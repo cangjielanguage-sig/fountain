@@ -1,0 +1,222 @@
+/*
+    Copyright (c) [2022] [WuJingrun（吴京润）]
+    fountain is licensed under Mulan PSL v2.
+    You can use this software according to the terms and conditions of the Mulan PSL v2.
+    You may obtain a copy of Mulan PSL v2 at:
+            http://license.coscl.org.cn/MulanPSL2
+    THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+    See the Mulan PSL v2 for more details.
+ */
+package f_base
+
+import f_exception.IllegalAccessException
+
+public interface ExtendOption<T> {
+    func iterator(): Iterator<T>
+}
+public class OptionIterator<T> <: Iterator<T> {
+    public OptionIterator(private let opt: Option<T>) {}
+    private var got = false
+
+    public func next(): Option<T> {
+        if (got) {
+            None<T>
+        } else {
+            got = true
+            opt
+        }
+    }
+}
+
+extend<T> Option<T> <: ExtendOption<T> {
+    func map<O>(fn: (T) -> ?O): ?O {
+        if(let Some(x) <- this){
+            fn(x)
+        }else{
+            None<O>
+        }
+    }
+    public func iterator(): Iterator<T> {
+        OptionIterator<T>(this)
+    }
+    public func call<R>(fn: (T) -> R): ?R {
+        match (this) {
+            case Some(x) => fn(x)
+            case _ => None<R>
+        }
+    }
+    public func call<A, R>(right: A, fn: (T, A) -> R): ?R {
+        call<R> {left => fn(left, right)}
+    }
+    public func caller<A, R>(right: A, fn: (T, A) -> R): OptionCaller<T, R> {
+        caller<R> {
+            left => fn(left, right)
+        }
+    }
+
+    public func caller<R>(fn: (T) -> R): OptionCaller<T, R> {
+        OptionCaller<T, R>(this, fn)
+    }
+}
+public class OptionCaller<T, R> {
+    public OptionCaller(
+        private let option: ?T,
+        private let someCallee: (T) -> R,
+        private var noneCallee!: ?() -> R = None
+    ) {}
+    public func none(callee: () -> R) {
+        noneCallee = callee
+        this
+    }
+    public func call(): ?R {
+        match (option) {
+            case Some(x) => someCallee(x)
+            case _ => if (let Some(c) <- noneCallee) {
+                c()
+            } else {
+                None
+            }
+        }
+    }
+    public operator func ()(): ?R {
+        call()
+    }
+}
+
+public interface ExtendAddableOption<T> where T <: Addable<T>{}
+extend<T> Option<T> <: ExtendAddableOption<T> where T <: Addable<T>{
+    public operator func +(other: T): ?T{
+        call<T>{x => x + other}
+    }
+    public operator func +(other: ?T): ?T{
+        call<?T>{x => other + x} ?? None<T>
+    }
+}
+public interface ExtendSubableOption<T> where T <: Subable<T>{}
+extend<T> Option<T> <: ExtendSubableOption<T> where T <: Subable<T>{
+    public operator func -(other: T): ?T{
+        call<T>{x => x - other}
+    }
+    public operator func -(other: ?T): ?T{
+        call<?T>{x => match(other){
+            case Some(y) => x - y
+            case _ => None<T>
+        }} ?? None<T>
+    }
+}
+public interface ExtendMulableOption<T> where T <: Mulable<T>{}
+extend<T> Option<T> <: ExtendMulableOption<T> where T <: Mulable<T>{
+    public operator func *(other: T): ?T{
+        call<T>{x => x * other}
+    }
+    public operator func *(other: ?T): ?T{
+        call<?T>{x => other * x} ?? None<T>
+    }
+}
+public interface ExtendDivableOption<T> where T <: Divable<T>{}
+extend<T> Option<T> <: ExtendDivableOption<T> where T <: Divable<T>{
+    public operator func /(other: T): ?T{
+        call<T>{x => x / other}
+    }
+    public operator func /(other: ?T): ?T{
+        call<?T>{x => match(other){
+            case Some(y) => x / y
+            case _ => None<T>
+        }} ?? None<T>
+    }
+}
+public interface ExtendModableOption<T> where T <: Modable<T>{}
+extend<T> Option<T> <: ExtendModableOption<T> where T <: Modable<T>{
+    public operator func %(other: T): ?T{
+        call<T>{x => x % other}
+    }
+    public operator func %(other: ?T): ?T{
+        call<?T>{x =>
+            match(other){
+                case Some(y) => x % y
+                case _ => None<T>
+            }
+        } ?? None<T>
+    }
+}
+public interface ExtendExpableOption<T> where T <: Expable<T>{}
+extend<T> Option<T> <: ExtendExpableOption<T> where T <: Expable<T>{
+    public operator func **(other: T): ?T{
+        call<T>{x => x ** other}
+    }
+    public operator func **(other: ?T): ?T{
+        call<?T>{x => match(other){
+            case Some(y) => x ** y
+            case _ => None<T>
+        }} ?? None<T>
+    }
+}
+public interface ExtendBitAndableOption<T> where T <: BitAndable<T>{}
+extend<T> Option<T> <: ExtendBitAndableOption<T> where T <: BitAndable<T>{
+    public operator func &(other: T): ?T{
+        call<T>{x => x & other}
+    }
+    public operator func &(other: ?T): ?T{
+        call<?T>{x => match(other){
+            case Some(y) => x & y
+            case _ => None<T>
+        }} ?? None<T>
+    }
+}
+public interface ExtendBitOrableOption<T> where T <: BitOrable<T>{}
+extend<T> Option<T> <: ExtendBitOrableOption<T> where T <: BitOrable<T>{
+    public operator func |(other: T): ?T{
+        call<T>{x => x | other}
+    }
+    public operator func |(other: ?T): ?T{
+        call<?T>{x => match(other){
+            case Some(y) => x | y
+            case _ => None<T>
+        }} ?? None<T>
+    }
+}
+public interface ExtendBitXorableOption<T> where T <: BitXorable<T>{}
+extend<T> Option<T> <: ExtendBitXorableOption<T> where T <: BitXorable<T>{
+    public operator func ^(other: T): ?T{
+        call<T>{x => x ^ other}
+    }
+    public operator func ^(other: ?T): ?T{
+        call<?T>{x => match(other){
+            case Some(y) => x ^ y
+            case _ => None<T>
+        }} ?? None<T>
+    }
+}
+public interface ExtendBitNotableOption<T> where T <: BitNotable<T>{}
+extend<T> Option<T> <: ExtendBitNotableOption<T> where T <: BitNotable<T>{
+    public operator func !(): ?T{
+        match(this){
+            case Some(x) => !x
+            case _ => None<T>
+        }
+    }
+}
+public interface ExtendLeftShiftableOption<T> where T <: LeftShiftable<T>{}
+extend<T> Option<T> <: ExtendLeftShiftableOption<T> where T <: LeftShiftable<T>{
+    public operator func <<(other: T): ?T{
+        call<T>{x => x << other}
+    }
+    public operator func <<(other: ?T): ?T{
+        call<?T>{x => match(other){
+            case Some(y) => x << y
+            case _ => None<T>
+        }} ?? None<T>
+    }
+}
+public interface ExtendRightShiftableOption<T> where T <: RightShiftable<T>{}
+extend<T> Option<T> <: ExtendRightShiftableOption<T> where T <: RightShiftable<T>{
+    public operator func >>(other: T): ?T{
+        call<T>{x => x >> other}
+    }
+    public operator func >>(other: ?T): ?T{
+        call<?T>{x => match(other){
+            case Some(y) => x >> y
+            case _ => None<T>
+        }} ?? None<T>
+    }
+}

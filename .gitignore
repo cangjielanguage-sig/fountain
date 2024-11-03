@@ -1,7 +1,10 @@
 .cache/
-./cache/*
+.cache/*
 target/
+target/*
 .vscode
 .vnext
 cjlintignore.cfg
 .idea
+cjpm.lock
+.cjpm-history

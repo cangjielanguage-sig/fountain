@@ -1,0 +1,53 @@
+package f_base
+
+import std.unittest.*
+import std.unittest.testmacro.*
+
+/* ===== Emitted by MacroCall @Test in comparator_test.cj:6:1 ===== */
+/* 6.1 */@Attribute[TEST_GENERATED] class Comparator_test <: TestClass {
+/* 6.2 */    @Attribute[TestCase_0]
+/* 6.3 */    public func test(): Unit {
+/* 6.4 */        let cmp = Comparator < Int64 >.compare < Int64 >
+/* 6.5 */        assertEqual("Ordering.LT", "cmp(1, 2)", Ordering.LT, cmp(1, 2))
+/* 6.6 */        let comparator = Comparator < Int64 >.create < Int64 >()
+/* 6.7 */        assertEqual("Ordering.LT", "cmp(1, 2)", Ordering.LT, cmp(1, 2))
+/* 6.8 */    }
+/* 6.9 */    
+/* 6.10 */    init() {
+/* 6.11 */    }
+/* 6.12 */    private func classConfiguration(): Configuration {
+/* 6.13 */        let configuration = Configuration()
+/* 6.14 */        
+/* 6.15 */        return configuration
+/* 6.16 */    }
+/* 6.17 */    public override func asTestSuite(): TestSuite {
+/* 6.18 */        
+/* 6.19 */        let suiteConfiguration = classConfiguration()
+/* 6.20 */        let suiteBuilder = TestSuite.builder("Comparator_test").configure(suiteConfiguration)
+/* 6.21 */        
+/* 6.22 */        { => let caseConfig = Configuration()
+/* 6.23 */            
+/* 6.24 */            let testTestFunc = { => test();() }
+/* 6.25 */            suiteBuilder.add(
+/* 6.26 */            UnitTestCase.create(
+/* 6.27 */            "test",
+/* 6.28 */            configuration: caseConfig,
+/* 6.29 */            body: testTestFunc
+/* 6.30 */            )
+/* 6.31 */            )
+/* 6.32 */            
+/* 6.33 */        }()
+/* 6.34 */        
+/* 6.35 */        return suiteBuilder.build()
+/* 6.36 */    }
+/* 6.37 */}
+/* 6.38 */
+/* 6.39 */
+/* 6.40 */extend TestPackage {
+/* 6.41 */    @Attribute[TEST_REGISTER]
+/* 6.42 */    func registerComparator_test() {
+/* 6.43 */        registerSuite({ => Comparator_test().asTestSuite() })
+/* 6.44 */    }
+/* 6.45 */}
+/* 6.46 */
+/* ===== End of the Emit ===== */

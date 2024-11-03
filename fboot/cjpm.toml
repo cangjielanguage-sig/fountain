@@ -2,7 +2,7 @@
 # charset4cj = { git = "https://gitcode.com/Cangjie-TPC/charset4cj.git", branch = "develop", version = "0.0.1"}
 # f_app = {path = "../f_app"}
 # f_aspect = {path = "../f_aspect"}
-# f_base = {path = "../f_base"}
+  f_base = {path = "../f_base"}
 # f_bean = {path = "../f_bean"}
 # f_cache = {path = "../f_cache"}
 # f_collection = {path = "../f_collection"}

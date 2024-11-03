@@ -1,0 +1,14 @@
+2024-11-03
+初始化项目目录结构
+增加通用异常声明
+增加f_base模块
+    Comparator Equaler
+    空集合
+    Option的比较扩展
+    对数值型的抽象Number Float Integer
+    字符扩展
+    区间扩展
+    字符串扩展
+    OS
+    HashBuilder
+    
