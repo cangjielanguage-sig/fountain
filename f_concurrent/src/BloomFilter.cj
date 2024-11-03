@@ -10,8 +10,10 @@
 package f_concurrent
 
 import f_collection.BitSet
+import std.sync.ReentrantMutex
 
 public class BloomFilter<T> where T <: Hashable {
+    private let mutex = ReentrantMutex()
     private let bits = BitSet()
     public BloomFilter(private let hashers: Array<(T, Int64) -> Int64>) {}
     public init(iterate!: Int64 = 5) {
@@ -33,23 +35,27 @@ public class BloomFilter<T> where T <: Hashable {
     }
     public func set(value: T): Unit {
         var h = value.hashCode()
-        bits[h] = true
-        for(hasher in hashers){
-            h = hasher(value, h)
+        synchronized(mutex){
             bits[h] = true
+            for(hasher in hashers){
+                h = hasher(value, h)
+                bits[h] = true
+            }
         }
     }
     public func contains(value: T): Bool {
         var h = value.hashCode()
-        var result = bits[h]
-        if (result) {
-            var i = 0
-            while(result && i < hashers.size) {
-                h = hashers[i](value, h)
-                result &&= bits[h]
-                i++
+        synchronized(mutex){
+            var result = bits[h]
+            if (result) {
+                var i = 0
+                while(result && i < hashers.size) {
+                    h = hashers[i](value, h)
+                    result &&= bits[h]
+                    i++
+                }
             }
+            result
         }
-        result
     }
 }

@@ -1,0 +1,315 @@
+/*
+    Copyright (c) [2022] [WuJingrun（吴京润）]
+    fountain is licensed under Mulan PSL v2.
+    You can use this software according to the terms and conditions of the Mulan PSL v2.
+    You may obtain a copy of Mulan PSL v2 at:
+            http://license.coscl.org.cn/MulanPSL2
+    THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+    See the Mulan PSL v2 for more details.
+ */
+package f_collection
+
+import std.collection.{HashMap, Map, EquatableCollection}
+
+import f_exception.UnreachableException
+
+public class LinkedHashMap<K, V> <: Map<K, V> where K <: Hashable & Equatable<K> {
+    private let map: HashMap<K, ValueNode<(K, V)>>
+    private var head = HeadNode<(K, V)>()
+    private var tail = head.tail
+    private let size_: Int64
+    private let max: Bool
+
+    public init() {
+        this.max = false
+        this.size_ = 0
+        this.map = HashMap<K, ValueNode<(K, V)>>()
+    }
+    public init(size: Int64, max: Bool) {
+        this.max = max
+        this.size_ = size
+        map = HashMap<K, ValueNode<(K, V)>>(size)
+    }
+    public init(c: Collection<(K, V)>) {
+        map = HashMap<K, ValueNode<(K, V)>>(c.size)
+        this.max = false
+        this.size_ = c.size
+        putAll(c)
+    }
+    public init(c: Collection<(K, V)>, size: Int64, max: Bool) {
+        map = HashMap<K, ValueNode<(K, V)>>(size)
+        this.max = max
+        this.size_ = size
+        putAll(c)
+    }
+
+    /**
+     * 返回对象的长度。
+     * 返回值 Int64 - 列表的容量
+     */
+    public prop size: Int64 {
+        get() {
+            return map.size
+        }
+    }
+
+    /**
+     * 判断对象是否为空
+     * 返回值 Bool - 若为空返回 true，否则返回 false
+     */
+    public func isEmpty(): Bool {
+        return map.isEmpty()
+    }
+
+    /**
+     * 将对象转为数组类型
+     * 返回值 Array<T> - 转换后的数组
+     */
+    public func toArray(): Array<(K, V)> {
+        let itr = iterator()
+        Array<(K, V)>(size){i =>
+            itr.next().getOrThrow()
+        }
+    }
+
+    /**
+     * 返回实例类型的迭代器
+     * 返回值 Iterator<(K,V)> - 返回实例类型的迭代器。
+     */
+    public func iterator(): Iterator<(K, V)> {
+        return LinkedNodeIterator<(K, V)>(head)
+    }
+    private func turnToTail(entry: ValueNode<(K, V)>) {
+        if (size <= 1) {
+            return
+        }
+        entry.turnTo(tail)
+    }
+
+    /**
+     * 根据 key 得到 Map 中映射的值
+     * 参数 key - 传递 key，获取 value
+     * 返回值 Option<V> - key 对应的值是用 Option 封装的
+     */
+    public func get(key: K): Option<V> {
+        return get(key, true)
+    }
+    public func get(key: K, turn: Bool): Option<V> {
+        return match (map.get(key)) {
+            case Some(n) =>
+                if (turn) {
+                    this.turnToTail(n)
+                }
+                n.value[1]
+            case _ => None
+        }
+    }
+
+    /**
+     * 判断是否包含指定键的映射
+     * 参数 key - 传递要判断的 key
+     * 返回值 Bool - 如果存在，则返回 true；否则，返回 false
+     */
+    public func contains(key: K): Bool {
+        return map.contains(key)
+    }
+
+    /**
+     * 判断是否包含指定集合键的映射
+     * 参数 keys - 传递待判断的 keys
+     * 返回值 Bool - 如果存在，则返回 true；否则，返回 false
+     */
+    public func containsAll(keys: Collection<K>): Bool {
+        return map.containsAll(keys)
+    }
+    private func delete(opt: Option<ValueNode<(K, V)>>, removeMap!: Bool = false): Option<V> {
+        return match (opt) {
+            case Some(n) =>
+                n.remove()
+                if (removeMap) {
+                    map.remove(n.value[0])
+                }
+                n.value[1]
+            case _ => None<V>
+        }
+    }
+    private func getFirstEntry(): Option<ValueNode<(K, V)>> {
+        match (head.next) {
+            case n: ValueNode<(K, V)> => n
+            case n: TailNode<(K, V)> => None
+            case _ => throw UnreachableException()
+        }
+    }
+    private func getLastEntry(): Option<ValueNode<(K, V)>> {
+        match (tail.prev) {
+            case n: ValueNode<(K, V)> => n
+            case n: HeadNode<(K, V)> => None
+            case _ => throw UnreachableException()
+        }
+    }
+    private func extract(opt: Option<ValueNode<(K, V)>>): Option<(K, V)> {
+        match (opt) {
+            case Some(n) => n.value
+            case _ => None
+        }
+    }
+    public func firstEntry(): Option<(K, V)> {
+        if (map.isEmpty()) {
+            return None
+        }
+        let entry = getFirstEntry()
+        match (entry) {
+            case Some(e) =>
+                turnToTail(e)
+                return extract(entry)
+            case _ => return None
+        }
+    }
+    public func pollFirstEntry(): Option<(K, V)> {
+        if (map.isEmpty()) {
+            return None
+        }
+        let entry = getFirstEntry()
+        delete(entry, removeMap: true)
+        return extract(entry)
+    }
+    public func lastEntry(): Option<(K, V)> {
+        if (map.isEmpty()) {
+            return None
+        }
+        let entry = getLastEntry()
+        return extract(entry)
+    }
+    public func pollLastEntry(): Option<(K, V)> {
+        if (map.isEmpty()) {
+            return None
+        }
+        let entry = getLastEntry()
+        delete(entry, removeMap: true)
+        return extract(entry)
+    }
+
+    /**
+     * 将指定的值与此映射中指定的键关联
+     * 如果映射以前包含键的映射，则旧值将被替换
+     * 参数 key - 要放置的键
+     * 参数 value - 要分配的值
+     * 返回值 Option<V> - 如果赋值之前 key 存在，旧的 value 用 Option 封装；
+     * 否则，返回 None<V>
+     */
+    public func put(key: K, value: V): Option<V> {
+        var s = size
+        while (max && s > 0 && s >= size_ && !this.contains(key)) {
+            match (head.next) {
+                case n: ValueNode<(K, V)> => remove(n.value[0])
+                case _ => throw UnreachableException()
+            }
+            s = size
+        }
+        let old = map.put(key, tail.insertPrev((key, value)))
+        delete(old)
+    }
+    public func put(entry: (K, V)): Option<V> {
+        return put(entry[0], entry[1])
+    }
+
+    /**
+     * 传递指定元素进行遍历，并按顺序赋值
+     * 如果映射以前包含键的映射，则旧值将被替换
+     * 参数 element - 传递给遍历赋值的元素
+     */
+    public func putAll(elements: Collection<(K, V)>): Unit {
+        for (e in elements) {
+            put(e)
+        }
+    }
+
+    /**
+     * 从此映射中删除指定键的映射（如果存在）
+     * 参数 key - 传入要删除的 key
+     * 返回值 Option<V> - 被移除映射的 V 用 Option 封装
+     */
+    public func remove(key: K): Option<V> {
+        let opt = map.remove(key)
+        return delete(opt)
+    }
+
+    /**
+     * 从此映射中删除指定集合的映射（如果存在）
+     * 参数 keys - 传人要删除的集合
+     */
+    public func removeAll(keys: Collection<K>): Unit {
+        for (k in keys) {
+            remove(k)
+        }
+    }
+
+    /**
+     * 传入 lambda 表达式，如果满足条件，则删除对应的键值
+     * 参数 predicate - 传递一个 lambda 表达式进行判断
+     */
+    public func removeIf(predicate: (K, V) -> Bool): Unit {
+        for ((k, v) in iterator()) {
+            if (predicate(k, v)) {
+                remove(k)
+            }
+        }
+    }
+
+    /**
+     * 清除所有键值对
+     */
+    public func clear(): Unit {
+        map.clear()
+        this.head.reset(tail)
+    }
+
+    /**
+     * 克隆 Map
+     * 返回值 Map<K, V> - 返回一个 Map<K, V>
+     */
+    public func clone(): Map<K, V> {
+        return LinkedHashMap<K, V>(this)
+    }
+
+    /**
+     * 运算符重载集合，如果键存在，返回键对应的值，如果不存在，抛出异常。
+     * 参数 key - 传递值进行判断
+     * 返回值 V - 与键对应的值
+     */
+    public operator func [](key: K): V {
+        get(key).getOrThrow()
+    }
+
+    /**
+     * 运算符重载集合，如果键存在，新 value 覆盖旧 value，如果键不存在，
+     * 添加此键值对
+     * 参数 key - 传递值进行判断
+     * 参数 value - 传递要设置的值
+     */
+    public operator func [](key: K, value!: V): Unit {
+        put(key, value)
+    }
+
+    /**
+     * 返回 Map 中所有的 key，并将所有 key 存储在一个 Keys 容器中
+     * 返回值 Keys<K> - 保存所有返回的 key
+     */
+    public func keys(): EquatableCollection<K> {
+        return MapKeys<K, V>(this)
+    }
+
+    /**
+     * 返回 Map 中所有的 value，并将所有 value 存储在一个 Values 容器中
+     * 返回值 Values<V> - 保存所有返回的 value
+     */
+    public func values(): Collection<V> {
+        return MapValues<K, V>(this)
+    }
+}
+extend<K, V> LinkedHashMap<K, V> <: ValueEqualMap<K, V> where K <: Hashable & Equatable<K>, V <: Equal<V> {
+
+}
+extend<K, V> LinkedHashMap<K, V> <: ValueContainsMap<K, V> where K <: Equatable<K>, V <: Equal<V> {
+
+}
