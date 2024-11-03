@@ -38,6 +38,7 @@ public interface Integer<T> <: Number<T> & Modable<T> & BitAndable<T> & BitOrabl
         }
     }
     prop isEven: Bool
+
 }
 public interface Float<T> <: Number<T> where T <: Float<T> {
     static prop NaN: T
@@ -104,8 +105,18 @@ extend Int8 <: Integer<Int8> {
     }
     public prop isEven: Bool {
         get() {
-            this % 2 == 0
+            (this & 1) == 0
         }
+    }
+    public prop isOdd: Bool {
+        get(){
+            !isEven
+        }
+    }
+    
+    @OverflowWrapping
+    public func toUInt(): UInt8 {
+        UInt8(this & 0x7f) | UInt8(this & (1 << 7))
     }
 }
 extend Int16 <: Integer<Int16> {
@@ -163,8 +174,17 @@ extend Int16 <: Integer<Int16> {
     }
     public prop isEven: Bool {
         get() {
-            this % 2 == 0
+            (this & 1) == 0
         }
+    }
+    public prop isOdd: Bool {
+        get(){
+            !isEven
+        }
+    }
+    @OverflowWrapping
+    public func toUInt(): UInt16 {
+        UInt16(this & 0x7f_ff) | UInt16(this & (1 << 15))
     }
 }
 extend Int32 <: Integer<Int32> {
@@ -227,8 +247,17 @@ extend Int32 <: Integer<Int32> {
     }
     public prop isEven: Bool {
         get() {
-            this % 2 == 0
+            (this & 1) == 0
         }
+    }
+    public prop isOdd: Bool {
+        get(){
+            !isEven
+        }
+    }
+    @OverflowWrapping
+    public func toUInt(): UInt32{
+        UInt32(this & 0x7fff_ffff) | UInt32(this & (1 << 31))
     }
 }
 extend Int64 <: Integer<Int64> {
@@ -295,8 +324,17 @@ extend Int64 <: Integer<Int64> {
     }
     public prop isEven: Bool {
         get() {
-            this % 2 == 0
+            (this & 1) == 0
         }
+    }
+    public prop isOdd: Bool {
+        get(){
+            !isEven
+        }
+    }
+    @OverflowWrapping
+    public func toUInt(): UInt64 {
+        UInt64(this & 0x7fff_ffff_ffff_ffff) | UInt64(this & (1 << 63))
     }
 }
 
@@ -350,8 +388,17 @@ extend UInt8 <: Integer<UInt8> {
     }
     public prop isEven: Bool {
         get() {
-            this % 2 == 0
+            (this & 1) == 0
         }
+    }
+    public prop isOdd: Bool {
+        get(){
+            !isEven
+        }
+    }
+    @OverflowWrapping
+    public func toInt(): Int8{
+        Int8(this & 0x7f) | Int8(this & (1 << 7))
     }
 }
 extend UInt16 <: Integer<UInt16> {
@@ -408,8 +455,17 @@ extend UInt16 <: Integer<UInt16> {
     }
     public prop isEven: Bool {
         get() {
-            this % 2 == 0
+            (this & 1) == 0
         }
+    }
+    public prop isOdd: Bool {
+        get(){
+            !isEven
+        }
+    }
+    @OverflowWrapping
+    public func toInt(): Int16 {
+        Int16(this & 0x7fff) | Int16(this & (1 << 15))
     }
 }
 extend UInt32 <: Integer<UInt32> {
@@ -470,8 +526,17 @@ extend UInt32 <: Integer<UInt32> {
     }
     public prop isEven: Bool {
         get() {
-            this % 2 == 0
+            (this & 1) == 0
         }
+    }
+    public prop isOdd: Bool {
+        get(){
+            !isEven
+        }
+    }
+    @OverflowWrapping
+    public func toInt(): Int32 {
+        Int32(this & 0x7fff_ffff) | Int32(this & (1 << 31))
     }
 }
 extend UInt64 <: Integer<UInt64> {
@@ -534,10 +599,20 @@ extend UInt64 <: Integer<UInt64> {
         }
         return n - (i >> 1)
     }
+    
     public prop isEven: Bool {
         get() {
-            this % 2 == 0
+            (this & 1) == 0
         }
+    }
+    public prop isOdd: Bool {
+        get(){
+            !isEven
+        }
+    }
+    @OverflowWrapping
+    public func toInt(): Int64 {
+        Int64(this & 0x7fff_ffff_ffff_ffff) | Int64(this & (1 << 63))
     }
 }
 
