@@ -1,4 +1,0 @@
-version = 0
-
-[requires]
-  charset4cj = {branch = "develop", commitId = "c2bc1145f565ffaa554892e30574f8f7df5ce00a", git = "https://gitcode.com/Cangjie-TPC/charset4cj.git", version = "0.0.1"}
