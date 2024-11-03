@@ -4,3 +4,4 @@ target/
 .vscode
 .vnext
 cjlintignore.cfg
+.idea
