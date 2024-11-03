@@ -8,41 +8,9 @@
       "exeName": "",
       "hasSubPkgs": true
     },
-    "charset4cj.charset.exception": {
-      "rootPackageName": "charset4cj",
-      "fileNameHash": "-339447067216228494",
-      "timeStamp": 1728259345,
-      "isBuilt": true,
-      "exeName": "",
-      "hasSubPkgs": false
-    },
-    "charset4cj.charset.korean": {
-      "rootPackageName": "charset4cj",
-      "fileNameHash": "-7508787419509033806",
-      "timeStamp": 1728259345,
-      "isBuilt": true,
-      "exeName": "",
-      "hasSubPkgs": false
-    },
     "charset4cj.charset.singlebyte": {
       "rootPackageName": "charset4cj",
       "fileNameHash": "417775147535551820",
-      "timeStamp": 1728259345,
-      "isBuilt": true,
-      "exeName": "",
-      "hasSubPkgs": false
-    },
-    "charset4cj.charset.simplechinese": {
-      "rootPackageName": "charset4cj",
-      "fileNameHash": "4121692361873292779",
-      "timeStamp": 1728259345,
-      "isBuilt": true,
-      "exeName": "",
-      "hasSubPkgs": false
-    },
-    "charset4cj.charset.encoding": {
-      "rootPackageName": "charset4cj",
-      "fileNameHash": "7674029407046732664",
       "timeStamp": 1728259345,
       "isBuilt": true,
       "exeName": "",
@@ -56,9 +24,17 @@
       "exeName": "",
       "hasSubPkgs": true
     },
-    "charset4cj.charset.traditionchinese": {
+    "charset4cj.charset.exception": {
       "rootPackageName": "charset4cj",
-      "fileNameHash": "-5072286416295776380",
+      "fileNameHash": "-339447067216228494",
+      "timeStamp": 1728259345,
+      "isBuilt": true,
+      "exeName": "",
+      "hasSubPkgs": false
+    },
+    "charset4cj.charset.simplechinese": {
+      "rootPackageName": "charset4cj",
+      "fileNameHash": "4121692361873292779",
       "timeStamp": 1728259345,
       "isBuilt": true,
       "exeName": "",
@@ -67,6 +43,30 @@
     "charset4cj.charset.japanese": {
       "rootPackageName": "charset4cj",
       "fileNameHash": "6071391915126875725",
+      "timeStamp": 1728259345,
+      "isBuilt": true,
+      "exeName": "",
+      "hasSubPkgs": false
+    },
+    "charset4cj.charset.traditionchinese": {
+      "rootPackageName": "charset4cj",
+      "fileNameHash": "-5072286416295776380",
+      "timeStamp": 1728259345,
+      "isBuilt": true,
+      "exeName": "",
+      "hasSubPkgs": false
+    },
+    "charset4cj.charset.encoding": {
+      "rootPackageName": "charset4cj",
+      "fileNameHash": "7674029407046732664",
+      "timeStamp": 1728259345,
+      "isBuilt": true,
+      "exeName": "",
+      "hasSubPkgs": false
+    },
+    "charset4cj.charset.korean": {
+      "rootPackageName": "charset4cj",
+      "fileNameHash": "-7508787419509033806",
       "timeStamp": 1728259345,
       "isBuilt": true,
       "exeName": "",

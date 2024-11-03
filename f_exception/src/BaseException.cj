@@ -14,10 +14,12 @@ import std.io.{OutputStream, StringWriter}
 import std.collection.ArrayList
 
 public func printStackTrace<O>(exception: Exception, output: O): Unit where O <: OutputStream {
-    let writer = StringWriter(output)
+    printStackTrace<O>(exception, StringWriter<O>(output))
+}
+public func printStackTrace<O>(exception: Exception, writer: StringWriter<O>): Unit where O <: OutputStream {
     writer.write("An exception has occured: ")
     writer.write(exception.toString())
-    writer.write('\n')
+    writer.writeln()
     for (stack in exception.getStackTrace()) {
         writer.write("         at ")
         writer.write(stack.declaringClass)
@@ -27,7 +29,7 @@ public func printStackTrace<O>(exception: Exception, output: O): Unit where O <:
         writer.write(stack.fileName)
         writer.write(": ")
         writer.write(stack.lineNumber)
-        writer.write(")\n")
+        writer.writeln(")")
     }
     writer.flush()
 }
@@ -62,25 +64,27 @@ public open class BaseException <: Exception {
         }
     }
 
-    public func printStackTrace<O>(writer: O): Unit where O <: OutputStream {
-        printStackTrace(this, writer)
-        let causedBy = unsafe{"Caused by: ".rawData()}
+    public func printStackTrace<O>(output: O): Unit where O <: OutputStream {
+        this.printStackTrace(StringWriter<O>(output))
+    }
+    public func printStackTrace<O>(writer: StringWriter<O>): Unit where O <: OutputStream {
+        printStackTrace<O>(this, writer)
         if (let Some(c) <- caused) {
-            writer.write(causedBy)
+            writer.write("Caused by: ")
             if (let cp: BaseException <- c) {
-                cp.printStackTrace(writer)
+                cp.printStackTrace<O>(writer)
             } else {
-                printStackTrace(c, writer)
+                printStackTrace<O>(c, writer)
             }
         }
         if (!suppressed.isEmpty()) {
-            writer.write(unsafe{"Suppressed: \n".rawData()})
+            writer.write("Suppressed: ")
         }
         for (s in suppressed) {
             if (let se: BaseException <- s) {
-                se.printStackTrace(writer)
+                se.printStackTrace<O>(writer)
             } else {
-                printStackTrace(s, writer)
+                printStackTrace<O>(s, writer)
             }
         }
     }
