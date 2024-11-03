@@ -1,0 +1,14 @@
+{
+  "packageInformation": {
+    "fboot": {
+      "rootPackageName": "fboot",
+      "fileNameHash": "2228896790177539465",
+      "timeStamp": 1730598406,
+      "isBuilt": true,
+      "exeName": "main",
+      "hasSubPkgs": false
+    }
+  },
+  "jsonHash": "-4723276076962268310",
+  "rootPackageName": "fboot"
+}
