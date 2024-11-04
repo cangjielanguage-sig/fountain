@@ -307,9 +307,3 @@ public class LinkedHashMap<K, V> <: Map<K, V> where K <: Hashable & Equatable<K>
         return MapValues<K, V>(this)
     }
 }
-extend<K, V> LinkedHashMap<K, V> <: ValueEqualMap<K, V> where K <: Hashable & Equatable<K>, V <: Equal<V> {
-
-}
-extend<K, V> LinkedHashMap<K, V> <: ValueContainsMap<K, V> where K <: Equatable<K>, V <: Equal<V> {
-
-}

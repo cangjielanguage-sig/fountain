@@ -7,7 +7,7 @@
     THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
     See the Mulan PSL v2 for more details.
  */
-package fountain.collection
+package f_collection
 
 import std.unittest.*
 import std.unittest.testmacro.*
@@ -179,5 +179,23 @@ public class Collection_test {
             @Assert([1,3,5,7,9][i], queue.poll().getOrThrow())
             i++
         }
+    }
+    @TestCase
+    public func testBitSet(): Unit {
+        let bs = BitSet()
+        bs[21324] = true
+        @Assert(true, bs[21324])
+        bs[21324] = false
+        @Assert(false, bs[21324])
+        var r = bs | 21324
+        @Assert(true, bs[21324])
+        @Assert(false, r)
+        r = bs ^ 21324
+        @Assert(true, r)
+        @Assert(false, bs[21324])
+        r = bs & 21324
+        @Assert(false, r)
+        @Assert(false, bs[21324])
+
     }
 }

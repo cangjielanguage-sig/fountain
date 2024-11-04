@@ -42,3 +42,9 @@ extend<K, V> TreeMap<K, V> where K <: Comparable<K>, V <: Equal<V> {
 extend<K, V> TreeMap<K, V> where K <: Comparable<K>{
 
 }
+extend<K, V> LinkedHashMap<K, V> <: ValueEqualMap<K, V> where K <: Hashable & Equatable<K>, V <: Equal<V> {
+
+}
+extend<K, V> LinkedHashMap<K, V> <: ValueContainsMap<K, V> where K <: Equatable<K>, V <: Equal<V> {
+
+}
