@@ -89,7 +89,7 @@ public class BitSet <: Iterable<Bool> {
             false
         } else {
             let i = computePosition(h)
-            if (let r <- ((bits[idx] & i) != 0) && r) {
+            if ((bits[idx] & i) != 0) {
                 if(store){
                     bits[idx] |= i
                 }else{
