@@ -53,9 +53,9 @@ public class BitSet <: Iterable<Bool> {
         BitSetIterator(this)
     }
     private func growIfNeed(index: Int64, grow!: Bool = true): Int64 {
-        let idx = index / 64
+        var idx = index / 64
         if(idx < 0){
-            throw IndexOutOfBoundsException(index.toString())
+            idx = -idx
         }
         if (grow && idx >= bits.size) {
             bits.appendAll(Array<UInt64>(idx - bits.size + 1, repeat: 0u64))
