@@ -28,7 +28,7 @@ public class Collection_test {
         map
     }
     private func createLinkedMap(): Map<Int64, Int64> {
-        let map = LinkedMap<Int64, Int64>()
+        let map = LinkedHashMap<Int64, Int64>()
         createMap(map, array)
     }
     private func createHashMap(array: Array<Int64>): Map<Int64, Int64> {
@@ -84,7 +84,7 @@ public class Collection_test {
     }
     @TestCase
     public func testLinkedMap2(): Unit {
-        let map = LinkedMap<Int64, Int64>()
+        let map = LinkedHashMap<Int64, Int64>()
         map.put(1, 1)
         map.put(2, 2)
         map.put(3, 3)
@@ -100,7 +100,7 @@ public class Collection_test {
     }
     @TestCase
     public func testLinkedMap3(): Unit {
-        let map = LinkedMap<Int64, Int64>(3, true)
+        let map = LinkedHashMap<Int64, Int64>(3, true)
         map.put(1, 1)
         map.put(2, 2)
         map.put(3, 3)
@@ -115,7 +115,7 @@ public class Collection_test {
     }
     @TestCase
     public func testLinkedMap4(): Unit {
-        let map = LinkedMap<Int64, Int64>(3, true)
+        let map = LinkedHashMap<Int64, Int64>(3, true)
         map.put(1, 1)
         map.put(2, 2)
         map.put(3, 3)
