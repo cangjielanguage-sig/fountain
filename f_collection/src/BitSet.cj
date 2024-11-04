@@ -12,7 +12,7 @@ package f_collection
 import f_base.*
 
 class BitSetIterator <: Iterator<Bool> {
-    private var current: UInt32 = 0
+    private var current: UInt64 = 0
     BitSetIterator(private let set: BitSet){}
 
     public func next(): ?Bool{
@@ -54,6 +54,9 @@ public class BitSet <: Iterable<Bool> {
     }
     private func growIfNeed(index: Int64, grow!: Bool = true): Int64 {
         let idx = index / 64
+        if(idx < 0){
+            throw IndexOutOfBoundexException(index)
+        }
         if (grow && idx >= bits.size) {
             bits.appendAll(Array<UInt64>(idx - bits.size + 1, repeat: 0u64))
         }
@@ -84,7 +87,7 @@ public class BitSet <: Iterable<Bool> {
         let idx = growIfNeed(h, grow: store)
         if(idx >= bits.size){
             false
-        } else if (let i = computePosition(h) && let r = ((bits[idx] & i) != 0) && r) {
+        } else if (let i <- computePosition(h) && let r <- ((bits[idx] & i) != 0) && r) {
             if(store){
                 bits[idx] |= i
             }else{
