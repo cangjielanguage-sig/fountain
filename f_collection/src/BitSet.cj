@@ -86,19 +86,17 @@ public class BitSet <: Iterable<Bool> {
         let h = value.hashCode()
         let idx = growIfNeed(h, grow: store)
         if(idx >= bits.size){
-            false
-        } else {
-            let i = computePosition(h)
-            if ((bits[idx] & i) != 0) {
-                if(store){
-                    bits[idx] |= i
-                }else{
-                    bits[idx] &= !i
-                }
-                true
+            return false
+        }
+        if (let i <- computePosition(h) && (bits[idx] & i) != 0) {
+            if(store){
+                bits[idx] |= i
             }else{
-                false
+                bits[idx] &= !i
             }
+            true
+        }else{
+            false
         }
     }
     public func set<T>(value: T): Bool where T <: Hashable {
