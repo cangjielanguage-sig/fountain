@@ -52,104 +52,134 @@ public class BitSet <: Iterable<Bool> {
     public func iterator(): Iterator<Bool> {
         BitSetIterator(this)
     }
-    private func growIfNeed(index: UInt64, grow!: Bool = true): Int64 {
-        let idx = Int64(index / 64)
+    private func growIfNeed(index: Int64, grow!: Bool = true): Int64 {
+        let idx = index / 64
         if (grow && idx >= bits.size) {
             bits.appendAll(Array<UInt64>(idx - bits.size + 1, repeat: 0u64))
         }
         idx
     }
+    private func computePosition(index: UInt64): UInt64 {
+        (MASK >> (index % 64))
+    }
+    private func computePosition(index: Int64): UInt64 {
+        computePosition(index.toUInt())
+    }
     func get(index: UInt64): ?Bool {
+        get(index.toInt())
+    }
+    func get(index: Int64): ?Bool {
         let idx = growIfNeed(index, grow: false)
         if (idx >= bits.size) {
             None
         } else {
-            (bits[idx] & (MASK >> (index % 64))) != 0
+            (bits[idx] & computePosition(index)) != 0
         }
     }
     public func contains<T>(value: T): Bool where T <: Hashable {
         this[value.hashCode()]
     }
-    public func set<T>(value: T): Bool where T <: Hashable {
-        this[value.hashCode()] = true
-    }
-    public func remove<T>(value: T): Bool where T <: Hashable {
-        this[value.hashCode()] = false
-    }
-    public operator func [](index: UInt32): Bool {
-        this[UInt64(index)]
-    }
-    public operator func [](index: Int32): Bool {
-        this[index.toUInt()]
-    }
-    public operator func [](index: UInt64): Bool {
-        get(index) ?? false
-    }
-    public operator func [](index: Int64): Bool {
-        this[index.toUInt()]
-    }
-    public operator func [](index: UInt32, value!: Bool): Unit {
-        this[UInt64(index)] = value
-    }
-    public operator func [](index: Int32, value!: Bool): Unit {
-        this[index.toUInt()] = value
-    }
-    public operator func [](index: UInt64, value!: Bool): Unit {
-        let idx = growIfNeed(index)
-        if (value) {
-            bits[idx] |= MASK >> UInt64(index % 64)
-        } else {
-            bits[idx] &= !(MASK >> UInt64(index % 64))
+    private func set<T>(value: T, store: Bool): Bool where T <: Hashable {
+        let h = value.hashCode()
+        let idx = growIfNeed(h, grow: store)
+        if(idx >= bits.size){
+            false
+        } else if (let i = computePosition(h) && let r = ((bits[idx] & i) != 0) && r) {
+            if(store){
+                bits[idx] |= i
+            }else{
+                bits[idx] &= !i
+            }
+            true
+        }else{
+            false
         }
     }
+    public func set<T>(value: T): Bool where T <: Hashable {
+        set<T>(value, true)
+    }
+    public func remove<T>(value: T): Bool where T <: Hashable {
+        set<T>(value, false)
+    }
+    public operator func [](index: UInt32): Bool {
+        this[Int64(index)]
+    }
+    public operator func [](index: Int32): Bool {
+        this[Int64(index)]
+    }
+    public operator func [](index: UInt64): Bool {
+        this[index.toInt()]
+    }
+    public operator func [](index: Int64): Bool {
+        get(index) ?? false
+    }
+    public operator func [](index: UInt32, value!: Bool): Unit {
+        this[Int64(index)] = value
+    }
+    public operator func [](index: Int32, value!: Bool): Unit {
+        this[Int64(index)] = value
+    }
+    public operator func [](index: UInt64, value!: Bool): Unit {
+        this[index.toInt()] = value
+    }
     public operator func [](index: Int64, value!: Bool): Unit {
-        this[index.toUInt()] = value
+        let idx = growIfNeed(index, grow: value)
+        let mask = computePosition(index)
+        if(idx >= bits.size){
+            return
+        }else if (value) {
+            bits[idx] |= mask
+        } else {
+            bits[idx] &= !mask
+        }
     }
     public operator func |(index: UInt32): Bool {
-        this | UInt64(index)
+        this | Int64(index)
     }
     public operator func |(index: Int32): Bool {
-        this | index.toUInt()
+        this | Int64(index)
     }
     public operator func |(index: UInt64): Bool {
-        let idx = growIfNeed(index)
-        let val = bits[idx]
-        let r = (val | (MASK >> UInt64(index % 64)))
-        bits[idx] = val
-        r == val
+        this | index.toInt()
     }
     public operator func |(index: Int64): Bool {
-        this | index.toUInt()
-    }
-    public operator func &(index: UInt32): Bool {
-        this & UInt64(index)
-    }
-    public operator func &(index: Int32): Bool {
-        this & index.toUInt()
-    }
-    public operator func &(index: UInt64): Bool {
         let idx = growIfNeed(index)
         let val = bits[idx]
-        let r = (val & (MASK >> UInt64(index % 64)))
-        bits[idx] = val & (val | (MASK >> UInt64(index % 64)))
-        r != 0
+        let r = (val | computePosition(index))
+        bits[idx] = r
+        r == val
+    }
+    public operator func &(index: UInt32): Bool {
+        this & Int64(index)
+    }
+    public operator func &(index: Int32): Bool {
+        this & Int64(index)
+    }
+    public operator func &(index: UInt64): Bool {
+        this & index.toInt()
     }
     public operator func &(index: Int64): Bool {
-        this & index.toUInt()
+        let idx = growIfNeed(index)
+        let val = bits[idx]
+        let mask = computePosition(index)
+        (val & mask) != 0
     }
     /**
      * 切换指定bit位的值，返回切换之前的状态
      */
     public operator func ^(index: UInt32): Bool {
-        this ^ UInt64(index)
+        this ^ Int64(index)
     }
 
     public operator func ^(index: Int32): Bool {
-        this ^ index.toUInt()
+        this ^ Int64(index)
     }
     public operator func ^(index: UInt64): Bool {
+        this ^ index.toInt()
+    }
+    public operator func ^(index: Int64): Bool {
         let idx = growIfNeed(index)
-        let mask = MASK >> UInt64(index % 64)
+        let mask = computePosition(index)
         if ((bits[idx] & mask) == 0) {
             bits[idx] |= mask
             false
@@ -157,8 +187,5 @@ public class BitSet <: Iterable<Bool> {
             bits[idx] &= !mask
             true
         }
-    }
-    public operator func ^(index: Int64): Bool {
-        this ^ index.toUInt()
     }
 }
