@@ -8,3 +8,4 @@ cjlintignore.cfg
 .idea
 cjpm.lock
 .cjpm-history
+*.cj.macrocall

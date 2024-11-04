@@ -52,37 +52,49 @@ public class BitSet <: Iterable<Bool> {
     public func iterator(): Iterator<Bool> {
         BitSetIterator(this)
     }
-    private func growIfNeed(index: UInt32, grow!: Bool = true): Int64 {
+    private func growIfNeed(index: UInt64, grow!: Bool = true): Int64 {
         let idx = Int64(index / 64)
         if (grow && idx >= bits.size) {
             bits.appendAll(Array<UInt64>(idx - bits.size + 1, repeat: 0u64))
         }
         idx
     }
-    func get(index: UInt32): ?Bool {
+    func get(index: UInt64): ?Bool {
         let idx = growIfNeed(index, grow: false)
         if (idx >= bits.size) {
             None
         } else {
-            (bits[idx] & (MASK >> UInt64(index % 64))) != 0
+            (bits[idx] & (MASK >> (index % 64))) != 0
         }
     }
+    public func contains<T>(value: T): Bool where T <: Hashable {
+        this[value.hashCode()]
+    }
+    public func set<T>(value: T): Bool where T <: Hashable {
+        this[value.hashCode()] = true
+    }
+    public func remove<T>(value: T): Bool where T <: Hashable {
+        this[value.hashCode()] = false
+    }
     public operator func [](index: UInt32): Bool {
-        get(index) ?? false
+        this[UInt64(index)]
     }
     public operator func [](index: Int32): Bool {
         this[index.toUInt()]
     }
-    private func uint64ToUInt32(index: UInt64){
-        UInt32(index & 0xffff_ffff)
-    }
     public operator func [](index: UInt64): Bool {
-        this[uint64ToUInt32(index)]
+        get(index) ?? false
     }
     public operator func [](index: Int64): Bool {
         this[index.toUInt()]
     }
     public operator func [](index: UInt32, value!: Bool): Unit {
+        this[UInt64(index)] = value
+    }
+    public operator func [](index: Int32, value!: Bool): Unit {
+        this[index.toUInt()] = value
+    }
+    public operator func [](index: UInt64, value!: Bool): Unit {
         let idx = growIfNeed(index)
         if (value) {
             bits[idx] |= MASK >> UInt64(index % 64)
@@ -90,43 +102,37 @@ public class BitSet <: Iterable<Bool> {
             bits[idx] &= !(MASK >> UInt64(index % 64))
         }
     }
-    public operator func [](index: Int32, value!: Bool): Unit {
-        this[index.toUInt()] = value
-    }
-    public operator func [](index: UInt64, value!: Bool): Unit {
-        this[uint64ToUInt32(index)] = value
-    }
     public operator func [](index: Int64, value!: Bool): Unit {
         this[index.toUInt()] = value
     }
     public operator func |(index: UInt32): Bool {
+        this | UInt64(index)
+    }
+    public operator func |(index: Int32): Bool {
+        this | index.toUInt()
+    }
+    public operator func |(index: UInt64): Bool {
         let idx = growIfNeed(index)
         let val = bits[idx]
         let r = (val | (MASK >> UInt64(index % 64)))
         bits[idx] = val
         r == val
     }
-    public operator func |(index: Int32): Bool {
-        this | index.toUInt()
-    }
-    public operator func |(index: UInt64): Bool {
-        this | uint64ToUInt32(index)
-    }
     public operator func |(index: Int64): Bool {
         this | index.toUInt()
     }
     public operator func &(index: UInt32): Bool {
-        let idx = growIfNeed(index)
-        let val = bits[idx]
-        let r = (val & (MASK >> UInt64(index % 64)))
-        bits[idx] = val & (val | (MASK >> UInt64(index % 64)))
-        r != 0
+        this & UInt64(index)
     }
     public operator func &(index: Int32): Bool {
         this & index.toUInt()
     }
     public operator func &(index: UInt64): Bool {
-        this & uint64ToUInt32(index)
+        let idx = growIfNeed(index)
+        let val = bits[idx]
+        let r = (val & (MASK >> UInt64(index % 64)))
+        bits[idx] = val & (val | (MASK >> UInt64(index % 64)))
+        r != 0
     }
     public operator func &(index: Int64): Bool {
         this & index.toUInt()
@@ -135,6 +141,13 @@ public class BitSet <: Iterable<Bool> {
      * 切换指定bit位的值，返回切换之前的状态
      */
     public operator func ^(index: UInt32): Bool {
+        this ^ UInt64(index)
+    }
+
+    public operator func ^(index: Int32): Bool {
+        this ^ index.toUInt()
+    }
+    public operator func ^(index: UInt64): Bool {
         let idx = growIfNeed(index)
         let mask = MASK >> UInt64(index % 64)
         if ((bits[idx] & mask) == 0) {
@@ -144,13 +157,6 @@ public class BitSet <: Iterable<Bool> {
             bits[idx] &= !mask
             true
         }
-    }
-
-    public operator func ^(index: Int32): Bool {
-        this ^ index.toUInt()
-    }
-    public operator func ^(index: UInt64): Bool {
-        this ^ uint64ToUInt32(index)
     }
     public operator func ^(index: Int64): Bool {
         this ^ index.toUInt()
