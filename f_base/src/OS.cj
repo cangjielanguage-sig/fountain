@@ -62,16 +62,28 @@ public enum OS <: Equatable<OS> & ToString & Hashable {
     public func hashCode(): Int64 {
         toString().hashCode()
     }
-}
     @When[os == "Linux"]
-    public let currentOS = OS.Linux
-
+    public static prop current: OS {
+        get(){
+            Linux
+        }
+    }
     @When[os == "Windows"]
-    public let currentOS = OS.Windows
-
+    public static prop current: OS {
+        get(){
+            Windows
+        }
+    }
     @When[os == "macOS"]
-    public let currentOS = OS.MacOS
-
+    public static prop current: OS {
+        get(){
+            macOS
+        }
+    }
     @When[os == "HarmonyOS"]
-    public let currentOS = OS.HarmonyOS
-
+    public static prop current: OS {
+        get(){
+            HarmonyOS
+        }
+    }
+}
