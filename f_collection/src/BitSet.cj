@@ -6,39 +6,40 @@
             http://license.coscl.org.cn/MulanPSL2
     THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
     See the Mulan PSL v2 for more details.
-*/
+ */
 package f_collection
 
 import f_base.*
 
 class BitSetIterator <: Iterator<Bool> {
     private var current: UInt64 = 0
-    BitSetIterator(private let set: BitSet){}
+    BitSetIterator(private let set: BitSet) {}
 
-    public func next(): ?Bool{
+    public func next(): ?Bool {
         let r = set.get(current)
         current++
         r
     }
 }
+
 public class BitSet <: Iterable<Bool> {
     private static let MASK = 1u64 << 63
     private let bits = ArrayList<UInt64>()
 
-    public init(){
+    public init() {
         this(1)
     }
-    public init(capacity: Int64){
+    public init(capacity: Int64) {
         var i = 0
-        while(i < capacity) {
+        while (i < capacity) {
             bits.append(0)
             i++
         }
     }
-    public init(set: BitSet){
+    public init(set: BitSet) {
         var idx = 0u32
-        for(v in set){
-            if(v){
+        for (v in set) {
+            if (v) {
                 this[idx]
             }
             idx++
@@ -53,10 +54,12 @@ public class BitSet <: Iterable<Bool> {
         BitSetIterator(this)
     }
     private func growIfNeed(index: Int64, grow!: Bool = true): Int64 {
-        var idx = index / 64
-        if(idx < 0){
-            idx = -idx
-        }
+        var idx = if (index < 0) {
+            -index
+        } else {
+            index
+        } / 64
+
         if (grow && idx >= bits.size) {
             bits.appendAll(Array<UInt64>(idx - bits.size + 1, repeat: 0u64))
         }
@@ -85,17 +88,17 @@ public class BitSet <: Iterable<Bool> {
     private func set<T>(value: T, store: Bool): Bool where T <: Hashable {
         let h = value.hashCode()
         let idx = growIfNeed(h, grow: store)
-        if(idx >= bits.size){
+        if (idx >= bits.size) {
             return false
         }
         if (let i <- computePosition(h) && (bits[idx] & i) != 0) {
-            if(store){
+            if (store) {
                 bits[idx] |= i
-            }else{
+            } else {
                 bits[idx] &= !i
             }
             true
-        }else{
+        } else {
             false
         }
     }
@@ -129,9 +132,9 @@ public class BitSet <: Iterable<Bool> {
     public operator func [](index: Int64, value!: Bool): Unit {
         let idx = growIfNeed(index, grow: value)
         let mask = computePosition(index)
-        if(idx >= bits.size){
+        if (idx >= bits.size) {
             return
-        }else if (value) {
+        } else if (value) {
             bits[idx] |= mask
         } else {
             bits[idx] &= !mask
