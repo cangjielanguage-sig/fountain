@@ -8,7 +8,6 @@
   f_collection = {path = "../f_collection"}
   f_concurrent = {path = "../f_concurrent"}
 # f_config = {path = "../f_config"}
-# f_cron = {path = "../f_cron"}
 # f_data = {path = "../f_data"}
   f_exception = {path = "../f_exception"}
 # f_id = {path = "../f_id"}
@@ -23,6 +22,7 @@
 # f_process = {path = "../f_process"}
 # f_random = {path = "../f_random"}
 # f_regex = {path = "../f_regex"}
+# f_ticktock = {path = "../f_ticktock"}
 # f_util = {path = "../f_util"}
   fountain = {path = "../"}
 
