@@ -33,31 +33,31 @@ public interface ValueEqualMap<K, V> <: Values<V> where K <: Equatable<K>, V <: 
     }
 }
 
-extend<K, V> HashMap<K, V> <: ValueEqualMap<K, V> where K <: Hashable & Equatable<K>, V <: Equal<V> {
-    
-}
 extend<K, V> HashMap<K, V> <: ValueContainsMap<K, V> where K <: Hashable & Equatable<K> {
     
 }
-extend<K, V> TreeMap<K, V> <: ValueEqualMap<K, V> where K <: Comparable<K>, V <: Equal<V> {
-
+extend<K, V> HashMap<K, V> <: ValueEqualMap<K, V> where K <: Hashable & Equatable<K>, V <: Equal<V> {
+    
 }
 extend<K, V> TreeMap<K, V> <: ValueContainsMap<K, V> where K <: Comparable<K>{
 
 }
-extend<K, V> LinkedHashMap<K, V> <: ValueEqualMap<K, V> where K <: Hashable & Equatable<K>, V <: Equal<V> {
+extend<K, V> TreeMap<K, V> <: ValueEqualMap<K, V> where K <: Comparable<K>, V <: Equal<V> {
 
 }
 extend<K, V> LinkedHashMap<K, V> <: ValueContainsMap<K, V> where K <: Hashable & Equatable<K> {
 
 }
-extend<K, V> ConcurrentHashMap<K, V> <: ValueEqualMap<K, V> where K <: Hashable & Equatable<K>, V <: Equal<V> {
-    
+extend<K, V> LinkedHashMap<K, V> <: ValueEqualMap<K, V> where K <: Hashable & Equatable<K>, V <: Equal<V> {
+
 }
 extend<K, V> ConcurrentHashMap<K, V> <: ValueContainsMap<K, V> where K <: Hashable & Equatable<K> {
     public func values(): Collection<V>{
         ConcurrentHashMapValues<K, V>(this)
     }
+}
+extend<K, V> ConcurrentHashMap<K, V> <: ValueEqualMap<K, V> where K <: Hashable & Equatable<K>, V <: Equal<V> {
+    
 }
 public class ConcurrentHashMapValues<K, V> <: Collection<V> where K <: Hashable & Equatable<K> {
     public ConcurrentHashMapValues(private let map: ConcurrentHashMap<K, V>){}

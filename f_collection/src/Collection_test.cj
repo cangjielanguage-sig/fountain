@@ -199,7 +199,7 @@ public class Collection_test {
     }
     @TestCase
     public func testContainsValue(): Unit {
-        let map = HashMap<Int64, Int64>([(3, 3)])
+        let map = HashMap<Int64, Int64>([(1, 1), (2, 2), (3, 3)])
         @Assert(true, map.containsValue(3))
     }
 }
