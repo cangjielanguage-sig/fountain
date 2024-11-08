@@ -20,13 +20,12 @@ _/ ____\____  __ __  _____/  |______  |__| ____
 
 ### fboot
 - 把fboot加入PATH环境变量
-#### 动态fboot
-1. fboot build：执行`cjpm build`构建当前目录，加载编译得到的动态链接库，把@Pointcut插入正确的函数。如果当前目录没有cjpm.toml，会抛出异常。
-2. fboot build -p /path/of/project：把工作目录切换到指定路径，然后执行跟上一条一样的工作。
-3. fboot run：加载当前目录的动态链接库并执行f_app.App，完成应用初始化。f_app.App实现了f_launcher.Launcher。
-4. fboot run -p /path/of/dylibs：把工作目录切换到指定路径，然后执行第三条。
-5. fboot run package_name.LauncherImpl，类型需要实现f_launcher.Launcher接口。加载当前目录的动态链接库并调用指定类型名完成初始化。
-6. fboot run package_name.LauncherImpl -p /path/of/dylibs：把工作目录切换到指定路径，然后执行第五条。
+  1. fboot build：执行`cjpm build`构建当前目录，加载编译得到的动态链接库，把@Pointcut插入正确的函数。如果当前目录没有cjpm.toml，会抛出异常。
+  2. fboot build -p /path/of/project：把工作目录切换到指定路径，然后执行跟上一条一样的工作。
+  3. fboot run：加载当前目录的动态链接库并执行f_app.App，完成应用初始化。f_app.App实现了f_launcher.Launcher。
+  4. fboot run -p /path/of/dylibs：把工作目录切换到指定路径，然后执行第三条。
+  5. fboot run package_name.LauncherImpl，类型需要实现f_launcher.Launcher接口。加载当前目录的动态链接库并调用指定类型名完成初始化。
+  6. fboot run package_name.LauncherImpl -p /path/of/dylibs：把工作目录切换到指定路径，然后执行第五条。
 
 ### 功能
 - 空集合
