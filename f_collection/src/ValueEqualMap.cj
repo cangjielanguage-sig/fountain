@@ -28,7 +28,6 @@ public interface ValueEqualMap<K, V> where K <: Equatable<K>, V <: Equal<V> {
         containsValue{v => v == value}
     }
 }
-
 extend<K, V> HashMap<K, V> <: ValueEqualMap<K, V> where K <: Hashable & Equatable<K>, V <: Equal<V> {
     
 }
