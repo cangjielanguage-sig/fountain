@@ -196,6 +196,10 @@ public class Collection_test {
         r = bs & 21324
         @Assert(false, r)
         @Assert(false, bs[21324])
-
+    }
+    @TestCase
+    public func testContainsValue(): Unit {
+        let map = HashMap<Int64, Int64>([(3, 3)])
+        @Assert(true, map.containsValue(3))
     }
 }
