@@ -12,8 +12,10 @@ package f_collection
 public import std.collection.{HashMap, TreeMap}
 public import std.collection.concurrent.ConcurrentHashMap
 
-public interface ValueContainsMap<K, V> where K <: Equatable<K> {
+public interface Values<V>{
     func values(): Collection<V>
+}
+public interface ValueContainsMap<K, V> <: Values<V> where K <: Equatable<K> {
     func containsValue(predicate: (V) -> Bool): Bool {
         for(v in this.values() where predicate(v)){
             return true
@@ -22,10 +24,12 @@ public interface ValueContainsMap<K, V> where K <: Equatable<K> {
     }
 }
 
-public interface ValueEqualMap<K, V> where K <: Equatable<K>, V <: Equal<V> {
-    func containsValue(predicate: (V) -> Bool): Bool
+public interface ValueEqualMap<K, V> <: Values<V> where K <: Equatable<K>, V <: Equal<V> {
     func containsValue(value: V): Bool {
-        containsValue{v => v == value}
+        for(v in this.values() where v == value){
+            return true
+        }
+        return false
     }
 }
 
