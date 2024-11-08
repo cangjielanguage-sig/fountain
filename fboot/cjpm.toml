@@ -13,6 +13,7 @@
 # f_id = {path = "../f_id"}
 # f_io = {path = "../f_io"}
 # f_jwt = {path = "../f_jwt"}
+# f_launcher = {path = "../f_launcher"}
 # f_log = {path = "../f_log"}
 # f_mvc = {path = "../f_mvc"}
 # f_net = {path = "../f_net"}
