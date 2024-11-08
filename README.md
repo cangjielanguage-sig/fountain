@@ -19,15 +19,24 @@ _/ ____\____  __ __  _____/  |______  |__| ____
 - 深刻利用仓颉语言特性
 - 只需要开发动态链接库，fboot负责加载、初始化并运行。
 
-### 本项目的所有动态链接库
+### 加载本项目的动态链接库
 - 如果仅仅是开发使用，可以使用cjpm run当前依赖fountain的项目，就自动加载了。
-- 如果是在Linux服务器环境运行，最好将本项目编译的动态链接库都加入环境变量LD_LIBRARY_PATH。
+- 如果是在Linux服务器环境运行，
+  - 将fountain动态链接库所在的路径加入环境变量`export fountainPath=/path/of/fountain_dynamic_libs`。
+  - 最好将本项目编译的动态链接库都加入环境变量`export LD_LIBRARY_PATH=$fountainPath:$LD_LIBRARY_PATH`。
 
 ### fboot
 - 把fboot加入PATH环境变量
   1. fboot build：执行`cjpm build`构建当前目录，加载编译得到的动态链接库，把@Pointcut插入正确的函数。如果当前目录没有cjpm.toml，会抛出异常。
   2. fboot build -p /path/of/project：把工作目录切换到指定路径，然后执行跟上一条一样的工作。
-  3. fboot run：加载当前目录的动态链接库并执行f_app.App，完成应用初始化。f_app.App实现了f_launcher.Launcher。
+  3. fboot run：
+     - 首先加载环境变量$fountainPath。
+     - 按字符顺序加载当前目录的动态链接库，加载完成当前目录的动态链接库再按照字符顺序加载子目录里的动态链接库，直到递归加载完当前目录和它的子目录里的全部动态链接库。
+     - 然后并执行`f_app.App`，完成应用初始化。f_app.App实现了f_launcher.Launcher。
+     - 如果找不到f_app.App，就执行找到的第一个`f_launcher.Launcher`实现。
+     - 如果找不到就执行第一个找到的顶级声明函数`public func launch(args: Array<String>): Unit`。
+     - 如果找不到就执行第一个找到的顶级声明函数`public func launch(): Unit`。
+     - 如果找不到就只加载动态链接库，需要确保动态链接库初始化时就能够完成程序引导。
   4. fboot run -p /path/of/dylibs：把工作目录切换到指定路径，然后执行第三条。
   5. fboot run package_name.LauncherImpl，类型需要实现f_launcher.Launcher接口。加载当前目录的动态链接库并调用指定类型名完成初始化。
   6. fboot run package_name.LauncherImpl -p /path/of/dylibs：把工作目录切换到指定路径，然后执行第五条。
