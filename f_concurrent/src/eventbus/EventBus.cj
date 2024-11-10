@@ -16,7 +16,6 @@ import std.sync.{Monitor, ReentrantMutex, AtomicBool}
 import std.time.DateTime
 import crypto.crypto.SecureRandom
 import f_base.WorkerStrategy
-import f_collection.TreeSet
 import f_concurrent.eventbus.exception.EventBusException
 
 /**
@@ -27,7 +26,8 @@ public class EventBus {
     private let mutex = ReentrantMutex()
     private let monitor = Monitor()
     private var workers: Array<Worker> = []
-
+    
+    private var maxQueueSize = (-1, -1) // (maxQueueSize, longestQueueIndex)
     private let queueMutex = ReentrantMutex()
     private let seizeQueue: BlockingQueue<Int64>
     private let toThrowIfNotMatch: Bool
@@ -42,9 +42,7 @@ public class EventBus {
         maxWaitingJobPerWorker!: Int64 = 1,
         fullJobQueueStrategy!: WorkerStrategy = Block,
         toThrowIfNotMatch!: Bool = false,
-        abilities!: Array<(Event, (Event) -> Event)> = [],
-        seizingGranularity!: Duration = Duration.millisecond,
-        seizingTreeResetPeriod!: Duration = Duration.millisecond
+        abilities!: Array<(Event, (Event) -> Event)> = []
     ) {
         this.toThrowIfNotMatch = toThrowIfNotMatch
         seizeQueue = BlockingQueue<Int64>(workers)
@@ -52,43 +50,19 @@ public class EventBus {
             i => Worker(this, i, maxWaitingJobPerWorker, abilities: abilities)
         }
         doArrange = genDoArrange(maxWaitingJobPerWorker, fullJobQueueStrategy)
-        seize(seizingGranularity, seizingTreeResetPeriod)
+        seize()
     }
-    private func seize(seizingGranularity: Duration, seizingTreeResetPeriod: Duration){
+    private func seize(){
         spawn {
-            let tree = TreeSet<ComparableWorker>()
-            var populate = true
-            var lastReset = DateTime.now()
-            while(let seizedBy = seizeQueue.dequeue()){
-                if(populate || DateTime.now() - lastReset >= seizingTreeResetPeriod){
-                    tree.clear()
-                    for(w in this.workers){
-                        tree.put(ComparableWorker(w))
-                    }
-                    populate = false
-                    lastReset = DateTime.now()
+            while (true) {
+                let sizedBy = seizeQueue.dequeue()
+                let (maxQueueSize, maxQueueIndex) = synchronized(queueMutex) {
+                    this.maxQueueSize
                 }
-                let list = ArrayList<ComparableWorker>()
-                while(let Some(last) <- tree.popLast()){
-                    if(last.worker.workerId != seizedBy && let Some(e) <- last.worker.tryDequeue()){
-                        e.workerId = seizedBy
-                        this.workers[seizedBy].arrange(e)
-                        last.update()
-                        tree.put(last)
-                        for(w in list){
-                            w.update()
-                            tree.put(w)
-                        }
-                        list.clear()
-                        break
-                    }else{
-                        list.append(last)
-                    }
-                }
-                if(tree.isEmpty()){
-                    seizeQueue.tryEnqueue(seizedBy)
-                    populate = true
-                    sleep(seizingGranularity)
+                if (maxQueueSize > 0 && maxQueueIndex != sizedBy && let Some(e) <- this.workers[maxQueueIndex].tryDequeue()) {
+                    e.workerId = sizedBy
+                    this.workers[sizedBy].arrange(e)
+                    putQueueSize(sizedBy)
                 }
             }
         }
@@ -239,6 +213,7 @@ public class EventBus {
             }
         }
         doArrange(workerId, event)
+        putQueueSize(workerId)
     }
 
     private func arrange(workerId: Int64, event: Event, currentThread: Bool) {
@@ -272,6 +247,15 @@ public class EventBus {
     }
     private func discard(workerId: Int64) {
         workers[workerId].discard()
+    }
+    
+    func putQueueSize(workerId: Int64) {//分别在增加减少Worker任务队列的时候调用了此函数
+        synchronized(queueMutex) {
+            let waitingJobSize = workers[workerId].waitingJobSize
+            if (waitingJobSize > maxQueueSize[0] || workerId == maxQueueSize[1]) {
+                maxQueueSize = (waitingJobSize, workerId)
+            }
+        }
     }
     func seizeBy(workerId: Int64): Unit {
         seizeQueue.enqueue(workerId)
