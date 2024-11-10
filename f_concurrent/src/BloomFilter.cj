@@ -21,7 +21,7 @@ public class BloomFilter<T> where T <: Hashable {
     }
     public init(hashers: Array<(T) -> Int64>) {
         this(Array<(T, Int64) -> Int64>(hashers.size) {i =>
-            {v: T, h: Int64 =>
+            {v: T, _: Int64 =>
                 hashers[i](v)
             }
         })

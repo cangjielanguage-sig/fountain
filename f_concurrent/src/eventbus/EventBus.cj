@@ -31,7 +31,7 @@ public class EventBus {
     private let queueMutex = ReentrantMutex()
     private let seizeQueue: BlockingQueue<Int64>
     private let toThrowIfNotMatch: Bool
-    private var doArrange: (Int64, Event) -> Bool = {id, e => false}
+    private var doArrange: (Int64, Event) -> Bool = {_, _ => false}
     /**
      * workers 工作线程数，初始化后不可修改
      * maxWaitingJobPerWorker 最大等待任务数
