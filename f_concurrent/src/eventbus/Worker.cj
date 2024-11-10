@@ -12,10 +12,26 @@ package f_concurrent.eventbus
 import std.collection.concurrent.ConcurrentHashMap
 import std.sync.AtomicBool
 import f_concurrent.eventbus.exception.EventBusException
+
+class ComparableWorker <: Comparable<ComparableWorker> {
+    let size: Int64
+    ComparableWorker(let worker: Worker){
+        size = worker.waitingJobSize
+    }
+    public func compare(other: ComparableWorker): Ordering {
+        match(size.compare(other.size)){
+            case EQ => index.compare(other.worker.index)
+            case x => x
+        }
+    }
+    func update(){
+        this.size = worker.waitingJobSize
+    }
+}
 /**
  * 任务线程
  */
-public class Worker {
+public class Worker <: Comparable<Worker> {
     private let abilities = ConcurrentHashMap<Event, (Event) -> Event>()
     private let queue: JobQueue
     private let retired = AtomicBool(false)

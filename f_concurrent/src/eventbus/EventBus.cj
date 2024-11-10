@@ -9,13 +9,14 @@
  */
 package f_concurrent.eventbus
 
-import std.collection.TreeMap
+import std.collection.{TreeMap, ArrayList}
 import std.collection.concurrent.{BlockingQueue, ConcurrentHashMap}
 import std.runtime.ProcessorInfo
 import std.sync.{Monitor, ReentrantMutex, AtomicBool}
 import std.time.DateTime
 import crypto.crypto.SecureRandom
 import f_base.WorkerStrategy
+import f_collection.TreeSet
 import f_concurrent.eventbus.exception.EventBusException
 
 /**
@@ -27,7 +28,6 @@ public class EventBus {
     private let monitor = Monitor()
     private var workers: Array<Worker> = []
 
-    private var maxQueueSize = (-1, -1) // (maxQueueSize, longestQueueIndex)
     private let queueMutex = ReentrantMutex()
     private let seizeQueue: BlockingQueue<Int64>
     private let toThrowIfNotMatch: Bool
@@ -42,119 +42,160 @@ public class EventBus {
         maxWaitingJobPerWorker!: Int64 = 1,
         fullJobQueueStrategy!: WorkerStrategy = Block,
         toThrowIfNotMatch!: Bool = false,
-        abilities!: Array<(Event, (Event) -> Event)> = []
+        abilities!: Array<(Event, (Event) -> Event)> = [],
+        seizingGranularity!: Duration = Duration.millisecond,
+        seizingTreeResetPeriod!: Duration = Duration.millisecond
     ) {
         this.toThrowIfNotMatch = toThrowIfNotMatch
         seizeQueue = BlockingQueue<Int64>(workers)
         this.workers = Array<Worker>(workers) {
             i => Worker(this, i, maxWaitingJobPerWorker, abilities: abilities)
         }
-        doArrange = match (fullJobQueueStrategy) {
-            case Abort => {
-                id, e => if (e is EndEvent) {
-                    deliverIfNeed(e)
-                    false
-                } else if (tryArrange(id, e) || tryArrangeOther(id, e)) {
-                    true
-                } else {
-                    throw EventBusException("job queue is full, max size of queue is ${maxWaitingJobPerWorker}")
-                }
-            }
-            case DiscardCurrent => {
-                id, e => if (e is EndEvent) {
-                    deliverIfNeed(e)
-                    false
-                } else if (tryArrange(id, e) || tryArrangeOther(id, e)) {
-                    true
-                } else {
-                    deliverIfNeed(e)
-                    false
-                }
-            }
-            case DiscardOldest => {
-                id, e =>
-                if (e is EndEvent) {
-                    deliverIfNeed(e)
-                    return false
-                }
-                while (!(tryArrange(id, e) || tryArrangeOther(id, e))) {
-                    discard(id)
-                }
-                true
-            }
-            case AbortAfter(d) => {
-                id, e => if (e is EndEvent) {
-                    deliverIfNeed(e)
-                    false
-                } else if (tryArrange(id, e) || tryArrangeOther(id, e) || tryArrange(id, e,
-                    timeout: d)) {
-                    true
-                } else {
-                    throw EventBusException("job queue is full, max size of queue is ${maxWaitingJobPerWorker}")
-                }
-            }
-            case DiscardCurrentAfter(d) => {
-                id, e => if (e is EndEvent) {
-                    deliverIfNeed(e)
-                    false
-                } else if (tryArrange(id, e) || tryArrangeOther(id, e) || tryArrange(id, e,
-                    timeout: d)) {
-                    true
-                } else {
-                    e.setNoneData()
-                    deliverIfNeed(e)
-                    false
-                }
-            }
-            case DiscardOldestDuring(d) => {
-                id, e =>
-                if (e is EndEvent) {
-                    deliverIfNeed(e)
-                    return false
-                }
-                let start = DateTime.now()
-                while (!(tryArrange(id, e) || tryArrangeOther(id, e))) {
-                    if (DateTime.now() - start < d) {
-                        discard(id)
-                    } else {
-                        e.setNoneData()
-                        deliverIfNeed(e)
-                        return false
-                    }
-                }
-                true
-            }
-            case Block => {
-                id, e =>
-                if (e is EndEvent) {
-                    deliverIfNeed(e)
-                } else {
-                    arrange(id, e)
-                }
-                true
-            }
-            case CurrentThread => {
-                id, e => arrange(id, e, true)
-            }
-            case NewThread => {
-                id, e => arrange(id, e, false)
-            }
-        }
+        doArrange = genDoArrange(maxWaitingJobPerWorker, fullJobQueueStrategy)
+        seize(seizingGranularity, seizingTreeResetPeriod)
+    }
+    private func seize(seizingGranularity: Duration, seizingTreeResetPeriod: Duration){
         spawn {
-            while (true) {
-                let sizedBy = seizeQueue.dequeue()
-                let (maxQueueSize, maxQueueIndex) = synchronized(queueMutex) {
-                    this.maxQueueSize
-                }
-                if (maxQueueSize > 0 && maxQueueIndex != sizedBy) {
-                    if (let Some(e) <- this.workers[maxQueueIndex].tryDequeue()) {
-                        e.workerId = sizedBy
-                        this.workers[sizedBy].arrange(e)
+            let tree = TreeSet<ComparableWorker>()
+            var populate = true
+            var lastReset = DateTime.now()
+            while(let seizedBy = seizeQueue.dequeue()){
+                if(populate || DateTime.now() - lastReset >= seizingTreeResetPeriod){
+                    tree.clear()
+                    for(w in this.workers){
+                        tree.put(ComparableWorker(w))
                     }
+                    populate = false
+                    lastReset = DateTime.now()
+                }
+                let list = ArrayList<ComparableWorker>()
+                while(let Some(last) <- tree.popLast()){
+                    if(last.worker.workerId != seizedBy && let Some(e) <- last.worker.tryDequeue()){
+                        e.workerId = seizedBy
+                        this.workers[seizedBy].arrange(e)
+                        last.update()
+                        tree.put(last)
+                        for(w in list){
+                            w.update()
+                            tree.put(w)
+                        }
+                        list.clear()
+                        break
+                    }else{
+                        list.append(last)
+                    }
+                }
+                if(tree.isEmpty()){
+                    seizeQueue.tryEnqueue(seizedBy)
+                    populate = true
+                    sleep(seizingGranularity)
                 }
             }
         }
     }
+    private func genDoArrange(maxWaitingJobPerWorker: Int64, fullJobQueueStrategy: WorkerStrategy): (Int64, Event) -> Bool {
+        match (fullJobQueueStrategy) {
+            case Abort => abortStrategy(maxWaitingJobPerWorker)
+            case DiscardCurrent => discardCurrent
+            case DiscardOldest => discardOldestStrategy
+            case AbortAfter(d) => abortAfterStrategy(d, maxWaitingJobPerWorker)
+            case DiscardCurrentAfter(d) => discardCurrentAfterStrategy(d)
+            case DiscardOldestDuring(d) => discardOldestDuringStrategy(d)
+            case Block => blockStrategy
+            case CurrentThread | New => currentThreadStrategy
+        }
+    }
+    private func abortStrategy(maxWaitingJobPerWorker: Int64): (Int64, Event) -> Bool {
+        {
+            id, e => if (e is EndEvent) {
+                deliverIfNeed(e)
+                false
+            } else if (tryArrange(id, e) || tryArrangeOther(id, e)) {
+                true
+            } else {
+                throw EventBusException("job queue is full, max size of queue is ${maxWaitingJobPerWorker}")
+            }
+        }
+    }
+    private func discardCurrent(id: Int64, e: Event) {
+        if (e is EndEvent) {
+            deliverIfNeed(e)
+            false
+        } else if (tryArrange(id, e) || tryArrangeOther(id, e)) {
+            true
+        } else {
+            deliverIfNeed(e)
+            false
+        }
+    }
+    private func discardOldestStrategy(id: Int64, e: Event) {
+        if (e is EndEvent) {
+            deliverIfNeed(e)
+            return false
+        }
+        while (!(tryArrange(id, e) || tryArrangeOther(id, e))) {
+            discard(id)
+        }
+        true
+    }
+    private func abortAfterStrategy(d: Duration, maxWaitingJobPerWorker: Int64): (Int64, Event) -> Bool {
+        {
+            id, e => if (e is EndEvent) {
+                deliverIfNeed(e)
+                false
+            } else if (tryArrange(id, e) || tryArrangeOther(id, e) || tryArrange(id, e, timeout: d)) {
+                true
+            } else {
+                throw EventBusException("job queue is full, max size of queue is ${maxWaitingJobPerWorker}")
+            }
+        }
+    }
+    private func discardCurrentAfterStrategy(d: Duration): (Int64, Event) -> Bool {
+        {
+            id, e => if (e is EndEvent) {
+                deliverIfNeed(e)
+                false
+            } else if (tryArrange(id, e) || tryArrangeOther(id, e) || tryArrange(id, e, timeout: d)) {
+                true
+            } else {
+                e.setNoneData()
+                deliverIfNeed(e)
+                false
+            }
+        }
+    }
+    private func discardOldestDuringStrategy(d: Duration): (Int64, Event) -> Bool {
+        {
+            id, e =>
+            if (e is EndEvent) {
+                deliverIfNeed(e)
+                return false
+            }
+            let start = DateTime.now()
+            while (!(tryArrange(id, e) || tryArrangeOther(id, e))) {
+                if (DateTime.now() - start < d) {
+                    discard(id)
+                } else {
+                    e.setNoneData()
+                    deliverIfNeed(e)
+                    return false
+                }
+            }
+            true
+        }
+    }
+    private func blockStrategy(id: Int64, e: Event) {
+        if (e is EndEvent) {
+            deliverIfNeed(e)
+        } else {
+            arrange(id, e)
+        }
+        true
+    }
+    private func currentThreadStrategy(id: Int64, e: Event) {
+        arrange(id, e, true)
+    }
+
     public func retireAll() {
         for (worker in workers) {
             worker.retire()
@@ -177,26 +218,27 @@ public class EventBus {
         event.arrangedThreadId = Thread.currentThread.id
         var workerId = event.workerId
         if (workerId < 0) {
-            workerId =
-            synchronized(mutex) {
+            workerId = synchronized(mutex) {
                 let id = event.workerId
                 if (id >= 0) {
                     id
                 } else {
-                    let id = if (let Some(random) <- THREAD_LOCAL_RANDOM.get()) {
-                        random
-                    } else {
-                        let random = SecureRandom()
-                        THREAD_LOCAL_RANDOM.set(random)
-                        random
-                    }.nextInt64(workers.size)
+                    let id = if (let Some(random) <- THREAD_LOCAL_RANDOM
+                        .get()) {
+                            random
+                        } else {
+                            let random = SecureRandom()
+                            THREAD_LOCAL_RANDOM
+                            .set(random)
+                            random
+                        }
+                        .nextInt64(workers.size)
                     event.workerId = id
                     id
                 }
             }
         }
         doArrange(workerId, event)
-        putQueueSize(workerId)
     }
 
     private func arrange(workerId: Int64, event: Event, currentThread: Bool) {
@@ -231,14 +273,6 @@ public class EventBus {
     private func discard(workerId: Int64) {
         workers[workerId].discard()
     }
-    func putQueueSize(workerId: Int64) {
-        synchronized(queueMutex) {
-            let waitingJobSize = workers[workerId].waitingJobSize
-            if (waitingJobSize > maxQueueSize[0]) {
-                maxQueueSize = (waitingJobSize, workerId)
-            }
-        }
-    }
     func seizeBy(workerId: Int64): Unit {
         seizeQueue.enqueue(workerId)
     }
@@ -256,11 +290,12 @@ public class EventBus {
             match (d) {
                 case Some(x) => match (x) {
                     case x: T => Some(x)
-                    case _ => if (toThrowIfNotMatch) {
-                        throw EventBusException("data in current Event does not match.")
-                    } else {
-                        None<T>
-                    }
+                    case _ =>
+                        if (toThrowIfNotMatch) {
+                            throw EventBusException("data in current Event does not match.")
+                        } else {
+                            None<T>
+                        }
                 }
                 case _ => None<T>
             }
@@ -291,8 +326,8 @@ public class EventBus {
         }
         get(true)
     }
-    func deliverIfNeed(event: Event){
-        if(event.deliverResult){
+    func deliverIfNeed(event: Event) {
+        if (event.deliverResult) {
             deliver(event.arrangedThreadId, event.getData<Any>())
         }
     }

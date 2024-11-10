@@ -102,7 +102,7 @@ public class ConcurrentHashSet<T> <: Set<T> where T <: Hashable & Equatable<T> {
         }
     }
     public func clear(): Unit {
-        removeIf{v => true}
+        removeIf{_ => true}
     }
     public func retainAll(values: Set<T>): Unit {
         for (v in this where !values.contains(v)) {
