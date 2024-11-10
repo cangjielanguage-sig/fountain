@@ -67,7 +67,7 @@ public class LinkedHashMap<K, V> <: Map<K, V> where K <: Hashable & Equatable<K>
      */
     public func toArray(): Array<(K, V)> {
         let itr = iterator()
-        Array<(K, V)>(size){i =>
+        Array<(K, V)>(size){_ =>
             itr.next().getOrThrow()
         }
     }

@@ -1,0 +1,237 @@
+/*
+    Copyright (c) [2022] [WuJingrun（吴京润）]
+    fountain is licensed under Mulan PSL v2.
+    You can use this software according to the terms and conditions of the Mulan PSL v2.
+    You may obtain a copy of Mulan PSL v2 at:
+            http://license.coscl.org.cn/MulanPSL2
+    THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+    See the Mulan PSL v2 for more details.
+ */
+package f_cache
+
+import std.collection.{HashMap, HashSet, Set}
+import std.collection.concurrent.BlockingQueue
+import std.math.MathExtension
+import std.process.Process
+import std.time.DateTime
+import std.sync.{ReentrantMutex, AtomicInt64, AtomicReference, Timer, AtomicBool}
+import f_base.*
+import f_exception.UnreachableException
+import f_collection.PriorityQueue
+
+public class HeapCache<V> where V <: Object {
+    private let mutex = ReentrantMutex()
+    private let store: ConcHashMap<Priority<V>>
+    private let alive = AtomicBool(true)
+
+    public HeapCache(
+        private let concurrencyLevel!: Int64 = DEFAULT_HEAP_CACHE_CONCURRENCY_LEVEL,
+        private let maxLife!: Duration = DEFAULT_HEAP_CACHE_MAX_LIFE,
+        private let maxSize!: Int64 = DEFAULT_HEAP_CACHE_MAX_SIZE,
+        private let checkDuration!: Duration = DEFAULT_HEAP_CHECK_CHECK_DURATION,
+        private let evictionCallback!: (String, V) -> Unit = {k, v => ()}
+    ) {
+        if (maxLife < Duration.Zero || maxSize <= 0 || concurrencyLevel <= 0 || checkDuration <= Duration.Zero) {
+            throw IllegalArgumentException(
+                "maxLife must not be less than zero. maxSize and concurrencyLevel must be greater than zero. checkDuration must be greater than Duration.Zero. however current are ${maxLife}, ${maxSize}, ${concurrencyLevel}, ${checkDuration}"
+            )
+        }
+        this.store = ConcHashMap<Priority<V>>.create(concurrencyLevel: concurrencyLevel)
+        startTimer()
+        Process.current.atExit(destroy)
+    }
+
+    public static func builder(): HeapCacheBuilder<V> {
+        return HeapCacheBuilder<V>()
+    }
+    private func onEviction(): BlockingQueue<(String, V)> {
+        let q = BlockingQueue<(String, V)>()
+        spawn {
+            while (let (k, v) <- q.dequeue()) {
+                evictionCallback(k, v)
+            }
+        }
+        q
+    }
+    private func startTimer() {
+        let topVals = PriorityQueue<Priority<V>>.create<Priority<V>>(capacity: concurrencyLevel)
+        let tops = HashMap<String, Priority<V>>()
+        let q = onEviction()
+        Timer.after(checkDuration) {
+            let iterator = (store.iterator() as ConcHashMapIterator<Priority<V>>).getOrThrow()
+            checkTimeout(q)
+            checkOverSize(topVals, tops, iterator, q)
+            if (alive.load()) {
+                checkDuration
+            } else {
+                None<Duration>
+            }
+        }
+    }
+    private func checkTimeout(evictionQueue: BlockingQueue<(String, V)>): Unit {
+        removeIf{k, p =>
+            if(alive.load()){
+                if(evicated(p)){
+                    evictionQueue.enqueue((k, p.load()))
+                    true
+                }else{
+                    false
+                }
+            }else{
+                return true
+            }
+        }
+    }
+    private func checkOverSize(
+        topVals: PriorityQueue<Priority<V>>,
+        tops: HashMap<String, Priority<V>>,
+        iterator: ConcHashMapIterator<Priority<V>>,
+        evictionQueue: BlockingQueue<(String, V)>
+    ): Unit {
+        let store = this.store
+        let maxSize = this.maxSize
+        let current = DateTime.now()
+        while (store.size > maxSize && alive.load()) {
+            let segmItrs = iterator.segmentIterators()
+            var segmItrMap = HashMap<Int64, Iterator<(String, Priority<V>)>>()
+            var i = 0
+            for (segmItr in segmItrs where alive.load()) {
+                if (let Some((k, p)) <- segmItr.next()) {
+                    segmItrMap[i] = segmItr
+                    p.index = i
+                    topVals.offer(p)
+                }
+                i++
+            }
+            while (store.size > maxSize && alive.load()) {
+                var minIdx = -1
+                if (let Some(p) <- topVals.poll()) {
+                    store.remove(p.key)
+                    minIdx = p.index
+                    evictionQueue.enqueue((p.key, p.load()))
+                }
+                if (minIdx < 0 || store.size <= maxSize) {
+                    break
+                } else if (let Some(segm) <- segmItrMap.get(minIdx) && let Some(next) <- segm.next()) {
+                    next[1].index = minIdx
+                    topVals.offer(next[1])
+                }
+            }
+            while (let Some(p) <- topVals.poll() && alive.load()) {
+                tops.put(p.key, p)
+            }
+        }
+        for (p in tops.values() where alive.load()) { //不给Priority增加已删除标记，此处也不判断Priority是不是已被主动删除，因为这样做不节省时间
+            p.updateLastChecked(current)
+        }
+        tops.clear()
+    }
+    private func evicated(p: Priority<V>): Bool {
+        DateTime.now() - if(p.once){
+            p.birthTime
+        }else{
+            p.lastUsedTime
+        } >= p.maxLife
+    }
+
+    public func get(key: String): Option<V> {
+        match(store.get(key)){
+            case Some(p) where !evicated(p) => p.load()
+            case _ => None
+        }
+    }
+    public func contains(key: String): Bool {
+        get(key).isSome()
+    }
+    public func once(key: String): Bool {
+        match (store.get(key)) {
+            case Some(p) => synchronized(p.lock) {
+                p.load()
+                p.once = true
+                true
+            }
+            case _ => false
+        }
+    }
+    public func prolong(key: String, life: Duration, once!: Bool = false): Bool {
+        match (store.get(key)) {
+            case Some(p) => synchronized(p.lock) {
+                p.load()
+                p.maxLife = life
+                p.once = once
+                true
+            }
+            case _ => false
+        }
+    }
+    public func prolong(key: String, deathTime: DateTime): Bool {
+        match (store.get(key)) {
+            case Some(p) => synchronized(p.lock) {
+                p.load()
+                p.deathTime = deathTime
+                p.once = true
+                true
+            }
+            case _ => false
+        }
+    }
+    public func set(key: String, value: V, life!: Duration = this.maxLife, once!: Bool = false): ?V {
+        if (let Some(p) <- store.get(key)) {
+            synchronized(p.lock) {
+                let old = p.load()
+                p.store(value)
+                p.maxLife = life
+                p.once = false
+                old
+            }
+        } else {
+            store.put(key, Priority<V>(key, value, maxLife, once))
+            Option<V>.None
+        }
+    }
+    public func set(key: String, value: V, dieAt: DateTime): ?V {
+        set(key, value, life: dieAt - DateTime.now(), once: true)
+    }
+    public func getOrDefault(key: String, default: V): V {
+        return get(key) ?? default
+    }
+    public func getOrStore(key: String, value: V): V {
+        getOrCompute(key) {value}.getOrThrow()
+    }
+    public func getOrCompute(key: String, callable: () -> V): Option<V> {
+        getOrCompute(key) {
+            (callable(), this.maxLife, false)
+        }
+    }
+    public func getOrCompute(key: String, callable: () -> (V, DateTime)): Option<V> {
+        store.computeIfAbsent(key) {
+            let data = callable()
+            Priority<V>(key, data[0], data[1] - DateTime.now(), true)
+        }.load()
+    }
+    public func getOrCompute(key: String, callable: () -> (V, Duration, Bool)): Option<V> {
+        store.computeIfAbsent(key) {
+            let data = callable()
+            Priority<V>(key, data[0], data[1], data[2])
+        }.load()
+    }
+    public func remove(key: String): Option<V> {
+        store.remove(key)?.load()
+    }
+    public func removeIf(predicate: (String, V) -> Bool): Unit {
+        removeIf{k: String, p: Priority<V> => predicate(k, p.load())}
+    }
+    private func removeIf(predicate: (String, Priority<V>) -> Bool): Unit {
+        for ((k, p) in store where predicate(k, p)) {
+            remove(k)
+        }
+    }
+    public prop size: Int64 {
+        get() {
+            store.size
+        }
+    }
+    public func destroy(): Unit {
+        alive.store(false)
+    }
+}

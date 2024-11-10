@@ -45,7 +45,7 @@ class MapKeys<K, V> <: EquatableCollection<K> where K <: Equatable<K> {
      */
     public func toArray(): Array<K> {
         let itr = iterator()
-        return Array<K>(size){i => 
+        return Array<K>(size){_ => 
             itr.next().getOrThrow()
         }
     }
@@ -126,7 +126,7 @@ class MapValues<K, V> <: Collection<V> where K <: Equatable<K> {
     }
     public func toArray(): Array<V>{
         let itr = iterator()
-        Array<V>(size){i => 
+        Array<V>(size){_ => 
             itr.next().getOrThrow()
         }
     }

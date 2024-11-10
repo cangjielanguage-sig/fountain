@@ -245,7 +245,7 @@ public class PriorityQueue<T> <: Queue<T> & Iterable<T> & Collection<T> & Growab
     public func toArray(): Array<T> {
         let itr = iterator()
         Array<T>(size) {
-            i => itr.next().getOrThrow()
+            _ => itr.next().getOrThrow()
         }
     }
 }
