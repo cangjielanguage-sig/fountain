@@ -85,7 +85,18 @@ _/ ____\____  __ __  _____/  |______  |__| ____
 - 日志
 - 流程引擎
 - 功能更丰富的json
-- 限流策略
-  - 时间窗
-  - 令牌桶
- 
+- 并发
+  - 限流策略
+    - 滑动时间窗口
+    - 令牌桶
+    - 漏桶
+    - 任意时刻最大并发数
+  - 布隆过滤器
+  - ConcurrentHashSet
+  - SyncPriorityQueue
+  - 原子类型扩展
+- 集合
+  - LinkedHashMap
+  - 判定值是否存在的Map扩展
+  - TreeSet
+  - PriorityQueue
