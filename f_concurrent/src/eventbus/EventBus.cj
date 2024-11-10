@@ -54,11 +54,25 @@ public class EventBus {
     }
     private func seize(){
         spawn {
+            var (prevMaxQueueSize, prevMaxQueueIndex): (Int64, Int64) = (-1, -1)
             while (true) {
                 let sizedBy = seizeQueue.dequeue()
-                let (maxQueueSize, maxQueueIndex) = synchronized(queueMutex) {
+                var (maxQueueSize, maxQueueIndex) = synchronized(queueMutex) {
                     this.maxQueueSize
                 }
+                var i = 0
+                while((prevMaxQueueIndex == maxQueueIndex || prevMaxQueueSize > maxQueueSize) && i < this.workers.size){
+                    if(i == maxQueueIndex){
+                        i++
+                        continue
+                    }
+                    if(let s <- this.workers[i].waitingJobSize && maxQueueSize < s){
+                        (maxQueueSize, maxQueueIndex) = (s, i)
+                        break
+                    }
+                    i++
+                }
+                (prevMaxQueueSize, prevMaxQueueIndex) = (maxQueueSize, maxQueueIndex)
                 if (maxQueueSize > 0 && maxQueueIndex != sizedBy && let Some(e) <- this.workers[maxQueueIndex].tryDequeue()) {
                     e.workerId = sizedBy
                     this.workers[sizedBy].arrange(e)
