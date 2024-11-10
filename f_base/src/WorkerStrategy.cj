@@ -40,7 +40,7 @@ public enum WorkerStrategy{
     /**
      * 等待Duration，然后抛出JobQueueFullException
      */
-    | DiscardOldestAfter(Duration)
+    | DiscardOldestDuring(Duration)
     /**
      * 当前线程执行
      */
