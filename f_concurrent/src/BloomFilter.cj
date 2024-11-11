@@ -17,7 +17,7 @@ public class BloomFilter<T> where T <: Hashable {
     private let bits = BitSet()
     public BloomFilter(private let hashers: Array<(T, Int64) -> Int64>) {}
     public init(iterate!: Int64 = 5) {
-        this(_hashers(iterate))
+        this(genHashers(iterate))
     }
     public init(hashers: Array<(T) -> Int64>) {
         this(Array<(T, Int64) -> Int64>(hashers.size) {i =>
@@ -26,7 +26,7 @@ public class BloomFilter<T> where T <: Hashable {
             }
         })
     }
-    private static func _hashers(iterate: Int64): Array<(T, Int64) -> Int64> {
+    private static func genHashers(iterate: Int64): Array<(T, Int64) -> Int64> {
         @OverflowWrapping
         func hash(v: T, h: Int64) {
             h * 131 + v.hashCode()

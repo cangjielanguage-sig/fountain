@@ -13,7 +13,7 @@ import std.sync.ReentrantMutex
 import f_base.*
 import f_collection.{PriorityQueue, Queue, Growable}
 
-public class SyncPriorityQueue<T> <: Queue<T> & Iterable<T> & Collection<T> & Growable {
+public class SyncPriorityQueue<T> <: Queue<T> & Collection<T> & Growable {
     private let mutex = ReentrantMutex()
     private let queue: PriorityQueue<T>
     public init(
@@ -72,7 +72,7 @@ public class SyncPriorityQueue<T> <: Queue<T> & Iterable<T> & Collection<T> & Gr
             queue.grow()
         }
     }
-    public func offerAll(values: Iterable<T>){
+    public func offerAll<I>(values: I) where I <: Iterable<T>{
         synchronized(mutex){
             queue.offerAll(values)
         }
