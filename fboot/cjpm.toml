@@ -1,30 +1,4 @@
 [dependencies]
-# charset4cj = { git = "https://gitcode.com/Cangjie-TPC/charset4cj.git", branch = "develop", version = "0.0.1"}
-# f_app = {path = "../f_app"}
-# f_aspect = {path = "../f_aspect"}
-  f_base = {path = "../f_base"}
-# f_bean = {path = "../f_bean"}
-  f_cache = {path = "../f_cache"}
-  f_collection = {path = "../f_collection"}
-  f_concurrent = {path = "../f_concurrent"}
-# f_config = {path = "../f_config"}
-# f_data = {path = "../f_data"}
-  f_exception = {path = "../f_exception"}
-# f_id = {path = "../f_id"}
-# f_io = {path = "../f_io"}
-# f_jwt = {path = "../f_jwt"}
-# f_launcher = {path = "../f_launcher"}
-# f_log = {path = "../f_log"}
-# f_mvc = {path = "../f_mvc"}
-# f_net = {path = "../f_net"}
-# f_orm = {path = "../f_orm"}
-# f_pool = {path = "../f_pool"}
-# f_privilege = {path = "../f_privilege"}
-# f_process = {path = "../f_process"}
-# f_random = {path = "../f_random"}
-# f_regex = {path = "../f_regex"}
-# f_ticktock = {path = "../f_ticktock"}
-# f_util = {path = "../f_util"}
   fountain = {path = "../"}
 
 [package]
