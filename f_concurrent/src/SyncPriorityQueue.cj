@@ -72,7 +72,7 @@ public class SyncPriorityQueue<T> <: Queue<T> & Collection<T> & Growable {
             queue.grow()
         }
     }
-    public func offerAll<I>(values: I) where I <: Iterable<T>{
+    public func offerAll(values: Iterable<T>) {
         synchronized(mutex){
             queue.offerAll(values)
         }

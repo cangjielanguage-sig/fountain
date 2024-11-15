@@ -9,7 +9,7 @@
  */
 package f_base
 
-import std.unicode.UnicodeExtension
+import std.unicode.{UnicodeRuneExtension, UnicodeStringExtension}
 
 public class Options<T, R> {
     private init() {}
