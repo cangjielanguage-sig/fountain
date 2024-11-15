@@ -40,6 +40,12 @@ public interface Integer<T> <: Number<T> & Modable<T> & BitAndable<T> & BitOrabl
     prop isEven: Bool
 
 }
+public interface SignedInteger<S, T> <: Integer<S> where S <: SignedInteger<S, T>, T <: UnsignedInteger<T, S>{
+    func toUInt(): T
+}
+public interface UnsignedInteger<S, T> <: Integer<S> where S <: UnsignedInteger<S, T>, T <: SignedInteger<T, S> {
+    func toInt(): T
+}
 public interface Float<T> <: Number<T> where T <: Float<T> {
     static prop NaN: T
     static prop Inf: T
@@ -54,7 +60,7 @@ public interface Float<T> <: Number<T> where T <: Float<T> {
     }
 }
 
-extend Int8 <: Integer<Int8> {
+extend Int8 <: SignedInteger<Int8, UInt8> {
     public static prop bytes: Int64 {
         get() {
             1
@@ -119,7 +125,7 @@ extend Int8 <: Integer<Int8> {
         UInt8(this & 0x7f) | UInt8(this & (1 << 7))
     }
 }
-extend Int16 <: Integer<Int16> {
+extend Int16 <: SignedInteger<Int16, UInt16> {
     public static prop bytes: Int64 {
         get() {
             2
@@ -187,7 +193,7 @@ extend Int16 <: Integer<Int16> {
         UInt16(this & 0x7f_ff) | UInt16(this & (1 << 15))
     }
 }
-extend Int32 <: Integer<Int32> {
+extend Int32 <: SignedInteger<Int32, UInt32> {
     public static prop bytes: Int64 {
         get() {
             4
@@ -260,7 +266,7 @@ extend Int32 <: Integer<Int32> {
         UInt32(this & 0x7fff_ffff) | UInt32(this & (1 << 31))
     }
 }
-extend Int64 <: Integer<Int64> {
+extend Int64 <: SignedInteger<Int64, UInt64> {
     public static prop bytes: Int64 {
         get() {
             8
@@ -338,7 +344,7 @@ extend Int64 <: Integer<Int64> {
     }
 }
 
-extend UInt8 <: Integer<UInt8> {
+extend UInt8 <: UnsignedInteger<UInt8, Int8> {
     public static prop bytes: Int64 {
         get() {
             1
@@ -401,7 +407,7 @@ extend UInt8 <: Integer<UInt8> {
         Int8(this & 0x7f) | Int8(this & (1 << 7))
     }
 }
-extend UInt16 <: Integer<UInt16> {
+extend UInt16 <: UnsignedInteger<UInt16, Int16> {
     public static prop bytes: Int64 {
         get() {
             2
@@ -468,7 +474,7 @@ extend UInt16 <: Integer<UInt16> {
         Int16(this & 0x7fff) | Int16(this & (1 << 15))
     }
 }
-extend UInt32 <: Integer<UInt32> {
+extend UInt32 <: UnsignedInteger<UInt32, Int32> {
     public static prop bytes: Int64 {
         get() {
             4
@@ -539,7 +545,7 @@ extend UInt32 <: Integer<UInt32> {
         Int32(this & 0x7fff_ffff) | Int32(this & (1 << 31))
     }
 }
-extend UInt64 <: Integer<UInt64> {
+extend UInt64 <: UnsignedInteger<UInt64, Int64> {
     public static prop bytes: Int64 {
         get() {
             8
