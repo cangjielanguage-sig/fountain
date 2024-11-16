@@ -28,6 +28,7 @@ extend Duration <: DataParsable<Duration> {
         var i = 0
         while (i < s.size) {
             let r = s[i]
+            i++
             duration += match (r) {
                 case x where x == b'-' || (x >= b'0' && x <= b'9') =>
                     bytes.append(x)
@@ -36,23 +37,22 @@ extend Duration <: DataParsable<Duration> {
                 case b'd' => Duration.day
                 case b'h' => Duration.hour
                 case b'm' =>
-                    if (s[i + 1] == b's') {
+                    if (s[i] == b's') {
                         i++
                         Duration.millisecond
                     } else {
                         Duration.minute
                     }
                 case b's' => Duration.second
-                case b'u' where s[i + 1] == b's' =>
+                case b'u' where s[i] == b's' =>
                     i++ 
                     Duration.microsecond
-                case b'n' where s[i + 1] == b's' =>
+                case b'n' where s[i] == b's' =>
                     i++
                     Duration.nanosecond
                 case _ => 
                     throw DataParsableException('${s} cannot be parsed to Duration')
             } * Int64.tryParse(String.fromUtf8(bytes.toArray())).getOrThrow {DataParsableException('${s} cannot be parsed to Duration')}
-            i++
         }
         duration
     }
