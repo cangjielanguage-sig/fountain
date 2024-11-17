@@ -1,6 +1,11 @@
 [dependencies]
+  f_base = {path = "../f_base"}
+  f_collection = {path = "../f_collection"}
   f_config = {path = "../f_config"}
+  f_data = {path = "../f_data"}
   f_exception = {path = "../f_exception"}
+  f_regex = {path = "../f_regex"}
+  f_random = {path = "../f_random"}
 [package]
   cjc-version = "0.57.3"
   compile-option = ""
