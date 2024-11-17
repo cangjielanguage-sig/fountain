@@ -16,15 +16,7 @@ import f_util.exception.IdException
 
 public class IdMaker {
     public static const HOST_SERIAL = "host.serial"
-    private static let genesis = DateTime.of(
-        year: 2023,
-        month: 8,
-        dayOfMonth: 6,
-        hour: 14,
-        minute: 30,
-        second: 0,
-        nanosecond: 0
-    )
+
     private let startMillis: Int64 = (DateTime.now() - DateTime.UnixEpoch).toMilliseconds()
     private let current: AtomicInt64
     public IdMaker(private let hostSerial!: Int64) {

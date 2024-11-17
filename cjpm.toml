@@ -11,7 +11,7 @@
   f_data = {path = "./f_data"}
   f_exception = {path = "./f_exception"}
 # f_io = {path = "./f_io"}
-# f_jwt = {path = "./f_jwt"}
+  f_jwt = {path = "./f_jwt"}
 # f_launcher = {path = "./f_launcher"}
 # f_log = {path = "./f_log"}
 # f_macros = {path = "./f_macros"}
