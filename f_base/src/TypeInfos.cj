@@ -40,6 +40,10 @@ public class TypeInfos {
             }
         }
     }
+    public static func getGenericTypes<T>(): Array<TypeInfo>{
+        let qualifiedName = get<T>().qualifiedName
+        getGenericTypes(qualifiedName)
+    }
     public static func getGenericTypes(qualifiedName: String): Array<TypeInfo> {
         let idx = qualifiedName.indexOf("<")
         if (let Some(i) <- idx) {
