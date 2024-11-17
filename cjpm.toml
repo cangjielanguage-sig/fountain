@@ -22,7 +22,7 @@
 # f_privilege = {path = "./f_privilege"}
 # f_process = {path = "./f_process"}
 # f_random = {path = "./f_random"}
-# f_regex = {path = "./f_regex"}
+  f_regex = {path = "./f_regex"}
 # f_ticktock = {path = "./f_ticktock"}
 # f_util = {path = "./f_util"}
 
