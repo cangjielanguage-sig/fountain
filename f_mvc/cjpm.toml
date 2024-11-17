@@ -1,5 +1,5 @@
 [dependencies]
-
+  f_data = {path = "../f_data"}
 [package]
   cjc-version = "0.57.3"
   compile-option = ""

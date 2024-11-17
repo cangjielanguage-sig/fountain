@@ -5,20 +5,10 @@
     You may obtain a copy of Mulan PSL v2 at:
             http://license.coscl.org.cn/MulanPSL2
     THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-    See the Mulan PSL v2 for more details.
- */
-package f_exception
+    See the Mulan PSL v2 for more details.  
+*/
+package f_mvc
 
-public class IllegalArgException <: BaseException {
-    public init() {}
-
-    public init(message: String) {
-        super(message)
-    }
-    public init(caused: Exception) {
-        super(caused)
-    }
-    public init(message: String, caused: Exception) {
-        super(message, caused)
-    }
-}
+internal import std.collection.ArrayList
+internal import std.convert.Parsable
+internal import f_data.DataParsable

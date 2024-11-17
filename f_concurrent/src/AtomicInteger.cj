@@ -20,16 +20,16 @@ public interface AtomicInteger<N> where N <: Integer<N> {
     func fetchXor(val: N): N
 
     func fetchIncr(): N {
-        fetchAdd(N.one)
+        fetchAdd(N.ONE)
     }
     func fetchDecr(): N {
-        fetchSub(N.one)
+        fetchSub(N.ONE)
     }
     func incrFetch(): N {
-        addFetch(N.one)
+        addFetch(N.ONE)
     }
     func decrFetch(): N {
-        subFetch(N.one)
+        subFetch(N.ONE)
     }
 
     func addFetch(val: N): N {
