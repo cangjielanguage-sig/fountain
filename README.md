@@ -51,7 +51,7 @@ _/ ____\____  __ __  _____/  |______  |__| ____
   - 观察者模式
 - 路径匹配PathPattern
 - TreeTransformer
-- crd16
+- crc16
 - murmur_hash
 - DiffieHellman密钥交换协议
 - CaseFormat 命名风格的字符串转换
