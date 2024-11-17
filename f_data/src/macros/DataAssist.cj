@@ -13,6 +13,7 @@ macro package f_data.macros
 import std.ast.*
 import std.collection.{HashSet, ArrayList}
 import f_data.*
+import f_macros.*
 
 /*
  * Props Hash Compare Equal ToString Fields
@@ -47,7 +48,7 @@ func generateProps(decls: ArrayList<Decl>){
     for(decl in decls where !isStatic(decl)){
         match(decl){
             case d: VarDecl =>
-                let _static = if(f_macros.isStatic(d)){
+                let _static = if(isStatic(d)){
                     `static`
                 }else{
                     `empty_tokens`
@@ -207,7 +208,7 @@ func generateToFields(d: CompositeDecl) {
     if(klassDecl.superTypes.isEmpty()){
         klassDecl.upperBound = `upperbound`[0]
     }
-    klassDecl.superTypes.append(QualifiedType(quote(data.DataObject<$(klassIdentifier)>)))
+    klassDecl.superTypes.append(QualifiedType(quote(DataObject<$(klassIdentifier)>)))
     let body = klassDecl.body.decls
     var fields = `lsquare`
     var i = 0
@@ -215,6 +216,7 @@ func generateToFields(d: CompositeDecl) {
         if (i == 0) {
             fields += `comma`
         }
+        fields += 
         match(f){
             case x: VarDecl where x.isPublic() =>
                 if (x.isVar()) {
@@ -233,7 +235,6 @@ func generateToFields(d: CompositeDecl) {
                         (o as $klassIdentifier).getOrThrow{DataException("type of current instance does not match, expected " + TypeInfos<$(klassIdentifier)>.instance + ", but recceives " + TypeInfo.of(o))}.$(x.identifier).toData()
                     })
                 }
-                i++
             case x: PropDecl where x.isPublic() =>
                 if (x.isMut()) {
                     quote(MutableField($(x.identifier.value), TypeInfo.of($(x.identifier)), {o =>
@@ -251,9 +252,11 @@ func generateToFields(d: CompositeDecl) {
                         (o as $klassIdentifier).getOrThrow{DataException("type of current instance does not match, expected " + TypeInfos<$(klassIdentifier)>.instance + ", but recceives " + TypeInfo.of(o))}.$(x.identifier).toData()
                     })
                 }
+            case _ => 
                 i++
-            case _ => continue
+                continue
         }
+        i++
     }
     fields += `rsquare`
     let fieldsName = Token(IDENTIFIER, "dAtA__fIElds_")
