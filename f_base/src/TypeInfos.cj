@@ -41,6 +41,8 @@ public class TypeInfos {
     public static let DATETIME_TYPE = TypeInfo.of<DateTime>()
     public static let BYTEARRAY_TYPE = TypeInfo.of<Array<Byte>>()
     public static let BYTE_TYPE = UINT8_TYPE
+    public static let OBJECT_TYPE = TypeInfo.of<Object>()
+    public static let ANY_TYPE = TypeInfo.of<Any>()
 
     public static func getTypeInfo(qualifiedName: String): TypeInfo {
         if (let Some(x) <- INFOS.get(qualifiedName)) {

@@ -5,8 +5,22 @@
     You may obtain a copy of Mulan PSL v2 at:
             http://license.coscl.org.cn/MulanPSL2
     THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-    See the Mulan PSL v2 for more details.  
+    See the Mulan PSL v2 for more details.
 */
 package f_data
 
-public f_data.*
+abstract sealed class ReadableField {
+    public ReadableField(
+        public let name: String,
+        public let typeInfo: TypeInfo,
+        private let getter: (Object) -> Data
+    ){}
+    public func get(instance: Object): Data{
+        getter(instance)
+    }
+}
+public class ReadonlyField <: ReadableField {
+    public init(name: String, typeInfo: TypeInfo, getter: (Object) -> Data){
+        super(name, typeInfo, getter)
+    }
+}

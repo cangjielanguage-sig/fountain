@@ -16,10 +16,10 @@ public import std.math.numeric.*
 
 public interface Number<T> <: Negativable<T> & Addable<T> & Subable<T> & Mulable<T> & Divable<T> & Cmpable<T> & Eqable<T>
     & ToString where T <: Number<T> & ToString {
-    static prop bytes: Int64
-    static prop zero: T
-    static prop one: T
-    static prop ten: T
+    static prop BYTES: Int64
+    static prop ZERO: T
+    static prop ONE: T
+    static prop TEN: T
 
     static prop Max: T
     static prop Min: T
@@ -63,22 +63,22 @@ public interface Float<T> <: Number<T> where T <: Float<T> {
 }
 
 extend Int8 <: SignedInteger<Int8, UInt8> {
-    public static prop bytes: Int64 {
+    public static prop BYTES: Int64 {
         get() {
             1
         }
     }
-    public static prop zero: Int8 {
+    public static prop ZERO: Int8 {
         get() {
             0
         }
     }
-    public static prop one: Int8 {
+    public static prop ONE: Int8 {
         get() {
             1
         }
     }
-    public static prop ten: Int8 {
+    public static prop TEN: Int8 {
         get() {
             10
         }
@@ -128,22 +128,22 @@ extend Int8 <: SignedInteger<Int8, UInt8> {
     }
 }
 extend Int16 <: SignedInteger<Int16, UInt16> {
-    public static prop bytes: Int64 {
+    public static prop BYTES: Int64 {
         get() {
             2
         }
     }
-    public static prop zero: Int16 {
+    public static prop ZERO: Int16 {
         get() {
             0
         }
     }
-    public static prop one: Int16 {
+    public static prop ONE: Int16 {
         get() {
             1
         }
     }
-    public static prop ten: Int16 {
+    public static prop TEN: Int16 {
         get() {
             10
         }
@@ -196,22 +196,22 @@ extend Int16 <: SignedInteger<Int16, UInt16> {
     }
 }
 extend Int32 <: SignedInteger<Int32, UInt32> {
-    public static prop bytes: Int64 {
+    public static prop BYTES: Int64 {
         get() {
             4
         }
     }
-    public static prop zero: Int32 {
+    public static prop ZERO: Int32 {
         get() {
             0
         }
     }
-    public static prop one: Int32 {
+    public static prop ONE: Int32 {
         get() {
             1
         }
     }
-    public static prop ten: Int32 {
+    public static prop TEN: Int32 {
         get() {
             10
         }
@@ -269,22 +269,22 @@ extend Int32 <: SignedInteger<Int32, UInt32> {
     }
 }
 extend Int64 <: SignedInteger<Int64, UInt64> {
-    public static prop bytes: Int64 {
+    public static prop BYTES: Int64 {
         get() {
             8
         }
     }
-    public static prop zero: Int64 {
+    public static prop ZERO: Int64 {
         get() {
             0
         }
     }
-    public static prop one: Int64 {
+    public static prop ONE: Int64 {
         get() {
             1
         }
     }
-    public static prop ten: Int64 {
+    public static prop TEN: Int64 {
         get() {
             10
         }
@@ -347,22 +347,22 @@ extend Int64 <: SignedInteger<Int64, UInt64> {
 }
 
 extend UInt8 <: UnsignedInteger<UInt8, Int8> {
-    public static prop bytes: Int64 {
+    public static prop BYTES: Int64 {
         get() {
             1
         }
     }
-    public static prop zero: UInt8 {
+    public static prop ZERO: UInt8 {
         get() {
             0
         }
     }
-    public static prop one: UInt8 {
+    public static prop ONE: UInt8 {
         get() {
             1
         }
     }
-    public static prop ten: UInt8 {
+    public static prop TEN: UInt8 {
         get() {
             10
         }
@@ -410,22 +410,22 @@ extend UInt8 <: UnsignedInteger<UInt8, Int8> {
     }
 }
 extend UInt16 <: UnsignedInteger<UInt16, Int16> {
-    public static prop bytes: Int64 {
+    public static prop BYTES: Int64 {
         get() {
             2
         }
     }
-    public static prop zero: UInt16 {
+    public static prop ZERO: UInt16 {
         get() {
             0
         }
     }
-    public static prop one: UInt16 {
+    public static prop ONE: UInt16 {
         get() {
             1
         }
     }
-    public static prop ten: UInt16 {
+    public static prop TEN: UInt16 {
         get() {
             10
         }
@@ -477,22 +477,22 @@ extend UInt16 <: UnsignedInteger<UInt16, Int16> {
     }
 }
 extend UInt32 <: UnsignedInteger<UInt32, Int32> {
-    public static prop bytes: Int64 {
+    public static prop BYTES: Int64 {
         get() {
             4
         }
     }
-    public static prop zero: UInt32 {
+    public static prop ZERO: UInt32 {
         get() {
             0
         }
     }
-    public static prop one: UInt32 {
+    public static prop ONE: UInt32 {
         get() {
             1
         }
     }
-    public static prop ten: UInt32 {
+    public static prop TEN: UInt32 {
         get() {
             10
         }
@@ -548,22 +548,22 @@ extend UInt32 <: UnsignedInteger<UInt32, Int32> {
     }
 }
 extend UInt64 <: UnsignedInteger<UInt64, Int64> {
-    public static prop bytes: Int64 {
+    public static prop BYTES: Int64 {
         get() {
             8
         }
     }
-    public static prop zero: UInt64 {
+    public static prop ZERO: UInt64 {
         get() {
             0
         }
     }
-    public static prop one: UInt64 {
+    public static prop ONE: UInt64 {
         get() {
             1
         }
     }
-    public static prop ten: UInt64 {
+    public static prop TEN: UInt64 {
         get() {
             10
         }
@@ -625,22 +625,22 @@ extend UInt64 <: UnsignedInteger<UInt64, Int64> {
 }
 
 extend Float16 <: Float<Float16> {
-    public static prop bytes: Int64 {
+    public static prop BYTES: Int64 {
         get() {
             2
         }
     }
-    public static prop zero: Float16 {
+    public static prop ZERO: Float16 {
         get() {
             0.0
         }
     }
-    public static prop one: Float16 {
+    public static prop ONE: Float16 {
         get() {
             1.0
         }
     }
-    public static prop ten: Float16 {
+    public static prop TEN: Float16 {
         get() {
             10.0
         }
@@ -648,22 +648,22 @@ extend Float16 <: Float<Float16> {
 }
 
 extend Float32 <: Float<Float32> {
-    public static prop bytes: Int64 {
+    public static prop BYTES: Int64 {
         get() {
             4
         }
     }
-    public static prop zero: Float32 {
+    public static prop ZERO: Float32 {
         get() {
             0.0
         }
     }
-    public static prop one: Float32 {
+    public static prop ONE: Float32 {
         get() {
             1.0
         }
     }
-    public static prop ten: Float32 {
+    public static prop TEN: Float32 {
         get() {
             10.0
         }
@@ -671,22 +671,22 @@ extend Float32 <: Float<Float32> {
 }
 
 extend Float64 <: Float<Float64> {
-    public static prop bytes: Int64 {
+    public static prop BYTES: Int64 {
         get() {
             8
         }
     }
-    public static prop zero: Float64 {
+    public static prop ZERO: Float64 {
         get() {
             0.0
         }
     }
-    public static prop one: Float64 {
+    public static prop ONE: Float64 {
         get() {
             1.0
         }
     }
-    public static prop ten: Float64 {
+    public static prop TEN: Float64 {
         get() {
             10.0
         }
@@ -698,67 +698,79 @@ let oneBigInt = BigInt(1)
 let tenBigInt = BigInt(10)
 let oneHundredBigInt = BigInt(100)
 
-public interface ExtendBigInt {}
+public interface ExtendBigInt {
+    static prop ZERO: BigInt
+    static prop ONE: BigInt
+    static prop TEN: BigInt
+    static prop ONE_HUNDRED: BigInt
+}
 
 extend BigInt <: ExtendBigInt {
-    public static prop zero: BigInt {
+    public static prop ZERO: BigInt {
         get() {
             zeroBigInt
         }
     }
-    public static prop one: BigInt {
+    public static prop ONE: BigInt {
         get() {
             oneBigInt
         }
     }
-    public static prop ten: BigInt {
+    public static prop TEN: BigInt {
         get() {
             tenBigInt
         }
     }
-    public static prop oneHundred: BigInt {
+    public static prop ONE_HUNDRED: BigInt {
         get() {
             oneHundredBigInt
         }
     }
 }
 
-let zeroDecimal = Decimal(Float64.zero)
-let oneDecimal = Decimal(Float64.one)
-let tenDecimal = Decimal(Float64.ten)
+let zeroDecimal = Decimal('0')
+let oneDecimal = Decimal('1')
+let tenDecimal = Decimal('10')
 let oneHundredDecimal = Decimal("100")
 let piDecimal = Decimal(Float64.PI.toString())
 let eDecimal = Decimal(Float64.E.toString())
 
-public interface ExtendDecimal {}
+public interface ExtendDecimal {
+    static prop ZERO: Decimal
+    static prop ONE: Decimal
+    static prop TEN: Decimal
+    static prop ONE_HUNDRED: Decimal
+    static prop PI: Decimal
+    static prop E: Decimal
+}
 
 extend Decimal <: ExtendDecimal {
-    public static prop zero: Decimal {
+    public static prop ZERO: Decimal {
         get() {
             zeroDecimal
         }
     }
-    public static prop one: Decimal {
+    public static prop ONE: Decimal {
         get() {
             oneDecimal
         }
     }
-    public static prop ten: Decimal {
+    public static prop TEN: Decimal {
         get() {
             tenDecimal
         }
     }
-    public static prop oneHundred: Decimal {
+    public static prop ONE_HUNDRED: Decimal {
         get() {
             oneHundredDecimal
         }
     }
-    public static prop pi: Decimal {
+    public static prop PI: Decimal {
         get() {
             piDecimal
         }
     }
-    public static prop e: Decimal {
+    public static prop E: Decimal {
         get() {
             eDecimal
         }

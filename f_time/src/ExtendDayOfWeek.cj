@@ -7,6 +7,21 @@
     THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
     See the Mulan PSL v2 for more details.  
 */
-package f_data
+package f_time
 
-public f_data.*
+public interface ExtendDayOfWeek{
+    operator func -(day: DayOfWeek): Int64
+    operator func -(day: Int64): DayOfWeek
+    operator func +(day: Int64): DayOfWeek
+}
+extend DayOfWeek <: ExtendDayOfWeek{
+    public operator func -(day: DayOfWeek): Int64 {
+        this.value() - day.value()
+    }
+    public operator func -(day: Int64): DayOfWeek {
+        DayOfWeek.of(this.value() - day)
+    }
+    public operator func +(day: Int64): DayOfWeek {
+        DayOfWeek.of(this.value() + day)
+    }
+}

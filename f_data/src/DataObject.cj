@@ -1,0 +1,156 @@
+/*
+    Copyright (c) [2022] [WuJingrun（吴京润）]
+    fountain is licensed under Mulan PSL v2.
+    You can use this software according to the terms and conditions of the Mulan PSL v2.
+    You may obtain a copy of Mulan PSL v2 at:
+            http://license.coscl.org.cn/MulanPSL2
+    THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+    See the Mulan PSL v2 for more details.
+*/
+package f_data
+
+import fountain.regex.*
+
+public interface DataObject<T> <: DataFields<T> where T <: Object & DataObject<T> {
+    static func dataFields(): ObjectFields<T>
+
+    func toData(): Data {
+        ObjectData<T>((this as T).getOrThrow{DataException("generic type ${TypeInfos<T>.instance} must be subtype of ${TypeInfos<DataObject<T>>.instance}")})
+    }
+    static func fromData(data: Data): T {
+        tryFromData(data).getOrThrow{DataException("current data ${data} cannot be converted to ${TypeInfos<T>.instance}")}
+    }
+    static func tryFromData(data: Data): ?T {
+        ObjectData<T>.populate(data)
+    }
+}
+class FieldIterator<T> <: Iterator<(String, Data)> where T <: Object & DataObject<T> {
+    public FieldIterator(private let data: T, private let itr: Iterator<ReadableField>){}
+
+    public func next(): ?(String, Data) {
+        for(f in itr) {
+            return (f.name, f.get(data))
+        }
+        None
+    }
+}
+
+public class ObjectData<T> <: Data & Iterable<(String, Data)> where T <: Object & DataObject<T> {
+    public ObjectData(public let data: T) {
+    }
+    public func iterator(): Iterator<(String, Data)> {
+        let fields = T.dataFields().iterator()
+        FieldIterator<T>(data, fields)
+    }
+    public func fields(): Iterator<ReadableField> {
+        T.dataFields().iterator()
+    }
+    public operator func [](name: String): ?Data {
+        T.dataFields().readableField(name)?.get(data)
+    }
+    public operator func [](name: String, value!: Data): Unit {
+        T.dataFields().mutableField(name)?.set(data, value)
+    }
+    public func toString(): String {
+        match(data){
+            case x: ToString => x.toString()
+            case x =>
+                let s = StringBuilder()
+                s.append("{")
+                var i = 0
+                for((k, v) in this) {
+                    if (i > 0) {
+                        s.append(",")
+                    }
+                    s.append(k)
+                    s.append(":")
+                    s.append(v.toString())
+                }
+                s.append("}")
+                s.toString()
+        }
+    }
+    public static func tryParse(string: String): ?Data {
+        let typeInfo = TypeInfos<T>.instance
+        if (typeInfo.isSubtypeOf(TypeInfos<Parsable<T>>.instance)) {
+            let data = typeInfo.getStaticFunction("parse", TypeInfos<String>.instance).apply([string])
+            ObjectData<T>((data as T).getOrThrow())
+        } else {
+            None<Data>
+        }
+    }
+    public static func parse(string: String): Data {
+        tryParse(string).getOrThrow{DataException("current type ${TypeInfos<T>.instance} is not Parsable")}
+    }
+    public static func populate(src: Data, target: T, flag!: UInt64 = SILENCE): ?T {
+        let srcDataType = TypeInfo.of(src)
+        func isObjectData(){
+            srcDataType.qualifiedName.startsWith("fountain/data.ObjectData")
+        }
+        func putValue(dstFields: ObjectFields<T>, name: String, dst: T, data: Data, srcType: TypeInfo): Bool {
+            match (dstFields.mutableField(name)) {
+                case Some(mf) where mf.set(dst, data) => true
+                case Some(_) where (flag & IGNORE_FIELD_NOT_CONVERTABLE) > 0 => true
+                case Some(_) where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 =>
+                    throw DataException("source field ${name} which type is ${srcType} connoted be converted")
+                case None where (flag & IGNORE_FIELD_NOT_FOUND) > 0 => true
+                case None where (flag & IGNORE_FIELD_NOT_FOUND) == 0 =>
+                    throw DataException("field name ${name} is not found from ${TypeInfos<T>.instance}")
+                case _ => throw DataException("source value of field ${name} connot be set into destination")
+            }
+            true
+        }
+        func putTuple(x: DataTuple, dstTuple!: ?(ObjectFields<T>, T) = None) {
+            let (key, value) = (x.key, x.value)
+            match(key) {
+                case x: DataString where #"^_*[a-zA-Z]+\w*$"#.regex(solid: true).matched(x.data) =>
+                    let (dstFields, dst) = match(dstTuple) {
+                        case Some(x) => x
+                        case _ =>
+                            let dstFields = T.dataFields()
+                            (dstFields, target)
+                    }
+                    putValue(dstFields, x.data, dst, value, srcDataType)
+                    dst
+                case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) > 0 => None<T>
+                case _ => throw DataException("${key} cannot be field name of an object")
+            }
+        }
+        match(src){
+            case x: DataTuples =>
+                let dstFields = T.dataFields()
+                for(e in x) {
+                    match(e){
+                        case x: DataTuple => putTuple(x, dstTuple: (dstFields, target))
+                        case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) > 0 => continue
+                        case _ => throw DataException("at least on element in current DataSequence cannot be converted to a DataTuple for populating current object which type is ${TypeInfos<T>.instance}")
+                    }
+                }
+                target
+            case x: DataTuple => putTuple(x)
+            case _ where isObjectData() =>
+                let dstFields = T.dataFields()
+                let srcDataObjectType = (srcDataType as ClassTypeInfo).getOrThrow()
+                let srcData = srcDataObjectType.getInstanceVariable("data").getValue(src)
+                let srcType = TypeInfo.of(srcData)
+                let srcFields = srcType.getStaticFunction("dataFields").apply([])
+                let srcFieldsType = (TypeInfo.of(srcFields).getInstanceFunction("iterator").apply(srcFields) as Iterator<ReadableField>).getOrThrow()
+                for(sf in srcFieldsType) {
+                    let srcData = sf.get((srcData as Object).getOrThrow())
+                    putValue(dstFields, sf.name, target, srcData, srcType)
+                }
+                target
+            case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) > 0 => None<T>
+            case _ => throw DataException("src cannot be converted to ${TypeInfos<T>.instance}")
+        }
+    }
+    public static func populate(src: Data, flag!: UInt64 = SILENCE): ?T {
+        populate(src, T.dataFields().create())
+    }
+    public static func populate<S>(src: S, flag!: UInt64 = SILENCE): ?T where S <: DataObject<S> {
+        populate(ObjectData<S>(src), flag: flag)
+    }
+    public static func populate<S>(src: S, target: T, flag!: UInt64 = SILENCE): ?T where S <: DataObject<S> {
+        populate(ObjectData<S>(src), target, flag: flag)
+    }
+}
