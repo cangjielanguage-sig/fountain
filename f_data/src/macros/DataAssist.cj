@@ -1,0 +1,269 @@
+/*
+   Copyright (c) [2022] [WuJingrun（吴京润）]
+   fountain is licensed under Mulan PSL v2.
+   You can use this software according to the terms and conditions of the Mulan PSL v2.
+   You may obtain a copy of Mulan PSL v2 at:
+            http://license.coscl.org.cn/MulanPSL2
+   THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+   See the Mulan PSL v2 for more details.
+ */
+
+macro package f_data.macros
+
+import std.ast.*
+import std.collection.{HashSet, ArrayList}
+import f_data.*
+
+/*
+ * Props Hash Compare Equal ToString Fields
+ */
+public macro DataAssist(attr: Tokens, input: Tokens): Tokens {
+    let set = HashSet<String>()
+    for (t in attr) {
+        set.put(t.value.toAsciiLower())
+    }
+    let decl = parseDecl(input)
+    match(decl){
+        case d: ClassDecl =>
+            let bodyDecls = d.body.decls
+            for (val in set){
+                match(val){
+                    case "props" => generateProps(bodyDecls)
+                    case "hash" => generateHash(d)
+                    case "equal" => generateEqual(d)
+                    case "compare" => generateCompare(d)
+                    case "tostring" => generateToString(d)
+                    case "fields" => generateToFields(d)
+                    case _ => throw DataException("${val} does not support.")
+                }
+            }
+            decl.toTokens()
+        case _ =>
+            throw IllegalArgumentException("${input} must be a struct decl or a class decl")
+    }
+}
+func generateProps(decls: ArrayList<Decl>){
+    let appended = ArrayList<Decl>()
+    for(decl in decls where !isStatic(decl)){
+        match(decl){
+            case d: VarDecl =>
+                let _static = if(f_macros.isStatic(d)){
+                    `static`
+                }else{
+                    `empty_tokens`
+                }
+                let propIdentifier = decl.identifier
+                let varName = Token(IDENTIFIER, "_${propIdentifier.value}_")
+                decl.identifier = varName
+                let propDecl =
+                if(decl.keyword.kind == VAR){
+                    parseDecl(quote(
+                        public $_static mut prop $propIdentifier{
+                            get(){
+                                $varName
+                            }
+                            set(value){
+                                $varName = value
+                            }
+                        }
+                    ))
+                }else{
+                    parseDecl(quote(
+                        public $_static prop $propIdentifier{
+                            get(){
+                                $varName
+                            }
+                        }
+                    ))
+                }
+                appended.append(propDecl)
+            case _ => continue
+        }
+    }
+    decls.appendAll(appended)
+}
+func generateHash(d: CompositeDecl){
+    d.superTypes.append(RefType(quote(Hashable)))
+    var hashed = `nl`
+    for(d in d.body.decls where d is VarDecl){
+        hashed += quote(
+            match($(d.identifier)){
+                case x: Hashable => hasher.write(x.hashCode())
+                case _ => ()
+            }
+        ) + `nl`
+    }
+    d.body.decls.append(parseDecl(quote(
+        private var __hAsh__ = 0
+    )))
+    d.body.decls.append(parseDecl(quote(
+        public func hashCode(): Int64{
+            if(__hAsh__ == 0){
+                let hasher = DefaultHasher()
+                $hashed
+                __hAsh__ = hasher.finish()
+            }
+            __hAsh__
+        }
+    )))
+}
+func generateEqual(d: CompositeDecl){
+    let generic = try{
+        d.genericParam.toTokens()
+    }catch(e: Exception){
+        `empty_tokens`
+    }
+    let typeName = quote($(d.identifier)$generic)
+    d.superTypes.append(QualifiedType(quote(Equatable<$typeName>)))
+    var eq = `nl`
+    for(d in d.body.decls where d is VarDecl){
+        eq += quote(
+            result = {=>
+                try{
+                    let typeInfo = TypeInfo.of($(d.identifier))
+                    let eq = typeInfo.getInstanceFunction("==", typeInfo)
+                    eq.apply($(d.identifier), other.$(d.identifier))
+                }catch(e: Exception){
+                    true
+                }
+            }()
+            if(!result){
+                return false
+            }
+        ) + `nl`
+    }
+    d.body.decls.append(parseDecl(quote(
+        public operator func ==(other: $typeName): Bool {
+            var result = true
+            $eq
+            true
+        }
+    )))
+}
+func generateCompare(d: CompositeDecl){
+    let generic = try{
+        d.genericParam.toTokens()
+    }catch(e: Exception){
+        `empty_tokens`
+    }
+    let typeName = quote($(d.identifier)$generic)
+    d.superTypes.append(QualifiedType(quote(Comparable<$typeName>)))
+    var cmp = `nl`
+    for(d in d.body.decls where d is VarDecl){
+        cmp += quote(
+            result = {=>
+                try{
+                    let typeInfo = TypeInfo.of($(d.identifier))
+                    let cmp = typeInfo.getInstanceFunction("compare", typeInfo)
+                    cmp.apply($(d.identifier), other.$(d.identifier))
+                }catch(e: Exception){
+                    EQ
+                }
+            }()
+            if(result != EQ){
+                return result
+            }
+        ) + `nl`
+    }
+    d.body.decls.append(parseDecl(quote(
+        public func compare(other: $typeName): Bool {
+            var result = Ordering.EQ
+            $cmp
+            result
+        }
+    )))
+}
+func generateToString(d: CompositeDecl){
+    let generic = try{
+        d.genericParam.toTokens()
+    }catch(e: Exception){
+        `empty_tokens`
+    }
+    let typeName = quote($(d.identifier)$generic)
+    d.superTypes.append(RefType(quote(ToString)))
+    var str = `nl`
+    for(d in d.body.decls where d is VarDecl){
+        str += quote(
+            result.append($(d.identifier.value))
+            result.append(" = ")
+            match($(d.identifier)){
+                case x: ToString => result.append(x.toString())
+                case _ => result.append("_")
+            }
+            result.append("; ")
+        ) + `nl`
+    }
+    d.body.decls.append(parseDecl(quote(
+        public func compare(other: $typeName): Bool {
+            var result = StringBuilder()
+            $str
+            result
+        }
+    )))
+}
+func generateToFields(d: CompositeDecl) {
+    let klassDecl = (d as ClassDecl).getOrThrow{DataException("current decl ${d.identifier.value} must be a class decl")}
+    let klassIdentifier = quote($(klassDecl.identifier)$(klassDecl.genericParam))
+    if(klassDecl.superTypes.isEmpty()){
+        klassDecl.upperBound = `upperbound`[0]
+    }
+    klassDecl.superTypes.append(QualifiedType(quote(data.DataObject<$(klassIdentifier)>)))
+    let body = klassDecl.body.decls
+    var fields = `lsquare`
+    var i = 0
+    for (f in body) {
+        if (i == 0) {
+            fields += `comma`
+        }
+        match(f){
+            case x: VarDecl where x.isPublic() =>
+                if (x.isVar()) {
+                    quote(MutableField($(x.identifier.value), TypeInfo.of($(x.identifier)), {o =>
+                        (o as $klassIdentifier).getOrThrow{DataException("type of current instance does not match, expected " + TypeInfos<$(klassIdentifier)>.instance + ", but recceives " + TypeInfo.of(o))}.$(x.identifier).toData()
+                    }){o, d =>
+                        match ($(x.declType).tryFromData(d)) {
+                            case Some(x) =>
+                                (o as $klassIdentifier).getOrThrow{DataException("type of current instance does not match, expected " + TypeInfos<$(klassIdentifier)>.instance + ", but receives " + TypeInfo.of(o))}.$(x.identifier) = x
+                                true
+                            case _ => false
+                        }
+                    })
+                } else {
+                    quote(ReadonlyField($(x.identifier.value), TypeInfo.of($(x.identifier))){o=>
+                        (o as $klassIdentifier).getOrThrow{DataException("type of current instance does not match, expected " + TypeInfos<$(klassIdentifier)>.instance + ", but recceives " + TypeInfo.of(o))}.$(x.identifier).toData()
+                    })
+                }
+                i++
+            case x: PropDecl where x.isPublic() =>
+                if (x.isMut()) {
+                    quote(MutableField($(x.identifier.value), TypeInfo.of($(x.identifier)), {o =>
+                        (o as $klassIdentifier).getOrThrow{DataException("type of current instance does not match, expected " + TypeInfos<$(klassIdentifier)>.instance + ", but recceives " + TypeInfo.of(o))}.$(x.identifier).toData()
+                    }){o, d =>
+                        match ($(x.declType).tryFromData(d)) {
+                            case Some(x) =>
+                                (o as $klassIdentifier).getOrThrow{DataException("type of current instance does not match, expected " + TypeInfos<$(klassIdentifier)>.instance + ", but recceives " + TypeInfo.of(o))}.$(x.identifier) = x
+                                true
+                            case _ => false
+                        }
+                    })
+                } else {
+                    quote(ReadonlyField($(x.identifier.value), TypeInfo.of($(x.identifier))){o=>
+                        (o as $klassIdentifier).getOrThrow{DataException("type of current instance does not match, expected " + TypeInfos<$(klassIdentifier)>.instance + ", but recceives " + TypeInfo.of(o))}.$(x.identifier).toData()
+                    })
+                }
+                i++
+            case _ => continue
+        }
+    }
+    fields += `rsquare`
+    let fieldsName = Token(IDENTIFIER, "dAtA__fIElds_")
+    body.appendAll([VarDecl(quote(
+        private static let $(fieldsName) = ObjectFields<$klassIdentifier>($fields){
+            $klassIdentifier()
+        }
+    )), FuncDecl(quote(
+        public static func dataFields(): ObjectFields<$klassIdentifier> {
+            $fieldsName
+        }
+    ))])
+}

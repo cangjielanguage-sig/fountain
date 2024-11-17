@@ -9,16 +9,16 @@
 */
 package f_data
 
-import fountain.regex.*
+import f_regex.*
 
 public interface DataObject<T> <: DataFields<T> where T <: Object & DataObject<T> {
     static func dataFields(): ObjectFields<T>
 
     func toData(): Data {
-        ObjectData<T>((this as T).getOrThrow{DataException("generic type ${TypeInfos<T>.instance} must be subtype of ${TypeInfos<DataObject<T>>.instance}")})
+        ObjectData<T>((this as T).getOrThrow{DataException("generic type ${TypeInfos.get<T>()} must be subtype of ${TypeInfos.get<DataObject<T>>()}")})
     }
     static func fromData(data: Data): T {
-        tryFromData(data).getOrThrow{DataException("current data ${data} cannot be converted to ${TypeInfos<T>.instance}")}
+        tryFromData(data).getOrThrow{DataException("current data ${data} cannot be converted to ${TypeInfos.get<T>()}")}
     }
     static func tryFromData(data: Data): ?T {
         ObjectData<T>.populate(data)
@@ -71,16 +71,16 @@ public class ObjectData<T> <: Data & Iterable<(String, Data)> where T <: Object 
         }
     }
     public static func tryParse(string: String): ?Data {
-        let typeInfo = TypeInfos<T>.instance
-        if (typeInfo.isSubtypeOf(TypeInfos<Parsable<T>>.instance)) {
-            let data = typeInfo.getStaticFunction("parse", TypeInfos<String>.instance).apply([string])
+        let typeInfo = TypeInfos.get<T>()
+        if (typeInfo.isSubtypeOf(TypeInfos.get<Parsable<T>>())) {
+            let data = typeInfo.getStaticFunction("parse", TypeInfos.get<String>()).apply([string])
             ObjectData<T>((data as T).getOrThrow())
         } else {
             None<Data>
         }
     }
     public static func parse(string: String): Data {
-        tryParse(string).getOrThrow{DataException("current type ${TypeInfos<T>.instance} is not Parsable")}
+        tryParse(string).getOrThrow{DataException("current type ${TypeInfos.get<T>()} is not Parsable")}
     }
     public static func populate(src: Data, target: T, flag!: UInt64 = SILENCE): ?T {
         let srcDataType = TypeInfo.of(src)
@@ -95,7 +95,7 @@ public class ObjectData<T> <: Data & Iterable<(String, Data)> where T <: Object 
                     throw DataException("source field ${name} which type is ${srcType} connoted be converted")
                 case None where (flag & IGNORE_FIELD_NOT_FOUND) > 0 => true
                 case None where (flag & IGNORE_FIELD_NOT_FOUND) == 0 =>
-                    throw DataException("field name ${name} is not found from ${TypeInfos<T>.instance}")
+                    throw DataException("field name ${name} is not found from ${TypeInfos.get<T>()}")
                 case _ => throw DataException("source value of field ${name} connot be set into destination")
             }
             true
@@ -123,7 +123,7 @@ public class ObjectData<T> <: Data & Iterable<(String, Data)> where T <: Object 
                     match(e){
                         case x: DataTuple => putTuple(x, dstTuple: (dstFields, target))
                         case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) > 0 => continue
-                        case _ => throw DataException("at least on element in current DataSequence cannot be converted to a DataTuple for populating current object which type is ${TypeInfos<T>.instance}")
+                        case _ => throw DataException("at least on element in current DataSequence cannot be converted to a DataTuple for populating current object which type is ${TypeInfos.get<T>()}")
                     }
                 }
                 target
@@ -141,11 +141,11 @@ public class ObjectData<T> <: Data & Iterable<(String, Data)> where T <: Object 
                 }
                 target
             case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) > 0 => None<T>
-            case _ => throw DataException("src cannot be converted to ${TypeInfos<T>.instance}")
+            case _ => throw DataException("src cannot be converted to ${TypeInfos.get<T>()}")
         }
     }
     public static func populate(src: Data, flag!: UInt64 = SILENCE): ?T {
-        populate(src, T.dataFields().create())
+        populate(src, T.dataFields().create(), flag: flag)
     }
     public static func populate<S>(src: S, flag!: UInt64 = SILENCE): ?T where S <: DataObject<S> {
         populate(ObjectData<S>(src), flag: flag)

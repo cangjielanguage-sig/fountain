@@ -9,7 +9,7 @@
 */
 package f_data
 
-public sealed abstract class DataList<D> <: Data & Iterable<D> where D <: Data {
+sealed abstract class DataList<D> <: Data & Iterable<D> where D <: Data {
     public DataList(private let data: ArrayList<D>){}
     public init(data: Array<D>){
         this(ArrayList<D>(data))
@@ -50,7 +50,7 @@ public sealed abstract class DataList<D> <: Data & Iterable<D> where D <: Data {
                 try {
                     data.add(T.parse(tmp))
                 } catch (e: Exception) {
-                    throw DataException("to parse from sub string ${tmp} in ${string} to ${TypeInfos<T>.instance}", e)
+                    throw DataException("to parse from sub string ${tmp} in ${string} to ${TypeInfos.get<T>()}", e)
                 }
             } else {
                 bytes.append(b)

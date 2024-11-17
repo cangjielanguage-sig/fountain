@@ -6,23 +6,30 @@
             http://license.coscl.org.cn/MulanPSL2
     THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
     See the Mulan PSL v2 for more details.
-*/
-package f_data
+ */
+package f_macros
 
-extend<T> Option<T> <: DataFields<?T> where T <: DataFields<T> {
-    public func toData(): Data {
-        match(this) {
-            case Some(x) => x.toData()
-            case _ => DataNone.instance
+public interface ExtendVarDecl <: ExtendMember {
+    func isVar(): Bool
+    func isStatic(): Bool
+}
+extend VarDecl <: ExtendVarDecl {
+    public func isVar(): Bool {
+        match (this.keyword.kind) {
+            case VAR => true
+            case _ => false
         }
     }
-    public static func fromData(data: Data): ?T {
-        tryFromData(data).getOrThrow{DataException("current data ${data} cannot be converted to ${TypeInfos.get<T>()}")}
+    public func isPublic(): Bool {
+        isPublic(this)
     }
-    public static func tryFromData(data: Data): ??T {
-        match(data) {
-            case x: DataNone => Some(None<T>)
-            case x => T.tryFromData(x)
-        }
+    public func isProtected(): Bool {
+        isProtected(this)
+    }
+    public func isPrivate(): Bool {
+        isPrivate(this)
+    }
+    public func isStatic(): Bool {
+        isStatic(this)
     }
 }

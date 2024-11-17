@@ -9,7 +9,7 @@
 */
 package f_data
 
-extend<T> Int8 <: DataFields<Int8> {
+extend Int8 <: DataFields<Int8> {
     public func toData(): Data {
         DataReal(this)
     }
@@ -24,7 +24,7 @@ extend<T> Int8 <: DataFields<Int8> {
         }
     }
 }
-extend<T> UInt8 <: DataFields<UInt8> {
+extend UInt8 <: DataFields<UInt8> {
     public func toData(): Data {
         DataReal(this)
     }
@@ -39,8 +39,7 @@ extend<T> UInt8 <: DataFields<UInt8> {
         }
     }
 }
-
-extend<T> Int16 <: DataFields<Int16> {
+extend Int16 <: DataFields<Int16> {
     public func toData(): Data {
         DataReal(this)
     }
@@ -55,7 +54,7 @@ extend<T> Int16 <: DataFields<Int16> {
         }
     }
 }
-extend<T> UInt16 <: DataFields<UInt16> {
+extend UInt16 <: DataFields<UInt16> {
     public func toData(): Data {
         DataReal(this)
     }
@@ -70,8 +69,7 @@ extend<T> UInt16 <: DataFields<UInt16> {
         }
     }
 }
-
-extend<T> Int32 <: DataFields<Int32> {
+extend Int32 <: DataFields<Int32> {
     public func toData(): Data {
         DataReal(this)
     }
@@ -86,7 +84,7 @@ extend<T> Int32 <: DataFields<Int32> {
         }
     }
 }
-extend<T> UInt32 <: DataFields<UInt32> {
+extend UInt32 <: DataFields<UInt32> {
     public func toData(): Data {
         DataReal(this)
     }
@@ -101,8 +99,7 @@ extend<T> UInt32 <: DataFields<UInt32> {
         }
     }
 }
-
-extend<T> Int64 <: DataFields<Int64> {
+extend Int64 <: DataFields<Int64> {
     public func toData(): Data {
         DataReal(this)
     }
@@ -117,7 +114,7 @@ extend<T> Int64 <: DataFields<Int64> {
         }
     }
 }
-extend<T> UInt64 <: DataFields<UInt64> {
+extend UInt64 <: DataFields<UInt64> {
     public func toData(): Data {
         DataReal(this)
     }
@@ -132,7 +129,38 @@ extend<T> UInt64 <: DataFields<UInt64> {
         }
     }
 }
-extend<T> Float64 <: DataFields<Float64> {
+
+extend IntNative <: DataFields<IntNative> {
+    public func toData(): Data {
+        DataReal(this)
+    }
+    public static func fromData(data: Data): IntNative {
+        tryFromData(data).getOrThrow{DataException("${data} cannot be converted to IntNative")}
+    }
+    public static func tryFromData(data: Data): ?IntNative {
+        match(data){
+            case x: DataReal => x.tryToIntNative()
+            case x: DataString => DataReal(x.toString()).tryToIntNative()
+            case _ => None<IntNative>
+        }
+    }
+}
+extend UIntNative <: DataFields<UIntNative> {
+    public func toData(): Data {
+        DataReal(this)
+    }
+    public static func fromData(data: Data): UIntNative {
+        tryFromData(data).getOrThrow{DataException("${data} cannot be converted to UIntNative")}
+    }
+    public static func tryFromData(data: Data): ?UIntNative {
+        match(data){
+            case x: DataReal => x.tryToUIntNative()
+            case x: DataString => DataReal(x.toString()).tryToUIntNative()
+            case _ => None<UIntNative>
+        }
+    }
+}
+extend Float64 <: DataFields<Float64> {
     public func toData(): Data {
         DataReal(this)
     }
@@ -147,7 +175,7 @@ extend<T> Float64 <: DataFields<Float64> {
         }
     }
 }
-extend<T> Float32 <: DataFields<Float32> {
+extend Float32 <: DataFields<Float32> {
     public func toData(): Data {
         DataReal(this)
     }
@@ -162,7 +190,7 @@ extend<T> Float32 <: DataFields<Float32> {
         }
     }
 }
-extend<T> Float16 <: DataFields<Float16> {
+extend Float16 <: DataFields<Float16> {
     public func toData(): Data {
         DataReal(this)
     }
@@ -177,8 +205,7 @@ extend<T> Float16 <: DataFields<Float16> {
         }
     }
 }
-
-extend<T> BigInt <: DataFields<BigInt> {
+extend BigInt <: DataFields<BigInt> {
     public func toData(): Data {
         DataReal(this)
     }
@@ -193,8 +220,7 @@ extend<T> BigInt <: DataFields<BigInt> {
         }
     }
 }
-
-extend<T> Decimal <: DataFields<Decimal> {
+extend Decimal <: DataFields<Decimal> {
     public func toData(): Data {
         DataReal(this)
     }

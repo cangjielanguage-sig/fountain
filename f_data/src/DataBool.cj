@@ -38,7 +38,7 @@ public class DataBool <: Data & Hashable & Equatable<DataBool> {
         data == other.data
     }
 }
-extend<T> Bool <: DataFields<Bool> {
+extend Bool <: DataFields<Bool> {
     public func toData(): Data {
         if(this) {
             DataBool.TRUE
@@ -60,7 +60,7 @@ extend<T> Bool <: DataFields<Bool> {
                     None<Bool>
                 }
             case x: DataReal =>
-                x.toDecimal() != Decimal.zero
+                x.toDecimal() != Decimal.ZERO
             case _ => None<Bool>
         }
     }

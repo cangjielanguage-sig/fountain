@@ -9,7 +9,7 @@
 */
 package f_data
 
-import fountain.regex.*
+import f_regex.*
 
 public class DataReal <: Data & Hashable & Comparable<DataReal> {
     public DataReal(public let data: Decimal){}
@@ -38,6 +38,12 @@ public class DataReal <: Data & Hashable & Comparable<DataReal> {
         this(Decimal(data))
     }
     public init(data: UInt64){
+        this(Decimal(data))
+    }
+    public init(data: IntNative){
+        this(Decimal(data))
+    }
+    public init(data: UIntNative){
         this(Decimal(data))
     }
     public init(data: Float16){
@@ -174,6 +180,26 @@ public class DataReal <: Data & Hashable & Comparable<DataReal> {
             None<UInt64>
         }
     }
+    public func toIntNative(): IntNative {
+        data.toIntNative()
+    }
+    public func tryToIntNative(): ?IntNative {
+        if(data >= int64Range[0] && data <= int64Range[1]){
+            data.toIntNative()
+        }else{
+            None<IntNative>
+        }
+    }
+    public func toUIntNative(): UIntNative {
+        data.toUIntNative()
+    }
+    public func tryToUIntNative(): ?UIntNative {
+        if(data >= int64Range[0] && data <= int64Range[1]){
+            data.toUIntNative()
+        }else{
+            None<UIntNative>
+        }
+    }
 
     public func toString(): String {
         this.data.toString()
@@ -182,7 +208,7 @@ public class DataReal <: Data & Hashable & Comparable<DataReal> {
         DataReal(data)
     }
     public static func tryParse(data: String): ?Data {
-        if (Regex.realNumber.matched(data)) {
+        if (Regex.REAL_NUMBER.matched(data)) {
             parse(data)
         } else {
             None<Data>

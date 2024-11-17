@@ -33,7 +33,7 @@ public class DataString <: Data & Hashable & Comparable<DataString> {
         data.compare(other.data)
     }
 }
-extend<T> String <: DataFields<String> {
+extend String <: DataFields<String> {
     public func toData(): Data {
         DataString(this)
     }

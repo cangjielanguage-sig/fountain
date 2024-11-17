@@ -36,7 +36,7 @@ public class DataDuration <: Data & Hashable & Comparable<DataDuration> {
         data.compare(other.data)
     }
 }
-extend<T> Duration <: DataFields<Duration> {
+extend Duration <: DataFields<Duration> {
     public func toData(): Data {
         DataDuration(this)
     }
@@ -46,7 +46,7 @@ extend<T> Duration <: DataFields<Duration> {
     public static func tryFromData(data: Data): ?Duration {
         match(data){
             case x: DataDuration => x.tryToDuration()
-            case x: DataDateTime => x.toDateTime() - DateTime.genesis
+            case x: DataDateTime => x.toDateTime() - DateTime.UnixEpoch
             case x: DataString => Duration.tryParse(x.data)
             case _ => None<Duration>
         }

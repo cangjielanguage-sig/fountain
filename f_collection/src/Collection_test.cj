@@ -27,7 +27,7 @@ public class Collection_test {
         }
         map
     }
-    private func createLinkedMap(): Map<Int64, Int64> {
+    private func createLinkedHashMap(): Map<Int64, Int64> {
         let map = LinkedHashMap<Int64, Int64>()
         createMap(map, array)
     }
@@ -63,8 +63,8 @@ public class Collection_test {
     }
 
     @TestCase
-    public func testLinkedMap1(): Unit {
-        let map = createLinkedMap()
+    public func testLinkedHashMap1(): Unit {
+        let map = createLinkedHashMap()
         testSeqMap(map)
         let rand = Random()
         let list = ArrayList<Int64>(array)
@@ -83,7 +83,7 @@ public class Collection_test {
         }
     }
     @TestCase
-    public func testLinkedMap2(): Unit {
+    public func testLinkedHashMap2(): Unit {
         let map = LinkedHashMap<Int64, Int64>()
         map.put(1, 1)
         map.put(2, 2)
@@ -99,7 +99,7 @@ public class Collection_test {
         }
     }
     @TestCase
-    public func testLinkedMap3(): Unit {
+    public func testLinkedHashMap3(): Unit {
         let map = LinkedHashMap<Int64, Int64>(3, true)
         map.put(1, 1)
         map.put(2, 2)
@@ -114,7 +114,7 @@ public class Collection_test {
         }
     }
     @TestCase
-    public func testLinkedMap4(): Unit {
+    public func testLinkedHashMap4(): Unit {
         let map = LinkedHashMap<Int64, Int64>(3, true)
         map.put(1, 1)
         map.put(2, 2)

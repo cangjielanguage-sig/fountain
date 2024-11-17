@@ -24,7 +24,7 @@ public class DataTuple <: Data {
             try {
                 T.parse(tmp)
             } catch(e: Exception) {
-                throw DataException("to parse from sub string ${tmp} in ${string} to ${TypeInfos<K>.instance}", e)
+                throw DataException("to parse from sub string ${tmp} in ${string} to ${TypeInfos.get<K>()}", e)
             }
         }
         let s = string[1 .. string.size - 1]

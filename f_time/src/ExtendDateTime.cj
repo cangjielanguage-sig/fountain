@@ -12,11 +12,6 @@ package f_time
 public import std.time.*
 
 public interface ExtendDateTime {
-    /**
-      * 创世纪0001-01-01T00:00:00Z
-      */
-    static prop genesis: DateTime
-
     static prop currentDuration: Duration
     static prop yesterday: DateTime
     static prop today: DateTime
@@ -38,11 +33,6 @@ public interface ExtendDateTime {
     prop isLastMonthDay: Bool
 }
 extend DateTime <: ExtendDateTime {
-    public static prop genesis: DateTime {
-        get() {
-            DateTime.of(year: 1, month: Month.of(1), dayOfMonth: 1, timeZone: TimeZone.Z)
-        }
-    }
     public static prop currentDuration: Duration {
         get() {
             now().toUnixTimeStamp()

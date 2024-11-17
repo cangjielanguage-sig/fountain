@@ -25,6 +25,6 @@ public class DataNone <: Data{
         }
     }
     public static func parse(data: String): Data {
-        tryParse(data).getOrThrow{DataException("DataNone.parse receives string 'nullr' 'none' or there upper cases, but current is ${data}")}
+        tryParse(data).getOrThrow{DataException("DataNone.parse receives string 'null' 'none' or there upper cases, but current is ${data}")}
     }
 }

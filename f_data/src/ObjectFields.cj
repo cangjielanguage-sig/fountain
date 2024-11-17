@@ -28,7 +28,7 @@ public class ObjectFields<O> <: Iterable<ReadableField> where O <: Object & Data
                 populateField(f.name, f)
             }
         }
-        let currentType = (TypeInfos<O>.instance as ClassTypeInfo).getOrThrow()
+        let currentType = (TypeInfos.get<O>() as ClassTypeInfo).getOrThrow()
         populateFields(fields)
         func populateFields(name: String, annotations: Collection<Annotation>) {
             for(annotation in annotations) {
@@ -45,8 +45,8 @@ public class ObjectFields<O> <: Iterable<ReadableField> where O <: Object & Data
             populateFields(p.name, p.annotations)
         }
         match(currentType.superClass) {
-            case Some(x) where x != objectType =>
-                let superFields = QualifiedTypeInfos.getTypeInfo("fountain/data.DataObject<${x.qualifiedName}>").getStaticFunction("dataFields").apply()
+            case Some(x) where x != TypeInfos.get<Object>() =>
+                let superFields = TypeInfos.get("fountain/data.DataObject<${x.qualifiedName}>").getStaticFunction("dataFields").apply()
                 let superFieldsIterator = (TypeInfo.of(superFields).getInstanceFunction("iterator").apply(superFields) as Iterator<ReadableField>).getOrThrow()
                 populateFields(superFieldsIterator)
             case _ => ()

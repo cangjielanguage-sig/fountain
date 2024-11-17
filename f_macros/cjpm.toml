@@ -1,16 +1,12 @@
 [dependencies]
   f_base = {path = "../f_base"}
-  f_collection = {path = "../f_collection"}
   f_exception = {path = "../f_exception"}
-  f_macros = {path = "../f_macros"}
-  f_regex = {path = "../f_regex"}
-  f_time = {path = "../f_time"}
 [package]
   cjc-version = "0.57.3"
   compile-option = ""
   description = "nothing here"
   link-option = ""
-  name = "f_data"
+  name = "f_macros"
   output-type = "dynamic"
   override-compile-option = ""
   src-dir = ""

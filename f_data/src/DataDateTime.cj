@@ -42,7 +42,7 @@ public class DataDateTime <: Data & Hashable & Comparable<DataDateTime> {
 }
 let currentThreadDateFormat = ThreadLocal<String>()
 let defaultDateFormat = AtomicReference<Box<String>>(Box<String>(""))
-extend<T> DateTime <: DataFields<DateTime> {
+extend DateTime <: DataFields<DateTime> {
     public func toData(): Data {
         DataDateTime(this)
     }
@@ -52,7 +52,7 @@ extend<T> DateTime <: DataFields<DateTime> {
     public static func tryFromData(data: Data): ?DateTime {
         match(data){
             case x: DataDateTime => x.tryToDateTime()
-            case x: DataDuration => DateTime.genesis + x.toDuration()
+            case x: DataDuration => DateTime.UnixEpoch + x.toDuration()
             case x: DataString =>
                 let fmt = currentThreadDateFormat.get() ?? defaultDateFormat.load().value
                 if (fmt.isEmpty()) {
