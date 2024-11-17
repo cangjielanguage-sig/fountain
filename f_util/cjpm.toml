@@ -1,5 +1,6 @@
 [dependencies]
-
+  f_config = {path = "../f_config"}
+  f_exception = {path = "../f_exception"}
 [package]
   cjc-version = "0.57.3"
   compile-option = ""

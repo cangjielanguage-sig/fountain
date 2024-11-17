@@ -1,5 +1,5 @@
 [dependencies]
-
+  f_config = {path = "../f_config"}
 [package]
   cjc-version = "0.57.3"
   compile-option = ""
