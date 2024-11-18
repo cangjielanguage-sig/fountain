@@ -21,7 +21,7 @@ public class Config{
     private static let ARGS = ConcurrentHashMap<String, String>()
     static init(){
         let process = Process.current
-        for((k, v) in Process.current.environment){
+        for((k, v) in process.environment){
             ARGS[k] = v
         }
         for(arg in process.arguments where arg.startsWith('--')){
