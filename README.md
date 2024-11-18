@@ -17,6 +17,22 @@ _/ ____\____  __ __  _____/  |______  |__| ____
 - 深刻利用仓颉语言特性
 - 只需要开发动态链接库，fboot负责加载、初始化并运行。
 
+### 版本管理
+待功能完备后将按以下流程跟随仓颉版本，功能完备以前一直跟随最新的开发版。
+- 每月仓颉开发版对应一个`dev/${DEV_CANGJIE_VERSION}`
+- 每次发仓颉beta版，将对应的开发版转为`beta/${BETA_CANGJIE_VERSION}`，删除对应的开发版
+- 功能完备后的长期支持版作为master分支
+  - 此后master分支跟随最新的长期支持版
+  - 每次仓颉升级LTS
+    - 从对应的beta版建分支`lts/${LTS_CANGJIE_VERSION}`
+    - 删除对应beta版
+    - lts版本完成测试合并到master，创建版本`release-${main}.${sub}.${bug}.${CANGJIE_VERSION}`
+      - main：有新功能
+      - sub：功能变更
+      - bug：修改BUG
+      - CANGJIE_VERSION：取当前仓颉长期支持版前两位，比如当前仓颉长期支持版是1.0.x，CANGJIE_VERSION就是1_0。
+
+
 ### 加载本项目的动态链接库
 - 如果仅仅是开发使用，可以使用cjpm run当前依赖fountain的项目，就自动加载了。
 - 如果是在Linux服务器环境运行，
@@ -101,3 +117,6 @@ _/ ____\____  __ __  _____/  |______  |__| ____
   - TreeSet
   - PriorityQueue
 - TextTemplate
+- 随机数
+  - 随机字符串
+  - 范围随机数
