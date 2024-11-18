@@ -23,7 +23,6 @@
 # f_process = {path = "./f_process"}
   f_random = {path = "./f_random"}
   f_regex = {path = "./f_regex"}
-  f_text = {path = "./f_text"}
 # f_ticktock = {path = "./f_ticktock"}
   f_time = {path = "./f_time"}
   f_util = {path = "./f_util"}

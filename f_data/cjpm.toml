@@ -5,7 +5,6 @@
   f_macros = {path = "../f_macros"}
   f_regex = {path = "../f_regex"}
   f_time = {path = "../f_time"}
-  f_util = {path = "../f_util"}
 [package]
   cjc-version = "0.57.3"
   compile-option = ""

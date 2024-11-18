@@ -10,7 +10,6 @@
 macro package f_data.validation.macros
 
 import std.ast.*
-import f_util.CaseFormat
 import f_macros.*
 
 /**

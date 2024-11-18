@@ -7,7 +7,7 @@
     THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
     See the Mulan PSL v2 for more details.
  */
-package f_text
+package f_util
 
 import std.collection.{ArrayList, TreeMap, HashMap}
 import std.collection.concurrent.ConcurrentHashMap
@@ -41,7 +41,6 @@ import f_util.exception.TextTemplateException
  * 占位符可以是用.分割的字符串，.分割的占位符接收数组、list、po、map作参数；
  * a.0.b.c，表示参数的a属性是一个数组或list，它的索引0有一个属性b（如果是map就是key）,属性b有一个属性c，属性c的值是用来格式化的内容
  * 由于在number: regex: time:等模式中`有特殊意义
- *
  */
 public class TextTemplate {
     private static let templates = ConcurrentHashMap<String, TextTemplate>()
