@@ -18,36 +18,24 @@ import std.time.{DateTime, DateTimeFormat}
 import f_data.DataParsable
 
 public class Config{
-    private static let ENVS: Map<String, String>
-    private static let CMD_ARGS = HashMap<String, String>()
-    private static let ARGS = ConcurrentHashMap<String, ?String>()
+    private static let ARGS = ConcurrentHashMap<String, String>()
     static init(){
         let process = Process.current
+        for((k, v) in Process.current.environment){
+            ARGS[k] = v
+        }
         for(arg in process.arguments where arg.startsWith('--')){
             if(let Some(idx) <- arg.indexOf('=')){
                 let key = arg[2 .. idx].trimAscii()
                 let val = arg[idx + 1 .. ].trimAscii()
-                CMD_ARGS[key] = val
+                ARGS[key] = val
             }
         }
-        ENVS = process.environment
     }
     private init(){}
+    
     public static func getString(key: String): ?String{
-        if(let Some(x) <- ARGS.get(key)){
-            x
-        }else {
-            let val = 
-            if(let Some(x) <- CMD_ARGS.get(key)){
-                x
-            }else if(let Some(x) <- ENVS.get(key)){
-                x
-            }else{
-                None<String>
-            }
-            ARGS.putIfAbsent(key, val)
-            val
-        }
+        ARGS.get(key)
     }
     public static func getValue<T>(key: String, parser: (String) -> ?T): ?T {
         if(let Some(x) <- getString(key)){
