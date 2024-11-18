@@ -52,7 +52,9 @@ _/ ____\____  __ __  _____/  |______  |__| ____
      - 如果找不到就执行第一个找到的顶级声明函数`public func launch(): Unit`。
      - 如果找不到就只加载动态链接库，需要确保动态链接库初始化时就能够完成程序引导。
   4. fboot run -p /path/of/dylibs：把工作目录切换到指定路径，然后执行第三条。
-  5. fboot run package_name.LauncherImpl，类型需要实现f_launcher.Launcher接口。加载当前目录的动态链接库并调用指定类型名完成初始化。
+  5. fboot run package_name.LauncherImpl，类型需要实现f_launcher.Launcher接口。
+     - 首先加载环境变量$fountainPath。
+     - 加载当前目录的动态链接库并调用指定类型名完成初始化。
   6. fboot run package_name.LauncherImpl -p /path/of/dylibs：把工作目录切换到指定路径，然后执行第五条。
   7. fboot config --<key1>=<value1> --<key2>=<value2>
 
