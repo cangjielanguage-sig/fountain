@@ -9,6 +9,8 @@
 */
 package f_data
 
+import f_collection.LinkedHashMap
+
 sealed abstract class DataList<D> <: Data & Iterable<D> where D <: Data {
     public DataList(private let data: ArrayList<D>){}
     public init(data: Array<D>){
@@ -96,5 +98,74 @@ public class DataTuples <: DataList<DataTuple> {
     }
     public init(){
         super()
+    }
+}
+public class StringKeyMapTuples <: Data & Iterable<DataTuple> {
+    private let map = LinkedHashMap<String, DataTuple>()
+
+    public func addAll<L>(list: L): Unit where L <: DataList<DataTuple> {
+        for(d in list){
+            add(d)
+        }
+    }
+    public func add(tuple: DataTuple): Unit {
+        map[tuple.key.toString()] = tuple
+    }
+    public func add<V>(key: String, value: V): Unit where V <: DataFields<V> {
+        map[key] = DataTuple(key.toData(), value.toData())
+    }
+    public func iterator(): Iterator<DataTuple>{
+        map.values().iterator()
+    }
+    public func toString(): String {
+        var i = 0
+        let builder = StringBuilder('[')
+        for(tuple in map.values()){
+            if(i > 0){
+                builder.append(',')
+            }
+            builder.append(tuple)
+            i++
+        }
+        builder.append(']')
+        builder.toString()
+    }
+    public static func parseMap(string: String): StringKeyMapTuples  {
+        let s = string[1 .. string.size - 1]
+        let data = StringKeyMapTuples()
+        let bytes = ArrayList<Byte>()
+        for (b in s) {
+            if (b == b'\\') {
+                continue
+            } else if (b == b',') {
+                let tmp = StringBuilder().appendFromUtf8(bytes.toArray()).toString()
+                bytes.clear()
+                try {
+                    data.add((DataTuple.parse(tmp) as DataTuple).getOrThrow())
+                } catch (e: Exception) {
+                    throw DataException("to parse from sub string ${tmp} in ${string} to ${TypeInfos.get<DataTuple>()}", e)
+                }
+            } else {
+                bytes.append(b)
+            }
+        }
+        data
+    }
+    public static func tryParseMap(string: String): ?StringKeyMapTuples {
+        try {
+            parseMap(string)
+        } catch (_) {
+            None<StringKeyMapTuples>
+        }
+    }
+    public static func parse(string: String): Data {
+        parseMap(string)
+    }
+    public static func tryParse(string: String): ?Data {
+        try{
+            parse(string)
+        } catch (_) {
+            None<Data>
+        }
     }
 }

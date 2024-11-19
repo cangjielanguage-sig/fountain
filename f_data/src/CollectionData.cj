@@ -107,11 +107,20 @@ extend<T> HashSet<T> <: DataFields<HashSet<T>> where T <: DataFields<T> & Hashab
 
 extend<K, V> HashMap<K, V> <: DataFields<HashMap<K, V>> where K <: DataFields<K> & Hashable & Equatable<K>, V <: DataFields<V> {
     public func toData(): Data {
-        let list = ArrayList<DataTuple>()
-        for ((k, v) in this) {
-            list.append(DataTuple.create<K, V>(k, v))
+        if(TypeInfos.get<String>() == TypeInfos.get<K>()){
+            let map = StringKeyMapTuples()
+            for((k, v) in this){
+                let s = (k as String).getOrThrow()
+                map.add(s, v)
+            }
+            map
+        }else{
+            let list = ArrayList<DataTuple>()
+            for ((k, v) in this) {
+                list.append(DataTuple.create<K, V>(k, v))
+            }
+            DataTuples(list)
         }
-        DataTuples(list)
     }
     public static func fromData(data: Data): HashMap<K, V> {
         tryFromData(data).getOrThrow {DataException("${data} cannot be converted to ${TypeInfos.get<HashMap<K, V>>()}")}
@@ -161,11 +170,20 @@ extend<K, V> HashMap<K, V> <: DataFields<HashMap<K, V>> where K <: DataFields<K>
 
 extend<K, V> TreeMap<K, V> <: DataFields<TreeMap<K, V>> where K <: DataFields<K> & Comparable<K>, V <: DataFields<V> {
     public func toData(): Data {
-        let list = ArrayList<DataTuple>()
-        for ((k, v) in this) {
-            list.append(DataTuple.create<K, V>(k, v))
+        if(TypeInfos.get<String>() == TypeInfos.get<K>()){
+            let map = StringKeyMapTuples()
+            for((k, v) in this){
+                let s = (k as String).getOrThrow()
+                map.add(s, v)
+            }
+            map
+        }else{
+            let list = ArrayList<DataTuple>()
+            for ((k, v) in this) {
+                list.append(DataTuple.create<K, V>(k, v))
+            }
+            DataTuples(list)
         }
-        DataTuples(list)
     }
     public static func fromData(data: Data): TreeMap<K, V> {
         tryFromData(data).getOrThrow {DataException("${data} cannot be converted to ${TypeInfos.get<TreeMap<K, V>>()}")}
@@ -216,11 +234,20 @@ extend<K, V> TreeMap<K, V> <: DataFields<TreeMap<K, V>> where K <: DataFields<K>
 extend<K, V> ConcurrentHashMap<K, V> <: DataFields<ConcurrentHashMap<K, V>> where K <: DataFields<K> & Hashable & Equatable<K>,
     V <: DataFields<V> {
     public func toData(): Data {
-        let list = ArrayList<DataTuple>()
-        for ((k, v) in this) {
-            list.append(DataTuple.create<K, V>(k, v))
+        if(TypeInfos.get<String>() == TypeInfos.get<K>()){
+            let map = StringKeyMapTuples()
+            for((k, v) in this){
+                let s = (k as String).getOrThrow()
+                map.add(s, v)
+            }
+            map
+        }else{
+            let list = ArrayList<DataTuple>()
+            for ((k, v) in this) {
+                list.append(DataTuple.create<K, V>(k, v))
+            }
+            DataTuples(list)
         }
-        DataTuples(list)
     }
     public static func fromData(data: Data): ConcurrentHashMap<K, V> {
         tryFromData(data).getOrThrow {DataException(
@@ -272,11 +299,20 @@ extend<K, V> ConcurrentHashMap<K, V> <: DataFields<ConcurrentHashMap<K, V>> wher
 extend<K, V> LinkedHashMap<K, V> <: DataFields<LinkedHashMap<K, V>> where K <: DataFields<K> & Hashable & Equatable<K>,
     V <: DataFields<V> {
     public func toData(): Data {
-        let list = ArrayList<DataTuple>()
-        for ((k, v) in this) {
-            list.append(DataTuple.create<K, V>(k, v))
+        if(TypeInfos.get<String>() == TypeInfos.get<K>()){
+            let map = StringKeyMapTuples()
+            for((k, v) in this){
+                let s = (k as String).getOrThrow()
+                map.add(s, v)
+            }
+            map
+        }else{
+            let list = ArrayList<DataTuple>()
+            for ((k, v) in this) {
+                list.append(DataTuple.create<K, V>(k, v))
+            }
+            DataTuples(list)
         }
-        DataTuples(list)
     }
     public static func fromData(data: Data): LinkedHashMap<K, V> {
         tryFromData(data).getOrThrow {DataException("${data} cannot be converted to ${TypeInfos.get<LinkedHashMap<K, V>>()}")}
