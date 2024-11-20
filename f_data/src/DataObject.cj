@@ -119,19 +119,9 @@ public class ObjectData<T> <: Data & Iterable<(String, Data)> where T <: Object 
             }
         }
         match(src){
-            case x: DataTuples =>
+            case x: Iterable<DataTuple> =>
                 let dstFields = T.dataFields()
                 for(e in x) {
-                    match(e){
-                        case x: DataTuple => putTuple(x, dstTuple: (dstFields, target))
-                        case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) > 0 => continue
-                        case _ => throw DataException("at least on element in current DataSequence cannot be converted to a DataTuple for populating current object which type is ${TypeInfos.get<T>()}")
-                    }
-                }
-                target
-            case x: StringKeyMapTuples => 
-                let dstFields = T.dataFields()
-                for(e in x){
                     match(e){
                         case x: DataTuple => putTuple(x, dstTuple: (dstFields, target))
                         case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) > 0 => continue
