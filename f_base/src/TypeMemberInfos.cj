@@ -120,7 +120,7 @@ public class TypeMemberInfos{
                                 map[v.name] = v
                             }
                             map
-                        case _ => EmptyMap<String, StaticVariableInfo>.instance
+                        case _ => EmptyMap<String, StaticVariableInfo>.INSTANCE
                     }
             }
     }
@@ -151,7 +151,7 @@ public class TypeMemberInfos{
                                 map[v.name] = v
                             }
                             map
-                        case _ => EmptyMap<String, InstanceVariableInfo>.instance
+                        case _ => EmptyMap<String, InstanceVariableInfo>.INSTANCE
                     }
             }
     }

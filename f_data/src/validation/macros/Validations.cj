@@ -35,7 +35,7 @@ public macro Validations(input: Tokens): Tokens {
     stringsValidations("LowerUnderScoresValidation", name) +
     stringsValidations("UpperHyphensValidation", name) +
     stringsValidations("LowerHyphensValidation", name) +
-    quote(DummyValidator<$name>.instance)
+    quote(DummyValidator<$name>.INSTANCE)
     let validatorsName = Token(IDENTIFIER, "validators_${name.toString().replace(" ","").replace(",","_").replace("<","_").replace(">","_")}")
     input + `nl` + quote(
         let $validatorsName = Validators<$name>($tokens)

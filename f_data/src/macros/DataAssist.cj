@@ -221,35 +221,35 @@ func generateToFields(d: CompositeDecl) {
             case x: VarDecl where x.isPublic() =>
                 if (x.isVar()) {
                     quote(MutableField($(x.identifier.value), TypeInfo.of(x.$(x.identifier)), {o =>
-                        (o as $klassIdentifier).getOrThrow{DataException("type of current instance does not match, expected " + TypeInfos<$(klassIdentifier)>.INSTANCE + ", but recceives " + TypeInfo.of(o))}.$(x.identifier).toData()
+                        (o as $klassIdentifier).getOrThrow{DataException("type of current instance does not match, expected " + TypeInfos.get<$(klassIdentifier)>() + ", but recceives " + TypeInfo.of(o))}.$(x.identifier).toData()
                     }){o, d =>
                         match ($(x.declType).tryFromData(d)) {
                             case Some(x) =>
-                                (o as $klassIdentifier).getOrThrow{DataException("type of current instance does not match, expected " + TypeInfos<$(klassIdentifier)>.INSTANCE + ", but receives " + TypeInfo.of(o))}.$(x.identifier) = (x as $(x.declType)).getOrThrow()
+                                (o as $klassIdentifier).getOrThrow{DataException("type of current instance does not match, expected " + TypeInfos.get<$(klassIdentifier)>() + ", but receives " + TypeInfo.of(o))}.$(x.identifier) = (x as $(x.declType)).getOrThrow()
                                 true
                             case _ => false
                         }
                     })
                 } else {
                     quote(ReadonlyField($(x.identifier.value), TypeInfo.of(x.$(x.identifier))){o=>
-                        (o as $klassIdentifier).getOrThrow{DataException("type of current instance does not match, expected " + TypeInfos<$(klassIdentifier)>.INSTANCE + ", but recceives " + TypeInfo.of(o))}.$(x.identifier).toData()
+                        (o as $klassIdentifier).getOrThrow{DataException("type of current instance does not match, expected " + TypeInfos.get<$(klassIdentifier)>() + ", but recceives " + TypeInfo.of(o))}.$(x.identifier).toData()
                     })
                 }
             case x: PropDecl where x.isPublic() =>
                 if (x.isMut()) {
                     quote(MutableField($(x.identifier.value), TypeInfo.of(x.$(x.identifier)), {o =>
-                        (o as $klassIdentifier).getOrThrow{DataException("type of current instance does not match, expected " + TypeInfos<$(klassIdentifier)>.INSTANCE + ", but recceives " + TypeInfo.of(o))}.$(x.identifier).toData()
+                        (o as $klassIdentifier).getOrThrow{DataException("type of current instance does not match, expected " + TypeInfos.get<$(klassIdentifier)>() + ", but recceives " + TypeInfo.of(o))}.$(x.identifier).toData()
                     }){o, d =>
                         match ($(x.declType).tryFromData(d)) {
                             case Some(x) =>
-                                (o as $klassIdentifier).getOrThrow{DataException("type of current instance does not match, expected " + TypeInfos<$(klassIdentifier)>.INSTANCE + ", but recceives " + TypeInfo.of(o))}.$(x.identifier) = (x as $(x.declType)).getOrThrow()
+                                (o as $klassIdentifier).getOrThrow{DataException("type of current instance does not match, expected " + TypeInfos.get<$(klassIdentifier)>() + ", but recceives " + TypeInfo.of(o))}.$(x.identifier) = (x as $(x.declType)).getOrThrow()
                                 true
                             case _ => false
                         }
                     })
                 } else {
                     quote(ReadonlyField($(x.identifier.value), TypeInfo.of(x.$(x.identifier))){o=>
-                        (o as $klassIdentifier).getOrThrow{DataException("type of current instance does not match, expected " + TypeInfos<$(klassIdentifier)>.INSTANCE + ", but recceives " + TypeInfo.of(o))}.$(x.identifier).toData()
+                        (o as $klassIdentifier).getOrThrow{DataException("type of current instance does not match, expected " + TypeInfos.get<$(klassIdentifier)>() + ", but recceives " + TypeInfo.of(o))}.$(x.identifier).toData()
                     })
                 }
             case _ => 

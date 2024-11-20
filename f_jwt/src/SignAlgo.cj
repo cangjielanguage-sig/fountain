@@ -120,7 +120,7 @@ public class ECDSASignAlgo <: AsymmetricSignAlgo {
     }
 }
 private class NoneDigest <: Digest {
-    static let instance = NoneDigest()
+    static let INSTANCE = NoneDigest()
     private init(){}
     public prop blockSize: Int64{
         get(){
@@ -140,9 +140,9 @@ private class NoneDigest <: Digest {
 }
 public class NoneSignAlgo <: SignAlgo{
     private init(){
-        super(NoneDigest.instance)
+        super(NoneDigest.INSTANCE)
     }
-    public static let instance = NoneSignAlgo()
+    public static let INSTANCE = NoneSignAlgo()
 
     protected func sign(data: Array<Byte>): Array<Byte>{
         throw JWTException("sign algo was not be specified")

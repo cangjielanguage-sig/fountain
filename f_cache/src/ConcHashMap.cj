@@ -125,7 +125,7 @@ class ConcHashMapValues<V> <: Collection<V> {
 }
 class ConcHashMapIterator<V> <: Iterator<(String, V)> {
     private var cur = 0
-    private var itr: Iterator<(String, V)> = EmptyIterator<(String, V)>.instance
+    private var itr: Iterator<(String, V)> = EmptyIterator<(String, V)>.INSTANCE
     ConcHashMapIterator(private let m: ConcHashMap<V>) {
         (cur, itr) = doNextSegment(cur)
     }
@@ -148,7 +148,7 @@ class ConcHashMapIterator<V> <: Iterator<(String, V)> {
         if (cur >= 0 && cur < m.segments.size) {
             (cur + 1, segmentIterator(cur))
         } else {
-            (cur + 1, EmptyIterator<(String, V)>.instance)
+            (cur + 1, EmptyIterator<(String, V)>.INSTANCE)
         }
     }
     func segmentIterators(): Array<Iterator<(String, V)>> {

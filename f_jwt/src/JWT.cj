@@ -23,7 +23,7 @@ import f_jwt.exception.JWTException
 public class JWT {
     let headers = HashMap<String, String>()
     let payload = HashMap<String, Any>()
-    var signAlgo: SignAlgo = NoneSignAlgo.instance
+    var signAlgo: SignAlgo = NoneSignAlgo.INSTANCE
 
     public init() {}
 

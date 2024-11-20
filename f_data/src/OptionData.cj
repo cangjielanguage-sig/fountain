@@ -13,7 +13,7 @@ extend<T> Option<T> <: DataFields<?T> where T <: DataFields<T> {
     public func toData(): Data {
         match(this) {
             case Some(x) => x.toData()
-            case _ => DataNone.instance
+            case _ => DataNone.INSTANCE
         }
     }
     public static func fromData(data: Data): ?T {

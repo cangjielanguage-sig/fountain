@@ -10,7 +10,7 @@
 package f_data
 
 public class DataNone <: Data{
-    public static let instance = DataNone()
+    public static let INSTANCE = DataNone()
     private init(){}
     public func toString(): String {
         "None"
@@ -20,7 +20,7 @@ public class DataNone <: Data{
             return None<Data>
         }
         match(data.toAsciiLower()){
-            case "null" | "none" => instance
+            case "null" | "none" => INSTANCE
             case _ => None<Data>
         }
     }

@@ -61,7 +61,7 @@ public interface Node<T> {
     }
 }
 public class NoneNode<T> <: Node<T> {
-    static const instance = NoneNode<T>()
+    static const INSTANCE = NoneNode<T>()
     private const init() {}
 }
 public class HeadNode<T> <: Node<T> & Iterable<T> {
@@ -90,7 +90,7 @@ public class HeadNode<T> <: Node<T> & Iterable<T> {
     }
 }
 public class TailNode<T> <: Node<T> & Iterable<T> {
-    TailNode(var prev!: Node<T> = NoneNode<T>.instance) {}
+    TailNode(var prev!: Node<T> = NoneNode<T>.INSTANCE) {}
     public func insertPrev(value: T): ValueNode<T> {
         ValueNode<T>(value, this)
     }

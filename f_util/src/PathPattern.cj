@@ -64,7 +64,7 @@ public class PathPattern {
         func populateNode(node: PathNode) {
             synchronized(mutex) {
                 while (patterns.size < len) {
-                    patterns.append(NonePathNode.instance)
+                    patterns.append(NonePathNode.INSTANCE)
                 }
                 if (patterns.size == len) {
                     patterns.append(node)
@@ -119,7 +119,7 @@ public class PathPattern {
             if (pattern.contains("**")) {
                 let count = countWithoutDoubleStar(pattern, true)
                 while (patterns.size < count + 1) {
-                    patterns.append(NonePathNode.instance)
+                    patterns.append(NonePathNode.INSTANCE)
                 }
                 while (originPatterns.size < count + 1) {
                     originPatterns.append(ArrayList<(String, Any)>())
@@ -230,15 +230,15 @@ public class PathPattern {
      */
     private func get<T>(parts: Array<String>, mode: Mode, len: Int64): Option<T> {
         var node: PathNode = getPathNode(len)
-        var prevDoubleStar: PathNode = NonePathNode.instance
-        var prevComplex: PathNode = NonePathNode.instance
-        var prevRegexPlaceholder: PathNode = NonePathNode.instance
-        var prevPlaceholder: PathNode = NonePathNode.instance
-        var endNode: PathNode = NonePathNode.instance
+        var prevDoubleStar: PathNode = NonePathNode.INSTANCE
+        var prevComplex: PathNode = NonePathNode.INSTANCE
+        var prevRegexPlaceholder: PathNode = NonePathNode.INSTANCE
+        var prevPlaceholder: PathNode = NonePathNode.INSTANCE
+        var endNode: PathNode = NonePathNode.INSTANCE
         let variables: Map<Int64, Any> = if (let EXTRACTION <- mode) {
             HashMap<Int64, Any>()
         } else {
-            EmptyMap<Int64, Any>.instance
+            EmptyMap<Int64, Any>.INSTANCE
         }
         var i = 0
         while (i < parts.size) {
@@ -246,9 +246,9 @@ public class PathPattern {
             var tmp: Option<PathNode> = node.getSub(part)
             if (let Some(n) <- tmp) {
                 node = n
-                prevComplex = NonePathNode.instance
-                prevRegexPlaceholder = NonePathNode.instance
-                prevPlaceholder = NonePathNode.instance
+                prevComplex = NonePathNode.INSTANCE
+                prevRegexPlaceholder = NonePathNode.INSTANCE
+                prevPlaceholder = NonePathNode.INSTANCE
                 i++
                 continue
             }
@@ -256,10 +256,10 @@ public class PathPattern {
             tmp = node.getRegexPlaceholderNode(part, prevRegexPlaceholder)
             if (let Some(n) <- tmp) {
                 node = n
-                prevComplex = NonePathNode.instance
-                prevRegexPlaceholder = NonePathNode.instance
-                prevDoubleStar = NonePathNode.instance
-                prevPlaceholder = NonePathNode.instance
+                prevComplex = NonePathNode.INSTANCE
+                prevRegexPlaceholder = NonePathNode.INSTANCE
+                prevDoubleStar = NonePathNode.INSTANCE
+                prevPlaceholder = NonePathNode.INSTANCE
                 if (mode.extraction()) {
                     variables.put(i, node.name)
                 }
@@ -269,10 +269,10 @@ public class PathPattern {
             tmp = node.getPlaceholderNode(prevPlaceholder)
             if (let Some(n) <- tmp) {
                 node = n
-                prevPlaceholder = NonePathNode.instance
-                prevDoubleStar = NonePathNode.instance
-                prevComplex = NonePathNode.instance
-                prevRegexPlaceholder = NonePathNode.instance
+                prevPlaceholder = NonePathNode.INSTANCE
+                prevDoubleStar = NonePathNode.INSTANCE
+                prevComplex = NonePathNode.INSTANCE
+                prevRegexPlaceholder = NonePathNode.INSTANCE
                 if (mode.extraction()) {
                     variables.put(i, node.name)
                 }
@@ -282,9 +282,9 @@ public class PathPattern {
             tmp = node.getRegexNode(part)
             if (let Some(n) <- tmp) {
                 node = n
-                prevComplex = NonePathNode.instance
-                prevRegexPlaceholder = NonePathNode.instance
-                prevPlaceholder = NonePathNode.instance
+                prevComplex = NonePathNode.INSTANCE
+                prevRegexPlaceholder = NonePathNode.INSTANCE
+                prevPlaceholder = NonePathNode.INSTANCE
                 i++
                 continue
             }
@@ -292,9 +292,9 @@ public class PathPattern {
             tmp = node.getComplexNode(part, prevComplex)
             if (let Some(n) <- tmp) {
                 node = n
-                prevPlaceholder = NonePathNode.instance
-                prevComplex = NonePathNode.instance
-                prevRegexPlaceholder = NonePathNode.instance
+                prevPlaceholder = NonePathNode.INSTANCE
+                prevComplex = NonePathNode.INSTANCE
+                prevRegexPlaceholder = NonePathNode.INSTANCE
                 if (mode.extraction()) {
                     variables.put(i, node)
                 }
@@ -305,9 +305,9 @@ public class PathPattern {
             tmp = node.getStarNode()
             if (let Some(n) <- tmp) {
                 node = n
-                prevComplex = NonePathNode.instance
-                prevRegexPlaceholder = NonePathNode.instance
-                prevPlaceholder = NonePathNode.instance
+                prevComplex = NonePathNode.INSTANCE
+                prevRegexPlaceholder = NonePathNode.INSTANCE
+                prevPlaceholder = NonePathNode.INSTANCE
                 i++
                 continue
             }
@@ -315,9 +315,9 @@ public class PathPattern {
             if (let Some(n) <- tmp) {
                 node = n
                 prevDoubleStar = node
-                prevPlaceholder = NonePathNode.instance
-                prevComplex = NonePathNode.instance
-                prevRegexPlaceholder = NonePathNode.instance
+                prevPlaceholder = NonePathNode.INSTANCE
+                prevComplex = NonePathNode.INSTANCE
+                prevRegexPlaceholder = NonePathNode.INSTANCE
                 i++
                 continue
             }
@@ -335,11 +335,11 @@ public class PathPattern {
                     if (let Some(ppn) <- prevPlaceholder.prev) {
                         node = ppn
                     } else {
-                        node = NonePathNode.instance
+                        node = NonePathNode.INSTANCE
                     }
-                    prevDoubleStar = NonePathNode.instance
-                    prevComplex = NonePathNode.instance
-                    prevRegexPlaceholder = NonePathNode.instance
+                    prevDoubleStar = NonePathNode.INSTANCE
+                    prevComplex = NonePathNode.INSTANCE
+                    prevRegexPlaceholder = NonePathNode.INSTANCE
                 case Some(n) where n is PlaceholderRegexPathNode =>
                     if (mode.extraction()) {
                         variables.remove(i)
@@ -349,11 +349,11 @@ public class PathPattern {
                     if (let Some(prpn) <- prevRegexPlaceholder.prev) {
                         node = prpn
                     } else {
-                        node = NonePathNode.instance
+                        node = NonePathNode.INSTANCE
                     }
-                    prevComplex = NonePathNode.instance
-                    prevDoubleStar = NonePathNode.instance
-                    prevPlaceholder = NonePathNode.instance
+                    prevComplex = NonePathNode.INSTANCE
+                    prevDoubleStar = NonePathNode.INSTANCE
+                    prevPlaceholder = NonePathNode.INSTANCE
                 case Some(n) where n is ComplexPathNode =>
                     if (mode.extraction()) {
                         variables.remove(i)
@@ -363,23 +363,23 @@ public class PathPattern {
                     if (let Some(pcn) <- prevComplex.prev) {
                         node = pcn
                     } else {
-                        node = NonePathNode.instance
+                        node = NonePathNode.INSTANCE
                     }
-                    prevRegexPlaceholder = NonePathNode.instance
-                    prevDoubleStar = NonePathNode.instance
-                    prevPlaceholder = NonePathNode.instance
+                    prevRegexPlaceholder = NonePathNode.INSTANCE
+                    prevDoubleStar = NonePathNode.INSTANCE
+                    prevPlaceholder = NonePathNode.INSTANCE
                 case _ where !(prevDoubleStar is NonePathNode || prevDoubleStar == node) =>
                     node = prevDoubleStar
-                    prevPlaceholder = NonePathNode.instance
-                    prevComplex = NonePathNode.instance
-                    prevRegexPlaceholder = NonePathNode.instance
+                    prevPlaceholder = NonePathNode.INSTANCE
+                    prevComplex = NonePathNode.INSTANCE
+                    prevRegexPlaceholder = NonePathNode.INSTANCE
                     i++
                     continue
                 case _ where node is DoubleStarPathNode =>
                     prevDoubleStar = node
-                    prevPlaceholder = NonePathNode.instance
-                    prevComplex = NonePathNode.instance
-                    prevRegexPlaceholder = NonePathNode.instance
+                    prevPlaceholder = NonePathNode.INSTANCE
+                    prevComplex = NonePathNode.INSTANCE
+                    prevRegexPlaceholder = NonePathNode.INSTANCE
                     i++
                     continue
                 case _ where end && mode.prefix() =>
@@ -416,7 +416,7 @@ public class PathPattern {
         (!(node is NonePathNode)) && node.end
     }
     private func matches(node: Option<PathNode>): Bool {
-        matches(node ?? NonePathNode.instance)
+        matches(node ?? NonePathNode.INSTANCE)
     }
 
     /**
@@ -452,7 +452,7 @@ public class PathPattern {
                 } while (len > 0 && !matches(node))
                 node
             case _ => get<PathNode>(parts, mode)
-        } ?? NonePathNode.instance
+        } ?? NonePathNode.INSTANCE
     }
 }
 extend<T> Option<T> where T <: PathNode {
@@ -740,7 +740,7 @@ open class PathNode <: Equatable<PathNode> {
     }
 }
 class NonePathNode <: PathNode {
-    static let instance: PathNode = NonePathNode()
+    static let INSTANCE: PathNode = NonePathNode()
     private init() {}
     protected operator func ==(o: Any): Bool {
         o is NonePathNode || (o as Option<NonePathNode>).isSome()
