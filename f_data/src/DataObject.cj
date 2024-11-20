@@ -34,7 +34,7 @@ public class ObjectData<T> <: Data & Iterable<(String, Data)> where T <: Object 
     public ObjectData(public let data: T) {
     }
     public func iterator(): Iterator<(String, Data)> {
-        let fields = T.dataFields().iterator()
+        let fields = fields()
         FieldIterator<T>(data, fields)
     }
     public func fields(): Iterator<ReadableField> {
@@ -150,5 +150,21 @@ public class ObjectData<T> <: Data & Iterable<(String, Data)> where T <: Object 
     }
     public static func populate<S>(src: S, target: T, flag!: UInt64 = SILENCE): ?T where S <: DataObject<S> {
         populate(ObjectData<S>(src), target, flag: flag)
+    }
+    public static func populate<M, V>(src: M, flag!: UInt64 = SILENCE): ?T where M <: Map<String, V> & DataFields<M>, V <: DataFields<V> {
+        populate(src.toData(), flag: flag)
+    }
+    public static func populate<M, V>(src: M, target: T, flag!: UInt64 = SILENCE): ?T where M <: Map<String, V> & DataFields<M>, V <: DataFields<V> {
+        populate(src.toData(), target, flag: flag)
+    }
+    public static func populate<M, V>(src: T, map: M, flag!: UInt64 = SILENCE): M where M <: Map<String, V> & DataFields<M>, V <: DataFields<V> {
+        for((k, v) in ObjectData<T>(src)){
+            match(V.tryFromData(v, flag: flag)){
+                case Some(x) => map[k] = x
+                case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) != 0 => ()
+                case _ => throw DataException('property ${k} of ${TypeInfos.get<T>()} cannot be converted to ${TypeInfos.get<V>()}')
+            }
+        }
+        map
     }
 }
