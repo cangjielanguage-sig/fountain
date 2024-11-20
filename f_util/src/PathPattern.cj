@@ -109,9 +109,9 @@ public class PathPattern {
     //pattern是定义的路径，data是路径对应的数据，比如这个路径对应的执行函数、是否匹配当前请求方法等
     public func compile(pattern: String, data: Any): PathPattern {
         var p = pattern
-        p = Regex(#"/\{\*(?=[a-zA-Z][A-Za-z0-9_]*\})"#).matcher(p).replaceAll("/**/{")
-        p = Regex(#"/\*{3,}"#).matcher(p).replaceAll("/**")
-        p = Regex(#"(/\*{2}){2,}"#).matcher(p).replaceAll("/**")
+        p = #"/\{\*(?=[a-zA-Z][A-Za-z0-9_]*\})"#.regex(solid: true).matcher(p).replaceAll("/**/{")
+        p = #"/\*{3,}"#.regex(solid: true).matcher(p).replaceAll("/**")
+        p = #"(/\*{2}){2,}"#.regex(solid: true).matcher(p).replaceAll("/**")
         p = p.replace("//", "/")
         p = trimRedundantSlash(p)
         let parts = parts(pattern, true)
@@ -677,18 +677,18 @@ open class PathNode <: Equatable<PathNode> {
         match (name) {
             case "*" => this.createStarNodeIfAbsent()
             case "**" => this.createDoubleStarNodeIfAbsent()
-            case _ => if (Regex(#"^\{#regex:.+\}$"#).matches(name).isSome()) {
+            case _ => if (#"^\{#regex:.+\}$"#.regex(solid: true).matches(name).isSome()) {
                 let idx = (name.indexOf(":") ?? -1) + 1
                 let n = name[idx..name.size - 1]
                 this.appendRegexNode(n, true)
-            } else if (Regex(#"^\{[a-zA-Z_]+\w*:.+\}$"#).matches(name).isSome()) {
+            } else if (#"^\{[a-zA-Z_]+\w*:.+\}$"#.regex(solid: true).matches(name).isSome()) {
                 let idx = name.indexOf(":") ?? -1
                 let reg = name[idx + 1..name.size - 1]
                 let n = name[1..idx]
                 this.createPlaceholderRegexNodeIfAbsent(n, reg, true)
-            } else if (Regex(#"^\{[a-zA-Z_]+\w*\}$"#).matches(name).isSome()) {
+            } else if (#"^\{[a-zA-Z_]+\w*\}$"#.regex(sold: true).matches(name).isSome()) {
                 return this.createPlaceholderNodeIfAbsent(name[1..name.size - 1])
-            } else if (Regex(#"^(.*\{[a-zA-Z_]+\w*\}.*)+$"#).matches(name).isSome()) {
+            } else if (#"^(.*\{[a-zA-Z_]+\w*\}.*)+$"#.regex(solid: true).matches(name).isSome()) {
                 return this.createComplexPathNode(name)
             } else if (name.contains("*") || name.contains("?")) {
                 return this.appendRegexNode(name, false)
@@ -790,7 +790,7 @@ open class RegexPathNode <: PathNode {
             } else if (!name.endsWith("$")) {
                 suffix = "$"
             }
-            this.reg = Regex("${prefix}(${name})${suffix}")
+            this.reg = "${prefix}(${name})${suffix}".regex()
         } else {
             let reg = StringBuilder()
             reg.append("^(")
@@ -802,7 +802,7 @@ open class RegexPathNode <: PathNode {
                 }
             }
             reg.append(")$")
-            this.reg = Regex(reg.toString())
+            this.reg = reg.toString().regex()
         }
     }
     protected func matches(name: String) {
@@ -859,7 +859,7 @@ class ComplexPathNode <: PathNode {
             part = name[start..]
             patterns.append(tmp.appendSubPathNode(part).getOrThrow())
         }
-        return Regex("^(${String.join(parts.toArray(), delimiter: ")(")})$") //正则非贪婪匹配
+        return "^(${String.join(parts.toArray(), delimiter: ")(")})$".regex() //正则非贪婪匹配
     }
     private static func appendPart(tmp: PathNode, parts: ArrayList<String>, name: String, start: Int64, end: Int64): PathNode {
         let part = name[start..end]
