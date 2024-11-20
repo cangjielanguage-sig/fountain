@@ -165,14 +165,13 @@ public class ObjectData<T> <: Data & Iterable<(String, Data)> where T <: Object 
         V <: DataFields<V> {
         populate(src.toData(), target, flag: flag)
     }
-    public static func populate<M, V>(src: T, map: M, flag!: UInt64 = SILENCE): M where M <: Map<String, V> & DataFields<M>,
+    public static func populate<M, V>(src: T, map: M, flag!: UInt64 = SILENCE): M where M <: Map<String, V>,
         V <: DataFields<V> {
         for ((k, v) in ObjectData<T>(src)) {
             if (let Some(x) <- V.tryFromData(v, flag: flag)) {
                 map[k] = x
             } else if ((flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0) {
-                throw DataException(
-                    'field ${k} of ${TypeInfos.get<T>()} cannot be converted to ${TypeInfos.get<V>()}')
+                throw DataException('field ${k} of ${TypeInfos.get<T>()} cannot be converted to ${TypeInfos.get<V>()}')
             }
         }
         map
