@@ -28,7 +28,12 @@ public interface CompositeDecl <: ToTokens {
         !(isPublic() || isProtected() || isPrivate())
     }
 }
-extend ClassDecl <: CompositeDecl{
+public interface ExtendClassDecl {
+    func isOpen(): Bool
+    func isAbstract(): Bool
+    func isSealed(): Bool
+}
+extend ClassDecl <: CompositeDecl & ExtendClassDecl {
     public func isPublic(): Bool {
         isPublic(this)
     }
@@ -37,6 +42,27 @@ extend ClassDecl <: CompositeDecl{
     }
     public func isPrivate(): Bool {
         isPrivate(this)
+    }
+    public func isOpen(): Bool{
+        let modifiers = this.modifiers
+        for(i in 0 .. modifiers.size where isOpen(modifiers, i)){
+            return true
+        }
+        false
+    }
+    public func isAbstract(): Bool{
+        let modifiers = this.modifiers
+        for(i in 0 .. modifiers.size where isAbstract(modifiers, i)){
+            return true
+        }
+        false
+    }
+    public func isSealed(): Bool{
+        let modifiers = this.modifiers
+        for(i in 0 .. modifiers.size where isModifier(modifiers, i, SEALED)){
+            return true
+        }
+        false
     }
 }
 extend StructDecl <: CompositeDecl{

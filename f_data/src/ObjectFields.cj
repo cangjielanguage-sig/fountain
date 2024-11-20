@@ -9,17 +9,19 @@
 */
 package f_data
 
-public class ObjectFields<O> <: Iterable<ReadableField> where O <: Object & DataObject<O> {
+public class ObjectFields <: Iterable<ReadableField> {
     private let mutables = HashMap<String, MutableField>()
     private let readables = HashMap<String, ReadableField>()
-    public ObjectFields(
+    private ObjectFields(
         fields: Array<ReadableField>,
-        private let creator: ()-> O
-    ){
+        private let creator: ()-> Object
+    ){}
+    public static func createFields<O>(fields: Array<ReadableField>, creator: ()-> O): ObjectFields where O <: Object & DataObject<O> {
+        let objf = ObjectFields(fields, creator)
         func populateField(name: String, field: ReadableField) {
-            readables.putIfAbsent(name, field)
+            objf.readables.putIfAbsent(name, field)
             match(field){
-                case x: MutableField => mutables.putIfAbsent(name, x)
+                case x: MutableField => objf.mutables.putIfAbsent(name, x)
                 case _ => false
             }
         }
@@ -28,16 +30,16 @@ public class ObjectFields<O> <: Iterable<ReadableField> where O <: Object & Data
                 populateField(f.name, f)
             }
         }
-        let currentType = (TypeInfos.get<O>() as ClassTypeInfo).getOrThrow()
         populateFields(fields)
         func populateFields(name: String, annotations: Collection<Annotation>) {
             for(annotation in annotations) {
                 match(annotation){
-                    case x: FieldAlias => populateField(x.name, readables[name])
+                    case x: FieldAlias => populateField(x.name, objf.readables[name])
                     case _ => ()
                 }
             }
         }
+        let currentType = (TypeInfos.get<O>() as ClassTypeInfo).getOrThrow()
         for(v in currentType.instanceVariables) {
             populateFields(v.name, v.annotations)
         }
@@ -45,14 +47,15 @@ public class ObjectFields<O> <: Iterable<ReadableField> where O <: Object & Data
             populateFields(p.name, p.annotations)
         }
         match(currentType.superClass) {
-            case Some(x) where x != TypeInfos.get<Object>() =>
-                let superFields = TypeInfos.get("fountain/data.DataObject<${x.qualifiedName}>").getStaticFunction("dataFields").apply()
-                let superFieldsIterator = (TypeInfo.of(superFields).getInstanceFunction("iterator").apply(superFields) as Iterator<ReadableField>).getOrThrow()
+            case Some(x) where x != TypeInfos.get<Object>() && x.isSubtypeOf(TypeInfos.get("fountain/data.DataObject<${x.qualifiedName}>")) =>
+                let superFields = x.getStaticFunction("dataFields").apply()
+                let superFieldsIterator = (superFields as ObjectFields).getOrThrow().iterator()
                 populateFields(superFieldsIterator)
             case _ => ()
         }
+        objf
     }
-    public func create(): O {
+    public func create(): Object {
         creator()
     }
     public func iterator(): Iterator<ReadableField> {

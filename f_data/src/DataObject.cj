@@ -11,17 +11,19 @@ package f_data
 
 import f_regex.*
 
-public interface DataObject<T> <: DataFields<T> where T <: Object & DataObject<T> {
-    static func dataFields(): ObjectFields<T>
-
-    func toData(): Data {
-        ObjectData<T>((this as T).getOrThrow{DataException("generic type ${TypeInfos.get<T>()} must be subtype of ${TypeInfos.get<DataObject<T>>()}")})
-    }
-    static func fromData(data: Data): T {
+public interface DataObject<T> <: DataFields<Object> where T <: Object & DataObject<T> {
+    static func dataFields(): ObjectFields
+    
+    func toData(): Data 
+    
+    static func fromData(data: Data): Object {
         tryFromData(data).getOrThrow{DataException("current data ${data} cannot be converted to ${TypeInfos.get<T>()}")}
     }
-    static func tryFromData(data: Data): ?T {
-        ObjectData<T>.populate(data)
+    static func tryFromData(data: Data): ?Object {
+        match(ObjectData<T>.populate(data)){
+            case Some(o) => o
+            case _ => None
+        }
     }
 }
 class FieldIterator<T> <: Iterator<(String, Data)> where T <: Object & DataObject<T> {
@@ -87,7 +89,7 @@ public class ObjectData<T> <: Data & Iterable<(String, Data)> where T <: Object 
         func isObjectData(){
             srcDataType.qualifiedName.startsWith("fountain/data.ObjectData")
         }
-        func putValue(dstFields: ObjectFields<T>, name: String, dst: T, data: Data, srcType: TypeInfo): Bool {
+        func putValue(dstFields: ObjectFields, name: String, dst: T, data: Data, srcType: TypeInfo): Bool {
             match (dstFields.mutableField(name)) {
                 case Some(mf) where mf.set(dst, data) => true
                 case Some(_) where (flag & IGNORE_FIELD_NOT_CONVERTABLE) > 0 => true
@@ -100,7 +102,7 @@ public class ObjectData<T> <: Data & Iterable<(String, Data)> where T <: Object 
             }
             true
         }
-        func putTuple(x: DataTuple, dstTuple!: ?(ObjectFields<T>, T) = None) {
+        func putTuple(x: DataTuple, dstTuple!: ?(ObjectFields, T) = None) {
             let (key, value) = (x.key, x.value)
             match(key) {
                 case x: DataString where #"^_*[a-zA-Z]+\w*$"#.regex(solid: true).matched(x.data) =>
@@ -127,6 +129,16 @@ public class ObjectData<T> <: Data & Iterable<(String, Data)> where T <: Object 
                     }
                 }
                 target
+            case x: StringKeyMapTuples => 
+                let dstFields = T.dataFields()
+                for(e in x){
+                    match(e){
+                        case x: DataTuple => putTuple(x, dstTuple: (dstFields, target))
+                        case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) > 0 => continue
+                        case _ => throw DataException("at least on element in current DataSequence cannot be converted to a DataTuple for populating current object which type is ${TypeInfos.get<T>()}")
+                    }
+                }
+                target
             case x: DataTuple => putTuple(x)
             case _ where isObjectData() =>
                 let dstFields = T.dataFields()
@@ -145,7 +157,7 @@ public class ObjectData<T> <: Data & Iterable<(String, Data)> where T <: Object 
         }
     }
     public static func populate(src: Data, flag!: UInt64 = SILENCE): ?T {
-        populate(src, T.dataFields().create(), flag: flag)
+        populate(src, (T.dataFields().create() as T).getOrThrow(), flag: flag)
     }
     public static func populate<S>(src: S, flag!: UInt64 = SILENCE): ?T where S <: DataObject<S> {
         populate(ObjectData<S>(src), flag: flag)

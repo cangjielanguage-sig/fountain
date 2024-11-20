@@ -213,43 +213,43 @@ func generateToFields(d: CompositeDecl) {
     var fields = `lsquare`
     var i = 0
     for (f in body) {
-        if (i == 0) {
+        if (i > 0) {
             fields += `comma`
         }
         fields += 
         match(f){
             case x: VarDecl where x.isPublic() =>
                 if (x.isVar()) {
-                    quote(MutableField($(x.identifier.value), TypeInfo.of($(x.identifier)), {o =>
-                        (o as $klassIdentifier).getOrThrow{DataException("type of current instance does not match, expected " + TypeInfos<$(klassIdentifier)>.instance + ", but recceives " + TypeInfo.of(o))}.$(x.identifier).toData()
+                    quote(MutableField($(x.identifier.value), TypeInfo.of(x.$(x.identifier)), {o =>
+                        (o as $klassIdentifier).getOrThrow{DataException("type of current instance does not match, expected " + TypeInfos<$(klassIdentifier)>.INSTANCE + ", but recceives " + TypeInfo.of(o))}.$(x.identifier).toData()
                     }){o, d =>
                         match ($(x.declType).tryFromData(d)) {
                             case Some(x) =>
-                                (o as $klassIdentifier).getOrThrow{DataException("type of current instance does not match, expected " + TypeInfos<$(klassIdentifier)>.instance + ", but receives " + TypeInfo.of(o))}.$(x.identifier) = x
+                                (o as $klassIdentifier).getOrThrow{DataException("type of current instance does not match, expected " + TypeInfos<$(klassIdentifier)>.INSTANCE + ", but receives " + TypeInfo.of(o))}.$(x.identifier) = (x as $(x.declType)).getOrThrow()
                                 true
                             case _ => false
                         }
                     })
                 } else {
-                    quote(ReadonlyField($(x.identifier.value), TypeInfo.of($(x.identifier))){o=>
-                        (o as $klassIdentifier).getOrThrow{DataException("type of current instance does not match, expected " + TypeInfos<$(klassIdentifier)>.instance + ", but recceives " + TypeInfo.of(o))}.$(x.identifier).toData()
+                    quote(ReadonlyField($(x.identifier.value), TypeInfo.of(x.$(x.identifier))){o=>
+                        (o as $klassIdentifier).getOrThrow{DataException("type of current instance does not match, expected " + TypeInfos<$(klassIdentifier)>.INSTANCE + ", but recceives " + TypeInfo.of(o))}.$(x.identifier).toData()
                     })
                 }
             case x: PropDecl where x.isPublic() =>
                 if (x.isMut()) {
-                    quote(MutableField($(x.identifier.value), TypeInfo.of($(x.identifier)), {o =>
-                        (o as $klassIdentifier).getOrThrow{DataException("type of current instance does not match, expected " + TypeInfos<$(klassIdentifier)>.instance + ", but recceives " + TypeInfo.of(o))}.$(x.identifier).toData()
+                    quote(MutableField($(x.identifier.value), TypeInfo.of(x.$(x.identifier)), {o =>
+                        (o as $klassIdentifier).getOrThrow{DataException("type of current instance does not match, expected " + TypeInfos<$(klassIdentifier)>.INSTANCE + ", but recceives " + TypeInfo.of(o))}.$(x.identifier).toData()
                     }){o, d =>
                         match ($(x.declType).tryFromData(d)) {
                             case Some(x) =>
-                                (o as $klassIdentifier).getOrThrow{DataException("type of current instance does not match, expected " + TypeInfos<$(klassIdentifier)>.instance + ", but recceives " + TypeInfo.of(o))}.$(x.identifier) = x
+                                (o as $klassIdentifier).getOrThrow{DataException("type of current instance does not match, expected " + TypeInfos<$(klassIdentifier)>.INSTANCE + ", but recceives " + TypeInfo.of(o))}.$(x.identifier) = (x as $(x.declType)).getOrThrow()
                                 true
                             case _ => false
                         }
                     })
                 } else {
-                    quote(ReadonlyField($(x.identifier.value), TypeInfo.of($(x.identifier))){o=>
-                        (o as $klassIdentifier).getOrThrow{DataException("type of current instance does not match, expected " + TypeInfos<$(klassIdentifier)>.instance + ", but recceives " + TypeInfo.of(o))}.$(x.identifier).toData()
+                    quote(ReadonlyField($(x.identifier.value), TypeInfo.of(x.$(x.identifier))){o=>
+                        (o as $klassIdentifier).getOrThrow{DataException("type of current instance does not match, expected " + TypeInfos<$(klassIdentifier)>.INSTANCE + ", but recceives " + TypeInfo.of(o))}.$(x.identifier).toData()
                     })
                 }
             case _ => 
@@ -258,15 +258,27 @@ func generateToFields(d: CompositeDecl) {
         }
         i++
     }
+    let openModi = if(klassDecl.isAbstract() || klassDecl.isOpen()){
+        `open`
+    }else{
+        `empty_tokens`
+    }
     fields += `rsquare`
     let fieldsName = Token(IDENTIFIER, "dAtA__fIElds_")
     body.appendAll([VarDecl(quote(
-        private static let $(fieldsName) = ObjectFields<$klassIdentifier>($fields){
-            $klassIdentifier()
-        }
+        private static let $(fieldsName) = {
+            let creator = {=>
+                $klassIdentifier()
+            }
+            let x = creator()
+            ObjectFields($fields, creator)
+        }()
     )), FuncDecl(quote(
-        public static func dataFields(): ObjectFields<$klassIdentifier> {
+        public static func dataFields(): ObjectFields {
             $fieldsName
+        }
+        public $openModi func toData(): Data {
+            ObjectData<$klassIdentifier>((this as $klassIdentifier).getOrThrow{DataException("generic type ${TypeInfos.get<$klassIdentifier>()} must be subtype of ${TypeInfos.get<DataObject<$klassIdentifier>>()}")})
         }
     ))])
 }
