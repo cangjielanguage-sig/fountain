@@ -17,7 +17,7 @@ _/ ____\____  __ __  _____/  |______  |__| ____
 - 深刻利用仓颉语言特性
 - 只需要开发动态链接库，fboot负责加载、初始化并运行。
 
-### 版本管理
+## 版本管理
 待功能完备后将按以下流程跟随仓颉版本，功能完备以前一直跟随最新的开发版。
 - 每月仓颉开发版对应一个`dev/${DEV_CANGJIE_VERSION}`
 - 每次发仓颉beta版，将对应的开发版转为`beta/${BETA_CANGJIE_VERSION}`，删除对应的开发版
@@ -33,13 +33,13 @@ _/ ____\____  __ __  _____/  |______  |__| ____
       - CANGJIE_VERSION：取当前仓颉长期支持版前两位，比如当前仓颉长期支持版是1.0.x，CANGJIE_VERSION就是1_0。
 
 
-### 加载本项目的动态链接库
+## 加载本项目的动态链接库
 - 如果仅仅是开发使用，可以使用cjpm run当前依赖fountain的项目，就自动加载了。
 - 如果是在Linux服务器环境运行，
   - 将fountain动态链接库所在的路径加入环境变量`export fountainPath=/path/of/fountain_dynamic_libs`。
   - 最好将本项目编译的动态链接库都加入环境变量`export LD_LIBRARY_PATH=$fountainPath:$LD_LIBRARY_PATH`。
 
-### fboot
+## fboot
 - 把fboot加入PATH环境变量
   1. fboot build：执行`cjpm build`构建当前目录，加载编译得到的动态链接库，把@Pointcut插入正确的函数。如果当前目录没有cjpm.toml，会抛出异常。
   2. fboot build -p /path/of/project：把工作目录切换到指定路径，然后执行跟上一条一样的工作。
@@ -59,7 +59,7 @@ _/ ____\____  __ __  _____/  |______  |__| ____
   6. fboot run package_name.LauncherImpl -p /path/of/dylibs：把工作目录切换到指定路径，然后执行第五条。
   7. fboot config --pid=<PID> --<key1>=<value1> --<key2>=<value2>：修改指定进程号的配置，指定进程必须是fboot启动。
 
-### 功能
+## 功能
 - 空集合
 - 比较器Comparator Equaler
 
