@@ -686,7 +686,7 @@ open class PathNode <: Equatable<PathNode> {
                 let reg = name[idx + 1..name.size - 1]
                 let n = name[1..idx]
                 this.createPlaceholderRegexNodeIfAbsent(n, reg, true)
-            } else if (#"^\{[a-zA-Z_]+\w*\}$"#.regex(sold: true).matches(name).isSome()) {
+            } else if (#"^\{[a-zA-Z_]+\w*\}$"#.regex(solid: true).matches(name).isSome()) {
                 return this.createPlaceholderNodeIfAbsent(name[1..name.size - 1])
             } else if (#"^(.*\{[a-zA-Z_]+\w*\}.*)+$"#.regex(solid: true).matches(name).isSome()) {
                 return this.createComplexPathNode(name)
