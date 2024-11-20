@@ -12,6 +12,8 @@ package f_util
 import std.unittest.*
 import std.unittest.testmacro.*
 
+import std.convert.*
+
 @Test
 public class PathPattern_test {
     private let p = PathPattern()
@@ -106,7 +108,7 @@ public class PathPattern_test {
         @Assert(true, pattern.matches(path))
         path = "/api/user/action/sequence/29/1/CustomizedClick/2019-06-28 00:00:00,2019-06-28 23:59:00/before,after"
         @Assert(true, pattern.matches(path))
-        @Assert(29i64, pattern.extractPasableVairableInPath<Int64>(path,"projectId").getOrThrow())
+        @Assert(29i64, pattern.extractParsableVariableInPath<Int64>(path,"projectId").getOrThrow())
         path = "/api/user/action/sequence/29/1/2019-06-28 00:00:00,2019-06-28 23:59:00/before,after"
         @Assert(true, pattern.matches(path))
         path = "/api/user/action/sequence/29/1/2019-06-28 00:00:00,2019-06-28 23:59:00/before"
@@ -121,7 +123,7 @@ public class PathPattern_test {
         @Assert(false, pattern.matches(path))
         path = path + "/47"
         @Assert(true, pattern.matches(path))
-        @Assert(47i64,pattern.extractPasableVairableInPath<Int64>(path, "projectId").getOrThrow())
+        @Assert(47i64,pattern.extractParsableVariableInPath<Int64>(path, "projectId").getOrThrow())
     }
 
     @TestCase

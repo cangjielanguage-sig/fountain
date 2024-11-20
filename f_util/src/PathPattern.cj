@@ -15,6 +15,7 @@ import std.convert.Parsable
 import std.time.DateTime
 
 import f_base.EmptyMap
+import f_data.DataParsable
 import f_regex.*
 
 /**
@@ -208,6 +209,16 @@ public class PathPattern {
         return extractParsableVariableInPath<T>(path, name, false)
     }
     public func extractParsableVariableInPath<T>(path: String, name: String, withExtName: Bool): Option<T> where T <: Parsable<T> {
+        let value = extractVariableInPath(path, name, withExtName)
+        match (value) {
+            case Some(v) => T.tryParse(v)
+            case _ => None<T>
+        }
+    }
+    public func extractDataParsableVariableInPath<T>(path: String, name: String): Option<T> where T <: DataParsable<T> {
+        return extractDataParsableVariableInPath<T>(path, name, false)
+    }
+    public func extractDataParsableVariableInPath<T>(path: String, name: String, withExtName: Bool): Option<T> where T <: DataParsable<T> {
         let value = extractVariableInPath(path, name, withExtName)
         match (value) {
             case Some(v) => T.tryParse(v)
@@ -555,8 +566,8 @@ open class PathNode <: Equatable<PathNode> {
             return None<PathNode>
         }
         let iterator = regexPlaceholderPathNodes.values().iterator()
-        var node = None<PathNode>
-        if (current.isNone() || !(current.getOrThrow() is PlaceholderRegexPathNode)) {
+        var node: PathNode = NonePathNode.INSTANCE
+        if (!(current is PlaceholderRegexPathNode)) {
             for (n in iterator) {
                 node = n
                 if (node.matches(value)) {
@@ -564,16 +575,8 @@ open class PathNode <: Equatable<PathNode> {
                 }
             }
         } else {
-            while (true) {
-                if (current != node) {
-                    node = if (let Some(n) <- iterator.next()) {
-                        n
-                    } else {
-                        break
-                    }
-                } else {
-                    break
-                }
+            while (current != node && let Some(n) <- iterator.next()) {
+                node = n
             }
             for (n in iterator) {
                 node = n
