@@ -13,10 +13,10 @@ extend Int8 <: DataFields<Int8> {
     public func toData(): Data {
         DataReal(this)
     }
-    public static func fromData(data: Data): Int8 {
-        tryFromData(data).getOrThrow{DataException("${data} cannot be converted to Int8")}
+    public static func fromData(data: Data, flag!: UInt64 = SILENCE): Int8 {
+        tryFromData(data, flag: flag).getOrThrow{DataException("${data} cannot be converted to Int8")}
     }
-    public static func tryFromData(data: Data): ?Int8 {
+    public static func tryFromData(data: Data, flag!: UInt64 = SILENCE): ?Int8 {
         match(data){
             case x: DataReal => x.tryToInt8()
             case x: DataString => DataReal(x.toString()).tryToInt8()
@@ -28,10 +28,10 @@ extend UInt8 <: DataFields<UInt8> {
     public func toData(): Data {
         DataReal(this)
     }
-    public static func fromData(data: Data): UInt8 {
-        tryFromData(data).getOrThrow{DataException("${data} cannot be converted to UInt8")}
+    public static func fromData(data: Data, flag!: UInt64 = SILENCE): UInt8 {
+        tryFromData(data, flag: flag).getOrThrow{DataException("${data} cannot be converted to UInt8")}
     }
-    public static func tryFromData(data: Data): ?UInt8 {
+    public static func tryFromData(data: Data, flag!: UInt64 = SILENCE): ?UInt8 {
         match(data){
             case x: DataReal => x.tryToUInt8()
             case x: DataString => DataReal(x.toString()).tryToUInt8()
@@ -43,10 +43,10 @@ extend Int16 <: DataFields<Int16> {
     public func toData(): Data {
         DataReal(this)
     }
-    public static func fromData(data: Data): Int16 {
-        tryFromData(data).getOrThrow{DataException("${data} cannot be converted to Int16")}
+    public static func fromData(data: Data, flag!: UInt64 = SILENCE): Int16 {
+        tryFromData(data, flag: flag).getOrThrow{DataException("${data} cannot be converted to Int16")}
     }
-    public static func tryFromData(data: Data): ?Int16 {
+    public static func tryFromData(data: Data, flag!: UInt64 = SILENCE): ?Int16 {
         match(data){
             case x: DataReal => x.tryToInt16()
             case x: DataString => DataReal(x.toString()).tryToInt16()
@@ -58,10 +58,10 @@ extend UInt16 <: DataFields<UInt16> {
     public func toData(): Data {
         DataReal(this)
     }
-    public static func fromData(data: Data): UInt16 {
-        tryFromData(data).getOrThrow{DataException("${data} cannot be converted to UInt16")}
+    public static func fromData(data: Data, flag!: UInt64 = SILENCE): UInt16 {
+        tryFromData(data, flag: flag).getOrThrow{DataException("${data} cannot be converted to UInt16")}
     }
-    public static func tryFromData(data: Data): ?UInt16 {
+    public static func tryFromData(data: Data, flag!: UInt64 = SILENCE): ?UInt16 {
         match(data){
             case x: DataReal => x.tryToUInt16()
             case x: DataString => DataReal(x.toString()).tryToUInt16()
@@ -73,10 +73,10 @@ extend Int32 <: DataFields<Int32> {
     public func toData(): Data {
         DataReal(this)
     }
-    public static func fromData(data: Data): Int32 {
-        tryFromData(data).getOrThrow{DataException("${data} cannot be converted to Int32")}
+    public static func fromData(data: Data, flag!: UInt64 = SILENCE): Int32 {
+        tryFromData(data, flag: flag).getOrThrow{DataException("${data} cannot be converted to Int32")}
     }
-    public static func tryFromData(data: Data): ?Int32 {
+    public static func tryFromData(data: Data, flag!: UInt64 = SILENCE): ?Int32 {
         match(data){
             case x: DataReal => x.tryToInt32()
             case x: DataString => DataReal(x.toString()).tryToInt32()
@@ -88,10 +88,10 @@ extend UInt32 <: DataFields<UInt32> {
     public func toData(): Data {
         DataReal(this)
     }
-    public static func fromData(data: Data): UInt32 {
-        tryFromData(data).getOrThrow{DataException("${data} cannot be converted to UInt32")}
+    public static func fromData(data: Data, flag!: UInt64 = SILENCE): UInt32 {
+        tryFromData(data, flag: flag).getOrThrow{DataException("${data} cannot be converted to UInt32")}
     }
-    public static func tryFromData(data: Data): ?UInt32 {
+    public static func tryFromData(data: Data, flag!: UInt64 = SILENCE): ?UInt32 {
         match(data){
             case x: DataReal => x.tryToUInt32()
             case x: DataString => DataReal(x.toString()).tryToUInt32()
@@ -103,10 +103,10 @@ extend Int64 <: DataFields<Int64> {
     public func toData(): Data {
         DataReal(this)
     }
-    public static func fromData(data: Data): Int64 {
-        tryFromData(data).getOrThrow{DataException("${data} cannot be converted to Int64")}
+    public static func fromData(data: Data, flag!: UInt64 = SILENCE): Int64 {
+        tryFromData(data, flag: flag).getOrThrow{DataException("${data} cannot be converted to Int64")}
     }
-    public static func tryFromData(data: Data): ?Int64 {
+    public static func tryFromData(data: Data, flag!: UInt64 = SILENCE): ?Int64 {
         match(data){
             case x: DataReal => x.tryToInt64()
             case x: DataString => DataReal(x.toString()).tryToInt64()
@@ -118,10 +118,10 @@ extend UInt64 <: DataFields<UInt64> {
     public func toData(): Data {
         DataReal(this)
     }
-    public static func fromData(data: Data): UInt64 {
-        tryFromData(data).getOrThrow{DataException("${data} cannot be converted to UInt64")}
+    public static func fromData(data: Data, flag!: UInt64 = SILENCE): UInt64 {
+        tryFromData(data, flag: flag).getOrThrow{DataException("${data} cannot be converted to UInt64")}
     }
-    public static func tryFromData(data: Data): ?UInt64 {
+    public static func tryFromData(data: Data, flag!: UInt64 = SILENCE): ?UInt64 {
         match(data){
             case x: DataReal => x.tryToUInt64()
             case x: DataString => DataReal(x.toString()).tryToUInt64()
@@ -134,10 +134,10 @@ extend IntNative <: DataFields<IntNative> {
     public func toData(): Data {
         DataReal(this)
     }
-    public static func fromData(data: Data): IntNative {
-        tryFromData(data).getOrThrow{DataException("${data} cannot be converted to IntNative")}
+    public static func fromData(data: Data, flag!: UInt64 = SILENCE): IntNative {
+        tryFromData(data, flag: flag).getOrThrow{DataException("${data} cannot be converted to IntNative")}
     }
-    public static func tryFromData(data: Data): ?IntNative {
+    public static func tryFromData(data: Data, flag!: UInt64 = SILENCE): ?IntNative {
         match(data){
             case x: DataReal => x.tryToIntNative()
             case x: DataString => DataReal(x.toString()).tryToIntNative()
@@ -149,10 +149,10 @@ extend UIntNative <: DataFields<UIntNative> {
     public func toData(): Data {
         DataReal(this)
     }
-    public static func fromData(data: Data): UIntNative {
-        tryFromData(data).getOrThrow{DataException("${data} cannot be converted to UIntNative")}
+    public static func fromData(data: Data, flag!: UInt64 = SILENCE): UIntNative {
+        tryFromData(data, flag: flag).getOrThrow{DataException("${data} cannot be converted to UIntNative")}
     }
-    public static func tryFromData(data: Data): ?UIntNative {
+    public static func tryFromData(data: Data, flag!: UInt64 = SILENCE): ?UIntNative {
         match(data){
             case x: DataReal => x.tryToUIntNative()
             case x: DataString => DataReal(x.toString()).tryToUIntNative()
@@ -164,10 +164,10 @@ extend Float64 <: DataFields<Float64> {
     public func toData(): Data {
         DataReal(this)
     }
-    public static func fromData(data: Data): Float64 {
-        tryFromData(data).getOrThrow{DataException("${data} cannot be converted to Float64")}
+    public static func fromData(data: Data, flag!: UInt64 = SILENCE): Float64 {
+        tryFromData(data, flag: flag).getOrThrow{DataException("${data} cannot be converted to Float64")}
     }
-    public static func tryFromData(data: Data): ?Float64 {
+    public static func tryFromData(data: Data, flag!: UInt64 = SILENCE): ?Float64 {
         match(data){
             case x: DataReal => x.tryToFloat64()
             case x: DataString => DataReal(x.toString()).tryToFloat64()
@@ -179,10 +179,10 @@ extend Float32 <: DataFields<Float32> {
     public func toData(): Data {
         DataReal(this)
     }
-    public static func fromData(data: Data): Float32 {
-        tryFromData(data).getOrThrow{DataException("${data} cannot be converted to Float32")}
+    public static func fromData(data: Data, flag!: UInt64 = SILENCE): Float32 {
+        tryFromData(data, flag: flag).getOrThrow{DataException("${data} cannot be converted to Float32")}
     }
-    public static func tryFromData(data: Data): ?Float32 {
+    public static func tryFromData(data: Data, flag!: UInt64 = SILENCE): ?Float32 {
         match(data){
             case x: DataReal => x.tryToFloat32()
             case x: DataString => DataReal(x.toString()).tryToFloat32()
@@ -194,10 +194,10 @@ extend Float16 <: DataFields<Float16> {
     public func toData(): Data {
         DataReal(this)
     }
-    public static func fromData(data: Data): Float16 {
-        tryFromData(data).getOrThrow{DataException("${data} cannot be converted to Float16")}
+    public static func fromData(data: Data, flag!: UInt64 = SILENCE): Float16 {
+        tryFromData(data, flag: flag).getOrThrow{DataException("${data} cannot be converted to Float16")}
     }
-    public static func tryFromData(data: Data): ?Float16 {
+    public static func tryFromData(data: Data, flag!: UInt64 = SILENCE): ?Float16 {
         match(data){
             case x: DataReal => x.tryToFloat16()
             case x: DataString => DataReal(x.toString()).tryToFloat16()
@@ -209,10 +209,10 @@ extend BigInt <: DataFields<BigInt> {
     public func toData(): Data {
         DataReal(this)
     }
-    public static func fromData(data: Data): BigInt {
-        tryFromData(data).getOrThrow{DataException("${data} cannot be converted to BigInt")}
+    public static func fromData(data: Data, flag!: UInt64 = SILENCE): BigInt {
+        tryFromData(data, flag: flag).getOrThrow{DataException("${data} cannot be converted to BigInt")}
     }
-    public static func tryFromData(data: Data): ?BigInt {
+    public static func tryFromData(data: Data, flag!: UInt64 = SILENCE): ?BigInt {
         match(data){
             case x: DataReal => x.tryToBigInt()
             case x: DataString => DataReal(x.toString()).tryToBigInt()
@@ -224,10 +224,10 @@ extend Decimal <: DataFields<Decimal> {
     public func toData(): Data {
         DataReal(this)
     }
-    public static func fromData(data: Data): Decimal {
-        tryFromData(data).getOrThrow{DataException("${data} cannot be converted to Decimal")}
+    public static func fromData(data: Data, flag!: UInt64 = SILENCE): Decimal {
+        tryFromData(data, flag: flag).getOrThrow{DataException("${data} cannot be converted to Decimal")}
     }
-    public static func tryFromData(data: Data): ?Decimal {
+    public static func tryFromData(data: Data, flag!: UInt64 = SILENCE): ?Decimal {
         match(data){
             case x: DataReal => x.tryToDecimal()
             case x: DataString => DataReal(x.toString()).tryToDecimal()

@@ -42,14 +42,18 @@ public class DataDateTime <: Data & Hashable & Comparable<DataDateTime> {
 }
 let currentThreadDateFormat = ThreadLocal<String>()
 let defaultDateFormat = AtomicReference<Box<String>>(Box<String>(""))
-extend DateTime <: DataFields<DateTime> {
+public interface ExtendDateTimeData {
+    static func setDefaultDateFormat(format: String): Unit
+    static func setCurrentThreadDateFormat(format: String): Unit
+}
+extend DateTime <: DataFields<DateTime> & ExtendDateTimeData {
     public func toData(): Data {
         DataDateTime(this)
     }
-    public static func fromData(data: Data): DateTime {
-        tryFromData(data).getOrThrow{DataException("${data} cannot be converted to DateTime")}
+    public static func fromData(data: Data, flag!: UInt64 = SILENCE): DateTime {
+        tryFromData(data, flag: flag).getOrThrow{DataException("${data} cannot be converted to DateTime")}
     }
-    public static func tryFromData(data: Data): ?DateTime {
+    public static func tryFromData(data: Data, flag!: UInt64 = SILENCE): ?DateTime {
         match(data){
             case x: DataDateTime => x.tryToDateTime()
             case x: DataDuration => DateTime.UnixEpoch + x.toDuration()
@@ -63,7 +67,7 @@ extend DateTime <: DataFields<DateTime> {
             case _ => None<DateTime>
         }
     }
-    public static func setDefaultFormat(format: String) {
+    public static func setDefaultDateFormat(format: String) {
         var box = None<Box<String>>
         while (true) {
             let fmt = defaultDateFormat.load()

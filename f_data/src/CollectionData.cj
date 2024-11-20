@@ -21,21 +21,21 @@ extend<T> Array<T> <: DataFields<Array<T>> where T <: DataFields<T> {
         }
         DataSequence(list)
     }
-    public static func fromData(data: Data): Array<T> {
-        tryFromData(data).getOrThrow {DataException("${data} cannot be converted to ${TypeInfos.get<Array<T>>()}")}
+    public static func fromData(data: Data, flag!: UInt64 = SILENCE): Array<T> {
+        tryFromData(data, flag: flag).getOrThrow {DataException("${data} cannot be converted to ${TypeInfos.get<Array<T>>()}")}
     }
-    public static func tryFromData(data: Data): ?Array<T> {
+    public static func tryFromData(data: Data, flag!: UInt64 = SILENCE): ?Array<T> {
         match (data) {
             case x: DataSequence =>
                 let list = ArrayList<T>()
                 for (v in x) {
-                    match (T.tryFromData(v)) {
+                    match (T.tryFromData(v, flag: flag)) {
                         case Some(x) => list.append(x)
                         case _ => return None<Array<T>>
                     }
                 }
                 list.toArray()
-            case x => match (T.tryFromData(x)) {
+            case x => match (T.tryFromData(x, flag: flag)) {
                 case Some(x) => [x]
                 case _ => None<Array<T>>
             }
@@ -51,21 +51,21 @@ extend<T> ArrayList<T> <: DataFields<ArrayList<T>> where T <: DataFields<T> {
         }
         DataSequence(list)
     }
-    public static func fromData(data: Data): ArrayList<T> {
-        tryFromData(data).getOrThrow {DataException("${data} cannot be converted to ${TypeInfos.get<ArrayList<T>>()}")}
+    public static func fromData(data: Data, flag!: UInt64 = SILENCE): ArrayList<T> {
+        tryFromData(data, flag: flag).getOrThrow {DataException("${data} cannot be converted to ${TypeInfos.get<ArrayList<T>>()}")}
     }
-    public static func tryFromData(data: Data): ?ArrayList<T> {
+    public static func tryFromData(data: Data, flag!: UInt64 = SILENCE): ?ArrayList<T> {
         match (data) {
             case x: DataSequence =>
                 let list = ArrayList<T>()
                 for (v in x) {
-                    match (T.tryFromData(v)) {
+                    match (T.tryFromData(v, flag: flag)) {
                         case Some(x) => list.append(x)
                         case _ => return None<ArrayList<T>>
                     }
                 }
                 list
-            case x => match (T.tryFromData(x)) {
+            case x => match (T.tryFromData(x, flag: flag)) {
                 case Some(x) => ArrayList<T>([x])
                 case _ => None<ArrayList<T>>
             }
@@ -82,21 +82,21 @@ extend<T> HashSet<T> <: DataFields<HashSet<T>> where T <: DataFields<T> & Hashab
         }
         DataSequence(list)
     }
-    public static func fromData(data: Data): HashSet<T> {
-        tryFromData(data).getOrThrow {DataException("${data} cannot be converted to ${TypeInfos.get<HashSet<T>>()}")}
+    public static func fromData(data: Data, flag!: UInt64 = SILENCE): HashSet<T> {
+        tryFromData(data, flag: flag).getOrThrow {DataException("${data} cannot be converted to ${TypeInfos.get<HashSet<T>>()}")}
     }
-    public static func tryFromData(data: Data): ?HashSet<T> {
+    public static func tryFromData(data: Data, flag!: UInt64 = SILENCE): ?HashSet<T> {
         match (data) {
             case x: DataSequence =>
                 let set = HashSet<T>()
                 for (v in x) {
-                    match (T.tryFromData(v)) {
+                    match (T.tryFromData(v, flag: flag)) {
                         case Some(x) => set.put(x)
                         case _ => return None<HashSet<T>>
                     }
                 }
                 set
-            case x => match (T.tryFromData(x)) {
+            case x => match (T.tryFromData(x, flag: flag)) {
                 case Some(x) => HashSet<T>([x])
                 case _ => None<HashSet<T>>
             }
@@ -122,16 +122,16 @@ extend<K, V> HashMap<K, V> <: DataFields<HashMap<K, V>> where K <: DataFields<K>
             DataTuples(list)
         }
     }
-    public static func fromData(data: Data): HashMap<K, V> {
-        tryFromData(data).getOrThrow {DataException("${data} cannot be converted to ${TypeInfos.get<HashMap<K, V>>()}")}
+    public static func fromData(data: Data, flag!: UInt64 = SILENCE): HashMap<K, V> {
+        tryFromData(data, flag: flag).getOrThrow {DataException("${data} cannot be converted to ${TypeInfos.get<HashMap<K, V>>()}")}
     }
-    public static func tryFromData(data: Data): ?HashMap<K, V> {
+    public static func tryFromData(data: Data, flag!: UInt64 = SILENCE): ?HashMap<K, V> {
         match (data) {
             case x: DataSequence =>
                 let map = HashMap<K, V>()
                 for (v in x) {
                     match (v) {
-                        case x: DataTuple => match ((K.tryFromData(x.key), V.tryFromData(x.value))) {
+                        case x: DataTuple => match ((K.tryFromData(x.key, flag: flag), V.tryFromData(x.value, flag: flag))) {
                             case (Some(k), Some(v)) => map.put(k, v)
                             case _ => return None<HashMap<K, V>>
                         }
@@ -139,7 +139,7 @@ extend<K, V> HashMap<K, V> <: DataFields<HashMap<K, V>> where K <: DataFields<K>
                     }
                 }
                 map
-            case x: DataTuple => match ((K.tryFromData(x.key), V.tryFromData(x.value))) {
+            case x: DataTuple => match ((K.tryFromData(x.key, flag: flag), V.tryFromData(x.value, flag: flag))) {
                 case (Some(k), Some(v)) =>
                     let map = HashMap<K, V>()
                     map.put(k, v)
@@ -155,7 +155,7 @@ extend<K, V> HashMap<K, V> <: DataFields<HashMap<K, V>> where K <: DataFields<K>
                     let iterator = (dataType.getInstanceFunction("fields").apply(x) as Iterator<ReadableField>).
                         getOrThrow()
                     for (f in iterator) {
-                        match ((K.tryFromData(f.name.toData()), V.tryFromData(f.get(raw)))) {
+                        match ((K.tryFromData(f.name.toData(), flag: flag), V.tryFromData(f.get(raw), flag: flag))) {
                             case (Some(k), Some(v)) => map[k] = v
                             case _ => continue
                         }
@@ -185,16 +185,16 @@ extend<K, V> TreeMap<K, V> <: DataFields<TreeMap<K, V>> where K <: DataFields<K>
             DataTuples(list)
         }
     }
-    public static func fromData(data: Data): TreeMap<K, V> {
-        tryFromData(data).getOrThrow {DataException("${data} cannot be converted to ${TypeInfos.get<TreeMap<K, V>>()}")}
+    public static func fromData(data: Data, flag!: UInt64 = SILENCE): TreeMap<K, V> {
+        tryFromData(data, flag: flag).getOrThrow {DataException("${data} cannot be converted to ${TypeInfos.get<TreeMap<K, V>>()}")}
     }
-    public static func tryFromData(data: Data): ?TreeMap<K, V> {
+    public static func tryFromData(data: Data, flag!: UInt64 = SILENCE): ?TreeMap<K, V> {
         match (data) {
             case x: DataSequence =>
                 let map = TreeMap<K, V>()
                 for (v in x) {
                     match (v) {
-                        case x: DataTuple => match ((K.tryFromData(x.key), V.tryFromData(x.value))) {
+                        case x: DataTuple => match ((K.tryFromData(x.key, flag: flag), V.tryFromData(x.value, flag: flag))) {
                             case (Some(k), Some(v)) => map.put(k, v)
                             case _ => return None<TreeMap<K, V>>
                         }
@@ -202,7 +202,7 @@ extend<K, V> TreeMap<K, V> <: DataFields<TreeMap<K, V>> where K <: DataFields<K>
                     }
                 }
                 map
-            case x: DataTuple => match ((K.tryFromData(x.key), V.tryFromData(x.value))) {
+            case x: DataTuple => match ((K.tryFromData(x.key, flag: flag), V.tryFromData(x.value, flag: flag))) {
                 case (Some(k), Some(v)) =>
                     let map = TreeMap<K, V>()
                     map.put(k, v)
@@ -218,7 +218,7 @@ extend<K, V> TreeMap<K, V> <: DataFields<TreeMap<K, V>> where K <: DataFields<K>
                     let iterator = (dataType.getInstanceFunction("fields").apply(x) as Iterator<ReadableField>).
                         getOrThrow()
                     for (f in iterator) {
-                        match ((K.tryFromData(f.name.toData()), V.tryFromData(f.get(raw)))) {
+                        match ((K.tryFromData(f.name.toData(), flag: flag), V.tryFromData(f.get(raw), flag: flag))) {
                             case (Some(k), Some(v)) => map[k] = v
                             case _ => continue
                         }
@@ -249,17 +249,17 @@ extend<K, V> ConcurrentHashMap<K, V> <: DataFields<ConcurrentHashMap<K, V>> wher
             DataTuples(list)
         }
     }
-    public static func fromData(data: Data): ConcurrentHashMap<K, V> {
+    public static func fromData(data: Data, flag!: UInt64 = SILENCE): ConcurrentHashMap<K, V> {
         tryFromData(data).getOrThrow {DataException(
                 "${data} cannot be converted to ${TypeInfos.get<ConcurrentHashMap<K, V>>()}")}
     }
-    public static func tryFromData(data: Data): ?ConcurrentHashMap<K, V> {
+    public static func tryFromData(data: Data, flag!: UInt64 = SILENCE): ?ConcurrentHashMap<K, V> {
         match (data) {
             case x: DataSequence =>
                 let map = ConcurrentHashMap<K, V>()
                 for (v in x) {
                     match (v) {
-                        case x: DataTuple => match ((K.tryFromData(x.key), V.tryFromData(x.value))) {
+                        case x: DataTuple => match ((K.tryFromData(x.key, flag: flag), V.tryFromData(x.value, flag: flag))) {
                             case (Some(k), Some(v)) => map.put(k, v)
                             case _ => return None<ConcurrentHashMap<K, V>>
                         }
@@ -267,7 +267,7 @@ extend<K, V> ConcurrentHashMap<K, V> <: DataFields<ConcurrentHashMap<K, V>> wher
                     }
                 }
                 map
-            case x: DataTuple => match ((K.tryFromData(x.key), V.tryFromData(x.value))) {
+            case x: DataTuple => match ((K.tryFromData(x.key, flag: flag), V.tryFromData(x.value, flag: flag))) {
                 case (Some(k), Some(v)) =>
                     let map = ConcurrentHashMap<K, V>()
                     map.put(k, v)
@@ -283,7 +283,7 @@ extend<K, V> ConcurrentHashMap<K, V> <: DataFields<ConcurrentHashMap<K, V>> wher
                     let iterator = (dataType.getInstanceFunction("fields").apply(x) as Iterator<ReadableField>).
                         getOrThrow()
                     for (f in iterator) {
-                        match ((K.tryFromData(f.name.toData()), V.tryFromData(f.get(raw)))) {
+                        match ((K.tryFromData(f.name.toData(), flag: flag), V.tryFromData(f.get(raw), flag: flag))) {
                             case (Some(k), Some(v)) => map[k] = v
                             case _ => continue
                         }
@@ -314,16 +314,16 @@ extend<K, V> LinkedHashMap<K, V> <: DataFields<LinkedHashMap<K, V>> where K <: D
             DataTuples(list)
         }
     }
-    public static func fromData(data: Data): LinkedHashMap<K, V> {
-        tryFromData(data).getOrThrow {DataException("${data} cannot be converted to ${TypeInfos.get<LinkedHashMap<K, V>>()}")}
+    public static func fromData(data: Data, flag!: UInt64 = SILENCE): LinkedHashMap<K, V> {
+        tryFromData(data, flag: flag).getOrThrow {DataException("${data} cannot be converted to ${TypeInfos.get<LinkedHashMap<K, V>>()}")}
     }
-    public static func tryFromData(data: Data): ?LinkedHashMap<K, V> {
+    public static func tryFromData(data: Data, flag!: UInt64 = SILENCE): ?LinkedHashMap<K, V> {
         match (data) {
             case x: DataSequence =>
                 let map = LinkedHashMap<K, V>()
                 for (v in x) {
                     match (v) {
-                        case x: DataTuple => match ((K.tryFromData(x.key), V.tryFromData(x.value))) {
+                        case x: DataTuple => match ((K.tryFromData(x.key, flag: flag), V.tryFromData(x.value, flag: flag))) {
                             case (Some(k), Some(v)) => map.put(k, v)
                             case _ => return None<LinkedHashMap<K, V>>
                         }
@@ -331,7 +331,7 @@ extend<K, V> LinkedHashMap<K, V> <: DataFields<LinkedHashMap<K, V>> where K <: D
                     }
                 }
                 map
-            case x: DataTuple => match ((K.tryFromData(x.key), V.tryFromData(x.value))) {
+            case x: DataTuple => match ((K.tryFromData(x.key, flag: flag), V.tryFromData(x.value, flag: flag))) {
                 case (Some(k), Some(v)) =>
                     let map = LinkedHashMap<K, V>()
                     map.put(k, v)
@@ -347,7 +347,7 @@ extend<K, V> LinkedHashMap<K, V> <: DataFields<LinkedHashMap<K, V>> where K <: D
                     let iterator = (dataType.getInstanceFunction("fields").apply(x) as Iterator<ReadableField>).
                         getOrThrow()
                     for (f in iterator) {
-                        match ((K.tryFromData(f.name.toData()), V.tryFromData(f.get(raw)))) {
+                        match ((K.tryFromData(f.name.toData(), flag: flag), V.tryFromData(f.get(raw), flag: flag))) {
                             case (Some(k), Some(v)) => map[k] = v
                             case _ => continue
                         }

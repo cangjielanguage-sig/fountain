@@ -13,12 +13,12 @@ public class MutableField <: ReadableField {
     public MutableField(
         name: String, typeInfo: TypeInfo,
         getter: (Object)->Data,
-        private let setter: (Object, Data) -> Bool
+        private let setter: (Object, Data, UInt64) -> Bool
     ){
         super(name, typeInfo, getter)
     }
 
-    public func set(instance: Object, data: Data): Bool {
-        setter(instance, data)
+    public func set(instance: Object, data: Data, flag!: UInt64 = SILENCE): Bool {
+        setter(instance, data, flag)
     }
 }

@@ -16,13 +16,13 @@ extend<T> Option<T> <: DataFields<?T> where T <: DataFields<T> {
             case _ => DataNone.INSTANCE
         }
     }
-    public static func fromData(data: Data): ?T {
-        tryFromData(data).getOrThrow{DataException("current data ${data} cannot be converted to ${TypeInfos.get<T>()}")}
+    public static func fromData(data: Data, flag!: UInt64 = SILENCE): ?T {
+        tryFromData(data, flag: flag).getOrThrow{DataException("current data ${data} cannot be converted to ${TypeInfos.get<T>()}")}
     }
-    public static func tryFromData(data: Data): ??T {
+    public static func tryFromData(data: Data, flag!: UInt64 = SILENCE): ??T {
         match(data) {
             case x: DataNone => Some(None<T>)
-            case x => T.tryFromData(x)
+            case x => T.tryFromData(x, flag: flag)
         }
     }
 }

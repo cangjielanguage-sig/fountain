@@ -46,10 +46,10 @@ extend Bool <: DataFields<Bool> {
             DataBool.FALSE
         }
     }
-    public static func fromData(data: Data): Bool {
-        tryFromData(data).getOrThrow{DataException("${data} cannot be converted to Bool")}
+    public static func fromData(data: Data, flag!: UInt64 = SILENCE): Bool {
+        tryFromData(data, flag: flag).getOrThrow{DataException("${data} cannot be converted to Bool")}
     }
-    public static func tryFromData(data: Data): ?Bool {
+    public static func tryFromData(data: Data, flag!: UInt64 = SILENCE): ?Bool {
         match(data){
             case x: DataBool => x.tryToBool()
             case x: DataString =>

@@ -222,8 +222,8 @@ func generateToFields(d: CompositeDecl) {
                 if (x.isVar()) {
                     quote(MutableField($(x.identifier.value), TypeInfo.of(x.$(x.identifier)), {o =>
                         (o as $klassIdentifier).getOrThrow{DataException("type of current instance does not match, expected " + TypeInfos.get<$(klassIdentifier)>() + ", but recceives " + TypeInfo.of(o))}.$(x.identifier).toData()
-                    }){o, d =>
-                        match ($(x.declType).tryFromData(d)) {
+                    }){o, d, flag =>
+                        match ($(x.declType).tryFromData(d, flag: flag)) {
                             case Some(x) =>
                                 (o as $klassIdentifier).getOrThrow{DataException("type of current instance does not match, expected " + TypeInfos.get<$(klassIdentifier)>() + ", but receives " + TypeInfo.of(o))}.$(x.identifier) = (x as $(x.declType)).getOrThrow()
                                 true
@@ -239,8 +239,8 @@ func generateToFields(d: CompositeDecl) {
                 if (x.isMut()) {
                     quote(MutableField($(x.identifier.value), TypeInfo.of(x.$(x.identifier)), {o =>
                         (o as $klassIdentifier).getOrThrow{DataException("type of current instance does not match, expected " + TypeInfos.get<$(klassIdentifier)>() + ", but recceives " + TypeInfo.of(o))}.$(x.identifier).toData()
-                    }){o, d =>
-                        match ($(x.declType).tryFromData(d)) {
+                    }){o, d, flag =>
+                        match ($(x.declType).tryFromData(d, flag: flag)) {
                             case Some(x) =>
                                 (o as $klassIdentifier).getOrThrow{DataException("type of current instance does not match, expected " + TypeInfos.get<$(klassIdentifier)>() + ", but recceives " + TypeInfo.of(o))}.$(x.identifier) = (x as $(x.declType)).getOrThrow()
                                 true
@@ -266,19 +266,27 @@ func generateToFields(d: CompositeDecl) {
     fields += `rsquare`
     let fieldsName = Token(IDENTIFIER, "dAtA__fIElds_")
     body.appendAll([VarDecl(quote(
-        private static let $(fieldsName) = {
-            let creator = {=>
-                $klassIdentifier()
-            }
-            let x = creator()
-            ObjectFields($fields, creator)
-        }()
+        private static let $(fieldsName) = ObjectFields.createFields<$klassIdentifier>($fields){
+            $klassIdentifier()
+        }
     )), FuncDecl(quote(
         public static func dataFields(): ObjectFields {
             $fieldsName
         }
+    )), FuncDecl(quote(
         public $openModi func toData(): Data {
-            ObjectData<$klassIdentifier>((this as $klassIdentifier).getOrThrow{DataException("generic type ${TypeInfos.get<$klassIdentifier>()} must be subtype of ${TypeInfos.get<DataObject<$klassIdentifier>>()}")})
+            ObjectData<$klassIdentifier>((this as $klassIdentifier).getOrThrow{DataException("generic type " + TypeInfos.get<$klassIdentifier>() + " must be subtype of " + TypeInfos.get<DataObject<$klassIdentifier>>())})
+        }
+    )), FuncDecl(quote(
+        static func fromData(data: Data, flag!: UInt64 = SILENCE): Object {
+            tryFromData(data, flag: flag).getOrThrow{DataException("current data " + data + " cannot be converted to " + TypeInfos.get<$klassIdentifier>())}
+        }
+    )), FuncDecl(quote(
+        static func tryFromData(data: Data, flag!: UInt64 = SILENCE): ?Object {
+            match(ObjectData<$klassIdentifier>.populate(data, flag: flag)){
+                case Some(o) => o
+                case _ => None
+            }
         }
     ))])
 }

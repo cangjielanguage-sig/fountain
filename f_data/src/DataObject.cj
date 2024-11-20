@@ -16,15 +16,8 @@ public interface DataObject<T> <: DataFields<Object> where T <: Object & DataObj
     
     func toData(): Data 
     
-    static func fromData(data: Data): Object {
-        tryFromData(data).getOrThrow{DataException("current data ${data} cannot be converted to ${TypeInfos.get<T>()}")}
-    }
-    static func tryFromData(data: Data): ?Object {
-        match(ObjectData<T>.populate(data)){
-            case Some(o) => o
-            case _ => None
-        }
-    }
+    static func fromData(data: Data, flag!: UInt64): Object 
+    static func tryFromData(data: Data, flag!: UInt64): ?Object 
 }
 class FieldIterator<T> <: Iterator<(String, Data)> where T <: Object & DataObject<T> {
     public FieldIterator(private let data: T, private let itr: Iterator<ReadableField>){}
@@ -51,7 +44,10 @@ public class ObjectData<T> <: Data & Iterable<(String, Data)> where T <: Object 
         T.dataFields().readableField(name)?.get(data)
     }
     public operator func [](name: String, value!: Data): Unit {
-        T.dataFields().mutableField(name)?.set(data, value)
+        set(name, value)
+    }
+    public func set(name: String, value: Data, flag!: UInt64 = SILENCE): Unit {
+        T.dataFields().mutableField(name)?.set(data, value, flag: flag)
     }
     public func toString(): String {
         match(data){
@@ -91,12 +87,12 @@ public class ObjectData<T> <: Data & Iterable<(String, Data)> where T <: Object 
         }
         func putValue(dstFields: ObjectFields, name: String, dst: T, data: Data, srcType: TypeInfo): Bool {
             match (dstFields.mutableField(name)) {
-                case Some(mf) where mf.set(dst, data) => true
-                case Some(_) where (flag & IGNORE_FIELD_NOT_CONVERTABLE) > 0 => true
-                case Some(_) where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 =>
+                case Some(mf) where mf.set(dst, data, flag: flag) => true
+                case Some(_) where (flag & IGNORE_FIELD_NOT_CONVERTABLE) != 0 => true
+                case Some(_) =>
                     throw DataException("source field ${name} which type is ${srcType} connoted be converted")
-                case None where (flag & IGNORE_FIELD_NOT_FOUND) > 0 => true
-                case None where (flag & IGNORE_FIELD_NOT_FOUND) == 0 =>
+                case None where (flag & IGNORE_FIELD_NOT_FOUND) != 0 => true
+                case None =>
                     throw DataException("field name ${name} is not found from ${TypeInfos.get<T>()}")
                 case _ => throw DataException("source value of field ${name} connot be set into destination")
             }
