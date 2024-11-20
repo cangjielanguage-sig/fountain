@@ -9,6 +9,7 @@
 */
 package f_data
 
+import std.math.numeric.OverflowStrategy
 import f_regex.*
 
 public class DataReal <: Data & Hashable & Comparable<DataReal> {
@@ -97,8 +98,8 @@ public class DataReal <: Data & Hashable & Comparable<DataReal> {
     private static let uint32Range = [Decimal(UInt32.Min), Decimal(UInt32.Max)]
     private static let int64Range = [Decimal(Int64.Min), Decimal(Int64.Max)]
     private static let uint64Range = [Decimal(UInt64.Min), Decimal(UInt64.Max)]
-    public func toInt8(): Int8 {
-        data.toInt8()
+    public func toInt8(strategy!: OverflowStrategy = throwing): Int8 {
+        data.toInt8(overflowHandling: strategy)
     }
     public func tryToInt8(): ?Int8 {
         if(data >= int8Range[0] && data <= int8Range[1]){
@@ -107,8 +108,8 @@ public class DataReal <: Data & Hashable & Comparable<DataReal> {
             None<Int8>
         }
     }
-    public func toUInt8(): UInt8 {
-        data.toUInt8()
+    public func toUInt8(strategy!: OverflowStrategy = throwing): UInt8 {
+        data.toUInt8(overflowHandling: strategy)
     }
     public func tryToUInt8(): ?UInt8 {
         if(data >= uint8Range[0] && data <= uint8Range[1]){
@@ -118,8 +119,8 @@ public class DataReal <: Data & Hashable & Comparable<DataReal> {
         }
     }
 
-    public func toInt16(): Int16 {
-        data.toInt16()
+    public func toInt16(strategy!: OverflowStrategy = throwing): Int16 {
+        data.toInt16(overflowHandling: strategy)
     }
     public func tryToInt16(): ?Int16 {
         if(data >= int16Range[0] && data <= int16Range[1]){
@@ -128,8 +129,8 @@ public class DataReal <: Data & Hashable & Comparable<DataReal> {
             None<Int16>
         }
     }
-    public func toUInt16(): UInt16 {
-        data.toUInt16()
+    public func toUInt16(strategy!: OverflowStrategy = throwing): UInt16 {
+        data.toUInt16(overflowHandling: strategy)
     }
     public func tryToUInt16(): ?UInt16 {
         if(data >= uint16Range[0] && data <= uint16Range[1]){
@@ -139,8 +140,8 @@ public class DataReal <: Data & Hashable & Comparable<DataReal> {
         }
     }
 
-    public func toInt32(): Int32 {
-        data.toInt32()
+    public func toInt32(strategy!: OverflowStrategy = throwing): Int32 {
+        data.toInt32(overflowHandling: strategy)
     }
     public func tryToInt32(): ?Int32 {
         if(data >= int32Range[0] && data <= int32Range[1]){
@@ -149,8 +150,8 @@ public class DataReal <: Data & Hashable & Comparable<DataReal> {
             None<Int32>
         }
     }
-    public func toUInt32(): UInt32 {
-        data.toUInt32()
+    public func toUInt32(strategy!: OverflowStrategy = throwing): UInt32 {
+        data.toUInt32(overflowHandling: strategy)
     }
     public func tryToUInt32(): ?UInt32 {
         if(data >= uint32Range[0] && data <= uint32Range[1]){
@@ -160,8 +161,8 @@ public class DataReal <: Data & Hashable & Comparable<DataReal> {
         }
     }
 
-    public func toInt64(): Int64 {
-        data.toInt64()
+    public func toInt64(strategy!: OverflowStrategy = throwing): Int64 {
+        data.toInt64(overflowHandling: strategy)
     }
     public func tryToInt64(): ?Int64 {
         if(data >= int64Range[0] && data <= int64Range[1]){
@@ -170,8 +171,8 @@ public class DataReal <: Data & Hashable & Comparable<DataReal> {
             None<Int64>
         }
     }
-    public func toUInt64(): UInt64 {
-        data.toUInt64()
+    public func toUInt64(strategy!: OverflowStrategy = throwing): UInt64 {
+        data.toUInt64(overflowHandling: strategy)
     }
     public func tryToUInt64(): ?UInt64 {
         if(data >= uint64Range[0] && data <= uint64Range[1]){
@@ -180,8 +181,8 @@ public class DataReal <: Data & Hashable & Comparable<DataReal> {
             None<UInt64>
         }
     }
-    public func toIntNative(): IntNative {
-        data.toIntNative()
+    public func toIntNative(strategy!: OverflowStrategy = throwing): IntNative {
+        data.toIntNative(overflowHandling: strategy)
     }
     public func tryToIntNative(): ?IntNative {
         if(data >= int64Range[0] && data <= int64Range[1]){
@@ -190,8 +191,8 @@ public class DataReal <: Data & Hashable & Comparable<DataReal> {
             None<IntNative>
         }
     }
-    public func toUIntNative(): UIntNative {
-        data.toUIntNative()
+    public func toUIntNative(strategy!: OverflowStrategy = throwing): UIntNative {
+        data.toUIntNative(overflowHandling: strategy)
     }
     public func tryToUIntNative(): ?UIntNative {
         if(data >= int64Range[0] && data <= int64Range[1]){
