@@ -208,7 +208,7 @@ extend<K, V> HashMap<K, V> <: DataFields<HashMap<K, V>> where K <: DataFields<K>
             }
             case x =>
                 let dataType = TypeInfo.of(x)
-                if (dataType.qualifiedName.startsWith("fountain/data.ObjectData")) {
+                if (dataType.qualifiedName.startsWith("f_data.ObjectData")) {
                     let map = HashMap<K, V>()
                     let raw = ((dataType as ClassTypeInfo).getOrThrow().getInstanceVariable("data").getValue(x) as Object).
                         getOrThrow()
@@ -284,7 +284,7 @@ extend<K, V> TreeMap<K, V> <: DataFields<TreeMap<K, V>> where K <: DataFields<K>
             }
             case x =>
                 let dataType = TypeInfo.of(x)
-                if (dataType.qualifiedName.startsWith("fountain/data.ObjectData")) {
+                if (dataType.qualifiedName.startsWith("f_data.ObjectData")) {
                     let map = TreeMap<K, V>()
                     let raw = ((dataType as ClassTypeInfo).getOrThrow().getInstanceVariable("data").getValue(x) as Object).
                         getOrThrow()
@@ -362,7 +362,7 @@ extend<K, V> ConcurrentHashMap<K, V> <: DataFields<ConcurrentHashMap<K, V>> wher
             }
             case x =>
                 let dataType = TypeInfo.of(x)
-                if (dataType.qualifiedName.startsWith("fountain/data.ObjectData")) {
+                if (dataType.qualifiedName.startsWith("f_data.ObjectData")) {
                     let map = ConcurrentHashMap<K, V>()
                     let raw = ((dataType as ClassTypeInfo).getOrThrow().getInstanceVariable("data").getValue(x) as Object).
                         getOrThrow()
@@ -439,7 +439,7 @@ extend<K, V> LinkedHashMap<K, V> <: DataFields<LinkedHashMap<K, V>> where K <: D
             }
             case x =>
                 let dataType = TypeInfo.of(x)
-                if (dataType.qualifiedName.startsWith("fountain/data.ObjectData")) {
+                if (dataType.qualifiedName.startsWith("f_data.ObjectData")) {
                     let map = LinkedHashMap<K, V>()
                     let raw = ((dataType as ClassTypeInfo).getOrThrow().getInstanceVariable("data").getValue(x) as Object).
                         getOrThrow()

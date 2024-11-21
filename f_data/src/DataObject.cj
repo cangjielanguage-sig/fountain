@@ -95,7 +95,7 @@ public class ObjectData<T> <: Data & Iterable<(String, Data)> where T <: Object 
     public static func populate(src: Data, target: T, flag!: UInt64 = SILENCE): ?T {
         let srcDataType = TypeInfo.of(src)
         func isObjectData() {
-            srcDataType.qualifiedName.startsWith("fountain/data.ObjectData")
+            srcDataType.qualifiedName.startsWith("f_data.ObjectData")
         }
         func putValue(dstFields: ObjectFields, name: String, dst: T, data: Data, srcType: TypeInfo): Bool {
             match (dstFields.mutableField(name)) {

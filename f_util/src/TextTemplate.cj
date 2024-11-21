@@ -237,7 +237,7 @@ class ValueGetter {
         match(index){
             case x: K where index >= 0 => data[x]
             case _ => match(key){
-                case x: K where !(key.isEmpty() && (TypeInfo.of(data).qualifiedName.startsWith("fountain/util.ObjectTextTemplateArgs")))  => data[x]
+                case x: K where !(key.isEmpty() && (TypeInfo.of(data).qualifiedName.startsWith("f_util.ObjectTextTemplateArgs")))  => data[x]
                 case _ => throw TextTemplateException("data type ${TypeInfo.of(data)} is without field ${key} or the field is not a ${TypeInfos.get<K>()}")
             }
         }

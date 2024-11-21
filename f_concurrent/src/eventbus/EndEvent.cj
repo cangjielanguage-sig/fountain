@@ -17,7 +17,7 @@ public class EndEvent <: Event{
     }
     public prop name: String{
         get(){
-            "fountain/concurrent.eventbus.EndEvent"
+            "f_concurrent.eventbus.EndEvent"
         }
     }
 }

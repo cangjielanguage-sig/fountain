@@ -62,7 +62,7 @@ public class ObjectFields <: Iterable<ReadableField> {
             populateFields(p.name, p.annotations)
         }
         match(currentType.superClass) {
-            case Some(x) where x != TypeInfos.get<Object>() && x.isSubtypeOf(TypeInfos.get("fountain/data.DataObject<${x.qualifiedName}>")) =>
+            case Some(x) where x != TypeInfos.get<Object>() && x.isSubtypeOf(TypeInfos.get("f_data.DataObject<${x.qualifiedName}>")) =>
                 let superFields = x.getStaticFunction("dataFields").apply()
                 let superFieldsIterator = (superFields as ObjectFields).getOrThrow().iterator()
                 populateFields(superFieldsIterator, throwIfDuplicate: false)
