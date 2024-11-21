@@ -23,30 +23,29 @@ public macro DataAssist(attr: Tokens, input: Tokens): Tokens {
     for (t in attr) {
         set.put(t.value.toAsciiLower())
     }
+    func generate(tag: String, decl: CompositeDecl, fn: (CompositeDecl) -> Unit): Unit {
+        if(set.contains(tag)){
+            fn(decl)
+        }
+    }
     let decl = parseDecl(input)
     match(decl){
-        case d: ClassDecl =>
-            let bodyDecls = d.body.decls
-            for (val in set){
-                match(val){
-                    case "props" => generateProps(bodyDecls)
-                    case "hash" => generateHash(d)
-                    case "equal" => generateEqual(d)
-                    case "compare" => generateCompare(d)
-                    case "tostring" => generateToString(d)
-                    case "fields" => continue
-                    case _ => throw DataException("${val} does not support.")
-                }
-            }
-            if(set.contains('fields')){
-                generateToFields(d)
+        case d: CompositeDecl =>
+            generate('props', d, generateProps)
+            generate('hash', d, generateHash)
+            generate('equal', d, generateEqual)
+            generate('compare', d, generateCompare)
+            generate('tostring', d, generateToString)
+            if(d is ClassDecl){
+                generate('fields', d, generateToFields)
             }
             decl.toTokens()
         case _ =>
             throw IllegalArgumentException("${input} must be a struct decl or a class decl")
     }
 }
-func generateProps(decls: ArrayList<Decl>){
+func generateProps(decl: CompositeDecl){
+    let decls = decl.body.decls
     let appended = ArrayList<Decl>()
     for(decl in decls where !isStatic(decl)){
         match(decl){
