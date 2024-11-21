@@ -50,10 +50,8 @@ func generateProps(decl: CompositeDecl){
     for(decl in decls where !isStatic(decl)){
         match(decl){
             case d: VarDecl =>
-                let _static = if(isStatic(d)){
-                    `static`
-                }else{
-                    `empty_tokens`
+                if(d.isStatic()){
+                    continue
                 }
                 let propIdentifier = decl.identifier
                 let varName = Token(IDENTIFIER, "_${propIdentifier.value}_")
@@ -61,7 +59,7 @@ func generateProps(decl: CompositeDecl){
                 let propDecl =
                 if(decl.keyword.kind == VAR){
                     parseDecl(quote(
-                        public $_static mut prop $propIdentifier{
+                        public mut prop $propIdentifier{
                             get(){
                                 $varName
                             }
@@ -72,7 +70,7 @@ func generateProps(decl: CompositeDecl){
                     ))
                 }else{
                     parseDecl(quote(
-                        public $_static prop $propIdentifier{
+                        public prop $propIdentifier{
                             get(){
                                 $varName
                             }
@@ -86,6 +84,9 @@ func generateProps(decl: CompositeDecl){
     decls.appendAll(appended)
 }
 func generateHash(d: CompositeDecl){
+    if(d.superTypes.isEmpty()){
+        d.upperBound = `upperbound`[0]
+    }
     d.superTypes.append(RefType(quote(Hashable)))
     var hashed = `nl`
     for(d in d.body.decls where d is VarDecl){
@@ -115,6 +116,9 @@ func generateEqual(d: CompositeDecl){
         d.genericParam.toTokens()
     }catch(e: Exception){
         `empty_tokens`
+    }
+    if(d.superTypes.isEmpty()){
+        d.upperBound = `upperbound`[0]
     }
     let typeName = quote($(d.identifier)$generic)
     d.superTypes.append(QualifiedType(quote(Equatable<$typeName>)))
@@ -149,6 +153,9 @@ func generateCompare(d: CompositeDecl){
     }catch(e: Exception){
         `empty_tokens`
     }
+    if(d.superTypes.isEmpty()){
+        d.upperBound = `upperbound`[0]
+    }
     let typeName = quote($(d.identifier)$generic)
     d.superTypes.append(QualifiedType(quote(Comparable<$typeName>)))
     var cmp = `nl`
@@ -182,9 +189,12 @@ func generateToString(d: CompositeDecl){
     }catch(e: Exception){
         `empty_tokens`
     }
+    if(d.superTypes.isEmpty()){
+        d.upperBound = `upperbound`[0]
+    }
     let typeName = quote($(d.identifier)$generic)
     d.superTypes.append(RefType(quote(ToString)))
-    var str = `nl`
+    var str = `nl` + `lsquare`
     for(d in d.body.decls where d is VarDecl){
         str += quote(
             result.append($(d.identifier.value))
@@ -196,8 +206,9 @@ func generateToString(d: CompositeDecl){
             result.append("; ")
         ) + `nl`
     }
+    str += `rsquare`
     d.body.decls.append(parseDecl(quote(
-        public func compare(other: $typeName): Bool {
+        public func toString(): Bool {
             var result = StringBuilder()
             $str
             result
