@@ -34,9 +34,12 @@ public macro DataAssist(attr: Tokens, input: Tokens): Tokens {
                     case "equal" => generateEqual(d)
                     case "compare" => generateCompare(d)
                     case "tostring" => generateToString(d)
-                    case "fields" => generateToFields(d)
+                    case "fields" => continue
                     case _ => throw DataException("${val} does not support.")
                 }
+            }
+            if(set.contains('fields')){
+                generateToFields(d)
             }
             decl.toTokens()
         case _ =>
@@ -264,7 +267,7 @@ func generateToFields(d: CompositeDecl) {
         `empty_tokens`
     }
     fields += `rsquare`
-    let fieldsName = Token(IDENTIFIER, "dAtA__fIElds_")
+    let fieldsName = Token(IDENTIFIER, "___dAtA__fIElds_")
     body.appendAll([VarDecl(quote(
         private static let $(fieldsName) = ObjectFields.createFields<$klassIdentifier>($fields){
             $klassIdentifier()
