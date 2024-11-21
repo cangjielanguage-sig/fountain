@@ -47,12 +47,9 @@ public macro DataAssist(attr: Tokens, input: Tokens): Tokens {
 func generateProps(decl: CompositeDecl){
     let decls = decl.body.decls
     let appended = ArrayList<Decl>()
-    for(decl in decls where !isStatic(decl)){
+    for(decl in decls){
         match(decl){
-            case d: VarDecl =>
-                if(d.isStatic() || d.isPublic()){
-                    continue
-                }
+            case d: VarDecl where !(d.isStatic() || d.isPublic()) =>
                 let propIdentifier = decl.identifier
                 let varName = Token(IDENTIFIER, "_${propIdentifier.value}_")
                 decl.identifier = varName
