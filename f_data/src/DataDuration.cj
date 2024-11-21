@@ -40,14 +40,17 @@ extend Duration <: DataFields<Duration> {
     public func toData(): Data {
         DataDuration(this)
     }
-    public static func fromData(data: Data, flag!: UInt64 = SILENCE): Duration {
+    public static func fromData(data: Data, flag!: DataConversionFlag = SILENCE): Duration {
         tryFromData(data, flag: flag).getOrThrow{DataException("${data} cannot be converted to Duration")}
     }
-    public static func tryFromData(data: Data, flag!: UInt64 = SILENCE): ?Duration {
+    public static func tryFromData(data: Data, flag!: DataConversionFlag = SILENCE): ?Duration {
         match(data){
             case x: DataDuration => x.tryToDuration()
+            case _: DataNone => None
+            case _ where (flag & IGNORE_FIELD_TYPE_NOT_MATCH) == 0 => throw DataException('(${data}) does not match to ${TypeInfos.get<Duration>()}')
             case x: DataDateTime => x.toDateTime() - DateTime.UnixEpoch
             case x: DataString => Duration.tryParse(x.data)
+            case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException('(${data}) cannot be converted to ${TypeInfos.get<Duration>()}')
             case _ => None<Duration>
         }
     }

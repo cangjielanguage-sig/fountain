@@ -11,6 +11,6 @@ package f_data
 
 public interface DataFields<T>  {
     func toData(): Data
-    static func fromData(data: Data, flag!: UInt64): T
-    static func tryFromData(data: Data, flag!: UInt64): ?T
+    static func fromData(data: Data, flag!: DataConversionFlag): T
+    static func tryFromData(data: Data, flag!: DataConversionFlag): ?T
 }

@@ -278,13 +278,14 @@ func generateToFields(d: CompositeDecl) {
             ObjectData<$klassIdentifier>((this as $klassIdentifier).getOrThrow{DataException("generic type " + TypeInfos.get<$klassIdentifier>() + " must be subtype of " + TypeInfos.get<DataObject<$klassIdentifier>>())})
         }
     )), FuncDecl(quote(
-        static func fromData(data: Data, flag!: UInt64 = SILENCE): Object {
+        public static func fromData(data: Data, flag!: DataConversionFlag = SILENCE): Object {
             tryFromData(data, flag: flag).getOrThrow{DataException("current data " + data + " cannot be converted to " + TypeInfos.get<$klassIdentifier>())}
         }
     )), FuncDecl(quote(
-        static func tryFromData(data: Data, flag!: UInt64 = SILENCE): ?Object {
+        public static func tryFromData(data: Data, flag!: DataConversionFlag = SILENCE): ?Object {
             match(ObjectData<$klassIdentifier>.populate(data, flag: flag)){
                 case Some(o) => o
+                case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException(data.toString() + 'cannot be converted to ' + TypeInfos.get<$klassIdentifier>())
                 case _ => None
             }
         }

@@ -50,12 +50,14 @@ extend DateTime <: DataFields<DateTime> & ExtendDateTimeData {
     public func toData(): Data {
         DataDateTime(this)
     }
-    public static func fromData(data: Data, flag!: UInt64 = SILENCE): DateTime {
+    public static func fromData(data: Data, flag!: DataConversionFlag = SILENCE): DateTime {
         tryFromData(data, flag: flag).getOrThrow{DataException("${data} cannot be converted to DateTime")}
     }
-    public static func tryFromData(data: Data, flag!: UInt64 = SILENCE): ?DateTime {
+    public static func tryFromData(data: Data, flag!: DataConversionFlag = SILENCE): ?DateTime {
         match(data){
             case x: DataDateTime => x.tryToDateTime()
+            case _: DataNone => None
+            case _ where (flag & IGNORE_FIELD_TYPE_NOT_MATCH) == 0 => throw DataException('(${data}) does not match ${TypeInfos.get<DateTime>()}')
             case x: DataDuration => DateTime.UnixEpoch + x.toDuration()
             case x: DataString =>
                 let fmt = currentThreadDateFormat.get() ?? defaultDateFormat.load().value
@@ -64,6 +66,7 @@ extend DateTime <: DataFields<DateTime> & ExtendDateTimeData {
                 } else {
                     DateTime.parse(x.data, fmt)
                 }
+            case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException('(${data}) cannot be converted to ${TypeInfos.get<DateTime>()}')
             case _ => None<DateTime>
         }
     }

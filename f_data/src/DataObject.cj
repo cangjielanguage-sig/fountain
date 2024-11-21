@@ -9,6 +9,7 @@
  */
 package f_data
 
+public import f_data.exception.*
 import f_regex.*
 
 public interface DataObject<T> <: DataFields<Object> where T <: Object & DataObject<T> {
@@ -47,8 +48,18 @@ public class ObjectData<T> <: Data & Iterable<(String, Data)> where T <: Object 
     public operator func [](name: String, value!: Data): Unit {
         set(name, value)
     }
+    public func set<V>(name: String, value: V, flag!: UInt64 = SILENCE): Unit where V <: DataFields<V>{
+        set(name, value.toData(), flag: flag)
+    }
     public func set(name: String, value: Data, flag!: UInt64 = SILENCE): Unit {
         T.dataFields().mutableField(name)?.set(data, value, flag: flag)
+    }
+    public func get<V>(name: String, flag!: UInt64 = SILENCE): ?V where V <: DataFields<V> {
+        match(T.dataFields().readableField(name)?.get(data)){
+            case Some(x) => V.tryFromData(x, flag: flag)
+            case _ where (flag & IGNORE_FIELD_NOT_FOUND) == 0 => None
+            case _ => throw DataException('field ${name} is not found in ${TypeInfos.get<T>()}')
+        }
     }
     public func toString(): String {
         match (data) {
@@ -94,7 +105,6 @@ public class ObjectData<T> <: Data & Iterable<(String, Data)> where T <: Object 
                     "source field ${name} which type is ${srcType} connoted be converted")
                 case None where (flag & IGNORE_FIELD_NOT_FOUND) != 0 => true
                 case None => throw DataException("field name ${name} is not found from ${TypeInfos.get<T>()}")
-                case _ => throw DataException("source value of field ${name} connot be set into destination")
             }
             true
         }

@@ -37,13 +37,14 @@ extend String <: DataFields<String> {
     public func toData(): Data {
         DataString(this)
     }
-    public static func fromData(data: Data, flag!: UInt64 = SILENCE): String {
+    public static func fromData(data: Data, flag!: DataConversionFlag = SILENCE): String {
         tryFromData(data, flag: flag).getOrThrow{DataException("${data} cannot be converted to String")}
     }
-    public static func tryFromData(data: Data, flag!: UInt64 = SILENCE): ?String {
+    public static func tryFromData(data: Data, flag!: DataConversionFlag = SILENCE): ?String {
         match(data){
             case x: DataString => x.data
             case x: DataNone => None<String>
+            case _ where (flag & IGNORE_FIELD_TYPE_NOT_MATCH) == 0 => throw DataException('(${data}) does not match to ${TypeInfos.get<String>()}')
             case x => x.toString()
         }
     }

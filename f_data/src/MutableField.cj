@@ -18,7 +18,7 @@ public class MutableField <: ReadableField {
         super(name, typeInfo, getter)
     }
 
-    public func set(instance: Object, data: Data, flag!: UInt64 = SILENCE): Bool {
+    public func set(instance: Object, data: Data, flag!: DataConversionFlag = SILENCE): Bool {
         setter(instance, data, flag)
     }
 }
