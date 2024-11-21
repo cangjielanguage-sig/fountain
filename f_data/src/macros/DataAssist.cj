@@ -50,7 +50,7 @@ func generateProps(decl: CompositeDecl){
     for(decl in decls where !isStatic(decl)){
         match(decl){
             case d: VarDecl =>
-                if(d.isStatic()){
+                if(d.isStatic() || d.isPublic()){
                     continue
                 }
                 let propIdentifier = decl.identifier
