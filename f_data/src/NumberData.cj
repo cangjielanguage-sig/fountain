@@ -330,7 +330,7 @@ extend BigInt <: DataFields<BigInt> {
             case x: DataReal => x.tryToBigInt()
             case _: DataNone => None
             case _ where (flag & IGNORE_FIELD_TYPE_NOT_MATCH) == 0 => throw DataException('(${data}) does not match ${TypeInfos.get<BigInt>()}')
-            case x: DataString where #'^(\d+|0[xX][0-9a-fA-F]+|0[oO][0-7]+|0[bB][01]+)$'#.regex(solid: true).matched(x.toString().trimAscii()) => DataReal(x.toString().trimAscii()).tryToBigInt()
+            case x: DataString where #'^(-?(\d+|0[xX][0-9a-fA-F]+|0[oO][0-7]+|0[bB][01]+))$'#.regex(solid: true).matched(x.toString().trimAscii()) => DataReal(x.toString().trimAscii()).tryToBigInt()
             case _ => None<BigInt>
         }
     }
