@@ -24,6 +24,7 @@ public interface ExtendRegex {
     static prop EMAIL: Regex
     static prop DURATION: Regex
     static prop IDENTIFIER: Regex
+    static prop BASE64: Regex
     static func builder(): RegexBuilder
     static func builder(callback: (RegexBuilder) -> Unit): Regex
     func matched(input: String): Bool
@@ -60,6 +61,11 @@ extend Regex <: ExtendRegex {
     public static prop IDENTIFIER: Regex {
         get(){
             #"^_*[a-zA-Z]+\w*$"#.regex(solid: true)
+        }
+    }
+    public static prop BASE64: Regex {
+        get(){
+            '^([+a-zA-Z0-9/]{4})+([+a-zA-Z0-9/]{2}==|[+a-zA-Z0-9/]{3}=)?$'.regex(solid: true)
         }
     }
 

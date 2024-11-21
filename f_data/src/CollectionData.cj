@@ -11,15 +11,23 @@ package f_data
 
 import std.collection.{ArrayList, HashSet, HashMap, TreeMap}
 import std.collection.concurrent.ConcurrentHashMap
+import std.regex.*
+import encoding.base64.*
 import f_collection.{LinkedHashMap, TreeSet}
+import f_regex.*
 
 extend<T> Array<T> <: DataFields<Array<T>> where T <: DataFields<T> {
     public func toData(): Data {
-        let list = ArrayList<Data>()
-        for (v in this) {
-            list.append(v.toData())
+        match(this){
+            case x: Array<Byte> => 
+                toBase64String(x).toData()
+            case _ =>
+                let list = ArrayList<Data>()
+                for (v in this) {
+                    list.append(v.toData())
+                }
+                DataSequence(list)
         }
-        DataSequence(list)
     }
     public static func fromData(data: Data, flag!: DataConversionFlag = SILENCE): Array<T> {
         tryFromData(data, flag: flag).getOrThrow {DataException("${data} cannot be converted to ${TypeInfos.get<Array<T>>()}")}
@@ -36,6 +44,8 @@ extend<T> Array<T> <: DataFields<Array<T>> where T <: DataFields<T> {
                     }
                 }
                 list.toArray()
+            case x: DataString where TypeInfos.get<T>() == TypeInfos.get<Byte>() && Regex.BASE64.matched(x.toString()) =>
+                fromBase64String(x.toString()) as Array<T>
             case _ where (flag & IGNORE_FIELD_TYPE_NOT_MATCH) == 0 => throw DataException('${data} does not match ${TypeInfos.get<Array<T>>()}')
             case x => match (T.tryFromData(x, flag: flag)) {
                 case Some(x) => [x]
