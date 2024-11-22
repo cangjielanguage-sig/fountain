@@ -42,8 +42,8 @@ public class ObjectData<T> <: Data & Iterable<(String, Data)> where T <: Object 
     public func fields(): Iterator<ReadableField> {
         T.dataFields().iterator()
     }
-    public operator func [](name: String): ?Data {
-        T.dataFields().readableField(name)?.get(data)
+    public operator func [](name: String): Data {
+        (T.dataFields().readableField(name)?.get(data)).getOrThrow{DataException('field ${name} is not found in ${TypeInfos.get<T>()}')}
     }
     public operator func [](name: String, value!: Data): Unit {
         set(name, value)

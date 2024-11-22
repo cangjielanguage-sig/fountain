@@ -38,10 +38,12 @@ public macro DataAssist(attr: Tokens, input: Tokens): Tokens {
             generate('tostring', d, generateToString)
             if(d is ClassDecl){
                 generate('fields', d, generateToFields)
+            }else if(set.contains('fields')){
+                throw IllegalArgumentException('input must be a class for fields attr of @DataAssist')
             }
             decl.toTokens()
         case _ =>
-            throw IllegalArgumentException("${input} must be a struct decl or a class decl")
+            throw IllegalArgumentException("input must be a struct decl or a class decl")
     }
 }
 func generateProps(decl: CompositeDecl){
@@ -285,7 +287,7 @@ func generateToFields(d: CompositeDecl) {
         }
     )), FuncDecl(quote(
         public $openModi func toData(): Data {
-            ObjectData<$klassIdentifier>((this as $klassIdentifier).getOrThrow{DataException("generic type " + TypeInfos.get<$klassIdentifier>() + " must be subtype of " + TypeInfos.get<DataObject<$klassIdentifier>>())})
+            ObjectData<$klassIdentifier>(this)
         }
     )), FuncDecl(quote(
         public static func fromData(data: Data, flag!: DataConversionFlag = SILENCE): Object {
