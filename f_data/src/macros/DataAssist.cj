@@ -311,7 +311,9 @@ func generateToFields(d: ClassDecl, exclusion: HashSet<String>) {
             case x: VarDecl =>
                 var declType = x.declType.toTokens()
                 if(declType[0].kind == QUEST){
-                    declType = quote(Option<$(declType[1 ..])>)
+                    declType = declType[1 ..]
+                }else if(declType[0].kind == IDENTIFIER && declType[0].value == 'Option'){
+                    declType = declType[2 .. declType.size - 1]
                 }
                 if (x.isVar()) {
                     TrailingClosureExpr(quote(
