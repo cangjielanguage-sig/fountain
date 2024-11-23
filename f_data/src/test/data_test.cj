@@ -20,8 +20,8 @@ import std.unittest.testmacro.*
 public class DataTest {
   private var i: Int64 = 0
   private var s: String = ''
-//   private var opts: ?String = None
-//   private var test: ?DataTest = None
+  private var opts: ?String = None
+  private var test: ?DataTest = None
   private var ilist: ArrayList<Int64> = ArrayList<Int64>()
   private var slist: ArrayList<String> = ArrayList<String>()
   private var dlist: ArrayList<DataTest> = ArrayList<DataTest>()
