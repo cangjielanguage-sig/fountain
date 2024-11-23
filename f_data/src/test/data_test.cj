@@ -16,11 +16,17 @@ import f_data.macros.DataAssist
 import std.unittest.*
 import std.unittest.testmacro.*
 
+
+@DataAssist[fields equal]
+public class TT{
+    private var s: String = ''
+}
 @DataAssist[hash equal props fields]
 public class DataTest {
   private var i: Int64 = 0
   private var s: String = ''
   private var opts: ?String = None
+  private var tt: ?TT = None
   private var test: ?DataTest = None
   private var ilist: ArrayList<Int64> = ArrayList<Int64>()
   private var slist: ArrayList<String> = ArrayList<String>()
