@@ -187,8 +187,8 @@ func generateEqual(d: ClassDecl, exclusion: HashSet<String>) {
         }
         let declType = (d as VarDecl).getOrThrow().declType
         eq += quote(
-            result = if($(d.identifier) is Equatable<$declType>){
-                this.$(d.identifier) == other.$(d.identifier)
+            result = if((this.$(d.identifier) is Equatable<$declType>) && let x: Bool <- TypeInfos.get<$declType>().getInstanceFunction('==', [TypeInfos.get<$declType>()]).apply(this.$(d.identifier), [other.$(d.identifier)])){
+                x
             }else{
                 true
             }
@@ -233,8 +233,8 @@ func generateCompare(d: ClassDecl, exclusion: HashSet<String>) {
         }
         let declType = (d as VarDecl).getOrThrow().declType
         cmp += quote(
-            result = if($(d.identifier) is Comparable<$declType>){
-                this.$(d.identifier).compare(other.$(d.identifier))
+            result = if((this.$(d.identifier) is Comparable<$declType>) && let x: Ordering <- TypeInfos.get<$declType>().getInstanceFunction('compare', [TypeInfos.get<$declType>()]).apply(this.$(d.identifier), [other.$(d.identifier)])){
+                x
             } else {
                 EQ
             }

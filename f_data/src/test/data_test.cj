@@ -17,7 +17,7 @@ import std.unittest.*
 import std.unittest.testmacro.*
 
 
-@DataAssist[fields equal]
+@DataAssist[fields]
 public class TT{
     private var s: String = ''
 }
