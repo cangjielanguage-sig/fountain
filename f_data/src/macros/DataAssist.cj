@@ -313,6 +313,7 @@ func generateToFields(d: ClassDecl, exclusion: HashSet<String>) {
                 var optionExpr = quote(
                     match(o){
                         case v: $klassIdentifier => v.$(x.identifier) = None
+                            return true
                         case _ => throw DataException("type of current instance does not match, expected " + TypeInfos.get<$(klassIdentifier)>().toString() + ", but receives " + TypeInfo.of(o).toString())
                     }
                 )
@@ -357,6 +358,7 @@ func generateToFields(d: ClassDecl, exclusion: HashSet<String>) {
                 var optionExpr = quote(
                     match(o){
                         case v: $klassIdentifier => v.$(x.identifier) = None
+                            return true
                         case _ => throw DataException("type of current instance does not match, expected " + TypeInfos.get<$(klassIdentifier)>().toString() + ", but receives " + TypeInfo.of(o).toString())
                     }
                 )
