@@ -9,8 +9,6 @@
  */
 package f_data
 
-import std.math.numeric.OverflowStrategy
-
 extend Int8 <: DataFields<Int8> {
     public func toData(): Data {
         DataReal(this)

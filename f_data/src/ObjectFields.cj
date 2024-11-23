@@ -9,8 +9,6 @@
 */
 package f_data
 
-public import f_base.TypeInfos
-
 public class ObjectFields <: Iterable<ReadableField> {
     private let mutables = HashMap<String, MutableField>()
     private let readables = HashMap<String, ReadableField>()
@@ -35,7 +33,6 @@ public class ObjectFields <: Iterable<ReadableField> {
                 populateField(f.name, f, throwIfDuplicate: throwIfDuplicate)
             }
         }
-        populateFields(fields)
         func populateFields(name: String, annotations: Collection<Annotation>) {
             for(annotation in annotations) {
                 match(annotation){
@@ -44,6 +41,7 @@ public class ObjectFields <: Iterable<ReadableField> {
                 }
             }
         }
+        populateFields(fields)
         let currentType = (TypeInfos.get<O>() as ClassTypeInfo).getOrThrow()
         for(v in currentType.instanceVariables) {
             let annotations = try{

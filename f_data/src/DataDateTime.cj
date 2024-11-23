@@ -9,9 +9,6 @@
 */
 package f_data
 
-import std.time.DateTime
-import f_time.ExtendDateTime
-
 public class DataDateTime <: Data & Hashable & Comparable<DataDateTime> {
     public DataDateTime(public let data: DateTime){}
     public func toString(): String {

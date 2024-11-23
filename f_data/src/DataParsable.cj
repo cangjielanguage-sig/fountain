@@ -9,11 +9,6 @@
  */
 package f_data
 
-import std.collection.ArrayList
-import std.convert.Parsable
-import std.reflect.TypeInfo
-import f_data.exception.DataParsableException
-
 public interface DataParsable<T> where T <: DataParsable<T> {
     static func parse(s: String): T {
         tryParse(s).getOrThrow {DataParsableException('${s} cannot be parsed to ${TypeInfo.of<T>()}')}

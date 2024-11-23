@@ -9,9 +9,6 @@
 */
 package f_data
 
-import std.math.numeric.OverflowStrategy
-import f_regex.*
-
 public class DataReal <: Data & Hashable & Comparable<DataReal> {
     public DataReal(public let data: Decimal){}
     public init(data: BigInt){

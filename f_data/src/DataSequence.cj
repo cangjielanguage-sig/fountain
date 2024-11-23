@@ -9,8 +9,6 @@
 */
 package f_data
 
-import f_collection.LinkedHashMap
-
 sealed abstract class DataList<D> <: Data & Iterable<D> where D <: Data {
     public DataList(private let data: ArrayList<D>){}
     public init(data: Array<D>){

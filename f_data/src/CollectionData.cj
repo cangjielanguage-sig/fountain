@@ -9,13 +9,6 @@
  */
 package f_data
 
-import std.collection.{ArrayList, HashSet, HashMap, TreeMap}
-import std.collection.concurrent.ConcurrentHashMap
-import std.regex.*
-import encoding.base64.*
-import f_collection.{LinkedHashMap, TreeSet}
-import f_regex.*
-
 extend<T> Array<T> <: DataFields<Array<T>> where T <: DataFields<T> {
     public func toData(): Data {
         match(this){

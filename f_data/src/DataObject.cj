@@ -9,16 +9,13 @@
  */
 package f_data
 
-public import f_data.exception.*
-import f_regex.*
-
 public interface DataObject<T> <: DataFields<Object> where T <: Object & DataObject<T> {
     static func dataFields(): ObjectFields
 
     func toData(): Data
 
-    static func fromData(data: Data, flag!: UInt64): Object
-    static func tryFromData(data: Data, flag!: UInt64): ?Object
+    static func fromData(data: Data, flag!: DataConversionFlag): Object
+    static func tryFromData(data: Data, flag!: DataConversionFlag): ?Object
 }
 
 class FieldIterator<T> <: Iterator<(String, Data)> where T <: Object & DataObject<T> {

@@ -17,184 +17,257 @@ import f_macros.*
 
 /*
  * Props Hash Compare Equal ToString Fields
+ * props hash compare equal tostring toString fields
  */
 public macro DataAssist(attr: Tokens, input: Tokens): Tokens {
-    let set = HashSet<String>()
-    for (t in attr) {
-        set.put(t.value.toAsciiLower())
-    }
-    func generate(tag: String, decl: CompositeDecl, fn: (CompositeDecl) -> Unit): Unit {
-        if(set.contains(tag)){
-            fn(decl)
-        }
-    }
-    let decl = parseDecl(input)
-    match(decl){
-        case d: CompositeDecl =>
-            generate('props', d, generateProps)
-            generate('hash', d, generateHash)
-            generate('equal', d, generateEqual)
-            generate('compare', d, generateCompare)
-            generate('tostring', d, generateToString)
-            if(d is ClassDecl){
-                generate('fields', d, generateToFields)
-            }else if(set.contains('fields')){
-                throw IllegalArgumentException('input must be a class for fields attr of @DataAssist')
+    match (parseDecl(input)) {
+        case d: ClassDecl =>
+            let set = HashSet<String>()
+            for (t in attr) {
+                set.put(t.value.toAsciiLower())
             }
-            decl.toTokens()
-        case _ =>
-            throw IllegalArgumentException("input must be a struct decl or a class decl")
+            func generate(tag: String, decl: ClassDecl, exclusion: HashSet<String>,
+                fn: (ClassDecl, HashSet<String>) -> Unit): Unit {
+                if (set.contains(tag)) {
+                    fn(decl, exclusion)
+                }
+            }
+            let excludeProp = HashSet<String>()
+            let excludeHash = HashSet<String>()
+            let excludeEqual = HashSet<String>()
+            let excludeCompare = HashSet<String>()
+            let excludeToString = HashSet<String>()
+            let excludeFields = HashSet<String>()
+            func populateExclusion(message: MacroMessage, name: String, set: HashSet<String>): Unit {
+                try {
+                    set.put(message.getString(name))
+                } catch (_) {}
+            }
+            for (message in getChildMessages('DataExclude')) {
+                populateExclusion(message, 'prop', excludeProp)
+                populateExclusion(message, 'hash', excludeHash)
+                populateExclusion(message, 'equal', excludeEqual)
+                populateExclusion(message, 'compare', excludeCompare)
+                populateExclusion(message, 'tostring', excludeToString)
+                populateExclusion(message, 'field', excludeFields)
+            }
+            generate('props', d, excludeProp, generateProps)
+            generate('hash', d, excludeHash, generateHash)
+            generate('equal', d, excludeEqual, generateEqual)
+            generate('compare', d, excludeCompare, generateCompare)
+            generate('tostring', d, excludeToString, generateToString)
+            generate('fields', d, excludeFields, generateToFields)
+            d.toTokens()
+        case _ => throw IllegalArgumentException("input must be a class decl")
     }
 }
-func generateProps(decl: CompositeDecl){
+
+func generateProps(decl: ClassDecl, exclusion: HashSet<String>) {
     let decls = decl.body.decls
     let appended = ArrayList<Decl>()
-    for(decl in decls){
-        match(decl){
-            case d: VarDecl where !(d.isStatic() || d.isPublic()) =>
-                let propIdentifier = decl.identifier
-                let varName = Token(IDENTIFIER, "_${propIdentifier.value}_")
-                decl.identifier = varName
-                let propDecl =
-                if(decl.keyword.kind == VAR){
-                    parseDecl(quote(
-                        public mut prop $propIdentifier{
-                            get(){
-                                $varName
-                            }
-                            set(value){
-                                $varName = value
-                            }
-                        }
-                    ))
-                }else{
-                    parseDecl(quote(
-                        public prop $propIdentifier{
-                            get(){
-                                $varName
-                            }
-                        }
-                    ))
+    func gen(v: VarDecl) {
+        if(v.isStatic() || v.isPublic()){
+            return
+        }
+        let name = v.identifier
+        if (exclusion.contains(name.value)) {
+            return
+        }
+        let t = v.declType
+        let mutable = v.keyword.value == 'var'
+        v.identifier = Token(IDENTIFIER, v.identifier.value + '_')
+        let (mutToken, setter) = if (mutable) {
+            (quote(mut), quote(
+                set(value){
+                    $(v.identifier) = value
                 }
-                appended.append(propDecl)
+            ))
+        } else {
+            let empty = quote()
+            (empty, empty)
+        }
+        appended.append(
+            PropDecl(
+                quote(
+            public $mutToken prop $name: $(t){
+                get(){
+                    $(v.identifier)
+                }
+                $(setter)
+            }
+        )
+            ))
+    }
+    for (decl in decls) {
+        match (decl) {
+            case d: VarDecl where !(d.isStatic() || d.isPublic()) => gen(d)
+            case d: PrimaryCtorDecl =>
+                let vars = ArrayList<Decl>()
+                let assigns = ArrayList<Node>()
+                let args = ArrayList<FuncParam>()
+                for (p in d.funcParams where p.isMemberParam()) {
+                    let member = VarDecl()
+                    member.modifiers = p.modifiers
+                    member.keyword = p.keyword
+                    member.identifier = p.identifier
+                    member.colon = p.colon
+                    member.declType = p.paramType
+                    if (p.assign.kind.toString() == 'ASSIGN') {
+                        member.assign = p.assign
+                        member.expr = p.expr
+                    }
+                    vars.append(member)
+                    args.append(p)
+                    p.modifiers = ArrayList<Modifier>()
+                    p.keyword = Token(ILLEGAL)
+                    gen(member)
+                    assigns.append(parseExpr(quote(this.$(member.identifier) = $(p.identifier))))
+                }
+                decls.prependAll(vars)
+                d.block.nodes.prependAll(assigns)
             case _ => continue
         }
     }
     decls.appendAll(appended)
 }
-func generateHash(d: CompositeDecl){
-    if(d.superTypes.isEmpty()){
+
+func generateHash(d: ClassDecl, exclusion: HashSet<String>) {
+    if (d.superTypes.isEmpty()) {
         d.upperBound = `upperbound`[0]
     }
     d.superTypes.append(RefType(quote(Hashable)))
     var hashed = `nl`
-    for(d in d.body.decls where d is VarDecl){
+    for (d in d.body.decls where d is VarDecl &&
+        !(isStatic(d) || exclusion.contains(d.identifier.value) || exclusion.contains('${d.identifier.value}_'))) {
         hashed += quote(
             match($(d.identifier)){
                 case x: Hashable => hasher.write(x.hashCode())
                 case _ => ()
             }
-        ) + `nl`
+        ) +
+            `nl`
     }
     d.body.decls.append(parseDecl(quote(
         private var __hAsh__ = 0
     )))
-    d.body.decls.append(parseDecl(quote(
+    d
+        .body
+        .decls
+        .append(
+            parseDecl(
+                quote(
         public func hashCode(): Int64{
             if(__hAsh__ == 0){
-                let hasher = DefaultHasher()
+                var hasher = DefaultHasher()
                 $hashed
                 __hAsh__ = hasher.finish()
             }
             __hAsh__
         }
-    )))
+    )
+            ))
 }
-func generateEqual(d: CompositeDecl){
-    let generic = try{
-        d.genericParam.toTokens()
-    }catch(e: Exception){
-        `empty_tokens`
-    }
-    if(d.superTypes.isEmpty()){
+
+func generateEqual(d: ClassDecl, exclusion: HashSet<String>) {
+    if (d.superTypes.isEmpty()) {
         d.upperBound = `upperbound`[0]
     }
-    let typeName = quote($(d.identifier)$generic)
-    d.superTypes.append(QualifiedType(quote(Equatable<$typeName>)))
+    let typeName = quote($(d.identifier)$(d.genericParamTokens))
+    d.superTypes.append(RefType(quote(Equatable<$typeName>)))
+    var hashTokens = `empty_tokens`
     var eq = `nl`
-    for(d in d.body.decls where d is VarDecl){
+    for (d in d.body.decls where d is VarDecl &&
+        !(isStatic(d) || exclusion.contains(d.identifier.value) || exclusion.contains('${d.identifier.value}_'))) {
+        if(d.identifier.value == '__hAsh__'){
+            hashTokens = quote(
+                if(this.__hAsh__ != other.__hAsh__){
+                    return false
+                })
+            continue
+        }
+        let declType = (d as VarDecl).getOrThrow().declType
         eq += quote(
-            result = {=>
-                try{
-                    let typeInfo = TypeInfo.of($(d.identifier))
-                    let eq = typeInfo.getInstanceFunction("==", typeInfo)
-                    eq.apply($(d.identifier), other.$(d.identifier))
-                }catch(e: Exception){
-                    true
-                }
-            }()
+            result = if($(d.identifier) is Equatable<$declType>){
+                this.$(d.identifier) == other.$(d.identifier)
+            }else{
+                true
+            }
             if(!result){
                 return false
             }
-        ) + `nl`
+        ) +
+            `nl`
     }
-    d.body.decls.append(parseDecl(quote(
+    d
+        .body
+        .decls
+        .append(
+            parseDecl(
+                quote(
         public operator func ==(other: $typeName): Bool {
+            $hashTokens
             var result = true
             $eq
             true
         }
-    )))
+    )
+            ))
 }
-func generateCompare(d: CompositeDecl){
-    let generic = try{
-        d.genericParam.toTokens()
-    }catch(e: Exception){
-        `empty_tokens`
-    }
-    if(d.superTypes.isEmpty()){
+
+func generateCompare(d: ClassDecl, exclusion: HashSet<String>) {
+    if (d.superTypes.isEmpty()) {
         d.upperBound = `upperbound`[0]
     }
-    let typeName = quote($(d.identifier)$generic)
-    d.superTypes.append(QualifiedType(quote(Comparable<$typeName>)))
+    let typeName = quote($(d.identifier)$(d.genericParamTokens))
+    d.superTypes.append(RefType(quote(Comparable<$typeName>)))
+    var hashTokens = `empty_tokens`
     var cmp = `nl`
-    for(d in d.body.decls where d is VarDecl){
+    for (d in d.body.decls where d is VarDecl &&
+        !(isStatic(d) || exclusion.contains(d.identifier.value) || exclusion.contains('${d.identifier.value}_'))) {
+        if(d.identifier.value == '__hAsh__'){
+            hashTokens = quote(
+                if(this.__hAsh__.compare(other.__hAsh__) != EQ){
+                    return result
+                })
+            continue
+        }
+        let declType = (d as VarDecl).getOrThrow().declType
         cmp += quote(
-            result = {=>
-                try{
-                    let typeInfo = TypeInfo.of($(d.identifier))
-                    let cmp = typeInfo.getInstanceFunction("compare", typeInfo)
-                    cmp.apply($(d.identifier), other.$(d.identifier))
-                }catch(e: Exception){
-                    EQ
-                }
-            }()
+            result = if($(d.identifier) is Comparable<$declType>){
+                this.$(d.identifier).compare(other.$(d.identifier))
+            } else {
+                EQ
+            }
             if(result != EQ){
                 return result
             }
-        ) + `nl`
+        ) +
+            `nl`
     }
-    d.body.decls.append(parseDecl(quote(
+    d
+        .body
+        .decls
+        .append(
+            parseDecl(
+                quote(
         public func compare(other: $typeName): Bool {
+            $hashTokens
             var result = Ordering.EQ
             $cmp
             result
         }
-    )))
+    )
+            ))
 }
-func generateToString(d: CompositeDecl){
-    let generic = try{
-        d.genericParam.toTokens()
-    }catch(e: Exception){
-        `empty_tokens`
-    }
-    if(d.superTypes.isEmpty()){
+
+func generateToString(d: ClassDecl, exclusion: HashSet<String>) {
+    if (d.superTypes.isEmpty()) {
         d.upperBound = `upperbound`[0]
     }
-    let typeName = quote($(d.identifier)$generic)
     d.superTypes.append(RefType(quote(ToString)))
-    var str = `nl` + `lsquare`
-    for(d in d.body.decls where d is VarDecl){
+    var str = quote($(d.identifier)$(d.genericParamTokens)) + `lsquare`
+    for (d in d.body.decls where d is VarDecl &&
+        !(isStatic(d) || exclusion.contains(d.identifier.value) || exclusion.contains('${d.identifier.value}_'))) {
         str += quote(
             result.append($(d.identifier.value))
             result.append(" = ")
@@ -203,103 +276,167 @@ func generateToString(d: CompositeDecl){
                 case _ => result.append("_")
             }
             result.append("; ")
-        ) + `nl`
+        ) +
+            `nl`
     }
     str += `rsquare`
-    d.body.decls.append(parseDecl(quote(
+    d
+        .body
+        .decls
+        .append(
+            parseDecl(
+                quote(
         public func toString(): Bool {
             var result = StringBuilder()
             $str
             result
         }
-    )))
+    )
+            ))
 }
-func generateToFields(d: CompositeDecl) {
-    let klassDecl = (d as ClassDecl).getOrThrow{DataException("current decl ${d.identifier.value} must be a class decl")}
-    let klassIdentifier = quote($(klassDecl.identifier)$(klassDecl.genericParam))
-    if(klassDecl.superTypes.isEmpty()){
+
+func generateToFields(d: ClassDecl, exclusion: HashSet<String>) {
+    let klassDecl = (d as ClassDecl).getOrThrow {
+        DataException("current decl ${d.identifier.value} must be a class decl")
+    }
+    let klassIdentifier = quote($(klassDecl.identifier)$(d.genericParamTokens))
+    if (klassDecl.superTypes.isEmpty()) {
         klassDecl.upperBound = `upperbound`[0]
     }
-    klassDecl.superTypes.append(QualifiedType(quote(DataObject<$(klassIdentifier)>)))
+    klassDecl.superTypes.append(RefType(quote(DataObject<$(klassIdentifier)>)))
     let body = klassDecl.body.decls
-    var fields = `lsquare`
-    var i = 0
-    for (f in body) {
-        if (i > 0) {
-            fields += `comma`
-        }
-        fields += 
-        match(f){
-            case x: VarDecl where x.isPublic() =>
+    var fields = ArrayList<Expr>()
+    for (d in body where (d is VarDecl || d is PropDecl) && !isStatic(d) && isPublic(d) && !exclusion.contains(d.identifier.value)) {
+        let expr =  match (d) {
+            case x: VarDecl =>
+                var declType = x.declType.toTokens()
+                if(declType[0].kind == QUEST){
+                    declType = quote(Option<$(declType[1 ..])>)
+                }
                 if (x.isVar()) {
-                    quote(MutableField($(x.identifier.value), TypeInfo.of(x.$(x.identifier)), {o =>
-                        (o as $klassIdentifier).getOrThrow{DataException("type of current instance does not match, expected " + TypeInfos.get<$(klassIdentifier)>() + ", but recceives " + TypeInfo.of(o))}.$(x.identifier).toData()
+                    TrailingClosureExpr(quote(
+                        MutableField($(x.identifier.value), TypeInfos.get<$(declType)>(), {o =>
+                        (o as $klassIdentifier).getOrThrow{DataException("type of current instance does not match, expected " + TypeInfos.get<$(klassIdentifier)>().toString() + ", but recceives " + TypeInfo.of(o))}.$(x.identifier).toData()
                     }){o, d, flag =>
-                        match ($(x.declType).tryFromData(d, flag: flag)) {
-                            case Some(x) =>
-                                (o as $klassIdentifier).getOrThrow{DataException("type of current instance does not match, expected " + TypeInfos.get<$(klassIdentifier)>() + ", but receives " + TypeInfo.of(o))}.$(x.identifier) = (x as $(x.declType)).getOrThrow()
-                                true
-                            case _ => false
+                        if(d is DataNone){
+                            if((flag & IGNORE_NONE) == 0){
+                                throw DataException('data is none')
+                            }else{
+                                return false
+                            }
                         }
-                    })
+                        match ($(declType).tryFromData(d, flag: flag)) {
+                            case Some(x) =>
+                                match(o){
+                                    case v: $klassIdentifier => v.$(x.identifier) = x
+                                    case _ => throw DataException("type of current instance does not match, expected " + TypeInfos.get<$(klassIdentifier)>().toString() + ", but receives " + TypeInfo.of(o))
+                                }
+                                true
+                            case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) != 0 => false
+                            case _ => throw DataException('data ' + d.toString() + 'cannot be converted to ' + TypeInfos.get<$(declType)>().toString())
+                        }
+                    }))
                 } else {
-                    quote(ReadonlyField($(x.identifier.value), TypeInfo.of(x.$(x.identifier))){o=>
-                        (o as $klassIdentifier).getOrThrow{DataException("type of current instance does not match, expected " + TypeInfos.get<$(klassIdentifier)>() + ", but recceives " + TypeInfo.of(o))}.$(x.identifier).toData()
-                    })
+                    TrailingClosureExpr(quote(
+                        ReadonlyField($(x.identifier.value), TypeInfos.get<$(declType)>()){o=>
+                        (o as $klassIdentifier).getOrThrow{DataException("type of current instance does not match, expected " + TypeInfos.get<$(klassIdentifier)>().toString() + ", but recceives " + TypeInfo.of(o))}.$(x.identifier).toData()
+                    }))
                 }
-            case x: PropDecl where x.isPublic() =>
+            case x: PropDecl =>
+                var declType = x.declType.toTokens()
+                if(declType[0].kind == QUEST){
+                    declType = quote(Option<$(declType[1 ..])>)
+                }
                 if (x.isMut()) {
-                    quote(MutableField($(x.identifier.value), TypeInfo.of(x.$(x.identifier)), {o =>
-                        (o as $klassIdentifier).getOrThrow{DataException("type of current instance does not match, expected " + TypeInfos.get<$(klassIdentifier)>() + ", but recceives " + TypeInfo.of(o))}.$(x.identifier).toData()
+                    TrailingClosureExpr(quote(
+                        MutableField($(x.identifier.value), TypeInfos.get<$(declType)>(), {o =>
+                        (o as $klassIdentifier).getOrThrow{DataException("type of current instance does not match, expected " + TypeInfos.get<$(klassIdentifier)>().toString() + ", but recceives " + TypeInfo.of(o).toString())}.$(x.identifier).toData()
                     }){o, d, flag =>
-                        match ($(x.declType).tryFromData(d, flag: flag)) {
-                            case Some(x) =>
-                                (o as $klassIdentifier).getOrThrow{DataException("type of current instance does not match, expected " + TypeInfos.get<$(klassIdentifier)>() + ", but recceives " + TypeInfo.of(o))}.$(x.identifier) = (x as $(x.declType)).getOrThrow()
-                                true
-                            case _ => false
+                        if(d is DataNone){
+                            if((flag & IGNORE_NONE) == 0){
+                                throw DataException('data is none')
+                            }else{
+                                return false
+                            }
                         }
-                    })
+                        match ($(declType).tryFromData(d, flag: flag)) {
+                            case Some(x) =>
+                                match(o){
+                                    case v: $klassIdentifier => v.$(x.identifier) = x
+                                    case _ => throw DataException("type of current instance does not match, expected " + TypeInfos.get<$(klassIdentifier)>().toString() + ", but receives " + TypeInfo.of(o).toString())
+                                }
+                                true
+                            case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) != 0 => false
+                            case _ => throw DataException('data ' + d.toString() + 'cannot be converted to ' + TypeInfos.get<$(declType)>().toString())
+                        }
+                    }))
                 } else {
-                    quote(ReadonlyField($(x.identifier.value), TypeInfo.of(x.$(x.identifier))){o=>
-                        (o as $klassIdentifier).getOrThrow{DataException("type of current instance does not match, expected " + TypeInfos.get<$(klassIdentifier)>() + ", but recceives " + TypeInfo.of(o))}.$(x.identifier).toData()
-                    })
+                    TrailingClosureExpr(quote(
+                        ReadonlyField($(x.identifier.value), TypeInfos.get<$(declType)>()){o =>
+                        (o as $klassIdentifier).getOrThrow{DataException("type of current instance does not match, expected " + TypeInfos.get<$(klassIdentifier)>().toString() + ", but recceives " + TypeInfo.of(o).toString())}.$(x.identifier).toData()
+                    }))
                 }
-            case _ => 
-                i++
+            case _ =>
                 continue
         }
-        i++
+        fields.append(expr)
     }
-    let openModi = if(klassDecl.isAbstract() || klassDecl.isOpen()){
+    let openModi = if (klassDecl.isAbstract() || klassDecl.isOpen()) {
         `open`
-    }else{
+    } else {
         `empty_tokens`
     }
-    fields += `rsquare`
     let fieldsName = Token(IDENTIFIER, "___dAtA__fIElds_")
-    body.appendAll([VarDecl(quote(
-        private static let $(fieldsName) = ObjectFields.createFields<$klassIdentifier>($fields){
+    var fieldTokens = `lsquare`
+    var i = 0
+    while(i < fields.size) {
+        if(i > 0){
+            fieldTokens += `comma`
+        }
+        fieldTokens += fields[i].toTokens()
+        i++
+    }
+    fieldTokens += `rsquare`
+    body.appendAll(
+        [
+            VarDecl(
+                quote(
+        private static let $(fieldsName) = ObjectFields.createFields<$klassIdentifier>($fieldTokens){
             $klassIdentifier()
         }
-    )), FuncDecl(quote(
+    )
+            ),
+            FuncDecl(
+                quote(
         public static func dataFields(): ObjectFields {
             $fieldsName
         }
-    )), FuncDecl(quote(
+    )),
+            FuncDecl(
+                quote(
         public $openModi func toData(): Data {
             ObjectData<$klassIdentifier>(this)
         }
-    )), FuncDecl(quote(
+    )
+            ),
+            FuncDecl(
+                quote(
         public static func fromData(data: Data, flag!: DataConversionFlag = SILENCE): Object {
-            tryFromData(data, flag: flag).getOrThrow{DataException("current data " + data + " cannot be converted to " + TypeInfos.get<$klassIdentifier>())}
+            tryFromData(data, flag: flag).getOrThrow{DataException("current data " + data.toString() + " cannot be converted to " + TypeInfos.get<$klassIdentifier>().toString())}
         }
-    )), FuncDecl(quote(
+    )
+            ),
+            FuncDecl(
+                quote(
         public static func tryFromData(data: Data, flag!: DataConversionFlag = SILENCE): ?Object {
             match(ObjectData<$klassIdentifier>.populate(data, flag: flag)){
                 case Some(o) => o
-                case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException(data.toString() + 'cannot be converted to ' + TypeInfos.get<$klassIdentifier>())
+                case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException(data.toString() + 'cannot be converted to ' + TypeInfos.get<$klassIdentifier>().toString())
                 case _ => None
             }
         }
-    ))])
+    )
+            )
+        ]
+    )
 }
