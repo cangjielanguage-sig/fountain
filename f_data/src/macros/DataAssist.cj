@@ -39,9 +39,9 @@ public macro DataAssist(attr: Tokens, input: Tokens): Tokens {
             let excludeToString = HashSet<String>()
             let excludeFields = HashSet<String>()
             func populateExclusion(message: MacroMessage, name: String, set: HashSet<String>): Unit {
-                try {
+                if (message.hasItem(name)) {
                     set.put(message.getString(name))
-                } catch (_) {}
+                }
             }
             for (message in getChildMessages('DataExclude')) {
                 populateExclusion(message, 'prop', excludeProp)
