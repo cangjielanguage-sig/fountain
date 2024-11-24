@@ -13,7 +13,7 @@ import std.collection.Map
 import std.fs.Path
 import std.io.{InputStream, OutputStream}
 import std.process.{Process, SubProcess, ProcessRedirect}
-import f_io.pipe
+import f_io.{asyncPipe, pipe}
 import f_regex.*
 
 public interface ExtendProcess{
@@ -44,7 +44,7 @@ public interface ExtendProcess{
 }
 extend String <: ExtendProcess {
     private func link(input: InputStream, output: OutputStream, bufsize: Int64){
-        asyncPipe(input: input, output: output, bufsize: bufsize)
+        asyncPipe(input: input, output: output, bufferSize: bufsize)
     }
     public func piped(workingDirectory!: ?Path = Process.current.workingDirectory,
             environment!: ?Map<String, String> = Process.current.environment,
@@ -126,7 +126,7 @@ extend String <: ExtendProcess {
             stdIn!: ProcessRedirect = Pipe,
             stdOut!: ProcessRedirect = Pipe,
             stdErr!: ProcessRedirect = Inherit): SubProcess {
-        let command = "\\s+".regex(solid: true).split(this.trimAscii())
+        let command = this.trimAscii().split(' ', removeEmpty: true)
         Process.start(command[0], if (command.size > 1) {
             command[1 .. ]
         } else {
