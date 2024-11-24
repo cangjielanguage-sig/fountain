@@ -10,3 +10,4 @@
 macro package fountain.data.macros
 
 public import f_data.macros.*
+public import f_data.validation.macros.*

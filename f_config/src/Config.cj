@@ -9,7 +9,7 @@
 */
 package f_config
 
-import std.collection.{HashMap, Map}
+import std.collection.{HashMap, Map, HashSet}
 import std.collection.concurrent.ConcurrentHashMap
 import std.convert.Parsable
 import std.process.{Process, CurrentProcess}
@@ -19,6 +19,7 @@ import f_data.DataParsable
 
 public class Config{
     private static let ARGS = ConcurrentHashMap<String, String>()
+    private static let REFRESHER = ConcurrentHashMap<String, ()->Unit>() 
     static init(){
         let process = Process.current
         for((k, v) in process.environment){
@@ -33,6 +34,26 @@ public class Config{
         }
     }
     private init(){}
+
+    public static func refresher(name: String, fn: ()->Unit){
+        REFRESHER[name] = fn
+    }
+
+    public static func set<T>(tuples: Array<(String, T)>): Unit where T <: ToString {
+        let set = HashSet<String>()
+        for(tpl in tuples){
+            let name = tpl[0]
+            ARGS[name] = tpl[1].toString()
+            if(let Some(x) <- name.indexOf('_')){
+                set.put(name[0 .. x])
+            }else{
+                set.put(name)
+            }
+        }
+        for((k, fn) in REFRESHER where set.contains(k)){
+            fn()
+        }
+    }
     
     public static func getString(key: String): ?String{
         ARGS.get(key)

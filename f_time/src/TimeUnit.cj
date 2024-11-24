@@ -9,6 +9,7 @@
  */
 package f_time
 
+public type TU = TimeUnit
 public enum TimeUnit <: ToString {
     | NANOSECOND
     | MICROSECOND
@@ -103,11 +104,21 @@ public enum TimeUnit <: ToString {
                 let day = t.dayOfMonth
                 let hour = t.hour
                 let min = t.minute
-                let sec = 0
+                let sec = t.second
                 let nano = 0
                 DateTime.of(year: year, month: month, dayOfMonth: day, hour: hour, minute: min, second: sec,
                     nanosecond: nano)
             case MINUTE =>
+                let year = t.year
+                let month = t.month
+                let day = t.dayOfMonth
+                let hour = t.hour
+                let min = t.minute
+                let sec = 0
+                let nano = 0
+                DateTime.of(year: year, month: month, dayOfMonth: day, hour: hour, minute: min, second: sec,
+                    nanosecond: nano)
+            case HOUR =>
                 let year = t.year
                 let month = t.month
                 let day = t.dayOfMonth
@@ -117,7 +128,7 @@ public enum TimeUnit <: ToString {
                 let nano = 0
                 DateTime.of(year: year, month: month, dayOfMonth: day, hour: hour, minute: min, second: sec,
                     nanosecond: nano)
-            case HOUR =>
+            case DAY =>
                 let year = t.year
                 let month = t.month
                 let day = t.dayOfMonth
@@ -127,7 +138,7 @@ public enum TimeUnit <: ToString {
                 let nano = 0
                 DateTime.of(year: year, month: month, dayOfMonth: day, hour: hour, minute: min, second: sec,
                     nanosecond: nano)
-            case DAY =>
+            case MONTH =>
                 let year = t.year
                 let month = t.month
                 let day = 1
@@ -137,18 +148,8 @@ public enum TimeUnit <: ToString {
                 let nano = 0
                 DateTime.of(year: year, month: month, dayOfMonth: day, hour: hour, minute: min, second: sec,
                     nanosecond: nano)
-            case MONTH =>
-                let year = t.year
-                let month = Month.January
-                let day = 1
-                let hour = 0
-                let min = 0
-                let sec = 0
-                let nano = 0
-                DateTime.of(year: year, month: month, dayOfMonth: day, hour: hour, minute: min, second: sec,
-                    nanosecond: nano)
             case YEAR =>
-                let year = 1
+                let year = t.year
                 let month = Month.January
                 let day = 1
                 let hour = 0

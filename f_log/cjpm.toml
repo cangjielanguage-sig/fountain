@@ -1,5 +1,10 @@
 [dependencies]
-
+  f_base = {path = "../f_base"}
+  f_config = {path = "../f_config"}
+  f_data = {path = "../f_data"}
+  f_exception = {path = "../f_exception"}
+  f_time = {path = "../f_time"}
+  f_util = {path = "../f_util"}
 [package]
   cjc-version = "0.57.3"
   compile-option = ""

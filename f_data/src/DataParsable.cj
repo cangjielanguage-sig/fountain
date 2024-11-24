@@ -9,6 +9,10 @@
  */
 package f_data
 
+import std.convert.*
+import std.math.numeric.{BigInt, Decimal}
+import f_regex.*
+
 public interface DataParsable<T> where T <: DataParsable<T> {
     static func parse(s: String): T {
         tryParse(s).getOrThrow {DataParsableException('${s} cannot be parsed to ${TypeInfo.of<T>()}')}
@@ -50,5 +54,35 @@ extend Duration <: DataParsable<Duration> {
             } * Int64.tryParse(String.fromUtf8(bytes.toArray())).getOrThrow {DataParsableException('${s} cannot be parsed to Duration')}
         }
         duration
+    }
+}
+extend Int64 <: DataParsable<Int64>{}
+extend UInt64 <: DataParsable<UInt64>{}
+extend Int32 <: DataParsable<Int32>{}
+extend UInt32 <: DataParsable<UInt32>{}
+extend Int16 <: DataParsable<Int16>{}
+extend UInt16 <: DataParsable<UInt16>{}
+extend Int8 <: DataParsable<Int8>{}
+extend UInt8 <: DataParsable<UInt8>{}
+extend Float64 <: DataParsable<Float64>{}
+extend Float32 <: DataParsable<Float32>{}
+extend Float16 <: DataParsable<Float16>{}
+extend Bool <: DataParsable<Bool>{}
+extend BigInt <: DataParsable<BigInt>{
+    public static func tryParse(s: String): ?BigInt {
+        if(Regex.INTEGER.matched(s)){
+            BigInt(s)
+        }else{
+            None
+        }
+    }
+}
+extend Decimal <: DataParsable<Decimal>{
+    public static func tryParse(s: String): ?Decimal {
+        if(Regex.DECIMAL.matched(s)){
+            Decimal(s)
+        }else{
+            None
+        }
     }
 }
