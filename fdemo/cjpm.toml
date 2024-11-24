@@ -1,5 +1,7 @@
 [dependencies]
   fountain = {path = "../"}
+  f_log = {path = "../f_log"}
+  f_time = {path = "../f_time"}
 
 [package]
   cjc-version = "0.57.3"
@@ -7,7 +9,7 @@
   description = "nothing here"
   link-option = ""
   name = "fdemo"
-  output-type = "dynamic"
+  output-type = "executable"
   override-compile-option = ""
   src-dir = ""
   target-dir = ""

@@ -81,13 +81,15 @@ public class RotatableFile <: OutputStream {
         rotateTimer = createRotateTimer()
     }
     private func createRotateTimer() {
-        Timer.after(timeunit.since()) {
+        let timer = Timer.after(timeunit.since()) {
             rotateFileIfNeed(DateTime.now())
             while(let Some(fn) <- queue.tryDequeue()){
                 fn()
             }
             this.timeunit.since()
         }
+        Process.current.atExit{timer.cancel()}
+        timer
     }
     private static func createDirIfNeed(path: String){
         let directory = path[0 .. (path.lastIndexOf("/") ?? path.size)]
@@ -200,7 +202,7 @@ public class RotatableFile <: OutputStream {
         }
     }
     private func needRotate(current: DateTime) {
-        var file = this.file
+        let file = this.file
         let fileInfo = file.info
         (fileInfo.creationTime < current || fileInfo.size >= fileSize, file)
     }

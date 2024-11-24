@@ -7,9 +7,19 @@
     THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
     See the Mulan PSL v2 for more details.  
 */
-package fboot
+package fdemo
 
-main(): Int64 {
-    
-    return 0
+import f_log.output.*
+import f_time.TimeUnit
+import compress.zlib.*
+
+main(){
+    let param = RotatableFileParams()
+    param.compress = LogFileCompressFormat.GZip(CompressLevel.DefaultCompression)
+    param.fileSize = 0
+    param.timeunit = TimeUnit.SECOND
+    param.path = '/tmp/test.log'
+    let file = RotatableFile(param)
+    file.write('hello'.toArray())
+    sleep(Duration.second * 5)
 }

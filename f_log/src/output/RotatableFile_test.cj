@@ -23,9 +23,10 @@ public class RotatableFileTest {
         let param = RotatableFileParams()
         param.compress = LogFileCompressFormat.GZip(CompressLevel.DefaultCompression)
         param.fileSize = 0
-        param.timeunit = TU.DAY
+        param.timeunit = TU.SECOND
         param.path = '/tmp/test.log'
         let file = RotatableFile(param)
-        sleep(Duration.second * 3)
+        file.write('hello'.toArray())
+        sleep(Duration.second * 5)
     }
 }

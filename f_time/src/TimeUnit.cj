@@ -46,8 +46,12 @@ public enum TimeUnit <: ToString {
      * datetime在当前时间单位的未来duration个整点，duration可以是负数
      * 比如datetime是2023-10-11 12:31:32.568900，当前时间单位是minute，duration是1，返回值是2023-10-11 12:32:00.000000
      */
-    public func next(datetime!: DateTime = DateTime.now(), duration!: Int64 = 1): DateTime {
-        let d = trim(datetime)
+    public func next(datetime!: DateTime = DateTime.now(), duration!: Int64 = 1, toTrim!: Bool = true): DateTime {
+        let d = if(toTrim){
+            trim(datetime)
+        }else{
+            datetime
+        }
         match (this) {
             case NANOSECOND => d.addNanoseconds(duration)
             case MICROSECOND => d.addMicroseconds(duration)
@@ -65,11 +69,11 @@ public enum TimeUnit <: ToString {
      * datetime在当前时间单位的过去duration个整点，duration可以是负数
      * 比如datetime是2023-10-11 12:31:32.568900，当前时间单位是minute，duration是1，返回值是2023-10-11 12:31:00.000000
      */
-    public func prev(datetime!: DateTime = DateTime.now(), duration!: Int64 = 1): DateTime {
-        next(datetime: datetime, duration: -duration)
+    public func prev(datetime!: DateTime = DateTime.now(), duration!: Int64 = 1, toTrim!: Bool = true): DateTime {
+        next(datetime: datetime, duration: -duration, toTrim: toTrim)
     }
     /**
-     * datetime在当前时间单位距离未来duration个带点的时间长度，duration可以是负数
+     * datetime在当前时间单位距离未来duration个时间单位的时间长度，duration可以是负数
      * 比如datetime是2023-10-11 12:31:32.568900，当前时间单位是minute，返回值等于Duration.minute
      */
     public func since(datetime!: DateTime = DateTime.now(), duration!: Int64 = 1): Duration {
