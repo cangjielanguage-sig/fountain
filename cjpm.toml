@@ -19,7 +19,7 @@
 # f_orm = {path = "./f_orm"}
 # f_pool = {path = "./f_pool"}
 # f_privilege = {path = "./f_privilege"}
-# f_process = {path = "./f_process"}
+  f_process = {path = "./f_process"}
   f_random = {path = "./f_random"}
   f_regex = {path = "./f_regex"}
 # f_ticktock = {path = "./f_ticktock"}
