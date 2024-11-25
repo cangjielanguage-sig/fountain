@@ -44,12 +44,7 @@ public class ObjectFields <: Iterable<ReadableField> {
         populateFields(fields)
         let currentType = (TypeInfos.get<O>() as ClassTypeInfo).getOrThrow()
         for(v in currentType.instanceVariables) {
-            let annotations = try{
-                v.annotations
-            }catch(_){
-                EmptyCollection<Annotation>.INSTANCE
-            }
-            populateFields(v.name, annotations)
+            populateFields(v.name, v.annotations)
         }
         for(p in currentType.instanceProperties) {
             populateFields(p.name, p.annotations)
