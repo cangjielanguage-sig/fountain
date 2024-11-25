@@ -158,9 +158,8 @@ public abstract class AbstractLogger <: Logger & Resource {
         append<T>(LogLevel.TRACE, message, args, ex)
     }
     public func append(level: LogLevel, message: String, ex: Option<Exception>): Unit {
-        let now = DateTime.now()
         doLock {
-            append(level, message, now, ex)
+            append(level, message, DateTime.now(), ex)
         }
     }
     protected func append(level: LogLevel, message: String, ex: Exception): Unit {
