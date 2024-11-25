@@ -57,7 +57,7 @@ public class ObjectFields <: Iterable<ReadableField> {
             }catch(_){
                 EmptyCollection<Annotation>.INSTANCE
             }
-            populateFields(p.name, p.annotations)
+            populateFields(p.name, annotations)
         }
         match(currentType.superClass) {
             case Some(x) where x != TypeInfos.get<Object>() && x.isSubtypeOf(TypeInfos.get("f_data.DataObject<${x.qualifiedName}>")) =>
