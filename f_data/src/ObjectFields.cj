@@ -52,12 +52,7 @@ public class ObjectFields <: Iterable<ReadableField> {
             populateFields(v.name, annotations)
         }
         for(p in currentType.instanceProperties) {
-            let annotations = try{
-                p.annotations
-            }catch(_){
-                EmptyCollection<Annotation>.INSTANCE
-            }
-            populateFields(p.name, annotations)
+            populateFields(p.name, p.annotations)
         }
         match(currentType.superClass) {
             case Some(x) where x != TypeInfos.get<Object>() && x.isSubtypeOf(TypeInfos.get("f_data.DataObject<${x.qualifiedName}>")) =>
