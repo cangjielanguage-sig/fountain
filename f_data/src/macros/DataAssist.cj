@@ -443,14 +443,14 @@ func generateToFields(d: ClassDecl, exclusion: HashSet<String>) {
             ),
             FuncDecl(
                 quote(
-        public static func fromData(data: Data, flag!: DataConversionFlag = SILENCE): Object {
+        public static func fromData(data: Data, flag!: DataConversionFlag = SILENCE): $klassIdentifier {
             tryFromData(data, flag: flag).getOrThrow{DataException("current data " + data.toString() + " cannot be converted to " + TypeInfos.get<$klassIdentifier>().toString())}
         }
     )
             ),
             FuncDecl(
                 quote(
-        public static func tryFromData(data: Data, flag!: DataConversionFlag = SILENCE): ?Object {
+        public static func tryFromData(data: Data, flag!: DataConversionFlag = SILENCE): ?$klassIdentifier {
             match(ObjectData<$klassIdentifier>.populate(data, flag: flag)){
                 case Some(o) => o
                 case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException(data.toString() + 'cannot be converted to ' + TypeInfos.get<$klassIdentifier>().toString())

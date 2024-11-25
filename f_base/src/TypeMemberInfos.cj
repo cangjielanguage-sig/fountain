@@ -13,8 +13,8 @@ import std.collection.concurrent.ConcurrentHashMap
 
 public class TypeMemberInfos{
     private init(){}
-    private static let staticPropertyMap = ConcurrentHashMap<TypeInfo, Map<String, StaticPropertyInfo>>()
-    private static func getStaticPropertyMap(typeInfo: TypeInfo): Map<String, StaticPropertyInfo> {
+    private static let staticPropertyMap = ConcurrentHashMap<TypeInfo, HashMap<String, StaticPropertyInfo>>()
+    private static func getStaticPropertyMap(typeInfo: TypeInfo): HashMap<String, StaticPropertyInfo> {
         match(staticPropertyMap.get(typeInfo)){
                 case Some(map) => map
                 case _ =>
@@ -33,8 +33,8 @@ public class TypeMemberInfos{
         getStaticPropertyMap(typeInfo).get(name)
     }
 
-    private static let instancePropertyMap = ConcurrentHashMap<TypeInfo, Map<String, InstancePropertyInfo>>()
-    private static func getInstancePropertyMap(typeInfo: TypeInfo): Map<String, InstancePropertyInfo> {
+    private static let instancePropertyMap = ConcurrentHashMap<TypeInfo, HashMap<String, InstancePropertyInfo>>()
+    private static func getInstancePropertyMap(typeInfo: TypeInfo): HashMap<String, InstancePropertyInfo> {
         match(instancePropertyMap.get(typeInfo)){
                 case Some(map) => map
                 case _ =>
@@ -53,8 +53,8 @@ public class TypeMemberInfos{
         getInstancePropertyMap(typeInfo).get(name)
     }
 
-    private static let staticFunctionMap = ConcurrentHashMap<TypeInfo, Map<FuncMeta, StaticFunctionInfo>>()
-    private static func getStaticFunctionMap(typeInfo: TypeInfo): Map<FuncMeta, StaticFunctionInfo> {
+    private static let staticFunctionMap = ConcurrentHashMap<TypeInfo, HashMap<FuncMeta, StaticFunctionInfo>>()
+    private static func getStaticFunctionMap(typeInfo: TypeInfo): HashMap<FuncMeta, StaticFunctionInfo> {
         match(staticFunctionMap.get(typeInfo)){
                 case Some(map) => map
                 case _ =>
@@ -76,8 +76,8 @@ public class TypeMemberInfos{
         getStaticFunctionMap(typeInfo).get(FuncMeta(name, paramTypes))
     }
 
-    private static let instanceFunctionMap = ConcurrentHashMap<TypeInfo, Map<FuncMeta, InstanceFunctionInfo>>()
-    private static func getInstanceFunctionMap(typeInfo: TypeInfo): Map<FuncMeta, InstanceFunctionInfo> {
+    private static let instanceFunctionMap = ConcurrentHashMap<TypeInfo, HashMap<FuncMeta, InstanceFunctionInfo>>()
+    private static func getInstanceFunctionMap(typeInfo: TypeInfo): HashMap<FuncMeta, InstanceFunctionInfo> {
         match(instanceFunctionMap.get(typeInfo)){
                 case Some(map) => map
                 case _ =>
@@ -100,7 +100,7 @@ public class TypeMemberInfos{
     }
 
 
-    private static let staticVariableMap = ConcurrentHashMap<TypeInfo, Map<String, StaticVariableInfo>>()
+    private static let staticVariableMap = ConcurrentHashMap<TypeInfo, HashMap<String, StaticVariableInfo>>()
     private static func getStaticVariableMap(typeInfo: TypeInfo): Map<String, StaticVariableInfo> {
         match(staticVariableMap.get(typeInfo)){
                 case Some(map) => map
@@ -131,7 +131,7 @@ public class TypeMemberInfos{
         getStaticVariableMap(typeInfo).get(name)
     }
 
-    private static let instanceVariableMap = ConcurrentHashMap<TypeInfo, Map<String, InstanceVariableInfo>>()
+    private static let instanceVariableMap = ConcurrentHashMap<TypeInfo, HashMap<String, InstanceVariableInfo>>()
     private static func getInstanceVariableMap(typeInfo: TypeInfo): Map<String, InstanceVariableInfo> {
         match(instanceVariableMap.get(typeInfo)){
                 case Some(map) => map

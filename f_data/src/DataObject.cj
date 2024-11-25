@@ -9,13 +9,13 @@
  */
 package f_data
 
-public interface DataObject<T> <: DataFields<Object> where T <: Object & DataObject<T> {
+public interface DataObject<T> <: DataFields<T> where T <: Object & DataObject<T> {
     static func dataFields(): ObjectFields
 
     func toData(): Data
 
-    static func fromData(data: Data, flag!: DataConversionFlag): Object
-    static func tryFromData(data: Data, flag!: DataConversionFlag): ?Object
+    static func fromData(data: Data, flag!: DataConversionFlag): T
+    static func tryFromData(data: Data, flag!: DataConversionFlag): ?T
 }
 
 class FieldIterator<T> <: Iterator<(String, Data)> where T <: Object & DataObject<T> {

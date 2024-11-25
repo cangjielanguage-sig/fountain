@@ -9,7 +9,7 @@
  */
 package f_util
 
-import std.collection.{ArrayList, TreeMap, HashMap}
+import std.collection.{ArrayList, TreeMap, HashMap, Map}
 import std.collection.concurrent.ConcurrentHashMap
 import std.convert.Parsable
 import std.math.RoundingMode

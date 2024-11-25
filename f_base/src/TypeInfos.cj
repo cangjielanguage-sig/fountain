@@ -11,6 +11,7 @@ package f_base
 
 import std.collection.concurrent.ConcurrentHashMap
 import std.sync.ReentrantMutex
+public import std.reflect.TypeInfo
 public import std.math.numeric.{BigInt, Decimal}
 public import std.time.DateTime
 

@@ -12,6 +12,8 @@ package f_log.output
 import std.time.DateTime
 import log.{LogWriter, LogValue}
 
+import f_exception.{printStackTrace, BaseException}
+
 public class LogWriterImpl <: LogWriter {
     public LogWriterImpl(private let writer: OutputStream){}
     public func writeNone(): Unit{
@@ -55,5 +57,12 @@ public class LogWriterImpl <: LogWriter {
     }
     public func endObject(): Unit{
         writeString('}')
+    }
+    public func writeException(v: Exception): Unit {
+        if (let c: BaseException <- v) {
+            c.printStackTrace(writer)
+        } else {
+            printStackTrace(v, writer)
+        }
     }
 }
