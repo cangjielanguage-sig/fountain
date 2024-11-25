@@ -31,7 +31,7 @@ public class LoggerAppenderFacade <: AsyncLogger {
         }
         return enabled
     }
-
+    
     protected func append(level: LogLevel, message: String, now: DateTime, ex: Option<Exception>): Unit {
         append {
             var i = 0
