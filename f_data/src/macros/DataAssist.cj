@@ -180,7 +180,7 @@ func generateEqual(d: ClassDecl, exclusion: HashSet<String>) {
         !(isStatic(d) || exclusion.contains(d.identifier.value) || exclusion.contains('${d.identifier.value}_'))) {
         if(d.identifier.value == '__hAsh__'){
             hashTokens = quote(
-                if(this.__hAsh__ != other.__hAsh__){
+                if(this.hashCode() != other.hashCode()){
                     return false
                 })
             continue
@@ -220,23 +220,15 @@ func generateCompare(d: ClassDecl, exclusion: HashSet<String>) {
     }
     let typeName = quote($(d.identifier)$(d.genericParamTokens))
     d.superTypes.append(RefType(quote(Comparable<$typeName>)))
-    var hashTokens = `empty_tokens`
     var cmp = `nl`
     for (d in d.body.decls where d is VarDecl &&
         !(isStatic(d) || exclusion.contains(d.identifier.value) || exclusion.contains('${d.identifier.value}_'))) {
-        if(d.identifier.value == '__hAsh__'){
-            hashTokens = quote(
-                if(this.__hAsh__.compare(other.__hAsh__) != EQ){
-                    return result
-                })
-            continue
-        }
         let declType = (d as VarDecl).getOrThrow().declType
         cmp += quote(
             result = if(let x: Comparable<$declType> <- this.$(d.identifier)) {
                 x.compare(other.$(d.identifier))
             } else {
-                true
+                EQ
             }
             if(result != EQ){
                 return result
@@ -251,7 +243,6 @@ func generateCompare(d: ClassDecl, exclusion: HashSet<String>) {
             parseDecl(
                 quote(
         public func compare(other: $typeName): Bool {
-            $hashTokens
             var result = Ordering.EQ
             $cmp
             result
