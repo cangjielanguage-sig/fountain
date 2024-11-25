@@ -14,7 +14,9 @@ import std.collection.concurrent.ArrayBlockingQueue
 import std.io.OutputStream
 import std.time.DateTime
 
-import log.{LogLevel}
+import log.{LogLevel, LogRecord}
+
+import f_log.exception.LogException
 
 public abstract class AsyncLogger <: AbstractLogger {
     protected let queue: ArrayBlockingQueue<() -> Unit>
@@ -40,12 +42,15 @@ public abstract class AsyncLogger <: AbstractLogger {
             }
         }
     }
+    public open func log(record: LogRecord): Unit {
+        append{super.log(record)}
+    }
     protected func append(fn: () -> Unit) {
         while (!queue.enqueue(fn, timeout)) {
             match (policy) {
                 case AlwaysWaiting => continue
                 case Discard => return // 忽略
-                case Abort => return //throw LoggerException("to enqueue for current logger is timeout ${timeout}")
+                case Abort => throw LogException("to enqueue for current logger is timeout ${timeout}")
             }
         }
     }

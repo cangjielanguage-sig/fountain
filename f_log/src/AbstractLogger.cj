@@ -14,10 +14,11 @@ import std.io.OutputStream
 import std.sync.{AtomicBool, ReentrantMutex}
 import std.time.DateTime
 
-import log.{LogLevel, Attr, LogRecord}
+import log.{LogLevel, Attr, LogRecord, LogWriter}
 
 import f_exception.{BaseException, UnsupportedAccessException, printStackTrace}
 import f_log.exception.LogException
+import f_log.output.LogWriterImpl
 import f_util.{TextTemplate, TextTemplateKey, TextTemplateObject}
 
 public abstract class AbstractLogger <: Logger & Resource {
@@ -25,12 +26,14 @@ public abstract class AbstractLogger <: Logger & Resource {
     protected let name: String
     protected var level_: LogLevel
     protected let pattern: LogPattern
-    protected var output: OutputStream
+    protected let output: OutputStream
+    private let writer: LogWriter
     protected init(name: String, level: LogLevel, pattern: LogPattern, output: OutputStream) {
         this.name = name
         this.level_ = level
         this.pattern = pattern
         this.output = output
+        this.writer = LogWriterImpl(output)
     }
     public open func isClosed(): Bool {
         match (output) {
@@ -53,11 +56,28 @@ public abstract class AbstractLogger <: Logger & Resource {
             level_ = value
         }
     }
+    private let attrs = ThreadLocal<Array<Attr>>()
     public func withAttrs(attrs: Array<Attr>): Logger {
-        throw LogException('f_log does not support log.Attr and log.Logger.withAttrs(attrs)')
+        this.attrs.set(attrs)
+        this
     }
-    public func log(record: LogRecord): Unit {
-        append(record.level, record.message, record.time, None<Exception>)
+    public open func log(record: LogRecord): Unit {
+        try{
+            append(record.level, record.message, record.time, None<Exception>)
+            func writeAttrs(attrs: Array<Attr>){
+                for(attr in attrs){
+                    writer.writeString('(${attr[0]},')
+                    attr[1].writeTo(writer)
+                    writer.writeString(')')
+                }
+            }
+            if(let Some(attrs) <- attrMap.get(name)){
+                writeAttrs(attrs)
+            }
+            writeAttrs(record.attrs)
+        }finally{
+            attrs.set(None<Array<Attr>>)
+        }
     }
 
     protected open func append(level: LogLevel, message: () -> String, ex: Option<Exception>): Unit {
