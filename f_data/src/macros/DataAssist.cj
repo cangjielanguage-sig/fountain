@@ -187,9 +187,9 @@ func generateEqual(d: ClassDecl, exclusion: HashSet<String>) {
         }
         let declType = (d as VarDecl).getOrThrow().declType
         eq += quote(
-            result = if((this.$(d.identifier) is Equatable<$declType>) && let x: Bool <- TypeInfos.get<$declType>().getInstanceFunction('==', [TypeInfos.get<$declType>()]).apply(this.$(d.identifier), [other.$(d.identifier)])){
-                x
-            }else{
+            result = if(let x: Equatable<$declType> <- this.$(d.identifier)) {
+                x == other.$(d.identifier)
+            } else {
                 true
             }
             if(!result){
@@ -233,10 +233,10 @@ func generateCompare(d: ClassDecl, exclusion: HashSet<String>) {
         }
         let declType = (d as VarDecl).getOrThrow().declType
         cmp += quote(
-            result = if((this.$(d.identifier) is Comparable<$declType>) && let x: Ordering <- TypeInfos.get<$declType>().getInstanceFunction('compare', [TypeInfos.get<$declType>()]).apply(this.$(d.identifier), [other.$(d.identifier)])){
-                x
+            result = if(let x: Comparable<$declType> <- this.$(d.identifier)) {
+                x.compare(other.$(d.identifier))
             } else {
-                EQ
+                true
             }
             if(result != EQ){
                 return result
@@ -322,7 +322,7 @@ func generateToFields(d: ClassDecl, exclusion: HashSet<String>) {
                 }else if(declType[0].kind == IDENTIFIER && declType[0].value == 'Option'){
                     declType = declType[2 .. declType.size - 1]
                 }else{
-                    optionExpr = quote(throw DataException('data is None for field $(x.identifier.value) of $(klassIdentifier)'))
+                    optionExpr = quote(throw DataException('data is None for field ' + $(x.identifier.value) + ' of ' + TypeInfos.get<$(klassIdentifier)>().toString()))
                 }
                 if (x.isVar()) {
                     TrailingClosureExpr(quote(
@@ -367,7 +367,7 @@ func generateToFields(d: ClassDecl, exclusion: HashSet<String>) {
                 }else if(declType[0].kind == IDENTIFIER && declType[0].value == 'Option'){
                     declType = declType[2 .. declType.size - 1]
                 }else{
-                    optionExpr = quote(throw DataException('data is None for field $(x.identifier.value) of $(klassIdentifier)'))
+                    optionExpr = quote(throw DataException('data is None for field ' + $(x.identifier.value) + ' of ' + TypeInfos.get<$(klassIdentifier)>().toString()))
                 }
                 if (x.isMut()) {
                     TrailingClosureExpr(quote(
