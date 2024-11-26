@@ -23,7 +23,7 @@ public macro DataExclude(attrs: Tokens, input: Tokens): Tokens {
             for(attr in attrs){
                 let tag = attr.value.toAsciiLower()
                 if(tag == 'field' && !d.isPublic()){
-                    diagReport(ERROR, d.modifiers.toTokens() + d.keyword + d.identifier.toTokens() , 'input must be non-static public prop/public mut prop for @DataExclude[field]', '')
+                    diagReport(ERROR, extractDeclSignature(d) , 'input must be non-static public prop/public mut prop for @DataExclude[field]', '')
                 }
                 setItem(tag, d.identifier.value)
             }
@@ -33,11 +33,14 @@ public macro DataExclude(attrs: Tokens, input: Tokens): Tokens {
                 if(tag == 'field'){
                     setItem(tag, d.identifier.value)
                 }else{
-                    diagReport(WARNING, d.modifiers.toTokens() + d.keyword + d.identifier.toTokens(), 'only @DataExclude[field] can only modify public prop or public mut prop', '')
+                    diagReport(WARNING, extractDeclSignature(d), 'only @DataExclude[field] can only modify public prop or public mut prop', '')
                 }
             }
         case _ => 
-            diagReport(ERROR, decl.modifiers.toTokens() + decl.keyword + decl.identifier.toTokens(), 'input must be non-static var decleration for prop hash equal compare tostring or non-static public var/public prop/public mut prop for field', '')
+            diagReport(ERROR, extractDeclSignature(decl), 'input must be non-static var decleration for prop hash equal compare tostring or non-static public var/public prop/public mut prop for field', '')
     }
     input
+}
+func extractDeclSignature(decl: Decl){
+    quote($(decl.modifiers) $(decl.keyword) $(decl.identifier)) 
 }
