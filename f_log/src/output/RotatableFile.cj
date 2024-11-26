@@ -80,6 +80,11 @@ protected class RotatableFile <: OutputStream {
         (this.directory, this.file) = createDirIfNeed(params.path)
         rotateTimer = createRotateTimer()
     }
+    protected prop path: String {
+        get(){
+            this.file.info.path.toString()
+        }
+    }
     private func createRotateTimer() {
         spawn{
             while(let fn <- queue.dequeue()){
@@ -174,7 +179,7 @@ protected class RotatableFile <: OutputStream {
     }
     private let fileLock = ReentrantMutex()
     private func rotateFileIfNeed() {
-        synchronized(fileLock) {
+        synchronized(fileLock) {//此处不能使用双重检查锁，否则可能导致一个线程试图向另一个线程已经重命名的文件导致写失败
             let current = timeunit.trim(DateTime.now())
             let (need, file) = needRotate(current)
             if (need) {

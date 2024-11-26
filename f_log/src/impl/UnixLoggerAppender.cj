@@ -28,7 +28,7 @@ private class UnixLoggerAppender <: AsyncLogger {
         writeTimeout!: ?Duration,
         bufSize!: ?Int64
     ) {
-        super(name, level, pattern, createSocket(path, writeTimeout, bufSize))
+        super(name, level, pattern, createSocket(path, writeTimeout, bufSize), path)
         this.path = path
         this.writeTimeout = writeTimeout
         this.bufSize = bufSize

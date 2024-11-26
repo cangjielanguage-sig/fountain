@@ -31,7 +31,7 @@ private class UdpLoggerAppender <: AsyncLogger {
         port!: UInt16,
         sendTimeout!: ?Duration
     ) {
-        super(name, level, pattern, createSocket(host, port, sendTimeout: sendTimeout))
+        super(name, level, pattern, createSocket(host, port, sendTimeout: sendTimeout), '${host}:${port}')
         this.host = host
         this.port = port
         this.sendTimeout = sendTimeout

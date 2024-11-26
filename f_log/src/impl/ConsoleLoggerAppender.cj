@@ -21,7 +21,7 @@ public import f_log.*
 let _ = ConsoleLoggerAppender.register() //将本实现注册到LoggerAppenderCreator
 private class ConsoleLoggerAppender <: AsyncLogger {
     public init(name!: String, level!: LogLevel, pattern!: LogPattern) {
-        super(name, level, pattern, Process.current.stdOut)
+        super(name, level, pattern, Process.current.stdOut, 'console')
     }
 
     public static func register(): Unit {

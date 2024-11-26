@@ -30,7 +30,7 @@ private class TcpLoggerAppender <: AsyncLogger {
         port!: UInt16,
         sendBufSize!: ?Int64
     ) {
-        super(name, level, pattern, createSocket(host, port, sendBufSize))
+        super(name, level, pattern, createSocket(host, port, sendBufSize), '${host}:${port}')
         this.host = host
         this.port = port
         this.sendBufSize = sendBufSize

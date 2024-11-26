@@ -10,8 +10,9 @@
 
 package f_log
 
-import std.collection.concurrent.ArrayBlockingQueue
+import std.collection.concurrent.{ArrayBlockingQueue, ConcurrentHashMap}
 import std.io.OutputStream
+import std.sync.ReentrantMutex
 import std.time.DateTime
 
 import log.{LogLevel, LogRecord}
@@ -19,21 +20,28 @@ import log.{LogLevel, LogRecord}
 import f_log.exception.LogException
 
 public abstract class AsyncLogger <: AbstractLogger {
-    protected let queue: ArrayBlockingQueue<() -> Unit>
+    private static let queueMap = ConcurrentHashMap<String, ArrayBlockingQueue<() -> Unit>>()
+    private static let mutex = ReentrantMutex()
     private let timeout: Duration
     private let policy: AsyncTimeoutPolicy
     public init(
         name: String,
         level: LogLevel,
         pattern: LogPattern,
-        output: OutputStream
+        output: OutputStream,
+        queueTag: String
     ) {
         super(name, level, pattern, output)
-        let bufSize = LoggerConfig.getAsyncBufSize()
         timeout = LoggerConfig.getAsyncTimeout()
         policy = LoggerConfig.getAsyncTimeoutPolicy()
-        queue = ArrayBlockingQueue<() -> Unit>(bufSize)
-        dequeue(queue)
+        synchronized(mutex){//确保一个日志写入目标只有一个队列和一个消费线程
+            if(let None <- queueMap.get(queueTag)){
+                let bufSize = LoggerConfig.getAsyncBufSize()
+                let queue = ArrayBlockingQueue<() -> Unit>(bufSize)
+                queueMap[queueTag] = queue
+                dequeue(queue)
+            }
+        }
     }
     private static func dequeue(queue: ArrayBlockingQueue<() -> Unit>){
         spawn {
