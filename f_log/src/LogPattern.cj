@@ -5,15 +5,15 @@
     You may obtain a copy of Mulan PSL v2 at:
             http://license.coscl.org.cn/MulanPSL2
     THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-    See the Mulan PSL v2 for more details.  
-*/
+    See the Mulan PSL v2 for more details.
+ */
 package f_log
 
 import std.collection.ArrayList
 import std.process.Process
 import std.time.{DateTime, DateTimeFormat}
-
 import log.LogLevel
+import f_base.OS
 
 public class LogPattern <: LogPart {
     private static let appLogPart = AppLogPart()
@@ -39,15 +39,15 @@ public class LogPattern <: LogPart {
         while (i < size) {
             let c = pattern[i]
             if (c == b'%') {
-                if (i + 5 < size && pattern[i + 1 ..= i + 5] == "level") {
+                if (i + 5 < size && pattern[i + 1..=i + 5] == "level") {
                     appendOrigin()
                     patterns.append(levelLogPart)
                     i += 6
-                } else if (i + 3 < size && pattern[i + 1 ..= i + 3] == "app") {
+                } else if (i + 3 < size && pattern[i + 1..=i + 3] == "app") {
                     appendOrigin()
                     patterns.append(appLogPart)
                     i += 4
-                } else if (i + 4 < size && pattern[i + 1 ..= i + 4] == "name") {
+                } else if (i + 4 < size && pattern[i + 1..=i + 4] == "name") {
                     appendOrigin()
                     patterns.append(nameLogPart)
                     i += 5
@@ -60,7 +60,7 @@ public class LogPattern <: LogPart {
                         }
                         if (di < size) {
                             appendOrigin()
-                            patterns.append(TimeLogPart(pattern[ds .. di]))
+                            patterns.append(TimeLogPart(pattern[ds..di]))
                             i = di + 1
                         } else {
                             origin.append(c)
@@ -90,13 +90,14 @@ public class LogPattern <: LogPart {
 
     public func generate(name: String, level: LogLevel, message: ToString, current: DateTime): String {
         var builder = StringBuilder()
-        var i = 0
-        let size = patterns.size
-        while (i < size) {
-            builder.append(patterns[i].generate(name, level, message, current))
-            i++
+        for(p in patterns){
+            builder.append(p.generate(name, level, message, current))
         }
-        builder.append('\n')
+        builder.append(if (OS.current.isWindows) {
+            '\r\n'
+        } else {
+            '\n'
+        })
         builder.toString()
     }
 }
@@ -104,24 +105,28 @@ public class LogPattern <: LogPart {
 public interface LogPart {
     func generate(name: String, level: LogLevel, message: ToString, current: DateTime): String
 }
+
 class OriginLogPart <: LogPart {
     OriginLogPart(private let txt: String) {}
     public func generate(name: String, level: LogLevel, message: ToString, current: DateTime): String {
         txt
     }
 }
+
 class LevelLogPart <: LogPart {
     init() {}
     public func generate(name: String, level: LogLevel, message: ToString, current: DateTime): String {
         level.text
     }
 }
+
 class NameLogPart <: LogPart {
     init() {}
     public func generate(name: String, level: LogLevel, message: ToString, current: DateTime): String {
         name
     }
 }
+
 class AppLogPart <: LogPart {
     init() {}
     private let app = Process.current.command
@@ -129,18 +134,20 @@ class AppLogPart <: LogPart {
         app
     }
 }
+
 class TimeLogPart <: LogPart {
     TimeLogPart(private let format: DateTimeFormat) {}
-    init(format: String){
+    init(format: String) {
         this(DateTimeFormat.of(format))
     }
-    init(){
+    init() {
         this('yyyy-MM-dd,HH:mm:ss.SSS')
     }
     public func generate(name: String, level: LogLevel, message: ToString, datetime: DateTime): String {
         datetime.toString(format)
     }
 }
+
 class MessageLogPart <: LogPart {
     init() {}
     public func generate(name: String, level: LogLevel, message: ToString, current: DateTime): String {
