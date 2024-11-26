@@ -312,19 +312,13 @@ func generateToString(d: ClassDecl, exclusion: HashSet<String>) {
         } + `nl`
     }
     str += `rsquare`
-    d
-        .body
-        .decls
-        .append(
-            parseDecl(
-                quote(
+    d.body.decls.append(parseDecl(quote(
         public func toString(): Bool {
             var result = StringBuilder()
             $str
             result
         }
-    )
-            ))
+    )))
 }
 
 func generateToFields(d: ClassDecl, exclusion: HashSet<String>) {
