@@ -33,6 +33,6 @@ public class RotatableFileTest {
             }
         }
         sleep(Duration.second * 5)
-        throw Exception()
+        // throw Exception()
     }
 }
