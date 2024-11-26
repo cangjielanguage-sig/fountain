@@ -84,9 +84,13 @@ public abstract class AbstractLogger <: Logger & Resource {
                     writer.writeString(')')
                 }
             }
-            if(let Some(attrs) <- attrMap.get(name)){
-                writeAttrs(attrs)
+            func writeAttrs(attrs: ?Array<Attr>){
+                if(let Some(attrs) <- attrs){
+                    writeAttrs(attrs)
+                }
             }
+            writeAttrs(attrMap.get(name))
+            writeAttrs(this.attrs.get())
             writeAttrs(record.attrs)
         }finally{
             attrs.set(None<Array<Attr>>)

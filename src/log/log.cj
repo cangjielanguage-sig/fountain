@@ -9,4 +9,4 @@
 */
 package fountain.log
 
-public import f_log.*
+public import f_log.impl.*
