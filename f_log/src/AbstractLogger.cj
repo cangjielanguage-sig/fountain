@@ -82,11 +82,15 @@ public abstract class AbstractLogger <: Logger & Resource {
                         return
                     }
                     writer.startObject()
-                    for (attr in attrs) {
+                    for(i in 0 .. attrs.size) {
+                        if(i > 0){
+                            writer.writeString(',')
+                        }
+                        let attr = attrs[i]
                         writer.writeString('${attr[0]}:')
                         attr[1].writeTo(writer)
-                        writer.writeString(',')
                     }
+
                     writer.endObject()
                     writer.writeString(if (OS.current.isWindows) {
                         '\r\n'
