@@ -17,12 +17,13 @@ import f_macros.*
  */
 public macro DataExclude(attrs: Tokens, input: Tokens): Tokens {
     assertParentContext('DataAssist')
-    match(parseDecl(input)){
+    let decl = parseDecl(input)
+    match(decl){
         case d: VarDecl where !d.isStatic() => 
             for(attr in attrs){
                 let tag = attr.value.toAsciiLower()
                 if(tag == 'field' && !d.isPublic()){
-                    diagReport(ERROR, input, 'input must be non-static public prop/public mut prop for @DataExclude[field]', '')
+                    diagReport(ERROR, d.modifiers.toTokens() + d.keyword + d.identifier.toTokens() , 'input must be non-static public prop/public mut prop for @DataExclude[field]', '')
                 }
                 setItem(tag, d.identifier.value)
             }
@@ -32,11 +33,11 @@ public macro DataExclude(attrs: Tokens, input: Tokens): Tokens {
                 if(tag == 'field'){
                     setItem(tag, d.identifier.value)
                 }else{
-                    diagReport(WARNING, input, 'only @DataExclude[field] can only modify public prop or public mut prop', '')
+                    diagReport(WARNING, d.modifiers.toTokens() + d.keyword + d.identifier.toTokens(), 'only @DataExclude[field] can only modify public prop or public mut prop', '')
                 }
             }
         case _ => 
-            diagReport(ERROR, input, 'input must be non-static var decleration for prop hash equal compare tostring or non-static public var/public prop/public mut prop for field', '')
+            diagReport(ERROR, decl.modifiers.toTokens() + decl.keyword + decl.identifier.toTokens(), 'input must be non-static var decleration for prop hash equal compare tostring or non-static public var/public prop/public mut prop for field', '')
     }
     input
 }
