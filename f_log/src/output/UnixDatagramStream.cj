@@ -14,7 +14,7 @@ protected import std.net.{UnixDatagramSocket, SocketAddress, UnixSocketAddress}
 import std.process.Process
 import std.sync.AtomicUInt64
 
-public class UnixDatagramOutputStream <: OutputStream {
+protected class UnixDatagramOutputStream <: OutputStream {
     private static let SERIAL = AtomicUInt64(0)
     private static func newSocket(sendTimeout: ?Duration){
         let sock = UnixDatagramSocket(bindAt: Process.current.tempDirectory.join('${SERIAL.fetchAdd(1)}').toString())

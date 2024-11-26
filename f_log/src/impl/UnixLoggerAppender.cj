@@ -16,7 +16,7 @@ import f_log.output.UnixOutputStream
 import log.LogLevel
 
 let _ = UnixLoggerAppender.register()
-public class UnixLoggerAppender <: AsyncLogger {
+private class UnixLoggerAppender <: AsyncLogger {
     private let path: String
     private let writeTimeout: ?Duration
     private let bufSize: ?Int64

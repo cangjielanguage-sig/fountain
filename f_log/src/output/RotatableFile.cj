@@ -28,7 +28,7 @@ public class RotatableFileParams{
     public var timeunit = TimeUnit.DAY
     public var compress = LogFileCompressFormat.None
 }
-public class RotatableFile <: OutputStream {
+protected class RotatableFile <: OutputStream {
     private let queue = ArrayBlockingQueue<()->Unit>(1)
     private var rotateTimer = ZERO_TIMER
     private let fileSize: Int64

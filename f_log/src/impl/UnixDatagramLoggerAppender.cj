@@ -15,7 +15,7 @@ import f_log.output.UnixDatagramOutputStream
 import log.LogLevel
 
 let _ = UnixDatagramLoggerAppender.register()
-public class UnixDatagramLoggerAppender <: AsyncLogger {
+private class UnixDatagramLoggerAppender <: AsyncLogger {
     private let path: String
     private let sendTimeout: ?Duration
     public init(

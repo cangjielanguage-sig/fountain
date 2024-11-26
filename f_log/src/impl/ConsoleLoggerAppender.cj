@@ -19,7 +19,7 @@ import f_log.exception.*
 public import f_log.*
 
 let _ = ConsoleLoggerAppender.register() //将本实现注册到LoggerAppenderCreator
-public class ConsoleLoggerAppender <: AsyncLogger {
+private class ConsoleLoggerAppender <: AsyncLogger {
     public init(name!: String, level!: LogLevel, pattern!: LogPattern) {
         super(name, level, pattern, Process.current.stdOut)
     }

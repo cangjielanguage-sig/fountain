@@ -14,7 +14,7 @@ protected import std.net.{UnixSocket, SocketAddress, UnixSocketAddress}
 import std.process.Process
 import std.sync.AtomicUInt64
 
-public class UnixOutputStream <: OutputStream {
+protected class UnixOutputStream <: OutputStream {
     private static let SERIAL = AtomicUInt64(0)
     private static func newSocket(addr: UnixSocketAddress, writeTimeout: ?Duration){
         let sock = UnixSocket(addr)

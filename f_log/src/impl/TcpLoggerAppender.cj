@@ -18,7 +18,7 @@ import f_log.exception.*
 import f_log.output.UdpOutputStream
 
 let _ = TcpLoggerAppender.register()
-public class TcpLoggerAppender <: AsyncLogger {
+private class TcpLoggerAppender <: AsyncLogger {
     private let host: String
     private let port: UInt16
     private let sendBufSize: ?Int64

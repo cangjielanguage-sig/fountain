@@ -14,7 +14,7 @@ import log.{LogWriter, LogValue}
 
 import f_exception.{printStackTrace, BaseException}
 
-public class LogWriterImpl <: LogWriter {
+protected class LogWriterImpl <: LogWriter {
     public LogWriterImpl(private let writer: OutputStream){}
     public func writeNone(): Unit{
         writeString('None')

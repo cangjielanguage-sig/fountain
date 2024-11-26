@@ -18,7 +18,7 @@ import f_log.exception.LogException
 import f_log.output.UdpOutputStream
 
 let _ = UdpLoggerAppender.register()
-public class UdpLoggerAppender <: AsyncLogger {
+private class UdpLoggerAppender <: AsyncLogger {
     private let host: String
     private let port: UInt16
     private let sendTimeout: ?Duration

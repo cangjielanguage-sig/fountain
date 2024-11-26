@@ -27,7 +27,7 @@ import f_log.output.{RotatableFile, RotatableFileParams}
 import f_time.{TimeUnit, ExtendDateTime}
 
 let _ = FileLoggerAppender.register()
-public class FileLoggerAppender <: AsyncLogger {
+private class FileLoggerAppender <: AsyncLogger {
     public init(
         name!: String,
         pattern!: LogPattern,

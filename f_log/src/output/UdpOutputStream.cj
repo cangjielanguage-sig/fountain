@@ -12,7 +12,7 @@ package f_log.output
 protected import std.io.OutputStream
 protected import std.net.{UdpSocket, IPSocketAddress, SocketAddress}
 
-public class UdpOutputStream <: OutputStream & Resource {
+protected class UdpOutputStream <: OutputStream & Resource {
     public UdpOutputStream(private let udp: UdpSocket, private let addr: IPSocketAddress) {}
     public init(addr: String, port: UInt16, sendTimeout!: ?Duration = None){
         let sockAddr = IPSocketAddress(addr, port)
