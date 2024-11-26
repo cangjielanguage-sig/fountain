@@ -75,32 +75,34 @@ public abstract class AbstractLogger <: Logger & Resource {
     }
     public open func log(record: LogRecord): Unit {
         try {
-            append(record.level, record.message, record.time, None<Exception>)
-            func writeAttrs(attrs: Array<Attr>) {
-                if (attrs.isEmpty()) {
-                    return
+            if (logLevelEnabled(record.level)) {
+                doAppend(record.level, record.message, record.time, None<Exception>)
+                func writeAttrs(attrs: Array<Attr>) {
+                    if (attrs.isEmpty()) {
+                        return
+                    }
+                    writer.startObject()
+                    for (attr in attrs) {
+                        writer.writeString('${attr[0]}:')
+                        attr[1].writeTo(writer)
+                        writer.writeString(',')
+                    }
+                    writer.endObject()
+                    writer.writeString(if (OS.current.isWindows) {
+                        '\r\n'
+                    } else {
+                        '\n'
+                    })
                 }
-                writer.startObject()
-                for (attr in attrs) {
-                    writer.writeString('${attr[0]}:')
-                    attr[1].writeTo(writer)
-                    writer.writeString(',')
+                func writeAttrs(attrs: ?Array<Attr>) {
+                    if (let Some(attrs) <- attrs) {
+                        writeAttrs(attrs)
+                    }
                 }
-                writer.endObject()
-                writer.writeString(if (OS.current.isWindows) {
-                    '\r\n'
-                } else {
-                    '\n'
-                })
+                writeAttrs(attrMap.get(name))
+                writeAttrs(this.attrs.get())
+                writeAttrs(record.attrs)
             }
-            func writeAttrs(attrs: ?Array<Attr>) {
-                if (let Some(attrs) <- attrs) {
-                    writeAttrs(attrs)
-                }
-            }
-            writeAttrs(attrMap.get(name))
-            writeAttrs(this.attrs.get())
-            writeAttrs(record.attrs)
         } finally {
             attrs.set(None<Array<Attr>>)
         }
