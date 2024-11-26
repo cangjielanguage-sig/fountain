@@ -81,11 +81,13 @@ protected class RotatableFile <: OutputStream {
         rotateTimer = createRotateTimer()
     }
     private func createRotateTimer() {
-        let timer = Timer.after(timeunit.since()) {
-            rotateFileIfNeed(DateTime.now())
-            while(let Some(fn) <- queue.tryDequeue()){
+        spawn{
+            while(let fn <- queue.dequeue()){
                 fn()
             }
+        }
+        let timer = Timer.after(timeunit.since()) {
+            rotateFileIfNeed()
             this.timeunit.since()
         }
         Process.current.atExit{timer.cancel()}
@@ -171,31 +173,30 @@ protected class RotatableFile <: OutputStream {
         }
     }
     private let fileLock = ReentrantMutex()
-    private func rotateFileIfNeed(now: DateTime) {
-        let current = timeunit.trim(now)
-        var (need, file) = needRotate(current)
-        if (need) {
-            synchronized(fileLock) {
-                (need, file) = needRotate(current)
-                if (need) {
-                    let originPath = file.info.path.toString()
+    private func rotateFileIfNeed() {
+        synchronized(fileLock) {
+            let current = timeunit.trim(DateTime.now())
+            let (need, file) = needRotate(current)
+            if (need) {
+                let originPath = file.info.path.toString()
+                try {
+                    let time = genTime(timeunit, current)
+                    let path = "${originPath}.${time}"
                     try {
-                        let time = genTime(timeunit, current)
-                        let path = "${originPath}.${time}"
-                        try {
-                            file.close()
-                        } catch (e: Exception) {
-                            e.printStackTrace()
-                        }
-                        try {
-                            rename(originPath, to: path, overwrite: true)
-                        } catch (e: Exception) {
-                            e.printStackTrace()
-                        }
-                        compressAndDeleteOld(path)
+                        file.close()
                     } catch (e: Exception) {
                         e.printStackTrace()
                     }
+                    try {
+                        rename(originPath, to: path, overwrite: true)
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                    compressAndDeleteOld(path)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+                if(!exists(originPath)){
                     this.file = File(originPath, Append)
                 }
             }
@@ -227,7 +228,7 @@ protected class RotatableFile <: OutputStream {
             if (fsize == 0) {
                 return
             }
-            compressedFile = File("${path}.${ext}", Write)
+            compressedFile = File("${path}${ext}", Write)
             let compressedOutput = CompressOutputStream(
                 compressedFile.getOrThrow(),
                 wrap: wrap,
@@ -274,7 +275,7 @@ protected class RotatableFile <: OutputStream {
         })
     }
     public func write(buffer: Array<Byte>): Unit {
-        rotateFileIfNeed(DateTime.now())
+        rotateFileIfNeed()
         file.write(buffer)
     }
     public func flush(): Unit {

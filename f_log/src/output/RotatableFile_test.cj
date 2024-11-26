@@ -26,7 +26,13 @@ public class RotatableFileTest {
         param.timeunit = TU.SECOND
         param.path = '/tmp/test.log'
         let file = RotatableFile(param)
-        file.write('hello'.toArray())
+        spawn{
+            while(true){
+                file.write('hello\n'.toArray())
+                sleep(Duration.millisecond * 100)
+            }
+        }
         sleep(Duration.second * 5)
+        throw Exception()
     }
 }
