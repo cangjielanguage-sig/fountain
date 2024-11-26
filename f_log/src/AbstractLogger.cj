@@ -90,7 +90,6 @@ public abstract class AbstractLogger <: Logger & Resource {
                         writer.writeString('${attr[0]}:')
                         attr[1].writeTo(writer)
                     }
-
                     writer.endObject()
                     writer.writeString(if (OS.current.isWindows) {
                         '\r\n'
