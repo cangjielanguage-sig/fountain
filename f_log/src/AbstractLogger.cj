@@ -15,9 +15,8 @@ import std.collection.concurrent.ConcurrentHashMap
 import std.io.OutputStream
 import std.sync.{AtomicBool, ReentrantMutex}
 import std.time.DateTime
-
 import log.{LogLevel, Attr, LogRecord, LogWriter}
-
+import f_base.OS
 import f_collection.LinkedHashMap
 import f_data.DataObject
 import f_exception.{BaseException, UnsupportedAccessException, printStackTrace}
@@ -40,10 +39,10 @@ public abstract class AbstractLogger <: Logger & Resource {
         this.writer = LogWriterImpl(output)
     }
     protected mut prop output: OutputStream {
-        get(){
+        get() {
             output_
         }
-        set(value){
+        set(value) {
             output_ = value
             writer = LogWriterImpl(value)
         }
@@ -62,10 +61,10 @@ public abstract class AbstractLogger <: Logger & Resource {
     }
 
     public mut prop level: LogLevel {
-        get(){
+        get() {
             level_
         }
-        set(value){
+        set(value) {
             level_ = value
         }
     }
@@ -75,24 +74,34 @@ public abstract class AbstractLogger <: Logger & Resource {
         this
     }
     public open func log(record: LogRecord): Unit {
-        try{
+        try {
             append(record.level, record.message, record.time, None<Exception>)
-            func writeAttrs(attrs: Array<Attr>){
-                for(attr in attrs){
-                    writer.writeString('(${attr[0]},')
-                    attr[1].writeTo(writer)
-                    writer.writeString(')')
+            func writeAttrs(attrs: Array<Attr>) {
+                if (attrs.isEmpty()) {
+                    return
                 }
+                writer.startObject()
+                for (attr in attrs) {
+                    writer.writeString('${attr[0]}:')
+                    attr[1].writeTo(writer)
+                    writer.writeString(',')
+                }
+                writer.endObject()
+                writer.writeString(if (OS.current.isWindows) {
+                    '\r\n'
+                } else {
+                    '\n'
+                })
             }
-            func writeAttrs(attrs: ?Array<Attr>){
-                if(let Some(attrs) <- attrs){
+            func writeAttrs(attrs: ?Array<Attr>) {
+                if (let Some(attrs) <- attrs) {
                     writeAttrs(attrs)
                 }
             }
             writeAttrs(attrMap.get(name))
             writeAttrs(this.attrs.get())
             writeAttrs(record.attrs)
-        }finally{
+        } finally {
             attrs.set(None<Array<Attr>>)
         }
     }
@@ -126,7 +135,7 @@ public abstract class AbstractLogger <: Logger & Resource {
         append(msg, ex, writer)
     }
     protected open func append(level: LogLevel, message: String, now: DateTime, ex: Option<Exception>): Unit {
-        if (enabled(level)) {
+        if (logLevelEnabled(level)) {
             doAppend(level, message, now, ex)
         }
     }
@@ -136,39 +145,67 @@ public abstract class AbstractLogger <: Logger & Resource {
         }
     }
     public func append<T>(level: LogLevel, message: String, args: Array<T>, ex: ?Exception): Unit where T <: ToString {
-        append(level, {=>
-            TextTemplate.compile(message, prefix: "{", suffix: "}").format<T>(args)
-        }, ex)
+        append(
+            level,
+            {
+                => TextTemplate.compile(message, prefix: "{", suffix: "}").format<T>(args)
+            },
+            ex
+        )
     }
     public func append<T>(level: LogLevel, message: String, args: T, ex: ?Exception): Unit where T <: DataObject<T> {
-        append(level, {=> 
-            TextTemplate.compile(message, prefix: "{", suffix: "}").format<T>(args)
-        }, ex)
+        append(
+            level,
+            {
+                => TextTemplate.compile(message, prefix: "{", suffix: "}").format<T>(args)
+            },
+            ex
+        )
     }
     public func append<T>(level: LogLevel, message: String, args: ArrayList<T>, ex: ?Exception): Unit where T <: ToString {
-        append(level, {=> 
-            TextTemplate.compile(message, prefix: "{", suffix: "}").format<T>(args)
-        }, ex)
+        append(
+            level,
+            {
+                => TextTemplate.compile(message, prefix: "{", suffix: "}").format<T>(args)
+            },
+            ex
+        )
     }
     public func append<T>(level: LogLevel, message: String, args: HashMap<String, T>, ex: ?Exception): Unit where T <: ToString {
-        append(level, {=> 
-            TextTemplate.compile(message, prefix: "{", suffix: "}").format<T>(args)
-        }, ex)
+        append(
+            level,
+            {
+                => TextTemplate.compile(message, prefix: "{", suffix: "}").format<T>(args)
+            },
+            ex
+        )
     }
     public func append<T>(level: LogLevel, message: String, args: ConcurrentHashMap<String, T>, ex: ?Exception): Unit where T <: ToString {
-        append(level, {=> 
-            TextTemplate.compile(message, prefix: "{", suffix: "}").format<T>(args)
-        }, ex)
+        append(
+            level,
+            {
+                => TextTemplate.compile(message, prefix: "{", suffix: "}").format<T>(args)
+            },
+            ex
+        )
     }
     public func append<T>(level: LogLevel, message: String, args: TreeMap<String, T>, ex: ?Exception): Unit where T <: ToString {
-        append(level, {=> 
-            TextTemplate.compile(message, prefix: "{", suffix: "}").format<T>(args)
-        }, ex)
+        append(
+            level,
+            {
+                => TextTemplate.compile(message, prefix: "{", suffix: "}").format<T>(args)
+            },
+            ex
+        )
     }
     public func append<T>(level: LogLevel, message: String, args: LinkedHashMap<String, T>, ex: ?Exception): Unit where T <: ToString {
-        append(level, {=> 
-            TextTemplate.compile(message, prefix: "{", suffix: "}").format<T>(args)
-        }, ex)
+        append(
+            level,
+            {
+                => TextTemplate.compile(message, prefix: "{", suffix: "}").format<T>(args)
+            },
+            ex
+        )
     }
     public func error<T>(message: String, args: Array<T>): Unit where T <: ToString {
         append<T>(LogLevel.ERROR, message, args, None<Exception>)
@@ -195,7 +232,7 @@ public abstract class AbstractLogger <: Logger & Resource {
     public func error<T>(message: String, args: T): Unit where T <: DataObject<T> {
         append<T>(LogLevel.ERROR, message, args, None<Exception>)
     }
-    
+
     public func error<T>(message: String, ex: Exception, args: ArrayList<T>): Unit where T <: ToString {
         append<T>(LogLevel.ERROR, message, args, ex)
     }
@@ -240,7 +277,7 @@ public abstract class AbstractLogger <: Logger & Resource {
     public func warn<T>(message: String, args: T): Unit where T <: DataObject<T> {
         append<T>(LogLevel.WARN, message, args, None<Exception>)
     }
-    
+
     public func warn<T>(message: String, ex: Exception, args: HashMap<String, T>): Unit where T <: ToString {
         append<T>(LogLevel.WARN, message, args, ex)
     }
@@ -282,7 +319,7 @@ public abstract class AbstractLogger <: Logger & Resource {
     public func info<T>(message: String, args: T): Unit where T <: DataObject<T> {
         append<T>(LogLevel.INFO, message, args, None<Exception>)
     }
-    
+
     public func info<T>(message: String, ex: Exception, args: ArrayList<T>): Unit where T <: ToString {
         append<T>(LogLevel.INFO, message, args, ex)
     }
@@ -308,7 +345,7 @@ public abstract class AbstractLogger <: Logger & Resource {
     public func debug<T>(message: String, ex: Exception, args: Array<T>): Unit where T <: ToString {
         append<T>(LogLevel.DEBUG, message, args, ex)
     }
-    
+
     public func debug<T>(message: String, args: ArrayList<T>): Unit where T <: ToString {
         append<T>(LogLevel.DEBUG, message, args, None<Exception>)
     }
@@ -327,7 +364,7 @@ public abstract class AbstractLogger <: Logger & Resource {
     public func debug<T>(message: String, args: T): Unit where T <: DataObject<T> {
         append<T>(LogLevel.DEBUG, message, args, None<Exception>)
     }
-    
+
     public func debug<T>(message: String, ex: Exception, args: ArrayList<T>): Unit where T <: ToString {
         append<T>(LogLevel.DEBUG, message, args, ex)
     }
@@ -353,7 +390,7 @@ public abstract class AbstractLogger <: Logger & Resource {
     public func trace<T>(message: String, ex: Exception, args: Array<T>): Unit where T <: ToString {
         append<T>(LogLevel.TRACE, message, args, ex)
     }
-    
+
     public func trace<T>(message: String, args: ArrayList<T>): Unit where T <: ToString {
         append<T>(LogLevel.TRACE, message, args, None<Exception>)
     }
@@ -372,7 +409,7 @@ public abstract class AbstractLogger <: Logger & Resource {
     public func trace<T>(message: String, args: T): Unit where T <: DataObject<T> {
         append<T>(LogLevel.TRACE, message, args, None<Exception>)
     }
-    
+
     public func trace<T>(message: String, ex: Exception, args: ArrayList<T>): Unit where T <: ToString {
         append<T>(LogLevel.TRACE, message, args, ex)
     }
@@ -503,27 +540,27 @@ public abstract class AbstractLogger <: Logger & Resource {
 
     public prop traceEnabled: Bool {
         get() {
-            enabled(LogLevel.TRACE)
+            logLevelEnabled(LogLevel.TRACE)
         }
     }
     public prop debugEnabled: Bool {
         get() {
-            enabled(LogLevel.DEBUG)
+            logLevelEnabled(LogLevel.DEBUG)
         }
     }
     public prop infoEnabled: Bool {
         get() {
-            enabled(LogLevel.INFO)
+            logLevelEnabled(LogLevel.INFO)
         }
     }
     public prop warnEnabled: Bool {
         get() {
-            enabled(LogLevel.WARN)
+            logLevelEnabled(LogLevel.WARN)
         }
     }
     public prop errorEnabled: Bool {
         get() {
-            enabled(LogLevel.ERROR)
+            logLevelEnabled(LogLevel.ERROR)
         }
     }
     public open prop closable: Bool {

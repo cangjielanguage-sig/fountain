@@ -22,14 +22,10 @@ public class LoggerAppenderFacade <: AsyncLogger {
     }
 
     public func logLevelEnabled(level: LogLevel): Bool {
-        var i = 0
-        let s = appenders.size
-        var enabled = false
-        while (i < s && !enabled) {
-            enabled ||= appenders[i].logLevelEnabled(level)
-            i++
+        for(appender in appenders where appender.logLevelEnabled(level)){
+            return true
         }
-        return enabled
+        return false
     }
     
     protected func append(level: LogLevel, message: String, now: DateTime, ex: Option<Exception>): Unit {
