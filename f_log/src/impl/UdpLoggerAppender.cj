@@ -75,12 +75,12 @@ private class UdpLoggerAppender <: AsyncLogger {
             }
         }
     }
-    protected func doAppend(level: LogLevel, message: String, now: DateTime, ex: Option<Exception>): Unit {
+    protected func append(level: LogLevel, message: String, now: DateTime, ex: Option<Exception>): Unit {
         var sock = (super.output as UdpOutputStream).getOrThrow()
         if (sock.isClosed()) {
             sock = createSocket(host, port, sendTimeout: sendTimeout)
             super.output = sock
         }
-        super.doAppend(level, message, now, ex)
+        super.append(level, message, now, ex)
     }
 }

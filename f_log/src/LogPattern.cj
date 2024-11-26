@@ -93,11 +93,7 @@ public class LogPattern <: LogPart {
         for(p in patterns){
             builder.append(p.generate(name, level, message, current))
         }
-        builder.append(if (OS.current.isWindows) {
-            '\r\n'
-        } else {
-            '\n'
-        })
+        builder.append(OS.current.nextLine)
         builder.toString()
     }
 }

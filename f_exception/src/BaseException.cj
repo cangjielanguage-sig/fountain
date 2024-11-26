@@ -16,23 +16,17 @@ import std.collection.ArrayList
 public func printStackTrace<O>(exception: Exception, output: O): Unit where O <: OutputStream {
     printStackTrace<O>(exception, StringWriter<O>(output))
 }
+
 public func printStackTrace<O>(exception: Exception, writer: StringWriter<O>): Unit where O <: OutputStream {
-    writer.write("An exception has occured: ")
-    writer.write(exception.toString())
-    writer.writeln()
+    writer.writeln("An exception has occured: ${exception}")
     for (stack in exception.getStackTrace()) {
-        writer.write("         at ")
-        writer.write(stack.declaringClass)
-        writer.write(".")
-        writer.write(stack.methodName)
-        writer.write("(")
-        writer.write(stack.fileName)
-        writer.write(": ")
-        writer.write(stack.lineNumber)
-        writer.writeln(")")
+        writer.writeln(
+            "         at ${stack.declaringClass}.${stack.methodName}(${stack.fileName}: ${stack.lineNumber})"
+        )
     }
     writer.flush()
 }
+
 public open class BaseException <: Exception {
     private var caused_ = None<Exception>
     private var suppressed_ = ArrayList<Exception>()

@@ -70,12 +70,12 @@ private class UnixLoggerAppender <: AsyncLogger {
             }
         }
     }
-    protected func doAppend(level: LogLevel, message: String, now: DateTime, ex: Option<Exception>): Unit {
+    protected func append(level: LogLevel, message: String, now: DateTime, ex: Option<Exception>): Unit {
         var sock = (super.output as UnixSocket).getOrThrow()
         if (sock.isClosed()) {
             sock = createSocket(path, writeTimeout, bufSize)
             super.output = sock
         }
-        super.doAppend(level, message, now, ex)
+        super.append(level, message, now, ex)
     }
 }

@@ -86,4 +86,28 @@ public enum OS <: Equatable<OS> & ToString & Hashable {
             HarmonyOS
         }
     }
+    @When[os == "Linux"]
+    public prop nextLine: String {
+        get(){
+            '\n'
+        }
+    }
+    @When[os == "macOS"]
+    public prop nextLine: String {
+        get(){
+            '\n'
+        }
+    }
+    @When[os == "HarmonyOS"]
+    public prop nextLine: String {
+        get(){
+            '\n'
+        }
+    }
+    @When[os == "Windows"]
+    public prop nextLine: String {
+        get(){
+            '\r\n'
+        }
+    }
 }

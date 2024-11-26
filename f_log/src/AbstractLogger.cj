@@ -76,7 +76,7 @@ public abstract class AbstractLogger <: Logger & Resource {
     public open func log(record: LogRecord): Unit {
         try {
             if (logLevelEnabled(record.level)) {
-                doAppend(record.level, record.message, record.time, None<Exception>)
+                append(record.level, record.message, record.time, None<Exception>)
                 func writeAttrs(attrs: Array<Attr>) {
                     if (attrs.isEmpty()) {
                         return
@@ -91,11 +91,7 @@ public abstract class AbstractLogger <: Logger & Resource {
                         attr[1].writeTo(writer)
                     }
                     writer.endObject()
-                    writer.writeString(if (OS.current.isWindows) {
-                        '\r\n'
-                    } else {
-                        '\n'
-                    })
+                    writer.writeString(OS.current.nextLine)
                 }
                 func writeAttrs(attrs: ?Array<Attr>) {
                     if (let Some(attrs) <- attrs) {
@@ -111,18 +107,15 @@ public abstract class AbstractLogger <: Logger & Resource {
         }
     }
 
-    protected open func append(level: LogLevel, message: () -> String, ex: Option<Exception>): Unit {
-        append(level, message(), ex)
-        //在LoggerWrapper判断日志级别是一个循环操作，
-        //需要判断每一个LoggerAppender是否可以记录当前级别的日志，大部分构造日志的逻辑相对简单，
-        //所以此处默认不判断日志级别
-        //如果构造日志的逻辑比较复杂，可以在构造日志文本之前先主动判断一次
+    protected func append(level: LogLevel, message: () -> String, ex: Option<Exception>): Unit {
+        if(logLevelEnabled(level)){
+            doLock {
+                let now = DateTime.now()
+                append(level, message(), now, ex)
+            }
+        }
     }
 
-    //
-    public func log(level: LogLevel, message: String): Unit {
-        append(level, message)
-    }
     protected func append(level: LogLevel, message: String): Unit {
         append(level, message, None<Exception>)
     }
@@ -135,19 +128,18 @@ public abstract class AbstractLogger <: Logger & Resource {
             output.writeException(e)
         }
     }
-    protected open func doAppend(level: LogLevel, message: String, now: DateTime, ex: Option<Exception>): Unit {
+    protected open func append(level: LogLevel, message: String, now: DateTime, ex: Option<Exception>): Unit {
         let msg = pattern.generate(name, level, message, now)
         append(msg, ex, writer)
-    }
-    protected open func append(level: LogLevel, message: String, now: DateTime, ex: Option<Exception>): Unit {
-        if (logLevelEnabled(level)) {
-            doAppend(level, message, now, ex)
-        }
     }
     protected func doLock<T>(callback: () -> T): T {
         synchronized(lock) {
             callback()
         }
+    }
+    
+    public func append(level: LogLevel, message: String, ex: Option<Exception>): Unit {
+        append(level, {=> message}, ex)
     }
     public func append<T>(level: LogLevel, message: String, args: Array<T>, ex: ?Exception): Unit where T <: ToString {
         append(
@@ -434,14 +426,6 @@ public abstract class AbstractLogger <: Logger & Resource {
         append<T>(LogLevel.TRACE, message, args, ex)
     }
 
-    public func append(level: LogLevel, message: String, ex: Option<Exception>): Unit {
-        doLock {
-            append(level, message, DateTime.now(), ex)
-        }
-    }
-    protected func append(level: LogLevel, message: String, ex: Exception): Unit {
-        append(level, message, Some(ex))
-    }
     public func error(message: String, ex: Exception): Unit {
         append(LogLevel.ERROR, message, ex)
     }

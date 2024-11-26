@@ -17,7 +17,7 @@ public class LoggerAppenderFacade <: AsyncLogger {
     private var appenders: Array<AbstractLogger>
 
     public init(name: String, appenders: Array<AbstractLogger>) {
-        super(name, LogLevel.ALL, LogPattern.default, Process.current.stdOut, 'f_log.LoggerAppenderFacade')
+        super(name, LogLevel.ALL, LogPattern.default, Process.current.stdOut, 'f_log.LoggerAppenderFacade_${name}')
         this.appenders = appenders
     }
 
