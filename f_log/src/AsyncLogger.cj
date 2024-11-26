@@ -24,6 +24,7 @@ public abstract class AsyncLogger <: AbstractLogger {
     private static let mutex = ReentrantMutex()
     private let timeout: Duration
     private let policy: AsyncTimeoutPolicy
+    private let queueTag: String
     public init(
         name: String,
         level: LogLevel,
@@ -34,6 +35,7 @@ public abstract class AsyncLogger <: AbstractLogger {
         super(name, level, pattern, output)
         timeout = LoggerConfig.getAsyncTimeout()
         policy = LoggerConfig.getAsyncTimeoutPolicy()
+        this.queueTag = queueTag
         synchronized(mutex){//确保一个日志写入目标只有一个队列和一个消费线程
             if(let None <- queueMap.get(queueTag)){
                 let bufSize = LoggerConfig.getAsyncBufSize()
@@ -54,7 +56,7 @@ public abstract class AsyncLogger <: AbstractLogger {
         append{super.log(record)}
     }
     protected func append(fn: () -> Unit) {
-        while (!queue.enqueue(fn, timeout)) {
+        while (!queueMap[queueTag].enqueue(fn, timeout)) {
             match (policy) {
                 case AlwaysWaiting => continue
                 case Discard => return // 忽略

@@ -20,14 +20,15 @@ public import f_log.*
 
 let _ = ConsoleLoggerAppender.register() //将本实现注册到LoggerAppenderCreator
 private class ConsoleLoggerAppender <: AsyncLogger {
+    private static const CONSOLE_NAME = 'console'
     public init(name!: String, level!: LogLevel, pattern!: LogPattern) {
-        super(name, level, pattern, Process.current.stdOut, 'console')
+        super(name, level, pattern, Process.current.stdOut, CONSOLE_NAME)
     }
 
     public static func register(): Unit {
-        LoggerAppenderCreator.register("console") {
+        LoggerAppenderCreator.register(CONSOLE_NAME) {
             name =>
-            let appender = LoggerConfig.getAppenders("console")
+            let appender = LoggerConfig.getAppenders(CONSOLE_NAME)
             if (appender.isEmpty()) {
                 [NoneLogAppender.instance]
             } else {
