@@ -139,13 +139,24 @@ func generateHash(d: ClassDecl, exclusion: HashSet<String>) {
     var hashed = `nl`
     for (d in d.body.decls where d is VarDecl &&
         !(isStatic(d) || exclusion.contains(d.identifier.value) || exclusion.contains('${d.identifier.value}_'))) {
-        hashed += quote(
-            match($(d.identifier)){
+        hashed += match((d as VarDecl).getOrThrow().declType.toTokens().toString().replace(' ', '')){
+            case 'Int' | 'UInt' | 'Byte' | "IntNative" | 'UIntNative' |
+                 'Int64' | 'UInt64' | 'Int32' | 'UInt32' | 'Int16' | 'UInt16' | 'Int8' | 'UInt8' | 
+                 'Float64' | 'Float32' | 'Float16' | 'BigInt' | 'Decimal' | 
+                 '?Int' | '?UInt' | '?Byte' | "?IntNative" | '?UIntNative' |
+                 '?Int64' | '?UInt64' | '?Int32' | '?UInt32' | '?Int16' | '?UInt16' | '?Int8' | '?UInt8' | 
+                 '?Float64' | '?Float32' | '?Float16' | '?BigInt' | '?Decimal' | 
+                 'Option<Int>' | 'Option<UInt>' | 'Option<Byte>' | "Option<IntNative>" | 'Option<UIntNative>' |
+                 'Option<Int64>' | 'Option<UInt64>' | 'Option<Int32>' | 'Option<UInt32>' | 'Option<Int16>' | 'Option<UInt16>' | 'Option<Int8>' | 'Option<UInt8>' | 
+                 'Option<Float64>' | 'Option<Float32>' | 'Option<Float16>' | 'Option<BigInt>' | 'Option<Decimal>' | 
+                 'Bool' | '?Bool' | 'Option<Bool>' | 'Rune' | '?Rune' | 'Option<Rune>' | 
+                 'String' | '?String' | 'Option<String>' | 'Duration' | '?Duration' | 'Option<Duration>' |
+                 'DateTime' | '?DateTime' | 'Option<DateTime>' => quote(hasher.write($(d.identifier).hashCode()))
+            case _ => quote(match($(d.identifier)){
                 case x: Hashable => hasher.write(x.hashCode())
                 case _ => ()
-            }
-        ) +
-            `nl`
+            })
+        } + `nl`
     }
     d.body.decls.append(parseDecl(quote(
         private var __hAsh__ = 0
@@ -186,17 +197,28 @@ func generateEqual(d: ClassDecl, exclusion: HashSet<String>) {
             continue
         }
         let declType = (d as VarDecl).getOrThrow().declType
-        eq += quote(
-            result = if(let x: Equatable<$declType> <- this.$(d.identifier)) {
-                x == other.$(d.identifier)
-            } else {
-                true
-            }
+        eq += match(declType.toTokens().toString().replace(' ', '')){
+            case 'Int' | 'UInt' | 'Byte' | "IntNative" | 'UIntNative' |
+                 'Int64' | 'UInt64' | 'Int32' | 'UInt32' | 'Int16' | 'UInt16' | 'Int8' | 'UInt8' | 
+                 'Float64' | 'Float32' | 'Float16' | 'BigInt' | 'Decimal' | 
+                 '?Int' | '?UInt' | '?Byte' | "?IntNative" | '?UIntNative' |
+                 '?Int64' | '?UInt64' | '?Int32' | '?UInt32' | '?Int16' | '?UInt16' | '?Int8' | '?UInt8' | 
+                 '?Float64' | '?Float32' | '?Float16' | '?BigInt' | '?Decimal' | 
+                 'Option<Int>' | 'Option<UInt>' | 'Option<Byte>' | "Option<IntNative>" | 'Option<UIntNative>' |
+                 'Option<Int64>' | 'Option<UInt64>' | 'Option<Int32>' | 'Option<UInt32>' | 'Option<Int16>' | 'Option<UInt16>' | 'Option<Int8>' | 'Option<UInt8>' | 
+                 'Option<Float64>' | 'Option<Float32>' | 'Option<Float16>' | 'Option<BigInt>' | 'Option<Decimal>' | 
+                 'Bool' | '?Bool' | 'Option<Bool>' | 'Rune' | '?Rune' | 'Option<Rune>' |
+                 'String' | '?String' | 'Option<String>' | 'Duration' | '?Duration' | 'Option<Duration>' | 
+                 'DateTime' | '?DateTime' | 'Option<DateTime>' => quote(this.$(d.identifier) == other.$(d.identifier))
+            case _ => quote(match($(d.identifier)){
+                case x: Equatable<$(declType)> => x == other.$(d.identifier)
+                case _ => true
+            })
+        } + `nl` + quote(
             if(!result){
                 return false
             }
-        ) +
-            `nl`
+        ) + `nl`
     }
     d
         .body
@@ -224,17 +246,20 @@ func generateCompare(d: ClassDecl, exclusion: HashSet<String>) {
     for (d in d.body.decls where d is VarDecl &&
         !(isStatic(d) || exclusion.contains(d.identifier.value) || exclusion.contains('${d.identifier.value}_'))) {
         let declType = (d as VarDecl).getOrThrow().declType
-        cmp += quote(
-            result = if(let x: Comparable<$declType> <- this.$(d.identifier)) {
-                x.compare(other.$(d.identifier))
-            } else {
-                EQ
-            }
+        cmp += match(declType.toTokens().toString().replace(' ', '')){
+            case 'Int' | 'UInt' | 'Byte' | "IntNative" | 'UIntNative' |
+                 'Int64' | 'UInt64' | 'Int32' | 'UInt32' | 'Int16' | 'UInt16' | 'Int8' | 'UInt8' | 
+                 'Float64' | 'Float32' | 'Float16' | 'BigInt' | 'Decimal' |
+                 'Bool' | 'Rune' | 'String' | 'Duration' | 'DateTime'  => quote(this.$(d.identifier).compare(other.$(d.identifier)))
+            case _ => quote(match($(d.identifier)){
+                case x: Comparable<$(declType)> => x.compare(other.$(d.identifier))
+                case _ => EQ
+            })
+        } + `nl` + quote(
             if(result != EQ){
                 return result
             }
-        ) +
-            `nl`
+        ) + `nl`
     }
     d
         .body
@@ -259,16 +284,32 @@ func generateToString(d: ClassDecl, exclusion: HashSet<String>) {
     var str = quote($(d.identifier)$(d.genericParamTokens)) + `lsquare`
     for (d in d.body.decls where d is VarDecl &&
         !(isStatic(d) || exclusion.contains(d.identifier.value) || exclusion.contains('${d.identifier.value}_'))) {
-        str += quote(
-            result.append($(d.identifier.value))
-            result.append(" = ")
-            match($(d.identifier)){
-                case x: ToString => result.append(x.toString())
-                case _ => result.append("_")
-            }
-            result.append("; ")
-        ) +
-            `nl`
+        str += match((d as VarDecl).getOrThrow().toTokens().toString().replace(' ', '')){
+            case 'Int' | 'UInt' | 'Byte' | "IntNative" | 'UIntNative' |
+                 'Int64' | 'UInt64' | 'Int32' | 'UInt32' | 'Int16' | 'UInt16' | 'Int8' | 'UInt8' | 
+                 'Float64' | 'Float32' | 'Float16' | 'BigInt' | 'Decimal' | 
+                 '?Int' | '?UInt' | '?Byte' | "?IntNative" | '?UIntNative' |
+                 '?Int64' | '?UInt64' | '?Int32' | '?UInt32' | '?Int16' | '?UInt16' | '?Int8' | '?UInt8' | 
+                 '?Float64' | '?Float32' | '?Float16' | '?BigInt' | '?Decimal' | 
+                 'Option<Int>' | 'Option<UInt>' | 'Option<Byte>' | "Option<IntNative>" | 'Option<UIntNative>' |
+                 'Option<Int64>' | 'Option<UInt64>' | 'Option<Int32>' | 'Option<UInt32>' | 'Option<Int16>' | 'Option<UInt16>' | 'Option<Int8>' | 'Option<UInt8>' | 
+                 'Option<Float64>' | 'Option<Float32>' | 'Option<Float16>' | 'Option<BigInt>' | 'Option<Decimal>' | 
+                 'Bool' | '?Bool' | 'Option<Bool>' | 'Rune' | '?Rune' | 'Option<Rune>' |
+                 'String' | '?String' | 'Option<String>' | 'Duration' | '?Duration' | 'Option<Duration>' | 
+                 'DateTime' | '?DateTime' | 'Option<DateTime>' => quote(
+                    result.append($(d.identifier.value))
+                    result.append(" = ")
+                    result.append(this.$(d.identifier).toString())
+                    result.append("; "))
+            case _ => quote(match($(d.identifier)){
+                case x: ToString => 
+                    result.append($(d.identifier.value))
+                    result.append(" = ")
+                    result.append(x.toString())
+                    result.append("; ")
+                case _ => ()
+            })
+        } + `nl`
     }
     str += `rsquare`
     d
