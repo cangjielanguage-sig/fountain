@@ -336,34 +336,49 @@ func generateToFields(d: ClassDecl, exclusion: HashSet<String>) {
         let expr =  match (d) {
             case x: VarDecl =>
                 var declType = x.declType.toTokens()
-                var optionExpr = quote(
+                var optionSetExpr = quote(
                     match(o){
                         case v: $klassIdentifier => v.$(x.identifier) = None
                             return true
                         case _ => throw DataException("type of current instance does not match, expected " + TypeInfos.get<$(klassIdentifier)>().toString() + ", but receives " + TypeInfo.of(o).toString())
                     }
                 )
+                var isOption = true
                 if(declType[0].kind == QUEST){
                     declType = declType[1 ..]
                 }else if(declType[0].kind == IDENTIFIER && declType[0].value == 'Option'){
                     declType = declType[2 .. declType.size - 1]
                 }else{
-                    optionExpr = quote(throw DataException('data is None for field ' + $(x.identifier.value) + ' of ' + TypeInfos.get<$(klassIdentifier)>().toString()))
+                    optionSetExpr = quote(throw DataException('data is None for field ' + $(x.identifier.value) + ' of ' + TypeInfos.get<$(klassIdentifier)>().toString()))
+                    isOption = false
+                }
+                var optionGetExpr = if(isOption){
+                    quote(
+                        match(o){
+                            case v: $klassIdentifier => match(v.$(x.identifier)){
+                                case Some(x: $(declType)) => x.toData()
+                                case _ => DataNone.INSTANCE
+                            }
+                            case _ => throw DataException("type of current instance does not match, expected " + TypeInfos.get<$(klassIdentifier)>().toString() + ", but receives " + TypeInfo.of(o).toString())
+                        }
+                    )
+                }else{
+                    quote((o as $klassIdentifier).getOrThrow{DataException("type of current instance does not match, expected " + TypeInfos.get<$(klassIdentifier)>().toString() + ", but receives " + TypeInfo.of(o).toString())}.$(x.identifier).toData())
                 }
                 if (x.isVar()) {
                     TrailingClosureExpr(quote(
                         MutableField($(x.identifier.value), TypeInfos.get<$(declType)>(), {o =>
-                        (o as $klassIdentifier).getOrThrow{DataException("type of current instance does not match, expected " + TypeInfos.get<$(klassIdentifier)>().toString() + ", but receives " + TypeInfo.of(o).toString())}.$(x.identifier).toData()
+                        $optionGetExpr
                     }){o, d, flag =>
                         if(d is DataNone){
                             if((flag & IGNORE_NONE) != 0){
                                 return false
                             }else{
-                                $optionExpr
+                                $optionSetExpr
                             }
                         }
                         match ($(declType).tryFromData(d, flag: flag)) {
-                            case Some(x) =>
+                            case Some(x: $(declType)) =>
                                 match(o){
                                     case v: $klassIdentifier => v.$(x.identifier) = x
                                     case _ => throw DataException("type of current instance does not match, expected " + TypeInfos.get<$(klassIdentifier)>().toString() + ", but receives " + TypeInfo.of(o).toString())
@@ -376,39 +391,54 @@ func generateToFields(d: ClassDecl, exclusion: HashSet<String>) {
                 } else {
                     TrailingClosureExpr(quote(
                         ReadonlyField($(x.identifier.value), TypeInfos.get<$(declType)>()){o=>
-                        (o as $klassIdentifier).getOrThrow{DataException("type of current instance does not match, expected " + TypeInfos.get<$(klassIdentifier)>().toString() + ", but receives " + TypeInfo.of(o).toString())}.$(x.identifier).toData()
+                        $optionGetExpr
                     }))
                 }
             case x: PropDecl =>
                 var declType = x.declType.toTokens()
-                var optionExpr = quote(
+                var optionSetExpr = quote(
                     match(o){
                         case v: $klassIdentifier => v.$(x.identifier) = None
                             return true
                         case _ => throw DataException("type of current instance does not match, expected " + TypeInfos.get<$(klassIdentifier)>().toString() + ", but receives " + TypeInfo.of(o).toString())
                     }
                 )
+                var isOption = true
                 if(declType[0].kind == QUEST){
                     declType = declType[1 ..]
                 }else if(declType[0].kind == IDENTIFIER && declType[0].value == 'Option'){
                     declType = declType[2 .. declType.size - 1]
                 }else{
-                    optionExpr = quote(throw DataException('data is None for field ' + $(x.identifier.value) + ' of ' + TypeInfos.get<$(klassIdentifier)>().toString()))
+                    optionSetExpr = quote(throw DataException('data is None for field ' + $(x.identifier.value) + ' of ' + TypeInfos.get<$(klassIdentifier)>().toString()))
+                    isOption = false
+                }
+                var optionGetExpr = if(isOption){
+                    quote(
+                        match(o){
+                            case v: $klassIdentifier => match(v.$(x.identifier)){
+                                case Some(x: $(declType)) => x.toData()
+                                case _ => DataNone.INSTANCE
+                            }
+                            case _ => throw DataException("type of current instance does not match, expected " + TypeInfos.get<$(klassIdentifier)>().toString() + ", but receives " + TypeInfo.of(o).toString())
+                        }
+                    )
+                }else{
+                    quote((o as $klassIdentifier).getOrThrow{DataException("type of current instance does not match, expected " + TypeInfos.get<$(klassIdentifier)>().toString() + ", but receives " + TypeInfo.of(o).toString())}.$(x.identifier).toData())
                 }
                 if (x.isMut()) {
                     TrailingClosureExpr(quote(
                         MutableField($(x.identifier.value), TypeInfos.get<$(declType)>(), {o =>
-                        (o as $klassIdentifier).getOrThrow{DataException("type of current instance does not match, expected " + TypeInfos.get<$(klassIdentifier)>().toString() + ", but receives " + TypeInfo.of(o).toString())}.$(x.identifier).toData()
+                        $optionGetExpr
                     }){o, d, flag =>
                         if(d is DataNone){
                             if((flag & IGNORE_NONE) != 0){
                                 return false
                             }else{
-                                $optionExpr
+                                $optionSetExpr
                             }
                         }
                         match ($(declType).tryFromData(d, flag: flag)) {
-                            case Some(x) =>
+                            case Some(x: $(declType)) =>
                                 match(o){
                                     case v: $klassIdentifier => v.$(x.identifier) = x
                                     case _ => throw DataException("type of current instance does not match, expected " + TypeInfos.get<$(klassIdentifier)>().toString() + ", but receives " + TypeInfo.of(o).toString())
@@ -421,7 +451,7 @@ func generateToFields(d: ClassDecl, exclusion: HashSet<String>) {
                 } else {
                     TrailingClosureExpr(quote(
                         ReadonlyField($(x.identifier.value), TypeInfos.get<$(declType)>()){o =>
-                        (o as $klassIdentifier).getOrThrow{DataException("type of current instance does not match, expected " + TypeInfos.get<$(klassIdentifier)>().toString() + ", but receives " + TypeInfo.of(o).toString())}.$(x.identifier).toData()
+                        $optionGetExpr
                     }))
                 }
             case _ =>
@@ -469,14 +499,14 @@ func generateToFields(d: ClassDecl, exclusion: HashSet<String>) {
             ),
             FuncDecl(
                 quote(
-        public static func fromData(data: Data, flag!: DataConversionFlag = SILENCE): $klassIdentifier {
+        public static func fromData(data: Data, flag!: DataConversionFlag = SILENCE): Ojbect {
             tryFromData(data, flag: flag).getOrThrow{DataException("current data " + data.toString() + " cannot be converted to " + TypeInfos.get<$klassIdentifier>().toString())}
         }
     )
             ),
             FuncDecl(
                 quote(
-        public static func tryFromData(data: Data, flag!: DataConversionFlag = SILENCE): ?$klassIdentifier {
+        public static func tryFromData(data: Data, flag!: DataConversionFlag = SILENCE): ?Object {
             match(ObjectData<$klassIdentifier>.populate(data, flag: flag)){
                 case Some(o) => o
                 case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException(data.toString() + 'cannot be converted to ' + TypeInfos.get<$klassIdentifier>().toString())
