@@ -98,7 +98,7 @@ public abstract class AbstractLogger <: Logger & Resource {
                         writeAttrs(attrs)
                     }
                 }
-                writeAttrs(attrMap.get(name))
+                writeAttrs(globalAttrMap.get(name))
                 writeAttrs(this.attrs.get())
                 writeAttrs(record.attrs)
             }

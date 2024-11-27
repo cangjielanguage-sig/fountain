@@ -17,7 +17,7 @@ import log.Attr
 
 import f_base.*
 
-internal let attrMap = ConcurrentHashMap<String, Array<Attr>>()
+internal let globalAttrMap = ConcurrentHashMap<String, Array<Attr>>()
 public class LoggerFactory {
     private static let mutex = ReentrantMutex()
     private static let loggers = ConcurrentHashMap<String, LoggerWrapper>()
@@ -26,7 +26,7 @@ public class LoggerFactory {
 
     public static func getLogger(name: String, attrs: Array<Attr>): Logger {
         if(!attrs.isEmpty()){
-            attrMap[name] = attrs
+            globalAttrMap[name] = attrs
         }
         if(let Some(x) <- loggers.get(name)){
             x
