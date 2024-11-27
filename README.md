@@ -46,10 +46,6 @@ _/ ____\____  __ __  _____/  |______  |__| ____
   3. fboot run：
      - 将当前目录添加到LD_LIBRARY_PATH,作为新的环境变量启动自身。
      - 在新的进程执行`f_app.App`，完成应用初始化。f_app.App实现了f_launcher.Launcher。
-     - 如果找不到`f_app.App`，就尝试加载当前目录的动态链接库，执行找到的第一个`f_launcher.Launcher`实现。
-     - 如果找不到就执行第一个找到的顶级声明函数`public func launch(args: Array<String>): Unit`。
-     - 如果找不到就执行第一个找到的顶级声明函数`public func launch(): Unit`。
-     - 如果找不到就只加载动态链接库，需要确保动态链接库初始化时就能够完成程序引导。
   4. fboot run -p /path/of/dylibs：把工作目录切换到指定路径，然后执行第三条。
   5. fboot run package_name.LauncherImpl：
      类型需要实现f_launcher.Launcher接口。
