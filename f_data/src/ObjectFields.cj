@@ -34,9 +34,18 @@ public class ObjectFields <: Iterable<ReadableField> {
             }
         }
         func populateFields(name: String, annotations: Collection<Annotation>) {
+            let f = 
+            if(let Some(f) <- objf.readables.get(name)){
+                f
+            }else{
+                return
+            }
             for(annotation in annotations) {
                 match(annotation){
-                    case x: FieldAlias => populateField(x.name, objf.readables[name])
+                    case x: FieldAlias => 
+                        for(n in x.name.split(',')){
+                            populateField(n, f)
+                        }
                     case _ => ()
                 }
             }
