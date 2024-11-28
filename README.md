@@ -43,11 +43,12 @@ _/ ____\____  __ __  _____/  |______  |__| ____
 - 把fboot加入PATH环境变量
   1. fboot build：执行`cjpm build`构建当前目录，
      - 加载编译得到的动态链接库，把@Pointcut插入正确的函数。
-     - 创建lAUnchEr可执行子模块
-       - 把各业务模块加入该模块的依赖
-       - 把各业务模块的包加入该模块的main.cj的导入
-       - 在main函数体执行`f_app.App`，完成应用初始化。f_app.App实现了f_launcher.Launcher。
-       - 编译该模块，
+     - 在当前项目的src目录创建main.cj，
+     - 把cjpm.toml改为executable
+     - 把各业务模块加入项目依赖
+     - 把各业务模块的包加入该模块的main.cj的导入
+     - 在main函数体执行`f_app.App`，完成应用初始化。f_app.App实现了f_launcher.Launcher。
+     - 编译该模块，
      - 如果当前目录没有cjpm.toml，会抛出异常。
   2. fboot build -p /path/of/project：把工作目录切换到指定路径，然后执行跟上一条一样的工作。
   3. fboot build package_name.LauncherImpl
