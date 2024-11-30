@@ -16,12 +16,7 @@ public class ObjectFields<T> <: Iterable<ReadableField> where T <: DataObject<T>
         fields: Array<ReadableField>,
         private let creator: ()-> T
     ){
-        for(field in fields){
-            if(let f: MutableField <- field){
-                mutables[f.name] = f
-            }
-            readables[field.name] = field
-        }
+        //createFields(...)的嵌套函数populateFields(fields)会将fields填充到mutables readables
     }
     public static func createFields(fields: Array<ReadableField>, creator: ()-> T): ObjectFields<T> {
         let objf = ObjectFields<T>(fields, creator)
@@ -59,12 +54,12 @@ public class ObjectFields<T> <: Iterable<ReadableField> where T <: DataObject<T>
         }
         populateFields(fields)
         let currentType = (TypeInfos.get<T>() as ClassTypeInfo).getOrThrow()
-        for(v in currentType.instanceVariables) {
-            populateFields(v.name, v.annotations)
-        }
-        for(p in currentType.instanceProperties) {
-            populateFields(p.name, p.annotations)
-        }
+        // for(v in currentType.instanceVariables) {
+        //     populateFields(v.name, v.annotations)
+        // }
+        // for(p in currentType.instanceProperties) {
+        //     populateFields(p.name, p.annotations)
+        // }
         match(currentType.superClass) {
             case Some(x) where x != TypeInfos.get<Object>() && x.isSubtypeOf(TypeInfos.get("f_data.DataObject<${x.qualifiedName}>")) =>
                 let superFields = x.getStaticFunction("dataFields").apply()
