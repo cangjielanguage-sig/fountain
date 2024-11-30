@@ -117,7 +117,7 @@ _/ ____\____  __ __  _____/  |______  |__| ____
   }
   ```
   ```bash
-    # 现在支持console, file, tcp, udp, unixDatagram, unix这六个日志记录器，可以随意编排不必全部出现
+    # 现在支持console, file, tcp, udp, unixDatagram, unix这六个日志记录器，可以随意编排不必全部出现，还可以继承f_log.AsyncLogger实现新的日志记录器
     export fountain_logger_appender_console=ConsoleLoggerName # =右边是开发者定义的日志记录器名字，用来标识配置项，控制台日志只支持一个配置，即使配置了多个也是只有第一个名字的配置生效
     export fountain_logger_appender_ConsoleLoggerName_level=ERROR
 

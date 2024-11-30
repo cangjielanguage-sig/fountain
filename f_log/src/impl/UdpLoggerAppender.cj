@@ -59,6 +59,8 @@ private class UdpLoggerAppender <: AsyncLogger {
                             LogException(
                                 "param port of SocketLoggerAppender must be a value of UInt16, however it is ${p}")
                         }
+                    }else if(let Some(idx) <- host.indexOf(':')){
+                        (host, port) = (host[0 .. idx].trimAscii(), UInt16.parse(host[idx + 1 ..].trimAscii()))
                     }
                     let sendTimeout = LoggerConfig.getUdpSendTimeout("${appender}")
                     UdpLoggerAppender(
