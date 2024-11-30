@@ -9,8 +9,10 @@
 */
 package f_data
 
-public interface DataFields<T>  {
+public interface DataFields<T> where T <: DataFields<T> {
     func toData(): Data
-    static func fromData(data: Data, flag!: DataConversionFlag): T
-    static func tryFromData(data: Data, flag!: DataConversionFlag): ?T
+    static func fromData(data: Data, flag!: DataConversionFlag): T {
+        T.tryFromData(data, flag: flag).value.getOrThrow{DataException('data ${data} cannot be converted to ${TypeInfos.get<T>()}')}
+    }
+    static func tryFromData(data: Data, flag!: DataConversionFlag): DataOption<T>
 }

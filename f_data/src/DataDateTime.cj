@@ -48,23 +48,34 @@ extend DateTime <: DataFields<DateTime> & ExtendDateTimeData {
         DataDateTime(this)
     }
     public static func fromData(data: Data, flag!: DataConversionFlag = SILENCE): DateTime {
-        tryFromData(data, flag: flag).getOrThrow{DataException("${data} cannot be converted to DateTime")}
+        tryFromData(data, flag: flag).value.getOrThrow{DataException("${data} cannot be converted to DateTime")}
     }
-    public static func tryFromData(data: Data, flag!: DataConversionFlag = SILENCE): ?DateTime {
+    public static func tryFromData(data: Data, flag!: DataConversionFlag = SILENCE): DataOption<DateTime> {
         match(data){
-            case x: DataDateTime => x.tryToDateTime()
-            case _: DataNone => None
+            case x: DataDateTime => DataOption(x.tryToDateTime())
+            case _: DataNone => DataOption<DateTime>.NONE
             case _ where (flag & IGNORE_FIELD_TYPE_NOT_MATCH) == 0 => throw DataException('(${data}) does not match ${TypeInfos.get<DateTime>()}')
-            case x: DataDuration => DateTime.UnixEpoch + x.toDuration()
+            case x: DataDuration => match(x.tryToDuration()){
+                case Some(x) => DataOption(DateTime.UnixEpoch + x)
+                case _ => DataOption<DateTime>.NONE
+            }
             case x: DataString =>
                 let fmt = currentThreadDateFormat.get() ?? defaultDateFormat.load().value
-                if (fmt.isEmpty()) {
-                    DateTime.parse(x.data)
-                } else {
-                    DateTime.parse(x.data, fmt)
+                try{
+                    if (fmt.isEmpty()) {
+                        DataOption(DateTime.parse(x.data))
+                    } else {
+                        DataOption(DateTime.parse(x.data, fmt))
+                    }
+                }catch(e: Exception){
+                    if((flag & IGNORE_FIELD_TYPE_NOT_MATCH) == 0){
+                        throw e
+                    }else{
+                        DataOption<DateTime>.NONE
+                    }
                 }
             case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException('(${data}) cannot be converted to ${TypeInfos.get<DateTime>()}')
-            case _ => None<DateTime>
+            case _ => DataOption<DateTime>.NONE
         }
     }
     public static func setDefaultDateFormat(format: String) {

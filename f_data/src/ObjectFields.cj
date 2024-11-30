@@ -52,12 +52,12 @@ public class ObjectFields <: Iterable<ReadableField> {
         }
         populateFields(fields)
         let currentType = (TypeInfos.get<O>() as ClassTypeInfo).getOrThrow()
-        for(v in currentType.instanceVariables) {
-            populateFields(v.name, v.annotations)
-        }
-        for(p in currentType.instanceProperties) {
-            populateFields(p.name, p.annotations)
-        }
+        // for(v in currentType.instanceVariables) {
+        //     populateFields(v.name, v.annotations)
+        // }
+        // for(p in currentType.instanceProperties) {
+        //     populateFields(p.name, p.annotations)
+        // }
         match(currentType.superClass) {
             case Some(x) where x != TypeInfos.get<Object>() && x.isSubtypeOf(TypeInfos.get("f_data.DataObject<${x.qualifiedName}>")) =>
                 let superFields = x.getStaticFunction("dataFields").apply()

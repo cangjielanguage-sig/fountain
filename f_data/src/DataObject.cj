@@ -9,13 +9,12 @@
  */
 package f_data
 
-public interface DataObject<T> <: DataFields<Object> where T <: Object & DataObject<T> {
+public interface DataObject<T> <: DataFields<T> where T <: Object & DataObject<T> {
     static func dataFields(): ObjectFields
 
     func toData(): Data
 
-    static func fromData(data: Data, flag!: DataConversionFlag): Object
-    static func tryFromData(data: Data, flag!: DataConversionFlag): ?Object
+    static func tryFromData(data: Data, flag!: DataConversionFlag): DataOption<T>
 }
 
 class FieldIterator<T> <: Iterator<(String, Data)> where T <: Object & DataObject<T> {
@@ -53,7 +52,7 @@ public class ObjectData<T> <: Data & Iterable<(String, Data)> where T <: Object 
     }
     public func get<V>(name: String, flag!: UInt64 = SILENCE): ?V where V <: DataFields<V> {
         match(T.dataFields().readableField(name)?.get(data)){
-            case Some(x) => V.tryFromData(x, flag: flag)
+            case Some(x) => V.tryFromData(x, flag: flag).value
             case _ where (flag & IGNORE_FIELD_NOT_FOUND) == 0 => None
             case _ => throw DataException('field ${name} is not found in ${TypeInfos.get<T>()}')
         }
@@ -175,7 +174,7 @@ public class ObjectData<T> <: Data & Iterable<(String, Data)> where T <: Object 
     public static func populate<M, V>(src: T, map: M, flag!: UInt64 = SILENCE): M where M <: Map<String, V>,
         V <: DataFields<V> {
         for ((k, v) in ObjectData<T>(src)) {
-            if (let Some(x) <- V.tryFromData(v, flag: flag)) {
+            if (let Some(x) <- V.tryFromData(v, flag: flag).value) {
                 map[k] = x
             } else if ((flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0) {
                 throw DataException('field ${k} of ${TypeInfos.get<T>()} cannot be converted to ${TypeInfos.get<V>()}')

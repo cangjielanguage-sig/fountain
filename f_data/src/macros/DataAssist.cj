@@ -66,7 +66,7 @@ func generateProps(decl: ClassDecl, exclusion: HashSet<String>) {
     let decls = decl.body.decls
     let appended = ArrayList<Decl>()
     func gen(v: VarDecl) {
-        if(v.isStatic() || v.isPublic()){
+        if (v.isStatic() || v.isPublic()) {
             return
         }
         let name = v.identifier
@@ -139,20 +139,11 @@ func generateHash(d: ClassDecl, exclusion: HashSet<String>) {
     var hashed = `nl`
     for (d in d.body.decls where d is VarDecl &&
         !(isStatic(d) || exclusion.contains(d.identifier.value) || exclusion.contains('${d.identifier.value}_'))) {
-        hashed += match((d as VarDecl).getOrThrow().declType.toTokens().toString().replace(' ', '')){
-            case 'Int' | 'UInt' | 'Byte' | "IntNative" | 'UIntNative' |
-                 'Int64' | 'UInt64' | 'Int32' | 'UInt32' | 'Int16' | 'UInt16' | 'Int8' | 'UInt8' | 
-                 'Float64' | 'Float32' | 'Float16' | 'BigInt' | 'Decimal' | 
-                 '?Int' | '?UInt' | '?Byte' | "?IntNative" | '?UIntNative' |
-                 '?Int64' | '?UInt64' | '?Int32' | '?UInt32' | '?Int16' | '?UInt16' | '?Int8' | '?UInt8' | 
-                 '?Float64' | '?Float32' | '?Float16' | '?BigInt' | '?Decimal' | 
-                 'Option<Int>' | 'Option<UInt>' | 'Option<Byte>' | "Option<IntNative>" | 'Option<UIntNative>' |
-                 'Option<Int64>' | 'Option<UInt64>' | 'Option<Int32>' | 'Option<UInt32>' | 'Option<Int16>' | 'Option<UInt16>' | 'Option<Int8>' | 'Option<UInt8>' | 
-                 'Option<Float64>' | 'Option<Float32>' | 'Option<Float16>' | 'Option<BigInt>' | 'Option<Decimal>' | 
-                 'Bool' | '?Bool' | 'Option<Bool>' | 'Rune' | '?Rune' | 'Option<Rune>' | 
-                 'String' | '?String' | 'Option<String>' | 'Duration' | '?Duration' | 'Option<Duration>' |
-                 'DateTime' | '?DateTime' | 'Option<DateTime>' => quote(hasher.write($(d.identifier).hashCode()))
-            case _ => quote(match($(d.identifier)){
+        hashed += match ((d as VarDecl).getOrThrow().declType.toTokens().toString().replace(' ', '')) {
+            case 'Int' | 'UInt' | 'Byte' | "IntNative" | 'UIntNative' | 'Int64' | 'UInt64' | 'Int32' | 'UInt32' | 'Int16' | 'UInt16' | 'Int8' | 'UInt8' | 'Float64' | 'Float32' | 'Float16' | 'BigInt' | 'Decimal' | '?Int' | '?UInt' | '?Byte' | "?IntNative" | '?UIntNative' | '?Int64' | '?UInt64' | '?Int32' | '?UInt32' | '?Int16' | '?UInt16' | '?Int8' | '?UInt8' | '?Float64' | '?Float32' | '?Float16' | '?BigInt' | '?Decimal' | 'Option<Int>' | 'Option<UInt>' | 'Option<Byte>' | "Option<IntNative>" | 'Option<UIntNative>' | 'Option<Int64>' | 'Option<UInt64>' | 'Option<Int32>' | 'Option<UInt32>' | 'Option<Int16>' | 'Option<UInt16>' | 'Option<Int8>' | 'Option<UInt8>' | 'Option<Float64>' | 'Option<Float32>' | 'Option<Float16>' | 'Option<BigInt>' | 'Option<Decimal>' | 'Bool' | '?Bool' | 'Option<Bool>' | 'Rune' | '?Rune' | 'Option<Rune>' | 'String' | '?String' | 'Option<String>' | 'Duration' | '?Duration' | 'Option<Duration>' | 'DateTime' | '?DateTime' | 'Option<DateTime>' => quote(
+                hasher.write($(d.identifier).hashCode()))
+            case _ => quote(
+                match($(d.identifier)){
                 case x: Hashable => hasher.write(x.hashCode())
                 case _ => ()
             })
@@ -189,7 +180,7 @@ func generateEqual(d: ClassDecl, exclusion: HashSet<String>) {
     var eq = `nl`
     for (d in d.body.decls where d is VarDecl &&
         !(isStatic(d) || exclusion.contains(d.identifier.value) || exclusion.contains('${d.identifier.value}_'))) {
-        if(d.identifier.value == '__hAsh__'){
+        if (d.identifier.value == '__hAsh__') {
             hashTokens = quote(
                 if(this.hashCode() != other.hashCode()){
                     return false
@@ -197,20 +188,11 @@ func generateEqual(d: ClassDecl, exclusion: HashSet<String>) {
             continue
         }
         let declType = (d as VarDecl).getOrThrow().declType
-        eq += match(declType.toTokens().toString().replace(' ', '')){
-            case 'Int' | 'UInt' | 'Byte' | "IntNative" | 'UIntNative' |
-                 'Int64' | 'UInt64' | 'Int32' | 'UInt32' | 'Int16' | 'UInt16' | 'Int8' | 'UInt8' | 
-                 'Float64' | 'Float32' | 'Float16' | 'BigInt' | 'Decimal' | 
-                 '?Int' | '?UInt' | '?Byte' | "?IntNative" | '?UIntNative' |
-                 '?Int64' | '?UInt64' | '?Int32' | '?UInt32' | '?Int16' | '?UInt16' | '?Int8' | '?UInt8' | 
-                 '?Float64' | '?Float32' | '?Float16' | '?BigInt' | '?Decimal' | 
-                 'Option<Int>' | 'Option<UInt>' | 'Option<Byte>' | "Option<IntNative>" | 'Option<UIntNative>' |
-                 'Option<Int64>' | 'Option<UInt64>' | 'Option<Int32>' | 'Option<UInt32>' | 'Option<Int16>' | 'Option<UInt16>' | 'Option<Int8>' | 'Option<UInt8>' | 
-                 'Option<Float64>' | 'Option<Float32>' | 'Option<Float16>' | 'Option<BigInt>' | 'Option<Decimal>' | 
-                 'Bool' | '?Bool' | 'Option<Bool>' | 'Rune' | '?Rune' | 'Option<Rune>' |
-                 'String' | '?String' | 'Option<String>' | 'Duration' | '?Duration' | 'Option<Duration>' | 
-                 'DateTime' | '?DateTime' | 'Option<DateTime>' => quote(this.$(d.identifier) == other.$(d.identifier))
-            case _ => quote(match($(d.identifier)){
+        eq += match (declType.toTokens().toString().replace(' ', '')) {
+            case 'Int' | 'UInt' | 'Byte' | "IntNative" | 'UIntNative' | 'Int64' | 'UInt64' | 'Int32' | 'UInt32' | 'Int16' | 'UInt16' | 'Int8' | 'UInt8' | 'Float64' | 'Float32' | 'Float16' | 'BigInt' | 'Decimal' | '?Int' | '?UInt' | '?Byte' | "?IntNative" | '?UIntNative' | '?Int64' | '?UInt64' | '?Int32' | '?UInt32' | '?Int16' | '?UInt16' | '?Int8' | '?UInt8' | '?Float64' | '?Float32' | '?Float16' | '?BigInt' | '?Decimal' | 'Option<Int>' | 'Option<UInt>' | 'Option<Byte>' | "Option<IntNative>" | 'Option<UIntNative>' | 'Option<Int64>' | 'Option<UInt64>' | 'Option<Int32>' | 'Option<UInt32>' | 'Option<Int16>' | 'Option<UInt16>' | 'Option<Int8>' | 'Option<UInt8>' | 'Option<Float64>' | 'Option<Float32>' | 'Option<Float16>' | 'Option<BigInt>' | 'Option<Decimal>' | 'Bool' | '?Bool' | 'Option<Bool>' | 'Rune' | '?Rune' | 'Option<Rune>' | 'String' | '?String' | 'Option<String>' | 'Duration' | '?Duration' | 'Option<Duration>' | 'DateTime' | '?DateTime' | 'Option<DateTime>' => quote(
+                result = this.$(d.identifier) == other.$(d.identifier))
+            case _ => quote(
+                result = match($(d.identifier)){
                 case x: Equatable<$(declType)> => x == other.$(d.identifier)
                 case _ => true
             })
@@ -246,12 +228,11 @@ func generateCompare(d: ClassDecl, exclusion: HashSet<String>) {
     for (d in d.body.decls where d is VarDecl &&
         !(isStatic(d) || exclusion.contains(d.identifier.value) || exclusion.contains('${d.identifier.value}_'))) {
         let declType = (d as VarDecl).getOrThrow().declType
-        cmp += match(declType.toTokens().toString().replace(' ', '')){
-            case 'Int' | 'UInt' | 'Byte' | "IntNative" | 'UIntNative' |
-                 'Int64' | 'UInt64' | 'Int32' | 'UInt32' | 'Int16' | 'UInt16' | 'Int8' | 'UInt8' | 
-                 'Float64' | 'Float32' | 'Float16' | 'BigInt' | 'Decimal' |
-                 'Bool' | 'Rune' | 'String' | 'Duration' | 'DateTime'  => quote(this.$(d.identifier).compare(other.$(d.identifier)))
-            case _ => quote(match($(d.identifier)){
+        cmp += match (declType.toTokens().toString().replace(' ', '')) {
+            case 'Int' | 'UInt' | 'Byte' | "IntNative" | 'UIntNative' | 'Int64' | 'UInt64' | 'Int32' | 'UInt32' | 'Int16' | 'UInt16' | 'Int8' | 'UInt8' | 'Float64' | 'Float32' | 'Float16' | 'BigInt' | 'Decimal' | 'Bool' | 'Rune' | 'String' | 'Duration' | 'DateTime' => quote(
+                result = this.$(d.identifier).compare(other.$(d.identifier)))
+            case _ => quote(
+                result = match($(d.identifier)){
                 case x: Comparable<$(declType)> => x.compare(other.$(d.identifier))
                 case _ => EQ
             })
@@ -284,24 +265,14 @@ func generateToString(d: ClassDecl, exclusion: HashSet<String>) {
     var str = quote($(d.identifier)$(d.genericParamTokens)) + `lsquare`
     for (d in d.body.decls where d is VarDecl &&
         !(isStatic(d) || exclusion.contains(d.identifier.value) || exclusion.contains('${d.identifier.value}_'))) {
-        str += match((d as VarDecl).getOrThrow().toTokens().toString().replace(' ', '')){
-            case 'Int' | 'UInt' | 'Byte' | "IntNative" | 'UIntNative' |
-                 'Int64' | 'UInt64' | 'Int32' | 'UInt32' | 'Int16' | 'UInt16' | 'Int8' | 'UInt8' | 
-                 'Float64' | 'Float32' | 'Float16' | 'BigInt' | 'Decimal' | 
-                 '?Int' | '?UInt' | '?Byte' | "?IntNative" | '?UIntNative' |
-                 '?Int64' | '?UInt64' | '?Int32' | '?UInt32' | '?Int16' | '?UInt16' | '?Int8' | '?UInt8' | 
-                 '?Float64' | '?Float32' | '?Float16' | '?BigInt' | '?Decimal' | 
-                 'Option<Int>' | 'Option<UInt>' | 'Option<Byte>' | "Option<IntNative>" | 'Option<UIntNative>' |
-                 'Option<Int64>' | 'Option<UInt64>' | 'Option<Int32>' | 'Option<UInt32>' | 'Option<Int16>' | 'Option<UInt16>' | 'Option<Int8>' | 'Option<UInt8>' | 
-                 'Option<Float64>' | 'Option<Float32>' | 'Option<Float16>' | 'Option<BigInt>' | 'Option<Decimal>' | 
-                 'Bool' | '?Bool' | 'Option<Bool>' | 'Rune' | '?Rune' | 'Option<Rune>' |
-                 'String' | '?String' | 'Option<String>' | 'Duration' | '?Duration' | 'Option<Duration>' | 
-                 'DateTime' | '?DateTime' | 'Option<DateTime>' => quote(
+        str += match ((d as VarDecl).getOrThrow().toTokens().toString().replace(' ', '')) {
+            case 'Int' | 'UInt' | 'Byte' | "IntNative" | 'UIntNative' | 'Int64' | 'UInt64' | 'Int32' | 'UInt32' | 'Int16' | 'UInt16' | 'Int8' | 'UInt8' | 'Float64' | 'Float32' | 'Float16' | 'BigInt' | 'Decimal' | '?Int' | '?UInt' | '?Byte' | "?IntNative" | '?UIntNative' | '?Int64' | '?UInt64' | '?Int32' | '?UInt32' | '?Int16' | '?UInt16' | '?Int8' | '?UInt8' | '?Float64' | '?Float32' | '?Float16' | '?BigInt' | '?Decimal' | 'Option<Int>' | 'Option<UInt>' | 'Option<Byte>' | "Option<IntNative>" | 'Option<UIntNative>' | 'Option<Int64>' | 'Option<UInt64>' | 'Option<Int32>' | 'Option<UInt32>' | 'Option<Int16>' | 'Option<UInt16>' | 'Option<Int8>' | 'Option<UInt8>' | 'Option<Float64>' | 'Option<Float32>' | 'Option<Float16>' | 'Option<BigInt>' | 'Option<Decimal>' | 'Bool' | '?Bool' | 'Option<Bool>' | 'Rune' | '?Rune' | 'Option<Rune>' | 'String' | '?String' | 'Option<String>' | 'Duration' | '?Duration' | 'Option<Duration>' | 'DateTime' | '?DateTime' | 'Option<DateTime>' => quote(
                     result.append($(d.identifier.value))
                     result.append(" = ")
                     result.append(this.$(d.identifier).toString())
                     result.append("; "))
-            case _ => quote(match($(d.identifier)){
+            case _ => quote(
+                match($(d.identifier)){
                 case x: ToString => 
                     result.append($(d.identifier.value))
                     result.append(" = ")
@@ -312,13 +283,19 @@ func generateToString(d: ClassDecl, exclusion: HashSet<String>) {
         } + `nl`
     }
     str += `rsquare`
-    d.body.decls.append(parseDecl(quote(
+    d
+        .body
+        .decls
+        .append(
+            parseDecl(
+                quote(
         public func toString(): Bool {
             var result = StringBuilder()
             $str
             result
         }
-    )))
+    )
+            ))
 }
 
 func generateToFields(d: ClassDecl, exclusion: HashSet<String>) {
@@ -332,8 +309,9 @@ func generateToFields(d: ClassDecl, exclusion: HashSet<String>) {
     klassDecl.superTypes.append(RefType(quote(DataObject<$(klassIdentifier)>)))
     let body = klassDecl.body.decls
     var fields = ArrayList<Expr>()
-    for (d in body where (d is VarDecl || d is PropDecl) && !isStatic(d) && isPublic(d) && !exclusion.contains(d.identifier.value)) {
-        let expr =  match (d) {
+    for (d in body where (d is VarDecl || d is PropDecl) && !isStatic(d) && isPublic(d) &&
+        !exclusion.contains(d.identifier.value)) {
+        let expr = match (d) {
             case x: VarDecl =>
                 var declType = x.declType.toTokens()
                 var optionSetExpr = quote(
@@ -344,15 +322,16 @@ func generateToFields(d: ClassDecl, exclusion: HashSet<String>) {
                     }
                 )
                 var isOption = true
-                if(declType[0].kind == QUEST){
-                    declType = declType[1 ..]
-                }else if(declType[0].kind == IDENTIFIER && declType[0].value == 'Option'){
-                    declType = declType[2 .. declType.size - 1]
-                }else{
-                    optionSetExpr = quote(throw DataException('data is None for field ' + $(x.identifier.value) + ' of ' + TypeInfos.get<$(klassIdentifier)>().toString()))
+                if (declType[0].kind == QUEST) {
+                    declType = declType[1..]
+                } else if (declType[0].kind == IDENTIFIER && declType[0].value == 'Option') {
+                    declType = declType[2..declType.size - 1]
+                } else {
+                    optionSetExpr = quote(
+                        throw DataException('data is None for field ' + $(x.identifier.value) + ' of ' + TypeInfos.get<$(klassIdentifier)>().toString()))
                     isOption = false
                 }
-                var optionGetExpr = if(isOption){
+                var optionGetExpr = if (isOption) {
                     quote(
                         match(o){
                             case v: $klassIdentifier => match(v.$(x.identifier)){
@@ -362,11 +341,13 @@ func generateToFields(d: ClassDecl, exclusion: HashSet<String>) {
                             case _ => throw DataException("type of current instance does not match, expected " + TypeInfos.get<$(klassIdentifier)>().toString() + ", but receives " + TypeInfo.of(o).toString())
                         }
                     )
-                }else{
-                    quote((o as $klassIdentifier).getOrThrow{DataException("type of current instance does not match, expected " + TypeInfos.get<$(klassIdentifier)>().toString() + ", but receives " + TypeInfo.of(o).toString())}.$(x.identifier).toData())
+                } else {
+                    quote(
+                        (o as $klassIdentifier).getOrThrow{DataException("type of current instance does not match, expected " + TypeInfos.get<$(klassIdentifier)>().toString() + ", but receives " + TypeInfo.of(o).toString())}.$(x.identifier).toData())
                 }
                 if (x.isVar()) {
-                    TrailingClosureExpr(quote(
+                    TrailingClosureExpr(
+                        quote(
                         MutableField($(x.identifier.value), TypeInfos.get<$(declType)>(), {o =>
                         $optionGetExpr
                     }){o, d, flag =>
@@ -377,7 +358,7 @@ func generateToFields(d: ClassDecl, exclusion: HashSet<String>) {
                                 $optionSetExpr
                             }
                         }
-                        match ($(declType).tryFromData(d, flag: flag)) {
+                        match ($(declType).tryFromData(d, flag: flag).value) {
                             case Some(x: $(declType)) =>
                                 match(o){
                                     case v: $klassIdentifier => v.$(x.identifier) = x
@@ -387,12 +368,15 @@ func generateToFields(d: ClassDecl, exclusion: HashSet<String>) {
                             case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) != 0 => false
                             case _ => throw DataException('data ' + d.toString() + 'cannot be converted to ' + TypeInfos.get<$(declType)>().toString())
                         }
-                    }))
+                    })
+                    )
                 } else {
-                    TrailingClosureExpr(quote(
+                    TrailingClosureExpr(
+                        quote(
                         ReadonlyField($(x.identifier.value), TypeInfos.get<$(declType)>()){o=>
                         $optionGetExpr
-                    }))
+                    })
+                    )
                 }
             case x: PropDecl =>
                 var declType = x.declType.toTokens()
@@ -404,15 +388,16 @@ func generateToFields(d: ClassDecl, exclusion: HashSet<String>) {
                     }
                 )
                 var isOption = true
-                if(declType[0].kind == QUEST){
-                    declType = declType[1 ..]
-                }else if(declType[0].kind == IDENTIFIER && declType[0].value == 'Option'){
-                    declType = declType[2 .. declType.size - 1]
-                }else{
-                    optionSetExpr = quote(throw DataException('data is None for field ' + $(x.identifier.value) + ' of ' + TypeInfos.get<$(klassIdentifier)>().toString()))
+                if (declType[0].kind == QUEST) {
+                    declType = declType[1..]
+                } else if (declType[0].kind == IDENTIFIER && declType[0].value == 'Option') {
+                    declType = declType[2..declType.size - 1]
+                } else {
+                    optionSetExpr = quote(
+                        throw DataException('data is None for field ' + $(x.identifier.value) + ' of ' + TypeInfos.get<$(klassIdentifier)>().toString()))
                     isOption = false
                 }
-                var optionGetExpr = if(isOption){
+                var optionGetExpr = if (isOption) {
                     quote(
                         match(o){
                             case v: $klassIdentifier => match(v.$(x.identifier)){
@@ -422,11 +407,13 @@ func generateToFields(d: ClassDecl, exclusion: HashSet<String>) {
                             case _ => throw DataException("type of current instance does not match, expected " + TypeInfos.get<$(klassIdentifier)>().toString() + ", but receives " + TypeInfo.of(o).toString())
                         }
                     )
-                }else{
-                    quote((o as $klassIdentifier).getOrThrow{DataException("type of current instance does not match, expected " + TypeInfos.get<$(klassIdentifier)>().toString() + ", but receives " + TypeInfo.of(o).toString())}.$(x.identifier).toData())
+                } else {
+                    quote(
+                        (o as $klassIdentifier).getOrThrow{DataException("type of current instance does not match, expected " + TypeInfos.get<$(klassIdentifier)>().toString() + ", but receives " + TypeInfo.of(o).toString())}.$(x.identifier).toData())
                 }
                 if (x.isMut()) {
-                    TrailingClosureExpr(quote(
+                    TrailingClosureExpr(
+                        quote(
                         MutableField($(x.identifier.value), TypeInfos.get<$(declType)>(), {o =>
                         $optionGetExpr
                     }){o, d, flag =>
@@ -437,7 +424,7 @@ func generateToFields(d: ClassDecl, exclusion: HashSet<String>) {
                                 $optionSetExpr
                             }
                         }
-                        match ($(declType).tryFromData(d, flag: flag)) {
+                        match ($(declType).tryFromData(d, flag: flag).value) {
                             case Some(x: $(declType)) =>
                                 match(o){
                                     case v: $klassIdentifier => v.$(x.identifier) = x
@@ -447,15 +434,17 @@ func generateToFields(d: ClassDecl, exclusion: HashSet<String>) {
                             case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) != 0 => false
                             case _ => throw DataException('data ' + d.toString() + 'cannot be converted to ' + TypeInfos.get<$(declType)>().toString())
                         }
-                    }))
+                    })
+                    )
                 } else {
-                    TrailingClosureExpr(quote(
+                    TrailingClosureExpr(
+                        quote(
                         ReadonlyField($(x.identifier.value), TypeInfos.get<$(declType)>()){o =>
                         $optionGetExpr
-                    }))
+                    })
+                    )
                 }
-            case _ =>
-                continue
+            case _ => continue
         }
         fields.append(expr)
     }
@@ -467,8 +456,8 @@ func generateToFields(d: ClassDecl, exclusion: HashSet<String>) {
     let fieldsName = Token(IDENTIFIER, "___dAtA__fIElds_")
     var fieldTokens = `lsquare`
     var i = 0
-    while(i < fields.size) {
-        if(i > 0){
+    while (i < fields.size) {
+        if (i > 0) {
             fieldTokens += `comma`
         }
         fieldTokens += fields[i].toTokens()
@@ -499,18 +488,11 @@ func generateToFields(d: ClassDecl, exclusion: HashSet<String>) {
             ),
             FuncDecl(
                 quote(
-        public static func fromData(data: Data, flag!: DataConversionFlag = SILENCE): Ojbect {
-            tryFromData(data, flag: flag).getOrThrow{DataException("current data " + data.toString() + " cannot be converted to " + TypeInfos.get<$klassIdentifier>().toString())}
-        }
-    )
-            ),
-            FuncDecl(
-                quote(
-        public static func tryFromData(data: Data, flag!: DataConversionFlag = SILENCE): ?Object {
+        public static func tryFromData(data: Data, flag!: DataConversionFlag = SILENCE): DataOption<$klassIdentifier> {
             match(ObjectData<$klassIdentifier>.populate(data, flag: flag)){
-                case Some(o) => o
+                case Some(o) => DataOption(o)
                 case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException(data.toString() + 'cannot be converted to ' + TypeInfos.get<$klassIdentifier>().toString())
-                case _ => None
+                case _ => DataOption<$klassIdentifier>.NONE
             }
         }
     )

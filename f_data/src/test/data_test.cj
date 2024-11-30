@@ -25,9 +25,9 @@ public class TT{
 public class DataTest {
   private var i: Int64 = 0
   private var s: String = ''
-  public var opts: ?String = None
+  private var opts: ?String = None
   private var tt: TT = TT()
-  public var dt: ?DataTest = None
+  private var dt: ?DataTest = None
   private var ilist: ArrayList<Int64> = ArrayList<Int64>()
   private var slist: ArrayList<String> = ArrayList<String>()
   private var dlist: ArrayList<DataTest> = ArrayList<DataTest>()
@@ -37,11 +37,15 @@ public class DataTest {
 public class DataUnitTest {
     @TestCase
     public func test1(): Unit {
-        let dt = DataTest()
+        var dt = DataTest()
         @Assert(dt is Hashable)
         @Assert(dt is Equatable<DataTest>)
         @Assert(!(dt is Comparable<DataTest>))
         dt.s = 'hello'
         @Assert('hello', dt.s)
+        dt.s = 'hello world'
+        let data = dt.toData()
+        dt = ObjectData<DataTest>.populate(data, flag: SILENCE).getOrThrow()
+        @Assert('hello world', dt.s)
     }
 }

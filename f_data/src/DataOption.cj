@@ -5,21 +5,18 @@
     You may obtain a copy of Mulan PSL v2 at:
             http://license.coscl.org.cn/MulanPSL2
     THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-    See the Mulan PSL v2 for more details.
+    See the Mulan PSL v2 for more details.  
 */
 package f_data
 
-extend<T> Option<T> <: DataFields<T> where T <: DataFields<T> {
-    public func toData(): Data {
-        match(this) {
-            case Some(x) => x.toData()
-            case _ => DataNone.INSTANCE
-        }
+public struct DataOption<T> {
+    public static let NONE = DataOption<T>(None)
+    public DataOption(public let value: ?T){}
+
+    public func isSome(): Bool {
+        value.isSome()
     }
-    public static func tryFromData(data: Data, flag!: DataConversionFlag = SILENCE): DataOption<T> {
-        match(data) {
-            case x: DataNone => DataOption<T>.NONE
-            case x => T.tryFromData(x, flag: flag)
-        }
+    public func isNone(): Bool {
+        value.isNone()
     }
 }
