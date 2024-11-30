@@ -82,6 +82,17 @@ _/ ____\____  __ __  _____/  |______  |__| ____
   - 针对Iterator的扩展
 - 对象池
 - 堆缓存
+  ```cj
+  let cache = HeapCache<V> where V <: Object (
+    private let concurrencyLevel!: Int64 = DEFAULT_HEAP_CACHE_CONCURRENCY_LEVEL,
+    private let maxLife!: Duration = DEFAULT_HEAP_CACHE_MAX_LIFE,
+    private let maxSize!: Int64 = DEFAULT_HEAP_CACHE_MAX_SIZE,
+    private let checkDuration!: Duration = DEFAULT_HEAP_CHECK_CHECK_DURATION,
+    private let evictionCallback!: (String, V) -> Unit = {k, v => ()}
+  )
+  cache.set('key', object)
+  let opt: ?V = cache.get('key')
+  ```
 - 正则表达式DSL
 - 简化属性复制的工具
 - 优先级队列
@@ -103,6 +114,14 @@ _/ ____\____  __ __  _____/  |______  |__| ____
   - 雪花算法改
 - 配置类型
 - jwt
+  ```cj
+  let jwt = JWT().hmacSHA1(keyOfBytes)//支持标准库提供的除国密之外的全部签名算法，国密不支持HMAC故无法支持
+  //JWT().hmacSHA1ByBase64Key(base64String)
+  //JWT().hmacSHA1ByHexKey(hexString)
+  let sign = jwt.keyId('keyId').expire(Duration.minute).addPayload('name', 'Bob').encoder().sign()
+  println(sign)
+  @Expect(jwt.verifier(sign).verify(), true)
+  ```
 - 日志
   ```cj
   import fountain.log.LoggerFactory
