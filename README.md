@@ -148,6 +148,11 @@ _/ ____\____  __ __  _____/  |______  |__| ____
     export fountain_logger_appender_UnixName_path=/path/of/unix/file.log # 默认是/tmp/log/unix.log
   ```
 - 流程引擎
+- 实例复制
+  - 由于语言的限制，不支持类的继承，因为对集合类型和Option的扩展无法即扩展DataFields<T>又扩展DataObject<T> <: DataFields<Object>，
+  - 从语言特性上，这两个扩展只有一个会生效，但是会造成接口的函数遮盖。
+  - 由于以上限制，对DataObject<T>的声明也就改成了DataObject<T> <: DataFields<T> where T <: Object & DataObject<T>
+  - 由于以上限制，泛型又不支持协变如果父类实现了DataObject<T>，则子类无法再次实现这个接口
 - 功能更丰富的json
 - 并发
   - 限流策略

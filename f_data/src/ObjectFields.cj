@@ -58,13 +58,17 @@ public class ObjectFields <: Iterable<ReadableField> {
         for(p in currentType.instanceProperties) {
             populateFields(p.name, p.annotations)
         }
-        match(currentType.superClass) {
-            case Some(x) where x != TypeInfos.get<Object>() && x.isSubtypeOf(TypeInfos.get("f_data.DataObject<${x.qualifiedName}>")) =>
-                let superFields = x.getStaticFunction("dataFields").apply()
-                let superFieldsIterator = (superFields as ObjectFields).getOrThrow().iterator()
-                populateFields(superFieldsIterator, throwIfDuplicate: false)
-            case _ => ()
-        }
+        // 由于语言的限制，不支持类的继承，因为对集合类型和Option的扩展无法即扩展DataFields<T>又扩展DataObject<T> <: DataFields<Object>，
+        // 从语言特性上，这两个扩展只有一个会生效，但是会造成接口的函数遮盖。
+        // 由于以上限制，对DataObject<T>的声明也就改成了DataObject<T> <: DataFields<T> where T <: Object & DataObject<T>
+        // 由于以上限制，泛型又不支持协变如果父类实现了DataObject<T>，则子类无法再次实现这个接口
+        // match(currentType.superClass) {
+        //     case Some(x) where x != TypeInfos.get<Object>() && x.isSubtypeOf(TypeInfos.get("f_data.DataObject<${x.qualifiedName}>")) =>
+        //         let superFields = x.getStaticFunction("dataFields").apply()
+        //         let superFieldsIterator = (superFields as ObjectFields).getOrThrow().iterator()
+        //         populateFields(superFieldsIterator, throwIfDuplicate: false)
+        //     case _ => ()
+        // }
         objf
     }
     public func create(): Object {
