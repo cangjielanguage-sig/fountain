@@ -358,7 +358,7 @@ func generateToFields(d: ClassDecl, exclusion: HashSet<String>) {
                                 $optionSetExpr
                             }
                         }
-                        match ($(declType).tryFromData(d, flag: flag).value) {
+                        match (convert<$(declType)>(d, flag: flag)) {
                             case Some(x: $(declType)) =>
                                 match(o){
                                     case v: $klassIdentifier => v.$(x.identifier) = x
@@ -424,7 +424,7 @@ func generateToFields(d: ClassDecl, exclusion: HashSet<String>) {
                                 $optionSetExpr
                             }
                         }
-                        match ($(declType).tryFromData(d, flag: flag).value) {
+                        match (convert<$(declType)>(d, flag: flag)) {
                             case Some(x: $(declType)) =>
                                 match(o){
                                     case v: $klassIdentifier => v.$(x.identifier) = x
@@ -488,11 +488,11 @@ func generateToFields(d: ClassDecl, exclusion: HashSet<String>) {
             ),
             FuncDecl(
                 quote(
-        public static func tryFromData(data: Data, flag!: DataConversionFlag = SILENCE): DataOption<$klassIdentifier> {
+        public static func tryFromData(data: Data, flag!: DataConversionFlag = SILENCE): Any {
             match(ObjectData<$klassIdentifier>.populate(data, flag: flag)){
-                case Some(o) => DataOption(o)
+                case Some(o) => o as $klassIdentifier
                 case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException(data.toString() + 'cannot be converted to ' + TypeInfos.get<$klassIdentifier>().toString())
-                case _ => DataOption<$klassIdentifier>.NONE
+                case _ => None<$klassIdentifier>
             }
         }
     )

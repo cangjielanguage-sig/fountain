@@ -14,7 +14,7 @@ public interface DataObject<T> <: DataFields<T> where T <: Object & DataObject<T
 
     func toData(): Data
 
-    static func tryFromData(data: Data, flag!: DataConversionFlag): DataOption<T>
+    static func tryFromData(data: Data, flag!: DataConversionFlag): Any
 }
 
 class FieldIterator<T> <: Iterator<(String, Data)> where T <: Object & DataObject<T> {
@@ -52,7 +52,12 @@ public class ObjectData<T> <: Data & Iterable<(String, Data)> where T <: Object 
     }
     public func get<V>(name: String, flag!: UInt64 = SILENCE): ?V where V <: DataFields<V> {
         match(T.dataFields().readableField(name)?.get(data)){
-            case Some(x) => V.tryFromData(x, flag: flag).value
+            case Some(x) => match(V.tryFromData(x, flag: flag)){
+                case x: ?V => x
+                case x: V => x
+                case _ where (flag & IGNORE_FIELD_NOT_FOUND) == 0 => None
+                case _ => throw DataException('field ${name} is not found in ${TypeInfos.get<T>()}')
+            }
             case _ where (flag & IGNORE_FIELD_NOT_FOUND) == 0 => None
             case _ => throw DataException('field ${name} is not found in ${TypeInfos.get<T>()}')
         }
@@ -174,10 +179,17 @@ public class ObjectData<T> <: Data & Iterable<(String, Data)> where T <: Object 
     public static func populate<M, V>(src: T, map: M, flag!: UInt64 = SILENCE): M where M <: Map<String, V>,
         V <: DataFields<V> {
         for ((k, v) in ObjectData<T>(src)) {
-            if (let Some(x) <- V.tryFromData(v, flag: flag).value) {
-                map[k] = x
-            } else if ((flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0) {
-                throw DataException('field ${k} of ${TypeInfos.get<T>()} cannot be converted to ${TypeInfos.get<V>()}')
+            match(V.tryFromData(v, flag: flag)){
+                case x: ?V => match(x){
+                    case Some(x) => map[k] = x
+                    case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => 
+                        throw DataException('field ${k} of ${TypeInfos.get<T>()} cannot be converted to ${TypeInfos.get<V>()}')
+                    case _ => continue
+                }
+                case x: V => map[k] = x
+                case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => 
+                    throw DataException('field ${k} of ${TypeInfos.get<T>()} cannot be converted to ${TypeInfos.get<V>()}')
+                case _ => continue
             }
         }
         map

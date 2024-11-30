@@ -22,25 +22,25 @@ extend<T> Array<T> <: DataFields<Array<T>> where T <: DataFields<T> {
                 DataSequence(list)
         }
     }
-    public static func tryFromData(data: Data, flag!: DataConversionFlag = SILENCE): DataOption<Array<T>> {
+    public static func tryFromData(data: Data, flag!: DataConversionFlag = SILENCE): Any {
         match (data) {
             case x: DataSequence =>
                 let list = ArrayList<T>()
                 for (v in x) {
-                    match (T.tryFromData(v, flag: flag).value) {
+                    match (convert<T>(v, flag: flag)) {
                         case Some(x: T) => list.append(x)
                         case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException('${v} cannot be converted to ${TypeInfos.get<T>()}')
-                        case _ => return DataOption<Array<T>>.NONE
+                        case _ => continue
                     }
                 }
-                DataOption<Array<T>>(unsafe{list.getRawArray()})
+                unsafe{list.getRawArray()} as Array<T>
             case x: DataString where TypeInfos.get<T>() == TypeInfos.get<Byte>() && Regex.BASE64.matched(x.toString()) =>
-                DataOption<Array<T>>((fromBase64String(x.toString()) as Array<T>).getOrThrow())
+                fromBase64String(x.toString())
             case _ where (flag & IGNORE_FIELD_TYPE_NOT_MATCH) == 0 => throw DataException('${data} does not match ${TypeInfos.get<Array<T>>()}')
-            case x => match (T.tryFromData(x, flag: flag).value) {
-                case Some(x: T) => DataOption<Array<T>>([x])
+            case x => match (convert<T>(x, flag: flag)) {
+                case Some(x: T) => [x]
                 case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException('${data} cannot be converted to ${TypeInfos.get<Array<T>>()}')
-                case _ => DataOption<Array<T>>.NONE
+                case _ => None<T>
             }
         }
     }
@@ -54,25 +54,25 @@ extend<T> ArrayList<T> <: DataFields<ArrayList<T>> where T <: DataFields<T> {
         }
         DataSequence(list)
     }
-    public static func tryFromData(data: Data, flag!: DataConversionFlag = SILENCE): DataOption<ArrayList<T>> {
+    public static func tryFromData(data: Data, flag!: DataConversionFlag = SILENCE): Any {
         match (data) {
             case x: DataSequence =>
                 let list = ArrayList<T>()
                 for (v in x) {
-                    match (T.tryFromData(v, flag: flag).value) {
+                    match (convert<T>(v, flag: flag)) {
                         case Some(x: T) => list.append(x)
                         case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException('${v} cannot be converted to ${TypeInfos.get<T>()}')
-                        case _ => return DataOption<ArrayList<T>>.NONE
+                        case _ => continue
                     }
                 }
-                DataOption<ArrayList<T>>(list)
+                list
             case _ where (flag & IGNORE_FIELD_TYPE_NOT_MATCH) == 0 => throw DataException('${data} does not match ${TypeInfos.get<ArrayList<T>>()}')
-            case x => match (T.tryFromData(x, flag: flag).value) {
-                case Some(x: T) => DataOption<ArrayList<T>>(ArrayList<T>([x]))
+            case x => match (convert<T>(x, flag: flag)) {
+                case Some(x: T) => ArrayList<T>([x])
                 case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException('${data} cannot be converted to ${TypeInfos.get<ArrayList<T>>()}')
-                case _ => DataOption<ArrayList<T>>.NONE
+                case _ => None<ArrayList<T>>
             }
-            case _ => DataOption<ArrayList<T>>.NONE
+            case _ => None<ArrayList<T>>
         }
     }
 }
@@ -85,25 +85,25 @@ extend<T> HashSet<T> <: DataFields<HashSet<T>> where T <: DataFields<T> & Hashab
         }
         DataSequence(list)
     }
-    public static func tryFromData(data: Data, flag!: DataConversionFlag = SILENCE): DataOption<HashSet<T>> {
+    public static func tryFromData(data: Data, flag!: DataConversionFlag = SILENCE): Any {
         match (data) {
             case x: DataSequence =>
                 let set = HashSet<T>()
                 for (v in x) {
-                    match (T.tryFromData(v, flag: flag).value) {
+                    match (convert<T>(v, flag: flag)) {
                         case Some(x: T) => set.put(x)
                         case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException('${v} cannot be converted to ${TypeInfos.get<T>()}')
-                        case _ => return DataOption<HashSet<T>>.NONE
+                        case _ => continue
                     }
                 }
-                DataOption<HashSet<T>>(set)
+                set
             case _ where (flag & IGNORE_FIELD_TYPE_NOT_MATCH) == 0 => throw DataException('${data} does not match ${TypeInfos.get<HashSet<T>>()}')
-            case x => match (T.tryFromData(x, flag: flag).value) {
-                case Some(x: T) => DataOption<HashSet<T>>(HashSet<T>([x]))
+            case x => match (convert<T>(x, flag: flag)) {
+                case Some(x: T) => HashSet<T>([x])
                 case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException('${data} cannot be converted to ${TypeInfos.get<HashSet<T>>()}')
-                case _ => DataOption<HashSet<T>>.NONE
+                case _ => None<HashSet<T>>
             }
-            case _ => DataOption<HashSet<T>>.NONE
+            case _ => None<HashSet<T>>
         }
     }
 }
@@ -115,25 +115,25 @@ extend<T> TreeSet<T> <: DataFields<TreeSet<T>> where T <: DataFields<T> & Compar
         }
         DataSequence(list)
     }
-    public static func tryFromData(data: Data, flag!: DataConversionFlag = SILENCE): DataOption<TreeSet<T>> {
+    public static func tryFromData(data: Data, flag!: DataConversionFlag = SILENCE): Any {
         match (data) {
             case x: DataSequence =>
                 let set = TreeSet<T>()
                 for (v in x) {
-                    match (T.tryFromData(v, flag: flag).value) {
+                    match (convert<T>(v, flag: flag)) {
                         case Some(x: T) => set.put(x)
                         case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException('${v} cannot be converted to ${TypeInfos.get<T>()}')
-                        case _ => return DataOption<TreeSet<T>>.NONE
+                        case _ => continue
                     }
                 }
-                DataOption(set)
+                set
             case _ where (flag & IGNORE_FIELD_TYPE_NOT_MATCH) == 0 => throw DataException('${data} does not match ${TypeInfos.get<TreeSet<T>>()}')
-            case x => match (T.tryFromData(x, flag: flag).value) {
-                case Some(x: T) => DataOption(TreeSet<T>([x]))
+            case x => match (convert<T>(x, flag: flag)) {
+                case Some(x: T) => TreeSet<T>([x])
                 case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException('${data} cannot be converted to ${TypeInfos.get<TreeSet<T>>()}')
-                case _ => DataOption<TreeSet<T>>.NONE
+                case _ => None<TreeSet<T>>
             }
-            case _ => DataOption<TreeSet<T>>.NONE
+            case _ => None<TreeSet<T>>
         }
     }
 }
@@ -155,34 +155,34 @@ extend<K, V> HashMap<K, V> <: DataFields<HashMap<K, V>> where K <: DataFields<K>
             DataTuples(list)
         }
     }
-    public static func tryFromData(data: Data, flag!: DataConversionFlag = SILENCE): DataOption<HashMap<K, V>> {
+    public static func tryFromData(data: Data, flag!: DataConversionFlag = SILENCE): Any {
         match (data) {
             case x: DataSequence =>
                 let map = HashMap<K, V>()
                 for (v in x) {
                     match (v) {
-                        case x: DataTuple => match ((K.tryFromData(x.key, flag: flag).value, V.tryFromData(x.value, flag: flag).value)) {
+                        case x: DataTuple => match ((convert<K>(x.key, flag: flag), convert<V>(x.value, flag: flag))) {
                             case (Some(k: K), Some(v: V)) => map.put(k, v)
                             case (Some(_), _) where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException('${x.value} cannot be converted to ${TypeInfos.get<V>()}')
                             case (_, Some(_)) where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException('${x.key} cannot be converted to ${TypeInfos.get<K>()}')
                             case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException('tuple (${x.key}, ${x.value}) cannot be converted to (${TypeInfos.get<K>()}, ${TypeInfos.get<V>()})')
-                            case _ => return DataOption<HashMap<K, V>>.NONE
+                            case _ => continue
                         }
                         case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException('tuple ${x} cannot be converted to (${TypeInfos.get<K>()}, ${TypeInfos.get<V>()})')
-                        case _ => return DataOption<HashMap<K, V>>.NONE
+                        case _ => continue
                     }
                 }
-                DataOption(map)
+                map
             case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException('(${data}) cannot be converted to ${TypeInfos.get<HashMap<K, V>>()}')
-            case x: DataTuple => match ((K.tryFromData(x.key, flag: flag).value, V.tryFromData(x.value, flag: flag).value)) {
+            case x: DataTuple => match ((convert<K>(x.key, flag: flag), convert<V>(x.value, flag: flag))) {
                 case (Some(k: K), Some(v: V)) =>
                     let map = HashMap<K, V>()
                     map.put(k, v)
-                    DataOption(map)
+                    map
                 case (Some(_), _) where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException('${x.value} cannot be converted to ${TypeInfos.get<V>()}')
                 case (_, Some(_)) where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException('${x.key} cannot be converted to ${TypeInfos.get<K>()}')
                 case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException('tuple (${x.key}, ${x.value}) cannot be converted to (${TypeInfos.get<K>()}, ${TypeInfos.get<V>()})')
-                case _ => return DataOption<HashMap<K, V>>.NONE
+                case _ => return None<HashMap<K, V>>
             }
             case x =>
                 let dataType = TypeInfo.of(x)
@@ -193,7 +193,7 @@ extend<K, V> HashMap<K, V> <: DataFields<HashMap<K, V>> where K <: DataFields<K>
                     let iterator = (dataType.getInstanceFunction("fields").apply(x) as Iterator<ReadableField>).
                         getOrThrow()
                     for (f in iterator) {
-                        match ((K.tryFromData(f.name.toData(), flag: flag).value, V.tryFromData(f.get(raw), flag: flag).value)) {
+                        match ((convert<K>(f.name.toData(), flag: flag), convert<V>(f.get(raw), flag: flag))) {
                             case (Some(k: K), Some(v: V)) => map[k] = v
                             case (Some(_), _) where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException('${f.get(raw)} cannot be converted to ${TypeInfos.get<V>()}')
                             case (_, Some(_)) where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException('${f.name} cannot be converted to ${TypeInfos.get<K>()}')
@@ -201,11 +201,11 @@ extend<K, V> HashMap<K, V> <: DataFields<HashMap<K, V>> where K <: DataFields<K>
                             case _ => continue
                         }
                     }
-                    DataOption(map)
+                    map
                 } else if ((flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0) {
                     throw DataException('${x} cannot be converted to ${TypeInfos.get<HashMap<K, V>>()}')
                 } else {
-                    DataOption<HashMap<K, V>>.NONE
+                    None<HashMap<K, V>>
                 }
         }
     }
@@ -228,34 +228,34 @@ extend<K, V> TreeMap<K, V> <: DataFields<TreeMap<K, V>> where K <: DataFields<K>
             DataTuples(list)
         }
     }
-    public static func tryFromData(data: Data, flag!: DataConversionFlag = SILENCE): DataOption<TreeMap<K, V>> {
+    public static func tryFromData(data: Data, flag!: DataConversionFlag = SILENCE): Any {
         match (data) {
             case x: DataSequence =>
                 let map = TreeMap<K, V>()
                 for (v in x) {
                     match (v) {
-                        case x: DataTuple => match ((K.tryFromData(x.key, flag: flag).value, V.tryFromData(x.value, flag: flag).value)) {
+                        case x: DataTuple => match ((convert<K>(x.key, flag: flag), convert<V>(x.value, flag: flag))) {
                             case (Some(k: K), Some(v: V)) => map.put(k, v)
                             case (Some(_), _) where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException('${x.value} cannot be converted to ${TypeInfos.get<V>()}')
                             case (_, Some(_)) where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException('${x.key} cannot be converted to ${TypeInfos.get<K>()}')
                             case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException('tuple (${x.key}, ${x.value}) cannot be converted to (${TypeInfos.get<K>()}, ${TypeInfos.get<V>()})')
-                            case _ => return DataOption<TreeMap<K, V>>.NONE
+                            case _ => continue
                         }
                         case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException('tuple ${x} cannot be converted to (${TypeInfos.get<K>()}, ${TypeInfos.get<V>()})')
-                        case _ => return DataOption<TreeMap<K, V>>.NONE
+                        case _ => continue
                     }
                 }
-                DataOption(map)
+                map
             case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException('(${data}) cannot be converted to ${TypeInfos.get<TreeMap<K, V>>()}')
-            case x: DataTuple => match ((K.tryFromData(x.key, flag: flag).value, V.tryFromData(x.value, flag: flag).value)) {
+            case x: DataTuple => match ((convert<K>(x.key, flag: flag), convert<V>(x.value, flag: flag))) {
                 case (Some(k: K), Some(v: V)) =>
                     let map = TreeMap<K, V>()
                     map.put(k, v)
-                    DataOption(map)
+                    map
                 case (Some(_), _) where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException('${x.value} cannot be converted to ${TypeInfos.get<V>()}')
                 case (_, Some(_)) where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException('${x.key} cannot be converted to ${TypeInfos.get<K>()}')
                 case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException('tuple (${x.key}, ${x.value}) cannot be converted to (${TypeInfos.get<K>()}, ${TypeInfos.get<V>()})')
-                case _ => return DataOption<TreeMap<K, V>>.NONE
+                case _ => return None<TreeMap<K, V>>
             }
             case x =>
                 let dataType = TypeInfo.of(x)
@@ -266,7 +266,7 @@ extend<K, V> TreeMap<K, V> <: DataFields<TreeMap<K, V>> where K <: DataFields<K>
                     let iterator = (dataType.getInstanceFunction("fields").apply(x) as Iterator<ReadableField>).
                         getOrThrow()
                     for (f in iterator) {
-                        match ((K.tryFromData(f.name.toData(), flag: flag).value, V.tryFromData(f.get(raw), flag: flag).value)) {
+                        match ((convert<K>(f.name.toData(), flag: flag), convert<V>(f.get(raw), flag: flag))) {
                             case (Some(k: K), Some(v: V)) => map[k] = v
                             case (Some(_), _) where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException('${f.get(raw)} cannot be converted to ${TypeInfos.get<V>()}')
                             case (_, Some(_)) where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException('${f.name} cannot be converted to ${TypeInfos.get<K>()}')
@@ -274,11 +274,11 @@ extend<K, V> TreeMap<K, V> <: DataFields<TreeMap<K, V>> where K <: DataFields<K>
                             case _ => continue
                         }
                     }
-                    DataOption(map)
+                    map
                 } else if ((flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0) {
                     throw DataException('${x} cannot be converted to ${TypeInfos.get<TreeMap<K, V>>()}')
                 } else {
-                    DataOption<TreeMap<K, V>>.NONE
+                    None<TreeMap<K, V>>
                 }
         }
     }
@@ -302,34 +302,34 @@ extend<K, V> ConcurrentHashMap<K, V> <: DataFields<ConcurrentHashMap<K, V>> wher
             DataTuples(list)
         }
     }
-    public static func tryFromData(data: Data, flag!: DataConversionFlag = SILENCE): DataOption<ConcurrentHashMap<K, V>> {
+    public static func tryFromData(data: Data, flag!: DataConversionFlag = SILENCE): Any {
         match (data) {
             case x: DataSequence =>
                 let map = ConcurrentHashMap<K, V>()
                 for (v in x) {
                     match (v) {
-                        case x: DataTuple => match ((K.tryFromData(x.key, flag: flag).value, V.tryFromData(x.value, flag: flag).value)) {
+                        case x: DataTuple => match ((convert<K>(x.key, flag: flag), convert<V>(x.value, flag: flag))) {
                             case (Some(k: K), Some(v: V)) => map.put(k, v)
                             case (Some(_), _) where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException('${x.value} cannot be converted to ${TypeInfos.get<V>()}')
                             case (_, Some(_)) where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException('${x.key} cannot be converted to ${TypeInfos.get<K>()}')
                             case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException('tuple (${x.key}, ${x.value}) cannot be converted to (${TypeInfos.get<K>()}, ${TypeInfos.get<V>()})')
-                            case _ => return DataOption<ConcurrentHashMap<K, V>>.NONE
+                            case _ => continue
                         }
                         case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException('tuple ${x} cannot be converted to (${TypeInfos.get<K>()}, ${TypeInfos.get<V>()})')
-                        case _ => return DataOption<ConcurrentHashMap<K, V>>.NONE
+                        case _ => continue
                     }
                 }
-                DataOption(map)
+                map
             case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException('(${data}) cannot be converted to ${TypeInfos.get<ConcurrentHashMap<K, V>>()}')
-            case x: DataTuple => match ((K.tryFromData(x.key, flag: flag).value, V.tryFromData(x.value, flag: flag).value)) {
+            case x: DataTuple => match ((convert<K>(x.key, flag: flag), convert<V>(x.value, flag: flag))) {
                 case (Some(k: K), Some(v: V)) =>
                     let map = ConcurrentHashMap<K, V>()
                     map.put(k, v)
-                    DataOption(map)
+                    map
                 case (Some(_), _) where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException('${x.value} cannot be converted to ${TypeInfos.get<V>()}')
                 case (_, Some(_)) where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException('${x.key} cannot be converted to ${TypeInfos.get<K>()}')
                 case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException('tuple (${x.key}, ${x.value}) cannot be converted to (${TypeInfos.get<K>()}, ${TypeInfos.get<V>()})')
-                case _ => return DataOption<ConcurrentHashMap<K, V>>.NONE
+                case _ => return None<ConcurrentHashMap<K, V>>
             }
             case x =>
                 let dataType = TypeInfo.of(x)
@@ -340,7 +340,7 @@ extend<K, V> ConcurrentHashMap<K, V> <: DataFields<ConcurrentHashMap<K, V>> wher
                     let iterator = (dataType.getInstanceFunction("fields").apply(x) as Iterator<ReadableField>).
                         getOrThrow()
                     for (f in iterator) {
-                        match ((K.tryFromData(f.name.toData(), flag: flag).value, V.tryFromData(f.get(raw), flag: flag).value)) {
+                        match ((convert<K>(f.name.toData(), flag: flag), convert<V>(f.get(raw), flag: flag))) {
                             case (Some(k: K), Some(v: V)) => map[k] = v
                             case (Some(_), _) where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException('${f.get(raw)} cannot be converted to ${TypeInfos.get<V>()}')
                             case (_, Some(_)) where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException('${f.name} cannot be converted to ${TypeInfos.get<K>()}')
@@ -348,11 +348,11 @@ extend<K, V> ConcurrentHashMap<K, V> <: DataFields<ConcurrentHashMap<K, V>> wher
                             case _ => continue
                         }
                     }
-                    DataOption(map)
+                    map
                 } else if ((flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0) {
                     throw DataException('${x} cannot be converted to ${TypeInfos.get<ConcurrentHashMap<K, V>>()}')
                 } else {
-                    DataOption<ConcurrentHashMap<K, V>>.NONE
+                    None<ConcurrentHashMap<K, V>>
                 }
         }
     }
@@ -376,34 +376,34 @@ extend<K, V> LinkedHashMap<K, V> <: DataFields<LinkedHashMap<K, V>> where K <: D
             DataTuples(list)
         }
     }
-    public static func tryFromData(data: Data, flag!: DataConversionFlag = SILENCE): DataOption<LinkedHashMap<K, V>> {
+    public static func tryFromData(data: Data, flag!: DataConversionFlag = SILENCE): Any {
         match (data) {
             case x: DataSequence =>
                 let map = LinkedHashMap<K, V>()
                 for (v in x) {
                     match (v) {
-                        case x: DataTuple => match ((K.tryFromData(x.key, flag: flag).value, V.tryFromData(x.value, flag: flag).value)) {
+                        case x: DataTuple => match ((convert<K>(x.key, flag: flag), convert<V>(x.value, flag: flag))) {
                             case (Some(k: K), Some(v: V)) => map.put(k, v)
                             case (Some(_), _) where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException('${x.value} cannot be converted to ${TypeInfos.get<V>()}')
                             case (_, Some(_)) where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException('${x.key} cannot be converted to ${TypeInfos.get<K>()}')
                             case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException('tuple (${x.key}, ${x.value}) cannot be converted to (${TypeInfos.get<K>()}, ${TypeInfos.get<V>()})')
-                            case _ => return DataOption<LinkedHashMap<K, V>>.NONE
+                            case _ => continue
                         }
                         case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException('tuple ${x} cannot be converted to (${TypeInfos.get<K>()}, ${TypeInfos.get<V>()})')
-                        case _ => return DataOption<LinkedHashMap<K, V>>.NONE
+                        case _ => continue
                     }
                 }
-                DataOption(map)
+                map
             case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException('(${data}) cannot be converted to ${TypeInfos.get<LinkedHashMap<K, V>>()}')
-            case x: DataTuple => match ((K.tryFromData(x.key, flag: flag).value, V.tryFromData(x.value, flag: flag).value)) {
+            case x: DataTuple => match ((convert<K>(x.key, flag: flag), convert<V>(x.value, flag: flag))) {
                 case (Some(k: K), Some(v: V)) =>
                     let map = LinkedHashMap<K, V>()
                     map.put(k, v)
-                    DataOption(map)
+                    map
                 case (Some(_), _) where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException('${x.value} cannot be converted to ${TypeInfos.get<V>()}')
                 case (_, Some(_)) where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException('${x.key} cannot be converted to ${TypeInfos.get<K>()}')
                 case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException('tuple (${x.key}, ${x.value}) cannot be converted to (${TypeInfos.get<K>()}, ${TypeInfos.get<V>()})')
-                case _ => return DataOption<LinkedHashMap<K, V>>.NONE
+                case _ => return None<LinkedHashMap<K, V>>
             }
             case x =>
                 let dataType = TypeInfo.of(x)
@@ -414,7 +414,7 @@ extend<K, V> LinkedHashMap<K, V> <: DataFields<LinkedHashMap<K, V>> where K <: D
                     let iterator = (dataType.getInstanceFunction("fields").apply(x) as Iterator<ReadableField>).
                         getOrThrow()
                     for (f in iterator) {
-                        match ((K.tryFromData(f.name.toData(), flag: flag).value, V.tryFromData(f.get(raw), flag: flag).value)) {
+                        match ((convert<K>(f.name.toData(), flag: flag), convert<V>(f.get(raw), flag: flag))) {
                             case (Some(k: K), Some(v: V)) => map[k] = v
                             case (Some(_), _) where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException('${f.get(raw)} cannot be converted to ${TypeInfos.get<V>()}')
                             case (_, Some(_)) where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException('${f.name} cannot be converted to ${TypeInfos.get<K>()}')
@@ -422,11 +422,11 @@ extend<K, V> LinkedHashMap<K, V> <: DataFields<LinkedHashMap<K, V>> where K <: D
                             case _ => continue
                         }
                     }
-                    DataOption(map)
+                    map
                 }  else if ((flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0) {
                     throw DataException('${x} cannot be converted to ${TypeInfos.get<LinkedHashMap<K, V>>()}')
                 } else {
-                    DataOption<LinkedHashMap<K, V>>.NONE
+                    None<LinkedHashMap<K, V>>
                 }
         }
     }

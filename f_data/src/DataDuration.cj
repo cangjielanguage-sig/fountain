@@ -40,22 +40,19 @@ extend Duration <: DataFields<Duration> {
     public func toData(): Data {
         DataDuration(this)
     }
-    public static func fromData(data: Data, flag!: DataConversionFlag = SILENCE): Duration {
-        tryFromData(data, flag: flag).value.getOrThrow{DataException("${data} cannot be converted to Duration")}
-    }
-    public static func tryFromData(data: Data, flag!: DataConversionFlag = SILENCE): DataOption<Duration> {
+    public static func tryFromData(data: Data, flag!: DataConversionFlag = SILENCE): Any {
         match(data){
-            case x: DataDuration => DataOption(x.tryToDuration())
-            case _: DataNone => DataOption<Duration>.NONE
+            case x: DataDuration => x.tryToDuration()
+            case _: DataNone => None<Duration>
             case _ where (flag & IGNORE_FIELD_TYPE_NOT_MATCH) == 0 => throw DataException('(${data}) does not match to ${TypeInfos.get<Duration>()}')
             case x: DataDateTime => match(x.tryToDateTime()){
-                case Some(x) => DataOption(x - DateTime.UnixEpoch)
+                case Some(x) => x - DateTime.UnixEpoch
                 case _ where (flag & IGNORE_FIELD_TYPE_NOT_MATCH) == 0 => throw DataException('(${data}) does not match to ${TypeInfos.get<Duration>()}')
-                case _ => return DataOption<Duration>.NONE
+                case _ => return None<Duration>
             }
-            case x: DataString => DataOption(Duration.tryParse(x.data))
+            case x: DataString => Duration.tryParse(x.data)
             case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException('(${data}) cannot be converted to ${TypeInfos.get<Duration>()}')
-            case _ => DataOption<Duration>.NONE
+            case _ => None<Duration>
         }
     }
 }

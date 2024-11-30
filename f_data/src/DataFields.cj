@@ -12,7 +12,23 @@ package f_data
 public interface DataFields<T> where T <: DataFields<T> {
     func toData(): Data
     static func fromData(data: Data, flag!: DataConversionFlag): T {
-        T.tryFromData(data, flag: flag).value.getOrThrow{DataException('data ${data} cannot be converted to ${TypeInfos.get<T>()}')}
+        match(T.tryFromData(data, flag: flag)){
+            case x: ?T => match(x){
+                case Some(x) => x
+                case _ => throw DataException('data ${data} cannot be converted to ${TypeInfos.get<T>()}')
+            }
+            case x: T => x
+            case _ => throw DataException('data ${data} cannot be converted to ${TypeInfos.get<T>()}')
+        }
     }
-    static func tryFromData(data: Data, flag!: DataConversionFlag): DataOption<T>
+    static func tryFromData(data: Data, flag!: DataConversionFlag): Any
+}
+public func convert<T>(data: Data, flag!: DataConversionFlag = SILENCE): ?T where T <: DataFields<T> {
+    match(T.tryFromData(data, flag: flag)){
+        case x: ?T => x
+        case x: T => x
+        case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => 
+            throw DataException('data ${data} cannot be converted to ${TypeInfos.get<T>()}')
+        case _ => None<T>
+    }
 }

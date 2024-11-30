@@ -46,25 +46,22 @@ extend Bool <: DataFields<Bool> {
             DataBool.FALSE
         }
     }
-    public static func fromData(data: Data, flag!: DataConversionFlag = SILENCE): Bool {
-        tryFromData(data, flag: flag).value.getOrThrow{DataException("${data} cannot be converted to Bool")}
-    }
-    public static func tryFromData(data: Data, flag!: DataConversionFlag = SILENCE): DataOption<Bool> {
+    public static func tryFromData(data: Data, flag!: DataConversionFlag = SILENCE): Any {
         match(data){
-            case x: DataBool => DataOption(x.tryToBool())
-            case _: DataNone => DataOption<Bool>.NONE
+            case x: DataBool => x.tryToBool()
+            case _: DataNone => None<Bool>
             case _ where (flag & IGNORE_FIELD_TYPE_NOT_MATCH) == 0 => throw DataException('(${data}) does not match ${TypeInfos.get<Bool>()}')
             case x: DataString =>
                 let s = x.toString().toAsciiLower()
                 if (s == "true" || s == "false") {
-                    DataOption(Bool.parse(s))
+                    Bool.tryParse(s)
                 } else {
-                    DataOption<Bool>.NONE
+                    None<Bool>
                 }
             case x: DataReal =>
-                DataOption(x.toDecimal() != Decimal.ZERO)
+                x.toDecimal() != Decimal.ZERO
             case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException('(${data}) cannot be converted to ${TypeInfos.get<Bool>()}')
-            case _ => DataOption<Bool>.NONE
+            case _ => None<Bool>
         }
     }
 }
