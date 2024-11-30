@@ -40,16 +40,9 @@ public class LoggerConfig {
     public static func createFacade(name: String): LoggerAppenderFacade {
         LoggerAppenderCreator.create(name)
     }
-    private static func extractAppenders(): Option<Array<String>> {
-        if (let Some(appen) <- Config.getString('${confPrefix}_${appender}')) {
-            let appenders = BLANK_SPLITTOR.matcher(appen.toAsciiLower()).split()
-            Some(appenders)
-        } else {
-            None<Array<String>>
-        }
-    }
+
     public static func getString(appender: String, item: String): Option<String> {
-        Config.getString("${confPrefix}_${LoggerConfig.appender}_${appender}_${item}")
+        Config.getString("${confPrefix}_${appender}_${item}")
     }
     public static func getAppenders(kind: String): Array<String>{
         if(let Some(appenders) <- getString(appender, kind)){
@@ -58,14 +51,17 @@ public class LoggerConfig {
             []
         }
     }
+    private static func appenderKeyPart(appender: String){
+        '${LoggerConfig.appender}_${appender}'
+    }
     public static func getLevelConf(appender: String): LogLevel {
-        if (let Some(level) <- getString(appender, "level")) {
+        if (let Some(level) <- getString(appenderKeyPart(appender), "level")) {
             return convertLevel(level)
         }
         return LogLevel.INFO
     }
     public static func getPatternConf(appender: String): LogPattern {
-        if (let Some(p) <- getString(appender, "pattern")) {
+        if (let Some(p) <- getString(appenderKeyPart(appender), "pattern")) {
             return LogPattern(p)
         }
         return LogPattern.default
@@ -97,28 +93,28 @@ public class LoggerConfig {
         }
     }
     public static func getUdpSendTimeout(appender: String): ?Duration {
-        if (let Some(d) <- getString(appender, "sendTimeout")) {
+        if (let Some(d) <- getString(appenderKeyPart(appender), "sendTimeout")) {
             Duration.tryParse(d).getOrThrow{LogException("${d} is an illegal duration string for ${appender} udp sendTimeout")}
         } else {
             None
         }
     }
     public static func getUnixWriteTimeout(appender: String): ?Duration {
-        if (let Some(d) <- getString(appender, "writeTimeout")) {
+        if (let Some(d) <- getString(appenderKeyPart(appender), "writeTimeout")) {
             Duration.tryParse(d).getOrThrow{LogException("${d} is an illegal duration string for ${appender} unix writeTimeout")}
         } else {
             None
         }
     }
     public static func getTcpSendBufSize(appender: String): ?Int64 {
-        if (let Some(s) <- getString(appender, "bufSize")) {
+        if (let Some(s) <- getString(appenderKeyPart(appender), "bufSize")) {
             Int64.tryParse(s).getOrThrow{LogException("${s} is an illegal duration string for ${appender} tcp sendBufSize")}
         } else {
             None
         }
     }
     public static func getUnixBufSize(appender: String): ?Int64 {
-        if (let Some(s) <- getString(appender, "bufSize")) {
+        if (let Some(s) <- getString(appenderKeyPart(appender), "bufSize")) {
             Int64.tryParse(s).getOrThrow{LogException("${s} is an illegal duration string for ${appender} unix sendBufSize")}
         } else {
             None

@@ -28,7 +28,7 @@ public class RotatableFileParams{
     public var timeunit = TimeUnit.DAY
     public var compress = LogFileCompressFormat.None
 }
-protected class RotatableFile <: OutputStream {
+protected class RotatableFile <: OutputStream & Resource{
     private let queue = ArrayBlockingQueue<()->Unit>(1)
     private var rotateTimer = ZERO_TIMER
     private let fileSize: Int64
@@ -79,6 +79,12 @@ protected class RotatableFile <: OutputStream {
         this.compress = params.compress
         (this.directory, this.file) = createDirIfNeed(params.path)
         rotateTimer = createRotateTimer()
+    }
+    public func isClosed(): Bool {
+        file.isClosed()
+    }
+    public func close(): Unit {
+        file.close()
     }
     protected prop path: String {
         get(){

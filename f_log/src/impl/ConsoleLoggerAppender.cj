@@ -19,15 +19,15 @@ import f_log.exception.*
 public import f_log.*
 
 private class ConsoleLoggerAppender <: AsyncLogger {
-    private static const CONSOLE_NAME = 'console'
+    private static const LOGGER_NAME = 'console'
     public init(name!: String, level!: LogLevel, pattern!: LogPattern) {
-        super(name, level, pattern, Process.current.stdOut, CONSOLE_NAME)
+        super(name, level, pattern, Process.current.stdOut, LOGGER_NAME)
     }
 
     public static func register(): Unit {
-        LoggerAppenderCreator.register(CONSOLE_NAME) {
+        LoggerAppenderCreator.register(LOGGER_NAME) {
             name =>
-            let appender = LoggerConfig.getAppenders(CONSOLE_NAME)
+            let appender = LoggerConfig.getAppenders(LOGGER_NAME)
             if (appender.isEmpty()) {
                 [NoneLogAppender.instance]
             } else {

@@ -17,8 +17,8 @@ import log.LogLevel
 import f_log.exception.LogException
 import f_log.output.UdpOutputStream
 
-let _ = UdpLoggerAppender.register()
 private class UdpLoggerAppender <: AsyncLogger {
+    private static const LOGGER_NAME = 'udp'
     private let host: String
     private let port: UInt16
     private let sendTimeout: ?Duration
@@ -41,20 +41,18 @@ private class UdpLoggerAppender <: AsyncLogger {
         sock
     }
     public static func register(): Unit {
-        LoggerAppenderCreator.register("socket") {
+        LoggerAppenderCreator.register(LOGGER_NAME) {
             name =>
-            let appenders = LoggerConfig.getAppenders("socket")
+            let appenders = LoggerConfig.getAppenders(LOGGER_NAME)
             if(appenders.isEmpty()){
                 [NoneLogAppender.instance]
             }else{
                 Array<AbstractLogger>(appenders.size){i =>
                     let appender = appenders[i]
                     var host = "127.0.0.1"
-                    var port = 65535u16
-                    if (let Some(h) <- LoggerConfig.getString(appender, "host")) {
-                        if (h != String.empty) {
-                            host = h
-                        }
+                    var port = 65534u16
+                    if (let Some(h) <- LoggerConfig.getString(appender, "host") && !h.isEmpty()) {
+                        host = h
                     }
                     if (let Some(p) <- LoggerConfig.getString(appender, "port")) {
                         port = UInt16.tryParse(p).getOrThrow {
@@ -84,3 +82,4 @@ private class UdpLoggerAppender <: AsyncLogger {
         super.append(level, message, now, ex)
     }
 }
+let _ = UdpLoggerAppender.register()

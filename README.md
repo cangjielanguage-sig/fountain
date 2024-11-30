@@ -104,6 +104,49 @@ _/ ____\____  __ __  _____/  |______  |__| ____
 - 配置类型
 - jwt
 - 日志
+  ```cj
+  import fountain.log.LoggerFactory
+  let topLog = LoggerFactory.getLogger('top')
+  public class Foo {
+    private static let LOGGER = LoggerFactory.getLogger<Foo>()
+    public func foo(){
+      LOGGER.info('hello')
+      LOGGER.error('hello', Exception('test'))
+      LOGGER.info('hello {}', 'world')
+    }
+  }
+  ```
+  ```bash
+    # 现在支持console, file, tcp, udp, unixDatagram, unix这六个日志记录器，可以随意编排不必全部出现
+    export fountain_logger_appender_console=ConsoleLoggerName # =右边是开发者定义的日志记录器名字，用来标识配置项，控制台日志只支持一个配置，即使配置了多个也是只有第一个名字的配置生效
+    export fountain_logger_appender_ConsoleLoggerName_level=ERROR
+
+    export fountain_logger_appender_file=FileLoggerName1,FileLoggerName2
+    export fountain_logger_appender_FileLoggerName1_level=INFO
+    export fountain_logger_appender_FileLoggerName1_path=/path/of/file/logger.log
+    export fountain_logger_appender_FileLoggerName1_rotateDuration=DAY # 新建日志文件的时间周期，现在支持各种时间单位从NANOSECOND到YEAR
+    export fountain_logger_appender_FileLoggerName1_rotateSize=1G # 新建日志文件的日志文件大小上限，现在支持字节数从xB和K M G T P E，大小写不限，x是任意正整数，Z Y 超过Int64上限了，B表示字节，K M G T P E后面可以带字母B也可以不带
+    export fountain_logger_appender_FileLoggerName1_compressFormat=Deflate(BestSpeed) # GZip(BestSpeed) 支持标准库的Deflate和GZip以及压缩比。还有不压缩的None
+    # 还支持用url的形式，path必须出现在url，其它配置项可选，可以继续以每项一个环境变量的形式指定
+    export fountain_logger_appender_FileLoggerName2=file:///path/of/file/logger.log?level=INFO
+    # 下面是文件日志记录器的默认选项
+    # public var path = "${Process.current.workingDirectory}/logs/${Process.current.command}.log"
+    # public var fileSize = Int64.Max
+    # public var timeunit = TimeUnit.DAY
+    # public var compress = LogFileCompressFormat.None
+    
+    export fountain_logger_appender_tcp=TcpLoggerName # 也是支持英文逗号分隔的多个TcpLoggerName
+    export fountain_logger_appender_TcpLoggerName_host=127.0.0.1:65535 # 这个host也是默认参数
+    
+    export fountain_logger_appender_udp=UdpLoggerName
+    export fountain_logger_appender_UdpLoggerName_host=127.0.0.1:65534
+
+    export fountain_logger_appender_unixDatagram=UnixDatagramName
+    export fountain_logger_appender_UdpDatagramName_path=/path/of/udpDatagram/file.log # 默认是/tmp/log/unixDatagram.log
+
+    export fountain_logger_appender_unix=UnixName
+    export fountain_logger_appender_UnixName_path=/path/of/unix/file.log # 默认是/tmp/log/unix.log
+  ```
 - 流程引擎
 - 功能更丰富的json
 - 并发

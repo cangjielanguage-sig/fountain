@@ -18,6 +18,7 @@ import std.time.{DateTime, DateTimeFormat}
 import f_data.DataParsable
 
 public class Config{
+    private static let prefix = 'fountain'
     private static let ARGS = ConcurrentHashMap<String, String>()
     private static let REFRESHER = ConcurrentHashMap<String, ()->Unit>() 
     static init(){
@@ -56,7 +57,7 @@ public class Config{
     }
     
     public static func getString(key: String): ?String{
-        ARGS.get(key)
+        ARGS.get('${prefix}_${key}')
     }
     public static func getValue<T>(key: String, parser: (String) -> ?T): ?T {
         if(let Some(x) <- getString(key)){

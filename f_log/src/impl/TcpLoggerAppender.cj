@@ -17,8 +17,8 @@ import f_data.*
 import f_log.exception.*
 import f_log.output.UdpOutputStream
 
-let _ = TcpLoggerAppender.register()
 private class TcpLoggerAppender <: AsyncLogger {
+    private static const LOGGER_NAME = 'tcp'
     private let host: String
     private let port: UInt16
     private let sendBufSize: ?Int64
@@ -44,9 +44,9 @@ private class TcpLoggerAppender <: AsyncLogger {
         sock
     }
     public static func register(): Unit {
-        LoggerAppenderCreator.register("socket") {
+        LoggerAppenderCreator.register(LOGGER_NAME) {
             name =>
-            let appenders = LoggerConfig.getAppenders("socket")
+            let appenders = LoggerConfig.getAppenders(LOGGER_NAME)
             if(appenders.isEmpty()){
                 [NoneLogAppender.instance]
             }else{
@@ -54,16 +54,16 @@ private class TcpLoggerAppender <: AsyncLogger {
                     let appender = appenders[i]
                     var host = "127.0.0.1"
                     var port = 65535u16
-                    if (let Some(h) <- LoggerConfig.getString(appender, "host")) {
-                        if (h != String.empty) {
-                            host = h
-                        }
+                    if (let Some(h) <- LoggerConfig.getString(appender, "host") && !h.isEmpty()) {
+                        host = h
                     }
                     if (let Some(p) <- LoggerConfig.getString(appender, "port")) {
                         port = UInt16.tryParse(p).getOrThrow {
                             LogException(
                                 "param port of SocketLoggerAppender must be a value of UInt16, however it is ${p}")
                         }
+                    }else if(let Some(idx) <- host.indexOf(':')){
+                        (host, port) = (host[0 .. idx], UInt16.parse(host[idx + 1 ..]))
                     }
                     let sendBufSize = LoggerConfig.getTcpSendBufSize(appender)
                     TcpLoggerAppender(
@@ -87,3 +87,4 @@ private class TcpLoggerAppender <: AsyncLogger {
         super.append(level, message, now, ex)
     }
 }
+let _ = TcpLoggerAppender.register()

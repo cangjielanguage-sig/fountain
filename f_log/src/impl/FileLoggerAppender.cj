@@ -18,16 +18,14 @@ import std.math.MathExtension
 import std.sync.{Timer, ReentrantMutex, AtomicReference, AtomicUInt64}
 import std.time.DateTime
 import compress.zlib.{WrapType, CompressLevel, CompressOutputStream}
-
 import log.LogLevel
-
 import f_base.*
 import f_exception.*
 import f_log.output.{RotatableFile, RotatableFileParams}
 import f_time.{TimeUnit, ExtendDateTime}
 
-let _ = FileLoggerAppender.register()
 private class FileLoggerAppender <: AsyncLogger {
+    private static const LOGGER_NAME = 'file'
     public init(
         name!: String,
         pattern!: LogPattern,
@@ -38,41 +36,48 @@ private class FileLoggerAppender <: AsyncLogger {
     }
 
     public static func register(): Unit {
-        LoggerAppenderCreator.register("file") {
+        LoggerAppenderCreator.register(LOGGER_NAME) {
             name =>
-            let appenders = LoggerConfig.getAppenders("file")
-            if(appenders.isEmpty()){
+            let appenders = LoggerConfig.getAppenders(LOGGER_NAME)
+            if (appenders.isEmpty()) {
                 [NoneLogAppender.instance]
-            }else{
-                Array<AbstractLogger>(appenders.size){i =>
+            } else {
+                Array<AbstractLogger>(appenders.size) {
+                    i =>
                     let appender = appenders[i]
                     let params = RotatableFileParams()
-                    if (let Some(p) <- LoggerConfig.getString(appender, "path")) {
-                        if (p != String.empty) {
-                            params.path = p
-                        }
+                    let url = if (let Some(url) <- LoggerConfig.getString(appender, 'url')) {
+                        url
+                    } else {
+                        ''
                     }
-                    if (let Some(d) <- LoggerConfig.getString(appender, "rotate.duration")) {
-                        if (let Some(u) <- TimeUnit.parse(d)) {
-                            params.timeunit = u
-                        }
+                    if (let Some(p) <- LoggerConfig.getString(appender, "path") && !p.isEmpty()) {
+                        params.path = p
                     }
-                    if (let Some(s) <- LoggerConfig.getString(appender, "rotate.size")) {
-                        if (s != String.empty) {
-                            params.fileSize = RotatableFile.computeBytes(s)
-                        }
+                    if (let Some(d) <- LoggerConfig.getString(appender, "rotateDuration") && let Some(u) <- TimeUnit
+                        .parse(d)) {
+                        params.timeunit = u
                     }
-                    if (let Some(c) <- LoggerConfig.getString(appender, "compress.format")) {
+                    if (let Some(s) <- LoggerConfig.getString(appender, "rotateSize") && !s.isEmpty()) {
+                        params.fileSize = RotatableFile.computeBytes(s)
+                    }
+                    if (let Some(c) <- LoggerConfig.getString(appender, "compressFormat")) {
                         params.compress = RotatableFile.compressFormat(c)
                     }
                     FileLoggerAppender(
                         name: name,
                         level: LoggerConfig.getLevelConf(appender),
                         pattern: LoggerConfig.getPatternConf(appender),
-                        file: RotatableFile(params)
+                        file: if (url.isEmpty()) {
+                            RotatableFile(params)
+                        } else {
+                            RotatableFile(url, params)
+                        }
                     )
                 }
             }
         }
     }
 }
+
+let _ = FileLoggerAppender.register()
