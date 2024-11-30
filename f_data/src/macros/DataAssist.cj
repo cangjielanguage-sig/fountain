@@ -468,14 +468,14 @@ func generateToFields(d: ClassDecl, exclusion: HashSet<String>) {
         [
             VarDecl(
                 quote(
-        private static let $(fieldsName) = ObjectFields.createFields<$klassIdentifier>($fieldTokens){
+        private static let $(fieldsName) = ObjectFields<$klassIdentifier>.createFields($fieldTokens){
             $klassIdentifier()
         }
     )
             ),
             FuncDecl(
                 quote(
-        public static func dataFields(): ObjectFields {
+        public static func dataFields(): ObjectFields<$klassIdentifier> {
             $fieldsName
         }
     )),

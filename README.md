@@ -149,10 +149,19 @@ _/ ____\____  __ __  _____/  |______  |__| ____
   ```
 - 流程引擎
 - 实例复制
-  - 由于语言的限制，不支持类的继承，因为对集合类型和Option的扩展无法即扩展DataFields<T>又扩展DataObject<T> <: DataFields<Object>，
-  - 从语言特性上，这两个扩展只有一个会生效，但是会造成接口的函数遮盖。
-  - 由于以上限制，对DataObject<T>的声明也就改成了DataObject<T> <: DataFields<T> where T <: Object & DataObject<T>
-  - 由于以上限制，泛型又不支持协变如果父类实现了DataObject<T>，则子类无法再次实现这个接口
+  - ```cj
+    // 下面的T <: DataFields<T>
+    convert<T>(data: Data, flag: DataConversionFlag = SILENCE): ?T
+    // 下面的T <: DataObject<T>
+    T.populate(src: Data, flag): ?T
+    T.populate(src: Data, target: T, flag): ?T
+    T.populate<S>(src: S, flag): ?T where S <: DataFields<T>
+    T.populate<S>(src: S, target: T, flag): ?T where S <: DataFields<T>
+    T.populate<M, V>(src: M, flag): ?T where M <: StringKeyMap<V>, V <: DataFields<V>
+    T.populate<M, V>(src: M, target: T, flag): ?T where M <: StringKeyMap<V>, V <: DataFields<V>
+    T.
+    ```
+  - 
 - 功能更丰富的json
 - 并发
   - 限流策略

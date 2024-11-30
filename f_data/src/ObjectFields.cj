@@ -9,22 +9,29 @@
 */
 package f_data
 
-public class ObjectFields <: Iterable<ReadableField> {
+public class ObjectFields<T> <: Iterable<ReadableField> where T <: DataObject<T>{
     private let mutables = HashMap<String, MutableField>()
     private let readables = HashMap<String, ReadableField>()
     private ObjectFields(
         fields: Array<ReadableField>,
-        private let creator: ()-> Object
-    ){}
-    public static func createFields<O>(fields: Array<ReadableField>, creator: ()-> O): ObjectFields where O <: Object & DataObject<O> {
-        let objf = ObjectFields(fields, creator)
+        private let creator: ()-> T
+    ){
+        for(field in fields){
+            if(let f: MutableField <- field){
+                mutables[f.name] = f
+            }
+            readables[field.name] = field
+        }
+    }
+    public static func createFields(fields: Array<ReadableField>, creator: ()-> T): ObjectFields<T> {
+        let objf = ObjectFields<T>(fields, creator)
         func populateField(name: String, field: ReadableField, throwIfDuplicate!: Bool = true) {
             if(!objf.readables.putIfAbsent(name, field) && throwIfDuplicate){
-                throw DataException('duplicate field ${name} in ${TypeInfos.get<O>()}')
+                throw DataException('duplicate field ${name} in ${TypeInfos.get<T>()}')
             }
             match(field){
                 case x: MutableField where !objf.mutables.putIfAbsent(name, x) && throwIfDuplicate => 
-                    throw DataException('duplicate field ${name} in ${TypeInfos.get<O>()}')
+                    throw DataException('duplicate field ${name} in ${TypeInfos.get<T>()}')
                 case _ => false
             }
         }
@@ -51,7 +58,7 @@ public class ObjectFields <: Iterable<ReadableField> {
             }
         }
         populateFields(fields)
-        let currentType = (TypeInfos.get<O>() as ClassTypeInfo).getOrThrow()
+        let currentType = (TypeInfos.get<T>() as ClassTypeInfo).getOrThrow()
         for(v in currentType.instanceVariables) {
             populateFields(v.name, v.annotations)
         }
@@ -61,13 +68,13 @@ public class ObjectFields <: Iterable<ReadableField> {
         match(currentType.superClass) {
             case Some(x) where x != TypeInfos.get<Object>() && x.isSubtypeOf(TypeInfos.get("f_data.DataObject<${x.qualifiedName}>")) =>
                 let superFields = x.getStaticFunction("dataFields").apply()
-                let superFieldsIterator = (superFields as ObjectFields).getOrThrow().iterator()
+                let superFieldsIterator = (superFields as ObjectFields<T>).getOrThrow().iterator()
                 populateFields(superFieldsIterator, throwIfDuplicate: false)
             case _ => ()
         }
         objf
     }
-    public func create(): Object {
+    public func create(): T {
         creator()
     }
     public func iterator(): Iterator<ReadableField> {

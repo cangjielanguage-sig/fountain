@@ -10,7 +10,7 @@
 package f_data
 
 public interface DataObject<T> <: DataFields<T> where T <: Object & DataObject<T> {
-    static func dataFields(): ObjectFields
+    static func dataFields(): ObjectFields<T>
 
     func toData(): Data
 
@@ -44,13 +44,13 @@ public class ObjectData<T> <: Data & Iterable<(String, Data)> where T <: Object 
     public operator func [](name: String, value!: Data): Unit {
         set(name, value)
     }
-    public func set<V>(name: String, value: V, flag!: UInt64 = SILENCE): Unit where V <: DataFields<V>{
+    public func set<V>(name: String, value: V, flag!: DataConversionFlag = SILENCE): Unit where V <: DataFields<V>{
         set(name, value.toData(), flag: flag)
     }
-    public func set(name: String, value: Data, flag!: UInt64 = SILENCE): Unit {
+    public func set(name: String, value: Data, flag!: DataConversionFlag = SILENCE): Unit {
         T.dataFields().mutableField(name)?.set(data, value, flag: flag)
     }
-    public func get<V>(name: String, flag!: UInt64 = SILENCE): ?V where V <: DataFields<V> {
+    public func get<V>(name: String, flag!: DataConversionFlag = SILENCE): ?V where V <: DataFields<V> {
         match(T.dataFields().readableField(name)?.get(data)){
             case Some(x) => match(V.tryFromData(x, flag: flag)){
                 case x: ?V => x
@@ -93,12 +93,12 @@ public class ObjectData<T> <: Data & Iterable<(String, Data)> where T <: Object 
     public static func parse(string: String): Data {
         tryParse(string).getOrThrow {DataException("current type ${TypeInfos.get<T>()} is not Parsable")}
     }
-    public static func populate(src: Data, target: T, flag!: UInt64 = SILENCE): ?T {
+    public static func populate(src: Data, target: T, flag!: DataConversionFlag = SILENCE): ?T {
         let srcDataType = TypeInfo.of(src)
         func isObjectData() {
             srcDataType.qualifiedName.startsWith("f_data.ObjectData")
         }
-        func putValue(dstFields: ObjectFields, name: String, dst: T, data: Data, srcType: TypeInfo): Bool {
+        func putValue(dstFields: ObjectFields<T>, name: String, dst: T, data: Data, srcType: TypeInfo): Bool {
             match (dstFields.mutableField(name)) {
                 case Some(mf) where mf.set(dst, data, flag: flag) => true
                 case Some(_) where (flag & IGNORE_FIELD_NOT_CONVERTABLE) != 0 => true
@@ -109,7 +109,7 @@ public class ObjectData<T> <: Data & Iterable<(String, Data)> where T <: Object 
             }
             true
         }
-        func putTuple(x: DataTuple, dstTuple!: ?(ObjectFields, T) = None) {
+        func putTuple(x: DataTuple, dstTuple!: ?(ObjectFields<T>, T) = None) {
             let (key, value) = (x.key, x.value)
             match (key) {
                 case x: DataString where #"^_*[a-zA-Z]+\w*$"#.regex(solid: true).matched(x.data) =>
@@ -159,24 +159,24 @@ public class ObjectData<T> <: Data & Iterable<(String, Data)> where T <: Object 
             case _ => throw DataException("src cannot be converted to ${TypeInfos.get<T>()}")
         }
     }
-    public static func populate(src: Data, flag!: UInt64 = SILENCE): ?T {
+    public static func populate(src: Data, flag!: DataConversionFlag = SILENCE): ?T {
         populate(src, (T.dataFields().create() as T).getOrThrow(), flag: flag)
     }
-    public static func populate<S>(src: S, flag!: UInt64 = SILENCE): ?T where S <: DataObject<S> {
+    public static func populate<S>(src: S, flag!: DataConversionFlag = SILENCE): ?T where S <: DataObject<S> {
         populate(ObjectData<S>(src), flag: flag)
     }
-    public static func populate<S>(src: S, target: T, flag!: UInt64 = SILENCE): ?T where S <: DataObject<S> {
+    public static func populate<S>(src: S, target: T, flag!: DataConversionFlag = SILENCE): ?T where S <: DataObject<S> {
         populate(ObjectData<S>(src), target, flag: flag)
     }
-    public static func populate<M, V>(src: M, flag!: UInt64 = SILENCE): ?T where M <: Map<String, V> & DataFields<M>,
+    public static func populate<M, V>(src: M, flag!: DataConversionFlag = SILENCE): ?T where M <: Map<String, V> & DataFields<M>,
         V <: DataFields<V> {
         populate(src.toData(), flag: flag)
     }
-    public static func populate<M, V>(src: M, target: T, flag!: UInt64 = SILENCE): ?T where M <: Map<String, V> & DataFields<M>,
+    public static func populate<M, V>(src: M, target: T, flag!: DataConversionFlag = SILENCE): ?T where M <: Map<String, V> & DataFields<M>,
         V <: DataFields<V> {
         populate(src.toData(), target, flag: flag)
     }
-    public static func populate<M, V>(src: T, map: M, flag!: UInt64 = SILENCE): M where M <: Map<String, V>,
+    public static func populate<M, V>(src: T, map: M, flag!: DataConversionFlag = SILENCE): M where M <: Map<String, V>,
         V <: DataFields<V> {
         for ((k, v) in ObjectData<T>(src)) {
             match(V.tryFromData(v, flag: flag)){
