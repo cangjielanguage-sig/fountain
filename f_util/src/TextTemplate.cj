@@ -209,7 +209,7 @@ public class TextTemplate {
     public func format<V>(data: LinkedHashMap<String, V>, noneConverter!: ?String = None): String where V <: ToString {
         format<String, V, LinkedHashMap<String, V>>(data, noneConverter)
     }
-    public func format<T>(data: T, noneConverter!: ?String = None): String where T <: Object & DataObject<T> {
+    public func format<T>(data: T, noneConverter!: ?String = None): String where T <: Object & ObjectData<T> {
         format<String, ToString, ObjectTextTemplateArgs<T>>(ObjectTextTemplateArgs<T>(data), noneConverter)
     }
 }
@@ -445,7 +445,7 @@ extend<K, V> ConcurrentHashMap<K, V> <: TextTemplateObject<K, V, ConcurrentHashM
 extend<K, V> TreeMap<K, V> <: TextTemplateObject<K, V, TreeMap<K, V>> where K <: Comparable<K> & TextTemplateKey<K>, V <: ToString {}
 extend<K, V> LinkedHashMap<K, V> <: TextTemplateObject<K, V, LinkedHashMap<K, V>> where K <: Equatable<K> & TextTemplateKey<K>, V <: ToString {}
 
-public class ObjectTextTemplateArgs<T> <: TextTemplateObject<String, ToString, ObjectTextTemplateArgs<T>> where T <: Object & DataObject<T> {
+public class ObjectTextTemplateArgs<T> <: TextTemplateObject<String, ToString, ObjectTextTemplateArgs<T>> where T <: Object & ObjectData<T> {
     public ObjectTextTemplateArgs(private let arg: T){}
     public operator func [](key: String): ToString {
         T.dataFields().readableField(key).getOrThrow{TextTemplateException("type ${TypeInfos.get<T>()} is without field ${key}")}.get(arg).toString()

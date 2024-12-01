@@ -1,4 +1,5 @@
 [dependencies]
+  charset4cj = { git = "https://gitcode.com/Cangjie-TPC/charset4cj.git", branch = "develop", version = "0.0.1"}
   f_base = {path = "../f_base"}
   f_collection = {path = "../f_collection"}
   f_exception = {path = "../f_exception"}

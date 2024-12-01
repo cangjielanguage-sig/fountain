@@ -9,7 +9,7 @@
  */
 package f_data
 
-public interface DataObject<T> <: DataFields<T> where T <: Object & DataObject<T> {
+public interface ObjectData<T> <: DataFields<T> where T <: Object & ObjectData<T> {
     static func dataFields(): ObjectFields<T>
 
     func toData(): Data
@@ -17,7 +17,7 @@ public interface DataObject<T> <: DataFields<T> where T <: Object & DataObject<T
     static func tryFromData(data: Data, flag!: DataConversionFlag): Any
 }
 
-class FieldIterator<T> <: Iterator<(String, Data)> where T <: Object & DataObject<T> {
+class FieldIterator<T> <: Iterator<(String, Data)> where T <: Object & ObjectData<T> {
     public FieldIterator(private let data: T, private let itr: Iterator<ReadableField>) {}
 
     public func next(): ?(String, Data) {
@@ -28,8 +28,8 @@ class FieldIterator<T> <: Iterator<(String, Data)> where T <: Object & DataObjec
     }
 }
 
-public class ObjectData<T> <: Data & Iterable<(String, Data)> where T <: Object & DataObject<T> {
-    public ObjectData(public let data: T) {
+public class DataObject<T> <: Data & Iterable<(String, Data)> where T <: Object & ObjectData<T> {
+    public DataObject(public let data: T) {
     }
     public func iterator(): Iterator<(String, Data)> {
         let fields = fields()
@@ -85,7 +85,7 @@ public class ObjectData<T> <: Data & Iterable<(String, Data)> where T <: Object 
         let typeInfo = TypeInfos.get<T>()
         if (typeInfo.isSubtypeOf(TypeInfos.get<Parsable<T>>())) {
             let data = typeInfo.getStaticFunction("parse", TypeInfos.get<String>()).apply([string])
-            ObjectData<T>((data as T).getOrThrow())
+            DataObject<T>((data as T).getOrThrow())
         } else {
             None<Data>
         }
@@ -96,7 +96,7 @@ public class ObjectData<T> <: Data & Iterable<(String, Data)> where T <: Object 
     public static func populate(src: Data, target: T, flag!: DataConversionFlag = SILENCE): ?T {
         let srcDataType = TypeInfo.of(src)
         func isObjectData() {
-            srcDataType.qualifiedName.startsWith("f_data.ObjectData")
+            srcDataType.qualifiedName.startsWith("f_data.DataObject")
         }
         func putValue(dstFields: ObjectFields<T>, name: String, dst: T, data: Data, srcType: TypeInfo): Bool {
             match (dstFields.mutableField(name)) {
@@ -162,11 +162,11 @@ public class ObjectData<T> <: Data & Iterable<(String, Data)> where T <: Object 
     public static func populate(src: Data, flag!: DataConversionFlag = SILENCE): ?T {
         populate(src, (T.dataFields().create() as T).getOrThrow(), flag: flag)
     }
-    public static func populate<S>(src: S, flag!: DataConversionFlag = SILENCE): ?T where S <: DataObject<S> {
-        populate(ObjectData<S>(src), flag: flag)
+    public static func populate<S>(src: S, flag!: DataConversionFlag = SILENCE): ?T where S <: ObjectData<S> {
+        populate(DataObject<S>(src), flag: flag)
     }
-    public static func populate<S>(src: S, target: T, flag!: DataConversionFlag = SILENCE): ?T where S <: DataObject<S> {
-        populate(ObjectData<S>(src), target, flag: flag)
+    public static func populate<S>(src: S, target: T, flag!: DataConversionFlag = SILENCE): ?T where S <: ObjectData<S> {
+        populate(DataObject<S>(src), target, flag: flag)
     }
     public static func populate<M, V>(src: M, flag!: DataConversionFlag = SILENCE): ?T where M <: Map<String, V> & DataFields<M>,
         V <: DataFields<V> {
@@ -178,7 +178,7 @@ public class ObjectData<T> <: Data & Iterable<(String, Data)> where T <: Object 
     }
     public static func populate<M, V>(src: T, map: M, flag!: DataConversionFlag = SILENCE): M where M <: Map<String, V>,
         V <: DataFields<V> {
-        for ((k, v) in ObjectData<T>(src)) {
+        for ((k, v) in DataObject<T>(src)) {
             match(V.tryFromData(v, flag: flag)){
                 case x: ?V => match(x){
                     case Some(x) => map[k] = x

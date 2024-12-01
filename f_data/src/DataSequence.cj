@@ -112,6 +112,12 @@ public class StringKeyMapTuples <: Data & Iterable<DataTuple> {
     public func add<V>(key: String, value: V): Unit where V <: DataFields<V> {
         map[key] = DataTuple(key.toData(), value.toData())
     }
+    public func add<V>(key: DataString, value: Data): Unit {
+        map[key.data] = DataTuple(key, value)
+    }
+    public func add(key: String, value: Data): Unit {
+        map[key] = DataTuple(key.toData(), value)
+    }
     public func iterator(): Iterator<DataTuple>{
         map.values().iterator()
     }

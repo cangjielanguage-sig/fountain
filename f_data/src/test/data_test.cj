@@ -45,7 +45,7 @@ public class DataUnitTest {
         @Assert('hello', dt.s)
         dt.s = 'hello world'
         let data = dt.toData()
-        dt = ObjectData<DataTest>.populate(data).getOrThrow()
+        dt = DataObject<DataTest>.populate(data).getOrThrow()
         @Assert('hello world', dt.s)
     }
 }

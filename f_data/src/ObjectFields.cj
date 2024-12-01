@@ -9,7 +9,7 @@
 */
 package f_data
 
-public class ObjectFields<T> <: Iterable<ReadableField> where T <: DataObject<T>{
+public class ObjectFields<T> <: Iterable<ReadableField> where T <: ObjectData<T>{
     private let mutables = HashMap<String, MutableField>()
     private let readables = HashMap<String, ReadableField>()
     private ObjectFields(
@@ -61,7 +61,7 @@ public class ObjectFields<T> <: Iterable<ReadableField> where T <: DataObject<T>
         //     populateFields(p.name, p.annotations)
         // }
         match(currentType.superClass) {
-            case Some(x) where x != TypeInfos.get<Object>() && x.isSubtypeOf(TypeInfos.get("f_data.DataObject<${x.qualifiedName}>")) =>
+            case Some(x) where x != TypeInfos.get<Object>() && x.isSubtypeOf(TypeInfos.get("f_data.ObjectData<${x.qualifiedName}>")) =>
                 let superFields = x.getStaticFunction("dataFields").apply()
                 let superFieldsIterator = (superFields as ObjectFields<T>).getOrThrow().iterator()
                 populateFields(superFieldsIterator, throwIfDuplicate: false)

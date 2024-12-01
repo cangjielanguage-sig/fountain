@@ -11,3 +11,4 @@ package fountain.data
 
 public import f_data.*
 public import f_data.validation.*
+public import f_data.json.*

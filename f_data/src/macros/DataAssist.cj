@@ -306,7 +306,7 @@ func generateToFields(d: ClassDecl, exclusion: HashSet<String>) {
     if (klassDecl.superTypes.isEmpty()) {
         klassDecl.upperBound = `upperbound`[0]
     }
-    klassDecl.superTypes.append(RefType(quote(DataObject<$(klassIdentifier)>)))
+    klassDecl.superTypes.append(RefType(quote(ObjectData<$(klassIdentifier)>)))
     let body = klassDecl.body.decls
     var fields = ArrayList<Expr>()
     for (d in body where (d is VarDecl || d is PropDecl) && !isStatic(d) && isPublic(d) &&
@@ -482,14 +482,14 @@ func generateToFields(d: ClassDecl, exclusion: HashSet<String>) {
             FuncDecl(
                 quote(
         public $openModi func toData(): Data {
-            ObjectData<$klassIdentifier>(this)
+            DataObject<$klassIdentifier>(this)
         }
     )
             ),
             FuncDecl(
                 quote(
         public static func tryFromData(data: Data, flag!: DataConversionFlag = SILENCE): Any {
-            match(ObjectData<$klassIdentifier>.populate(data, flag: flag)){
+            match(DataObject<$klassIdentifier>.populate(data, flag: flag)){
                 case Some(o) => o as $klassIdentifier
                 case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException(data.toString() + 'cannot be converted to ' + TypeInfos.get<$klassIdentifier>().toString())
                 case _ => None<$klassIdentifier>

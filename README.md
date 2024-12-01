@@ -171,7 +171,7 @@ _/ ____\____  __ __  _____/  |______  |__| ____
   - ```cj
     // 下面的T <: DataFields<T>
     convert<T>(data: Data, flag: DataConversionFlag = SILENCE): ?T
-    // 下面的T <: DataObject<T>
+    // 下面的T <: ObjectData<T>
     T.populate(src: Data, flag): ?T
     T.populate(src: Data, target: T, flag): ?T
     T.populate<S>(src: S, flag): ?T where S <: DataFields<T>
