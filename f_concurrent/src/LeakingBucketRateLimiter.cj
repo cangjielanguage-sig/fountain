@@ -11,7 +11,7 @@ package f_concurrent
 
 import std.collection.concurrent.ArrayBlockingQueue
 import std.process.Process
-import std.sync.{Monitor, AtomicBool, CatchupStyle, Timer, AtomicInt64, SyncCounter}
+import std.sync.{Monitor, AtomicBool, CatchupStyle, Timer, AtomicInt64, SyncCounter, AtomicOptionReference, ReentrantMutex}
 import std.time.DateTime
 
 import f_concurrent.exception.RateLimiterException
@@ -36,17 +36,27 @@ public class LeakingBucketRateLimiter<T> <: RateLimiter<T> {
     ) {
         super(timeout)
         this.bucket = ArrayBlockingQueue<(DateTime, SyncCounter)>(maxWaitings)
+        let lock = ReentrantMutex()
+        let future = AtomicOptionReference<Future<Unit>>()
         let timer = Timer.repeat(
             Duration.Zero,
             leakingDuration,
             {
                 =>
-                while (leaked.load() < leakingPerDuration && let Some((d, c)) <- bucket.head() && 
-                       DateTime.now() - d < timeout) {
-                    bucket.tryDequeue()
-                    leaked.fetchAdd(1)
-                    c.dec()
-                }
+                let start = DateTime.now()
+                future.load()?.cancel()
+                future.store(spawn{
+                    synchronized(lock){
+                        leaked.store(0)
+                        while (!Thread.currentThread.hasPendingCancellation && leaked.load() < leakingPerDuration && 
+                            let Some((d, c)) <- bucket.dequeue(leakingDuration - (DateTime.now() - start))) {
+                            if(DateTime.now() - d < timeout){
+                                leaked.fetchAdd(1)
+                                c.dec()
+                            }
+                        }
+                    }
+                })
             },
             style: Skip
         )
@@ -59,11 +69,7 @@ public class LeakingBucketRateLimiter<T> <: RateLimiter<T> {
         let tag = SyncCounter(1)
         let start = DateTime.now()
         if (bucket.enqueue((start, tag), timeout) && let _ <- tag.waitUntilZero(timeout: timeout - (DateTime.now() - start))) {
-            try{
-                return task()
-            }finally{
-                leaked.fetchSub(1)
-            }
+            return task()
         }else if (let Some(v) <- default) {
             v
         } else {
