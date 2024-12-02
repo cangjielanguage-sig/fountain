@@ -139,10 +139,12 @@ _/ ____\____  __ __  _____/  |______  |__| ____
     # 现在支持console, file, tcp, udp, unixDatagram, unix这六个日志记录器，可以随意编排不必全部出现，还可以继承f_log.AsyncLogger实现新的日志记录器
     export fountain_logger_appender_console=ConsoleLoggerName # =右边是开发者定义的日志记录器名字，用来标识配置项，控制台日志只支持一个配置，即使配置了多个也是只有第一个名字的配置生效
     export fountain_logger_appender_ConsoleLoggerName_level=ERROR
+    export fountain_logger_appender_ConsoleLoggerName_pattern=..... # 控制台日志格式
 
     export fountain_logger_appender_file=FileLoggerName1,FileLoggerName2
     export fountain_logger_appender_FileLoggerName1_level=INFO
     export fountain_logger_appender_FileLoggerName1_path=/path/of/file/logger.log
+    export fountain_logger_appender_FileLoggerName1_pattern=..... # 文件日志格式
     export fountain_logger_appender_FileLoggerName1_rotateDuration=DAY # 新建日志文件的时间周期，现在支持各种时间单位从NANOSECOND到YEAR
     export fountain_logger_appender_FileLoggerName1_rotateSize=1G # 新建日志文件的日志文件大小上限，现在支持字节数从xB和K M G T P E，大小写不限，x是任意正整数，Z Y 超过Int64上限了，B表示字节，K M G T P E后面可以带字母B也可以不带
     export fountain_logger_appender_FileLoggerName1_compressFormat=Deflate(BestSpeed) # GZip(BestSpeed) 支持标准库的Deflate和GZip以及压缩比。还有不压缩的None
@@ -153,18 +155,28 @@ _/ ____\____  __ __  _____/  |______  |__| ____
     # public var fileSize = Int64.Max
     # public var timeunit = TimeUnit.DAY
     # public var compress = LogFileCompressFormat.None
-    
+    # 默认日志格式[%level-%name] %d{yyyy/MM/dd,HH:mm:ss.SSS}|%m
+    # %level 日志级别
+    # %name  日志记录器的名字，这个是初始化日志记录器是从LoggerFactory.getLogger传入的名字
+    # %d     日志产生时间，按照yyyy-MM-dd,HH:mm:ss.SSS格式输出
+    # %d{...}日志产生时间，花括号内是时间格式
+    # %m     日志内容
+    # %app   当前应用名称，即当前进程名
     export fountain_logger_appender_tcp=TcpLoggerName # 也是支持英文逗号分隔的多个TcpLoggerName
     export fountain_logger_appender_TcpLoggerName_host=127.0.0.1:65535 # 这个host也是默认参数
+    export fountain_logger_appender_TcpLoggerName_pattern=..... # tcp日志格式
     
     export fountain_logger_appender_udp=UdpLoggerName
     export fountain_logger_appender_UdpLoggerName_host=127.0.0.1:65534
+    export fountain_logger_appender_UdpLoggerName_pattern=..... # udp日志格式
 
-    export fountain_logger_appender_unixDatagram=UnixDatagramName
-    export fountain_logger_appender_UdpDatagramName_path=/path/of/udpDatagram/file.log # 默认是/tmp/log/unixDatagram.log
+    export fountain_logger_appender_unixDatagram=UnixDatagramLoggerName
+    export fountain_logger_appender_UnixDatagramLoggerName_path=/path/of/udpDatagram/file.log # 默认是/tmp/log/unixDatagram.log
+    export fountain_logger_appender_UnixDatagramLoggerName_pattern=..... # unix datagram日志格式
 
-    export fountain_logger_appender_unix=UnixName
-    export fountain_logger_appender_UnixName_path=/path/of/unix/file.log # 默认是/tmp/log/unix.log
+    export fountain_logger_appender_unix=UnixLoggerName
+    export fountain_logger_appender_UnixLoggerName_path=/path/of/unix/file.log # 默认是/tmp/log/unix.log
+    export fountain_logger_appender_UnixLoggerName_pattern=..... # unix日志格式
   ```
 - 流程引擎
 - 实例复制
