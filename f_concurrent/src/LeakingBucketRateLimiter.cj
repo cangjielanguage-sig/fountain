@@ -11,7 +11,7 @@ package f_concurrent
 
 import std.collection.concurrent.ArrayBlockingQueue
 import std.process.Process
-import std.sync.{Monitor, AtomicBool, CatchupStyle, Timer, AtomicInt64}
+import std.sync.{Monitor, AtomicBool, CatchupStyle, Timer, AtomicInt64, SyncCounter}
 import std.time.DateTime
 
 import f_concurrent.exception.RateLimiterException
@@ -20,7 +20,7 @@ import f_concurrent.exception.RateLimiterException
  * 漏桶限流器
  */
 public class LeakingBucketRateLimiter<T> <: RateLimiter<T> {
-    private let bucket: ArrayBlockingQueue<(DateTime, ArrayBlockingQueue<Unit>)>
+    private let bucket: ArrayBlockingQueue<(DateTime, SyncCounter)>
     private let leaked = AtomicInt64(0)
     /**
      * @param timeout 任务等待时长
@@ -35,17 +35,17 @@ public class LeakingBucketRateLimiter<T> <: RateLimiter<T> {
         leakingDuration!: Duration = Duration.second
     ) {
         super(timeout)
-        this.bucket = ArrayBlockingQueue<(DateTime, ArrayBlockingQueue<Unit>)>(maxWaitings)
+        this.bucket = ArrayBlockingQueue<(DateTime, SyncCounter)>(maxWaitings)
         let timer = Timer.repeat(
             Duration.Zero,
             leakingDuration,
             {
                 =>
-                while (leaked.load() < leakingPerDuration && let Some((d, q)) <- bucket.head() && 
+                while (leaked.load() < leakingPerDuration && let Some((d, c)) <- bucket.head() && 
                        DateTime.now() - d < timeout) {
                     bucket.tryDequeue()
                     leaked.fetchAdd(1)
-                    q.enqueue(())
+                    c.dec()
                 }
             },
             style: Skip
@@ -56,10 +56,10 @@ public class LeakingBucketRateLimiter<T> <: RateLimiter<T> {
         }
     }
     public func exec(default: ?T, task: () -> T): T {
-        let tag = ArrayBlockingQueue<Unit>(1)
+        let tag = SyncCounter(1)
         let start = DateTime.now()
         if (bucket.enqueue((start, tag), timeout) && let remainder <- (timeout - (DateTime.now() - start)) && 
-            remainder > Duration.Zero && let _ <- tag.dequeue(remainder)) {
+            remainder > Duration.Zero && let _ <- tag.waitUntilZero(timeout: remainder)) {
             try{
                 return task()
             }finally{
