@@ -30,12 +30,9 @@ public class SlidingWindowRateLimiter<T> <: RateLimiter<T> {
         super(timeout)
         queue = BlockingQueue<DateTime>(limit)
         let timer = Timer.repeat(Duration.Zero, granularity,{=> 
-            if(let Some(d) <- queue.head() && DateTime.now() - d >= timeout){
+            while(let Some(d) <- queue.head() && DateTime.now() - d >= timeout){
                 queue.dequeue()
-            }else{
-                sleep(granularity)
             }
-            ()
         }, style: Skip)
         Process.current.atExit(timer.cancel)
     }

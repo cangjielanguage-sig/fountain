@@ -9,7 +9,7 @@
  */
 package f_concurrent
 
-import std.collection.concurrent.BlockingQueue
+import std.collection.concurrent.ArrayBlockingQueue
 import std.process.Process
 import std.sync.{Monitor, AtomicBool, CatchupStyle, Timer, AtomicInt64}
 import std.time.DateTime
@@ -20,7 +20,8 @@ import f_concurrent.exception.RateLimiterException
  * 漏桶限流器
  */
 public class LeakingBucketRateLimiter<T> <: RateLimiter<T> {
-    private let bucket: BlockingQueue<(DateTime, Monitor)>
+    private let bucket: ArrayBlockingQueue<(DateTime, ArrayBlockingQueue<Unit>)>
+    private let leaked = AtomicInt64(0)
     /**
      * @param timeout 任务等待时长
      * @param maxWaitings 允许等待的最大任务数
@@ -34,22 +35,19 @@ public class LeakingBucketRateLimiter<T> <: RateLimiter<T> {
         leakingDuration!: Duration = Duration.second
     ) {
         super(timeout)
-        this.bucket = BlockingQueue<(DateTime, Monitor)>(maxWaitings)
+        this.bucket = ArrayBlockingQueue<(DateTime, ArrayBlockingQueue<Unit>)>(maxWaitings)
         let timer = Timer.repeat(
             Duration.Zero,
             leakingDuration,
             {
                 =>
-                let leaked = AtomicInt64(0)
-                while (leaked.load() < leakingPerDuration) {
-                    spawn {
-                        if (let Some((d, m)) <- bucket.tryDequeue() && DateTime.now() - d < timeout) {
-                            synchronized(m) {
-                                m.notify()
-                            }
-                            leaked.fetchAdd(1)
-                        }
-                    }
+                let opt = this.bucket.head()
+                while (leaked.load() < leakingPerDuration && 
+                       let Some((d, q)) <- bucket.head() && 
+                       DateTime.now() - d < timeout) {
+                    bucket.tryDequeue()
+                    leaked.fetchAdd(1)
+                    q.enqueue(())
                 }
             },
             style: Skip
@@ -60,20 +58,16 @@ public class LeakingBucketRateLimiter<T> <: RateLimiter<T> {
         }
     }
     public func exec(default: ?T, task: () -> T): T {
-        var toExec = false
-        let monitor = Monitor()
+        let tag = ArrayBlockingQueue<Unit>(1)
         let start = DateTime.now()
-        let notified = AtomicBool(true)
-        synchronized(monitor) {
-            if (bucket.enqueue((start, monitor), timeout) && let remainder <- (timeout - (DateTime.now() - start))) {
-                if(remainder > Duration.Zero && monitor.wait(timeout: remainder)){//todo 由于一个编译器BUG，这个if不能跟外部if合并，等待新版
-                    toExec = true
-                }
+        if (bucket.enqueue((start, tag), timeout) && let remainder <- (timeout - (DateTime.now() - start)) && 
+            remainder > Duration.Zero && let _ <- tag.dequeue(remainder)) {
+            try{
+                return task()
+            }finally{
+                leaked.fetchSub(1)
             }
-        }
-        if (toExec) {
-            task()
-        } else if (let Some(v) <- default) {
+        }else if (let Some(v) <- default) {
             v
         } else {
             throw RateLimiterException('timeout for ${timeout} since ${start}')
