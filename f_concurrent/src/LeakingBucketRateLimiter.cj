@@ -41,9 +41,7 @@ public class LeakingBucketRateLimiter<T> <: RateLimiter<T> {
             leakingDuration,
             {
                 =>
-                let opt = this.bucket.head()
-                while (leaked.load() < leakingPerDuration && 
-                       let Some((d, q)) <- bucket.head() && 
+                while (leaked.load() < leakingPerDuration && let Some((d, q)) <- bucket.head() && 
                        DateTime.now() - d < timeout) {
                     bucket.tryDequeue()
                     leaked.fetchAdd(1)
