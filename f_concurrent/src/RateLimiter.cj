@@ -22,3 +22,12 @@ sealed abstract class RateLimiter<T>{
     }
     public func exec(default: ?T, task: () -> T): T
 }
+public class UnlimitedRateLimiter<T> <: RateLimiter<T> {
+    public static let INSTANCE = UnlimitedRateLimiter<T>()
+    private init(){
+        super(Duration.Max)
+    }
+    public func exec(default: ?T, task: () -> T): T {
+        task()
+    }
+}
