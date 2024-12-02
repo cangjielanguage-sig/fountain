@@ -58,8 +58,7 @@ public class LeakingBucketRateLimiter<T> <: RateLimiter<T> {
     public func exec(default: ?T, task: () -> T): T {
         let tag = SyncCounter(1)
         let start = DateTime.now()
-        if (bucket.enqueue((start, tag), timeout) && let remainder <- (timeout - (DateTime.now() - start)) && 
-            remainder > Duration.Zero && let _ <- tag.waitUntilZero(timeout: remainder)) {
+        if (bucket.enqueue((start, tag), timeout) && let _ <- tag.waitUntilZero(timeout: timeout - (DateTime.now() - start))) {
             try{
                 return task()
             }finally{
