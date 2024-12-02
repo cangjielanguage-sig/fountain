@@ -61,7 +61,6 @@ public class LeakingBucketRateLimiter<T> <: RateLimiter<T> {
             style: Skip
         )
         Process.current.atExit {
-            while (bucket.size > 0) {}
             timer.cancel()
         }
     }
