@@ -49,8 +49,9 @@ public class LeakingBucketRateLimiter<T> <: RateLimiter<T> {
                     synchronized(lock){
                         leaked.store(0)
                         while (!Thread.currentThread.hasPendingCancellation && leaked.load() < leakingPerDuration && 
-                            let Some((d, c)) <- bucket.dequeue(leakingDuration - (DateTime.now() - start))) {
-                            if(DateTime.now() - d < timeout){
+                            let remainder <- leakingDuration - (DateTime.now() - start) && remainder > Duration.Zero &&
+                            let Some((d, c)) <- bucket.dequeue(remainder)) {
+                            if(DateTime.now() - d < timeout){//这个条件不能合并到while循环条件，这个条件不论结果都得继续下次循环
                                 leaked.fetchAdd(1)
                                 c.dec()
                             }
