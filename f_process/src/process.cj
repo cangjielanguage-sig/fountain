@@ -66,7 +66,7 @@ extend String <: ExtendProcess {
             stdErr!: ProcessRedirect = Inherit): SubProcess {
         let tuple = piped(workingDirectory: workingDirectory,
                           environment: environment,
-                          stdIn: Pipe, stdOut: Pipe, stdErr: stdErr)
+                          stdIn: stdIn, stdOut: Pipe, stdErr: stdErr)
         link(tuple[1].getOrThrow().stdOut, stdOut, bufSize)
         tuple[0].getOrThrow()
     }
