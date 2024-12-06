@@ -9,7 +9,7 @@
 */
 package f_data
 
-sealed abstract class DataList<D> <: Data & Iterable<D> where D <: Data {
+sealed abstract class DataList<D> <: Data & Iterable<D> & Collection<D> where D <: Data {
     public DataList(private let data: ArrayList<D>){}
     public init(data: Array<D>){
         this(ArrayList<D>(data))
@@ -24,6 +24,15 @@ sealed abstract class DataList<D> <: Data & Iterable<D> where D <: Data {
     public func iterator(): Iterator<D> {
         data.iterator()
     }
+    public prop size: Int64 {
+        get(){
+            data.size
+        }
+    }
+    public func isEmpty(): Bool {
+        data.isEmpty()
+    }
+
     public func toString(): String {
         let s = StringBuilder("[")
         var i = 0
@@ -98,7 +107,7 @@ public class DataTuples <: DataList<DataTuple> {
         super()
     }
 }
-public class StringKeyMapTuples <: Data & Iterable<DataTuple> {
+public class StringKeyMapTuples <: Data & Iterable<DataTuple> & Collection<DataTuple> {
     private let map = LinkedHashMap<String, DataTuple>()
 
     public func addAll<L>(list: L): Unit where L <: DataList<DataTuple> {
@@ -120,6 +129,14 @@ public class StringKeyMapTuples <: Data & Iterable<DataTuple> {
     }
     public func iterator(): Iterator<DataTuple>{
         map.values().iterator()
+    }
+    public func isEmpty(): Bool {
+        map.isEmpty()
+    }
+    public prop size: Int64 {
+        get(){
+            map.size
+        }
     }
     public func toString(): String {
         var i = 0
