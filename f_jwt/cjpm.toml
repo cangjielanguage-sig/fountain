@@ -1,4 +1,5 @@
 [dependencies]
+  f_data = {path = "../f_data"}
   f_exception = {path = "../f_exception"}
 [package]
   cjc-version = "0.57.3"
