@@ -28,7 +28,7 @@ public class AnyMomentRateLimiter<T> <: RateLimiter<T> {
         tokens.fetchAdd(maxTokens)
     }
 
-    public func exec(default: ?T, task: () -> T): T {
+    public func exec(default: ?T, task: () -> T): ?T {
         func call(callback: () -> ?T): ?T {
             let current = tokens.fetchSub(1)
             if (current > 0) {
@@ -64,7 +64,7 @@ public class AnyMomentRateLimiter<T> <: RateLimiter<T> {
         if (let Some(v) <- default) {
             return v
         } else {
-            throw RateLimiterException('timout for ${timeout} since ${start}')
+            return None<T>
         }
     }
 }

@@ -17,17 +17,17 @@ sealed abstract class RateLimiter<T>{
             throw RateLimiterException('timeout must be greater than zero, but current is ${timeout}')
         }
     }
-    public func exec(task: () -> T): T {
+    public func exec(task: () -> T): ?T {
         exec(None, task)
     }
-    public func exec(default: ?T, task: () -> T): T
+    public func exec(default: ?T, task: () -> T): ?T
 }
 public class UnlimitedRateLimiter<T> <: RateLimiter<T> {
     public static let INSTANCE = UnlimitedRateLimiter<T>()
     private init(){
         super(Duration.Max)
     }
-    public func exec(default: ?T, task: () -> T): T {
+    public func exec(default: ?T, task: () -> T): ?T {
         task()
     }
 }

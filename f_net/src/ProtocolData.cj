@@ -9,8 +9,21 @@
 */
 package f_net
 
-internal import std.collection.concurrent.ArrayBlockingQueue
-internal import std.net.{TcpSocket, TcpServerSocket}
-internal import std.sync.{AtomicBool, AtomicUInt64}
-internal import f_concurrent.{RateLimiter, UnlimitedRateLimiter}
-internal import f_log.LoggerFactory
+public interface ProtocolData<T> where T <: ProtocolData<T> {
+    /**
+     * 返回true时关闭连接
+     */
+    prop isToClose: Bool{
+        get(){
+            false
+        }
+    }
+    prop isOverload: Bool{
+        get(){
+            false
+        }
+    }
+}
+public interface KeyedData<K, T> <: ProtocolData<T> where K <: Hashable & Equatable<K>, T <: KeyedData<K, T> {
+    prop key: K
+}

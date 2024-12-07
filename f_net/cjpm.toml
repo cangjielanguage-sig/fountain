@@ -1,4 +1,7 @@
 [dependencies]
+  f_base = {path = "../f_base"}
+  f_concurrent = {path = "../f_concurrent"}
+  f_log = {path = "../f_log"}
 
 [package]
   cjc-version = "0.57.3"
