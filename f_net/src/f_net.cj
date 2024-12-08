@@ -14,4 +14,5 @@ internal import std.net.{TcpSocket, TcpServerSocket, SocketAddress}
 internal import std.process.Process
 internal import std.sync.{AtomicBool, AtomicInt64}
 internal import f_concurrent.{RateLimiter, UnlimitedRateLimiter}
+internal import f_exception.UnreachableException
 internal import f_log.LoggerFactory

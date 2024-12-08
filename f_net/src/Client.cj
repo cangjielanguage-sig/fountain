@@ -58,14 +58,17 @@ public class AsyncSocketClient<T, K, R> <: SocketClient<T, R> where K <: Hashabl
         super(host: host, port: port, codec: codec)
     }
     private let dataMap = ConcurrentHashMap<K, SocketClientFuture<K, R>>()
-    public func transfer(data: T): SocketClientFuture<K, R> {
-        let future = SocketClientFuture<K, R>()
+    public func transfer(data: T): ?R {
+        throw UnsupportedException('')
+    }
+    public func asyncTransfer(data: T): SocketClientFuture<K, R> {
+        let future = SocketClientFuture<K, R>(dataMap)
         dataMap[data.key] = future
         spawn{
             if(let Some(d) <- super.transfer(data)){
-                future.set(d)
+                dataMap.remove(d.key)?.set(d)
             }else{
-                future.set(None)
+                throw UnreachableException()
             }
         }
         future
@@ -73,12 +76,13 @@ public class AsyncSocketClient<T, K, R> <: SocketClient<T, R> where K <: Hashabl
 }
 public class SocketClientFuture<K, T> where K <: Hashable & Equatable<K>, T <: KeyedData<K, T> {
     private let q = ArrayBlockingQueue<?T>(1)
-    init(){}
+    SocketClientFuture(private let map: ConcurrentHashMap<K, SocketClientFuture<K, T>>){}
     func set(data: ?T){
         q.enqueue(data)
     }
     public func get(timeout!: Duration = Duration.Max): ?T {
-        if(let Some(x) <- q.dequeue(timeout)) {
+        if(let Some(x) <- q.dequeue(timeout) && let Some(v) <- x) {
+            map.remove(v.key)
             x
         }else{
             None
