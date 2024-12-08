@@ -8,3 +8,19 @@
     See the Mulan PSL v2 for more details.  
 */
 package f_pool
+
+import f_exception.BaseException
+
+public class PoolException <: BaseException {
+    public init() {}
+
+    public init(message: String) {
+        super(message)
+    }
+    public init(caused: Exception) {
+        super(caused)
+    }
+    public init(message: String, caused: Exception) {
+        super(message, caused)
+    }
+} 
