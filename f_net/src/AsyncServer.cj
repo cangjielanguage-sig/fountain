@@ -45,6 +45,7 @@ public class AsyncServer<EN, DE> <: Resource where EN <: ProtocolData<EN>, DE <:
         startConsume()
         server.bind()
         start()
+        Process.current.atExt(close)
     }
     public init(codecParallelism!: Int64 = 8, codecBuffer!: Int64 = 1024, taskBuffer!: Int64 = 1024, 
         writeParallelism!: Int64 = 8, writeBuffer!: Int64 = 1024,
@@ -98,45 +99,51 @@ public class AsyncServer<EN, DE> <: Resource where EN <: ProtocolData<EN>, DE <:
         }
     }
     private func start(): Unit {
-        spawn{
-            while(!closed.load() && let socket <- server.accept()){
-                let decoder = this.decoder.newDecoder()
-                let serial = this.serial.fetchAdd(1) % codecQueues.size
-                spawn{
-                    while(!(closed.load() || socket.isClosed())){
-                        let buf = Array<Byte>(128, repeat: 0)
-                        let len = try{
-                            socket.read(buf)
-                        }catch(e: Exception){
-                            LOG.warn<SocketAddress>('socket {} read', e, [socket.remoteAddress])
-                            continue
-                        }
-                        codecQueues[serial].enqueue({=>
-                            if(let Some(d) <- decoder.decode(buf[0 .. len])){
-                                if(d.isToClose){
-                                    try{
-                                        socket.close()
-                                    }catch(e: Exception){
-                                        LOG.warn<SocketAddress>('socket {} close', e, [socket.remoteAddress])
-                                    }
-                                }else{
-                                    taskQueue.enqueue({=>
-                                        try{
-                                            let r = executor(d)
-                                            codecQueues[serial].enqueue({=> 
-                                                let bytes = encoder.newEncoder().encode(r)
-                                                writeQueues[serial].enqueue({=>
-                                                    socket.write(bytes)
-                                                })
-                                            })
-                                        }catch(e: Exception){
-                                            LOG.warn<SocketAddress>('task execute', e, [socket.remoteAddress])
-                                        }
-                                    })
-                                }
-                            }
-                        })
+        while(!closed.load() && let socket <- server.accept()){
+            let decoder = this.decoder.newDecoder()
+            let serial = this.serial.fetchAdd(1) % codecQueues.size
+            spawn{
+                while(!(closed.load() || socket.isClosed())){
+                    let buf = Array<Byte>(128, repeat: 0)
+                    let len = try{
+                        socket.read(buf)
+                    }catch(e: Exception){
+                        LOG.warn<SocketAddress>('socket {} read', e, [socket.remoteAddress])
+                        continue
                     }
+                    codecQueues[serial].enqueue({=>
+                        if(let Some(d) <- decoder.decode(buf[0 .. len])){
+                            if(d.isToClose){
+                                try{
+                                    socket.close()
+                                }catch(e: Exception){
+                                    LOG.warn<SocketAddress>('socket {} close', e, [socket.remoteAddress])
+                                }
+                            }else{
+                                taskQueue.enqueue({=>
+                                    let r = try{
+                                        executor(d)
+                                    }catch(e: Exception){
+                                        LOG.warn<SocketAddress>('task execute', e, [socket.remoteAddress])
+                                    }
+                                    codecQueues[serial].enqueue({=> 
+                                        let bytes = try {
+                                            encoder.newEncoder().encode(r)
+                                        }catch(e: Exception){
+                                            LOG.warn<SocketAddress>('async socket encode {}', e, [socket.remoteAddress])
+                                        }
+                                        writeQueues[serial].enqueue({=>
+                                            try{
+                                                socket.write(bytes)
+                                            }catch(e: Exception){
+                                                LOG.warn<SocketAddress>('async socket write {}', e, [socket.remoteAddress])
+                                            }
+                                        })
+                                    })
+                                })
+                            }
+                        }
+                    })
                 }
             }
         }

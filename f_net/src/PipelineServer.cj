@@ -20,6 +20,7 @@ public class PipelineServer<EN, DE> <: Resource where EN <: ProtocolData<EN>, DE
     ){
         server.bind()
         start()
+        Process.current.atExot(close)
     }
     public init(serverCreater!: ()->TcpServerSocket, encoder!: Encoder<EN>, decoder!: Decoder<DE>, executor!: (DE) -> EN) {
         this(server: serverCreater(), encoder: encoder, decoder: decoder, executor: executor)
@@ -31,37 +32,38 @@ public class PipelineServer<EN, DE> <: Resource where EN <: ProtocolData<EN>, DE
         this(server: TcpServerSocket(bindAt: port), encoder: codec, decoder: codec, executor: executor)
     }
     private func start(): Unit {
-        spawn{
-            while(!closed.load() && let socket <- server.accept()){
-                spawn{
-                    while(!closed.load()){
-                        let buf = Array<Byte>(128, repeat: 0)
-                        let len = try{
-                            socket.read(buf)
-                        }catch(e: Exception){
-                            LOG.warn<SocketAddress>('socket {} read', e, [socket.remoteAddress])
-                            if(socket.isClosed()){
-                                return
+        while(!closed.load() && let socket <- server.accept()){
+            spawn{
+                while(!(closed.load() || socket.isClosed())){
+                    let buf = Array<Byte>(128, repeat: 0)
+                    let len = try{
+                        socket.read(buf)
+                    }catch(e: Exception){
+                        LOG.warn<SocketAddress>('socket {} read', e, [socket.remoteAddress])
+                        continue
+                    }
+                    if(let Some(d) <- decoder.decode(buf[0 .. len])){
+                        if(d.isToClose){
+                            try{
+                                socket.close()
+                            }catch(e: Exception){
+                                LOG.warn<SocketAddress>('socket {} close', e, [socket.remoteAddress])
                             }
-                            continue
-                        }
-                        if(let Some(d) <- decoder.decode(buf[0 .. len])){
-                            if(d.isToClose){
-                                try{
-                                    socket.close()
-                                }catch(e: Exception){
-                                    LOG.warn<SocketAddress>('socket {} close', e, [socket.remoteAddress])
-                                }
-                                return
-                            }else{
-                                try{
-                                    socket.write(encoder.encode(executor(d)))
-                                }catch(e: Exception){
-                                    LOG.warn<SocketAddress>('socket {} write', e, [socket.remoteAddress])
-                                    if(socket.isClosed()){
-                                        return
-                                    }
-                                }
+                        }else{
+                            let r = try{
+                                executor(d)
+                            }catch(e: Exception){
+                                LOG.warn<SocketAddress>('pipeline executor {}', e, [socket.remoteAddress])
+                            }
+                            let bytes = try{
+                                encoder.encode(r)
+                            }catch(e: Exception){
+                                LOG.warn<SocketAddress>('pipeline encode {}', e, [socket.remoteAddress])
+                            }
+                            try{
+                                socket.write(bytes)
+                            }catch(e: Exception){
+                                LOG.warn<SocketAddress>('socket {} write', e, [socket.remoteAddress])
                             }
                         }
                     }
