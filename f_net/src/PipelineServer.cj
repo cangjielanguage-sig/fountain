@@ -52,6 +52,7 @@ public class PipelineServer<EN, DE> <: Resource where EN <: ProtocolData<EN>, DE
                                 }catch(e: Exception){
                                     LOG.warn<SocketAddress>('socket {} close', e, [socket.remoteAddress])
                                 }
+                                return
                             }else{
                                 try{
                                     socket.write(encoder.encode(executor(d)))
