@@ -10,13 +10,13 @@
 package f_net
 
 public class AsyncServer<EN, DE> <: Resource where EN <: ProtocolData<EN>, DE <: ProtocolData<DE> {
-    private static let LOG = LoggerFactory.getLogger<AsyncServer<EN, DE, E, D>>()
+    private static let LOG = LoggerFactory.getLogger<AsyncServer<EN, DE>>()
     private let closed = AtomicBool(false)
-    private let serial = AtomicUInt64(0)
+    private let serial = AtomicInt64(0)
     private let codecQueues: Array<ArrayBlockingQueue<()->Unit>>
     private let taskQueue: ArrayBlockingQueue<()->Unit>
-    private let writeQueues: Array<ArrayBlockingQueue<()->Unit>
-    public KeyedServer(
+    private let writeQueues: Array<ArrayBlockingQueue<()->Unit>>
+    public AsyncServer(
         codecParallelism!: Int64 = 8,
         codecBuffer!: Int64 = 1024,
         taskBuffer!: Int64 = 1024,
@@ -24,8 +24,8 @@ public class AsyncServer<EN, DE> <: Resource where EN <: ProtocolData<EN>, DE <:
         writeBuffer!: Int64 = 1024,
         private let server!: TcpServerSocket, 
         private let encoder!: Encoder<EN>,
-        private let decoder!: Decoder<DE>
-        private let executor!: (EN) -> DE
+        private let decoder!: Decoder<DE>,
+        private let executor!: (DE) -> EN
     ){
         var parallelism = 1
         while(parallelism < codecParallelism){
@@ -39,7 +39,7 @@ public class AsyncServer<EN, DE> <: Resource where EN <: ProtocolData<EN>, DE <:
             parallelism++
         }
         taskQueue = ArrayBlockingQueue<()->Unit>(taskBuffer)
-        writeQueues = Array<ArrayBlockingQueue<()->Unit>(parallelism){i =>
+        writeQueues = Array<ArrayBlockingQueue<()->Unit>>(parallelism){i =>
             ArrayBlockingQueue<()->Unit>(writeBuffer)
         }
         startConsume()
@@ -48,28 +48,28 @@ public class AsyncServer<EN, DE> <: Resource where EN <: ProtocolData<EN>, DE <:
     }
     public init(codecParallelism!: Int64 = 8, codecBuffer!: Int64 = 1024, taskBuffer!: Int64 = 1024, 
         writeParallelism!: Int64 = 8, writeBuffer!: Int64 = 1024,
-        serverCreater!: ()->TcpServerSocket, encoder!: Encoder<EN>, decoder!: Decoder<DE>, executor!: (EN) -> DE) {
+        serverCreater!: ()->TcpServerSocket, encoder!: Encoder<EN>, decoder!: Decoder<DE>, executor!: (DE) -> EN) {
         this(codecParallelism: codecParallelism, codecBuffer: codecBuffer, taskBuffer: taskBuffer, 
              writeParallelism: writeParallelism, writeBuffer: writeBuffer,
              server: serverCreater(), encoder: encoder, decoder: decoder, executor: executor)
     }
     public init(codecParallelism!: Int64 = 8, codecBuffer!: Int64 = 1024, taskBuffer!: Int64 = 1024, 
         writeParallelism!: Int64 = 8, writeBuffer!: Int64 = 1024,
-        serverCreater!: ()->TcpServerSocket, codec: Codec<EN, DE>, executor!: (EN) -> DE) {
+        serverCreater!: ()->TcpServerSocket, codec!: Codec<EN, DE>, executor!: (DE) -> EN) {
         this(codecParallelism: codecParallelism, codecBuffer: codecBuffer, taskBuffer: taskBuffer, 
              writeParallelism: writeParallelism, writeBuffer: writeBuffer,
              server: serverCreater(), encoder: codec, decoder: codec, executor: executor)
     }
     public init(codecParallelism!: Int64 = 8, codecBuffer!: Int64 = 1024, taskBuffer!: Int64 = 1024, 
         writeParallelism!: Int64 = 8, writeBuffer!: Int64 = 1024,
-        port!: UInt16, encoder!: Encoder<EN>, decoder!: Decoder<DE>, executor!: (EN) -> DE) {
+        port!: UInt16, encoder!: Encoder<EN>, decoder!: Decoder<DE>, executor!: (DE) -> EN) {
         this(codecParallelism: codecParallelism, codecBuffer: codecBuffer, taskBuffer: taskBuffer, 
              writeParallelism: writeParallelism, writeBuffer: writeBuffer,
              server: TcpServerSocket(bindAt: port), encoder: encoder, decoder: decoder, executor: executor)
     }
     public init(codecParallelism!: Int64 = 8, codecBuffer!: Int64 = 1024, taskBuffer!: Int64 = 1024, 
         writeParallelism!: Int64 = 8, writeBuffer!: Int64 = 1024,
-        port!: UInt16, codec!: Codec<EN, DE>, executor!: (EN) -> DE): PipelineServer<EN, DE, E, D> {
+        port!: UInt16, codec!: Codec<EN, DE>, executor!: (DE) -> EN) {
         this(codecParallelism: codecParallelism, codecBuffer: codecBuffer, taskBuffer: taskBuffer, 
              writeParallelism: writeParallelism, writeBuffer: writeBuffer,
              server: TcpServerSocket(bindAt: port), encoder: codec, decoder: codec, executor: executor)
@@ -90,7 +90,7 @@ public class AsyncServer<EN, DE> <: Resource where EN <: ProtocolData<EN>, DE <:
             }
         }
         spawn{
-            while(let task in taskQueue){
+            while(let task <- taskQueue.dequeue()){
                 spawn{
                     task()
                 }
@@ -108,7 +108,7 @@ public class AsyncServer<EN, DE> <: Resource where EN <: ProtocolData<EN>, DE <:
                         let len = try{
                             socket.read(buf)
                         }catch(e: Exception){
-                            LOG.warn('socket {} read': e, socket.remoteAddress)
+                            LOG.warn<SocketAddress>('socket {} read', e, [socket.remoteAddress])
                             continue
                         }
                         codecQueues[serial].enqueue({=>
@@ -117,12 +117,12 @@ public class AsyncServer<EN, DE> <: Resource where EN <: ProtocolData<EN>, DE <:
                                     try{
                                         socket.close()
                                     }catch(e: Exception){
-                                        LOG.warn('socket {} close', e, socket.remoteAddress)
+                                        LOG.warn<SocketAddress>('socket {} close', e, [socket.remoteAddress])
                                     }
                                 }else{
                                     taskQueue.enqueue({=>
                                         try{
-                                            let r = executeor(d)
+                                            let r = executor(d)
                                             codecQueues[serial].enqueue({=> 
                                                 let bytes = encoder.newEncoder().encode(r)
                                                 writeQueues[serial].enqueue({=>
@@ -130,7 +130,7 @@ public class AsyncServer<EN, DE> <: Resource where EN <: ProtocolData<EN>, DE <:
                                                 })
                                             })
                                         }catch(e: Exception){
-                                            LOG.warn('task execute', e)
+                                            LOG.warn<SocketAddress>('task execute', e, [socket.remoteAddress])
                                         }
                                     })
                                 }
@@ -142,10 +142,10 @@ public class AsyncServer<EN, DE> <: Resource where EN <: ProtocolData<EN>, DE <:
         }
     }
     public func isClosed(): Bool {
-        socket.isClosed()
+        server.isClosed()
     }
     public func close(): Unit {
         closed.store(true)
-        socket.close()
+        server.close()
     }
 }
