@@ -40,6 +40,9 @@ public class PipelineServer<EN, DE> <: Resource where EN <: ProtocolData<EN>, DE
                             socket.read(buf)
                         }catch(e: Exception){
                             LOG.warn<SocketAddress>('socket {} read', e, [socket.remoteAddress])
+                            if(socket.isClosed()){
+                                return
+                            }
                             continue
                         }
                         if(let Some(d) <- decoder.decode(buf[0 .. len])){
@@ -54,6 +57,9 @@ public class PipelineServer<EN, DE> <: Resource where EN <: ProtocolData<EN>, DE
                                     socket.write(encoder.encode(executor(d)))
                                 }catch(e: Exception){
                                     LOG.warn<SocketAddress>('socket {} write', e, [socket.remoteAddress])
+                                    if(socket.isClosed()){
+                                        return
+                                    }
                                 }
                             }
                         }
