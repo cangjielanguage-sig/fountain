@@ -20,12 +20,6 @@ public open class SocketClient<T, R> <: Resource where T <: ProtocolData<T>, R <
     public init(socket!: TcpSocket, codec!: Codec<T, R>){
         this(socket: socket, encoder: codec, decoder: codec)
     }
-    public init(host!: String, port!: UInt16, encoder!: Encoder<T>, decoder!: Decoder<R>){
-        this(socket: TcpSocket(host, port), encoder: encoder, decoder: decoder)
-    }
-    public init(host!: String, port!: UInt16, codec!: Codec<T, R>){
-        this(socket: TcpSocket(host, port), encoder: codec, decoder: codec)
-    }
     public func isClosed(): Bool {
         socket.isClosed()
     }
@@ -50,12 +44,6 @@ public class AsyncSocketClient<T, K, R> <: SocketClient<T, R> where K <: Hashabl
     }
     public init(socket!: TcpSocket, codec!: Codec<T, R>){
         super(socket: socket, codec: codec)
-    }
-    public init(host!: String, port!: UInt16, encoder!: Encoder<T>, decoder!: Decoder<R>){
-        super(host: host, port: port, encoder: encoder, decoder: decoder)
-    }
-    public init(host!: String, port!: UInt16, codec!: Codec<T, R>){
-        super(host: host, port: port, codec: codec)
     }
     private let dataMap = ConcurrentHashMap<K, SocketClientFuture<K, R>>()
     public func transfer(data: T): ?R {

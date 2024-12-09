@@ -22,6 +22,13 @@ public class PipelineServer<EN, DE> <: Resource where EN <: ProtocolData<EN>, DE
         start()
         Process.current.atExit(close)
     }
+    public init(
+        server!: TcpServerSocket,
+        codec!: Codec<EN, DE>,
+        executor!: (DE) -> EN
+    ){
+        this(server: server, encoder: codec, decoder: codec, executor: executor)
+    }
     
     private func start(): Unit {
         while(!closed.load() && let socket <- server.accept()){

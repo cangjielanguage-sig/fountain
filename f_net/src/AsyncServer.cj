@@ -30,6 +30,30 @@ public class AsyncServer<EN, DE> <: Resource where EN <: ProtocolData<EN>, DE <:
         start()
         Process.current.atExit(close)
     }
+    public init(
+        overload!: EN,
+        execError!: EN,
+        encodeError!: EN = execError,
+        codecQueues!: Array<ArrayBlockingQueue<()->Unit>> = initQueues(8, 1024),
+        taskQueues!: Array<ArrayBlockingQueue<()->Unit>> = codecQueues,
+        writeQueues!: Array<ArrayBlockingQueue<()->Unit>> = codecQueues,
+        rateLimiter!: RateLimiter<EN> = UnlimitedRateLimiter<EN>.INSTANCE,
+        server!: TcpServerSocket, 
+        codec!: Codec<EN, DE>,
+        executor!: (DE) -> EN
+    ){
+        this(overload: overload, 
+             execError: execError,
+             encodeError: encodeError,
+             codecQueues: codecQueues,
+             taskQueues: taskQueues,
+             writeQueues: writeQueues,
+             rateLimiter: rateLimiter,
+             server: server,
+             encoder: codec,
+             decoder: codec,
+             executor: executor)
+    }
     public static func initQueues(parallelism: Int64, bufferSize: Int64){
         let p = if(((parallelism - 1) & parallelism) == 0){
             parallelism

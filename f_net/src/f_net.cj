@@ -23,3 +23,9 @@ public func initTcpServer(port!: UInt16){
 public func initTcpServer(new: ()->TcpServerSocket){
     new()
 }
+public func initTcpClient(host!: String, port!: UInt16){
+    TcpSocket(host, port)
+}
+public func initTcpClient(new: ()->TcpSocket){
+    new()
+}
