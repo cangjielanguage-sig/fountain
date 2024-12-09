@@ -5,8 +5,8 @@
     You may obtain a copy of Mulan PSL v2 at:
             http://license.coscl.org.cn/MulanPSL2
     THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-    See the Mulan PSL v2 for more details.  
-*/
+    See the Mulan PSL v2 for more details.
+ */
 package f_net
 
 internal import std.collection.concurrent.{ArrayBlockingQueue, ConcurrentHashMap}
@@ -17,15 +17,22 @@ internal import f_concurrent.{RateLimiter, UnlimitedRateLimiter}
 internal import f_exception.UnreachableException
 internal import f_log.LoggerFactory
 
-public func initTcpServer(port!: UInt16){
+public func initTcpServer(port!: UInt16) {
     TcpServerSocket(bindAt: port)
 }
-public func initTcpServer(new: ()->TcpServerSocket){
+/**
+ * 返回的TcpServerSocket不要调用bind()
+ */
+public func initTcpServer(new: () -> TcpServerSocket) {
     new()
 }
-public func initTcpClient(host!: String, port!: UInt16){
+
+public func initTcpClient(host!: String, port!: UInt16) {
     TcpSocket(host, port)
 }
-public func initTcpClient(new: ()->TcpSocket){
+/**
+ * 返回的TcpSocket不要调用connect()
+ */
+public func initTcpClient(new: () -> TcpSocket) {
     new()
 }
