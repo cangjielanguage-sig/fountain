@@ -20,7 +20,7 @@ public class PipelineServer<EN, DE> <: Resource where EN <: ProtocolData<EN>, DE
     ){
         server.bind()
         start()
-        Process.current.atExot(close)
+        Process.current.atExit(close)
     }
     public init(serverCreater!: ()->TcpServerSocket, encoder!: Encoder<EN>, decoder!: Decoder<DE>, executor!: (DE) -> EN) {
         this(server: serverCreater(), encoder: encoder, decoder: decoder, executor: executor)
@@ -54,11 +54,13 @@ public class PipelineServer<EN, DE> <: Resource where EN <: ProtocolData<EN>, DE
                                 executor(d)
                             }catch(e: Exception){
                                 LOG.warn<SocketAddress>('pipeline executor {}', e, [socket.remoteAddress])
+                                continue
                             }
                             let bytes = try{
                                 encoder.encode(r)
                             }catch(e: Exception){
                                 LOG.warn<SocketAddress>('pipeline encode {}', e, [socket.remoteAddress])
+                                continue
                             }
                             try{
                                 socket.write(bytes)
@@ -72,10 +74,10 @@ public class PipelineServer<EN, DE> <: Resource where EN <: ProtocolData<EN>, DE
         }
     }
     public func isClosed(): Bool {
-        socket.isClosed()
+        server.isClosed()
     }
     public func close(): Unit {
         closed.store(true)
-        socket.close()
+        server.close()
     }
 }

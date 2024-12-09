@@ -45,7 +45,7 @@ public class AsyncServer<EN, DE> <: Resource where EN <: ProtocolData<EN>, DE <:
         startConsume()
         server.bind()
         start()
-        Process.current.atExt(close)
+        Process.current.atExit(close)
     }
     public init(codecParallelism!: Int64 = 8, codecBuffer!: Int64 = 1024, taskBuffer!: Int64 = 1024, 
         writeParallelism!: Int64 = 8, writeBuffer!: Int64 = 1024,
@@ -125,12 +125,14 @@ public class AsyncServer<EN, DE> <: Resource where EN <: ProtocolData<EN>, DE <:
                                         executor(d)
                                     }catch(e: Exception){
                                         LOG.warn<SocketAddress>('task execute', e, [socket.remoteAddress])
+                                        return
                                     }
                                     codecQueues[serial].enqueue({=> 
                                         let bytes = try {
                                             encoder.newEncoder().encode(r)
                                         }catch(e: Exception){
                                             LOG.warn<SocketAddress>('async socket encode {}', e, [socket.remoteAddress])
+                                            return
                                         }
                                         writeQueues[serial].enqueue({=>
                                             try{

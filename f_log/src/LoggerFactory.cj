@@ -24,7 +24,7 @@ public class LoggerFactory {
 
     private init() {}
 
-    public static func getLogger(name: String, attrs: Array<Attr>): Logger {
+    public static func getLogger(name: String, attrs: Array<Attr>): AbstractLogger {
         if(!attrs.isEmpty()){
             globalAttrMap[name] = attrs
         }
@@ -42,10 +42,10 @@ public class LoggerFactory {
             }
         }
     }
-    public static func getLogger<O>(attrs: Array<Attr>): Logger{
+    public static func getLogger<O>(attrs: Array<Attr>): AbstractLogger{
         getLogger(TypeInfos.get<O>(), attrs)
     }
-    public static func getLogger(typeInfo: TypeInfo, attrs: Array<Attr>): Logger {
+    public static func getLogger(typeInfo: TypeInfo, attrs: Array<Attr>): AbstractLogger {
         getLogger(typeInfo.qualifiedName, attrs)
     }
     public static func refresh(){
