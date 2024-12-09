@@ -22,17 +22,10 @@ public class PipelineServer<EN, DE> <: Resource where EN <: ProtocolData<EN>, DE
         start()
         Process.current.atExit(close)
     }
-    public init(serverCreater!: ()->TcpServerSocket, encoder!: Encoder<EN>, decoder!: Decoder<DE>, executor!: (DE) -> EN) {
-        this(server: serverCreater(), encoder: encoder, decoder: decoder, executor: executor)
-    }
-    public init(port!: UInt16, encoder!: Encoder<EN>, decoder!: Decoder<DE>, executor!: (DE) -> EN) {
-        this(server: TcpServerSocket(bindAt: port), encoder: encoder, decoder: decoder, executor: executor)
-    }
-    public init(port!: UInt16, codec!: Codec<EN, DE>, executor!: (DE) -> EN) {
-        this(server: TcpServerSocket(bindAt: port), encoder: codec, decoder: codec, executor: executor)
-    }
+    
     private func start(): Unit {
         while(!closed.load() && let socket <- server.accept()){
+            let decoder = this.decoder.decoder()
             spawn{
                 while(!(closed.load() || socket.isClosed())){
                     let buf = Array<Byte>(128, repeat: 0)
@@ -57,7 +50,7 @@ public class PipelineServer<EN, DE> <: Resource where EN <: ProtocolData<EN>, DE
                                 continue
                             }
                             let bytes = try{
-                                encoder.encode(r)
+                                encoder.encoder().encode(r)
                             }catch(e: Exception){
                                 LOG.warn<SocketAddress>('pipeline encode {}', e, [socket.remoteAddress])
                                 continue

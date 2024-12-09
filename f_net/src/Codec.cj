@@ -12,9 +12,9 @@ package f_net
 public interface Encoder<EN> where EN <: ProtocolData<EN> {
     func encode(data: EN): Array<Byte>
     /**
-     * 每次调用务必返回一个新实例
+     * 如果是无状态的，可以每次调用返回同一个实例，否则需要确保每次调用返回一个新实例
      */
-    func newEncoder(): Encoder<EN>
+    func encoder(): Encoder<EN>
 }
 public interface Decoder<DE> where DE <: ProtocolData<DE> {
     /**
@@ -22,9 +22,10 @@ public interface Decoder<DE> where DE <: ProtocolData<DE> {
      */
     func decode(bytes: Array<Byte>): ?DE
     /**
-     * 每次调用务必返回一个新实例
+     * 每次调用decode，传入的字节数组不一定刚好解析一个DE，未完成解析的剩余字节和解析中间结果需要保存下来。
+     * 如果单例就可以确保不会有并发问题每次调用可以返回同一个实例，否则需要确保每次调用返回一个新实例。
      */
-    func newDecoder(): Decoder<DE>
+    func decoder(): Decoder<DE>
 }
 public interface Codec<EN, DE> <: Encoder<EN> & Decoder<DE> where EN <: ProtocolData<EN>, DE <: ProtocolData<DE> {
 }

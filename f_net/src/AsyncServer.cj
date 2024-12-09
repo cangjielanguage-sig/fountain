@@ -12,143 +12,129 @@ package f_net
 public class AsyncServer<EN, DE> <: Resource where EN <: ProtocolData<EN>, DE <: ProtocolData<DE> {
     private static let LOG = LoggerFactory.getLogger<AsyncServer<EN, DE>>()
     private let closed = AtomicBool(false)
-    private let serial = AtomicInt64(0)
-    private let codecQueues: Array<ArrayBlockingQueue<()->Unit>>
-    private let taskQueue: ArrayBlockingQueue<()->Unit>
-    private let writeQueues: Array<ArrayBlockingQueue<()->Unit>>
     public AsyncServer(
-        codecParallelism!: Int64 = 8,
-        codecBuffer!: Int64 = 1024,
-        taskBuffer!: Int64 = 1024,
-        writeParallelism!: Int64 = 8,
-        writeBuffer!: Int64 = 1024,
+        private let overload!: EN,
+        private let execError!: EN,
+        private let encodeError!: EN = execError,
+        private let codecQueues!: Array<ArrayBlockingQueue<()->Unit>> = initQueues(8, 1024),
+        private let taskQueues!: Array<ArrayBlockingQueue<()->Unit>> = codecQueues,
+        private let writeQueues!: Array<ArrayBlockingQueue<()->Unit>> = codecQueues,
+        private let rateLimiter!: RateLimiter<EN> = UnlimitedRateLimiter<EN>.INSTANCE,
         private let server!: TcpServerSocket, 
         private let encoder!: Encoder<EN>,
         private let decoder!: Decoder<DE>,
         private let executor!: (DE) -> EN
     ){
-        var parallelism = 1
-        while(parallelism < codecParallelism){
-            parallelism++
-        }
-        codecQueues = Array<ArrayBlockingQueue<()->Unit>>(parallelism){i => 
-            ArrayBlockingQueue<()->Unit>(codecBuffer)
-        }
-        parallelism = 1
-        while(parallelism < writeParallelism){
-            parallelism++
-        }
-        taskQueue = ArrayBlockingQueue<()->Unit>(taskBuffer)
-        writeQueues = Array<ArrayBlockingQueue<()->Unit>>(parallelism){i =>
-            ArrayBlockingQueue<()->Unit>(writeBuffer)
-        }
         startConsume()
         server.bind()
         start()
         Process.current.atExit(close)
     }
-    public init(codecParallelism!: Int64 = 8, codecBuffer!: Int64 = 1024, taskBuffer!: Int64 = 1024, 
-        writeParallelism!: Int64 = 8, writeBuffer!: Int64 = 1024,
-        serverCreater!: ()->TcpServerSocket, encoder!: Encoder<EN>, decoder!: Decoder<DE>, executor!: (DE) -> EN) {
-        this(codecParallelism: codecParallelism, codecBuffer: codecBuffer, taskBuffer: taskBuffer, 
-             writeParallelism: writeParallelism, writeBuffer: writeBuffer,
-             server: serverCreater(), encoder: encoder, decoder: decoder, executor: executor)
+    public static func initQueues(parallelism: Int64, bufferSize: Int64){
+        let p = if(((parallelism - 1) & parallelism) == 0){
+            parallelism
+        }else{
+            var p = 1
+            while(p < parallelism){
+                p <<= 1
+            }
+            p
+        }
+        Array<ArrayBlockingQueue<()->Unit>>(p){i => 
+            ArrayBlockingQueue<()->Unit>(bufferSize)
+        }
     }
-    public init(codecParallelism!: Int64 = 8, codecBuffer!: Int64 = 1024, taskBuffer!: Int64 = 1024, 
-        writeParallelism!: Int64 = 8, writeBuffer!: Int64 = 1024,
-        serverCreater!: ()->TcpServerSocket, codec!: Codec<EN, DE>, executor!: (DE) -> EN) {
-        this(codecParallelism: codecParallelism, codecBuffer: codecBuffer, taskBuffer: taskBuffer, 
-             writeParallelism: writeParallelism, writeBuffer: writeBuffer,
-             server: serverCreater(), encoder: codec, decoder: codec, executor: executor)
-    }
-    public init(codecParallelism!: Int64 = 8, codecBuffer!: Int64 = 1024, taskBuffer!: Int64 = 1024, 
-        writeParallelism!: Int64 = 8, writeBuffer!: Int64 = 1024,
-        port!: UInt16, encoder!: Encoder<EN>, decoder!: Decoder<DE>, executor!: (DE) -> EN) {
-        this(codecParallelism: codecParallelism, codecBuffer: codecBuffer, taskBuffer: taskBuffer, 
-             writeParallelism: writeParallelism, writeBuffer: writeBuffer,
-             server: TcpServerSocket(bindAt: port), encoder: encoder, decoder: decoder, executor: executor)
-    }
-    public init(codecParallelism!: Int64 = 8, codecBuffer!: Int64 = 1024, taskBuffer!: Int64 = 1024, 
-        writeParallelism!: Int64 = 8, writeBuffer!: Int64 = 1024,
-        port!: UInt16, codec!: Codec<EN, DE>, executor!: (DE) -> EN) {
-        this(codecParallelism: codecParallelism, codecBuffer: codecBuffer, taskBuffer: taskBuffer, 
-             writeParallelism: writeParallelism, writeBuffer: writeBuffer,
-             server: TcpServerSocket(bindAt: port), encoder: codec, decoder: codec, executor: executor)
-    }
+    
     private func startConsume(): Unit {
-        for(q in codecQueues){
-            spawn{
-                while(let task <- q.dequeue()){
-                    task()
-                }
-            }
-        }
-        for(q in writeQueues){
-            spawn{
-                while(let w <- q.dequeue()){
-                    w()
-                }
-            }
-        }
-        spawn{
-            while(let task <- taskQueue.dequeue()){
+        func startTasks(queues: Array<ArrayBlockingQueue<()->Unit>>){
+            for(q in queues){
                 spawn{
-                    task()
+                    while(let task <- q.dequeue()){
+                        task()
+                    }
                 }
             }
         }
+        startTasks(codecQueues)
+        startTasks(taskQueues)
+        startTasks(writeQueues)
     }
     private func start(): Unit {
         while(!closed.load() && let socket <- server.accept()){
-            let decoder = this.decoder.newDecoder()
-            let serial = this.serial.fetchAdd(1) % codecQueues.size
-            spawn{
-                while(!(closed.load() || socket.isClosed())){
-                    let buf = Array<Byte>(128, repeat: 0)
-                    let len = try{
-                        socket.read(buf)
+            execSocket(socket)
+        }
+    }
+    private func execSocket(socket: TcpSocket){
+        let decoder = this.decoder.decoder()
+        spawnSocket(socket, decoder)
+    }
+    private func spawnSocket(socket: TcpSocket, decoder: Decoder<DE>){
+        spawn{
+            loopSocket(socket, decoder)
+        }
+    }
+    private func loopSocket(socket: TcpSocket, decoder: Decoder<DE>){
+        while(!(closed.load() || socket.isClosed())){
+            let buf = Array<Byte>(128, repeat: 0)
+            let len = try{
+                socket.read(buf)
+            }catch(e: Exception){
+                LOG.warn<SocketAddress>('socket {} read', e, [socket.remoteAddress])
+                continue
+            }
+            enqueueDecode(socket, buf[0 .. len], decoder)
+        }
+    }
+    private func enqueueDecode(socket: TcpSocket, buf: Array<Byte>, decoder: Decoder<DE>){
+        codecQueues[calidx(socket, codecQueues.size)].enqueue({=>
+            if(let Some(d) <- decoder.decode(buf)){
+                if(d.isToClose){
+                    try{
+                        socket.close()
                     }catch(e: Exception){
-                        LOG.warn<SocketAddress>('socket {} read', e, [socket.remoteAddress])
-                        continue
+                        LOG.warn<SocketAddress>('socket {} close', e, [socket.remoteAddress])
                     }
-                    codecQueues[serial].enqueue({=>
-                        if(let Some(d) <- decoder.decode(buf[0 .. len])){
-                            if(d.isToClose){
-                                try{
-                                    socket.close()
-                                }catch(e: Exception){
-                                    LOG.warn<SocketAddress>('socket {} close', e, [socket.remoteAddress])
-                                }
-                            }else{
-                                taskQueue.enqueue({=>
-                                    let r = try{
-                                        executor(d)
-                                    }catch(e: Exception){
-                                        LOG.warn<SocketAddress>('task execute', e, [socket.remoteAddress])
-                                        return
-                                    }
-                                    codecQueues[serial].enqueue({=> 
-                                        let bytes = try {
-                                            encoder.newEncoder().encode(r)
-                                        }catch(e: Exception){
-                                            LOG.warn<SocketAddress>('async socket encode {}', e, [socket.remoteAddress])
-                                            return
-                                        }
-                                        writeQueues[serial].enqueue({=>
-                                            try{
-                                                socket.write(bytes)
-                                            }catch(e: Exception){
-                                                LOG.warn<SocketAddress>('async socket write {}', e, [socket.remoteAddress])
-                                            }
-                                        })
-                                    })
-                                })
-                            }
-                        }
-                    })
+                }else{
+                    enqueueTask(socket, d)
                 }
             }
-        }
+        })
+    }
+    private func enqueueTask(socket: TcpSocket, d: DE){
+        taskQueues[calidx(socket, taskQueues.size)].enqueue({=>
+            let r = rateLimiter.exec(overload){
+                try{
+                    executor(d)
+                }catch(e: Exception){
+                    LOG.warn<SocketAddress>('task execute', e, [socket.remoteAddress])
+                    execError
+                }
+            }.getOrThrow()
+            enqueueEncoding(socket, r)
+        })
+    }
+    private func enqueueEncoding(socket: TcpSocket, r: EN){
+        codecQueues[calidx(socket, codecQueues.size)].enqueue({=> 
+            let bytes = try {
+                encoder.encoder().encode(r)
+            }catch(e: Exception){
+                LOG.warn<SocketAddress>('async socket encode {}', e, [socket.remoteAddress])
+                encoder.encoder().encode(encodeError)
+            }
+            enqueueWrite(socket, bytes)
+        })
+    }
+    private func enqueueWrite(socket: TcpSocket, bytes: Array<Byte>){
+        writeQueues[calidx(socket, writeQueues.size)].enqueue({=>
+            try{
+                socket.write(bytes)
+            }catch(e: Exception){
+                LOG.warn<SocketAddress>('async socket write {}', e, [socket.remoteAddress])
+            }
+        })
+    }
+    private func calidx(socket: TcpSocket, size: Int64){
+        socket.hashCode() & (size - 1)
     }
     public func isClosed(): Bool {
         server.isClosed()

@@ -37,13 +37,11 @@ public class SlidingWindowRateLimiter<T> <: RateLimiter<T> {
         Process.current.atExit(timer.cancel)
     }
 
-    public func exec(default: ?T, task: () -> T): ?T{
-        if(queue.enqueue(DateTime.now(), timeout)){
-            task()
-        } else if (let Some(v) <- default){
-            v
+    public func exec(default: ?T, task: () -> ?T): ?T{
+        if(queue.enqueue(DateTime.now(), timeout) && let Some(x) <- task()){
+            x
         } else {
-            None
+            default
         }
     }
 }

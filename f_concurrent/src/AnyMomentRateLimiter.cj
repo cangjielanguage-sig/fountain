@@ -28,12 +28,16 @@ public class AnyMomentRateLimiter<T> <: RateLimiter<T> {
         tokens.fetchAdd(maxTokens)
     }
 
-    public func exec(default: ?T, task: () -> T): ?T {
+    public func exec(default: ?T, task: () -> ?T): ?T {
         func call(callback: () -> ?T): ?T {
             let current = tokens.fetchSub(1)
             if (current > 0) {
                 try {
-                    task()
+                    if(let Some(x) <- task()){
+                        x
+                    }else{
+                        default
+                    }
                 } finally {
                     tokens.fetchAdd(1)
                     synchronized(monitor) {
@@ -61,10 +65,6 @@ public class AnyMomentRateLimiter<T> <: RateLimiter<T> {
                 return v
             }
         } while (DateTime.now() - start < timeout)
-        if (let Some(v) <- default) {
-            return v
-        } else {
-            return None<T>
-        }
+        default
     }
 }
