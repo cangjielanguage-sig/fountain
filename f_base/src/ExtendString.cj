@@ -9,11 +9,11 @@
  */
 package f_base
 
-public func join<T>(parts: Array<T>, delimiter!: String = '', leftPadding!: String = '', rightPadding!: String = ''): String where T <: ToString {
-    join<T, Array<T>>(parts, delimiter: delimiter, leftPadding: leftPadding, rightPadding: rightPadding)
+public func stringJoin<T>(parts: Array<T>, delimiter!: String = '', leftPadding!: String = '', rightPadding!: String = ''): String where T <: ToString {
+    stringJoin<T, Array<T>>(parts, delimiter: delimiter, leftPadding: leftPadding, rightPadding: rightPadding)
 }
 
-public func join<T, C>(parts: C, delimiter!: String = '', leftPadding!: String = '', rightPadding!: String = ''): String where T <: ToString,
+public func stringJoin<T, C>(parts: C, delimiter!: String = '', leftPadding!: String = '', rightPadding!: String = ''): String where T <: ToString,
     C <: Iterable<T> {
     let builder = StringBuilder()
     builder.append(leftPadding)
