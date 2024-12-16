@@ -9,7 +9,7 @@
  */
 package f_pool
 
-import std.collection.concurrent.BlockingQueue
+import std.collection.concurrent.ArrayBlockingQueue
 import std.process.Process
 import std.sync.{AtomicInt64, AtomicBool, MultiConditionMonitor, ConditionID}
 import std.time.MonoTime
@@ -26,8 +26,8 @@ public interface PooledManager<T> where T <: Object {
  */
 public class Pool<T> <: Resource where T <: Object {
     private static let log = LoggerFactory.getLogger<Pool<T>>()
-    private let queue = BlockingQueue<(?T, MonoTime)>()
-    private let tasks = BlockingQueue<ConditionID>()
+    private let queue: ArrayBlockingQueue<(?T, MonoTime)>
+    private let tasks: ArrayBlockingQueue<ConditionID>
     private let size = AtomicInt64(0)
     private let running = AtomicBool(false)
     private let monitor = MultiConditionMonitor()
@@ -42,6 +42,8 @@ public class Pool<T> <: Resource where T <: Object {
         private let checker!: (T) -> Bool,
         private let destroier!: (T) -> Unit
     ) {
+        queue = ArrayBlockingQueue<(?T, MonoTime)>(maxSize)
+        tasks = ArrayBlockingQueue<ConditionID>(maxSize)
         add(None)
         startCheckingSchedule()
         startCreationSchedule()
@@ -117,10 +119,9 @@ public class Pool<T> <: Resource where T <: Object {
         }
     }
     private func add(object: ?T): Unit {
-        if(size.load() + 1 > maxSize){
+        if(!queue.tryEnqueue((object, MonoTime.now()))){
             throw PoolException("current size of pool is larger than maxSize(${maxSize}), may be some instances which were not be created by current pool were given back to current pool.")
         }
-        queue.enqueue((object, MonoTime.now()))
     }
     public func isClosed(): Bool {
         running.load()
