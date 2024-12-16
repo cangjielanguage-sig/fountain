@@ -115,7 +115,12 @@ public class Pool<T> <: Resource where T <: Object {
             size.fetchSub(1)
         }
         if(size.load() < 0){
-            throw PoolException('current size of pool is less than zero, may be some instances which were not be created by current pool were destroied by current pool on giving back.')
+            let ex = PoolException('current size of pool is less than zero, may be some instances which were not be created by current pool were destroied by current pool on giving back.')
+            if(logOnEx){
+                log.warn(ex)
+            }else{
+                throw ex
+            }
         }
     }
     private func add(object: ?T): Unit {
