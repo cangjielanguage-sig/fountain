@@ -22,7 +22,7 @@ public interface PooledManager<T> where T <: Object {
     func destroy(object: T): Unit
 }
 /**
- * 本类型无法分辨返回的实例是不是从Pool借出去的，也无法分辨借出实例的Pool跟返回实例的Pool是不是同一个，因此调用giveBack返还实例的时候，如果返回时检查失败了一定会销毁返还的实例，池维护的实例数随之减1。
+ * 本类型无法分辨返还的实例是不是从Pool借出去的，也无法分辨借出实例的Pool跟返回实例的Pool是不是同一个，因此调用giveBack返还实例的时候，如果返回时检查失败了一定会销毁返还的实例，池维护的实例数随之减1。
  */
 public class Pool<T> <: Resource where T <: Object {
     private static let log = LoggerFactory.getLogger<Pool<T>>()
