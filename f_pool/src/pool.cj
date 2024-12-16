@@ -11,7 +11,7 @@ package f_pool
 
 import std.collection.concurrent.BlockingQueue
 import std.process.Process
-import std.sync.{AtomicInt64, AtomicBool}
+import std.sync.{AtomicInt64, AtomicBool, Monitor}
 import std.time.MonoTime
 
 public interface PooledManager<T> where T <: Object {
@@ -25,6 +25,7 @@ public class Pool<T> <: Resource where T <: Object {
     private let tasks = BlockingQueue<Unit>()
     private let size = AtomicInt64(0)
     private let running = AtomicBool(false)
+    private let monitor = Monitor()
     public Pool(
         private let initSize!: Int64 = 0,
         private let minSize!: Int64 = 0,
@@ -84,11 +85,14 @@ public class Pool<T> <: Resource where T <: Object {
                 } else if (size.load() < maxSize) {
                     add(creator())
                     size.fetchAdd(1)
+                    synchronized(monitor) {
+                        monitor.notify()
+                    }
                 }
             }
         }
     }
-    private func destroy(o: T){
+    private func destroy(o: T) {
         destroier(o)
         size.fetchSub(1)
     }
@@ -102,54 +106,61 @@ public class Pool<T> <: Resource where T <: Object {
         running.store(false)
         queue.tryEnqueue((None<T>, MonoTime.now()))
         tasks.tryEnqueue(())
-        while(let Some(x) <- queue.tryDequeue() && let (Some(o), _) <- x){
+        while (let Some(x) <- queue.tryDequeue() && let (Some(o), _) <- x) {
             destroy(o)
         }
     }
     public func borrow(timeout!: Duration = Duration.Max): ?T {
         let start = MonoTime.now()
         while (MonoTime.now() - start >= timeout && let Some((x, t)) <- queue.tryDequeue()) {
-            if(let Some(o) <- x){
-                if(checkOnBorrowing){
-                    if(checker(o)){
+            if (let Some(o) <- x) {
+                if (checkOnBorrowing) {
+                    if (checker(o)) {
                         return o
-                    }else{
+                    } else {
                         destroy(o)
                     }
-                }else{
+                } else {
                     return o
                 }
-            }else{
+            } else {
                 queue.tryEnqueue((x, t))
             }
         }
-        let consumed = MonoTime.now() - start
-        if(consumed >= timeout || size.load() >= maxSize){
+        var consumed = MonoTime.now() - start
+        if (consumed >= timeout || size.load() >= maxSize) {
             return None<T>
         }
         tasks.tryEnqueue(())
-        if(let Some(x) <- queue.dequeue(timeout - consumed) && let (Some(o), t) <- x){
-            if(checkOnBorrowing){
-                if(checker(o)){
+        while (timeout > consumed) {
+            if (let Some(x) <- queue.tryDequeue() && let (Some(o), t) <- x) {
+                if (checkOnBorrowing) {
+                    if (checker(o)) {
+                        return o
+                    } else {
+                        destroy(o)
+                    }
+                } else {
                     return o
-                }else{
-                    destroy(o)
                 }
-            }else{
-                return o
             }
+            tasks.tryEnqueue(())
+            synchronized(monitor) {
+                monitor.wait(timeout: timeout - consumed)
+            }
+            consumed = MonoTime.now() - start
         }
         None<T>
     }
     public func giveBack(object: T): Unit {
-        if(checkOnReturning){
-            if(checker(object)){
+        if (checkOnReturning) {
+            if (checker(object)) {
                 add(object)
-            }else{
+            } else {
                 destroy(object)
                 tasks.tryEnqueue(())
             }
-        }else{
+        } else {
             add(object)
         }
     }
