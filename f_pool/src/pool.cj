@@ -112,8 +112,14 @@ public class Pool<T> <: Resource where T <: Object {
         }finally{
             size.fetchSub(1)
         }
+        if(size.load() < 0){
+            throw PoolException('current size of pool is less than zero, may be some instances which were not be created by current pool were destroied by current pool on giving back.')
+        }
     }
     private func add(object: ?T): Unit {
+        if(size.load() + 1 > maxSize){
+            throw PoolException("current size of pool is larger than maxSize(${maxSize}), may be some instances which were not be created by current pool were given back to current pool.")
+        }
         queue.enqueue((object, MonoTime.now()))
     }
     public func isClosed(): Bool {
