@@ -141,7 +141,8 @@ public class DataObject<T> <: Data & Iterable<(String, Data)> where T <: Object 
             case x: DataTuple => putTuple(x)
             case _ where isDataObject() =>
                 let dstFields = T.dataFields()
-                for((n, d) in (srcDataType.getInstanceFunction('iterator').apply(src) as Iterator<(String, Data)>).getOrThrow()){
+                let srcDataItr = ((TypeMemberInfos.instanceFunction(srcDataType, 'iterator')?.apply(src)).getOrThrow() as Iterator<(String, Data)>).getOrThrow()
+                for((n, d) in srcDataItr){
                     putValue(dstFields, n, target, d, srcDataType)
                 }
                 target
