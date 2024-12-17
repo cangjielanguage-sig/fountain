@@ -48,6 +48,13 @@ public class DataObject<T> <: Data & Iterable<(String, Data)> where T <: Object 
         set(name, value.toData(), flag: flag)
     }
     public func set(name: String, value: Data, flag!: DataConversionFlag = SILENCE): Unit {
+        match(T.dataFields().mutableField(name)){
+            case Some(f) where f.set(data, value, flag: flag) => ()
+            case Some(_) where (flag & IGNORE_FIELD_NOT_CONVERTABLE) != 0 => ()  
+            case Some(_) => throw DataException("source field ${name} connot be converted")
+            case _ where (flag & IGNORE_FIELD_NOT_FOUND) == 0 => ()
+            case _ => throw DataException("field name ${name} is not found from ${TypeInfos.get<T>()}")
+        }
         T.dataFields().mutableField(name)?.set(data, value, flag: flag)
     }
     public func get<V>(name: String, flag!: DataConversionFlag = SILENCE): ?V where V <: DataFields<V> {
