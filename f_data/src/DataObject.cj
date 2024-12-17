@@ -112,7 +112,7 @@ public class DataObject<T> <: Data & Iterable<(String, Data)> where T <: Object 
         func putTuple(x: DataTuple, dstTuple!: ?(ObjectFields<T>, T) = None) {
             let (key, value) = (x.key, x.value)
             match (key) {
-                case x: DataString where #"^_*[a-zA-Z]+\w*$"#.regex(solid: true).matched(x.data) =>
+                case x: DataString where Regex.IDENTIFIER.matched(x.data) =>
                     let (dstFields, dst) = match (dstTuple) {
                         case Some(x) => x
                         case _ =>
