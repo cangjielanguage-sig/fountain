@@ -105,7 +105,7 @@ public class DataObject<T> <: Data & Iterable<(String, Data)> where T <: Object 
         func isDataObject() {
             srcDataType.qualifiedName.startsWith("f_data.DataObject")
         }
-        func putTuple(x: DataTuple, dstTuple!: ?(ObjectFields<T>, T) = None) {
+        func putTuple(x: DataTuple) {
             let (key, value) = (x.key, x.value)
             match (key) {
                 case x: DataString where Regex.IDENTIFIER.matched(x.data) =>
@@ -117,20 +117,12 @@ public class DataObject<T> <: Data & Iterable<(String, Data)> where T <: Object 
         }
         match (src) {
             case x: Iterable<DataTuple> =>
-                let dstFields = T.dataFields()
                 for (e in x) {
-                    match (e) {
-                        case x: DataTuple => putTuple(x, dstTuple: (dstFields, target))
-                        case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) > 0 => continue
-                        case _ => throw DataException(
-                            "at least on element in current DataSequence cannot be converted to a DataTuple for populating current object which type is ${TypeInfos.get<T>()}"
-                        )
-                    }
+                    putTuple(e)
                 }
                 target
             case x: DataTuple => putTuple(x)
             case _ where isDataObject() =>
-                let dstFields = T.dataFields()
                 let srcDataItr = ((TypeMemberInfos.instanceFunction(srcDataType, 'iterator')?.apply(src)).getOrThrow() as Iterator<(String, Data)>).getOrThrow()
                 for((n, d) in srcDataItr){
                     targetData.set(n, d, flag: flag)
