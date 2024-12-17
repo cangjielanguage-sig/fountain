@@ -39,10 +39,10 @@ public class TypeMemberInfos{
                 case Some(map) => map
                 case _ =>
                     let map = HashMap<String, InstancePropertyInfo>()
-                    instancePropertyMap[typeInfo] = map
                     for(p in typeInfo.instanceProperties){
                         map[p.name] = p
                     }
+                    instancePropertyMap[typeInfo] = map
                     map
             }
     }
@@ -59,13 +59,13 @@ public class TypeMemberInfos{
                 case Some(map) => map
                 case _ =>
                     let map = HashMap<FuncMeta, StaticFunctionInfo>()
-                    staticFunctionMap[typeInfo] = map
                     for(f in typeInfo.staticFunctions){
                         let params = f.parameters
                         map[FuncMeta(f.name, Array<TypeInfo>(params.size){i =>
                             params[i].typeInfo
                         })] = f
                     }
+                    staticFunctionMap[typeInfo] = map
                     map
             }
     }
@@ -82,13 +82,13 @@ public class TypeMemberInfos{
                 case Some(map) => map
                 case _ =>
                     let map = HashMap<FuncMeta, InstanceFunctionInfo>()
-                    instanceFunctionMap[typeInfo] = map
                     for(f in typeInfo.instanceFunctions){
                         let params = f.parameters
                         map[FuncMeta(f.name, Array<TypeInfo>(params.size){i =>
                             params[i].typeInfo
                         })] = f
                     }
+                    instanceFunctionMap[typeInfo] = map
                     map
             }
     }
@@ -108,17 +108,17 @@ public class TypeMemberInfos{
                     match(typeInfo) {
                         case x: StructTypeInfo =>
                             let map = HashMap<String, StaticVariableInfo>()
-                            staticVariableMap[typeInfo] = map
                             for(v in x.staticVariables){
                                 map[v.name] = v
                             }
+                            staticVariableMap[typeInfo] = map
                             map
                         case x: ClassTypeInfo =>
                             let map = HashMap<String, StaticVariableInfo>()
-                            staticVariableMap[typeInfo] = map
                             for(v in x.staticVariables){
                                 map[v.name] = v
                             }
+                            staticVariableMap[typeInfo] = map
                             map
                         case _ => EmptyMap<String, StaticVariableInfo>.INSTANCE
                     }
@@ -139,17 +139,17 @@ public class TypeMemberInfos{
                     match(typeInfo) {
                         case x: StructTypeInfo =>
                             let map = HashMap<String, InstanceVariableInfo>()
-                            instanceVariableMap[typeInfo] = map
                             for(v in x.instanceVariables){
                                 map[v.name] = v
                             }
+                            instanceVariableMap[typeInfo] = map
                             map
                         case x: ClassTypeInfo =>
                             let map = HashMap<String, InstanceVariableInfo>()
-                            instanceVariableMap[typeInfo] = map
                             for(v in x.instanceVariables){
                                 map[v.name] = v
                             }
+                            instanceVariableMap[typeInfo] = map
                             map
                         case _ => EmptyMap<String, InstanceVariableInfo>.INSTANCE
                     }
