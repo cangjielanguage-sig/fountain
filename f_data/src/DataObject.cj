@@ -103,7 +103,7 @@ public class DataObject<T> <: Data & Iterable<(String, Data)> where T <: Object 
                 case Some(mf) where mf.set(dst, data, flag: flag) => true
                 case Some(_) where (flag & IGNORE_FIELD_NOT_CONVERTABLE) != 0 => true
                 case Some(_) => throw DataException(
-                    "source field ${name} which type is ${srcType} connoted be converted")
+                    "source field ${name} which type is ${srcType} connot be converted")
                 case None where (flag & IGNORE_FIELD_NOT_FOUND) != 0 => true
                 case None => throw DataException("field name ${name} is not found from ${TypeInfos.get<T>()}")
             }
@@ -141,18 +141,8 @@ public class DataObject<T> <: Data & Iterable<(String, Data)> where T <: Object 
             case x: DataTuple => putTuple(x)
             case _ where isDataObject() =>
                 let dstFields = T.dataFields()
-                let srcDataObjectType = (srcDataType as ClassTypeInfo).getOrThrow()
-                let srcData = srcDataObjectType.getInstanceVariable("data").getValue(src)
-                let srcType = TypeInfo.of(srcData)
-                let srcFields = srcType.getStaticFunction("dataFields").apply([])
-                let srcFieldsType = (TypeInfo
-                    .of(srcFields)
-                    .getInstanceFunction("iterator")
-                    .apply(srcFields) as Iterator<ReadableField>)
-                    .getOrThrow()
-                for (sf in srcFieldsType) {
-                    let srcData = sf.get((srcData as Object).getOrThrow())
-                    putValue(dstFields, sf.name, target, srcData, srcType)
+                for((n, d) in (srcDataType.getInstanceFunction('iterator').apply(src) as Iterator<(String, Data)>).getOrThrow()){
+                    putValue(dstFields, n, target, d, srcDataType)
                 }
                 target
             case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) > 0 => None<T>
