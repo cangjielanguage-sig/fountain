@@ -135,10 +135,10 @@ public class DataObject<T> <: Data & Iterable<(String, Data)> where T <: Object 
     public static func populate(src: Data, flag!: DataConversionFlag = SILENCE): ?T {
         populate(src, T.dataFields().create(), flag: flag)
     }
-    public static func populate<S>(src: S, flag!: DataConversionFlag = SILENCE): ?T where S <: ObjectData<S> {
+    public static func populate<S>(src: S, flag!: DataConversionFlag = SILENCE): ?T where S <: Object & ObjectData<S> {
         populate(DataObject<S>(src), flag: flag)
     }
-    public static func populate<S>(src: S, target: T, flag!: DataConversionFlag = SILENCE): ?T where S <: ObjectData<S> {
+    public static func populate<S>(src: S, target: T, flag!: DataConversionFlag = SILENCE): ?T where S <: Object & ObjectData<S> {
         populate(DataObject<S>(src), target, flag: flag)
     }
     public static func populate<M, V>(src: M, flag!: DataConversionFlag = SILENCE): ?T where M <: Map<String, V> & DataFields<M>,
