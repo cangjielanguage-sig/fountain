@@ -51,11 +51,10 @@ public class DataObject<T> <: Data & Iterable<(String, Data)> where T <: Object 
         match(T.dataFields().mutableField(name)){
             case Some(f) where f.set(data, value, flag: flag) => ()
             case Some(_) where (flag & IGNORE_FIELD_NOT_CONVERTABLE) != 0 => ()  
-            case Some(_) => throw DataException("source field ${name} connot be converted")
+            case Some(_) => throw DataException("source field ${name} in ${TypeInfos.get<T>()} connot be converted")
             case _ where (flag & IGNORE_FIELD_NOT_FOUND) == 0 => ()
             case _ => throw DataException("field name ${name} is not found from ${TypeInfos.get<T>()}")
         }
-        T.dataFields().mutableField(name)?.set(data, value, flag: flag)
     }
     public func get<V>(name: String, flag!: DataConversionFlag = SILENCE): ?V where V <: DataFields<V> {
         match(T.dataFields().readableField(name)?.get(data)){
@@ -101,33 +100,17 @@ public class DataObject<T> <: Data & Iterable<(String, Data)> where T <: Object 
         tryParse(string).getOrThrow {DataException("current type ${TypeInfos.get<T>()} is not Parsable")}
     }
     public static func populate(src: Data, target: T, flag!: DataConversionFlag = SILENCE): ?T {
+        let targetData = DataObject<T>(target)
         let srcDataType = TypeInfo.of(src)
         func isDataObject() {
             srcDataType.qualifiedName.startsWith("f_data.DataObject")
-        }
-        func putValue(dstFields: ObjectFields<T>, name: String, dst: T, data: Data, srcType: TypeInfo): Bool {
-            match (dstFields.mutableField(name)) {
-                case Some(mf) where mf.set(dst, data, flag: flag) => true
-                case Some(_) where (flag & IGNORE_FIELD_NOT_CONVERTABLE) != 0 => true
-                case Some(_) => throw DataException(
-                    "source field ${name} which type is ${srcType} connot be converted")
-                case None where (flag & IGNORE_FIELD_NOT_FOUND) != 0 => true
-                case None => throw DataException("field name ${name} is not found from ${TypeInfos.get<T>()}")
-            }
-            true
         }
         func putTuple(x: DataTuple, dstTuple!: ?(ObjectFields<T>, T) = None) {
             let (key, value) = (x.key, x.value)
             match (key) {
                 case x: DataString where Regex.IDENTIFIER.matched(x.data) =>
-                    let (dstFields, dst) = match (dstTuple) {
-                        case Some(x) => x
-                        case _ =>
-                            let dstFields = T.dataFields()
-                            (dstFields, target)
-                    }
-                    putValue(dstFields, x.data, dst, value, srcDataType)
-                    dst
+                    targetData.set(x.data, value, flag: flag)
+                    target
                 case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) > 0 => None<T>
                 case _ => throw DataException("${key} cannot be field name of an object")
             }
@@ -150,7 +133,7 @@ public class DataObject<T> <: Data & Iterable<(String, Data)> where T <: Object 
                 let dstFields = T.dataFields()
                 let srcDataItr = ((TypeMemberInfos.instanceFunction(srcDataType, 'iterator')?.apply(src)).getOrThrow() as Iterator<(String, Data)>).getOrThrow()
                 for((n, d) in srcDataItr){
-                    putValue(dstFields, n, target, d, srcDataType)
+                    targetData.set(n, d, flag: flag)
                 }
                 target
             case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) > 0 => None<T>
