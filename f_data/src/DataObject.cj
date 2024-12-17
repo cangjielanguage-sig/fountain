@@ -95,7 +95,7 @@ public class DataObject<T> <: Data & Iterable<(String, Data)> where T <: Object 
     }
     public static func populate(src: Data, target: T, flag!: DataConversionFlag = SILENCE): ?T {
         let srcDataType = TypeInfo.of(src)
-        func isObjectData() {
+        func isDataObject() {
             srcDataType.qualifiedName.startsWith("f_data.DataObject")
         }
         func putValue(dstFields: ObjectFields<T>, name: String, dst: T, data: Data, srcType: TypeInfo): Bool {
@@ -139,7 +139,7 @@ public class DataObject<T> <: Data & Iterable<(String, Data)> where T <: Object 
                 }
                 target
             case x: DataTuple => putTuple(x)
-            case _ where isObjectData() =>
+            case _ where isDataObject() =>
                 let dstFields = T.dataFields()
                 let srcDataObjectType = (srcDataType as ClassTypeInfo).getOrThrow()
                 let srcData = srcDataObjectType.getInstanceVariable("data").getValue(src)
@@ -160,7 +160,7 @@ public class DataObject<T> <: Data & Iterable<(String, Data)> where T <: Object 
         }
     }
     public static func populate(src: Data, flag!: DataConversionFlag = SILENCE): ?T {
-        populate(src, (T.dataFields().create() as T).getOrThrow(), flag: flag)
+        populate(src, T.dataFields().create(), flag: flag)
     }
     public static func populate<S>(src: S, flag!: DataConversionFlag = SILENCE): ?T where S <: ObjectData<S> {
         populate(DataObject<S>(src), flag: flag)
