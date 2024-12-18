@@ -490,7 +490,7 @@ func generateToFields(d: ClassDecl, exclusion: HashSet<String>) {
                 quote(
         public static func tryFromData(data: Data, flag!: DataConversionFlag = SILENCE): Any {
             match(DataObject<$klassIdentifier>.populate(data, flag: flag)){
-                case Some(o) => o as $klassIdentifier
+                case Some(o: $klassIdentifier) => o
                 case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException(data.toString() + 'cannot be converted to ' + TypeInfos.get<$klassIdentifier>().toString())
                 case _ => None<$klassIdentifier>
             }

@@ -16,22 +16,21 @@ import f_data.macros.DataAssist
 import std.unittest.*
 import std.unittest.testmacro.*
 
-
-@DataAssist[fields props]
-public class TT{
-    private var s: String = ''
-}
 @DataAssist[hash equal props fields]
 public class DataTest {
   private var i: Int64 = 0
   private var s: String = ''
   private var opts: ?String = None
-  private var tt: TT = TT()
   private var dt: ?DataTest = None
-  private var ilist: ArrayList<Int64> = ArrayList<Int64>()
+  private var ilist: ArrayList<Int64> = ArrayList<Int64>([1,2,3,4,5])
   private var slist: ArrayList<String> = ArrayList<String>()
   private var dlist: ArrayList<DataTest> = ArrayList<DataTest>()
   private var dmap: HashMap<String, DataTest> = HashMap<String, DataTest>()
+  private var tt: TT = TT()
+}
+@DataAssist[fields props]
+public class TT{
+    private var s: String = 'tttttt'
 }
 @Test
 public class DataUnitTest {
@@ -44,10 +43,14 @@ public class DataUnitTest {
         dt.s = 'hello'
         @Assert('hello', dt.s)
         dt.s = 'hello world'
+        let target = DataObject<DataTest>(DataTest())
         let data = (dt.toData() as DataObject<DataTest>).getOrThrow()
-        for((n, d) in data){
+        let itr = data.iterator()
+        for((n, d) in itr){
             println('${n} ${d}')
+            target.set(n, d)
         }
+        println(target.data.s)
         dt = DataObject<DataTest>.populate(data).getOrThrow()
         @Assert('hello world', dt.s)
     }
