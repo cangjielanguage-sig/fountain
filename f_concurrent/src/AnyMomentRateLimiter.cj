@@ -9,7 +9,7 @@
  */
 package f_concurrent
 
-import std.sync.AtomicInt64
+import std.collection.concurrent.ArrayBlockingQueue
 import std.time.MonoTime
 import f_concurrent.exception.RateLimiterException
 
@@ -17,38 +17,30 @@ import f_concurrent.exception.RateLimiterException
  * 任意时刻限流器
  */
 public class AnyMomentRateLimiter<T> <: RateLimiter<T> {
-    private let tokens = AtomicInt64(0)
+    private let queue: ArrayBlockingQueue<Unit>
     /**
      * @param maxTokens 任意时刻允许最多这么多任务并发执行
      * @param timeout 任务等待时长
      */
     public init(maxTokens!: Int64, timeout!: Duration) {
         super(timeout)
-        tokens.fetchAdd(maxTokens)
+        queue = ArrayBlockingQueue<Unit>(maxTokens)
     }
 
     public func exec(default: ?T, task: () -> ?T): ?T {
-        let start = MonoTime.now()
-        do {
-            let current = tokens.fetchSub(1)
-            let result = if (current > 0) {
-                try{
-                    if(let Some(x) <- task()){
-                        x
-                    }else{
-                        default
-                    }
-                }finally{
-                    tokens.fetchAdd(1)
-                }
-            } else {
-                tokens.fetchAdd(1)
+        if(queue.enqueue((), timeout)){
+            let result = try{
+                task()
+            }finally{
+                queue.tryDequeue()
+            }
+            if(let Some(x) <- result){
+                x
+            }else{
                 default
             }
-            if (let Some(v) <- result) {
-                return v
-            }
-        } while (MonoTime.now() - start < timeout)
-        default
+        }else{
+            default
+        }
     }
 }
