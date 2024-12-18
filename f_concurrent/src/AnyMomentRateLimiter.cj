@@ -9,8 +9,8 @@
  */
 package f_concurrent
 
-import std.time.DateTime
-import std.sync.{AtomicInt64, Monitor}
+import std.sync.AtomicInt64
+import std.time.MonoTime
 import f_concurrent.exception.RateLimiterException
 
 /**
@@ -18,7 +18,6 @@ import f_concurrent.exception.RateLimiterException
  */
 public class AnyMomentRateLimiter<T> <: RateLimiter<T> {
     private let tokens = AtomicInt64(0)
-    private let monitor = Monitor()
     /**
      * @param maxTokens 任意时刻允许最多这么多任务并发执行
      * @param timeout 任务等待时长
@@ -29,42 +28,29 @@ public class AnyMomentRateLimiter<T> <: RateLimiter<T> {
     }
 
     public func exec(default: ?T, task: () -> ?T): ?T {
-        func call(callback: () -> ?T): ?T {
+        let start = MonoTime.now()
+        do {
             let current = tokens.fetchSub(1)
-            if (current > 0) {
-                try {
+            let result = if (current > 0) {
+                try{
                     if(let Some(x) <- task()){
                         x
                     }else{
                         default
                     }
-                } finally {
+                }finally{
                     tokens.fetchAdd(1)
-                    synchronized(monitor) {
-                        monitor.notifyAll()
-                    }
                 }
             } else {
                 tokens.fetchAdd(1)
-                if (let Some(_) <- default) {
-                    default
-                } else {
-                    callback()
-                }
+                default
             }
-        }
-        let start = DateTime.now()
-        do {
-            let result = call {
-                synchronized(monitor) {
-                    monitor.wait(timeout: timeout)
-                    None
-                }
+            return if (let Some(v) <- result) {
+                v
+            }else{
+                default
             }
-            if (let Some(v) <- result) {
-                return v
-            }
-        } while (DateTime.now() - start < timeout)
+        } while (MonoTime.now() - start < timeout)
         default
     }
 }
