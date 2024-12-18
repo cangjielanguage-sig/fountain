@@ -10,7 +10,6 @@
 package f_data.test
 
 import std.collection.*
-import std.console.*
 import f_data.*
 import f_data.macros.DataAssist
 
@@ -47,7 +46,7 @@ public class DataUnitTest {
         dt.s = 'hello world'
         let data = (dt.toData() as DataObject<DataTest>).getOrThrow()
         for((n, d) in data){
-            Console.stdOut.writeln('${n} ${d}')
+            println('${n} ${d}')
         }
         dt = DataObject<DataTest>.populate(data).getOrThrow()
         @Assert('hello world', dt.s)
