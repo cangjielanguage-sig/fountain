@@ -11,9 +11,10 @@ package f_concurrent
 
 import std.collection.concurrent.BlockingQueue
 import std.process.Process
-import std.sync.{CatchupStyle, Timer}
+import std.sync.Timer
 import std.time.DateTime
 
+import f_base.ZERO_TIMER
 import f_concurrent.exception.RateLimiterException
 
 /**
@@ -26,17 +27,15 @@ public class SlidingWindowRateLimiter<T> <: RateLimiter<T> {
      * @param limit 时间窗口内最大任务数
      * @param granularity 两次检查队列头是否超时的时间间隔
      */
-    public init(timeout!: Duration, limit!: Int64, granularity!: Duration = Duration.second){
+    public init(timeout!: Duration, limit!: Int64){
         super(timeout)
         queue = BlockingQueue<DateTime>(limit)
-        let timer = Timer.repeat(Duration.Zero, granularity,{=> 
-            while(let Some(d) <- queue.head() && DateTime.now() - d >= timeout){
-                queue.dequeue()
-            }
-        }, style: Skip)
+        let timer = Timer.after(Duration.Zero){
+            let dt = queue.dequeue()
+            DateTime.now() - dt
+        }
         Process.current.atExit(timer.cancel)
     }
-
     public func exec(default: ?T, task: () -> ?T): ?T{
         if(queue.enqueue(DateTime.now(), timeout) && let Some(x) <- task()){
             x

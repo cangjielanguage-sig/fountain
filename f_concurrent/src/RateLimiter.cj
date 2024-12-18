@@ -11,7 +11,7 @@ package f_concurrent
 
 import f_concurrent.exception.RateLimiterException
 
-sealed abstract class RateLimiter<T>{
+sealed abstract class RateLimiter<T> {
     public RateLimiter(protected let timeout: Duration){
         if(timeout <= Duration.Zero){
             throw RateLimiterException('timeout must be greater than zero, but current is ${timeout}')
