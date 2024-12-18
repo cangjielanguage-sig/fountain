@@ -44,7 +44,10 @@ public class DataUnitTest {
         dt.s = 'hello'
         @Assert('hello', dt.s)
         dt.s = 'hello world'
-        let data = dt.toData()
+        let data = (dt.toData() as DataObject<DataTest>).getOrThrow()
+        for((n, d) in data){
+            println('${n} ${d}')
+        }
         dt = DataObject<DataTest>.populate(data).getOrThrow()
         @Assert('hello world', dt.s)
     }
