@@ -16,11 +16,6 @@ abstract sealed class ReadableField {
         private let getter: (Object) -> Data
     ){}
     public func get(instance: Object): Data{
-        let t = TypeInfo.of(instance)
-        if(typeInfo == t || t.isSubtypeOf(typeInfo)){
-            getter(instance)
-        }else{
-            throw DataException('${t} is not subtype of ${typeInfo}')
-        }
+        getter(instance)
     }
 }
