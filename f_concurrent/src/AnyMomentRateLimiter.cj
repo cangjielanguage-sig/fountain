@@ -45,10 +45,8 @@ public class AnyMomentRateLimiter<T> <: RateLimiter<T> {
                 tokens.fetchAdd(1)
                 default
             }
-            return if (let Some(v) <- result) {
-                v
-            }else{
-                default
+            if (let Some(v) <- result) {
+                return v
             }
         } while (MonoTime.now() - start < timeout)
         default
