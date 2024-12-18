@@ -19,6 +19,11 @@ public class MutableField <: ReadableField {
     }
 
     public func set(instance: Object, data: Data, flag!: DataConversionFlag = SILENCE): Bool {
-        setter(instance, data, flag)
+        let t = TypeInfo.of(instance)
+        if(t == typeInfo || t.isSubtypeOf(typeInfo)){
+            setter(instance, data, flag)
+        }else{
+            throw DataException('${t} is not subtype of ${typeInfo}')
+        }
     }
 }
