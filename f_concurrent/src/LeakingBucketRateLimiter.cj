@@ -12,7 +12,7 @@ package f_concurrent
 import std.collection.concurrent.ArrayBlockingQueue
 import std.process.Process
 import std.sync.{Monitor, AtomicBool, CatchupStyle, Timer, AtomicInt64, SyncCounter, AtomicOptionReference, ReentrantMutex}
-import std.time.DateTime
+import std.time.MonoTime
 
 import f_concurrent.exception.RateLimiterException
 
@@ -20,7 +20,7 @@ import f_concurrent.exception.RateLimiterException
  * 漏桶限流器
  */
 public class LeakingBucketRateLimiter<T> <: RateLimiter<T> {
-    private let bucket: ArrayBlockingQueue<(DateTime, SyncCounter)>
+    private let bucket: ArrayBlockingQueue<(MonoTime, SyncCounter)>
     private let leaked = AtomicInt64(0)
     /**
      * @param timeout 任务等待时长
@@ -29,47 +29,44 @@ public class LeakingBucketRateLimiter<T> <: RateLimiter<T> {
      * @param leakingDuration 漏桶周期
      */
     public init(
-        timeout!: Duration,
+        timeout!: Duration = Duration.second,
         maxWaitings!: Int64 = 0,
         leakingPerDuration!: Int64 = 1,
         leakingDuration!: Duration = Duration.second
     ) {
         super(timeout)
-        this.bucket = ArrayBlockingQueue<(DateTime, SyncCounter)>(maxWaitings)
+        this.bucket = ArrayBlockingQueue<(MonoTime, SyncCounter)>(maxWaitings)
         let lock = ReentrantMutex()
         let future = AtomicOptionReference<Future<Unit>>()
-        let timer = Timer.repeat(
-            Duration.Zero,
-            leakingDuration,
-            {
-                =>
-                let start = DateTime.now()
-                future.load()?.cancel()
-                future.store(spawn{
-                    synchronized(lock){
-                        leaked.store(0)
-                        while (!Thread.currentThread.hasPendingCancellation && leaked.load() < leakingPerDuration && 
-                            let remainder <- leakingDuration - (DateTime.now() - start) && remainder > Duration.Zero &&
-                            let Some((d, c)) <- bucket.dequeue(remainder)) {
-                            if(DateTime.now() - d < timeout){//这个条件不能合并到while循环条件，这个条件不论结果都得继续下次循环
-                                leaked.fetchAdd(1)
-                                c.dec()
-                            }
+        let timer = Timer.after(Duration.Zero){
+            let start = MonoTime.now()
+            let end = start + timeout
+            let leakingEnd = start + leakingDuration
+            future.load()?.cancel()
+            future.store(spawn{
+                synchronized(lock){
+                    leaked.store(0)
+                    while (!Thread.currentThread.hasPendingCancellation && leaked.load() < leakingPerDuration && 
+                        let remainder <- leakingEnd - MonoTime.now() && remainder > Duration.Zero &&
+                        let Some((d, c)) <- bucket.dequeue(remainder)) {
+                        if(MonoTime.now() - d < timeout){//这个条件不能合并到while循环条件，这个条件不论结果都得继续下次循环
+                            leaked.fetchAdd(1)
+                            c.dec()
                         }
                     }
-                })
-            },
-            style: Skip
-        )
+                }
+            })
+            end - MonoTime.now()
+        }
         Process.current.atExit {
             timer.cancel()
         }
     }
     public func exec(default: ?T, task: () -> ?T): ?T {
         let tag = SyncCounter(1)
-        let start = DateTime.now()
+        let start = MonoTime.now()
         if (bucket.enqueue((start, tag), timeout) && 
-            let _ <- tag.waitUntilZero(timeout: timeout - (DateTime.now() - start)) && 
+            let _ <- tag.waitUntilZero(timeout: timeout - (MonoTime.now() - start)) && 
             let Some(x) <- task()) {
             x
         }else {

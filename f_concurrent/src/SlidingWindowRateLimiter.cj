@@ -12,7 +12,7 @@ package f_concurrent
 import std.collection.concurrent.BlockingQueue
 import std.process.Process
 import std.sync.Timer
-import std.time.DateTime
+import std.time.MonoTime
 
 import f_base.ZERO_TIMER
 import f_concurrent.exception.RateLimiterException
@@ -21,23 +21,21 @@ import f_concurrent.exception.RateLimiterException
  * 滑动窗口限流器
  */
 public class SlidingWindowRateLimiter<T> <: RateLimiter<T> {
-    private let queue: BlockingQueue<DateTime>
+    private let queue: BlockingQueue<MonoTime>
     /**
      * @param timeout 时间窗口
      * @param limit 时间窗口内最大任务数
-     * @param granularity 两次检查队列头是否超时的时间间隔
      */
     public init(timeout!: Duration, limit!: Int64){
         super(timeout)
-        queue = BlockingQueue<DateTime>(limit)
+        queue = BlockingQueue<MonoTime>(limit)
         let timer = Timer.after(Duration.Zero){
-            let dt = queue.dequeue()//必须先取得队列头的时间再获取DateTime.now()，否则会得到负数的Duration
-            DateTime.now() - dt
+            queue.dequeue() + timeout - MonoTime.now()
         }
         Process.current.atExit(timer.cancel)
     }
     public func exec(default: ?T, task: () -> ?T): ?T{
-        if(queue.enqueue(DateTime.now(), timeout) && let Some(x) <- task()){
+        if(queue.enqueue(MonoTime.now(), timeout) && let Some(x) <- task()){
             x
         } else {
             default

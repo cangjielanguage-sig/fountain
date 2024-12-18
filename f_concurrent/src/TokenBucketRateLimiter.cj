@@ -12,6 +12,7 @@ package f_concurrent
 import std.collection.concurrent.BlockingQueue
 import std.sync.Timer
 import std.process.Process
+import std.time.MonoTime
 
 import f_concurrent.exception.RateLimiterException
 
@@ -22,15 +23,18 @@ public class TokenBucketRateLimiter<T> <: RateLimiter<T> {
     private let tokens: BlockingQueue<Unit>
     public init(
         tokens!: Int64,
-        timeout!: Duration,
-        tokenDuration!: Duration = Duration.second){
+        timeout!: Duration = Duration.second){
         super(timeout)
         this.tokens = BlockingQueue<Unit>(tokens)
-        let timer = Timer.repeat(Duration.Zero, tokenDuration, {=>
-            while(this.tokens.size < tokens){
+        let timer = Timer.after(Duration.Zero){
+            let end = MonoTime.now() + timeout
+            var i = 0
+            while(i < tokens && this.tokens.size < tokens){
                 this.tokens.enqueue(())
+                i++
             }
-        }, style: Skip)
+            end - MonoTime.now()
+        }
         Process.current.atExit(timer.cancel)
     }
     public func exec(default: ?T, task: () -> ?T): ?T{
