@@ -31,7 +31,7 @@ public class SlidingWindowRateLimiter<T> <: RateLimiter<T> {
         super(timeout)
         queue = BlockingQueue<DateTime>(limit)
         let timer = Timer.after(Duration.Zero){
-            let dt = queue.dequeue()
+            let dt = queue.dequeue()//必须先取得队列头的时间再获取DateTime.now()，否则会得到负数的Duration
             DateTime.now() - dt
         }
         Process.current.atExit(timer.cancel)
