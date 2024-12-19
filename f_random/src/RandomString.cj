@@ -37,7 +37,7 @@ public class RandomString {
     private static let UPPER_LETTERS_AND_NUMBERS = concat(UPPER_LETTERS, NUMBERS)
     private static let ALL_LETTERS_AND_NUMBERS = concat(ALL_LETTERS, NUMBERS)
     private static let ALL_PRINTABLE_ASCIIS = concat(ALL_LETTERS_AND_NUMBERS, "`~!@#$%^&*()-_=+[{]}\\|'\";:/?.>,<".toRuneArray())
-    // private static let ALL_CHARS = [[UInt32(0x0000), UInt32(0xD7FF)], [UInt32(0xE000), UInt32(0x10FFFF)]]
+    private static let ALL_CHARS = [[UInt32(0x0000), UInt32(0xD7FF)], [UInt32(0xE000), UInt32(0x10FFFF)]]
 
     public RandomString(private let rand!: SecureRandom = ThreadLocalRandom.current) {}
     public init(priv: Bool) {
@@ -127,7 +127,8 @@ public class RandomString {
         var builder = StringBuilder()
         var i = 0
         while (i < count) {
-            builder.append(Rune(rand.nextUInt32(0, 0x10FFFF, closed: true)))
+            let tuple = ALL_CHARS[rand.nextInt64(2)]
+            builder.append(Rune(rand.nextUInt32(tuple[0], tuple[1], closed: true)))
             i++
         }
         return builder.toString()
