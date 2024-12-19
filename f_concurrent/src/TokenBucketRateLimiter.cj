@@ -21,13 +21,14 @@ import f_concurrent.exception.RateLimiterException
  */
 public class TokenBucketRateLimiter<T> <: RateLimiter<T> {
     private let tokens: BlockingQueue<Unit>
-    public init(
-        tokens!: Int64,
-        timeout!: Duration = Duration.second){
+    public init(tokens!: Int64, timeout!: Duration, populationPeriod!: Duration){
         super(timeout)
+        if(tokens <= 0 || timeout <= Duration.Zero || populationPeriod <= Duration.Zero){
+            throw RateLimiterException('all parameters must be larger than zero')
+        }
         this.tokens = BlockingQueue<Unit>(tokens)
         let timer = Timer.after(Duration.Zero){
-            let end = MonoTime.now() + timeout
+            let end = MonoTime.now() + populationPeriod
             var i = 0
             while(i < tokens && this.tokens.size < tokens){
                 this.tokens.enqueue(())

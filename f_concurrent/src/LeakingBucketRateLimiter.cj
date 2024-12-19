@@ -29,44 +29,37 @@ public class LeakingBucketRateLimiter<T> <: RateLimiter<T> {
      * @param leakingDuration 漏桶周期
      */
     public init(
-        timeout!: Duration = Duration.second,
-        maxWaitings!: Int64 = 0,
-        leakingPerDuration!: Int64 = 1,
-        leakingDuration!: Duration = Duration.second
+        timeout!: Duration,
+        maxWaitings!: Int64,
+        leakingPerDuration!: Int64,
+        leakingDuration!: Duration
     ) {
         super(timeout)
+        if(leakingDuration <= Duration.Zero || leakingPerDuration <= 0 || maxWaitings <= 0){
+            throw RateLimiterException('all parameters must be larger than zero')
+        }
         this.bucket = ArrayBlockingQueue<(MonoTime, SyncCounter)>(maxWaitings)
-        let lock = ReentrantMutex()
-        let future = AtomicOptionReference<Future<Unit>>()
         let timer = Timer.after(Duration.Zero){
-            let start = MonoTime.now()
-            let end = start + timeout
-            let leakingEnd = start + leakingDuration
-            future.load()?.cancel()
-            future.store(spawn{
-                synchronized(lock){
-                    leaked.store(0)
-                    while (!Thread.currentThread.hasPendingCancellation && leaked.load() < leakingPerDuration && 
-                        let remainder <- leakingEnd - MonoTime.now() && remainder > Duration.Zero &&
-                        let Some((d, c)) <- bucket.dequeue(remainder)) {
-                        if(MonoTime.now() - d < timeout){//这个条件不能合并到while循环条件，这个条件不论结果都得继续下次循环
-                            leaked.fetchAdd(1)
-                            c.dec()
-                        }
-                    }
+            leaked.store(0)
+            let end = MonoTime.now() + leakingDuration
+            while (leaked.load() < leakingPerDuration && 
+                let remainder <- end - MonoTime.now() && remainder > Duration.Zero &&
+                let Some((d, c)) <- bucket.dequeue(remainder)) {
+                if(MonoTime.now() - d < timeout){//这个条件不能合并到while循环条件，这个条件不论结果都得继续下次循环
+                    c.dec()
+                    leaked.fetchAdd(1)
                 }
-            })
+            }
             end - MonoTime.now()
         }
-        Process.current.atExit {
-            timer.cancel()
-        }
+        Process.current.atExit(timer.cancel)
     }
     public func exec(default: ?T, task: () -> ?T): ?T {
         let tag = SyncCounter(1)
         let start = MonoTime.now()
         if (bucket.enqueue((start, tag), timeout) && 
-            let _ <- tag.waitUntilZero(timeout: timeout - (MonoTime.now() - start)) && 
+            let _ <- tag.waitUntilZero(timeout: start + timeout - MonoTime.now()) && 
+            tag.count <= 0 &&
             let Some(x) <- task()) {
             x
         }else {

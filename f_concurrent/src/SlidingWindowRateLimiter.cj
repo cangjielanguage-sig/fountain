@@ -26,11 +26,14 @@ public class SlidingWindowRateLimiter<T> <: RateLimiter<T> {
      * @param timeout 时间窗口
      * @param limit 时间窗口内最大任务数
      */
-    public init(timeout!: Duration, limit!: Int64){
+    public init(window!: Duration, timeout!: Duration, limit!: Int64){
         super(timeout)
+        if(window <= Duration.Zero || timeout <= Duration.Zero || limit <= 0){
+            throw RateLimiterException('all parameters must be larger than zero')
+        }
         queue = BlockingQueue<MonoTime>(limit)
         let timer = Timer.after(Duration.Zero){
-            queue.dequeue() + timeout - MonoTime.now()
+            queue.dequeue() + window - MonoTime.now()
         }
         Process.current.atExit(timer.cancel)
     }
