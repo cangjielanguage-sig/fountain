@@ -9,6 +9,8 @@
  */
 package f_random
 
+import std.collection.ArrayList
+
 import crypto.crypto.SecureRandom
 
 /*
@@ -20,14 +22,21 @@ import crypto.crypto.SecureRandom
    异常。
  */
 public class RandomString {
-    private static const LOWER_LETTERS = "abcdefghijklmnopqrstuvwxyz"
-    private static const UPPER_LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-    private static const ALL_LETTERS = UPPER_LETTERS + LOWER_LETTERS
-    private static const NUMBERS = "0123456789"
-    private static const LOWER_LETTERS_AND_NUMBERS = LOWER_LETTERS + NUMBERS
-    private static const UPPER_LETTERS_AND_NUMBERS = UPPER_LETTERS + NUMBERS
-    private static const ALL_LETTERS_AND_NUMBERS = ALL_LETTERS + NUMBERS
-    private static const ALL_PRINTABLE_ASCIIS = ALL_LETTERS_AND_NUMBERS + "`~!@#$%^&*()-_=+[{]}\\|'\";:/?.>,<"
+    private static func concat(arrays: Array<Array<Rune>>){
+        let list = ArrayList<Rune>()
+        for(array in arrays){
+            list.appendAll(array)
+        }
+        list.toArray()
+    }
+    private static let LOWER_LETTERS = "abcdefghijklmnopqrstuvwxyz".toRuneArray()
+    private static let UPPER_LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".toRuneArray()
+    private static let ALL_LETTERS = concat(UPPER_LETTERS, LOWER_LETTERS)
+    private static let NUMBERS = "0123456789".toRuneArray()
+    private static let LOWER_LETTERS_AND_NUMBERS = concat(LOWER_LETTERS, NUMBERS)
+    private static let UPPER_LETTERS_AND_NUMBERS = concat(UPPER_LETTERS, NUMBERS)
+    private static let ALL_LETTERS_AND_NUMBERS = concat(ALL_LETTERS, NUMBERS)
+    private static let ALL_PRINTABLE_ASCIIS = concat(ALL_LETTERS_AND_NUMBERS, "`~!@#$%^&*()-_=+[{]}\\|'\";:/?.>,<".toRuneArray())
     private static let ALL_CHARS = [[UInt32(0x0000), UInt32(0xD7FF)], [UInt32(0xE000), UInt32(0x10FFFF)]]
 
     public RandomString(private let rand!: SecureRandom = ThreadLocalRandom.current) {}
