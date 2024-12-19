@@ -9,7 +9,7 @@
 */
 package f_concurrent
 
-import std.collection.concurrent.BlockingQueue
+import std.collection.concurrent.ArrayBlockingQueue
 import std.process.Process
 import std.sync.Timer
 import std.time.MonoTime
@@ -21,17 +21,17 @@ import f_concurrent.exception.RateLimiterException
  * 滑动窗口限流器
  */
 public class SlidingWindowRateLimiter<T> <: RateLimiter<T> {
-    private let queue: BlockingQueue<MonoTime>
+    private let queue: ArrayBlockingQueue<MonoTime>
     /**
      * @param timeout 时间窗口
      * @param limit 时间窗口内最大任务数
      */
     public init(window!: Duration, timeout!: Duration, limit!: Int64){
         super(timeout)
-        if(window <= Duration.Zero || timeout <= Duration.Zero || limit <= 0){
+        if(window <= Duration.Zero || limit <= 0){
             throw RateLimiterException('all parameters must be larger than zero')
         }
-        queue = BlockingQueue<MonoTime>(limit)
+        queue = ArrayBlockingQueue<MonoTime>(limit)
         let timer = Timer.after(Duration.Zero){
             queue.dequeue() + window - MonoTime.now()
         }
@@ -39,7 +39,7 @@ public class SlidingWindowRateLimiter<T> <: RateLimiter<T> {
     }
     public func exec(default: ?T, task: () -> ?T): ?T{
         if(queue.enqueue(MonoTime.now(), timeout) && let Some(x) <- task()){
-            x
+                    x
         } else {
             default
         }
