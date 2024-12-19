@@ -37,7 +37,7 @@ public class RandomString {
     private static let UPPER_LETTERS_AND_NUMBERS = concat(UPPER_LETTERS, NUMBERS)
     private static let ALL_LETTERS_AND_NUMBERS = concat(ALL_LETTERS, NUMBERS)
     private static let ALL_PRINTABLE_ASCIIS = concat(ALL_LETTERS_AND_NUMBERS, "`~!@#$%^&*()-_=+[{]}\\|'\";:/?.>,<".toRuneArray())
-    private static let ALL_CHARS = [[UInt32(0x0000), UInt32(0xD7FF)], [UInt32(0xE000), UInt32(0x10FFFF)]]
+    private static let ALL_CHARS = [[UInt32(0x0000), UInt32(0xD7FF)], [UInt32(0xE000), UInt32(0x10FFFF)], [UInt32(0xD800), UInt32(0xDBFF)], [UInt32(0xDC00), UInt32(0xDFFF)]]
 
     public RandomString(private let rand!: SecureRandom = ThreadLocalRandom.current) {}
     public init(priv: Bool) {
@@ -125,10 +125,17 @@ public class RandomString {
     }
     public func randomAllChars(count: Int64) {
         var builder = StringBuilder()
+        func appendChar(idx: Int64){
+            let tuple = ALL_CHARS[idx]
+            builder.append(Rune(rand.nextUInt32(tuple[0], tuple[1], closed: true)))
+        }
         var i = 0
         while (i < count) {
-            let tuple = ALL_CHARS[rand.nextInt64(2)]
-            builder.append(Rune(rand.nextUInt32(tuple[0], tuple[1], closed: true)))
+            let idx = rand.nextInt64(3)
+            appendChar(idx)
+            if(idx == 2){
+                appendChar(3)
+            }
             i++
         }
         return builder.toString()
