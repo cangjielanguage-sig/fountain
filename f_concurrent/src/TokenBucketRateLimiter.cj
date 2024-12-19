@@ -28,13 +28,18 @@ public class TokenBucketRateLimiter<T> <: RateLimiter<T> {
         }
         this.tokens = BlockingQueue<Unit>(tokens)
         let timer = Timer.after(Duration.Zero){
-            let end = MonoTime.now() + populationPeriod
-            var i = 0
-            while(i < tokens && this.tokens.size < tokens){
-                this.tokens.enqueue(())
-                i++
-            }
-            end - MonoTime.now()
+            var end: MonoTime
+            var next: Duration
+            do{
+                end = MonoTime.now() + populationPeriod
+                var i = 0
+                while(i < tokens && this.tokens.size < tokens){
+                    this.tokens.enqueue(())
+                    i++
+                }
+                next = end - MonoTime.now()
+            }while(next <= Duration.Zero)
+            next
         }
         Process.current.atExit(timer.cancel)
     }

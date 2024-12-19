@@ -41,16 +41,21 @@ public class LeakingBucketRateLimiter<T> <: RateLimiter<T> {
         this.bucket = ArrayBlockingQueue<(MonoTime, SyncCounter)>(maxWaitings)
         let timer = Timer.after(Duration.Zero){
             leaked.store(0)
-            let end = MonoTime.now() + leakingDuration
-            while (leaked.load() < leakingPerDuration && 
-                let remainder <- end - MonoTime.now() && remainder > Duration.Zero &&
-                let Some((d, c)) <- bucket.dequeue(remainder)) {
-                if(MonoTime.now() - d < timeout){//这个条件不能合并到while循环条件，这个条件不论结果都得继续下次循环
-                    c.dec()
-                    leaked.fetchAdd(1)
+            var end: MonoTime
+            var next: Duration
+            do{
+                end = MonoTime.now() + leakingDuration
+                while (leaked.load() < leakingPerDuration && 
+                    let remainder <- end - MonoTime.now() && remainder > Duration.Zero &&
+                    let Some((d, c)) <- bucket.dequeue(remainder)) {
+                    if(MonoTime.now() - d < timeout){//这个条件不能合并到while循环条件，这个条件不论结果都得继续下次循环
+                        c.dec()
+                        leaked.fetchAdd(1)
+                    }
                 }
-            }
-            end - MonoTime.now()
+                next = end - MonoTime.now()
+            }while(next <= Duration.Zero)
+            next
         }
         Process.current.atExit(timer.cancel)
     }
