@@ -106,10 +106,10 @@ public class AsyncServer<EN, DE> <: Resource where EN <: ProtocolData<EN>, DE <:
                 LOG.warn<SocketAddress>('socket {} read', e, [socket.remoteAddress])
                 continue
             }
-            enqueueDecode(socket, buf[0 .. len], decoder)
+            enqueueDecoding(socket, buf[0 .. len], decoder)
         }
     }
-    private func enqueueDecode(socket: TcpSocket, buf: Array<Byte>, decoder: Decoder<DE>){
+    private func enqueueDecoding(socket: TcpSocket, buf: Array<Byte>, decoder: Decoder<DE>){
         codecQueues[calidx(socket, codecQueues.size)].enqueue({=>
             if(let Some(d) <- decoder.decode(buf)){
                 if(d.isToClose){
@@ -145,10 +145,10 @@ public class AsyncServer<EN, DE> <: Resource where EN <: ProtocolData<EN>, DE <:
                 LOG.warn<SocketAddress>('async socket encode {}', e, [socket.remoteAddress])
                 encoder.encoder().encode(encodeError)
             }
-            enqueueWrite(socket, bytes)
+            enqueueWriting(socket, bytes)
         })
     }
-    private func enqueueWrite(socket: TcpSocket, bytes: Array<Byte>){
+    private func enqueueWriting(socket: TcpSocket, bytes: Array<Byte>){
         writeQueues[calidx(socket, writeQueues.size)].enqueue({=>
             try{
                 socket.write(bytes)
