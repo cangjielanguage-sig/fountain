@@ -59,6 +59,7 @@ _/ ____\____  __ __  _____/  |______  |__| ____
   6. fboot config --pid=<PID> --<key1>=<value1> --<key2>=<value2>：修改指定进程号的配置，指定进程必须是fboot启动。
      调用`f_config.Config.set(...)`修改配置。
      各模块需要重新初始化的需要调用`f_config.Config.refresher(prefix, refreshFn)`，set函数返回前会调用配置项的键第一个_前的字符串与prefix相同的对应refreshFn。每次调用set函数每个refreshFn最多调用一次。
+  7. fboot doc 加编译后的动态链接库读取f_doc注解生成markdown文档。
 
 ## 功能
 - 空集合
@@ -215,3 +216,5 @@ _/ ____\____  __ __  _____/  |______  |__| ____
   - 随机字符串
   - 范围随机数
   - 蓄水池算法
+- 文档
+  - f_doc.* 的注解用来声明文档，可以对顶级声明、类型公共成员、函数参数生成文档。
