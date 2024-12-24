@@ -11,8 +11,8 @@ package f_process
 
 import std.io.InputStream
 public import std.process.CurrentProcess
-public import charset4cj.charset.{Charsets, TextReader, TextWriter}
-public import charset4cj.charset.encoding.Charset
+public import charset4cj.{Charsets, TextReader, TextWriter}
+public import charset4cj.Charset
 
 public interface ExtendCurrentProcess {
     func stdReader(charset!: Charset): TextReader

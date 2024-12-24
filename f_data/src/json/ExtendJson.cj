@@ -14,8 +14,8 @@ import encoding.json.*
 
 import f_data.exception.DataException
 
-import charset4cj.charset.encoding.Charset
-import charset4cj.charset.{Charsets, TextReader, TextWriter}
+import charset4cj.Charset
+import charset4cj.{Charsets, TextReader, TextWriter}
 
 public interface ExtendJsonValue {
     static func fromInput(input: InputStream, charset!: Charset): JsonValue{
