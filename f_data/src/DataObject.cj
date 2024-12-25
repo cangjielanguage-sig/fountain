@@ -79,9 +79,7 @@ public class DataObject<T> <: Data & Iterable<(String, Data)> where T <: Object 
                     if (i > 0) {
                         s.append(",")
                     }
-                    s.append(k)
-                    s.append(":")
-                    s.append(v.toString())
+                    s.append('"${k}":${v}')
                 }
                 s.append("}")
                 s.toString()
@@ -90,8 +88,14 @@ public class DataObject<T> <: Data & Iterable<(String, Data)> where T <: Object 
     public static func tryParse(string: String): ?Data {
         let typeInfo = TypeInfos.get<T>()
         if (typeInfo.isSubtypeOf(TypeInfos.get<Parsable<T>>())) {
-            let data = typeInfo.getStaticFunction("parse", TypeInfos.get<String>()).apply([string])
-            DataObject<T>((data as T).getOrThrow())
+            let data = TypeMemberInfos.staticFunction(typeInfo, 'tryParse', [TypeInfos.get<String>()])
+            match(data){
+                case x: ?T => match(x){
+                    case Some(x) => DataObject<T>(x)
+                    case _ => None<Data>
+                }
+                case _ => throw UnreachableException()
+            }
         } else {
             None<Data>
         }

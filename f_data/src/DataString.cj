@@ -18,13 +18,17 @@ public class DataString <: Data & Hashable & Comparable<DataString> {
         this("")
     }
     public func toString(): String {
-        data
+        '"${data}"'
     }
     public static func tryParse(data: String): ?Data {
-        DataString(data)
+        parse(data)
     }
     public static func parse(data: String): Data {
-        DataString(data)
+        DataString(if(data.startsWith('"') && data.endsWith('"')){
+            data[1 .. data.size - 1]
+        }else{
+            data
+        })
     }
     public func hashCode(): Int64 {
         data.hashCode()
