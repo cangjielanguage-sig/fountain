@@ -424,7 +424,7 @@ public class PathPattern {
         return matches(node)
     }
     private func matches(node: PathNode): Bool {
-        (!(node is NonePathNode)) && node.end
+        !(node is NonePathNode) && node.end
     }
     private func matches(node: Option<PathNode>): Bool {
         matches(node ?? NonePathNode.INSTANCE)
