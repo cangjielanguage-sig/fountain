@@ -32,6 +32,16 @@ extend DataNone <: ToJsonString {
         'null'
     }
 }
+extend DataString <: ToJsonString {
+    public func toJsonString(): String {
+        '"${toString()}"'
+    }
+}
+extend DataReal <: ToJsonString {
+    public func toJsonString(): String {
+        toString()
+    }
+}
 extend<T> DataObject<T> <: ToJsonString where T <: Object & ObjectData<T> {
     public func toJsonString(): String {
         let builder = StringBuilder('{')
@@ -50,11 +60,6 @@ extend<T> DataObject<T> <: ToJsonString where T <: Object & ObjectData<T> {
         }
         builder.append('}')
         builder.toString()
-    }
-}
-extend DataReal <: ToJsonString {
-    public func toJsonString(): String {
-        toString()
     }
 }
 extend DataSequence <: ToJsonString {
@@ -97,8 +102,4 @@ extend StringKeyMapTuples <: ToJsonString {
         builder.toString()
     }
 }
-extend DataString <: ToJsonString {
-    public func toJsonString(): String {
-        '"${toString()}"'
-    }
-}
+

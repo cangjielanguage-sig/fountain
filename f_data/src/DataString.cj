@@ -18,14 +18,14 @@ public class DataString <: Data & Hashable & Comparable<DataString> {
         this("")
     }
     public func toString(): String {
-        '"${data}"'
+        '"${data.replace('"', '\\"')}"'
     }
     public static func tryParse(data: String): ?Data {
         parse(data)
     }
     public static func parse(data: String): Data {
         DataString(if(data.startsWith('"') && data.endsWith('"')){
-            data[1 .. data.size - 1]
+            data[1 .. data.size - 1].replace('\\"', '"')
         }else{
             data
         })

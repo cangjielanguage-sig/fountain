@@ -145,7 +145,7 @@ public class StringKeyMapTuples <: Data & Iterable<DataTuple> & Collection<DataT
             if(i > 0){
                 builder.append(',')
             }
-            builder.append(tuple)
+            builder.append('${tuple.key}:${tuple.value}')
             i++
         }
         builder.append(']')
