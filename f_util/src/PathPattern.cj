@@ -541,16 +541,8 @@ open class PathNode <: Equatable<PathNode> {
                 }
             }
         } else {
-            while (true) {
-                if (current != node) {
-                    node = if (let Some(n) <- iterator.next()) {
-                        n
-                    } else {
-                        break
-                    }
-                } else {
-                    break
-                }
+            while (current != node && let Some(n) <- iterator.next()) {
+                node = n
             }
             for (n in iterator) {
                 node = n
