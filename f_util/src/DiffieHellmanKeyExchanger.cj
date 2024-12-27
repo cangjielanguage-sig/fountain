@@ -9,7 +9,7 @@
 */
 package f_util
 
-import std.math.numeric.BigInt
+import std.math.numeric.Decimal
 import f_base.*
 import f_random.ThreadLocalRandom
 
@@ -29,7 +29,7 @@ import f_random.ThreadLocalRandom
  * 7.      虽然Eve看见了p,g, A and B, 但是鉴于计算离散对数的困难性，她无法知道a和b 的具体值。所以Eve就无从知晓密钥S 是什么了。
  * 永远是alice发起密钥交换请求
  * let alice = DiffieHellmanKeyExchangerClient();
- * let semi=alice.init();
+ * let semi=alice.semi(16);
  * //alice将semi发送给bob
  *
  * //bob接收到请求
@@ -41,23 +41,23 @@ import f_random.ThreadLocalRandom
  * let aliceKey=alice.key(B,p);//alice保存key，不对外公开
  */
 public struct Semi {
-    public Semi(public let g: UInt64, public let p: UInt64, public let A: UInt64){}
+    public Semi(public let g: Array<Byte>, public let p: Array<Byte>, public let A: BigInt){}
 }
 public class DiffieHellmanKeyExchangerClient <: DiffieHellmanKeyExchanger{
-    public func semi(){
+    public func semi(gBytes!: Int32 = 16, pBytes!: Int32 = 16){
         ab()
-        let g = random()
-        let p = random()
+        let g = randomBytes(bytes: gBytes)
+        let p = randomBytes(bytes: pBytes)
         let A = middle(g, p)
         Semi(g, p, A)
     }
 }
 
 public class DiffieHellmanKeyExchangerServer <: DiffieHellmanKeyExchanger{
-    public func key(m: UInt64, p: UInt64){
-        var result = "0";
-        while("0" == result){
-            ab_=0;
+    public func key(m: Array<Byte>, p: Array<Byte>): String{
+        var result = "0"
+        while(result == '0'){
+            ab_=0
             result = super.key(m,p)
         }
         return result
@@ -68,30 +68,40 @@ public class DiffieHellmanKeyExchangerServer <: DiffieHellmanKeyExchanger{
         * @param p
         * @return B
         */
-    public func finish(g: UInt64, p: UInt64){
+    public func finish(g: Array<Byte>, p: Array<Byte>): BigInt{
         return middle(g, p)
     }
 }
 
 abstract sealed class DiffieHellmanKeyExchanger{
-    protected var ab_: UInt64 = random()//ab
+    protected var ab_: Int64 = random()//ab
 
     protected func ab(){
         if(ab_ == 0){
             ab_ = random();
         }
     }
-    protected open func key(m: UInt64, p: UInt64){
+    public open func key(m: Array<Byte>, p: Array<Byte>): String {
         ab()
         let mm = middle(m,p)
-        return BigInt(mm).toString(36)
+        return mm.toString(36)
     }
 
-    @OverflowWrapping
-    protected func middle(g: UInt64, p: UInt64): UInt64{
-        (g.toInt() ** ab_).toUInt() % p
+    protected func middle(g: Array<Byte>, p: Array<Byte>): BigInt {
+        (Decimal(BigInt(true, g)) ** ab_).toBigInt() % BigInt(true, p)
     }
     protected static func random(){
-        ThreadLocalRandom.current.nextUInt64()
+        ThreadLocalRandom.current.nextInt64()
+    }
+    protected static func randomBytes(bytes!: Int32 = 16){
+        ThreadLocalRandom.current.nextBytes(bytes)
+    }
+    public static func randomByteLen(): Int32 {
+        let rand = ThreadLocalRandom.current
+        var r = 0i32
+        do {
+            r = rand.nextInt32()
+        }while(r <= 0)
+        r
     }
 }
