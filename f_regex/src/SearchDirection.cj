@@ -10,9 +10,9 @@
 package f_regex
 
 /**
- * FORWARD: 前向匹配，(?=X)
- * BACKWARD: 后向匹配，(?<=X)
+ * LOOK_AHEAD: 前向匹配，(?=X)
+ * LOOK_BEHIND: 后向匹配，(?<=X)
  */
 public enum SearchDirection {
-    FORWARD | BACKWARD
+    LOOK_AHEAD | LOOK_BEHIND
 }

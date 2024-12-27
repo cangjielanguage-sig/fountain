@@ -216,8 +216,8 @@ public class RegexBuilder <: ToString & Equatable<RegexBuilder> {
     }
     private func group_(dir: SearchDirection, part: ToString): RegexBuilder {
         match (dir) {
-            case FORWARD => lparan.forward.text(part).rparan
-            case BACKWARD => lparan.backward.text(part).rparan
+            case LOOK_AHEAD => lparan.lookAhead.text(part).rparan
+            case LOOK_BEHIND => lparan.lookBehind.text(part).rparan
         }
     }
     public operator func ()(dir: SearchDirection, part: ToString): RegexBuilder {
@@ -244,16 +244,28 @@ public class RegexBuilder <: ToString & Equatable<RegexBuilder> {
             return this
         }
     }
-    public prop forward: RegexBuilder {
+    public prop lookAhead: RegexBuilder {
         get() {
             pattern.append("?=")
             return this
         }
     }
-    public prop backward: RegexBuilder {
+    public prop notLookAhead: RegexBuilder {
+        get() {
+            pattern.append('?!')
+            this
+        }
+    }
+    public prop lookBehind: RegexBuilder {
         get() {
             pattern.append("?<=")
             return this
+        }
+    }
+    public prop notLookBehind: RegexBuilder {
+        get() {
+            pattern.append('?<!')
+            this
         }
     }
 
