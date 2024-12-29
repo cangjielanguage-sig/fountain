@@ -39,7 +39,7 @@ public class DataObject<T> <: Data & Iterable<(String, Data)> where T <: Object 
         T.dataFields().iterator()
     }
     public operator func [](name: String): Data {
-        (T.dataFields().readableField(name)?.get(data)).getOrThrow{DataException('field ${name} is not found in ${TypeInfos.get<T>()}')}
+        get(name).getOrThrow{DataException('field ${name} is not found in ${TypeInfos.get<T>()}')}
     }
     public operator func [](name: String, value!: Data): Unit {
         set(name, value)
@@ -56,8 +56,11 @@ public class DataObject<T> <: Data & Iterable<(String, Data)> where T <: Object 
             case _ => throw DataException("field name ${name} is not found from ${TypeInfos.get<T>()}")
         }
     }
+    public func get(name: String): ?Data{
+        T.dataFields().readableField(name)?.get(data)
+    }
     public func get<V>(name: String, flag!: DataConversionFlag = SILENCE): ?V where V <: DataFields<V> {
-        match(T.dataFields().readableField(name)?.get(data)){
+        match(get(name)){
             case Some(x) => match(V.tryFromData(x, flag: flag)){
                 case x: ?V => x
                 case x: V => x

@@ -196,20 +196,20 @@ public class HeapCache<V> where V <: Object {
         return get(key) ?? default
     }
     public func getOrStore(key: String, value: V): V {
-        getOrCompute(key) {value}.getOrThrow()
+        getOrCompute(key) {value}
     }
-    public func getOrCompute(key: String, callable: () -> V): Option<V> {
+    public func getOrCompute(key: String, callable: () -> V): V {
         getOrCompute(key) {
             (callable(), this.maxLife, false)
         }
     }
-    public func getOrCompute(key: String, callable: () -> (V, DateTime)): Option<V> {
+    public func getOrCompute(key: String, callable: () -> (V, DateTime)): V {
         store.computeIfAbsent(key) {
             let data = callable()
             Priority<V>(key, data[0], data[1] - DateTime.now(), true)
         }.load()
     }
-    public func getOrCompute(key: String, callable: () -> (V, Duration, Bool)): Option<V> {
+    public func getOrCompute(key: String, callable: () -> (V, Duration, Bool)): V {
         store.computeIfAbsent(key) {
             let data = callable()
             Priority<V>(key, data[0], data[1], data[2])

@@ -35,7 +35,7 @@ extend String <: RegexFromString {
         } else {
             CACHE.getOrCompute(key) {
                 SOLID.get(key) ?? Regex(this, option)
-            }.getOrThrow()
+            }
         }
     }
 }

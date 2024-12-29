@@ -21,6 +21,15 @@ sealed abstract class DataList<D> <: Data & Iterable<D> & Collection<D> where D 
     public func add(data: D){
         this.data.append(data)
     }
+    public operator func [](index: Int64): D {
+        this.data[index]
+    } 
+    public func get(index: Int64): ?D {
+        if(index >= size || index < 0){
+            return None<D>
+        }
+        this.data.get(index)
+    }
     public func iterator(): Iterator<D> {
         data.iterator()
     }
@@ -126,6 +135,9 @@ public class StringKeyMapTuples <: Data & Iterable<DataTuple> & Collection<DataT
     }
     public func add(key: String, value: Data): Unit {
         map[key] = DataTuple(key.toData(), value)
+    }
+    public func get(key: String): ?Data{
+        map.get(key)?.value
     }
     public func iterator(): Iterator<DataTuple>{
         map.values().iterator()
