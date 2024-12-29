@@ -448,7 +448,7 @@ public class DataPath <: DataPathNode {
                 let (sub, index) = extractSubPathInSquares(path, i + 1)
                 i = index
                 compileInSquares(sub, dp, solid)
-            } else if(path[i].kind == LSQUARE && path[i - 1].kind == IDENTIFIER) {
+            } else if(path[i].kind == LSQUARE && (path[i - 1].kind == IDENTIFIER || path[i - 1].kind == DOLLAR || path[i - 1].kind == AT || path[i - 1].kind == RSQUARE)) {
                 let (subPath, index) = extractSubPathInSquares(path, i)
                 i = index
                 compileInSquares(sub, dp, solid)
