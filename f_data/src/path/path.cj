@@ -55,25 +55,18 @@ public import f_data.*
  * && || !          逻辑与、逻辑或、逻辑非
  * [?(@.age =~ /\d+/)]
  */
-public abstract sealed class DataPath <: DataPathNode {
+abstract sealed class DataPath <: DataPathNode {
     private let nodes = ArrayList<DataPathNode>()
 
     init(){}
-    public static func compile(path: String, solid!: Bool = false): DataPath {
-        if(solid){
-            SolidDataPath.doCompile(path)
-        }else{
-            CacheDataPath.doCompile(path)
-        }
-    }
     
-    static func doCompile(path: String, solid: Bool): DataPath {
+    func doCompile(path: String, solid: Bool): DataPath {
         if(!(path.startsWith('$.') || path.startsWith('$['))){
             throw DataException('data path must be starts with "$." or "$[", but it is ${path}')
         }
         doCompile(cangjieLex(path, true), solid)
     }
-    private static func extractSubPathInSquares(path: Tokens, index: Int64): (Tokens, Int64) {
+    private func extractSubPathInSquares(path: Tokens, index: Int64): (Tokens, Int64) {
         var parens = 0
         var end = -1
         for(i in index .. path.size){
@@ -94,20 +87,20 @@ public abstract sealed class DataPath <: DataPathNode {
         }
         (path[index + 1 .. end], end)
     }
-    private static func compileSubInSquares(sub: Tokens){
+    private func compileSubInSquares(sub: Tokens){
         match(sub[0].kind){
             case STRING_LITERAL | IDENTIFIER => SubPathNode(sub[0].value)
             case _ => throw DataException('sub expression in squares can only be string literal or identifier')
         }
     }
-    private static func compileIndexInSquares(sub: Tokens){
+    private func compileIndexInSquares(sub: Tokens){
         let idx = Int64.parse(sub[0].value)
         if(idx < 0){
             throw DataException('sub expression as an index must greater than or equals to zero')
         }
         IndexPathNode(idx)
     }
-    private static func compileSubsInSquares(sub: Tokens){
+    private func compileSubsInSquares(sub: Tokens){
         let names = ArrayList<String>()
         for(t in sub){
             let n =
@@ -120,7 +113,7 @@ public abstract sealed class DataPath <: DataPathNode {
         }
         MultiSubPathNode(names.toArray())
     }
-    private static func compileIndexesInSquares(sub: Tokens): DataPathNode {
+    private func compileIndexesInSquares(sub: Tokens): DataPathNode {
         let list = ArrayList<Int64>()
         var range = 0
         var comma = 0
@@ -163,7 +156,7 @@ public abstract sealed class DataPath <: DataPathNode {
             case _ => throw UnreachableException()
         }
     }
-    private static func parseFilterTokens(sub: Tokens, solid: Bool): Tokens {
+    private func parseFilterTokens(sub: Tokens, solid: Bool): Tokens {
         var tokens = quote()
         var i = 0
         while(i < sub.size) {
@@ -323,7 +316,7 @@ public abstract sealed class DataPath <: DataPathNode {
         }
         tokens
     }
-    private static func parseSetOp(sub: Tokens, i: Int64, e: Int64, filter: Tokens, solid: Bool): (Tokens, Int64) {
+    private func parseSetOp(sub: Tokens, i: Int64, e: Int64, filter: Tokens, solid: Bool): (Tokens, Int64) {
         let arrs = e + 1
         var arre = arrs + 1
         for(e in arre .. sub.size where sub[e].kind == RSQUARE){
@@ -342,12 +335,12 @@ public abstract sealed class DataPath <: DataPathNode {
         }
         (tokens, arre)
     }
-    private static func compileFilter(sub: Tokens,  solid: Bool){
+    private func compileFilter(sub: Tokens,  solid: Bool){
         let tokens = parseFilterTokens(sub, solid)
         let expr = parseExpr(tokens)
         DataFilterPathNode(compileFilter(expr))
     }
-    private static func compileFilter(expr: Expr): DataFilter {
+    private func compileFilter(expr: Expr): DataFilter {
         //EqFilter<> NotEqFilter<> CmpFilter<> RegexFilter 
         //InFilter<> NinFilter<> AnyOfFilter<> SubSetOfFilter<> NoOneOfFilter<>
         //SizeFilter
@@ -402,7 +395,7 @@ public abstract sealed class DataPath <: DataPathNode {
             case _ => throw DataException('unreachable ${expr.toTokens()}')
         }
     }
-    private static func compileInSquares(sub: Tokens, dp: DataPath, solid: Bool) {
+    private func compileInSquares(sub: Tokens, solid: Bool) {
         if(sub.size == 1 && sub[0].kind == STRING_LITERAL){
             compileSubInSquares(sub)
         }else if(sub.size == 1 && sub[0].kind == INT64){
@@ -417,12 +410,7 @@ public abstract sealed class DataPath <: DataPathNode {
             throw DataException('sub path ${sub} is illegal')
         }
     }
-    private static func doCompile(path: Tokens, solid: Bool): DataPath {
-        let dp = if(solid){
-            SolidDataPath()
-        }else{
-            CacheDataPath()
-        }
+    private func doCompile(path: Tokens, solid: Bool): DataPath {
         var i = 0
         while(i < path.size){
             let node = 
@@ -436,11 +424,11 @@ public abstract sealed class DataPath <: DataPathNode {
             } else if(path[i].kind == DOT && path[i + 1].kind == LSQUARE && path[i - 1].kind == DOT) {
                 let (sub, index) = extractSubPathInSquares(path, i + 1)
                 i = index
-                compileInSquares(sub, dp, solid)
+                compileInSquares(sub, solid)
             } else if(path[i].kind == LSQUARE && (path[i - 1].kind == IDENTIFIER || path[i - 1].kind == DOLLAR || path[i - 1].kind == AT || path[i - 1].kind == RSQUARE)) {
                 let (subPath, index) = extractSubPathInSquares(path, i)
                 i = index
-                compileInSquares(sub, dp, solid)
+                compileInSquares(sub, solid)
             } else if (i == 0 && path[i].kind == AT) {
                 CurrentPathNode.instance
             } else if (path[i].kind == DOT && path[i + 1].kind == IDENTIFIER && path[i + 2].kind == LPAREN && path[i + 3].kind == RPAREN) {
@@ -457,10 +445,10 @@ public abstract sealed class DataPath <: DataPathNode {
             } else {
                 throw DataException('data path is illegal at index ${i}, path: ${path}')
             }
-            dp.nodes.append(node)
+            nodes.append(node)
             i++
         }
-        dp
+        this
     }
     public func get(data: Data): Iterator<Data> {
         var itr: Iterator<Data> = nodes[0].get(data)
@@ -472,12 +460,12 @@ public abstract sealed class DataPath <: DataPathNode {
 }
 public class SolidDataPath <: DataPath {
     private static let solid = ConcurrentHashMap<String, DataPath>()
-    init(){}
-    static func doCompile(path: String): DataPath {
+    private init(){}
+    public static func compile(path: String): DataPath {
         if(let Some(p) <- solid.get(path)){
             p
         }else{
-            let p = doCompile(path, true)
+            let p = SolidDataPath().doCompile(path, true)
             solid[path] = p
             p
         }
@@ -485,9 +473,9 @@ public class SolidDataPath <: DataPath {
 }
 public class CacheDataPath <: DataPath {
     private static let cache = HeapCache<DataPath>(maxLife: Duration.day, maxSize: 10000)
-    init(){}
-    static func doCompile(path: String): DataPath {
-        cache.getOrCompute(path){doCompile(path, false)}
+    private init(){}
+    public static func compile(path: String): DataPath {
+        cache.getOrCompute(path){CacheDataPath().doCompile(path, false)}
     }
 }
 private interface DataPathNode {
