@@ -35,13 +35,17 @@ class SyncLinkedHashMap<V> <: Collection<(String, V)>{
         }
     }
     public func computeIfAbsent(key: String, callable: ()->V): V{
-        synchronized(mutex){
-            if(let Some(v) <- get(key)){
-                v
-            }else{
-                let v = callable()
-                put(key, v)
-                v
+        if(let Some(v) <- get(key)){
+            v
+        }else{
+            synchronized(mutex){
+                if(let Some(v) <- get(key)){
+                    v
+                }else{
+                    let v = callable()
+                    put(key, v)
+                    v
+                }
             }
         }
     }

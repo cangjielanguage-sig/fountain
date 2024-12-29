@@ -14,6 +14,7 @@ import std.collection.{ArrayList, LinkedList, HashSet}
 import std.collection.concurrent.ConcurrentHashMap
 import std.convert.Parsable
 import std.reflect.*
+import std.sync.ReentrantMutex
 import f_cache.HeapCache
 import f_base.*
 import f_macros.*
@@ -460,14 +461,21 @@ abstract sealed class DataPath <: DataPathNode {
 }
 public class SolidDataPath <: DataPath {
     private static let solid = ConcurrentHashMap<String, DataPath>()
+    private static let lock = ReentrantMutex()
     private init(){}
     public static func compile(path: String): DataPath {
         if(let Some(p) <- solid.get(path)){
             p
         }else{
-            let p = SolidDataPath().doCompile(path, true)
-            solid[path] = p
-            p
+            synchronized(lock){
+                if(let Some(p) <- solid.get(path)){
+                    p
+                }else{
+                    let p = SolidDataPath().doCompile(path, true)
+                    solid[path] = p
+                    p
+                }
+            }
         }
     }
 }
