@@ -474,7 +474,7 @@ public class SolidDataPath <: DataPath {
                     let p = SolidDataPath().doCompile(path, true)
                     solid[path] = p
                     p
-                }
+                } 
             }
         }
     }
@@ -698,6 +698,13 @@ private interface DataFilter {
     operator func !(): DataFilter {
         NotFilter(this)
     }
+    static func compilePath(path: String, solid: String){
+        if(Bool.parse(solid)){
+            SolidDataPath.compile(path)
+        }else{
+            CacheDataPath.compile(path)
+        }
+    }
     static func parse<T>(value: String): T {
         let t = TypeInfos.get<T>()
         let any: Any = 
@@ -741,7 +748,7 @@ private interface DataFilter {
 private class CmpFilter<T> <: DataFilter where T <: Comparable<T> {
     CmpFilter(private let left: DataPath, private let right: T, private let ordering: Ordering, private let eq: Bool){}
     init(left: String, right: String, orderingStr: String, eqStr: String, solid: String){
-        this(DataPath.compile(left, solid: Bool.parse(solid)), parse<T>(right), match(orderingStr){
+        this(compilePath(left, solid), parse<T>(right), match(orderingStr){
             case 'LT' => LT
             case 'GT' => GT
             case 'EQ' => EQ
@@ -786,7 +793,7 @@ private class CmpFilter<T> <: DataFilter where T <: Comparable<T> {
 private class EqFilter<T> <: DataFilter where T <: Equatable<T> {
     EqFilter(private let left: DataPath, private let right: T){}
     init(left: String, right: String, solid: String){
-        this(DataPath.compile(left, solid: Bool.parse(solid)), parse<T>(right))
+        this(compilePath(left, solid), parse<T>(right))
     }
     public func check(data: Data): Bool {
         let d = match(left.get(data).next()){
@@ -824,7 +831,7 @@ private class NotEqFilter<T> <: DataFilter where T <: Equatable<T> {
         eqFilter = EqFilter<T>(left, right)
     }
     init(left: String, right: String, solid: String){
-        this(DataPath.compile(left, solid: Bool.parse(solid)), parse<T>(right))
+        this(compilePath(left, solid), parse<T>(right))
     }
     public func check(data: Data): Bool {
         !eqFilter.check(data)
@@ -838,7 +845,7 @@ private class RegexFilter <: DataFilter {
         this.regex = parseRegex(regex)
     }
     init(left: String, regex: String, solid: String){
-        this(DataPath.compile(left, solid: Bool.parse(solid)), regex)
+        this(compilePath(left, solid), regex)
     }
     private static func parseRegex(regex: String){
         if(!regex.startsWith('/')){
@@ -866,7 +873,7 @@ private class RegexFilter <: DataFilter {
 private class InFilter<T> <: DataFilter where T <: Hashable & Equatable<T> {
     InFilter(private let left: DataPath, private let right: HashSet<T>){}
     init(left: String, right: String, solid: String){
-        this(DataPath.compile(left, solid: Bool.parse(solid)), parseHashSet<T>(right))
+        this(compilePath(left, solid), parseHashSet<T>(right))
     }
     public func check(data: Data): Bool {
         let d = match(left.get(data).next()){
@@ -904,7 +911,7 @@ private class NinFilter<T> <: DataFilter where T <: Hashable & Equatable<T> {
         filter = InFilter<T>(left, right)
     }
     init(left: String, right: String, solid: String){
-        this(DataPath.compile(left, solid: Bool.parse(solid)), parseHashSet<T>(right))
+        this(compilePath(left, solid), parseHashSet<T>(right))
     }
     public func check(data: Data): Bool {
         !filter.check(data)
@@ -952,7 +959,7 @@ private class AnyOfFilter<T> <: Subset<T> & DataFilter where T <: ToString & Dat
         super(left, right)
     }
     init(left: String, right: String, solid: String){
-        this(DataPath.compile(left, solid: Bool.parse(solid)), parseArrayList<T>(right))
+        this(compilePath(left, solid), parseArrayList<T>(right))
     }
     public func check(data: Data): Bool {
         subset(data) > 0
@@ -963,7 +970,7 @@ private class SubSetOfFilter<T> <: Subset<T> & DataFilter where T <: ToString & 
         super(left, right)
     }
     init(left: String, right: String, solid: String){
-        this(DataPath.compile(left, solid: Bool.parse(solid)), parseArrayList<T>(right))
+        this(compilePath(left, solid), parseArrayList<T>(right))
     }
     public func check(data: Data): Bool {
         let d = match(left.get(data).next()){
@@ -994,7 +1001,7 @@ private class NoOneOfFilter<T> <: Subset<T> & DataFilter where T <: ToString & D
         super(left, right)
     }
     init(left: String, right: String, solid: String){
-        this(DataPath.compile(left, solid: Bool.parse(solid)), parseArrayList<T>(right))
+        this(compilePath(left, solid), parseArrayList<T>(right))
     }
     public func check(left: Data): Bool {
         subset(left) == 0
@@ -1003,7 +1010,7 @@ private class NoOneOfFilter<T> <: Subset<T> & DataFilter where T <: ToString & D
 private class SizeFilter <: DataFilter {
     SizeFilter(private let left: DataPath, private let right: Int64){}
     init(left: String, right: String, solid: String){
-        this(DataPath.compile(left, solid: Bool.parse(solid)), Int64.parse(right))
+        this(compilePath(left, solid), Int64.parse(right))
     }
     public func check(data: Data): Bool {
         let d = match(left.get(data).next()){
