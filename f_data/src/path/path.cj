@@ -55,33 +55,19 @@ public import f_data.*
  * && || !          逻辑与、逻辑或、逻辑非
  * [?(@.age =~ /\d+/)]
  */
-public class DataPath <: DataPathNode {
-    private static let solid = ConcurrentHashMap<String, DataPath>()
-    private static let cache = HeapCache<DataPath>(maxLife: Duration.day, maxSize: 10000)
-
+public abstract sealed class DataPath <: DataPathNode {
     private let nodes = ArrayList<DataPathNode>()
 
-    private init(){}
+    init(){}
     public static func compile(path: String, solid!: Bool = false): DataPath {
         if(solid){
-            doSolidCompile(path)
+            SolidDataPath.doCompile(path)
         }else{
-            doCacheCompile(path)
+            CacheDataPath.doCompile(path)
         }
     }
-    private static func doSolidCompile(path: String): DataPath {
-        if(let Some(p) <- solid.get(path)){
-            p
-        }else{
-            let p = doCompile(path, true)
-            solid[path] = p
-            p
-        }
-    }
-    private static func doCacheCompile(path: String): DataPath {
-        cache.getOrCompute(path){doCompile(path, false)}
-    }
-    private static func doCompile(path: String, solid: Bool): DataPath {
+    
+    static func doCompile(path: String, solid: Bool): DataPath {
         if(!(path.startsWith('$.') || path.startsWith('$['))){
             throw DataException('data path must be starts with "$." or "$[", but it is ${path}')
         }
@@ -433,7 +419,11 @@ public class DataPath <: DataPathNode {
         }
     }
     private static func doCompile(path: Tokens, solid: Bool): DataPath {
-        let dp = DataPath()
+        let dp = if(solid){
+            SolidDataPath()
+        }else{
+            CacheDataPath()
+        }
         var i = 0
         while(i < path.size){
             let node = 
@@ -479,6 +469,26 @@ public class DataPath <: DataPathNode {
             itr = itr.flatMap<Data>{d => nodes[i].get(d)}
         }
         itr
+    }
+}
+public class SolidDataPath <: DataPath {
+    private static let solid = ConcurrentHashMap<String, DataPath>()
+    init(){}
+    static func doCompile(path: String): DataPath {
+        if(let Some(p) <- solid.get(path)){
+            p
+        }else{
+            let p = doCompile(path, true)
+            solid[path] = p
+            p
+        }
+    }
+}
+public class CacheDataPath <: DataPath {
+    private static let cache = HeapCache<DataPath>(maxLife: Duration.day, maxSize: 10000)
+    init(){}
+    static func doCompile(path: String): DataPath {
+        cache.getOrCompute(path){doCompile(path, false)}
     }
 }
 private interface DataPathNode {
