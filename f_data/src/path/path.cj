@@ -75,15 +75,15 @@ public abstract sealed class DataPath <: DataPathNode {
     }
     private static func extractSubPathInSquares(path: Tokens, index: Int64): (Tokens, Int64) {
         var result = quote()
-        let stack = LinkedList<Unit>()
+        var parens = 0
         var end = -1
         for(i in index .. path.size){
             let t = path[i]
             match(t.kind){
-                case LSQUARE => stack.append(())
+                case LSQUARE => parens++
                 case RSQUARE => 
-                    stack.popLast()
-                    if(stack.isEmpty()){
+                    parens--
+                    if(parens == 0){
                         end = i
                         break
                     }
@@ -171,14 +171,14 @@ public abstract sealed class DataPath <: DataPathNode {
             let t = sub[i]
             match(t.kind){
                 case LPAREN => 
-                    let stack = LinkedList<Unit>()
+                    var parens = 0
                     var end = -1
                     for(e in i .. sub.size){
                         match(sub[e].kind){
-                            case LPAREN => stack.append(())
+                            case LPAREN => parens++
                             case RPAREN => 
-                                stack.popLast()
-                                if(stack.isEmpty()){
+                                parens--
+                                if(parens == 0){
                                     end = e
                                     break
                                 }
