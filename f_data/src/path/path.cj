@@ -74,7 +74,6 @@ public abstract sealed class DataPath <: DataPathNode {
         doCompile(cangjieLex(path, true), solid)
     }
     private static func extractSubPathInSquares(path: Tokens, index: Int64): (Tokens, Int64) {
-        var result = quote()
         var parens = 0
         var end = -1
         for(i in index .. path.size){
