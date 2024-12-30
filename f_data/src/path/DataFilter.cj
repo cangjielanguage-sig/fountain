@@ -25,9 +25,9 @@ internal interface DataFilter {
     }
     static func compilePath(path: String, solid: String){
         if(Bool.parse(solid)){
-            SolidDataPath.compile(path)
+            DataPath.solid(path)
         }else{
-            CacheDataPath.compile(path)
+            DataPath.cache(path)
         }
     }
     static func parse<T>(value: String): T {
