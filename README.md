@@ -205,7 +205,7 @@ _/ ____\____  __ __  _____/  |______  |__| ____
     T.populate<M, V>(src: M, target: T, flag): ?T where M <: StringKeyMap<V>, V <: DataFields<V>
     T.
     ```
-  - 
+  - `let iterator: Iterator<Data> = DataPath.cache(pathString).get(data)`
 - 功能更丰富的json
 - 并发
   - 限流策略
