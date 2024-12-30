@@ -206,6 +206,9 @@ _/ ____\____  __ __  _____/  |______  |__| ____
     T.
     ```
   - `let iterator: Iterator<Data> = DataPath.cache(pathString).get(data)`
+    - 还支持`DataPath.solid(pathString)`，两种模式的使用方式都一样。
+    - solid会一直保存path的编译结果，直到进程结束
+    - cache最多保存一万个path，最长保存一天的时间。
 - 功能更丰富的json
 - 并发
   - 限流策略
