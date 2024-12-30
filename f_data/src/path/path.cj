@@ -60,7 +60,12 @@ abstract sealed class DataPath <: DataPathNode {
     private let nodes = ArrayList<DataPathNode>()
 
     init(){}
-    
+    public static func solid(path: String): DataPath {
+        SolidDataPath.compile(path)
+    }
+    public static func cache(path: String): DataPath {
+        CacheDataPath.compile(path)
+    }
     func doCompile(path: String, solid: Bool): DataPath {
         if(!(path.startsWith('$.') || path.startsWith('$['))){
             throw DataException('data path must be starts with "$." or "$[", but it is ${path}')
@@ -460,19 +465,19 @@ abstract sealed class DataPath <: DataPathNode {
     }
 }
 public class SolidDataPath <: DataPath {
-    private static let solid = ConcurrentHashMap<String, DataPath>()
+    private static let SOLID = ConcurrentHashMap<String, DataPath>()
     private static let lock = ReentrantMutex()
     private init(){}
-    public static func compile(path: String): DataPath {
-        if(let Some(p) <- solid.get(path)){
+    static func compile(path: String): DataPath {
+        if(let Some(p) <- SOLID.get(path)){
             p
         }else{
             synchronized(lock){
-                if(let Some(p) <- solid.get(path)){
+                if(let Some(p) <- SOLID.get(path)){
                     p
                 }else{
                     let p = SolidDataPath().doCompile(path, true)
-                    solid[path] = p
+                    SOLID[path] = p
                     p
                 } 
             }
@@ -480,10 +485,10 @@ public class SolidDataPath <: DataPath {
     }
 }
 public class CacheDataPath <: DataPath {
-    private static let cache = HeapCache<DataPath>(maxLife: Duration.day, maxSize: 10000)
+    private static let CACHE = HeapCache<DataPath>(maxLife: Duration.day, maxSize: 10000)
     private init(){}
-    public static func compile(path: String): DataPath {
-        cache.getOrCompute(path){CacheDataPath().doCompile(path, false)}
+    static func compile(path: String): DataPath {
+        CACHE.getOrCompute(path){CacheDataPath().doCompile(path, false)}
     }
 }
 private interface DataPathNode {
