@@ -422,6 +422,9 @@ abstract sealed class DataPath <: DataPathNode {
             } else if(path[i].kind == DOT && path[i + 1].kind == IDENTIFIER) {
                 i++
                 SubPathNode(path[i].value)
+            } else if (path[i].kind == DOT && path[i + 1].kind == MUL) {
+                i++
+                AnySubPathNode.instance
             } else if(path[i].kind == DOT && path[i + 1].kind == DOT) {
                 RecursiveDescentPathNode.instance
             } else if(path[i].kind == DOT && path[i + 1].kind == LSQUARE && path[i - 1].kind == DOT) {

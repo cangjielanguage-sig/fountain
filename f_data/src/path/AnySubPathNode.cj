@@ -10,7 +10,8 @@
 package f_data.path
 
 internal class AnySubPathNode <: DataPathNode {
-    init(){}
+    static let instance = AnySubPathNode()
+    private init(){}
     public func get(data: Data): Iterator<Data> {
         match(data){
             case x: StringKeyMapTuples => x.iterator().map{tpl => tpl.value}
