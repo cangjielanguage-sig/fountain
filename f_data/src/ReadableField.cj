@@ -10,11 +10,18 @@
 package f_data
 
 abstract sealed class ReadableField {
+    public let name: String
     public ReadableField(
-        public let name: String,
+        name: String,
         public let typeInfo: TypeInfo,
         private let getter: (Object) -> Data
-    ){}
+    ){
+        this.name = if(name[0] == b'`'){
+            name[1 .. name.size - 1]
+        }else{
+            name
+        }
+    }
     public func get(instance: Object): Data{
         getter(instance)
     }
