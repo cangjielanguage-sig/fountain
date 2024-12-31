@@ -111,16 +111,14 @@ public class AsyncServer<EN, DE> <: Resource where EN <: ProtocolData<EN>, DE <:
     }
     private func enqueueDecoding(socket: TcpSocket, buf: Array<Byte>, decoder: Decoder<DE>){
         codecQueues[calidx(socket, codecQueues.size)].enqueue({=>
-            if(let Some(d) <- decoder.decode(buf)){
-                if(d.isToClose){
-                    try{
-                        socket.close()
-                    }catch(e: Exception){
-                        LOG.warn<SocketAddress>('socket {} close', e, [socket.remoteAddress])
-                    }
-                }else{
-                    enqueueTask(socket, d)
+            if(let Some(d) <- decoder.decode(buf) && d.isToClose){
+                try{
+                    socket.close()
+                }catch(e: Exception){
+                    LOG.warn<SocketAddress>('socket {} close', e, [socket.remoteAddress])
                 }
+            }else{
+                enqueueTask(socket, d)
             }
         })
     }

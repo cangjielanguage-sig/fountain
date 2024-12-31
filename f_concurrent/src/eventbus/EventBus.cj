@@ -310,14 +310,12 @@ public class EventBus {
                         convert(x)
                     } else if (notified.load()) {
                         None<T>
+                    } else if (toWaitIfNeed && monitor.wait(timeout: timeout)) {
+                        get(false)
+                    } else if (let Some(x) <- datas.remove(threadId)) {
+                        convert(x)
                     } else {
-                        if (toWaitIfNeed && monitor.wait(timeout: timeout)) {
-                            get(false)
-                        } else if (let Some(x) <- datas.remove(threadId)) {
-                            convert(x)
-                        } else {
-                            throw EventBusException("monitor is timeout")
-                        }
+                        throw EventBusException("monitor is timeout")
                     }
                 }
             }
