@@ -12,7 +12,7 @@ package f_data
 public class ObjectFields<T> <: Iterable<ReadableField> where T <: ObjectData<T>{
     private let mutables = HashMap<String, MutableField>()
     private let readables = HashMap<String, ReadableField>()
-    private ObjectFields(
+    public ObjectFields(
         fields: Array<ReadableField>,
         private let creator: ()-> T
     ){
