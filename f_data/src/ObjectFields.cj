@@ -16,16 +16,12 @@ public class ObjectFields<T> <: Iterable<ReadableField> where T <: ObjectData<T>
         fields: Array<ReadableField>,
         private let creator: ()-> T
     ){
-        //createFields(...)的嵌套函数populateFields(fields)会将fields填充到mutables readables
-    }
-    public static func createFields(fields: Array<ReadableField>, creator: ()-> T): ObjectFields<T> {
-        let objf = ObjectFields<T>(fields, creator)
         func populateField(name: String, field: ReadableField, throwIfDuplicate!: Bool = true) {
-            if(!objf.readables.putIfAbsent(name, field) && throwIfDuplicate){
+            if(!this.readables.putIfAbsent(name, field) && throwIfDuplicate){
                 throw DataException('duplicate field ${name} in ${TypeInfos.get<T>()}')
             }
             match(field){
-                case x: MutableField where !objf.mutables.putIfAbsent(name, x) && throwIfDuplicate => 
+                case x: MutableField where !this.mutables.putIfAbsent(name, x) && throwIfDuplicate => 
                     throw DataException('duplicate field ${name} in ${TypeInfos.get<T>()}')
                 case _ => false
             }
@@ -37,7 +33,7 @@ public class ObjectFields<T> <: Iterable<ReadableField> where T <: ObjectData<T>
         }
         func populateFields(name: String, annotations: Collection<Annotation>) {
             let f = 
-            if(let Some(f) <- objf.readables.get(name)){
+            if(let Some(f) <- this.readables.get(name)){
                 f
             }else{
                 return
@@ -67,7 +63,6 @@ public class ObjectFields<T> <: Iterable<ReadableField> where T <: ObjectData<T>
                 populateFields(superFieldsIterator, throwIfDuplicate: false)
             case _ => ()
         }
-        objf
     }
     public func create(): T {
         creator()

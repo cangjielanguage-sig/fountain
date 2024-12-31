@@ -468,7 +468,7 @@ func generateToFields(d: ClassDecl, exclusion: HashSet<String>) {
         [
             VarDecl(
                 quote(
-        private static let $(fieldsName) = ObjectFields<$klassIdentifier>.createFields($fieldTokens){
+        private static let $(fieldsName) = ObjectFields<$klassIdentifier>($fieldTokens){
             $klassIdentifier()
         }
     )
