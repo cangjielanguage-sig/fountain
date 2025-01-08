@@ -119,6 +119,28 @@ public class ECDSASignAlgo <: AsymmetricSignAlgo {
         }
     }
 }
+public class SM2SignAlgo <: AsymmetricSignAlgo {
+    public init(
+        digest: Digest,
+        privateKey!: ?SM2PrivateKey = None,
+        publicKey!: ?SM2PublicKey = None){
+        super(digest, privateKey: toPrivateKey(privateKey), publicKey: toPublicKey(publicKey))
+    }
+
+    protected func sign(data: Array<Byte>): Array<Byte>{
+        match(privateKey){
+            case Some(key) => 
+                (key as SM2PrivateKey)?.sign(doDigest(data)) ?? []
+            case _ => throw JWTException("PrivateKey does not exist")
+        }
+    }
+    protected func verify(data: Array<Byte>, sign: Array<Byte>): Bool {
+        match(publicKey){
+            case Some(key) => (key as SM2PublicKey)?.verify(doDigest(data), sign) ?? false
+            case _ => throw JWTException("PublicKey does not exist")
+        }
+    }
+}
 private class NoneDigest <: Digest {
     static let INSTANCE = NoneDigest()
     private init(){}
