@@ -3,12 +3,12 @@
 
 [package]
   cjc-version = "0.57.3"
-  compile-option = ""
+  compile-option = "-O2"
   description = "fountain boot program"
   link-option = ""
   name = "fboot"
   output-type = "executable"
-  override-compile-option = ""
+  override-compile-option = "-O2"
   src-dir = ""
   target-dir = ""
   version = "1.0.0"

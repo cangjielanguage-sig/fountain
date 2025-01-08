@@ -4,12 +4,12 @@
   f_regex = {path = "../f_regex"}
 [package]
   cjc-version = "0.57.3"
-  compile-option = ""
+  compile-option = "-O2"
   description = "nothing here"
   link-option = ""
   name = "f_process"
   output-type = "dynamic"
-  override-compile-option = ""
+  override-compile-option = "-O2"
   src-dir = ""
   target-dir = ""
   version = "1.0.0"

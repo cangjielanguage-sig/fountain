@@ -9,12 +9,12 @@
   f_time = {path = "../f_time"}
 [package]
   cjc-version = "0.57.3"
-  compile-option = ""
+  compile-option = "-O2"
   description = "nothing here"
   link-option = ""
   name = "f_data"
   output-type = "dynamic"
-  override-compile-option = ""
+  override-compile-option = "-O2"
   src-dir = ""
   target-dir = ""
   version = "1.0.0"
