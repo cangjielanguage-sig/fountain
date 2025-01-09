@@ -161,7 +161,9 @@ public class Pool<T> <: Resource where T <: Object {
             synchronized(monitor) {
                 let cond = monitor.newCondition()
                 tasks.tryEnqueue(cond)
-                monitor.wait(cond, timeout: timeout - consumed)
+                if(!monitor.wait(cond, timeout: timeout - consumed)){
+                    return None<T>
+                }
             }
             if (let Some(x) <- queue.tryDequeue() && let (Some(o), t) <- x) {
                 if (checkOnBorrowing) {
