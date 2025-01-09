@@ -165,7 +165,7 @@ public class Pool<T> <: Resource where T <: Object {
                     return None<T>
                 }
             }
-            if (let Some(x) <- queue.tryDequeue() && let (Some(o), t) <- x) {
+            if (let Some((Some(o), t)) <- queue.tryDequeue()) {
                 if (checkOnBorrowing) {
                     if (checker(o)) {
                         return o
