@@ -91,7 +91,7 @@ public class DataObject<T> <: Data & Iterable<(String, Data)> where T <: Object 
     public static func tryParse(string: String): ?Data {
         let typeInfo = TypeInfos.get<T>()
         if (typeInfo.isSubtypeOf(TypeInfos.get<Parsable<T>>())) {
-            let data = TypeMemberInfos.staticFunction(typeInfo, 'tryParse', [TypeInfos.get<String>()])
+            let data = (TypeMemberInfos.staticFunction(typeInfo, 'tryParse', [TypeInfos.get<String>()])?.apply(string)).getOrThrow()
             match(data){
                 case x: ?T => match(x){
                     case Some(x) => DataObject<T>(x)

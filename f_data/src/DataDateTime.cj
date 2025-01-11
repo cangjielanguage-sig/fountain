@@ -22,7 +22,7 @@ public class DataDateTime <: Data & Hashable & Comparable<DataDateTime> {
         }
     }
     public static func parse(data: String): Data {
-        DataDateTime(DateTime.parse(data))
+        DataDateTime(DateTime.parse(extractPureString(data)))
     }
     public func toDateTime(): DateTime {
         data

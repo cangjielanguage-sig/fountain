@@ -11,3 +11,10 @@ package f_data
 
 public interface Data <: ToString & DataParsable<Data> {
 }
+func extractPureString(data: String) {
+    if (data.startsWith('"') && data.endsWith('"')) {
+        data[1..data.size - 1]
+    } else {
+        data
+    }
+}

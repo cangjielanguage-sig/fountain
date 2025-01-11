@@ -6,82 +6,82 @@
             http://license.coscl.org.cn/MulanPSL2
     THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
     See the Mulan PSL v2 for more details.
-*/
+ */
 package f_data
 
 public class DataReal <: Data & Hashable & Comparable<DataReal> {
-    public DataReal(public let data: Decimal){}
-    public init(data: BigInt){
+    public DataReal(public let data: Decimal) {}
+    public init(data: BigInt) {
         this(Decimal(data.toString()))
     }
-    public init(data: Int8){
+    public init(data: Int8) {
         this(Decimal(data))
     }
-    public init(data: UInt8){
+    public init(data: UInt8) {
         this(Decimal(data))
     }
-    public init(data: Int16){
+    public init(data: Int16) {
         this(Decimal(data))
     }
-    public init(data: UInt16){
+    public init(data: UInt16) {
         this(Decimal(data))
     }
-    public init(data: Int32){
+    public init(data: Int32) {
         this(Decimal(data))
     }
-    public init(data: UInt32){
+    public init(data: UInt32) {
         this(Decimal(data))
     }
-    public init(data: Int64){
+    public init(data: Int64) {
         this(Decimal(data))
     }
-    public init(data: UInt64){
+    public init(data: UInt64) {
         this(Decimal(data))
     }
-    public init(data: IntNative){
+    public init(data: IntNative) {
         this(Decimal(data))
     }
-    public init(data: UIntNative){
+    public init(data: UIntNative) {
         this(Decimal(data))
     }
-    public init(data: Float16){
+    public init(data: Float16) {
         this(Decimal(data))
     }
-    public init(data: Float32){
+    public init(data: Float32) {
         this(Decimal(data))
     }
-    public init(data: Float64){
+    public init(data: Float64) {
         this(Decimal(data))
     }
-    public init(data: String){
+    public init(data: String) {
         this(Decimal(data))
     }
 
-    public func toDecimal(){
+    public func toDecimal() {
         data
     }
     public func tryToDecimal(): ?Decimal {
         toDecimal()
     }
-    public func toBigInt(){
+    public func toBigInt() {
         data.toBigInt()
     }
     public func tryToBigInt(): ?BigInt {
         data.toBigInt()
     }
-    public func toFloat64(){
+    public func toFloat64() {
         data.toFloat64()
     }
     public func tryToFloat64(): ?Float64 {
         data.toFloat64()
     }
-    public func toFloat32(){
+    public func toFloat32() {
         data.toFloat32()
     }
     public func tryToFloat32(): ?Float32 {
         data.toFloat32()
     }
-    public func toFloat16(){
+    public func toFloat16() {
         data.toFloat16()
     }
     public func tryToFloat16(): ?Float16 {
@@ -99,9 +99,9 @@ public class DataReal <: Data & Hashable & Comparable<DataReal> {
         data.toInt8(overflowHandling: strategy)
     }
     public func tryToInt8(): ?Int8 {
-        if(data >= int8Range[0] && data <= int8Range[1]){
+        if (data >= int8Range[0] && data <= int8Range[1]) {
             data.toInt8()
-        }else{
+        } else {
             None<Int8>
         }
     }
@@ -109,9 +109,9 @@ public class DataReal <: Data & Hashable & Comparable<DataReal> {
         data.toUInt8(overflowHandling: strategy)
     }
     public func tryToUInt8(): ?UInt8 {
-        if(data >= uint8Range[0] && data <= uint8Range[1]){
+        if (data >= uint8Range[0] && data <= uint8Range[1]) {
             data.toUInt8()
-        }else{
+        } else {
             None<UInt8>
         }
     }
@@ -120,9 +120,9 @@ public class DataReal <: Data & Hashable & Comparable<DataReal> {
         data.toInt16(overflowHandling: strategy)
     }
     public func tryToInt16(): ?Int16 {
-        if(data >= int16Range[0] && data <= int16Range[1]){
+        if (data >= int16Range[0] && data <= int16Range[1]) {
             data.toInt16()
-        }else{
+        } else {
             None<Int16>
         }
     }
@@ -130,9 +130,9 @@ public class DataReal <: Data & Hashable & Comparable<DataReal> {
         data.toUInt16(overflowHandling: strategy)
     }
     public func tryToUInt16(): ?UInt16 {
-        if(data >= uint16Range[0] && data <= uint16Range[1]){
+        if (data >= uint16Range[0] && data <= uint16Range[1]) {
             data.toUInt16()
-        }else{
+        } else {
             None<UInt16>
         }
     }
@@ -141,9 +141,9 @@ public class DataReal <: Data & Hashable & Comparable<DataReal> {
         data.toInt32(overflowHandling: strategy)
     }
     public func tryToInt32(): ?Int32 {
-        if(data >= int32Range[0] && data <= int32Range[1]){
+        if (data >= int32Range[0] && data <= int32Range[1]) {
             data.toInt32()
-        }else{
+        } else {
             None<Int32>
         }
     }
@@ -151,9 +151,9 @@ public class DataReal <: Data & Hashable & Comparable<DataReal> {
         data.toUInt32(overflowHandling: strategy)
     }
     public func tryToUInt32(): ?UInt32 {
-        if(data >= uint32Range[0] && data <= uint32Range[1]){
+        if (data >= uint32Range[0] && data <= uint32Range[1]) {
             data.toUInt32()
-        }else{
+        } else {
             None<UInt32>
         }
     }
@@ -162,9 +162,9 @@ public class DataReal <: Data & Hashable & Comparable<DataReal> {
         data.toInt64(overflowHandling: strategy)
     }
     public func tryToInt64(): ?Int64 {
-        if(data >= int64Range[0] && data <= int64Range[1]){
+        if (data >= int64Range[0] && data <= int64Range[1]) {
             data.toInt64()
-        }else{
+        } else {
             None<Int64>
         }
     }
@@ -172,9 +172,9 @@ public class DataReal <: Data & Hashable & Comparable<DataReal> {
         data.toUInt64(overflowHandling: strategy)
     }
     public func tryToUInt64(): ?UInt64 {
-        if(data >= uint64Range[0] && data <= uint64Range[1]){
+        if (data >= uint64Range[0] && data <= uint64Range[1]) {
             data.toUInt64()
-        }else{
+        } else {
             None<UInt64>
         }
     }
@@ -182,9 +182,9 @@ public class DataReal <: Data & Hashable & Comparable<DataReal> {
         data.toIntNative(overflowHandling: strategy)
     }
     public func tryToIntNative(): ?IntNative {
-        if(data >= int64Range[0] && data <= int64Range[1]){
+        if (data >= int64Range[0] && data <= int64Range[1]) {
             data.toIntNative()
-        }else{
+        } else {
             None<IntNative>
         }
     }
@@ -192,9 +192,9 @@ public class DataReal <: Data & Hashable & Comparable<DataReal> {
         data.toUIntNative(overflowHandling: strategy)
     }
     public func tryToUIntNative(): ?UIntNative {
-        if(data >= int64Range[0] && data <= int64Range[1]){
+        if (data >= int64Range[0] && data <= int64Range[1]) {
             data.toUIntNative()
-        }else{
+        } else {
             None<UIntNative>
         }
     }
@@ -202,12 +202,14 @@ public class DataReal <: Data & Hashable & Comparable<DataReal> {
     public func toString(): String {
         this.data.toString()
     }
+    
     public static func parse(data: String): Data {
-        DataReal(data)
+        DataReal(extractPureString(data))
     }
     public static func tryParse(data: String): ?Data {
-        if (Regex.REAL_NUMBER.matched(data)) {
-            parse(data)
+        let d = extractPureString(data)
+        if (Regex.REAL_NUMBER.matched(d)) {
+            parse(d)
         } else {
             None<Data>
         }

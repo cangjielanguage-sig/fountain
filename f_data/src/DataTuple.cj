@@ -27,7 +27,8 @@ public class DataTuple <: Data {
                 throw DataException("to parse from sub string ${tmp} in ${string} to ${TypeInfos.get<K>()}", e)
             }
         }
-        let s = string[1 .. string.size - 1]
+        let data = extractPureString(string)
+        let s = data[1 .. data.size - 1]
         let bytes = ArrayList<Byte>()
         var k = None<Data>
         for (b in s) {

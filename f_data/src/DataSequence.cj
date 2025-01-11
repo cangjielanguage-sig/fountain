@@ -56,7 +56,8 @@ sealed abstract class DataList<D> <: Data & Iterable<D> & Collection<D> where D 
         s.toString()
     }
     public static func parseSequence<T>(string: String): DataSequence where T <: Data {
-        let s = string[1 .. string.size - 1]
+        let extracted = extractPureString(string)
+        let s = extracted[1 .. extracted.size - 1]
         let data = DataSequence()
         let bytes = ArrayList<Byte>()
         for (b in s) {

@@ -17,7 +17,7 @@ public class DataBool <: Data & Hashable & Equatable<DataBool> {
         data.toString()
     }
     public static func tryParse(data: String): ?Data {
-        match(Bool.tryParse(data.toAsciiLower())){
+        match(Bool.tryParse(extractPureString(data).toAsciiLower())){
             case Some(x) => DataBool(x)
             case _ => None<Data>
         }

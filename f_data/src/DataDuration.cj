@@ -15,7 +15,7 @@ public class DataDuration <: Data & Hashable & Comparable<DataDuration> {
         data.toString()
     }
     public static func tryParse(data: String): ?Data {
-        match(Duration.tryParse(data.toAsciiLower())){
+        match(Duration.tryParse(extractPureString(data).toAsciiLower())){
             case Some(x) => DataDuration(x)
             case _ => None<Data>
         }

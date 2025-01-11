@@ -16,10 +16,11 @@ public class DataNone <: Data{
         "None"
     }
     public static func tryParse(data: String): ?Data {
-        if(data.size != 4) {
+        let d = extractPureString(data)
+        if(d.size != 4) {
             return None<Data>
         }
-        match(data.toAsciiLower()){
+        match(d.toAsciiLower()){
             case "null" | "none" => INSTANCE
             case _ => None<Data>
         }
