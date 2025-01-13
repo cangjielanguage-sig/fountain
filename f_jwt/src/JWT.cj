@@ -244,6 +244,15 @@ public class JWT {
     public func keyId(keyId: String): JWT {
         header("kid", keyId)
     }
+    public func issuer(iss: String): JWT {
+        addPayload('iss', iss)
+    }
+    public func subject(sub: String): JWT {
+        addPayload('sub', sub)
+    }
+    public func audience(aud: String): JWT {
+        addPayload('aud', aud)
+    }
     public func expire(expire: Int64): JWT {
         this.expire(Duration.millisecond * expire)
     }
@@ -259,6 +268,28 @@ public class JWT {
     public func expireAt(expireAt: Int64): JWT {
         addPayload("exp", expireAt)
     }
+    public func notBefore(nbf: Int64): JWT {
+        addPayload("nbf", nbf)
+    }
+    public func notBefore(nbf: Duration): JWT {
+        notBefore(nbf.toMilliseconds())
+    }
+    public func notBeforeAt(nbf: DateTime): JWT {
+        notBefore(nbf.toUnixTimeStamp())
+    }
+    public func issuedAt(iat: Int64): JWT {
+        addPayload("iat", iat)
+    }
+    public func issuedAt(iat: Duration): JWT {
+        addPayload("iat", iat.toMilliseconds())
+    }
+    public func issuedAt(iat: DateTime): JWT {
+        addPayload("iat", iat.toUnixTimeStamp().toMilliseconds())
+    }
+    public func jwtId(jti: String): JWT {
+        addPayload("jti", jti)
+    }
+
     public func addPayload<T>(name: String, value: T): JWT where T <: ToString {
         payload[name] = value
         this
