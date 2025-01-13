@@ -423,6 +423,23 @@ public class JWTVerifier {
     public func getExpireAtMillis(): ?Int64 {
         getPayloadValue<Int64>('exp')
     }
+    public func getNotBefore(): ?DateTime {
+        if (let Some(d) <- getNotBeforeDuration()) {
+            DateTime.now() + d
+        } else {
+            None
+        }
+    }
+    public func getNotBeforeDuration(): ?Duration {
+        if (let Some(d) <- getNotBeforeMillis()) {
+            Duration.millisecond * d
+        } else {
+            None
+        }
+    }
+    public func getNotBeforeMillis(): ?Int64 {
+        getPayloadValue<Int64>("nbf")
+    }
     public func getPayloadValue<T>(name: String): ?T where T <: Parsable<T> {
         if (let Some(x) <- getPayload(name)) {
             match (x) {
@@ -445,7 +462,21 @@ public class JWTVerifier {
             None
         }
     }
-    public func verify(): Bool {
+    public func isNotBefore(now: DateTime): Bool {
+        (this.getNotBefore() ?? now) <= now
+    }
+    public func isExpired(now: DateTime): Bool {
+        if (let Some(d) <- this.getExpireAt()) {
+            d > now
+        } else {
+            true
+        }
+    }
+    public func verifySign(): Bool {
         jwt.signAlgo.verify(bytesForSign(headerBytes, payloadBytes), signBytes)
+    }
+    public func verify(): Bool {
+        let now = DateTime.now()
+        isExpired(now) && isNotBefore(now) && verifySign()
     }
 }
