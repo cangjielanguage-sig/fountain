@@ -351,7 +351,7 @@ public class JWTEncoder {
         }
         let payloadJson = json.toString()
         let payloadBase64 = toBase64(payloadJson)
-        "${headerBase64}.${payloadBase64}.${jwt.signAlgo.signToBase64(bytesToSign(headerJson, payloadJson))}"
+        "${headerBase64}.${payloadBase64}.${jwt.signAlgo.signToBase64(bytesForSign(headerJson, payloadJson))}"
     }
 }
 
@@ -446,6 +446,6 @@ public class JWTVerifier {
         }
     }
     public func verify(): Bool {
-        jwt.signAlgo.verify(bytesToSign(headerBytes, payloadBytes), signBytes)
+        jwt.signAlgo.verify(bytesForSign(headerBytes, payloadBytes), signBytes)
     }
 }

@@ -28,10 +28,10 @@ func toBase64(src: Array<Byte>): String {
 func toBase64(src: String): String {
     toBase64(unsafe{src.rawData()})
 }
-func bytesToSign(header: String, payload: String): Array<Byte> {
-    bytesToSign(unsafe{header.rawData()}, unsafe{payload.rawData()})
+func bytesForSign(header: String, payload: String): Array<Byte> {
+    bytesForSign(unsafe{header.rawData()}, unsafe{payload.rawData()})
 }
-func bytesToSign(header: Array<Byte>, payload: Array<Byte>): Array<Byte> {
+func bytesForSign(header: Array<Byte>, payload: Array<Byte>): Array<Byte> {
     let headerSize = header.size
     Array<Byte>(headerSize + payload.size){i =>
         if (i < headerSize) {
