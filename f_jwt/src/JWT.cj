@@ -268,12 +268,7 @@ public class JWT {
     public func expireAt(expireAt: Int64): JWT {
         addPayload("exp", expireAt)
     }
-    public func notBefore(nbf: Int64): JWT {
-        notBeforeAt(nbf * Duration.millisecond)
-    }
-    public func notBefore(nbf: Duration): JWT {
-        notBeforeAt(DateTime.now() + nbf)
-    }
+    
     public func notBeforeAt(nbf: Int64): JWT {
         addPayload("nbf", nbf)
     }
