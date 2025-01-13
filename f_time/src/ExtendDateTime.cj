@@ -31,6 +31,11 @@ public interface ExtendDateTime {
     func setNanosecond(nanos: Int64): DateTime
     prop isLeapYear: Bool
     prop isLastMonthDay: Bool
+    func toUnixEpochDuration(): Duration
+    func toUnixEpochSeconds(): Int64
+    func toUnixEpochMillis(): Int64
+    func toUnixEpochMicros(): Int64
+    func toUnixEpochNanos(): Int64
 }
 extend DateTime <: ExtendDateTime {
     public static prop currentDuration: Duration {
@@ -179,5 +184,20 @@ extend DateTime <: ExtendDateTime {
                 case _ => false
             }
         }
+    }
+    public func toUnixEpochDuration(): Duration {
+        this - DateTime.UnixEpoch
+    }
+    public func toUnixEpochSeconds(): Int64 {
+        toUnixEpochDuration().toSeconds()
+    }
+    public func toUnixEpochMillis(): Int64 {
+        toUnixEpochDuration().toMilliseconds()
+    }
+    public func toUnixEpochMicros(): Int64 {
+        toUnixEpochDuration().toMicroseconds()
+    }
+    public func toUnixEpochNanos(): Int64 {
+        toUnixEpochDuration().toNanoseconds()
     }
 }
