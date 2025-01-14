@@ -32,11 +32,11 @@ public class CronCompiler {
             let units = ArrayList<String>(expr.trimAscii().split(" "))
             var i = TicktockUnit.values.size - units.size
             while (i > 0) {
-                units.append("*")
+                units.add("*")
                 i--
             }
             var cronc = CronDataCollection(expr)
-            datas.append(cronc)
+            datas.add(cronc)
             i = 0
             let l = units.size
             while (i < l) {

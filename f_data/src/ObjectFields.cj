@@ -17,11 +17,11 @@ public class ObjectFields<T> <: Iterable<ReadableField> where T <: ObjectData<T>
         private let creator: ()-> T
     ){
         func populateField(name: String, field: ReadableField, throwIfDuplicate!: Bool = true) {
-            if(!this.readables.putIfAbsent(name, field) && throwIfDuplicate){
+            if(!this.readables.addIfAbsent(name, field) && throwIfDuplicate){
                 throw DataException('duplicate field ${name} in ${TypeInfos.get<T>()}')
             }
             match(field){
-                case x: MutableField where !this.mutables.putIfAbsent(name, x) && throwIfDuplicate => 
+                case x: MutableField where !this.mutables.addIfAbsent(name, x) && throwIfDuplicate => 
                     throw DataException('duplicate field ${name} in ${TypeInfos.get<T>()}')
                 case _ => false
             }

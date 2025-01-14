@@ -9,7 +9,7 @@
  */
 package f_concurrent
 
-import std.collection.{Set, ArrayList}
+import std.collection.{Set, ArrayList, ReadOnlySet}
 import std.collection.concurrent.ConcurrentHashMap
 
 public class ConcurrentHashSetIterator<T> <: Iterator<T>{
@@ -49,32 +49,29 @@ public class ConcurrentHashSet<T> <: Set<T> where T <: Hashable & Equatable<T> {
     public func iterator(): Iterator<T> {
         ConcurrentHashSetIterator<T>(store.iterator())
     }
-    public func put(value: T): Bool {
+    public func add(value: T): Bool {
         store.put(value, value).isNone()
     }
-    public func putAll(values: Collection<T>): Unit {
-        let itr: Iterable<T> = values
-        putAll(itr)
-    }
-    public func putAll(values: Iterable<T>): Unit {
-        for (v in values) {
-            put(v)
+    public func add(all!: Collection<T>): Unit {
+        for(v in all){
+            add(v)
         }
     }
     public func contains(value: T): Bool {
         store.contains(value)
     }
-    public func containsAll(values: Collection<T>): Bool {
-        let itr: Iterable<T> = values
-        containsAll(itr)
-    }
-    public func containsAll(values: Iterable<T>): Bool {
-        for (v in values where !this.contains(v)) {
+    public func contains(all!: Collection<T>): Bool {
+        for (v in all where !this.contains(v)) {
             return false
         }
         return true
     }
-    public func subsetOf(other: Set<T>): Bool {
+    public func retain(all!: Set<T>): Unit {
+        for((k, _) in store where !all.contains(k)){
+            store.remove(k)
+        }
+    }
+    public func subsetOf(other: ReadOnlySet<T>): Bool {
         for (v in this where !other.contains(v)) {
             return false
         }
@@ -83,19 +80,15 @@ public class ConcurrentHashSet<T> <: Set<T> where T <: Hashable & Equatable<T> {
     public func remove(value: T): Bool {
         store.remove(value).isSome()
     }
-    public func removeAll(values: Collection<T>): Unit {
-        let itr: Iterable<T> = values
-        removeAll(itr)
-    }
-    public func removeAll(values: Iterable<T>): Unit {
-        for (v in values) {
+    public func remove(all!: Collection<T>): Unit {
+        for (v in all) {
             store.remove(v)
         }
     }
     public func removeIf(predicate: (T) -> Bool): Unit {
         let keys = ArrayList<T>()
         for((k, v) in store where predicate(v)) {
-            keys.append(k)
+            keys.add(k)
         }
         for(k in keys){
             store.remove(k)

@@ -38,7 +38,7 @@ public class ResposibilityChain<C, A, R> {
     public init() {}
     public init(resposibilities: Iterable<Resposibility<C, A, R>>) {
         for(r in resposibilities){
-            this.resposibilities.append(r)
+            this.resposibilities.add(r)
         }
     }
 
@@ -46,12 +46,12 @@ public class ResposibilityChain<C, A, R> {
       * 注册一个策略
       */
     public func register(resposibility: Resposibility<C, A, R>): ResposibilityChain<C, A, R> {
-        resposibilities.append(resposibility)
+        resposibilities.add(resposibility)
         this
     }
     public func register<S>(resposibilities: Iterable<S>): Unit where S <: Resposibility<C, A, R> {
         for(r in resposibilities){
-            this.resposibilities.append(r)
+            this.resposibilities.add(r)
         }
     }
 

@@ -22,7 +22,7 @@ public class LoggerAppenderCreator {
         let loggers = ArrayList<AbstractLogger>()
         for ((_, creator) in creators) {
             for (logger in creator(name) where !(logger is NoneLogAppender)) {
-                loggers.append(logger)
+                loggers.add(logger)
             }
         }
         LoggerAppenderFacade(name, loggers.toArray())

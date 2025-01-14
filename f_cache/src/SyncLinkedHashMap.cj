@@ -29,9 +29,9 @@ class SyncLinkedHashMap<V> <: Collection<(String, V)>{
             map.contains(key)
         }
     }
-    public func put(key: String, value: V): ?V{
+    public func add(key: String, value: V): ?V{
         synchronized(mutex){
-            map.put(key, value)
+            map.add(key, value)
         }
     }
     public func computeIfAbsent(key: String, callable: ()->V): V{
@@ -43,7 +43,7 @@ class SyncLinkedHashMap<V> <: Collection<(String, V)>{
                     v
                 }else{
                     let v = callable()
-                    put(key, v)
+                    add(key, v)
                     v
                 }
             }

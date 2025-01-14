@@ -51,7 +51,7 @@ internal interface DataFilter {
         for(t in cangjieLex(value, true)){
             match(t.kind){
                 case COMMA => continue
-                case STRING_LITERAL | INT64 | FLOAT64 | BOOL_LITERAL => list.append(parse<T>(t.value))
+                case STRING_LITERAL | INT64 | FLOAT64 | BOOL_LITERAL => list.add(parse<T>(t.value))
                 case _ => throw DataException('illegal token for set filter ${value}')
             }
         }
@@ -62,7 +62,7 @@ internal interface DataFilter {
         for(t in cangjieLex(value, true)){
             match(t.kind){
                 case COMMA => continue
-                case STRING_LITERAL | INT64 | FLOAT64 | BOOL_LITERAL => set.put(parse<T>(t.value))
+                case STRING_LITERAL | INT64 | FLOAT64 | BOOL_LITERAL => set.add(parse<T>(t.value))
                 case _ => throw DataException('illegal token for set filter ${value}')
             }
         }

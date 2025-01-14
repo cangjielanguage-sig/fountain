@@ -18,7 +18,7 @@ public open class HeapCacheBuilder<V> where V <: Object {
     private var concurrencyLevel = DEFAULT_HEAP_CACHE_CONCURRENCY_LEVEL
     private var maxSize = DEFAULT_HEAP_CACHE_MAX_SIZE
     private var checkDuration = DEFAULT_HEAP_CHECK_CHECK_DURATION
-    private var evictionCallback: (String, V) -> Unit = {k, v => ()}
+    private var evictionCallback: (String, V) -> Unit = {_, _ => ()}
 
     public func setMaxLife(maxLife: Duration): HeapCacheBuilder<V> {
         if (maxLife < Duration.Zero) {

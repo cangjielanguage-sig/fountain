@@ -97,7 +97,7 @@ public class PriorityQueue<T> <: Queue<T> & Iterable<T> & Collection<T> & Growab
     /**
      * add an element
      */
-    public func offer(x: T): Unit {
+    public func add(x: T): Unit {
         if (capacity > 0 && size >= capacity) {
             overSizePolicy.reject(this) {doOffer(x)}
         } else {
@@ -134,9 +134,9 @@ public class PriorityQueue<T> <: Queue<T> & Iterable<T> & Collection<T> & Growab
     /**
      * offer all elements in values to current queue
      */
-    public func offerAll(values: Iterable<T>) {
-        for (value in values) {
-            offer(value)
+    public func add(all!: Collection<T>) {
+        for (value in all) {
+            add(value)
         }
     }
 
@@ -161,9 +161,9 @@ public class PriorityQueue<T> <: Queue<T> & Iterable<T> & Collection<T> & Growab
     /**
      * get and remove element on top
      */
-    public func poll(): Option<T> {
+    public func remove(): Option<T> {
         let cur = peek()
-        if (let None <- cur) {
+        if (cur.isNone()) {
             return PriorityQueue<T>.EMPTY_VALUE
         }
         currentSize--

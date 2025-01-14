@@ -23,7 +23,7 @@ public class CronCompiler_test {
                     case Some(crons) => for (cron in crons) {
                         println(cron)
                     }
-                    case None => throw Exception()
+                    case _ => throw Exception()
                 }
             }
         }

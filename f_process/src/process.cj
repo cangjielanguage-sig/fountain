@@ -114,7 +114,7 @@ extend String <: ExtendProcess {
             }else{
                 startup()
             }
-            if(let None <- first){
+            if(first.isNone()){
                 first = last
             }
             cur = idx + 1

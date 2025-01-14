@@ -32,7 +32,7 @@ public class BitSet <: Iterable<Bool> {
     public init(capacity: Int64) {
         var i = 0
         while (i < capacity) {
-            bits.append(0)
+            bits.add(0)
             i++
         }
     }
@@ -61,7 +61,9 @@ public class BitSet <: Iterable<Bool> {
         } / 64
 
         if (grow && idx >= bits.size) {
-            bits.appendAll(Array<UInt64>(idx - bits.size + 1, repeat: 0u64))
+            for(_ in 0 .. idx - bits.size + 1) {
+                bits.add(0u64)
+            }
         }
         idx
     }
@@ -77,7 +79,7 @@ public class BitSet <: Iterable<Bool> {
     func get(index: Int64): ?Bool {
         let idx = growIfNeed(index, grow: false)
         if (idx >= bits.size) {
-            None
+            None<Bool>
         } else {
             (bits[idx] & computePosition(index)) != 0
         }

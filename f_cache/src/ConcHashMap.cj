@@ -25,7 +25,7 @@ class ConcHashMapKeysIterator<V> <: Iterator<String> {
         if (let Some((k, v)) <- itr.next()) {
             return Some(k)
         }
-        return None
+        return None<String>
     }
 }
 class ConcHashMapKeys<V> <: EquatableCollection<String> {
@@ -66,8 +66,8 @@ class ConcHashMapKeys<V> <: EquatableCollection<String> {
         map.contains(element)
     }
 
-    public func containsAll(elements: Collection<String>): Bool {
-        for(e in elements where contains(e)){
+    public func contains(all!: Collection<String>): Bool {
+        for(e in all where contains(e)){
             return true
         }
         false
@@ -152,7 +152,6 @@ class ConcHashMapIterator<V> <: Iterator<(String, V)> {
         }
     }
     func segmentIterators(): Array<Iterator<(String, V)>> {
-        let map = this.m
         Array<Iterator<(String, V)>>(m.concurrency) {
             i => segmentIterator(i)
         }
@@ -185,7 +184,7 @@ class ConcHashMap<V> <: Collection<(String, V)>{
         }
         let segments = newSegments(concurrency)
         var result = ConcHashMap<V>(segments, concurrency)
-        result.putAll(map)
+        result.add(all: map)
         return result
     }
     private static func newSegments(concurrency: Int64) {
@@ -252,8 +251,8 @@ class ConcHashMap<V> <: Collection<(String, V)>{
      * 返回值 Option<V> - 如果赋值之前 key 存在，旧的 value 用 Option 封装；
      * 否则，返回 Option<V>.None
      */
-    func put(key: String, value: V): Option<V> {
-        let opt = segment(key).put(key, value)
+    func add(key: String, value: V): Option<V> {
+        let opt = segment(key).add(key, value)
         incrSize()
         return opt
     }
@@ -263,9 +262,9 @@ class ConcHashMap<V> <: Collection<(String, V)>{
      * 如果映射以前包含键的映射，则旧值将被替换
      * 参数 element - 传递给遍历赋值的元素
      */
-    func putAll(elements: Collection<(String, V)>): Unit {
-        for ((key, val) in elements) {
-            segment(key).put(key, val)
+    func add(all!: Collection<(String, V)>): Unit {
+        for ((key, val) in all) {
+            segment(key).add(key, val)
             incrSize()
         }
     }

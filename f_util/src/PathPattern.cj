@@ -65,10 +65,10 @@ public class PathPattern {
         func populateNode(node: PathNode) {
             synchronized(mutex) {
                 while (patterns.size < len) {
-                    patterns.append(NonePathNode.INSTANCE)
+                    patterns.add(NonePathNode.INSTANCE)
                 }
                 if (patterns.size == len) {
-                    patterns.append(node)
+                    patterns.add(node)
                 } else {
                     patterns[len] = node
                 }
@@ -120,12 +120,12 @@ public class PathPattern {
             if (pattern.contains("**")) {
                 let count = countWithoutDoubleStar(pattern, true)
                 while (patterns.size < count + 1) {
-                    patterns.append(NonePathNode.INSTANCE)
+                    patterns.add(NonePathNode.INSTANCE)
                 }
                 while (originPatterns.size < count + 1) {
-                    originPatterns.append(ArrayList<(String, Any)>())
+                    originPatterns.add(ArrayList<(String, Any)>())
                 }
-                originPatterns[count].append((pattern, data))
+                originPatterns[count].add((pattern, data))
                 for (i in count..patterns.size) {
                     var node = patterns[i]
                     if (node is NonePathNode) {
@@ -141,17 +141,17 @@ public class PathPattern {
     }
     public func compileIfAbsent<T>(pattern: String, supplier: () -> T): T {
         match (this.data<T>(pattern)) {
-            case None =>
+            case Some(d) => d
+            case _ =>
                 synchronized(mutex) {
                     match(this.data<T>(pattern)) {
-                        case None =>
+                        case Some(d) => d
+                        case _ =>
                             let d = supplier()
                             compile(pattern, d)
                             d
-                        case Some(d) => d
                     }
                 }
-            case Some(d) => d
         }
     }
 
@@ -185,8 +185,8 @@ public class PathPattern {
             case Some(map) =>
                 for ((index, node) in map) {
                     match (node) {
-                        case name: String => result.put(name, parts[index])
-                        case node: ComplexPathNode => result.putAll(node.extract(parts[index]))
+                        case name: String => result.add(name, parts[index])
+                        case node: ComplexPathNode => result.add(all: node.extract(parts[index]))
                         case _ => () //unreachable
                     }
                 }
@@ -272,7 +272,7 @@ public class PathPattern {
                 prevDoubleStar = NonePathNode.INSTANCE
                 prevPlaceholder = NonePathNode.INSTANCE
                 if (mode.extraction()) {
-                    variables.put(i, node.name)
+                    variables.add(i, node.name)
                 }
                 i++
                 continue
@@ -285,7 +285,7 @@ public class PathPattern {
                 prevComplex = NonePathNode.INSTANCE
                 prevRegexPlaceholder = NonePathNode.INSTANCE
                 if (mode.extraction()) {
-                    variables.put(i, node.name)
+                    variables.add(i, node.name)
                 }
                 i++
                 continue
@@ -307,7 +307,7 @@ public class PathPattern {
                 prevComplex = NonePathNode.INSTANCE
                 prevRegexPlaceholder = NonePathNode.INSTANCE
                 if (mode.extraction()) {
-                    variables.put(i, node)
+                    variables.add(i, node)
                 }
                 i++
                 continue
@@ -470,7 +470,7 @@ extend<T> Option<T> where T <: PathNode {
     func matches(value: String): Bool {
         match (this) {
             case Some(n) => n.matches(value)
-            case None => false
+            case _ => false
         }
     }
 }
@@ -616,7 +616,7 @@ open class PathNode <: Equatable<PathNode> {
             case Some(x) => x
             case _ => 
                 let node = SubPathNode(name, this)
-                subs.putIfAbsent(name, node)
+                subs.addIfAbsent(name, node)
                 node
         }
     }
@@ -625,7 +625,7 @@ open class PathNode <: Equatable<PathNode> {
             case Some(x) => x
             case _ => 
                 let node = RegexPathNode(name, protogenesis, this)
-                regexPathNodes.putIfAbsent(name, node)
+                regexPathNodes.addIfAbsent(name, node)
                 node
         }
     }
@@ -634,7 +634,7 @@ open class PathNode <: Equatable<PathNode> {
             case Some(x) => x
             case _ => 
                 let node = PlaceholderRegexPathNode(name, reg, protogenesis, this)
-                regexPlaceholderPathNodes.putIfAbsent(name, node)
+                regexPlaceholderPathNodes.addIfAbsent(name, node)
                 node
         }
     }
@@ -655,7 +655,7 @@ open class PathNode <: Equatable<PathNode> {
             case Some(x) => x
             case _ => 
                 let node = PlaceholderPathNode(name, this)
-                placeholderPathNodes.putIfAbsent(name, node)
+                placeholderPathNodes.addIfAbsent(name, node)
                 node
         }
     }
@@ -664,7 +664,7 @@ open class PathNode <: Equatable<PathNode> {
             case Some(x) => x
             case _ => 
                 let node = ComplexPathNode(name, this)
-                complexPathNodes.putIfAbsent(name, node)
+                complexPathNodes.addIfAbsent(name, node)
                 node
         }
     }
@@ -706,7 +706,7 @@ open class PathNode <: Equatable<PathNode> {
     func data<T>(): Option<T> {
         match (data_) {
             case Some(x) => x as T
-            case _ => None
+            case _ => None<T>
         }
     }
     protected open operator func ==(o: Any): Bool {
@@ -841,10 +841,10 @@ class ComplexPathNode <: PathNode {
             let c = charr[i]
             if (c == r'{') { //patterns.append(node.getOrThrow())
                 var node = appendPart(tmp, parts, name, start, i)
-                patterns.append(node)
+                patterns.add(node)
                 let end = name.indexOf("}", i + 1) ?? -1
                 node = appendPart(tmp, parts, name, i, end + 1)
-                patterns.append(node)
+                patterns.add(node)
                 i = end
                 start = i + 1
             }
@@ -852,7 +852,7 @@ class ComplexPathNode <: PathNode {
         }
         if (start < len) {
             part = name[start..]
-            patterns.append(tmp.appendSubPathNode(part).getOrThrow())
+            patterns.add(tmp.appendSubPathNode(part).getOrThrow())
         }
         return "^(${String.join(parts.toArray(), delimiter: ")(")})$".regex() //正则非贪婪匹配
     }
@@ -860,9 +860,9 @@ class ComplexPathNode <: PathNode {
         let part = name[start..end]
         let node = tmp.appendSubPathNode(part).getOrThrow()
         if (node is SubPathNode) {
-            parts.append(part)
+            parts.add(part)
         } else {
-            parts.append(".+?")
+            parts.add(".+?")
         }
         node
     }
@@ -887,18 +887,18 @@ class ComplexPathNode <: PathNode {
             if (node is PlaceholderPathNode || node is PlaceholderRegexPathNode) {
                 let matcher = reg.matcher(value)
                 match (matcher.find()) {
-                    case None =>
-                        matches = false
-                        break
                     case Some(md) =>
                         let part = md.matchStr(i + 1)
                         if (node.matches(part)) {
                             let name = node.name
-                            datas.put(name, part)
+                            datas.add(name, part)
                         } else {
                             matches = false
                             break
                         }
+                    case _ =>
+                        matches = false
+                        break
                 }
             }
         }

@@ -54,28 +54,28 @@ public class DigestSignAlgo <: SignAlgo {
 abstract sealed class AsymmetricSignAlgo <: SignAlgo {
     public AsymmetricSignAlgo(
         digest: Digest,
-        protected let privateKey!: ?PrivateKey = None,
-        protected let publicKey!: ?PublicKey = None){
+        protected let privateKey!: ?PrivateKey = None<PrivateKey>,
+        protected let publicKey!: ?PublicKey = None<PublicKey>){
             super(digest)
         }
     protected static func toPrivateKey<T>(privateKey: ?T): ?PrivateKey where T <: PrivateKey {
         match(privateKey){
             case Some(x) => x as PrivateKey
-            case _ => None
+            case _ => None<PrivateKey>
         }
     }
     protected static func toPublicKey<T>(publicKey: ?T): ?PublicKey where T <: PublicKey {
         match(publicKey){
             case Some(x) => x as PublicKey
-            case _ => None
+            case _ => None<PublicKey>
         }
     }
 }
 public class RSASignAlgo <: AsymmetricSignAlgo {
     public RSASignAlgo(
         digest: Digest,
-        privateKey!: ?RSAPrivateKey = None,
-        publicKey!: ?RSAPublicKey = None,
+        privateKey!: ?RSAPrivateKey = None<RSAPrivateKey>,
+        publicKey!: ?RSAPublicKey = None<RSAPublicKey>,
         private let padType!: PadOption = PKCS1){
         super(digest, privateKey: toPrivateKey(privateKey), publicKey: toPublicKey(publicKey))
     }
@@ -100,8 +100,8 @@ public class RSASignAlgo <: AsymmetricSignAlgo {
 public class ECDSASignAlgo <: AsymmetricSignAlgo {
     public init(
         digest: Digest,
-        privateKey!: ?ECDSAPrivateKey = None,
-        publicKey!: ?ECDSAPublicKey = None){
+        privateKey!: ?ECDSAPrivateKey = None<ECDSAPrivateKey>,
+        publicKey!: ?ECDSAPublicKey = None<ECDSAPublicKey>){
         super(digest, privateKey: toPrivateKey(privateKey), publicKey: toPublicKey(publicKey))
     }
 
@@ -122,8 +122,8 @@ public class ECDSASignAlgo <: AsymmetricSignAlgo {
 public class SM2SignAlgo <: AsymmetricSignAlgo {
     public init(
         digest: Digest,
-        privateKey!: ?SM2PrivateKey = None,
-        publicKey!: ?SM2PublicKey = None){
+        privateKey!: ?SM2PrivateKey = None<SM2PrivateKey>,
+        publicKey!: ?SM2PublicKey = None<SM2PublicKey>){
         super(digest, privateKey: toPrivateKey(privateKey), publicKey: toPublicKey(publicKey))
     }
 

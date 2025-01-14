@@ -9,7 +9,7 @@
  */
 package f_collection
 
-import std.collection.{HashMap, Map, EquatableCollection}
+import std.collection.{HashMap, Map, EquatableCollection, MapEntryView}
 
 import f_exception.UnreachableException
 
@@ -34,13 +34,13 @@ public class LinkedHashMap<K, V> <: Map<K, V> where K <: Hashable & Equatable<K>
         map = HashMap<K, ValueNode<(K, V)>>(c.size)
         this.max = false
         this.size_ = c.size
-        putAll(c)
+        add(all: c)
     }
     public init(c: Collection<(K, V)>, size: Int64, max: Bool) {
         map = HashMap<K, ValueNode<(K, V)>>(size)
         this.max = max
         this.size_ = size
-        putAll(c)
+        add(all: c)
     }
 
     /**
@@ -85,7 +85,9 @@ public class LinkedHashMap<K, V> <: Map<K, V> where K <: Hashable & Equatable<K>
         }
         entry.turnTo(tail)
     }
-
+    public func entryView(key: K): MapEntryView<K, V> {
+        LinkedHashMapEntryView<K, V>(key, this)
+    }
     /**
      * 根据 key 得到 Map 中映射的值
      * 参数 key - 传递 key，获取 value
@@ -101,7 +103,7 @@ public class LinkedHashMap<K, V> <: Map<K, V> where K <: Hashable & Equatable<K>
                     this.turnToTail(n)
                 }
                 n.value[1]
-            case _ => None
+            case _ => None<V>
         }
     }
 
@@ -116,11 +118,11 @@ public class LinkedHashMap<K, V> <: Map<K, V> where K <: Hashable & Equatable<K>
 
     /**
      * 判断是否包含指定集合键的映射
-     * 参数 keys - 传递待判断的 keys
+     * 参数 all - 传递待判断的 all
      * 返回值 Bool - 如果存在，则返回 true；否则，返回 false
      */
-    public func containsAll(keys: Collection<K>): Bool {
-        return map.containsAll(keys)
+    public func contains(all!: Collection<K>): Bool {
+        return map.contains(all: all)
     }
     private func delete(opt: Option<ValueNode<(K, V)>>, removeMap!: Bool = false): Option<V> {
         return match (opt) {
@@ -136,38 +138,38 @@ public class LinkedHashMap<K, V> <: Map<K, V> where K <: Hashable & Equatable<K>
     private func getFirstEntry(): Option<ValueNode<(K, V)>> {
         match (head.next) {
             case n: ValueNode<(K, V)> => n
-            case n: TailNode<(K, V)> => None
+            case n: TailNode<(K, V)> => None<ValueNode<(K, V)>>
             case _ => throw UnreachableException()
         }
     }
     private func getLastEntry(): Option<ValueNode<(K, V)>> {
         match (tail.prev) {
             case n: ValueNode<(K, V)> => n
-            case n: HeadNode<(K, V)> => None
+            case n: HeadNode<(K, V)> => None<ValueNode<(K, V)>>
             case _ => throw UnreachableException()
         }
     }
     private func extract(opt: Option<ValueNode<(K, V)>>): Option<(K, V)> {
         match (opt) {
             case Some(n) => n.value
-            case _ => None
+            case _ => None<(K, V)>
         }
     }
     public func firstEntry(): Option<(K, V)> {
         if (map.isEmpty()) {
-            return None
+            return None<(K, V)>
         }
         let entry = getFirstEntry()
         match (entry) {
             case Some(e) =>
                 turnToTail(e)
                 return extract(entry)
-            case _ => return None
+            case _ => return None<(K, V)>
         }
     }
     public func pollFirstEntry(): Option<(K, V)> {
         if (map.isEmpty()) {
-            return None
+            return None<(K, V)>
         }
         let entry = getFirstEntry()
         delete(entry, removeMap: true)
@@ -175,14 +177,14 @@ public class LinkedHashMap<K, V> <: Map<K, V> where K <: Hashable & Equatable<K>
     }
     public func lastEntry(): Option<(K, V)> {
         if (map.isEmpty()) {
-            return None
+            return None<(K, V)>
         }
         let entry = getLastEntry()
         return extract(entry)
     }
     public func pollLastEntry(): Option<(K, V)> {
         if (map.isEmpty()) {
-            return None
+            return None<(K, V)>
         }
         let entry = getLastEntry()
         delete(entry, removeMap: true)
@@ -197,7 +199,7 @@ public class LinkedHashMap<K, V> <: Map<K, V> where K <: Hashable & Equatable<K>
      * 返回值 Option<V> - 如果赋值之前 key 存在，旧的 value 用 Option 封装；
      * 否则，返回 None<V>
      */
-    public func put(key: K, value: V): Option<V> {
+    public func add(key: K, value: V): Option<V> {
         var s = size
         while (max && s > 0 && s >= size_ && !this.contains(key)) {
             match (head.next) {
@@ -206,11 +208,11 @@ public class LinkedHashMap<K, V> <: Map<K, V> where K <: Hashable & Equatable<K>
             }
             s = size
         }
-        let old = map.put(key, tail.insertPrev((key, value)))
+        let old = map.add(key, tail.insertPrev((key, value)))
         delete(old)
     }
-    public func put(entry: (K, V)): Option<V> {
-        return put(entry[0], entry[1])
+    public func add(entry: (K, V)): Option<V> {
+        return add(entry[0], entry[1])
     }
 
     /**
@@ -218,9 +220,9 @@ public class LinkedHashMap<K, V> <: Map<K, V> where K <: Hashable & Equatable<K>
      * 如果映射以前包含键的映射，则旧值将被替换
      * 参数 element - 传递给遍历赋值的元素
      */
-    public func putAll(elements: Collection<(K, V)>): Unit {
-        for (e in elements) {
-            put(e)
+    public func add(all!: Collection<(K, V)>): Unit {
+        for (e in all) {
+            add(e)
         }
     }
 
@@ -236,12 +238,10 @@ public class LinkedHashMap<K, V> <: Map<K, V> where K <: Hashable & Equatable<K>
 
     /**
      * 从此映射中删除指定集合的映射（如果存在）
-     * 参数 keys - 传人要删除的集合
+     * 参数 all - 传人要删除的集合
      */
-    public func removeAll(keys: Collection<K>): Unit {
-        for (k in keys) {
-            remove(k)
-        }
+    public func remove(all!: Collection<K>): Unit {
+        map.remove(all: all)
     }
 
     /**
@@ -288,7 +288,7 @@ public class LinkedHashMap<K, V> <: Map<K, V> where K <: Hashable & Equatable<K>
      * 参数 value - 传递要设置的值
      */
     public operator func [](key: K, value!: V): Unit {
-        put(key, value)
+        add(key, value)
     }
 
     /**
@@ -305,5 +305,24 @@ public class LinkedHashMap<K, V> <: Map<K, V> where K <: Hashable & Equatable<K>
      */
     public func values(): Collection<V> {
         return MapValues<K, V>(this)
+    }
+}
+public class LinkedHashMapEntryView<K, V> <: MapEntryView<K, V> where K <: Hashable & Equatable<K> {
+    public LinkedHashMapEntryView(private let k: K, private let map: LinkedHashMap<K, V>) {}
+    public prop key: K {
+        get(){
+            k
+        }
+    }
+    public mut prop value: ?V {
+        get() {
+            map.get(k)
+        }
+        set(value){
+            match(value){
+                case Some(v) => map[k] = v
+                case _ => map.remove(k)
+            }
+        }
     }
 }

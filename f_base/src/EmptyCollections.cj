@@ -46,17 +46,17 @@ public class EmptySet<T> <: Set<T> where T <: Equatable<T> {
      * 参数 other - 其他集合
      * 返回值 Bool - 如果它是子集，则返回 true，否则返回 false
      */
-    public func subsetOf(other: Set<T>): Bool {
+    public func subsetOf(other: ReadOnlySet<T>): Bool {
         true
     }
 
     /**
      * 检查该集合是否包含其他集合
-     * 参数 elements - 其他集合
+     * 参数 all - 其他集合
      * 返回值 Bool - 如果包含，则返回 true；否则，返回 false
      */
-    public func containsAll(elements: Collection<T>): Bool {
-        if (elements.isEmpty()) {
+    public func contains(all!: Collection<T>): Bool {
+        if (all.isEmpty()) {
             true
         } else {
             false
@@ -67,15 +67,15 @@ public class EmptySet<T> <: Set<T> where T <: Equatable<T> {
      * 添加元素操作。如果元素已经存在，则不会添加它
      * 参数 element - 要添加的元素
      */
-    public func put(element: T): Bool {
+    public func add(element: T): Bool {
         false
     }
 
     /**
      * 添加 Collection 中的所有元素至此 Set 中，如果元素存在，则不添加
-     * 参数 elements - 需要被添加的元素的集合
+     * 参数 all - 需要被添加的元素的集合
      */
-    public func putAll(elements: Collection<T>): Unit {
+    public func add(all!: Collection<T>): Unit {
         ()
     }
 
@@ -89,9 +89,9 @@ public class EmptySet<T> <: Set<T> where T <: Equatable<T> {
 
     /**
      * 移除此 Set 中那些也包含在指定 Collection 中的所有元素
-     * 参数 elements - 传入 Collection<T>
+     * 参数 all - 传入 Collection<T>
      */
-    public func removeAll(elements: Collection<T>): Unit {
+    public func remove(all!: Collection<T>): Unit {
         ()
     }
 
@@ -112,9 +112,9 @@ public class EmptySet<T> <: Set<T> where T <: Equatable<T> {
 
     /**
      * 只保留重复的 T
-     * 参数 elements - 要保存的元素集合
+     * 参数 all - 要保存的元素集合
      */
-    public func retainAll(elements: Set<T>): Unit {
+    public func retain(all!: Set<T>): Unit {
         ()
     }
 
@@ -168,8 +168,8 @@ public class EmptyMap<K, V> <: Map<K, V> & Bucket<K, V> where K <: Equatable<K> 
      * 参数 keys - 传递待判断的 keys
      * 返回值 Bool - 如果存在，则返回 true；否则，返回 false
      */
-    public func containsAll(keys: Collection<K>): Bool {
-        if (keys.isEmpty()) {
+    public func contains(all!: Collection<K>): Bool {
+        if (all.isEmpty()) {
             true
         } else {
             false
@@ -185,7 +185,7 @@ public class EmptyMap<K, V> <: Map<K, V> & Bucket<K, V> where K <: Equatable<K> 
      * 返回值 Option<V> - 如果赋值之前 key 存在，旧的 value 用 Option 封装；
      * 否则，返回 Option<V>.None
      */
-    public func put(key: K, value: V): Option<V> {
+    public func add(key: K, value: V): Option<V> {
         None<V>
     }
 
@@ -194,7 +194,7 @@ public class EmptyMap<K, V> <: Map<K, V> & Bucket<K, V> where K <: Equatable<K> 
      * 如果映射以前包含键的映射，则旧值将被替换
      * 参数 element - 传递给遍历赋值的元素
      */
-    public func putAll(elements: Collection<(K, V)>): Unit {
+    public func add(all!: Collection<(K, V)>): Unit {
         ()
     }
 
@@ -209,9 +209,9 @@ public class EmptyMap<K, V> <: Map<K, V> & Bucket<K, V> where K <: Equatable<K> 
 
     /**
      * 从此映射中删除指定集合的映射（如果存在）
-     * 参数 keys - 传人要删除的集合
+     * 参数 all - 传人要删除的集合
      */
-    public func removeAll(keys: Collection<K>): Unit {
+    public func remove(all!: Collection<K>): Unit {
         ()
     }
 
@@ -301,6 +301,23 @@ public class EmptyMap<K, V> <: Map<K, V> & Bucket<K, V> where K <: Equatable<K> 
     public func toArray(): Array<(K, V)> {
         []
     }
+    public func entryView(k: K): MapEntryView<K, V> {
+        EmptyMapEntryView<K, V>(k)
+    }
+}
+public class EmptyMapEntryView<K, V> <: MapEntryView<K, V> {
+    EmptyMapEntryView(private let k: K){}
+    public prop key: K {
+        get(){
+            k
+        }
+    }
+    public mut prop value: ?V {
+        get(){
+            None<V>
+        }
+        set(value){}
+    }
 }
 public class EmptyEquatableCollection<K> <: EquatableCollection<K> where K <: Equatable<K> {
     public static let INSTANCE = EmptyEquatableCollection<K>()
@@ -343,11 +360,11 @@ public class EmptyEquatableCollection<K> <: EquatableCollection<K> where K <: Eq
 
     /**
      * 判断 Keys 是否包含指定集合的元素
-     * 参数 elements - 待判断的集合 elements
+     * 参数 all - 待判断的集合 all
      * 返回值 Bool - 如果存在，则返回 true；否则，返回 false
      */
-    public func containsAll(elements: Collection<K>): Bool {
-        if (elements.isEmpty()) {
+    public func contains(all!: Collection<K>): Bool {
+        if (all.isEmpty()) {
             true
         } else {
             false
@@ -386,5 +403,71 @@ public class EmptyCollection<T> <: Collection<T> {
     }
     public func iterator(): Iterator<T> {
         EmptyIterator<T>.INSTANCE
+    }
+}
+public class EmptyList<T> <: List<T> {
+    public static let INSTANCE = EmptyList<T>()
+    private init(){}
+    public func isEmpty(): Bool {
+        true
+    }
+    public func iterator(): Iterator<T> {
+        EmptyIterator<T>.INSTANCE
+    }
+    public prop size: Int64 {
+        get() {
+            0
+        }
+    }
+    public func add(element: T): Unit{}
+    public func add(all!: Collection<T>): Unit{}
+    public func add(element: T, at!: Int64): Unit{}
+    public func add(all!: Collection<T>, at!: Int64): Unit{}
+    public func remove(at!: Int64): T{
+        throw IndexOutOfBoundsException('current list is empty')
+    }
+    public func remove(range: Range<Int64>): Unit{}
+    public func removeIf(predicate: (T) -> Bool): Unit {}
+    public func clear(): Unit {}
+    
+    public operator func [](index: Int64, value!: T): Unit{}
+    public operator func [](index: Int64): T {
+        throw IndexOutOfBoundsException('current list is empty')
+    }
+    public func insert(at: Int64, element: T): Unit {}
+    public func remove(element: T): Bool {false}
+    public func contains(element: T): Bool {
+        false
+    }
+    public func contains(all!: Collection<T>): Bool {
+        false
+    }
+    public func indexOf(element: T): ?Int64 {
+        None<Int64>
+    }
+    public func lastIndexOf(element: T): ?Int64 {
+        None<Int64>
+    }
+    public func count(element: T): Int64 {
+        0
+    }
+    public func reverse(): Unit {}
+    public func sortBy(comparator: (T, T) -> Ordering, stable!: Bool): Unit {}
+    public func reserve(additional: Int64): Unit {}
+    public func capacity(): Int64 {
+        0
+    }
+    public prop first: ?T {
+        get(){
+            None<T>
+        }
+    }
+    public prop last: ?T {
+        get(){
+            None<T>
+        }
+    }
+    public func get(index: Int64): ?T {
+        None<T>
     }
 }

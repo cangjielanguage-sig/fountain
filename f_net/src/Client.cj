@@ -73,7 +73,7 @@ public class SocketClientFuture<K, T> where K <: Hashable & Equatable<K>, T <: K
             map.remove(v.key)
             x
         }else{
-            None
+            None<T>
         }
     }
 }

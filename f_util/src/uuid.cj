@@ -205,7 +205,7 @@ public struct UUID <: Hashable & Comparable<UUID> & ToString & Parsable<UUID> {
             if (b1 == 16) {
                 continue
             } else if (b1 == 17) {
-                return None
+                return None<UUID>
             }
             c = iterator.next()
             let b2 = match (c) {
@@ -213,7 +213,7 @@ public struct UUID <: Hashable & Comparable<UUID> & ToString & Parsable<UUID> {
                 case _ => break
             }
             if (b2 == 16 || b2 == 17) {
-                return None
+                return None<UUID>
             }
             values[i] = (b1 << 4) | b2
             i++
@@ -221,7 +221,7 @@ public struct UUID <: Hashable & Comparable<UUID> & ToString & Parsable<UUID> {
         if (i == 16 && iterator.next().isNone()) {
             UUID(values: values)
         } else {
-            None
+            None<UUID>
         }
     }
     /**

@@ -23,10 +23,10 @@ protected class UnixOutputStream <: OutputStream & Resource {
         sock
     }
     public UnixOutputStream(private let sock: UnixSocket, private let addr: UnixSocketAddress){}
-    public init(addr: UnixSocketAddress, writeTimeout!: ?Duration = None){
+    public init(addr: UnixSocketAddress, writeTimeout!: ?Duration = None<Duration>){
         this(newSocket(addr, writeTimeout), addr)
     }
-    public init(path: String, writeTimeout!: ?Duration = None){
+    public init(path: String, writeTimeout!: ?Duration = None<Duration>){
         this(UnixSocketAddress(path), writeTimeout: writeTimeout)
     }
     public func write(buffer: Array<Byte>): Unit {

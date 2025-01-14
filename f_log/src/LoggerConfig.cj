@@ -96,28 +96,28 @@ public class LoggerConfig {
         if (let Some(d) <- getString(appenderKeyPart(appender), "sendTimeout")) {
             Duration.tryParse(d).getOrThrow{LogException("${d} is an illegal duration string for ${appender} udp sendTimeout")}
         } else {
-            None
+            None<Duration>
         }
     }
     public static func getUnixWriteTimeout(appender: String): ?Duration {
         if (let Some(d) <- getString(appenderKeyPart(appender), "writeTimeout")) {
             Duration.tryParse(d).getOrThrow{LogException("${d} is an illegal duration string for ${appender} unix writeTimeout")}
         } else {
-            None
+            None<Duration>
         }
     }
     public static func getTcpSendBufSize(appender: String): ?Int64 {
         if (let Some(s) <- getString(appenderKeyPart(appender), "bufSize")) {
             Int64.tryParse(s).getOrThrow{LogException("${s} is an illegal duration string for ${appender} tcp sendBufSize")}
         } else {
-            None
+            None<Int64>
         }
     }
     public static func getUnixBufSize(appender: String): ?Int64 {
         if (let Some(s) <- getString(appenderKeyPart(appender), "bufSize")) {
             Int64.tryParse(s).getOrThrow{LogException("${s} is an illegal duration string for ${appender} unix sendBufSize")}
         } else {
-            None
+            None<Int64>
         }
     }
     private static func convertLevel(level: String): LogLevel {

@@ -46,9 +46,9 @@ public class Config{
             let name = tpl[0]
             ARGS[name] = tpl[1].toString()
             if(let Some(x) <- name.indexOf('_')){
-                set.put(name[0 .. x])
+                set.add(name[0 .. x])
             }else{
-                set.put(name)
+                set.add(name)
             }
         }
         for((k, fn) in REFRESHER where set.contains(k)){

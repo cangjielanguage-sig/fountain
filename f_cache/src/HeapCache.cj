@@ -29,7 +29,7 @@ public class HeapCache<V> where V <: Object {
         private let maxLife!: Duration = DEFAULT_HEAP_CACHE_MAX_LIFE,
         private let maxSize!: Int64 = DEFAULT_HEAP_CACHE_MAX_SIZE,
         private let checkDuration!: Duration = DEFAULT_HEAP_CHECK_CHECK_DURATION,
-        private let evictionCallback!: (String, V) -> Unit = {k, v => ()}
+        private let evictionCallback!: (String, V) -> Unit = {_, _ => ()}
     ) {
         if (maxLife < Duration.Zero || maxSize <= 0 || concurrencyLevel <= 0 || checkDuration <= Duration.Zero) {
             throw IllegalArgumentException(
@@ -99,13 +99,13 @@ public class HeapCache<V> where V <: Object {
                 if (let Some((k, p)) <- segmItr.next()) {
                     segmItrMap[i] = segmItr
                     p.index = i
-                    topVals.offer(p)
+                    topVals.add(p)
                 }
                 i++
             }
             while (store.size > maxSize && alive.load()) {
                 var minIdx = -1
-                if (let Some(p) <- topVals.poll()) {
+                if (let Some(p) <- topVals.remove()) {
                     store.remove(p.key)
                     minIdx = p.index
                     evictionQueue.enqueue((p.key, p.load()))
@@ -114,11 +114,11 @@ public class HeapCache<V> where V <: Object {
                     break
                 } else if (let Some(segm) <- segmItrMap.get(minIdx) && let Some(next) <- segm.next()) {
                     next[1].index = minIdx
-                    topVals.offer(next[1])
+                    topVals.add(next[1])
                 }
             }
-            while (let Some(p) <- topVals.poll() && alive.load()) {
-                tops.put(p.key, p)
+            while (let Some(p) <- topVals.remove() && alive.load()) {
+                tops.add(p.key, p)
             }
         }
         for (p in tops.values() where alive.load()) { //不给Priority增加已删除标记，此处也不判断Priority是不是已被主动删除，因为这样做不节省时间
@@ -137,7 +137,7 @@ public class HeapCache<V> where V <: Object {
     public func get(key: String): Option<V> {
         match(store.get(key)){
             case Some(p) where !evicated(p) => p.load()
-            case _ => None
+            case _ => None<V>
         }
     }
     public func contains(key: String): Bool {
@@ -185,7 +185,7 @@ public class HeapCache<V> where V <: Object {
                 old
             }
         } else {
-            store.put(key, Priority<V>(key, value, maxLife, once))
+            store.add(key, Priority<V>(key, value, maxLife, once))
             Option<V>.None
         }
     }

@@ -38,20 +38,20 @@ public class TicktockUnitTest {
             @Assert(1,0)
         } catch (e: IllegalArgumentException) {}
 
-        result = TicktockUnit.SECONDLY.convertRange(ArrayList<Int64>(0, 59))
+        result = TicktockUnit.SECONDLY.convertRange(ArrayList<Int64>([0, 59]))
         @Assert(0,result[0].start)
         @Assert(59,result[0].end)
 
-        result = TicktockUnit.SECONDLY.convertRange(ArrayList<Int64>(1, 58))
+        result = TicktockUnit.SECONDLY.convertRange(ArrayList<Int64>([1, 58]))
         @Assert(1,result[0].start)
         @Assert(58,result[0].end)
 
         try {
-            result = TicktockUnit.SECONDLY.convertRange(ArrayList<Int64>(1, 60))
+            result = TicktockUnit.SECONDLY.convertRange(ArrayList<Int64>([1, 60]))
             @Assert(1,0)
         } catch (e: IllegalArgumentException) {}
         try {
-            result = TicktockUnit.SECONDLY.convertRange(ArrayList<Int64>(60, 59))
+            result = TicktockUnit.SECONDLY.convertRange(ArrayList<Int64>([60, 59]))
             @Assert(1,0)
         } catch (e: IllegalArgumentException) {}
     }
@@ -67,12 +67,12 @@ public class TicktockUnitTest {
         @Assert(31,result[0].end)
         @Assert(4,result[0].step)
 
-        result = TicktockUnit.MONTH_DAILY.convertRange(ArrayList<Int64>(1, 31))
+        result = TicktockUnit.MONTH_DAILY.convertRange(ArrayList<Int64>([1, 31]))
         @Assert(1,result[0].start)
         @Assert(31,result[0].end)
 
         try {
-            result = TicktockUnit.MONTH_DAILY.convertRange(ArrayList<Int64>(1, 32))
+            result = TicktockUnit.MONTH_DAILY.convertRange(ArrayList<Int64>([1, 32]))
             @Assert(1,0)
         } catch (e: IllegalArgumentException) {}
     }
@@ -96,25 +96,25 @@ public class TicktockUnitTest {
         @Assert(7,result[1].end)
         @Assert(1,result[1].step)
 
-        result = TicktockUnit.WEEK_DAILY.convertRange(ArrayList<Int64>(1, 7))
+        result = TicktockUnit.WEEK_DAILY.convertRange(ArrayList<Int64>([1, 7]))
         @Assert(1,result[0].start)
         @Assert(7,result[0].end)
 
-        result = TicktockUnit.WEEK_DAILY.convertRange(ArrayList<Int64>(0, 7))
+        result = TicktockUnit.WEEK_DAILY.convertRange(ArrayList<Int64>([0, 7]))
         @Assert(1,result[0].start)
         @Assert(7,result[0].end)
 
-        result = TicktockUnit.WEEK_DAILY.convertRange(ArrayList<Int64>(0, 6))
+        result = TicktockUnit.WEEK_DAILY.convertRange(ArrayList<Int64>([0, 6]))
         @Assert(1,result[0].start)
         @Assert(7,result[0].end)
 
-        result = TicktockUnit.WEEK_DAILY.convertRange(ArrayList<Int64>(0, 5))
+        result = TicktockUnit.WEEK_DAILY.convertRange(ArrayList<Int64>([0, 5]))
         @Assert(1, result[0].start)
         @Assert(5, result[0].end)
         @Assert(7, result[1].start)
         @Assert(7, result[1].end)
 
-        result = TicktockUnit.WEEK_DAILY.convertRange(ArrayList<Int64>(1, 6))
+        result = TicktockUnit.WEEK_DAILY.convertRange(ArrayList<Int64>([1, 6]))
         @Assert(1, result[0].start)
         @Assert(6, result[0].end)
     }

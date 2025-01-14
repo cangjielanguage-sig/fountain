@@ -9,7 +9,7 @@
 */
 package f_collection
 
-import std.collection.{Set, TreeMap, TreeMapNode}
+import std.collection.{Set, TreeMap, ReadOnlySet, ArrayList}
 import f_base.OverSizePolicy
 
 public class TreeSet<T> <: Set<T> where T <: Comparable<T> {
@@ -20,13 +20,13 @@ public class TreeSet<T> <: Set<T> where T <: Comparable<T> {
     public init(elements: Collection<T>){
         this()
         for(e in elements){
-            map.put(e, ())
+            map.add(e, ())
         }
     }
     public init(elements: Array<T>){
         this()
         for(e in elements){
-            map.put(e, ())
+            map.add(e, ())
         }
     }
     public init(size: Int64, initElement: (Int64) -> T) {
@@ -53,31 +53,31 @@ public class TreeSet<T> <: Set<T> where T <: Comparable<T> {
     public func contains(key: T): Bool {
         map.contains(key)
     }
-    public func subsetOf(other: Set<T>): Bool {
+    public func contains(all!: Collection<T>): Bool {
+        map.contains(all: all)
+    }
+    public func subsetOf(other: ReadOnlySet<T>): Bool {
         for(v in map.keys() where !other.contains(v)){
             return false
         }
         return true
     }
-    public func containsAll(elements: Collection<T>): Bool {
-        for(e in elements where !contains(e)) {
-            return false
-        }
-        return true
+    public func retain(all!: Set<T>): Unit {
+        map.removeIf{k,_ => !all.contains(k)}
     }
-    public func put(element: T): Bool{
-        map.put(element, ()).isNone()
+    public func add(element: T): Bool{
+        map.add(element, ()).isNone()
     }
-    public func putAll(elements: Collection<T>): Unit {
-        for(e in elements){
-            map.put(e, ())
+    public func add(all!: Collection<T>): Unit {
+        for(e in all){
+            map.add(e, ())
         }
     }
     public func remove(element: T): Bool{
         map.remove(element).isSome()
     }
-    public func removeAll(elements: Collection<T>): Unit {
-        map.removeAll(elements)
+    public func remove(all!: Collection<T>): Unit {
+        map.remove(all: all)
     }
     public func removeIf(predicate: (T) -> Bool): Unit {
         map.removeIf{k, _ => predicate(k)}
@@ -85,31 +85,27 @@ public class TreeSet<T> <: Set<T> where T <: Comparable<T> {
     public func retainAll(elements: Set<T>): Unit{
         removeIf{v => !elements.contains(v)}
     }
-    public func findLower(bound: T, inclusive!: Bool = false): Option<TreeSetNode<T>>{
-        if(let Some(n) <- map.findLower(bound, inclusive: inclusive)){
-            TreeSetNode<T>(n)
-        }else{
-            None
+    public func forward(mark: T, inclusive!: Bool = false): Iterator<T> {
+        map.forward(mark, inclusive: inclusive).map{kv => kv[0]}
+    }
+    public func backward(mark: T, inclusive!: Bool = false): Iterator<T> {
+        map.backward(mark, inclusive: inclusive).map{kv => kv[0]}
+    }
+    public prop first: ?T {
+        get(){
+            map.first?[0]
         }
     }
-    public func findUpper(bound: T, inclusive!: Bool = false): Option<TreeSetNode<T>>{
-        if(let Some(n) <- map.findUpper(bound, inclusive: inclusive)){
-            TreeSetNode<T>(n)
-        }else{
-            None
+    public prop last: ?T{
+        get(){
+            map.last?[0]
         }
     }
-    public func first(): ?T {
-        map.firstEntry()?[0]
+    public func removeFirst(): ?T{
+        map.removeFirst()?[0]
     }
-    public func last(): ?T{
-        map.lastEntry()?[0]
-    }
-    public func popFirst(): ?T{
-        map.popFirstEntry()?[0]
-    }
-    public func popLast(): ?T{
-        map.popLastEntry()?[0]
+    public func removeLast(): ?T{
+        map.removeLast()?[0]
     }
 }
 
@@ -141,88 +137,5 @@ extend<T> TreeSet<T> <: ToString where T <: Comparable<T> & ToString{
         }
         builder.append(']')
         builder.toString()
-    }
-}
-public struct TreeSetNode<T> where T <: Comparable<T>{
-    TreeSetNode(private let node: TreeMapNode<T, Unit>){}
-    public prop value: T{
-        get(){
-            node.key
-        }
-    }
-    public func backward(bound: T, inclusive!:Bool = true): Iterator<T> {
-        BackwardTreeSetNodeIterator<T>(node, bound, inclusive)
-    }
-    public func forward(bound: T, inclusive!:Bool = true): Iterator<T>{
-        ForwardTreeSetNodeIterator<T>(node, bound, inclusive)
-    }
-    public func next(): Option<TreeSetNode<T>> {
-        if(let Some(n) <- node.next()){
-            TreeSetNode(n)
-        }else{
-            None
-        }
-    }
-    public func prev(): Option<TreeSetNode<T>> {
-        if(let Some(n) <- node.prev()){
-            TreeSetNode(n)
-        }else{
-            None
-        }
-    }
-    
-}
-public class BackwardTreeSetNodeIterator<T> <: Iterator<T> where T <: Comparable<T>{
-    private var end = false
-    BackwardTreeSetNodeIterator(private var node: TreeMapNode<T, Unit>, 
-                        private let bound: T, 
-                        private let inclusive: Bool){}
-    public func next(): ?T {
-        if(end){
-            None
-        }else if(let Some(n) <- node.next()){
-            let v = n.key
-            if(v < bound){
-                node = n
-                v
-            }else if(v == bound && inclusive){
-                node = n
-                end = true
-                v
-            }else{
-                end = true
-                None
-            }
-        }else{
-            end = true
-            None
-        }
-    }
-}
-public class ForwardTreeSetNodeIterator<T> <: Iterator<T> where T <: Comparable<T>{
-    private var end = false
-    ForwardTreeSetNodeIterator(private var node: TreeMapNode<T, Unit>, 
-                        private let bound: T, 
-                        private let inclusive: Bool){}
-    public func next(): ?T {
-        if(end){
-            None
-        }else if(let Some(n) <- node.next()){
-            let v = n.key
-            if(v > bound){
-                node = n
-                v
-            }else if(v == bound && inclusive){
-                node = n
-                end = true
-                v
-            }else{
-                end = true
-                None
-            }
-        }else{
-            end = true
-            None
-        }
     }
 }

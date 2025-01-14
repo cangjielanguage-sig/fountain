@@ -16,7 +16,7 @@ public class Options<T, R> {
 
     public static func isEmpty(current: Option<T>): Bool {
         match (current) {
-            case None => true
+            case Option<T>.None => return true
             case Some(x) where x is Unit => true
             case Some(x) where x is Collection<R> => (x as Collection<R>).getOrThrow().isEmpty()
             case Some(_) => false
@@ -29,7 +29,7 @@ public class Options<T, R> {
         isEmpty(current) ||
         match (current) {
             case Some(v) => v is Unit
-            case None => true
+            case Option<T>.None => true
         }
     }
     public static func isNotEmptyOrUnit(current: Option<T>): Bool {
@@ -54,7 +54,7 @@ public class Options<T, R> {
                 case x: String where x.isEmpty() || x == '\0' => true
                 case _ => false
             }
-            case None => true
+            case Option<T>.None => true
         }
     }
     public static func isNotEmptyOrZero(current: Option<T>): Bool {

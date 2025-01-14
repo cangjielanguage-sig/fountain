@@ -12,7 +12,7 @@ package f_macros
 public func extractFuncs(decls: Array<Decl>, extractPublic!: Bool = true): Array<FuncDecl> {
     let list = ArrayList<FuncDecl>()
     for (decl in decls where decl is FuncDecl && (!extractPublic || isPublic(decl))) {
-        list.append((decl as FuncDecl).getOrThrow())
+        list.add((decl as FuncDecl).getOrThrow())
     }
     list.toArray()
 }

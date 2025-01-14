@@ -16,13 +16,13 @@ extend Form <: ExtendForm {
     public func getValue<T>(name: String): ?T where T <: DataParsable<T> {
         match(get(name)) {
             case Some(x) => T.tryParse(x)
-            case _ => None
+            case _ => None<T>
         }
     }
     public func getAllValues<T>(name: String): ArrayList<T> where T <: DataParsable<T> {
         let list = ArrayList<T>()
         for(v in getAll(name)) {
-            list.append(T.parse(v))
+            list.add(T.parse(v))
         }
         list
     }

@@ -45,7 +45,7 @@ public open class BaseException <: Exception {
     }
 
     public func addSuppressed(suppressed: Exception): Unit {
-        this.suppressed_.append(suppressed)
+        this.suppressed_.add(suppressed)
     }
     public prop caused: Option<Exception> {
         get() {

@@ -71,8 +71,8 @@ class MapKeys<K, V> <: EquatableCollection<K> where K <: Equatable<K> {
      * 参数 elements - 待判断的集合 elements
      * 返回值 Bool - 如果存在，则返回 true；否则，返回 false
      */
-    public func containsAll(elements: Collection<K>): Bool {
-        return map.containsAll(elements)
+    public func contains(all!: Collection<K>): Bool {
+        return map.contains(all: all)
     }
 }
 class MapValueIterator<K, V> <: Iterator<V> {

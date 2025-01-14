@@ -25,7 +25,7 @@ public class Factory<N, A, O> where N <: Hashable & Equatable<N> {
     private let producers = HashMap<N, Producer<N, A, O>>()
 
     public func assemble(producer: Producer<N, A, O>): Unit {
-        producers.put(producer.name, producer)
+        producers.add(producer.name, producer)
     }
     public func assemble(producers: Iterable<Producer<N, A, O>>): Unit {
         for (producer in producers) {

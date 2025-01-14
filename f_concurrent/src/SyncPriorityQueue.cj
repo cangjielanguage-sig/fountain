@@ -11,7 +11,7 @@ package f_concurrent
 
 import std.sync.ReentrantMutex
 import f_base.*
-import f_collection.{PriorityQueue, Queue, Growable}
+import f_collection.{PriorityQueue, Growable}
 
 public class SyncPriorityQueue<T> <: Queue<T> & Collection<T> & Growable {
     private let mutex = ReentrantMutex()
@@ -62,9 +62,9 @@ public class SyncPriorityQueue<T> <: Queue<T> & Collection<T> & Growable {
             queue.isEmpty()
         }
     }
-    public func offer(x: T): Unit {
+    public func add(x: T): Unit {
         synchronized(mutex){
-            queue.offer(x)
+            queue.add(x)
         }
     }
     public func grow(): Unit {
@@ -72,9 +72,9 @@ public class SyncPriorityQueue<T> <: Queue<T> & Collection<T> & Growable {
             queue.grow()
         }
     }
-    public func offerAll(values: Iterable<T>) {
+    public func add(all!: Collection<T>) {
         synchronized(mutex){
-            queue.offerAll(values)
+            queue.add(all: all)
         }
     }
     public func peek(): ?T {
@@ -82,9 +82,9 @@ public class SyncPriorityQueue<T> <: Queue<T> & Collection<T> & Growable {
             queue.peek()
         }
     }
-    public func poll(): ?T {
+    public func remove(): ?T {
         synchronized(mutex){
-            queue.poll()
+            queue.remove()
         }
     }
     public func iterator(): Iterator<T> {

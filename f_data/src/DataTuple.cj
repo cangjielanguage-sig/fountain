@@ -37,7 +37,7 @@ public class DataTuple <: Data {
                 case b',' =>
                     k = doParse<K>(bytes)
                     bytes.clear()
-                case _ => bytes.append(b)
+                case _ => bytes.add(b)
             }
         }
         DataTuple(k.getOrThrow(), doParse<V>(bytes))

@@ -30,7 +30,7 @@ public class LogPattern <: LogPart {
         let origin = ArrayList<Byte>()
         func appendOrigin() {
             if (origin.size > 0) {
-                patterns.append(OriginLogPart(String.fromUtf8(origin.toArray())))
+                patterns.add(OriginLogPart(String.fromUtf8(origin.toArray())))
                 origin.clear()
             }
         }
@@ -41,15 +41,15 @@ public class LogPattern <: LogPart {
             if (c == b'%') {
                 if (i + 5 < size && pattern[i + 1..=i + 5] == "level") {
                     appendOrigin()
-                    patterns.append(levelLogPart)
+                    patterns.add(levelLogPart)
                     i += 6
                 } else if (i + 3 < size && pattern[i + 1..=i + 3] == "app") {
                     appendOrigin()
-                    patterns.append(appLogPart)
+                    patterns.add(appLogPart)
                     i += 4
                 } else if (i + 4 < size && pattern[i + 1..=i + 4] == "name") {
                     appendOrigin()
-                    patterns.append(nameLogPart)
+                    patterns.add(nameLogPart)
                     i += 5
                 } else if (i + 3 < size && pattern[i + 1] == b'd') {
                     if (pattern[i + 2] == b'{') {
@@ -60,27 +60,27 @@ public class LogPattern <: LogPart {
                         }
                         if (di < size) {
                             appendOrigin()
-                            patterns.append(TimeLogPart(pattern[ds..di]))
+                            patterns.add(TimeLogPart(pattern[ds..di]))
                             i = di + 1
                         } else {
-                            origin.append(c)
+                            origin.add(c)
                             i++
                         }
                     } else {
                         appendOrigin()
-                        patterns.append(TimeLogPart())
+                        patterns.add(TimeLogPart())
                         i += 2
                     }
                 } else if (i + 1 < size && pattern[i + 1] == b'm') {
                     appendOrigin()
-                    patterns.append(messageLogPart)
+                    patterns.add(messageLogPart)
                     i += 2
                 } else {
-                    origin.append(c)
+                    origin.add(c)
                     i++
                 }
             } else {
-                origin.append(c)
+                origin.add(c)
                 i++
             }
         }

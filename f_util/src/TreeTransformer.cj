@@ -15,7 +15,7 @@ import std.collection.HashMap
 public interface TreeNode<ID, T> where ID <: Hashable & Equatable<ID>, T <: Object & TreeNode<ID, T> {
     prop children: ArrayList<T>
     func addChild(child: T): Unit {
-        children.append(child)
+        children.add(child)
     }
 
     func addChildren(children: Iterable<T>) {
@@ -37,8 +37,8 @@ public interface TreeNode<ID, T> where ID <: Hashable & Equatable<ID>, T <: Obje
         for (s in iterable) {
             let t = transferFn(s).getOrThrow {IllegalArgumentException(
                     "There is some element in arg iterable which cannot be transformed into T")}
-            if (let None <- map.put(t.id, t)) {
-                list.append(t)
+            if (map.add(t.id, t).isNone()) {
+                list.add(t)
             } else if (!ignoreDuplicate) {
                 throw IllegalArgumentException("Some elements are duplicate which are transformed from arg iterable.")
             }
@@ -46,7 +46,7 @@ public interface TreeNode<ID, T> where ID <: Hashable & Equatable<ID>, T <: Obje
         for (t in list) {
             let parentId = t.parentId
             if (parentId == emptyId) {
-                root.append(t)
+                root.add(t)
             } else {
                 map[parentId].addChild(t)
             }

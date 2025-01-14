@@ -24,7 +24,7 @@ class FieldIterator<T> <: Iterator<(String, Data)> where T <: Object & ObjectDat
         for (f in itr) {
             return (f.name, f.get(data))
         }
-        None
+        None<(String, Data)>
     }
 }
 
@@ -64,10 +64,10 @@ public class DataObject<T> <: Data & Iterable<(String, Data)> where T <: Object 
             case Some(x) => match(V.tryFromData(x, flag: flag)){
                 case x: ?V => x
                 case x: V => x
-                case _ where (flag & IGNORE_FIELD_NOT_FOUND) == 0 => None
+                case _ where (flag & IGNORE_FIELD_NOT_FOUND) == 0 => None<V>
                 case _ => throw DataException('field ${name} is not found in ${TypeInfos.get<T>()}')
             }
-            case _ where (flag & IGNORE_FIELD_NOT_FOUND) == 0 => None
+            case _ where (flag & IGNORE_FIELD_NOT_FOUND) == 0 => None<V>
             case _ => throw DataException('field ${name} is not found in ${TypeInfos.get<T>()}')
         }
     }

@@ -10,8 +10,9 @@
 package f_random
 
 import std.collection.ArrayList
-
 import crypto.crypto.SecureRandom
+
+import f_base.*
 
 /*
    Char 到 UInt32 的转换使用 UInt32(e) 的方式，其中 e 是一个 Char 类型的表达式， UInt32(e)
@@ -23,11 +24,7 @@ import crypto.crypto.SecureRandom
  */
 public class RandomString {
     private static func concat(arrays: Array<Array<Rune>>){
-        let list = ArrayList<Rune>()
-        for(array in arrays){
-            list.appendAll(array)
-        }
-        list.toArray()
+        arrays.iterator().flatMap{c => c.iterator()}.fold<ArrayList<Rune>>(ArrayList<Rune>(), {acc, e => acc.add(e);acc}).toArray()
     }
     private static let LOWER_LETTERS = "abcdefghijklmnopqrstuvwxyz".toRuneArray()
     private static let UPPER_LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".toRuneArray()

@@ -21,6 +21,7 @@ import f_base.*
 import f_collection.LinkedHashMap
 import f_data.*
 import f_regex.*
+import f_time.*
 import f_util.exception.TextTemplateException
 /**
  * 简单文本模板
@@ -83,9 +84,9 @@ public class TextTemplate {
 
         while (true) {
             if (end > 0 && tmp > 0 && end < templateLength && tmp < templateLength) {
-                compiled.append(OriginValue2String(template[start..end]))
+                compiled.add(OriginValue2String(template[start..end]))
             } else if (end < 0 || tmp < 0 || end >= templateLength || tmp >= templateLength) {
-                compiled.append(OriginValue2String(template[start..templateLength]))
+                compiled.add(OriginValue2String(template[start..templateLength]))
                 break
             }
             start = end + prefixLength
@@ -129,7 +130,7 @@ public class TextTemplate {
         var placeholder = template[start .. end].trimAscii()
         let getter = ValueGetter(placeholderIndex, placeholder)
         if (placeholder.isEmpty()) {
-            compiled.append(Value2PlainString(getter))
+            compiled.add(Value2PlainString(getter))
             return
         }
         var timePrefix = TIME_FORMAT_PREFIX
@@ -180,7 +181,7 @@ public class TextTemplate {
             }.trimAscii()
             Value2TimeString(getter, format)
         }
-        compiled.append(converter)
+        compiled.add(converter)
     }
     private func format<K, V, O>(data: O, noneConverter: ?String): String where K <: TextTemplateKey<K>, V <: ToString, O <: TextTemplateObject<K, V, O> {
         let builder = StringBuilder()
@@ -191,25 +192,25 @@ public class TextTemplate {
         }
         builder.toString()
     }
-    public func format<T>(data: Array<T>, noneConverter!: ?String = None): String where T <: ToString {
+    public func format<T>(data: Array<T>, noneConverter!: ?String = None<String>): String where T <: ToString {
         format<Int64, T, Array<T>>(data, noneConverter)
     }
-    public func format<T>(data: ArrayList<T>, noneConverter!: ?String = None): String where T <: ToString {
+    public func format<T>(data: ArrayList<T>, noneConverter!: ?String = None<String>): String where T <: ToString {
         format<Int64, T, ArrayList<T>>(data, noneConverter)
     }
-    public func format<V>(data: HashMap<String, V>, noneConverter!: ?String = None): String where V <: ToString {
+    public func format<V>(data: HashMap<String, V>, noneConverter!: ?String = None<String>): String where V <: ToString {
         format<String, V, HashMap<String, V>>(data, noneConverter)
     }
-    public func format<V>(data: TreeMap<String, V>, noneConverter!: ?String = None): String where V <: ToString {
+    public func format<V>(data: TreeMap<String, V>, noneConverter!: ?String = None<String>): String where V <: ToString {
         format<String, V, TreeMap<String, V>>(data, noneConverter)
     }
-    public func format<V>(data: ConcurrentHashMap<String, V>, noneConverter!: ?String = None): String where V <: ToString {
+    public func format<V>(data: ConcurrentHashMap<String, V>, noneConverter!: ?String = None<String>): String where V <: ToString {
         format<String, V, ConcurrentHashMap<String, V>>(data, noneConverter)
     }
-    public func format<V>(data: LinkedHashMap<String, V>, noneConverter!: ?String = None): String where V <: ToString {
+    public func format<V>(data: LinkedHashMap<String, V>, noneConverter!: ?String = None<String>): String where V <: ToString {
         format<String, V, LinkedHashMap<String, V>>(data, noneConverter)
     }
-    public func format<T>(data: T, noneConverter!: ?String = None): String where T <: Object & ObjectData<T> {
+    public func format<T>(data: T, noneConverter!: ?String = None<String>): String where T <: Object & ObjectData<T> {
         format<String, ToString, ObjectTextTemplateArgs<T>>(ObjectTextTemplateArgs<T>(data), noneConverter)
     }
 }
@@ -292,9 +293,9 @@ class Value2TimeString <: Value2String {
         }
         let value = getter.get<K, V, O>(data)
         match(value) {
-            case x: DateTime => x.toString(formatter)
+            case x: DateTime => x.toString(formatter.toFormat())
             case x: ?DateTime => match(x){
-                case Some(x) => x.toString(formatter)
+                case Some(x) => x.toString(formatter.toFormat())
                 case _ => extractNoneConverter()
             }
             case _ => extractNoneConverter()

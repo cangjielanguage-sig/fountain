@@ -19,7 +19,7 @@ sealed abstract class DataList<D> <: Data & Iterable<D> & Collection<D> where D 
     }
 
     public func add(data: D){
-        this.data.append(data)
+        this.data.add(data)
     }
     public operator func [](index: Int64): D {
         this.data[index]
@@ -72,7 +72,7 @@ sealed abstract class DataList<D> <: Data & Iterable<D> & Collection<D> where D 
                     throw DataException("to parse from sub string ${tmp} in ${string} to ${TypeInfos.get<T>()}", e)
                 }
             } else {
-                bytes.append(b)
+                bytes.add(b)
             }
         }
         data
@@ -180,7 +180,7 @@ public class StringKeyMapTuples <: Data & Iterable<DataTuple> & Collection<DataT
                     throw DataException("to parse from sub string ${tmp} in ${string} to ${TypeInfos.get<DataTuple>()}", e)
                 }
             } else {
-                bytes.append(b)
+                bytes.add(b)
             }
         }
         data

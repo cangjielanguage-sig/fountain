@@ -44,7 +44,7 @@ public class Pool<T> <: Resource where T <: Object {
     ) {
         queue = ArrayBlockingQueue<(?T, MonoTime)>(maxSize)
         tasks = ArrayBlockingQueue<ConditionID>(maxSize)
-        add(None)
+        add(None<T>)
         startCheckingSchedule()
         startCreationSchedule()
         for (i in 0..initSize) {

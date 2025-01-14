@@ -16,13 +16,13 @@ extend HttpHeaders <: ExtendHttpHeaders {
     public func getFirstValue<T>(name: String): ?T where T <: DataParsable<T>{
         match (this.getFirst(name)) {
             case Some(x) => T.tryParse(x)
-            case _ => None
+            case _ => None<T>
         }
     }
     public func getValues<T>(name: String): Collection<T> where T <: DataParsable<T> {
         let list = ArrayList<T>()
         for (v in get(name)) {
-            list.append(T.parse(v))
+            list.add(T.parse(v))
         }
         list
     }

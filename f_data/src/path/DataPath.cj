@@ -112,7 +112,7 @@ abstract sealed class DataPath <: DataPathNode {
                 case COMMA => continue
                 case _ => throw DataException('sub expression in squares as multi-names can only be string literal, identifier and comma, but current are ${sub}')
             }
-            names.append(n)
+            names.add(n)
         }
         MultiSubPathNode(names.toArray())
     }
@@ -128,7 +128,7 @@ abstract sealed class DataPath <: DataPathNode {
                     if(idx < 0){
                         throw DataException('sub expression as an index must greater than or equals to zero')
                     }
-                    list.append(idx)
+                    list.add(idx)
                 case COLON => 
                     range++
                     if(range > 2){
@@ -451,7 +451,7 @@ abstract sealed class DataPath <: DataPathNode {
             } else {
                 throw DataException('data path is illegal at index ${i}, path: ${path}')
             }
-            nodes.append(node)
+            nodes.add(node)
             i++
         }
         this

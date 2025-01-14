@@ -12,7 +12,7 @@ package f_macros
 public func extractAllVars(decls: Array<Decl>): Array<VarDecl> {
     let list = ArrayList<VarDecl>()
     for (decl in decls where decl is VarDecl) {
-        list.append((decl as VarDecl).getOrThrow())
+        list.add((decl as VarDecl).getOrThrow())
     }
     list.toArray()
 }
@@ -22,7 +22,7 @@ public func extractVars(decls: ArrayList<Decl>, extractPublic!: Bool = true, ext
     for (decl in decls where decl is VarDecl && (!extractPublic || isPublic(decl)) && (!extractStatic || isStatic(decl))) {
         let varDecl = (decl as VarDecl).getOrThrow()
         if (!extractVar || varDecl.isVar()) {
-            list.append(varDecl)
+            list.add(varDecl)
         }
     }
     list.toArray()

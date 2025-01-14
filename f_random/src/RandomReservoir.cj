@@ -18,11 +18,11 @@ public func randomReservoir<T>(count: Int64, source: Iterable<T>, priv!: Bool = 
     var c = 0
     for (v in source) {
         if (c < count) {
-            result.append(v)
+            result.add(v)
         } else {
             let r = rand.nextInt64(c)
             if (r < count) {
-                result.set(r, v)
+                result[r] = v 
             }
         }
         c++

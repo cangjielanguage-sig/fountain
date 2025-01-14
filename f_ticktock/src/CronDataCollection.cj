@@ -31,7 +31,7 @@ public class CronDataCollection <: Hashable & Equatable<CronDataCollection> {
             let list = ArrayList<CronData>()
             datas[unit] = list
             list
-        }.append(data)
+        }.add(data)
     }
     public func put(unit: TicktockUnit, range: Range<Int64>): Unit {
         put(unit, CronData(unit, range))

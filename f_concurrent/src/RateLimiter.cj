@@ -18,7 +18,7 @@ sealed abstract class RateLimiter<T> {
         }
     }
     public func exec(task: () -> ?T): ?T {
-        exec(None, task)
+        exec(None<T>, task)
     }
     public func exec(default: ?T, task: () -> ?T): ?T
 }

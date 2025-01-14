@@ -30,7 +30,7 @@ extend Duration <: DataParsable<Duration> {
             i++
             duration += match (r) {
                 case x where x == b'-' || (x >= b'0' && x <= b'9') =>
-                    bytes.append(x)
+                    bytes.add(x)
                     i++
                     continue
                 case b'd' => Duration.day
@@ -73,7 +73,7 @@ extend BigInt <: DataParsable<BigInt>{
         if(Regex.INTEGER.matched(s)){
             BigInt(s)
         }else{
-            None
+            None<BigInt>
         }
     }
 }
@@ -82,7 +82,7 @@ extend Decimal <: DataParsable<Decimal>{
         if(Regex.DECIMAL.matched(s)){
             Decimal(s)
         }else{
-            None
+            None<Decimal>
         }
     }
 }

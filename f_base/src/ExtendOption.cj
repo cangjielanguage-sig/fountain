@@ -15,7 +15,7 @@ public interface ExtendOption<T> {
     func iterator(): Iterator<T>
 }
 public class OptionIterator<T> <: Iterator<T> {
-    public static let NONE = OptionIterator<T>(None)
+    public static let NONE = OptionIterator<T>(None<T>)
     public OptionIterator(private let opt: Option<T>) {}
     private var got = false
 
@@ -63,7 +63,7 @@ public class OptionCaller<T, R> {
     public OptionCaller(
         private let option: ?T,
         private let someCallee: (T) -> R,
-        private var noneCallee!: ?() -> R = None
+        private var noneCallee!: ?() -> R = None<() -> R>
     ) {}
     public func none(callee: () -> R) {
         noneCallee = callee
@@ -75,7 +75,7 @@ public class OptionCaller<T, R> {
             case _ => if (let Some(c) <- noneCallee) {
                 c()
             } else {
-                None
+                None<R>
             }
         }
     }

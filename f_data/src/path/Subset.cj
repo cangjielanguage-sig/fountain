@@ -14,7 +14,7 @@ internal abstract class Subset<T> where T <: ToString & DataFields<T> {
     private let right = HashSet<String>()
     init(left: DataPath, right: ArrayList<T>){
         for(v in right){
-            this.right.put(v.toData().toString())
+            this.right.add(v.toData().toString())
         }
         this.left = left
     }

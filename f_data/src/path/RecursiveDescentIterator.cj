@@ -16,7 +16,7 @@ internal class RecursiveDescentIterator <: Iterator<Data> {
         append(data)
     }
     private func append(data: Data){
-        list.append(AnySubPathNode.instance.get(data))
+        list.addLast(AnySubPathNode.instance.get(data))
     }
     public func next(): ?Data {
         if(let Some(x) <- itr.next()){
@@ -24,11 +24,11 @@ internal class RecursiveDescentIterator <: Iterator<Data> {
                 append(x)
             }
             x
-        }else if(let Some(i) <- list.popFirst()){
+        }else if(let Some(i) <- list.removeFirst()){
             itr = i.iterator()
             next()
         }else{
-            None
+            None<Data>
         }
     }
 }

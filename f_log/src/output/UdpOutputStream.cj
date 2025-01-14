@@ -14,7 +14,7 @@ protected import std.net.{UdpSocket, IPSocketAddress, SocketAddress}
 
 protected class UdpOutputStream <: OutputStream & Resource {
     public UdpOutputStream(private let udp: UdpSocket, private let addr: IPSocketAddress) {}
-    public init(addr: String, port: UInt16, sendTimeout!: ?Duration = None){
+    public init(addr: String, port: UInt16, sendTimeout!: ?Duration = None<Duration>){
         let sockAddr = IPSocketAddress(addr, port)
         let sock = UdpSocket(bindAt: 0)
         sock.sendTimeout = sendTimeout
@@ -22,7 +22,7 @@ protected class UdpOutputStream <: OutputStream & Resource {
         this.udp = sock
         this.addr = sockAddr
     }
-    public init(addr: String, sendTimeout!: ?Duration = None){
+    public init(addr: String, sendTimeout!: ?Duration = None<Duration>){
         let sockAddr = IPSocketAddress.parse(addr)
         let sock = UdpSocket(bindAt: 0)
         sock.sendTimeout = sendTimeout

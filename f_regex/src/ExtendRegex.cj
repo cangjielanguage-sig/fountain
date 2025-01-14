@@ -143,7 +143,7 @@ public class RegexReplacement {
             match (ch) {
                 case r'$' =>
                     if (part.size > 0) {
-                        parts.append(part.toString())
+                        parts.add(part.toString())
                         part.reset()
                     }
                     placeholder = true
@@ -151,19 +151,19 @@ public class RegexReplacement {
                 case _ where placeholder =>
                     if (part.size > 0) {
                         let idx = Int64.parse(part.toString())
-                        parts.append(idx)
+                        parts.add(idx)
                         part.reset()
                     } else {
-                        parts.append("$")
+                        parts.add("$")
                     }
                     placeholder = false
                 case _ => part.append(ch)
             }
         }
         if (replacement.endsWith("$")) {
-            parts.append("$")
+            parts.add("$")
         } else if (part.size > 0) {
-            parts.append(part.toString())
+            parts.add(part.toString())
         }
     }
     func format(data: MatchData): String {

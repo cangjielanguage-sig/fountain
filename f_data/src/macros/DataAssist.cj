@@ -24,7 +24,7 @@ public macro DataAssist(attr: Tokens, input: Tokens): Tokens {
         case d: ClassDecl =>
             let set = HashSet<String>()
             for (t in attr) {
-                set.put(t.value.toAsciiLower())
+                set.add(t.value.toAsciiLower())
             }
             func generate(tag: String, decl: ClassDecl, exclusion: HashSet<String>,
                 fn: (ClassDecl, HashSet<String>) -> Unit): Unit {
@@ -40,7 +40,7 @@ public macro DataAssist(attr: Tokens, input: Tokens): Tokens {
             let excludeFields = HashSet<String>()
             func populateExclusion(message: MacroMessage, name: String, set: HashSet<String>): Unit {
                 if (message.hasItem(name)) {
-                    set.put(message.getString(name))
+                    set.add(message.getString(name))
                 }
             }
             for (message in getChildMessages('DataExclude')) {
@@ -86,7 +86,7 @@ func generateProps(decl: ClassDecl, exclusion: HashSet<String>) {
             let empty = quote()
             (empty, empty)
         }
-        appended.append(
+        appended.add(
             PropDecl(
                 quote(
             public $mutToken prop $name: $(t){
@@ -116,26 +116,30 @@ func generateProps(decl: ClassDecl, exclusion: HashSet<String>) {
                         member.assign = p.assign
                         member.expr = p.expr
                     }
-                    vars.append(member)
-                    args.append(p)
+                    vars.add(member)
+                    args.add(p)
                     p.modifiers = ArrayList<Modifier>()
                     p.keyword = Token(ILLEGAL)
                     gen(member)
-                    assigns.append(parseExpr(quote(this.$(member.identifier) = $(p.identifier))))
+                    assigns.add(parseExpr(quote(this.$(member.identifier) = $(p.identifier))))
                 }
-                decls.prependAll(vars)
-                d.block.nodes.prependAll(assigns)
+                for(i in 0 .. vars.size) {
+                    decls.add(vars[i], at: i)
+                }
+                for(i in 0 .. assigns.size) {
+                    d.block.nodes.add(assigns[i], at: i)
+                }
             case _ => continue
         }
     }
-    decls.appendAll(appended)
+    decls.add(all: appended)
 }
 
 func generateHash(d: ClassDecl, exclusion: HashSet<String>) {
     if (d.superTypes.isEmpty()) {
         d.upperBound = `upperbound`[0]
     }
-    d.superTypes.append(RefType(quote(Hashable)))
+    d.superTypes.add(RefType(quote(Hashable)))
     var hashed = `nl`
     for (d in d.body.decls where d is VarDecl &&
         !(isStatic(d) || exclusion.contains(d.identifier.value) || exclusion.contains('${d.identifier.value}_'))) {
@@ -149,13 +153,13 @@ func generateHash(d: ClassDecl, exclusion: HashSet<String>) {
             })
         } + `nl`
     }
-    d.body.decls.append(parseDecl(quote(
+    d.body.decls.add(parseDecl(quote(
         private var __hAsh__ = 0
     )))
     d
         .body
         .decls
-        .append(
+        .add(
             parseDecl(
                 quote(
         public func hashCode(): Int64{
@@ -175,7 +179,7 @@ func generateEqual(d: ClassDecl, exclusion: HashSet<String>) {
         d.upperBound = `upperbound`[0]
     }
     let typeName = quote($(d.identifier)$(d.genericParamTokens))
-    d.superTypes.append(RefType(quote(Equatable<$typeName>)))
+    d.superTypes.add(RefType(quote(Equatable<$typeName>)))
     var hashTokens = `empty_tokens`
     var eq = `nl`
     for (d in d.body.decls where d is VarDecl &&
@@ -205,7 +209,7 @@ func generateEqual(d: ClassDecl, exclusion: HashSet<String>) {
     d
         .body
         .decls
-        .append(
+        .add(
             parseDecl(
                 quote(
         public operator func ==(other: $typeName): Bool {
@@ -223,7 +227,7 @@ func generateCompare(d: ClassDecl, exclusion: HashSet<String>) {
         d.upperBound = `upperbound`[0]
     }
     let typeName = quote($(d.identifier)$(d.genericParamTokens))
-    d.superTypes.append(RefType(quote(Comparable<$typeName>)))
+    d.superTypes.add(RefType(quote(Comparable<$typeName>)))
     var cmp = `nl`
     for (d in d.body.decls where d is VarDecl &&
         !(isStatic(d) || exclusion.contains(d.identifier.value) || exclusion.contains('${d.identifier.value}_'))) {
@@ -245,7 +249,7 @@ func generateCompare(d: ClassDecl, exclusion: HashSet<String>) {
     d
         .body
         .decls
-        .append(
+        .add(
             parseDecl(
                 quote(
         public func compare(other: $typeName): Bool {
@@ -261,7 +265,7 @@ func generateToString(d: ClassDecl, exclusion: HashSet<String>) {
     if (d.superTypes.isEmpty()) {
         d.upperBound = `upperbound`[0]
     }
-    d.superTypes.append(RefType(quote(ToString)))
+    d.superTypes.add(RefType(quote(ToString)))
     var str = quote($(d.identifier)$(d.genericParamTokens)) + `lsquare`
     for (d in d.body.decls where d is VarDecl &&
         !(isStatic(d) || exclusion.contains(d.identifier.value) || exclusion.contains('${d.identifier.value}_'))) {
@@ -286,7 +290,7 @@ func generateToString(d: ClassDecl, exclusion: HashSet<String>) {
     d
         .body
         .decls
-        .append(
+        .add(
             parseDecl(
                 quote(
         public func toString(): Bool {
@@ -306,7 +310,7 @@ func generateToFields(d: ClassDecl, exclusion: HashSet<String>) {
     if (klassDecl.superTypes.isEmpty()) {
         klassDecl.upperBound = `upperbound`[0]
     }
-    klassDecl.superTypes.append(RefType(quote(ObjectData<$(klassIdentifier)>)))
+    klassDecl.superTypes.add(RefType(quote(ObjectData<$(klassIdentifier)>)))
     let body = klassDecl.body.decls
     var fields = ArrayList<Expr>()
     for (d in body where (d is VarDecl || d is PropDecl) && !isStatic(d) && isPublic(d) &&
@@ -446,7 +450,7 @@ func generateToFields(d: ClassDecl, exclusion: HashSet<String>) {
                 }
             case _ => continue
         }
-        fields.append(expr)
+        fields.add(expr)
     }
     let openModi = if (klassDecl.isAbstract() || klassDecl.isOpen()) {
         `open`
@@ -464,8 +468,8 @@ func generateToFields(d: ClassDecl, exclusion: HashSet<String>) {
         i++
     }
     fieldTokens += `rsquare`
-    body.appendAll(
-        [
+    body.add(
+        all: [
             VarDecl(
                 quote(
         private static let $(fieldsName) = ObjectFields<$klassIdentifier>($fieldTokens){
