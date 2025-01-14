@@ -463,12 +463,12 @@ public class JWTVerifier {
             None
         }
     }
-    public func isNotBefore(now: DateTime): Bool {
-        (this.getNotBefore() ?? now) <= now
+    public func isNotBefore(time!: DateTime = DateTime.now()): Bool {
+        (this.getNotBefore() ?? time) <= time
     }
-    public func isExpired(now: DateTime): Bool {
+    public func isExpired(time!: DateTime = DateTime.now()): Bool {
         if (let Some(d) <- this.getExpireAt()) {
-            d > now
+            d > time
         } else {
             true
         }
@@ -478,6 +478,6 @@ public class JWTVerifier {
     }
     public func verify(): Bool {
         let now = DateTime.now()
-        isExpired(now) && isNotBefore(now) && verifySign()
+        isExpired(time: now) && isNotBefore(time: now) && verifySign()
     }
 }
