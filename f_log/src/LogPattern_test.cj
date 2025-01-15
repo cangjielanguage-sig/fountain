@@ -24,7 +24,7 @@ public class LogPattern_test {
         let level = LogLevel.ERROR
         let logmsg = pattern.generate("test", level, "test message", now)
         println(logmsg)
-        let tpl = "[${level.text}%-test]% ${now.toString("yyyy/MM/dd,HH:mm:ss.SSS")}|%test message%\n"
+        let tpl = "[${level.text}%-test]% ${now.format("yyyy/MM/dd,HH:mm:ss.SSS")}|%test message%\n"
         @Assert(tpl, logmsg)
     }
 }

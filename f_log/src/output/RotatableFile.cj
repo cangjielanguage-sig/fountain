@@ -173,14 +173,14 @@ protected class RotatableFile <: OutputStream & Resource{
 
     private static func genTime(timeunit: TimeUnit, current: DateTime): String {
         match (timeunit) {
-            case DAY => current.addDays(-1).toString("yyyyMMdd".toFormat())
-            case HOUR => current.addHours(-1).toString("yyyyMMddHH".toFormat())
-            case WEEK => current.addWeeks(-1).toString("yyyyMMddWW".toFormat())
-            case MINUTE => current.addMinutes(-1).toString("yyyyMMddHHmm".toFormat())
-            case MONTH => current.addMonths(-1).toString("yyyyMM".toFormat())
-            case YEAR => current.addYears(-1).toString("yyyy".toFormat())
-            case SECOND => current.addSeconds(-1).toString("yyyyMMddHHMMss".toFormat())
-            case _ => current.addNanoseconds(-1).toString("yyyyMMddHHmmssSSS".toFormat())
+            case DAY => current.addDays(-1).toString("yyyyMMdd")
+            case HOUR => current.addHours(-1).toString("yyyyMMddHH")
+            case WEEK => current.addWeeks(-1).toString("yyyyMMddWW")
+            case MINUTE => current.addMinutes(-1).toString("yyyyMMddHHmm")
+            case MONTH => current.addMonths(-1).toString("yyyyMM")
+            case YEAR => current.addYears(-1).toString("yyyy")
+            case SECOND => current.addSeconds(-1).toString("yyyyMMddHHMMss")
+            case _ => current.addNanoseconds(-1).toString("yyyyMMddHHmmssSSS")
         }
     }
     private let fileLock = ReentrantMutex()
