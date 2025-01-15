@@ -26,7 +26,7 @@ public class RotatableFileParams{
     public var path = "${Process.current.workingDirectory}/logs/${Process.current.command}.log"
     public var fileSize = Int64.Max
     public var timeunit = TimeUnit.DAY
-    public var compress = LogFileCompressFormat.None
+    public var compress = LogFileCompressFormat.NonCompression
 }
 protected class RotatableFile <: OutputStream & Resource{
     private let queue = ArrayBlockingQueue<()->Unit>(1)
@@ -113,7 +113,7 @@ protected class RotatableFile <: OutputStream & Resource{
     }
     public static func compressFormat(format: String): LogFileCompressFormat {
         match (format) {
-            case "None" => LogFileCompressFormat.None
+            case "None" => LogFileCompressFormat.NonCompression
             case "Deflate(BestSpeed)" | "DeflateFormat(BestSpeed)" => LogFileCompressFormat.Deflate(
                 BestSpeed)
             case "Deflate(DefaultCompression)" | "Deflate(Default)" | "Deflate" | "DeflateFormat" | "DeflateFormat(DefaultCompression)" | "DeflateFormat(Default)" => LogFileCompressFormat.
@@ -281,7 +281,7 @@ protected class RotatableFile <: OutputStream & Resource{
             match (compress) {
                 case Deflate(level) => doCompress(path, ".lz", DeflateFormat, level)
                 case GZip(level) => doCompress(path, ".gz", GzipFormat, level)
-                case None => return
+                case NonCompression => return
             }
         })
     }
@@ -295,7 +295,7 @@ protected class RotatableFile <: OutputStream & Resource{
 }
 
 public enum LogFileCompressFormat {
-    | None
+    | NonCompression
     | Deflate(CompressLevel)
     | GZip(CompressLevel)
 }

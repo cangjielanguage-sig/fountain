@@ -10,7 +10,9 @@ _/ ____\____  __ __  _____/  |______  |__| ____
 # fountain
 
 ## 介绍
+
 一个用于服务器应用开发的综合工具库。
+
 - 零配置文件
 - 环境变量和命令行参数配置
 - 约定优于配置
@@ -18,7 +20,9 @@ _/ ____\____  __ __  _____/  |______  |__| ____
 - 只需要开发动态链接库，fboot负责加载、初始化并运行。
 
 ## 版本管理
+
 待功能完备后将按以下流程跟随仓颉版本，功能完备以前一直跟随最新的开发版。
+
 - 每月仓颉开发版对应一个`dev/${DEV_CANGJIE_VERSION}`
 - 每次发仓颉beta版，将对应的开发版转为`beta/${BETA_CANGJIE_VERSION}`，删除对应的开发版
 - 功能完备后的长期支持版作为master分支
@@ -32,14 +36,15 @@ _/ ____\____  __ __  _____/  |______  |__| ____
       - bug：修改BUG
       - CANGJIE_VERSION：取当前仓颉长期支持版前两位，比如当前仓颉长期支持版是1.0.x，CANGJIE_VERSION就是1_0。
 
-
 ## 加载本项目的动态链接库
+
 - 如果仅仅是开发使用，可以使用cjpm run当前依赖fountain的项目，就自动加载了。
 - 如果是在Linux服务器环境运行，
   - 将fountain动态链接库所在的路径加入环境变量`export fountainPath=/path/of/fountain_dynamic_libs`。
   - 将本项目编译的动态链接库都加入环境变量`export LD_LIBRARY_PATH=$fountainPath:$LD_LIBRARY_PATH`。
 
 ## fboot
+
 - 把fboot加入PATH环境变量
   1. fboot build：执行`cjpm build`构建当前目录，
      - 加载编译得到的动态链接库，把@Pointcut插入正确的函数。
@@ -61,6 +66,7 @@ _/ ____\____  __ __  _____/  |______  |__| ____
      各模块需要重新初始化的需要调用`f_config.Config.refresher(prefix, refreshFn)`，set函数返回前会调用配置项的键第一个_前的字符串与prefix相同的对应refreshFn。每次调用set函数每个refreshFn最多调用一次。
 
 ## 功能
+
 - 空集合
 - 比较器Comparator Equaler
 
@@ -82,6 +88,7 @@ _/ ____\____  __ __  _____/  |______  |__| ____
   - 针对Iterator的扩展
 - 对象池
 - 堆缓存
+
   ```cj
   let cache = HeapCache<V> where V <: Object (
     private let concurrencyLevel!: Int64 = DEFAULT_HEAP_CACHE_CONCURRENCY_LEVEL,
@@ -93,6 +100,7 @@ _/ ____\____  __ __  _____/  |______  |__| ____
   cache.set('key', object)
   let opt: ?V = cache.get('key')
   ```
+
 - 正则表达式DSL
 - 简化属性复制的工具
 - 优先级队列
@@ -119,7 +127,7 @@ _/ ____\____  __ __  _____/  |______  |__| ____
       - 自带文档请求接口
 - 网络流水线
 - 权限控制
-- 负载均衡策略 
+- 负载均衡策略
   - 随机
   - 优先级
   - 轮转法
@@ -127,6 +135,7 @@ _/ ____\____  __ __  _____/  |______  |__| ____
   - 雪花算法改
 - 配置类型
 - jwt
+
   ```cj
   let jwt = JWT().hmacSHA1(keyOfBytes)//支持标准库提供的除国密之外的全部签名算法，国密不支持HMAC故无法支持
   //JWT().hmacSHA1ByBase64Key(base64String)
@@ -135,7 +144,9 @@ _/ ____\____  __ __  _____/  |______  |__| ____
   println(sign)
   @Expect(jwt.verifier(sign).verify(), true)
   ```
+
 - 日志
+
   ```cj
   import fountain.log.LoggerFactory
   let topLog = LoggerFactory.getLogger('top')
@@ -148,6 +159,7 @@ _/ ____\____  __ __  _____/  |______  |__| ____
     }
   }
   ```
+
   ```bash
     # 现在支持console, file, tcp, udp, unixDatagram, unix这六个日志记录器，可以随意编排不必全部出现，还可以继承f_log.AsyncLogger实现新的日志记录器
     export fountain_logger_appender_console=ConsoleLoggerName # =右边是开发者定义的日志记录器名字，用来标识配置项，控制台日志只支持一个配置，即使配置了多个也是只有第一个名字的配置生效
@@ -167,7 +179,7 @@ _/ ____\____  __ __  _____/  |______  |__| ____
     # public var path = "${Process.current.workingDirectory}/logs/${Process.current.command}.log"
     # public var fileSize = Int64.Max
     # public var timeunit = TimeUnit.DAY
-    # public var compress = LogFileCompressFormat.None
+    # public var compress = LogFileCompressFormat.NonCompression
     # 默认日志格式[%level-%name] %d{yyyy/MM/dd,HH:mm:ss.SSS}|%m
     # %level 日志级别
     # %name  日志记录器的名字，这个是初始化日志记录器是从LoggerFactory.getLogger传入的名字
@@ -191,8 +203,10 @@ _/ ____\____  __ __  _____/  |______  |__| ____
     export fountain_logger_appender_UnixLoggerName_path=/path/of/unix/file.log # 默认是/tmp/log/unix.log
     export fountain_logger_appender_UnixLoggerName_pattern=..... # unix日志格式
   ```
+
 - 流程引擎
 - 实例复制
+
   - ```cj
     // 下面的T <: DataFields<T>
     convert<T>(data: Data, flag: DataConversionFlag = SILENCE): ?T
@@ -205,6 +219,7 @@ _/ ____\____  __ __  _____/  |______  |__| ____
     T.populate<M, V>(src: M, target: T, flag): ?T where M <: StringKeyMap<V>, V <: DataFields<V>
     T.
     ```
+
   - `let iterator: Iterator<Data> = DataPath.cache(pathString).get(data)`
     - 还支持`DataPath.solid(pathString)`，两种模式的使用方式都一样。
     - solid会一直保存path的编译结果，直到进程结束
