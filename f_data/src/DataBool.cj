@@ -9,6 +9,8 @@
 */
 package f_data
 
+import std.convert.Parsable
+
 public class DataBool <: Data & Hashable & Equatable<DataBool> {
     public static let TRUE = DataBool(true)
     public static let FALSE = DataBool(false)

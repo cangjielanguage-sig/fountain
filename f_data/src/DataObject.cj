@@ -9,6 +9,8 @@
  */
 package f_data
 
+import std.convert.Parsable
+
 public interface ObjectData<T> <: DataFields<T> where T <: Object & ObjectData<T> {
     static func dataFields(): ObjectFields<T>
 

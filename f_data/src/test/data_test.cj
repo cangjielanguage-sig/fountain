@@ -43,14 +43,14 @@ public class DataUnitTest {
         dt.s = 'hello'
         @Assert('hello', dt.s)
         dt.s = 'hello world'
-        let target = DataObject<DataTest>(DataTest())
+        // let target = DataObject<DataTest>(DataTest())
         let data = (dt.toData() as DataObject<DataTest>).getOrThrow()
-        let itr = data.iterator()
-        for((n, d) in itr){
-            println('${n} ${d}')
-            target.set(n, d)
-        }
-        println(target.data.s)
+        // let itr = data.iterator()
+        // for((n, d) in itr){
+        //     println('${n} ${d}')
+        //     target.set(n, d)
+        // }
+        // println(target.data.s)
         dt = DataObject<DataTest>.populate(data).getOrThrow()
         @Assert('hello world', dt.s)
     }
