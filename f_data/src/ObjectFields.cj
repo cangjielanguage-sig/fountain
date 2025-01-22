@@ -70,7 +70,7 @@ public class ObjectFields<T> <: Iterable<ReadableField> where T <: ObjectData<T>
     public func iterator(): Iterator<ReadableField> {
         readables.values().iterator()
     }
-    public func multableFields(): Iterator<MutableField> {
+    public func mutableFields(): Iterator<MutableField> {
         mutables.values().iterator()
     }
     public func mutableField(name: String): ?MutableField {

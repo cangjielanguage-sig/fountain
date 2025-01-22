@@ -40,6 +40,9 @@ public class DataObject<T> <: Data & Iterable<(String, Data)> where T <: Object 
     public func fields(): Iterator<ReadableField> {
         T.dataFields().iterator()
     }
+    public func mutableFields(): Iterator<MutableField> {
+        T.dataFields().mutableFields()
+    }
     public operator func [](name: String): Data {
         get(name).getOrThrow{DataException('field ${name} is not found in ${TypeInfos.get<T>()}')}
     }
