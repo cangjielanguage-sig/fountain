@@ -38,6 +38,7 @@ public class Pool<T> <: Resource where T <: Object {
         private let elementLife!: Duration = Duration.hour,
         private let checkOnBorrowing!: Bool = true,
         private let checkOnReturning!: Bool = true,
+        private let checkInterval!: Duration = Duration.minute,
         private let creator!: () -> T,
         private let checker!: (T) -> Bool,
         private let destroier!: (T) -> Unit
@@ -62,6 +63,7 @@ public class Pool<T> <: Resource where T <: Object {
         elementLife!: Duration = Duration.hour,
         checkOnBorrowing!: Bool = true,
         checkOnReturning!: Bool = true,
+        checkInterval!: Duration = Duration.minute,
         manager!: PooledManager<T>
     ) {
         this(initSize: initSize, minSize: minSize, maxSize: maxSize, elementLife: elementLife,
@@ -73,7 +75,7 @@ public class Pool<T> <: Resource where T <: Object {
             while (running.load()) {
                 while (running.load() && size.load() > minSize && let x <- queue.dequeue()) {
                     if(let (Some(o), t) <- x){
-                        if (MonoTime.now() - t >= elementLife) {
+                        if (MonoTime.now() - t >= elementLife || !checker(o)) {
                             destroy(o, true)
                         } else {
                             queue.enqueue(x)
@@ -83,7 +85,7 @@ public class Pool<T> <: Resource where T <: Object {
                         break
                     }
                 }
-                sleep(Duration.second)
+                sleep(checkInterval)
             }
         }
     }

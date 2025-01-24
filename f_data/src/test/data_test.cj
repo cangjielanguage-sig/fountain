@@ -19,7 +19,7 @@ import std.unittest.testmacro.*
 @DataAssist[hash equal props fields]
 public class DataTest {
   private var i: Int64 = 0
-  private var s: String = ''
+  private var s: String = 'sdf'
   private var opts: ?String = None<String>
   private var dt: ?DataTest = None<DataTest>
   private var ilist: ArrayList<Int64> = ArrayList<Int64>([1,2,3,4,5])
@@ -43,14 +43,14 @@ public class DataUnitTest {
         dt.s = 'hello'
         @Assert('hello', dt.s)
         dt.s = 'hello world'
-        // let target = DataObject<DataTest>(DataTest())
+        let target = DataObject<DataTest>(DataTest())
         let data = (dt.toData() as DataObject<DataTest>).getOrThrow()
-        // let itr = data.iterator()
-        // for((n, d) in itr){
-        //     println('${n} ${d}')
-        //     target.set(n, d)
-        // }
-        // println(target.data.s)
+        let itr = data.iterator()
+        for((n, d) in itr){
+            println('${n} ${d}')
+            target.set(n, d)
+        }
+        println(target.data.s)
         dt = DataObject<DataTest>.populate(data).getOrThrow()
         @Assert('hello world', dt.s)
     }
