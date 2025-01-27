@@ -11,7 +11,7 @@ package f_pool
 
 import std.collection.concurrent.ArrayBlockingQueue
 import std.process.Process
-import std.sync.{AtomicInt64, AtomicBool, MultiConditionMonitor, ConditionID}
+import std.sync.{AtomicInt64, AtomicBool}
 import std.time.MonoTime
 
 import f_log.LoggerFactory
@@ -26,16 +26,16 @@ public interface PooledManager<T> where T <: Object {
  */
 public class Pool<T> <: Resource where T <: Object {
     private static let log = LoggerFactory.getLogger<Pool<T>>()
-    private let queue: ArrayBlockingQueue<(?T, MonoTime)>
-    private let tasks: ArrayBlockingQueue<ConditionID>
+    private let queue: ArrayBlockingQueue<(T, MonoTime)>
+    private let tasks: ArrayBlockingQueue<Unit>
     private let size = AtomicInt64(0)
     private let running = AtomicBool(false)
-    private let monitor = MultiConditionMonitor()
     public Pool(
         private let initSize!: Int64 = 0,
         private let minSize!: Int64 = 0,
         private let maxSize!: Int64 = Int64.Max,
         private let elementLife!: Duration = Duration.hour,
+        private let checkOnCreation!: Bool = false,
         private let checkOnBorrowing!: Bool = true,
         private let checkOnReturning!: Bool = true,
         private let checkInterval!: Duration = Duration.minute,
@@ -43,15 +43,12 @@ public class Pool<T> <: Resource where T <: Object {
         private let checker!: (T) -> Bool,
         private let destroier!: (T) -> Unit
     ) {
-        queue = ArrayBlockingQueue<(?T, MonoTime)>(maxSize)
-        tasks = ArrayBlockingQueue<ConditionID>(maxSize)
-        add(None<T>)
+        queue = ArrayBlockingQueue<(T, MonoTime)>(maxSize)
+        tasks = ArrayBlockingQueue<Unit>(maxSize)
         startCheckingSchedule()
         startCreationSchedule()
-        for (i in 0..initSize) {
-            synchronized(monitor){
-                tasks.enqueue(monitor.newCondition())
-            }
+        for (_ in 0..initSize) {
+            tasks.enqueue(())
         }
         running.store(true)
         Process.current.atExit(close)
@@ -61,28 +58,33 @@ public class Pool<T> <: Resource where T <: Object {
         minSize!: Int64 = 0,
         maxSize!: Int64 = Int64.Max,
         elementLife!: Duration = Duration.hour,
+        checkOnCreation!: Bool = false,
         checkOnBorrowing!: Bool = true,
         checkOnReturning!: Bool = true,
         checkInterval!: Duration = Duration.minute,
         manager!: PooledManager<T>
     ) {
         this(initSize: initSize, minSize: minSize, maxSize: maxSize, elementLife: elementLife,
-            checkOnBorrowing: checkOnBorrowing, checkOnReturning: checkOnReturning, creator: manager.create,
-            checker: manager.check, destroier: manager.destroy)
+            checkOnCreation: checkOnCreation, checkOnBorrowing: checkOnBorrowing, checkOnReturning: checkOnReturning, 
+            checkInterval: checkInterval, creator: manager.create, checker: manager.check, destroier: manager.destroy)
     }
     private func startCheckingSchedule() {
         spawn {
             while (running.load()) {
-                while (running.load() && size.load() > minSize && let x <- queue.dequeue()) {
-                    if(let (Some(o), t) <- x){
+                var i = 0
+                while (running.load() && i < maxSize && let (o, t) <- queue.dequeue()) {
+                    i++
+                    try{
                         if (MonoTime.now() - t >= elementLife || !checker(o)) {
                             destroy(o, true)
+                            if(this.size.load() < minSize){
+                                tasks.tryEnqueue(())
+                            }
                         } else {
-                            queue.enqueue(x)
+                            queue.enqueue((o, t))
                         }
-                    }else{
-                        queue.enqueue(x)
-                        break
+                    }catch(e: Exception){
+                        log.warn('Pool checking schedule', e)
                     }
                 }
                 sleep(checkInterval)
@@ -92,14 +94,14 @@ public class Pool<T> <: Resource where T <: Object {
     private func startCreationSchedule() {
         spawn {
             while (running.load() && let cond <- tasks.dequeue()) {
-                if (!running.load()) {
-                    return
-                } else if (size.load() < maxSize) {
-                    add(creator())
-                    size.fetchAdd(1)
-                    synchronized(monitor) {
-                        monitor.notify(cond)
+                if (running.load() && size.load() < maxSize) {
+                    let object = creator()
+                    if(checkOnCreation && !checker(object)){
+                        destroy(object, true)
+                        continue
                     }
+                    add(object)
+                    size.fetchAdd(1)
                 }
             }
         }
@@ -125,9 +127,10 @@ public class Pool<T> <: Resource where T <: Object {
             }
         }
     }
-    private func add(object: ?T): Unit {
+    private func add(object: T): Unit {
         if(!queue.tryEnqueue((object, MonoTime.now()))){
-            throw PoolException("current size of pool is larger than maxSize(${maxSize}), may be some instances which were not be created by current pool were given back to current pool.")
+            log.warn("current size of pool is larger than maxSize(${maxSize}), may be some instances which were not be created by current pool were given back to current pool.")
+            destroy(object, false)
         }
     }
     public func isClosed(): Bool {
@@ -135,39 +138,28 @@ public class Pool<T> <: Resource where T <: Object {
     }
     public func close(): Unit {
         running.store(false)
-        queue.tryEnqueue((None<T>, MonoTime.now()))
         while(let Some(c) <- tasks.tryDequeue()){}
-        while (let Some(x) <- queue.tryDequeue() && let (Some(o), _) <- x) {
+        while (let Some((o, _)) <- queue.tryDequeue()) {
             destroy(o, true)
         }
     }
     public func borrow(timeout!: Duration = Duration.Max): ?T {
         let start = MonoTime.now()
-        while (MonoTime.now() - start >= timeout && let Some((x, t)) <- queue.tryDequeue()) {
-            if (let Some(o) <- x) {
-                if (checkOnBorrowing) {
-                    if (checker(o)) {
-                        return o
-                    } else {
-                        destroy(o, true)
-                    }
-                } else {
+        while (running.load() && MonoTime.now() - start >= timeout && let Some((o, t)) <- queue.tryDequeue()) {
+            if (checkOnBorrowing) {
+                if (checker(o)) {
                     return o
+                } else {
+                    destroy(o, true)
                 }
             } else {
-                queue.tryEnqueue((x, t))
+                return o
             }
         }
         var consumed = MonoTime.now() - start
-        while (size.load() < maxSize && timeout > consumed) {
-            synchronized(monitor) {
-                let cond = monitor.newCondition()
-                tasks.tryEnqueue(cond)
-                if(!monitor.wait(cond, timeout: timeout - consumed)){
-                    return None<T>
-                }
-            }
-            if (let Some((Some(o), t)) <- queue.tryDequeue()) {
+        while (running.load() && timeout > consumed) {
+            tasks.tryEnqueue(())
+            if (let Some((o, t)) <- queue.dequeue(timeout - consumed)) {
                 if (checkOnBorrowing) {
                     if (checker(o)) {
                         return o
@@ -183,11 +175,13 @@ public class Pool<T> <: Resource where T <: Object {
         None<T>
     }
     public func giveBack(object: T): Unit {
-        if (checkOnReturning) {
+        if(!running.load()){
+            destroy(object, true)
+        }else if (checkOnReturning) {
             if (checker(object)) {
                 add(object)
             } else {
-                destroy(object, false)
+                destroy(object, true)
             }
         } else {
             add(object)
