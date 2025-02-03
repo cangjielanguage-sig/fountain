@@ -170,15 +170,15 @@ extend DateTime <: ExtendDateTime {
     public prop isLeapYear: Bool {
         get() {
             let y = this.year
-            (y & 3) == 0 && ((y % 100) != 0 || (y % 400) == 0)
+            ((y & 3) == 0 && (y % 100) != 0) || y % 400 == 0
         }
     }
     public prop isLastMonthDay: Bool {
         get() {
-            match ((this.month, this.dayOfMonth)) {
-                case (January, 31) | (February, 29) | (March, 31) | (April, 30) | (May, 31) | (June, 30) | (July, 31) | (August, 31) | (September, 30) | (October, 31) | (November, 30) | (December, 31) => true
-                case (February, 28) => !isLeapYear
-                case _ => false
+            match(this.month){
+                case January | March | May | July | August | October | December => this.dayOfMonth == 31
+                case April | June | September | November => this.dayOfMonth == 30
+                case February => (isLeapYear && this.dayOfMonth == 29) || this.dayOfMonth == 28
             }
         }
     }

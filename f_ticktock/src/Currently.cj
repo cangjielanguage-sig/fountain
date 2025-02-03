@@ -11,6 +11,6 @@ package f_ticktock
 
 import std.time.DateTime
 
-public sealed interface Currently <: ToString {
+sealed interface Currently <: ToString {
     func current(now: DateTime): Int64
 }

@@ -11,7 +11,7 @@ package f_ticktock
 
 import std.time.DateTime
 
-public sealed interface Trigger <: ToString {
+sealed interface Trigger <: ToString {
     /**
      * 触发任务
      */
