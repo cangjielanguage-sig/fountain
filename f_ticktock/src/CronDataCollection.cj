@@ -51,14 +51,15 @@ public class CronDataCollection <: Hashable & Equatable<CronDataCollection> {
         }
     }
     public func matches(date: DateTime){
-        var result = true
-        for(crons in datas.values() where result){
+        for(crons in datas.values()){
             var i = 0
             while(i < crons.size && !crons[i].matches(date)) {
                 i++
             }
-            result = i < crons.size
+            if(i < crons.size) {
+                return true
+            }
         }
-        result
+        false
     }
 }
