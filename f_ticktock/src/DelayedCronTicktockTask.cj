@@ -14,14 +14,14 @@ import std.time.DateTime
 import f_time.ExtendDateTime
 
 public class DelayedCronTicktockTask <: FuncInvocationTask {
-    private var executingTime: DateTime = DateTime.now()
+    private var executingTime = DateTime.now()
     private var delayedPeriodic_: DelayedPeriodic
     private var immediate_: Bool = false
     private var delay_: Duration
 
     public init(name: String, delayedPeriodic: DelayedPeriodic, delay: Duration, immediate: Bool, function: () -> Unit) {
         super(name, function)
-        this.executingTime = this.executingTime + delay
+        this.executingTime += delay
         this.delayedPeriodic_ = delayedPeriodic
         this.delay_ = delay
         this.immediate_ = immediate

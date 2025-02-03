@@ -9,6 +9,6 @@
  */
 package f_ticktock
 
-public sealed interface Emitter {
+sealed interface Emitter {
     func emit(now: DateTime): Unit
 }

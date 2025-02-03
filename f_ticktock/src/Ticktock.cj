@@ -55,20 +55,13 @@ import f_ticktock.exception.TicktockException
  */
 public class Ticktock <: Emitter {
     private static let LOGGER = LoggerFactory.getLogger("commons/timewheel.TicktockLauncheer")
+    public static let instance = Ticktock()
 
-    /**
-     * 此处不与TikTok共用线程池目的是防止多线程同时操作时间轮，
-     * 虽然几乎不可能发生，还是为了以防万一，万一发生了，按这个线程池的初始化参数，会立即抛出异常。
-     * 执行任务的线程池是另外一个。
-     */
     private let tasks = ConcurrentHashMap<String, (TicktockTask, Collection<CronDataCollection>)>()
     private let ticktock = Chrono()
-    public init() {
-        Process.current.atExit(shutdown)
-    }
-
-    public func launch(){
+    private init() {
         ticktock.start(this)
+        Process.current.atExit(shutdown)
     }
 
     public func removeTask(task: TicktockTask) {
