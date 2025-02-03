@@ -14,20 +14,20 @@ import std.collection.HashMap
 import f_base.*
 
 public class CronDataCollection <: Hashable & Equatable<CronDataCollection> {
-    public CronDataCollection(private let cron: String){}
+    public CronDataCollection(private let cron: String) {}
     private var datas = HashMap<TicktockUnit, ArrayList<CronData>>()
 
-    public func hashCode(){
+    public func hashCode() {
         cron.hashCode()
     }
-    public operator func ==(other: CronDataCollection){
+    public operator func ==(other: CronDataCollection) {
         this.cron == other.cron
     }
 
     public func put(unit: TicktockUnit, data: CronData): Unit {
-        if(let Some(l) <- datas.get(unit)){
+        if (let Some(l) <- datas.get(unit)) {
             l
-        }else{
+        } else {
             let list = ArrayList<CronData>()
             datas[unit] = list
             list
@@ -50,18 +50,18 @@ public class CronDataCollection <: Hashable & Equatable<CronDataCollection> {
             None<Collection<CronData>>
         }
     }
-    public func matches(date: DateTime){
-        for(crons in datas.values()){
-            var result = true
-            for(cron in crons where !cron.matches(date)) {
-                result = false
+    public func matches(date: DateTime) {
+        for (crons in datas.values()) {
+            var result = false
+            for (cron in crons where cron.matches(date)) {
+                result = true
                 break
             }
-            if(result) {
-                return result
+            if (!result) {
+                return false
             }
-            result = true
+            result = false
         }
-        false
+        true
     }
 }

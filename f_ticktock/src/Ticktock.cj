@@ -142,13 +142,12 @@ public class Ticktock <: Emitter {
     }
 
     public func emit(now: DateTime): Unit {
-        for ((name, taskTuple) in tasks) {
+        for ((name, (task, crons)) in tasks) {
             spawn {
                 var emitted = false
                 var once = false
                 try {
-                    for(cron in taskTuple[1] where cron.matches(now)){
-                        let task = taskTuple[0]
+                    for(cron in crons where cron.matches(now)){
                         task.execute()
                         once = task.once
                         if(once){

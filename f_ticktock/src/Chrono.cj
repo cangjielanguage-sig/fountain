@@ -16,8 +16,7 @@ class Chrono {
     private var timer: Timer = ZERO_TIMER
     init() {}
     func start(emitter: Emitter) {
-        let now = DateTime.now()
-        timer = Timer.repeat(
+        func next(now: DateTime, n: Int64) {
             DateTime.of(
                 year: now.year,
                 month: now.month,
@@ -25,16 +24,16 @@ class Chrono {
                 hour: now.hour,
                 minute: now.minute,
                 second: now.second
-            ) + Duration.second * 2 - DateTime.now(),
-            Duration.second,
-            {
-                =>
-                let now = DateTime.now()
-                spawn {
-                    emitter.emit(now)
-                }
+            ) + Duration.second * n - DateTime.now()
+        }
+        let now = DateTime.now()
+        timer = Timer.after(next(now, 2)) {
+            let now = DateTime.now()
+            spawn {
+                emitter.emit(now)
             }
-        )
+            next(now, 1)
+        }
     }
     func shutdown() {
         timer.cancel()
