@@ -96,16 +96,17 @@ public class Pool<T> <: Resource where T <: Object {
                 if (running.load() && size.load() < maxSize) {
                     let object = creator()
                     if(checkOnCreation && !checker(object)){
-                        destroy(object, true)
+                        destroy(object, true, decr: false)
                         continue
                     }
-                    add(object)
-                    size.fetchAdd(1)
+                    if(add(object, decrIfOverload: false)){
+                        size.fetchAdd(1)
+                    }
                 }
             }
         }
     }
-    private func destroy(o: T, logOnEx: Bool) {
+    private func destroy(o: T, logOnEx: Bool, decr!: Bool = true) {
         try{
             destroier(o)
         }catch(e: Exception){
@@ -115,7 +116,9 @@ public class Pool<T> <: Resource where T <: Object {
                 throw e
             }
         }finally{
-            size.fetchSub(1)
+            if(decr){
+                size.fetchSub(1)
+            }
         }
         if(size.load() < 0){
             let ex = PoolException('current size of pool is less than zero, may be some instances which were not be created by current pool were destroied by current pool on giving back.')
@@ -126,10 +129,13 @@ public class Pool<T> <: Resource where T <: Object {
             }
         }
     }
-    private func add(object: T): Unit {
+    private func add(object: T, decrIfOverload!: Bool = true): Bool {
         if(!queue.tryEnqueue((object, MonoTime.now()))){
             log.warn("current size of pool is larger than maxSize(${maxSize}), may be some instances which were not be created by current pool were given back to current pool.")
-            destroy(object, false)
+            destroy(object, false, decr: decrIfOverload)
+            false
+        }else{
+            true
         }
     }
     public func isClosed(): Bool {
