@@ -97,9 +97,7 @@ public class Pool<T> <: Resource where T <: Object {
                     let object = creator()
                     if(checkOnCreation && !checker(object)){
                         destroy(object, true, decr: false)
-                        continue
-                    }
-                    if(add(object, decrIfOverload: false)){
+                    }else if(add(object, decrIfOverload: false)){
                         size.fetchAdd(1)
                     }
                 }
