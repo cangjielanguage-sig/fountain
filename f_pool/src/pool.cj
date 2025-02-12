@@ -29,7 +29,7 @@ public class Pool<T> <: Resource where T <: Object {
     private let queue: ArrayBlockingQueue<(T, MonoTime)>
     private let tasks: ArrayBlockingQueue<Unit>
     private let size = AtomicInt64(0)
-    private let running = AtomicBool(false)
+    private let running = AtomicBool(true)
     public Pool(
         private let initSize!: Int64 = 0,
         private let minSize!: Int64 = 0,
@@ -50,7 +50,6 @@ public class Pool<T> <: Resource where T <: Object {
         for (_ in 0..initSize) {
             tasks.enqueue(())
         }
-        running.store(true)
         Process.current.atExit(close)
     }
     public init(
@@ -72,7 +71,7 @@ public class Pool<T> <: Resource where T <: Object {
         spawn {
             while (running.load()) {
                 var i = 0
-                while (running.load() && i < maxSize && let (o, t) <- queue.dequeue()) {
+                while (running.load() && i < this.size.load() && let (o, t) <- queue.dequeue()) {
                     i++
                     try{
                         if (MonoTime.now() - t >= elementLife || !checker(o)) {
@@ -93,7 +92,7 @@ public class Pool<T> <: Resource where T <: Object {
     }
     private func startCreationSchedule() {
         spawn {
-            while (running.load() && let cond <- tasks.dequeue()) {
+            while (running.load() && let _ <- tasks.dequeue()) {
                 if (running.load() && size.load() < maxSize) {
                     let object = creator()
                     if(checkOnCreation && !checker(object)){
