@@ -57,4 +57,7 @@ public class TypeInfos {
             []
         }
     }
+    public func isInstanceOf<T>(instance: Any): Bool {
+        TypeInfo.of(instance).isSubtypeOf(get<T>())
+    }
 }
