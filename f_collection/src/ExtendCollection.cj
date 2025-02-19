@@ -36,7 +36,7 @@ extend<T> ArrayList<T> <: ExtendList<T> where T <: Equatable<T> {
             return
         }
         for(i in s - 1 ..= w: -1){
-            remove(i)
+            remove(at: i)
         }
     }
 }
