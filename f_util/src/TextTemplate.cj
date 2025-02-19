@@ -198,17 +198,11 @@ public class TextTemplate {
     public func format<T>(data: ArrayList<T>, noneConverter!: ?String = None<String>): String where T <: ToString {
         format<Int64, T, ArrayList<T>>(data, noneConverter)
     }
-    public func format<V>(data: HashMap<String, V>, noneConverter!: ?String = None<String>): String where V <: ToString {
-        format<String, V, HashMap<String, V>>(data, noneConverter)
-    }
-    public func format<V>(data: TreeMap<String, V>, noneConverter!: ?String = None<String>): String where V <: ToString {
-        format<String, V, TreeMap<String, V>>(data, noneConverter)
-    }
     public func format<V>(data: ConcurrentHashMap<String, V>, noneConverter!: ?String = None<String>): String where V <: ToString {
         format<String, V, ConcurrentHashMap<String, V>>(data, noneConverter)
     }
-    public func format<V>(data: LinkedHashMap<String, V>, noneConverter!: ?String = None<String>): String where V <: ToString {
-        format<String, V, LinkedHashMap<String, V>>(data, noneConverter)
+    public func format<V, M>(data: M, noneConverter!: ?String = None<String>): String where V <: ToString, M <: Map<String, V> & TextTemplateObject<String, V, M> {
+        format<String, V, M>(data, noneConverter)
     }
     public func format<T>(data: T, noneConverter!: ?String = None<String>): String where T <: Object & ObjectData<T> {
         format<String, ToString, ObjectTextTemplateArgs<T>>(ObjectTextTemplateArgs<T>(data), noneConverter)
