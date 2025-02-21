@@ -16,8 +16,10 @@ import f_data.*
 import f_macros.*
 
 /*
- * Props Hash Compare Equal ToString Fields
- * props hash compare equal tostring toString fields
+ * ToString Props Hash Compare Equal Fields
+ * tostring props hash compare equal fields
+ * TOSTRING PROPS HASH COMPARE EQUAL FIELDS
+ * toString
  */
 public macro DataAssist(attr: Tokens, input: Tokens): Tokens {
     match (parseDecl(input)) {
