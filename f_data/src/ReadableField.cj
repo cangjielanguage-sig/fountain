@@ -9,6 +9,8 @@
 */
 package f_data
 
+import f_base.*
+
 abstract sealed class ReadableField {
     public let name: String
     public ReadableField(
@@ -24,5 +26,21 @@ abstract sealed class ReadableField {
     }
     public func get(instance: Object): Data{
         getter(instance)
+    }
+    protected static func newGetter<O, F>(fn: (O) -> F): (Object) -> Data where O <: ObjectData<O>, F <: DataFields<F> {
+        {o =>
+            match(o){
+                case x: O => fn(x).toData()
+                case _ => throw DataException("type of current instance does not match, expected ${TypeInfos.get<O>()}, but receives ${TypeInfo.of(o)}")
+            }
+        }
+    }
+    protected static func newGetter<O, F>(fn: (O) -> ?F): (Object) -> Data where O <: ObjectData<O>, F <: DataFields<F> {
+        {o =>
+            match(o){
+                case x: O => fn(x).toData()
+                case _ => throw DataException("type of current instance does not match, expected ${TypeInfos.get<O>()}, but receives ${TypeInfo.of(o)}")
+            }
+        }
     }
 }

@@ -32,3 +32,10 @@ public func convert<T>(data: Data, flag!: DataConversionFlag = SILENCE): ?T wher
         case _ => None<T>
     }
 }
+public func f_data_tryFromData<O>(data: Data, flag: DataConversionFlag): Any where O <: Object & ObjectData<O> {
+    match(DataObject<O>.populate(data, flag: flag)){
+        case Some(o: O) => o
+        case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException('${data} cannot be converted to ${TypeInfos.get<O>()}')
+        case _ => None<O>
+    }
+}

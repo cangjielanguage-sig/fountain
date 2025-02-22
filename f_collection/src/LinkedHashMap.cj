@@ -42,6 +42,15 @@ public class LinkedHashMap<K, V> <: Map<K, V> where K <: Hashable & Equatable<K>
         this.size_ = size
         add(all: c)
     }
+    public init(size: Int64, initElement: (Int64) -> (K, V)) {
+        map = HashMap<K, ValueNode<(K, V)>>(size)
+        this.size_ = size
+        this.max = false
+        for(i in 0..size) {
+            let (k, v) = initElement(i)
+            add(k, v)
+        }
+    }
 
     /**
      * 返回对象的长度。

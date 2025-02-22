@@ -16,7 +16,7 @@ import f_data.macros.DataAssist
 import std.unittest.*
 import std.unittest.testmacro.*
 
-@DataAssist[hash equal props fields]
+@DataAssist[hash equal props fields tostring compare]
 public class DataTest {
   private var i: Int64 = 0
   private var s: String = 'sdf'
@@ -30,7 +30,7 @@ public class DataTest {
 }
 @DataAssist[fields props]
 public class TT{
-    private var s: String = 'tttttt'
+    private var st: String = 'tttttt'
 }
 @Test
 public class DataUnitTest {
@@ -39,18 +39,20 @@ public class DataUnitTest {
         var dt = DataTest()
         @Assert(dt is Hashable)
         @Assert(dt is Equatable<DataTest>)
-        @Assert(!(dt is Comparable<DataTest>))
+        @Assert(dt is Comparable<DataTest>)
         dt.s = 'hello'
         @Assert('hello', dt.s)
         dt.s = 'hello world'
         let target = DataObject<DataTest>(DataTest())
         let data = (dt.toData() as DataObject<DataTest>).getOrThrow()
+        println('-------------------------------------------------')
         let itr = data.iterator()
         for((n, d) in itr){
             println('${n} ${d}')
             target.set(n, d)
         }
-        println(target.data.s)
+        println('-------------------------------------------------')
+        @Assert('hello world', target.data.s)
         dt = DataObject<DataTest>.populate(data).getOrThrow()
         @Assert('hello world', dt.s)
     }

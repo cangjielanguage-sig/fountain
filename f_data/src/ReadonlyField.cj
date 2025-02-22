@@ -13,4 +13,8 @@ public class ReadonlyField <: ReadableField {
     public init(name: String, typeInfo: TypeInfo, getter: (Object) -> Data){
         super(name, typeInfo, getter)
     }
+    public static func new<O, F>(name: String, getter: (O) -> F): ReadonlyField 
+    where O <: ObjectData<O>, F <: DataFields<F> {
+        ReadonlyField(name, TypeInfos.get<F>(), newGetter<O, F>(getter))
+    }
 }
