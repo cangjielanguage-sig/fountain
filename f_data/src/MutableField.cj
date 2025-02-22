@@ -22,7 +22,7 @@ public class MutableField <: ReadableField {
         setter(instance, data, flag)
     }
     public static func new<O, F>(name: String, getter: (O) -> ?F, setter: (O, ?F) -> Unit): MutableField 
-    where O <: ObjectData<O>, F <: DataFields<F> {
+    where O <: Object & ObjectData<O>, F <: DataFields<F> {
         let fieldType = TypeInfos.get<F>()
         MutableField(name, fieldType, newGetter<O, F>(getter), {o, data, flag => 
             if(data is DataNone){
@@ -50,7 +50,7 @@ public class MutableField <: ReadableField {
         })
     }
     public static func new<O, F>(name: String, getter: (O) -> F, setter: (O, F) -> Unit): MutableField 
-    where O <: ObjectData<O>, F <: DataFields<F> {
+    where O <: Object & ObjectData<O>, F <: DataFields<F> {
         let fieldType = TypeInfos.get<F>()
         MutableField(name, fieldType, newGetter<O, F>(getter), {o, data, flag => 
             if(data is DataNone){

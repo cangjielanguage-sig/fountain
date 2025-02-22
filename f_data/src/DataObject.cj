@@ -82,9 +82,8 @@ public class DataObject<T> <: Data & Iterable<(String, Data)> where T <: Object 
             case x =>
                 let s = StringBuilder()
                 s.append("{")
-                var i = 0
                 for ((k, v) in this) {
-                    if (i > 0) {
+                    if (s.size > 1) {
                         s.append(",")
                     }
                     s.append('"${k}":${v}')

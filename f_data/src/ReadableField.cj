@@ -27,7 +27,7 @@ abstract sealed class ReadableField {
     public func get(instance: Object): Data{
         getter(instance)
     }
-    protected static func newGetter<O, F>(fn: (O) -> F): (Object) -> Data where O <: ObjectData<O>, F <: DataFields<F> {
+    protected static func newGetter<O, F>(fn: (O) -> F): (Object) -> Data where O <: Object & ObjectData<O>, F <: DataFields<F> {
         {o =>
             match(o){
                 case x: O => fn(x).toData()
@@ -35,7 +35,7 @@ abstract sealed class ReadableField {
             }
         }
     }
-    protected static func newGetter<O, F>(fn: (O) -> ?F): (Object) -> Data where O <: ObjectData<O>, F <: DataFields<F> {
+    protected static func newGetter<O, F>(fn: (O) -> ?F): (Object) -> Data where O <: Object & ObjectData<O>, F <: DataFields<F> {
         {o =>
             match(o){
                 case x: O => fn(x).toData()

@@ -13,3 +13,5 @@ fountain.iml
 *.iml
 .devbrain/
 .devbrain/*
+.arts/
+.arts/*

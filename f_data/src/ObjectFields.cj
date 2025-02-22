@@ -9,7 +9,7 @@
 */
 package f_data
 
-public class ObjectFields<T> <: Iterable<ReadableField> where T <: ObjectData<T>{
+public class ObjectFields<T> <: Iterable<ReadableField> where T <: Object & ObjectData<T>{
     private let mutables = HashMap<String, MutableField>()
     private let readables = HashMap<String, ReadableField>()
     public ObjectFields(
