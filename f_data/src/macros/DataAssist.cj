@@ -285,12 +285,12 @@ func generateToFields(d: ClassDecl, exclusion: HashSet<String>) {
                     declType = declType[2..declType.size - 1]
                 }
                 if (x.isVar()) {
-                    parseExpr(
+                    TrailingClosureExpr(
                         quote(
                             MutableField.new<$(klassIdentifier), $(declType)>($(x.identifier.value), {o => o.$(x.identifier)}){o, v => o.$(x.identifier) = v})
                     )
                 } else {
-                    parseExpr(
+                    TrailingClosureExpr(
                         quote(
                             ReadonlyField.new<$(klassIdentifier), $(declType)>($(x.identifier.value)){o => o.$(x.identifier)})
                     )
@@ -303,12 +303,12 @@ func generateToFields(d: ClassDecl, exclusion: HashSet<String>) {
                     declType = declType[2..declType.size - 1]
                 }
                 if (x.isMut()) {
-                    parseExpr(
+                    TrailingClosureExpr(
                         quote(
                             MutableField.new<$(klassIdentifier), $(declType)>($(x.identifier.value), {o => o.$(x.identifier)}){o, v => o.$(x.identifier) = v})
                     )
                 } else {
-                    parseExpr(
+                    TrailingClosureExpr(
                         quote(
                             ReadonlyField.new<$(klassIdentifier), $(declType)>($(x.identifier.value)){o => o.$(x.identifier)})
                     )
