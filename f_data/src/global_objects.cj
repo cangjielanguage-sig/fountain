@@ -14,10 +14,12 @@ public const IGNORE_FIELD_NOT_FOUND: DataConversionFlag = 0x1u64
 public const IGNORE_FIELD_TYPE_NOT_MATCH: DataConversionFlag = 0x2u64
 public const IGNORE_FIELD_NOT_CONVERTABLE: DataConversionFlag = 0x4u64
 public const IGNORE_NONE = 0x8u64
+public const DEEP = 0x10u64
 /**
  * 优先级 WRAPPING > THROWING > SATURATING
  */
-public const WRAPPING_ON_INT_OVERFLOW: DataConversionFlag = 0x10u64
-public const THROWING_ON_INT_OVERFLOW: DataConversionFlag = 0x20u64
-public const SATURATING_ON_INT_OVERFLOW: DataConversionFlag = 0x40u64
+public const WRAPPING_ON_INT_OVERFLOW: DataConversionFlag = 0x20u64
+public const THROWING_ON_INT_OVERFLOW: DataConversionFlag = 0x40u64
+public const SATURATING_ON_INT_OVERFLOW: DataConversionFlag = 0x80u64
 public const SILENCE: DataConversionFlag = IGNORE_FIELD_NOT_FOUND | IGNORE_FIELD_TYPE_NOT_MATCH | IGNORE_FIELD_NOT_CONVERTABLE | IGNORE_NONE
+public const DEFAULT: DataConversionFlag = WRAPPING_ON_INT_OVERFLOW | SILENCE
