@@ -29,8 +29,11 @@ class FieldIterator<T> <: Iterator<(String, Data)> where T <: Object & ObjectDat
         None<(String, Data)>
     }
 }
+interface DataFieldsIterable <: Iterable<(String, Data)> {
+    func iterator(): Iterator<(String, Data)>
+}
 
-public class DataObject<T> <: Data & Iterable<(String, Data)> where T <: Object & ObjectData<T> {
+public class DataObject<T> <: Data & Iterable<(String, Data)> & DataFieldsIterable where T <: Object & ObjectData<T> {
     public DataObject(public let data: T) {
     }
     public func iterator(): Iterator<(String, Data)> {
@@ -112,10 +115,6 @@ public class DataObject<T> <: Data & Iterable<(String, Data)> where T <: Object 
     }
     public static func populate(src: Data, target: T, flag!: DataConversionFlag = SILENCE): ?T {
         let targetData = DataObject<T>(target)
-        let srcDataType = TypeInfo.of(src)
-        func isDataObject() {
-            srcDataType.qualifiedName.startsWith("f_data.DataObject")
-        }
         func putTuple(x: DataTuple) {
             let (key, value) = (x.key, x.value)
             match (key) {
@@ -133,8 +132,8 @@ public class DataObject<T> <: Data & Iterable<(String, Data)> where T <: Object 
                 }
                 target
             case x: DataTuple => putTuple(x)
-            case _ where isDataObject() =>
-                let srcDataItr = ((TypeMemberInfos.instanceFunction(srcDataType, 'iterator')?.apply(src)).getOrThrow() as Iterator<(String, Data)>).getOrThrow()
+            case _ where src is DataFieldsIterable =>
+                let srcDataItr = (src as DataFieldsIterable).getOrThrow()
                 for((n, d) in srcDataItr){
                     targetData.set(n, d, flag: flag)
                 }
