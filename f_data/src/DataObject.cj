@@ -132,14 +132,16 @@ public class DataObject<T> <: Data & Iterable<(String, Data)> & DataFieldsIterab
                 }
                 target
             case x: DataTuple => putTuple(x)
-            case _ where src is DataFieldsIterable =>
-                let srcDataItr = (src as DataFieldsIterable).getOrThrow()
-                for((n, d) in srcDataItr){
-                    targetData.set(n, d, flag: flag)
+            case _ => 
+                match (src){
+                    case x: DataFieldsIterable => 
+                        for((n, d) in x) {
+                            targetData.set(n, d, flag: flag)
+                        }
+                        target
+                    case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) > 0 => None<T>
+                    case _ => throw DataException("src cannot be converted to ${TypeInfos.get<T>()}")
                 }
-                target
-            case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) > 0 => None<T>
-            case _ => throw DataException("src cannot be converted to ${TypeInfos.get<T>()}")
         }
     }
     public static func populate(src: Data, flag!: DataConversionFlag = SILENCE): ?T {
