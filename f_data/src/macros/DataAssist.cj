@@ -195,14 +195,14 @@ func generateEqual(d: ClassDecl, exclusion: HashSet<String>) {
         public operator func ==(other: $typeName): Bool {
             $eq
         }
-    )),
+    ))/*,
                 parseDecl(
                 quote(
         public operator func !=(other: $typeName): Bool {
             !(this == other)
         }
     )
-            )])
+            )*/])
 }
 
 func generateCompare(d: ClassDecl, exclusion: HashSet<String>) {
