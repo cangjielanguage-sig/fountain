@@ -29,11 +29,8 @@ class FieldIterator<T> <: Iterator<(String, Data)> where T <: Object & ObjectDat
         None<(String, Data)>
     }
 }
-interface DataFieldsIterable <: Iterable<(String, Data)> {
-    func iterator(): Iterator<(String, Data)>
-}
 
-public class DataObject<T> <: Data & Iterable<(String, Data)> & DataFieldsIterable where T <: Object & ObjectData<T> {
+public class DataObject<T> <: Data & Iterable<(String, Data)> where T <: Object & ObjectData<T> {
     public DataObject(public let data: T) {
     }
     public func iterator(): Iterator<(String, Data)> {
@@ -132,7 +129,7 @@ public class DataObject<T> <: Data & Iterable<(String, Data)> & DataFieldsIterab
                 }
                 target
             case x: DataTuple => putTuple(x)
-            case x: DataFieldsIterable => 
+            case x: Iterable<(String, Data)> => 
                 for((n, d) in x) {
                     targetData.set(n, d, flag: flag)
                 }
