@@ -41,7 +41,7 @@ extend String <: DataFields<String> {
     public func toData(): Data {
         DataString(this)
     }
-    public static func tryFromData(data: Data, flag!: DataConversionFlag = SILENCE): Any {
+    public static func tryFromData(data: Data, flag!: DataConversionFlag = DEFAULT): Any {
         match(data){
             case x: DataString => x.data
             case x: DataNone => None<String>

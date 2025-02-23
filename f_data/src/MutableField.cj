@@ -15,7 +15,7 @@ public class MutableField <: ReadableField {
         super(name, typeInfo, getter)
     }
 
-    public func set(instance: Object, data: Data, flag!: DataConversionFlag = SILENCE): Bool {
+    public func set(instance: Object, data: Data, flag!: DataConversionFlag = DEFAULT): Bool {
         setter(instance, data, flag)
     }
     public static func new<O, F>(name: String, getter: (O) -> ?F, setter: (O, ?F) -> Unit): MutableField where O <: Object & ObjectData<O>,

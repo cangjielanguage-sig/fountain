@@ -22,7 +22,7 @@ extend<T> Array<T> <: DataFields<Array<T>> where T <: DataFields<T> {
                 DataSequence(list)
         }
     }
-    public static func tryFromData(data: Data, flag!: DataConversionFlag = SILENCE): Any {
+    public static func tryFromData(data: Data, flag!: DataConversionFlag = DEFAULT): Any {
         match (data) {
             case x: DataSequence =>
                 let list = ArrayList<T>()
@@ -54,7 +54,7 @@ extend<T> ArrayList<T> <: DataFields<ArrayList<T>> where T <: DataFields<T> {
         }
         DataSequence(list)
     }
-    public static func tryFromData(data: Data, flag!: DataConversionFlag = SILENCE): Any {
+    public static func tryFromData(data: Data, flag!: DataConversionFlag = DEFAULT): Any {
         match (data) {
             case x: DataSequence =>
                 let list = ArrayList<T>()
@@ -85,7 +85,7 @@ extend<T> HashSet<T> <: DataFields<HashSet<T>> where T <: DataFields<T> & Hashab
         }
         DataSequence(list)
     }
-    public static func tryFromData(data: Data, flag!: DataConversionFlag = SILENCE): Any {
+    public static func tryFromData(data: Data, flag!: DataConversionFlag = DEFAULT): Any {
         match (data) {
             case x: DataSequence =>
                 let set = HashSet<T>()
@@ -115,7 +115,7 @@ extend<T> TreeSet<T> <: DataFields<TreeSet<T>> where T <: DataFields<T> & Compar
         }
         DataSequence(list)
     }
-    public static func tryFromData(data: Data, flag!: DataConversionFlag = SILENCE): Any {
+    public static func tryFromData(data: Data, flag!: DataConversionFlag = DEFAULT): Any {
         match (data) {
             case x: DataSequence =>
                 let set = TreeSet<T>()
@@ -155,7 +155,7 @@ extend<K, V> HashMap<K, V> <: DataFields<HashMap<K, V>> where K <: DataFields<K>
             DataTuples(list)
         }
     }
-    public static func tryFromData(data: Data, flag!: DataConversionFlag = SILENCE): Any {
+    public static func tryFromData(data: Data, flag!: DataConversionFlag = DEFAULT): Any {
         match (data) {
             case x: DataSequence =>
                 let map = HashMap<K, V>()
@@ -228,7 +228,7 @@ extend<K, V> TreeMap<K, V> <: DataFields<TreeMap<K, V>> where K <: DataFields<K>
             DataTuples(list)
         }
     }
-    public static func tryFromData(data: Data, flag!: DataConversionFlag = SILENCE): Any {
+    public static func tryFromData(data: Data, flag!: DataConversionFlag = DEFAULT): Any {
         match (data) {
             case x: DataSequence =>
                 let map = TreeMap<K, V>()
@@ -302,7 +302,7 @@ extend<K, V> ConcurrentHashMap<K, V> <: DataFields<ConcurrentHashMap<K, V>> wher
             DataTuples(list)
         }
     }
-    public static func tryFromData(data: Data, flag!: DataConversionFlag = SILENCE): Any {
+    public static func tryFromData(data: Data, flag!: DataConversionFlag = DEFAULT): Any {
         match (data) {
             case x: DataSequence =>
                 let map = ConcurrentHashMap<K, V>()
@@ -376,7 +376,7 @@ extend<K, V> LinkedHashMap<K, V> <: DataFields<LinkedHashMap<K, V>> where K <: D
             DataTuples(list)
         }
     }
-    public static func tryFromData(data: Data, flag!: DataConversionFlag = SILENCE): Any {
+    public static func tryFromData(data: Data, flag!: DataConversionFlag = DEFAULT): Any {
         match (data) {
             case x: DataSequence =>
                 let map = LinkedHashMap<K, V>()

@@ -49,10 +49,10 @@ public class DataObject<T> <: Data & Iterable<(String, Data)> where T <: Object 
     public operator func [](name: String, value!: Data): Unit {
         set(name, value)
     }
-    public func set<V>(name: String, value: V, flag!: DataConversionFlag = SILENCE): Unit where V <: DataFields<V>{
+    public func set<V>(name: String, value: V, flag!: DataConversionFlag = DEFAULT): Unit where V <: DataFields<V>{
         set(name, value.toData(), flag: flag)
     }
-    public func set(name: String, value: Data, flag!: DataConversionFlag = SILENCE): Unit {
+    public func set(name: String, value: Data, flag!: DataConversionFlag = DEFAULT): Unit {
         match(T.dataFields().mutableField(name)){
             case Some(f) where f.set(data, value, flag: flag) => ()
             case Some(_) where (flag & IGNORE_FIELD_NOT_CONVERTABLE) != 0 => ()  
@@ -64,7 +64,7 @@ public class DataObject<T> <: Data & Iterable<(String, Data)> where T <: Object 
     public func get(name: String): ?Data{
         T.dataFields().readableField(name)?.get(data)
     }
-    public func get<V>(name: String, flag!: DataConversionFlag = SILENCE): ?V where V <: DataFields<V> {
+    public func get<V>(name: String, flag!: DataConversionFlag = DEFAULT): ?V where V <: DataFields<V> {
         match(get(name)){
             case Some(x) => match(V.tryFromData(x, flag: flag)){
                 case x: ?V => x
@@ -110,7 +110,7 @@ public class DataObject<T> <: Data & Iterable<(String, Data)> where T <: Object 
     public static func parse(string: String): Data {
         tryParse(string).getOrThrow {DataException("current type ${TypeInfos.get<T>()} is not Parsable")}
     }
-    public static func populate(src: Data, target: T, flag!: DataConversionFlag = SILENCE): ?T {
+    public static func populate(src: Data, target: T, flag!: DataConversionFlag = DEFAULT): ?T {
         let targetData = DataObject<T>(target)
         func putTuple(x: DataTuple) {
             let (key, value) = (x.key, x.value)
@@ -138,24 +138,24 @@ public class DataObject<T> <: Data & Iterable<(String, Data)> where T <: Object 
             case _ => throw DataException("src cannot be converted to ${TypeInfos.get<T>()}")
         }
     }
-    public static func populate(src: Data, flag!: DataConversionFlag = SILENCE): ?T {
+    public static func populate(src: Data, flag!: DataConversionFlag = DEFAULT): ?T {
         populate(src, T.dataFields().create(), flag: flag)
     }
-    public static func populate<S>(src: S, flag!: DataConversionFlag = SILENCE): ?T where S <: Object & ObjectData<S> {
+    public static func populate<S>(src: S, flag!: DataConversionFlag = DEFAULT): ?T where S <: Object & ObjectData<S> {
         populate(DataObject<S>(src), flag: flag)
     }
-    public static func populate<S>(src: S, target: T, flag!: DataConversionFlag = SILENCE): ?T where S <: Object & ObjectData<S> {
+    public static func populate<S>(src: S, target: T, flag!: DataConversionFlag = DEFAULT): ?T where S <: Object & ObjectData<S> {
         populate(DataObject<S>(src), target, flag: flag)
     }
-    public static func populate<M, V>(src: M, flag!: DataConversionFlag = SILENCE): ?T where M <: Map<String, V> & DataFields<M>,
+    public static func populate<M, V>(src: M, flag!: DataConversionFlag = DEFAULT): ?T where M <: Map<String, V> & DataFields<M>,
         V <: DataFields<V> {
         populate(src.toData(), flag: flag)
     }
-    public static func populate<M, V>(src: M, target: T, flag!: DataConversionFlag = SILENCE): ?T where M <: Map<String, V> & DataFields<M>,
+    public static func populate<M, V>(src: M, target: T, flag!: DataConversionFlag = DEFAULT): ?T where M <: Map<String, V> & DataFields<M>,
         V <: DataFields<V> {
         populate(src.toData(), target, flag: flag)
     }
-    public static func populate<M, V>(src: T, map: M, flag!: DataConversionFlag = SILENCE): M where M <: Map<String, V>,
+    public static func populate<M, V>(src: T, map: M, flag!: DataConversionFlag = DEFAULT): M where M <: Map<String, V>,
         V <: DataFields<V> {
         for ((k, v) in DataObject<T>(src)) {
             match(V.tryFromData(v, flag: flag)){

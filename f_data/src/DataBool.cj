@@ -48,7 +48,7 @@ extend Bool <: DataFields<Bool> {
             DataBool.FALSE
         }
     }
-    public static func tryFromData(data: Data, flag!: DataConversionFlag = SILENCE): Any {
+    public static func tryFromData(data: Data, flag!: DataConversionFlag = DEFAULT): Any {
         match(data){
             case x: DataBool => x.tryToBool()
             case _: DataNone => None<Bool>

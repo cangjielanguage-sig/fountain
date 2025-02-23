@@ -23,7 +23,7 @@ public interface DataFields<T> where T <: DataFields<T> {
     }
     static func tryFromData(data: Data, flag!: DataConversionFlag): Any
 }
-public func convert<T>(data: Data, flag!: DataConversionFlag = SILENCE): ?T where T <: DataFields<T> {
+public func convert<T>(data: Data, flag!: DataConversionFlag = DEFAULT): ?T where T <: DataFields<T> {
     match(T.tryFromData(data, flag: flag)){
         case x: ?T => x
         case x: T => x
