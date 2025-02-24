@@ -13,8 +13,8 @@ public type DataConversionFlag = UInt64
 public const IGNORE_FIELD_NOT_FOUND: DataConversionFlag = 0x1u64
 public const IGNORE_FIELD_TYPE_NOT_MATCH: DataConversionFlag = 0x2u64
 public const IGNORE_FIELD_NOT_CONVERTABLE: DataConversionFlag = 0x4u64
-public const IGNORE_NONE = 0x8u64
-public const DEEP = 0x10u64
+public const IGNORE_NONE: DataConversionFlag = 0x8u64
+public const DEEP: DataConversionFlag = 0x10u64
 /**
  * 优先级 WRAPPING > THROWING > SATURATING
  */
