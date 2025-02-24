@@ -153,14 +153,14 @@ func generateHash(d: ClassDecl, exclusion: HashSet<String>) {
         !(isStatic(d) || exclusion.contains(d.identifier.value) || exclusion.contains('${d.identifier.value}_'))) {
         hashed += quote(hasher.write($(d.identifier))) + `nl`
     }
-    d.body.decls.add(parseDecl(quote(
-        private var __hAsh__ = 0
-    )))
     d
         .body
         .decls
         .add(
-            parseDecl(
+            all: [VarDecl(quote(
+        private var __hAsh__ = 0
+    )),
+                FuncDecl(
                 quote(
         public func hashCode(): Int64{
             if(__hAsh__ == 0){
@@ -171,7 +171,7 @@ func generateHash(d: ClassDecl, exclusion: HashSet<String>) {
             __hAsh__
         }
     )
-            ))
+            )])
 }
 
 func generateEqual(d: ClassDecl, exclusion: HashSet<String>) {
@@ -190,13 +190,13 @@ func generateEqual(d: ClassDecl, exclusion: HashSet<String>) {
         .body
         .decls
         .add(
-            all: [parseDecl(
+            all: [FuncDecl(
                 quote(
         public operator func ==(other: $typeName): Bool {
             $eq
         }
     )),
-                parseDecl(
+                FuncDecl(
                 quote(
         public operator func !=(other: $typeName): Bool {
             !(this == other)
@@ -226,7 +226,7 @@ func generateCompare(d: ClassDecl, exclusion: HashSet<String>) {
         .body
         .decls
         .add(
-            parseDecl(
+            FuncDecl(
                 quote(
         public func compare(other: $typeName): Ordering {
             var result = Ordering.EQ
@@ -255,7 +255,7 @@ func generateToString(d: ClassDecl, exclusion: HashSet<String>) {
         .body
         .decls
         .add(
-            parseDecl(
+            FuncDecl(
                 quote(
         public func toString(): String {
             var result = DataToString()
