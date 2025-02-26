@@ -20,7 +20,7 @@ abstract sealed class TicktockUnit <: Currently & ToString & Hashable & Equatabl
     public static let MONTH_DAILY = MonthDailyTicktockUnit(3, true, 1..= 31, 28 ..= 31)
     public static let MONTHLY = MonthlyTicktockUnit(4, true, 1..= 12, 12..= 12)
     public static let WEEK_DAILY = WeekDailyTicktockUnit(5, true, 1..= 7, 7..= 7)
-    public static let YEARLY = YearlyTicktockUnit(6, false, 0, DateTime.now().year ..= Int64.Max, Int64.Max ..= Int64.Max)
+    public static let YEARLY = YearlyTicktockUnit(6, false, DateTime.now().year ..= Int64.Max, Int64.Max ..= Int64.Max)
 
     private var value_: Int64
     private var oneStart: Bool
