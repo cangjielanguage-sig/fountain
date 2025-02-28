@@ -87,7 +87,11 @@ public struct DataToString <: ToString {
     }
     public func append<T>(name: String, value: ?T): Unit {
         match(value) {
-            case Some(x) => append(name, x)
+            case Some(x) => match(x){
+                case v: ToString => builder.append('${name}: ${v}; ')
+                case v: Object => append(name, v)
+                case _ => builder.append('${name}: _; ')
+            }
             case _ => builder.append('${name}: None; ')
         }
     }
