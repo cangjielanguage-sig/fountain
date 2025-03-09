@@ -9,6 +9,8 @@
 */
 package f_data.json
 
+import std.collection.concurrent.ConcurrentMap
+
 public interface ToJsonString {
     func toJsonString(): String
 }
@@ -42,64 +44,89 @@ extend DataReal <: ToJsonString {
         toString()
     }
 }
-extend<T> DataObject<T> <: ToJsonString where T <: Object & ObjectData<T> {
+extend<T> DataObject<T> <: ToJsonString where T <: ObjectData<T> {
     public func toJsonString(): String {
         let builder = StringBuilder('{')
-        var commaBefore = false
         for((name, value) in this){
             let valStr = 
             match(value){
                 case x: ToJsonString => x.toJsonString()
                 case _ => continue
             }
-            if(commaBefore){
+            if(builder.size > 1){
                 builder.append(',')
             }
-            builder.append('"${name}"', valStr)
-            commaBefore = true
+            builder.append('"${name}"')
+            builder.append(':')
+            builder.append(valStr)
         }
         builder.append('}')
         builder.toString()
     }
 }
-extend DataSequence <: ToJsonString {
+extend<C, T> DataCollection<C, T> <: ToJsonString where T <: DataFields<T>,C <: DataFields<C> & Collection<T> {
     public func toJsonString(): String {
         let builder = StringBuilder('[')
-        var commaBefore = false
         for(d in this){
             let valStr = 
             match(d){
                 case x: ToJsonString => x.toJsonString()
                 case _ => continue
             }
-            if(commaBefore){
+            if(builder.size > 1){
                 builder.append(',')
             }
             builder.append(valStr)
-            commaBefore = true
         }
         builder.append(']')
         builder.toString()
     }
 }
-extend StringKeyMapTuples <: ToJsonString {
+extend<M, K, V> DataMap<M, K, V> <: ToJsonString where K <: DataFields<K>, V <: DataFields<V>, M <: DataFields<M> & Map<K, V> {
     public func toJsonString(): String {
         let builder = StringBuilder('{')
-        var commaBefore = false
-        for(tuple in this){
-            let valStr = 
-            match((tuple.key, tuple.value)){
-                case (x: DataString, y: ToJsonString) => '${x.toJsonString()}:${y.toJsonString()}'
+        for((k, v) in this){
+            let (ks, vs) = 
+            match((k, v)){
+                case (x: ToJsonString, y: ToJsonString) => (x.toJsonString(), y.toJsonString())
                 case _ => continue
             }
-            if(commaBefore){
+            if(builder.size > 1){
                 builder.append(',')
             }
-            builder.append(valStr)
-            commaBefore = true
+            if(ks.startsWith('"') && ks.endsWith('"')){
+                builder.append(ks)
+            }else{
+                builder.append('"${ks}"')
+            }
+            builder.append(':')
+            builder.append(vs)
         }
         builder.append('}')
         builder.toString()
     }
 }
-
+extend<M, K, V> DataConcurrentMap<M, K, V> <: ToJsonString where K <: DataFields<K>, V <: DataFields<V>, M <: DataFields<M> & ConcurrentMap<K, V> {
+    public func toJsonString(): String {
+        let builder = StringBuilder('{')
+        for((k, v) in this){
+            let (ks, vs) = 
+            match((k, v)){
+                case (x: ToJsonString, y: ToJsonString) => (x.toJsonString(), y.toJsonString())
+                case _ => continue
+            }
+            if(builder.size > 1){
+                builder.append(',')
+            }
+            if(ks.startsWith('"') && ks.endsWith('"')){
+                builder.append(ks)
+            }else{
+                builder.append('"${ks}"')
+            }
+            builder.append(':')
+            builder.append(vs)
+        }
+        builder.append('}')
+        builder.toString()
+    }
+}

@@ -14,7 +14,7 @@ internal class MinPathNode <: DataPathNode {
     private init(){}
     public func get(data: Data): Iterator<Data> {
         match(data){
-            case x: DataSequence => 
+            case x: Iterable<Data> => 
                 var r = None<Data>
                 for(v in x){
                     if(r.isNone()){

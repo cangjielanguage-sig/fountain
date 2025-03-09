@@ -20,9 +20,9 @@ internal class SizeFilter <: DataFilter {
             case _ => return false
         }
         match(d){
-            case x: DataSequence => x.size
-            case x: StringKeyMapTuples => x.size
-            case x: DataTuples => x.size
+            case x: Collection<Data> => x.size
+            case x: Collection<(String, Data)> => x.size
+            case x: Collection<(Data, Data)> => x.size
             case x: DataString => 
                 var s = 0
                 for(_ in x.data.runes()){

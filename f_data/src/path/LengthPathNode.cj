@@ -14,8 +14,9 @@ internal class LengthPathNode <: DataPathNode {
     private init(){}
     public func get(data: Data): Iterator<Data>{
         match(data){
-            case x: DataSequence => SingleIterator<Data>(x.size.toData())
-            case x: StringKeyMapTuples => SingleIterator<Data>(x.size.toData())
+            case x: Collection<Data> => SingleIterator<Data>(x.size.toData())
+            case x: Collection<(String, Data)> => SingleIterator<Data>(x.size.toData())
+            case x: Collection<(Data, Data)> => SingleIterator<Data>(x.size.toData())
             case x: DataString => SingleIterator<Data>(x.data.size.toData())
             case _ => OptionIterator<Data>.NONE
         }

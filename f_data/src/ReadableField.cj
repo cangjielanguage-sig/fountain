@@ -16,7 +16,7 @@ abstract sealed class ReadableField {
     public ReadableField(
         name: String,
         public let typeInfo: TypeInfo,
-        private let getter: (Object) -> Data
+        private let getter: (Any) -> Data
     ){
         this.name = if(name[0] == b'`'){
             name[1 .. name.size - 1]
@@ -24,10 +24,10 @@ abstract sealed class ReadableField {
             name
         }
     }
-    public func get(instance: Object): Data{
+    public func get(instance: Any): Data{
         getter(instance)
     }
-    protected static func newGetter<O, F>(fn: (O) -> F): (Object) -> Data where O <: Object & ObjectData<O>, F <: DataFields<F> {
+    protected static func newGetter<O, F>(fn: (O) -> F): (Any) -> Data where O <: ObjectData<O>, F <: DataFields<F> {
         {o =>
             match(o){
                 case x: O => fn(x).toData()
@@ -35,7 +35,7 @@ abstract sealed class ReadableField {
             }
         }
     }
-    protected static func newGetter<O, F>(fn: (O) -> ?F): (Object) -> Data where O <: Object & ObjectData<O>, F <: DataFields<F> {
+    protected static func newGetter<O, F>(fn: (O) -> ?F): (Any) -> Data where O <: ObjectData<O>, F <: DataFields<F> {
         {o =>
             match(o){
                 case x: O => fn(x).toData()

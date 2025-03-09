@@ -13,7 +13,7 @@ extend Int8 <: DataFields<Int8> {
     public func toData(): Data {
         DataReal(this)
     }
-    public static func tryFromData(data: Data, flag!: DataConversionFlag = DEFAULT): Any {
+    public static func tryFromData(data: Data, flag!: DataConversionFlag = DEFAULT_DATA_FLAG): Any {
         match (data) {
             case x: DataReal where (flag & IGNORE_FIELD_NOT_CONVERTABLE) != 0 => x.tryToInt8()
             case x: DataReal where (flag & WRAPPING_ON_INT_OVERFLOW) != 0 => x.toInt8(strategy: wrapping)
@@ -35,7 +35,7 @@ extend UInt8 <: DataFields<UInt8> {
     public func toData(): Data {
         DataReal(this)
     }
-    public static func tryFromData(data: Data, flag!: DataConversionFlag = DEFAULT): Any {
+    public static func tryFromData(data: Data, flag!: DataConversionFlag = DEFAULT_DATA_FLAG): Any {
         match (data) {
             case x: DataReal where (flag & IGNORE_FIELD_NOT_CONVERTABLE) != 0 => x.tryToUInt8()
             case x: DataReal where (flag & WRAPPING_ON_INT_OVERFLOW) != 0 => x.toUInt8(strategy: wrapping)
@@ -57,7 +57,7 @@ extend Int16 <: DataFields<Int16> {
     public func toData(): Data {
         DataReal(this)
     }
-    public static func tryFromData(data: Data, flag!: DataConversionFlag = DEFAULT): Any {
+    public static func tryFromData(data: Data, flag!: DataConversionFlag = DEFAULT_DATA_FLAG): Any {
         match (data) {
             case x: DataReal where (flag & IGNORE_FIELD_NOT_CONVERTABLE) != 0 => x.tryToInt16()
             case x: DataReal where (flag & WRAPPING_ON_INT_OVERFLOW) != 0 => x.toInt16(strategy: wrapping)
@@ -79,7 +79,7 @@ extend UInt16 <: DataFields<UInt16> {
     public func toData(): Data {
         DataReal(this)
     }
-    public static func tryFromData(data: Data, flag!: DataConversionFlag = DEFAULT): Any {
+    public static func tryFromData(data: Data, flag!: DataConversionFlag = DEFAULT_DATA_FLAG): Any {
         match (data) {
             case x: DataReal where (flag & IGNORE_FIELD_NOT_CONVERTABLE) != 0 => x.tryToUInt16()
             case x: DataReal where (flag & WRAPPING_ON_INT_OVERFLOW) != 0 => x.toUInt16(strategy: wrapping)
@@ -101,7 +101,7 @@ extend Int32 <: DataFields<Int32> {
     public func toData(): Data {
         DataReal(this)
     }
-    public static func tryFromData(data: Data, flag!: DataConversionFlag = DEFAULT): Any {
+    public static func tryFromData(data: Data, flag!: DataConversionFlag = DEFAULT_DATA_FLAG): Any {
         match (data) {
             case x: DataReal where (flag & IGNORE_FIELD_NOT_CONVERTABLE) != 0 => x.tryToInt32()
             case x: DataReal where (flag & WRAPPING_ON_INT_OVERFLOW) != 0 => x.toInt32(strategy: wrapping)
@@ -123,7 +123,7 @@ extend UInt32 <: DataFields<UInt32> {
     public func toData(): Data {
         DataReal(this)
     }
-    public static func tryFromData(data: Data, flag!: DataConversionFlag = DEFAULT): Any {
+    public static func tryFromData(data: Data, flag!: DataConversionFlag = DEFAULT_DATA_FLAG): Any {
         match (data) {
             case x: DataReal where (flag & IGNORE_FIELD_NOT_CONVERTABLE) != 0 => x.tryToUInt32()
             case x: DataReal where (flag & WRAPPING_ON_INT_OVERFLOW) != 0 => x.toUInt32(strategy: wrapping)
@@ -145,7 +145,7 @@ extend Int64 <: DataFields<Int64> {
     public func toData(): Data {
         DataReal(this)
     }
-    public static func tryFromData(data: Data, flag!: DataConversionFlag = DEFAULT): Any {
+    public static func tryFromData(data: Data, flag!: DataConversionFlag = DEFAULT_DATA_FLAG): Any {
         match (data) {
             case x: DataReal where (flag & IGNORE_FIELD_NOT_CONVERTABLE) != 0 => x.tryToInt64()
             case x: DataReal where (flag & WRAPPING_ON_INT_OVERFLOW) != 0 => x.toInt64(strategy: wrapping)
@@ -167,7 +167,7 @@ extend UInt64 <: DataFields<UInt64> {
     public func toData(): Data {
         DataReal(this)
     }
-    public static func tryFromData(data: Data, flag!: DataConversionFlag = DEFAULT): Any {
+    public static func tryFromData(data: Data, flag!: DataConversionFlag = DEFAULT_DATA_FLAG): Any {
         match (data) {
             case x: DataReal where (flag & IGNORE_FIELD_NOT_CONVERTABLE) != 0 => x.tryToUInt64()
             case x: DataReal where (flag & WRAPPING_ON_INT_OVERFLOW) != 0 => x.toUInt64(strategy: wrapping)
@@ -189,7 +189,7 @@ extend IntNative <: DataFields<IntNative> {
     public func toData(): Data {
         DataReal(this)
     }
-    public static func tryFromData(data: Data, flag!: DataConversionFlag = DEFAULT): Any {
+    public static func tryFromData(data: Data, flag!: DataConversionFlag = DEFAULT_DATA_FLAG): Any {
         match (data) {
             case x: DataReal where (flag & IGNORE_FIELD_NOT_CONVERTABLE) != 0 => x.tryToIntNative()
             case x: DataReal where (flag & WRAPPING_ON_INT_OVERFLOW) != 0 => x.toIntNative(strategy: wrapping)
@@ -211,7 +211,7 @@ extend UIntNative <: DataFields<UIntNative> {
     public func toData(): Data {
         DataReal(this)
     }
-    public static func tryFromData(data: Data, flag!: DataConversionFlag = DEFAULT): Any {
+    public static func tryFromData(data: Data, flag!: DataConversionFlag = DEFAULT_DATA_FLAG): Any {
         match (data) {
             case x: DataReal where (flag & IGNORE_FIELD_NOT_CONVERTABLE) != 0 => x.tryToUIntNative()
             case x: DataReal where (flag & WRAPPING_ON_INT_OVERFLOW) != 0 => x.toUIntNative(strategy: wrapping)
@@ -233,7 +233,7 @@ extend Float64 <: DataFields<Float64> {
     public func toData(): Data {
         DataReal(this)
     }
-    public static func tryFromData(data: Data, flag!: DataConversionFlag = DEFAULT): Any {
+    public static func tryFromData(data: Data, flag!: DataConversionFlag = DEFAULT_DATA_FLAG): Any {
         match (data) {
             case x: DataReal => x.tryToFloat64()
             case _: DataNone => None<Float64>
@@ -249,7 +249,7 @@ extend Float32 <: DataFields<Float32> {
     public func toData(): Data {
         DataReal(this)
     }
-    public static func tryFromData(data: Data, flag!: DataConversionFlag = DEFAULT): Any {
+    public static func tryFromData(data: Data, flag!: DataConversionFlag = DEFAULT_DATA_FLAG): Any {
         match (data) {
             case x: DataReal => x.tryToFloat32()
             case _: DataNone => None<Float32>
@@ -265,7 +265,7 @@ extend Float16 <: DataFields<Float16> {
     public func toData(): Data {
         DataReal(this)
     }
-    public static func tryFromData(data: Data, flag!: DataConversionFlag = DEFAULT): Any {
+    public static func tryFromData(data: Data, flag!: DataConversionFlag = DEFAULT_DATA_FLAG): Any {
         match (data) {
             case x: DataReal => x.tryToFloat16()
             case _: DataNone => None<Float16>
@@ -281,7 +281,7 @@ extend BigInt <: DataFields<BigInt> {
     public func toData(): Data {
         DataReal(this)
     }
-    public static func tryFromData(data: Data, flag!: DataConversionFlag = DEFAULT): Any {
+    public static func tryFromData(data: Data, flag!: DataConversionFlag = DEFAULT_DATA_FLAG): Any {
         match (data) {
             case x: DataReal => x.tryToBigInt()
             case _: DataNone => None<BigInt>
@@ -296,7 +296,7 @@ extend Decimal <: DataFields<Decimal> {
     public func toData(): Data {
         DataReal(this)
     }
-    public static func tryFromData(data: Data, flag!: DataConversionFlag = DEFAULT): Any {
+    public static func tryFromData(data: Data, flag!: DataConversionFlag = DEFAULT_DATA_FLAG): Any {
         match (data) {
             case x: DataReal => x.tryToDecimal()
             case _: DataNone => None<Decimal>

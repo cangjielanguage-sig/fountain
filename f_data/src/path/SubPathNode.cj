@@ -13,16 +13,9 @@ internal class SubPathNode <: DataPathNode {
     SubPathNode(private let name: String){}
     public func get(data: Data): Iterator<Data> {
         match(data){
-            case x: StringKeyMapTuples => OptionIterator<Data>(x.get(name))
+            case x: NamedData => OptionIterator<Data>(x.get(name))
             case _ => 
-                let info = TypeInfo.of(data)
-                if(info.qualifiedName.startsWith('f_data.DataObject') && 
-                   let Some(fn) <- TypeMemberInfos.instanceFunction(info, 'getData', [TypeInfos.get<String>()]) && 
-                   let d: ?Data <- fn.apply(data, [name])){
-                    OptionIterator<Data>(d)
-                }else{
-                    OptionIterator<Data>.NONE
-                }
+                OptionIterator<Data>.NONE
         }
     }
 }

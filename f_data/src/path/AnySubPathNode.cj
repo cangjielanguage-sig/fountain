@@ -14,8 +14,9 @@ internal class AnySubPathNode <: DataPathNode {
     private init(){}
     public func get(data: Data): Iterator<Data> {
         match(data){
-            case x: StringKeyMapTuples => x.iterator().map{tpl => tpl.value}
-            case x: DataSequence => x.iterator()
+            case x: Iterable<(String, Data)> => x.iterator().map{tpl => tpl[1]}
+            case x: Iterable<(Data, Data)> => x.iterator().map{tpl => tpl[1]}
+            case x: Iterable<Data> => x.iterator()
             case _ => 
                 let info = TypeInfo.of(data)
                 if(info.qualifiedName.startsWith('f_data.DataObject') && 

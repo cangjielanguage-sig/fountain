@@ -359,7 +359,7 @@ func generateToFields(d: ClassDecl, exclusion: HashSet<String>) {
             ),
             FuncDecl(
                 quote(
-        public static func tryFromData(data: Data, flag!: DataConversionFlag = DEFAULT): Any {
+        public static func tryFromData(data: Data, flag!: DataConversionFlag = DEFAULT_DATA_FLAG): Any {
             f_data_tryFromData<$klassIdentifier>(data, flag)
         }
     )

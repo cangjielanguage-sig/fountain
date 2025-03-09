@@ -14,7 +14,7 @@ internal class AvgPathNode <: DataPathNode {
     private init(){}
     public func get(data: Data): Iterator<Data> {
         match(data){
-            case x: DataSequence => 
+            case x: Iterable<Data> => 
                 var r = Decimal.ZERO
                 var c = 0
                 for(v in x){

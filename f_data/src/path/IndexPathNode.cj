@@ -13,7 +13,7 @@ internal class IndexPathNode <: DataPathNode {
     IndexPathNode(private let index: Int64){}
     public func get(data: Data): Iterator<Data> {
         match(data){
-            case x: DataSequence => OptionIterator<Data>(x.get(index))
+            case x: Iterable<Data> => x.iterator().skip(index)
             case _ => OptionIterator<Data>.NONE
         }
     }

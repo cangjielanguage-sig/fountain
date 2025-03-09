@@ -16,7 +16,7 @@ extend<T> Option<T> <: DataFields<T> where T <: DataFields<T> {
             case _ => DataNone.INSTANCE
         }
     }
-    public static func tryFromData(data: Data, flag!: DataConversionFlag = DEFAULT): Any {
+    public static func tryFromData(data: Data, flag!: DataConversionFlag = DEFAULT_DATA_FLAG): Any {
         match(data) {
             case x: DataNone => None<T>
             case x => T.tryFromData(x, flag: flag)

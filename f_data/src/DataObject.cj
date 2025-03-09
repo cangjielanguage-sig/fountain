@@ -11,7 +11,7 @@ package f_data
 
 import std.convert.Parsable
 
-public interface ObjectData<T> <: DataFields<T> where T <: Object & ObjectData<T> {
+public interface ObjectData<T> <: DataFields<T> where T <: ObjectData<T> & DataFields<T> {
     static func dataFields(): ObjectFields<T>
 
     func toData(): Data
@@ -19,7 +19,7 @@ public interface ObjectData<T> <: DataFields<T> where T <: Object & ObjectData<T
     static func tryFromData(data: Data, flag!: DataConversionFlag): Any
 }
 
-class FieldIterator<T> <: Iterator<(String, Data)> where T <: Object & ObjectData<T> {
+class FieldIterator<T> <: Iterator<(String, Data)> where T <: DataFields<T> {
     public FieldIterator(private let data: T, private let itr: Iterator<ReadableField>) {}
 
     public func next(): ?(String, Data) {
@@ -30,8 +30,16 @@ class FieldIterator<T> <: Iterator<(String, Data)> where T <: Object & ObjectDat
     }
 }
 
-public class DataObject<T> <: Data & Iterable<(String, Data)> where T <: Object & ObjectData<T> {
+public class DataObject<T> <: Data & Collection<(String, Data)> & NamedData where T <: ObjectData<T> & DataFields<T> {
     public DataObject(public let data: T) {
+    }
+    public prop size: Int64 {
+        get(){
+            T.dataFields().size
+        }
+    }
+    public func isEmpty() {
+        size == 0
     }
     public func iterator(): Iterator<(String, Data)> {
         let fields = fields()
@@ -49,10 +57,10 @@ public class DataObject<T> <: Data & Iterable<(String, Data)> where T <: Object 
     public operator func [](name: String, value!: Data): Unit {
         set(name, value)
     }
-    public func set<V>(name: String, value: V, flag!: DataConversionFlag = DEFAULT): Unit where V <: DataFields<V>{
+    public func set<V>(name: String, value: V, flag!: DataConversionFlag = DEFAULT_DATA_FLAG): Unit where V <: DataFields<V>{
         set(name, value.toData(), flag: flag)
     }
-    public func set(name: String, value: Data, flag!: DataConversionFlag = DEFAULT): Unit {
+    public func set(name: String, value: Data, flag!: DataConversionFlag = DEFAULT_DATA_FLAG): Unit {
         match(T.dataFields().mutableField(name)){
             case Some(f) where f.set(data, value, flag: flag) => ()
             case Some(_) where (flag & IGNORE_FIELD_NOT_CONVERTABLE) != 0 => ()  
@@ -64,7 +72,7 @@ public class DataObject<T> <: Data & Iterable<(String, Data)> where T <: Object 
     public func get(name: String): ?Data{
         T.dataFields().readableField(name)?.get(data)
     }
-    public func get<V>(name: String, flag!: DataConversionFlag = DEFAULT): ?V where V <: DataFields<V> {
+    public func get<V>(name: String, flag!: DataConversionFlag = DEFAULT_DATA_FLAG): ?V where V <: DataFields<V> {
         match(get(name)){
             case Some(x) => match(V.tryFromData(x, flag: flag)){
                 case x: ?V => x
@@ -110,25 +118,10 @@ public class DataObject<T> <: Data & Iterable<(String, Data)> where T <: Object 
     public static func parse(string: String): Data {
         tryParse(string).getOrThrow {DataException("current type ${TypeInfos.get<T>()} is not Parsable")}
     }
-    public static func populate(src: Data, target: T, flag!: DataConversionFlag = DEFAULT): ?T {
+    public static func populate(src: Data, target: T, flag!: DataConversionFlag = DEFAULT_DATA_FLAG): ?T {
         let targetData = DataObject<T>(target)
-        func putTuple(x: DataTuple) {
-            let (key, value) = (x.key, x.value)
-            match (key) {
-                case x: DataString where Regex.IDENTIFIER.matched(x.data) =>
-                    targetData.set(x.data, value, flag: flag)
-                    target
-                case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) > 0 => None<T>
-                case _ => throw DataException("${key} cannot be field name of an object")
-            }
-        }
         match (src) {
-            case x: Iterable<DataTuple> =>
-                for (e in x) {
-                    putTuple(e)
-                }
-                target
-            case x: DataTuple => putTuple(x)
+            case x: DataObject<T> where (flag & DEEP) == 0 => x.data
             case x: Iterable<(String, Data)> => 
                 for((n, d) in x) {
                     targetData.set(n, d, flag: flag)
@@ -138,24 +131,24 @@ public class DataObject<T> <: Data & Iterable<(String, Data)> where T <: Object 
             case _ => throw DataException("src cannot be converted to ${TypeInfos.get<T>()}")
         }
     }
-    public static func populate(src: Data, flag!: DataConversionFlag = DEFAULT): ?T {
+    public static func populate(src: Data, flag!: DataConversionFlag = DEFAULT_DATA_FLAG): ?T {
         populate(src, T.dataFields().create(), flag: flag)
     }
-    public static func populate<S>(src: S, flag!: DataConversionFlag = DEFAULT): ?T where S <: Object & ObjectData<S> {
+    public static func populate<S>(src: S, flag!: DataConversionFlag = DEFAULT_DATA_FLAG): ?T where S <: ObjectData<S> {
         populate(DataObject<S>(src), flag: flag)
     }
-    public static func populate<S>(src: S, target: T, flag!: DataConversionFlag = DEFAULT): ?T where S <: Object & ObjectData<S> {
+    public static func populate<S>(src: S, target: T, flag!: DataConversionFlag = DEFAULT_DATA_FLAG): ?T where S <: ObjectData<S> {
         populate(DataObject<S>(src), target, flag: flag)
     }
-    public static func populate<M, V>(src: M, flag!: DataConversionFlag = DEFAULT): ?T where M <: Map<String, V> & DataFields<M>,
+    public static func populate<M, V>(src: M, flag!: DataConversionFlag = DEFAULT_DATA_FLAG): ?T where M <: Map<String, V> & DataFields<M>,
         V <: DataFields<V> {
         populate(src.toData(), flag: flag)
     }
-    public static func populate<M, V>(src: M, target: T, flag!: DataConversionFlag = DEFAULT): ?T where M <: Map<String, V> & DataFields<M>,
+    public static func populate<M, V>(src: M, target: T, flag!: DataConversionFlag = DEFAULT_DATA_FLAG): ?T where M <: Map<String, V> & DataFields<M>,
         V <: DataFields<V> {
         populate(src.toData(), target, flag: flag)
     }
-    public static func populate<M, V>(src: T, map: M, flag!: DataConversionFlag = DEFAULT): M where M <: Map<String, V>,
+    public static func populate<M, V>(src: T, map: M, flag!: DataConversionFlag = DEFAULT_DATA_FLAG): M where M <: Map<String, V>,
         V <: DataFields<V> {
         for ((k, v) in DataObject<T>(src)) {
             match(V.tryFromData(v, flag: flag)){

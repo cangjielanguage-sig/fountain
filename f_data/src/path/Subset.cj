@@ -25,23 +25,20 @@ internal abstract class Subset<T> where T <: ToString & DataFields<T> {
             case _ => return subsetSize
         }
         match(d){
-            case x: DataSequence => 
+            case x: Iterable<Data> => 
                 for(v in x where right.contains(v.toString())){
                     subsetSize++
                 }
-            case x: StringKeyMapTuples =>
-                for(v in x where right.contains(v.key.toString())){
+            case x: Iterable<(String, Data)> =>
+                for((k, v) in x where right.contains(k)){
                     subsetSize++
                 }
-            case _ => 
-                let info = TypeInfo.of(left)
-                if(info.qualifiedName.startsWith('f_data.DataObject') && 
-                   let Some(fn) <- TypeMemberInfos.instanceFunction(info, 'iterator') && 
-                   let tuples: Iterator<(String, Data)> <- fn.apply(left)){
-                    for((k, _) in tuples where right.contains(k)){
-                        subsetSize++
-                    }
+            case x: Iterable<(Data, Data)> =>
+                for((k, _) in x where right.contains(k.toString())){
+                    subsetSize++
                 }
+            case _ => ()
+
         }
         subsetSize
     }

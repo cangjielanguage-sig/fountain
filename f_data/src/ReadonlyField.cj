@@ -10,7 +10,7 @@
 package f_data
 
 public class ReadonlyField <: ReadableField {
-    public init(name: String, typeInfo: TypeInfo, getter: (Object) -> Data){
+    public init(name: String, typeInfo: TypeInfo, getter: (Any) -> Data){
         super(name, typeInfo, getter)
     }
     public static func new<O, F>(name: String, getter: (O) -> F): ReadonlyField 

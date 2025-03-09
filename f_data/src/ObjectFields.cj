@@ -9,7 +9,7 @@
 */
 package f_data
 
-public class ObjectFields<T> <: Iterable<ReadableField> where T <: Object & ObjectData<T>{
+public class ObjectFields<T> <: Collection<ReadableField> where T <: ObjectData<T>{
     private let mutables = HashMap<String, MutableField>()
     private let readables = HashMap<String, ReadableField>()
     public ObjectFields(
@@ -66,6 +66,14 @@ public class ObjectFields<T> <: Iterable<ReadableField> where T <: Object & Obje
     }
     public func create(): T {
         creator()
+    }
+    public prop size: Int64 {
+        get(){
+            readables.size
+        }
+    }
+    public func isEmpty() {
+        size == 0
     }
     public func iterator(): Iterator<ReadableField> {
         readables.values().iterator()

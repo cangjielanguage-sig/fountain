@@ -10,15 +10,15 @@
 package f_data
 
 public class MutableField <: ReadableField {
-    public MutableField(name: String, typeInfo: TypeInfo, getter: (Object) -> Data,
-        private let setter: (Object, Data, UInt64) -> Bool) {
+    public MutableField(name: String, typeInfo: TypeInfo, getter: (Any) -> Data,
+        private let setter: (Any, Data, UInt64) -> Bool) {
         super(name, typeInfo, getter)
     }
 
-    public func set(instance: Object, data: Data, flag!: DataConversionFlag = DEFAULT): Bool {
+    public func set(instance: Any, data: Data, flag!: DataConversionFlag = DEFAULT_DATA_FLAG): Bool {
         setter(instance, data, flag)
     }
-    public static func new<O, F>(name: String, getter: (O) -> ?F, setter: (O, ?F) -> Unit): MutableField where O <: Object & ObjectData<O>,
+    public static func new<O, F>(name: String, getter: (O) -> ?F, setter: (O, ?F) -> Unit): MutableField where O <: ObjectData<O>,
         F <: DataFields<F> {
         let fieldType = TypeInfos.get<F>()
         MutableField(name, fieldType, newGetter<O, F>(getter),
@@ -51,7 +51,7 @@ public class MutableField <: ReadableField {
                 }
             })
     }
-    public static func new<O, F>(name: String, getter: (O) -> F, setter: (O, F) -> Unit): MutableField where O <: Object & ObjectData<O>,
+    public static func new<O, F>(name: String, getter: (O) -> F, setter: (O, F) -> Unit): MutableField where O <: ObjectData<O>,
         F <: DataFields<F> {
         let fieldType = TypeInfos.get<F>()
         MutableField(name, fieldType, newGetter<O, F>(getter),

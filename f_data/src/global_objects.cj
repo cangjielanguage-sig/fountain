@@ -22,4 +22,4 @@ public const WRAPPING_ON_INT_OVERFLOW: DataConversionFlag = 0x20u64
 public const THROWING_ON_INT_OVERFLOW: DataConversionFlag = 0x40u64
 public const SATURATING_ON_INT_OVERFLOW: DataConversionFlag = 0x80u64
 public const SILENCE: DataConversionFlag = IGNORE_FIELD_NOT_FOUND | IGNORE_FIELD_TYPE_NOT_MATCH | IGNORE_FIELD_NOT_CONVERTABLE | IGNORE_NONE
-public const DEFAULT: DataConversionFlag = WRAPPING_ON_INT_OVERFLOW | SILENCE
+public const DEFAULT_DATA_FLAG: DataConversionFlag = WRAPPING_ON_INT_OVERFLOW | SILENCE

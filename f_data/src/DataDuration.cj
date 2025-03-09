@@ -40,7 +40,7 @@ extend Duration <: DataFields<Duration> {
     public func toData(): Data {
         DataDuration(this)
     }
-    public static func tryFromData(data: Data, flag!: DataConversionFlag = DEFAULT): Any {
+    public static func tryFromData(data: Data, flag!: DataConversionFlag = DEFAULT_DATA_FLAG): Any {
         match(data){
             case x: DataDuration => x.tryToDuration()
             case _: DataNone => None<Duration>
