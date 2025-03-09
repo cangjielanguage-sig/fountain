@@ -48,9 +48,17 @@ public class DataCollection<C, T> <: Data & Collection<Data> where T <: DataFiel
     }
 }
 
-public interface CollectionData<C, T> <: DataFields<C> where T <: DataFields<T>, C <: DataFields<C> & Collection<T> {
+public interface CollectionRawType{
+    prop rawType: TypeInfo
+}
+public interface CollectionData<C, T> <: DataFields<C> & CollectionRawType where T <: DataFields<T>, C <: DataFields<C> & Collection<T> {
     func toData(): Data
     static func tryFromData(data: Data, flag!: DataConversionFlag): Any
+    prop rawType: TypeInfo {
+        get(){
+            TypeInfos.get<T>()
+        }
+    }
 }
 extend<T> Array<T> <: CollectionData<Array<T>, T> where T <: DataFields<T> {
     public func toData(): Data {

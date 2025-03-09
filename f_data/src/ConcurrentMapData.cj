@@ -50,9 +50,14 @@ public class DataConcurrentMap<M, K, V> <: Data & Collection<(Data, Data)> where
     }
 }
 
-public interface ConcurrentMapData<M, K, V> <: DataFields<M> where K <: Equatable<K> & DataFields<K>, V <: DataFields<V>, M <: DataFields<M> & ConcurrentMap<K, V> {
+public interface ConcurrentMapData<M, K, V> <: DataFields<M> & MapRawType where K <: Equatable<K> & DataFields<K>, V <: DataFields<V>, M <: DataFields<M> & ConcurrentMap<K, V> {
     func toData(): Data
     static func tryFromData(data: Data, flag!: DataConversionFlag): Any
+    prop rawType: (TypeInfo, TypeInfo){
+        get(){
+            (TypeInfos.get<K>(), TypeInfos.get<V>())
+        }
+    }
 }
 extend<K, V> ConcurrentHashMap<K, V> <: ConcurrentMapData<ConcurrentHashMap<K, V>, K, V> where K <: Hashable & Equatable<K> & DataFields<K>, V <: DataFields<V> {
     public func toData(): Data {

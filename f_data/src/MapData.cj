@@ -50,9 +50,17 @@ public class DataMap<M, K, V> <: Data & Collection<(Data, Data)> where K <: Equa
     }
 }
 
-public interface MapData<M, K, V> <: DataFields<M> where K <: Equatable<K> & DataFields<K>, V <: DataFields<V>, M <: DataFields<M> & Map<K, V> {
+public interface MapRawType{
+    prop rawType: (TypeInfo, TypeInfo)
+}
+public interface MapData<M, K, V> <: DataFields<M> & MapRawType where K <: Equatable<K> & DataFields<K>, V <: DataFields<V>, M <: DataFields<M> & Map<K, V> {
     func toData(): Data
     static func tryFromData(data: Data, flag!: DataConversionFlag): Any
+    prop rawType: (TypeInfo, TypeInfo){
+        get(){
+            (TypeInfos.get<K>(), TypeInfos.get<V>())
+        }
+    }
 }
 private func tryFromDataToMap<M, K, V>(data: Data, flag: DataConversionFlag, creator: () -> M): M where K <: Equatable<K> & DataFields<K>, V <: DataFields<V>, M <: DataFields<M> & Map<K, V> {
     let map = creator()
