@@ -137,10 +137,9 @@ public class DataObject<T> <: Data & Collection<(String, Data)> & NamedData wher
         tryParse(string).getOrThrow {DataException("current type ${TypeInfos.get<T>()} is not Parsable")}
     }
     public static func populate(src: Data, target: T, flag!: DataConversionFlag = DEFAULT_DATA_FLAG): ?T {
-        let targetData = DataObject<T>(target)
         match (src) {
-            case x: DataObject<T> where (flag & DEEP) == 0 => x.data
             case x: Iterable<(String, Data)> => 
+                let targetData = DataObject<T>(target)
                 for((n, d) in x) {
                     targetData.set(n, d, flag: flag)
                 }
@@ -150,6 +149,9 @@ public class DataObject<T> <: Data & Collection<(String, Data)> & NamedData wher
         }
     }
     public static func populate(src: Data, flag!: DataConversionFlag = DEFAULT_DATA_FLAG): ?T {
+        if((flag & DEEP) == 0 && let d: DataObject<T> <- src){
+            return d.data
+        }
         populate(src, T.dataFields().create(), flag: flag)
     }
     public static func populate<S>(src: S, flag!: DataConversionFlag = DEFAULT_DATA_FLAG): ?T where S <: ObjectData<S> {
