@@ -200,7 +200,7 @@ public struct UUID <: Hashable & Comparable<UUID> & ToString & Parsable<UUID> {
             var c = iterator.next()
             let b1 = match (c) {
                 case Some(x) => doParse(x, i)
-                case _ => break
+                case _ => return None<UUID>
             }
             if (b1 == 16) {
                 continue
@@ -210,7 +210,7 @@ public struct UUID <: Hashable & Comparable<UUID> & ToString & Parsable<UUID> {
             c = iterator.next()
             let b2 = match (c) {
                 case Some(x) => doParse(x, i)
-                case _ => break
+                case _ => return None<UUID>
             }
             if (b2 == 16 || b2 == 17) {
                 return None<UUID>
