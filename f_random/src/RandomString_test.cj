@@ -32,7 +32,7 @@ public class RandomString_test {
     @TestCase
     public func test1(): Unit {
         let source = "1a,;kpzxcqp081341;k.xz,".toRuneArray()
-        let set = HashSet<Char>(source)
+        let set = HashSet<Rune>(source)
         for (i in 0..10_000) {
             var r = randStr.random(1, source).toRuneArray()
             @Assert(r.size, 1)

@@ -38,6 +38,24 @@ public class DataObject<T> <: Data & Collection<(String, Data)> & NamedData wher
             T.dataFields().size
         }
     }
+    public func annotations(name: String): Collection<Annotation> {
+        if(let Some(p) <- TypeMemberInfos.instanceProperty<T>(name)) {
+            p.annotations
+        }else if(let Some(v) <- TypeMemberInfos.instanceVariable<T>(name)){
+            v.annotations
+        }else{
+            []
+        }
+    }
+    public func annotation<A>(name: String): ?A where A <: Annotation {
+        if(let Some(p) <- TypeMemberInfos.instanceProperty<T>(name)) {
+            p.findAnnotation<A>()
+        }else if(let Some(v) <- TypeMemberInfos.instanceVariable<T>(name)){
+            v.findAnnotation<A>()
+        }else{
+            None
+        }
+    }
     public func isEmpty() {
         size == 0
     }

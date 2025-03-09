@@ -26,8 +26,14 @@ public class TypeMemberInfos{
                     map
             }
     }
+    public static func staticProperties<T>(): Collection<StaticPropertyInfo> {
+        staticProperties(TypeInfos.get<T>())
+    }
     public static func staticProperties(typeInfo: TypeInfo): Collection<StaticPropertyInfo> {
         getStaticPropertyMap(typeInfo).values()
+    }
+    public static func staticProperty<T>(name: String): ?StaticPropertyInfo {
+        staticProperty(TypeInfos.get<T>(), name)
     }
     public static func staticProperty(typeInfo: TypeInfo, name: String): ?StaticPropertyInfo {
         getStaticPropertyMap(typeInfo).get(name)
@@ -46,8 +52,14 @@ public class TypeMemberInfos{
                     map
             }
     }
+    public static func instanceProperties<T>(): Collection<InstancePropertyInfo> {
+        instanceProperties(TypeInfos.get<T>())
+    }
     public static func instanceProperties(typeInfo: TypeInfo): Collection<InstancePropertyInfo> {
         getInstancePropertyMap(typeInfo).values()
+    }
+    public static func instanceProperty<T>(name: String): ?InstancePropertyInfo {
+        instanceProperty(TypeInfos.get<T>(), name)
     }
     public static func instanceProperty(typeInfo: TypeInfo, name: String): ?InstancePropertyInfo {
         getInstancePropertyMap(typeInfo).get(name)
@@ -69,8 +81,14 @@ public class TypeMemberInfos{
                     map
             }
     }
+    public static func staticFunctions<T>(): Collection<StaticFunctionInfo> {
+        staticFunctions(TypeInfos.get<T>())
+    }
     public static func staticFunctions(typeInfo: TypeInfo): Collection<StaticFunctionInfo> {
         getStaticFunctionMap(typeInfo).values()
+    }
+    public static func staticFunction<T>(name: String, paramTypes: Array<TypeInfo>): ?StaticFunctionInfo {
+        staticFunction(TypeInfos.get<T>(), name, paramTypes)
     }
     public static func staticFunction(typeInfo: TypeInfo, name: String, paramTypes: Array<TypeInfo>): ?StaticFunctionInfo {
         getStaticFunctionMap(typeInfo).get(FuncMeta(name, paramTypes))
@@ -92,8 +110,14 @@ public class TypeMemberInfos{
                     map
             }
     }
+    public static func instanceFunctions<T>(): Collection<InstanceFunctionInfo> {
+        instanceFunctions(TypeInfos.get<T>())
+    }
     public static func instanceFunctions(typeInfo: TypeInfo): Collection<InstanceFunctionInfo> {
         getInstanceFunctionMap(typeInfo).values()
+    }
+    public static func instanceFunction<T>(name: String, paramTypes: Array<TypeInfo>): ?InstanceFunctionInfo {
+        instanceFunction(TypeInfos.get<T>(), name, paramTypes)
     }
     public static func instanceFunction(typeInfo: TypeInfo, name: String, params: Array<TypeInfo>): ?InstanceFunctionInfo {
         getInstanceFunctionMap(typeInfo).get(FuncMeta(name, params))
@@ -124,8 +148,14 @@ public class TypeMemberInfos{
                     }
             }
     }
+    public static func staticVariables<T>(): Collection<StaticVariableInfo> {
+        staticVariables(TypeInfos.get<T>())
+    }
     public static func staticVariables(typeInfo: TypeInfo): Collection<StaticVariableInfo> {
         getStaticVariableMap(typeInfo).values()
+    }
+    public static func staticVariable<T>(name: String): ?StaticVariableInfo {
+        staticVariable(TypeInfos.get<T>(), name)
     }
     public static func staticVariable(typeInfo: TypeInfo, name: String): ?StaticVariableInfo {
         getStaticVariableMap(typeInfo).get(name)
@@ -155,8 +185,14 @@ public class TypeMemberInfos{
                     }
             }
     }
+    public static func instanceVariables<T>(): Collection<InstanceVariableInfo> {
+        instanceVariables(TypeInfos.get<T>())
+    }
     public static func instanceVariables(typeInfo: TypeInfo): Collection<InstanceVariableInfo> {
         getInstanceVariableMap(typeInfo).values()
+    }
+    public static func instanceVariable<T>(name: String): ?InstanceVariableInfo {
+        instanceVariable(TypeInfos.get<T>(), name)
     }
     public static func instanceVariable(typeInfo: TypeInfo, name: String): ?InstanceVariableInfo {
         getInstanceVariableMap(typeInfo).get(name)

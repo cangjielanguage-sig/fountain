@@ -5,6 +5,17 @@
     You may obtain a copy of Mulan PSL v2 at:
             http://license.coscl.org.cn/MulanPSL2
     THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-    See the Mulan PSL v2 for more details.  
-*/
+    See the Mulan PSL v2 for more details.
+ */
 package f_orm
+
+public class ConversionQueryMaper<D, T, O> <: QueryMapper<O> {
+    public init(
+        name!: String,
+        dataType!: DataType = unknown,
+        converter!: (D) -> T,
+        putter!: (O, T) -> Unit
+    ) {
+        super(name: name, dataType: dataType, putter: {o, v => putter(o, converter(orm.convert<D>(v)))})
+    }
+}
