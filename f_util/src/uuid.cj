@@ -318,9 +318,9 @@ public struct UUID <: Hashable & Comparable<UUID> & ToString & Parsable<UUID> {
             } else if (i == 7) {
                 sha[19]
             } else if (i == 8) {
-                sha[7] & 0x3f | (2 << 6)
+                sha[8] & 0x3f | (2 << 6)
             } else {
-                sha[i - 1]
+                sha[i]
             }
         }
         UUID(values: values)
