@@ -56,7 +56,7 @@ public enum OS <: Equatable<OS> & ToString & Hashable {
             case "windows" => Windows
             case "macos" => macOS
             case "harmonyos" => HarmonyOS
-            case x => throw IllegalArgumentException("unsupported os name: ${x}")
+            case _ => throw IllegalArgumentException("unsupported os name: ${value}")
         }
     }
     public func hashCode(): Int64 {
