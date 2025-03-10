@@ -27,10 +27,6 @@ public interface ExtendRegex {
     static prop BASE64: Regex
     static func builder(): RegexBuilder
     static func builder(callback: (RegexBuilder) -> Unit): Regex
-    func matched(input: String): Bool
-    func split(input: String): Array<String>
-    func replace(input: String, replacement: String, index!: Int64, matchDataIndex!: Int64): String
-    func replaceAll(input: String, replacement: String, index!: Int64, matchDataIndex!: Int64): String
 }
 extend Regex <: ExtendRegex {
     public static prop INTEGER: Regex{
@@ -77,62 +73,7 @@ extend Regex <: ExtendRegex {
         callback(builder)
         builder.build()
     }
-    public func matched(input: String): Bool {
-        matches(input).isSome()
-    }
-    public func split(input: String): Array<String> {
-        this.matcher(input).split()
-    }
 
-    public func replace(input: String, replacement: String, index!: Int64 = 0, matchDataIndex!: Int64 = 0): String {
-        let matcher = this.matcher(input)
-        var i = 0
-        var findIdx = index
-        while (i < matchDataIndex) {
-            match (matcher.find(findIdx)) {
-                case Some(md) => findIdx = md.matchPosition().end
-                case _ => return input
-            }
-            i++
-        }
-        match (matcher.find(findIdx)) {
-            case Some(md) =>
-                let rr = RegexReplacement(replacement)
-                let r = rr.format(md)
-                matcher.replace(r, md.matchPosition().start)
-            case _ => input
-        }
-    }
-    public func replaceAll(input: String, replacement: String, index!: Int64 = 0, matchDataIndex!: Int64 = 0): String {
-        var str = input
-        var matcher = this.matcher(str)
-        var i = 0
-        var findIdx = index
-        while (i < matchDataIndex) {
-            match (matcher.find(findIdx)) {
-                case Some(md) => findIdx = md.matchPosition().end
-                case _ => return str
-            }
-            i++
-        }
-        let rr = RegexReplacement(replacement)
-        while (findIdx < str.size) {
-            match (matcher.find(findIdx)) {
-                case Some(md) =>
-                    let r = rr.format(md)
-                    let pos = md.matchPosition().start
-                    str = matcher.replace(r, pos)
-                    findIdx = pos + r.size
-                    if (findIdx < str.size) {
-                        matcher = matcher.resetString(str)
-                    } else {
-                        break
-                    }
-                case _ => break
-            }
-        }
-        str
-    }
 }
 public class RegexReplacement {
     private let parts = ArrayList<Any>()
@@ -172,7 +113,7 @@ public class RegexReplacement {
         while (i < parts.size) {
             match (parts[i]) {
                 case x: String => builder.append(x)
-                case x: Int64 => builder.append(data.matchStr(x))
+                case x: Int64 => builder.append(data.matchString(x))
                 case _ => throw UnreachableException()
             }
             i++
