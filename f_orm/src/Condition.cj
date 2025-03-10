@@ -57,6 +57,6 @@ public class Condition {
         }
     }
     public static func trim(prefix!: String = '', suffix!: String = '', partial!: () -> String): String {
-        '^\\s*(${prefix})\\s*|\\s*(${suffix})\\s*$'.regex(option: RegexOption().ignoreCase()).replaceAll(partial())
+        '^\\s*(${prefix})\\s*|\\s*(${suffix})\\s*$'.regex(option: RegexOption().ignoreCase()).replaceAll(partial(), "")
     }
 }
