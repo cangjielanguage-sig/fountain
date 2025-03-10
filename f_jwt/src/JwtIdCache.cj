@@ -9,15 +9,17 @@
 */
 package f_jwt
 
+import std.time.DateTime
+
 public interface JwtIdCache<T> where T <: Equatable<T> {
     func put(id: T, expire: Duration): Unit
-    func put(id: T, expireAt: Duration): Unit
+    func put(id: T, expireAt: DateTime): Unit
     func contains(id: T): Bool
     func remove(id: T): Unit
 }
 public class NoneJwtIdCache<T> <: JwtIdCache<T> where T <: Equatable<T> {
     public func put(id: T, expire: Duration): Unit{}
-    public func put(id: T, expireAt: Duration): Unit{}
+    public func put(id: T, expireAt: DateTime): Unit{}
     public func contains(id: T): Bool{
         false
     }

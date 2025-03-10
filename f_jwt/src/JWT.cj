@@ -292,7 +292,7 @@ public class JWT {
         addPayload("jti", jti)
     }
     public func jwtId<T>(jti: T, expireAt: DateTime, cache: JwtIdCache<T>): JWT where T <: Equatable<T> & ToString {
-        cache.put(jti, expire)
+        cache.put(jti, expireAt)
         addPayload("jti", jti)
     }
 
@@ -486,7 +486,7 @@ public class JWTVerifier {
         isExpired(time: now) && isNotBefore(time: now) && verifySign()
     }
     public func verifyPayload<V>(name: String, value: V): Bool where V <: Equatable<V> {
-        if(let Some(o) <- getPayload(name) && let v: ToString <- o) {
+        if(let Some(o) <- getPayload(name) && let v: Equatable<V> <- o) {
             v == value
         }else{
             false
@@ -505,7 +505,7 @@ public class JWTVerifier {
         verifyPayload('iat', issueAt)
     }
     public func verifyIssueAt(issueAt: Duration): Bool {
-        verifyIssueAt(issueAt.toSecond())
+        verifyIssueAt(issueAt.toSeconds())
     }
     public func verifyIssueAt(issueAt: DateTime): Bool {
         verifyIssueAt(issueAt - DateTime.UnixEpoch)
