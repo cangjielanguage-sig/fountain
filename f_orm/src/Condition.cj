@@ -9,6 +9,8 @@
 */
 package f_orm
 
+import f_regex.*
+
 public class Condition {
     private init(){}
     private static let _delimiter = ThreadLocal<String>()
@@ -20,25 +22,30 @@ public class Condition {
             _delimiter.set(value)
         }
     }
-    public func loop<I, T>(values: I, executor: SqlExecutor): LoopCondition<I, T> where I <: Iterable<T> {
+    public static func loop<I, T>(values: I, executor: SqlExecutor): LoopCondition<I, T> where I <: Iterable<T> {
         LoopCondition<I, T>(values, executor)
     }
 
-    public func `set`(partial: () -> String): String {
+    public static func `set`(partial: () -> String): String {
         try {
             delimiter = ','
-            ' `set` ${trim(prefix: ',', suffix: ',', partial: partial)} '
+            let partial = trim(prefix: ',', suffix: ',', partial: partial)
+            if(partial.isEmpty()){
+                ''
+            }else{
+                ' `set` ${partial} '
+            }
         } finally {
             delimiter = ''
         }
     }
 
-    public func `where`(partial: () -> String): String {
+    public static func `where`(partial: () -> String): String {
         `where`('', partial)
     }
-    public func `where`(delimiter: String, partial: () -> String): String {
+    public static func `where`(delimiter: String, partial: () -> String): String {
         try{
-            delimiter = delimiter
+            Condition.delimiter = delimiter
             let partial = trim(prefix: 'and|or', suffix: 'and|or', partial: partial)
             if(partial.isEmpty()){
                 ''
@@ -46,7 +53,7 @@ public class Condition {
                 ' `where` ${partial} '
             }
         }finally {
-            delimiter = ''
+            Condition.delimiter = ''
         }
     }
     public static func trim(prefix!: String = '', suffix!: String = '', partial!: () -> String): String {

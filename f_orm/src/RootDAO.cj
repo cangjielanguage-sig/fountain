@@ -30,19 +30,19 @@ public interface RootDAO {
             ChooseCondition(executor)
         }
     }
-    public func loop<I, T>(values: I): LoopCondition<I, T> where I <: Iterable<T> {
+    func loop<I, T>(values: I): LoopCondition<I, T> where I <: Iterable<T> {
         Condition.loop<I, T>(values, executor)
     }
-    public func `set`(partial: () -> String): String {
+    func `set`(partial: () -> String): String {
         Condition.`set`(partial)
     }
-    public func `where`(partial: () -> String): String {
+    func `where`(partial: () -> String): String {
         Condition.`where`(partial)
     }
-    public func `where`(delimiter: String, partial: () -> String): String {
+    func `where`(delimiter: String, partial: () -> String): String {
         Condition.`where`(delimiter, partial)
     }
-    public func trim(prefix!: String, suffix!: String, partial!: () -> String): String {
+    func trim(prefix!: String, suffix!: String, partial!: () -> String): String {
         Condition.trim(prefix: prefix, suffix: suffix, partial: partial)
     }
 }
