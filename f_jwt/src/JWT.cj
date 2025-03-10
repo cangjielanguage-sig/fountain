@@ -481,6 +481,9 @@ public class JWTVerifier {
     public func verifySign(): Bool {
         jwt.signAlgo.verify(bytesForSign(headerBytes, payloadBytes), signBytes)
     }
+    /**
+     * 检查了exp nbf sign，如果没有指定exp 或nbf 就认为jwt在相应时间字段当前时间有效。
+     */
     public func verify(): Bool {
         let now = DateTime.now()
         isExpired(time: now) && isNotBefore(time: now) && verifySign()
