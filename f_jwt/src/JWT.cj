@@ -254,7 +254,7 @@ public class JWT {
         addPayload('aud', aud)
     }
     public func expire(expire: Int64): JWT {
-        this.expire(Duration.millisecond * expire)
+        this.expire(Duration.second * expire)
     }
     public func expire(duration: Duration): JWT {
         expireAt(DateTime.now() + duration)
@@ -263,7 +263,7 @@ public class JWT {
         this.expireAt(expireAt - DateTime.UnixEpoch)
     }
     public func expireAt(duration: Duration): JWT {
-        this.expireAt(duration.toMilliseconds())
+        this.expireAt(duration.toSeconds())
     }
     public func expireAt(expireAt: Int64): JWT {
         addPayload("exp", expireAt)
@@ -273,7 +273,7 @@ public class JWT {
         addPayload("nbf", nbf)
     }
     public func notBeforeAt(nbf: Duration): JWT {
-        notBeforeAt(nbf.toMilliseconds())
+        notBeforeAt(nbf.toSeconds())
     }
     public func notBeforeAt(nbf: DateTime): JWT {
         notBeforeAt(nbf.toUnixTimeStamp())
@@ -282,12 +282,17 @@ public class JWT {
         addPayload("iat", iat)
     }
     public func issuedAt(iat: Duration): JWT {
-        addPayload("iat", iat.toMilliseconds())
+        addPayload("iat", iat.toSeconds())
     }
     public func issuedAt(iat: DateTime): JWT {
-        addPayload("iat", iat.toUnixTimeStamp().toMilliseconds())
+        addPayload("iat", iat.toUnixTimeStamp())
     }
-    public func jwtId(jti: String): JWT {
+    public func jwtId<T>(jti: T, expire: Duration, cache: JwtIdCache<T>): JWT where T <: Equatable<T> & ToString {
+        cache.put(jti, expire)
+        addPayload("jti", jti)
+    }
+    public func jwtId<T>(jti: T, expireAt: DateTime, cache: JwtIdCache<T>): JWT where T <: Equatable<T> & ToString {
+        cache.put(jti, expire)
         addPayload("jti", jti)
     }
 
@@ -409,36 +414,36 @@ public class JWTVerifier {
 
     public func getExpireAt(): ?DateTime {
         if (let Some(d) <- getExpireAtDuration()) {
-            DateTime.now() + d
+            DateTime.UnixEpoch + d
         } else {
             None<DateTime>
         }
     }
     public func getExpireAtDuration(): ?Duration {
-        if (let Some(d) <- getExpireAtMillis()) {
-            Duration.millisecond * d
+        if (let Some(d) <- getExpireAtSeconds()) {
+            Duration.second * d
         } else {
             None<Duration>
         }
     }
-    public func getExpireAtMillis(): ?Int64 {
+    public func getExpireAtSeconds(): ?Int64 {
         getPayloadValue<Int64>('exp')
     }
     public func getNotBefore(): ?DateTime {
         if (let Some(d) <- getNotBeforeDuration()) {
-            DateTime.now() + d
+            DateTime.UnixEpoch + d
         } else {
             None<DateTime>
         }
     }
     public func getNotBeforeDuration(): ?Duration {
-        if (let Some(d) <- getNotBeforeMillis()) {
-            Duration.millisecond * d
+        if (let Some(d) <- getNotBeforeSeconds()) {
+            Duration.second * d
         } else {
             None<Duration>
         }
     }
-    public func getNotBeforeMillis(): ?Int64 {
+    public func getNotBeforeSeconds(): ?Int64 {
         getPayloadValue<Int64>("nbf")
     }
     public func getPayloadValue<T>(name: String): ?T where T <: Parsable<T> {
@@ -479,5 +484,39 @@ public class JWTVerifier {
     public func verify(): Bool {
         let now = DateTime.now()
         isExpired(time: now) && isNotBefore(time: now) && verifySign()
+    }
+    public func verifyPayload<V>(name: String, value: V): Bool where V <: Equatable<V> {
+        if(let Some(o) <- getPayload(name) && let v: ToString <- o) {
+            v == value
+        }else{
+            false
+        }
+    }
+    public func verifyIssuer<V>(issuer: V): Bool where V <: Equatable<V> {
+        verifyPayload("iss", issuer)
+    }
+    public func verifySubject<V>(subject: V): Bool where V <: Equatable<V> {
+        verifyPayload("sub", subject)
+    }
+    public func verifyAudience<V>(audience: V): Bool where V <: Equatable<V> {
+        verifyPayload("aud", audience)
+    }
+    public func verifyIssueAt(issueAt: Int64): Bool {
+        verifyPayload('iat', issueAt)
+    }
+    public func verifyIssueAt(issueAt: Duration): Bool {
+        verifyIssueAt(issueAt.toSecond())
+    }
+    public func verifyIssueAt(issueAt: DateTime): Bool {
+        verifyIssueAt(issueAt - DateTime.UnixEpoch)
+    }
+    public func verifyId<T>(cache: JwtIdCache<T>): Bool where T <: Equatable<T> {
+        if(let Some(o) <- getPayload('jti') && let jti: T <- o) {
+            let r = cache.contains(jti)
+            cache.remove(jti)
+            r
+        }else{
+            false
+        }
     }
 }

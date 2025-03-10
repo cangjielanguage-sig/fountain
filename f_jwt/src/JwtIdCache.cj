@@ -7,12 +7,19 @@
     THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
     See the Mulan PSL v2 for more details.  
 */
-package f_orm
+package f_jwt
 
-@Annotation[target: [MemberProperty, MemberVariable]]
-public class ORMColumn {
-    public const ORMColumn(
-        public let name!: String = '',
-        public let id!: Bool = false,
-        public let cascading!: Bool = false){}
+public interface JwtIdCache<T> where T <: Equatable<T> {
+    func put(id: T, expire: Duration): Unit
+    func put(id: T, expireAt: Duration): Unit
+    func contains(id: T): Bool
+    func remove(id: T): Unit
+}
+public class NoneJwtIdCache<T> <: JwtIdCache<T> where T <: Equatable<T> {
+    public func put(id: T, expire: Duration): Unit{}
+    public func put(id: T, expireAt: Duration): Unit{}
+    public func contains(id: T): Bool{
+        false
+    }
+    public func remove(id: T): Unit {}
 }
