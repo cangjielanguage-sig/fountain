@@ -16,7 +16,7 @@ public import std.math.numeric.{BigInt, Decimal}
 public import std.time.DateTime
 
 private class Types<T> {
-    public static let INSTANCE = TypeInfo.of<T>()
+    static let INSTANCE = TypeInfo.of<T>()
     private init(){}
 }
 public class TypeInfos {
