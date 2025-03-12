@@ -24,7 +24,7 @@ extend<T> ThreadLocal<T> <: ExtendThreadLocal<T> {
                 x
         }
     }
-    public func remove(): Unit{
+    public func remove(): Unit {
         set(None<T>)
     }
 }

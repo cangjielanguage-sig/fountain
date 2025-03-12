@@ -12,6 +12,7 @@ package f_orm
 
 import std.collection.HashMap
 import f_data.*
+import f_log.*
 import f_orm.exception.*
 
 public class SqlCacheKey <: Hashable & Equatable<SqlCacheKey> & ToString {
@@ -530,11 +531,14 @@ public class SqlExecutor <: Resource & RootDAO {
         args.append(arg)
         this
     }
-    public func generateSql(generator: (SqlArgs) -> String): SqlExecutor {
+    public func generateSql(sql: String): SqlExecutor {
         args = SqlArgs(driverName: driverName)
-        sql = generator(args)
+        this.sql = sql
         args.finished = true
         this
+    }
+    public operator func ()(sql: String): SqlExecutor {
+        generateSql(sql)
     }
 
     private func execute<T>(executor: () -> T): T {
