@@ -48,7 +48,7 @@ import f_macros.*
 //    import apppack.model.ArgData
 //    import apppack.model.po.SomePO
 //    @DAO
-//    public interface SomePODAO {
+//    public interface SomeDAO {
 //        prop executor: SqlExecutor//所有dao必须有这一行
 //        func listSomePO(arg: ArgData): ArrayList<SomePO>{
 //            executor.generateSql{sqlargs: SqlArgs =>
@@ -81,7 +81,8 @@ import f_macros.*
 //        }
 //    }
 public macro DAO(input: Tokens): Tokens {
+    let name = parseDecl(input).identifier
     input + `nl` + quote(
-        extend<T> f_orm.SqlExecutor <: $(input[2]){}
+        extend SqlExecutor <: $(name){}
     )
 }
