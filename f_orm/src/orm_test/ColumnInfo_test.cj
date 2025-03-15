@@ -10,6 +10,10 @@
 
 package f_orm.orm_test
 
+internal import std.database.sql.*
+internal import f_orm.*
+internal import f_orm.exception.*
+
 public class ColumnInfoTest <: ColumnInfo {
     public ColumnInfoTest(private let n: String, private let tn: String) {
     }

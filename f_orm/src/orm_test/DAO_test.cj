@@ -13,9 +13,9 @@ package f_orm.orm_test
 import std.time.*
 import std.collection.ArrayList
 import std.database.sql.*
-import orm.*
-import orm.macros.*
-import orm.exception.*
+import f_orm.macros.*
+import f_data.macros.*
+import f_data.*
 
 // let _ = ORM.register(DriverTest()) // 1
 let _ = ORM.register(DatasourceCreatorImpl()) // 2

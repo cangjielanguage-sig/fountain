@@ -14,7 +14,7 @@ public class TransactionTest <: Transaction {
     private var state = 0
 
     /**
-     * 数 据 库 事 务 隔 离 级 别 。
+     * 数据库事务隔离级别。
      */
     public mut prop isoLevel: TransactionIsoLevel {
         get() {
@@ -26,7 +26,7 @@ public class TransactionTest <: Transaction {
     }
 
     /**
-     * 数 据 库 事 务 访 问 模 式 。
+     * 数据库事务访问模式。
      */
     public mut prop accessMode: TransactionAccessMode {
         get() {
@@ -38,7 +38,7 @@ public class TransactionTest <: Transaction {
     }
 
     /**
-     * 数 据 库 事 务 延 迟 模 式 。
+     * 数据库事务延迟模式。
      */
     public mut prop deferrableMode: TransactionDeferrableMode {
         get() {
@@ -50,9 +50,9 @@ public class TransactionTest <: Transaction {
     }
 
     /**
-     * 开 始 数 据 库 事 务 。
-     * 异 常 SqlException - 提 交 事 务 时 服 务 器 端 发 生 错 误 。
-     * 异 常 SqlException - 事 务 已 提 交 或 回 滚 或 连 接 已 断 开 。
+     * 开始数据库事务。
+     * 异常SqlException - 提交事务时服务器端发生错误。
+     * 异常SqlException - 事务已提交或回滚或连接已断开。
      */
     public func begin(): Unit {
         if (state != 0) {
