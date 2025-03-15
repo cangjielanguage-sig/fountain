@@ -9,7 +9,7 @@
  */
 package f_orm.wrap
 
-public import std.time.{Duration, DateTime}
+public import std.time.DateTime
 
 public interface Data<T> <: AnyData where T <: Data<T> {
     func getValue(): T
@@ -45,7 +45,7 @@ extend<T> Option<T> <: Data<Option<T>> where T <: Data<T> {
     }
 }
 
-extend<T> Int8 <: Data<Int8> {
+extend Int8 <: Data<Int8> {
     public func getValue(): Int8 {
         this
     }
@@ -55,7 +55,7 @@ extend<T> Int8 <: Data<Int8> {
         }
     }
 }
-extend<T> UInt8 <: Data<UInt8> {
+extend UInt8 <: Data<UInt8> {
     public func getValue(): UInt8 {
         this
     }
@@ -67,7 +67,7 @@ extend<T> UInt8 <: Data<UInt8> {
     }
 }
 
-extend<T> Int16 <: Data<Int16> {
+extend Int16 <: Data<Int16> {
     public func getValue(): Int16 {
         this
     }
@@ -77,7 +77,7 @@ extend<T> Int16 <: Data<Int16> {
         }
     }
 }
-extend<T> UInt16 <: Data<UInt16> {
+extend UInt16 <: Data<UInt16> {
     public func getValue(): UInt16 {
         this
     }
@@ -88,7 +88,7 @@ extend<T> UInt16 <: Data<UInt16> {
     }
 }
 
-extend<T> Int32 <: Data<Int32> {
+extend Int32 <: Data<Int32> {
     public func getValue(): Int32 {
         this
     }
@@ -98,7 +98,7 @@ extend<T> Int32 <: Data<Int32> {
         }
     }
 }
-extend<T> UInt32 <: Data<UInt32> {
+extend UInt32 <: Data<UInt32> {
     public func getValue(): UInt32 {
         this
     }
@@ -109,7 +109,7 @@ extend<T> UInt32 <: Data<UInt32> {
     }
 }
 
-extend<T> Int64 <: Data<Int64> {
+extend Int64 <: Data<Int64> {
     public func getValue(): Int64 {
         this
     }
@@ -119,7 +119,7 @@ extend<T> Int64 <: Data<Int64> {
         }
     }
 }
-extend<T> UInt64 <: Data<UInt64> {
+extend UInt64 <: Data<UInt64> {
     public func getValue(): UInt64 {
         this
     }
@@ -130,7 +130,7 @@ extend<T> UInt64 <: Data<UInt64> {
     }
 }
 
-extend<T> Float16 <: Data<Float16> {
+extend Float16 <: Data<Float16> {
     public func getValue(): Float16 {
         this
     }
@@ -140,7 +140,7 @@ extend<T> Float16 <: Data<Float16> {
         }
     }
 }
-extend<T> Float32 <: Data<Float32> {
+extend Float32 <: Data<Float32> {
     public func getValue(): Float32 {
         this
     }
@@ -150,7 +150,7 @@ extend<T> Float32 <: Data<Float32> {
         }
     }
 }
-extend<T> Float64 <: Data<Float64> {
+extend Float64 <: Data<Float64> {
     public func getValue(): Float64 {
         this
     }
@@ -160,7 +160,7 @@ extend<T> Float64 <: Data<Float64> {
         }
     }
 }
-extend<T> Decimal <: Data<Decimal> {
+extend Decimal <: Data<Decimal> {
     public func getValue(): Decimal {
         this
     }
@@ -171,7 +171,7 @@ extend<T> Decimal <: Data<Decimal> {
     }
 }
 
-extend<T> Bool <: Data<Bool> {
+extend Bool <: Data<Bool> {
     public func getValue(): Bool {
         this
     }
@@ -182,7 +182,7 @@ extend<T> Bool <: Data<Bool> {
     }
 }
 
-extend<T> String <: Data<String> {
+extend String <: Data<String> {
     public func getValue(): String {
         this
     }
@@ -193,7 +193,7 @@ extend<T> String <: Data<String> {
     }
 }
 
-extend<T> Duration <: Data<Duration> {
+extend Duration <: Data<Duration> {
     public func getValue(): Duration {
         this
     }
@@ -204,7 +204,7 @@ extend<T> Duration <: Data<Duration> {
     }
 }
 
-extend<T> DateTime <: Data<DateTime> {
+extend DateTime <: Data<DateTime> {
     public func getValue(): DateTime {
         this
     }

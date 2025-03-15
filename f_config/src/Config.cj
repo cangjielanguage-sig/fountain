@@ -17,6 +17,9 @@ import std.time.{DateTime, DateTimeFormat}
 
 import f_data.DataParsable
 
+/**
+ * 不依赖配置文件，所有配置都来自环境变量和--开头的命令行参数
+ */
 public class Config{
     private static let prefix = 'fountain'
     private static let ARGS = ConcurrentHashMap<String, String>()
@@ -36,8 +39,8 @@ public class Config{
     }
     private init(){}
 
-    public static func refresher(name: String, fn: ()->Unit){
-        REFRESHER[name] = fn
+    public static func refresher(prefix: String, fn: ()->Unit){
+        REFRESHER['${prefix}_'] = fn
     }
 
     public static func set<T>(tuples: Array<(String, T)>): Unit where T <: ToString {
@@ -51,13 +54,25 @@ public class Config{
                 set.add(name)
             }
         }
-        for((k, fn) in REFRESHER where set.contains(k)){
-            fn()
+        for((prefix, fn) in REFRESHER ){
+            for(k in set where k.startsWith(prefix) || k.startsWith('${Config.prefix}_${prefix}')){
+                fn()
+            }
         }
     }
-    
+    public static func getAll(prefix: String): Map<String, String> {
+        let map = HashMap<String, String>()
+        for((k, v) in ARGS where k.startsWith('${prefix}_') || k.startsWith('${Config.prefix}_${prefix}_')){
+            map[k] = v
+        }
+        map
+    }
     public static func getString(key: String): ?String{
-        ARGS.get('${prefix}_${key}')
+        if(let Some(v) <- ARGS.get(key)){
+            v
+        }else{
+            ARGS.get("${prefix}_${key}")
+        }
     }
     public static func getValue<T>(key: String, parser: (String) -> ?T): ?T {
         if(let Some(x) <- getString(key)){

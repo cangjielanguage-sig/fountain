@@ -10,6 +10,8 @@
 
 package f_orm.wrap
 
+import f_orm.exception.*
+
 public enum DummyTransactionMode {
     | Common
     | Mandatory

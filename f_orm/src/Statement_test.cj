@@ -11,7 +11,7 @@
 package f_orm
 
 import std.collection.ArrayList
-import orm.exception.*
+import f_orm.exception.*
 
 public class StatementTest <: Statement {
     public StatementTest(private let sql: String) {

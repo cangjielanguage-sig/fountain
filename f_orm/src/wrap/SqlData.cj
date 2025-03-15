@@ -10,14 +10,15 @@
 package f_orm.wrap
 
 public import std.database.sql.*
+public import std.io.InputStream
 public import std.math.numeric.*
-import fountain.base.exception.UnreachableException
+import f_exception.UnreachableException
 
 public interface SqlData<T> <: SqlAnyData where T <: Data<T> {
     func getValue(): T
 }
 
-extend<T> SqlChar <: SqlData<String> {
+extend SqlChar <: SqlData<String> {
     public func getData(): AnyData {
         this.value
     }
@@ -25,7 +26,7 @@ extend<T> SqlChar <: SqlData<String> {
         this.value
     }
 }
-extend<T> SqlVarchar <: SqlData<String> {
+extend SqlVarchar <: SqlData<String> {
     public func getData(): AnyData {
         this.value
     }
@@ -33,7 +34,7 @@ extend<T> SqlVarchar <: SqlData<String> {
         this.value
     }
 }
-extend<T> SqlBinary <: SqlData<Array<Byte>> {
+extend SqlBinary <: SqlData<Array<Byte>> {
     public func getData(): AnyData {
         this.value
     }
@@ -41,7 +42,7 @@ extend<T> SqlBinary <: SqlData<Array<Byte>> {
         this.value
     }
 }
-extend<T> SqlVarBinary <: SqlData<Array<Byte>> {
+extend SqlVarBinary <: SqlData<Array<Byte>> {
     public func getData(): AnyData {
         this.value
     }
@@ -49,7 +50,7 @@ extend<T> SqlVarBinary <: SqlData<Array<Byte>> {
         this.value
     }
 }
-extend<T> SqlClob <: SqlData<DataInputStream> {
+extend SqlClob <: SqlData<DataInputStream> {
     public func getData(): AnyData {
         getValue()
     }
@@ -61,7 +62,7 @@ extend<T> SqlClob <: SqlData<DataInputStream> {
         }
     }
 }
-extend<T> SqlBlob <: SqlData<DataInputStream> {
+extend SqlBlob <: SqlData<DataInputStream> {
     public func getData(): AnyData {
         getValue()
     }
@@ -69,7 +70,7 @@ extend<T> SqlBlob <: SqlData<DataInputStream> {
         DataInputStream(this.value)
     }
 }
-extend<T> SqlBool <: SqlData<Bool> {
+extend SqlBool <: SqlData<Bool> {
     public func getData(): AnyData {
         this.value
     }
@@ -77,7 +78,7 @@ extend<T> SqlBool <: SqlData<Bool> {
         this.value
     }
 }
-extend<T> SqlByte <: SqlData<Int8> {
+extend SqlByte <: SqlData<Int8> {
     public func getData(): AnyData {
         this.value
     }
@@ -85,7 +86,7 @@ extend<T> SqlByte <: SqlData<Int8> {
         this.value
     }
 }
-extend<T> SqlSmallInt <: SqlData<Int16> {
+extend SqlSmallInt <: SqlData<Int16> {
     public func getData(): AnyData {
         this.value
     }
@@ -93,7 +94,7 @@ extend<T> SqlSmallInt <: SqlData<Int16> {
         this.value
     }
 }
-extend<T> SqlInteger <: SqlData<Int32> {
+extend SqlInteger <: SqlData<Int32> {
     public func getData(): AnyData {
         this.value
     }
@@ -101,7 +102,7 @@ extend<T> SqlInteger <: SqlData<Int32> {
         this.value
     }
 }
-extend<T> SqlBigInt <: SqlData<Int64> {
+extend SqlBigInt <: SqlData<Int64> {
     public func getData(): AnyData {
         this.value
     }
@@ -109,7 +110,7 @@ extend<T> SqlBigInt <: SqlData<Int64> {
         this.value
     }
 }
-extend<T> SqlReal <: SqlData<Float32> {
+extend SqlReal <: SqlData<Float32> {
     public func getData(): AnyData {
         this.value
     }
@@ -117,7 +118,7 @@ extend<T> SqlReal <: SqlData<Float32> {
         this.value
     }
 }
-extend<T> SqlDouble <: SqlData<Float64> {
+extend SqlDouble <: SqlData<Float64> {
     public func getData(): AnyData {
         this.value
     }
@@ -125,7 +126,7 @@ extend<T> SqlDouble <: SqlData<Float64> {
         this.value
     }
 }
-extend<T> SqlDecimal <: SqlData<Decimal>{
+extend SqlDecimal <: SqlData<Decimal>{
     public func getData(): AnyData{
         this.value
     }
@@ -133,7 +134,7 @@ extend<T> SqlDecimal <: SqlData<Decimal>{
         this.value
     }
 }
-extend<T> SqlDate <: SqlData<DateTime> {
+extend SqlDate <: SqlData<DateTime> {
     public func getData(): AnyData {
         this.value
     }
@@ -141,7 +142,7 @@ extend<T> SqlDate <: SqlData<DateTime> {
         this.value
     }
 }
-extend<T> SqlTime <: SqlData<DateTime> {
+extend SqlTime <: SqlData<DateTime> {
     public func getData(): AnyData {
         this.value
     }
@@ -149,7 +150,7 @@ extend<T> SqlTime <: SqlData<DateTime> {
         this.value
     }
 }
-extend<T> SqlTimeTz <: SqlData<DateTime> {
+extend SqlTimeTz <: SqlData<DateTime> {
     public func getData(): AnyData {
         this.value
     }
@@ -157,7 +158,7 @@ extend<T> SqlTimeTz <: SqlData<DateTime> {
         this.value
     }
 }
-extend<T> SqlTimestamp <: SqlData<DateTime> {
+extend SqlTimestamp <: SqlData<DateTime> {
     public func getData(): AnyData {
         this.value
     }
@@ -165,7 +166,7 @@ extend<T> SqlTimestamp <: SqlData<DateTime> {
         this.value
     }
 }
-extend<T> SqlInterval <: SqlData<Duration> {
+extend SqlInterval <: SqlData<Duration> {
     public func getData(): AnyData {
         this.value
     }

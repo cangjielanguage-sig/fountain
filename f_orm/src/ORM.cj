@@ -12,21 +12,21 @@ package f_orm
 
 import std.collection.concurrent.ConcurrentHashMap
 import std.database.sql.*
-import std.os.process.Process
-import config.Config
-import pool.exception.PoolException
-import orm.exception.ORMException
-import fountain.base.*
-public import fountain.base.exception.{BaseException, UnreachableException}
-public import orm.dialect.*
-public import orm.exception.*
+import std.process.Process
+import f_base.*
+import f_config.Config
+import f_log.*
+import f_pool.PoolException
+import f_orm.exception.ORMException
+public import f_exception.{BaseException, UnreachableException}
+public import f_orm.wrap.*
+public import f_orm.exception.*
 
 //事务维持在连接内，要在一个事务内完成的数据库访问应确保使用一个连接
 public class ORM {
     private static let logger = LoggerFactory.getLogger("fountain/orm.ORM")
     private static var default = String.empty
     private static let datasources = ConcurrentHashMap<String, Datasource>()
-    private static var config = Config.instance
 
     public static func register(datasource: NamedDatasource, default!: Bool = true): Unit {
         if (datasources.isEmpty()) {

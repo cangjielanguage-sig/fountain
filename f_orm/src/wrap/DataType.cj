@@ -10,8 +10,8 @@
 
 package f_orm.wrap
 
-import std.io.ByteArrayStream
-import orm.exception.*
+import std.io.ByteBuffer
+import f_orm.exception.*
 
 //数据库列的数据类型
 public enum DataType <: ToString & Hashable & Equatable<DataType> {

@@ -12,16 +12,20 @@ package f_orm.wrap
 
 import std.collection.HashMap
 import std.collection.concurrent.ConcurrentHashMap
-import fountain.base.exception.UnreachableException
+import f_base.*
+import f_exception.UnreachableException
+import f_orm.exception.*
 
 public class RowWrap <: Row {
     private static let sqlDataToDataMap = ConcurrentHashMap<String, (SqlDbType) -> AnyData>()
-    private var itr: Iterator<AnyData> = EmptyIterator<AnyData>.instance
+    private var itr: Iterator<AnyData> = EmptyIterator<AnyData>.INSTANCE
     public RowWrap(
         private let driverName: String,
         private let columnInfos: Map<String, Int64>,
         private let row: Array<SqlDbType>
-    ) {}
+    ) {
+        itr = RowWrapIterator(this)
+    }
     static func registerSqlDataToDataConverter(driverName: String, converter: (SqlDbType) -> AnyData) {
         sqlDataToDataMap[driverName] = converter
     }
@@ -93,14 +97,8 @@ public class RowWrap <: Row {
     public operator func [](columnName: String): AnyData {
         get(columnName).getOrThrow {throw ORMException("column ${columnName} is not found")}
     }
-    public func next(): ?AnyData {
-        match (itr) {
-            case i: RowWrapIterator => i.next()
-            case i: EmptyIterator<AnyData> =>
-                itr = RowWrapIterator(this)
-                itr.next()
-            case _ => throw UnreachableException()
-        }
+    public func iterator(): Iterator<AnyData> {
+        itr
     }
     public operator func [](index: Int64): AnyData {
         sqlDataToData(driverName, row[index])

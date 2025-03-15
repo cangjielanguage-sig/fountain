@@ -10,7 +10,7 @@
 
 package f_orm
 
-import orm.exception.ORMException
+import f_orm.exception.ORMException
 
 public func convert<T>(value: Any): T {
     match (value) {

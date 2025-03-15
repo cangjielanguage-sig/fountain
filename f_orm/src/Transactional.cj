@@ -27,13 +27,13 @@ public class Transactional {
         if (let Some(p) <- propagation) {
             p
         } else {
-            ORMConfig.instance.getTransactionPropagation(driverName: this.driverName)
+            ORMConfig.getTransactionPropagation(driverName: this.driverName)
         }
     }
     public func getIsoLevel(): ?TransactionIsoLevel {
         if (let Some(l) <- isoLevel) {
             l
-        } else if (let Some(l) <- ORMConfig.instance.getTransactionLevel(driverName: this.driverName)) {
+        } else if (let Some(l) <- ORMConfig.getTransactionLevel(driverName: this.driverName)) {
             l
         } else {
             None
@@ -42,7 +42,7 @@ public class Transactional {
     public func getAccessMode(): ?TransactionAccessMode {
         if (let Some(m) <- accessMode) {
             m
-        } else if (let Some(m) <- ORMConfig.instance.getTransactionAccessMode(driverName: this.driverName)) {
+        } else if (let Some(m) <- ORMConfig.getTransactionAccessMode(driverName: this.driverName)) {
             m
         } else {
             None
@@ -51,7 +51,7 @@ public class Transactional {
     public func getDeferrableMode(): ?TransactionDeferrableMode {
         if (let Some(m) <- deferrableMode) {
             m
-        } else if (let Some(m) <- ORMConfig.instance.getTransactionDeferrableMode(driverName: this.driverName)) {
+        } else if (let Some(m) <- ORMConfig.getTransactionDeferrableMode(driverName: this.driverName)) {
             m
         } else {
             None

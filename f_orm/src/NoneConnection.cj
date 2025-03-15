@@ -10,7 +10,8 @@
 
 package f_orm
 
-import fountain.base.exception.IllegalAccessException
+import std.collection.*
+import f_exception.IllegalAccessException
 
 class NoneConnection <: Connection {
     public static const instance = NoneConnection()

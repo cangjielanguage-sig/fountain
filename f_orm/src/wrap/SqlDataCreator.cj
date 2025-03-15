@@ -11,6 +11,8 @@ package f_orm.wrap
 
 import std.convert.*
 import std.collection.concurrent.ConcurrentHashMap
+import std.io.ByteBuffer
+import f_orm.exception.ORMException
 
 public class SqlDataCreators {
     private static let dataCreators = {
@@ -231,7 +233,7 @@ public class SqlBinaryCreator <: SqlDataCreator {
         SqlBinary(v)
     }
     public func create(column: ColumnInfo): SqlDbType {
-        SqlBinary(Array<Byte>(column.length, item: 0))
+        SqlBinary(Array<Byte>(column.length, repeat: 0))
     }
 }
 public class SqlVarBinaryCreator <: SqlDataCreator {
@@ -257,19 +259,19 @@ public class SqlVarBinaryCreator <: SqlDataCreator {
         SqlVarBinary(v)
     }
     public func create(column: ColumnInfo): SqlDbType {
-        SqlVarBinary(Array<Byte>(column.length, item: 0))
+        SqlVarBinary(Array<Byte>(column.length, repeat: 0))
     }
 }
 public class SqlClobCreator <: SqlDataCreator {
     public func create(): SqlDbType {
-        SqlClob(ByteArrayStream())
+        SqlClob(ByteBuffer())
     }
     public func create(value: Any): SqlDbType {
         let v = match (value) {
             case x: Option<Any> => match (x) {
                 case Some(x) => match (x) {
                     case x: Array<Byte> =>
-                        let s = ByteArrayStream()
+                        let s = ByteBuffer()
                         s.write(x)
                         s
                     case x: InputStream => x
@@ -279,7 +281,7 @@ public class SqlClobCreator <: SqlDataCreator {
             }
             case x: Option<Array<Byte>> => match (x) {
                 case Some(x) =>
-                    let s = ByteArrayStream()
+                    let s = ByteBuffer()
                     s.write(x)
                     s
                 case _ => throw ORMException("current value must not be none")
@@ -289,7 +291,7 @@ public class SqlClobCreator <: SqlDataCreator {
                 case _ => throw ORMException("current value must not be none")
             }
             case x: Array<Byte> =>
-                let s = ByteArrayStream()
+                let s = ByteBuffer()
                 s.write(x)
                 s
             case x: InputStream => x
@@ -298,19 +300,19 @@ public class SqlClobCreator <: SqlDataCreator {
         SqlClob(v)
     }
     public func create(column: ColumnInfo): SqlDbType {
-        SqlClob(ByteArrayStream())
+        SqlClob(ByteBuffer())
     }
 }
 public class SqlBlobCreator <: SqlDataCreator {
     public func create(): SqlDbType {
-        SqlBlob(ByteArrayStream())
+        SqlBlob(ByteBuffer())
     }
     public func create(value: Any): SqlDbType {
         let v = match (value) {
             case x: Option<Any> => match (x) {
                 case Some(x) => match (x) {
                     case x: Array<Byte> =>
-                        let s = ByteArrayStream()
+                        let s = ByteBuffer()
                         s.write(x)
                         s
                     case x: InputStream => x
@@ -320,7 +322,7 @@ public class SqlBlobCreator <: SqlDataCreator {
             }
             case x: Option<Array<Byte>> => match (x) {
                 case Some(x) =>
-                    let s = ByteArrayStream()
+                    let s = ByteBuffer()
                     s.write(x)
                     s
                 case _ => throw ORMException("current value must not be none")
@@ -330,7 +332,7 @@ public class SqlBlobCreator <: SqlDataCreator {
                 case _ => throw ORMException("current value must not be none")
             }
             case x: Array<Byte> =>
-                let s = ByteArrayStream()
+                let s = ByteBuffer()
                 s.write(x)
                 s
             case x: InputStream => x
@@ -339,7 +341,7 @@ public class SqlBlobCreator <: SqlDataCreator {
         SqlBlob(v)
     }
     public func create(column: ColumnInfo): SqlDbType {
-        SqlBlob(ByteArrayStream())
+        SqlBlob(ByteBuffer())
     }
 }
 public class SqlBoolCreator <: SqlDataCreator {
@@ -350,8 +352,8 @@ public class SqlBoolCreator <: SqlDataCreator {
         let v = match (value) {
             case x: Option<Any> => match (x) {
                 case Some(x) => match (x) {
-                    case x: ToString => Bool.parse(x.toString())
                     case x: Bool => x
+                    case x: ToString => Bool.parse(x.toString())
                     case _ => throw ORMException("current value does not match")
                 }
                 case _ => throw ORMException("current value must not be none")
@@ -368,8 +370,8 @@ public class SqlBoolCreator <: SqlDataCreator {
                 case Some(x) => x
                 case _ => throw ORMException("current value must not be none")
             }
-            case x: ToString => Bool.parse(x.toString())
             case x: Bool => x
+            case x: ToString => Bool.parse(x.toString())
             case _ => throw ORMException("current value does not match")
         }
         SqlBool(v)
@@ -386,8 +388,8 @@ public class SqlByteCreator <: SqlDataCreator {
         let v = match (value) {
             case x: Option<Any> => match (x) {
                 case Some(x) => match (x) {
-                    case x: ToString => Int8.parse(x.toString())
                     case x: Int8 => x
+                    case x: ToString => Int8.parse(x.toString())
                     case _ => throw ORMException("current value does not match")
                 }
                 case _ => throw ORMException("current value must not be none")
@@ -404,8 +406,8 @@ public class SqlByteCreator <: SqlDataCreator {
                 case Some(x) => x
                 case _ => throw ORMException("current value must not be none")
             }
-            case x: ToString => Int8.parse(x.toString())
             case x: Int8 => x
+            case x: ToString => Int8.parse(x.toString())
             case _ => throw ORMException("current value does not match")
         }
         SqlByte(v)
@@ -422,8 +424,8 @@ public class SqlSmallIntCreator <: SqlDataCreator {
         let v = match (value) {
             case x: Option<Any> => match (x) {
                 case Some(x) => match (x) {
-                    case x: ToString => Int16.parse(x.toString())
                     case x: Int16 => x
+                    case x: ToString => Int16.parse(x.toString())
                     case _ => throw ORMException("current value does not match")
                 }
                 case _ => throw ORMException("current value must not be none")
@@ -440,8 +442,8 @@ public class SqlSmallIntCreator <: SqlDataCreator {
                 case Some(x) => x
                 case _ => throw ORMException("current value must not be none")
             }
-            case x: ToString => Int16.parse(x.toString())
             case x: Int16 => x
+            case x: ToString => Int16.parse(x.toString())
             case _ => throw ORMException("current value does not match")
         }
         SqlSmallInt(v)
@@ -458,8 +460,8 @@ public class SqlIntegerCreator <: SqlDataCreator {
         let v = match (value) {
             case x: Option<Any> => match (x) {
                 case Some(x) => match (x) {
-                    case x: ToString => Int32.parse(x.toString())
                     case x: Int32 => x
+                    case x: ToString => Int32.parse(x.toString())
                     case _ => throw ORMException("current value does not match")
                 }
                 case _ => throw ORMException("current value must not be none")
@@ -476,8 +478,8 @@ public class SqlIntegerCreator <: SqlDataCreator {
                 case Some(x) => x
                 case _ => throw ORMException("current value must not be none")
             }
-            case x: ToString => Int32.parse(x.toString())
             case x: Int32 => x
+            case x: ToString => Int32.parse(x.toString())
             case _ => throw ORMException("current value does not match")
         }
         SqlInteger(v)
@@ -494,8 +496,8 @@ public class SqlBigIntCreator <: SqlDataCreator {
         let v = match (value) {
             case x: Option<Any> => match (x) {
                 case Some(x) => match (x) {
-                    case x: ToString => Int64.parse(x.toString())
                     case x: Int64 => x
+                    case x: ToString => Int64.parse(x.toString())
                     case _ => throw ORMException("current value does not match")
                 }
                 case _ => throw ORMException("current value must not be none")
@@ -512,8 +514,8 @@ public class SqlBigIntCreator <: SqlDataCreator {
                 case Some(x) => x
                 case _ => throw ORMException("current value must not be none")
             }
-            case x: ToString => Int64.parse(x.toString())
             case x: Int64 => x
+            case x: ToString => Int64.parse(x.toString())
             case _ => throw ORMException("current value does not match")
         }
         SqlBigInt(v)

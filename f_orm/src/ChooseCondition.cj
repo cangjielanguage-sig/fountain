@@ -13,8 +13,8 @@ import std.collection.ArrayList
 import f_orm.exception.ORMException
 
 public class ChooseCondition {
-    private static let emptyPartial = {=> ('', '')}
-    private let conditions = ArrayList<(() -> Bool, () -> (String, ToString)>())> ()
+    private static let emptyPartial: () -> (String, ToString) = {=> ('', '')}
+    private let conditions = ArrayList<(() -> Bool, () -> (String, ToString))> ()
     private var _otherwise: () -> (String, ToString) = emptyPartial
     private var pair = true
     private var _argInSql: Bool = false
@@ -62,13 +62,13 @@ public class ChooseCondition {
         func gen(partial: () -> (String, ToString)){
             let (frag, arg) = partial()
             if(frag.size > 0){
-                if(argInSql){
+                if(_argInSql){
                     executor.addArg(arg)
                     ' ${frag} ? ${Condition.delimiter} '
                 }else{
                     ' ${frag} ${arg} ${Condition.delimiter} '
                 }
-            }else if(argInSql){
+            }else if(_argInSql){
                 ' ${arg} ${Condition.delimiter} '
             }else{
                 executor.addArg(arg)

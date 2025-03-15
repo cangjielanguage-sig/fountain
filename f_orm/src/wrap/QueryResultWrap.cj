@@ -10,10 +10,10 @@
 
 package f_orm.wrap
 
-import fountain.base.*
 import std.database.sql.*
+import f_base.*
 
-public class QueryResultWrap <: QueryResult & Iterator<Row> {
+public class QueryResultWrap <: Iterator<Row> & QueryResult {
     private var row: Array<SqlDbType> = []
     private let columnInfoMap: Map<String, Int64> = HashMap<String, Int64>()
     public QueryResultWrap(private let driverName: String, private let result: QueryResult) {

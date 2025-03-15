@@ -10,6 +10,9 @@
 
 package f_orm
 
+import std.collection.ArrayList
+import f_base.*
+
 public open class SqlArgs <: Collection<SqlDbType> & ToString & Hashable & Equatable<SqlArgs> { //sql参数集
     public static let empty = SqlArgs(finished: true)
     private let sqlArgs = ArrayList<SqlDbType>()
@@ -62,15 +65,15 @@ public open class SqlArgs <: Collection<SqlDbType> & ToString & Hashable & Equat
         if (finished) {
             throw ORMException("current instance of SqlArgs is finished.")
         }
-        sqlArgs.append(SqlDataCreators.generate(driverName, arg.argType, arg.value))
-        args.append(arg)
+        sqlArgs.add(SqlDataCreators.generate(driverName, arg.argType, arg.value))
+        args.add(arg)
     }
     func append(dataType: DataType, value: Any) {
         append(SqlArg(sqlArgs.size, dataType, value))
     }
     func append(value: Any) {
         match(value){
-            case x: SalArg => append(x)
+            case x: SqlArg => append(x)
             case _ => append(SqlArg(sqlArgs.size, value))
         }
     }

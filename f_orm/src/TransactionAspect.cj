@@ -12,10 +12,10 @@ package f_orm
 import std.collection.concurrent.ConcurrentHashMap
 import std.reflect.*
 import std.sync.ReentrantMutex
-import fountain.aspect.*
-import fountain.bean.{BeanFactory, BeanMeta}
+import f_aspect.*
+import f_bean.{BeanFactory, BeanMeta}
 
-@AspectRoute[Route.WithAnnotation("fountain/orm.Transactional")]
+@AspectRoute[Route.WithAnnotation("f_orm.Transactional")]
 public class TransactionAspect <: Aspect {
     public static func initialize(): Unit {
         let meta = BeanMeta.create<TransactionAspect>(creator: {=> TransactionAspect()})

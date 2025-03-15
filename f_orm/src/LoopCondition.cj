@@ -18,7 +18,7 @@ public class LoopCondition<I, T> where I <: Iterable<T> {
     private var _trimRight = ''
     private var _delimiter = ''
     private var _argInSql = false
-    private var _condition: (T, Int64) -> Bool => {v, i => true}
+    private var _condition: (T, Int64) -> Bool = {v, i => true}
     private var _partial: (T, Int64) -> (String, ToString) = {v, i => throw ORMException('partial for loop is not specified')}
 
     LoopCondition(private let values: I, private let executor: SqlExecutor){}
@@ -33,7 +33,7 @@ public class LoopCondition<I, T> where I <: Iterable<T> {
         this
     }
     public func wrapRight(right: String): LoopCondition<I, T> {
-        _wrapright = right
+        _wrapRight = right
         this
     }
     public func trim(left: String, right: String): LoopCondition<I, T> {
@@ -68,30 +68,30 @@ public class LoopCondition<I, T> where I <: Iterable<T> {
         this
     }
     public func partial(partial: (T, Int64) -> ToString): LoopCondition<I, T> {
-        this.partial{('', partial())}
+        this.partial{t, i => ('', partial(t, i))}
     }
     public func done(): String {
-        let sqlFrag = trim(prefix: trimLeft, suffix: trimRight){
+        let sqlFrag = Condition.trim(prefix: _trimLeft, suffix: _trimRight){
             let builder = StringBuilder()
             var i = 0
-            for (v in values where condition(v, i)) {
+            for (v in values where _condition(v, i)) {
                 if (builder.size > 0) {
                     builder.append(' ')
-                    builder.append(delimiter)
+                    builder.append(_delimiter)
                     builder.append(' ')
                 }
-                let (frag, v) = partial(v, i)
+                let (frag, arg) = _partial(v, i)
                 builder.append(frag)
-                if(argInSql) {
-                    builder.append(v)
+                if(_argInSql) {
+                    builder.append(arg)
                 }else{
-                    executor.addArg(v)
+                    executor.addArg(arg)
                     builder.append('?')
                 }
                 i++
             }
             builder.toString()
         }
-        ' ${wrapLeft} ${sqlFrag} ${wrapRight} '
+        ' ${_wrapLeft} ${sqlFrag} ${_wrapRight} '
     }
 }

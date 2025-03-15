@@ -9,6 +9,8 @@
  */
 package f_orm
 
+import f_orm.wrap.*
+
 public class ConversionQueryMaper<D, T, O> <: QueryMapper<O> {
     public init(
         name!: String,
@@ -16,6 +18,6 @@ public class ConversionQueryMaper<D, T, O> <: QueryMapper<O> {
         converter!: (D) -> T,
         putter!: (O, T) -> Unit
     ) {
-        super(name: name, dataType: dataType, putter: {o, v => putter(o, converter(orm.convert<D>(v)))})
+        super(name: name, dataType: dataType, putter: {o, v => putter(o, converter(convert<D>(v)))})
     }
 }

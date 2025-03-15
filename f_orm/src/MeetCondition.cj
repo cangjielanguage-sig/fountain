@@ -12,7 +12,7 @@ package f_orm
 public class MeetCondition{
     //condition: Bool, sqlFrag: String, argInSql!: Bool, value!: () -> ToString
     private var _argInSql = false
-    private var _value = {=> ''}
+    private var _value: () -> ToString = {=> ''}
     public MeetCondition(private let condition: Bool, private let partial: String, private let executor: SqlExecutor){}
     
     public prop argInSql: MeetCondition {

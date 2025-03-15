@@ -11,6 +11,7 @@
 package f_orm
 
 import std.collection.HashMap
+import f_collection.*
 import f_data.*
 import f_log.*
 import f_orm.exception.*
@@ -44,11 +45,11 @@ public class SqlExecutor <: Resource & RootDAO {
     private let useCache: Bool
 
     private SqlExecutor(let driverName: String) {
-        useCache = ORMConfig.instance.getUseCache(driverName: driverName) ?? true
+        useCache = ORMConfig.getUseCache(driverName: driverName) ?? true
         cache = if (useCache) {
             HashMap<SqlCacheKey, Any>()
         } else {
-            EmptyMap<SqlCacheKey, Any>.instance
+            EmptyMap<SqlCacheKey, Any>.INSTANCE
         }
         _connection_ = getConnection(driverName)
     }
@@ -63,8 +64,14 @@ public class SqlExecutor <: Resource & RootDAO {
     }
 
     static func getInstance(driverName: String): SqlExecutor {
-        let exe =
-        current.getOrCompute{HashMap<String, SqlExecutor>()}.computeIfAbsent(driverName){dn => SqlExecutor(dn)}
+        let em = current.getOrCompute{HashMap<String, SqlExecutor>()}
+        let exe = if(let Some(e) <- em.get(driverName)) {
+            e
+        }else{
+            let e = SqlExecutor(driverName)
+            em[driverName] = e
+            e
+        }
         if(!(exe._connection_ is NoneConnection)){
             match(exe._connection_.state){
                 case Closed => exe._connection_ = NoneConnection.instance
@@ -104,10 +111,10 @@ public class SqlExecutor <: Resource & RootDAO {
     }
 
     private func createTransaction(
-        propagation!: Propagation = ORMConfig.instance.getTransactionPropagation(driverName: driverName),
-        isoLevel!: ?TransactionIsoLevel = ORMConfig.instance.getTransactionLevel(driverName: driverName),
-        accessMode!: ?TransactionAccessMode = ORMConfig.instance.getTransactionAccessMode(driverName: driverName),
-        deferrableMode!: ?TransactionDeferrableMode = ORMConfig.instance.getTransactionDeferrableMode(
+        propagation!: Propagation = ORMConfig.getTransactionPropagation(driverName: driverName),
+        isoLevel!: ?TransactionIsoLevel = ORMConfig.getTransactionLevel(driverName: driverName),
+        accessMode!: ?TransactionAccessMode = ORMConfig.getTransactionAccessMode(driverName: driverName),
+        deferrableMode!: ?TransactionDeferrableMode = ORMConfig.getTransactionDeferrableMode(
             driverName: driverName)
     ): TransactionWrap {
         func newDummyTx(
@@ -125,7 +132,7 @@ public class SqlExecutor <: Resource & RootDAO {
                 //Support a current transaction, create a new one if none exists.
                 try {
                 if (!hasRealTx) {
-                    if (let Some(tx) <- connection.createTransaction() as TransactionWrap) {
+                    if (let tx: TransactionWrap <- connection.createTransaction()) {
                         hasRealTx = true
                         tx.wrapping = this.tx
                         this.tx = tx
@@ -155,7 +162,7 @@ public class SqlExecutor <: Resource & RootDAO {
                 } else {
                     this.connection
                 }
-                if (let Some(tx) <- connection.createTransaction() as TransactionWrap) {
+                if (let tx: TransactionWrap <- connection.createTransaction()) {
                     tx.wrapping = this.tx
                     tx.suspend = hasRealTx
                     hasRealTx = true
@@ -186,7 +193,7 @@ public class SqlExecutor <: Resource & RootDAO {
             case Nested =>
                 //Execute within a nested transaction if a current transaction exists, behave like REQUIRED otherwise.
                 try {
-                if (let Some(tx) <- connection.createTransaction() as TransactionWrap) {
+                if (let tx: TransactionWrap <- connection.createTransaction()) {
                     tx.wrapping = this.tx
                     hasRealTx = true
                     this.tx = tx
@@ -208,10 +215,10 @@ public class SqlExecutor <: Resource & RootDAO {
         this.tx.getOrThrow()
     }
     public func newTxAndBegin(
-        propagation!: Propagation = ORMConfig.instance.getTransactionPropagation(driverName: driverName),
-        isoLevel!: ?TransactionIsoLevel = ORMConfig.instance.getTransactionLevel(driverName: driverName),
-        accessMode!: ?TransactionAccessMode = ORMConfig.instance.getTransactionAccessMode(driverName: driverName),
-        deferrableMode!: ?TransactionDeferrableMode = ORMConfig.instance.getTransactionDeferrableMode(
+        propagation!: Propagation = ORMConfig.getTransactionPropagation(driverName: driverName),
+        isoLevel!: ?TransactionIsoLevel = ORMConfig.getTransactionLevel(driverName: driverName),
+        accessMode!: ?TransactionAccessMode = ORMConfig.getTransactionAccessMode(driverName: driverName),
+        deferrableMode!: ?TransactionDeferrableMode = ORMConfig.getTransactionDeferrableMode(
             driverName: driverName)
     ): SqlExecutor {
         createTransaction(
@@ -407,7 +414,7 @@ public class SqlExecutor <: Resource & RootDAO {
             let wrap = (query as QueryResultWrap).getOrThrow()
             for (row in wrap) {
                 let value = (row[index] as T).getOrThrow()
-                list.append(value)
+                list.add(value)
             }
             return list
         }
@@ -418,7 +425,7 @@ public class SqlExecutor <: Resource & RootDAO {
             let wrap = (query as QueryResultWrap).getOrThrow()
             for (row in wrap) {
                 let value = (row[column] as T).getOrThrow()
-                list.append(value)
+                list.add(value)
             }
             return list
         }
@@ -430,7 +437,7 @@ public class SqlExecutor <: Resource & RootDAO {
         execute<Iterator<T>> {
             match (query as QueryResultWrap) {
                 case Some(x) => SingleColumnIterator<T>(x, index: index)
-                case _ => EmptyIterator<T>.instance
+                case _ => EmptyIterator<T>.INSTANCE
             }
         }
     }
@@ -438,7 +445,7 @@ public class SqlExecutor <: Resource & RootDAO {
         execute<Iterator<T>> {
             match (query as QueryResultWrap) {
                 case Some(x) => SingleColumnIterator<T>(x, column: column)
-                case _ => EmptyIterator<T>.instance
+                case _ => EmptyIterator<T>.INSTANCE
             }
         }
     }
@@ -458,7 +465,7 @@ public class SqlExecutor <: Resource & RootDAO {
         execute<Map<String, Any>> {
             match ((query as QueryResultWrap).getOrThrow().next()) {
                 case Some(x) => x.toMap()
-                case _ => EmptyMap<String, Any>.instance
+                case _ => EmptyMap<String, Any>.INSTANCE
             }
         }
     }
@@ -480,7 +487,7 @@ public class SqlExecutor <: Resource & RootDAO {
                 case Some(x) =>
                     let list = ArrayList<HashMap<String, Any>>()
                     for (row in x) {
-                        list.append(row.toMap())
+                        list.add(row.toMap())
                     }
                     list
                 case _ => ArrayList<HashMap<String, Any>>()

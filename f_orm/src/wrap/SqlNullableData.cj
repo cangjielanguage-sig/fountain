@@ -11,7 +11,7 @@ package f_orm.wrap
 
 public interface SqlNullableData<T> <: SqlData<Option<T>> where T <: Data<T> {}
 
-extend<T> SqlNullableChar <: SqlNullableData<String> {
+extend SqlNullableChar <: SqlNullableData<String> {
     public func getData(): AnyData {
         this.value
     }
@@ -19,7 +19,7 @@ extend<T> SqlNullableChar <: SqlNullableData<String> {
         this.value
     }
 }
-extend<T> SqlNullableVarchar <: SqlNullableData<String> {
+extend SqlNullableVarchar <: SqlNullableData<String> {
     public func getData(): AnyData {
         this.value
     }
@@ -27,7 +27,7 @@ extend<T> SqlNullableVarchar <: SqlNullableData<String> {
         this.value
     }
 }
-extend<T> SqlNullableBinary <: SqlNullableData<Array<Byte>> {
+extend SqlNullableBinary <: SqlNullableData<Array<Byte>> {
     public func getData(): AnyData {
         this.value
     }
@@ -35,7 +35,7 @@ extend<T> SqlNullableBinary <: SqlNullableData<Array<Byte>> {
         this.value
     }
 }
-extend<T> SqlNullableVarBinary <: SqlNullableData<Array<Byte>> {
+extend SqlNullableVarBinary <: SqlNullableData<Array<Byte>> {
     public func getData(): AnyData {
         this.value
     }
@@ -43,7 +43,7 @@ extend<T> SqlNullableVarBinary <: SqlNullableData<Array<Byte>> {
         this.value
     }
 }
-extend<T> SqlNullableClob <: SqlNullableData<DataInputStream> {
+extend SqlNullableClob <: SqlNullableData<DataInputStream> {
     public func getData(): AnyData {
         this.getValue()
     }
@@ -54,7 +54,7 @@ extend<T> SqlNullableClob <: SqlNullableData<DataInputStream> {
         }
     }
 }
-extend<T> SqlNullableBlob <: SqlNullableData<DataInputStream> {
+extend SqlNullableBlob <: SqlNullableData<DataInputStream> {
     public func getData(): AnyData {
         this.getValue()
     }
@@ -65,7 +65,7 @@ extend<T> SqlNullableBlob <: SqlNullableData<DataInputStream> {
         }
     }
 }
-extend<T> SqlNullableBool <: SqlNullableData<Bool> {
+extend SqlNullableBool <: SqlNullableData<Bool> {
     public func getData(): AnyData {
         this.value
     }
@@ -73,7 +73,7 @@ extend<T> SqlNullableBool <: SqlNullableData<Bool> {
         this.value
     }
 }
-extend<T> SqlNullableByte <: SqlNullableData<Int8> {
+extend SqlNullableByte <: SqlNullableData<Int8> {
     public func getData(): AnyData {
         this.value
     }
@@ -81,7 +81,7 @@ extend<T> SqlNullableByte <: SqlNullableData<Int8> {
         this.value
     }
 }
-extend<T> SqlNullableSmallInt <: SqlNullableData<Int16> {
+extend SqlNullableSmallInt <: SqlNullableData<Int16> {
     public func getData(): AnyData {
         this.value
     }
@@ -89,7 +89,7 @@ extend<T> SqlNullableSmallInt <: SqlNullableData<Int16> {
         this.value
     }
 }
-extend<T> SqlNullableInteger <: SqlNullableData<Int32> {
+extend SqlNullableInteger <: SqlNullableData<Int32> {
     public func getData(): AnyData {
         this.value
     }
@@ -97,7 +97,7 @@ extend<T> SqlNullableInteger <: SqlNullableData<Int32> {
         this.value
     }
 }
-extend<T> SqlNullableBigInt <: SqlNullableData<Int64> {
+extend SqlNullableBigInt <: SqlNullableData<Int64> {
     public func getData(): AnyData {
         this.value
     }
@@ -105,7 +105,7 @@ extend<T> SqlNullableBigInt <: SqlNullableData<Int64> {
         this.value
     }
 }
-extend<T> SqlNullableReal <: SqlNullableData<Float32> {
+extend SqlNullableReal <: SqlNullableData<Float32> {
     public func getData(): AnyData {
         this.value
     }
@@ -113,7 +113,7 @@ extend<T> SqlNullableReal <: SqlNullableData<Float32> {
         this.value
     }
 }
-extend<T> SqlNullableDouble <: SqlNullableData<Float64> {
+extend SqlNullableDouble <: SqlNullableData<Float64> {
     public func getData(): AnyData {
         this.value
     }
@@ -121,7 +121,7 @@ extend<T> SqlNullableDouble <: SqlNullableData<Float64> {
         this.value
     }
 }
-extend<T> SqlNullableDecimal <: SqlNullableData<Decimal> {
+extend SqlNullableDecimal <: SqlNullableData<Decimal> {
     public func getData(): AnyData {
         this.value
     }
@@ -129,7 +129,7 @@ extend<T> SqlNullableDecimal <: SqlNullableData<Decimal> {
         this.value
     }
 }
-extend<T> SqlNullableDate <: SqlNullableData<DateTime> {
+extend SqlNullableDate <: SqlNullableData<DateTime> {
     public func getData(): AnyData {
         this.value
     }
@@ -137,7 +137,7 @@ extend<T> SqlNullableDate <: SqlNullableData<DateTime> {
         this.value
     }
 }
-extend<T> SqlNullableTime <: SqlNullableData<DateTime> {
+extend SqlNullableTime <: SqlNullableData<DateTime> {
     public func getData(): AnyData {
         this.value
     }
@@ -145,7 +145,7 @@ extend<T> SqlNullableTime <: SqlNullableData<DateTime> {
         this.value
     }
 }
-extend<T> SqlNullableTimeTz <: SqlNullableData<DateTime> {
+extend SqlNullableTimeTz <: SqlNullableData<DateTime> {
     public func getData(): AnyData {
         this.value
     }
@@ -153,7 +153,7 @@ extend<T> SqlNullableTimeTz <: SqlNullableData<DateTime> {
         this.value
     }
 }
-extend<T> SqlNullableTimestamp <: SqlNullableData<DateTime> {
+extend SqlNullableTimestamp <: SqlNullableData<DateTime> {
     public func getData(): AnyData {
         this.value
     }
@@ -161,7 +161,7 @@ extend<T> SqlNullableTimestamp <: SqlNullableData<DateTime> {
         this.value
     }
 }
-extend<T> SqlNullableInterval <: SqlNullableData<Duration> {
+extend SqlNullableInterval <: SqlNullableData<Duration> {
     public func getData(): AnyData {
         this.value
     }

@@ -9,6 +9,9 @@
  */
 package f_orm
 
+import std.collection.ArrayList
+import f_orm.wrap.Row
+
 public class GroupedQueryMapper<T, O> <: QueryMapper<O> {
     public GroupedQueryMapper(
         name!: String,
@@ -32,7 +35,7 @@ public class GroupedQueryMapper<T, O> <: QueryMapper<O> {
     public func populate(row: Row, o: O): O {
         let groupedValue = grouped.creator()
         let list = groupedGetter(o)
-        list.append(groupedValue)
+        list.add(groupedValue)
         for (m in grouped.mappers) {
             if (let Some(value) <- row.get(m.name)) {
                 m.putter(groupedValue, value)
@@ -62,7 +65,7 @@ public class GroupedSingleQueryMapper<T, O> <: QueryMapper<O> {
     public func populate(row: Row, o: O): O {
         let list = groupedGetter(o)
         if (let Some(value) <- row.get(name)) {
-            list.append(orm.convert<T>(value))
+            list.add(convert<T>(value))
         }
         o
     }
@@ -99,7 +102,7 @@ public class NullableGroupedQueryMapper<T, O> <: QueryMapper<O> {
             if (let Some(value) <- row.get(mapper.name)) {
                 let groupedValue = if (prevSize == list.size) {
                     let groupedValue = grouped.creator()
-                    list.append(groupedValue)
+                    list.add(groupedValue)
                     groupedValue
                 } else {
                     list[prevSize].getOrThrow()
@@ -109,7 +112,7 @@ public class NullableGroupedQueryMapper<T, O> <: QueryMapper<O> {
             i++
         }
         if (!ignoreNone && prevSize == list.size) {
-            list.append(Option<T>.None)
+            list.add(Option<T>.None)
         }
         o
     }

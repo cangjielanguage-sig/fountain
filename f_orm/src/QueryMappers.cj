@@ -10,7 +10,8 @@
 package f_orm
 
 import std.collection.HashMap
-import fountain.collection.{LinkedMap, ExtendHashMap, ExtendMap}
+import f_base.*
+import f_collection.{LinkedHashMap, ExtendMap}
 
 public class QueryMappers<O> {
     private var hasGroup = false
@@ -31,17 +32,17 @@ public class QueryMappers<O> {
         }
     }
     public static func create<T>(mappers!: Array<QueryMapper<T>>, creator!: ()->T): ?QueryMappers<T> {
-        if(!(TypeInfos<O>.instance.isSubtypeOf(TypeInfos<Object>.instance) && TypeInfos<T>.instance.isSubtypeOf(TypeInfos<O>.instance))){
+        if(!(TypeInfos.get<O>().isSubtypeOf(TypeInfos.get<Object>()) && TypeInfos.get<T>().isSubtypeOf(TypeInfos.get<O>()))){
             return None<QueryMappers<T>>
         }
         let mapperMap = HashMap<String, QueryMapper<T>>()
         func putMapperMap<U>(mappers: Array<QueryMapper<U>>, convert: (QueryMapper<U>) -> QueryMapper<T>){
             for (mapper in mappers) {
-                mapperMap.putIfAbsent(mapper.name, convert(mapper))
+                mapperMap.addIfAbsent(mapper.name, convert(mapper))
             }
         }
         putMapperMap<T>(mappers){m => m}
-        let oMappers = (TypeInfos<O>.instance.getStaticFunction("queryMappers").apply() as QueryMappers<O>).getOrThrow().mappers
+        let oMappers = (TypeInfos.get<O>().getStaticFunction("queryMappers").apply() as QueryMappers<O>).getOrThrow().mappers
         putMapperMap<O>(oMappers){m => m.new<T>()}
         QueryMappers<T>(mappers: mapperMap.values().toArray(), creator: creator)
     }
@@ -71,14 +72,14 @@ public class QueryMappers<O> {
     public func list(result: QueryResult): ArrayList<O> {
         let list = ArrayList<O>()
         for (row in convert(result)) {
-            list.append(map(row))
+            list.add(map(row))
         }
         list
     }
     public func groupedList<ID>(result: QueryResult): ArrayList<O> where ID <: Hashable & Equatable<ID> {
         if (hasGroup) {
             let idMapper = (this.idMapper.getOrThrow() as IdQueryMapper<ID, O>).getOrThrow()
-            let map = LinkedMap<ID, O>()
+            let map = LinkedHashMap<ID, O>()
             for (row in convert(result)) {
                 let id = idMapper.id(row)
                 match (map.get(id, false)) {

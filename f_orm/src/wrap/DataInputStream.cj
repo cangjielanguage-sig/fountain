@@ -9,28 +9,21 @@
  */
 package f_orm.wrap
 
-import std.io.{InputStream, ByteArrayStream, StringReader, StringEncoding, Endian, CURRENT_ENDIAN}
+import std.io.{InputStream, ByteBuffer, StringReader, StringEncoding}
 import charset.charset.*
 import charset.charset.encoding.*
 
 public class DataInputStream <: InputStream & Data<DataInputStream> {
     public DataInputStream(private let input: InputStream) {}
     public static func new(bytes: Array<Byte>): DataInputStream {
-        let input = ByteArrayStream(bytes.size)
+        let input = ByteBuffer(bytes.size)
         input.write(bytes)
         DataInputStream(input)
     }
     public func read(buffer: Array<Byte>): Int64 {
         input.read(buffer)
     }
-    // public prop length: Int64 {
-    //     get() {
-    //         input.length
-    //     }
-    // }
-    public func reader(encoding!: StringEncoding = UTF8, endian!: Endian = CURRENT_ENDIAN): StringReader<InputStream> {
-        StringReader<InputStream>(input, encoding: encoding, endian: endian)
-    }
+    
     public func reader(charset!: Charset = Charsets.UTF8, bufSize!: Int64 = 8192): TextReader {
         TextReader(input, charset: charset, bufSize: bufSize)
     }

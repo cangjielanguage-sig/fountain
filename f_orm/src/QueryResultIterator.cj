@@ -18,9 +18,6 @@ public class QueryResultIterator<T> <: Iterator<T> & Resource {
     public func next(): ?T {
         mappers.doMap(result)
     }
-    public func stream(): Stream<T> {
-        Stream<T>(this)
-    }
     public func isClosed(): Bool {
         result.isClosed()
     }

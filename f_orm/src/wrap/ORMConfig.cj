@@ -11,105 +11,90 @@
 package f_orm.wrap
 
 import std.regex.Regex
-import std.collection.HashMap
+import std.collection.{Map, HashMap}
 import std.collection.concurrent.ConcurrentHashMap
-import config.Config
-import fountain.regex.*
+import std.convert.Parsable
+import f_config.Config
+import f_regex.*
+import f_orm.exception.ORMException
 
 public class ORMConfig {
-    private static const confPrefix = "fountain.orm"
-    public static let connectionUrl = "${confPrefix}.connection.url"
-    public static let transactionIncluding = "${confPrefix}.transaction.including"
-    public static let transactionExcluding = "${confPrefix}.transaction.excluding"
-    public static let transactionPropagation = "${confPrefix}.transaction.propagation"
-    public static let transactionLevel = "${confPrefix}.transaction.level"
-    public static let transactionAccessMode = "${confPrefix}.transaction.access.mode"
-    public static let transactionDeferrableMode = "${confPrefix}.transaction.deferrable.mode"
-    public static let useCache = "${confPrefix}.useCache"
-    public static let databasePoolInitSize = "${confPrefix}.database.pool.init.size"
-    public static let databasePoolMinSize = "${confPrefix}.database.pool.min.size"
-    public static let databasePoolMaxSize = "${confPrefix}.database.pool.max.size"
-    public static let databasePoolCheckPeriod = "${confPrefix}.database.pool.check.period"
-    public static let databasePoolCreationRetries = "${confPrefix}.database.pool.creation.retries"
-    public static let databasePoolCheckSql = "${confPrefix}.database.pool.check.sql"
-    public static let stdPoolIdleTimeout = "${confPrefix}.pooled.datasource.idleTimeout"
-    public static let stdPoolMaxLifeTime = "${confPrefix}.pooled.datasource.maxLifeTime"
-    public static let stdPoolConnectionTimeout = "${confPrefix}.pooled.datasource.connectionTimeout"
-    public static let stdPoolKeepaliveTime = "${confPrefix}.pooled.datasource.keepaliveTime"
-    public static let stdPoolMaxSize = "${confPrefix}.pooled.datasource.maxSize"
-    public static let stdPoolMaxIdleSize = "${confPrefix}.pooled.datasource.maxIdleSize"
+    private static const confPrefix = "orm"
+    public static let connectionUrl = "${confPrefix}_connectionUrl"
+    public static let transactionIncluding = "${confPrefix}_transactionIncluding"
+    public static let transactionExcluding = "${confPrefix}_transactionExcluding"
+    public static let transactionPropagation = "${confPrefix}_transactionPropagation"
+    public static let transactionLevel = "${confPrefix}_transactionLevel"
+    public static let transactionAccessMode = "${confPrefix}_transactionAccessMode"
+    public static let transactionDeferrableMode = "${confPrefix}_transactionDeferrableMode"
+    public static let useCache = "${confPrefix}_useCache"
+    public static let databasePoolInitSize = "${confPrefix}_databasePoolInitSize"
+    public static let databasePoolMinSize = "${confPrefix}_databasePoolMinSize"
+    public static let databasePoolMaxSize = "${confPrefix}_databasePoolMaxSize"
+    public static let databasePoolCheckInterval = "${confPrefix}_databasePoolCheckInterval"
+    public static let databasePoolConnectionLife = "${confPrefix}_databasePoolConnectionLife"
+    public static let databasePoolCheckOnCreation = "${confPrefix}_databasePoolCheckOnCreation"
+    public static let databasePoolCheckOnBorrowing = "${confPrefix}_databasePoolCheckOnBorrowing"
+    public static let databasePoolCheckOnReturning = "${confPrefix}_databasePoolCheckOnReturning"
+    public static let databasePoolCheckSql = "${confPrefix}_databasePoolCheckSql"
+    public static let stdPoolIdleTimeout = "${confPrefix}_pooledDatasourceIdleTimeout"
+    public static let stdPoolMaxLifeTime = "${confPrefix}_pooledDatasourceMaxLifeTime"
+    public static let stdPoolConnectionTimeout = "${confPrefix}_pooledDatasourceConnectionTimeout"
+    public static let stdPoolKeepaliveTime = "${confPrefix}_pooledDatasourceKeepaliveTime"
+    public static let stdPoolMaxSize = "${confPrefix}_pooledDatasourceMaxSize"
+    public static let stdPoolMaxIdleSize = "${confPrefix}_pooledDatasourceMaxIdleSize"
 
     private static let dot = Regex(#"\."#)
     private static let BLANK_SPLITTOR = Regex(#"\s*,\s*"#)
 
-    public static let instance = ORMConfig()
-
-    private let converterMap = ConcurrentHashMap<String, Any>()
-    private var transactionIncludingRegex = None<Regex>
-    private var transactionExcludingRegex = None<Regex>
-    private let cfg = Config.instance
-    private init() {
-        Config.appendPrefix(confPrefix)
+    private static let converterMap = ConcurrentHashMap<String, Any>()
+    private static var transactionIncludingRegex = None<Regex>
+    private static var transactionExcludingRegex = None<Regex>
+    static init() {
         refresh {
-            if (let Some(reg) <- cfg.getConf(transactionIncluding)) {
+            if (let Some(reg) <- Config.getString(transactionIncluding)) {
                 transactionIncludingRegex = Regex(reg)
             }
-            if (let Some(reg) <- cfg.getConf(transactionExcluding)) {
+            if (let Some(reg) <- Config.getString(transactionExcluding)) {
                 transactionExcludingRegex = Regex(reg)
             }
         }
     }
-    public func refresh(fn: () -> Unit): Unit {
-        cfg.refresh(confPrefix, fn)
-        cfg.refresh()
+    public static func refresh(fn: () -> Unit): Unit {
+        Config.refresher(confPrefix, fn)
         fn()
     }
-    public func getMonitorInterval(): Option<Int64> {
-        cfg.getMonitorInterval()
-    }
-    public func registerConverter<D, T>(name: String, converter: (D) -> T) {
+    public static func registerConverter<D, T>(name: String, converter: (D) -> T) {
         converterMap[name] = converter
     }
-    public func getConverter<D, T>(name: String): (D) -> T {
+    public static func getConverter<D, T>(name: String): (D) -> T {
         (converterMap[name] as (D) -> T).getOrThrow()
     }
-    public func getAllConfigs(driverName!: String = String.empty): Array<(String, String)> {
-        var keys = cfg.getAllNames(confPrefix)
-        let confs = HashMap<String, String>()
-        var i = 0
-        while (i < keys.size) {
-            let key = keys[i]
-            confs[key["${confPrefix}.".size..]] = cfg.getConf(key) ?? String.empty
-            i++
-        }
+    public static func getAllConfigs(driverName!: String = String.empty): Map<String, String> {
+        let confMap = Config.getAll(confPrefix)
         if (!driverName.isEmpty()) {
-            keys = cfg.getAllNames("${driverName}.${confPrefix}")
-            i = 0
-            while (i < keys.size) {
-                let key = keys[i]
-                confs[key["${driverName}.${confPrefix}".size..]] = cfg.getConf(key) ?? String.empty
-                i++
+            let driverConfs = Config.getAll("${driverName}_${confPrefix}")
+            for((k, v) in driverConfs) {
+                confMap[k.replace('${driverName}_', '')] = v
             }
         }
-        Array<(String, String)>(confs)
+        confMap
     }
-    public func getUseCache(driverName!: String = String.empty): ?Bool {
+    public static func getUseCache(driverName!: String = String.empty): ?Bool {
         match (getConf(driverName: driverName, key: useCache)) {
             case Some(x) => Bool.parse(x)
             case _ where !driverName.isEmpty() => getUseCache()
             case _ => None<Bool>
         }
     }
-    public func getConf(driverName!: String = String.empty, key!: String): ?String {
-        if (driverName.isEmpty()) {
-            cfg.getConf(key)
-        } else if (let Some(x) <- cfg.getConf("${driverName}.${key}")) {
+    public static func getConf(driverName!: String = String.empty, key!: String): ?String {
+        if (!driverName.isEmpty() && let Some(x) <- Config.getString("${driverName}_${key}")) {
             x
         } else {
-            cfg.getConf(key)
+            Config.getString(key)
         }
     }
-    public func getUrl(driverName!: String = String.empty): String {
+    public static func getUrl(driverName!: String = String.empty): String {
         match (getConf(driverName: driverName, key: connectionUrl)) {
             case Some(x) => x
             case _ where !driverName.isEmpty() => getUrl()
@@ -118,55 +103,46 @@ public class ORMConfig {
             )
         }
     }
-
-    public func getPoolInitSize(driverName!: String = String.empty): Int64 {
-        match (getConf(driverName: driverName, key: databasePoolInitSize)) {
-            case Some(x) => Int64.parse(x)
-            case _ where !driverName.isEmpty() => getPoolInitSize()
-            case _ => 10
-        }
-    }
-    public func getPoolMinSize(driverName!: String = String.empty): Int64 {
-        match (getConf(driverName: driverName, key: databasePoolMinSize)) {
-            case Some(x) => Int64.parse(x)
-            case _ where !driverName.isEmpty() => getPoolMinSize()
-            case _ => 10
-        }
-    }
-    public func getPoolMaxSize(driverName!: String = String.empty): Int64 {
-        match (getConf(driverName: driverName, key: databasePoolMaxSize)) {
-            case Some(x) => Int64.parse(x)
-            case _ where !driverName.isEmpty() => getPoolMaxSize()
-            case _ => 10
-        }
-    }
-    public func getPoolCheckPeriod(driverName!: String = String.empty): Duration {
-        match (getConf(driverName: driverName, key: databasePoolCheckPeriod)) {
-            case Some(x) => Duration.second * Int64.parse(x)
-            case _ where !driverName.isEmpty() => getPoolCheckPeriod()
-            case _ => Duration.second
-        }
-    }
-    public func getPoolCreationRetries(driverName!: String = String.empty): Int64 {
-        match (getConf(driverName: driverName, key: databasePoolCreationRetries)) {
-            case Some(x) => Int64.parse(x)
-            case _ where !driverName.isEmpty() => getPoolCreationRetries()
-            case _ => 1
-        }
-    }
-    public func getPoolCheckSql(driverName!: String = String.empty): String {
-        match (getConf(driverName: driverName, key: databasePoolCheckSql)) {
-            case Some(x) => x
-            case _ where !driverName.isEmpty() => getPoolCheckSql()
-            case _ => "select 1"
+    private static func get<T>(driverName!: String = String.empty, key!: String, default!: T): T where T <: Parsable<T> {
+        match (getConf(driverName: driverName, key: key)) {
+            case Some(x) => T.parse(x)
+            case _ => default
         }
     }
 
-    public func transactionable(funcName: String): Bool {
+    public static func getPoolInitSize(driverName!: String = String.empty): Int64 {
+        get<Int64>(driverName: driverName, key: databasePoolInitSize, default: 10)
+    }
+    public static func getPoolMinSize(driverName!: String = String.empty): Int64 {
+        get<Int64>(driverName: driverName, key: databasePoolMinSize, default: 10)
+    }
+    public static func getPoolMaxSize(driverName!: String = String.empty): Int64 {
+        get<Int64>(driverName: driverName, key: databasePoolMaxSize, default: 10)
+    }
+    public static func getCheckOnCreation(driverName!: String = String.empty): Bool {
+        get<Bool>(driverName: driverName, key: databasePoolCheckOnCreation, default: false)
+    }
+    public static func getCheckOnBorrowing(driverName!: String = String.empty): Bool {
+        get<Bool>(driverName: driverName, key: databasePoolCheckOnBorrowing, default: true)
+    }
+    public static func getCheckOnReturning(driverName!: String = String.empty): Bool {
+        get<Bool>(driverName: driverName, key: databasePoolCheckOnReturning, default: false)
+    }
+    public static func getConnectionLife(driverName!: String = String.empty): Duration {
+        Duration.second * get<Int64>(driverName: driverName, key: databasePoolConnectionLife, default: 3600)
+    }
+    public static func getPoolCheckInterval(driverName!: String = String.empty): Duration {
+        Duration.second * get<Int64>(driverName: driverName, key: databasePoolCheckInterval, default: 300)
+    }
+    public static func getPoolCheckSql(driverName!: String = String.empty, default!: String = 'select 1'): String {
+        getConf(driverName: driverName, key: databasePoolCheckSql) ?? default
+    }
+
+    public static func transactionable(funcName: String): Bool {
         (transactionIncludingRegex?.matched(funcName) ?? true) &&
             !(transactionExcludingRegex?.matched(funcName) ?? false)
     }
-    public func getTransactionPropagation(driverName!: String = String.empty): Propagation {
+    public static func getTransactionPropagation(driverName!: String = String.empty): Propagation {
         match (getConf(driverName: driverName, key: transactionPropagation)) {
             case Some(x) => match (x) {
                 case "Required" | "required" | "REQUIRED" => Required
@@ -181,7 +157,7 @@ public class ORMConfig {
             case _ => Required
         }
     }
-    public func getTransactionLevel(driverName!: String = String.empty): ?TransactionIsoLevel {
+    public static func getTransactionLevel(driverName!: String = String.empty): ?TransactionIsoLevel {
         match (getConf(driverName: driverName, key: transactionLevel)) {
             case Some(x) => match (x) {
                 case "Default" | "default" | "DEFAULT" => Unspecified
@@ -199,7 +175,7 @@ public class ORMConfig {
             case _ => None<TransactionIsoLevel>
         }
     }
-    public func getTransactionAccessMode(driverName!: String = String.empty): ?TransactionAccessMode {
+    public static func getTransactionAccessMode(driverName!: String = String.empty): ?TransactionAccessMode {
         match (getConf(driverName: driverName, key: transactionAccessMode)) {
             case Some(x) => match (x) {
                 case "Default" | "default" | "DEFAULT" => Unspecified
@@ -212,7 +188,7 @@ public class ORMConfig {
             case _ => None<TransactionAccessMode>
         }
     }
-    public func getTransactionDeferrableMode(driverName!: String = String.empty): ?TransactionDeferrableMode {
+    public static func getTransactionDeferrableMode(driverName!: String = String.empty): ?TransactionDeferrableMode {
         match (getConf(driverName: driverName, key: transactionDeferrableMode)) {
             case Some(x) => match (x) {
                 case "Default" | "default" | "DEFAULT" => Unspecified
@@ -225,41 +201,41 @@ public class ORMConfig {
             case _ => None<TransactionDeferrableMode>
         }
     }
-    public func registerSqlDataToDataConverter(driverName: String, converter: (SqlDbType) -> AnyData) {
+    public static func registerSqlDataToDataConverter(driverName: String, converter: (SqlDbType) -> AnyData) {
         RowWrap.registerSqlDataToDataConverter(driverName, converter)
     }
 
-    public func getStdPoolIdleTimeout(driverName!: String = String.empty): ?Duration {
+    public static func getStdPoolIdleTimeout(driverName!: String = String.empty): ?Duration {
         match (getConf(driverName: driverName, key: stdPoolIdleTimeout)) {
             case Some(x) => Duration.second * Int64.parse(x)
             case _ => None
         }
     }
-    public func getStdPoolMaxLifeTime(driverName!: String = String.empty): ?Duration {
+    public static func getStdPoolMaxLifeTime(driverName!: String = String.empty): ?Duration {
         match (getConf(driverName: driverName, key: stdPoolMaxLifeTime)) {
             case Some(x) => Duration.second * Int64.parse(x)
             case _ => None
         }
     }
-    public func getStdPoolConnectionTimeout(driverName!: String = String.empty): ?Duration {
+    public static func getStdPoolConnectionTimeout(driverName!: String = String.empty): ?Duration {
         match (getConf(driverName: driverName, key: stdPoolConnectionTimeout)) {
             case Some(x) => Duration.second * Int64.parse(x)
             case _ => None
         }
     }
-    public func getStdPoolKeepaliveTime(driverName!: String = String.empty): ?Duration {
+    public static func getStdPoolKeepaliveTime(driverName!: String = String.empty): ?Duration {
         match (getConf(driverName: driverName, key: stdPoolKeepaliveTime)) {
             case Some(x) => Duration.second * Int64.parse(x)
             case _ => None
         }
     }
-    public func getStdPoolMaxSize(driverName!: String = String.empty): ?Int32 {
+    public static func getStdPoolMaxSize(driverName!: String = String.empty): ?Int32 {
         match (getConf(driverName: driverName, key: stdPoolMaxSize)) {
             case Some(x) => Int32.parse(x)
             case _ => None
         }
     }
-    public func getStdPoolMaxIdleSize(driverName!: String = String.empty): ?Int32 {
+    public static func getStdPoolMaxIdleSize(driverName!: String = String.empty): ?Int32 {
         match (getConf(driverName: driverName, key: stdPoolMaxIdleSize)) {
             case Some(x) => Int32.parse(x)
             case _ => None

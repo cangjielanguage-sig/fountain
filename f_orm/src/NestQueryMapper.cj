@@ -9,6 +9,8 @@
  */
 package f_orm
 
+import f_orm.wrap.*
+
 public class NestQueryMapper<T, O> <: QueryMapper<O> where O <: QueryMappersInit<O>, T <: QueryMappersInit<T> {
     public NestQueryMapper(
         name!: String,

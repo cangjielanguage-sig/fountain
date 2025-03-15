@@ -9,6 +9,8 @@
  */
 package f_orm
 
+import f_orm.wrap.{DataType, Row}
+
 public class IdQueryMapper<ID, O> <: FieldQueryMapper<ID, O> where ID <: Hashable & Equatable<ID> {
     public init(
         name!: String = "id",

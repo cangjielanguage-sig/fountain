@@ -10,6 +10,8 @@
 
 package f_orm
 
+import f_orm.wrap.*
+
 public class DriverTest <: Driver {
     /**
      * 驱 动 名 称

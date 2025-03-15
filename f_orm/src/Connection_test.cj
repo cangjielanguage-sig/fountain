@@ -11,7 +11,7 @@
 package f_orm
 
 import std.collection.Map
-import fountain.base.EmptyMap
+import f_base.EmptyMap
 
 public class ConnectionTest <: Connection {
     public func isClosed(): Bool {
@@ -32,7 +32,7 @@ public class ConnectionTest <: Connection {
      * 返 回 连 接 到 的 数 据 源 元 数 据
      */
     public func getMetaData(): Map<String, String> {
-        EmptyMap<String, String>.instance
+        EmptyMap<String, String>.INSTANCE
     }
 
     /**

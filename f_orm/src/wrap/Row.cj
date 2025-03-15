@@ -10,7 +10,9 @@
 
 package f_orm.wrap
 
-public interface Row <: Iterator<AnyData> & Collection<AnyData> {
+import std.collection.HashMap
+
+public interface Row <: Collection<AnyData> {
     operator func [](index: Int64): AnyData
     operator func [](columnName: String): AnyData
     func get(columnName: String): ?AnyData

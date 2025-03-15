@@ -10,11 +10,11 @@
 
 package f_orm
 
-import std.collection.{ArrayList, Map, HashMap, Set}
-import fountain.base.exception.{TypeCastException, OverSizeException}
-import fountain.base.EmptyMap
-import fountain.base.ExtendOption
-import fountain.collection.List
+import std.collection.{ArrayList, Map, HashMap, Set, List}
+import f_exception.{TypeCastException, OverSizeException}
+import f_base.EmptyMap
+import f_base.ExtendOption
+import f_orm.wrap.*
 
 /* 数据映射类型，把数据库里的值，读出来调用putter，把值填充到指定的对象，
  * 一个数据库列对应一个QueryMapper, 泛型O是要填充的对象类型
@@ -73,6 +73,6 @@ public open class FieldQueryMapper<T, O> <: QueryMapper<O> {
         dataType!: DataType = unknown,
         putter!: (O, T) -> Unit
     ) {
-        super(name: name, dataType: dataType, putter: {o, v => putter(o, orm.convert<T>(v))})
+        super(name: name, dataType: dataType, putter: {o, v => putter(o, convert<T>(v))})
     }
 }

@@ -11,11 +11,12 @@
 package f_orm
 
 public import std.database.sql.*
-import std.sync.{AtomicUInt64, sleep}
-import std.time.Duration
-import std.unicode.UnicodeExtension
-import log.LoggerFactory
-import pool.Pool
+import std.collection.Map
+import std.sync.AtomicUInt64
+import std.unicode.UnicodeStringExtension
+import f_log.LoggerFactory
+import f_pool.Pool
+import f_orm.wrap.*
 
 public class DatabasePool <: Resource & Datasource {
     private static let logger = LoggerFactory.getLogger("fountain/pool.DatabasePool")
@@ -28,8 +29,11 @@ public class DatabasePool <: Resource & Datasource {
         initSize!: Int64 = 0,
         minSize!: Int64 = 0,
         maxSize!: Int64 = 10,
-        checkDuration!: Duration = Duration.second,
-        creationRetries!: Int64 = 1,
+        checkOnCreation!: Bool = false,
+        checkOnBorrowing!: Bool = true,
+        checkOnReturning!: Bool = true,
+        connectionLife!: Duration = Duration.hour,
+        checkInterval!: Duration = Duration.minute * 5,
         creator!: () -> Connection,
         checker!: (Connection) -> Bool
     ) {
@@ -38,8 +42,11 @@ public class DatabasePool <: Resource & Datasource {
             initSize: initSize,
             minSize: minSize,
             maxSize: maxSize,
-            checkDuration: checkDuration,
-            creationRetries: creationRetries,
+            checkOnCreation: checkOnCreation,
+            checkOnBorrowing: checkOnBorrowing,
+            checkOnReturning: checkOnReturning,
+            elementLife: connectionLife,
+            checkInterval: checkInterval,
             creator: { => PooledConnection(creator())},
             checker: {
                 c => try {
@@ -57,8 +64,11 @@ public class DatabasePool <: Resource & Datasource {
         initSize!: Int64 = 0,
         minSize!: Int64 = 0,
         maxSize!: Int64 = 10,
-        checkDuration!: Duration = Duration.second,
-        creationRetries!: Int64 = 1,
+        checkOnCreation!: Bool = false,
+        checkOnBorrowing!: Bool = true,
+        checkOnReturning!: Bool = true,
+        connectionLife!: Duration = Duration.hour,
+        checkInterval!: Duration = Duration.minute * 5,
         creator!: () -> Connection,
         checkSql!: String = "select 1"
     ) {
@@ -67,8 +77,11 @@ public class DatabasePool <: Resource & Datasource {
             initSize: initSize,
             minSize: minSize,
             maxSize: maxSize,
-            checkDuration: checkDuration,
-            creationRetries: creationRetries,
+            checkOnCreation: checkOnCreation,
+            checkOnBorrowing: checkOnBorrowing,
+            checkOnReturning: checkOnReturning,
+            connectionLife: connectionLife,
+            checkInterval: checkInterval,
             creator: creator,
             checker: {
                 c => if (checkSql[0..6].toLower().startsWith("select")) {
@@ -81,16 +94,18 @@ public class DatabasePool <: Resource & Datasource {
         )
     }
     public static func byConfig(driver: Driver, creator: () -> Connection) {
-        let cfg = ORMConfig.instance
         DatabasePool(
             driver: driver,
-            initSize: cfg.getPoolInitSize(driverName: driver.name),
-            minSize: cfg.getPoolMinSize(driverName: driver.name),
-            maxSize: cfg.getPoolMaxSize(driverName: driver.name),
-            checkDuration: cfg.getPoolCheckPeriod(driverName: driver.name),
-            creationRetries: cfg.getPoolCreationRetries(driverName: driver.name),
+            initSize: ORMConfig.getPoolInitSize(driverName: driver.name),
+            minSize: ORMConfig.getPoolMinSize(driverName: driver.name),
+            maxSize: ORMConfig.getPoolMaxSize(driverName: driver.name),
+            checkOnCreation: ORMConfig.getCheckOnCreation(driverName: driver.name),
+            checkOnBorrowing: ORMConfig.getCheckOnBorrowing(driverName: driver.name),
+            checkOnReturning: ORMConfig.getCheckOnReturning(driverName: driver.name),
+            connectionLife: ORMConfig.getConnectionLife(driverName: driver.name),
+            checkInterval: ORMConfig.getPoolCheckInterval(driverName: driver.name),
             creator: creator,
-            checkSql: cfg.getPoolCheckSql(driverName: driver.name)
+            checkSql: ORMConfig.getPoolCheckSql(driverName: driver.name)
         )
     }
 
@@ -111,7 +126,7 @@ public class DatabasePool <: Resource & Datasource {
         if (isClosed()) {
             return None<Connection>
         }
-        pool.getObject(timeout: timeout)?.activate(pool.returnObject)
+        pool.borrow(timeout: timeout)?.activate(pool.giveBack)
     }
     public func setOption(key: String, value: String): Unit {}
     public func connect(): Connection {
