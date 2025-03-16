@@ -18,7 +18,15 @@ import std.time.{DateTime, DateTimeFormat}
 import f_data.DataParsable
 
 /**
- * 不依赖配置文件，所有配置都来自环境变量和--开头的命令行参数
+ * 不依赖配置文件，所有配置都来自环境变量和命令行参数，命令行参数会覆盖同名环境变量。
+ * 本工具不会修改环境变量和命令行参数命名风格，仓颉运行时环境变量都是驼峰命名法，建议用于应用配置的环境变量和信行参数也采用此风格。
+ * 命令行参数需要遵守以下规则
+ *   1. --argName=argValue
+ *   2. --argName
+ *      * 相当于--argName=true
+ *   3. -argName argValue
+ *   4. -argName
+ *      * 相当于-argName true
  */
 public class Config{
     private static let prefix = 'fountain'
@@ -29,12 +37,35 @@ public class Config{
         for((k, v) in process.environment){
             ARGS[k] = v
         }
-        for(arg in process.arguments where arg.startsWith('--')){
-            if(let Some(idx) <- arg.indexOf('=')){
-                let key = arg[2 .. idx].trimAscii()
-                let val = arg[idx + 1 .. ].trimAscii()
-                ARGS[key] = val
+        let args = process.arguments
+        var i = 0
+        while(i < args.size) {
+            let arg = args[i]
+            if(arg.startsWith('--')){
+                if(let Some(idx) <- arg.indexOf('=')){
+                    let key = arg[2 .. idx].trimAscii()
+                    let val = arg[idx + 1 .. ].trimAscii()
+                    ARGS[key] = val
+                }else{
+                    let key = arg[2 .. ].trimAscii()
+                    ARGS[key] = 'true'
+                }
+            }else if(arg.startsWith('-')){
+                let key = arg[1 .. ].trimAscii()
+                ARGS[key] = 
+                if(i < args.size){
+                    let val = args[i + 1].trimAscii()
+                    if(val.startsWith('-')){
+                        'true'
+                    }else{
+                        i++
+                        val
+                    }
+                }else{
+                    'true'
+                }
             }
+            i++
         }
     }
     private init(){}
