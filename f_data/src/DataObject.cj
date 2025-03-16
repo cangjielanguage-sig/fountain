@@ -12,6 +12,11 @@ package f_data
 import std.convert.Parsable
 
 public interface ObjectData<T> <: DataFields<T> where T <: ObjectData<T> & DataFields<T> {
+    static prop isSimple: Bool {
+        get(){
+            false
+        }
+    }
     static func dataFields(): ObjectFields<T>
 
     func toData(): Data

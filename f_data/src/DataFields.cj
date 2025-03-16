@@ -10,6 +10,11 @@
 package f_data
 
 public interface DataFields<T> where T <: DataFields<T> {
+    static prop isSimple: Bool {
+        get(){
+            true
+        }
+    }
     func toData(): Data
     static func fromData(data: Data, flag!: DataConversionFlag): T {
         match(T.tryFromData(data, flag: flag)){

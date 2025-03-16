@@ -13,6 +13,5 @@ package f_orm
 public class ORMColumn {
     public const ORMColumn(
         public let name!: String = '',
-        public let id!: Bool = false,
-        public let cascading!: Bool = false){}
+        public let id!: Bool = false){}
 }
