@@ -19,7 +19,7 @@ import f_pool.Pool
 import f_orm.wrap.*
 
 public class DatabasePool <: Resource & Datasource {
-    private static let logger = LoggerFactory.getLogger("fountain/pool.DatabasePool")
+    private static let logger = LoggerFactory.getLogger<DatabasePool>()
 
     private let driver: Driver
     private let pool: Pool<PooledConnection>
@@ -135,7 +135,7 @@ public class DatabasePool <: Resource & Datasource {
 }
 
 class PooledConnection <: Connection {
-    private static let logger = LoggerFactory.getLogger("fountain/orm.PooledConnection")
+    private static let logger = LoggerFactory.getLogger<PooledConnection>()
     private static let serialGen = AtomicUInt64(1)
     private let serial = serialGen.fetchAdd(1)
     PooledConnection(private let connection: Connection) {}

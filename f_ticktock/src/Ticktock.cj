@@ -54,7 +54,7 @@ import f_ticktock.exception.TicktockException
  * 上面的表达式意思是每月最后一天如果刚好是周一就从1点整开始每两小时，0到5分钟内，0到30秒内每5秒执行一次
  */
 public class Ticktock <: Emitter {
-    private static let LOGGER = LoggerFactory.getLogger("commons/timewheel.TicktockLauncheer")
+    private static let LOGGER = LoggerFactory.getLogger<Ticktock>()
     public static let instance = Ticktock()
 
     private let tasks = ConcurrentHashMap<String, (TicktockTask, Collection<CronDataCollection>)>()

@@ -32,7 +32,7 @@ public class SqlCacheKey <: Hashable & Equatable<SqlCacheKey> & ToString {
     }
 }
 public class SqlExecutor <: Resource & RootDAO {
-    private static let logger = LoggerFactory.getLogger("fountain/orm.SqlExecutor")
+    private static let logger = LoggerFactory.getLogger<SqlExecutor>()
     private static let blankRegex = Regex(#"\s{2,}"#)
     private static let current = ThreadLocal<HashMap<String, SqlExecutor>>()
     private var sql_ = String.empty

@@ -24,7 +24,7 @@ public import f_orm.exception.*
 
 //事务维持在连接内，要在一个事务内完成的数据库访问应确保使用一个连接
 public class ORM {
-    private static let logger = LoggerFactory.getLogger("fountain/orm.ORM")
+    private static let logger = LoggerFactory.getLogger<ORM>()
     private static var default = String.empty
     private static let datasources = ConcurrentHashMap<String, Datasource>()
 
