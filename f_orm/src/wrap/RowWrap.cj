@@ -18,13 +18,11 @@ import f_orm.exception.*
 
 public class RowWrap <: Row {
     private static let sqlDataToDataMap = ConcurrentHashMap<String, (SqlDbType) -> AnyData>()
-    private var itr: Iterator<AnyData> = EmptyIterator<AnyData>.INSTANCE
     public RowWrap(
         private let driverName: String,
         private let columnInfos: Map<String, Int64>,
         private let row: Array<SqlDbType>
     ) {
-        itr = RowWrapIterator(this)
     }
     static func registerSqlDataToDataConverter(driverName: String, converter: (SqlDbType) -> AnyData) {
         sqlDataToDataMap[driverName] = converter
@@ -95,10 +93,10 @@ public class RowWrap <: Row {
         }
     }
     public operator func [](columnName: String): AnyData {
-        get(columnName).getOrThrow {throw ORMException("column ${columnName} is not found")}
+        get(columnName).getOrThrow {ORMException("column ${columnName} is not found")}
     }
     public func iterator(): Iterator<AnyData> {
-        itr
+        RowWrapIterator(this)
     }
     public operator func [](index: Int64): AnyData {
         sqlDataToData(driverName, row[index])
