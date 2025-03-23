@@ -155,7 +155,7 @@ public abstract class AbstractLogger <: Logger & Resource {
             ex
         )
     }
-    public func append<T>(level: LogLevel, message: String, args: T, ex: ?Exception): Unit where T <: ObjectData<T> {
+    public func append<T>(level: LogLevel, message: String, args: T, ex: ?Exception): Unit where T <: Object & ObjectData<T> {
         append(
             level,
             {
@@ -231,7 +231,7 @@ public abstract class AbstractLogger <: Logger & Resource {
     public func error<T>(message: String, args: TreeMap<String, T>): Unit where T <: ToString {
         append<T>(LogLevel.ERROR, message, args, None<Exception>)
     }
-    public func error<T>(message: String, args: T): Unit where T <: ObjectData<T> {
+    public func error<T>(message: String, args: T): Unit where T <: Object & ObjectData<T> {
         append<T>(LogLevel.ERROR, message, args, None<Exception>)
     }
 
@@ -250,7 +250,7 @@ public abstract class AbstractLogger <: Logger & Resource {
     public func error<T>(message: String, ex: Exception, args: TreeMap<String, T>): Unit where T <: ToString {
         append<T>(LogLevel.ERROR, message, args, ex)
     }
-    public func error<T>(message: String, ex: Exception, args: T): Unit where T <: ObjectData<T> {
+    public func error<T>(message: String, ex: Exception, args: T): Unit where T <: Object & ObjectData<T> {
         append<T>(LogLevel.ERROR, message, args, ex)
     }
 
@@ -276,7 +276,7 @@ public abstract class AbstractLogger <: Logger & Resource {
     public func warn<T>(message: String, args: TreeMap<String, T>): Unit where T <: ToString {
         append<T>(LogLevel.WARN, message, args, None<Exception>)
     }
-    public func warn<T>(message: String, args: T): Unit where T <: ObjectData<T> {
+    public func warn<T>(message: String, args: T): Unit where T <: Object & ObjectData<T> {
         append<T>(LogLevel.WARN, message, args, None<Exception>)
     }
 
@@ -292,7 +292,7 @@ public abstract class AbstractLogger <: Logger & Resource {
     public func warn<T>(message: String, ex: Exception, args: TreeMap<String, T>): Unit where T <: ToString {
         append<T>(LogLevel.WARN, message, args, ex)
     }
-    public func warn<T>(message: String, ex: Exception, args: T): Unit where T <: ObjectData<T> {
+    public func warn<T>(message: String, ex: Exception, args: T): Unit where T <: Object & ObjectData<T> {
         append<T>(LogLevel.WARN, message, args, ex)
     }
 
@@ -318,7 +318,7 @@ public abstract class AbstractLogger <: Logger & Resource {
     public func info<T>(message: String, args: TreeMap<String, T>): Unit where T <: ToString {
         append<T>(LogLevel.INFO, message, args, None<Exception>)
     }
-    public func info<T>(message: String, args: T): Unit where T <: ObjectData<T> {
+    public func info<T>(message: String, args: T): Unit where T <: Object & ObjectData<T> {
         append<T>(LogLevel.INFO, message, args, None<Exception>)
     }
 
@@ -337,7 +337,7 @@ public abstract class AbstractLogger <: Logger & Resource {
     public func info<T>(message: String, ex: Exception, args: TreeMap<String, T>): Unit where T <: ToString {
         append<T>(LogLevel.INFO, message, args, ex)
     }
-    public func info<T>(message: String, ex: Exception, args: T): Unit where T <: ObjectData<T> {
+    public func info<T>(message: String, ex: Exception, args: T): Unit where T <: Object & ObjectData<T> {
         append<T>(LogLevel.INFO, message, args, ex)
     }
 
@@ -363,7 +363,7 @@ public abstract class AbstractLogger <: Logger & Resource {
     public func debug<T>(message: String, args: TreeMap<String, T>): Unit where T <: ToString {
         append<T>(LogLevel.DEBUG, message, args, None<Exception>)
     }
-    public func debug<T>(message: String, args: T): Unit where T <: ObjectData<T> {
+    public func debug<T>(message: String, args: T): Unit where T <: Object & ObjectData<T> {
         append<T>(LogLevel.DEBUG, message, args, None<Exception>)
     }
 
@@ -382,7 +382,7 @@ public abstract class AbstractLogger <: Logger & Resource {
     public func debug<T>(message: String, ex: Exception, args: TreeMap<String, T>): Unit where T <: ToString {
         append<T>(LogLevel.DEBUG, message, args, ex)
     }
-    public func debug<T>(message: String, ex: Exception, args: T): Unit where T <: ObjectData<T> {
+    public func debug<T>(message: String, ex: Exception, args: T): Unit where T <: Object & ObjectData<T> {
         append<T>(LogLevel.DEBUG, message, args, ex)
     }
 
@@ -408,7 +408,7 @@ public abstract class AbstractLogger <: Logger & Resource {
     public func trace<T>(message: String, args: TreeMap<String, T>): Unit where T <: ToString {
         append<T>(LogLevel.TRACE, message, args, None<Exception>)
     }
-    public func trace<T>(message: String, args: T): Unit where T <: ObjectData<T> {
+    public func trace<T>(message: String, args: T): Unit where T <: Object & ObjectData<T> {
         append<T>(LogLevel.TRACE, message, args, None<Exception>)
     }
 
@@ -427,7 +427,7 @@ public abstract class AbstractLogger <: Logger & Resource {
     public func trace<T>(message: String, ex: Exception, args: TreeMap<String, T>): Unit where T <: ToString {
         append<T>(LogLevel.TRACE, message, args, ex)
     }
-    public func trace<T>(message: String, ex: Exception, args: T): Unit where T <: ObjectData<T> {
+    public func trace<T>(message: String, ex: Exception, args: T): Unit where T <: Object & ObjectData<T> {
         append<T>(LogLevel.TRACE, message, args, ex)
     }
 

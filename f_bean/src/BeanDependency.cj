@@ -5,6 +5,16 @@
     You may obtain a copy of Mulan PSL v2 at:
             http://license.coscl.org.cn/MulanPSL2
     THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-    See the Mulan PSL v2 for more details.  
-*/
+    See the Mulan PSL v2 for more details.
+ */
 package f_bean
+
+public class BeanDependency <: IBeanCondition {
+    public BeanDependency(
+        let nameDef!: ?BeanNameDef = None,
+        let typeDef!: ?TypeDef = None
+    ) {}
+    public func on(ringChecker: RingChecker) {
+        BeanChecker(dependency: true, nameDef: nameDef, typeDef: typeDef).on(ringChecker)
+    }
+}
