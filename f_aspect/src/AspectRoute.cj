@@ -20,7 +20,7 @@ import f_regex.*
  */
 @Annotation[target: [Type]]
 public class AspectRoute <: RouteRule {
-    public const AspectRoute(public let route: RouteRule) {}
+    public const AspectRoute(public let route: Route) {}
     public func isAspect<T>(): Bool {
         TypeInfos.get<T>().isSubtypeOf(TypeInfos.get<Aspect>())
     }
@@ -30,68 +30,7 @@ public class AspectRoute <: RouteRule {
 }
 public sealed interface RouteRule {
     func matched(qualifiedFunc: String): Bool
-    operator func &(rule: RouteRule): RouteRule
-    operator func |(rule: RouteRule): RouteRule
-    operator func !(): RouteRule
 }
-public class UnreachableRouteRule <: RouteRule {
-    public static const INSTANCE = UnreachableRouteRule()
-    private const init(){}
-    public func matched(qualifiedFunc: String): Bool {
-        throw AspectException()
-    }
-    private const prop current: RouteRule{
-        
-    }
-    public const operator func &(rule: RouteRule): RouteRule {
-        match(this){
-            case x: Route => AndRouteRule(x, rule)
-            case x: AndRouteRule => AndRouteRule(x, rule)
-            case x: OrRouteRule => AndRouteRule(x, rule)
-            case x: NotRouteRule => AndRouteRule(x, rule)
-            case _ => UnreachableRouteRule.INSTANCE
-        }
-    }
-    public const operator func |(rule: RouteRule): RouteRule {
-        match(this){
-            case x: Route => OrRouteRule(x, rule)
-            case x: AndRouteRule => OrRouteRule(x, rule)
-            case x: OrRouteRule => OrRouteRule(x, rule)
-            case x: NotRouteRule => OrRouteRule(x, rule)
-            case _ => UnreachableRouteRule.INSTANCE
-        }
-    }
-    public const operator func !(): RouteRule {
-        match(this){
-            case x: Route => NotRouteRule(x)
-            case x: AndRouteRule => NotRouteRule(x)
-            case x: OrRouteRule => NotRouteRule(x)
-            case x: NotRouteRule => NotRouteRule(x)
-            case _ => UnreachableRouteRule.INSTANCE
-        }
-    }
-}
-public class AndRouteRule <: RouteRule {
-    public const AndRouteRule(private let left: RouteRule,
-                              private let right: RouteRule) {}
-    public func matched(qualifiedFunc: String): Bool {
-        return left.matched(qualifiedFunc) && right.matched(qualifiedFunc)
-    }
-}
-public class OrRouteRule <: RouteRule {
-    public const OrRouteRule(private let left: RouteRule,
-                             private let right: RouteRule) {}
-    public func matched(qualifiedFunc: String): Bool {
-        return left.matched(qualifiedFunc) || right.matched(qualifiedFunc)
-    }
-}
-public class NotRouteRule <: RouteRule {
-    public const NotRouteRule(private let rule: RouteRule) {}
-    public func matched(qualifiedFunc: String): Bool {
-        !rule.matched(qualifiedFunc)
-    }
-}
-
 public enum Route <: RouteRule {
     /**
      * *\/..*.*(#): *
@@ -113,6 +52,19 @@ public enum Route <: RouteRule {
      * 注解全限定名
      */
     | WithAnnotation(String)
+    /**
+     * 与
+     */
+    | And(Route, Route)
+    /**
+     * 或
+     */
+    | Or(Route, Route)
+    /**
+     * 非
+     */
+    | Not(Route)
+      
 
     public func matched(qualifiedFunc: String): Bool {
         match (this) {
@@ -127,6 +79,9 @@ public enum Route <: RouteRule {
                 }
                 let returnTypeInfo = TypeInfos.get(returnType)
                 doFuncTypeMatch(argTypes, returnTypeInfo, qualifiedFunc)
+            case And(a, b) => a.matched(qualifiedFunc) && b.matched(qualifiedFunc)
+            case Or(a, b) => a.matched(qualifiedFunc) || b.matched(qualifiedFunc)
+            case Not(a) => !a.matched(qualifiedFunc)
         }
     }
     private func doExecutionMatch(route: String, qualifiedFunc: String): Bool {

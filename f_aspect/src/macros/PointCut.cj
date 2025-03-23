@@ -33,7 +33,7 @@ public macro PointCut(attr: Tokens, input: Tokens): Tokens {
             } else {
                 0u64
             }
-            AssertParentContext("PointCut")
+            assertParentContext("PointCut")
             weaveFunc(d, recursiveSerial)
         case _ => throw AspectException(
             "@PointCut cant modify class struct and func, but current is ${decl.keyword.kind}")
@@ -52,7 +52,7 @@ func weaveComposite(decl: CompositeDecl) {
         private static let __cUrrEnt_typE_InfO__ = TypeInfos.get<$identifier$generic>()
     )
     let currentTypeInfoDecl = VarDecl(currentTypeTokens)
-    decls.prepend(currentTypeInfoDecl)
+    decls.add(currentTypeInfoDecl, at: 0)
     decl.toTokens()
 }
 
@@ -80,24 +80,24 @@ func weaveFunc(decl: FuncDecl, recursive: UInt64) {
     }
     args += `rsquare`
     argTypes += `rsquare`
-    nodes.append(parseDecl(quote(
+    nodes.add(parseDecl(quote(
         let args: Array<Any> = $args
     )))
-    nodes.append(parseDecl(quote(
+    nodes.add(parseDecl(quote(
         let argsTypes: Array<TypeInfo> = $argTypes
     )))
-    nodes.append(parseDecl(quote(
+    nodes.add(parseDecl(quote(
         let fnName = $(decl.identifier.value)
     )))
-    nodes.append(parseDecl(quote(
+    nodes.add(parseDecl(quote(
         let route = __cUrrEnt_typE_InfO__.qualifiedName + "." + fnName
     )))
-    nodes.append(
+    nodes.add(
         parseDecl(
         quote(
         let returnType = TypeInfos.get<$(decl.declType)>()
     )))
-    nodes.append(
+    nodes.add(
         parseExpr(quote(
         AspectProceeder<$(decl.declType)>($recursive, route, args, argTypes, returnType)$(body))))
     decl.toTokens()

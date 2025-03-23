@@ -44,7 +44,8 @@ public class Aspects {
             let tomlPath = "${path}/cjpm.toml"
             if (exists(tomlPath)) {
                 let module = {=>
-                    try (reader = StringReader(File(tomlPath, ReadWrite))) {
+                    try (file = File(tomlPath, ReadWrite)) {
+                        let reader = StringReader(file)
                         while(let Some(line) <- reader.readln()) {
                             let current = line.trimAscii()
                             let matcher = "^name\\s*=\\s*\"([a-zA-Z]\\w*)\\s*\"$".regex().matcher(current)
