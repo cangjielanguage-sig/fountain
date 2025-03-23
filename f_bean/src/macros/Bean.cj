@@ -54,7 +54,7 @@ public macro Bean(attr: Tokens, input: Tokens) {
             `empty_tokens`
         }
         let typeName = composite.identifier
-        let typeInfo = quote(TypeInfos<$(typeName)>.instance)
+        let typeInfo = quote(TypeInfos.get<$(typeName)>())
         var di = 0
         var dependencies = `lsquare`
         for (message in getChildMessages("Autowired")) {

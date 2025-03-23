@@ -50,7 +50,7 @@ func generateConstructors(name: Token){
                 argTypes += `comma`
             }
             let typeTokens = cangjieLex(argTypeNames[j])
-            argTypes += quote(TypeInfos<$typeTokens>.instance)
+            argTypes += quote(TypeInfos.get<$typeTokens>())
             j++
         }
         argTypes += `rsquare`
