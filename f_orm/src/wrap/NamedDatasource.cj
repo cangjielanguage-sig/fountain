@@ -16,38 +16,37 @@ public class NamedDatasource <: Datasource & Resource {
         private var datasource: Datasource
     ) {
         if (!optionSpecified) {
-            for (tuple in ORMConfig.instance.getAllConfigs(driverName: driverName)) {
+            for (tuple in ORMConfig.getAllConfigs(driverName: driverName)) {
                 setOption(tuple[0], tuple[1])
             }
         }
     }
     public static func new(driver: Driver, needPool!: Bool = true): NamedDatasource {
-        let cfg = ORMConfig.instance
         let driverName = driver.name
-        let ds = match (driver.open(cfg.getUrl(driverName: driverName), cfg.getAllConfigs(driverName: driverName))) {
+        let ds = match (driver.open(ORMConfig.getUrl(driverName: driverName), ORMConfig.getAllConfigTuples(driverName: driverName))) {
             case x: PooledDatasource => x
             case x where !needPool => x
             case x =>
                 let p = PooledDatasource(x)
-                if (let Some(x) <- cfg.getStdPoolConnectionTimeout(driverName: driverName)) {
+                if (let Some(x) <- ORMConfig.getStdPoolConnectionTimeout(driverName: driverName)) {
                     p.connectionTimeout = x
                 }
-                if (let Some(x) <- cfg.getStdPoolIdleTimeout(driverName: driverName)) {
+                if (let Some(x) <- ORMConfig.getStdPoolIdleTimeout(driverName: driverName)) {
                     p.idleTimeout = x
                 }
-                if (let Some(x) <- cfg.getStdPoolKeepaliveTime(driverName: driverName)) {
+                if (let Some(x) <- ORMConfig.getStdPoolKeepaliveTime(driverName: driverName)) {
                     p.keepaliveTime = x
                 }
-                if (let Some(x) <- cfg.getStdPoolMaxLifeTime(driverName: driverName)) {
+                if (let Some(x) <- ORMConfig.getStdPoolMaxLifeTime(driverName: driverName)) {
                     p.maxLifeTime = x
                 }
-                if (let Some(x) <- cfg.getStdPoolMaxIdleSize(driverName: driverName)) {
+                if (let Some(x) <- ORMConfig.getStdPoolMaxIdleSize(driverName: driverName)) {
                     p.maxIdleSize = x
                 }
-                if (let Some(x) <- cfg.getStdPoolMaxSize(driverName: driverName)) {
+                if (let Some(x) <- ORMConfig.getStdPoolMaxSize(driverName: driverName)) {
                     p.maxSize = x
                 }
-                for (tuple in cfg.getAllConfigs(driverName: driverName)) {
+                for (tuple in ORMConfig.getAllConfigs(driverName: driverName)) {
                     p.setOption(tuple[0], tuple[1])
                 }
                 p

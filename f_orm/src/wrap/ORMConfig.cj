@@ -80,6 +80,13 @@ public class ORMConfig {
         }
         confMap
     }
+    public static func getAllConfigTuples(driverName!: String = String.empty): Array<(String, String)> {
+        let map = getAllConfigs(driverName: driverName)
+        let iterator = map.iterator()
+        Array<(String, String)>(map.size){_ => 
+            iterator.next() ?? ('', '')
+        }
+    }
     public static func getUseCache(driverName!: String = String.empty): ?Bool {
         match (getConf(driverName: driverName, key: useCache)) {
             case Some(x) => Bool.parse(x)

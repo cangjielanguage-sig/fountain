@@ -9,7 +9,7 @@
  */
 package f_orm.wrap
 
-import std.io.{InputStream, ByteBuffer, StringReader, StringEncoding}
+import std.io.{InputStream, ByteBuffer, StringReader}
 import charset4cj.charset.*
 import charset4cj.charset.encoding.*
 

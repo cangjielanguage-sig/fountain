@@ -9,11 +9,14 @@
  */
 package f_orm
 
+import std.collection.{Set, HashSet}
 import std.collection.concurrent.ConcurrentHashMap
 import std.reflect.*
 import std.sync.ReentrantMutex
 import f_aspect.*
+import f_base.*
 import f_bean.{BeanFactory, BeanMeta}
+import f_collection.*
 
 @AspectRoute[Route.WithAnnotation("f_orm.Transactional")]
 public class TransactionAspect <: Aspect {
@@ -77,20 +80,25 @@ public class TransactionAspect <: Aspect {
             } catch (e: Exception) {
                 let et = TypeInfo.of(e)
                 func genExceptionSet(ex: String){
-                    let set = HashSet<TypeInfo>()
-                    for(e in ex.split("|")){
-                        set.put(QualifiedTypeInfos.getTypeInfo(e))
+                    if(let Some(s) <- rollbackExceptions.get(ex)){
+                        s
+                    }else{
+                        let set = HashSet<TypeInfo>()
+                        for(e in ex.split("|")){
+                            set.add(TypeInfos.get(e))
+                        }
+                        rollbackExceptions[ex] = set
+                        set
                     }
-                    set
                 }
                 if (let Some(noRollbackFor) <- transactional?.noRollbackFor) {
-                    let set: Set<TypeInfo> = rollbackExceptions.computeIfAbsent(noRollbackFor, genExceptionSet)
+                    let set: Set<TypeInfo> = genExceptionSet(noRollbackFor)
                     for(noRollback in set where et.isSubtypeOf(noRollback)){
                         throw exe.noRollbackFor(e)
                     }
                 }
                 if(let Some(rollbackFor) <- transactional?.rollbackFor){
-                    let set: Set<TypeInfo> = rollbackExceptions.computeIfAbsent(rollbackFor, genExceptionSet)
+                    let set: Set<TypeInfo> = genExceptionSet(rollbackFor)
                     for(rollback in set where et.isSubtypeOf(rollback)){
                         throw exe.rollbackFor(e)
                     }
