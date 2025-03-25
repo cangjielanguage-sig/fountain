@@ -10,8 +10,8 @@
 package f_orm.wrap
 
 import std.io.{InputStream, ByteBuffer, StringReader, StringEncoding}
-import charset.charset.*
-import charset.charset.encoding.*
+import charset4cj.charset.*
+import charset4cj.charset.encoding.*
 
 public class DataInputStream <: InputStream & Data<DataInputStream> {
     public DataInputStream(private let input: InputStream) {}

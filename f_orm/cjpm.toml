@@ -1,9 +1,17 @@
 [dependencies]
+  charset4cj = { git = "https://gitcode.com/Cangjie-TPC/charset4cj.git", branch = "develop", version = "0.0.1"} 
+  f_aspect = {path = "../f_aspect"}
   f_base = {path = "../f_base"}
+  f_bean = {path = "../f_bean"}
+  f_collection = {path = "../f_collection"}
+  f_config = {path = "../f_config"}
+  f_data = {path = "../f_data"}
   f_exception = {path = "../f_exception"}
   f_log = {path = "../f_log"}
+  f_macros = {path = "../f_macros"}
   f_regex = {path = "../f_regex"}
   f_pool = {path = "../f_pool"}
+  f_util = {path = "../f_util"}
 
 [package]
   cjc-version = "0.57.3"
