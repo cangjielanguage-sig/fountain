@@ -18,3 +18,5 @@
   target-dir = ""
   version = "1.0.0"
   package-configuration = {}
+[profile.build]
+  incremental = true
