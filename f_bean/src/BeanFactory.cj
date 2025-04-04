@@ -118,30 +118,30 @@ public class BeanFactory {
         }
         None
     }
-    private func getAll<T>(cond: StringCond, put: (ArrayList<T>, BeanManager) -> Unit){
-        let list = ArrayList<T>()
+    private func getAll<T>(cond: StringCond, put: (BeanManager) -> Unit){
         match(cond){
             case Exactly(n) => match(beans.get(n)){
                 case Some(m) where matches<T>(m) => 
-                    put(list, m)
+                    put(m)
                 case _ => ()
             }
             case _ => match(beanTypeMap.get(TypeInfos.get<T>())){
                 case Some(tree) => for(m in tree where matches<T>(cond, m)) {
-                    put(list, m)
+                    put(m)
                 }
                 case _ => ()
             }
         }
-        list
     }
     public func getAll<T>(cond!: StringCond = IgnoreCond): Collection<T> {
-        func put(list: ArrayList<T>, m: BeanManager){
+        let list = ArrayList<T>()
+        func put(m: BeanManager){
             if(let b: T <- m.bean){
                 list.add(b)
             }
         }
         getAll<T>(cond, put)
+        list
     }
     
     private func generateTuple<T>(manager: BeanManager): ?(T, () -> Unit){
@@ -174,12 +174,14 @@ public class BeanFactory {
         None
     }
     public func getAllTuples<T>(cond!: StringCond = IgnoreCond): Collection<(T, () -> Unit)>{
-        func put(list: ArrayList<(T, () -> Unit)>, m: BeanManager){
+        let list = ArrayList<(T, () -> Unit)>()
+        func put(m: BeanManager){
             if(let bean <- m.bean && let b: T <- bean){
                 list.add((b, m.generateDestroy(bean)))
             }
         }
         getAll<T>(cond, put)
+        list
     }
     public func get<T>(name: String): ?T {
         getFirst<T>(cond: Exactly(name))
