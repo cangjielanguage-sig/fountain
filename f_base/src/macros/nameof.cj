@@ -10,10 +10,17 @@
 macro package f_base.macros
 
 import std.ast.*
-
+/**
+ * @nameof(name) 展开是'name'
+ * @nameof(object.name) 展开是'name'
+ */
 public macro nameof(input: Tokens): Tokens {
     quote(@nameValue($input)[0])
 }
+/**
+ * @nameValueOf(name) 展开是元组('name', /*name变量的值*/)
+ * @nameValueOf(object.name) 展开是元组('name', /*object.name的值*/)
+ */
 public macro nameValueOf(input: Tokens): Tokens {
     if(input.size == 0) {
         diagReport(ERROR, input, 'macro nameof do not accept empty input', '')
