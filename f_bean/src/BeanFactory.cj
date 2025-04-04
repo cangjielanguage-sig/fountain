@@ -5,524 +5,183 @@
     You may obtain a copy of Mulan PSL v2 at:
             http://license.coscl.org.cn/MulanPSL2
     THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-    See the Mulan PSL v2 for more details.
- */
+    See the Mulan PSL v2 for more details.  
+*/
 package f_bean
 
-/**
- * 不支持bean的循环引用，如果发生循环引用会导致栈溢出
- */
 public class BeanFactory {
-    private static let log = LoggerFactory.getLogger<BeanFactory>()
-    public static const BEAN_LIBRARIES_LOAD_PATH = "bean.libraries.load.path"
-    private static let mutex = ReentrantMutex()
-    private static var instance_ = BeanFactory()
-    public static func addBeanFactory() {
-        let factory = BeanFactory()
-        factory.setInherited(instance)
-        synchronized(mutex) {
-            instance_ = factory
-        }
-    }
-    public static prop instance: BeanFactory {
-        get() {
-            instance_
-        }
-    }
-    private let beans = ConcurrentHashMap<String, BeanManager>()
-    private let typeMap = ConcurrentHashMap<TypeInfo, TreeMap<BeanManager, BeanManager>>()
-    private let annotationMap = ConcurrentHashMap<TypeInfo, TreeMap<BeanManager, BeanManager>>()
-    private var inherited = None<BeanFactory>
-    private init() {
-        Process.current.atExit {
-            destroy()
-            if (let Some(f) <- inherited) {
-                f.destroy()
-            }
-        }
-    }
-    private func destroy(): Unit {
-        for ((_, b) in beans.iterator()) {
-            try {
-                b.destroy()
-            } catch (e: Exception) {
-                log.warn(e)
-            }
-        }
-    }
-    public func setInherited(inherited: BeanFactory): BeanFactory {
-        this.inherited = inherited
-        this
-    }
-    private static func offerQueue(queue: LinkedList<TypeInfo>, typeInfo: TypeInfo) {
-        match (typeInfo) {
-            case ti: ClassTypeInfo => if (let Some(s) <- ti.superClass && s != TypeInfos.get<Object>()) {
-                queue.addLast(s)
-            }
-            case _ => ()
-        }
-        for (si in typeInfo.superInterfaces where si != TypeInfos.get<Any>()) {
-            queue.addLast(si)
-        }
-    }
-    public func deregister(names: Array<String>) {
-        for (name in names) {
-            if (let Some(bean) <- beans.remove(name)) {
-                try {
-                    bean.destroy()
-                } catch (e: Exception) {
-                    log.warn(e)
-                }
-            }
-        }
-    }
-    private func register(bean: BeanManager): BeanFactory {
-        if (beans.putIfAbsent(bean.name, bean).isSome()) {
-            throw BeanException("duplicate bean name: ${bean.name}")
-        } else {
-            func populateMap(typeInfo: TypeInfo, map: ConcurrentHashMap<TypeInfo, TreeMap<BeanManager, BeanManager>>) {
-                match (map.get(typeInfo)) {
-                    case Some(tree) => tree
-                    case _ =>
-                        let tree = TreeMap<BeanManager, BeanManager>()
-                        map[typeInfo] = tree
-                        tree
-                }.add(bean, bean)
-            }
-            synchronized(mutex) {
-                let queue = LinkedList<TypeInfo>()
-                if (bean.typeInfo is ClassTypeInfo) {
-                    queue.addLast(TypeInfos.get<Object>())
-                }
-                queue.addLast(TypeInfos.get<Object>())
-                queue.addLast(TypeInfos.get<Any>())
-                queue.addLast(bean.typeInfo)
-                while (let Some(typeInfo) <- queue.removeFirst()) {
-                    populateMap(typeInfo, typeMap)
-                    offerQueue(queue, typeInfo)
-                }
-                for (annotation in bean.typeInfo.annotations) {
-                    populateMap(TypeInfo.of(annotation), annotationMap)
-                }
-            }
-        }
-        this
-    }
-    public func register(meta: BeanMeta): BeanFactory {
-        register(BeanManager(meta))
-    }
-    public func register(fn: () -> BeanMeta): BeanFactory {
-        register(fn())
-        this
-    }
-    public func register(beans: Iterable<BeanMeta>): BeanFactory {
-        for (bean in beans) {
-            register(bean)
-        }
-        this
-    }
-    public func register(fn: () -> Iterable<BeanMeta>): BeanFactory {
-        register(fn())
-    }
-    public func register(fns: Iterable<() -> BeanMeta>): BeanFactory {
-        for (fn in fns) {
-            register(fn)
-        }
-        this
-    }
-    public func register(fns: Iterable<() -> Iterable<BeanMeta>>): BeanFactory {
-        for (fn in fns) {
-            register(fn)
-        }
-        this
-    }
-    private var finished = false
-    /**
-     * 待所有bean元数据都初始化完成，就执行这个函数，检查每个bean是否满足初始化条件，如果不满足就从BeanFactory删除，检查时如果条件有循环依赖就抛出异常。
-     * 如果参数checkDependencyRing是true就检查每个bean的依赖关系，确认有没有循环依赖，如果发现循环依赖就抛出异常。
-     */
-    public func initialize(paths!: Array<String>, checkDependencyRing!: Bool = true) {
-        if (finished) {
-            return
-        }
-        finished = true
-        if (let Some(i) <- inherited) {
-            i.doInitialize(checkDependencyRing)
-        }
-        doInitialize(checkDependencyRing)
-    }
-    private func doInitialize(checkDependencyRing: Bool) {
-        for ((_, b) in beans where !b.lazy) {
-            b.get()
-        }
-    }
-    public func getBeanManagers<T>(): Collection<BeanManager> {
-        this.typeMap[TypeInfos.get<T>()].keys()
-    }
-    public func get(name: String, typeInfo: TypeInfo): ?Any {
-        if (let Some(v) <- get<Any>(name)) {
-            if (TypeInfo.of(v).isSubtypeOf(typeInfo)) {
-                return v
-            }
-        }
-        None
-    }
+    private let mutex = ReentrantMutex()
+    private let beans = HashMap<String, BeanManager>()
+    private let beanTypeMap = HashMap<TypeInfo, TreeSet<BeanManager>>()
+    private let registered = AtomicBool(false)
 
-    public func get<T>(checker: (String, Any) -> Bool) {
-        get(TypeInfos.get<T>(), checker)
+    public init(){
+        Process.current.atExit(this.shutdown)
     }
-    public func get(typeInfo: TypeInfo, checker: (String, Any) -> Bool): Map<String, Any> {
-        let beans = HashMap<String, Any>()
-        if (let Some(i) <- inherited) {
-            beans.add(all: i.get(typeInfo, checker))
+    private func shutdown(){
+        for((_, m) in beans){
+            m.doDestroy()
         }
-        if (let Some(ts) <- typeMap.get(typeInfo)) {
-            for ((t, _) in ts) {
-                let o = t.get()
-                if (checker(t.name, o)) {
-                    match (o) {
-                        case x: FactoryBean =>
-                            let bean = x.get()
-                            x.beanPostConstruct(bean)
-                            beans[t.name] = bean
-                        case _ => beans[t.name] = o
+    }
+    public func register<T>(meta: BeanMeta, 
+                            creator: () -> Object, 
+                            postConstruct!: (Object) -> Unit = {o =>},
+                            destroy!: (Object) -> Unit = {o =>}){
+        if(registered.load()){
+            throw BeanException('To register bean to a registered BeanFactory is forbidden')
+        }
+        var beanType = TypeInfos.get<T>()
+        let manager = BeanManager(meta, beanType, creator, postConstruct: postConstruct, destroy: destroy)
+        synchronized(mutex){
+            if(!beans.addIfAbsent(manager.name, manager)){
+                let prevType = beans[manager.name].beanType
+                throw BeanException('duplicate bean name ${manager.name}, existed bean type is ${prevType}, current bean type is ${manager.beanType}')
+            }
+            let typeQueue = LinkedList<TypeInfo>()
+            typeQueue.addLast(beanType)
+            typeQueue.addLast(TypeInfos.get<Any>())
+            typeQueue.addLast(TypeInfos.get<Object>())
+            while(let Some(klass) <- typeQueue.removeFirst()){
+                if(let Some(set) <- beanTypeMap.get(klass)){
+                    set
+                }else{
+                    let set = TreeSet<BeanManager>()
+                    beanTypeMap.add(klass, set)
+                    set
+                }.add(manager)
+                if(!klass.isSubtypeOf(TypeInfos.get<Annotation>())){
+                    for(annotation in klass.annotations){
+                        typeQueue.addLast(TypeInfo.of(annotation))
                     }
                 }
-            }
-        }
-        beans
-    }
-    public func getByPrefix(prefix: String, typeInfo: TypeInfo) {
-        get(typeInfo, prefixChecker<Any>(prefix))
-    }
-    public func getBySuffix(suffix: String, typeInfo: TypeInfo) {
-        get(typeInfo, suffixChecker<Any>(suffix))
-    }
-    public func getByWildcard<T>(pattern: String) {
-        getByWildcard(pattern, TypeInfos.get<T>())
-    }
-    public func getByWildcard(pattern: String, typeInfo: TypeInfo) {
-        get(typeInfo, wildcardChecker<Any>(pattern))
-    }
-    public func getByRegex<T>(regex: String) {
-        getByRegex(regex, TypeInfos.get<T>())
-    }
-    public func getByRegex(regex: String, typeInfo: TypeInfo) {
-        get(typeInfo, regexChecker<Any>(regex))
-    }
-    public func getFirstByPrefix(prefix: String, typeInfo: TypeInfo): ?Any {
-        for ((_, bean) in getByPrefix(prefix, typeInfo)) {
-            return bean
-        }
-        None
-    }
-    public func getFirstBySuffix(suffix: String, typeInfo: TypeInfo): ?Any {
-        for ((_, bean) in getBySuffix(suffix, typeInfo)) {
-            return bean
-        }
-        None
-    }
-    public func getFirstByWildcard<T>(pattern: String) {
-        getFirstByWildcard(pattern, TypeInfos.get<T>())
-    }
-    public func getFirstByWildcard(pattern: String, typeInfo: TypeInfo): ?Any {
-        for ((_, bean) in getByWildcard(pattern, typeInfo)) {
-            return bean
-        }
-        None
-    }
-    public func getFirstByRegex<T>(regex: String) {
-        getFirstByRegex(regex, TypeInfos.get<T>())
-    }
-    public func getFirstByRegex(regex: String, typeInfo: TypeInfo): ?Any {
-        for ((_, bean) in getByRegex(regex, typeInfo)) {
-            return bean
-        }
-        None
-    }
-    private static let annotationType = TypeInfos.get<Annotation>()
-    private static func checkAnnotation(typeInfo: TypeInfo) {
-        if (!typeInfo.isSubtypeOf(annotationType)) {
-            throw BeanException("${typeInfo} is not an annotation")
-        }
-    }
-    public func getByAnnotation<T>(name: String): ?Any {
-        getByAnnotation(name, TypeInfos.get<T>())
-    }
-    public func getByAnnotation(name: String, typeInfo: TypeInfo): ?Any {
-        checkAnnotation(typeInfo)
-        if (let Some(v) <- get<Any>(name)) {
-            for (annotation in TypeInfo.of(v).annotations where TypeInfo.of(annotation).isSubtypeOf(typeInfo)) {
-                return v
-            }
-        }
-        None
-    }
-    public func getByAnnotation<T>(checker: (String, Any) -> Bool): Map<String, Any> {
-        getByAnnotation(TypeInfos.get<T>(), checker)
-    }
-    public func getByAnnotation(typeInfo: TypeInfo, checker: (String, Any) -> Bool): Map<String, Any> {
-        checkAnnotation(typeInfo)
-        let beans = HashMap<String, Any>()
-        if (let Some(i) <- inherited) {
-            beans.add(all: i.getByAnnotation(typeInfo, checker))
-        }
-        if (let Some(ts) <- annotationMap.get(typeInfo)) {
-            for ((t, _) in ts) {
-                let o = t.get()
-                if (checker(t.name, o)) {
-                    match (o) {
-                        case x: FactoryBean =>
-                            let bean = x.get()
-                            x.beanPostConstruct(bean)
-                            beans[t.name] = bean
-                        case _ => beans[t.name] = o
-                    }
+                for(superInterface in klass.superInterfaces){
+                    typeQueue.addLast(superInterface)
+                }
+                if(let s: ClassTypeInfo <- klass && let Some(sc) <- s.superClass){
+                    typeQueue.addLast(sc)
                 }
             }
+
         }
-        beans
     }
-    public func getByPrefixAndAnnotation<T>(prefix: String) {
-        getByPrefixAndAnnotation(prefix, TypeInfos.get<T>())
+    public func afterRegistered(){
+        this.registered.store(true)
+        check()
+        initBeansIfNeed()
     }
-    public func getByPrefixAndAnnotation(prefix: String, typeInfo: TypeInfo) {
-        get(typeInfo, prefixChecker<Any>(prefix))
+    private func check(){
+        synchronized(mutex){
+            let discarded = TreeSet<BeanManager>()
+            for((_, m) in beans where !(discarded.contains(m) || m.on(this))){
+                discarded.add(m)
+            }
+            let removed = HashSet<TypeInfo>()
+            for(d in discarded){
+                beans.remove(d.name)
+                for((t, set) in beanTypeMap){
+                    set.remove(d)
+                    removed.add(t)
+                }
+            }
+            for(t in removed where beanTypeMap[t].isEmpty()){
+                beanTypeMap.remove(t)
+            }
+        }
     }
-    public func getBySuffixAndAnnotation<T>(prefix: String) {
-        getBySuffixAndAnnotation(prefix, TypeInfos.get<T>())
+    private func initBeansIfNeed(){
+        for((_, m) in beans){
+            m.initIfNeed()
+        }
     }
-    public func getBySuffixAndAnnotation(suffix: String, typeInfo: TypeInfo) {
-        get(typeInfo, suffixChecker<Any>(suffix))
+    internal func beanManagers(typeInfo: TypeInfo): Collection<BeanManager> {
+        beanTypeMap.get(typeInfo) ?? []
     }
-    public func getByWildcardAndAnnotation<T>(prefix: String) {
-        getByWildcardAndAnnotation(prefix, TypeInfos.get<T>())
+    private func matches<T>(m: BeanManager){
+        m.beanType.isSubtypeOf(TypeInfos.get<T>())
     }
-    public func getByWildcardAndAnnotation(pattern: String, typeInfo: TypeInfo) {
-        get(typeInfo, wildcardChecker<Any>(pattern))
+    private func matches<T>(cond: StringCond, m: BeanManager){
+        matches<T>(m) && cond.on(m.name)
     }
-    public func getByRegexAndAnnotation<T>(prefix: String) {
-        getByRegexAndAnnotation(prefix, TypeInfos.get<T>())
+    public func getFirst<T>(cond!: StringCond = IgnoreCond): ?T {
+        match(cond){
+            case Exactly(n) => match(beans.get(n)){
+                case Some(m) where matches<T>(m) => 
+                    return m.bean as T
+                case _ => ()
+            }
+            case _ => match(beanTypeMap.get(TypeInfos.get<T>())){
+                case Some(tree) => for(m in tree where matches<T>(cond, m)){
+                        return m.bean as T
+                    }
+                case _ => ()
+            }
+        }
+        None
     }
-    public func getByRegexAndAnnotation(regex: String, typeInfo: TypeInfo) {
-        get(typeInfo, regexChecker<Any>(regex))
+    private fucn getAll<T>(cond: StringCond, put: (ArrayList<T>, BeanManger) -> Unit){
+        let list = ArrayList<T>()
+        match(cond){
+            case Exactly(n) => match(beans.get(n)){
+                case Some(m) where matches<T>(m) => 
+                    put(list, m)
+                case _ => ()
+            }
+            case _ => match(beanTypeMap.get(TypeInfos.get<T>())){
+                case Some(tree) => for(m in tree where matches<T>(cond, m)) {
+                    put(list, m)
+                }
+                case _ => ()
+            }
+        }
+        list
     }
-    public func getFirstByPrefixByAnnotation<T>(prefix: String) {
-        getFirstByPrefixByAnnotation(prefix, TypeInfos.get<T>())
+    public func getAll<T>(cond!: StringCond = IgnoreCond): Collection<T> {
+        func put(list: ArrayList<T>, m: BeanManager){
+            if(let b: T <- m.bean){
+                list.add(b)
+            }
+        }
+        getAll<T>(cond, put)
     }
-    public func getFirstByPrefixByAnnotation(prefix: String, typeInfo: TypeInfo): ?Any {
-        for ((_, bean) in getByPrefixAndAnnotation(prefix, typeInfo)) {
-            return bean
+    
+    private func generateTuple<T>(manager: BeanManager): ?(T, () -> Unit){
+        if(matches<T>(manager)){
+            let bean = manager.bean
+            let b = (bean as T).getOrThrow()
+            return (b, manager.generateDestroy(bean))
         }
         None
     }
-    public func getFirstBySuffixAndAnnotation<T>(prefix: String) {
-        getFirstBySuffixAndAnnotation(prefix, TypeInfos.get<T>())
-    }
-    public func getFirstBySuffixAndAnnotation(suffix: String, typeInfo: TypeInfo): ?Any {
-        for ((_, bean) in getBySuffixAndAnnotation(suffix, typeInfo)) {
-            return bean
+    private func generateTuple<T>(manager: ?BeanManager): ?(T, () -> Unit) {
+        match(manager){
+            case Some(m) => generateTuple<T>(m)
+            case _ => None
         }
-        None
-    }
-    public func getFirstByWildcardAndAnnotation<T>(prefix: String) {
-        getFirstByWildcardAndAnnotation(prefix, TypeInfos.get<T>())
-    }
-    public func getFirstByWildcardAndAnnotation(pattern: String, typeInfo: TypeInfo): ?Any {
-        for ((_, bean) in getByWildcardAndAnnotation(pattern, typeInfo)) {
-            return bean
-        }
-        None
-    }
-    public func getFirstByRegexAndAnnotation<T>(prefix: String) {
-        getFirstByRegexAndAnnotation(prefix, TypeInfos.get<T>())
-    }
-    public func getFirstByRegexAndAnnotation(regex: String, typeInfo: TypeInfo): ?Any {
-        for ((_, bean) in getByRegexAndAnnotation(regex, typeInfo)) {
-            return bean
-        }
-        None
     }
 
+    public func getFirstTuple<T>(cond!: StringCond = IgnoreCond): ?(T, () -> Unit){
+        match(cond){
+            case Exactly(n) => return generateTuple<T>(beans.get(n))
+            case _ => match(beanTypeMap.get(TypeInfos.get<T>())){
+                case Some(tree) => for(m in tree where matches<T>(cond, m)){
+                    if(let bean <- m.bean && let b: T <- bean){
+                        return (b, m.generateDestroy(bean))
+                    }
+                }
+                case _ => ()
+            }
+        }
+        None
+    }
+    public func getAllTuples<T>(cond!: StringCond = IgnoreCond): Collection<(T, () -> Unit)>{
+        func put(list: ArrayList<(T, () -> Unit)>, m: BeanManager){
+            if(let bean <- m.bean && let b: T <- bean){
+                list.add((b, m.generateDestroy(bean)))
+            }
+        }
+        getAll<T>(cond, put)
+    }
     public func get<T>(name: String): ?T {
-        var result: ?T = if (let Some(b) <- beans.get(name)) {
-            match (b.get()) {
-                case x: T => x
-                case _ => None<T>
-            }
-        } else if (let Some(f) <- inherited) {
-            f.get<T>(name)
-        } else {
-            None<T>
-        }
-        result
-    }
-
-    private func prefixChecker<T>(prefix: String): (String, T) -> Bool {
-        {name, bean => name.startsWith(prefix)}
-    }
-    public func getByPrefix<T>(prefix: String): Map<String, T> {
-        get<T>(this.prefixChecker<T>(prefix))
-    }
-    public func useByPrefix<T>(prefix: String, exec: (T) -> Unit): Unit {
-        use<T>(this.prefixChecker<T>(prefix), exec)
-    }
-    public func getFirstByPrefix<T>(prefix: String): ?T {
-        getFirst<T>(this.prefixChecker<T>(prefix))
-    }
-    private func suffixChecker<T>(suffix: String): (String, T) -> Bool {
-        {name, bean => name.endsWith(suffix)}
-    }
-    public func getBySuffix<T>(suffix: String): Map<String, T> {
-        get<T>(this.suffixChecker<T>(suffix))
-    }
-    public func useBySuffix<T>(suffix: String, exec: (T) -> Unit): Unit {
-        use<T>(this.suffixChecker<T>(suffix), exec)
-    }
-    public func getFirstBySuffix<T>(suffix: String): ?T {
-        getFirst<T>(this.suffixChecker<T>(suffix))
-    }
-    private func wildcardChecker<T>(pattern: String): (String, T) -> Bool {
-        {name, bean => "^${pattern.replace("*", ".*")}$".regex().matched(name)}
-    }
-
-    //支持通配符*
-    public func getWithWildcard<T>(pattern: String): Map<String, T> {
-        get<T>(wildcardChecker<T>(pattern))
-    }
-    public func useWithWildcard<T>(pattern: String, exec: (T) -> Unit): Unit {
-        use<T>(wildcardChecker<T>(pattern), exec)
-    }
-    public func getFirstWithWildcard<T>(pattern: String): ?T {
-        getFirst<T>(wildcardChecker<T>(pattern))
-    }
-    private func regexChecker<T>(pattern: String): (String, T) -> Bool {
-        {name, bean => pattern.regex().matched(name)}
-    }
-    public func getWithRegex<T>(pattern: String): Map<String, T> {
-        get<T>(regexChecker<T>(pattern))
-    }
-    public func useWithRegex<T>(pattern: String, exec: (T) -> Unit): Unit {
-        use<T>(regexChecker<T>(pattern), exec)
-    }
-    public func getFirstWithRegex<T>(pattern: String): ?T {
-        getFirst<T>(regexChecker<T>(pattern))
-    }
-    private func alwaysTrue<T>(): (String, T) -> Bool {
-        {k, b => b is T}
-    }
-    public func get<T>(): Map<String, T> {
-        get<T>(alwaysTrue<T>())
-    }
-    public func use<T>(exec: (T) -> Unit): Unit {
-        use<T>(alwaysTrue<T>(), exec)
-    }
-    public func use<T, R>(name: String, exec: (T) -> ?R): ?R {
-        if (let Some(b) <- get<T>(name)) {
-            exec(b)
-        } else {
-            None
-        }
-    }
-
-    public func getFirst<T>(): ?T {
-        getFirst<T> {k, T => true}
-    }
-    public func get<T>(checker: (String, T) -> Bool): Map<String, T> {
-        let beans = HashMap<String, T>()
-        if (let Some(i) <- inherited) {
-            beans.add(all: i.get<T>(checker))
-        }
-        if (let Some(tree) <- this.typeMap.get(TypeInfos.get<T>())) {
-            for (bean in tree.keys()) {
-                let name = bean.name
-                match (bean.get()) {
-                    case x: T where checker(name, x) => beans[name] = x
-                    case fb: FactoryBean =>
-                        let bean = fb.get()
-                        match (bean) {
-                            case x: T =>
-                                fb.beanPostConstruct(x)
-                                if (checker(name, x)) {
-                                    beans[name] = x
-                                } else {
-                                    continue
-                                }
-                            case _ => continue
-                        }
-                    case _ => continue
-                }
-            }
-        }
-        beans
-    }
-    public func use<T>(checker: (String, T) -> Bool, exec: (T) -> Unit): Unit {
-        for (bean in get<T>(checker).values()) {
-            exec(bean)
-        }
-    }
-    public func use<T>(checker: (String, T) -> Bool): BeanFactoryWrapper<T> {
-        BeanFactoryWrapper<T>(this, checker)
-    }
-    public func useFirst<T>(checker: (String, T) -> Bool): FirstBeanFactoryWrapper<T> {
-        FirstBeanFactoryWrapper<T>(this, checker)
-    }
-    public func getFirst<T>(checker: (String, T) -> Bool): ?T {
-        if (let Some(tree) <- this.typeMap.get(TypeInfos.get<T>())) {
-            for (bean in tree.keys()) {
-                let name = bean.name
-                match (bean.get()) {
-                    case x: T where checker(name, x) => return x
-                    case x: FactoryBean =>
-                        let bean = x.get()
-                        x.beanPostConstruct(bean)
-                        match (bean) {
-                            case x: T where checker(name, x) => return x
-                            case _ => continue
-                        }
-                    case _ => continue
-                }
-            }
-        }
-        var result = None<T>
-        if (let Some(i) <- inherited) {
-            result = i.getFirst<T>(checker)
-        }
-        result
-    }
-    public func useFirst<T, R>(checker: (String, T) -> Bool, exec: (T) -> ?R): ?R {
-        if (let Some(f) <- getFirst<T>(checker)) {
-            exec(f)
-        } else {
-            None
-        }
-    }
-    public func useFirstByPrefix<T, R>(prefix: String, exec: (T) -> ?R): ?R {
-        useFirst<T, R>(this.prefixChecker<T>(prefix), exec)
-    }
-    public func useFirst<T, R>(exec: (T) -> ?R): ?R {
-        useFirst<T, R>(alwaysTrue(), exec)
-    }
-    public func useFirstBySuffix<T, R>(suffix: String, exec: (T) -> ?R): ?R {
-        useFirst<T, R>(this.suffixChecker<T>(suffix), exec)
-    }
-    public func useFirstWithWildcard<T, R>(pattern: String, exec: (T) -> ?R): ?R {
-        useFirst<T, R>(this.wildcardChecker<T>(pattern), exec)
-    }
-}
-
-public class BeanFactoryWrapper<T> {
-    BeanFactoryWrapper(private let factory: BeanFactory, private let checker: (String, T) -> Bool) {}
-
-    public func exec(exec: (T) -> Unit): Unit {
-        factory.use<T>(checker, exec)
-    }
-}
-
-public class FirstBeanFactoryWrapper<T> {
-    FirstBeanFactoryWrapper(private let factory: BeanFactory, private let checker: (String, T) -> Bool) {}
-
-    public func exec<R>(exec: (T) -> ?R): ?R {
-        factory.useFirst<T, R>(checker, exec)
+        getFirst<T>(cond: Exactly(name))
     }
 }

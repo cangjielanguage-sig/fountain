@@ -30,7 +30,6 @@ public class LoggerConfig {
     private static const confPrefix = "logger"
     public static const appender = "appender"
 
-    private static let dot = Regex(#"\."#)
     private static let BLANK_SPLITTOR = Regex(#"\s*,\s*"#)
     private init() {
     }

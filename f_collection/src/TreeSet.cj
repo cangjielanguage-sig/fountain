@@ -50,8 +50,8 @@ public class TreeSet<T> <: Set<T> where T <: Comparable<T> {
             map.size
         }
     }
-    public func contains(key: T): Bool {
-        map.contains(key)
+    public func contains(value: T): Bool {
+        map.contains(value)
     }
     public func contains(all!: Collection<T>): Bool {
         map.contains(all: all)

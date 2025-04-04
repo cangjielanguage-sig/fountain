@@ -9,17 +9,17 @@
 */
 package f_bean
 
-internal import std.ast.{ToTokens, Tokens}
-internal import std.collection.Map
+internal import std.collection.{HashMap, TreeMap, LinkedList, ArrayList}
 internal import std.collection.concurrent.ConcurrentHashMap
-internal import std.fs.{exists, Directory, FileInfo}
-internal import std.process.Process
-internal import std.sync.{ReentrantMutex, AtomicInt64}
-
-internal import f_config.*
-internal import f_cmd.*
-internal import f_log.LoggerFactory
-internal import f_regex.*
+internal import std.process.{Process, CurrentProcess}
+internal import std.reflect.*
+internal import std.sync.{AtomicInt64, AtomicBool, AtomicOptionReference, ReentrantMutex}
 internal import f_base.*
-
+internal import f_collection.TreeSet
+internal import f_config.Config
+internal import f_regex.*
 internal import f_bean.exception.*
+
+internal func toRegex(wildcard: String): Regex{
+    wildcard.replace('*', '.*').replace('?', '.?').regex()
+}

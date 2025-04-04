@@ -1,22 +1,21 @@
 [dependencies]
   f_base = {path = "../f_base"}
   f_cmd = {path = "../f_cmd"}
+  f_collection = {path = "../f_collection"}
   f_config = {path = "../f_config"}
   f_log = {path = "../f_log"}
   f_macros = {path = "../f_macros"}
   f_exception = {path = "../f_exception"}
   f_regex = {path = "../f_regex"}
 [package]
-  cjc-version = "0.57.3"
-  compile-option = "-O2"
+  cjc-version = "0.58.3"
+  compile-option = ""
   description = "nothing here"
   link-option = ""
   name = "f_bean"
   output-type = "dynamic"
-  override-compile-option = "-O2"
+  override-compile-option = ""
   src-dir = ""
   target-dir = ""
   version = "1.0.0"
   package-configuration = {}
-[profile.build]
-  incremental = true
