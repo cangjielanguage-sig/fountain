@@ -118,7 +118,7 @@ public class BeanFactory {
         }
         None
     }
-    private fucn getAll<T>(cond: StringCond, put: (ArrayList<T>, BeanManger) -> Unit){
+    private func getAll<T>(cond: StringCond, put: (ArrayList<T>, BeanManager) -> Unit){
         let list = ArrayList<T>()
         match(cond){
             case Exactly(n) => match(beans.get(n)){
