@@ -18,7 +18,7 @@ import f_macros.*
 /**
  * 支持以下特性，不分大小写
  * ToString：实现ToString接口
- * Props：为非公共的实例成员变量添加属性
+ * Props：为非公共的实例成员变量添加公共实例成员属性
  * Hash：实现Hashable
  * Compare: 实现Comparable<T>
  * Equal: 实现Equatable<T>

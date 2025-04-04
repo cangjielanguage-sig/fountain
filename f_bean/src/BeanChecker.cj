@@ -18,7 +18,7 @@ struct BeanChecker <: IBeanCondition {
         let typeDef!: ?TypeDef = None,
         let beanDef!: ?BeanDef = None
     ) {}
-    public func on(ringChecker: RingChecker): Bool {
+    public func on(): Bool {
         var result = true
         var nameMatchedCount = 0
         var beanMatchedCount = 0
@@ -168,14 +168,7 @@ struct BeanChecker <: IBeanCondition {
                     case Missing => nameMatchedCount == 0 && beanMatchedCount == 0
                 }
             }
-            func check() {
-                if (dependency) {
-                    bean.dependencyCheck(ringChecker)
-                } else {
-                    bean.on(ringChecker)
-                }
-            }
-            if (!(result && check())) {
+            if (!result) {
                 return false
             }
         }

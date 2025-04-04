@@ -41,30 +41,6 @@ public class BeanFactory {
             }
         }
     }
-    /**
-     * 从指定路径加载动态链接库，如果参数是空数组就从当前的工作路径加载动态链接库
-     */
-    private func load(paths: Array<String>): Unit {
-        if (paths.isEmpty()) {
-            return load(CmdArgs.instance.currentWorkingDirectory.toString())
-        }
-        for (path in paths) {
-            if (exists(path)) {
-                if(FileInfo(path).isDirectory()){
-                    Directory.walk(path){fi => 
-                        load(fi.path.toString())
-                        true
-                    }
-                }else if (path.endsWith('.so') || path.endsWith('.dll')) {
-                    ModuleInfo.load(path[0..path.size - if (OS.current.isWindows) {
-                            ".dll"
-                        } else {
-                            ".so"
-                        }.size])
-                }
-            }
-        }
-    }
     private func destroy(): Unit {
         for ((_, b) in beans.iterator()) {
             try {
@@ -80,7 +56,7 @@ public class BeanFactory {
     }
     private static func offerQueue(queue: LinkedList<TypeInfo>, typeInfo: TypeInfo) {
         match (typeInfo) {
-            case ti: ClassTypeInfo => if (let Some(s) <- ti.superClass) {
+            case ti: ClassTypeInfo => if (let Some(s) <- ti.superClass && s != TypeInfos.get<Object>()) {
                 queue.addLast(s)
             }
             case _ => ()
@@ -173,54 +149,12 @@ public class BeanFactory {
         if (let Some(i) <- inherited) {
             i.doInitialize(checkDependencyRing)
         }
-        load(paths)
         doInitialize(checkDependencyRing)
     }
     private func doInitialize(checkDependencyRing: Bool) {
-        let list = ArrayList<BeanManager>()
-        func removeNotMatches() {
-            for (b in list) {
-                beans.remove(b.name)
-                typeMap[TypeInfos.get<Any>()].remove(b)
-                typeMap[TypeInfos.get<Object>()].remove(b)
-                let queue = LinkedList<TypeInfo>()
-                queue.addLast(b.typeInfo)
-                while (let Some(typeInfo) <- queue.removeFirst()) {
-                    typeMap[typeInfo].remove(b)
-                    offerQueue(queue, typeInfo)
-                }
-            }
-            list.clear()
+        for ((_, b) in beans where !b.lazy) {
+            b.get()
         }
-        let ringChecker = RingChecker()
-        for ((_, b) in beans) {
-            if (!b.on(ringChecker)) {
-                list.add(b)
-            }
-            ringChecker.clear()
-        }
-        removeNotMatches()
-        for ((_, b) in beans) {
-            b.resetOn()
-        }
-        for ((_, b) in beans) {
-            if (b.on(ringChecker)) {
-                ringChecker.clear()
-                if (checkDependencyRing) {
-                    ringChecker.forOn = false
-                    ringChecker.put(b)
-                    b.dependencyCheck(ringChecker)
-                    ringChecker.forOn = true
-                }
-                if (!b.lazy) {
-                    b.get()
-                }
-            } else {
-                list.add(b)
-            }
-            ringChecker.clear()
-        }
-        removeNotMatches()
     }
     public func getBeanManagers<T>(): Collection<BeanManager> {
         this.typeMap[TypeInfos.get<T>()].keys()

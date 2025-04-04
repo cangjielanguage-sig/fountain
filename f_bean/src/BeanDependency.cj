@@ -14,7 +14,7 @@ public class BeanDependency <: IBeanCondition {
         let nameDef!: ?BeanNameDef = None,
         let typeDef!: ?TypeDef = None
     ) {}
-    public func on(ringChecker: RingChecker) {
-        BeanChecker(dependency: true, nameDef: nameDef, typeDef: typeDef).on(ringChecker)
+    public func on() {
+        BeanChecker(dependency: true, nameDef: nameDef, typeDef: typeDef).on()
     }
 }

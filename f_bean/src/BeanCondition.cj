@@ -10,52 +10,46 @@
 package f_bean
 
 public interface IBeanCondition {
-    func on(ringChecker: RingChecker): Bool
+    func on(): Bool
 }
 
 @Annotation[target: [Type, MemberFunction]]
 public class BeanCondition <: IBeanCondition {
     public const BeanCondition(public let condition: IBeanCondition) {}
-    public func on(ringChecker: RingChecker): Bool {
-        condition.on(ringChecker)
+    public func on(): Bool {
+        condition.on()
     }
 }
 
 public class OnAnd <: IBeanCondition {
-    public const OnAnd(public let conditions: Array<IBeanCondition>) {}
+    public const OnAnd(private let left: IBeanCondition, private let right: IBeanCondition) {}
 
-    public func on(ringChecker: RingChecker): Bool {
-        for (c in conditions where !c.on(ringChecker)) {
-            return false
-        }
-        return true
+    public func on(): Bool {
+        left.on() && right.on()
     }
 }
 
 public class OnOr <: IBeanCondition {
-    public const OnOr(public let conditions: Array<IBeanCondition>) {}
+    public const OnOr(private let left: IBeanCondition, private let right: IBeanCondition) {}
 
-    public func on(ringChecker: RingChecker): Bool {
-        for (c in conditions where c.on(ringChecker)) {
-            return true
-        }
-        return false
+    public func on(): Bool {
+        left.on() || right.on()
     }
 }
 
 public class OnNot <: IBeanCondition {
     public const OnNot(public let condition: IBeanCondition) {}
-    public func on(ringChecker: RingChecker) {
-        !condition.on(ringChecker)
+    public func on() {
+        !condition.on()
     }
 }
 /**
  * 值是运行时计算并传入构造器
  */
 public class OnBool <: IBeanCondition {
-    public const OnBool(public let cond: (RingChecker) -> Bool) {}
-    public func on(ringChecker: RingChecker): Bool {
-        cond(ringChecker)
+    public const OnBool(public let cond: () -> Bool) {}
+    public func on(): Bool {
+        cond()
     }
 }
 
@@ -64,7 +58,7 @@ public class OnBool <: IBeanCondition {
  */
 public class OnType <: IBeanCondition {
     public const OnType(public let typeDef: TypeDef) {}
-    public func on(ringChecker: RingChecker): Bool {
+    public func on(): Bool {
         match (typeDef) {
             case WithType(t) => try {
                 TypeInfo.of(t)
@@ -92,8 +86,8 @@ public class OnBean <: IBeanCondition {
         public let typeDef!: ?TypeDef = None,
         public let beanDef!: ?BeanDef = None
     ) {}
-    public func on(ringChecker: RingChecker): Bool {
-        BeanChecker(dependency: false, nameDef: nameDef, typeDef: typeDef, beanDef: beanDef).on(ringChecker)
+    public func on(): Bool {
+        BeanChecker(dependency: false, nameDef: nameDef, typeDef: typeDef, beanDef: beanDef).on()
     }
 }
 
@@ -106,7 +100,7 @@ public func setWebApp() {
  */
 public class OnWebApp <: IBeanCondition {
     public const init() {}
-    public func on(ringChecker: RingChecker): Bool {
+    public func on(): Bool {
         _webApp
     }
 }
@@ -117,7 +111,7 @@ public class OnWebApp <: IBeanCondition {
 public class OnConf <: IBeanCondition {
     public const OnConf(public let conf: ConfDef<String>) {}
 
-    public func on(ringChecker: RingChecker): Bool {
+    public func on(): Bool {
         func extractValue(key: String) {
             Config.getString(key).getOrThrow {BeanException("config item of ${key} does not exist")}
         }
@@ -136,7 +130,7 @@ public class OnConf <: IBeanCondition {
 public class OnEnv <: IBeanCondition {
     public const OnEnv(public let env: ConfDef<String>) {}
 
-    public func on(ringChecker: RingChecker): Bool {
+    public func on(): Bool {
         let enviroment = Process.current.environment
         match (env) {
             case WithKey(key) => enviroment.contains(key)
@@ -152,7 +146,7 @@ public class OnEnv <: IBeanCondition {
 public class OnCmdArg <: IBeanCondition {
     public const OnCmdArg(public let cmd: ConfDef<String>) {}
 
-    public func on(ringChecker: RingChecker): Bool {
+    public func on(): Bool {
         let args = Process.current.arguments
         match (cmd) {
             case WithKey(key) => CmdArgs.instance.getArg(key).isSome()
@@ -168,7 +162,7 @@ public class OnCmdArg <: IBeanCondition {
 public class OnFile <: IBeanCondition {
     public const OnFile(public let path!: String, public let missing!: Bool = false) {}
 
-    public func on(ringChecker: RingChecker): Bool {
+    public func on(): Bool {
         let exists = exists(this.path)
         (missing && !exists) || (!missing && exists)
     }

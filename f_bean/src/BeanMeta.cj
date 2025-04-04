@@ -366,9 +366,9 @@ public class BeanMeta <: IBeanCondition {
         }
         meta
     }
-    public func on(ringChecker: RingChecker): Bool {
+    public func on(): Bool {
         if (let Some(c) <- _condition) {
-            c.on(ringChecker)
+            c.on()
         } else {
             true
         }

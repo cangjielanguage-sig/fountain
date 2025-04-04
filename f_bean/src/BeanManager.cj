@@ -83,37 +83,6 @@ public class BeanManager <: Comparable<BeanManager> {
     private let mutex = ReentrantMutex()
     private var bean: ?Any = None
     private var factoryBean: ?FactoryBean = None
-    private var _on = None<Bool>
-    private var _ch = None<Bool>
-    func resetOn(){
-        _on = None<Bool>
-    }
-    func on(ringChecker: RingChecker): Bool {
-        if(let Some(on) <- this._on){
-            on
-        }else{
-            ringChecker.put(this)
-            let on = meta.on(ringChecker)
-            ringChecker.remove(this)
-            this._on = on
-            on
-        }
-    }
-    func dependencyCheck(ringChecker: RingChecker): Bool {
-        if(let Some(ch) <- this._ch){
-            ch
-        }else{
-            var ch = true
-            ringChecker.put(this)
-            for(d in dependencies where !d.on(ringChecker)){
-                ch = false
-                break
-            }
-            ringChecker.remove(this)
-            this._ch = ch
-            ch
-        }
-    }
     //如果creator()返回的是值类型会先用Box<Any>包装一遍再执行postConstruct，返回的也是包装以后的
     public func get(): Any {
         func creator(){

@@ -10,7 +10,7 @@
 package f_bean
 
 /**
- * 本注解只修饰函数参数，从fountain/app.App.config得到的值作为函数实参
+ * 本注解只修饰函数参数，从f_config得到的值作为函数实参
  */
 @Annotation[target: [Parameter]]
 public class ParamValue {
