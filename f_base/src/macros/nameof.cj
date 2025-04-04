@@ -12,6 +12,9 @@ macro package f_base.macros
 import std.ast.*
 
 public macro nameof(input: Tokens): Tokens {
+    quote(@nameValue($input)[0])
+}
+public macro nameValueOf(input: Tokens): Tokens {
     if(input.size == 0) {
         diagReport(ERROR, input, 'macro nameof do not accept empty input', '')
         throw IllegalArgumentException()
@@ -24,8 +27,5 @@ public macro nameof(input: Tokens): Tokens {
             diagReport(ERROR, input, 'the kind of last token in parameter of macro nameof must be IDENTIFIER', '')
             throw IllegalArgumentException()
     }
-    quote({=>
-        let _ = $input
-        $identifier
-    }())
+    quote(($identifier, $input))
 }
