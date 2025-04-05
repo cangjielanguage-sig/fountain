@@ -5,8 +5,8 @@
     You may obtain a copy of Mulan PSL v2 at:
             http://license.coscl.org.cn/MulanPSL2
     THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-    See the Mulan PSL v2 for more details.  
-*/
+    See the Mulan PSL v2 for more details.
+ */
 package f_bean
 
 /**
@@ -31,11 +31,11 @@ public enum ConfCond <: BeanCondition {
     | Value(String, StringCond)
 
     public func on(_: BeanFactory): Bool {
-        match(this){
+        match (this) {
             case IgnoreConf => true
             case Exists(key) => Config.getString(key).isSome()
             case NotExists(key) => Config.getString(key).isNone()
-            case Value(key, val) => match(Config.getString(key)){
+            case Value(key, val) => match (Config.getString(key)) {
                 case Some(x) => val.on(x)
                 case _ => false
             }

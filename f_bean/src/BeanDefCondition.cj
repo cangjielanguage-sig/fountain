@@ -5,8 +5,8 @@
     You may obtain a copy of Mulan PSL v2 at:
             http://license.coscl.org.cn/MulanPSL2
     THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-    See the Mulan PSL v2 for more details.  
-*/
+    See the Mulan PSL v2 for more details.
+ */
 package f_bean
 
 /**
@@ -30,7 +30,8 @@ public enum BeanDefCount {
      */
     | MoreThanOne
 }
-public enum BeanType{
+
+public enum BeanType {
     /**
      * 不判断bean类型
      */
@@ -55,15 +56,16 @@ public enum BeanType{
      * bean定义的类型必须是指定类型的祖先类型
      */
     | SuperOfOnly(String)
-    public func on(beanType: TypeInfo){
-        match(this){
+
+    public func on(beanType: TypeInfo) {
+        match (this) {
             case IgnoreType => true
             case Current(t) => TypeInfos.get(t) == beanType
-            case CurrentOrSubOf(t) => 
+            case CurrentOrSubOf(t) =>
                 let ti = TypeInfos.get(t)
                 ti == beanType || beanType.isSubtypeOf(ti)
             case SubOfOnly(t) => beanType.isSubtypeOf(TypeInfos.get(t))
-            case CurrentOrSuperOf(t) => 
+            case CurrentOrSuperOf(t) =>
                 let ti = TypeInfos.get(t)
                 ti == beanType || ti.isSubtypeOf(beanType)
             case SuperOfOnly(t) => TypeInfos.get(t).isSubtypeOf(beanType)
@@ -75,34 +77,35 @@ public enum BeanType{
  * beanType是全限定类型名，指定类型有bean定义则on返回true
  */
 public class BeanDef <: BeanCondition {
-    public const BeanDef(public let beanType!: BeanType = IgnoreType, 
-                      public let beanName!: StringCond = IgnoreCond,
-                      public let count!: BeanDefCount = AtLeastOne,
-                      public let scope!: ?BeanScope = None){}
+    public const BeanDef(
+        public let beanType!: BeanType = IgnoreType,
+        public let beanName!: StringCond = IgnoreCond,
+        public let count!: BeanDefCount = AtLeastOne,
+        public let scope!: ?BeanScope = None
+    ) {}
     public func on(factory: BeanFactory): Bool {
-        match((beanType, beanName)){
-            case (IgnoreType, IgnoreName) => return true//相当于没有指定bean初始化条件
+        match ((beanType, beanName)) {
+            case (IgnoreType, IgnoreName) => return true //相当于没有指定bean初始化条件
             case (CurrentOrSubOf(t), _) => on(factory, TypeInfos.get(t))
             case (Current(t), _) => on(factory, TypeInfos.get(t))
-            case (SubOfOnly(t), _) =>on(factory, TypeInfos.get(t))
+            case (SubOfOnly(t), _) => on(factory, TypeInfos.get(t))
             case _ => on(factory, TypeInfos.get<Object>())
         }
     }
     private func on(factory: BeanFactory, typeInfo: TypeInfo): Bool {
         var count = 0
-        for(m in factory.beanManagers(typeInfo) 
-            where beanType.on(m.beanType) && beanName.on(m.name) && 
-                 (scope.isNone() || scope.getOrThrow() == m.meta.scope)){
+        for (m in factory.beanManagers(typeInfo) where beanType.on(m.beanType) && beanName.on(m.name) && (scope.isNone() ||
+            scope.getOrThrow() == m.meta.scope)) {
             count++
-            match(this.count){
+            match (this.count) {
                 case AtLeastOne => return true
                 case MoreThanOne where count > 1 => return true
                 case OnlyOne where count > 1 => return false
-                case Zero => return false 
+                case Zero => return false
                 case _ => continue
             }
         }
-        match(this.count){
+        match (this.count) {
             case AtLeastOne => count > 0
             case MoreThanOne => count > 1
             case OnlyOne => count == 1

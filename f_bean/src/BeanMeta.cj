@@ -5,8 +5,8 @@
     You may obtain a copy of Mulan PSL v2 at:
             http://license.coscl.org.cn/MulanPSL2
     THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-    See the Mulan PSL v2 for more details.  
-*/
+    See the Mulan PSL v2 for more details.
+ */
 package f_bean
 
 /**
@@ -21,15 +21,15 @@ public class BeanMeta <: Comparable<BeanMeta> {
         public let order!: Int64 = 0,
         public let primary!: Bool = false,
         public let condition!: BeanCondition = NoneBeanCondition.instance
-    ){}
+    ) {}
 
     public func compare(meta: BeanMeta): Ordering {
-        if(this.primary && !meta.primary){
+        if (this.primary && !meta.primary) {
             LT
-        }else if(!this.primary && meta.primary){
+        } else if (!this.primary && meta.primary) {
             GT
-        }else{
-            match(this.order.compare(meta.order)){
+        } else {
+            match (this.order.compare(meta.order)) {
                 case EQ where !(this.name.isEmpty() || meta.name.isEmpty()) => this.name.compare(meta.name)
                 case x => x
             }

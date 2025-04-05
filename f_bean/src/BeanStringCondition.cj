@@ -5,14 +5,14 @@
     You may obtain a copy of Mulan PSL v2 at:
             http://license.coscl.org.cn/MulanPSL2
     THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-    See the Mulan PSL v2 for more details.  
-*/
+    See the Mulan PSL v2 for more details.
+ */
 package f_bean
 
 /**
  * 字符串满足指定条件返回true
  */
-public enum StringCond {
+public enum StringCond <: Equatable<StringCond> & Equatable<String> {
     /**
      * 忽略本条件
      */
@@ -39,7 +39,7 @@ public enum StringCond {
     | Regexp(String)
 
     public func on(s: String): Bool {
-        match(this){
+        match (this) {
             case IgnoreCond => true
             case Exactly(v) => s == v
             case Prefix(v) => s.startsWith(v)
@@ -49,11 +49,25 @@ public enum StringCond {
         }
     }
     public prop ignored: Bool {
-        get(){
-            match(this){
+        get() {
+            match (this) {
                 case IgnoreCond => true
                 case _ => false
             }
         }
+    }
+    public operator func ==(right: StringCond) {
+        match ((this, right)) {
+            case (IgnoreCond, IgnoreCond) => true
+            case (Exactly(a), Exactly(b)) => a == b
+            case (Prefix(a), Prefix(b)) => a == b
+            case (Suffix(a), Suffix(b)) => a == b
+            case (Wildcard(a), Wildcard(b)) => a == b
+            case (Regexp(a), Regexp(b)) => a == b
+            case _ => false
+        }
+    }
+    public operator func ==(right: String) {
+        this == Exactly(right)
     }
 }

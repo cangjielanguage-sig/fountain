@@ -3,6 +3,7 @@
   f_cmd = {path = "../f_cmd"}
   f_collection = {path = "../f_collection"}
   f_config = {path = "../f_config"}
+  f_data = {path = "../f_data"}
   f_log = {path = "../f_log"}
   f_macros = {path = "../f_macros"}
   f_exception = {path = "../f_exception"}
@@ -19,3 +20,5 @@
   target-dir = ""
   version = "1.0.0"
   package-configuration = {}
+[profile.build]
+  incremental = true
