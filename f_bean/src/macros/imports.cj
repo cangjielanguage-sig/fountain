@@ -9,6 +9,7 @@
  */
 macro package f_bean.macros
 
+internal import std.ast.*
 internal import std.collection.{ArrayList, HashMap}
 internal import f_macros.*
 internal import f_bean.exception.*

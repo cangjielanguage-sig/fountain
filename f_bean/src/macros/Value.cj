@@ -9,8 +9,6 @@
  */
 macro package f_bean.macros
 
-import std.ast.*
-
 /**
  * 修饰需要注入来自f_config.Config配置项的实例成员变量、构造函数形叁、工厂函数形参，也可以修饰顶级变量。
  * 修饰参数时必须在Constructor下面。

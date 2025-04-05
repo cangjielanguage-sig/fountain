@@ -9,8 +9,6 @@
  */
 macro package f_bean.macros
 
-import std.ast.*
-
 /**
  * 将@Configuration修饰的类里被@Constructor修饰的函数作为bean初始化函数。被@Configuration修饰的类不会注册到BeanFactory.
  */

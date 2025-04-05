@@ -9,8 +9,6 @@
  */
 macro package f_bean.macros
 
-import std.ast.*
-
 /**
  * 修饰构造函数或工厂函数。必须在Bean或Configuration。
  * 在Bean下面时，只有第一个Constructor生效，且不能修饰静态函数。
