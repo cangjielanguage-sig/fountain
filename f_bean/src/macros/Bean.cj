@@ -32,6 +32,7 @@ public macro Bean(input: Tokens): Tokens {
             }
         case _ => report(input, 'macro @Bean accept a class decl')
     }
+    let tokens = 
     quote(
         
       $input
@@ -40,4 +41,5 @@ public macro Bean(input: Tokens): Tokens {
          $constructor($params)
       }
    )
+   tokens
 }

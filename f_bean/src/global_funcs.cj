@@ -9,12 +9,15 @@
  */
 package f_bean
 
+private func toExactly(primary: String, secondly: String): StringCond {
+    Exactly(if(primary.isEmpty()){
+        secondly
+    }else{
+        primary
+    })
+}
 private func getArrayConfig<T>(primary: String, secondly: String, fn: (String) -> Array<T>): Array<T> {
-    var values = fn(primary)
-    if (values.isEmpty() && primary != secondly) {
-        values = fn(secondly)
-    }
-    values
+    fn(primary)
 }
 
 private func getArrayConfig<T>(primary: String, secondly: String, default: Array<T>, fn: (String, String) -> Array<T>): Array<T> {
@@ -43,11 +46,7 @@ public func getStringArrayConfig(primary: String, secondly: String, default: Arr
 }
 
 private func getConfig<T>(primary: String, secondly: String, fn: (String) -> ?T): ?T {
-    var values = fn(primary)
-    if (values.isNone() && primary != secondly) {
-        values = fn(secondly)
-    }
-    values
+    fn(primary)
 }
 
 private func getConfig<T>(primary: String, secondly: String, default: T, fn: (String, String) -> ?T): T {
@@ -88,15 +87,11 @@ public func getStringConfig(primary: String, secondly: String, default: ?String)
 }
 
 public func getBean<T>(primary: StringCond, secondly: String): ?T where T <: Object {
-    var bean = BeanFactory.instance.getFirst<T>(cond: primary)
-    if (bean.isNone() && primary != secondly) {
-        bean = BeanFactory.instance.getFirst<T>(cond: Exactly(secondly))
-    }
-    bean
+    BeanFactory.instance.getFirst<T>(cond: primary)
 }
 
 public func getBean<T>(primary: String, secondly: String): ?T where T <: Object {
-    getBean<T>(Exactly(primary), secondly)
+    getBean<T>(toExactly(primary, secondly), secondly)
 }
 
 public func getBean<T>(primary: StringCond, secondly: String, default: ?T): ?T where T <: Object {
@@ -121,15 +116,11 @@ public func getBean<T>(primary: String, secondly: String, default: T): T where T
 }
 
 public func getBeanList<T>(primary: StringCond, secondly: String): ArrayList<T> where T <: Object {
-    var beans = BeanFactory.instance.getList<T>(cond: primary)
-    if (beans.isEmpty() && primary != secondly) {
-        beans = BeanFactory.instance.getList<T>(cond: Exactly(secondly))
-    }
-    beans
+    BeanFactory.instance.getList<T>(cond: primary)
 }
 
 public func getBeanList<T>(primary: String, secondly: String): ArrayList<T> where T <: Object {
-    getBeanList<T>(Exactly(primary), secondly)
+    getBeanList<T>(toExactly(primary, secondly), secondly)
 }
 
 public func getBeanList<T>(primary: StringCond, secondly: String, default: ArrayList<T>): ArrayList<T> where T <: Object {
@@ -142,15 +133,11 @@ public func getBeanList<T>(primary: StringCond, secondly: String, default: Array
 }
 
 public func getBeanList<T>(primary: String, secondly: String, default: ArrayList<T>): ArrayList<T> where T <: Object {
-    getBeanList<T>(Exactly(primary), secondly)
+    getBeanList<T>(toExactly(primary, secondly), secondly)
 }
 
 public func getBeanMap<T>(primary: StringCond, secondly: String): HashMap<String, T> where T <: Object {
-    var beans = BeanFactory.instance.getMap<T>(cond: primary)
-    if (beans.isEmpty() && primary != secondly) {
-        beans = BeanFactory.instance.getMap<T>(cond: Exactly(secondly))
-    }
-    beans
+    BeanFactory.instance.getMap<T>(cond: primary)
 }
 
 public func getBeanMap<T>(primary: String, secondly: String): HashMap<String, T> where T <: Object {

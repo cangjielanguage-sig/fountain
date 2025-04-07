@@ -95,13 +95,13 @@ private func genParamMessage(input: Tokens, confKey: String, identifier: String,
                 if (expr.isSome()) {
                     quote(getStringConfig($confKey, $(identifier), $(expr.getOrThrow())))
                 } else {
-                    quote(getStringConfig($confKey, $(identifier)))
+                    quote(getStringConfig($confKey, $(identifier)).getOrThrow{BeanException('conf ' + $(confKey) + ' is not found.')})
                 }
             } else if (typeTokens[0].kind == IDENTIFIER && typeTokens[0].value == 'Duration') {
                 if (expr.isSome()) {
                     quote(getConfig<$typeTokens>($confKey, $(identifier), $(expr.getOrThrow())))
                 } else {
-                    quote(getConfig<$typeTokens>($confKey, $(identifier)))
+                    quote(getConfig<$typeTokens>($confKey, $(identifier)).getOrThrow{BeanException('conf ' + $(confKey) + ' is not found.')})
                 }
             } else if (typeTokens[0].kind == IDENTIFIER && typeTokens[0].value == 'Option') {
                 let optType = typeTokens[2]
@@ -129,13 +129,23 @@ private func genParamMessage(input: Tokens, confKey: String, identifier: String,
             if (expr.isSome()) {
                 quote(getConfig<$x>($confKey, $(identifier), $(expr.getOrThrow())))
             } else {
-                quote(getConfig<$x>($confKey, $(identifier)))
+                quote(getConfig<$x>($confKey, $(identifier)).getOrThrow{BeanException('conf ' + $(confKey) + ' is not found.')})
             }
         case x: PrefixType =>
-            if (expr.isSome()) {
-                quote(getConfig<$(x.baseType)>($confKey, $(identifier), $(expr.getOrThrow())))
-            } else {
-                quote(getConfig<$(x.baseType)>($confKey, $(identifier)))
+            let optType = x.toTokens()[1]
+            match (optType.value) {
+                case 'String' =>
+                    if (expr.isSome()) {
+                        quote(getStringConfig($confKey, $(identifier), $(expr.getOrThrow())))
+                    } else {
+                        quote(getStringConfig($confKey, $(identifier)))
+                    }
+                case _ =>
+                    if (expr.isSome()) {
+                        quote(getConfig<$optType>($confKey, $(identifier), $(expr.getOrThrow())))
+                    } else {
+                        quote(getConfig<$optType>($confKey, $(identifier)))
+                    }
             }
         case _ => report(
             input,

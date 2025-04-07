@@ -116,7 +116,7 @@ private func genAutowiredMessage(input: Tokens, beanName: Tokens, identifier: St
         }
         case _ => match (expr) {
             case Some(e) => quote(getBean<$typeTokens>($beanName, $identifier, $e))
-            case _ => quote(getBean<$typeTokens>($beanName, $identifier))
+            case _ => quote(getBean<$typeTokens>($beanName, $identifier).getOrThrow{BeanException('bean name ' + $(beanName.toString()) + 'is not found')})
         }
     }
     (identifier, tokens)

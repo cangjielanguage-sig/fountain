@@ -20,7 +20,7 @@ internal import f_collection.TreeSet
 internal import f_config.Config
 internal import f_data.*
 internal import f_regex.*
-internal import f_bean.exception.*
+public import f_bean.exception.*
 
 internal func toRegex(wildcard: String): Regex {
     wildcard.replace('*', '.*').replace('?', '.?').regex()
