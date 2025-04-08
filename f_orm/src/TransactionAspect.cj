@@ -21,8 +21,8 @@ import f_collection.*
 @AspectRoute[Route.WithAnnotation("f_orm.Transactional")]
 public class TransactionAspect <: Aspect {
     public static func initialize(): Unit {
-        let meta = BeanMeta.create<TransactionAspect>(creator: {=> TransactionAspect()})
-        BeanFactory.instance.register(meta)
+        let meta = BeanMeta(name: '')
+        BeanFactory.instance.register<TransactionAspect>{TransactionAspect()}
     }
     private init(){}
     private let rollbackExceptions = ConcurrentHashMap<String, HashSet<TypeInfo>>()
