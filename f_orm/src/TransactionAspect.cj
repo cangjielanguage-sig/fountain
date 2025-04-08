@@ -19,9 +19,9 @@ import f_bean.{BeanFactory, BeanMeta}
 import f_collection.*
 
 @AspectRoute[Route.WithAnnotation("f_orm.Transactional")]
+@BeanMeta
 public class TransactionAspect <: Aspect {
     public static func initialize(): Unit {
-        let meta = BeanMeta(name: '')
         BeanFactory.instance.register<TransactionAspect>{TransactionAspect()}
     }
     private init(){}
