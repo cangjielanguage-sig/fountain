@@ -162,7 +162,7 @@ func generateHash(d: ClassDecl, exclusion: HashSet<String>) {
     )),
                 FuncDecl(
                 quote(
-        public func hashCode(): Int64{
+        public $(openTokens(d)) func hashCode(): Int64{
             if(__hAsh__ == 0){
                 var hasher = DataHasher()
                 $hashed
@@ -192,13 +192,13 @@ func generateEqual(d: ClassDecl, exclusion: HashSet<String>) {
         .add(
             all: [FuncDecl(
                 quote(
-        public operator func ==(other: $typeName): Bool {
+        public $(openTokens(d)) operator func ==(other: $typeName): Bool {
             $eq
         }
     )),
                 FuncDecl(
                 quote(
-        public operator func !=(other: $typeName): Bool {
+        public $(openTokens(d)) operator func !=(other: $typeName): Bool {
             !(this == other)
         }
     )
@@ -228,7 +228,7 @@ func generateCompare(d: ClassDecl, exclusion: HashSet<String>) {
         .add(
             FuncDecl(
                 quote(
-        public func compare(other: $typeName): Ordering {
+        public $(openTokens(d)) func compare(other: $typeName): Ordering {
             var result = Ordering.EQ
             $cmp
             result
@@ -257,7 +257,7 @@ func generateToString(d: ClassDecl, exclusion: HashSet<String>) {
         .add(
             FuncDecl(
                 quote(
-        public func toString(): String {
+        public $(openTokens(d)) func toString(): String {
             var result = DataToString()
             $str
             result.toString()
@@ -320,11 +320,7 @@ func generateToFields(d: ClassDecl, exclusion: HashSet<String>) {
         }
         fields.add(expr)
     }
-    let openModi = if (klassDecl.isAbstract() || klassDecl.isOpen()) {
-        `open`
-    } else {
-        `empty_tokens`
-    }
+    let openModi = openTokens(klassDecl)
     let fieldsName = Token(IDENTIFIER, "___dAtA__fIElds_")
     var fieldTokens = `lsquare`
     for (f in fields) {
@@ -366,4 +362,11 @@ func generateToFields(d: ClassDecl, exclusion: HashSet<String>) {
             )
         ]
     )
+}
+private func openTokens(klassDecl: ClassDecl): Tokens {
+    if (klassDecl.isAbstract() || klassDecl.isOpen()) {
+        `open`
+    } else {
+        `empty_tokens`
+    }
 }
