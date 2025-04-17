@@ -11,18 +11,21 @@ package f_concurrent
 
 import std.collection.concurrent.ArrayBlockingQueue
 import std.process.Process
-import std.sync.{Timer, AtomicInt64, ReentrantMutex}
+import std.reflect.TypeInfo
+import std.sync.{Timer, AtomicBool, AtomicInt64, AtomicOptionReference}
 import std.time.MonoTime
 
 import f_base.ZERO_TIMER
 import f_concurrent.exception.RateLimiterException
-
+import f_log.*
 /**
  * 滑动窗口限流器
  */
 public class SlidingWindowRateLimiter<T> <: RateLimiter<T> {
-    private let mutex = ReentrantMutex()
+    private static let log = LoggerFactory.getLogger<SlidingWindowRateLimiter<T>>()
     private let queue: ArrayBlockingQueue<Mono>
+    private let timeout = AtomicOptionReference<Mono>()
+    private let unfinishedTasks = AtomicInt64(1)
     /**
      * @param timeout 时间窗口
      * @param limit 时间窗口内最大任务数
@@ -34,15 +37,27 @@ public class SlidingWindowRateLimiter<T> <: RateLimiter<T> {
         }
         queue = ArrayBlockingQueue<Mono>(limit)
         let timer = Timer.after(Duration.Zero){
-            queue.dequeue().time + window - MonoTime.now()
+            if(let Some(out) <- this.timeout.load() && !out.finished){
+                log.warn('sliding window for ${TypeInfos.get<T>()} has ${unfinishedTasks.fetchAdd(1)} tasks timeout.')
+            }
+            let mono = queue.dequeue()
+            timeout.store(mono)
+            mono.time + window - MonoTime.now()
         }
         Process.current.atExit(timer.cancel)
     }
     public func exec(default: ?T, task: () -> ?T): ?T{
         let mono = Mono()
+        func exec() {
+            try{
+                task()
+            }finally{
+                mono.finished = true
+            }
+        }
         if(queue.enqueue(mono, timeout)){
             mono.time = MonoTime.now()
-            if(let Some(x) <- task()){
+            if(let Some(x) <- exec()){
                 x
             }else{
                 default
@@ -54,7 +69,7 @@ public class SlidingWindowRateLimiter<T> <: RateLimiter<T> {
 }
 private class Mono {
     private var _time = None<MonoTime>
-    private let _count = AtomicInt64(0)
+    private let _finished = AtomicBool(false)
 
     mut prop time: MonoTime{
         get(){
@@ -62,12 +77,14 @@ private class Mono {
         }
         set(value){
             _time = value
-            _count.fetchAdd(1)
         }
     }
-    prop count: Int64{
+    mut prop finished: Bool {
         get(){
-            _count.fetchAdd(1)
+            _finished.load()
+        }
+        set(value){
+            _finished.store(value)
         }
     }
 }
