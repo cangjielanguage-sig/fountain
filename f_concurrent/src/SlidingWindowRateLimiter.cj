@@ -15,16 +15,14 @@ import std.reflect.TypeInfo
 import std.sync.{Timer, AtomicBool, AtomicInt64, AtomicOptionReference}
 import std.time.MonoTime
 
-import f_base.ZERO_TIMER
+import f_base.*
 import f_concurrent.exception.RateLimiterException
-import f_log.*
 /**
  * 滑动窗口限流器
  */
 public class SlidingWindowRateLimiter<T> <: RateLimiter<T> {
-    private static let log = LoggerFactory.getLogger<SlidingWindowRateLimiter<T>>()
     private let queue: ArrayBlockingQueue<Mono>
-    private let timeout = AtomicOptionReference<Mono>()
+    private let prev = AtomicOptionReference<Mono>()
     private let unfinishedTasks = AtomicInt64(1)
     /**
      * @param timeout 时间窗口
@@ -37,11 +35,11 @@ public class SlidingWindowRateLimiter<T> <: RateLimiter<T> {
         }
         queue = ArrayBlockingQueue<Mono>(limit)
         let timer = Timer.after(Duration.Zero){
-            if(let Some(out) <- this.timeout.load() && !out.finished){
-                log.warn('sliding window for ${TypeInfos.get<T>()} has ${unfinishedTasks.fetchAdd(1)} tasks timeout.')
+            if(let Some(out) <- this.prev.load() && !out.finished){
+                println('${unfinishedTasks.fetchAdd(1)} tasks are timeout in SlidingWindowRateLimiter for ${TypeInfos.get<T>()}.')
             }
             let mono = queue.dequeue()
-            timeout.store(mono)
+            prev.store(mono)
             mono.time + window - MonoTime.now()
         }
         Process.current.atExit(timer.cancel)
@@ -68,15 +66,16 @@ public class SlidingWindowRateLimiter<T> <: RateLimiter<T> {
     }
 }
 private class Mono {
-    private var _time = None<MonoTime>
+    private var _time = AtomicOptionReference<Box<MonoTime>>()
     private let _finished = AtomicBool(false)
 
     mut prop time: MonoTime{
         get(){
-            _time.getOrThrow()
+            while(_time.load().isNone()){}
+            _time.load().getOrThrow().value
         }
         set(value){
-            _time = value
+            _time.store(Box<MonoTime>(value))
         }
     }
     mut prop finished: Bool {

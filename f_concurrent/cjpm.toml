@@ -2,7 +2,6 @@
   f_base = {path = "../f_base"}
   f_collection = {path = "../f_collection"}
   f_exception = {path = "../f_exception"}
-  f_log = {path = "../f_log"}
 
 [package]
   cjc-version = "0.58.3"
