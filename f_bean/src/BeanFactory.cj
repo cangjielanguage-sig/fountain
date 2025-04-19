@@ -121,8 +121,10 @@ public class BeanFactory {
         }
     }
     private func initBeansIfNeed() {
-        for ((_, m) in beans) {
-            m.initIfNeed()
+        if(shouldInitBean){
+            for ((_, m) in beans) {
+                m.initIfNeed()
+            }
         }
     }
     internal func beanManagers(typeInfo: TypeInfo): Collection<BeanManager> {

@@ -44,7 +44,7 @@ public class BeanManager <: Comparable<BeanManager> {
         meta.condition.on(factory)
     }
     internal func initIfNeed(): Unit {
-        if (!meta.lazy && meta.scope.isSingleton) {
+        if (shouldInitBean && !meta.lazy && meta.scope.isSingleton) {
             _bean.store(new())
         }
     }
