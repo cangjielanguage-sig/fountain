@@ -15,28 +15,30 @@ public import f_aspect.exception.AspectBeforeException
  * 所有切面必须实现本接口，且必须被@AspectRoute修饰。
  */
 public interface Aspect {
-    func before(qualifiedFunc: String, args: Array<Any>): Array<Any> {
-        args
+    func before(funcInfo: InvocationFuncInfo): Unit {
+        
     }
-    func after(qualifiedFunc: String, args: Array<Any>, result: Any): Any {
+    func after(funcInfo: InvocationFuncInfo, result: Any): Any {
         result
     }
-    func around(qualifiedFunc: String, args: Array<Any>, point: () -> Any): Any {
-        point()
+    func around(funcInfo: InvocationFuncInfo, point: (Array<Any>) -> Any): Any {
+        point(funcInfo.args)
     }
-    func throwing(qualifiedFunc: String, args: Array<Any>, e: Exception): Exception {
+    func throwing(funcInfo: InvocationFuncInfo, e: Exception): Exception {
         e
     }
-    func final(): Unit{}
-    func proceed(qualifiedFunc: String, args: Array<Any>, point: () -> Any): Any {
+    func final(funcInfo: InvocationFuncInfo): Unit{}
+    func proceed(funcInfo: InvocationFuncInfo, point: (Array<Any>) -> Any): Any {
         try {
-            let newArgs = before(qualifiedFunc, args)
-            let result = around(qualifiedFunc, newArgs, point)
-            after(qualifiedFunc, args, result)
+            before(funcInfo)
+            var result = around(funcInfo, point)
+            result = after(funcInfo, result)
+            funcInfo.result = result
+            result
         } catch (e: Exception) {
-            throw throwing(qualifiedFunc, args, e)
+            throw throwing(funcInfo, e)
         } finally {
-            final()
+            final(funcInfo)
         }
     }
 }

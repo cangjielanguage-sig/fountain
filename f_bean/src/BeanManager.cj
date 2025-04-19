@@ -37,7 +37,7 @@ public class BeanManager <: Comparable<BeanManager> {
      * 如果有自定义BeanScope，调用这个函数生成销毁函数，
      * 同一自定义BeanScope且相同生命周期的的bean应在生命周期结束时统一调用本函数生成的函数销毁bean。
      */
-    public func generateDestroy(object: Object): () -> Unit {
+    internal func generateDestroy(object: Object): () -> Unit {
         {=> destroy(object)}
     }
     internal func on(factory: BeanFactory): Bool {

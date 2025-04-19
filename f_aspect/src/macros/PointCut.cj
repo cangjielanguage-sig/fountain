@@ -1,104 +1,74 @@
 /*
-    Copyright (c) [2022] [WuJingrun（吴京润）]
-    fountain is licensed under Mulan PSL v2.
-    You can use this software according to the terms and conditions of the Mulan PSL v2.
-    You may obtain a copy of Mulan PSL v2 at:
+   Copyright (c) [2022] [WuJingrun（吴京润）]
+   fountain is licensed under Mulan PSL v2.
+   You can use this software according to the terms and conditions of the Mulan PSL v2.
+   You may obtain a copy of Mulan PSL v2 at:
             http://license.coscl.org.cn/MulanPSL2
-    THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-    See the Mulan PSL v2 for more details.
- */
+   THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+   See the Mulan PSL v2 for more details.  
+*/
 macro package f_aspect.macros
 
 import std.ast.*
-import std.collection.*
-import std.sync.AtomicUInt64
-import f_aspect.*
 import f_aspect.exception.AspectException
 import f_macros.*
 
-let recursiveSerialGen = AtomicUInt64(1)
-/**
- * 可以将切面织入func
- * 被织入的函数返回类型必须明确指定，等有反射api再次尝试是否可以完成类型推断
- * 如果attr最后一个元素是RecursiveSensitive，意思是递归调用切点，切面只在首次调用时执行一次
- */
-public macro PointCut(attr: Tokens, input: Tokens): Tokens {
-    let decl = parseDecl(input)
-    match (decl) {
-        case d: CompositeDecl => weaveComposite(d)
-        case d: FuncDecl =>
-            let recursiveSerial = if (attr.size > 0 && attr[attr.size - 1].value == "RecursiveSensitive" &&
-                attr[attr.size - 1].kind == IDENTIFIER) {
-                recursiveSerialGen.fetchAdd(1)
-            } else {
-                0u64
+public macro Pointcut(attr: Tokens, input: Tokens): Tokens {
+    if(insideParentContext('Pointcut')){
+        return input
+    }
+    var decl = parseDecl(input)
+    while(let m: MacroExpandDecl <- decl){
+        decl = m.macroInputDecl
+    }
+    match(decl){
+        case x: FuncDecl =>
+            var funcDecl = `empty_tokens`
+            for(t in input){
+                if(t.kind == TokenKind.LCURL){
+                    break
+                }
+                funcDecl += t
             }
-            assertParentContext("PointCut")
-            weaveFunc(d, recursiveSerial)
-        case _ => throw AspectException(
-            "@PointCut cant modify class struct and func, but current is ${decl.keyword.kind}")
+            let params = x.funcParams
+            var argVars = quote()
+            var args = `lsquare`
+            for(i in 0 .. params.size){
+                let param = params[i]
+                let paramName = param.identifier
+                argVars += quote(
+                    let $paramName = (args[$(i)] as $(param.paramType)).getOrThrow()
+                ) + `nl`
+                if(i > 0){
+                    args += `comma`
+                }
+                args += paramName
+            }
+            args += `rsquare`
+            let qualifiedName = attr[0].value
+            let funcName = x.identifier.value
+            let funcType = try{
+                x.declType.toTokens()
+            }catch(_){
+                `empty_tokens`
+            }
+            let proceed = if(funcType.size == 0){
+                quote(Aspects.proceed(info, callee))
+            }else{
+                quote(Aspects.proceed<$funcType>(info, callee))
+            }
+            quote(
+                $funcDecl {
+                    func callee(args: Array<Any>){
+                        $argVars
+                        $(x.block.nodes)
+                    }
+                    let info = InvocationFuncInfo($qualifiedName, $funcName, $args)
+                    $proceed
+                }
+            )
+        case _ => 
+            diagReport(ERROR, input, '${decl.identifier.value} must be a func decl', '')
+            throw AspectException()
     }
-}
-
-func weaveComposite(decl: CompositeDecl) {
-    let decls = decl.body.decls
-    let identifier = decl.identifier
-    let generic = try {
-        decl.genericParam.toTokens()
-    } catch (e: Exception) {
-        `empty_tokens`
-    }
-    let currentTypeTokens = quote(
-        private static let __cUrrEnt_typE_InfO__ = TypeInfos.get<$identifier$generic>()
-    )
-    let currentTypeInfoDecl = VarDecl(currentTypeTokens)
-    decls.add(currentTypeInfoDecl, at: 0)
-    decl.toTokens()
-}
-
-func weaveFunc(decl: FuncDecl, recursive: UInt64) {
-    let body = decl.block
-    let nodes = ArrayList<Node>()
-    let block = Block()
-    block.lBrace = `lcurl`[0]
-    block.nodes = nodes
-    block.rBrace = `rcurl`[0]
-    decl.block = block
-    let params = decl.funcParams
-    var args = `lsquare`
-    var argTypes = `lsquare`
-    var i = 0
-    while (i < params.size) {
-        if (i > 0) {
-            args += `comma`
-            argTypes += `comma`
-        }
-        let p = params[i]
-        args += p.identifier
-        argTypes += quote(TypeInfos.get<$(p.paramType)>())
-        i++
-    }
-    args += `rsquare`
-    argTypes += `rsquare`
-    nodes.add(parseDecl(quote(
-        let args: Array<Any> = $args
-    )))
-    nodes.add(parseDecl(quote(
-        let argsTypes: Array<TypeInfo> = $argTypes
-    )))
-    nodes.add(parseDecl(quote(
-        let fnName = $(decl.identifier.value)
-    )))
-    nodes.add(parseDecl(quote(
-        let route = __cUrrEnt_typE_InfO__.qualifiedName + "." + fnName
-    )))
-    nodes.add(
-        parseDecl(
-        quote(
-        let returnType = TypeInfos.get<$(decl.declType)>()
-    )))
-    nodes.add(
-        parseExpr(quote(
-        AspectProceeder<$(decl.declType)>($recursive, route, args, argTypes, returnType)$(body))))
-    decl.toTokens()
 }

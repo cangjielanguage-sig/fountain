@@ -129,19 +129,34 @@ public class BeanFactory {
         beanTypeMap.get(typeInfo) ?? []
     }
     private func matches<T>(m: BeanManager) {
-        m.beanType.isSubtypeOf(TypeInfos.get<T>())
+        matches(TypeInfos.get<T>(), m)
+    }
+    private func matches(beanType: TypeInfo, m: BeanManager){
+        m.beanType.isSubtypeOf(beanType)
     }
     private func matches<T>(cond: StringCond, m: BeanManager) {
-        matches<T>(m) && cond.on(m.name)
+        matches(TypeInfos.get<T>(), cond, m)
+    }
+    private func matches(beanType: TypeInfo, cond: StringCond, m: BeanManager){
+        matches(beanType, m) && cond.on(m.name)
     }
     public func getFirst<T>(cond!: StringCond = IgnoreCond): ?T {
+        getFirst<T>(TypeInfos.get<T>(), cond: cond)
+    }
+    private func beanTypeIs<T>(beanType: TypeInfo){
+        if(!beanType.isSubtypeOf(TypeInfos.get<T>())){
+            throw BeanException('${beanType} is sub type of ${TypeInfos.get<T>()}')
+        }
+    }
+    public func getFirst<T>(beanType: TypeInfo, cond!: StringCond = IgnoreCond): ?T {
+        beanTypeIs<T>(beanType)
         match (cond) {
             case Exactly(n) => match (beans.get(n)) {
-                case Some(m) where matches<T>(m) => return m.bean as T
+                case Some(m) where matches(beanType, m) => return m.bean as T
                 case _ => ()
             }
-            case _ => match (beanTypeMap.get(TypeInfos.get<T>())) {
-                case Some(tree) => for (m in tree where matches<T>(cond, m)) {
+            case _ => match (beanTypeMap.get(beanType)) {
+                case Some(tree) => for (m in tree where matches(beanType, cond, m)) {
                     return m.bean as T
                 }
                 case _ => ()
@@ -150,37 +165,37 @@ public class BeanFactory {
         None
     }
     private func getAll<T>(cond: StringCond, put: (BeanManager) -> Unit) {
-        match (cond) {
-            case Exactly(n) => match (beans.get(n)) {
-                case Some(m) where matches<T>(m) => put(m)
-                case _ => ()
-            }
-            case _ => match (beanTypeMap.get(TypeInfos.get<T>())) {
-                case Some(tree) => for (m in tree where matches<T>(cond, m)) {
-                    put(m)
-                }
-                case _ => ()
-            }
+        getAll<T>(TypeInfos.get<T>(), cond, put)
+    }
+    private func getAll<T>(beanType: TypeInfo, cond: StringCond, put: (BeanManager) -> Unit) {
+        for(m in iterator<T>(beanType, cond: cond)){
+            put(m)
         }
     }
     public func getList<T>(cond!: StringCond = IgnoreCond): ArrayList<T> {
+        getList<T>(TypeInfos.get<T>(), cond: cond)
+    }
+    public func getList<T>(beanType: TypeInfo, cond!: StringCond = IgnoreCond): ArrayList<T> {
         let list = ArrayList<T>()
         func put(m: BeanManager) {
             if (let b: T <- m.bean) {
                 list.add(b)
             }
         }
-        getAll<T>(cond, put)
+        getAll<T>(beanType, cond, put)
         list
     }
     public func getMap<T>(cond!: StringCond = IgnoreCond): HashMap<String, T> {
+        getMap<T>(TypeInfos.get<T>(), cond: cond)
+    }
+    public func getMap<T>(beanType: TypeInfo, cond!: StringCond = IgnoreCond): HashMap<String, T> {
         let map = HashMap<String, T>()
         func put(m: BeanManager) {
             if (let b: T <- m.bean) {
                 map[m.name] = b
             }
         }
-        getAll<T>(cond, put)
+        getAll<T>(beanType, cond, put)
         map
     }
 
@@ -231,5 +246,21 @@ public class BeanFactory {
     }
     public func get<T>(name: String): ?T {
         getFirst<T>(cond: Exactly(name))
+    }
+    public func iterator<T>(cond!: StringCond = IgnoreCond): Iterator<BeanManager>{
+        iterator<T>(TypeInfos.get<T>(), cond: cond)
+    }
+    public func iterator<T>(beanType: TypeInfo, cond!: StringCond = IgnoreCond): Iterator<BeanManager> {
+        beanTypeIs<T>(beanType)
+        match (cond) {
+            case Exactly(n) => match (beans.get(n)) {
+                case Some(m) where matches(beanType, m) => [m].iterator()
+                case _ => EmptyIterator<BeanManager>.INSTANCE
+            }
+            case _ => match (beanTypeMap.get(beanType)) {
+                case Some(tree) => tree.iterator().filter{m => matches(beanType, cond, m)}
+                case _ => EmptyIterator<BeanManager>.INSTANCE
+            }
+        }
     }
 }
