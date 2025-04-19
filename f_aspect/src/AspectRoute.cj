@@ -138,40 +138,66 @@ public class TargetRouteRule <: RouteRule {
         funcInfo.typeInfo.isSubtypeOf(TypeInfos.get(targetQualifiedName))
     }
 }
-private func contains(annotations: Collection<Annotation>, annotationNames: Array<String>){
-    let set = HashSet<String>()
-    for(annotation in annotations){
-        set.add(TypeInfo.of(annotation).qualifiedName)
+private func contains(annotations: Collection<Annotation>, annotationNames: Array<String>, sub!: Bool = false){
+    if(sub){
+        let list = ArrayList<TypeInfo>()
+        let supers = ArrayList<TypeInfo>()
+        for(annotation in annotations){
+            list.add(TypeInfo.of(annotation))
+        }
+        for(name in annotationNames){
+            supers.add(TypeInfos.get(name))
+        }
+        for(superType in supers){
+            var matched = false
+            for(annotationType in list where annotationType.isSubtypeOf(superType)){
+                matched = true
+                break
+            }
+            if(!matched){
+                return false
+            }
+        }
+        true
+    }else{
+        let set = HashSet<String>()
+        for(annotation in annotations){
+            set.add(TypeInfo.of(annotation).qualifiedName)
+        }
+        for(name in annotationNames where !set.contains(name.trimAscii())){
+            return false
+        }
+        true
     }
-    for(name in annotationNames where !set.contains(name.trimAscii())){
-        return false
-    }
-    true
 }
 /**
  * 如果目标类型有指定类型的注解则目标类型的全部公共实例函数将被织入，本规则不适用通配符
- * 参数是注解类型的全限定名
+ * 参数是注解类型的全限定名，多个注解类名用|分割，每个注解类型都要能够跟目标类型的注解匹配到才返回true。
+ * sub是true时，要求目标类型的注解是指定注解的子类型，否则要求指定的注解全限定名是目标类型注解全限定名的子集。
  */
 public class TargetAnnotationRouteRule <: RouteRule {
     public const TargetAnnotationRouteRule(
-        public let annotationType: String
+        public let annotationType: String,
+        public let sub!: Bool = false
     ){}
     public func matches(funcInfo: InvocationFuncInfo): Bool {
         let annotationNames = annotationType.split('|')
-        contains(funcInfo.funcInfo.annotations, annotationNames)
+        contains(funcInfo.funcInfo.annotations, annotationNames, sub: sub)
     }
 }
 /**
  * 目标函数有指定类型的注解将被织入，本规则不适用通配符
- * 参数是注解类型的全限定名
+ * 参数是注解类型的全限定名，多个注解类名用|分割，每个注解类型都要能够跟目标函数的注解匹配到才返回true。
+ * sub是true时，要求目标函数的注解是指定注解的子类型，否则要求指定的注解的全限定名是目标函数注解全限定名的子集。
  */
 public class FuncAnnotationRouteRule <: RouteRule {
     public const FuncAnnotationRouteRule(
-        public let annotationTypes: String
+        public let annotationTypes: String,
+        public let sub!: Bool = false
     ){}
     public func matches(funcInfo: InvocationFuncInfo): Bool {
         let annotationNames = annotationTypes.split('|')
-        contains(funcInfo.funcInfo.annotations, annotationNames)
+        contains(funcInfo.funcInfo.annotations, annotationNames, sub: sub)
     }
 }
 /**
@@ -277,9 +303,9 @@ public class BeanNameRouteRule <: RouteRule {
         public let beanName: String
     ) {}
     public func matches(funcInfo: InvocationFuncInfo): Bool {
-        let keys = BeanFactory.instance.getMap<Object>(funcInfo.typeInfo).keys()
+        let managers = BeanFactory.instance.iterator<Object>(funcInfo.typeInfo)
         let regex = beanName.replace('*', '.*').replace('?', '.?').regex()
-        for(key in keys where regex.matched(key)){
+        for(m in managers where regex.matched(m.name) && m.beanType == funcInfo.typeInfo){
             return true
         }
         false
