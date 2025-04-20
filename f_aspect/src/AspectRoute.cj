@@ -34,7 +34,7 @@ public class AspectRoute <: RouteRule {
  * - .*、*.、.*. 表示任意包名
  * - .. 表示任意级别的包名
  * typeName参数是类型名，
- * argTypes参数是参数全限定名，多个参数之间用|分割，不适用通配符
+ * argTypes参数是参数全限定名，多个参数之间用,分割，不适用通配符
  * returnType参数是返回类型全限定名，不适用通配符
  * 类型全限定名不支持反射尚不支持的类型
 */
@@ -67,20 +67,20 @@ public class WithinRouteRule <: RouteRule {
         public let qualifiedName: String
     ){}
     public func matches(funcInfo: InvocationFuncInfo): Bool {
-        qualifiedName.replace('?', '.?').replace('*', '.*').regex().matched(funcInfo.typeInfo.qualifiedName)
+        Regex.wildcard(qualifiedName).matched(funcInfo.typeInfo.qualifiedName)
     }
 }
 /**
  * 因为切面修改以后的参数必须是原函数参数的子类型，原函数才能接收切面的修改，
  * 所以参数匹配argTypes的全部公共实例函数将被织入。
- * 多个参数使用|分割，*|表示忽略第一个参数，|*|表示忽略中间某个参数，|*表示忽略最后一个参数
+ * 多个参数使用,分割，*,表示忽略第一个参数，,*,表示忽略中间某个参数，,*表示忽略最后一个参数
  */
 public class ArgsRouteRule <: RouteRule {
     public const ArgsRouteRule(
         public let argTypes: String
     ){}
     public func matches(funcInfo: InvocationFuncInfo): Bool {
-        let types = argTypes.split('|')
+        let types = argTypes.split(',')
         let params = funcInfo.funcInfo.parameters
         for(i in 0 .. params.size where !TypeInfos.get(types[i]).isSubtypeOf(params[i].typeInfo)){
             return false
@@ -114,17 +114,21 @@ public class FuncTypeRouteRule <: AndRouteRule {
         this(ArgsRouteRule(argTypes), ReturnTypeRouteRule(returnType))
     }
 }
-public class FuncRouteRule <: RouteRule{
-    public const FuncRouteRule(
-        public let name: String,
-        public let funcType: FuncTypeRouteRule
-    ){}
-    public const init(name: String, argTypes: String, returnType: String){
-        this(name, FuncTypeRouteRule(argTypes, returnType))
-    }
+public class FuncNameRouteRule <: RouteRule {
+    public const FuncNameRouteRule(public let name: String){}
     public func matches(funcInfo: InvocationFuncInfo): Bool {
-        name.replace('?', '.?').replace('*', '.*').regex().matched(funcInfo.funcInfo.name) && 
-        funcType.matches(funcInfo)
+        Regex.wildcard(name).matched(funcInfo.funcInfo.name)
+    }
+}
+public class FuncRouteRule <: AndRouteRule{
+    public const init(
+        name: FuncNameRouteRule,
+        funcType: FuncTypeRouteRule
+    ){
+        super(name, funcType)
+    }
+    public const init(name: String, argTypes: String, returnType: String){
+        this(FuncNameRouteRule(name), FuncTypeRouteRule(argTypes, returnType))
     }
 }
 /**
@@ -146,7 +150,7 @@ private func contains(annotations: Collection<Annotation>, annotationNames: Arra
             list.add(TypeInfo.of(annotation))
         }
         for(name in annotationNames){
-            supers.add(TypeInfos.get(name))
+            supers.add(TypeInfos.get(name.trimAscii()))
         }
         for(superType in supers){
             var matched = false
@@ -172,22 +176,22 @@ private func contains(annotations: Collection<Annotation>, annotationNames: Arra
 }
 /**
  * 如果目标类型有指定类型的注解则目标类型的全部公共实例函数将被织入，本规则不适用通配符
- * 参数是注解类型的全限定名，多个注解类名用|分割，每个注解类型都要能够跟目标类型的注解匹配到才返回true。
+ * 参数是注解类型的全限定名，多个注解类名用&分割，每个注解类型都要能够跟目标类型的注解匹配到才返回true。
  * sub是true时，要求目标类型的注解是指定注解的子类型，否则要求指定的注解全限定名是目标类型注解全限定名的子集。
  */
 public class TargetAnnotationRouteRule <: RouteRule {
     public const TargetAnnotationRouteRule(
-        public let annotationType: String,
+        public let annotationTypes: String,
         public let sub!: Bool = false
     ){}
     public func matches(funcInfo: InvocationFuncInfo): Bool {
-        let annotationNames = annotationType.split('|')
+        let annotationNames = annotationTypes.split('&')
         contains(funcInfo.funcInfo.annotations, annotationNames, sub: sub)
     }
 }
 /**
  * 目标函数有指定类型的注解将被织入，本规则不适用通配符
- * 参数是注解类型的全限定名，多个注解类名用|分割，每个注解类型都要能够跟目标函数的注解匹配到才返回true。
+ * 参数是注解类型的全限定名，多个注解类名用&分割，每个注解类型都要能够跟目标函数的注解匹配到才返回true。
  * sub是true时，要求目标函数的注解是指定注解的子类型，否则要求指定的注解的全限定名是目标函数注解全限定名的子集。
  */
 public class FuncAnnotationRouteRule <: RouteRule {
@@ -196,16 +200,16 @@ public class FuncAnnotationRouteRule <: RouteRule {
         public let sub!: Bool = false
     ){}
     public func matches(funcInfo: InvocationFuncInfo): Bool {
-        let annotationNames = annotationTypes.split('|')
+        let annotationNames = annotationTypes.split('&')
         contains(funcInfo.funcInfo.annotations, annotationNames, sub: sub)
     }
 }
 /**
  * 目标函数参数都有指定类型注解将被织入，本规则不适用通配符
- * 参数是注解类型的全限定名，多个注解类型用|分割，每个注解类型依次对应一个参数。
+ * 参数是注解类型的全限定名，多个注解类型用&分割，每个注解类型依次对应一个参数。
  * 忽略某个参数的注解需要使用*占位，
- * 比如*|a.b.c.AnnotationType表示目标函数有两个参数，忽略第一个参数的注解，第二个参数必须有a.b.c.AnnotationType注解
- * a.Annotation1|*|b.Annotation2表示目标函数有三个参数，忽略第二个参数的注解，第一第三个参数必须有a.Annotation1和b.Annotation2
+ * 比如*,a.b.c.AnnotationType表示目标函数有两个参数，忽略第一个参数的注解，第二个参数必须有a.b.c.AnnotationType注解
+ * a.Annotation1,*,b.Annotation2表示目标函数有三个参数，忽略第二个参数的注解，第一第三个参数必须有a.Annotation1和b.Annotation2
  */
 public class ArgAnnotationsRouteRule <: RouteRule {
     public const ArgAnnotationsRouteRule(
@@ -213,7 +217,7 @@ public class ArgAnnotationsRouteRule <: RouteRule {
     ){}
     public func matches(funcInfo: InvocationFuncInfo): Bool {
         let params = funcInfo.funcInfo.parameters
-        let annotationNames = annotationTypes.split('|')
+        let annotationNames = annotationTypes.split('&')
         for(i in 0 .. params.size){
             let param = params[i]
             let annotationName = annotationNames[i].trimAscii()
@@ -229,7 +233,7 @@ public class ArgAnnotationsRouteRule <: RouteRule {
     }
 }
 /**
- * 目标函数任意一个参数拥有指定的全部注解将被织入，本规则不适用通配符，多个注解用|分割
+ * 目标函数任意一个参数拥有指定的全部注解将被织入，本规则不适用通配符，多个注解用,分割
  */
 public class AnyArgAnnotationsRouteRule <: RouteRule {
     public const AnyArgAnnotationsRouteRule(
@@ -237,7 +241,7 @@ public class AnyArgAnnotationsRouteRule <: RouteRule {
     ){}
     public func matches(funcInfo: InvocationFuncInfo): Bool {
         let params = funcInfo.funcInfo.parameters
-        let annotationNames = annotationTypes.split('|')
+        let annotationNames = annotationTypes.split(',')
         for(param in params where contains(param.annotations, annotationNames)){
             return true
         }
@@ -245,7 +249,7 @@ public class AnyArgAnnotationsRouteRule <: RouteRule {
     }
 }
 private func matches(asc: Bool, funcInfo: InvocationFuncInfo, annotationTypes: String){
-    let annotations = annotationTypes.split('|')
+    let annotations = annotationTypes.split(',')
     let params = funcInfo.funcInfo.parameters
     let range = if(asc){
         0 .. params.size
@@ -266,8 +270,8 @@ private func matches(asc: Bool, funcInfo: InvocationFuncInfo, annotationTypes: S
     true
 }
 /**
- * 目标函数开头的每个参数拥有指定注解将被织入，本规则不适用通配符，多个注解用|分割
- * 比如a.Annotation1|b.Annotation2 匹配下面的test1和test2
+ * 目标函数开头的每个参数拥有指定注解将被织入，本规则不适用通配符，多个注解用,分割
+ * 比如a.Annotation1,b.Annotation2 匹配下面的test1和test2
  * public func test1(@Annotation1 a: String, @Annotation2 b: String){}
  * public func test2(@Annotation1 a: String, @Annotation2 b: String, c: String){}
  * public func test3(@Annotation1 a: String, c: String, @Annotation2 b: String){}
@@ -281,8 +285,8 @@ public class ArgPrefixAnnotationsRouteRule <: RouteRule {
     }
 }
 /**
- * 目标函数结尾的每个参数拥有指定注解将被织入，本规则不适用通配符，多个注解用|分割
- * 比如a.Annotation1|b.Annotation2 匹配下面的test1和test2
+ * 目标函数结尾的每个参数拥有指定注解将被织入，本规则不适用通配符，多个注解用,分割
+ * 比如a.Annotation1,b.Annotation2 匹配下面的test1和test2
  * public func test1(@Annotation1 a: String, @Annotation2 b: String){}
  * public func test2(c: String, @Annotation1 a: String, @Annotation2 b: String){}
  * public func test3(@Annotation1 a: String, c: String, @Annotation2 b: String){}
@@ -304,7 +308,7 @@ public class BeanNameRouteRule <: RouteRule {
     ) {}
     public func matches(funcInfo: InvocationFuncInfo): Bool {
         let managers = BeanFactory.instance.iterator<Object>(funcInfo.typeInfo)
-        let regex = beanName.replace('*', '.*').replace('?', '.?').regex()
+        let regex = Regex.wildcard(beanName)
         for(m in managers where regex.matched(m.name) && m.beanType == funcInfo.typeInfo){
             return true
         }

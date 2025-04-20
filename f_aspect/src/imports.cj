@@ -15,5 +15,6 @@ internal import std.reflect.*
 internal import f_aspect.exception.*
 internal import f_base.*
 internal import f_bean.*
+internal import f_config.*
 internal import f_exception.TypeCastException
 internal import f_regex.*

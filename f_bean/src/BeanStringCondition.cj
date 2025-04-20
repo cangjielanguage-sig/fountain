@@ -44,7 +44,7 @@ public enum StringCond <: Equatable<StringCond> & Equatable<String> {
             case Exactly(v) => s == v
             case Prefix(v) => s.startsWith(v)
             case Suffix(v) => s.endsWith(v)
-            case Wildcard(v) => toRegex(v).matched(s)
+            case Wildcard(v) => Regex.wildcard(v).matched(s)
             case Regexp(v) => v.regex().matched(s)
         }
     }

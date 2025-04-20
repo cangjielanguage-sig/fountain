@@ -25,12 +25,14 @@ public interface ExtendRegex {
     static prop DURATION: Regex
     static prop IDENTIFIER: Regex
     static prop BASE64: Regex
+    static func wildcard(wildcard: String): Regex
     static func builder(): RegexBuilder
     static func builder(callback: (RegexBuilder) -> Unit): Regex
     func matched(input: String): Bool
     func split(input: String): Array<String>
     func replace(input: String, replacement: String, index!: Int64, matchDataIndex!: Int64): String
     func replaceAll(input: String, replacement: String, index!: Int64, matchDataIndex!: Int64): String
+
 }
 extend Regex <: ExtendRegex {
     public static prop INTEGER: Regex{
@@ -67,6 +69,11 @@ extend Regex <: ExtendRegex {
         get(){
             '^([+a-zA-Z0-9/]{4})+([+a-zA-Z0-9/]{2}==|[+a-zA-Z0-9/]{3}=)?$'.regex(solid: true)
         }
+    }
+    public static func wildcard(wildcard: String): Regex {
+        '^${wildcard}$'.replace('.', '\\.').replace('\\.\\.', '(\\.\\w+)#\\.')
+        .replace('\\.*\\.', '\\.\\w+\\.').replace('*', '\\w*').replace('?', '\\w?')
+        .replace('(\\.\\w+)#\\.', '(\\.\\w+)*\\.').regex()
     }
 
     public static func builder(): RegexBuilder {

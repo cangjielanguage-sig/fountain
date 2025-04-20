@@ -22,9 +22,6 @@ internal import f_data.*
 internal import f_regex.*
 public import f_bean.exception.*
 
-internal func toRegex(wildcard: String): Regex {
-    wildcard.replace('*', '.*').replace('?', '.?').regex()
-}
 /**
  * 初始化时使用命令行参数--initBeansIfNeed
  */

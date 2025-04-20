@@ -17,8 +17,11 @@ import f_aspect.*
 import f_base.*
 import f_bean.{BeanFactory, BeanMeta}
 import f_collection.*
+import f_orm.wrap.ORMConfig
 
-@AspectRoute[Route.WithAnnotation("f_orm.Transactional")]
+@AspectRoute[OrRouteRule(
+    FuncAnnotationRouteRule("f_orm.Transactional"),
+    ConfigExecutionRouteRule(ORMConfig.transactionalFuncExecution))]
 @BeanMeta
 public class TransactionAspect <: Aspect {
     public static func initialize(): Unit {
@@ -28,30 +31,9 @@ public class TransactionAspect <: Aspect {
     private let rollbackExceptions = ConcurrentHashMap<String, HashSet<TypeInfo>>()
     private let mutex = ReentrantMutex()
     private let transactionalMap = ConcurrentHashMap<String, Transactional>()
-    private func getTransactional(qualifiedFunc: String): ?Transactional {
-        if (let Some(transactional) <- transactionalMap.get(qualifiedFunc)) {
-            return transactional
-        } else {
-            synchronized(mutex) {
-                if (let Some(transactional) <- transactionalMap.get(qualifiedFunc)) {
-                    return transactional
-                } else {
-                    let annotations = Aspects.getAnnotations(qualifiedFunc)
-                    for (annotation in annotations where annotation is Transactional) {
-                        match (annotation) {
-                            case x: Transactional =>
-                                transactionalMap[qualifiedFunc] = x
-                                return x
-                            case _ => ()
-                        }
-                    }
-                }
-            }
-        }
-        None
-    }
-    public func proceed(qualifiedFunc: String, args: Array<Any>, point: () -> Any): Any {
-        let transactional = getTransactional(qualifiedFunc)
+    
+    public func proceed(funcInfo: InvocationFuncInfo, point: (Array<Any>) -> Any): Any {
+        let transactional = funcInfo.funcInfo.findAnnotation<Transactional>()
         var driverName = ""
         var propagation = Propagation.Required
         var isoLevel = None<TransactionIsoLevel>
@@ -84,8 +66,8 @@ public class TransactionAspect <: Aspect {
                         s
                     }else{
                         let set = HashSet<TypeInfo>()
-                        for(e in ex.split("|")){
-                            set.add(TypeInfos.get(e))
+                        for(e in ex.split("|") where e.size > 0){
+                            set.add(TypeInfos.get(e.trimAscii()))
                         }
                         rollbackExceptions[ex] = set
                         set

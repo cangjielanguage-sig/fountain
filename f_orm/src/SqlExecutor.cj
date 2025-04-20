@@ -274,15 +274,15 @@ public class SqlExecutor <: Resource & RootDAO {
         try {
             commit()
         } catch (ex: Exception) {
-            let re: BaseException
+            let re: BaseException = 
             match(ex){
                 case x: BaseException =>
                     x.addSuppressed(e)
-                    re = x
+                    x
                 case x =>
                     let txe = TransactionException(x)
                     txe.addSuppressed(e)
-                    re = txe
+                    txe
             }
             try {
                 rollback()
