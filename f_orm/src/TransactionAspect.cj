@@ -19,9 +19,7 @@ import f_bean.{BeanFactory, BeanMeta}
 import f_collection.*
 import f_orm.wrap.ORMConfig
 
-@AspectRoute[OrRouteRule(
-    FuncAnnotationRouteRule("f_orm.Transactional"),
-    ConfigExecutionRouteRule(ORMConfig.transactionalFuncExecution))]
+@AspectRoute[FuncAnnotationRouteRule("f_orm.Transactional") | ConfigExecutionRouteRule(ORMConfig.transactionalFuncExecution)]
 @BeanMeta
 public class TransactionAspect <: Aspect {
     public static func initialize(): Unit {
