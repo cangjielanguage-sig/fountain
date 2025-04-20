@@ -9,6 +9,10 @@
 */
 package f_aspect
 
+/**
+ * 拥有已经实现过的全部RouteRule，只是初始化参数是配置项
+ */
+
 private func getConfig(config: String): String {
     Config.getString(config).getOrThrow{AspectException('There is not a ${config} item.')}.trimAscii()
 }
