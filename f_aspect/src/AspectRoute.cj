@@ -40,30 +40,14 @@ public class AspectRoute <: RouteRule {
 */
 sealed interface RouteRule {
     func matches(funcInfo: InvocationFuncInfo): Bool
-    const operator func &(right: RouteRule): AndRouteRule{
-        AndRouteRule(DummyRouteRule.instance, DummyRouteRule.instance)
-    }
-    const operator func |(right: RouteRule): OrRouteRule{
-        OrRouteRule(DummyRouteRule.instance, DummyRouteRule.instance)
-    }
-    const operator func !(): NotRouteRule {
-        NotRouteRule(DummyRouteRule.instance)
-    }
-}
-private class DummyRouteRule <: RouteRule {
-    private const init(){}
-    static const instance = DummyRouteRule()
-    public func matches(funcInfo: InvocationFuncInfo): Bool {
-        true
-    }
 }
 /**
  * 匹配的公共实例函数将被织入
  */
-public class ExecutionRouteRule <: AbstractAndRouteRule & RouteRule {
-    public const ExecutionRouteRule(
-        private let within: WithinRouteRule,
-        private let funcType: FuncRouteRule
+public class ExecutionRouteRule <: AndRouteRule {
+    public const init(
+        within: WithinRouteRule,
+        funcType: FuncRouteRule
     ){
         super(within, funcType)
     }
@@ -72,15 +56,6 @@ public class ExecutionRouteRule <: AbstractAndRouteRule & RouteRule {
                       argTypes: String,
                       returnType: String){
         this(WithinRouteRule(qualifiedName), FuncRouteRule(funcName, argTypes, returnType))
-    }
-    public const operator func &(other: RouteRule): AndRouteRule {
-        AndRouteRule(ExecutionRouteRule(within, funcType), other)
-    }
-    public const operator func |(other: RouteRule): OrRouteRule {
-        OrRouteRule(ExecutionRouteRule(within, funcType), other)
-    }
-    public const operator func !(): NotRouteRule {
-        NotRouteRule(ExecutionRouteRule(within, funcType))
     }
 }
 /**
@@ -92,15 +67,6 @@ public class WithinRouteRule <: RouteRule {
     ){}
     public func matches(funcInfo: InvocationFuncInfo): Bool {
         Regex.wildcard(qualifiedName).matched(funcInfo.typeInfo.qualifiedName)
-    }
-    public const operator func &(other: RouteRule): AndRouteRule {
-        AndRouteRule(WithinRouteRule(qualifiedName), other)
-    }
-    public const operator func |(other: RouteRule): OrRouteRule {
-        OrRouteRule(WithinRouteRule(qualifiedName), other)
-    }
-    public const operator func !(): NotRouteRule {
-        NotRouteRule(WithinRouteRule(qualifiedName))
     }
 }
 /**
@@ -120,15 +86,6 @@ public class ArgsRouteRule <: RouteRule {
         }
         true
     }
-    public const operator func &(other: RouteRule): AndRouteRule {
-        AndRouteRule(ArgsRouteRule(argTypes), other)
-    }
-    public const operator func |(other: RouteRule): OrRouteRule {
-        OrRouteRule(ArgsRouteRule(argTypes), other)
-    }
-    public const operator func !(): NotRouteRule {
-        NotRouteRule(ArgsRouteRule(argTypes))
-    }
 }
 /**
  * 因为切面修改以后的返回类型必须是原函数返回类型的子类型，才能按原函数的返回类型返回，
@@ -141,37 +98,19 @@ public class ReturnTypeRouteRule <: RouteRule{
     public func matches(funcInfo: InvocationFuncInfo): Bool {
         TypeInfos.get(returnType).isSubtypeOf(funcInfo.funcInfo.returnType)
     }
-    public const operator func &(other: RouteRule): AndRouteRule {
-        AndRouteRule(ReturnTypeRouteRule(returnType), other)
-    }
-    public const operator func |(other: RouteRule): OrRouteRule {
-        OrRouteRule(ReturnTypeRouteRule(returnType), other)
-    }
-    public const operator func !(): NotRouteRule {
-        NotRouteRule(ReturnTypeRouteRule(returnType))
-    }
 }
 /**
  * 参数和返回类型匹配的全部公共实例函数将被织入
  */
-public class FuncTypeRouteRule <: AbstractAndRouteRule & RouteRule {
-    public const FuncTypeRouteRule(
-        private let argTypes: ArgsRouteRule,
-        private let returnType: ReturnTypeRouteRule
+public class FuncTypeRouteRule <: AndRouteRule {
+    public const init(
+        argTypes: ArgsRouteRule,
+        returnType: ReturnTypeRouteRule
     ){
         super(argTypes, returnType)
     }
     public const init(argTypes: String, returnType: String){
         this(ArgsRouteRule(argTypes), ReturnTypeRouteRule(returnType))
-    }
-    public const operator func &(other: RouteRule): AndRouteRule {
-        AndRouteRule(FuncTypeRouteRule(argTypes, returnType), other)
-    }
-    public const operator func |(other: RouteRule): OrRouteRule {
-        OrRouteRule(FuncTypeRouteRule(argTypes, returnType), other)
-    }
-    public const operator func !(): NotRouteRule {
-        NotRouteRule(FuncTypeRouteRule(argTypes, returnType))
     }
 }
 public class FuncNameRouteRule <: RouteRule {
@@ -179,34 +118,16 @@ public class FuncNameRouteRule <: RouteRule {
     public func matches(funcInfo: InvocationFuncInfo): Bool {
         Regex.wildcard(name).matched(funcInfo.funcInfo.name)
     }
-    public const operator func &(other: RouteRule): AndRouteRule {
-        AndRouteRule(FuncNameRouteRule(name), other)
-    }
-    public const operator func |(other: RouteRule): OrRouteRule {
-        OrRouteRule(FuncNameRouteRule(name), other)
-    }
-    public const operator func !(): NotRouteRule {
-        NotRouteRule(FuncNameRouteRule(name))
-    }
 }
-public class FuncRouteRule <: AbstractAndRouteRule & RouteRule{
-    public const FuncRouteRule(
-        private let name: FuncNameRouteRule,
-        private let funcType: FuncTypeRouteRule
+public class FuncRouteRule <: AndRouteRule{
+    public const init(
+        name: FuncNameRouteRule,
+        funcType: FuncTypeRouteRule
     ){
         super(name, funcType)
     }
     public const init(name: String, argTypes: String, returnType: String){
         this(FuncNameRouteRule(name), FuncTypeRouteRule(argTypes, returnType))
-    }
-    public const operator func &(other: RouteRule): AndRouteRule {
-        AndRouteRule(FuncRouteRule(name, funcType), other)
-    }
-    public const operator func |(other: RouteRule): OrRouteRule {
-        OrRouteRule(FuncRouteRule(name, funcType), other)
-    }
-    public const operator func !(): NotRouteRule {
-        NotRouteRule(FuncRouteRule(name, funcType))
     }
 }
 /**
@@ -218,15 +139,6 @@ public class TargetRouteRule <: RouteRule {
     ){}
     public func matches(funcInfo: InvocationFuncInfo): Bool {
         funcInfo.typeInfo.isSubtypeOf(TypeInfos.get(targetQualifiedName))
-    }
-    public const operator func &(other: RouteRule): AndRouteRule {
-        AndRouteRule(TargetRouteRule(targetQualifiedName), other)
-    }
-    public const operator func |(other: RouteRule): OrRouteRule {
-        OrRouteRule(TargetRouteRule(targetQualifiedName), other)
-    }
-    public const operator func !(): NotRouteRule {
-        NotRouteRule(TargetRouteRule(targetQualifiedName))
     }
 }
 private func contains(annotations: Collection<Annotation>, annotationNames: Array<String>, sub!: Bool = false){
@@ -275,15 +187,6 @@ public class TargetAnnotationRouteRule <: RouteRule {
         let annotationNames = annotationTypes.split('&')
         contains(funcInfo.funcInfo.annotations, annotationNames, sub: sub)
     }
-    public const operator func &(other: RouteRule): AndRouteRule {
-        AndRouteRule(TargetAnnotationRouteRule(annotationTypes, sub: sub), other)
-    }
-    public const operator func |(other: RouteRule): OrRouteRule {
-        OrRouteRule(TargetAnnotationRouteRule(annotationTypes, sub: sub), other)
-    }
-    public const operator func !(): NotRouteRule {
-        NotRouteRule(TargetAnnotationRouteRule(annotationTypes, sub: sub))
-    }
 }
 /**
  * 目标函数有指定类型的注解将被织入，本规则不适用通配符
@@ -298,15 +201,6 @@ public class FuncAnnotationRouteRule <: RouteRule {
     public func matches(funcInfo: InvocationFuncInfo): Bool {
         let annotationNames = annotationTypes.split('&')
         contains(funcInfo.funcInfo.annotations, annotationNames, sub: sub)
-    }
-    public const operator func &(other: RouteRule): AndRouteRule {
-        AndRouteRule(FuncAnnotationRouteRule(annotationTypes, sub: sub), other)
-    }
-    public const operator func |(other: RouteRule): OrRouteRule {
-        OrRouteRule(FuncAnnotationRouteRule(annotationTypes, sub: sub), other)
-    }
-    public const operator func !(): NotRouteRule {
-        NotRouteRule(FuncAnnotationRouteRule(annotationTypes, sub: sub))
     }
 }
 /**
@@ -336,15 +230,6 @@ public class ArgAnnotationsRouteRule <: RouteRule {
         }
         true
     }
-    public const operator func &(other: RouteRule): AndRouteRule {
-        AndRouteRule(ArgAnnotationsRouteRule(annotationTypes), other)
-    }
-    public const operator func |(other: RouteRule): OrRouteRule {
-        OrRouteRule(ArgAnnotationsRouteRule(annotationTypes), other)
-    }
-    public const operator func !(): NotRouteRule {
-        NotRouteRule(ArgAnnotationsRouteRule(annotationTypes))
-    }
 }
 /**
  * 目标函数任意一个参数拥有指定的全部注解将被织入，本规则不适用通配符，多个注解用,分割
@@ -360,15 +245,6 @@ public class AnyArgAnnotationsRouteRule <: RouteRule {
             return true
         }
         false
-    }
-    public const operator func &(other: RouteRule): AndRouteRule {
-        AndRouteRule(AnyArgAnnotationsRouteRule(annotationTypes), other)
-    }
-    public const operator func |(other: RouteRule): OrRouteRule {
-        OrRouteRule(AnyArgAnnotationsRouteRule(annotationTypes), other)
-    }
-    public const operator func !(): NotRouteRule {
-        NotRouteRule(AnyArgAnnotationsRouteRule(annotationTypes))
     }
 }
 private func matches(asc: Bool, funcInfo: InvocationFuncInfo, annotationTypes: String){
@@ -406,15 +282,6 @@ public class ArgPrefixAnnotationsRouteRule <: RouteRule {
     public func matches(funcInfo: InvocationFuncInfo): Bool {
         matches(true, funcInfo, annotationTypes)
     }
-    public const operator func &(other: RouteRule): AndRouteRule {
-        AndRouteRule(ArgPrefixAnnotationsRouteRule(annotationTypes), other)
-    }
-    public const operator func |(other: RouteRule): OrRouteRule {
-        OrRouteRule(ArgPrefixAnnotationsRouteRule(annotationTypes), other)
-    }
-    public const operator func !(): NotRouteRule {
-        NotRouteRule(ArgPrefixAnnotationsRouteRule(annotationTypes))
-    }
 }
 /**
  * 目标函数结尾的每个参数拥有指定注解将被织入，本规则不适用通配符，多个注解用,分割
@@ -429,15 +296,6 @@ public class ArgSuffixAnnotationsRouteRule <: RouteRule {
     ){}
     public func matches(funcInfo: InvocationFuncInfo): Bool {
         matches(false, funcInfo, annotationTypes)
-    }
-    public const operator func &(other: RouteRule): AndRouteRule {
-        AndRouteRule(ArgSuffixAnnotationsRouteRule(annotationTypes), other)
-    }
-    public const operator func |(other: RouteRule): OrRouteRule {
-        OrRouteRule(ArgSuffixAnnotationsRouteRule(annotationTypes), other)
-    }
-    public const operator func !(): NotRouteRule {
-        NotRouteRule(ArgSuffixAnnotationsRouteRule(annotationTypes))
     }
 }
 /**
@@ -455,38 +313,14 @@ public class BeanNameRouteRule <: RouteRule {
         }
         false
     }
-    public const operator func &(other: RouteRule): AndRouteRule {
-        AndRouteRule(BeanNameRouteRule(beanName), other)
-    }
-    public const operator func |(other: RouteRule): OrRouteRule {
-        OrRouteRule(BeanNameRouteRule(beanName), other)
-    }
-    public const operator func !(): NotRouteRule {
-        NotRouteRule(BeanNameRouteRule(beanName))
-    }
-}
-abstract sealed class AbstractAndRouteRule {
-    const AbstractAndRouteRule(public let left: RouteRule, public let right: RouteRule){}
-    public func matches(funcInfo: InvocationFuncInfo): Bool {
-        left.matches(funcInfo) && right.matches(funcInfo)
-    }
 }
 /**
  * 两个规则都匹配的公共实例函数将被织入
  */
-public open class AndRouteRule <: AbstractAndRouteRule & RouteRule {
-    public const AndRouteRule(private let _left: RouteRule, private let _right: RouteRule){
-        super(_left, _right)
-    }
-    
-    public const operator func &(other: RouteRule): AndRouteRule {
-        AndRouteRule(AndRouteRule(_left, _right), other)
-    }
-    public const operator func |(other: RouteRule): OrRouteRule {
-        OrRouteRule(AndRouteRule(_left, _right), other)
-    }
-    public const operator func !(): NotRouteRule {
-        NotRouteRule(AndRouteRule(_left, _right))
+public open class AndRouteRule <: RouteRule {
+    public const AndRouteRule(private let left: RouteRule, private let right: RouteRule){}
+    public func matches(funcInfo: InvocationFuncInfo): Bool {
+        left.matches(funcInfo) && right.matches(funcInfo)
     }
 }
 /**
@@ -497,15 +331,6 @@ public class OrRouteRule <: RouteRule {
     public func matches(funcInfo: InvocationFuncInfo): Bool {
         left.matches(funcInfo) || right.matches(funcInfo)
     }
-    public const operator func &(other: RouteRule): AndRouteRule {
-        AndRouteRule(OrRouteRule(left, right), other)
-    }
-    public const operator func |(other: RouteRule): OrRouteRule {
-        OrRouteRule(OrRouteRule(left, right), other)
-    }
-    public const operator func !(): NotRouteRule {
-        NotRouteRule(OrRouteRule(left, right))
-    }
 }
 /**
  * 对指定规则匹配结果取反。
@@ -514,14 +339,5 @@ public class NotRouteRule <: RouteRule {
     public const NotRouteRule(public let rule: RouteRule){}
     public func matches(funcInfo: InvocationFuncInfo): Bool {
         !rule.matches(funcInfo)
-    }
-    public const operator func &(other: RouteRule): AndRouteRule {
-        AndRouteRule(NotRouteRule(rule), other)
-    }
-    public const operator func |(other: RouteRule): OrRouteRule {
-        OrRouteRule(NotRouteRule(rule), other)
-    }
-    public const operator func !(): NotRouteRule {
-        NotRouteRule(NotRouteRule(rule))
     }
 }

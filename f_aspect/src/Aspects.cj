@@ -37,6 +37,7 @@ public class Aspects {
                     for(i in list.size - 1 ..= 0){
                         let aspected = f
                         f = {args => 
+                            funcInfo.setArgs(args)
                             BeanFactory.instance.get<Aspect>(list[i]).getOrThrow().proceed(funcInfo, aspected)
                         }
                     }

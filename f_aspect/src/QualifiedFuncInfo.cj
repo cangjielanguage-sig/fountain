@@ -13,17 +13,25 @@ public class InvocationFuncInfo {
     public var result = None<Any>
     public InvocationFuncInfo(
         private let _funcInfo: QualifiedFuncInfo,
-        public let args: Array<Any>
+        private var _args: Array<Any>
     ){}
     public init(
         qualifiedName: String,
         funcName: String,
         args: Array<Any>
     ){
-        this.args = args
+        this._args = args
         this._funcInfo = QualifiedFuncInfo(qualifiedName, funcName, Array<TypeInfo>(args.size){i => 
             TypeInfo.of(args[i])
         })
+    }
+    func setArgs(args: Array<Any>) {
+        this._args = args
+    }
+    public prop args: Array<Any> {
+        get(){
+            _args
+        }
     }
     public prop typeInfo: TypeInfo {
         get(){
