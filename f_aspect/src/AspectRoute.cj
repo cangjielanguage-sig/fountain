@@ -73,15 +73,22 @@ public class WithinRouteRule <: RouteRule {
  * 因为切面修改以后的参数必须是原函数参数的子类型，原函数才能接收切面的修改，
  * 所以参数匹配argTypes的全部公共实例函数将被织入。
  * 多个参数使用,分割，*,表示忽略第一个参数，,*,表示忽略中间某个参数，,*表示忽略最后一个参数
+ * **表示任意数量任意类型的参数
  */
 public class ArgsRouteRule <: RouteRule {
     public const ArgsRouteRule(
         public let argTypes: String
     ){}
     public func matches(funcInfo: InvocationFuncInfo): Bool {
+        if(argTypes == '**'){
+            return true
+        }
         let types = argTypes.split(',')
         let params = funcInfo.funcInfo.parameters
-        for(i in 0 .. params.size where !TypeInfos.get(types[i]).isSubtypeOf(params[i].typeInfo)){
+        if(params.size < types.size){
+            return false
+        }
+        for(i in 0 .. params.size where !(i < types.size && (types[i] == '*' && TypeInfos.get(types[i]).isSubtypeOf(params[i].typeInfo)) || (types[types.size - 1] == '**'))){
             return false
         }
         true
