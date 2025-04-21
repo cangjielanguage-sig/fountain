@@ -73,7 +73,11 @@ public class WithinRouteRule <: RouteRule {
  * 因为切面修改以后的参数必须是原函数参数的子类型，原函数才能接收切面的修改，
  * 所以参数匹配argTypes的全部公共实例函数将被织入。
  * 多个参数使用,分割，*,表示忽略第一个参数，,*,表示忽略中间某个参数，,*表示忽略最后一个参数
- * **表示任意数量任意类型的参数
+ * **表示任意数量任意类型的参数，可以**在本规则结尾。
+ * 本规则指定的明确参数类型如果是目标函数参数的子类型则判定通过，切面对参数的修改可以是目标函数参数的子类型或原类型。
+ * 规则指定的类型可以使用`<: TypeQualifiedName`表示目标函数参数是指定参数类型的子类型即符合规则。
+ * 规则指定的类型可以使用`TypeQualifiedName <:`表示指定参数类型是目标函数参数的子类型即符合规则。
+ * 按照仓颉的子类型关系，任意类型都是其自身的子类型。
  */
 public class ArgsRouteRule <: RouteRule {
     public const ArgsRouteRule(
@@ -88,7 +92,22 @@ public class ArgsRouteRule <: RouteRule {
         if(params.size < types.size){
             return false
         }
-        for(i in 0 .. params.size where !(i < types.size && (types[i] == '*' && TypeInfos.get(types[i]).isSubtypeOf(params[i].typeInfo)) || (types[types.size - 1] == '**'))){
+        func check(index: Int64): Bool {
+            let pt = params[i].typeInfo
+            if(i < types.size){
+                let t = types[i].trimAscii()
+                t == '*' || if (t.startsWith('<:')) {
+                    pt.isSubtypeOf(TypeInfos.get(t[2 ..].trimAscii()))
+                } else if (t.endsWith('<:')){
+                    TypeInfos.get(t[0 .. t.size - 2].trimAscii()).isSubtypeOf(pt)
+                }else{
+                    TypeInfos.get(t) == pt
+                }
+            }else{
+                types[types.size - 1] == '**'
+            }
+        }
+        for(i in 0 .. params.size where !check(index)){
             return false
         }
         true
