@@ -92,7 +92,7 @@ public class ArgsRouteRule <: RouteRule {
         if(params.size < types.size){
             return false
         }
-        func check(index: Int64): Bool {
+        func check(i: Int64): Bool {
             let pt = params[i].typeInfo
             if(i < types.size){
                 let t = types[i].trimAscii()
