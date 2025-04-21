@@ -107,7 +107,7 @@ public class ArgsRouteRule <: RouteRule {
                 types[types.size - 1] == '**'
             }
         }
-        for(i in 0 .. params.size where !check(index)){
+        for(i in 0 .. params.size where !check(i)){
             return false
         }
         true
