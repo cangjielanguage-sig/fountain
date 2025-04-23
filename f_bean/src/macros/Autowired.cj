@@ -28,17 +28,20 @@ public macro Autowired(input: Tokens): Tokens {
         }
     }
     match(parseDecl(input)){
-        case d: FuncDecl where insideParentContext('Constructor') => 
+        case d: FuncDecl where insideParentContext('Constructor') && isPublic(d) && (isStatic(d) || d.identifier == 'init') => 
             convert(d.funcParams)
             return d.toTokens()
 
-        case d: PrimaryCtorDecl where insideParentContext('Constructor') => 
+        case d: PrimaryCtorDecl where insideParentContext('Constructor') && isPublic(d) => 
             convert(d.funcParams)
             return d.toTokens()
         case d where d is FuncDecl || d is PrimaryCtorDecl => 
             report(input, 'If @Autowired modify a func or a primary constructor it must be inside @Constructor')
             throw BeanException()
-        case _ => ()
+        case d where d is FuncParam || d is VarDecl => ()
+        case _ => 
+            report(input, '@Autowired can modify constructor, static func, instance member variable or func param')
+            throw BeanException()
     }
     for (i in 0..input.size where input[i].kind == IDENTIFIER) {
         return autowired(input[i].value, input)
