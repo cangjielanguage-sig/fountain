@@ -35,7 +35,7 @@ public macro Autowired(input: Tokens): Tokens {
         case d: PrimaryCtorDecl where insideParentContext('Constructor') => 
             convert(d.funcParams)
             return d.toTokens()
-        case _ where d is FuncDecl || d is PrimaryCtorDecl => 
+        case d where d is FuncDecl || d is PrimaryCtorDecl => 
             report(input, 'If @Autowired modify a func or a primary constructor it must be inside @Constructor')
             throw BeanException()
         case _ => ()
