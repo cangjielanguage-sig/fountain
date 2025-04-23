@@ -28,12 +28,16 @@ public macro Autowired(input: Tokens): Tokens {
         }
     }
     match(parseDecl(input)){
-        case d: FuncDecl => 
+        case d: FuncDecl where insideParentContext('Constructor') => 
             convert(d.funcParams)
             return d.toTokens()
-        case d: PrimaryCtorDecl => 
+
+        case d: PrimaryCtorDecl where insideParentContext('Constructor') => 
             convert(d.funcParams)
             return d.toTokens()
+        case _ where d is FuncDecl || d is PrimaryCtorDecl => 
+            report(input, 'If @Autowired modify a func or a primary constructor it must be inside @Constructor')
+            throw BeanException()
         case _ => ()
     }
     for (i in 0..input.size where input[i].kind == IDENTIFIER) {
