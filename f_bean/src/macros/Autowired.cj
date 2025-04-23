@@ -15,6 +15,27 @@ macro package f_bean.macros
  * 把input内的第一个标识符作为beanName，精准匹配。
  */
 public macro Autowired(input: Tokens): Tokens {
+    func convert(params: ArrayList<FuncParam>){
+        for(i in 0 .. params.size){
+            let param = params[i]
+            if(param.toTokens().toString().replace(' ', '').contains('@Autowired')){
+                continue
+            }
+            params[i] = FuncParam(quote(
+                @Autowired
+                $param
+            ))
+        }
+    }
+    match(parseDecl(input)){
+        case d: FuncDecl => 
+            convert(d.funcParams)
+            return d.toTokens()
+        case d: PrimaryCtorDecl => 
+            convert(d.funcParams)
+            return d.toTokens()
+        case _ => ()
+    }
     for (i in 0..input.size where input[i].kind == IDENTIFIER) {
         return autowired(input[i].value, input)
     }
@@ -26,6 +47,11 @@ public macro Autowired(input: Tokens): Tokens {
  * 修饰需要注入bean的实例成员变量或构造函数形参、工厂函数形参。
  */
 public macro Autowired(attr: Tokens, input: Tokens): Tokens {
+    let decl = parseDecl(input)
+    if(decl is FuncDecl || decl is PrimaryCtorDecl){
+        report(input, '@Autowired with attr can only modify a instance member variable or a param')
+        throw BeanException()
+    }
     if (attr.size == 0) {
         quote(
          @Autowired
