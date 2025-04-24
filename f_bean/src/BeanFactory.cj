@@ -81,8 +81,8 @@ public class BeanFactory {
         var postConstruct: (Object) -> Unit = {o =>}
         var destroy: (Object) -> Unit = {o =>}
         for (fn in typeInfo.instanceFunctions) {
-            let closure: (Object) -> Unit = {
-                o => if (o is T) {
+            func closure(o: Object): Unit {
+                if (o is T) {
                     fn.apply(o)
                 } else {
                     throw BeanException('parameter does not match the type ${typeInfo}')
