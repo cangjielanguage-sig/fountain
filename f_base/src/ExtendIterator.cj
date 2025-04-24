@@ -19,10 +19,10 @@ public class AsyncIterator<T> <: Iterator<Future<?T>> {
         }
     }
 }
-public class OfTypeIterator<T, R> <: Iterator<R> {
-    public OfTypeIterator(private let itr: Iterator<T>){}
+public class TypeFilterIterator<T, R> <: Iterator<R> {
+    public TypeFilterIterator(private let itr: Iterator<T>, private let exactly: Bool){}
     public func next(): ?R {
-        for(v in itr where v is R){
+        for(v in itr where (exactly && TypeInfo.of(v) == TypeInfos.get<R>()) || v is R){
             return v as R
         }
         None
@@ -32,7 +32,7 @@ public interface ExtendIterator<T> {
     func async(): Iterator<Future<?T>>
     func min(cmp: (T, T) -> Ordering): ?T
     func max(cmp: (T, T) -> Ordering): ?T
-    func filterType<R>(): Iterator<R>
+    func filterType<R>(exactly!: Bool): Iterator<R>
     func flatten<R>(toThrow!: Bool): Iterator<R>
 }
 
@@ -54,8 +54,8 @@ extend<T> Iterator<T> <: ExtendIterator<T> {
         }
         r
     }
-    public func filterType<R>(): Iterator<R> {
-        OfTypeIterator<T, R>(this)
+    public func filterType<R>(exactly!: Bool = false): Iterator<R> {
+        TypeFilterIterator<T, R>(this, exactly)
     }
     public func flatten<R>(toThrow!: Bool = true): Iterator<R> {
         if (toThrow) {
