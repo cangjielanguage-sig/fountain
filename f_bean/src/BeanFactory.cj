@@ -80,6 +80,7 @@ public class BeanFactory {
         }
         var postConstruct: (Object) -> Unit = {o =>}
         var destroy: (Object) -> Unit = {o =>}
+        var i = 0
         for (fn in typeInfo.instanceFunctions) {
             func closure(o: Object): Unit {
                 if (o is T) {
@@ -89,9 +90,14 @@ public class BeanFactory {
                 }
             }
             if (fn.findAnnotation<PostConstruct>().isSome()) {
+                i++
                 postConstruct = closure
             } else if (fn.findAnnotation<Destroy>().isSome()) {
+                i++
                 destroy = closure
+            }
+            if(i == 2){
+                break
             }
         }
         doRegister<T>(meta, creator, postConstruct: postConstruct, destroy: destroy)
