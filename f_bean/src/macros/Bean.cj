@@ -15,9 +15,10 @@ macro package f_bean.macros
 public macro Bean(input: Tokens): Tokens {
     let decl = parseDecl(input)
     let identifier = decl.identifier
-    let (constructor, params) = match (decl) {
+    match (decl) {
         case x: ClassDecl =>
             let messages = getChildMessages('Constructor')
+            let (constructor, params) = 
             if (messages.isEmpty()) {
                 (quote($(x.identifier)), `empty_tokens`)
             } else {
@@ -30,16 +31,19 @@ public macro Bean(input: Tokens): Tokens {
                     (quote($(x.identifier).$constructor), params)
                 }
             }
-        case _ => report(input, 'macro @Bean accept a class decl')
+            let tokens = 
+            quote(
+                $input
+                let _ = BeanFactory.instance.register<$identifier>{
+                    $constructor($params)
+                }
+            )
+            tokens
+        case x: FuncDecl => 
+            assertParentContext('Configuration')
+            populateConstructor(decl, acceptCtor: false)
+        case _ => 
+            report(input, 'macro @Bean can modify a class decl or a func decl when it is inside @Configuration')
+            throw BeanException()
     }
-    let tokens = 
-    quote(
-        
-      $input
-
-      let _ = BeanFactory.instance.register<$identifier>{
-         $constructor($params)
-      }
-   )
-   tokens
 }

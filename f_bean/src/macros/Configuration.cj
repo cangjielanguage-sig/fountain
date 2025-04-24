@@ -21,16 +21,30 @@ public macro Configuration(input: Tokens): Tokens {
     match (decl) {
         case x: ClassDecl =>
             var tokens = `empty_tokens`
+            let messages = getChildMessages('Constructor')
+            configurationConstructor = 
+            if(messages.isEmpty()){
+                (quote($(x.identifier)), `empty_tokens`)
+            }else{
+                let message = messages[0]
+                let constructor = message.getTokens('constructor')
+                let params = message.getTokens('params')
+                if(constructor[0].value == 'init' || constructor[0].value == x.identifier.value){
+                    (quote($(x.identifier)), params)
+                }else if(message.getBool('static')){
+                    (quote($(x.identifier).$constructor), params)
+                }else{
+                    report(input, '@Constructor modify public constructor or public static func.')
+                    throw BeanException()
+                }
+            }
             for (message in getChildMessages('Bean')) {
                 var constructor = message.getTokens('constructor')
                 let params = message.getTokens('params')
-                if (constructor[0].value == 'init') {
-                    if (configurationConstructor.isNone()) {
-                        configurationConstructor = (quote($(x.identifier)), params)
-                    } else {
-                        report(input,
-                            '@Constructor can modify one constructor in which decl is modified by @Configuration')
-                    }
+                if (constructor[0].value == 'init' || constructor[0].value == x.identifier.value) {
+                    report(input,
+                        '@Bean can modify public func inside which decl is modified by @Configuration')
+                    throw BeanException()
                 } else if (message.getBool('static')) {
                     staticConstructors.add((quote($(x.identifier).$constructor), params))
                 } else {

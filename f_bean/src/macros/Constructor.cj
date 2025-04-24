@@ -22,18 +22,20 @@ public macro Constructor(input: Tokens): Tokens {
     if (insideParentContext('Bean') && !(decl is PrimaryCtorDecl || decl.identifier.value == 'init' || isStatic(decl))) {
         report(input, 'if macro @Constructor is inside @Bean, it must modify a static func decl or a constructor decl')
     }
+    populateConstructor(decl)
+    input
+}
+internal func populateConstructor(decl: Decl, acceptCtor!: Bool = true){
     let (constructor, params) = match (decl) {
-        case x: PrimaryCtorDecl where isPublic(x) => (quote(init), x.funcParams)
-        case x: FuncDecl where (isStatic(x) || x.identifier == 'init') && isPublic(x) => (quote($(x.identifier)), x
+        case x: PrimaryCtorDecl where acceptCtor && isPublic(x) => (quote(init), x.funcParams)
+        case x: FuncDecl where (isStatic(x) || (acceptCtor && x.identifier == 'init')) && isPublic(x) => (quote($(x.identifier)), x
                 .funcParams)
-        case _ => report(input, 'macro @Constructor accept constructor decl or static func decl')
+        case _ => report(decl.toTokens(), 'macro @Constructor accept constructor decl or static func decl')
     }
     setItem('static', isStatic(decl))
     setItem('constructor', constructor)
     setItem('params', populateParams(params))
-    input
 }
-
 internal func populateParams(params: ArrayList<FuncParam>) {
     let map = HashMap<String, Tokens>()
     populateParamMessages(map, 'Autowired')

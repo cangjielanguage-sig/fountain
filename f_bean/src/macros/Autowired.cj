@@ -18,13 +18,9 @@ public macro Autowired(input: Tokens): Tokens {
     func convert(params: ArrayList<FuncParam>){
         for(i in 0 .. params.size){
             let param = params[i]
-            if(param.toTokens().toString().replace(' ', '').contains('@Autowired')){
-                continue
+            if(!param.toTokens().toString().replace('@ ', '@').trimAscii().startsWith('@Autowired')){
+                params[i] = FuncParam(quote(@Autowired $param))
             }
-            params[i] = FuncParam(quote(
-                @Autowired
-                $param
-            ))
         }
     }
     match(parseDecl(input)){
@@ -36,15 +32,13 @@ public macro Autowired(input: Tokens): Tokens {
             convert(d.funcParams)
             return d.toTokens()
         case d where d is FuncDecl || d is PrimaryCtorDecl => 
-            report(input, 'If @Autowired modify a func or a primary constructor it must be inside @Constructor')
+            report(input, 'If @Autowired modify a func or a constructor, it must be inside @Constructor')
             throw BeanException()
-        case d where d is FuncParam || d is VarDecl => ()
+        case d where d is FuncParam || d is VarDecl => 
+            return autowired(d.identifier.value, input)
         case _ => 
-            report(input, '@Autowired can modify constructor, static func, instance member variable or func param')
+            report(input, '@Autowired can modify public constructor, public static func, instance member variable or func param')
             throw BeanException()
-    }
-    for (i in 0..input.size where input[i].kind == IDENTIFIER) {
-        return autowired(input[i].value, input)
     }
     report(input, 'input of current macro @Autowired must be a instance member variable or a func param.')
 }
@@ -55,15 +49,14 @@ public macro Autowired(input: Tokens): Tokens {
  */
 public macro Autowired(attr: Tokens, input: Tokens): Tokens {
     let decl = parseDecl(input)
-    if(decl is FuncDecl || decl is PrimaryCtorDecl){
-        report(input, '@Autowired with attr can only modify a instance member variable or a param')
-        throw BeanException()
-    }
     if (attr.size == 0) {
         quote(
          @Autowired
          $input
       )
+    } else if (decl is FuncDecl || decl is PrimaryCtorDecl){
+        report(input, '@Autowired with attr can only modify a instance member variable or a param')
+        throw BeanException()
     } else {
         autowired(attr, input)
     }
