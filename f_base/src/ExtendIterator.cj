@@ -32,7 +32,7 @@ public interface ExtendIterator<T> {
     func async(): Iterator<Future<?T>>
     func min(cmp: (T, T) -> Ordering): ?T
     func max(cmp: (T, T) -> Ordering): ?T
-    func ofType<R>(): Iterator<R>
+    func filterType<R>(): Iterator<R>
     func flatten<R>(toThrow!: Bool): Iterator<R>
 }
 
@@ -54,7 +54,7 @@ extend<T> Iterator<T> <: ExtendIterator<T> {
         }
         r
     }
-    public func ofType<R>(): Iterator<R> {
+    public func filterType<R>(): Iterator<R> {
         OfTypeIterator<T, R>(this)
     }
     public func flatten<R>(toThrow!: Bool = true): Iterator<R> {
