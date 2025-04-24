@@ -19,11 +19,21 @@ public class AsyncIterator<T> <: Iterator<Future<?T>> {
         }
     }
 }
-
+public class OfTypeIterator<T, R> <: Iterator<R> {
+    public OfTypeIterator(private let itr: Iterator<T>){}
+    public func next(): ?R {
+        for(v in itr where v is R){
+            return v as R
+        }
+        None
+    }
+}
 public interface ExtendIterator<T> {
     func async(): Iterator<Future<?T>>
     func min(cmp: (T, T) -> Ordering): ?T
     func max(cmp: (T, T) -> Ordering): ?T
+    func ofType<R>(): Iterator<R>
+    public func flatten<R>(toThrow!: Bool = true): Iterator<R>
 }
 
 extend<T> Iterator<T> <: ExtendIterator<T> {
@@ -44,7 +54,9 @@ extend<T> Iterator<T> <: ExtendIterator<T> {
         }
         r
     }
-    
+    public func ofType<R>(): Iterator<R> {
+        OfTypeIterator<T, R>(this)
+    }
     public func flatten<R>(toThrow!: Bool = true): Iterator<R> {
         if (toThrow) {
             flatMap<R> {
