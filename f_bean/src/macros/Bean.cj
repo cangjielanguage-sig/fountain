@@ -42,6 +42,7 @@ public macro Bean(input: Tokens): Tokens {
         case x: FuncDecl => 
             assertParentContext('Configuration')
             populateConstructor(decl, acceptCtor: false)
+            input
         case _ => 
             report(input, 'macro @Bean can modify a class decl or a func decl when it is inside @Configuration')
             throw BeanException()

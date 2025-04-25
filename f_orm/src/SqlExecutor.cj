@@ -36,6 +36,7 @@ public class SqlExecutor <: Resource & RootDAO {
     private static let blankRegex = Regex(#"\s{2,}"#)
     private static let current = ThreadLocal<HashMap<String, SqlExecutor>>()
     private var sql_ = String.empty
+    private var readOnly = false
     private var args: SqlArgs = SqlArgs.empty
     private var hasRealTx = false
     private var _connection_: Connection
@@ -60,6 +61,9 @@ public class SqlExecutor <: Resource & RootDAO {
         }
         set(value) {
             sql_ = blankRegex.matcher(value).replaceAll(" ")
+            if(!(value.trimAscii()[0 .. 6].toAsciiLower() == 'select')){
+                readOnly = false
+            }
         }
     }
 
@@ -616,18 +620,27 @@ public class SqlExecutor <: Resource & RootDAO {
     public func execute<T>(executor: (SqlExecutor) -> (T, Bool)): T {
         if (tx.isNone()) {
             execute<T> {
+                var txStatus = TransactionStatus.Unknown
                 try {
                     newTxAndBegin()
                     let result = executor(this)
                     if (result[1]) {
+                        ORM.hooks.beforeCommit(readOnly)
                         commit()
+                        txStatus = Committed
+                        ORM.hooks.afterCommit()
                         result[0]
                     } else {
                         throw ORMException()
                     }
                 } catch (e1: Exception) {
                     try {
-                        rollback()
+                        if(!(let Committed <- txStatus)){
+                            ORM.hooks.beforeRollback()
+                            rollback()
+                            txStatus = Rollback
+                            ORM.hooks.afterRollback()
+                        }
                     } catch (e2: Exception) {
                         let e = ORMException(e2)
                         e.addSuppressed(e1)
@@ -637,6 +650,8 @@ public class SqlExecutor <: Resource & RootDAO {
                         throw e1
                     }
                     throw ORMException(e1)
+                } finally {
+                    ORM.hooks.afterComplete(txStatus)
                 }
             }
         } else {

@@ -27,6 +27,11 @@ public class ORM {
     private static let logger = LoggerFactory.getLogger<ORM>()
     private static var default = String.empty
     private static let datasources = ConcurrentHashMap<String, Datasource>()
+    static let hooks = TransactionHooks()
+
+    public static func registerTransactionHook<T>(hook: T): Unit where T <: TransactionHook {
+        hooks.register<T>(hook)
+    }
 
     public static func register(datasource: NamedDatasource, default!: Bool = true): Unit {
         if (datasources.isEmpty()) {

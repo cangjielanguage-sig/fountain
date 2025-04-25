@@ -30,9 +30,9 @@ public interface RootDAO {
             ChooseCondition(executor)
         }
     }
-    func loop<I, T>(values: I): LoopCondition<I, T> where I <: Iterable<T> {
-        Condition.loop<I, T>(values, executor)
-    }
+    // func loop<I, T>(values: I): LoopCondition<I, T> where I <: Iterable<T> {
+    //     Condition.loop<I, T>(values, executor)
+    // }
     func `set`(partial: () -> String): String {
         Condition.`set`(partial)
     }
