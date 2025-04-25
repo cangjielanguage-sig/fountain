@@ -9,8 +9,17 @@
 */
 package f_orm
 
-public enum TransactionStatus{
+public enum TransactionStatus {
     | Unknown
     | Committed
     | Rollback
+
+    public prop isCommitted: Bool {
+        get(){
+            match(this){
+                case Committed => true
+                case _ => false
+            }
+        }
+    }
 }
