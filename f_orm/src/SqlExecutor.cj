@@ -635,11 +635,13 @@ public class SqlExecutor <: Resource & RootDAO {
                     }
                 } catch (e1: Exception) {
                     try {
-                        if(!(let Committed <- txStatus)){
-                            ORM.hooks.beforeRollback()
-                            rollback()
-                            txStatus = Rollback
-                            ORM.hooks.afterRollback()
+                        match(txStatus){
+                            case Committed => ()
+                            case _ =>
+                                ORM.hooks.beforeRollback()
+                                rollback()
+                                txStatus = Rollback
+                                ORM.hooks.afterRollback()
                         }
                     } catch (e2: Exception) {
                         let e = ORMException(e2)
