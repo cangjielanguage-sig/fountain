@@ -9,17 +9,37 @@
 */
 package f_orm
 
-public enum TransactionStatus {
+public enum TransactionStatus <: Equatable<TransactionStatus> & ToString {
     | Unknown
     | Committed
     | Rollback
 
+    public operator func ==(other: TransactionStatus): Bool {
+        match((this, other)){
+            case (Unknown, Unknown) | (Committed, Committed) | (Rollback, Rollback) => true
+            case _ => false
+        }
+    }
+    public prop isUnknown: Bool {
+        get(){
+            this == Unknown
+        }
+    }
     public prop isCommitted: Bool {
         get(){
-            match(this){
-                case Committed => true
-                case _ => false
-            }
+            this == Committed
+        }
+    }
+    public prop isRollback: Bool {
+        get(){
+            this == Rollback
+        }
+    }
+    public func toString(): String {
+        match(this) {
+            case Unknown => 'Unknown'
+            case Committed => 'Committed'
+            case Rollback => 'Rollback'
         }
     }
 }
