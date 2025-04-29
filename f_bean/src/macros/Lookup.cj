@@ -30,7 +30,7 @@ public macro Lookup(attr: Tokens, input: Tokens): Tokens{
         tokens += t
     }
     let beanType = FuncDecl(input).declType
-    let body = genAutowiredMessage(beanName, '', typbeanTypeeNode)[1]
+    let body = genAutowiredMessage(beanName, '', beanType, None)[1]
     quote(
         $tokens {
             $body
