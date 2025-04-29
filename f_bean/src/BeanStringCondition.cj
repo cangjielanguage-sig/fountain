@@ -12,7 +12,7 @@ package f_bean
 /**
  * 字符串满足指定条件返回true
  */
-public enum StringCond <: Equatable<StringCond> & Equatable<String> {
+public enum StringCond <: Equatable<StringCond> & Equatable<String> & ToString {
     /**
      * 忽略本条件
      */
@@ -37,6 +37,17 @@ public enum StringCond <: Equatable<StringCond> & Equatable<String> {
      * 传入on的字符串符合指定正则表达式
      */
     | Regexp(String)
+
+    public func toString(){
+        match(this){
+            case IgnoreCond => 'IgnoreCond'
+            case Exactly(n) => 'Exactly(${n})'
+            case Prefix(n) => 'Prefix(${n})'
+            case Suffix(n) => 'Suffix(${n})'
+            case Wildcard(n) => 'Wildcard(${n})'
+            case Regexp(n) => 'Regexp(${n})'
+        }
+    }
 
     public func on(s: String): Bool {
         match (this) {
