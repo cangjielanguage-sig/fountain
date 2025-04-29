@@ -76,7 +76,7 @@ private func genParamMessage(beanName: Tokens, input: Tokens): (String, Tokens) 
     } else { //成员变量形参
         primaryCtorParam(input)
     }
-    genAutowiredMessage(input, beanName, param)
+    genAutowiredMessage(beanName, param)
 }
 
 private func autowired(beanName: String, input: Tokens): Tokens {
@@ -90,7 +90,7 @@ private func autowired(beanName: Tokens, input: Tokens): Tokens {
         input
     } else { //成员变量
         let decl = VarDecl(input)
-        let (identifier, value) = genAutowiredMessage(input, beanName, decl.identifier.value, decl.declType,
+        let (identifier, value) = genAutowiredMessage(beanName, decl.identifier.value, decl.declType,
             if (decl.assign.kind == ASSIGN) {
                 decl.expr
             } else {
@@ -102,8 +102,8 @@ private func autowired(beanName: Tokens, input: Tokens): Tokens {
     }
 }
 
-private func genAutowiredMessage(input: Tokens, beanName: Tokens, param: FuncParam): (String, Tokens) {
-    genAutowiredMessage(input, beanName, param.identifier.value, param.paramType,
+private func genAutowiredMessage(beanName: Tokens, param: FuncParam): (String, Tokens) {
+    genAutowiredMessage(beanName, param.identifier.value, param.paramType,
         if (param.assign.kind == ASSIGN) {
             param.expr
         } else {
@@ -111,7 +111,7 @@ private func genAutowiredMessage(input: Tokens, beanName: Tokens, param: FuncPar
         })
 }
 
-private func genAutowiredMessage(input: Tokens, beanName: Tokens, identifier: String, typeNode: TypeNode, expr: ?Expr): (String, 
+internal func genAutowiredMessage(beanName: Tokens, identifier: String, typeNode: TypeNode, expr: ?Expr): (String, 
     Tokens) {
     let typeTokens = typeNode.toTokens()
     let typeIdentifier = typeTokens[0].value

@@ -1,5 +1,8 @@
 [dependencies]
+  charset4cj = { git = "https://gitcode.com/Cangjie-TPC/charset4cj.git", branch = "develop", version = "0.0.1"}
+  f_base = {path = "../f_base"}
   f_data = {path = "../f_data"}
+  f_exception = {path = "../f_exception"}
 [package]
   cjc-version = "0.58.3"
   compile-option = "-O2"

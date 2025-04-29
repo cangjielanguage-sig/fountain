@@ -164,7 +164,7 @@ public let `illegal` = quote($(Token(ILLEGAL)))
 
 public let `any` = quote($(Token(IDENTIFIER, "Any")))
 public let `array` = quote($(Token(IDENTIFIER, "Array")))
-public let `empty_tokens` = Tokens()
+public let `empty_tokens` = quote()
 public let `empty_string` = quote($(Token(STRING_LITERAL, String.empty)))
 
 

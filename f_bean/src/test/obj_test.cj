@@ -5,21 +5,24 @@
     You may obtain a copy of Mulan PSL v2 at:
             http://license.coscl.org.cn/MulanPSL2
     THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-    See the Mulan PSL v2 for more details.
- */
-package f_bean.exception
+    See the Mulan PSL v2 for more details.  
+*/
+package f_bean.test
 
-import f_exception.BaseException
+import f_bean.*
+import f_bean.macros.*
 
-public class BeanException <: BaseException {
-    public init() {}
-    public init(message: String) {
-        super(message)
+@Bean
+public class A <: ToString {
+    public func toString(){
+        'A'
     }
-    public init(caused: Exception) {
-        super(caused)
-    }
-    public init(message: String, caused: Exception) {
-        super(message, caused)
+}
+@Bean
+public class B <: ToString {
+    @Constructor
+    public B(public let a: A){}
+    public func toString(){
+        'B(${a})'
     }
 }

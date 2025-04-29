@@ -10,7 +10,7 @@
   f_regex = {path = "../f_regex"}
 [package]
   cjc-version = "0.58.3"
-  compile-option = ""
+  compile-option = "--debug-macro"
   description = "nothing here"
   link-option = ""
   name = "f_bean"

@@ -11,23 +11,7 @@ package f_bean.test
 
 import std.unittest.*
 import std.unittest.testmacro.*
-import f_bean.*
-import f_bean.macros.*
 
-@Bean
-public class A <: ToString {
-    public func toString(){
-        'A'
-    }
-}
-@Bean
-public class B <: ToString {
-    @Constructor
-    public B(public let a: A){}
-    public func toString(){
-        'B(${a})'
-    }
-}
 @Test
 public class BeanTest{
     @TestCase

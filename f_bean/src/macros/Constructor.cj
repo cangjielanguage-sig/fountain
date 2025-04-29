@@ -18,7 +18,18 @@ public macro Constructor(input: Tokens): Tokens {
     if (!(insideParentContext('Bean') || insideParentContext('Configuration'))) {
         report(input, 'macro @Constructor must be inside @Bean or @Configuration')
     }
-    let decl = parseDecl(input)
+    let decl = try{
+        parseDecl(input)
+    }catch(e1: Exception) {
+        try{
+            PrimaryCtorDecl(input)
+        }catch(e2: Exception){
+            report(input, 'current input is not a decl')
+            let e = BeanException(e1)
+            e.addSuppressed(e2)
+            throw e
+        }
+    }
     if (insideParentContext('Bean') && !(decl is PrimaryCtorDecl || decl.identifier.value == 'init' || isStatic(decl))) {
         report(input, 'if macro @Constructor is inside @Bean, it must modify a static func decl or a constructor decl')
     }

@@ -9,7 +9,10 @@
  */
 package f_bean
 
-private func toExactly(primary: String, secondly: String): StringCond {
+private func toStringCond(primary: String, secondly: String): StringCond {
+    if(primary.isEmpty() && secondly.isEmpty()){
+        return IgnoreCond
+    }
     Exactly(if(primary.isEmpty()){
         secondly
     }else{
@@ -91,7 +94,7 @@ public func getBean<T>(primary: StringCond, secondly: String): ?T where T <: Obj
 }
 
 public func getBean<T>(primary: String, secondly: String): ?T where T <: Object {
-    getBean<T>(toExactly(primary, secondly), secondly)
+    getBean<T>(toStringCond(primary, secondly), secondly)
 }
 
 public func getBean<T>(primary: StringCond, secondly: String, default: ?T): ?T where T <: Object {
@@ -120,7 +123,7 @@ public func getBeanList<T>(primary: StringCond, secondly: String): ArrayList<T> 
 }
 
 public func getBeanList<T>(primary: String, secondly: String): ArrayList<T> where T <: Object {
-    getBeanList<T>(toExactly(primary, secondly), secondly)
+    getBeanList<T>(toStringCond(primary, secondly), secondly)
 }
 
 public func getBeanList<T>(primary: StringCond, secondly: String, default: ArrayList<T>): ArrayList<T> where T <: Object {
@@ -133,7 +136,7 @@ public func getBeanList<T>(primary: StringCond, secondly: String, default: Array
 }
 
 public func getBeanList<T>(primary: String, secondly: String, default: ArrayList<T>): ArrayList<T> where T <: Object {
-    getBeanList<T>(toExactly(primary, secondly), secondly)
+    getBeanList<T>(toStringCond(primary, secondly), secondly)
 }
 
 public func getBeanMap<T>(primary: StringCond, secondly: String): HashMap<String, T> where T <: Object {
