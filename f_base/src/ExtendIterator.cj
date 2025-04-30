@@ -32,8 +32,8 @@ public interface ExtendIterator<T> {
     func async(): Iterator<Future<?T>>
     func min(cmp: (T, T) -> Ordering): ?T
     func max(cmp: (T, T) -> Ordering): ?T
-    // func filterType<R>(exactly!: Bool): Iterator<R>
-    // func flatten<R>(toThrow!: Bool): Iterator<R>
+    func filterType<R>(exactly!: Bool): Iterator<R>
+    func flatten<R>(toThrow!: Bool): Iterator<R>
 }
 
 extend<T> Iterator<T> <: ExtendIterator<T> {

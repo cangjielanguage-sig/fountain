@@ -22,6 +22,10 @@ public interface RootDAO {
      */
     prop executor: SqlExecutor
 
+    func arg(value: Any): String {
+        executor.addArg(value)
+        '?'
+    }
     func meet(condition: Bool, partial: String): MeetCondition {
         MeetCondition(condition, partial, executor)
     }
@@ -30,9 +34,9 @@ public interface RootDAO {
             ChooseCondition(executor)
         }
     }
-    // func loop<I, T>(values: I): LoopCondition<I, T> where I <: Iterable<T> {
-    //     Condition.loop<I, T>(values, executor)
-    // }
+    func loop<I, T>(values: I): LoopCondition<I, T> where I <: Iterable<T> {
+        Condition.loop<I, T>(values, executor)
+    }
     func `set`(partial: () -> String): String {
         Condition.`set`(partial)
     }
