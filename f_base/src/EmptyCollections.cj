@@ -12,16 +12,22 @@ package f_base
 import std.collection.{Set, Map, EquatableCollection}
 
 public class EmptyArray<T> {
-    public static let INSTANCE = Array<T>()
+    // public static let INSTANCE = Array<T>() 
+    public static func INSTANCE() {
+        Array<T>()
+    }
     private init() {}
 }
 public class EmptySet<T> <: Set<T> where T <: Equatable<T> {
-    public static let INSTANCE = EmptySet<T>()
+    // public static let INSTANCE = EmptySet<T>()
+    public static func INSTANCE(){
+        EmptySet<T>()
+    }
 
     private init() {}
 
     public func iterator(): Iterator<T> {
-        EmptyIterator<T>.INSTANCE
+        EmptyIterator<T>.INSTANCE()
     }
     public func isEmpty(): Bool {
         true
@@ -127,21 +133,30 @@ public class EmptySet<T> <: Set<T> where T <: Equatable<T> {
     }
 }
 public class EmptyIterator<T> <: Iterator<T> {
-    public static let INSTANCE = EmptyIterator<T>()
+    // public static let INSTANCE = EmptyIterator<T>()
+    public static func INSTANCE(){
+        EmptyIterator<T>()
+    }
     private init() {}
     public func next(): Option<T> {
         None<T>
     }
 }
 public class EmptyIterable<T> <: Iterable<T> {
-    public static let INSTANCE = EmptyIterable<T>()
+    // public static let INSTANCE = EmptyIterable<T>()
+    public static func INSTANCE(){
+        EmptyIterable<T>()
+    }
     private init() {}
     public func iterator(): Iterator<T> {
-        EmptyIterator<T>.INSTANCE
+        EmptyIterator<T>.INSTANCE()
     }
 }
 public class EmptyMap<K, V> <: Map<K, V> & Bucket<K, V> where K <: Equatable<K> {
-    public static let INSTANCE = EmptyMap<K, V>()
+    // public static let INSTANCE = EmptyMap<K, V>()
+    public static func INSTANCE(){
+        EmptyMap<K, V>()
+    }
 
     private init() {}
 
@@ -196,6 +211,12 @@ public class EmptyMap<K, V> <: Map<K, V> & Bucket<K, V> where K <: Equatable<K> 
      */
     public func add(all!: Collection<(K, V)>): Unit {
         ()
+    }
+    public func addIfAbsent(key: K, value: V): ?V {
+        None<V>
+    }
+    public func replace(key: K, value: V): ?V {
+        None<V>
     }
 
     /**
@@ -262,7 +283,7 @@ public class EmptyMap<K, V> <: Map<K, V> & Bucket<K, V> where K <: Equatable<K> 
      * 返回值 Keys<K> - 保存所有返回的 key
      */
     public func keys(): EquatableCollection<K> {
-        EmptyEquatableCollection<K>.INSTANCE
+        EmptyEquatableCollection<K>.INSTANCE()
     }
 
     /**
@@ -270,7 +291,7 @@ public class EmptyMap<K, V> <: Map<K, V> & Bucket<K, V> where K <: Equatable<K> 
      * 返回值 Values<V> - 保存所有返回的 value
      */
     public func values(): Collection<V> {
-        EmptyCollection<V>.INSTANCE
+        EmptyCollection<V>.INSTANCE()
     }
 
     /**
@@ -296,7 +317,7 @@ public class EmptyMap<K, V> <: Map<K, V> & Bucket<K, V> where K <: Equatable<K> 
      * 返回值 Iterator<(K,V)> - Map 的迭代器
      */
     public func iterator(): Iterator<(K, V)> {
-        EmptyIterator<(K, V)>.INSTANCE
+        EmptyIterator<(K, V)>.INSTANCE()
     }
     public func toArray(): Array<(K, V)> {
         []
@@ -320,7 +341,10 @@ public class EmptyMapEntryView<K, V> <: MapEntryView<K, V> {
     }
 }
 public class EmptyEquatableCollection<K> <: EquatableCollection<K> where K <: Equatable<K> {
-    public static let INSTANCE = EmptyEquatableCollection<K>()
+    // public static let INSTANCE = EmptyEquatableCollection<K>()
+    public static func INSTANCE(){
+        EmptyEquatableCollection<K>()
+    }
     private init() {}
 
     /**
@@ -328,7 +352,7 @@ public class EmptyEquatableCollection<K> <: EquatableCollection<K> where K <: Eq
      * 返回值 Iterator<K> - Keys 的迭代器
      */
     public func iterator(): Iterator<K> {
-        EmptyIterator<K>.INSTANCE
+        EmptyIterator<K>.INSTANCE()
     }
 
     /**
@@ -373,7 +397,10 @@ public class EmptyEquatableCollection<K> <: EquatableCollection<K> where K <: Eq
 }
 
 public class EmptyCollection<T> <: Collection<T> {
-    public static let INSTANCE = EmptyCollection<T>()
+    // public static let INSTANCE = EmptyCollection<T>()
+    public static func INSTANCE(){
+        EmptyCollection<T>()
+    }
     private init() {}
 
     /**
@@ -399,20 +426,23 @@ public class EmptyCollection<T> <: Collection<T> {
      * 返回值 Array<T> - 转换后的数组
      */
     public func toArray(): Array<T> {
-        EmptyArray<T>.INSTANCE
+        EmptyArray<T>.INSTANCE()
     }
     public func iterator(): Iterator<T> {
-        EmptyIterator<T>.INSTANCE
+        EmptyIterator<T>.INSTANCE()
     }
 }
 public class EmptyList<T> <: List<T> {
-    public static let INSTANCE = EmptyList<T>()
+    // public static let INSTANCE = EmptyList<T>()
+    public static func INSTANCE(){
+        EmptyList<T>()
+    }
     private init(){}
     public func isEmpty(): Bool {
         true
     }
     public func iterator(): Iterator<T> {
-        EmptyIterator<T>.INSTANCE
+        EmptyIterator<T>.INSTANCE()
     }
     public prop size: Int64 {
         get() {

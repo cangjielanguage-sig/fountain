@@ -148,8 +148,8 @@ public class ORMConfig {
     }
 
     public static func transactionable(funcName: String): Bool {
-        (transactionIncludingRegex?.matched(funcName) ?? true) &&
-            !(transactionExcludingRegex?.matched(funcName) ?? false)
+        (transactionIncludingRegex?.matches(funcName) ?? true) &&
+            !(transactionExcludingRegex?.matches(funcName) ?? false)
     }
     public static func getTransactionPropagation(driverName!: String = String.empty): Propagation {
         match (getConf(driverName: driverName, key: transactionPropagation)) {

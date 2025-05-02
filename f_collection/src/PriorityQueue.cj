@@ -25,11 +25,10 @@ class PriorityQueueIterator<T> <: Iterator<T> {
             idx++
             return current.getOrThrow()
         }
-        PriorityQueue<T>.EMPTY_VALUE
+        None<T>
     }
 }
 public class PriorityQueue<T> <: Queue<T> & Iterable<T> & Collection<T> & Growable {
-    static const EMPTY_VALUE = None<T>
 
     /**
      * current size
@@ -52,7 +51,7 @@ public class PriorityQueue<T> <: Queue<T> & Iterable<T> & Collection<T> & Growab
             } else {
                 capacity
             },
-            repeat: PriorityQueue<T>.EMPTY_VALUE
+            repeat: None<T>
         )
     }
     public init(
@@ -126,7 +125,7 @@ public class PriorityQueue<T> <: Queue<T> & Iterable<T> & Collection<T> & Growab
             if(i < currentSize){
                 q[i]
             }else{
-                PriorityQueue<T>.EMPTY_VALUE
+                None<T>
             }
         }
     }
@@ -154,7 +153,7 @@ public class PriorityQueue<T> <: Queue<T> & Iterable<T> & Collection<T> & Growab
         if (currentSize > 0) {
             queue[0]
         } else {
-            PriorityQueue<T>.EMPTY_VALUE
+            None<T>
         }
     }
 
@@ -164,11 +163,11 @@ public class PriorityQueue<T> <: Queue<T> & Iterable<T> & Collection<T> & Growab
     public func remove(): Option<T> {
         let cur = peek()
         if (cur.isNone()) {
-            return PriorityQueue<T>.EMPTY_VALUE
+            return None<T>
         }
         currentSize--
         let temp = queue[currentSize]
-        queue[currentSize] = PriorityQueue<T>.EMPTY_VALUE
+        queue[currentSize] = None<T>
         if (currentSize > 0) {
             adjustDown(0, temp.getOrThrow())
         }
@@ -228,13 +227,13 @@ public class PriorityQueue<T> <: Queue<T> & Iterable<T> & Collection<T> & Growab
         while (i < size) {
             let v = queue[i].getOrThrow()
             if (predicate(v)) {
-                queue[i] = PriorityQueue<T>.EMPTY_VALUE
+                queue[i] = None<T>
                 if (!toAdjust) {
                     lastIdx = i
                     toAdjust = true
                 }
             } else if (toAdjust) {
-                queue[i] = PriorityQueue<T>.EMPTY_VALUE
+                queue[i] = None<T>
                 adjustUp(lastIdx, v)
                 lastIdx++
             }

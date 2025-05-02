@@ -17,11 +17,11 @@ public class ObjectFields<T> <: Collection<ReadableField> where T <: ObjectData<
         private let creator: ()-> T
     ){
         func populateField(name: String, field: ReadableField, throwIfDuplicate!: Bool = true) {
-            if(!this.readables.addIfAbsent(name, field) && throwIfDuplicate){
+            if(this.readables.addIfAbsent(name, field).isSome() && throwIfDuplicate){
                 throw DataException('duplicate field ${name} in ${TypeInfos.get<T>()}')
             }
             match(field){
-                case x: MutableField where !this.mutables.addIfAbsent(name, x) && throwIfDuplicate => 
+                case x: MutableField where this.mutables.addIfAbsent(name, x).isSome() && throwIfDuplicate => 
                     throw DataException('duplicate field ${name} in ${TypeInfos.get<T>()}')
                 case _ => false
             }
@@ -58,7 +58,7 @@ public class ObjectFields<T> <: Collection<ReadableField> where T <: ObjectData<
         }
         match(currentType.superClass) {
             case Some(x) where x != TypeInfos.get<Object>() && x.isSubtypeOf(TypeInfos.get("f_data.ObjectData<${x.qualifiedName}>")) =>
-                let superFields = x.getStaticFunction("dataFields").apply()
+                let superFields = x.getStaticFunction("dataFields").apply(x)
                 let superFieldsIterator = (superFields as ObjectFields<T>).getOrThrow().iterator()
                 populateFields(superFieldsIterator, throwIfDuplicate: false)
             case _ => ()

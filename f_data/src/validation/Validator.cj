@@ -34,8 +34,8 @@ public interface ValidatorsExtend<T>{
     static func validators(): Validators<T>
 }
 public class DummyValidator<T> <: Validator<T> {
-    private const init(){}
-    public static const instance = DummyValidator<T>()
+    public const init(){}
+    // public static const instance = DummyValidator<T>()
     public prop name: String {
         get(){
             ""
@@ -134,7 +134,7 @@ public class DurationValidator<T> <: BaseValidator<T> {
         super("Duration", _name_, setter)
     }
     public func validate(value: String): Bool {
-        format.matched(value)
+        format.matches(value)
     }
 }
 public class IntegersValidator<T> <: BaseValidator<T> {

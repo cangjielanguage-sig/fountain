@@ -9,8 +9,8 @@
 */
 package f_jwt
 
-import encoding.base64.*
-import encoding.hex.*
+import stdx.encoding.base64.*
+import stdx.encoding.hex.*
 import f_jwt.exception.*
 
 func fromBase64(src: String): Array<Byte> {

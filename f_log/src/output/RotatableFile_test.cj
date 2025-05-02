@@ -12,7 +12,7 @@ package f_log.output
 import std.unittest.*
 import std.unittest.testmacro.*
 
-import compress.zlib.*
+import stdx.compress.zlib.*
 
 import f_time.TimeUnit as TU
 

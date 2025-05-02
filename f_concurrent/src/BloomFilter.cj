@@ -9,9 +9,6 @@
  */
 package f_concurrent
 
-import f_collection.BitSet
-import std.sync.ReentrantMutex
-
 public class BloomFilter<T> where T <: Hashable {
     private let mutex = ReentrantMutex()
     private let bits = BitSet()

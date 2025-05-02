@@ -17,8 +17,8 @@ import std.io.SeekPosition
 import std.math.MathExtension
 import std.sync.{Timer, ReentrantMutex, AtomicReference, AtomicUInt64}
 import std.time.DateTime
-import compress.zlib.{WrapType, CompressLevel, CompressOutputStream}
-import log.LogLevel
+import stdx.compress.zlib.{WrapType, CompressLevel, CompressOutputStream}
+import stdx.log.LogLevel
 import f_base.*
 import f_exception.*
 import f_log.output.{RotatableFile, RotatableFileParams}

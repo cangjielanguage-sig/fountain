@@ -9,10 +9,6 @@
 */
 package f_concurrent
 
-import std.sync.ReentrantMutex
-import f_base.*
-import f_collection.{PriorityQueue, Growable}
-
 public class SyncPriorityQueue<T> <: Queue<T> & Collection<T> & Growable {
     private let mutex = ReentrantMutex()
     private let queue: PriorityQueue<T>

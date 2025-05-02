@@ -26,7 +26,7 @@ internal class RegexFilter <: DataFilter {
         if(regex.endsWith('/')){
             regex[1 .. regex.size - 1].regex()
         }else if(regex.endsWith('/i')){
-            regex[1 .. regex.size - 1].regex(option: RegexOption().ignoreCase())
+            regex[1 .. regex.size - 1].regex(flags: [IgnoreCase])
         }else{
             throw DataException('illegal regex ${regex}, regex must be format as /<REGEX>/ or /<REGEX>/i')
         }
@@ -37,7 +37,7 @@ internal class RegexFilter <: DataFilter {
             case _ => return false
         }
         match(d){
-            case x: DataString => regex.matched(x.data)
+            case x: DataString => regex.matches(x.data)
             case _ => false
         }
     }

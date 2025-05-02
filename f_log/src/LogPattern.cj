@@ -12,7 +12,7 @@ package f_log
 import std.collection.ArrayList
 import std.process.Process
 import std.time.{DateTime, DateTimeFormat}
-import log.LogLevel
+import stdx.log.LogLevel
 import f_base.OS
 
 public class LogPattern <: LogPart {

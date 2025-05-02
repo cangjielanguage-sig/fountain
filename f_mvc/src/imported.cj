@@ -15,8 +15,8 @@ internal import std.io.ByteBuffer
 internal import std.regex.*
 internal import std.time.DateTime
 
-internal import encoding.base64.*
-internal import encoding.hex.*
+internal import stdx.encoding.base64.*
+internal import stdx.encoding.hex.*
 
 internal import charset4cj.charset.*
 internal import charset4cj.charset.encoding.*

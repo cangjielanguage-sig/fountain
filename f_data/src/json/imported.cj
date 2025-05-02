@@ -10,3 +10,4 @@
 package f_data.json
 
 public import f_data.*
+internal import f_exception.UnreadableException

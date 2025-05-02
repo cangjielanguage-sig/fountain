@@ -14,7 +14,7 @@ internal class IndexPathNode <: DataPathNode {
     public func get(data: Data): Iterator<Data> {
         match(data){
             case x: Iterable<Data> => x.iterator().skip(index)
-            case _ => OptionIterator<Data>.NONE
+            case _ => OptionIterator<Data>()
         }
     }
 }

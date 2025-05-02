@@ -9,7 +9,7 @@
 */
 package f_log
 
-import log.setGlobalLogger
-public import log.getGlobalLogger
+import stdx.log.setGlobalLogger
+public import stdx.log.getGlobalLogger
 
 let _ = setGlobalLogger(LoggerFactory.getLogger('global'))

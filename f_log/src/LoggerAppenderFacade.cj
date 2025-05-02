@@ -11,7 +11,7 @@ package f_log
 
 import std.process.Process
 import std.time.DateTime
-import log.LogLevel
+import stdx.log.LogLevel
 
 public class LoggerAppenderFacade <: AsyncLogger {
     private var appenders: Array<AbstractLogger>

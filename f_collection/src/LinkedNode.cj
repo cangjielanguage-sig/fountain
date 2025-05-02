@@ -60,8 +60,11 @@ public interface Node<T> {
         throw UnreachableException()
     }
 }
+
 public class NoneNode<T> <: Node<T> {
-    static const INSTANCE = NoneNode<T>()
+    static const func instance(){
+        NoneNode<T>()
+    }
     private const init() {}
 }
 public class HeadNode<T> <: Node<T> & Iterable<T> {
@@ -90,7 +93,7 @@ public class HeadNode<T> <: Node<T> & Iterable<T> {
     }
 }
 public class TailNode<T> <: Node<T> & Iterable<T> {
-    TailNode(var prev!: Node<T> = NoneNode<T>.INSTANCE) {}
+    TailNode(var prev!: Node<T> = NoneNode<T>.instance()) {}
     public func insertPrev(value: T): ValueNode<T> {
         ValueNode<T>(value, this)
     }

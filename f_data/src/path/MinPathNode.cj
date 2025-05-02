@@ -31,7 +31,7 @@ internal class MinPathNode <: DataPathNode {
                     }
                 }
                 OptionIterator<Data>(r)
-            case _ => OptionIterator<Data>.NONE                
+            case _ => OptionIterator<Data>()                
         }
     }
 }

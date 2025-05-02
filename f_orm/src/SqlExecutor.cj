@@ -50,7 +50,7 @@ public class SqlExecutor <: Resource & RootDAO {
         cache = if (useCache) {
             HashMap<SqlCacheKey, Any>()
         } else {
-            EmptyMap<SqlCacheKey, Any>.INSTANCE
+            EmptyMap<SqlCacheKey, Any>.INSTANCE()
         }
         _connection_ = getConnection(driverName)
     }
@@ -441,7 +441,7 @@ public class SqlExecutor <: Resource & RootDAO {
         execute<Iterator<T>> {
             match (query as QueryResultWrap) {
                 case Some(x) => SingleColumnIterator<T>(x, index: index)
-                case _ => EmptyIterator<T>.INSTANCE
+                case _ => EmptyIterator<T>.INSTANCE()
             }
         }
     }
@@ -449,7 +449,7 @@ public class SqlExecutor <: Resource & RootDAO {
         execute<Iterator<T>> {
             match (query as QueryResultWrap) {
                 case Some(x) => SingleColumnIterator<T>(x, column: column)
-                case _ => EmptyIterator<T>.INSTANCE
+                case _ => EmptyIterator<T>.INSTANCE()
             }
         }
     }
@@ -469,7 +469,7 @@ public class SqlExecutor <: Resource & RootDAO {
         execute<Map<String, Any>> {
             match ((query as QueryResultWrap).getOrThrow().next()) {
                 case Some(x) => x.toMap()
-                case _ => EmptyMap<String, Any>.INSTANCE
+                case _ => EmptyMap<String, Any>.INSTANCE()
             }
         }
     }

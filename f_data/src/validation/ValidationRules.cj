@@ -28,17 +28,17 @@ let rules = {=>
     let lowerHyphens = Regex(#"[a-z]+[a-z-]*(,[a-z]+[a-z-]*)*"#)
     let upperHyphens = Regex(#"[A-Z]+[A-Z-]*(,[A-Z]+[A-Z-]*)*"#)
 
-    map["Integer"] = {val => integer.matched(val)}
-    map["Decimal"] = {val => decimal.matched(val)}
-    map["Email"] = {val => email.matched(val)}
-    map["ChineseCellPhone"] = {val => chineseCellPhone.matched(val)}
-    map["Integers"] = {val => ints.matched(val)}
-    map["Pascals"] = {val => pascals.matched(val)}
-    map["Camels"] = {val => camels.matched(val)}
-    map["LowerUnderScores"] = {val => lowerUnderScores.matched(val)}
-    map["UpperUnderScores"] = {val => upperUnderScores.matched(val)}
-    map["LowerHyphens"] = {val => lowerHyphens.matched(val)}
-    map["UpperHyphens"] = {val => upperHyphens.matched(val)}
+    map["Integer"] = {val => integer.matches(val)}
+    map["Decimal"] = {val => decimal.matches(val)}
+    map["Email"] = {val => email.matches(val)}
+    map["ChineseCellPhone"] = {val => chineseCellPhone.matches(val)}
+    map["Integers"] = {val => ints.matches(val)}
+    map["Pascals"] = {val => pascals.matches(val)}
+    map["Camels"] = {val => camels.matches(val)}
+    map["LowerUnderScores"] = {val => lowerUnderScores.matches(val)}
+    map["UpperUnderScores"] = {val => upperUnderScores.matches(val)}
+    map["LowerHyphens"] = {val => lowerHyphens.matches(val)}
+    map["UpperHyphens"] = {val => upperHyphens.matches(val)}
 
     map
 }()

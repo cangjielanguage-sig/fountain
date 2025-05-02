@@ -11,7 +11,7 @@ package f_random
 
 import std.math.floor
 public import std.random.Random
-public import crypto.crypto.SecureRandom
+public import stdx.crypto.crypto.SecureRandom
 
 public interface ExtendRandom<R> where R <: ExtendRandom<R> {
     func nextInt64(min: Int64, max: Int64, closed!: Bool): Int64

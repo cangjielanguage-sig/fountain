@@ -11,7 +11,7 @@ package fdemo
 
 import f_log.output.*
 import f_time.TimeUnit
-import compress.zlib.*
+import stdx.compress.zlib.*
 
 main(){
     let param = RotatableFileParams()

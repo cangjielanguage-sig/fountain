@@ -10,7 +10,7 @@
 package f_jwt
 
 import std.crypto.digest.Digest
-import crypto.digest.{HMAC, HashType}
+import stdx.crypto.digest.{HMAC, HashType}
 
 public class HMACDigest <: Digest {
     public HMACDigest(private let hmac: HMAC){}
@@ -33,7 +33,15 @@ public class HMACDigest <: Digest {
     public func finish(): Array<Byte> {
         hmac.finish()
     }
+    public func finish(to!: Array<Byte>): Unit {
+        hmac.finish(to: to)
+    }
     public func reset(): Unit {
         hmac.reset()
+    }
+    public prop algorithm: String {
+        get(){
+            'HMAC-${hmac.algorithm}'
+        }
     }
 }

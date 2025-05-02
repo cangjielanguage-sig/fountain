@@ -15,7 +15,7 @@
   f_jwt = {path = "./f_jwt"}
   f_log = {path = "./f_log"}
   f_macros = {path = "./f_macros"}
-  f_mvc = {path = "./f_mvc"}
+#  f_mvc = {path = "./f_mvc"}
   f_net = {path = "./f_net"}
   f_orm = {path = "./f_orm"}
   f_pool = {path = "./f_pool"}
@@ -38,6 +38,14 @@
   target-dir = ""
   version = "1.0.0"
   package-configuration = {}
+
+[target.x86_64-w64-mingw32]
+  [target.x86_64-w64-mingw32.bin-dependencies]
+    path-option = ["D:\\docs\\work\\cangjie\\cangjie-win-bin\\windows_x86_64_llvm\\dynamic\\stdx"]
+
+[target.x86_64-unknown-linux-gnu]
+  [target.x86_64-unknown-linux-gnu.bin-dependencies]
+    path-option = ["/mnt/d/docs/work/cangjie/cangjie-linux-bin/linux_x86_64_llvm/dynamic/stdx"]
 
 [profile.build]
   incremental = true

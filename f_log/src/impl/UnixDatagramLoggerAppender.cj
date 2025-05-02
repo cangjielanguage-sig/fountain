@@ -12,7 +12,7 @@ package f_log.impl
 
 import std.time.DateTime
 import f_log.output.UnixDatagramOutputStream
-import log.LogLevel
+import stdx.log.LogLevel
 
 private class UnixDatagramLoggerAppender <: AsyncLogger {
     private static const LOGGER_NAME = 'unixDatagram'

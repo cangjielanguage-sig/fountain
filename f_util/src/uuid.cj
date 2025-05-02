@@ -16,8 +16,8 @@ import std.math.numeric.BigInt
 import std.process.Process
 import std.sync.{AtomicUInt16, AtomicInt64, ReentrantMutex}
 import std.time.{TimeZone, DateTime}
-import crypto.crypto.*
-import crypto.digest.{MD5, SHA1}
+import stdx.crypto.crypto.*
+import stdx.crypto.digest.{MD5, SHA1}
 import f_base.HashBuilder
 import f_exception.UnreachableException
 import f_util.exception.UUIDException

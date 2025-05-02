@@ -15,16 +15,18 @@ public import std.reflect.TypeInfo
 public import std.math.numeric.{BigInt, Decimal}
 public import std.time.DateTime
 
-private class Types<T> {
-    static let INSTANCE = TypeInfo.of<T>()
-    private init(){}
-}
+// private class Types<T> {
+//     static let INSTANCE = TypeInfo.of<T>()
+//     private init(){}
+// }
 public class TypeInfos {
     private static let INFOS = ConcurrentHashMap<String, TypeInfo>()
     private static let MUTEX = ReentrantMutex()
 
     public static func get<T>(): TypeInfo{
-        Types<T>.INSTANCE
+        // Types<T>.INSTANCE
+        //待支持静态成员再改回使用Types
+        TypeInfo.of<T>()
     }
     public static func get(qualifiedName: String): TypeInfo {
         if (let Some(x) <- INFOS.get(qualifiedName)) {

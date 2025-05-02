@@ -12,7 +12,7 @@ package f_log
 import std.convert.Parsable
 import std.regex.Regex
 import std.sync.ReentrantMutex
-import log.LogLevel
+import stdx.log.LogLevel
 import f_config.Config
 import f_data.*
 import f_log.exception.LogException

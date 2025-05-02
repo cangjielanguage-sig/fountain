@@ -42,7 +42,8 @@ public class QueryMappers<O> {
             }
         }
         putMapperMap<T>(mappers){m => m}
-        let oMappers = (TypeInfos.get<O>().getStaticFunction("queryMappers").apply() as QueryMappers<O>).getOrThrow().mappers
+        let oType = TypeInfos.get<O>()
+        let oMappers = (oType.getStaticFunction("queryMappers").apply(oType) as QueryMappers<O>).getOrThrow().mappers
         putMapperMap<O>(oMappers){m => m.new<T>()}
         QueryMappers<T>(mappers: mapperMap.values().toArray(), creator: creator)
     }

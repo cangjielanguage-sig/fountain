@@ -95,7 +95,7 @@ public class DataReal <: Data & Hashable & Comparable<DataReal> {
     private static let uint32Range = [Decimal(UInt32.Min), Decimal(UInt32.Max)]
     private static let int64Range = [Decimal(Int64.Min), Decimal(Int64.Max)]
     private static let uint64Range = [Decimal(UInt64.Min), Decimal(UInt64.Max)]
-    public func toInt8(strategy!: OverflowStrategy = throwing): Int8 {
+    public func toInt8(strategy!: OverflowStrategy = Throwing): Int8 {
         data.toInt8(overflowHandling: strategy)
     }
     public func tryToInt8(): ?Int8 {
@@ -105,7 +105,7 @@ public class DataReal <: Data & Hashable & Comparable<DataReal> {
             None<Int8>
         }
     }
-    public func toUInt8(strategy!: OverflowStrategy = throwing): UInt8 {
+    public func toUInt8(strategy!: OverflowStrategy = Throwing): UInt8 {
         data.toUInt8(overflowHandling: strategy)
     }
     public func tryToUInt8(): ?UInt8 {
@@ -116,7 +116,7 @@ public class DataReal <: Data & Hashable & Comparable<DataReal> {
         }
     }
 
-    public func toInt16(strategy!: OverflowStrategy = throwing): Int16 {
+    public func toInt16(strategy!: OverflowStrategy = Throwing): Int16 {
         data.toInt16(overflowHandling: strategy)
     }
     public func tryToInt16(): ?Int16 {
@@ -126,7 +126,7 @@ public class DataReal <: Data & Hashable & Comparable<DataReal> {
             None<Int16>
         }
     }
-    public func toUInt16(strategy!: OverflowStrategy = throwing): UInt16 {
+    public func toUInt16(strategy!: OverflowStrategy = Throwing): UInt16 {
         data.toUInt16(overflowHandling: strategy)
     }
     public func tryToUInt16(): ?UInt16 {
@@ -137,7 +137,7 @@ public class DataReal <: Data & Hashable & Comparable<DataReal> {
         }
     }
 
-    public func toInt32(strategy!: OverflowStrategy = throwing): Int32 {
+    public func toInt32(strategy!: OverflowStrategy = Throwing): Int32 {
         data.toInt32(overflowHandling: strategy)
     }
     public func tryToInt32(): ?Int32 {
@@ -147,7 +147,7 @@ public class DataReal <: Data & Hashable & Comparable<DataReal> {
             None<Int32>
         }
     }
-    public func toUInt32(strategy!: OverflowStrategy = throwing): UInt32 {
+    public func toUInt32(strategy!: OverflowStrategy = Throwing): UInt32 {
         data.toUInt32(overflowHandling: strategy)
     }
     public func tryToUInt32(): ?UInt32 {
@@ -158,7 +158,7 @@ public class DataReal <: Data & Hashable & Comparable<DataReal> {
         }
     }
 
-    public func toInt64(strategy!: OverflowStrategy = throwing): Int64 {
+    public func toInt64(strategy!: OverflowStrategy = Throwing): Int64 {
         data.toInt64(overflowHandling: strategy)
     }
     public func tryToInt64(): ?Int64 {
@@ -168,7 +168,7 @@ public class DataReal <: Data & Hashable & Comparable<DataReal> {
             None<Int64>
         }
     }
-    public func toUInt64(strategy!: OverflowStrategy = throwing): UInt64 {
+    public func toUInt64(strategy!: OverflowStrategy = Throwing): UInt64 {
         data.toUInt64(overflowHandling: strategy)
     }
     public func tryToUInt64(): ?UInt64 {
@@ -178,7 +178,7 @@ public class DataReal <: Data & Hashable & Comparable<DataReal> {
             None<UInt64>
         }
     }
-    public func toIntNative(strategy!: OverflowStrategy = throwing): IntNative {
+    public func toIntNative(strategy!: OverflowStrategy = Throwing): IntNative {
         data.toIntNative(overflowHandling: strategy)
     }
     public func tryToIntNative(): ?IntNative {
@@ -188,7 +188,7 @@ public class DataReal <: Data & Hashable & Comparable<DataReal> {
             None<IntNative>
         }
     }
-    public func toUIntNative(strategy!: OverflowStrategy = throwing): UIntNative {
+    public func toUIntNative(strategy!: OverflowStrategy = Throwing): UIntNative {
         data.toUIntNative(overflowHandling: strategy)
     }
     public func tryToUIntNative(): ?UIntNative {
@@ -208,7 +208,7 @@ public class DataReal <: Data & Hashable & Comparable<DataReal> {
     }
     public static func tryParse(data: String): ?Data {
         let d = extractPureString(data)
-        if (Regex.REAL_NUMBER.matched(d)) {
+        if (Regex.REAL_NUMBER.matches(d)) {
             parse(d)
         } else {
             None<Data>

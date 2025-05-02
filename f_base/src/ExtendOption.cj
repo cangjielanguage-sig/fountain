@@ -15,7 +15,10 @@ public interface ExtendOption<T> {
     func iterator(): Iterator<T>
 }
 public class OptionIterator<T> <: Iterator<T> {
-    public static let NONE = OptionIterator<T>(None<T>)
+    // public static let none = OptionIterator<T>()
+    public init(){
+        this(None<T>)
+    }
     public OptionIterator(private let opt: Option<T>) {}
     private var got = false
 

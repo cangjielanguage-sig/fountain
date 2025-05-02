@@ -10,7 +10,7 @@
 package f_random
 
 import std.collection.ArrayList
-import crypto.crypto.SecureRandom
+import stdx.crypto.crypto.SecureRandom
 
 public func randomReservoir<T>(count: Int64, source: Iterable<T>, priv!: Bool = false): ArrayList<T> {
     let rand = SecureRandom(priv: priv)

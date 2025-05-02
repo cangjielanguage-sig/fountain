@@ -15,18 +15,18 @@ internal class AvgPathNode <: DataPathNode {
     public func get(data: Data): Iterator<Data> {
         match(data){
             case x: Iterable<Data> => 
-                var r = Decimal.ZERO
+                var r = Decimal.zero
                 var c = 0
                 for(v in x){
                     match(v){
                         case x: DataReal => 
                             c++
                             r += x.data
-                        case _ => return OptionIterator<Data>.NONE
+                        case _ => return OptionIterator<Data>()
                     }
                 }
                 OptionIterator<Data>((r/Decimal(BigInt(c))).toData())
-            case _ => OptionIterator<Data>.NONE                
+            case _ => OptionIterator<Data>()                
         }
     }
 }

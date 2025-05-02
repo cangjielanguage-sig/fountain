@@ -15,7 +15,7 @@ import std.io.OutputStream
 import std.sync.ReentrantMutex
 import std.time.DateTime
 
-import log.{LogLevel, LogRecord}
+import stdx.log.{LogLevel, LogRecord}
 
 import f_log.exception.LogException
 

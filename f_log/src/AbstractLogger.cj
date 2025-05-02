@@ -15,7 +15,7 @@ import std.collection.concurrent.ConcurrentHashMap
 import std.io.OutputStream
 import std.sync.{AtomicBool, ReentrantMutex}
 import std.time.DateTime
-import log.{LogLevel, Attr, LogRecord, LogWriter}
+import stdx.log.{LogLevel, Attr, LogRecord, LogWriter}
 import f_base.OS
 import f_collection.LinkedHashMap
 import f_data.ObjectData

@@ -314,7 +314,7 @@ class Value2NumberString <: Value2String {
     private var mode = RoundingMode.HALF_UP
 
     Value2NumberString(private let getter: ValueGetter, private let formatter: String){
-        if (!#"^[oOxXeE\\+\\(]?(#+(\\.#+)?|(#*\\.#+))(,[a-zA-Z_]+)?$"#.regex(solid: false).matched(formatter)) {
+        if (!#"^[oOxXeE\\+\\(]?(#+(\\.#+)?|(#*\\.#+))(,[a-zA-Z_]+)?$"#.regex(solid: false).matches(formatter)) {
             throw TextTemplateException("number placeholder must be # in number format like O### x### e###.## ##.##,HALF_UP or ###,HALF_UP or .###,HALF_UP")
         }
         var hasSymbol = 0
@@ -390,7 +390,7 @@ class Value2NumberString <: Value2String {
             noneConverter
         }
         var number = Decimal(value)
-        var symbol = number.compare(Decimal.ZERO)
+        var symbol = number.compare(Decimal.zero)
         if (radix == 10) {
             number = number.reScale(scale, roundingMode: mode)
             var string: String

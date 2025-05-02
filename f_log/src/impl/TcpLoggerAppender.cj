@@ -12,7 +12,7 @@ package f_log.impl
 
 import std.convert.*
 import std.net.{SocketNet, TcpSocket, SocketKeepAliveConfig}
-import log.LogLevel
+import stdx.log.LogLevel
 import f_data.*
 import f_log.exception.*
 import f_log.output.UdpOutputStream

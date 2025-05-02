@@ -9,7 +9,7 @@
 */
 package f_log
 
-import log.LogLevel
+import stdx.log.LogLevel
 
 public interface ExtendLogLevel{
     prop text: String

@@ -70,7 +70,7 @@ extend<T> Iterator<T> <: ExtendIterator<T> {
             flatMap<R> {
                 v => match (v) {
                     case x: Iterator<R> => x
-                    case _ => EmptyIterator<R>.INSTANCE
+                    case _ => EmptyIterator<R>.INSTANCE()
                 }
             }
         }

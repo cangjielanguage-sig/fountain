@@ -9,13 +9,6 @@
 */
 package f_data
 
-import std.time.{DateTime, MonoTime}
-import std.math.numeric.{Decimal, BigInt}
-import std.collection.concurrent.ConcurrentHashMap
-import std.collection.*
-import f_collection.{TreeSet, LinkedHashMap, LinkedHashSet}
-import f_concurrent.ConcurrentHashSet
-
 public struct DataHasher{
     private var hasher = DefaultHasher()
     public mut func write(value: Bool): Unit {

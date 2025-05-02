@@ -13,7 +13,7 @@ package f_log.impl
 import std.net.UnixSocket
 import std.time.DateTime
 import f_log.output.UnixOutputStream
-import log.LogLevel
+import stdx.log.LogLevel
 
 
 private class UnixLoggerAppender <: AsyncLogger {

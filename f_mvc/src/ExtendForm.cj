@@ -9,7 +9,7 @@
 */
 package f_mvc
 
-internal import encoding.url.Form
+internal import stdx.encoding.url.Form
 
 public interface ExtendForm{}
 extend Form <: ExtendForm {

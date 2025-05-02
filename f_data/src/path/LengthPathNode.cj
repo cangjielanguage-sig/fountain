@@ -18,7 +18,7 @@ internal class LengthPathNode <: DataPathNode {
             case x: Collection<(String, Data)> => SingleIterator<Data>(x.size.toData())
             case x: Collection<(Data, Data)> => SingleIterator<Data>(x.size.toData())
             case x: DataString => SingleIterator<Data>(x.data.size.toData())
-            case _ => OptionIterator<Data>.NONE
+            case _ => OptionIterator<Data>()
         }
     }
 }

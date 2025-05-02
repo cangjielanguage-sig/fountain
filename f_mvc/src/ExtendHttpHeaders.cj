@@ -9,7 +9,7 @@
 */
 package f_mvc
 
-internal import net.http.HttpHeaders
+internal import stdx.net.http.HttpHeaders
 
 public interface ExtendHttpHeaders{}
 extend HttpHeaders <: ExtendHttpHeaders {

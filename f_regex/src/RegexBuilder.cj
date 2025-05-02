@@ -28,8 +28,8 @@ public class RegexBuilder <: ToString & Equatable<RegexBuilder> {
         pattern.toString() == other.pattern.toString()
     }
 
-    public func build(option!: RegexOption = RegexOption(), solid!: Bool = false): Regex {
-        return toString().regex(option: option, solid: solid)
+    public func build(flags!: Array<RegexFlag> = [], solid!: Bool = false): Regex {
+        return toString().regex(flags: flags, solid: solid)
     }
 
     public func toString(): String {

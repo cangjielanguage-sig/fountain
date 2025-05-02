@@ -12,7 +12,7 @@ package f_log
 import std.unittest.*
 import std.unittest.testmacro.*
 
-import log.*
+import stdx.log.*
 import std.process.Process
 
 public open class TestLogAppender <: AbstractLogger {

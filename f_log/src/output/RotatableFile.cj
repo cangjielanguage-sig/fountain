@@ -17,7 +17,7 @@ import std.math.MathExtension
 import std.process.Process
 import std.sync.{Timer, ReentrantMutex, AtomicReference, AtomicUInt64}
 import std.time.DateTime
-import compress.zlib.{WrapType, CompressLevel, CompressOutputStream}
+import stdx.compress.zlib.{WrapType, CompressLevel, CompressOutputStream}
 import f_base.*
 import f_log.exception.LogException
 import f_time.{TimeUnit, ExtendDateTime, DateTimeFormatAssist}
@@ -54,7 +54,7 @@ protected class RotatableFile <: OutputStream & Resource{
             if (idx > 0) {
                 let end = fileInfo.indexOf("&", idx) ?? fileInfo.size
                 let duration = fileInfo[idx + "rotateDuration=".size .. end]
-                timeunit = TimeUnit.parse(duration).getOrThrow{LogException("rotateDuration=${duration}")}
+                timeunit = TimeUnit.tryParse(duration).getOrThrow{LogException("rotateDuration=${duration}")}
             } else {
                 timeunit = params.timeunit
             }

@@ -13,7 +13,7 @@ import std.collection.concurrent.ConcurrentHashMap
 import std.reflect.TypeInfo
 import std.sync.ReentrantMutex
 
-import log.Attr
+import stdx.log.Attr
 
 import f_base.*
 

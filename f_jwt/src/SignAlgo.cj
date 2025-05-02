@@ -10,9 +10,9 @@
 package f_jwt
 
 import std.crypto.digest.{Digest, digest as stdDigest}
-import crypto.digest.*
-import crypto.keys.*
-import crypto.x509.{PrivateKey, PublicKey}
+import stdx.crypto.digest.*
+import stdx.crypto.keys.*
+import stdx.crypto.x509.{PrivateKey, PublicKey}
 import f_jwt.exception.*
 
 sealed abstract class SignAlgo{
@@ -157,8 +157,14 @@ private class NoneDigest <: Digest {
     public func finish(): Array<Byte>{
         []
     }
+    public func finish(to!: Array<Byte>): Unit{}
     public func reset(): Unit {}
     public func write(buffer: Array<Byte>): Unit {}
+    public prop algorithm: String {
+        get(){
+            ''
+        }
+    }
 }
 public class NoneSignAlgo <: SignAlgo{
     private init(){

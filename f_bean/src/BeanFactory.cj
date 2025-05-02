@@ -36,10 +36,9 @@ public class BeanFactory {
         var beanType = TypeInfos.get<T>()
         let manager = BeanManager(meta, beanType, creator, postConstruct: postConstruct, destroy: destroy)
         synchronized(mutex) {
-            if (!beans.addIfAbsent(manager.name, manager)) {
-                let prevType = beans[manager.name].beanType
+            if (let Some(existed) <- beans.addIfAbsent(manager.name, manager)) {
                 throw BeanException(
-                    'duplicate bean name ${manager.name}, existed bean type is ${prevType}, current bean type is ${manager.beanType}'
+                    'duplicate bean name ${manager.name}, existed bean type is ${existed}, current bean type is ${manager.beanType}'
                 )
             }
             let typeQueue = LinkedList<TypeInfo>()
@@ -47,16 +46,13 @@ public class BeanFactory {
             typeQueue.addLast(TypeInfos.get<Any>())
             typeQueue.addLast(TypeInfos.get<Object>())
             while (let Some(klass) <- typeQueue.removeFirst()) {
-                if (let Some(set) <- beanTypeMap
-                    .get(klass)) {
+                if (let Some(set) <- beanTypeMap.get(klass)) {
                         set
                     } else {
                         let set = TreeSet<BeanManager>()
-                        beanTypeMap
-                        .add(klass, set)
+                        beanTypeMap.add(klass, set)
                         set
-                    }
-                    .add(manager)
+                    }.add(manager)
                 if (!klass.isSubtypeOf(TypeInfos.get<Annotation>())) {
                     for (annotation in klass.annotations) {
                         typeQueue.addLast(TypeInfo.of(annotation))
@@ -263,11 +259,11 @@ public class BeanFactory {
         match (cond) {
             case Exactly(n) => match (beans.get(n)) {
                 case Some(m) where matches(beanType, m) => [m].iterator()
-                case _ => EmptyIterator<BeanManager>.INSTANCE
+                case _ => EmptyIterator<BeanManager>.INSTANCE()
             }
             case _ => match (beanTypeMap.get(beanType)) {
                 case Some(tree) => tree.iterator().filter{m => matches(beanType, cond, m)}
-                case _ => EmptyIterator<BeanManager>.INSTANCE
+                case _ => EmptyIterator<BeanManager>.INSTANCE()
             }
         }
     }

@@ -32,7 +32,7 @@ public class ConnectionTest <: Connection {
      * 返 回 连 接 到 的 数 据 源 元 数 据
      */
     public func getMetaData(): Map<String, String> {
-        EmptyMap<String, String>.INSTANCE
+        EmptyMap<String, String>.INSTANCE()
     }
 
     /**

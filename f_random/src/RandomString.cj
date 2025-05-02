@@ -10,7 +10,7 @@
 package f_random
 
 import std.collection.ArrayList
-import crypto.crypto.SecureRandom
+import stdx.crypto.crypto.SecureRandom
 
 import f_base.*
 
@@ -105,7 +105,7 @@ public class RandomString {
         randomLowerLettersNumbers(rand.nextInt64(min, max))
     }
     public func randomUpperLettersNumbers(count: Int64) {
-        random(count, LOWER_LETTERS_AND_NUMBERS)
+        random(count, UPPER_LETTERS_AND_NUMBERS)
     }
     public func randomUpperLettersNumbers(min: Int64, max: Int64) {
         randomLowerLettersNumbers(rand.nextInt64(min, max))

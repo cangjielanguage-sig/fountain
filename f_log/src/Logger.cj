@@ -9,8 +9,8 @@
 */
 package f_log
 
-import log.LogLevel
-import log.Logger as StdLogger
+import stdx.log.LogLevel
+import stdx.log.Logger as StdLogger
 
 public abstract class Logger <: StdLogger {
     public mut prop level: LogLevel

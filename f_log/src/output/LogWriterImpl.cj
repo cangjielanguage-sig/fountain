@@ -10,7 +10,7 @@
 package f_log.output
 
 import std.time.DateTime
-import log.{LogWriter, LogValue}
+import stdx.log.{LogWriter, LogValue}
 
 import f_exception.{printStackTrace, BaseException}
 

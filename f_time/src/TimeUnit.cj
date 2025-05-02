@@ -9,8 +9,10 @@
  */
 package f_time
 
+import std.convert.Parsable
+
 public type TU = TimeUnit
-public enum TimeUnit <: ToString {
+public enum TimeUnit <: ToString & Parsable<TimeUnit> {
     | NANOSECOND
     | MICROSECOND
     | MILLISECOND
@@ -22,7 +24,10 @@ public enum TimeUnit <: ToString {
     | MONTH
     | YEAR
 
-    public static func parse(value: String): Option<TimeUnit> {
+    public static func parse(value: String): TimeUnit {
+        tryParse(value).getOrThrow{IllegalArgumentException('${value} cannot be parsed to TimeUnit')}
+    }
+    public static func tryParse(value: String): Option<TimeUnit> {
         match (value.toAsciiUpper()) {
             case "NANOSECOND" => Some(NANOSECOND)
             case "MICROSECOND" => Some(MICROSECOND)

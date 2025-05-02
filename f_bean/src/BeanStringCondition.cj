@@ -55,8 +55,8 @@ public enum StringCond <: Equatable<StringCond> & Equatable<String> & ToString {
             case Exactly(v) => s == v
             case Prefix(v) => s.startsWith(v)
             case Suffix(v) => s.endsWith(v)
-            case Wildcard(v) => Regex.wildcard(v).matched(s)
-            case Regexp(v) => v.regex().matched(s)
+            case Wildcard(v) => Regex.wildcard(v).matches(s)
+            case Regexp(v) => v.regex().matches(s)
         }
     }
     public prop ignored: Bool {

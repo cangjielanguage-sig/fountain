@@ -9,18 +9,37 @@
  */
 package f_regex
 
+import std.collection.HashSet
 import std.collection.concurrent.ConcurrentHashMap
 
 import f_cache.HeapCache
 
 public interface RegexFromString {
-    func regex(option!: RegexOption, solid!: Bool): Regex
+    func regex(flags!: Array<RegexFlag>, solid!: Bool): Regex
 }
-var CACHE = HeapCache<Regex>(maxLife: Duration.day, maxSize: 10000)
-var SOLID = ConcurrentHashMap<String, Regex>()
+private let CACHE = HeapCache<Regex>(maxLife: Duration.day, maxSize: 10000)
+private let SOLID = ConcurrentHashMap<String, Regex>()
 extend String <: RegexFromString {
-    public func regex(option!: RegexOption = RegexOption(), solid!: Bool = false): Regex {
-        let key = "/${this}/${option.toString()}"
+    public func regex(flags!: Array<RegexFlag> = [], solid!: Bool = false): Regex {
+        func flagstr(flag: RegexFlag): String {
+            match(flag){
+                case IgnoreCase => 'i'
+                case MultiLine => 'm'
+                case Unicode => 'u'
+            }
+        }
+        func flagsstr(){
+            let set = HashSet<String>()
+            for(f in flags){
+                set.add(flagstr(f))
+            }
+            let fb = StringBuilder()
+            for(f in set){
+                fb.append(f)
+            }
+            fb.toString()
+        }
+        let key = "/${this}/${flagsstr()}"
         if (solid) {
             if(let Some(x) <- SOLID.get(key)){
                 x
@@ -28,13 +47,13 @@ extend String <: RegexFromString {
                 SOLID[key] = x
                 x
             }else{
-                let reg = Regex(this, option)
+                let reg = Regex(this, flags)
                 SOLID[key] = reg
                 reg
             }
         } else {
             CACHE.getOrCompute(key) {
-                SOLID.get(key) ?? Regex(this, option)
+                SOLID.get(key) ?? Regex(this, flags)
             }
         }
     }

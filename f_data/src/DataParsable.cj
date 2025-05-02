@@ -68,21 +68,5 @@ extend Float64 <: DataParsable<Float64>{}
 extend Float32 <: DataParsable<Float32>{}
 extend Float16 <: DataParsable<Float16>{}
 extend Bool <: DataParsable<Bool>{}
-extend BigInt <: DataParsable<BigInt>{
-    public static func tryParse(s: String): ?BigInt {
-        if(Regex.INTEGER.matched(s)){
-            BigInt(s)
-        }else{
-            None<BigInt>
-        }
-    }
-}
-extend Decimal <: DataParsable<Decimal>{
-    public static func tryParse(s: String): ?Decimal {
-        if(Regex.DECIMAL.matched(s)){
-            Decimal(s)
-        }else{
-            None<Decimal>
-        }
-    }
-}
+extend BigInt <: DataParsable<BigInt>{}
+extend Decimal <: DataParsable<Decimal>{}

@@ -9,9 +9,6 @@
  */
 package f_concurrent
 
-import std.collection.{Set, ArrayList, ReadOnlySet}
-import std.collection.concurrent.ConcurrentHashMap
-
 public class ConcurrentHashSetIterator<T> <: Iterator<T>{
     public ConcurrentHashSetIterator(public let itr: Iterator<(T, T)>){}
     public func next(): ?T{

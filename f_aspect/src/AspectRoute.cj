@@ -66,7 +66,7 @@ public class WithinRouteRule <: RouteRule {
         public let qualifiedName: String
     ){}
     public func matches(funcInfo: InvocationFuncInfo): Bool {
-        Regex.wildcard(qualifiedName).matched(funcInfo.typeInfo.qualifiedName)
+        Regex.wildcard(qualifiedName).matches(funcInfo.typeInfo.qualifiedName)
     }
 }
 /**
@@ -142,7 +142,7 @@ public class FuncTypeRouteRule <: AndRouteRule {
 public class FuncNameRouteRule <: RouteRule {
     public const FuncNameRouteRule(public let name: String){}
     public func matches(funcInfo: InvocationFuncInfo): Bool {
-        Regex.wildcard(name).matched(funcInfo.funcInfo.name)
+        Regex.wildcard(name).matches(funcInfo.funcInfo.name)
     }
 }
 public class FuncRouteRule <: AndRouteRule{
@@ -334,7 +334,7 @@ public class BeanNameRouteRule <: RouteRule {
     public func matches(funcInfo: InvocationFuncInfo): Bool {
         let managers = BeanFactory.instance.iterator<Object>(funcInfo.typeInfo)
         let regex = Regex.wildcard(beanName)
-        for(m in managers where regex.matched(m.name) && m.beanType == funcInfo.typeInfo){
+        for(m in managers where regex.matches(m.name) && m.beanType == funcInfo.typeInfo){
             return true
         }
         false

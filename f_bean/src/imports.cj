@@ -9,14 +9,13 @@
  */
 package f_bean
 
-internal import std.collection.{HashMap, TreeMap, LinkedList, ArrayList}
+internal import std.collection.{HashMap, TreeMap, LinkedList, ArrayList, TreeSet}
 internal import std.collection.concurrent.ConcurrentHashMap
 internal import std.convert.*
 internal import std.process.{Process, CurrentProcess}
 internal import std.reflect.*
 internal import std.sync.{AtomicInt64, AtomicBool, AtomicOptionReference, ReentrantMutex}
 internal import f_base.*
-internal import f_collection.TreeSet
 internal import f_config.Config
 internal import f_data.*
 internal import f_regex.*

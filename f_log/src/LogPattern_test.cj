@@ -13,7 +13,7 @@ import std.time.DateTime
 import std.unittest.*
 import std.unittest.testmacro.*
 
-import log.LogLevel
+import stdx.log.LogLevel
 
 @Test
 public class LogPattern_test {

@@ -17,12 +17,6 @@ public import std.math.numeric.*
 public interface Number<T> <: Negativable<T> & Addable<T> & Subable<T> & Mulable<T> & Divable<T> & Cmpable<T> & Eqable<T>
     & ToString where T <: Number<T> & ToString {
     static prop BYTES: Int64
-    static prop ZERO: T
-    static prop ONE: T
-    static prop TEN: T
-
-    static prop Max: T
-    static prop Min: T
 }
 
 public interface Integer<T> <: Number<T> & Modable<T> & BitAndable<T> & BitOrable<T> & BitXorable<T> & LeftShiftable<T> &
@@ -49,48 +43,29 @@ public interface UnsignedInteger<S, T> <: Integer<S> where S <: UnsignedInteger<
     func toInt(): T
 }
 public interface Float<T> <: Number<T> where T <: Float<T> {
-    static prop NaN: T
-    static prop Inf: T
-    static prop PI: T
-    static prop E: T
-    static prop MinDenormal: T
-    static prop MinNormal: T
-    static prop NegInf: T{
-        get(){
-            -Inf
-        }
-    }
-}
 
-extend Int8 <: SignedInteger<Int8, UInt8> {
-    public static prop BYTES: Int64 {
-        get() {
-            1
-        }
-    }
-    public static prop ZERO: Int8 {
-        get() {
+}
+public interface ExtendInt8 <: SignedInteger<Int8, UInt8> {
+    static prop zero: Int8 {
+        get(){
             0
         }
     }
-    public static prop ONE: Int8 {
-        get() {
+    static prop one: Int8 {
+        get(){
             1
         }
     }
-    public static prop TEN: Int8 {
-        get() {
+    static prop ten: Int8 {
+        get(){
             10
         }
     }
-    public static prop max: Int8 {
+}
+extend Int8 <: ExtendInt8 {
+    public static prop BYTES: Int64 {
         get() {
-            Int8.Max
-        }
-    }
-    public static prop min: Int8 {
-        get() {
-            Int8.Min
+            1
         }
     }
     public func numberOfLeadingZeros(): Int8 {
@@ -127,35 +102,27 @@ extend Int8 <: SignedInteger<Int8, UInt8> {
         UInt8(this & 0x7f) | UInt8(this & (1 << 7))
     }
 }
-extend Int16 <: SignedInteger<Int16, UInt16> {
-    public static prop BYTES: Int64 {
-        get() {
-            2
-        }
-    }
-    public static prop ZERO: Int16 {
-        get() {
+public interface ExtendInt16 <: SignedInteger<Int16, UInt16> {
+    static prop zero: Int16 {
+        get(){
             0
         }
     }
-    public static prop ONE: Int16 {
-        get() {
+    static prop one: Int16 {
+        get(){
             1
         }
     }
-    public static prop TEN: Int16 {
-        get() {
+    static prop ten: Int16 {
+        get(){
             10
         }
     }
-    public static prop max: Int16 {
+}
+extend Int16 <: ExtendInt16 {
+    public static prop BYTES: Int64 {
         get() {
-            Int16.Max
-        }
-    }
-    public static prop min: Int16 {
-        get() {
-            Int16.Min
+            2
         }
     }
     public func numberOfLeadingZeros(): Int16 {
@@ -195,35 +162,27 @@ extend Int16 <: SignedInteger<Int16, UInt16> {
         UInt16(this & 0x7f_ff) | UInt16(this & (1 << 15))
     }
 }
-extend Int32 <: SignedInteger<Int32, UInt32> {
-    public static prop BYTES: Int64 {
-        get() {
-            4
-        }
-    }
-    public static prop ZERO: Int32 {
-        get() {
+public interface ExtendInt32 <: SignedInteger<Int32, UInt32> {
+    static prop zero: Int32 {
+        get(){
             0
         }
     }
-    public static prop ONE: Int32 {
-        get() {
+    static prop one: Int32 {
+        get(){
             1
         }
     }
-    public static prop TEN: Int32 {
-        get() {
+    static prop ten: Int32 {
+        get(){
             10
         }
     }
-    public static prop max: Int32 {
+}
+extend Int32 <: ExtendInt32 {
+    public static prop BYTES: Int64 {
         get() {
-            Int32.Max
-        }
-    }
-    public static prop min: Int32 {
-        get() {
-            Int32.Min
+            4
         }
     }
     public func numberOfLeadingZeros(): Int32 {
@@ -268,35 +227,27 @@ extend Int32 <: SignedInteger<Int32, UInt32> {
         UInt32(this & 0x7fff_ffff) | UInt32(this & (1 << 31))
     }
 }
-extend Int64 <: SignedInteger<Int64, UInt64> {
-    public static prop BYTES: Int64 {
-        get() {
-            8
-        }
-    }
-    public static prop ZERO: Int64 {
-        get() {
+public interface ExtendInt64 <: SignedInteger<Int64, UInt64> {
+    static prop zero: Int64 {
+        get(){
             0
         }
     }
-    public static prop ONE: Int64 {
-        get() {
+    static prop one: Int64 {
+        get(){
             1
         }
     }
-    public static prop TEN: Int64 {
-        get() {
+    static prop ten: Int64 {
+        get(){
             10
         }
     }
-    public static prop max: Int64 {
+}
+extend Int64 <: ExtendInt64 {
+    public static prop BYTES: Int64 {
         get() {
-            Int64.Max
-        }
-    }
-    public static prop min: Int64 {
-        get() {
-            Int64.Min
+            8
         }
     }
     public func numberOfLeadingZeros(): Int64 {
@@ -346,35 +297,27 @@ extend Int64 <: SignedInteger<Int64, UInt64> {
     }
 }
 
-extend UInt8 <: UnsignedInteger<UInt8, Int8> {
-    public static prop BYTES: Int64 {
-        get() {
-            1
-        }
-    }
-    public static prop ZERO: UInt8 {
-        get() {
+public interface ExtendUInt8 <: UnsignedInteger<UInt8, Int8> {
+    static prop zero: UInt8 {
+        get(){
             0
         }
     }
-    public static prop ONE: UInt8 {
-        get() {
+    static prop one: UInt8 {
+        get(){
             1
         }
     }
-    public static prop TEN: UInt8 {
-        get() {
+    static prop ten: UInt8 {
+        get(){
             10
         }
     }
-    public static prop max: UInt8 {
+}
+extend UInt8 <: ExtendUInt8 {
+    public static prop BYTES: Int64 {
         get() {
-            UInt8.Max
-        }
-    }
-    public static prop min: UInt8 {
-        get() {
-            UInt8.Min
+            1
         }
     }
     public func numberOfLeadingZeros(): UInt8 {
@@ -409,35 +352,27 @@ extend UInt8 <: UnsignedInteger<UInt8, Int8> {
         Int8(this & 0x7f) | Int8(this & (1 << 7))
     }
 }
-extend UInt16 <: UnsignedInteger<UInt16, Int16> {
-    public static prop BYTES: Int64 {
-        get() {
-            2
-        }
-    }
-    public static prop ZERO: UInt16 {
-        get() {
+public interface ExtendUInt16 <: UnsignedInteger<UInt16, Int16> {
+    static prop zero: UInt16 {
+        get(){
             0
         }
     }
-    public static prop ONE: UInt16 {
-        get() {
+    static prop one: UInt16 {
+        get(){
             1
         }
     }
-    public static prop TEN: UInt16 {
-        get() {
+    static prop ten: UInt16 {
+        get(){
             10
         }
     }
-    public static prop max: UInt16 {
+}
+extend UInt16 <: ExtendUInt16 {
+    public static prop BYTES: Int64 {
         get() {
-            UInt16.Max
-        }
-    }
-    public static prop min: UInt16 {
-        get() {
-            UInt16.Min
+            2
         }
     }
     public func numberOfLeadingZeros(): UInt16 {
@@ -476,35 +411,27 @@ extend UInt16 <: UnsignedInteger<UInt16, Int16> {
         Int16(this & 0x7fff) | Int16(this & (1 << 15))
     }
 }
-extend UInt32 <: UnsignedInteger<UInt32, Int32> {
-    public static prop BYTES: Int64 {
-        get() {
-            4
-        }
-    }
-    public static prop ZERO: UInt32 {
-        get() {
+public interface ExtendUInt32 <: UnsignedInteger<UInt32, Int32> {
+    static prop zero: UInt32 {
+        get(){
             0
         }
     }
-    public static prop ONE: UInt32 {
-        get() {
+    static prop one: UInt32 {
+        get(){
             1
         }
     }
-    public static prop TEN: UInt32 {
-        get() {
+    static prop ten: UInt32 {
+        get(){
             10
         }
     }
-    public static prop max: UInt32 {
+}
+extend UInt32 <: ExtendUInt32 {
+    public static prop BYTES: Int64 {
         get() {
-            UInt32.Max
-        }
-    }
-    public static prop min: UInt32 {
-        get() {
-            UInt32.Min
+            4
         }
     }
     public func numberOfLeadingZeros(): UInt32 {
@@ -547,35 +474,27 @@ extend UInt32 <: UnsignedInteger<UInt32, Int32> {
         Int32(this & 0x7fff_ffff) | Int32(this & (1 << 31))
     }
 }
-extend UInt64 <: UnsignedInteger<UInt64, Int64> {
-    public static prop BYTES: Int64 {
-        get() {
-            8
-        }
-    }
-    public static prop ZERO: UInt64 {
-        get() {
+public interface ExtendUInt64 <: UnsignedInteger<UInt64, Int64> {
+    static prop zero: UInt64 {
+        get(){
             0
         }
     }
-    public static prop ONE: UInt64 {
-        get() {
+    static prop one: UInt64 {
+        get(){
             1
         }
     }
-    public static prop TEN: UInt64 {
-        get() {
+    static prop ten: UInt64 {
+        get(){
             10
         }
     }
-    public static prop max: UInt64 {
+}
+extend UInt64 <: ExtendUInt64 {
+    public static prop BYTES: Int64 {
         get() {
-            UInt64.Max
-        }
-    }
-    public static prop min: UInt64 {
-        get() {
-            UInt64.Min
+            8
         }
     }
     public func numberOfLeadingZeros(): UInt64 {
@@ -624,143 +543,214 @@ extend UInt64 <: UnsignedInteger<UInt64, Int64> {
     }
 }
 
-extend Float16 <: Float<Float16> {
+public interface ExtendFloat16 <: Float<Float16> {
+    static prop zero: Float16 {
+        get(){
+            0.0
+        }
+    }
+    static prop one: Float16 {
+        get(){
+            1.0
+        }
+    }
+    static prop ten: Float16 {
+        get(){
+            10.0
+        }
+    }
+    static prop NaN: Float16
+    static prop Inf: Float16
+    static prop PI: Float16
+    static prop E: Float16
+    static prop MinDenormal: Float16
+    static prop MinNormal: Float16
+    static prop NegInf: Float16{
+        get(){
+            -Inf
+        }
+    }
+}
+
+extend Float16 <: ExtendFloat16 {
     public static prop BYTES: Int64 {
         get() {
             2
         }
     }
-    public static prop ZERO: Float16 {
-        get() {
-            0.0
+
+    public static prop PI: Float16 {
+        get(){
+            Float16.getPI()
         }
     }
-    public static prop ONE: Float16 {
-        get() {
-            1.0
-        }
-    }
-    public static prop TEN: Float16 {
-        get() {
-            10.0
+    public static prop E: Float16 {
+        get(){
+            Float16.getE()
         }
     }
 }
 
-extend Float32 <: Float<Float32> {
+public interface ExtendFloat32 <: Float<Float32> {
+    static prop zero: Float32 {
+        get(){
+            0.0
+        }
+    }
+    static prop one: Float32 {
+        get(){
+            1.0
+        }
+    }
+    static prop ten: Float32 {
+        get(){
+            10.0
+        }
+    }
+    static prop NaN: Float32
+    static prop Inf: Float32
+    static prop PI: Float32
+    static prop E: Float32
+    static prop MinDenormal: Float32
+    static prop MinNormal: Float32
+    static prop NegInf: Float32{
+        get(){
+            -Inf
+        }
+    }
+}
+extend Float32 <: ExtendFloat32 {
     public static prop BYTES: Int64 {
         get() {
             4
         }
     }
-    public static prop ZERO: Float32 {
-        get() {
-            0.0
+    public static prop PI: Float32 {
+        get(){
+            Float32.getPI()
         }
     }
-    public static prop ONE: Float32 {
-        get() {
-            1.0
-        }
-    }
-    public static prop TEN: Float32 {
-        get() {
-            10.0
+    public static prop E: Float32 {
+        get(){
+            Float32.getE()
         }
     }
 }
 
-extend Float64 <: Float<Float64> {
+public interface ExtendFloat64 <: Float<Float64> {
+    static prop zero: Float64 {
+        get(){
+            0.0
+        }
+    }
+    static prop one: Float64 {
+        get(){
+            1.0
+        }
+    }
+    static prop ten: Float64 {
+        get(){
+            10.0
+        }
+    }
+    static prop NaN: Float64
+    static prop Inf: Float64
+    static prop PI: Float64
+    static prop E: Float64
+    static prop MinDenormal: Float64
+    static prop MinNormal: Float64
+    static prop NegInf: Float64{
+        get(){
+            -Inf
+        }
+    }
+}
+extend Float64 <: ExtendFloat64 {
     public static prop BYTES: Int64 {
         get() {
             8
         }
     }
-    public static prop ZERO: Float64 {
-        get() {
-            0.0
+    public static prop PI: Float64 {
+        get(){
+            Float64.getPI()
         }
     }
-    public static prop ONE: Float64 {
-        get() {
-            1.0
-        }
-    }
-    public static prop TEN: Float64 {
-        get() {
-            10.0
+    public static prop E: Float64 {
+        get(){
+            Float64.getE()
         }
     }
 }
 
-let zeroBigInt = BigInt(0)
-let oneBigInt = BigInt(1)
-let tenBigInt = BigInt(10)
-let oneHundredBigInt = BigInt(100)
+private let zeroBigInt = BigInt(0)
+private let oneBigInt = BigInt(1)
+private let tenBigInt = BigInt(10)
+private let oneHundredBigInt = BigInt(100)
 
 public interface ExtendBigInt {
-    static prop ZERO: BigInt
-    static prop ONE: BigInt
-    static prop TEN: BigInt
-    static prop ONE_HUNDRED: BigInt
+    static prop zero: BigInt
+    static prop one: BigInt
+    static prop ten: BigInt
+    static prop oneHundred: BigInt
 }
 
 extend BigInt <: ExtendBigInt {
-    public static prop ZERO: BigInt {
+    public static prop zero: BigInt {
         get() {
             zeroBigInt
         }
     }
-    public static prop ONE: BigInt {
+    public static prop one: BigInt {
         get() {
             oneBigInt
         }
     }
-    public static prop TEN: BigInt {
+    public static prop ten: BigInt {
         get() {
             tenBigInt
         }
     }
-    public static prop ONE_HUNDRED: BigInt {
+    public static prop oneHundred: BigInt {
         get() {
             oneHundredBigInt
         }
     }
 }
 
-let zeroDecimal = Decimal('0')
-let oneDecimal = Decimal('1')
-let tenDecimal = Decimal('10')
-let oneHundredDecimal = Decimal("100")
-let piDecimal = Decimal(Float64.PI.toString())
-let eDecimal = Decimal(Float64.E.toString())
+private let zeroDecimal = Decimal('0')
+private let oneDecimal = Decimal('1')
+private let tenDecimal = Decimal('10')
+private let oneHundredDecimal = Decimal("100")
+private let piDecimal = Decimal(Float64.PI.toString())
+private let eDecimal = Decimal(Float64.E.toString())
 
 public interface ExtendDecimal {
-    static prop ZERO: Decimal
-    static prop ONE: Decimal
-    static prop TEN: Decimal
-    static prop ONE_HUNDRED: Decimal
+    static prop zero: Decimal
+    static prop one: Decimal
+    static prop ten: Decimal
+    static prop oneHundred: Decimal
     static prop PI: Decimal
     static prop E: Decimal
 }
 
 extend Decimal <: ExtendDecimal {
-    public static prop ZERO: Decimal {
+    public static prop zero: Decimal {
         get() {
             zeroDecimal
         }
     }
-    public static prop ONE: Decimal {
+    public static prop one: Decimal {
         get() {
             oneDecimal
         }
     }
-    public static prop TEN: Decimal {
+    public static prop ten: Decimal {
         get() {
             tenDecimal
         }
     }
-    public static prop ONE_HUNDRED: Decimal {
+    public static prop oneHundred: Decimal {
         get() {
             oneHundredDecimal
         }

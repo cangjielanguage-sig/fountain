@@ -70,7 +70,7 @@ extend<K, V> ConcurrentHashMap<K, V> <: ConcurrentMapData<ConcurrentHashMap<K, V
             case itr: Iterable<(Data, Data)> => 
                 for((dk, dv) in itr){
                     if(let (Some(k: K), Some(v: V)) <- (internal_f_data_tryFromData<K>(dk, flag), internal_f_data_tryFromData<V>(dv, flag))){
-                        map.put(k, v)
+                        map.add(k, v)
                     }else if((flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0){
                         throw DataException('data cannot be converted to tuple for ${TypeInfos.get<ConcurrentHashMap<K, V>>()} ')
                     }
@@ -79,12 +79,12 @@ extend<K, V> ConcurrentHashMap<K, V> <: ConcurrentMapData<ConcurrentHashMap<K, V
                 for((k, v) in itr){
                     match(k){
                         case mk: K => if(let Some(mv: V) <- internal_f_data_tryFromData<V>(v, flag)){
-                            map.put(mk, mv)
+                            map.add(mk, mv)
                         }else if((flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0){
                             throw DataException('data cannot be converted to tuple for ${TypeInfos.get<ConcurrentHashMap<K, V>>()}, current tuple is (${k}, ${v})')
                         }
                         case _ => if(let (Some(mk: K), Some(mv: V)) <- (internal_f_data_tryFromData<K>(k.toData(), flag), internal_f_data_tryFromData<V>(v, flag))){
-                            map.put(mk, mv)
+                            map.add(mk, mv)
                         }else if((flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0){
                             throw DataException('data cannot be converted to tuple for ${TypeInfos.get<ConcurrentHashMap<K, V>>()}, current tuple is (${k}, ${v})')
                         }

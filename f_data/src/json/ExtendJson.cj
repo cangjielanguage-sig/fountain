@@ -10,7 +10,7 @@
 package f_data.json
 
 import std.io.{InputStream, StringReader, OutputStream, StringWriter, ByteBuffer}
-import encoding.json.*
+import stdx.encoding.json.*
 
 import f_data.exception.DataException
 
@@ -56,6 +56,7 @@ extend JsonValue <: ExtendJsonValue {
                 DataJsonArray(x)
             case x: JsonObject => 
                 DataJsonObject(x)
+            case _ => throw UnreachableException()
         }
     }
     public static func tryFromData(data: Data, flag!: DataConversionFlag = DEFAULT_DATA_FLAG): Any {

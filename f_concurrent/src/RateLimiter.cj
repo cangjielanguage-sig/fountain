@@ -9,8 +9,6 @@
  */
 package f_concurrent
 
-import f_concurrent.exception.RateLimiterException
-
 sealed abstract class RateLimiter<T> {
     public RateLimiter(protected let timeout: Duration){
         if(timeout <= Duration.Zero){
@@ -23,8 +21,8 @@ sealed abstract class RateLimiter<T> {
     public func exec(default: ?T, task: () -> ?T): ?T
 }
 public class UnlimitedRateLimiter<T> <: RateLimiter<T> {
-    public static let INSTANCE = UnlimitedRateLimiter<T>()
-    private init(){
+    // public static let INSTANCE = UnlimitedRateLimiter<T>()
+    public init(){
         super(Duration.Max)
     }
     public func exec(default: ?T, task: () -> ?T): ?T {

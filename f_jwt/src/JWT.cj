@@ -12,12 +12,12 @@ package f_jwt
 import std.collection.{HashMap, Map}
 import std.convert.Parsable
 import std.time.DateTime
-import crypto.digest.*
-import crypto.keys.PadOption
-import encoding.json.*
-import encoding.hex.*
-import encoding.base64.*
-import crypto.keys.*
+import stdx.crypto.digest.*
+import stdx.crypto.keys.PadOption
+import stdx.encoding.json.*
+import stdx.encoding.hex.*
+import stdx.encoding.base64.*
+import stdx.crypto.keys.*
 import f_data.{ObjectData, DataObject}
 import f_exception.UnreadableException
 import f_jwt.exception.JWTException

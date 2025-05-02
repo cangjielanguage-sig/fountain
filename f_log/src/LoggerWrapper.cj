@@ -12,7 +12,7 @@ package f_log
 import std.sync.AtomicReference
 import std.process.Process
 import std.time.DateTime
-import log.LogLevel
+import stdx.log.LogLevel
 
 public class LoggerWrapper <: AbstractLogger {
     private var facade: AtomicReference<LoggerAppenderFacade>

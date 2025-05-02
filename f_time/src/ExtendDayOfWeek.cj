@@ -11,17 +11,9 @@ package f_time
 
 public interface ExtendDayOfWeek{
     operator func -(day: DayOfWeek): Int64
-    operator func -(day: Int64): DayOfWeek
-    operator func +(day: Int64): DayOfWeek
 }
 extend DayOfWeek <: ExtendDayOfWeek{
     public operator func -(day: DayOfWeek): Int64 {
         this.value() - day.value()
-    }
-    public operator func -(day: Int64): DayOfWeek {
-        DayOfWeek.of(this.value() - day)
-    }
-    public operator func +(day: Int64): DayOfWeek {
-        DayOfWeek.of(this.value() + day)
     }
 }

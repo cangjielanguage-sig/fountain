@@ -61,7 +61,7 @@ extend Bool <: DataFields<Bool> {
                     None<Bool>
                 }
             case x: DataReal =>
-                x.toDecimal() != Decimal.ZERO
+                x.toDecimal() != Decimal.zero
             case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException('(${data}) cannot be converted to ${TypeInfos.get<Bool>()}')
             case _ => None<Bool>
         }

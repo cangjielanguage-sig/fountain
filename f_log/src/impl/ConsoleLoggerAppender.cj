@@ -13,7 +13,7 @@ package f_log.impl
 import std.process.Process
 import std.sync.ReentrantMutex
 import std.time.DateTime
-import log.* 
+import stdx.log.* 
 import f_exception.*
 import f_log.exception.*
 public import f_log.*
