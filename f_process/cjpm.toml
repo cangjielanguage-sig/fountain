@@ -3,7 +3,7 @@
   f_io = {path = "../f_io"}
   f_regex = {path = "../f_regex"}
 [package]
-  cjc-version = "0.58.3"
+  cjc-version = "0.60.5"
   compile-option = "-O2"
   description = "nothing here"
   link-option = ""

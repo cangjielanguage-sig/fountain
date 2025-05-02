@@ -3,7 +3,7 @@
   f_exception = {path = "../f_exception"}
   f_log = {path = "../f_log"}
 [package]
-  cjc-version = "0.58.3"
+  cjc-version = "0.60.5"
   compile-option = "-O2"
   description = "nothing here"
   link-option = ""

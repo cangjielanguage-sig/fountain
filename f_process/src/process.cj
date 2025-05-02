@@ -9,10 +9,11 @@
 */
 package f_process
 
-import std.collection.Map
+import std.collection.{Map, HashMap}
+import std.env.*
 import std.fs.Path
 import std.io.{InputStream, OutputStream}
-import std.process.{Process, SubProcess, ProcessRedirect}
+import std.process.{Process, SubProcess, ProcessRedirect, launch}
 import f_io.{asyncPipe, pipe}
 import f_regex.*
 
@@ -46,8 +47,17 @@ extend String <: ExtendProcess {
     private func link(input: InputStream, output: OutputStream, bufsize: Int64){
         asyncPipe(input: input, output: output, bufferSize: bufsize)
     }
-    public func piped(workingDirectory!: ?Path = Process.current.workingDirectory,
-            environment!: ?Map<String, String> = Process.current.environment,
+    private prop enviromentVariables: Map<String, String> {
+        get(){
+            let vars = HashMap<String, String>()
+            for((k, v) in getVariables()){
+                vars[k] = v
+            }
+            vars
+        }
+    }
+    public func piped(workingDirectory!: ?Path = getWorkingDirectory(),
+            environment!: ?Map<String, String> = enviromentVariables,
             stdIn!: InputStream,
             stdOut!: OutputStream,
             bufSize!: Int64 = 4096,
@@ -58,8 +68,8 @@ extend String <: ExtendProcess {
         link(tuple[1].getOrThrow().stdOut, stdOut, bufSize)
         link(stdIn, tuple[0].getOrThrow().stdIn, bufSize)
     }
-    public func piped(workingDirectory!: ?Path = Process.current.workingDirectory,
-            environment!: ?Map<String, String> = Process.current.environment,
+    public func piped(workingDirectory!: ?Path = getWorkingDirectory(),
+            environment!: ?Map<String, String> = enviromentVariables,
             stdOut!: OutputStream,
             bufSize!: Int64 = 4096,
             stdIn!: ProcessRedirect = Pipe,
@@ -70,8 +80,8 @@ extend String <: ExtendProcess {
         link(tuple[1].getOrThrow().stdOut, stdOut, bufSize)
         tuple[0].getOrThrow()
     }
-    public func piped(workingDirectory!: ?Path = Process.current.workingDirectory,
-            environment!: ?Map<String, String> = Process.current.environment,
+    public func piped(workingDirectory!: ?Path = getWorkingDirectory(),
+            environment!: ?Map<String, String> = enviromentVariables,
             stdIn!: InputStream,
             bufSize!: Int64 = 4096,
             stdOut!: ProcessRedirect = Pipe,
@@ -82,8 +92,8 @@ extend String <: ExtendProcess {
         link(stdIn, tuple[0].getOrThrow().stdIn, bufSize)
         tuple[1].getOrThrow()
     }
-    public func piped(workingDirectory!: ?Path = Process.current.workingDirectory,
-            environment!: ?Map<String, String> = Process.current.environment,
+    public func piped(workingDirectory!: ?Path = getWorkingDirectory(),
+            environment!: ?Map<String, String> = enviromentVariables,
             stdIn!: ProcessRedirect = Pipe,
             stdOut!: ProcessRedirect = Pipe,
             stdErr!: ProcessRedirect = Inherit): (?SubProcess, ?SubProcess) {
@@ -121,13 +131,13 @@ extend String <: ExtendProcess {
         }
         (first, last)
     }
-    public func exec(workingDirectory!: ?Path = Process.current.workingDirectory,
-            environment!: ?Map<String, String> = Process.current.environment,
+    public func exec(workingDirectory!: ?Path = getWorkingDirectory(),
+            environment!: ?Map<String, String> = enviromentVariables,
             stdIn!: ProcessRedirect = Pipe,
             stdOut!: ProcessRedirect = Pipe,
             stdErr!: ProcessRedirect = Inherit): SubProcess {
         let command = this.trimAscii().split(' ', removeEmpty: true)
-        Process.start(command[0], if (command.size > 1) {
+        launch(command[0], if (command.size > 1) {
             command[1 .. ]
         } else {
             []

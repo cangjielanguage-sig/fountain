@@ -9,39 +9,27 @@
 */
 package f_process
 
-import std.io.InputStream
-public import std.process.CurrentProcess
+import std.io.{InputStream, OutputStream}
+import std.env.*
 public import std.fs.{Path, canonicalize}
 
 import charset4cj.charset.encoding.Charset
 import charset4cj.charset.{Charsets, TextReader, TextWriter}
 // import charset4cj.{Charset, Charsets, TextReader, TextWriter}
 
-public interface ExtendCurrentProcess {
-    func stdReader(charset!: Charset): TextReader
-    func stdOutWriter(charset!: Charset): TextWriter
-    func stdErrWriter(charset!: Charset): TextWriter
-    prop absoluteCommand: Path
-    prop absoluteCommandDir: Path
+
+public func stdReader(charset!: Charset = Charsets.UTF8): TextReader{
+    TextReader(getStdIn(), charset: charset)
 }
-extend CurrentProcess <: ExtendCurrentProcess {
-    public func stdReader(charset!: Charset = Charsets.UTF8): TextReader{
-        TextReader(this.stdIn, charset: charset)
-    }
-    public func stdOutWriter(charset!: Charset = Charsets.UTF8): TextWriter{
-        TextWriter(this.stdOut, charset: charset)
-    }
-    public func stdErrWriter(charset!: Charset = Charsets.UTF8): TextWriter{
-        TextWriter(this.stdErr, charset: charset)
-    }
-    public prop absoluteCommand: Path {
-        get(){
-            canonicalize(this.command)
-        }
-    }
-    public prop absoluteCommandDir: Path {
-        get(){
-            this.absoluteCommand.parent
-        }
-    }
+public func stdOutWriter(charset!: Charset = Charsets.UTF8): TextWriter{
+    TextWriter(getStdOut(), charset: charset)
+}
+public func stdErrWriter(charset!: Charset = Charsets.UTF8): TextWriter{
+    TextWriter(getStdErr(), charset: charset)
+}
+public func getAbsoluteCommand(): Path {
+    canonicalize(getCommand())
+}
+public func getAbsoluteCommandDir(): Path {
+    getAbsoluteCommand().parent
 }

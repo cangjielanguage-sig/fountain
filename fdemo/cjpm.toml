@@ -4,7 +4,7 @@
   f_time = {path = "../f_time"}
 
 [package]
-  cjc-version = "0.58.3"
+  cjc-version = "0.60.5"
   compile-option = "-O2"
   description = "nothing here"
   link-option = ""
