@@ -12,7 +12,7 @@ package f_concurrent.eventbus
 import std.collection.{TreeMap, ArrayList}
 import std.collection.concurrent.{BlockingQueue, ConcurrentHashMap}
 import std.runtime.ProcessorInfo
-import std.sync.{Monitor, ReentrantMutex, AtomicBool}
+import std.sync.{Mutex, AtomicBool}
 import std.time.DateTime
 import stdx.crypto.crypto.SecureRandom
 import f_base.WorkerStrategy
@@ -23,12 +23,15 @@ import f_concurrent.eventbus.exception.EventBusException
  */
 public class EventBus {
     private static let THREAD_LOCAL_RANDOM = ThreadLocal<SecureRandom>()
-    private let mutex = ReentrantMutex()
-    private let monitor = Monitor()
+    private let mutex = Mutex()
+    private let monitor = Mutex()
+    private let condition = synchronized(monitor){
+        monitor.condition()
+    }
     private var workers: Array<Worker> = []
     
     private var maxQueueSize = (-1, -1) // (maxQueueSize, longestQueueIndex)
-    private let queueMutex = ReentrantMutex()
+    private let queueMutex = Mutex()
     private let seizeQueue: BlockingQueue<Int64>
     private let toThrowIfNotMatch: Bool
     private var doArrange: (Int64, Event) -> Bool = {_, _ => false}
@@ -310,7 +313,7 @@ public class EventBus {
                         convert(x)
                     } else if (notified.load()) {
                         None<T>
-                    } else if (toWaitIfNeed && monitor.wait(timeout: timeout)) {
+                    } else if (toWaitIfNeed && condition.wait(timeout: timeout)) {
                         get(false)
                     } else if (let Some(x) <- datas.remove(threadId)) {
                         convert(x)
@@ -331,7 +334,7 @@ public class EventBus {
         synchronized(monitor) {
             this.datas.put(arrangedThreadId, data)
             notified.store(true)
-            monitor.notify()
+            condition.notify()
         }
     }
 }

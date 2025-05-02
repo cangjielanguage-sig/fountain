@@ -11,7 +11,7 @@ package f_bean
 
 public class BeanFactory {
     public static let instance = BeanFactory()
-    private let mutex = ReentrantMutex()
+    private let mutex = Mutex()
     private let beans = HashMap<String, BeanManager>()
     private let beanTypeMap = HashMap<TypeInfo, TreeSet<BeanManager>>()
     private let registered = AtomicBool(false)

@@ -9,7 +9,7 @@
  */
 package f_util
 
-import std.sync.ReentrantMutex
+import std.sync.Mutex
 import std.collection.{ArrayList, Map, HashMap}
 import std.convert.Parsable
 import std.time.DateTime
@@ -41,7 +41,7 @@ import f_regex.*
 public class PathPattern {
     public init() {}
 
-    private let mutex = ReentrantMutex()
+    private let mutex = Mutex()
     private let patterns = ArrayList<PathNode>()
     private let originPatterns = ArrayList<ArrayList<(String, Any)>>()
 

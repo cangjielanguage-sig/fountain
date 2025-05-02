@@ -10,7 +10,7 @@
 package f_aspect
 
 import std.collection.concurrent.ConcurrentHashMap
-import std.sync.ReentrantMutex
+import std.sync.Mutex
 import f_base.*
 import f_bean.{BeanFactory, BeanManager}
 import f_collection.*
@@ -19,7 +19,7 @@ import f_regex.*
 
 public class Aspects {
     private static let aspects = ConcurrentHashMap<QualifiedFuncInfo, (Array<Any>) -> Any>()
-    private static let mutex = ReentrantMutex()
+    private static let mutex = Mutex()
     private static func doProceed<T>(funcInfo: InvocationFuncInfo, fn: (Array<Any>) -> T): T {
         let r = if(let Some(f) <- aspects.get(funcInfo.qualifiedFuncInfo)){
             f

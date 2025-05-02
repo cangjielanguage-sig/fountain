@@ -9,7 +9,7 @@
  */
 package f_base
 
-import std.sync.Monitor
+import std.sync.Mutex
 import f_exception.OverSizeException
 
 public interface OverSizePolicy<T> {
@@ -42,7 +42,10 @@ public class CallerRunsOverSizePolicy<T> <: OverSizePolicy<T> {
     }
 }
 public class BlockingOverSizePolicy<T> <: OverSizePolicy<T> {
-    private let monitor = Monitor()
+    private let monitor = Mutex()
+    private let condition = synchronized(monitor){
+        monitor.condition()
+    }
     public BlockingOverSizePolicy(
         private let recovered: (T) -> Bool,
         private let timeout!: Duration = Duration.Max,
@@ -50,7 +53,7 @@ public class BlockingOverSizePolicy<T> <: OverSizePolicy<T> {
     ) {}
     public func reject(o: T, fn: () -> Unit): Unit {
         synchronized(monitor) {
-            monitor.wait(timeout: timeout)
+            condition.wait(timeout: timeout)
         }
         if (recovered(o)) {
             policy.reject(o, fn)
@@ -58,12 +61,12 @@ public class BlockingOverSizePolicy<T> <: OverSizePolicy<T> {
     }
     public func notifyAll() {
         synchronized(monitor) {
-            monitor.notifyAll()
+            condition.notifyAll()
         }
     }
     public func notify() {
         synchronized(monitor) {
-            monitor.notify()
+            condition.notify()
         }
     }
 }

@@ -14,13 +14,13 @@ import std.collection.concurrent.BlockingQueue
 import std.math.MathExtension
 import std.process.Process
 import std.time.DateTime
-import std.sync.{ReentrantMutex, AtomicInt64, AtomicReference, Timer, AtomicBool}
+import std.sync.{Mutex, AtomicInt64, AtomicReference, Timer, AtomicBool}
 import f_base.*
 import f_exception.UnreachableException
 import f_collection.PriorityQueue
 
 public class HeapCache<V> where V <: Object {
-    private let mutex = ReentrantMutex()
+    private let mutex = Mutex()
     private let store: ConcHashMap<Priority<V>>
     private let alive = AtomicBool(true)
 

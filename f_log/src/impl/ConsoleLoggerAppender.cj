@@ -11,7 +11,7 @@
 package f_log.impl
 
 import std.process.Process
-import std.sync.ReentrantMutex
+import std.sync.Mutex
 import std.time.DateTime
 import stdx.log.* 
 import f_exception.*

@@ -15,7 +15,7 @@ import std.convert.Parsable
 import std.math.RoundingMode
 import std.math.numeric.Decimal
 import std.reflect.TypeInfo
-import std.sync.ReentrantMutex
+import std.sync.Mutex
 import std.time.DateTime
 import f_base.*
 import f_collection.LinkedHashMap
@@ -45,7 +45,7 @@ import f_util.exception.TextTemplateException
  */
 public class TextTemplate {
     private static let templates = ConcurrentHashMap<String, TextTemplate>()
-    private static let mutex = ReentrantMutex()
+    private static let mutex = Mutex()
     private static const TIME_FORMAT_PREFIX = "time:"
     private static const NUMBER_FORMAT_PREFIX = "number:"
 

@@ -10,11 +10,11 @@
 package f_cache
 
 import std.collection.Map
-import std.sync.ReentrantMutex
+import std.sync.Mutex
 import f_collection.{LinkedHashMap, ValueEqualMap, ValueContainsMap}
 
 class SyncLinkedHashMap<V> <: Collection<(String, V)>{
-    private let mutex = ReentrantMutex()
+    private let mutex = Mutex()
     private let map = LinkedHashMap<String, V>()
     public func iterator(): Iterator<(String, V)>{
         SyncLinkedHashMapIterator<V>(map.iterator(), mutex)
@@ -74,7 +74,7 @@ class SyncLinkedHashMap<V> <: Collection<(String, V)>{
 }
 class SyncLinkedHashMapIterator<V> <: Iterator<(String, V)>{
     SyncLinkedHashMapIterator(private let itr: Iterator<(String, V)>,
-                              private let mutex: ReentrantMutex){}
+                              private let mutex: Mutex){}
     public func next(): ?(String, V){
         synchronized(mutex){
             itr.next()

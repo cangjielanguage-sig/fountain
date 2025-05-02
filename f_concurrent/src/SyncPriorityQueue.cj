@@ -10,7 +10,7 @@
 package f_concurrent
 
 public class SyncPriorityQueue<T> <: Queue<T> & Collection<T> & Growable {
-    private let mutex = ReentrantMutex()
+    private let mutex = Mutex()
     private let queue: PriorityQueue<T>
     public init(
         comparator: (T, T) -> Ordering,
@@ -101,7 +101,7 @@ public class SyncPriorityQueue<T> <: Queue<T> & Collection<T> & Growable {
 }
 public class SyncPriorityQueueIterator<T> <: Iterator<T> {
     public SyncPriorityQueueIterator(private let itr: Iterator<T>, 
-                                     private let mutex: ReentrantMutex){}
+                                     private let mutex: Mutex){}
     public func next(): ?T {
         synchronized(mutex){
             itr.next()

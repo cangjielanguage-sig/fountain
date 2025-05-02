@@ -11,7 +11,7 @@ package f_bean
 
 public class BeanManager <: Comparable<BeanManager> {
     private static let serialGen = AtomicInt64(1)
-    private let mutex = ReentrantMutex()
+    private let mutex = Mutex()
     public let index = serialGen.fetchAdd(1)
     private let _name: String
     private let _bean = AtomicOptionReference()

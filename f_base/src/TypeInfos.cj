@@ -10,7 +10,7 @@
 package f_base
 
 import std.collection.concurrent.ConcurrentHashMap
-import std.sync.ReentrantMutex
+import std.sync.Mutex
 public import std.reflect.TypeInfo
 public import std.math.numeric.{BigInt, Decimal}
 public import std.time.DateTime
@@ -21,7 +21,7 @@ public import std.time.DateTime
 // }
 public class TypeInfos {
     private static let INFOS = ConcurrentHashMap<String, TypeInfo>()
-    private static let MUTEX = ReentrantMutex()
+    private static let MUTEX = Mutex()
 
     public static func get<T>(): TypeInfo{
         // Types<T>.INSTANCE

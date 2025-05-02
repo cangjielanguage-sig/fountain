@@ -14,7 +14,7 @@ import std.fs.{File, Directory, OpenMode}
 import std.io.SeekPosition
 import std.math.numeric.BigInt
 import std.process.Process
-import std.sync.{AtomicUInt16, AtomicInt64, ReentrantMutex}
+import std.sync.{AtomicUInt16, AtomicInt64, Mutex}
 import std.time.{TimeZone, DateTime}
 import stdx.crypto.crypto.*
 import stdx.crypto.digest.{MD5, SHA1}
@@ -579,7 +579,7 @@ public class TimestampSequenceBuilder {
     }
     static let timeStart = DateTime.of(year: 1582, month: 10, dayOfMonth: 15, hour: 0, minute: 0, second: 0,
         nanosecond: 0, timeZone: TimeZone.UTC)
-    private static let mutex = ReentrantMutex()
+    private static let mutex = Mutex()
 
     static func timestampAndSequence(randomSeq: Bool): (Int64, UInt16) {
         synchronized(mutex) {

@@ -9,7 +9,7 @@
  */
 package f_cache
 
-import std.sync.{AtomicInt64, AtomicBool, AtomicReference, ReentrantMutex}
+import std.sync.{AtomicInt64, AtomicBool, AtomicReference, Mutex}
 import std.time.DateTime
 
 /*
@@ -19,7 +19,7 @@ import std.time.DateTime
     ref: 访问次数
  */
 public open class Priority<V> <: Comparable<Priority<V>> where V <: Object {
-    let lock = ReentrantMutex()
+    let lock = Mutex()
     var index = -1
     private let ref = AtomicInt64(1) //缓存数据的使用次数
     private let birth = DateTime.now() //缓存数据的创建时间

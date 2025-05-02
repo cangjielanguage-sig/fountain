@@ -13,7 +13,7 @@ package f_log
 import std.collection.{ArrayList, HashMap, TreeMap, Map}
 import std.collection.concurrent.ConcurrentHashMap
 import std.io.OutputStream
-import std.sync.{AtomicBool, ReentrantMutex}
+import std.sync.{AtomicBool, Mutex}
 import std.time.DateTime
 import stdx.log.{LogLevel, Attr, LogRecord, LogWriter}
 import f_base.OS
@@ -25,7 +25,7 @@ import f_log.output.LogWriterImpl
 import f_util.{TextTemplate, TextTemplateKey, TextTemplateObject}
 
 public abstract class AbstractLogger <: Logger & Resource {
-    private let lock = ReentrantMutex()
+    private let lock = Mutex()
     protected let name: String
     protected var level_: LogLevel
     protected let pattern: LogPattern

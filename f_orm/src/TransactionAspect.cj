@@ -12,7 +12,7 @@ package f_orm
 import std.collection.{Set, HashSet}
 import std.collection.concurrent.ConcurrentHashMap
 import std.reflect.*
-import std.sync.ReentrantMutex
+import std.sync.Mutex
 import f_aspect.*
 import f_base.*
 import f_bean.{BeanFactory, BeanMeta}
@@ -27,7 +27,7 @@ public class TransactionAspect <: Aspect {
     }
     private init(){}
     private let rollbackExceptions = ConcurrentHashMap<String, HashSet<TypeInfo>>()
-    private let mutex = ReentrantMutex()
+    private let mutex = Mutex()
     private let transactionalMap = ConcurrentHashMap<String, Transactional>()
     
     public func proceed(funcInfo: InvocationFuncInfo, point: (Array<Any>) -> Any): Any {

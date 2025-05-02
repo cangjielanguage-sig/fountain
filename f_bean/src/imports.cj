@@ -14,7 +14,7 @@ internal import std.collection.concurrent.ConcurrentHashMap
 internal import std.convert.*
 internal import std.process.{Process, CurrentProcess}
 internal import std.reflect.*
-internal import std.sync.{AtomicInt64, AtomicBool, AtomicOptionReference, ReentrantMutex}
+internal import std.sync.{AtomicInt64, AtomicBool, AtomicOptionReference, Mutex}
 internal import f_base.*
 internal import f_config.Config
 internal import f_data.*

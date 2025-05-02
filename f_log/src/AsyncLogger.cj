@@ -12,7 +12,7 @@ package f_log
 
 import std.collection.concurrent.{ArrayBlockingQueue, ConcurrentHashMap}
 import std.io.OutputStream
-import std.sync.ReentrantMutex
+import std.sync.Mutex
 import std.time.DateTime
 
 import stdx.log.{LogLevel, LogRecord}
@@ -21,7 +21,7 @@ import f_log.exception.LogException
 
 public abstract class AsyncLogger <: AbstractLogger {
     private static let queueMap = ConcurrentHashMap<String, ArrayBlockingQueue<() -> Unit>>()
-    private static let mutex = ReentrantMutex()
+    private static let mutex = Mutex()
     private let timeout: Duration
     private let policy: AsyncTimeoutPolicy
     private let queue: ArrayBlockingQueue<() -> Unit>

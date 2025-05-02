@@ -10,7 +10,7 @@
 package f_concurrent
 
 public class BloomFilter<T> where T <: Hashable {
-    private let mutex = ReentrantMutex()
+    private let mutex = Mutex()
     private let bits = BitSet()
     public BloomFilter(private let hashers: Array<(T, Int64) -> Int64>) {}
     public init(iterate!: Int64 = 5) {

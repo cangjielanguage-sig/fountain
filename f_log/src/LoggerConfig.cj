@@ -11,7 +11,7 @@ package f_log
 
 import std.convert.Parsable
 import std.regex.Regex
-import std.sync.ReentrantMutex
+import std.sync.Mutex
 import stdx.log.LogLevel
 import f_config.Config
 import f_data.*

@@ -15,7 +15,7 @@ import std.collection.concurrent.ArrayBlockingQueue
 import std.fs.{File, Directory, OpenMode}
 import std.io.SeekPosition
 import std.math.MathExtension
-import std.sync.{Timer, ReentrantMutex, AtomicReference, AtomicUInt64}
+import std.sync.{Timer, Mutex, AtomicReference, AtomicUInt64}
 import std.time.DateTime
 import stdx.compress.zlib.{WrapType, CompressLevel, CompressOutputStream}
 import stdx.log.LogLevel

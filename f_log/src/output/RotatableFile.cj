@@ -15,7 +15,7 @@ import std.fs.{File, Directory, OpenMode, exists, rename, removeIfExists}
 import std.io.{SeekPosition, OutputStream}
 import std.math.MathExtension
 import std.process.Process
-import std.sync.{Timer, ReentrantMutex, AtomicReference, AtomicUInt64}
+import std.sync.{Timer, Mutex, AtomicReference, AtomicUInt64}
 import std.time.DateTime
 import stdx.compress.zlib.{WrapType, CompressLevel, CompressOutputStream}
 import f_base.*
@@ -183,7 +183,7 @@ protected class RotatableFile <: OutputStream & Resource{
             case _ => current.addNanoseconds(-1).toString("yyyyMMddHHmmssSSS")
         }
     }
-    private let fileLock = ReentrantMutex()
+    private let fileLock = Mutex()
     private func rotateFileIfNeed() {
         synchronized(fileLock) {//此处不能使用双重检查锁，否则可能导致一个线程试图向另一个线程已经重命名的文件导致写失败
             let current = timeunit.trim(DateTime.now())

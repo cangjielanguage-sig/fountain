@@ -10,11 +10,11 @@
 package f_data.path
 
 import std.collection.concurrent.ConcurrentHashMap
-import std.sync.ReentrantMutex
+import std.sync.Mutex
 
 internal class SolidDataPath <: DataPath {
     private static let SOLID = ConcurrentHashMap<String, DataPath>()
-    private static let lock = ReentrantMutex()
+    private static let lock = Mutex()
     private init(){}
     static func compile(path: String): DataPath {
         if(let Some(p) <- SOLID.get(path)){

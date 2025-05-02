@@ -9,15 +9,17 @@
  */
 package f_ticktock
 
-import std.sync.{Monitor, AtomicInt64}
+import std.sync.{Mutex, AtomicInt64}
 
 @Test
 public class Launcher_test {
-    private let lock = Monitor()
-
+    private let lock = Mutex()
+    private let condition = synchronized(lock){
+        lock.condition()
+    }
     private func waitAndShutdown(launcher: Ticktock) {
         synchronized(lock) {
-            lock.wait(timeout: 30 * Duration.second)
+            condition.wait(timeout: 30 * Duration.second)
         }
         launcher.shutdown()
     }
@@ -453,7 +455,12 @@ class LauncherTestTask1_2 <: TicktockTask {
     }
 }
 class LauncherTestTask2 <: TicktockTask {
-    LauncherTestTask2(let lock: Monitor) {}
+    private let condition: Condition
+    LauncherTestTask2(let lock: Mutex) {
+        synchronized(lock){
+            condition = lock.condition()
+        }
+    }
     public prop name: String {
         get() {
             "LauncherTest-Task2"
@@ -462,7 +469,7 @@ class LauncherTestTask2 <: TicktockTask {
     public func execute(): Unit {
         println("${name} ${DateTime.now()}")
         synchronized(lock) {
-            lock.notifyAll()
+            condition.notifyAll()
         }
     }
 }
