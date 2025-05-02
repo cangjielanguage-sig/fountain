@@ -14,7 +14,9 @@ import std.math.numeric.{BigInt, Decimal}
 import f_regex.*
 
 public interface DataParsable<T> where T <: DataParsable<T> {
-    static func parse(s: String): T 
+    static func parse(s: String): T {
+        tryParse(s).getOrThrow{DataParsableException('${s} cannot be parsed to ${TypeInfos.get<T>()}')}
+    }
     static func tryParse(s: String): ?T
 }
 
