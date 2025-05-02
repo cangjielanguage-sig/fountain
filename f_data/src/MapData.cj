@@ -48,6 +48,9 @@ public class DataMap<M, K, V> <: Data & Collection<(Data, Data)> where K <: Equa
     public static func tryParse(s: String): ?Data {
         None<Data>
     }
+    public static func parse(s: String): Data {
+        throw DataParsableException('${s} cannot be parsed to ${TypeInfos.get<DataMap<M, K, V>>()}')
+    }
 }
 
 public interface MapRawType{

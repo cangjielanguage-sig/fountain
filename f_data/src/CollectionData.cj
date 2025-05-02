@@ -46,6 +46,9 @@ public class DataCollection<C, T> <: Data & Collection<Data> where T <: DataFiel
     public static func tryParse(s: String): ?Data {
         None<Data>
     }
+    public static func parse(s: String): Data {
+        throw DataParsableException('${s} cannot be parsed to ${TypeInfos.get<DataCollection<C, T>>()}')
+    }
 }
 
 public interface CollectionRawType{

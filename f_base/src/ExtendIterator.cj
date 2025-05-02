@@ -63,7 +63,7 @@ extend<T> Iterator<T> <: ExtendIterator<T> {
                 v => match (v) {
                     case x: Iterator<R> => x
                     case _ => throw IllegalArgumentException(
-                        '${TypeInfo.of<T>()} does not match ${TypeInfo.of<Iterator<R>>()}')
+                        '${TypeInfos.get<T>()} does not match ${TypeInfos.get<Iterator<R>>()}')
                 }
             }
         } else {

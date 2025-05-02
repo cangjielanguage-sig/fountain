@@ -14,13 +14,14 @@ import std.math.numeric.{BigInt, Decimal}
 import f_regex.*
 
 public interface DataParsable<T> where T <: DataParsable<T> {
-    static func parse(s: String): T {
-        tryParse(s).getOrThrow {DataParsableException('${s} cannot be parsed to ${TypeInfo.of<T>()}')}
-    }
+    static func parse(s: String): T 
     static func tryParse(s: String): ?T
 }
 
 extend Duration <: DataParsable<Duration> {
+    public static func parse(s: String): Duration {
+        tryParse(s).getOrThrow {DataParsableException('${s} cannot be parsed to ${TypeInfos.get<Duration>()}')}
+    }
     public static func tryParse(s: String): ?Duration {
         let bytes = ArrayList<Byte>()
         var duration = Duration.Zero

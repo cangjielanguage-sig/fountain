@@ -151,6 +151,9 @@ public class DataJsonArray <: Data & Collection<Data> {
     public static func tryParse(s: String): ?Data {
         JsonValue.fromStr(s).toData()
     }
+    public static func parse(s: String): Data {
+        tryParse(s).getOrThrow {DataParsableException('${s} cannot be parsed to ${TypeInfos.get<DataJsonArray>()}')}
+    }
 }
 public class DataJsonObjectIterator <: Iterator<(String, Data)> {
     public DataJsonObjectIterator(private let itr: Iterator<(String, JsonValue)>){}
@@ -179,5 +182,8 @@ public class DataJsonObject <: Data & Collection<(String, Data)> {
     }
     public static func tryParse(s: String): ?Data {
         JsonValue.fromStr(s).toData()
+    }
+    public static func parse(s: String): Data {
+        tryParse(s).getOrThrow {DataParsableException('${s} cannot be parsed to ${TypeInfos.get<DataJsonObject>()}')}
     }
 }
