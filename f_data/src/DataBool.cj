@@ -25,7 +25,7 @@ public class DataBool <: Data & Hashable & Equatable<DataBool> {
         }
     }
     public static func parse(data: String): Data {
-        tryParse(data).getOrThrow{DataException("DataBool.parse receives string 'truer' 'false' or there upper cases, but current is ${data}")}
+        tryParse(data).getOrThrow{DataException("DataBool.parse receives string 'true' 'false' or their upper cases, but current is ${data}")}
     }
     public func toBool(): Bool {
         data
