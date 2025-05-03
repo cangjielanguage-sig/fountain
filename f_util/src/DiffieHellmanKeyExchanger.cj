@@ -84,7 +84,7 @@ abstract sealed class DiffieHellmanKeyExchanger{
     public open func key(m: Array<Byte>, p: Array<Byte>): String {
         ab()
         let mm = middle(m,p)
-        return mm.toString(36)
+        return mm.toString(radix: 36)
     }
 
     protected func middle(g: Array<Byte>, p: Array<Byte>): BigInt {

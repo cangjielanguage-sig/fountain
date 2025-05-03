@@ -38,7 +38,7 @@ public class BeanFactory {
         synchronized(mutex) {
             if (let Some(existed) <- beans.addIfAbsent(manager.name, manager)) {
                 throw BeanException(
-                    'duplicate bean name ${manager.name}, existed bean type is ${existed}, current bean type is ${manager.beanType}'
+                    'duplicate bean name ${manager.name}, existed bean type is ${existed.beanType}, current bean type is ${manager.beanType}'
                 )
             }
             let typeQueue = LinkedList<TypeInfo>()

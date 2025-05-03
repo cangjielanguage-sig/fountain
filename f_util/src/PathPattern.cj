@@ -672,18 +672,18 @@ open class PathNode <: Equatable<PathNode> {
         match (name) {
             case "*" => this.createStarNodeIfAbsent()
             case "**" => this.createDoubleStarNodeIfAbsent()
-            case _ => if (#"^\{#regex:.+\}$"#.regex(solid: true).matches(name).isSome()) {
+            case _ => if (#"^\{#regex:.+\}$"#.regex(solid: true).matches(name)) {
                 let idx = (name.indexOf(":") ?? -1) + 1
                 let n = name[idx..name.size - 1]
                 this.appendRegexNode(n, true)
-            } else if (#"^\{[a-zA-Z_]+\w*:.+\}$"#.regex(solid: true).matches(name).isSome()) {
+            } else if (#"^\{[a-zA-Z_]+\w*:.+\}$"#.regex(solid: true).matches(name)) {
                 let idx = name.indexOf(":") ?? -1
                 let reg = name[idx + 1..name.size - 1]
                 let n = name[1..idx]
                 this.createPlaceholderRegexNodeIfAbsent(n, reg, true)
-            } else if (#"^\{[a-zA-Z_]+\w*\}$"#.regex(solid: true).matches(name).isSome()) {
+            } else if (#"^\{[a-zA-Z_]+\w*\}$"#.regex(solid: true).matches(name)) {
                 return this.createPlaceholderNodeIfAbsent(name[1..name.size - 1])
-            } else if (#"^(.*\{[a-zA-Z_]+\w*\}.*)+$"#.regex(solid: true).matches(name).isSome()) {
+            } else if (#"^(.*\{[a-zA-Z_]+\w*\}.*)+$"#.regex(solid: true).matches(name)) {
                 return this.createComplexPathNode(name)
             } else if (name.contains("*") || name.contains("?")) {
                 return this.appendRegexNode(name, false)
@@ -801,7 +801,7 @@ open class RegexPathNode <: PathNode {
         }
     }
     protected func matches(name: String) {
-        return reg.matches(name).isSome()
+        return reg.matches(name)
     }
 }
 class PlaceholderRegexPathNode <: RegexPathNode {
@@ -871,7 +871,7 @@ class ComplexPathNode <: PathNode {
             let node = patterns[i]
             if (node is SubPathNode || node is RegexPathNode) {
                 match (reg.matcher(value).find()) {
-                    case Some(md) where !node.matches(md.matchStr(i + 1)) => return false
+                    case Some(md) where !node.matches(md.matchString(i + 1)) => return false
                     case _ => return false
                 }
             }
@@ -888,7 +888,7 @@ class ComplexPathNode <: PathNode {
                 let matcher = reg.matcher(value)
                 match (matcher.find()) {
                     case Some(md) =>
-                        let part = md.matchStr(i + 1)
+                        let part = md.matchString(i + 1)
                         if (node.matches(part)) {
                             let name = node.name
                             datas.add(name, part)

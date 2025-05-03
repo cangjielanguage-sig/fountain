@@ -262,6 +262,7 @@ abstract sealed class Value2String {
             case x: Value2PlainString => x.doFormat<K, V, O>(data, noneConverter)
             case x: Value2TimeString => x.doFormat<K, V, O>(data, noneConverter)
             case x: Value2NumberString => x.doFormat<K, V, O>(data, noneConverter)
+            case _ => throw UnreachableException()
         }
     }
 }
@@ -311,7 +312,7 @@ class Value2NumberString <: Value2String {
     private var enclosedInParentheses = false
     private var upperCase = false
     private var scale = 0i32
-    private var mode = RoundingMode.HALF_UP
+    private var mode = RoundingMode.HalfUp
 
     Value2NumberString(private let getter: ValueGetter, private let formatter: String){
         if (!#"^[oOxXeE\\+\\(]?(#+(\\.#+)?|(#*\\.#+))(,[a-zA-Z_]+)?$"#.regex(solid: false).matches(formatter)) {
@@ -348,7 +349,7 @@ class Value2NumberString <: Value2String {
             scale = 0
             if (commaIdx < 0) {
                 integer = formatter.size - hasSymbol
-                mode = RoundingMode.HALF_UP
+                mode = RoundingMode.HalfUp
             } else {//commaIdx>0
                 integer = commaIdx - hasSymbol
                 mode = parseRoundingMode(formatter[commaIdx + 1 .. ].toAsciiUpper())
@@ -357,7 +358,7 @@ class Value2NumberString <: Value2String {
             integer = 0
             if (commaIdx < 0) {
                 scale = Int32(formatter.size - 1)//去掉小数点
-                mode = RoundingMode.HALF_UP
+                mode = RoundingMode.HalfUp
             } else {//commaIdx>0
                 scale = Int32(commaIdx - 1)//去掉小数点
                 mode = parseRoundingMode(formatter[commaIdx + 1 .. ])
@@ -366,7 +367,7 @@ class Value2NumberString <: Value2String {
             integer = dotIdx - hasSymbol
             if (commaIdx < 0) {
                 scale = Int32(formatter.size - dotIdx - 1)
-                mode = RoundingMode.HALF_UP
+                mode = RoundingMode.HalfUp
             } else if (commaIdx > 0) {
                 scale = Int32(commaIdx - dotIdx - 1)
                 mode = parseRoundingMode(formatter[commaIdx + 1 ..])
@@ -375,12 +376,12 @@ class Value2NumberString <: Value2String {
     }
     private static func parseRoundingMode(mode: String): RoundingMode {
         match(mode.toAsciiUpper()){
-            case "UP" => UP
-            case "DOWN" => DOWN
-            case "CEILING" => CEILING
-            case "FLOOR" => FLOOR
-            case "HALF_UP" => HALF_UP
-            case "HALF_EVEN" => HALF_EVEN
+            case "UP" => Up
+            case "DOWN" => Down
+            case "CEILING" => Ceiling
+            case "FLOOR" => Floor
+            case "HALF_UP" | 'HALFUP' => HalfUp
+            case "HALF_EVEN" | 'HALFEVEN' => HalfEven
             case _ => throw TextTemplateException("${mode} is not a RoundingMode")
         }
     }
@@ -422,7 +423,7 @@ class Value2NumberString <: Value2String {
             }
             return string
         } else {
-            let string = BigInt(true, number.reScale(0, roundingMode: mode).toBigInt().toBytes()).toString(radix)
+            let string = BigInt(true, number.reScale(0, roundingMode: mode).toBigInt().toBytes()).toString(radix: radix)
             let l = string.size
             if (l < integer) {
                 return "${prefix}${0 * (integer - 1)}${string}"

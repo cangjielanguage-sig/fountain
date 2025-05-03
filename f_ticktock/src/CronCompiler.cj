@@ -48,8 +48,8 @@ public class CronCompiler {
                     cronc.put(wheelUnit, range)
                 } else {
                     for (value in unit.split(",")) {
-                        if (let Some(_) <- "^(\\d{1,2}|\\*)?/(\\d{1,2}|\\*)?-(\\d{1,2}|\\*)?$".regex(solid: true).
-                            matches(value)) { //value.contains("/") && value.contains("-")
+                        if ("^(\\d{1,2}|\\*)?/(\\d{1,2}|\\*)?-(\\d{1,2}|\\*)?$".regex(solid: true).matches(value)) {
+                            //value.contains("/") && value.contains("-")
                             var first = 0
                             var last = value.indexOf("/", first) ?? -1
                             var start = parsePart(value, first, last, wheelUnit.min)
@@ -63,7 +63,7 @@ public class CronCompiler {
                             last = value.size
                             var end = parsePart(value, first, last, wheelUnit.max)
                             putCronc(cronc, wheelUnit, start, end, duration)
-                        } else if (let Some(_) <- "^(\\d{1,2}|\\*)?/(\\d{1,2}|\\*)?$".regex(solid: true).matches(value)) {
+                        } else if ("^(\\d{1,2}|\\*)?/(\\d{1,2}|\\*)?$".regex(solid: true).matches(value)) {
                             var first = 0
                             var last = value.indexOf("/", first) ?? -1
                             var start = parsePart(value, first, last, wheelUnit.min)
@@ -75,7 +75,7 @@ public class CronCompiler {
                             var duration = parsePart(value, first, last, 1)
                             var end = wheelUnit.max
                             putCronc(cronc, wheelUnit, start, end, duration)
-                        } else if (let Some(_) <- "^(\\d{1,2}|\\*)?-(\\d{1,2}|\\*)?$".regex(solid: true).matches(value)) {
+                        } else if ("^(\\d{1,2}|\\*)?-(\\d{1,2}|\\*)?$".regex(solid: true).matches(value)) {
                             var first = 0
                             var last = value.indexOf("-", first) ?? -1
                             var start = parsePart(value, first, last, wheelUnit.min)
@@ -92,7 +92,7 @@ public class CronCompiler {
                             }
                         } else if (value == "L") {
                             cronc.putLast(wheelUnit)
-                        } else if (let Some(_) <- "^\\d{1,2}$".regex(solid: true).matches(value)) {
+                        } else if ("^\\d{1,2}$".regex(solid: true).matches(value)) {
                             var single = Int64.parse(value)
                             cronc.put(wheelUnit, wheelUnit.convertSingle(single))
                         } else {

@@ -80,7 +80,7 @@ public struct UUID <: Hashable & Comparable<UUID> & ToString & Parsable<UUID> {
         if(base == 16){
             return toString(false)
         }
-        BigInt(true, values).toString(base)
+        BigInt(true, values).toString(radix: base)
     }
     public func toHexString(){
         toString(16)

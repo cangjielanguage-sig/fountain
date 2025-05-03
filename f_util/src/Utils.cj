@@ -18,10 +18,10 @@ import f_regex.RegexFromString
   */
 public func computeBytes(size: String): Option<Int64> {
     let sizeRegex = #"^(\d+)([kmgtpezyKMGTPEZY]?)[bB]?$"#.regex(solid: true)
-    let matched = sizeRegex.matches(size).getOrThrow()
-    let num = Int64.parse(matched.matchStr(1))
+    let matched = sizeRegex.find(size, group: true).getOrThrow()
+    let num = Int64.parse(matched.matchString(1))
     if (matched.groupNumber() >= 2) {
-        let unit = matched.matchStr(2)
+        let unit = matched.matchString(2)
         return computeBytes(num, unit)
     }
     return num
