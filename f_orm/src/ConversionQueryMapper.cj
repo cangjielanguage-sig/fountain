@@ -9,15 +9,19 @@
  */
 package f_orm
 
-import f_orm.wrap.*
-
 public class ConversionQueryMaper<D, T, O> <: QueryMapper<O> {
     public init(
-        name!: String,
-        dataType!: DataType = unknown,
+        dataType!: DataType,
         converter!: (D) -> T,
         putter!: (O, T) -> Unit
     ) {
-        super(name: name, dataType: dataType, putter: {o, v => putter(o, converter(convert<D>(v)))})
+        super(dataType: dataType, putter: {o, v => putter(o, converter(convert<D>(v)))})
+    }
+    public init(
+        name!: String,
+        converter!: (D) -> T,
+        putter!: (O, T) -> Unit
+    ){
+        this(dataType: UnknownDataType(true, name), converter: converter, putter: putter)
     }
 }

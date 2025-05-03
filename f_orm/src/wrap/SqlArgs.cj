@@ -1,0 +1,101 @@
+/*
+    Copyright (c) [2022] [WuJingrun（吴京润）]
+    fountain is licensed under Mulan PSL v2.
+    You can use this software according to the terms and conditions of the Mulan PSL v2.
+    You may obtain a copy of Mulan PSL v2 at:
+            http://license.coscl.org.cn/MulanPSL2
+    THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+    See the Mulan PSL v2 for more details.  
+*/
+package f_orm.wrap
+
+public class SqlArgs <: Hashable & Equatable<SqlArgs> & ToString {
+    protected static let empty = SqlArgs()
+    private let args = ArrayList<SqlArg>()
+    protected func set(statement: Statement){
+        for(arg in args){
+            arg.set(statement)
+        }
+    }
+    public func add(arg: SqlArg){
+        args.add(arg)
+    }
+    public func add(arg: Bool){
+        add(BoolSqlArg(args.size, arg))
+    }
+    public func add(arg: Int8){
+        add(Int8SqlArg(args.size, arg))
+    }
+    public func add(arg: UInt8){
+        add(UInt8SqlArg(args.size, arg))
+    }
+    public func add(arg: Int16){
+        add(Int16SqlArg(args.size, arg))
+    }
+    public func add(arg: UInt16){
+        add(UInt16SqlArg(args.size, arg))
+    }
+    public func add(arg: Int32){
+        add(Int32SqlArg(args.size, arg))
+    }
+    public func add(arg: UInt32){
+        add(UInt32SqlArg(args.size, arg))
+    }
+    public func add(arg: Int64){
+        add(Int64SqlArg(args.size, arg))
+    }
+    public func add(arg: UInt64){
+        add(UInt64SqlArg(args.size, arg))
+    }
+    public func add(arg: BigInt){
+        add(BigIntSqlArg(args.size, arg))
+    }
+    public func add(arg: Decimal){
+        add(DecimalSqlArg(args.size, arg))
+    }
+    public func add(arg: Float16){
+        add(Float16SqlArg(args.size, arg))
+    }
+    public func add(arg: Float32){
+        add(Float32SqlArg(args.size, arg))
+    }
+    public func add(arg: Float64){
+        add(Float64SqlArg(args.size, arg))
+    }
+    public func add(arg: Rune){
+        add(RuneSqlArg(args.size, arg))
+    }
+    public func add(arg: String){
+        add(StringSqlArg(args.size, arg))
+    }
+    public func add(arg: InputStream){
+        add(InputStreamSqlArg(args.size, arg))
+    }
+    public func add(arg: Duration){
+        add(DurationSqlArg(args.size, arg))
+    }
+    public func add(arg: DateTime){
+        add(DateTimeSqlArg(args.size, arg))
+    }
+    public func add(arg: Array<Byte>){
+        add(ByteArraySqlArg(args.size, arg))
+    }
+    public func toString(){
+        args.toString()
+    }
+    private var h = 0
+    public func hashCode(){
+        if(h == 0){
+            let hasher = HashBuilder()
+            hasher.append(TypeInfos.get<SqlArgs>())
+            for(arg in args){
+                hasher.append(arg)
+            }
+            h = hasher.finish()
+        }
+        h
+    }
+    public operator func ==(other: SqlArgs){
+        args == other.args
+    } 
+}

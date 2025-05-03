@@ -11,14 +11,14 @@ package f_log
 
 import std.unittest.*
 import std.unittest.testmacro.*
-
+import std.env
 import stdx.log.*
 import std.process.Process
 
 public open class TestLogAppender <: AbstractLogger {
     init(name!: String, level!: LogLevel) {
         super(name, level, LogPattern("[%level-%name] %d{yyyy/MM/dd,HH:mm:ss.SSS}|%m"),
-            Process.current.stdOut)
+            env.getStdOut())
     }
 
     public open prop closable: Bool {

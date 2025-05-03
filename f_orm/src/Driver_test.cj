@@ -10,7 +10,6 @@
 
 package f_orm
 
-import f_orm.wrap.*
 
 public class DriverTest <: Driver {
     /**

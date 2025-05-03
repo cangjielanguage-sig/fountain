@@ -10,6 +10,7 @@
 
 package f_log.impl
 
+import std.env
 import std.process.Process
 import std.sync.Mutex
 import std.time.DateTime
@@ -21,7 +22,7 @@ public import f_log.*
 private class ConsoleLoggerAppender <: AsyncLogger {
     private static const LOGGER_NAME = 'console'
     public init(name!: String, level!: LogLevel, pattern!: LogPattern) {
-        super(name, level, pattern, Process.current.stdOut, LOGGER_NAME)
+        super(name, level, pattern, env.getStdOut(), LOGGER_NAME)
     }
 
     public static func register(): Unit {

@@ -20,11 +20,23 @@ public class StatementWrap <: Statement {
     public func setOption(key: String, value: String): Unit {
         statement.setOption(key, value)
     }
+    public func set<T>(index: Int64, value: T): Unit {
+        statement.set<T>(index, value)
+    }
+    public func setNull(index: Int64): Unit {
+        statement.setNull(index)
+    }
     public func update(params: Array<SqlDbType>): UpdateResult {
-        statement.update(params)
+        throw ORMException('current access is deprecated')
     }
     public func query(params: Array<SqlDbType>): QueryResult {
-        QueryResultWrap(driverName, statement.query(params))
+        throw ORMException('current access is deprecated')
+    }
+    public func update(): UpdateResult {
+        statement.update()
+    }
+    public func query(): QueryResult {
+        QueryResultWrap(driverName, statement.query())
     }
     public func isClosed(): Bool {
         statement.isClosed()

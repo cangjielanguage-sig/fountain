@@ -146,23 +146,17 @@ func generateMappers(name: Tokens, fieldName: Token, dts: Tokens, meta: (Bool, S
         let dt = dts[j]
         if (j == 0 && dt.value == "?") {
             nullable = true
-            dataType += quote(Option<)
+            dataType += dts[j + 1]
         } else if (j == 0 && dt.value == "Option") {
             nullable = true
-            dataType += dt
+            dataType += dts[j + 2]
         } else {
             dataType += dt
         }
         j++
+        break
     }
-    if (nullable) {
-        dataType += `gt`
-    }
-    var origin = if (nullable) {
-        dataType[2..dataType.size]
-    } else {
-        dataType
-    }
+    let dataTypeToken = Token(IDENTIFIER, '${dataType[0].value}DataType')
     let fieldNameStr = Token(STRING_LITERAL, fieldName.value)
     let columnName = Token(STRING_LITERAL, meta[1])
     let columnType = meta[2]
@@ -170,16 +164,14 @@ func generateMappers(name: Tokens, fieldName: Token, dts: Tokens, meta: (Bool, S
         if (columnType.value.isEmpty()) {
             quote(
                     IdQueryMapper<$dataType, $name>(
-                        name: $columnName,
-                        dataType: $(dataType).dataType,
+                        dataType: $(dataTypeToken)($nullable, $columnName),
                         putter: {o, v => o.$fieldName = orm.convert<$dataType>(v)}
                     )
                 )
         } else {
             quote(
                     IdQueryMapper<$dataType, $name>(
-                        name: $columnName,
-                        dataType: DataType.$columnType,
+                        dataType: $(dataTypeToken)($nullable, $columnName),
                         putter: {o, v => o.$fieldName = orm.convert<$dataType>(v)}
                     )
                 )
@@ -205,19 +197,13 @@ func generateMappers(name: Tokens, fieldName: Token, dts: Tokens, meta: (Bool, S
         }
         if (nullable && columnType.value.isEmpty()) {
             quote(
-                    if ($(listGeneric).isSimpleData) {
+                    if ($(listGeneric) is InputStream || $(listGeneric).isSimpleData()) {
                         GroupedSingleQueryMapper<$listGeneric, $name>(
                             name: $columnName,
-                            grouped: FieldQueryMapper<$listGeneric, $name>(
-                                name: $columnName,
-                                dataType: $(listGeneric).dataType,
-                                putter: (o, v => o.$(fieldName) = v)
-                            ),
                             groupedGetter: {o => o.$fieldName}
                         )
                     } else {
                         NullableGroupedQueryMapper<$listGeneric, $name>(
-                            name: $columnName,
                             ignoreNone: false,
                             grouped: $(listGeneric).queryMappers,
                             groupedGetter: {o => o.$fieldName}
@@ -226,35 +212,24 @@ func generateMappers(name: Tokens, fieldName: Token, dts: Tokens, meta: (Bool, S
                 )
         } else if (nullable) {
             quote(
-                    if ($(listGeneric).isSimpleData) {
+                    if ($(listGeneric) is InputStream || $(listGeneric).isSimpleData()) {
                         GroupedSingleQueryMapper<$listGeneric, $name>(
                             name: $columnName,
-                            grouped: FieldQueryMapper<$listGeneric, $name>(
-                                name: $columnName,
-                                dataType: DataType.$columnType,
-                                putter: (o, v => o.$(fieldName) = v)
-                            ),
                             groupedGetter: {o => o.$fieldName}
                         )
                     } else {
                         NullableGroupedQueryMapper<$listGeneric, $name>(
-                            name: $columnName,
                             ignoreNone: false,
-                            grouped: DataType.$columnType,
+                            grouped: $(listGeneric).queryMappers,
                             groupedGetter: {o => o.$fieldName}
                         )
                     }
                 )
         } else if (columnType.value == "") {
             quote(
-                    if ($(listGeneric).isSimpleData) {
+                    if ($(listGeneric) is InputStream || $(listGeneric).isSimpleData()) {
                         GroupedSingleQueryMapper<$listGeneric, $name>(
                             name: $columnName,
-                            grouped: FieldQueryMapper<$listGeneric, $name>(
-                                name: $columnName,
-                                dataType: $(listGeneric).dataType,
-                                putter: (o, v => o.$(fieldName) = v)
-                            ),
                             groupedGetter: {o => o.$fieldName}
                         )
                     } else {
@@ -267,20 +242,15 @@ func generateMappers(name: Tokens, fieldName: Token, dts: Tokens, meta: (Bool, S
                 )
         } else {
             quote(
-                    if ($(listGeneric).isSimpleData) {
+                    if ($(listGeneric) is InputStream || $(listGeneric).isSimpleData()) {
                         GroupedSingleQueryMapper<$listGeneric, $name>(
                             name: $columnName,
-                            grouped: FieldQueryMapper<$listGeneric, $name>(
-                                name: $columnName,
-                                dataType: DataType.$columnType,
-                                putter: (o, v => o.$(fieldName) = v)
-                            ),
                             groupedGetter: {o => o.$fieldName}
                         )
                     } else {
                         GroupedQueryMapper<$listGeneric, $name>(
                             name: $columnName,
-                            grouped: DataType.$columnType,
+                            grouped: $(listGeneric).queryMappers,
                             groupedGetter: {o => o.$fieldName}
                         )
                     }
@@ -288,16 +258,19 @@ func generateMappers(name: Tokens, fieldName: Token, dts: Tokens, meta: (Bool, S
         }
     } else if (nullable && columnType.value == "") {
         quote(
-                if ($(dataType).isSimpleData) {
+                if($(dataType) is InputStream){
                     FieldQueryMapper<$dataType, $name> (
-                        name: $columnName,
-                        dataType: $(dataType).dataType,
+                        dataType: InputStreamDataType($nullable, $columnName),
+                        putter: {o, v => o.$fieldName = v}
+                    )
+                }else if ($(dataType).isSimpleData()) {
+                    FieldQueryMapper<$dataType, $name> (
+                        dataType: $(dataTypeToken)($nullable, $columnName),
                         putter: {o, v => o.$fieldName = v}
                     )
                 } else {
-                    NullableNestQueryMapper<$origin, $name> (
-                        name: $columnName,
-                        nested: $(origin).queryMappers,
+                    NullableNestQueryMapper<$dataType, $name> (
+                        nested: $(dataType).queryMappers,
                         nestGetter: {o => o.$fieldName}
                         nestPutter: {o, v => o.$fieldName = v}
                     )
@@ -305,16 +278,19 @@ func generateMappers(name: Tokens, fieldName: Token, dts: Tokens, meta: (Bool, S
             )
     } else if (nullable) {
         quote(
-                if ($(dataType).isSimpleData) {
+                if($(dataType) is InputStream){
                     FieldQueryMapper<$dataType, $name> (
-                        name: $columnName,
-                        dataType: DataType.$columnType,
+                        dataType: InputStreamDataType($nullable, $columnName),
+                        putter: {o, v => o.$fieldName = v}
+                    )
+                }else if ($(dataType).isSimpleData()) {
+                    FieldQueryMapper<$dataType, $name> (
+                        dataType: $(dataTypeToken)($nullable, $columnName),
                         putter: {o, v => o.$fieldName = v}
                     )
                 } else {
-                    NullableNestQueryMapper<$origin, $name> (
-                        name: $columnName,
-                        nested: $(origin).queryMappers,
+                    NullableNestQueryMapper<$dataType, $name> (
+                        nested: $(dataType).queryMappers,
                         nestGetter: {o => o.$fieldName}
                         nestPutter: {o, v => o.$fieldName = v}
                     )
@@ -322,10 +298,20 @@ func generateMappers(name: Tokens, fieldName: Token, dts: Tokens, meta: (Bool, S
             )
     } else if (columnType.value == "") {
         quote(
-                if ($(dataType).isSimpleData) {
+                if($(dataType) is InputStream){
                     QueryMapper<$name> (
-                        name: $columnName,
-                        dataType: $(dataType).dataType,
+                        dataType: InputStreamDataType($nullable, $columnName),
+                        putter: {o, v =>
+                            o.$fieldName =
+                            match(v){
+                                case x: Option<$dataType> => x.getOrThrow{ORMException("current value for " + $fieldNameStr + " must not be None")}
+                                case x: $dataType =>  x
+                                case _ => throw ORMException("current value must be type of " + $(dataType).dataType.toString())
+                            }
+                    })
+                }else if ($(dataType).isSimpleData()) {
+                    QueryMapper<$name> (
+                        dataType: $(dataTypeToken)($nullable, $columnName),
                         putter: {o, v =>
                             o.$fieldName =
                             match(v){
@@ -336,7 +322,6 @@ func generateMappers(name: Tokens, fieldName: Token, dts: Tokens, meta: (Bool, S
                     })
                 } else {
                     NestQueryMapper<$dataType, $name> (
-                        name: $columnName,
                         nested: $(dataType).queryMappers,
                         nestPutter: {o, v => o.$fieldName = v}
                     )
@@ -344,10 +329,20 @@ func generateMappers(name: Tokens, fieldName: Token, dts: Tokens, meta: (Bool, S
             )
     } else {
         quote(
-                if ($(dataType).isSimpleData) {
+                if($(dataType) is InputStream){
                     QueryMapper<$name> (
-                        name: $columnName,
-                        dataType: DataType.$columnType,
+                        dataType: InputStreamDataType($nullable, $columnName),
+                        putter: {o, v =>
+                            o.$fieldName =
+                            match(v){
+                                case x: Option<$dataType> => x.getOrThrow{ORMException("current value for " + $fieldNameStr + " must not be None")}
+                                case x: $dataType =>  x
+                                case _ => throw ORMException("current value must be type of " + $(dataType).dataType.toString())
+                            }
+                    })
+                }else if ($(dataType).isSimpleData()) {
+                    QueryMapper<$name> (
+                        dataType: $(dataTypeToken)($nullable, $columnName),
                         putter: {o, v =>
                             o.$fieldName =
                             match(v){
@@ -358,7 +353,6 @@ func generateMappers(name: Tokens, fieldName: Token, dts: Tokens, meta: (Bool, S
                     })
                 } else {
                     NestQueryMapper<$dataType, $name> (
-                        name: $columnName,
                         nested: $(dataType).queryMappers,
                         nestPutter: {o, v => o.$fieldName = v}
                     )

@@ -34,7 +34,7 @@ public class TokenBucketRateLimiter<T> <: RateLimiter<T> {
             }while(next <= Duration.Zero)
             next
         }
-        Process.current.atExit(timer.cancel)
+        atExit(timer.cancel)
     }
     public func exec(default: ?T, task: () -> ?T): ?T{
         if (let Some(_) <- tokens.dequeue(timeout) && let Some(x) <- task()) {

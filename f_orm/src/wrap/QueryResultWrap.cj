@@ -13,26 +13,15 @@ package f_orm.wrap
 import std.database.sql.*
 import f_base.*
 
-public class QueryResultWrap <: Iterator<Row> & QueryResult {
-    private var row: Array<SqlDbType> = []
-    private let columnInfoMap: Map<String, Int64> = HashMap<String, Int64>()
+public class QueryResultWrap <: QueryResult {
+    private let columnInfoMap = HashMap<String, Int64>()
     public QueryResultWrap(private let driverName: String, private let result: QueryResult) {
-        let columnInfos = result.columnInfos
-        row = Array<SqlDbType>(columnInfos.size) {
-            i =>
-            let info = columnInfos[i]
-            this.columnInfoMap[info.name] = i
-            let typeName = info.typeName
-            SqlDataCreators.generate(driverName, typeName)
+        for(i in 0 .. columnInfos.size){
+            columnInfoMap[columnInfos[i].name] = i
         }
     }
-    public func next(): ?Row {
-        let row = this.row
-        if (result.next(row)) {
-            RowWrap(driverName, columnInfoMap, row)
-        } else {
-            None
-        }
+    public func next(): Bool {
+        result.next()
     }
 
     public prop columnInfos: Array<ColumnInfo> {
@@ -40,8 +29,27 @@ public class QueryResultWrap <: Iterator<Row> & QueryResult {
             result.columnInfos
         }
     }
+    public func get<T>(index: Int64): T {
+        result.get<T>(index)
+    }
+    public func getOrNull<T>(index: Int64): ?T {
+        result.getOrNull<T>(index)
+    }
+    public func get<T>(columnName: String): T{
+        get<T>(columnInfoMap[columnName])
+    }
+    public func getOrNull<T>(columnName: String): ?T {
+        getOrNull<T>(columnInfoMap[columnName])
+    }
     public func next(values: Array<SqlDbType>): Bool {
-        result.next(values)
+        throw ORMException('this func is deprecated')
+    }
+    public func toMap(): HashMap<String, Any> {
+        let map = HashMap<String, Any>()
+        for((column, index) in columnInfoMap){
+            map[column] = get(index)
+        }
+        map
     }
     public func isClosed(): Bool {
         result.isClosed()

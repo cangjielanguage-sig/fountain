@@ -10,6 +10,7 @@
 package f_util
 
 import std.convert.Parsable
+import std.env
 import std.fs.{File, Directory, OpenMode}
 import std.io.SeekPosition
 import std.math.numeric.BigInt
@@ -537,7 +538,7 @@ public class TimestampSequenceBuilder {
         let serial = AtomicUInt16(0)
         let dir = Directory.createTemp('/tmp')
         let file = File("${dir}/${serial.fetchAdd(1)}", OpenMode.Write)
-        Process.current.atExit{file.close()}
+        env.atExit{file.close()}
         seqGen = {
             timestamp =>
             var seq: UInt16 = 0

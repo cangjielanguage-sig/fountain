@@ -35,17 +35,15 @@ public class QueryMappers<O> {
         if(!(TypeInfos.get<O>().isSubtypeOf(TypeInfos.get<Object>()) && TypeInfos.get<T>().isSubtypeOf(TypeInfos.get<O>()))){
             return None<QueryMappers<T>>
         }
-        let mapperMap = HashMap<String, QueryMapper<T>>()
-        func putMapperMap<U>(mappers: Array<QueryMapper<U>>, convert: (QueryMapper<U>) -> QueryMapper<T>){
-            for (mapper in mappers) {
-                mapperMap.addIfAbsent(mapper.name, convert(mapper))
-            }
-        }
-        putMapperMap<T>(mappers){m => m}
         let oType = TypeInfos.get<O>()
         let oMappers = (oType.getStaticFunction("queryMappers").apply(oType) as QueryMappers<O>).getOrThrow().mappers
-        putMapperMap<O>(oMappers){m => m.new<T>()}
-        QueryMappers<T>(mappers: mapperMap.values().toArray(), creator: creator)
+        QueryMappers<T>(mappers: Array<QueryMapper<T>>(oMappers.size + mappers.size){i =>
+            if(i < oMappers.size){
+                oMappers[i].new<T>()
+            }else{
+                mappers[i]
+            }
+        }, creator: creator)
     }
     private func convert(result: QueryResult): QueryResultWrap {
         (result as QueryResultWrap).getOrThrow()
@@ -54,26 +52,27 @@ public class QueryMappers<O> {
      * 映射单个对象
      */
     func doMap(result: QueryResultWrap): Option<O> {
-        for (row in result) {
-            return map(row)
+        while (result.next()) {
+            return map(result)
         }
         return None
     }
     func doMap(result: QueryResult): Option<O> {
         doMap(convert(result))
     }
-    private func map(row: Row): O {
+    func map(result: QueryResult): O {
         let o = creator()
         for (mapper in mappers) {
-            mapper.populate(row, o)
+            mapper.populate(result, o)
         }
         o
     }
     //映射全部结果集
     public func list(result: QueryResult): ArrayList<O> {
         let list = ArrayList<O>()
-        for (row in convert(result)) {
-            list.add(map(row))
+        let wrap = convert(result)
+        while (wrap.next()) {
+            list.add(map(wrap))
         }
         list
     }
@@ -81,13 +80,14 @@ public class QueryMappers<O> {
         if (hasGroup) {
             let idMapper = (this.idMapper.getOrThrow() as IdQueryMapper<ID, O>).getOrThrow()
             let map = LinkedHashMap<ID, O>()
-            for (row in convert(result)) {
-                let id = idMapper.id(row)
+            let wrap = convert(result)
+            while (wrap.next()) {
+                let id = idMapper.id(wrap)
                 match (map.get(id, false)) {
                     case Some(o) => for (mapper in mappers where mapper.isGrouped) {
-                        mapper.populate(row, o)
+                        mapper.populate(wrap, o)
                     }
-                    case _ => map[id] = this.map(row)
+                    case _ => map[id] = this.map(wrap)
                 }
             }
             ArrayList<O>(map.values())

@@ -17,7 +17,7 @@ import std.sync.AtomicUInt64
 protected class UnixDatagramOutputStream <: OutputStream & Resource{
     private static let SERIAL = AtomicUInt64(0)
     private static func newSocket(sendTimeout: ?Duration){
-        let sock = UnixDatagramSocket(bindAt: Process.current.tempDirectory.join('${SERIAL.fetchAdd(1)}').toString())
+        let sock = UnixDatagramSocket(bindAt: '/tmp/${SERIAL.fetchAdd(1)}')
         sock.bind()
         sock.sendTimeout = sendTimeout
         sock

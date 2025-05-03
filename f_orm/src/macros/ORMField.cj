@@ -76,7 +76,7 @@ public macro ORMField(attrs: Tokens, input: Tokens): Tokens {
             "member of current type must be modified by `public var` or `public mut prop` which is annotated by ORMField"
         )
     }
-        setItem("field", name.value)
+    setItem("field", name.value)
     for (attr in attrs) {
         match ((attr.kind, attr.value)) {
             case (BOOL_LITERAL, x) => setItem("id", x == "true")
@@ -89,7 +89,6 @@ public macro ORMField(attrs: Tokens, input: Tokens): Tokens {
                 case "Pascal" => setItem("column", CaseFormat.Camel.convert(name.value, CaseFormat.Pascal))
                 case "Camel" => setItem("column", name.value)
                 case x =>
-                    DataType.valueOf(x)
                     setItem("dataType", x)
             }
             case _ => throw ORMException("unsupported TokenKind in attrs of @ORMFIeld")

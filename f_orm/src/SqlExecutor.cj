@@ -14,6 +14,7 @@ import std.collection.HashMap
 import f_collection.*
 import f_data.*
 import f_log.*
+import f_orm.wrap.*
 import f_orm.exception.*
 
 public class SqlCacheKey <: Hashable & Equatable<SqlCacheKey> & ToString {
@@ -372,16 +373,17 @@ public class SqlExecutor <: Resource & RootDAO {
             updateOrDelete
         }
     }
-    public prop insert: InsertResult {
+    public prop insert: Int64 {
         get() {
-            execute<InsertResult> {r: UpdateResult => InsertResult(r)}
+            execute<Int64> {r: UpdateResult => r.lastInsertId}
         }
     }
 
     private prop query: QueryResult {
         get() {
             execute<QueryResult> {
-                statement.query(args.toArray())
+                args.set(statement)
+                statement.query()
             }
         }
     }
@@ -392,8 +394,8 @@ public class SqlExecutor <: Resource & RootDAO {
     public func singleFirst<T>(index: Int64): Option<T> {
         execute<Option<T>> {
             let wrap = (query as QueryResultWrap).getOrThrow()
-            for (row in wrap) {
-                let value = (row[index] as T).getOrThrow()
+            while (wrap.next()) {
+                let value = wrap.get<T>(index)
                 return value
             }
             return None<T>
@@ -402,8 +404,8 @@ public class SqlExecutor <: Resource & RootDAO {
     public func singleFirst<T>(column: String): Option<T> {
         execute<Option<T>> {
             let wrap = (query as QueryResultWrap).getOrThrow()
-            for (row in wrap) {
-                let value = (row[column] as T).getOrThrow()
+            while (wrap.next()) {
+                let value = wrap.get<T>(column)
                 return value
             }
             return None<T>
@@ -416,8 +418,8 @@ public class SqlExecutor <: Resource & RootDAO {
         execute<ArrayList<T>> {
             let list = ArrayList<T>()
             let wrap = (query as QueryResultWrap).getOrThrow()
-            for (row in wrap) {
-                let value = (row[index] as T).getOrThrow()
+            while (wrap.next()) {
+                let value = wrap.get<T>(index)
                 list.add(value)
             }
             return list
@@ -427,8 +429,8 @@ public class SqlExecutor <: Resource & RootDAO {
         execute<ArrayList<T>> {
             let list = ArrayList<T>()
             let wrap = (query as QueryResultWrap).getOrThrow()
-            for (row in wrap) {
-                let value = (row[column] as T).getOrThrow()
+            while (wrap.next()) {
+                let value = wrap.get<T>(column)
                 list.add(value)
             }
             return list
@@ -459,7 +461,7 @@ public class SqlExecutor <: Resource & RootDAO {
         }
     }
     public func first<T>(): Option<T> where T <: QueryMappersInit<T> {
-        if (T.isSimpleData) {
+        if (T.isSimpleData()) {
             singleFirst<T>()
         } else {
             first<T>(T.queryMappers())
@@ -467,9 +469,11 @@ public class SqlExecutor <: Resource & RootDAO {
     }
     public func firstToMap(): Map<String, Any> {
         execute<Map<String, Any>> {
-            match ((query as QueryResultWrap).getOrThrow().next()) {
-                case Some(x) => x.toMap()
-                case _ => EmptyMap<String, Any>.INSTANCE()
+            let wrap = (query as QueryResultWrap).getOrThrow()
+            if (wrap.next()) {
+                wrap.toMap()
+            }else{
+                EmptyMap<String, Any>.INSTANCE()
             }
         }
     }
@@ -479,7 +483,7 @@ public class SqlExecutor <: Resource & RootDAO {
         }
     }
     public func list<T>(): ArrayList<T> where T <: QueryMappersInit<T> {
-        if (T.isSimpleData) {
+        if (T.isSimpleData()) {
             singleList<T>()
         } else {
             list<T>(T.queryMappers())
@@ -487,11 +491,11 @@ public class SqlExecutor <: Resource & RootDAO {
     }
     public func mapList(): ArrayList<HashMap<String, Any>> {
         execute<ArrayList<HashMap<String, Any>>> {
-            match (query as QueryResultWrap) {
-                case Some(x) =>
+            match (query) {
+                case x: QueryResultWrap =>
                     let list = ArrayList<HashMap<String, Any>>()
-                    for (row in x) {
-                        list.add(row.toMap())
+                    while (x.next()) {
+                        list.add(x.toMap())
                     }
                     list
                 case _ => ArrayList<HashMap<String, Any>>()
@@ -504,7 +508,7 @@ public class SqlExecutor <: Resource & RootDAO {
         }
     }
     public func iterator<T>(): Iterator<T> where T <: QueryMappersInit<T> {
-        if (T.isSimpleData) {
+        if (T.isSimpleData()) {
             singleIterator<T>()
         } else {
             iterator<T>(T.queryMappers())
@@ -516,7 +520,7 @@ public class SqlExecutor <: Resource & RootDAO {
         }
     }
     public func one<T>(): Option<T> where T <: QueryMappersInit<T> {
-        if (T.isSimpleData) {
+        if (T.isSimpleData()) {
             singleFirst<T>()
         } else {
             one<T>(T.queryMappers())
@@ -527,25 +531,114 @@ public class SqlExecutor <: Resource & RootDAO {
         this.sql = sql
         this
     }
-    public func setArgs(args: Iterable<(DataType, Any)>): SqlExecutor {
-        this.args = SqlArgs(driverName: driverName)
-        for (arg in args) {
-            this.args.append(arg[0], arg[1])
+    public func add<T>(arg: T): SqlExecutor where T <: ToString {
+        match(arg){
+            case x: Bool => add(x)
+            case x: Int8 => add(x)
+            case x: UInt8 => add(x)
+            case x: Int16 => add(x)
+            case x: UInt16 => add(x)
+            case x: Int32 => add(x)
+            case x: UInt32 => add(x)
+            case x: Int64 => add(x)
+            case x: UInt64 => add(x)
+            case x: BigInt => add(x)
+            case x: Decimal => add(x)
+            case x: Float16 => add(x)
+            case x: Float32 => add(x)
+            case x: Float64 => add(x)
+            case x: Rune => add(x)
+            case x: String => add(x)
+            case x: Duration => add(x)
+            case x: DateTime => add(x)
+            case x: Array<Byte> => add(x)
+            case x => add(x.toString())
         }
+    }
+    public func add(arg: Bool){
+        args.add(arg)
         this
     }
-    public func setArgs(args: Array<(DataType, Any)>): SqlExecutor {
-        let itr: Iterable<(DataType, Any)> = args
-        setArgs(itr)
-    }
-    public func addArg(arg: Any): SqlExecutor {
-        args.append(arg)
+    public func add(arg: Int8){
+        args.add(arg)
         this
     }
+    public func add(arg: UInt8){
+        args.add(arg)
+        this
+    }
+    public func add(arg: Int16){
+        args.add(arg)
+        this
+    }
+    public func add(arg: UInt16){
+        args.add(arg)
+        this
+    }
+    public func add(arg: Int32){
+        args.add(arg)
+        this
+    }
+    public func add(arg: UInt32){
+        args.add(arg)
+        this
+    }
+    public func add(arg: Int64){
+        args.add(arg)
+        this
+    }
+    public func add(arg: UInt64){
+        args.add(arg)
+        this
+    }
+    public func add(arg: BigInt){
+        args.add(arg)
+        this
+    }
+    public func add(arg: Decimal){
+        args.add(arg)
+        this
+    }
+    public func add(arg: Float16){
+        args.add(arg)
+        this
+    }
+    public func add(arg: Float32){
+        args.add(arg)
+        this
+    }
+    public func add(arg: Float64){
+        args.add(arg)
+        this
+    }
+    public func add(arg: Rune){
+        args.add(arg)
+        this
+    }
+    public func add(arg: String){
+        args.add(arg)
+        this
+    }
+    public func add(arg: InputStream){
+        args.add(arg)
+        this
+    }
+    public func add(arg: Duration){
+        args.add(arg)
+        this
+    }
+    public func add(arg: DateTime){
+        args.add(arg)
+        this
+    }
+    public func add(arg: Array<Byte>){
+        args.add(arg)
+        this
+    }
+
     public func generateSql(sql: String): SqlExecutor {
-        args = SqlArgs(driverName: driverName)
+        args = SqlArgs()
         this.sql = sql
-        args.finished = true
         this
     }
     public operator func ()(sql: String): SqlExecutor {
@@ -568,9 +661,6 @@ public class SqlExecutor <: Resource & RootDAO {
                 throw UnreachableException()
             }
             let v = if (useCache && !clearCache) {
-                if (!args.finished) {
-                    throw ORMException("current SqlArgs is not finished, the SqlArgs is ${args}")
-                }
                 let key = SqlCacheKey(sql, args)
                 match (cache.get(key)) {
                     case Some(v) => (v as T).getOrThrow {
@@ -606,7 +696,8 @@ public class SqlExecutor <: Resource & RootDAO {
     private func execute<T>(extract: (UpdateResult) -> T): T {
         clearCache = true
         execute<T> {
-            let result = statement.update(args.toArray())
+            args.set(statement)
+            let result = statement.update()
             extract(result)
         }
     }

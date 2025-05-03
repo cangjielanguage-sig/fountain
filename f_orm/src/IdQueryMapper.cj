@@ -9,28 +9,25 @@
  */
 package f_orm
 
-import f_orm.wrap.{DataType, Row}
-
 public class IdQueryMapper<ID, O> <: FieldQueryMapper<ID, O> where ID <: Hashable & Equatable<ID> {
     public init(
-        name!: String = "id",
-        dataType!: DataType = int64,
+        dataType!: DataType = Int64DataType(false, 'id'),
         putter!: (O, ID) -> Unit
     ) {
-        super(name: name, dataType: dataType, putter: putter)
+        super(dataType: dataType, putter: putter)
     }
     protected prop isId: Bool {
         get() {
             true
         }
     }
-    public func populate(row: Row, o: O): O {
-        if (let Some(id) <- row.get(name)) {
+    public func populate(result: QueryResult, o: O): O {
+        if (let Some(id) <- super.get<ID>(result)) {
             putter(o, id)
         }
         o
     }
-    public func id(row: Row): ID {
-        (row[name] as ID).getOrThrow()
+    public func id(result: QueryResult): ID {
+        super.get<ID>(result).getOrThrow()
     }
 }

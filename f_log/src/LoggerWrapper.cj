@@ -9,6 +9,7 @@
  */
 package f_log
 
+import std.env
 import std.sync.AtomicReference
 import std.process.Process
 import std.time.DateTime
@@ -18,9 +19,9 @@ public class LoggerWrapper <: AbstractLogger {
     private var facade: AtomicReference<LoggerAppenderFacade>
 
     public LoggerWrapper(name: String) {
-        super(name, LogLevel.ALL, LogPattern.default, Process.current.stdOut)
+        super(name, LogLevel.ALL, LogPattern.default, env.getStdOut())
         this.facade = AtomicReference<LoggerAppenderFacade>(LoggerConfig.createFacade(name))
-        Process.current.atExit {this.facade.load().close()}
+        env.atExit {this.facade.load().close()}
     }
 
     public func logLevelEnabled(level: LogLevel): Bool {

@@ -85,7 +85,7 @@ public class LoopCondition<I, T> where I <: Iterable<T> {
                 if(_argInSql) {
                     builder.append(arg)
                 }else{
-                    executor.addArg(arg)
+                    executor.add<ToString>(arg)
                     builder.append('?')
                 }
                 i++

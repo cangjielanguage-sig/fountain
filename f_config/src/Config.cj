@@ -12,7 +12,8 @@ package f_config
 import std.collection.{HashMap, Map, HashSet}
 import std.collection.concurrent.ConcurrentHashMap
 import std.convert.Parsable
-import std.process.{Process, CurrentProcess}
+import std.env
+import std.process.Process
 import std.time.{DateTime, DateTimeFormat}
 
 import f_data.DataParsable
@@ -33,11 +34,10 @@ public class Config{
     private static let ARGS = ConcurrentHashMap<String, String>()
     private static let REFRESHER = ConcurrentHashMap<String, ()->Unit>() 
     static init(){
-        let process = Process.current
-        for((k, v) in process.environment){
+        for((k, v) in env.getVariables()){
             ARGS[k] = v
         }
-        let args = process.arguments
+        let args = env.getCommandLine()[1 ..]
         var i = 0
         while(i < args.size) {
             let arg = args[i]

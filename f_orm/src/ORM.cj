@@ -12,6 +12,7 @@ package f_orm
 
 import std.collection.concurrent.ConcurrentHashMap
 import std.database.sql.*
+import std.env
 import std.process.Process
 import f_base.*
 import f_config.Config
@@ -35,7 +36,7 @@ public class ORM {
 
     public static func register(datasource: NamedDatasource, default!: Bool = true): Unit {
         if (datasources.isEmpty()) {
-            Process.current.atExit {
+            env.atExit {
                 for ((_, datasource) in datasources.iterator()) {
                     datasource.close()
                 }

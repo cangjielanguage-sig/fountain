@@ -10,19 +10,16 @@
 package f_orm
 
 import std.collection.ArrayList
-import f_orm.wrap.Row
 
 public class GroupedQueryMapper<T, O> <: QueryMapper<O> {
     public GroupedQueryMapper(
-        name!: String,
         private let grouped!: QueryMappers<T>,
         private let groupedGetter!: (O) -> ArrayList<T>
     ) {
-        super(name: name, putter: {o, v => }, dataType: unknown)
+        super(putter: {o, v => }, dataType: UnknownDataType(true, ''))
     }
     func newGrouped<SUB>(): QueryMapper<SUB> where SUB <: QueryMappersInit<SUB> {
         GroupedQueryMapper<T, SUB>(
-            name: name,
             grouped: grouped,
             groupedGetter: {sub => groupedGetter((sub as O).getOrThrow())}
         )
@@ -32,24 +29,18 @@ public class GroupedQueryMapper<T, O> <: QueryMapper<O> {
             true
         }
     }
-    public func populate(row: Row, o: O): O {
-        let groupedValue = grouped.creator()
-        let list = groupedGetter(o)
-        list.add(groupedValue)
-        for (m in grouped.mappers) {
-            if (let Some(value) <- row.get(m.name)) {
-                m.putter(groupedValue, value)
-            }
-        }
+    public func populate(result: QueryResult, o: O): O {
+        let grouped = this.grouped.map(result)
+        groupedGetter(o).add(grouped)
         o
     }
 }
 public class GroupedSingleQueryMapper<T, O> <: QueryMapper<O> {
     public GroupedSingleQueryMapper(
-        name!: String,
+        private let name!: String,
         private let groupedGetter!: (O) -> ArrayList<T>
     ) {
-        super(name: name, putter: {o, v => }, dataType: unknown)
+        super(putter: {o, v => }, dataType: UnknownDataType(false, name))
     }
     func newGroupedSingle<SUB>(): QueryMapper<SUB> where SUB <: QueryMappersInit<SUB> {
         GroupedSingleQueryMapper<T, SUB>(
@@ -62,26 +53,23 @@ public class GroupedSingleQueryMapper<T, O> <: QueryMapper<O> {
             true
         }
     }
-    public func populate(row: Row, o: O): O {
+    public func populate(result: QueryResult, o: O): O {
+        let wrap = (result as QueryResultWrap).getOrThrow()
         let list = groupedGetter(o)
-        if (let Some(value) <- row.get(name)) {
-            list.add(convert<T>(value))
-        }
+        list.add(convert<T>(wrap.getOrNull<T>(name)))
         o
     }
 }
 public class NullableGroupedQueryMapper<T, O> <: QueryMapper<O> {
     public NullableGroupedQueryMapper(
-        name!: String,
         private let ignoreNone!: Bool = true,
         private let grouped!: QueryMappers<T>,
         private let groupedGetter!: (O) -> ArrayList<Option<T>>
     ) {
-        super(name: name, putter: {o, v => }, dataType: unknown)
+        super(putter: {o, v => }, dataType: UnknownDataType(true, ''))
     }
     func newNullableGrouped<SUB>(): QueryMapper<SUB> {
         NullableGroupedQueryMapper<T, SUB>(
-            name: name,
             ignoreNone: ignoreNone,
             grouped: grouped,
             groupedGetter: {sub => groupedGetter((sub as O).getOrThrow())}
@@ -92,14 +80,12 @@ public class NullableGroupedQueryMapper<T, O> <: QueryMapper<O> {
             true
         }
     }
-    public func populate(row: Row, o: O): O {
+    public func populate(result: QueryResult, o: O): O {
         let list = groupedGetter(o)
         let prevSize = list.size
         let mappers = grouped.mappers
-        var i = 0
-        while (i < mappers.size) {
-            let mapper = mappers[i]
-            if (let Some(value) <- row.get(mapper.name)) {
+        for (mapper in mappers) {
+            if (let Some(value) <- mapper.get<T>(result)) {
                 let groupedValue = if (prevSize == list.size) {
                     let groupedValue = grouped.creator()
                     list.add(groupedValue)
@@ -109,7 +95,6 @@ public class NullableGroupedQueryMapper<T, O> <: QueryMapper<O> {
                 }
                 mapper.putter(groupedValue, value)
             }
-            i++
         }
         if (!ignoreNone && prevSize == list.size) {
             list.add(Option<T>.None)

@@ -5,24 +5,22 @@
     You may obtain a copy of Mulan PSL v2 at:
             http://license.coscl.org.cn/MulanPSL2
     THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-    See the Mulan PSL v2 for more details.
- */
-package f_bean
+    See the Mulan PSL v2 for more details.  
+*/
+package f_orm.wrap
 
-internal import std.collection.{HashMap, TreeMap, LinkedList, ArrayList, TreeSet}
+internal import std.collection.{Map, HashMap, ArrayList}
 internal import std.collection.concurrent.ConcurrentHashMap
-internal import std.convert.*
-internal import std.env.*
-internal import std.process.Process
-internal import std.reflect.*
-internal import std.sync.{AtomicInt64, AtomicBool, AtomicOptionReference, Mutex}
-internal import f_base.*
+internal import std.convert.Parsable
+internal import std.database.sql.*
+internal import std.io.InputStream
+internal import std.math.numeric.{Decimal, BigInt}
+internal import std.reflect.TypeInfo
+internal import std.regex.Regex
+internal import std.sync.AtomicInt64
+internal import std.time.DateTime
 internal import f_config.Config
 internal import f_data.*
 internal import f_regex.*
-public import f_bean.exception.*
 
-/**
- * 初始化时使用命令行参数--initBeansIfNeed
- */
-internal let shouldInitBean = Config.getValue<Bool>('shouleInitBean') ?? true
+internal import f_orm.exception.*

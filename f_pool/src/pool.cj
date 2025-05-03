@@ -10,6 +10,7 @@
 package f_pool
 
 import std.collection.concurrent.ArrayBlockingQueue
+import std.env
 import std.process.Process
 import std.sync.{AtomicInt64, AtomicBool}
 import std.time.MonoTime
@@ -25,7 +26,10 @@ public interface PooledManager<T> where T <: Object {
  * 本类型无法分辨返还的实例是不是从Pool借出去的，也无法分辨借出实例的Pool跟返回实例的Pool是不是同一个，因此调用giveBack返还实例的时候，如果返回时检查失败了一定会销毁返还的实例，池维护的实例数随之减1。
  */
 public class Pool<T> <: Resource where T <: Object {
-    private static let log = LoggerFactory.getLogger<Pool<T>>()
+    // private static let log = LoggerFactory.getLogger<Pool<T>>()
+    private static func getLog(){
+        LoggerFactory.getLogger<Pool<T>>()
+    }
     private let queue: ArrayBlockingQueue<(T, MonoTime)>
     private let tasks: ArrayBlockingQueue<Unit>
     private let size = AtomicInt64(0)
@@ -50,7 +54,7 @@ public class Pool<T> <: Resource where T <: Object {
         for (_ in 0..initSize) {
             tasks.enqueue(())
         }
-        Process.current.atExit(close)
+        env.atExit(close)
     }
     public init(
         initSize!: Int64 = 0,
@@ -83,7 +87,7 @@ public class Pool<T> <: Resource where T <: Object {
                             queue.enqueue((o, t))
                         }
                     }catch(e: Exception){
-                        log.warn('Pool checking schedule', e)
+                        getLog().warn('Pool checking schedule', e)
                     }
                 }
                 sleep(checkInterval)
@@ -109,7 +113,7 @@ public class Pool<T> <: Resource where T <: Object {
             destroier(o)
         }catch(e: Exception){
             if(logOnEx){
-                log.warn('error occurred on destring object in pool', e)
+                getLog().warn('error occurred on destring object in pool', e)
             }else{
                 throw e
             }
@@ -121,7 +125,7 @@ public class Pool<T> <: Resource where T <: Object {
         if(size.load() < 0){
             let ex = PoolException('current size of pool is less than zero, may be some instances which were not be created by current pool were destroied by current pool on giving back.')
             if(logOnEx){
-                log.warn(ex)
+                getLog().warn(ex)
             }else{
                 throw ex
             }
@@ -129,7 +133,7 @@ public class Pool<T> <: Resource where T <: Object {
     }
     private func add(object: T, decrIfOverload!: Bool = true): Bool {
         if(!queue.tryEnqueue((object, MonoTime.now()))){
-            log.warn("current size of pool is larger than maxSize(${maxSize}), may be some instances which were not be created by current pool were given back to current pool.")
+            getLog().warn("current size of pool is larger than maxSize(${maxSize}), may be some instances which were not be created by current pool were given back to current pool.")
             destroy(object, false, decr: decrIfOverload)
             false
         }else{

@@ -9,6 +9,7 @@
  */
 package f_log
 
+import std.env
 import std.process.Process
 import std.time.DateTime
 import stdx.log.LogLevel
@@ -17,7 +18,7 @@ public class LoggerAppenderFacade <: AsyncLogger {
     private var appenders: Array<AbstractLogger>
 
     public init(name: String, appenders: Array<AbstractLogger>) {
-        super(name, LogLevel.ALL, LogPattern.default, Process.current.stdOut, 'f_log.LoggerAppenderFacade_${name}')
+        super(name, LogLevel.ALL, LogPattern.default, env.getStdOut(), 'f_log.LoggerAppenderFacade_${name}')
         this.appenders = appenders
     }
 

@@ -17,7 +17,7 @@ public class BeanFactory {
     private let registered = AtomicBool(false)
 
     private init() {
-        Process.current.atExit(this.shutdown)
+        atExit(this.shutdown)
     }
     private func shutdown() {
         for ((_, m) in beans) {

@@ -34,7 +34,7 @@ public class MeetCondition{
             if(_argInSql){
                 ' ${partial} ${_value()} ${Condition.delimiter} '
             }else{
-                executor.addArg(_value())
+                executor.add<ToString>(_value())
                 ' ${partial} ? ${Condition.delimiter} '
             }
         }else{

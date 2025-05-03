@@ -63,15 +63,15 @@ public class ChooseCondition {
             let (frag, arg) = partial()
             if(frag.size > 0){
                 if(_argInSql){
-                    executor.addArg(arg)
-                    ' ${frag} ? ${Condition.delimiter} '
-                }else{
                     ' ${frag} ${arg} ${Condition.delimiter} '
+                }else{
+                    executor.add<ToString>(arg)
+                    ' ${frag} ? ${Condition.delimiter} '
                 }
             }else if(_argInSql){
                 ' ${arg} ${Condition.delimiter} '
             }else{
-                executor.addArg(arg)
+                executor.add<ToString>(arg)
                 ' ? ${Condition.delimiter} '
             }
         }

@@ -10,6 +10,7 @@
 package f_log
 
 import std.collection.ArrayList
+import std.env
 import std.process.Process
 import std.time.{DateTime, DateTimeFormat}
 import stdx.log.LogLevel
@@ -125,7 +126,7 @@ class NameLogPart <: LogPart {
 
 class AppLogPart <: LogPart {
     init() {}
-    private let app = Process.current.command
+    private let app = env.getCommand()
     public func generate(name: String, level: LogLevel, message: ToString, current: DateTime): String {
         app
     }

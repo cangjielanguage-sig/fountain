@@ -176,7 +176,7 @@ _/ ____\____  __ __  _____/  |______  |__| ____
     # 还支持用url的形式，path必须出现在url，其它配置项可选，可以继续以每项一个环境变量的形式指定
     export fountain_logger_appender_FileLoggerName2=file:///path/of/file/logger.log?level=INFO
     # 下面是文件日志记录器的默认选项
-    # public var path = "${Process.current.workingDirectory}/logs/${Process.current.command}.log"
+    # public var path = "${getWorkingDirectory()}/logs/${getCommand()}.log"
     # public var fileSize = Int64.Max
     # public var timeunit = TimeUnit.DAY
     # public var compress = LogFileCompressFormat.NonCompression

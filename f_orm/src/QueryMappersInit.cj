@@ -1,20 +1,19 @@
 package f_orm
 
+public import std.time.DateTime
+public import std.io.InputStream
+
 public interface QueryMappersInit<T> where T <: QueryMappersInit<T> {
-    static prop isSimpleData: Bool {
-        get() {
-            true
-        }
+    static func isSimpleData(): Bool {
+        true
     }
     static func queryMappers(): QueryMappers<T> {
         throw ORMException("not supported")
     }
 }
 extend<T> Option<T> <: QueryMappersInit<T> where T <: QueryMappersInit<T> {
-    public static prop isSimpleData: Bool {
-        get() {
-            T.isSimpleData
-        }
+    public static func isSimpleData(): Bool {
+        T.isSimpleData()
     }
     public static func queryMappers(): QueryMappers<T> {
         T.queryMappers()
@@ -37,4 +36,3 @@ extend Bool <: QueryMappersInit<Bool> {}
 extend Duration <: QueryMappersInit<Duration> {}
 extend DateTime <: QueryMappersInit<DateTime> {}
 extend<T> Array<T> <: QueryMappersInit<Array<T>> where T <: QueryMappersInit<T> {}
-extend DataInputStream <: QueryMappersInit<DataInputStream> {}

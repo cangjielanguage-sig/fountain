@@ -14,7 +14,6 @@ import std.collection.{ArrayList, Map, HashMap, Set, List}
 import f_exception.{TypeCastException, OverSizeException}
 import f_base.EmptyMap
 import f_base.ExtendOption
-import f_orm.wrap.*
 
 /* 数据映射类型，把数据库里的值，读出来调用putter，把值填充到指定的对象，
  * 一个数据库列对应一个QueryMapper, 泛型O是要填充的对象类型
@@ -25,14 +24,12 @@ import f_orm.wrap.*
  */
 public open class QueryMapper<O> {
     public QueryMapper(
-        protected let name!: String,
-        protected let dataType!: DataType = unknown,
+        protected let dataType!: DataType = UnknownDataType(true, ''),
         protected let putter!: (O, Any) -> Unit
     ) {}
 
     protected func new<T>(): QueryMapper<T> {
         QueryMapper<T>(
-            name: name,
             dataType: dataType,
             putter: {instance, value =>
                 putter((instance as O).getOrThrow(), value)
@@ -53,26 +50,22 @@ public open class QueryMapper<O> {
 
     //获取单列的单行的数据
     public func get<T>(result: QueryResult): ?T {
-        let wrap = (result as QueryResultWrap).getOrThrow()
-        if (let Some(row) <- wrap.next()) {
-            (row[name] as T).getOrThrow()
-        } else {
+        if(result.next()){
+            dataType.get(result) as T
+        }else{
             None
         }
     }
-    public open func populate(row: Row, o: O): O {
-        if (let Some(x) <- row.get(name)) {
-            putter(o, x)
-        }
+    public open func populate(result: QueryResult, o: O): O {
+        putter(o, dataType.get(result))
         o
     }
 }
 public open class FieldQueryMapper<T, O> <: QueryMapper<O> {
     public init(
-        name!: String,
-        dataType!: DataType = unknown,
+        dataType!: DataType = UnknownDataType(true, ''),
         putter!: (O, T) -> Unit
     ) {
-        super(name: name, dataType: dataType, putter: {o, v => putter(o, convert<T>(v))})
+        super(dataType: dataType, putter: {o, v => putter(o, convert<T>(v))})
     }
 }

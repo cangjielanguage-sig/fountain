@@ -34,7 +34,7 @@ public class SlidingWindowRateLimiter<T> <: RateLimiter<T> {
             prev.store(mono)
             mono.time + window - MonoTime.now()
         }
-        Process.current.atExit(timer.cancel)
+        atExit(timer.cancel)
     }
     public func exec(default: ?T, task: () -> ?T): ?T{
         let mono = Mono()

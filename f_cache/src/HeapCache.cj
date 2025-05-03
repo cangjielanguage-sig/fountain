@@ -12,6 +12,7 @@ package f_cache
 import std.collection.{HashMap, HashSet, Set}
 import std.collection.concurrent.BlockingQueue
 import std.math.MathExtension
+import std.env.atExit
 import std.process.Process
 import std.time.DateTime
 import std.sync.{Mutex, AtomicInt64, AtomicReference, Timer, AtomicBool}
@@ -38,7 +39,7 @@ public class HeapCache<V> where V <: Object {
         }
         this.store = ConcHashMap<Priority<V>>.create(concurrencyLevel: concurrencyLevel)
         startTimer()
-        Process.current.atExit(destroy)
+        atExit(destroy)
     }
 
     public static func builder(): HeapCacheBuilder<V> {

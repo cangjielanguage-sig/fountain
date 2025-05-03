@@ -11,6 +11,7 @@ package f_log.output
 
 import std.convert.Parsable
 import std.collection.concurrent.ArrayBlockingQueue
+import std.env
 import std.fs.{File, Directory, OpenMode, exists, rename, removeIfExists}
 import std.io.{SeekPosition, OutputStream}
 import std.math.MathExtension
@@ -23,7 +24,7 @@ import f_log.exception.LogException
 import f_time.{TimeUnit, ExtendDateTime, DateTimeFormatAssist}
 
 public class RotatableFileParams{
-    public var path = "${Process.current.workingDirectory}/logs/${Process.current.command}.log"
+    public var path = "${env.getWorkingDirectory()}/logs/${env.getCommand()}.log"
     public var fileSize = Int64.Max
     public var timeunit = TimeUnit.DAY
     public var compress = LogFileCompressFormat.NonCompression
@@ -101,7 +102,7 @@ protected class RotatableFile <: OutputStream & Resource{
             rotateFileIfNeed()
             this.timeunit.since()
         }
-        Process.current.atExit{timer.cancel()}
+        env.atExit{timer.cancel()}
         timer
     }
     private static func createDirIfNeed(path: String){

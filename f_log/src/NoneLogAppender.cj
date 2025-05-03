@@ -9,6 +9,7 @@
  */
 package f_log
 
+import std.env
 import std.process.Process
 import std.time.DateTime
 import stdx.log.LogLevel
@@ -16,7 +17,7 @@ import stdx.log.LogLevel
 public class NoneLogAppender <: AbstractLogger {
     public static let instance = NoneLogAppender()
     private init() {
-        super("", LogLevel.OFF, LogPattern.default, Process.current.stdOut)
+        super("", LogLevel.OFF, LogPattern.default, env.getStdOut())
     }
 
     public static func register(): Unit {

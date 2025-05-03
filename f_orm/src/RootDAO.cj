@@ -10,6 +10,8 @@
 
 package f_orm
 
+import std.math.numeric.{BigInt, Decimal}
+import std.time.DateTime
 import f_orm.exception.ORMException
 
 /**
@@ -22,8 +24,84 @@ public interface RootDAO {
      */
     prop executor: SqlExecutor
 
-    func arg(value: Any): String {
-        executor.addArg(value)
+    func arg(value: Bool): String {
+        executor.add(value)
+        '?'
+    }
+    func arg(value: Int8): String {
+        executor.add(value)
+        '?'
+    }
+    func arg(value: UInt8): String {
+        executor.add(value)
+        '?'
+    }
+    func arg(value: Int16): String {
+        executor.add(value)
+        '?'
+    }
+    func arg(value: UInt16): String {
+        executor.add(value)
+        '?'
+    }
+    func arg(value: Int32): String {
+        executor.add(value)
+        '?'
+    }
+    func arg(value: UInt32): String {
+        executor.add(value)
+        '?'
+    }
+    func arg(value: Int64): String {
+        executor.add(value)
+        '?'
+    }
+    func arg(value: UInt64): String {
+        executor.add(value)
+        '?'
+    }
+    func arg(value: Float16): String {
+        executor.add(value)
+        '?'
+    }
+    func arg(value: Float32): String {
+        executor.add(value)
+        '?'
+    }
+    func arg(value: Float64): String {
+        executor.add(value)
+        '?'
+    }
+    func arg(value: BigInt): String {
+        executor.add(value)
+        '?'
+    }
+    func arg(value: Decimal): String {
+        executor.add(value)
+        '?'
+    }
+    func arg(value: Rune): String {
+        executor.add(value)
+        '?'
+    }
+    func arg(value: String): String {
+        executor.add(value)
+        '?'
+    }
+    func arg(value: InputStream): String {
+        executor.add(value)
+        '?'
+    }
+    func arg(value: Duration): String {
+        executor.add(value)
+        '?'
+    }
+    func arg(value: DateTime): String {
+        executor.add(value)
+        '?'
+    }
+    func arg(value: Array<Byte>): String {
+        executor.add(value)
         '?'
     }
     func meet(condition: Bool, partial: String): MeetCondition {

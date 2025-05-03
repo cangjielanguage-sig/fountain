@@ -10,14 +10,6 @@
 
 package f_orm.wrap
 
-import std.regex.Regex
-import std.collection.{Map, HashMap}
-import std.collection.concurrent.ConcurrentHashMap
-import std.convert.Parsable
-import f_config.Config
-import f_regex.*
-import f_orm.exception.ORMException
-
 public class ORMConfig {
     private static const confPrefix = "orm"
     public static const connectionUrl = confPrefix + "_connectionUrl"
@@ -209,9 +201,6 @@ public class ORMConfig {
             case _ where !driverName.isEmpty() => getTransactionDeferrableMode()
             case _ => None<TransactionDeferrableMode>
         }
-    }
-    public static func registerSqlDataToDataConverter(driverName: String, converter: (SqlDbType) -> AnyData) {
-        RowWrap.registerSqlDataToDataConverter(driverName, converter)
     }
 
     public static func getStdPoolIdleTimeout(driverName!: String = String.empty): ?Duration {

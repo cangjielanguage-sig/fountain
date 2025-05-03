@@ -33,14 +33,16 @@ public class SingleColumnIterator<T> <: Iterator<T> & Resource {
     ) {}
     public func next(): ?T {
         if (column == String.empty) {
-            match (result.next()?[index]) {
-                case Some(x) where x is T => x as T
-                case _ => throw ORMException("the first column does not match specified data type")
+            if(result.next()){
+                result.getOrNull<T>(index)
+            }else{
+                throw ORMException("the first column does not match specified data type")
             }
         } else {
-            match (result.next()?[column]) {
-                case Some(x) where x is T => x as T
-                case _ => throw ORMException("the first column does not match specified data type")
+            if(result.next()){
+                result.getOrNull<T>(index)
+            }else{
+                throw ORMException("the first column does not match specified data type")
             }
         }
     }

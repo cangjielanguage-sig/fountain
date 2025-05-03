@@ -14,6 +14,7 @@ import std.collection.concurrent.ConcurrentHashMap
 import std.collection.Map
 import std.collection.HashMap
 import std.collection.Set
+import std.env
 import std.process.Process
 import std.sync.*
 public import std.time.DateTime
@@ -61,7 +62,7 @@ public class Ticktock <: Emitter {
     private let ticktock = Chrono()
     private init() {
         ticktock.start(this)
-        Process.current.atExit(shutdown)
+        env.atExit(shutdown)
     }
 
     public func removeTask(task: TicktockTask) {

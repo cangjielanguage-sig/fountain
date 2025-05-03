@@ -16,7 +16,6 @@ import std.sync.AtomicUInt64
 import std.unicode.UnicodeStringExtension
 import f_log.LoggerFactory
 import f_pool.Pool
-import f_orm.wrap.*
 
 public class DatabasePool <: Resource & Datasource {
     private static let logger = LoggerFactory.getLogger<DatabasePool>()

@@ -5,25 +5,20 @@
     You may obtain a copy of Mulan PSL v2 at:
             http://license.coscl.org.cn/MulanPSL2
     THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-    See the Mulan PSL v2 for more details.
- */
-package f_orm
+    See the Mulan PSL v2 for more details.  
+*/
+package f_orm.exception 
 
-public class InsertResult <: UpdateResult {
-    private let rows: Int64
-    private let id: Int64
-    init(result: UpdateResult) {
-        this.rows = result.rowCount
-        this.id = result.lastInsertId
+public class SqlArgException <: BaseException {
+    public init() {}
+
+    public init(message: String) {
+        super(message)
     }
-    public prop rowCount: Int64 {
-        get() {
-            rows
-        }
+    public init(caused: Exception) {
+        super(caused)
     }
-    public prop lastInsertId: Int64 {
-        get() {
-            id
-        }
+    public init(message: String, caused: Exception) {
+        super(message, caused)
     }
 }

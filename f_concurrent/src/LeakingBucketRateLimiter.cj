@@ -50,7 +50,7 @@ public class LeakingBucketRateLimiter<T> <: RateLimiter<T> {
             }while(next <= Duration.Zero)
             next
         }
-        Process.current.atExit(timer.cancel)
+        atExit(timer.cancel)
     }
     public func exec(default: ?T, task: () -> ?T): ?T {
         let tag = SyncCounter(1)

@@ -12,17 +12,18 @@ package f_cmd
 import std.collection.{HashMap, ArrayList}
 import std.convert.Parsable
 import std.fs.Path
-import std.process.{Process, CurrentProcess}
+import std.env
+import std.process.Process
 import f_regex.*
 
 import f_cmd.exception.CmdException
 
 public class CmdArgs {
     private var args = HashMap<String, ArrayList<String>>()
-    private var appName = Process.current.name
-    private var _currentWorkingDir = Process.current.workingDirectory
+    private var appName = env.getCommand()
+    private var _currentWorkingDir = env.getWorkingDirectory()
     private init() {
-        this(Process.current.arguments)
+        this(env.getCommandLine()[1 ..])
     }
     private init(args: Array<String>) {
         let blankRegex = Regex.builder().headOrTailBlanks.build()

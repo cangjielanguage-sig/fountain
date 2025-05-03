@@ -9,8 +9,12 @@
 */
 package f_net
 
+import std.env
+
 public class PipelineServer<EN, DE> <: Resource where EN <: ProtocolData<EN>, DE <: ProtocolData<DE> {
-    private static let LOG = LoggerFactory.getLogger<PipelineServer<EN, DE>>()
+    private static func log(){
+        LoggerFactory.getLogger<PipelineServer<EN, DE>>()
+    }
     private let closed = AtomicBool(false)
     public PipelineServer(
         private let server!: TcpServerSocket, 
@@ -20,7 +24,7 @@ public class PipelineServer<EN, DE> <: Resource where EN <: ProtocolData<EN>, DE
     ){
         server.bind()
         start()
-        Process.current.atExit(close)
+        env.atExit(close)
     }
     public init(
         server!: TcpServerSocket,
@@ -39,7 +43,7 @@ public class PipelineServer<EN, DE> <: Resource where EN <: ProtocolData<EN>, DE
                     let len = try{
                         socket.read(buf)
                     }catch(e: Exception){
-                        LOG.warn<SocketAddress>('socket {} read', e, [socket.remoteAddress])
+                        log().warn<SocketAddress>('socket {} read', e, [socket.remoteAddress])
                         continue
                     }
                     if(let Some(d) <- decoder.decode(buf[0 .. len])){
@@ -47,25 +51,25 @@ public class PipelineServer<EN, DE> <: Resource where EN <: ProtocolData<EN>, DE
                             try{
                                 socket.close()
                             }catch(e: Exception){
-                                LOG.warn<SocketAddress>('socket {} close', e, [socket.remoteAddress])
+                                log().warn<SocketAddress>('socket {} close', e, [socket.remoteAddress])
                             }
                         }else{
                             let r = try{
                                 executor(d)
                             }catch(e: Exception){
-                                LOG.warn<SocketAddress>('pipeline executor {}', e, [socket.remoteAddress])
+                                log().warn<SocketAddress>('pipeline executor {}', e, [socket.remoteAddress])
                                 continue
                             }
                             let bytes = try{
                                 encoder.encoder().encode(r)
                             }catch(e: Exception){
-                                LOG.warn<SocketAddress>('pipeline encode {}', e, [socket.remoteAddress])
+                                log().warn<SocketAddress>('pipeline encode {}', e, [socket.remoteAddress])
                                 continue
                             }
                             try{
                                 socket.write(bytes)
                             }catch(e: Exception){
-                                LOG.warn<SocketAddress>('socket {} write', e, [socket.remoteAddress])
+                                log().warn<SocketAddress>('socket {} write', e, [socket.remoteAddress])
                             }
                         }
                     }
