@@ -5,24 +5,20 @@
     You may obtain a copy of Mulan PSL v2 at:
             http://license.coscl.org.cn/MulanPSL2
     THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-    See the Mulan PSL v2 for more details.  
+    See the Mulan PSL v2 for more details.
 */
-package f_time
+package f_mvc
 
-import std.collection.concurrent.ConcurrentHashMap
+abstract sealed class Multipart {
+    public Multipart(public let contentDisposition: ContentDisposition){}
 
-public interface DateTimeFormatAssist {
-    func toFormat(): DateTimeFormat
-}
-private let formats = ConcurrentHashMap<String, DateTimeFormat>()
-extend String <: DateTimeFormatAssist{
-    public func toFormat(): DateTimeFormat{
-        if(let Some(x) <- formats.get(this)){
-            x
-        }else{
-            let f = DateTimeFormat.of(this)
-            formats[this] = f
-            f
+    public prop name: String{
+        get(){
+            contentDisposition.getName()
         }
+    }
+
+    func setName(name: String): Unit {
+        contentDisposition.setName(name)
     }
 }

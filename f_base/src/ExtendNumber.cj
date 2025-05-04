@@ -718,12 +718,12 @@ extend BigInt <: ExtendBigInt {
     }
 }
 
-private let zeroDecimal = Decimal('0')
-private let oneDecimal = Decimal('1')
-private let tenDecimal = Decimal('10')
-private let oneHundredDecimal = Decimal("100")
-private let piDecimal = Decimal(Float64.PI.toString())
-private let eDecimal = Decimal(Float64.E.toString())
+private let zeroDecimal = Decimal.parse('0')
+private let oneDecimal = Decimal.parse('1')
+private let tenDecimal = Decimal.parse('10')
+private let oneHundredDecimal = Decimal.parse("100")
+private let piDecimal = Decimal.parse(Float64.PI.toString())
+private let eDecimal = Decimal.parse(Float64.E.toString())
 
 public interface ExtendDecimal {
     static prop zero: Decimal

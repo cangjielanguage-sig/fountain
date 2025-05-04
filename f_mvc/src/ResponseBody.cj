@@ -6,20 +6,12 @@
             http://license.coscl.org.cn/MulanPSL2
     THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
     See the Mulan PSL v2 for more details.
-*/
-package f_data
+ */
+package f_mvc
 
-extend<T> Option<T> <: DataFields<T> where T <: DataFields<T> {
-    public func toData(): Data {
-        match(this) {
-            case Some(x) => x.toData()
-            case _ => DataNone.INSTANCE
-        }
-    }
-    public static func tryFromData(data: Data, flag: DataConversionFlag): Any {
-        match(data) {
-            case x: DataNone => None<T>
-            case x => T.tryFromData(x, flag)
-        }
-    }
+public func responseBody<T>(ctx: HttpContext, data: T): Unit where T <: Object & DataObject<T> {
+    let d = data.toData()
+    let mediaType = ctx.request.headers.getFirst("Accept").getOrThrow{HttpRequestHeaderException("current request header does not contain Accept")}
+    let bytes = MediaTypes.parse(mediaType).fromData(d)
+    HttpResponseWriter(ctx).write(bytes)
 }

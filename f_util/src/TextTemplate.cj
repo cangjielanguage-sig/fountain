@@ -294,9 +294,9 @@ class Value2TimeString <: Value2String {
         }
         let value = getter.get<K, V, O>(data)
         match(value) {
-            case x: DateTime => x.toString(formatter.toFormat())
+            case x: DateTime => x.format(formatter)
             case x: ?DateTime => match(x){
-                case Some(x) => x.toString(formatter.toFormat())
+                case Some(x) => x.format(formatter)
                 case _ => extractNoneConverter()
             }
             case _ => extractNoneConverter()

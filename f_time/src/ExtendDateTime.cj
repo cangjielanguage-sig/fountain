@@ -35,7 +35,6 @@ public interface ExtendDateTime {
     func toUnixEpochMillis(): Int64
     func toUnixEpochMicros(): Int64
     func toUnixEpochNanos(): Int64
-    func toString(format: String): String
 }
 extend DateTime <: ExtendDateTime {
     public static prop currentDuration: Duration {
@@ -193,8 +192,5 @@ extend DateTime <: ExtendDateTime {
     }
     public func toUnixEpochNanos(): Int64 {
         toUnixTimeStamp().toNanoseconds()
-    }
-    public func toString(format: String): String {
-        this.toString(format.toFormat())
     }
 }

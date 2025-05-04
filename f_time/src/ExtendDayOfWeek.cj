@@ -14,6 +14,6 @@ public interface ExtendDayOfWeek{
 }
 extend DayOfWeek <: ExtendDayOfWeek{
     public operator func -(day: DayOfWeek): Int64 {
-        this.value() - day.value()
+        this.toInteger() - day.toInteger()
     }
 }

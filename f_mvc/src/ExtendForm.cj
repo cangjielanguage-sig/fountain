@@ -9,8 +9,6 @@
 */
 package f_mvc
 
-internal import stdx.encoding.url.Form
-
 public interface ExtendForm{}
 extend Form <: ExtendForm {
     public func getValue<T>(name: String): ?T where T <: DataParsable<T> {

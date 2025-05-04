@@ -9,7 +9,6 @@
 */
 package f_mvc
 
-
 public enum ContentDispositionType <: Equatable<ContentDispositionType> & Hashable & ToString & Parsable<ContentDispositionType> {
     | attachment
     | formData

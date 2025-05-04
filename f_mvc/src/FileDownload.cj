@@ -28,8 +28,8 @@ public class FileDownload {
     }
     public func write(file: File): Unit {
         let info = file.info
-        if (info.isFile()) {
-            write(info.path.fileName.getOrThrow(), file, length: info.length)
+        if (info.isRegular()) {
+            write(info.path.fileName, file, length: info.size)
         } else {
             throw HttpResponseException("${info.path} is not a file")
         }
@@ -51,7 +51,7 @@ public class FileDownload {
             built.store(true)
         }
         func write() {
-            let buf = Array<Byte>(MVCConfig.downloadBufferSize, item: 0)
+            let buf = Array<Byte>(MVCConfig.downloadBufferSize, repeat: 0)
             while(let len <- input.read(buf)) {
                 if(len > 0) {
                     writer.write(buf[0 .. len])

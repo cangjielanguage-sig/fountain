@@ -58,7 +58,7 @@ public interface MapRawType{
 }
 public interface MapData<M, K, V> <: DataFields<M> & MapRawType where K <: Equatable<K> & DataFields<K>, V <: DataFields<V>, M <: DataFields<M> & Map<K, V> {
     func toData(): Data
-    static func tryFromData(data: Data, flag!: DataConversionFlag): Any
+    static func tryFromData(data: Data, flag: DataConversionFlag): Any
     prop rawType: (TypeInfo, TypeInfo){
         get(){
             (TypeInfos.get<K>(), TypeInfos.get<V>())
@@ -101,7 +101,7 @@ extend<K, V> HashMap<K, V> <: MapData<HashMap<K, V>, K, V> where K <: Equatable<
     public func toData(): Data {
         DataMap(this)
     }
-    public static func tryFromData(data: Data, flag!: DataConversionFlag): Any {
+    public static func tryFromData(data: Data, flag: DataConversionFlag): Any {
         tryFromDataToMap<HashMap<K, V>, K, V>(data, flag){HashMap<K, V>()}
     }
 }
@@ -109,7 +109,7 @@ extend<K, V> LinkedHashMap<K, V> <: MapData<LinkedHashMap<K, V>, K, V> where K <
     public func toData(): Data {
         DataMap(this)
     }
-    public static func tryFromData(data: Data, flag!: DataConversionFlag): Any {
+    public static func tryFromData(data: Data, flag: DataConversionFlag): Any {
         tryFromDataToMap<LinkedHashMap<K, V>, K, V>(data, flag){LinkedHashMap<K, V>()}
     }
 }
@@ -117,7 +117,7 @@ extend<K, V> TreeMap<K, V> <: MapData<TreeMap<K, V>, K, V> where K <: Equatable<
     public func toData(): Data {
         DataMap(this)
     }
-    public static func tryFromData(data: Data, flag!: DataConversionFlag): Any {
+    public static func tryFromData(data: Data, flag: DataConversionFlag): Any {
         tryFromDataToMap<TreeMap<K, V>, K, V>(data, flag){TreeMap<K, V>()}
     }
 }

@@ -9,7 +9,7 @@
 */
 package f_bean.test
 
-import f_bean.*
+public import f_bean.*
 import f_bean.macros.*
 
 @Bean

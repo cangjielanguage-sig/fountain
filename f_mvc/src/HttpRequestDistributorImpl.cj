@@ -12,8 +12,8 @@ package f_mvc
 sealed abstract class HttpRequestPathPatterns <: HttpRequestDistributor{
     protected let patterns = PathPattern()
 
-    public func extractParsableVairableInPath<T>(path: String, name: String): ?T where T <: DataParsable<T> {
-        patterns.extractParsableVairableInPath<T>(path, name)
+    public func extractParsableVariableInPath<T>(path: String, name: String): ?T where T <: DataParsable<T> {
+        patterns.extractDataParsableVariableInPath<T>(path, name)
     }
     func register(meta: RequestMeta): Unit {
         meta.setPathPattern(patterns)

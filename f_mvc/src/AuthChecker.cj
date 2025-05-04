@@ -7,19 +7,16 @@
     THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
     See the Mulan PSL v2 for more details.
 */
-package f_data
+package f_mvc
 
-extend<T> Option<T> <: DataFields<T> where T <: DataFields<T> {
-    public func toData(): Data {
-        match(this) {
-            case Some(x) => x.toData()
-            case _ => DataNone.INSTANCE
-        }
-    }
-    public static func tryFromData(data: Data, flag: DataConversionFlag): Any {
-        match(data) {
-            case x: DataNone => None<T>
-            case x => T.tryFromData(x, flag)
-        }
+public interface AuthChecker {
+    func check(ctx: HttpContext, patterns: HttpRequestPathPatterns): Bool
+}
+
+class EmptyAuthChecker <: AuthChecker {
+    static let instance = EmptyAuthChecker()
+    private init(){}
+    public func check(ctx: HttpContext, patterns: HttpRequestPathPatterns): Bool {
+        true
     }
 }

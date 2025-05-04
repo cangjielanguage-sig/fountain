@@ -14,6 +14,6 @@ public interface ExtendMonth{
 }
 extend Month <: ExtendMonth{
     public operator func -(month: Month): Int64 {
-        this.value() - month.value()
+        this.toInteger() - month.toInteger()
     }
 }

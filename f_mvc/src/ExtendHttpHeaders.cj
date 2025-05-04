@@ -9,8 +9,6 @@
 */
 package f_mvc
 
-internal import stdx.net.http.HttpHeaders
-
 public interface ExtendHttpHeaders{}
 extend HttpHeaders <: ExtendHttpHeaders {
     public func getFirstValue<T>(name: String): ?T where T <: DataParsable<T>{

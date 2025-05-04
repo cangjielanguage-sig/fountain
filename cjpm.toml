@@ -15,7 +15,7 @@
   f_jwt = {path = "./f_jwt"}
   f_log = {path = "./f_log"}
   f_macros = {path = "./f_macros"}
-#  f_mvc = {path = "./f_mvc"}
+  f_mvc = {path = "./f_mvc"}
   f_net = {path = "./f_net"}
   f_orm = {path = "./f_orm"}
   f_pool = {path = "./f_pool"}

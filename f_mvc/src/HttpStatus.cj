@@ -17,7 +17,7 @@ public class HttpStatus <: ToString {
    	 * https://tools.ietf.org/html/rfc7231#section-6.2.1
      * HTTP/1.1: Semantics and Content, section 6.2.1
    	 */
-    public static let CONTINUE = HttpStatus(
+    public static const CONTINUE = HttpStatus(
         HttpStatusCode.STATUS_CONTINUE,
         Series.INFORMATIONAL,
         "Continue")
@@ -27,7 +27,7 @@ public class HttpStatus <: ToString {
    	 * https://tools.ietf.org/html/rfc7231#section-6.2.2
      * HTTP/1.1: Semantics and Content, section 6.2.2
    	 */
-    public static let SWITCHING_PROTOCOLS = HttpStatus(
+    public static const SWITCHING_PROTOCOLS = HttpStatus(
         HttpStatusCode.STATUS_SWITCHING_PROTOCOLS,
         Series.INFORMATIONAL,
         "Switching Protocols"
@@ -38,7 +38,7 @@ public class HttpStatus <: ToString {
    	 * https://tools.ietf.org/html/rfc2518#section-10.1
      * WebDAV
    	 */
-    public static let PROCESSING = HttpStatus(
+    public static const PROCESSING = HttpStatus(
         HttpStatusCode.STATUS_PROCESSING,
         Series.INFORMATIONAL,
         "Processing")
@@ -49,11 +49,11 @@ public class HttpStatus <: ToString {
      * A proposal for supporting
    	 * resumable POST/PUT HTTP requests in HTTP/1.0
    	 */
-    public static let CHECKPOINT = HttpStatus(
+    public static const CHECKPOINT = HttpStatus(
         HttpStatusCode.STATUS_EARLY_HINTS,
         Series.INFORMATIONAL,
         "Checkpoint")
-    public static let EARLY_HINTS = HttpStatus(
+    public static const EARLY_HINTS = HttpStatus(
         HttpStatusCode.STATUS_EARLY_HINTS,
         Series.INFORMATIONAL,
         "Early Hints")
@@ -65,7 +65,7 @@ public class HttpStatus <: ToString {
    	 * https://tools.ietf.org/html/rfc7231#section-6.3.1
      * HTTP/1.1: Semantics and Content, section 6.3.1
    	 */
-    public static let OK = HttpStatus(
+    public static const OK = HttpStatus(
         HttpStatusCode.STATUS_OK,
         Series.SUCCESSFUL,
         "OK")
@@ -75,7 +75,7 @@ public class HttpStatus <: ToString {
    	 * https://tools.ietf.org/html/rfc7231#section-6.3.2
      * HTTP/1.1: Semantics and Content, section 6.3.2
    	 */
-    public static let CREATED = HttpStatus(
+    public static const CREATED = HttpStatus(
         HttpStatusCode.STATUS_CREATED,
         Series.SUCCESSFUL,
         "Created")
@@ -85,7 +85,7 @@ public class HttpStatus <: ToString {
    	 * https://tools.ietf.org/html/rfc7231#section-6.3.3
      * HTTP/1.1: Semantics and Content, section 6.3.3
    	 */
-    public static let ACCEPTED = HttpStatus(
+    public static const ACCEPTED = HttpStatus(
         HttpStatusCode.STATUS_ACCEPTED,
         Series.SUCCESSFUL,
         "Accepted")
@@ -95,7 +95,7 @@ public class HttpStatus <: ToString {
    	 * https://tools.ietf.org/html/rfc7231#section-6.3.4
      * HTTP/1.1: Semantics and Content, section 6.3.4
    	 */
-    public static let NON_AUTHORITATIVE_INFORMATION = HttpStatus(
+    public static const NON_AUTHORITATIVE_INFORMATION = HttpStatus(
         HttpStatusCode.STATUS_NON_AUTHORITATIVE_INFO,
         Series.SUCCESSFUL,
         "Non-Authoritative Information"
@@ -106,7 +106,7 @@ public class HttpStatus <: ToString {
    	 * https://tools.ietf.org/html/rfc7231#section-6.3.5
      * HTTP/1.1: Semantics and Content, section 6.3.5
    	 */
-    public static let NO_CONTENT = HttpStatus(
+    public static const NO_CONTENT = HttpStatus(
         HttpStatusCode.STATUS_NO_CONTENT,
         Series.SUCCESSFUL,
         "No Content")
@@ -116,7 +116,7 @@ public class HttpStatus <: ToString {
    	 * https://tools.ietf.org/html/rfc7231#section-6.3.6
      * HTTP/1.1: Semantics and Content, section 6.3.6
    	 */
-    public static let RESET_CONTENT = HttpStatus(
+    public static const RESET_CONTENT = HttpStatus(
         HttpStatusCode.STATUS_RESET_CONTENT,
         Series.SUCCESSFUL,
         "Reset Content"
@@ -127,7 +127,7 @@ public class HttpStatus <: ToString {
    	 * https://tools.ietf.org/html/rfc7233#section-4.1
      * HTTP/1.1: Range Requests, section 4.1
    	 */
-    public static let PARTIAL_CONTENT = HttpStatus(
+    public static const PARTIAL_CONTENT = HttpStatus(
         HttpStatusCode.STATUS_PARTIAL_CONTENT,
         Series.SUCCESSFUL,
         "Partial Content"
@@ -138,7 +138,7 @@ public class HttpStatus <: ToString {
    	 * https://tools.ietf.org/html/rfc4918#section-13
      * WebDAV
    	 */
-    public static let MULTI_STATUS = HttpStatus(
+    public static const MULTI_STATUS = HttpStatus(
         HttpStatusCode.STATUS_MULTI_STATUS,
         Series.SUCCESSFUL,
         "Multi-Status")
@@ -148,7 +148,7 @@ public class HttpStatus <: ToString {
    	 * https://tools.ietf.org/html/rfc5842#section-7.1
      * WebDAV Binding Extensions
    	 */
-    public static let ALREADY_REPORTED = HttpStatus(
+    public static const ALREADY_REPORTED = HttpStatus(
         HttpStatusCode.STATUS_ALREADY_REPORTED,
         Series.SUCCESSFUL,
         "Already Reported"
@@ -159,7 +159,7 @@ public class HttpStatus <: ToString {
    	 * https://tools.ietf.org/html/rfc3229#section-10.4.1
      * Delta encoding in HTTP
    	 */
-    public static let IM_USED = HttpStatus(
+    public static const IM_USED = HttpStatus(
         HttpStatusCode.STATUS_IM_USED,
         Series.SUCCESSFUL,
         "IM Used")
@@ -171,7 +171,7 @@ public class HttpStatus <: ToString {
    	 * https://tools.ietf.org/html/rfc7231#section-6.4.1
      * HTTP/1.1: Semantics and Content, section 6.4.1
    	 */
-    public static let MULTIPLE_CHOICES = HttpStatus(
+    public static const MULTIPLE_CHOICES = HttpStatus(
         HttpStatusCode.STATUS_MULTIPLE_CHOICES,
         Series.REDIRECTION,
         "Multiple Choices"
@@ -182,7 +182,7 @@ public class HttpStatus <: ToString {
    	 * https://tools.ietf.org/html/rfc7231#section-6.4.2
      * HTTP/1.1: Semantics and Content, section 6.4.2
    	 */
-    public static let MOVED_PERMANENTLY = HttpStatus(
+    public static const MOVED_PERMANENTLY = HttpStatus(
         HttpStatusCode.STATUS_MOVED_PERMANENTLY,
         Series.REDIRECTION,
         "Moved Permanently"
@@ -193,7 +193,7 @@ public class HttpStatus <: ToString {
    	 * https://tools.ietf.org/html/rfc7231#section-6.4.3
      * HTTP/1.1: Semantics and Content, section 6.4.3
    	 */
-    public static let FOUND = HttpStatus(
+    public static const FOUND = HttpStatus(
         HttpStatusCode.STATUS_FOUND,
         Series.REDIRECTION,
         "Found")
@@ -204,7 +204,7 @@ public class HttpStatus <: ToString {
      * HTTP/1.0, section 9.3
    	 * deprecated in favor of FOUND which will be returned from HttpStatus.valueOf = HttpStatus(302)
    	 */
-    public static let MOVED_TEMPORARILY = HttpStatus(
+    public static const MOVED_TEMPORARILY = HttpStatus(
         HttpStatusCode.STATUS_FOUND,
         Series.REDIRECTION,
         "Moved Temporarily"
@@ -215,7 +215,7 @@ public class HttpStatus <: ToString {
    	 * https://tools.ietf.org/html/rfc7231#section-6.4.4
      * HTTP/1.1: Semantics and Content, section 6.4.4
    	 */
-    public static let SEE_OTHER = HttpStatus(
+    public static const SEE_OTHER = HttpStatus(
         HttpStatusCode.STATUS_SEE_OTHER,
         Series.REDIRECTION,
         "See Other")
@@ -225,7 +225,7 @@ public class HttpStatus <: ToString {
    	 * https://tools.ietf.org/html/rfc7232#section-4.1
      * HTTP/1.1: Conditional Requests, section 4.1
    	 */
-    public static let NOT_MODIFIED = HttpStatus(
+    public static const NOT_MODIFIED = HttpStatus(
         HttpStatusCode.STATUS_NOT_MODIFIED,
         Series.REDIRECTION,
         "Not Modified")
@@ -236,7 +236,7 @@ public class HttpStatus <: ToString {
      * HTTP/1.1: Semantics and Content, section 6.4.5
    	 * deprecated due to security concerns regarding in-band configuration of a proxy
    	 */
-    public static let USE_PROXY = HttpStatus(
+    public static const USE_PROXY = HttpStatus(
         HttpStatusCode.STATUS_USE_PROXY,
         Series.REDIRECTION,
         "Use Proxy")
@@ -246,7 +246,7 @@ public class HttpStatus <: ToString {
    	 * https://tools.ietf.org/html/rfc7231#section-6.4.7
      * HTTP/1.1: Semantics and Content, section 6.4.7
    	 */
-    public static let TEMPORARY_REDIRECT = HttpStatus(
+    public static const TEMPORARY_REDIRECT = HttpStatus(
         HttpStatusCode.STATUS_TEMPORARY_REDIRECT,
         Series.REDIRECTION,
         "Temporary Redirect"
@@ -257,7 +257,7 @@ public class HttpStatus <: ToString {
    	 * https://tools.ietf.org/html/rfc7238
      * RFC 7238
    	 */
-    public static let PERMANENT_REDIRECT = HttpStatus(
+    public static const PERMANENT_REDIRECT = HttpStatus(
         HttpStatusCode.STATUS_PERMANENT_REDIRECT,
         Series.REDIRECTION,
         "Permanent Redirect"
@@ -270,7 +270,7 @@ public class HttpStatus <: ToString {
    	 * https://tools.ietf.org/html/rfc7231#section-6.5.1
      * HTTP/1.1: Semantics and Content, section 6.5.1
    	 */
-    public static let BAD_REQUEST = HttpStatus(
+    public static const BAD_REQUEST = HttpStatus(
         HttpStatusCode.STATUS_BAD_REQUEST,
         Series.CLIENT_ERROR,
         "Bad Request")
@@ -280,7 +280,7 @@ public class HttpStatus <: ToString {
    	 * https://tools.ietf.org/html/rfc7235#section-3.1
      * HTTP/1.1: Authentication, section 3.1
    	 */
-    public static let UNAUTHORIZED = HttpStatus(
+    public static const UNAUTHORIZED = HttpStatus(
         HttpStatusCode.STATUS_UNAUTHORIZED,
         Series.CLIENT_ERROR,
         "Unauthorized")
@@ -290,7 +290,7 @@ public class HttpStatus <: ToString {
    	 * https://tools.ietf.org/html/rfc7231#section-6.5.2
      * HTTP/1.1: Semantics and Content, section 6.5.2
    	 */
-    public static let PAYMENT_REQUIRED = HttpStatus(
+    public static const PAYMENT_REQUIRED = HttpStatus(
         HttpStatusCode.STATUS_PAYMENT_REQUIRED,
         Series.CLIENT_ERROR,
         "Payment Required"
@@ -301,7 +301,7 @@ public class HttpStatus <: ToString {
    	 * https://tools.ietf.org/html/rfc7231#section-6.5.3
      * HTTP/1.1: Semantics and Content, section 6.5.3
    	 */
-    public static let FORBIDDEN = HttpStatus(
+    public static const FORBIDDEN = HttpStatus(
         HttpStatusCode.STATUS_FORBIDDEN,
         Series.CLIENT_ERROR,
         "Forbidden")
@@ -311,7 +311,7 @@ public class HttpStatus <: ToString {
    	 * https://tools.ietf.org/html/rfc7231#section-6.5.4
      * HTTP/1.1: Semantics and Content, section 6.5.4
    	 */
-    public static let NOT_FOUND = HttpStatus(
+    public static const NOT_FOUND = HttpStatus(
         HttpStatusCode.STATUS_NOT_FOUND,
         Series.CLIENT_ERROR,
         "Not Found")
@@ -321,7 +321,7 @@ public class HttpStatus <: ToString {
    	 * https://tools.ietf.org/html/rfc7231#section-6.5.5
      * HTTP/1.1: Semantics and Content, section 6.5.5
    	 */
-    public static let METHOD_NOT_ALLOWED = HttpStatus(
+    public static const METHOD_NOT_ALLOWED = HttpStatus(
         HttpStatusCode.STATUS_METHOD_NOT_ALLOWED,
         Series.CLIENT_ERROR,
         "Method Not Allowed"
@@ -332,7 +332,7 @@ public class HttpStatus <: ToString {
    	 * https://tools.ietf.org/html/rfc7231#section-6.5.6
      * HTTP/1.1: Semantics and Content, section 6.5.6
    	 */
-    public static let NOT_ACCEPTABLE = HttpStatus(
+    public static const NOT_ACCEPTABLE = HttpStatus(
         HttpStatusCode.STATUS_NOT_ACCEPTABLE,
         Series.CLIENT_ERROR,
         "Not Acceptable"
@@ -343,7 +343,7 @@ public class HttpStatus <: ToString {
    	 * https://tools.ietf.org/html/rfc7235#section-3.2
      * HTTP/1.1: Authentication, section 3.2
    	 */
-    public static let PROXY_AUTHENTICATION_REQUIRED = HttpStatus(
+    public static const PROXY_AUTHENTICATION_REQUIRED = HttpStatus(
         HttpStatusCode.STATUS_PROXY_AUTH_REQUIRED,
         Series.CLIENT_ERROR,
         "Proxy Authentication Required"
@@ -354,7 +354,7 @@ public class HttpStatus <: ToString {
    	 * https://tools.ietf.org/html/rfc7231#section-6.5.7
      * HTTP/1.1: Semantics and Content, section 6.5.7
    	 */
-    public static let REQUEST_TIMEOUT = HttpStatus(
+    public static const REQUEST_TIMEOUT = HttpStatus(
         HttpStatusCode.STATUS_REQUEST_TIMEOUT,
         Series.CLIENT_ERROR,
         "Request Timeout"
@@ -365,7 +365,7 @@ public class HttpStatus <: ToString {
    	 * https://tools.ietf.org/html/rfc7231#section-6.5.8
      * HTTP/1.1: Semantics and Content, section 6.5.8
    	 */
-    public static let CONFLICT = HttpStatus(
+    public static const CONFLICT = HttpStatus(
         HttpStatusCode.STATUS_CONFLICT,
         Series.CLIENT_ERROR,
         "Conflict")
@@ -376,7 +376,7 @@ public class HttpStatus <: ToString {
      *
    	 *     HTTP/1.1: Semantics and Content, section 6.5.9
    	 */
-    public static let GONE = HttpStatus(
+    public static const GONE = HttpStatus(
         HttpStatusCode.STATUS_GONE,
         Series.CLIENT_ERROR,
         "Gone")
@@ -387,7 +387,7 @@ public class HttpStatus <: ToString {
      *
    	 *     HTTP/1.1: Semantics and Content, section 6.5.10
    	 */
-    public static let LENGTH_REQUIRED = HttpStatus(
+    public static const LENGTH_REQUIRED = HttpStatus(
         HttpStatusCode.STATUS_LENGTH_REQUIRED,
         Series.CLIENT_ERROR,
         "Length Required"
@@ -399,7 +399,7 @@ public class HttpStatus <: ToString {
      *
    	 *     HTTP/1.1: Conditional Requests, section 4.2
    	 */
-    public static let PRECONDITION_FAILED = HttpStatus(
+    public static const PRECONDITION_FAILED = HttpStatus(
         HttpStatusCode.STATUS_PRECONDITION_FAILED,
         Series.CLIENT_ERROR,
         "Precondition Failed"
@@ -411,7 +411,7 @@ public class HttpStatus <: ToString {
      *
    	 *     HTTP/1.1: Semantics and Content, section 6.5.11
    	 */
-    public static let PAYLOAD_TOO_LARGE = HttpStatus(
+    public static const PAYLOAD_TOO_LARGE = HttpStatus(
         HttpStatusCode.STATUS_REQUEST_CONTENT_TOO_LARGE,
         Series.CLIENT_ERROR,
         "Payload Too Large"
@@ -424,7 +424,7 @@ public class HttpStatus <: ToString {
    	 * deprecated in favor of PAYLOAD_TOO_LARGE which will be
    	 * returned from HttpStatus.valueOf = HttpStatus(413)
    	 */
-    public static let REQUEST_ENTITY_TOO_LARGE = HttpStatus(
+    public static const REQUEST_ENTITY_TOO_LARGE = HttpStatus(
         HttpStatusCode.STATUS_REQUEST_CONTENT_TOO_LARGE,
         Series.CLIENT_ERROR,
         "Request Entity Too Large"
@@ -435,7 +435,7 @@ public class HttpStatus <: ToString {
    	 * https://tools.ietf.org/html/rfc7231#section-6.5.12
    	 * HTTP/1.1: Semantics and Content, section 6.5.12
    	 */
-    public static let URI_TOO_LONG = HttpStatus(
+    public static const URI_TOO_LONG = HttpStatus(
         HttpStatusCode.STATUS_REQUEST_URI_TOO_LONG,
         Series.CLIENT_ERROR,
         "URI Too Long"
@@ -447,7 +447,7 @@ public class HttpStatus <: ToString {
      * HTTP/1.1, section 10.4.15
    	 * deprecated in favor of URI_TOO_LONG which will be returned from HttpStatus.valueOf = HttpStatus(414)
    	 */
-    public static let REQUEST_URI_TOO_LONG = HttpStatus(
+    public static const REQUEST_URI_TOO_LONG = HttpStatus(
         HttpStatusCode.STATUS_REQUEST_URI_TOO_LONG,
         Series.CLIENT_ERROR,
         "Request-URI Too Long"
@@ -458,7 +458,7 @@ public class HttpStatus <: ToString {
    	 * https://tools.ietf.org/html/rfc7231#section-6.5.13
    	 * HTTP/1.1: Semantics and Content, section 6.5.13
    	 */
-    public static let UNSUPPORTED_MEDIA_TYPE = HttpStatus(
+    public static const UNSUPPORTED_MEDIA_TYPE = HttpStatus(
         HttpStatusCode.STATUS_UNSUPPORTED_MEDIA_TYPE,
         Series.CLIENT_ERROR,
         "Unsupported Media Type"
@@ -469,7 +469,7 @@ public class HttpStatus <: ToString {
    	 * https://tools.ietf.org/html/rfc7233#section-4.4
      * HTTP/1.1: Range Requests, section 4.4
    	 */
-    public static let REQUESTED_RANGE_NOT_SATISFIABLE = HttpStatus(
+    public static const REQUESTED_RANGE_NOT_SATISFIABLE = HttpStatus(
         HttpStatusCode.STATUS_REQUESTED_RANGE_NOT_SATISFIABLE,
         Series.CLIENT_ERROR,
         "Requested range not satisfiable"
@@ -480,7 +480,7 @@ public class HttpStatus <: ToString {
    	 * https://tools.ietf.org/html/rfc7231#section-6.5.14
    	 * HTTP/1.1: Semantics and Content, section 6.5.14
    	 */
-    public static let EXPECTATION_FAILED = HttpStatus(
+    public static const EXPECTATION_FAILED = HttpStatus(
         HttpStatusCode.STATUS_EXPECTATION_FAILED,
         Series.CLIENT_ERROR,
         "Expectation Failed"
@@ -491,7 +491,7 @@ public class HttpStatus <: ToString {
    	 * https://tools.ietf.org/html/rfc2324#section-2.3.2
      * HTCPCP/1.0
    	 */
-    public static let I_AM_A_TEAPOT = HttpStatus(
+    public static const I_AM_A_TEAPOT = HttpStatus(
         HttpStatusCode.STATUS_TEAPOT,
         Series.CLIENT_ERROR,
         "I'm a teapot")
@@ -501,7 +501,7 @@ public class HttpStatus <: ToString {
    	 * https://tools.ietf.org/rfcdiff?difftype=--hwdiff&ampurl2=draft-ietf-webdav-protocol-06.txt
    	 * WebDAV Draft Changes
    	 */
-    public static let INSUFFICIENT_SPACE_ON_RESOURCE = HttpStatus(
+    public static const INSUFFICIENT_SPACE_ON_RESOURCE = HttpStatus(
         419,
         Series.CLIENT_ERROR,
         "Insufficient Space On Resource"
@@ -512,7 +512,7 @@ public class HttpStatus <: ToString {
    	 * https://tools.ietf.org/rfcdiff?difftype=--hwdiff&ampurl2=draft-ietf-webdav-protocol-06.txt
    	 * WebDAV Draft Changes
    	 */
-    public static let METHOD_FAILURE = HttpStatus(
+    public static const METHOD_FAILURE = HttpStatus(
         420,
         Series.CLIENT_ERROR,
         "Method Failure")
@@ -522,12 +522,12 @@ public class HttpStatus <: ToString {
    	 * https://tools.ietf.org/rfcdiff?difftype=--hwdiff&ampurl2=draft-ietf-webdav-protocol-06.txt
    	 * WebDAV Draft Changes
    	 */
-    public static let DESTINATION_LOCKED = HttpStatus(
+    public static const DESTINATION_LOCKED = HttpStatus(
         HttpStatusCode.STATUS_MISDIRECTED_REQUEST,
         Series.CLIENT_ERROR,
         "Destination Locked"
     )
-    public static let MISDIRECTED_REQUEST = HttpStatus(
+    public static const MISDIRECTED_REQUEST = HttpStatus(
         HttpStatusCode.STATUS_MISDIRECTED_REQUEST,
         Series.CLIENT_ERROR,
         "Misdirected Request"
@@ -538,7 +538,7 @@ public class HttpStatus <: ToString {
    	 * https://tools.ietf.org/html/rfc4918#section-11.2
      * WebDAV
    	 */
-    public static let UNPROCESSABLE_ENTITY = HttpStatus(
+    public static const UNPROCESSABLE_ENTITY = HttpStatus(
         HttpStatusCode.STATUS_UNPROCESSABLE_ENTITY,
         Series.CLIENT_ERROR,
         "Unprocessable Entity"
@@ -549,7 +549,7 @@ public class HttpStatus <: ToString {
    	 * https://tools.ietf.org/html/rfc4918#section-11.3
      * WebDAV
    	 */
-    public static let LOCKED = HttpStatus(
+    public static const LOCKED = HttpStatus(
         HttpStatusCode.STATUS_LOCKED,
         Series.CLIENT_ERROR,
         "Locked")
@@ -559,7 +559,7 @@ public class HttpStatus <: ToString {
    	 * https://tools.ietf.org/html/rfc4918#section-11.4
      * WebDAV
    	 */
-    public static let FAILED_DEPENDENCY = HttpStatus(
+    public static const FAILED_DEPENDENCY = HttpStatus(
         HttpStatusCode.STATUS_FAILED_DEPENDENCY,
         Series.CLIENT_ERROR,
         "Failed Dependency"
@@ -570,7 +570,7 @@ public class HttpStatus <: ToString {
    	 * https://tools.ietf.org/html/rfc8470
      * RFC 8470
    	 */
-    public static let TOO_EARLY = HttpStatus(
+    public static const TOO_EARLY = HttpStatus(
         HttpStatusCode.STATUS_TOO_EARLY,
         Series.CLIENT_ERROR,
         "Too Early")
@@ -580,7 +580,7 @@ public class HttpStatus <: ToString {
    	 * https://tools.ietf.org/html/rfc2817#section-6
      * Upgrading to TLS Within HTTP/1.1
    	 */
-    public static let UPGRADE_REQUIRED = HttpStatus(
+    public static const UPGRADE_REQUIRED = HttpStatus(
         HttpStatusCode.STATUS_UPGRADE_REQUIRED,
         Series.CLIENT_ERROR,
         "Upgrade Required"
@@ -591,7 +591,7 @@ public class HttpStatus <: ToString {
    	 * https://tools.ietf.org/html/rfc6585#section-3
      * Additional HTTP Status Codes
    	 */
-    public static let PRECONDITION_REQUIRED = HttpStatus(
+    public static const PRECONDITION_REQUIRED = HttpStatus(
         HttpStatusCode.STATUS_PRECONDITION_REQUIRED,
         Series.CLIENT_ERROR,
         "Precondition Required"
@@ -602,7 +602,7 @@ public class HttpStatus <: ToString {
    	 * https://tools.ietf.org/html/rfc6585#section-4
      * Additional HTTP Status Codes
    	 */
-    public static let TOO_MANY_REQUESTS = HttpStatus(
+    public static const TOO_MANY_REQUESTS = HttpStatus(
         HttpStatusCode.STATUS_TOO_MANY_REQUESTS,
         Series.CLIENT_ERROR,
         "Too Many Requests"
@@ -613,7 +613,7 @@ public class HttpStatus <: ToString {
    	 * https://tools.ietf.org/html/rfc6585#section-5
      * Additional HTTP Status Codes
    	 */
-    public static let REQUEST_HEADER_FIELDS_TOO_LARGE = HttpStatus(
+    public static const REQUEST_HEADER_FIELDS_TOO_LARGE = HttpStatus(
         HttpStatusCode.STATUS_REQUEST_HEADER_FIELDS_TOO_LARGE,
         Series.CLIENT_ERROR,
         "Request Header Fields Too Large"
@@ -624,7 +624,7 @@ public class HttpStatus <: ToString {
    	 * https://tools.ietf.org/html/draft-ietf-httpbis-legally-restricted-status-04
    	 * An HTTP Status Code to Report Legal Obstacles
    	 */
-    public static let UNAVAILABLE_FOR_LEGAL_REASONS = HttpStatus(
+    public static const UNAVAILABLE_FOR_LEGAL_REASONS = HttpStatus(
         HttpStatusCode.STATUS_UNAVAILABLE_FOR_LEGAL_REASONS,
         Series.CLIENT_ERROR,
         "Unavailable For Legal Reasons"
@@ -637,7 +637,7 @@ public class HttpStatus <: ToString {
    	 * https://tools.ietf.org/html/rfc7231#section-6.6.1
      * HTTP/1.1: Semantics and Content, section 6.6.1
    	 */
-    public static let INTERNAL_SERVER_ERROR = HttpStatus(
+    public static const INTERNAL_SERVER_ERROR = HttpStatus(
         HttpStatusCode.STATUS_INTERNAL_SERVER_ERROR,
         Series.SERVER_ERROR,
         "Internal Server Error"
@@ -648,7 +648,7 @@ public class HttpStatus <: ToString {
    	 * https://tools.ietf.org/html/rfc7231#section-6.6.2
      * HTTP/1.1: Semantics and Content, section 6.6.2
    	 */
-    public static let NOT_IMPLEMENTED = HttpStatus(
+    public static const NOT_IMPLEMENTED = HttpStatus(
         HttpStatusCode.STATUS_NOT_IMPLEMENTED,
         Series.SERVER_ERROR,
         "Not Implemented"
@@ -659,7 +659,7 @@ public class HttpStatus <: ToString {
    	 * https://tools.ietf.org/html/rfc7231#section-6.6.3
      * HTTP/1.1: Semantics and Content, section 6.6.3
    	 */
-    public static let BAD_GATEWAY = HttpStatus(
+    public static const BAD_GATEWAY = HttpStatus(
         HttpStatusCode.STATUS_BAD_GATEWAY,
         Series.SERVER_ERROR,
         "Bad Gateway")
@@ -669,7 +669,7 @@ public class HttpStatus <: ToString {
    	 * https://tools.ietf.org/html/rfc7231#section-6.6.4
      * HTTP/1.1: Semantics and Content, section 6.6.4
    	 */
-    public static let SERVICE_UNAVAILABLE = HttpStatus(
+    public static const SERVICE_UNAVAILABLE = HttpStatus(
         HttpStatusCode.STATUS_SERVICE_UNAVAILABLE,
         Series.SERVER_ERROR,
         "Service Unavailable"
@@ -680,7 +680,7 @@ public class HttpStatus <: ToString {
    	 * https://tools.ietf.org/html/rfc7231#section-6.6.5
      * HTTP/1.1: Semantics and Content, section 6.6.5
    	 */
-    public static let GATEWAY_TIMEOUT = HttpStatus(
+    public static const GATEWAY_TIMEOUT = HttpStatus(
         HttpStatusCode.STATUS_GATEWAY_TIMEOUT,
         Series.SERVER_ERROR,
         "Gateway Timeout"
@@ -691,7 +691,7 @@ public class HttpStatus <: ToString {
    	 * https://tools.ietf.org/html/rfc7231#section-6.6.6
      * HTTP/1.1: Semantics and Content, section 6.6.6
    	 */
-    public static let HTTP_VERSION_NOT_SUPPORTED = HttpStatus(
+    public static const HTTP_VERSION_NOT_SUPPORTED = HttpStatus(
         HttpStatusCode.STATUS_HTTP_VERSION_NOT_SUPPORTED,
         Series.SERVER_ERROR,
         "HTTP Version not supported"
@@ -702,7 +702,7 @@ public class HttpStatus <: ToString {
    	 * https://tools.ietf.org/html/rfc2295#section-8.1
      * Transparent Content Negotiation
    	 */
-    public static let VARIANT_ALSO_NEGOTIATES = HttpStatus(
+    public static const VARIANT_ALSO_NEGOTIATES = HttpStatus(
         HttpStatusCode.STATUS_VARIANT_ALSO_NEGOTIATES,
         Series.SERVER_ERROR,
         "Variant Also Negotiates"
@@ -713,7 +713,7 @@ public class HttpStatus <: ToString {
    	 * https://tools.ietf.org/html/rfc4918#section-11.5
      * WebDAV
    	 */
-    public static let INSUFFICIENT_STORAGE = HttpStatus(
+    public static const INSUFFICIENT_STORAGE = HttpStatus(
         HttpStatusCode.STATUS_INSUFFICIENT_STORAGE,
         Series.SERVER_ERROR,
         "Insufficient Storage"
@@ -724,7 +724,7 @@ public class HttpStatus <: ToString {
    	 * https://tools.ietf.org/html/rfc5842#section-7.2
      * WebDAV Binding Extensions
     	 */
-    public static let LOOP_DETECTED = HttpStatus(
+    public static const LOOP_DETECTED = HttpStatus(
         HttpStatusCode.STATUS_LOOP_DETECTED,
         Series.SERVER_ERROR,
         "Loop Detected"
@@ -733,7 +733,7 @@ public class HttpStatus <: ToString {
     /**
    	 * 509 Bandwidth Limit Exceeded
     	 */
-    public static let BANDWIDTH_LIMIT_EXCEEDED = HttpStatus(
+    public static const BANDWIDTH_LIMIT_EXCEEDED = HttpStatus(
         509,
         Series.SERVER_ERROR,
         "Bandwidth Limit Exceeded")
@@ -743,7 +743,7 @@ public class HttpStatus <: ToString {
    	 * https://tools.ietf.org/html/rfc2774#section-7
      * HTTP Extension Framework
    	 */
-    public static let NOT_EXTENDED = HttpStatus(
+    public static const NOT_EXTENDED = HttpStatus(
         HttpStatusCode.STATUS_NOT_EXTENDED,
         Series.SERVER_ERROR,
         "Not Extended")
@@ -753,7 +753,7 @@ public class HttpStatus <: ToString {
    	 * https://tools.ietf.org/html/rfc6585#section-6
      * Additional HTTP Status Codes
    	 */
-    public static let NETWORK_AUTHENTICATION_REQUIRED = HttpStatus(
+    public static const NETWORK_AUTHENTICATION_REQUIRED = HttpStatus(
         HttpStatusCode.STATUS_NETWORK_AUTHENTICATION_REQUIRED,
         Series.SERVER_ERROR,
         "Network Authentication Required"
@@ -764,7 +764,7 @@ public class HttpStatus <: ToString {
             statuses[status.value] = status
         }
     }
-    private HttpStatus(public let value: UInt16,
+    private const HttpStatus(public let value: UInt16,
                        public let series: Series,
                        public let reasonPhrase: String) {}
 

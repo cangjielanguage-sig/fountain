@@ -16,8 +16,8 @@ public interface DataFields<T> where T <: DataFields<T> {
         }
     }
     func toData(): Data
-    static func fromData(data: Data, flag!: DataConversionFlag): T {
-        match(T.tryFromData(data, flag: flag)){
+    static func fromData(data: Data, flag: DataConversionFlag): T {
+        match(T.tryFromData(data, flag)){
             case x: ?T => match(x){
                 case Some(x) => x
                 case _ => throw DataException('data ${data} cannot be converted to ${TypeInfos.get<T>()}')
@@ -26,10 +26,16 @@ public interface DataFields<T> where T <: DataFields<T> {
             case _ => throw DataException('data ${data} cannot be converted to ${TypeInfos.get<T>()}')
         }
     }
-    static func tryFromData(data: Data, flag!: DataConversionFlag): Any
+    static func fromData(data: Data){
+        fromData(data, DEFAULT_DATA_FLAG)
+    }
+    static func tryFromData(data: Data, flag: DataConversionFlag): Any
+    static func tryFromData(data: Data){
+        tryFromData(data, DEFAULT_DATA_FLAG)
+    }
 }
 public func convert<T>(data: Data, flag!: DataConversionFlag = DEFAULT_DATA_FLAG): ?T where T <: DataFields<T> {
-    match(T.tryFromData(data, flag: flag)){
+    match(T.tryFromData(data, flag)){
         case x: ?T => x
         case x: T => x
         case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => 
@@ -45,7 +51,7 @@ public func f_data_tryFromData<O>(data: Data, flag: DataConversionFlag): Any whe
     }
 }
 internal func internal_f_data_tryFromData<T>(data: Data, flag: DataConversionFlag): ?T where T <: DataFields<T> {
-    match(T.tryFromData(data, flag: flag)){
+    match(T.tryFromData(data, flag)){
         case x: T => x
         case x: ?T => match(x){
             case Some(x) => x

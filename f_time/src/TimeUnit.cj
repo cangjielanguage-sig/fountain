@@ -168,7 +168,7 @@ public enum TimeUnit <: ToString & Parsable<TimeUnit> {
                 DateTime.of(year: year, month: month, dayOfMonth: day, hour: hour, minute: min, second: sec,
                     nanosecond: nano)
             case WEEK =>
-                let weekday = t.dayOfWeek.value()
+                let weekday = t.dayOfWeek.toInteger()
                 let date = t.addDays(-weekday)
                 let year = date.year
                 let month = date.month

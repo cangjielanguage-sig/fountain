@@ -21,7 +21,7 @@ public interface ObjectData<T> <: DataFields<T> where T <: ObjectData<T> & DataF
 
     func toData(): Data
 
-    static func tryFromData(data: Data, flag!: DataConversionFlag): Any
+    static func tryFromData(data: Data, flag: DataConversionFlag): Any
 }
 
 class FieldIterator<T> <: Iterator<(String, Data)> where T <: DataFields<T> {
@@ -97,7 +97,7 @@ public class DataObject<T> <: Data & Collection<(String, Data)> & NamedData wher
     }
     public func get<V>(name: String, flag!: DataConversionFlag = DEFAULT_DATA_FLAG): ?V where V <: DataFields<V> {
         match(get(name)){
-            case Some(x) => match(V.tryFromData(x, flag: flag)){
+            case Some(x) => match(V.tryFromData(x, flag)){
                 case x: ?V => x
                 case x: V => x
                 case _ where (flag & IGNORE_FIELD_NOT_FOUND) == 0 => None<V>
@@ -176,7 +176,7 @@ public class DataObject<T> <: Data & Collection<(String, Data)> & NamedData wher
     public static func populate<M, V>(src: T, map: M, flag!: DataConversionFlag = DEFAULT_DATA_FLAG): M where M <: Map<String, V>,
         V <: DataFields<V> {
         for ((k, v) in DataObject<T>(src)) {
-            match(V.tryFromData(v, flag: flag)){
+            match(V.tryFromData(v, flag)){
                 case x: ?V => match(x){
                     case Some(x) => map[k] = x
                     case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => 

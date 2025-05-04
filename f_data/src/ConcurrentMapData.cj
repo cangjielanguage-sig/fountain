@@ -55,7 +55,7 @@ public class DataConcurrentMap<M, K, V> <: Data & Collection<(Data, Data)> where
 
 public interface ConcurrentMapData<M, K, V> <: DataFields<M> & MapRawType where K <: Equatable<K> & DataFields<K>, V <: DataFields<V>, M <: DataFields<M> & ConcurrentMap<K, V> {
     func toData(): Data
-    static func tryFromData(data: Data, flag!: DataConversionFlag): Any
+    static func tryFromData(data: Data, flag: DataConversionFlag): Any
     prop rawType: (TypeInfo, TypeInfo){
         get(){
             (TypeInfos.get<K>(), TypeInfos.get<V>())
@@ -66,7 +66,7 @@ extend<K, V> ConcurrentHashMap<K, V> <: ConcurrentMapData<ConcurrentHashMap<K, V
     public func toData(): Data {
         DataConcurrentMap(this)
     }
-    public static func tryFromData(data: Data, flag!: DataConversionFlag): Any {
+    public static func tryFromData(data: Data, flag: DataConversionFlag): Any {
         var map = ConcurrentHashMap<K, V>()
         match(data){
             case x: DataConcurrentMap<ConcurrentHashMap<K, V>, K, V> where (flag & DEEP) == 0 => x.data

@@ -63,7 +63,11 @@ public macro Autowired(attr: Tokens, input: Tokens): Tokens {
 }
 
 private func beanNameTokens(beanName: String) {
-    quote(StringCond.Exactly($(beanName)))
+    if(beanName.isEmpty()){
+        quote(StringCond.IgnoreCond)
+    }else{
+        quote(StringCond.Exactly($(beanName)))
+    }
 }
 
 internal func genParamMessage(beanName: String, input: Tokens): (String, Tokens) {

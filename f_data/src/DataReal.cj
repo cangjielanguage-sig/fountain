@@ -12,7 +12,7 @@ package f_data
 public class DataReal <: Data & Hashable & Comparable<DataReal> {
     public DataReal(public let data: Decimal) {}
     public init(data: BigInt) {
-        this(Decimal(data.toString()))
+        this(Decimal.parse(data.toString()))
     }
     public init(data: Int8) {
         this(Decimal(data))
@@ -54,7 +54,7 @@ public class DataReal <: Data & Hashable & Comparable<DataReal> {
         this(Decimal(data))
     }
     public init(data: String) {
-        this(Decimal(data))
+        this(Decimal.parse(data))
     }
 
     public func toDecimal() {
