@@ -27,7 +27,7 @@
 
 [target.x86_64-unknown-linux-gnu]
   [target.x86_64-unknown-linux-gnu.bin-dependencies]
-    path-option = ["/mnt/d/docs/work/cangjie/cangjie-linux-bin/linux_x86_64_llvm/dynamic/stdx"]
+    path-option = ["${CANGJIE_STDX_PATH}/dynamic/stdx"]
 
 
 [profile.build]
