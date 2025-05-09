@@ -18,7 +18,7 @@ public macro Autowired(input: Tokens): Tokens {
     func convert(params: ArrayList<FuncParam>){
         for(i in 0 .. params.size){
             let param = params[i]
-            if(!param.toTokens().toString().replace('@ ', '@').trimAscii().startsWith('@Autowired')){
+            if(!withMacro<Autowired>(param)){
                 params[i] = FuncParam(quote(@Autowired $param))
             }
         }
@@ -27,7 +27,6 @@ public macro Autowired(input: Tokens): Tokens {
         case d: FuncDecl where insideParentContext('Constructor') && isPublic(d) && (isStatic(d) || d.identifier == 'init') => 
             convert(d.funcParams)
             return d.toTokens()
-
         case d: PrimaryCtorDecl where insideParentContext('Constructor') && isPublic(d) => 
             convert(d.funcParams)
             return d.toTokens()
