@@ -9,8 +9,6 @@
 */
 package f_macros
 
-public import std.ast.*
-
 public interface ExtendDecl {
     prop genericParamTokens: Tokens 
 }

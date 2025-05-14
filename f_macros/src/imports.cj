@@ -9,16 +9,7 @@
 */
 package f_macros
 
-import f_base
-public func withAnnotation<T>(decl: Decl): Bool where T <: Annotation {
-    match(decl){
-        case d: MacroExpandDecl => f_base.TypeInfos.get<T>().qualifiedName.endsWith('.${d.fullIdentifier.value}')
-        case _ => false
-    }
-}
-public func withMacro(decl: Decl, macroName: String): Bool {
-    match(decl){
-        case d: MacroExpandDecl => d.fullIdentifier.value == macroName
-        case _ => false
-    }
-}
+public import std.ast.*
+
+internal import f_macros.exception.MacroFragmentException
+

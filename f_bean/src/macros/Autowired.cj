@@ -18,7 +18,7 @@ public macro Autowired(input: Tokens): Tokens {
     func convert(params: ArrayList<FuncParam>){
         for(i in 0 .. params.size){
             let param = params[i]
-            if(!withMacro<Autowired>(param)){
+            if(!withMacro(param, 'Autowired')){
                 params[i] = FuncParam(quote(@Autowired $param))
             }
         }

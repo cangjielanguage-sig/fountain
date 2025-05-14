@@ -9,8 +9,6 @@
  */
 package f_macros
 
-public import std.ast.*
-import f_macros.exception.MacroFragmentException
 
 public func extractFirstTokenToStringLiteral(tokens: Tokens, default!: Token = `empty_string`[0]): Token {
     if (tokens.size == 0) {

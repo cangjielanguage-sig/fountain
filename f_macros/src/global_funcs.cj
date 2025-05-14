@@ -9,8 +9,6 @@
 */
 package f_macros
 
-import std.ast.*
-
 public func primaryCtorParam(input: Tokens): FuncParam {
     PrimaryCtorDecl(quote(
         Ctor($input){}
