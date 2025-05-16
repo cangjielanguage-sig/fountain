@@ -32,7 +32,7 @@ private class FileLoggerAppender <: AsyncLogger {
         level!: LogLevel = LogLevel.INFO,
         file!: RotatableFile
     ) {
-        super(name, level, pattern, file, file.path)
+        super(name, level, pattern, file, '${LOGGER_NAME}:///${file.path}')
     }
 
     public static func register(): Unit {

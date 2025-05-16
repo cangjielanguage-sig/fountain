@@ -25,7 +25,7 @@ private class UnixDatagramLoggerAppender <: AsyncLogger {
         path!: String,
         sendTimeout!: ?Duration
     ) {
-        super(name, level, pattern, createSocket(path, sendTimeout), path)
+        super(name, level, pattern, createSocket(path, sendTimeout), '${LOGGER_NAME}:///${path}')
         this.path = path
         this.sendTimeout = sendTimeout
     }

@@ -11,7 +11,7 @@
 package f_log
 
 import std.collection.concurrent.{ArrayBlockingQueue, ConcurrentHashMap}
-import std.io.OutputStream
+import std.io.{OutputStream, ByteBuffer}
 import std.sync.Mutex
 import std.time.DateTime
 
@@ -25,6 +25,7 @@ public abstract class AsyncLogger <: AbstractLogger {
     private let timeout: Duration
     private let policy: AsyncTimeoutPolicy
     private let queue: ArrayBlockingQueue<() -> Unit>
+    private let output_: OutputStream
     public init(
         name: String,
         level: LogLevel,
@@ -32,7 +33,8 @@ public abstract class AsyncLogger <: AbstractLogger {
         output: OutputStream,
         queueTag: String
     ) {
-        super(name, level, pattern, output)
+        super(name, level, pattern, ByteBuffer())
+        this.output_ = output
         timeout = LoggerConfig.getAsyncTimeout()
         policy = LoggerConfig.getAsyncTimeoutPolicy()
         this.queue = 
@@ -48,7 +50,7 @@ public abstract class AsyncLogger <: AbstractLogger {
             }
         }
     }
-    private static func dequeue(queue: ArrayBlockingQueue<() -> Unit>){
+    private static func dequeue(queue: ArrayBlockingQueue<() -> Unit>): Unit {
         spawn {
             while (true) {
                 queue.dequeue()()
@@ -58,7 +60,7 @@ public abstract class AsyncLogger <: AbstractLogger {
     public open func log(record: LogRecord): Unit {
         append{super.log(record)}
     }
-    protected func append(fn: () -> Unit) {
+    protected func append(fn: () -> Unit): Unit {
         while (!queue.enqueue(fn, timeout)) {
             match (policy) {
                 case AlwaysWaiting => continue
@@ -68,6 +70,12 @@ public abstract class AsyncLogger <: AbstractLogger {
         }
     }
     protected open func append(level: LogLevel, message: String, now: DateTime, ex: Option<Exception>): Unit {
-        append { super.append(level, message, now, ex)}
+        super.append(level, message, now, ex)
+        let buffer = (super.output as ByteBuffer).getOrThrow()
+        super.output = ByteBuffer()
+        append{
+            this.output_.write(buffer.bytes())
+            this.output_.flush()
+        }
     }
 }
