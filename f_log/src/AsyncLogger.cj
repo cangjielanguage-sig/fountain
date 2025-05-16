@@ -72,10 +72,12 @@ public abstract class AsyncLogger <: AbstractLogger {
     protected open func append(level: LogLevel, message: String, now: DateTime, ex: Option<Exception>): Unit {
         super.append(level, message, now, ex)
         let buffer = (super.output as ByteBuffer).getOrThrow()
-        super.output = ByteBuffer()
-        append{
-            this.output_.write(buffer.bytes())
-            this.output_.flush()
+        if(buffer.length > 0){
+            super.output = ByteBuffer()
+            append{
+                this.output_.write(buffer.bytes())
+                this.output_.flush()
+            }
         }
     }
 }
