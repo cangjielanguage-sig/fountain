@@ -142,7 +142,7 @@ public class Ticktock <: Emitter {
                 var once = false
                 try {
                     for(cron in crons where cron.matches(now)){
-                        task.execute()
+                        task.run()
                         once = task.once
                         if(once){
                             this.removeTask(task)
