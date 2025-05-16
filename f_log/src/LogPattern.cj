@@ -13,7 +13,7 @@ import std.collection.ArrayList
 import std.env
 import std.process.Process
 import std.time.{DateTime, DateTimeFormat}
-import stdx.log.LogLevel
+import stdx.log.{LogLevel, LogWriter}
 import f_base.OS
 
 public class LogPattern <: LogPart {
@@ -89,46 +89,44 @@ public class LogPattern <: LogPart {
         patterns
     }
 
-    public func generate(name: String, level: LogLevel, message: ToString, current: DateTime): String {
-        var builder = StringBuilder()
+    public func generate(name: String, level: LogLevel, message: ToString, current: DateTime, writer: LogWriter): Unit {
         for(p in patterns){
-            builder.append(p.generate(name, level, message, current))
+            p.generate(name, level, message, current, writer)
         }
-        builder.append(OS.current.nextLine)
-        builder.toString()
+        writer.writeString(OS.current.nextLine)
     }
 }
 
 public interface LogPart {
-    func generate(name: String, level: LogLevel, message: ToString, current: DateTime): String
+    func generate(name: String, level: LogLevel, message: ToString, current: DateTime, writer: LogWriter): Unit
 }
 
 class OriginLogPart <: LogPart {
     OriginLogPart(private let txt: String) {}
-    public func generate(name: String, level: LogLevel, message: ToString, current: DateTime): String {
-        txt
+    public func generate(name: String, level: LogLevel, message: ToString, current: DateTime, writer: LogWriter): Unit {
+        writer.writeString(txt)
     }
 }
 
 class LevelLogPart <: LogPart {
     init() {}
-    public func generate(name: String, level: LogLevel, message: ToString, current: DateTime): String {
-        level.text
+    public func generate(name: String, level: LogLevel, message: ToString, current: DateTime, writer: LogWriter): Unit {
+        writer.writeString(level.text)
     }
 }
 
 class NameLogPart <: LogPart {
     init() {}
-    public func generate(name: String, level: LogLevel, message: ToString, current: DateTime): String {
-        name
+    public func generate(name: String, level: LogLevel, message: ToString, current: DateTime, writer: LogWriter): Unit {
+        writer.writeString(name)
     }
 }
 
 class AppLogPart <: LogPart {
     init() {}
     private let app = env.getCommand()
-    public func generate(name: String, level: LogLevel, message: ToString, current: DateTime): String {
-        app
+    public func generate(name: String, level: LogLevel, message: ToString, current: DateTime, writer: LogWriter): Unit {
+        writer.writeString(app)
     }
 }
 
@@ -140,14 +138,14 @@ class TimeLogPart <: LogPart {
     init() {
         this('yyyy-MM-dd,HH:mm:ss.SSS')
     }
-    public func generate(name: String, level: LogLevel, message: ToString, datetime: DateTime): String {
-        datetime.toString(format)
+    public func generate(name: String, level: LogLevel, message: ToString, datetime: DateTime, writer: LogWriter): Unit {
+        writer.writeString(datetime.toString(format))
     }
 }
 
 class MessageLogPart <: LogPart {
     init() {}
-    public func generate(name: String, level: LogLevel, message: ToString, current: DateTime): String {
-        message.toString()
+    public func generate(name: String, level: LogLevel, message: ToString, current: DateTime, writer: LogWriter): Unit {
+        writer.writeString(message.toString())
     }
 }

@@ -119,18 +119,14 @@ public abstract class AbstractLogger <: Logger & Resource {
     protected func append(level: LogLevel, message: String): Unit {
         append(level, message, None<Exception>)
     }
-    protected func append(msg: String, ex: ?Exception, output: LogWriter): Unit {
-        output.writeString(msg)
-        appendException(ex, output)
-    }
     protected func appendException(ex: ?Exception, output: LogWriter): Unit {
         if (let Some(e) <- ex) {
             output.writeException(e)
         }
     }
     private func doAppend(level: LogLevel, message: String, now: DateTime, ex: Option<Exception>): Unit {
-        let msg = pattern.generate(name, level, message, now)
-        append(msg, ex, writer)
+        pattern.generate(name, level, message, now, writer)
+        appendException(ex, writer)
     }
     protected open func append(level: LogLevel, message: String, now: DateTime, ex: Option<Exception>): Unit {
         if(logLevelEnabled(level)){
