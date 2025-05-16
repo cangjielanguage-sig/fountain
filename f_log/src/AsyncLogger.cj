@@ -57,8 +57,19 @@ public abstract class AsyncLogger <: AbstractLogger {
             }
         }
     }
+    private func append(){
+        let buffer = (super.output as ByteBuffer).getOrThrow()
+        if(buffer.remainLength > 0){
+            super.output = ByteBuffer()
+            append{
+                this.output_.write(buffer.bytes())
+                this.output_.flush()
+            }
+        }
+    }
     public open func log(record: LogRecord): Unit {
-        append{super.log(record)}
+        super.log(record)
+        append()
     }
     protected func append(fn: () -> Unit): Unit {
         while (!queue.enqueue(fn, timeout)) {
@@ -71,13 +82,6 @@ public abstract class AsyncLogger <: AbstractLogger {
     }
     protected open func append(level: LogLevel, message: String, now: DateTime, ex: Option<Exception>): Unit {
         super.append(level, message, now, ex)
-        let buffer = (super.output as ByteBuffer).getOrThrow()
-        if(buffer.remainLength > 0){
-            super.output = ByteBuffer()
-            append{
-                this.output_.write(buffer.bytes())
-                this.output_.flush()
-            }
-        }
+        append()
     }
 }
