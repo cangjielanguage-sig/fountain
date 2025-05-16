@@ -31,11 +31,8 @@ public class LoggerAppenderFacade <: AsyncLogger {
     
     protected func append(level: LogLevel, message: String, now: DateTime, ex: Option<Exception>): Unit {
         append {
-            var i = 0
-            let size = appenders.size
-            while (i < size) {
-                appenders[i].append(level, message, now, ex)
-                i++
+            for(appender in appenders){
+                appender.append(level, message, now, ex)
             }
         }
     }
