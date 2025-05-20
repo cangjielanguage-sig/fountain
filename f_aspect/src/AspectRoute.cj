@@ -34,12 +34,22 @@ public class AspectRoute <: RouteRule {
  * - .*、*.、.*. 表示任意包名
  * - .. 表示任意级别的包名
  * typeName参数是类型名，
- * argTypes参数是参数全限定名，多个参数之间用,分割，不适用通配符
- * returnType参数是返回类型全限定名，不适用通配符
+ * argTypes参数是参数全限定名，多个参数之间用,分割，适用通配符**表示任意数量和类型的参数类型
+ * returnType参数是返回类型全限定名，适用通配符*表示任意返回类型
  * 类型全限定名不支持反射尚不支持的类型
 */
-sealed interface RouteRule {
-    func matches(funcInfo: InvocationFuncInfo): Bool
+public abstract class RouteRule {
+    public const init(){}
+    public func matches(funcInfo: InvocationFuncInfo): Bool
+    public const operator func &(right: RouteRule){
+        AndRouteRule(this, right)
+    }
+    public const operator func |(right: RouteRule){
+        OrRouteRule(this, right)
+    }
+    public const operator func !(){
+        NotRouteRule(this)
+    }
 }
 /**
  * 匹配的公共实例函数将被织入
@@ -122,7 +132,7 @@ public class ReturnTypeRouteRule <: RouteRule{
         public let returnType: String
     ){}
     public func matches(funcInfo: InvocationFuncInfo): Bool {
-        TypeInfos.get(returnType).isSubtypeOf(funcInfo.funcInfo.returnType)
+        returnType == '*' && TypeInfos.get(returnType).isSubtypeOf(funcInfo.funcInfo.returnType)
     }
 }
 /**
