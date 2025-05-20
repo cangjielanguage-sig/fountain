@@ -76,15 +76,10 @@ extend DateTime <: DataFields<DateTime> & ExtendDateTimeData {
         }
     }
     public static func setDefaultDateFormat(format: String) {
-        var box = None<Box<String>>
         while (true) {
             let fmt = defaultDateFormat.load()
             if (fmt.value == "") {
-                let newBox = match (box) {
-                    case Some(x) => x
-                    case _ => Box<String>(format)
-                }
-                if (defaultDateFormat.compareAndSwap(fmt, newBox)) {
+                if (defaultDateFormat.compareAndSwap(fmt, Box<String>(format))) {
                     return
                 }
             } else {

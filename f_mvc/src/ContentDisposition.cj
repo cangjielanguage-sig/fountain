@@ -308,7 +308,7 @@ public class ContentDisposition <: Equatable<ContentDisposition> & Equatable<Any
                     }
                 } else if (attribute == "filename" && (filename == "")) {
                     if (value.startsWith("=?")) {
-                        let matched = BASE64_ENCODED_PATTERN.matcher(value).find(0)
+                        let matched = BASE64_ENCODED_PATTERN.find(value, group: true)
                         match (matched) {
                             case Some(m) =>
                                 let match1 = m.matchString(1) //charset

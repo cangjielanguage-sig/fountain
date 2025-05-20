@@ -61,7 +61,7 @@ public class SqlExecutor <: Resource & RootDAO {
             sql_
         }
         set(value) {
-            sql_ = blankRegex.matcher(value).replaceAll(" ")
+            sql_ = blankRegex.replaceAll(value, " ")
             if(!(value.trimAscii()[0 .. 6].toAsciiLower() == 'select')){
                 readOnly = false
             }

@@ -125,7 +125,6 @@ public struct DataHasher{
         if(let x: Hashable <- value){
             hasher.write(x.hashCode())
         }
-        var hashable = true
         for((k,v) in value){
             match((k, v)){
                 case (x: Hashable, y: Hashable) => 
@@ -139,6 +138,18 @@ public struct DataHasher{
                     hasher.write(y.hashCode())
                 case (x: ToString, y: ToString) =>
                     hasher.write(x.toString())
+                    hasher.write(y.toString())
+                case (x: Hashable, _) =>
+                    hasher.write(x.hashCode())
+                    hasher.write('_')
+                case (x: ToString, _) =>
+                    hasher.write(x.toString())
+                    hasher.write('_')
+                case (_, y: Hashable) =>
+                    hasher.write('_')
+                    hasher.write(y.hashCode())
+                case (_, y: ToString) =>
+                    hasher.write('_')
                     hasher.write(y.toString())
                 case _ => ()
             }
@@ -160,7 +171,6 @@ public struct DataHasher{
         if(let x: Hashable <- value){
             hasher.write(x.hashCode())
         }
-        var hashable = true
         for((k, v) in value){
             match((k, v)){
                 case (x: Hashable, y: Hashable) => 

@@ -59,7 +59,7 @@ public class PathPattern {
         return p
     }
     private func countWithoutDoubleStar(path: String, withExtName: Bool): Int64 {
-        return parts(#"/\*\*"#.regex(solid: true).matcher(path).replaceAll(String.empty), withExtName).size
+        return parts(#"/\*\*"#.regex(solid: true).replaceAll(path, String.empty), withExtName).size
     }
     private func getPathNode(len: Int64): PathNode {
         func populateNode(node: PathNode) {
@@ -110,9 +110,9 @@ public class PathPattern {
     //pattern是定义的路径，data是路径对应的数据，比如这个路径对应的执行函数、是否匹配当前请求方法等
     public func compile(pattern: String, data: Any): PathPattern {
         var p = pattern
-        p = #"/\{\*(?=[a-zA-Z][A-Za-z0-9_]*\})"#.regex(solid: true).matcher(p).replaceAll("/**/{")
-        p = #"/\*{3,}"#.regex(solid: true).matcher(p).replaceAll("/**")
-        p = #"(/\*{2}){2,}"#.regex(solid: true).matcher(p).replaceAll("/**")
+        p = #"/\{\*(?=[a-zA-Z][A-Za-z0-9_]*\})"#.regex(solid: true).replaceAll(p, "/**/{")
+        p = #"/\*{3,}"#.regex(solid: true).replaceAll(p, "/**")
+        p = #"(/\*{2}){2,}"#.regex(solid: true).replaceAll(p, "/**")
         p = p.replace("//", "/")
         p = trimRedundantSlash(p)
         let parts = parts(pattern, true)
@@ -870,7 +870,7 @@ class ComplexPathNode <: PathNode {
         for (i in 0..patterns.size) {
             let node = patterns[i]
             if (node is SubPathNode || node is RegexPathNode) {
-                match (reg.matcher(value).find()) {
+                match (reg.find(value, group: true)) {
                     case Some(md) where !node.matches(md.matchString(i + 1)) => return false
                     case _ => return false
                 }
@@ -885,8 +885,7 @@ class ComplexPathNode <: PathNode {
         for (i in 0..patterns.size) {
             let node = patterns[i]
             if (node is PlaceholderPathNode || node is PlaceholderRegexPathNode) {
-                let matcher = reg.matcher(value)
-                match (matcher.find()) {
+                match (reg.find(value, group: true)) {
                     case Some(md) =>
                         let part = md.matchString(i + 1)
                         if (node.matches(part)) {

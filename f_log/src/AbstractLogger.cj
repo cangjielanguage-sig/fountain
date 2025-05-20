@@ -10,19 +10,14 @@
 
 package f_log
 
-import std.collection.{ArrayList, HashMap, TreeMap, Map}
-import std.collection.concurrent.ConcurrentHashMap
 import std.io.OutputStream
 import std.sync.{AtomicBool, Mutex}
 import std.time.DateTime
 import stdx.log.{LogLevel, Attr, LogRecord, LogWriter}
 import f_base.OS
-import f_collection.LinkedHashMap
-import f_data.ObjectData
 import f_exception.{BaseException, UnsupportedAccessException, printStackTrace}
 import f_log.exception.LogException
 import f_log.output.LogWriterImpl
-import f_util.{TextTemplate, TextTemplateKey, TextTemplateObject}
 
 public abstract class AbstractLogger <: Logger & Resource {
     private let lock = Mutex()
@@ -76,31 +71,28 @@ public abstract class AbstractLogger <: Logger & Resource {
     public open func log(record: LogRecord): Unit {
         try {
             if (logLevelEnabled(record.level)) {
-                append(record.level, record.message, record.time, None<Exception>)
-                func writeAttrs(attrs: Array<Attr>) {
-                    if (attrs.isEmpty()) {
-                        return
-                    }
-                    writer.startObject()
-                    for(i in 0 .. attrs.size) {
-                        if(i > 0){
-                            writer.writeString(',')
+                doLock{
+                    append(record.level, record.message, record.time, None<Exception>)
+                    func writeAttrs(attrs: Array<Attr>) {
+                        if (attrs.isEmpty()) {
+                            return
                         }
-                        let attr = attrs[i]
-                        writer.writeString('${attr[0]}:')
-                        attr[1].writeTo(writer)
+                        writer.startObject()
+                        for(i in 0 .. attrs.size) {
+                            if(i > 0){
+                                writer.writeString(',')
+                            }
+                            let attr = attrs[i]
+                            writer.writeString('${attr[0]}:')
+                            attr[1].writeTo(writer)
+                        }
+                        writer.endObject()
+                        writer.writeString(OS.current.nextLine)
                     }
-                    writer.endObject()
-                    writer.writeString(OS.current.nextLine)
+                    writeAttrs(globalAttrMap.get(name) ?? [])
+                    writeAttrs(this.attrs.get() ?? [])
+                    writeAttrs(record.attrs)
                 }
-                func writeAttrs(attrs: ?Array<Attr>) {
-                    if (let Some(attrs) <- attrs) {
-                        writeAttrs(attrs)
-                    }
-                }
-                writeAttrs(globalAttrMap.get(name))
-                writeAttrs(this.attrs.get())
-                writeAttrs(record.attrs)
             }
         } finally {
             attrs.set(None<Array<Attr>>)
@@ -116,9 +108,6 @@ public abstract class AbstractLogger <: Logger & Resource {
         }
     }
 
-    protected func append(level: LogLevel, message: String): Unit {
-        append(level, message, None<Exception>)
-    }
     protected func appendException(ex: ?Exception, output: LogWriter): Unit {
         if (let Some(e) <- ex) {
             output.writeException(e)
@@ -132,395 +121,6 @@ public abstract class AbstractLogger <: Logger & Resource {
         synchronized(lock) {
             callback()
         }
-    }
-    
-    public func append(level: LogLevel, message: String, ex: Option<Exception>): Unit {
-        append(level, {=> message}, ex)
-    }
-    public func append<T>(level: LogLevel, message: String, args: Array<T>, ex: ?Exception): Unit where T <: ToString {
-        append(
-            level,
-            {
-                => TextTemplate.compile(message, prefix: "{", suffix: "}").format<T>(args)
-            },
-            ex
-        )
-    }
-    public func append<T>(level: LogLevel, message: String, args: T, ex: ?Exception): Unit where T <: Object & ObjectData<T> {
-        append(
-            level,
-            {
-                => TextTemplate.compile(message, prefix: "{", suffix: "}").format<T>(args)
-            },
-            ex
-        )
-    }
-    public func append<T>(level: LogLevel, message: String, args: ArrayList<T>, ex: ?Exception): Unit where T <: ToString {
-        append(
-            level,
-            {
-                => TextTemplate.compile(message, prefix: "{", suffix: "}").format<T>(args)
-            },
-            ex
-        )
-    }
-    public func append<T>(level: LogLevel, message: String, args: HashMap<String, T>, ex: ?Exception): Unit where T <: ToString {
-        append(
-            level,
-            {
-                => TextTemplate.compile(message, prefix: "{", suffix: "}").format<T>(args)
-            },
-            ex
-        )
-    }
-    public func append<T>(level: LogLevel, message: String, args: ConcurrentHashMap<String, T>, ex: ?Exception): Unit where T <: ToString {
-        append(
-            level,
-            {
-                => TextTemplate.compile(message, prefix: "{", suffix: "}").format<T>(args)
-            },
-            ex
-        )
-    }
-    public func append<T>(level: LogLevel, message: String, args: TreeMap<String, T>, ex: ?Exception): Unit where T <: ToString {
-        append(
-            level,
-            {
-                => TextTemplate.compile(message, prefix: "{", suffix: "}").format<T>(args)
-            },
-            ex
-        )
-    }
-    public func append<T>(level: LogLevel, message: String, args: LinkedHashMap<String, T>, ex: ?Exception): Unit where T <: ToString {
-        append(
-            level,
-            {
-                => TextTemplate.compile(message, prefix: "{", suffix: "}").format<T>(args)
-            },
-            ex
-        )
-    }
-    public func error<T>(message: String, args: Array<T>): Unit where T <: ToString {
-        append<T>(LogLevel.ERROR, message, args, None<Exception>)
-    }
-    public func error<T>(message: String, ex: Exception, args: Array<T>): Unit where T <: ToString {
-        append<T>(LogLevel.ERROR, message, args, ex)
-    }
-
-    public func error<T>(message: String, args: ArrayList<T>): Unit where T <: ToString {
-        append<T>(LogLevel.ERROR, message, args, None<Exception>)
-    }
-    public func error<T>(message: String, args: HashMap<String, T>): Unit where T <: ToString {
-        append<T>(LogLevel.ERROR, message, args, None<Exception>)
-    }
-    public func error<T>(message: String, args: ConcurrentHashMap<String, T>): Unit where T <: ToString {
-        append<T>(LogLevel.ERROR, message, args, None<Exception>)
-    }
-    public func error<T>(message: String, args: LinkedHashMap<String, T>): Unit where T <: ToString {
-        append<T>(LogLevel.ERROR, message, args, None<Exception>)
-    }
-    public func error<T>(message: String, args: TreeMap<String, T>): Unit where T <: ToString {
-        append<T>(LogLevel.ERROR, message, args, None<Exception>)
-    }
-    public func error<T>(message: String, args: T): Unit where T <: Object & ObjectData<T> {
-        append<T>(LogLevel.ERROR, message, args, None<Exception>)
-    }
-
-    public func error<T>(message: String, ex: Exception, args: ArrayList<T>): Unit where T <: ToString {
-        append<T>(LogLevel.ERROR, message, args, ex)
-    }
-    public func error<T>(message: String, ex: Exception, args: HashMap<String, T>): Unit where T <: ToString {
-        append<T>(LogLevel.ERROR, message, args, ex)
-    }
-    public func error<T>(message: String, ex: Exception, args: LinkedHashMap<String, T>): Unit where T <: ToString {
-        append<T>(LogLevel.ERROR, message, args, ex)
-    }
-    public func error<T>(message: String, ex: Exception, args: ConcurrentHashMap<String, T>): Unit where T <: ToString {
-        append<T>(LogLevel.ERROR, message, args, ex)
-    }
-    public func error<T>(message: String, ex: Exception, args: TreeMap<String, T>): Unit where T <: ToString {
-        append<T>(LogLevel.ERROR, message, args, ex)
-    }
-    public func error<T>(message: String, ex: Exception, args: T): Unit where T <: Object & ObjectData<T> {
-        append<T>(LogLevel.ERROR, message, args, ex)
-    }
-
-    public func warn<T>(message: String, args: Array<T>): Unit where T <: ToString {
-        append<T>(LogLevel.WARN, message, args, None<Exception>)
-    }
-    public func warn<T>(message: String, ex: Exception, args: Array<T>): Unit where T <: ToString {
-        append<T>(LogLevel.WARN, message, args, ex)
-    }
-
-    public func warn<T>(message: String, args: ArrayList<T>): Unit where T <: ToString {
-        append<T>(LogLevel.WARN, message, args, None<Exception>)
-    }
-    public func warn<T>(message: String, args: HashMap<String, T>): Unit where T <: ToString {
-        append<T>(LogLevel.WARN, message, args, None<Exception>)
-    }
-    public func warn<T>(message: String, args: ConcurrentHashMap<String, T>): Unit where T <: ToString {
-        append<T>(LogLevel.WARN, message, args, None<Exception>)
-    }
-    public func warn<T>(message: String, args: LinkedHashMap<String, T>): Unit where T <: ToString {
-        append<T>(LogLevel.WARN, message, args, None<Exception>)
-    }
-    public func warn<T>(message: String, args: TreeMap<String, T>): Unit where T <: ToString {
-        append<T>(LogLevel.WARN, message, args, None<Exception>)
-    }
-    public func warn<T>(message: String, args: T): Unit where T <: Object & ObjectData<T> {
-        append<T>(LogLevel.WARN, message, args, None<Exception>)
-    }
-
-    public func warn<T>(message: String, ex: Exception, args: HashMap<String, T>): Unit where T <: ToString {
-        append<T>(LogLevel.WARN, message, args, ex)
-    }
-    public func warn<T>(message: String, ex: Exception, args: LinkedHashMap<String, T>): Unit where T <: ToString {
-        append<T>(LogLevel.WARN, message, args, ex)
-    }
-    public func warn<T>(message: String, ex: Exception, args: ConcurrentHashMap<String, T>): Unit where T <: ToString {
-        append<T>(LogLevel.WARN, message, args, ex)
-    }
-    public func warn<T>(message: String, ex: Exception, args: TreeMap<String, T>): Unit where T <: ToString {
-        append<T>(LogLevel.WARN, message, args, ex)
-    }
-    public func warn<T>(message: String, ex: Exception, args: T): Unit where T <: Object & ObjectData<T> {
-        append<T>(LogLevel.WARN, message, args, ex)
-    }
-
-    public func info<T>(message: String, args: Array<T>): Unit where T <: ToString {
-        append<T>(LogLevel.INFO, message, args, None<Exception>)
-    }
-    public func info<T>(message: String, ex: Exception, args: Array<T>): Unit where T <: ToString {
-        append<T>(LogLevel.INFO, message, args, ex)
-    }
-
-    public func info<T>(message: String, args: ArrayList<T>): Unit where T <: ToString {
-        append<T>(LogLevel.INFO, message, args, None<Exception>)
-    }
-    public func info<T>(message: String, args: HashMap<String, T>): Unit where T <: ToString {
-        append<T>(LogLevel.INFO, message, args, None<Exception>)
-    }
-    public func info<T>(message: String, args: ConcurrentHashMap<String, T>): Unit where T <: ToString {
-        append<T>(LogLevel.INFO, message, args, None<Exception>)
-    }
-    public func info<T>(message: String, args: LinkedHashMap<String, T>): Unit where T <: ToString {
-        append<T>(LogLevel.INFO, message, args, None<Exception>)
-    }
-    public func info<T>(message: String, args: TreeMap<String, T>): Unit where T <: ToString {
-        append<T>(LogLevel.INFO, message, args, None<Exception>)
-    }
-    public func info<T>(message: String, args: T): Unit where T <: Object & ObjectData<T> {
-        append<T>(LogLevel.INFO, message, args, None<Exception>)
-    }
-
-    public func info<T>(message: String, ex: Exception, args: ArrayList<T>): Unit where T <: ToString {
-        append<T>(LogLevel.INFO, message, args, ex)
-    }
-    public func info<T>(message: String, ex: Exception, args: HashMap<String, T>): Unit where T <: ToString {
-        append<T>(LogLevel.INFO, message, args, ex)
-    }
-    public func info<T>(message: String, ex: Exception, args: LinkedHashMap<String, T>): Unit where T <: ToString {
-        append<T>(LogLevel.INFO, message, args, ex)
-    }
-    public func info<T>(message: String, ex: Exception, args: ConcurrentHashMap<String, T>): Unit where T <: ToString {
-        append<T>(LogLevel.INFO, message, args, ex)
-    }
-    public func info<T>(message: String, ex: Exception, args: TreeMap<String, T>): Unit where T <: ToString {
-        append<T>(LogLevel.INFO, message, args, ex)
-    }
-    public func info<T>(message: String, ex: Exception, args: T): Unit where T <: Object & ObjectData<T> {
-        append<T>(LogLevel.INFO, message, args, ex)
-    }
-
-    public func debug<T>(message: String, args: Array<T>): Unit where T <: ToString {
-        append<T>(LogLevel.DEBUG, message, args, None<Exception>)
-    }
-    public func debug<T>(message: String, ex: Exception, args: Array<T>): Unit where T <: ToString {
-        append<T>(LogLevel.DEBUG, message, args, ex)
-    }
-
-    public func debug<T>(message: String, args: ArrayList<T>): Unit where T <: ToString {
-        append<T>(LogLevel.DEBUG, message, args, None<Exception>)
-    }
-    public func debug<T>(message: String, args: HashMap<String, T>): Unit where T <: ToString {
-        append<T>(LogLevel.DEBUG, message, args, None<Exception>)
-    }
-    public func debug<T>(message: String, args: ConcurrentHashMap<String, T>): Unit where T <: ToString {
-        append<T>(LogLevel.DEBUG, message, args, None<Exception>)
-    }
-    public func debug<T>(message: String, args: LinkedHashMap<String, T>): Unit where T <: ToString {
-        append<T>(LogLevel.DEBUG, message, args, None<Exception>)
-    }
-    public func debug<T>(message: String, args: TreeMap<String, T>): Unit where T <: ToString {
-        append<T>(LogLevel.DEBUG, message, args, None<Exception>)
-    }
-    public func debug<T>(message: String, args: T): Unit where T <: Object & ObjectData<T> {
-        append<T>(LogLevel.DEBUG, message, args, None<Exception>)
-    }
-
-    public func debug<T>(message: String, ex: Exception, args: ArrayList<T>): Unit where T <: ToString {
-        append<T>(LogLevel.DEBUG, message, args, ex)
-    }
-    public func debug<T>(message: String, ex: Exception, args: HashMap<String, T>): Unit where T <: ToString {
-        append<T>(LogLevel.DEBUG, message, args, ex)
-    }
-    public func debug<T>(message: String, ex: Exception, args: LinkedHashMap<String, T>): Unit where T <: ToString {
-        append<T>(LogLevel.DEBUG, message, args, ex)
-    }
-    public func debug<T>(message: String, ex: Exception, args: ConcurrentHashMap<String, T>): Unit where T <: ToString {
-        append<T>(LogLevel.DEBUG, message, args, ex)
-    }
-    public func debug<T>(message: String, ex: Exception, args: TreeMap<String, T>): Unit where T <: ToString {
-        append<T>(LogLevel.DEBUG, message, args, ex)
-    }
-    public func debug<T>(message: String, ex: Exception, args: T): Unit where T <: Object & ObjectData<T> {
-        append<T>(LogLevel.DEBUG, message, args, ex)
-    }
-
-    public func trace<T>(message: String, args: Array<T>): Unit where T <: ToString {
-        append<T>(LogLevel.TRACE, message, args, None<Exception>)
-    }
-    public func trace<T>(message: String, ex: Exception, args: Array<T>): Unit where T <: ToString {
-        append<T>(LogLevel.TRACE, message, args, ex)
-    }
-
-    public func trace<T>(message: String, args: ArrayList<T>): Unit where T <: ToString {
-        append<T>(LogLevel.TRACE, message, args, None<Exception>)
-    }
-    public func trace<T>(message: String, args: HashMap<String, T>): Unit where T <: ToString {
-        append<T>(LogLevel.TRACE, message, args, None<Exception>)
-    }
-    public func trace<T>(message: String, args: ConcurrentHashMap<String, T>): Unit where T <: ToString {
-        append<T>(LogLevel.TRACE, message, args, None<Exception>)
-    }
-    public func trace<T>(message: String, args: LinkedHashMap<String, T>): Unit where T <: ToString {
-        append<T>(LogLevel.TRACE, message, args, None<Exception>)
-    }
-    public func trace<T>(message: String, args: TreeMap<String, T>): Unit where T <: ToString {
-        append<T>(LogLevel.TRACE, message, args, None<Exception>)
-    }
-    public func trace<T>(message: String, args: T): Unit where T <: Object & ObjectData<T> {
-        append<T>(LogLevel.TRACE, message, args, None<Exception>)
-    }
-
-    public func trace<T>(message: String, ex: Exception, args: ArrayList<T>): Unit where T <: ToString {
-        append<T>(LogLevel.TRACE, message, args, ex)
-    }
-    public func trace<T>(message: String, ex: Exception, args: HashMap<String, T>): Unit where T <: ToString {
-        append<T>(LogLevel.TRACE, message, args, ex)
-    }
-    public func trace<T>(message: String, ex: Exception, args: LinkedHashMap<String, T>): Unit where T <: ToString {
-        append<T>(LogLevel.TRACE, message, args, ex)
-    }
-    public func trace<T>(message: String, ex: Exception, args: ConcurrentHashMap<String, T>): Unit where T <: ToString {
-        append<T>(LogLevel.TRACE, message, args, ex)
-    }
-    public func trace<T>(message: String, ex: Exception, args: TreeMap<String, T>): Unit where T <: ToString {
-        append<T>(LogLevel.TRACE, message, args, ex)
-    }
-    public func trace<T>(message: String, ex: Exception, args: T): Unit where T <: Object & ObjectData<T> {
-        append<T>(LogLevel.TRACE, message, args, ex)
-    }
-
-    public func error(message: String, ex: Exception): Unit {
-        append(LogLevel.ERROR, message, ex)
-    }
-    public func warn(message: String, ex: Exception): Unit {
-        append(LogLevel.WARN, message, ex)
-    }
-    public func info(message: String, ex: Exception): Unit {
-        append(LogLevel.INFO, message, ex)
-    }
-    public func debug(message: String, ex: Exception): Unit {
-        append(LogLevel.DEBUG, message, ex)
-    }
-    public func trace(message: String, ex: Exception): Unit {
-        append(LogLevel.TRACE, message, ex)
-    }
-    public func error(ex: Exception, message: () -> String): Unit {
-        append(LogLevel.ERROR, message, ex)
-    }
-    public func warn(ex: Exception, message: () -> String): Unit {
-        append(LogLevel.WARN, message, ex)
-    }
-    public func info(ex: Exception, message: () -> String): Unit {
-        append(LogLevel.INFO, message, ex)
-    }
-    public func debug(ex: Exception, message: () -> String): Unit {
-        append(LogLevel.DEBUG, message, ex)
-    }
-    public func trace(ex: Exception, message: () -> String): Unit {
-        append(LogLevel.TRACE, message, ex)
-    }
-
-    public func error(ex: Exception): Unit {
-        append(LogLevel.ERROR, String.empty, ex)
-    }
-    public func warn(ex: Exception): Unit {
-        append(LogLevel.WARN, String.empty, ex)
-    }
-    public func info(ex: Exception): Unit {
-        append(LogLevel.INFO, String.empty, ex)
-    }
-    public func debug(ex: Exception): Unit {
-        append(LogLevel.DEBUG, String.empty, ex)
-    }
-    public func trace(ex: Exception): Unit {
-        append(LogLevel.TRACE, String.empty, ex)
-    }
-
-    public func error(message: String): Unit {
-        append(LogLevel.ERROR, message)
-    }
-    public func warn(message: String): Unit {
-        append(LogLevel.WARN, message)
-    }
-    public func info(message: String): Unit {
-        append(LogLevel.INFO, message)
-    }
-    public func debug(message: String): Unit {
-        append(LogLevel.DEBUG, message)
-    }
-    public func trace(message: String): Unit {
-        append(LogLevel.TRACE, message)
-    }
-
-    protected func append(level: LogLevel, message: () -> String): Unit {
-        append(level, message(), None<Exception>)
-    }
-    protected func append(level: LogLevel, message: () -> String, ex: Exception): Unit {
-        append(level, message(), Some(ex))
-    }
-    public func error(message: () -> String, ex: Exception): Unit {
-        append(LogLevel.ERROR, message, ex)
-    }
-    public func warn(message: () -> String, ex: Exception): Unit {
-        append(LogLevel.WARN, message, ex)
-    }
-    public func info(message: () -> String, ex: Exception): Unit {
-        append(LogLevel.INFO, message, ex)
-    }
-    public func debug(message: () -> String, ex: Exception): Unit {
-        append(LogLevel.DEBUG, message, ex)
-    }
-    public func trace(message: () -> String, ex: Exception): Unit {
-        append(LogLevel.TRACE, message, ex)
-    }
-
-    public func error(message: () -> String): Unit {
-        append(LogLevel.ERROR, message)
-    }
-    public func warn(message: () -> String): Unit {
-        append(LogLevel.WARN, message)
-    }
-    public func info(message: () -> String): Unit {
-        append(LogLevel.INFO, message)
-    }
-    public func debug(message: () -> String): Unit {
-        append(LogLevel.DEBUG, message)
-    }
-    public func trace(message: () -> String): Unit {
-        append(LogLevel.TRACE, message)
     }
 
     public open prop closable: Bool {

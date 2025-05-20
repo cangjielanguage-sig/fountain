@@ -170,6 +170,7 @@ public struct DataToString <: ToString {
                 case (x: ToString, _) => builder.append("${x}: _")
                 case _ => builder.append('_')
             }
+            i++
         }
         builder.append('}')
     }
@@ -204,6 +205,7 @@ public struct DataToString <: ToString {
                 case (x: ToString, _) => builder.append("${x}: _")
                 case _ => builder.append('_')
             }
+            i++
         }
         builder.append('}')
     }

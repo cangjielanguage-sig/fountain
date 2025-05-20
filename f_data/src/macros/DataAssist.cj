@@ -183,7 +183,6 @@ func generateEqual(d: ClassDecl, exclusion: HashSet<String>) {
     var eq = quote((!(this is Hashable) || this.hashCode() == other.hashCode())) + `nl`
     for (d in d.body.decls where d is VarDecl &&
         !(isStatic(d) || exclusion.contains(d.identifier.value) || exclusion.contains('${d.identifier.value}_'))) {
-        let declType = (d as VarDecl).getOrThrow().declType
         eq += `and` + quote(f_data_eq(this.$(d.identifier), other.$(d.identifier))) + `nl`
     }
     d
@@ -214,7 +213,6 @@ func generateCompare(d: ClassDecl, exclusion: HashSet<String>) {
     var cmp = `nl`
     for (d in d.body.decls where d is VarDecl &&
         !(isStatic(d) || exclusion.contains(d.identifier.value) || exclusion.contains('${d.identifier.value}_'))) {
-        let declType = (d as VarDecl).getOrThrow().declType
         cmp += quote(f_data_cmp(this.$(d.identifier), other.$(d.identifier))) + `nl` + quote(
             if(result != EQ){
                 return result
@@ -245,11 +243,9 @@ func generateToString(d: ClassDecl, exclusion: HashSet<String>) {
     var str = quote(
         result.append<$(d.identifier)$(d.genericParamTokens)>()
     )
-    var empty = true
     for (d in d.body.decls where d is VarDecl &&
         !(isStatic(d) || exclusion.contains(d.identifier.value) || exclusion.contains('${d.identifier.value}_'))) {
         str += `nl` + quote(result.append($(d.identifier.value), $(d.identifier)))
-        empty = false
     }
     d
         .body
