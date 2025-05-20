@@ -53,7 +53,11 @@ public abstract class AsyncLogger <: AbstractLogger {
     private static func dequeue(queue: ArrayBlockingQueue<() -> Unit>): Unit {
         spawn {
             while (true) {
-                queue.dequeue()()
+                try{
+                    queue.dequeue()()
+                }catch(e: Exception){
+                    e.printStackTrace()
+                }
             }
         }
     }

@@ -76,7 +76,7 @@ public abstract class AbstractLogger <: Logger & Resource {
     public open func log(record: LogRecord): Unit {
         try {
             if (logLevelEnabled(record.level)) {
-                doAppend(record.level, record.message, record.time, None<Exception>)
+                append(record.level, record.message, record.time, None<Exception>)
                 func writeAttrs(attrs: Array<Attr>) {
                     if (attrs.isEmpty()) {
                         return
@@ -124,14 +124,9 @@ public abstract class AbstractLogger <: Logger & Resource {
             output.writeException(e)
         }
     }
-    private func doAppend(level: LogLevel, message: String, now: DateTime, ex: Option<Exception>): Unit {
+    protected open func append(level: LogLevel, message: String, now: DateTime, ex: Option<Exception>): Unit {
         pattern.generate(name, level, message, now, writer)
         appendException(ex, writer)
-    }
-    protected open func append(level: LogLevel, message: String, now: DateTime, ex: Option<Exception>): Unit {
-        if(logLevelEnabled(level)){
-            doAppend(level, message, now, ex)
-        }
     }
     protected func doLock<T>(callback: () -> T): T {
         synchronized(lock) {
@@ -528,31 +523,6 @@ public abstract class AbstractLogger <: Logger & Resource {
         append(LogLevel.TRACE, message)
     }
 
-    public prop traceEnabled: Bool {
-        get() {
-            logLevelEnabled(LogLevel.TRACE)
-        }
-    }
-    public prop debugEnabled: Bool {
-        get() {
-            logLevelEnabled(LogLevel.DEBUG)
-        }
-    }
-    public prop infoEnabled: Bool {
-        get() {
-            logLevelEnabled(LogLevel.INFO)
-        }
-    }
-    public prop warnEnabled: Bool {
-        get() {
-            logLevelEnabled(LogLevel.WARN)
-        }
-    }
-    public prop errorEnabled: Bool {
-        get() {
-            logLevelEnabled(LogLevel.ERROR)
-        }
-    }
     public open prop closable: Bool {
         get() {
             true

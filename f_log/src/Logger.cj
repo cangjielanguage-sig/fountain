@@ -51,9 +51,29 @@ public abstract class Logger <: StdLogger {
     public func debug(message: () -> String): Unit
     public func trace(message: () -> String): Unit
 
-    public prop traceEnabled: Bool
-    public prop debugEnabled: Bool
-    public prop infoEnabled: Bool
-    public prop warnEnabled: Bool
-    public prop errorEnabled: Bool
+    public prop traceEnabled: Bool {
+        get() {
+            logLevelEnabled(LogLevel.TRACE)
+        }
+    }
+    public prop debugEnabled: Bool {
+        get() {
+            logLevelEnabled(LogLevel.DEBUG)
+        }
+    }
+    public prop infoEnabled: Bool {
+        get() {
+            logLevelEnabled(LogLevel.INFO)
+        }
+    }
+    public prop warnEnabled: Bool {
+        get() {
+            logLevelEnabled(LogLevel.WARN)
+        }
+    }
+    public prop errorEnabled: Bool {
+        get() {
+            logLevelEnabled(LogLevel.ERROR)
+        }
+    }
 }
