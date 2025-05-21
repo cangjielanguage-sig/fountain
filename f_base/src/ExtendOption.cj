@@ -13,6 +13,15 @@ import f_exception.IllegalAccessException
 
 public interface ExtendOption<T> {
     func iterator(): Iterator<T>
+    func call<R>(fn: (T) -> R): ?R 
+    func call<A, R>(right: A, fn: (T, A) -> R): ?R 
+    func caller<A, R>(right: A, fn: (T, A) -> R): OptionCaller<T, R> 
+    func caller<R>(fn: (T) -> R): OptionCaller<T, R> 
+
+    func convert<U, E>(): Result<?U, E>
+    func convert<U, E>(fn: (T) -> ?U): Result<U, E>
+    func convert<U, E>(fn: () -> Exception): Result<U, E>
+    func wrap<E>(): Result<?T, E>
 }
 public class OptionIterator<T> <: Iterator<T> {
     // public static let none = OptionIterator<T>()
@@ -57,9 +66,32 @@ extend<T> Option<T> <: ExtendOption<T> {
             left => fn(left, right)
         }
     }
-
     public func caller<R>(fn: (T) -> R): OptionCaller<T, R> {
         OptionCaller<T, R>(this, fn)
+    }
+    public func convert<U, E>(): Result<U, E>{
+        match(this){
+            case Some(x: U) => Ok(x)
+            case _ => None
+        }
+    }
+    public func convert<U, E>(fn: (T) -> ?U): Result<U, E> {
+        match(this){
+            case Some(x) => match(x){
+                case Some(y) => Ok(y)
+                case _ => None
+            }
+            case _ => None
+        }
+    }
+    public func convert<U, E>(fn: () -> Exception): Result<U, E> {
+        match(this){
+            case Some(x: U) => Ok(x)
+            case _ => throw fn()
+        }
+    }
+    public func wrap<E>(): Result<?T, E> {
+        Ok(this)
     }
 }
 public class OptionCaller<T, R> {
