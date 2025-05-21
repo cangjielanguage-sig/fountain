@@ -18,10 +18,11 @@ public interface ExtendOption<T> {
     func caller<A, R>(right: A, fn: (T, A) -> R): OptionCaller<T, R> 
     func caller<R>(fn: (T) -> R): OptionCaller<T, R> 
 
-    func convert<U, E>(): Result<?U, E>
-    func convert<U, E>(fn: (T) -> ?U): Result<U, E>
-    func convert<U, E>(fn: () -> Exception): Result<U, E>
-    func wrap<E>(): Result<?T, E>
+    func toResult<U, E>(): ?Result<U, E>
+    func toResult<U, E>(fn: (T) -> U): ?Result<U, E>
+    func toResult<U, E>(fn: (T) -> ?U): ?Result<U, E>
+    func toResult<U, E>(fn: () -> Exception): Result<U, E>
+    func wrapResult<E>(): Result<?T, E>
 }
 public class OptionIterator<T> <: Iterator<T> {
     // public static let none = OptionIterator<T>()
@@ -69,28 +70,36 @@ extend<T> Option<T> <: ExtendOption<T> {
     public func caller<R>(fn: (T) -> R): OptionCaller<T, R> {
         OptionCaller<T, R>(this, fn)
     }
-    public func convert<U, E>(): Result<U, E>{
+    public func toResult<U, E>(): ?Result<U, E>{
         match(this){
             case Some(x: U) => Ok(x)
+            case Some(_) => None<Result<U, E>>
             case _ => Result<U, E>.None
         }
     }
-    public func convert<U, E>(fn: (T) -> ?U): Result<U, E> {
+    public func toResult<U, E>(fn: (T) -> ?U): ?Result<U, E> {
         match(this){
-            case Some(x) => match(x){
+            case Some(x) => match(fn(x)){
                 case Some(y) => Ok(y)
-                case _ => Result<U, E>.None
+                case _ => None<Result<U, E>>
             }
             case _ => Result<U, E>.None
         }
     }
-    public func convert<U, E>(fn: () -> Exception): Result<U, E> {
+    public func toResult<U, E>(fn: (T) -> U): ?Result<U, E> {
         match(this){
-            case Some(x: U) => Ok(x)
-            case _ => throw fn()
+            case Some(x) => Ok(fn(x))
+            case _ => Result<U, E>.None
         }
     }
-    public func wrap<E>(): Result<?T, E> {
+    public func toResult<U, E>(fn: () -> Exception): Result<U, E> {
+        match(this){
+            case Some(x: U) => Ok(x)
+            case Some(_) => throw fn()
+            case _ => Result<U, E>.None
+        }
+    }
+    public func wrapResult<E>(): Result<?T, E> {
         Ok(this)
     }
 }
