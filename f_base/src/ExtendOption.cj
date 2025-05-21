@@ -72,16 +72,16 @@ extend<T> Option<T> <: ExtendOption<T> {
     public func convert<U, E>(): Result<U, E>{
         match(this){
             case Some(x: U) => Ok(x)
-            case _ => None
+            case _ => Result<U, E>.None
         }
     }
     public func convert<U, E>(fn: (T) -> ?U): Result<U, E> {
         match(this){
             case Some(x) => match(x){
                 case Some(y) => Ok(y)
-                case _ => None
+                case _ => Result<U, E>.None
             }
-            case _ => None
+            case _ => Result<U, E>.None
         }
     }
     public func convert<U, E>(fn: () -> Exception): Result<U, E> {

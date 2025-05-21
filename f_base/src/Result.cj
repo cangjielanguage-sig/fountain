@@ -176,6 +176,7 @@ public enum Result<T, E> {
                 case Some(x) => Ok(x)
                 case _ => None
             }
+        }
     }
     public func mapper<U>(): ResultMapper<T, U, E>{
         ResultMapper<T, U, E>(this)
