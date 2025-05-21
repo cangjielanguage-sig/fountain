@@ -35,7 +35,7 @@ public enum Result<T, E> {
         }
     }
     public prop isNone: Bool {
-        get(){
+        get() {
             match (this) {
                 case None => true
                 case _ => false
@@ -43,16 +43,16 @@ public enum Result<T, E> {
         }
     }
     public prop withE: Bool {
-        get(){
-            match(this){
+        get() {
+            match (this) {
                 case Err(_) => true
                 case _ => false
             }
         }
     }
     public prop withValue: Bool {
-        get(){
-            match(this){
+        get() {
+            match (this) {
                 case Ok(_) => true
                 case _ => false
             }
@@ -73,22 +73,21 @@ public enum Result<T, E> {
     public func map<U>(f: (T) -> Result<U, E>): Result<U, E> {
         match (this) {
             case Ok => Ok
-            case Ok(v) => 
-                try{
-                    f(v)
-                }catch(e: Exception){
-                    match(e){
-                        case x: E => Err(x)
-                        case _ => throw e
-                    }
+            case Ok(v) => try {
+                f(v)
+            } catch (e: Exception) {
+                match (e) {
+                    case x: E => Err(x)
+                    case _ => throw e
                 }
+            }
             case Err => Err
             case Err(e) => Err(e)
             case None => None
         }
     }
     public func map<U>(f: (E) -> Result<U, E>): Result<U, E> {
-        match(this){
+        match (this) {
             case Ok => Ok
             case Ok(v: U) => Ok(v)
             case Ok(_) => Ok
@@ -101,7 +100,7 @@ public enum Result<T, E> {
      * 忽略数据和错误信息，只返回Ok Err None
      */
     public func ignore(): Result<T, E> {
-        match(this){
+        match (this) {
             case Ok => Ok
             case Ok(_) => Ok
             case Err => Err
@@ -116,38 +115,41 @@ public enum Result<T, E> {
         }
     }
     public func filter(predicate: (E) -> Bool): Result<T, E> {
-        match(this){
+        match (this) {
             case Err(e) where predicate(e) => this
             case _ => None
         }
     }
-    public func filterOk(){
-        if(isOk){
+    public func filterOk() {
+        if (isOk) {
             this
-        }else{
+        } else {
             None
         }
     }
-    public func filterErr(){
-        if(isErr){
+    public func filterErr() {
+        if (isErr) {
             this
-        }else{
+        } else {
             None
         }
     }
-    public func filterWithE(){
-        if(withE){
+    public func filterWithE() {
+        if (withE) {
             this
-        }else{
+        } else {
             None
         }
     }
-    public func filterWithValue(){
-        if(withValue){
+    public func filterWithValue() {
+        if (withValue) {
             this
-        }else{
+        } else {
             None
         }
+    }
+    public func filter(){
+        ResultFilter<T, E>(this)
     }
     public func flatten<U>(): Result<U, E> {
         match (this) {
@@ -160,8 +162,8 @@ public enum Result<T, E> {
         }
     }
     public func transpose<U>(): ?Result<U, E> {
-        match(this){
-            case Ok(x: ?U) => match(x){
+        match (this) {
+            case Ok(x: ?U) => match (x) {
                 case Some(y) => Ok(y)
                 case _ => None
             }
@@ -173,29 +175,113 @@ public enum Result<T, E> {
         }
     }
     public func orDefault(default: T): T {
-        match(this){
+        match (this) {
             case Ok(x) => x
             case _ => default
         }
     }
     public func orElse(fn: () -> T): T {
-        match(this){
+        match (this) {
             case Ok(x) => x
             case _ => fn()
         }
     }
     public func orElse(fn: () -> ?T): ?T {
-        match(this){
+        match (this) {
             case Ok(x) => x
             case _ => fn()
         }
     }
-    public func mapper<U>(): ResultMapper<T, U, E>{
+    public func mapper<U>(): ResultMapper<T, U, E> {
         ResultMapper<T, U, E>(this)
     }
 }
+
+public class ResultFilter<T, E> {
+    ResultFilter(private let origin: Result<T, E>) {}
+    private var filterOk_: ?Bool = None
+    private var filterOkFn_: ?(T) -> Bool = None
+    private var filterErr_: ?Bool = None
+    private var filterErrFn_: ?(E) -> Bool = None
+    private var filterWithValue_: ?Bool = None
+    private var filterWithE_: ?Bool = None
+    public func filterOk(predicate: (T) -> Bool) {
+        filterOkFn_ = predicate
+        this
+    }
+    public func filterOk() {
+        filterOk_ = true
+        this
+    }
+    public func filterErr(predicate: (E) -> Bool) {
+        filterErrFn_ = predicate
+        this
+    }
+    public func filterErr() {
+        filterErr_ = true
+        this
+    }
+    public func filterWithValue(){
+        filterWithValue_ = true
+        this
+    }
+    public func filterWithE(){
+        filterWithE_ = true
+        this
+    }
+    public func filter(): Result<T, E> {
+        match (origin) {
+            case Ok =>
+                if (let Some(ok) <- filterOk_ && ok) {
+                    origin
+                } else {
+                    Result<T, E>.None
+                }
+            case Ok(v) =>
+                if (let Some(ok) <- filterOkFn_) {
+                    if (ok(v)) {
+                        origin
+                    } else if (let Some(ok) <- filterWithValue_ && ok) {
+                        origin
+                    } else {
+                        Result<T, E>.None
+                    }
+                } else if (let Some(ok) <- filterOk_ && ok) {
+                    origin
+                } else if (let Some(ok) <- filterWithValue_ && ok) {
+                    origin
+                } else {
+                    Result<T, E>.None
+                }
+            case Err =>
+                if (let Some(err) <- filterErr_ && err) {
+                    origin
+                } else {
+                    Result<T, E>.None
+                }
+            case Err(e) =>
+                if (let Some(err) <- filterErrFn_) {
+                    if (err(e)) {
+                        origin
+                    } else if (let Some(err) <- filterWithE_ && err) {
+                        origin
+                    } else {
+                        Result<T, E>.None
+                    }
+                } else if (let Some(err) <- filterErr_ && err) {
+                    origin
+                } else if (let Some(err) <- filterWithE_ && err) {
+                    origin
+                } else {
+                    Result<T, E>.None
+                }
+            case None => origin
+        }
+    }
+}
+
 public class ResultMapper<T, U, E> {
-    ResultMapper(private let origin: Result<T, E>){}
+    ResultMapper(private let origin: Result<T, E>) {}
     private var resultMap = {_: T => Result<U, E>.Ok}
     private var okMap = {=> Result<U, E>.Ok}
     private var withErrorMap = {e: E => Result<U, E>.Err(e)}
@@ -222,7 +308,7 @@ public class ResultMapper<T, U, E> {
         this
     }
     public func map(): Result<U, E> {
-        match(origin) {
+        match (origin) {
             case Ok => okMap()
             case Ok(v) => resultMap(v)
             case Err => errorMap()
