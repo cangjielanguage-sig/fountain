@@ -45,8 +45,8 @@ public class NamedDatasource <: Datasource & Resource {
                 if (let Some(x) <- ORMConfig.getStdPoolMaxSize(driverName: driverName)) {
                     p.maxSize = x
                 }
-                for (tuple in ORMConfig.getAllConfigs(driverName: driverName)) {
-                    p.setOption(tuple[0], tuple[1])
+                for ((k, v) in ORMConfig.getAllConfigs(driverName: driverName)) {
+                    p.setOption(k, v)
                 }
                 p
             case x => x
