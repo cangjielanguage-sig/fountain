@@ -14,7 +14,7 @@ public enum Result<T, E> {
     | Ok(T)
     | Err
     | Err(E)
-    | None
+    | NoResult
 
     public prop isOk: Bool {
         get() {
@@ -34,10 +34,10 @@ public enum Result<T, E> {
             }
         }
     }
-    public prop isNone: Bool {
+    public prop isNoResult: Bool {
         get() {
             match (this) {
-                case None => true
+                case NoResult => true
                 case _ => false
             }
         }
@@ -61,13 +61,13 @@ public enum Result<T, E> {
     public func result(): ?T {
         match (this) {
             case Ok(v) => v
-            case _ => Option<T>.None
+            case _ => None
         }
     }
     public func err(): ?E {
         match (this) {
             case Err(e) => e
-            case _ => Option<E>.None
+            case _ => None
         }
     }
     public func mapValue<U>(f: (T) -> Result<U, E>): Result<U, E> {
@@ -83,7 +83,7 @@ public enum Result<T, E> {
             }
             case Err => Err
             case Err(e) => Err(e)
-            case None => None
+            case NoResult => NoResult
         }
     }
     public func mapError<U>(f: (E) -> Result<U, E>): Result<U, E> {
@@ -92,60 +92,60 @@ public enum Result<T, E> {
             case Ok(v: U) => Ok(v)
             case Ok(_) => Ok
             case Err => Err
-            case None => None
+            case NoResult => NoResult
             case Err(e) => f(e)
         }
     }
     /**
-     * 忽略数据和错误信息，只返回Ok Err None
+     * 忽略数据和错误信息，只返回Ok Err NoResult
      */
     public func ignore(): Result<T, E> {
         match (this) {
             case Ok => Ok
             case Ok(_) => Ok
             case Err => Err
-            case None => None
+            case NoResult => NoResult
             case Err(_) => Err
         }
     }
     public func filterValue(predicate: (T) -> Bool): Result<T, E> {
         match (this) {
             case Ok(v) where predicate(v) => this
-            case _ => None
+            case _ => NoResult
         }
     }
     public func filterError(predicate: (E) -> Bool): Result<T, E> {
         match (this) {
             case Err(e) where predicate(e) => this
-            case _ => None
+            case _ => NoResult
         }
     }
     public func filterOk() {
         if (isOk) {
             this
         } else {
-            None
+            NoResult
         }
     }
     public func filterErr() {
         if (isErr) {
             this
         } else {
-            None
+            NoResult
         }
     }
     public func filterWithE() {
         if (withE) {
             this
         } else {
-            None
+            NoResult
         }
     }
     public func filterWithValue() {
         if (withValue) {
             this
         } else {
-            None
+            NoResult
         }
     }
     public func filter(){
@@ -158,19 +158,19 @@ public enum Result<T, E> {
             case Ok => Ok
             case Err => Err
             case Err(e) => Err(e)
-            case None => None
+            case NoResult => NoResult
         }
     }
     public func transpose<U>(): ?Result<U, E> {
         match (this) {
             case Ok(x: ?U) => match (x) {
                 case Some(y) => Ok(y)
-                case _ => None
+                case _ => NoResult
             }
             case Ok => Ok
             case Err => Err
             case Err(e) => Err(e)
-            case None => None
+            case NoResult => NoResult
             case Ok(_) => Ok
         }
     }
@@ -235,7 +235,7 @@ public class ResultFilter<T, E> {
                 if (let Some(ok) <- filterOk_ && ok) {
                     origin
                 } else {
-                    Result<T, E>.None
+                    NoResult
                 }
             case Ok(v) =>
                 if (let Some(ok) <- filterOkFn_) {
@@ -244,20 +244,20 @@ public class ResultFilter<T, E> {
                     } else if (let Some(ok) <- filterWithValue_ && ok) {
                         origin
                     } else {
-                        Result<T, E>.None
+                        NoResult
                     }
                 } else if (let Some(ok) <- filterOk_ && ok) {
                     origin
                 } else if (let Some(ok) <- filterWithValue_ && ok) {
                     origin
                 } else {
-                    Result<T, E>.None
+                    NoResult
                 }
             case Err =>
                 if (let Some(err) <- filterErr_ && err) {
                     origin
                 } else {
-                    Result<T, E>.None
+                    NoResult
                 }
             case Err(e) =>
                 if (let Some(err) <- filterErrFn_) {
@@ -266,16 +266,16 @@ public class ResultFilter<T, E> {
                     } else if (let Some(err) <- filterWithE_ && err) {
                         origin
                     } else {
-                        Result<T, E>.None
+                        NoResult
                     }
                 } else if (let Some(err) <- filterErr_ && err) {
                     origin
                 } else if (let Some(err) <- filterWithE_ && err) {
                     origin
                 } else {
-                    Result<T, E>.None
+                    NoResult
                 }
-            case None => origin
+            case NoResult => origin
         }
     }
 }
@@ -286,7 +286,7 @@ public class ResultMapper<T, U, E> {
     private var okMap = {=> Result<U, E>.Ok}
     private var withErrorMap = {e: E => Result<U, E>.Err(e)}
     private var errorMap = {=> Result<U, E>.Err}
-    private var noneMap = {=> Result<U, E>.None}
+    private var noneMap = {=> Result<U, E>.NoResult}
     public func result(f: (T) -> Result<U, E>): ResultMapper<T, U, E> {
         resultMap = f
         this
@@ -313,7 +313,7 @@ public class ResultMapper<T, U, E> {
             case Ok(v) => resultMap(v)
             case Err => errorMap()
             case Err(e) => withErrorMap(e)
-            case None => noneMap()
+            case NoResult => noneMap()
         }
     }
 }

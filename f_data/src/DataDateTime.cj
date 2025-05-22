@@ -84,8 +84,9 @@ extend DateTime <: DataFields<DateTime> & ExtendDateTimeData {
                 match(box){
                     case Some(x) => x
                     case _ => 
-                        box = Box<String>(format)
-                        box
+                        let b = Box<String>(format)
+                        box = b
+                        b
                 }
                 if (defaultDateFormat.compareAndSwap(fmt, b)) {
                     return
