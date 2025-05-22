@@ -13,11 +13,11 @@ public class NamedDatasource <: Datasource & Resource {
     public NamedDatasource(
         optionSpecified: Bool,
         public let driverName: String,
-        private var datasource: Datasource
+        private let datasource: Datasource
     ) {
         if (!optionSpecified) {
-            for (tuple in ORMConfig.getAllConfigs(driverName: driverName)) {
-                setOption(tuple[0], tuple[1])
+            for ((k, v) in ORMConfig.getAllConfigs(driverName: driverName)) {
+                setOption(k, v)
             }
         }
     }
@@ -45,13 +45,10 @@ public class NamedDatasource <: Datasource & Resource {
                 if (let Some(x) <- ORMConfig.getStdPoolMaxSize(driverName: driverName)) {
                     p.maxSize = x
                 }
-                for ((k, v) in ORMConfig.getAllConfigs(driverName: driverName)) {
-                    p.setOption(k, v)
-                }
                 p
             case x => x
         }
-        NamedDatasource(true, driverName, ds)
+        NamedDatasource(false, driverName, ds)
     }
 
     public func connect(): Connection {
