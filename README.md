@@ -46,22 +46,8 @@ _/ ____\____  __ __  _____/  |______  |__| ____
 ## fboot
 
 - 把fboot加入PATH环境变量
-  1. fboot build：执行`cjpm build`构建当前目录，
-     - 加载编译得到的动态链接库，把@Pointcut插入正确的函数。
-     - 在当前项目的src目录创建main.cj，
-     - 把cjpm.toml改为executable
-     - 把各业务模块加入项目依赖
-     - 把各业务模块的包加入该模块的main.cj的导入
-     - 在main函数体执行`f_app.App`，完成应用初始化。f_app.App实现了f_launcher.Launcher。
-     - 编译该模块，
-     - 如果当前目录没有cjpm.toml，会抛出异常。
-  2. fboot build -p /path/of/project：把工作目录切换到指定路径，然后执行跟上一条一样的工作。
-  3. fboot build package_name.LauncherImpl
-     - package_name.LauncherImpl类型需要实现f_launcher.Launcher接口。
-     - 这个类型代替`f_app.App`，其它跟第一条一样。
-  4. fboot build package_name.LauncherImpl -p /path/of/project：把工作目录切换到指定路径，然后执行第一条。
-  5. 如果fboot build找不到`f_app.App`也没有指定package_name.LauncherImpl则导入全部包以后即停止。可在执行导入时完成应用进程初始化。
-  6. fboot config --pid=<PID> --<key1>=<value1> --<key2>=<value2>：修改指定进程号的配置，指定进程必须是fboot启动。
+  1. fboot run [PATH] --pattern=<DYNAMIC_LIB_NAME_REGEX_WITHOUT_EXTNAME>
+  2. fboot config --pid=<PID> --<key1>=<value1> --<key2>=<value2>：修改指定进程号的配置，指定进程必须是fboot启动。
      调用`f_config.Config.set(...)`修改配置。
      各模块需要重新初始化的需要调用`f_config.Config.refresher(prefix, refreshFn)`，set函数返回前会调用配置项的键第一个_前的字符串与prefix相同的对应refreshFn。每次调用set函数每个refreshFn最多调用一次。
 
