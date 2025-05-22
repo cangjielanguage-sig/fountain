@@ -46,14 +46,14 @@ main(args: Array<String>): Unit {
             match(OS.current){
                 case Windows => 
                     pathRegex = #'([C-Z]:|\.\.?)(\\(.+))+'#
-                    'dll'
-                case macOS => 'dylib'
-                case _ => 'so'
+                    '.dll'
+                case macOS => '.dylib'
+                case _ => '.so'
             }
             if(!Regex(#'\.{0, 2}/(.+/)*(.+)?'#).matches(path)){
                 throw BootException('fboot error: The path is not a directory, current arg is ${path}')
             }
-            load(Path(path), Regex('${pattern}\\.${ext}'#, '.${ext}'))
+            load(Path(path), Regex('^lib.*${pattern}.*\\${ext}$'), ext)
             //todo 增加项目启动初始化代码，按照Config决定需要是否需要初始化mvc，完成mvc模块后才能添加
             //应当在mvc模块提供一个函数，函数内确认是否需要初始化mvc，如果需要就完成mvc初始化
             //此处只需要调用这个函数
