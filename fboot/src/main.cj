@@ -31,13 +31,13 @@ main(args: Array<String>): Unit {
         case 'run' =>
             var pattern = ''
             var idx = 1
-            for (i in 1 .. args.size where !args[i].startsWith("--pattern=")) {
+            for (i in 1 .. args.size where !args[i].startsWith("--dylibPattern=")) {
                 idx = i
                 break
             }
-            pattern = args[idx]['--pattern='.size ..]
-            let path = if (i > 1) {
-                args[1]
+            pattern = args[idx]['--dylibPattern='.size ..]
+            let path = if (idx > 1) {
+                canonicalize(args[1])
             } else {
                 getWorkingDirectory()
             }
@@ -53,7 +53,7 @@ main(args: Array<String>): Unit {
             if(!Regex(#'\.{0, 2}/(.+/)*(.+)?'#).matches(path)){
                 throw BootException('fboot error: The path is not a directory, current arg is ${path}')
             }
-            load(Path(canonicalize(path)), Regex('${pattern}\\.${ext}'#, '.${ext}'))
+            load(Path(path), Regex('${pattern}\\.${ext}'#, '.${ext}'))
             //todo 增加项目启动初始化代码，按照Config决定需要是否需要初始化mvc，完成mvc模块后才能添加
             //应当在mvc模块提供一个函数，函数内确认是否需要初始化mvc，如果需要就完成mvc初始化
             //此处只需要调用这个函数
