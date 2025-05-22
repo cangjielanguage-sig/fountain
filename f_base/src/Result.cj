@@ -70,7 +70,7 @@ public enum Result<T, E> {
             case _ => Option<E>.None
         }
     }
-    public func map<U>(f: (T) -> Result<U, E>): Result<U, E> {
+    public func mapValue<U>(f: (T) -> Result<U, E>): Result<U, E> {
         match (this) {
             case Ok => Ok
             case Ok(v) => try {
@@ -86,7 +86,7 @@ public enum Result<T, E> {
             case None => None
         }
     }
-    public func map<U>(f: (E) -> Result<U, E>): Result<U, E> {
+    public func mapError<U>(f: (E) -> Result<U, E>): Result<U, E> {
         match (this) {
             case Ok => Ok
             case Ok(v: U) => Ok(v)
@@ -108,13 +108,13 @@ public enum Result<T, E> {
             case Err(_) => Err
         }
     }
-    public func filter(predicate: (T) -> Bool): Result<T, E> {
+    public func filterValue(predicate: (T) -> Bool): Result<T, E> {
         match (this) {
             case Ok(v) where predicate(v) => this
             case _ => None
         }
     }
-    public func filter(predicate: (E) -> Bool): Result<T, E> {
+    public func filterError(predicate: (E) -> Bool): Result<T, E> {
         match (this) {
             case Err(e) where predicate(e) => this
             case _ => None
