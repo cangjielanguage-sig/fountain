@@ -23,8 +23,10 @@ public import f_exception.{BaseException, UnreachableException}
 public import f_orm.wrap.*
 public import f_orm.exception.*
 
-//事务维持在连接内，要在一个事务内完成的数据库访问应确保使用一个连接
-//应用项目应当有一个初始化文件用来调用ORM.register(...)完成初始化
+/**
+ * 事务维持在连接内，要在一个事务内完成的数据库访问应确保使用一个连接。
+ * 应用项目应当有一个初始化文件用来调用ORM.register(...)完成初始化
+*/
 public class ORM {
     private static let logger = LoggerFactory.getLogger<ORM>()
     private static var default = String.empty
@@ -52,9 +54,9 @@ public class ORM {
         let ds = creator.create()
         register(ds, default: default)
     }
-    public static func register(driver: Driver, default!: Bool = true, needPool!: Bool = true): Unit {
+    public static func register(driver: Driver, default!: Bool = true): Unit {
         DriverManager.register(driver.name, driver)
-        register(NamedDatasource.new(driver, needPool: needPool), default: default)
+        register(NamedDatasource.new(driver), default: default)
     }
     public static func deregister(name: String): Unit {
         datasources.remove(name)?.close()

@@ -21,12 +21,11 @@ public class NamedDatasource <: Datasource & Resource {
             }
         }
     }
-    public static func new(driver: Driver, needPool!: Bool = true): NamedDatasource {
+    public static func new(driver: Driver): NamedDatasource {
         let driverName = driver.name
         let ds = match (driver.open(ORMConfig.getUrl(driverName: driverName), ORMConfig.getAllConfigTuples(driverName: driverName))) {
             case x: PooledDatasource => x
-            case x where !needPool => x
-            case x =>
+            case x where driver.preferredPooling => 
                 let p = PooledDatasource(x)
                 if (let Some(x) <- ORMConfig.getStdPoolConnectionTimeout(driverName: driverName)) {
                     p.connectionTimeout = x
@@ -50,6 +49,7 @@ public class NamedDatasource <: Datasource & Resource {
                     p.setOption(tuple[0], tuple[1])
                 }
                 p
+            case x => x
         }
         NamedDatasource(true, driverName, ds)
     }
