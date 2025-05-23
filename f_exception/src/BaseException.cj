@@ -10,14 +10,28 @@
 
 package f_exception
 
-import std.io.{OutputStream, StringWriter}
+import std.io.{OutputStream, StringWriter, ByteBuffer}
 import std.collection.ArrayList
 
-public func printStackTrace<O>(exception: Exception, output: O): Unit where O <: OutputStream {
-    printStackTrace<O>(exception, StringWriter<O>(output))
+public func printStackTrace(exception: Exception, output: OutputStream): Unit {
+    printStackTrace(output){w => printStackTrace(exception, w)}
+}
+private func printStackTrace(output: OutputStream, callee: (ByteBuffer) -> Unit) {
+    if(let buffer: ByteBuffer <- output){
+        let writer = StringWriter(buffer)
+        callee(writer)
+        writer.flush()
+    }else{
+        let buffer = ByteBuffer()
+        let writer = StringWriter(buffer)
+        callee(writer)
+        writer.flush()
+        output.write(buffer.bytes())
+        output.flush()
+    }
 }
 
-public func printStackTrace<O>(exception: Exception, writer: StringWriter<O>): Unit where O <: OutputStream {
+private func printStackTrace(exception: Exception, writer: StringWriter<ByteBuffer>): Unit {
     writer.writeln("An exception has occured: ${exception}")
     for (stack in exception.getStackTrace()) {
         writer.writeln(
@@ -58,27 +72,18 @@ public open class BaseException <: Exception {
         }
     }
 
-    public func printStackTrace<O>(output: O): Unit where O <: OutputStream {
-        this.printStackTrace(StringWriter<O>(output))
-    }
-    public func printStackTrace<O>(writer: StringWriter<O>): Unit where O <: OutputStream {
-        printStackTrace<O>(this, writer)
-        if (let Some(c) <- caused) {
-            writer.write("Caused by: ")
-            if (let cp: BaseException <- c) {
-                cp.printStackTrace<O>(writer)
-            } else {
-                printStackTrace<O>(c, writer)
+    public func printStackTrace(output: OutputStream): Unit {
+        printStackTrace(output){w => 
+            printStackTrace(this, w)
+            if (let Some(c) <- caused) {
+                w.write("Caused by: ")
+                printStackTrace(c, w)
             }
-        }
-        if (!suppressed.isEmpty()) {
-            writer.write("Suppressed: ")
-        }
-        for (s in suppressed) {
-            if (let se: BaseException <- s) {
-                se.printStackTrace<O>(writer)
-            } else {
-                printStackTrace<O>(s, writer)
+            if (!suppressed.isEmpty()) {
+                w.write("Suppressed: ")
+                for (s in suppressed) {
+                    printStackTrace(s, w)
+                }
             }
         }
     }
