@@ -48,7 +48,7 @@ public class NamedDatasource <: Datasource & Resource {
                 p
             case x => x
         }
-        NamedDatasource(false, driverName, ds)
+        NamedDatasource(true, driverName, ds)
     }
 
     public func connect(): Connection {
