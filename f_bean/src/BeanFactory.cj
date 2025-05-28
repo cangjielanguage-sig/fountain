@@ -67,7 +67,7 @@ public class BeanFactory {
             }
         }
     }
-    public func register<T>(creator: () -> T, postConstruct!: (T) -> Unit = {o =>}, destroy!: (T) -> Unit = {o =>}) where T <: Object {
+    public func register<T>(creator: () -> T, postConstruct!: (Object) -> Unit = {o =>}, destroy!: (Object) -> Unit = {o =>}) where T <: Object {
         let typeInfo = TypeInfos.get<T>()
         let meta = if (let Some(meta) <- typeInfo.findAnnotation<BeanMeta>()) {
             meta

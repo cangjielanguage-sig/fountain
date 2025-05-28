@@ -36,16 +36,16 @@ public macro Bean(input: Tokens): Tokens {
                 if(funcTokens.size > 1) {
                     funcTokens += `comma`
                 }
-                let identifier = f.identifier
-                funcTokens += quote(($(identifier.value), $(identifier)))
+                let fn = f.identifier
+                funcTokens += quote(($(fn.value), {o: Object => (o as $identifier)?.$fn()}))
             }
             funcTokens += `rsquare`
             let tokens = 
             quote(
                 $input
                 let _ = {=>
-                    var postConstruct: (Object) -> Unit = {o =>}
-                    var destroy: (Object) -> Unit = {o =>}
+                    var postConstruct = {o: Object =>}
+                    var destroy = {o: Object =>}
                     var i = 0i8
                     for((n, f) in $funcTokens){
                         if(withAnnotation<$identifier, PostConstruct>(n)) {
