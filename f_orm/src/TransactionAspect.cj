@@ -23,13 +23,13 @@ import f_orm.wrap.ORMConfig
 @BeanMeta
 public class TransactionAspect <: Aspect {
     public static func initialize(): Unit {
-        BeanFactory.instance.register<TransactionAspect>{TransactionAspect()}
+        BeanFactory.instance.register<TransactionAspect>({=> TransactionAspect()})
     }
-    private init(){}
+    private init() {}
     private let rollbackExceptions = ConcurrentHashMap<String, HashSet<TypeInfo>>()
     private let mutex = Mutex()
     private let transactionalMap = ConcurrentHashMap<String, Transactional>()
-    
+
     public func proceed(funcInfo: InvocationFuncInfo, point: (Array<Any>) -> Any): Any {
         let transactional = funcInfo.funcInfo.findAnnotation<Transactional>()
         var driverName = ""
@@ -37,16 +37,16 @@ public class TransactionAspect <: Aspect {
         var isoLevel = None<TransactionIsoLevel>
         var accessMode = None<TransactionAccessMode>
         var deferrableMode = None<TransactionDeferrableMode>
-        if(let Some(x) <- transactional){
+        if (let Some(x) <- transactional) {
             driverName = x.driverName
-            if(let Some(p) <- x.propagation){
+            if (let Some(p) <- x.propagation) {
                 propagation = p
             }
             isoLevel = x.isoLevel
             accessMode = x.accessMode
             deferrableMode = x.deferrableMode
         }
-        try(exe = ORM.executor(driverName)){
+        try (exe = ORM.executor(driverName)) {
             try {
                 exe.newTxAndBegin(
                     propagation: propagation,
@@ -59,12 +59,12 @@ public class TransactionAspect <: Aspect {
                 result
             } catch (e: Exception) {
                 let et = TypeInfo.of(e)
-                func genExceptionSet(ex: String){
-                    if(let Some(s) <- rollbackExceptions.get(ex)){
+                func genExceptionSet(ex: String) {
+                    if (let Some(s) <- rollbackExceptions.get(ex)) {
                         s
-                    }else{
+                    } else {
                         let set = HashSet<TypeInfo>()
-                        for(e in ex.split("|") where e.size > 0){
+                        for (e in ex.split("|") where e.size > 0) {
                             set.add(TypeInfos.get(e.trimAscii()))
                         }
                         rollbackExceptions[ex] = set
@@ -73,13 +73,13 @@ public class TransactionAspect <: Aspect {
                 }
                 if (let Some(noRollbackFor) <- transactional?.noRollbackFor) {
                     let set: Set<TypeInfo> = genExceptionSet(noRollbackFor)
-                    for(noRollback in set where et.isSubtypeOf(noRollback)){
+                    for (noRollback in set where et.isSubtypeOf(noRollback)) {
                         throw exe.noRollbackFor(e)
                     }
                 }
-                if(let Some(rollbackFor) <- transactional?.rollbackFor){
+                if (let Some(rollbackFor) <- transactional?.rollbackFor) {
                     let set: Set<TypeInfo> = genExceptionSet(rollbackFor)
-                    for(rollback in set where et.isSubtypeOf(rollback)){
+                    for (rollback in set where et.isSubtypeOf(rollback)) {
                         throw exe.rollbackFor(e)
                     }
                     throw exe.noRollbackFor(e)
