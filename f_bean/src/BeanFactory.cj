@@ -67,34 +67,12 @@ public class BeanFactory {
             }
         }
     }
-    public func register<T>(creator: () -> T) where T <: Object {
+    public func register<T>(creator: () -> T, postConstruct!: (T) -> Unit = {o =>}, destroy!: (T) -> Unit = {o =>}) where T <: Object {
         let typeInfo = TypeInfos.get<T>()
         let meta = if (let Some(meta) <- typeInfo.findAnnotation<BeanMeta>()) {
             meta
         } else {
             BeanMeta()
-        }
-        var postConstruct: (Object) -> Unit = {o =>}
-        var destroy: (Object) -> Unit = {o =>}
-        var i = 0
-        for (fn in typeInfo.instanceFunctions) {
-            func closure(o: Object): Unit {
-                if (o is T) {
-                    fn.apply(o)
-                } else {
-                    throw BeanException('parameter does not match the type ${typeInfo}')
-                }
-            }
-            if (fn.findAnnotation<PostConstruct>().isSome()) {
-                i++
-                postConstruct = closure
-            } else if (fn.findAnnotation<Destroy>().isSome()) {
-                i++
-                destroy = closure
-            }
-            if(i == 2){
-                break
-            }
         }
         doRegister<T>(meta, creator, postConstruct: postConstruct, destroy: destroy)
     }

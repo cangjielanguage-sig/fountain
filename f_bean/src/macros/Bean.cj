@@ -31,12 +31,38 @@ public macro Bean(input: Tokens): Tokens {
                     (quote($(x.identifier).$constructor), params)
                 }
             }
+            var funcTokens = `lsquare`
+            for(f in x.body.decls where isPublic(f) && !isStatic(f) && ((f as FuncDecl)?.funcParams.isEmpty() ?? false)){
+                if(funcTokens.size > 1) {
+                    funcTokens += `comma`
+                }
+                let identifier = f.identifier
+                funcTokens += quote(($(identifier.value), $(identifier)))
+            }
+            funcTokens += `rsquare`
             let tokens = 
             quote(
                 $input
-                let _ = BeanFactory.instance.register<$identifier>{
-                    $constructor($params)
-                }
+                let _ = {=>
+                    var postConstruct: (Object) -> Unit = {o =>}
+                    var destroy: (Object) -> Unit = {o =>}
+                    var i = 0i8
+                    for((n, f) in $funcTokens){
+                        if(withAnnotation<$identifier, PostConstruct>(n)) {
+                            postConstruct = f
+                            i++
+                        }else if (withAnnotation<$identifier, Destroy>(n)) {
+                            destroy = f
+                            i++
+                        }
+                        if(i == 2) {
+                            break
+                        }
+                    }
+                    BeanFactory.instance.register<$identifier>({=>
+                        $constructor($params)
+                    }, postConstruct: postConstruct, destroy: destroy)
+                }()
             )
             tokens
         case x: FuncDecl => 

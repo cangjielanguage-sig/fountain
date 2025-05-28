@@ -16,6 +16,9 @@ public func withAnnotation<T>(decl: Decl): Bool where T <: Annotation {
         case _ => false
     }
 }
+public func withAnnotation<T, A>(funcName: String, argTypes: Array<TypeInfo>): Bool where A <: Annotation {
+    f_base.TypeInfos.get<T>().getInstanceFunction(funcName, argTypes).findAnnotation<A>().isSome()
+}
 public func withMacro(decl: Decl, macroName: String): Bool {
     match(decl){
         case d: MacroExpandDecl => d.fullIdentifier.value == macroName
