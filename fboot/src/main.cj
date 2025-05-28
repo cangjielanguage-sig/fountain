@@ -13,50 +13,54 @@ import std.fs.Path
 import std.reflect.ModuleInfo
 import std.regex.Regex
 import std.env.getWorkingDirectory
-
-private func load(path: Path, pattern: Regex, ext: String) {
-    Directory.walk(dir) {
-        fi =>
-        if (fi.isDirectory()) {
-            load(fi.path, pattern, ext)
-        } else if (pattern.matches(fi.path.fileName)) {
-            ModuleInfo.load(fi.path.toString().replace(ext, ''))
-        }
-        true
-    }
-}
+import fountain.bean.BeanFactory
 
 main(args: Array<String>): Unit {
     match (args[0]) {
         case 'run' =>
             var pattern = ''
             var idx = 1
-            for (i in 1 .. args.size where !args[i].startsWith("--dylibPattern=")) {
+            for (i in 1..args.size where !args[i].startsWith("--dylibPattern=")) {
                 idx = i
                 break
             }
-            pattern = args[idx]['--dylibPattern='.size ..]
-            let path = if (idx > 1) {
-                canonicalize(args[1])
+            pattern = args[idx]['--dylibPattern='.size..]
+            let path = canonicalize(if (idx > 1) {
+                args[1]
             } else {
                 getWorkingDirectory()
-            }
+            })
             var pathRegex = #'\.{0, 2}/(.+/)*(.+)?'#
-            let ext = 
-            match(OS.current){
-                case Windows => 
+            let ext = match (OS.current) {
+                case Windows =>
                     pathRegex = #'([C-Z]:|\.\.?)(\\(.+))+'#
                     '.dll'
                 case macOS => '.dylib'
                 case _ => '.so'
             }
-            if(!Regex(#'\.{0, 2}/(.+/)*(.+)?'#).matches(path)){
-                throw BootException('fboot error: The path is not a directory, current arg is ${path}')
+            if (!Regex(pathRegex).matches(path)) {
+                throw BootException('fboot error: The path is not a legal directory, current arg is ${path}')
             }
-            load(Path(path), Regex('^lib.*${pattern}.*\\${ext}$'), ext)
-            //todo 增加项目启动初始化代码，按照Config决定需要是否需要初始化mvc，完成mvc模块后才能添加
+            func load(path: Path, pattern: Regex, ext: String) {
+                Directory.walk(dir) {
+                    fi =>
+                    if (fi.isDirectory()) {
+                        load(fi.path, pattern, ext)
+                    } else if (pattern.matches(fi.path.fileNameWithoutExtension)) {
+                        ModuleInfo.load(fi.path.toString().replace(ext, ''))
+                    }
+                    true
+                }
+            }
+            load(Path(path), Regex('^lib.*${pattern}.*$'), ext)
+            BeanFactory.instance.afterRegistered()
+            //todo 增加项目启动初始化代码，按照Config决定需要是否需要初始化mvc，完成mvc模块后才能添加mvc初始化代码
             //应当在mvc模块提供一个函数，函数内确认是否需要初始化mvc，如果需要就完成mvc初始化
             //此处只需要调用这个函数
+
+            //orm 需要应用开发者显式注册数据库驱动及初始化事务切面，执行load函数时一定会加载初始化orm的动态链接库从而完成初始化
+            //ticktock是自初始化，首次使用时完成初始化
+            //其它模块工具API
         case _ => throw BootException('first command arg must be run, but current args are ${args}')
     }
 }

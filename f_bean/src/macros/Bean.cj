@@ -48,10 +48,10 @@ public macro Bean(input: Tokens): Tokens {
                     var destroy = {o: Object =>}
                     var i = 0i8
                     for((n, f) in $funcTokens){
-                        if(withAnnotation<$identifier, PostConstruct>(n)) {
+                        if(TypeInfos.withAnnotation<$identifier, PostConstruct>(n)) {
                             postConstruct = f
                             i++
-                        }else if (withAnnotation<$identifier, Destroy>(n)) {
+                        }else if (TypeInfos.withAnnotation<$identifier, Destroy>(n)) {
                             destroy = f
                             i++
                         }

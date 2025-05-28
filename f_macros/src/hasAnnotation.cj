@@ -12,12 +12,13 @@ package f_macros
 import f_base
 public func withAnnotation<T>(decl: Decl): Bool where T <: Annotation {
     match(decl){
-        case d: MacroExpandDecl => f_base.TypeInfos.get<T>().qualifiedName.endsWith('.${d.fullIdentifier.value}')
+        case d: MacroExpandDecl => 
+            for(a in f_base.TypeInfos.get<T>().annotations where TypeInfo.of(a).name == d.fullIdentifier.value){
+                return true
+            }
+            false
         case _ => false
     }
-}
-public func withAnnotation<T, A>(funcName: String, argTypes: Array<TypeInfo>): Bool where A <: Annotation {
-    f_base.TypeInfos.get<T>().getInstanceFunction(funcName, argTypes).findAnnotation<A>().isSome()
 }
 public func withMacro(decl: Decl, macroName: String): Bool {
     match(decl){

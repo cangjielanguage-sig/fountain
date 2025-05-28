@@ -62,4 +62,7 @@ public class TypeInfos {
     public func isInstanceOf<T>(instance: Any): Bool {
         TypeInfo.of(instance).isSubtypeOf(get<T>())
     }
+    public func withAnnotation<T, A>(funcName: String, argTypes: Array<TypeInfo>): Bool where A <: Annotation {
+        (TypeMemberInfos.instanceFunction(get<T>(), funcName, argTypes)?.findAnnotation<A>() ?? None).isSome()
+    }
 }
