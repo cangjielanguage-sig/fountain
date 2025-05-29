@@ -17,11 +17,10 @@ public abstract class DataType {
     protected func getValue<T>(result: QueryResult): Any {
         let any: Any = 
         if(nullable){
-            (result as QueryResultWrap)?.getOrNull<T>(columnName) ?? None
+            ((result as QueryResultWrap)?.getOrNull<T>(columnName)) ?? None<T>
         }else{
-            (result as QueryResultWrap)?.get<T>(columnName).getOrThrow()
+            ((result as QueryResultWrap)?.get<T>(columnName)).getOrThrow()
         }
-        value = any
         any
     }
     public func get(result: QueryResult): Any

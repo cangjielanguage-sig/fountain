@@ -18,14 +18,10 @@ public func printStackTrace(exception: Exception, output: OutputStream): Unit {
 }
 private func printStackTrace(output: OutputStream, callee: (ByteBuffer) -> Unit) {
     if(let buffer: ByteBuffer <- output){
-        let writer = StringWriter(buffer)
-        callee(writer)
-        writer.flush()
+        callee(buffer)
     }else{
         let buffer = ByteBuffer()
-        let writer = StringWriter(buffer)
-        callee(writer)
-        writer.flush()
+        callee(buffer)
         output.write(buffer.bytes())
         output.flush()
     }
@@ -71,16 +67,18 @@ public open class BaseException <: Exception {
             suppressed_
         }
     }
-
+    private func rawStringBytes(s: String){
+        unsafe{s.rawData()}
+    }
     public func printStackTrace(output: OutputStream): Unit {
         printStackTrace(output){w => 
             printStackTrace(this, w)
             if (let Some(c) <- caused) {
-                w.write("Caused by: ")
+                w.write(rawStringBytes("Caused by: "))
                 printStackTrace(c, w)
             }
             if (!suppressed.isEmpty()) {
-                w.write("Suppressed: ")
+                w.write(rawStringBytes("Suppressed: "))
                 for (s in suppressed) {
                     printStackTrace(s, w)
                 }

@@ -9,7 +9,9 @@
 */
 package f_macros
 
+import std.reflect.TypeInfo
 import f_base
+
 public func withAnnotation<T>(decl: Decl): Bool where T <: Annotation {
     match(decl){
         case d: MacroExpandDecl => 
