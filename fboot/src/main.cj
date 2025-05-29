@@ -19,12 +19,16 @@ main(args: Array<String>): Unit {
     match (args[0]) {
         case 'run' =>
             var pattern = ''
-            var idx = 1
+            var idx = -1
             for (i in 1..args.size where !args[i].startsWith("--dylibPattern=")) {
                 idx = i
                 break
             }
-            pattern = args[idx]['--dylibPattern='.size..]
+            pattern = if(idx > 0){
+                args[idx]['--dylibPattern='.size..]
+            }else{
+                ''
+            }
             let path = canonicalize(if (idx > 1) {
                 args[1]
             } else {

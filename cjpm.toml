@@ -48,4 +48,7 @@
     path-option = ["${CANGJIE_STDX_PATH}/dynamic/stdx"]
 
 [profile.build]
-  incremental = true
+  lto = "full"  # 是否开启 LTO （Link Time Optimization 链接时优化）优化编译模式，仅 `Linux` 平台支持该功能。
+  incremental = true # 是否默认开启增量编译
+[profile.build.combined]
+  fountain = "dynamic" # 将模块整体编译成一个动态库文件，key 值为模块名
