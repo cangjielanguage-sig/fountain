@@ -10,22 +10,10 @@
 package f_orm.wrap
 
 public abstract class DataType {
-    private let _index = AtomicInt64(-1)
     public DataType(
         private let nullable: Bool,
         public let columnName: String
     ){}
-    private mut prop index: Int64 {
-        get(){
-            _index.load()
-        }
-        set(value){
-            _index.store(value)
-        }
-    }
-    protected func swapIfNeed(index: Int64): Unit {
-        _index.compareAndSwap(-1,  index)
-    }
     protected func getValue<T>(result: QueryResult): Any {
         let any: Any = 
         if(nullable){
