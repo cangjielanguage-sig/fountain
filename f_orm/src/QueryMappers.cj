@@ -45,9 +45,6 @@ public class QueryMappers<O> {
             }
         }, creator: creator)
     }
-    private func convert(result: QueryResult): QueryResultWrap {
-        (result as QueryResultWrap).getOrThrow()
-    }
     /**
      * 映射单个对象
      */
@@ -57,10 +54,8 @@ public class QueryMappers<O> {
         }
         return None
     }
-    func doMap(result: QueryResult): Option<O> {
-        doMap(convert(result))
-    }
-    func map(result: QueryResult): O {
+
+    func map(result: QueryResultWrap): O {
         let o = creator()
         for (mapper in mappers) {
             mapper.populate(result, o)
@@ -68,26 +63,24 @@ public class QueryMappers<O> {
         o
     }
     //映射全部结果集
-    public func list(result: QueryResult): ArrayList<O> {
+    public func list(result: QueryResultWrap): ArrayList<O> {
         let list = ArrayList<O>()
-        let wrap = convert(result)
-        while (wrap.next()) {
-            list.add(map(wrap))
+        while (result.next()) {
+            list.add(map(result))
         }
         list
     }
-    public func groupedList<ID>(result: QueryResult): ArrayList<O> where ID <: Hashable & Equatable<ID> {
+    public func groupedList<ID>(result: QueryResultWrap): ArrayList<O> where ID <: Hashable & Equatable<ID> {
         if (hasGroup) {
             let idMapper = (this.idMapper.getOrThrow() as IdQueryMapper<ID, O>).getOrThrow()
             let map = LinkedHashMap<ID, O>()
-            let wrap = convert(result)
-            while (wrap.next()) {
-                let id = idMapper.id(wrap)
+            while (result.next()) {
+                let id = idMapper.id(result)
                 match (map.get(id, false)) {
                     case Some(o) => for (mapper in mappers where mapper.isGrouped) {
-                        mapper.populate(wrap, o)
+                        mapper.populate(result, o)
                     }
-                    case _ => map[id] = this.map(wrap)
+                    case _ => map[id] = this.map(result)
                 }
             }
             ArrayList<O>(map.values())
@@ -95,10 +88,10 @@ public class QueryMappers<O> {
             list(result)
         }
     }
-    public func iterator(result: QueryResult): QueryResultIterator<O> {
-        QueryResultIterator<O>(convert(result), this)
+    public func iterator(result: QueryResultWrap): QueryResultIterator<O> {
+        QueryResultIterator<O>(result, this)
     }
-    public func one(result: QueryResult): Option<O> {
-        doMap(convert(result))
+    public func one(result: QueryResultWrap): Option<O> {
+        doMap(result)
     }
 }

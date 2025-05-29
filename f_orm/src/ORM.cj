@@ -30,7 +30,7 @@ public import f_orm.exception.*
 public class ORM {
     private static let logger = LoggerFactory.getLogger<ORM>()
     private static var default = String.empty
-    private static let datasources = ConcurrentHashMap<String, Datasource>()
+    private static let datasources = ConcurrentHashMap<String, NamedDatasource>()
     static let hooks = TransactionHooks()
 
     public static func registerTransactionHook<T>(hook: T): Unit where T <: TransactionHook {

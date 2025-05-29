@@ -49,7 +49,7 @@ public open class QueryMapper<O> {
     }
 
     //获取单列的单行的数据
-    public func get<T>(result: QueryResult): ?T {
+    public func get<T>(result: QueryResultWrap): ?T {
         if(result.next()){
             match(dataType.get(result)){
                 case x: T => x
@@ -60,7 +60,7 @@ public open class QueryMapper<O> {
             None
         }
     }
-    public open func populate(result: QueryResult, o: O): O {
+    public open func populate(result: QueryResultWrap, o: O): O {
         putter(o, dataType.get(result))
         o
     }

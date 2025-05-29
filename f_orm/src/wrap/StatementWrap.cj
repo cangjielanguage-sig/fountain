@@ -29,13 +29,13 @@ public class StatementWrap <: Statement {
     public func update(params: Array<SqlDbType>): UpdateResult {
         throw ORMException('current access is deprecated')
     }
-    public func query(params: Array<SqlDbType>): QueryResult {
+    public func query(params: Array<SqlDbType>): QueryResultWrap {
         throw ORMException('current access is deprecated')
     }
     public func update(): UpdateResult {
         statement.update()
     }
-    public func query(): QueryResult {
+    public func query(): QueryResultWrap {
         QueryResultWrap(driverName, statement.query())
     }
     public func isClosed(): Bool {

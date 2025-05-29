@@ -379,11 +379,11 @@ public class SqlExecutor <: Resource & RootDAO {
         }
     }
 
-    private prop query: QueryResult {
+    private prop query: QueryResultWrap {
         get() {
-            execute<QueryResult> {
+            execute<QueryResultWrap> {
                 args.set(statement)
-                statement.query()
+                (statement.query() as QueryResultWrap).getOrThrow()
             }
         }
     }
@@ -393,9 +393,9 @@ public class SqlExecutor <: Resource & RootDAO {
     }
     public func singleFirst<T>(index: Int64): Option<T> {
         execute<Option<T>> {
-            let wrap = (query as QueryResultWrap).getOrThrow()
-            while (wrap.next()) {
-                let value = wrap.get<T>(index)
+            let result = query
+            while (result.next()) {
+                let value = result.get<T>(index)
                 return value
             }
             return None<T>
@@ -403,9 +403,9 @@ public class SqlExecutor <: Resource & RootDAO {
     }
     public func singleFirst<T>(column: String): Option<T> {
         execute<Option<T>> {
-            let wrap = (query as QueryResultWrap).getOrThrow()
-            while (wrap.next()) {
-                let value = wrap.get<T>(column)
+            let result = query
+            while (result.next()) {
+                let value = result.get<T>(column)
                 return value
             }
             return None<T>
@@ -417,9 +417,9 @@ public class SqlExecutor <: Resource & RootDAO {
     public func singleList<T>(index: Int64): ArrayList<T> {
         execute<ArrayList<T>> {
             let list = ArrayList<T>()
-            let wrap = (query as QueryResultWrap).getOrThrow()
-            while (wrap.next()) {
-                let value = wrap.get<T>(index)
+            let result = query
+            while (result.next()) {
+                let value = result.get<T>(index)
                 list.add(value)
             }
             return list
@@ -428,9 +428,9 @@ public class SqlExecutor <: Resource & RootDAO {
     public func singleList<T>(column: String): ArrayList<T> {
         execute<ArrayList<T>> {
             let list = ArrayList<T>()
-            let wrap = (query as QueryResultWrap).getOrThrow()
-            while (wrap.next()) {
-                let value = wrap.get<T>(column)
+            let result = query
+            while (result.next()) {
+                let value = result.get<T>(column)
                 list.add(value)
             }
             return list
@@ -441,18 +441,12 @@ public class SqlExecutor <: Resource & RootDAO {
     }
     public func singleIterator<T>(index: Int64): Iterator<T> {
         execute<Iterator<T>> {
-            match (query as QueryResultWrap) {
-                case Some(x) => SingleColumnIterator<T>(x, index: index)
-                case _ => EmptyIterator<T>.INSTANCE()
-            }
+            SingleColumnIterator<T>(query, index: index)
         }
     }
     public func singleIterator<T>(column: String): Iterator<T> {
         execute<Iterator<T>> {
-            match (query as QueryResultWrap) {
-                case Some(x) => SingleColumnIterator<T>(x, column: column)
-                case _ => EmptyIterator<T>.INSTANCE()
-            }
+            SingleColumnIterator<T>(query, column: column)
         }
     }
     public func first<T>(mappers: QueryMappers<T>): Option<T> {
@@ -469,9 +463,9 @@ public class SqlExecutor <: Resource & RootDAO {
     }
     public func firstToMap(): Map<String, Any> {
         execute<Map<String, Any>> {
-            let wrap = (query as QueryResultWrap).getOrThrow()
-            if (wrap.next()) {
-                wrap.toMap()
+            let result = query
+            if (result.next()) {
+                result.toMap()
             }else{
                 EmptyMap<String, Any>.INSTANCE()
             }
@@ -491,15 +485,12 @@ public class SqlExecutor <: Resource & RootDAO {
     }
     public func mapList(): ArrayList<HashMap<String, Any>> {
         execute<ArrayList<HashMap<String, Any>>> {
-            match (query) {
-                case x: QueryResultWrap =>
-                    let list = ArrayList<HashMap<String, Any>>()
-                    while (x.next()) {
-                        list.add(x.toMap())
-                    }
-                    list
-                case _ => ArrayList<HashMap<String, Any>>()
+            let result = query
+            let list = ArrayList<HashMap<String, Any>>()
+            while (result.next()) {
+                list.add(result.toMap())
             }
+            list
         }
     }
     public func iterator<T>(mappers: QueryMappers<T>): QueryResultIterator<T> {

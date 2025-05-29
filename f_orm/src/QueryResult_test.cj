@@ -11,7 +11,7 @@ package f_orm
 
 import std.random.Random
 
-public class QueryResultTest <: QueryResult {
+public class QueryResultTest <: QueryResultWrap {
     public func isClosed(): Bool {
         false
     }

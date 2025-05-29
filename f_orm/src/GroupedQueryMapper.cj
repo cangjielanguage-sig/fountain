@@ -29,7 +29,7 @@ public class GroupedQueryMapper<T, O> <: QueryMapper<O> {
             true
         }
     }
-    public func populate(result: QueryResult, o: O): O {
+    public func populate(result: QueryResultWrap, o: O): O {
         let grouped = this.grouped.map(result)
         groupedGetter(o).add(grouped)
         o
@@ -53,10 +53,9 @@ public class GroupedSingleQueryMapper<T, O> <: QueryMapper<O> {
             true
         }
     }
-    public func populate(result: QueryResult, o: O): O {
-        let wrap = (result as QueryResultWrap).getOrThrow()
+    public func populate(result: QueryResultWrap, o: O): O {
         let list = groupedGetter(o)
-        list.add(convert<T>(wrap.getOrNull<T>(name)))
+        list.add(convert<T>(result.getOrNull<T>(name)))
         o
     }
 }
@@ -80,7 +79,7 @@ public class NullableGroupedQueryMapper<T, O> <: QueryMapper<O> {
             true
         }
     }
-    public func populate(result: QueryResult, o: O): O {
+    public func populate(result: QueryResultWrap, o: O): O {
         let list = groupedGetter(o)
         let prevSize = list.size
         let mappers = grouped.mappers

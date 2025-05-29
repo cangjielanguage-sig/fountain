@@ -84,8 +84,7 @@ public class DatabasePool <: Resource & Datasource {
             creator: creator,
             checker: {
                 c => if (checkSql[0..6].toLower().startsWith("select")) {
-                    let val = SqlInteger(0)
-                    c.prepareStatement(checkSql).query([]).next([val])
+                    c.prepareStatement(checkSql).query([]).next()
                 } else {
                     c.prepareStatement(checkSql).update([]).rowCount > 0
                 }

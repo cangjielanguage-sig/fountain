@@ -22,7 +22,7 @@ public class NestQueryMapper<T, O> <: QueryMapper<O> where O <: QueryMappersInit
             nestPutter: {sub, nest => nestPutter((sub as O).getOrThrow(), nest)}
         )
     }
-    public func populate(result: QueryResult, o: O): O {
+    public func populate(result: QueryResultWrap, o: O): O {
         let n = nested.map(result)
         nestPutter(o, n)
         o
@@ -43,7 +43,7 @@ public class NullableNestQueryMapper<T, O> <: QueryMapper<O> {
             nestPutter: {sub, nest => nestPutter((sub as O).getOrThrow(), nest)}
         )
     }
-    public func populate(result: QueryResult, o: O): O {
+    public func populate(result: QueryResultWrap, o: O): O {
         let n = nested.map(result)
         nestPutter(o, n)
         o
