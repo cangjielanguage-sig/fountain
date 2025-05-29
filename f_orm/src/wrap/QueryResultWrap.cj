@@ -17,7 +17,7 @@ public class QueryResultWrap <: QueryResult {
     private let columnInfoMap = HashMap<String, Int64>()
     private let list = ArrayList<Any>()
     public QueryResultWrap(private let driverName: String, private let result: QueryResult) {
-        for(i in 0 .. columnInfos.size){
+        for (i in 0..columnInfos.size) {
             columnInfoMap[columnInfos[i].name] = i
         }
     }
@@ -34,14 +34,14 @@ public class QueryResultWrap <: QueryResult {
         getOrNull<T>(index).getOrThrow()
     }
     public func getOrNull<T>(index: Int64): ?T {
-        if(index >= list.size){
-            for(i in list.size ..= index){
+        if (index >= list.size) {
+            for (i in list.size..=index) {
                 list.add(result.getOrNull<T>(i))
             }
         }
         (list[index] as ?T).getOrThrow()
     }
-    public func get<T>(columnName: String): T{
+    public func get<T>(columnName: String): T {
         get<T>(columnInfoMap[columnName])
     }
     public func getOrNull<T>(columnName: String): ?T {
@@ -52,7 +52,7 @@ public class QueryResultWrap <: QueryResult {
     }
     public func toMap(): HashMap<String, Any> {
         let map = HashMap<String, Any>()
-        for((column, index) in columnInfoMap){
+        for ((column, index) in columnInfoMap) {
             map[column] = get(index)
         }
         map
