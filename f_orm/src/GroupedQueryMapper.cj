@@ -84,17 +84,11 @@ public class NullableGroupedQueryMapper<T, O> <: QueryMapper<O> {
         let list = groupedGetter(o)
         let prevSize = list.size
         let mappers = grouped.mappers
+        let groupedValue = grouped.creator()
+        list.add(groupedValue)
         for (mapper in mappers) {
-            if (let Some(value) <- mapper.get<T>(result)) {
-                let groupedValue = if (prevSize == list.size) {
-                    let groupedValue = grouped.creator()
-                    list.add(groupedValue)
-                    groupedValue
-                } else {
-                    list[prevSize].getOrThrow()
-                }
-                mapper.putter(groupedValue, value)
-            }
+            let value = mapper.dataType.get(result)
+            mapper.putter(groupedValue, value)
         }
         if (!ignoreNone && prevSize == list.size) {
             list.add(Option<T>.None)

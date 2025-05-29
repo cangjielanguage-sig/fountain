@@ -51,7 +51,11 @@ public open class QueryMapper<O> {
     //获取单列的单行的数据
     public func get<T>(result: QueryResult): ?T {
         if(result.next()){
-            dataType.get(result) as T
+            match(dataType.get(result)){
+                case x: T => x
+                case x: ?T => x
+                case _ => throw TypeCastException("${dataType.columnName}")
+            }
         }else{
             None
         }

@@ -23,19 +23,15 @@ public abstract class DataType {
             _index.store(value)
         }
     }
-    public func swapIfNeed(index: Int64): Unit {
+    protected func swapIfNeed(index: Int64): Unit {
         _index.compareAndSwap(-1,  index)
     }
-    private var value = None<Any>
     protected func getValue<T>(result: QueryResult): Any {
-        if(let Some(any) <- value){
-            return any
-        }
         let any: Any = 
         if(nullable){
-            result.getOrNull<T>(index)
+            (result as QueryResultWrap)?.getOrNull<T>(columnName) ?? None
         }else{
-            result.get<T>(index)
+            (result as QueryResultWrap)?.get<T>(columnName).getOrThrow()
         }
         value = any
         any

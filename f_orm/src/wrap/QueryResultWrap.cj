@@ -15,6 +15,7 @@ import f_base.*
 
 public class QueryResultWrap <: QueryResult {
     private let columnInfoMap = HashMap<String, Int64>()
+    private let list = ArrayList<Any>()
     public QueryResultWrap(private let driverName: String, private let result: QueryResult) {
         for(i in 0 .. columnInfos.size){
             columnInfoMap[columnInfos[i].name] = i
@@ -30,10 +31,15 @@ public class QueryResultWrap <: QueryResult {
         }
     }
     public func get<T>(index: Int64): T {
-        result.get<T>(index)
+        getOrNull<T>(index).getOrThrow()
     }
     public func getOrNull<T>(index: Int64): ?T {
-        result.getOrNull<T>(index)
+        if(index >= list.size){
+            for(i in list.size ..= index){
+                list.add(result.getOrNull<T>(i))
+            }
+        }
+        (list[index] as ?T).getOrThrow()
     }
     public func get<T>(columnName: String): T{
         get<T>(columnInfoMap[columnName])
