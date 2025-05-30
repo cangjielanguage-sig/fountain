@@ -16,7 +16,7 @@ public class LoggerAppenderCreator {
     private static let creators = ConcurrentHashMap<String, (String) -> Array<AbstractLogger>>()
 
     public static func register(kind: String, creator: (String) -> Array<AbstractLogger>) {
-        creators.put(kind, creator)
+        creators.add(kind, creator)
     }
     public static func create(name: String): LoggerAppenderFacade {
         let loggers = ArrayList<AbstractLogger>()

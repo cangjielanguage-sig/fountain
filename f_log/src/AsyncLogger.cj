@@ -18,6 +18,7 @@ import std.time.DateTime
 import stdx.log.{LogLevel, LogRecord}
 
 import f_log.exception.LogException
+import f_log.output.DummyOutputStream
 
 public abstract class AsyncLogger <: AbstractLogger {
     private static let queueMap = ConcurrentHashMap<String, ArrayBlockingQueue<() -> Unit>>()

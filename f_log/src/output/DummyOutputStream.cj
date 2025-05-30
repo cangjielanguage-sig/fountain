@@ -13,7 +13,7 @@ protected class DummyOutputStream <: OutputStream & Resource {
     protected static const instance = DummyOutputStream()
     private const init(){}
 
-    public func isClosed(): Unit {
+    public func isClosed(): Bool {
         false
     }
     public func close(): Unit {}
