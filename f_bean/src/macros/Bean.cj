@@ -41,7 +41,7 @@ func expandBean(input: Tokens): Tokens {
                     funcTokens += `comma`
                 }
                 let fn = f.identifier
-                funcTokens += quote(($(fn.value), {o: Object => (o as $identifier)?.$fn()}))
+                funcTokens += quote(($(fn.value), {o: Object => let _ = (o as $identifier)?.$fn()}))
             }
             funcTokens += `rsquare`
             let tokens = 
