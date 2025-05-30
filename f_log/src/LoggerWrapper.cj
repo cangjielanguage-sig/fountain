@@ -21,7 +21,7 @@ public class LoggerWrapper <: AbstractLogger {
     private var facade: AtomicReference<LoggerAppenderFacade>
 
     public LoggerWrapper(name: String) {
-        super(name, LogLevel.ALL, LogPattern.default, DummyOutputStream.instance)
+        super(name, LogLevel.ALL, LogPattern.default, DummyOutputStream.THROW_ON_ACCESSING)
         this.facade = AtomicReference<LoggerAppenderFacade>(LoggerConfig.createFacade(name))
         env.atExit {this.facade.load().close()}
     }

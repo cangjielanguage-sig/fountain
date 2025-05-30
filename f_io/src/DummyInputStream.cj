@@ -9,26 +9,21 @@
 */
 package f_io
 
-public class DummyOutputStream <: OutputStream & Resource {
-    public static const THROW_ON_ACCESSING = DummyOutputStream(true)
-    public static const SILENCE = DummyOutputStream(false)
-    private const DummyOutputStream(private let throwing: Bool){}
+public class DummyInputStream <: InputStream & Resource {
+    public static const THROW_ON_ACCESSING = DummyInputStream(true)
+    public static const SILENCE = DummyInputStream(false)
+    private const DummyInputStream(private let throwing: Bool){}
 
     public func isClosed(): Bool {
         false
     }
     public func close(): Unit {}
 
-    private func throwIfNeed(){
+    public func read(buffer: Array<Byte>): Int64 {
         if(throwing){
-            throw Exception("DummyOutputStream is not writable")        
+            throw Exception("DummyInputStream is not readable")
+        }else{
+            0
         }
-    }
-    public func flush(): Unit {
-        throwIfNeed()
-    }
-
-    public func write(buffer: Array<Byte>): Unit {
-        throwIfNeed()
     }
 }
