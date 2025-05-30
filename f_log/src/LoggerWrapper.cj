@@ -15,11 +15,13 @@ import std.process.Process
 import std.time.DateTime
 import stdx.log.LogLevel
 
+import f_log.output.DummyOutputStream
+
 public class LoggerWrapper <: AbstractLogger {
     private var facade: AtomicReference<LoggerAppenderFacade>
 
     public LoggerWrapper(name: String) {
-        super(name, LogLevel.ALL, LogPattern.default, env.getStdOut())
+        super(name, LogLevel.ALL, LogPattern.default, DummyOutputStream.instance)
         this.facade = AtomicReference<LoggerAppenderFacade>(LoggerConfig.createFacade(name))
         env.atExit {this.facade.load().close()}
     }

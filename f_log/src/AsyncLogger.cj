@@ -33,7 +33,7 @@ public abstract class AsyncLogger <: AbstractLogger {
         output: OutputStream,
         queueTag: String
     ) {
-        super(name, level, pattern, ByteBuffer())
+        super(name, level, pattern, confirmDummy(output))
         this.output_ = output
         timeout = LoggerConfig.getAsyncTimeout()
         policy = LoggerConfig.getAsyncTimeoutPolicy()
@@ -48,6 +48,12 @@ public abstract class AsyncLogger <: AbstractLogger {
                 dequeue(queue)
                 queue
             }
+        }
+    }
+    private static func confirmDummy(output: OutputStream): OutputStream {
+        match(output){
+            case _: DummyOutputStream => output
+            case _ => ByteBuffer()
         }
     }
     private static func dequeue(queue: ArrayBlockingQueue<() -> Unit>): Unit {

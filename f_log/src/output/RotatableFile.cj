@@ -20,8 +20,8 @@ import std.sync.{Timer, Mutex, AtomicReference, AtomicUInt64}
 import std.time.DateTime
 import stdx.compress.zlib.{WrapType, CompressLevel, CompressOutputStream}
 import f_base.*
-import f_log.exception.LogException
 import f_time.{TimeUnit, ExtendDateTime}
+internal import f_log.exception.LogException
 
 public class RotatableFileParams{
     public var path = "${env.getWorkingDirectory()}/logs/${env.getCommand()}.log"

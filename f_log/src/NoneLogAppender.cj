@@ -9,15 +9,16 @@
  */
 package f_log
 
-import std.env
 import std.process.Process
 import std.time.DateTime
 import stdx.log.LogLevel
 
+import f_log.output.DummyOutputStream
+
 public class NoneLogAppender <: AbstractLogger {
     public static let instance = NoneLogAppender()
     private init() {
-        super("", LogLevel.OFF, LogPattern.default, env.getStdOut())
+        super("", LogLevel.OFF, LogPattern.default, DummyOutputStream.instance)
     }
 
     public static func register(): Unit {
