@@ -78,8 +78,10 @@ public class BeanFactory {
     }
     public func afterRegistered() {
         this.registered.store(true)
-        check()
-        initBeansIfNeed()
+        if(!beans.isEmpty()){
+            check()
+            initBeansIfNeed()
+        }
     }
     private func check() {
         synchronized(mutex) {
