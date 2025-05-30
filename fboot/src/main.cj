@@ -9,15 +9,17 @@
  */
 package fboot
 
+import std.env.getWorkingDirectory
 import std.fs.Path
 import std.reflect.ModuleInfo
 import std.regex.Regex
-import std.env.getWorkingDirectory
+import std.time.DateTime
 import fountain.bean.BeanFactory
 
 main(args: Array<String>): Unit {
     match (args[0]) {
         case 'run' =>
+            let start = DateTime.now()
             var pattern = ''
             var idx = -1
             for (i in 1..args.size where !args[i].startsWith("--dylibPattern=")) {
@@ -64,7 +66,9 @@ main(args: Array<String>): Unit {
 
             //orm 需要应用开发者显式注册数据库驱动及初始化事务切面，执行load函数时一定会加载初始化orm的动态链接库从而完成初始化
             //ticktock是自初始化，首次使用时完成初始化
-            //其它模块工具API
+            //其它模块是工具API没有专门的初始化API
+            let end = DateTime.now()
+            println('fboot is started in ${end - start}, now is ${end}')
         case _ => throw BootException('first command arg must be run, but current args are ${args}')
     }
 }
