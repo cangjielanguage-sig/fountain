@@ -13,6 +13,10 @@ macro package f_bean.macros
  * 只能修饰类。将@Bean修饰的类注册到BeanFactory
  */
 public macro Bean(input: Tokens): Tokens {
+    expandBean(input)
+}
+
+func expandBean(input: Tokens): Tokens {
     let decl = parseDecl(input)
     let identifier = decl.identifier
     match (decl) {
@@ -69,6 +73,8 @@ public macro Bean(input: Tokens): Tokens {
             assertParentContext('Configuration')
             populateConstructor(decl, acceptCtor: false)
             input
+        case x: MacroExpandDecl => 
+            expandBean(x.macroInputs)
         case _ => 
             report(input, 'macro @Bean can modify a class decl or a func decl when it is inside @Configuration')
             throw BeanException()
