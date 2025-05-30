@@ -9,7 +9,7 @@
 */
 package f_io
 
-import std.io.{InputStream, OutputStream}
+internal import std.io.{InputStream, OutputStream}
 
 public func pipe<I, O>(input!: I, output!: O, bufferSize!: Int64 = 4096): Unit where I <: InputStream, O <: OutputStream {
     let buf = Array<Byte>(bufferSize, repeat: 0)

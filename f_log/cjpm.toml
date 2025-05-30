@@ -4,6 +4,7 @@
   f_collection = {path = "../f_collection"}
   f_data = {path = "../f_data"}
   f_exception = {path = "../f_exception"}
+  f_io = {path = "../f_io"}
   f_time = {path = "../f_time"}
   f_util = {path = "../f_util"}
 [package]

@@ -7,10 +7,10 @@
     THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
     See the Mulan PSL v2 for more details.  
 */
-package f_log.output
+package f_io
 
-protected class DummyOutputStream <: OutputStream & Resource {
-    protected static const instance = DummyOutputStream()
+public class DummyOutputStream <: OutputStream & Resource {
+    public static const instance = DummyOutputStream()
     private const init(){}
 
     public func isClosed(): Bool {
@@ -19,10 +19,10 @@ protected class DummyOutputStream <: OutputStream & Resource {
     public func close(): Unit {}
 
     public func flush(): Unit {
-        throw LogException("DummyOutputStream is not writable")
+        throw Exception("DummyOutputStream is not writable")
     }
 
     public func write(buffer: Array<Byte>): Unit {
-        throw LogException("DummyOutputStream is not writable")
+        throw Exception("DummyOutputStream is not writable")
     }
 }

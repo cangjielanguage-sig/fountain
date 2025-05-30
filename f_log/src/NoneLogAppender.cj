@@ -13,7 +13,7 @@ import std.process.Process
 import std.time.DateTime
 import stdx.log.LogLevel
 
-import f_log.output.DummyOutputStream
+import f_io.DummyOutputStream
 
 public class NoneLogAppender <: AbstractLogger {
     public static let instance = NoneLogAppender()
