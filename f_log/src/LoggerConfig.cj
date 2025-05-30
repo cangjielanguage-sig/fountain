@@ -23,9 +23,7 @@ import f_util.computeBytes
  *
  */
 public class LoggerConfig {
-    //日志配置文件路径配置项是logger.conf.path，
-    //从启动参数--logger.conf.path -Dlogger.conf.path 和环境变量LOGGER_CONF_PATH之一读取，读取优先级就是前述顺序
-    //所有的appender配置项都是logger.conf.appender.${appenderName}.${confItem}
+    //所有的appender配置项都是fountain_logger_appender_${appenderName}_${confItem}
     //confItem 可以是level pattern 等，还可以有Appender特有配置项
     private static const confPrefix = "logger"
     public static const appender = "appender"

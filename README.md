@@ -23,8 +23,8 @@ _/ ____\____  __ __  _____/  |______  |__| ____
 
 待功能完备后将按以下流程跟随仓颉版本，功能完备以前一直跟随最新的开发版。
 
-- 每月仓颉开发版对应一个`dev/${DEV_CANGJIE_VERSION}`
-- 每次发仓颉beta版，将对应的开发版转为`beta/${BETA_CANGJIE_VERSION}`，删除对应的开发版
+- 每月仓颉开发版对应一个`canary/${DEV_CANGJIE_VERSION}`
+- 每次发仓颉sts版，将对应的开发版转为`sts/${BETA_CANGJIE_VERSION}`，删除对应的开发版
 - 功能完备后的长期支持版作为master分支
   - 此后master分支跟随最新的长期支持版
   - 每次仓颉升级LTS
