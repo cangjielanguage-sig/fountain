@@ -32,21 +32,11 @@ main(args: Array<String>): Unit {
                 ''
             }
             let path = canonicalize(if (idx > 1) {
-                args[1]
+                Path(args[1])
             } else {
                 getWorkingDirectory()
             })
-            var pathRegex = #'\.{0, 2}/(.+/)*(.+)?'#
-            let ext = match (OS.current) {
-                case Windows =>
-                    pathRegex = #'([C-Z]:|\.\.?)(\\(.+))+'#
-                    '.dll'
-                case macOS => '.dylib'
-                case _ => '.so'
-            }
-            if (!Regex(pathRegex).matches(path)) {
-                throw BootException('fboot error: The path is not a legal directory, current arg is ${path}')
-            }
+            
             func load(path: Path, pattern: Regex, ext: String) {
                 Directory.walk(dir) {
                     fi =>
@@ -68,7 +58,7 @@ main(args: Array<String>): Unit {
             //ticktock是自初始化，首次使用时完成初始化
             //其它模块是工具API没有专门的初始化API
             let end = DateTime.now()
-            println('fboot is started in ${end - start}, now is ${end}')
+            println('${path.fileName} is started in ${end - start}, now is ${end}')
         case _ => throw BootException('first command arg must be run, but current args are ${args}')
     }
 }
