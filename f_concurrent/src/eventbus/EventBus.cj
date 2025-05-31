@@ -10,7 +10,7 @@
 package f_concurrent.eventbus
 
 import std.collection.{TreeMap, ArrayList}
-import std.collection.concurrent.{BlockingQueue, ConcurrentHashMap}
+import std.collection.concurrent.{LinkedBlockingQueue, ConcurrentHashMap}
 import std.runtime.ProcessorInfo
 import std.sync.{Mutex, AtomicBool}
 import std.time.DateTime
@@ -32,7 +32,7 @@ public class EventBus {
     
     private var maxQueueSize = (-1, -1) // (maxQueueSize, longestQueueIndex)
     private let queueMutex = Mutex()
-    private let seizeQueue: BlockingQueue<Int64>
+    private let seizeQueue: LinkedBlockingQueue<Int64>
     private let toThrowIfNotMatch: Bool
     private var doArrange: (Int64, Event) -> Bool = {_, _ => false}
     /**
@@ -48,7 +48,7 @@ public class EventBus {
         abilities!: Array<(Event, (Event) -> Event)> = []
     ) {
         this.toThrowIfNotMatch = toThrowIfNotMatch
-        seizeQueue = BlockingQueue<Int64>(workers)
+        seizeQueue = LinkedBlockingQueue<Int64>(workers)
         this.workers = Array<Worker>(workers) {
             i => Worker(this, i, maxWaitingJobPerWorker, abilities: abilities)
         }

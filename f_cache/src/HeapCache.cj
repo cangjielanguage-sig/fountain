@@ -10,7 +10,7 @@
 package f_cache
 
 import std.collection.{HashMap, HashSet, Set}
-import std.collection.concurrent.BlockingQueue
+import std.collection.concurrent.LinkedBlockingQueue
 import std.math.MathExtension
 import std.env.atExit
 import std.process.Process
@@ -45,8 +45,8 @@ public class HeapCache<V> where V <: Object {
     public static func builder(): HeapCacheBuilder<V> {
         return HeapCacheBuilder<V>()
     }
-    private func onEviction(): BlockingQueue<(String, V)> {
-        let q = BlockingQueue<(String, V)>()
+    private func onEviction(): LinkedBlockingQueue<(String, V)> {
+        let q = LinkedBlockingQueue<(String, V)>()
         spawn {
             while (let (k, v) <- q.dequeue()) {
                 evictionCallback(k, v)
@@ -69,7 +69,7 @@ public class HeapCache<V> where V <: Object {
             }
         }
     }
-    private func checkTimeout(evictionQueue: BlockingQueue<(String, V)>): Unit {
+    private func checkTimeout(evictionQueue: LinkedBlockingQueue<(String, V)>): Unit {
         removeIf{k, p =>
             if(alive.load()){
                 if(evicated(p)){
@@ -87,7 +87,7 @@ public class HeapCache<V> where V <: Object {
         topVals: PriorityQueue<Priority<V>>,
         tops: HashMap<String, Priority<V>>,
         iterator: ConcHashMapIterator<Priority<V>>,
-        evictionQueue: BlockingQueue<(String, V)>
+        evictionQueue: LinkedBlockingQueue<(String, V)>
     ): Unit {
         let store = this.store
         let maxSize = this.maxSize

@@ -10,10 +10,11 @@
 package fboot
 
 import std.env.getWorkingDirectory
-import std.fs.Path
+import std.fs.*
 import std.reflect.ModuleInfo
 import std.regex.Regex
 import std.time.DateTime
+import fountain.base.OS
 import fountain.bean.BeanFactory
 
 main(args: Array<String>): Unit {
@@ -26,9 +27,9 @@ main(args: Array<String>): Unit {
                 idx = i
                 break
             }
-            pattern = if(idx > 0){
+            pattern = if (idx > 0) {
                 args[idx]['--dylibPattern='.size..]
-            }else{
+            } else {
                 ''
             }
             let path = canonicalize(if (idx > 1) {
@@ -36,19 +37,23 @@ main(args: Array<String>): Unit {
             } else {
                 getWorkingDirectory()
             })
-            
-            func load(path: Path, pattern: Regex, ext: String) {
-                Directory.walk(dir) {
+            let ext = match (OS.current) {
+                case Windows => ".dll"
+                case macOS => ".dylib"
+                case _ => ".so"
+            }
+            func load(path: Path, pattern: Regex): Unit {
+                Directory.walk(path) {
                     fi =>
                     if (fi.isDirectory()) {
-                        load(fi.path, pattern, ext)
+                        load(fi.path, pattern)
                     } else if (pattern.matches(fi.path.fileNameWithoutExtension)) {
                         ModuleInfo.load(fi.path.toString().replace(ext, ''))
                     }
                     true
                 }
             }
-            load(Path(path), Regex('^lib.*${pattern}.*$'), ext)
+            load(path, Regex('^lib.*(${pattern}.*)?$'))
             BeanFactory.instance.afterRegistered()
             //todo 增加项目启动初始化代码，按照Config决定需要是否需要初始化mvc，完成mvc模块后才能添加mvc初始化代码
             //应当在mvc模块提供一个函数，函数内确认是否需要初始化mvc，如果需要就完成mvc初始化

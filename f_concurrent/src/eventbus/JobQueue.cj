@@ -9,14 +9,14 @@
 */
 package f_concurrent.eventbus
 
-import std.collection.concurrent.{BlockingQueue, ConcurrentHashMap}
+import std.collection.concurrent.{LinkedBlockingQueue, ConcurrentHashMap}
 import f_concurrent.eventbus.exception.EventBusException
 
 /**
  * 工作任务队列
  */
 public class JobQueue {
-    private let queue: BlockingQueue<Event>
+    private let queue: LinkedBlockingQueue<Event>
     /**
      * max 队列最大长度
      * strategy 满队列策略
@@ -24,7 +24,7 @@ public class JobQueue {
     public JobQueue(
         private let max: Int64
     ) {
-        queue = BlockingQueue<Event>(max)
+        queue = LinkedBlockingQueue<Event>(max)
     }
     func enqueue(event: Event) {
         queue.enqueue(event)
