@@ -21,39 +21,41 @@ main(args: Array<String>): Unit {
     match (args[0]) {
         case 'run' =>
             let start = DateTime.now()
-            var pattern = ''
             var idx = -1
             for (i in 1..args.size where !args[i].startsWith("--dylibPattern=")) {
                 idx = i
                 break
             }
-            pattern = if (idx > 0) {
-                args[idx]['--dylibPattern='.size..]
-            } else {
-                ''
+            func extractPattern(){
+                if (idx > 0) {
+                    args[idx]['--dylibPattern='.size..]
+                } else {
+                    ''
+                }
+            }
+            let pattern = Regex('^lib.*(${extractPattern()}.*)?$')
+            let ext = match (OS.current) {
+                case Windows => ".dll"
+                case macOS => ".dylib"
+                case _ => ".so"
             }
             let path = canonicalize(if (idx > 1) {
                 Path(args[1])
             } else {
                 getWorkingDirectory()
             })
-            let ext = match (OS.current) {
-                case Windows => ".dll"
-                case macOS => ".dylib"
-                case _ => ".so"
-            }
-            func load(path: Path, pattern: Regex): Unit {
+            func load(path: Path): Unit {
                 Directory.walk(path) {
                     fi =>
                     if (fi.isDirectory()) {
-                        load(fi.path, pattern)
+                        load(fi.path)
                     } else if (pattern.matches(fi.path.fileNameWithoutExtension)) {
                         ModuleInfo.load(fi.path.toString().replace(ext, ''))
                     }
                     true
                 }
             }
-            load(path, Regex('^lib.*(${pattern}.*)?$'))
+            load(path)
             BeanFactory.instance.afterRegistered()
             //todo 增加项目启动初始化代码，按照Config决定需要是否需要初始化mvc，完成mvc模块后才能添加mvc初始化代码
             //应当在mvc模块提供一个函数，函数内确认是否需要初始化mvc，如果需要就完成mvc初始化
