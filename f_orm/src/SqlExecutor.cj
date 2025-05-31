@@ -649,14 +649,12 @@ public class SqlExecutor <: Resource & RootDAO {
                         this.close()
                     }
                 }
-                throw UnreachableException()
             }
             let v = if (useCache && !clearCache) {
                 let key = SqlCacheKey(sql, args)
                 match (cache.get(key)) {
-                    case Some(v) => (v as T).getOrThrow {
-                        ORMException("type of cached data with key '${key}' does not match")
-                    }
+                    case Some(v: T) => v
+                    case Some(_) => throw ORMException("type of cached data with key '${key}' does not match")
                     case _ =>
                         let v = exec()
                         cache[key] = v

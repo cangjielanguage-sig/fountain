@@ -131,15 +131,12 @@ class AppLogPart <: LogPart {
 }
 
 class TimeLogPart <: LogPart {
-    TimeLogPart(private let format: DateTimeFormat) {}
-    init(format: String) {
-        this(DateTimeFormat.of(format))
-    }
+    TimeLogPart(private let format: String) {}
     init() {
         this('yyyy-MM-dd,HH:mm:ss.SSS')
     }
     public func generate(name: String, level: LogLevel, message: ToString, datetime: DateTime, writer: LogWriter): Unit {
-        writer.writeString(datetime.toString(format))
+        writer.writeString(datetime.format(format))
     }
 }
 
