@@ -5,12 +5,20 @@
     You may obtain a copy of Mulan PSL v2 at:
             http://license.coscl.org.cn/MulanPSL2
     THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-    See the Mulan PSL v2 for more details.  
-*/
-package f_data.json
+    See the Mulan PSL v2 for more details.
+ */
+package f_mvc
 
-public import stdx.encoding.json.*
+abstract sealed class Multipart {
+    public Multipart(public let contentDisposition: ContentDisposition) {}
 
-public import f_data.*
+    public prop name: String {
+        get() {
+            contentDisposition.getName()
+        }
+    }
 
-internal import f_exception.UnreadableException
+    func setName(name: String): Unit {
+        contentDisposition.setName(name)
+    }
+}

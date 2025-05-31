@@ -5,12 +5,22 @@
     You may obtain a copy of Mulan PSL v2 at:
             http://license.coscl.org.cn/MulanPSL2
     THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-    See the Mulan PSL v2 for more details.  
-*/
-package f_data.json
+    See the Mulan PSL v2 for more details.
+ */
+package f_mvc.exception
 
-public import stdx.encoding.json.*
+internal import f_exception.BaseException
 
-public import f_data.*
+public class HttpRequestException <: BaseException {
+    public init() {}
 
-internal import f_exception.UnreadableException
+    public init(message: String) {
+        super(message)
+    }
+    public init(caused: Exception) {
+        super(caused)
+    }
+    public init(message: String, caused: Exception) {
+        super(message, caused)
+    }
+}
