@@ -20,5 +20,7 @@
   target-dir = ""
   version = "1.0.0"
   package-configuration = {}
+
 [profile.build]
+  lto = "full"
   incremental = true

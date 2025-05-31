@@ -27,4 +27,5 @@
   package-configuration = {}
 
 [profile.build]
+  lto = "full"
   incremental = true
