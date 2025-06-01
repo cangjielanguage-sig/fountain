@@ -32,42 +32,36 @@ main(args: Array<String>): Int64 {
     } else {
         getWorkingDirectory()
     })
-    let ext = match (OS.current) {
-        case Windows => ".dll"
-        case macOS => ".dylib"
-        case _ => ".so"
+    let (ext, libPathName, delim) = match (OS.current) {
+        case Windows => (".dll", 'Path', ';')
+        case macOS => (".dylib", 'DYLD_FALLBACK_LIBRARY_PATH', ':')
+        case _ => (".so", 'LD_LIBRARY_PATH', ':')
     }
     match (args[0]) {
         case 'start' =>
             let libSet = HashSet<String>()
             let env = HashMap<String, String>(getVariables())
-            func genLibPath(path: Path, ldlibPath: StringBuilder): Unit {
+            let ldlibPath = StringBuilder(env.get(libPathName) ?? '')
+            func genLibPath(path: Path): Unit {
                 Directory.walk(path) {
                     fi =>
                     if (fi.isDirectory()) {
-                        genLibPath(fi.path, ldlibPath)
-                    } else if (fi.path.fileName.endsWith(ext)) {
-                        let libpath = fi.path.parent.toString().replace(ext, '')
-                        if (!libSet.contains(libpath)) {
-                            libSet.add(libpath)
-                            ldlibPath.append(libpath)
-                            ldlibPath.append(':')
+                        genLibPath(fi.path)
+                    } else if (fi.path.fileName.endsWith(ext) && 
+                               let libpath <- fi.path.parent.toString() &&
+                               !libSet.contains(libpath)) {
+                        libSet.add(libpath)
+                        if(ldlibPath.size > 0) {
+                            ldlibPath.append(delim)
                         }
+                        ldlibPath.append(libpath)
                     }
                     true
                 }
             }
-            func genLibPath(libPath: String): Unit {
-                let ldlibPath = StringBuilder(env.get(libPath) ?? '')
-                genLibPath(path, ldlibPath)
-                env[libPath] = ldlibPath.toString()
-            }
-            genLibPath(if (let Windows <- OS.current) {
-                'Path'
-            } else {
-                'LD_LIBRARY_PATH'
-            })
-            args[1] = 'run'
+            genLibPath(path)
+            env[libPathName] = ldlibPath.toString()
+            args[0] = 'run'
             execute('fboot', args, workingDirectory: path, environment: env)
         case 'run' =>
             func extractPattern() {
