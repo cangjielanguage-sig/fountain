@@ -28,8 +28,7 @@ func generate(input: Tokens): Tokens {
     for(d in decl.body.decls){
         match(d){
             case f: FuncDecl where !isStatic(f) && isPublic(f) =>
-                let argTypes = generateArgTypes(f)
-                let (argExprs, args) = generateArgValues(f)
+                let (argTypes, argExprs, args) = generateArgs(f)
                 tokens += quote(
                     private let _ = {=>
                         let fname = $(f.identifier.value)
@@ -47,21 +46,10 @@ func generate(input: Tokens): Tokens {
     }
     tokens
 }
-func generateArgTypes(decl: FuncDecl): Tokens {
-    var tokens = `lsquare`
-    for(p in decl.funcParams){
-        if(tokens.size > 1){
-            tokens += `comma`
-        }
-        tokens += quote(
-            TypeInfos.get<$(p.paramType)>()
-        )
-    }
-    tokens + `rsquare`
-}
-func generateArgValues(decl: FuncDecl): (Tokens, Tokens) {
+func generateArgs(decl: FuncDecl): (Tokens, Tokens, Tokens) {
+    var argTypes = `empty_tokens`
     var exprs = `empty_tokens`
-    var tokens = `empty_tokens`
+    var args = `empty_tokens`
     for(p in decl.funcParams){
         let pname = p.identifier.value
         let ptype = p.paramType
@@ -92,14 +80,20 @@ func generateArgValues(decl: FuncDecl): (Tokens, Tokens) {
         }catch(_){
             false
         }
-        if(tokens.size > 0){
-            tokens += `comma`
+        if(args.size > 0){
+            args += `comma`
         }
-        tokens += if(named){
+        args += if(named){
             quote($(p.identifier): $(p.identifier))
         }else{
             quote($(p.identifier))
         }
+        if(argTypes.size > 1){
+            argTypes += `comma`
+        }
+        argTypes += quote(
+            TypeInfos.get<$(p.paramType)>()
+        )
     }
-    (exprs, tokens)
+    (argTypes, exprs, args)
 }
