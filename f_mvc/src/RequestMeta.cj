@@ -58,10 +58,19 @@ public class RequestMeta{
         this.headers.check(headers) && 
         this.params.check(request.form, request.url)
     }
-    public func setHandle<T>(fn: (T, HttpContext, HttpRequestPathPatterns) -> Unit): Unit where T <: Object {
+    public func setHandle<T, R>(fn: (T, HttpContext, HttpRequestPathPatterns) -> R): Unit where T <: Object, R <: DataFields<R> {
         let pattern = this.pattern.getOrThrow()
         handle = {ctx =>
-            fn(BeanFactory.instance.getFirst<T>().getOrThrow(), ctx, pattern)
+            let result = fn(BeanFactory.instance.getFirst<T>().getOrThrow(), ctx, pattern)
+            generateResponse<R>(ctx, result)
+        }
+    }
+    private func generateResponse<R>(ctx: HttpContext, result: R): Unit where R <: DataFields<R> {
+        if(!(result is Unit)){
+            let accept = ctx.request.headers.getFirst('Accept') ?? ""
+            let mediaType = MediaTypes.parse(accept)
+            let bytes = mediaType.fromDataFields(result)
+            ctx.responseBuilder.body(bytes)
         }
     }
     public func isMultipart(name: String){
@@ -80,6 +89,20 @@ public class RequestMeta{
         (args[name] as MultipartFormData).getOrThrow()
         .multipart<T>(name, ctx, pattern.getOrThrow())
         .getOrThrow{MVCException('controller func ${name} and request body do not match')}
+    }
+    private func addMediaTypes(set: HashSet<String>, types: Array<String>): Unit {
+        for(t in types where !t.isEmpty()) {
+            set.add(t)
+        }
+    }
+    private func addMediaTypes(set: HashSet<String>, types: String): Unit {
+        addMediaTypes(set, types.split("|"))
+    }
+    private func addProduces(types: String){
+        addMediaTypes(produces, types)
+    }
+    private func addConsumes(types: String){
+        addMediaTypes(consumes, types)
     }
     public static func generate<T>(fnName: String, argTypes: Array<TypeInfo>): ArrayList<RequestMeta> where T <: Object {
         let typeInfo = TypeInfos.get<T>()
@@ -104,8 +127,8 @@ public class RequestMeta{
                         let headers = RequestCondition.compile(a.headers)
                         for(path in a.path.split('|')){
                             let meta = RequestMeta(path, method, params: params, headers: headers)
-                            meta.produces.add(all: a.produces.split('|'))
-                            meta.consumes.add(all: a.consumes.split('|'))
+                            meta.addProduces(a.produces)
+                            meta.addConsumes(a.consumes)
                             meta.ignoreAuth_ = ignoreAuth
                             meta.ignorePrivilege_ = ignorePrivilege
                             meta.args.add(all: args)

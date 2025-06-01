@@ -10,8 +10,8 @@
 package f_mvc
 
 public class MultiRequestMethodHandler <: HttpRequestHandler {
+    static let NOT_ACCEPTABLE = HttpStatusOnlyHandler(HttpStatus.NOT_ACCEPTABLE)
     private static let METHOD_NOT_ALLOWED = HttpStatusOnlyHandler(HttpStatus.METHOD_NOT_ALLOWED)
-    private static let NOT_ACCEPTABLE = HttpStatusOnlyHandler(HttpStatus.NOT_ACCEPTABLE)
     private static let UNSUPPORTED_MEDIA_TYPE = HttpStatusOnlyHandler(HttpStatus.UNSUPPORTED_MEDIA_TYPE)
     private static let NOT_IMPLEMENTED = HttpStatusOnlyHandler(HttpStatus.NOT_IMPLEMENTED)
     private static let authFailureHandler = HttpStatusOnlyHandler(MVCConfig.authFailureStatus, message: MVCConfig.authFailureMessage)

@@ -26,7 +26,6 @@ internal import stdx.encoding.url.*
 internal import stdx.net.http.*
 internal import charset4cj.charset.encoding.Charset
 internal import charset4cj.charset.{Charsets, TextReader, TextWriter}
-internal import f_base.*
 internal import f_bean.BeanFactory
 internal import f_collection.*
 internal import f_config.*
@@ -36,4 +35,6 @@ internal import f_log.LoggerFactory
 internal import f_random.RandomString
 internal import f_regex.*
 internal import f_mvc.exception.*
+
+public import f_base.*
 public import f_util.PathPattern

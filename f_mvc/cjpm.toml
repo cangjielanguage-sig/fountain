@@ -8,6 +8,7 @@
   f_exception = {path = "../f_exception"}
   f_io = {path = "../f_io"}
   f_log = {path = "../f_log"}
+  f_macros = {path = "../f_macros"}
   f_random = {path = "../f_random"}
   f_regex = {path = "../f_regex"}
   f_util = {path = "../f_util"}

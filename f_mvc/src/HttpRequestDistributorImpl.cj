@@ -50,7 +50,7 @@ class HttpRequestDistributorImpl <: HttpRequestPathPatterns {
         }
     }
     
-    func generateAndregister<T>(fnName: String, argTypes: Array<TypeInfo>): ArrayList<RequestMeta> where T <: Object {
+    func generateAndRegister<T>(fnName: String, argTypes: Array<TypeInfo>): ArrayList<RequestMeta> where T <: Object {
         let metas = RequestMeta.generate<T>(fnName, argTypes)
         register(metas)
     }

@@ -54,9 +54,9 @@ public class MVCLauncher {
         server = builder.distributor(HttpRequestDistributorImpl.instance).build()
     }
     private static let initial_ = AtomicBool(false)
-    public static func generateAndregister<T>(fnName: String, argTypes: Array<TypeInfo>) where T <: Object {
+    public static func generateAndRegister<T>(fnName: String, argTypes: Array<TypeInfo>): ArrayList<RequestMeta> where T <: Object {
         if (!initial_.load()) {
-            HttpRequestDistributorImpl.instance.generateAndregister<T>(fnName, argTypes)
+            HttpRequestDistributorImpl.instance.generateAndRegister<T>(fnName, argTypes)
         } else {
             throw Exception("The generateAndregister can only be called before calling MVCLauncher.launch().")
         }

@@ -55,6 +55,9 @@ abstract class RequestCondition {
         }
     }
     static func compile(expr: String): RequestCondition {
+        if(expr.trimAscii().isEmpty()) {
+            return DummyRequestCondition.instance
+        }
         let tokens = cangjieLex(expr)
         let e = parseExpr(tokens)
         compile(e)
