@@ -9,16 +9,31 @@
  */
 package f_mvc
 
-public class MultipartFile<T> <: Multipart & InputStream & Resource where T <: InputStream {
+public class MultipartFile <: Multipart & InputStream & Resource & DataFields<MultipartFile> & Data {
     MultipartFile(
         contentDisposition: ContentDisposition,
-        public let content: T,
+        public let content: InputStream,
         private let charset!: Charset = Charsets.UTF8
     ) {
         super(contentDisposition)
     }
     ~init() {
         doClose(content, toThrow: false)
+    }
+    public func toData(): Data {
+        this
+    }
+    public func toString(): String {
+        throw MVCException('Not Supported')
+    }
+    public static func tryFromData(data: Data, flag: DataConversionFlag): Any {
+        throw MVCException('Not Supported')
+    }
+    public static func parse(string: String): Data {
+        tryParse(string).getOrThrow()
+    }
+    public static func tryParse(string: String): ?Data {
+        throw MVCException('Not Supported')
     }
     public prop empty: Bool {
         get() {

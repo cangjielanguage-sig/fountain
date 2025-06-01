@@ -52,7 +52,7 @@ multipart/form-data multipart/mixed
         --BbC04y--
         --AaB03x--
  */
-class MultipartFormDataParser<T> where T <: InputStream {
+class MultipartFormDataParser {
     private static let uploadDir = MVCConfig.uploadDir
     private static let uploadStoreInMemory = MVCConfig.uploadStoreInMemory
     private let boundary: String
@@ -110,8 +110,8 @@ class MultipartFormDataParser<T> where T <: InputStream {
     static func extractBoundary(contentType: String) {
         contentType["multipart/form-data; boundary=".size..]
     }
-    func parse(): Multiparts<T> {
-        let parts = Multiparts<T>()
+    func parse(): Multiparts {
+        let parts = Multiparts()
         while (indexer.notEnd()) {
             var header = extractHeaderFromBody(indexer)
             let contentDisposition = ContentDisposition.parse(header[1])
@@ -141,8 +141,8 @@ class MultipartFormDataParser<T> where T <: InputStream {
                         indexer.bodyEnd = genBodyEnd(boundary)
                         parts.add(
                             match (parse()) {
-                                case x: Multiparts<ByteBuffer> => MultipartMixed<ByteBuffer>(contentDisposition, x)
-                                case x: Multiparts<File> => MultipartMixed<File>(contentDisposition, x)
+                                case x: Multiparts => MultipartMixed(contentDisposition, x)
+                                case x: Multiparts => MultipartMixed(contentDisposition, x)
                                 case _ => throw MultipartFormDataException("unreachable")
                             })
                         indexer.bodyStart = bodyStart
@@ -155,14 +155,18 @@ class MultipartFormDataParser<T> where T <: InputStream {
                         indexer.indexOf(lineDelim, rotate: true) //此处必须有一行这个，必须跟【OTHER】处的相同代码同时存在
                         let list = partPadding()
                         if (!list.isEmpty()) {
-                            parts.setForm(Form((String.fromUtf8(list.unsafeData()))))
+                            parts.setForm(contentDisposition.getName(), Form((String.fromUtf8(list.unsafeData()))))
                         }
                         continue
                     } else {
                         indexer.indexOf(lineDelim, rotate: true) //此处必须有一行这个，必须跟【OTHER】处的相同代码同时存在
-                        let media = MediaTypes.parse(header[1])
                         let list = partPadding()
-                        let part = MultipartMedia(contentDisposition, media, list.unsafeData())
+                        let mediaType = if(headerValue.isEmpty()){
+                            None<MediaType>
+                        }else{
+                            MediaTypes.parse(headerValue)
+                        }
+                        let part = MultipartMedia(contentDisposition, mediaType, list.unsafeData())
                         parts.add(part)
                         continue
                     }
@@ -182,12 +186,12 @@ class MultipartFormDataParser<T> where T <: InputStream {
                 let header = extractHeaderFromBody(indexer)
                 let (stream, file): (OutputStream, Multipart) = if (uploadStoreInMemory) {
                     let stream = ByteBuffer()
-                    let file = MultipartFile<ByteBuffer>(contentDisposition, stream)
+                    let file = MultipartFile(contentDisposition, stream)
                     (stream, file)
                 } else {
                     let filepath = "${path}/${filename}"
                     let stream = File(filepath, Read)
-                    let file = MultipartFile<File>(contentDisposition, stream)
+                    let file = MultipartFile(contentDisposition, stream)
                     (File(filepath, Write), file)
                 }
                 try {
@@ -212,7 +216,11 @@ class MultipartFormDataParser<T> where T <: InputStream {
     private func extractHeaderFromBody(indexer: BodyIndexer) {
         let headerName = findSlice(indexer, headerDelim)
         let headerValue = findSlice(indexer, lineDelim)
-        (headerName, headerValue)
+        if(headerName.isEmpty()) {
+            ('', '')
+        }else{
+            (headerName, headerValue)
+        }
     }
     private func findSlice(indexer: BodyIndexer, delim: Array<Byte>): String {
         let found = indexer.indexOf(delim)
@@ -220,7 +228,7 @@ class MultipartFormDataParser<T> where T <: InputStream {
             let slice = indexer.slice(delim == lineDelim)
             String.fromUtf8(slice).trimAscii()
         } else {
-            throw MultipartFormDataException("current request body does not match multipart/form-data")
+            ''
         }
     }
 }

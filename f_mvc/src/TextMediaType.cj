@@ -35,10 +35,10 @@ public abstract class TextMediaType <: MediaType {
 
 public class JsonMediaType <: TextMediaType {
     public static let instance = JsonMediaType()
-    private init(charset!: Charset = Charsets.UTF8) {
+    init(charset!: Charset = Charsets.UTF8) {
         super("application/json", charset: charset)
     }
-    public func clone(mediaType: String): MediaType {
+    public func make(mediaType: String): MediaType {
         let tag = "; charset="
         let idx = mediaType.indexOf(tag)
         if (let Some(x) <- idx) {
@@ -71,3 +71,4 @@ public class JsonMediaType <: TextMediaType {
         JsonValue.fromStr(data).toData()
     }
 }
+private let _ = JsonMediaType()

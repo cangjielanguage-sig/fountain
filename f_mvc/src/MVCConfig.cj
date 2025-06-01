@@ -196,10 +196,9 @@ public class MVCConfig {
             getStatus(AUTH_FAILURE_STATUS, DEFAULT_AUTH_FAILURE_STATUS)
         }
     }
-    public static prop authFailureMessage: Array<Byte> {
+    public static prop authFailureMessage: String {
         get() {
-            let msg = Config.getString(AUTH_FAILURE_MESSAGE) ?? authFailureStatus.reasonPhrase
-            authFailureMessageKind.toBytes(msg)
+            Config.getString(AUTH_FAILURE_MESSAGE) ?? authFailureStatus.reasonPhrase
         }
     }
     public static prop authFailureMessageKind: FailureMessageKind {
@@ -213,10 +212,9 @@ public class MVCConfig {
             getStatus(PRIVILEGE_FAILURE_STATUS, DEFAULT_PRIVILEGE_FAILURE_STATUS)
         }
     }
-    public static prop privilegeFailureMessage: Array<Byte> {
+    public static prop privilegeFailureMessage: String {
         get() {
-            let msg = Config.getString(PRIVILEGE_FAILURE_MESSAGE) ?? privilegeFailureStatus.reasonPhrase
-            privilegeFailureMessageKind.toBytes(msg)
+            Config.getString(PRIVILEGE_FAILURE_MESSAGE) ?? privilegeFailureStatus.reasonPhrase
         }
     }
     public static prop privilegeFailureMessageKind: FailureMessageKind {

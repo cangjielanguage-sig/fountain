@@ -9,35 +9,35 @@
  */
 package f_mvc
 
-public class MultipartMixed<T> <: Multipart & Iterable<MultipartFile<T>> where T <: InputStream {
-    private let parts = ArrayList<MultipartFile<T>>()
+public class MultipartMixed <: Multipart & Iterable<MultipartFile> {
+    private let parts = ArrayList<MultipartFile>()
 
     public init(contentDisposition: ContentDisposition) {
         super(contentDisposition)
     }
     public init(
         contentDisposition: ContentDisposition,
-        files: Multiparts<T>
+        files: Multiparts
     ) {
         super(contentDisposition)
         addAll(files)
     }
 
-    public func add(file: MultipartFile<T>) {
+    public func add(file: MultipartFile) {
         parts.add(file)
     }
-    public func addAll<C>(files: C) where C <: Collection<MultipartFile<T>> {
+    public func addAll<C>(files: C) where C <: Collection<MultipartFile> {
         parts.add(all: files)
     }
-    public func addAll(files: Multiparts<T>) {
+    public func addAll(files: Multiparts) {
         for (file in files.allFiles()) {
             match (file) {
-                case f: MultipartFile<T> => add(f)
+                case f: MultipartFile => add(f)
                 case _ => continue
             }
         }
     }
-    public func iterator(): Iterator<MultipartFile<T>> {
+    public func iterator(): Iterator<MultipartFile> {
         parts.iterator()
     }
 }

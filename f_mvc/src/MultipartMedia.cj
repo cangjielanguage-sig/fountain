@@ -9,26 +9,37 @@
  */
 package f_mvc
 
-public class MultipartMedia <: Multipart {
+public class MultipartMedia <: Multipart & Data & DataFields<MultipartMedia> {
     public MultipartMedia(
         contentDisposition: ContentDisposition,
-        public let mediaType: MediaType,
+        public let mediaType: ?MediaType,
         public let bytes: Array<Byte>
     ) {
         super(contentDisposition)
     }
-
     public func toData(): Data {
-        mediaType.toData(bytes)
+        match(mediaType) {
+            case Some(x) => x.toData(bytes)
+            case _ => toString().toData()
+        }
+    }
+    public static func tryFromData(data: Data, flag: DataConversionFlag): Any {
+        throw MVCException('Not Supported')
     }
     public func toDataFields<T>(): T where T <: DataFields<T> {
-        mediaType.toDataFields<T>(bytes)
+        (mediaType?.toDataFields<T>(bytes)).getOrThrow()
     }
-    public func toText(): String {
+    public func toString(): String {
         let charset = contentDisposition.getCharset() ?? Charsets.UTF8
         charset.newDecoder().decode(bytes)
     }
+    public static func parse(string: String): Data {
+        tryParse(string).getOrThrow()
+    }
+    public static func tryParse(string: String): ?Data {
+        throw MVCException('Not Supported')
+    }
     public func to<T>(): ?T where T <: Parsable<T> {
-        T.tryParse(toText())
+        T.tryParse(toString())
     }
 }

@@ -36,7 +36,7 @@ public class MultipartMediaType <: MediaType {
         }
         hash
     }
-    public func clone(mediaType: String): MediaType {
+    public func make(mediaType: String): MediaType {
         if (mediaType.startsWith(MEDIA_TYPE_NAME)) {
             let idx = mediaType.indexOf(", boundary=") ?? -1
             if (idx > 0) {
@@ -58,11 +58,11 @@ public class MultipartMediaType <: MediaType {
         throw MediaTypeException("${MEDIA_TYPE_NAME} does not support current access")
     }
     private static let multipart = ThreadLocal<Any>()
-    public func parse<T>(ctx: HttpContext): Multiparts<T> where T <: InputStream {
+    public func parse(ctx: HttpContext): Multiparts {
         match (multipart.get()) {
-            case Some(x) => (x as Multiparts<T>).getOrThrow()
+            case Some(x) => (x as Multiparts).getOrThrow()
             case _ =>
-                let parts = MultipartFormDataParser<T>(ctx).parse()
+                let parts = MultipartFormDataParser(ctx).parse()
                 multipart.set(parts)
                 parts
         }

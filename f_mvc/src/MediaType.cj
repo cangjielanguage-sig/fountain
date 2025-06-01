@@ -21,7 +21,7 @@ public abstract class MediaType <: ToString & Hashable & Equatable<MediaType> {
         }
         hash
     }
-    public func clone(mediaType: String): MediaType
+    public func make(mediaType: String): MediaType
     public open operator func ==(other: MediaType): Bool {
         this.mediaType == other.mediaType
     }
@@ -30,7 +30,7 @@ public abstract class MediaType <: ToString & Hashable & Equatable<MediaType> {
     }
     public open func fromData(data: Data): Array<Byte>
     public open func toData(data: Array<Byte>): Data
-    public func toData(input: InputStream): Data {
+    public open func toData(input: InputStream): Data {
         let list = ArrayList<Byte>()
         let buf = Array<Byte>(1024, repeat: 0)
         while (let len <- input.read(buf)) {

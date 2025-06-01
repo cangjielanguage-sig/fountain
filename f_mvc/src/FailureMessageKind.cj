@@ -29,12 +29,4 @@ public enum FailureMessageKind <: Equatable<FailureMessageKind> & Parsable<Failu
     public static func parse(kind: String): FailureMessageKind {
         tryParse(kind).getOrThrow {MVCException("unsupported FailureMessageKind ${kind}")}
     }
-    public func toBytes(message: String): Array<Byte> {
-        match (this) {
-            case Base64Binary => fromBase64String(message).getOrThrow {
-                MVCException("${message} must be a base64 string")
-            }
-            case Text => message.toArray()
-        }
-    }
 }
