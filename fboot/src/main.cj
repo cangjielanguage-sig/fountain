@@ -48,11 +48,10 @@ main(args: Array<String>): Int64 {
                     fi =>
                     if (fi.isDirectory()) {
                         genLibPath(fi.path)
-                    } else if (fi.path.fileName.endsWith(ext) && 
-                               let libpath <- fi.path.parent.toString() &&
-                               !libSet.contains(libpath)) {
+                    } else if (fi.path.fileName.endsWith(ext) && let libpath <- fi.path.parent.toString() &&
+                        !libSet.contains(libpath)) {
                         libSet.add(libpath)
-                        if(ldlibPath.size > 0) {
+                        if (ldlibPath.size > 0) {
                             ldlibPath.append(delim)
                         }
                         ldlibPath.append(libpath)
@@ -68,8 +67,8 @@ main(args: Array<String>): Int64 {
             func extractPattern() {
                 if (idx > 0) {
                     let p = args[idx]['--dylibPattern='.size..]
-                    if((p.startsWith("'") && p.endsWith("'")) || ( p.startsWith('"') && p.endsWith('"'))) {
-                        return p [1..p.size - 1]
+                    if ((p.startsWith("'") && p.endsWith("'")) || (p.startsWith('"') && p.endsWith('"'))) {
+                        return p[1..p.size - 1]
                     }
                     p
                 } else {
