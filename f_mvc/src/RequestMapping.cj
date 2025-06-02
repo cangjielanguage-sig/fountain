@@ -9,7 +9,7 @@
 */
 package f_mvc
 
-public open class RequestMapping {
+public abstract class RequestMapping {
     public const RequestMapping(
         public let path!: String,
         public let method!: RequestMethod,

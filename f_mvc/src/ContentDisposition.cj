@@ -467,7 +467,6 @@ public class ContentDisposition <: Equatable<ContentDisposition> & Equatable<Any
             throw IllegalArgumentException("Only UTF-8 and ISO-8859-1 supported.")
         }
         let source = charset.newEncoder().encode(input)
-        let len = source.size
         let builder = StringBuilder()
         builder.append(if (isUtf8) {
             UTF8
