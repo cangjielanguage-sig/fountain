@@ -111,15 +111,18 @@ public class MultiRequestMethodHandler <: HttpRequestHandler {
             case _ => METHOD_NOT_ALLOWED.handle(ctx)
         }
     }
+    private static let mutex = Mutex()
     func register(meta: RequestMeta): Unit {
-        meta.pattern = patterns
-        match (metas.get(meta.method)) {
-            case Some(list) => list
-            case _ =>
-                let l = ArrayList<RequestMeta>()
-                metas[meta.method] = l
-                l
-        }.add(meta)
+        synchronized(mutex){
+            meta.pattern = patterns
+            match (metas.get(meta.method)) {
+                case Some(list) => list
+                case _ =>
+                    let l = ArrayList<RequestMeta>()
+                    metas[meta.method] = l
+                    l
+            }.add(meta)
+        }
     }
 }
 
