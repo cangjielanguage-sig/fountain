@@ -68,7 +68,7 @@ main(args: Array<String>): Int64 {
             func extractPattern() {
                 if (idx > 0) {
                     let p = args[idx]['--dylibPattern='.size..]
-                    if((p.startsWith("'") && p.endsWith("'")) || p.startsWith('"') && p.endsWith('"'))) {
+                    if((p.startsWith("'") && p.endsWith("'")) || ( p.startsWith('"') && p.endsWith('"'))) {
                         return p [1..p.size - 1]
                     }
                     p
