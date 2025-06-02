@@ -14,7 +14,7 @@ import std.collection.{ArrayList, Map, HashMap}
 import std.convert.Parsable
 import std.time.DateTime
 
-import f_base.EmptyMap
+import f_base.{EmptyMap, StringGenerator}
 import f_data.DataParsable
 import f_regex.*
 
@@ -787,7 +787,7 @@ open class RegexPathNode <: PathNode {
             }
             this.reg = "${prefix}(${name})${suffix}".regex()
         } else {
-            let reg = StringBuilder()
+            let reg = StringGenerator()
             reg.append("^(")
             for (c in name.runes()) {
                 match (c) {

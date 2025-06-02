@@ -119,7 +119,7 @@ extend<T> ConcurrentHashSet<T> <: Equatable<ConcurrentHashSet<T>> where T <: Has
 }
 extend<T> ConcurrentHashSet<T> <: ToString where T <: Hashable & Equatable<T> & ToString{
     public func toString(): String {
-        let builder = StringBuilder()
+        let builder = StringGenerator()
         builder.append('[')
         var i = 0
         for(v in this){

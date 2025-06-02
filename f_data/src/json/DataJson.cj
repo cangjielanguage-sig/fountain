@@ -46,7 +46,7 @@ extend DataReal <: ToJsonString {
 }
 extend<T> DataObject<T> <: ToJsonString where T <: ObjectData<T> {
     public func toJsonString(): String {
-        let builder = StringBuilder('{')
+        let builder = StringGenerator('{')
         for((name, value) in this){
             let valStr = 
             match(value){
@@ -66,7 +66,7 @@ extend<T> DataObject<T> <: ToJsonString where T <: ObjectData<T> {
 }
 extend<C, T> DataCollection<C, T> <: ToJsonString where T <: DataFields<T>,C <: DataFields<C> & Collection<T> {
     public func toJsonString(): String {
-        let builder = StringBuilder('[')
+        let builder = StringGenerator('[')
         for(d in this){
             let valStr = 
             match(d){
@@ -84,7 +84,7 @@ extend<C, T> DataCollection<C, T> <: ToJsonString where T <: DataFields<T>,C <: 
 }
 extend<M, K, V> DataMap<M, K, V> <: ToJsonString where K <: DataFields<K>, V <: DataFields<V>, M <: DataFields<M> & Map<K, V> {
     public func toJsonString(): String {
-        let builder = StringBuilder('{')
+        let builder = StringGenerator('{')
         for((k, v) in this){
             let (ks, vs) = 
             match((k, v)){
@@ -108,7 +108,7 @@ extend<M, K, V> DataMap<M, K, V> <: ToJsonString where K <: DataFields<K>, V <: 
 }
 extend<M, K, V> DataConcurrentMap<M, K, V> <: ToJsonString where K <: DataFields<K>, V <: DataFields<V>, M <: DataFields<M> & ConcurrentMap<K, V> {
     public func toJsonString(): String {
-        let builder = StringBuilder('{')
+        let builder = StringGenerator('{')
         for((k, v) in this){
             let (ks, vs) = 
             match((k, v)){

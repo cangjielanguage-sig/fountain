@@ -12,6 +12,7 @@ package f_regex
 import std.collection.HashSet
 import std.collection.concurrent.ConcurrentHashMap
 
+import f_base.StringGenerator
 import f_cache.HeapCache
 
 public interface RegexFromString {
@@ -33,7 +34,7 @@ extend String <: RegexFromString {
             for(f in flags){
                 set.add(flagstr(f))
             }
-            let fb = StringBuilder()
+            let fb = StringGenerator()
             for(f in set){
                 fb.append(f)
             }

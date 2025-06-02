@@ -13,7 +13,7 @@ abstract class ControllerFuncParam {
     protected const init(){}
     protected func extract<T>(name: String, ctx: HttpContext, pattern: HttpRequestPathPatterns): ?T where T <: DataFields<T> 
     static func concat(list: Collection<String>){
-        let b = StringBuilder()
+        let b = StringGenerator()
         for(v in list){
             if(b.size > 0){
                 b.append(',')

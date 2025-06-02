@@ -99,7 +99,7 @@ extend Regex <: ExtendRegex {
         let mds = this.findAll(sub, group: true)
         if(mds.size > 0){
             let rr = RegexReplacement(replacement)
-            let builder = StringBuilder()
+            let builder = StringGenerator()
             builder.append(input[0 .. index])
             var prevEnd = 0
             for(md in mds){
@@ -117,7 +117,7 @@ extend Regex <: ExtendRegex {
         let sub = input[index ..]
         let mds = this.findAll(sub, group: true)
         if(mds.size > 0){
-            let builder = StringBuilder()
+            let builder = StringGenerator()
             builder.append(input[0 .. index])
             var prevEnd = 0
             for(md in mds){
@@ -139,7 +139,7 @@ extend Regex <: ExtendRegex {
 public struct RegexReplacement {
     private let parts = ArrayList<Any>()
     public init(replacement: String) {
-        let part = StringBuilder()
+        let part = StringGenerator()
         var placeholder = false
         for (ch in replacement.runes()) {
             match (ch) {
@@ -169,7 +169,7 @@ public struct RegexReplacement {
         }
     }
     func format(data: MatchData): String {
-        let builder = StringBuilder()
+        let builder = StringGenerator()
         var i = 0
         while (i < parts.size) {
             match (parts[i]) {

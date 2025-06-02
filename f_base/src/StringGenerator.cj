@@ -14,10 +14,19 @@ import std.collection.ArrayList
 public class StringGenerator <: ToString {
     private let utf8 = ArrayList<Byte>()
 
-    private prop size: Int64 {
+    public init(){}
+    public init(s: String){
+        append(s)
+    }
+
+    public prop size: Int64 {
         get(){
             utf8.size
         }
+    }
+    public func reset(): This {
+        utf8.clear()
+        this
     }
     public func append<T>(content: T): This where T <: ToString {
         utf8.add(all: content.toString().unsafeBytes())

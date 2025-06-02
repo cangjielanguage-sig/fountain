@@ -10,7 +10,7 @@
 package f_data
 
 public struct DataToString <: ToString {
-    private let builder = StringBuilder()
+    private let builder = StringGenerator()
 
     public func toString(): String {
         builder.append('}')

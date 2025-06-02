@@ -10,7 +10,7 @@
 package f_collection
 
 import std.collection.{Set, TreeMap, ReadOnlySet, ArrayList}
-import f_base.OverSizePolicy
+import f_base.{OverSizePolicy, StringGenerator}
 
 public class LinkedHashSet<T> <: Set<T> where T <: Hashable & Equatable<T> {
     private let map: LinkedHashMap<T, Unit>
@@ -119,7 +119,7 @@ extend<T> LinkedHashSet<T> <: Equatable<LinkedHashSet<T>> where T <: Comparable<
 }
 extend<T> LinkedHashSet<T> <: ToString where T <: Comparable<T> & ToString{
     public func toString(): String {
-        let builder = StringBuilder()
+        let builder = StringGenerator()
         builder.append('[')
         var i = 0
         for(v in this){

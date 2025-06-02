@@ -16,7 +16,7 @@ import std.process.execute
 import std.reflect.ModuleInfo
 import std.regex.Regex
 import std.time.DateTime
-import fountain.base.OS
+import fountain.base.{OS, StringGenerator}
 import fountain.bean.BeanFactory
 import fountain.mvc.MVCLauncher
 
@@ -41,7 +41,7 @@ main(args: Array<String>): Int64 {
         case 'start' =>
             let libSet = HashSet<String>()
             let env = HashMap<String, String>(getVariables())
-            let ldlibPath = StringBuilder(env.get(libPathName) ?? '')
+            let ldlibPath = StringGenerator(env.get(libPathName) ?? '')
             func genLibPath(path: Path): Unit {
                 Directory.walk(path) {
                     fi =>

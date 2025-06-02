@@ -19,7 +19,7 @@ import std.sync.{AtomicUInt16, AtomicInt64, Mutex}
 import std.time.{TimeZone, DateTime}
 import stdx.crypto.crypto.*
 import stdx.crypto.digest.{MD5, SHA1}
-import f_base.HashBuilder
+import f_base.{HashBuilder, StringGenerator}
 import f_exception.UnreachableException
 import f_util.exception.UUIDException
 
@@ -64,7 +64,7 @@ public struct UUID <: Hashable & Comparable<UUID> & ToString & Parsable<UUID> {
     private func toString(withDash: Bool){
         //00 00 00 00-00 00-00 00-00 00-00 00 00 00 00 00
         //0  1  2  3  4  5  6  7  8  9  10 11 12 13 14 15
-        let builder = StringBuilder()
+        let builder = StringGenerator()
         var i = 0
         while (i < values.size) {
             let v = values[i]
@@ -84,7 +84,7 @@ public struct UUID <: Hashable & Comparable<UUID> & ToString & Parsable<UUID> {
         BigInt(true, values).toString(radix: base)
     }
     public func toHexString(){
-        toString(16)
+        toString(false)
     }
     public prop version: Int64 {
         get() {

@@ -111,7 +111,7 @@ public class DataObject<T> <: Data & Collection<(String, Data)> & NamedData wher
         match (data) {
             case x: ToString => x.toString()
             case x =>
-                let s = StringBuilder()
+                let s = StringGenerator()
                 s.append("{")
                 for ((k, v) in this) {
                     if (s.size > 1) {

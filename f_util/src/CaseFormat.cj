@@ -9,6 +9,8 @@
  */
 package f_util
 
+import f_base.StringGenerator
+
 abstract sealed class CaseFormat {
     /**
       * 首字母大写的驼峰
@@ -38,7 +40,7 @@ abstract sealed class CaseFormat {
     protected CaseFormat(protected let withDelimiter!: Bool) {}
 
     public func convert(text: String, format: CaseFormat): String {
-        let builder = StringBuilder()
+        let builder = StringGenerator()
         let caseFormat = format.new()
         let withDelim = this.withDelimiter
         for (ch in text.runes()) {
@@ -53,8 +55,8 @@ abstract sealed class CaseFormat {
         }
         builder.toString()
     }
-    protected func convert(ch: Rune, delimiter: Bool, builder: StringBuilder): Unit
-    protected func delimiter(builder: StringBuilder): Unit
+    protected func convert(ch: Rune, delimiter: Bool, builder: StringGenerator): Unit
+    protected func delimiter(builder: StringGenerator): Unit
     protected func isDelimiter(ch: Rune): Bool
     protected func new(): CaseFormat
 }
@@ -63,7 +65,7 @@ class PascalCaseFormat <: CaseFormat {
         super(withDelimiter: true)
     }
     private var sectionStart = true
-    protected func convert(ch: Rune, delimiter: Bool, builder: StringBuilder): Unit {
+    protected func convert(ch: Rune, delimiter: Bool, builder: StringGenerator): Unit {
         let c = if (builder.size == 0) {
             sectionStart = false
             ch.toAsciiUpperCase()
@@ -81,7 +83,7 @@ class PascalCaseFormat <: CaseFormat {
     protected func new(): CaseFormat {
         PascalCaseFormat()
     }
-    protected func delimiter(builder: StringBuilder): Unit {
+    protected func delimiter(builder: StringGenerator): Unit {
         sectionStart = true
     }
 }
@@ -90,7 +92,7 @@ class CamelCaseFormat <: CaseFormat {
         super(withDelimiter: true)
     }
     private var sectionStart = true
-    protected func convert(ch: Rune, delimiter: Bool, builder: StringBuilder): Unit {
+    protected func convert(ch: Rune, delimiter: Bool, builder: StringGenerator): Unit {
         let c = if (builder.size == 0) {
             sectionStart = false
             ch.toAsciiLowerCase()
@@ -108,7 +110,7 @@ class CamelCaseFormat <: CaseFormat {
     protected func new(): CaseFormat {
         CamelCaseFormat()
     }
-    protected func delimiter(builder: StringBuilder): Unit {
+    protected func delimiter(builder: StringGenerator): Unit {
         sectionStart = true
     }
 }
@@ -117,7 +119,7 @@ class LowerUnderScoreCaseFormat <: CaseFormat {
         super(withDelimiter: false)
     }
     private static const DELIMITER = r'_'
-    protected func convert(ch: Rune, delimiter: Bool, builder: StringBuilder): Unit {
+    protected func convert(ch: Rune, delimiter: Bool, builder: StringGenerator): Unit {
         if (builder.size == 0) {
             builder.append(ch.toAsciiLowerCase())
         } else if (delimiter) {
@@ -127,7 +129,7 @@ class LowerUnderScoreCaseFormat <: CaseFormat {
             builder.append(ch.toAsciiLowerCase())
         }
     }
-    protected func delimiter(builder: StringBuilder): Unit {
+    protected func delimiter(builder: StringGenerator): Unit {
         builder.append(DELIMITER)
     }
     protected func isDelimiter(ch: Rune): Bool {
@@ -142,7 +144,7 @@ class UpperUnderScoreCaseFormat <: CaseFormat {
         super(withDelimiter: false)
     }
     private static const DELIMITER = r'_'
-    protected func convert(ch: Rune, delimiter: Bool, builder: StringBuilder): Unit {
+    protected func convert(ch: Rune, delimiter: Bool, builder: StringGenerator): Unit {
         if (builder.size == 0) {
             builder.append(ch.toAsciiUpperCase())
         } else if (delimiter) {
@@ -152,7 +154,7 @@ class UpperUnderScoreCaseFormat <: CaseFormat {
             builder.append(ch.toAsciiUpperCase())
         }
     }
-    protected func delimiter(builder: StringBuilder): Unit {
+    protected func delimiter(builder: StringGenerator): Unit {
         builder.append(DELIMITER)
     }
     protected func isDelimiter(ch: Rune): Bool {
@@ -167,7 +169,7 @@ class LowerHyphenCaseFormat <: CaseFormat {
         super(withDelimiter: false)
     }
     private static const DELIMITER = r'-'
-    protected func convert(ch: Rune, delimiter: Bool, builder: StringBuilder): Unit {
+    protected func convert(ch: Rune, delimiter: Bool, builder: StringGenerator): Unit {
         if (builder.size == 0) {
             builder.append(ch.toAsciiLowerCase())
         } else if (delimiter) {
@@ -177,7 +179,7 @@ class LowerHyphenCaseFormat <: CaseFormat {
             builder.append(ch.toAsciiLowerCase())
         }
     }
-    protected func delimiter(builder: StringBuilder): Unit {
+    protected func delimiter(builder: StringGenerator): Unit {
         builder.append(DELIMITER)
     }
     protected func isDelimiter(ch: Rune): Bool {
@@ -192,7 +194,7 @@ class UpperHyphenCaseFormat <: CaseFormat {
         super(withDelimiter: false)
     }
     private static const DELIMITER = r'-'
-    protected func convert(ch: Rune, delimiter: Bool, builder: StringBuilder): Unit {
+    protected func convert(ch: Rune, delimiter: Bool, builder: StringGenerator): Unit {
         if (builder.size == 0) {
             builder.append(ch.toAsciiUpperCase())
         } else if (delimiter) {
@@ -202,7 +204,7 @@ class UpperHyphenCaseFormat <: CaseFormat {
             builder.append(ch.toAsciiUpperCase())
         }
     }
-    protected func delimiter(builder: StringBuilder): Unit {
+    protected func delimiter(builder: StringGenerator): Unit {
         builder.append(DELIMITER)
     }
     protected func isDelimiter(ch: Rune): Bool {

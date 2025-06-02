@@ -33,7 +33,7 @@ public class DataCollection<C, T> <: Data & Collection<Data> where T <: DataFiel
         data.isEmpty()
     }
     public func toString(): String {
-        let b = StringBuilder('[')
+        let b = StringGenerator('[')
         for (d in data) {
             if (b.size > 1) {
                 b.append(',')

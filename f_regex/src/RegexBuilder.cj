@@ -22,7 +22,7 @@ import f_regex.exception.RegexBuilderException
  * group(...) 就是(...)，区别是group会在新的RegexBuilder添加(...)
  */
 public class RegexBuilder <: ToString & Equatable<RegexBuilder> {
-    private var pattern = StringBuilder()
+    private var pattern = StringGenerator()
 
     public operator func ==(other: RegexBuilder) {
         pattern.toString() == other.pattern.toString()

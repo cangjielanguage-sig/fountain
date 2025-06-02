@@ -79,7 +79,7 @@ public class MultiRequestMethodHandler <: HttpRequestHandler {
                 if (let Some(h) <- check(m)) {
                     return h.handle(ctx)
                 }
-                let allow = StringBuilder()
+                let allow = StringGenerator()
                 allow.append(method)
                 allow.append(", ")
                 let last = metas.size

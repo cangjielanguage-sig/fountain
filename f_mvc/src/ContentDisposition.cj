@@ -186,7 +186,7 @@ public class ContentDisposition <: Equatable<ContentDisposition> & Equatable<Any
      * @see parse(String)
      */
     public func toString(): String {
-        let builder = StringBuilder()
+        let builder = StringGenerator()
         if (this.`type` != ContentDispositionType.none) {
             builder.append(this.`type`)
         }
@@ -432,7 +432,7 @@ public class ContentDisposition <: Equatable<ContentDisposition> & Equatable<Any
             return filename
         }
         var escaped = false
-        let builder = StringBuilder()
+        let builder = StringGenerator()
         for (c in filename) {
             if (!escaped && c == b'"') {
                 builder.append("\\\"")
@@ -467,7 +467,7 @@ public class ContentDisposition <: Equatable<ContentDisposition> & Equatable<Any
             throw IllegalArgumentException("Only UTF-8 and ISO-8859-1 supported.")
         }
         let source = charset.newEncoder().encode(input)
-        let builder = StringBuilder()
+        let builder = StringGenerator()
         builder.append(if (isUtf8) {
             UTF8
         } else {

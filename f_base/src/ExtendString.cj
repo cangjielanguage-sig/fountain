@@ -15,7 +15,7 @@ public func stringJoin<T>(parts: Array<T>, delimiter!: String = '', leftPadding!
 
 public func stringJoin<T, C>(parts: C, delimiter!: String = '', leftPadding!: String = '', rightPadding!: String = ''): String where T <: ToString,
     C <: Iterable<T> {
-    let builder = StringBuilder()
+    let builder = StringGenerator()
     builder.append(leftPadding)
     var i = 0
     for (p in parts) {

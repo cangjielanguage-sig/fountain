@@ -9,6 +9,7 @@
 */
 package f_orm
 
+import f_base.StringGenerator
 import f_orm.exception.ORMException
 
 public class LoopCondition<I, T> where I <: Iterable<T> {
@@ -72,7 +73,7 @@ public class LoopCondition<I, T> where I <: Iterable<T> {
     }
     public func done(): String {
         let sqlFrag = Condition.trim(prefix: _trimLeft, suffix: _trimRight){
-            let builder = StringBuilder()
+            let builder = StringGenerator()
             var i = 0
             for (v in values where _condition(v, i)) {
                 if (builder.size > 0) {

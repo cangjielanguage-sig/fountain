@@ -35,7 +35,7 @@ public class DataConcurrentMap<M, K, V> <: Data & Collection<(Data, Data)> where
         data.isEmpty()
     }
     public func toString(): String {
-        let b = StringBuilder('{')
+        let b = StringGenerator('{')
         for (d in this) {
             if (b.size > 1) {
                 b.append(',')

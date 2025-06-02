@@ -95,7 +95,7 @@ public class HashBuilder {
     public func append(arg: String): This {
         append(arg.hashCode())
     }
-    public func append(arg: StringBuilder): This {
+    public func append(arg: StringGenerator): This {
         append(arg.toString())
     }
     public func append<K, V>(value: ConcurrentHashMap<K, V>): This where K <: Hashable & Equatable<K>{
