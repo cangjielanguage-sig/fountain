@@ -23,30 +23,35 @@ public class StringGenerator <: ToString {
         utf8.add(all: content.toString().unsafeBytes())
         this
     }
-    private func indexOf(search: Array<Byte>, fromIndex): ?Int64 {
+    private func indexOf(search: Array<Byte>, fromIndex: Int64): ?Int64 {
         utf8.unsafeData().indexOf(search, fromIndex)
     }
     public func indexOf<T>(content: T, fromIndex!: Int64 = 0): ?Int64 where T <: ToString {
         let search = content.toString().unsafeBytes()
         indexOf(search, fromIndex)
     }
-    public func lastIndexOf<T>(content: T, fromIndex!: Int64 = size): ?Int64 where T <: ToString {
+    private func lastIndexOf(search: Array<Byte>, fromIndex: Int64): ?Int64 {
         let array = utf8.unsafeData()
-        let search = content.toString().unsafeBytes()
         array.lastIndexOf(search, fromIndex)
+    }
+    public func lastIndexOf<T>(content: T, fromIndex!: Int64 = size): ?Int64 where T <: ToString {
+        let search = content.toString().unsafeBytes()
+        lastIndexOf(search, fromIndex)
     }
     public func contains<T>(content: T): Bool where T <: ToString {
         indexOf<T>(content).isSome()
     }
     public func removeFirst<T>(content: T, fromIndex!: Int64 = 0): This where T <: ToString {
-        if(let Some(idx) <- indexOf(content, fromIndex: fromIndex)){
-            utf8.remove(idx .. idx + content.size)
+        let bytes = content.toString().unsafeBytes()
+        if(let Some(idx) <- indexOf(bytes, fromIndex)){
+            utf8.remove(idx .. idx + bytes.size)
         }
         this
     }
     public func removeLast<T>(content: T, fromIndex!: Int64 = size): This where T <: ToString {
-        if(let Some(idx) <- lastIndexOf(content, fromIndex: fromIndex)){
-            utf8.remove(idx .. idx + search.size)
+        let bytes = content.toString().unsafeBytes()
+        if(let Some(idx) <- lastIndexOf(bytes, fromIndex)){
+            utf8.remove(idx .. idx + bytes.size)
         }
         this
     }
