@@ -20,7 +20,7 @@ import f_orm.exception.*
 public class SqlCacheKey <: Hashable & Equatable<SqlCacheKey> & ToString {
     private let h: Int64
     public SqlCacheKey(private let sql: String, private let args: SqlArgs) {
-        h = HashBuilder().append(sql).append(args).finish()
+        h = HashBuilder().append(sql).append(args).build()
     }
     public func hashCode(): Int64 {
         h

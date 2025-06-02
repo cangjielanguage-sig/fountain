@@ -32,7 +32,7 @@ public class MultipartMediaType <: MediaType {
     }
     public func hashCode(): Int64 {
         if (hash == 0) {
-            hash = HashBuilder().append(mediaType).append(boundary).finish()
+            hash = HashBuilder().append(mediaType).append(boundary).build()
         }
         hash
     }

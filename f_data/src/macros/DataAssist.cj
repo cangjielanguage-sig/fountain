@@ -151,7 +151,7 @@ func generateHash(d: ClassDecl, exclusion: HashSet<String>) {
     var hashed = `nl`
     for (d in d.body.decls where d is VarDecl &&
         !(isStatic(d) || exclusion.contains(d.identifier.value) || exclusion.contains('${d.identifier.value}_'))) {
-        hashed += quote(hasher.write($(d.identifier))) + `nl`
+        hashed += quote(hasher.append($(d.identifier))) + `nl`
     }
     d
         .body
@@ -164,9 +164,9 @@ func generateHash(d: ClassDecl, exclusion: HashSet<String>) {
                 quote(
         public $(openTokens(d)) func hashCode(): Int64{
             if(__hAsh__ == 0){
-                var hasher = DataHasher()
+                let hasher = HashBuilder()
                 $hashed
-                __hAsh__ = hasher.finish()
+                __hAsh__ = hasher.build()
             }
             __hAsh__
         }

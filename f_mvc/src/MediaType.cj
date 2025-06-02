@@ -17,7 +17,7 @@ public abstract class MediaType <: ToString & Hashable & Equatable<MediaType> {
     }
     public open func hashCode(): Int64 {
         if (hash == 0) {
-            hash = HashBuilder().append(mediaType).finish()
+            hash = HashBuilder().append(mediaType).build()
         }
         hash
     }

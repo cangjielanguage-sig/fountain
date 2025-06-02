@@ -29,7 +29,7 @@ import f_util.exception.UUIDException
 public struct UUID <: Hashable & Comparable<UUID> & ToString & Parsable<UUID> {
     private let h: Int64
     UUID(private let values!: Array<Byte> = Array<Byte>(16, repeat: 0)) {
-        h = HashBuilder().append<Byte>(values).finish()
+        h = HashBuilder().append<Byte, Array<Byte>>(values).build()
     }
 
     public func hashCode(): Int64 {

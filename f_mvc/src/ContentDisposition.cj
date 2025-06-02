@@ -176,7 +176,7 @@ public class ContentDisposition <: Equatable<ContentDisposition> & Equatable<Any
                 .append(this.creationDate?.toString() ?? "")
                 .append(this.modificationDate?.toString() ?? "")
                 .append(this.readDate?.toString() ?? "")
-                .finish()
+                .build()
         }
         hash
     }

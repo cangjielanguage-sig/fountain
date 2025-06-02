@@ -67,10 +67,7 @@ public class QualifiedFuncInfo <: Hashable & Equatable<QualifiedFuncInfo> {
         this.hash = doHash(typeInfo, funcInfo)
     }
     private static func doHash(typeInfo: TypeInfo, funcInfo: InstanceFunctionInfo){
-        var hasher = DefaultHasher()
-        hasher.write(typeInfo.hashCode())
-        hasher.write(funcInfo.hashCode())
-        hasher.finish()
+        HashBuilder().append(typeInfo).append(funcInfo).build()
     }
     public operator func ==(other: QualifiedFuncInfo){
         this.typeInfo == other.typeInfo && this.funcInfo == other.funcInfo

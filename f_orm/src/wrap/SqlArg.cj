@@ -54,7 +54,7 @@ public abstract class SqlArg <: Hashable & Equatable<SqlArg> & ToString {
     protected var h = 0
     protected func hashCode<T>(value: T): Int64 where T <: Hashable {
         if(h == 0){
-            h = HashBuilder().append(index).append(TypeInfos.get<T>()).append(value).finish()
+            h = HashBuilder().append(index).append(TypeInfos.get<T>()).append(value).build()
         }
         h
     }
@@ -427,7 +427,7 @@ public class InputStreamSqlArg <: SqlArg {
     }
     public func hashCode(){
         if(h == 0){
-            h = HashBuilder().append(index).append(TypeInfos.get<InputStream>()).append('std.io.InputStream').finish()
+            h = HashBuilder().append(index).append(TypeInfos.get<InputStream>()).append('std.io.InputStream').build()
         }
         h
     }

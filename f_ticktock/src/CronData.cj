@@ -9,6 +9,8 @@
  */
 package f_ticktock
 
+import f_base.HashBuilder
+
 public class CronData <: ToString & Hashable & Equatable<CronData> {
     private let unit_: TicktockUnit
     private let range_: Range<Int64>
@@ -26,11 +28,7 @@ public class CronData <: ToString & Hashable & Equatable<CronData> {
         this.unit_ = unit
         this.range_ = range
         this.last_ = last
-        var hasher = DefaultHasher()
-        hasher.write(unit_.hashCode())
-        hasher.write(range_.hashCode())
-        hasher.write(last_)
-        hash = hasher.finish()
+        hash = HashBuilder().append(unit_).append(range_).append(last_).build()
     }
     public static func createLast(unit: TicktockUnit){
         if(unit == TicktockUnit.YEARLY) {

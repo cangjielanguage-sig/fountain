@@ -201,10 +201,7 @@ public class TypeMemberInfos{
 class FuncMeta <: Hashable & Equatable<FuncMeta> {
     private let hash: Int64
     FuncMeta(private let name: String, private let param: Array<TypeInfo>){
-        let hasher = HashBuilder()
-        hasher.append(name)
-        hasher.append(param)
-        hash = hasher.finish()
+        hash = HashBuilder().append(name).append(param).build()
     }
     public operator func ==(other: FuncMeta) {
         hash == other.hash && name == other.name && param == other.param

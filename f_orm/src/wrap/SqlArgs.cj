@@ -91,7 +91,7 @@ public class SqlArgs <: Hashable & Equatable<SqlArgs> & ToString {
             for(arg in args){
                 hasher.append(arg)
             }
-            h = hasher.finish()
+            h = hasher.build()
         }
         h
     }

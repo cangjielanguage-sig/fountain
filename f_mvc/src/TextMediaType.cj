@@ -27,7 +27,7 @@ public abstract class TextMediaType <: MediaType {
     }
     public func hashCode(): Int64 {
         if (hash == 0) {
-            hash = HashBuilder().append(mediaType).append(charset).finish()
+            hash = HashBuilder().append(mediaType).append(charset).build()
         }
         hash
     }
