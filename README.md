@@ -49,10 +49,7 @@ _/ ____\____  __ __  _____/  |______  |__| ____
   1. fboot start [PATH] --dylibPattern=<DYNAMIC_LIB_NAME_REGEX_WITHOUT_EXTNAME>
      把指定路径或工作目录加入当前操作系统自动加载动态链接库的环境变量，并用这个环境变量和fboot start相同的参数启动子进程fboot run，这个环境变量也仅限于fboot run启动的子进程。
   2. fboot run [PATH] --dylibPattern=<DYNAMIC_LIB_NAME_REGEX_WITHOUT_EXTNAME>
-  3. fboot config <PID> --<key1>=<value1> --<key2>=<value2>：修改指定进程号的配置，指定进程必须是fboot启动。
-     调用`f_config.Config.set(...)`修改配置。
-     各模块需要重新初始化的需要调用`f_config.Config.refresher(prefix, refreshFn)`，set函数返回前会调用配置项的键第一个_前的字符串与prefix相同的对应refreshFn。每次调用set函数每个refreshFn最多调用一次。
-  4. fbbot shutdown <PID>
+  3. fbbot shutdown <PID>
 ## 功能
 
 - 空集合
