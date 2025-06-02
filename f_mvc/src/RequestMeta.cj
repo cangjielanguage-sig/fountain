@@ -42,7 +42,7 @@ public class RequestMeta{
         }
     }
     private func checkHeader(ctx: HttpContext, headers: HashSet<String>, name: String): Bool {
-        headers.contains(ctx.request.headers.getFirst(name) ?? '')
+        headers.contains(ctx.request.headers.getFirst(name) ?? '') || headers.contains("*")
     }
     public func checkConsumes(ctx: HttpContext){
         checkHeader(ctx, consumes, "Content-Type")
@@ -90,19 +90,24 @@ public class RequestMeta{
         .multipart<T>(name, ctx, pattern.getOrThrow())
         .getOrThrow{MVCException('controller func ${name} and request body do not match')}
     }
-    private func addMediaTypes(set: HashSet<String>, types: Array<String>): Unit {
-        for(t in types where !t.isEmpty()) {
-            set.add(t)
+    private func addMediaTypes(set: HashSet<String>, types: Array<String>, allowAny: Bool): Unit {
+        for(t in types) {
+            match(t.trimAscii()){
+                case '*' | '*/*' where !allowAny => throw IllegalArgumentException("Invalid mime type: ${t} in ${types.toString().replace(', ', '|').replace('[', '').replace(']', '')}")
+                case '*' | '*/*' => set.add('*')
+                case '' => throw IllegalArgumentException("mime type must not be empty string in ${types.toString().replace(', ', '|').replace('[', '').replace(']', '')}")
+                case x => set.add(x)
+            }
         }
     }
-    private func addMediaTypes(set: HashSet<String>, types: String): Unit {
-        addMediaTypes(set, types.split("|"))
+    private func addMediaTypes(set: HashSet<String>, types: String, allowAny: Bool): Unit {
+        addMediaTypes(set, types.split("|"), allowAny)
     }
     private func addProduces(types: String){
-        addMediaTypes(produces, types)
+        addMediaTypes(produces, types, false)
     }
     private func addConsumes(types: String){
-        addMediaTypes(consumes, types)
+        addMediaTypes(consumes, types, true)
     }
     public static func generate<T>(fnName: String, argTypes: Array<TypeInfo>): ArrayList<RequestMeta> where T <: Object {
         let typeInfo = TypeInfos.get<T>()
