@@ -32,19 +32,15 @@ public class MediaTypes {
                 mediaType
             }
             if (let Some(x) <- mediaTypes.get(mt)) {
-                let new = x.make(mediaType)
-                if (x is TextMediaType) {
-                    if (let Some(x) <- mediaTypes.addIfAbsent(mediaType, new)) {
-                        x
-                    } else {
-                        new
-                    }
-                } else {
-                    new
+                x
+            } else if(let list <- BeanFactory.getList<MediaType>() && list.size > 0){
+                for(m in list){
+                    register(m)
                 }
-            } else {
+                tryParse(mediaType)
+            }else{
                 None<MediaType>
             }
-        }
+        }?.make(mediaType)
     }
 }

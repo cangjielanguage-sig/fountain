@@ -5,11 +5,11 @@
     You may obtain a copy of Mulan PSL v2 at:
             http://license.coscl.org.cn/MulanPSL2
     THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-    See the Mulan PSL v2 for more details.  
-*/
+    See the Mulan PSL v2 for more details.
+ */
 package f_mvc
 
-public class RequestMeta{
+public class RequestMeta {
     private var ignoreAuth_ = false
     private var ignorePrivilege_ = false
 
@@ -18,33 +18,33 @@ public class RequestMeta{
 
     private let args = HashMap<String, ControllerFuncParam>()
 
-    var pattern = None<HttpRequestPathPatterns> 
+    var pattern = None<HttpRequestPathPatterns>
 
     private RequestMeta(
         public let path: String,
         public let method: RequestMethod,
         private let params!: RequestCondition = DummyRequestCondition.instance,
         private let headers!: RequestCondition = DummyRequestCondition.instance
-    ){}
-    
-    var handle: (HttpContext) -> Unit = {ctx: HttpContext => 
-        throw MVCException('Request was not handled')
+    ) {}
+
+    var handle: (HttpContext) -> Unit = {
+        ctx: HttpContext => throw MVCException('Request was not handled')
     }
 
     public prop ignoreAuth: Bool {
-        get(){
+        get() {
             ignoreAuth_
         }
     }
     public prop ignorePrivilege: Bool {
-        get(){
+        get() {
             ignorePrivilege_
         }
     }
     private func checkHeader(ctx: HttpContext, headers: HashSet<String>, name: String): Bool {
         headers.contains(ctx.request.headers.getFirst(name) ?? '') || headers.contains("*")
     }
-    public func checkConsumes(ctx: HttpContext){
+    public func checkConsumes(ctx: HttpContext) {
         checkHeader(ctx, consumes, "Content-Type")
     }
     public func checkProduces(ctx: HttpContext) {
@@ -54,26 +54,34 @@ public class RequestMeta{
     public func check(ctx: HttpContext): Bool {
         let request = ctx.request
         let headers = request.headers
-        produces.contains(headers.getFirst('Accept') ?? '') && 
-        this.headers.check(headers) && 
-        this.params.check(request.form, request.url)
+        produces.contains(headers.getFirst('Accept') ?? '') && this.headers.check(headers) && this
+            .params
+            .check(request.form, request.url)
     }
-    public func setHandle<T, R>(fn: (T, HttpContext, HttpRequestPathPatterns) -> R): Unit where T <: Object, R <: DataFields<R> {
+    public func setHandle<T, R>(fn: (T, HttpContext, HttpRequestPathPatterns) -> R): Unit where T <: Object,
+        R <: DataFields<R> {
         let pattern = this.pattern.getOrThrow()
-        handle = {ctx =>
+        handle = {
+            ctx =>
             let result = fn(BeanFactory.instance.getFirst<T>().getOrThrow(), ctx, pattern)
             generateResponse<R>(ctx, result)
         }
     }
     private func generateResponse<R>(ctx: HttpContext, result: R): Unit where R <: DataFields<R> {
-        if(!(result is Unit)){
-            let accept = ctx.request.headers.getFirst('Accept') ?? ""
+        if (!(result is Unit)) {
+            let accept = if (let Some(x) <- ctx.request.headers.getFirst('Accept')) {
+                x
+            } else if (let Some(x) <- consumes.iterator().next()) {
+                x
+            } else {
+                ''
+            }
             let mediaType = MediaTypes.parse(accept)
             let bytes = mediaType.fromDataFields(result)
             ctx.responseBuilder.body(bytes)
         }
     }
-    public func isMultipart(name: String){
+    public func isMultipart(name: String) {
         args[name] is MultipartFormData
     }
     private func doExtract<T>(ctx: HttpContext, name: String): ?T where T <: DataFields<T> {
@@ -86,16 +94,21 @@ public class RequestMeta{
         doExtract<T>(ctx, name) ?? default
     }
     public func multipart<T>(ctx: HttpContext, name: String): T where T <: ObjectData<T> & DataFields<T> {
-        (args[name] as MultipartFormData).getOrThrow()
-        .multipart<T>(name, ctx, pattern.getOrThrow())
-        .getOrThrow{MVCException('controller func ${name} and request body do not match')}
+        (args[name] as MultipartFormData)
+            .getOrThrow()
+            .multipart<T>(name, ctx, pattern.getOrThrow())
+            .getOrThrow {MVCException('controller func ${name} and request body do not match')}
     }
     private func addMediaTypes(set: HashSet<String>, types: Array<String>, allowAny: Bool): Unit {
-        for(t in types) {
-            match(t.trimAscii()){
-                case '*' | '*/*' where !allowAny => throw IllegalArgumentException("Invalid mime type: ${t} in ${types.toString().replace(', ', '|').replace('[', '').replace(']', '')}")
+        for (t in types) {
+            match (t.trimAscii()) {
+                case '*' | '*/*' where !allowAny => throw IllegalArgumentException(
+                    "Invalid mime type: ${t} in ${types.toString().replace(', ', '|').replace('[', '').replace(']', '')}"
+                )
                 case '*' | '*/*' => set.add('*')
-                case '' => throw IllegalArgumentException("mime type must not be empty string in ${types.toString().replace(', ', '|').replace('[', '').replace(']', '')}")
+                case '' => throw IllegalArgumentException(
+                    "mime type must not be empty string in ${types.toString().replace(', ', '|').replace('[', '').replace(']', '')}"
+                )
                 case x => set.add(x)
             }
         }
@@ -103,34 +116,36 @@ public class RequestMeta{
     private func addMediaTypes(set: HashSet<String>, types: String, allowAny: Bool): Unit {
         addMediaTypes(set, types.split("|"), allowAny)
     }
-    private func addProduces(types: String){
+    private func addProduces(types: String) {
         addMediaTypes(produces, types, false)
     }
-    private func addConsumes(types: String){
-        addMediaTypes(consumes, types, true)
+    private func addConsumes(types: String) {
+        addMediaTypes(consumes, types, false)
     }
     public static func generate<T>(fnName: String, argTypes: Array<TypeInfo>): ArrayList<RequestMeta> where T <: Object {
         let typeInfo = TypeInfos.get<T>()
         let metas = ArrayList<RequestMeta>()
-        for(function in typeInfo.instanceFunctions) {
+        for (function in typeInfo.instanceFunctions) {
             let args = HashMap<String, ControllerFuncParam>()
-            for(param in function.parameters){
+            for (param in function.parameters) {
                 let pname = param.name
-                for(annotation in param.annotations where annotation is ControllerFuncParam){
+                for (annotation in param.annotations where annotation is ControllerFuncParam) {
                     args[pname] = (annotation as ControllerFuncParam).getOrThrow()
                     break
                 }
-                throw MVCException('parameter of controller function must be with one and only one Annotation as @RequestBody or @RequestParam or @RequestHeader or @PathVariable or @MultipartFormData')
+                throw MVCException(
+                    'parameter of controller function must be with one and only one Annotation as @RequestBody or @RequestParam or @RequestHeader or @PathVariable or @MultipartFormData'
+                )
             }
-            for(annotation in function.annotations) {
-                match(annotation){
-                    case a: RequestMapping => 
+            for (annotation in function.annotations) {
+                match (annotation) {
+                    case a: RequestMapping =>
                         let method = a.method
                         let ignoreAuth = a.ignoreAuth
                         let ignorePrivilege = a.ignorePrivilege
                         let params = RequestCondition.compile(a.params)
                         let headers = RequestCondition.compile(a.headers)
-                        for(path in a.path.split('|')){
+                        for (path in a.path.split('|')) {
                             let meta = RequestMeta(path, method, params: params, headers: headers)
                             meta.addProduces(a.produces)
                             meta.addConsumes(a.consumes)
