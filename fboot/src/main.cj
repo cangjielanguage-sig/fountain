@@ -95,7 +95,7 @@ main(args: Array<String>): Int64 {
             println('${path.fileName} is started in ${end - start} on ${end}')
             future.get()
             0
-        case 'shutdown' => 
+        case 'shutdown' => //每个模块都注册了atExit，所以发送退出命令的时候都会执行atExit
             let pid = Int64.parse(args[1])
             exit(pid)
         case _ => throw BootException('first command arg must be run, but current args are ${args}')
