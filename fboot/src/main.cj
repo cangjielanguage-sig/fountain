@@ -11,9 +11,9 @@ package fboot
 
 import std.collection.{HashMap, HashSet}
 import std.convert.*
-import std.env.{getWorkingDirectory, getVariables, getCommand, exit}
+import std.env.{getWorkingDirectory, getVariables, getCommand}
 import std.fs.*
-import std.process.execute
+import std.process.{execute, findProcess}
 import std.reflect.ModuleInfo
 import std.regex.Regex
 import std.time.DateTime
@@ -97,7 +97,8 @@ main(args: Array<String>): Int64 {
             0
         case 'shutdown' => //每个模块都注册了atExit，所以发送退出命令的时候都会执行atExit
             let pid = Int64.parse(args[1])
-            exit(pid)
+            findProcess(pid).terminate()
+            0
         case _ => throw BootException('first command arg must be run, but current args are ${args}')
     }
 }
