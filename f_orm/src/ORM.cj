@@ -33,18 +33,20 @@ public class ORM {
     private static let datasources = ConcurrentHashMap<String, NamedDatasource>()
     static let hooks = TransactionHooks()
 
+    static init(){
+        env.atExit(close)
+    }
+
+    public static func close(){
+        for((_, s) in datasources){
+            s.close()
+        }
+    }
     public static func registerTransactionHook<T>(hook: T): Unit where T <: TransactionHook {
         hooks.register<T>(hook)
     }
 
     public static func register(datasource: NamedDatasource, default!: Bool = true): Unit {
-        if (datasources.isEmpty()) {
-            env.atExit {
-                for ((_, datasource) in datasources.iterator()) {
-                    datasource.close()
-                }
-            }
-        }
         if (default) {
             ORM.default = datasource.driverName
         }

@@ -10,7 +10,8 @@
 package fboot
 
 import std.collection.{HashMap, HashSet}
-import std.env.{getWorkingDirectory, getVariables}
+import std.convert.*
+import std.env.{getWorkingDirectory, getVariables, getCommand, exit}
 import std.fs.*
 import std.process.execute
 import std.reflect.ModuleInfo
@@ -62,7 +63,7 @@ main(args: Array<String>): Int64 {
             genLibPath(path)
             env[libPathName] = ldlibPath.toString()
             args[0] = 'run'
-            execute('fboot', args, workingDirectory: path, environment: env)
+            execute(getCommand(), args, workingDirectory: path, environment: env)
         case 'run' =>
             func extractPattern() {
                 if (idx > 0) {
@@ -85,14 +86,18 @@ main(args: Array<String>): Int64 {
             }
             load(path)
             BeanFactory.instance.afterRegistered()
-            MVCLauncher.launch()
+            let future = MVCLauncher.launch()
             //orm 需要应用开发者显式注册数据库驱动及初始化事务切面，
             //执行load函数时一定会加载初始化orm的动态链接库从而完成初始化
             //ticktock是自初始化，首次使用时完成初始化
             //其它模块是工具API没有专门的初始化API
             let end = DateTime.now()
-            println('${path.fileName} is started in ${end - start}, on ${end}')
+            println('${path.fileName} is started in ${end - start} on ${end}')
+            future.get()
             0
+        case 'shutdown' => 
+            let pid = Int64.parse(args[1])
+            exit(pid)
         case _ => throw BootException('first command arg must be run, but current args are ${args}')
     }
 }

@@ -13,6 +13,7 @@ internal import std.ast.*
 internal import std.collection.{ArrayList, HashMap, HashSet}
 internal import std.collection.concurrent.ConcurrentHashMap
 internal import std.convert.*
+internal import std.env.atExit
 internal import std.fs.*
 internal import std.io.{InputStream, OutputStream, ByteBuffer, copy}
 internal import std.math.numeric.{BigInt, Decimal}

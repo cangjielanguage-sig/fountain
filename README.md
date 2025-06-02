@@ -47,10 +47,10 @@ _/ ____\____  __ __  _____/  |______  |__| ____
 
 - 把fboot加入PATH环境变量
   1. fboot run [PATH] --dylibPattern=<DYNAMIC_LIB_NAME_REGEX_WITHOUT_EXTNAME>
-  2. fboot config --pid=<PID> --<key1>=<value1> --<key2>=<value2>：修改指定进程号的配置，指定进程必须是fboot启动。
+  2. fboot config <PID> --<key1>=<value1> --<key2>=<value2>：修改指定进程号的配置，指定进程必须是fboot启动。
      调用`f_config.Config.set(...)`修改配置。
      各模块需要重新初始化的需要调用`f_config.Config.refresher(prefix, refreshFn)`，set函数返回前会调用配置项的键第一个_前的字符串与prefix相同的对应refreshFn。每次调用set函数每个refreshFn最多调用一次。
-
+  3. fbbot shutdown <PID>
 ## 功能
 
 - 空集合

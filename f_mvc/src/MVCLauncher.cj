@@ -12,7 +12,10 @@ package f_mvc
 public class MVCLauncher {
     private static let log = LoggerFactory.getLogger<MVCLauncher>()
     private static var server = None<Server>
-    private static func initialize() {
+    static init(){
+        atExit(closeGracefully)
+    }
+    private static func initialize(): Future<Unit> {
         let builder = ServerBuilder().addr(MVCConfig.host).port(MVCConfig.port).logger(log)
         if (let Some(x) <- MVCConfig.readTimeout) {
             builder.readTimeout(x)
@@ -50,9 +53,10 @@ public class MVCLauncher {
         if (let Some(x) <- MVCConfig.servicePoolConfig) {
             builder.servicePoolConfig(x)
         }
-        let server = builder.distributor(HttpRequestDistributorImpl.instance).build()
-        server.serve()
-        MVCLauncher.server = server
+        server = builder.distributor(HttpRequestDistributorImpl.instance).build()
+        spawn{
+            server?.serve()
+        }
     }
     private static let initial_ = AtomicBool(false)
     private static let registered = AtomicBool(false)
@@ -65,10 +69,15 @@ public class MVCLauncher {
             throw Exception("The generateAndregister can only be called before calling MVCLauncher.launch().")
         }
     }
-    public static func launch() {
+    public static func launch(): Future<Unit>{
         initial_.store(true)
         if(registered.load()) {
             initialize()
+        }else{
+            spawn{}
         }
+    }
+    public static func closeGracefully(): Unit {
+        server?.closeGracefully()
     }
 }

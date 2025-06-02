@@ -46,48 +46,49 @@ public class TransactionAspect <: Aspect {
             accessMode = x.accessMode
             deferrableMode = x.deferrableMode
         }
-        try (exe = ORM.executor(driverName)) {
-            try {
-                exe.newTxAndBegin(
-                    propagation: propagation,
-                    isoLevel: isoLevel,
-                    accessMode: accessMode,
-                    deferrableMode: deferrableMode
-                )
-                let result = point()
-                exe.commit()
-                result
-            } catch (e: Exception) {
-                let et = TypeInfo.of(e)
-                func genExceptionSet(ex: String) {
-                    if (let Some(s) <- rollbackExceptions.get(ex)) {
-                        s
-                    } else {
-                        let set = HashSet<TypeInfo>()
-                        for (e in ex.split("|") where e.size > 0) {
-                            set.add(TypeInfos.get(e.trimAscii()))
-                        }
-                        rollbackExceptions[ex] = set
-                        set
-                    }
-                }
-                if (let Some(noRollbackFor) <- transactional?.noRollbackFor) {
-                    let set: Set<TypeInfo> = genExceptionSet(noRollbackFor)
-                    for (noRollback in set where et.isSubtypeOf(noRollback)) {
-                        throw exe.noRollbackFor(e)
-                    }
-                }
-                if (let Some(rollbackFor) <- transactional?.rollbackFor) {
-                    let set: Set<TypeInfo> = genExceptionSet(rollbackFor)
-                    for (rollback in set where et.isSubtypeOf(rollback)) {
-                        throw exe.rollbackFor(e)
-                    }
-                    throw exe.noRollbackFor(e)
+        var exe = ORM.executor(driverName) // 如果此处发生异常就无所谓回滚事务了，所以ORM.executor(driverName)不必在try块内
+        try {
+            exe.newTxAndBegin(
+                propagation: propagation,
+                isoLevel: isoLevel,
+                accessMode: accessMode,
+                deferrableMode: deferrableMode
+            )
+            let result = point()
+            exe.commit()
+            result
+        } catch (e: Exception) {
+            let et = TypeInfo.of(e)
+            func genExceptionSet(ex: String) {
+                if (let Some(s) <- rollbackExceptions.get(ex)) {
+                    s
                 } else {
-                    exe.rollback()
-                    throw e
+                    let set = HashSet<TypeInfo>()
+                    for (e in ex.split("|") where e.size > 0) {
+                        set.add(TypeInfos.get(e.trimAscii()))
+                    }
+                    rollbackExceptions[ex] = set
+                    set
                 }
             }
+            if (let Some(noRollbackFor) <- transactional?.noRollbackFor) {
+                let set: Set<TypeInfo> = genExceptionSet(noRollbackFor)
+                for (noRollback in set where et.isSubtypeOf(noRollback)) {
+                    throw exe.noRollbackFor(e)
+                }
+            }
+            if (let Some(rollbackFor) <- transactional?.rollbackFor) {
+                let set: Set<TypeInfo> = genExceptionSet(rollbackFor)
+                for (rollback in set where et.isSubtypeOf(rollback)) {
+                    throw exe.rollbackFor(e)
+                }
+                throw exe.noRollbackFor(e)
+            } else {
+                exe.rollback()
+                throw e
+            }
+        } finally {
+            exe.close()
         }
     }
 }
