@@ -1,0 +1,22 @@
+#!/bin/bash
+###################################################################################
+# File Name     : fboot
+# Description   : fountain start script
+# Language      : BASH
+# Version       : 0.1
+# Author        : 吴京润
+# Created Time  : 2025-06-03 13:00 
+###################################################################################
+
+# fboot home variables define
+PRG="$0"
+PRG_DIR=`dirname "$PRG"`
+
+[ -z "$FOUNTAIN_HOME" ] && FOUNTAIN_HOME=`cd "$PRG_DIR/.." >/dev/null; pwd`
+[ -r $PRG ] || exit 5
+[ -x $PRG ] || chmod u+x,g+x $PRG
+
+LD_PATH=`find $PRG_DIR/target/release -name 'f_*'|grep -v -P '\.so|\.cjo|\.build-logs'|tr '\n' ':'`
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$LD_PATH
+
+$PRG_DIR/target/release/bin/fboot start $1
