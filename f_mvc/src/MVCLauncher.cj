@@ -58,6 +58,9 @@ public class MVCLauncher {
             server?.serve()
         }
     }
+    public static func register(mediaType: MediaType) {
+        MediaTypes.register(mediaType)
+    }
     private static let initial_ = AtomicBool(false)
     private static let registered = AtomicBool(false)
     public static func generateAndRegister<T>(fnName: String, argTypes: Array<TypeInfo>): ArrayList<RequestMeta> where T <: Object {
