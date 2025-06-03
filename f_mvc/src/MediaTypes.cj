@@ -14,12 +14,21 @@ public class MediaTypes {
     static init() {
         register(JsonMediaType.instance)
         register(MultipartMediaType.instance)
+        registerFromBeanFactory()
     }
     public static func register(mediaType: MediaType) {
         mediaTypes[mediaType.mediaType] = mediaType
     }
     public static func parse(mediaType: String) {
         tryParse(mediaType).getOrThrow {MediaTypeException("${mediaType} is an illegal MediaType string")}
+    }
+    private static func registerFromBeanFactory(){
+        register(BeanFactory.getList<MediaType>())
+    }
+    private static func regsiter(mediaTypes: ArrayList<MediaType>) {
+        for(m in list){
+            register(m)
+        }
     }
     public static func tryParse(mediaType: String): ?MediaType {
         if (let Some(x) <- mediaTypes.get(mediaType)) {
@@ -34,9 +43,7 @@ public class MediaTypes {
             if (let Some(x) <- mediaTypes.get(mt)) {
                 x
             } else if(let list <- BeanFactory.getList<MediaType>() && list.size > 0){
-                for(m in list){
-                    register(m)
-                }
+                register(list)
                 tryParse(mediaType)
             }else{
                 None<MediaType>

@@ -71,4 +71,3 @@ public class JsonMediaType <: TextMediaType {
         JsonValue.fromStr(data).toData()
     }
 }
-private let _ = JsonMediaType()
