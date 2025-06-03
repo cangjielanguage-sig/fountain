@@ -47,7 +47,6 @@ public class App{
         }
     }
 
-
     private func start(): Int64 {
         let libSet = HashSet<String>()
         let env = HashMap<String, String>(getVariables())
