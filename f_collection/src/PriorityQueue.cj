@@ -11,7 +11,6 @@ package f_collection
 
 import std.collection.ArrayList
 import f_base.*
-import f_exception.OverSizeException
 
 class PriorityQueueIterator<T> <: Iterator<T> {
     private var idx = 0

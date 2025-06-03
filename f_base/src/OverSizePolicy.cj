@@ -10,7 +10,6 @@
 package f_base
 
 import std.sync.Mutex
-import f_exception.OverSizeException
 
 public interface OverSizePolicy<T> {
     /**

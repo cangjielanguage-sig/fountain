@@ -11,7 +11,8 @@
 package f_orm
 
 import std.collection.{ArrayList, Map, HashMap, Set, List}
-import f_exception.{TypeCastException, OverSizeException}
+import f_base.OverSizeException
+import f_exception.TypeCastException
 import f_base.EmptyMap
 import f_base.ExtendOption
 

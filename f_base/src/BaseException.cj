@@ -8,13 +8,20 @@
    See the Mulan PSL v2 for more details.
  */
 
-package f_exception
+package f_base
 
 import std.io.{OutputStream, StringWriter, ByteBuffer}
 import std.collection.ArrayList
 
 public func printStackTrace(exception: Exception, output: OutputStream): Unit {
-    printStackTrace(output){w => printStackTrace(exception, w)}
+    printStackTrace(output){buf => 
+        buf.write("An exception has occured: ${exception}".unsafeBytes())
+        for (stack in exception.getStackTrace()) {
+            buf.write(
+                "         at ${stack.declaringClass}.${stack.methodName}(${stack.fileName}: ${stack.lineNumber})${OS.current.nextLine}".unsafeBytes()
+            )
+        }
+    }
 }
 private func printStackTrace(output: OutputStream, callee: (ByteBuffer) -> Unit) {
     if(let buffer: ByteBuffer <- output){
@@ -25,16 +32,6 @@ private func printStackTrace(output: OutputStream, callee: (ByteBuffer) -> Unit)
         output.write(buffer.bytes())
         output.flush()
     }
-}
-
-private func printStackTrace(exception: Exception, writer: StringWriter<ByteBuffer>): Unit {
-    writer.writeln("An exception has occured: ${exception}")
-    for (stack in exception.getStackTrace()) {
-        writer.writeln(
-            "         at ${stack.declaringClass}.${stack.methodName}(${stack.fileName}: ${stack.lineNumber})"
-        )
-    }
-    writer.flush()
 }
 
 public open class BaseException <: Exception {

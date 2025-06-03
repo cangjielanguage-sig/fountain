@@ -12,7 +12,7 @@ package f_log.output
 import std.time.DateTime
 import stdx.log.{LogWriter, LogValue}
 
-import f_exception.{printStackTrace, BaseException}
+import f_base.{printStackTrace, BaseException}
 
 protected class LogWriterImpl <: LogWriter {
     public LogWriterImpl(private let writer: OutputStream){}

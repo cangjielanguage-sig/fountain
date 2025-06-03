@@ -32,6 +32,7 @@ internal import f_collection.*
 internal import f_config.*
 internal import f_data.*
 internal import f_data.json.*
+internal import f_exception.{UnreachableException, IllegalArgException}
 internal import f_log.LoggerFactory
 internal import f_random.RandomString
 internal import f_regex.*

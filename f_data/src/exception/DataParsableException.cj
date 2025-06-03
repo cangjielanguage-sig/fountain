@@ -9,8 +9,6 @@
 */
 package f_data.exception
 
-import f_exception.BaseException
-
 public class DataParsableException <: BaseException {
     public init() {}
 

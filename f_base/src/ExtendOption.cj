@@ -9,8 +9,6 @@
  */
 package f_base
 
-import f_exception.IllegalAccessException
-
 public interface ExtendOption<T> {
     func iterator(): Iterator<T>
     func call<R>(fn: (T) -> R): ?R 

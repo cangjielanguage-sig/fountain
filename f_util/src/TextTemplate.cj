@@ -20,6 +20,7 @@ import std.time.DateTime
 import f_base.*
 import f_collection.LinkedHashMap
 import f_data.*
+import f_exception.UnreachableException
 import f_regex.*
 import f_time.*
 import f_util.exception.TextTemplateException

@@ -9,7 +9,7 @@
 */
 package f_data.exception
 
-import f_exception.BaseException
+internal import f_base.BaseException
 
 public class DataException <: BaseException {
     public init() {}
