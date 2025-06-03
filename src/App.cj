@@ -29,7 +29,7 @@ public class App{
     private let libPathName: String
     private let delim: String
     
-    public init(args: Array<String>){
+    public App(args: Array<String>, private let name!: String = ''){
         this.args = args
         for (i in 1..args.size where !args[i].startsWith("--dylibPattern=")) {
             idx = i
@@ -105,7 +105,12 @@ public class App{
             //ticktock是自初始化，首次使用时完成初始化
             //其它模块是工具API没有专门的初始化API
             let end = DateTime.now()
-            println('${path.fileName} is started in ${end - start} on ${end}')
+            let app = if(name.size > 0) {
+                name
+            }else{
+                path.fileName.toString()
+            }
+            println('${app} is started in ${end - start} on ${end}')
             future.get()
             0
     }
