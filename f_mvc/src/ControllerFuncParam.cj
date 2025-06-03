@@ -46,7 +46,7 @@ public class RequestParam <: ControllerFuncParam {
         if(value.isEmpty()){
             None<T>
         }else{
-            parseValue<T>(value[1 .. value.size - 1])
+            parseValue<T>(value)
         }
     }
 }
@@ -73,7 +73,7 @@ public class RequestHeader <: ControllerFuncParam {
             None<T>
         }else{
             let v = concat(value)
-            parseValue<T>(v[1 .. v.size - 1])
+            parseValue<T>(v)
         }
     }
 }
