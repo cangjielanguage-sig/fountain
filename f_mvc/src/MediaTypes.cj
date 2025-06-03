@@ -23,10 +23,10 @@ public class MediaTypes {
         tryParse(mediaType).getOrThrow {MediaTypeException("${mediaType} is an illegal MediaType string")}
     }
     private static func registerFromBeanFactory(){
-        register(BeanFactory.getList<MediaType>())
+        register(BeanFactory.instance.getList<MediaType>())
     }
-    private static func regsiter(mediaTypes: ArrayList<MediaType>) {
-        for(m in list){
+    private static func register(mediaTypes: ArrayList<MediaType>) {
+        for(m in mediaTypes){
             register(m)
         }
     }
@@ -42,7 +42,7 @@ public class MediaTypes {
             }
             if (let Some(x) <- mediaTypes.get(mt)) {
                 x
-            } else if(let list <- BeanFactory.getList<MediaType>() && list.size > 0){
+            } else if(let list <- BeanFactory.instance.getList<MediaType>() && list.size > 0){
                 register(list)
                 tryParse(mediaType)
             }else{
