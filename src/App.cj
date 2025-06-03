@@ -29,7 +29,7 @@ public class App{
     private let libPathName: String
     private let delim: String
     
-    public App(args: Array<String>, private let name!: String = ''){
+    public App(args: Array<String>, appHomeIsWorkingPath!: Bool = true, private let name!: String = ''){
         this.args = args
         for (i in 1..args.size where !args[i].startsWith("--dylibPattern=")) {
             idx = i
@@ -37,8 +37,15 @@ public class App{
         }
         path = canonicalize(if (idx > 1) {
             Path(args[1])
-        } else {
+        } else if (appHomeIsWorkingPath){
             getWorkingDirectory()
+        } else {
+            let p = canonicalize(Path(getCommand()))
+            if(p.parent.fileName == 'bin'){
+                p.parent.parent
+            }else{
+                p.parent
+            }
         })
         (ext, libPathName, delim) = match (OS.current) {
             case Windows => (".dll", 'Path', ';')
