@@ -59,7 +59,8 @@ _/ ____\____  __ __  _____/  |______  |__| ____
   1. fboot start [PATH] --dylibPattern=<DYNAMIC_LIB_NAME_REGEX_WITHOUT_EXTNAME>
      把指定路径或工作目录加入当前操作系统自动加载动态链接库的环境变量，并用这个环境变量和fboot start相同的参数启动子进程fboot run，这个环境变量也仅限于fboot run启动的子进程。
   2. fboot run [PATH] --dylibPattern=<DYNAMIC_LIB_NAME_REGEX_WITHOUT_EXTNAME>
-  3. fbbot shutdown <PID>
+  3. fboot shutdown <PID>
+  4. fboot restart <PID>
 ## 功能
 
 - 空集合
