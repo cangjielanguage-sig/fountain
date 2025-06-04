@@ -27,7 +27,7 @@ public class TokenBucketRateLimiter<T> <: RateLimiter<T> {
                 end = MonoTime.now() + populationPeriod
                 var i = 0
                 while(i < tokens && this.tokens.size < tokens){
-                    this.tokens.enqueue(())
+                    this.tokens.add(())
                     i++
                 }
                 next = end - MonoTime.now()
@@ -37,7 +37,7 @@ public class TokenBucketRateLimiter<T> <: RateLimiter<T> {
         atExit(timer.cancel)
     }
     public func exec(default: ?T, task: () -> ?T): ?T{
-        if (let Some(_) <- tokens.dequeue(timeout) && let Some(x) <- task()) {
+        if (let Some(_) <- tokens.remove(timeout) && let Some(x) <- task()) {
             x
         } else {
             default

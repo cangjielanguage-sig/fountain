@@ -33,11 +33,11 @@ public class Worker {
         register(abilities)
         spawn {
             while (!retired.load() || queue.size > 0) {
-                var e = if (let Some(e) <- tryDequeue()) {
+                var e = if (let Some(e) <- tryRemove()) {
                     e
                 } else {
                     eventBus.seizeBy(index)
-                    queue.dequeue()
+                    queue.remove()
                 }
                 while (true) {
                     let ee = this.abilities[e](e)
@@ -92,7 +92,7 @@ public class Worker {
         if (retired.load()) {
             throw EventBusException("index of ${index} worker is retired")
         }
-        queue.enqueue(event)
+        queue.add(event)
     }
     /**
      * 给工作线程安排任务
@@ -104,15 +104,15 @@ public class Worker {
         queue.tryEnqueue(event, timeout)
     }
     func discard(){
-        queue.tryDequeue()
+        queue.tryRemove()
     }
     prop waitingJobSize: Int64 {
         get() {
             queue.size
         }
     }
-    func tryDequeue(): ?Event {
-        if (let Some(e) <- queue.tryDequeue()) {
+    func tryRemove(): ?Event {
+        if (let Some(e) <- queue.tryRemove()) {
             eventBus.putQueueSize(index)
             e.workerId = index
             e

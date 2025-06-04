@@ -26,17 +26,17 @@ public class JobQueue {
     ) {
         queue = LinkedBlockingQueue<Event>(max)
     }
-    func enqueue(event: Event) {
-        queue.enqueue(event)
+    func add(event: Event) {
+        queue.add(event)
     }
     func tryEnqueue(event: Event, timeout: Duration): Bool {
-        queue.enqueue(event, timeout)
+        queue.add(event, timeout)
     }
-    func dequeue(): Event {
-        queue.dequeue()
+    func remove(): Event {
+        queue.remove()
     }
-    func tryDequeue(): ?Event {
-        queue.tryDequeue()
+    func tryRemove(): ?Event {
+        queue.tryRemove()
     }
     public prop size: Int64 {
         get(){

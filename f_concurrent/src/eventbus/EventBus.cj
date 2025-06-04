@@ -59,7 +59,7 @@ public class EventBus {
         spawn {
             var (prevMaxQueueSize, prevMaxQueueIndex): (Int64, Int64) = (-1, -1)
             while (true) {
-                let sizedBy = seizeQueue.dequeue()
+                let sizedBy = seizeQueue.remove()
                 var (maxQueueSize, maxQueueIndex) = synchronized(queueMutex) {
                     this.maxQueueSize
                 }
@@ -76,7 +76,7 @@ public class EventBus {
                     i++
                 }
                 (prevMaxQueueSize, prevMaxQueueIndex) = (maxQueueSize, maxQueueIndex)
-                if (maxQueueSize > 0 && maxQueueIndex != sizedBy && let Some(e) <- this.workers[maxQueueIndex].tryDequeue()) {
+                if (maxQueueSize > 0 && maxQueueIndex != sizedBy && let Some(e) <- this.workers[maxQueueIndex].tryRemove()) {
                     e.workerId = sizedBy
                     this.workers[sizedBy].arrange(e)
                     putQueueSize(sizedBy)
@@ -275,7 +275,7 @@ public class EventBus {
         }
     }
     func seizeBy(workerId: Int64): Unit {
-        seizeQueue.enqueue(workerId)
+        seizeQueue.add(workerId)
     }
     private let datas = ConcurrentHashMap<Int64, Any>()
     private let notified = AtomicBool(false)

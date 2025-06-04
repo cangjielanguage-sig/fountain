@@ -40,7 +40,7 @@ public class LeakingBucketRateLimiter<T> <: RateLimiter<T> {
                 end = MonoTime.now() + leakingDuration
                 while (leaked.load() < leakingPerDuration && 
                     let remainder <- end - MonoTime.now() && remainder > Duration.Zero &&
-                    let Some((d, c)) <- bucket.dequeue(remainder)) {
+                    let Some((d, c)) <- bucket.remove(remainder)) {
                     if(MonoTime.now() - d < timeout){//这个条件不能合并到while循环条件，这个条件不论结果都得继续下次循环
                         c.dec()
                         leaked.fetchAdd(1)
@@ -55,7 +55,7 @@ public class LeakingBucketRateLimiter<T> <: RateLimiter<T> {
     public func exec(default: ?T, task: () -> ?T): ?T {
         let tag = SyncCounter(1)
         let start = MonoTime.now()
-        if (bucket.enqueue((start, tag), timeout) && 
+        if (bucket.add((start, tag), timeout) && 
             let _ <- tag.waitUntilZero(timeout: start + timeout - MonoTime.now()) && 
             tag.count <= 0 &&
             let Some(x) <- task()) {

@@ -77,7 +77,7 @@ public class AsyncServer<EN, DE> <: Resource where EN <: ProtocolData<EN>, DE <:
         func startTasks(queues: Array<ArrayBlockingQueue<()->Unit>>){
             for(q in queues){
                 spawn{
-                    while(let task <- q.dequeue()){
+                    while(let task <- q.remove()){
                         task()
                     }
                 }
@@ -114,7 +114,7 @@ public class AsyncServer<EN, DE> <: Resource where EN <: ProtocolData<EN>, DE <:
         }
     }
     private func enqueueDecoding(socket: TcpSocket, buf: Array<Byte>, decoder: Decoder<DE>){
-        codecQueues[calidx(socket, codecQueues.size)].enqueue({=>
+        codecQueues[calidx(socket, codecQueues.size)].add({=>
             if(let Some(d) <- decoder.decode(buf)){
                 if (d.isToClose) {
                     try{
@@ -129,7 +129,7 @@ public class AsyncServer<EN, DE> <: Resource where EN <: ProtocolData<EN>, DE <:
         })
     }
     private func enqueueTask(socket: TcpSocket, d: DE){
-        taskQueues[calidx(socket, taskQueues.size)].enqueue({=>
+        taskQueues[calidx(socket, taskQueues.size)].add({=>
             let r = rateLimiter.exec(overload){
                 try{
                     executor(d)
@@ -142,7 +142,7 @@ public class AsyncServer<EN, DE> <: Resource where EN <: ProtocolData<EN>, DE <:
         })
     }
     private func enqueueEncoding(socket: TcpSocket, r: EN){
-        codecQueues[calidx(socket, codecQueues.size)].enqueue({=> 
+        codecQueues[calidx(socket, codecQueues.size)].add({=> 
             let bytes = try {
                 encoder.encoder().encode(r)
             }catch(e: Exception){
@@ -153,7 +153,7 @@ public class AsyncServer<EN, DE> <: Resource where EN <: ProtocolData<EN>, DE <:
         })
     }
     private func enqueueWriting(socket: TcpSocket, bytes: Array<Byte>){
-        writeQueues[calidx(socket, writeQueues.size)].enqueue({=>
+        writeQueues[calidx(socket, writeQueues.size)].add({=>
             try{
                 socket.write(bytes)
             }catch(e: Exception){

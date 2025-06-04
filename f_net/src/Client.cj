@@ -66,10 +66,10 @@ public class SocketClientFuture<K, T> where K <: Hashable & Equatable<K>, T <: K
     private let q = ArrayBlockingQueue<?T>(1)
     SocketClientFuture(private let map: ConcurrentHashMap<K, SocketClientFuture<K, T>>){}
     func set(data: ?T){
-        q.enqueue(data)
+        q.add(data)
     }
     public func get(timeout!: Duration = Duration.Max): ?T {
-        if(let Some(x) <- q.dequeue(timeout) && let Some(v) <- x) {
+        if(let Some(x) <- q.remove(timeout) && let Some(v) <- x) {
             map.remove(v.key)
             x
         }else{

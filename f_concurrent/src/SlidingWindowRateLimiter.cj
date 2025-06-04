@@ -30,7 +30,7 @@ public class SlidingWindowRateLimiter<T> <: RateLimiter<T> {
             if(let Some(out) <- this.prev.load() && !out.finished){
                 println('SlidingWindowRateLimiter: ${unfinishedTasks.fetchAdd(1)} tasks are timeout in SlidingWindowRateLimiter for ${TypeInfos.get<T>()}.')
             }
-            let mono = queue.dequeue()
+            let mono = queue.remove()
             prev.store(mono)
             mono.time + window - MonoTime.now()
         }
@@ -45,7 +45,7 @@ public class SlidingWindowRateLimiter<T> <: RateLimiter<T> {
                 mono.finished = true
             }
         }
-        if(queue.enqueue(mono, timeout)){
+        if(queue.add(mono, timeout)){
             mono.time = MonoTime.now()
             if(let Some(x) <- exec()){
                 x

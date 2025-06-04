@@ -52,7 +52,7 @@ public class Pool<T> <: Resource where T <: Object {
         startCheckingSchedule()
         startCreationSchedule()
         for (_ in 0..initSize) {
-            tasks.enqueue(())
+            tasks.add(())
         }
         env.atExit(close)
     }
@@ -75,7 +75,7 @@ public class Pool<T> <: Resource where T <: Object {
         spawn {
             while (running.load()) {
                 var i = 0
-                while (running.load() && i < this.size.load() && let (o, t) <- queue.dequeue()) {
+                while (running.load() && i < this.size.load() && let (o, t) <- queue.remove()) {
                     i++
                     try{
                         if (MonoTime.now() - t >= elementLife || !checker(o)) {
@@ -84,7 +84,7 @@ public class Pool<T> <: Resource where T <: Object {
                                 tasks.tryEnqueue(())
                             }
                         } else {
-                            queue.enqueue((o, t))
+                            queue.add((o, t))
                         }
                     }catch(e: Exception){
                         getLog().warn('Pool checking schedule', e)
@@ -96,7 +96,7 @@ public class Pool<T> <: Resource where T <: Object {
     }
     private func startCreationSchedule() {
         spawn {
-            while (running.load() && let _ <- tasks.dequeue()) {
+            while (running.load() && let _ <- tasks.remove()) {
                 if (running.load() && size.load() < maxSize) {
                     let object = creator()
                     if(checkOnCreation && !checker(object)){
@@ -145,14 +145,14 @@ public class Pool<T> <: Resource where T <: Object {
     }
     public func close(): Unit {
         running.store(false)
-        while(let Some(c) <- tasks.tryDequeue()){}
-        while (let Some((o, _)) <- queue.tryDequeue()) {
+        while(let Some(c) <- tasks.tryRemove()){}
+        while (let Some((o, _)) <- queue.tryRemove()) {
             destroy(o, true)
         }
     }
     public func borrow(timeout!: Duration = Duration.Max): ?T {
         let start = MonoTime.now()
-        while (running.load() && MonoTime.now() - start >= timeout && let Some((o, t)) <- queue.tryDequeue()) {
+        while (running.load() && MonoTime.now() - start >= timeout && let Some((o, t)) <- queue.tryRemove()) {
             if (checkOnBorrowing) {
                 if (checker(o)) {
                     return o
@@ -166,7 +166,7 @@ public class Pool<T> <: Resource where T <: Object {
         var consumed = MonoTime.now() - start
         while (running.load() && timeout > consumed) {
             tasks.tryEnqueue(())
-            if (let Some((o, t)) <- queue.dequeue(timeout - consumed)) {
+            if (let Some((o, t)) <- queue.remove(timeout - consumed)) {
                 if (checkOnBorrowing) {
                     if (checker(o)) {
                         return o

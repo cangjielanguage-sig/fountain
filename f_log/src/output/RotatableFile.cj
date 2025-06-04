@@ -94,7 +94,7 @@ protected class RotatableFile <: OutputStream & Resource{
     }
     private func createRotateTimer() {
         spawn{
-            while(let fn <- queue.dequeue()){
+            while(let fn <- queue.remove()){
                 fn()
             }
         }
@@ -278,7 +278,7 @@ protected class RotatableFile <: OutputStream & Resource{
         }
     }
     private func compressAndDeleteOld(path: String) {
-        queue.enqueue({=>
+        queue.add({=>
             match (compress) {
                 case Deflate(level) => doCompress(path, ".lz", DeflateFormat, level)
                 case GZip(level) => doCompress(path, ".gz", GzipFormat, level)

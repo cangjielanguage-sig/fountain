@@ -46,7 +46,7 @@ public abstract class AsyncLogger <: AbstractLogger {
                 let bufSize = LoggerConfig.getAsyncBufSize()
                 let queue = ArrayBlockingQueue<() -> Unit>(bufSize)
                 queueMap[queueTag] = queue
-                dequeue(queue)
+                remove(queue)
                 queue
             }
         }
@@ -57,11 +57,11 @@ public abstract class AsyncLogger <: AbstractLogger {
             case _ => ByteBuffer()
         }
     }
-    private static func dequeue(queue: ArrayBlockingQueue<() -> Unit>): Unit {
+    private static func remove(queue: ArrayBlockingQueue<() -> Unit>): Unit {
         spawn {
             while (true) {
                 try{
-                    queue.dequeue()()
+                    queue.remove()()
                 }catch(e: Exception){
                     e.printStackTrace()
                 }
@@ -83,11 +83,11 @@ public abstract class AsyncLogger <: AbstractLogger {
         append()
     }
     protected func append(fn: () -> Unit): Unit {
-        while (!queue.enqueue(fn, timeout)) {
+        while (!queue.add(fn, timeout)) {
             match (policy) {
                 case AlwaysWaiting => continue
                 case Discard => return // 忽略
-                case Abort => throw LogException("to enqueue for current logger is timeout ${timeout}")
+                case Abort => throw LogException("to add for current logger is timeout ${timeout}")
             }
         }
     }

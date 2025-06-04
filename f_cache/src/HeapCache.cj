@@ -48,7 +48,7 @@ public class HeapCache<V> where V <: Object {
     private func onEviction(): LinkedBlockingQueue<(String, V)> {
         let q = LinkedBlockingQueue<(String, V)>()
         spawn {
-            while (let (k, v) <- q.dequeue()) {
+            while (let (k, v) <- q.remove()) {
                 evictionCallback(k, v)
             }
         }
@@ -73,7 +73,7 @@ public class HeapCache<V> where V <: Object {
         removeIf{k, p =>
             if(alive.load()){
                 if(evicated(p)){
-                    evictionQueue.enqueue((k, p.load()))
+                    evictionQueue.add((k, p.load()))
                     true
                 }else{
                     false
@@ -109,7 +109,7 @@ public class HeapCache<V> where V <: Object {
                 if (let Some(p) <- topVals.remove()) {
                     store.remove(p.key)
                     minIdx = p.index
-                    evictionQueue.enqueue((p.key, p.load()))
+                    evictionQueue.add((p.key, p.load()))
                 }
                 if (minIdx < 0 || store.size <= maxSize) {
                     break
