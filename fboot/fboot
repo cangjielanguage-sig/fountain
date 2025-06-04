@@ -12,11 +12,13 @@
 PRG="$0"
 PRG_DIR=`dirname "$PRG"`
 
-[ -z "$FOUNTAIN_HOME" ] && FOUNTAIN_HOME=`cd "$PRG_DIR/.." >/dev/null; pwd`
 [ -r $PRG ] || exit 5
 [ -x $PRG ] || chmod u+x,g+x $PRG
 
-LD_PATH=`find $PRG_DIR/target/release -name 'f_*'|grep -v -P '\.so|\.cjo|\.build-logs'|tr '\n' ':'`
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$LD_PATH
-
-$PRG_DIR/target/release/bin/fboot start $1
+if [ $1 -eq 'export' ]; then
+    LD_PATH=`find $PRG_DIR -name 'f_*'|grep -v -P '\.so|\.cjo|\.build-logs'|tr '\n' ':'`
+    export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$LD_PATH
+    export PATH=$PATH:$PRG_DIR/bin
+else
+    $PRG_DIR/bin/fboot start $1
+fi
