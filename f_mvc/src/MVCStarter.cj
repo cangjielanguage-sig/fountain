@@ -9,13 +9,20 @@
  */
 package f_mvc
 
-public class MVCLauncher {
+public class MVCStarter {
     private static let log = LoggerFactory.getLogger<MVCLauncher>()
     private static var server = None<Server>
     static init(){
         atExit(closeGracefully)
     }
-    private static func initialize(): Future<Unit> {
+    private init(){}
+    private static func initialize(): ?MVCStarter {
+        if(!initial_.compareAndSwap(false, true)){
+            throw MVCException('mvc has been started')
+        }
+        if(!registered.load()) {
+            return None<MVCStarter>
+        }
         let builder = ServerBuilder().addr(MVCConfig.host).port(MVCConfig.port).logger(log)
         if (let Some(x) <- MVCConfig.readTimeout) {
             builder.readTimeout(x)
@@ -54,9 +61,7 @@ public class MVCLauncher {
             builder.servicePoolConfig(x)
         }
         server = builder.distributor(HttpRequestDistributorImpl.instance).build()
-        spawn{
-            server?.serve()
-        }
+        MVCStarter()
     }
     public static func register(mediaType: MediaType) {
         MediaTypes.register(mediaType)
@@ -72,13 +77,8 @@ public class MVCLauncher {
             throw Exception("The generateAndregister can only be called before calling MVCLauncher.launch().")
         }
     }
-    public static func launch(): Future<Unit>{
-        initial_.store(true)
-        if(registered.load()) {
-            initialize()
-        }else{
-            spawn{}
-        }
+    public func start(): Unit {
+        server?.serve()
     }
     public static func closeGracefully(): Unit {
         server?.closeGracefully()

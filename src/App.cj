@@ -19,7 +19,7 @@ import std.regex.Regex
 import std.time.DateTime
 import fountain.base.{OS, StringGenerator}
 import fountain.bean.BeanFactory
-import fountain.mvc.MVCLauncher
+import fountain.mvc.MVCStarter
 
 public class App{
     private let args: Array<String>
@@ -106,7 +106,7 @@ public class App{
             }
             load(path)
             BeanFactory.instance.afterRegistered()
-            let future = MVCLauncher.launch()
+            let mvc = MVCLauncher.launch()
             //orm 需要应用开发者显式注册数据库驱动及初始化事务切面，
             //执行load函数时一定会加载初始化orm的动态链接库从而完成初始化
             //ticktock是自初始化，首次使用时完成初始化
@@ -118,7 +118,7 @@ public class App{
                 path.fileName.toString()
             }
             println('${app} is started in ${end - start} on ${end}')
-            future.get()
+            mvc?.start()
             0
     }
     private func shutdown(): Int64 {
