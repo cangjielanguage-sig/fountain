@@ -79,7 +79,7 @@ public class Worker {
             return
         }
         var ee = e
-        while (!queue.tryEnqueue(ee, Duration.Zero)) {
+        while (!queue.tryAdd(ee, Duration.Zero)) {
             ee = abilities[ee](ee)
             if (ee is EndEvent) {
                 deliverIfNeed(ee)
@@ -101,7 +101,7 @@ public class Worker {
         if (retired.load()) {
             throw EventBusException("index of ${index} worker is retired")
         }
-        queue.tryEnqueue(event, timeout)
+        queue.tryAdd(event, timeout)
     }
     func discard(){
         queue.tryRemove()

@@ -29,7 +29,7 @@ public class JobQueue {
     func add(event: Event) {
         queue.add(event)
     }
-    func tryEnqueue(event: Event, timeout: Duration): Bool {
+    func tryAdd(event: Event, timeout: Duration): Bool {
         queue.add(event, timeout)
     }
     func remove(): Event {

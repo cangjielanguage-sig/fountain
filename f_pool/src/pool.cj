@@ -81,7 +81,7 @@ public class Pool<T> <: Resource where T <: Object {
                         if (MonoTime.now() - t >= elementLife || !checker(o)) {
                             destroy(o, true)
                             if(this.size.load() < minSize){
-                                tasks.tryEnqueue(())
+                                tasks.tryAdd(())
                             }
                         } else {
                             queue.add((o, t))
@@ -132,7 +132,7 @@ public class Pool<T> <: Resource where T <: Object {
         }
     }
     private func add(object: T, decrIfOverload!: Bool = true): Bool {
-        if(!queue.tryEnqueue((object, MonoTime.now()))){
+        if(!queue.tryAdd((object, MonoTime.now()))){
             getLog().warn("current size of pool is larger than maxSize(${maxSize}), may be some instances which were not be created by current pool were given back to current pool.")
             destroy(object, false, decr: decrIfOverload)
             false
@@ -165,7 +165,7 @@ public class Pool<T> <: Resource where T <: Object {
         }
         var consumed = MonoTime.now() - start
         while (running.load() && timeout > consumed) {
-            tasks.tryEnqueue(())
+            tasks.tryAdd(())
             if (let Some((o, t)) <- queue.remove(timeout - consumed)) {
                 if (checkOnBorrowing) {
                     if (checker(o)) {
