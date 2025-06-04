@@ -11,11 +11,10 @@ package f_mvc
 
 public class MVCStarter {
     private static let log = LoggerFactory.getLogger<MVCStarter>()
-    private static var server = None<Server>
-    static init(){
+    
+    private MVCStarter(private let server: Server){
         atExit(closeGracefully)
     }
-    private init(){}
     public static func initialize(): ?MVCStarter {
         if(!initial_.compareAndSwap(false, true)){
             throw MVCException('mvc has been started')
@@ -60,8 +59,8 @@ public class MVCStarter {
         if (let Some(x) <- MVCConfig.servicePoolConfig) {
             builder.servicePoolConfig(x)
         }
-        server = builder.distributor(HttpRequestDistributorImpl.instance).build()
-        MVCStarter()
+        let server = builder.distributor(HttpRequestDistributorImpl.instance).build()
+        MVCStarter(server)
     }
     public static func register(mediaType: MediaType) {
         MediaTypes.register(mediaType)
@@ -78,9 +77,9 @@ public class MVCStarter {
         }
     }
     public func start(): Unit {
-        server?.serve()
+        server.serve()
     }
-    public static func closeGracefully(): Unit {
-        server?.closeGracefully()
+    public func closeGracefully(): Unit {
+        server.closeGracefully()
     }
 }
