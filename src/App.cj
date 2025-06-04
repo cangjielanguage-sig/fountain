@@ -9,11 +9,11 @@
 */
 package fountain
 
-import std.collection.{HashMap, HashSet}
+import std.collection.{HashMap, HashSet, Map}
 import std.convert.*
 import std.env.{getWorkingDirectory, getVariables, getCommand}
 import std.fs.*
-import std.process.{execute, findProcess}
+import std.process.{execute, findProcess, Process, ProcessException}
 import std.reflect.ModuleInfo
 import std.regex.Regex
 import std.time.DateTime
@@ -76,6 +76,9 @@ public class App{
         }
         genLibPath(path)
         env[libPathName] = ldlibPath.toString()
+        run(args, env)
+    }
+    private func run(args: Array<String>, env: Map<String, String>){
         args[0] = 'run'
         execute(getCommand(), args, workingDirectory: path, environment: env)
     }
@@ -121,18 +124,42 @@ public class App{
             mvc?.start()
             0
     }
+    private func pid(){
+        Int64.parse(args[1])
+    }
     private func shutdown(): Int64 {
         //每个模块都注册了atExit，所以发送退出命令的时候都会执行atExit
-        let pid = Int64.parse(args[1])
-        findProcess(pid).terminate()
+        let pid = this.pid()
+        shutdown(pid)
+    }
+    private func shutdown(pid: Int64): Int64 {
+        shutdown(findProcess(pid))
+    }
+    private func shutdown(process: Process): Int64 {
+        process.terminate()
         0
     }
-
+    private func restart(): Int64 {
+        let pid = this.pid()
+        let process = findProcess(pid)
+        let args = process.arguments
+        let env = process.environment
+        shutdown(process)
+        while(true){
+            try{
+                findProcess(pid)
+            }catch(_: ProcessException){
+                break
+            }
+        }
+        run(args, env)
+    }
     public func boot(): Int64 {
         match (args[0]) {
             case 'start' => start()
             case 'run' => run()
             case 'shutdown' => shutdown()
+            case 'restart' => restart()
             case _ => throw BootException('first command arg must be run, but current args are ${args}')
         }
     }
