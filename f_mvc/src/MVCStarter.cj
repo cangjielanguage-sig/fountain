@@ -10,13 +10,13 @@
 package f_mvc
 
 public class MVCStarter {
-    private static let log = LoggerFactory.getLogger<MVCLauncher>()
+    private static let log = LoggerFactory.getLogger<MVCStarter>()
     private static var server = None<Server>
     static init(){
         atExit(closeGracefully)
     }
     private init(){}
-    private static func initialize(): ?MVCStarter {
+    public static func initialize(): ?MVCStarter {
         if(!initial_.compareAndSwap(false, true)){
             throw MVCException('mvc has been started')
         }
