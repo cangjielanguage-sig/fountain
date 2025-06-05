@@ -9,7 +9,7 @@
 */
 package f_collection
 
-import std.collection.{Set, ArrayList}
+import std.collection.{Set, ArrayList, MapEntryView}
 import std.collection.concurrent.ConcurrentHashMap
 
 public interface ExtendCollection<T, C> where T <: Equatable<T>, C <: Collection<T> {
@@ -48,8 +48,24 @@ public interface ExtendMap<K, V> <: ExtendCollection<K, Collection<K>> where K <
             remove(k)
         }
     }
+    func entryView(key: K, fn: (MapEntryView<K, V>) -> ?V): ?V
 }
-extend<K, V> HashMap<K, V> <: ExtendMap<K, V> where K <: Hashable & Equatable<K> {}
-extend<K, V> TreeMap<K, V> <: ExtendMap<K, V> where K <: Comparable<K> {}
-extend<K, V> LinkedHashMap<K, V> <: ExtendMap<K, V> where K <: Hashable & Equatable<K> {}
-extend<K, V> ConcurrentHashMap<K, V> <: ExtendMap<K, V> where K <: Hashable & Equatable<K> {}
+public interface ExtendNonConcurrentMap<K, V> <: ExtendMap<K, V> where K <: Equatable<K> {
+    func entryView(key: K): MapEntryView<K, V>
+    func entryView(key: K, fn: (MapEntryView<K, V>) -> ?V): ?V {
+        let entry = this.entryView(key)
+        let value = fn(entry)
+        entry.value = value
+        value
+    }
+}
+extend<K, V> HashMap<K, V> <: ExtendNonConcurrentMap<K, V> where K <: Hashable & Equatable<K> {}
+extend<K, V> TreeMap<K, V> <: ExtendNonConcurrentMap<K, V> where K <: Comparable<K> {}
+extend<K, V> LinkedHashMap<K, V> <: ExtendNonConcurrentMap<K, V> where K <: Hashable & Equatable<K> {}
+extend<K, V> ConcurrentHashMap<K, V> <: ExtendMap<K, V> where K <: Hashable & Equatable<K> {
+    public func entryView(key: K, fn: (MapEntryView<K, V>) -> ?V): ?V {
+        this.entryView(key){entry => 
+            entry.value = fn(entry)
+        }
+    }
+}
