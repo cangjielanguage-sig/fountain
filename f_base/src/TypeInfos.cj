@@ -66,3 +66,11 @@ public class TypeInfos {
         (TypeMemberInfos.instanceFunction(get<T>(), funcName, argTypes)?.findAnnotation<A>() ?? None).isSome()
     }
 }
+public interface SubTypeOf {
+    func isSubtypeOf<S>(): Bool
+}
+extend TypeInfo <: SubTypeOf {
+    public func isSubtypeOf<S>(): Bool {
+        this.isSubtypeOf(TypeInfos.get<S>())
+    }
+}
