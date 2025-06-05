@@ -142,4 +142,10 @@ public class StringGenerator <: ToString {
     public func toString() {
         String.fromUtf8(utf8.unsafeData())
     }
+    public unsafe func rawBytes() {
+        utf8.getRawArray()
+    }
+    public func unsafeBytes(): Array<Byte> {
+        utf8.unsafeData()
+    }
 }
