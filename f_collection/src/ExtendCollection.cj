@@ -48,13 +48,13 @@ public interface ExtendMap<K, V> <: ExtendCollection<K, Collection<K>> where K <
             remove(k)
         }
     }
-    func entryView(key: K, fn: (MapEntryView<K, V>) -> ?V): ?V
+    func entryView(key: K, fn: (K, ?V) -> ?V): ?V
 }
 public interface ExtendNonConcurrentMap<K, V> <: ExtendMap<K, V> where K <: Equatable<K> {
     func entryView(key: K): MapEntryView<K, V>
-    func entryView(key: K, fn: (MapEntryView<K, V>) -> ?V): ?V {
+    func entryView(key: K, fn: (K, ?V) -> ?V): ?V {
         let entry = this.entryView(key)
-        let value = fn(entry)
+        let value = fn(entry.key, entry.value)
         entry.value = value
         value
     }
@@ -63,9 +63,9 @@ extend<K, V> HashMap<K, V> <: ExtendNonConcurrentMap<K, V> where K <: Hashable &
 extend<K, V> TreeMap<K, V> <: ExtendNonConcurrentMap<K, V> where K <: Comparable<K> {}
 extend<K, V> LinkedHashMap<K, V> <: ExtendNonConcurrentMap<K, V> where K <: Hashable & Equatable<K> {}
 extend<K, V> ConcurrentHashMap<K, V> <: ExtendMap<K, V> where K <: Hashable & Equatable<K> {
-    public func entryView(key: K, fn: (MapEntryView<K, V>) -> ?V): ?V {
+    public func entryView(key: K, fn: (K, ?V) -> ?V): ?V {
         this.entryView(key){entry => 
-            entry.value = fn(entry)
+            entry.value = fn(entry.key, entry.value)
         }
     }
 }
