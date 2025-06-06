@@ -36,12 +36,15 @@ func expandBean(input: Tokens): Tokens {
                 }
             }
             var funcTokens = `lsquare`
-            for(f in x.body.decls where isPublic(f) && !isStatic(f) && ((f as FuncDecl)?.funcParams.isEmpty() ?? false)){
-                if(funcTokens.size > 1) {
-                    funcTokens += `comma`
+            for(d in x.body.decls){
+                if(let m: MacroExpandDecl <- d && let f: FuncDecl <- extract(m) && 
+                   isPublic(f) && !isStatic(f) && ((f as FuncDecl)?.funcParams.isEmpty() ?? false)){
+                    if(funcTokens.size > 1) {
+                        funcTokens += `comma`
+                    }
+                    let fn = f.identifier
+                    funcTokens += quote(($(fn.value), {o: Object => let _ = (o as $identifier)?.$fn()}))
                 }
-                let fn = f.identifier
-                funcTokens += quote(($(fn.value), {o: Object => let _ = (o as $identifier)?.$fn()}))
             }
             funcTokens += `rsquare`
             let tokens = 
