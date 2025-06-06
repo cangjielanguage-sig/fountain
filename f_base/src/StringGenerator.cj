@@ -73,6 +73,10 @@ public class StringGenerator <: ToString {
         }
         this
     }
+    public func insert<T>(sub: T, at!: Int64): This where T <: ToString {
+        utf8.add(all: sub.toString().unsafeBytes(), at: at)
+        this
+    }
     public func replace<O, T>(old: O, new: T, fromIndex!: Int64 = 0, toIndex!: Int64 = size): This where O <: ToString, T <: ToString {
         let oldBytes = old.toString().unsafeBytes()
         let newBytes = new.toString().unsafeBytes()
@@ -90,6 +94,21 @@ public class StringGenerator <: ToString {
                 utf8.remove(idx + newBytes.size .. idx + oldBytes.size)
             }
             fromIdx = idx + newBytes.size
+        }
+        this
+    }
+    public func replace<T>(new: T, fromIndex!: Int64 = 0, toIndex!: Int64 = size): This where T <: ToString {
+        let sub = new.toString().unsafeBytes()
+        let replaced = toIndex - fromIndex
+        let subSize = sub.size
+        if(replaced < subSize){
+            utf8.unsafeData()[fromIndex .. toIndex] = sub[0 .. replaced]
+            utf8.add(all: sub[replaced .. sub.size], at: toIndex)
+        }else if(replaced > subSize){
+            utf8.unsafeData()[fromIndex .. fromIndex + subSize] = sub
+            utf8.remove(fromIndex + subSize .. toIndex)
+        }else{
+            utf8.unsafeData()[fromIndex .. toIndex] = sub
         }
         this
     }
@@ -129,6 +148,7 @@ public class StringGenerator <: ToString {
         }
         this
     }
+    
     public func reverse(): This {
         let utf8 = this.utf8.unsafeData()
         var i = utf8.size
