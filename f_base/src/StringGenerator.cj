@@ -34,11 +34,6 @@ public class StringGenerator <: ToString {
             throw IndexOutOfBoundsException('current size is ${size}, but fromIndex: ${fromIndex}, toIndex: ${toIndex}')
         }
     }
-    private func checkIndex(index: Int64){
-        if(index < 0 || index > size){
-            throw IndexOutOfBoundsException('current size is ${size}, but index: ${index}')
-        }
-    }
     public func append<T>(content: T): This where T <: ToString {
         utf8.add(all: content.toString().unsafeBytes())
         this
