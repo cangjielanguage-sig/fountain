@@ -28,6 +28,17 @@ public class StringGenerator <: ToString {
         utf8.clear()
         this
     }
+    
+    private func checkIndex(fromIndex: Int64, toIndex: Int64){
+        if(fromIndex < 0 || fromIndex > size || toIndex < fromIndex || toIndex > size){
+            throw IndexOutOfBoundsException('current size is ${size}, but fromIndex: ${fromIndex}, toIndex: ${toIndex}')
+        }
+    }
+    private func checkIndex(index: Int64){
+        if(index < 0 || index > size){
+            throw IndexOutOfBoundsException('current size is ${size}, but index: ${index}')
+        }
+    }
     public func append<T>(content: T): This where T <: ToString {
         utf8.add(all: content.toString().unsafeBytes())
         this
@@ -65,6 +76,7 @@ public class StringGenerator <: ToString {
         this
     }
     public func remove<T>(content: T, fromIndex!: Int64 = 0, toIndex!: Int64 = size): This where T <: ToString {
+        checkIndex(fromIndex, toIndex)
         let search = content.toString().unsafeBytes()
         var fromIdx = fromIndex
         while(let Some(idx) <- indexOf(search, fromIdx) && idx < toIndex){
@@ -78,6 +90,7 @@ public class StringGenerator <: ToString {
         this
     }
     public func replace<O, T>(old: O, new: T, fromIndex!: Int64 = 0, toIndex!: Int64 = size): This where O <: ToString, T <: ToString {
+        checkIndex(fromIndex, toIndex)
         let oldBytes = old.toString().unsafeBytes()
         let newBytes = new.toString().unsafeBytes()
         var fromIdx = fromIndex
@@ -98,6 +111,7 @@ public class StringGenerator <: ToString {
         this
     }
     public func replace<T>(new: T, fromIndex!: Int64 = 0, toIndex!: Int64 = size): This where T <: ToString {
+        checkIndex(fromIndex, toIndex)
         let sub = new.toString().unsafeBytes()
         let replaced = toIndex - fromIndex
         let subSize = sub.size
@@ -113,6 +127,7 @@ public class StringGenerator <: ToString {
         this
     }
     public func replaceFirst<O, T>(old: O, new: T, fromIndex!: Int64 = 0, toIndex!: Int64 = size): This where O <: ToString, T <: ToString {
+        checkIndex(fromIndex, toIndex)
         let oldBytes = old.toString().unsafeBytes()
         let newBytes = new.toString().unsafeBytes()
         if(let Some(idx) <- indexOf(oldBytes, fromIndex) && idx < toIndex){
@@ -131,6 +146,7 @@ public class StringGenerator <: ToString {
         this
     }
     public func replaceLast<O, T>(old: O, new: T, fromIndex!: Int64 = 0, toIndex!: Int64 = size): This where O <: ToString, T <: ToString {
+        checkIndex(fromIndex, toIndex)
         let oldBytes = old.toString().unsafeBytes()
         let newBytes = new.toString().unsafeBytes()
         if(let Some(idx) <- lastIndexOf(oldBytes, fromIndex) && idx < toIndex){
