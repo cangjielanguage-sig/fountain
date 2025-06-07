@@ -9,6 +9,7 @@
  */
 macro package f_bean.macros
 
+//Autowired Constructor Value只能是宏否则会用到大量反射
 /**
  * 只能修饰类。将@Bean修饰的类注册到BeanFactory
  */
