@@ -11,7 +11,7 @@ macro package f_bean.macros
 
 public macro Lookup(input: Tokens): Tokens {
     quote(
-        @Lookup['']
+        @Lookup[]
         $input
     )
 }
