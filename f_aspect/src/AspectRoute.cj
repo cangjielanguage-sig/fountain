@@ -182,7 +182,7 @@ private func contains(annotations: Collection<Annotation>, annotationNames: Arra
         let list = ArrayList<TypeInfo>()
         let supers = ArrayList<TypeInfo>()
         for(annotation in annotations){
-            list.add(TypeInfo.of(annotation))
+            list.add(ClassTypeInfo.of(annotation))
         }
         for(name in annotationNames){
             supers.add(TypeInfos.get(name.trimAscii()))
@@ -201,7 +201,7 @@ private func contains(annotations: Collection<Annotation>, annotationNames: Arra
     }else{
         let set = HashSet<String>()
         for(annotation in annotations){
-            set.add(TypeInfo.of(annotation).qualifiedName)
+            set.add(ClassTypeInfo.of(annotation).qualifiedName)
         }
         for(name in annotationNames where !set.contains(name.trimAscii())){
             return false
@@ -259,7 +259,7 @@ public class ArgAnnotationsRouteRule <: RouteRule {
             if(annotationName == '*'){
                 continue
             }
-            for(annotation in param.annotations where TypeInfo.of(annotation).qualifiedName == annotationName){
+            for(annotation in param.annotations where ClassTypeInfo.of(annotation).qualifiedName == annotationName){
                 continue
             }
             return false
@@ -294,7 +294,7 @@ private func matches(asc: Bool, funcInfo: InvocationFuncInfo, annotationTypes: S
     for(i in range){
         let current = annotations[i]
         var matched = false
-        for(annotation in params[i].annotations where TypeInfo.of(annotation).qualifiedName == current){
+        for(annotation in params[i].annotations where ClassTypeInfo.of(annotation).qualifiedName == current){
             matched = true
             break
         }

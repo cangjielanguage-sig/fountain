@@ -60,7 +60,7 @@ public abstract class SqlArg <: Hashable & Equatable<SqlArg> & ToString {
     }
     protected func equals(other: SqlArg): Bool {
         this.hashCode() == other.hashCode() && this.index == other.index && 
-        TypeInfo.of(this) == TypeInfo.of(other)
+        ClassTypeInfo.of(this) == ClassTypeInfo.of(other)
     }
 }
 public class BoolSqlArg <: SqlArg {

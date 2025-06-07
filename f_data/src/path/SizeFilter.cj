@@ -31,7 +31,7 @@ internal class SizeFilter <: DataFilter {
                 s
             case _ => 
                 var size = -1
-                let info = TypeInfo.of(left)
+                let info = ClassTypeInfo.of(left)
                 if(info.qualifiedName.startsWith('f_data.DataObject') && 
                    let Some(fn) <- TypeMemberInfos.instanceFunction(info, 'fields') && 
                    let fields: Iterator<ReadableField> <- fn.apply(left)){

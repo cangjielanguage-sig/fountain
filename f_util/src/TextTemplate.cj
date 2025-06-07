@@ -391,7 +391,7 @@ class Value2NumberString <: Value2String {
         if (value.isEmpty()) {
             noneConverter
         }
-        var number = Decimal(value)
+        var number = Decimal.parse(value)
         var symbol = number.compare(Decimal.zero)
         if (radix == 10) {
             number = number.reScale(scale, roundingMode: mode)

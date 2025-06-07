@@ -58,7 +58,7 @@ public class TransactionAspect <: Aspect {
             exe.commit()
             result
         } catch (e: Exception) {
-            let et = TypeInfo.of(e)
+            let et = ClassTypeInfo.of(e)
             func genExceptionSet(ex: String) {
                 if (let Some(s) <- rollbackExceptions.get(ex)) {
                     s

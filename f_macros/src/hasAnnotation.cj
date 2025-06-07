@@ -9,13 +9,13 @@
 */
 package f_macros
 
-import std.reflect.TypeInfo
+import std.reflect.ClassTypeInfo
 import f_base
 
 public func withAnnotation<T>(decl: Decl): Bool where T <: Annotation {
     match(decl){
         case d: MacroExpandDecl => 
-            for(a in f_base.TypeInfos.get<T>().annotations where TypeInfo.of(a).name == d.fullIdentifier.value){
+            for(a in f_base.TypeInfos.get<T>().annotations where ClassTypeInfo.of(a).name == d.fullIdentifier.value){
                 return true
             }
             false

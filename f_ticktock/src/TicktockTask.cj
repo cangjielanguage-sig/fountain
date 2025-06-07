@@ -9,7 +9,7 @@
  */
 package f_ticktock
 
-import std.reflect.TypeInfo
+import std.reflect.ClassTypeInfo
 import std.sync.AtomicInt64
 
 public abstract class TicktockTask <: TicktockTaskDef & Hashable & Equatable<TicktockTaskDef> & Equatable<String> {
@@ -59,7 +59,7 @@ public abstract class TicktockTask <: TicktockTaskDef & Hashable & Equatable<Tic
     }
     public open prop name: String {
         get(){
-            TypeInfo.of(this).qualifiedName
+            ClassTypeInfo.of(this).qualifiedName
         }
     }
 

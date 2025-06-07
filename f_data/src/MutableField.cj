@@ -29,9 +29,11 @@ public class MutableField <: ReadableField {
                     } else {
                         match (o) {
                             case x: O => setter(x, None<F>)
-                            case _ => throw DataException(
-                                "type of current instance does not match, expected ${TypeInfos.get<O>()}, but receives ${TypeInfo.of(o)}"
-                            )
+                            case _ =>
+                                let x: Any = o
+                                throw DataException(
+                                    "type of current instance does not match, expected ${TypeInfos.get<O>()}, but receives ${TypeInfo.of(x)}"
+                                )
                         }
                         true
                     }
@@ -40,9 +42,11 @@ public class MutableField <: ReadableField {
                         case x: O =>
                             setter(x, v)
                             true
-                        case _ => throw DataException(
-                            "type of current instance does not match, expected ${TypeInfos.get<O>()}, but receives ${TypeInfo.of(o)}"
-                        )
+                        case _ =>
+                            let x: Any = o
+                            throw DataException(
+                                "type of current instance does not match, expected ${TypeInfos.get<O>()}, but receives ${TypeInfo.of(x)}"
+                            )
                     }
                 } else if ((flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0) {
                     throw DataException("data ${data} cannot be converted to ${fieldType}")
@@ -67,9 +71,11 @@ public class MutableField <: ReadableField {
                         case x: O =>
                             setter(x, v)
                             true
-                        case _ => throw DataException(
-                            "type of current instance does not match, expected ${TypeInfos.get<O>()}, but receives ${TypeInfo.of(o)}"
-                        )
+                        case _ =>
+                            let x: Any = o
+                            throw DataException(
+                                "type of current instance does not match, expected ${TypeInfos.get<O>()}, but receives ${TypeInfo.of(x)}"
+                            )
                     }
                 } else if ((flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0) {
                     throw DataException("data ${data} cannot be converted to ${fieldType}")

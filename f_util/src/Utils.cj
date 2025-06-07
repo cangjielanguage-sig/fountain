@@ -14,13 +14,13 @@ import std.convert.Parsable
 import f_regex.RegexFromString
 
 /**
-  * compute parameter such as 123KB 24M etc。 to a UInt64,
-  */
+ * compute parameter such as 123KB 24M etc。 to a UInt64,
+ */
 public func computeBytes(size: String): Option<Int64> {
     let sizeRegex = #"^(\d+)([kmgtpezyKMGTPEZY]?)[bB]?$"#.regex(solid: true)
     let matched = sizeRegex.find(size, group: true).getOrThrow()
     let num = Int64.parse(matched.matchString(1))
-    if (matched.groupNumber() >= 2) {
+    if (matched.groupCount() >= 2) {
         let unit = matched.matchString(2)
         return computeBytes(num, unit)
     }
