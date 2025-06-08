@@ -89,6 +89,7 @@ public class CronData <: ToString & Hashable & Equatable<CronData> {
             return true;
         }
         let current = unit.current(date)
-        current >= start && current <= end && (duration == 1 || ((current - start) % duration == 0))
+        current >= start && current <= end && 
+        (duration == 1 || ((current - start) % duration == 0))
     }
 }

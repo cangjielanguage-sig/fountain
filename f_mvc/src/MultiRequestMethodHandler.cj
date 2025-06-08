@@ -10,10 +10,12 @@
 package f_mvc
 
 public class MultiRequestMethodHandler <: HttpRequestHandler {
+    private static let log = LoggerFactory.getLogger<MultiRequestMethodHandler>()
     static let NOT_ACCEPTABLE = HttpStatusOnlyHandler(HttpStatus.NOT_ACCEPTABLE)
     private static let METHOD_NOT_ALLOWED = HttpStatusOnlyHandler(HttpStatus.METHOD_NOT_ALLOWED)
     private static let UNSUPPORTED_MEDIA_TYPE = HttpStatusOnlyHandler(HttpStatus.UNSUPPORTED_MEDIA_TYPE)
     private static let NOT_IMPLEMENTED = HttpStatusOnlyHandler(HttpStatus.NOT_IMPLEMENTED)
+    private static let INTERNAL_SERVER_ERROR = HttpStatusOnlyHandler(HttpStatus.INTERNAL_SERVER_ERROR)
     private static let authFailureHandler = HttpStatusOnlyHandler(MVCConfig.authFailureStatus, message: MVCConfig.authFailureMessage)
     private static let privilegeFailureHandler = HttpStatusOnlyHandler(MVCConfig.privilegeFailureStatus, message: MVCConfig.privilegeFailureMessage)
 
@@ -72,7 +74,15 @@ public class MultiRequestMethodHandler <: HttpRequestHandler {
                     return m.handle(ctx)
                 }
             }
-            handle?.handle(ctx)
+            try{
+                handle?.handle(ctx)
+            }catch(e: Exception){
+                log.error<ToString>('fountain mvc {}: {}', e, [request.method, request.url])
+            }
+        }
+        if(log.debugEnabled) {
+            let request = ctx.request
+            log.debug<ToString>('fountain mvc {}: {}', [request.method, request.url])
         }
         match ((metas.get(method), method)) {
             case (Some(m), OPTIONS)  =>

@@ -20,7 +20,7 @@ internal import std.math.numeric.{BigInt, Decimal}
 internal import std.reflect.*
 internal import std.regex.*
 internal import std.sync.*
-internal import std.time.DateTime
+internal import std.time.{DateTime, MonoTime}
 internal import stdx.encoding.base64.*
 internal import stdx.encoding.hex.*
 internal import stdx.encoding.url.*

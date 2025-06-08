@@ -10,6 +10,7 @@
 package f_mvc
 
 public class RequestMeta {
+    private static let log = LoggerFactory.getLogger<RequestMeta>()
     private var ignoreAuth_ = false
     private var ignorePrivilege_ = false
 
@@ -63,8 +64,14 @@ public class RequestMeta {
         let pattern = this.pattern.getOrThrow()
         handle = {
             ctx =>
-            let result = fn(BeanFactory.instance.getFirst<T>().getOrThrow(), ctx, pattern)
-            generateResponse<R>(ctx, result)
+            let start = MonoTime.now()
+            try{
+                let result = fn(BeanFactory.instance.getFirst<T>().getOrThrow(), ctx, pattern)
+                generateResponse<R>(ctx, result)
+            }finally{
+                let request = ctx.request
+                log.info<ToString>('fountain mvc {}:{};{}', [request.method, request.url, MonoTime.now() - start])
+            }
         }
     }
     private func generateResponse<R>(ctx: HttpContext, result: R): Unit where R <: DataFields<R> {
