@@ -26,24 +26,20 @@ func generate(input: Tokens): Tokens {
     let decl = ClassDecl(input)
     let klass = decl.identifier
     for(d in decl.body.decls){
-        match(d){
-            case m: MacroExpandDecl =>
-                if(let f: FuncDecl <- extract(m) && !isStatic(f) && isPublic(f)){
-                    let (argTypes, argExprs, args) = generateArgs(f)
-                    tokens += quote(
-                        private let _ = {=>
-                            let fname = $(f.identifier.value)
-                            let metas = MVCStarter.generateAndRegister<$klass>($(f.identifier.value), $argTypes)
-                            for(meta in metas){
-                                meta.setHandle{controller, ctx, patterns => 
-                                    $argExprs
-                                    controller.$(f.identifier)($args)
-                                }
-                            }
-                        }()
-                    ) + `nl`
-                }
-            case _ => continue
+        if(let m: MacroExpandDecl <- d && let f: FuncDecl <- extract(m) && !isStatic(f) && isPublic(f)){
+            let (argTypes, argExprs, args) = generateArgs(f)
+            tokens += quote(
+                private let _ = {=>
+                    let fname = $(f.identifier.value)
+                    let metas = MVCStarter.generateAndRegister<$klass>($(f.identifier.value), $argTypes)
+                    for(meta in metas){
+                        meta.setHandle{controller, ctx, patterns => 
+                            $argExprs
+                            controller.$(f.identifier)($args)
+                        }
+                    }
+                }()
+            ) + `nl`
         }
     }
     tokens
