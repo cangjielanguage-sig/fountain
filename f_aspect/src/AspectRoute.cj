@@ -224,16 +224,6 @@ public class TargetAnnotationRouteRule <: RouteRule {
         contains(funcInfo.funcInfo.annotations, annotationNames, sub: sub)
     }
 }
-public class AnyTargetAnnotationRouteRule <: RouteRule {
-    public const AnyTargetAnnotationRouteRule(
-        public let annotationTypes: String,
-        public let sub!: Bool = false
-    ){}
-    public func matches(funcInfo: InvocationFuncInfo): Bool {
-        let annotationNames = annotationTypes.split('|')
-        contains(funcInfo.funcInfo.annotations, annotationNames, sub: sub)
-    }
-}
 /**
  * 目标函数有指定类型的注解将被织入，本规则不适用通配符
  * 参数是注解类型的全限定名，多个注解类名用&分割，每个注解类型都要能够跟目标函数的注解匹配到才返回true。
@@ -246,16 +236,6 @@ public class FuncAnnotationRouteRule <: RouteRule {
     ){}
     public func matches(funcInfo: InvocationFuncInfo): Bool {
         let annotationNames = annotationTypes.split('&')
-        contains(funcInfo.funcInfo.annotations, annotationNames, sub: sub)
-    }
-}
-public class AnyFuncAnnotationRouteRule <: RouteRule {
-    public const AnyFuncAnnotationRouteRule(
-        public let annotationTypes: String,
-        public let sub!: Bool = false
-    ){}
-    public func matches(funcInfo: InvocationFuncInfo): Bool {
-        let annotationNames = annotationTypes.split('|')
         contains(funcInfo.funcInfo.annotations, annotationNames, sub: sub)
     }
 }
