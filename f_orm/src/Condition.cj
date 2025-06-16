@@ -45,7 +45,7 @@ public class Condition {
     }
     public static func `where`(delimiter: String, partial: () -> String): String {
         try{
-            Condition.delimiter = delimiter
+            delimiter = delimiter
             let partial = trim(prefix: 'and|or', suffix: 'and|or', partial: partial)
             if(partial.isEmpty()){
                 ''
@@ -53,7 +53,7 @@ public class Condition {
                 ' `where` ${partial} '
             }
         }finally {
-            Condition.delimiter = ''
+            delimiter = ''
         }
     }
     public static func trim(prefix!: String = '', suffix!: String = '', partial!: () -> String): String {
