@@ -47,7 +47,9 @@ public class TransactionAspect <: Aspect {
             deferrableMode = x.deferrableMode
         }
         var exe = ORM.executor(driverName) // 如果此处发生异常就无所谓回滚事务了，所以ORM.executor(driverName)不必在try块内
+        var txStatus = TransactionStatus.Unknown
         try {
+            ORM.hooks.beforeTx()
             exe.newTxAndBegin(
                 propagation: propagation,
                 isoLevel: isoLevel,
@@ -55,9 +57,13 @@ public class TransactionAspect <: Aspect {
                 deferrableMode: deferrableMode
             )
             let result = point()
+            ORM.hooks.beforeCommit(exe.isReadOnly)
             exe.commit()
+            txStatus = Committed
+            ORM.hooks.afterCommit()
             result
         } catch (e: Exception) {
+            ORM.hooks.afterThrowing(e)
             let et = ClassTypeInfo.of(e)
             func genExceptionSet(ex: String) {
                 if (let Some(s) <- rollbackExceptions.get(ex)) {
@@ -71,23 +77,40 @@ public class TransactionAspect <: Aspect {
                     set
                 }
             }
+            
             if (let Some(noRollbackFor) <- transactional?.noRollbackFor) {
                 let set: Set<TypeInfo> = genExceptionSet(noRollbackFor)
                 for (noRollback in set where et.isSubtypeOf(noRollback)) {
-                    throw exe.noRollbackFor(e)
+                    ORM.hooks.beforeCommit(exe.isReadOnly)
+                    let thrown = exe.noRollbackFor(e)
+                    txStatus = Committed
+                    ORM.hooks.afterCommit()
+                    throw thrown
                 }
             }
             if (let Some(rollbackFor) <- transactional?.rollbackFor) {
                 let set: Set<TypeInfo> = genExceptionSet(rollbackFor)
                 for (rollback in set where et.isSubtypeOf(rollback)) {
-                    throw exe.rollbackFor(e)
+                    ORM.hooks.beforeRollback(e)
+                    let thrown = exe.rollbackFor(e)
+                    txStatus = Rollback
+                    ORM.hooks.afterRollback(e)
+                    throw thrown
                 }
-                throw exe.noRollbackFor(e)
+                ORM.hooks.beforeCommit(exe.isReadOnly)
+                let thrown = exe.noRollbackFor(e)
+                txStatus = Committed
+                ORM.hooks.afterCommit()
+                throw thrown
             } else {
+                ORM.hooks.beforeRollback(e)
                 exe.rollback()
+                txStatus = Rollback
+                ORM.hooks.afterRollback(e)
                 throw e
             }
         } finally {
+            ORM.hooks.afterComplete(txStatus)
             exe.close()
         }
     }

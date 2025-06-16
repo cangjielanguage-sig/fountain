@@ -10,11 +10,13 @@
 package f_orm
 
 public interface TransactionHook {
-    func beforeCommit(readOnly: Bool): Unit
-    func afterCommit(): Unit
-    func beforeRollback(): Unit 
-    func afterRollback(): Unit
-    func afterComplete(status: TransactionStatus): Unit
+    func beforeTx(): Unit{}
+    func beforeCommit(readOnly: Bool): Unit{}
+    func afterCommit(): Unit{}
+    func afterThrowing(e: Exception): Unit {}
+    func beforeRollback(e: Exception): Unit{} 
+    func afterRollback(e: Exception): Unit{}
+    func afterComplete(status: TransactionStatus): Unit{}
     /**
      * 用于决定钩子的执行顺序
      */

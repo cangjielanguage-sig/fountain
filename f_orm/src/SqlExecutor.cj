@@ -67,6 +67,11 @@ public class SqlExecutor <: Resource & RootDAO {
             }
         }
     }
+    public prop isReadOnly: Bool {
+        get(){
+            readOnly
+        }
+    }
 
     static func getInstance(driverName: String): SqlExecutor {
         let em = current.getOrCompute{HashMap<String, SqlExecutor>()}
@@ -702,6 +707,7 @@ public class SqlExecutor <: Resource & RootDAO {
             execute<T> {
                 var txStatus = TransactionStatus.Unknown
                 try {
+                    ORM.hooks.beforeTx()
                     newTxAndBegin()
                     let result = executor(this)
                     if (result[1]) {
@@ -714,12 +720,13 @@ public class SqlExecutor <: Resource & RootDAO {
                         throw ORMException()
                     }
                 } catch (e1: Exception) {
+                    ORM.hooks.afterThrowing(e1)
                     try {
                         if(!txStatus.isCommitted){
-                            ORM.hooks.beforeRollback()
+                            ORM.hooks.beforeRollback(e1)
                             rollback()
                             txStatus = Rollback
-                            ORM.hooks.afterRollback()
+                            ORM.hooks.afterRollback(e1)
                         }
                     } catch (e2: Exception) {
                         let e = ORMException(e2)
@@ -732,12 +739,11 @@ public class SqlExecutor <: Resource & RootDAO {
                     throw ORMException(e1)
                 } finally {
                     ORM.hooks.afterComplete(txStatus)
+                    close()
                 }
             }
         } else {
-            execute<T> {
-                executor(this)[0]
-            }
+            executor(this)[0]
         }
     }
 }

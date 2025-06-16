@@ -14,17 +14,23 @@ import std.collection.ArrayList
 struct TransactionHookWrap <: TransactionHook {
     TransactionHookWrap(private let hook: TransactionHook, let count: Int64){}
 
+    public func beforeTx(): Unit {
+        hook.beforeTx()
+    }
     public func beforeCommit(readOnly: Bool): Unit {
         hook.beforeCommit(readOnly)
     }
     public func afterCommit(): Unit{
         hook.afterCommit()
     }
-    public func beforeRollback(): Unit {
-        hook.beforeRollback()
+    public func afterThrowing(e: Exception): Unit {
+        hook.afterThrowing(e)
     }
-    public func afterRollback(): Unit {
-        hook.afterRollback()
+    public func beforeRollback(e: Exception): Unit {
+        hook.beforeRollback(e)
+    }
+    public func afterRollback(e: Exception): Unit {
+        hook.afterRollback(e)
     }
     public func afterComplete(status: TransactionStatus) {
         hook.afterComplete(status)
@@ -41,7 +47,11 @@ class TransactionHooks <: TransactionHook {
           }
         }
     }
-
+    public func beforeTx(): Unit {
+        for(h in list) {
+            h.beforeTx()
+        }
+    }
     public func beforeCommit(readOnly: Bool): Unit {
         for(h in list){
             h.beforeCommit(readOnly)
@@ -52,14 +62,19 @@ class TransactionHooks <: TransactionHook {
             h.afterCommit()
         }
     }
-    public func beforeRollback(): Unit {
+    public func afterThrowing(e: Exception): Unit {
         for(h in list){
-            h.beforeRollback()
+            h.afterThrowing(e)
         }
     }
-    public func afterRollback(): Unit {
+    public func beforeRollback(e: Exception): Unit {
         for(h in list){
-            h.afterRollback()
+            h.beforeRollback(e)
+        }
+    }
+    public func afterRollback(e: Exception): Unit {
+        for(h in list){
+            h.afterRollback(e)
         }
     }
     public func afterComplete(status: TransactionStatus) {
