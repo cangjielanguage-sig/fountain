@@ -70,7 +70,7 @@ public class RequestMeta {
                 generateResponse<R>(ctx, result)
             }finally{
                 let request = ctx.request
-                log.info<ToString>('fountain mvc {}:{};{}', [request.method, request.url, MonoTime.now() - start])
+                log.info<ToString>('fountain.mvc {}:{};{}', [request.method, request.url, MonoTime.now() - start])
             }
         }
     }

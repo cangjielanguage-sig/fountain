@@ -14,12 +14,5 @@ import f_time.TimeUnit
 import stdx.compress.zlib.*
 
 main(){
-    let param = RotatableFileParams()
-    param.compress = LogFileCompressFormat.GZip(CompressLevel.DefaultCompression)
-    param.fileSize = 0
-    param.timeunit = TimeUnit.SECOND
-    param.path = '/tmp/test.log'
-    let file = RotatableFile(param)
-    file.write('hello'.toArray())
-    sleep(Duration.second * 5)
+    0
 }
