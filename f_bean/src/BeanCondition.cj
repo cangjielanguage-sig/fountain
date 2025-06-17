@@ -13,7 +13,19 @@ package f_bean
  * bean初始化条件，满足条件的bean才初始化，否则将被从BeanFactory删除
  */
 public interface BeanCondition {
-    public func on(factory: BeanFactory): Bool
+    func on(factory: BeanFactory): Bool
+}
+sealed abstract class AbstractBeanCondition <: BeanCondition {
+    const init(){}
+    public const operator func &(right: BeanCondition): BeanCondition{
+        AndCond(this, right)
+    }
+    public const operator func |(right: BeanCondition): BeanCondition{
+        OrCond(this, right)
+    }
+    public const operator func !() : BeanCondition{
+        NotCond(this)
+    }
 }
 /**
  * 默认的bean初始化条件，初始化BeanMeta时的占位。永远返回true。
