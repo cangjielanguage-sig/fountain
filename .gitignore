@@ -15,3 +15,6 @@ fountain.iml
 .devbrain/*
 .arts/
 .arts/*
+build-script-cache/
+build-script-cache/*
+build.cj
