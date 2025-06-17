@@ -10,7 +10,6 @@
 package f_aspect
 
 public class InvocationFuncInfo {
-    public var result = None<Any>
     public InvocationFuncInfo(
         private let _funcInfo: QualifiedFuncInfo,
         private var _args: Array<Any>

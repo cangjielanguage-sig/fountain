@@ -34,7 +34,7 @@ public class Aspects {
                         list.add(m.name)
                     }
                     var f: (Array<Any>) -> Any = {args => fn(args)}
-                    for(i in list.size - 1 ..= 0){
+                    for(i in list.size - 1 ..= 0: -1){
                         let aspected = f
                         f = {args => 
                             funcInfo.setArgs(args)

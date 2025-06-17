@@ -22,7 +22,12 @@ internal import f_data.*
 internal import f_regex.*
 public import f_bean.exception.*
 
+public const SHOULD_INIT_BEAN_CONF_KEY = 'shouldInitBean'
 /**
- * 初始化时使用命令行参数--initBeansIfNeed
+ * 初始化时使用命令行参数--shouldInitBean
  */
-internal let shouldInitBean = Config.getValue<Bool>('shouleInitBean') ?? true
+internal let shouldInitBean = Config.getValue<Bool>(SHOULD_INIT_BEAN_CONF_KEY) ?? true
+
+public func setShouldInitBean(value: Bool) {
+    Config.set<Bool>([(SHOULD_INIT_BEAN_CONF_KEY, value)])
+}

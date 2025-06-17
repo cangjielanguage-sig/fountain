@@ -33,7 +33,6 @@ public interface Aspect {
             before(funcInfo)
             var result = around(funcInfo, point)
             result = after(funcInfo, result)
-            funcInfo.result = result
             result
         } catch (e: Exception) {
             throw throwing(funcInfo, e)
