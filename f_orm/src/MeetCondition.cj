@@ -12,7 +12,7 @@ package f_orm
 public class MeetCondition{
     //condition: Bool, sqlFrag: String, argInSql!: Bool, value!: () -> ToString
     private var _argInSql = false
-    private var _value: () -> ToString = {=> ''}
+    private var _value: () -> Any = {=> ''}
     public MeetCondition(private let condition: Bool, private let partial: String, private let executor: SqlExecutor){}
     
     public prop argInSql: MeetCondition {
@@ -21,20 +21,25 @@ public class MeetCondition{
             this
         }
     }
-    public func value(value: () -> ToString): MeetCondition {
+    public func value(value: () -> Any): MeetCondition {
         this._value = value
         this
     }
-    public func value(value: ToString): MeetCondition {
+    public func value(value: Any): MeetCondition {
         this._value = {=> value}
         this
     }
     public func done(): String {
         if(condition){
             if(_argInSql){
-                ' ${partial} ${_value()} ${Condition.delimiter} '
+                match(_value()){
+                    case x: ToString => ' ${partial} ${x} ${Condition.delimiter} '
+                    case x => 
+                        executor.add(_value())
+                        ' ${partial} ? ${Condition.delimiter} '
+                }        
             }else{
-                executor.add<ToString>(_value())
+                executor.add(_value())
                 ' ${partial} ? ${Condition.delimiter} '
             }
         }else{

@@ -20,7 +20,7 @@ public class LoopCondition<I, T> where I <: Iterable<T> {
     private var _delimiter = ''
     private var _argInSql = false
     private var _condition: (T, Int64) -> Bool = {v, i => true}
-    private var _partial: (T, Int64) -> (String, ToString) = {v, i => throw ORMException('partial for loop is not specified')}
+    private var _partial: (T, Int64) -> (String, Any) = {v, i => throw ORMException('partial for loop is not specified')}
 
     LoopCondition(private let values: I, private let executor: SqlExecutor){}
 
@@ -64,12 +64,15 @@ public class LoopCondition<I, T> where I <: Iterable<T> {
         _condition = cond
         this
     }
-    public func partial(partial: (T, Int64) -> (String, ToString)): LoopCondition<I, T> {
+    public func partial(partial: (T, Int64) -> (String, Any)): LoopCondition<I, T> {
         _partial = partial
         this
     }
-    public func partial(partial: (T, Int64) -> ToString): LoopCondition<I, T> {
-        this.partial{t, i => ('', partial(t, i))}
+    public func partial(partial: (T, Int64) -> Any): LoopCondition<I, T> {
+        func callee(v: T, i: Int64): (String, Any) {
+            ('', partial(v, i))
+        }
+        this.partial(callee)
     }
     public func done(): String {
         let sqlFrag = Condition.trim(prefix: _trimLeft, suffix: _trimRight){
@@ -84,9 +87,14 @@ public class LoopCondition<I, T> where I <: Iterable<T> {
                 let (frag, arg) = _partial(v, i)
                 builder.append(frag)
                 if(_argInSql) {
-                    builder.append(arg)
+                    match(arg){
+                        case x: ToString => builder.append(x)
+                        case x =>
+                            executor.add(arg)
+                            builder.append('?')
+                    }
                 }else{
-                    executor.add<ToString>(arg)
+                    executor.add(arg)
                     builder.append('?')
                 }
                 i++

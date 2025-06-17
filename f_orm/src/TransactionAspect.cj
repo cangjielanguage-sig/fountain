@@ -22,7 +22,7 @@ import f_orm.wrap.ORMConfig
 @AspectRoute[FuncAnnotationRouteRule("f_orm.Transactional") | ConfigExecutionRouteRule(ORMConfig.transactionalFuncExecution)]
 @BeanMeta
 public class TransactionAspect <: Aspect {
-    private init() {}
+    init() {}
     private let rollbackExceptions = ConcurrentHashMap<String, HashSet<TypeInfo>>()
     private let mutex = Mutex()
     private let transactionalMap = ConcurrentHashMap<String, Transactional>()

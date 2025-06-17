@@ -13,9 +13,9 @@ import std.collection.ArrayList
 import f_orm.exception.ORMException
 
 public class ChooseCondition {
-    private static let emptyPartial: () -> (String, ToString) = {=> ('', '')}
-    private let conditions = ArrayList<(() -> Bool, () -> (String, ToString))> ()
-    private var _otherwise: () -> (String, ToString) = emptyPartial
+    private static let emptyPartial: () -> (String, Any) = {=> ('', '')}
+    private let conditions = ArrayList<(() -> Bool, () -> (String, Any))> ()
+    private var _otherwise: () -> (String, Any) = emptyPartial
     private var pair = true
     private var _argInSql: Bool = false
     public ChooseCondition(private let executor: SqlExecutor){}
@@ -34,7 +34,7 @@ public class ChooseCondition {
             throw ORMException('condition and sql partial generation function arg not paring')
         }
     }
-    public func partial(partial: () -> (String, ToString)): ChooseCondition {
+    public func partial(partial: () -> (String, Any)): ChooseCondition {
         if(pair){
             throw ORMException('condition and sql partial generation function arg not paring')
         }else{
@@ -45,33 +45,46 @@ public class ChooseCondition {
             this
         }
     }
-    public func partial(partial: () -> ToString): ChooseCondition {
-        this.partial{('', partial())}
+    private func callee(partial: () -> Any): () -> (String, Any) {
+        {=> ('', partial())}
     }
-    public func otherwise(partial: () -> (String, ToString)): ChooseCondition {
+    public func partial(partial: () -> Any): ChooseCondition {
+        this.partial(callee(partial))
+    }
+    public func otherwise(partial: () -> (String, Any)): ChooseCondition {
         _otherwise = partial
         this
     }
-    public func otherwise(partial: () -> ToString): ChooseCondition {
-        otherwise{('', partial())}
+    public func otherwise(partial: () -> Any): ChooseCondition {
+        otherwise(callee(partial))
     }
     public func done(): String {
         if(!pair){
             throw ORMException('condition and sql partial generation function arg not paring')
         }
-        func gen(partial: () -> (String, ToString)){
+        func gen(partial: () -> (String, Any)){
             let (frag, arg) = partial()
             if(frag.size > 0){
                 if(_argInSql){
-                    ' ${frag} ${arg} ${Condition.delimiter} '
+                    match(arg){
+                        case x: ToString => ' ${frag} ${x} ${Condition.delimiter} '
+                        case x => 
+                            executor.add(arg)
+                            ' ${frag} ? ${Condition.delimiter} '
+                    }
                 }else{
-                    executor.add<ToString>(arg)
+                    executor.add(arg)
                     ' ${frag} ? ${Condition.delimiter} '
                 }
             }else if(_argInSql){
-                ' ${arg} ${Condition.delimiter} '
+                match(arg){
+                    case x: ToString => ' ${x} ${Condition.delimiter} '
+                    case x => 
+                        executor.add(arg)
+                        ' ? ${Condition.delimiter} '
+                }
             }else{
-                executor.add<ToString>(arg)
+                executor.add(arg)
                 ' ? ${Condition.delimiter} '
             }
         }

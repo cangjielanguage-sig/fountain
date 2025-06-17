@@ -631,6 +631,13 @@ public class SqlExecutor <: Resource & RootDAO {
         args.add(arg)
         this
     }
+    public func add(arg: Any){
+        match(arg){
+            case x: ToString => add<ToString>(x)
+            case x: InputStream => add(x)
+            case _ => throw SqlException("Unsupported data type")
+        }
+    }
 
     public func generateSql(sql: String): SqlExecutor {
         args = SqlArgs()
