@@ -18,3 +18,4 @@ fountain.iml
 build-script-cache/
 build-script-cache/*
 build.cj
+build.cj.bak

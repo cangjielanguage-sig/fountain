@@ -33,7 +33,7 @@ public class TransactionAspect <: Aspect {
     public func proceed(funcInfo: InvocationFuncInfo, point: (Array<Any>) -> Any): Any {
         let transactional = funcInfo.funcInfo.findAnnotation<Transactional>()
         var driverName = ""
-        var propagation = Propagation.Required
+        var propagation = None<Propagation>
         var isoLevel = None<TransactionIsoLevel>
         var accessMode = None<TransactionAccessMode>
         var deferrableMode = None<TransactionDeferrableMode>
@@ -63,7 +63,7 @@ public class TransactionAspect <: Aspect {
         try {
             ORM.hooks.beforeTx()
             exe.newTxAndBegin(
-                propagation: propagation,
+                propagation: propagation ?? Propagation.Required,
                 isoLevel: isoLevel,
                 accessMode: accessMode,
                 deferrableMode: deferrableMode
