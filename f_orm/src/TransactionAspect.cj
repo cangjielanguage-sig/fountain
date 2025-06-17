@@ -22,7 +22,7 @@ import f_orm.wrap.ORMConfig
 @AspectRoute[FuncAnnotationRouteRule("f_orm.Transactional") | ConfigExecutionRouteRule(ORMConfig.transactionalFuncExecution)]
 @BeanMeta
 public class TransactionAspect <: Aspect {
-    public static func initialize(): Unit {
+    static init() {
         BeanFactory.instance.register<TransactionAspect>({=> TransactionAspect()})
     }
     private init() {}
@@ -33,7 +33,7 @@ public class TransactionAspect <: Aspect {
     public func proceed(funcInfo: InvocationFuncInfo, point: (Array<Any>) -> Any): Any {
         let transactional = funcInfo.funcInfo.findAnnotation<Transactional>()
         var driverName = ""
-        var propagation = Propagation.Required
+        var propagation = None<Propagation>
         var isoLevel = None<TransactionIsoLevel>
         var accessMode = None<TransactionAccessMode>
         var deferrableMode = None<TransactionDeferrableMode>
@@ -46,12 +46,24 @@ public class TransactionAspect <: Aspect {
             accessMode = x.accessMode
             deferrableMode = x.deferrableMode
         }
+        if(propagation.isNone()){
+            propagation = ORMConfig.getTransactionPropagation(driverName: driverName)
+        }
+        if(isoLevel.isNone()){
+            isoLevel = ORMConfig.getTransactionLevel(driverName: driverName)
+        }
+        if(accessMode.isNone()){
+            accessMode = ORMConfig.getTransactionAccessMode(driverName: driverName)
+        }
+        if(deferrableMode.isNone()){
+            deferrableMode = ORMConfig.getTransactionDeferrableMode(driverName: driverName)
+        }
         var exe = ORM.executor(driverName) // 如果此处发生异常就无所谓回滚事务了，所以ORM.executor(driverName)不必在try块内
         var txStatus = TransactionStatus.Unknown
         try {
             ORM.hooks.beforeTx()
             exe.newTxAndBegin(
-                propagation: propagation,
+                propagation: propagation ?? Propagation.Required,
                 isoLevel: isoLevel,
                 accessMode: accessMode,
                 deferrableMode: deferrableMode
