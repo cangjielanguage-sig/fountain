@@ -12,7 +12,7 @@ package f_bean
 /**
  * 两个bean初始化条件都是true时本条件才是true。
  */
-public class AndCond <: AbstractBeanCondition {
+public class AndCond <: BeanCondition {
     public const AndCond(public let left: BeanCondition, public let right: BeanCondition) {}
     public func on(factory: BeanFactory): Bool {
         left.on(factory) && right.on(factory)
@@ -21,7 +21,7 @@ public class AndCond <: AbstractBeanCondition {
 /**
  * 两个bean初始化条件有一个是true本条件就是true，首先执行left。
  */
-public class OrCond <: AbstractBeanCondition {
+public class OrCond <: BeanCondition {
     public const OrCond(public let left: BeanCondition, public let right: BeanCondition) {}
     public func on(factory: BeanFactory): Bool {
         left.on(factory) || right.on(factory)
@@ -30,7 +30,7 @@ public class OrCond <: AbstractBeanCondition {
 /**
  * 将指定初始化条件取反
  */
-public class NotCond <: AbstractBeanCondition {
+public class NotCond <: BeanCondition {
     public const NotCond(public let op: BeanCondition) {}
     public func on(factory: BeanFactory): Bool {
         !op.on(factory)

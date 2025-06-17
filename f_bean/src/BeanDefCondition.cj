@@ -76,7 +76,7 @@ public enum BeanType {
 /**
  * beanType是全限定类型名，指定类型有bean定义则on返回true
  */
-public class BeanDef <: AbstractBeanCondition {
+public class BeanDef <: BeanCondition {
     public const BeanDef(
         public let beanType!: BeanType = IgnoreType,
         public let beanName!: StringCond = IgnoreCond,

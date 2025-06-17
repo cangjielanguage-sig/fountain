@@ -41,13 +41,4 @@ public enum ConfCond <: BeanCondition {
             }
         }
     }
-    public const operator func &(right: BeanCondition): BeanCondition{
-        AndCond(this, right)
-    }
-    public const operator func |(right: BeanCondition): BeanCondition{
-        OrCond(this, right)
-    }
-    public const operator func !() : BeanCondition{
-        NotCond(this)
-    }
 }

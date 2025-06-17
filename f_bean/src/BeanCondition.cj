@@ -14,9 +14,6 @@ package f_bean
  */
 public interface BeanCondition {
     func on(factory: BeanFactory): Bool
-}
-sealed abstract class AbstractBeanCondition <: BeanCondition {
-    const init(){}
     public const operator func &(right: BeanCondition): BeanCondition{
         AndCond(this, right)
     }
