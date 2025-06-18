@@ -60,7 +60,7 @@ public enum OS <: Equatable<OS> & ToString & Hashable {
         }
     }
     public func hashCode(): Int64 {
-        '${TypeInfos.get<OS>()}.${this}'.hashCode()
+        'fountain.base.OS.${this}'.hashCode()
     }
     @When[os == "Linux"]
     public static prop current: OS {
