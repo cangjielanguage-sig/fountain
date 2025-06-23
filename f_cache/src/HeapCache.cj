@@ -232,7 +232,11 @@ public class HeapCache<V> where V <: Object {
             store.size
         }
     }
+    public func clear(){
+        store.clear()
+    }
     public func destroy(): Unit {
         alive.store(false)
+        store.clear()
     }
 }
