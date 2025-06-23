@@ -65,8 +65,7 @@ public struct UUID <: Hashable & Comparable<UUID> & ToString & Parsable<UUID> {
         //00 00 00 00-00 00-00 00-00 00-00 00 00 00 00 00
         //0  1  2  3  4  5  6  7  8  9  10 11 12 13 14 15
         let builder = StringGenerator()
-        var i = 0
-        while (i < values.size) {
+        for (i in 0 .. values.size) {
             let v = values[i]
             builder.append(hex[Int64((v >> 4) & 0xf)])
             builder.append(hex[Int64(v & 0xf)])
@@ -77,11 +76,11 @@ public struct UUID <: Hashable & Comparable<UUID> & ToString & Parsable<UUID> {
         }
         builder.toString()
     }
-    public func toString(base: Int64){
-        if(base == 16){
+    public func toString(radix: Int64){
+        if(radix == 16){
             return toString(false)
         }
-        BigInt(true, values).toString(radix: base)
+        BigInt(true, values).toString(radix: radix)
     }
     public func toHexString(){
         toString(false)
@@ -168,6 +167,9 @@ public struct UUID <: Hashable & Comparable<UUID> & ToString & Parsable<UUID> {
         tryParse(uuid).getOrThrow {IllegalArgumentException("error uuid ${uuid}")}
     }
     public static func tryParse(uuid: String): ?UUID {
+        if(uuid.size != 35){
+            return None<UUID>
+        }
         func doParse(c: Rune, i: Int64): UInt8 {
             match (c) {
                 case r'0' => 0x0
@@ -186,9 +188,9 @@ public struct UUID <: Hashable & Comparable<UUID> & ToString & Parsable<UUID> {
                 case r'd' => 0xd
                 case r'e' => 0xe
                 case r'f' => 0xf
-                case r'-' where i == 4 || i == 6 || i == 8 || i == 10 =>
+                case r'-' where !(i == 8 || i == 13 || i == 18 || i == 23) =>
                 //00 00 00 00-00 00-00 00-00 00-00 00 00 00 00 00
-                //0  2  4  6  9  11 14 16 19 21 24 26 28 30 32 35 Rune
+                //0  2  4  6  9  11 14 16 19 21 24 26 28 30 32 34 Rune
                 //0  1  2  3  4  5  6  7  8  9  10 11 12 13 14 15 array index
                 16
                 case _ => 17
@@ -196,8 +198,7 @@ public struct UUID <: Hashable & Comparable<UUID> & ToString & Parsable<UUID> {
         }
         var values = Array<Byte>(16, repeat: 0)
         let iterator = uuid.runes()
-        var i = 0
-        while (i < 16) {
+        for (i in 0 .. 16) {
             var c = iterator.next()
             let b1 = match (c) {
                 case Some(x) => doParse(x, i)
@@ -217,13 +218,8 @@ public struct UUID <: Hashable & Comparable<UUID> & ToString & Parsable<UUID> {
                 return None<UUID>
             }
             values[i] = (b1 << 4) | b2
-            i++
         }
-        if (i == 16 && iterator.next().isNone()) {
-            UUID(values: values)
-        } else {
-            None<UUID>
-        }
+        UUID(values: values)
     }
     /**
        version 1
