@@ -21,6 +21,7 @@ import stdx.crypto.crypto.*
 import stdx.crypto.digest.{MD5, SHA1}
 import f_base.{HashBuilder, StringGenerator}
 import f_exception.UnreachableException
+import f_random.ThreadLocalRandom
 import f_util.exception.UUIDException
 
 /**
@@ -72,7 +73,6 @@ public struct UUID <: Hashable & Comparable<UUID> & ToString & Parsable<UUID> {
             if (withDash && (i == 3 || i == 5 || i == 7 || i == 9)) {
                 builder.append(r'-')
             }
-            i++
         }
         builder.toString()
     }
@@ -279,7 +279,7 @@ public struct UUID <: Hashable & Comparable<UUID> & ToString & Parsable<UUID> {
         UUID(values: md)
     }
     public static func random(): UUID {
-        let rand = SecureRandom().nextBytes(16)
+        let rand = ThreadLocalRandom.current.nextBytes(16)
         rand[6] &= 0xf
         rand[6] &= 4 << 4
         rand[8] &= 0x3f
@@ -337,7 +337,7 @@ public struct UUID <: Hashable & Comparable<UUID> & ToString & Parsable<UUID> {
      */
     public static func unixTimeBased(): UUID {
         let millis = (DateTime.now() - DateTime.UnixEpoch).toMilliseconds()
-        let rand = SecureRandom().nextBytes(10)
+        let rand = ThreadLocalRandom.current.nextBytes(10)
         let values = Array<Byte>(16) {
             i => if (i < 6) {
                 UInt8((millis >> (7 - i) * 8) & 0xff)
@@ -464,7 +464,7 @@ public class TimeBasedUUIDBuilder {
         }
     }
     public func randomNode(): UUID {
-        node(SecureRandom().nextBytes(6))
+        node(ThreadLocalRandom.current.nextBytes(6))
     }
     public func node(node: Array<Byte>): UUID {
         generate {i => node[i]}
@@ -555,7 +555,7 @@ public class TimestampSequenceBuilder {
                 }
                 file.seek(Begin(0))
                 file.write(bytes)
-                seq = SecureRandom().nextUInt16()
+                seq = ThreadLocalRandom.current.nextUInt16()
             }
             seq
         }
@@ -568,7 +568,7 @@ public class TimestampSequenceBuilder {
             if (last >= timestamp) {
                 return 0
             } else if (lastNanos.compareAndSwap(last, timestamp)) {
-                return SecureRandom().nextUInt16()
+                return ThreadLocalRandom.current.nextUInt16()
             } else {
                 return 0
             }
@@ -582,7 +582,7 @@ public class TimestampSequenceBuilder {
         synchronized(mutex) {
             let timestamp = (DateTime.now() - timeStart).toNanoseconds() / 100
             if (randomSeq) {
-                (timestamp, SecureRandom().nextUInt16())
+                (timestamp, ThreadLocalRandom.current.nextUInt16())
             } else {
                 (timestamp, seqGen(timestamp))
             }
