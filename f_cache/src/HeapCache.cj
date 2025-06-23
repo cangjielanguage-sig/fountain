@@ -182,7 +182,7 @@ public class HeapCache<V> where V <: Object {
                 let old = p.load()
                 p.store(value)
                 p.maxLife = life
-                p.once = false
+                p.once = once
                 old
             }
         } else {
