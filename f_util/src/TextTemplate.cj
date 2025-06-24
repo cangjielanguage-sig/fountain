@@ -186,10 +186,8 @@ public class TextTemplate {
     }
     private func format<K, V, O>(data: O, noneConverter: ?String): String where K <: TextTemplateKey<K>, V <: ToString, O <: TextTemplateObject<K, V, O> {
         let builder = StringGenerator()
-        var i = 0
-        while(i < compiled.size) {
+        for(i in 0 .. compiled.size) {
             builder.append(compiled[i].format<K, V, O>(data, noneConverter))
-            i++
         }
         builder.toString()
     }

@@ -45,10 +45,9 @@ public struct UUID <: Hashable & Comparable<UUID> & ToString & Parsable<UUID> {
     public func compare(other: UUID): Ordering {
         let v1 = this.values
         let v2 = other.values
-        var i = 0
-        while (i < 16) {
+        for (i in 0 .. 16) {
             match (v1[i].compare(v2[i])) {
-                case EQ => i++
+                case EQ => continue
                 case x => return x
             }
         }
@@ -541,10 +540,8 @@ public class TimestampSequenceBuilder {
             var bytes = Array<Byte>(8, repeat: 0)
             file.read(bytes)
             var storedNanos = 0
-            var i = 0
-            while (i < 8) {
+            for (i in 0 .. 8) {
                 storedNanos |= Int64(bytes[i]) << ((7 - i) * 8)
-                i++
             }
             if (storedNanos >= timestamp) {
                 seq = 0u16

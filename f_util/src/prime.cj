@@ -54,15 +54,13 @@ public func isPrime(p: UInt64){
         return false
     }
     let a: Array<UInt64> = [2, 3, 5, 7, 11]
-    var i = 0
-    while(i < a.size) {
+    for(i in 0 .. a.size) {
         if(p == a[i]){
             return true
         }
         if(!millerRabin(a[i], p)){
             return false
         }
-        i++
     }
     return true
 }
