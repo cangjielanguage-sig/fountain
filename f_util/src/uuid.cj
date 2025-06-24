@@ -546,8 +546,7 @@ public class TimestampSequenceBuilder {
             if (storedNanos >= timestamp) {
                 seq = 0u16
             } else {
-                i = 0
-                while (i < 8) {
+                for (i in 0 .. 8) {
                     bytes[i] = UInt8((timestamp >> ((7 - i) * 8)) & 0xff)
                 }
                 file.seek(Begin(0))
