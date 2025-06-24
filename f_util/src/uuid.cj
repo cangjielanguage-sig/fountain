@@ -87,7 +87,7 @@ public struct UUID <: Hashable & Comparable<UUID> & ToString & Parsable<UUID> {
     }
     public prop version: Int64 {
         get() {
-            Int64(values[7] >> 4)
+            Int64(values[6] >> 4)
         }
     }
     public prop timestampNanos: Int64 {
@@ -158,7 +158,7 @@ public struct UUID <: Hashable & Comparable<UUID> & ToString & Parsable<UUID> {
             } + timestampNanos * Duration.nanosecond
         }
     }
-    public prop propiant: Int64 {
+    public prop variant: Int64 {
         get() {
             Int64(values[8] >> 6)
         }
@@ -283,9 +283,9 @@ public struct UUID <: Hashable & Comparable<UUID> & ToString & Parsable<UUID> {
     public static func random(): UUID {
         let rand = ThreadLocalRandom.current.nextBytes(16)
         rand[6] &= 0xf
-        rand[6] &= 4 << 4
+        rand[6] |= 4 << 4
         rand[8] &= 0x3f
-        rand[8] &= 2 << 6
+        rand[8] |= 2 << 6
         UUID(values: rand)
     }
     /**
@@ -500,7 +500,7 @@ public class TimeBasedUUIDBuilder {
             } else if (idx == 5) {
                 UInt8((timestamp >> 40) & 0xff)
             } else if (idx == 6) {
-                UInt8((timestamp >> 48) & 0xf) | version
+                UInt8((timestamp >> 48) & 0xf) | (version << 4)
             } else {
                 UInt8((timestamp >> 56) & 0xff)
             }
@@ -515,7 +515,7 @@ public class TimeBasedUUIDBuilder {
             } else if (idx == 5) {
                 UInt8((timestamp >> 16) & 0xff)
             } else if (idx == 6) {
-                UInt8((timestamp >> 8) & 0xf) | version
+                UInt8((timestamp >> 8) & 0xf) | (version << 4)
             } else {
                 UInt8(timestamp & 0xff)
             }

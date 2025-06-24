@@ -18,7 +18,9 @@ public class UUIDTest{
     public func random(){
         let uuid = UUID.random()
         let s = uuid.toString()
-        println(s)
+        println('uuid: ${s} ${uuid.version} ${uuid.variant}')
         @Assert(UUID.parse(s) == uuid)
+        @Assert(uuid.version == 4)
+        @Assert(uuid.variant == 2)
     }
 }
