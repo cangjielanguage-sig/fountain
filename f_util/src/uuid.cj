@@ -45,7 +45,7 @@ public struct UUID <: Hashable & Comparable<UUID> & ToString & Parsable<UUID> {
     public func compare(other: UUID): Ordering {
         let v1 = this.values
         let v2 = other.values
-        for (i in 0 .. 16) {
+        for (i in 0..16) {
             match (v1[i].compare(v2[i])) {
                 case EQ => continue
                 case x => return x
@@ -57,15 +57,16 @@ public struct UUID <: Hashable & Comparable<UUID> & ToString & Parsable<UUID> {
     public static let Nil = UUID()
     public static let Max = UUID(values: Array<Byte>(16, repeat: 0xff))
 
-    private static let hex = [r'0', r'1', r'2', r'3', r'4', r'5', r'6', r'7', r'8', r'9', r'a', r'b', r'c', r'd', r'e', r'f']
+    private static let hex = [r'0', r'1', r'2', r'3', r'4', r'5', r'6', r'7', r'8', r'9', r'a', r'b', r'c', r'd', r'e',
+        r'f']
     public func toString(): String {
         toString(true)
     }
-    private func toString(withDash: Bool){
+    private func toString(withDash: Bool) {
         //00 00 00 00-00 00-00 00-00 00-00 00 00 00 00 00
         //0  1  2  3  4  5  6  7  8  9  10 11 12 13 14 15
         let builder = StringGenerator()
-        for (i in 0 .. values.size) {
+        for (i in 0..values.size) {
             let v = values[i]
             builder.append(hex[Int64((v >> 4) & 0xf)])
             builder.append(hex[Int64(v & 0xf)])
@@ -75,13 +76,13 @@ public struct UUID <: Hashable & Comparable<UUID> & ToString & Parsable<UUID> {
         }
         builder.toString()
     }
-    public func toString(radix: Int64){
-        if(radix == 16){
+    public func toString(radix: Int64) {
+        if (radix == 16) {
             return toString(false)
         }
         BigInt(true, values).toString(radix: radix)
     }
-    public func toHexString(){
+    public func toHexString() {
         toString(false)
     }
     public prop version: Int64 {
@@ -166,7 +167,7 @@ public struct UUID <: Hashable & Comparable<UUID> & ToString & Parsable<UUID> {
         tryParse(uuid).getOrThrow {IllegalArgumentException("error uuid ${uuid}")}
     }
     public static func tryParse(uuid: String): ?UUID {
-        if(uuid.size != 35){
+        if (uuid.size != 35) {
             return None<UUID>
         }
         func doParse(c: Rune, i: Int64): UInt8 {
@@ -188,16 +189,16 @@ public struct UUID <: Hashable & Comparable<UUID> & ToString & Parsable<UUID> {
                 case r'e' => 0xe
                 case r'f' => 0xf
                 case r'-' where !(i == 8 || i == 13 || i == 18 || i == 23) =>
-                //00 00 00 00-00 00-00 00-00 00-00 00 00 00 00 00
-                //0  2  4  6  9  11 14 16 19 21 24 26 28 30 32 34 Rune
-                //0  1  2  3  4  5  6  7  8  9  10 11 12 13 14 15 array index
-                16
+                    //00 00 00 00-00 00-00 00-00 00-00 00 00 00 00 00
+                    //0  2  4  6  9  11 14 16 19 21 24 26 28 30 32 34 Rune
+                    //0  1  2  3  4  5  6  7  8  9  10 11 12 13 14 15 array index
+                    16
                 case _ => 17
             }
         }
         var values = Array<Byte>(16, repeat: 0)
         let iterator = uuid.runes()
-        for (i in 0 .. 16) {
+        for (i in 0..16) {
             var c = iterator.next()
             let b1 = match (c) {
                 case Some(x) => doParse(x, i)
@@ -386,6 +387,7 @@ public struct UUID <: Hashable & Comparable<UUID> & ToString & Parsable<UUID> {
         UUID(values: val)
     }
 }
+
 public class TimeBasedUUIDBuilder {
     private let version: Byte
     private var timestamp: Int64 = 0
@@ -485,8 +487,7 @@ public class TimeBasedUUIDBuilder {
                 } else {
                     node(i - 10)
                 }
-            }
-        )
+            })
     }
     private func timeLowFirst(timestamp: Int64): (Int64) -> Byte {
         {
@@ -519,10 +520,11 @@ public class TimeBasedUUIDBuilder {
         }
     }
 }
+
 public class TimestampSequenceBuilder {
     private init() {}
     private static var seqGen: (Int64) -> UInt16 = {
-         =>
+        =>
         let seq = AtomicUInt16(0)
         {t: Int64 => seq.fetchAdd(1)}
     }()
@@ -530,30 +532,32 @@ public class TimestampSequenceBuilder {
         seqGen = generator
     }
     public static func registerFileSequenceGenerator() {
-        let serial = AtomicUInt16(0)
         let dir = Directory.createTemp('/tmp')
-        let file = File("${dir}/${serial.fetchAdd(1)}", OpenMode.Write)
-        env.atExit{file.close()}
+        let file = File("${dir}/${DateTime.now().format('yyyyMMddHHmmssSSS')}", OpenMode.ReadWrite)
+        env.atExit {file.close()}
+        let mutex = Mutex()
         seqGen = {
-            timestamp =>
-            var seq: UInt16 = 0
-            var bytes = Array<Byte>(8, repeat: 0)
-            file.read(bytes)
-            var storedNanos = 0
-            for (i in 0 .. 8) {
-                storedNanos |= Int64(bytes[i]) << ((7 - i) * 8)
-            }
-            if (storedNanos >= timestamp) {
-                seq = 0u16
-            } else {
-                for (i in 0 .. 8) {
-                    bytes[i] = UInt8((timestamp >> ((7 - i) * 8)) & 0xff)
+            timestamp => synchronized(mutex) {
+                let bytes = Array<Byte>(8, repeat: 0)
+                var storedNanos = 0
+                if (file.read(bytes) > 0) {
+                    for (i in 0..8) {
+                        storedNanos |= Int64(bytes[i]) << ((7 - i) * 8)
+                    }
                 }
-                file.seek(Begin(0))
-                file.write(bytes)
-                seq = ThreadLocalRandom.current.nextUInt16()
+                if (storedNanos >= timestamp) {
+                    0u16
+                } else {
+                    for (i in 0..8) {
+                        bytes[i] = UInt8((timestamp >> ((7 - i) * 8)) & 0xff)
+                    }
+                    let pos: SeekPosition = Begin(0)
+                    file.seek(pos)
+                    file.write(bytes)
+                    file.seek(pos)
+                    ThreadLocalRandom.current.nextUInt16()
+                }
             }
-            seq
         }
     }
     public static func registerSequenceGenerator() {
