@@ -167,7 +167,7 @@ public struct UUID <: Hashable & Comparable<UUID> & ToString & Parsable<UUID> {
         tryParse(uuid).getOrThrow {IllegalArgumentException("error uuid ${uuid}")}
     }
     public static func tryParse(uuid: String): ?UUID {
-        if (uuid.size != 35) {
+        if (uuid.size != 36) {
             return None<UUID>
         }
         func doParse(c: Rune, i: Int64): UInt8 {
@@ -188,7 +188,7 @@ public struct UUID <: Hashable & Comparable<UUID> & ToString & Parsable<UUID> {
                 case r'd' => 0xd
                 case r'e' => 0xe
                 case r'f' => 0xf
-                case r'-' where !(i == 8 || i == 13 || i == 18 || i == 23) =>
+                case r'-' where i == 4 || i == 6 || i == 8 || i == 10 =>//i是按解析后的字节数组的索引
                     //00 00 00 00-00 00-00 00-00 00-00 00 00 00 00 00
                     //0  2  4  6  9  11 14 16 19 21 24 26 28 30 32 34 Rune
                     //0  1  2  3  4  5  6  7  8  9  10 11 12 13 14 15 array index
@@ -198,7 +198,8 @@ public struct UUID <: Hashable & Comparable<UUID> & ToString & Parsable<UUID> {
         }
         var values = Array<Byte>(16, repeat: 0)
         let iterator = uuid.runes()
-        for (i in 0..16) {
+        var i = 0
+        while (i < 16) {//这里不能用for-in
             var c = iterator.next()
             let b1 = match (c) {
                 case Some(x) => doParse(x, i)
@@ -218,6 +219,7 @@ public struct UUID <: Hashable & Comparable<UUID> & ToString & Parsable<UUID> {
                 return None<UUID>
             }
             values[i] = (b1 << 4) | b2
+            i++
         }
         UUID(values: values)
     }
@@ -526,7 +528,7 @@ public class TimestampSequenceBuilder {
     private static var seqGen: (Int64) -> UInt16 = {
         =>
         let seq = AtomicUInt16(0)
-        {t: Int64 => seq.fetchAdd(1)}
+        {_: Int64 => seq.fetchAdd(1)}
     }()
     public static func registerSequenceGenerator(generator: (Int64) -> UInt16) {
         seqGen = generator
