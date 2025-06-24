@@ -45,10 +45,8 @@ public class RandomString {
 
     public func randomAscii(count: Int64) {
         var builder = StringGenerator()
-        var i = 0
-        while (i < count) {
+        for (i in 0 .. count) {
             builder.append(Rune(rand.nextUInt32(128)))
-            i++
         }
         return builder.toString()
     }
@@ -60,10 +58,8 @@ public class RandomString {
     }
     public func random(count: Int64, source: Array<Rune>) {
         var builder = StringGenerator()
-        var i = 0
-        while (i < count) {
+        for (i in 0 .. count) {
             builder.append(source[rand.nextInt64(source.size)])
-            i++
         }
         return builder.toString()
     }
@@ -124,12 +120,10 @@ public class RandomString {
     }
     public func randomAllChars(count: Int64) {
         var builder = StringGenerator()
-        var i = 0
-        while (i < count) {
+        for (i in 0 .. count) {
             let idx = rand.nextInt64(2)
             let tuple = ALL_CHARS[idx]
             builder.append(Rune(rand.nextUInt32(tuple[0], tuple[1], closed: true)))
-            i++
         }
         return builder.toString()
     }

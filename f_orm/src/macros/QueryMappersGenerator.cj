@@ -107,8 +107,7 @@ public macro QueryMappersGenerator(input: Tokens): Tokens {
 }
 func generateMappers(name: Tokens, props: Array<PropDecl>, mapperMetaFn: (String) -> (Bool, String, Token)): Tokens {
     var tokens = `empty_tokens`
-    var i = 0
-    while (i < props.size) {
+    for (i in 0 .. props.size) {
         if (i > 0) {
             tokens += `comma`
         }
@@ -117,14 +116,12 @@ func generateMappers(name: Tokens, props: Array<PropDecl>, mapperMetaFn: (String
         let dts = quote($(decl.declType))
         let meta = mapperMetaFn(propName.value)
         tokens += generateMappers(name, propName, dts, meta)
-        i++
     }
     tokens
 }
 func generateMappers(name: Tokens, vars: Array<VarDecl>, mapperMetaFn: (String) -> (Bool, String, Token)): Tokens {
     var tokens = `empty_tokens`
-    var i = 0
-    while (i < vars.size) {
+    for (i in 0 .. vars.size) {
         if (i > 0) {
             tokens += `comma`
         }
@@ -133,16 +130,14 @@ func generateMappers(name: Tokens, vars: Array<VarDecl>, mapperMetaFn: (String) 
         let dts = quote($(decl.declType))
         let meta = mapperMetaFn(varName.value)
         tokens += generateMappers(name, varName, dts, meta)
-        i++
     }
     tokens
 }
 
 func generateMappers(name: Tokens, fieldName: Token, dts: Tokens, meta: (Bool, String, Token)): Tokens {
-    var j = 0
     var dataType = `empty_tokens`
     var nullable = false
-    while (j < dts.size) {
+    for (j in 0 .. dts.size) {
         let dt = dts[j]
         if (j == 0 && dt.value == "?") {
             nullable = true
@@ -153,7 +148,6 @@ func generateMappers(name: Tokens, fieldName: Token, dts: Tokens, meta: (Bool, S
         } else {
             dataType += dt
         }
-        j++
         break
     }
     let dataTypeToken = Token(IDENTIFIER, '${dataType[0].value}DataType')
@@ -178,8 +172,7 @@ func generateMappers(name: Tokens, fieldName: Token, dts: Tokens, meta: (Bool, S
         }
     } else if (dataType[0].value == "ArrayList") {
         var listGeneric = `empty_tokens`
-        var j = 2
-        while (j < dataType.size - 1) {
+        for (j in 2 .. dataType.size - 1) {
             let dt = dataType[j]
             if (j == 2 && dt.value == "?") {
                 nullable = true
@@ -190,7 +183,6 @@ func generateMappers(name: Tokens, fieldName: Token, dts: Tokens, meta: (Bool, S
             } else {
                 listGeneric += dt
             }
-            j++
         }
         if (nullable) {
             listGeneric += `gt`

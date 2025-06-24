@@ -38,8 +38,7 @@ public macro EmailValidation(input: Tokens): Tokens {
 }
 public macro ChineseCellPhoneValidation(attr: Tokens, input: Tokens): Tokens {
     dataValidation("Integer", input)
-    var i = 0
-    while(i < attr.size) {
+    for(i in 0 .. attr.size) {
         let token = attr[i]
         match((token.kind, token.value)){
             case (IDENTIFIER, "NationalCode") => setItem("NationalCode", true)
@@ -48,7 +47,6 @@ public macro ChineseCellPhoneValidation(attr: Tokens, input: Tokens): Tokens {
             case (STRING_LITERAL, x) => setItem("separator", x)
             case _ => throw IllegalArgumentException("illegal attr for @ChineseCellPhoneValidation[], (${token.kind}, ${token.value})")
         }
-        i++
     }
     input
 }

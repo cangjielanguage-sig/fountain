@@ -170,14 +170,12 @@ public struct RegexReplacement {
     }
     func format(data: MatchData): String {
         let builder = StringGenerator()
-        var i = 0
-        while (i < parts.size) {
+        for (i in 0 .. parts.size) {
             match (parts[i]) {
                 case x: String => builder.append(x)
                 case x: Int64 => builder.append(data.matchString(x))
                 case _ => throw UnreachableException()
             }
-            i++
         }
         builder.toString()
     }

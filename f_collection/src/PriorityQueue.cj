@@ -219,11 +219,10 @@ public class PriorityQueue<T> <: Queue<T> & Iterable<T> & Collection<T> & Growab
         PriorityQueueIterator<T>(itr, size)
     }
     public func removeIf(predicate: (T) -> Bool): Unit {
-        var i = 0
         let size = currentSize
         var lastIdx = size
         var toAdjust = false
-        while (i < size) {
+        for (i in 0 .. size) {
             let v = queue[i].getOrThrow()
             if (predicate(v)) {
                 queue[i] = None<T>
@@ -236,7 +235,6 @@ public class PriorityQueue<T> <: Queue<T> & Iterable<T> & Collection<T> & Growab
                 adjustUp(lastIdx, v)
                 lastIdx++
             }
-            i++
         }
         currentSize = lastIdx
     }
