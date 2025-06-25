@@ -270,6 +270,9 @@ public struct UUID <: Hashable & Comparable<UUID> & ToString & Parsable<UUID> {
     public static func md5(value: String): UUID {
         md5(value.toArray())
     }
+    public static func randomMd5(): UUID {
+        md5(ThreadLocalRandom.current.nextBytes(16))
+    }
     public static func md5(value: Array<Byte>): UUID {
         let md5 = MD5()
         md5.write(value)
@@ -304,6 +307,9 @@ public struct UUID <: Hashable & Comparable<UUID> & ToString & Parsable<UUID> {
      */
     public static func sha1(value: String): UUID {
         sha1(value.toArray())
+    }
+    public static func randomSha1(): UUID {
+        sha1(ThreadLocalRandom.current.nextBytes(20))
     }
     public static func sha1(value: Array<Byte>): UUID {
         let sha1 = SHA1()
