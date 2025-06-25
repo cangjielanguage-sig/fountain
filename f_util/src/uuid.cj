@@ -188,7 +188,7 @@ public struct UUID <: Hashable & Comparable<UUID> & ToString & Parsable<UUID> {
                 case r'd' => 0xd
                 case r'e' => 0xe
                 case r'f' => 0xf
-                case r'-' where i == 4 || i == 6 || i == 8 || i == 10 =>//i是按解析后的字节数组的索引
+                case r'-' where i == 4 || i == 6 || i == 8 || i == 10 => //i是按解析后的字节数组的索引
                     //00 00 00 00-00 00-00 00-00 00-00 00 00 00 00 00
                     //0  2  4  6  9  11 14 16 19 21 24 26 28 30 32 34 Rune
                     //0  1  2  3  4  5  6  7  8  9  10 11 12 13 14 15 array index
@@ -199,7 +199,7 @@ public struct UUID <: Hashable & Comparable<UUID> & ToString & Parsable<UUID> {
         var values = Array<Byte>(16, repeat: 0)
         let iterator = uuid.runes()
         var i = 0
-        while (i < 16) {//这里不能用for-in
+        while (i < 16) { //这里不能用for-in
             var c = iterator.next()
             let b1 = match (c) {
                 case Some(x) => doParse(x, i)
@@ -391,6 +391,7 @@ public struct UUID <: Hashable & Comparable<UUID> & ToString & Parsable<UUID> {
 }
 
 public class TimeBasedUUIDBuilder {
+    private let seqGen = TimestampSequenceBuilder()
     private let version: Byte
     private var timestamp: Int64 = 0
     private var seq: UInt16 = 0
@@ -415,7 +416,7 @@ public class TimeBasedUUIDBuilder {
     }
     private func genTimestampAndSequence(randomSeq: Bool) {
         while (timestamp == 0 || seq == 0) {
-            (timestamp, seq) = TimestampSequenceBuilder.timestampAndSequence(randomSeq)
+            (timestamp, seq) = seqGen.timestampAndSequence(randomSeq)
         }
     }
     public func ether(ether: String): UUID {
@@ -524,67 +525,64 @@ public class TimeBasedUUIDBuilder {
 }
 
 public class TimestampSequenceBuilder {
-    private init() {}
-    private static var seqGen: (Int64) -> UInt16 = {
-        =>
-        let seq = AtomicUInt16(0)
-        {_: Int64 => seq.fetchAdd(1)}
-    }()
-    public static func registerSequenceGenerator(generator: (Int64) -> UInt16) {
+    private let seq = AtomicUInt16(0)
+    private var seqGen: (Int64) -> UInt16 = {_ => 0}
+    init() {
+        seqGen = {_: Int64 => seq.fetchAdd(1)}
+    }
+    public func registerSequenceGenerator(generator: (Int64) -> UInt16) {
         seqGen = generator
     }
-    public static func registerFileSequenceGenerator() {
+    public func registerFileSequenceGenerator() {
         let dir = Directory.createTemp('/tmp')
         let file = File("${dir}/${DateTime.now().format('yyyyMMddHHmmssSSS')}", OpenMode.ReadWrite)
         env.atExit {file.close()}
-        let mutex = Mutex()
         seqGen = {
-            timestamp => synchronized(mutex) {
-                let bytes = Array<Byte>(8, repeat: 0)
-                var storedNanos = 0
-                if (file.read(bytes) > 0) {
-                    for (i in 0..8) {
-                        storedNanos |= Int64(bytes[i]) << ((7 - i) * 8)
-                    }
+            timestamp =>
+            let bytes = Array<Byte>(8, repeat: 0)
+            var storedNanos = 0
+            if (file.read(bytes) > 0) {
+                for (i in 0..8) {
+                    storedNanos |= Int64(bytes[i]) << ((7 - i) * 8)
                 }
-                if (storedNanos >= timestamp) {
-                    0u16
-                } else {
-                    for (i in 0..8) {
-                        bytes[i] = UInt8((timestamp >> ((7 - i) * 8)) & 0xff)
-                    }
-                    let pos: SeekPosition = Begin(0)
-                    file.seek(pos)
-                    file.write(bytes)
-                    file.seek(pos)
-                    ThreadLocalRandom.current.nextUInt16()
+            }
+            if (storedNanos >= timestamp) {
+                0u16
+            } else {
+                for (i in 0..8) {
+                    bytes[i] = UInt8((timestamp >> ((7 - i) * 8)) & 0xff)
                 }
+                let pos: SeekPosition = Begin(0)
+                file.seek(pos)
+                file.write(bytes)
+                file.seek(pos)
+                seq.fetchAdd(1)
             }
         }
     }
-    public static func registerSequenceGenerator() {
+    public func registerSequenceGenerator() {
         let lastNanos = AtomicInt64(0)
         seqGen = {
             timestamp =>
             let last = lastNanos.load()
             if (last >= timestamp) {
-                return 0
+                0
             } else if (lastNanos.compareAndSwap(last, timestamp)) {
-                return ThreadLocalRandom.current.nextUInt16()
+                seq.fetchAdd(1)
             } else {
-                return 0
+                0
             }
         }
     }
     static let timeStart = DateTime.of(year: 1582, month: 10, dayOfMonth: 15, hour: 0, minute: 0, second: 0,
         nanosecond: 0, timeZone: TimeZone.UTC)
-    private static let mutex = Mutex()
+    private let mutex = Mutex()
 
-    static func timestampAndSequence(randomSeq: Bool): (Int64, UInt16) {
+    func timestampAndSequence(randomSeq: Bool): (Int64, UInt16) {
         synchronized(mutex) {
             let timestamp = (DateTime.now() - timeStart).toNanoseconds() / 100
             if (randomSeq) {
-                (timestamp, ThreadLocalRandom.current.nextUInt16())
+                (timestamp, seq.fetchAdd(1))
             } else {
                 (timestamp, seqGen(timestamp))
             }
