@@ -21,7 +21,7 @@ import stdx.crypto.crypto.*
 import stdx.crypto.digest.{MD5, SHA1}
 import f_base.{HashBuilder, StringGenerator}
 import f_exception.UnreachableException
-import f_random.ThreadLocalRandom
+import f_random.*
 import f_util.exception.UUIDException
 
 /**
