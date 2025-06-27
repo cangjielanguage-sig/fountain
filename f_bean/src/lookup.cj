@@ -24,3 +24,21 @@ public func lookupList<T>(): ArrayList<T> {
 public func lookupList<T>(cond: StringCond): ArrayList<T> {
     BeanFactory.instance.getList<T>(cond: cond)
 }
+public func lookupHashSet<T>(): HashSet<T> where T <: Hashable & Equatable<T> {
+    lookupHashSet<T>(IgnoreCond)
+}
+public func lookupHashSet<T>(cond: StringCond): HashSet<T> where T <: Hashable & Equatable<T> {
+    HashSet<T>(lookupList<T>(cond))
+}
+public func lookupTreeSet<T>(): TreeSet<T> where T <: Comparable<T> {
+    lookupTreeSet<T>(IgnoreCond)
+}
+public func lookupTreeSet<T>(cond: StringCond): TreeSet<T> where T <: Comparable<T> {
+    TreeSet<T>(lookupList<T>(cond))
+}
+public func lookupHashMap<T>(): HashMap<String, T> {
+    lookupHashMap<T>(IgnoreCond)
+}
+public func lookupHashMap<T>(cond: StringCond): HashMap<String, T> {
+    BeanFactory.instance.getMap<T>(cond: cond)
+}

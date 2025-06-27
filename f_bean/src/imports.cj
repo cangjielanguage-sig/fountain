@@ -9,7 +9,7 @@
  */
 package f_bean
 
-internal import std.collection.{HashMap, TreeMap, LinkedList, ArrayList, TreeSet}
+internal import std.collection.{HashMap, TreeMap, LinkedList, ArrayList, TreeSet, HashSet}
 internal import std.collection.concurrent.ConcurrentHashMap
 internal import std.convert.*
 internal import std.env.*
