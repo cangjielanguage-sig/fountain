@@ -42,3 +42,23 @@ public func lookupHashMap<T>(): HashMap<String, T> {
 public func lookupHashMap<T>(cond: StringCond): HashMap<String, T> {
     BeanFactory.instance.getMap<T>(cond: cond)
 }
+public func lookupLabelBeans<L, T>(): HashMap<L, T> where L <: Hashable & Equatable<L>, T <: BeanLabel<L> {
+    lookupLabelBeans<L, T>(IgnoreCond)
+}
+public func lookupLabelBeans<L, T>(cond: StringCond): HashMap<L, T> where L <: Hashable & Equatable<L>, T <: BeanLabel<L> {
+    let map = HashMap<L, T>()
+    for(bean in lookupList<T>(cond)) {
+        map[bean.label] = bean
+    }
+    map
+}
+public func lookupWeightBeans<W, T>(): TreeMap<W, T> where W <: Comparable<W> & Addable<W>, T <: BeanWeight<W> {
+    lookupWeightBeans<W, T>(IgnoreCond)
+}
+public func lookupWeightBeans<W, T>(cond: StringCond): TreeMap<W, T> where W <: Comparable<W> & Addable<W>, T <: BeanWeight<W> {
+    let map = TreeMap<W, T>()
+    for(bean in lookupList<T>(cond)) {
+        map[bean.weight] = bean
+    }
+    map
+}
