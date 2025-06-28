@@ -56,6 +56,11 @@ public class BeanManager <: Comparable<BeanManager> {
             case _ => o
         }
     }
+    public static prop dummyFunc: (Object) -> Unit {
+        get(){
+            {o: Object =>}
+        }
+    }
     public prop name: String {
         get() {
             _name

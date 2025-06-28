@@ -13,74 +13,44 @@ macro package f_bean.macros
  * 将@Configuration修饰的类里被@Constructor修饰的函数作为bean初始化函数。被@Configuration修饰的类不会注册到BeanFactory.
  */
 public macro Configuration(input: Tokens): Tokens {
-    let decl = parseDecl(input)
-    let identifier = decl.identifier
-    let staticConstructors = ArrayList<(Tokens, Tokens)>()
-    let instanceConstructors = ArrayList<(Tokens, Tokens)>()
-    var configurationConstructor = None<(Tokens, Tokens)>
-    match (decl) {
-        case x: ClassDecl =>
-            var tokens = `empty_tokens`
-            let messages = getChildMessages('Constructor')
-            configurationConstructor = 
-            if(messages.isEmpty()){
-                (quote($(x.identifier)), `empty_tokens`)
-            }else{
-                let message = messages[0]
-                let constructor = message.getTokens('constructor')
-                let params = message.getTokens('params')
-                if(constructor[0].value == 'init' || constructor[0].value == x.identifier.value){
-                    (quote($(x.identifier)), params)
-                }else if(message.getBool('static')){
-                    (quote($(x.identifier).$constructor), params)
-                }else{
-                    report(input, '@Constructor modify public constructor or public static func.')
-                    throw BeanException()
+    let klass = ClassDecl(input)
+    let identifier = klass.identifier
+    var ctorTokens = quote(
+        let ctors = HashMap<String, ()-> $identifier>()
+    ) + `nl`
+    for(d in klass.body.decls){
+        match(d){
+            case med: MacroExpandDecl => 
+                var md: Decl = med
+                while(let d: MacroExpandDecl <- md){
+                    md = d.macroInputDecl
+                    match(md){
+                        case f: FuncDecl where isStatic(f) && isPublic(f) && f.funcParams.isEmpty() => 
+                            let fname = f.identifier.value
+                            ctorTokens += quote(
+                                ctors[$fname] = {=> $(identifier).$(f.identifier)()}
+                            ) + `nl`
+                        case f: FuncDecl where !isStatic(f) && isPublic(f) && f.funcParams.isEmpty() => 
+                            let fname = f.identifier.value
+                            ctorTokens += quote(
+                                ctors[$fname] = {=> configuration.$(f.identifier)()}
+                            )
+                        case f: MacroExpandDecl => continue
+                        case _ => break
+                    }
+                    break
                 }
-            }
-            for (message in getChildMessages('Bean')) {
-                var constructor = message.getTokens('constructor')
-                let params = message.getTokens('params')
-                if (constructor[0].value == 'init' || constructor[0].value == x.identifier.value) {
-                    report(input,
-                        '@Bean can modify public func inside which decl is modified by @Configuration')
-                    throw BeanException()
-                } else if (message.getBool('static')) {
-                    staticConstructors.add((quote($(x.identifier).$constructor), params))
-                } else {
-                    instanceConstructors.add((quote(configuration.$constructor), params))
-                }
-            }
-            tokens
-        case _ => report(input, 'macro @Configuration accept a class decl or')
-    }
-    func genCtorApply(tokens: Option<(Tokens, Tokens)>) {
-        if (let Some((constructor, params)) <- tokens) {
-            quote($constructor($params))
-        } else {
-            quote($(decl.identifier)())
+            case _ => ()
         }
     }
-    func genCtorApply(tokens: ArrayList<(Tokens, Tokens)>) {
-        var beans = `empty_tokens`
-        for (ct in tokens) {
-            if (beans.size > 0) {
-                beans += `nl`
-            }
-            beans += quote(BeanFactory.instance.register{
-            $(genCtorApply(ct))
-         })
-        }
-        beans
-    }
-    let beans = `nl` + genCtorApply(staticConstructors) + `nl` + genCtorApply(instanceConstructors)
     quote(
-        
-      $input
-      
-      let _ = {=> 
-         let configuration = $(genCtorApply(configurationConstructor))
-         $beans
-      }
-   )
+        $input
+        private let _ = {=>
+            let configuration = $(identifier)()
+            $ctorTokens
+            for ((n, f) in ctors where TypeInfos.withAnnotation<$identifier, Constructor>(n, [])) {
+                BeanFactory.instance.register<$identifier>(f)
+            }
+        }()
+    )
 }

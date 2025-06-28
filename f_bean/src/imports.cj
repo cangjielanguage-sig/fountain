@@ -9,7 +9,7 @@
  */
 package f_bean
 
-internal import std.collection.{HashMap, TreeMap, LinkedList, ArrayList, TreeSet, HashSet}
+internal import std.collection.{TreeMap, LinkedList, ArrayList, TreeSet, HashSet}
 internal import std.collection.concurrent.ConcurrentHashMap
 internal import std.convert.*
 internal import std.env.*
@@ -20,6 +20,7 @@ internal import f_base.*
 internal import f_config.Config
 internal import f_data.*
 internal import f_regex.*
+public import std.collection.HashMap
 public import f_bean.exception.*
 
 public const SHOULD_INIT_BEAN_CONF_KEY = 'shouldInitBean'

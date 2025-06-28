@@ -67,7 +67,28 @@ public class BeanFactory {
             }
         }
     }
-    public func register<T>(creator: () -> T, postConstruct!: (Object) -> Unit = {o =>}, destroy!: (Object) -> Unit = {o =>}) where T <: Object {
+    public func register<T>(creator: () -> T) where T <: Object {
+        func fn(f: InstanceFunctionInfo): (Object) -> Unit {
+            {o: Object => f.apply(o)}
+        }
+        var postConstruct = BeanManager.dummyFunc
+        var destroy = BeanManager.dummyFunc
+        var i = 0
+        for(f in TypeInfos.get<T>().instanceFunctions where f.parameters.isEmpty() && f.genericParams.isEmpty()){
+            if(TypeInfos.withAnnotation<T, PostConstruct>(f.name, [])){
+                postConstruct = fn(f)
+                i++
+            }else if(TypeInfos.withAnnotation<T, Destroy>(f.name, [])){
+                destroy = fn(f)
+                i++
+            }
+            if(i == 2){
+                break
+            }
+        }
+        register<T>(creator, postConstruct, destroy)
+    }
+    public func register<T>(creator: () -> T, postConstruct: (Object) -> Unit, destroy: (Object) -> Unit) where T <: Object {
         let typeInfo = TypeInfos.get<T>()
         let meta = if (let Some(meta) <- typeInfo.findAnnotation<BeanMeta>()) {
             meta
