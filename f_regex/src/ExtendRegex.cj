@@ -89,7 +89,6 @@ extend Regex <: ExtendRegex {
         if(let Some(md) <- this.find(sub, group: true)){
             let rr = RegexReplacement(replacement)
             let pos = md.matchPosition()
-            let start = pos.start
             return '${input[0 .. index]}${sub[0 .. pos.start]}${rr.format(md)}${sub[pos.end ..]}'
         }
         input

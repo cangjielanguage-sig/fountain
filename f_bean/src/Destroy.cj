@@ -9,7 +9,6 @@
  */
 package f_bean
 
-@Annotation[target: [MemberFunction]]
-public class Destroy {
-    public const init() {}
+public interface Destroy{
+    func destroy(): Unit
 }

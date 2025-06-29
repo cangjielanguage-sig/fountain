@@ -21,8 +21,7 @@ public abstract class TicktockTask <: TicktockTaskDef & Hashable & Equatable<Tic
      */
     public func run(): Unit {
         let currentStamp = stamped.fetchAdd(1) + 1
-        let notExecuting = !executing(currentStamp)
-        if (notExecuting || (concurrentable && !this.once)) {
+        if (!executing(currentStamp) || (concurrentable && !this.once)) {
             try {
                 execute()
             } finally {

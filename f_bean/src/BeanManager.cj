@@ -18,9 +18,7 @@ public class BeanManager <: Comparable<BeanManager> {
     public BeanManager(
         public let meta: BeanMeta,
         public let beanType: TypeInfo,
-        private let creator: () -> Object,
-        private let postConstruct!: (Object) -> Unit = {o =>},
-        private let destroy!: (Object) -> Unit = {o =>}
+        private let creator: () -> Object
     ) {
         _name = if (meta.name.isEmpty()) {
             '${beanType.qualifiedName}_${index}'
@@ -29,8 +27,8 @@ public class BeanManager <: Comparable<BeanManager> {
         }
     }
     internal func doDestroy(): Unit {
-        if (let Some(b) <- _bean.load()) {
-            destroy(b)
+        if (let Some(b) <- _bean.load() && let x: Destroy <- b) {
+            x.destroy()
         }
     }
     /**
@@ -38,7 +36,11 @@ public class BeanManager <: Comparable<BeanManager> {
      * 同一自定义BeanScope且相同生命周期的的bean应在生命周期结束时统一调用本函数生成的函数销毁bean。
      */
     internal func generateDestroy(object: Object): () -> Unit {
-        {=> destroy(object)}
+        {=>
+            if(let x: Destroy <- object){
+                x.destroy()
+            }
+        }
     }
     internal func on(factory: BeanFactory): Bool {
         meta.condition.on(factory)
@@ -50,15 +52,12 @@ public class BeanManager <: Comparable<BeanManager> {
     }
     private func new(): Object {
         let o = creator()
-        postConstruct(o)
+        if(let x: PostConstruct <- o){
+            x.postConstruct()
+        }
         match (o) {
             case x: FactoryBean => x.get()
             case _ => o
-        }
-    }
-    public static prop dummyFunc: (Object) -> Unit {
-        get(){
-            {o: Object =>}
         }
     }
     public prop name: String {

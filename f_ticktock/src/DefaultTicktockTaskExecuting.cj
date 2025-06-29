@@ -10,15 +10,16 @@
 package f_ticktock
 
 import std.collection.concurrent.ConcurrentHashMap
+import f_collection.*
 
 class DefaultTicktockTaskExecuting {
     private static var executingMap = ConcurrentHashMap<String, Int64>()
 
     static func executing(name: String, stamp: Int64): Bool {
-        executingMap.putIfAbsent(name, stamp).isSome()
+        executingMap.addIfAbsent(name, stamp).isSome()
     }
 
     static func reset(name: String, stamp: Int64): Unit {
-        executingMap.remove(name){v => v == stamp}
+        executingMap.removeIf(name){v => v == stamp}
     }
 }

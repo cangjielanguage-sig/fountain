@@ -19,7 +19,6 @@ public macro Bean(input: Tokens): Tokens {
     var ctorTokens = quote(
         let ctors = HashMap<String, ()-> $identifier>()
     ) + `nl`
-    var funcTokens = `lsquare`
     for(d in klass.body.decls){
         match(d){
             case f: FuncDecl where f.identifier.value == 'init' =>
@@ -49,12 +48,6 @@ public macro Bean(input: Tokens): Tokens {
                             ctorTokens += quote(
                                 ctors[$fname] = {=> $(identifier).$(f.identifier)()}
                             ) + `nl`
-                        case f: FuncDecl where !isStatic(f) && isPublic(f) && f.funcParams.isEmpty() => 
-                            if(funcTokens.size > 1) {
-                                funcTokens += `comma`
-                            }
-                            let fn = f.identifier
-                            funcTokens += quote(($(fn.value), {o: Object => let _ = (o as $identifier)?.$fn()}))
                         case f: PrimaryCtorDecl where isPublic(f) && f.funcParams.isEmpty() =>
                             ctorTokens += quote(
                                 ctors['init'] = {=> $(identifier)()}
@@ -67,44 +60,22 @@ public macro Bean(input: Tokens): Tokens {
             case _ => continue
         }
     }
-    funcTokens += `rsquare`
     quote(
         $input
         private let _ = {=>
             $ctorTokens
-            var constructor = if(ctors.size == 1){
-                (ctors.values().iterator().next().getOrThrow(), true)
-            }else{
-                ({=>}, false)
+            var constructor = None<() -> $identifier>
+            for ((n, f) in ctors where TypeInfos.withAnnotation<$identifier, Constructor>(n, [])) {
+                constructor = n
+                break
             }
-            if (!constructor[1]) {
-                for ((n, f) in ctors where TypeInfos.withAnnotation<$identifier, Constructor>(n, [])) {
-                    constructor = (f, true)
-                    break
-                }
+            if (constructor.isNone() && let Some(f) <- ctors.get("init")) {
+                constructor = f
             }
-            if (!constructor[1] && let Some(f) <- ctors.get("init")) {
-                constructor = (f, true)
-            }
-            if(!constructor[1]){
+            if(constructor.isNone()){
                 throw BeanException('class $(identifier.value) must be with a public parameterless constructor or a public static parameterless function.')
             }
-            var postConstruct = BeanManager.dummyFunc
-            var destroy = BeanManager.dummyFunc
-            var i = 0i8
-            for((n, f) in $funcTokens){
-                if(TypeInfos.withAnnotation<$identifier, PostConstruct>(n, [])) {
-                    postConstruct = f
-                    i++
-                }else if (TypeInfos.withAnnotation<$identifier, Destroy>(n, [])) {
-                    destroy = f
-                    i++
-                }
-                if(i == 2) {
-                    break
-                }
-            }
-            BeanFactory.instance.register<$identifier>(constructor[0], postConstruct, destroy)
+            BeanFactory.instance.register<$identifier>(constructor.getOrThrow())
         }()
     )
 }

@@ -1,5 +1,6 @@
 [dependencies]
   f_base = {path = "../f_base"}
+  f_collection = {path = "../f_collection"}
   f_exception = {path = "../f_exception"}
   f_log = {path = "../f_log"}
   f_regex = {path = "../f_regex"}

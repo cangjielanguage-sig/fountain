@@ -9,7 +9,6 @@
  */
 package f_bean
 
-@Annotation[target: [MemberFunction]]
-public class PostConstruct {
-    public const init() {}
+public interface PostConstruct {
+    func postConstruct(): Unit
 }

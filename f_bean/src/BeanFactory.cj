@@ -26,15 +26,13 @@ public class BeanFactory {
     }
     private func doRegister<T>(
         meta: BeanMeta,
-        creator: () -> Object,
-        postConstruct!: (Object) -> Unit = {o =>},
-        destroy!: (Object) -> Unit = {o =>}
+        creator: () -> Object
     ) where T <: Object {
         if (registered.load()) {
             throw BeanException('To register bean to a registered BeanFactory is forbidden')
         }
         var beanType = TypeInfos.get<T>()
-        let manager = BeanManager(meta, beanType, creator, postConstruct: postConstruct, destroy: destroy)
+        let manager = BeanManager(meta, beanType, creator)
         synchronized(mutex) {
             if (let Some(existed) <- beans.addIfAbsent(manager.name, manager)) {
                 throw BeanException(
@@ -68,34 +66,13 @@ public class BeanFactory {
         }
     }
     public func register<T>(creator: () -> T) where T <: Object {
-        func fn(f: InstanceFunctionInfo): (Object) -> Unit {
-            {o: Object => f.apply(o)}
-        }
-        var postConstruct = BeanManager.dummyFunc
-        var destroy = BeanManager.dummyFunc
-        var i = 0
-        for(f in TypeInfos.get<T>().instanceFunctions where f.parameters.isEmpty() && f.genericParams.isEmpty()){
-            if(TypeInfos.withAnnotation<T, PostConstruct>(f.name, [])){
-                postConstruct = fn(f)
-                i++
-            }else if(TypeInfos.withAnnotation<T, Destroy>(f.name, [])){
-                destroy = fn(f)
-                i++
-            }
-            if(i == 2){
-                break
-            }
-        }
-        register<T>(creator, postConstruct, destroy)
-    }
-    public func register<T>(creator: () -> T, postConstruct: (Object) -> Unit, destroy: (Object) -> Unit) where T <: Object {
         let typeInfo = TypeInfos.get<T>()
         let meta = if (let Some(meta) <- typeInfo.findAnnotation<BeanMeta>()) {
             meta
         } else {
             BeanMeta()
         }
-        doRegister<T>(meta, creator, postConstruct: postConstruct, destroy: destroy)
+        doRegister<T>(meta, creator)
     }
     public func afterRegistered() {
         this.registered.store(true)

@@ -26,14 +26,10 @@ public class CmdArgs {
         this(env.getCommandLine()[1 ..])
     }
     private init(args: Array<String>) {
-        let blankRegex = Regex.builder().headOrTailBlanks.build()
         var prev = String.empty
-        var i = 0
-        let argsize = args.size
-        while (i < argsize) {
+        for (i in 0 .. args.size) {
             prev = String.empty
             let arg = args[i]
-            i++
             if (arg.startsWith("--")) {
                 let idxopt = arg.indexOf("=")
                 if (let Some(idx) <- idxopt) {
@@ -48,6 +44,7 @@ public class CmdArgs {
                             this.args.add(key, l)
                         }
                     }
+                    continue
                 }
                 throw CmdException('command arg starts with -- must match pattern as --key=value, but current is ${arg}')
             } else if (arg.startsWith("-")) {
