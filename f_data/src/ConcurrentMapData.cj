@@ -67,10 +67,10 @@ extend<K, V> ConcurrentHashMap<K, V> <: ConcurrentMapData<ConcurrentHashMap<K, V
         DataConcurrentMap(this)
     }
     public static func tryFromData(data: Data, flag: DataConversionFlag): Any {
-        var map = ConcurrentHashMap<K, V>()
         match(data){
             case x: DataConcurrentMap<ConcurrentHashMap<K, V>, K, V> where (flag & DEEP) == 0 => x.data
             case itr: Iterable<(Data, Data)> => 
+                let map = ConcurrentHashMap<K, V>()
                 for((dk, dv) in itr){
                     if(let (Some(k: K), Some(v: V)) <- (internal_f_data_tryFromData<K>(dk, flag), internal_f_data_tryFromData<V>(dv, flag))){
                         map.add(k, v)
@@ -78,7 +78,9 @@ extend<K, V> ConcurrentHashMap<K, V> <: ConcurrentMapData<ConcurrentHashMap<K, V
                         throw DataException('data cannot be converted to tuple for ${TypeInfos.get<ConcurrentHashMap<K, V>>()} ')
                     }
                 }
+                map
             case itr: Iterable<(String, Data)> =>
+                let map = ConcurrentHashMap<K, V>()
                 for((k, v) in itr){
                     match(k){
                         case mk: K => if(let Some(mv: V) <- internal_f_data_tryFromData<V>(v, flag)){
@@ -93,9 +95,9 @@ extend<K, V> ConcurrentHashMap<K, V> <: ConcurrentMapData<ConcurrentHashMap<K, V
                         }
                     }
                 }
+                map
             case _ where (flag & IGNORE_FIELD_TYPE_NOT_MATCH) == 0 => throw DataException('data cannot be converted to tuple for ${TypeInfos.get<ConcurrentHashMap<K, V>>()}, data is ${data}')
-            case _ => ()
+            case _ => ConcurrentHashMap<K, V>()
         }
-        map
     }
 }

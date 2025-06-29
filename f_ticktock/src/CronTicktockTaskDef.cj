@@ -9,6 +9,6 @@
  */
 package f_ticktock
 
-public sealed interface CronTicktockTaskDef <: TicktockTaskDef {
+sealed interface CronTicktockTaskDef <: TicktockTaskDef {
     prop cron: String
 }

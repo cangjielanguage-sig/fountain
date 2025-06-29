@@ -197,7 +197,7 @@ class MultipartFormDataParser {
                 try {
                     var partEnd = -1
                     do {
-                        let partEnd = indexer.indexOf(bodyDelimiter)
+                        partEnd = indexer.indexOf(bodyDelimiter)
                         indexer.output(false, stream)
                     } while (partEnd < 0)
                     parts.add(file)

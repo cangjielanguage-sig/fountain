@@ -59,7 +59,6 @@ public open class Priority<V> <: Comparable<Priority<V>> where V <: Object {
                 case _ => ordering
             }
         }
-        let maxLife = this.maxLife
         let age = this.age
         let otherAge = other.age
         let ageSub = age - otherAge

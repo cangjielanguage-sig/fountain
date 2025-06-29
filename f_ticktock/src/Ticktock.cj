@@ -132,7 +132,7 @@ public class Ticktock <: Emitter {
      * @param cronExpr 关于表达式的解释请见{@code CronCompiler}
      */
     public func addOrReplaceTask(task: TicktockTask, cronExpr: String) {
-        tasks.put(task.name, (task, CronCompiler.compile(cronExpr)))
+        tasks.add(task.name, (task, CronCompiler.compile(cronExpr)))
     }
 
     public func emit(now: DateTime): Unit {

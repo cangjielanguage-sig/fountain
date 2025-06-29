@@ -20,7 +20,6 @@ abstract class RequestCondition {
         } else {
             false
         }
-        false
     }
     protected func check(headers: HttpHeaders): Bool
 

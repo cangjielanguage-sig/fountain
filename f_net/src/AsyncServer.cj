@@ -68,7 +68,7 @@ public class AsyncServer<EN, DE> <: Resource where EN <: ProtocolData<EN>, DE <:
             }
             p
         }
-        Array<ArrayBlockingQueue<()->Unit>>(p){i => 
+        Array<ArrayBlockingQueue<()->Unit>>(p){_ => 
             ArrayBlockingQueue<()->Unit>(bufferSize)
         }
     }

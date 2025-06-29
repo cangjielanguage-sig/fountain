@@ -30,7 +30,7 @@ public class CronCompiler {
         var datas = ArrayList<CronDataCollection>()
         for (expr in exprs) {
             let units = ArrayList<String>(expr.trimAscii().split(" "))
-            for (i in TicktockUnit.values.size - units.size .. 0: -1) {
+            for (_ in 0 .. TicktockUnit.values.size - units.size) {
                 units.add("*")
             }
             var cronc = CronDataCollection(expr)

@@ -10,8 +10,9 @@
 package f_orm
 
 import std.collection.ArrayList
+import std.sort.*
 
-struct TransactionHookWrap <: TransactionHook {
+struct TransactionHookWrap <: TransactionHook & Comparable<TransactionHookWrap> {
     TransactionHookWrap(private let hook: TransactionHook, let count: Int64){}
 
     public func beforeTx(): Unit {
@@ -35,17 +36,18 @@ struct TransactionHookWrap <: TransactionHook {
     public func afterComplete(status: TransactionStatus) {
         hook.afterComplete(status)
     }
+    public func compare(other: TransactionHookWrap): Ordering {
+        match(this.order.compare(other.order)){
+            case EQ => this.count.compare(other.count)
+            case cmp => cmp
+        }
+    }
 }
 class TransactionHooks <: TransactionHook {
     private let list = ArrayList<TransactionHookWrap>()
     func register<T>(hook: TransactionHook): Unit where T <: TransactionHook {
         list.add(TransactionHookWrap(hook, list.size))
-        list.sortBy{h1, h2 => 
-          match(h1.order.compare(h2.order)){
-            case EQ => h1.count.compare(h2.count)
-            case cmp => cmp
-          }
-        }
+        sort(list)
     }
     public func beforeTx(): Unit {
         for(h in list) {

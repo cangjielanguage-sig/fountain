@@ -16,21 +16,18 @@ import stdx.log.LogLevel
 
 private class UnixDatagramLoggerAppender <: AsyncLogger {
     private static const LOGGER_NAME = 'unixDatagram'
-    private let path: String
-    private let sendTimeout: ?Duration
-    public init(
+    public UnixDatagramLoggerAppender(
         name!: String,
         pattern!: LogPattern,
         level!: LogLevel = LogLevel.INFO,
-        path!: String,
-        sendTimeout!: ?Duration
+        private let path!: String,
+        private let sendTimeout!: ?Duration,
+        private let bufSize!: ?Int64 = None
     ) {
-        super(name, level, pattern, createSocket(path, sendTimeout), '${LOGGER_NAME}:///${path}')
-        this.path = path
-        this.sendTimeout = sendTimeout
+        super(name, level, pattern, createSocket(path, sendTimeout, bufSize), '${LOGGER_NAME}:///${path}')
     }
-    private static func createSocket(path: String, sendTimeout: ?Duration) {
-        let sock = UnixDatagramOutputStream(path, sendTimeout: sendTimeout)
+    private static func createSocket(path: String, sendTimeout: ?Duration, bufSize: ?Int64) {
+        let sock = UnixDatagramOutputStream(path, sendTimeout: sendTimeout, bufSize: bufSize)
         sock
     }
     public static func register(): Unit {
@@ -53,7 +50,8 @@ private class UnixDatagramLoggerAppender <: AsyncLogger {
                         level: LoggerConfig.getLevelConf(appender),
                         pattern: LoggerConfig.getPatternConf(appender),
                         path: path,
-                        sendTimeout: sendTimeout
+                        sendTimeout: sendTimeout,
+                        bufSize: bufSize
                     )
                 }
             }
@@ -62,7 +60,7 @@ private class UnixDatagramLoggerAppender <: AsyncLogger {
     protected func append(level: LogLevel, message: String, now: DateTime, ex: Option<Exception>): Unit {
         var sock = (super.output as UnixDatagramOutputStream).getOrThrow()
         if (sock.isClosed()) {
-            sock = createSocket(path, sendTimeout)
+            sock = createSocket(path, sendTimeout, bufSize)
             super.output = sock
         }
         super.append(level, message, now, ex)

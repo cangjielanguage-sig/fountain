@@ -14,13 +14,3 @@ internal import std.collection.{ArrayList, HashMap}
 internal import f_macros.*
 internal import f_bean.exception.*
 internal import f_config.*
-
-internal func report(input: Tokens, message: String) {
-    diagReport(ERROR, input, message, '')
-    throw BeanException()
-}
-
-internal func setIdentifierValue(identifier: String, value: Tokens) {
-    setItem('identifier', identifier)
-    setItem('value', value)
-}

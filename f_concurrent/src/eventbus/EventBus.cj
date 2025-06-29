@@ -11,7 +11,7 @@ package f_concurrent.eventbus
 
 import std.collection.{TreeMap, ArrayList}
 import std.collection.concurrent.{LinkedBlockingQueue, ConcurrentHashMap}
-import std.runtime.ProcessorInfo
+import std.runtime.getProcessorCount
 import std.sync.{Mutex, AtomicBool}
 import std.time.DateTime
 import stdx.crypto.crypto.SecureRandom
@@ -41,7 +41,7 @@ public class EventBus {
      * fullJobQueueStrategy 满任务队列处理策略，默认是Block
      */
     public init(
-        workers!: Int64 = ProcessorInfo.processorCount,
+        workers!: Int64 = getProcessorCount(),
         maxWaitingJobPerWorker!: Int64 = 1,
         fullJobQueueStrategy!: WorkerStrategy = Block,
         toThrowIfNotMatch!: Bool = false,
@@ -332,7 +332,7 @@ public class EventBus {
     }
     func deliver(arrangedThreadId: Int64, data: ?Any): Unit {
         synchronized(monitor) {
-            this.datas.put(arrangedThreadId, data)
+            this.datas.add(arrangedThreadId, data)
             notified.store(true)
             condition.notify()
         }

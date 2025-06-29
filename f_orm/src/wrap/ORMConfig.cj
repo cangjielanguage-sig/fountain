@@ -39,7 +39,6 @@ public class ORMConfig {
     public static const transactionalFuncExecution = confPrefix + '_transactionalFuncExecution'
 
     private static let dot = Regex(#"\."#)
-    private static let BLANK_SPLITTOR = Regex(#"\s*,\s*"#)
 
     private static let converterMap = ConcurrentHashMap<String, Any>()
     private static var transactionIncludingRegex = None<Regex>

@@ -25,7 +25,7 @@ public class UnlimitedRateLimiter<T> <: RateLimiter<T> {
     public init(){
         super(Duration.Max)
     }
-    public func exec(default: ?T, task: () -> ?T): ?T {
+    public func exec(_: ?T, task: () -> ?T): ?T {
         task()
     }
 }

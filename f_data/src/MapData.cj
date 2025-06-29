@@ -66,10 +66,10 @@ public interface MapData<M, K, V> <: DataFields<M> & MapRawType where K <: Equat
     }
 }
 private func tryFromDataToMap<M, K, V>(data: Data, flag: DataConversionFlag, creator: () -> M): M where K <: Equatable<K> & DataFields<K>, V <: DataFields<V>, M <: DataFields<M> & Map<K, V> {
-    let map = creator()
     match(data){
         case x: DataMap<M, K, V> where (flag & DEEP) == 0 => x.data
         case itr: Iterable<(Data, Data)> => 
+            let map = creator()
             for((dk, dv) in itr){
                 if(let (Some(k: K), Some(v: V)) <- (internal_f_data_tryFromData<K>(dk, flag), internal_f_data_tryFromData<V>(dv, flag))){
                     map[k] = v
@@ -77,7 +77,9 @@ private func tryFromDataToMap<M, K, V>(data: Data, flag: DataConversionFlag, cre
                     throw DataException('data cannot be converted to tuple for ${TypeInfos.get<M>()} ')
                 }
             }
+            map
         case itr: Iterable<(String, Data)> =>
+            let map = creator()
             for((k, v) in itr){
                 match(k){
                     case mk: K => if(let Some(mv: V) <- internal_f_data_tryFromData<V>(v, flag)){
@@ -92,10 +94,10 @@ private func tryFromDataToMap<M, K, V>(data: Data, flag: DataConversionFlag, cre
                     }
                 }
             }
+            map
         case _ where (flag & IGNORE_FIELD_TYPE_NOT_MATCH) == 0 => throw DataException('data cannot be converted to tuple for ${TypeInfos.get<M>()}, data is ${data}')
-        case _ => ()
+        case _ => creator()
     }
-    map
 }
 extend<K, V> HashMap<K, V> <: MapData<HashMap<K, V>, K, V> where K <: Equatable<K> & DataFields<K>, V <: DataFields<V> {
     public func toData(): Data {

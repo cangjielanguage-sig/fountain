@@ -23,10 +23,10 @@ public class NoneLogAppender <: AbstractLogger {
 
     public static func register(): Unit {
         LoggerAppenderCreator.register("none") {
-            name => [instance]
+            _ => [instance]
         }
     }
-    protected func append(level: LogLevel, message: String, now: DateTime, ex: Option<Exception>): Unit {
+    protected func append(_: LogLevel, _: String, _: DateTime, _: Option<Exception>): Unit {
         //do nothing
     }
     public prop closable: Bool {

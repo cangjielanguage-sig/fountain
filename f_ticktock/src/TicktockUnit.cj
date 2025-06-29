@@ -281,7 +281,7 @@ public class MonthlyTicktockUnit <: TicktockUnit {
     }
 
     public func current(now: DateTime): Int64 {
-        return now.month.value()
+        return now.month.toInteger()
     }
 }
 public class WeekDailyTicktockUnit <: TicktockUnit {
@@ -293,7 +293,7 @@ public class WeekDailyTicktockUnit <: TicktockUnit {
     }
 
     public func current(now: DateTime): Int64 {
-        match(now.dayOfWeek.value()){
+        match(now.dayOfWeek.toInteger()){
             case 0 => 7
             case x => x
         }

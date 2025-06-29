@@ -45,9 +45,9 @@ func generate(input: Tokens): Tokens {
     tokens
 }
 func generateArgs(decl: FuncDecl): (Tokens, Tokens, Tokens) {
-    var argTypes = `empty_tokens`
+    var argTypes = `lsquare`
     var exprs = `empty_tokens`
-    var args = `empty_tokens`
+    var args = `lsquare`
     for(p in decl.funcParams){
         let pname = p.identifier.value
         let ptype = p.paramType
@@ -93,5 +93,7 @@ func generateArgs(decl: FuncDecl): (Tokens, Tokens, Tokens) {
             TypeInfos.get<$(p.paramType)>()
         )
     }
+    argTypes += `rsquare`
+    args += `rsquare`
     (argTypes, exprs, args)
 }

@@ -28,7 +28,6 @@ public import f_orm.exception.*
  * 应用项目应当有一个初始化文件用来调用ORM.register(...)完成初始化
 */
 public class ORM {
-    private static let logger = LoggerFactory.getLogger<ORM>()
     private static var default = String.empty
     private static let datasources = ConcurrentHashMap<String, NamedDatasource>()
     static let hooks = TransactionHooks()

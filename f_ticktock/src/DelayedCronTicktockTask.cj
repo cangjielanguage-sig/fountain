@@ -52,7 +52,7 @@ public class DelayedCronTicktockTask <: FuncInvocationTask {
     public prop cron: String {
         get() {
             let t = executingTime
-            "${t.second} ${t.minute} ${t.hour} ${t.dayOfMonth} ${t.month.value()} ${t.dayOfWeek.value()} ${t.year}"
+            "${t.second} ${t.minute} ${t.hour} ${t.dayOfMonth} ${t.month.toInteger()} ${t.dayOfWeek.toInteger()} ${t.year}"
         }
     }
     public func wrapExecutor(remover: (String) -> Unit, repeater: (DelayedCronTicktockTask) -> Unit) {

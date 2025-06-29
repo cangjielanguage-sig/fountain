@@ -103,21 +103,21 @@ public interface LogPart {
 
 class OriginLogPart <: LogPart {
     OriginLogPart(private let txt: String) {}
-    public func generate(name: String, level: LogLevel, message: ToString, current: DateTime, writer: LogWriter): Unit {
+    public func generate(_: String, _: LogLevel, _: ToString, _: DateTime, writer: LogWriter): Unit {
         writer.writeString(txt)
     }
 }
 
 class LevelLogPart <: LogPart {
     init() {}
-    public func generate(name: String, level: LogLevel, message: ToString, current: DateTime, writer: LogWriter): Unit {
+    public func generate(_: String, level: LogLevel, _: ToString, _: DateTime, writer: LogWriter): Unit {
         writer.writeString(level.text)
     }
 }
 
 class NameLogPart <: LogPart {
     init() {}
-    public func generate(name: String, level: LogLevel, message: ToString, current: DateTime, writer: LogWriter): Unit {
+    public func generate(name: String, _: LogLevel, _: ToString, _: DateTime, writer: LogWriter): Unit {
         writer.writeString(name)
     }
 }
@@ -125,7 +125,7 @@ class NameLogPart <: LogPart {
 class AppLogPart <: LogPart {
     init() {}
     private let app = env.getCommand()
-    public func generate(name: String, level: LogLevel, message: ToString, current: DateTime, writer: LogWriter): Unit {
+    public func generate(_: String, _: LogLevel, _: ToString, _: DateTime, writer: LogWriter): Unit {
         writer.writeString(app)
     }
 }
@@ -135,14 +135,14 @@ class TimeLogPart <: LogPart {
     init() {
         this('yyyy-MM-dd,HH:mm:ss.SSS')
     }
-    public func generate(name: String, level: LogLevel, message: ToString, datetime: DateTime, writer: LogWriter): Unit {
+    public func generate(_: String, _: LogLevel, _: ToString, datetime: DateTime, writer: LogWriter): Unit {
         writer.writeString(datetime.format(format))
     }
 }
 
 class MessageLogPart <: LogPart {
     init() {}
-    public func generate(name: String, level: LogLevel, message: ToString, current: DateTime, writer: LogWriter): Unit {
+    public func generate(_: String, _: LogLevel, message: ToString, _: DateTime, writer: LogWriter): Unit {
         writer.writeString(message.toString())
     }
 }

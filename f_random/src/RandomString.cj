@@ -36,7 +36,7 @@ public class RandomString {
     private static let ALL_PRINTABLE_ASCIIS = concat(ALL_LETTERS_AND_NUMBERS, "`~!@#$%^&*()-_=+[{]}\\|'\";:/?.>,<".toRuneArray())
     //utf32规范认为0~10ffff足够表示所有字符；d800~dfff不在utf32范围内，这部分是utf16特殊字符，需要前面一半数做高位，后面一半数做低位组合成一个字符，utf32没有使用这一段。
     //已经试过Rune(0xd800u32) Rune(0xdc00u32) Rune((0xd800u32 << 16) | 0xdc00u32)，都会出编译错误
-    private static let ALL_CHARS = [[UInt32(0x0000), UInt32(0xD7FF)], [UInt32(0xE000), UInt32(0x10FFFF)]]
+    private static let ALL_CHARS = [(UInt32(0x0000), UInt32(0xD7FF)), (UInt32(0xE000), UInt32(0x10FFFF))]
 
     public RandomString(private let rand!: SecureRandom = ThreadLocalRandom.current) {}
     public init(priv: Bool) {
@@ -45,7 +45,7 @@ public class RandomString {
 
     public func randomAscii(count: Int64) {
         var builder = StringGenerator()
-        for (i in 0 .. count) {
+        for (_ in 0 .. count) {
             builder.append(Rune(rand.nextUInt32(128)))
         }
         return builder.toString()
@@ -58,7 +58,7 @@ public class RandomString {
     }
     public func random(count: Int64, source: Array<Rune>) {
         var builder = StringGenerator()
-        for (i in 0 .. count) {
+        for (_ in 0 .. count) {
             builder.append(source[rand.nextInt64(source.size)])
         }
         return builder.toString()
@@ -120,10 +120,10 @@ public class RandomString {
     }
     public func randomAllChars(count: Int64) {
         var builder = StringGenerator()
-        for (i in 0 .. count) {
+        for (_ in 0 .. count) {
             let idx = rand.nextInt64(2)
-            let tuple = ALL_CHARS[idx]
-            builder.append(Rune(rand.nextUInt32(tuple[0], tuple[1], closed: true)))
+            let (start, end) = ALL_CHARS[idx]
+            builder.append(Rune(rand.nextUInt32(start, end, closed: true)))
         }
         return builder.toString()
     }

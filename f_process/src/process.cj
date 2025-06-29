@@ -65,8 +65,8 @@ extend String <: ExtendProcess {
         let tuple = piped(workingDirectory: workingDirectory,
                           environment: environment,
                           stdIn: Pipe, stdOut: Pipe, stdErr: stdErr)
-        link(tuple[1].getOrThrow().stdOut, stdOut, bufSize)
-        link(stdIn, tuple[0].getOrThrow().stdIn, bufSize)
+        link(tuple[1].getOrThrow().stdOutPipe, stdOut, bufSize)
+        link(stdIn, tuple[0].getOrThrow().stdInPipe, bufSize)
     }
     public func piped(workingDirectory!: ?Path = getWorkingDirectory(),
             environment!: ?Map<String, String> = enviromentVariables,
@@ -77,7 +77,7 @@ extend String <: ExtendProcess {
         let tuple = piped(workingDirectory: workingDirectory,
                           environment: environment,
                           stdIn: stdIn, stdOut: Pipe, stdErr: stdErr)
-        link(tuple[1].getOrThrow().stdOut, stdOut, bufSize)
+        link(tuple[1].getOrThrow().stdOutPipe, stdOut, bufSize)
         tuple[0].getOrThrow()
     }
     public func piped(workingDirectory!: ?Path = getWorkingDirectory(),
@@ -89,7 +89,7 @@ extend String <: ExtendProcess {
         let tuple = piped(workingDirectory: workingDirectory,
                           environment: environment,
                           stdIn: Pipe, stdOut: stdOut, stdErr: stdErr)
-        link(stdIn, tuple[0].getOrThrow().stdIn, bufSize)
+        link(stdIn, tuple[0].getOrThrow().stdInPipe, bufSize)
         tuple[1].getOrThrow()
     }
     public func piped(workingDirectory!: ?Path = getWorkingDirectory(),
@@ -157,7 +157,7 @@ public interface ExtendSubProcess {
 }
 extend SubProcess <: ExtendSubProcess {
     public operator func |(next: SubProcess): SubProcess {
-        pipe(input: this.stdOut, output: next.stdIn)
+        pipe(input: this.stdOutPipe, output: next.stdInPipe)
         next
     }
     public operator func |(next: String): SubProcess {

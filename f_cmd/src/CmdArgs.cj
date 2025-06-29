@@ -26,27 +26,24 @@ public class CmdArgs {
         this(env.getCommandLine()[1 ..])
     }
     private init(args: Array<String>) {
-        var prev = String.empty
-        for (i in 0 .. args.size) {
-            prev = String.empty
-            let arg = args[i]
+        var prev = ''
+        for (arg in args) {
             if (arg.startsWith("--")) {
+                prev = ''
                 let idxopt = arg.indexOf("=")
                 if (let Some(idx) <- idxopt) {
-                    let key = arg[2..idx].trimAscii()
-                    if (idx == arg.size - 1) {
-                        let val = arg[idx + 1 ..].trimAscii()
-                        if(let Some(l) <- this.args.get(key)){
-                            l.add(val)
-                        }else{
-                            let l = ArrayList<String>()
-                            l.add(val)
-                            this.args.add(key, l)
-                        }
+                    let key = arg[2 .. idx].trimAscii()
+                    let val = arg[idx + 1 ..].trimAscii()
+                    if(let Some(l) <- this.args.get(key)){
+                        l.add(val)
+                    }else{
+                        let l = ArrayList<String>()
+                        l.add(val)
+                        this.args.add(key, l)
                     }
-                    continue
+                }else if(let key <- arg[2 ..].trimAscii() && !this.args.contains(key)){
+                    this.args[key] = ArrayList<String>()
                 }
-                throw CmdException('command arg starts with -- must match pattern as --key=value, but current is ${arg}')
             } else if (arg.startsWith("-")) {
                 this.args[arg] = ArrayList<String>()
                 prev = arg

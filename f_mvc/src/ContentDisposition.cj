@@ -305,9 +305,9 @@ public class ContentDisposition <: Equatable<ContentDisposition> & Equatable<Any
                         let matched = BASE64_ENCODED_PATTERN.find(value, group: true)
                         match (matched) {
                             case Some(m) =>
-                                let match1 = m.matchString(1) //charset
-                                let match2 = m.matchString(2)
-                                filename = String.fromUtf8(fromBase64String(match2) ?? [])
+                                let _ = m.matchString(1) //charset
+                                let matched = m.matchString(2)
+                                filename = String.fromUtf8(fromBase64String(matched) ?? [])
                             case _ => filename = value
                         }
                     } else {

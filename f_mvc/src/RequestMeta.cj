@@ -132,37 +132,36 @@ public class RequestMeta {
     public static func generate<T>(fnName: String, argTypes: Array<TypeInfo>): ArrayList<RequestMeta> where T <: Object {
         let typeInfo = TypeInfos.get<T>()
         let metas = ArrayList<RequestMeta>()
-        for (function in typeInfo.instanceFunctions) {
-            let args = HashMap<String, ControllerFuncParam>()
-            for (param in function.parameters) {
-                let pname = param.name
-                for (annotation in param.annotations where annotation is ControllerFuncParam) {
-                    args[pname] = (annotation as ControllerFuncParam).getOrThrow()
-                    break
-                }
-                throw MVCException(
-                    'parameter of controller function must be with one and only one Annotation as @RequestBody or @RequestParam or @RequestHeader or @PathVariable or @MultipartFormData'
-                )
+        let function = typeInfo.getInstanceFunction(fnName, argTypes)
+        let args = HashMap<String, ControllerFuncParam>()
+        for (param in function.parameters) {
+            let pname = param.name
+            for (annotation in param.annotations where annotation is ControllerFuncParam) {
+                args[pname] = (annotation as ControllerFuncParam).getOrThrow()
+                break
             }
-            for (annotation in function.annotations) {
-                match (annotation) {
-                    case a: RequestMapping =>
-                        let method = a.method
-                        let ignoreAuth = a.ignoreAuth
-                        let ignorePrivilege = a.ignorePrivilege
-                        let params = RequestCondition.compile(a.params)
-                        let headers = RequestCondition.compile(a.headers)
-                        for (path in a.path.split('|')) {
-                            let meta = RequestMeta(path, method, params: params, headers: headers)
-                            meta.addProduces(a.produces)
-                            meta.addConsumes(a.consumes)
-                            meta.ignoreAuth_ = ignoreAuth
-                            meta.ignorePrivilege_ = ignorePrivilege
-                            meta.args.add(all: args)
-                            metas.add(meta)
-                        }
-                    case _ => ()
-                }
+            throw MVCException(
+                'parameter of controller function must be with one and only one Annotation as @RequestBody or @RequestParam or @RequestHeader or @PathVariable or @MultipartFormData'
+            )
+        }
+        for (annotation in function.annotations) {
+            match (annotation) {
+                case a: RequestMapping =>
+                    let method = a.method
+                    let ignoreAuth = a.ignoreAuth
+                    let ignorePrivilege = a.ignorePrivilege
+                    let params = RequestCondition.compile(a.params)
+                    let headers = RequestCondition.compile(a.headers)
+                    for (path in a.path.split('|')) {
+                        let meta = RequestMeta(path, method, params: params, headers: headers)
+                        meta.addProduces(a.produces)
+                        meta.addConsumes(a.consumes)
+                        meta.ignoreAuth_ = ignoreAuth
+                        meta.ignorePrivilege_ = ignorePrivilege
+                        meta.args.add(all: args)
+                        metas.add(meta)
+                    }
+                case _ => ()
             }
         }
         metas

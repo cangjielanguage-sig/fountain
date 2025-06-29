@@ -46,7 +46,7 @@ public class AsyncSocketClient<T, K, R> <: SocketClient<T, R> where K <: Hashabl
         super(socket: socket, codec: codec)
     }
     private let dataMap = ConcurrentHashMap<K, SocketClientFuture<K, R>>()
-    public func transfer(data: T): ?R {
+    public func transfer(_: T): ?R {
         throw UnsupportedException('')
     }
     public func asyncTransfer(data: T): SocketClientFuture<K, R> {

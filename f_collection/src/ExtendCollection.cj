@@ -65,7 +65,7 @@ public interface ExtendNonConcurrentMap<K, V> <: ExtendMap<K, V> where K <: Equa
         entry.value = value
         value
     }
-    public func addIfAbsent(key: K, fn: () -> V): V {
+    func addIfAbsent(key: K, fn: () -> V): V {
         let view = entryView(key)
         if (let Some(v) <- view.value) {
             v
@@ -75,7 +75,7 @@ public interface ExtendNonConcurrentMap<K, V> <: ExtendMap<K, V> where K <: Equa
             v
         }
     }
-    public func addIfPreset(key: K, fn: () -> V): ?V {
+    func addIfPreset(key: K, fn: () -> V): ?V {
         let view = entryView(key)
         if (let Some(_) <- view.value) {
             let v = fn()

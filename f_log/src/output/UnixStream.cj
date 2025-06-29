@@ -15,7 +15,6 @@ import std.process.Process
 import std.sync.AtomicUInt64
 
 protected class UnixOutputStream <: OutputStream & Resource {
-    private static let SERIAL = AtomicUInt64(0)
     private static func newSocket(addr: UnixSocketAddress, writeTimeout: ?Duration){
         let sock = UnixSocket(addr)
         sock.connect()

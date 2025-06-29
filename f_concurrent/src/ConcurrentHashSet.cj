@@ -47,7 +47,7 @@ public class ConcurrentHashSet<T> <: Set<T> where T <: Hashable & Equatable<T> {
         ConcurrentHashSetIterator<T>(store.iterator())
     }
     public func add(value: T): Bool {
-        store.put(value, value).isNone()
+        store.add(value, value).isNone()
     }
     public func add(all!: Collection<T>): Unit {
         for(v in all){
