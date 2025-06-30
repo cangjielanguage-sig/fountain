@@ -72,10 +72,9 @@ public macro Bean(input: Tokens): Tokens {
             if (constructor.isNone() && let Some(f) <- ctors.get("init")) {
                 constructor = f
             }
-            if(constructor.isNone()){
-                throw BeanException('class $(identifier.value) must be with a public parameterless constructor or a public static parameterless function.')
-            }
-            BeanFactory.instance.register<$identifier>(constructor.getOrThrow())
+            BeanFactory.instance.register<$identifier>(constructor.getOrThrow{
+                BeanException('class $(identifier.value) must be with a public parameterless constructor or a public static parameterless function.')
+            })
         }()
     )
 }
