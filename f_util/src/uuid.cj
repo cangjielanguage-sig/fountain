@@ -408,6 +408,18 @@ public class TimeBasedUUIDBuilder {
             6
         }
     }
+    public func registerSequenceGenerator(generator: (Int64) -> UInt16): This {
+        seqGen.registerSequenceGenerator(generator)
+        this
+    }
+    public func registerSequenceGenerator(): This {
+        seqGen.registerSequenceGenerator()
+        this
+    }
+    public func registerFileSequenceGenerator(): This {
+        seqGen.registerFileSequenceGenerator()
+        this
+    }
     public prop randomSeq: TimeBasedUUIDBuilder {
         get() {
             genTimestampAndSequence(true)
@@ -531,9 +543,9 @@ public class TimeBasedUUIDBuilder {
 }
 
 public class TimestampSequenceBuilder {
-    private let seq = AtomicUInt16(0)
-    private var seqGen: (Int64) -> UInt16 = {_ => 0}
+    private var seqGen: (Int64) -> UInt16
     init() {
+        let seq = AtomicUInt16(0)
         seqGen = {_: Int64 => seq.fetchAdd(1)}
     }
     public func registerSequenceGenerator(generator: (Int64) -> UInt16) {
@@ -545,29 +557,39 @@ public class TimestampSequenceBuilder {
         env.atExit {file.close()}
         seqGen = {
             timestamp =>
-            let bytes = Array<Byte>(8, repeat: 0)
+            let bytes = Array<Byte>(10, repeat: 0)
             var storedNanos = 0
+            var seq = 0u16
             if (file.read(bytes) > 0) {
                 for (i in 0..8) {
                     storedNanos |= Int64(bytes[i]) << ((7 - i) * 8)
                 }
+                seq = (UInt16(bytes[8]) << 8) | UInt16(bytes[9])
             }
             if (storedNanos >= timestamp) {
-                0u16
+                seq
             } else {
                 for (i in 0..8) {
                     bytes[i] = UInt8((timestamp >> ((7 - i) * 8)) & 0xff)
                 }
+                @OverflowWrapping
+                func incr(){
+                    seq++
+                }
+                incr()
+                bytes[8] = UInt8(seq >> 8)
+                bytes[9] = UInt8(seq & 0xff)
                 let pos: SeekPosition = Begin(0)
                 file.seek(pos)
                 file.write(bytes)
                 file.seek(pos)
-                seq.fetchAdd(1)
+                seq
             }
         }
     }
     public func registerSequenceGenerator() {
         let lastNanos = AtomicInt64(0)
+        let seq = AtomicUInt16(0)
         seqGen = {
             timestamp =>
             let last = lastNanos.load()
@@ -588,7 +610,7 @@ public class TimestampSequenceBuilder {
         synchronized(mutex) {
             let timestamp = (DateTime.now() - timeStart).toNanoseconds() / 100
             if (randomSeq) {
-                (timestamp, seq.fetchAdd(1))
+                (timestamp, ThreadLocalRandom.current.nextUInt16())
             } else {
                 (timestamp, seqGen(timestamp))
             }
