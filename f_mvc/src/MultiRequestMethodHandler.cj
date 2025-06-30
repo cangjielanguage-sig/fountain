@@ -77,14 +77,14 @@ public class MultiRequestMethodHandler <: HttpRequestHandler {
                 meta
             }
         }
-        func check(metas: ConcurrentHashMap<String, RequestMeta>): HttpRequestHandler {
+        func check(metas: HashMap<String, RequestMeta>): HttpRequestHandler {
             if (let Some(m) <- metas.get(consumes) && let h <- check(m)) {
                 h
             } else {
                 UNSUPPORTED_MEDIA_TYPE
             }
         }
-        func handle(ms: ConcurrentHashMap<String, RequestMeta>): Unit {
+        func handle(ms: HashMap<String, RequestMeta>): Unit {
             try {
                 check(ms).handle(ctx)
             } catch (e: Exception) {
