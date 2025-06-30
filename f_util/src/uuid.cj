@@ -572,8 +572,9 @@ public class TimestampSequenceBuilder {
                 for (i in 0..8) {
                     bytes[i] = UInt8((timestamp >> ((7 - i) * 8)) & 0xff)
                 }
+
                 @OverflowWrapping
-                func incr(){
+                func incr() {
                     seq++
                 }
                 incr()
@@ -594,7 +595,7 @@ public class TimestampSequenceBuilder {
             timestamp =>
             let last = lastNanos.load()
             if (last >= timestamp) {
-                0
+                seq.load()
             } else if (lastNanos.compareAndSwap(last, timestamp)) {
                 seq.fetchAdd(1)
             } else {
