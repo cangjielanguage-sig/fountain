@@ -16,13 +16,14 @@ public class MultiRequestMethodHandler <: HttpRequestHandler {
     private static let UNSUPPORTED_MEDIA_TYPE = HttpStatusOnlyHandler(HttpStatus.UNSUPPORTED_MEDIA_TYPE)
     private static let NOT_IMPLEMENTED = HttpStatusOnlyHandler(HttpStatus.NOT_IMPLEMENTED)
     private static let INTERNAL_SERVER_ERROR = HttpStatusOnlyHandler(HttpStatus.INTERNAL_SERVER_ERROR)
-    private static let authFailureHandler = HttpStatusOnlyHandler(MVCConfig.authFailureStatus, message: MVCConfig.authFailureMessage)
-    private static let privilegeFailureHandler = HttpStatusOnlyHandler(MVCConfig.privilegeFailureStatus, message: MVCConfig.privilegeFailureMessage)
+    private static let authFailureHandler = HttpStatusOnlyHandler(MVCConfig.authFailureStatus,
+        message: MVCConfig.authFailureMessage)
+    private static let privilegeFailureHandler = HttpStatusOnlyHandler(MVCConfig.privilegeFailureStatus,
+        message: MVCConfig.privilegeFailureMessage)
 
     private static let accessControlAllowHeaders: String = MVCConfig.accessControlAllowHeaders
     private static let accessControlAllowOrigin: String = MVCConfig.accessControlAllowOrigin
     private static let accessControlMaxAge: Int64 = MVCConfig.accessControlMaxAge
-
 
     private prop privilegeChecker: PrivilegeChecker {
         get() {
@@ -34,9 +35,29 @@ public class MultiRequestMethodHandler <: HttpRequestHandler {
             BeanFactory.instance.getFirst<AuthChecker>() ?? EmptyAuthChecker.instance
         }
     }
-    private let metas = ConcurrentHashMap<RequestMethod, ConcurrentHashMap<String, RequestMeta>>()
 
     MultiRequestMethodHandler(private let patterns: HttpRequestPathPatterns) {}
+
+    private let metas = HashMap<RequestMethod, HashMap<String, RequestMeta>>() //注册时已使用Mutex同步，不必使用ConcurrentHashMap
+    private static let mutex = Mutex()
+    func register(meta: RequestMeta): Unit {
+        synchronized(mutex) {
+            meta.pattern = patterns
+            let map = match (metas.get(meta.method)) {
+                case Some(map) => map
+                case _ =>
+                    let m = HashMap<String, RequestMeta>()
+                    metas[meta.method] = m
+                    m
+            }
+            meta.iterateConsumes {
+                c => if (let Some(m) <- map.addIfAbsent(c, meta)) {
+                    throw MVCException(
+                        'duplicate RequestMeta, method: ${meta.method}, path: ${meta.path}, consumes: ${c}')
+                }
+            }
+        }
+    }
 
     public func handle(ctx: HttpContext): Unit {
         let request = ctx.request
@@ -57,26 +78,25 @@ public class MultiRequestMethodHandler <: HttpRequestHandler {
             }
         }
         func check(metas: ConcurrentHashMap<String, RequestMeta>): HttpRequestHandler {
-            if(let Some(m) <- metas.get(consumes) && let h <- check(m)){
+            if (let Some(m) <- metas.get(consumes) && let h <- check(m)) {
                 h
-            }else{
+            } else {
                 UNSUPPORTED_MEDIA_TYPE
             }
         }
         func handle(ms: ConcurrentHashMap<String, RequestMeta>): Unit {
-            try{
+            try {
                 check(ms).handle(ctx)
-            }catch(e: Exception){
+            } catch (e: Exception) {
                 log.error<ToString>('fountain mvc {}: {}', e, [request.method, request.url])
             }
         }
-        if(log.debugEnabled) {
+        if (log.debugEnabled) {
             let request = ctx.request
             log.debug<ToString>('fountain mvc {}: {}', [request.method, request.url])
         }
         match ((metas.get(method), method)) {
-            case (Some(ms), OPTIONS)  =>
-                check(ms).handle(ctx)
+            case (Some(ms), OPTIONS) => check(ms).handle(ctx)
             case (_, OPTIONS) =>
                 let allow = StringGenerator()
                 allow.append(method)
@@ -105,31 +125,19 @@ public class MultiRequestMethodHandler <: HttpRequestHandler {
             case _ => METHOD_NOT_ALLOWED.handle(ctx)
         }
     }
-    private static let mutex = Mutex()
-    func register(meta: RequestMeta): Unit {
-        synchronized(mutex){
-            meta.pattern = patterns
-            let map = 
-            match (metas.get(meta.method)) {
-                case Some(map) => map
-                case _ =>
-                    let m = ConcurrentHashMap<String, RequestMeta>()
-                    metas[meta.method] = m
-                    m
-            }
-            meta.iterateConsumes{c => map[c] = meta}
-        }
-    }
 }
 
 class HttpStatusOnlyHandler <: HttpRequestHandler {
     HttpStatusOnlyHandler(private let status: HttpStatus, private let message!: String = '') {}
 
     public func handle(httpContext: HttpContext): Unit {
-        httpContext.responseBuilder.status(status.value).body(if(message.isEmpty()){
-            status.reasonPhrase
-        }else{
-            message
-        })
+        httpContext
+            .responseBuilder
+            .status(status.value)
+            .body(if (message.isEmpty()) {
+                status.reasonPhrase
+            } else {
+                message
+            })
     }
 }
