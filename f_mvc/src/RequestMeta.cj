@@ -9,7 +9,7 @@
  */
 package f_mvc
 
-public class RequestMeta {
+public class RequestMeta <: HttpRequestHandler {
     private static let log = LoggerFactory.getLogger<RequestMeta>()
     private var ignoreAuth_ = false
     private var ignorePrivilege_ = false
@@ -28,10 +28,13 @@ public class RequestMeta {
         private let headers!: RequestCondition = DummyRequestCondition.instance
     ) {}
 
-    var handle: (HttpContext) -> Unit = {
+    private var handle_: (HttpContext) -> Unit = {
         ctx: HttpContext => throw MVCException('Request was not handled')
     }
 
+    public func handle(ctx: HttpContext): Unit {
+        handle_(ctx)
+    }
     public prop ignoreAuth: Bool {
         get() {
             ignoreAuth_
@@ -42,11 +45,13 @@ public class RequestMeta {
             ignorePrivilege_
         }
     }
+    internal func iterateConsumes(fn: (String) -> Unit): Unit {
+        for(c in consumes) {
+            fn(c)
+        }
+    }
     private func checkHeader(ctx: HttpContext, headers: HashSet<String>, name: String): Bool {
         headers.contains(ctx.request.headers.getFirst(name) ?? '') || headers.contains("*")
-    }
-    public func checkConsumes(ctx: HttpContext) {
-        checkHeader(ctx, consumes, "Content-Type")
     }
     public func checkProduces(ctx: HttpContext) {
         checkHeader(ctx, produces, "Accept")
@@ -62,11 +67,14 @@ public class RequestMeta {
     public func setHandle<T, R>(fn: (T, HttpContext, HttpRequestPathPatterns) -> R): Unit where T <: Object,
         R <: DataFields<R> {
         let pattern = this.pattern.getOrThrow()
-        handle = {
+        this.handle_ = {
             ctx =>
             let start = MonoTime.now()
             try{
                 let result = fn(BeanFactory.instance.getFirst<T>().getOrThrow(), ctx, pattern)
+                if(let (GET, GET) <- (this.method, RequestMethod.parse(ctx.request.method))) {
+                    return
+                }
                 generateResponse<R>(ctx, result)
             }finally{
                 let request = ctx.request

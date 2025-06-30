@@ -34,48 +34,38 @@ public class MultiRequestMethodHandler <: HttpRequestHandler {
             BeanFactory.instance.getFirst<AuthChecker>() ?? EmptyAuthChecker.instance
         }
     }
-    private let metas = ConcurrentHashMap<RequestMethod, ArrayList<RequestMeta>>()
+    private let metas = ConcurrentHashMap<RequestMethod, ConcurrentHashMap<String, RequestMeta>>()
 
     MultiRequestMethodHandler(private let patterns: HttpRequestPathPatterns) {}
 
     public func handle(ctx: HttpContext): Unit {
         let request = ctx.request
         let headers = request.headers
+        let consumes = headers.getFirst('Content-Type') ?? ''
         let method = RequestMethod.parse(request.method)
-        func check(meta: RequestMeta): ?HttpRequestHandler {
-            if (!(meta.ignoreAuth || authChecker.check(ctx, patterns))) {
-                authFailureHandler
-            } else if (!(meta.ignorePrivilege || privilegeChecker.check(ctx, patterns))) {
-                privilegeFailureHandler
-            } else if (!meta.checkConsumes(ctx)) {
-                UNSUPPORTED_MEDIA_TYPE
-            } else if (!meta.checkProduces(ctx)) {
+        func check(meta: RequestMeta): HttpRequestHandler {
+            if (!meta.checkProduces(ctx)) {
                 NOT_ACCEPTABLE
             } else if (!meta.check(ctx)) {
                 NOT_IMPLEMENTED
+            } else if (!(meta.ignoreAuth || authChecker.check(ctx, patterns))) {
+                authFailureHandler
+            } else if (!(meta.ignorePrivilege || privilegeChecker.check(ctx, patterns))) {
+                privilegeFailureHandler
             } else {
-                None<HttpRequestHandler>
+                meta
             }
         }
-        func check(meta: ArrayList<RequestMeta>): ?HttpRequestHandler {
-            for (m in meta) {
-                if (let Some(h) <- check(m)) {
-                    return h
-                }
+        func check(metas: ConcurrentHashMap<String, RequestMeta>): HttpRequestHandler {
+            if(let Some(m) <- metas.get(consumes) && let h <- check(m)){
+                h
+            }else{
+                UNSUPPORTED_MEDIA_TYPE
             }
-            return None<HttpRequestHandler>
         }
-        func handle(ms: ArrayList<RequestMeta>): Unit {
-            var handle = None<HttpRequestHandler>
-            for (m in ms) {
-                if (let Some(h) <- check(m)) {
-                    handle = h
-                } else {
-                    return m.handle(ctx)
-                }
-            }
+        func handle(ms: ConcurrentHashMap<String, RequestMeta>): Unit {
             try{
-                handle?.handle(ctx)
+                check(ms).handle(ctx)
             }catch(e: Exception){
                 log.error<ToString>('fountain mvc {}: {}', e, [request.method, request.url])
             }
@@ -85,21 +75,15 @@ public class MultiRequestMethodHandler <: HttpRequestHandler {
             log.debug<ToString>('fountain mvc {}: {}', [request.method, request.url])
         }
         match ((metas.get(method), method)) {
-            case (Some(m), OPTIONS)  =>
-                if (let Some(h) <- check(m)) {
-                    return h.handle(ctx)
-                }
+            case (Some(ms), OPTIONS)  =>
+                check(ms).handle(ctx)
+            case (_, OPTIONS) =>
                 let allow = StringGenerator()
                 allow.append(method)
-                allow.append(", ")
                 let last = metas.size
-                var i = 0
                 for ((method, _) in metas) {
+                    allow.append(", ")
                     allow.append(method)
-                    i++
-                    if (i < last) {
-                        allow.append(", ")
-                    }
                 }
                 let allows = allow.toString()
                 let resp = ctx.responseBuilder
@@ -125,13 +109,15 @@ public class MultiRequestMethodHandler <: HttpRequestHandler {
     func register(meta: RequestMeta): Unit {
         synchronized(mutex){
             meta.pattern = patterns
+            let map = 
             match (metas.get(meta.method)) {
-                case Some(list) => list
+                case Some(map) => map
                 case _ =>
-                    let l = ArrayList<RequestMeta>()
-                    metas[meta.method] = l
-                    l
-            }.add(meta)
+                    let m = ConcurrentHashMap<String, RequestMeta>()
+                    metas[meta.method] = m
+                    m
+            }
+            meta.iterateConsumes{c => map[c] = meta}
         }
     }
 }
