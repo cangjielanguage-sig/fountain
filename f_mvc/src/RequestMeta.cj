@@ -59,10 +59,7 @@ public class RequestMeta <: HttpRequestHandler {
 
     public func check(ctx: HttpContext): Bool {
         let request = ctx.request
-        let headers = request.headers
-        produces.contains(headers.getFirst('Accept') ?? '') && this.headers.check(headers) && this
-            .params
-            .check(request.form, request.url)
+        this.headers.check(request.headers) && this.params.check(request.form, request.url)
     }
     public func setHandle<T, R>(fn: (T, HttpContext, HttpRequestPathPatterns) -> R): Unit where T <: Object,
         R <: DataFields<R> {
