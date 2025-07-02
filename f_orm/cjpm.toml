@@ -1,5 +1,5 @@
 [dependencies]
-  charset4cj = { git = "https://gitcode.com/Cangjie-TPC/charset4cj.git", branch = "develop", version = "0.0.1"} 
+  charset4cj = { git = "https://gitcode.com/Cangjie-TPC/charset4cj.git", branch = "develop"} 
   f_aspect = {path = "../f_aspect"}
   f_base = {path = "../f_base"}
   f_bean = {path = "../f_bean"}

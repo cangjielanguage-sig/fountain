@@ -1,5 +1,5 @@
 [dependencies]
-  charset4cj = { git = "https://gitcode.com/Cangjie-TPC/charset4cj.git", branch = "develop", version = "0.0.1"}
+  charset4cj = { git = "https://gitcode.com/Cangjie-TPC/charset4cj.git", branch = "develop"}
   f_io = {path = "../f_io"}
   f_regex = {path = "../f_regex"}
 [package]
