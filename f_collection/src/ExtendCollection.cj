@@ -9,7 +9,7 @@
  */
 package f_collection
 
-import std.collection.{Set, ArrayList, MapEntryView}
+import std.collection.{Set, ArrayList, MapEntryView, HashMapIterator}
 import std.collection.concurrent.ConcurrentHashMap
 
 public interface ExtendCollection<T, C> where T <: Equatable<T>, C <: Collection<T> {
@@ -55,6 +55,7 @@ public interface ExtendMap<K, V> <: ExtendCollection<K, Collection<K>> where K <
     func addIfAbsent(key: K, fn: () -> V): V
     func addIfPreset(key: K, fn: () -> V): ?V
     func removeIf(key: K, predicate: (V) -> Bool): ?V
+    func removeIf(predicate: (K, V) -> Bool): Unit
 }
 
 public interface ExtendNonConcurrentMap<K, V> <: ExtendMap<K, V> where K <: Equatable<K> {
@@ -96,7 +97,9 @@ public interface ExtendNonConcurrentMap<K, V> <: ExtendMap<K, V> where K <: Equa
     }
 }
 
-extend<K, V> HashMap<K, V> <: ExtendNonConcurrentMap<K, V> where K <: Hashable & Equatable<K> {}
+extend<K, V> HashMap<K, V> <: ExtendNonConcurrentMap<K, V> where K <: Hashable & Equatable<K> {
+
+}
 
 extend<K, V> TreeMap<K, V> <: ExtendNonConcurrentMap<K, V> where K <: Comparable<K> {}
 
@@ -130,6 +133,11 @@ extend<K, V> ConcurrentHashMap<K, V> <: ExtendMap<K, V> where K <: Hashable & Eq
             }else{
                 None<V>
             }
+        }
+    }
+    public func removeIf(predicate: (K, V) -> Bool): Unit {
+        for((k, v) in this where predicate(k, v)) {
+            remove(k)
         }
     }
 }

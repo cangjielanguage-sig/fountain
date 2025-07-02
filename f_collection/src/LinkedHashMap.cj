@@ -9,7 +9,7 @@
  */
 package f_collection
 
-import std.collection.{HashMap, Map, EquatableCollection, MapEntryView}
+import std.collection.{HashMap, Map, EquatableCollection, MapEntryView, ArrayList}
 
 import f_exception.UnreachableException
 
@@ -258,11 +258,11 @@ public class LinkedHashMap<K, V> <: Map<K, V> where K <: Hashable & Equatable<K>
      * 参数 predicate - 传递一个 lambda 表达式进行判断
      */
     public func removeIf(predicate: (K, V) -> Bool): Unit {
-        for ((k, v) in iterator()) {
-            if (predicate(k, v)) {
-                remove(k)
-            }
+        let rm = ArrayList<K>()
+        for ((k, v) in iterator() where predicate(k, v)) {
+            rm.add(k)
         }
+        remove(all: rm)
     }
 
     /**

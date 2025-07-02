@@ -9,7 +9,6 @@
  */
 package f_cache
 
-import std.ref.*
 import std.sync.{AtomicInt64, AtomicBool, AtomicReference, Mutex}
 import std.time.DateTime
 
@@ -30,16 +29,13 @@ public open class Priority<V> <: Comparable<Priority<V>> where V <: Object {
     private var maxLife_: Duration //缓存数据的最大生存期，每条数据的生存期可以不同
     private let once_ = AtomicBool(false) //控制缓存数据的生存时间，true从出生开始算，false从上次使用时间开始算
     let key: String
-    private let value: AtomicReference<WeakRef<V>>
+    private let value: AtomicReference<V>
 
     protected init(key: String, value: V, maxLife: Duration, once: Bool) {
         this.key = key
-        this.value = AtomicReference<WeakRef<V>>(weakRef(value))
+        this.value = AtomicReference<V>(value)
         this.maxLife_ = maxLife
         this.once_.store(once)
-    }
-    private static func weakRef(value: V){
-        WeakRef<V>(value, DEFERRED)
     }
     public open func compare(other: Priority<V>): Ordering {
         let lastUsed = this.lastUsedTime
@@ -164,15 +160,15 @@ public open class Priority<V> <: Comparable<Priority<V>> where V <: Object {
         ref.fetchAdd(1)
         lastUsed = DateTime.now()
     }
-    protected func load(): ?V {
+    protected func load(): V {
         synchronized(lock) {
             incr()
-            return value.load().value
+            return value.load()
         }
     }
     protected func store(value: V) {
         synchronized(lock) {
-            this.value.store(weakRef(value))
+            this.value.store(value)
             incr()
         }
     }

@@ -73,9 +73,7 @@ public class HeapCache<V> where V <: Object {
         removeIf{k, p =>
             if(alive.load()){
                 if(evicated(p)){
-                    if(let Some(v) <- p.load()){
-                        evictionQueue.add((k, v))
-                    }
+                    evictionQueue.add((k, p.load()))
                     true
                 }else{
                     false
@@ -111,9 +109,7 @@ public class HeapCache<V> where V <: Object {
                 if (let Some(p) <- topVals.remove()) {
                     store.remove(p.key)
                     minIdx = p.index
-                    if(let Some(v) <- p.load()){
-                        evictionQueue.add((p.key, v))
-                    }
+                    evictionQueue.add((p.key, p.load()))
                 }
                 if (minIdx < 0 || store.size <= maxSize) {
                     break
@@ -132,7 +128,6 @@ public class HeapCache<V> where V <: Object {
         tops.clear()
     }
     private func evicated(p: Priority<V>): Bool {
-        p.load().isNone() ||
         DateTime.now() - if(p.once){
             p.birthTime
         }else{
@@ -213,18 +208,18 @@ public class HeapCache<V> where V <: Object {
         store.computeIfAbsent(key) {
             let data = callable()
             Priority<V>(key, data[0], data[1] - DateTime.now(), true)
-        }.load().getOrThrow()
+        }.load()
     }
     public func getOrCompute(key: String, callable: () -> (V, Duration, Bool)): V {
         store.computeIfAbsent(key) {
             let data = callable()
             Priority<V>(key, data[0], data[1], data[2])
-        }.load().getOrThrow()
+        }.load()
     }
     public func remove(key: String): Option<V> {
-        store.remove(key)?.load() ?? None<V>
+        store.remove(key)?.load()
     }
-    public func removeIf(predicate: (String, ?V) -> Bool): Unit {
+    public func removeIf(predicate: (String, V) -> Bool): Unit {
         removeIf{k: String, p: Priority<V> => predicate(k, p.load())}
     }
     private func removeIf(predicate: (String, Priority<V>) -> Bool): Unit {
