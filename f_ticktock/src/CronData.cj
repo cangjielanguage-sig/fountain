@@ -18,7 +18,7 @@ public class CronData <: ToString & Hashable & Equatable<CronData> {
     private let hash: Int64
 
     public init(unit: TicktockUnit, value: Int64) {
-        this(unit, value ..= value)
+        this(unit, value..=value)
     }
     public init(unit: TicktockUnit, range: Range<Int64>) {
         this(unit, range, false)
@@ -30,20 +30,17 @@ public class CronData <: ToString & Hashable & Equatable<CronData> {
         this.last_ = last
         hash = HashBuilder().append(unit_).append(range_).append(last_).build()
     }
-    public static func createLast(unit: TicktockUnit){
-        if(unit == TicktockUnit.YEARLY) {
+    public static func createLast(unit: TicktockUnit) {
+        if (unit == TicktockUnit.YEARLY) {
             throw IllegalArgumentException("L tag for YEARLY unit in cron expression is forbidden.")
         }
         CronData(unit, unit.lastRange, true)
     }
-    public func hashCode(){
+    public func hashCode() {
         hash
     }
-    public operator func ==(other: CronData){
-        hash == other.hash &&
-        unit_ == other.unit_ &&
-        range_ == other.range_ &&
-        last_ == other.last_
+    public operator func ==(other: CronData) {
+        hash == other.hash && unit_ == other.unit_ && range_ == other.range_ && last_ == other.last_
     }
     public func toString(): String {
         "unit: ${unit}, start: ${start}, end: ${end}, duration: ${duration}, last: ${last}"
@@ -73,8 +70,8 @@ public class CronData <: ToString & Hashable & Equatable<CronData> {
             return range.step
         }
     }
-    public prop range: Range<Int64>{
-        get(){
+    public prop range: Range<Int64> {
+        get() {
             range_
         }
     }
@@ -84,13 +81,11 @@ public class CronData <: ToString & Hashable & Equatable<CronData> {
             return last_
         }
     }
-    public func matches(date: DateTime){
-        if(last && unit.last(date)){//这一部分不能省，因为不同月份的最后一天不一样
+    public func matches(date: DateTime) {
+        if (last && unit.last(date)) { //这一部分不能省，因为不同月份的最后一天不一样
             return true;
         }
         let current = unit.current(date)
-        current == start || 
-        (current > start && current <= end && 
-        (duration == 1 || ((current - start) % duration == 0)))
+        current == start || (current > start && current <= end && (duration == 1 || ((current - start) % duration == 0)))
     }
 }

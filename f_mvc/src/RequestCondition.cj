@@ -39,8 +39,7 @@ abstract class RequestCondition {
                     case 'contains' => ValueContainsRequestCondition(key, args)
                     case 'subset' => SubsetOfValuesRequestCondition(key, args)
                     case _ => throw MVCException(
-                        'function call in request condition supports contains and subset only, but current is ${e.toTokens()}. \"contains\" means values of request params or headers which is with specified name contains specified values, meanwhile \"subset\" means values of request params or headers which is specified name is subset of specified values.'
-                    )
+                        'function call in request condition supports contains and subset only, but current is ${e.toTokens()}. \"contains\" means values of request params or headers which is with specified name contains specified values, meanwhile \"subset\" means values of request params or headers which is specified name is subset of specified values.')
                 }
             case e: BinaryExpr => match (e.op.kind) {
                 case AND => AndRequestCondition(compile(e.leftExpr), compile(e.rightExpr))
@@ -54,7 +53,7 @@ abstract class RequestCondition {
         }
     }
     static func compile(expr: String): RequestCondition {
-        if(expr.trimAscii().isEmpty()) {
+        if (expr.trimAscii().isEmpty()) {
             return DummyRequestCondition.instance
         }
         let tokens = cangjieLex(expr)
@@ -106,11 +105,11 @@ class OrRequestCondition <: RequestCondition {
 
 class EqualRequestCondition <: RequestCondition {
     EqualRequestCondition(private let name: String, private let value: String) {}
-    init(name: RequestCondition, value: RequestCondition){
-        match((name, value)){
-            case (x: ContainsRequestCondition, y: ContainsRequestCondition) => 
-                (this.name, this.value) = (x.name, y.name)
-            case _ => throw MVCException("The left and right of == should be both form name or request header key string value")
+    init(name: RequestCondition, value: RequestCondition) {
+        match ((name, value)) {
+            case (x: ContainsRequestCondition, y: ContainsRequestCondition) => (this.name, this.value) = (x.name, y.name)
+            case _ => throw MVCException(
+                "The left and right of == should be both form name or request header key string value")
         }
     }
     protected func check(form: Form) {
@@ -127,6 +126,7 @@ class EqualRequestCondition <: RequestCondition {
         false
     }
 }
+
 abstract class SubsetOfRequestCondition <: RequestCondition {
     protected let key: String
     protected let values = HashSet<String>()
@@ -138,7 +138,7 @@ abstract class SubsetOfRequestCondition <: RequestCondition {
         this.key = key
         this.values.add(all: values)
     }
-    
+
     protected func check(form: Form) {
         check(form.getAll(key))
     }
@@ -147,11 +147,12 @@ abstract class SubsetOfRequestCondition <: RequestCondition {
     }
     protected func check<C>(currentValues: C): Bool where C <: Collection<String>
 }
+
 class ValueContainsRequestCondition <: SubsetOfRequestCondition {
-    init(key: String, value: String){
+    init(key: String, value: String) {
         super(key, value)
     }
-    init(key: String, values: Array<String>){
+    init(key: String, values: Array<String>) {
         super(key, values)
     }
     protected func check<C>(currentValues: C): Bool where C <: Collection<String> {
@@ -162,15 +163,16 @@ class ValueContainsRequestCondition <: SubsetOfRequestCondition {
         true
     }
 }
+
 class SubsetOfValuesRequestCondition <: SubsetOfRequestCondition {
-    init(key: String, value: String){
+    init(key: String, value: String) {
         super(key, value)
     }
-    init(key: String, values: Array<String>){
+    init(key: String, values: Array<String>) {
         super(key, values)
     }
     protected func check<C>(currentValues: C): Bool where C <: Collection<String> {
-        for(cur in currentValues where !values.contains(cur)) {
+        for (cur in currentValues where !values.contains(cur)) {
             return false
         }
         true

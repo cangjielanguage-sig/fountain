@@ -17,8 +17,7 @@ import std.process.Process
 
 public open class TestLogAppender <: AbstractLogger {
     init(name!: String, level!: LogLevel) {
-        super(name, level, LogPattern("[%level-%name] %d{yyyy/MM/dd,HH:mm:ss.SSS}|%m"),
-            env.getStdOut())
+        super(name, level, LogPattern("[%level-%name] %d{yyyy/MM/dd,HH:mm:ss.SSS}|%m"), env.getStdOut())
     }
 
     public open prop closable: Bool {
@@ -27,7 +26,9 @@ public open class TestLogAppender <: AbstractLogger {
         }
     }
 }
+
 let _ = Test1LogAppender.register(LogLevel.INFO)
+
 public class Test1LogAppender <: TestLogAppender {
     public init(level!: LogLevel) {
         super(name: "test1", level: level)
@@ -38,7 +39,9 @@ public class Test1LogAppender <: TestLogAppender {
         }
     }
 }
+
 let _ = Test2LogAppender.register(LogLevel.ERROR)
+
 public class Test2LogAppender <: TestLogAppender {
     public init(level!: LogLevel) {
         super(name: "test2", level: level)

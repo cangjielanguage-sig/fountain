@@ -26,18 +26,18 @@ public import f_orm.exception.*
 /**
  * 事务维持在连接内，要在一个事务内完成的数据库访问应确保使用一个连接。
  * 应用项目应当有一个初始化文件用来调用ORM.register(...)完成初始化
-*/
+ */
 public class ORM {
     private static var default = String.empty
     private static let datasources = ConcurrentHashMap<String, NamedDatasource>()
     static let hooks = TransactionHooks()
 
-    static init(){
+    static init() {
         env.atExit(close)
     }
 
-    public static func close(){
-        for((_, s) in datasources){
+    public static func close() {
+        for ((_, s) in datasources) {
             s.close()
         }
     }
@@ -81,16 +81,16 @@ public class ORM {
         connection(default)
     }
     public static func connection(name: String): Connection {
-        if(name.isEmpty()){
+        if (name.isEmpty()) {
             datasources[default].connect()
-        }else{
+        } else {
             datasources[name].connect()
         }
     }
     public static func executor(driverName: String): SqlExecutor {
-        if(driverName.isEmpty()){
+        if (driverName.isEmpty()) {
             SqlExecutor.getInstance(default)
-        }else{
+        } else {
             SqlExecutor.getInstance(driverName)
         }
     }

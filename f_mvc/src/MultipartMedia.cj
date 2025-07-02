@@ -18,7 +18,7 @@ public class MultipartMedia <: Multipart & Data & DataFields<MultipartMedia> {
         super(contentDisposition)
     }
     public func toData(): Data {
-        match(mediaType) {
+        match (mediaType) {
             case Some(x) => x.toData(bytes)
             case _ => toString().toData()
         }

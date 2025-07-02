@@ -5,25 +5,26 @@
     You may obtain a copy of Mulan PSL v2 at:
             http://license.coscl.org.cn/MulanPSL2
     THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-    See the Mulan PSL v2 for more details.  
-*/
+    See the Mulan PSL v2 for more details.
+ */
 package f_macros
 
 import std.reflect.ClassTypeInfo
 import f_base
 
 public func withAnnotation<T>(decl: Decl): Bool where T <: Annotation {
-    match(decl){
-        case d: MacroExpandDecl => 
-            for(a in f_base.TypeInfos.get<T>().annotations where ClassTypeInfo.of(a).name == d.fullIdentifier.value){
+    match (decl) {
+        case d: MacroExpandDecl =>
+            for (a in f_base.TypeInfos.get<T>().annotations where ClassTypeInfo.of(a).name == d.fullIdentifier.value) {
                 return true
             }
             false
         case _ => false
     }
 }
+
 public func withMacro(decl: Decl, macroName: String): Bool {
-    match(decl){
+    match (decl) {
         case d: MacroExpandDecl => d.fullIdentifier.value == macroName
         case _ => false
     }

@@ -36,78 +36,63 @@ public interface ExtendRandom<R> where R <: ExtendRandom<R> {
  */
 extend Random <: ExtendRandom<Random> {
     public func nextInt64(min: Int64, max: Int64, closed!: Bool = false): Int64 {
-        return Int64(floor(
-                nextFloat64() * (Float64(max) - Float64(min) + if (closed) {
-                    1.0
-                } else {
-                    0.0
-                }) + Float64(min)
-            ))
+        return Int64(floor(nextFloat64() * (Float64(max) - Float64(min) + if (closed) {
+            1.0
+        } else {
+            0.0
+        }) + Float64(min)))
     }
     public func nextUInt64(min: UInt64, max: UInt64, closed!: Bool = false): UInt64 {
-        return UInt64(floor(
-                nextFloat64() * (Float64(max) - Float64(min) + if (closed) {
-                    1.0
-                } else {
-                    0.0
-                }) + Float64(min)
-            ))
+        return UInt64(floor(nextFloat64() * (Float64(max) - Float64(min) + if (closed) {
+            1.0
+        } else {
+            0.0
+        }) + Float64(min)))
     }
     public func nextInt32(min: Int32, max: Int32, closed!: Bool = false): Int32 {
-        return Int32(floor(
-                nextFloat32() * (Float32(max) - Float32(min) + if (closed) {
-                    1.0
-                } else {
-                    0.0
-                }) + Float32(min)
-            ))
+        return Int32(floor(nextFloat32() * (Float32(max) - Float32(min) + if (closed) {
+            1.0
+        } else {
+            0.0
+        }) + Float32(min)))
     }
     public func nextUInt32(min: UInt32, max: UInt32, closed!: Bool = false): UInt32 {
-        return UInt32(floor(
-                nextFloat32() * (Float32(max) - Float32(min) + if (closed) {
-                    1.0
-                } else {
-                    0.0
-                }) + Float32(min)
-            ))
+        return UInt32(floor(nextFloat32() * (Float32(max) - Float32(min) + if (closed) {
+            1.0
+        } else {
+            0.0
+        }) + Float32(min)))
     }
 }
+
 extend SecureRandom <: ExtendRandom<SecureRandom> {
     public func nextInt64(min: Int64, max: Int64, closed!: Bool = false): Int64 {
-        return Int64(floor(
-                nextFloat64() * (Float64(max) - Float64(min) + if (closed) {
-                    1.0
-                } else {
-                    0.0
-                }) + Float64(min)
-            ))
+        return Int64(floor(nextFloat64() * (Float64(max) - Float64(min) + if (closed) {
+            1.0
+        } else {
+            0.0
+        }) + Float64(min)))
     }
     public func nextUInt64(min: UInt64, max: UInt64, closed!: Bool = false): UInt64 {
-        return UInt64(floor(
-                nextFloat64() * (Float64(max) - Float64(min) + if (closed) {
-                    1.0
-                } else {
-                    0.0
-                }) + Float64(min)
-            ))
+        return UInt64(floor(nextFloat64() * (Float64(max) - Float64(min) + if (closed) {
+            1.0
+        } else {
+            0.0
+        }) + Float64(min)))
     }
     public func nextInt32(min: Int32, max: Int32, closed!: Bool = false): Int32 {
-        return Int32(floor(
-                nextFloat32() * (Float32(max) - Float32(min) + if (closed) {
-                    1.0
-                } else {
-                    0.0
-                }) + Float32(min)
-            ))
+        return Int32(floor(nextFloat32() * (Float32(max) - Float32(min) + if (closed) {
+            1.0
+        } else {
+            0.0
+        }) + Float32(min)))
     }
     public func nextUInt32(min: UInt32, max: UInt32, closed!: Bool = false): UInt32 {
-        return UInt32(floor(
-                nextFloat32() * (Float32(max) - Float32(min) + if (closed) {
-                    1.0
-                } else {
-                    0.0
-                }) + Float32(min)
-            ))
+        return UInt32(floor(nextFloat32() * (Float32(max) - Float32(min) + if (closed) {
+            1.0
+        } else {
+            0.0
+        }) + Float32(min)))
     }
 }
 
@@ -267,15 +252,15 @@ public interface BaseRandom<R> where R <: BaseRandom<R> {
     func randomInt32(min: Int32, max: Int32, closed!: Bool): Iterator<Int32>
     func randomUInt32(min: UInt32, max: UInt32, closed!: Bool): Iterator<UInt32>
     func nextBytes(length: Int64): Array<Byte> {
-        Array<UInt8>(length){_ => nextUInt8()}
+        Array<UInt8>(length) {_ => nextUInt8()}
     }
     /**
      * 生成随机数替换入参数组中的每个元素
      * 参数类型 array - 传入一个数组
      * 返回值 Array<UInt8> - 返回替换后的 Array
      */
-    func nextUInt8s(array: Array<UInt8>): Array<UInt8>{
-        for(i in 0 .. array.size){
+    func nextUInt8s(array: Array<UInt8>): Array<UInt8> {
+        for (i in 0..array.size) {
             array[i] = nextUInt8()
         }
         array
@@ -285,17 +270,17 @@ public interface BaseRandom<R> where R <: BaseRandom<R> {
      * 获取高斯 Float16 的随机数
      * 返回值 Float16 - 返回一个 Float16 类型的高斯随机数
      */
-    func randomGaussianFloat16Stream(mean!: Float16, sigma!: Float16): Iterator<Float16> 
+    func randomGaussianFloat16Stream(mean!: Float16, sigma!: Float16): Iterator<Float16>
 
     /**
      * 获取高斯 Float32 的随机数
      * 返回值 Float32 - 返回一个 Float32 类型的高斯随机数
      */
-    func randomGaussianFloat32Stream(mean!: Float32, sigma!: Float32): Iterator<Float32> 
+    func randomGaussianFloat32Stream(mean!: Float32, sigma!: Float32): Iterator<Float32>
 
     /**
      * 获取高斯 Float64 的随机数
      * 返回值 Float64 - 返回一个 Float64 类型的高斯随机数
      */
-    func randomGaussianFloat64Stream(mean!: Float64, sigma!: Float64): Iterator<Float64> 
+    func randomGaussianFloat64Stream(mean!: Float64, sigma!: Float64): Iterator<Float64>
 }

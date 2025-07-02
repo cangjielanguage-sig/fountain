@@ -29,7 +29,7 @@ import f_util.CaseFormat
  * 没有使用@ORMField注解的按照映射的不是主键，且按照列名是LowerUnderScore处理。
  */
 public macro QueryMappersGenerator(input: Tokens): Tokens {
-    let decl = (parseDecl(input) as ClassDecl).getOrThrow{ORMException("QueryMappersGenerator supports a class")}
+    let decl = (parseDecl(input) as ClassDecl).getOrThrow {ORMException("QueryMappersGenerator supports a class")}
     let name = quote($(decl.identifier)$(decl.genericParam))
     let body = decl.body.decls
     let props = extractMutProps(body)
@@ -72,19 +72,23 @@ public macro QueryMappersGenerator(input: Tokens): Tokens {
     var mapperTokens = quote(
         let creator = {=> $name()}
         let mappers = $mappers
-    ) + `nl`
-    for(st in superTypes){
+    ) +
+        `nl`
+    for (st in superTypes) {
         mapperTokens += quote(
             if (let Some(x) <- QueryMappers<$st.create<$name>(creator, mappers)) {
                 return x
             }
-        ) + `nl`
+        ) +
+            `nl`
     }
-    if(superTypes.isEmpty()){
+    if (superTypes.isEmpty()) {
         decl.upperBound = `upperbound`[0]
     }
     decl.superTypes.add(QualifiedType(quote(orm.QueryMappersInit<$name>)))
-    body.add(all: [parseDecl(quote(
+    body.add(
+        all: [parseDecl(
+            quote(
         private static let $queryMappersName = {=>
             $mapperTokens
             QueryMappers<$name> (
@@ -92,22 +96,27 @@ public macro QueryMappersGenerator(input: Tokens): Tokens {
                 mappers: mappers
             )
         }()
-    )), parseDecl(quote(
+    )),
+            parseDecl(
+            quote(
         public static prop isSimpleData: Bool {
             get(){
                 false
             }
         }
-    )), parseDecl(quote(
+    )),
+            parseDecl(
+            quote(
         public static func queryMappers(): QueryMappers<$name>{
             $queryMappersName
         }
     ))])
     decl.toTokens()
 }
+
 func generateMappers(name: Tokens, props: Array<PropDecl>, mapperMetaFn: (String) -> (Bool, String, Token)): Tokens {
     var tokens = `empty_tokens`
-    for (i in 0 .. props.size) {
+    for (i in 0..props.size) {
         if (i > 0) {
             tokens += `comma`
         }
@@ -119,9 +128,10 @@ func generateMappers(name: Tokens, props: Array<PropDecl>, mapperMetaFn: (String
     }
     tokens
 }
+
 func generateMappers(name: Tokens, vars: Array<VarDecl>, mapperMetaFn: (String) -> (Bool, String, Token)): Tokens {
     var tokens = `empty_tokens`
-    for (i in 0 .. vars.size) {
+    for (i in 0..vars.size) {
         if (i > 0) {
             tokens += `comma`
         }
@@ -137,7 +147,7 @@ func generateMappers(name: Tokens, vars: Array<VarDecl>, mapperMetaFn: (String) 
 func generateMappers(name: Tokens, fieldName: Token, dts: Tokens, meta: (Bool, String, Token)): Tokens {
     var dataType = `empty_tokens`
     var nullable = false
-    for (j in 0 .. dts.size) {
+    for (j in 0..dts.size) {
         let dt = dts[j]
         if (j == 0 && dt.value == "?") {
             nullable = true
@@ -172,7 +182,7 @@ func generateMappers(name: Tokens, fieldName: Token, dts: Tokens, meta: (Bool, S
         }
     } else if (dataType[0].value == "ArrayList") {
         var listGeneric = `empty_tokens`
-        for (j in 2 .. dataType.size - 1) {
+        for (j in 2..dataType.size - 1) {
             let dt = dataType[j]
             if (j == 2 && dt.value == "?") {
                 nullable = true

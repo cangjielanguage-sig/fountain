@@ -27,6 +27,7 @@ class PriorityQueueIterator<T> <: Iterator<T> {
         None<T>
     }
 }
+
 public class PriorityQueue<T> <: Queue<T> & Iterable<T> & Collection<T> & Growable {
 
     /**
@@ -120,10 +121,10 @@ public class PriorityQueue<T> <: Queue<T> & Iterable<T> & Collection<T> & Growab
     }
     public func grow(): Unit {
         let q = queue
-        queue = Array<Option<T>>(currentSize * 2){i => 
-            if(i < currentSize){
+        queue = Array<Option<T>>(currentSize * 2) {
+            i => if (i < currentSize) {
                 q[i]
-            }else{
+            } else {
                 None<T>
             }
         }
@@ -222,7 +223,7 @@ public class PriorityQueue<T> <: Queue<T> & Iterable<T> & Collection<T> & Growab
         let size = currentSize
         var lastIdx = size
         var toAdjust = false
-        for (i in 0 .. size) {
+        for (i in 0..size) {
             let v = queue[i].getOrThrow()
             if (predicate(v)) {
                 queue[i] = None<T>

@@ -9,6 +9,6 @@
  */
 package f_bean
 
-public interface Destroy{
+public interface Destroy {
     func destroy(): Unit
 }

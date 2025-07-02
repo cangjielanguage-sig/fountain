@@ -12,6 +12,7 @@ package f_time
 public interface ExtendTimeZone {
     static prop Z: TimeZone
 }
+
 extend TimeZone <: ExtendTimeZone {
     public static prop Z: TimeZone {
         get() {

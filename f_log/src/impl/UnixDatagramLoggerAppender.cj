@@ -34,10 +34,11 @@ private class UnixDatagramLoggerAppender <: AsyncLogger {
         LoggerAppenderCreator.register(LOGGER_NAME) {
             name =>
             let appenders = LoggerConfig.getAppenders(LOGGER_NAME)
-            if(appenders.isEmpty()){
+            if (appenders.isEmpty()) {
                 [NoneLogAppender.instance]
-            }else{
-                Array<AbstractLogger>(appenders.size){i =>
+            } else {
+                Array<AbstractLogger>(appenders.size) {
+                    i =>
                     let appender = appenders[i]
                     var path = "/tmp/log/unixDatagram.log"
                     if (let Some(h) <- LoggerConfig.getString(appender, "path") && !h.isEmpty()) {
@@ -66,4 +67,5 @@ private class UnixDatagramLoggerAppender <: AsyncLogger {
         super.append(level, message, now, ex)
     }
 }
+
 let _ = UnixDatagramLoggerAppender.register()

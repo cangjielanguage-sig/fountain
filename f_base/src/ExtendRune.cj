@@ -114,4 +114,3 @@ extend Rune <: ExtendRune {
         }
     }
 }
-

@@ -14,6 +14,7 @@ public interface ExtendPropDecl <: ExtendMember {
     func isOpen(): Bool
     func isStatic(): Bool
 }
+
 extend PropDecl <: ExtendPropDecl {
     public func isMut(): Bool {
         isMut(this)

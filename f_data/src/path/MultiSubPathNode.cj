@@ -5,13 +5,13 @@
     You may obtain a copy of Mulan PSL v2 at:
             http://license.coscl.org.cn/MulanPSL2
     THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-    See the Mulan PSL v2 for more details.  
-*/
+    See the Mulan PSL v2 for more details.
+ */
 package f_data.path
 
 internal class MultiSubPathNode <: DataPathNode {
-    MultiSubPathNode(private let names: Array<String>){}
+    MultiSubPathNode(private let names: Array<String>) {}
     public func get(data: Data): Iterator<Data> {
-        names.iterator().map{n => SubPathNode(n)}.flatMap{n => n.get(data).iterator()}
+        names.iterator().map {n => SubPathNode(n)}.flatMap {n => n.get(data).iterator()}
     }
 }

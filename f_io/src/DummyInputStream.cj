@@ -5,14 +5,14 @@
     You may obtain a copy of Mulan PSL v2 at:
             http://license.coscl.org.cn/MulanPSL2
     THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-    See the Mulan PSL v2 for more details.  
-*/
+    See the Mulan PSL v2 for more details.
+ */
 package f_io
 
 public class DummyInputStream <: InputStream & Resource {
     public static const THROW_ON_ACCESSING = DummyInputStream(true)
     public static const SILENCE = DummyInputStream(false)
-    private const DummyInputStream(private let throwing: Bool){}
+    private const DummyInputStream(private let throwing: Bool) {}
 
     public func isClosed(): Bool {
         false
@@ -20,9 +20,9 @@ public class DummyInputStream <: InputStream & Resource {
     public func close(): Unit {}
 
     public func read(buffer: Array<Byte>): Int64 {
-        if(throwing){
+        if (throwing) {
             throw Exception("DummyInputStream is not readable")
-        }else{
+        } else {
             0
         }
     }

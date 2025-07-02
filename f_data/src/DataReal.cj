@@ -202,7 +202,7 @@ public class DataReal <: Data & Hashable & Comparable<DataReal> {
     public func toString(): String {
         this.data.toString()
     }
-    
+
     public static func parse(data: String): Data {
         DataReal(extractPureString(data))
     }

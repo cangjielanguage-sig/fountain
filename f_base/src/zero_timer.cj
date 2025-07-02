@@ -22,4 +22,4 @@ package f_base
 
 public import std.sync.Timer
 
-public let ZERO_TIMER = Timer.once(Duration.Zero){}
+public let ZERO_TIMER = Timer.once(Duration.Zero) {}

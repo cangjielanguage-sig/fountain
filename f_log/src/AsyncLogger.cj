@@ -14,9 +14,7 @@ import std.collection.concurrent.{ArrayBlockingQueue, ConcurrentHashMap}
 import std.io.{OutputStream, ByteBuffer}
 import std.sync.Mutex
 import std.time.DateTime
-
 import stdx.log.{LogLevel, LogRecord}
-
 import f_io.DummyOutputStream
 import f_log.exception.LogException
 
@@ -38,11 +36,10 @@ public abstract class AsyncLogger <: AbstractLogger {
         this.output_ = output
         timeout = LoggerConfig.getAsyncTimeout()
         policy = LoggerConfig.getAsyncTimeoutPolicy()
-        this.queue = 
-        synchronized(mutex){//确保一个日志写入目标只有一个队列和一个消费线程
-            if(let Some(q) <- queueMap.get(queueTag)){
+        this.queue = synchronized(mutex) { //确保一个日志写入目标只有一个队列和一个消费线程
+            if (let Some(q) <- queueMap.get(queueTag)) {
                 q
-            }else{
+            } else {
                 let bufSize = LoggerConfig.getAsyncBufSize()
                 let queue = ArrayBlockingQueue<() -> Unit>(bufSize)
                 queueMap[queueTag] = queue
@@ -52,7 +49,7 @@ public abstract class AsyncLogger <: AbstractLogger {
         }
     }
     private static func confirmDummy(output: OutputStream): OutputStream {
-        match(output){
+        match (output) {
             case _: DummyOutputStream => output
             case _ => ByteBuffer()
         }
@@ -60,19 +57,19 @@ public abstract class AsyncLogger <: AbstractLogger {
     private static func remove(queue: ArrayBlockingQueue<() -> Unit>): Unit {
         spawn {
             while (true) {
-                try{
+                try {
                     queue.remove()()
-                }catch(e: Exception){
+                } catch (e: Exception) {
                     e.printStackTrace()
                 }
             }
         }
     }
-    private func append(){
+    private func append() {
         let buffer = (super.output as ByteBuffer).getOrThrow()
-        if(buffer.remainLength > 0){
+        if (buffer.remainLength > 0) {
             super.output = ByteBuffer()
-            append{
+            append {
                 this.output_.write(buffer.bytes())
                 this.output_.flush()
             }

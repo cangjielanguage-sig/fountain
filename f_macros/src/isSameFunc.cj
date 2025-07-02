@@ -20,8 +20,15 @@ public func isSameFuncDecl(source: FuncDecl, target: FuncDecl): Bool {
             case _ => return false
         }
     } else if (sourceModifiers.size == 2) {
-        match ((sourceModifiers[0].keyword.kind, sourceModifiers[0].keyword.kind, targetModifiers[1].keyword.kind, targetModifiers[1].keyword.kind)) {
-            case (PUBLIC, STATIC, PUBLIC, STATIC) | (STATIC, PUBLIC, STATIC, PUBLIC) | (PUBLIC, STATIC, STATIC, PUBLIC) | (STATIC, PUBLIC, PUBLIC, STATIC) | (PROTECTED, STATIC, PROTECTED, STATIC) | (STATIC, PROTECTED, STATIC, PROTECTED) | (PROTECTED, STATIC, STATIC, PROTECTED) | (STATIC, PROTECTED, PROTECTED, STATIC) | (PRIVATE, STATIC, PRIVATE, STATIC) | (STATIC, PRIVATE, STATIC, PRIVATE) | (PRIVATE, STATIC, STATIC, PRIVATE) | (STATIC, PRIVATE, PRIVATE, STATIC) => true
+        match ((sourceModifiers[0].keyword.kind, sourceModifiers[0].keyword.kind, targetModifiers[1].keyword.kind, targetModifiers[1]
+                .keyword
+                .kind)) {
+            case (PUBLIC, STATIC, PUBLIC, STATIC) | (STATIC, PUBLIC, STATIC, PUBLIC) | (PUBLIC, STATIC, STATIC, PUBLIC)
+                | (STATIC, PUBLIC, PUBLIC, STATIC) | (PROTECTED, STATIC, PROTECTED, STATIC)
+                | (STATIC, PROTECTED, STATIC, PROTECTED) | (PROTECTED, STATIC, STATIC, PROTECTED)
+                | (STATIC, PROTECTED, PROTECTED, STATIC) | (PRIVATE, STATIC, PRIVATE, STATIC)
+                | (STATIC, PRIVATE, STATIC, PRIVATE) | (PRIVATE, STATIC, STATIC, PRIVATE)
+                | (STATIC, PRIVATE, PRIVATE, STATIC) => true
             case _ => return false
         }
     } else {
@@ -38,8 +45,9 @@ public func isSameFuncDecl(source: FuncDecl, target: FuncDecl): Bool {
         for (i in 0..sourceParams.size) {
             let sourceParam = sourceParams[i]
             let targetParam = targetParams[i]
-            if (sourceParam.identifier.value != targetParam.identifier.value || sourceParam.not.kind !=
-                targetParam.not.kind || sourceParam.isMemberParam() != targetParam.isMemberParam() ||
+            if (sourceParam.identifier.value != targetParam.identifier.value || sourceParam.not.kind != targetParam
+                .not
+                .kind || sourceParam.isMemberParam() != targetParam.isMemberParam() ||
                 sourceParam.paramType.toTokens() != targetParam.paramType.toTokens()) {
                 return false
             }

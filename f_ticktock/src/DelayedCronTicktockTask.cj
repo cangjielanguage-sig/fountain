@@ -59,20 +59,20 @@ public class DelayedCronTicktockTask <: FuncInvocationTask {
         let fn = function
         if (once) {
             function = {
-                 =>
+                =>
                 remover(name)
                 fn()
             }
         } else {
             function = match (delayedPeriodic) {
                 case FixedRate => {
-                     =>
+                    =>
                     remover(name)
                     repeater(this)
                     fn()
                 }
                 case FixedDelay => {
-                     =>
+                    =>
                     remover(name)
                     fn()
                     repeater(this)

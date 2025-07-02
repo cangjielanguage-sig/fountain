@@ -17,9 +17,9 @@ public class BloomFilter<T> where T <: Hashable {
         this(genHashers(iterate))
     }
     public init(hashers: Array<(T) -> Int64>) {
-        this(Array<(T, Int64) -> Int64>(hashers.size) {i =>
-            {v: T, _: Int64 =>
-                hashers[i](v)
+        this(Array<(T, Int64) -> Int64>(hashers.size) {
+            i => {
+                v: T, _: Int64 => hashers[i](v)
             }
         })
     }
@@ -32,9 +32,9 @@ public class BloomFilter<T> where T <: Hashable {
     }
     public func set(value: T): Unit {
         var h = value.hashCode()
-        synchronized(mutex){
+        synchronized(mutex) {
             bits[h] = true
-            for(hasher in hashers){
+            for (hasher in hashers) {
                 h = hasher(value, h)
                 bits[h] = true
             }
@@ -42,11 +42,11 @@ public class BloomFilter<T> where T <: Hashable {
     }
     public func contains(value: T): Bool {
         var h = value.hashCode()
-        synchronized(mutex){
+        synchronized(mutex) {
             var result = bits[h]
             if (result) {
                 var i = 0
-                while(result && i < hashers.size) {
+                while (result && i < hashers.size) {
                     h = hashers[i](value, h)
                     result &&= bits[h]
                     i++

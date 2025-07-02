@@ -6,58 +6,57 @@
             http://license.coscl.org.cn/MulanPSL2
     THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
     See the Mulan PSL v2 for more details.
-*/
+ */
 package f_data
 
-public class ObjectFields<T> <: Collection<ReadableField> where T <: ObjectData<T>{
+public class ObjectFields<T> <: Collection<ReadableField> where T <: ObjectData<T> {
     private let mutables = HashMap<String, MutableField>()
     private let readables = HashMap<String, ReadableField>()
     public ObjectFields(
         fields: Array<ReadableField>,
-        private let creator: ()-> T
-    ){
+        private let creator: () -> T
+    ) {
         func populateField(name: String, field: ReadableField, throwIfDuplicate!: Bool = true) {
-            if(this.readables.addIfAbsent(name, field).isSome() && throwIfDuplicate){
+            if (this.readables.addIfAbsent(name, field).isSome() && throwIfDuplicate) {
                 throw DataException('duplicate field ${name} in ${TypeInfos.get<T>()}')
             }
-            match(field){
-                case x: MutableField where this.mutables.addIfAbsent(name, x).isSome() && throwIfDuplicate => 
-                    throw DataException('duplicate field ${name} in ${TypeInfos.get<T>()}')
+            match (field) {
+                case x: MutableField where this.mutables.addIfAbsent(name, x).isSome() && throwIfDuplicate => throw DataException(
+                    'duplicate field ${name} in ${TypeInfos.get<T>()}')
                 case _ => false
             }
         }
-        func populateFields(fields: Iterable<ReadableField>, throwIfDuplicate!: Bool = true){
-            for(f in fields){
+        func populateFields(fields: Iterable<ReadableField>, throwIfDuplicate!: Bool = true) {
+            for (f in fields) {
                 populateField(f.name, f, throwIfDuplicate: throwIfDuplicate)
             }
         }
         func populateFields(name: String, annotations: Collection<Annotation>) {
-            let f = 
-            if(let Some(f) <- this.readables.get(name)){
+            let f = if (let Some(f) <- this.readables.get(name)) {
                 f
-            }else{
+            } else {
                 return
             }
-            for(annotation in annotations) {
-                match(annotation){
-                    case x: FieldAlias => 
-                        for(n in x.name.split(',')){
-                            populateField(n, f)
-                        }
+            for (annotation in annotations) {
+                match (annotation) {
+                    case x: FieldAlias => for (n in x.name.split(',')) {
+                        populateField(n, f)
+                    }
                     case _ => ()
                 }
             }
         }
         populateFields(fields)
         let currentType = (TypeInfos.get<T>() as ClassTypeInfo).getOrThrow()
-        for(v in currentType.instanceVariables) {
+        for (v in currentType.instanceVariables) {
             populateFields(v.name, v.annotations)
         }
-        for(p in currentType.instanceProperties) {
+        for (p in currentType.instanceProperties) {
             populateFields(p.name, p.annotations)
         }
-        match(currentType.superClass) {
-            case Some(x) where x != TypeInfos.get<Object>() && x.isSubtypeOf(TypeInfos.get("f_data.ObjectData<${x.qualifiedName}>")) =>
+        match (currentType.superClass) {
+            case Some(x) where x != TypeInfos.get<Object>() && x.isSubtypeOf(
+                TypeInfos.get("f_data.ObjectData<${x.qualifiedName}>")) =>
                 let superFields = x.getStaticFunction("dataFields").apply(x)
                 let superFieldsIterator = (superFields as ObjectFields<T>).getOrThrow().iterator()
                 populateFields(superFieldsIterator, throwIfDuplicate: false)
@@ -68,7 +67,7 @@ public class ObjectFields<T> <: Collection<ReadableField> where T <: ObjectData<
         creator()
     }
     public prop size: Int64 {
-        get(){
+        get() {
             readables.size
         }
     }

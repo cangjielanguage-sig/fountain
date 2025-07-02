@@ -21,13 +21,13 @@ import f_exception.IllegalAccessException
  */
 public interface Strategy<N, A, R> where N <: Hashable & Equatable<N> {
     /**
-      * 返回策略标识
-      */
+     * 返回策略标识
+     */
     prop name: N
 
     /**
-      * 执行策略
-      */
+     * 执行策略
+     */
     func execute(arg: A): R
 }
 
@@ -48,8 +48,8 @@ public class Strategies<N, A, R> where N <: Hashable & Equatable<N> {
     }
 
     /**
-      * 用指定的标识和参数执行策略，如果没有找到标识是name的策略会抛出base.IllegalAccessException
-      */
+     * 用指定的标识和参数执行策略，如果没有找到标识是name的策略会抛出base.IllegalAccessException
+     */
     public func execute(name: N, arg: A): R {
         match (strategies.get(name)) {
             case Some(s) => s.execute(arg)

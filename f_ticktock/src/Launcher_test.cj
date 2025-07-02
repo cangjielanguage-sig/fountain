@@ -14,7 +14,7 @@ import std.sync.{Mutex, AtomicInt64}
 @Test
 public class Launcher_test {
     private let lock = Mutex()
-    private let condition = synchronized(lock){
+    private let condition = synchronized(lock) {
         lock.condition()
     }
     private func waitAndShutdown(launcher: Ticktock) {
@@ -400,6 +400,7 @@ public class Launcher_test {
     //     launcher.shutdown()
     // }
 }
+
 class LauncherTestTask0 <: TicktockTask {
     public prop name: String {
         get() {
@@ -420,6 +421,7 @@ class LauncherTestTask0 <: TicktockTask {
         println("${name} ${integer.fetchAdd(1)} ${DateTime.now()} ${elapsed}")
     }
 }
+
 class LauncherTestTask1_1 <: TicktockTask {
     public prop name: String {
         get() {
@@ -437,6 +439,7 @@ class LauncherTestTask1_1 <: TicktockTask {
         println("${name} ${integer.fetchAdd(1)} ${DateTime.now()} ${elapsed}")
     }
 }
+
 class LauncherTestTask1_2 <: TicktockTask {
     public prop name: String {
         get() {
@@ -454,10 +457,11 @@ class LauncherTestTask1_2 <: TicktockTask {
         println("${name} ${integer.fetchAdd(1)} ${DateTime.now()} ${elapsed}")
     }
 }
+
 class LauncherTestTask2 <: TicktockTask {
     private let condition: Condition
     LauncherTestTask2(let lock: Mutex) {
-        synchronized(lock){
+        synchronized(lock) {
             condition = lock.condition()
         }
     }
@@ -473,6 +477,7 @@ class LauncherTestTask2 <: TicktockTask {
         }
     }
 }
+
 class LauncherTestTask3 <: TicktockTask {
     public prop name: String {
         get() {
@@ -485,6 +490,7 @@ class LauncherTestTask3 <: TicktockTask {
         println("${name} ${integer.fetchAdd(1)} ${DateTime.now()}")
     }
 }
+
 class LauncherTestTask4 <: TicktockTask {
     public prop name: String {
         get() {
@@ -497,6 +503,7 @@ class LauncherTestTask4 <: TicktockTask {
         println("${name} ${integer.fetchAdd(1)} ${DateTime.now()}")
     }
 }
+
 class LauncherTestTask5 <: TicktockTask {
     public prop name: String {
         get() {
@@ -509,6 +516,7 @@ class LauncherTestTask5 <: TicktockTask {
         println("${name} ${integer.fetchAdd(1)} ${DateTime.now()}")
     }
 }
+
 class LauncherTestTask6 <: TicktockTask {
     public prop name: String {
         get() {
@@ -521,6 +529,7 @@ class LauncherTestTask6 <: TicktockTask {
         println("${name} ${integer.fetchAdd(1)} ${DateTime.now()}")
     }
 }
+
 class LauncherTestTask7 <: TicktockTask {
     public prop name: String {
         get() {
@@ -533,6 +542,7 @@ class LauncherTestTask7 <: TicktockTask {
         println("${name} ${integer.fetchAdd(1)} ${DateTime.now()}")
     }
 }
+
 class LauncherTestTask8 <: TicktockTask {
     public prop name: String {
         get() {
@@ -545,6 +555,7 @@ class LauncherTestTask8 <: TicktockTask {
         println("${name} ${integer.fetchAdd(1)} ${DateTime.now()}")
     }
 }
+
 class LauncherTestTask9 <: TicktockTask {
     public prop name: String {
         get() {
@@ -556,6 +567,7 @@ class LauncherTestTask9 <: TicktockTask {
         println("${name} ${DateTime.now()}")
     }
 }
+
 class LauncherTestTask10 <: TicktockTask {
     public prop name: String {
         get() {
@@ -565,6 +577,7 @@ class LauncherTestTask10 <: TicktockTask {
 
     public func execute(): Unit {}
 }
+
 class LauncherTestTask11 <: TicktockTask {
     public prop name: String {
         get() {
@@ -581,6 +594,7 @@ class LauncherTestTask11 <: TicktockTask {
         }
     }
 }
+
 class LauncherTestTask12 <: TicktockTask {
     private var executed = 0
 
@@ -596,6 +610,7 @@ class LauncherTestTask12 <: TicktockTask {
         throw Exception()
     }
 }
+
 class LauncherTestTask13 <: TicktockTask {
     private var executed = 0
 
@@ -610,6 +625,7 @@ class LauncherTestTask13 <: TicktockTask {
         println("executed: ${name}-${executed}-DateTime.now()")
     }
 }
+
 class LauncherTestTask14 <: TicktockTask {
     public prop name: String {
         get() {

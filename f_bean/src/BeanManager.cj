@@ -36,8 +36,8 @@ public class BeanManager <: Comparable<BeanManager> {
      * 同一自定义BeanScope且相同生命周期的的bean应在生命周期结束时统一调用本函数生成的函数销毁bean。
      */
     internal func generateDestroy(object: Object): () -> Unit {
-        {=>
-            if(let x: Destroy <- object){
+        {
+            => if (let x: Destroy <- object) {
                 x.destroy()
             }
         }
@@ -52,7 +52,7 @@ public class BeanManager <: Comparable<BeanManager> {
     }
     private func new(): Object {
         let o = creator()
-        if(let x: PostConstruct <- o){
+        if (let x: PostConstruct <- o) {
             x.postConstruct()
         }
         match (o) {

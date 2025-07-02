@@ -5,21 +5,22 @@
     You may obtain a copy of Mulan PSL v2 at:
             http://license.coscl.org.cn/MulanPSL2
     THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-    See the Mulan PSL v2 for more details.  
-*/
+    See the Mulan PSL v2 for more details.
+ */
 package f_concurrent
 
 public interface ExtendAtomicInt8 {
-    func fetchIncr(): Int8 
-    func fetchDecr(): Int8 
-    func incrFetch(): Int8 
-    func decrFetch(): Int8 
-    func addFetch(val: Int8): Int8 
-    func subFetch(val: Int8): Int8 
-    func andFetch(val: Int8): Int8 
-    func orFetch(val: Int8): Int8 
-    func xorFetch(val: Int8): Int8 
+    func fetchIncr(): Int8
+    func fetchDecr(): Int8
+    func incrFetch(): Int8
+    func decrFetch(): Int8
+    func addFetch(val: Int8): Int8
+    func subFetch(val: Int8): Int8
+    func andFetch(val: Int8): Int8
+    func orFetch(val: Int8): Int8
+    func xorFetch(val: Int8): Int8
 }
+
 extend AtomicInt8 <: ExtendAtomicInt8 {
     public func fetchIncr(): Int8 {
         fetchAdd(Int8.one)
@@ -49,18 +50,20 @@ extend AtomicInt8 <: ExtendAtomicInt8 {
         fetchXor(val) ^ val
     }
 }
+
 public interface ExtendAtomicUInt8 {
-    func fetchIncr(): UInt8 
-    func fetchDecr(): UInt8 
-    func incrFetch(): UInt8 
-    func decrFetch(): UInt8 
-    
-    func addFetch(val: UInt8): UInt8 
-    func subFetch(val: UInt8): UInt8 
-    func andFetch(val: UInt8): UInt8 
-    func orFetch(val: UInt8): UInt8 
-    func xorFetch(val: UInt8): UInt8 
+    func fetchIncr(): UInt8
+    func fetchDecr(): UInt8
+    func incrFetch(): UInt8
+    func decrFetch(): UInt8
+
+    func addFetch(val: UInt8): UInt8
+    func subFetch(val: UInt8): UInt8
+    func andFetch(val: UInt8): UInt8
+    func orFetch(val: UInt8): UInt8
+    func xorFetch(val: UInt8): UInt8
 }
+
 extend AtomicUInt8 <: ExtendAtomicUInt8 {
     public func fetchIncr(): UInt8 {
         fetchAdd(UInt8.one)
@@ -90,18 +93,20 @@ extend AtomicUInt8 <: ExtendAtomicUInt8 {
         fetchXor(val) ^ val
     }
 }
+
 public interface ExtendAtomicInt16 {
-    func fetchIncr(): Int16 
-    func fetchDecr(): Int16 
-    func incrFetch(): Int16 
-    func decrFetch(): Int16 
-    
-    func addFetch(val: Int16): Int16 
-    func subFetch(val: Int16): Int16 
-    func andFetch(val: Int16): Int16 
+    func fetchIncr(): Int16
+    func fetchDecr(): Int16
+    func incrFetch(): Int16
+    func decrFetch(): Int16
+
+    func addFetch(val: Int16): Int16
+    func subFetch(val: Int16): Int16
+    func andFetch(val: Int16): Int16
     func orFetch(val: Int16): Int16
-    func xorFetch(val: Int16): Int16 
+    func xorFetch(val: Int16): Int16
 }
+
 extend AtomicInt16 <: ExtendAtomicInt16 {
     public func fetchIncr(): Int16 {
         fetchAdd(Int16.one)
@@ -131,17 +136,19 @@ extend AtomicInt16 <: ExtendAtomicInt16 {
         fetchXor(val) ^ val
     }
 }
+
 public interface ExtendAtomicUInt16 {
-    func fetchIncr(): UInt16 
-    func fetchDecr(): UInt16 
-    func incrFetch(): UInt16 
-    func decrFetch(): UInt16 
-    func addFetch(val: UInt16): UInt16 
+    func fetchIncr(): UInt16
+    func fetchDecr(): UInt16
+    func incrFetch(): UInt16
+    func decrFetch(): UInt16
+    func addFetch(val: UInt16): UInt16
     func subFetch(val: UInt16): UInt16
     func andFetch(val: UInt16): UInt16
     func orFetch(val: UInt16): UInt16
     func xorFetch(val: UInt16): UInt16
 }
+
 extend AtomicUInt16 <: ExtendAtomicUInt16 {
     public func fetchIncr(): UInt16 {
         fetchAdd(UInt16.one)
@@ -171,17 +178,19 @@ extend AtomicUInt16 <: ExtendAtomicUInt16 {
         fetchXor(val) ^ val
     }
 }
+
 public interface ExtendAtomicInt32 {
-    func fetchIncr(): Int32 
-    func fetchDecr(): Int32 
-    func incrFetch(): Int32 
-    func decrFetch(): Int32 
-    func addFetch(val: Int32): Int32 
+    func fetchIncr(): Int32
+    func fetchDecr(): Int32
+    func incrFetch(): Int32
+    func decrFetch(): Int32
+    func addFetch(val: Int32): Int32
     func subFetch(val: Int32): Int32
     func andFetch(val: Int32): Int32
     func orFetch(val: Int32): Int32
     func xorFetch(val: Int32): Int32
 }
+
 extend AtomicInt32 <: ExtendAtomicInt32 {
     public func fetchIncr(): Int32 {
         fetchAdd(Int32.one)
@@ -211,17 +220,19 @@ extend AtomicInt32 <: ExtendAtomicInt32 {
         fetchXor(val) ^ val
     }
 }
+
 public interface ExtendAtomicUInt32 {
-    func fetchIncr(): UInt32 
-    func fetchDecr(): UInt32 
-    func incrFetch(): UInt32 
-    func decrFetch(): UInt32 
+    func fetchIncr(): UInt32
+    func fetchDecr(): UInt32
+    func incrFetch(): UInt32
+    func decrFetch(): UInt32
     func addFetch(val: UInt32): UInt32
     func subFetch(val: UInt32): UInt32
     func andFetch(val: UInt32): UInt32
     func orFetch(val: UInt32): UInt32
     func xorFetch(val: UInt32): UInt32
 }
+
 extend AtomicUInt32 <: ExtendAtomicUInt32 {
     public func fetchIncr(): UInt32 {
         fetchAdd(UInt32.one)
@@ -251,17 +262,19 @@ extend AtomicUInt32 <: ExtendAtomicUInt32 {
         fetchXor(val) ^ val
     }
 }
+
 public interface ExtendAtomicInt64 {
-    func fetchIncr(): Int64 
-    func fetchDecr(): Int64 
-    func incrFetch(): Int64 
-    func decrFetch(): Int64 
+    func fetchIncr(): Int64
+    func fetchDecr(): Int64
+    func incrFetch(): Int64
+    func decrFetch(): Int64
     func addFetch(val: Int64): Int64
     func subFetch(val: Int64): Int64
     func andFetch(val: Int64): Int64
     func orFetch(val: Int64): Int64
     func xorFetch(val: Int64): Int64
 }
+
 extend AtomicInt64 <: ExtendAtomicInt64 {
     public func fetchIncr(): Int64 {
         fetchAdd(Int64.one)
@@ -291,17 +304,19 @@ extend AtomicInt64 <: ExtendAtomicInt64 {
         fetchXor(val) ^ val
     }
 }
+
 public interface ExtendAtomicUInt64 {
-    func fetchIncr(): UInt64 
-    func fetchDecr(): UInt64 
-    func incrFetch(): UInt64 
-    func decrFetch(): UInt64 
+    func fetchIncr(): UInt64
+    func fetchDecr(): UInt64
+    func incrFetch(): UInt64
+    func decrFetch(): UInt64
     func addFetch(val: UInt64): UInt64
     func subFetch(val: UInt64): UInt64
     func andFetch(val: UInt64): UInt64
     func orFetch(val: UInt64): UInt64
     func xorFetch(val: UInt64): UInt64
 }
+
 extend AtomicUInt64 <: ExtendAtomicUInt64 {
     public func fetchIncr(): UInt64 {
         fetchAdd(UInt64.one)

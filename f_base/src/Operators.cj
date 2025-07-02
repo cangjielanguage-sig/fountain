@@ -6,55 +6,69 @@
             http://license.coscl.org.cn/MulanPSL2
     THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
     See the Mulan PSL v2 for more details.
-*/
+ */
 package f_base
 
-public interface Negativable<T> where T <: Negativable<T>{
+public interface Negativable<T> where T <: Negativable<T> {
     operator func -(): T
 }
+
 public interface Addable<T> where T <: Addable<T> {
     operator func +(right: T): T
 }
+
 public interface Subable<T> where T <: Subable<T> {
     operator func -(right: T): T
 }
+
 public interface Mulable<T> where T <: Mulable<T> {
     operator func *(right: T): T
 }
+
 public interface Divable<T> where T <: Divable<T> {
     operator func /(right: T): T
 }
+
 public interface Modable<T> where T <: Modable<T> {
     operator func %(right: T): T
 }
+
 public interface Expable<T> where T <: Expable<T> {
     operator func **(right: T): T
 }
+
 public interface Cmpable<T> where T <: Cmpable<T> {
     operator func >(right: T): Bool
     operator func <(right: T): Bool
     operator func >=(right: T): Bool
     operator func <=(right: T): Bool
 }
+
 public interface Eqable<T> where T <: Eqable<T> {
     operator func ==(right: T): Bool
     operator func !=(right: T): Bool
 }
+
 public interface BitAndable<T> where T <: BitAndable<T> {
     operator func &(right: T): T
 }
+
 public interface BitOrable<T> where T <: BitOrable<T> {
     operator func |(right: T): T
 }
+
 public interface BitXorable<T> where T <: BitXorable<T> {
     operator func ^(right: T): T
 }
+
 public interface BitNotable<T> where T <: BitNotable<T> {
     operator func !(): T
 }
+
 public interface LeftShiftable<T> where T <: LeftShiftable<T> {
     operator func <<(right: T): T
 }
+
 public interface RightShiftable<T> where T <: RightShiftable<T> {
     operator func >>(right: T): T
 }

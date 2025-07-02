@@ -270,7 +270,7 @@ let CRC16_LOOKUP_TABLE: Array<UInt16> = [
 
 func crc16(bytes: Array<Byte>, s: Int64, e: Int64) {
     var crc: UInt16 = 0x0000
-    for (i in s .. e) {
+    for (i in s..e) {
         crc = (crc << 8) ^ CRC16_LOOKUP_TABLE[Int64((UInt8(crc >> 8) ^ (bytes[i] & 0xFF)) & 0xFF)]
     }
     return crc & 0xFFFF;

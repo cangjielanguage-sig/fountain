@@ -148,7 +148,7 @@ public enum Result<T, E> {
             NoResult
         }
     }
-    public func filter(){
+    public func filter() {
         ResultFilter<T, E>(this)
     }
     public func flatten<U>(): Result<U, E> {
@@ -221,11 +221,11 @@ public class ResultFilter<T, E> {
         filterErr_ = true
         this
     }
-    public func filterWithValue(){
+    public func filterWithValue() {
         filterWithValue_ = true
         this
     }
-    public func filterWithE(){
+    public func filterWithE() {
         filterWithE_ = true
         this
     }

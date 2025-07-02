@@ -9,29 +9,30 @@
  */
 package f_concurrent
 
-public class ConcurrentHashSetIterator<T> <: Iterator<T>{
-    public ConcurrentHashSetIterator(public let itr: Iterator<(T, T)>){}
-    public func next(): ?T{
+public class ConcurrentHashSetIterator<T> <: Iterator<T> {
+    public ConcurrentHashSetIterator(public let itr: Iterator<(T, T)>) {}
+    public func next(): ?T {
         itr.next()?[0]
     }
 }
+
 public class ConcurrentHashSet<T> <: Set<T> where T <: Hashable & Equatable<T> {
     private let store: ConcurrentHashMap<T, T>
     public init() {
         store = ConcurrentHashMap<T, T>()
     }
-    public init(capacity: Int64){
+    public init(capacity: Int64) {
         store = ConcurrentHashMap<T, T>(capacity)
     }
-    public init(elements: Collection<T>){
+    public init(elements: Collection<T>) {
         this()
-        for(v in elements){
+        for (v in elements) {
             store[v] = v
         }
     }
-    public init(elements: Array<T>){
+    public init(elements: Array<T>) {
         this()
-        for(v in elements){
+        for (v in elements) {
             store[v] = v
         }
     }
@@ -50,7 +51,7 @@ public class ConcurrentHashSet<T> <: Set<T> where T <: Hashable & Equatable<T> {
         store.add(value, value).isNone()
     }
     public func add(all!: Collection<T>): Unit {
-        for(v in all){
+        for (v in all) {
             add(v)
         }
     }
@@ -64,7 +65,7 @@ public class ConcurrentHashSet<T> <: Set<T> where T <: Hashable & Equatable<T> {
         return true
     }
     public func retain(all!: Set<T>): Unit {
-        for((k, _) in store where !all.contains(k)){
+        for ((k, _) in store where !all.contains(k)) {
             store.remove(k)
         }
     }
@@ -84,15 +85,15 @@ public class ConcurrentHashSet<T> <: Set<T> where T <: Hashable & Equatable<T> {
     }
     public func removeIf(predicate: (T) -> Bool): Unit {
         let keys = ArrayList<T>()
-        for((k, v) in store where predicate(v)) {
+        for ((k, v) in store where predicate(v)) {
             keys.add(k)
         }
-        for(k in keys){
+        for (k in keys) {
             store.remove(k)
         }
     }
     public func clear(): Unit {
-        removeIf{_ => true}
+        removeIf {_ => true}
     }
     public func retainAll(values: Set<T>): Unit {
         for (v in this where !values.contains(v)) {
@@ -103,27 +104,29 @@ public class ConcurrentHashSet<T> <: Set<T> where T <: Hashable & Equatable<T> {
         ConcurrentHashSet<T>(this)
     }
 }
+
 extend<T> ConcurrentHashSet<T> <: Equatable<ConcurrentHashSet<T>> where T <: Hashable & Equatable<T> {
     public operator func ==(other: ConcurrentHashSet<T>): Bool {
-        if(this.size != other.size){
+        if (this.size != other.size) {
             return false
         }
         let itr1 = this.iterator()
         let itr2 = other.iterator()
         var i = 0
-        while(let (Some(x), Some(y)) <- (itr1.next(), itr2.next()) && x == y){
+        while (let (Some(x), Some(y)) <- (itr1.next(), itr2.next()) && x == y) {
             i++
         }
         i == this.size
     }
 }
-extend<T> ConcurrentHashSet<T> <: ToString where T <: Hashable & Equatable<T> & ToString{
+
+extend<T> ConcurrentHashSet<T> <: ToString where T <: Hashable & Equatable<T> & ToString {
     public func toString(): String {
         let builder = StringGenerator()
         builder.append('[')
         var i = 0
-        for(v in this){
-            if(i > 0){
+        for (v in this) {
+            if (i > 0) {
                 builder.append(', ')
             }
             builder.append(v)

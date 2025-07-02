@@ -64,8 +64,7 @@ public struct Comparator<T> {
     }
     public func then<O>(mapper: (T) -> O, comparator: (O, O) -> Ordering): Comparator<T> {
         Comparator<T> {
-            left, right =>
-            match (this.comparator(left, right)) {
+            left, right => match (this.comparator(left, right)) {
                 case EQ => comparator(mapper(left), mapper(right))
                 case x => x
             }
@@ -73,8 +72,7 @@ public struct Comparator<T> {
     }
     public func then<O>(mapper: (T) -> O, comparator: Comparator<O>): Comparator<T> {
         Comparator<T> {
-            left, right =>
-            match (this.comparator(left, right)) {
+            left, right => match (this.comparator(left, right)) {
                 case EQ => comparator(mapper(left), mapper(right))
                 case x => x
             }

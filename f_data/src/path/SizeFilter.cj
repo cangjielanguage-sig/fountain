@@ -5,38 +5,37 @@
     You may obtain a copy of Mulan PSL v2 at:
             http://license.coscl.org.cn/MulanPSL2
     THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-    See the Mulan PSL v2 for more details.  
-*/
+    See the Mulan PSL v2 for more details.
+ */
 package f_data.path
 
 internal class SizeFilter <: DataFilter {
-    SizeFilter(private let left: DataPath, private let right: Int64){}
-    init(left: String, right: String, solid: String){
+    SizeFilter(private let left: DataPath, private let right: Int64) {}
+    init(left: String, right: String, solid: String) {
         this(compilePath(left, solid), Int64.parse(right))
     }
     public func check(data: Data): Bool {
-        let d = match(left.get(data).next()){
+        let d = match (left.get(data).next()) {
             case Some(x) => x
             case _ => return false
         }
-        match(d){
+        match (d) {
             case x: Collection<Data> => x.size
             case x: Collection<(String, Data)> => x.size
             case x: Collection<(Data, Data)> => x.size
-            case x: DataString => 
+            case x: DataString =>
                 var s = 0
-                for(_ in x.data.runes()){
+                for (_ in x.data.runes()) {
                     s++
                 }
                 s
-            case _ => 
+            case _ =>
                 var size = -1
                 let info = ClassTypeInfo.of(left)
-                if(info.qualifiedName.startsWith('f_data.DataObject') && 
-                   let Some(fn) <- TypeMemberInfos.instanceFunction(info, 'fields') && 
-                   let fields: Iterator<ReadableField> <- fn.apply(left)){
+                if (info.qualifiedName.startsWith('f_data.DataObject') && let Some(fn) <- TypeMemberInfos
+                    .instanceFunction(info, 'fields') && let fields: Iterator<ReadableField> <- fn.apply(left)) {
                     size = 0
-                    for(_ in fields){
+                    for (_ in fields) {
                         size++
                     }
                 }

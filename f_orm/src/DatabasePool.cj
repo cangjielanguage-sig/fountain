@@ -46,7 +46,7 @@ public class DatabasePool <: Resource & Datasource {
             checkOnReturning: checkOnReturning,
             elementLife: connectionLife,
             checkInterval: checkInterval,
-            creator: { => PooledConnection(creator())},
+            creator: {=> PooledConnection(creator())},
             checker: {
                 c => try {
                     return !c.isDestroied() && checker(c)

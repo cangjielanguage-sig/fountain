@@ -9,10 +9,11 @@
  */
 package f_time
 
-public interface ExtendMonth{
+public interface ExtendMonth {
     operator func -(month: Month): Int64
 }
-extend Month <: ExtendMonth{
+
+extend Month <: ExtendMonth {
     public operator func -(month: Month): Int64 {
         this.toInteger() - month.toInteger()
     }

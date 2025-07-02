@@ -6,15 +6,15 @@
             http://license.coscl.org.cn/MulanPSL2
     THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
     See the Mulan PSL v2 for more details.
-*/
+ */
 package f_jwt
 
 import std.crypto.digest.Digest
 import stdx.crypto.digest.{HMAC, HashType}
 
 public class HMACDigest <: Digest {
-    public HMACDigest(private let hmac: HMAC){}
-    public init(key: Array<Byte>, algorithm: HashType){
+    public HMACDigest(private let hmac: HMAC) {}
+    public init(key: Array<Byte>, algorithm: HashType) {
         this(HMAC(key, algorithm))
     }
     public prop size: Int64 {
@@ -40,7 +40,7 @@ public class HMACDigest <: Digest {
         hmac.reset()
     }
     public prop algorithm: String {
-        get(){
+        get() {
             'HMAC-${hmac.algorithm}'
         }
     }

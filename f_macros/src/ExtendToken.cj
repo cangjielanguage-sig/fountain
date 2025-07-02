@@ -15,6 +15,7 @@ public interface ExtendToken {
         !(this == value)
     }
 }
+
 extend Token <: ExtendToken {
     public operator func ==(value: String): Bool {
         this.value == value

@@ -46,7 +46,7 @@ public class RequestMeta <: HttpRequestHandler {
         }
     }
     internal func iterateConsumes(fn: (String) -> Unit): Unit {
-        for(c in consumes) {
+        for (c in consumes) {
             fn(c)
         }
     }
@@ -67,13 +67,13 @@ public class RequestMeta <: HttpRequestHandler {
         this.handle_ = {
             ctx =>
             let start = MonoTime.now()
-            try{
+            try {
                 let result = fn(BeanFactory.instance.getFirst<T>().getOrThrow(), ctx, pattern)
-                if(let (GET, GET) <- (this.method, RequestMethod.parse(ctx.request.method))) {
+                if (let (GET, GET) <- (this.method, RequestMethod.parse(ctx.request.method))) {
                     return
                 }
                 generateResponse<R>(ctx, result)
-            }finally{
+            } finally {
                 let request = ctx.request
                 log.info<ToString>('fountain.mvc {}:{};{}', [request.method, request.url, MonoTime.now() - start])
             }
@@ -115,12 +115,10 @@ public class RequestMeta <: HttpRequestHandler {
         for (t in types) {
             match (t.trimAscii()) {
                 case '*' | '*/*' where !allowAny => throw IllegalArgumentException(
-                    "Invalid mime type: ${t} in ${types.toString().replace(', ', '|').replace('[', '').replace(']', '')}"
-                )
+                    "Invalid mime type: ${t} in ${types.toString().replace(', ', '|').replace('[', '').replace(']', '')}")
                 case '*' | '*/*' => set.add('*')
                 case '' => throw IllegalArgumentException(
-                    "mime type must not be empty string in ${types.toString().replace(', ', '|').replace('[', '').replace(']', '')}"
-                )
+                    "mime type must not be empty string in ${types.toString().replace(', ', '|').replace('[', '').replace(']', '')}")
                 case x => set.add(x)
             }
         }
@@ -146,8 +144,7 @@ public class RequestMeta <: HttpRequestHandler {
                 break
             }
             throw MVCException(
-                'parameter of controller function must be with one and only one Annotation as @RequestBody or @RequestParam or @RequestHeader or @PathVariable or @MultipartFormData'
-            )
+                'parameter of controller function must be with one and only one Annotation as @RequestBody or @RequestParam or @RequestHeader or @PathVariable or @MultipartFormData')
         }
         for (annotation in function.annotations) {
             match (annotation) {

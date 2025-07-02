@@ -16,6 +16,7 @@ public enum DummyTransactionMode {
     | Never
     | StartFailure
 }
+
 public class DummyTransaction <: Transaction {
     public DummyTransaction(private let mode: DummyTransactionMode, private let ex: ?Exception) {}
     private var level: TransactionIsoLevel = TransactionIsoLevel.Unspecified

@@ -5,17 +5,16 @@
     You may obtain a copy of Mulan PSL v2 at:
             http://license.coscl.org.cn/MulanPSL2
     THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-    See the Mulan PSL v2 for more details.  
-*/
+    See the Mulan PSL v2 for more details.
+ */
 package f_data.path
 
 internal class SubPathNode <: DataPathNode {
-    SubPathNode(private let name: String){}
+    SubPathNode(private let name: String) {}
     public func get(data: Data): Iterator<Data> {
-        match(data){
+        match (data) {
             case x: NamedData => OptionIterator<Data>(x.get(name))
-            case _ => 
-                OptionIterator<Data>()
+            case _ => OptionIterator<Data>()
         }
     }
 }

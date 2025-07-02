@@ -71,15 +71,15 @@ public abstract class AbstractLogger <: Logger & Resource {
     public open func log(record: LogRecord): Unit {
         try {
             if (logLevelEnabled(record.level)) {
-                doLock{
+                doLock {
                     append(record.level, record.message, record.time, None<Exception>)
                     func writeAttrs(attrs: Array<Attr>) {
                         if (attrs.isEmpty()) {
                             return
                         }
                         writer.startObject()
-                        for(i in 0 .. attrs.size) {
-                            if(i > 0){
+                        for (i in 0..attrs.size) {
+                            if (i > 0) {
                                 writer.writeString(',')
                             }
                             let attr = attrs[i]
@@ -100,7 +100,7 @@ public abstract class AbstractLogger <: Logger & Resource {
     }
 
     protected func append(level: LogLevel, message: () -> String, ex: Option<Exception>): Unit {
-        if(logLevelEnabled(level)){
+        if (logLevelEnabled(level)) {
             doLock {
                 let now = DateTime.now()
                 append(level, message(), now, ex)

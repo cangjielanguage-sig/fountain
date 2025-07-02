@@ -69,8 +69,7 @@ class MultipartFormDataParser {
             throw HttpRequestHeaderException("No Content-Type of http request header")
         } else if (!contentType.startsWith("multipart/form-data; boundary=")) {
             throw HttpRequestHeaderException(
-                "Content-Type of http request header does not match, ${contentType}, Content-Type must start with multipart/form-data; boundary="
-            )
+                "Content-Type of http request header does not match, ${contentType}, Content-Type must start with multipart/form-data; boundary=")
         }
         boundary = extractBoundary(contentType)
         bodyStream = ctx.request.body
@@ -161,9 +160,9 @@ class MultipartFormDataParser {
                     } else {
                         indexer.indexOf(lineDelim, rotate: true) //此处必须有一行这个，必须跟【OTHER】处的相同代码同时存在
                         let list = partPadding()
-                        let mediaType = if(headerValue.isEmpty()){
+                        let mediaType = if (headerValue.isEmpty()) {
                             None<MediaType>
-                        }else{
+                        } else {
                             MediaTypes.parse(headerValue)
                         }
                         let part = MultipartMedia(contentDisposition, mediaType, list.unsafeData())
@@ -216,9 +215,9 @@ class MultipartFormDataParser {
     private func extractHeaderFromBody(indexer: BodyIndexer) {
         let headerName = findSlice(indexer, headerDelim)
         let headerValue = findSlice(indexer, lineDelim)
-        if(headerName.isEmpty()) {
+        if (headerName.isEmpty()) {
             ('', '')
-        }else{
+        } else {
             (headerName, headerValue)
         }
     }

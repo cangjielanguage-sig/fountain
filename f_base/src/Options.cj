@@ -26,8 +26,7 @@ public class Options<T, R> {
         !isEmpty(current)
     }
     public static func isEmptyOrUnit(current: Option<T>): Bool {
-        isEmpty(current) ||
-        match (current) {
+        isEmpty(current) || match (current) {
             case Some(v) => v is Unit
             case Option<T>.None => true
         }
@@ -36,8 +35,7 @@ public class Options<T, R> {
         !isEmptyOrUnit(current)
     }
     public static func isEmptyOrZero(current: Option<T>): Bool {
-        isEmpty(current) ||
-        match (current) {
+        isEmpty(current) || match (current) {
             case Some(v) => match (v) {
                 case x: Int64 where x == 0 => true
                 case x: UInt64 where x == 0 => true
@@ -64,8 +62,7 @@ public class Options<T, R> {
         func isBlankRune(c: Rune) {
             c == r'\0' || c.isWhiteSpace()
         }
-        isEmpty(current) ||
-        match (current.getOrThrow()) {
+        isEmpty(current) || match (current.getOrThrow()) {
             case v: String => v.isBlank()
             case v: Iterable<Rune> =>
                 for (c in v where !isBlankRune(c)) {

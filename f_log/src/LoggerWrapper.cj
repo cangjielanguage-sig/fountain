@@ -14,7 +14,6 @@ import std.sync.AtomicReference
 import std.process.Process
 import std.time.DateTime
 import stdx.log.LogLevel
-
 import f_io.DummyOutputStream
 
 public class LoggerWrapper <: AbstractLogger {
@@ -35,9 +34,9 @@ public class LoggerWrapper <: AbstractLogger {
     }
     public func refresh() {
         var replaced = false
-        while(!replaced) {
+        while (!replaced) {
             try {
-                let (facade, replaced_) = super.doLock{
+                let (facade, replaced_) = super.doLock {
                     let new = LoggerConfig.createFacade(name)
                     let old = this.facade.load()
                     if (this.facade.compareAndSwap(old, new)) {
@@ -48,7 +47,7 @@ public class LoggerWrapper <: AbstractLogger {
                 }
                 replaced = replaced_
                 facade.close()
-            }catch(e: Exception){
+            } catch (e: Exception) {
                 e.printStackTrace()
             }
         }

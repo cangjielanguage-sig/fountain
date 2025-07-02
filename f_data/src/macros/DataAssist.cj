@@ -103,8 +103,7 @@ func generateProps(decl: ClassDecl, exclusion: HashSet<String>) {
                 }
                 $(setter)
             }
-        )
-            ))
+        )))
     }
     for (decl in decls) {
         match (decl) {
@@ -170,8 +169,7 @@ func generateHash(d: ClassDecl, exclusion: HashSet<String>) {
             }
             __hAsh__
         }
-    )
-            )])
+    ))])
 }
 
 func generateEqual(d: ClassDecl, exclusion: HashSet<String>) {
@@ -200,8 +198,7 @@ func generateEqual(d: ClassDecl, exclusion: HashSet<String>) {
         public $(openTokens(d)) operator func !=(other: $typeName): Bool {
             !(this == other)
         }
-    )
-            )])
+    ))])
 }
 
 func generateCompare(d: ClassDecl, exclusion: HashSet<String>) {
@@ -231,8 +228,7 @@ func generateCompare(d: ClassDecl, exclusion: HashSet<String>) {
             $cmp
             result
         }
-    )
-            ))
+    )))
 }
 
 func generateToString(d: ClassDecl, exclusion: HashSet<String>) {
@@ -258,8 +254,7 @@ func generateToString(d: ClassDecl, exclusion: HashSet<String>) {
             $str
             result.toString()
         }
-    )
-            ))
+    )))
 }
 
 func generateToFields(d: ClassDecl, exclusion: HashSet<String>) {
@@ -286,13 +281,11 @@ func generateToFields(d: ClassDecl, exclusion: HashSet<String>) {
                 if (x.isVar()) {
                     TrailingClosureExpr(
                         quote(
-                            MutableField.new<$(klassIdentifier), $(declType)>($(x.identifier.value), {o => o.$(x.identifier)}){o, v => o.$(x.identifier) = v})
-                    )
+                            MutableField.new<$(klassIdentifier), $(declType)>($(x.identifier.value), {o => o.$(x.identifier)}){o, v => o.$(x.identifier) = v}))
                 } else {
                     TrailingClosureExpr(
                         quote(
-                            ReadonlyField.new<$(klassIdentifier), $(declType)>($(x.identifier.value)){o => o.$(x.identifier)})
-                    )
+                            ReadonlyField.new<$(klassIdentifier), $(declType)>($(x.identifier.value)){o => o.$(x.identifier)}))
                 }
             case x: PropDecl =>
                 var declType = x.declType.toTokens()
@@ -304,13 +297,11 @@ func generateToFields(d: ClassDecl, exclusion: HashSet<String>) {
                 if (x.isMut()) {
                     TrailingClosureExpr(
                         quote(
-                            MutableField.new<$(klassIdentifier), $(declType)>($(x.identifier.value), {o => o.$(x.identifier)}){o, v => o.$(x.identifier) = v})
-                    )
+                            MutableField.new<$(klassIdentifier), $(declType)>($(x.identifier.value), {o => o.$(x.identifier)}){o, v => o.$(x.identifier) = v}))
                 } else {
                     TrailingClosureExpr(
                         quote(
-                            ReadonlyField.new<$(klassIdentifier), $(declType)>($(x.identifier.value)){o => o.$(x.identifier)})
-                    )
+                            ReadonlyField.new<$(klassIdentifier), $(declType)>($(x.identifier.value)){o => o.$(x.identifier)}))
                 }
             case _ => continue
         }
@@ -333,32 +324,29 @@ func generateToFields(d: ClassDecl, exclusion: HashSet<String>) {
         private static let $(fieldsName) = ObjectFields<$klassIdentifier>($fieldTokens){
             $klassIdentifier()
         }
-    )
-            ),
+    )),
             FuncDecl(
                 quote(
         public static func dataFields(): ObjectFields<$klassIdentifier> {
             $fieldsName
         }
-    )
-            ),
+    )),
             FuncDecl(
                 quote(
         public $openModi func toData(): Data {
             DataObject<$klassIdentifier>(this)
         }
-    )
-            ),
+    )),
             FuncDecl(
                 quote(
         public static func tryFromData(data: Data, flag: DataConversionFlag): Any {
             f_data_tryFromData<$klassIdentifier>(data, flag)
         }
-    )
-            )
+    ))
         ]
     )
 }
+
 private func openTokens(klassDecl: ClassDecl): Tokens {
     if (klassDecl.isAbstract() || klassDecl.isOpen()) {
         `open`

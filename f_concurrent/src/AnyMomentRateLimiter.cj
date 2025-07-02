@@ -24,18 +24,18 @@ public class AnyMomentRateLimiter<T> <: RateLimiter<T> {
     }
 
     public func exec(default: ?T, task: () -> ?T): ?T {
-        if(queue.add((), timeout)){
-            let result = try{
+        if (queue.add((), timeout)) {
+            let result = try {
                 task()
-            }finally{
+            } finally {
                 queue.tryRemove()
             }
-            if(let Some(x) <- result){
+            if (let Some(x) <- result) {
                 x
-            }else{
+            } else {
                 default
             }
-        }else{
+        } else {
             default
         }
     }

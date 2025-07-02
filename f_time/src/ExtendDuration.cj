@@ -15,6 +15,7 @@ public interface ExtendDuration {
     func before(current: DateTime): DateTime
     func after(current: DateTime): DateTime
 }
+
 extend Duration <: ExtendDuration {
     public prop ago: DateTime {
         get() {

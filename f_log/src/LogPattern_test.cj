@@ -12,7 +12,6 @@ package f_log
 import std.time.DateTime
 import std.unittest.*
 import std.unittest.testmacro.*
-
 import stdx.log.LogLevel
 
 @Test

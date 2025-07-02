@@ -5,8 +5,8 @@
     You may obtain a copy of Mulan PSL v2 at:
             http://license.coscl.org.cn/MulanPSL2
     THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-    See the Mulan PSL v2 for more details.  
-*/
+    See the Mulan PSL v2 for more details.
+ */
 package f_log.output
 
 protected import std.io.OutputStream
@@ -15,17 +15,17 @@ import std.process.Process
 import std.sync.AtomicUInt64
 
 protected class UnixOutputStream <: OutputStream & Resource {
-    private static func newSocket(addr: UnixSocketAddress, writeTimeout: ?Duration){
+    private static func newSocket(addr: UnixSocketAddress, writeTimeout: ?Duration) {
         let sock = UnixSocket(addr)
         sock.connect()
         sock.writeTimeout = writeTimeout
         sock
     }
-    public UnixOutputStream(private let sock: UnixSocket, private let addr: UnixSocketAddress){}
-    public init(addr: UnixSocketAddress, writeTimeout!: ?Duration = None<Duration>){
+    public UnixOutputStream(private let sock: UnixSocket, private let addr: UnixSocketAddress) {}
+    public init(addr: UnixSocketAddress, writeTimeout!: ?Duration = None<Duration>) {
         this(newSocket(addr, writeTimeout), addr)
     }
-    public init(path: String, writeTimeout!: ?Duration = None<Duration>){
+    public init(path: String, writeTimeout!: ?Duration = None<Duration>) {
         this(UnixSocketAddress(path), writeTimeout: writeTimeout)
     }
     public func write(buffer: Array<Byte>): Unit {

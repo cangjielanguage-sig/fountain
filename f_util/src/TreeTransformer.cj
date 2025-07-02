@@ -35,8 +35,9 @@ public interface TreeNode<ID, T> where ID <: Hashable & Equatable<ID>, T <: Obje
         let root = ArrayList<T>()
         let list = ArrayList<T>()
         for (s in iterable) {
-            let t = transferFn(s).getOrThrow {IllegalArgumentException(
-                    "There is some element in arg iterable which cannot be transformed into T")}
+            let t = transferFn(s).getOrThrow {
+                IllegalArgumentException("There is some element in arg iterable which cannot be transformed into T")
+            }
             if (map.add(t.id, t).isNone()) {
                 list.add(t)
             } else if (!ignoreDuplicate) {

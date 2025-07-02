@@ -30,12 +30,12 @@ public class CronCompiler {
         var datas = ArrayList<CronDataCollection>()
         for (expr in exprs) {
             let units = ArrayList<String>(expr.trimAscii().split(" "))
-            for (_ in 0 .. TicktockUnit.values.size - units.size) {
+            for (_ in 0..TicktockUnit.values.size - units.size) {
                 units.add("*")
             }
             var cronc = CronDataCollection(expr)
             datas.add(cronc)
-            for (i in 0 .. units.size) {
+            for (i in 0..units.size) {
                 var unit = units[i]
                 let wheelUnit = TicktockUnit.valueOf(i)
                 unit = unit.replace("*/", "${wheelUnit.min}/")

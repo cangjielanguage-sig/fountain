@@ -36,32 +36,35 @@ public interface Integer<T> <: Number<T> & Modable<T> & BitAndable<T> & BitOrabl
     }
     prop isEven: Bool
 }
-public interface SignedInteger<S, T> <: Integer<S> where S <: SignedInteger<S, T>, T <: UnsignedInteger<T, S>{
+
+public interface SignedInteger<S, T> <: Integer<S> where S <: SignedInteger<S, T>, T <: UnsignedInteger<T, S> {
     func toUInt(): T
 }
+
 public interface UnsignedInteger<S, T> <: Integer<S> where S <: UnsignedInteger<S, T>, T <: SignedInteger<T, S> {
     func toInt(): T
 }
-public interface Float<T> <: Number<T> where T <: Float<T> {
 
-}
+public interface Float<T> <: Number<T> where T <: Float<T> {}
+
 public interface ExtendInt8 <: SignedInteger<Int8, UInt8> {
     static prop zero: Int8 {
-        get(){
+        get() {
             0
         }
     }
     static prop one: Int8 {
-        get(){
+        get() {
             1
         }
     }
     static prop ten: Int8 {
-        get(){
+        get() {
             10
         }
     }
 }
+
 extend Int8 <: ExtendInt8 {
     public static prop BYTES: Int64 {
         get() {
@@ -92,33 +95,35 @@ extend Int8 <: ExtendInt8 {
         }
     }
     public prop isOdd: Bool {
-        get(){
+        get() {
             !isEven
         }
     }
-    
+
     @OverflowWrapping
     public func toUInt(): UInt8 {
         UInt8(this & 0x7f) | UInt8(this & (1 << 7))
     }
 }
+
 public interface ExtendInt16 <: SignedInteger<Int16, UInt16> {
     static prop zero: Int16 {
-        get(){
+        get() {
             0
         }
     }
     static prop one: Int16 {
-        get(){
+        get() {
             1
         }
     }
     static prop ten: Int16 {
-        get(){
+        get() {
             10
         }
     }
 }
+
 extend Int16 <: ExtendInt16 {
     public static prop BYTES: Int64 {
         get() {
@@ -153,32 +158,35 @@ extend Int16 <: ExtendInt16 {
         }
     }
     public prop isOdd: Bool {
-        get(){
+        get() {
             !isEven
         }
     }
+
     @OverflowWrapping
     public func toUInt(): UInt16 {
         UInt16(this & 0x7f_ff) | UInt16(this & (1 << 15))
     }
 }
+
 public interface ExtendInt32 <: SignedInteger<Int32, UInt32> {
     static prop zero: Int32 {
-        get(){
+        get() {
             0
         }
     }
     static prop one: Int32 {
-        get(){
+        get() {
             1
         }
     }
     static prop ten: Int32 {
-        get(){
+        get() {
             10
         }
     }
 }
+
 extend Int32 <: ExtendInt32 {
     public static prop BYTES: Int64 {
         get() {
@@ -218,32 +226,35 @@ extend Int32 <: ExtendInt32 {
         }
     }
     public prop isOdd: Bool {
-        get(){
+        get() {
             !isEven
         }
     }
+
     @OverflowWrapping
-    public func toUInt(): UInt32{
+    public func toUInt(): UInt32 {
         UInt32(this & 0x7fff_ffff) | UInt32(this & (1 << 31))
     }
 }
+
 public interface ExtendInt64 <: SignedInteger<Int64, UInt64> {
     static prop zero: Int64 {
-        get(){
+        get() {
             0
         }
     }
     static prop one: Int64 {
-        get(){
+        get() {
             1
         }
     }
     static prop ten: Int64 {
-        get(){
+        get() {
             10
         }
     }
 }
+
 extend Int64 <: ExtendInt64 {
     public static prop BYTES: Int64 {
         get() {
@@ -287,10 +298,11 @@ extend Int64 <: ExtendInt64 {
         }
     }
     public prop isOdd: Bool {
-        get(){
+        get() {
             !isEven
         }
     }
+
     @OverflowWrapping
     public func toUInt(): UInt64 {
         UInt64(this & 0x7fff_ffff_ffff_ffff) | UInt64(this & (1 << 63))
@@ -299,21 +311,22 @@ extend Int64 <: ExtendInt64 {
 
 public interface ExtendUInt8 <: UnsignedInteger<UInt8, Int8> {
     static prop zero: UInt8 {
-        get(){
+        get() {
             0
         }
     }
     static prop one: UInt8 {
-        get(){
+        get() {
             1
         }
     }
     static prop ten: UInt8 {
-        get(){
+        get() {
             10
         }
     }
 }
+
 extend UInt8 <: ExtendUInt8 {
     public static prop BYTES: Int64 {
         get() {
@@ -343,32 +356,35 @@ extend UInt8 <: ExtendUInt8 {
         }
     }
     public prop isOdd: Bool {
-        get(){
+        get() {
             !isEven
         }
     }
+
     @OverflowWrapping
-    public func toInt(): Int8{
+    public func toInt(): Int8 {
         Int8(this & 0x7f) | Int8(this & (1 << 7))
     }
 }
+
 public interface ExtendUInt16 <: UnsignedInteger<UInt16, Int16> {
     static prop zero: UInt16 {
-        get(){
+        get() {
             0
         }
     }
     static prop one: UInt16 {
-        get(){
+        get() {
             1
         }
     }
     static prop ten: UInt16 {
-        get(){
+        get() {
             10
         }
     }
 }
+
 extend UInt16 <: ExtendUInt16 {
     public static prop BYTES: Int64 {
         get() {
@@ -402,32 +418,35 @@ extend UInt16 <: ExtendUInt16 {
         }
     }
     public prop isOdd: Bool {
-        get(){
+        get() {
             !isEven
         }
     }
+
     @OverflowWrapping
     public func toInt(): Int16 {
         Int16(this & 0x7fff) | Int16(this & (1 << 15))
     }
 }
+
 public interface ExtendUInt32 <: UnsignedInteger<UInt32, Int32> {
     static prop zero: UInt32 {
-        get(){
+        get() {
             0
         }
     }
     static prop one: UInt32 {
-        get(){
+        get() {
             1
         }
     }
     static prop ten: UInt32 {
-        get(){
+        get() {
             10
         }
     }
 }
+
 extend UInt32 <: ExtendUInt32 {
     public static prop BYTES: Int64 {
         get() {
@@ -465,32 +484,35 @@ extend UInt32 <: ExtendUInt32 {
         }
     }
     public prop isOdd: Bool {
-        get(){
+        get() {
             !isEven
         }
     }
+
     @OverflowWrapping
     public func toInt(): Int32 {
         Int32(this & 0x7fff_ffff) | Int32(this & (1 << 31))
     }
 }
+
 public interface ExtendUInt64 <: UnsignedInteger<UInt64, Int64> {
     static prop zero: UInt64 {
-        get(){
+        get() {
             0
         }
     }
     static prop one: UInt64 {
-        get(){
+        get() {
             1
         }
     }
     static prop ten: UInt64 {
-        get(){
+        get() {
             10
         }
     }
 }
+
 extend UInt64 <: ExtendUInt64 {
     public static prop BYTES: Int64 {
         get() {
@@ -526,17 +548,18 @@ extend UInt64 <: ExtendUInt64 {
         }
         return n - (i >> 1)
     }
-    
+
     public prop isEven: Bool {
         get() {
             (this & 1) == 0
         }
     }
     public prop isOdd: Bool {
-        get(){
+        get() {
             !isEven
         }
     }
+
     @OverflowWrapping
     public func toInt(): Int64 {
         Int64(this & 0x7fff_ffff_ffff_ffff) | Int64(this & (1 << 63))
@@ -545,17 +568,17 @@ extend UInt64 <: ExtendUInt64 {
 
 public interface ExtendFloat16 <: Float<Float16> {
     static prop zero: Float16 {
-        get(){
+        get() {
             0.0
         }
     }
     static prop one: Float16 {
-        get(){
+        get() {
             1.0
         }
     }
     static prop ten: Float16 {
-        get(){
+        get() {
             10.0
         }
     }
@@ -565,8 +588,8 @@ public interface ExtendFloat16 <: Float<Float16> {
     static prop E: Float16
     static prop MinDenormal: Float16
     static prop MinNormal: Float16
-    static prop NegInf: Float16{
-        get(){
+    static prop NegInf: Float16 {
+        get() {
             -Inf
         }
     }
@@ -580,12 +603,12 @@ extend Float16 <: ExtendFloat16 {
     }
 
     public static prop PI: Float16 {
-        get(){
+        get() {
             Float16.getPI()
         }
     }
     public static prop E: Float16 {
-        get(){
+        get() {
             Float16.getE()
         }
     }
@@ -593,17 +616,17 @@ extend Float16 <: ExtendFloat16 {
 
 public interface ExtendFloat32 <: Float<Float32> {
     static prop zero: Float32 {
-        get(){
+        get() {
             0.0
         }
     }
     static prop one: Float32 {
-        get(){
+        get() {
             1.0
         }
     }
     static prop ten: Float32 {
-        get(){
+        get() {
             10.0
         }
     }
@@ -613,12 +636,13 @@ public interface ExtendFloat32 <: Float<Float32> {
     static prop E: Float32
     static prop MinDenormal: Float32
     static prop MinNormal: Float32
-    static prop NegInf: Float32{
-        get(){
+    static prop NegInf: Float32 {
+        get() {
             -Inf
         }
     }
 }
+
 extend Float32 <: ExtendFloat32 {
     public static prop BYTES: Int64 {
         get() {
@@ -626,12 +650,12 @@ extend Float32 <: ExtendFloat32 {
         }
     }
     public static prop PI: Float32 {
-        get(){
+        get() {
             Float32.getPI()
         }
     }
     public static prop E: Float32 {
-        get(){
+        get() {
             Float32.getE()
         }
     }
@@ -639,17 +663,17 @@ extend Float32 <: ExtendFloat32 {
 
 public interface ExtendFloat64 <: Float<Float64> {
     static prop zero: Float64 {
-        get(){
+        get() {
             0.0
         }
     }
     static prop one: Float64 {
-        get(){
+        get() {
             1.0
         }
     }
     static prop ten: Float64 {
-        get(){
+        get() {
             10.0
         }
     }
@@ -659,12 +683,13 @@ public interface ExtendFloat64 <: Float<Float64> {
     static prop E: Float64
     static prop MinDenormal: Float64
     static prop MinNormal: Float64
-    static prop NegInf: Float64{
-        get(){
+    static prop NegInf: Float64 {
+        get() {
             -Inf
         }
     }
 }
+
 extend Float64 <: ExtendFloat64 {
     public static prop BYTES: Int64 {
         get() {
@@ -672,12 +697,12 @@ extend Float64 <: ExtendFloat64 {
         }
     }
     public static prop PI: Float64 {
-        get(){
+        get() {
             Float64.getPI()
         }
     }
     public static prop E: Float64 {
-        get(){
+        get() {
             Float64.getE()
         }
     }

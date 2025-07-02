@@ -9,7 +9,6 @@
  */
 package f_macros
 
-
 public func extractFirstTokenToStringLiteral(tokens: Tokens, default!: Token = `empty_string`[0]): Token {
     if (tokens.size == 0) {
         return default
@@ -20,6 +19,7 @@ public func extractFirstTokenToStringLiteral(tokens: Tokens, default!: Token = `
         case _ => throw MacroFragmentException("first attr must be an IDENTIFIER or a STRING_LITERAL")
     }
 }
+
 public func extractFirstTokenToIdentifier(tokens: Tokens): Token {
     match (tokens[0].kind) {
         case IDENTIFIER => tokens[0]

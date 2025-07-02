@@ -11,7 +11,6 @@ package f_util
 
 import std.unittest.*
 import std.unittest.testmacro.*
-
 import std.convert.*
 
 @Test
@@ -87,23 +86,17 @@ public class PathPattern_test {
     public func test3(): Unit {
         let pattern = p
         pattern.compile(
-            "/api/user/action/sequence/{projectId}/{userId}/{eventName}/{timeRange:\\d{4}-\\d{2}-\\d{2}\\s\\d{2}:\\d{2}:\\d{2},\\d{4}-\\d{2}-\\d{2}\\s\\d{2}:\\d{2}:\\d{2}}/{direction:(before|after|before,after)}/{lastMillis:\\d+}"
-        )
+            "/api/user/action/sequence/{projectId}/{userId}/{eventName}/{timeRange:\\d{4}-\\d{2}-\\d{2}\\s\\d{2}:\\d{2}:\\d{2},\\d{4}-\\d{2}-\\d{2}\\s\\d{2}:\\d{2}:\\d{2}}/{direction:(before|after|before,after)}/{lastMillis:\\d+}")
         pattern.compile(
-            "/api/user/action/sequence/{projectId}/{userId}/{eventName}/{timeRange:\\d{4}-\\d{2}-\\d{2}\\s\\d{2}:\\d{2}:\\d{2},\\d{4}-\\d{2}-\\d{2}\\s\\d{2}:\\d{2}:\\d{2}}/{direction:(before|after|before,after)}"
-        )
+            "/api/user/action/sequence/{projectId}/{userId}/{eventName}/{timeRange:\\d{4}-\\d{2}-\\d{2}\\s\\d{2}:\\d{2}:\\d{2},\\d{4}-\\d{2}-\\d{2}\\s\\d{2}:\\d{2}:\\d{2}}/{direction:(before|after|before,after)}")
         pattern.compile(
-            "/api/user/action/sequence/{projectId}/{userId}/{timeRange:\\d{4}-\\d{2}-\\d{2}\\s\\d{2}:\\d{2}:\\d{2},\\d{4}-\\d{2}-\\d{2}\\s\\d{2}:\\d{2}:\\d{2}}/{direction:(before|after|before,after)}/{lastMillis:\\d+}"
-        )
+            "/api/user/action/sequence/{projectId}/{userId}/{timeRange:\\d{4}-\\d{2}-\\d{2}\\s\\d{2}:\\d{2}:\\d{2},\\d{4}-\\d{2}-\\d{2}\\s\\d{2}:\\d{2}:\\d{2}}/{direction:(before|after|before,after)}/{lastMillis:\\d+}")
         pattern.compile(
-            "/api/user/action/sequence/{projectId}/{userId}/{timeRange:\\d{4}-\\d{2}-\\d{2}\\s\\d{2}:\\d{2}:\\d{2},\\d{4}-\\d{2}-\\d{2}\\s\\d{2}:\\d{2}:\\d{2}}/{direction:(before|after|before,after)}"
-        )
+            "/api/user/action/sequence/{projectId}/{userId}/{timeRange:\\d{4}-\\d{2}-\\d{2}\\s\\d{2}:\\d{2}:\\d{2},\\d{4}-\\d{2}-\\d{2}\\s\\d{2}:\\d{2}:\\d{2}}/{direction:(before|after|before,after)}")
         pattern.compile(
-            "/api/user/action/sequence/{projectId}/{userId}/{timeRange:\\d{4}-\\d{2}-\\d{2}\\s\\d{2}:\\d{2}:\\d{2},\\d{4}-\\d{2}-\\d{2}\\s\\d{2}:\\d{2}:\\d{2}}/{lastMillis:\\d+}"
-        )
+            "/api/user/action/sequence/{projectId}/{userId}/{timeRange:\\d{4}-\\d{2}-\\d{2}\\s\\d{2}:\\d{2}:\\d{2},\\d{4}-\\d{2}-\\d{2}\\s\\d{2}:\\d{2}:\\d{2}}/{lastMillis:\\d+}")
         pattern.compile(
-            "/api/user/action/sequence/{projectId}/{userId}/{timeRange:\\d{4}-\\d{2}-\\d{2}\\s\\d{2}:\\d{2}:\\d{2},\\d{4}-\\d{2}-\\d{2}\\s\\d{2}:\\d{2}:\\d{2}}"
-        )
+            "/api/user/action/sequence/{projectId}/{userId}/{timeRange:\\d{4}-\\d{2}-\\d{2}\\s\\d{2}:\\d{2}:\\d{2},\\d{4}-\\d{2}-\\d{2}\\s\\d{2}:\\d{2}:\\d{2}}")
         var path = "/api/user/action/sequence/29/1/CustomizedClick/2019-06-28 00:00:00,2019-06-28 23:59:00/before,after/0"
         @Assert(true, pattern.matches(path))
         path = "/api/user/action/sequence/29/1/CustomizedClick/2019-06-28 00:00:00,2019-06-28 23:59:00/before,after"

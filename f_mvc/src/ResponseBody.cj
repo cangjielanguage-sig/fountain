@@ -11,7 +11,11 @@ package f_mvc
 
 public func responseBody<T>(ctx: HttpContext, data: T): Unit where T <: Object & DataObject<T> {
     let d = data.toData()
-    let mediaType = ctx.request.headers.getFirst("Accept").getOrThrow{HttpRequestHeaderException("current request header does not contain Accept")}
+    let mediaType = ctx
+        .request
+        .headers
+        .getFirst("Accept")
+        .getOrThrow {HttpRequestHeaderException("current request header does not contain Accept")}
     let bytes = MediaTypes.parse(mediaType).fromData(d)
     HttpResponseWriter(ctx).write(bytes)
 }

@@ -5,8 +5,8 @@
     You may obtain a copy of Mulan PSL v2 at:
             http://license.coscl.org.cn/MulanPSL2
     THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-    See the Mulan PSL v2 for more details.  
-*/
+    See the Mulan PSL v2 for more details.
+ */
 package f_collection
 
 import std.collection.{Set, TreeMap, ReadOnlySet, ArrayList}
@@ -17,36 +17,36 @@ public class LinkedHashSet<T> <: Set<T> where T <: Hashable & Equatable<T> {
     public init() {
         map = LinkedHashMap<T, Unit>()
     }
-    public init(elements: Collection<T>){
+    public init(elements: Collection<T>) {
         this()
-        for(e in elements){
+        for (e in elements) {
             map.add(e, ())
         }
     }
-    public init(elements: Array<T>){
+    public init(elements: Array<T>) {
         this()
-        for(e in elements){
+        for (e in elements) {
             map.add(e, ())
         }
     }
     public init(size: Int64, initElement: (Int64) -> T) {
-        map = LinkedHashMap<T, Unit>(size){i => (initElement(i), ())}
+        map = LinkedHashMap<T, Unit>(size) {i => (initElement(i), ())}
     }
-    public func clear(): Unit{
+    public func clear(): Unit {
         map.clear()
     }
-    public func clone(): Set<T>{
+    public func clone(): Set<T> {
         let c: Collection<T> = map.keys()
         LinkedHashSet<T>(c)
     }
     public func isEmpty(): Bool {
         map.isEmpty()
     }
-    public func iterator(): Iterator<T>{
+    public func iterator(): Iterator<T> {
         map.keys().iterator()
     }
     public prop size: Int64 {
-        get(){
+        get() {
             map.size
         }
     }
@@ -57,73 +57,74 @@ public class LinkedHashSet<T> <: Set<T> where T <: Hashable & Equatable<T> {
         map.contains(all: all)
     }
     public func subsetOf(other: ReadOnlySet<T>): Bool {
-        for(v in map.keys() where !other.contains(v)){
+        for (v in map.keys() where !other.contains(v)) {
             return false
         }
         return true
     }
     public func retain(all!: Set<T>): Unit {
-        map.removeIf{k,_ => !all.contains(k)}
+        map.removeIf {k, _ => !all.contains(k)}
     }
-    public func add(element: T): Bool{
+    public func add(element: T): Bool {
         map.add(element, ()).isNone()
     }
     public func add(all!: Collection<T>): Unit {
-        for(e in all){
+        for (e in all) {
             map.add(e, ())
         }
     }
-    public func remove(element: T): Bool{
+    public func remove(element: T): Bool {
         map.remove(element).isSome()
     }
     public func remove(all!: Collection<T>): Unit {
         map.remove(all: all)
     }
     public func removeIf(predicate: (T) -> Bool): Unit {
-        map.removeIf{k, _ => predicate(k)}
+        map.removeIf {k, _ => predicate(k)}
     }
-    public func retainAll(elements: Set<T>): Unit{
-        removeIf{v => !elements.contains(v)}
+    public func retainAll(elements: Set<T>): Unit {
+        removeIf {v => !elements.contains(v)}
     }
     public prop first: ?T {
-        get(){
+        get() {
             map.firstEntry()?[0]
         }
     }
-    public prop last: ?T{
-        get(){
+    public prop last: ?T {
+        get() {
             map.lastEntry()?[0]
         }
     }
-    public func removeFirst(): ?T{
+    public func removeFirst(): ?T {
         map.pollFirstEntry()?[0]
     }
-    public func removeLast(): ?T{
+    public func removeLast(): ?T {
         map.pollLastEntry()?[0]
     }
 }
 
 extend<T> LinkedHashSet<T> <: Equatable<LinkedHashSet<T>> where T <: Comparable<T> {
     public operator func ==(other: LinkedHashSet<T>): Bool {
-        if(this.size != other.size){
+        if (this.size != other.size) {
             return false
         }
         let itr1 = this.iterator()
         let itr2 = other.iterator()
         var i = 0
-        while(let (Some(x), Some(y)) <- (itr1.next(), itr2.next()) && x == y){
+        while (let (Some(x), Some(y)) <- (itr1.next(), itr2.next()) && x == y) {
             i++
         }
         i == this.size
     }
 }
-extend<T> LinkedHashSet<T> <: ToString where T <: Comparable<T> & ToString{
+
+extend<T> LinkedHashSet<T> <: ToString where T <: Comparable<T> & ToString {
     public func toString(): String {
         let builder = StringGenerator()
         builder.append('[')
         var i = 0
-        for(v in this){
-            if(i > 0){
+        for (v in this) {
+            if (i > 0) {
                 builder.append(', ')
             }
             builder.append(v)

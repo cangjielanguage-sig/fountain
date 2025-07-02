@@ -12,7 +12,9 @@ package f_util
 import std.overflow.WrappingOp
 import f_base.*
 
-let MURMUR_HASH_MASK = 0xc6a4a7935bd1e995_u64.toInt()
+let MURMUR_HASH_MASK = 0xc6a4a7935bd1e995_u64.
+toInt()
+
 public func hash(data: Array<Byte>, offset!: Int64 = 0, length!: Int64 = data.size, seed!: Int64 = 0x1234567890ABCDEF): Int64 {
     func getLong(buf: Array<Byte>, cur: Int64): (Int64, Int64) {
         var k = 0

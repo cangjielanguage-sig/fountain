@@ -5,8 +5,8 @@
     You may obtain a copy of Mulan PSL v2 at:
             http://license.coscl.org.cn/MulanPSL2
     THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-    See the Mulan PSL v2 for more details.  
-*/
+    See the Mulan PSL v2 for more details.
+ */
 package f_log
 
 import std.collection.{ArrayList, HashMap, TreeMap, Map}
@@ -23,18 +23,18 @@ public abstract class Logger <: StdLogger {
         enabled(level)
     }
 
-    protected func append(level: LogLevel, message: () -> String, ex: ?Exception): Unit 
+    protected func append(level: LogLevel, message: () -> String, ex: ?Exception): Unit
     protected func append(level: LogLevel, message: () -> String): Unit {
         append(level, message, None<Exception>)
     }
     protected func append(level: LogLevel, message: String): Unit {
         append(level, message, None<Exception>)
     }
-    
+
     public func append(level: LogLevel, message: String, ex: Option<Exception>): Unit {
         append(level, {=> message}, ex)
     }
-    
+
     public func append<T>(level: LogLevel, message: String, args: Array<T>, ex: ?Exception): Unit where T <: ToString {
         append(
             level,

@@ -40,7 +40,7 @@ package f_log
 // BrightMagenta  "95"
 // BrightCyan  "96"
 // BrightWhite  "97"
-        
+
 // //背景色
 // Black  "40"            黑
 // Red  "41"              红
@@ -58,7 +58,6 @@ package f_log
 // BrightMagenta  "105"
 // BrightCyan  "106"
 // BrightWhite  "107"
-
 
 // //字体样式
 // Bold  "1"

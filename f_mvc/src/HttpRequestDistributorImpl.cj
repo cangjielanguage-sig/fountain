@@ -6,22 +6,22 @@
             http://license.coscl.org.cn/MulanPSL2
     THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
     See the Mulan PSL v2 for more details.
-*/
+ */
 package f_mvc
 
-sealed abstract class HttpRequestPathPatterns <: HttpRequestDistributor{
+abstract sealed class HttpRequestPathPatterns <: HttpRequestDistributor {
     private let patterns = PathPattern()
 
     public func extract(path: String, name: String): ?String {
         patterns.extractVariableInPath(path, name)
     }
     private func register(meta: RequestMeta): Unit {
-        patterns.compileIfAbsent<MultiRequestMethodHandler>(meta.path){
+        patterns.compileIfAbsent<MultiRequestMethodHandler>(meta.path) {
             MultiRequestMethodHandler(this)
         }.register(meta)
     }
     func register(metas: ArrayList<RequestMeta>) {
-        for(meta in metas){
+        for (meta in metas) {
             register(meta)
         }
         metas
@@ -30,11 +30,12 @@ sealed abstract class HttpRequestPathPatterns <: HttpRequestDistributor{
         patterns.data<MultiRequestMethodHandler>(path)
     }
 }
+
 class HttpRequestDistributorImpl <: HttpRequestPathPatterns {
     static let instance = HttpRequestDistributorImpl()
     private static let NOT_FOUND = NotFoundHandler()
 
-    private init(){}
+    private init() {}
     public func register(path: String, handler: HttpRequestHandler): Unit {
         throw MVCException("func register(String, HttpRequestHandler): Unit is not implemented")
     }
@@ -44,12 +45,12 @@ class HttpRequestDistributorImpl <: HttpRequestPathPatterns {
 
     public func distribute(path: String): HttpRequestHandler {
         let handler = getHandler(path)
-        match(handler) {
+        match (handler) {
             case Some(h) => h
             case _ => NOT_FOUND
         }
     }
-    
+
     func generateAndRegister<T>(fnName: String, argTypes: Array<TypeInfo>): ArrayList<RequestMeta> where T <: Object {
         let metas = RequestMeta.generate<T>(fnName, argTypes)
         register(metas)

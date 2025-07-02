@@ -5,18 +5,18 @@
     You may obtain a copy of Mulan PSL v2 at:
             http://license.coscl.org.cn/MulanPSL2
     THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-    See the Mulan PSL v2 for more details.  
-*/
+    See the Mulan PSL v2 for more details.
+ */
 package f_orm
 
-public class MeetCondition{
+public class MeetCondition {
     //condition: Bool, sqlFrag: String, argInSql!: Bool, value!: () -> ToString
     private var _argInSql = false
     private var _value: () -> Any = {=> ''}
-    public MeetCondition(private let condition: Bool, private let partial: String, private let executor: SqlExecutor){}
-    
+    public MeetCondition(private let condition: Bool, private let partial: String, private let executor: SqlExecutor) {}
+
     public prop argInSql: MeetCondition {
-        get(){
+        get() {
             _argInSql = true
             this
         }
@@ -30,19 +30,19 @@ public class MeetCondition{
         this
     }
     public func done(): String {
-        if(condition){
-            if(_argInSql){
-                match(_value()){
+        if (condition) {
+            if (_argInSql) {
+                match (_value()) {
                     case x: ToString => ' ${partial} ${x} ${Condition.delimiter} '
-                    case x => 
+                    case x =>
                         executor.add(_value())
                         ' ${partial} ? ${Condition.delimiter} '
-                }        
-            }else{
+                }
+            } else {
                 executor.add(_value())
                 ' ${partial} ? ${Condition.delimiter} '
             }
-        }else{
+        } else {
             ''
         }
     }

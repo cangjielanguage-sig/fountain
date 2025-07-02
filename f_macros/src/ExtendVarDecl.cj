@@ -13,6 +13,7 @@ public interface ExtendVarDecl <: ExtendMember {
     func isVar(): Bool
     func isStatic(): Bool
 }
+
 extend VarDecl <: ExtendVarDecl {
     public func isVar(): Bool {
         match (this.keyword.kind) {

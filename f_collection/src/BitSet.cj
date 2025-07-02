@@ -61,7 +61,7 @@ public class BitSet <: Iterable<Bool> {
         } / 64
 
         if (grow && idx >= bits.size) {
-            for(_ in 0 .. idx - bits.size + 1) {
+            for (_ in 0..idx - bits.size + 1) {
                 bits.add(0u64)
             }
         }

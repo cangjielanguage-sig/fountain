@@ -32,8 +32,8 @@ public open class QueryMapper<O> {
     protected func new<T>(): QueryMapper<T> {
         QueryMapper<T>(
             dataType: dataType,
-            putter: {instance, value =>
-                putter((instance as O).getOrThrow(), value)
+            putter: {
+                instance, value => putter((instance as O).getOrThrow(), value)
             }
         )
     }
@@ -51,13 +51,13 @@ public open class QueryMapper<O> {
 
     //获取单列的单行的数据
     public func get<T>(result: QueryResultWrap): ?T {
-        if(result.next()){
-            match(dataType.get(result)){
+        if (result.next()) {
+            match (dataType.get(result)) {
                 case x: T => x
                 case x: ?T => x
                 case _ => throw TypeCastException("${dataType.columnName}")
             }
-        }else{
+        } else {
             None
         }
     }
@@ -66,6 +66,7 @@ public open class QueryMapper<O> {
         o
     }
 }
+
 public open class FieldQueryMapper<T, O> <: QueryMapper<O> {
     public init(
         dataType!: DataType = UnknownDataType(true, ''),

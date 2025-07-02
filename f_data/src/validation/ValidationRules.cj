@@ -6,7 +6,7 @@
             http://license.coscl.org.cn/MulanPSL2
     THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
     See the Mulan PSL v2 for more details.
-*/
+ */
 package f_data.validation
 
 import std.collection.concurrent.ConcurrentHashMap
@@ -14,8 +14,9 @@ import std.regex.*
 import f_regex.*
 
 //属性验证 整数 小数 电邮 手机号 整数值范围 正则 日期格式
-let rules = {=>
-    let map = ConcurrentHashMap<String, (String)->Bool>()
+let rules = {
+    =>
+    let map = ConcurrentHashMap<String, (String) -> Bool>()
     let integer = Regex.INTEGER
     let decimal = Regex.DECIMAL
     let email = Regex.EMAIL
@@ -42,9 +43,11 @@ let rules = {=>
 
     map
 }()
+
 public func registgerRule(name: String, rule: (String) -> Bool): Unit {
     rules[name] = rule
 }
+
 public func validate(name: String, value: String): Bool {
     rules[name](value)
 }

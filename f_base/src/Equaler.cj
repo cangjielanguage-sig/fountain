@@ -55,8 +55,7 @@ public struct Equaler<T> {
     }
     public func then<O>(mapper: (T) -> O, equal: (O, O) -> Bool): Equaler<T> {
         Equaler<T> {
-            left, right =>
-            match (this.eq(left, right)) {
+            left, right => match (this.eq(left, right)) {
                 case true => equal(mapper(left), mapper(right))
                 case _ => false
             }
@@ -64,8 +63,7 @@ public struct Equaler<T> {
     }
     public func then<O>(mapper: (T) -> O, equal: Equaler<O>): Equaler<T> {
         Equaler<T> {
-            left, right =>
-            match (this.eq(left, right)) {
+            left, right => match (this.eq(left, right)) {
                 case true => equal(mapper(left), mapper(right))
                 case _ => false
             }

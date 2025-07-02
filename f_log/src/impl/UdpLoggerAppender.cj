@@ -31,7 +31,8 @@ private class UdpLoggerAppender <: AsyncLogger {
         port!: UInt16,
         sendTimeout!: ?Duration
     ) {
-        super(name, level, pattern, createSocket(host, port, sendTimeout: sendTimeout), '${LOGGER_NAME}://${host}:${port}')
+        super(name, level, pattern, createSocket(host, port, sendTimeout: sendTimeout),
+            '${LOGGER_NAME}://${host}:${port}')
         this.host = host
         this.port = port
         this.sendTimeout = sendTimeout
@@ -44,10 +45,11 @@ private class UdpLoggerAppender <: AsyncLogger {
         LoggerAppenderCreator.register(LOGGER_NAME) {
             name =>
             let appenders = LoggerConfig.getAppenders(LOGGER_NAME)
-            if(appenders.isEmpty()){
+            if (appenders.isEmpty()) {
                 [NoneLogAppender.instance]
-            }else{
-                Array<AbstractLogger>(appenders.size){i =>
+            } else {
+                Array<AbstractLogger>(appenders.size) {
+                    i =>
                     let appender = appenders[i]
                     var host = "127.0.0.1"
                     var port = 65534u16
@@ -55,12 +57,14 @@ private class UdpLoggerAppender <: AsyncLogger {
                         host = h
                     }
                     if (let Some(p) <- LoggerConfig.getString(appender, "port")) {
-                        port = UInt16.tryParse(p).getOrThrow {
-                            LogException(
-                                "param port of SocketLoggerAppender must be a value of UInt16, however it is ${p}")
-                        }
-                    }else if(let Some(idx) <- host.indexOf(':')){
-                        (host, port) = (host[0 .. idx].trimAscii(), UInt16.parse(host[idx + 1 ..].trimAscii()))
+                        port = UInt16
+                            .tryParse(p)
+                            .getOrThrow {
+                                LogException(
+                                    "param port of SocketLoggerAppender must be a value of UInt16, however it is ${p}")
+                            }
+                    } else if (let Some(idx) <- host.indexOf(':')) {
+                        (host, port) = (host[0..idx].trimAscii(), UInt16.parse(host[idx + 1..].trimAscii()))
                     }
                     let sendTimeout = LoggerConfig.getUdpSendTimeout("${appender}")
                     UdpLoggerAppender(
@@ -84,4 +88,5 @@ private class UdpLoggerAppender <: AsyncLogger {
         super.append(level, message, now, ex)
     }
 }
+
 let _ = UdpLoggerAppender.register()

@@ -5,8 +5,8 @@
     You may obtain a copy of Mulan PSL v2 at:
             http://license.coscl.org.cn/MulanPSL2
     THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-    See the Mulan PSL v2 for more details.  
-*/
+    See the Mulan PSL v2 for more details.
+ */
 package f_data
 
 internal import std.collection.{ArrayList, HashSet, HashMap, TreeMap, TreeSet}
@@ -15,14 +15,11 @@ internal import std.math.numeric.{Decimal, BigInt, OverflowStrategy}
 internal import std.sync.AtomicReference
 internal import std.time.{DateTime, MonoTime}
 internal import stdx.encoding.base64.*
-
 internal import f_collection.{LinkedHashMap, LinkedHashSet}
 internal import f_concurrent.ConcurrentHashSet
 internal import f_exception.UnreachableException
 internal import f_regex.*
 internal import f_time.ExtendDateTime
-
 public import std.reflect.TypeInfo
 public import f_base.*
 public import f_data.exception.*
-

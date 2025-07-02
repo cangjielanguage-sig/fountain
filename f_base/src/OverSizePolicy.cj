@@ -25,9 +25,11 @@ public class AbortOverSizePolicy<T> <: OverSizePolicy<T> {
         throw OverSizeException("max size is ${max}")
     }
 }
+
 public class DiscardOverSizePolicy<T> <: OverSizePolicy<T> {
     public func reject(o: T, fn: () -> Unit): Unit {}
 }
+
 public class RemoveSomeOnePolicy<T> <: OverSizePolicy<T> {
     public RemoveSomeOnePolicy(private let remove: (T) -> Unit) {}
     public func reject(o: T, fn: () -> Unit): Unit {
@@ -35,14 +37,16 @@ public class RemoveSomeOnePolicy<T> <: OverSizePolicy<T> {
         fn()
     }
 }
+
 public class CallerRunsOverSizePolicy<T> <: OverSizePolicy<T> {
     public func reject(o: T, fn: () -> Unit): Unit {
         fn()
     }
 }
+
 public class BlockingOverSizePolicy<T> <: OverSizePolicy<T> {
     private let monitor = Mutex()
-    private let condition = synchronized(monitor){
+    private let condition = synchronized(monitor) {
         monitor.condition()
     }
     public BlockingOverSizePolicy(

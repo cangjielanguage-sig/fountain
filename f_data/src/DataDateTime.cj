@@ -6,11 +6,11 @@
             http://license.coscl.org.cn/MulanPSL2
     THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
     See the Mulan PSL v2 for more details.
-*/
+ */
 package f_data
 
 public class DataDateTime <: Data & Hashable & Comparable<DataDateTime> {
-    public DataDateTime(public let data: DateTime){}
+    public DataDateTime(public let data: DateTime) {}
     public func toString(): String {
         data.toString()
     }
@@ -37,41 +37,46 @@ public class DataDateTime <: Data & Hashable & Comparable<DataDateTime> {
         data.compare(other.data)
     }
 }
+
 let currentThreadDateFormat = ThreadLocal<String>()
 let defaultDateFormat = AtomicReference<Box<String>>(Box<String>(""))
+
 public interface ExtendDateTimeData {
     static func setDefaultDateFormat(format: String): Unit
     static func setCurrentThreadDateFormat(format: String): Unit
 }
+
 extend DateTime <: DataFields<DateTime> & ExtendDateTimeData {
     public func toData(): Data {
         DataDateTime(this)
     }
     public static func tryFromData(data: Data, flag: DataConversionFlag): Any {
-        match(data){
+        match (data) {
             case x: DataDateTime => x.tryToDateTime()
             case _: DataNone => None<DateTime>
-            case _ where (flag & IGNORE_FIELD_TYPE_NOT_MATCH) == 0 => throw DataException('(${data}) does not match ${TypeInfos.get<DateTime>()}')
-            case x: DataDuration => match(x.tryToDuration()){
+            case _ where (flag & IGNORE_FIELD_TYPE_NOT_MATCH) == 0 => throw DataException(
+                '(${data}) does not match ${TypeInfos.get<DateTime>()}')
+            case x: DataDuration => match (x.tryToDuration()) {
                 case Some(x) => DateTime.UnixEpoch + x
                 case _ => None<DateTime>
             }
             case x: DataString =>
                 let fmt = currentThreadDateFormat.get() ?? defaultDateFormat.load().value
-                try{
+                try {
                     if (fmt.isEmpty()) {
                         DateTime.parse(x.data)
                     } else {
                         DateTime.parse(x.data, fmt)
                     }
-                }catch(e: Exception){
-                    if((flag & IGNORE_FIELD_TYPE_NOT_MATCH) == 0){
+                } catch (e: Exception) {
+                    if ((flag & IGNORE_FIELD_TYPE_NOT_MATCH) == 0) {
                         throw e
-                    }else{
+                    } else {
                         None<DateTime>
                     }
                 }
-            case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException('(${data}) cannot be converted to ${TypeInfos.get<DateTime>()}')
+            case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException(
+                '(${data}) cannot be converted to ${TypeInfos.get<DateTime>()}')
             case _ => None<DateTime>
         }
     }
@@ -80,10 +85,9 @@ extend DateTime <: DataFields<DateTime> & ExtendDateTimeData {
         while (true) {
             let fmt = defaultDateFormat.load()
             if (fmt.value == "") {
-                let b = 
-                match(box){
+                let b = match (box) {
                     case Some(x) => x
-                    case _ => 
+                    case _ =>
                         let b = Box<String>(format)
                         box = b
                         b

@@ -36,6 +36,7 @@ public interface ExtendDateTime {
     func toUnixEpochMicros(): Int64
     func toUnixEpochNanos(): Int64
 }
+
 extend DateTime <: ExtendDateTime {
     public static prop currentDuration: Duration {
         get() {
@@ -174,7 +175,7 @@ extend DateTime <: ExtendDateTime {
     }
     public prop isLastMonthDay: Bool {
         get() {
-            match(this.month){
+            match (this.month) {
                 case January | March | May | July | August | October | December => this.dayOfMonth == 31
                 case April | June | September | November => this.dayOfMonth == 30
                 case February => (isLeapYear && this.dayOfMonth == 29) || this.dayOfMonth == 28

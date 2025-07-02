@@ -13,28 +13,28 @@ import f_base.StringGenerator
 
 abstract sealed class CaseFormat {
     /**
-      * 首字母大写的驼峰
-      */
+     * 首字母大写的驼峰
+     */
     public static let Pascal: CaseFormat = PascalCaseFormat()
     /**
-      * 首字母小写的驼峰
-      */
+     * 首字母小写的驼峰
+     */
     public static let Camel: CaseFormat = CamelCaseFormat()
     /**
-      * 全小写按下划线分割
-      */
+     * 全小写按下划线分割
+     */
     public static let LowerUnderScore: CaseFormat = LowerUnderScoreCaseFormat()
     /**
-      * 全大写按下划线分割
-      */
+     * 全大写按下划线分割
+     */
     public static let UpperUnderScore: CaseFormat = UpperUnderScoreCaseFormat()
     /**
-      * 全小写按-分割
-      */
+     * 全小写按-分割
+     */
     public static let LowerHyphen: CaseFormat = LowerHyphenCaseFormat()
     /**
-      * 全大写按-分割
-      */
+     * 全大写按-分割
+     */
     public static let UpperHyphen: CaseFormat = UpperHyphenCaseFormat()
 
     protected CaseFormat(protected let withDelimiter!: Bool) {}
@@ -60,6 +60,7 @@ abstract sealed class CaseFormat {
     protected func isDelimiter(ch: Rune): Bool
     protected func new(): CaseFormat
 }
+
 class PascalCaseFormat <: CaseFormat {
     init() {
         super(withDelimiter: true)
@@ -87,6 +88,7 @@ class PascalCaseFormat <: CaseFormat {
         sectionStart = true
     }
 }
+
 class CamelCaseFormat <: CaseFormat {
     init() {
         super(withDelimiter: true)
@@ -114,6 +116,7 @@ class CamelCaseFormat <: CaseFormat {
         sectionStart = true
     }
 }
+
 class LowerUnderScoreCaseFormat <: CaseFormat {
     init() {
         super(withDelimiter: false)
@@ -139,6 +142,7 @@ class LowerUnderScoreCaseFormat <: CaseFormat {
         this
     }
 }
+
 class UpperUnderScoreCaseFormat <: CaseFormat {
     init() {
         super(withDelimiter: false)
@@ -164,6 +168,7 @@ class UpperUnderScoreCaseFormat <: CaseFormat {
         this
     }
 }
+
 class LowerHyphenCaseFormat <: CaseFormat {
     init() {
         super(withDelimiter: false)
@@ -189,6 +194,7 @@ class LowerHyphenCaseFormat <: CaseFormat {
         this
     }
 }
+
 class UpperHyphenCaseFormat <: CaseFormat {
     init() {
         super(withDelimiter: false)

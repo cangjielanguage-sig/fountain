@@ -6,26 +6,28 @@
             http://license.coscl.org.cn/MulanPSL2
     THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
     See the Mulan PSL v2 for more details.
-*/
+ */
 package f_data
 
-public class DataNone <: Data{
+public class DataNone <: Data {
     public static let INSTANCE = DataNone()
-    private init(){}
+    private init() {}
     public func toString(): String {
         "None"
     }
     public static func tryParse(data: String): ?Data {
         let d = extractPureString(data)
-        if(d.size != 4) {
+        if (d.size != 4) {
             return None<Data>
         }
-        match(d.toAsciiLower()){
+        match (d.toAsciiLower()) {
             case "null" | "none" => INSTANCE
             case _ => None<Data>
         }
     }
     public static func parse(data: String): Data {
-        tryParse(data).getOrThrow{DataException("DataNone.parse receives string 'null' 'none' or there upper cases, but current is ${data}")}
+        tryParse(data).getOrThrow {
+            DataException("DataNone.parse receives string 'null' 'none' or there upper cases, but current is ${data}")
+        }
     }
 }

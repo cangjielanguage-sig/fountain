@@ -30,7 +30,7 @@ public class LoggerConfig {
 
     private init() {
     }
-    static init(){
+    static init() {
         Config.refresher(confPrefix, LoggerFactory.refresh)
     }
     public static func createFacade(name: String): LoggerAppenderFacade {
@@ -40,14 +40,14 @@ public class LoggerConfig {
     public static func getString(appender: String, item: String): Option<String> {
         Config.getString("${confPrefix}_${appender}_${item}")
     }
-    public static func getAppenders(kind: String): Array<String>{
-        if(let Some(appenders) <- getString(appender, kind)){
+    public static func getAppenders(kind: String): Array<String> {
+        if (let Some(appenders) <- getString(appender, kind)) {
             appenders.split(",")
-        }else{
+        } else {
             []
         }
     }
-    private static func appenderKeyPart(appender: String){
+    private static func appenderKeyPart(appender: String) {
         '${LoggerConfig.appender}_${appender}'
     }
     public static func getLevelConf(appender: String): LogLevel {
@@ -66,20 +66,20 @@ public class LoggerConfig {
         Config.getData<Int64>("loggerAsyncBufsize") ?? 1
     }
     public static func getAsyncTimeout(): Duration {
-        if(let Some(d) <- Config.getString("loggerAsyncTimeout")){
-            let timeout = Duration.tryParse(d).getOrThrow{LogException("illegal async timeout duration ${d}")}
+        if (let Some(d) <- Config.getString("loggerAsyncTimeout")) {
+            let timeout = Duration.tryParse(d).getOrThrow {LogException("illegal async timeout duration ${d}")}
             if (timeout == Duration.Zero) {
                 Duration.Max
             } else {
                 timeout
             }
-        }else{
+        } else {
             Duration.Max
         }
     }
     public static func getAsyncTimeoutPolicy(): AsyncTimeoutPolicy {
-        if(let Some(p) <- Config.getString("loggerAsyncTimeoutPolicy")) {
-            match(p.toAsciiLower()){
+        if (let Some(p) <- Config.getString("loggerAsyncTimeoutPolicy")) {
+            match (p.toAsciiLower()) {
                 case "discard" => Discard
                 case "abort" => Abort
                 case _ => AlwaysWaiting
@@ -90,28 +90,36 @@ public class LoggerConfig {
     }
     public static func getUdpSendTimeout(appender: String): ?Duration {
         if (let Some(d) <- getString(appenderKeyPart(appender), "sendTimeout")) {
-            Duration.tryParse(d).getOrThrow{LogException("${d} is an illegal duration string for ${appender} udp sendTimeout")}
+            Duration
+                .tryParse(d)
+                .getOrThrow {LogException("${d} is an illegal duration string for ${appender} udp sendTimeout")}
         } else {
             None<Duration>
         }
     }
     public static func getUnixWriteTimeout(appender: String): ?Duration {
         if (let Some(d) <- getString(appenderKeyPart(appender), "writeTimeout")) {
-            Duration.tryParse(d).getOrThrow{LogException("${d} is an illegal duration string for ${appender} unix writeTimeout")}
+            Duration
+                .tryParse(d)
+                .getOrThrow {LogException("${d} is an illegal duration string for ${appender} unix writeTimeout")}
         } else {
             None<Duration>
         }
     }
     public static func getTcpSendBufSize(appender: String): ?Int64 {
         if (let Some(s) <- getString(appenderKeyPart(appender), "bufSize")) {
-            Int64.tryParse(s).getOrThrow{LogException("${s} is an illegal duration string for ${appender} tcp sendBufSize")}
+            Int64
+                .tryParse(s)
+                .getOrThrow {LogException("${s} is an illegal duration string for ${appender} tcp sendBufSize")}
         } else {
             None<Int64>
         }
     }
     public static func getUnixBufSize(appender: String): ?Int64 {
         if (let Some(s) <- getString(appenderKeyPart(appender), "bufSize")) {
-            Int64.tryParse(s).getOrThrow{LogException("${s} is an illegal duration string for ${appender} unix sendBufSize")}
+            Int64
+                .tryParse(s)
+                .getOrThrow {LogException("${s} is an illegal duration string for ${appender} unix sendBufSize")}
         } else {
             None<Int64>
         }
@@ -127,6 +135,5 @@ public class LoggerConfig {
             case "ALL" => LogLevel.ALL
             case _ => LogLevel.INFO
         }
-        
     }
 }

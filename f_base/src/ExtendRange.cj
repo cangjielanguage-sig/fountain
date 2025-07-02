@@ -15,8 +15,9 @@ import std.regex.*
 public interface ExtendRange<T> where T <: Countable<T> & ToString {
     func toString(): String
 }
+
 extend<T> Range<T> <: ExtendRange<T> where T <: Countable<T> & ToString {
     public func toString(): String {
-        "${start} .. ${if(isClosed){"="}else{String.empty}}${end} : ${step}"
+        "${start} .. ${if (isClosed) { "=" } else { String.empty }}${end} : ${step}"
     }
 }

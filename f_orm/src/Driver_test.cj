@@ -10,7 +10,6 @@
 
 package f_orm
 
-
 public class DriverTest <: Driver {
     /**
      * 驱 动 名 称
@@ -51,6 +50,7 @@ public class DriverTest <: Driver {
         DatasourceTest()
     }
 }
+
 public class DatasourceCreatorImpl <: DatasourceCreator {
     public func create(): NamedDatasource {
         let driver = DriverTest()

@@ -31,19 +31,22 @@ public class QueryMappers<O> {
             }
         }
     }
-    public static func create<T>(mappers!: Array<QueryMapper<T>>, creator!: ()->T): ?QueryMappers<T> {
-        if(!(TypeInfos.get<O>().isSubtypeOf(TypeInfos.get<Object>()) && TypeInfos.get<T>().isSubtypeOf(TypeInfos.get<O>()))){
+    public static func create<T>(mappers!: Array<QueryMapper<T>>, creator!: () -> T): ?QueryMappers<T> {
+        if (!(TypeInfos.get<O>().isSubtypeOf(TypeInfos.get<Object>()) && TypeInfos
+            .get<T>()
+            .isSubtypeOf(TypeInfos.get<O>()))) {
             return None<QueryMappers<T>>
         }
         let oType = TypeInfos.get<O>()
         let oMappers = (oType.getStaticFunction("queryMappers").apply(oType) as QueryMappers<O>).getOrThrow().mappers
-        QueryMappers<T>(mappers: Array<QueryMapper<T>>(oMappers.size + mappers.size){i =>
-            if(i < oMappers.size){
-                oMappers[i].new<T>()
-            }else{
-                mappers[i]
-            }
-        }, creator: creator)
+        QueryMappers<T>(
+            mappers: Array<QueryMapper<T>>(oMappers.size + mappers.size) {
+                i => if (i < oMappers.size) {
+                    oMappers[i].new<T>()
+                } else {
+                    mappers[i]
+                }
+            }, creator: creator)
     }
     /**
      * 映射单个对象

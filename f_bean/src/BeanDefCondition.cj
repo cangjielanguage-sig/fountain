@@ -94,8 +94,8 @@ public class BeanDef <: BeanCondition {
     }
     private func on(factory: BeanFactory, typeInfo: TypeInfo): Bool {
         var count = 0
-        for (m in factory.beanManagers(typeInfo) where beanType.on(m.beanType) && beanName.on(m.name) && (scope.isNone() ||
-            scope.getOrThrow() == m.meta.scope)) {
+        for (m in factory.beanManagers(typeInfo) where beanType.on(m.beanType) && beanName.on(m.name) && (scope
+            .isNone() || scope.getOrThrow() == m.meta.scope)) {
             count++
             match (this.count) {
                 case AtLeastOne => return true

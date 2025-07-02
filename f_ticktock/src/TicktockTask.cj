@@ -57,7 +57,7 @@ public abstract class TicktockTask <: TicktockTaskDef & Hashable & Equatable<Tic
         }
     }
     public open prop name: String {
-        get(){
+        get() {
             ClassTypeInfo.of(this).qualifiedName
         }
     }
@@ -78,4 +78,5 @@ public abstract class TicktockTask <: TicktockTaskDef & Hashable & Equatable<Tic
         DefaultTicktockTaskExecuting.reset(name, stamp)
     }
 }
+
 public abstract class CronTicktockTask <: TicktockTask & CronTicktockTaskDef {}

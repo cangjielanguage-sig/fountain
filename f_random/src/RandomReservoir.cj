@@ -22,7 +22,7 @@ public func randomReservoir<T>(count: Int64, source: Iterable<T>, priv!: Bool = 
         } else {
             let r = rand.nextInt64(c)
             if (r < count) {
-                result[r] = v 
+                result[r] = v
             }
         }
         c++

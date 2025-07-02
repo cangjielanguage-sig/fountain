@@ -18,19 +18,20 @@ public macro Configuration(input: Tokens): Tokens {
     var ctorTokens = quote(
         let ctors = HashMap<String, ()-> $identifier>()
     ) + `nl`
-    for(d in klass.body.decls){
-        match(d){
-            case med: MacroExpandDecl => 
+    for (d in klass.body.decls) {
+        match (d) {
+            case med: MacroExpandDecl =>
                 var md: Decl = med
-                while(let d: MacroExpandDecl <- md){
+                while (let d: MacroExpandDecl <- md) {
                     md = d.macroInputDecl
-                    match(md){
-                        case f: FuncDecl where isStatic(f) && isPublic(f) && f.funcParams.isEmpty() => 
+                    match (md) {
+                        case f: FuncDecl where isStatic(f) && isPublic(f) && f.funcParams.isEmpty() =>
                             let fname = f.identifier.value
                             ctorTokens += quote(
                                 ctors[$fname] = {=> $(identifier).$(f.identifier)()}
-                            ) + `nl`
-                        case f: FuncDecl where !isStatic(f) && isPublic(f) && f.funcParams.isEmpty() => 
+                            ) +
+                                `nl`
+                        case f: FuncDecl where !isStatic(f) && isPublic(f) && f.funcParams.isEmpty() =>
                             let fname = f.identifier.value
                             ctorTokens += quote(
                                 ctors[$fname] = {=> configuration.$(f.identifier)()}

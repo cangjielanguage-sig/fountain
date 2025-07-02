@@ -5,36 +5,34 @@
     You may obtain a copy of Mulan PSL v2 at:
             http://license.coscl.org.cn/MulanPSL2
     THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-    See the Mulan PSL v2 for more details.  
-*/
+    See the Mulan PSL v2 for more details.
+ */
 package f_data.json
 
 import std.io.{InputStream, StringReader, OutputStream, StringWriter, ByteBuffer}
 import stdx.encoding.json.*
-
 import f_data.exception.DataException
-
 import charset4cj.charset.encoding.Charset
 import charset4cj.charset.{Charsets, TextReader, TextWriter}
 // import charset4cj.{Charset, Charsets, TextReader, TextWriter}
 
 public interface ExtendJsonValue {
-    static func fromInput(input: InputStream, charset!: Charset): JsonValue{
+    static func fromInput(input: InputStream, charset!: Charset): JsonValue {
         fromReader(TextReader(input, charset: charset))
     }
     static func fromReader<I>(reader: StringReader<I>): JsonValue where I <: InputStream {
         let buffer = ByteBuffer()
         let writer = StringWriter(buffer)
-        while(let Some(line) <- reader.readln()){
+        while (let Some(line) <- reader.readln()) {
             writer.writeln(line)
         }
         writer.flush()
         JsonValue.fromStr(String.fromUtf8(buffer.bytes()))
     }
-    static func fromReader(reader: TextReader): JsonValue{
+    static func fromReader(reader: TextReader): JsonValue {
         let buffer = ByteBuffer()
         let writer = StringWriter(buffer)
-        while(let Some(line) <- reader.readln()){
+        while (let Some(line) <- reader.readln()) {
             writer.writeln(line)
         }
         writer.flush()
@@ -43,58 +41,58 @@ public interface ExtendJsonValue {
     func toData(): Data
     static func tryFromData(data: Data, flag!: DataConversionFlag): Any
 }
+
 public let JSON_NULL = JsonNull()
+
 extend JsonValue <: ExtendJsonValue {
     public func toData(): Data {
-        match(this){
+        match (this) {
             case x: JsonBool => x.getValue().toData()
             case x: JsonInt => x.getValue().toData()
             case x: JsonFloat => x.getValue().toData()
             case x: JsonNull => DataNone.INSTANCE
             case x: JsonString => x.getValue().toData()
-            case x: JsonArray => 
-                DataJsonArray(x)
-            case x: JsonObject => 
-                DataJsonObject(x)
+            case x: JsonArray => DataJsonArray(x)
+            case x: JsonObject => DataJsonObject(x)
             case _ => throw UnreachableException()
         }
     }
     public static func tryFromData(data: Data, flag!: DataConversionFlag = DEFAULT_DATA_FLAG): Any {
-        func from(data: Data){
-            match(tryFromData(data, flag: flag)){
+        func from(data: Data) {
+            match (tryFromData(data, flag: flag)) {
                 case x: JsonValue => x
-                case x: ?JsonValue => match(x){
+                case x: ?JsonValue => match (x) {
                     case Some(x) => x
                     case _ => JSON_NULL
                 }
-                case x: ?JsonBool => match(x){
+                case x: ?JsonBool => match (x) {
                     case Some(x) => x
                     case _ => JSON_NULL
                 }
-                case x: ?JsonInt => match(x){
+                case x: ?JsonInt => match (x) {
                     case Some(x) => x
                     case _ => JSON_NULL
                 }
-                case x: ?JsonFloat => match(x){
+                case x: ?JsonFloat => match (x) {
                     case Some(x) => x
                     case _ => JSON_NULL
                 }
-                case x: ?JsonString => match(x){
+                case x: ?JsonString => match (x) {
                     case Some(x) => x
                     case _ => JSON_NULL
                 }
-                case x: ?JsonObject => match(x){
+                case x: ?JsonObject => match (x) {
                     case Some(x) => x
                     case _ => JSON_NULL
                 }
-                case x: ?JsonArray => match(x){
+                case x: ?JsonArray => match (x) {
                     case Some(x) => x
                     case _ => JSON_NULL
                 }
                 case _ => JSON_NULL
             }
         }
-        match(data){
+        match (data) {
             case x: DataJsonArray => x.json
             case x: DataJsonObject => x.json
             case x: DataNone => JsonNull()
@@ -103,21 +101,21 @@ extend JsonValue <: ExtendJsonValue {
             case x: DataString => JsonString(x.data)
             case x: DataDateTime => JsonString(x.data.toString())
             case x: DataDuration => JsonString(x.data.toString())
-            case x: Iterable<Data> => 
+            case x: Iterable<Data> =>
                 let arr = JsonArray()
-                for(d in x){
+                for (d in x) {
                     arr.add(from(d))
                 }
                 arr
-            case x: Iterable<(String, Data)> => 
+            case x: Iterable<(String, Data)> =>
                 let obj = JsonObject()
-                for((k, v) in x){
+                for ((k, v) in x) {
                     obj.put(k, from(v))
                 }
                 obj
-            case x: Iterable<(Data, Data)> => 
+            case x: Iterable<(Data, Data)> =>
                 let obj = JsonObject()
-                for((k, v) in x){
+                for ((k, v) in x) {
                     let jk = from(k)
                     let jv = from(k)
                     obj.put(jk.toString(), jv)
@@ -126,16 +124,18 @@ extend JsonValue <: ExtendJsonValue {
         }
     }
 }
+
 public class DataJsonArrayIterator <: Iterator<Data> {
-    public DataJsonArrayIterator(private let itr: Iterator<JsonValue>){}
-    public func next(): ?Data{
+    public DataJsonArrayIterator(private let itr: Iterator<JsonValue>) {}
+    public func next(): ?Data {
         itr.next()?.toData()
     }
 }
+
 public class DataJsonArray <: Data & Collection<Data> {
-    public DataJsonArray(public let json: JsonArray){}
+    public DataJsonArray(public let json: JsonArray) {}
     public prop size: Int64 {
-        get(){
+        get() {
             json.size()
         }
     }
@@ -155,19 +155,21 @@ public class DataJsonArray <: Data & Collection<Data> {
         tryParse(s).getOrThrow {DataParsableException('${s} cannot be parsed to ${TypeInfos.get<DataJsonArray>()}')}
     }
 }
+
 public class DataJsonObjectIterator <: Iterator<(String, Data)> {
-    public DataJsonObjectIterator(private let itr: Iterator<(String, JsonValue)>){}
+    public DataJsonObjectIterator(private let itr: Iterator<(String, JsonValue)>) {}
     public func next(): ?(String, Data) {
-        for((k, v) in itr){
+        for ((k, v) in itr) {
             (k, v.toData())
         }
         None
     }
 }
+
 public class DataJsonObject <: Data & Collection<(String, Data)> {
-    public DataJsonObject(public let json: JsonObject){}
+    public DataJsonObject(public let json: JsonObject) {}
     public prop size: Int64 {
-        get(){
+        get() {
             json.size()
         }
     }

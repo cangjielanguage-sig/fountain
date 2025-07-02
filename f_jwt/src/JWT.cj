@@ -138,8 +138,10 @@ public class JWT {
         signAlgo = match ((privateKeyPem, publicKeyPem)) {
             case (Some(pri), Some(pub)) => ECDSASignAlgo(SHA224(), privateKey: ECDSAPrivateKey.decodeFromPem(pri),
                 publicKey: ECDSAPublicKey.decodeFromPem(pub))
-            case (Some(pri), Option<String>.None) => ECDSASignAlgo(SHA224(), privateKey: ECDSAPrivateKey.decodeFromPem(pri))
-            case (Option<String>.None, Some(pub)) => ECDSASignAlgo(SHA224(), publicKey: ECDSAPublicKey.decodeFromPem(pub))
+            case (Some(pri), Option<String>.None) => ECDSASignAlgo(SHA224(),
+                privateKey: ECDSAPrivateKey.decodeFromPem(pri))
+            case (Option<String>.None, Some(pub)) => ECDSASignAlgo(SHA224(),
+                publicKey: ECDSAPublicKey.decodeFromPem(pub))
             case _ => throw JWTException("no key of ECDSA is been specified")
         }
         ES224
@@ -154,8 +156,10 @@ public class JWT {
         signAlgo = match ((privateKeyPem, publicKeyPem)) {
             case (Some(pri), Some(pub)) => ECDSASignAlgo(SHA256(), privateKey: ECDSAPrivateKey.decodeFromPem(pri),
                 publicKey: ECDSAPublicKey.decodeFromPem(pub))
-            case (Some(pri), Option<String>.None) => ECDSASignAlgo(SHA256(), privateKey: ECDSAPrivateKey.decodeFromPem(pri))
-            case (Option<String>.None, Some(pub)) => ECDSASignAlgo(SHA256(), publicKey: ECDSAPublicKey.decodeFromPem(pub))
+            case (Some(pri), Option<String>.None) => ECDSASignAlgo(SHA256(),
+                privateKey: ECDSAPrivateKey.decodeFromPem(pri))
+            case (Option<String>.None, Some(pub)) => ECDSASignAlgo(SHA256(),
+                publicKey: ECDSAPublicKey.decodeFromPem(pub))
             case _ => throw JWTException("no key of ECDSA is been specified")
         }
         ES256
@@ -169,8 +173,10 @@ public class JWT {
         signAlgo = match ((privateKeyPem, publicKeyPem)) {
             case (Some(pri), Some(pub)) => ECDSASignAlgo(SHA384(), privateKey: ECDSAPrivateKey.decodeFromPem(pri),
                 publicKey: ECDSAPublicKey.decodeFromPem(pub))
-            case (Some(pri), Option<String>.None) => ECDSASignAlgo(SHA384(), privateKey: ECDSAPrivateKey.decodeFromPem(pri))
-            case (Option<String>.None, Some(pub)) => ECDSASignAlgo(SHA384(), publicKey: ECDSAPublicKey.decodeFromPem(pub))
+            case (Some(pri), Option<String>.None) => ECDSASignAlgo(SHA384(),
+                privateKey: ECDSAPrivateKey.decodeFromPem(pri))
+            case (Option<String>.None, Some(pub)) => ECDSASignAlgo(SHA384(),
+                publicKey: ECDSAPublicKey.decodeFromPem(pub))
             case _ => throw JWTException("no key of ECDSA is been specified")
         }
         ES384
@@ -184,8 +190,10 @@ public class JWT {
         signAlgo = match ((privateKeyPem, publicKeyPem)) {
             case (Some(pri), Some(pub)) => ECDSASignAlgo(SHA512(), privateKey: ECDSAPrivateKey.decodeFromPem(pri),
                 publicKey: ECDSAPublicKey.decodeFromPem(pub))
-            case (Some(pri), Option<String>.None) => ECDSASignAlgo(SHA512(), privateKey: ECDSAPrivateKey.decodeFromPem(pri))
-            case (Option<String>.None, Some(pub)) => ECDSASignAlgo(SHA512(), publicKey: ECDSAPublicKey.decodeFromPem(pub))
+            case (Some(pri), Option<String>.None) => ECDSASignAlgo(SHA512(),
+                privateKey: ECDSAPrivateKey.decodeFromPem(pri))
+            case (Option<String>.None, Some(pub)) => ECDSASignAlgo(SHA512(),
+                publicKey: ECDSAPublicKey.decodeFromPem(pub))
             case _ => throw JWTException("no key of ECDSA is been specified")
         }
         ES512
@@ -195,13 +203,17 @@ public class JWT {
             header("alg", "RS256")
         }
     }
-    public func rsa256(privateKeyPem!: ?String = None<String>, publicKeyPem!: ?String = None<String>, padType!: PadOption = PKCS1) {
+    public func rsa256(privateKeyPem!: ?String = None<String>, publicKeyPem!: ?String = None<String>,
+        padType!: PadOption = PKCS1) {
         signAlgo = match ((privateKeyPem, publicKeyPem)) {
             case (Some(pri), Some(pub)) => RSASignAlgo(SHA256(), privateKey: RSAPrivateKey.decodeFromPem(pri),
                 publicKey: RSAPublicKey.decodeFromPem(pub), padType: padType)
             case (Some(pri), Option<String>.None) => RSASignAlgo(SHA256(), privateKey: RSAPrivateKey.decodeFromPem(pri),
                 padType: padType)
-            case (Option<String>.None, Some(pub)) => RSASignAlgo(SHA256(), publicKey: RSAPublicKey.decodeFromPem(pub), padType: padType
+            case (Option<String>.None, Some(pub)) => RSASignAlgo(
+                SHA256(),
+                publicKey: RSAPublicKey.decodeFromPem(pub),
+                padType: padType
             )
             case _ => throw JWTException("no key of RSA is been specified")
         }
@@ -212,13 +224,17 @@ public class JWT {
             header("alg", "RS384")
         }
     }
-    public func rsa384(privateKeyPem!: ?String = None<String>, publicKeyPem!: ?String = None<String>, padType!: PadOption = PKCS1) {
+    public func rsa384(privateKeyPem!: ?String = None<String>, publicKeyPem!: ?String = None<String>,
+        padType!: PadOption = PKCS1) {
         signAlgo = match ((privateKeyPem, publicKeyPem)) {
             case (Some(pri), Some(pub)) => RSASignAlgo(SHA384(), privateKey: RSAPrivateKey.decodeFromPem(pri),
                 publicKey: RSAPublicKey.decodeFromPem(pub), padType: padType)
             case (Some(pri), Option<String>.None) => RSASignAlgo(SHA384(), privateKey: RSAPrivateKey.decodeFromPem(pri),
                 padType: padType)
-            case (Option<String>.None, Some(pub)) => RSASignAlgo(SHA384(), publicKey: RSAPublicKey.decodeFromPem(pub), padType: padType
+            case (Option<String>.None, Some(pub)) => RSASignAlgo(
+                SHA384(),
+                publicKey: RSAPublicKey.decodeFromPem(pub),
+                padType: padType
             )
             case _ => throw JWTException("no key of RSA is been specified")
         }
@@ -229,13 +245,17 @@ public class JWT {
             header("alg", "RS512")
         }
     }
-    public func rsa512(privateKeyPem!: ?String = None<String>, publicKeyPem!: ?String = None<String>, padType!: PadOption = PKCS1) {
+    public func rsa512(privateKeyPem!: ?String = None<String>, publicKeyPem!: ?String = None<String>,
+        padType!: PadOption = PKCS1) {
         signAlgo = match ((privateKeyPem, publicKeyPem)) {
             case (Some(pri), Some(pub)) => RSASignAlgo(SHA512(), privateKey: RSAPrivateKey.decodeFromPem(pri),
                 publicKey: RSAPublicKey.decodeFromPem(pub), padType: padType)
             case (Some(pri), Option<String>.None) => RSASignAlgo(SHA512(), privateKey: RSAPrivateKey.decodeFromPem(pri),
                 padType: padType)
-            case (Option<String>.None, Some(pub)) => RSASignAlgo(SHA512(), publicKey: RSAPublicKey.decodeFromPem(pub), padType: padType
+            case (Option<String>.None, Some(pub)) => RSASignAlgo(
+                SHA512(),
+                publicKey: RSAPublicKey.decodeFromPem(pub),
+                padType: padType
             )
             case _ => throw JWTException("no key of RSA is been specified")
         }
@@ -268,7 +288,7 @@ public class JWT {
     public func expireAt(expireAt: Int64): JWT {
         addPayload("exp", expireAt)
     }
-    
+
     public func notBeforeAt(nbf: Int64): JWT {
         addPayload("nbf", nbf)
     }
@@ -489,9 +509,9 @@ public class JWTVerifier {
         isExpired(time: now) && isNotBefore(time: now) && verifySign()
     }
     public func verifyPayload<V>(name: String, value: V): Bool where V <: Equatable<V> {
-        if(let Some(o) <- getPayload(name) && let v: Equatable<V> <- o) {
+        if (let Some(o) <- getPayload(name) && let v: Equatable<V> <- o) {
             v == value
-        }else{
+        } else {
             false
         }
     }
@@ -514,11 +534,11 @@ public class JWTVerifier {
         verifyIssueAt(issueAt - DateTime.UnixEpoch)
     }
     public func verifyId<T>(cache: JwtIdCache<T>): Bool where T <: Equatable<T> {
-        if(let Some(o) <- getPayload('jti') && let jti: T <- o) {
+        if (let Some(o) <- getPayload('jti') && let jti: T <- o) {
             let r = cache.contains(jti)
             cache.remove(jti)
             r
-        }else{
+        } else {
             false
         }
     }

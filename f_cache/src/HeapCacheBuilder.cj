@@ -13,6 +13,7 @@ public let DEFAULT_HEAP_CACHE_MAX_LIFE = Duration.second * 5
 public let DEFAULT_HEAP_CACHE_MAX_SIZE = Int64.Max
 public let DEFAULT_HEAP_CACHE_CONCURRENCY_LEVEL = 128
 public let DEFAULT_HEAP_CHECK_CHECK_DURATION = Duration.second
+
 public open class HeapCacheBuilder<V> where V <: Object {
     private var maxLife = DEFAULT_HEAP_CACHE_MAX_LIFE
     private var concurrencyLevel = DEFAULT_HEAP_CACHE_CONCURRENCY_LEVEL
@@ -47,16 +48,14 @@ public open class HeapCacheBuilder<V> where V <: Object {
         this
     }
     public func setCheckDuration(checkDuration: Duration): HeapCacheBuilder<V> {
-        if(checkDuration <= Duration.Zero) {
+        if (checkDuration <= Duration.Zero) {
             throw IllegalArgumentException("checkDuration must be greater Duration.Zero")
         }
         this.checkDuration = checkDuration
         this
     }
     public open func build(): HeapCache<V> {
-        return HeapCache<V>(concurrencyLevel: concurrencyLevel,
-                            maxLife: maxLife, maxSize: maxSize,
-                            checkDuration: checkDuration,
-                            evictionCallback: evictionCallback)
+        return HeapCache<V>(concurrencyLevel: concurrencyLevel, maxLife: maxLife, maxSize: maxSize,
+            checkDuration: checkDuration, evictionCallback: evictionCallback)
     }
 }

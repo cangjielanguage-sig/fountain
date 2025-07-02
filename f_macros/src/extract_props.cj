@@ -18,14 +18,17 @@ public func extractProps(decls: ArrayList<Decl>, extractPublic!: Bool = true): A
     }
     list.toArray()
 }
+
 public func extractMutProps(decls: ArrayList<Decl>, extractPublic!: Bool = true, extractStatic!: Bool = false): Array<PropDecl> {
     let list = ArrayList<PropDecl>()
-    for (decl in decls where decl is PropDecl && (!extractPublic || isPublic(decl)) && (!extractStatic || isStatic(decl)) && isMut(decl)) {
+    for (decl in decls where decl is PropDecl && (!extractPublic || isPublic(decl)) && (!extractStatic || isStatic(decl)) &&
+        isMut(decl)) {
         let propDecl = (decl as PropDecl).getOrThrow()
         list.add(propDecl)
     }
     list.toArray()
 }
+
 public func extractReadOnlyProps(decls: ArrayList<Decl>, extractPublic!: Bool = true): Array<PropDecl> {
     let list = ArrayList<PropDecl>()
     for (decl in decls where decl is PropDecl && (!extractPublic || isPublic(decl)) && !isMut(decl)) {

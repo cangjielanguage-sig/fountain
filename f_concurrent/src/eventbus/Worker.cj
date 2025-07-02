@@ -59,7 +59,7 @@ public class Worker {
     public func retire(): Unit {
         retired.store(true)
     }
-    private func deliverIfNeed(event: Event){
+    private func deliverIfNeed(event: Event) {
         eventBus.deliverIfNeed(event)
     }
     /**
@@ -103,7 +103,7 @@ public class Worker {
         }
         queue.tryAdd(event, timeout)
     }
-    func discard(){
+    func discard() {
         queue.tryRemove()
     }
     prop waitingJobSize: Int64 {

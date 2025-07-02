@@ -43,6 +43,7 @@ class LinkedNodeIterator<T> <: Iterator<T> {
         }
     }
 }
+
 public interface Node<T> {
     func insertPrev(value: T): ValueNode<T> {
         throw UnreachableException()
@@ -62,11 +63,12 @@ public interface Node<T> {
 }
 
 public class NoneNode<T> <: Node<T> {
-    static const func instance(){
+    static const func instance() {
         NoneNode<T>()
     }
     private const init() {}
 }
+
 public class HeadNode<T> <: Node<T> & Iterable<T> {
     var next: Node<T>
     let tail = TailNode<T>()
@@ -92,6 +94,7 @@ public class HeadNode<T> <: Node<T> & Iterable<T> {
         LinkedNodeIterator<T>(this)
     }
 }
+
 public class TailNode<T> <: Node<T> & Iterable<T> {
     TailNode(var prev!: Node<T> = NoneNode<T>.instance()) {}
     public func insertPrev(value: T): ValueNode<T> {
@@ -108,6 +111,7 @@ public class TailNode<T> <: Node<T> & Iterable<T> {
         LinkedNodeIterator<T>(this)
     }
 }
+
 public class ValueNode<T> <: Node<T> {
     ValueNode(var value: T, var prev: Node<T>, var next: Node<T>) {
         match (next) {

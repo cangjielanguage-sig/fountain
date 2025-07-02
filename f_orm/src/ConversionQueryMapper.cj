@@ -21,7 +21,7 @@ public class ConversionQueryMaper<D, T, O> <: QueryMapper<O> {
         name!: String,
         converter!: (D) -> T,
         putter!: (O, T) -> Unit
-    ){
+    ) {
         this(dataType: UnknownDataType(true, name), converter: converter, putter: putter)
     }
 }

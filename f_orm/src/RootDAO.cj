@@ -107,8 +107,8 @@ public interface RootDAO {
     func meet(condition: Bool, partial: String): MeetCondition {
         MeetCondition(condition, partial, executor)
     }
-    prop choose: ChooseCondition{
-        get(){
+    prop choose: ChooseCondition {
+        get() {
             ChooseCondition(executor)
         }
     }

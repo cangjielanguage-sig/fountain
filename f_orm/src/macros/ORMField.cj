@@ -26,7 +26,7 @@ import f_util.CaseFormat
  * 没有使用@ORMField注解的公共实例成员变量或公共实例成员属性被认为映射的不是主键，且按照列名是LowerUnderScore处理。
  */
 public macro ORMField(attrs: Tokens, input: Tokens): Tokens {
-    assertParentContext("QueryMappersGenerator")//无法用反射处理QueryMapper的闭包参数的泛型，也就不能用反射创建Q
+    assertParentContext("QueryMappersGenerator") //无法用反射处理QueryMapper的闭包参数的泛型，也就不能用反射创建Q
     var tokens = input
     let decl = parseDecl(input)
     let name = if (decl is VarDecl) {
@@ -34,12 +34,12 @@ public macro ORMField(attrs: Tokens, input: Tokens): Tokens {
         if (varDecl.keyword.kind == VAR && !varDecl.isStatic()) {
             let name = varDecl.identifier
             let varName = Token(IDENTIFIER, "_${name.value}_")
-            let varType = if(varDecl.colon.kind != ILLEGAL) {
+            let varType = if (varDecl.colon.kind != ILLEGAL) {
                 `colon` + varDecl.declType.toTokens()
             } else {
                 `empty_tokens`
             }
-            let assign = if(varDecl.assign.kind != ILLEGAL) {
+            let assign = if (varDecl.assign.kind != ILLEGAL) {
                 `assign` + varDecl.expr.toTokens()
             } else {
                 `empty_tokens`
@@ -55,12 +55,12 @@ public macro ORMField(attrs: Tokens, input: Tokens): Tokens {
                         this.$varName = value
                     }
                 }
-            ) + `nl`
+            ) +
+                `nl`
             name
         } else {
             throw ORMException(
-                "member of current type which is named as ${decl.identifier.value} must be modified by `public var` or `public mut prop` which is annotated by ORMField"
-            )
+                "member of current type which is named as ${decl.identifier.value} must be modified by `public var` or `public mut prop` which is annotated by ORMField")
         }
     } else if (decl is PropDecl) {
         let propDecl = (decl as PropDecl).getOrThrow()
@@ -68,13 +68,11 @@ public macro ORMField(attrs: Tokens, input: Tokens): Tokens {
             propDecl.identifier
         } else {
             throw ORMException(
-                "member of current type which is named as ${decl.identifier.value} must be modified by `public var` or `public mut prop` which is annotated by ORMField"
-            )
+                "member of current type which is named as ${decl.identifier.value} must be modified by `public var` or `public mut prop` which is annotated by ORMField")
         }
     } else {
         throw ORMException(
-            "member of current type must be modified by `public var` or `public mut prop` which is annotated by ORMField"
-        )
+            "member of current type must be modified by `public var` or `public mut prop` which is annotated by ORMField")
     }
     setItem("field", name.value)
     for (attr in attrs) {
@@ -88,8 +86,7 @@ public macro ORMField(attrs: Tokens, input: Tokens): Tokens {
                     CaseFormat.Camel.convert(name.value, CaseFormat.UpperUnderScore))
                 case "Pascal" => setItem("column", CaseFormat.Camel.convert(name.value, CaseFormat.Pascal))
                 case "Camel" => setItem("column", name.value)
-                case x =>
-                    setItem("dataType", x)
+                case x => setItem("dataType", x)
             }
             case _ => throw ORMException("unsupported TokenKind in attrs of @ORMFIeld")
         }

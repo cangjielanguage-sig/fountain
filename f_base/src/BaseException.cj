@@ -14,19 +14,21 @@ import std.io.{OutputStream, StringWriter, ByteBuffer}
 import std.collection.ArrayList
 
 public func printStackTrace(exception: Exception, output: OutputStream): Unit {
-    printStackTrace(output){buf => 
+    printStackTrace(output) {
+        buf =>
         buf.write("An exception has occured: ${exception}".unsafeBytes())
         for (stack in exception.getStackTrace()) {
             buf.write(
-                "         at ${stack.declaringClass}.${stack.methodName}(${stack.fileName}: ${stack.lineNumber})${OS.current.nextLine}".unsafeBytes()
-            )
+                "         at ${stack.declaringClass}.${stack.methodName}(${stack.fileName}: ${stack.lineNumber})${OS.current.nextLine}"
+                    .unsafeBytes())
         }
     }
 }
+
 private func printStackTrace(output: OutputStream, callee: (ByteBuffer) -> Unit) {
-    if(let buffer: ByteBuffer <- output){
+    if (let buffer: ByteBuffer <- output) {
         callee(buffer)
-    }else{
+    } else {
         let buffer = ByteBuffer()
         callee(buffer)
         output.write(buffer.bytes())
@@ -64,11 +66,12 @@ public open class BaseException <: Exception {
             suppressed_
         }
     }
-    private func rawStringBytes(s: String){
-        unsafe{s.rawData()}
+    private func rawStringBytes(s: String) {
+        unsafe { s.rawData() }
     }
     public func printStackTrace(output: OutputStream): Unit {
-        printStackTrace(output){w => 
+        printStackTrace(output) {
+            w =>
             printStackTrace(this, w)
             if (let Some(c) <- caused) {
                 w.write(rawStringBytes("Caused by: "))

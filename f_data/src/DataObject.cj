@@ -13,7 +13,7 @@ import std.convert.Parsable
 
 public interface ObjectData<T> <: DataFields<T> where T <: ObjectData<T> & DataFields<T> {
     static prop isSimple: Bool {
-        get(){
+        get() {
             false
         }
     }
@@ -39,25 +39,25 @@ public class DataObject<T> <: Data & Collection<(String, Data)> & NamedData wher
     public DataObject(public let data: T) {
     }
     public prop size: Int64 {
-        get(){
+        get() {
             T.dataFields().size
         }
     }
     public func annotations(name: String): Collection<Annotation> {
-        if(let Some(p) <- TypeMemberInfos.instanceProperty<T>(name)) {
+        if (let Some(p) <- TypeMemberInfos.instanceProperty<T>(name)) {
             p.annotations
-        }else if(let Some(v) <- TypeMemberInfos.instanceVariable<T>(name)){
+        } else if (let Some(v) <- TypeMemberInfos.instanceVariable<T>(name)) {
             v.annotations
-        }else{
+        } else {
             []
         }
     }
     public func annotation<A>(name: String): ?A where A <: Annotation {
-        if(let Some(p) <- TypeMemberInfos.instanceProperty<T>(name)) {
+        if (let Some(p) <- TypeMemberInfos.instanceProperty<T>(name)) {
             p.findAnnotation<A>()
-        }else if(let Some(v) <- TypeMemberInfos.instanceVariable<T>(name)){
+        } else if (let Some(v) <- TypeMemberInfos.instanceVariable<T>(name)) {
             v.findAnnotation<A>()
-        }else{
+        } else {
             None
         }
     }
@@ -75,29 +75,29 @@ public class DataObject<T> <: Data & Collection<(String, Data)> & NamedData wher
         T.dataFields().mutableFields()
     }
     public operator func [](name: String): Data {
-        get(name).getOrThrow{DataException('field ${name} is not found in ${TypeInfos.get<T>()}')}
+        get(name).getOrThrow {DataException('field ${name} is not found in ${TypeInfos.get<T>()}')}
     }
     public operator func [](name: String, value!: Data): Unit {
         set(name, value)
     }
-    public func set<V>(name: String, value: V, flag!: DataConversionFlag = DEFAULT_DATA_FLAG): Unit where V <: DataFields<V>{
+    public func set<V>(name: String, value: V, flag!: DataConversionFlag = DEFAULT_DATA_FLAG): Unit where V <: DataFields<V> {
         set(name, value.toData(), flag: flag)
     }
     public func set(name: String, value: Data, flag!: DataConversionFlag = DEFAULT_DATA_FLAG): Unit {
-        match(T.dataFields().mutableField(name)){
+        match (T.dataFields().mutableField(name)) {
             case Some(f) where f.set(data, value, flag: flag) => ()
-            case Some(_) where (flag & IGNORE_FIELD_NOT_CONVERTABLE) != 0 => ()  
+            case Some(_) where (flag & IGNORE_FIELD_NOT_CONVERTABLE) != 0 => ()
             case Some(_) => throw DataException("source field ${name} in ${TypeInfos.get<T>()} connot be converted")
             case _ where (flag & IGNORE_FIELD_NOT_FOUND) == 0 => ()
             case _ => throw DataException("field name ${name} is not found from ${TypeInfos.get<T>()}")
         }
     }
-    public func get(name: String): ?Data{
+    public func get(name: String): ?Data {
         T.dataFields().readableField(name)?.get(data)
     }
     public func get<V>(name: String, flag!: DataConversionFlag = DEFAULT_DATA_FLAG): ?V where V <: DataFields<V> {
-        match(get(name)){
-            case Some(x) => match(V.tryFromData(x, flag)){
+        match (get(name)) {
+            case Some(x) => match (V.tryFromData(x, flag)) {
                 case x: ?V => x
                 case x: V => x
                 case _ where (flag & IGNORE_FIELD_NOT_FOUND) == 0 => None<V>
@@ -117,7 +117,7 @@ public class DataObject<T> <: Data & Collection<(String, Data)> & NamedData wher
                     if (s.size > 1) {
                         s.append(",")
                     }
-                    s.append('"${k}":${v}')
+                    s.append('\"${k}\":${v}')
                 }
                 s.append("}")
                 s.toString()
@@ -126,9 +126,12 @@ public class DataObject<T> <: Data & Collection<(String, Data)> & NamedData wher
     public static func tryParse(string: String): ?Data {
         let typeInfo = TypeInfos.get<T>()
         if (typeInfo.isSubtypeOf(TypeInfos.get<Parsable<T>>())) {
-            let data = (TypeMemberInfos.staticFunction(typeInfo, 'tryParse', [TypeInfos.get<String>()])?.apply(typeInfo, string)).getOrThrow()
-            match(data){
-                case x: ?T => match(x){
+            let data = (TypeMemberInfos
+                .staticFunction(typeInfo, 'tryParse', [TypeInfos.get<String>()])?
+                .apply(typeInfo, string))
+                .getOrThrow()
+            match (data) {
+                case x: ?T => match (x) {
                     case Some(x) => DataObject<T>(x)
                     case _ => None<Data>
                 }
@@ -143,9 +146,9 @@ public class DataObject<T> <: Data & Collection<(String, Data)> & NamedData wher
     }
     public static func populate(src: Data, target: T, flag!: DataConversionFlag = DEFAULT_DATA_FLAG): ?T {
         match (src) {
-            case x: Iterable<(String, Data)> => 
+            case x: Iterable<(String, Data)> =>
                 let targetData = DataObject<T>(target)
-                for((n, d) in x) {
+                for ((n, d) in x) {
                     targetData.set(n, d, flag: flag)
                 }
                 target
@@ -154,7 +157,7 @@ public class DataObject<T> <: Data & Collection<(String, Data)> & NamedData wher
         }
     }
     public static func populate(src: Data, flag!: DataConversionFlag = DEFAULT_DATA_FLAG): ?T {
-        if((flag & DEEP) == 0 && let d: DataObject<T> <- src){
+        if ((flag & DEEP) == 0 && let d: DataObject<T> <- src) {
             return d.data
         }
         populate(src, T.dataFields().create(), flag: flag)
@@ -169,23 +172,23 @@ public class DataObject<T> <: Data & Collection<(String, Data)> & NamedData wher
         V <: DataFields<V> {
         populate(src.toData(), flag: flag)
     }
-    public static func populate<M, V>(src: M, target: T, flag!: DataConversionFlag = DEFAULT_DATA_FLAG): ?T where M <: Map<String, V> & DataFields<M>,
-        V <: DataFields<V> {
+    public static func populate<M, V>(src: M, target: T, flag!: DataConversionFlag = DEFAULT_DATA_FLAG): ?T where M <: Map<String,
+    V> & DataFields<M>, V <: DataFields<V> {
         populate(src.toData(), target, flag: flag)
     }
-    public static func populate<M, V>(src: T, map: M, flag!: DataConversionFlag = DEFAULT_DATA_FLAG): M where M <: Map<String, V>,
-        V <: DataFields<V> {
+    public static func populate<M, V>(src: T, map: M, flag!: DataConversionFlag = DEFAULT_DATA_FLAG): M where M <: Map<String,
+    V>, V <: DataFields<V> {
         for ((k, v) in DataObject<T>(src)) {
-            match(V.tryFromData(v, flag)){
-                case x: ?V => match(x){
+            match (V.tryFromData(v, flag)) {
+                case x: ?V => match (x) {
                     case Some(x) => map[k] = x
-                    case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => 
-                        throw DataException('field ${k} of ${TypeInfos.get<T>()} cannot be converted to ${TypeInfos.get<V>()}')
+                    case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException(
+                        'field ${k} of ${TypeInfos.get<T>()} cannot be converted to ${TypeInfos.get<V>()}')
                     case _ => continue
                 }
                 case x: V => map[k] = x
-                case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => 
-                    throw DataException('field ${k} of ${TypeInfos.get<T>()} cannot be converted to ${TypeInfos.get<V>()}')
+                case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException(
+                    'field ${k} of ${TypeInfos.get<T>()} cannot be converted to ${TypeInfos.get<V>()}')
                 case _ => continue
             }
         }

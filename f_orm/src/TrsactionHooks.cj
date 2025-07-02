@@ -5,15 +5,15 @@
     You may obtain a copy of Mulan PSL v2 at:
             http://license.coscl.org.cn/MulanPSL2
     THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-    See the Mulan PSL v2 for more details.  
-*/
+    See the Mulan PSL v2 for more details.
+ */
 package f_orm
 
 import std.collection.ArrayList
 import std.sort.*
 
 struct TransactionHookWrap <: TransactionHook & Comparable<TransactionHookWrap> {
-    TransactionHookWrap(private let hook: TransactionHook, let count: Int64){}
+    TransactionHookWrap(private let hook: TransactionHook, let count: Int64) {}
 
     public func beforeTx(): Unit {
         hook.beforeTx()
@@ -21,7 +21,7 @@ struct TransactionHookWrap <: TransactionHook & Comparable<TransactionHookWrap> 
     public func beforeCommit(readOnly: Bool): Unit {
         hook.beforeCommit(readOnly)
     }
-    public func afterCommit(): Unit{
+    public func afterCommit(): Unit {
         hook.afterCommit()
     }
     public func afterThrowing(e: Exception): Unit {
@@ -37,12 +37,13 @@ struct TransactionHookWrap <: TransactionHook & Comparable<TransactionHookWrap> 
         hook.afterComplete(status)
     }
     public func compare(other: TransactionHookWrap): Ordering {
-        match(this.order.compare(other.order)){
+        match (this.order.compare(other.order)) {
             case EQ => this.count.compare(other.count)
             case cmp => cmp
         }
     }
 }
+
 class TransactionHooks <: TransactionHook {
     private let list = ArrayList<TransactionHookWrap>()
     func register<T>(hook: TransactionHook): Unit where T <: TransactionHook {
@@ -50,37 +51,37 @@ class TransactionHooks <: TransactionHook {
         sort(list)
     }
     public func beforeTx(): Unit {
-        for(h in list) {
+        for (h in list) {
             h.beforeTx()
         }
     }
     public func beforeCommit(readOnly: Bool): Unit {
-        for(h in list){
+        for (h in list) {
             h.beforeCommit(readOnly)
         }
     }
-    public func afterCommit(): Unit{
-        for(h in list){
+    public func afterCommit(): Unit {
+        for (h in list) {
             h.afterCommit()
         }
     }
     public func afterThrowing(e: Exception): Unit {
-        for(h in list){
+        for (h in list) {
             h.afterThrowing(e)
         }
     }
     public func beforeRollback(e: Exception): Unit {
-        for(h in list){
+        for (h in list) {
             h.beforeRollback(e)
         }
     }
     public func afterRollback(e: Exception): Unit {
-        for(h in list){
+        for (h in list) {
             h.afterRollback(e)
         }
     }
     public func afterComplete(status: TransactionStatus) {
-        for(h in list){
+        for (h in list) {
             h.afterComplete(status)
         }
     }

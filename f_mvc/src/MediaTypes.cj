@@ -22,32 +22,39 @@ public class MediaTypes {
     public static func parse(mediaType: String) {
         tryParse(mediaType).getOrThrow {MediaTypeException("${mediaType} is an illegal MediaType string")}
     }
-    private static func registerFromBeanFactory(){
+    private static func registerFromBeanFactory() {
         register(BeanFactory.instance.getList<MediaType>())
     }
     private static func register(mediaTypes: ArrayList<MediaType>) {
-        for(m in mediaTypes){
+        for (m in mediaTypes) {
             register(m)
         }
     }
     public static func tryParse(mediaType: String): ?MediaType {
-        if (let Some(x) <- mediaTypes.get(mediaType)) {
-            x
-        } else {
-            let idx = mediaType.indexOf(";") ?? -1
-            let mt = if (idx > 0) {
-                mediaType[0..idx]
-            } else {
-                mediaType
-            }
-            if (let Some(x) <- mediaTypes.get(mt)) {
+        if (let Some(x) <- mediaTypes
+            .get(mediaType)) {
                 x
-            } else if(let list <- BeanFactory.instance.getList<MediaType>() && list.size > 0){
-                register(list)
-                tryParse(mediaType)
-            }else{
-                None<MediaType>
-            }
-        }?.make(mediaType)
+            } else {
+                let idx = mediaType
+                .indexOf(";") ?? -1
+                let mt = if (idx > 0) {
+                    mediaType[0..idx]
+                } else {
+                    mediaType
+                }
+                if (let Some(x) <- mediaTypes
+                .get(mt)) {
+                    x
+                } else if (let list <- BeanFactory
+                .instance
+                .getList<MediaType>() && list
+                .size > 0) {
+                    register(list)
+                    tryParse(mediaType)
+                } else {
+                    None<MediaType>
+                }
+            }?
+            .make(mediaType)
     }
 }

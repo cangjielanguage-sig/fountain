@@ -14,7 +14,7 @@ import std.env
 import std.process.Process
 import std.sync.Mutex
 import std.time.DateTime
-import stdx.log.* 
+import stdx.log.*
 import f_exception.*
 import f_log.exception.*
 public import f_log.*
@@ -49,4 +49,5 @@ private class ConsoleLoggerAppender <: AsyncLogger {
         }
     }
 }
+
 let _ = ConsoleLoggerAppender.register() //将本实现注册到LoggerAppenderCreator

@@ -87,19 +87,17 @@ public interface ExtendNonConcurrentMap<K, V> <: ExtendMap<K, V> where K <: Equa
         }
     }
     func removeIf(key: K, predicate: (V) -> Bool): ?V {
-        let view =entryView(key)
-        if(let Some(v) <- view.value && predicate(v)) {
+        let view = entryView(key)
+        if (let Some(v) <- view.value && predicate(v)) {
             view.value = None<V>
             v
-        }else{
+        } else {
             None<V>
         }
     }
 }
 
-extend<K, V> HashMap<K, V> <: ExtendNonConcurrentMap<K, V> where K <: Hashable & Equatable<K> {
-
-}
+extend<K, V> HashMap<K, V> <: ExtendNonConcurrentMap<K, V> where K <: Hashable & Equatable<K> {}
 
 extend<K, V> TreeMap<K, V> <: ExtendNonConcurrentMap<K, V> where K <: Comparable<K> {}
 
@@ -112,31 +110,31 @@ extend<K, V> ConcurrentHashMap<K, V> <: ExtendMap<K, V> where K <: Hashable & Eq
         }
     }
     public func addIfAbsent(key: K, fn: () -> V): V {
-        entryView(key){view => 
-            if(view.value.isNone()) {
+        entryView(key) {
+            view => if (view.value.isNone()) {
                 view.value = fn()
             }
         }.getOrThrow()
     }
     public func addIfPreset(key: K, fn: () -> V): ?V {
-        entryView(key) {view => 
-            if(view.value.isSome()) {
+        entryView(key) {
+            view => if (view.value.isSome()) {
                 view.value = fn()
             }
         }
     }
     public func removeIf(key: K, predicate: (V) -> Bool): ?V {
-        entryView(key) {view =>
-            if(let Some(v) <- view.value && predicate(v)) {
+        entryView(key) {
+            view => if (let Some(v) <- view.value && predicate(v)) {
                 view.value = None<V>
                 v
-            }else{
+            } else {
                 None<V>
             }
         }
     }
     public func removeIf(predicate: (K, V) -> Bool): Unit {
-        for((k, v) in this where predicate(k, v)) {
+        for ((k, v) in this where predicate(k, v)) {
             remove(k)
         }
     }

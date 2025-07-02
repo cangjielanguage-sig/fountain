@@ -15,7 +15,6 @@ import std.time.DateTime
 import f_log.output.UnixOutputStream
 import stdx.log.LogLevel
 
-
 private class UnixLoggerAppender <: AsyncLogger {
     private static const LOGGER_NAME = 'unix'
     private let path: String
@@ -37,7 +36,7 @@ private class UnixLoggerAppender <: AsyncLogger {
     private static func createSocket(path: String, writeTimeout: ?Duration, bufSize: ?Int64) {
         let sock = UnixSocket(path)
         sock.writeTimeout = writeTimeout
-        if(let Some(s) <- bufSize){
+        if (let Some(s) <- bufSize) {
             sock.sendBufferSize = s
         }
         sock
@@ -46,10 +45,11 @@ private class UnixLoggerAppender <: AsyncLogger {
         LoggerAppenderCreator.register(LOGGER_NAME) {
             name =>
             let appenders = LoggerConfig.getAppenders(LOGGER_NAME)
-            if(appenders.isEmpty()){
+            if (appenders.isEmpty()) {
                 [NoneLogAppender.instance]
-            }else{
-                Array<AbstractLogger>(appenders.size){i =>
+            } else {
+                Array<AbstractLogger>(appenders.size) {
+                    i =>
                     let appender = appenders[i]
                     var path = "/tmp/log/unix.log"
                     if (let Some(h) <- LoggerConfig.getString(appender, "path") && !h.isEmpty()) {
@@ -78,4 +78,5 @@ private class UnixLoggerAppender <: AsyncLogger {
         super.append(level, message, now, ex)
     }
 }
+
 let _ = UnixLoggerAppender.register()

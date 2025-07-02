@@ -27,6 +27,7 @@ public interface DurationCategory {
     prop weeks: TimeDuration
     prop week: TimeDuration
 }
+
 extend Int64 <: DurationCategory {
     public prop nanoseconds: TimeDuration {
         get() {

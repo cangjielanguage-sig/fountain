@@ -36,21 +36,23 @@ public class BeanFactory {
         synchronized(mutex) {
             if (let Some(existed) <- beans.addIfAbsent(manager.name, manager)) {
                 throw BeanException(
-                    'duplicate bean name ${manager.name}, existed bean type is ${existed.beanType}, current bean type is ${manager.beanType}'
-                )
+                    'duplicate bean name ${manager.name}, existed bean type is ${existed.beanType}, current bean type is ${manager.beanType}')
             }
             let typeQueue = LinkedList<TypeInfo>()
             typeQueue.addLast(beanType)
             typeQueue.addLast(TypeInfos.get<Any>())
             typeQueue.addLast(TypeInfos.get<Object>())
             while (let Some(klass) <- typeQueue.removeFirst()) {
-                if (let Some(set) <- beanTypeMap.get(klass)) {
+                if (let Some(set) <- beanTypeMap
+                    .get(klass)) {
                         set
                     } else {
                         let set = TreeSet<BeanManager>()
-                        beanTypeMap.add(klass, set)
+                        beanTypeMap
+                        .add(klass, set)
                         set
-                    }.add(manager)
+                    }
+                    .add(manager)
                 if (!klass.isSubtypeOf(TypeInfos.get<Annotation>())) {
                     for (annotation in klass.annotations) {
                         typeQueue.addLast(ClassTypeInfo.of(annotation))
@@ -76,7 +78,7 @@ public class BeanFactory {
     }
     public func afterRegistered() {
         this.registered.store(true)
-        if(!beans.isEmpty()){
+        if (!beans.isEmpty()) {
             check()
             initBeansIfNeed()
         }
@@ -101,7 +103,7 @@ public class BeanFactory {
         }
     }
     private func initBeansIfNeed() {
-        if(shouldInitBean){
+        if (shouldInitBean) {
             for ((_, m) in beans) {
                 m.initIfNeed()
             }
@@ -113,20 +115,20 @@ public class BeanFactory {
     private func matches<T>(m: BeanManager) {
         matches(TypeInfos.get<T>(), m)
     }
-    private func matches(beanType: TypeInfo, m: BeanManager){
+    private func matches(beanType: TypeInfo, m: BeanManager) {
         m.beanType.isSubtypeOf(beanType)
     }
     private func matches<T>(cond: StringCond, m: BeanManager) {
         matches(TypeInfos.get<T>(), cond, m)
     }
-    private func matches(beanType: TypeInfo, cond: StringCond, m: BeanManager){
+    private func matches(beanType: TypeInfo, cond: StringCond, m: BeanManager) {
         matches(beanType, m) && cond.on(m.name)
     }
     public func getFirst<T>(cond!: StringCond = IgnoreCond): ?T {
         getFirst<T>(TypeInfos.get<T>(), cond: cond)
     }
-    private func beanTypeIs<T>(beanType: TypeInfo){
-        if(!beanType.isSubtypeOf(TypeInfos.get<T>())){
+    private func beanTypeIs<T>(beanType: TypeInfo) {
+        if (!beanType.isSubtypeOf(TypeInfos.get<T>())) {
             throw BeanException('${beanType} is sub type of ${TypeInfos.get<T>()}')
         }
     }
@@ -150,7 +152,7 @@ public class BeanFactory {
         getAll<T>(TypeInfos.get<T>(), cond, put)
     }
     private func getAll<T>(beanType: TypeInfo, cond: StringCond, put: (BeanManager) -> Unit) {
-        for(m in iterator<T>(beanType, cond: cond)){
+        for (m in iterator<T>(beanType, cond: cond)) {
             put(m)
         }
     }
@@ -229,7 +231,7 @@ public class BeanFactory {
     public func get<T>(name: String): ?T {
         getFirst<T>(cond: Exactly(name))
     }
-    public func iterator<T>(cond!: StringCond = IgnoreCond): Iterator<BeanManager>{
+    public func iterator<T>(cond!: StringCond = IgnoreCond): Iterator<BeanManager> {
         iterator<T>(TypeInfos.get<T>(), cond: cond)
     }
     public func iterator<T>(beanType: TypeInfo, cond!: StringCond = IgnoreCond): Iterator<BeanManager> {
@@ -240,7 +242,7 @@ public class BeanFactory {
                 case _ => EmptyIterator<BeanManager>.INSTANCE()
             }
             case _ => match (beanTypeMap.get(beanType)) {
-                case Some(tree) => tree.iterator().filter{m => matches(beanType, cond, m)}
+                case Some(tree) => tree.iterator().filter {m => matches(beanType, cond, m)}
                 case _ => EmptyIterator<BeanManager>.INSTANCE()
             }
         }

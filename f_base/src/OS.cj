@@ -17,33 +17,32 @@ public enum OS <: Equatable<OS> & ToString & Hashable {
 
     public operator func ==(other: OS): Bool {
         match ((this, other)) {
-            case (Linux, Linux) | (Windows, Windows) | (macOS, macOS) | (HarmonyOS, HarmonyOS)
-             => true
+            case (Linux, Linux) | (Windows, Windows) | (macOS, macOS) | (HarmonyOS, HarmonyOS) => true
             case _ => false
         }
     }
     public prop isWindows: Bool {
-        get(){
+        get() {
             this == Windows
         }
     }
     public prop isLinux: Bool {
-        get(){
+        get() {
             this == Linux
         }
     }
     public prop isMacOS: Bool {
-        get(){
+        get() {
             this == macOS
         }
     }
     public prop isHarmonyOS: Bool {
-        get(){
+        get() {
             this == HarmonyOS
         }
     }
     public func toString(): String {
-        match(this){
+        match (this) {
             case Linux => "Linux"
             case Windows => "Windows"
             case macOS => "macOS"
@@ -51,7 +50,7 @@ public enum OS <: Equatable<OS> & ToString & Hashable {
         }
     }
     public static func valueOf(value: String): OS {
-        match(value.toAsciiLower()){
+        match (value.toAsciiLower()) {
             case "linux" => Linux
             case "windows" => Windows
             case "macos" => macOS
@@ -62,39 +61,45 @@ public enum OS <: Equatable<OS> & ToString & Hashable {
     public func hashCode(): Int64 {
         'fountain.base.OS.${this}'.hashCode()
     }
+
     @When[os == "Linux"]
     public static prop current: OS {
-        get(){
+        get() {
             Linux
         }
     }
+
     @When[os == "Windows"]
     public static prop current: OS {
-        get(){
+        get() {
             Windows
         }
     }
+
     @When[os == "macOS"]
     public static prop current: OS {
-        get(){
+        get() {
             macOS
         }
     }
+
     @When[os == "HarmonyOS"]
     public static prop current: OS {
-        get(){
+        get() {
             HarmonyOS
         }
     }
+
     @When[os != "Windows"]
     public prop nextLine: String {
-        get(){
+        get() {
             '\n'
         }
     }
+
     @When[os == "Windows"]
     public prop nextLine: String {
-        get(){
+        get() {
             '\r\n'
         }
     }

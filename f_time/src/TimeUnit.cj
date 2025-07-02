@@ -12,6 +12,7 @@ package f_time
 import std.convert.Parsable
 
 public type TU = TimeUnit
+
 public enum TimeUnit <: ToString & Parsable<TimeUnit> {
     | NANOSECOND
     | MICROSECOND
@@ -25,7 +26,7 @@ public enum TimeUnit <: ToString & Parsable<TimeUnit> {
     | YEAR
 
     public static func parse(value: String): TimeUnit {
-        tryParse(value).getOrThrow{IllegalArgumentException('${value} cannot be parsed to TimeUnit')}
+        tryParse(value).getOrThrow {IllegalArgumentException('${value} cannot be parsed to TimeUnit')}
     }
     public static func tryParse(value: String): Option<TimeUnit> {
         match (value.toAsciiUpper()) {
@@ -52,9 +53,9 @@ public enum TimeUnit <: ToString & Parsable<TimeUnit> {
      * 比如datetime是2023-10-11 12:31:32.568900，当前时间单位是minute，duration是1，返回值是2023-10-11 12:32:00.000000
      */
     public func next(datetime!: DateTime = DateTime.now(), duration!: Int64 = 1, toTrim!: Bool = true): DateTime {
-        let d = if(toTrim){
+        let d = if (toTrim) {
             trim(datetime)
-        }else{
+        } else {
             datetime
         }
         match (this) {

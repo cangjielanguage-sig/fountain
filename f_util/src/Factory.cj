@@ -21,6 +21,7 @@ public interface Producer<N, A, O> where N <: Hashable & Equatable<N> {
         throw IllegalAccessException("unimplemented")
     }
 }
+
 public class Factory<N, A, O> where N <: Hashable & Equatable<N> {
     private let producers = HashMap<N, Producer<N, A, O>>()
 

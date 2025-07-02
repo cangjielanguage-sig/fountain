@@ -5,8 +5,8 @@
     You may obtain a copy of Mulan PSL v2 at:
             http://license.coscl.org.cn/MulanPSL2
     THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-    See the Mulan PSL v2 for more details.  
-*/
+    See the Mulan PSL v2 for more details.
+ */
 package f_mvc
 
 public abstract class RequestMapping {
@@ -19,10 +19,11 @@ public abstract class RequestMapping {
         public let headers!: String = '',
         public let ignoreAuth!: Bool = false,
         public let ignorePrivilege!: Bool = false
-    ){}
+    ) {}
 }
+
 @Annotation[target: [MemberFunction]]
-public class PostMapping <: RequestMapping{
+public class PostMapping <: RequestMapping {
     public const init(
         path!: String,
         produces!: String = 'application/json',
@@ -31,15 +32,14 @@ public class PostMapping <: RequestMapping{
         headers!: String = '',
         ignoreAuth!: Bool = false,
         ignorePrivilege!: Bool = false
-    ){
-        super(path: path, method: RequestMethod.POST, 
-              produces: produces, consumes: consumes, 
-              params: params, headers: headers,
-              ignoreAuth: ignoreAuth, ignorePrivilege: ignorePrivilege)
+    ) {
+        super(path: path, method: RequestMethod.POST, produces: produces, consumes: consumes, params: params,
+            headers: headers, ignoreAuth: ignoreAuth, ignorePrivilege: ignorePrivilege)
     }
 }
+
 @Annotation[target: [MemberFunction]]
-public class GetMapping <: RequestMapping{
+public class GetMapping <: RequestMapping {
     public const init(
         path!: String,
         produces!: String = 'application/json',
@@ -48,15 +48,14 @@ public class GetMapping <: RequestMapping{
         headers!: String = '',
         ignoreAuth!: Bool = false,
         ignorePrivilege!: Bool = false
-    ){
-        super(path: path, method: RequestMethod.GET, 
-              produces: produces, consumes: consumes, 
-              params: params, headers: headers,
-              ignoreAuth: ignoreAuth, ignorePrivilege: ignorePrivilege)
+    ) {
+        super(path: path, method: RequestMethod.GET, produces: produces, consumes: consumes, params: params,
+            headers: headers, ignoreAuth: ignoreAuth, ignorePrivilege: ignorePrivilege)
     }
 }
+
 @Annotation[target: [MemberFunction]]
-public class PutMapping <: RequestMapping{
+public class PutMapping <: RequestMapping {
     public const init(
         path!: String,
         produces!: String = 'application/json',
@@ -65,15 +64,14 @@ public class PutMapping <: RequestMapping{
         headers!: String = '',
         ignoreAuth!: Bool = false,
         ignorePrivilege!: Bool = false
-    ){
-        super(path: path, method: RequestMethod.PUT, 
-              produces: produces, consumes: consumes, 
-              params: params, headers: headers,
-              ignoreAuth: ignoreAuth, ignorePrivilege: ignorePrivilege)
+    ) {
+        super(path: path, method: RequestMethod.PUT, produces: produces, consumes: consumes, params: params,
+            headers: headers, ignoreAuth: ignoreAuth, ignorePrivilege: ignorePrivilege)
     }
 }
+
 @Annotation[target: [MemberFunction]]
-public class DeleteMapping <: RequestMapping{
+public class DeleteMapping <: RequestMapping {
     public const init(
         path!: String,
         produces!: String = 'application/json',
@@ -82,15 +80,14 @@ public class DeleteMapping <: RequestMapping{
         headers!: String = '',
         ignoreAuth!: Bool = false,
         ignorePrivilege!: Bool = false
-    ){
-        super(path: path, method: RequestMethod.DELETE, 
-              produces: produces, consumes: consumes, 
-              params: params, headers: headers,
-              ignoreAuth: ignoreAuth, ignorePrivilege: ignorePrivilege)
+    ) {
+        super(path: path, method: RequestMethod.DELETE, produces: produces, consumes: consumes, params: params,
+            headers: headers, ignoreAuth: ignoreAuth, ignorePrivilege: ignorePrivilege)
     }
 }
+
 @Annotation[target: [MemberFunction]]
-public class PatchMapping <: RequestMapping{
+public class PatchMapping <: RequestMapping {
     public const init(
         path!: String,
         produces!: String = 'application/json',
@@ -99,10 +96,8 @@ public class PatchMapping <: RequestMapping{
         headers!: String = '',
         ignoreAuth!: Bool = false,
         ignorePrivilege!: Bool = false
-    ){
-        super(path: path, method: RequestMethod.PATCH, 
-              produces: produces, consumes: consumes, 
-              params: params, headers: headers,
-              ignoreAuth: ignoreAuth, ignorePrivilege: ignorePrivilege)
+    ) {
+        super(path: path, method: RequestMethod.PATCH, produces: produces, consumes: consumes, params: params,
+            headers: headers, ignoreAuth: ignoreAuth, ignorePrivilege: ignorePrivilege)
     }
 }

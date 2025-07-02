@@ -6,7 +6,7 @@
             http://license.coscl.org.cn/MulanPSL2
     THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
     See the Mulan PSL v2 for more details.
-*/
+ */
 package f_concurrent
 
 /**
@@ -14,29 +14,29 @@ package f_concurrent
  */
 public class TokenBucketRateLimiter<T> <: RateLimiter<T> {
     private let tokens: LinkedBlockingQueue<Unit>
-    public init(tokens!: Int64, timeout!: Duration, populationPeriod!: Duration){
+    public init(tokens!: Int64, timeout!: Duration, populationPeriod!: Duration) {
         super(timeout)
-        if(tokens <= 0 || timeout <= Duration.Zero || populationPeriod <= Duration.Zero){
+        if (tokens <= 0 || timeout <= Duration.Zero || populationPeriod <= Duration.Zero) {
             throw RateLimiterException('all parameters must be larger than zero')
         }
         this.tokens = LinkedBlockingQueue<Unit>(tokens)
-        let timer = Timer.after(Duration.Zero){
+        let timer = Timer.after(Duration.Zero) {
             var end: MonoTime
             var next: Duration
-            do{
+            do {
                 end = MonoTime.now() + populationPeriod
                 var i = 0
-                while(i < tokens && this.tokens.size < tokens){
+                while (i < tokens && this.tokens.size < tokens) {
                     this.tokens.add(())
                     i++
                 }
                 next = end - MonoTime.now()
-            }while(next <= Duration.Zero)
+            } while (next <= Duration.Zero)
             next
         }
         atExit(timer.cancel)
     }
-    public func exec(default: ?T, task: () -> ?T): ?T{
+    public func exec(default: ?T, task: () -> ?T): ?T {
         if (let Some(_) <- tokens.remove(timeout) && let Some(x) <- task()) {
             x
         } else {

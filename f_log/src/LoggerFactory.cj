@@ -12,12 +12,11 @@ package f_log
 import std.collection.concurrent.ConcurrentHashMap
 import std.reflect.TypeInfo
 import std.sync.Mutex
-
 import stdx.log.Attr
-
 import f_base.*
 
 internal let globalAttrMap = ConcurrentHashMap<String, Array<Attr>>()
+
 public class LoggerFactory {
     private static let mutex = Mutex()
     private static let loggers = ConcurrentHashMap<String, LoggerWrapper>()
@@ -25,16 +24,16 @@ public class LoggerFactory {
     private init() {}
 
     public static func getLogger(name: String, attrs: Array<Attr>): AbstractLogger {
-        if(!attrs.isEmpty()){
+        if (!attrs.isEmpty()) {
             globalAttrMap[name] = attrs
         }
-        if(let Some(x) <- loggers.get(name)){
+        if (let Some(x) <- loggers.get(name)) {
             x
-        }else{
-            synchronized(mutex){
-                if(let Some(x) <- loggers.get(name)){
+        } else {
+            synchronized(mutex) {
+                if (let Some(x) <- loggers.get(name)) {
                     x
-                }else{
+                } else {
                     let wrapper = LoggerWrapper(name)
                     loggers[name] = wrapper
                     wrapper
@@ -42,14 +41,14 @@ public class LoggerFactory {
             }
         }
     }
-    public static func getLogger<O>(attrs: Array<Attr>): AbstractLogger{
+    public static func getLogger<O>(attrs: Array<Attr>): AbstractLogger {
         getLogger(TypeInfos.get<O>(), attrs)
     }
     public static func getLogger(typeInfo: TypeInfo, attrs: Array<Attr>): AbstractLogger {
         getLogger(typeInfo.qualifiedName, attrs)
     }
-    public static func refresh(){
-        for((_, w) in loggers){
+    public static func refresh() {
+        for ((_, w) in loggers) {
             w.refresh()
         }
     }

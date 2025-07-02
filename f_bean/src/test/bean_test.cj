@@ -5,17 +5,17 @@
     You may obtain a copy of Mulan PSL v2 at:
             http://license.coscl.org.cn/MulanPSL2
     THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-    See the Mulan PSL v2 for more details.  
-*/
+    See the Mulan PSL v2 for more details.
+ */
 package f_bean.test
 
 import std.unittest.*
 import std.unittest.testmacro.*
 
 @Test
-public class BeanTest{
+public class BeanTest {
     @TestCase
-    public func test(){
+    public func test() {
         let b = BeanFactory.instance.getFirst<B>()
         println(b)
     }

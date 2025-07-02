@@ -161,12 +161,7 @@ public let `unit_literal` = quote($(Token(UNIT_LITERAL))) /**  "()))" */
 public let `dollar_identifier` = quote($(Token(DOLLAR_IDENTIFIER))) /**  e.g. "$x" */
 public let `macros` = quote($(Token(ANNOTATION))) /**  e.g. "@when" */
 public let `illegal` = quote($(Token(ILLEGAL)))
-
 public let `any` = quote($(Token(IDENTIFIER, "Any")))
 public let `array` = quote($(Token(IDENTIFIER, "Array")))
 public let `empty_tokens` = quote()
 public let `empty_string` = quote($(Token(STRING_LITERAL, String.empty)))
-
-
-
-

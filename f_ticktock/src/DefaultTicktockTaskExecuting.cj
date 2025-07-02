@@ -20,6 +20,6 @@ class DefaultTicktockTaskExecuting {
     }
 
     static func reset(name: String, stamp: Int64): Unit {
-        executingMap.removeIf(name){v => v == stamp}
+        executingMap.removeIf(name) {v => v == stamp}
     }
 }

@@ -90,7 +90,7 @@ public class LogPattern <: LogPart {
     }
 
     public func generate(name: String, level: LogLevel, message: ToString, current: DateTime, writer: LogWriter): Unit {
-        for(p in patterns){
+        for (p in patterns) {
             p.generate(name, level, message, current, writer)
         }
         writer.writeString(OS.current.nextLine)

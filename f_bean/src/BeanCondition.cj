@@ -14,13 +14,13 @@ package f_bean
  */
 public interface BeanCondition {
     func on(factory: BeanFactory): Bool
-    const operator func &(right: BeanCondition): BeanCondition{
+    operator const func &(right: BeanCondition): BeanCondition {
         AndCond(this, right)
     }
-    const operator func |(right: BeanCondition): BeanCondition{
+    operator const func |(right: BeanCondition): BeanCondition {
         OrCond(this, right)
     }
-    const operator func !() : BeanCondition{
+    operator const func !(): BeanCondition {
         NotCond(this)
     }
 }

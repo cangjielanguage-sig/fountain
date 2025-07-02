@@ -21,36 +21,38 @@ import f_exception.IllegalAccessException
  */
 public interface Resposibility<C, A, R> {
     /**
-      * 检查指定条件是否满足执行当前策略的要求
-      */
+     * 检查指定条件是否满足执行当前策略的要求
+     */
     func check(condition: C): Bool
 
     /**
-      * 执行当前策略
-      */
+     * 执行当前策略
+     */
     func execute(arg: A): R
 }
+
 public interface ValidationResposibility<C, A> <: Resposibility<C, A, Unit> {
     func execute(arg: A): Unit {}
 }
+
 public class ResposibilityChain<C, A, R> {
     private let resposibilities = ArrayList<Resposibility<C, A, R>>()
     public init() {}
     public init(resposibilities: Iterable<Resposibility<C, A, R>>) {
-        for(r in resposibilities){
+        for (r in resposibilities) {
             this.resposibilities.add(r)
         }
     }
 
     /**
-      * 注册一个策略
-      */
+     * 注册一个策略
+     */
     public func register(resposibility: Resposibility<C, A, R>): ResposibilityChain<C, A, R> {
         resposibilities.add(resposibility)
         this
     }
     public func register<S>(resposibilities: Iterable<S>): Unit where S <: Resposibility<C, A, R> {
-        for(r in resposibilities){
+        for (r in resposibilities) {
             this.resposibilities.add(r)
         }
     }

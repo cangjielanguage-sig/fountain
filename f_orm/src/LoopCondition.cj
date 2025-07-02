@@ -5,8 +5,8 @@
     You may obtain a copy of Mulan PSL v2 at:
             http://license.coscl.org.cn/MulanPSL2
     THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-    See the Mulan PSL v2 for more details.  
-*/
+    See the Mulan PSL v2 for more details.
+ */
 package f_orm
 
 import f_base.StringGenerator
@@ -20,9 +20,11 @@ public class LoopCondition<I, T> where I <: Iterable<T> {
     private var _delimiter = ''
     private var _argInSql = false
     private var _condition: (T, Int64) -> Bool = {v, i => true}
-    private var _partial: (T, Int64) -> (String, Any) = {v, i => throw ORMException('partial for loop is not specified')}
+    private var _partial: (T, Int64) -> (String, Any) = {
+        v, i => throw ORMException('partial for loop is not specified')
+    }
 
-    LoopCondition(private let values: I, private let executor: SqlExecutor){}
+    LoopCondition(private let values: I, private let executor: SqlExecutor) {}
 
     public func wrap(left: String, right: String): LoopCondition<I, T> {
         _wrapLeft = left
@@ -55,7 +57,7 @@ public class LoopCondition<I, T> where I <: Iterable<T> {
         this
     }
     public prop argInSql: LoopCondition<I, T> {
-        get(){
+        get() {
             _argInSql = true
             this
         }
@@ -75,7 +77,7 @@ public class LoopCondition<I, T> where I <: Iterable<T> {
         this.partial(callee)
     }
     public func done(): String {
-        let sqlFrag = Condition.trim(prefix: _trimLeft, suffix: _trimRight){
+        let sqlFrag = Condition.trim(prefix: _trimLeft, suffix: _trimRight) {
             let builder = StringGenerator()
             var i = 0
             for (v in values where _condition(v, i)) {
@@ -86,14 +88,14 @@ public class LoopCondition<I, T> where I <: Iterable<T> {
                 }
                 let (frag, arg) = _partial(v, i)
                 builder.append(frag)
-                if(_argInSql) {
-                    match(arg){
+                if (_argInSql) {
+                    match (arg) {
                         case x: ToString => builder.append(x)
                         case x =>
                             executor.add(arg)
                             builder.append('?')
                     }
-                }else{
+                } else {
                     executor.add(arg)
                     builder.append('?')
                 }

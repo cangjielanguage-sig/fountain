@@ -81,8 +81,8 @@ public struct DataToString <: ToString {
         builder.append('${name}: ${value}; ')
     }
     public func append<T>(name: String, value: ?T): Unit {
-        match(value) {
-            case Some(x) => match(x){
+        match (value) {
+            case Some(x) => match (x) {
                 case v: ToString => builder.append('${name}: ${v}; ')
                 case v: Object => append(name, v)
                 case _ => builder.append('${name}: _; ')
@@ -124,7 +124,7 @@ public struct DataToString <: ToString {
         let c: Collection<T> = value
         append(name, c)
     }
-    
+
     public func append<T>(name: String, value: ArrayList<T>): Unit {
         let c: Collection<T> = value
         append(name, c)
@@ -186,7 +186,7 @@ public struct DataToString <: ToString {
         let m: Map<K, V> = value
         append<K, V>(name, m)
     }
-    
+
     public func append<K, V>(name: String, value: ConcurrentHashMap<K, V>): Unit where K <: Hashable & Equatable<K> {
         builder.append('${name}: ')
         if (let x: ToString <- value) {

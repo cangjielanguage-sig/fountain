@@ -28,26 +28,25 @@ public class LeakingBucketRateLimiter<T> <: RateLimiter<T> {
         leakingDuration!: Duration
     ) {
         super(timeout)
-        if(leakingDuration <= Duration.Zero || leakingPerDuration <= 0 || maxWaitings <= 0){
+        if (leakingDuration <= Duration.Zero || leakingPerDuration <= 0 || maxWaitings <= 0) {
             throw RateLimiterException('all parameters must be larger than zero')
         }
         this.bucket = ArrayBlockingQueue<(MonoTime, SyncCounter)>(maxWaitings)
-        let timer = Timer.after(Duration.Zero){
+        let timer = Timer.after(Duration.Zero) {
             leaked.store(0)
             var end: MonoTime
             var next: Duration
-            do{
+            do {
                 end = MonoTime.now() + leakingDuration
-                while (leaked.load() < leakingPerDuration && 
-                    let remainder <- end - MonoTime.now() && remainder > Duration.Zero &&
-                    let Some((d, c)) <- bucket.remove(remainder)) {
-                    if(MonoTime.now() - d < timeout){//这个条件不能合并到while循环条件，这个条件不论结果都得继续下次循环
+                while (leaked.load() < leakingPerDuration && let remainder <- end - MonoTime.now() && remainder > Duration
+                        .Zero && let Some((d, c)) <- bucket.remove(remainder)) {
+                    if (MonoTime.now() - d < timeout) { //这个条件不能合并到while循环条件，这个条件不论结果都得继续下次循环
                         c.dec()
                         leaked.fetchAdd(1)
                     }
                 }
                 next = end - MonoTime.now()
-            }while(next <= Duration.Zero)
+            } while (next <= Duration.Zero)
             next
         }
         atExit(timer.cancel)
@@ -55,12 +54,10 @@ public class LeakingBucketRateLimiter<T> <: RateLimiter<T> {
     public func exec(default: ?T, task: () -> ?T): ?T {
         let tag = SyncCounter(1)
         let start = MonoTime.now()
-        if (bucket.add((start, tag), timeout) && 
-            let _ <- tag.waitUntilZero(timeout: start + timeout - MonoTime.now()) && 
-            tag.count <= 0 &&
-            let Some(x) <- task()) {
+        if (bucket.add((start, tag), timeout) && let _ <- tag.waitUntilZero(timeout: start + timeout - MonoTime.now()) &&
+            tag.count <= 0 && let Some(x) <- task()) {
             x
-        }else {
+        } else {
             default
         }
     }

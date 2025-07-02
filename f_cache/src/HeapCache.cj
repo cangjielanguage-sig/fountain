@@ -34,8 +34,7 @@ public class HeapCache<V> where V <: Object {
     ) {
         if (maxLife < Duration.Zero || maxSize <= 0 || concurrencyLevel <= 0 || checkDuration <= Duration.Zero) {
             throw IllegalArgumentException(
-                "maxLife must not be less than zero. maxSize and concurrencyLevel must be greater than zero. checkDuration must be greater than Duration.Zero. however current are ${maxLife}, ${maxSize}, ${concurrencyLevel}, ${checkDuration}"
-            )
+                "maxLife must not be less than zero. maxSize and concurrencyLevel must be greater than zero. checkDuration must be greater than Duration.Zero. however current are ${maxLife}, ${maxSize}, ${concurrencyLevel}, ${checkDuration}")
         }
         this.store = ConcHashMap<Priority<V>>.create(concurrencyLevel: concurrencyLevel)
         startTimer()
@@ -70,15 +69,15 @@ public class HeapCache<V> where V <: Object {
         }
     }
     private func checkTimeout(evictionQueue: LinkedBlockingQueue<(String, V)>): Unit {
-        removeIf{k, p =>
-            if(alive.load()){
-                if(evicated(p)){
+        removeIf {
+            k, p => if (alive.load()) {
+                if (evicated(p)) {
                     evictionQueue.add((k, p.load()))
                     true
-                }else{
+                } else {
                     false
                 }
-            }else{
+            } else {
                 return true
             }
         }
@@ -128,15 +127,15 @@ public class HeapCache<V> where V <: Object {
         tops.clear()
     }
     private func evicated(p: Priority<V>): Bool {
-        DateTime.now() - if(p.once){
+        DateTime.now() - if (p.once) {
             p.birthTime
-        }else{
+        } else {
             p.lastUsedTime
         } >= p.maxLife
     }
 
     public func get(key: String): Option<V> {
-        match(store.get(key)){
+        match (store.get(key)) {
             case Some(p) where !evicated(p) => p.load()
             case _ => None<V>
         }
@@ -220,7 +219,7 @@ public class HeapCache<V> where V <: Object {
         store.remove(key)?.load()
     }
     public func removeIf(predicate: (String, V) -> Bool): Unit {
-        removeIf{k: String, p: Priority<V> => predicate(k, p.load())}
+        removeIf {k: String, p: Priority<V> => predicate(k, p.load())}
     }
     private func removeIf(predicate: (String, Priority<V>) -> Bool): Unit {
         for ((k, p) in store where predicate(k, p)) {
@@ -232,7 +231,7 @@ public class HeapCache<V> where V <: Object {
             store.size
         }
     }
-    public func clear(){
+    public func clear() {
         store.clear()
     }
     public func destroy(): Unit {

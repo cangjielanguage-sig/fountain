@@ -5,8 +5,8 @@
    You may obtain a copy of Mulan PSL v2 at:
             http://license.coscl.org.cn/MulanPSL2
    THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-   See the Mulan PSL v2 for more details.  
-*/
+   See the Mulan PSL v2 for more details.
+ */
 macro package f_mvc.macros
 
 import std.ast.*
@@ -21,12 +21,13 @@ public macro Controller(input: Tokens): Tokens {
         $tokens
     )
 }
+
 func generate(input: Tokens): Tokens {
     var tokens = `empty_tokens`
     let decl = ClassDecl(input)
     let klass = decl.identifier
-    for(d in decl.body.decls){
-        if(let m: MacroExpandDecl <- d && let f: FuncDecl <- extract(m) && !isStatic(f) && isPublic(f)){
+    for (d in decl.body.decls) {
+        if (let m: MacroExpandDecl <- d && let f: FuncDecl <- extract(m) && !isStatic(f) && isPublic(f)) {
             let (argTypes, argExprs, args) = generateArgs(f)
             tokens += quote(
                 private let _ = {=>
@@ -39,26 +40,28 @@ func generate(input: Tokens): Tokens {
                         }
                     }
                 }()
-            ) + `nl`
+            ) +
+                `nl`
         }
     }
     tokens
 }
+
 func generateArgs(decl: FuncDecl): (Tokens, Tokens, Tokens) {
     var argTypes = `lsquare`
     var exprs = `empty_tokens`
     var args = `lsquare`
-    for(p in decl.funcParams){
+    for (p in decl.funcParams) {
         let pname = p.identifier.value
         let ptype = p.paramType
-        let defaultValue = try{
+        let defaultValue = try {
             p.expr.toTokens()
-        }catch(_){
+        } catch (_) {
             `empty_tokens`
         }
-        let default = if(defaultValue.size > 0){
+        let default = if (defaultValue.size > 0) {
             quote(, $defaultValue)
-        }else{
+        } else {
             `empty_tokens`
         }
         exprs += quote(
@@ -68,25 +71,26 @@ func generateArgs(decl: FuncDecl): (Tokens, Tokens, Tokens) {
             }else{
                 meta.extract<$ptype>(ctx, $pname $default)
             }
-        ) + `nl`
-        let named = try{
-            if(let NOT <- p.not.kind){
+        ) +
+            `nl`
+        let named = try {
+            if (let NOT <- p.not.kind) {
                 true
-            }else{
+            } else {
                 false
             }
-        }catch(_){
+        } catch (_) {
             false
         }
-        if(args.size > 0){
+        if (args.size > 0) {
             args += `comma`
         }
-        args += if(named){
+        args += if (named) {
             quote($(p.identifier): $(p.identifier))
-        }else{
+        } else {
             quote($(p.identifier))
         }
-        if(argTypes.size > 1){
+        if (argTypes.size > 1) {
             argTypes += `comma`
         }
         argTypes += quote(

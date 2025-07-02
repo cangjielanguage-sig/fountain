@@ -19,6 +19,7 @@ public class TicktockLauncher_test {
         launcher.shutdown()
     }
 }
+
 class CronTicktockTaskTest <: CronTicktockTask {
     public prop cron: String {
         get() {

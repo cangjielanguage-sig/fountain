@@ -31,16 +31,16 @@ public interface ExtendRegex {
     func doReplace(input: String, replacement!: String, index!: Int64): String
     func doReplaceAll(input: String, replacement!: String, index!: Int64): String
     func doReplaceAll(input: String, replacement!: (MatchData) -> ?String, index!: Int64): String
-
 }
+
 extend Regex <: ExtendRegex {
-    public static prop INTEGER: Regex{
-        get(){
+    public static prop INTEGER: Regex {
+        get() {
             #"^\d+$"#.regex(solid: true)
         }
     }
-    public static prop DECIMAL: Regex{
-        get(){
+    public static prop DECIMAL: Regex {
+        get() {
             #"^\d+\.\d+$"#.regex(solid: true)
         }
     }
@@ -49,30 +49,35 @@ extend Regex <: ExtendRegex {
             #"^\d+(\.\d*)?$"#.regex(solid: true)
         }
     }
-    public static prop EMAIL: Regex{
-        get(){
+    public static prop EMAIL: Regex {
+        get() {
             #"^[\w-]+@[\w-]+(\.[\w-]+)+$"#.regex(solid: true)
         }
     }
     public static prop DURATION: Regex {
-        get(){
+        get() {
             #"^-?((\d+)(d|h|m|s|ms|us|ns))+$"#.regex(solid: true)
         }
     }
     public static prop IDENTIFIER: Regex {
-        get(){
+        get() {
             #"^_*[a-zA-Z]+\w*$"#.regex(solid: true)
         }
     }
     public static prop BASE64: Regex {
-        get(){
+        get() {
             '^([+a-zA-Z0-9/]{4})+([+a-zA-Z0-9/]{2}==|[+a-zA-Z0-9/]{3}=)?$'.regex(solid: true)
         }
     }
     public static func wildcard(wildcard: String): Regex {
-        '^${wildcard}$'.replace('.', '\\.').replace('\\.\\.', '(\\.\\w+)#\\.')
-        .replace('\\.*\\.', '\\.\\w+\\.').replace('*', '\\w*').replace('?', '\\w?')
-        .replace('(\\.\\w+)#\\.', '(\\.\\w+)*\\.').regex()
+        '^${wildcard}$'
+            .replace('.', '\\.')
+            .replace('\\.\\.', '(\\.\\w+)#\\.')
+            .replace('\\.*\\.', '\\.\\w+\\.')
+            .replace('*', '\\w*')
+            .replace('?', '\\w?')
+            .replace('(\\.\\w+)#\\.', '(\\.\\w+)*\\.')
+            .regex()
     }
 
     public static func builder(): RegexBuilder {
@@ -85,56 +90,57 @@ extend Regex <: ExtendRegex {
     }
 
     public func doReplace(input: String, replacement!: String = '', index!: Int64 = 0): String {
-        let sub = input[index ..]
-        if(let Some(md) <- this.find(sub, group: true)){
+        let sub = input[index..]
+        if (let Some(md) <- this.find(sub, group: true)) {
             let rr = RegexReplacement(replacement)
             let pos = md.matchPosition()
-            return '${input[0 .. index]}${sub[0 .. pos.start]}${rr.format(md)}${sub[pos.end ..]}'
+            return '${input[0..index]}${sub[0..pos.start]}${rr.format(md)}${sub[pos.end..]}'
         }
         input
     }
     public func doReplaceAll(input: String, replacement!: String = '', index!: Int64 = 0): String {
-        let sub = input[index ..]
+        let sub = input[index..]
         let mds = this.findAll(sub, group: true)
-        if(mds.size > 0){
+        if (mds.size > 0) {
             let rr = RegexReplacement(replacement)
             let builder = StringGenerator()
-            builder.append(input[0 .. index])
+            builder.append(input[0..index])
             var prevEnd = 0
-            for(md in mds){
+            for (md in mds) {
                 let pos = md.matchPosition()
-                builder.append(sub[prevEnd .. pos.start])
+                builder.append(sub[prevEnd..pos.start])
                 builder.append(rr.format(md))
                 prevEnd = pos.end
             }
-            builder.append(sub[prevEnd ..])
+            builder.append(sub[prevEnd..])
             return builder.toString()
         }
         input
     }
-    public func doReplaceAll(input: String, replacement!: (MatchData) -> ?String = {md => ''}, index!: Int64 = 0){
-        let sub = input[index ..]
+    public func doReplaceAll(input: String, replacement!: (MatchData) -> ?String = {md => ''}, index!: Int64 = 0) {
+        let sub = input[index..]
         let mds = this.findAll(sub, group: true)
-        if(mds.size > 0){
+        if (mds.size > 0) {
             let builder = StringGenerator()
-            builder.append(input[0 .. index])
+            builder.append(input[0..index])
             var prevEnd = 0
-            for(md in mds){
+            for (md in mds) {
                 let pos = md.matchPosition()
-                builder.append(sub[prevEnd .. pos.start])
-                builder.append(if(let Some(s) <- replacement(md)){
+                builder.append(sub[prevEnd..pos.start])
+                builder.append(if (let Some(s) <- replacement(md)) {
                     s
-                }else{
+                } else {
                     md.matchString()
                 })
                 prevEnd = pos.end
             }
-            builder.append(sub[prevEnd ..])
+            builder.append(sub[prevEnd..])
             return builder.toString()
         }
         input
     }
 }
+
 public struct RegexReplacement {
     private let parts = ArrayList<Any>()
     public init(replacement: String) {
@@ -169,7 +175,7 @@ public struct RegexReplacement {
     }
     func format(data: MatchData): String {
         let builder = StringGenerator()
-        for (i in 0 .. parts.size) {
+        for (i in 0..parts.size) {
             match (parts[i]) {
                 case x: String => builder.append(x)
                 case x: Int64 => builder.append(data.matchString(x))

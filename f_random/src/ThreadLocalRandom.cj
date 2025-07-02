@@ -6,7 +6,7 @@
             http://license.coscl.org.cn/MulanPSL2
     THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
     See the Mulan PSL v2 for more details.
-*/
+ */
 package f_random
 
 import f_base.ExtendThreadLocal
@@ -16,10 +16,10 @@ import f_base.ExtendThreadLocal
  */
 public class ThreadLocalRandom {
     private static let rand = ThreadLocal<SecureRandom>()
-    private init(){}
+    private init() {}
     public static prop current: SecureRandom {
-        get(){
-            rand.getOrCompute{SecureRandom()}
+        get() {
+            rand.getOrCompute {SecureRandom()}
         }
     }
 }

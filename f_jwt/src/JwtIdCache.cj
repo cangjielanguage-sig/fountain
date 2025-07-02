@@ -5,8 +5,8 @@
     You may obtain a copy of Mulan PSL v2 at:
             http://license.coscl.org.cn/MulanPSL2
     THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-    See the Mulan PSL v2 for more details.  
-*/
+    See the Mulan PSL v2 for more details.
+ */
 package f_jwt
 
 import std.time.DateTime
@@ -17,10 +17,11 @@ public interface JwtIdCache<T> where T <: Equatable<T> {
     func contains(id: T): Bool
     func remove(id: T): Unit
 }
+
 public class NoneJwtIdCache<T> <: JwtIdCache<T> where T <: Equatable<T> {
-    public func put(id: T, expire: Duration): Unit{}
-    public func put(id: T, expireAt: DateTime): Unit{}
-    public func contains(id: T): Bool{
+    public func put(id: T, expire: Duration): Unit {}
+    public func put(id: T, expireAt: DateTime): Unit {}
+    public func contains(id: T): Bool {
         false
     }
     public func remove(id: T): Unit {}

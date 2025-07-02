@@ -25,11 +25,11 @@ public class EventBus {
     private static let THREAD_LOCAL_RANDOM = ThreadLocal<SecureRandom>()
     private let mutex = Mutex()
     private let monitor = Mutex()
-    private let condition = synchronized(monitor){
+    private let condition = synchronized(monitor) {
         monitor.condition()
     }
     private var workers: Array<Worker> = []
-    
+
     private var maxQueueSize = (-1, -1) // (maxQueueSize, longestQueueIndex)
     private let queueMutex = Mutex()
     private let seizeQueue: LinkedBlockingQueue<Int64>
@@ -55,7 +55,7 @@ public class EventBus {
         doArrange = genDoArrange(maxWaitingJobPerWorker, fullJobQueueStrategy)
         seize()
     }
-    private func seize(){
+    private func seize() {
         spawn {
             var (prevMaxQueueSize, prevMaxQueueIndex): (Int64, Int64) = (-1, -1)
             while (true) {
@@ -64,19 +64,21 @@ public class EventBus {
                     this.maxQueueSize
                 }
                 var i = 0
-                while((prevMaxQueueIndex == maxQueueIndex || prevMaxQueueSize > maxQueueSize) && i < this.workers.size){
-                    if(i == maxQueueIndex){
+                while ((prevMaxQueueIndex == maxQueueIndex || prevMaxQueueSize > maxQueueSize) && i < this.workers.size) {
+                    if (i == maxQueueIndex) {
                         i++
                         continue
                     }
-                    if(let s <- this.workers[i].waitingJobSize && maxQueueSize < s){
+                    if (let s <- this.workers[i].waitingJobSize && maxQueueSize < s) {
                         (maxQueueSize, maxQueueIndex) = (s, i)
                         break
                     }
                     i++
                 }
                 (prevMaxQueueSize, prevMaxQueueIndex) = (maxQueueSize, maxQueueIndex)
-                if (maxQueueSize > 0 && maxQueueIndex != sizedBy && let Some(e) <- this.workers[maxQueueIndex].tryRemove()) {
+                if (maxQueueSize > 0 && maxQueueIndex != sizedBy && let Some(e) <- this
+                    .workers[maxQueueIndex]
+                    .tryRemove()) {
                     e.workerId = sizedBy
                     this.workers[sizedBy].arrange(e)
                     putQueueSize(sizedBy)
@@ -265,8 +267,8 @@ public class EventBus {
     private func discard(workerId: Int64) {
         workers[workerId].discard()
     }
-    
-    func putQueueSize(workerId: Int64) {//分别在增加减少Worker任务队列的时候调用了此函数
+
+    func putQueueSize(workerId: Int64) { //分别在增加减少Worker任务队列的时候调用了此函数
         synchronized(queueMutex) {
             let waitingJobSize = workers[workerId].waitingJobSize
             if (waitingJobSize > maxQueueSize[0] || workerId == maxQueueSize[1]) {

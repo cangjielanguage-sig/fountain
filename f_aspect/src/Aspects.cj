@@ -21,22 +21,25 @@ public class Aspects {
     private static let aspects = ConcurrentHashMap<QualifiedFuncInfo, (Array<Any>) -> Any>()
     private static let mutex = Mutex()
     private static func doProceed<T>(funcInfo: InvocationFuncInfo, fn: (Array<Any>) -> T): T {
-        let r = if(let Some(f) <- aspects.get(funcInfo.qualifiedFuncInfo)){
+        let r = if (let Some(f) <- aspects.get(funcInfo.qualifiedFuncInfo)) {
             f
-        }else{
-            synchronized(mutex){
-                if(let Some(f) <- aspects.get(funcInfo.qualifiedFuncInfo)){
+        } else {
+            synchronized(mutex) {
+                if (let Some(f) <- aspects.get(funcInfo.qualifiedFuncInfo)) {
                     f
-                }else{
+                } else {
                     let list = ArrayList<String>()
-                    for(m in BeanFactory.instance.iterator<Aspect>() 
-                        where m.beanType.findAnnotation<AspectRoute>()?.matches(funcInfo) ?? false){
+                    for (m in BeanFactory.instance.iterator<Aspect>() where m
+                        .beanType
+                        .findAnnotation<AspectRoute>()?
+                        .matches(funcInfo) ?? false) {
                         list.add(m.name)
                     }
                     var f: (Array<Any>) -> Any = {args => fn(args)}
-                    for(i in list.size - 1 ..= 0: -1){
+                    for (i in list.size - 1..=0 : -1) {
                         let aspected = f
-                        f = {args => 
+                        f = {
+                            args =>
                             funcInfo.setArgs(args)
                             BeanFactory.instance.get<Aspect>(list[i]).getOrThrow().proceed(funcInfo, aspected)
                         }
@@ -46,7 +49,7 @@ public class Aspects {
                 }
             }
         }(funcInfo.args)
-        match(r){
+        match (r) {
             case x: T => x
             case _ => throw TypeCastException('Type of ${TypeInfo.of(r)} does not match ${TypeInfos.get<T>()}')
         }
@@ -55,7 +58,7 @@ public class Aspects {
     /**本函数不是给开发者用的，是给工具库生成切点使用的*/
     public static func proceed<T>(funcInfo: InvocationFuncInfo, fn: (Array<Any>) -> T): T {
         func setRecursiveSerial() {
-            try {//避免递归调用切点函数时切面也被重复执行
+            try { //避免递归调用切点函数时切面也被重复执行
                 recursiveInvocationFlag.set(true)
                 doProceed<T>(funcInfo, fn)
             } finally {

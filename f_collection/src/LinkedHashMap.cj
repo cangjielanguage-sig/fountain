@@ -10,7 +10,6 @@
 package f_collection
 
 import std.collection.{HashMap, Map, EquatableCollection, MapEntryView, ArrayList}
-
 import f_exception.UnreachableException
 
 public class LinkedHashMap<K, V> <: Map<K, V> where K <: Hashable & Equatable<K> {
@@ -46,7 +45,7 @@ public class LinkedHashMap<K, V> <: Map<K, V> where K <: Hashable & Equatable<K>
         map = HashMap<K, ValueNode<(K, V)>>(size)
         this.size_ = size
         this.max = false
-        for(i in 0..size) {
+        for (i in 0..size) {
             let (k, v) = initElement(i)
             add(k, v)
         }
@@ -76,8 +75,8 @@ public class LinkedHashMap<K, V> <: Map<K, V> where K <: Hashable & Equatable<K>
      */
     public func toArray(): Array<(K, V)> {
         let itr = iterator()
-        Array<(K, V)>(size){_ =>
-            itr.next().getOrThrow()
+        Array<(K, V)>(size) {
+            _ => itr.next().getOrThrow()
         }
     }
 
@@ -316,10 +315,11 @@ public class LinkedHashMap<K, V> <: Map<K, V> where K <: Hashable & Equatable<K>
         return MapValues<K, V>(this)
     }
 }
+
 public class LinkedHashMapEntryView<K, V> <: MapEntryView<K, V> where K <: Hashable & Equatable<K> {
     public LinkedHashMapEntryView(private let k: K, private let map: LinkedHashMap<K, V>) {}
     public prop key: K {
-        get(){
+        get() {
             k
         }
     }
@@ -327,8 +327,8 @@ public class LinkedHashMapEntryView<K, V> <: MapEntryView<K, V> where K <: Hasha
         get() {
             map.get(k)
         }
-        set(value){
-            match(value){
+        set(value) {
+            match (value) {
                 case Some(v) => map[k] = v
                 case _ => map.remove(k)
             }

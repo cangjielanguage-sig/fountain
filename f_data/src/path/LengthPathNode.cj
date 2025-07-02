@@ -5,15 +5,15 @@
     You may obtain a copy of Mulan PSL v2 at:
             http://license.coscl.org.cn/MulanPSL2
     THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-    See the Mulan PSL v2 for more details.  
-*/
+    See the Mulan PSL v2 for more details.
+ */
 package f_data.path
 
 internal class LengthPathNode <: DataPathNode {
     static let instance = LengthPathNode()
-    private init(){}
-    public func get(data: Data): Iterator<Data>{
-        match(data){
+    private init() {}
+    public func get(data: Data): Iterator<Data> {
+        match (data) {
             case x: Collection<Data> => SingleIterator<Data>(x.size.toData())
             case x: Collection<(String, Data)> => SingleIterator<Data>(x.size.toData())
             case x: Collection<(Data, Data)> => SingleIterator<Data>(x.size.toData())

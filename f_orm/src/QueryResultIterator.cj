@@ -9,7 +9,6 @@
  */
 package f_orm
 
-
 public class QueryResultIterator<T> <: Iterator<T> & Resource {
     QueryResultIterator(
         private let result: QueryResultWrap,
@@ -25,6 +24,7 @@ public class QueryResultIterator<T> <: Iterator<T> & Resource {
         result.close()
     }
 }
+
 public class SingleColumnIterator<T> <: Iterator<T> & Resource {
     SingleColumnIterator(
         private let result: QueryResultWrap,
@@ -33,15 +33,15 @@ public class SingleColumnIterator<T> <: Iterator<T> & Resource {
     ) {}
     public func next(): ?T {
         if (column == String.empty) {
-            if(result.next()){
+            if (result.next()) {
                 result.getOrNull<T>(index)
-            }else{
+            } else {
                 throw ORMException("the first column does not match specified data type")
             }
         } else {
-            if(result.next()){
+            if (result.next()) {
                 result.getOrNull<T>(index)
-            }else{
+            } else {
                 throw ORMException("the first column does not match specified data type")
             }
         }

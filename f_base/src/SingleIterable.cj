@@ -15,6 +15,7 @@ public class SingleIterable<T> <: Iterable<T> {
         SingleIterator<T>(value)
     }
 }
+
 public class SingleIterator<T> <: Iterator<T> {
     public SingleIterator(private let value: T) {}
     private var got = false

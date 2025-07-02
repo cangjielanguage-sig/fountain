@@ -38,8 +38,8 @@ public enum StringCond <: Equatable<StringCond> & Equatable<String> & ToString {
      */
     | Regexp(String)
 
-    public func toString(){
-        match(this){
+    public func toString() {
+        match (this) {
             case IgnoreCond => 'IgnoreCond'
             case Exactly(n) => 'Exactly(${n})'
             case Prefix(n) => 'Prefix(${n})'

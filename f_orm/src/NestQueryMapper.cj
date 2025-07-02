@@ -14,7 +14,7 @@ public class NestQueryMapper<T, O> <: QueryMapper<O> where O <: QueryMappersInit
         private let nested!: QueryMappers<T>,
         private let nestPutter!: (O, T) -> Unit
     ) {
-        super(putter: {o, v => }, dataType: UnknownDataType(true, ''))
+        super(putter: {o, v =>}, dataType: UnknownDataType(true, ''))
     }
     func newNest<SUB>(): QueryMapper<SUB> where SUB <: QueryMappersInit<SUB> {
         NestQueryMapper<T, SUB>(
@@ -28,13 +28,14 @@ public class NestQueryMapper<T, O> <: QueryMapper<O> where O <: QueryMappersInit
         o
     }
 }
+
 public class NullableNestQueryMapper<T, O> <: QueryMapper<O> {
     public NullableNestQueryMapper(
         private let nested!: QueryMappers<T>,
         private let nestGetter!: (O) -> Option<T>,
         private let nestPutter!: (O, T) -> Unit
     ) {
-        super(putter: {o, v => }, dataType: UnknownDataType(true, ''))
+        super(putter: {o, v =>}, dataType: UnknownDataType(true, ''))
     }
     func newNullableNest<SUB>(): QueryMapper<SUB> {
         NullableNestQueryMapper<T, SUB>(

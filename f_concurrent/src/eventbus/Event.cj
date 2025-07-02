@@ -41,10 +41,10 @@ public abstract class Event <: Hashable & Equatable<Event> & ToString {
         }
     }
     public mut prop deliverResult: Bool {
-        get(){
+        get() {
             deliverResult_.load()
         }
-        set(value){
+        set(value) {
             deliverResult_.store(value)
         }
     }

@@ -5,38 +5,38 @@
     You may obtain a copy of Mulan PSL v2 at:
             http://license.coscl.org.cn/MulanPSL2
     THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-    See the Mulan PSL v2 for more details.  
-*/
+    See the Mulan PSL v2 for more details.
+ */
 package f_data.path
 
 internal class EqFilter<T> <: DataFilter where T <: Equatable<T> {
-    EqFilter(private let left: DataPath, private let right: T){}
-    init(left: String, right: String, solid: String){
+    EqFilter(private let left: DataPath, private let right: T) {}
+    init(left: String, right: String, solid: String) {
         this(compilePath(left, solid), parse<T>(right))
     }
     public func check(data: Data): Bool {
-        let d = match(left.get(data).next()){
+        let d = match (left.get(data).next()) {
             case Some(x) => x
             case _ => return false
         }
-        match(d){
-            case x: DataDateTime => match(x.data){
+        match (d) {
+            case x: DataDateTime => match (x.data) {
                 case x: T => x == right
                 case _ => false
             }
-            case x: DataDuration => match(x.data){
+            case x: DataDuration => match (x.data) {
                 case x: T => x == right
                 case _ => false
             }
-            case x: DataReal => match(x.data){
+            case x: DataReal => match (x.data) {
                 case x: T => x == right
                 case _ => false
             }
-            case x: DataString => match(x.data){
+            case x: DataString => match (x.data) {
                 case x: T => x == right
                 case _ => false
             }
-            case x: DataBool => match(x.data){
+            case x: DataBool => match (x.data) {
                 case x: T => x == right
                 case _ => false
             }

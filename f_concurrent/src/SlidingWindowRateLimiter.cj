@@ -6,7 +6,7 @@
             http://license.coscl.org.cn/MulanPSL2
     THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
     See the Mulan PSL v2 for more details.
-*/
+ */
 package f_concurrent
 
 /**
@@ -20,15 +20,16 @@ public class SlidingWindowRateLimiter<T> <: RateLimiter<T> {
      * @param timeout 时间窗口
      * @param limit 时间窗口内最大任务数
      */
-    public init(window!: Duration, timeout!: Duration, limit!: Int64){
+    public init(window!: Duration, timeout!: Duration, limit!: Int64) {
         super(timeout)
-        if(window <= Duration.Zero || limit <= 0){
+        if (window <= Duration.Zero || limit <= 0) {
             throw RateLimiterException('all parameters must be larger than zero')
         }
         queue = ArrayBlockingQueue<Mono>(limit)
-        let timer = Timer.after(Duration.Zero){
-            if(let Some(out) <- this.prev.load() && !out.finished){
-                println('SlidingWindowRateLimiter: ${unfinishedTasks.fetchAdd(1)} tasks are timeout in SlidingWindowRateLimiter for ${TypeInfos.get<T>()}.')
+        let timer = Timer.after(Duration.Zero) {
+            if (let Some(out) <- this.prev.load() && !out.finished) {
+                println(
+                    'SlidingWindowRateLimiter: ${unfinishedTasks.fetchAdd(1)} tasks are timeout in SlidingWindowRateLimiter for ${TypeInfos.get<T>()}.')
             }
             let mono = queue.remove()
             prev.store(mono)
@@ -36,20 +37,20 @@ public class SlidingWindowRateLimiter<T> <: RateLimiter<T> {
         }
         atExit(timer.cancel)
     }
-    public func exec(default: ?T, task: () -> ?T): ?T{
+    public func exec(default: ?T, task: () -> ?T): ?T {
         let mono = Mono()
         func exec() {
-            try{
+            try {
                 task()
-            }finally{
+            } finally {
                 mono.finished = true
             }
         }
-        if(queue.add(mono, timeout)){
+        if (queue.add(mono, timeout)) {
             mono.time = MonoTime.now()
-            if(let Some(x) <- exec()){
+            if (let Some(x) <- exec()) {
                 x
-            }else{
+            } else {
                 default
             }
         } else {
@@ -57,24 +58,25 @@ public class SlidingWindowRateLimiter<T> <: RateLimiter<T> {
         }
     }
 }
+
 private class Mono {
     private var _time = AtomicOptionReference<Box<MonoTime>>()
     private let _finished = AtomicBool(false)
 
-    mut prop time: MonoTime{
-        get(){
-            while(_time.load().isNone()){}
+    mut prop time: MonoTime {
+        get() {
+            while (_time.load().isNone()) {}
             _time.load().getOrThrow().value
         }
-        set(value){
+        set(value) {
             _time.store(Box<MonoTime>(value))
         }
     }
     mut prop finished: Bool {
-        get(){
+        get() {
             _finished.load()
         }
-        set(value){
+        set(value) {
             _finished.store(value)
         }
     }

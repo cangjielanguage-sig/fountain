@@ -12,27 +12,27 @@ package f_log
 import std.process.Process
 import std.time.DateTime
 import stdx.log.LogLevel
-
 import f_io.DummyOutputStream
 
 public class LoggerAppenderFacade <: AsyncLogger {
     private var appenders: Array<AbstractLogger>
 
     public init(name: String, appenders: Array<AbstractLogger>) {
-        super(name, LogLevel.ALL, LogPattern.default, DummyOutputStream.THROW_ON_ACCESSING, 'f_log.LoggerAppenderFacade_${name}')
+        super(name, LogLevel.ALL, LogPattern.default, DummyOutputStream.THROW_ON_ACCESSING,
+            'f_log.LoggerAppenderFacade_${name}')
         this.appenders = appenders
     }
 
     public func logLevelEnabled(level: LogLevel): Bool {
-        for(appender in appenders where appender.logLevelEnabled(level)){
+        for (appender in appenders where appender.logLevelEnabled(level)) {
             return true
         }
         return false
     }
-    
+
     protected func append(level: LogLevel, message: String, now: DateTime, ex: Option<Exception>): Unit {
         append {
-            for(appender in appenders){
+            for (appender in appenders) {
                 appender.append(level, message, now, ex)
             }
         }

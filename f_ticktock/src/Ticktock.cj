@@ -18,7 +18,6 @@ import std.env
 import std.process.Process
 import std.sync.*
 public import std.time.DateTime
-
 import f_exception.IllegalStateException
 import f_log.LoggerFactory
 import f_ticktock.exception.TicktockException
@@ -141,19 +140,17 @@ public class Ticktock <: Emitter {
                 var emitted = false
                 var once = false
                 try {
-                    for(cron in crons where cron.matches(now)){
+                    for (cron in crons where cron.matches(now)) {
                         task.run()
                         once = task.once
-                        if(once){
+                        if (once) {
                             this.removeTask(task)
                         }
                         emitted = true
                         break
                     }
                     if (LOGGER.debugEnabled) {
-                        LOGGER.debug(
-                            "Ticktock.emit:${name}; ${emitted}; ${once}"
-                        )
+                        LOGGER.debug("Ticktock.emit:${name}; ${emitted}; ${once}")
                     }
                 } catch (e: Exception) {
                     LOGGER.warn(

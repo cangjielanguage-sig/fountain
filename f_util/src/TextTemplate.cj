@@ -128,7 +128,7 @@ public class TextTemplate {
      * @param placeholderIndex 第N个占位符，从0开始计数
      */
     private func addPlaceholder(template: String, start: Int64, end: Int64, placeholderIndex: Int64) {
-        var placeholder = template[start .. end].trimAscii()
+        var placeholder = template[start..end].trimAscii()
         let getter = ValueGetter(placeholderIndex, placeholder)
         if (placeholder.isEmpty()) {
             compiled.add(Value2PlainString(getter))
@@ -136,57 +136,54 @@ public class TextTemplate {
         }
         var timePrefix = TIME_FORMAT_PREFIX
         var timeIdx = placeholder.indexOf(timePrefix) ?? -1
-        let converter =
-        if (timeIdx < 0) {
+        let converter = if (timeIdx < 0) {
             let numberIdx = placeholder.indexOf(NUMBER_FORMAT_PREFIX) ?? -1
             if (numberIdx >= 0) {
                 var formatStart = numberIdx + NUMBER_FORMAT_PREFIX.size
-                formatStart = (placeholder.indexOf("`",formatStart) ?? -1) +1
-                var formatEnd = placeholder.indexOf("`",formatStart) ?? -1
-                while(formatEnd > 0 && formatEnd < placeholder.size && template[formatEnd-1]==b'\\') {
-                    formatEnd = template.indexOf("`",formatEnd+1) ?? -1
+                formatStart = (placeholder.indexOf("`", formatStart) ?? -1) + 1
+                var formatEnd = placeholder.indexOf("`", formatStart) ?? -1
+                while (formatEnd > 0 && formatEnd < placeholder.size && template[formatEnd - 1] == b'\\') {
+                    formatEnd = template.indexOf("`", formatEnd + 1) ?? -1
                 }
-                let format =
-                if (formatEnd > 0 && formatEnd < placeholder.size) {
-                    placeholder[formatStart .. formatEnd].trimAscii()
+                let format = if (formatEnd > 0 && formatEnd < placeholder.size) {
+                    placeholder[formatStart..formatEnd].trimAscii()
                 } else {
                     throw IllegalArgumentException("time format must be followed 'time:' and included in ``")
                 }
                 placeholder = placeholder[if (numberIdx == 0) {
-                    formatEnd + 1 .. placeholder.size
-                } else {
-                    0 .. numberIdx
-                }].trimAscii()
+                        formatEnd + 1..placeholder.size
+                    } else {
+                        0..numberIdx
+                    }].trimAscii()
                 Value2NumberString(getter, format)
             } else {
                 Value2PlainString(getter)
             }
-        }else{
+        } else {
             var formatStart = timeIdx + timePrefix.size
-            formatStart = (placeholder.indexOf("`",formatStart) ?? -1) + 1
-            var formatEnd = placeholder.indexOf("`",formatStart) ?? -1
-            while(formatEnd > 0 && formatEnd < placeholder.size && template[formatEnd - 1] == b'\\') {
-                formatEnd = template.indexOf("`",formatEnd+1) ?? -1
+            formatStart = (placeholder.indexOf("`", formatStart) ?? -1) + 1
+            var formatEnd = placeholder.indexOf("`", formatStart) ?? -1
+            while (formatEnd > 0 && formatEnd < placeholder.size && template[formatEnd - 1] == b'\\') {
+                formatEnd = template.indexOf("`", formatEnd + 1) ?? -1
             }
-            let format =
-            if (formatEnd > 0 && formatEnd < placeholder.size) {
-                placeholder[formatStart .. formatEnd].trimAscii().regex().replaceAll("`", "\\`")
-            }else{
+            let format = if (formatEnd > 0 && formatEnd < placeholder.size) {
+                placeholder[formatStart..formatEnd].trimAscii().regex().replaceAll("`", "\\`")
+            } else {
                 throw IllegalArgumentException("time format must be followed 'time:' and included in ``")
             }
-            placeholder =
-            if (timeIdx == 0) {
-                placeholder[formatEnd + 1 .. ]
-            } else {//timeIdx>0
-                placeholder[0 .. timeIdx]
+            placeholder = if (timeIdx == 0) {
+                placeholder[formatEnd + 1..]
+            } else { //timeIdx>0
+                placeholder[0..timeIdx]
             }.trimAscii()
             Value2TimeString(getter, format)
         }
         compiled.add(converter)
     }
-    private func format<K, V, O>(data: O, noneConverter: ?String): String where K <: TextTemplateKey<K>, V <: ToString, O <: TextTemplateObject<K, V, O> {
+    private func format<K, V, O>(data: O, noneConverter: ?String): String where K <: TextTemplateKey<K>, V <: ToString,
+        O <: TextTemplateObject<K, V, O> {
         let builder = StringGenerator()
-        for(i in 0 .. compiled.size) {
+        for (i in 0..compiled.size) {
             builder.append(compiled[i].format<K, V, O>(data, noneConverter))
         }
         builder.toString()
@@ -219,9 +216,8 @@ public class TextTemplate {
  */
 class ValueGetter {
     private let index: Int64
-    ValueGetter(index: Int64, private let key: String){
-        this.index =
-        if (key.isEmpty()) {
+    ValueGetter(index: Int64, private let key: String) {
+        this.index = if (key.isEmpty()) {
             index
         } else if (let Some(x) <- Int64.tryParse(key)) {
             x
@@ -229,21 +225,25 @@ class ValueGetter {
             -1
         }
     }
-    init(indexText: String){
+    init(indexText: String) {
         this(Int64.parse(indexText), indexText)
     }
 
     func get<K, V, O>(data: O): ToString where K <: TextTemplateKey<K>, V <: ToString, O <: TextTemplateObject<K, V, O> {
-        match(index){
+        match (index) {
             case x: K where index >= 0 => data[x]
-            case _ => match(key){
-                case x: K where !(key.isEmpty() && (TypeInfo.of(data).qualifiedName.startsWith("f_util.ObjectTextTemplateArgs")))  => data[x]
-                case _ => throw TextTemplateException("data type ${TypeInfo.of(data)} is without field ${key} or the field is not a ${TypeInfos.get<K>()}")
+            case _ => match (key) {
+                case x: K where !(key.isEmpty() && (TypeInfo
+                    .of(data)
+                    .qualifiedName
+                    .startsWith("f_util.ObjectTextTemplateArgs"))) => data[x]
+                case _ => throw TextTemplateException(
+                    "data type ${TypeInfo.of(data)} is without field ${key} or the field is not a ${TypeInfos.get<K>()}")
             }
         }
     }
     func placeholder(): String {
-        if(index >= 0 && key.isEmpty()){
+        if (index >= 0 && key.isEmpty()) {
             index.toString()
         } else {
             key
@@ -255,8 +255,9 @@ class ValueGetter {
  * 数据格式化接口，所有的占位符对象都实现这个接口
  */
 abstract sealed class Value2String {
-    protected func format<K, V, O>(data: O, noneConverter: ?String): String where K <: TextTemplateKey<K>, V <: ToString, O <: TextTemplateObject<K, V, O>{
-        match(this){
+    protected func format<K, V, O>(data: O, noneConverter: ?String): String where K <: TextTemplateKey<K>, V <: ToString,
+        O <: TextTemplateObject<K, V, O> {
+        match (this) {
             case x: OriginValue2String => x.doFormat()
             case x: Value2PlainString => x.doFormat<K, V, O>(data, noneConverter)
             case x: Value2TimeString => x.doFormat<K, V, O>(data, noneConverter)
@@ -276,25 +277,30 @@ class OriginValue2String <: Value2String {
         text
     }
 }
+
 class Value2PlainString <: Value2String {
-    Value2PlainString(private let getter: ValueGetter){}
-    protected func doFormat<K, V, O>(data: O, noneConverter: ?String): String where K <: TextTemplateKey<K>, V <: ToString, O <: TextTemplateObject<K, V, O> {
+    Value2PlainString(private let getter: ValueGetter) {}
+    protected func doFormat<K, V, O>(data: O, noneConverter: ?String): String where K <: TextTemplateKey<K>,
+        V <: ToString, O <: TextTemplateObject<K, V, O> {
         getter.get<K, V, O>(data).toString()
     }
 }
+
 class Value2TimeString <: Value2String {
-    Value2TimeString(private let getter: ValueGetter, private let formatter: String){}
-    protected func doFormat<K, V, O>(data: O, noneConverter: ?String): String where K <: TextTemplateKey<K>, V <: ToString, O <: TextTemplateObject<K, V, O> {
-        func extractNoneConverter(){
-            match(noneConverter){
+    Value2TimeString(private let getter: ValueGetter, private let formatter: String) {}
+    protected func doFormat<K, V, O>(data: O, noneConverter: ?String): String where K <: TextTemplateKey<K>,
+        V <: ToString, O <: TextTemplateObject<K, V, O> {
+        func extractNoneConverter() {
+            match (noneConverter) {
                 case Some(x) => x
-                case _ => throw TextTemplateException("type ${TypeInfo.of(data)} whose field ${getter.placeholder()} is not a DateTime or does not exist")
+                case _ => throw TextTemplateException(
+                    "type ${TypeInfo.of(data)} whose field ${getter.placeholder()} is not a DateTime or does not exist")
             }
         }
         let value = getter.get<K, V, O>(data)
-        match(value) {
+        match (value) {
             case x: DateTime => x.format(formatter)
-            case x: ?DateTime => match(x){
+            case x: ?DateTime => match (x) {
                 case Some(x) => x.format(formatter)
                 case _ => extractNoneConverter()
             }
@@ -302,6 +308,7 @@ class Value2TimeString <: Value2String {
         }
     }
 }
+
 class Value2NumberString <: Value2String {
     private let integer: Int64
     private var radix = 10
@@ -313,18 +320,19 @@ class Value2NumberString <: Value2String {
     private var scale = 0i32
     private var mode = RoundingMode.HalfUp
 
-    Value2NumberString(private let getter: ValueGetter, private let formatter: String){
+    Value2NumberString(private let getter: ValueGetter, private let formatter: String) {
         if (!#"^[oOxXeE\\+\\(]?(#+(\\.#+)?|(#*\\.#+))(,[a-zA-Z_]+)?$"#.regex(solid: false).matches(formatter)) {
-            throw TextTemplateException("number placeholder must be # in number format like O### x### e###.## ##.##,HALF_UP or ###,HALF_UP or .###,HALF_UP")
+            throw TextTemplateException(
+                "number placeholder must be # in number format like O### x### e###.## ##.##,HALF_UP or ###,HALF_UP or .###,HALF_UP")
         }
         var hasSymbol = 0
         if (formatter.startsWith("o") || formatter.startsWith("O")) {
             radix = 8
-            prefix = formatter[0 .. 1]
+            prefix = formatter[0..1]
             hasSymbol = 1
         } else if (formatter.startsWith("x") || formatter.startsWith("X")) {
             radix = 16
-            prefix = "0" + formatter[0 .. 1]
+            prefix = "0" + formatter[0..1]
             if (prefix[0] == b'X') {
                 upperCase = true
             }
@@ -349,32 +357,32 @@ class Value2NumberString <: Value2String {
             if (commaIdx < 0) {
                 integer = formatter.size - hasSymbol
                 mode = RoundingMode.HalfUp
-            } else {//commaIdx>0
+            } else { //commaIdx>0
                 integer = commaIdx - hasSymbol
-                mode = parseRoundingMode(formatter[commaIdx + 1 .. ].toAsciiUpper())
+                mode = parseRoundingMode(formatter[commaIdx + 1..].toAsciiUpper())
             }
         } else if (dotIdx == 0) {
             integer = 0
             if (commaIdx < 0) {
-                scale = Int32(formatter.size - 1)//去掉小数点
+                scale = Int32(formatter.size - 1) //去掉小数点
                 mode = RoundingMode.HalfUp
-            } else {//commaIdx>0
-                scale = Int32(commaIdx - 1)//去掉小数点
-                mode = parseRoundingMode(formatter[commaIdx + 1 .. ])
+            } else { //commaIdx>0
+                scale = Int32(commaIdx - 1) //去掉小数点
+                mode = parseRoundingMode(formatter[commaIdx + 1..])
             }
-        } else {//dotIdx>0
+        } else { //dotIdx>0
             integer = dotIdx - hasSymbol
             if (commaIdx < 0) {
                 scale = Int32(formatter.size - dotIdx - 1)
                 mode = RoundingMode.HalfUp
             } else if (commaIdx > 0) {
                 scale = Int32(commaIdx - dotIdx - 1)
-                mode = parseRoundingMode(formatter[commaIdx + 1 ..])
+                mode = parseRoundingMode(formatter[commaIdx + 1..])
             }
         }
     }
     private static func parseRoundingMode(mode: String): RoundingMode {
-        match(mode.toAsciiUpper()){
+        match (mode.toAsciiUpper()) {
             case "UP" => Up
             case "DOWN" => Down
             case "CEILING" => Ceiling
@@ -384,7 +392,8 @@ class Value2NumberString <: Value2String {
             case _ => throw TextTemplateException("${mode} is not a RoundingMode")
         }
     }
-    protected func doFormat<K, V, O>(data: O, noneConverter: ?String): String where K <: TextTemplateKey<K>, V <: ToString, O <: TextTemplateObject<K, V, O> {
+    protected func doFormat<K, V, O>(data: O, noneConverter: ?String): String where K <: TextTemplateKey<K>,
+        V <: ToString, O <: TextTemplateObject<K, V, O> {
         let value = getter.get<K, V, O>(data).toString()
         if (value.isEmpty()) {
             noneConverter
@@ -401,7 +410,7 @@ class Value2NumberString <: Value2String {
                 if (scale > 0) {
                     var dotIdx = string.indexOf(".") ?? -1
                     if (integer == 0) {
-                        string = "0${string[dotIdx .. ]}"
+                        string = "0${string[dotIdx..]}"
                     } else if (dotIdx < integer) {
                         string = "${0 * (integer - dotIdx)}${string}"
                     }
@@ -418,7 +427,7 @@ class Value2NumberString <: Value2String {
             if (symbol > EQ && prefixPlus) {
                 return "+" + string
             } else if (symbol < EQ && enclosedInParentheses) {
-                return "(${string[1 .. ]})"
+                return "(${string[1..]})"
             }
             return string
         } else {
@@ -429,26 +438,44 @@ class Value2NumberString <: Value2String {
             }
             return prefix + string
         }
-
     }
 }
-public interface TextTemplateKey<K> where K <: TextTemplateKey<K> {}
-extend Int64 <: TextTemplateKey<Int64>{}
-extend String <: TextTemplateKey<String>{}
 
-public interface TextTemplateObject<K, V, O> where K <: TextTemplateKey<K>, V <: ToString, O <: TextTemplateObject<K, V, O> {
+public interface TextTemplateKey<K> where K <: TextTemplateKey<K> {}
+
+extend Int64 <: TextTemplateKey<Int64> {}
+
+extend String <: TextTemplateKey<String> {}
+
+public interface TextTemplateObject<K, V, O> where K <: TextTemplateKey<K>, V <: ToString,
+    O <: TextTemplateObject<K, V, O> {
     operator func [](key: K): V
 }
+
 extend<T> Array<T> <: TextTemplateObject<Int64, T, Array<T>> where T <: ToString {}
+
 extend<T> ArrayList<T> <: TextTemplateObject<Int64, T, ArrayList<T>> where T <: ToString {}
-extend<K, V> HashMap<K, V> <: TextTemplateObject<K, V, HashMap<K, V>> where K <: Hashable & Equatable<K> & TextTemplateKey<K>, V <: ToString {}
-extend<K, V> ConcurrentHashMap<K, V> <: TextTemplateObject<K, V, ConcurrentHashMap<K, V>> where K <: Hashable & Equatable<K> & TextTemplateKey<K>, V <: ToString {}
-extend<K, V> TreeMap<K, V> <: TextTemplateObject<K, V, TreeMap<K, V>> where K <: Comparable<K> & TextTemplateKey<K>, V <: ToString {}
-extend<K, V> LinkedHashMap<K, V> <: TextTemplateObject<K, V, LinkedHashMap<K, V>> where K <: Equatable<K> & TextTemplateKey<K>, V <: ToString {}
+
+extend<K, V> HashMap<K, V> <: TextTemplateObject<K, V, HashMap<K, V>> where K <: Hashable & Equatable<K> & TextTemplateKey<K>,
+    V <: ToString {}
+
+extend<K, V> ConcurrentHashMap<K, V> <: TextTemplateObject<K, V, ConcurrentHashMap<K, V>> where K <: Hashable & Equatable<K> & TextTemplateKey<K>,
+    V <: ToString {}
+
+extend<K, V> TreeMap<K, V> <: TextTemplateObject<K, V, TreeMap<K, V>> where K <: Comparable<K> & TextTemplateKey<K>,
+    V <: ToString {}
+
+extend<K, V> LinkedHashMap<K, V> <: TextTemplateObject<K, V, LinkedHashMap<K, V>> where K <: Equatable<K> & TextTemplateKey<K>,
+    V <: ToString {}
 
 public class ObjectTextTemplateArgs<T> <: TextTemplateObject<String, ToString, ObjectTextTemplateArgs<T>> where T <: Object & ObjectData<T> {
-    public ObjectTextTemplateArgs(private let arg: T){}
+    public ObjectTextTemplateArgs(private let arg: T) {}
     public operator func [](key: String): ToString {
-        T.dataFields().readableField(key).getOrThrow{TextTemplateException("type ${TypeInfos.get<T>()} is without field ${key}")}.get(arg).toString()
+        T
+            .dataFields()
+            .readableField(key)
+            .getOrThrow {TextTemplateException("type ${TypeInfos.get<T>()} is without field ${key}")}
+            .get(arg)
+            .toString()
     }
 }

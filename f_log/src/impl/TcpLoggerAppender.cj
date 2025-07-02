@@ -38,7 +38,7 @@ private class TcpLoggerAppender <: AsyncLogger {
     private static func createSocket(host: String, port: UInt16, sendBufSize: ?Int64) {
         let sock = TcpSocket(host, port)
         sock.keepAlive = SocketKeepAliveConfig()
-        if(let Some(s) <- sendBufSize){
+        if (let Some(s) <- sendBufSize) {
             sock.sendBufferSize = s
         }
         sock
@@ -47,10 +47,11 @@ private class TcpLoggerAppender <: AsyncLogger {
         LoggerAppenderCreator.register(LOGGER_NAME) {
             name =>
             let appenders = LoggerConfig.getAppenders(LOGGER_NAME)
-            if(appenders.isEmpty()){
+            if (appenders.isEmpty()) {
                 [NoneLogAppender.instance]
-            }else{
-                Array<AbstractLogger>(appenders.size){i =>
+            } else {
+                Array<AbstractLogger>(appenders.size) {
+                    i =>
                     let appender = appenders[i]
                     var host = "127.0.0.1"
                     var port = 65535u16
@@ -58,12 +59,14 @@ private class TcpLoggerAppender <: AsyncLogger {
                         host = h
                     }
                     if (let Some(p) <- LoggerConfig.getString(appender, "port")) {
-                        port = UInt16.tryParse(p).getOrThrow {
-                            LogException(
-                                "param port of SocketLoggerAppender must be a value of UInt16, however it is ${p}")
-                        }
-                    }else if(let Some(idx) <- host.indexOf(':')){
-                        (host, port) = (host[0 .. idx].trimAscii(), UInt16.parse(host[idx + 1 ..].trimAscii()))
+                        port = UInt16
+                            .tryParse(p)
+                            .getOrThrow {
+                                LogException(
+                                    "param port of SocketLoggerAppender must be a value of UInt16, however it is ${p}")
+                            }
+                    } else if (let Some(idx) <- host.indexOf(':')) {
+                        (host, port) = (host[0..idx].trimAscii(), UInt16.parse(host[idx + 1..].trimAscii()))
                     }
                     let sendBufSize = LoggerConfig.getTcpSendBufSize(appender)
                     TcpLoggerAppender(
@@ -87,4 +90,5 @@ private class TcpLoggerAppender <: AsyncLogger {
         super.append(level, message, now, ex)
     }
 }
+
 let _ = TcpLoggerAppender.register()

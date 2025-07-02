@@ -11,15 +11,15 @@ package f_mvc
 
 public class MVCStarter {
     private static let log = LoggerFactory.getLogger<MVCStarter>()
-    
-    private MVCStarter(private let server: Server){
+
+    private MVCStarter(private let server: Server) {
         atExit(closeGracefully)
     }
     public static func initialize(): ?MVCStarter {
-        if(!initial_.compareAndSwap(false, true)){
+        if (!initial_.compareAndSwap(false, true)) {
             throw MVCException('mvc has been started')
         }
-        if(!registered.load()) {
+        if (!registered.load()) {
             return None<MVCStarter>
         }
         let builder = ServerBuilder().addr(MVCConfig.host).port(MVCConfig.port).logger(log)

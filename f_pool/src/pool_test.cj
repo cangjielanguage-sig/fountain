@@ -11,17 +11,12 @@ public class Test {
 }
 
 @Test
-public class PoolTest{
+public class PoolTest {
     @TestCase
     public func test0(): Unit {
-        let pool = Pool<Test>(initSize:1, 
-                        minSize: 1,
-                        maxSize: 2,
-                        elementLife: Duration.second * 10,
-                        checkInterval: Duration.second,
-                        creator: { => Test()},
-                        checker: {x: Test => x.valid},
-                        destroier:{x => x.destroy()})
+        let pool = Pool<Test>(initSize: 1, minSize: 1, maxSize: 2, elementLife: Duration.second * 10,
+            checkInterval: Duration.second, creator: {=> Test()}, checker: {x: Test => x.valid},
+            destroier: {x => x.destroy()})
         sleep(Duration.millisecond)
         let o1 = pool.borrow(timeout: Duration.Zero)
         let o2 = pool.borrow(timeout: Duration.second)
@@ -39,6 +34,5 @@ public class PoolTest{
         pool.giveBack(o5.getOrThrow())
         o5.getOrThrow().valid = false
         sleep(Duration.millisecond)
-
     }
 }

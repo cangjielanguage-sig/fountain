@@ -16,7 +16,6 @@ public import f_aspect.exception.AspectBeforeException
  */
 public interface Aspect {
     func before(funcInfo: InvocationFuncInfo): Unit {
-        
     }
     func after(funcInfo: InvocationFuncInfo, result: Any): Any {
         result
@@ -27,7 +26,7 @@ public interface Aspect {
     func throwing(funcInfo: InvocationFuncInfo, e: Exception): Exception {
         e
     }
-    func final(funcInfo: InvocationFuncInfo): Unit{}
+    func final(funcInfo: InvocationFuncInfo): Unit {}
     func proceed(funcInfo: InvocationFuncInfo, point: (Array<Any>) -> Any): Any {
         try {
             before(funcInfo)

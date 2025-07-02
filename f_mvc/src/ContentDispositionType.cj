@@ -65,8 +65,7 @@ public enum ContentDispositionType <: Equatable<ContentDispositionType> & Hashab
         match (tryParse(value)) {
             case Some(v) => v
             case _ => throw IllegalArgumentException(
-                "argument must be one of \"attachment\" \"formData\" \"form-data\" \"inline\" \"none\" \"None\" \"NONE\" \"\", but it is \"${value}\""
-            )
+                "argument must be one of \"attachment\" \"formData\" \"form-data\" \"inline\" \"none\" \"None\" \"NONE\" \"\", but it is \"${value}\"")
         }
     }
 }

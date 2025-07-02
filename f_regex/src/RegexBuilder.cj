@@ -330,8 +330,7 @@ public class RegexBuilder <: ToString & Equatable<RegexBuilder> {
     public func range(min: Int64, max: Int64): RegexBuilder {
         if ((min < 0 && max < 0) || (min > 0 && max > 0 && min < max)) {
             throw RegexBuilderException(
-                "min must less or equals to max and both are larger than 0, or one of min and max should be larger than 0 and the other must be ignored"
-            )
+                "min must less or equals to max and both are larger than 0, or one of min and max should be larger than 0 and the other must be ignored")
         }
         pattern.append("{")
         if (min >= 0) {
@@ -359,10 +358,10 @@ public class RegexBuilder <: ToString & Equatable<RegexBuilder> {
         return this[false, parts]
     }
     public func oneOf<T>(parts: Iterable<T>): RegexBuilder where T <: ToString {
-        return RegexBuilder()[false, parts.iterator().map{p => (p as ToString).getOrThrow()}]
+        return RegexBuilder()[false, parts.iterator().map {p => (p as ToString).getOrThrow()}]
     }
     public func notOneOf<T>(parts: Iterable<T>): RegexBuilder where T <: ToString {
-        return RegexBuilder()[true, parts.iterator().map{p => (p as ToString).getOrThrow()}]
+        return RegexBuilder()[true, parts.iterator().map {p => (p as ToString).getOrThrow()}]
     }
     public prop lsquare: RegexBuilder {
         get() {

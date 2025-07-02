@@ -5,14 +5,14 @@
     You may obtain a copy of Mulan PSL v2 at:
             http://license.coscl.org.cn/MulanPSL2
     THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-    See the Mulan PSL v2 for more details.  
-*/
+    See the Mulan PSL v2 for more details.
+ */
 package f_orm
 
 import f_regex.*
 
 public class Condition {
-    private init(){}
+    private init() {}
     private static let _delimiter = ThreadLocal<String>()
     mut static prop delimiter: String {
         get() {
@@ -30,9 +30,9 @@ public class Condition {
         try {
             delimiter = ','
             let partial = trim(prefix: ',', suffix: ',', partial: partial)
-            if(partial.isEmpty()){
+            if (partial.isEmpty()) {
                 ''
-            }else{
+            } else {
                 ' `set` ${partial} '
             }
         } finally {
@@ -44,15 +44,15 @@ public class Condition {
         `where`('', partial)
     }
     public static func `where`(delimiter: String, partial: () -> String): String {
-        try{
+        try {
             Condition.delimiter = delimiter
             let partial = trim(prefix: 'and|or', suffix: 'and|or', partial: partial)
-            if(partial.isEmpty()){
+            if (partial.isEmpty()) {
                 ''
-            }else{
+            } else {
                 ' `where` ${partial} '
             }
-        }finally {
+        } finally {
             Condition.delimiter = ''
         }
     }

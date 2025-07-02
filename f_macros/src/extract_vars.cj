@@ -16,6 +16,7 @@ public func extractAllVars(decls: Array<Decl>): Array<VarDecl> {
     }
     list.toArray()
 }
+
 public func extractVars(decls: ArrayList<Decl>, extractPublic!: Bool = true, extractVar!: Bool = true,
     extractStatic!: Bool = false): Array<VarDecl> {
     let list = ArrayList<VarDecl>()

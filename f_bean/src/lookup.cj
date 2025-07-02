@@ -60,8 +60,7 @@ public func lookupLabels<L, T>(): HashMap<L, T> where L <: Hashable & Equatable<
     lookupLabels<L, T>(IgnoreCond)
 }
 
-public func lookupLabels<L, T>(cond: StringCond): HashMap<L, T> where L <: Hashable & Equatable<L>,
-    T <: BeanLabel<L> {
+public func lookupLabels<L, T>(cond: StringCond): HashMap<L, T> where L <: Hashable & Equatable<L>, T <: BeanLabel<L> {
     let map = HashMap<L, T>()
     for (bean in lookupList<T>(cond)) {
         map[bean.label] = bean

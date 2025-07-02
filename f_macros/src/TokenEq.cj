@@ -15,6 +15,7 @@ public interface TokenEq<T> where T <: TokenEq<T> {
         !(this == other)
     }
 }
+
 extend Tokens <: TokenEq<Tokens> {
     public operator func ==(other: Tokens): Bool {
         if (this.size == other.size) {

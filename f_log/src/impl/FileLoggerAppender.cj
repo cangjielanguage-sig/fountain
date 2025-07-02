@@ -54,8 +54,8 @@ private class FileLoggerAppender <: AsyncLogger {
                     if (let Some(p) <- LoggerConfig.getString(appender, "path") && !p.isEmpty()) {
                         params.path = p
                     }
-                    if (let Some(d) <- LoggerConfig.getString(appender, "rotateDuration") && 
-                        let Some(u) <- TimeUnit.tryParse(d)) {
+                    if (let Some(d) <- LoggerConfig.getString(appender, "rotateDuration") && let Some(u) <- TimeUnit
+                        .tryParse(d)) {
                         params.timeunit = u
                     }
                     if (let Some(s) <- LoggerConfig.getString(appender, "rotateSize") && !s.isEmpty()) {

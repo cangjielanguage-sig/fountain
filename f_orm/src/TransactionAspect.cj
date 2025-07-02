@@ -19,10 +19,11 @@ import f_bean.{BeanFactory, BeanMeta}
 import f_collection.*
 import f_orm.wrap.ORMConfig
 
-@AspectRoute[FuncAnnotationRouteRule("f_orm.Transactional") | ConfigExecutionRouteRule(ORMConfig.transactionalFuncExecution)]
+@AspectRoute[FuncAnnotationRouteRule("f_orm.Transactional") | ConfigExecutionRouteRule(
+    ORMConfig.transactionalFuncExecution)]
 @BeanMeta
 public class TransactionAspect <: Aspect {
-    static init(){
+    static init() {
         BeanFactory.instance.register<TransactionAspect>({=> TransactionAspect()})
     }
     private init() {}
@@ -46,16 +47,16 @@ public class TransactionAspect <: Aspect {
             accessMode = x.accessMode
             deferrableMode = x.deferrableMode
         }
-        if(propagation.isNone()){
+        if (propagation.isNone()) {
             propagation = ORMConfig.getTransactionPropagation(driverName: driverName)
         }
-        if(isoLevel.isNone()){
+        if (isoLevel.isNone()) {
             isoLevel = ORMConfig.getTransactionLevel(driverName: driverName)
         }
-        if(accessMode.isNone()){
+        if (accessMode.isNone()) {
             accessMode = ORMConfig.getTransactionAccessMode(driverName: driverName)
         }
-        if(deferrableMode.isNone()){
+        if (deferrableMode.isNone()) {
             deferrableMode = ORMConfig.getTransactionDeferrableMode(driverName: driverName)
         }
         var exe = ORM.executor(driverName) // 如果此处发生异常就无所谓回滚事务了，所以ORM.executor(driverName)不必在try块内
@@ -89,7 +90,7 @@ public class TransactionAspect <: Aspect {
                     set
                 }
             }
-            
+
             if (let Some(noRollbackFor) <- transactional?.noRollbackFor) {
                 let set: Set<TypeInfo> = genExceptionSet(noRollbackFor)
                 for (noRollback in set where et.isSubtypeOf(noRollback)) {

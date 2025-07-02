@@ -14,14 +14,15 @@ import f_collection.*
 public class DataMapIterator<K, V> <: Iterator<(Data, Data)> where K <: Equatable<K> & DataFields<K>, V <: DataFields<V> {
     public DataMapIterator(private let itr: Iterator<(K, V)>) {}
     public func next(): ?(Data, Data) {
-        for((k, v) in itr){
+        for ((k, v) in itr) {
             return (k.toData(), v.toData())
         }
         return None
     }
 }
 
-public class DataMap<M, K, V> <: Data & Collection<(Data, Data)> where K <: Equatable<K> & DataFields<K>, V <: DataFields<V>, M <: DataFields<M> & Map<K, V> {
+public class DataMap<M, K, V> <: Data & Collection<(Data, Data)> where K <: Equatable<K> & DataFields<K>,
+    V <: DataFields<V>, M <: DataFields<M> & Map<K, V> {
     public DataMap(public let data: M) {}
     public func iterator(): Iterator<(Data, Data)> {
         DataMapIterator<K, V>(data.iterator())
@@ -53,73 +54,88 @@ public class DataMap<M, K, V> <: Data & Collection<(Data, Data)> where K <: Equa
     }
 }
 
-public interface MapRawType{
+public interface MapRawType {
     prop rawType: (TypeInfo, TypeInfo)
 }
-public interface MapData<M, K, V> <: DataFields<M> & MapRawType where K <: Equatable<K> & DataFields<K>, V <: DataFields<V>, M <: DataFields<M> & Map<K, V> {
+
+public interface MapData<M, K, V> <: DataFields<M> & MapRawType where K <: Equatable<K> & DataFields<K>,
+    V <: DataFields<V>, M <: DataFields<M> & Map<K, V> {
     func toData(): Data
     static func tryFromData(data: Data, flag: DataConversionFlag): Any
-    prop rawType: (TypeInfo, TypeInfo){
-        get(){
+    prop rawType: (TypeInfo, TypeInfo) {
+        get() {
             (TypeInfos.get<K>(), TypeInfos.get<V>())
         }
     }
 }
-private func tryFromDataToMap<M, K, V>(data: Data, flag: DataConversionFlag, creator: () -> M): M where K <: Equatable<K> & DataFields<K>, V <: DataFields<V>, M <: DataFields<M> & Map<K, V> {
-    match(data){
+
+private func tryFromDataToMap<M, K, V>(data: Data, flag: DataConversionFlag, creator: () -> M): M where K <: Equatable<K> & DataFields<K>,
+    V <: DataFields<V>, M <: DataFields<M> & Map<K, V> {
+    match (data) {
         case x: DataMap<M, K, V> where (flag & DEEP) == 0 => x.data
-        case itr: Iterable<(Data, Data)> => 
+        case itr: Iterable<(Data, Data)> =>
             let map = creator()
-            for((dk, dv) in itr){
-                if(let (Some(k: K), Some(v: V)) <- (internal_f_data_tryFromData<K>(dk, flag), internal_f_data_tryFromData<V>(dv, flag))){
+            for ((dk, dv) in itr) {
+                if (let (Some(k: K), Some(v: V)) <- (internal_f_data_tryFromData<K>(dk, flag),
+                    internal_f_data_tryFromData<V>(dv, flag))) {
                     map[k] = v
-                }else if((flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0){
+                } else if ((flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0) {
                     throw DataException('data cannot be converted to tuple for ${TypeInfos.get<M>()} ')
                 }
             }
             map
         case itr: Iterable<(String, Data)> =>
             let map = creator()
-            for((k, v) in itr){
-                match(k){
-                    case mk: K => if(let Some(mv: V) <- internal_f_data_tryFromData<V>(v, flag)){
-                        map[mk] = mv
-                    }else if((flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0){
-                        throw DataException('data cannot be converted to tuple for ${TypeInfos.get<M>()}, current tuple is (${k}, ${v})')
-                    }
-                    case _ => if(let (Some(mk: K), Some(mv: V)) <- (internal_f_data_tryFromData<K>(k.toData(), flag), internal_f_data_tryFromData<V>(v, flag))){
-                        map[mk] = mv
-                    }else if((flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0){
-                        throw DataException('data cannot be converted to tuple for ${TypeInfos.get<M>()}, current tuple is (${k}, ${v})')
-                    }
+            for ((k, v) in itr) {
+                match (k) {
+                    case mk: K =>
+                        if (let Some(mv: V) <- internal_f_data_tryFromData<V>(v, flag)) {
+                            map[mk] = mv
+                        } else if ((flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0) {
+                            throw DataException(
+                                'data cannot be converted to tuple for ${TypeInfos.get<M>()}, current tuple is (${k}, ${v})')
+                        }
+                    case _ =>
+                        if (let (Some(mk: K), Some(mv: V)) <- (internal_f_data_tryFromData<K>(k.toData(), flag),
+                            internal_f_data_tryFromData<V>(v, flag))) {
+                            map[mk] = mv
+                        } else if ((flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0) {
+                            throw DataException(
+                                'data cannot be converted to tuple for ${TypeInfos.get<M>()}, current tuple is (${k}, ${v})')
+                        }
                 }
             }
             map
-        case _ where (flag & IGNORE_FIELD_TYPE_NOT_MATCH) == 0 => throw DataException('data cannot be converted to tuple for ${TypeInfos.get<M>()}, data is ${data}')
+        case _ where (flag & IGNORE_FIELD_TYPE_NOT_MATCH) == 0 => throw DataException(
+            'data cannot be converted to tuple for ${TypeInfos.get<M>()}, data is ${data}')
         case _ => creator()
     }
 }
+
 extend<K, V> HashMap<K, V> <: MapData<HashMap<K, V>, K, V> where K <: Equatable<K> & DataFields<K>, V <: DataFields<V> {
     public func toData(): Data {
         DataMap(this)
     }
     public static func tryFromData(data: Data, flag: DataConversionFlag): Any {
-        tryFromDataToMap<HashMap<K, V>, K, V>(data, flag){HashMap<K, V>()}
+        tryFromDataToMap<HashMap<K, V>, K, V>(data, flag) {HashMap<K, V>()}
     }
 }
-extend<K, V> LinkedHashMap<K, V> <: MapData<LinkedHashMap<K, V>, K, V> where K <: Equatable<K> & DataFields<K>, V <: DataFields<V> {
+
+extend<K, V> LinkedHashMap<K, V> <: MapData<LinkedHashMap<K, V>, K, V> where K <: Equatable<K> & DataFields<K>,
+    V <: DataFields<V> {
     public func toData(): Data {
         DataMap(this)
     }
     public static func tryFromData(data: Data, flag: DataConversionFlag): Any {
-        tryFromDataToMap<LinkedHashMap<K, V>, K, V>(data, flag){LinkedHashMap<K, V>()}
+        tryFromDataToMap<LinkedHashMap<K, V>, K, V>(data, flag) {LinkedHashMap<K, V>()}
     }
 }
+
 extend<K, V> TreeMap<K, V> <: MapData<TreeMap<K, V>, K, V> where K <: Equatable<K> & DataFields<K>, V <: DataFields<V> {
     public func toData(): Data {
         DataMap(this)
     }
     public static func tryFromData(data: Data, flag: DataConversionFlag): Any {
-        tryFromDataToMap<TreeMap<K, V>, K, V>(data, flag){TreeMap<K, V>()}
+        tryFromDataToMap<TreeMap<K, V>, K, V>(data, flag) {TreeMap<K, V>()}
     }
 }

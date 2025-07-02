@@ -13,7 +13,6 @@ import std.sync.Mutex
 import std.collection.{ArrayList, Map, HashMap}
 import std.convert.Parsable
 import std.time.DateTime
-
 import f_base.{EmptyMap, StringGenerator}
 import f_data.DataParsable
 import f_regex.*
@@ -37,7 +36,6 @@ import f_regex.*
  * 匹配优先级是a>b=c=d>e=f=g>h
  * (b)(c)可以同时出现在同一级路径中
  */
-
 public class PathPattern {
     public init() {}
 
@@ -142,16 +140,15 @@ public class PathPattern {
     public func compileIfAbsent<T>(pattern: String, supplier: () -> T): T {
         match (this.data<T>(pattern)) {
             case Some(d) => d
-            case _ =>
-                synchronized(mutex) {
-                    match(this.data<T>(pattern)) {
-                        case Some(d) => d
-                        case _ =>
-                            let d = supplier()
-                            compile(pattern, d)
-                            d
-                    }
+            case _ => synchronized(mutex) {
+                match (this.data<T>(pattern)) {
+                    case Some(d) => d
+                    case _ =>
+                        let d = supplier()
+                        compile(pattern, d)
+                        d
                 }
+            }
         }
     }
 
@@ -466,6 +463,7 @@ public class PathPattern {
         } ?? NonePathNode.INSTANCE
     }
 }
+
 extend<T> Option<T> where T <: PathNode {
     func matches(value: String): Bool {
         match (this) {
@@ -474,6 +472,7 @@ extend<T> Option<T> where T <: PathNode {
         }
     }
 }
+
 open class PathNode <: Equatable<PathNode> {
     protected var name: String
     let prev: Option<PathNode>
@@ -612,27 +611,27 @@ open class PathNode <: Equatable<PathNode> {
         return doubleStarNode
     }
     func appendSub(name: String): Option<PathNode> {
-        match(subs.get(name)){
+        match (subs.get(name)) {
             case Some(x) => x
-            case _ => 
+            case _ =>
                 let node = SubPathNode(name, this)
                 subs.addIfAbsent(name, node)
                 node
         }
     }
     func appendRegexNode(name: String, protogenesis: Bool): Option<PathNode> {
-        match(regexPathNodes.get(name)){
+        match (regexPathNodes.get(name)) {
             case Some(x) => x
-            case _ => 
+            case _ =>
                 let node = RegexPathNode(name, protogenesis, this)
                 regexPathNodes.addIfAbsent(name, node)
                 node
         }
     }
     func createPlaceholderRegexNodeIfAbsent(name: String, reg: String, protogenesis: Bool): Option<PathNode> {
-        match(regexPlaceholderPathNodes.get(name)){
+        match (regexPlaceholderPathNodes.get(name)) {
             case Some(x) => x
-            case _ => 
+            case _ =>
                 let node = PlaceholderRegexPathNode(name, reg, protogenesis, this)
                 regexPlaceholderPathNodes.addIfAbsent(name, node)
                 node
@@ -651,18 +650,18 @@ open class PathNode <: Equatable<PathNode> {
         return doubleStarNode
     }
     func createPlaceholderNodeIfAbsent(name: String): Option<PathNode> {
-        match(placeholderPathNodes.get(name)){
+        match (placeholderPathNodes.get(name)) {
             case Some(x) => x
-            case _ => 
+            case _ =>
                 let node = PlaceholderPathNode(name, this)
                 placeholderPathNodes.addIfAbsent(name, node)
                 node
         }
     }
     func createComplexPathNode(name: String): Option<PathNode> {
-        match(complexPathNodes.get(name)){
+        match (complexPathNodes.get(name)) {
             case Some(x) => x
-            case _ => 
+            case _ =>
                 let node = ComplexPathNode(name, this)
                 complexPathNodes.addIfAbsent(name, node)
                 node
@@ -672,24 +671,25 @@ open class PathNode <: Equatable<PathNode> {
         match (name) {
             case "*" => this.createStarNodeIfAbsent()
             case "**" => this.createDoubleStarNodeIfAbsent()
-            case _ => if (#"^\{#regex:.+\}$"#.regex(solid: true).matches(name)) {
-                let idx = (name.indexOf(":") ?? -1) + 1
-                let n = name[idx..name.size - 1]
-                this.appendRegexNode(n, true)
-            } else if (#"^\{[a-zA-Z_]+\w*:.+\}$"#.regex(solid: true).matches(name)) {
-                let idx = name.indexOf(":") ?? -1
-                let reg = name[idx + 1..name.size - 1]
-                let n = name[1..idx]
-                this.createPlaceholderRegexNodeIfAbsent(n, reg, true)
-            } else if (#"^\{[a-zA-Z_]+\w*\}$"#.regex(solid: true).matches(name)) {
-                return this.createPlaceholderNodeIfAbsent(name[1..name.size - 1])
-            } else if (#"^(.*\{[a-zA-Z_]+\w*\}.*)+$"#.regex(solid: true).matches(name)) {
-                return this.createComplexPathNode(name)
-            } else if (name.contains("*") || name.contains("?")) {
-                return this.appendRegexNode(name, false)
-            } else {
-                return this.appendSub(name)
-            }
+            case _ =>
+                if (#"^\{#regex:.+\}$"#.regex(solid: true).matches(name)) {
+                    let idx = (name.indexOf(":") ?? -1) + 1
+                    let n = name[idx..name.size - 1]
+                    this.appendRegexNode(n, true)
+                } else if (#"^\{[a-zA-Z_]+\w*:.+\}$"#.regex(solid: true).matches(name)) {
+                    let idx = name.indexOf(":") ?? -1
+                    let reg = name[idx + 1..name.size - 1]
+                    let n = name[1..idx]
+                    this.createPlaceholderRegexNodeIfAbsent(n, reg, true)
+                } else if (#"^\{[a-zA-Z_]+\w*\}$"#.regex(solid: true).matches(name)) {
+                    return this.createPlaceholderNodeIfAbsent(name[1..name.size - 1])
+                } else if (#"^(.*\{[a-zA-Z_]+\w*\}.*)+$"#.regex(solid: true).matches(name)) {
+                    return this.createComplexPathNode(name)
+                } else if (name.contains("*") || name.contains("?")) {
+                    return this.appendRegexNode(name, false)
+                } else {
+                    return this.appendSub(name)
+                }
         }
     }
     mut prop end: Bool {
@@ -734,6 +734,7 @@ open class PathNode <: Equatable<PathNode> {
         return this == value
     }
 }
+
 class NonePathNode <: PathNode {
     static let INSTANCE: PathNode = NonePathNode()
     private init() {}
@@ -773,6 +774,7 @@ class DoubleStarPathNode <: PathNode {
             (o as Option<String>).isSome()
     }
 }
+
 open class RegexPathNode <: PathNode {
     private var reg: Regex
     init(name: String, protogenesis: Bool, prev: PathNode) {
@@ -804,12 +806,14 @@ open class RegexPathNode <: PathNode {
         return reg.matches(name)
     }
 }
+
 class PlaceholderRegexPathNode <: RegexPathNode {
     init(name: String, reg: String, protogenesis: Bool, prev: PathNode) {
         super(reg, protogenesis, prev)
         super.name = name
     }
 }
+
 class PlaceholderPathNode <: PathNode {
     init(name: String, prev: PathNode) {
         super(name, prev)
@@ -822,6 +826,7 @@ class PlaceholderPathNode <: PathNode {
         return this == name
     }
 }
+
 class ComplexPathNode <: PathNode {
     private let patterns = ArrayList<PathNode>()
     private let reg: Regex
@@ -907,6 +912,7 @@ class ComplexPathNode <: PathNode {
         return datas
     }
 }
+
 enum Mode {
     | MATCHING
     | EXTRACTION

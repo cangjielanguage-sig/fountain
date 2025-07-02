@@ -6,7 +6,7 @@
             http://license.coscl.org.cn/MulanPSL2
     THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
     See the Mulan PSL v2 for more details.
-*/
+ */
 package f_macros
 
 public interface CompositeDecl <: ToTokens {
@@ -21,18 +21,20 @@ public interface CompositeDecl <: ToTokens {
     mut prop upperBound: Token
     mut prop superTypes: ArrayList<TypeNode>
     mut prop body: Body
-    func isPublic(): Bool 
-    func isProtected(): Bool 
-    func isPrivate(): Bool 
+    func isPublic(): Bool
+    func isProtected(): Bool
+    func isPrivate(): Bool
     func isInternal(): Bool {
         !(isPublic() || isProtected() || isPrivate())
     }
 }
+
 public interface ExtendClassDecl {
     func isOpen(): Bool
     func isAbstract(): Bool
     func isSealed(): Bool
 }
+
 extend ClassDecl <: CompositeDecl & ExtendClassDecl {
     public func isPublic(): Bool {
         isPublic(this)
@@ -43,29 +45,30 @@ extend ClassDecl <: CompositeDecl & ExtendClassDecl {
     public func isPrivate(): Bool {
         isPrivate(this)
     }
-    public func isOpen(): Bool{
+    public func isOpen(): Bool {
         let modifiers = this.modifiers
-        for(i in 0 .. modifiers.size where isOpen(modifiers, i)){
+        for (i in 0..modifiers.size where isOpen(modifiers, i)) {
             return true
         }
         false
     }
-    public func isAbstract(): Bool{
+    public func isAbstract(): Bool {
         let modifiers = this.modifiers
-        for(i in 0 .. modifiers.size where isAbstract(modifiers, i)){
+        for (i in 0..modifiers.size where isAbstract(modifiers, i)) {
             return true
         }
         false
     }
-    public func isSealed(): Bool{
+    public func isSealed(): Bool {
         let modifiers = this.modifiers
-        for(i in 0 .. modifiers.size where isModifier(modifiers, i, SEALED)){
+        for (i in 0..modifiers.size where isModifier(modifiers, i, SEALED)) {
             return true
         }
         false
     }
 }
-extend StructDecl <: CompositeDecl{
+
+extend StructDecl <: CompositeDecl {
     public func isPublic(): Bool {
         isPublic(this)
     }

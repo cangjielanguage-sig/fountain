@@ -11,7 +11,6 @@ package f_cache
 
 import std.collection.{Map, EquatableCollection}
 import std.sync.{AtomicInt64, SyncCounter}
-
 import f_base.EmptyIterator
 
 class ConcHashMapKeysIterator<V> <: Iterator<String> {
@@ -28,6 +27,7 @@ class ConcHashMapKeysIterator<V> <: Iterator<String> {
         return None<String>
     }
 }
+
 class ConcHashMapKeys<V> <: EquatableCollection<String> {
     ConcHashMapKeys(private let map: ConcHashMap<V>) {}
 
@@ -67,12 +67,13 @@ class ConcHashMapKeys<V> <: EquatableCollection<String> {
     }
 
     public func contains(all!: Collection<String>): Bool {
-        for(e in all where contains(e)){
+        for (e in all where contains(e)) {
             return true
         }
         false
     }
 }
+
 class ConcHashMapValuesIterator<V> <: Iterator<V> {
     ConcHashMapValuesIterator(private let itr: Iterator<(String, V)>) {}
 
@@ -87,6 +88,7 @@ class ConcHashMapValuesIterator<V> <: Iterator<V> {
         return None<V>
     }
 }
+
 class ConcHashMapValues<V> <: Collection<V> {
     ConcHashMapValues(private let map: ConcHashMap<V>) {}
 
@@ -123,6 +125,7 @@ class ConcHashMapValues<V> <: Collection<V> {
         map.clear()
     }
 }
+
 class ConcHashMapIterator<V> <: Iterator<(String, V)> {
     private var cur = 0
     private var itr: Iterator<(String, V)> = EmptyIterator<(String, V)>.INSTANCE()
@@ -160,7 +163,8 @@ class ConcHashMapIterator<V> <: Iterator<(String, V)> {
         m.segments[idx].iterator()
     }
 }
-class ConcHashMap<V> <: Collection<(String, V)>{
+
+class ConcHashMap<V> <: Collection<(String, V)> {
     static const DEFAULT_CONCURRENCY = 16
     private var size_ = AtomicInt64(0)
     private let hashMask: Int64
@@ -268,7 +272,7 @@ class ConcHashMap<V> <: Collection<(String, V)>{
             incrSize()
         }
     }
-    func computeIfAbsent(key: String, callable: ()->V): V {
+    func computeIfAbsent(key: String, callable: () -> V): V {
         segment(key).computeIfAbsent(key, callable)
     }
 

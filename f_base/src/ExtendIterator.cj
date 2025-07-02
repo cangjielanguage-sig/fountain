@@ -19,15 +19,17 @@ public class AsyncIterator<T> <: Iterator<Future<?T>> {
         }
     }
 }
+
 public class TypeFilterIterator<T, R> <: Iterator<R> {
-    public TypeFilterIterator(private let itr: Iterator<T>, private let exactly: Bool){}
+    public TypeFilterIterator(private let itr: Iterator<T>, private let exactly: Bool) {}
     public func next(): ?R {
-        for(v in itr where (exactly && TypeInfo.of(v) == TypeInfos.get<R>()) || v is R){
+        for (v in itr where (exactly && TypeInfo.of(v) == TypeInfos.get<R>()) || v is R) {
             return v as R
         }
         None
     }
 }
+
 public interface ExtendIterator<T> {
     func async(): Iterator<Future<?T>>
     func min(cmp: (T, T) -> Ordering): ?T
@@ -42,14 +44,14 @@ extend<T> Iterator<T> <: ExtendIterator<T> {
     }
     public func min(cmp: (T, T) -> Ordering): ?T {
         var r = None<T>
-        for(v in this where r.isNone() || cmp(v, r.getOrThrow()) == LT){
+        for (v in this where r.isNone() || cmp(v, r.getOrThrow()) == LT) {
             r = v
         }
         r
     }
     public func max(cmp: (T, T) -> Ordering): ?T {
         var r = None<T>
-        for(v in this where r.isNone() || cmp(v, r.getOrThrow()) == GT){
+        for (v in this where r.isNone() || cmp(v, r.getOrThrow()) == GT) {
             r = v
         }
         r

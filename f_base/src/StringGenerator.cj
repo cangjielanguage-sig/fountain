@@ -5,8 +5,8 @@
     You may obtain a copy of Mulan PSL v2 at:
             http://license.coscl.org.cn/MulanPSL2
     THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-    See the Mulan PSL v2 for more details.  
-*/
+    See the Mulan PSL v2 for more details.
+ */
 package f_base
 
 import std.collection.ArrayList
@@ -14,13 +14,13 @@ import std.collection.ArrayList
 public class StringGenerator <: ToString {
     private let utf8 = ArrayList<Byte>()
 
-    public init(){}
-    public init(s: String){
+    public init() {}
+    public init(s: String) {
         append(s)
     }
 
     public prop size: Int64 {
-        get(){
+        get() {
             utf8.size
         }
     }
@@ -28,9 +28,9 @@ public class StringGenerator <: ToString {
         utf8.clear()
         this
     }
-    
-    private func checkIndex(fromIndex: Int64, toIndex: Int64){
-        if(fromIndex < 0 || fromIndex > size || toIndex < fromIndex || toIndex > size){
+
+    private func checkIndex(fromIndex: Int64, toIndex: Int64) {
+        if (fromIndex < 0 || fromIndex > size || toIndex < fromIndex || toIndex > size) {
             throw IndexOutOfBoundsException('current size is ${size}, but fromIndex: ${fromIndex}, toIndex: ${toIndex}')
         }
     }
@@ -58,15 +58,15 @@ public class StringGenerator <: ToString {
     }
     public func removeFirst<T>(content: T, fromIndex!: Int64 = 0): This where T <: ToString {
         let bytes = content.toString().unsafeBytes()
-        if(let Some(idx) <- indexOf(bytes, fromIndex)){
-            utf8.remove(idx .. idx + bytes.size)
+        if (let Some(idx) <- indexOf(bytes, fromIndex)) {
+            utf8.remove(idx..idx + bytes.size)
         }
         this
     }
     public func removeLast<T>(content: T, fromIndex!: Int64 = size): This where T <: ToString {
         let bytes = content.toString().unsafeBytes()
-        if(let Some(idx) <- lastIndexOf(bytes, fromIndex)){
-            utf8.remove(idx .. idx + bytes.size)
+        if (let Some(idx) <- lastIndexOf(bytes, fromIndex)) {
+            utf8.remove(idx..idx + bytes.size)
         }
         this
     }
@@ -74,8 +74,8 @@ public class StringGenerator <: ToString {
         checkIndex(fromIndex, toIndex)
         let search = content.toString().unsafeBytes()
         var fromIdx = fromIndex
-        while(let Some(idx) <- indexOf(search, fromIdx) && idx < toIndex){
-            utf8.remove(idx .. idx + search.size)
+        while (let Some(idx) <- indexOf(search, fromIdx) && idx < toIndex) {
+            utf8.remove(idx..idx + search.size)
             fromIdx = idx
         }
         this
@@ -84,22 +84,23 @@ public class StringGenerator <: ToString {
         utf8.add(all: sub.toString().unsafeBytes(), at: at)
         this
     }
-    public func replace<O, T>(old: O, new: T, fromIndex!: Int64 = 0, toIndex!: Int64 = size): This where O <: ToString, T <: ToString {
+    public func replace<O, T>(old: O, new: T, fromIndex!: Int64 = 0, toIndex!: Int64 = size): This where O <: ToString,
+        T <: ToString {
         checkIndex(fromIndex, toIndex)
         let oldBytes = old.toString().unsafeBytes()
         let newBytes = new.toString().unsafeBytes()
         var fromIdx = fromIndex
-        while(let Some(idx) <- indexOf(oldBytes, fromIdx) && idx < toIndex){
-            if(oldBytes.size == newBytes.size){
-                utf8.unsafeData()[idx .. idx + oldBytes.size] = newBytes
-            }else if(oldBytes.size < newBytes.size){
+        while (let Some(idx) <- indexOf(oldBytes, fromIdx) && idx < toIndex) {
+            if (oldBytes.size == newBytes.size) {
+                utf8.unsafeData()[idx..idx + oldBytes.size] = newBytes
+            } else if (oldBytes.size < newBytes.size) {
                 let utf8Bytes = utf8.unsafeData()
-                utf8Bytes[idx .. idx + oldBytes.size] = newBytes[0 .. oldBytes.size]
-                utf8.add(all: newBytes[oldBytes.size .. newBytes.size], at: idx + oldBytes.size)
-            }else{
+                utf8Bytes[idx..idx + oldBytes.size] = newBytes[0..oldBytes.size]
+                utf8.add(all: newBytes[oldBytes.size..newBytes.size], at: idx + oldBytes.size)
+            } else {
                 let utf8Bytes = utf8.unsafeData()
-                utf8Bytes[idx .. idx + newBytes.size] = newBytes
-                utf8.remove(idx + newBytes.size .. idx + oldBytes.size)
+                utf8Bytes[idx..idx + newBytes.size] = newBytes
+                utf8.remove(idx + newBytes.size..idx + oldBytes.size)
             }
             fromIdx = idx + newBytes.size
         }
@@ -110,62 +111,64 @@ public class StringGenerator <: ToString {
         let sub = new.toString().unsafeBytes()
         let replaced = toIndex - fromIndex
         let subSize = sub.size
-        if(replaced < subSize){
-            utf8.unsafeData()[fromIndex .. toIndex] = sub[0 .. replaced]
-            utf8.add(all: sub[replaced .. sub.size], at: toIndex)
-        }else if(replaced > subSize){
-            utf8.unsafeData()[fromIndex .. fromIndex + subSize] = sub
-            utf8.remove(fromIndex + subSize .. toIndex)
-        }else{
-            utf8.unsafeData()[fromIndex .. toIndex] = sub
+        if (replaced < subSize) {
+            utf8.unsafeData()[fromIndex..toIndex] = sub[0..replaced]
+            utf8.add(all: sub[replaced..sub.size], at: toIndex)
+        } else if (replaced > subSize) {
+            utf8.unsafeData()[fromIndex..fromIndex + subSize] = sub
+            utf8.remove(fromIndex + subSize..toIndex)
+        } else {
+            utf8.unsafeData()[fromIndex..toIndex] = sub
         }
         this
     }
-    public func replaceFirst<O, T>(old: O, new: T, fromIndex!: Int64 = 0, toIndex!: Int64 = size): This where O <: ToString, T <: ToString {
+    public func replaceFirst<O, T>(old: O, new: T, fromIndex!: Int64 = 0, toIndex!: Int64 = size): This where O <: ToString,
+        T <: ToString {
         checkIndex(fromIndex, toIndex)
         let oldBytes = old.toString().unsafeBytes()
         let newBytes = new.toString().unsafeBytes()
-        if(let Some(idx) <- indexOf(oldBytes, fromIndex) && idx < toIndex){
-            if(oldBytes.size == newBytes.size){
-                utf8.unsafeData()[idx .. idx + oldBytes.size] = newBytes
-            }else if(oldBytes.size < newBytes.size){
+        if (let Some(idx) <- indexOf(oldBytes, fromIndex) && idx < toIndex) {
+            if (oldBytes.size == newBytes.size) {
+                utf8.unsafeData()[idx..idx + oldBytes.size] = newBytes
+            } else if (oldBytes.size < newBytes.size) {
                 let utf8Bytes = utf8.unsafeData()
-                utf8Bytes[idx .. idx + oldBytes.size] = newBytes[0 .. oldBytes.size]
-                utf8.add(all: newBytes[oldBytes.size .. newBytes.size], at: idx + oldBytes.size)
-            }else{
+                utf8Bytes[idx..idx + oldBytes.size] = newBytes[0..oldBytes.size]
+                utf8.add(all: newBytes[oldBytes.size..newBytes.size], at: idx + oldBytes.size)
+            } else {
                 let utf8Bytes = utf8.unsafeData()
-                utf8Bytes[idx .. idx + newBytes.size] = newBytes
-                utf8.remove(idx + newBytes.size .. idx + oldBytes.size)
+                utf8Bytes[idx..idx + newBytes.size] = newBytes
+                utf8.remove(idx + newBytes.size..idx + oldBytes.size)
             }
         }
         this
     }
-    public func replaceLast<O, T>(old: O, new: T, fromIndex!: Int64 = 0, toIndex!: Int64 = size): This where O <: ToString, T <: ToString {
+    public func replaceLast<O, T>(old: O, new: T, fromIndex!: Int64 = 0, toIndex!: Int64 = size): This where O <: ToString,
+        T <: ToString {
         checkIndex(fromIndex, toIndex)
         let oldBytes = old.toString().unsafeBytes()
         let newBytes = new.toString().unsafeBytes()
-        if(let Some(idx) <- lastIndexOf(oldBytes, fromIndex) && idx < toIndex){
-            if(oldBytes.size == newBytes.size){
-                utf8.unsafeData()[idx .. idx + oldBytes.size] = newBytes
-            }else if(oldBytes.size < newBytes.size){
+        if (let Some(idx) <- lastIndexOf(oldBytes, fromIndex) && idx < toIndex) {
+            if (oldBytes.size == newBytes.size) {
+                utf8.unsafeData()[idx..idx + oldBytes.size] = newBytes
+            } else if (oldBytes.size < newBytes.size) {
                 let utf8Bytes = utf8.unsafeData()
-                utf8Bytes[idx .. idx + oldBytes.size] = newBytes[0 .. oldBytes.size]
-                utf8.add(all: newBytes[oldBytes.size .. newBytes.size], at: idx + oldBytes.size)
-            }else{
+                utf8Bytes[idx..idx + oldBytes.size] = newBytes[0..oldBytes.size]
+                utf8.add(all: newBytes[oldBytes.size..newBytes.size], at: idx + oldBytes.size)
+            } else {
                 let utf8Bytes = utf8.unsafeData()
-                utf8Bytes[idx .. idx + newBytes.size] = newBytes
-                utf8.remove(idx + newBytes.size .. idx + oldBytes.size)
+                utf8Bytes[idx..idx + newBytes.size] = newBytes
+                utf8.remove(idx + newBytes.size..idx + oldBytes.size)
             }
         }
         this
     }
-    
+
     public func reverse(): This {
         let utf8 = this.utf8.unsafeData()
         var i = utf8.size
-        for(rune in toString().runes()){
+        for (rune in toString().runes()) {
             let runeBytes = rune.toString().unsafeBytes()
-            utf8[i - runeBytes.size .. i] = runeBytes
+            utf8[i - runeBytes.size..i] = runeBytes
             i -= runeBytes.size
         }
         this

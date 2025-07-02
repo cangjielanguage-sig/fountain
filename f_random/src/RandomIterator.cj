@@ -51,6 +51,7 @@ extend Random <: BaseRandom<Random> {
         RandomGaussianFloat64Iterator<Random>(current, mean: mean, sigma: sigma)
     }
 }
+
 extend SecureRandom <: BaseRandom<SecureRandom> {
     public prop current: SecureRandom {
         get() {
@@ -94,9 +95,10 @@ extend SecureRandom <: BaseRandom<SecureRandom> {
     }
 }
 
-sealed abstract class RandomIterator<R, T> <: Iterator<T> where R <: BaseRandom<R> {
+abstract sealed class RandomIterator<R, T> <: Iterator<T> where R <: BaseRandom<R> {
     RandomIterator(protected let rand: R) {}
 }
+
 class RangeRandomInt32Iterator<R> <: RandomIterator<R, Int32> where R <: BaseRandom<R> & ExtendRandom<R> {
     RangeRandomInt32Iterator(rand: R, private let minValue: Int32, private let maxValue: Int32, private let closed: Bool) {
         super(rand)
@@ -105,14 +107,17 @@ class RangeRandomInt32Iterator<R> <: RandomIterator<R, Int32> where R <: BaseRan
         rand.nextInt32(minValue, maxValue, closed: closed)
     }
 }
+
 class RangeRandomUInt32Iterator<R> <: RandomIterator<R, UInt32> where R <: BaseRandom<R> & ExtendRandom<R> {
-    RangeRandomUInt32Iterator(rand: R, private let minValue: UInt32, private let maxValue: UInt32, private let closed: Bool) {
+    RangeRandomUInt32Iterator(rand: R, private let minValue: UInt32, private let maxValue: UInt32,
+        private let closed: Bool) {
         super(rand)
     }
     public func next(): Option<UInt32> {
         rand.nextUInt32(minValue, maxValue, closed: closed)
     }
 }
+
 class RangeRandomInt64Iterator<R> <: RandomIterator<R, Int64> where R <: BaseRandom<R> & ExtendRandom<R> {
     RangeRandomInt64Iterator(rand: R, private let minValue: Int64, private let maxValue: Int64, private let closed: Bool) {
         super(rand)
@@ -121,14 +126,17 @@ class RangeRandomInt64Iterator<R> <: RandomIterator<R, Int64> where R <: BaseRan
         rand.nextInt64(minValue, maxValue, closed: closed)
     }
 }
+
 class RangeRandomUInt64Iterator<R> <: RandomIterator<R, UInt64> where R <: BaseRandom<R> & ExtendRandom<R> {
-    RangeRandomUInt64Iterator(rand: R, private let minValue: UInt64, private let maxValue: UInt64, private let closed: Bool) {
+    RangeRandomUInt64Iterator(rand: R, private let minValue: UInt64, private let maxValue: UInt64,
+        private let closed: Bool) {
         super(rand)
     }
     public func next(): Option<UInt64> {
         rand.nextUInt64(minValue, maxValue, closed: closed)
     }
 }
+
 class RandomBoolIterator<R> <: RandomIterator<R, Bool> where R <: BaseRandom<R> {
     init(rand: R) {
         super(rand)
@@ -137,6 +145,7 @@ class RandomBoolIterator<R> <: RandomIterator<R, Bool> where R <: BaseRandom<R> 
         rand.nextBool()
     }
 }
+
 class RandomInt8Iterator<R> <: RandomIterator<R, Int8> where R <: BaseRandom<R> {
     init(rand: R) {
         super(rand)
@@ -145,6 +154,7 @@ class RandomInt8Iterator<R> <: RandomIterator<R, Int8> where R <: BaseRandom<R> 
         rand.nextInt8()
     }
 }
+
 class RandomUInt8Iterator<R> <: RandomIterator<R, UInt8> where R <: BaseRandom<R> {
     init(rand: R) {
         super(rand)
@@ -153,6 +163,7 @@ class RandomUInt8Iterator<R> <: RandomIterator<R, UInt8> where R <: BaseRandom<R
         rand.nextUInt8()
     }
 }
+
 class UpperRandomInt8Iterator<R> <: RandomIterator<R, Int8> where R <: BaseRandom<R> {
     UpperRandomInt8Iterator(rand: R, private var upper: Int8) {
         super(rand)
@@ -161,6 +172,7 @@ class UpperRandomInt8Iterator<R> <: RandomIterator<R, Int8> where R <: BaseRando
         rand.nextInt8(upper)
     }
 }
+
 class UpperRandomUInt8Iterator<R> <: RandomIterator<R, UInt8> where R <: BaseRandom<R> {
     UpperRandomUInt8Iterator(rand: R, private var upper: UInt8) {
         super(rand)
@@ -169,13 +181,14 @@ class UpperRandomUInt8Iterator<R> <: RandomIterator<R, UInt8> where R <: BaseRan
         rand.nextUInt8(upper)
     }
 }
+
 class RandomUInt8sIterator<R> <: RandomIterator<R, Array<UInt8>> where R <: BaseRandom<R> {
     RandomUInt8sIterator(rand: R, private let size: Int64) {
         super(rand)
     }
 
     public func next(): Option<Array<UInt8>> {
-        Array<UInt8>(size){_ => rand.nextUInt8()}
+        Array<UInt8>(size) {_ => rand.nextUInt8()}
     }
 }
 
@@ -187,6 +200,7 @@ class RandomInt16Iterator<R> <: RandomIterator<R, Int16> where R <: BaseRandom<R
         rand.nextInt16()
     }
 }
+
 class RandomUInt16Iterator<R> <: RandomIterator<R, UInt16> where R <: BaseRandom<R> {
     init(rand: R) {
         super(rand)
@@ -195,6 +209,7 @@ class RandomUInt16Iterator<R> <: RandomIterator<R, UInt16> where R <: BaseRandom
         rand.nextUInt16()
     }
 }
+
 class UpperRandomInt16Iterator<R> <: RandomIterator<R, Int16> where R <: BaseRandom<R> {
     UpperRandomInt16Iterator(rand: R, private var upper: Int16) {
         super(rand)
@@ -203,6 +218,7 @@ class UpperRandomInt16Iterator<R> <: RandomIterator<R, Int16> where R <: BaseRan
         rand.nextInt16(upper)
     }
 }
+
 class UpperRandomUInt16Iterator<R> <: RandomIterator<R, UInt16> where R <: BaseRandom<R> {
     UpperRandomUInt16Iterator(rand: R, private var upper: UInt16) {
         super(rand)
@@ -220,6 +236,7 @@ class RandomInt32Iterator<R> <: RandomIterator<R, Int32> where R <: BaseRandom<R
         rand.nextInt32()
     }
 }
+
 class RandomUInt32Iterator<R> <: RandomIterator<R, UInt32> where R <: BaseRandom<R> {
     init(rand: R) {
         super(rand)
@@ -228,6 +245,7 @@ class RandomUInt32Iterator<R> <: RandomIterator<R, UInt32> where R <: BaseRandom
         rand.nextUInt32()
     }
 }
+
 class UpperRandomInt32Iterator<R> <: RandomIterator<R, Int32> where R <: BaseRandom<R> {
     UpperRandomInt32Iterator(rand: R, private var upper: Int32) {
         super(rand)
@@ -236,6 +254,7 @@ class UpperRandomInt32Iterator<R> <: RandomIterator<R, Int32> where R <: BaseRan
         rand.nextInt32(upper)
     }
 }
+
 class UpperRandomUInt32Iterator<R> <: RandomIterator<R, UInt32> where R <: BaseRandom<R> {
     UpperRandomUInt32Iterator(rand: R, private var upper: UInt32) {
         super(rand)
@@ -253,6 +272,7 @@ class RandomInt64Iterator<R> <: RandomIterator<R, Int64> where R <: BaseRandom<R
         rand.nextInt64()
     }
 }
+
 class RandomUInt64Iterator<R> <: RandomIterator<R, UInt64> where R <: BaseRandom<R> {
     init(rand: R) {
         super(rand)
@@ -261,6 +281,7 @@ class RandomUInt64Iterator<R> <: RandomIterator<R, UInt64> where R <: BaseRandom
         rand.nextUInt64()
     }
 }
+
 class UpperRandomInt64Iterator<R> <: RandomIterator<R, Int64> where R <: BaseRandom<R> {
     UpperRandomInt64Iterator(rand: R, private var upper: Int64) {
         super(rand)
@@ -269,6 +290,7 @@ class UpperRandomInt64Iterator<R> <: RandomIterator<R, Int64> where R <: BaseRan
         rand.nextInt64(upper)
     }
 }
+
 class UpperRandomUInt64Iterator<R> <: RandomIterator<R, UInt64> where R <: BaseRandom<R> {
     UpperRandomUInt64Iterator(rand: R, private var upper: UInt64) {
         super(rand)
@@ -286,6 +308,7 @@ class RandomFloat16Iterator<R> <: RandomIterator<R, Float16> where R <: BaseRand
         rand.nextFloat16()
     }
 }
+
 class RandomFloat32Iterator<R> <: RandomIterator<R, Float32> where R <: BaseRandom<R> {
     init(rand: R) {
         super(rand)
@@ -294,6 +317,7 @@ class RandomFloat32Iterator<R> <: RandomIterator<R, Float32> where R <: BaseRand
         rand.nextFloat32()
     }
 }
+
 class RandomFloat64Iterator<R> <: RandomIterator<R, Float64> where R <: BaseRandom<R> {
     init(rand: R) {
         super(rand)
@@ -311,6 +335,7 @@ class RandomGaussianFloat16Iterator<R> <: RandomIterator<R, Float16> where R <: 
         rand.nextGaussianFloat16(mean: mean, sigma: sigma)
     }
 }
+
 class RandomGaussianFloat32Iterator<R> <: RandomIterator<R, Float32> where R <: BaseRandom<R> {
     RandomGaussianFloat32Iterator(rand: R, private let mean!: Float32, private let sigma!: Float32) {
         super(rand)
@@ -319,6 +344,7 @@ class RandomGaussianFloat32Iterator<R> <: RandomIterator<R, Float32> where R <: 
         rand.nextGaussianFloat32(mean: mean, sigma: sigma)
     }
 }
+
 class RandomGaussianFloat64Iterator<R> <: RandomIterator<R, Float64> where R <: BaseRandom<R> {
     RandomGaussianFloat64Iterator(rand: R, private let mean!: Float64, private let sigma!: Float64) {
         super(rand)

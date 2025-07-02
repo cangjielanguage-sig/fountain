@@ -6,29 +6,30 @@
             http://license.coscl.org.cn/MulanPSL2
     THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
     See the Mulan PSL v2 for more details.
-*/
+ */
 package f_data
 
 public class DataString <: Data & Hashable & Comparable<DataString> {
-    public DataString(public let data: String){}
-    public init(data: ToString){
+    public DataString(public let data: String) {}
+    public init(data: ToString) {
         this(data.toString())
     }
-    private init(){
+    private init() {
         this("")
     }
     public func toString(): String {
-        '"${data.replace('"', '\\"')}"'
+        '\"${data.replace('"', '\\"')}\"'
     }
     public static func tryParse(data: String): ?Data {
         parse(data)
     }
     public static func parse(data: String): Data {
-        DataString(if(data.startsWith('"') && data.endsWith('"')){
-            data[1 .. data.size - 1].replace('\\"', '"')
-        }else{
-            data
-        })
+        DataString(
+            if (data.startsWith('"') && data.endsWith('"')) {
+                data[1..data.size - 1].replace('\\"', '"')
+            } else {
+                data
+            })
     }
     public func hashCode(): Int64 {
         data.hashCode()
@@ -37,15 +38,17 @@ public class DataString <: Data & Hashable & Comparable<DataString> {
         data.compare(other.data)
     }
 }
+
 extend String <: DataFields<String> {
     public func toData(): Data {
         DataString(this)
     }
     public static func tryFromData(data: Data, flag: DataConversionFlag): Any {
-        match(data){
+        match (data) {
             case x: DataString => x.data
             case x: DataNone => None<String>
-            case _ where (flag & IGNORE_FIELD_TYPE_NOT_MATCH) == 0 => throw DataException('(${data}) does not match to ${TypeInfos.get<String>()}')
+            case _ where (flag & IGNORE_FIELD_TYPE_NOT_MATCH) == 0 => throw DataException(
+                '(${data}) does not match to ${TypeInfos.get<String>()}')
             case x => x.toString()
         }
     }

@@ -32,8 +32,7 @@ public class MutableField <: ReadableField {
                             case _ =>
                                 let x: Any = o
                                 throw DataException(
-                                    "type of current instance does not match, expected ${TypeInfos.get<O>()}, but receives ${TypeInfo.of(x)}"
-                                )
+                                    "type of current instance does not match, expected ${TypeInfos.get<O>()}, but receives ${TypeInfo.of(x)}")
                         }
                         true
                     }
@@ -45,8 +44,7 @@ public class MutableField <: ReadableField {
                         case _ =>
                             let x: Any = o
                             throw DataException(
-                                "type of current instance does not match, expected ${TypeInfos.get<O>()}, but receives ${TypeInfo.of(x)}"
-                            )
+                                "type of current instance does not match, expected ${TypeInfos.get<O>()}, but receives ${TypeInfo.of(x)}")
                     }
                 } else if ((flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0) {
                     throw DataException("data ${data} cannot be converted to ${fieldType}")
@@ -74,8 +72,7 @@ public class MutableField <: ReadableField {
                         case _ =>
                             let x: Any = o
                             throw DataException(
-                                "type of current instance does not match, expected ${TypeInfos.get<O>()}, but receives ${TypeInfo.of(x)}"
-                            )
+                                "type of current instance does not match, expected ${TypeInfos.get<O>()}, but receives ${TypeInfo.of(x)}")
                     }
                 } else if ((flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0) {
                     throw DataException("data ${data} cannot be converted to ${fieldType}")

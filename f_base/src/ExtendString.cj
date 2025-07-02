@@ -9,7 +9,8 @@
  */
 package f_base
 
-public func stringJoin<T>(parts: Array<T>, delimiter!: String = '', leftPadding!: String = '', rightPadding!: String = ''): String where T <: ToString {
+public func stringJoin<T>(parts: Array<T>, delimiter!: String = '', leftPadding!: String = '',
+    rightPadding!: String = ''): String where T <: ToString {
     stringJoin<T, Array<T>>(parts, delimiter: delimiter, leftPadding: leftPadding, rightPadding: rightPadding)
 }
 

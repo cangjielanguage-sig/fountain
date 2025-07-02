@@ -18,6 +18,7 @@ class MapKeyIterator<K, V> <: Iterator<K> {
         entryIterator.next()?[0]
     }
 }
+
 class MapKeys<K, V> <: EquatableCollection<K> where K <: Equatable<K> {
     MapKeys(private let map: Map<K, V>) {}
 
@@ -45,8 +46,8 @@ class MapKeys<K, V> <: EquatableCollection<K> where K <: Equatable<K> {
      */
     public func toArray(): Array<K> {
         let itr = iterator()
-        return Array<K>(size){_ => 
-            itr.next().getOrThrow()
+        return Array<K>(size) {
+            _ => itr.next().getOrThrow()
         }
     }
 
@@ -75,12 +76,14 @@ class MapKeys<K, V> <: EquatableCollection<K> where K <: Equatable<K> {
         return map.contains(all: all)
     }
 }
+
 class MapValueIterator<K, V> <: Iterator<V> {
     MapValueIterator(private let entryIterator: Iterator<(K, V)>) {}
     public func next(): Option<V> {
         entryIterator.next()?[1]
     }
 }
+
 class MapValues<K, V> <: Collection<V> where K <: Equatable<K> {
     private var map: Map<K, V>
     init(map: Map<K, V>) {
@@ -124,10 +127,10 @@ class MapValues<K, V> <: Collection<V> where K <: Equatable<K> {
     public func clear(): Unit {
         map.clear()
     }
-    public func toArray(): Array<V>{
+    public func toArray(): Array<V> {
         let itr = iterator()
-        Array<V>(size){_ => 
-            itr.next().getOrThrow()
+        Array<V>(size) {
+            _ => itr.next().getOrThrow()
         }
     }
 }
