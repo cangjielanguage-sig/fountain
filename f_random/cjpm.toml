@@ -15,7 +15,7 @@
 
 [target.x86_64-w64-mingw32]
   [target.x86_64-w64-mingw32.bin-dependencies]
-    path-option = ["D:\\docs\\work\\cangjie\\cangjie-win-bin\\windows_x86_64_llvm\\dynamic\\stdx"]
+    path-option = ["${CANGJIE_STDX_PATH}\\dynamic\\stdx"]
 
 [target.x86_64-unknown-linux-gnu]
   [target.x86_64-unknown-linux-gnu.bin-dependencies]
