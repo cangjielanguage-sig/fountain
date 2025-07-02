@@ -64,6 +64,13 @@ _/ ____\____  __ __  _____/  |______  |__| ____
   2. fboot run [PATH] --dylibPattern=<DYNAMIC_LIB_NAME_REGEX_WITHOUT_EXTNAME>
   3. fboot shutdown <PID>
   4. fboot restart <PID>
+
+## 构建
+  为stdx指定环境变量，比如下面这样
+  ```
+  export CANGJIE_STDX_PATH=/path/of/stdx/linux_x86_64_llvm
+  ```
+
 ## 功能
 
 - 空集合
