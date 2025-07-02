@@ -14,16 +14,19 @@ import std.convert.*
 import std.env.{getWorkingDirectory, getVariables, getCommand}
 import std.fs.*
 import std.process.{execute, findProcess, Process, ProcessException}
-import std.reflect.ModuleInfo
+import std.reflect.PackageInfo
 import std.regex.Regex
 import std.time.DateTime
 import fountain.base.{OS, StringGenerator}
 import fountain.bean.BeanFactory
 import fountain.mvc.MVCStarter
 
-public class App {
+/**
+ * App不会发生传参赋值，用命令行参数实例化后只调用boot函数。所以用struct比较合适，不会占用堆空间。
+ */
+public struct App {
     private let args: Array<String>
-    private var idx = -1
+    private let idx: Int64
     private let path: Path
     private let ext: String
     private let libPathName: String
@@ -31,10 +34,12 @@ public class App {
 
     public App(args: Array<String>, appHomeIsWorkingPath!: Bool = true, private let name!: String = '') {
         this.args = args
+        var idx = -1
         for (i in 1..args.size where !args[i].startsWith("--dylibPattern=")) {
             idx = i
             break
         }
+        this.idx = idx
         path = canonicalize(
             if (idx > 1) {
                 Path(args[1])
@@ -103,7 +108,7 @@ public class App {
                 if (fi.isDirectory()) {
                     load(fi.path)
                 } else if (pattern.matches(fi.path.fileNameWithoutExtension)) {
-                    ModuleInfo.load(fi.path.toString().replace(ext, ''))
+                    PackageInfo.load(fi.path.toString().replace(ext, ''))
                 }
                 true
             }
