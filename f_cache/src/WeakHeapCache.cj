@@ -15,22 +15,27 @@ import f_collection.*
 
 public class WeakHeapCache<T> where T <: Object {
     private let cache = ConcurrentHashMap<String, WeakRef<T>>()
-    
+    private func weakRef(value: T){
+        WeakRef(value, DEFERRED)
+    }
     public func set(key: String, value: T): ?T {
-        if(let Some(r) <- cache.get(key)){
-            if(let Some(v) <- r.value){
-                return v
+        try{
+            if(let Some(r) <- cache.get(key)){
+                if(let Some(v) <- r.value){
+                    return v
+                }
             }
-            cache.remove(key)
+            None<T>
+        }finally{
+            cache[key] = weakRef(value)
         }
-        None<T>
     }
     public func getOrCompute(key: String, fn: () -> ?T): ?T {
         cache.entryView(key){entry => 
             if(let Some(r) <- entry.value && let Some(v) <- r.value){
             }else {
                 entry.value = if(let Some(v) <- fn()){
-                    WeakRef<T>(v, DEFERRED)
+                    weakRef(v)
                 }else{
                     None
                 }
