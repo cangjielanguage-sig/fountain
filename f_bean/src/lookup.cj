@@ -56,11 +56,12 @@ public func lookupHashMap<T>(cond: StringCond): HashMap<String, T> {
     BeanFactory.instance.getMap<T>(cond: cond)
 }
 
-public func lookupLabels<L, T>(): HashMap<L, T> where L <: Hashable & Equatable<L>, T <: BeanLabel<L> {
+public func lookupLabels<L, T>(): HashMap<L, T> where L <: Hashable & Equatable<L>, T <: Object & BeanLabel<L> {
     lookupLabels<L, T>(IgnoreCond)
 }
 
-public func lookupLabels<L, T>(cond: StringCond): HashMap<L, T> where L <: Hashable & Equatable<L>, T <: BeanLabel<L> {
+public func lookupLabels<L, T>(cond: StringCond): HashMap<L, T> where L <: Hashable & Equatable<L>,
+    T <: Object & BeanLabel<L> {
     let map = HashMap<L, T>()
     for (bean in lookupList<T>(cond)) {
         map[bean.label] = bean
@@ -68,12 +69,12 @@ public func lookupLabels<L, T>(cond: StringCond): HashMap<L, T> where L <: Hasha
     map
 }
 
-public func lookupWeights<W, T>(): TreeMap<W, T> where W <: Comparable<W> & Addable<W>, T <: BeanWeight<W> {
+public func lookupWeights<W, T>(): TreeMap<W, T> where W <: Comparable<W> & Addable<W>, T <: Object & BeanWeight<W> {
     lookupWeights<W, T>(IgnoreCond)
 }
 
 public func lookupWeights<W, T>(cond: StringCond): TreeMap<W, T> where W <: Comparable<W> & Addable<W>,
-    T <: BeanWeight<W> {
+    T <: Object & BeanWeight<W> {
     let map = TreeMap<W, T>()
     var weight = None<W>
     for (bean in lookupList<T>(cond)) {
