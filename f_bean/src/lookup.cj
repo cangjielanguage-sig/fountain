@@ -9,50 +9,50 @@
  */
 package f_bean
 
-public func lookup<T>(): T {
+public func lookup<T>(): T where T <: Object {
     lookup<T>(IgnoreCond)
 }
 
-public func lookup<T>(name: String): T {
+public func lookup<T>(name: String): T where T <: Object {
     lookup<T>(Exactly(name))
 }
 
-public func lookup<T>(cond: StringCond): T {
+public func lookup<T>(cond: StringCond): T where T <: Object {
     BeanFactory
         .instance
         .getFirst<T>(cond: cond)
         .getOrThrow {BeanException('bean type ${TypeInfos.get<T>()} with bean name condition ${cond} does not exist.')}
 }
 
-public func lookupList<T>(): ArrayList<T> {
+public func lookupList<T>(): ArrayList<T> where T <: Object {
     lookupList<T>(IgnoreCond)
 }
 
-public func lookupList<T>(cond: StringCond): ArrayList<T> {
+public func lookupList<T>(cond: StringCond): ArrayList<T> where T <: Object {
     BeanFactory.instance.getList<T>(cond: cond)
 }
 
-public func lookupHashSet<T>(): HashSet<T> where T <: Hashable & Equatable<T> {
+public func lookupHashSet<T>(): HashSet<T> where T <: Object & Hashable & Equatable<T> {
     lookupHashSet<T>(IgnoreCond)
 }
 
-public func lookupHashSet<T>(cond: StringCond): HashSet<T> where T <: Hashable & Equatable<T> {
+public func lookupHashSet<T>(cond: StringCond): HashSet<T> where T <: Object & Hashable & Equatable<T> {
     HashSet<T>(lookupList<T>(cond))
 }
 
-public func lookupTreeSet<T>(): TreeSet<T> where T <: Comparable<T> {
+public func lookupTreeSet<T>(): TreeSet<T> where T <: Object & Comparable<T> {
     lookupTreeSet<T>(IgnoreCond)
 }
 
-public func lookupTreeSet<T>(cond: StringCond): TreeSet<T> where T <: Comparable<T> {
+public func lookupTreeSet<T>(cond: StringCond): TreeSet<T> where T <: Object & Comparable<T> {
     TreeSet<T>(lookupList<T>(cond))
 }
 
-public func lookupHashMap<T>(): HashMap<String, T> {
+public func lookupHashMap<T>(): HashMap<String, T> where T <: Object {
     lookupHashMap<T>(IgnoreCond)
 }
 
-public func lookupHashMap<T>(cond: StringCond): HashMap<String, T> {
+public func lookupHashMap<T>(cond: StringCond): HashMap<String, T> where T <: Object {
     BeanFactory.instance.getMap<T>(cond: cond)
 }
 
