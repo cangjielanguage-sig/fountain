@@ -7,7 +7,7 @@
   f_macros = {path = "../f_macros"}
   f_regex = {path = "../f_regex"}
 [package]
-  cjc-version = "0.60.5"
+  cjc-version = "1.0.0"
   compile-option = "-O2"
   description = "nothing here"
   link-option = ""

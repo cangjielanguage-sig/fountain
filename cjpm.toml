@@ -26,7 +26,7 @@
   f_util = {path = "./f_util"}
 
 [package]
-  cjc-version = "0.60.5"
+  cjc-version = "1.0.0"
   compile-option = "-O2"
   description = "utility for server app development"
   link-option = ""

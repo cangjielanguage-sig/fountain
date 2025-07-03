@@ -8,7 +8,7 @@
   f_random = {path = "../f_random"}
   f_time = {path = "../f_time"}
 [package]
-  cjc-version = "0.60.5"
+  cjc-version = "1.0.0"
   compile-option = "-O2"
   description = "nothing here"
   link-option = ""
