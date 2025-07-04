@@ -11,7 +11,7 @@ package fountain
 
 import std.collection.{HashMap, HashSet, Map}
 import std.convert.*
-import std.env.{getWorkingDirectory, getVariables, getCommand}
+import std.env.{getWorkingDirectory, getVariables, getCommand, getCommandLine, getVariables}
 import std.fs.*
 import std.process.{execute, findProcess, Process, ProcessException}
 import std.reflect.PackageInfo
@@ -41,8 +41,10 @@ public struct App {
         }
         this.idx = idx
         path = canonicalize(
-            if (idx > 1) {
+            if (idx > 1 && !(args[0] == 'restart' || args[0] == 'shutdown' || args[0] == 'rerun')) {
                 Path(args[1])
+            } else if (idx > 2 && !(args[0] == 'restart' || args[0] == 'shutdown' || args[0] == 'rerun')) {
+                Path(args[2])
             } else if (appHomeIsWorkingPath) {
                 getWorkingDirectory()
             } else {
@@ -59,7 +61,18 @@ public struct App {
             case _ => (".so", 'LD_LIBRARY_PATH', ':')
         }
     }
-
+    private func convertArgs(first: String){
+        match (this.args[0]) {
+            case x where x == first => Array<String>(args.size - 1) {
+                i => if (i == 0) {
+                    x.replace('re', '')
+                } else {
+                    args[i + 1]
+                }
+            }
+            case _ => args
+        }
+    }
     private func start(): Int64 {
         let libSet = HashSet<String>()
         let env = HashMap<String, String>(getVariables())
@@ -82,13 +95,16 @@ public struct App {
         }
         genLibPath(path)
         env[libPathName] = ldlibPath.toString()
-        run(args, env)
+        start(convertArgs('restart'), env)
     }
-    private func run(args: Array<String>, env: Map<String, String>) {
+    private func start(args: Array<String>, env: Map<String, String>) {
         args[0] = 'run'
         execute(getCommand(), args, workingDirectory: path, environment: env)
     }
     private func run(): Int64 {
+        run(args)
+    }
+    private func run(args: Array<String>): Int64{
         let start: DateTime = DateTime.now()
         func extractPattern() {
             if (idx > 0) {
@@ -139,18 +155,10 @@ public struct App {
         shutdown(pid)
     }
     private func shutdown(pid: Int64): Int64 {
-        shutdown(findProcess(pid))
+        shutdown(pid, findProcess(pid))
     }
-    private func shutdown(process: Process): Int64 {
+    private func shutdown(pid: Int64, process: Process): Int64 {
         process.terminate()
-        0
-    }
-    private func restart(): Int64 {
-        let pid = this.pid()
-        let process = findProcess(pid)
-        let args = process.arguments
-        let env = process.environment
-        shutdown(process)
         while (true) {
             try {
                 findProcess(pid)
@@ -158,15 +166,27 @@ public struct App {
                 break
             }
         }
-        run(args, env)
+        0
+    }
+    private func restart(): Int64 {
+        let pid = this.pid()
+        let process = findProcess(pid)
+        shutdown(pid, process)
+        start()
+    }
+    private func rerun(): Int64 {
+        shutdown()
+        run(convertArgs('rerun'))
     }
     public func boot(): Int64 {
         match (args[0]) {
-            case 'start' => start()
+            // case 'start' => start()
+            // case 'restart' => restart()
             case 'run' => run()
             case 'shutdown' => shutdown()
-            case 'restart' => restart()
-            case _ => throw BootException('first command arg must be run, but current args are ${args}')
+            case 'rerun' => rerun()
+            case _ => throw BootException(
+                'first command arg must be run|start|shutdown|restart, but current args are ${args}')
         }
     }
 }
