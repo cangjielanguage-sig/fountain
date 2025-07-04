@@ -9,12 +9,23 @@
  */
 package f_cache
 
-import std.ref.*
 import std.collection.concurrent.ConcurrentHashMap
+import std.ref.*
 import f_collection.*
 
 public class WeakHeapCache<T> where T <: Object {
     private let cache = ConcurrentHashMap<String, WeakRef<T>>()
+    public init() {
+        spawn {
+            while (true) {
+                for ((k, r) in cache where r.value.isNone()) {
+                    cache.remove(k)
+                    sleep(Duration.Zero)
+                }
+                sleep(Duration.second)
+            }
+        }
+    }
     private func weakRef(value: T) {
         WeakRef(value, DEFERRED)
     }

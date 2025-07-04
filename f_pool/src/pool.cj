@@ -88,6 +88,7 @@ public class Pool<T> <: Resource where T <: Object {
                     } catch (e: Exception) {
                         getLog().warn('Pool checking schedule', e)
                     }
+                    sleep(Duration.Zero)
                 }
                 sleep(checkInterval)
             }
