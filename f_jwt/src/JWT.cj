@@ -35,7 +35,7 @@ public class JWT {
     }
     private prop HM5: JWT {
         get() {
-            header("alg", "HS5")
+            header("alg", "HM5")
             this
         }
     }
