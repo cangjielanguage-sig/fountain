@@ -66,19 +66,16 @@ public open class BaseException <: Exception {
             suppressed_
         }
     }
-    private func rawStringBytes(s: String) {
-        unsafe { s.rawData() }
-    }
     public func printStackTrace(output: OutputStream): Unit {
         printStackTrace(output) {
             w =>
             printStackTrace(this, w)
             if (let Some(c) <- caused) {
-                w.write(rawStringBytes("Caused by: "))
+                w.write("Caused by: ".unsafeBytes())
                 printStackTrace(c, w)
             }
             if (!suppressed.isEmpty()) {
-                w.write(rawStringBytes("Suppressed: "))
+                w.write("Suppressed: ".unsafeBytes())
                 for (s in suppressed) {
                     printStackTrace(s, w)
                 }
