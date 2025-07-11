@@ -11,9 +11,10 @@ package f_util
 
 import std.convert.Parsable
 import f_base.*
+import f_data.DataParsable
 import f_util.exception.GeoHashException
 
-public struct GeoHash <: Hashable & Equatable<GeoHash> & ToString & Parsable<GeoHash> {
+public struct GeoHash <: Hashable & Equatable<GeoHash> & ToString & Parsable<GeoHash> & DataParsable<GeoHash> {
     private static const MAX_LATITUDE: Float64 = 90.0
     private static const MIN_LATITUDE: Float64 = -90.0
     private static const MAX_LONGITUDE: Float64 = 180.0

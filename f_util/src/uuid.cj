@@ -20,6 +20,7 @@ import std.time.{TimeZone, DateTime}
 import stdx.crypto.crypto.*
 import stdx.crypto.digest.{MD5, SHA1}
 import f_base.{HashBuilder, StringGenerator}
+import f_data.DataParsable
 import f_exception.UnreachableException
 import f_random.*
 import f_util.exception.UUIDException
@@ -27,7 +28,7 @@ import f_util.exception.UUIDException
 /**
  * reference https://www.ietf.org/archive/id/draft-ietf-uuidrev-rfc4122bis-00.html
  */
-public struct UUID <: Hashable & Comparable<UUID> & ToString & Parsable<UUID> {
+public struct UUID <: Hashable & Comparable<UUID> & ToString & Parsable<UUID> & DataParsable<UUID> {
     private let h: Int64
     UUID(private let values!: Array<Byte> = Array<Byte>(16, repeat: 0)) {
         h = HashBuilder().append<Byte, Array<Byte>>(values).build()
