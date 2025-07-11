@@ -83,7 +83,7 @@ public class MVCConfig {
                 }
                 if (let Some(mode) <- Config.getString(TLS_VERIFY_MODE) && mode.size > 0) {
                     tls.verifyMode = match (mode.toAsciiLower()) {
-                        case "trustall" => TrustAll
+                        case "trustall" | 'trust_all' | 'trust-all' => TrustAll
                         case "default" => Default
                         case _ =>
                             let modePem = String.fromUtf8(File.readFrom(mode))
