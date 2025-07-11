@@ -82,9 +82,9 @@ public class MVCConfig {
                     tls.supportedAlpnProtocols = alpns
                 }
                 if (let Some(mode) <- Config.getString(TLS_VERIFY_MODE) && mode.size > 0) {
-                    tls.verifyMode = match (mode.toAsciiUpper()) {
-                        case "TRUSTALL" => TrustAll
-                        case "DEFAULT" => Default
+                    tls.verifyMode = match (mode.toAsciiLower()) {
+                        case "trustall" => TrustAll
+                        case "default" => Default
                         case _ =>
                             let modePem = String.fromUtf8(File.readFrom(mode))
                             let custom = X509Certificate.decodeFromPem(modePem)
