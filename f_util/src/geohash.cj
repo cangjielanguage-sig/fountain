@@ -50,6 +50,9 @@ public struct GeoHash <: Hashable & Equatable<GeoHash> & ToString & Parsable<Geo
         }
         GeoHash(h)
     }
+    /**
+     * (longitude, latitude) = (coordinate[0], coordinate[1])
+     */
     public static func encode(coordinate: (Float64, Float64)): GeoHash {
         encode(coordinate[0], coordinate[1])
     }
