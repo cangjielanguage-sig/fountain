@@ -14,9 +14,6 @@ macro package f_bean.macros
  * 只能修饰类。将@Bean修饰的类注册到BeanFactory
  */
 public macro Bean(input: Tokens): Tokens {
-    generateBeanTokens(input)
-}
-private func generateBeanTokens(input: Tokens): Tokens {
     let klass = match(parseDecl(input)){
         case x: ClassDecl => x
         case x: MacroExpandDecl => 
@@ -24,7 +21,10 @@ private func generateBeanTokens(input: Tokens): Tokens {
             while(let m: MacroExpandDecl <- y.macroInputDecl){
                 y = m
             }
-            let tokens = generateBeanTokens(y.macroInputs)
+            let tokens = quote(
+                @Bean
+                $(y.macroInputs)
+            )
             y.macroInputs = tokens
             y.macroInputDecl = parseDecl(tokens)//经过测试，macroInputs macroInputDecl都得改
             return x.toTokens()

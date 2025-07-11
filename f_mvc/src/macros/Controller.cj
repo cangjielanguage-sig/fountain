@@ -32,10 +32,12 @@ func generate(input: Tokens): Tokens {
             while(let m: MacroExpandDecl <- y.macroInputDecl) {
                 y = m
             }
-            let tokens = generate(y.macroInputs)
-            y.macroInputs = tokens
-            y.macroInputDecl = parseDecl(tokens)//经过测试，macroInputs macroInputDecl都得改
-            return x.toTokens()
+            if(let d: ClassDecl <- y.macroInputDecl) {
+                d
+            }else{
+                diagReport(ERROR, y.macroInputs, 'illegal decl', '')
+                throw MVCException()
+            }
         case _ => 
             diagReport(ERROR, input, 'illegal decl', '')
             throw MVCException()
