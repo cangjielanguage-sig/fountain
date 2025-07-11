@@ -27,7 +27,8 @@ public struct GeoHash <: Hashable & Equatable<GeoHash> & ToString & Parsable<Geo
         var lowlng = MIN_LONGITUDE
         var highlng = MAX_LONGITUDE
         var h = 0u64
-        for (shift in 63 .. 0: -2) {
+        var shift = 63
+        while (shift >= 0) {
             let midlat = (highlat + lowlat) / 2.0
             let midlng = (highlng + lowlng) / 2.0
             h |= if(midlng >= longitude) {
@@ -37,6 +38,7 @@ public struct GeoHash <: Hashable & Equatable<GeoHash> & ToString & Parsable<Geo
                 highlng = midlng
                 0
             }
+            shift--
             h |= if(midlat >= latitude) {
                 lowlat = midlat
                 1u64 << shift
@@ -44,6 +46,7 @@ public struct GeoHash <: Hashable & Equatable<GeoHash> & ToString & Parsable<Geo
                 highlat = midlat
                 0u64
             }
+            shift--
         }
         GeoHash(h)
     }
