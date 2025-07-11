@@ -59,6 +59,9 @@ public class MVCStarter {
         if (let Some(x) <- MVCConfig.servicePoolConfig) {
             builder.servicePoolConfig(x)
         }
+        if (let Some(tls) <- MVCConfig.tlsConfig) {
+            builder.tlsConfig(tls)
+        }
         let server = builder.distributor(HttpRequestDistributorImpl.instance).build()
         MVCStarter(server)
     }

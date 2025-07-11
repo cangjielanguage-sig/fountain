@@ -64,6 +64,40 @@ public class MVCConfig {
     public static let SERVICE_POOL_QUEUE_CAPACITY = "${confPrefix}_servicePoolQueueCapacity"
     public static let SERVICE_POOL_PREHEAT = "${confPrefix}_servicePoolPreheat"
 
+    public static let TLS_PATH = "${confPrefix}_tlsPath"
+    public static let TLS_VERIFY_MODE = "${confPrefix}_tlsVerifyMode"
+    public static let TLS_SUPPORTED_ALPN_PROTOCOLS = "${confPrefix}_tlsSupportedAlpnProtocols"
+
+    public static prop tlsConfig: ?TlsServerConfig {
+        get(){
+            if(let Some(path) <- Config.getString(TLS_PATH) && path.size > 0 && 
+               let paths <- path.split('|') && paths.size == 2){
+                let x509Pem = String.fromUtf8(File.readFrom(paths[0]))
+                let privateKeyPem = String.fromUtf8(File.readFrom(paths[1]))
+                let x509 = X509Certificate.decodeFromPem(x509Pem)
+                let privateKey = PrivateKey.decodeFromPem(privateKeyPem)
+                var tls = TlsServerConfig(x509, privateKey)
+                if(let Some(alpn) <- Config.getString(TLS_SUPPORTED_ALPN_PROTOCOLS) && alpn.size > 0 && 
+                   let alpns <- alpn.split('|') && alpns.size > 0){
+                    tls.supportedAlpnProtocols = alpns
+                }
+                if(let Some(mode) <- Config.getString(TLS_VERIFY_MODE) && mode.size > 0){
+                    tls.verifyMode = match(mode.toAsciiUpper()){
+                        case "TRUSTALL" => TrustAll
+                        case "DEFAULT" => Default
+                        case _ => 
+                            let modePem = String.fromUtf8(File.readFrom(mode))
+                            let custom = X509Certificate.decodeFromPem(modePem)
+                            CustomCA(custom)
+                    }
+                }
+                tls
+            }else{
+                None<TlsServerConfig>
+            }
+        }
+    }
+
     private static prop isMVCDebugging: Bool {
         get() {
             Config.getValue<Bool>(MVC_DEBUGGING) ?? DEFAULT_MVC_DEBUGGING
