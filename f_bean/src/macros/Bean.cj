@@ -14,7 +14,24 @@ macro package f_bean.macros
  * 只能修饰类。将@Bean修饰的类注册到BeanFactory
  */
 public macro Bean(input: Tokens): Tokens {
-    let klass = ClassDecl(input)
+    generateBeanTokens(input)
+}
+private func generateBeanTokens(input: Tokens): Tokens {
+    let klass = match(parseDecl(input)){
+        case x: ClassDecl => x
+        case x: MacroExpandDecl => 
+            var y = x
+            while(let m: MacroExpandDecl <- y.macroInputDecl){
+                y = m
+            }
+            let tokens = generateBeanTokens(y.macroInputs)
+            y.macroInputs = tokens
+            y.macroInputDecl = parseDecl(tokens)//经过测试，macroInputs macroInputDecl都得改
+            return x.toTokens()
+        case _ => 
+            diagReport(ERROR, input, 'illegal decl', '')
+            throw BeanException()
+    }
     let identifier = klass.identifier
     var ctorTokens = quote(
         let ctors = HashMap<String, ()-> $identifier>()

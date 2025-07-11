@@ -11,6 +11,7 @@ macro package f_mvc.macros
 
 import std.ast.*
 import f_macros.*
+import f_mvc.exception.MVCException
 public import f_bean.macros.*
 
 public macro Controller(input: Tokens): Tokens {
@@ -24,7 +25,21 @@ public macro Controller(input: Tokens): Tokens {
 
 func generate(input: Tokens): Tokens {
     var tokens = `empty_tokens`
-    let decl = ClassDecl(input)
+    let decl = match(parseDecl(input)){
+        case x: ClassDecl => x
+        case x: MacroExpandDecl => 
+            var y = x
+            while(let m: MacroExpandDecl <- y.macroInputDecl) {
+                y = m
+            }
+            let tokens = generate(y.macroInputs)
+            y.macroInputs = tokens
+            y.macroInputDecl = parseDecl(tokens)//经过测试，macroInputs macroInputDecl都得改
+            return x.toTokens()
+        case _ => 
+            diagReport(ERROR, input, 'illegal decl', '')
+            throw MVCException()
+    }
     let klass = decl.identifier
     for (d in decl.body.decls) {
         if (let m: MacroExpandDecl <- d && let f: FuncDecl <- extract(m) && !isStatic(f) && isPublic(f)) {
