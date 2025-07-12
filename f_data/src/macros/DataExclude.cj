@@ -38,10 +38,7 @@ public macro DataExclude(attrs: Tokens, input: Tokens): Tokens {
             }
         }
         case d: MacroExpandDecl => 
-            return replaceMacroInputDecl(
-                quote(@DataExclude[$attrs]),
-                d
-            )
+            return replaceMacroInputDecl(quote(@DataExclude[$attrs]), d).toTokens()
         case _ => diagReport(ERROR, extractDeclSignature(decl),
             'input must be non-static var decleration for prop hash equal compare tostring or non-static public var/public prop/public mut prop for field',
             '')

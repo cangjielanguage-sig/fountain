@@ -67,10 +67,7 @@ public macro DataAssist(attr: Tokens, input: Tokens): Tokens {
             generate('fields', d, excludeFields, generateToFields)
             d.toTokens()
         case d: MacroExpandDecl =>
-            return replaceMacroInputDecl(
-                quote(@DataAssist[$attr]),
-                d
-            ).toTokens()
+            return replaceMacroInputDecl(quote(@DataAssist[$attr]), d).toTokens()
         case _ => 
             diagReport(ERROR, input,
             'input must be class decl',

@@ -31,7 +31,6 @@ public macro ORMField(attrs: Tokens, input: Tokens): Tokens {
     let decl = parseDecl(input)
     let name = match(decl) {
         case varDecl: VarDecl => 
-            let varDecl = (decl as VarDecl).getOrThrow()
             if (varDecl.keyword.kind == VAR && !varDecl.isStatic()) {
                 let name = varDecl.identifier
                 let varName = Token(IDENTIFIER, "_${name.value}_")
@@ -64,7 +63,6 @@ public macro ORMField(attrs: Tokens, input: Tokens): Tokens {
                     "member of current type which is named as ${decl.identifier.value} must be modified by `public var` or `public mut prop` which is annotated by ORMField")
             }
         case propDecl: PropDecl => 
-            let propDecl = (decl as PropDecl).getOrThrow()
             if (propDecl.isPublic() && propDecl.isMut() && !propDecl.isStatic()) {
                 propDecl.identifier
             } else {
@@ -72,7 +70,7 @@ public macro ORMField(attrs: Tokens, input: Tokens): Tokens {
                     "member of current type which is named as ${decl.identifier.value} must be modified by `public var` or `public mut prop` which is annotated by ORMField")
             }
         case d: MacroExpandDecl => 
-            return replaceMacroInputDecl(quote(@ORMField[$attrs]), d)
+            return replaceMacroInputDecl(quote(@ORMField[$attrs]), d).toTokens()
         case _ => 
             diagReport(ERROR, input, 'illegal decl', '')
             throw ORMException(

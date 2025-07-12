@@ -32,7 +32,7 @@ public macro QueryMappersGenerator(input: Tokens): Tokens {
     let decl = match(parseDecl(input)){
         case d: ClassDecl => d
         case d: MacroExpandDecl => 
-            return replaceMacroInputDecl(quote(@QueryMappersGenerator), d)
+            return replaceMacroInputDecl(quote(@QueryMappersGenerator), d).toTokens()
         case _ => 
             diagReport(ERROR, input, 'QueryMappersGenerator supports a class', '')
             throw ORMException("QueryMappersGenerator supports a class") 
