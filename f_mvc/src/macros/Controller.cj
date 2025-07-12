@@ -91,11 +91,7 @@ func generateArgs(decl: FuncDecl): (Tokens, Tokens, Tokens) {
         ) +
             `nl`
         let named = try {
-            if (let NOT <- p.not.kind) {
-                true
-            } else {
-                false
-            }
+            p.not.kind == TokenKind.NOT
         } catch (_) {
             false
         }

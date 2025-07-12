@@ -17,6 +17,7 @@ public enum RequestMethod <: Hashable & Equatable<RequestMethod> & ToString & Pa
     | PATCH
     | OPTIONS
     | HEAD
+    | WS
 
     public func hashCode(): Int64 {
         toString().hashCode()
