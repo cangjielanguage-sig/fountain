@@ -124,3 +124,16 @@ public func extractIfOneOf(param: MacroExpandParam, macroNames: Set<String>): ?(
     }
     result
 }
+public func replaceMacroInputDecl(macroTokens: Tokens, decl: MacroExpandDecl): MacroExpandDecl {
+    var d = decl
+    while(let md: MacroExpandDecl <- d.macroInputDecl) {
+        d = md
+    }
+    let tokens = quote(
+        $macroTokens
+        $(d.macroInputs)
+    )
+    d.macroInputs = tokens
+    d.macroInputDecl = parseDecl(tokens)
+    decl
+}

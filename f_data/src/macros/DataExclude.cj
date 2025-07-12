@@ -10,6 +10,7 @@
 macro package f_data.macros
 
 import std.ast.*
+import f_data.exception.DataException
 import f_macros.*
 
 /**
@@ -36,9 +37,15 @@ public macro DataExclude(attrs: Tokens, input: Tokens): Tokens {
                     'only @DataExclude[field] can only modify public prop or public mut prop', '')
             }
         }
+        case d: MacroExpandDecl => 
+            return replaceMacroInputDecl(
+                quote(@DataExclude[$attrs]),
+                d
+            )
         case _ => diagReport(ERROR, extractDeclSignature(decl),
             'input must be non-static var decleration for prop hash equal compare tostring or non-static public var/public prop/public mut prop for field',
             '')
+            throw DataException()
     }
     input
 }

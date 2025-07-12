@@ -29,7 +29,14 @@ import f_util.CaseFormat
  * 没有使用@ORMField注解的按照映射的不是主键，且按照列名是LowerUnderScore处理。
  */
 public macro QueryMappersGenerator(input: Tokens): Tokens {
-    let decl = (parseDecl(input) as ClassDecl).getOrThrow {ORMException("QueryMappersGenerator supports a class")}
+    let decl = match(parseDecl(input)){
+        case d: ClassDecl => d
+        case d: MacroExpandDecl => 
+            return replaceMacroInputDecl(quote(@QueryMappersGenerator), d)
+        case _ => 
+            diagReport(ERROR, input, 'QueryMappersGenerator supports a class', '')
+            throw ORMException("QueryMappersGenerator supports a class") 
+    }
     let name = quote($(decl.identifier)$(decl.genericParam))
     let body = decl.body.decls
     let props = extractMutProps(body)

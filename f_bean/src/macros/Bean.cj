@@ -17,17 +17,7 @@ public macro Bean(input: Tokens): Tokens {
     let klass = match(parseDecl(input)){
         case x: ClassDecl => x
         case x: MacroExpandDecl => 
-            var y = x
-            while(let m: MacroExpandDecl <- y.macroInputDecl){
-                y = m
-            }
-            let tokens = quote(
-                @Bean
-                $(y.macroInputs)
-            )
-            y.macroInputs = tokens
-            y.macroInputDecl = parseDecl(tokens)//经过测试，macroInputs macroInputDecl都得改
-            return x.toTokens()
+            return replaceMacroInputDecl(quote(@Bean), x)
         case _ => 
             diagReport(ERROR, input, 'illegal decl', '')
             throw BeanException()

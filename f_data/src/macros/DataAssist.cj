@@ -66,7 +66,16 @@ public macro DataAssist(attr: Tokens, input: Tokens): Tokens {
             generate('tostring', d, excludeToString, generateToString)
             generate('fields', d, excludeFields, generateToFields)
             d.toTokens()
-        case _ => throw IllegalArgumentException("input must be a class decl")
+        case d: MacroExpandDecl =>
+            return replaceMacroInputDecl(
+                quote(@DataAssist[$attr]),
+                d
+            ).toTokens()
+        case _ => 
+            diagReport(ERROR, input,
+            'input must be class decl',
+            '')
+            throw IllegalArgumentException("input must be a class decl")
     }
 }
 

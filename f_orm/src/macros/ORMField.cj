@@ -29,50 +29,55 @@ public macro ORMField(attrs: Tokens, input: Tokens): Tokens {
     assertParentContext("QueryMappersGenerator") //无法用反射处理QueryMapper的闭包参数的泛型，也就不能用反射创建Q
     var tokens = input
     let decl = parseDecl(input)
-    let name = if (decl is VarDecl) {
-        let varDecl = (decl as VarDecl).getOrThrow()
-        if (varDecl.keyword.kind == VAR && !varDecl.isStatic()) {
-            let name = varDecl.identifier
-            let varName = Token(IDENTIFIER, "_${name.value}_")
-            let varType = if (varDecl.colon.kind != ILLEGAL) {
-                `colon` + varDecl.declType.toTokens()
-            } else {
-                `empty_tokens`
-            }
-            let assign = if (varDecl.assign.kind != ILLEGAL) {
-                `assign` + varDecl.expr.toTokens()
-            } else {
-                `empty_tokens`
-            }
-            tokens = quote(
-                private var $varName $varType $assign
-
-                public mut prop $name $varType {
-                    get(){
-                        this.$varName
-                    }
-                    set(value){
-                        this.$varName = value
-                    }
+    let name = match(decl) {
+        case varDecl: VarDecl => 
+            let varDecl = (decl as VarDecl).getOrThrow()
+            if (varDecl.keyword.kind == VAR && !varDecl.isStatic()) {
+                let name = varDecl.identifier
+                let varName = Token(IDENTIFIER, "_${name.value}_")
+                let varType = if (varDecl.colon.kind != ILLEGAL) {
+                    `colon` + varDecl.declType.toTokens()
+                } else {
+                    `empty_tokens`
                 }
-            ) +
-                `nl`
-            name
-        } else {
+                let assign = if (varDecl.assign.kind != ILLEGAL) {
+                    `assign` + varDecl.expr.toTokens()
+                } else {
+                    `empty_tokens`
+                }
+                tokens = quote(
+                    private var $varName $varType $assign
+
+                    public mut prop $name $varType {
+                        get(){
+                            this.$varName
+                        }
+                        set(value){
+                            this.$varName = value
+                        }
+                    }
+                ) +
+                    `nl`
+                name
+            } else {
+                throw ORMException(
+                    "member of current type which is named as ${decl.identifier.value} must be modified by `public var` or `public mut prop` which is annotated by ORMField")
+            }
+        case propDecl: PropDecl => 
+            let propDecl = (decl as PropDecl).getOrThrow()
+            if (propDecl.isPublic() && propDecl.isMut() && !propDecl.isStatic()) {
+                propDecl.identifier
+            } else {
+                throw ORMException(
+                    "member of current type which is named as ${decl.identifier.value} must be modified by `public var` or `public mut prop` which is annotated by ORMField")
+            }
+        case d: MacroExpandDecl => 
+            return replaceMacroInputDecl(quote(@ORMField[$attrs]), d)
+        case _ => 
+            diagReport(ERROR, input, 'illegal decl', '')
             throw ORMException(
-                "member of current type which is named as ${decl.identifier.value} must be modified by `public var` or `public mut prop` which is annotated by ORMField")
-        }
-    } else if (decl is PropDecl) {
-        let propDecl = (decl as PropDecl).getOrThrow()
-        if (propDecl.isPublic() && propDecl.isMut() && !propDecl.isStatic()) {
-            propDecl.identifier
-        } else {
-            throw ORMException(
-                "member of current type which is named as ${decl.identifier.value} must be modified by `public var` or `public mut prop` which is annotated by ORMField")
-        }
-    } else {
-        throw ORMException(
-            "member of current type must be modified by `public var` or `public mut prop` which is annotated by ORMField")
+                "member of current type must be modified by `public var` or `public mut prop` which is annotated by ORMField")
+
     }
     setItem("field", name.value)
     for (attr in attrs) {
