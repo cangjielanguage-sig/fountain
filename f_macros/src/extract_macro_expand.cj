@@ -129,11 +129,18 @@ public func replaceMacroInputDecl(macroTokens: Tokens, decl: MacroExpandDecl): M
     while(let md: MacroExpandDecl <- d.macroInputDecl) {
         d = md
     }
+    let mt = 
+    if(let AT <- macroTokens[0].kind){
+        macroTokens
+    }else{
+        `at` + macroTokens
+    }
     let tokens = quote(
-        $macroTokens
+        $mt
         $(d.macroInputs)
     )
     d.macroInputs = tokens
     d.macroInputDecl = parseDecl(tokens)
+    //经过测试macroInputDecl macroInput互不影响，两个都要修改
     decl
 }
