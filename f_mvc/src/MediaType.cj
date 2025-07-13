@@ -10,8 +10,8 @@
 package f_mvc
 
 public abstract class MediaType <: ToString & Hashable & Equatable<MediaType> {
-    protected let hash: Int64
-    public const MediaType(public let mediaType: String) {
+    protected var hash: Int64
+    public MediaType(public let mediaType: String) {
         hash = mediaType.hashCode()
     }
     public open func toString(): String {

@@ -39,6 +39,7 @@ public enum RequestMethod <: Hashable & Equatable<RequestMethod> & ToString & Pa
             case PATCH => "PATCH"
             case OPTIONS => "OPTIONS"
             case HEAD => "HEAD"
+            case WS => "WS"
         }
     }
     public static func tryParse(value: String): ?RequestMethod {
@@ -50,6 +51,7 @@ public enum RequestMethod <: Hashable & Equatable<RequestMethod> & ToString & Pa
             case "PATCH" => PATCH
             case "OPTIONS" => OPTIONS
             case "HEAD" => HEAD
+            case "WS" => WS
             case _ => None
         }
     }
