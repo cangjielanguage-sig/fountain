@@ -130,16 +130,21 @@ class SingleScheduler<T> <: Scheduler<T> {
         spawn{
             try{
                 while(let state <- queue.remove()){
-                    func exec(state: SingleSchedulerState<T>): Unit {
+                    func exec(state: SingleSchedulerState<T>): Bool {
                         match(state){
                             case Item(item) => match(item){
                                 case Some(v) => this.observer.onNext(v)
-                                case _ => ()
+                                case _ => 
+                                    this.observer.onComplete()
+                                    return false
                             }
                             case Ex(e) => throw e
                         }
+                        true
                     }
-                    exec(state)
+                    if(!exec(state)){
+                        return
+                    }
                     if(let Some(w) <- wrapper){
                         let queues = w.queues
                         let qsize = queues.size
@@ -148,7 +153,9 @@ class SingleScheduler<T> <: Scheduler<T> {
                             for(i in 1 .. qsize - 1){
                                 if(let Some(state) <- queues[(index + i) % qsize].queue.tryRemove()){
                                     stolen++
-                                    exec(state)
+                                    if(!exec(state)){
+                                        return
+                                    }
                                 }
                                 if(this.queue.size > 0) {
                                     break
@@ -161,7 +168,6 @@ class SingleScheduler<T> <: Scheduler<T> {
                         }
                     }
                 }
-                this.observer.onComplete()
             }catch(e: Exception) {
                 this.observer.onError(e)
             }
