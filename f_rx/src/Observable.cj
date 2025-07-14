@@ -17,6 +17,7 @@ public class Observable<T> {
         this.observer = CombinedObserver<T>(async: asyncCombined)
         this.scheduler = Scheduler<T>.current(observer)
     }
+
     public static func iterable<I>(items: () -> Future<I>, asyncCombined!: Bool = false): Observable<T> where I <: Iterable<T> {
         Observable<T>({=> items().get().iterator()}, asyncCombined: asyncCombined)
     }
@@ -29,6 +30,7 @@ public class Observable<T> {
     public static func iterable<I>(items: I, asyncCombined!: Bool = false): Observable<T> where I <: Iterable<T> {
         Observable<T>({=> items.iterator()}, asyncCombined: asyncCombined)
     }
+
     public static func single(item: () -> Future<T>, iterator!: (T) -> Iterator<T> = {t => SingleIterator<T>(t)},
         asyncCombined!: Bool = false): Observable<T> {
         Observable<T>({=> item().get() |> iterator}, asyncCombined: asyncCombined)
@@ -62,8 +64,22 @@ public class Observable<T> {
         asyncCombined!: Bool = false): Observable<T> {
         Observable<T>({=> item |> iterator}, asyncCombined: asyncCombined)
     }
+
     public static func empty(asyncCombined!: Bool = false): Observable<T> {
         Observable<T>({=> EmptyIterator<T>.INSTANCE()}, asyncCombined: asyncCombined)
+    }
+
+    public static func concat<I1, I2>(iterables: () -> I2, asyncCombined!: Bool = false): Observable<T> where I2 <: Iterable<I1>, I1 <: Iterable<T> {
+        Observable<T>({=> iterables().iterator().flatMap{i => i.iterator()}}, asyncCombined: asyncCombined)
+    }
+    public static func concat<I1, I2>(iterables: I2, asyncCombined!: Bool = false): Observable<T> where I1 <: Iterable<T>, I2 <: Iterable<I1> {
+        concat<I1, I2>({=> iterables}, asyncCombined: asyncCombined)
+    }
+    public static func concat<I>(iterables: () -> Array<I>, asyncCombined!: Bool = false): Observable<T> where I <: Iterable<T> {
+        concat<I, Array<I>>({=> iterables()}, asyncCombined: asyncCombined)
+    }
+    public static func concat<I>(iterables: Array<I>, asyncCombined!: Bool = false): Observable<T> where I <: Iterable<T> {
+        concat<I>({=> iterables}, asyncCombined: asyncCombined)
     }
 
     public func subscribe(observer: Observer<T>): This {
