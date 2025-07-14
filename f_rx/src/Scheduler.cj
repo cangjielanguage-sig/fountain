@@ -120,21 +120,45 @@ enum SingleSchedulerState<T> {
     | Ex(Exception)
 }
 class SingleScheduler<T> <: Scheduler<T> {
-    private let mutex = Mutex()
+    var wrapper = None<FixedScheduler<T>>
     private SingleScheduler(
         observer: Observer<T>, 
         private let queue: LinkedBlockingQueue<SingleSchedulerState<T>>,
-        private let policy!: BackPressure = BackPressure.Current) {
+        private let policy!: BackPressure = BackPressure.Current,
+        private let index!: Int64 = 0) {
         super(observer)
         spawn{
             try{
                 while(let state <- queue.remove()){
-                    match(state){
-                        case Item(item) => match(item){
-                            case Some(v) => this.observer.onNext(v)
-                            case _ => break
+                    func exec(state: SingleSchedulerState<T>): Unit {
+                        match(state){
+                            case Item(item) => match(item){
+                                case Some(v) => this.observer.onNext(v)
+                                case _ => ()
+                            }
+                            case Ex(e) => throw e
                         }
-                        case Ex(e) => throw e
+                    }
+                    exec(state)
+                    if(let Some(w) <- wrapper){
+                        let queues = w.queues
+                        let qsize = queues.size
+                        var stolen = 0
+                        while(this.queue.size == 0) {
+                            for(i in 1 .. qsize - 1){
+                                if(let Some(state) <- queues[(index + i) % qsize].queue.tryRemove()){
+                                    stolen++
+                                    exec(state)
+                                }
+                                if(this.queue.size > 0) {
+                                    break
+                                }
+                            }
+                            if(stolen == 0){
+                                break
+                            }
+                            stolen = 0
+                        }
                     }
                 }
                 this.observer.onComplete()
@@ -144,11 +168,11 @@ class SingleScheduler<T> <: Scheduler<T> {
         }
     }
 
-    init(observer: Observer<T>, size: Int64, policy!: BackPressure = BackPressure.Current) {
-        this(observer, LinkedBlockingQueue<SingleSchedulerState<T>>(size), policy: policy)
+    init(observer: Observer<T>, size: Int64, policy!: BackPressure = BackPressure.Current, index!: Int64 = 0) {
+        this(observer, LinkedBlockingQueue<SingleSchedulerState<T>>(size), policy: policy, index: index)
     }
-    init(observer: Observer<T>, policy!: BackPressure = BackPressure.Current){
-        this(observer, LinkedBlockingQueue<SingleSchedulerState<T>>(), policy: policy)
+    init(observer: Observer<T>, policy!: BackPressure = BackPressure.Current, index!: Int64 = 0) {
+        this(observer, LinkedBlockingQueue<SingleSchedulerState<T>>(), policy: policy, index: index)
     }
     private func schedule(state: SingleSchedulerState<T>): Unit {
         if(queue.size < queue.capacity){
@@ -193,15 +217,18 @@ class SingleScheduler<T> <: Scheduler<T> {
 }
 class FixedScheduler<T> <: Scheduler<T> {
     private let index = AtomicInt64(0)
-    private FixedScheduler(private let queues: Array<SingleScheduler<T>>){
+    private FixedScheduler(let queues: Array<SingleScheduler<T>>){
         super(queues[0].observer)
+        for(scheduler in queues) {
+            scheduler.wrapper = this
+        }
     }
 
     public init(observer: Observer<T>, threads: Int64, policy!: BackPressure = BackPressure.Current) {
-        this(Array<SingleScheduler<T>>(threads, repeat:SingleScheduler<T>(observer, policy: policy)))
+        this(Array<SingleScheduler<T>>(threads){i => SingleScheduler<T>(observer, policy: policy, index: i)})
     }
     public init(observer: Observer<T>, threads: Int64, queueSize: Int64, policy!: BackPressure = BackPressure.Current){
-        this(Array<SingleScheduler<T>>(threads, repeat: SingleScheduler(observer, queueSize, policy: policy)))
+        this(Array<SingleScheduler<T>>(threads){i => SingleScheduler(observer, queueSize, policy: policy, index: i)})
     }
     private prop nextIndex: Int64 {
         get(){
