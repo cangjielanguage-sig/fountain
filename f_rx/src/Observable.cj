@@ -32,7 +32,7 @@ public class Observable<T> {
     }
 
     public static func iterable(futures: () -> Iterable<Future<T>>, asyncCombined!: Bool = false): Observable<T> {
-        iterable<Iterator<T>>({=> futures().iterator().map{f => f.get()}}, asyncCombined: asyncCombined)
+        iterable<Iterator<T>>({=> futures().iterator().map {f => f.get()}}, asyncCombined: asyncCombined)
     }
     public static func iterable(futures: Iterable<Future<T>>, asyncCombined!: Bool = false): Observable<T> {
         iterable({=> futures}, asyncCombined: asyncCombined)
@@ -45,7 +45,6 @@ public class Observable<T> {
         let f: () -> Iterable<Future<T>> = {=> futures.iterator()}
         iterable(f, asyncCombined: asyncCombined)
     }
-    
 
     public static func single(item: () -> Future<T>, iterator!: (T) -> Iterator<T> = {t => SingleIterator<T>(t)},
         asyncCombined!: Bool = false): Observable<T> {
@@ -85,10 +84,12 @@ public class Observable<T> {
         Observable<T>({=> EmptyIterator<T>.INSTANCE()}, asyncCombined: asyncCombined)
     }
 
-    public static func concat<I1, I2>(iterables: () -> I2, asyncCombined!: Bool = false): Observable<T> where I2 <: Iterable<I1>, I1 <: Iterable<T> {
-        Observable<T>({=> iterables().iterator().flatMap{i => i.iterator()}}, asyncCombined: asyncCombined)
+    public static func concat<I1, I2>(iterables: () -> I2, asyncCombined!: Bool = false): Observable<T> where I2 <: Iterable<I1>,
+        I1 <: Iterable<T> {
+        Observable<T>({=> iterables().iterator().flatMap {i => i.iterator()}}, asyncCombined: asyncCombined)
     }
-    public static func concat<I1, I2>(iterables: I2, asyncCombined!: Bool = false): Observable<T> where I1 <: Iterable<T>, I2 <: Iterable<I1> {
+    public static func concat<I1, I2>(iterables: I2, asyncCombined!: Bool = false): Observable<T> where I1 <: Iterable<T>,
+        I2 <: Iterable<I1> {
         concat<I1, I2>({=> iterables}, asyncCombined: asyncCombined)
     }
     public static func concat<I>(iterables: () -> Array<I>, asyncCombined!: Bool = false): Observable<T> where I <: Iterable<T> {
@@ -98,10 +99,12 @@ public class Observable<T> {
         concat<I>({=> iterables}, asyncCombined: asyncCombined)
     }
 
-    public static func concat<I1, I2>(iterables: () -> Future<I2>, asyncCombined!: Bool = false): Observable<T> where I2 <: Iterable<I1>, I1 <: Iterable<T> {
+    public static func concat<I1, I2>(iterables: () -> Future<I2>, asyncCombined!: Bool = false): Observable<T> where I2 <: Iterable<I1>,
+        I1 <: Iterable<T> {
         concat<I1, I2>({=> iterables().get()}, asyncCombined: asyncCombined)
     }
-    public static func concat<I1, I2>(iterables: Future<I2>, asyncCombined!: Bool = false): Observable<T> where I1 <: Iterable<T>, I2 <: Iterable<I1> {
+    public static func concat<I1, I2>(iterables: Future<I2>, asyncCombined!: Bool = false): Observable<T> where I1 <: Iterable<T>,
+        I2 <: Iterable<I1> {
         concat<I1, I2>({=> iterables}, asyncCombined: asyncCombined)
     }
     public static func concat<I>(iterables: () -> Future<Array<I>>, asyncCombined!: Bool = false): Observable<T> where I <: Iterable<T> {
@@ -140,7 +143,7 @@ public class Observable<T> {
         this
     }
     public prop isDisposed: Bool {
-        get(){
+        get() {
             disposed_.load()
         }
     }
