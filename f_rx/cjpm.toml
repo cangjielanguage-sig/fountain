@@ -12,3 +12,4 @@
   package-configuration = {}
 
 [dependencies]
+  f_base = {path = "../f_base"}

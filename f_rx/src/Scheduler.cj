@@ -11,7 +11,21 @@ package f_rx
 
 public abstract class Scheduler<T> {
     public Scheduler(protected var observer: Observer<T>){}
+    /**
+     * 伪代码
+     * try {
+     *   match (item) {
+     *     case Some(x) => observer.onNext(x)
+     *     case _ => observer.onComplete()
+     *   }
+     * } catch(e: Exception) {
+     *    observer.onError(e)
+     * }
+     */
     public func schedule(item: ?T): Unit
+    /**
+     * observer.onError(ex)
+     */
     public func schedule(ex: Exception): Unit
     public static func alwaysNew(observer: Observer<T>): Scheduler<T> {
         AlwaysNewScheduler(observer)
@@ -63,8 +77,9 @@ class CurrentScheduler<T> <: Scheduler<T> {
         try{
             if(let Some(v) <- item) {
                 this.observer.onNext(v)
+            }else{
+                this.observer.onComplete()
             }
-            this.observer.onComplete()
         } catch(e: Exception) {
             this.observer.onError(e)
         }
