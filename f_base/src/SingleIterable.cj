@@ -17,15 +17,11 @@ public class SingleIterable<T> <: Iterable<T> {
 }
 
 public class SingleIterator<T> <: Iterator<T> {
-    public SingleIterator(private let value: T) {}
-    private var got = false
+    public SingleIterator(private var value: ?T) {}
 
     public func next(): Option<T> {
-        if (got) {
-            None<T>
-        } else {
-            got = true
-            value
-        }
+        let r = value
+        value = None<T>
+        r
     }
 }
