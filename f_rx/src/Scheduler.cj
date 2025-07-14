@@ -5,15 +5,15 @@
     You may obtain a copy of Mulan PSL v2 at:
             http://license.coscl.org.cn/MulanPSL2
     THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-    See the Mulan PSL v2 for more details.  
-*/
+    See the Mulan PSL v2 for more details.
+ */
 package f_rx
 
 /**
  * 观察者调度器
  */
 public abstract class Scheduler<T> {
-    public Scheduler(protected var observer: Observer<T>){}
+    public Scheduler(protected var observer: Observer<T>) {}
     /**
      * 伪代码
      * try {
@@ -69,45 +69,48 @@ public abstract class Scheduler<T> {
      * 一个线程对应一个数据队列，被观察者的产生的数据按循环推入数据队列
      * queueSize是线程队列容量，policy是背压策略
      */
-    public static func fixed(observer: Observer<T>, threads: Int64, queueSize: Int64, policy!: BackPressure = BackPressure.Current): Scheduler<T> {
+    public static func fixed(observer: Observer<T>, threads: Int64, queueSize: Int64,
+        policy!: BackPressure = BackPressure.Current): Scheduler<T> {
         FixedScheduler(observer, threads, queueSize, policy: policy)
     }
 }
+
 class AlwaysNewScheduler<T> <: Scheduler<T> {
-    init(observer: Observer<T>){
+    init(observer: Observer<T>) {
         super(observer)
     }
     public func schedule(item: ?T): Unit {
         spawn {
-            try{
-                if(let Some(v) <- item) {
+            try {
+                if (let Some(v) <- item) {
                     this.observer.onNext(v)
-                }else{
+                } else {
                     this.observer.onComplete()
                 }
-            } catch(e: Exception) {
+            } catch (e: Exception) {
                 this.observer.onError(e)
             }
         }
     }
     public func schedule(ex: Exception): Unit {
-        spawn{
+        spawn {
             this.observer.onError(ex)
         }
     }
 }
+
 class CurrentScheduler<T> <: Scheduler<T> {
-    init(observer: Observer<T>){
+    init(observer: Observer<T>) {
         super(observer)
     }
     public func schedule(item: ?T): Unit {
-        try{
-            if(let Some(v) <- item) {
+        try {
+            if (let Some(v) <- item) {
                 this.observer.onNext(v)
-            }else{
+            } else {
                 this.observer.onComplete()
             }
-        } catch(e: Exception) {
+        } catch (e: Exception) {
             this.observer.onError(e)
         }
     }
@@ -115,26 +118,25 @@ class CurrentScheduler<T> <: Scheduler<T> {
         this.observer.onError(ex)
     }
 }
+
 enum SingleSchedulerState<T> {
     | Item(?T)
     | Ex(Exception)
 }
+
 class SingleScheduler<T> <: Scheduler<T> {
     var wrapper = None<FixedScheduler<T>>
-    private SingleScheduler(
-        observer: Observer<T>, 
-        private let queue: LinkedBlockingQueue<SingleSchedulerState<T>>,
-        private let policy!: BackPressure = BackPressure.Current,
-        private let index!: Int64 = 0) {
+    private SingleScheduler(observer: Observer<T>, private let queue: LinkedBlockingQueue<SingleSchedulerState<T>>,
+        private let policy!: BackPressure = BackPressure.Current, private let index!: Int64 = 0) {
         super(observer)
-        spawn{
-            try{
-                while(let state <- queue.remove()){
+        spawn {
+            try {
+                while (let state <- queue.remove()) {
                     func exec(state: SingleSchedulerState<T>): Bool {
-                        match(state){
-                            case Item(item) => match(item){
+                        match (state) {
+                            case Item(item) => match (item) {
                                 case Some(v) => this.observer.onNext(v)
-                                case _ => 
+                                case _ =>
                                     this.observer.onComplete()
                                     return false
                             }
@@ -142,31 +144,31 @@ class SingleScheduler<T> <: Scheduler<T> {
                         }
                         true
                     }
-                    if(!exec(state)){
+                    if (!exec(state)) {
                         return
                     }
-                    while(this.queue.size == 0 && let Some(w) <- wrapper) {
+                    while (this.queue.size == 0 && let Some(w) <- wrapper) {
                         let queues = w.queues
                         let qsize = queues.size
                         var stolen = 0
-                        for(i in 1 .. qsize){
-                            if(let Some(state) <- queues[(index + i) % qsize].queue.tryRemove()){
+                        for (i in 1..qsize) {
+                            if (let Some(state) <- queues[(index + i) % qsize].queue.tryRemove()) {
                                 stolen++
-                                if(!exec(state)){
+                                if (!exec(state)) {
                                     return
                                 }
                             }
-                            if(this.queue.size > 0) {
+                            if (this.queue.size > 0) {
                                 break
                             }
                         }
-                        if(stolen == 0){
+                        if (stolen == 0) {
                             break
                         }
                         stolen = 0
                     }
                 }
-            }catch(e: Exception) {
+            } catch (e: Exception) {
                 this.observer.onError(e)
             }
         }
@@ -179,38 +181,38 @@ class SingleScheduler<T> <: Scheduler<T> {
         this(observer, LinkedBlockingQueue<SingleSchedulerState<T>>(), policy: policy, index: index)
     }
     private func schedule(state: SingleSchedulerState<T>): Unit {
-        if(queue.size < queue.capacity){
+        if (queue.size < queue.capacity) {
             queue.add(state)
-        }else{
+        } else {
             func callee(): Unit {
-                try{
-                    match(state){
-                        case Item(item) => match(item) {
+                try {
+                    match (state) {
+                        case Item(item) => match (item) {
                             case Some(v) => this.observer.onNext(v)
                             case _ => this.observer.onComplete()
                         }
                         case Ex(ex) => this.observer.onError(ex)
                     }
-                }catch(e: Exception){
+                } catch (e: Exception) {
                     this.observer.onError(e)
                 }
             }
-            match(policy) {
+            match (policy) {
                 case Discarding => ()
-                case DropOldest => 
+                case DropOldest =>
                     queue.remove()
                     schedule(state)
                 case BlockingOrDiscarding(d) => queue.add(state, d)
-                case BlockingOrThrowing(d) => if(!queue.add(state, d)){
-                    throw FullSchedulerException()
-                }
+                case BlockingOrThrowing(d) =>
+                    if (!queue.add(state, d)) {
+                        throw FullSchedulerException()
+                    }
                 case Throwing => throw FullSchedulerException()
                 case Current => callee()
-                case NewThread => spawn{callee()}
+                case NewThread => spawn {callee()}
                 case Action(f) => f(callee)
             }
         }
-        
     }
     public func schedule(item: ?T): Unit {
         schedule(Item(item))
@@ -219,25 +221,26 @@ class SingleScheduler<T> <: Scheduler<T> {
         schedule(Ex(ex))
     }
 }
+
 class FixedScheduler<T> <: Scheduler<T> {
     private let index = AtomicInt64(0)
-    private FixedScheduler(let queues: Array<SingleScheduler<T>>){
+    private FixedScheduler(let queues: Array<SingleScheduler<T>>) {
         super(queues[0].observer)
-        for(scheduler in queues) {
+        for (scheduler in queues) {
             scheduler.wrapper = this
         }
     }
 
     public init(observer: Observer<T>, threads: Int64, policy!: BackPressure = BackPressure.Current) {
-        this(Array<SingleScheduler<T>>(threads){i => SingleScheduler<T>(observer, policy: policy, index: i)})
+        this(Array<SingleScheduler<T>>(threads) {i => SingleScheduler<T>(observer, policy: policy, index: i)})
     }
-    public init(observer: Observer<T>, threads: Int64, queueSize: Int64, policy!: BackPressure = BackPressure.Current){
-        this(Array<SingleScheduler<T>>(threads){i => SingleScheduler(observer, queueSize, policy: policy, index: i)})
+    public init(observer: Observer<T>, threads: Int64, queueSize: Int64, policy!: BackPressure = BackPressure.Current) {
+        this(Array<SingleScheduler<T>>(threads) {i => SingleScheduler(observer, queueSize, policy: policy, index: i)})
     }
     private prop nextIndex: Int64 {
-        get(){
+        get() {
             var idx = index.fetchAdd(1) % queues.size
-            if(idx < 0){
+            if (idx < 0) {
                 idx = -idx
             }
             idx
