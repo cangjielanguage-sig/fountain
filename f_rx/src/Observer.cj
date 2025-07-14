@@ -10,8 +10,17 @@
 package f_rx
 
 public interface Observer<T> {
+    /**
+     * 处理数据
+     */
     func onNext(item: T): Unit
+    /**
+     * 处理异常
+     */
     func onError(ex: Exception): Unit 
+    /**
+     * 完成函数
+     */
     func onComplete(): Unit
 }
 
@@ -34,28 +43,46 @@ public class FuncObserver<T> <: Observer<T> {
     public func onComplete(): Unit {
         completeFunc()
     }
+    /**
+     * 注册数据处理函数
+     */
     public func onNext(callee: (T) -> Unit): This {
         nextFunc = callee
         this
     }
+    /**
+     * 注册异常处理函数
+     */
     public func onError(callee: (Exception) -> Unit): This {
         errorFunc = callee
         this
     }
+    /**
+     * 注册完成函数
+     */
     public func onComplete(callee: () -> Unit): This {
         completeFunc = callee
         this
     }
 }
+/**
+ * 多个观察者的组合，async决定是所有观察者由一个线程执行，还是观察者跟线程一一对应
+ */
 public class CombinedObserver<T> <: Observer<T> {
     private let observers = ArrayList<Observer<T>>()
     public CombinedObserver(private let async!: Bool = false){}
 
+    /**
+     * 添加观察者
+     */
     public func add(): FuncObserver<T> {
         let observer = FuncObserver<T>()
         observers.add(observer)
         observer
     }
+    /**
+     * 添加观察者
+     */
     public func add(observer: Observer<T>): This{
         observers.add(observer)
         this

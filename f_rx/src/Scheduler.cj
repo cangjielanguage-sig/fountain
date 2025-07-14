@@ -9,6 +9,9 @@
 */
 package f_rx
 
+/**
+ * 观察者调度器
+ */
 public abstract class Scheduler<T> {
     public Scheduler(protected var observer: Observer<T>){}
     /**
@@ -27,21 +30,45 @@ public abstract class Scheduler<T> {
      * observer.onError(ex)
      */
     public func schedule(ex: Exception): Unit
+    /**
+     * 一直使用新线程执行观察者，observer是待执行的观察者
+     */
     public static func alwaysNew(observer: Observer<T>): Scheduler<T> {
         AlwaysNewScheduler(observer)
     }
+    /**
+     * 使用当前线程执行观察者，observer是待执行的观察者
+     */
     public static func current(observer: Observer<T>): Scheduler<T> {
         CurrentScheduler(observer)
     }
+    /**
+     * 开启一个新线程执行观察者，observer是待执行的观察者，被观察者产生的数据推入数据队列，这个线程不停地从队列取出数据。
+     * queueSize是线程队列容量，policy是背压策略
+     */
     public static func single(observer: Observer<T>, queueSize: Int64, policy!: BackPressure = BackPressure.Current): Scheduler<T> {
         SingleScheduler(observer, queueSize, policy: policy)
     }
+    /**
+     * 开启一个新线程执行观察者，observer是待执行的观察者
+     * policy是背压策略
+     */
     public static func single(observer: Observer<T>, policy!: BackPressure = BackPressure.Current): Scheduler<T> {
         SingleScheduler(observer, policy: policy)
     }
+    /**
+     * 开启threads个新线程执行观察者，observer是待执行的观察者，
+     * 一个线程对应一个数据队列，被观察者的产生的数据按循环推入数据队列
+     * queueSize是线程队列容量，policy是背压策略
+     */
     public static func fixed(observer: Observer<T>, threads: Int64, policy!: BackPressure = BackPressure.Current): Scheduler<T> {
         FixedScheduler(observer, threads, policy: policy)
     }
+    /**
+     * 开启threads个新线程执行观察者，observer是待执行的观察者，
+     * 一个线程对应一个数据队列，被观察者的产生的数据按循环推入数据队列
+     * queueSize是线程队列容量，policy是背压策略
+     */
     public static func fixed(observer: Observer<T>, threads: Int64, queueSize: Int64, policy!: BackPressure = BackPressure.Current): Scheduler<T> {
         FixedScheduler(observer, threads, queueSize, policy: policy)
     }
