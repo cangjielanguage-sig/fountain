@@ -21,48 +21,64 @@ public class Observable<T> {
     public static func iterable<I>(items: () -> Future<I>, asyncCombined!: Bool = false): Observable<T> where I <: Iterable<T> {
         Observable<T>({=> items().get().iterator()}, asyncCombined: asyncCombined)
     }
+    public static func iterable<I>(items: Future<I>, asyncCombined!: Bool = false): Observable<T> where I <: Iterable<T> {
+        iterable<I>({=> items}, asyncCombined: asyncCombined)
+    }
     public static func iterable<I>(items: () -> I, asyncCombined!: Bool = false): Observable<T> where I <: Iterable<T> {
         Observable<T>({=> items().iterator()}, asyncCombined: asyncCombined)
     }
-    public static func iterable<I>(items: Future<I>, asyncCombined!: Bool = false): Observable<T> where I <: Iterable<T> {
-        Observable<T>({=> items.get().iterator()}, asyncCombined: asyncCombined)
-    }
     public static func iterable<I>(items: I, asyncCombined!: Bool = false): Observable<T> where I <: Iterable<T> {
-        Observable<T>({=> items.iterator()}, asyncCombined: asyncCombined)
+        iterable<I>({=> items}, asyncCombined: asyncCombined)
     }
+
+    public static func iterable(futures: () -> Iterable<Future<T>>, asyncCombined!: Bool = false): Observable<T> {
+        iterable<Iterator<T>>({=> futures().iterator().map{f => f.get()}}, asyncCombined: asyncCombined)
+    }
+    public static func iterable(futures: Iterable<Future<T>>, asyncCombined!: Bool = false): Observable<T> {
+        iterable({=> futures}, asyncCombined: asyncCombined)
+    }
+    public static func iterable(futures: () -> Array<Future<T>>, asyncCombined!: Bool = false): Observable<T> {
+        let f: () -> Iterable<Future<T>> = {=> futures().iterator()}
+        iterable(f, asyncCombined: asyncCombined)
+    }
+    public static func iterable(futures: Array<Future<T>>, asyncCombined!: Bool = false): Observable<T> {
+        let f: () -> Iterable<Future<T>> = {=> futures.iterator()}
+        iterable(f, asyncCombined: asyncCombined)
+    }
+    
 
     public static func single(item: () -> Future<T>, iterator!: (T) -> Iterator<T> = {t => SingleIterator<T>(t)},
         asyncCombined!: Bool = false): Observable<T> {
         Observable<T>({=> item().get() |> iterator}, asyncCombined: asyncCombined)
     }
+    public static func single(item: Future<T>, iterator!: (T) -> Iterator<T> = {t => SingleIterator<T>(t)},
+        asyncCombined!: Bool = false): Observable<T> {
+        single({=> item}, iterator: iterator, asyncCombined: asyncCombined)
+    }
     public static func single(item: () -> T, iterator!: (T) -> Iterator<T> = {t => SingleIterator<T>(t)},
         asyncCombined!: Bool = false): Observable<T> {
         Observable<T>({=> item() |> iterator}, asyncCombined: asyncCombined)
     }
-    public static func single(item: Future<T>, iterator!: (T) -> Iterator<T> = {t => SingleIterator<T>(t)},
-        asyncCombined!: Bool = false): Observable<T> {
-        Observable<T>({=> item.get() |> iterator}, asyncCombined: asyncCombined)
-    }
     public static func single(item: T, iterator!: (T) -> Iterator<T> = {t => SingleIterator<T>(t)},
         asyncCombined!: Bool = false): Observable<T> {
-        Observable<T>({=> item |> iterator}, asyncCombined: asyncCombined)
+        single({=> item}, iterator: iterator, asyncCombined: asyncCombined)
     }
 
     public static func maybe(item: () -> Future<?T>, iterator!: (?T) -> Iterator<T> = {t => SingleIterator<T>(t)},
         asyncCombined!: Bool = false): Observable<T> {
         Observable<T>({=> item().get() |> iterator}, asyncCombined: asyncCombined)
     }
+    public static func maybe(item: Future<?T>, iterator!: (?T) -> Iterator<T> = {t => SingleIterator<T>(t)},
+        asyncCombined!: Bool = false): Observable<T> {
+        maybe({=> item}, iterator: iterator, asyncCombined: asyncCombined)
+    }
     public static func maybe(item: () -> ?T, iterator!: (?T) -> Iterator<T> = {t => SingleIterator<T>(t)},
         asyncCombined!: Bool = false): Observable<T> {
         Observable<T>({=> item() |> iterator}, asyncCombined: asyncCombined)
     }
-    public static func maybe(item: Future<?T>, iterator!: (?T) -> Iterator<T> = {t => SingleIterator<T>(t)},
-        asyncCombined!: Bool = false): Observable<T> {
-        Observable<T>({=> item.get() |> iterator}, asyncCombined: asyncCombined)
-    }
     public static func maybe(item: ?T, iterator!: (?T) -> Iterator<T> = {t => SingleIterator<T>(t)},
         asyncCombined!: Bool = false): Observable<T> {
-        Observable<T>({=> item |> iterator}, asyncCombined: asyncCombined)
+        maybe({=> item}, iterator: iterator, asyncCombined: asyncCombined)
     }
 
     public static func empty(asyncCombined!: Bool = false): Observable<T> {
@@ -79,6 +95,19 @@ public class Observable<T> {
         concat<I, Array<I>>({=> iterables()}, asyncCombined: asyncCombined)
     }
     public static func concat<I>(iterables: Array<I>, asyncCombined!: Bool = false): Observable<T> where I <: Iterable<T> {
+        concat<I>({=> iterables}, asyncCombined: asyncCombined)
+    }
+
+    public static func concat<I1, I2>(iterables: () -> Future<I2>, asyncCombined!: Bool = false): Observable<T> where I2 <: Iterable<I1>, I1 <: Iterable<T> {
+        concat<I1, I2>({=> iterables().get()}, asyncCombined: asyncCombined)
+    }
+    public static func concat<I1, I2>(iterables: Future<I2>, asyncCombined!: Bool = false): Observable<T> where I1 <: Iterable<T>, I2 <: Iterable<I1> {
+        concat<I1, I2>({=> iterables}, asyncCombined: asyncCombined)
+    }
+    public static func concat<I>(iterables: () -> Future<Array<I>>, asyncCombined!: Bool = false): Observable<T> where I <: Iterable<T> {
+        concat<I, Array<I>>({=> iterables()}, asyncCombined: asyncCombined)
+    }
+    public static func concat<I>(iterables: Future<Array<I>>, asyncCombined!: Bool = false): Observable<T> where I <: Iterable<T> {
         concat<I>({=> iterables}, asyncCombined: asyncCombined)
     }
 
