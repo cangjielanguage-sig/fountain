@@ -145,27 +145,25 @@ class SingleScheduler<T> <: Scheduler<T> {
                     if(!exec(state)){
                         return
                     }
-                    if(let Some(w) <- wrapper){
+                    while(this.queue.size == 0 && let Some(w) <- wrapper) {
                         let queues = w.queues
                         let qsize = queues.size
                         var stolen = 0
-                        while(this.queue.size == 0) {
-                            for(i in 1 .. qsize - 1){
-                                if(let Some(state) <- queues[(index + i) % qsize].queue.tryRemove()){
-                                    stolen++
-                                    if(!exec(state)){
-                                        return
-                                    }
-                                }
-                                if(this.queue.size > 0) {
-                                    break
+                        for(i in 1 .. qsize){
+                            if(let Some(state) <- queues[(index + i) % qsize].queue.tryRemove()){
+                                stolen++
+                                if(!exec(state)){
+                                    return
                                 }
                             }
-                            if(stolen == 0){
+                            if(this.queue.size > 0) {
                                 break
                             }
-                            stolen = 0
                         }
+                        if(stolen == 0){
+                            break
+                        }
+                        stolen = 0
                     }
                 }
             }catch(e: Exception) {
