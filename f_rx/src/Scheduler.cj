@@ -144,20 +144,20 @@ class SingleScheduler<T> <: Scheduler<T> {
                                         let qsize = queues.size
                                         let counter = SyncCounter(qsize)
                                         for (ss in queues) {
-                                            ss.queue.add(Poison(counter, ss, index))//这里不能使用ss.schedule代替ss.queue.add，毒丸必须发送成功
+                                            ss.queue.add(Poison(counter, ss, index)) //这里不能使用ss.schedule代替ss.queue.add，毒丸必须发送成功
                                         }
-                                    }else{
-                                        this.observer.onComplete()//当前是单线程调度器立即结束
+                                    } else {
+                                        this.observer.onComplete() //当前是单线程调度器立即结束
                                         return false
                                     }
                             }
                             case Ex(e) => this.observer.onError(e)
-                            case Poison(c, ss, idx) where steal => 
+                            case Poison(c, ss, idx) where steal =>
                                 ss.queue.add(Poison(c, ss, idx))
                                 return false
                             case Poison(c, _, idx) =>
                                 c.dec()
-                                if(idx == this.index){
+                                if (idx == this.index) {
                                     c.waitUntilZero()
                                     this.observer.onComplete()
                                 }
@@ -214,9 +214,9 @@ class SingleScheduler<T> <: Scheduler<T> {
                             case _ => this.observer.onComplete()
                         }
                         case Ex(ex) => this.observer.onError(ex)
-                        case Poison(c, _, idx) => 
+                        case Poison(c, _, idx) =>
                             c.dec()
-                            if(idx == this.index){
+                            if (idx == this.index) {
                                 c.waitUntilZero()
                                 this.observer.onComplete()
                             }
