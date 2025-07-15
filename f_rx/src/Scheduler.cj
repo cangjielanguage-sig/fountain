@@ -143,7 +143,7 @@ class SingleScheduler<T> <: Scheduler<T> {
                                         let qsize = queues.size
                                         let counter = SyncCounter(qsize)
                                         for (ss in queues) {
-                                            ss.queue.add(Poison(counter, ss, index))
+                                            ss.queue.add(Poison(counter, ss, index))//这里不能使用ss.schedule代替ss.queue.add，毒丸必须发送成功
                                         }
                                     }
                             }
