@@ -122,6 +122,7 @@ class CurrentScheduler<T> <: Scheduler<T> {
 enum SingleSchedulerState<T> {
     | Item(?T)
     | Ex(Exception)
+    | Poison(SyncCounter, SingleScheduler<T>, Int64)
 }
 
 class SingleScheduler<T> <: Scheduler<T> {
@@ -132,33 +133,49 @@ class SingleScheduler<T> <: Scheduler<T> {
         spawn {
             try {
                 while (let state <- queue.remove()) {
-                    func exec(state: SingleSchedulerState<T>): Bool {
+                    func exec(state: SingleSchedulerState<T>, steal: Bool): Bool {
                         match (state) {
                             case Item(item) => match (item) {
                                 case Some(v) => this.observer.onNext(v)
                                 case _ =>
-                                    this.observer.onComplete()
-                                    return false
+                                    if (let Some(w) <- wrapper) {
+                                        let queues = w.queues
+                                        let qsize = queues.size
+                                        let counter = SyncCounter(qsize)
+                                        for (ss in queues) {
+                                            ss.queue.add(Poison(counter, ss, index))
+                                        }
+                                    }
                             }
-                            case Ex(e) => throw e
+                            case Ex(e) => this.observer.onError(e)
+                            case Poison(c, ss, idx) where steal => ss.queue.add(Poison(c, ss, idx))
+                            case Poison(c, _, idx) =>
+                                c.dec()
+                                if(idx == this.index){
+                                    c.waitUntilZero()
+                                    this.observer.onComplete()
+                                }
+                                return false
                         }
                         true
                     }
-                    if (!exec(state)) {
+                    if (!exec(state, false)) {
                         return
                     }
-                    while (this.queue.size == 0 && let Some(w) <- wrapper) {
+                    var next = true
+                    while (next && this.queue.size == 0 && let Some(w) <- wrapper) {
                         let queues = w.queues
                         let qsize = queues.size
                         var stolen = 0
                         for (i in 1..qsize) {
                             if (let Some(state) <- queues[(index + i) % qsize].queue.tryRemove()) {
                                 stolen++
-                                if (!exec(state)) {
-                                    return
+                                if (!exec(state, true)) {
+                                    next = false
+                                    break
                                 }
                             }
-                            if (this.queue.size > 0) {
+                            if (next && this.queue.size > 0) {
                                 break
                             }
                         }
@@ -192,6 +209,12 @@ class SingleScheduler<T> <: Scheduler<T> {
                             case _ => this.observer.onComplete()
                         }
                         case Ex(ex) => this.observer.onError(ex)
+                        case Poison(c, _, idx) => 
+                            c.dec()
+                            if(idx == this.index){
+                                c.waitUntilZero()
+                                this.observer.onComplete()
+                            }
                     }
                 } catch (e: Exception) {
                     this.observer.onError(e)

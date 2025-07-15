@@ -273,8 +273,11 @@ public class Observable<T> {
     /**
      * 取消执行
      */
-    public func dispose(): Unit {
+    public func dispose(completion!: Bool = false): Unit {
         disposed_.store(true)
+        if(completion){
+            scheduler.schedule(None<T>)
+        }
     }
     /**
      *  当前线程执行
