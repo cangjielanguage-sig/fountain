@@ -67,6 +67,7 @@ _/ ____\____  __ __  _____/  |______  |__| ____
   为stdx指定环境变量，比如下面这样
   ```
   export CANGJIE_STDX_PATH=/path/of/stdx/linux_x86_64_llvm
+  export CANGJIE_STDX_DYNAMIC_PATH=$CANGJIE_STDX_PATH/dynamic/stdx
   ```
 
 ## 功能
