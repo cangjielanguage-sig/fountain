@@ -79,6 +79,19 @@ public class Observable<T> {
     }
     
     /**
+     * 使用数据发射器构造被观察者，须确保emitter.on*(*)调用方跟调用observable.immediately()的线程不是同一个
+     */
+    public static func emitter(emitter: Emitter<T>, asyncCombined!: Bool = false): Observable<T> {
+        iterable(EmitterIterator<T>(emitter), asyncCombined: asyncCombined)
+    }
+    /**
+     * 使用数据发射器构造被观察者，须确保emitter.on*(*)调用方跟调用observable.immediately()的线程不是同一个
+     */
+    public static func emitter(emitter: ()->Emitter<T>, asyncCombined!: Bool = false): Observable<T> {
+        iterable({=> EmitterIterator<T>(emitter())}, asyncCombined: asyncCombined)
+    }
+
+    /**
      * 只有一个数据的被观察者，iterator把item转化成迭代器
      * asyncCombined决定是否异步执行每个观察者，false：单线程执行所有观察者，true：每个观察者对应一个线程；观察者接收到的数据是否启用新线程由背压策略决定
      */
