@@ -46,21 +46,21 @@ public class FuncObserver<T> <: Observer<T> {
     /**
      * 注册数据处理函数
      */
-    public func onNext(callee: (T) -> Unit): This {
+    public func setNext(callee: (T) -> Unit): This {
         nextFunc = callee
         this
     }
     /**
      * 注册异常处理函数
      */
-    public func onError(callee: (Exception) -> Unit): This {
+    public func setError(callee: (Exception) -> Unit): This {
         errorFunc = callee
         this
     }
     /**
      * 注册完成函数
      */
-    public func onComplete(callee: () -> Unit): This {
+    public func setComplete(callee: () -> Unit): This {
         completeFunc = callee
         this
     }
