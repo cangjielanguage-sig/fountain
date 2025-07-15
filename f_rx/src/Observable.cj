@@ -81,26 +81,26 @@ public class Observable<T> {
     /**
      * 使用数据发射器构造被观察者，须确保emitter.on*(*)调用方跟调用observable.immediately()的线程不是同一个
      */
-    public static func emitter(emitter: Emitter<T>, asyncCombined!: Bool = false): Observable<T> {
-        iterable(EmitterIterator<T>(emitter), asyncCombined: asyncCombined)
+    public static func emitter(emit: Emitter<T>, asyncCombined!: Bool = false): Observable<T> {
+        iterable(EmitterIterator<T>(emit), asyncCombined: asyncCombined)
     }
     /**
      * 使用数据发射器构造被观察者，须确保emitter.on*(*)调用方跟调用observable.immediately()的线程不是同一个
      */
-    public static func emitter(emitter: ()->Emitter<T>, asyncCombined!: Bool = false): Observable<T> {
-        iterable({=> EmitterIterator<T>(emitter())}, asyncCombined: asyncCombined)
+    public static func emitter(emit: ()->Emitter<T>, asyncCombined!: Bool = false): Observable<T> {
+        iterable({=> EmitterIterator<T>(emit())}, asyncCombined: asyncCombined)
     }
     /**
      * 使用数据发射器构造被观察者
      */
-    public static func emitter(emitter: () -> Future<Emitter<T>>, asyncCombined!: Bool = false): Observable<T> {
-        emitter({=> emitter().get()}, asyncCombined: asyncCombined)
+    public static func emitter(emit: () -> Future<Emitter<T>>, asyncCombined!: Bool = false): Observable<T> {
+        emitter({=> emit().get()}, asyncCombined: asyncCombined)
     }
     /**
      * 使用数据发射器构造被观察者
      */
-    public static func emitter(emitter: Future<Emitter<T>>, asyncCombined!: Bool = false): Observable<T> {
-        emitter({=> emitter}, asyncCombined: asyncCombined)
+    public static func emitter(emit: Future<Emitter<T>>, asyncCombined!: Bool = false): Observable<T> {
+        emitter({=> emit}, asyncCombined: asyncCombined)
     }
 
     /**
