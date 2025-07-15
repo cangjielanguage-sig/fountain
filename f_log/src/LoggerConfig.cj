@@ -85,7 +85,7 @@ public class LoggerConfig {
                 case _ => AlwaysWaiting
             }
         } else {
-            AlwaysWaiting
+            Discard
         }
     }
     public static func getUdpSendTimeout(appender: String): ?Duration {
