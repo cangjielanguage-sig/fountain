@@ -19,7 +19,7 @@ enum EmitterState<T>{
 public class Emitter<T> {
     private let q: LinkedBlockingQueue<EmitterState<T>>
 
-    public init(qsize: Int64) {
+    public init(qsize!: Int64 = 1) {
         q = LinkedBlockingQueue<EmitterState<T>>(qsize)
     }
 

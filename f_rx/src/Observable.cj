@@ -107,7 +107,7 @@ public class Observable<T> {
      */
     public static func emiiter(emit: (Emitter<T>) -> Unit, bufSize!: Int64 = 1, asyncCombined!: Bool = false): Observable<T> {
         emitter({=>
-            let e = Emitter<T>(bufSize)
+            let e = Emitter<T>(qsize: bufSize)
             emit(e)
             e
         }, asyncCombined: asyncCombined)
