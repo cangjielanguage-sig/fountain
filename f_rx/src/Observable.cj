@@ -102,6 +102,16 @@ public class Observable<T> {
     public static func emitter(emit: Future<Emitter<T>>, asyncCombined!: Bool = false): Observable<T> {
         emitter({=> emit}, asyncCombined: asyncCombined)
     }
+    /**
+     * 使用数据发射器构造被观察者
+     */
+    public static func emiiter(emit: (Emitter<T>) -> Unit, bufSize!: Int64 = 1, asyncCombined!: Bool = false): Observable<T> {
+        emitter({=>
+            let e = Emitter<T>(bufSize)
+            emit(e)
+            e
+        }, asyncCombined: asyncCombined)
+    }
 
     /**
      * 只有一个数据的被观察者，iterator把item转化成迭代器
