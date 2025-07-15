@@ -81,7 +81,7 @@ public class Observable<T> {
     /**
      * 使用数据发射器构造被观察者
      */
-    public static func emiiter(emit: (Emitter<T>) -> Unit, bufSize!: Int64 = 1, asyncCombined!: Bool = false): Observable<T> {
+    public static func emiter(emit: (Emitter<T>) -> Unit, bufSize!: Int64 = 1, asyncCombined!: Bool = false): Observable<T> {
         iterable({=>
             let e = Emitter<T>(qsize: bufSize)
             spawn{emit(e)}
