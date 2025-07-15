@@ -132,6 +132,7 @@ class SingleScheduler<T> <: Scheduler<T> {
         super(observer)
         spawn {
             try {
+                var toSteal = true
                 while (let state <- queue.remove()) {
                     func exec(state: SingleSchedulerState<T>, steal: Bool): Bool {
                         match (state) {
@@ -148,7 +149,9 @@ class SingleScheduler<T> <: Scheduler<T> {
                                     }
                             }
                             case Ex(e) => this.observer.onError(e)
-                            case Poison(c, ss, idx) where steal => ss.queue.add(Poison(c, ss, idx))
+                            case Poison(c, ss, idx) where steal => 
+                                ss.queue.add(Poison(c, ss, idx))
+                                return false
                             case Poison(c, _, idx) =>
                                 c.dec()
                                 if(idx == this.index){
@@ -162,8 +165,7 @@ class SingleScheduler<T> <: Scheduler<T> {
                     if (!exec(state, false)) {
                         return
                     }
-                    var next = true
-                    while (next && this.queue.size == 0 && let Some(w) <- wrapper) {
+                    while (toSteal && this.queue.size == 0 && let Some(w) <- wrapper) {
                         let queues = w.queues
                         let qsize = queues.size
                         var stolen = 0
@@ -171,11 +173,11 @@ class SingleScheduler<T> <: Scheduler<T> {
                             if (let Some(state) <- queues[(index + i) % qsize].queue.tryRemove()) {
                                 stolen++
                                 if (!exec(state, true)) {
-                                    next = false
+                                    toSteal = false
                                     break
                                 }
                             }
-                            if (next && this.queue.size > 0) {
+                            if (toSteal && this.queue.size > 0) {
                                 break
                             }
                         }
