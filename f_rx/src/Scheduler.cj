@@ -146,6 +146,9 @@ class SingleScheduler<T> <: Scheduler<T> {
                                         for (ss in queues) {
                                             ss.queue.add(Poison(counter, ss, index))//这里不能使用ss.schedule代替ss.queue.add，毒丸必须发送成功
                                         }
+                                    }else{
+                                        this.observer.onComplete()//当前是单线程调度器立即结束
+                                        return false
                                     }
                             }
                             case Ex(e) => this.observer.onError(e)
