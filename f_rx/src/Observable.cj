@@ -90,6 +90,18 @@ public class Observable<T> {
     public static func emitter(emitter: ()->Emitter<T>, asyncCombined!: Bool = false): Observable<T> {
         iterable({=> EmitterIterator<T>(emitter())}, asyncCombined: asyncCombined)
     }
+    /**
+     * 使用数据发射器构造被观察者
+     */
+    public static func emitter(emitter: () -> Future<Emitter<T>>, asyncCombined!: Bool = false): Observable<T> {
+        emitter({=> emitter().get()}, asyncCombined: asyncCombined)
+    }
+    /**
+     * 使用数据发射器构造被观察者
+     */
+    public static func emitter(emitter: Future<Emitter<T>>, asyncCombined!: Bool = false): Observable<T> {
+        emitter({=> emitter}, asyncCombined: asyncCombined)
+    }
 
     /**
      * 只有一个数据的被观察者，iterator把item转化成迭代器
