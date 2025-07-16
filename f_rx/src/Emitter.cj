@@ -18,12 +18,17 @@ enum EmitterState<T>{
  */
 public class Emitter<T> {
     private let q: LinkedBlockingQueue<EmitterState<T>>
-
-    public init(qsize!: Int64 = 1) {
+    private var f = None<Future<Unit>>
+    public Emitter(qsize!: Int64 = 1, private let fn!: (Emitter<T>) -> Unit) {
         q = LinkedBlockingQueue<EmitterState<T>>(qsize)
     }
 
     func next(): ?T {
+        if(f.isNone()){
+            f = spawn {
+                fn(this)
+            }
+        }
         match(q.remove()){
             case Data(d) => d
             case Ex(e) => throw e
