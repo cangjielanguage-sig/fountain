@@ -287,7 +287,7 @@ public class Observable<T> {
         }
     }
     /**
-     * 取消执行
+     * 取消执行，如果completion是true就向消费者发送完成事件
      */
     public func dispose(completion!: Bool = false): Unit {
         disposed_.store(true)
