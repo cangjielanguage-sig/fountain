@@ -294,7 +294,9 @@ public class Observable<T> {
         try {
             func isDisposed() {
                 if (this.isDisposed) {
-                    scheduler.schedule(None<T>)
+                    if(completionOnDisposing.load()){
+                        scheduler.schedule(None<T>)
+                    }
                     return true
                 }
                 false
@@ -305,9 +307,6 @@ public class Observable<T> {
             for (item in this.items()) {
                 scheduler.schedule(item)
                 if (isDisposed()) {
-                    if(completionOnDisposing.load()){
-                        break
-                    }
                     return
                 }
             }
