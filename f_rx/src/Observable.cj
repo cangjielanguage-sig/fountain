@@ -277,7 +277,13 @@ public class Observable<T> {
      */
     public prop isDisposed: Bool {
         get() {
-            disposed_.load()
+            if(disposed_.load()){
+                if(completionOnDisposing.load()){
+                    scheduler.schedule(None<T>)
+                }
+                return true
+            }
+            false
         }
     }
     /**
@@ -292,21 +298,12 @@ public class Observable<T> {
      */
     public func immediately(): Unit {
         try {
-            func isDisposed() {
-                if (this.isDisposed) {
-                    if(completionOnDisposing.load()){
-                        scheduler.schedule(None<T>)
-                    }
-                    return true
-                }
-                false
-            }
-            if (isDisposed()) {
+            if (isDisposed) {
                 return
             }
             for (item in this.items()) {
                 scheduler.schedule(item)
-                if (isDisposed()) {
+                if (isDisposed) {
                     return
                 }
             }
