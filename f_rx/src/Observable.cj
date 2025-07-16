@@ -13,6 +13,7 @@ public class Observable<T> {
     private let observer: CombinedObserver<T>
     private var scheduler: Scheduler<T>
     private let disposed_ = AtomicBool(false)
+    private let completionOnDisposing = AtomicBool(false)
     private Observable(private let items: () -> Iterator<T>, private let asyncCombined!: Bool = false) {
         this.observer = CombinedObserver<T>(async: asyncCombined)
         this.scheduler = Scheduler<T>.current(observer)
@@ -284,9 +285,7 @@ public class Observable<T> {
      */
     public func dispose(completion!: Bool = false): Unit {
         disposed_.store(true)
-        if(completion){
-            scheduler.schedule(None<T>)
-        }
+        completionOnDisposing.store(completion)
     }
     /**
      *  当前线程执行
@@ -306,6 +305,9 @@ public class Observable<T> {
             for (item in this.items()) {
                 scheduler.schedule(item)
                 if (isDisposed()) {
+                    if(completionOnDisposing.load()){
+                        break
+                    }
                     return
                 }
             }

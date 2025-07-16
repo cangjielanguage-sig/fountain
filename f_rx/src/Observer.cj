@@ -88,12 +88,14 @@ public class CombinedObserver<T> <: Observer<T> {
         this
     }
     private func call(fn: (Observer<T>) -> Unit): Unit {
-        for(o in observers) {
-            if(async){
-                spawn{
+        if(async){
+            for(o in observers){
+                spawn {
                     fn(o)
                 }
-            }else{
+            }
+        }else{
+            for(o in observers){
                 fn(o)
             }
         }
