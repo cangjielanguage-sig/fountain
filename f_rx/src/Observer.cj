@@ -25,8 +25,8 @@ public interface Observer<T> {
 }
 
 public class EmptyObserver<T> <: Observer<T> {
-    public func onNext(item: T): Unit {}
-    public func onError(ex: Exception): Unit {}
+    public func onNext(_: T): Unit {}
+    public func onError(_: Exception): Unit {}
     public func onComplete(): Unit {}
 }
 public class FuncObserver<T> <: Observer<T> {
@@ -77,7 +77,11 @@ public class CombinedObserver<T> <: Observer<T> {
      */
     public func add(): FuncObserver<T> {
         let observer = FuncObserver<T>()
-        observers.add(observer)
+        observers.add(if(async){
+            AsyncObserver<T>(observer)
+        }else{
+            observer
+        })
         observer
     }
     /**
@@ -108,5 +112,35 @@ public class CombinedObserver<T> <: Observer<T> {
     }
     public func onComplete(): Unit {
         call{o => o.onComplete()}
+    }
+}
+class AsyncObserver<T> <: Observer<T> {
+    private let q = ArrayBlockingQueue<T>(1)
+    private let e = AtomicOptionReference<Exception>()
+    private let c = AtomicBool(false)
+    AsyncObserver(private let observer: Observer<T>){
+        spawn{
+            while(e.load().isNone() && !c.load() && let Some(d) <- q.remove(Duration.millisecond * 100)){
+                observer.onNext(d)
+            }
+            while(let Some(d) <- q.tryRemove()){
+                observer.onNext(d)
+            }
+            if(let Some(ex) <- e.load()){
+                observer.onError(ex)
+            }
+            if(c.load()){
+                observer.onComplete()
+            }
+        }
+    }
+    public func onNext(item: T): Unit {
+        q.add(item)
+    }
+    public func onError(ex: Exception): Unit {
+        e.store(ex)
+    }
+    public func onComplete(): Unit {
+        c.store(true)
     }
 }

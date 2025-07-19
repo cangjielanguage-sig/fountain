@@ -229,11 +229,16 @@ class SingleScheduler<T> <: Scheduler<T> {
                 case Discarding => ()
                 case DropOldest =>
                     queue.remove()
-                    schedule(state)
+                    queue.add(state)
                 case BlockingOrDiscarding(d) => queue.add(state, d)
                 case BlockingOrThrowing(d) =>
                     if (!queue.add(state, d)) {
                         throw FullSchedulerException()
+                    }
+                case BlockingOrDropingOldest(d) => 
+                    if(!queue.add(state, d)) {
+                        queue.remove()
+                        queue.add(state)
                     }
                 case Throwing => throw FullSchedulerException()
                 case Current => callee()

@@ -177,20 +177,6 @@ public class Observable<T> {
         I2 <: Iterable<I1> {
         concat<I1, I2>({=> iterables}, asyncCombined: asyncCombined)
     }
-    /**
-     * 把所有类型是I的迭代器连接成一个迭代器，
-     * asyncCombined决定是否异步执行每个观察者，false：单线程执行所有观察者，true：每个观察者对应一个线程；观察者接收到的数据是否启用新线程由背压策略决定
-     */
-    public static func concat<I>(iterables: () -> Array<I>, asyncCombined!: Bool = false): Observable<T> where I <: Iterable<T> {
-        concat<I, Array<I>>({=> iterables()}, asyncCombined: asyncCombined)
-    }
-    /**
-     * 把所有类型是I的迭代器连接成一个迭代器，
-     * asyncCombined决定是否异步执行每个观察者，false：单线程执行所有观察者，true：每个观察者对应一个线程；观察者接收到的数据是否启用新线程由背压策略决定
-     */
-    public static func concat<I>(iterables: Array<I>, asyncCombined!: Bool = false): Observable<T> where I <: Iterable<T> {
-        concat<I>({=> iterables}, asyncCombined: asyncCombined)
-    }
     
     /**
      * 把所有类型是I的迭代器连接成一个迭代器，
@@ -207,20 +193,6 @@ public class Observable<T> {
     public static func concat<I1, I2>(iterables: Future<I2>, asyncCombined!: Bool = false): Observable<T> where I1 <: Iterable<T>,
         I2 <: Iterable<I1> {
         concat<I1, I2>({=> iterables}, asyncCombined: asyncCombined)
-    }
-    /**
-     * 把所有类型是I的迭代器连接成一个迭代器，
-     * asyncCombined决定是否异步执行每个观察者，false：单线程执行所有观察者，true：每个观察者对应一个线程；观察者接收到的数据是否启用新线程由背压策略决定
-     */
-    public static func concat<I>(iterables: () -> Future<Array<I>>, asyncCombined!: Bool = false): Observable<T> where I <: Iterable<T> {
-        concat<I, Array<I>>({=> iterables()}, asyncCombined: asyncCombined)
-    }
-    /**
-     * 把所有类型是I的迭代器连接成一个迭代器，
-     * asyncCombined决定是否异步执行每个观察者，false：单线程执行所有观察者，true：每个观察者对应一个线程；观察者接收到的数据是否启用新线程由背压策略决定
-     */
-    public static func concat<I>(iterables: Future<Array<I>>, asyncCombined!: Bool = false): Observable<T> where I <: Iterable<T> {
-        concat<I>({=> iterables}, asyncCombined: asyncCombined)
     }
     
     /**
