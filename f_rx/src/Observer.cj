@@ -92,16 +92,8 @@ public class CombinedObserver<T> <: Observer<T> {
         this
     }
     private func call(fn: (Observer<T>) -> Unit): Unit {
-        if(async){
-            for(o in observers){
-                spawn {
-                    fn(o)
-                }
-            }
-        }else{
-            for(o in observers){
-                fn(o)
-            }
+        for(o in observers){
+            fn(o)
         }
     }
     public func onNext(item: T): Unit {

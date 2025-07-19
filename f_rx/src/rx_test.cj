@@ -9,6 +9,7 @@
 */
 package f_rx
 
+import std.collection.*
 import std.sync.*
 import std.unittest.*
 import std.unittest.testmacro.*
@@ -211,13 +212,31 @@ public class RxTest{
         }).immediately()
     }
     @TestCase
-    public func testAlwaysNewAndImmediately(): Unit {
-        let threads = ArrayBlockingQueue<Thread>(3)
+    public func testCurrentAndImmediately(): Unit {
+        let map = HashMap<Int64, ArrayList<Int64>>()
         Observable<Int64>.iterable([10000, 20000, 30000])
         .subscribe(FuncObserver<Int64>().setNextFunc{v => 
             synchronized(mutex){
                 println(v)
-                threads.add(Thread.currentThread)
+                map.addIfAbsent(Thread.currentThread.id, ArrayList<Int64>())?.add(v)
+            }
+        }.setCompleteFunc{
+            synchronized(mutex){
+                println("complete testAlwaysNewAndImmediately")
+            }
+        }).withCurrent().immediately()
+        sleep(Duration.second * 5)
+        println('threads: ${map}')
+        @Assert(map.size, 1)
+    }
+    @TestCase
+    public func testAlwaysNewAndImmediately(): Unit {
+        let map = HashMap<Int64, ArrayList<Int64>>()
+        Observable<Int64>.iterable([10000, 20000, 30000])
+        .subscribe(FuncObserver<Int64>().setNextFunc{v => 
+            synchronized(mutex){
+                println(v)
+                map.addIfAbsent(Thread.currentThread.id, ArrayList<Int64>())?.add(v)
             }
         }.setCompleteFunc{
             synchronized(mutex){
@@ -225,24 +244,17 @@ public class RxTest{
             }
         }).withAlwaysNew().immediately()
         sleep(Duration.second * 5)
-        var t = None<Thread>
-        let i = AtomicInt64(0)
-        while(let someqt <- threads.tryRemove() && let Some(qt) <- someqt && i.fetchAdd(1) < 3){
-            threads.add(qt)
-            if(let Some(tt) <- t && refEq(tt, qt)){
-                throw Exception('same threads')
-            }
-            t = qt
-        }
+        println('threads: ${map}')
+        @Assert(map.size, 3)
     }
     @TestCase
     public func testFixedAndImmediately(): Unit {
-        let threads = ArrayBlockingQueue<Thread>(3)
+        let map = HashMap<Int64, ArrayList<Int64>>()
         Observable<Int64>.iterable([40000, 50000, 60000])
         .subscribe(FuncObserver<Int64>().setNextFunc{v => 
             synchronized(mutex){
                 println(v)
-                threads.add(Thread.currentThread)
+                map.addIfAbsent(Thread.currentThread.id, ArrayList<Int64>())?.add(v)
             }
         }.setCompleteFunc{
             synchronized(mutex){
@@ -250,20 +262,8 @@ public class RxTest{
             }
         }).withFixed(2).immediately()
         sleep(Duration.second * 5)
-        var t = None<Thread>
-        let i = AtomicInt64(0)
-        var c = 0
-        while(let someqt <- threads.tryRemove() && let Some(qt) <- someqt && i.fetchAdd(1) < 3){
-            threads.add(qt)
-            if(let Some(tt) <- t && refEq(tt, qt)){
-                c++
-            }
-            t = qt
-        }
-        println('same threads: ${c}')
-        if(c != 1){
-            throw Exception('There must be two threads are same')
-        }
+        println('threads: ${map}')
+        @Assert(map.size, 2)
     }
     @TestCase
     public func testMultiSyncObserver(): Unit {
