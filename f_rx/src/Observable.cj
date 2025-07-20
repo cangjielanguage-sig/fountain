@@ -288,9 +288,7 @@ public class Observable<T> {
      * 延迟duration时长执行
      */
     public func delay(duration: Duration): This {
-        Timer.once(duration) {
-            immediately()
-        }
+        Timer.once(duration, immediately)
         this
     }
     /**
