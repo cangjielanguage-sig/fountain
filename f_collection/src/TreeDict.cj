@@ -28,6 +28,22 @@ public class TreeDict<K, V> <: Iterable<(K, V)> {
     public TreeDict(private let cmp: (K, K) -> Ordering){
         map = TreeMap<ComparableKey<K>, V>()
     }
+    public init(elements: Array<(K, V)>, cmp: (K, K) -> Ordering){
+        this(cmp)
+        add(all: elements)
+    }
+    public init(elements: Collection<(K, V)>, cmp: (K, K) -> Ordering){
+        this(cmp)
+        add(all: elements)
+    }
+    public init(size: Int64, initElement: (Int64) -> (K, V), cmp: (K, K) -> Ordering) {
+        this(cmp)
+        for(i in 0..size) {
+            let (k, v) = initElement(i)
+            add(k, v)
+        }
+    }
+    
     func newKey(key: K){
         ComparableKey<K>(key, cmp)
     }
@@ -193,6 +209,32 @@ public class TreeDict<K, V> <: Iterable<(K, V)> {
     }
     public func entryView(k: K): MapEntryView<K, V> {
         ComparableKeyMapEntryView<K, V>(map.entryView(newKey(k)))
+    }
+    private func extract(tuple: ?(ComparableKey<K>, V)): ?(K, V) {
+        if(let Some((tk, v)) <- tuple){
+            (tk.key, v)
+        }else{
+            None<(K, V)>
+        }
+    }
+    public prop first: ?(K, V) {
+        get(){
+            extract(map.first)
+        }
+    }
+    public prop last: ?(K, V) {
+        get(){
+            extract(map.last)
+        }
+    }
+    public func forward(mark: K, inclusive!: Bool = true): Iterator<(K, V)> {
+        ComparableKeyMapIterator<K, V>(map.forward(newKey(mark), inclusive: inclusive))
+    }
+    public func removeFirst(): ?(K, V) {
+        extract(map.removeFirst())
+    }
+    public func removeLast(): ?(K, V) {
+        extract(map.removeLast())
     }
 }
 class ComparableKeyMapIterator<K, V> <: Iterator<(K, V)> {
