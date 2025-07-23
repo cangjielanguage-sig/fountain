@@ -27,16 +27,9 @@ public struct HashKey<K> <: Hashable & Equatable<K> & Equatable<HashKey<K>> {
     }
 }
 public class HashDict<K, V> <: Iterable<(K, V)> {
-    let map: HashMap<HashKey<K>, V>
-    public HashDict(size: Int64, private let hasher: (K) -> Int64, private let equals: (K, K) -> Bool){
-        map = if(size < 0){
-            HashMap<HashKey<K>, V>()
-        }else{
-            HashMap<HashKey<K>, V>(size)
-        }
-    }
+    private HashDict(let map: HashMap<HashKey<K>, V>, private let hasher: (K) -> Int64, private let equals: (K, K) -> Bool){}
     public init(hasher: (K) -> Int64, equals: (K, K) -> Bool){
-        this(-1, hasher, equals)
+        this(newMap(), hasher, equals)
     }
     public init(elements: Array<(K, V)>, hasher: (K) -> Int64, equals: (K, K) -> Bool){
         this(hasher, equals)
@@ -46,12 +39,21 @@ public class HashDict<K, V> <: Iterable<(K, V)> {
         this(hasher, equals)
         add(all: elements)
     }
+    public init(size: Int64, hasher: (K) -> Int64, equals: (K, K) -> Bool){
+        this(newMap(size), hasher, equals)
+    }
     public init(size: Int64, initElement: (Int64) -> (K, V), hasher: (K) -> Int64, equals: (K, K) -> Bool) {
-        this(hasher, equals)
-        for(i in 0..size) {
+        this(size, hasher, equals)
+        for(i in 0..size: 1) {
             let (k, v) = initElement(i)
             add(k, v)
         }
+    }
+    private static func newMap() {
+        HashMap<HashKey<K>, V>()
+    }
+    private static func newMap(size: Int64){
+        HashMap<HashKey<K>, V>(size)
     }
     func newKey(key: K){
         HashKey<K>(key, hasher, equals)
