@@ -77,6 +77,11 @@ public class CombinedObserver<T> <: Observer<T> {
             observers.size
         }
     }
+    public func clear(){
+        for((k, _) in observers){
+            observers.remove(k)
+        }
+    }
     /**
      * 添加观察者，name是观察者的名称
      */

@@ -327,10 +327,10 @@ public class Observable<T> {
         }
     }
     /**
-     * 取消执行，如果completion是true就向消费者发送完成事件
+     * 暂停执行，如果completion是true就向消费者发送完成事件
      * 只停止不清空观察者
      */
-    public func dispose(completion!: Bool = false): Unit {
+    public func pause(completion!: Bool = false): Unit {
         disposed_.store(true)
         completionOnDisposing.store(completion)
     }
@@ -338,6 +338,10 @@ public class Observable<T> {
         if(this.observer.size == 0){
             disposed_.store(true)
         }
+    }
+    public func disposeAll(){
+        this.observer.clear()
+        disposed_.store(true)
     }
     /**
      * 取消指定名称的观察者
