@@ -300,6 +300,19 @@ public class Observable<T> {
         }
     }
     /**
+     * 指定错误恢复器，产生或消费数据时如果抛出异常将执行当前指定的恢复器，如果闭包参数返回true会继续使用当前Observable的全部成员创建新的Observable
+     * 多次调用本函数及其重载函数只有最后一个恢复器生效
+     */
+    public func setErrorResumer(resumer: (Exception) -> Bool): This {
+        this.setErrorResumer{e => 
+            if(resumer(e)){
+                this.iterator
+            }else{
+                None<Iterator<T>>
+            }
+        }
+    }
+    /**
      * 判断是否取消
      */
     public prop isDisposed: Bool {

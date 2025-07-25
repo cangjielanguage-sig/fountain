@@ -29,7 +29,7 @@ public class EmptyCache<T> <: Cache<T> {
         this
     }
     public func iterator(): Iterator<T> {
-        EmptyIterator<T>()
+        EmptyIterator<T>.INSTANCE()
     }
     public func set(value: T): Unit{
 
