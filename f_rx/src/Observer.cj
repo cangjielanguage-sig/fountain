@@ -77,9 +77,12 @@ public class CombinedObserver<T> <: Observer<T> {
             observers.size
         }
     }
-    public func clear(){
-        for((k, _) in observers){
-            observers.remove(k)
+    /**
+     * 清除观察者，如果completion是true，每个观察者被清除时都向其发送完成事件
+     */
+    public func clear(completion: Bool){
+        for((k, _) in observers) {
+            remove(k, completion)
         }
     }
     /**
@@ -116,39 +119,41 @@ public class CombinedObserver<T> <: Observer<T> {
         this
     }
     /**
-     * 删除指定名称的观察者
+     * 删除指定名称的观察者，如果completion是true向被清除的观察者发送完成事件
      */
-    public func remove(name: String): Unit {
-        observers.remove(name)
+    public func remove(name: String, completion: Bool): Unit {
+        if(let Some(o) <- observers.remove(name) && completion){
+            o.onComplete()
+        }
     }
     /**
-     * 删除指定名称的观察者且已注册观察者与参数observer是同一实例，如果不是同一实例会抛出异常
+     * 删除指定名称的观察者且已注册观察者与参数observer是同一实例，如果不是同一实例会抛出异常，如果completion是true向被清除的观察者发送完成事件
      */
-    public func remove<O>(name: String, observer: O): Unit where O <: Object & Observer<T> {
+    public func remove<O>(name: String, observer: O, completion: Bool): Unit where O <: Object & Observer<T> {
         if(let Some(o) <- observers.get(name) && let Some(oo) <- (o as Object) && refEq(oo, observer)){
             match(o){
-                case x: Object where refEq(x, observer) => observers.remove(name)
+                case x: Object where refEq(x, observer) => remove(name, completion)
                 case _ => throw ObserverRegistrationException("registered observer ${name} does not match current specified")
             }
         }
     }
     /**
-     * 删除指定观察者，如果没有找到相同实例的观察者将什么也不做
+     * 删除指定观察者，如果没有找到相同实例的观察者将什么也不做，如果completion是true向被清除的观察者发送完成事件
      */
-    public func remove<O>(observer: O): Unit where O <: Object & Observer<T> {
+    public func remove<O>(observer: O, completion: Bool): Unit where O <: Object & Observer<T> {
         for((n, o) in this.observers) {
             if(let x: Object <- o && refEq(x, observer)){
-                this.observers.remove(n)
+                remove(n, completion)
                 return;
             }
         }
     }
     /**
-     * 删除指定类型的观察者全部
+     * 删除指定类型的观察者全部，如果completion是true向被清除的观察者发送完成事件
      */
-    public func remove<O>(): Unit where O <: Observer<T> {
+    public func remove<O>(completion: Bool): Unit where O <: Observer<T> {
         for((n, o) in this.observers where o is O) {
-            remove(n)
+            remove(n, completion)
         }
     }
     private func call(fn: (Observer<T>) -> Unit): Unit {

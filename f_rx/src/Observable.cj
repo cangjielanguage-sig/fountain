@@ -339,36 +339,39 @@ public class Observable<T> {
             disposed_.store(true)
         }
     }
-    public func disposeAll(){
-        this.observer.clear()
+    /**
+     * 取消全部观察者
+     */
+    public func disposeAll(completion!: Bool = false){
+        this.observer.clear(completion)
         disposed_.store(true)
     }
     /**
      * 取消指定名称的观察者
      */
-    public func dispose(name: String): Unit {
-        this.observer.remove(name)
+    public func dispose(name: String, completion!: Bool = false): Unit {
+        this.observer.remove(name, completion)
         noObserver()
     }
     /**
      * 取消指定名称的观察者，如果参数observer与已注册观察者不是同一实例会抛出异常
      */
-    public func dispose<O>(name: String, observer: O): Unit where O <: Object & Observer<T> {
-        this.observer.remove<O>(name, observer)
+    public func dispose<O>(name: String, observer: O, completion!: Bool = false): Unit where O <: Object & Observer<T> {
+        this.observer.remove<O>(name, observer, completion)
         noObserver()
     }
     /**
      * 取消指定观察者，如果没有找到相同实例的观察者将什么也不做
      */
-    public func dispose<O>(observer: O): Unit where O <: Object & Observer<T> {
-        this.observer.remove<O>(observer)
+    public func dispose<O>(observer: O, completion!: Bool = false): Unit where O <: Object & Observer<T> {
+        this.observer.remove<O>(observer, completion)
         noObserver()
     }
     /**
      * 取消指定类型的观察者
      */
-    public func dispose<O>(): Unit where O <: Observer<T> {
-        observer.remove<O>()
+    public func dispose<O>(completion!: Bool = false): Unit where O <: Observer<T> {
+        observer.remove<O>(completion)
         noObserver()
     }
     /**
