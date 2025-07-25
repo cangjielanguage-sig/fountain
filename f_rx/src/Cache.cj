@@ -45,7 +45,7 @@ public class QueuedCache<T> <: Cache<T> {
         QueuedCache<T>(capacity)
     }
     public func iterator(): Iterator<T> {
-        CacheIterator<T>(queue.iterator(), lock)
+        CacheIterator<T>(queue.iterator(), lock, capacity)
     }
     public func set(value: T): Unit{
         synchronized(lock) {
@@ -57,10 +57,14 @@ public class QueuedCache<T> <: Cache<T> {
     }
 }
 class CacheIterator<T> <: Iterator<T> {
-    CacheIterator(private let itr: Iterator<T>, let lock: Mutex){}
-
+    CacheIterator(private let itr: Iterator<T>, private let lock: Mutex, private let size: Int64){}
+    private var consumed = 0
     public func next(): ?T {
         synchronized(lock) {
+            if(consumed >= size) {
+                return None<T>
+            }
+            consumed++
             itr.next()
         }
     }
