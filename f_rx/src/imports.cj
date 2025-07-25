@@ -9,7 +9,7 @@
 */
 package f_rx
 
-internal import std.collection.ArrayList
+internal import std.collection.{ArrayList, LinkedList}
 internal import std.collection.concurrent.*
 internal import std.reflect.*
 internal import std.sync.*

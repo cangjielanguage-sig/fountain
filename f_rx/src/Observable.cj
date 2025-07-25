@@ -17,7 +17,8 @@ public class Observable<T> {
                        private var errorResumer!: ?(Exception) -> ?Iterable<T> = None,
                        private var scheduler!: Scheduler<T> = Scheduler<T>.current(observer),
                        private let disposed_!: AtomicBool = AtomicBool(false),
-                       private let completionOnDisposing!: AtomicBool = AtomicBool(false)) {
+                       private let completionOnDisposing!: AtomicBool = AtomicBool(false),
+                       private var cache!: Cache<T> = EmptyCache<T>()) {
     }
     /**
      * 使用迭代器I构造被观察者
@@ -194,12 +195,20 @@ public class Observable<T> {
         I2 <: Iterable<I1> {
         concat<I1, I2>({=> iterables}, asyncCombined: asyncCombined)
     }
+    private func replayCached(observer: Observer<T>): Unit {
+        spawn{
+            for(v in cache) {
+                observer.onNext(v)
+            }
+        }
+    }
     /**
      * 添加一个FuncObserver<T>，name是观察者名称，creator接收刚添加的观察者实例，可在此闭包内对观察者做修改
      */
     public func subscribe(name: String, creator: (FuncObserver<T>) -> Unit): This {
         let observer = this.observer.add(name)
         creator(observer)
+        replayCached(observer)
         this
     }
     /**
@@ -207,6 +216,7 @@ public class Observable<T> {
      */
     public func subscribe(observer: Observer<T>): This {
         this.observer.add(observer)
+        replayCached(observer)
         this
     }
     /**
@@ -214,6 +224,7 @@ public class Observable<T> {
      */
     public func subscribe(name: String, observer: Observer<T>): This {
         this.observer.add(name, observer)
+        replayCached(observer)
         this
     }
     /**
@@ -256,6 +267,18 @@ public class Observable<T> {
      */
     public func withFixed(threads: Int64, queueSize: Int64, policy!: BackPressure = BackPressure.Current): This {
         this.scheduler = Scheduler<T>.fixed(this.observer, threads, queueSize, policy: policy)
+        this
+    }
+    /**
+     * 指定重放大小
+     */
+    public func replaySize(capacity!: Int64 = 0): This {
+        this.cache = 
+        if(capacity <= 0){
+            EmptyCache<T>()
+        }else{
+            QueuedCache<T>(capacity)
+        }
         this
     }
     /**
@@ -350,6 +373,7 @@ public class Observable<T> {
                 }
             }
             for (item in getIterator()) {
+                this.cache.set(item)
                 scheduler.schedule(item)
                 if (isDisposed) {
                     return
@@ -369,7 +393,8 @@ public class Observable<T> {
                     errorResumer: this.errorResumer,
                     scheduler: this.scheduler,
                     disposed_: this.disposed_,
-                    completionOnDisposing: this.completionOnDisposing
+                    completionOnDisposing: this.completionOnDisposing,
+                    cache: this.cache.new()
                 ).defer()
             }
         }
