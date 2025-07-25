@@ -10,15 +10,15 @@
 package f_rx
 
 public class Observable<T> {
-    private let observer: CombinedObserver<T>
-    private var scheduler: Scheduler<T>
-    private let disposed_ = AtomicBool(false)
-    private let completionOnDisposing = AtomicBool(false)
-    private Observable(private let items: () -> Iterator<T>, private let asyncCombined!: Bool = false) {
-        this.observer = CombinedObserver<T>(async: asyncCombined)
-        this.scheduler = Scheduler<T>.current(observer)
+    private var iterator = None<Iterator<T>>
+    private Observable(private let items: () -> Iterator<T>, 
+                       private let asyncCombined!: Bool = false,
+                       private let observer!: CombinedObserver<T> = CombinedObserver<T>(async: asyncCombined),
+                       private var errorResumer!: ?(Exception) -> ?Iterable<T> = None,
+                       private var scheduler!: Scheduler<T> = Scheduler<T>.current(observer),
+                       private let disposed_!: AtomicBool = AtomicBool(false),
+                       private let completionOnDisposing!: AtomicBool = AtomicBool(false)) {
     }
-    
     /**
      * 使用迭代器I构造被观察者
      * asyncCombined决定是否异步执行每个观察者，false：单线程执行所有观察者，true：每个观察者对应一个线程；观察者接收到的数据是否启用新线程由背压策略决定
@@ -194,12 +194,26 @@ public class Observable<T> {
         I2 <: Iterable<I1> {
         concat<I1, I2>({=> iterables}, asyncCombined: asyncCombined)
     }
-    
+    /**
+     * 添加一个FuncObserver<T>，name是观察者名称，creator接收刚添加的观察者实例，可在此闭包内对观察者做修改
+     */
+    public func subscribe(name: String, creator: (FuncObserver<T>) -> Unit): This {
+        let observer = this.observer.add(name)
+        creator(observer)
+        this
+    }
     /**
      * 订阅观察者
      */
     public func subscribe(observer: Observer<T>): This {
         this.observer.add(observer)
+        this
+    }
+    /**
+     * 订阅一个观察者，name是观察者名称
+     */
+    public func subscribe(name: String, observer: Observer<T>): This {
+        this.observer.add(name, observer)
         this
     }
     /**
@@ -245,6 +259,24 @@ public class Observable<T> {
         this
     }
     /**
+     * 指定错误恢复器，产生或消费数据时如果抛出异常将执行当前指定的恢复器，并使用恢复器返回的迭代器和当前Observable的成员创建新的Observable
+     * 多次调用本函数及其重载函数只有最后一个恢复器生效。
+     */
+    public func setErrorResumer(resumer: (Exception) -> ?Iterable<T>): This {
+        this.errorResumer = resumer
+        this
+    }
+    /**
+     * 指定错误恢复器，产生或消费数据时如果抛出异常将执行当前指定的恢复器，并继续使用当前Observable的全部成员创建新的Observable
+     * 多次调用本函数及其重载函数只有最后一个恢复器生效。
+     */
+    public func setErrorResumer(resumer: (Exception) -> Unit): This {
+        this.setErrorResumer{e => 
+            resumer
+            this.iterator
+        }
+    }
+    /**
      * 判断是否取消
      */
     public prop isDisposed: Bool {
@@ -260,28 +292,86 @@ public class Observable<T> {
     }
     /**
      * 取消执行，如果completion是true就向消费者发送完成事件
+     * 只停止不清空观察者
      */
     public func dispose(completion!: Bool = false): Unit {
         disposed_.store(true)
         completionOnDisposing.store(completion)
     }
+    private func noObserver(){
+        if(this.observer.size == 0){
+            disposed_.store(true)
+        }
+    }
+    /**
+     * 取消指定名称的观察者
+     */
+    public func dispose(name: String): Unit {
+        this.observer.remove(name)
+        noObserver()
+    }
+    /**
+     * 取消指定名称的观察者，如果参数observer与已注册观察者不是同一实例会抛出异常
+     */
+    public func dispose<O>(name: String, observer: O): Unit where O <: Object & Observer<T> {
+        this.observer.remove<O>(name, observer)
+        noObserver()
+    }
+    /**
+     * 取消指定观察者，如果没有找到相同实例的观察者将什么也不做
+     */
+    public func dispose<O>(observer: O): Unit where O <: Object & Observer<T> {
+        this.observer.remove<O>(observer)
+        noObserver()
+    }
+    /**
+     * 取消指定类型的观察者
+     */
+    public func dispose<O>(): Unit where O <: Observer<T> {
+        observer.remove<O>()
+        noObserver()
+    }
     /**
      *  当前线程执行
      */
     public func immediately(): Unit {
+        disposed_.store(false)
         try {
             if (isDisposed) {
                 return
             }
-            for (item in this.items()) {
+            func getIterator(){
+                if(let Some(i) <- this.iterator){
+                    i
+                }else{
+                    let iterator = this.items()
+                    this.iterator = iterator
+                    iterator
+                }
+            }
+            for (item in getIterator()) {
                 scheduler.schedule(item)
                 if (isDisposed) {
+                    return
+                }
+                if(observer.size == 0){
+                    noObserver()
                     return
                 }
             }
             scheduler.schedule(None<T>)
         } catch (e: Exception) {
             scheduler.schedule(e)
+            if(let Some(r) <- errorResumer && let Some(i) <- r(e)){
+                Observable<T>({=> i.iterator()}, 
+                    asyncCombined: this.asyncCombined,
+                    observer: this.observer,
+                    errorResumer: this.errorResumer,
+                    scheduler: this.scheduler,
+                    disposed_: this.disposed_,
+                    completionOnDisposing: this.completionOnDisposing
+                ).defer()
+            }
         }
     }
     /**

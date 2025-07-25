@@ -69,30 +69,85 @@ public class FuncObserver<T> <: Observer<T> {
  * 多个观察者的组合，async决定是所有观察者由一个线程执行，还是观察者跟线程一一对应
  */
 public class CombinedObserver<T> <: Observer<T> {
-    private let observers = ArrayList<Observer<T>>()
+    private let observers = ConcurrentHashMap<String, Observer<T>>()
     public CombinedObserver(private let async!: Bool = false){}
 
+    public prop size: Int64 {
+        get(){
+            observers.size
+        }
+    }
     /**
-     * 添加观察者
+     * 添加观察者，name是观察者的名称
      */
-    public func add(): FuncObserver<T> {
+    public func add(name: String): FuncObserver<T> {
         let observer = FuncObserver<T>()
-        observers.add(if(async){
+        observers.add(name, observer)
+        observer
+    }
+    /**
+     * 添加观察者，使用observer的全限定名做观察者名称，
+     * 如果如果试图注册FuncObserver<T>会抛出异常，如果同一类型的观察者重复注册会抛出异常
+     */
+    public func add(observer: Observer<T>): This{
+        if(observer is FuncObserver<T>){
+            throw ObserverRegistrationException('to invoke add(name: String) or add(name: String, observer: Observer<T>) insdead')
+        }
+        add(TypeInfo.of(observer).qualifiedName, if(async){
             AsyncObserver<T>(observer)
         }else{
             observer
         })
-        observer
-    }
-    /**
-     * 添加观察者
-     */
-    public func add(observer: Observer<T>): This{
-        observers.add(observer)
         this
     }
+    /**
+     * 注册观察者
+     * name是观察者名称，observer是注册的观察者
+     */
+    public func add(name: String, observer: Observer<T>): This {
+        if(observers.addIfAbsent(name, observer).isSome()){
+            throw ObserverRegistrationException("observer ${name} already registered")
+        }
+        this
+    }
+    /**
+     * 删除指定名称的观察者
+     */
+    public func remove(name: String): Unit {
+        observers.remove(name)
+    }
+    /**
+     * 删除指定名称的观察者且已注册观察者与参数observer是同一实例，如果不是同一实例会抛出异常
+     */
+    public func remove<O>(name: String, observer: O): Unit where O <: Object & Observer<T> {
+        if(let Some(o) <- observers.get(name) && let Some(oo) <- (o as Object) && refEq(oo, observer)){
+            match(o){
+                case x: Object where refEq(x, observer) => observers.remove(name)
+                case _ => throw ObserverRegistrationException("registered observer ${name} does not match current specified")
+            }
+        }
+    }
+    /**
+     * 删除指定观察者，如果没有找到相同实例的观察者将什么也不做
+     */
+    public func remove<O>(observer: O): Unit where O <: Object & Observer<T> {
+        for((n, o) in this.observers) {
+            if(let x: Object <- o && refEq(x, observer)){
+                this.observers.remove(n)
+                return;
+            }
+        }
+    }
+    /**
+     * 删除指定类型的观察者全部
+     */
+    public func remove<O>(): Unit where O <: Observer<T> {
+        for((n, o) in this.observers where o is O) {
+            remove(n)
+        }
+    }
     private func call(fn: (Observer<T>) -> Unit): Unit {
-        for(o in observers){
+        for((_, o) in observers){
             fn(o)
         }
     }
