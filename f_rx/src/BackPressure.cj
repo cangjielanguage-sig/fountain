@@ -32,7 +32,7 @@ public enum BackPressure {
     /**
      * 阻塞指定时长后丢弃队列头部数据
      */
-    | BlockingOrDropingOldest(Duration)
+    | BlockingOrDroppingOldest(Duration)
     /**
      * 立即抛出异常
      */

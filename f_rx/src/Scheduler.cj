@@ -235,7 +235,7 @@ class SingleScheduler<T> <: Scheduler<T> {
                     if (!queue.add(state, d)) {
                         throw FullSchedulerException()
                     }
-                case BlockingOrDropingOldest(d) => 
+                case BlockingOrDroppingOldest(d) => 
                     if(!queue.add(state, d)) {
                         queue.remove()
                         queue.add(state)
