@@ -18,19 +18,25 @@ enum EmitterState<T>{
  */
 public class Emitter<T> {
     private let q: LinkedBlockingQueue<EmitterState<T>>
+    private let end = AtomicBool(false)
     private var f = None<Future<Unit>>
     public Emitter(qsize!: Int64 = 1, private let fn!: (Emitter<T>) -> Unit) {
         q = LinkedBlockingQueue<EmitterState<T>>(qsize)
     }
 
     func next(): ?T {
-        if(f.isNone()){
+        if(end.load()){
+            return None<T>
+        }else if(f.isNone()){
             f = spawn {
                 fn(this)
             }
         }
         match(q.remove()){
-            case Data(d) => d
+            case Data(d) => if(d.isNone()){
+                end.store(true)
+            }
+            d
             case Ex(e) => throw e
         }
     }
