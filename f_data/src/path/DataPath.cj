@@ -92,7 +92,7 @@ abstract sealed class DataPath <: DataPathNode {
     }
     private func compileSubInSquares(sub: Tokens) {
         match (sub[0].kind) {
-            case STRING_LITERAL | IDENTIFIER => SubPathNode(sub[0].value)
+            case STRING_LITERAL | SINGLE_QUOTED_STRING_LITERAL | IDENTIFIER => SubPathNode(sub[0].value)
             case _ => throw DataException('sub expression in squares can only be string literal or identifier')
         }
     }
@@ -107,7 +107,7 @@ abstract sealed class DataPath <: DataPathNode {
         let names = ArrayList<String>()
         for (t in sub) {
             let n = match (t.kind) {
-                case STRING_LITERAL | IDENTIFIER => t.value
+                case STRING_LITERAL | SINGLE_QUOTED_STRING_LITERAL | IDENTIFIER => t.value
                 case COMMA => continue
                 case _ => throw DataException(
                     'sub expression in squares as multi-names can only be string literal, identifier and comma, but current are ${sub}')
@@ -190,7 +190,7 @@ abstract sealed class DataPath <: DataPathNode {
                 case AT => for (e in i..sub.size) {
                     let t = sub[e]
                     match (t.kind) {
-                        case EQUAL where sub[e + 1].kind == STRING_LITERAL =>
+                        case EQUAL where sub[e + 1].kind == STRING_LITERAL || sub[e + 1].kind == SINGLE_QUOTED_STRING_LITERAL =>
                             tokens += quote(EqFilter<String>($(sub[i .. e].toString()), $(sub[e + 1].value), $(solid.toString())))
                             i = e + 1
                             break
@@ -206,7 +206,7 @@ abstract sealed class DataPath <: DataPathNode {
                             tokens += quote(EqFilter<Bool>($(sub[i .. e].toString()), $(sub[e + 1].value), $(solid.toString())))
                             i = e + 1
                             break
-                        case NOTEQ where sub[e + 1].kind == STRING_LITERAL =>
+                        case NOTEQ where sub[e + 1].kind == STRING_LITERAL || sub[e + 1].kind == SINGLE_QUOTED_STRING_LITERAL =>
                             tokens += quote(NotEqFilter<String>($(sub[i .. e].toString()), $(sub[e + 1].value), $(solid.toString())))
                             i = e + 1
                             break
@@ -222,7 +222,7 @@ abstract sealed class DataPath <: DataPathNode {
                             tokens += quote(NotEqFilter<Bool>($(sub[i .. e].toString()), $(sub[e + 1].value), $(solid.toString())))
                             i = e + 1
                             break
-                        case LT where sub[e + 1].kind == STRING_LITERAL =>
+                        case LT where sub[e + 1].kind == STRING_LITERAL || sub[e + 1].kind ==SINGLE_QUOTED_STRING_LITERAL =>
                             tokens += quote(CmpFilter<String>($(sub[i .. e].toString()), $(sub[e + 1].value), 'LT', 'false', $(solid.toString())))
                             i = e + 1
                             break
@@ -234,7 +234,7 @@ abstract sealed class DataPath <: DataPathNode {
                             tokens += quote(CmpFilter<Float64>($(sub[i .. e].toString()), $(sub[e + 1].value), 'LT', 'false', $(solid.toString())))
                             i = e + 1
                             break
-                        case GT where sub[e + 1].kind == STRING_LITERAL =>
+                        case GT where sub[e + 1].kind == STRING_LITERAL || sub[e + 1].kind == SINGLE_QUOTED_STRING_LITERAL =>
                             tokens += quote(CmpFilter<String>($(sub[i .. e].toString()), $(sub[e + 1].value), 'GT', 'false', $(solid.toString())))
                             i = e + 1
                             break
@@ -246,7 +246,7 @@ abstract sealed class DataPath <: DataPathNode {
                             tokens += quote(CmpFilter<Float64>($(sub[i .. e].toString()), $(sub[e + 1].value), 'GT', 'false', $(solid.toString())))
                             i = e + 1
                             break
-                        case LE where sub[e + 1].kind == STRING_LITERAL =>
+                        case LE where sub[e + 1].kind == STRING_LITERAL || sub[e + 1].kind == SINGLE_QUOTED_STRING_LITERAL =>
                             tokens += quote(CmpFilter<String>($(sub[i .. e].toString()), $(sub[e + 1].value), 'LT', 'false', $(solid.toString())))
                             i = e + 1
                             break
@@ -258,7 +258,7 @@ abstract sealed class DataPath <: DataPathNode {
                             tokens += quote(CmpFilter<Float64>($(sub[i .. e].toString()), $(sub[e + 1].value), 'LT', 'false', $(solid.toString())))
                             i = e + 1
                             break
-                        case GE where sub[e + 1].kind == STRING_LITERAL =>
+                        case GE where sub[e + 1].kind == STRING_LITERAL || sub[e + 1].kind == SINGLE_QUOTED_STRING_LITERAL =>
                             tokens += quote(CmpFilter<String>($(sub[i .. e].toString()), $(sub[e + 1].value), 'GT', 'false', $(solid.toString())))
                             i = e + 1
                             break
@@ -332,7 +332,7 @@ abstract sealed class DataPath <: DataPathNode {
             throw DataException('illegal array in data path filter ${sub} for in expression')
         }
         let tokens = match (sub[arrs + 1].kind) {
-            case STRING_LITERAL => quote($(filter)<String>($(sub[i .. e].toString()), $(sub[arrs ..= arre].toString()), $(solid.toString())))
+            case STRING_LITERAL | SINGLE_QUOTED_STRING_LITERAL => quote($(filter)<String>($(sub[i .. e].toString()), $(sub[arrs ..= arre].toString()), $(solid.toString())))
             case INT64 => quote($(filter)<Int64>($(sub[i .. e].toString()), $(sub[arrs ..= arre].toString()), $(solid.toString())))
             case FLOAT64 => quote($(filter)<Float64>($(sub[i .. e].toString()), $(sub[arrs ..= arre].toString()), $(solid.toString())))
             case _ => throw DataException('illegal array element type in data path filter ${sub} for in expression')
@@ -405,11 +405,11 @@ abstract sealed class DataPath <: DataPathNode {
         }
     }
     private func compileInSquares(sub: Tokens, solid: Bool) {
-        if (sub.size == 1 && sub[0].kind == STRING_LITERAL) {
+        if (sub.size == 1 && (sub[0].kind == STRING_LITERAL || sub[0].kind == SINGLE_QUOTED_STRING_LITERAL)) {
             compileSubInSquares(sub)
         } else if (sub.size == 1 && sub[0].kind == INT64) {
             compileIndexInSquares(sub)
-        } else if (sub.size > 1 && sub[0].kind == STRING_LITERAL) {
+        } else if (sub.size > 1 && (sub[0].kind == STRING_LITERAL || sub[0].kind == SINGLE_QUOTED_STRING_LITERAL)) {
             compileSubsInSquares(sub)
         } else if (sub.size > 1 && sub[0].kind == INT64) {
             compileIndexesInSquares(sub)

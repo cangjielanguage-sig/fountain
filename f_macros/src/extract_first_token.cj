@@ -15,7 +15,7 @@ public func extractFirstTokenToStringLiteral(tokens: Tokens, default!: Token = `
     }
     match (tokens[0].kind) {
         case IDENTIFIER => Token(STRING_LITERAL, tokens[0].value)
-        case STRING_LITERAL => tokens[0]
+        case STRING_LITERAL | SINGLE_QUOTED_STRING_LITERAL => tokens[0]
         case _ => throw MacroFragmentException("first attr must be an IDENTIFIER or a STRING_LITERAL")
     }
 }
@@ -23,7 +23,7 @@ public func extractFirstTokenToStringLiteral(tokens: Tokens, default!: Token = `
 public func extractFirstTokenToIdentifier(tokens: Tokens): Token {
     match (tokens[0].kind) {
         case IDENTIFIER => tokens[0]
-        case STRING_LITERAL => Token(IDENTIFIER, tokens[0].value)
+        case STRING_LITERAL | SINGLE_QUOTED_STRING_LITERAL => Token(IDENTIFIER, tokens[0].value)
         case _ => throw MacroFragmentException("first attr must be an IDENTIFIER or a STRING_LITERAL")
     }
 }

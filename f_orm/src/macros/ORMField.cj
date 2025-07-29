@@ -82,6 +82,7 @@ public macro ORMField(attrs: Tokens, input: Tokens): Tokens {
         match ((attr.kind, attr.value)) {
             case (BOOL_LITERAL, x) => setItem("id", x == "true")
             case (STRING_LITERAL, x) => setItem("column", x)
+            case (SINGLE_QUOTED_STRING_LITERAL, x) => setItem("column", x)
             case (IDENTIFIER, x) => match (x) {
                 case "LowerUnderScore" => setItem("column",
                     CaseFormat.Camel.convert(name.value, CaseFormat.LowerUnderScore))

@@ -45,9 +45,10 @@ public macro ChineseCellPhoneValidation(attr: Tokens, input: Tokens): Tokens {
         let token = attr[i]
         match ((token.kind, token.value)) {
             case (IDENTIFIER, "NationalCode") => setItem("NationalCode", true)
-            case (IDENTIFIER, "hyphen") | (STRING_LITERAL, "-") => setItem("separator", "-")
+            case (IDENTIFIER, "hyphen") | (STRING_LITERAL, "-") | (SINGLE_QUOTED_STRING_LITERAL, '-') => setItem("separator", "-")
             case (IDENTIFIER, "paren") => setItem("separator", ")")
             case (STRING_LITERAL, x) => setItem("separator", x)
+            case (SINGLE_QUOTED_STRING_LITERAL, x) => setItem("separator", x)
             case _ => throw IllegalArgumentException(
                 "illegal attr for @ChineseCellPhoneValidation[], (${token.kind}, ${token.value})")
         }
