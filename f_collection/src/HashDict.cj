@@ -26,7 +26,7 @@ public struct HashKey<K> <: Hashable & Equatable<K> & Equatable<HashKey<K>> {
         equals(key, that.key)
     }
 }
-public class HashDict<K, V> <: Iterable<(K, V)> {
+public class HashDict<K, V> <: Collection<(K, V)> {
     private HashDict(let map: HashMap<HashKey<K>, V>, private let hasher: (K) -> Int64, private let equals: (K, K) -> Bool){}
     public init(hasher: (K) -> Int64, equals: (K, K) -> Bool){
         this(newMap(), hasher, equals)

@@ -23,7 +23,7 @@ public struct ComparableKey<K> <: Comparable<K> & Comparable<ComparableKey<K>> {
         cmp(this.key, that.key)
     }
 }
-public class TreeDict<K, V> <: Iterable<(K, V)> {
+public class TreeDict<K, V> <: Collection<(K, V)> {
     let map: TreeMap<ComparableKey<K>, V>
     public TreeDict(private let cmp: (K, K) -> Ordering){
         map = TreeMap<ComparableKey<K>, V>()
