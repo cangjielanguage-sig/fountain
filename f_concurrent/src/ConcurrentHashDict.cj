@@ -7,45 +7,39 @@
     THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
     See the Mulan PSL v2 for more details.  
 */
-package f_collection
+package f_concurrent
 
-import std.collection.{TreeMap, EquatableCollection, MapEntryView}
-
-public struct ComparableKey<K> <: Comparable<K> & Comparable<ComparableKey<K>> {
-    ComparableKey(
-        let key: K,
-        private let cmp: (K, K) -> Ordering
-    ){}
-    public func compare(that: K): Ordering {
-        cmp(this.key, that)
+public class HashDict<K, V> <: Dict<K, V> {
+    private HashDict(let map: ConcurrentHashMap<HashKey<K>, V>, private let hasher: (K) -> Int64, private let equals: (K, K) -> Bool){}
+    public init(hasher: (K) -> Int64, equals: (K, K) -> Bool){
+        this(newMap(), hasher, equals)
     }
-    public func compare(that: ComparableKey<K>): Ordering {
-        cmp(this.key, that.key)
-    }
-}
-public class TreeDict<K, V> <: Dict<K, V> {
-    let map: TreeMap<ComparableKey<K>, V>
-    public TreeDict(private let cmp: (K, K) -> Ordering){
-        map = TreeMap<ComparableKey<K>, V>()
-    }
-    public init(elements: Array<(K, V)>, cmp: (K, K) -> Ordering){
-        this(cmp)
+    public init(elements: Array<(K, V)>, hasher: (K) -> Int64, equals: (K, K) -> Bool){
+        this(hasher, equals)
         add(all: elements)
     }
-    public init(elements: Collection<(K, V)>, cmp: (K, K) -> Ordering){
-        this(cmp)
+    public init(elements: Collection<(K, V)>, hasher: (K) -> Int64, equals: (K, K) -> Bool){
+        this(hasher, equals)
         add(all: elements)
     }
-    public init(size: Int64, initElement: (Int64) -> (K, V), cmp: (K, K) -> Ordering) {
-        this(cmp)
-        for(i in 0..size) {
+    public init(size: Int64, hasher: (K) -> Int64, equals: (K, K) -> Bool){
+        this(newMap(size), hasher, equals)
+    }
+    public init(size: Int64, initElement: (Int64) -> (K, V), hasher: (K) -> Int64, equals: (K, K) -> Bool) {
+        this(size, hasher, equals)
+        for(i in 0..size: 1) {
             let (k, v) = initElement(i)
             add(k, v)
         }
     }
-    
+    private static func newMap() {
+        HashMap<HashKey<K>, V>()
+    }
+    private static func newMap(size: Int64){
+        HashMap<HashKey<K>, V>(size)
+    }
     func newKey(key: K){
-        ComparableKey<K>(key, cmp)
+        HashKey<K>(key, hasher, equals)
     }
     /**
      * 根据 key 得到 Map 中映射的值
@@ -122,7 +116,7 @@ public class TreeDict<K, V> <: Dict<K, V> {
      */
     public func remove(all!: Collection<K>): Unit {
         let keys = all.iterator()
-        map.remove(all: Array<ComparableKey<K>>(all.size){_ => newKey(keys.next().getOrThrow())})
+        map.remove(all: Array<HashKey<K>>(all.size){_ => newKey(keys.next().getOrThrow())})
     }
 
     /**
@@ -164,7 +158,7 @@ public class TreeDict<K, V> <: Dict<K, V> {
      * 返回值 Keys<K> - 保存所有返回的 key
      */
     public func keys(): Collection<K> {
-        ComparableKeyCollection<K, V>(this)
+        HashKeyCollection<K, V>(this)
     }
 
     /**
@@ -198,7 +192,7 @@ public class TreeDict<K, V> <: Dict<K, V> {
      * 返回值 Iterator<(K,V)> - Map 的迭代器
      */
     public func iterator(): Iterator<(K, V)> {
-        ComparableKeyMapIterator<K, V>(map.iterator())
+        HashDictIterator<K, V>(map.iterator())
     }
     public func toArray(): Array<(K, V)> {
         let itr = map.iterator()
@@ -208,113 +202,6 @@ public class TreeDict<K, V> <: Dict<K, V> {
         }
     }
     public func entryView(k: K): MapEntryView<K, V> {
-        ComparableKeyMapEntryView<K, V>(map.entryView(newKey(k)))
-    }
-    private func extract(tuple: ?(ComparableKey<K>, V)): ?(K, V) {
-        if(let Some((tk, v)) <- tuple){
-            (tk.key, v)
-        }else{
-            None<(K, V)>
-        }
-    }
-    public prop first: ?(K, V) {
-        get(){
-            extract(map.first)
-        }
-    }
-    public prop last: ?(K, V) {
-        get(){
-            extract(map.last)
-        }
-    }
-    public func forward(mark: K, inclusive!: Bool = true): Iterator<(K, V)> {
-        ComparableKeyMapIterator<K, V>(map.forward(newKey(mark), inclusive: inclusive))
-    }
-    public func removeFirst(): ?(K, V) {
-        extract(map.removeFirst())
-    }
-    public func removeLast(): ?(K, V) {
-        extract(map.removeLast())
-    }
-}
-class ComparableKeyMapIterator<K, V> <: Iterator<(K, V)> {
-    ComparableKeyMapIterator(private let itr: Iterator<(ComparableKey<K>, V)>) {}
-    public func next(): ?(K, V) {
-        for((hk, v) in itr){
-            return (hk.key, v)
-        }
-        None<(K, V)>
-    }
-}
-class ComparableKeyCollection<K, V> <: Collection<K> {
-    ComparableKeyCollection(private let dict: TreeDict<K, V>) {}
-
-    /**
-     * 返回 Keys 的迭代器
-     * 返回值 Iterator<K> - Keys 的迭代器
-     */
-    public func iterator(): Iterator<K> {
-        ComparableKeyIterator<K>(dict.map.keys().iterator())
-    }
-
-    /**
-     * 返回 Keys 中所有的元素个数
-     * 返回值 Int64 - 元素个数
-     */
-    public prop size: Int64 {
-        get() {
-            dict.size
-        }
-    }
-
-    /**
-     * 检查 Keys 是否为空
-     * 返回值 Bool - 如果是，则返回 true; 否则，返回 false
-     */
-    public func isEmpty(): Bool {
-        dict.isEmpty()
-    }
-
-    /**
-     * 判断 Keys 是否包含指定元素
-     * 参数 element - K
-     * 返回值 Bool - 如果存在，则返回 true；否则，返回 false
-     */
-    public func contains(element: K): Bool {
-        dict.contains(element)
-    }
-
-    /**
-     * 判断 Keys 是否包含指定集合的元素
-     * 参数 all - 待判断的集合 all
-     * 返回值 Bool - 如果存在，则返回 true；否则，返回 false
-     */
-    public func contains(all!: Collection<K>): Bool {
-        dict.contains(all: all)
-    }
-}
-class ComparableKeyIterator<K> <: Iterator<K> {
-    ComparableKeyIterator(private let itr: Iterator<ComparableKey<K>>) {}
-    public func next(): ?K {
-        for(hk in itr){
-            return hk.key
-        }
-        None<K>
-    }
-}
-class ComparableKeyMapEntryView<K, V> <: MapEntryView<K, V> {
-    ComparableKeyMapEntryView(private let view: MapEntryView<ComparableKey<K>, V>){}
-    public prop key: K {
-        get(){
-            view.key.key
-        }
-    }
-    public mut prop value: ?V {
-        get(){
-            view.value
-        }
-        set(value) {
-            view.value = value
-        }
+        HashKeyMapEntryView<K, V>(map.entryView(newKey(k)))
     }
 }

@@ -26,7 +26,7 @@ public struct HashKey<K> <: Hashable & Equatable<K> & Equatable<HashKey<K>> {
         equals(key, that.key)
     }
 }
-public class HashDict<K, V> <: Collection<(K, V)> {
+public class HashDict<K, V> <: Dict<K, V> {
     private HashDict(let map: HashMap<HashKey<K>, V>, private let hasher: (K) -> Int64, private let equals: (K, K) -> Bool){}
     public init(hasher: (K) -> Int64, equals: (K, K) -> Bool){
         this(newMap(), hasher, equals)
@@ -222,7 +222,7 @@ public class HashDict<K, V> <: Collection<(K, V)> {
         HashKeyMapEntryView<K, V>(map.entryView(newKey(k)))
     }
 }
-class HashDictIterator<K, V> <: Iterator<(K, V)> {
+public class HashDictIterator<K, V> <: Iterator<(K, V)> {
     HashDictIterator(private let itr: Iterator<(HashKey<K>, V)>) {}
     public func next(): ?(K, V) {
         for((hk, v) in itr){
@@ -231,7 +231,7 @@ class HashDictIterator<K, V> <: Iterator<(K, V)> {
         None<(K, V)>
     }
 }
-class HashKeyCollection<K, V> <: Collection<K> {
+public class HashKeyCollection<K, V> <: Collection<K> {
     HashKeyCollection(private let dict: HashDict<K, V>) {}
 
     /**
@@ -278,7 +278,7 @@ class HashKeyCollection<K, V> <: Collection<K> {
         dict.contains(all: all)
     }
 }
-class HashKeyIterator<K> <: Iterator<K> {
+public class HashKeyIterator<K> <: Iterator<K> {
     HashKeyIterator(private let itr: Iterator<HashKey<K>>) {}
     public func next(): ?K {
         for(hk in itr){
@@ -287,7 +287,7 @@ class HashKeyIterator<K> <: Iterator<K> {
         None<K>
     }
 }
-class HashKeyMapEntryView<K, V> <: MapEntryView<K, V> {
+public class HashKeyMapEntryView<K, V> <: MapEntryView<K, V> {
     HashKeyMapEntryView(private let view: MapEntryView<HashKey<K>, V>){}
     public prop key: K {
         get(){
