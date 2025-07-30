@@ -9,8 +9,8 @@
 */
 package f_concurrent
 
-public class HashDict<K, V> <: Dict<K, V> {
-    private HashDict(let map: ConcurrentHashMap<HashKey<K>, V>, private let hasher: (K) -> Int64, private let equals: (K, K) -> Bool){}
+public class ConcHashDict<K, V> <: ConcDict<K, V> {
+    private ConcHashDict(let map: ConcurrentHashMap<HashKey<K>, V>, private let hasher: (K) -> Int64, private let equals: (K, K) -> Bool){}
     public init(hasher: (K) -> Int64, equals: (K, K) -> Bool){
         this(newMap(), hasher, equals)
     }
@@ -33,10 +33,10 @@ public class HashDict<K, V> <: Dict<K, V> {
         }
     }
     private static func newMap() {
-        HashMap<HashKey<K>, V>()
+        ConcurrentHashMap<HashKey<K>, V>()
     }
     private static func newMap(size: Int64){
-        HashMap<HashKey<K>, V>(size)
+        ConcurrentHashMap<HashKey<K>, V>(size)
     }
     func newKey(key: K){
         HashKey<K>(key, hasher, equals)
@@ -115,8 +115,9 @@ public class HashDict<K, V> <: Dict<K, V> {
      * 参数 all - 传人要删除的集合
      */
     public func remove(all!: Collection<K>): Unit {
-        let keys = all.iterator()
-        map.remove(all: Array<HashKey<K>>(all.size){_ => newKey(keys.next().getOrThrow())})
+        for(k in all){
+            remove(k)
+        }
     }
 
     /**
@@ -131,7 +132,9 @@ public class HashDict<K, V> <: Dict<K, V> {
      * 清除所有键值对
      */
     public func clear(): Unit {
-        map.clear()
+        for((k, _) in map){
+            map.remove(k)
+        }
     }
 
     /**
@@ -158,7 +161,7 @@ public class HashDict<K, V> <: Dict<K, V> {
      * 返回值 Keys<K> - 保存所有返回的 key
      */
     public func keys(): Collection<K> {
-        HashKeyCollection<K, V>(this)
+        ConcHashKeyCollection<K, V>(this)
     }
 
     /**
@@ -201,7 +204,81 @@ public class HashDict<K, V> <: Dict<K, V> {
             (hk.key, v)
         }
     }
-    public func entryView(k: K): MapEntryView<K, V> {
-        HashKeyMapEntryView<K, V>(map.entryView(newKey(k)))
+    public func entryView(k: K, fn: (K, ?V) -> ?V): ?V {
+        map.entryView(newKey(k)){hk, v => fn(hk.key, v)}
+    }
+}
+private struct ConcDictView<K, V> <: MapEntryView<K, V> {
+    ConcDictView(
+        private let view: MapEntryView<HashKey<K>, V>
+    ){}
+    public prop key: K {
+        get(){
+            view.key.key
+        }
+    }
+    public mut prop value: ?V {
+        get(){
+            view.value
+        }
+        set(value){
+            view.value = value
+        }
+    }
+}
+class ConcHashKeyCollection<K, V> <: Collection<K> {
+    ConcHashKeyCollection(private let dict: ConcHashDict<K, V>) {}
+
+    /**
+     * 返回 Keys 的迭代器
+     * 返回值 Iterator<K> - Keys 的迭代器
+     */
+    public func iterator(): Iterator<K> {
+        ConcHashKeyIterator<K, V>(dict.map.iterator())
+    }
+
+    /**
+     * 返回 Keys 中所有的元素个数
+     * 返回值 Int64 - 元素个数
+     */
+    public prop size: Int64 {
+        get() {
+            dict.size
+        }
+    }
+
+    /**
+     * 检查 Keys 是否为空
+     * 返回值 Bool - 如果是，则返回 true; 否则，返回 false
+     */
+    public func isEmpty(): Bool {
+        dict.isEmpty()
+    }
+
+    /**
+     * 判断 Keys 是否包含指定元素
+     * 参数 element - K
+     * 返回值 Bool - 如果存在，则返回 true；否则，返回 false
+     */
+    public func contains(element: K): Bool {
+        dict.contains(element)
+    }
+
+    /**
+     * 判断 Keys 是否包含指定集合的元素
+     * 参数 all - 待判断的集合 all
+     * 返回值 Bool - 如果存在，则返回 true；否则，返回 false
+     */
+    public func contains(all!: Collection<K>): Bool {
+        dict.contains(all: all)
+    }
+}
+class ConcHashKeyIterator<K, V> <: Iterator<K> {
+    ConcHashKeyIterator(private let itr: Iterator<(HashKey<K>, V)>) {}
+    public func next(): ?K {
+        for((hk, _) in itr){
+            return hk.key
+        }
+        None<K>
     }
 }

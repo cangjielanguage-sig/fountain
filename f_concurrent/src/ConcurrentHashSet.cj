@@ -136,3 +136,14 @@ extend<T> ConcurrentHashSet<T> <: ToString where T <: Hashable & Equatable<T> & 
         builder.toString()
     }
 }
+extend<T> ConcurrentHashSet<T> <: SetOp<T> where T <: Hashable & Equatable<T> {
+    public func intersection<C>(collection: C): Set<T> where C <: Collection<T>{
+        IntersectionSetView<T, C>(this, ConcurrentHashSet<T>(collection))
+    }
+    public func union<C>(collection: C): Set<T> where C <: Collection<T>{
+        UnionSetView<T, C>(this, ConcurrentHashSet<T>(collection))
+    }
+    public func difference<C>(collection: C): Set<T> where C <: Collection<T>{
+        DifferenceSetView<T, C>(this, ConcurrentHashSet<T>(collection))
+    }
+}

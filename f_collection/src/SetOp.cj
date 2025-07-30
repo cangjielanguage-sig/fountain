@@ -15,9 +15,6 @@ public interface SetOp<T> {
     func intersection<C>(collection: C): Set<T> where C <: Collection<T>
     func union<C>(collection: C): Set<T> where C <: Collection<T>
     func difference<C>(collection: C): Set<T> where C <: Collection<T>
-    func overlaps<C>(collection: C): Bool where C <: Collection<T>{
-        !intersection(collection).isEmpty()
-    }
 }
 extend<T> HashSet<T> <: SetOp<T> where T <: Hashable & Equatable<T> {
     public func intersection<C>(collection: C): Set<T> where C <: Collection<T>{

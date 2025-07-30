@@ -7,11 +7,11 @@
     THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
     See the Mulan PSL v2 for more details.  
 */
-package f_collection
+package f_concurrent
 
 import std.collection.MapEntryView
 
-public interface Dict<K, V> <: Collection<(K, V)> {
+public interface ConcDict<K, V> <: Collection<(K, V)> {
     
     /**
      * 根据 key 得到 Map 中映射的值
@@ -120,40 +120,32 @@ public interface Dict<K, V> <: Collection<(K, V)> {
      * 返回值 Iterator<(K,V)> - Map 的迭代器
      */
     func iterator(): Iterator<(K, V)> 
-    func entryView(k: K): MapEntryView<K, V> 
-    func entryView(key: K, fn: (K, ?V) -> ?V): ?V {
-        let entry = this.entryView(key)
-        let value = fn(entry.key, entry.value)
-        entry.value = value
-        value
-    }
+    func entryView(key: K, fn: (K, ?V) -> ?V): ?V 
     func addIfAbsent(key: K, fn: () -> V): V {
-        let view = entryView(key)
-        if (let Some(v) <- view.value) {
-            v
-        } else {
-            let v = fn()
-            view.value = v
-            v
-        }
+        entryView(key){k, v => 
+            if(v.isNone()){
+                fn()
+            }else{
+                v
+            }
+        }.getOrThrow()
     }
     func addIfPreset(key: K, fn: () -> V): ?V {
-        let view = entryView(key)
-        if (let Some(_) <- view.value) {
-            let v = fn()
-            view.value = v
-            v
-        } else {
-            None<V>
+        entryView(key){k, v => 
+            if(v.isSome()){
+                fn()
+            }else{
+                None<V>
+            }
         }
     }
     func removeIf(key: K, predicate: (V) -> Bool): ?V {
-        let view = entryView(key)
-        if (let Some(v) <- view.value && predicate(v)) {
-            view.value = None<V>
-            v
-        } else {
-            None<V>
+        entryView(key){k, vv => 
+            if(let Some(v) <- vv && predicate(v)){
+                None<V>
+            }else{
+                vv
+            }
         }
     }
 }
