@@ -584,6 +584,7 @@ public class TimestampSequenceBuilder {
                 let pos: SeekPosition = Begin(0)
                 file.seek(pos)
                 file.write(bytes)
+                file.flush()
                 file.seek(pos)
                 seq
             }
