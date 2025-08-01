@@ -397,7 +397,7 @@ public struct UUID <: Hashable & Comparable<UUID> & ToString & Parsable<UUID> & 
     }
 }
 
-public class TimeBasedUUIDBuilder {
+public class TimeBasedUUIDBuilder <: Resource {
     private let seqGen = TimestampSequenceBuilder()
     private let version: Byte
     private var timestamp: Int64 = 0
@@ -408,6 +408,12 @@ public class TimeBasedUUIDBuilder {
         } else {
             6
         }
+    }
+    public func isClosed(): Bool {
+        seqGen.isClosed()
+    }
+    public func close(): Unit {
+        seqGen.close()
     }
     public func registerSequenceGenerator(generator: (Int64) -> UInt16): This {
         seqGen.registerSequenceGenerator(generator)
@@ -546,6 +552,9 @@ public class TimeBasedUUIDBuilder {
 public class TimestampSequenceBuilder <: Resource {
     private var seqGen: (Int64) -> UInt16
     private var closer: SequenceResource = SequenceResource.empty
+    ~init(){
+        close()
+    }
     init() {
         let seq = AtomicUInt16(0)
         seqGen = {_: Int64 => seq.fetchAdd(1)}
