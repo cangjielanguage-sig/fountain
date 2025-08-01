@@ -553,7 +553,7 @@ public class TimestampSequenceBuilder <: Resource {
     private var seqGen: (Int64) -> UInt16
     private var closer: SequenceResource = SequenceResource.empty
     ~init(){
-        close()
+        closer.close()
     }
     init() {
         let seq = AtomicUInt16(0)
