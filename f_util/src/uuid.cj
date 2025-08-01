@@ -573,6 +573,7 @@ public class TimestampSequenceBuilder <: Resource {
     public func registerFileSequenceGenerator() {
         let dir = Directory.createTemp('/tmp')
         let file = File("${dir}/${DateTime.now().format('yyyyMMddHHmmssSSS')}", OpenMode.ReadWrite)
+        closer.close()
         closer = SequenceResource({=> file.close()}, {=> file.isClosed()})
         env.atExit {closer.close()}
         seqGen = {
@@ -649,6 +650,8 @@ public struct SequenceResource <: Resource {
         isClosedFn()
     }
     public func close(): Unit {
-        closer()
+        if(!isClosedFn()){
+            closer()
+        }
     }
 }
