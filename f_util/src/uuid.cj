@@ -567,7 +567,12 @@ public class TimestampSequenceBuilder <: Resource {
             closer.close()
         }
     }
+    private func emptyCloser(){
+        closer.close()
+        closer = SequenceResource.empty
+    }
     public func registerSequenceGenerator(generator: (Int64) -> UInt16) {
+        emptyCloser()
         seqGen = generator
     }
     public func registerFileSequenceGenerator() {
@@ -613,6 +618,7 @@ public class TimestampSequenceBuilder <: Resource {
     public func registerSequenceGenerator() {
         let lastNanos = AtomicInt64(0)
         let seq = AtomicUInt16(0)
+        emptyCloser()
         seqGen = {
             timestamp =>
             let last = lastNanos.load()
