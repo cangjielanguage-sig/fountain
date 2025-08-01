@@ -543,11 +543,20 @@ public class TimeBasedUUIDBuilder {
     }
 }
 
-public class TimestampSequenceBuilder {
+public class TimestampSequenceBuilder <: Resource {
     private var seqGen: (Int64) -> UInt16
+    private var closer: SequenceResource = SequenceResource.empty
     init() {
         let seq = AtomicUInt16(0)
         seqGen = {_: Int64 => seq.fetchAdd(1)}
+    }
+    public func isClosed(): Bool {
+        closer.isClosed()
+    }
+    public func close(): Unit {
+        if(!isClosed()){
+            closer.close()
+        }
     }
     public func registerSequenceGenerator(generator: (Int64) -> UInt16) {
         seqGen = generator
@@ -555,7 +564,8 @@ public class TimestampSequenceBuilder {
     public func registerFileSequenceGenerator() {
         let dir = Directory.createTemp('/tmp')
         let file = File("${dir}/${DateTime.now().format('yyyyMMddHHmmssSSS')}", OpenMode.ReadWrite)
-        env.atExit {file.close()}
+        closer = SequenceResource({=> file.close()}, {=> file.isClosed()})
+        env.atExit {closer.close()}
         seqGen = {
             timestamp =>
             let bytes = Array<Byte>(10, repeat: 0)
@@ -618,5 +628,18 @@ public class TimestampSequenceBuilder {
                 (timestamp, seqGen(timestamp))
             }
         }
+    }
+}
+public struct SequenceResource <: Resource {
+    static let empty = SequenceResource({=>}, {=> false})
+    SequenceResource(
+        private let closer: () -> Unit,
+        private let isClosedFn: () -> Bool
+    ){}
+    public func isClosed(): Bool {
+        isClosedFn()
+    }
+    public func close(): Unit {
+        closer()
     }
 }
