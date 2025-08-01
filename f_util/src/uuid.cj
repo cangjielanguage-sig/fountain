@@ -578,7 +578,6 @@ public class TimestampSequenceBuilder <: Resource {
         let file = File("${dir}/${DateTime.now().format('yyyyMMddHHmmssSSS')}", OpenMode.ReadWrite)
         closer.close()
         closer = SequenceResource({=> file.close()}, {=> file.isClosed()})
-        env.atExit {closer.close()}
         seqGen = {
             timestamp =>
             let bytes = Array<Byte>(10, repeat: 0)
