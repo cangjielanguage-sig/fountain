@@ -54,14 +54,17 @@ public class WeakHeapCache<T> where T <: Object {
             .value ?? None<T>
     }
     public func get(key: String): ?T {
-        if (let Some(r) <- cache.get(key)) {
-            if (let Some(v) <- r.value) {
-                return v
-            } else {
-                cache.remove(key)
+        let box = Box<?T>(None<T>)
+        cache.entryView(key){view => 
+            if(let Some(r) <- view.value && let Some(v) <- r.value){
+                box.value = v
+                r
+            }else{
+                box.value = None<T>
+                None<WeakRef<T>>
             }
         }
-        None<T>
+        box.value
     }
     public func getOrDefault(key: String, default: T): T {
         get(key) ?? default
