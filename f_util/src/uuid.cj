@@ -563,9 +563,7 @@ public class TimestampSequenceBuilder <: Resource {
         closer.isClosed()
     }
     public func close(): Unit {
-        if(!isClosed()){
-            closer.close()
-        }
+        closer.close()
     }
     private func emptyCloser(){
         closer.close()
