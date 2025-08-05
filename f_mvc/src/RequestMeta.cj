@@ -17,7 +17,7 @@ public class RequestMeta <: HttpRequestHandler {
     private let produces = HashSet<String>()
     private let consumes = HashSet<String>()
 
-    private let args = HashMap<String, ControllerFuncParam>()
+    private let args = RequestArgMeta()
 
     var pattern = None<HttpRequestPathPatterns>
 
@@ -96,14 +96,11 @@ public class RequestMeta <: HttpRequestHandler {
     public func isMultipart(name: String) {
         args[name] is MultipartFormData
     }
-    private func doExtract<T>(ctx: HttpContext, name: String): ?T where T <: DataFields<T> {
-        args[name].extract<T>(name, ctx, pattern.getOrThrow())
-    }
     public func extract<T>(ctx: HttpContext, name: String): T where T <: DataFields<T> {
-        doExtract<T>(ctx, name).getOrThrow()
+        args.extract<T>(ctx, name, pattern)
     }
     public func extract<T>(ctx: HttpContext, name: String, default: T): T where T <: DataFields<T> {
-        doExtract<T>(ctx, name) ?? default
+        args.extract<T>(ctx, name, default, pattern)
     }
     public func multipart<T>(ctx: HttpContext, name: String): T where T <: ObjectData<T> & DataFields<T> {
         (args[name] as MultipartFormData)
@@ -139,12 +136,16 @@ public class RequestMeta <: HttpRequestHandler {
         let args = HashMap<String, ControllerFuncParam>()
         for (param in function.parameters) {
             let pname = param.name
+            var toThrow = true
             for (annotation in param.annotations where annotation is ControllerFuncParam) {
                 args[pname] = (annotation as ControllerFuncParam).getOrThrow()
+                toThrow = false
                 break
             }
-            throw MVCException(
-                'parameter of controller function must be with one and only one Annotation as @RequestBody or @RequestParam or @RequestHeader or @PathVariable or @MultipartFormData')
+            if(toThrow){
+                throw MVCException(
+                    'parameter of controller function must be with one and only one Annotation as @RequestBody or @RequestParam or @RequestHeader or @PathVariable or @MultipartFormData')
+            }
         }
         for (annotation in function.annotations) {
             match (annotation) {

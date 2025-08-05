@@ -44,7 +44,11 @@ func generate(input: Tokens): Tokens {
     }
     let klass = decl.identifier
     for (d in decl.body.decls) {
-        if (let m: MacroExpandDecl <- d && let f: FuncDecl <- extract(m) && !isStatic(f) && isPublic(f)) {
+        var md: Decl = d
+        while(let m: MacroExpandDecl <- md && let _: MacroExpandDecl <- m.macroInputDecl){
+            md = m
+        }
+        if (let m: MacroExpandDecl <- md && let f: FuncDecl <- extract(m) && !isStatic(f) && isPublic(f)) {
             let (argTypes, argExprs, args) = generateArgs(f)
             tokens += quote(
                 private let _ = {=>
@@ -83,11 +87,17 @@ func generateArgs(decl: FuncDecl): (Tokens, Tokens, Tokens) {
         }
         exprs += quote(
             let $(p.identifier) = 
-            if(meta.isMultipart($pname)){
+            if (meta.isMultipart($pname)) {
                 meta.multipart<$ptype>(ctx, $pname)
-            }else{
-                meta.extract<$ptype>(ctx, $pname $default)
-            }
+            } else {
+                match(None<$ptype>){
+                    case _: ?HttpContext => ctx
+                    case _: ?HttpHeaders => ctx.request.headers
+                    case _: ?HttpRequest => ctx.request
+                    case _: ?HttpResponseBuilder => ctx.responseBuilder
+                    case _ => meta.extract<$ptype>(ctx, $pname $default)
+                } as $ptype
+            }.getOrThrow()
         ) +
             `nl`
         let named = try {
