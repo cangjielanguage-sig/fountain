@@ -81,7 +81,7 @@ public class WSMeta {
         }
     }
     
-    private func doExtractArgOption<T, M>(meta: ?M, ctx: HttpContext, name: String): T where T <: DataFields<T>, M <: WSFuncMeta {
+    private func doExtractArgOption<T, M>(meta: ?M, ctx: HttpContext, name: String): ?T where T <: DataFields<T>, M <: WSFuncMeta {
         meta?.args.extract<T>(ctx, name, pattern)
     }
     private func doExtractArg<T, M>(meta: ?M, ctx: HttpContext, name: String): T where T <: DataFields<T>, M <: WSFuncMeta {

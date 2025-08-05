@@ -18,6 +18,8 @@ public import f_bean.macros.*
  * http mvc控制器的宏。请确保作为控制器的类型一定是class，且只有作为请求处理的函数是公共的。
  * 请求处理函数只接收实现了接口fountain.data.DataFields<T>的类型或HttpContext HttpHeaders HttpRequest HttpResponseBuilderw做参数
  * 如果有其它公共函数，或者试图使用其它类型作为请求处理函数的参数将会在本宏展开时发生编译错误。
+ * 所有基本类型 Duration DateTime String 都实现了DataFields<T>接口，可以直接用。
+ * 使用fountain.data.macros.DataAssist，@DataAssist[fields]注解的类也实现了DataFields<T>。
  */
 public macro Controller(input: Tokens): Tokens {
     let tokens = generate(input)
