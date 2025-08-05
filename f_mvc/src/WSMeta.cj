@@ -81,11 +81,14 @@ public class WSMeta {
         }
     }
     
-    private func doExtractArg<T, M>(meta: ?M, ctx: HttpContext, name: String): T where T <: DataFields<T>, M <: WSFuncMeta {
-        (meta?.args.extract<T>(ctx, name, pattern)).getOrThrow()
+    private func doExtractArgOption<T, M>(meta: ?M, ctx: HttpContext, name: String): T where T <: DataFields<T>, M <: WSFuncMeta {
+        meta?.args.extract<T>(ctx, name, pattern)
     }
-    public func doExtractArg<T, M>(meta: ?M, ctx: HttpContext, name: String, default: T): T where T <: DataFields<T>, M <: WSFuncMeta {
-        (meta?.args.extract<T>(ctx, name, pattern)) ?? default
+    private func doExtractArg<T, M>(meta: ?M, ctx: HttpContext, name: String): T where T <: DataFields<T>, M <: WSFuncMeta {
+        doExtractArgOption<T, M>(meta, ctx, name).getOrThrow()
+    }
+    private func doExtractArg<T, M>(meta: ?M, ctx: HttpContext, name: String, default: T): T where T <: DataFields<T>, M <: WSFuncMeta {
+        doExtractArgOption<T, M>(meta, ctx, name) ?? default
     }
 
     public func extractOpenArg<T>(ctx: HttpContext, name: String): T where T <: DataFields<T> {

@@ -14,6 +14,11 @@ import f_macros.*
 import f_mvc.exception.MVCException
 public import f_bean.macros.*
 
+/**
+ * http mvc控制器的宏。请确保作为控制器的类型一定是class，且只有作为请求处理的函数是公共的。
+ * 请求处理函数只接收实现了接口fountain.data.DataFields<T>的类型或HttpContext HttpHeaders HttpRequest HttpResponseBuilderw做参数
+ * 如果有其它公共函数，或者试图使用其它类型作为请求处理函数的参数将会在本宏展开时发生编译错误。
+ */
 public macro Controller(input: Tokens): Tokens {
     let tokens = generate(input)
     quote(
@@ -44,11 +49,7 @@ func generate(input: Tokens): Tokens {
     }
     let klass = decl.identifier
     for (d in decl.body.decls) {
-        var md: Decl = d
-        while(let m: MacroExpandDecl <- md && let _: MacroExpandDecl <- m.macroInputDecl){
-            md = m
-        }
-        if (let m: MacroExpandDecl <- md && let f: FuncDecl <- extract(m) && !isStatic(f) && isPublic(f)) {
+        if (let m: MacroExpandDecl <- d && let f: FuncDecl <- extract(m) && !isStatic(f) && isPublic(f)) {
             let (argTypes, argExprs, args) = generateArgs(f)
             tokens += quote(
                 private let _ = {=>
