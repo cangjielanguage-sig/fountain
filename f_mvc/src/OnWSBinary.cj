@@ -11,5 +11,5 @@ package f_mvc
 
 @Annotation[target:[MemberFunction]]
 public class  OnWSBinary{
-    public const OnWSBinary(public let mediaType!: String = ''){}
+    public const init(){}
 }

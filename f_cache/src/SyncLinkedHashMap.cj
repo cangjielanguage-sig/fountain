@@ -10,27 +10,29 @@
 package f_cache
 
 import std.collection.Map
-import std.sync.Mutex
+import std.sync.{ReadWriteLock, Lock}
 import f_collection.{LinkedHashMap, ValueEqualMap, ValueContainsMap}
 
 class SyncLinkedHashMap<V> <: Collection<(String, V)> {
-    private let mutex = Mutex()
+    private let rwl = ReadWriteLock()
+    private let rl = rwl.readLock
+    private let wl = rwl.writeLock
     private let map = LinkedHashMap<String, V>()
     public func iterator(): Iterator<(String, V)> {
-        SyncLinkedHashMapIterator<V>(map.iterator(), mutex)
+        SyncLinkedHashMapIterator<V>(map.iterator(), rl)
     }
     public func get(key: String): ?V {
-        synchronized(mutex) {
+        synchronized(rl) {
             map.get(key)
         }
     }
     public func contains(key: String): Bool {
-        synchronized(mutex) {
+        synchronized(rl) {
             map.contains(key)
         }
     }
     public func add(key: String, value: V): ?V {
-        synchronized(mutex) {
+        synchronized(wl) {
             map.add(key, value)
         }
     }
@@ -38,45 +40,45 @@ class SyncLinkedHashMap<V> <: Collection<(String, V)> {
         if (let Some(v) <- get(key)) {
             v
         } else {
-            synchronized(mutex) {
-                if (let Some(v) <- get(key)) {
+            synchronized(wl) {
+                if (let Some(v) <- map.get(key)) {
                     v
                 } else {
                     let v = callable()
-                    add(key, v)
+                    map.add(key, v)
                     v
                 }
             }
         }
     }
     public func remove(key: String): ?V {
-        synchronized(mutex) {
+        synchronized(wl) {
             map.remove(key)
         }
     }
     public prop size: Int64 {
         get() {
-            synchronized(mutex) {
+            synchronized(rl) {
                 map.size
             }
         }
     }
     public func isEmpty(): Bool {
-        synchronized(mutex) {
+        synchronized(rl) {
             map.isEmpty()
         }
     }
     public func clear(): Unit {
-        synchronized(mutex) {
+        synchronized(wl) {
             map.clear()
         }
     }
 }
 
 class SyncLinkedHashMapIterator<V> <: Iterator<(String, V)> {
-    SyncLinkedHashMapIterator(private let itr: Iterator<(String, V)>, private let mutex: Mutex) {}
+    SyncLinkedHashMapIterator(private let itr: Iterator<(String, V)>, private let rl: Lock) {}
     public func next(): ?(String, V) {
-        synchronized(mutex) {
+        synchronized(rl) {
             itr.next()
         }
     }
