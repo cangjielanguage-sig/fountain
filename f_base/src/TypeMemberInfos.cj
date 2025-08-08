@@ -202,7 +202,7 @@ class FuncMeta <: Hashable & Equatable<FuncMeta> {
         hash = HashBuilder().append(name).append(param).build()
     }
     public operator func ==(other: FuncMeta) {
-        hash == other.hash && name == other.name && param == other.param
+        refEq(this, other) || (hash == other.hash && name == other.name && param == other.param)
     }
     public func hashCode(): Int64 {
         hash

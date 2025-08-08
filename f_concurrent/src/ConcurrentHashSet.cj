@@ -107,7 +107,9 @@ public class ConcurrentHashSet<T> <: Set<T> where T <: Hashable & Equatable<T> {
 
 extend<T> ConcurrentHashSet<T> <: Equatable<ConcurrentHashSet<T>> where T <: Hashable & Equatable<T> {
     public operator func ==(other: ConcurrentHashSet<T>): Bool {
-        if (this.size != other.size) {
+        if(refEq(this, other)){
+            return true
+        }else if (this.size != other.size) {
             return false
         }
         let itr1 = this.iterator()

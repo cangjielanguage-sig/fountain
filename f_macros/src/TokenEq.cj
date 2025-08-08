@@ -18,12 +18,14 @@ public interface TokenEq<T> where T <: TokenEq<T> {
 
 extend Tokens <: TokenEq<Tokens> {
     public operator func ==(other: Tokens): Bool {
+        refEq(this, other) || 
         if (this.size == other.size) {
             for (i in 0..this.size where this[i] != other[i]) {
                 return false
             }
             return true
+        }else{
+            false
         }
-        false
     }
 }

@@ -26,7 +26,7 @@ public class MultipartMediaType <: MediaType {
     }
     public operator func ==(other: MediaType) {
         match (other) {
-            case x: MultipartMediaType => x.mediaType == this.mediaType && x.boundary == this.boundary
+            case x: MultipartMediaType => refEq(this, other) || (x.mediaType == this.mediaType && x.boundary == this.boundary)
             case _ => false
         }
     }

@@ -711,10 +711,10 @@ open class PathNode <: Equatable<PathNode> {
     }
     protected open operator func ==(o: Any): Bool {
         match (o) {
-            case x: PathNode => name == x.name
+            case x: PathNode => refEq(this, x) || name == x.name
             case x: String => name == x
             case opt: Option<PathNode> => match (opt) {
-                case Some(x) => name == x.name
+                case Some(x) => refEq(this, x) || name == x.name
                 case _ => false
             }
             case opt: Option<String> => match (opt) {
@@ -725,7 +725,7 @@ open class PathNode <: Equatable<PathNode> {
         }
     }
     public operator func ==(node: PathNode): Bool {
-        name == node.name
+        refEq(this, node) || name == node.name
     }
     public operator func !=(node: PathNode): Bool {
         name != node.name
@@ -739,7 +739,10 @@ class NonePathNode <: PathNode {
     static let INSTANCE: PathNode = NonePathNode()
     private init() {}
     protected operator func ==(o: Any): Bool {
-        o is NonePathNode || (o as Option<NonePathNode>).isSome()
+        match(o){
+            case x: Object => refEq(this, x)
+            case _ => false
+        } || o is NonePathNode || (o as Option<NonePathNode>).isSome()
     }
 }
 //实路径节点
@@ -754,6 +757,10 @@ class StarPathNode <: PathNode {
         super("*", prev)
     }
     protected operator func ==(o: Any): Bool {
+        match(o){
+            case x: Object => refEq(this, x)
+            case _ => false
+        } ||
         o is PathNode || o is String || (o as Option<DoubleStarPathNode>).isSome() ||
             (o as Option<StarPathNode>).isSome() || (o as Option<RegexPathNode>).isSome() ||
             (o as Option<PlaceholderPathNode>).isSome() || (o as Option<ComplexPathNode>).isSome() ||
@@ -767,6 +774,10 @@ class DoubleStarPathNode <: PathNode {
         super("**", prev)
     }
     protected operator func ==(o: Any) {
+        match(o){
+            case x: Object => refEq(this, x)
+            case _ => false
+        } ||
         o is PathNode || o is String || (o as Option<DoubleStarPathNode>).isSome() ||
             (o as Option<StarPathNode>).isSome() || (o as Option<RegexPathNode>).isSome() ||
             (o as Option<PlaceholderPathNode>).isSome() || (o as Option<ComplexPathNode>).isSome() ||
@@ -819,6 +830,10 @@ class PlaceholderPathNode <: PathNode {
         super(name, prev)
     }
     protected operator func ==(o: Any): Bool {
+        match(o){
+            case x: Object => refEq(this, x)
+            case _ => false
+        } ||
         o is PlaceholderPathNode || o is String || (o as Option<PlaceholderPathNode>).isSome() ||
             (o as Option<String>).isSome()
     }

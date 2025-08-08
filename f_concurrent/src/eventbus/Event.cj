@@ -71,7 +71,7 @@ public abstract class Event <: Hashable & Equatable<Event> & ToString {
         name.hashCode()
     }
     public operator func ==(e: Event): Bool {
-        name == e.name
+        refEq(this, e) || name == e.name
     }
     public func toString(): String {
         name

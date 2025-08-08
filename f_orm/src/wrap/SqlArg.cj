@@ -80,7 +80,7 @@ public class BoolSqlArg <: SqlArg {
     }
     public operator func ==(other: SqlArg): Bool {
         equals(other) && match (other) {
-            case x: BoolSqlArg => x.value == value
+            case x: BoolSqlArg => refEq(this, other) ||  x.value == value
             case _ => false
         }
     }
@@ -101,7 +101,7 @@ public class Int8SqlArg <: SqlArg {
     }
     public operator func ==(other: SqlArg): Bool {
         equals(other) && match (other) {
-            case x: Int8SqlArg => x.value == value
+            case x: Int8SqlArg => refEq(this, other) || x.value == value
             case _ => false
         }
     }
@@ -122,7 +122,7 @@ public class UInt8SqlArg <: SqlArg {
     }
     public operator func ==(other: SqlArg): Bool {
         equals(other) && match (other) {
-            case x: UInt8SqlArg => x.value == value
+            case x: UInt8SqlArg => refEq(this, other) || x.value == value
             case _ => false
         }
     }
@@ -145,7 +145,7 @@ public class Int16SqlArg <: SqlArg {
     }
     public operator func ==(other: SqlArg): Bool {
         equals(other) && match (other) {
-            case x: Int16SqlArg => x.value == value
+            case x: Int16SqlArg => refEq(this, other) || x.value == value
             case _ => false
         }
     }
@@ -166,7 +166,7 @@ public class UInt16SqlArg <: SqlArg {
     }
     public operator func ==(other: SqlArg): Bool {
         equals(other) && match (other) {
-            case x: UInt16SqlArg => x.value == value
+            case x: UInt16SqlArg => refEq(this, other) || x.value == value
             case _ => false
         }
     }
@@ -187,7 +187,7 @@ public class Int32SqlArg <: SqlArg {
     }
     public operator func ==(other: SqlArg): Bool {
         equals(other) && match (other) {
-            case x: Int32SqlArg => x.value == value
+            case x: Int32SqlArg => refEq(this, other) || x.value == value
             case _ => false
         }
     }
@@ -208,7 +208,7 @@ public class UInt32SqlArg <: SqlArg {
     }
     public operator func ==(other: SqlArg): Bool {
         equals(other) && match (other) {
-            case x: UInt32SqlArg => x.value == value
+            case x: UInt32SqlArg => refEq(this, other) || x.value == value
             case _ => false
         }
     }
@@ -229,7 +229,7 @@ public class Int64SqlArg <: SqlArg {
     }
     public operator func ==(other: SqlArg): Bool {
         equals(other) && match (other) {
-            case x: Int64SqlArg => x.value == value
+            case x: Int64SqlArg => refEq(this, other) || x.value == value
             case _ => false
         }
     }
@@ -250,7 +250,7 @@ public class UInt64SqlArg <: SqlArg {
     }
     public operator func ==(other: SqlArg): Bool {
         equals(other) && match (other) {
-            case x: UInt64SqlArg => x.value == value
+            case x: UInt64SqlArg => refEq(this, other) || x.value == value
             case _ => false
         }
     }
@@ -270,13 +270,13 @@ public class Float16SqlArg <: SqlArg {
         hashCode(value)
     }
     public operator func ==(other: SqlArg): Bool {
-        equals(other) && match (other) {
+        refEq(this, other) || (equals(other) && match (other) {
             case x: Float16SqlArg => x.value == value
             case x: Float32SqlArg => x.value == Float32(value)
             case x: Float64SqlArg => x.value == Float64(value)
             case x: DecimalSqlArg => x.value == Decimal(value)
             case _ => false
-        }
+        })
     }
 }
 
@@ -294,13 +294,13 @@ public class Float32SqlArg <: SqlArg {
         hashCode(value)
     }
     public operator func ==(other: SqlArg): Bool {
-        equals(other) && match (other) {
+        refEq(this, other) || (equals(other) && match (other) {
             case x: Float16SqlArg => Float32(x.value) == value
             case x: Float32SqlArg => x.value == value
             case x: Float64SqlArg => x.value == Float64(value)
             case x: DecimalSqlArg => x.value == Decimal(value)
             case _ => false
-        }
+        })
     }
 }
 
@@ -318,13 +318,13 @@ public class Float64SqlArg <: SqlArg {
         hashCode(value)
     }
     public operator func ==(other: SqlArg): Bool {
-        equals(other) && match (other) {
+        refEq(this, other) || (equals(other) && match (other) {
             case x: Float16SqlArg => Float64(x.value) == value
             case x: Float32SqlArg => Float64(x.value) == value
             case x: Float64SqlArg => x.value == value
             case x: DecimalSqlArg => x.value == Decimal(value)
             case _ => false
-        }
+        })
     }
 }
 
@@ -342,13 +342,13 @@ public class DecimalSqlArg <: SqlArg {
         hashCode(value)
     }
     public operator func ==(other: SqlArg): Bool {
-        equals(other) && match (other) {
+        refEq(this, other) || (equals(other) && match (other) {
             case x: Float16SqlArg => Decimal(x.value) == value
             case x: Float32SqlArg => Decimal(x.value) == value
             case x: Float64SqlArg => Decimal(x.value) == value
             case x: DecimalSqlArg => x.value == value
             case _ => false
-        }
+        })
     }
 }
 
@@ -366,10 +366,10 @@ public class BigIntSqlArg <: SqlArg {
         hashCode(value)
     }
     public operator func ==(other: SqlArg): Bool {
-        equals(other) && match (other) {
+        refEq(this, other) || (equals(other) && match (other) {
             case x: BigIntSqlArg => x.value == value
             case _ => false
-        }
+        })
     }
 }
 
@@ -387,11 +387,11 @@ public class RuneSqlArg <: SqlArg {
         hashCode(value)
     }
     public operator func ==(other: SqlArg): Bool {
-        equals(other) && match (other) {
+        refEq(this, other) || (equals(other) && match (other) {
             case x: RuneSqlArg => x.value == value
             case x: StringSqlArg => x.value == value.toString()
             case _ => false
-        }
+        })
     }
 }
 
@@ -409,11 +409,11 @@ public class StringSqlArg <: SqlArg {
         hashCode(value)
     }
     public operator func ==(other: SqlArg): Bool {
-        equals(other) && match (other) {
+        refEq(this, other) || (equals(other) && match (other) {
             case x: RuneSqlArg => x.value.toString() == value
             case x: StringSqlArg => x.value == value
             case _ => false
-        }
+        })
     }
 }
 
@@ -434,10 +434,10 @@ public class InputStreamSqlArg <: SqlArg {
         h
     }
     public operator func ==(other: SqlArg): Bool {
-        equals(other) && match (other) {
+        refEq(this, other) || (equals(other) && match (other) {
             case x: InputStreamSqlArg => true
             case _ => false
-        }
+        })
     }
 }
 
@@ -455,10 +455,10 @@ public class DurationSqlArg <: SqlArg {
         hashCode(value)
     }
     public operator func ==(other: SqlArg): Bool {
-        equals(other) && match (other) {
+        refEq(this, other) || (equals(other) && match (other) {
             case x: DurationSqlArg => x.value == value
             case _ => false
-        }
+        })
     }
 }
 
@@ -476,10 +476,10 @@ public class DateTimeSqlArg <: SqlArg {
         hashCode(value)
     }
     public operator func ==(other: SqlArg): Bool {
-        equals(other) && match (other) {
+        refEq(this, other) || (equals(other) && match (other) {
             case x: DateTimeSqlArg => x.value == value
             case _ => false
-        }
+        })
     }
 }
 
@@ -497,9 +497,9 @@ public class ByteArraySqlArg <: SqlArg {
         hashCode<String>(value.toString())
     }
     public operator func ==(other: SqlArg): Bool {
-        equals(other) && match (other) {
+        refEq(this, other) || (equals(other) && match (other) {
             case x: ByteArraySqlArg => x.value == value
             case _ => false
-        }
+        })
     }
 }

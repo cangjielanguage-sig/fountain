@@ -35,7 +35,7 @@ public class Series <: Equatable<Series> {
         }
     }
     public operator func ==(series: Series) {
-        this.value == series.value
+        refEq(this, series) || this.value == series.value
     }
 
     public static func valueOf(status: HttpStatus): Series {

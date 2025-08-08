@@ -21,7 +21,7 @@ public class CronDataCollection <: Hashable & Equatable<CronDataCollection> {
         cron.hashCode()
     }
     public operator func ==(other: CronDataCollection) {
-        this.cron == other.cron
+        refEq(this, other) || this.cron == other.cron
     }
 
     public func put(unit: TicktockUnit, data: CronData): Unit {

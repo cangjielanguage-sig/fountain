@@ -105,7 +105,9 @@ public class LinkedHashSet<T> <: Set<T> where T <: Hashable & Equatable<T> {
 
 extend<T> LinkedHashSet<T> <: Equatable<LinkedHashSet<T>> where T <: Comparable<T> {
     public operator func ==(other: LinkedHashSet<T>): Bool {
-        if (this.size != other.size) {
+        if(refEq(this, other)){
+            return true
+        }else if (this.size != other.size) {
             return false
         }
         let itr1 = this.iterator()

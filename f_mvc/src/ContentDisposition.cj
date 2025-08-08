@@ -160,9 +160,10 @@ public class ContentDisposition <: Equatable<ContentDisposition> & Equatable<Any
         }
     }
     public operator func ==(other: ContentDisposition) {
-        this.`type` == other.`type` && this.name == other.name && this.filename == other.filename && charsetEq(other) &&
+        refEq(this, other) || 
+        (this.`type` == other.`type` && this.name == other.name && this.filename == other.filename && charsetEq(other) &&
             this.size == other.size && this.creationDate == other.creationDate && this.modificationDate == other
-            .modificationDate && this.readDate == other.readDate
+            .modificationDate && this.readDate == other.readDate)
     }
     private var hash = 0
     public func hashCode(): Int64 {

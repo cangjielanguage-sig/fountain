@@ -33,7 +33,10 @@ public abstract class TicktockTask <: TicktockTaskDef & Hashable & Equatable<Tic
         return name.hashCode()
     }
     public operator func ==(task: TicktockTaskDef): Bool {
-        return this.name == task.name
+        match(task){
+            case x: Object => refEq(this, x)
+            case _ => false
+        } || return this.name == task.name
     }
     public operator func !=(task: TicktockTaskDef): Bool {
         return this.name != task.name

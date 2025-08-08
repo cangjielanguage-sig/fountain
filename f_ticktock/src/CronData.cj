@@ -40,7 +40,7 @@ public class CronData <: ToString & Hashable & Equatable<CronData> {
         hash
     }
     public operator func ==(other: CronData) {
-        hash == other.hash && unit_ == other.unit_ && range_ == other.range_ && last_ == other.last_
+        refEq(this, other) || (hash == other.hash && unit_ == other.unit_ && range_ == other.range_ && last_ == other.last_)
     }
     public func toString(): String {
         "unit: ${unit}, start: ${start}, end: ${end}, duration: ${duration}, last: ${last}"

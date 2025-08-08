@@ -26,7 +26,7 @@ public class SqlCacheKey <: Hashable & Equatable<SqlCacheKey> & ToString {
         h
     }
     public operator func ==(other: SqlCacheKey): Bool {
-        h == other.h && sql == other.sql && args == other.args
+        refEq(this, other) || (h == other.h && sql == other.sql && args == other.args)
     }
     public func toString(): String {
         "${sql} | ${args}"

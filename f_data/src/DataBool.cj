@@ -39,7 +39,7 @@ public class DataBool <: Data & Hashable & Equatable<DataBool> {
         data.hashCode()
     }
     public operator func ==(other: DataBool): Bool {
-        data == other.data
+        refEq(this, other) || data == other.data
     }
 }
 

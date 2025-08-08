@@ -25,7 +25,7 @@ public class RegexBuilder <: ToString & Equatable<RegexBuilder> {
     private var pattern = StringGenerator()
 
     public operator func ==(other: RegexBuilder) {
-        pattern.toString() == other.pattern.toString()
+        refEq(this, other) || pattern.toString() == other.pattern.toString()
     }
 
     public func build(flags!: Array<RegexFlag> = [], solid!: Bool = false): Regex {

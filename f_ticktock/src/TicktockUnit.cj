@@ -21,10 +21,10 @@ abstract sealed class TicktockUnit <: Currently & ToString & Hashable & Equatabl
     public static let WEEK_DAILY = WeekDailyTicktockUnit(5, true, 1..=7, 7..=7)
     public static let YEARLY = YearlyTicktockUnit(6, false, DateTime.now().year..=Int64.Max, Int64.Max..=Int64.Max)
 
-    private var value_: Int64
-    private var oneStart: Bool
-    private var range_: Range<Int64>
-    private var lastRange_: Range<Int64>
+    private let value_: Int64
+    private let oneStart: Bool
+    private let range_: Range<Int64>
+    private let lastRange_: Range<Int64>
 
     init(value: Int64, oneStart: Bool, range: Range<Int64>, lastRange: Range<Int64>) {
         this(value, oneStart, 0, range, lastRange)
@@ -70,7 +70,7 @@ abstract sealed class TicktockUnit <: Currently & ToString & Hashable & Equatabl
         value
     }
     public operator func ==(unit: TicktockUnit) {
-        this.value == unit.value
+        refEq(this, unit) || this.value == unit.value
     }
     public operator func !=(unit: TicktockUnit) {
         !(this == unit)

@@ -71,7 +71,7 @@ public class QualifiedFuncInfo <: Hashable & Equatable<QualifiedFuncInfo> {
         HashBuilder().append(typeInfo).append(funcInfo).build()
     }
     public operator func ==(other: QualifiedFuncInfo) {
-        this.typeInfo == other.typeInfo && this.funcInfo == other.funcInfo
+        refEq(this, other) || (this.typeInfo == other.typeInfo && this.funcInfo == other.funcInfo)
     }
     public func hashCode() {
         hash

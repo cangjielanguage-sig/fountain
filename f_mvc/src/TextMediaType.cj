@@ -21,7 +21,7 @@ public abstract class TextMediaType <: MediaType {
     }
     public operator func ==(other: MediaType) {
         match (other) {
-            case x: TextMediaType => x.mediaType == this.mediaType && x.charset == this.charset
+            case x: TextMediaType => refEq(this, other) || (x.mediaType == this.mediaType && x.charset == this.charset)
             case _ => false
         }
     }

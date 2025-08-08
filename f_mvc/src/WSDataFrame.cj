@@ -9,7 +9,8 @@
 */
 package f_mvc
 
-class WSDataFrame <: ControllerFuncParam {
+sealed abstract class WSDataFrame <: ControllerFuncParam {
+    public const init(){}
     protected func extract<T>(name: String, ctx: HttpContext, pattern: HttpRequestPathPatterns): ?T where T <: DataFields<T> {
         throw MVCException()
     }
@@ -17,19 +18,19 @@ class WSDataFrame <: ControllerFuncParam {
 }
 
 @Annotation[target: [MemberFunction]]
-public class WSTextFrame <: ControllerFuncParam {
-    public const WSTextFrame(public let mediaType: String, public let charset!: Charset = Charsets.UTF8) {}
+public class WSTextFrame <: WSDataFrame {
+    public const WSTextFrame(public let mediaType: String, public let charset!: String = 'utf-8') {}
     
-    protected func extract<T>(frame: Array<Byte>): ?T where T <: DataFields<T> {
-        let data = charset.newDecoder().decode(frame)
-        mediaType.toDataFields<T>(data)
+    protected func extract<T>(frame: Array<Byte>): T where T <: DataFields<T> {
+        let data = Charsets.forName(charset).getOrThrow{MediaTypeException('charset ${charset} does not support')}.newDecoder().decode(frame)
+        MediaTypes.parse(mediaType).toDataFields<T>(data)
     }
 }
 
 @Annotation[target: [MemberFunction]]
-public class WSBinaryFrame <: ControllerFuncParam {
+public class WSBinaryFrame <: WSDataFrame {
     public const WSBinaryFrame(public let mediaType: String) {}
-    protected func extract<T>(frame: Array<Byte>): ?T where T <: DataFields<T> {
-        mediaType.toDataFields<T>(frame)
+    protected func extract<T>(frame: Array<Byte>): T where T <: DataFields<T> {
+        MediaTypes.parse(mediaType).toDataFields<T>(frame)
     }
 }

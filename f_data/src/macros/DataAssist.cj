@@ -196,7 +196,7 @@ func generateEqual(d: ClassDecl, exclusion: HashSet<String>) {
             all: [FuncDecl(
                 quote(
         public $(openTokens(d)) operator func ==(other: $typeName): Bool {
-            $eq
+            refEq(this, other) || ($eq)
         }
     )),
                 FuncDecl(

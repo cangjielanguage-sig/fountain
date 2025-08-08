@@ -22,7 +22,7 @@ public abstract class BeanScope <: Equatable<BeanScope> {
      */
     public prop typeInfo: TypeInfo
     public operator func ==(other: BeanScope) {
-        this.typeInfo == other.typeInfo
+        refEq(this, other) || this.typeInfo == other.typeInfo
     }
     public prop isPrototype: Bool {
         get() {

@@ -96,6 +96,6 @@ public class SqlArgs <: Hashable & Equatable<SqlArgs> & ToString {
         h
     }
     public operator func ==(other: SqlArgs) {
-        args == other.args
+        refEq(this, other) || args == other.args
     }
 }
