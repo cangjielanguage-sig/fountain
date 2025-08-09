@@ -1,5 +1,5 @@
 /*
-    Copyright (c) 2022 WuJingrun（吴京润）
+    Copyright (c) [2022] [WuJingrun（吴京润）]
     fountain is licensed under Mulan PSL v2.
     You can use this software according to the terms and conditions of the Mulan PSL v2.
     You may obtain a copy of Mulan PSL v2 at:
@@ -10,6 +10,6 @@
 package f_mvc
 
 @Annotation[target:[MemberFunction]]
-public class  OnWSClose {
-    public const OnWSClose(public let mediaType: String){}
+public class WSPing {
+    public const WSPing(public let duration!: Duration = Duration.second * 30, public let mediaType!: String = ''){}
 }

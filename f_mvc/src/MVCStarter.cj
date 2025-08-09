@@ -76,7 +76,16 @@ public class MVCStarter {
             registered.compareAndSwap(false, list.size > 0)
             list
         } else {
-            throw Exception("The generateAndregister can only be called before calling MVCLauncher.launch().")
+            throw MVCException("The generateAndRegister can only be called before calling MVCStarter.start().")
+        }
+    }
+    public static func generateAndRegisterWSEndPoint<T>(path: String): WSMeta<T> where T <: Object {
+        if(initial_.load()) {
+            let meta = HttpRequestDistributorImpl.instance.generateAndRegisterWSEndPoint<T>(path)
+            registered.compareAndSwap(false, true)
+            meta
+        }else{
+            throw WSException('The generateAndRegisterWSEndPoint can only be called before calling MVCStarter.start()')
         }
     }
     public func start(): Unit {

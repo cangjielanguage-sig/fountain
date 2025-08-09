@@ -79,6 +79,13 @@ public class RequestMeta <: HttpRequestHandler {
             }
         }
     }
+    func setHandle<T>(wsmeta: WSMeta<T>){
+        this.handle_ = {ctx => 
+            wsmeta.handle(BeanFactory.instance.getFirst<T>().getOrThrow(), ctx, pattern)
+        }
+        produces.add('*')
+        consumes.add('*')
+    }
     private func generateResponse<R>(ctx: HttpContext, result: R): Unit where R <: DataFields<R> {
         if (!(result is Unit)) {
             let accept = if (let Some(x) <- ctx.request.headers.getFirst('Accept')) {
@@ -96,11 +103,21 @@ public class RequestMeta <: HttpRequestHandler {
     public func isMultipart(name: String) {
         args[name] is MultipartFormData
     }
-    public func extract<T>(ctx: HttpContext, name: String): T where T <: DataFields<T> {
-        args.extract<T>(ctx, name, pattern)
-    }
-    public func extract<T>(ctx: HttpContext, name: String, default: T): T where T <: DataFields<T> {
-        args.extract<T>(ctx, name, default, pattern)
+    public func extract<T>(ctx: HttpContext, name: String, default: ?T): T where T <: DataFields<T> {
+        if(isMultipart(name)){
+            multipart<T>(ctx, name)
+        }else{
+            match(None<T>){
+                case x: ?HttpContext => ctx
+                case x: ?HttpRequest => ctx.request
+                case x: ?HttpHeaders => ctx.request.headers
+                case _: ?HttpResponseBuilder => ctx.responseBuilder
+                case _ => match(default){
+                    case Some(d) => args.extract<T>(ctx, name, default, pattern)
+                    case _ => args.extract<T>(ctx, name, pattern)
+                }
+            }
+        }
     }
     public func multipart<T>(ctx: HttpContext, name: String): T where T <: ObjectData<T> & DataFields<T> {
         (args[name] as MultipartFormData)

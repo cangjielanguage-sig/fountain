@@ -11,5 +11,5 @@ package f_mvc
 
 @Annotation[target:[MemberFunction]]
 public class  OnWSText {
-    public const OnWSText(){}
+    public const OnWSText(public let mediaType: String, public responseFrameType: WebSocketFrameType){}
 }

@@ -9,6 +9,10 @@
 */
 package f_mvc
 
+/**
+ * 如果需要主动向客户端写应为被@OnWSOpen注解的函数声明WebSocket参数并设法保持此WebSocket实例。
+ * WSMeta提供了几个静态写函数用于辅助向客户端写。
+ */
 @Annotation[target:[MemberFunction]]
 public class  OnWSOpen {
     public const init(){}

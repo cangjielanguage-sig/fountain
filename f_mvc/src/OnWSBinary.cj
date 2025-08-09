@@ -11,5 +11,5 @@ package f_mvc
 
 @Annotation[target:[MemberFunction]]
 public class  OnWSBinary{
-    public const init(){}
+    public const OnWsBinary(public let mediaType: String, public responseFrameType: WebSocketFrameType){}
 }

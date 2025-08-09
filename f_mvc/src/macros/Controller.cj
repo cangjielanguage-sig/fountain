@@ -9,11 +9,6 @@
  */
 macro package f_mvc.macros
 
-import std.ast.*
-import f_macros.*
-import f_mvc.exception.MVCException
-public import f_bean.macros.*
-
 /**
  * http mvc控制器的宏。请确保作为控制器的类型一定是class，且只有作为请求处理的函数是公共的。
  * 请求处理函数只接收实现了接口fountain.data.DataFields<T>的类型或HttpContext HttpHeaders HttpRequest HttpResponseBuilderw做参数
@@ -30,7 +25,7 @@ public macro Controller(input: Tokens): Tokens {
     )
 }
 
-func generate(input: Tokens): Tokens {
+private func generate(input: Tokens): Tokens {
     var tokens = `empty_tokens`
     let decl = match(parseDecl(input)){
         case x: ClassDecl => x
@@ -43,11 +38,11 @@ func generate(input: Tokens): Tokens {
                 d
             }else{
                 diagReport(ERROR, y.macroInputs, 'illegal decl', '')
-                throw MVCException()
+                return input
             }
         case _ => 
             diagReport(ERROR, input, 'illegal decl', '')
-            throw MVCException()
+            return input
     }
     let klass = decl.identifier
     for (d in decl.body.decls) {
@@ -71,7 +66,7 @@ func generate(input: Tokens): Tokens {
     tokens
 }
 
-func generateArgs(decl: FuncDecl): (Tokens, Tokens, Tokens) {
+private func generateArgs(decl: FuncDecl): (Tokens, Tokens, Tokens) {
     var argTypes = `lsquare`
     var exprs = `empty_tokens`
     var args = `lsquare`
@@ -86,21 +81,10 @@ func generateArgs(decl: FuncDecl): (Tokens, Tokens, Tokens) {
         let default = if (defaultValue.size > 0) {
             quote(, $defaultValue)
         } else {
-            `empty_tokens`
+            quote(None<T>)
         }
         exprs += quote(
-            let $(p.identifier) = 
-            if (meta.isMultipart($pname)) {
-                meta.multipart<$ptype>(ctx, $pname)
-            } else {
-                match(None<$ptype>){
-                    case _: ?HttpContext => ctx
-                    case _: ?HttpHeaders => ctx.request.headers
-                    case _: ?HttpRequest => ctx.request
-                    case _: ?HttpResponseBuilder => ctx.responseBuilder
-                    case _ => meta.extract<$ptype>(ctx, $pname $default)
-                } as $ptype
-            }.getOrThrow()
+            let $(p.identifier) = meta.extract<$ptype>(ctx, $pname $default)
         ) +
             `nl`
         let named = try {

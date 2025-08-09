@@ -20,6 +20,10 @@ class RequestArgMeta {
     func extract<T>(ctx: HttpContext, name: String, default: T, pattern: ?HttpRequestPathPatterns): T where T <: DataFields<T> {
         doExtract<T>(ctx, name, pattern) ?? default
     }
+    func contains(name: String): Bool {
+        args.contains(name)
+    }
+
     operator func [](name: String): ControllerFuncParam {
         args[name]
     }

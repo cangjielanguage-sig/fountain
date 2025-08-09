@@ -9,51 +9,90 @@
 */
 package f_mvc
 
-sealed abstract class WSFuncMeta {
-    WSFuncMeta(public let name: String){}
+sealed abstract class WSFuncMeta<T> {
+    WSFuncMeta(public let name: String, public let mediaType: String, public let responseFrameType: ?WebSocketFrameType){}
     let args = RequestArgMeta()
-    private var handle: (HttpContext) -> Unit = {_ => }
+    var handle: (T, HttpContext, HttpRequestPathPatterns, WebSocket, Array<Byte>) -> Array<Byte> = {_ => []}
 
-    public func setHandle(handle: (HttpContext) -> Unit): Unit {
-        this.handle = handle
+    public func setHandle<R>(handle: (T, HttpContext, HttpRequestPathPatterns, WebSocket, Array<Byte>) -> R): Unit where R <: DataFields<R> {
+        this.handle = {endpoint, ctx, pattern, ws, payload =>
+            let r = handle(endpoint, ctx, pattern, ws, payload)
+            if(mediaType.isEmpty()){
+                match(r){
+                    case x: Array<Byte> => x
+                    case _ => []
+                }
+            }else{
+                MediaTypes.parse(mediaType).fromDataFields<R>(r)
+            }
+        }
     }
-    public func exec(ctx: HttpContext): Unit {
-        handle(ctx)
+    public func extract<T>(ctx: HttpContext, name: String, pattern: ?HttpRequestPathPatterns, ws: WebSocket, payload: Array<Byte>): ?T wehre T <: DataFields<T> {
+        match(None<T>){
+            case _: ?HttpContext => ctx
+            case _: ?HttpRequest => ctx.request
+            case _: ?HttpHeaders => ctx.request.headers
+            case _: ?WebSocket => ws
+            case _: ?Array<Byte> => payload
+            case _ => match(args[name]){
+                case x: WSDataFrame => x.extract<T>(payload)
+                case x => x.extract<T>(name, ctx, pattern)
+            }
+        }
     }
 }
-public class WSOpenMeta <: WSFuncMeta {
+public class WSOpenMeta<T> <: WSFuncMeta<T> {
     init(name: String){
-        super(name)
+        super(name, '', None<WebSocketFrameType>)
     }
 }
-public class WSCloseMeta <: WSFuncMeta {
-    init(name: String){
-        super(name)
+public class WSCloseMeta<T> <: WSFuncMeta<T> {
+    init(name: String, mediaType: String){
+        super(name, mediaType, WebSocketFrameType.CloseWebFrame)
     }
 }
-public class WSTextMeta <: WSFuncMeta {
-    init(name: String){
-        super(name)
+public class WSTextMeta<T> <: WSFuncMeta<T> {
+    init(name: String, mediaType: String, responseFrameType: WebSocketFrameType){
+        super(name, mediaType, responseFrameType)
     }
 }
-public class WSBinaryMeta <: WSFuncMeta {
-    init(name: String){
-        super(name)
+public class WSBinaryMeta<T> <: WSFuncMeta<T> {
+    init(name: String, mediaType: String, responseFrameType: WebSocketFrameType){
+        super(name, mediaType, responseFrameType)
     }
 }
-public class WSPingMeta <: WSFuncMeta {
-    init(name: String){
-        super(name)
+public class WSPingMeta<T> <: WSFuncMeta<T> {
+    init(name: String, mediaType: String){
+        super(name, mediaType, WebSocketFrameType.PongWebFrame)
+    }
+}
+public class WSPongMeta<T> <: WSFuncMeta<T> {
+    init(name: String, mediaType: String){
+        super(name, mediaType, None<WebSocketFrameType>)
+    }
+}
+public class WSPingFunc<T> <: WSFuncMeta<T> {
+    var duration = Duration.Zero
+    init(name: String, mediaType: String){
+        super(name, mediaType, WebSocketFrameType.PingWebFrame)
     }
 }
 
-public class WSMeta {
+public class WSMeta<T> <: HttpRequestHandler {
     var pattern = None<HttpRequestPathPatterns>
-    private var openMeta_ = None<WSOpenMeta>
-    private var closeMeta_ = None<WSCloseMeta>
-    private var textMeta_ = None<WSTextMeta>
-    private var binaryMeta_ = None<WSBinaryMeta>
-    private var pingMeta_ = None<WSPingMeta>
+    private var openMeta_ = None<WSOpenMeta<T>>
+    private var closeMeta_ = None<WSCloseMeta<T>>
+    private var textMeta_ = None<WSTextMeta<T>>
+    private var binaryMeta_ = None<WSBinaryMeta<T>>
+    private var pingMeta_ = None<WSPingMeta<T>>
+    private var pongMeta_ = None<WSPongMeta<T>>
+    private var pingFunc_ = None<WSPingFunc<T>>
+
+    var handle = {_:T, _: HttpContext, _: HttpRequestPathPatterns => ()}
+
+    public func setHandle<T>(fn: (T, HttpContext, HttpRequestPathPatterns) -> Unit): Unit {
+        handle_ = fn
+    }
 
     public prop openMeta: ?WSOpenMeta {
         get(){
@@ -78,6 +117,113 @@ public class WSMeta {
     public prop pingMeta: ?WSPingMeta {
         get(){
             pingMeta_
+        }
+    }
+    public prop pongMeta: ?WSPongMeta {
+        get(){
+            pongMeta_
+        }
+    }
+    public prop pingFunc: ?WSPingFunc {
+        get(){
+            pingFunc_
+        }
+    }
+
+    public func upgrade(ctx: HttpContext, 
+                        subProtocols!: Array<String> = [],
+                        origins!: Array<String> = [],
+                        userFunc!: (HttpRequest) -> HttpHeaders = {_ => HttpHeaders()}): WebSocket{
+        WebSocket.upgradeFromServer(ctx, 
+                                    subProtocols: ArrayList<String>(subProtocols), 
+                                    origins: ArrayList<String>(origins),
+                                    userFunc: userFunc)
+    }
+    public static func writeText<T>(ws: WebSocket, data: T, mediaType!: String): Unit where T <: DataFields<T> {
+        ws.write(TextWebFrame, MediaTypes.parse(mediaType).toDataFields(data))
+    }
+    public static func writeText(ws: WebSocket, data: String, charset!: Charset): Unit {
+        ws.write(TextWebFrame, charset.newEncoder().encode(data))
+    }
+    public static func writeBinary<T>(ws: WebSocket, data: T, mediaType!: String): Unit where T <: DataFields<T> {
+        writeBinary(ws, MediaTypes.parse(mediaType).toDataFields(data))
+    }
+    public static func writeBinary(ws: WebSocket, data: Array<UInt8>): Unit {
+        ws.write(BinaryWebFrame, data)
+    }
+    public func exec(endpoint: T, ctx: HttpContext, pattern: HttpRequestPathPatterns, ws: WebSocket): Unit {
+        openMeta_?.handle(endpoint, ctx, pattern, ws, [])
+        let pingTimer = if(let Some(f) <- pingFunc_) {
+            let duration = f.duration
+            let h = f.handle
+            Timer.repeat(duration, duration){
+                ws.writePingFrame(h(endpoint, ctx, pattern, []))
+            }
+        }else{
+            None<Timer>
+        }
+        var bytes = ArrayList<Byte>()
+        var frameType = None<WebSocketFrameType>
+        func doExec(payload: Array<Byte>, fin: Bool, frameType: ?WebSocketFrameType, bytes: ArrayList<Byte>){
+            if(let Some(ft) <- frameType){
+                bytes.add(all: payload)
+                if(fin){
+                    func doExec(meta: ?WSFuncMeta, metaType: String){
+                        let m = meta.getOrThrow{WSException('${metaType} meta for ws is not specified')}
+                        let resp = m.handle(endpoint, ctx, pattern, ws, bytes.unsafeData())
+                        match(m.responseFrameType){
+                            case Some(t) => match(t){
+                                case TextWebFrame | BinaryWebFrame => ws.write(t, resp)
+                                case _ => throw WSException('response of ${ctx.request.url} for ${m.name} must be TextWebFrame or BinaryWebFrame')
+                            }
+                            case _ => throw WSException('${ctx.request.url} for ${m.name} is not be specified frame type')
+                        }
+                    }
+                    let (meta, metaType) = match(ft){
+                        case TextWebFrame => (textMeta_, "text")
+                        case BinaryWebFrame => (binaryMeta_, "binary")
+                        case _ => return
+                    }
+                    doExec(meta, metaType)
+                    return ArrayList<Byte>()
+                }
+            }
+            bytes
+        }
+        while(let frame <- ws.read()){
+            match(frame.frameType){
+                case TextWebFrame | BinaryWebFrame =>
+                    if(!bytes.isEmpty()){
+                        throw WSException('current payload is not empty')
+                    }
+                    frameType = frame.frameType
+                    bytes = doExec(frame.payload, frame.fin, frameType, bytes)
+                case ContinuationWebFrame =>
+                    bytes = doExec(frame.payload, frame.fin, frameType, bytes)
+                case PingWebFrame => 
+                    if(let Some(ping) <- pingMeta_){
+                        let bytes = ping.handle(endpoint, ctx, pattern, ws, frame.payload)
+                        ws.writePongFrame(bytes)
+                    }else{
+                        ws.writePongFrame(frame.payload)
+                    }
+                case PongWebFrame =>
+                    if(let Some(pong) <- pongMeta_){
+                        pong.handle(endpoint, ctx, pattern, ws, frame.payload)
+                    }
+                case CloseWebFrame =>
+                    if(let Some(c) <- closeMeta_){
+                        let bytes = c.handle(endpoint, ctx, pattern, ws, frame.payload)
+                        if(!bytes.isEmpty()){
+                            ws.write(CloseWebFrame, bytes)
+                        }
+                    }else{
+                        ws.write(CloseWebFrame, frame.payload)
+                    }
+                    pingTimer?.cancel()
+                    ws.closeConn()
+                    return
+            }
         }
     }
     
@@ -121,33 +267,73 @@ public class WSMeta {
     public func extractPingArg<T>(ctx: HttpContext, name: String, default: T): T where T <: DataFields<T> {
         doExtractArg(pingMeta_, ctx, name, default)
     }
+    public func extractPongArg<T>(ctx: HttpContext, name: String): T where T <: DataFields<T> {
+        doExtractArg(pongMeta_, ctx, name)
+    }
+    public func extractPongArg<T>(ctx: HttpContext, name: String, default: T): T where T <: DataFields<T> {
+        doExtractArg(pongMeta_, ctx, name, default)
+    }
 
-    public static func generate<T>() : WSMeta where T <: Object {
+    private func setHandle<T, R>(meta: ?T, handle: (HttpContext, Array<Byte>) -> R): Unit where R <: DataFields<R> {
+        meta.getOrThrow{WSException('${TypeInfos.get<T>()} is none')}.setHandle<R>(handle)
+    }
+    public func setOpenHandle<R>(handle: (HttpContext, Array<Byte>) -> Unit): Unit where R <: DataFields<R> {
+        setHandle<WSOpenMeta, R>(openMeta_, handle)
+    }
+    public func setCloseHandle<R>(handle: (HttpContext, Array<Byte>) -> Unit): Unit where R <: DataFields<R> {
+        setHandle<WSCloseMeta, R>(closeMeta_, handle)
+    }
+    public func setTextHandle<R>(handle: (HttpContext, Array<Byte>) -> Unit): Unit where R <: DataFields<R> {
+        setHandle<WSTextMeta, R>(textMeta_, handle)
+    }
+    public func setBinaryHandle<R>(handle: (HttpContext, Array<Byte>) -> Unit): Unit where R <: DataFields<R> {
+        setHandle<WSBinaryMeta, R>(binaryMeta_, handle)
+    }
+    public func setPingHandle<R>(handle: (HttpContext, Array<Byte>) -> Unit): Unit where R <: DataFields<R> {
+        setHandle<WSPingMeta, R>(pingMeta_, handle)
+    }
+    public func setPongHandle<R>(handle: (HttpContext, Array<Byte>) -> Unit): Unit where R <: DataFields<R> {
+        setHandle<WSPongMeta, R>(pongMeta_, handle)
+    }
+    public func setPingFunc<R>(handle: (HttpContext) -> R): Unit where R <: DataFields<R> {
+        this.pingFunc_?.setPingHandle(handle)
+    }
+
+    public static func generate() : WSMeta<T> where T <: Object {
         let endpointClass = TypeInfo.of<T>()
-        let meta = WSMeta()
+        let meta = WSMeta<T>()
         for(function in endpointClass.instanceFunctions) {
             let funcName = function.name
             let funcMeta = 
             if(let Some(annotation) <- function.findAnnotation<OnWSOpen>()){
-                let m = WSOpenMeta(funcName)
+                let m = WSOpenMeta<T>(funcName)
                 meta.openMeta_ = m
                 m
             }else if(let Some(annotation) <- function.findAnnotation<OnWSClose>()){
-                let m = WSCloseMeta(funcName)
+                let m = WSCloseMeta<T>(funcName, annotation.mediaType)
                 meta.closeMeta_ = m
                 m
             }else if(let Some(annotation) <- function.findAnnotation<OnWSBinary>()){
-                let m = WSBinaryMeta(funcName)
+                let m = WSBinaryMeta<T>(funcName, annotation.mediaType, annotation.responseFrameType)
                 meta.binaryMeta_ = m
                 m
             }else if(let Some(annotation) <- function.findAnnotation<OnWSText>()){
-                let m = WSTextMeta(funcName)
+                let m = WSTextMeta<T>(funcName, annotation.mediaType, annotation.responseFrameType)
                 meta.textMeta_ = m
                 m
             }else if(let Some(annotation) <- function.findAnnotation<OnWSPing>()){
-                let m = WSPingMeta(funcName)
+                let m = WSPingMeta<T>(funcName, annotation.mediaType)
                 meta.pingMeta_ = m
                 m
+            }else if(let Some(annotation) <- function.findAnnotation<OnWSPong>()){
+                let m = WSPongMeta<T>(funcName, '')
+                meta.pingMeta_ = m
+                m
+            }else if(let Some(annotation) <- function.findAnnotation<WSPing>()){
+                let f = WSPingFunc<T>(funcName, annotation.mediaType)
+                f.duration = annotation.duration
+                meta.pingFunc_ = f
+                f
             }else{
                 continue
             }
@@ -160,7 +346,7 @@ public class WSMeta {
                     break
                 }
                 if(toThrow){
-                    throw MVCException(
+                    throw WSException(
                         'parameter of controller function must be with one and only one Annotation as @RequestBody or @RequestParam or @RequestHeader or @PathVariable or @MultipartFormData')
                 }
             }

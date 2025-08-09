@@ -11,5 +11,5 @@ package f_mvc
 
 @Annotation[target:[MemberFunction]]
 public class  OnWSPing {
-    public const init(){}
+    public const OnWSPing(public let mediaType: String){}
 }

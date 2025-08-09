@@ -10,7 +10,9 @@
 package f_concurrent
 
 public class BloomFilter<T> where T <: Hashable {
-    private let mutex = Mutex()
+    private let lock = ReadWriteLock()
+    private let wl = lock.writeLock
+    private let rl = lock.readLock
     private let bits = BitSet()
     public BloomFilter(private let hashers: Array<(T, Int64) -> Int64>) {}
     public init(iterate!: Int64 = 5) {
@@ -32,7 +34,7 @@ public class BloomFilter<T> where T <: Hashable {
     }
     public func set(value: T): Unit {
         var h = value.hashCode()
-        synchronized(mutex) {
+        synchronized(wl) {
             bits[h] = true
             for (hasher in hashers) {
                 h = hasher(value, h)
@@ -42,7 +44,7 @@ public class BloomFilter<T> where T <: Hashable {
     }
     public func contains(value: T): Bool {
         var h = value.hashCode()
-        synchronized(mutex) {
+        synchronized(rl) {
             var result = bits[h]
             if (result) {
                 var i = 0

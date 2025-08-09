@@ -10,6 +10,6 @@
 package f_mvc
 
 @Annotation[target:[MemberFunction]]
-public class  OnWSClose {
-    public const OnWSClose(public let mediaType: String){}
+public class  OnWSPong {
+    public const OnWSPong(public let mediaType: String){}
 }

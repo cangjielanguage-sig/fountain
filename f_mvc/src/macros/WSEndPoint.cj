@@ -13,30 +13,109 @@ import std.ast.*
 import f_macros.*
 import f_mvc.exception.MVCException
 
+/**
+ * attr的可选项
+ * '.....',//URL路径，必须指定且必须是attr开头第一个，必须是字符串类型
+ * subProtocols: [....],
+ * origins: [....],
+ * userFunc: ...//任意正确的的闭包，或者使用本宏的当前作用域内可见的函数标识，函数类型是(HttpRequest) -> HttpHeaders
+ * 本宏修饰的类型必须是类。
+ * 确保有且只有被@OnWS*开头的注解修饰的函数和被@WSPing修饰的函数才是公共实例成员函数，且函数名在当前类中唯一。
+ */
 public macro WSEndPoint(attr: Tokens, input: Tokens): Tokens {
-    if (attr.size != 1) {
-        diagReport(WARNING, attr, 'size of attr in @WSEndPoint should be one.', '')
-    }
-    if (let STRING_LITERAL | SINGLE_QUOTED_STRING_LITERAL <- attr[0].kind) {
-    } else {
-        diagReport(ERROR, attr, 'attr in @WSEndPoint should be string literal or single quoted string literal.', '')
-        throw MVCException()
-    }
-    let decl = match (parseDecl(input)) {
-        case d: ClassDecl => d
-        case d: MacroExpandDecl => return replaceMacroInputDecl(quote(@WSEndPoint[$attr]), d).toTokens()
+    let tokens = generate(attr, input)
+    quote(
+        @Bean
+        $input
+        $tokens
+    )
+}
+private func generate(attr: Tokens, input: Tokens): Tokens {
+    let path = attr[0]
+    let upgradeAttrs = attr[1 .. attr.size]
+    var tokens = `empty_tokens`
+    let decl = match(parseDecl(input)){
+        case x: ClassDecl => x
+        case x: MacroExpandDecl => 
+            var y = x
+            while(let m: MacroExpandDecl <- y.macroInputDecl) {
+                y = m
+            }
+            if(let d: ClassDecl <- y.macroInputDecl) {
+                d
+            }else{
+                diagReport(ERROR, y.macroInputs, 'illegal decl', '')
+                return input
+            }
         case _ =>
             diagReport(ERROR, input, 'illegal decl', '')
-            throw MVCException()
+            return input
     }
-    let identifier = decl.identifier
-    let path = attr[0]
-
+    let klass = decl.identifier
+    var metaTokens = quote(
+        let metaHandles = HashMap<String, (WSFuncMeta<$klass>) -> Unit>()
+    ) + `nl`
+    for(d in klass.body.decls where isPublic(d) && !isStatic(d)) {
+        if(let f: FuncDecl <- d){
+            var paramTokens = `empty_tokens`
+            var factParams = `empty_tokens`
+            for(p in f.funcParams){
+                let default = try{
+                    p.expr.toTokens()
+                }catch(_){
+                    `empty_tokens`
+                }
+                paramTokens += quote(
+                    let $(p.identifier) = m.extract<$(p.paramType)>(ctx, $(p.identifier.value), pattern, ws, payload)
+                ) + `nl`
+                if(factParams.size > 0){
+                    factParams += `comma`
+                }
+                factParams += if(default.size > 0) {
+                    quote($(p.identifier): $(p.identifier) ?? $(default))
+                }else{
+                    quote($(p.identifier).getOrThrow())
+                }
+            }
+            metaTokens += quote(
+                metaHandles[] = {m => 
+                    m.setHandle{endpoint, ctx, pattern, ws, payload => 
+                        $paramTokens
+                        endpoint.$(p.identifier)($factParams)
+                    }
+                }
+            ) + `nl`
+        }
+    }
     quote(
-        $input
         private let _ = {=>
-            let path = $path
-
+            $metaTokens
+            let meta = MVCStarter.generateAndRegisterWSEndPoint<$klass>($path)
+            if(let Some(m) <- meta.openMeta){
+                metaHandles[m.name](meta)
+            }
+            if(let Some(m) <- meta.closeMeta){
+                metaHandles[m.name](meta)
+            }
+            if(let Some(m) <- meta.textMeta){
+                metaHandles[m.name](meta)
+            }
+            if(let Some(m) <- meta.binaryMeta){
+                metaHandles[m.name](meta)
+            }
+            if(let Some(m) <- meta.pingMeta){
+                metaHandles[m.name](meta)
+            }
+            if(let Some(m) <- meta.pongMeta){
+                metaHandles[m.name](meta)
+            }
+            if(let Some(m) <- meta.pingFunc){
+                metaHandles[m.name](meta)
+            }
+            meta.handle = {endpoint: T, ctx: HttpContext, pattern: HttpRequestPathPatterns => 
+                let ws = meta.upgrade(ctx, upgradeAttrs)
+                meta.exec(endpoint, ctx, pattern, ws)
+            }
         }()
     )
 }
