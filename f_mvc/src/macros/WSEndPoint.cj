@@ -113,7 +113,7 @@ private func generate(attr: Tokens, input: Tokens): Tokens {
                 metaHandles[m.name](meta)
             }
             meta.handle = {endpoint: T, ctx: HttpContext, pattern: HttpRequestPathPatterns => 
-                let ws = meta.upgrade(ctx, upgradeAttrs)
+                let ws = meta.upgrade(ctx, $upgradeAttrs)
                 meta.exec(endpoint, ctx, pattern, ws)
             }
         }()
