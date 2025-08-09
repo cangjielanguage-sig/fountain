@@ -11,5 +11,5 @@ package f_mvc
 
 @Annotation[target:[MemberFunction]]
 public class WSPing {
-    public const WSPing(public let duration!: Duration = Duration.second * 30, public let mediaType!: String = ''){}
+    public const WSPing(public let duration!: String = '30s', public let mediaType!: String = ''){}
 }

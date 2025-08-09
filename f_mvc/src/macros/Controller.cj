@@ -84,7 +84,17 @@ private func generateArgs(decl: FuncDecl): (Tokens, Tokens, Tokens) {
             quote(None<T>)
         }
         exprs += quote(
-            let $(p.identifier) = meta.extract<$ptype>(ctx, $pname $default)
+            let $(p.identifier) = if(isMultipart(name)){
+                multipart<$ptype>(ctx, name)
+            }else{
+                match(None<$ptype>){
+                    case x: ?HttpContext => ctx
+                    case x: ?HttpRequest => ctx.request
+                    case x: ?HttpHeaders => ctx.request.headers
+                    case _: ?HttpResponseBuilder => ctx.responseBuilder
+                    case _ => meta.extract<$ptype>(ctx, $pname $default)
+                }
+            }
         ) +
             `nl`
         let named = try {

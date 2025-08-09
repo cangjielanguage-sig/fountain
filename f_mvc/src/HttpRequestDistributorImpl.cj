@@ -26,8 +26,9 @@ abstract sealed class HttpRequestPathPatterns <: HttpRequestDistributor {
         }
         metas
     }
-    func register(path: String, meta: WSMeta){
-        let requestMeta = RequestMeta(path, WS)
+    func register<T>(path: String, meta: WSMeta<T>): WSMeta<T> where T <: Object {
+        let requestMeta = RequestMeta(path, RequestMethod.WS)
+        requestMeta.pattern = this
         requestMeta.setHandle(meta)
         register(requestMeta)
         meta
@@ -63,6 +64,6 @@ class HttpRequestDistributorImpl <: HttpRequestPathPatterns {
     }
     func generateAndRegisterWSEndPoint<T>(path: String): WSMeta<T> where T <: Object {
         let meta = WSMeta<T>.generate()
-        register(path, meta)
+        register<T>(path, meta)
     }
 }

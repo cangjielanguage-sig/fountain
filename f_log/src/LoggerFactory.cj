@@ -45,7 +45,7 @@ public class LoggerFactory {
         getLogger(TypeInfos.get<O>(), attrs)
     }
     public static func getLogger(typeInfo: TypeInfo, attrs: Array<Attr>): AbstractLogger {
-        getLogger(typeInfo.qualifiedName, attrs)
+        getLogger('std.reflect.TypeInfo.get("${typeInfo.qualifiedName}")', attrs)
     }
     public static func refresh() {
         for ((_, w) in loggers) {

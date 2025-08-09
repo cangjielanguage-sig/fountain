@@ -55,7 +55,7 @@ private func generate(attr: Tokens, input: Tokens): Tokens {
     var metaTokens = quote(
         let metaHandles = HashMap<String, (WSFuncMeta<$klass>) -> Unit>()
     ) + `nl`
-    for(d in klass.body.decls where isPublic(d) && !isStatic(d)) {
+    for(d in decl.body.decls where isPublic(d) && !isStatic(d)) {
         if(let f: FuncDecl <- d){
             var paramTokens = `empty_tokens`
             var factParams = `empty_tokens`
@@ -66,7 +66,14 @@ private func generate(attr: Tokens, input: Tokens): Tokens {
                     `empty_tokens`
                 }
                 paramTokens += quote(
-                    let $(p.identifier) = m.extract<$(p.paramType)>(ctx, $(p.identifier.value), pattern, ws, payload)
+                    let $(p.identifier) = match(None<$(p.paramType)>){
+                        case _: ?HttpContext => ctx
+                        case _: ?HttpRequest => ctx.request
+                        case _: ?HttpHeaders => ctx.request.headers
+                        case _: ?WebSocket => ws
+                        case _: ?Array<Byte> => payload
+                        case _ => m.extract<$(p.paramType)>(ctx, $(p.identifier.value), pattern, ws, payload)
+                    }
                 ) + `nl`
                 if(factParams.size > 0){
                     factParams += `comma`
@@ -81,7 +88,7 @@ private func generate(attr: Tokens, input: Tokens): Tokens {
                 metaHandles[$(f.identifier.value)] = {m => 
                     m.setHandle{endpoint, ctx, pattern, ws, payload => 
                         $paramTokens
-                        endpoint.$(p.identifier)($factParams)
+                        endpoint.$(f.identifier)($factParams)
                     }
                 }
             ) + `nl`
@@ -112,7 +119,7 @@ private func generate(attr: Tokens, input: Tokens): Tokens {
             if(let Some(m) <- meta.pingFunc){
                 metaHandles[m.name](m)
             }
-            meta.handle = {endpoint: T, ctx: HttpContext, pattern: HttpRequestPathPatterns => 
+            meta.setHandle{endpoint, ctx, pattern => 
                 let ws = meta.upgrade(ctx, $upgradeAttrs)
                 meta.exec(endpoint, ctx, pattern, ws)
             }

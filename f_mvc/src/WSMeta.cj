@@ -12,7 +12,7 @@ package f_mvc
 sealed abstract class WSFuncMeta<T> {
     WSFuncMeta(public let name: String, public let mediaType: String, public let responseFrameType: ?WebSocketFrameType){}
     let args = RequestArgMeta()
-    var handle: (T, HttpContext, HttpRequestPathPatterns, WebSocket, Array<Byte>) -> Array<Byte> = {_ => []}
+    var handle = {_: T, _: HttpContext, _: HttpRequestPathPatterns, _: WebSocket, _: Array<Byte> => Array<Byte>()}
 
     public func setHandle<R>(handle: (T, HttpContext, HttpRequestPathPatterns, WebSocket, Array<Byte>) -> R): Unit where R <: DataFields<R> {
         this.handle = {endpoint, ctx, pattern, ws, payload =>
@@ -27,17 +27,10 @@ sealed abstract class WSFuncMeta<T> {
             }
         }
     }
-    public func extract<T>(ctx: HttpContext, name: String, pattern: ?HttpRequestPathPatterns, ws: WebSocket, payload: Array<Byte>): ?T wehre T <: DataFields<T> {
-        match(None<T>){
-            case _: ?HttpContext => ctx
-            case _: ?HttpRequest => ctx.request
-            case _: ?HttpHeaders => ctx.request.headers
-            case _: ?WebSocket => ws
-            case _: ?Array<Byte> => payload
-            case _ => match(args[name]){
-                case x: WSDataFrame => x.extract<T>(payload)
-                case x => x.extract<T>(name, ctx, pattern)
-            }
+    public func extract<T>(ctx: HttpContext, name: String, pattern: HttpRequestPathPatterns, ws: WebSocket, payload: Array<Byte>): ?T where T <: DataFields<T> {
+        match(args[name]){
+            case x: WSDataFrame => x.extract<T>(payload)
+            case x => x.extract<T>(name, ctx, pattern)
         }
     }
 }
@@ -78,7 +71,8 @@ public class WSPingFunc<T> <: WSFuncMeta<T> {
     }
 }
 
-public class WSMeta<T> <: HttpRequestHandler {
+public class WSMeta<T> where T <: Object {
+    private let log = LoggerFactory.getLogger<WSMeta<T>>()
     var pattern = None<HttpRequestPathPatterns>
     private var openMeta_ = None<WSOpenMeta<T>>
     private var closeMeta_ = None<WSCloseMeta<T>>
@@ -90,41 +84,41 @@ public class WSMeta<T> <: HttpRequestHandler {
 
     var handle = {_:T, _: HttpContext, _: HttpRequestPathPatterns => ()}
 
-    public func setHandle<T>(fn: (T, HttpContext, HttpRequestPathPatterns) -> Unit): Unit {
-        handle_ = fn
+    public func setHandle(fn: (T, HttpContext, HttpRequestPathPatterns) -> Unit): Unit {
+        handle = fn
     }
 
-    public prop openMeta: ?WSOpenMeta {
+    public prop openMeta: ?WSOpenMeta<T> {
         get(){
             openMeta_
         }
     }
-    public prop closeMeta: ?WSCloseMeta {
+    public prop closeMeta: ?WSCloseMeta<T> {
         get(){
             closeMeta_
         }
     }
-    public prop textMeta: ?WSTextMeta {
+    public prop textMeta: ?WSTextMeta<T> {
         get(){
             textMeta_
         }
     }
-    public prop binaryMeta: ?WSBinaryMeta {
+    public prop binaryMeta: ?WSBinaryMeta<T> {
         get(){
             binaryMeta_
         }
     }
-    public prop pingMeta: ?WSPingMeta {
+    public prop pingMeta: ?WSPingMeta<T> {
         get(){
             pingMeta_
         }
     }
-    public prop pongMeta: ?WSPongMeta {
+    public prop pongMeta: ?WSPongMeta<T> {
         get(){
             pongMeta_
         }
     }
-    public prop pingFunc: ?WSPingFunc {
+    public prop pingFunc: ?WSPingFunc<T> {
         get(){
             pingFunc_
         }
@@ -140,13 +134,13 @@ public class WSMeta<T> <: HttpRequestHandler {
                                     userFunc: userFunc)
     }
     public static func writeText<T>(ws: WebSocket, data: T, mediaType!: String): Unit where T <: DataFields<T> {
-        ws.write(TextWebFrame, MediaTypes.parse(mediaType).toDataFields(data))
+        ws.write(TextWebFrame, MediaTypes.parse(mediaType).fromDataFields(data))
     }
     public static func writeText(ws: WebSocket, data: String, charset!: Charset): Unit {
         ws.write(TextWebFrame, charset.newEncoder().encode(data))
     }
     public static func writeBinary<T>(ws: WebSocket, data: T, mediaType!: String): Unit where T <: DataFields<T> {
-        writeBinary(ws, MediaTypes.parse(mediaType).toDataFields(data))
+        writeBinary(ws, MediaTypes.parse(mediaType).fromDataFields(data))
     }
     public static func writeBinary(ws: WebSocket, data: Array<UInt8>): Unit {
         ws.write(BinaryWebFrame, data)
@@ -156,9 +150,9 @@ public class WSMeta<T> <: HttpRequestHandler {
         let pingTimer = if(let Some(f) <- pingFunc_) {
             let duration = f.duration
             let h = f.handle
-            Timer.repeat(duration, duration){
-                ws.writePingFrame(h(endpoint, ctx, pattern, []))
-            }
+            Timer.repeat(duration, duration, {=>
+                ws.writePingFrame(h(endpoint, ctx, pattern, ws, []))
+            })
         }else{
             None<Timer>
         }
@@ -168,7 +162,7 @@ public class WSMeta<T> <: HttpRequestHandler {
             if(let Some(ft) <- frameType){
                 bytes.add(all: payload)
                 if(fin){
-                    func doExec(meta: ?WSFuncMeta, metaType: String){
+                    func doExec<M>(meta: ?M, metaType: String) where M <: WSFuncMeta<T>  {
                         let m = meta.getOrThrow{WSException('${metaType} meta for ws is not specified')}
                         let resp = m.handle(endpoint, ctx, pattern, ws, bytes.unsafeData())
                         match(m.responseFrameType){
@@ -179,12 +173,11 @@ public class WSMeta<T> <: HttpRequestHandler {
                             case _ => throw WSException('${ctx.request.url} for ${m.name} is not be specified frame type')
                         }
                     }
-                    let (meta, metaType) = match(ft){
-                        case TextWebFrame => (textMeta_, "text")
-                        case BinaryWebFrame => (binaryMeta_, "binary")
-                        case _ => return
+                    match(ft){
+                        case TextWebFrame => doExec(textMeta_, "text")
+                        case BinaryWebFrame => doExec(binaryMeta_, "binary")
+                        case _ => return bytes
                     }
-                    doExec(meta, metaType)
                     return ArrayList<Byte>()
                 }
             }
@@ -223,18 +216,19 @@ public class WSMeta<T> <: HttpRequestHandler {
                     pingTimer?.cancel()
                     ws.closeConn()
                     return
+                case _ => log.error('unsupport frame ${frame.frameType}')
             }
         }
     }
     
-    private func doExtractArgOption<T, M>(meta: ?M, ctx: HttpContext, name: String): ?T where T <: DataFields<T>, M <: WSFuncMeta {
-        meta?.args.extract<T>(ctx, name, pattern)
+    private func doExtractArgOption<P, M>(meta: ?M, ctx: HttpContext, name: String): ?P where P <: DataFields<P>, M <: WSFuncMeta<T> {
+        meta?.args.extract<P>(ctx, name, pattern)
     }
-    private func doExtractArg<T, M>(meta: ?M, ctx: HttpContext, name: String): T where T <: DataFields<T>, M <: WSFuncMeta {
-        doExtractArgOption<T, M>(meta, ctx, name).getOrThrow()
+    private func doExtractArg<P, M>(meta: ?M, ctx: HttpContext, name: String): P where P <: DataFields<P>, M <: WSFuncMeta<T> {
+        doExtractArgOption<P, M>(meta, ctx, name).getOrThrow()
     }
-    private func doExtractArg<T, M>(meta: ?M, ctx: HttpContext, name: String, default: T): T where T <: DataFields<T>, M <: WSFuncMeta {
-        doExtractArgOption<T, M>(meta, ctx, name) ?? default
+    private func doExtractArg<P, M>(meta: ?M, ctx: HttpContext, name: String, default: P): P where P <: DataFields<P>, M <: WSFuncMeta<T> {
+        doExtractArgOption<P, M>(meta, ctx, name) ?? default
     }
 
     public func extractOpenArg<T>(ctx: HttpContext, name: String): T where T <: DataFields<T> {
@@ -274,32 +268,7 @@ public class WSMeta<T> <: HttpRequestHandler {
         doExtractArg(pongMeta_, ctx, name, default)
     }
 
-    private func setHandle<T, R>(meta: ?T, handle: (HttpContext, Array<Byte>) -> R): Unit where R <: DataFields<R> {
-        meta.getOrThrow{WSException('${TypeInfos.get<T>()} is none')}.setHandle<R>(handle)
-    }
-    public func setOpenHandle<R>(handle: (HttpContext, Array<Byte>) -> Unit): Unit where R <: DataFields<R> {
-        setHandle<WSOpenMeta, R>(openMeta_, handle)
-    }
-    public func setCloseHandle<R>(handle: (HttpContext, Array<Byte>) -> Unit): Unit where R <: DataFields<R> {
-        setHandle<WSCloseMeta, R>(closeMeta_, handle)
-    }
-    public func setTextHandle<R>(handle: (HttpContext, Array<Byte>) -> Unit): Unit where R <: DataFields<R> {
-        setHandle<WSTextMeta, R>(textMeta_, handle)
-    }
-    public func setBinaryHandle<R>(handle: (HttpContext, Array<Byte>) -> Unit): Unit where R <: DataFields<R> {
-        setHandle<WSBinaryMeta, R>(binaryMeta_, handle)
-    }
-    public func setPingHandle<R>(handle: (HttpContext, Array<Byte>) -> Unit): Unit where R <: DataFields<R> {
-        setHandle<WSPingMeta, R>(pingMeta_, handle)
-    }
-    public func setPongHandle<R>(handle: (HttpContext, Array<Byte>) -> Unit): Unit where R <: DataFields<R> {
-        setHandle<WSPongMeta, R>(pongMeta_, handle)
-    }
-    public func setPingFunc<R>(handle: (HttpContext) -> R): Unit where R <: DataFields<R> {
-        this.pingFunc_?.setPingHandle(handle)
-    }
-
-    public static func generate() : WSMeta<T> where T <: Object {
+    public static func generate() : WSMeta<T> {
         let endpointClass = TypeInfo.of<T>()
         let meta = WSMeta<T>()
         for(function in endpointClass.instanceFunctions) {
@@ -327,11 +296,11 @@ public class WSMeta<T> <: HttpRequestHandler {
                 m
             }else if(let Some(annotation) <- function.findAnnotation<OnWSPong>()){
                 let m = WSPongMeta<T>(funcName, '')
-                meta.pingMeta_ = m
+                meta.pongMeta_ = m
                 m
             }else if(let Some(annotation) <- function.findAnnotation<WSPing>()){
                 let f = WSPingFunc<T>(funcName, annotation.mediaType)
-                f.duration = annotation.duration
+                f.duration = Duration.parse(annotation.duration)
                 meta.pingFunc_ = f
                 f
             }else{
