@@ -91,14 +91,14 @@ private func generateArgs(decl: FuncDecl): (Tokens, Tokens, Tokens) {
         }
         exprs += quote(
             let $(p.identifier) = if(isMultipart(name)){
-                multipart<$ptype>(ctx, name)
+                (multipart<$ptype>(ctx, name) as $ptype).getOrThrow()
             }else{
                 match(None<$ptype>){
-                    case x: ?HttpContext => ctx
-                    case x: ?HttpRequest => ctx.request
-                    case x: ?HttpHeaders => ctx.request.headers
-                    case _: ?HttpResponseBuilder => ctx.responseBuilder
-                    case _ => meta.extract<$ptype>(ctx, $pname $default)
+                    case x: ?HttpContext => (ctx as $ptype).getOrThrow()
+                    case x: ?HttpRequest => (ctx.request as $ptype).getOrThrow()
+                    case x: ?HttpHeaders => (ctx.request.headers as $ptype).getOrThrow()
+                    case _: ?HttpResponseBuilder => (ctx.responseBuilder as $ptype).getOrThrow()
+                    case _ => (meta.extract<$ptype>(ctx, $pname $default) as $ptype).getOrThrow()
                 }
             }
         ) +

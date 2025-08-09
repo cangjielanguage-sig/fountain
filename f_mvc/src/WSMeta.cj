@@ -148,6 +148,10 @@ public class WSMeta<T> where T <: Object {
     public static func writeBinary<T>(ws: WebSocket, data: T, mediaType!: String): Unit where T <: DataFields<T> {
         writeBinary(ws, MediaTypes.parse(mediaType).fromDataFields(data))
     }
+    public static func close(ws: WebSocket, status!: ?UInt16 = None, reason!: ?String = ''): Unit {
+        ws.writeCloseFrame(status: status, reason: reason)
+        ws.close()
+    }
     public static func writeBinary(ws: WebSocket, data: Array<UInt8>): Unit {
         ws.write(BinaryWebFrame, data)
     }
@@ -190,39 +194,49 @@ public class WSMeta<T> where T <: Object {
             bytes
         }
         while(let frame <- ws.read()){
-            match(frame.frameType){
-                case TextWebFrame | BinaryWebFrame =>
-                    if(!bytes.isEmpty()){
-                        throw WSException('current payload is not empty')
-                    }
-                    frameType = frame.frameType
-                    bytes = doExec(frame.payload, frame.fin, frameType, bytes)
-                case ContinuationWebFrame =>
-                    bytes = doExec(frame.payload, frame.fin, frameType, bytes)
-                case PingWebFrame => 
-                    if(let Some(ping) <- pingMeta_){
-                        let bytes = ping.handle(endpoint, ctx, pattern, ws, frame.payload)
-                        ws.writePongFrame(bytes)
-                    }else{
-                        ws.writePongFrame(frame.payload)
-                    }
-                case PongWebFrame =>
-                    if(let Some(pong) <- pongMeta_){
-                        pong.handle(endpoint, ctx, pattern, ws, frame.payload)
-                    }
-                case CloseWebFrame =>
-                    if(let Some(c) <- closeMeta_){
-                        let bytes = c.handle(endpoint, ctx, pattern, ws, frame.payload)
+            try{
+                match(frame.frameType){
+                    case TextWebFrame | BinaryWebFrame =>
                         if(!bytes.isEmpty()){
-                            ws.write(CloseWebFrame, bytes)
+                            throw WSException('current payload is not empty')
                         }
-                    }else{
-                        ws.write(CloseWebFrame, frame.payload)
-                    }
-                    pingTimer?.cancel()
-                    ws.closeConn()
-                    return
-                case _ => log.error('unsupport frame ${frame.frameType}')
+                        frameType = frame.frameType
+                        bytes = doExec(frame.payload, frame.fin, frameType, bytes)
+                    case ContinuationWebFrame =>
+                        bytes = doExec(frame.payload, frame.fin, frameType, bytes)
+                    case PingWebFrame => 
+                        if(let Some(ping) <- pingMeta_){
+                            let bytes = ping.handle(endpoint, ctx, pattern, ws, frame.payload)
+                            ws.writePongFrame(bytes)
+                        }else{
+                            ws.writePongFrame(frame.payload)
+                        }
+                    case PongWebFrame =>
+                        if(let Some(pong) <- pongMeta_){
+                            pong.handle(endpoint, ctx, pattern, ws, frame.payload)
+                        }
+                    case CloseWebFrame =>
+                        try{
+                            if(let Some(c) <- closeMeta_){
+                                let bytes = c.handle(endpoint, ctx, pattern, ws, frame.payload)
+                                if(!bytes.isEmpty()){
+                                    ws.write(CloseWebFrame, bytes)
+                                }
+                            }else{
+                                ws.write(CloseWebFrame, frame.payload)
+                            }
+                        }catch(e: Exception){
+                            log.error('error on handling close ${toBase64String(frame.payload)}', e)
+                        }
+                        pingTimer?.cancel()
+                        ws.closeConn()
+                        return
+                    case _ => 
+                        log.error('unsupport frame ${frame.frameType}')
+                        ws.closeConn()
+                }
+            }catch(e: Exception){
+                log.error('error on handling ${frame.frameType}; frame: ${toBase64String(frame.payload)}', e)
             }
         }
     }

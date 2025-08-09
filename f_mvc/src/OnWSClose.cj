@@ -15,7 +15,10 @@ limitations under the License.
 */
 package f_mvc
 
+/**
+ * 被此注解修饰的函数只能接收WSCloseFrame实例做参数
+ */
 @Annotation[target:[MemberFunction]]
 public class  OnWSClose {
-    public const OnWSClose(public let mediaType: String){}
+    public const init(){}
 }

@@ -59,7 +59,7 @@ private func generate(attr: Tokens, input: Tokens): Tokens {
     }
     let klass = decl.identifier
     var metaTokens = quote(
-        let metaHandles = HashMap<String, (WSFuncMeta<$klass>) -> Unit>()
+        let metaHandles = HashMap<String, (WSFuncMeta<$klass>, Bool) -> Unit>()
     ) + `nl`
     for(d in decl.body.decls where isPublic(d) && !isStatic(d)) {
         if(let f: FuncDecl <- d){
@@ -73,12 +73,13 @@ private func generate(attr: Tokens, input: Tokens): Tokens {
                 }
                 paramTokens += quote(
                     let $(p.identifier) = match(None<$(p.paramType)>){
-                        case _: ?HttpContext => ctx
-                        case _: ?HttpRequest => ctx.request
-                        case _: ?HttpHeaders => ctx.request.headers
-                        case _: ?WebSocket => ws
-                        case _: ?Array<Byte> => payload
-                        case _ => m.extract<$(p.paramType)>(ctx, $(p.identifier.value), pattern, ws, payload)
+                        case _: ?HttpContext => (ctx as $(p.paramType)).getOrThrow()
+                        case _: ?HttpRequest => (ctx.request as $(p.paramType)).getOrThrow()
+                        case _: ?HttpHeaders => (ctx.request.headers as $(p.paramType)).getOrThrow()
+                        case _: ?WebSocket => (ws as $(p.paramType)).getOrThrow()
+                        case _: ?Array<Byte> => (payload as $(p.paramType)).getOrThrow()
+                        case _ where cf => (WSCloseFrame(payload) as $(p.paramType)).getOrThrow()
+                        case _ => (m.extract<$(p.paramType)>(ctx, $(p.identifier.value), pattern, ws, payload) as $(p.paramType)).getOrThrow()
                     }
                 ) + `nl`
                 if(factParams.size > 0){
@@ -91,7 +92,7 @@ private func generate(attr: Tokens, input: Tokens): Tokens {
                 }
             }
             metaTokens += quote(
-                metaHandles[$(f.identifier.value)] = {m => 
+                metaHandles[$(f.identifier.value)] = {m, cf => 
                     m.setHandle{endpoint, ctx, pattern, ws, payload => 
                         $paramTokens
                         endpoint.$(f.identifier)($factParams)
@@ -105,25 +106,25 @@ private func generate(attr: Tokens, input: Tokens): Tokens {
             $metaTokens
             let meta = MVCStarter.generateAndRegisterWSEndPoint<$klass>($path)
             if(let Some(m) <- meta.openMeta){
-                metaHandles[m.name](m)
+                metaHandles[m.name](m, false)
             }
             if(let Some(m) <- meta.closeMeta){
-                metaHandles[m.name](m)
+                metaHandles[m.name](m, true)
             }
             if(let Some(m) <- meta.textMeta){
-                metaHandles[m.name](m)
+                metaHandles[m.name](m, false)
             }
             if(let Some(m) <- meta.binaryMeta){
-                metaHandles[m.name](m)
+                metaHandles[m.name](m, false)
             }
             if(let Some(m) <- meta.pingMeta){
-                metaHandles[m.name](m)
+                metaHandles[m.name](m, false)
             }
             if(let Some(m) <- meta.pongMeta){
-                metaHandles[m.name](m)
+                metaHandles[m.name](m, false)
             }
             if(let Some(m) <- meta.pingFunc){
-                metaHandles[m.name](m)
+                metaHandles[m.name](m, false)
             }
             meta.setHandle{endpoint, ctx, pattern => 
                 let ws = meta.upgrade(ctx, $upgradeAttrs)
