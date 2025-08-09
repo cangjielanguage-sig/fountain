@@ -78,7 +78,7 @@ private func generate(attr: Tokens, input: Tokens): Tokens {
                 }
             }
             metaTokens += quote(
-                metaHandles[] = {m => 
+                metaHandles[$(f.identifier.value)] = {m => 
                     m.setHandle{endpoint, ctx, pattern, ws, payload => 
                         $paramTokens
                         endpoint.$(p.identifier)($factParams)
@@ -92,25 +92,25 @@ private func generate(attr: Tokens, input: Tokens): Tokens {
             $metaTokens
             let meta = MVCStarter.generateAndRegisterWSEndPoint<$klass>($path)
             if(let Some(m) <- meta.openMeta){
-                metaHandles[m.name](meta)
+                metaHandles[m.name](m)
             }
             if(let Some(m) <- meta.closeMeta){
-                metaHandles[m.name](meta)
+                metaHandles[m.name](m)
             }
             if(let Some(m) <- meta.textMeta){
-                metaHandles[m.name](meta)
+                metaHandles[m.name](m)
             }
             if(let Some(m) <- meta.binaryMeta){
-                metaHandles[m.name](meta)
+                metaHandles[m.name](m)
             }
             if(let Some(m) <- meta.pingMeta){
-                metaHandles[m.name](meta)
+                metaHandles[m.name](m)
             }
             if(let Some(m) <- meta.pongMeta){
-                metaHandles[m.name](meta)
+                metaHandles[m.name](m)
             }
             if(let Some(m) <- meta.pingFunc){
-                metaHandles[m.name](meta)
+                metaHandles[m.name](m)
             }
             meta.handle = {endpoint: T, ctx: HttpContext, pattern: HttpRequestPathPatterns => 
                 let ws = meta.upgrade(ctx, $upgradeAttrs)
