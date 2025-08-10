@@ -17,8 +17,9 @@ package f_collection
 
 import f_exception.UnreachableException
 
-class LinkedNodeIterator<T> <: Iterator<T> {
+public class LinkedNodeIterator<T> <: Iterator<T> {
     private let reversed: Bool
+    private var node = None<ValueNode<T>>
     LinkedNodeIterator(private var current: Node<T>) {
         this.current = match (current) {
             case n: HeadNode<T> =>
@@ -38,6 +39,7 @@ class LinkedNodeIterator<T> <: Iterator<T> {
     public func next(): Option<T> {
         match (current) {
             case n: ValueNode<T> =>
+                node = n
                 let val = n.value
                 current = if (reversed) {
                     n.prev
@@ -45,6 +47,19 @@ class LinkedNodeIterator<T> <: Iterator<T> {
                     n.next
                 }
                 val
+            case _ => 
+                node = None<ValueNode<T>>
+                None<T>
+        }
+    }
+    /**
+     * 删除当前节点
+     */
+    public func remove(): ?T {
+        match(node){
+            case Some(n) => 
+                n.remove()
+                n.value
             case _ => None<T>
         }
     }

@@ -46,8 +46,8 @@ public class WSOpenMeta<T> <: WSFuncMeta<T> {
     }
 }
 public class WSCloseMeta<T> <: WSFuncMeta<T> {
-    init(name: String, mediaType: String){
-        super(name, mediaType, WebSocketFrameType.CloseWebFrame)
+    init(name: String){
+        super(name, '', WebSocketFrameType.CloseWebFrame)
     }
 }
 public class WSTextMeta<T> <: WSFuncMeta<T> {
@@ -148,9 +148,9 @@ public class WSMeta<T> where T <: Object {
     public static func writeBinary<T>(ws: WebSocket, data: T, mediaType!: String): Unit where T <: DataFields<T> {
         writeBinary(ws, MediaTypes.parse(mediaType).fromDataFields(data))
     }
-    public static func close(ws: WebSocket, status!: ?UInt16 = None, reason!: ?String = ''): Unit {
+    public static func close(ws: WebSocket, status!: ?UInt16 = None, reason!: String = ''): Unit {
         ws.writeCloseFrame(status: status, reason: reason)
-        ws.close()
+        ws.closeConn()
     }
     public static func writeBinary(ws: WebSocket, data: Array<UInt8>): Unit {
         ws.write(BinaryWebFrame, data)
@@ -299,7 +299,7 @@ public class WSMeta<T> where T <: Object {
                 meta.openMeta_ = m
                 m
             }else if(let Some(annotation) <- function.findAnnotation<OnWSClose>()){
-                let m = WSCloseMeta<T>(funcName, annotation.mediaType)
+                let m = WSCloseMeta<T>(funcName)
                 meta.closeMeta_ = m
                 m
             }else if(let Some(annotation) <- function.findAnnotation<OnWSBinary>()){

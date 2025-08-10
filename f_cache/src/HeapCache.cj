@@ -228,9 +228,7 @@ public class HeapCache<V> where V <: Object {
         removeIf {k: String, p: Priority<V> => predicate(k, p.load())}
     }
     private func removeIf(predicate: (String, Priority<V>) -> Bool): Unit {
-        for ((k, p) in store where predicate(k, p)) {
-            remove(k)
-        }
+        store.removeIf(predicate)
     }
     public prop size: Int64 {
         get() {

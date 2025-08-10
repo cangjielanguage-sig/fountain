@@ -172,7 +172,7 @@ class ConcHashMapIterator<V> <: Iterator<(String, V)> {
 
 class ConcHashMap<V> <: Collection<(String, V)> {
     static const DEFAULT_CONCURRENCY = 16
-    private var size_ = AtomicInt64(0)
+    private let size_ = AtomicInt64(0)
     private let hashMask: Int64
 
     private ConcHashMap(let segments: Array<SyncLinkedHashMap<V>>, let concurrency: Int64) {
@@ -302,6 +302,18 @@ class ConcHashMap<V> <: Collection<(String, V)> {
     func removeAll(keys: Collection<String>): Unit {
         for (key in keys) {
             remove(key)
+        }
+    }
+    /**
+     * 
+     */
+    func removeIf(predicate: (String, V) -> Bool): Unit {
+        for(segment in segments){
+            segment.removeIf{k, v => 
+                let r = predicate(k, v)
+                decrSize()
+                r
+            }
         }
     }
 

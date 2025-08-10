@@ -90,7 +90,7 @@ public class LinkedHashMap<K, V> <: Map<K, V> where K <: Hashable & Equatable<K>
      * 返回实例类型的迭代器
      * 返回值 Iterator<(K,V)> - 返回实例类型的迭代器。
      */
-    public func iterator(): Iterator<(K, V)> {
+    public func iterator(): LinkedNodeIterator<(K, V)> {
         return LinkedNodeIterator<(K, V)>(head)
     }
     private func turnToTail(entry: ValueNode<(K, V)>) {
@@ -263,11 +263,13 @@ public class LinkedHashMap<K, V> <: Map<K, V> where K <: Hashable & Equatable<K>
      * 参数 predicate - 传递一个 lambda 表达式进行判断
      */
     public func removeIf(predicate: (K, V) -> Bool): Unit {
-        let rm = ArrayList<K>()
-        for ((k, v) in iterator() where predicate(k, v)) {
-            rm.add(k)
+        map.removeIf{k, n => 
+            let r = predicate(k, n.value[1])
+            if(r){
+                n.remove()
+            }
+            r
         }
-        remove(all: rm)
     }
 
     /**

@@ -62,6 +62,11 @@ class SyncLinkedHashMap<V> <: Collection<(String, V)> {
             map.remove(key)
         }
     }
+    func removeIf(predicate: (String, V) -> Bool): Unit {
+        synchronized(wl){
+            map.removeIf(predicate)
+        }
+    }
     public prop size: Int64 {
         get() {
             synchronized(rl) {
