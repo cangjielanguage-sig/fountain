@@ -29,7 +29,7 @@ public class Collection_test {
     }
     private func createMap(map: Map<Int64, Int64>, array: Array<Int64>): Map<Int64, Int64> {
         for (i in array) {
-            map.put(i, i)
+            map.add(i, i)
         }
         map
     }
@@ -40,7 +40,7 @@ public class Collection_test {
     private func createHashMap(array: Array<Int64>): Map<Int64, Int64> {
         let map = HashMap<Int64, Int64>()
         for (i in array) {
-            map.put(i, i)
+            map.add(i, i)
         }
         map
     }
@@ -76,10 +76,10 @@ public class Collection_test {
         let list = ArrayList<Int64>(array)
         for (i in array) {
             let r = rand.nextInt64(array.size)
-            let v = list.remove(r)
-            list.append(v)
+            let v = list.remove(at: r)
+            list.add(v)
             map.remove(v)
-            map.put(v, v)
+            map.add(v, v)
         }
         @Assert(map.size, list.size)
         var i = 0
@@ -91,10 +91,10 @@ public class Collection_test {
     @TestCase
     public func testLinkedHashMap2(): Unit {
         let map = LinkedHashMap<Int64, Int64>()
-        map.put(1, 1)
-        map.put(2, 2)
-        map.put(3, 3)
-        map.put(2, 2)
+        map.add(1, 1)
+        map.add(2, 2)
+        map.add(3, 3)
+        map.add(2, 2)
         map.get(1)
         let arr = [3, 2, 1]
         @Assert(arr.size, map.size)
@@ -107,10 +107,10 @@ public class Collection_test {
     @TestCase
     public func testLinkedHashMap3(): Unit {
         let map = LinkedHashMap<Int64, Int64>(3, true)
-        map.put(1, 1)
-        map.put(2, 2)
-        map.put(3, 3)
-        map.put(4, 4)
+        map.add(1, 1)
+        map.add(2, 2)
+        map.add(3, 3)
+        map.add(4, 4)
         let arr = [2, 3, 4]
         @Assert(arr.size, map.size)
         var i = 0
@@ -122,10 +122,10 @@ public class Collection_test {
     @TestCase
     public func testLinkedHashMap4(): Unit {
         let map = LinkedHashMap<Int64, Int64>(3, true)
-        map.put(1, 1)
-        map.put(2, 2)
-        map.put(3, 3)
-        map.put(2, 2)
+        map.add(1, 1)
+        map.add(2, 2)
+        map.add(3, 3)
+        map.add(2, 2)
         let arr = [1, 3, 2]
         @Assert(arr.size, map.size)
         var i = 0
@@ -140,13 +140,13 @@ public class Collection_test {
         let shuffled = shuffleArray(array)
         let queue = PriorityQueue<Int64>.create<Int64>()
         for (v in shuffled) {
-            queue.offer(v)
+            queue.add(v)
         }
         @Assert(array.size, queue.size)
         println(queue.toArray())
         var i = 0
         while (!queue.isEmpty()) {
-            let val = queue.poll().getOrThrow()
+            let val = queue.remove().getOrThrow()
             @Assert(array[i], val)
             i++
         }
@@ -161,12 +161,12 @@ public class Collection_test {
             overSizePolicy: GrowSizePolicy<Int64, PriorityQueue<Int64>>()
         )
         for (v in shuffled) {
-            queue.offer(v)
+            queue.add(v)
         }
         @Assert(array.size, queue.size)
         var i = 0
         while (!queue.isEmpty()) {
-            @Assert(array[i], queue.poll().getOrThrow())
+            @Assert(array[i], queue.remove().getOrThrow())
             i++
         }
     }
@@ -176,13 +176,13 @@ public class Collection_test {
         let shuffled = shuffleArray(array)
         let queue = PriorityQueue<Int64>.create<Int64>()
         for (v in shuffled) {
-            queue.offer(v)
+            queue.add(v)
         }
         queue.removeIf {v => v % 2 == 0}
         @Assert(queue.size, 5)
         var i = 0
         while (!queue.isEmpty()) {
-            @Assert([1,3,5,7,9][i], queue.poll().getOrThrow())
+            @Assert([1,3,5,7,9][i], queue.remove().getOrThrow())
             i++
         }
     }
