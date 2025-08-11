@@ -20,8 +20,8 @@ public import std.math.numeric.*
 
 /**可执行加法运算*/
 
-public interface Number<T> <: Negativable<T> & Addable<T> & Subable<T> & Mulable<T> & Divable<T> & Cmpable<T> & Eqable<T>
-    & ToString where T <: Number<T> & ToString {
+public interface Number<T> <: Negativable<T> & Addable<T> & Subable<T> & Mulable<T> & Divable<T> & Comparable<T> & Hashable
+    & ToString where T <: Number<T> & ToString & Comparable<T> & Hashable{
     static prop BYTES: Int64
 }
 
