@@ -217,9 +217,11 @@ public class MMapFile <: Resource & IOStream {
             unsafe{
                 let pr = pointer.asResource()
                 munmap(pointer, UIntNative(length))
-                if(!pr.isClosed()){
-                    pr.close()
-                }
+                try{
+                    if(!pr.isClosed()){
+                        pr.close()
+                    }
+                }catch(_){}
             }
         }
     }
