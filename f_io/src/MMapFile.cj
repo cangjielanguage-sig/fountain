@@ -216,11 +216,15 @@ public class MMapFile <: Resource & IOStream {
     private func isNullPointer(pointer: CPointer<Unit>){
         pointer.toUIntNative() == NULL_POINTER.toUIntNative()
     }
-    public func isReadable(){
-        !isNullPointer(readPointer)
+    public prop isReadable: Bool {
+        get(){
+            !isNullPointer(readPointer)
+        }
     }
-    public func isWritable(){
-        !isNullPointer(writePointer)
+    public prop isWritable: Bool{
+        get(){
+            !isNullPointer(writePointer)
+        }
     }
     private func unmap(pointer: CPointer<Unit>, length: Int64){
         if(!isNullPointer(pointer)){
