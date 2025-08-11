@@ -78,6 +78,9 @@ public enum MMapProt {
             }
         }
     }
+    operator func &(prot: IntNative): Bool {
+        (this.value & prot) != 0
+    }
     public operator func |(other: MMapProt): Array<MMapProt> {
         [this, other]
     }
@@ -175,45 +178,52 @@ public class MMapFile <: Resource & IOStream {
     private var writeStart = 0i64
     private var dirtyStart = 0i64// 脏数据起始位置，相对于文件开头是offset + dirtyStart
     private var dirtyBytes = 0i64// 脏数据大小
-    private var lastSync = MonoTime.now()
-    private var syncTimer: Timer = ZERO_TIMER
     private var factReadMapLength = 0i64
     public MMapFile(
         private let file: File,
         private let prots: Array<MMapProt>,
         private let offset!: Int64 = 0,
-        private let mapLength!: Int64 = DEFAULT_MMAP_BYTES,
-        private let syncBytes!: Int64 = DEFAULT_MMAP_BYTES,
-        private let syncDuration!: Duration = Duration.second
+        private let mapLength!: Int64 = DEFAULT_MMAP_BYTES
     ){
         this.fd = file.fileDescriptor.fileHandle
-        factReadMapLength = if(file.length < offset + mapLength){
-            file.length - offset
-        }else{
-            mapLength
-        }
-        readStart = offset
-        writeStart = offset
-        writePointer = map(offset, mapLength)
-        readPointer = map(offset, factReadMapLength)
-        syncTimer = Timer.repeat(syncDuration, syncDuration, {=>
-            try{
-                sync()
-            }catch(e: Exception){
-                e.printStackTrace()
+        let protBits = prots.combine()
+        if(MMapProt.Read & protBits){
+            factReadMapLength = if(file.length < offset + mapLength){
+                file.length - offset
+            }else{
+                mapLength
             }
-        })
-    }
-    public func isClosed(){
-        file.isClosed()
-    }
-    private func map(offset: Int64, length: Int64){
-        unsafe{
-            mmap(NULL_POINTER, UIntNative(length), prots.combine(), MMapFlag.Shared.value, fd, IntNative(offset))
+            readStart = offset
+            readPointer = mapRead(offset, factReadMapLength)
         }
+        if(MMapProt.Write & protBits){
+            writeStart = offset
+            writePointer = mapWrite(offset, mapLength)
+        }
+    }
+    private func mapRead(offset: Int64, length: Int64){
+        map(offset, length, MMapProt.Read.value)
+    }
+    private func mapWrite(offset: Int64, length: Int64){
+        map(offset, length, MMapProt.Write.value)
+    }
+    private func map(offset: Int64, length: Int64, prots: IntNative){
+        unsafe{
+            mmap(NULL_POINTER, UIntNative(length), prots, MMapFlag.Shared.value, fd, IntNative(offset))
+        }
+    }
+
+    private func isNullPointer(pointer: CPointer<Unit>){
+        pointer.toUIntNative() == NULL_POINTER.toUIntNative()
+    }
+    public func isReadable(){
+        !isNullPointer(readPointer)
+    }
+    public func isWritable(){
+        !isNullPointer(writePointer)
     }
     private func unmap(pointer: CPointer<Unit>, length: Int64){
-        if(pointer.toUIntNative() != NULL_POINTER.toUIntNative()){
+        if(!isNullPointer(pointer)){
             unsafe{
                 let pr = pointer.asResource()
                 munmap(pointer, UIntNative(length))
@@ -233,7 +243,6 @@ public class MMapFile <: Resource & IOStream {
     public func sync(){
         if(dirtyBytes > 0){
             sync(writePointer, dirtyBytes)
-            lastSync = MonoTime.now()
             dirtyStart += dirtyBytes
             dirtyBytes = 0
         }
@@ -261,8 +270,10 @@ public class MMapFile <: Resource & IOStream {
             writeStart + writeOffset_
         }
     }
+    public func isClosed(){
+        file.isClosed()
+    }
     public func close(){
-        syncTimer.cancel()
         var ex = None<MMapException>
         try{
             sync()
@@ -311,7 +322,7 @@ public class MMapFile <: Resource & IOStream {
         unmap(writePointer, this.mapLength)
         file.seek(Begin(offset))
         writeStart = offset
-        writePointer = map(offset, mapLength)
+        writePointer = mapWrite(offset, mapLength)
         writeOffset_ = 0
     }
     public func seekRead(offset: Int64): Unit {
@@ -326,7 +337,7 @@ public class MMapFile <: Resource & IOStream {
         unmap(readPointer, this.factReadMapLength)
         factReadMapLength = len
         readStart = offset
-        readPointer = map(offset, len)
+        readPointer = mapRead(offset, len)
         readOffset_ = 0
     }
     public func read(buffer: Array<Byte>): Int64 {
@@ -367,9 +378,7 @@ public class MMapFile <: Resource & IOStream {
                 dirtyBytes++
             }
         }
-        if(dirtyBytes > syncBytes){
-            sync()
-        }
+        sync()
     }
 }
 
@@ -377,11 +386,10 @@ public interface ToMMap {
     /**
      * 用此函数创建的内存映射文件只有读写两个prot，与当前File实例的可读可写属性一致
      */
-    func mmap(offset: Int64, mapLength: Int64, syncBytes!: Int64, syncDuration!: Duration): MMapFile
+    func mmap(offset: Int64, mapLength: Int64): MMapFile
 }
 extend File <: ToMMap {
-    public func mmap(offset: Int64, mapLength: Int64, 
-                     syncBytes!: Int64 = DEFAULT_MMAP_BYTES, syncDuration!: Duration = Duration.second): MMapFile {
+    public func mmap(offset: Int64, mapLength: Int64): MMapFile {
         let prots = if(this.canRead() && this.canWrite()){
             [MMapProt.Read, MMapProt.Write]
         }else if(this.canRead()){
@@ -391,6 +399,6 @@ extend File <: ToMMap {
         }else{
             throw IOException("file ${canonicalize(this.info.path)} cannot be read and written")
         }
-        MMapFile(this, prots, offset: offset, mapLength: mapLength, syncBytes: syncBytes, syncDuration: syncDuration)
+        MMapFile(this, prots, offset: offset, mapLength: mapLength)
     }
 }
