@@ -227,16 +227,17 @@ public class MMapFile <: Resource & IOStream {
         }
     }
     private func unmap(pointer: CPointer<Unit>, length: Int64){
-        if(!isNullPointer(pointer)){
-            unsafe{
-                let pr = pointer.asResource()
-                munmap(pointer, UIntNative(length))
-                try{
-                    if(!pr.isClosed()){
-                        pr.close()
-                    }
-                }catch(_){}
-            }
+        if(isNullPointer(pointer)){
+            return
+        }
+        unsafe{
+            let pr = pointer.asResource()
+            munmap(pointer, UIntNative(length))
+            try{
+                if(!pr.isClosed()){
+                    pr.close()
+                }
+            }catch(_){}
         }
     }
     private func sync(pointer: CPointer<Unit>, length: Int64){
@@ -311,12 +312,23 @@ public class MMapFile <: Resource & IOStream {
             file.length
         }
     }
+    private func checkWritable(){
+        if(!isWritable){
+            throw MMapException('current MMapFile is not writable ${file.path}')
+        }
+    }
+    private func checkReadable(){
+        if(!isReadable){
+            throw MMapException('current MMapFile is not readable ${file.path}')
+        }
+    }
     /**
      * seek 时如果允许映射同步到磁盘，会先同步数据再创建新映射，新的映射指针指向seek参数指定的偏移量。
      * offset 是从当前打开文件开头的偏移量，文件也会跟随执行seek偏移
      * length 是新的映射内存字节数
      */
     public func seekWrite(offset: Int64): Unit {
+        checkWritable()
         sync()
         if(offset + mapLength > this.length){
             file.seek(Begin(offset + mapLength - 1))
@@ -330,6 +342,7 @@ public class MMapFile <: Resource & IOStream {
         writeOffset_ = 0
     }
     public func seekRead(offset: Int64): Unit {
+        checkReadable()
         let len = 
         if(offset > this.length){
             throw MMapException('offset exceeds file size, offset: ${offset}')
@@ -345,6 +358,7 @@ public class MMapFile <: Resource & IOStream {
         readOffset_ = 0
     }
     public func read(buffer: Array<Byte>): Int64 {
+        checkReadable()
         let bs = buffer.size
         if(readOffset_ + bs > this.factReadMapLength){
             seekRead(offset + readOffset_)
@@ -367,6 +381,7 @@ public class MMapFile <: Resource & IOStream {
         }
     }
     public func write(buffer: Array<Byte>): Unit {
+        checkWritable()
         let bs = buffer.size
         if(bs == 0){
             return
