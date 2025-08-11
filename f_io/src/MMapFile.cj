@@ -323,9 +323,8 @@ public class MMapFile <: Resource & IOStream {
         }
     }
     /**
-     * seek 时如果允许映射同步到磁盘，会先同步数据再创建新映射，新的映射指针指向seek参数指定的偏移量。
+     * seek 时会先同步数据再创建新映射，新的映射指针指向seek参数指定的偏移量。
      * offset 是从当前打开文件开头的偏移量，文件也会跟随执行seek偏移
-     * length 是新的映射内存字节数
      */
     public func seekWrite(offset: Int64): Unit {
         checkWritable()
@@ -359,11 +358,11 @@ public class MMapFile <: Resource & IOStream {
     }
     public func read(buffer: Array<Byte>): Int64 {
         checkReadable()
+        if(buffer.isEmpty()){
+            return 0
+        }
         let bs = buffer.size
-        if(readOffset_ + bs > this.factReadMapLength){
-            seekRead(offset + readOffset_)
-            read(buffer)
-        }else{
+        func doRead(){
             let len =
             if(bs < factReadMapLength){
                 bs
@@ -378,6 +377,12 @@ public class MMapFile <: Resource & IOStream {
                 }
                 len
             }
+        }
+        if(readOffset_ + bs > this.factReadMapLength){
+            seekRead(offset + readOffset_)
+            doRead()
+        }else{
+            doRead()
         }
     }
     public func write(buffer: Array<Byte>): Unit {
