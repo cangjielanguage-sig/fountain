@@ -167,8 +167,10 @@ public class MMapFile <: Resource & IOStream {
     private let fd: IntNative
     private var writePointer = NULL_POINTER
     private var readPointer = NULL_POINTER
-    private var readOffset = 0i64
-    private var writeOffset = 0i64
+    private var readOffset_ = 0i64
+    private var writeOffset_ = 0i64
+    private var readStart = 0i64
+    private var writeStart = 0i64
     private var dirtyStart = 0i64// 脏数据起始位置，相对于文件开头是offset + dirtyStart
     private var dirtyBytes = 0i64// 脏数据大小
     private var lastSync = MonoTime.now()
@@ -188,6 +190,8 @@ public class MMapFile <: Resource & IOStream {
         }else{
             mapLength
         }
+        readStart = offset
+        writeStart = offset
         writePointer = map(offset, mapLength)
         readPointer = map(offset, factReadMapLength)
         syncTimer = Timer.repeat(syncDuration, syncDuration, {=>
@@ -237,6 +241,22 @@ public class MMapFile <: Resource & IOStream {
             case _ => MMapException(caused)
         }
     }
+    /**
+     * 相对文件开头的读偏移量
+     */
+    public prop readOffset: Int64 {
+        get(){
+            readStart + readOffset_
+        }
+    }
+    /**
+     * 相对文件开头的写偏移量
+     */
+    public prop writeOffset: Int64 {
+        get(){
+            writeStart + writeOffset_
+        }
+    }
     public func close(){
         syncTimer.cancel()
         var ex = None<MMapException>
@@ -283,8 +303,9 @@ public class MMapFile <: Resource & IOStream {
         }
         unmap(writePointer, this.mapLength)
         file.seek(Begin(offset))
+        writeStart = offset
         writePointer = map(offset, mapLength)
-        writeOffset = 0
+        writeOffset_ = 0
     }
     public func seekRead(offset: Int64): Unit {
         let len = 
@@ -297,13 +318,14 @@ public class MMapFile <: Resource & IOStream {
         }
         unmap(readPointer, this.factReadMapLength)
         factReadMapLength = len
+        readStart = offset
         readPointer = map(offset, len)
-        readOffset = 0
+        readOffset_ = 0
     }
     public func read(buffer: Array<Byte>): Int64 {
         let bs = buffer.size
-        if(readOffset + bs > this.factReadMapLength){
-            seekRead(offset + readOffset)
+        if(readOffset_ + bs > this.factReadMapLength){
+            seekRead(offset + readOffset_)
             read(buffer)
         }else{
             let len =
@@ -313,10 +335,10 @@ public class MMapFile <: Resource & IOStream {
                 factReadMapLength
             }
             unsafe{
-                let bp = CPointer<UInt8>(readPointer) + readOffset
+                let bp = CPointer<UInt8>(readPointer) + readOffset_
                 for(i in 0 .. len){
                     buffer[i] = bp.read(i)
-                    readOffset++
+                    readOffset_++
                 }
                 len
             }
@@ -326,15 +348,15 @@ public class MMapFile <: Resource & IOStream {
         let bs = buffer.size
         if(bs == 0){
             return
-        }else if(writeOffset + bs > mapLength){
-            seekWrite(offset + writeOffset)
-            writeOffset = 0
+        }else if(writeOffset_ + bs > mapLength){
+            seekWrite(offset + writeOffset_)
+            writeOffset_ = 0
         }
         unsafe{
-            let bp = CPointer<UInt8>(writePointer) + writeOffset
+            let bp = CPointer<UInt8>(writePointer) + writeOffset_
             for(i in 0 .. bs){
                 bp.write(i, buffer[i])
-                writeOffset++
+                writeOffset_++
                 dirtyBytes++
             }
         }
