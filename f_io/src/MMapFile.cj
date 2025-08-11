@@ -162,6 +162,8 @@ private let NULL_POINTER = CPointer<Unit>()
 public const DEFAULT_MMAP_BYTES = 1 * 1024 * 1024 * 1024
 /**
  * 内存映射文件，本类没有做并发安全处理
+ * 写映射区每次重定位都是mapLength大小
+ * 读映射区每次重定位按照mapLength和this.length - offset的大小动态决定
  */
 public class MMapFile <: Resource & IOStream {
     private let fd: IntNative
@@ -284,6 +286,9 @@ public class MMapFile <: Resource & IOStream {
             throw e
         }
     }
+    /**
+     * 文件的大小
+     */
     public prop length: Int64 {
         get(){
             file.length
