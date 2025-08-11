@@ -314,12 +314,12 @@ public class MMapFile <: Resource & IOStream {
     }
     private func checkWritable(){
         if(!isWritable){
-            throw MMapException('current MMapFile is not writable ${file.path}')
+            throw MMapException('current MMapFile is not writable ${file.info.path}')
         }
     }
     private func checkReadable(){
         if(!isReadable){
-            throw MMapException('current MMapFile is not readable ${file.path}')
+            throw MMapException('current MMapFile is not readable ${file.info.path}')
         }
     }
     /**
