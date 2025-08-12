@@ -15,6 +15,8 @@ limitations under the License.
 */
 package f_util
 
+import std.reflect.TypeInfo
+import f_base.TypeInfos
 /**
  * 状态模式
  */
@@ -42,7 +44,10 @@ public interface State<D> {
         if(this.continues) {
             this.exec().startup()
         }else{
-            (this.data as D).getOrThrow()
+            match(this.data){
+                case x: D => x
+                case x => throw IllegalStateException('data type requires ${TypeInfos.get<D>()} but current is ${TypeInfo.of(x)} which is from instance of ${TypeInfo.of(this)}')
+            }
         }
     }
 }
