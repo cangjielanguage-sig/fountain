@@ -67,11 +67,7 @@ foreign {
     func mmap(start: CPointer<Unit>, length: UIntNative, prot: IntNative, flags: IntNative, fd: IntNative, offset: IntNative): CPointer<Unit>
     func munmap(start: CPointer<Unit>, length: UIntNative): IntNative
     func msync(addr: CPointer<Unit>, length: UIntNative, flags: IntNative): IntNative
-    func memcpy(dest: CPointer<Unit>, src: CPointer<Unit>, n: UIntNative): CPointer<Unit>
-    func getpagesize(): IntNative
 }
-
-private let M_PAGE_SIZE = unsafe{Int64(getpagesize())}
 
 public enum MMapProt {
     | Read
