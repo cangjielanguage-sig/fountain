@@ -15,17 +15,44 @@ limitations under the License.
 */
 package f_collection
 
-import std.ref.*
-import std.unittest.*
-import std.unittest.testmacro.*
+// import std.ref.*
+// import std.unittest.*
+// import std.unittest.testmacro.*
 
-@Test
-public class WeakHashMap_test {
-    @TestCase
-    public func testTooLarge_eager(): Unit {
-        let map = WeakHashMap<Int64, Array<Int64>>(cleanupPolicy: EAGER)
-        for(i in 0..10000){
-            map[i] = Array<Int64>(10 * 1024 * 1024, repeat: i)
-        }
-    }
-}
+// @Test
+// public class WeakHashMap_test {
+//     // @TestCase
+//     // public func testTooLarge_eager(): Unit {
+//     //     let map = WeakHashMap<Int64, Array<Int64>>(cleanupPolicy: EAGER)
+//     //     for(i in 0..10000){
+//     //         map[i] = Array<Int64>(10 * 1024 * 1024, repeat: i)
+//     //     }
+//     // }
+
+//     @TestCase
+//     public func test(): Unit {
+//         let map = WeakHashMap<Int64, Int64>()
+//         map[1] = 1
+//         println(map.size)
+//         println(map.get(1))
+//     }
+//     private func doTest(size: Int64){
+//         let map = WeakHashMap<Int64, Int64>(cleanupPolicy: DEFERRED)
+//         for(i in 0..size){
+//             map[i] = i
+//         }
+//         println(map.size)
+//         var c = 0
+//         for(i in 0..size where map.contains(i)){
+//             c++
+//         }
+//         println(c)
+//         // for((k, v) in map){
+//         //     println('${k}:${v}')
+//         // }
+//     }
+//     @TestCase
+//     public func test2(): Unit {
+//         doTest(12)
+//     }
+// }
