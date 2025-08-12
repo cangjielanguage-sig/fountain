@@ -225,9 +225,9 @@ public class MMapFile <: Resource & IOStream {
      */
     public func syncAndUnmap(): Unit {
         sync()
-        doUnmap()
+        unmap()()
     }
-    private func doUnmap(){
+    private func unmap()(){
         unsafe{
             let pr = pointer.asResource()
             munmap(pointer, UIntNative(mapLength))
@@ -260,7 +260,7 @@ public class MMapFile <: Resource & IOStream {
     }
     public func remap(offset: Int64, mapLength: Int64): MMapFile {
         sync()
-        doUnmap()
+        unmap()()
         file.mmap(offset, mapLength)
     }
     /**
@@ -293,7 +293,7 @@ public class MMapFile <: Resource & IOStream {
             ex = extract(ex, e)
         }
         try{
-            doUnmap()
+            unmap()()
         }catch(e: Exception){
             ex = extract(ex, e)
         }
