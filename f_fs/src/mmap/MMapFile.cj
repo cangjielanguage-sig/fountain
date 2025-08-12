@@ -13,16 +13,21 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package f_io
+package f_fs.mmap
 
+import std.convert.Parsable
 import std.io.*
 import std.fs.*
+import std.process.executeWithOutput
 import std.sync.Timer
 import std.time.MonoTime
 
 import f_base.*
-import f_io.exception.MMapException
+import f_fs.mmap.exception.MMapException
 
+/**
+ * 本包仅支持linux
+ */
 /*
 #define PROT_READ   0x1
 #define PROT_WRITE  0x2
@@ -57,11 +62,17 @@ private const MS_SYNC: IntNative = 0x0004
 private const MS_ASYNC: IntNative = 0x001
 private const MS_INVALIDATE: IntNative = 0x002
 
+
 foreign {
     func mmap(start: CPointer<Unit>, length: UIntNative, prot: IntNative, flags: IntNative, fd: IntNative, offset: IntNative): CPointer<Unit>
     func munmap(start: CPointer<Unit>, length: UIntNative): IntNative
     func msync(addr: CPointer<Unit>, length: UIntNative, flags: IntNative): IntNative
+    func memcpy(dest: CPointer<Unit>, src: CPointer<Unit>, n: UIntNative): CPointer<Unit>
+    func getpagesize(): IntNative
 }
+
+private let M_PAGE_SIZE = unsafe{Int64(getpagesize())}
+
 public enum MMapProt {
     | Read
     | Write
@@ -170,15 +181,13 @@ public const DEFAULT_MMAP_BYTES = 1 * 1024 * 1024 * 1024
  */
 public class MMapFile <: Resource & IOStream {
     private let fd: IntNative
-    private var writePointer = NULL_POINTER
-    private var readPointer = NULL_POINTER
+    private let pointer: CPointer<Unit>
     private var readOffset_ = 0i64
     private var writeOffset_ = 0i64
-    private var readStart = 0i64
-    private var writeStart = 0i64
     private var dirtyStart = 0i64// 脏数据起始位置，相对于文件开头是offset + dirtyStart
     private var dirtyBytes = 0i64// 脏数据大小
-    private var factReadMapLength = 0i64
+    private let readable_: Bool
+    private let writable_: Bool
     public MMapFile(
         private let file: File,
         private let prots: Array<MMapProt>,
@@ -186,53 +195,35 @@ public class MMapFile <: Resource & IOStream {
         private let mapLength!: Int64 = DEFAULT_MMAP_BYTES
     ){
         this.fd = file.fileDescriptor.fileHandle
+        if(offset + mapLength > file.length){
+            file.seek(Begin(offset + mapLength - 1))
+            file.write([b'0'])//必须写入一字节长度才会真的改变
+            file.flush()
+        }
         let protBits = prots.combine()
-        if(MMapProt.Read & protBits){
-            factReadMapLength = if(file.length < offset + mapLength){
-                file.length - offset
-            }else{
-                mapLength
-            }
-            readStart = offset
-            readPointer = mapRead(offset, factReadMapLength)
-        }
-        if(MMapProt.Write & protBits){
-            writeStart = offset
-            writePointer = mapWrite(offset, mapLength)
+        readable_ = MMapProt.Read & protBits
+        writable_ = MMapProt.Write & protBits
+        pointer = unsafe{
+            mmap(NULL_POINTER, UIntNative(mapLength), protBits, MMapFlag.Private.value, fd, IntNative(offset))
         }
     }
-    private func mapRead(offset: Int64, length: Int64){
-        map(offset, length, MMapProt.Read.value)
-    }
-    private func mapWrite(offset: Int64, length: Int64){
-        map(offset, length, MMapProt.Write.value)
-    }
-    private func map(offset: Int64, length: Int64, prots: IntNative){
-        unsafe{
-            mmap(NULL_POINTER, UIntNative(length), prots, MMapFlag.Shared.value, fd, IntNative(offset))
-        }
-    }
-
     private func isNullPointer(pointer: CPointer<Unit>){
         pointer.toUIntNative() == NULL_POINTER.toUIntNative()
     }
     public prop isReadable: Bool {
         get(){
-            !isNullPointer(readPointer)
+            readable_
         }
     }
     public prop isWritable: Bool{
         get(){
-            !isNullPointer(writePointer)
+            writable_
         }
     }
-    private func unmap(pointer: CPointer<Unit>, length: Int64){
-        if(isNullPointer(pointer)){
-            return
-        }
+    public func unmap(){
         unsafe{
             let pr = pointer.asResource()
-            munmap(pointer, UIntNative(length))
+            munmap(pointer, UIntNative(mapLength))
             try{
                 if(!pr.isClosed()){
                     pr.close()
@@ -242,12 +233,13 @@ public class MMapFile <: Resource & IOStream {
     }
     private func sync(pointer: CPointer<Unit>, length: Int64){
         unsafe{
-            msync(pointer + dirtyStart, UIntNative(length), MSyncFlag.Sync.value)
+            let syncStart = (dirtyStart / M_PAGE_SIZE) * M_PAGE_SIZE
+            msync(pointer + syncStart, UIntNative(dirtyBytes + dirtyStart % M_PAGE_SIZE), MSyncFlag.Sync.value)
         }
     }
-    public func sync(){
+    private func sync(){
         if(dirtyBytes > 0){
-            sync(writePointer, dirtyBytes)
+            sync(pointer, dirtyBytes)
             dirtyStart += dirtyBytes
             dirtyBytes = 0
         }
@@ -259,12 +251,17 @@ public class MMapFile <: Resource & IOStream {
             case _ => MMapException(caused)
         }
     }
+    public func remap(offset: Int64, mapLength: Int64){
+        sync()
+        unmap()
+        file.mmap(offset, mapLength)
+    }
     /**
      * 相对文件开头的读偏移量
      */
     public prop readOffset: Int64 {
         get(){
-            readStart + readOffset_
+            offset + readOffset_
         }
     }
     /**
@@ -272,7 +269,7 @@ public class MMapFile <: Resource & IOStream {
      */
     public prop writeOffset: Int64 {
         get(){
-            writeStart + writeOffset_
+            offset + writeOffset_
         }
     }
     public func isClosed(){
@@ -286,12 +283,7 @@ public class MMapFile <: Resource & IOStream {
             ex = extract(ex, e)
         }
         try{
-            unmap(writePointer, mapLength)
-        }catch(e: Exception){
-            ex = extract(ex, e)
-        }
-        try{
-            unmap(readPointer, mapLength)
+            unmap()
         }catch(e: Exception){
             ex = extract(ex, e)
         }
@@ -322,86 +314,47 @@ public class MMapFile <: Resource & IOStream {
             throw MMapException('current MMapFile is not readable ${file.info.path}')
         }
     }
-    /**
-     * seek 时会先同步数据再创建新映射，新的映射指针指向seek参数指定的偏移量。
-     * offset 是从当前打开文件开头的偏移量，文件也会跟随执行seek偏移
-     */
-    public func seekWrite(offset: Int64): Unit {
-        checkWritable()
-        sync()
-        if(offset + mapLength > this.length){
-            file.seek(Begin(offset + mapLength - 1))
-            file.write([b'0'])//必须写入一字节长度才会真的改变
-            file.flush()
-        }
-        unmap(writePointer, this.mapLength)
-        file.seek(Begin(offset))
-        writeStart = offset
-        writePointer = mapWrite(offset, mapLength)
-        writeOffset_ = 0
+    private unsafe func pointerOffset(offset: Int64){
+        CPointer<Unit>(CPointer<Byte>(this.pointer) + offset)
     }
-    public func seekRead(offset: Int64): Unit {
-        checkReadable()
-        let len = 
-        if(offset > this.length){
-            throw MMapException('offset exceeds file size, offset: ${offset}')
-        }else if(offset + mapLength > this.length){
-            this.length - offset
+    private func opsize(size: Int64, offset: Int64){
+        if(let s <- mapLength - offset && s < size){
+            s
         }else{
-            mapLength
+            size
         }
-        unmap(readPointer, this.factReadMapLength)
-        factReadMapLength = len
-        readStart = offset
-        readPointer = mapRead(offset, len)
-        readOffset_ = 0
     }
     public func read(buffer: Array<Byte>): Int64 {
         checkReadable()
-        if(buffer.isEmpty()){
+        let size = opsize(buffer.size, readOffset_)
+        if(size == 0){
             return 0
         }
-        let bs = buffer.size
-        func doRead(){
-            let len =
-            if(bs < factReadMapLength){
-                bs
-            }else{
-                factReadMapLength
-            }
-            unsafe{
-                let bp = CPointer<UInt8>(readPointer) + readOffset_
-                for(i in 0 .. len){
-                    buffer[i] = bp.read(i)
-                    readOffset_++
-                }
-                len
-            }
+        unsafe{
+            let bufferAddr = acquireArrayRawData(buffer)
+            let bufferPtr = bufferAddr.pointer
+            memcpy(CPointer<Unit>(bufferPtr), pointerOffset(readOffset_), UIntNative(size))
+            releaseArrayRawData(bufferAddr)
         }
-        if(readOffset_ + bs > this.factReadMapLength){
-            seekRead(offset + readOffset_)
-            doRead()
-        }else{
-            doRead()
-        }
+        readOffset_ += size
+        size
     }
     public func write(buffer: Array<Byte>): Unit {
         checkWritable()
-        let bs = buffer.size
-        if(bs == 0){
-            return
-        }else if(writeOffset_ + bs > mapLength){
-            seekWrite(offset + writeOffset_)
-            writeOffset_ = 0
+        let size = opsize(buffer.size, writeOffset_)
+        if(size < buffer.size){
+            throw MMapException("remainder mmapped size is too small, remainder: ${size}, buffer.size: ${buffer.size}")
         }
         unsafe{
-            let bp = CPointer<UInt8>(writePointer) + writeOffset_
-            for(i in 0 .. bs){
-                bp.write(i, buffer[i])
-                writeOffset_++
-                dirtyBytes++
-            }
+            let bufferAddr = acquireArrayRawData(buffer)
+            let bufferPtr = bufferAddr.pointer
+            memcpy(pointerOffset(writeOffset_), CPointer<Unit>(bufferPtr), UIntNative(size))
+            releaseArrayRawData(bufferAddr)
         }
+        writeOffset_ += size
+        size
+    }
+    public func flush(): Unit {
         sync()
     }
 }
