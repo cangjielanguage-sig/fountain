@@ -30,7 +30,7 @@ public interface State<D> {
     /**
      * 执行当前状态
      */
-    func exec(): State<D>
+    func exec<S>(): S where S <: State<D>
     /**
      * 当前状态的数据
      */
