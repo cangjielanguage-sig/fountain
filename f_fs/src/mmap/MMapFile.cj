@@ -235,8 +235,8 @@ public class MMapFile <: Resource & IOStream {
     }
     private func sync(pointer: CPointer<Unit>, length: Int64){
         unsafe{
-            let syncStart = (dirtyStart / M_PAGE_SIZE) * M_PAGE_SIZE
-            msync(pointer + syncStart, UIntNative(dirtyBytes + dirtyStart % M_PAGE_SIZE), MSyncFlag.Sync.value)
+            let syncStart = (dirtyStart / MEM_PAGE_SIZE) * MEM_PAGE_SIZE
+            msync(pointer + syncStart, UIntNative(dirtyBytes + dirtyStart % MEM_PAGE_SIZE), MSyncFlag.Sync.value)
         }
     }
     private func sync(){
