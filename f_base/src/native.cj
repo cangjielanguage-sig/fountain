@@ -16,8 +16,15 @@ limitations under the License.
 package f_base
 
 foreign{
-    public func memcpy(dest: CPointer<Unit>, src: CPointer<Unit>, n: UIntNative): CPointer<Unit>
-    public func getpagesize(): IntNative
+    func memcpy(dest: CPointer<Unit>, src: CPointer<Unit>, n: UIntNative): CPointer<Unit>
+    func getpagesize(): IntNative
 }
 
 public let MEM_PAGE_SIZE = unsafe{Int64(getpagesize())}
+
+/**
+ * 简单调用memcpy
+ */
+public unsafe func memcopy(dest: CPointer<Unit>, src: CPointer<Unit>, n: UIntNative): CPointer<Unit>{
+    memcpy(dest, src, n)
+}
