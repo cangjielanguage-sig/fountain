@@ -251,7 +251,7 @@ public class MMapFile <: Resource & IOStream {
             case _ => MMapException(caused)
         }
     }
-    public func remap(offset: Int64, mapLength: Int64){
+    public func remap(offset: Int64, mapLength: Int64): MMapFile {
         sync()
         unmap()
         file.mmap(offset, mapLength)
