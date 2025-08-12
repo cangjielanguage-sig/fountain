@@ -39,11 +39,11 @@ public interface State<D> {
      * 执行状态
      */
     static func execute<S, D>(state: S): D where S <: State<D> {
-        var s = state
-        while(s.continues) {
-            s = s.exec()
+        if(state.continues) {
+            execute(state.exec())
+        }else{
+            state.data
         }
-        s.data
     }
 }
 
