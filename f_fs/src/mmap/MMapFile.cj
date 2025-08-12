@@ -324,6 +324,9 @@ public class MMapFile <: Resource & IOStream {
             size
         }
     }
+    /**
+     * 返回值是当前映射的内存区域min(剩余可读字节数, buffer.size)
+     */
     public func read(buffer: Array<Byte>): Int64 {
         checkReadable()
         let size = opsize(buffer.size, readOffset_)
@@ -339,6 +342,9 @@ public class MMapFile <: Resource & IOStream {
         readOffset_ += size
         size
     }
+    /**
+     * 如果映射的内存区域剩余可写字节数小于buffer.size会抛出异常
+     */
     public func write(buffer: Array<Byte>): Unit {
         checkWritable()
         let size = opsize(buffer.size, writeOffset_)
