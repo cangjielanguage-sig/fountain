@@ -220,7 +220,14 @@ public class MMapFile <: Resource & IOStream {
             writable_
         }
     }
-    public func unmap(){
+    /**
+     * 取消映射，不关闭文件
+     */
+    public func unmap(): Unit {
+        sync()
+        doUnmap()
+    }
+    private func doUnmap(){
         unsafe{
             let pr = pointer.asResource()
             munmap(pointer, UIntNative(mapLength))
@@ -253,7 +260,7 @@ public class MMapFile <: Resource & IOStream {
     }
     public func remap(offset: Int64, mapLength: Int64): MMapFile {
         sync()
-        unmap()
+        doUnmap()
         file.mmap(offset, mapLength)
     }
     /**
@@ -275,6 +282,9 @@ public class MMapFile <: Resource & IOStream {
     public func isClosed(){
         file.isClosed()
     }
+    /**
+     * 同步内存映射区域到磁盘，取消映射，关闭文件
+     */
     public func close(){
         var ex = None<MMapException>
         try{
@@ -283,7 +293,7 @@ public class MMapFile <: Resource & IOStream {
             ex = extract(ex, e)
         }
         try{
-            unmap()
+            doUnmap()
         }catch(e: Exception){
             ex = extract(ex, e)
         }
@@ -367,7 +377,7 @@ public class MMapFile <: Resource & IOStream {
 
 public interface ToMMap {
     /**
-     * 用此函数创建的内存映射文件只有读写两个prot，与当前File实例的可读可写属性一致
+     * 用此函数创建的内存映射文件只有读写两个prot，与当前File实例的可读可写属性一致。File扩展此接口
      */
     func mmap(offset: Int64, mapLength: Int64): MMapFile
 }
