@@ -223,7 +223,7 @@ public class MMapFile <: Resource & IOStream {
     /**
      * 同步内存映射区域到磁盘，取消映射，不关闭文件
      */
-    public func unmap(): Unit {
+    public func syncAndUnmap(): Unit {
         sync()
         doUnmap()
     }
