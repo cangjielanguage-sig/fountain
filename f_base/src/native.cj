@@ -19,7 +19,9 @@ foreign{
     func memcpy(dest: CPointer<Unit>, src: CPointer<Unit>, n: UIntNative): CPointer<Unit>
     func getpagesize(): IntNative
 }
-
+/**
+ * 当前系统内存页大小
+ */
 public let MEM_PAGE_SIZE = unsafe{Int64(getpagesize())}
 
 /**
