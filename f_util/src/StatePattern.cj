@@ -38,11 +38,11 @@ public interface State<D> {
     /**
      * 执行状态
      */
-    static func execute<S, D>(state: S): D where S <: State<D> {
-        if(state.continues) {
-            execute(state.exec())
+    func startup<D>(): D{
+        if(this.continues) {
+            this.exec().startup()
         }else{
-            state.data
+            (this.data as D).getOrThrow()
         }
     }
 }
