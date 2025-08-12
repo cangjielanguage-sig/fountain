@@ -15,8 +15,9 @@ limitations under the License.
 */
 package f_base
 
-unsafe{
+foreign{
     public func memcpy(dest: CPointer<Unit>, src: CPointer<Unit>, n: UIntNative): CPointer<Unit>
     public func getpagesize(): IntNative
-    public let MEM_PAGE_SIZE = unsafe{Int64(getpagesize())}
 }
+
+public let MEM_PAGE_SIZE = unsafe{Int64(getpagesize())}

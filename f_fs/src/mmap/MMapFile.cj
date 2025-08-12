@@ -62,7 +62,6 @@ private const MS_SYNC: IntNative = 0x0004
 private const MS_ASYNC: IntNative = 0x001
 private const MS_INVALIDATE: IntNative = 0x002
 
-
 foreign {
     func mmap(start: CPointer<Unit>, length: UIntNative, prot: IntNative, flags: IntNative, fd: IntNative, offset: IntNative): CPointer<Unit>
     func munmap(start: CPointer<Unit>, length: UIntNative): IntNative
