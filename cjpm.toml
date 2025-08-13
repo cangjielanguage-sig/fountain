@@ -10,11 +10,11 @@
   f_config = {path = "./f_config"}
   f_data = {path = "./f_data"}
   f_exception = {path = "./f_exception"}
-  f_fs = {path = "./f_fs"}
   f_io = {path = "./f_io"}
   f_jwt = {path = "./f_jwt"}
   f_log = {path = "./f_log"}
   f_macros = {path = "./f_macros"}
+  f_mmap = {path = "./f_mmap"}
   f_mvc = {path = "./f_mvc"}
   f_net = {path = "./f_net"}
   f_orm = {path = "./f_orm"}
@@ -42,14 +42,21 @@
 
 [target]
 [target.x86_64-w64-mingw32]
-  compile-option = "-lcrypt32"
-  [target.x86_64-w64-mingw32.bin-dependencies]
-    path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]
+[target.x86_64-W64-mingw32.bin-dependencies]
+  path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]
 
 [target.x86_64-unknown-linux-gnu]
-  compile-option = "-ldl"
-  [target.x86_64-unknown-linux-gnu.bin-dependencies]
-    path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]
+[target .x86_64-unknown-linux-gnu.bin-dependencies]
+  path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]
+
+[target.x86_64-apple-darwin]
+[target.x86_64-apple-darwin.bin-dependencies]
+  path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]
+
+[target.aarch64-unknown-linux-gnu]
+[target.aarch64-unknown-linux-gnu.bin-dependencies]
+  path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]
+
 
 [profile.build]
   lto = "full"

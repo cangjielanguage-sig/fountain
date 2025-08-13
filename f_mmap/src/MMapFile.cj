@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_fs.mmap
+package f_mmap
 
 import std.convert.Parsable
 import std.io.*
@@ -22,7 +22,7 @@ import std.process.executeWithOutput
 import std.sync.Timer
 import std.time.MonoTime
 import f_base.*
-import f_fs.mmap.exception.MMapException
+import f_mmap.exception.MMapException
 
 /**
  * 本包仅支持linux
@@ -56,7 +56,7 @@ private const PROT_NONE: IntNative = 0x0
 private const MAP_SHARED: IntNative = 0x01
 private const MAP_PRIVATE: IntNative = 0x02
 //private const MAP_FIXED: IntNative = 0x10
-//private const MAP_ANONYMOUS: IntNative = 0x20
+private const MAP_ANONYMOUS: IntNative = 0x20
 private const MS_SYNC: IntNative = 0x0004
 private const MS_ASYNC: IntNative = 0x001
 private const MS_INVALIDATE: IntNative = 0x002
@@ -137,11 +137,11 @@ extend Array<MMapProt> <: MMapProtArray {
     }
 }
 
-public enum MMapFlag <: Equatable<MMapFlag> & Equatable<IntNative>{
+public enum MMapFlag <: Equatable<MMapFlag> & Equatable<IntNative> {
     | Shared
     | Private
     // | Fixed
-    // | Anonymous
+    | Anonymous
 
     public prop value: IntNative {
         get() {
@@ -149,7 +149,7 @@ public enum MMapFlag <: Equatable<MMapFlag> & Equatable<IntNative>{
                 case Shared => MAP_SHARED
                 case Private => MAP_PRIVATE
                 // case Fixed => MAP_FIXED
-                // case Anonymous => MAP_ANONYMOUS
+                case Anonymous => MAP_ANONYMOUS
             }
         }
     }
@@ -160,13 +160,18 @@ public enum MMapFlag <: Equatable<MMapFlag> & Equatable<IntNative>{
         this.value == other
     }
     public prop isShared: Bool {
-        get(){
+        get() {
             this == Shared
         }
     }
     public prop isPrivate: Bool {
-        get(){
+        get() {
             this == Private
+        }
+    }
+    public prop isAnonymous: Bool {
+        get() {
+            this == Anonymous
         }
     }
 }
@@ -195,8 +200,11 @@ public const DEFAULT_MMAP_BYTES = 1 * 1024 * 1024 * 1024
  * 内存映射文件，本类没有做并发安全处理
  * 写映射区每次重定位都是mapLength大小
  * 读映射区每次重定位按照mapLength和this.length - offset的大小动态决定
+ * file是zeroValue<File>()是offset不生效。
  */
 public class MMapFile <: Resource & IOStream {
+    private static let zeroFile = unsafe{zeroValue<File>()}
+    private static let ANONYMOUS_FD = IntNative(-1)
     private let fd: IntNative
     private let pointer: CPointer<Unit>
     private var readOffset_ = 0i64
@@ -205,25 +213,41 @@ public class MMapFile <: Resource & IOStream {
     private var dirtyBytes = 0i64 // 脏数据大小
     private let readable_: Bool
     private let writable_: Bool
-    public MMapFile(
+    private var closed = false
+    MMapFile(
         private let file: File,
         private let prots: Array<MMapProt>,
         private let flag!: MMapFlag = MMapFlag.Private,
         private let offset!: Int64 = 0,
         private let mapLength!: Int64 = DEFAULT_MMAP_BYTES
     ) {
-        this.fd = file.fileDescriptor.fileHandle
-        if (offset + mapLength > file.length) {
-            file.seek(Begin(offset + mapLength - 1))
-            file.write([b'0']) //必须写入一字节长度才会真的改变
-            file.flush()
-        }
         let protBits = prots.combine()
         readable_ = MMapProt.Read & protBits
         writable_ = MMapProt.Write & protBits
-        pointer = unsafe {
-            mmap(nullptr, UIntNative(mapLength), protBits, flag.value, fd, IntNative(offset))
+        this.fd = if (!isZeroFile(file)) {
+            if (offset + mapLength > file.length) {
+                file.seek(Begin(offset + mapLength - 1))
+                file.write([b'0']) //必须写入一字节长度才会真的改变
+                file.flush()
+            }
+            file.fileDescriptor.fileHandle
+        } else {
+            ANONYMOUS_FD
         }
+        pointer = unsafe {
+            mmap(nullptr, UIntNative(mapLength), protBits, flag.value | MMapFlag.Anonymous.value, fd,
+                if (fd == ANONYMOUS_FD) {
+                    0
+                } else {
+                    IntNative(offset)
+                })
+        }
+    }
+    public static func anonymous(prots: Array<MMapProt>, flag!: MMapFlag = MMapFlag.Private, mapLength!: Int64 = DEFAULT_MMAP_BYTES){
+        MMapFile(zeroFile, prots, flag: flag, mapLength: mapLength)
+    }
+    private static func isZeroFile(file: File) {
+        refEq(file, zeroFile)
     }
     private func isNullPointer(pointer: CPointer<Unit>) {
         pointer.toUIntNative() == nullptr.toUIntNative()
@@ -236,6 +260,16 @@ public class MMapFile <: Resource & IOStream {
     public prop isWritable: Bool {
         get() {
             writable_
+        }
+    }
+    public prop isSyncable: Bool {
+        get() {
+            !(this.flag.isPrivate || this.isAnonymous)
+        }
+    }
+    public prop isAnonymous: Bool {
+        get(){
+            this.fd == ANONYMOUS_FD
         }
     }
     /**
@@ -256,12 +290,13 @@ public class MMapFile <: Resource & IOStream {
             } catch (_) {}
         }
     }
+    
     /**
      * 使用指定的flag将未同步数据同步到磁盘。
      */
-    public func sync(flag: MSyncFlag){
-        if(this.flag.isPrivate){
-            throw MMapException("current mmap can not sync, due to it is Anonymous")
+    public func sync(flag: MSyncFlag) {
+        if (!isSyncable) {
+            throw MMapException("current mmap can not sync, due to it is Anonymous or Private.")
         }
         unsafe {
             let syncStart = (dirtyStart / MEM_PAGE_SIZE) * MEM_PAGE_SIZE
@@ -272,7 +307,7 @@ public class MMapFile <: Resource & IOStream {
         sync(MSyncFlag.Sync)
     }
     private func sync() {
-        if (dirtyBytes > 0) {
+        if (dirtyBytes > 0 && isSyncable) {
             sync(pointer, dirtyBytes)
             dirtyStart += dirtyBytes
             dirtyBytes = 0
@@ -292,7 +327,11 @@ public class MMapFile <: Resource & IOStream {
     public func remap(offset: Int64, mapLength!: Int64 = this.mapLength, flag!: MMapFlag = this.flag): MMapFile {
         sync()
         unmap()
-        file.mmap(offset, mapLength, flag: flag)
+        if (isAnonymous) {
+            MMapFile(file, prots, flag: flag, offset: offset, mapLength: mapLength)
+        } else {
+            file.mmap(offset, mapLength, flag: flag)
+        }
     }
     /**
      * 相对文件开头的读偏移量
@@ -311,12 +350,13 @@ public class MMapFile <: Resource & IOStream {
         }
     }
     public func isClosed() {
-        file.isClosed()
+        closed
     }
     /**
      * 同步内存映射区域到磁盘，取消映射，关闭文件
      */
     public func close() {
+        closed = true
         var ex = None<MMapException>
         try {
             sync()
@@ -329,7 +369,9 @@ public class MMapFile <: Resource & IOStream {
             ex = extract(ex, e)
         }
         try {
-            file.close()
+            if (!isAnonymous) {
+                file.close()
+            }
         } catch (e: Exception) {
             ex = extract(ex, e)
         }
@@ -338,20 +380,26 @@ public class MMapFile <: Resource & IOStream {
         }
     }
     /**
-     * 文件的大小
+     * 映射内存的大小
      */
     public prop length: Int64 {
         get() {
-            file.length
+            mapLength
         }
     }
     private func checkWritable() {
         if (!isWritable) {
+            if (isAnonymous) {
+                throw MMapException('current MMapFile is not writable and it is Anonymous')
+            }
             throw MMapException('current MMapFile is not writable ${file.info.path}')
         }
     }
     private func checkReadable() {
         if (!isReadable) {
+            if (isAnonymous) {
+                throw MMapException('current MMapFile is not readable and it is Anonymous')
+            }
             throw MMapException('current MMapFile is not readable ${file.info.path}')
         }
     }
