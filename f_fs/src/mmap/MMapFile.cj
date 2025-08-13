@@ -140,16 +140,16 @@ extend Array<MMapProt> <: MMapProtArray {
 public enum MMapFlag <: Equatable<MMapFlag> & Equatable<IntNative>{
     | Shared
     | Private
-    //    | Fixed
-    | Anonymous
+    // | Fixed
+    // | Anonymous
 
     public prop value: IntNative {
         get() {
             match (this) {
                 case Shared => MAP_SHARED
                 case Private => MAP_PRIVATE
-                //                case Fixed => MAP_FIXED
-                case Anonymous => MAP_ANONYMOUS
+                // case Fixed => MAP_FIXED
+                // case Anonymous => MAP_ANONYMOUS
             }
         }
     }
@@ -167,11 +167,6 @@ public enum MMapFlag <: Equatable<MMapFlag> & Equatable<IntNative>{
     public prop isPrivate: Bool {
         get(){
             this == Private
-        }
-    }
-    public prop isAnonymous: Bool {
-        get(){
-            this == Anonymous
         }
     }
 }
@@ -265,7 +260,7 @@ public class MMapFile <: Resource & IOStream {
      * 使用指定的flag将未同步数据同步到磁盘。
      */
     public func sync(flag: MSyncFlag){
-        if(this.flag.isAnonymous){
+        if(this.flag.isPrivate){
             throw MMapException("current mmap can not sync, due to it is Anonymous")
         }
         unsafe {
