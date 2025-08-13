@@ -224,18 +224,19 @@ public class MMapFile <: Resource & IOStream {
         let protBits = prots.combine()
         readable_ = MMapProt.Read & protBits
         writable_ = MMapProt.Write & protBits
-        this.fd = if (!isZeroFile(file)) {
+        let flags: IntNative
+        (this.fd, flags) = if (!isZeroFile(file)) {
             if (offset + mapLength > file.length) {
                 file.seek(Begin(offset + mapLength - 1))
                 file.write([b'0']) //必须写入一字节长度才会真的改变
                 file.flush()
             }
-            file.fileDescriptor.fileHandle
+            (file.fileDescriptor.fileHandle, flag.value)
         } else {
-            ANONYMOUS_FD
+            (ANONYMOUS_FD, flag.value | MMapFlag.Anonymous.value)
         }
         pointer = unsafe {
-            mmap(nullptr, UIntNative(mapLength), protBits, flag.value | MMapFlag.Anonymous.value, fd,
+            mmap(nullptr, UIntNative(mapLength), protBits, flags, fd,
                 if (fd == ANONYMOUS_FD) {
                     0
                 } else {
