@@ -19,7 +19,7 @@ import std.convert.Parsable
 import std.io.*
 import std.fs.*
 import std.process.executeWithOutput
-import std.sync.Timer
+import std.sync.{Timer, AtomicInt64}
 import std.time.MonoTime
 import f_base.*
 import f_mmap.exception.MMapException
@@ -222,8 +222,8 @@ public class MMapFile <: Resource & IOStream {
     private static let ANONYMOUS_FD = IntNative(-1)
     private let fd: IntNative
     private let pointer: CPointer<Unit>
-    private var readOffset_ = 0i64
-    private var writeOffset_ = 0i64
+    private let readOffset_ = AtomicInt64(0)
+    private let writeOffset_ = AtomicInt64(0)
     private var dirtyStart = 0i64 // 脏数据起始位置，相对于文件开头是offset + dirtyStart
     private var dirtyBytes = 0i64 // 脏数据大小
     private let readable_: Bool
@@ -356,7 +356,7 @@ public class MMapFile <: Resource & IOStream {
      */
     public prop readOffset: Int64 {
         get() {
-            offset + readOffset_
+            offset + readOffset_.load()
         }
     }
     /**
@@ -364,7 +364,7 @@ public class MMapFile <: Resource & IOStream {
      */
     public prop writeOffset: Int64 {
         get() {
-            offset + writeOffset_
+            offset + writeOffset_.load()
         }
     }
     public func isClosed() {
@@ -436,8 +436,9 @@ public class MMapFile <: Resource & IOStream {
      */
     public func read(buffer: Array<Byte>): Int64 {
         checkReadable()
-        let size = opsize(buffer.size, readOffset_, if (isWritable) {
-            writeOffset_
+        let roff = readOff.load()
+        let size = opsize(buffer.size, readOff, if (isWritable) {
+            writeOffset_.load()
         } else {
             mapLength
         })
@@ -447,10 +448,10 @@ public class MMapFile <: Resource & IOStream {
         unsafe {
             let bufferAddr = acquireArrayRawData(buffer)
             let bufferPtr = bufferAddr.pointer
-            memcopy(CPointer<Unit>(bufferPtr), pointerOffset(readOffset_), UIntNative(size))
+            memcopy(CPointer<Unit>(bufferPtr), pointerOffset(readOff), UIntNative(size))
             releaseArrayRawData(bufferAddr)
         }
-        readOffset_ += size
+        readOffset_.fetchAdd(size)
         size
     }
     /**
@@ -458,17 +459,18 @@ public class MMapFile <: Resource & IOStream {
      */
     public func write(buffer: Array<Byte>): Unit {
         checkWritable()
-        let size = opsize(buffer.size, writeOffset_, mapLength)
+        let writeOff = writeOffset_.load()
+        let size = opsize(buffer.size, writeOff, mapLength)
         if (size < buffer.size) {
             throw MMapException("remainder mmapped size is too small, remainder: ${size}, buffer.size: ${buffer.size}")
         }
         unsafe {
             let bufferAddr = acquireArrayRawData(buffer)
             let bufferPtr = bufferAddr.pointer
-            memcopy(pointerOffset(writeOffset_), CPointer<Unit>(bufferPtr), UIntNative(size))
+            memcopy(pointerOffset(writeOff), CPointer<Unit>(bufferPtr), UIntNative(size))
             releaseArrayRawData(bufferAddr)
         }
-        writeOffset_ += size
+        writeOffset_.fetchAdd(size)
         size
     }
     /**
