@@ -200,7 +200,8 @@ public const DEFAULT_MMAP_BYTES = 1 * 1024 * 1024 * 1024
  * 内存映射文件，本类没有做并发安全处理
  * 写映射区每次重定位都是mapLength大小
  * 读映射区每次重定位按照mapLength和this.length - offset的大小动态决定
- * file是zeroValue<File>()是offset不生效。
+ * 如果file是zeroValue<File>()，按照Anonymous初始化，且offset不生效。
+ * 如果file不是zeroValue<File>()，且file.length - offset < mapLength, 文件又以只读方式打开，会抛出异常；此时如果文件可写会自动延长文件长度
  */
 public class MMapFile <: Resource & IOStream {
     private static let zeroFile = unsafe{zeroValue<File>()}
@@ -226,10 +227,12 @@ public class MMapFile <: Resource & IOStream {
         writable_ = MMapProt.Write & protBits
         let flags: IntNative
         (this.fd, flags) = if (!isZeroFile(file)) {
-            if (offset + mapLength > file.length) {
+            if (offset + mapLength > file.length && writable_) {
                 file.seek(Begin(offset + mapLength - 1))
                 file.write([b'0']) //必须写入一字节长度才会真的改变
                 file.flush()
+            }else{
+                throw MMapException('file ${file.info.path} is not writable but the file length - offset(${file.length} - ${offset}) is less than mapLength ${mapLength}')
             }
             (file.fileDescriptor.fileHandle, flag.value)
         } else {
