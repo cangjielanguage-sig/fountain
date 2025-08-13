@@ -192,7 +192,6 @@ public enum MSyncFlag {
     }
 }
 
-private let NULL_POINTER = CPointer<Unit>()
 /**
  * 默认映射字节数
  */
@@ -228,11 +227,11 @@ public class MMapFile <: Resource & IOStream {
         readable_ = MMapProt.Read & protBits
         writable_ = MMapProt.Write & protBits
         pointer = unsafe {
-            mmap(NULL_POINTER, UIntNative(mapLength), protBits, flag.value, fd, IntNative(offset))
+            mmap(nullptr, UIntNative(mapLength), protBits, flag.value, fd, IntNative(offset))
         }
     }
     private func isNullPointer(pointer: CPointer<Unit>) {
-        pointer.toUIntNative() == NULL_POINTER.toUIntNative()
+        pointer.toUIntNative() == nullptr.toUIntNative()
     }
     public prop isReadable: Bool {
         get() {
@@ -270,8 +269,8 @@ public class MMapFile <: Resource & IOStream {
             throw MMapException("current mmap can not sync, due to it is Anonymous")
         }
         unsafe {
-            let syncStart = (dirtyStart / nullptr) * nullptr
-            msync(pointer + syncStart, UIntNative(dirtyBytes + dirtyStart % nullptr), flag.value)
+            let syncStart = (dirtyStart / MEM_PAGE_SIZE) * MEM_PAGE_SIZE
+            msync(pointerOffset(syncStart), UIntNative(dirtyBytes + dirtyStart % MEM_PAGE_SIZE), flag.value)
         }
     }
     private func sync(pointer: CPointer<Unit>, length: Int64) {
