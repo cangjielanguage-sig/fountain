@@ -137,7 +137,7 @@ extend Array<MMapProt> <: MMapProtArray {
     }
 }
 
-public enum MMapFlag {
+public enum MMapFlag <: Equatable<MMapFlag> & Equatable<IntNative>{
     | Shared
     | Private
     //    | Fixed
@@ -151,6 +151,27 @@ public enum MMapFlag {
                 //                case Fixed => MAP_FIXED
                 case Anonymous => MAP_ANONYMOUS
             }
+        }
+    }
+    public operator func ==(other: MMapFlag): Bool {
+        this == other.value
+    }
+    public operator func ==(other: IntNative): Bool {
+        this.value == other
+    }
+    public prop isShared: Bool {
+        get(){
+            this == Shared
+        }
+    }
+    public prop isPrivate: Bool {
+        get(){
+            this == Private
+        }
+    }
+    public prop isAnonymous: Bool {
+        get(){
+            this == Anonymous
         }
     }
 }
@@ -241,11 +262,20 @@ public class MMapFile <: Resource & IOStream {
             } catch (_) {}
         }
     }
-    private func sync(pointer: CPointer<Unit>, length: Int64) {
+    /**
+     * 使用指定的flag将未同步数据同步到磁盘。
+     */
+    public func sync(flag: MSyncFlag){
+        if(this.flag.isAnonymous){
+            throw MMapException("current mmap can not sync, due to it is Anonymous")
+        }
         unsafe {
             let syncStart = (dirtyStart / nullptr) * nullptr
-            msync(pointer + syncStart, UIntNative(dirtyBytes + dirtyStart % nullptr), MSyncFlag.Sync.value)
+            msync(pointer + syncStart, UIntNative(dirtyBytes + dirtyStart % nullptr), flag.value)
         }
+    }
+    private func sync(pointer: CPointer<Unit>, length: Int64) {
+        sync(MSyncFlag.Sync)
     }
     private func sync() {
         if (dirtyBytes > 0) {
@@ -262,6 +292,9 @@ public class MMapFile <: Resource & IOStream {
             case _ => MMapException(caused)
         }
     }
+    /**
+     * 使用指定参数重映射。offset是文件开头的偏移量。mapLength是映射的内存大小，默认是当前的mapLength
+     */
     public func remap(offset: Int64, mapLength!: Int64 = this.mapLength, flag!: MMapFlag = this.flag): MMapFile {
         sync()
         unmap()
@@ -378,6 +411,9 @@ public class MMapFile <: Resource & IOStream {
         writeOffset_ += size
         size
     }
+    /**
+     * 使用MSyncFlag.Sync将未同步数据同步到磁盘，如果当前映射是Anonmous则抛出异常
+     */
     public func flush(): Unit {
         sync()
     }
