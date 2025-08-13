@@ -22,7 +22,7 @@ foreign{
 /**
  * 当前系统内存页大小
  */
-public let MEM_PAGE_SIZE = unsafe{Int64(getpagesize())}
+public let nullptr = unsafe{Int64(getpagesize())}
 
 /**
  * 简单调用memcpy

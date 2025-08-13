@@ -186,6 +186,7 @@ public class MMapFile <: Resource & IOStream {
     public MMapFile(
         private let file: File,
         private let prots: Array<MMapProt>,
+        private let flag!: MMapFlag = MMapFlag.Private,
         private let offset!: Int64 = 0,
         private let mapLength!: Int64 = DEFAULT_MMAP_BYTES
     ){
@@ -199,7 +200,7 @@ public class MMapFile <: Resource & IOStream {
         readable_ = MMapProt.Read & protBits
         writable_ = MMapProt.Write & protBits
         pointer = unsafe{
-            mmap(NULL_POINTER, UIntNative(mapLength), protBits, MMapFlag.Private.value, fd, IntNative(offset))
+            mmap(NULL_POINTER, UIntNative(mapLength), protBits, flag.value, fd, IntNative(offset))
         }
     }
     private func isNullPointer(pointer: CPointer<Unit>){
@@ -235,8 +236,8 @@ public class MMapFile <: Resource & IOStream {
     }
     private func sync(pointer: CPointer<Unit>, length: Int64){
         unsafe{
-            let syncStart = (dirtyStart / MEM_PAGE_SIZE) * MEM_PAGE_SIZE
-            msync(pointer + syncStart, UIntNative(dirtyBytes + dirtyStart % MEM_PAGE_SIZE), MSyncFlag.Sync.value)
+            let syncStart = (dirtyStart / nullptr) * nullptr
+            msync(pointer + syncStart, UIntNative(dirtyBytes + dirtyStart % nullptr), MSyncFlag.Sync.value)
         }
     }
     private func sync(){
@@ -253,10 +254,10 @@ public class MMapFile <: Resource & IOStream {
             case _ => MMapException(caused)
         }
     }
-    public func remap(offset: Int64, mapLength: Int64): MMapFile {
+    public func remap(offset: Int64, mapLength: Int64, flag!: MMapFlag = MMapFlag.Private): MMapFile {
         sync()
         unmap()
-        file.mmap(offset, mapLength)
+        file.mmap(offset, mapLength, flag: flag)
     }
     /**
      * 相对文件开头的读偏移量
@@ -322,8 +323,8 @@ public class MMapFile <: Resource & IOStream {
     private unsafe func pointerOffset(offset: Int64){
         CPointer<Unit>(CPointer<Byte>(this.pointer) + offset)
     }
-    private func opsize(size: Int64, offset: Int64){
-        if(let s <- mapLength - offset && s < size){
+    private func opsize(size: Int64, offset: Int64, len: Int64){
+        if(let s <- len - offset && s < size){
             s
         }else{
             size
@@ -334,7 +335,7 @@ public class MMapFile <: Resource & IOStream {
      */
     public func read(buffer: Array<Byte>): Int64 {
         checkReadable()
-        let size = opsize(buffer.size, readOffset_)
+        let size = opsize(buffer.size, readOffset_, writeOffset_)
         if(size == 0){
             return 0
         }
@@ -352,7 +353,7 @@ public class MMapFile <: Resource & IOStream {
      */
     public func write(buffer: Array<Byte>): Unit {
         checkWritable()
-        let size = opsize(buffer.size, writeOffset_)
+        let size = opsize(buffer.size, writeOffset_, mapLength)
         if(size < buffer.size){
             throw MMapException("remainder mmapped size is too small, remainder: ${size}, buffer.size: ${buffer.size}")
         }
@@ -374,10 +375,10 @@ public interface ToMMap {
     /**
      * 用此函数创建的内存映射文件只有读写两个prot，与当前File实例的可读可写属性一致。File扩展此接口
      */
-    func mmap(offset: Int64, mapLength: Int64): MMapFile
+    func mmap(offset: Int64, mapLength: Int64, flag!: MMapFlag): MMapFile
 }
 extend File <: ToMMap {
-    public func mmap(offset: Int64, mapLength: Int64): MMapFile {
+    public func mmap(offset: Int64, mapLength: Int64, flag!: MMapFlag = MMapFlag.Private): MMapFile {
         let prots = if(this.canRead() && this.canWrite()){
             [MMapProt.Read, MMapProt.Write]
         }else if(this.canRead()){
@@ -387,6 +388,6 @@ extend File <: ToMMap {
         }else{
             throw IOException("file ${canonicalize(this.info.path)} cannot be read and written")
         }
-        MMapFile(this, prots, offset: offset, mapLength: mapLength)
+        MMapFile(this, prots, offset: offset, mapLength: mapLength, flag: flag)
     }
 }
