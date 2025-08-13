@@ -436,7 +436,7 @@ public class MMapFile <: Resource & IOStream {
      */
     public func read(buffer: Array<Byte>): Int64 {
         checkReadable()
-        let roff = readOff.load()
+        let readOff = readOffset_.load()
         let size = opsize(buffer.size, readOff, if (isWritable) {
             writeOffset_.load()
         } else {
