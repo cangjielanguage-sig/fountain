@@ -15,7 +15,7 @@
 
 [target]
 [target.x86_64-w64-mingw32]
-[target.x86_64-W64-mingw32.bin-dependencies]
+[target.x86_64-w64-mingw32.bin-dependencies]
   path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]
 
 [target.x86_64-unknown-linux-gnu]

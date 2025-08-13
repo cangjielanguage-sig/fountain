@@ -49,18 +49,30 @@ MS_INVALIDATE
     int msync(void *addr, size_t length, int flags);
 
  */
+@When[os != "Windows"]
 private const PROT_READ: IntNative = 0x1
+@When[os != "Windows"]
 private const PROT_WRITE: IntNative = 0x2
+@When[os != "Windows"]
 private const PROT_EXEC: IntNative = 0x4
+@When[os != "Windows"]
 private const PROT_NONE: IntNative = 0x0
+@When[os != "Windows"]
 private const MAP_SHARED: IntNative = 0x01
+@When[os != "Windows"]
 private const MAP_PRIVATE: IntNative = 0x02
+// @When[os != "Windows"]
 //private const MAP_FIXED: IntNative = 0x10
+@When[os != "Windows"]
 private const MAP_ANONYMOUS: IntNative = 0x20
+@When[os != "Windows"]
 private const MS_SYNC: IntNative = 0x0004
+@When[os != "Windows"]
 private const MS_ASYNC: IntNative = 0x001
+@When[os != "Windows"]
 private const MS_INVALIDATE: IntNative = 0x002
 
+@When[os != "Windows"]
 foreign {
     func mmap(start: CPointer<Unit>, length: UIntNative, prot: IntNative, flags: IntNative, fd: IntNative,
         offset: IntNative): CPointer<Unit>
@@ -69,7 +81,7 @@ foreign {
 
     func msync(addr: CPointer<Unit>, length: UIntNative, flags: IntNative): IntNative
 }
-
+@When[os != "Windows"]
 public enum MMapProt {
     | Read
     | Write
@@ -102,13 +114,13 @@ public enum MMapProt {
         }
     }
 }
-
+@When[os != "Windows"]
 public interface MMapProtArray {
     operator func |(other: MMapProt): Array<MMapProt>
     operator func |(others: Array<MMapProt>): Array<MMapProt>
     func combine(): IntNative
 }
-
+@When[os != "Windows"]
 extend Array<MMapProt> <: MMapProtArray {
     public operator func |(other: MMapProt): Array<MMapProt> {
         Array<MMapProt>(this.size + 1) {
@@ -136,7 +148,7 @@ extend Array<MMapProt> <: MMapProtArray {
         return res
     }
 }
-
+@When[os != "Windows"]
 public enum MMapFlag <: Equatable<MMapFlag> & Equatable<IntNative> {
     | Shared
     | Private
@@ -175,7 +187,7 @@ public enum MMapFlag <: Equatable<MMapFlag> & Equatable<IntNative> {
         }
     }
 }
-
+@When[os != "Windows"]
 public enum MSyncFlag {
     | Sync
     | Async
@@ -195,6 +207,7 @@ public enum MSyncFlag {
 /**
  * 默认映射字节数
  */
+@When[os != "Windows"]
 public const DEFAULT_MMAP_BYTES = 1 * 1024 * 1024 * 1024
 /**
  * 内存映射文件，本类没有做并发安全处理
@@ -203,6 +216,7 @@ public const DEFAULT_MMAP_BYTES = 1 * 1024 * 1024 * 1024
  * 如果file是zeroValue<File>()，按照Anonymous初始化，且offset不生效。
  * 如果file不是zeroValue<File>()，且file.length - offset < mapLength, 文件又以只读方式打开，会抛出异常；此时如果文件可写会自动延长文件长度
  */
+@When[os != "Windows"]
 public class MMapFile <: Resource & IOStream {
     private static let zeroFile = unsafe{zeroValue<File>()}
     private static let ANONYMOUS_FD = IntNative(-1)
@@ -464,14 +478,14 @@ public class MMapFile <: Resource & IOStream {
         sync()
     }
 }
-
+@When[os != "Windows"]
 public interface ToMMap {
     /**
      * 用此函数创建的内存映射文件只有读写两个prot，与当前File实例的可读可写属性一致。File扩展此接口
      */
     func mmap(offset: Int64, mapLength: Int64, flag!: MMapFlag): MMapFile
 }
-
+@When[os != "Windows"]
 extend File <: ToMMap {
     public func mmap(offset: Int64, mapLength: Int64, flag!: MMapFlag = MMapFlag.Private): MMapFile {
         let prots = if (this.canRead() && this.canWrite()) {
