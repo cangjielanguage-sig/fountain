@@ -130,12 +130,9 @@ public class MMapFile <: Resource & IOStream {
             msync(pointerOffset(syncStart), UIntNative(dirtyBytes + dirtyStart % MEM_PAGE_SIZE), flag.value)
         }
     }
-    private func sync(pointer: CPointer<Unit>, length: Int64) {
-        sync(MSyncFlag.Sync)
-    }
     private func sync() {
         if (dirtyBytes > 0 && isSyncable) {
-            sync(pointer, dirtyBytes)
+            sync(MSyncFlag.Sync)
             dirtyStart += dirtyBytes
             dirtyBytes = 0
         }
