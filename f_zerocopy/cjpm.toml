@@ -1,6 +1,6 @@
 [package]
   cjc-version = "1.0.0"
-  name = "f_mmap"
+  name = "f_zerocopy"
   description = "nothing here"
   version = "1.0.0"
   target-dir = ""

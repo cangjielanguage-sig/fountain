@@ -94,7 +94,7 @@ _/ ____\____  __ __  _____/  |______  |__| ____
   - 针对Iterator的扩展
 - 对象池
 - 堆缓存
-
+  - 强引用，指定最大缓存数、过期时间的缓存
   ```cj
   let cache = HeapCache<V> where V <: Object (
     private let concurrencyLevel!: Int64 = DEFAULT_HEAP_CACHE_CONCURRENCY_LEVEL,
@@ -106,6 +106,7 @@ _/ ____\____  __ __  _____/  |______  |__| ____
   cache.set('key', object)
   let opt: ?V = cache.get('key')
   ```
+  - 延迟弱引用堆缓存
 
 - 正则表达式DSL
 - 简化属性复制的工具
@@ -166,6 +167,8 @@ _/ ____\____  __ __  _____/  |______  |__| ____
     }
   }
   ```
+
+- 零复制
 
   ```bash
     # 现在支持console, file, tcp, udp, unixDatagram, unix这六个日志记录器，可以随意编排不必全部出现，还可以继承f_log.AsyncLogger实现新的日志记录器

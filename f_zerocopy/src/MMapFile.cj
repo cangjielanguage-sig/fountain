@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_mmap
+package f_zerocopy
 
 import std.convert.Parsable
 import std.io.*
@@ -22,7 +22,7 @@ import std.process.executeWithOutput
 import std.sync.{Timer, AtomicInt64}
 import std.time.MonoTime
 import f_base.*
-import f_mmap.exception.MMapException
+import f_zerocopy.exception.MMapException
 
 /**
  * 本包仅支持linux
@@ -299,13 +299,7 @@ public class MMapFile <: Resource & IOStream {
     }
     private func unmap() {
         unsafe {
-            let pr = pointer.asResource()
             munmap(pointer, UIntNative(mapLength))
-            try {
-                if (!pr.isClosed()) {
-                    pr.close()
-                }
-            } catch (_) {}
         }
     }
     
