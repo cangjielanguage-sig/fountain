@@ -299,9 +299,15 @@ public class Observable<T> {
      * 指定错误恢复器，产生或消费数据时如果抛出异常将执行当前指定的恢复器，并使用恢复器返回的数据和当前Observable的成员创建新的Observable
      * 多次调用本函数及其重载函数只有最后一个恢复器第一次。
      */
-    public func setErrorResumer(resumer: (Exception) -> ?T) : This {
+    public func setErrorResumer(resumeIfNone: Bool, resumer: (Exception) -> ?T) : This {
         setErrorResumer{e => 
-            return SingleIterator<T>(resumer(e))
+            return if(let Some(v) <- resumer(e)){
+                SingleIterator<T>(v)
+            }else if(resumeIfNone){
+                EmptyIterator<T>()
+            }else{
+                None<Iterable<T>>
+            }
         }
     }
     /**
@@ -318,10 +324,12 @@ public class Observable<T> {
      * 指定错误恢复器，产生或消费数据时如果抛出异常将执行当前指定的恢复器，如果闭包参数返回true会继续使用当前Observable的全部成员创建新的Observable
      * 多次调用本函数及其重载函数只有最后一个恢复器生效
      */
-    public func setErrorResumer(resumer: (Exception) -> Bool): This {
+    public func setErrorResumer(resumeIfFalse: Bool, resumer: (Exception) -> Bool): This {
         this.setErrorResumer{e => 
             if(resumer(e)){
                 this.iterator
+            }else if(resumeIfFalse){
+                EmptyIterator<T>()
             }else{
                 None<Iterator<T>>
             }
