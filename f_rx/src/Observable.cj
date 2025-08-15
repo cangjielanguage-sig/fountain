@@ -296,6 +296,15 @@ public class Observable<T> {
         this
     }
     /**
+     * 指定错误恢复器，产生或消费数据时如果抛出异常将执行当前指定的恢复器，并使用恢复器返回的数据和当前Observable的成员创建新的Observable
+     * 多次调用本函数及其重载函数只有最后一个恢复器第一次。
+     */
+    public func setErrorResumer(resumer: (Exception) -> ?T) : This {
+        setErrorResumer{e => 
+            return SingleIterator<T>(resumer(e))
+        }
+    }
+    /**
      * 指定错误恢复器，产生或消费数据时如果抛出异常将执行当前指定的恢复器，并继续使用当前Observable的全部成员创建新的Observable
      * 多次调用本函数及其重载函数只有最后一个恢复器生效。
      */
