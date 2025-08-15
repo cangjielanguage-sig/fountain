@@ -146,9 +146,10 @@ public class CombinedObserver<T> <: Observer<T> {
      */
     public func remove<O>(name: String, observer: O, completion: Bool): Unit where O <: Object & Observer<T> {
         if(let Some(o) <- observers.get(name)){
-            match(o){
-                case x: Object where isSame(observer, x) => remove(name, completion)
-                case _ => throw ObserverRegistrationException("registered observer ${name} does not match current specified")
+            if(isSame(observer, o)){
+                remove(name, completion)
+            }else{
+                throw ObserverRegistrationException("registered observer ${name} does not match current specified")
             }
         }
     }
@@ -156,15 +157,13 @@ public class CombinedObserver<T> <: Observer<T> {
      * 删除指定观察者，如果没有找到相同实例的观察者将什么也不做，如果completion是true向被清除的观察者发送完成事件
      */
     public func remove<O>(observer: O, completion: Bool): Unit where O <: Object & Observer<T> {
-        for((n, o) in this.observers) {
-            if(let x: Object <- o && isSame(observer, x)){
-                remove(n, completion)
-                return;
-            }
+        for((n, o) in this.observers where isSame(observer, o)) {
+            remove(n, completion)
+            return;
         }
     }
-    private func isSame<O>(observer: O, o: Object): Bool where O <: Object & Observer<T> {
-        match((unwrapAsync(observer), o)){
+    private func isSame<O>(observer: O, o: Observer<T>): Bool where O <: Object & Observer<T> {
+        match((observer, unwrapAsync(o))){
             case (o1: Object, o2: Object) => refEq(o1, o2)
             case _ => false
         }
