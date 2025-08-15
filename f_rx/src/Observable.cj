@@ -310,7 +310,7 @@ public class Observable<T> {
      */
     public func setErrorResumer(resumer: (Exception) -> Unit): This {
         this.setErrorResumer{e => 
-            resumer
+            resumer(e)
             this.iterator
         }
     }
