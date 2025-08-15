@@ -96,7 +96,7 @@ public class CombinedObserver<T> <: Observer<T> {
      */
     public func add(name: String): FuncObserver<T> {
         let observer = FuncObserver<T>()
-        observers.add(name, wrap(observer))
+        observers.add(name, wrapAsyncIfNeed(observer))
         observer
     }
     /**
@@ -107,7 +107,7 @@ public class CombinedObserver<T> <: Observer<T> {
         if(observer is FuncObserver<T>){
             throw ObserverRegistrationException('to invoke add(name: String) or add(name: String, observer: Observer<T>) insdead')
         }
-        add(TypeInfo.of(observer).qualifiedName, wrap(observer))
+        add(TypeInfo.of(observer).qualifiedName, wrapAsyncIfNeed(observer))
         this
     }
     /**
@@ -115,16 +115,22 @@ public class CombinedObserver<T> <: Observer<T> {
      * name是观察者名称，observer是注册的观察者
      */
     public func add(name: String, observer: Observer<T>): This {
-        if(observers.addIfAbsent(name, wrap(observer)).isSome()){
+        if(observers.addIfAbsent(name, wrapAsyncIfNeed(observer)).isSome()){
             throw ObserverRegistrationException("observer ${name} already registered")
         }
         this
     }
-    private func wrap(observer: Observer<T>) {
+    private func wrapAsyncIfNeed(observer: Observer<T>) {
         if(async){
             AsyncObserver<T>(observer)
         }else{
             observer
+        }
+    }
+    private func unwrapAsync(observer: Observer<T>){
+        match(observer){
+            case x: AsyncObserver<T> => x.observer
+            case _ => observer
         }
     }
     /**
@@ -139,7 +145,7 @@ public class CombinedObserver<T> <: Observer<T> {
      * 删除指定名称的观察者且已注册观察者与参数observer是同一实例，如果不是同一实例会抛出异常，如果completion是true向被清除的观察者发送完成事件
      */
     public func remove<O>(name: String, observer: O, completion: Bool): Unit where O <: Object & Observer<T> {
-        if(let Some(o) <- observers.get(name) && let Some(oo) <- (o as Object) && refEq(oo, observer)){
+        if(let Some(o) <- observers.get(name)){
             match(o){
                 case x: Object where isSame(observer, x) => remove(name, completion)
                 case _ => throw ObserverRegistrationException("registered observer ${name} does not match current specified")
@@ -157,13 +163,8 @@ public class CombinedObserver<T> <: Observer<T> {
             }
         }
     }
-    private func isSame(observer: Observer<T>, o: Object): Bool {
-        match((observer, o)){
-            case (o: Object, x: AsyncObserver<T>) => if(let x: Object <- x.observer){
-                refEq(o, x)
-            }else{
-                false
-            }
+    private func isSame<O>(observer: O, o: Object): Bool where O <: Object & Observer<T> {
+        match((unwrapAsync(observer), o)){
             case (o1: Object, o2: Object) => refEq(o1, o2)
             case _ => false
         }
