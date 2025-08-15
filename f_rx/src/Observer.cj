@@ -96,7 +96,7 @@ public class CombinedObserver<T> <: Observer<T> {
      */
     public func add(name: String): FuncObserver<T> {
         let observer = FuncObserver<T>()
-        observers.add(name, observer)
+        observers.add(name, wrap(observer))
         observer
     }
     /**
@@ -107,11 +107,7 @@ public class CombinedObserver<T> <: Observer<T> {
         if(observer is FuncObserver<T>){
             throw ObserverRegistrationException('to invoke add(name: String) or add(name: String, observer: Observer<T>) insdead')
         }
-        add(TypeInfo.of(observer).qualifiedName, if(async){
-            AsyncObserver<T>(observer)
-        }else{
-            observer
-        })
+        add(TypeInfo.of(observer).qualifiedName, wrap(observer))
         this
     }
     /**
@@ -119,10 +115,17 @@ public class CombinedObserver<T> <: Observer<T> {
      * name是观察者名称，observer是注册的观察者
      */
     public func add(name: String, observer: Observer<T>): This {
-        if(observers.addIfAbsent(name, observer).isSome()){
+        if(observers.addIfAbsent(name, wrap(observer)).isSome()){
             throw ObserverRegistrationException("observer ${name} already registered")
         }
         this
+    }
+    private func wrap(observer: Observer<T>) {
+        if(async){
+            AsyncObserver<T>(observer)
+        }else{
+            observer
+        }
     }
     /**
      * 删除指定名称的观察者，如果completion是true向被清除的观察者发送完成事件
@@ -138,7 +141,7 @@ public class CombinedObserver<T> <: Observer<T> {
     public func remove<O>(name: String, observer: O, completion: Bool): Unit where O <: Object & Observer<T> {
         if(let Some(o) <- observers.get(name) && let Some(oo) <- (o as Object) && refEq(oo, observer)){
             match(o){
-                case x: Object where refEq(x, observer) => remove(name, completion)
+                case x: Object where isSame(observer, x) => remove(name, completion)
                 case _ => throw ObserverRegistrationException("registered observer ${name} does not match current specified")
             }
         }
@@ -148,10 +151,21 @@ public class CombinedObserver<T> <: Observer<T> {
      */
     public func remove<O>(observer: O, completion: Bool): Unit where O <: Object & Observer<T> {
         for((n, o) in this.observers) {
-            if(let x: Object <- o && refEq(x, observer)){
+            if(let x: Object <- o && isSame(observer, x)){
                 remove(n, completion)
                 return;
             }
+        }
+    }
+    private func isSame(observer: Observer<T>, o: Object): Bool {
+        match((observer, o)){
+            case (o: Object, x: AsyncObserver<T>) => if(let x: Object <- x.observer){
+                refEq(o, x)
+            }else{
+                false
+            }
+            case (o1: Object, o2: Object) => refEq(o1, o2)
+            case _ => false
         }
     }
     /**
@@ -181,7 +195,7 @@ class AsyncObserver<T> <: Observer<T> {
     private let q = ArrayBlockingQueue<T>(1)
     private let e = AtomicOptionReference<Exception>()
     private let c = AtomicBool(false)
-    AsyncObserver(private let observer: Observer<T>){
+    AsyncObserver(let observer: Observer<T>){
         spawn{
             while(e.load().isNone() && !c.load() && let Some(d) <- q.remove(Duration.millisecond * 100)){
                 observer.onNext(d)
