@@ -336,7 +336,7 @@ public class Observable<T> {
             }else if(resumeIfFalse){
                 EmptyIterator<T>.INSTANCE()
             }else{
-                None<Iterator<T>>
+                None<Iterable<T>>
             }
         }
     }
