@@ -304,7 +304,7 @@ public class Observable<T> {
             return if(let Some(v) <- resumer(e)){
                 SingleIterator<T>(v)
             }else if(resumeIfNone){
-                EmptyIterator<T>()
+                EmptyIterator<T>.INSTANCE()
             }else{
                 None<Iterable<T>>
             }
@@ -329,7 +329,7 @@ public class Observable<T> {
             if(resumer(e)){
                 this.iterator
             }else if(resumeIfFalse){
-                EmptyIterator<T>()
+                EmptyIterator<T>.INSTANCE()
             }else{
                 None<Iterator<T>>
             }

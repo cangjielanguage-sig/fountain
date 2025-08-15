@@ -96,7 +96,7 @@ public class CombinedObserver<T> <: Observer<T> {
      */
     public func add(name: String): FuncObserver<T> {
         let observer = FuncObserver<T>()
-        observers.add(name, wrapAsyncIfNeed(observer))
+        addIfAbsent(name, observer)
         observer
     }
     /**
@@ -104,10 +104,7 @@ public class CombinedObserver<T> <: Observer<T> {
      * 如果如果试图注册FuncObserver<T>会抛出异常，如果同一类型的观察者重复注册会抛出异常
      */
     public func add(observer: Observer<T>): This{
-        if(observer is FuncObserver<T>){
-            throw ObserverRegistrationException('to invoke add(name: String) or add(name: String, observer: Observer<T>) insdead')
-        }
-        add(TypeInfo.of(observer).qualifiedName, wrapAsyncIfNeed(observer))
+        add(TypeInfo.of(observer).qualifiedName, observer)
         this
     }
     /**
@@ -115,16 +112,28 @@ public class CombinedObserver<T> <: Observer<T> {
      * name是观察者名称，observer是注册的观察者
      */
     public func add(name: String, observer: Observer<T>): This {
+        if(observer is FuncObserver<T>){
+            throw ObserverRegistrationException('to invoke add(name: String) or add(name: String, observer: Observer<T>) insdead')
+        }
+        addIfAbsent(name, observer)
+        this
+    }
+    private func addIfAbsent(name: String, observer: Observer<T>){
         if(observers.addIfAbsent(name, wrapAsyncIfNeed(observer)).isSome()){
             throw ObserverRegistrationException("observer ${name} already registered")
         }
-        this
     }
     private func wrapAsyncIfNeed(observer: Observer<T>) {
         if(async){
-            AsyncObserver<T>(observer)
+            match(observer){
+                case x: AsyncObserver<T> => x
+                case _ => AsyncObserver<T>(observer)
+            }
         }else{
-            observer
+            match(observer){
+                case x: AsyncObserver<T> => x.observer
+                case _ => observer
+            }
         }
     }
     private func unwrapAsync(observer: Observer<T>){
