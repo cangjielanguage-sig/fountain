@@ -313,11 +313,16 @@ public class Observable<T> {
     /**
      * 指定错误恢复器，产生或消费数据时如果抛出异常将执行当前指定的恢复器，并继续使用当前Observable的全部成员创建新的Observable
      * 多次调用本函数及其重载函数只有最后一个恢复器生效。
+     * 如果resumeWithEmpty是true使用空迭代器恢复，否则使用当前迭代器恢复
      */
-    public func setErrorResumer(resumer: (Exception) -> Unit): This {
+    public func setErrorResumer(resumeWithEmpty: Bool, resumer: (Exception) -> Unit): This {
         this.setErrorResumer{e => 
             resumer(e)
-            this.iterator
+            if(resumeWithEmpty){
+                EmptyIterator<T>.INSTANCE()
+            }else{
+                this.iterator.getOrThrow()
+            }
         }
     }
     /**
@@ -327,7 +332,7 @@ public class Observable<T> {
     public func setErrorResumer(resumeIfFalse: Bool, resumer: (Exception) -> Bool): This {
         this.setErrorResumer{e => 
             if(resumer(e)){
-                this.iterator
+                this.iterator.getOrThrow()
             }else if(resumeIfFalse){
                 EmptyIterator<T>.INSTANCE()
             }else{

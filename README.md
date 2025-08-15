@@ -72,29 +72,30 @@ _/ ____\____  __ __  _____/  |______  |__| ____
 
 ## 功能
 
-- 空集合
-- 比较器Comparator Equaler
+### 空集合
+### 比较器Comparator Equaler
 
-- UUID
-- 常用设计模式
+### UUID
+### 常用设计模式
   - 工厂模式
   - 策略模式
   - 发布订阅模式
   - 观察者模式
-- 路径匹配PathPattern
-- TreeTransformer
-- crc16
-- murmur_hash
-- DiffieHellman密钥交换协议
-- CaseFormat 命名风格的字符串转换
-- 文本模板，插值串在编译期就确定了，有时候需要运行期才能确定的文本模板
-- 各种常用异常
-- 标准库的扩展
+  - 状态模式
+### 路径匹配PathPattern
+### TreeTransformer
+### crc16
+### murmur_hash
+### DiffieHellman密钥交换协议
+### CaseFormat 命名风格的字符串转换
+### 文本模板，插值串在编译期就确定了，有时候需要运行期才能确定的文本模板
+### 各种常用异常
+### 标准库的扩展
   
   - 针对Iterator的扩展
-- 对象池
-- 堆缓存
-  - 强引用，指定最大缓存数、过期时间的缓存
+### 对象池
+### 堆缓存
+#### 强引用，指定最大缓存数、过期时间的缓存
   ```cj
   let cache = HeapCache<V> where V <: Object (
     private let concurrencyLevel!: Int64 = DEFAULT_HEAP_CACHE_CONCURRENCY_LEVEL,
@@ -106,19 +107,19 @@ _/ ____\____  __ __  _____/  |______  |__| ____
   cache.set('key', object)
   let opt: ?V = cache.get('key')
   ```
-  - 延迟弱引用堆缓存
+#### 延迟弱引用堆缓存
 
-- 正则表达式DSL
-- 简化属性复制的工具
-- 优先级队列
-- 标准库未提供的集合
-- 支持大端序小端序的字节数组扩展（可以把各种数值类型按指定端序从字节数组读写）
-- 功能更丰富的JSON
-- CRON定时器
-- ORM
-- IOC
-- AOP
-- MVC
+### 正则表达式DSL
+### 简化属性复制的工具
+### 优先级队列
+### 标准库未提供的集合
+### 支持大端序小端序的字节数组扩展（可以把各种数值类型按指定端序从字节数组读写）
+### 功能更丰富的JSON
+### CRON定时器
+### ORM
+### IOC
+### AOP
+### MVC
   - 特性
     - 各种请求方法
     - 参数
@@ -132,17 +133,17 @@ _/ ____\____  __ __  _____/  |______  |__| ____
     - 可以上传多个文件
     - 自动生成文档
       - 自带文档请求接口
-- 网络流水线
-- 权限控制
-- 负载均衡策略
+### 网络流水线
+### 权限控制
+### 负载均衡策略
   - 随机
   - 优先级
   - 轮转法
-- id生成器
+### id生成器
   
   - 雪花算法改
-- 配置类型
-- jwt
+### 配置类型
+### jwt
 
   ```cj
   let jwt = JWT().hmacSHA1(keyOfBytes)//支持标准库提供的除国密之外的全部签名算法，国密不支持HMAC故无法支持
@@ -167,8 +168,6 @@ _/ ____\____  __ __  _____/  |______  |__| ____
     }
   }
   ```
-
-- 零复制
 
   ```bash
     # 现在支持console, file, tcp, udp, unixDatagram, unix这六个日志记录器，可以随意编排不必全部出现，还可以继承f_log.AsyncLogger实现新的日志记录器
@@ -213,6 +212,149 @@ _/ ____\____  __ __  _____/  |______  |__| ____
     export fountain_logger_appender_UnixLoggerName_path=/path/of/unix/file.log # 默认是/tmp/log/unix.log
     export fountain_logger_appender_UnixLoggerName_pattern=..... # unix日志格式
   ```
+
+
+### 零复制
+  - MMapFile
+### 响应式编程
+#### 最简单用法
+```cj
+let observable = Observable<Int64>
+.iterable([1,2,3])
+.subscribe('test', FuncObserver<Int64>().setNextFunc{v => println(v)})
+.withCurrent()
+.defer()
+
+observable.pause()//暂停产生新数据
+// 每次获取下次数据前都会检查内部变量disposed_，disposed_是false的立即结束。dispose()修改disposed_为true。
+//disposed_类型是AtomicBool
+```
+#### 初始化方式
+1. iterable
+    1. 接收一个`Iterable<T>`实例
+    2. 接收一个`()->Iterable<T>`实例
+    3. 接收一个`()->Future<Iterable<T>>`实例
+    4. 接收一个`Future<Iterable<T>>`实例
+    5. 接收一个`()->Future<Iterable<T>>`实例
+2. emitter
+    接收一个`(Emitter<T>) -> Unit`实例
+    - `Emitter<T>`
+      - onNext(T)
+        发送一条数据
+      - onComplete()
+        发送完成事件
+      - onError(Exception)
+        发送异常
+3. single
+    1. 接收一个`T`实例
+    2. 接收一个`()->T`实例
+    3. 接收一个`Future<T>`实例
+    4. 接收一个`()->Future<T>`实例
+4. maybe
+    1. 接收一个`?T`实例
+    2. 接收一个`()->?T`实例
+    3. 接收一个`Future<?T>`实例
+    4. 接收一个`()->Future<?T>`实例
+5. empty
+    创建一个空的被观察者
+6. concat
+    1. 接收一个`Iterable<Iterable<T>>`实例，并把它展开成`Iterator<T>`
+    2. 接收一个`()->Iterable<Iterable<T>>`实例，并把它展开成`Iterator<T>`
+    3. 接收一个`Future<Iterable<Iterable<T>>`实例，并把它展开成`Iterator<T>`
+    4. 接收一个`()->Future<Iterable<Iterable<T>>>`实例，并把它展开成`Iterator<T>`
+
+#### 注册观察者
+  - subscribe(Observer<T>)
+    - 可多次调用注册多个观察者
+    - 由初始化时的asyncCombined参数决定是否并行执行各个观察者
+    - 使用观察者类型全限定名作为名称
+  - 有多个重载，还可以为观察者指定名称
+#### 注销观察者
+  - dispose(completion)
+    强制结束，不再产生新数据。参数决定是否发送完成消息
+  - dispose(name)
+    注销指定名称的观察者
+  - dispose<O>() 
+    注销指定类型的全部观察者
+  - dispose<O>(name, O) where O <: Object & Observer<T>
+    注销指定名称和观察者实例，如果注册的观察者与参数不是同一实例会抛异常
+  - dispose<O>(observer: O): Unit where O <: Object & Observer<T> 
+    注销指定实例的观察者，如果注册的观察者与参数不是同一实例会抛异常
+  - disposeAll()
+    注销全部观察者
+  - pause(completion!: Bool = false)
+    暂停产生新数据，completion决定是否发送完成事件
+  - 如果当前已经没有观察者了将暂停产生新数据，直到注册新的观察者并重新调用启动函数
+##### 多个观察者
+    以上每个初始化函数都可以接收命名参数`asyncCombined!: Bool`，用来决定多个观察者是否单独开启线程还是所有观察者都使用一个线程
+
+#### 每条数据的处理策略
+ 1. withAlwaysNew()
+    总是使用新线程处理每条数据
+ 2. withCurrent()
+    总是使用当前线程处理每条数据
+ 3. withSingle(...)
+    使用指定背压策略和数据队列长度初始化数据处理策略，一直使用同一个线程处理所有数据
+ 4. withFixed(...)
+    使用指定背压策略、数据队列长度和线程数初始化数据处理策略，一直使用这几个线程处理所有数据
+#### 启动
+  1. delay(Duration)
+     延迟Duration后启动
+  2. defer()
+     0延迟新线程启动
+  3. immediately()
+     当前线程立即启动
+#### 停止
+  - dispose(completion!: Bool = false)
+    停止当前被观察者，如果参数是true就发送onComplete()事件
+#### 背压策略
+    只有单线程和固定线程数的处理策略才支持背压策略，如果产生新数据时，数据队列已满，则触发背压策略
+##### BackPressure
+ 1. Discarding
+    丢弃新数据
+ 2. DropOldest
+    丢弃队列头的数据
+ 3. BlockingOrDiscarding(Duration)
+    阻塞指定时长后如果队列还是满的则丢弃最新数据
+ 4. BlockingOrThrowing(Duration)
+    阻塞指定时长后如果队列还是满的就抛出异常
+ 5. BlockingOrDroppingOldest(Duration)
+    阻塞指定时长后如果队列还是满的就丢弃队列头部的数据
+ 6. Throwing
+    如果队列是满的立即抛出异常
+ 7. Current
+    如果队列是满的就立即使用当前线程处理当前数据
+ 8. NewThread
+    如果队列是满的就立即使用新线程处理当前数据
+ 9. Action((()->Unit) -> Unit)
+    如果队列是满的就使用指定函数处理当前数据
+
+#### `Observer<T>`
+  - onNext(T)
+    接收一条数据
+  - onComplete()
+    接收完成事件
+  - onError(Exception)
+    接收一个异常
+##### `FuncObserver<T> <: Observer<T>`
+   - setNextFunc((T) -> Unit)
+     指定接收数据的函数
+   - setErrorFunc((Exception) -> Unit)
+     指定接收异常的函数
+   - setComplete(() -> Unit)
+     指定接收完成事件的函数
+##### `EmptyObserver<T>`
+   空的观察者
+
+#### 错误恢复器
+  - public func setErrorResumer(resumer: (Exception) -> ?Iterable<T>): This
+  - public func setErrorResumer(resumeIfNone: Bool, resumer: (Exception) -> ?T) : This
+  - public func setErrorResumer(resumer: (Exception) -> Unit): This
+  - public func setErrorResumer(resumeIfFalse: Bool, resumer: (Exception) -> Bool): This
+
+#### 重放
+Observable.replaySize(capacity)
+启动后如果继续注册观察者会异步重放缓存的数据，缓存数据的数量最大是capacity
 
 - 流程引擎
 - 实例复制
