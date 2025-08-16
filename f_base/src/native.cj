@@ -31,6 +31,6 @@ public let nullptr = CPointer<Unit>()
 /**
  * 简单调用memcpy
  */
-public unsafe func memcopy(dest: CPointer<Unit>, src: CPointer<Unit>, n: UIntNative): CPointer<Unit>{
+public unsafe func mcopy(dest: CPointer<Unit>, src: CPointer<Unit>, n: UIntNative): CPointer<Unit>{
     memcpy(dest, src, n)
 }

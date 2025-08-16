@@ -254,7 +254,7 @@ public class MMapFile <: Resource & IOStream {
         unsafe {
             let bufferAddr = acquireArrayRawData(buffer)
             let bufferPtr = bufferAddr.pointer
-            memcopy(CPointer<Unit>(bufferPtr), pointerOffset(readOff), UIntNative(size))
+            mcopy(CPointer<Unit>(bufferPtr), pointerOffset(readOff), UIntNative(size))
             releaseArrayRawData(bufferAddr)
         }
         readOffset_.fetchAdd(size)
@@ -273,7 +273,7 @@ public class MMapFile <: Resource & IOStream {
         unsafe {
             let bufferAddr = acquireArrayRawData(buffer)
             let bufferPtr = bufferAddr.pointer
-            memcopy(pointerOffset(writeOff), CPointer<Unit>(bufferPtr), UIntNative(size))
+            mcopy(pointerOffset(writeOff), CPointer<Unit>(bufferPtr), UIntNative(size))
             releaseArrayRawData(bufferAddr)
         }
         writeOffset_.fetchAdd(size)
