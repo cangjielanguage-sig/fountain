@@ -18,6 +18,7 @@ package f_rx
 public interface Cache<T> <: Iterable<T> {
     func new(): Cache<T>
     func set(value: T): Unit
+    func replay(observer: Observer<T>, fn: () -> Unit): Unit
 }
 public class EmptyCache<T> <: Cache<T> {
     public func new(): Cache<T> {
@@ -26,9 +27,8 @@ public class EmptyCache<T> <: Cache<T> {
     public func iterator(): Iterator<T> {
         EmptyIterator<T>.INSTANCE()
     }
-    public func set(value: T): Unit{
-
-    }
+    public func set(value: T): Unit{}
+    public func replay(observer: Observer<T>, fn: () -> Unit): Unit {}
 }
 public class QueuedCache<T> <: Cache<T> {
     private let queue: LinkedList<T>
@@ -48,6 +48,14 @@ public class QueuedCache<T> <: Cache<T> {
                 queue.removeFirst()
             }
             queue.addLast(value)
+        }
+    }
+    public func replay(observer: Observer<T>, fn: () -> Unit): Unit {
+        synchronized(lock){
+            for(data in queue){
+                observer.onNext(data)
+            }
+            fn()
         }
     }
 }

@@ -28,7 +28,9 @@ public class BeanMeta <: Comparable<BeanMeta> {
         public let primary!: Bool = false,
         public let condition!: BeanCondition = NoneBeanCondition.instance
     ) {}
-
+    /**
+     * BeanFactory.getList<T>()按照这个顺序返回
+     */
     public func compare(meta: BeanMeta): Ordering {
         if (this.primary && !meta.primary) {
             LT

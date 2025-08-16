@@ -201,36 +201,36 @@ public class Observable<T> {
         I2 <: Iterable<I1> {
         concat<I1, I2>({=> iterables}, asyncCombined: asyncCombined)
     }
-    private func replayCached(observer: Observer<T>): Unit {
-        spawn{
-            for(v in cache) {
-                observer.onNext(v)
-            }
-        }
+    private func replayCached(observer: Observer<T>, fn: () -> Unit): Unit {
+        cache.replay(observer, fn)
     }
     /**
      * 添加一个FuncObserver<T>，name是观察者名称，creator接收刚添加的观察者实例，可在此闭包内对观察者做修改
      */
     public func subscribe(name: String, creator: (FuncObserver<T>) -> Unit): This {
-        let observer = this.observer.add(name)
-        creator(observer)
-        replayCached(observer)
+        let ob = FuncObserver<T>()
+        creator(ob)
+        replayCached(ob){
+            this.observer.add(name, ob)
+        }
         this
     }
     /**
      * 订阅观察者
      */
     public func subscribe(observer: Observer<T>): This {
-        this.observer.add(observer)
-        replayCached(observer)
+        replayCached(observer){
+            this.observer.add(observer)
+        }
         this
     }
     /**
      * 订阅一个观察者，name是观察者名称
      */
     public func subscribe(name: String, observer: Observer<T>): This {
-        this.observer.add(name, observer)
-        replayCached(observer)
+        replayCached(observer){
+            this.observer.add(name, observer)
+        }
         this
     }
     /**
