@@ -121,14 +121,14 @@ public interface RootDAO {
     func loop<I, T>(values: I): LoopCondition<I, T> where I <: Iterable<T> {
         Condition.loop<I, T>(values, executor)
     }
-    func `set`(partial: () -> String): String {
-        Condition.`set`(partial)
+    func SET(partial: () -> String): String {
+        Condition.SET(partial)
     }
-    func `where`(partial: () -> String): String {
-        Condition.`where`(partial)
+    func WHERE(partial: () -> String): String {
+        Condition.WHERE(partial)
     }
-    func `where`(delimiter: String, partial: () -> String): String {
-        Condition.`where`(delimiter, partial)
+    func WHERE(delimiter: String, partial: () -> String): String {
+        Condition.WHERE(delimiter, partial)
     }
     func trim(prefix!: String, suffix!: String, partial!: () -> String): String {
         Condition.trim(prefix: prefix, suffix: suffix, partial: partial)

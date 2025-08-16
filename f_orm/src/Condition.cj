@@ -32,31 +32,31 @@ public class Condition {
         LoopCondition<I, T>(values, executor)
     }
 
-    public static func `set`(partial: () -> String): String {
+    public static func SET(partial: () -> String): String {
         try {
             delimiter = ','
             let partial = trim(prefix: ',', suffix: ',', partial: partial)
             if (partial.isEmpty()) {
                 ''
             } else {
-                ' `set` ${partial} '
+                ' SET ${partial} '
             }
         } finally {
             delimiter = ''
         }
     }
 
-    public static func `where`(partial: () -> String): String {
-        `where`('', partial)
+    public static func WHERE(partial: () -> String): String {
+        WHERE('', partial)
     }
-    public static func `where`(delimiter: String, partial: () -> String): String {
+    public static func WHERE(delimiter: String, partial: () -> String): String {
         try {
             Condition.delimiter = delimiter
             let partial = trim(prefix: 'and|or', suffix: 'and|or', partial: partial)
             if (partial.isEmpty()) {
                 ''
             } else {
-                ' `where` ${partial} '
+                ' WHERE ${partial} '
             }
         } finally {
             Condition.delimiter = ''
