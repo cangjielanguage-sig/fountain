@@ -287,12 +287,24 @@ public class Observable<T> {
         }
         this
     }
+    private func setErrorResumer(resumer: (Exception)-> ?Iterable<T>): This {
+        this.errorResumer = resumer
+        this
+    }
     /**
      * 指定错误恢复器，产生或消费数据时如果抛出异常将执行当前指定的恢复器，并使用恢复器返回的迭代器和当前Observable的成员创建新的Observable
      * 多次调用本函数及其重载函数只有最后一个恢复器生效。
      */
-    public func setErrorResumer(resumer: (Exception) -> ?Iterable<T>): This {
-        this.errorResumer = resumer
+    public func setErrorResumer(resumeIfNone: Bool, resumer: (Exception) -> ?Iterable<T>): This {
+        this.errorResumer = {e => 
+            return if(let Some(i) <- resumer(e)){
+                i.iterator()
+            }else if(resumeIfNone){
+                EmptyIterator<T>()
+            }else{
+                None<Iterable<T>>
+            }
+        }
         this
     }
     /**
