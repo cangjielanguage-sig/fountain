@@ -39,7 +39,7 @@ public class FuncObserver<T> <: Observer<T> {
     private var nextFunc: (T) -> Unit = {_ => }
     private var errorFunc: (Exception) -> Unit = {_ => }
     private var completeFunc: () -> Unit = { => }
-
+    init(){}
     public func onNext(item: T): Unit {
         nextFunc(item)
     }
@@ -94,10 +94,8 @@ public class CombinedObserver<T> <: Observer<T> {
     /**
      * 添加观察者，name是观察者的名称
      */
-    public func add(name: String): FuncObserver<T> {
-        let observer = FuncObserver<T>()
+    public func add(name: String, observer: FuncObserver<T>): Unit {
         addIfAbsent(name, observer)
-        observer
     }
     /**
      * 添加观察者，使用observer的全限定名做观察者名称，
