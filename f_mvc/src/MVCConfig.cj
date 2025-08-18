@@ -266,9 +266,11 @@ public class MVCConfig {
     private static func bufferSize(bufferKey: String, default: Int64) {
         if (let Some(x) <- Config.getValue<Int>(bufferKey)) {
             if (x > 0 && isMVCDebugging) {
-                x
+                return x
             } else if (x <= 0) {
-                default
+                return default
+            } else if ((x - 1) & x == 0) {
+                return x
             }
             var s = 1
             while (s < x) {
