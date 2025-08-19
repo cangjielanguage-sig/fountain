@@ -58,6 +58,24 @@ public interface ExtendMap<K, V> <: ExtendCollection<K, Collection<K>> where K <
         }
     }
     func entryView(key: K, fn: (K, ?V) -> ?V): ?V
+    func computeIfAbsent(key: K, fn: () -> V): V {
+        entryView(key){k, optv =>
+            if(let Some(_) <- optv){
+                optv
+            }else{
+                fn()
+            }
+        }.getOrThrow()
+    }
+    func computeIfPresent(key: K, fn: () -> V): ?V {
+        entryView(key){k, optv => 
+            if(let Some(_) <- optv){
+                fn()
+            }else{
+                None<V>
+            }
+        }
+    }
     func addIfAbsent(key: K, fn: () -> V): V
     func addIfPreset(key: K, fn: () -> V): ?V
     func removeIf(key: K, predicate: (V) -> Bool): ?V

@@ -203,7 +203,7 @@ class ConcHashMap<V> <: Collection<(String, V)> {
         }
     }
     private static func conc(concurrencyLevel: Int64) {
-        if((concurrencyLevel - 1) & concurrencyLevel == 0){
+        if(((concurrencyLevel - 1) & concurrencyLevel) == 0){
             return concurrencyLevel
         }
         var concurrency = 1

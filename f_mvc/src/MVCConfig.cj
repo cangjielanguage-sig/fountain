@@ -269,7 +269,7 @@ public class MVCConfig {
                 return x
             } else if (x <= 0) {
                 return default
-            } else if ((x - 1) & x == 0) {
+            } else if (((x - 1) & x) == 0) {
                 return x
             }
             var s = 1
