@@ -17,3 +17,4 @@ fountain.iml
 .arts/*
 build-script-cache/
 build.cj
+log.txt
