@@ -20,8 +20,8 @@ public import std.math.numeric.*
 
 /**可执行加法运算*/
 
-public interface Number<T> <: Negativable<T> & Addable<T> & Subable<T> & Mulable<T> & Divable<T> & Comparable<T> & Hashable
-    & ToString where T <: Number<T> & ToString & Comparable<T> & Hashable{
+public interface Number<T> <: Negativable<T> & Addable<T> & Subable<T> & Mulable<T> & Divable<T> & Comparable<T> &
+    Hashable & ToString where T <: Number<T> & ToString & Comparable<T> & Hashable {
     static prop BYTES: Int64
 }
 
@@ -108,7 +108,11 @@ extend Int8 <: ExtendInt8 {
 
     @OverflowWrapping
     public func toUInt(): UInt8 {
-        UInt8(this & 0x7f) | UInt8(this & (1 << 7))
+        UInt8(this & 0x7f) | if (this < 0) {
+            !0x7fu8
+        } else {
+            0u8
+        }
     }
 }
 
@@ -171,7 +175,11 @@ extend Int16 <: ExtendInt16 {
 
     @OverflowWrapping
     public func toUInt(): UInt16 {
-        UInt16(this & 0x7f_ff) | UInt16(this & (1 << 15))
+        UInt16(this & 0x7f_ff) | if (this < 0) {
+            !0x7f_ffu16
+        } else {
+            0u16
+        }
     }
 }
 
@@ -239,7 +247,11 @@ extend Int32 <: ExtendInt32 {
 
     @OverflowWrapping
     public func toUInt(): UInt32 {
-        UInt32(this & 0x7fff_ffff) | UInt32(this & (1 << 31))
+        UInt32(this & 0x7fff_ffff) | if (this < 0) {
+            !0x7fff_ffffu32
+        } else {
+            0u32
+        }
     }
 }
 
@@ -311,7 +323,11 @@ extend Int64 <: ExtendInt64 {
 
     @OverflowWrapping
     public func toUInt(): UInt64 {
-        UInt64(this & 0x7fff_ffff_ffff_ffff) | UInt64(this & (1 << 63))
+        UInt64(this & 0x7fff_ffff_ffff_ffff) | if (this < 0) {
+            !0x7fff_ffff_ffff_ffffu64
+        } else {
+            0u64
+        }
     }
 }
 
@@ -369,7 +385,11 @@ extend UInt8 <: ExtendUInt8 {
 
     @OverflowWrapping
     public func toInt(): Int8 {
-        Int8(this & 0x7f) | Int8(this & (1 << 7))
+        Int8(this & 0x7f) | if (this > 0x7fu8) {
+            !0x7fi8
+        } else {
+            0i8
+        }
     }
 }
 
@@ -431,7 +451,11 @@ extend UInt16 <: ExtendUInt16 {
 
     @OverflowWrapping
     public func toInt(): Int16 {
-        Int16(this & 0x7fff) | Int16(this & (1 << 15))
+        Int16(this & 0x7fff) | if (this > 0x7fffu16) {
+            !0x7fffi16
+        } else {
+            0i16
+        }
     }
 }
 
@@ -497,7 +521,11 @@ extend UInt32 <: ExtendUInt32 {
 
     @OverflowWrapping
     public func toInt(): Int32 {
-        Int32(this & 0x7fff_ffff) | Int32(this & (1 << 31))
+        Int32(this & 0x7fff_ffff) | if (this > 0x7fff_ffffu32) {
+            !0x7fff_ffffi32
+        } else {
+            0i32
+        }
     }
 }
 
@@ -568,7 +596,11 @@ extend UInt64 <: ExtendUInt64 {
 
     @OverflowWrapping
     public func toInt(): Int64 {
-        Int64(this & 0x7fff_ffff_ffff_ffff) | Int64(this & (1 << 63))
+        Int64(this & 0x7fff_ffff_ffff_ffff) | if (this > 0x7fff_ffff_ffff_ffffu64) {
+            !0x7fff_ffff_ffff_ffffi64
+        } else {
+            0i64
+        }
     }
 }
 
