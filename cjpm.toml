@@ -25,7 +25,6 @@
   f_ticktock = {path = "./f_ticktock"}
   f_time = {path = "./f_time"}
   f_util = {path = "./f_util"}
-  f_zerocopy = {path = "./f_zerocopy"}
 
 [package]
   cjc-version = "1.0.0"

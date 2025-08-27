@@ -13,16 +13,13 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_zerocopy
+package f_io
 
-import std.convert.Parsable
 import std.io.*
 import std.fs.*
-import std.process.executeWithOutput
-import std.sync.{Timer, AtomicInt64}
-import std.time.MonoTime
+import std.sync.AtomicInt64
 import f_base.*
-import f_zerocopy.exception.MMapException
+import f_io.exception.MMapException
 
 /**
  * 内存映射文件，本类没有做并发安全处理
@@ -33,17 +30,17 @@ import f_zerocopy.exception.MMapException
  */
 @When[os != "Windows"]
 public class MMapFile <: Resource & IOStream {
-    private static let zeroFile = unsafe{zeroValue<File>()}
+    private static let zeroFile = unsafe { zeroValue<File>() }
     private static let ANONYMOUS_FD = IntNative(-1)
     private let fd: IntNative
-    private let pointer: CPointer<Unit>
-    private let readOffset_ = AtomicInt64(0)
-    private let writeOffset_ = AtomicInt64(0)
     private var dirtyStart = 0i64 // 脏数据起始位置，相对于文件开头是offset + dirtyStart
     private var dirtyBytes = 0i64 // 脏数据大小
-    private let readable_: Bool
-    private let writable_: Bool
+
+    private let pointer: CPointer<Unit>
+    private let ptrStream: BytePointerStream
+
     private var closed = false
+
     MMapFile(
         private let file: File,
         private let prots: Array<MMapProt>,
@@ -52,31 +49,34 @@ public class MMapFile <: Resource & IOStream {
         private let mapLength!: Int64 = DEFAULT_MMAP_BYTES
     ) {
         let protBits = prots.combine()
-        readable_ = MMapProt.Read & protBits
-        writable_ = MMapProt.Write & protBits
+        let readable = MMapProt.Read & protBits
+        let writable = MMapProt.Write & protBits
         let flags: IntNative
         (this.fd, flags) = if (!isZeroFile(file)) {
-            if (offset + mapLength > file.length && writable_) {
+            if (offset + mapLength > file.length && writable) {
                 file.seek(Begin(offset + mapLength - 1))
                 file.write([b'0']) //必须写入一字节长度才会真的改变
                 file.flush()
-            }else{
-                throw MMapException('file ${file.info.path} is not writable but the file length - offset(${file.length} - ${offset}) is less than mapLength ${mapLength}')
+            } else {
+                throw MMapException(
+                    'file ${file.info.path} is not writable but the file length - offset(${file.length} - ${offset}) is less than mapLength ${mapLength}')
             }
             (file.fileDescriptor.fileHandle, flag.value)
         } else {
             (ANONYMOUS_FD, flag.value | MMapFlag.Anonymous.value)
         }
         pointer = unsafe {
-            mmap(nullptr, UIntNative(mapLength), protBits, flags, fd,
-                if (fd == ANONYMOUS_FD) {
-                    0
-                } else {
-                    IntNative(offset)
-                })
+            mmap(nullptr, UIntNative(mapLength), protBits, flags, fd, if (fd == ANONYMOUS_FD) {
+                0
+            } else {
+                IntNative(offset)
+            })
         }
+        this.ptrStream = BytePointerStream(unsafe { CPointer<Byte>(pointer) + offset }, mapLength, readable: readable,
+            writable: writable)
     }
-    public static func anonymous(prots: Array<MMapProt>, flag!: MMapFlag = MMapFlag.Private, mapLength!: Int64 = DEFAULT_MMAP_BYTES){
+    public static func anonymous(prots: Array<MMapProt>, flag!: MMapFlag = MMapFlag.Private,
+        mapLength!: Int64 = DEFAULT_MMAP_BYTES) {
         MMapFile(zeroFile, prots, flag: flag, mapLength: mapLength)
     }
     private static func isZeroFile(file: File) {
@@ -87,12 +87,12 @@ public class MMapFile <: Resource & IOStream {
     }
     public prop isReadable: Bool {
         get() {
-            readable_
+            ptrStream.readable
         }
     }
     public prop isWritable: Bool {
         get() {
-            writable_
+            ptrStream.writable
         }
     }
     public prop isSyncable: Bool {
@@ -101,7 +101,7 @@ public class MMapFile <: Resource & IOStream {
         }
     }
     public prop isAnonymous: Bool {
-        get(){
+        get() {
             this.fd == ANONYMOUS_FD
         }
     }
@@ -117,7 +117,7 @@ public class MMapFile <: Resource & IOStream {
             munmap(pointer, UIntNative(mapLength))
         }
     }
-    
+
     /**
      * 使用指定的flag将未同步数据同步到磁盘。
      */
@@ -127,7 +127,7 @@ public class MMapFile <: Resource & IOStream {
         }
         unsafe {
             let syncStart = (dirtyStart / MEM_PAGE_SIZE) * MEM_PAGE_SIZE
-            msync(pointerOffset(syncStart), UIntNative(dirtyBytes + dirtyStart % MEM_PAGE_SIZE), flag.value)
+            msync(ptrStream.pointerOffset(syncStart), UIntNative(dirtyBytes + dirtyStart % MEM_PAGE_SIZE), flag.value)
         }
     }
     private func sync() {
@@ -162,7 +162,7 @@ public class MMapFile <: Resource & IOStream {
      */
     public prop readOffset: Int64 {
         get() {
-            offset + readOffset_.load()
+            offset + ptrStream.readOffset
         }
     }
     /**
@@ -170,7 +170,7 @@ public class MMapFile <: Resource & IOStream {
      */
     public prop writeOffset: Int64 {
         get() {
-            offset + writeOffset_.load()
+            offset + ptrStream.writeOffset
         }
     }
     public func isClosed() {
@@ -227,63 +227,33 @@ public class MMapFile <: Resource & IOStream {
             throw MMapException('current MMapFile is not readable ${file.info.path}')
         }
     }
-    private unsafe func pointerOffset(offset: Int64) {
-        CPointer<Unit>(CPointer<Byte>(this.pointer) + offset)
-    }
-    private func opsize(size: Int64, offset: Int64, len: Int64) {
-        if (let s <- len - offset && s < size) {
-            s
-        } else {
-            size
-        }
-    }
-    private func doAccess(buffer: Array<Byte>, offset: Int64, size: Int64, bufIsDst: Bool){
-        unsafe {
-            let bufferAddr = acquireArrayRawData(buffer)
-            try{
-                let bufferPtr = bufferAddr.pointer
-                let (dstptr, srcptr) = if(bufIsDst){
-                    (CPointer<Unit>(bufferPtr), pointerOffset(offset))
-                }else{
-                    (pointerOffset(offset), CPointer<Unit>(bufferPtr))
-                }
-                mcopy(dstptr, srcptr, UIntNative(size))
-            }finally{
-                releaseArrayRawData(bufferAddr)
-            }
-        }
+    /**
+     * 返回值是当前映射的内存区域min(剩余可读字节数, maxSize)
+     */
+    public func read(p: CPointer<Byte>, maxSize: Int64): Int64 {
+        checkReadable()
+        ptrStream.read(p, maxSize)
     }
     /**
      * 返回值是当前映射的内存区域min(剩余可读字节数, buffer.size)
      */
     public func read(buffer: Array<Byte>): Int64 {
         checkReadable()
-        let readOff = readOffset_.load()
-        let size = opsize(buffer.size, readOff, if (isWritable) {
-            writeOffset_.load()
-        } else {
-            mapLength
-        })
-        if (size == 0) {
-            return 0
-        }
-        doAccess(buffer, readOff, size, true)
-        readOffset_.fetchAdd(size)
-        size
+        ptrStream.read(buffer)
+    }
+    /**
+     * 如果映射的内存区域剩余可写字节数小于s会抛出异常
+     */
+    public func write(p: CPointer<Byte>, s: Int64): Unit {
+        checkWritable()
+        ptrStream.write(p, s)
     }
     /**
      * 如果映射的内存区域剩余可写字节数小于buffer.size会抛出异常
      */
     public func write(buffer: Array<Byte>): Unit {
         checkWritable()
-        let writeOff = writeOffset_.load()
-        let size = opsize(buffer.size, writeOff, mapLength)
-        if (size < buffer.size) {
-            throw MMapException("remainder mmapped size is too small, remainder: ${size}, buffer.size: ${buffer.size}")
-        }
-        doAccess(buffer, writeOff, size, false)
-        writeOffset_.fetchAdd(size)
-        size
+        ptrStream.write(buffer)
     }
     /**
      * 使用MSyncFlag.Sync将未同步数据同步到磁盘，如果当前映射是Anonmous则抛出异常
@@ -292,6 +262,7 @@ public class MMapFile <: Resource & IOStream {
         sync()
     }
 }
+
 @When[os != "Windows"]
 public interface ToMMap {
     /**
@@ -299,6 +270,7 @@ public interface ToMMap {
      */
     func mmap(offset: Int64, mapLength: Int64, flag!: MMapFlag): MMapFile
 }
+
 @When[os != "Windows"]
 extend File <: ToMMap {
     public func mmap(offset: Int64, mapLength: Int64, flag!: MMapFlag = MMapFlag.Private): MMapFile {
