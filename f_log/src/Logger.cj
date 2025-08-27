@@ -23,6 +23,9 @@ import f_collection.LinkedHashMap
 import f_data.ObjectData
 import f_util.{TextTemplate, TextTemplateKey, TextTemplateObject}
 
+/**
+ * 函数logLevelEnabled和各种日志级别的Enabled属性，不必在应用代码中显式调用，本日志框架记录日志前已做过判断
+ */
 public abstract class Logger <: StdLogger {
     public mut prop level: LogLevel
     public open func logLevelEnabled(level: LogLevel): Bool {
