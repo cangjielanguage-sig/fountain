@@ -234,7 +234,6 @@ protected class RotatableFile <: OutputStream & Resource {
                     if(let Some(mm) <- this.mmapf){
                         mm.mmap = this.file.mmap(0, this.fileSize)
                         mm.mmap.writeOffset = 0
-                        this.mmapf = mm.mmap
                     }
                 }
             }
