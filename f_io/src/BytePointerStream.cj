@@ -32,14 +32,20 @@ public class BytePointerStream <: IOStream {
         public let writable!: Bool = true
     ){}
 
-    public prop readOffset: Int64 {
+    public mut prop readOffset: Int64 {
         get(){
             readOffset_.load()
         }
+        set(value){
+            readOffset_.store(value)
+        }
     }
-    public prop writeOffset: Int64 {
+    public mut prop writeOffset: Int64 {
         get(){
             writeOffset_.load()
+        }
+        set(value){
+            writeOffset_.store(value)
         }
     }
     public prop length: Int64 {

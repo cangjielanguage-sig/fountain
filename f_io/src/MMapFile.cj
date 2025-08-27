@@ -53,7 +53,7 @@ public class MMapFile <: Resource & IOStream {
         let writable = MMapProt.Write & protBits
         let flags: IntNative
         (this.fd, flags) = if (!isZeroFile(file)) {
-            if (offset + mapLength > file.length && writable) {
+            if (writable && offset + mapLength > file.length) {
                 file.seek(Begin(offset + mapLength - 1))
                 file.write([b'0']) //必须写入一字节长度才会真的改变
                 file.flush()
@@ -72,7 +72,7 @@ public class MMapFile <: Resource & IOStream {
                 IntNative(offset)
             })
         }
-        this.ptrStream = BytePointerStream(unsafe { CPointer<Byte>(pointer) + offset }, mapLength, readable: readable,
+        this.ptrStream = BytePointerStream(CPointer<Byte>(pointer), mapLength, readable: readable,
             writable: writable)
     }
     public static func anonymous(prots: Array<MMapProt>, flag!: MMapFlag = MMapFlag.Private,
@@ -103,6 +103,28 @@ public class MMapFile <: Resource & IOStream {
     public prop isAnonymous: Bool {
         get() {
             this.fd == ANONYMOUS_FD
+        }
+    }
+    /**
+     * 相对文件头的读偏移量
+     */
+    public mut prop readOffset: Int64 {
+        get(){
+            offset + ptrStream.readOffset
+        }
+        set(value){
+            ptrStream.readOffset = value - offset
+        }
+    }
+    /**
+     * 相对文件头的写偏移量
+     */
+    public mut prop writeOffset: Int64 {
+        get(){
+            offset + ptrStream.writeOffset
+        }
+        set(value){
+            ptrStream.writeOffset = value - offset
         }
     }
     /**
@@ -157,22 +179,7 @@ public class MMapFile <: Resource & IOStream {
             file.mmap(offset, mapLength, flag: flag)
         }
     }
-    /**
-     * 相对文件开头的读偏移量
-     */
-    public prop readOffset: Int64 {
-        get() {
-            offset + ptrStream.readOffset
-        }
-    }
-    /**
-     * 相对文件开头的写偏移量
-     */
-    public prop writeOffset: Int64 {
-        get() {
-            offset + ptrStream.writeOffset
-        }
-    }
+    
     public func isClosed() {
         closed
     }
