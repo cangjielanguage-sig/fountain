@@ -92,14 +92,19 @@ protected class RotatableFile <: OutputStream & Resource {
         file.isClosed()
     }
     public func close(): Unit {
-        file.close()
+        if(let Some(mm) <- this.mmapf){
+            mm.setLength()
+            mm.close()
+        }else{
+            file.close()
+        }
     }
     private var mmapf = None<RotatableMMapFile>
     protected func mmap() {
         let len = file.length
         let mm = file.mmap(0, fileSize)
         mm.writeOffset = len
-        let rmmf = RotatableMMapFile(mm)
+        let rmmf = RotatableMMapFile(this, mm)
         this.mmapf = rmmf
         rmmf
     }
@@ -210,15 +215,10 @@ protected class RotatableFile <: OutputStream & Resource {
                 try {
                     let time = genTime(timeunit, current)
                     let path = "${originPath}.${time}"
-                    if(let Some(mm) <- this.mmapf){
-                        mm.setLength()
-                        mm.close()
-                    }else{
-                        try {
-                            file.close()
-                        } catch (e: Exception) {
-                            e.printStackTrace()
-                        }
+                    try {
+                        this.close()
+                    } catch (e: Exception) {
+                        e.printStackTrace()
                     }
                     try {
                         rename(originPath, to: path, overwrite: true)
@@ -234,6 +234,7 @@ protected class RotatableFile <: OutputStream & Resource {
                     if(let Some(mm) <- this.mmapf){
                         mm.mmap = this.file.mmap(0, this.fileSize)
                         mm.mmap.writeOffset = 0
+                        this.mmapf = mm.mmap
                     }
                 }
             }

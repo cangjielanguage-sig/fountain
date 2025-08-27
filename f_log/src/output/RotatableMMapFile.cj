@@ -21,6 +21,7 @@ import f_io.MMapFile
 protected class RotatableMMapFile <: OutputStream & Resource {
     private let q = ArrayBlockingQueue<Unit>(1)
     RotatableMMapFile(
+        private let file: RotatableFile,
         private var mmap_: MMapFile
     ){
         spawn{
@@ -46,12 +47,13 @@ protected class RotatableMMapFile <: OutputStream & Resource {
         }
     }
     public func isClosed() {
-        mmap.isClosed()
+        file.isClosed()
     }
     public func close() {
-        mmap.close()
+        file.close()
     }
     public func write(buffer: Array<UInt8>): Unit {
+        file.rotateFileIfNeed(buffer.size)
         mmap.write(buffer)
         q.tryAdd(())
     }
