@@ -83,6 +83,11 @@ public class MMapFile <: Resource & IOStream {
     private func isNullPointer(pointer: CPointer<Unit>) {
         pointer.toUIntNative() == nullptr.toUIntNative()
     }
+    public prop info: FileInfo {
+        get(){
+            file.info
+        }
+    }
     public prop isReadable: Bool {
         get() {
             ptrStream.readable

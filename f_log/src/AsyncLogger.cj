@@ -16,6 +16,7 @@ limitations under the License.
 package f_log
 
 import std.collection.concurrent.{ArrayBlockingQueue, ConcurrentHashMap}
+import std.env
 import std.io.{OutputStream, ByteBuffer}
 import std.sync.Mutex
 import std.time.DateTime
@@ -50,6 +51,15 @@ public abstract class AsyncLogger <: AbstractLogger {
                 queueMap[queueTag] = queue
                 remove(queue)
                 queue
+            }
+        }
+        env.atExit{
+            if(let r: Resource <- output){
+                try{
+                    r.close()
+                }catch(e: Exception){
+                    e.printStackTrace()
+                }
             }
         }
     }

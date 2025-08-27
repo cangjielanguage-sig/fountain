@@ -25,6 +25,7 @@ import std.sync.{Timer, Mutex, AtomicReference, AtomicUInt64}
 import std.time.DateTime
 import stdx.compress.zlib.{WrapType, CompressLevel, CompressOutputStream}
 import f_base.*
+import f_io.{MMapFile, ToMMap}
 import f_time.{TimeUnit, ExtendDateTime}
 internal import f_log.exception.LogException
 
@@ -93,6 +94,15 @@ protected class RotatableFile <: OutputStream & Resource {
     public func close(): Unit {
         file.close()
     }
+    private var mmapf = None<RotatableMMapFile>
+    protected func mmap() {
+        let len = file.length
+        let mm = file.mmap(0, fileSize)
+        mm.writeOffset = len
+        let rmmf = RotatableMMapFile(mm)
+        this.mmapf = rmmf
+        rmmf
+    }
     protected prop path: String {
         get() {
             this.file.info.path.toString()
@@ -105,7 +115,7 @@ protected class RotatableFile <: OutputStream & Resource {
             }
         }
         let timer = Timer.after(timeunit.since()) {
-            rotateFileIfNeed()
+            rotateFileIfNeed(0)
             this.timeunit.since()
         }
         env.atExit {timer.cancel()}
@@ -191,19 +201,24 @@ protected class RotatableFile <: OutputStream & Resource {
         }
     }
     private let fileLock = Mutex()
-    private func rotateFileIfNeed() {
+    func rotateFileIfNeed(appended: Int64) {
         synchronized(fileLock) { //此处不能使用双重检查锁，否则可能导致一个线程试图向另一个线程已经重命名的文件导致写失败
             let current = timeunit.trim(DateTime.now())
-            let (need, file) = needRotate(current)
+            let (need, file) = needRotate(current, appended)
             if (need) {
                 let originPath = file.info.path.toString()
                 try {
                     let time = genTime(timeunit, current)
                     let path = "${originPath}.${time}"
-                    try {
-                        file.close()
-                    } catch (e: Exception) {
-                        e.printStackTrace()
+                    if(let Some(mm) <- this.mmapf){
+                        mm.setLength()
+                        mm.close()
+                    }else{
+                        try {
+                            file.close()
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                        }
                     }
                     try {
                         rename(originPath, to: path, overwrite: true)
@@ -216,14 +231,18 @@ protected class RotatableFile <: OutputStream & Resource {
                 }
                 if (!exists(originPath)) {
                     this.file = File(originPath, Append)
+                    if(let Some(mm) <- this.mmapf){
+                        mm.mmap = this.file.mmap(0, this.fileSize)
+                        mm.mmap.writeOffset = 0
+                    }
                 }
             }
         }
     }
-    private func needRotate(current: DateTime) {
+    private func needRotate(current: DateTime, appended: Int64) {
         let file = this.file
         let fileInfo = file.info
-        (fileInfo.creationTime < current || fileInfo.size >= fileSize, file)
+        (fileInfo.creationTime < current || fileInfo.size + appended >= fileSize, file)
     }
     private func closeFile(file: ?File): Unit {
         if (let Some(f) <- file) {
@@ -294,7 +313,7 @@ protected class RotatableFile <: OutputStream & Resource {
             })
     }
     public func write(buffer: Array<Byte>): Unit {
-        rotateFileIfNeed()
+        rotateFileIfNeed(buffer.size)
         file.write(buffer)
     }
     public func flush(): Unit {

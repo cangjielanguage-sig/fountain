@@ -18,7 +18,7 @@ package f_log.impl
 import std.convert.Parsable
 import std.collection.concurrent.ArrayBlockingQueue
 import std.fs.{File, Directory, OpenMode}
-import std.io.SeekPosition
+import std.io.{SeekPosition, OutputStream}
 import std.math.MathExtension
 import std.sync.{Timer, Mutex, AtomicReference, AtomicUInt64}
 import std.time.DateTime
@@ -26,7 +26,7 @@ import stdx.compress.zlib.{WrapType, CompressLevel, CompressOutputStream}
 import stdx.log.LogLevel
 import f_base.*
 import f_exception.*
-import f_log.output.{RotatableFile, RotatableFileParams}
+import f_log.output.{RotatableFile, RotatableFileParams, RotatableMMapFile}
 import f_time.{TimeUnit, ExtendDateTime}
 
 private class FileLoggerAppender <: AsyncLogger {
@@ -35,11 +35,17 @@ private class FileLoggerAppender <: AsyncLogger {
         name!: String,
         pattern!: LogPattern,
         level!: LogLevel = LogLevel.INFO,
-        file!: RotatableFile
+        file!: OutputStream
     ) {
-        super(name, level, pattern, file, '${LOGGER_NAME}:///${file.path}')
+        super(name, level, pattern, file, '${LOGGER_NAME}:///${toPath(file)}')
     }
-
+    private static func toPath(file: OutputStream) {
+        match(file){
+            case x: RotatableFile => x.path
+            case x: RotatableMMapFile => x.path
+            case _ => ''
+        }
+    }
     public static func register(): Unit {
         LoggerAppenderCreator.register(LOGGER_NAME) {
             name =>
@@ -69,14 +75,25 @@ private class FileLoggerAppender <: AsyncLogger {
                     if (let Some(c) <- LoggerConfig.getString(appender, "compressFormat")) {
                         params.compress = RotatableFile.compressFormat(c)
                     }
+                    let mmap = 
+                    if(let Some(_) <- LoggerConfig.getString(appender, "mmap")){
+                        true
+                    }else{
+                        false
+                    }
+                    let rf = if (url.isEmpty()) {
+                        RotatableFile(params)
+                    } else {
+                        RotatableFile(url, params)
+                    }
                     FileLoggerAppender(
                         name: name,
                         level: LoggerConfig.getLevelConf(appender),
                         pattern: LoggerConfig.getPatternConf(appender),
-                        file: if (url.isEmpty()) {
-                            RotatableFile(params)
-                        } else {
-                            RotatableFile(url, params)
+                        file: if(mmap){
+                            rf.mmap()
+                        }else{
+                            rf
                         }
                     )
                 }
