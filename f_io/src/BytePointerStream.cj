@@ -21,16 +21,36 @@ import std.sync.AtomicInt64
 import f_base.*
 import f_io.exception.BytePointerException
 
-public class BytePointerStream <: IOStream {
+public class BytePointerStream <: IOStream & Resource {
     private let readOffset_ = AtomicInt64(0)
     private let writeOffset_ = AtomicInt64(0)
-    
-    public BytePointerStream(
+    private var closed = false
+    private BytePointerStream(
         private let pointer: CPointer<Byte>,
-        private let s: Int64,
-        public let readable!: Bool = true,
-        public let writable!: Bool = true
+        private let size: Int64,
+        public let readable: Bool,
+        public let writable: Bool,
+        private let freeable: Bool
     ){}
+
+    public init(pointer: CPointer<Byte>, size: Int64, readable!: Bool = true, writable!: Bool = true){
+        this(pointer, size, readable, writable, false)
+    }
+    public init(size: Int64, readable!: Bool = true, writable!: Bool = true){
+        this(LibC.malloc<Byte>(count: size), size, readable, writable, true)
+    }
+
+    public func isClosed(): Bool {
+        closed
+    }
+    public func close(): Unit {
+        if(freeable){
+            unsafe {
+                LibC.free(pointer)
+            }
+            closed = true
+        }
+    }
 
     public mut prop readOffset: Int64 {
         get(){
@@ -50,7 +70,7 @@ public class BytePointerStream <: IOStream {
     }
     public prop length: Int64 {
         get(){
-            s
+            size
         }
     }
     private func checkWritable() {
@@ -92,7 +112,7 @@ public class BytePointerStream <: IOStream {
         let size = opsize(maxSize, readOff, if (writable) {
             writeOffset_.load()
         } else {
-            s
+            size
         })
         if (size == 0) {
             return 0
@@ -122,15 +142,15 @@ public class BytePointerStream <: IOStream {
     /**
      * 如果映射的内存区域剩余可写字节数小于s会抛出异常
      */
-    public func write(p: CPointer<Byte>, s: Int64): Unit {
+    public func write(p: CPointer<Byte>, size: Int64): Unit {
         checkWritable()
         let writeOff = writeOffset_.load()
-        let size = opsize(s, writeOff, this.s)
-        if (size < s) {
-            throw BytePointerException("remainder mmapped size is too small, remainder: ${size}, buffer.size: ${s}")
+        let s = opsize(size, writeOff, this.size)
+        if (s < size) {
+            throw BytePointerException("remainder mmapped size is too small, remainder: ${s}, buffer.size: ${size}")
         }
-        access(p, size, false)
-        writeOffset_.fetchAdd(size)
+        access(p, s, false)
+        writeOffset_.fetchAdd(s)
     }
     /**
      * 如果映射的内存区域剩余可写字节数小于buffer.size会抛出异常
