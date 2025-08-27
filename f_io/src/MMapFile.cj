@@ -218,6 +218,11 @@ public class MMapFile <: Resource & IOStream {
             mapLength
         }
     }
+    public func setLength(length!: Int64 = this.writeOffset) {
+        if(!isAnonymous){
+            file.setLength(length)
+        }
+    }
     private func checkWritable() {
         if (!isWritable) {
             if (isAnonymous) {
