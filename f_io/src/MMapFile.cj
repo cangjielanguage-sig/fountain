@@ -54,9 +54,7 @@ public class MMapFile <: Resource & IOStream {
         let flags: IntNative
         (this.fd, flags) = if (!isZeroFile(file)) {
             if (writable && offset + mapLength > file.length) {
-                file.seek(Begin(offset + mapLength - 1))
-                file.write([b'0']) //必须写入一字节长度才会真的改变
-                file.flush()
+                file.setLength(offset + mapLength)
             } else {
                 throw MMapException(
                     'file ${file.info.path} is not writable but the file length - offset(${file.length} - ${offset}) is less than mapLength ${mapLength}')
