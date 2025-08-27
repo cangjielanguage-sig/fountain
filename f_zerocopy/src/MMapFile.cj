@@ -237,6 +237,22 @@ public class MMapFile <: Resource & IOStream {
             size
         }
     }
+    private func doAccess(buffer: Array<Byte>, offset: Int64, size: Int64, bufIsDst: Bool){
+        unsafe {
+            let bufferAddr = acquireArrayRawData(buffer)
+            try{
+                let bufferPtr = bufferAddr.pointer
+                let (dstptr, srcptr) = if(bufIsDst){
+                    (CPointer<Unit>(bufferPtr), pointerOffset(offset))
+                }else{
+                    (pointerOffset(offset), CPointer<Unit>(bufferPtr))
+                }
+                mcopy(dstptr, srcptr, UIntNative(size))
+            }finally{
+                releaseArrayRawData(bufferAddr)
+            }
+        }
+    }
     /**
      * 返回值是当前映射的内存区域min(剩余可读字节数, buffer.size)
      */
@@ -251,12 +267,7 @@ public class MMapFile <: Resource & IOStream {
         if (size == 0) {
             return 0
         }
-        unsafe {
-            let bufferAddr = acquireArrayRawData(buffer)
-            let bufferPtr = bufferAddr.pointer
-            mcopy(CPointer<Unit>(bufferPtr), pointerOffset(readOff), UIntNative(size))
-            releaseArrayRawData(bufferAddr)
-        }
+        doAccess(buffer, readOff, size, true)
         readOffset_.fetchAdd(size)
         size
     }
@@ -270,12 +281,7 @@ public class MMapFile <: Resource & IOStream {
         if (size < buffer.size) {
             throw MMapException("remainder mmapped size is too small, remainder: ${size}, buffer.size: ${buffer.size}")
         }
-        unsafe {
-            let bufferAddr = acquireArrayRawData(buffer)
-            let bufferPtr = bufferAddr.pointer
-            mcopy(pointerOffset(writeOff), CPointer<Unit>(bufferPtr), UIntNative(size))
-            releaseArrayRawData(bufferAddr)
-        }
+        doAccess(buffer, writeOff, size, false)
         writeOffset_.fetchAdd(size)
         size
     }

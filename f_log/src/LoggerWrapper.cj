@@ -17,7 +17,6 @@ package f_log
 
 import std.env
 import std.sync.AtomicReference
-import std.process.Process
 import std.time.DateTime
 import stdx.log.LogLevel
 import f_io.DummyOutputStream
@@ -31,7 +30,7 @@ public class LoggerWrapper <: AbstractLogger {
         env.atExit {this.facade.load().close()}
     }
 
-    public func logLevelEnabled(level: LogLevel): Bool {
+    public func logLevelEnabled(level: LogLevel): Bool {/*  */
         facade.load().logLevelEnabled(level)
     }
 

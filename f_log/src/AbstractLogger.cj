@@ -106,8 +106,8 @@ public abstract class AbstractLogger <: Logger & Resource {
 
     protected func append(level: LogLevel, message: () -> String, ex: Option<Exception>): Unit {
         if (logLevelEnabled(level)) {
+            let now = DateTime.now()//产生日志的时间比记录时间重要，可能记日志的顺序跟时间不一致了，不过不重要。
             doLock {
-                let now = DateTime.now()
                 append(level, message(), now, ex)
             }
         }
