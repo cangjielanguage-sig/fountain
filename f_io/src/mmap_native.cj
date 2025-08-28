@@ -40,30 +40,30 @@ MS_INVALIDATE
     int msync(void *addr, size_t length, int flags);
 
  */
-@When[os != "Windows"]
+@When[os == "Linux"]
 private const PROT_READ: IntNative = 0x1
-@When[os != "Windows"]
+@When[os == "Linux"]
 private const PROT_WRITE: IntNative = 0x2
-@When[os != "Windows"]
+@When[os == "Linux"]
 private const PROT_EXEC: IntNative = 0x4
-@When[os != "Windows"]
+@When[os == "Linux"]
 private const PROT_NONE: IntNative = 0x0
-@When[os != "Windows"]
+@When[os == "Linux"]
 private const MAP_SHARED: IntNative = 0x01
-@When[os != "Windows"]
+@When[os == "Linux"]
 private const MAP_PRIVATE: IntNative = 0x02
-// @When[os != "Windows"]
+// @When[os == "Linux"]
 //private const MAP_FIXED: IntNative = 0x10
-@When[os != "Windows"]
+@When[os == "Linux"]
 private const MAP_ANONYMOUS: IntNative = 0x20
-@When[os != "Windows"]
+@When[os == "Linux"]
 private const MS_SYNC: IntNative = 0x0004
-@When[os != "Windows"]
+@When[os == "Linux"]
 private const MS_ASYNC: IntNative = 0x001
-@When[os != "Windows"]
+@When[os == "Linux"]
 private const MS_INVALIDATE: IntNative = 0x002
 
-@When[os != "Windows"]
+@When[os == "Linux"]
 foreign {
     func mmap(start: CPointer<Unit>, length: UIntNative, prot: IntNative, flags: IntNative, fd: IntNative,
         offset: IntNative): CPointer<Unit>
@@ -72,7 +72,7 @@ foreign {
 
     func msync(addr: CPointer<Unit>, length: UIntNative, flags: IntNative): IntNative
 }
-@When[os != "Windows"]
+@When[os == "Linux"]
 public enum MMapProt {
     | Read
     | Write
@@ -105,13 +105,13 @@ public enum MMapProt {
         }
     }
 }
-@When[os != "Windows"]
+@When[os == "Linux"]
 public interface MMapProtArray {
     operator func |(other: MMapProt): Array<MMapProt>
     operator func |(others: Array<MMapProt>): Array<MMapProt>
     func combine(): IntNative
 }
-@When[os != "Windows"]
+@When[os == "Linux"]
 extend Array<MMapProt> <: MMapProtArray {
     public operator func |(other: MMapProt): Array<MMapProt> {
         Array<MMapProt>(this.size + 1) {
@@ -139,7 +139,7 @@ extend Array<MMapProt> <: MMapProtArray {
         return res
     }
 }
-@When[os != "Windows"]
+@When[os == "Linux"]
 public enum MMapFlag <: Equatable<MMapFlag> & Equatable<IntNative> {
     | Shared
     | Private
@@ -178,7 +178,7 @@ public enum MMapFlag <: Equatable<MMapFlag> & Equatable<IntNative> {
         }
     }
 }
-@When[os != "Windows"]
+@When[os == "Linux"]
 public enum MSyncFlag {
     | Sync
     | Async
@@ -198,5 +198,5 @@ public enum MSyncFlag {
 /**
  * 默认映射字节数
  */
-@When[os != "Windows"]
+@When[os == "Linux"]
 public const DEFAULT_MMAP_BYTES = 1 * 1024 * 1024 * 1024

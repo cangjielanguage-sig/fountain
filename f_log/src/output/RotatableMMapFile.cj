@@ -16,8 +16,9 @@ limitations under the License.
 package f_log.output
 
 import std.collection.concurrent.ArrayBlockingQueue
-import f_io.MMapFile
+import f_io.*
 
+@When[os == "Linux"]
 protected class RotatableMMapFile <: OutputStream & Resource {
     private let q = ArrayBlockingQueue<Unit>(1)
     RotatableMMapFile(

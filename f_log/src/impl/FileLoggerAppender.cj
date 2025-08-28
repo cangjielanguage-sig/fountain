@@ -26,7 +26,7 @@ import stdx.compress.zlib.{WrapType, CompressLevel, CompressOutputStream}
 import stdx.log.LogLevel
 import f_base.*
 import f_exception.*
-import f_log.output.{RotatableFile, RotatableFileParams, RotatableMMapFile}
+import f_log.output.*
 import f_time.{TimeUnit, ExtendDateTime}
 
 private class FileLoggerAppender <: AsyncLogger {
@@ -39,10 +39,18 @@ private class FileLoggerAppender <: AsyncLogger {
     ) {
         super(name, level, pattern, file, '${LOGGER_NAME}:///${toPath(file)}')
     }
+    @When[os == "Linux"]
     private static func toPath(file: OutputStream) {
         match(file){
             case x: RotatableFile => x.path
             case x: RotatableMMapFile => x.path
+            case _ => ''
+        }
+    }
+    @When[os != "Linux"]
+    private static func toPath(file: OutputStream) {
+        match(file){
+            case x: RotatableFile => x.path
             case _ => ''
         }
     }
@@ -76,7 +84,7 @@ private class FileLoggerAppender <: AsyncLogger {
                         params.compress = RotatableFile.compressFormat(c)
                     }
                     let mmap = 
-                    if(let Some(_) <- LoggerConfig.getString(appender, "mmap")){
+                    if(let Some(x) <- LoggerConfig.getString(appender, "mmap") && x.trimAscii().toAsciiLower() == 'true'){
                         true
                     }else{
                         false
@@ -86,15 +94,19 @@ private class FileLoggerAppender <: AsyncLogger {
                     } else {
                         RotatableFile(url, params)
                     }
+                    @When[os == "Linux"]
+                    let output: OutputStream = if(mmap){
+                        rf.mmap()
+                    }else{
+                        rf
+                    }
+                    @When[os != "Linux"]
+                    let output = rf
                     FileLoggerAppender(
                         name: name,
                         level: LoggerConfig.getLevelConf(appender),
                         pattern: LoggerConfig.getPatternConf(appender),
-                        file: if(mmap){
-                            rf.mmap()
-                        }else{
-                            rf
-                        }
+                        file: output
                     )
                 }
             }

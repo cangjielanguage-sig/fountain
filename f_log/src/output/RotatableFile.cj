@@ -25,7 +25,7 @@ import std.sync.{Timer, Mutex, AtomicReference, AtomicUInt64}
 import std.time.DateTime
 import stdx.compress.zlib.{WrapType, CompressLevel, CompressOutputStream}
 import f_base.*
-import f_io.{MMapFile, ToMMap}
+import f_io.*
 import f_time.{TimeUnit, ExtendDateTime}
 internal import f_log.exception.LogException
 
@@ -91,6 +91,11 @@ protected class RotatableFile <: OutputStream & Resource {
     public func isClosed(): Bool {
         file.isClosed()
     }
+    @When[os != "Linux"]
+    public func close(): Unit {
+        file.close()
+    }
+    @When[os == "Linux"]
     public func close(): Unit {
         if(let Some(mm) <- this.mmapf){
             mm.setLength()
@@ -99,7 +104,9 @@ protected class RotatableFile <: OutputStream & Resource {
             file.close()
         }
     }
+    @When[os == "Linux"]
     private var mmapf = None<RotatableMMapFile>
+    @When[os == "Linux"]
     protected func mmap() {
         let len = file.length
         let mm = file.mmap(0, fileSize)
@@ -231,7 +238,8 @@ protected class RotatableFile <: OutputStream & Resource {
                 }
                 if (!exists(originPath)) {
                     this.file = File(originPath, Append)
-                    if(let Some(mm) <- this.mmapf){
+                    @When[os == "Linux"]
+                    let _ = if(let Some(mm) <- this.mmapf){
                         mm.mmap = this.file.mmap(0, this.fileSize)
                         mm.mmap.writeOffset = 0
                     }
@@ -260,12 +268,12 @@ protected class RotatableFile <: OutputStream & Resource {
         var f = None<File>
         var compressedFile = None<File>
         try {
-            f = File(path, Read)
+            f = File(path, OpenMode.Read)
             let fsize = f?.length ?? 0
             if (fsize == 0) {
                 return
             }
-            compressedFile = File("${path}${ext}", Write)
+            compressedFile = File("${path}${ext}", OpenMode.Write)
             let compressedOutput = CompressOutputStream(
                 compressedFile.getOrThrow(),
                 wrap: wrap,

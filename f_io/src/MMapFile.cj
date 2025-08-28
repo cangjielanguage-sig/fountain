@@ -28,7 +28,7 @@ import f_io.exception.MMapException
  * 如果file是zeroValue<File>()，按照Anonymous初始化，且offset不生效。
  * 如果file不是zeroValue<File>()，且file.length - offset < mapLength, 文件又以只读方式打开，会抛出异常；此时如果文件可写会自动延长文件长度
  */
-@When[os != "Windows"]
+@When[os == "Linux"]
 public class MMapFile <: Resource & IOStream {
     private static let zeroFile = unsafe { zeroValue<File>() }
     private static let ANONYMOUS_FD = IntNative(-1)
@@ -278,7 +278,7 @@ public class MMapFile <: Resource & IOStream {
     }
 }
 
-@When[os != "Windows"]
+@When[os == "Linux"]
 public interface ToMMap {
     /**
      * 用此函数创建的内存映射文件只有读写两个prot，与当前File实例的可读可写属性一致。File扩展此接口
@@ -286,7 +286,7 @@ public interface ToMMap {
     func mmap(offset: Int64, mapLength: Int64, flag!: MMapFlag): MMapFile
 }
 
-@When[os != "Windows"]
+@When[os == "Linux"]
 extend File <: ToMMap {
     public func mmap(offset: Int64, mapLength: Int64, flag!: MMapFlag = MMapFlag.Private): MMapFile {
         let prots = if (this.canRead() && this.canWrite()) {
