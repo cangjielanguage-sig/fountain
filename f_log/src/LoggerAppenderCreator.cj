@@ -18,6 +18,8 @@ package f_log
 import std.collection.ArrayList
 import std.collection.concurrent.ConcurrentHashMap
 
+import f_base.*
+
 public class LoggerAppenderCreator {
     private static let creators = ConcurrentHashMap<String, (String) -> Array<AbstractLogger>>()
 
@@ -31,6 +33,6 @@ public class LoggerAppenderCreator {
                 loggers.add(logger)
             }
         }
-        LoggerAppenderFacade(name, loggers.toArray())
+        LoggerAppenderFacade(name, loggers.unsafeData())
     }
 }

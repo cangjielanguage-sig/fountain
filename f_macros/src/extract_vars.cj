@@ -15,12 +15,14 @@ limitations under the License.
  */
 package f_macros
 
+import f_base.*
+
 public func extractAllVars(decls: Array<Decl>): Array<VarDecl> {
     let list = ArrayList<VarDecl>()
     for (decl in decls where decl is VarDecl) {
         list.add((decl as VarDecl).getOrThrow())
     }
-    list.toArray()
+    list.unsafeData()
 }
 
 public func extractVars(decls: ArrayList<Decl>, extractPublic!: Bool = true, extractVar!: Bool = true,
@@ -32,5 +34,5 @@ public func extractVars(decls: ArrayList<Decl>, extractPublic!: Bool = true, ext
             list.add(varDecl)
         }
     }
-    list.toArray()
+    list.unsafeData()
 }

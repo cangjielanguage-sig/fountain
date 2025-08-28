@@ -19,7 +19,7 @@ import std.sync.Mutex
 import std.collection.{ArrayList, Map, HashMap}
 import std.convert.Parsable
 import std.time.DateTime
-import f_base.{EmptyMap, StringGenerator}
+import f_base.*
 import f_data.DataParsable
 import f_regex.*
 
@@ -880,7 +880,7 @@ class ComplexPathNode <: PathNode {
             part = name[start..]
             patterns.add(tmp.appendSubPathNode(part).getOrThrow())
         }
-        return "^(${String.join(parts.toArray(), delimiter: ")(")})$".regex() //正则非贪婪匹配
+        return "^(${String.join(parts.unsafeData(), delimiter: ")(")})$".regex() //正则非贪婪匹配
     }
     private static func appendPart(tmp: PathNode, parts: ArrayList<String>, name: String, start: Int64, end: Int64): PathNode {
         let part = name[start..end]

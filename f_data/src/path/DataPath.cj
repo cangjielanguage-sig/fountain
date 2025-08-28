@@ -120,7 +120,7 @@ abstract sealed class DataPath <: DataPathNode {
             }
             names.add(n)
         }
-        MultiSubPathNode(names.toArray())
+        MultiSubPathNode(names.unsafeData())
     }
     private func compileIndexesInSquares(sub: Tokens): DataPathNode {
         let list = ArrayList<Int64>()

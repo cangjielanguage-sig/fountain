@@ -20,6 +20,7 @@ import std.convert.Parsable
 import std.fs.Path
 import std.env
 import std.process.Process
+import f_base.*
 import f_regex.*
 import f_cmd.exception.CmdException
 
@@ -65,7 +66,7 @@ public class CmdArgs {
         for (key in args.keys() where key.startsWith(prefix)) {
             list.add(key)
         }
-        list.toArray()
+        list.unsafeData()
     }
     public func contains(name: String): Bool {
         args.contains(name)

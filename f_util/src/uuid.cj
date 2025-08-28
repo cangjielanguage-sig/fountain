@@ -292,7 +292,7 @@ public struct UUID <: Hashable & Comparable<UUID> & ToString & Parsable<UUID> & 
        +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
      */
     public static func md5(value: String): UUID {
-        md5(value.toArray())
+        md5(value.unsafeBytes())
     }
     public static func randomMd5(bytes!: Int64 = 16): UUID {
         md5(ThreadLocalRandom.current.nextBytes(bytes))
@@ -330,7 +330,7 @@ public struct UUID <: Hashable & Comparable<UUID> & ToString & Parsable<UUID> & 
        最后的sha_low在原文是md5_low，此处应该是一个错误
      */
     public static func sha1(value: String): UUID {
-        sha1(value.toArray())
+        sha1(value.unsafeBytes())
     }
     public static func randomSha1(bytes!: Int64 = 20): UUID {
         sha1(ThreadLocalRandom.current.nextBytes(bytes))

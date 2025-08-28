@@ -15,10 +15,12 @@ limitations under the License.
  */
 package f_macros
 
+import f_base.*
+
 public func extractFuncs(decls: Array<Decl>, extractPublic!: Bool = true): Array<FuncDecl> {
     let list = ArrayList<FuncDecl>()
     for (decl in decls where decl is FuncDecl && (!extractPublic || isPublic(decl))) {
         list.add((decl as FuncDecl).getOrThrow())
     }
-    list.toArray()
+    list.unsafeData()
 }
