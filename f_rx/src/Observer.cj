@@ -29,7 +29,7 @@ public interface Observer<T> {
      */
     func onComplete(): Unit
 }
-
+public type Value<T> = SingleIterator<T>
 public class EmptyObserver<T> <: Observer<T> {
     public func onNext(_: T): Unit {}
     public func onError(_: Exception): Unit {}
@@ -52,8 +52,8 @@ public class FuncObserver<T> <: Observer<T> {
     /**
      * 注册数据处理函数
      */
-    public func setNext(callee: (SingleIterator<T>) -> Unit): This {
-        setNext{v => callee(SingleIterator<T>(v))}
+    public func setNext(callee: (Value<T>) -> Unit): This {
+        setNext{v => callee(Value<T>(v))}
     }
     /**
      * 注册数据处理函数
