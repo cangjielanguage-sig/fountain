@@ -52,6 +52,12 @@ public class FuncObserver<T> <: Observer<T> {
     /**
      * 注册数据处理函数
      */
+    public func setNext(callee: (SingleIterator<T>) -> Unit): This {
+        setNext{v => callee(SingleIterator<T>(v))}
+    }
+    /**
+     * 注册数据处理函数
+     */
     public func setNext(callee: (T) -> Unit): This {
         nextFunc = callee
         this
