@@ -310,24 +310,26 @@ observable.pause()//暂停产生新数据
 #### 背压策略
     只有单线程和固定线程数的处理策略才支持背压策略，如果产生新数据时，数据队列已满，则触发背压策略
 ##### BackPressure
- 1. Discarding
-    丢弃新数据
- 2. DropOldest
-    丢弃队列头的数据
- 3. BlockingOrDiscarding(Duration)
-    阻塞指定时长后如果队列还是满的则丢弃最新数据
- 4. BlockingOrThrowing(Duration)
-    阻塞指定时长后如果队列还是满的就抛出异常
- 5. BlockingOrDroppingOldest(Duration)
-    阻塞指定时长后如果队列还是满的就丢弃队列头部的数据
- 6. Throwing
-    如果队列是满的立即抛出异常
- 7. Current
-    如果队列是满的就立即使用当前线程处理当前数据
- 8. NewThread
-    如果队列是满的就立即使用新线程处理当前数据
- 9. Action((()->Unit) -> Unit)
-    如果队列是满的就使用指定函数处理当前数据
+ 1.  Discarding
+     丢弃新数据
+ 2.  DropOldest
+     丢弃队列头的数据
+ 3.  AlwaysBlocking
+     一直阻塞
+ 4.  BlockingOrDiscarding(Duration)
+     阻塞指定时长后如果队列还是满的则丢弃最新数据
+ 5.  BlockingOrThrowing(Duration)
+     阻塞指定时长后如果队列还是满的就抛出异常
+ 6.  BlockingOrDroppingOldest(Duration)
+     阻塞指定时长后如果队列还是满的就丢弃队列头部的数据
+ 7.  Throwing
+     如果队列是满的立即抛出异常
+ 8.  Current
+     如果队列是满的就立即使用当前线程处理当前数据
+ 9.  NewThread
+     如果队列是满的就立即使用新线程处理当前数据
+ 10. Action((()->Unit) -> Unit)
+     如果队列是满的就使用指定函数处理当前数据
 
 #### `Observer<T>`
   - onNext(T)

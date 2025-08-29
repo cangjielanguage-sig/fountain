@@ -28,6 +28,10 @@ public enum BackPressure {
      */
     | DropOldest
     /**
+     * 一直阻塞
+     */
+    | AlwaysBlocking
+    /**
      * 阻塞指定时长后丢弃
      */
     | BlockingOrDiscarding(Duration)
