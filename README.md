@@ -339,11 +339,13 @@ observable.pause()//暂停产生新数据
   - onError(Exception)
     接收一个异常
 ##### `FuncObserver<T> <: Observer<T>`
-   - setNextFunc((T) -> Unit)
+   - `setNext((T) -> Unit)`
      指定接收数据的函数
-   - setErrorFunc((Exception) -> Unit)
+   - `setNext((Single<T>) -> Unit)`
+      `Single<T>`是`SingleIterator<T>`的别名，可以在这个闭包内使用`Iterator<T>`的各种函数。
+   - `setError((Exception) -> Unit)`
      指定接收异常的函数
-   - setComplete(() -> Unit)
+   - `setComplete(() -> Unit)`
      指定接收完成事件的函数
 ##### `EmptyObserver<T>`
    空的观察者
