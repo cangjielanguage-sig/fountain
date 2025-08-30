@@ -26,6 +26,8 @@ public class RateLimited<T> <: BackPressure<T> {
         private let policy!: BackPressure<T> = CurrentThread<T>(),
         private let discardedPolicy!: BackPressure<T> = Discarding<T>()){
         super.scheduler = scheduler
+        policy.scheduler = scheduler
+        discardedPolicy.scheduler = scheduler
     }
     public init(limiter: RateLimiter<Unit>, policy!: BackPressure<T> = CurrentThread<T>(), discardedPolicy!: BackPressure<T> = Discarding<T>()){
         this.limiter = limiter
@@ -73,9 +75,23 @@ public class RateLimited<T> <: BackPressure<T> {
             discardedPolicy.schedule(state)
         }
     }
+    protected mut prop scheduler: SingleScheduler<T> {
+        get(){
+            super.scheduler
+        }
+        set(value){
+            super.scheduler = value
+            policy.scheduler = value
+            discardedPolicy.scheduler = value
+        }
+    }
     protected func clone(): BackPressure<T> {
-        let bp = RateLimited<T>(this.limiter, policy: policy, discardedPolicy: discardedPolicy)
+        let p = policy.clone()
+        let dp = discardedPolicy.clone()
+        let bp = RateLimited<T>(this.limiter, policy: p, discardedPolicy: dp)
         bp.scheduler_ = this.scheduler_
+        p.scheduler_ = this.scheduler_
+        dp.scheduler_ = this.scheduler_
         bp
     }
 }
