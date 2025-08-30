@@ -17,6 +17,9 @@ package f_rx
 
 import f_concurrent.{RateLimiter, AnyMomentRateLimiter, LeakingBucketRateLimiter, SlidingWindowRateLimiter, TokenBucketRateLimiter}
 
+/**
+ * limiter 是限流算法，policy是被限流算法命中时执行的策略，discardedPolicy是被限流算法丢弃时的背压策略
+ */
 public class RateLimiterBackPressure<T> <: BackPressure<T> {
     public RateLimiterBackPressure(scheduler: SingleScheduler<T>, 
         private let limiter: RateLimiter<Unit>,
@@ -63,7 +66,7 @@ public class RateLimiterBackPressure<T> <: BackPressure<T> {
     }
     
     protected func schedule(state: SingleSchedulerState<T>): Unit {
-        let exe = limiter.exec(None<Unit>){
+        let exe = limiter.exec{
             policy.schedule(state)
         }
         if(exe.isNone()){
