@@ -310,26 +310,32 @@ observable.pause()//暂停产生新数据
 #### 背压策略
     只有单线程和固定线程数的处理策略才支持背压策略，如果产生新数据时，数据队列已满，则触发背压策略
 ##### BackPressure
- 1.  Discarding
+ 1.  `Discarding`
      丢弃新数据
- 2.  DropOldest
+ 2.  `DropOldest`
      丢弃队列头的数据
- 3.  AlwaysBlocking
+ 3.  `AlwaysBlocking`
      一直阻塞
- 4.  BlockingOrDiscarding(Duration)
+ 4.  `BlockingOrDiscarding(Duration)`
      阻塞指定时长后如果队列还是满的则丢弃最新数据
- 5.  BlockingOrThrowing(Duration)
+ 5.  `BlockingOrThrowing(Duration)`
      阻塞指定时长后如果队列还是满的就抛出异常
- 6.  BlockingOrDroppingOldest(Duration)
+ 6.  `BlockingOrDroppingOldest(Duration)`
      阻塞指定时长后如果队列还是满的就丢弃队列头部的数据
- 7.  Throwing
+ 7.  `Throwing`
      如果队列是满的立即抛出异常
- 8.  Current
+ 8.  `Current`
      如果队列是满的就立即使用当前线程处理当前数据
- 9.  NewThread
+ 9.  `NewThread`
      如果队列是满的就立即使用新线程处理当前数据
- 10. Action((()->Unit) -> Unit)
+ 10. `Action((()->Unit) -> Unit)`
      如果队列是满的就使用指定函数处理当前数据
+ 11. `BlockingOrCurrent(Duration)`
+     阻塞指定时长后如果队列还是满的就使用当前线程执行观察者
+ 12. `BlockingOrNewThread(Duration)`
+     阻塞指定时长后如果队列还是满的就使用新线程执行观察者
+ 13. `BlockingOrAction(Duration, (() -> Unit) -> Unit)`
+     阻塞指定时长后如果队列还是满的就使用指定函数执行观察者
 
 #### `Observer<T>`
   - onNext(T)
@@ -351,10 +357,11 @@ observable.pause()//暂停产生新数据
    空的观察者
 
 #### 错误恢复器
-  - public func setErrorResumer(resumer: (Exception) -> ?Iterable<T>): This
-  - public func setErrorResumer(resumeIfNone: Bool, resumer: (Exception) -> ?T) : This
-  - public func setErrorResumer(resumer: (Exception) -> Unit): This
-  - public func setErrorResumer(resumeIfFalse: Bool, resumer: (Exception) -> Bool): This
+  - `public func setErrorResumer(resumer: (Exception) -> ?Iterable<T>): This`
+  - `public func setErrorResumer(resumeIfNone: Bool, resumer: (Exception) -> ?T) : This`
+  - `public func setErrorResumer(resumer: (Exception) -> Unit): This`
+  - `public func setErrorResumer(resumeIfFalse: Bool, resumer: (Exception) -> Bool): This`
+  - `public func setErrorResumer(resumeIfNone: Bool, resumer: (Exception) -> ?(Emitter<T>) -> Unit): This`
 
 #### 重放
 Observable.replaySize(capacity)
