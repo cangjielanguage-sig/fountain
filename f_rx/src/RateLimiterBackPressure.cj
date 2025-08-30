@@ -16,24 +16,7 @@ limitations under the License.
 package f_rx
 
 import f_concurrent.{RateLimiter, AnyMomentRateLimiter, LeakingBucketRateLimiter, SlidingWindowRateLimiter, TokenBucketRateLimiter}
-/*
-public class Action<T> <: BackPressure<T> {
-    public Action(scheduler: ?SingleScheduler<T>, private let action: (() -> Unit) -> Unit){
-        super.scheduler_ = scheduler
-    }
-    public init(action: (() -> Unit) -> Unit){
-        this.action = action
-    }
-    protected func clone(): BackPressure<T> {
-        Action<T>(scheduler, action)
-    }
-    protected func schedule(state: SingleSchedulerState<T>): Unit {
-        action{
-            scheduler.doSchedule(state)
-        }
-    }
-}
-*/
+
 public class RateLimiterBackPressure<T> <: BackPressure<T> {
     public RateLimiterBackPressure(scheduler: SingleScheduler<T>, 
         private let limiter: RateLimiter<Unit>,
