@@ -35,11 +35,14 @@ public abstract class BackPressure<T> {
  * 丢弃当前数据
  */
 public class Discarding<T> <: BackPressure<T> {
-    public init(scheduler!: ?SingleScheduler<T> = None<SingleScheduler<T>>){
+    public init(scheduler: SingleScheduler<T>){
         super.scheduler_ = scheduler
     }
+    public init(){}
     protected func clone(): BackPressure<T> {
-        Discarding<T>(scheduler: this.scheduler)
+        let bp = Discarding<T>()
+        bp.scheduler_ = this.scheduler_
+        bp
     }
     protected func schedule(state: SingleSchedulerState<T>): Unit {}
 }
@@ -47,11 +50,14 @@ public class Discarding<T> <: BackPressure<T> {
  * 丢弃最旧数据
  */
 public class ToDropOldest<T> <: BackPressure<T> {
-    public init(scheduler!: ?SingleScheduler<T> = None<SingleScheduler<T>>){
+    public init(scheduler: SingleScheduler<T>){
         super.scheduler_ = scheduler
     }
+    public init(){}
     protected func clone(): BackPressure<T> {
-        ToDropOldest<T>(scheduler: this.scheduler)
+        let bp = ToDropOldest<T>()
+        bp.scheduler_ = this.scheduler_
+        bp
     }
     protected func schedule(state: SingleSchedulerState<T>): Unit {
         let s = scheduler
@@ -63,11 +69,14 @@ public class ToDropOldest<T> <: BackPressure<T> {
  * 一直阻塞
  */
 public class AlwaysBlocking<T> <: BackPressure<T> {
-    public init(scheduler!: ?SingleScheduler<T> = None<SingleScheduler<T>>){
-        super.scheduler_ = scheduler
+    public init(scheduler: SingleScheduler<T>){
+        super.scheduler = scheduler
     }
+    public init(){}
     protected func clone(): BackPressure<T> {
-        AlwaysBlocking<T>(scheduler: this.scheduler)
+        let bp = AlwaysBlocking<T>()
+        bp.scheduler_ = this.scheduler_
+        bp
     }
     protected func schedule(state: SingleSchedulerState<T>): Unit {
         scheduler.add(state)
@@ -77,11 +86,14 @@ public class AlwaysBlocking<T> <: BackPressure<T> {
  * 立即抛出异常
  */
 public class Throwing<T> <: BackPressure<T> {
-    public init(scheduler!: ?SingleScheduler<T> = None<SingleScheduler<T>>){
+    public init(scheduler: SingleScheduler<T>){
         super.scheduler_ = scheduler
     }
+    public init(){}
     protected func clone(): BackPressure<T> {
-        Throwing<T>(scheduler: this.scheduler)
+        let bp = Throwing<T>()
+        bp.scheduler_ = this.scheduler_
+        bp
     }
     protected func schedule(state: SingleSchedulerState<T>): Unit {
         throw FullSchedulerException()
@@ -91,11 +103,14 @@ public class Throwing<T> <: BackPressure<T> {
  * 使用当前线程
  */
 public class CurrentThread<T> <: BackPressure<T> {
-    public init(scheduler!: ?SingleScheduler<T> = None<SingleScheduler<T>>){
-        super.scheduler_ = scheduler
+    public init(scheduler: SingleScheduler<T>){
+        super.scheduler = scheduler
     }
+    public init(){}
     protected func clone(): BackPressure<T> {
-        CurrentThread<T>(scheduler: this.scheduler)
+        let bp = CurrentThread<T>()
+        bp.scheduler_ = this.scheduler_
+        bp
     }
     protected func schedule(state: SingleSchedulerState<T>): Unit {
         scheduler.doSchedule(state)
@@ -105,11 +120,14 @@ public class CurrentThread<T> <: BackPressure<T> {
  * 使用新线程
  */
 public class NewThread<T> <: BackPressure<T> {
-    public init(scheduler!: ?SingleScheduler<T> = None<SingleScheduler<T>>){
-        super.scheduler_ = scheduler
+    public init(scheduler: SingleScheduler<T>){
+        super.scheduler = scheduler
     }
+    public init(){}
     protected func clone(): BackPressure<T> {
-        NewThread<T>(scheduler: this.scheduler)
+        let bp = NewThread<T>()
+        bp.scheduler_ = this.scheduler_
+        bp
     }
     protected func schedule(state: SingleSchedulerState<T>): Unit {
         spawn{
@@ -121,14 +139,16 @@ public class NewThread<T> <: BackPressure<T> {
  * 使用指定函数
  */
 public class Action<T> <: BackPressure<T> {
-    public Action(scheduler: ?SingleScheduler<T>, private let action: (() -> Unit) -> Unit){
-        super.scheduler_ = scheduler
+    public Action(scheduler: SingleScheduler<T>, private let action: (() -> Unit) -> Unit){
+        super.scheduler = scheduler
     }
     public init(action: (() -> Unit) -> Unit){
         this.action = action
     }
     protected func clone(): BackPressure<T> {
-        Action<T>(scheduler, action)
+        let bp = Action<T>(action)
+        bp.scheduler_ = this.scheduler_
+        bp
     }
     protected func schedule(state: SingleSchedulerState<T>): Unit {
         action{
@@ -151,7 +171,9 @@ public class AfterBlocking<T> <: BackPressure<T> {
         this.then = then
     }
     protected func clone(): BackPressure<T> {
-        AfterBlocking<T>(scheduler, timeout, then: then.clone())
+        let bp = AfterBlocking<T>(timeout, then: then.clone())
+        bp.scheduler_ = this.scheduler_
+        bp
     }
     protected func schedule(state: SingleSchedulerState<T>): Unit {
         if(!scheduler.add(state, timeout)){
