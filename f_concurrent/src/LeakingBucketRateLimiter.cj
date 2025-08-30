@@ -49,10 +49,11 @@ public class LeakingBucketRateLimiter<T> <: RateLimiter<T> {
                     if (MonoTime.now() - d < timeout) { //这个条件不能合并到while循环条件，这个条件不论结果都得继续下次循环
                         c.dec()
                         leaked.fetchAdd(1)
-                    }
+                    }//当false，说明任务已经等待超时了
                 }
                 next = end - MonoTime.now()
-            } while (next <= Duration.Zero)
+            } while (next <= Duration.Zero)//当false说明当前周期内已经漏过指定数量的任务
+            //如果桶空了，当前线程会阻塞剩余的周期时间
             next
         }
         atExit(timer.cancel)
