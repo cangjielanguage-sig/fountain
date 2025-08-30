@@ -75,7 +75,7 @@ public class RateLimiterBackPressure<T> <: BackPressure<T> {
         }
     }
     protected func clone(): BackPressure<T> {
-        let bp = RateLimiterBackPressure<T>(this.limiter)
+        let bp = RateLimiterBackPressure<T>(this.limiter, policy: policy)
         bp.scheduler_ = this.scheduler_
         bp
     }
