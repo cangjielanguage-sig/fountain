@@ -59,4 +59,16 @@ public enum BackPressure {
      * 使用指定函数处理
      */
     | Action((() -> Unit) -> Unit)
+    /**
+     * 阻塞指定时间后使用当前线程处理
+     */
+    | BlockingOrCurrent(Duration)
+    /**
+     * 阻塞指定时间后创建新线程处理
+     */
+    | BlockingOrNewThread(Duration)
+    /**
+     * 阻塞指定时间后使用指定函数处理
+     */
+    | BlockingOrAction(Duration, (() -> Unit) -> Unit)
 }

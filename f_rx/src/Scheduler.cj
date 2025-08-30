@@ -251,6 +251,18 @@ class SingleScheduler<T> <: Scheduler<T> {
                 case Current => callee()
                 case NewThread => spawn {callee()}
                 case Action(f) => f(callee)
+                case BlockingOrCurrent(d) => 
+                    if(!queue.add(state, d)){
+                        callee()
+                    }
+                case BlockingOrNewThread(d) => 
+                    if(!queue.add(state, d)) {
+                        spawn {callee()}
+                    }
+                case BlockingOrAction(d, f) => 
+                    if(!queue.add(state, d)){
+                        f(callee)
+                    }
             }
         }
     }
