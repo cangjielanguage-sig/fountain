@@ -250,28 +250,28 @@ public class Observable<T> {
     /**
      * 单线程执行观察者，policy是背压策略，观察者队列上限是queueSize
      */
-    public func withSingle(queueSize: Int64, policy!: BackPressure = BackPressure.Current): This {
+    public func withSingle(queueSize: Int64, policy!: BackPressure<T> = CurrentThread<T>()): This {
         this.scheduler = Scheduler<T>.single(this.observer, queueSize, policy: policy)
         this
     }
     /**
      * 单线程执行观察者，policy是背压策略，观察者队列上限是Int64.Max
      */
-    public func withSingle(policy!: BackPressure = BackPressure.Current): This {
+    public func withSingle(policy!: BackPressure<T> = CurrentThread<T>()): This {
         this.scheduler = Scheduler<T>.single(this.observer, policy: policy)
         this
     }
     /**
      * 指定threads数量的线程执行观察者，policy是背压策略
      */
-    public func withFixed(threads: Int64, policy!: BackPressure = BackPressure.Current): This {
+    public func withFixed(threads: Int64, policy!: BackPressure<T> = CurrentThread<T>()): This {
         this.scheduler = Scheduler<T>.fixed(this.observer, threads, policy: policy)
         this
     }
     /**
      * 指定threads数量的线程执行观察者，观察者队列容量是queueSize，policy是观察者背压策略
      */
-    public func withFixed(threads: Int64, queueSize: Int64, policy!: BackPressure = BackPressure.Current): This {
+    public func withFixed(threads: Int64, queueSize: Int64, policy!: BackPressure<T> = CurrentThread<T>()): This {
         this.scheduler = Scheduler<T>.fixed(this.observer, threads, queueSize, policy: policy)
         this
     }

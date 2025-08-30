@@ -52,14 +52,14 @@ public abstract class Scheduler<T> {
      * 开启一个新线程执行观察者，observer是待执行的观察者，被观察者产生的数据推入数据队列，这个线程不停地从队列取出数据。
      * queueSize是线程队列容量，policy是背压策略
      */
-    public static func single(observer: Observer<T>, queueSize: Int64, policy!: BackPressure = BackPressure.Current): Scheduler<T> {
+    public static func single(observer: Observer<T>, queueSize: Int64, policy!: BackPressure<T> = CurrentThread<T>()): Scheduler<T> {
         SingleScheduler(observer, queueSize, policy: policy)
     }
     /**
      * 开启一个新线程执行观察者，observer是待执行的观察者
      * policy是背压策略
      */
-    public static func single(observer: Observer<T>, policy!: BackPressure = BackPressure.Current): Scheduler<T> {
+    public static func single(observer: Observer<T>, policy!: BackPressure<T> = CurrentThread<T>()): Scheduler<T> {
         SingleScheduler(observer, policy: policy)
     }
     /**
@@ -67,7 +67,7 @@ public abstract class Scheduler<T> {
      * 一个线程对应一个数据队列，被观察者的产生的数据按循环推入数据队列
      * queueSize是线程队列容量，policy是背压策略
      */
-    public static func fixed(observer: Observer<T>, threads: Int64, policy!: BackPressure = BackPressure.Current): Scheduler<T> {
+    public static func fixed(observer: Observer<T>, threads: Int64, policy!: BackPressure<T> = CurrentThread<T>()): Scheduler<T> {
         FixedScheduler(observer, threads, policy: policy)
     }
     /**
@@ -76,7 +76,7 @@ public abstract class Scheduler<T> {
      * queueSize是线程队列容量，policy是背压策略
      */
     public static func fixed(observer: Observer<T>, threads: Int64, queueSize: Int64,
-        policy!: BackPressure = BackPressure.Current): Scheduler<T> {
+        policy!: BackPressure<T> = CurrentThread<T>()): Scheduler<T> {
         FixedScheduler(observer, threads, queueSize, policy: policy)
     }
 }
@@ -125,17 +125,18 @@ class CurrentScheduler<T> <: Scheduler<T> {
     }
 }
 
-enum SingleSchedulerState<T> {
+public enum SingleSchedulerState<T> {
     | Item(?T)
     | Ex(Exception)
     | Poison(SyncCounter, SingleScheduler<T>, Int64)
 }
 
-class SingleScheduler<T> <: Scheduler<T> {
+public class SingleScheduler<T> <: Scheduler<T> {
     var wrapper = None<FixedScheduler<T>>
     private SingleScheduler(observer: Observer<T>, private let queue: LinkedBlockingQueue<SingleSchedulerState<T>>,
-        private let policy!: BackPressure = BackPressure.Current, private let index!: Int64 = 0) {
+        private let policy!: BackPressure<T> = CurrentThread<T>(), private let index!: Int64 = 0) {
         super(observer)
+        policy.scheduler = this
         spawn {
             try {
                 var toSteal = true
@@ -202,68 +203,17 @@ class SingleScheduler<T> <: Scheduler<T> {
         }
     }
 
-    init(observer: Observer<T>, size: Int64, policy!: BackPressure = BackPressure.Current, index!: Int64 = 0) {
+    init(observer: Observer<T>, size: Int64, policy!: BackPressure<T> = CurrentThread<T>(), index!: Int64 = 0) {
         this(observer, LinkedBlockingQueue<SingleSchedulerState<T>>(size), policy: policy, index: index)
     }
-    init(observer: Observer<T>, policy!: BackPressure = BackPressure.Current, index!: Int64 = 0) {
+    init(observer: Observer<T>, policy!: BackPressure<T> = CurrentThread<T>(), index!: Int64 = 0) {
         this(observer, LinkedBlockingQueue<SingleSchedulerState<T>>(), policy: policy, index: index)
     }
     private func schedule(state: SingleSchedulerState<T>): Unit {
         if (queue.size < queue.capacity) {
             queue.add(state)
         } else {
-            func callee(): Unit {
-                try {
-                    match (state) {
-                        case Item(item) => match (item) {
-                            case Some(v) => this.observer.onNext(v)
-                            case _ => this.observer.onComplete()
-                        }
-                        case Ex(ex) => this.observer.onError(ex)
-                        case Poison(c, _, idx) =>
-                            c.dec()
-                            if (idx == this.index) {
-                                c.waitUntilZero()
-                                this.observer.onComplete()
-                            }
-                    }
-                } catch (e: Exception) {
-                    this.observer.onError(e)
-                }
-            }
-            match (policy) {
-                case Discarding => ()
-                case DropOldest =>
-                    queue.remove()
-                    queue.add(state)
-                case AlwaysBlocking => queue.add(state)
-                case BlockingOrDiscarding(d) => queue.add(state, d)
-                case BlockingOrThrowing(d) =>
-                    if (!queue.add(state, d)) {
-                        throw FullSchedulerException()
-                    }
-                case BlockingOrDroppingOldest(d) => 
-                    if(!queue.add(state, d)) {
-                        queue.remove()
-                        queue.add(state)
-                    }
-                case Throwing => throw FullSchedulerException()
-                case Current => callee()
-                case NewThread => spawn {callee()}
-                case Action(f) => f(callee)
-                case BlockingOrCurrent(d) => 
-                    if(!queue.add(state, d)){
-                        callee()
-                    }
-                case BlockingOrNewThread(d) => 
-                    if(!queue.add(state, d)) {
-                        spawn {callee()}
-                    }
-                case BlockingOrAction(d, f) => 
-                    if(!queue.add(state, d)){
-                        f(callee)
-                    }
-            }
+            policy.schedule(state)
         }
     }
     public func schedule(item: ?T): Unit {
@@ -271,6 +221,34 @@ class SingleScheduler<T> <: Scheduler<T> {
     }
     public func schedule(ex: Exception): Unit {
         schedule(Ex(ex))
+    }
+    public func doSchedule(state: SingleSchedulerState<T>): Unit {
+        try {
+            match (state) {
+                case Item(item) => match (item) {
+                    case Some(v) => this.observer.onNext(v)
+                    case _ => this.observer.onComplete()
+                }
+                case Ex(ex) => this.observer.onError(ex)
+                case Poison(c, _, idx) =>
+                    c.dec()
+                    if (idx == this.index) {
+                        c.waitUntilZero()
+                        this.observer.onComplete()
+                    }
+            }
+        } catch (e: Exception) {
+            this.observer.onError(e)
+        }
+    }
+    public func tryRemove(){
+        queue.tryRemove()
+    }
+    public func add(state: SingleSchedulerState<T>){
+        queue.add(state)
+    }
+    public func add(state: SingleSchedulerState<T>, timeout: Duration): Bool {
+        queue.add(state, timeout)
     }
 }
 
@@ -283,10 +261,10 @@ class FixedScheduler<T> <: Scheduler<T> {
         }
     }
 
-    public init(observer: Observer<T>, threads: Int64, policy!: BackPressure = BackPressure.Current) {
+    public init(observer: Observer<T>, threads: Int64, policy!: BackPressure<T> = CurrentThread<T>()) {
         this(Array<SingleScheduler<T>>(threads) {i => SingleScheduler<T>(observer, policy: policy, index: i)})
     }
-    public init(observer: Observer<T>, threads: Int64, queueSize: Int64, policy!: BackPressure = BackPressure.Current) {
+    public init(observer: Observer<T>, threads: Int64, queueSize: Int64, policy!: BackPressure<T> = CurrentThread<T>()) {
         this(Array<SingleScheduler<T>>(threads) {i => SingleScheduler(observer, queueSize, policy: policy, index: i)})
     }
     private prop nextIndex: Int64 {

@@ -18,57 +18,153 @@ package f_rx
 /**
  * 背压策略
  */
-public enum BackPressure {
-    /**
-     * 直接丢弃
-     */
-    | Discarding
-    /**
-     * 丢弃队列头部数据
-     */
-    | DropOldest
-    /**
-     * 一直阻塞
-     */
-    | AlwaysBlocking
-    /**
-     * 阻塞指定时长后丢弃
-     */
-    | BlockingOrDiscarding(Duration)
-    /**
-     * 阻塞指定时长后抛出异常
-     */
-    | BlockingOrThrowing(Duration)
-    /**
-     * 阻塞指定时长后丢弃队列头部数据
-     */
-    | BlockingOrDroppingOldest(Duration)
-    /**
-     * 立即抛出异常
-     */
-    | Throwing
-    /**
-     * 使用当前线程处理
-     */
-    | Current
-    /**
-     * 使用新线程处理
-     */
-    | NewThread
-    /**
-     * 使用指定函数处理
-     */
-    | Action((() -> Unit) -> Unit)
-    /**
-     * 阻塞指定时间后使用当前线程处理
-     */
-    | BlockingOrCurrent(Duration)
-    /**
-     * 阻塞指定时间后创建新线程处理
-     */
-    | BlockingOrNewThread(Duration)
-    /**
-     * 阻塞指定时间后使用指定函数处理
-     */
-    | BlockingOrAction(Duration, (() -> Unit) -> Unit)
+public abstract class BackPressure<T> {
+    var scheduler_: ?SingleScheduler<T> = None
+    protected func schedule(state: SingleSchedulerState<T>): Unit
+    protected func clone(): BackPressure<T>
+    protected open mut prop scheduler: SingleScheduler<T> {
+        get(){
+            scheduler_.getOrThrow()
+        }
+        set(value){
+            scheduler_ = value
+        }
+    }
+}
+/**
+ * 丢弃当前数据
+ */
+public class Discarding<T> <: BackPressure<T> {
+    public init(scheduler!: ?SingleScheduler<T> = None<SingleScheduler<T>>){
+        super.scheduler_ = scheduler
+    }
+    protected func clone(): BackPressure<T> {
+        Discarding<T>(scheduler: this.scheduler)
+    }
+    protected func schedule(state: SingleSchedulerState<T>): Unit {}
+}
+/**
+ * 丢弃最旧数据
+ */
+public class ToDropOldest<T> <: BackPressure<T> {
+    public init(scheduler!: ?SingleScheduler<T> = None<SingleScheduler<T>>){
+        super.scheduler_ = scheduler
+    }
+    protected func clone(): BackPressure<T> {
+        ToDropOldest<T>(scheduler: this.scheduler)
+    }
+    protected func schedule(state: SingleSchedulerState<T>): Unit {
+        let s = scheduler
+        s.tryRemove()
+        s.add(state)
+    }
+}
+/**
+ * 一直阻塞
+ */
+public class AlwaysBlocking<T> <: BackPressure<T> {
+    public init(scheduler!: ?SingleScheduler<T> = None<SingleScheduler<T>>){
+        super.scheduler_ = scheduler
+    }
+    protected func clone(): BackPressure<T> {
+        AlwaysBlocking<T>(scheduler: this.scheduler)
+    }
+    protected func schedule(state: SingleSchedulerState<T>): Unit {
+        scheduler.add(state)
+    }
+}
+/**
+ * 立即抛出异常
+ */
+public class Throwing<T> <: BackPressure<T> {
+    public init(scheduler!: ?SingleScheduler<T> = None<SingleScheduler<T>>){
+        super.scheduler_ = scheduler
+    }
+    protected func clone(): BackPressure<T> {
+        Throwing<T>(scheduler: this.scheduler)
+    }
+    protected func schedule(state: SingleSchedulerState<T>): Unit {
+        throw FullSchedulerException()
+    }
+}
+/**
+ * 使用当前线程
+ */
+public class CurrentThread<T> <: BackPressure<T> {
+    public init(scheduler!: ?SingleScheduler<T> = None<SingleScheduler<T>>){
+        super.scheduler_ = scheduler
+    }
+    protected func clone(): BackPressure<T> {
+        CurrentThread<T>(scheduler: this.scheduler)
+    }
+    protected func schedule(state: SingleSchedulerState<T>): Unit {
+        scheduler.doSchedule(state)
+    }
+}
+/**
+ * 使用新线程
+ */
+public class NewThread<T> <: BackPressure<T> {
+    public init(scheduler!: ?SingleScheduler<T> = None<SingleScheduler<T>>){
+        super.scheduler_ = scheduler
+    }
+    protected func clone(): BackPressure<T> {
+        NewThread<T>(scheduler: this.scheduler)
+    }
+    protected func schedule(state: SingleSchedulerState<T>): Unit {
+        spawn{
+            scheduler.doSchedule(state)
+        }
+    }
+}
+/**
+ * 使用指定函数
+ */
+public class Action<T> <: BackPressure<T> {
+    public Action(scheduler: ?SingleScheduler<T>, private let action: (() -> Unit) -> Unit){
+        super.scheduler_ = scheduler
+    }
+    public init(action: (() -> Unit) -> Unit){
+        this.action = action
+    }
+    protected func clone(): BackPressure<T> {
+        Action<T>(scheduler, action)
+    }
+    protected func schedule(state: SingleSchedulerState<T>): Unit {
+        action{
+            scheduler.doSchedule(state)
+        }
+    }
+}
+/**
+ * 阻塞指定时间后执行指定策略
+ */
+public class AfterBlocking<T> <: BackPressure<T> {
+    public AfterBlocking(scheduler: SingleScheduler<T>, 
+                         private let timeout: Duration,
+                         private let then!: BackPressure<T> = Discarding<T>()){
+        super.scheduler = scheduler
+        this.then.scheduler = scheduler
+    }
+    public init(timeout: Duration, then!: BackPressure<T> = Discarding<T>()){
+        this.timeout = timeout
+        this.then = then
+    }
+    protected func clone(): BackPressure<T> {
+        AfterBlocking<T>(scheduler, timeout, then: then.clone())
+    }
+    protected func schedule(state: SingleSchedulerState<T>): Unit {
+        if(!scheduler.add(state, timeout)){
+            then.schedule(state)
+        }
+    }
+    protected mut prop scheduler: SingleScheduler<T> {
+        get(){
+            super.scheduler
+        }
+        set(value){
+            super.scheduler = value
+            then.scheduler = value
+        }
+    }
 }
