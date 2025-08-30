@@ -33,7 +33,7 @@ public class RateLimited<T> <: BackPressure<T> {
         this.discardedPolicy = discardedPolicy
     }
     public static func tokenBucket(scheduler: SingleScheduler<T>, tokens!: Int64, timeout!: Duration, populationPeriod!: Duration, 
-        policy!: BackPressure<T> = CurrentThread<T>(), discardedPolicy!: BackPressure<T> = Discarding<T>()): RateLimiterBackPressure<T> {
+        policy!: BackPressure<T> = CurrentThread<T>(), discardedPolicy!: BackPressure<T> = Discarding<T>()) {
         RateLimited<T>(scheduler, TokenBucketRateLimiter<Unit>(tokens: tokens, timeout: timeout, populationPeriod: populationPeriod), policy: policy, discardedPolicy: discardedPolicy)
     }
     public static func tokenBucket(tokens!: Int64, timeout!: Duration, populationPeriod!: Duration, 
