@@ -20,45 +20,58 @@ import f_concurrent.{RateLimiter, AnyMomentRateLimiter, LeakingBucketRateLimiter
 public class RateLimiterBackPressure<T> <: BackPressure<T> {
     public RateLimiterBackPressure(scheduler: SingleScheduler<T>, 
         private let limiter: RateLimiter<Unit>,
-        private let policy!: BackPressure<T> = CurrentThread<T>()){
+        private let policy!: BackPressure<T> = CurrentThread<T>(),
+        private let discardedPolicy!: BackPressure<T> = Discarding<T>()){
         super.scheduler = scheduler
     }
-    public init(limiter: RateLimiter<Unit>, policy!: BackPressure<T> = CurrentThread<T>()){
+    public init(limiter: RateLimiter<Unit>, policy!: BackPressure<T> = CurrentThread<T>(), discardedPolicy!: BackPressure<T> = Discarding<T>()){
         this.limiter = limiter
         this.policy = policy
+        this.discardedPolicy = discardedPolicy
     }
-    public static func tokenBucket(scheduler: SingleScheduler<T>, tokens!: Int64, timeout!: Duration, populationPeriod!: Duration, policy!: BackPressure<T> = CurrentThread<T>()): RateLimiterBackPressure<T> {
-        RateLimiterBackPressure<T>(scheduler, TokenBucketRateLimiter<Unit>(tokens: tokens, timeout: timeout, populationPeriod: populationPeriod), policy: policy)
+    public static func tokenBucket(scheduler: SingleScheduler<T>, tokens!: Int64, timeout!: Duration, populationPeriod!: Duration, 
+        policy!: BackPressure<T> = CurrentThread<T>(), discardedPolicy!: BackPressure<T> = Discarding<T>()): RateLimiterBackPressure<T> {
+        RateLimiterBackPressure<T>(scheduler, TokenBucketRateLimiter<Unit>(tokens: tokens, timeout: timeout, populationPeriod: populationPeriod), policy: policy, discardedPolicy: discardedPolicy)
     }
-    public static func tokenBucket(tokens!: Int64, timeout!: Duration, populationPeriod!: Duration, policy!: BackPressure<T> = CurrentThread<T>()){
-        RateLimiterBackPressure<T>(TokenBucketRateLimiter<Unit>(tokens: tokens, timeout: timeout, populationPeriod: populationPeriod), policy: policy)
+    public static func tokenBucket(tokens!: Int64, timeout!: Duration, populationPeriod!: Duration, 
+        policy!: BackPressure<T> = CurrentThread<T>(), discardedPolicy!: BackPressure<T> = Discarding<T>()){
+        RateLimiterBackPressure<T>(TokenBucketRateLimiter<Unit>(tokens: tokens, timeout: timeout, populationPeriod: populationPeriod), policy: policy, discardedPolicy: discardedPolicy)
     }
-    public static func slidingWindow(scheduler: SingleScheduler<T>, window!: Duration, timeout!: Duration, limit!: Int64, policy!: BackPressure<T> = CurrentThread<T>()){
-        RateLimiterBackPressure<T>(scheduler, SlidingWindowRateLimiter<Unit>(window: window, timeout: timeout, limit: limit), policy: policy)
+    public static func slidingWindow(scheduler: SingleScheduler<T>, window!: Duration, timeout!: Duration, limit!: Int64, 
+        policy!: BackPressure<T> = CurrentThread<T>(), discardedPolicy!: BackPressure<T> = Discarding<T>()){
+        RateLimiterBackPressure<T>(scheduler, SlidingWindowRateLimiter<Unit>(window: window, timeout: timeout, limit: limit), policy: policy, discardedPolicy: discardedPolicy)
     }
-    public static func slidingWindow(window!: Duration, timeout!: Duration, limit!: Int64, policy!: BackPressure<T> = CurrentThread<T>()){
-        RateLimiterBackPressure<T>(SlidingWindowRateLimiter<Unit>(window: window, timeout: timeout, limit: limit), policy: policy)
+    public static func slidingWindow(window!: Duration, timeout!: Duration, limit!: Int64, 
+        policy!: BackPressure<T> = CurrentThread<T>(), discardedPolicy!: BackPressure<T> = Discarding<T>()){
+        RateLimiterBackPressure<T>(SlidingWindowRateLimiter<Unit>(window: window, timeout: timeout, limit: limit), policy: policy, discardedPolicy: discardedPolicy)
     }
-    public static func leakingBucket(scheduler: SingleScheduler<T>, timeout!: Duration, maxWaitings!: Int64, leakingPerDuration!: Int64, leakingDuration!: Duration, policy!: BackPressure<T> = CurrentThread<T>()){
-        RateLimiterBackPressure<T>(scheduler, LeakingBucketRateLimiter<Unit>(timeout: timeout, maxWaitings: maxWaitings, leakingPerDuration: leakingPerDuration, leakingDuration: leakingDuration), policy: policy)
+    public static func leakingBucket(scheduler: SingleScheduler<T>, timeout!: Duration, maxWaitings!: Int64, leakingPerDuration!: Int64, leakingDuration!: Duration, 
+        policy!: BackPressure<T> = CurrentThread<T>(), discardedPolicy!: BackPressure<T> = Discarding<T>()){
+        RateLimiterBackPressure<T>(scheduler, LeakingBucketRateLimiter<Unit>(timeout: timeout, maxWaitings: maxWaitings, leakingPerDuration: leakingPerDuration, leakingDuration: leakingDuration), policy: policy, discardedPolicy: discardedPolicy)
     }
-    public static func leakingBucket(timeout!: Duration, maxWaitings!: Int64, leakingPerDuration!: Int64, leakingDuration!: Duration, policy!: BackPressure<T> = CurrentThread<T>()){
-        RateLimiterBackPressure<T>(LeakingBucketRateLimiter<Unit>(timeout: timeout, maxWaitings: maxWaitings, leakingPerDuration: leakingPerDuration, leakingDuration: leakingDuration), policy: policy)
+    public static func leakingBucket(timeout!: Duration, maxWaitings!: Int64, leakingPerDuration!: Int64, leakingDuration!: Duration, 
+        policy!: BackPressure<T> = CurrentThread<T>(), discardedPolicy!: BackPressure<T> = Discarding<T>()){
+        RateLimiterBackPressure<T>(LeakingBucketRateLimiter<Unit>(timeout: timeout, maxWaitings: maxWaitings, leakingPerDuration: leakingPerDuration, leakingDuration: leakingDuration), policy: policy, discardedPolicy: discardedPolicy)
     }
-    public static func anyMoment(scheduler: SingleScheduler<T>, maxTokens!: Int64, timeout!: Duration, policy!: BackPressure<T> = CurrentThread<T>()){
-        RateLimiterBackPressure<T>(scheduler, AnyMomentRateLimiter<Unit>(maxTokens: maxTokens, timeout: timeout), policy: policy)
+    public static func anyMoment(scheduler: SingleScheduler<T>, maxTokens!: Int64, timeout!: Duration, 
+        policy!: BackPressure<T> = CurrentThread<T>(), discardedPolicy!: BackPressure<T> = Discarding<T>()){
+        RateLimiterBackPressure<T>(scheduler, AnyMomentRateLimiter<Unit>(maxTokens: maxTokens, timeout: timeout), policy: policy, discardedPolicy: discardedPolicy)
     }
-    public static func anyMoment(maxTokens!: Int64, timeout!: Duration, policy!: BackPressure<T> = CurrentThread<T>()){
-        RateLimiterBackPressure<T>(AnyMomentRateLimiter<Unit>(maxTokens: maxTokens, timeout: timeout), policy: policy)
+    public static func anyMoment(maxTokens!: Int64, timeout!: Duration, 
+        policy!: BackPressure<T> = CurrentThread<T>(), discardedPolicy!: BackPressure<T> = Discarding<T>()){
+        RateLimiterBackPressure<T>(AnyMomentRateLimiter<Unit>(maxTokens: maxTokens, timeout: timeout), policy: policy, discardedPolicy: discardedPolicy)
     }
     
     protected func schedule(state: SingleSchedulerState<T>): Unit {
-        limiter.exec(None<Unit>){
+        let exe = limiter.exec(None<Unit>){
             policy.schedule(state)
+        }
+        if(exe.isNone()){
+            discardedPolicy.schedule(state)
         }
     }
     protected func clone(): BackPressure<T> {
-        let bp = RateLimiterBackPressure<T>(this.limiter, policy: policy)
+        let bp = RateLimiterBackPressure<T>(this.limiter, policy: policy, discardedPolicy: discardedPolicy)
         bp.scheduler_ = this.scheduler_
         bp
     }
