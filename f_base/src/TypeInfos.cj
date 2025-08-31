@@ -58,7 +58,7 @@ public class TypeInfos {
     public static func getGenericTypes(qualifiedName: String): Array<TypeInfo> {
         let idx = qualifiedName.indexOf("<")
         if (let Some(i) <- idx) {
-            let generics = qualifiedName[i..qualifiedName.size - 1]
+            let generics = qualifiedName[i + 1 .. qualifiedName.size - 1]
             let types = parseParameterTypes(generics)
             types
         } else {
