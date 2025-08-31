@@ -35,7 +35,6 @@ public class TransactionAspect <: Aspect {
     private init() {}
     private let rollbackExceptions = ConcurrentHashMap<String, HashSet<TypeInfo>>()
     private let mutex = Mutex()
-    private let transactionalMap = ConcurrentHashMap<String, Transactional>()
 
     public func proceed(funcInfo: InvocationFuncInfo, point: (Array<Any>) -> Any): Any {
         let transactional = funcInfo.funcInfo.findAnnotation<Transactional>()
@@ -85,14 +84,11 @@ public class TransactionAspect <: Aspect {
             ORM.hooks.afterThrowing(e)
             let et = ClassTypeInfo.of(e)
             func genExceptionSet(ex: String) {
-                if (let Some(s) <- rollbackExceptions.get(ex)) {
-                    s
-                } else {
+                rollbackExceptions.computeIfAbsent(ex){
                     let set = HashSet<TypeInfo>()
                     for (e in ex.split("|") where e.size > 0) {
                         set.add(TypeInfos.get(e.trimAscii()))
                     }
-                    rollbackExceptions[ex] = set
                     set
                 }
             }

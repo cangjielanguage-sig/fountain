@@ -24,7 +24,7 @@ import std.reflect.TypeInfo
 import std.sync.Mutex
 import std.time.DateTime
 import f_base.*
-import f_collection.LinkedHashMap
+import f_collection.*
 import f_data.*
 import f_exception.UnreachableException
 import f_regex.*
@@ -66,18 +66,10 @@ public class TextTemplate {
         compile(template, prefix: placeholder, suffix: placeholder)
     }
     public static func compile(template: String, prefix!: String = #"${"#, suffix!: String = "}") {
-        match (templates.get(template)) {
-            case Some(t) => t
-            case _ => synchronized(mutex) {
-                match (templates.get(template)) {
-                    case Some(t) => t
-                    case _ =>
-                        let instance = TextTemplate(template)
-                        instance.doCompile(template, prefix, suffix)
-                        templates[template] = instance
-                        instance
-                }
-            }
+        templates.computeIfAbsent(template){
+            let instance = TextTemplate(template)
+            instance.doCompile(template, prefix, suffix)
+            instance
         }
     }
     private func doCompile(template: String, prefix: String, suffix: String) {

@@ -17,7 +17,6 @@ package f_log
 
 import std.collection.concurrent.ConcurrentHashMap
 import std.reflect.TypeInfo
-import std.sync.Mutex
 import stdx.log.Attr
 import f_base.*
 import f_collection.*
@@ -25,7 +24,6 @@ import f_collection.*
 internal let globalAttrMap = ConcurrentHashMap<String, Array<Attr>>()
 
 public class LoggerFactory {
-    private static let mutex = Mutex()
     private static let loggers = ConcurrentHashMap<String, LoggerWrapper>()
 
     private init() {}

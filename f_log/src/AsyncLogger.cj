@@ -18,15 +18,14 @@ package f_log
 import std.collection.concurrent.{ArrayBlockingQueue, ConcurrentHashMap}
 import std.env
 import std.io.{OutputStream, ByteBuffer}
-import std.sync.Mutex
 import std.time.DateTime
 import stdx.log.{LogLevel, LogRecord}
+import f_collection.*
 import f_io.DummyOutputStream
 import f_log.exception.LogException
 
 public abstract class AsyncLogger <: AbstractLogger {
     private static let queueMap = ConcurrentHashMap<String, ArrayBlockingQueue<() -> Unit>>()
-    private static let mutex = Mutex()
     private let timeout: Duration
     private let policy: AsyncTimeoutPolicy
     private let queue: ArrayBlockingQueue<() -> Unit>
@@ -42,16 +41,11 @@ public abstract class AsyncLogger <: AbstractLogger {
         this.output_ = output
         timeout = LoggerConfig.getAsyncTimeout()
         policy = LoggerConfig.getAsyncTimeoutPolicy()
-        this.queue = synchronized(mutex) { //确保一个日志写入目标只有一个队列和一个消费线程
-            if (let Some(q) <- queueMap.get(queueTag)) {
-                q
-            } else {
-                let bufSize = LoggerConfig.getAsyncBufSize()
-                let queue = ArrayBlockingQueue<() -> Unit>(bufSize)
-                queueMap[queueTag] = queue
-                remove(queue)
-                queue
-            }
+        this.queue = queueMap.computeIfAbsent(queueTag){
+            let bufSize = LoggerConfig.getAsyncBufSize()
+            let queue = ArrayBlockingQueue<() -> Unit>(bufSize)
+            remove(queue)
+            queue
         }
         env.atExit{doClose(output)}
     }

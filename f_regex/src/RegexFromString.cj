@@ -19,6 +19,7 @@ import std.collection.HashSet
 import std.collection.concurrent.ConcurrentHashMap
 import f_base.StringGenerator
 import f_cache.HeapCache
+import f_collection.*
 
 public interface RegexFromString {
     func regex(flags!: Array<RegexFlag>, solid!: Bool): Regex
@@ -49,15 +50,12 @@ extend String <: RegexFromString {
         }
         let key = "/${this}/${flagsstr()}"
         if (solid) {
-            if (let Some(x) <- SOLID.get(key)) {
-                x
-            } else if (let Some(x) <- CACHE.get(key)) {
-                SOLID[key] = x
-                x
-            } else {
-                let reg = Regex(this, flags)
-                SOLID[key] = reg
-                reg
+            SOLID.computeIfAbsent(key){
+                if(let Some(x) <- CACHE.get(key)) {
+                    x
+                }else{
+                    Regex(this, flags)
+                }
             }
         } else {
             CACHE.getOrCompute(key) {

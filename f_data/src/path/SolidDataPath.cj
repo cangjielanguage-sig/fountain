@@ -17,24 +17,15 @@ package f_data.path
 
 import std.collection.concurrent.ConcurrentHashMap
 import std.sync.Mutex
+import f_collection.*
 
 internal class SolidDataPath <: DataPath {
     private static let SOLID = ConcurrentHashMap<String, DataPath>()
     private static let lock = Mutex()
     private init() {}
     static func compile(path: String): DataPath {
-        if (let Some(p) <- SOLID.get(path)) {
-            p
-        } else {
-            synchronized(lock) {
-                if (let Some(p) <- SOLID.get(path)) {
-                    p
-                } else {
-                    let p = SolidDataPath().doCompile(path, true)
-                    SOLID[path] = p
-                    p
-                }
-            }
+        SOLID.computeIfAbsent(path){
+            SolidDataPath().doCompile(path, true)
         }
     }
 }
