@@ -20,6 +20,10 @@ public import std.random.Random
 public import stdx.crypto.crypto.SecureRandom
 
 public interface ExtendRandom<R> where R <: ExtendRandom<R> {
+    func nextFloat64(): Float64
+    func nextFloat32(): Float32
+    func nextFloat64(min: Float64, max: Float64, closed!: Bool): Float64
+    func nextFloat32(min: Float32, max: Float32, closed!: Bool): Float32
     func nextInt64(min: Int64, max: Int64, closed!: Bool): Int64
     func nextUInt64(min: UInt64, max: UInt64, closed!: Bool): UInt64
     func nextInt32(min: Int32, max: Int32, closed!: Bool): Int32
@@ -41,64 +45,60 @@ public interface ExtendRandom<R> where R <: ExtendRandom<R> {
    如果不加这个限制，那么目前函数没有直接的方法，可以通过仅对超过max的部分下取整来解决
  */
 extend Random <: ExtendRandom<Random> {
-    public func nextInt64(min: Int64, max: Int64, closed!: Bool = false): Int64 {
-        return Int64(floor(nextFloat64() * (Float64(max) - Float64(min) + if (closed) {
+    public func nextFloat64(min: Float64, max: Float64, closed!: Bool = false): Float64{
+        nextFloat64() * (max - min + if (closed) {
             1.0
         } else {
             0.0
-        }) + Float64(min)))
+        }) + min
+    }
+    public func nextFloat32(min: Float32, max: Float32, closed!: Bool = false): Float32 {
+        nextFloat32() * (max - min + if (closed) {
+            1.0
+        } else {
+            0.0
+        }) + min
+    }
+    public func nextInt64(min: Int64, max: Int64, closed!: Bool = false): Int64 {
+        return Int64(floor(nextFloat64(Float64(min), Float64(max), closed: closed)))
     }
     public func nextUInt64(min: UInt64, max: UInt64, closed!: Bool = false): UInt64 {
-        return UInt64(floor(nextFloat64() * (Float64(max) - Float64(min) + if (closed) {
-            1.0
-        } else {
-            0.0
-        }) + Float64(min)))
+        return UInt64(floor(nextFloat64(Float64(min), Float64(max), closed: closed)))
     }
     public func nextInt32(min: Int32, max: Int32, closed!: Bool = false): Int32 {
-        return Int32(floor(nextFloat32() * (Float32(max) - Float32(min) + if (closed) {
-            1.0
-        } else {
-            0.0
-        }) + Float32(min)))
+        return Int32(floor(nextFloat32(Float32(min), Float32(max), closed: closed)))
     }
     public func nextUInt32(min: UInt32, max: UInt32, closed!: Bool = false): UInt32 {
-        return UInt32(floor(nextFloat32() * (Float32(max) - Float32(min) + if (closed) {
-            1.0
-        } else {
-            0.0
-        }) + Float32(min)))
+        return UInt32(floor(nextFloat32(Float32(min), Float32(max), closed: closed)))
     }
 }
 
 extend SecureRandom <: ExtendRandom<SecureRandom> {
-    public func nextInt64(min: Int64, max: Int64, closed!: Bool = false): Int64 {
-        return Int64(floor(nextFloat64() * (Float64(max) - Float64(min) + if (closed) {
+    public func nextFloat64(min: Float64, max: Float64, closed!: Bool = false): Float64{
+        nextFloat64() * (max - min + if (closed) {
             1.0
         } else {
             0.0
-        }) + Float64(min)))
+        }) + min
+    }
+    public func nextFloat32(min: Float32, max: Float32, closed!: Bool = false): Float32 {
+        nextFloat32() * (max - min + if (closed) {
+            1.0
+        } else {
+            0.0
+        }) + min
+    }
+    public func nextInt64(min: Int64, max: Int64, closed!: Bool = false): Int64 {
+        return Int64(floor(nextFloat64(Float64(min), Float64(max), closed: closed)))
     }
     public func nextUInt64(min: UInt64, max: UInt64, closed!: Bool = false): UInt64 {
-        return UInt64(floor(nextFloat64() * (Float64(max) - Float64(min) + if (closed) {
-            1.0
-        } else {
-            0.0
-        }) + Float64(min)))
+        return UInt64(floor(nextFloat64(Float64(min), Float64(max), closed: closed)))
     }
     public func nextInt32(min: Int32, max: Int32, closed!: Bool = false): Int32 {
-        return Int32(floor(nextFloat32() * (Float32(max) - Float32(min) + if (closed) {
-            1.0
-        } else {
-            0.0
-        }) + Float32(min)))
+        return Int32(floor(nextFloat32(Float32(min), Float32(max), closed: closed)))
     }
     public func nextUInt32(min: UInt32, max: UInt32, closed!: Bool = false): UInt32 {
-        return UInt32(floor(nextFloat32() * (Float32(max) - Float32(min) + if (closed) {
-            1.0
-        } else {
-            0.0
-        }) + Float32(min)))
+        return UInt32(floor(nextFloat32(Float32(min), Float32(max), closed: closed)))
     }
 }
 
