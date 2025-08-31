@@ -20,6 +20,7 @@ import std.reflect.TypeInfo
 import std.sync.Mutex
 import stdx.log.Attr
 import f_base.*
+import f_collection.*
 
 internal let globalAttrMap = ConcurrentHashMap<String, Array<Attr>>()
 
@@ -29,27 +30,26 @@ public class LoggerFactory {
 
     private init() {}
 
+    /**
+     * name和attrs一一对应，如果在不同的代码用相同的名字，请务必确保attrs一致，否则只保留每一个名称最后一次调用的attrs。
+     */
     public static func getLogger(name: String, attrs: Array<Attr>): AbstractLogger {
         if (!attrs.isEmpty()) {
             globalAttrMap[name] = attrs
         }
-        if (let Some(x) <- loggers.get(name)) {
-            x
-        } else {
-            synchronized(mutex) {
-                if (let Some(x) <- loggers.get(name)) {
-                    x
-                } else {
-                    let wrapper = LoggerWrapper(name)
-                    loggers[name] = wrapper
-                    wrapper
-                }
-            }
+        loggers.computeIfAbsent(name){
+            LoggerWrapper(name)
         }
     }
+    /**
+     * 把泛型O的全限定名作为日志实例的唯一标识
+     */
     public static func getLogger<O>(attrs: Array<Attr>): AbstractLogger {
         getLogger(TypeInfos.get<O>(), attrs)
     }
+    /**
+     * 把typeInfo的全限定名作为日志实例的唯一标识
+     */
     public static func getLogger(typeInfo: TypeInfo, attrs: Array<Attr>): AbstractLogger {
         getLogger('std.reflect.TypeInfo.get("${typeInfo.qualifiedName}")', attrs)
     }
