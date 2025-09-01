@@ -12,25 +12,26 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
-*/
+ */
 package f_base
 
-foreign{
+foreign {
     func memcpy(dest: CPointer<Unit>, src: CPointer<Unit>, n: UIntNative): CPointer<Unit>
+
     func getpagesize(): IntNative
 }
 /**
  * 当前系统内存页大小
  */
-public let MEM_PAGE_SIZE = unsafe{Int64(getpagesize())}
+public let MEM_PAGE_SIZE = unsafe { Int64(getpagesize()) }
 /**
- * null void* 
+ * null void*
  */
-public let nullptr = CPointer<Unit>()
+public let nullptr = unsafe { zeroValue<CPointer<Unit>>() }
 
 /**
  * 简单调用memcpy
  */
-public unsafe func mcopy(dest: CPointer<Unit>, src: CPointer<Unit>, n: UIntNative): CPointer<Unit>{
+public unsafe func mcopy(dest: CPointer<Unit>, src: CPointer<Unit>, n: UIntNative): CPointer<Unit> {
     memcpy(dest, src, n)
 }
