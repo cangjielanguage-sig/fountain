@@ -133,11 +133,7 @@ public class HeapCache<V> where V <: Object {
         tops.clear()
     }
     private func evicated(p: Priority<V>): Bool {
-        DateTime.now() - if (p.once) {
-            p.birthTime
-        } else {
-            p.lastUsedTime
-        } >= p.maxLife
+        DateTime.now() >= p.deathTime
     }
 
     public func get(key: String): Option<V> {
@@ -191,7 +187,7 @@ public class HeapCache<V> where V <: Object {
                 old
             }
         } else {
-            store.add(key, Priority<V>(key, value, maxLife, once))
+            store.add(key, Priority<V>(key, value, maxLife, checkDuration, once))
             Option<V>.None
         }
     }
@@ -212,13 +208,13 @@ public class HeapCache<V> where V <: Object {
     public func getOrCompute(key: String, callable: () -> (V, DateTime)): V {
         store.computeIfAbsent(key) {
             let data = callable()
-            Priority<V>(key, data[0], data[1] - DateTime.now(), true)
+            Priority<V>(key, data[0], data[1] - DateTime.now(), checkDuration, true)
         }.load()
     }
     public func getOrCompute(key: String, callable: () -> (V, Duration, Bool)): V {
         store.computeIfAbsent(key) {
             let data = callable()
-            Priority<V>(key, data[0], data[1], data[2])
+            Priority<V>(key, data[0], data[1], checkDuration, data[2])
         }.load()
     }
     public func remove(key: String): Option<V> {

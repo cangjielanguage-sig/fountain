@@ -33,14 +33,16 @@ public open class Priority<V> <: Comparable<Priority<V>> where V <: Object {
     private var usedUtilLastChecked = ref.load() //缓存数据截至上次检查时间的使用次数
     private var lastUsed = birth //缓存数据上次使用时间
     private var maxLife_: Duration //缓存数据的最大生存期，每条数据的生存期可以不同
+    private let checkDuration: Duration
     private let once_ = AtomicBool(false) //控制缓存数据的生存时间，true从出生开始算，false从上次使用时间开始算
     let key: String
     private let value: AtomicReference<V>
 
-    protected init(key: String, value: V, maxLife: Duration, once: Bool) {
+    protected init(key: String, value: V, maxLife: Duration, checkDuration: Duration, once: Bool) {
         this.key = key
         this.value = AtomicReference<V>(value)
         this.maxLife_ = maxLife
+        this.checkDuration = checkDuration
         this.once_.store(once)
     }
     public open func compare(other: Priority<V>): Ordering {
@@ -87,7 +89,7 @@ public open class Priority<V> <: Comparable<Priority<V>> where V <: Object {
                     birth
                 } else {
                     lastUsed
-                }) / maxLife_
+                }) / checkDuration
             }
         }
     }
