@@ -49,8 +49,8 @@ public open class Priority<V> <: Comparable<Priority<V>> where V <: Object {
         let lastUsed = this.lastUsedTime
         let otherLastUsed = other.lastUsedTime
         func cmp(): Ordering {
-            let duration = (lastUsed - lastCheckedTime).toSeconds()
-            let otherDuration = (otherLastUsed - other.lastCheckedTime).toSeconds()
+            let duration = (lastUsed - lastCheckedTime)
+            let otherDuration = (otherLastUsed - other.lastCheckedTime)
 
             var ordering: Ordering = (usedCount - usedCountUtilLastChecked).compare(
                 other.usedCount - other.usedCountUtilLastChecked)
@@ -61,6 +61,10 @@ public open class Priority<V> <: Comparable<Priority<V>> where V <: Object {
             ordering = match (ordering) {
                 case EQ => lastUsed.compare(otherLastUsed)
                 case _ => return ordering
+            }
+            ordering = match (ordering) {
+                case EQ => this.ref.load().compare(other.ref.load())
+                case _ => ordering
             }
             match (ordering) {
                 case EQ => this.birth.compare(other.birth)
