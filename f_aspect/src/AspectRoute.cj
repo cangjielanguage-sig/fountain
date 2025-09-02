@@ -17,7 +17,6 @@ package f_aspect
 
 public import std.reflect.*
 import f_base.*
-import f_aspect.exception.AspectException
 import f_regex.*
 
 /**

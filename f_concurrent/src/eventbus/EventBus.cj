@@ -15,7 +15,6 @@ limitations under the License.
  */
 package f_concurrent.eventbus
 
-import std.collection.{TreeMap, ArrayList}
 import std.collection.concurrent.{LinkedBlockingQueue, ConcurrentHashMap}
 import std.runtime.getProcessorCount
 import std.sync.{Mutex, AtomicBool}

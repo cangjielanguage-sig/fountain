@@ -15,15 +15,12 @@ limitations under the License.
  */
 package f_cache
 
-import std.collection.{HashMap, HashSet, Set}
+import std.collection.HashMap
 import std.collection.concurrent.LinkedBlockingQueue
-import std.math.MathExtension
 import std.env.atExit
-import std.process.Process
 import std.time.DateTime
-import std.sync.{Mutex, AtomicInt64, AtomicReference, Timer, AtomicBool}
+import std.sync.{Mutex, Timer, AtomicBool}
 import f_base.*
-import f_exception.UnreachableException
 import f_collection.PriorityQueue
 
 public class HeapCache<V> where V <: Object {

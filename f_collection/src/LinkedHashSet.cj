@@ -15,8 +15,8 @@ limitations under the License.
  */
 package f_collection
 
-import std.collection.{Set, TreeMap, ReadOnlySet, ArrayList}
-import f_base.{OverSizePolicy, StringGenerator}
+import std.collection.{Set, ReadOnlySet}
+import f_base.StringGenerator
 
 public class LinkedHashSet<T> <: Set<T> where T <: Hashable & Equatable<T> {
     private let map: LinkedHashMap<T, Unit>

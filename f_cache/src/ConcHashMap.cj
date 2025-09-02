@@ -16,7 +16,7 @@ limitations under the License.
 package f_cache
 
 import std.collection.{Map, EquatableCollection}
-import std.sync.{AtomicInt64, SyncCounter}
+import std.sync.AtomicInt64
 import f_base.EmptyIterator
 
 class ConcHashMapKeysIterator<V> <: Iterator<String> {

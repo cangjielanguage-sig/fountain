@@ -16,7 +16,6 @@ limitations under the License.
 package f_collection
 
 import std.collection.{Map, EquatableCollection}
-import f_base.ExtendOption
 
 class MapKeyIterator<K, V> <: Iterator<K> {
     MapKeyIterator(private let entryIterator: Iterator<(K, V)>) {}

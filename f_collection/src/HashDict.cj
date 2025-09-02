@@ -15,7 +15,7 @@ limitations under the License.
  */
 package f_collection
 
-import std.collection.{HashMap, EquatableCollection, MapEntryView}
+import std.collection.{HashMap, MapEntryView}
 
 public struct HashKey<K> <: Hashable & Equatable<K> & Equatable<HashKey<K>> {
     public HashKey(

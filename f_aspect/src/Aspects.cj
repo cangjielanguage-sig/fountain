@@ -21,7 +21,6 @@ import f_base.*
 import f_bean.{BeanFactory, BeanManager}
 import f_collection.*
 import f_macros.*
-import f_regex.*
 
 public class Aspects {
     private static let aspects = ConcurrentHashMap<QualifiedFuncInfo, (Array<Any>) -> Any>()

@@ -15,9 +15,6 @@ limitations under the License.
  */
 package f_base
 
-import std.convert.Parsable
-import std.regex.*
-
 public interface ExtendRange<T> where T <: Countable<T> & ToString {
     func toString(): String
 }

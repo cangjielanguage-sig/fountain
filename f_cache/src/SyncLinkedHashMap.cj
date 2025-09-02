@@ -15,9 +15,8 @@ limitations under the License.
  */
 package f_cache
 
-import std.collection.Map
 import std.sync.{ReadWriteLock, Lock}
-import f_collection.{LinkedHashMap, ValueEqualMap, ValueContainsMap}
+import f_collection.LinkedHashMap
 
 class SyncLinkedHashMap<V> <: Collection<(String, V)> {
     private let rwl = ReadWriteLock()

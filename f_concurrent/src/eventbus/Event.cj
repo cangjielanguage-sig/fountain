@@ -16,7 +16,6 @@ limitations under the License.
 package f_concurrent.eventbus
 
 import std.sync.{AtomicUInt64, AtomicBool, AtomicInt64, AtomicReference}
-import f_base.*
 
 /**
  * 如果一个业务流程有许多步，每一步可以定义成一个事件，把这些事件注册到concurrent.eventbus.EventBus

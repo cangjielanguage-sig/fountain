@@ -15,7 +15,7 @@ limitations under the License.
  */
 package f_collection
 
-import std.collection.{TreeMap, EquatableCollection, MapEntryView}
+import std.collection.{TreeMap, MapEntryView}
 
 public struct ComparableKey<K> <: Comparable<K> & Comparable<ComparableKey<K>> {
     ComparableKey(
