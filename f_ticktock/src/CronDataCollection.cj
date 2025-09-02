@@ -46,7 +46,6 @@ public class CronDataCollection <: Hashable & Equatable<CronDataCollection> {
         put(unit, CronData(unit, value))
     }
     public func putLast(unit: TicktockUnit) {
-        var value = unit.lastRange
         put(unit, CronData.createLast(unit))
     }
     public func get(unit: TicktockUnit): Option<Collection<CronData>> {
@@ -66,7 +65,6 @@ public class CronDataCollection <: Hashable & Equatable<CronDataCollection> {
             if (!result) {
                 return false
             }
-            result = false
         }
         true
     }
