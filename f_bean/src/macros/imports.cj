@@ -16,6 +16,6 @@ limitations under the License.
 macro package f_bean.macros
 
 internal import std.ast.*
-internal import std.collection.{ArrayList, HashMap}
+internal import std.collection.ArrayList
 internal import f_macros.*
 internal import f_bean.exception.*

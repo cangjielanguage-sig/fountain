@@ -16,13 +16,14 @@ limitations under the License.
 macro package f_bean.macros
 
 /**
- * 只能修饰类。将@Bean修饰的类注册到BeanFactory
+ * 只能修饰类。将@Bean修饰的类注册到BeanFactory。如果不是泛型类型建议使用无属性的@Bean宏。
+ * 本宏的属性仅仅用来指定泛型类型的泛型实参，可以使用|分隔指定多组泛型实参。
  */
-public macro Bean(input: Tokens): Tokens {
+public macro Bean(attr: Tokens, input: Tokens): Tokens {
     let klass = match(parseDecl(input)){
         case x: ClassDecl => x
         case x: MacroExpandDecl => 
-            return replaceMacroInputDecl(quote(@Bean), x).toTokens()
+            return replaceMacroInputDecl(quote(@Bean[$attr]), x).toTokens()
         case _ => 
             diagReport(ERROR, input, 'illegal decl', '')
             throw BeanException()
@@ -74,21 +75,52 @@ public macro Bean(input: Tokens): Tokens {
             case _ => continue
         }
     }
+
+    let list = ArrayList<Tokens>()
+    list.add(quote())
+    for(a in attr){
+        if(a.kind == TokenKind.BITOR){
+            list.add(quote())
+            continue
+        }else{
+            list.last?.append(a)
+        }
+    }
+    if(list.size > 1){
+        list.removeIf{g => g.size == 0}
+    }
+    for(g in list){
+        let beanType = if(g.size == 0){
+            quote($identifier)
+        }else{
+            quote($identifier<$g>)
+        }
+        input.append(quote(
+            private let _ = {=>
+                $ctorTokens
+                var constructor = None<() -> $beanType>
+                for ((n, f) in ctors where TypeInfos.withAnnotation<$beanType, Constructor>(n, [])) {
+                    constructor = n
+                    break
+                }
+                if (constructor.isNone() && let Some(f) <- ctors.get("init")) {
+                    constructor = f
+                }
+                BeanFactory.instance.register<$beanType>(constructor.getOrThrow{
+                    let beanTypeName = $(beanType.toString())
+                    BeanException('class ' + beanTypeName + ' must be with a public parameterless constructor or a public static parameterless function.')
+                })
+            }()
+        )).append(`nl`)
+    }
+    input
+}
+/**
+ * 只能修饰类。将@Bean修饰的类注册到BeanFactory。如果不是泛型类型建议使用无属性的@Bean宏
+ */
+public macro Bean(input: Tokens): Tokens {
     quote(
+        @Bean[]
         $input
-        private let _ = {=>
-            $ctorTokens
-            var constructor = None<() -> $identifier>
-            for ((n, f) in ctors where TypeInfos.withAnnotation<$identifier, Constructor>(n, [])) {
-                constructor = n
-                break
-            }
-            if (constructor.isNone() && let Some(f) <- ctors.get("init")) {
-                constructor = f
-            }
-            BeanFactory.instance.register<$identifier>(constructor.getOrThrow{
-                BeanException('class $(identifier.value) must be with a public parameterless constructor or a public static parameterless function.')
-            })
-        }()
     )
 }
