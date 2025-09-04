@@ -41,13 +41,21 @@ public class FuncObserver<T> <: Observer<T> {
     private var completeFunc: () -> Unit = { => }
     init(){}
     public func onNext(item: T): Unit {
-        nextFunc(item)
+        try{
+            nextFunc(item)
+        }catch(e: Exception){
+            onError(e)
+        }
     }
     public func onError(ex: Exception): Unit {
         errorFunc(ex)
     }
     public func onComplete(): Unit {
-        completeFunc()
+        try{
+            completeFunc()
+        }catch(e: Exception){
+            onError(e)
+        }
     }
     /**
      * 注册数据处理函数
@@ -195,13 +203,25 @@ public class CombinedObserver<T> <: Observer<T> {
         }
     }
     public func onNext(item: T): Unit {
-        call{o => o.onNext(item)}
+        call{o => 
+            try{
+                o.onNext(item)
+            }catch(e: Exception){
+                onError(e)
+            }
+        }
     }
     public func onError(ex: Exception): Unit {
         call{o => o.onError(ex)}
     }
     public func onComplete(): Unit {
-        call{o => o.onComplete()}
+        call{o => 
+            try{
+                o.onComplete()
+            }catch(e: Exception){
+                onError(e)
+            }
+        }
     }
 }
 class AsyncObserver<T> <: Observer<T> {
