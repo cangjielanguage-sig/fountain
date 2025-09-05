@@ -32,6 +32,18 @@ public class LogPattern <: LogPart {
     public init(pattern: String) {
         patterns = compile(pattern)
     }
+    public operator func ==(that: LogPart): Bool {
+        match(that) {
+            case x: LogPattern where refEq(this, x) => true
+            case x: LogPattern where this.patterns.size != x.patterns.size => false
+            case x: LogPattern =>
+                for(i in 0..this.patterns.size where this.patterns[i] != x.patterns[i]) {
+                    return false
+                }
+                true
+            case _ => false
+        }
+    }
     private static func compile(pattern: String): ArrayList<LogPart> {
         let patterns = ArrayList<LogPart>()
         let origin = ArrayList<Byte>()
@@ -103,14 +115,23 @@ public class LogPattern <: LogPart {
     }
 }
 
-public interface LogPart {
+public interface LogPart <: Equatable<LogPart> {
     func generate(name: String, level: LogLevel, message: ToString, current: DateTime, writer: LogWriter): Unit
+    operator func ==(that: LogPart): Bool{
+        true
+    }
 }
 
 class OriginLogPart <: LogPart {
     OriginLogPart(private let txt: String) {}
     public func generate(_: String, _: LogLevel, _: ToString, _: DateTime, writer: LogWriter): Unit {
         writer.writeString(txt)
+    }
+    public operator func ==(that: LogPart): Bool{
+        match(that) {
+            case x: OriginLogPart => refEq(this, x) || this.txt == x.txt
+            case _ => false
+        }
     }
 }
 
@@ -134,6 +155,12 @@ class AppLogPart <: LogPart {
     public func generate(_: String, _: LogLevel, _: ToString, _: DateTime, writer: LogWriter): Unit {
         writer.writeString(app)
     }
+    public operator func ==(that: LogPart): Bool{
+        match(that) {
+            case x: AppLogPart => refEq(this, x) || this.app == x.app
+            case _ => false
+        }
+    }
 }
 
 class TimeLogPart <: LogPart {
@@ -143,6 +170,12 @@ class TimeLogPart <: LogPart {
     }
     public func generate(_: String, _: LogLevel, _: ToString, datetime: DateTime, writer: LogWriter): Unit {
         writer.writeString(datetime.format(format))
+    }
+    public operator func ==(that: LogPart): Bool{
+        match(that) {
+            case x: TimeLogPart => refEq(this, x) || this.format == x.format
+            case _ => false
+        }
     }
 }
 

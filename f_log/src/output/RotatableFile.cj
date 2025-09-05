@@ -29,11 +29,16 @@ import f_io.*
 import f_time.{TimeUnit, ExtendDateTime}
 internal import f_log.exception.LogException
 
-public class RotatableFileParams {
+public class RotatableFileParams <: Equatable<RotatableFileParams> {
     public var path = "${env.getWorkingDirectory()}/logs/${env.getCommand()}.log"
     public var fileSize = Int64.Max
     public var timeunit = TimeUnit.DAY
     public var compress = LogFileCompressFormat.NonCompression
+
+    public operator func ==(that: RotatableFileParams): Bool {
+        this.path == that.path && this.fileSize == that.fileSize && 
+        this.timeunit.toString() == that.timeunit.toString() && this.compress == that.compress
+    }
 }
 
 protected class RotatableFile <: OutputStream & Resource {
@@ -329,8 +334,25 @@ protected class RotatableFile <: OutputStream & Resource {
     }
 }
 
-public enum LogFileCompressFormat {
+public enum LogFileCompressFormat <: Equatable<LogFileCompressFormat> {
     | NonCompression
     | Deflate(CompressLevel)
     | GZip(CompressLevel)
+
+    private func eq(x: CompressLevel, y: CompressLevel): Bool {
+        match((x, y)){
+            case (BestCompression, BestCompression) => true
+            case (BestSpeed, BestSpeed) => true
+            case (DefaultCompression, DefaultCompression) => true
+            case _ => false
+        }
+    }
+    public operator func ==(that: LogFileCompressFormat): Bool {
+        match((this, that)){
+            case (NonCompression, NonCompression) => true
+            case (Deflate(x), Deflate(y)) => eq(x, y)
+            case (GZip(x), GZip(y)) => eq(x, y)
+            case _ => false
+        }
+    }
 }
