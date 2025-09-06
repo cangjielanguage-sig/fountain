@@ -51,20 +51,24 @@ public macro Bean(attr: Tokens, input: Tokens): Tokens {
         }
         let ctorTokens = quote(
             let ctors = HashMap<String, ()-> $beanType>()
-        ).append(`nl`)
+            $(`nl`)
+        )
         for (d in klass.body.decls) {
             match (d) {
                 case f: FuncDecl where f.identifier.value == 'init' => ctorTokens.append(quote(
                         ctors['init'] = {=> $(beanType)()}
-                    )).append(`nl`)
+                        $(`nl`)
+                    ))
                 case f: FuncDecl where isStatic(f) && isPublic(f) && f.funcParams.isEmpty() =>
                     let fname = f.identifier.value
                     ctorTokens.append(quote(
                         ctors[$fname] = {=> $(beanType).$(f.identifier)()}
-                    )).append(`nl`)
+                        $(`nl`)
+                    ))
                 case f: PrimaryCtorDecl where isPublic(f) && f.funcParams.isEmpty() => ctorTokens.append(quote(
                         ctors['init'] = {=> $(beanType)()}
-                    )).append(`nl`)
+                        $(`nl`)
+                    ))
                 case med: MacroExpandDecl =>
                     var md: Decl = med
                     while (let d: MacroExpandDecl <- md) {
@@ -72,15 +76,18 @@ public macro Bean(attr: Tokens, input: Tokens): Tokens {
                         match (md) {
                             case f: FuncDecl where f.identifier.value == 'init' => ctorTokens.append(quote(
                                     ctors['init'] = {=> $(beanType)()}
-                                )).append(`nl`)
+                                    $(`nl`)
+                                ))
                             case f: FuncDecl where isStatic(f) && isPublic(f) && f.funcParams.isEmpty() =>
                                 let fname = f.identifier.value
                                 ctorTokens.append(quote(
                                     ctors[$fname] = {=> $(beanType).$(f.identifier)()}
-                                )).append(`nl`)
+                                    $(`nl`)
+                                ))
                             case f: PrimaryCtorDecl where isPublic(f) && f.funcParams.isEmpty() => ctorTokens.append(quote(
                                     ctors['init'] = {=> $(beanType)()}
-                                )).append(`nl`)
+                                    $(`nl`)
+                                ))
                             case f: MacroExpandDecl => continue
                             case _ => break
                         }
@@ -90,6 +97,7 @@ public macro Bean(attr: Tokens, input: Tokens): Tokens {
             }
         }
         input.append(quote(
+            $(`nl`)
             private let _ = {=>
                 $ctorTokens
                 var constructor = None<() -> $beanType>
@@ -105,7 +113,7 @@ public macro Bean(attr: Tokens, input: Tokens): Tokens {
                     BeanException('class ' + beanTypeName + ' must be with a public parameterless constructor or a public static parameterless function.')
                 })
             }()
-        )).append(`nl`)
+        ))
     }
     input
 }
