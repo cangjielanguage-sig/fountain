@@ -43,21 +43,21 @@ public abstract class BaseLoggerParams<T> <: Hashable & Equatable<T> where T <: 
                         i =>
                         let appenderName = appenders[i]
                         let params = T.newParams(appenderName)
+                        let appender = 
                         if(let Some(appender) <- appenderMap.get(params)){
-                            appenderHash[params] = appender
                             appender.new(name)
                         }else{
-                            let appender = params.newAppender(name)
-                            appenderHash[params] = appender
-                            appender
+                            params.newAppender(name)
                         }
+                        appenderHash[params] = appender
+                        appender
                     }
                     appenderMap.removeIf{k, v => 
-                        if(!appenderHash.contains(k)){
+                        if(appenderHash.contains(k)){
+                            false
+                        }else{
                             v.closable = true
                             true
-                        }else{
-                            false
                         }
                     }
                     for((k, v) in appenderHash){
