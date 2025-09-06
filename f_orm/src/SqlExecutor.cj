@@ -522,10 +522,6 @@ public class SqlExecutor <: Resource & RootDAO {
         }
     }
 
-    public func setSql(sql: String): SqlExecutor {
-        this.sql = sql
-        this
-    }
     public func add<T>(arg: T): SqlExecutor where T <: ToString {
         match (arg) {
             case x: Bool => add(x)
@@ -638,13 +634,13 @@ public class SqlExecutor <: Resource & RootDAO {
         }
     }
 
-    public func generateSql(sql: String): SqlExecutor {
+    public func setSql(sql: String): SqlExecutor {
         args = SqlArgs()
         this.sql = sql
         this
     }
     public operator func ()(sql: String): SqlExecutor {
-        generateSql(sql)
+        setSql(sql)
     }
 
     private func execute<T>(executor: () -> T): T {
