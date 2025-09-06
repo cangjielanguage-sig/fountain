@@ -35,6 +35,47 @@ public class MeetCondition {
         this._value = {=> value}
         this
     }
+    public func frag(frag: String): String {
+        this.frag{frag}
+    }
+    public func frag(frag: () -> String): String {
+        if(condition){
+            '${partial} ${frag()} ${Condition.delimiter}'
+        }else{
+            ''
+        }
+    }
+    public func BETWEEN(one: Any, two: Any): String {
+        frag{
+            if(_argInSql && let (x: ToString, y: ToString) <- (one, two)){
+                ' between ${x} and ${y} '
+            }else{
+                executor.add(one)
+                executor.add(two)
+                ' between ? and ? '
+            }
+        }
+    }
+    public func IN<I, T>(itr: I): String where I <: Iterable<T> {
+        frag{
+            let builder = StringBuilder(' in (')
+            var i = 0
+            for(v in itr){
+                if(i > 0){
+                    builder.append(',')
+                }
+                if(_argInSql && let x: ToString <- v){
+                    builder.append(x)
+                }else{
+                    executor.add(v)
+                    builder.append('?')
+                }
+                i++
+            }
+            builder.append(') ')
+            builder.toString()
+        }
+    }
     public func done(): String {
         if (condition) {
             if (_argInSql) {

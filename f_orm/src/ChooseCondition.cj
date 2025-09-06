@@ -54,12 +54,21 @@ public class ChooseCondition {
     private func callee(partial: () -> Any): () -> (String, Any) {
         {=> ('', partial())}
     }
+    private func callee(partial: () -> String): () -> (String, Any){
+        {=> (partial(), ())}
+    }
     public func partial(partial: () -> Any): ChooseCondition {
+        this.partial(callee(partial))
+    }
+    public func partial(partial: () -> String): ChooseCondition {
         this.partial(callee(partial))
     }
     public func otherwise(partial: () -> (String, Any)): ChooseCondition {
         _otherwise = partial
         this
+    }
+    public func otherwise(partial: () -> String): ChooseCondition {
+        otherwise(callee(partial))
     }
     public func otherwise(partial: () -> Any): ChooseCondition {
         otherwise(callee(partial))
@@ -73,6 +82,7 @@ public class ChooseCondition {
             if (frag.size > 0) {
                 if (_argInSql) {
                     match (arg) {
+                        case _: Unit => ' ${frag} ${Condition.delimiter} '
                         case x: ToString => ' ${frag} ${x} ${Condition.delimiter} '
                         case x =>
                             executor.add(arg)

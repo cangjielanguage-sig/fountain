@@ -57,15 +57,18 @@ import f_macros.*
 //    public interface SomeDAO {
 //        prop executor: SqlExecutor//所有dao必须有这一行
 //        func listSomePO(arg: ArgData): ArrayList<SomePO>{
-//            executor.generateSql{sqlargs: SqlArgs =>
+//            executor.setSql(
 //                """
 //                select *
 //                  from some_table
-//                 where ${sqlargs.appendArg(" id = ", arg.id)}
-//                       ${sqlargs.meet(arg.name != String.empty, " `name` like ", "${arg.name}%", prefix: " and ")}
-//                       ${sqlargs.meet(arg.minBirthday.isSome() && arg.maxBirthday.isSome(), "${sqlargs.appendArg(" birthday between ", arg.minBirthday)} ${sqlargs.appendArg(" and ", arg.maxBirthday)}")}
+//                 WHERE('and'){'''
+//                       id = ${arg(arg.id)}
+//                   and ${meet(arg.name != String.empty, " `name` like ").value{"${arg.name}%"}.donw()}
+//                   and ${meet(arg.minBirthday.isSome() && arg.maxBirthday.isSome(), " birthday ").BETWEEN(arg.minBirthday.getOrThrow(), arg.maxBirthday.getOrThrow())}")}
+//                 ''''
+//                }
 //                """
-//            }.list<SomePO>(somePOMappers)
+//            ).list<SomePO>(somePOMappers)
 //        }
 //        prop somePOMappers: QueryMappers<SomePO>{
 //            get(){
