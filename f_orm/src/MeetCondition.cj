@@ -41,7 +41,7 @@ public class MeetCondition {
                 match (_value()) {
                     case x: ToString => ' ${partial} ${x} ${Condition.delimiter} '
                     case x =>
-                        executor.add(_value())
+                        executor.add(x)
                         ' ${partial} ? ${Condition.delimiter} '
                 }
             } else {

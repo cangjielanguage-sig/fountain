@@ -18,8 +18,21 @@ package f_bean.test
 import std.unittest.*
 import std.unittest.testmacro.*
 
+import f_bean.*
+import f_bean.macros.*
+
 @Bean[String|Int64]
 public class TestGenericBean<T> {}
+public abstract class AbstractBean{}
+@Bean
+public class TestBean1 <: AbstractBean{}
+@Bean
+public class TestBean2 <: AbstractBean{}
+@Bean
+public class TestBean {
+    private let generic = lookup<TestGenericBean<String>>()
+    private let list = lookupList<AbstractBean>()
+}
 
 @Test
 public class GenericBeanTest {
