@@ -49,44 +49,38 @@ public macro Bean(attr: Tokens, input: Tokens): Tokens {
         }else{
             quote($identifier<$g>)
         }
-        var ctorTokens = quote(
+        let ctorTokens = quote(
             let ctors = HashMap<String, ()-> $beanType>()
-        ) + `nl`
+        ).append(`nl`)
         for (d in klass.body.decls) {
             match (d) {
-                case f: FuncDecl where f.identifier.value == 'init' => ctorTokens += quote(
+                case f: FuncDecl where f.identifier.value == 'init' => ctorTokens.append(quote(
                         ctors['init'] = {=> $(beanType)()}
-                    ) +
-                    `nl`
+                    )).append(`nl`)
                 case f: FuncDecl where isStatic(f) && isPublic(f) && f.funcParams.isEmpty() =>
                     let fname = f.identifier.value
-                    ctorTokens += quote(
+                    ctorTokens.append(quote(
                         ctors[$fname] = {=> $(beanType).$(f.identifier)()}
-                    ) +
-                        `nl`
-                case f: PrimaryCtorDecl where isPublic(f) && f.funcParams.isEmpty() => ctorTokens += quote(
+                    )).append(`nl`)
+                case f: PrimaryCtorDecl where isPublic(f) && f.funcParams.isEmpty() => ctorTokens.append(quote(
                         ctors['init'] = {=> $(beanType)()}
-                    ) +
-                    `nl`
+                    )).append(`nl`)
                 case med: MacroExpandDecl =>
                     var md: Decl = med
                     while (let d: MacroExpandDecl <- md) {
                         md = d.macroInputDecl
                         match (md) {
-                            case f: FuncDecl where f.identifier.value == 'init' => ctorTokens += quote(
+                            case f: FuncDecl where f.identifier.value == 'init' => ctorTokens.append(quote(
                                     ctors['init'] = {=> $(beanType)()}
-                                ) +
-                                `nl`
+                                )).append(`nl`)
                             case f: FuncDecl where isStatic(f) && isPublic(f) && f.funcParams.isEmpty() =>
                                 let fname = f.identifier.value
-                                ctorTokens += quote(
+                                ctorTokens.append(quote(
                                     ctors[$fname] = {=> $(beanType).$(f.identifier)()}
-                                ) +
-                                    `nl`
-                            case f: PrimaryCtorDecl where isPublic(f) && f.funcParams.isEmpty() => ctorTokens += quote(
+                                )).append(`nl`)
+                            case f: PrimaryCtorDecl where isPublic(f) && f.funcParams.isEmpty() => ctorTokens.append(quote(
                                     ctors['init'] = {=> $(beanType)()}
-                                ) +
-                                `nl`
+                                )).append(`nl`)
                             case f: MacroExpandDecl => continue
                             case _ => break
                         }
