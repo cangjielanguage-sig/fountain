@@ -29,7 +29,7 @@ import f_io.*
 import f_time.{TimeUnit, ExtendDateTime}
 internal import f_log.exception.LogException
 
-public class RotatableFileParams <: Equatable<RotatableFileParams> {
+public class RotatableFileParams <: Hashable & Equatable<RotatableFileParams> {
     public var path = "${env.getWorkingDirectory()}/logs/${env.getCommand()}.log"
     public var fileSize = Int64.Max
     public var timeunit = TimeUnit.DAY
@@ -38,6 +38,13 @@ public class RotatableFileParams <: Equatable<RotatableFileParams> {
     public operator func ==(that: RotatableFileParams): Bool {
         this.path == that.path && this.fileSize == that.fileSize && 
         this.timeunit.toString() == that.timeunit.toString() && this.compress == that.compress
+    }
+    private var h = 0
+    public func hashCode(): Int64 {
+        if (h == 0){
+            h = HashBuilder().append(path).append(fileSize).append(timeunit.toString()).append(compress).build()
+        }
+        h
     }
 }
 
@@ -334,7 +341,7 @@ protected class RotatableFile <: OutputStream & Resource {
     }
 }
 
-public enum LogFileCompressFormat <: Equatable<LogFileCompressFormat> {
+public enum LogFileCompressFormat <: ToString & Hashable & Equatable<LogFileCompressFormat> {
     | NonCompression
     | Deflate(CompressLevel)
     | GZip(CompressLevel)
@@ -354,5 +361,22 @@ public enum LogFileCompressFormat <: Equatable<LogFileCompressFormat> {
             case (GZip(x), GZip(y)) => eq(x, y)
             case _ => false
         }
+    }
+    private func compressLevelString(level: CompressLevel){
+        match(level){
+            case BestCompression => "BestCompression"
+            case BestSpeed => "BestSpeed"
+            case DefaultCompression => "DefaultCompression"
+        }
+    }
+    public func toString(): String {
+        match(this){
+            case NonCompression => "NonCompression"
+            case Deflate(x) => 'Deflate(${compressLevelString(x)})'
+            case GZip(x) => 'GZip(${compressLevelString(x)})'
+        }
+    }
+    public func hashCode(): Int64 {
+        toString().hashCode()
     }
 }

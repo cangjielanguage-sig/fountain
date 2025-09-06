@@ -16,43 +16,37 @@ limitations under the License.
 package f_log.impl
 
 import std.env
-import std.process.Process
-import std.sync.Mutex
-import std.time.DateTime
-import stdx.log.*
-import f_exception.*
-import f_log.exception.*
-public import f_log.*
 
-private class ConsoleLoggerAppender <: AsyncLogger {
+class ConsoleLoggerAppender <: AsyncLogger {
     private static const LOGGER_NAME = 'console'
-    public init(name!: String, level!: LogLevel, pattern!: LogPattern) {
+    private static let appenders = ConcurrentHashMap<ConsoleLoggerParams, AbstractLogger>()
+    init(name: String, level: LogLevel, pattern: LogPattern){
         super(name, level, pattern, env.getStdOut(), '${LOGGER_NAME}://')
-    }
 
-    public static func register(): Unit {
-        LoggerAppenderCreator.register(LOGGER_NAME) {
-            name =>
-            let appender = LoggerConfig.getAppenders(LOGGER_NAME)
-            if (appender.isEmpty()) {
-                [NoneLogAppender.instance]
-            } else {
-                let logger = appender[0]
-                [
-                    ConsoleLoggerAppender(
-                        name: name,
-                        level: LoggerConfig.getLevelConf(logger),
-                        pattern: LoggerConfig.getPatternConf(logger)
-                    )
-                ]
-            }
-        }
     }
-    public prop closable: Bool {
+    public static func register(): Unit {
+        ConsoleLoggerParams.register(LOGGER_NAME, appenders)
+    }
+    public mut prop closable: Bool {
         get() {
             false
         }
+        set(value){}
     }
 }
-
+public class ConsoleLoggerParams <: BaseLoggerParams<ConsoleLoggerParams>{
+    public init(level: LogLevel, pattern: LogPattern) {
+        super(level, pattern)
+        super.h = HashBuilder().append(level).append(pattern).build()
+    }
+    public operator func ==(that: ConsoleLoggerParams): Bool {
+        this.hashCode() == that.hashCode() && this.level == that.level && this.pattern == that.pattern
+    }
+    protected static func newParams(appender: String): ConsoleLoggerParams {
+        ConsoleLoggerParams(LoggerConfig.getLevelConf(appender), LoggerConfig.getPatternConf(appender))
+    }
+    protected func newAppender(name: String): AbstractLogger {
+        ConsoleLoggerAppender(name, level, pattern)
+    }
+}
 let _ = ConsoleLoggerAppender.register() //将本实现注册到LoggerAppenderCreator

@@ -27,7 +27,7 @@ import f_log.output.LogWriterImpl
 public abstract class AbstractLogger <: Logger & Resource {
     private let lock = Mutex()
     protected let name: String
-    protected var level_: LogLevel
+    private var level_: LogLevel
     protected let pattern: LogPattern
     private var output_: OutputStream
     private var writer: LogWriter
@@ -37,6 +37,9 @@ public abstract class AbstractLogger <: Logger & Resource {
         this.pattern = pattern
         this.output_ = output
         this.writer = LogWriterImpl(output)
+    }
+    protected open func new(name: String): AbstractLogger{
+        this
     }
     protected mut prop output: OutputStream {
         get() {
@@ -55,7 +58,7 @@ public abstract class AbstractLogger <: Logger & Resource {
     }
     public open func close(): Unit {
         match (output) {
-            case r: Resource => r.close()
+            case r: Resource where closable => r.close()
             case _ => ()
         }
     }
@@ -127,10 +130,13 @@ public abstract class AbstractLogger <: Logger & Resource {
             callback()
         }
     }
-
-    public open prop closable: Bool {
+    private var closable_ = false
+    public open mut prop closable: Bool {
         get() {
-            true
+            closable_
+        }
+        set(value){
+            closable_ = value
         }
     }
 }

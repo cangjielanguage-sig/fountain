@@ -47,7 +47,7 @@ public abstract class AsyncLogger <: AbstractLogger {
             remove(queue)
             queue
         }
-        env.atExit{doClose(output)}
+        env.atExit{doClose(output, true)}
     }
     public open func isClosed(): Bool {
         if(let r: Resource <- output){
@@ -56,13 +56,13 @@ public abstract class AsyncLogger <: AbstractLogger {
             false
         }
     }
-    private static func doClose(output: OutputStream){
-        if(let r: Resource <- output){
+    private static func doClose(output: OutputStream, closable: Bool){
+        if(let r: Resource <- output && closable){
             r.close()
         }
     }
     public open func close(): Unit {
-        doClose(output)
+        doClose(output_, closable)
     }
     private static func confirmDummy(output: OutputStream): OutputStream {
         match (output) {

@@ -15,19 +15,25 @@ limitations under the License.
  */
 package f_log.impl
 
-import std.convert.*
-import std.net.{SocketNet, TcpSocket, SocketKeepAliveConfig}
-import std.time.DateTime
-import stdx.log.LogLevel
-import f_log.exception.LogException
-import f_log.output.UdpOutputStream
-
-private class UdpLoggerAppender <: AsyncLogger {
+class UdpLoggerAppender <: AsyncLogger {
     private static const LOGGER_NAME = 'udp'
     private let host: String
     private let port: UInt16
     private let sendTimeout: ?Duration
-
+    private init(
+        name!: String,
+        level!: LogLevel,
+        pattern!: LogPattern,
+        host!: String,
+        port!: UInt16,
+        sendTimeout!: ?Duration,
+        output!: OutputStream
+    ){
+        super(name, level, pattern, output, '${LOGGER_NAME}://${host}:${port}')
+        this.host = host
+        this.port = port
+        this.sendTimeout = sendTimeout
+    }
     public init(
         name!: String,
         pattern!: LogPattern,
@@ -36,53 +42,19 @@ private class UdpLoggerAppender <: AsyncLogger {
         port!: UInt16,
         sendTimeout!: ?Duration
     ) {
-        super(name, level, pattern, createSocket(host, port, sendTimeout: sendTimeout),
-            '${LOGGER_NAME}://${host}:${port}')
-        this.host = host
-        this.port = port
-        this.sendTimeout = sendTimeout
+        this(name: name, level: level, pattern: pattern, host: host, port: port, sendTimeout: sendTimeout,
+              output: createSocket(host, port, sendTimeout: sendTimeout))
+    }
+    public func new(name: String): AbstractLogger {
+        UdpLoggerAppender(name: name, pattern: super.pattern, level: super.level, host: host, port: port, sendTimeout: sendTimeout, output: super.output)
     }
     private static func createSocket(host: String, port: UInt16, sendTimeout!: ?Duration) {
         let sock = UdpOutputStream(host, port, sendTimeout: sendTimeout)
         sock
     }
+    private static let appenderMap = ConcurrentHashMap<UdpLoggerParams, AbstractLogger>()
     public static func register(): Unit {
-        LoggerAppenderCreator.register(LOGGER_NAME) {
-            name =>
-            let appenders = LoggerConfig.getAppenders(LOGGER_NAME)
-            if (appenders.isEmpty()) {
-                [NoneLogAppender.instance]
-            } else {
-                Array<AbstractLogger>(appenders.size) {
-                    i =>
-                    let appender = appenders[i]
-                    var host = "127.0.0.1"
-                    var port = 65534u16
-                    if (let Some(h) <- LoggerConfig.getString(appender, "host") && !h.isEmpty()) {
-                        host = h
-                    }
-                    if (let Some(p) <- LoggerConfig.getString(appender, "port")) {
-                        port = UInt16
-                            .tryParse(p)
-                            .getOrThrow {
-                                LogException(
-                                    "param port of SocketLoggerAppender must be a value of UInt16, however it is ${p}")
-                            }
-                    } else if (let Some(idx) <- host.indexOf(':')) {
-                        (host, port) = (host[0..idx].trimAscii(), UInt16.parse(host[idx + 1..].trimAscii()))
-                    }
-                    let sendTimeout = LoggerConfig.getUdpSendTimeout("${appender}")
-                    UdpLoggerAppender(
-                        name: name,
-                        level: LoggerConfig.getLevelConf(appender),
-                        pattern: LoggerConfig.getPatternConf(appender),
-                        host: host,
-                        port: port,
-                        sendTimeout: sendTimeout
-                    )
-                }
-            }
-        }
+        UdpLoggerParams.register(LOGGER_NAME, appenderMap)
     }
     protected func append(level: LogLevel, message: String, now: DateTime, ex: Option<Exception>): Unit {
         var sock = (super.output as UdpOutputStream).getOrThrow()
@@ -93,5 +65,51 @@ private class UdpLoggerAppender <: AsyncLogger {
         super.append(level, message, now, ex)
     }
 }
-
+public class UdpLoggerParams <: BaseLoggerParams<UdpLoggerParams> {
+    public UdpLoggerParams(
+        level: LogLevel,
+        pattern: LogPattern,
+        protected let host: String,
+        protected let port: UInt16,
+        protected let sendTimeout: ?Duration
+    ){
+        super(level, pattern)
+        h = HashBuilder().append(level).append(pattern).append(host).append(port).append(sendTimeout).build()
+    }
+    public operator func ==(that: UdpLoggerParams): Bool {
+        this.h == that.h && this.level == that.level && this.pattern == that.pattern && 
+        this.host == that.host && this.port == that.port && this.sendTimeout == that.sendTimeout
+    }
+    protected static func newParams(appender: String): UdpLoggerParams {
+        var host = "127.0.0.1"
+        var port = 65534u16
+        if (let Some(h) <- LoggerConfig.getString(appender, "host") && !h.isEmpty()) {
+            host = h
+        }
+        if (let Some(p) <- LoggerConfig.getString(appender, "port")) {
+            port = UInt16
+                .tryParse(p)
+                .getOrThrow {
+                    LogException(
+                        "param port of SocketLoggerAppender must be a value of UInt16, however it is ${p}")
+                }
+        } else if (let Some(idx) <- host.indexOf(':')) {
+            (host, port) = (host[0..idx].trimAscii(), UInt16.parse(host[idx + 1..].trimAscii()))
+        }
+        let sendTimeout = LoggerConfig.getUdpSendTimeout(appender)
+        UdpLoggerParams(
+            LoggerConfig.getLevelConf(appender), LoggerConfig.getPatternConf(appender),
+            host, port, sendTimeout)
+    }
+    protected func newAppender(name: String): AbstractLogger {
+        UdpLoggerAppender(
+            name: name,
+            level: level,
+            pattern: pattern,
+            host: host,
+            port: port,
+            sendTimeout: sendTimeout
+        )
+    }
+}
 let _ = UdpLoggerAppender.register()

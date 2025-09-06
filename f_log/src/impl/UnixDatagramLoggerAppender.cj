@@ -15,11 +15,7 @@ limitations under the License.
  */
 package f_log.impl
 
-import std.time.DateTime
-import f_log.output.UnixDatagramOutputStream
-import stdx.log.LogLevel
-
-private class UnixDatagramLoggerAppender <: AsyncLogger {
+class UnixDatagramLoggerAppender <: AsyncLogger {
     private static const LOGGER_NAME = 'unixDatagram'
     public UnixDatagramLoggerAppender(
         name!: String,
@@ -35,33 +31,9 @@ private class UnixDatagramLoggerAppender <: AsyncLogger {
         let sock = UnixDatagramOutputStream(path, sendTimeout: sendTimeout, bufSize: bufSize)
         sock
     }
+    private static let appenderMap = ConcurrentHashMap<UnixDatagramLoggerParams, AbstractLogger>()
     public static func register(): Unit {
-        LoggerAppenderCreator.register(LOGGER_NAME) {
-            name =>
-            let appenders = LoggerConfig.getAppenders(LOGGER_NAME)
-            if (appenders.isEmpty()) {
-                [NoneLogAppender.instance]
-            } else {
-                Array<AbstractLogger>(appenders.size) {
-                    i =>
-                    let appender = appenders[i]
-                    var path = "/tmp/log/unixDatagram.log"
-                    if (let Some(h) <- LoggerConfig.getString(appender, "path") && !h.isEmpty()) {
-                        path = h
-                    }
-                    let sendTimeout = LoggerConfig.getUnixWriteTimeout(appender)
-                    let bufSize = LoggerConfig.getUnixBufSize(appender)
-                    UnixDatagramLoggerAppender(
-                        name: name,
-                        level: LoggerConfig.getLevelConf(appender),
-                        pattern: LoggerConfig.getPatternConf(appender),
-                        path: path,
-                        sendTimeout: sendTimeout,
-                        bufSize: bufSize
-                    )
-                }
-            }
-        }
+        UnixDatagramLoggerParams.register(LOGGER_NAME, appenderMap)
     }
     protected func append(level: LogLevel, message: String, now: DateTime, ex: Option<Exception>): Unit {
         var sock = (super.output as UnixDatagramOutputStream).getOrThrow()
@@ -72,5 +44,41 @@ private class UnixDatagramLoggerAppender <: AsyncLogger {
         super.append(level, message, now, ex)
     }
 }
-
+public class UnixDatagramLoggerParams <: BaseLoggerParams<UnixDatagramLoggerParams>{
+    public UnixDatagramLoggerParams(
+        level: LogLevel,
+        pattern: LogPattern,
+        private let path: String,
+        private let sendTimeout: ?Duration,
+        private let bufSize: ?Int64
+    ){
+        super(level, pattern)
+        h = HashBuilder().append(level).append(pattern).append(path).append(sendTimeout).append(bufSize).build()
+    }
+    public operator func ==(that: UnixDatagramLoggerParams): Bool {
+        this.h == that.h && this.level == that.level && this.pattern == that.pattern && 
+        this.path == that.path && this.sendTimeout == that.sendTimeout && this.bufSize == that.bufSize
+    }
+    protected static func newParams(appender: String): UnixDatagramLoggerParams {
+        var path = "/tmp/log/unixDatagram.log"
+        if (let Some(h) <- LoggerConfig.getString(appender, "path") && !h.isEmpty()) {
+            path = h
+        }
+        let sendTimeout = LoggerConfig.getUnixWriteTimeout(appender)
+        let bufSize = LoggerConfig.getUnixBufSize(appender)
+        UnixDatagramLoggerParams(
+            LoggerConfig.getLevelConf(appender), LoggerConfig.getPatternConf(appender),
+            path, sendTimeout, bufSize)
+    }
+    protected func newAppender(name: String): AbstractLogger {
+        UnixDatagramLoggerAppender(
+            name: name,
+            level: level,
+            pattern: pattern,
+            path: path,
+            sendTimeout: sendTimeout,
+            bufSize: bufSize
+        )
+    }
+}
 let _ = UnixDatagramLoggerAppender.register()

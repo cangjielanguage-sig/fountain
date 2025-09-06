@@ -15,21 +15,7 @@ limitations under the License.
  */
 package f_log.impl
 
-import std.convert.Parsable
-import std.collection.concurrent.ArrayBlockingQueue
-import std.fs.{File, Directory, OpenMode}
-import std.io.{SeekPosition, OutputStream}
-import std.math.MathExtension
-import std.sync.{Timer, Mutex, AtomicReference, AtomicUInt64}
-import std.time.DateTime
-import stdx.compress.zlib.{WrapType, CompressLevel, CompressOutputStream}
-import stdx.log.LogLevel
-import f_base.*
-import f_exception.*
-import f_log.output.*
-import f_time.{TimeUnit, ExtendDateTime}
-
-private class FileLoggerAppender <: AsyncLogger {
+class FileLoggerAppender <: AsyncLogger {
     private static const LOGGER_NAME = 'file'
     public init(
         name!: String,
@@ -38,6 +24,9 @@ private class FileLoggerAppender <: AsyncLogger {
         file!: OutputStream
     ) {
         super(name, level, pattern, file, '${LOGGER_NAME}:///${toPath(file)}')
+    }
+    protected func new(name: String): AbstractLogger {
+        FileLoggerAppender(name: name, pattern: super.pattern, level: super.level, file: super.output)
     }
     @When[os == "Linux"]
     private static func toPath(file: OutputStream) {
@@ -54,64 +43,75 @@ private class FileLoggerAppender <: AsyncLogger {
             case _ => ''
         }
     }
+    private static let appenderMap = ConcurrentHashMap<FileLoggerParams, AbstractLogger>()
     public static func register(): Unit {
-        LoggerAppenderCreator.register(LOGGER_NAME) {
-            name =>
-            let appenders = LoggerConfig.getAppenders(LOGGER_NAME)
-            if (appenders.isEmpty()) {
-                [NoneLogAppender.instance]
-            } else {
-                Array<AbstractLogger>(appenders.size) {
-                    i =>
-                    let appender = appenders[i]
-                    let params = RotatableFileParams()
-                    let url = if (let Some(url) <- LoggerConfig.getString(appender, 'url')) {
-                        url
-                    } else {
-                        ''
-                    }
-                    if (let Some(p) <- LoggerConfig.getString(appender, "path") && !p.isEmpty()) {
-                        params.path = p
-                    }
-                    if (let Some(d) <- LoggerConfig.getString(appender, "rotateDuration") && let Some(u) <- TimeUnit
-                        .tryParse(d)) {
-                        params.timeunit = u
-                    }
-                    if (let Some(s) <- LoggerConfig.getString(appender, "rotateSize") && !s.isEmpty()) {
-                        params.fileSize = RotatableFile.computeBytes(s)
-                    }
-                    if (let Some(c) <- LoggerConfig.getString(appender, "compressFormat")) {
-                        params.compress = RotatableFile.compressFormat(c)
-                    }
-                    let mmap = 
-                    if(let Some(x) <- LoggerConfig.getString(appender, "mmap") && x.trimAscii().toAsciiLower() == 'true'){
-                        true
-                    }else{
-                        false
-                    }
-                    let rf = if (url.isEmpty()) {
-                        RotatableFile(params)
-                    } else {
-                        RotatableFile(url, params)
-                    }
-                    @When[os == "Linux"]
-                    let output: OutputStream = if(mmap){
-                        rf.mmap()
-                    }else{
-                        rf
-                    }
-                    @When[os != "Linux"]
-                    let output = rf
-                    FileLoggerAppender(
-                        name: name,
-                        level: LoggerConfig.getLevelConf(appender),
-                        pattern: LoggerConfig.getPatternConf(appender),
-                        file: output
-                    )
-                }
-            }
-        }
+        FileLoggerParams.register(LOGGER_NAME, appenderMap)
     }
 }
-
+public class FileLoggerParams <: BaseLoggerParams<FileLoggerParams> {
+    public FileLoggerParams(
+        level: LogLevel,
+        pattern: LogPattern,
+        protected let url: String,
+        protected let params: RotatableFileParams,
+        protected let mmap: Bool
+    ){
+        super(level, pattern)
+        h = HashBuilder().append(level).append(pattern).append(url).append(params).append(mmap).build()
+    }
+    public operator func ==(that: FileLoggerParams): Bool {
+        this.h == that.h && this.level == that.level && this.pattern == that.pattern && 
+        this.url == that.url && this.params == that.params && this.mmap == that.mmap
+    }
+    protected static func newParams(appender: String): FileLoggerParams {
+        let params = RotatableFileParams()
+        let url = if (let Some(url) <- LoggerConfig.getString(appender, 'url')) {
+            url
+        } else {
+            ''
+        }
+        if (let Some(p) <- LoggerConfig.getString(appender, "path") && !p.isEmpty()) {
+            params.path = p
+        }
+        if (let Some(d) <- LoggerConfig.getString(appender, "rotateDuration") && let Some(u) <- TimeUnit
+            .tryParse(d)) {
+            params.timeunit = u
+        }
+        if (let Some(s) <- LoggerConfig.getString(appender, "rotateSize") && !s.isEmpty()) {
+            params.fileSize = RotatableFile.computeBytes(s)
+        }
+        if (let Some(c) <- LoggerConfig.getString(appender, "compressFormat")) {
+            params.compress = RotatableFile.compressFormat(c)
+        }
+        let mmap = 
+        if(let Some(x) <- LoggerConfig.getString(appender, "mmap") && x.trimAscii().toAsciiLower() == 'true'){
+            true
+        }else{
+            false
+        }
+        FileLoggerParams(LoggerConfig.getLevelConf(appender), LoggerConfig.getPatternConf(appender),
+            url, params, mmap)
+    }
+    protected func newAppender(name: String): AbstractLogger {
+        let rf = if (url.isEmpty()) {
+            RotatableFile(params)
+        } else {
+            RotatableFile(url, params)
+        }
+        @When[os == "Linux"]
+        let output: OutputStream = if(mmap){
+            rf.mmap()
+        }else{
+            rf
+        }
+        @When[os != "Linux"]
+        let output: OutputStream = rf
+        FileLoggerAppender(
+            name: name,
+            level: level,
+            pattern: pattern,
+            file: output
+        )
+    }
+}
 let _ = FileLoggerAppender.register()

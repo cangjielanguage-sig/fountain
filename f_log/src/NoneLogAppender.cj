@@ -34,9 +34,10 @@ public class NoneLogAppender <: AbstractLogger {
     protected func append(_: LogLevel, _: String, _: DateTime, _: Option<Exception>): Unit {
         //do nothing
     }
-    public prop closable: Bool {
+    public mut prop closable: Bool {
         get() {
             false
         }
+        set(value){}
     }
 }

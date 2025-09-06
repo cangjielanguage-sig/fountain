@@ -22,7 +22,6 @@ import f_io.DummyOutputStream
 
 public class LoggerAppenderFacade <: AsyncLogger {
     private var appenders: Array<AbstractLogger>
-
     public init(name: String, appenders: Array<AbstractLogger>) {
         super(name, LogLevel.ALL, LogPattern.default, DummyOutputStream.THROW_ON_ACCESSING,
             'f_log.LoggerAppenderFacade_${name}')
@@ -44,9 +43,11 @@ public class LoggerAppenderFacade <: AsyncLogger {
         }
     }
     public func close(): Unit {
-        for (appender in appenders where appender.closable) {
+        for (appender in appenders) {
             try {
-                appender.close()
+                if(!appender.isClosed()){
+                    appender.close()
+                }
             } catch (e: Exception) {
                 e.printStackTrace()
             }

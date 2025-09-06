@@ -15,18 +15,23 @@ limitations under the License.
  */
 package f_log.impl
 
-import std.convert.*
-import std.net.{SocketNet, TcpSocket, SocketKeepAliveConfig}
-import stdx.log.LogLevel
-import f_data.*
-import f_log.exception.*
-import f_log.output.UdpOutputStream
-
-private class TcpLoggerAppender <: AsyncLogger {
+class TcpLoggerAppender <: AsyncLogger {
     private static const LOGGER_NAME = 'tcp'
     private let host: String
     private let port: UInt16
     private let sendBufSize: ?Int64
+    private init(name!: String, 
+                 pattern!: LogPattern, 
+                 level!: LogLevel, 
+                 host!: String, 
+                 port!: UInt16, 
+                 sendBufSize!: ?Int64,
+                 output!: OutputStream){
+        super(name, level, pattern, output, '${LOGGER_NAME}://${host}:${port}')
+        this.host = host
+        this.port = port
+        this.sendBufSize = sendBufSize
+    }
     public init(
         name!: String,
         pattern!: LogPattern,
@@ -35,10 +40,12 @@ private class TcpLoggerAppender <: AsyncLogger {
         port!: UInt16,
         sendBufSize!: ?Int64
     ) {
-        super(name, level, pattern, createSocket(host, port, sendBufSize), '${LOGGER_NAME}://${host}:${port}')
-        this.host = host
-        this.port = port
-        this.sendBufSize = sendBufSize
+        this(name: name, level: level, pattern: pattern, host: host, port: port, sendBufSize: sendBufSize,
+             output: createSocket(host, port, sendBufSize))
+    }
+    protected func new(name: String): AbstractLogger {
+        TcpLoggerAppender(name: name, level: super.level, pattern: super.pattern, host: this.host, port: this.port, 
+                          sendBufSize: this.sendBufSize, output: super.output)
     }
     private static func createSocket(host: String, port: UInt16, sendBufSize: ?Int64) {
         let sock = TcpSocket(host, port)
@@ -48,43 +55,9 @@ private class TcpLoggerAppender <: AsyncLogger {
         }
         sock
     }
+    private static let appenderMap = ConcurrentHashMap<TcpLoggerParams, AbstractLogger>()
     public static func register(): Unit {
-        LoggerAppenderCreator.register(LOGGER_NAME) {
-            name =>
-            let appenders = LoggerConfig.getAppenders(LOGGER_NAME)
-            if (appenders.isEmpty()) {
-                [NoneLogAppender.instance]
-            } else {
-                Array<AbstractLogger>(appenders.size) {
-                    i =>
-                    let appender = appenders[i]
-                    var host = "127.0.0.1"
-                    var port = 65535u16
-                    if (let Some(h) <- LoggerConfig.getString(appender, "host") && !h.isEmpty()) {
-                        host = h
-                    }
-                    if (let Some(p) <- LoggerConfig.getString(appender, "port")) {
-                        port = UInt16
-                            .tryParse(p)
-                            .getOrThrow {
-                                LogException(
-                                    "param port of SocketLoggerAppender must be a value of UInt16, however it is ${p}")
-                            }
-                    } else if (let Some(idx) <- host.indexOf(':')) {
-                        (host, port) = (host[0..idx].trimAscii(), UInt16.parse(host[idx + 1..].trimAscii()))
-                    }
-                    let sendBufSize = LoggerConfig.getTcpSendBufSize(appender)
-                    TcpLoggerAppender(
-                        name: name,
-                        level: LoggerConfig.getLevelConf(appender),
-                        pattern: LoggerConfig.getPatternConf(appender),
-                        host: host,
-                        port: port,
-                        sendBufSize: sendBufSize
-                    )
-                }
-            }
-        }
+        TcpLoggerParams.register(LOGGER_NAME, appenderMap)
     }
     protected func append(level: LogLevel, message: String, now: DateTime, ex: Option<Exception>): Unit {
         var sock = (super.output as TcpSocket).getOrThrow()
@@ -95,5 +68,51 @@ private class TcpLoggerAppender <: AsyncLogger {
         super.append(level, message, now, ex)
     }
 }
-
+public class TcpLoggerParams <: BaseLoggerParams<TcpLoggerParams> {
+    public TcpLoggerParams(
+        level: LogLevel,
+        pattern: LogPattern,
+        protected let host: String,
+        protected let port: UInt16,
+        protected let sendBufSize: ?Int64
+    ){
+        super(level, pattern)
+        h = HashBuilder().append(level).append(pattern).append(host).append(port).append(sendBufSize).build()
+    }
+    public operator func ==(that: TcpLoggerParams): Bool {
+        this.h == that.h && this.level == that.level && this.pattern == that.pattern && 
+        this.host == that.host && this.port == that.port && this.sendBufSize == that.sendBufSize
+    }
+    protected static func newParams(appender: String): TcpLoggerParams {
+        var host = "127.0.0.1"
+        var port = 65535u16
+        if (let Some(h) <- LoggerConfig.getString(appender, "host") && !h.isEmpty()) {
+            host = h
+        }
+        if (let Some(p) <- LoggerConfig.getString(appender, "port")) {
+            port = UInt16
+                .tryParse(p)
+                .getOrThrow {
+                    LogException(
+                        "param port of SocketLoggerAppender must be a value of UInt16, however it is ${p}")
+                }
+        } else if (let Some(idx) <- host.indexOf(':')) {
+            (host, port) = (host[0..idx].trimAscii(), UInt16.parse(host[idx + 1..].trimAscii()))
+        }
+        let sendBufSize = LoggerConfig.getTcpSendBufSize(appender)
+        TcpLoggerParams(
+            LoggerConfig.getLevelConf(appender),LoggerConfig.getPatternConf(appender),
+            host, port, sendBufSize)
+    }
+    protected func newAppender(name: String): AbstractLogger {
+        TcpLoggerAppender(
+            name: name,
+            level: level,
+            pattern: pattern,
+            host: host,
+            port: port,
+            sendBufSize: sendBufSize
+        )
+    }
+}
 let _ = TcpLoggerAppender.register()

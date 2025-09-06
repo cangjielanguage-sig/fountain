@@ -25,12 +25,6 @@ public open class TestLogAppender <: AbstractLogger {
     init(name!: String, level!: LogLevel) {
         super(name, level, LogPattern("[%level-%name] %d{yyyy/MM/dd,HH:mm:ss.SSS}|%m"), env.getStdOut())
     }
-
-    public open prop closable: Bool {
-        get() {
-            false
-        }
-    }
 }
 
 let _ = Test1LogAppender.register(LogLevel.INFO)
