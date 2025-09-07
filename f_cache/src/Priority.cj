@@ -55,15 +55,15 @@ public open class Priority<V> <: Comparable<Priority<V>> where V <: Object {
             var ordering: Ordering = (usedCount - usedCountUtilLastChecked).compare(
                 other.usedCount - other.usedCountUtilLastChecked)
             ordering = match (ordering) {
-                case EQ => duration.compare(otherDuration)
+                case EQ => otherDuration.compare(duration)
                 case _ => return ordering
             }
             ordering = match (ordering) {
-                case EQ => lastUsed.compare(otherLastUsed)
+                case EQ => otherLastUsed.compare(lastUsed)
                 case _ => return ordering
             }
             ordering = match (ordering) {
-                case EQ => this.ref.load().compare(other.ref.load())
+                case EQ => other.ref.load().compare(this.ref.load())
                 case _ => ordering
             }
             match (ordering) {

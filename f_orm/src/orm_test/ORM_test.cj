@@ -38,7 +38,7 @@ public interface CharacerDAO <: RootDAO {
             ${meet(param.gender.isSome(), '`gender`=').value{param.gender.getOrThrow()}.done()}
             '''
          }}
-         ${WHERE('and'){
+         ${WHERE{
             '''
                  `id`=${arg(param.id)}
              and ${meet(param.originName.size > 0, '`name`=').value{param.originName}.done()}
