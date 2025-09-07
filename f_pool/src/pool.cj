@@ -17,7 +17,6 @@ package f_pool
 
 import std.collection.concurrent.ArrayBlockingQueue
 import std.env
-import std.process.Process
 import std.sync.{AtomicInt64, AtomicBool}
 import std.time.MonoTime
 import f_log.LoggerFactory

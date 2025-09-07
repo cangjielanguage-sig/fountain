@@ -16,14 +16,10 @@ limitations under the License.
 package f_log
 
 import std.convert.Parsable
-import std.regex.Regex
-import std.sync.Mutex
 import stdx.log.LogLevel
 import f_config.Config
 import f_data.*
 import f_log.exception.LogException
-import f_time.*
-import f_util.computeBytes
 
 /**
  *
