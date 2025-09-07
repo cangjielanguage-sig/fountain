@@ -78,9 +78,9 @@ public open class Priority<V> <: Comparable<Priority<V>> where V <: Object {
         //在数据段头同时最后访问时间还在最近一个生命周期之内，要么是整个数据段都是刚刚出生，要么是整个数据段使用都很频繁
         if (ageSub >= -1.0 && ageSub <= 1.0) {
             cmp() //两个待比较数据都在最近一个生命周期内刚访问过
-        } else if (age <= 1.0 && otherAge > 1.0) { //两个待比较数据的最后访问时间距今的时间差超过一个生命周期，保护新生
+        } else if (ageSub > 1.0) { //两个待比较数据的最后访问时间距今的时间差超过一个生命周期，保护新生
             GT
-        } else if (age > 1.0 && otherAge <= 1.0) {
+        } else if (age < -1.0) {
             LT
         } else { //两个待比较数据的最后访问时间距今都超过了一个生命周期，成年了不需要保护了
             cmp()
