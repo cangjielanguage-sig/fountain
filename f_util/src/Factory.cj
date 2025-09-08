@@ -16,10 +16,11 @@ limitations under the License.
 package f_util
 
 import std.collection.HashMap
+import std.reflect.TypeInfo
+import f_base.TypeInfos
 import f_exception.IllegalAccessException
 
-public interface Producer<N, A, O> where N <: Hashable & Equatable<N> {
-    prop name: N
+public interface Producer<A, O> {
     func produce(): O {
         throw IllegalAccessException("unimplemented")
     }
@@ -28,21 +29,21 @@ public interface Producer<N, A, O> where N <: Hashable & Equatable<N> {
     }
 }
 
-public class Factory<N, A, O> where N <: Hashable & Equatable<N> {
-    private let producers = HashMap<N, Producer<N, A, O>>()
+public class Factory<A, O> {
+    private let producers = HashMap<TypeInfo, Producer<A, O>>()
 
-    public func assemble(producer: Producer<N, A, O>): Unit {
-        producers.add(producer.name, producer)
+    public func assemble(producer: Producer<A, O>): Unit {
+        producers.add(TypeInfos.get<O>(), producer)
     }
-    public func assemble(producers: Iterable<Producer<N, A, O>>): Unit {
+    public func assemble(producers: Iterable<Producer<A, O>>): Unit {
         for (producer in producers) {
             assemble(producer)
         }
     }
-    public func produce(name: N): O {
-        producers[name].produce()
+    public func produce(): O {
+        producers[TypeInfos.get<O>()].produce()
     }
-    public func produce(name: N, arg: A): O {
-        producers[name].produce(arg)
+    public func produce(arg: A): O {
+        producers[TypeInfos.get<O>()].produce(arg)
     }
 }
