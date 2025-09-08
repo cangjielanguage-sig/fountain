@@ -42,6 +42,13 @@ public interface ExtendIterator<T> {
     func max(cmp: (T, T) -> Ordering): ?T
     func filterType<R>(exactly!: Bool): Iterator<R>
     func flatten<R>(toThrow!: Bool): Iterator<R>
+    func collect<C>(collection: C, collector: (T, C) -> Unit): C where C <: Collection<T>
+    func toArray(): Array<T>{
+        toArrayList().unsafeData()
+    }
+    func toArrayList(): ArrayList<T>{
+        collect<ArrayList<T>>(ArrayList<T>()){v, l => l.add(v)}
+    }
 }
 
 extend<T> Iterator<T> <: ExtendIterator<T> {
@@ -82,5 +89,11 @@ extend<T> Iterator<T> <: ExtendIterator<T> {
                 }
             }
         }
+    }
+    public func collect<C>(collection: C, collector: (T, C) -> Unit): C where C <: Collection<T> {
+        for(v in this){
+            collector(v, collection)
+        }
+        collection
     }
 }
