@@ -18,7 +18,7 @@ package f_util
 import std.collection.HashMap
 import std.reflect.TypeInfo
 import f_base.TypeInfos
-import f_exception.IllegalAccessException
+import f_exception.{IllegalAccessException, TypeNotMatchException}
 
 public interface Producer<A, O> {
     func produce(): O {
@@ -32,18 +32,24 @@ public interface Producer<A, O> {
 public class Factory<A, O> {
     private let producers = HashMap<TypeInfo, Producer<A, O>>()
 
-    public func assemble(producer: Producer<A, O>): Unit {
-        producers.add(TypeInfos.get<O>(), producer)
+    public func assemble<T>(producer: Producer<A, O>): Unit {
+        producers.add(TypeInfos.get<T>(), producer)
     }
-    public func assemble(producers: Iterable<Producer<A, O>>): Unit {
+    public func assemble<T>(producers: Iterable<Producer<A, O>>): Unit {
         for (producer in producers) {
-            assemble(producer)
+            assemble<T>(producer)
         }
     }
-    public func produce(): O {
-        producers[TypeInfos.get<O>()].produce()
+    private func convert<T>(o: O): T {
+        match(o){
+            case x: T => x
+            case _ => throw TypeNotMatchException('${TypeInfos.get<T>()} must be subtype of ${TypeInfos.get<O>()}')
+        }
     }
-    public func produce(arg: A): O {
-        producers[TypeInfos.get<O>()].produce(arg)
+    public func produce<T>(): T {
+        convert<T>(producers[TypeInfos.get<T>()].produce())
+    }
+    public func produce<T>(arg: A): T {
+        convert<T>(producers[TypeInfos.get<T>()].produce(arg))
     }
 }
