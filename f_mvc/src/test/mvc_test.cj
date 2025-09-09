@@ -29,3 +29,11 @@ public class UserController {
         ...
     }
 }
+
+@WSEndPoint['/ws/chat']
+public class ChatEndPoint{
+    @OnWSText['text/plain', TextWebFrame]
+    public func onBinary(text: String): String {
+        text
+    }
+}

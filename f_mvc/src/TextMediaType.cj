@@ -22,6 +22,28 @@ public abstract class TextMediaType <: MediaType {
     ) {
         super(mediaType)
     }
+    protected func doMake(mediaType: String, creator: (Charset) -> MediaType): MediaType {
+        let tag = '; charset='
+        let idx = mediaType.indexOf(tag)
+        if(let Some(x) <- idx){
+            let cs = mediaType[x + tag.size..]
+            let mt = mediaType[0 .. x]
+            if(mt == this.mediaType){
+                let charset = Charsets.forName(cs)
+                if (let Some(c) <- charset) {
+                    creator(c)
+                } else {
+                    throw MediaTypeException('charset in ${mediaType} is not be supported')
+                }
+            } else {
+                throw MediaTypeException("${mediaType} is not ${this.mediaType}")
+            }
+        } else if (mediaType.startsWith(this.mediaType)) {
+            this
+        } else {
+            throw MediaTypeException('${mediaType} is not ${this.mediaType}')
+        }
+    }
     public func toString() {
         "${mediaType}; charset=${charset}"
     }
@@ -39,32 +61,30 @@ public abstract class TextMediaType <: MediaType {
     }
 }
 
+public class PlainTextMediaType <: TextMediaType {
+    init(charset!: Charset = Charsets.UTF8) {
+        super("text/plain", charset: charset)
+    }
+    public func make(mediaType: String): MediaType {
+        super.doMake(mediaType){cs => PlainTextMediaType(charset: cs)}
+    }
+    public func fromData(data: Data): Array<Byte> {
+        charset.newEncoder().encode(data.toString())
+    }
+    public func toData(data: Array<Byte>): Data {
+        toData(charset.newDecoder().decode(data))
+    }
+    public func toData(data: String): Data {
+        data.toData()
+    }
+}
 public class JsonMediaType <: TextMediaType {
     public static let instance = JsonMediaType()
     init(charset!: Charset = Charsets.UTF8) {
         super("application/json", charset: charset)
     }
     public func make(mediaType: String): MediaType {
-        let tag = "; charset="
-        let idx = mediaType.indexOf(tag)
-        if (let Some(x) <- idx) {
-            let cs = mediaType[x + tag.size..]
-            let mt = mediaType[0..x]
-            if (mt == this.mediaType) {
-                let charset = Charsets.forName(cs)
-                if (let Some(c) <- charset) {
-                    JsonMediaType(charset: c)
-                } else {
-                    throw MediaTypeException("charset in ${mediaType} is not be supported")
-                }
-            } else {
-                throw MediaTypeException("${mediaType} is not ${this.mediaType}")
-            }
-        } else if (mediaType.startsWith(this.mediaType)) {
-            this
-        } else {
-            throw MediaTypeException("${mediaType} is not ${this.mediaType}")
-        }
+        super.doMake(mediaType){cs => JsonMediaType(charset: cs)}
     }
     public func fromData(data: Data): Array<Byte> {
         let json = (JsonValue.tryFromData(data) as JsonValue).getOrThrow().toString()
