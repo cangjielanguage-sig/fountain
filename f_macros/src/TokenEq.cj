@@ -26,7 +26,7 @@ extend Tokens <: TokenEq<Tokens> {
     public operator func ==(other: Tokens): Bool {
         refEq(this, other) || 
         if (this.size == other.size) {
-            for (i in 0..this.size where this[i] != other[i]) {
+            for (i in 0..this.size where !(this[i].kind == other[i].kind || this[i].value == other[i].value)) {
                 return false
             }
             return true
