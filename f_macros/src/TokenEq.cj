@@ -15,23 +15,31 @@ limitations under the License.
  */
 package f_macros
 
-public interface TokenEq<T> where T <: TokenEq<T> {
+public interface TokensEq<T> where T <: TokensEq<T> {
     operator func ==(other: T): Bool
     operator func !=(other: T): Bool {
         !(this == other)
     }
 }
-
-extend Tokens <: TokenEq<Tokens> {
+extend Tokens <: TokensEq<Tokens> {
     public operator func ==(other: Tokens): Bool {
         refEq(this, other) || 
         if (this.size == other.size) {
-            for (i in 0..this.size where !(this[i].kind == other[i].kind || this[i].value == other[i].value)) {
+            for (i in 0..this.size where !this[i].equalsIgnorePos(other[i])) {
                 return false
             }
             return true
         }else{
             false
         }
+    }
+}
+
+public interface TokenEq<T> where T <: TokenEq<T> {
+    func equalsIgnorePos(other: T): Bool
+}
+extend Token <: TokenEq<Token> {
+    public func equalsIgnorePos(other: Token): Bool {
+        this.kind == other.kind && this.value == other.value
     }
 }
