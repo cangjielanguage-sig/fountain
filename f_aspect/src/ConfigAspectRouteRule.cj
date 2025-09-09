@@ -18,216 +18,224 @@ package f_aspect
 /**
  * 拥有已经实现过的全部RouteRule，只是初始化参数是配置项
  */
-private func getConfig(config: String): String {
-    Config.getString(config).getOrThrow {AspectException('There is not a ${config} item.')}.trimAscii()
-}
-
-public class ConfigExecutionRouteRule <: RouteRule {
-    private let config: String
-    public const init(config: String) {
-        this.config = config
+public abstract class ConfigRouteRule <: RouteRule {
+    public const ConfigRouteRule(
+        private let config: String,
+        private let matchIfNone: Bool) {
     }
-    public func matches(funcInfo: InvocationFuncInfo): Bool {
-        let qualified = getConfig(config)
-        let colon = qualified.lastIndexOf(':').getOrThrow {AspectException('${qualified} does not contain returnType')}
-        let rparen = qualified
-            .lastIndexOf(')', colon)
-            .getOrThrow {AspectException('${qualified} does not contain argTypes')}
-        let lparen = qualified
-            .lastIndexOf('(', rparen)
-            .getOrThrow {AspectException('${qualified} does not contain argTypes')}
-        let lastDot = qualified
-            .lastIndexOf('.', lparen)
-            .getOrThrow {AspectException('${qualified} does not contain qualifiedName or funcName')}
-        let returnType = qualified[colon + 1..]
-        let argTypes = qualified[lparen + 1..rparen]
-        let funcName = qualified[lastDot + 1..lparen]
-        let qualifiedName = qualified[0..lastDot]
-        ExecutionRouteRule(qualifiedName, funcName, argTypes, returnType).matches(funcInfo)
+    private func getConfig(config: String): ?String {
+        Config.getString(config)?.trimAscii()
+    }
+    protected func doMatches(funcInfo: InvocationFuncInfo, matchFn: (String) -> Bool): Bool {
+        if(let Some(x) <- getConfig(config)){
+            matchFn(x)
+        }else{
+            matchIfNone
+        }
     }
 }
-
-public class ConfigWithinRouteRule <: RouteRule {
-    private let config: String
-    public const init(config: String) {
-        this.config = config
+public class ConfigExecutionRouteRule <: ConfigRouteRule {
+    public const init(config: String, matchIfNone!: Bool = true) {
+        super(config, matchIfNone)
     }
     public func matches(funcInfo: InvocationFuncInfo): Bool {
-        let qualified = getConfig(config)
-        WithinRouteRule(qualified).matches(funcInfo)
-    }
-}
-
-public class ConfigArgsRouteRule <: RouteRule {
-    private let config: String
-    public const init(config: String) {
-        this.config = config
-    }
-    public func matches(funcInfo: InvocationFuncInfo): Bool {
-        let qualified = getConfig(config)
-        ArgsRouteRule(qualified).matches(funcInfo)
+        doMatches(funcInfo){qualified =>
+            let colon = qualified.lastIndexOf(':').getOrThrow {AspectException('${qualified} does not contain returnType')}
+            let rparen = qualified
+                .lastIndexOf(')', colon)
+                .getOrThrow {AspectException('${qualified} does not contain argTypes')}
+            let lparen = qualified
+                .lastIndexOf('(', rparen)
+                .getOrThrow {AspectException('${qualified} does not contain argTypes')}
+            let lastDot = qualified
+                .lastIndexOf('.', lparen)
+                .getOrThrow {AspectException('${qualified} does not contain qualifiedName or funcName')}
+            let returnType = qualified[colon + 1..]
+            let argTypes = qualified[lparen + 1..rparen]
+            let funcName = qualified[lastDot + 1..lparen]
+            let qualifiedName = qualified[0..lastDot]
+            ExecutionRouteRule(qualifiedName, funcName, argTypes, returnType).matches(funcInfo)
+        }
     }
 }
 
-public class ConfigReturnTypeRouteRule <: RouteRule {
-    private let config: String
-    public const init(config: String) {
-        this.config = config
+public class ConfigWithinRouteRule <: ConfigRouteRule {
+    public const init(config: String, matchIfNone!: Bool = true) {
+        super(config, matchIfNone)
     }
     public func matches(funcInfo: InvocationFuncInfo): Bool {
-        let qualified = getConfig(config)
-        ReturnTypeRouteRule(qualified).matches(funcInfo)
+        doMatches(funcInfo){qualified =>
+            WithinRouteRule(qualified).matches(funcInfo)
+        }
     }
 }
 
-public class ConfigFuncTypeRouteRule <: RouteRule {
-    private let config: String
-    public const init(config: String) {
-        this.config = config
+public class ConfigArgsRouteRule <: ConfigRouteRule {
+    public const init(config: String, matchIfNone!: Bool = true) {
+        super(config, matchIfNone)
     }
     public func matches(funcInfo: InvocationFuncInfo): Bool {
-        let funcType = getConfig(config)
-        let colon = funcType.lastIndexOf(':').getOrThrow {AspectException('${funcType} does not contain returnType')}
-        let rparen = funcType
-            .lastIndexOf(')', colon)
-            .getOrThrow {AspectException('${funcType} does not contain argTypes')}
-        let lparen = funcType
-            .lastIndexOf('(', rparen)
-            .getOrThrow {AspectException('${funcType} does not contain argTypes')}
-        let returnType = funcType[colon + 1..]
-        let argTypes = funcType[lparen + 1..rparen]
-        FuncTypeRouteRule(argTypes, returnType).matches(funcInfo)
+        doMatches(funcInfo){qualified =>
+            ArgsRouteRule(qualified).matches(funcInfo)
+        }
     }
 }
 
-public class ConfigFuncNameRouteRule <: RouteRule {
-    private let config: String
-    public const init(config: String) {
-        this.config = config
+public class ConfigReturnTypeRouteRule <: ConfigRouteRule {
+    public const init(config: String, matchIfNone!: Bool = true) {
+        super(config, matchIfNone)
     }
     public func matches(funcInfo: InvocationFuncInfo): Bool {
-        let name = getConfig(config)
-        FuncNameRouteRule(name).matches(funcInfo)
+        doMatches(funcInfo){qualified =>
+            ReturnTypeRouteRule(qualified).matches(funcInfo)
+        }
     }
 }
 
-public class ConfigFuncRouteRule <: RouteRule {
-    private let config: String
-    public const init(config: String) {
-        this.config = config
+public class ConfigFuncTypeRouteRule <: ConfigRouteRule {
+    public const init(config: String, matchIfNone!: Bool = true) {
+        super(config, matchIfNone)
     }
     public func matches(funcInfo: InvocationFuncInfo): Bool {
-        let funcDecl = getConfig(config)
-        let colon = funcDecl.lastIndexOf(':').getOrThrow {AspectException('${funcDecl} does not contain returnType')}
-        let rparen = funcDecl
-            .lastIndexOf(')', colon)
-            .getOrThrow {AspectException('${funcDecl} does not contain argTypes')}
-        let lparen = funcDecl
-            .lastIndexOf('(', rparen)
-            .getOrThrow {AspectException('${funcDecl} does not contain argTypes')}
-        let returnType = funcDecl[colon + 1..]
-        let argTypes = funcDecl[lparen + 1..rparen]
-        let funcName = funcDecl[0..lparen]
-        FuncRouteRule(funcName, argTypes, returnType).matches(funcInfo)
+        doMatches(funcInfo){funcType =>
+            let colon = funcType.lastIndexOf(':').getOrThrow {AspectException('${funcType} does not contain returnType')}
+            let rparen = funcType
+                .lastIndexOf(')', colon)
+                .getOrThrow {AspectException('${funcType} does not contain argTypes')}
+            let lparen = funcType
+                .lastIndexOf('(', rparen)
+                .getOrThrow {AspectException('${funcType} does not contain argTypes')}
+            let returnType = funcType[colon + 1..]
+            let argTypes = funcType[lparen + 1..rparen]
+            FuncTypeRouteRule(argTypes, returnType).matches(funcInfo)
+        }
     }
 }
 
-public class ConfigTargetRouteRule <: RouteRule {
-    private let config: String
-    public const init(config: String) {
-        this.config = config
+public class ConfigFuncNameRouteRule <: ConfigRouteRule {
+    public const init(config: String, matchIfNone!: Bool = true) {
+        super(config, matchIfNone)
     }
     public func matches(funcInfo: InvocationFuncInfo): Bool {
-        let qualified = getConfig(config)
-        TargetRouteRule(qualified).matches(funcInfo)
+        doMatches(funcInfo){name =>
+            FuncNameRouteRule(name).matches(funcInfo)
+        }
     }
 }
 
-public class ConfigTargetAnnotationRouteRule <: RouteRule {
-    private let config: String
-    public const init(config: String) {
-        this.config = config
+public class ConfigFuncRouteRule <: ConfigRouteRule {
+    public const init(config: String, matchIfNone!: Bool = true) {
+        super(config, matchIfNone)
     }
     public func matches(funcInfo: InvocationFuncInfo): Bool {
-        let annotationTypes = getConfig(config)
-        if (annotationTypes
-            .startsWith('<:')) {
+        doMatches(funcInfo){funcDecl =>
+            let colon = funcDecl.lastIndexOf(':').getOrThrow {AspectException('${funcDecl} does not contain returnType')}
+            let rparen = funcDecl
+                .lastIndexOf(')', colon)
+                .getOrThrow {AspectException('${funcDecl} does not contain argTypes')}
+            let lparen = funcDecl
+                .lastIndexOf('(', rparen)
+                .getOrThrow {AspectException('${funcDecl} does not contain argTypes')}
+            let returnType = funcDecl[colon + 1..]
+            let argTypes = funcDecl[lparen + 1..rparen]
+            let funcName = funcDecl[0..lparen]
+            FuncRouteRule(funcName, argTypes, returnType).matches(funcInfo)
+        }
+    }
+}
+
+public class ConfigTargetRouteRule <: ConfigRouteRule {
+    public const init(config: String, matchIfNone!: Bool = true) {
+        super(config, matchIfNone)
+    }
+    public func matches(funcInfo: InvocationFuncInfo): Bool {
+        doMatches(funcInfo){qualified =>
+            TargetRouteRule(qualified).matches(funcInfo)
+        }
+    }
+}
+
+public class ConfigTargetAnnotationRouteRule <: ConfigRouteRule {
+    public const init(config: String, matchIfNone!: Bool = true) {
+        super(config, matchIfNone)
+    }
+    public func matches(funcInfo: InvocationFuncInfo): Bool {
+        doMatches(funcInfo){annotationTypes =>
+            if (annotationTypes.startsWith('<:')) {
                 TargetAnnotationRouteRule(annotationTypes[2..], sub: true)
             } else {
                 TargetAnnotationRouteRule(annotationTypes, sub: false)
-            }
-            .matches(funcInfo)
+            }.matches(funcInfo)
+        }
     }
 }
 
-public class ConfigFuncAnnotationRouteRule <: RouteRule {
-    private let config: String
-    public const init(config: String) {
-        this.config = config
+public class ConfigFuncAnnotationRouteRule <: ConfigRouteRule {
+    public const init(config: String, matchIfNone!: Bool = true) {
+        super(config, matchIfNone)
     }
     public func matches(funcInfo: InvocationFuncInfo): Bool {
-        let annotationTypes = getConfig(config)
-        if (annotationTypes
-            .startsWith('<:')) {
+        doMatches(funcInfo){annotationTypes =>
+            if (annotationTypes.startsWith('<:')) {
                 FuncAnnotationRouteRule(annotationTypes[2..], sub: true)
             } else {
                 FuncAnnotationRouteRule(annotationTypes, sub: false)
-            }
-            .matches(funcInfo)
+            }.matches(funcInfo)
+        }
     }
 }
 
-public class ConfigArgAnnotationsRouteRule <: RouteRule {
-    private let config: String
-    public const init(config: String) {
-        this.config = config
+public class ConfigArgAnnotationsRouteRule <: ConfigRouteRule {
+    public const init(config: String, matchIfNone!: Bool = true) {
+        super(config, matchIfNone)
     }
     public func matches(funcInfo: InvocationFuncInfo): Bool {
-        let annotationTypes = getConfig(config)
-        ArgAnnotationsRouteRule(annotationTypes).matches(funcInfo)
+        doMatches(funcInfo){annotationTypes =>
+            ArgAnnotationsRouteRule(annotationTypes).matches(funcInfo)
+        }
     }
 }
 
-public class ConfigAnyArgAnnotationsRouteRule <: RouteRule {
-    private let config: String
-    public const init(config: String) {
-        this.config = config
+public class ConfigAnyArgAnnotationsRouteRule <: ConfigRouteRule {
+    public const init(config: String, matchIfNone!: Bool = true) {
+        super(config, matchIfNone)
     }
     public func matches(funcInfo: InvocationFuncInfo): Bool {
-        let annotationTypes = getConfig(config)
-        AnyArgAnnotationsRouteRule(annotationTypes).matches(funcInfo)
+        doMatches(funcInfo){annotationTypes =>
+            AnyArgAnnotationsRouteRule(annotationTypes).matches(funcInfo)
+        }
     }
 }
 
-public class ConfigArgPrefixAnnotationsRouteRule <: RouteRule {
-    private let config: String
-    public const init(config: String) {
-        this.config = config
+public class ConfigArgPrefixAnnotationsRouteRule <: ConfigRouteRule {
+    public const init(config: String, matchIfNone!: Bool = true) {
+        super(config, matchIfNone)
     }
     public func matches(funcInfo: InvocationFuncInfo): Bool {
-        let annotationTypes = getConfig(config)
-        ArgPrefixAnnotationsRouteRule(annotationTypes).matches(funcInfo)
+        doMatches(funcInfo){annotationTypes =>
+            ArgPrefixAnnotationsRouteRule(annotationTypes).matches(funcInfo)
+        }
     }
 }
 
-public class ConfigArgSuffixAnnotationsRouteRule <: RouteRule {
-    private let config: String
-    public const init(config: String) {
-        this.config = config
+public class ConfigArgSuffixAnnotationsRouteRule <: ConfigRouteRule {
+    public const init(config: String, matchIfNone!: Bool = true) {
+        super(config, matchIfNone)
     }
     public func matches(funcInfo: InvocationFuncInfo): Bool {
-        let annotationTypes = getConfig(config)
-        ArgSuffixAnnotationsRouteRule(annotationTypes).matches(funcInfo)
+        doMatches(funcInfo){annotationTypes =>
+            ArgSuffixAnnotationsRouteRule(annotationTypes).matches(funcInfo)
+        }
     }
 }
 
-public class ConfigBeanNameRouteRule <: RouteRule {
-    private let config: String
-    public const init(config: String) {
-        this.config = config
+public class ConfigBeanNameRouteRule <: ConfigRouteRule {
+    public const init(config: String, matchIfNone!: Bool = true) {
+        super(config, matchIfNone)
     }
     public func matches(funcInfo: InvocationFuncInfo): Bool {
-        let beanName = getConfig(config)
-        BeanNameRouteRule(beanName).matches(funcInfo)
+        doMatches(funcInfo){beanName =>
+            BeanNameRouteRule(beanName).matches(funcInfo)
+        }
     }
 }
