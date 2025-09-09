@@ -466,11 +466,11 @@ public class TimeBasedUUIDBuilder <: Resource {
         }
     }
     @When[os == 'Linux']
-    public func fromEth0(){
+    public func eth0(){
         fromEtherName('eth0')
     }
     @When[os == 'Linux']
-    public func fromEtherName(name: String): UUID {
+    public func etherName(name: String): UUID {
         try(f = File('/sys/class/net/${name}/address', Read)){
             return ether(StringReader(f).readToEnd())
         }
