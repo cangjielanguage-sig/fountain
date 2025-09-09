@@ -467,7 +467,7 @@ public class TimeBasedUUIDBuilder <: Resource {
     }
     @When[os == 'Linux']
     public func eth0(){
-        fromEtherName('eth0')
+        etherName('eth0')
     }
     @When[os == 'Linux']
     public func etherName(name: String): UUID {
