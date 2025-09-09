@@ -16,11 +16,9 @@ limitations under the License.
 package f_util
 
 import std.convert.Parsable
-import std.env
 import std.fs.{File, Directory, OpenMode}
-import std.io.SeekPosition
+import std.io.{SeekPosition, StringReader}
 import std.math.numeric.BigInt
-import std.process.Process
 import std.sync.{AtomicUInt16, AtomicInt64, Mutex}
 import std.time.{TimeZone, DateTime}
 import stdx.crypto.crypto.*
@@ -466,6 +464,17 @@ public class TimeBasedUUIDBuilder <: Resource {
         while (timestamp == 0 || seq == 0) {
             (timestamp, seq) = seqGen.timestampAndSequence(randomSeq)
         }
+    }
+    @When[os == 'Linux']
+    public func fromEth0(){
+        fromEtherName('eth0')
+    }
+    @When[os == 'Linux']
+    public func fromEtherName(name: String): UUID {
+        try(f = File('/sys/class/net/${name}/address', Read)){
+            return ether(StringReader(f).readToEnd())
+        }
+        throw UnreachableException()
     }
     public func ether(ether: String): UUID {
         //00:00:00:00:00:00
