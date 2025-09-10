@@ -54,11 +54,11 @@ public func isSameFuncDecl(source: FuncDecl, target: FuncDecl): Bool {
             if (sourceParam.identifier.value != targetParam.identifier.value || 
                 sourceParam.not.kind != targetParam.not.kind || 
                 sourceParam.isMemberParam() != targetParam.isMemberParam() ||
-                sourceParam.paramType.toTokens() != targetParam.paramType.toTokens()) {
+                !sourceParam.paramType.toTokens().equalsIgnorePos(targetParam.paramType.toTokens())) {
                 return false
             }
         }
-        source.declType.toTokens() == target.declType.toTokens()
+        source.declType.toTokens().equalsIgnorePos(target.declType.toTokens())
     }
     same
 }
