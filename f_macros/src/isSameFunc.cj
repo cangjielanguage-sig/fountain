@@ -51,9 +51,9 @@ public func isSameFuncDecl(source: FuncDecl, target: FuncDecl): Bool {
         for (i in 0..sourceParams.size) {
             let sourceParam = sourceParams[i]
             let targetParam = targetParams[i]
-            if (sourceParam.identifier.value != targetParam.identifier.value || sourceParam.not.kind != targetParam
-                .not
-                .kind || sourceParam.isMemberParam() != targetParam.isMemberParam() ||
+            if (sourceParam.identifier.value != targetParam.identifier.value || 
+                sourceParam.not.kind != targetParam.not.kind || 
+                sourceParam.isMemberParam() != targetParam.isMemberParam() ||
                 sourceParam.paramType.toTokens() != targetParam.paramType.toTokens()) {
                 return false
             }
