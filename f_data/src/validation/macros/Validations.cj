@@ -25,13 +25,22 @@ public macro Validations(input: Tokens): Tokens {
     } catch (e: Exception) {
         `empty_tokens`
     }
-    var tokens = baseValidations("IntegerValidation", name) + baseValidations("DecimalValidation", name) +
-        baseValidations("EmailValidation", name) + baseValidations("EmailValidation", name) +
-        chineseCellPhoneValidations(name) + integerRangeValidations(name) + regexValidations(name) +
-        dateTimeValidations(name) + durationValidations(name) + stringsValidations("PascalsValidation", name) +
-        stringsValidations("CamelsValidation", name) + stringsValidations("UpperUnderScoresValidation", name) +
-        stringsValidations("LowerUnderScoresValidation", name) + stringsValidations("UpperHyphensValidation", name) +
-        stringsValidations("LowerHyphensValidation", name) + quote(DummyValidator<$name>.INSTANCE)
+    let tokens = quote().append(baseValidations("IntegerValidation", name))
+                        .append(baseValidations("DecimalValidation", name))
+                        .append(baseValidations("EmailValidation", name))
+                        .append(baseValidations("EmailValidation", name))
+                        .append(chineseCellPhoneValidations(name))
+                        .append(integerRangeValidations(name))
+                        .append(regexValidations(name))
+                        .append(dateTimeValidations(name))
+                        .append(durationValidations(name))
+                        .append(stringsValidations("PascalsValidation", name))
+                        .append(stringsValidations("CamelsValidation", name))
+                        .append(stringsValidations("UpperUnderScoresValidation", name))
+                        .append(stringsValidations("LowerUnderScoresValidation", name))
+                        .append(stringsValidations("UpperHyphensValidation", name))
+                        .append(stringsValidations("LowerHyphensValidation", name))
+                        .append(quote(DummyValidator<$name>.INSTANCE))
     let validatorsName = Token(IDENTIFIER,
         "validators_${name.toString().replace(" ", "").replace(",", "_").replace("<", "_").replace(">", "_")}")
     input + `nl` + quote(
@@ -46,11 +55,11 @@ public macro Validations(input: Tokens): Tokens {
 }
 
 func baseValidations(macroName: String, declName: Tokens): Tokens {
-    var tokens = `empty_tokens`
+    let tokens = quote()
     for (m in getChildMessages(macroName)) {
         let (name, dataType, rule) = extractMessage(m)
         let customised = m.getBool("customised")
-        tokens += if (customised) {
+        tokens.append(if (customised) {
             quote(
                 CustomisedValidator<$declName>($rule, $(name.value)){target, value => target.$name = $(dataType).parse(value)}
             )
@@ -59,108 +68,101 @@ func baseValidations(macroName: String, declName: Tokens): Tokens {
             quote(
                 $validator($(name.value)){target, value => target.$name = $(dataType).parse(value)}
             )
-        } + `comma`
+        }).append(`comma`)
     }
     tokens
 }
 
 func chineseCellPhoneValidations(declName: Tokens): Tokens {
     let validator = Token(IDENTIFIER, "ChineseCellPhoneValidator") + quote(<$declName>)
-    var tokens = `empty_tokens`
+    let tokens = quote()
     for (m in getChildMessages("ChineseCellPhoneValidation")) {
         let (name, dataType, rule) = extractMessage(m)
         let withCode = m.getBool("NationalCode")
         let separator = m.getString("separator")
-        tokens += quote(
+        tokens.append(quote(
             $validator($withCode, $separator, $(name.value)){target, value => target.$name = value}
-        ) +
-            `comma`
+        )).append(`comma`)
     }
     tokens
 }
 
 func integerRangeValidations(declName: Tokens): Tokens {
     let validator = Token(IDENTIFIER, "IntegerRangeValidator") + quote(<$declName>)
-    var tokens = `empty_tokens`
+    let tokens = quote()
     for (m in getChildMessages("IntegerRangeValidation")) {
         let (name, dataType, rule) = extractMessage(m)
         let range = m.getString("range")
-        tokens += quote(
+        tokens.append(quote(
             $validator($range, $(name.value)){target, value => target.$name = $(dataType).parse(value)}
-        ) +
-            `comma`
+        )).append(`comma`)
     }
     tokens
 }
 
 func regexValidations(declName: Tokens): Tokens {
     let validator = Token(IDENTIFIER, "IntegerRangeValidator") + quote(<$declName>)
-    var tokens = `empty_tokens`
+    let tokens = quote()
     for (m in getChildMessages("RegexValidation")) {
         let (name, dataType, rule) = extractMessage(m)
         let regex = m.getString("regex")
-        tokens += quote(
+        tokens.append(quote(
             $validator($regex, $(name.value)){target, value =>
                 target.$name = match(value){
                     case x: $(dataType) => x
                     case x => $(dataType).parse(x)
                 }
             }
-        ) +
-            `comma`
+        )).append(`comma`)
     }
     tokens
 }
 
 func dateTimeValidations(declName: Tokens): Tokens {
     let validator = Token(IDENTIFIER, "DateTimeValidator") + quote(<$declName>)
-    var tokens = `empty_tokens`
+    let tokens = quote()
     for (m in getChildMessages("DateTimeValidation")) {
         let (name, dataType, rule) = extractMessage(m)
         let format = m.getString("format")
-        tokens += quote(
+        tokens.append(quote(
             $validator($format, $(name.value)){target, value => target.$name = DateTime.parse(value)}
-        ) +
-            `comma`
+        )).append(`comma`)
     }
     tokens
 }
 
 func durationValidations(declName: Tokens): Tokens {
     let validator = Token(IDENTIFIER, "DurationValidator") + quote(<$declName>)
-    var tokens = `empty_tokens`
+    let tokens = quote()
     for (m in getChildMessages("DurationValidation")) {
         let (name, dataType, rule) = extractMessage(m)
-        tokens += quote(
+        tokens.append(quote(
             $validator($(name.value)){target, value => target.$name = Duration.parse(value)}
-        ) +
-            `comma`
+        )).append(`comma`)
     }
     tokens
 }
 
 func integersValidations(declName: Tokens): Tokens {
     let validator = Token(IDENTIFIER, "IntegersValidator") + quote(<$declName>)
-    var tokens = `empty_tokens`
+    let tokens = quote()
     for (m in getChildMessages("IntegersValidation")) {
         let (name, dataType, rule) = extractMessage(m)
-        tokens += quote(
+        tokens.append(quote(
             $validator($(name.value)){target, value => target.$name = $(dataType).parse(value)}
-        ) +
-            `comma`
+        )).append(`comma`)
     }
     tokens
 }
 
 func stringsValidations(macroName: String, declName: Tokens): Tokens {
-    var tokens = `empty_tokens`
+    let tokens = quote()
     for (m in getChildMessages(macroName)) {
         let (name, dataType, rule) = extractMessage(m)
         let validator = Token(IDENTIFIER, "${rule}Validator") + quote(<$declName>)
-        tokens += quote(
+        tokens.append(quote(
             $validator($(name.value)){target, value => target.$name = value.split(",")}
-        ) +
-            `comma`
+        )).append(`comma`)
     }
     tokens
 }

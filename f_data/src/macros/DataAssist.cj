@@ -158,10 +158,10 @@ func generateHash(d: ClassDecl, exclusion: HashSet<String>) {
         d.upperBound = `upperbound`[0]
     }
     d.superTypes.add(RefType(quote(Hashable)))
-    var hashed = `nl`
+    let hashed = quote($(`nl`))
     for (d in d.body.decls where d is VarDecl &&
         !(isStatic(d) || exclusion.contains(d.identifier.value) || exclusion.contains('${d.identifier.value}_'))) {
-        hashed += quote(hasher.append($(d.identifier))) + `nl`
+        hashed.append(quote(hasher.append($(d.identifier))$(`nl`)))
     }
     d
         .body
@@ -189,10 +189,10 @@ func generateEqual(d: ClassDecl, exclusion: HashSet<String>) {
     }
     let typeName = quote($(d.identifier)$(d.genericParamTokens))
     d.superTypes.add(RefType(quote(Equatable<$typeName>)))
-    var eq = quote((!(this is Hashable) || this.hashCode() == other.hashCode())) + `nl`
+    let eq = quote((!(this is Hashable) || this.hashCode() == other.hashCode())$(`nl`))
     for (d in d.body.decls where d is VarDecl &&
         !(isStatic(d) || exclusion.contains(d.identifier.value) || exclusion.contains('${d.identifier.value}_'))) {
-        eq += `and` + quote(f_data_eq(this.$(d.identifier), other.$(d.identifier))) + `nl`
+        eq.append(`and`).append(quote(f_data_eq(this.$(d.identifier), other.$(d.identifier)))).append(`nl`)
     }
     d
         .body
@@ -218,15 +218,15 @@ func generateCompare(d: ClassDecl, exclusion: HashSet<String>) {
     }
     let typeName = quote($(d.identifier)$(d.genericParamTokens))
     d.superTypes.add(RefType(quote(Comparable<$typeName>)))
-    var cmp = `nl`
+    let cmp = quote().append(`nl`)
     for (d in d.body.decls where d is VarDecl &&
         !(isStatic(d) || exclusion.contains(d.identifier.value) || exclusion.contains('${d.identifier.value}_'))) {
-        cmp += quote(f_data_cmp(this.$(d.identifier), other.$(d.identifier))) + `nl` + quote(
+        cmp.append(quote(f_data_cmp(this.$(d.identifier), other.$(d.identifier))) + `nl` + quote(
             if(result != EQ){
                 return result
             }
-        ) +
-            `nl`
+            $(`nl`)
+        ))
     }
     d
         .body
@@ -247,12 +247,12 @@ func generateToString(d: ClassDecl, exclusion: HashSet<String>) {
         d.upperBound = `upperbound`[0]
     }
     d.superTypes.add(RefType(quote(ToString)))
-    var str = quote(
+    let str = quote(
         result.append<$(d.identifier)$(d.genericParamTokens)>()
     )
     for (d in d.body.decls where d is VarDecl &&
         !(isStatic(d) || exclusion.contains(d.identifier.value) || exclusion.contains('${d.identifier.value}_'))) {
-        str += `nl` + quote(result.append($(d.identifier.value), $(d.identifier)))
+        str.append(`nl`).append(quote(result.append($(d.identifier.value), $(d.identifier))))
     }
     d
         .body
@@ -278,16 +278,16 @@ func generateToFields(d: ClassDecl, exclusion: HashSet<String>) {
     }
     klassDecl.superTypes.add(RefType(quote(ObjectData<$(klassIdentifier)>)))
     let body = klassDecl.body.decls
-    var fields = ArrayList<Expr>()
+    let fields = ArrayList<Expr>()
     for (d in body where (d is VarDecl || d is PropDecl) && !isStatic(d) && isPublic(d) &&
         !exclusion.contains(d.identifier.value)) {
         let expr = match (d) {
             case x: VarDecl =>
-                var declType = x.declType.toTokens()
+                let declType = quote($(x.declType))
                 if (declType[0].kind == QUEST) {
-                    declType = declType[1..]
+                    declType.append(declType[1..])
                 } else if (declType[0].kind == IDENTIFIER && declType[0].value == 'Option') {
-                    declType = declType[2..declType.size - 1]
+                    declType.append(declType[2..declType.size - 1])
                 }
                 if (x.isVar()) {
                     TrailingClosureExpr(
@@ -299,11 +299,11 @@ func generateToFields(d: ClassDecl, exclusion: HashSet<String>) {
                             ReadonlyField.new<$(klassIdentifier), $(declType)>($(x.identifier.value)){o => o.$(x.identifier)}))
                 }
             case x: PropDecl =>
-                var declType = x.declType.toTokens()
+                let declType = quote($(x.declType))
                 if (declType[0].kind == QUEST) {
-                    declType = declType[1..]
+                    declType.append( declType[1..])
                 } else if (declType[0].kind == IDENTIFIER && declType[0].value == 'Option') {
-                    declType = declType[2..declType.size - 1]
+                    declType.append(declType[2..declType.size - 1])
                 }
                 if (x.isMut()) {
                     TrailingClosureExpr(
@@ -320,14 +320,14 @@ func generateToFields(d: ClassDecl, exclusion: HashSet<String>) {
     }
     let openModi = openTokens(klassDecl)
     let fieldsName = Token(IDENTIFIER, "___dAtA__fIElds_")
-    var fieldTokens = `lsquare`
+    let fieldTokens = quote().append(`lsquare`)
     for (f in fields) {
         if (fieldTokens.size > 1) {
-            fieldTokens += `comma`
+            fieldTokens.append(`comma`)
         }
-        fieldTokens += f.toTokens()
+        fieldTokens.append(f.toTokens())
     }
-    fieldTokens += `rsquare`
+    fieldTokens.append(`rsquare`)
     body.add(
         all: [
             VarDecl(

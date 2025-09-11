@@ -32,7 +32,7 @@ public macro Controller(input: Tokens): Tokens {
 }
 
 private func generate(input: Tokens): Tokens {
-    var tokens = `empty_tokens`
+    let tokens = quote()
     let decl = match(parseDecl(input)){
         case x: ClassDecl => x
         case x: MacroExpandDecl => 
@@ -54,7 +54,7 @@ private func generate(input: Tokens): Tokens {
     for (d in decl.body.decls) {
         if (let m: MacroExpandDecl <- d && let f: FuncDecl <- extract(m) && !isStatic(f) && isPublic(f)) {
             let (argTypes, argExprs, args) = generateArgs(f)
-            tokens += quote(
+            tokens.append(quote(
                 private let _ = {=>
                     let fname = $(f.identifier.value)
                     let metas = MVCStarter.generateAndRegister<$klass>($(f.identifier.value), $argTypes)
@@ -65,17 +65,17 @@ private func generate(input: Tokens): Tokens {
                         }
                     }
                 }()
-            ) +
-                `nl`
+                $(`nl`)
+            ))
         }
     }
     tokens
 }
 
 private func generateArgs(decl: FuncDecl): (Tokens, Tokens, Tokens) {
-    var argTypes = `lsquare`
-    var exprs = `empty_tokens`
-    var args = `lsquare`
+    let argTypes = `lsquare`
+    let exprs = `empty_tokens`
+    let args = `lsquare`
     for (p in decl.funcParams) {
         let pname = p.identifier.value
         let ptype = p.paramType
@@ -89,7 +89,7 @@ private func generateArgs(decl: FuncDecl): (Tokens, Tokens, Tokens) {
         } else {
             quote(None<T>)
         }
-        exprs += quote(
+        exprs.append(quote(
             let $(p.identifier) = if(isMultipart(name)){
                 (multipart<$ptype>(ctx, name) as $ptype).getOrThrow()
             }else{
@@ -101,29 +101,29 @@ private func generateArgs(decl: FuncDecl): (Tokens, Tokens, Tokens) {
                     case _ => (meta.extract<$ptype>(ctx, $pname $default) as $ptype).getOrThrow()
                 }
             }
-        ) +
-            `nl`
+            $(`nl`)
+        ))
         let named = try {
             p.not.kind == TokenKind.NOT
         } catch (_) {
             false
         }
         if (args.size > 0) {
-            args += `comma`
+            args.append(`comma`)
         }
-        args += if (named) {
+        args.append(if (named) {
             quote($(p.identifier): $(p.identifier))
         } else {
             quote($(p.identifier))
-        }
+        })
         if (argTypes.size > 1) {
-            argTypes += `comma`
+            argTypes.append(`comma`)
         }
-        argTypes += quote(
+        argTypes.append(quote(
             TypeInfos.get<$(p.paramType)>()
-        )
+        ))
     }
-    argTypes += `rsquare`
-    args += `rsquare`
+    argTypes.append(`rsquare`)
+    args.append(`rsquare`)
     (argTypes, exprs, args)
 }

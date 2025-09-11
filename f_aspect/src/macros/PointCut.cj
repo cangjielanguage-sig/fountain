@@ -29,29 +29,28 @@ public macro Pointcut(attr: Tokens, input: Tokens): Tokens {
     }
     match (decl) {
         case x: FuncDecl =>
-            var funcDecl = `empty_tokens`
+            let funcDecl = quote()
             for (t in input) {
                 if (t.kind == TokenKind.LCURL) {
                     break
                 }
-                funcDecl += t
+                funcDecl.append(t)
             }
             let params = x.funcParams
-            var argVars = quote()
-            var args = `lsquare`
+            let argVars = quote()
+            let args = quote($(`lsquare`))
             for (i in 0..params.size) {
                 let param = params[i]
                 let paramName = param.identifier
-                argVars += quote(
+                argVars.append(quote(
                     let $paramName = (args[$(i)] as $(param.paramType)).getOrThrow()
-                ) +
-                    `nl`
+                )).append(`nl`)
                 if (i > 0) {
-                    args += `comma`
+                    args.append( `comma`)
                 }
-                args += paramName
+                args.append(paramName)
             }
-            args += `rsquare`
+            args.append(`rsquare`)
             let qualifiedName = attr[0].value
             let funcName = x.identifier.value
             let funcType = try {

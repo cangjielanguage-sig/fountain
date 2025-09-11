@@ -17,7 +17,6 @@ macro package f_mvc.macros
 
 import std.ast.*
 import f_macros.*
-import f_mvc.exception.MVCException
 
 /**
  * attr的可选项
@@ -39,7 +38,7 @@ public macro WSEndPoint(attr: Tokens, input: Tokens): Tokens {
 private func generate(attr: Tokens, input: Tokens): Tokens {
     let path = attr[0]
     let upgradeAttrs = attr[1 .. attr.size]
-    var tokens = `empty_tokens`
+    let tokens = quote()
     let decl = match(parseDecl(input)){
         case x: ClassDecl => x
         case x: MacroExpandDecl => 
@@ -58,20 +57,21 @@ private func generate(attr: Tokens, input: Tokens): Tokens {
             return input
     }
     let klass = decl.identifier
-    var metaTokens = quote(
+    let metaTokens = quote(
         let metaHandles = HashMap<String, (WSFuncMeta<$klass>, Bool) -> Unit>()
-    ) + `nl`
+        $(`nl`)
+    )
     for(d in decl.body.decls where isPublic(d) && !isStatic(d)) {
         if(let f: FuncDecl <- d){
-            var paramTokens = `empty_tokens`
-            var factParams = `empty_tokens`
+            let paramTokens = quote()
+            let factParams = quote()
             for(p in f.funcParams){
                 let default = try{
                     p.expr.toTokens()
                 }catch(_){
                     `empty_tokens`
                 }
-                paramTokens += quote(
+                paramTokens.append(quote(
                     let $(p.identifier) = match(None<$(p.paramType)>){
                         case _: ?HttpContext => (ctx as $(p.paramType)).getOrThrow()
                         case _: ?HttpRequest => (ctx.request as $(p.paramType)).getOrThrow()
@@ -81,24 +81,26 @@ private func generate(attr: Tokens, input: Tokens): Tokens {
                         case _ where cf => (WSCloseFrame(payload) as $(p.paramType)).getOrThrow()
                         case _ => (m.extract<$(p.paramType)>(ctx, $(p.identifier.value), pattern, ws, payload) as $(p.paramType)).getOrThrow()
                     }
-                ) + `nl`
+                    $(`nl`)
+                ))
                 if(factParams.size > 0){
-                    factParams += `comma`
+                    factParams.append(`comma`)
                 }
-                factParams += if(default.size > 0) {
+                factParams.append(if(default.size > 0) {
                     quote($(p.identifier): $(p.identifier) ?? $(default))
                 }else{
                     quote($(p.identifier).getOrThrow())
-                }
+                })
             }
-            metaTokens += quote(
+            metaTokens.append(quote(
                 metaHandles[$(f.identifier.value)] = {m, cf => 
                     m.setHandle{endpoint, ctx, pattern, ws, payload => 
                         $paramTokens
                         endpoint.$(f.identifier)($factParams)
                     }
                 }
-            ) + `nl`
+                $(`nl`)
+            ))
         }
     }
     quote(

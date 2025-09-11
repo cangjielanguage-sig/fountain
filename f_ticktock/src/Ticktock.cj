@@ -19,6 +19,7 @@ package f_ticktock
 import std.collection.concurrent.ConcurrentHashMap
 import std.env
 public import std.time.DateTime
+import f_bean.BeanFactory
 import f_log.LoggerFactory
 
 /**
@@ -98,7 +99,14 @@ public class Ticktock <: Emitter {
         }
         addOrReplaceTask(task, task.cron)
     }
-
+    private func addOrReplaceTaskFromBeanFactory(){
+        for(task in BeanFactory.instance.getList<CronTicktockTask>()){
+            addOrReplaceTask(task)
+        }
+        for(task in BeanFactory.instance.getList<DelayedCronTicktockTask>()){
+            addOrReplaceDelayTask(task)
+        }
+    }
     public func addOrReplaceTask(task: CronTicktockTask) {
         addOrReplaceTask(task, task.cron)
     }

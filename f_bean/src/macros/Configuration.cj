@@ -21,9 +21,10 @@ macro package f_bean.macros
 public macro Configuration(input: Tokens): Tokens {
     let klass = ClassDecl(input)
     let identifier = klass.identifier
-    var ctorTokens = quote(
+    let ctorTokens = quote(
         let ctors = HashMap<String, ()-> $identifier>()
-    ) + `nl`
+        $(`nl`)
+    )
     for (d in klass.body.decls) {
         match (d) {
             case med: MacroExpandDecl =>
@@ -33,15 +34,16 @@ public macro Configuration(input: Tokens): Tokens {
                     match (md) {
                         case f: FuncDecl where isStatic(f) && isPublic(f) && f.funcParams.isEmpty() =>
                             let fname = f.identifier.value
-                            ctorTokens += quote(
+                            ctorTokens.append(quote(
                                 ctors[$fname] = {=> $(identifier).$(f.identifier)()}
-                            ) +
-                                `nl`
+                                $(`nl`)
+                            ))
                         case f: FuncDecl where !isStatic(f) && isPublic(f) && f.funcParams.isEmpty() =>
                             let fname = f.identifier.value
-                            ctorTokens += quote(
+                            ctorTokens.append(quote(
                                 ctors[$fname] = {=> configuration.$(f.identifier)()}
-                            )
+                                $(`nl`)
+                            ))
                         case f: MacroExpandDecl => continue
                         case _ => break
                     }

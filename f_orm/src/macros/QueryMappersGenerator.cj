@@ -17,8 +17,6 @@ macro package f_orm.macros
 
 import std.ast.*
 import std.collection.HashMap
-import std.convert.*
-import std.sort.*
 import f_macros.*
 import f_orm.exception.ORMException
 import f_util.CaseFormat
@@ -73,26 +71,26 @@ public macro QueryMappersGenerator(input: Tokens): Tokens {
             (false, CaseFormat.Camel.convert(n, CaseFormat.LowerUnderScore), Token(IDENTIFIER, ""))
         }
     }
-    var mappers = `lsquare` + generateMappers(name, props, mapperMetaFn)
+    let mappers = quote($(`lsquare`)).append(generateMappers(name, props, mapperMetaFn))
     let varMappers = generateMappers(name, vars, mapperMetaFn)
     if (varMappers.size > 0) {
-        mappers += `comma` + varMappers
+        mappers.append(`comma`).append(varMappers)
     }
-    mappers += `rsquare`
+    mappers.append(`rsquare`)
     let queryMappersName = Token(IDENTIFIER, "_qUEry__mAppErs_")
     let superTypes = decl.superTypes
-    var mapperTokens = quote(
+    let mapperTokens = quote(
         let creator = {=> $name()}
         let mappers = $mappers
-    ) +
-        `nl`
+        $(`nl`)
+    )
     for (st in superTypes) {
-        mapperTokens += quote(
+        mapperTokens.append(quote(
             if (let Some(x) <- QueryMappers<$st.create<$name>(creator, mappers)) {
                 return x
             }
-        ) +
-            `nl`
+            $(`nl`)
+        ))
     }
     if (superTypes.isEmpty()) {
         decl.upperBound = `upperbound`[0]
@@ -127,48 +125,48 @@ public macro QueryMappersGenerator(input: Tokens): Tokens {
 }
 
 func generateMappers(name: Tokens, props: Array<PropDecl>, mapperMetaFn: (String) -> (Bool, String, Token)): Tokens {
-    var tokens = `empty_tokens`
+    let tokens = quote()
     for (i in 0..props.size) {
         if (i > 0) {
-            tokens += `comma`
+            tokens.append(`comma`)
         }
         let decl = props[i]
-        var propName = decl.identifier
+        let propName = decl.identifier
         let dts = quote($(decl.declType))
         let meta = mapperMetaFn(propName.value)
-        tokens += generateMappers(name, propName, dts, meta)
+        tokens.append(generateMappers(name, propName, dts, meta))
     }
     tokens
 }
 
 func generateMappers(name: Tokens, vars: Array<VarDecl>, mapperMetaFn: (String) -> (Bool, String, Token)): Tokens {
-    var tokens = `empty_tokens`
+    let tokens = quote()
     for (i in 0..vars.size) {
         if (i > 0) {
-            tokens += `comma`
+            tokens.append(`comma`)
         }
         let decl = vars[i]
-        var varName = decl.identifier
+        let varName = decl.identifier
         let dts = quote($(decl.declType))
         let meta = mapperMetaFn(varName.value)
-        tokens += generateMappers(name, varName, dts, meta)
+        tokens.append(generateMappers(name, varName, dts, meta))
     }
     tokens
 }
 
 func generateMappers(name: Tokens, fieldName: Token, dts: Tokens, meta: (Bool, String, Token)): Tokens {
-    var dataType = `empty_tokens`
+    let dataType = quote()
     var nullable = false
     for (j in 0..dts.size) {
         let dt = dts[j]
         if (j == 0 && dt.value == "?") {
             nullable = true
-            dataType += dts[j + 1]
+            dataType.append(dts[j + 1])
         } else if (j == 0 && dt.value == "Option") {
             nullable = true
-            dataType += dts[j + 2]
+            dataType.append(dts[j + 2])
         } else {
-            dataType += dt
+            dataType.append(dt)
         }
         break
     }
@@ -193,21 +191,21 @@ func generateMappers(name: Tokens, fieldName: Token, dts: Tokens, meta: (Bool, S
                 )
         }
     } else if (dataType[0].value == "ArrayList") {
-        var listGeneric = `empty_tokens`
+        let listGeneric = quote()
         for (j in 2..dataType.size - 1) {
             let dt = dataType[j]
             if (j == 2 && dt.value == "?") {
                 nullable = true
-                listGeneric += quote(Option<)
+                listGeneric.append(quote(Option<))
             } else if (j == 2 && dt.value == "Option") {
                 nullable = true
-                listGeneric += dt
+                listGeneric.append(dt)
             } else {
-                listGeneric += dt
+                listGeneric.append(dt)
             }
         }
         if (nullable) {
-            listGeneric += `gt`
+            listGeneric.append(`gt`)
         }
         if (nullable && columnType.value.isEmpty()) {
             quote(

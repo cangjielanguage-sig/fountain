@@ -17,7 +17,6 @@ package f_ticktock
 
 import std.time.Month
 import std.time.DateTime
-import f_time.ExtendDateTime
 
 public class DelayedCronTicktockTask <: FuncInvocationTask {
     private var executingTime = DateTime.now()

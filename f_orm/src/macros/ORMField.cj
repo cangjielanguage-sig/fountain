@@ -17,7 +17,6 @@ macro package f_orm.macros
 
 import std.ast.*
 import f_macros.*
-import f_orm.wrap.DataType
 import f_orm.exception.*
 import f_util.CaseFormat
 
@@ -33,7 +32,7 @@ import f_util.CaseFormat
  */
 public macro ORMField(attrs: Tokens, input: Tokens): Tokens {
     assertParentContext("QueryMappersGenerator") //无法用反射处理QueryMapper的闭包参数的泛型，也就不能用反射创建Q
-    var tokens = input
+    let tokens = quote($input)
     let decl = parseDecl(input)
     let name = match(decl) {
         case varDecl: VarDecl => 
@@ -50,7 +49,7 @@ public macro ORMField(attrs: Tokens, input: Tokens): Tokens {
                 } else {
                     `empty_tokens`
                 }
-                tokens = quote(
+                tokens.append(quote(
                     private var $varName $varType $assign
 
                     public mut prop $name $varType {
@@ -61,8 +60,8 @@ public macro ORMField(attrs: Tokens, input: Tokens): Tokens {
                             this.$varName = value
                         }
                     }
-                ) +
-                    `nl`
+                    $(`nl`)
+                ))
                 name
             } else {
                 throw ORMException(
