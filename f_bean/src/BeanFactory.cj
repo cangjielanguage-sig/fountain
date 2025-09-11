@@ -82,6 +82,11 @@ public class BeanFactory {
         }
         doRegister<T>(meta, creator)
     }
+    public func register<T>(constructor: String, creator: () -> T) where T <: Object {
+        if(TypeInfos.withAnnotation<T, Constructor>(constructor, [])){
+            register<T>(creator)
+        }
+    }
     public func afterRegistered() {
         this.registered.store(true)
         if (!beans.isEmpty()) {

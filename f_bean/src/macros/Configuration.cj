@@ -21,10 +21,8 @@ macro package f_bean.macros
 public macro Configuration(input: Tokens): Tokens {
     let klass = ClassDecl(input)
     let identifier = klass.identifier
-    let ctorTokens = quote(
-        let ctors = HashMap<String, ()-> $identifier>()
-        $(`nl`)
-    )
+    let staticTokens = quote()
+    let instanceTokens = quote()
     for (d in klass.body.decls) {
         match (d) {
             case med: MacroExpandDecl =>
@@ -32,16 +30,16 @@ public macro Configuration(input: Tokens): Tokens {
                 while (let d: MacroExpandDecl <- md) {
                     md = d.macroInputDecl
                     match (md) {
-                        case f: FuncDecl where isStatic(f) && isPublic(f) && f.funcParams.isEmpty() =>
+                        case f: FuncDecl where d.fullIdentifier.value == 'Constructor' && isStatic(f) && isPublic(f) && f.funcParams.isEmpty() =>
                             let fname = f.identifier.value
-                            ctorTokens.append(quote(
-                                ctors[$fname] = {=> $(identifier).$(f.identifier)()}
+                            instanceTokens.append(quote(
+                                let _ = BeanFactory.instance.register<$identifier>($fname){$(identifier).$(f.identifier)()}
                                 $(`nl`)
                             ))
-                        case f: FuncDecl where !isStatic(f) && isPublic(f) && f.funcParams.isEmpty() =>
+                        case f: FuncDecl where d.fullIdentifier.value == 'Constructor' && !isStatic(f) && isPublic(f) && f.funcParams.isEmpty() =>
                             let fname = f.identifier.value
-                            ctorTokens.append(quote(
-                                ctors[$fname] = {=> configuration.$(f.identifier)()}
+                            staticTokens.append(quote(
+                                let _ = BeanFactory.instance.register<$identifier>($fname){configuration.$(f.identifier)()}
                                 $(`nl`)
                             ))
                         case f: MacroExpandDecl => continue
@@ -55,11 +53,9 @@ public macro Configuration(input: Tokens): Tokens {
     quote(
         $input
         private let _ = {=>
+            $staticTokens
             let configuration = $(identifier)()
-            $ctorTokens
-            for ((n, f) in ctors where TypeInfos.withAnnotation<$identifier, Constructor>(n, [])) {
-                BeanFactory.instance.register<$identifier>(f)
-            }
+            $instanceTokens
         }()
     )
 }
