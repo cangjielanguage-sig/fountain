@@ -33,13 +33,13 @@ public macro Configuration(input: Tokens): Tokens {
                         case f: FuncDecl where d.fullIdentifier.value == 'Constructor' && isStatic(f) && isPublic(f) && f.funcParams.isEmpty() =>
                             let fname = f.identifier.value
                             instanceTokens.append(quote(
-                                let _ = BeanFactory.instance.register<$identifier>($fname){$(identifier).$(f.identifier)()}
+                                BeanFactory.instance.register<$identifier>($fname){$(identifier).$(f.identifier)()}
                                 $(`nl`)
                             ))
                         case f: FuncDecl where d.fullIdentifier.value == 'Constructor' && !isStatic(f) && isPublic(f) && f.funcParams.isEmpty() =>
                             let fname = f.identifier.value
                             staticTokens.append(quote(
-                                let _ = BeanFactory.instance.register<$identifier>($fname){configuration.$(f.identifier)()}
+                                BeanFactory.instance.register<$identifier>($fname){configuration.$(f.identifier)()}
                                 $(`nl`)
                             ))
                         case f: MacroExpandDecl => continue
