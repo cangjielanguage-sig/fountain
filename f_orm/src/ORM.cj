@@ -18,11 +18,6 @@ package f_orm
 import std.collection.concurrent.ConcurrentHashMap
 import std.database.sql.*
 import std.env
-import std.process.Process
-import f_base.*
-import f_config.Config
-import f_log.*
-import f_pool.PoolException
 import f_orm.exception.ORMException
 public import f_exception.{BaseException, UnreachableException}
 public import f_orm.wrap.*
