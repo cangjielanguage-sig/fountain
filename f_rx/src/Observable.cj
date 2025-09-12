@@ -213,6 +213,7 @@ public class Observable<T> {
         replayCached(ob){
             this.observer.add(name, ob)
         }
+        disposed_.store(false)
         this
     }
     /**
@@ -222,6 +223,7 @@ public class Observable<T> {
         replayCached(observer){
             this.observer.add(observer)
         }
+        disposed_.store(false)
         this
     }
     /**
@@ -231,6 +233,7 @@ public class Observable<T> {
         replayCached(observer){
             this.observer.add(name, observer)
         }
+        disposed_.store(false)
         this
     }
     /**
@@ -433,7 +436,6 @@ public class Observable<T> {
      *  当前线程执行
      */
     public func immediately(): Unit {
-        disposed_.store(false)
         try {
             if (isDisposed) {
                 return
@@ -447,7 +449,8 @@ public class Observable<T> {
                     iterator
                 }
             }
-            for (item in getIterator()) {
+            let itr = getIterator()
+            while(isDisposed && let Some(item) <- itr.next()){
                 this.cache.set(item)
                 scheduler.schedule(item)
                 if (isDisposed) {
