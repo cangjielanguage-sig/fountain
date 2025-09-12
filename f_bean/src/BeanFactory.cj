@@ -84,7 +84,11 @@ public class BeanFactory {
     }
     public func register<T>(constructor: String, creator: () -> T) where T <: Object {
         if(TypeInfos.withAnnotation<T, Constructor>(constructor, [])){
-            register<T>(creator)
+            if(let Some(meta) <- TypeInfos.get<T>().getInstanceFunction(constructor, []).findAnnotation<BeanMeta>()){
+                doRegister<T>(meta, creator)
+            }else{
+                register<T>(creator)
+            }
         }
     }
     public func afterRegistered() {
