@@ -94,6 +94,7 @@ public class ORM {
     }
     public static func executor(driverName: String): SqlExecutor {
         if (driverName.isEmpty()) {
+            hasDefault()
             SqlExecutor.getInstance(default)
         } else {
             SqlExecutor.getInstance(driverName)
