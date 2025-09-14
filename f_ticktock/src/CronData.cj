@@ -16,6 +16,7 @@ limitations under the License.
 package f_ticktock
 
 import f_base.HashBuilder
+import f_ticktock.exception.*
 
 public class CronData <: ToString & Hashable & Equatable<CronData> {
     private let unit_: TicktockUnit
@@ -31,6 +32,9 @@ public class CronData <: ToString & Hashable & Equatable<CronData> {
     }
 
     private init(unit: TicktockUnit, range: Range<Int64>, last: Bool) {
+        if(unit == TicktockUnit.YEARLY && last){
+            throw TicktockException('time unit of year must not be specified as last')
+        }
         this.unit_ = unit
         this.range_ = range
         this.last_ = last
