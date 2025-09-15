@@ -61,9 +61,14 @@ public class ORM {
     }
     public static func deregister(name: String): Unit {
         datasources.remove(name)?.close()
+        DriverManager.deregister(name)
         if (name == default) {
             default = String.empty
         }
+    }
+    public static func deregisterAndReplaceDefault(newDefault: String): Unit {
+        deregister(default)
+        default = newDefault
     }
     public static prop databasesNames: Array<String> {
         get() {

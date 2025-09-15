@@ -142,7 +142,6 @@ public struct App {
         let _ = Ticktock.getInstance(anyway: false)
         //orm 需要应用开发者显式注册数据库驱动及初始化事务切面，
         //执行load函数时一定会加载初始化orm的动态链接库从而完成初始化
-        //ticktock是自初始化，首次使用时完成初始化
         //其它模块是工具API没有专门的初始化API
         let app = if (name.size > 0) {
             name
