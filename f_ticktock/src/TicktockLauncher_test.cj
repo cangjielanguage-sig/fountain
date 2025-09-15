@@ -19,7 +19,7 @@ package f_ticktock
 public class TicktockLauncher_test {
     @TestCase
     public func test(): Unit {
-        let launcher = Ticktock.getInstance(anyway: true)
+        let launcher = Ticktock.instance
         launcher.addOrReplaceTask(CronTicktockTaskTest())
         sleep(15 * Duration.minute)
         launcher.shutdown()
