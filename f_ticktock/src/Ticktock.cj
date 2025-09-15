@@ -60,6 +60,7 @@ public class Ticktock <: Emitter {
      * 如果需要调用此函数后并注册定时任务,anyway必须是true。
      * 如果只是想从IOC获得定时任务初始化，如果IOC内没有注册定时任务就不初始化，此时anyway应该是false，
      * anyway是false且IOC没有注册过定时任务将返回zeroValue<Ticktock>()，当副作用管理实装后此处改为使用perform，并不再resume。
+     * zeroValue的Ticktock实例不会保存下来，下次调用本函数时会执行初始化全过程。
      */
     public static func getInstance(anyway!: Bool = false): Ticktock {
         if(let Some(x) <- instance_.load()){
