@@ -60,8 +60,10 @@ public class ORM {
         register(NamedDatasource.new(driver), default: default)
     }
     public static func deregister(name: String): Unit {
-        datasources.remove(name)?.close()
-        DriverManager.deregister(name)
+        if(let Some(d) <- datasources.remove(name)){
+            DriverManager.deregister(name)
+            d.close()
+        }
         if (name == default) {
             default = String.empty
         }
