@@ -18,14 +18,12 @@ package f_ticktock
 
 import std.collection.concurrent.ConcurrentHashMap
 import std.env
+import std.sync.{AtomicOptionReference, Mutex}
 public import std.time.DateTime
 import f_bean.BeanFactory
 import f_log.LoggerFactory
 
 /**
- * 时间轮单位初始化顺序任意，TicktockTaskExecutor必须先初始化；所有时间轮单位都初始化完成才能launch()
- * 执行launch以前或以后都可以随时增删任务
- * create*Wheel(Currently)是为了方便单元测试的，实际使用默认就够了
  * 本类对象能接收的cron表达式，简单说明如下：
  * 多个表达式可以用|分隔
  * 包含用空格分隔的六部分，从左至右依次是秒 分 时 日 月 星期
@@ -55,7 +53,49 @@ import f_log.LoggerFactory
  */
 public class Ticktock <: Emitter {
     private static let LOGGER = LoggerFactory.getLogger<Ticktock>()
-    public static let instance = Ticktock()
+    private static let mutex = Mutex()
+    private static let instance_ = AtomicOptionReference<Ticktock>()
+
+    /**
+     * 如果需要调用此函数后并注册定时任务,anyway必须是true。
+     * 如果只是想从IOC获得定时任务初始化，如果IOC内没有注册定时任务就不初始化，此时anyway应该是false，
+     * anyway是false且IOC没有注册过定时任务将返回zeroValue<Ticktock>()，当副作用管理实装后此处改为使用perform，并不再resume。
+     */
+    public static func getInstance(anyway!: Bool = false): Ticktock {
+        if(let Some(x) <- instance_.load()){
+            x
+        }else{
+            synchronized(mutex){
+                if(let Some(x) <- instance_.load()){
+                    x
+                }else if(let list <- getTasksFromBeanFactory() && list.size > 0){
+                    instance_.compareAndSwap(None<Ticktock>, Ticktock())
+                    let tt = instance_.load().getOrThrow()
+                    for(task in list){
+                        tt.addOrReplaceTask(task)
+                    }
+                    if(let list <- getDelayedTasksFromBeanFactory() && list.size > 0){
+                        for(task in list){
+                            tt.addOrReplaceDelayTask(task)
+                        }
+                    }
+                    tt
+                }else if(let list <- getDelayedTasksFromBeanFactory() && list.size > 0){
+                    instance_.compareAndSwap(None<Ticktock>, Ticktock())
+                    let tt = instance_.load().getOrThrow()
+                    for(task in list){
+                        tt.addOrReplaceDelayTask(task)
+                    }
+                    tt
+                }else if (anyway){
+                    instance_.compareAndSwap(None<Ticktock>, Ticktock())
+                    instance_.load().getOrThrow()
+                }else{
+                    unsafe{zeroValue<Ticktock>()}
+                }
+            }
+        }
+    }
 
     private let tasks = ConcurrentHashMap<String, (TicktockTask, Collection<CronDataCollection>)>()
     private let ticktock = Chrono()
@@ -99,14 +139,13 @@ public class Ticktock <: Emitter {
         }
         addOrReplaceTask(task, task.cron)
     }
-    private func addOrReplaceTaskFromBeanFactory(){
-        for(task in BeanFactory.instance.getList<CronTicktockTask>()){
-            addOrReplaceTask(task)
-        }
-        for(task in BeanFactory.instance.getList<DelayedCronTicktockTask>()){
-            addOrReplaceDelayTask(task)
-        }
+    private static func getTasksFromBeanFactory() {
+        BeanFactory.instance.getList<CronTicktockTask>()
     }
+    private static func getDelayedTasksFromBeanFactory(){
+        BeanFactory.instance.getList<DelayedCronTicktockTask>()
+    }
+    
     public func addOrReplaceTask(task: CronTicktockTask) {
         addOrReplaceTask(task, task.cron)
     }

@@ -26,6 +26,7 @@ import std.time.DateTime
 import fountain.base.{OS, StringGenerator}
 import fountain.bean.BeanFactory
 import fountain.mvc.MVCStarter
+import fountain.ticktock.Ticktock
 
 /**
  * App不会发生传参赋值，用命令行参数实例化后只调用boot函数。所以用struct比较合适，不会占用堆空间。
@@ -137,6 +138,7 @@ public struct App {
         }
         load(path)
         BeanFactory.instance.afterRegistered()
+        let _ = Ticktock.getInstance()
         let mvc = MVCStarter.initialize()
         //orm 需要应用开发者显式注册数据库驱动及初始化事务切面，
         //执行load函数时一定会加载初始化orm的动态链接库从而完成初始化
