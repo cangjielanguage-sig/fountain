@@ -22,10 +22,6 @@
 [target .x86_64-unknown-linux-gnu.bin-dependencies]
   path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]
 
-[target.x86_64-apple-darwin]
-[target.x86_64-apple-darwin.bin-dependencies]
-  path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]
-
 [target.aarch64-unknown-linux-gnu]
 [target.aarch64-unknown-linux-gnu.bin-dependencies]
   path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]
