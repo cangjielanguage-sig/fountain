@@ -540,7 +540,7 @@ public class JWTVerifier {
         verifyIssueAt(issueAt - DateTime.UnixEpoch)
     }
     public func verifyId<T>(cache: JwtIdCache<T>): Bool where T <: Equatable<T> {
-        if (let Some(o) <- getPayload('jti') && let jti: T <- o) {
+        if (let Some(jti: T) <- getPayload('jti')) {
             cache.remove(jti)
         } else {
             false
