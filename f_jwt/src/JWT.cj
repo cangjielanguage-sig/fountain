@@ -541,9 +541,7 @@ public class JWTVerifier {
     }
     public func verifyId<T>(cache: JwtIdCache<T>): Bool where T <: Equatable<T> {
         if (let Some(o) <- getPayload('jti') && let jti: T <- o) {
-            let r = cache.contains(jti)
             cache.remove(jti)
-            r
         } else {
             false
         }

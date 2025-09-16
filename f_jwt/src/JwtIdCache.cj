@@ -21,7 +21,7 @@ public interface JwtIdCache<T> where T <: Equatable<T> {
     func put(id: T, expire: Duration): Unit
     func put(id: T, expireAt: DateTime): Unit
     func contains(id: T): Bool
-    func remove(id: T): Unit
+    func remove(id: T): Bool
 }
 
 public class NoneJwtIdCache<T> <: JwtIdCache<T> where T <: Equatable<T> {
@@ -30,5 +30,7 @@ public class NoneJwtIdCache<T> <: JwtIdCache<T> where T <: Equatable<T> {
     public func contains(id: T): Bool {
         false
     }
-    public func remove(id: T): Unit {}
+    public func remove(id: T): Bool {
+        false
+    }
 }
