@@ -76,11 +76,14 @@ public class Config {
     public static func refresher(prefix: String, fn: () -> Unit) {
         REFRESHER['${prefix}_'] = fn
     }
+    /**
+     * ifAbsent是true，只有当前配置项不存在时才添加，否则用新的配置覆盖旧的
+     */
     public static func set<T>(tuples: Array<(String, T)>, ifAbsent!: Bool = false): Unit where T <: ToString {
         let set = HashSet<String>()
         for (tpl in tuples) {
             let name = tpl[0]
-            if (ifAbsent) {
+            if (!ifAbsent) {
                 ARGS[name] = tpl[1].toString()
             } else if(ARGS.addIfAbsent(name, tpl[1].toString()).isSome()) {
                 continue
