@@ -97,6 +97,7 @@ public class Config {
         for ((prefix, fn) in REFRESHER) {
             for (k in set where k.startsWith(prefix) || k.startsWith('${Config.prefix}_${prefix}')) {
                 fn()
+                break
             }
         }
 
