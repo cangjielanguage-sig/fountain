@@ -56,6 +56,9 @@ public class CronDataCollection <: Hashable & Equatable<CronDataCollection> {
         }
     }
     public func matches(date: DateTime) {
+        if(datas.isEmpty()){//如果datas是空的，表示cron表达式是* * * * * * *
+            return true
+        }
         for (crons in datas.values()) {
             var result = false
             for (cron in crons where cron.matches(date)) {
