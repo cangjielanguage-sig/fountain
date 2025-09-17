@@ -55,6 +55,7 @@ _/ ____\____  __ __  _____/  |______  |__| ____
   - 将fountain动态链接库所在的路径加入环境变量`export FOUNTAIN_HOME=/path/of/fountain_dynamic_libs`。
   - 将本项目编译的动态链接库都加入环境变量`export LD_LIBRARY_PATH=$FOUNTAIN_HOME:$LD_LIBRARY_PATH`。
   - 或者把子项目`fountain/fboot`的构建结果原样复制到`FOUNTAIN_HOME`，把`fountain/fboot/fboot`脚本复制到`FOUNTAIN_HOME`目录，并执行`fboot export`即可自动添加环境变量
+  - 建议在fboot项目目录下面执行`cjpm install`，执行`export FOUNTAIN_HOME=~/.cjpm/libs/fboot`
 
 ## fboot
 
