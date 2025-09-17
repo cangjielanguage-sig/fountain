@@ -42,7 +42,12 @@ public class CronCompiler {
                 var unit = units[i]
                 let ticktockUnit = TicktockUnit.valueOf(i)
                 unit = unit.replace("*/", "${ticktockUnit.min}/")
-                if (unit == "*" || unit == '*/*' || unit == '*-*' || unit == '*/*-*' || unit == '${ticktockUnit.min}/1' || unit == '${ticktockUnit.min}/1-${ticktockUnit.max}') {
+                if (unit == "*" || unit == '*/*' || unit == '*-*' || unit == '*/*-*' || unit == '*/1-*' || unit == '*/1' ||
+                    unit == '${ticktockUnit.min}/*' || unit == '${ticktockUnit.min}/*-*' || unit == '${ticktockUnit.min}-*' || 
+                    unit == '${ticktockUnit.min}/1' || unit == '${ticktockUnit.min}/1-*' || 
+                    unit == '*/*-${ticktockUnit.max}' || unit == '*/1-${ticktockUnit.max}' || unit == '*-${ticktockUnit.max}' ||
+                    unit == '${ticktockUnit.min}/*-${ticktockUnit.max}' || unit == '${ticktockUnit.min}/1-${ticktockUnit.max}' || 
+                    unit == '${ticktockUnit.min}-${ticktockUnit.max}') {
                     //对于这些情况说明当前单位每个值都任意时间都匹配，为了减少运算量就忽略它们
                     continue
                 }
