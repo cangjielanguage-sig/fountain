@@ -76,12 +76,15 @@ public class Config {
     public static func refresher(prefix: String, fn: () -> Unit) {
         REFRESHER['${prefix}_'] = fn
     }
-
-    public static func set<T>(tuples: Array<(String, T)>): Unit where T <: ToString {
+    public static func set<T>(tuples: Array<(String, T)>, ifAbsent!: Bool = false): Unit where T <: ToString {
         let set = HashSet<String>()
         for (tpl in tuples) {
             let name = tpl[0]
-            ARGS[name] = tpl[1].toString()
+            if (ifAbsent) {
+                ARGS[name] = tpl[1].toString()
+            } else if(ARGS.addIfAbsent(name, tpl[1].toString()).isSome()) {
+                continue
+            }
             if (let Some(x) <- name.indexOf('_')) {
                 set.add(name[0..x])
             } else {
@@ -93,6 +96,7 @@ public class Config {
                 fn()
             }
         }
+
     }
     public static func getAll(prefix: String): Map<String, String> {
         let map = HashMap<String, String>()
