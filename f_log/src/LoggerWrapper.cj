@@ -19,7 +19,6 @@ import std.env
 import std.sync.AtomicReference
 import std.time.DateTime
 import stdx.log.LogLevel
-import f_config.Config
 import f_io.DummyOutputStream
 
 public class LoggerWrapper <: AbstractLogger {
