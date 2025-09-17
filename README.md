@@ -60,9 +60,10 @@ _/ ____\____  __ __  _____/  |______  |__| ____
 ## fboot
 
 - 把fboot加入PATH环境变量
-  1. fboot run [PATH] --dylibPattern=<DYNAMIC_LIB_NAME_REGEX_WITHOUT_EXTNAME>
-  2. fboot shutdown <PID>
-  3. fboot rerun <PID> [PATH] --dylibPattern=<DYNAMIC_LIB_NAME_REGEX_WITHOUT_EXTNAME>
+  1. 应用项目只需要编译为动态链接库，把应用的动态链接库加入LD_LIBRARY_PATH
+  2. fboot run [PATH] --dylibPattern=<DYNAMIC_LIB_NAME_REGEX_WITHOUT_EXTNAME>
+  3. fboot shutdown <PID>
+  4. fboot rerun <PID> [PATH] --dylibPattern=<DYNAMIC_LIB_NAME_REGEX_WITHOUT_EXTNAME>
 
 ## 构建
   为stdx指定环境变量，比如下面这样
