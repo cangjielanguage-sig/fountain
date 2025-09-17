@@ -187,8 +187,8 @@ public struct App {
     }
     public func boot(): Int64 {
         match (args[0]) {
-            // case 'start' => start()
-            // case 'restart' => restart()
+            case 'start' => start()
+            case 'restart' => restart()
             case 'run' => run()
             case 'shutdown' => shutdown()
             case 'rerun' => rerun()
