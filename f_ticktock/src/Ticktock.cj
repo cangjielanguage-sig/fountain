@@ -16,6 +16,7 @@ limitations under the License.
 
 package f_ticktock
 
+import std.collection.ArrayList
 import std.collection.concurrent.ConcurrentHashMap
 import std.env
 import std.sync.{AtomicOptionReference, Mutex}
@@ -61,46 +62,48 @@ public class Ticktock <: Emitter {
      */
     public static prop instance: Ticktock {
         get(){
-            getInstance(anyway: true)
+            getInstance(anyway: true).getOrThrow()
+        }
+    }
+
+    private static func swapIfNone(){
+        let instance = instance_.load()
+        if(let Some(tt) <- instance){
+            tt
+        }else{
+            instance_.compareAndSwap(instance, Ticktock())
+            instance_.load().getOrThrow()
         }
     }
     /**
      * 如果需要调用此函数后并注册定时任务,anyway必须是true。
      * 如果只是想从IOC获得定时任务初始化，如果IOC内没有注册定时任务就不初始化，此时anyway应该是false，
-     * anyway是false且IOC没有注册过定时任务将返回zeroValue<Ticktock>()，当副作用管理实装后此处改为使用perform，并不再resume。
-     * zeroValue的Ticktock实例不会保存下来，下次调用本函数时会执行初始化全过程。
+     * anyway是false且IOC没有注册过定时任务将返回None<Ticktock>。
      */
-    public static func getInstance(anyway!: Bool = true): Ticktock {
+    public static func getInstance(anyway!: Bool = true): ?Ticktock {
         if(let Some(x) <- instance_.load()){
             x
         }else{
             synchronized(mutex){
                 if(let Some(x) <- instance_.load()){
                     x
-                }else if(let list <- getTasksFromBeanFactory() && list.size > 0){
-                    instance_.compareAndSwap(None<Ticktock>, Ticktock())
-                    let tt = instance_.load().getOrThrow()
-                    for(task in list){
-                        tt.addOrReplaceTask(task)
-                    }
-                    if(let list <- getDelayedTasksFromBeanFactory() && list.size > 0){
+                }
+                func doRegister<T>(taskGetter: () -> ArrayList<T>, register: (Ticktock, T) -> Unit){
+                    if(let list <- taskGetter() && list.size > 0){
+                        let tt = swapIfNone()
                         for(task in list){
-                            tt.addOrReplaceDelayTask(task)
+                            register(tt, task)
                         }
+                        return tt
                     }
-                    tt
-                }else if(let list <- getDelayedTasksFromBeanFactory() && list.size > 0){
-                    instance_.compareAndSwap(None<Ticktock>, Ticktock())
-                    let tt = instance_.load().getOrThrow()
-                    for(task in list){
-                        tt.addOrReplaceDelayTask(task)
-                    }
-                    tt
-                }else if (anyway){
-                    instance_.compareAndSwap(None<Ticktock>, Ticktock())
-                    instance_.load().getOrThrow()
+                    None<Ticktock>
+                }
+                var tt = doRegister(getTasksFromBeanFactory){tt, task => tt.addOrReplaceTask(task)}
+                tt = doRegister(getDelayedTasksFromBeanFactory){tt, task => tt.addOrReplaceDelayTask(task)}
+                if (anyway && tt.isNone()){
+                    swapIfNone()
                 }else{
-                    unsafe{zeroValue<Ticktock>()}
+                    tt
                 }
             }
         }
