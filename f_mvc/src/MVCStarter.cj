@@ -86,7 +86,7 @@ public class MVCStarter {
         }
     }
     public static func generateAndRegisterWSEndPoint<T>(path: String): WSMeta<T> where T <: Object {
-        if(initial_.load()) {
+        if(!initial_.load()) {
             let meta = HttpRequestDistributorImpl.instance.generateAndRegisterWSEndPoint<T>(path)
             registered.compareAndSwap(false, true)
             meta
