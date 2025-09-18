@@ -35,7 +35,7 @@ public abstract class ConfigRouteRule <: RouteRule {
     }
 }
 public class ConfigExecutionRouteRule <: ConfigRouteRule {
-    public const init(config: String, matchIfNone!: Bool = true) {
+    public const init(config: String, matchIfNone!: Bool = false) {
         super(config, matchIfNone)
     }
     public func matches(funcInfo: InvocationFuncInfo): Bool {
@@ -60,7 +60,7 @@ public class ConfigExecutionRouteRule <: ConfigRouteRule {
 }
 
 public class ConfigWithinRouteRule <: ConfigRouteRule {
-    public const init(config: String, matchIfNone!: Bool = true) {
+    public const init(config: String, matchIfNone!: Bool = false) {
         super(config, matchIfNone)
     }
     public func matches(funcInfo: InvocationFuncInfo): Bool {
@@ -71,7 +71,7 @@ public class ConfigWithinRouteRule <: ConfigRouteRule {
 }
 
 public class ConfigArgsRouteRule <: ConfigRouteRule {
-    public const init(config: String, matchIfNone!: Bool = true) {
+    public const init(config: String, matchIfNone!: Bool = false) {
         super(config, matchIfNone)
     }
     public func matches(funcInfo: InvocationFuncInfo): Bool {
@@ -82,7 +82,7 @@ public class ConfigArgsRouteRule <: ConfigRouteRule {
 }
 
 public class ConfigReturnTypeRouteRule <: ConfigRouteRule {
-    public const init(config: String, matchIfNone!: Bool = true) {
+    public const init(config: String, matchIfNone!: Bool = false) {
         super(config, matchIfNone)
     }
     public func matches(funcInfo: InvocationFuncInfo): Bool {
@@ -93,7 +93,7 @@ public class ConfigReturnTypeRouteRule <: ConfigRouteRule {
 }
 
 public class ConfigFuncTypeRouteRule <: ConfigRouteRule {
-    public const init(config: String, matchIfNone!: Bool = true) {
+    public const init(config: String, matchIfNone!: Bool = false) {
         super(config, matchIfNone)
     }
     public func matches(funcInfo: InvocationFuncInfo): Bool {
@@ -113,7 +113,7 @@ public class ConfigFuncTypeRouteRule <: ConfigRouteRule {
 }
 
 public class ConfigFuncNameRouteRule <: ConfigRouteRule {
-    public const init(config: String, matchIfNone!: Bool = true) {
+    public const init(config: String, matchIfNone!: Bool = false) {
         super(config, matchIfNone)
     }
     public func matches(funcInfo: InvocationFuncInfo): Bool {
@@ -124,7 +124,7 @@ public class ConfigFuncNameRouteRule <: ConfigRouteRule {
 }
 
 public class ConfigFuncRouteRule <: ConfigRouteRule {
-    public const init(config: String, matchIfNone!: Bool = true) {
+    public const init(config: String, matchIfNone!: Bool = false) {
         super(config, matchIfNone)
     }
     public func matches(funcInfo: InvocationFuncInfo): Bool {
@@ -145,7 +145,7 @@ public class ConfigFuncRouteRule <: ConfigRouteRule {
 }
 
 public class ConfigTargetRouteRule <: ConfigRouteRule {
-    public const init(config: String, matchIfNone!: Bool = true) {
+    public const init(config: String, matchIfNone!: Bool = false) {
         super(config, matchIfNone)
     }
     public func matches(funcInfo: InvocationFuncInfo): Bool {
@@ -156,7 +156,7 @@ public class ConfigTargetRouteRule <: ConfigRouteRule {
 }
 
 public class ConfigTargetAnnotationRouteRule <: ConfigRouteRule {
-    public const init(config: String, matchIfNone!: Bool = true) {
+    public const init(config: String, matchIfNone!: Bool = false) {
         super(config, matchIfNone)
     }
     public func matches(funcInfo: InvocationFuncInfo): Bool {
@@ -171,7 +171,7 @@ public class ConfigTargetAnnotationRouteRule <: ConfigRouteRule {
 }
 
 public class ConfigFuncAnnotationRouteRule <: ConfigRouteRule {
-    public const init(config: String, matchIfNone!: Bool = true) {
+    public const init(config: String, matchIfNone!: Bool = false) {
         super(config, matchIfNone)
     }
     public func matches(funcInfo: InvocationFuncInfo): Bool {
@@ -186,7 +186,7 @@ public class ConfigFuncAnnotationRouteRule <: ConfigRouteRule {
 }
 
 public class ConfigArgAnnotationsRouteRule <: ConfigRouteRule {
-    public const init(config: String, matchIfNone!: Bool = true) {
+    public const init(config: String, matchIfNone!: Bool = false) {
         super(config, matchIfNone)
     }
     public func matches(funcInfo: InvocationFuncInfo): Bool {
@@ -197,7 +197,7 @@ public class ConfigArgAnnotationsRouteRule <: ConfigRouteRule {
 }
 
 public class ConfigAnyArgAnnotationsRouteRule <: ConfigRouteRule {
-    public const init(config: String, matchIfNone!: Bool = true) {
+    public const init(config: String, matchIfNone!: Bool = false) {
         super(config, matchIfNone)
     }
     public func matches(funcInfo: InvocationFuncInfo): Bool {
@@ -208,7 +208,7 @@ public class ConfigAnyArgAnnotationsRouteRule <: ConfigRouteRule {
 }
 
 public class ConfigArgPrefixAnnotationsRouteRule <: ConfigRouteRule {
-    public const init(config: String, matchIfNone!: Bool = true) {
+    public const init(config: String, matchIfNone!: Bool = false) {
         super(config, matchIfNone)
     }
     public func matches(funcInfo: InvocationFuncInfo): Bool {
@@ -219,7 +219,7 @@ public class ConfigArgPrefixAnnotationsRouteRule <: ConfigRouteRule {
 }
 
 public class ConfigArgSuffixAnnotationsRouteRule <: ConfigRouteRule {
-    public const init(config: String, matchIfNone!: Bool = true) {
+    public const init(config: String, matchIfNone!: Bool = false) {
         super(config, matchIfNone)
     }
     public func matches(funcInfo: InvocationFuncInfo): Bool {
@@ -230,7 +230,7 @@ public class ConfigArgSuffixAnnotationsRouteRule <: ConfigRouteRule {
 }
 
 public class ConfigBeanNameRouteRule <: ConfigRouteRule {
-    public const init(config: String, matchIfNone!: Bool = true) {
+    public const init(config: String, matchIfNone!: Bool = false) {
         super(config, matchIfNone)
     }
     public func matches(funcInfo: InvocationFuncInfo): Bool {

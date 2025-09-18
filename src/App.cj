@@ -124,7 +124,7 @@ public struct App {
                 ''
             }
         }
-        let pattern = Regex('^lib.*(${extractPattern()}.*)?$')
+        let pattern = Regex('^lib.*(${extractPattern()}).*$')
         func load(path: Path): Unit {
             Directory.walk(path) {
                 fi =>
