@@ -149,7 +149,14 @@ public struct App {
             path.fileName.toString()
         }
         let end = DateTime.now()
-        println('${app} is started in ${end - start} on ${end}')
+        println(#'
+  _____                    __         .__
+_/ ____\____  __ __  _____/  |______  |__| ____
+\   __\/  _ \|  |  \/    \   __\__  \ |  |/    \
+ |  | (  <_> )  |  /   |  \  |  / __ \|  |   |  \
+ |__|  \____/|____/|___|  /__| (____  /__|___|  /
+                        \/          \/        \/'#)
+        println('${app} is started in ${end - start} on ${end} by fountain')
         mvc?.start()
         0
     }
