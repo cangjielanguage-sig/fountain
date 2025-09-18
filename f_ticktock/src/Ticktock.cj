@@ -85,7 +85,7 @@ public class Ticktock <: Emitter {
             return x
         }
         synchronized(mutex){
-            if(let Some(x) <- instance_.load()){
+            if (let Some(x) <- instance_.load()) {
                 return x
             }
             func doRegister<T>(taskGetter: () -> ArrayList<T>, register: (Ticktock, T) -> Unit){
@@ -100,9 +100,9 @@ public class Ticktock <: Emitter {
             }
             var tt = doRegister(getTasksFromBeanFactory){tt, task => tt.addOrReplaceTask(task)}
             tt = doRegister(getDelayedTasksFromBeanFactory){tt, task => tt.addOrReplaceDelayTask(task)}
-            if (anyway && tt.isNone()){
+            if (anyway && tt.isNone()) {
                 swapIfNone()
-            }else{
+            } else {
                 tt
             }
         }
