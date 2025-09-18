@@ -82,29 +82,28 @@ public class Ticktock <: Emitter {
      */
     public static func getInstance(anyway!: Bool = true): ?Ticktock {
         if(let Some(x) <- instance_.load()){
-            x
-        }else{
-            synchronized(mutex){
-                if(let Some(x) <- instance_.load()){
-                    x
-                }
-                func doRegister<T>(taskGetter: () -> ArrayList<T>, register: (Ticktock, T) -> Unit){
-                    if(let list <- taskGetter() && list.size > 0){
-                        let tt = swapIfNone()
-                        for(task in list){
-                            register(tt, task)
-                        }
-                        return tt
+            return x
+        }
+        synchronized(mutex){
+            if(let Some(x) <- instance_.load()){
+                return x
+            }
+            func doRegister<T>(taskGetter: () -> ArrayList<T>, register: (Ticktock, T) -> Unit){
+                if(let list <- taskGetter() && list.size > 0){
+                    let tt = swapIfNone()
+                    for(task in list){
+                        register(tt, task)
                     }
-                    None<Ticktock>
+                    return tt
                 }
-                var tt = doRegister(getTasksFromBeanFactory){tt, task => tt.addOrReplaceTask(task)}
-                tt = doRegister(getDelayedTasksFromBeanFactory){tt, task => tt.addOrReplaceDelayTask(task)}
-                if (anyway && tt.isNone()){
-                    swapIfNone()
-                }else{
-                    tt
-                }
+                None<Ticktock>
+            }
+            var tt = doRegister(getTasksFromBeanFactory){tt, task => tt.addOrReplaceTask(task)}
+            tt = doRegister(getDelayedTasksFromBeanFactory){tt, task => tt.addOrReplaceDelayTask(task)}
+            if (anyway && tt.isNone()){
+                swapIfNone()
+            }else{
+                tt
             }
         }
     }
