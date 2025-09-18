@@ -66,15 +66,6 @@ public class Ticktock <: Emitter {
         }
     }
 
-    private static func swapIfNone(){
-        let instance = instance_.load()
-        if(let Some(tt) <- instance){
-            tt
-        }else{
-            instance_.compareAndSwap(instance, Ticktock())
-            instance_.load().getOrThrow()
-        }
-    }
     /**
      * 如果需要调用此函数后并注册定时任务,anyway必须是true。
      * 如果只是想从IOC获得定时任务初始化，如果IOC内没有注册定时任务就不初始化，此时anyway应该是false，
@@ -87,6 +78,15 @@ public class Ticktock <: Emitter {
         synchronized(mutex){
             if (let Some(x) <- instance_.load()) {
                 return x
+            }
+            func swapIfNone() {
+                let instance = instance_.load()
+                if (let Some(tt) <- instance) {
+                    tt
+                } else {
+                    instance_.compareAndSwap(instance, Ticktock())
+                    instance_.load().getOrThrow()
+                }
             }
             func doRegister<T>(taskGetter: () -> ArrayList<T>, register: (Ticktock, T) -> Unit){
                 if(let list <- taskGetter() && list.size > 0){
