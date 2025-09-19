@@ -130,7 +130,7 @@ extend<K, V> LinkedHashMap<K, V> <: ExtendNonConcurrentMap<K, V> where K <: Hash
 extend<K, V> ConcurrentHashMap<K, V> <: ExtendMap<K, V> where K <: Hashable & Equatable<K> {
     public func entryView(key: K, fn: (K, ?V) -> ?V): ?V {
         this.entryView(key) {
-            entry => entry.value = fn(entry.key, entry.value)
+            entry => entry.value = fn(key, entry.value)
         }
     }
     public func addIfAbsent(key: K, fn: () -> V): V {
