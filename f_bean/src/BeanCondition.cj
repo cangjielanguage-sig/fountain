@@ -18,7 +18,7 @@ package f_bean
 /**
  * bean初始化条件，满足条件的bean才初始化，否则将被从BeanFactory删除
  */
-public interface BeanCondition {
+public interface BeanCondition <: ToString {
     func on(factory: BeanFactory): Bool
     operator const func &(right: BeanCondition): BeanCondition {
         AndCond(this, right)
@@ -38,5 +38,8 @@ public class NoneBeanCondition <: BeanCondition {
     private const init() {}
     public func on(_: BeanFactory): Bool {
         true
+    }
+    public func toString(): String {
+        'None'
     }
 }

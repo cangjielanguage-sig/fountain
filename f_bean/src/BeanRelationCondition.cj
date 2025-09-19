@@ -23,6 +23,9 @@ public class AndCond <: BeanCondition {
     public func on(factory: BeanFactory): Bool {
         left.on(factory) && right.on(factory)
     }
+    public func toString(): String {
+        '(${left} && ${right})'
+    }
 }
 /**
  * 两个bean初始化条件有一个是true本条件就是true，首先执行left。
@@ -32,6 +35,9 @@ public class OrCond <: BeanCondition {
     public func on(factory: BeanFactory): Bool {
         left.on(factory) || right.on(factory)
     }
+    public func toString(): String {
+        '(${left} || ${right})'
+    }
 }
 /**
  * 将指定初始化条件取反
@@ -40,5 +46,8 @@ public class NotCond <: BeanCondition {
     public const NotCond(public let op: BeanCondition) {}
     public func on(factory: BeanFactory): Bool {
         !op.on(factory)
+    }
+    public func toString(): String {
+        '(!${op})'
     }
 }

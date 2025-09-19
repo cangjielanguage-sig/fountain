@@ -47,4 +47,12 @@ public enum ConfCond <: BeanCondition {
             }
         }
     }
+    public func toString(): String {
+        match(this){
+            case IgnoreConf => "IgnoreConf"
+            case Exists(key) => "Exists(${key})"
+            case NotExists(key) => "NotExists(${key})"
+            case Value(key, val) => "Value(${key}, ${val})"
+        }
+    }
 }

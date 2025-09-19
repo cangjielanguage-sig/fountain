@@ -19,7 +19,7 @@ package f_bean
  * 定义bean的作用范围。prototype和singleton，可以在其它模块定义新的作用范围。
  * 受自定义作用范围影响的bean生命周期由范围定义模块维持
  */
-public abstract class BeanScope <: Equatable<BeanScope> {
+public abstract class BeanScope <: Equatable<BeanScope> & ToString {
     public static const prototype = PrototypeBeanScope()
     public static const singleton = SingletonBeanScope()
     public const init() {}
@@ -49,6 +49,9 @@ public class PrototypeBeanScope <: BeanScope {
             TypeInfos.get<PrototypeBeanScope>()
         }
     }
+    public func toString(): String {
+        'prototype'
+    }
 }
 
 public class SingletonBeanScope <: BeanScope {
@@ -57,5 +60,8 @@ public class SingletonBeanScope <: BeanScope {
         get() {
             TypeInfos.get<PrototypeBeanScope>()
         }
+    }
+    public func toString(): String {
+        'singleton'
     }
 }

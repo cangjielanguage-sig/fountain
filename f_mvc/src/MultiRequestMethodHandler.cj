@@ -60,6 +60,8 @@ public class MultiRequestMethodHandler <: HttpRequestHandler {
                 c => if (let Some(m) <- map.addIfAbsent(c, meta)) {
                     throw MVCException(
                         'duplicate RequestMeta, method: ${meta.method}, path: ${meta.path}, consumes: ${c}')
+                }else if (log.debugEnabled) {
+                    log.debug('RequestMeta registered: ${c} ${meta}')
                 }
             }
         }

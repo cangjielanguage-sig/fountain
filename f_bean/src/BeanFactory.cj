@@ -15,7 +15,10 @@ limitations under the License.
  */
 package f_bean
 
+import f_log.LoggerFactory
+
 public class BeanFactory {
+    private static let log = LoggerFactory.getLogger<BeanFactory>()
     public static let instance = BeanFactory()
     private let mutex = Mutex()
     private let beans = HashMap<String, BeanManager>()
@@ -49,13 +52,11 @@ public class BeanFactory {
             typeQueue.addLast(TypeInfos.get<Any>())
             typeQueue.addLast(TypeInfos.get<Object>())
             while (let Some(klass) <- typeQueue.removeFirst()) {
-                if (let Some(set) <- beanTypeMap
-                    .get(klass)) {
+                if (let Some(set) <- beanTypeMap.get(klass)) {
                         set
                     } else {
                         let set = TreeSet<BeanManager>()
-                        beanTypeMap
-                        .add(klass, set)
+                        beanTypeMap.add(klass, set)
                         set
                     }
                     .add(manager)
@@ -71,6 +72,9 @@ public class BeanFactory {
                     typeQueue.addLast(sc)
                 }
             }
+        }
+        if(log.debugEnabled) {
+            log.debug('bean registered ${manager}')
         }
     }
     public func register<T>(creator: () -> T) where T <: Object {
@@ -103,6 +107,9 @@ public class BeanFactory {
             let discarded = TreeSet<BeanManager>()
             for ((_, m) in beans where !(discarded.contains(m) || m.on(this))) {
                 discarded.add(m)
+                if(log.debugEnabled){
+                    log.debug("bean discarded: ${m}")
+                }
             }
             let removed = HashSet<TypeInfo>()
             for (d in discarded) {
@@ -120,7 +127,9 @@ public class BeanFactory {
     private func initBeansIfNeed() {
         if (shouldInitBean) {
             for ((_, m) in beans) {
-                m.initIfNeed()
+                if(m.initIfNeed() && log.debugEnabled){
+                    log.debug('bean init on starting: ${m}')
+                }
             }
         }
     }

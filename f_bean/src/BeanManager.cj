@@ -15,7 +15,7 @@ limitations under the License.
  */
 package f_bean
 
-public class BeanManager <: Comparable<BeanManager> {
+public class BeanManager <: Comparable<BeanManager> & ToString {
     private static let serialGen = AtomicInt64(1)
     private let mutex = Mutex()
     public let index = serialGen.fetchAdd(1)
@@ -32,6 +32,11 @@ public class BeanManager <: Comparable<BeanManager> {
             meta.name
         }
     }
+
+    public func toString(): String {
+        'name: ${name}; lazy: ${meta.lazy}; scope: ${meta.scope}; order: ${meta.order}; primary:${meta.primary}; condition: ${meta.condition}; type: ${beanType}'
+    }
+
     internal func doDestroy(): Unit {
         if (let Some(b) <- _bean.load() && let x: Destroy <- b) {
             x.destroy()
@@ -51,9 +56,12 @@ public class BeanManager <: Comparable<BeanManager> {
     internal func on(factory: BeanFactory): Bool {
         meta.condition.on(factory)
     }
-    internal func initIfNeed(): Unit {
+    internal func initIfNeed(): Bool {
         if (shouldInitBean && !meta.lazy && meta.scope.isSingleton) {
             _bean.store(new())
+            true
+        }else{
+            false
         }
     }
     private func new(): Object {

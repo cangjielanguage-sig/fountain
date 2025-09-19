@@ -15,7 +15,7 @@ limitations under the License.
  */
 package f_mvc
 
-public class RequestMeta <: HttpRequestHandler {
+public class RequestMeta <: HttpRequestHandler & ToString {
     private static let log = LoggerFactory.getLogger<RequestMeta>()
     private var ignoreAuth_ = false
     private var ignorePrivilege_ = false
@@ -33,6 +33,10 @@ public class RequestMeta <: HttpRequestHandler {
         private let params!: RequestCondition = DummyRequestCondition.instance,
         private let headers!: RequestCondition = DummyRequestCondition.instance
     ) {}
+
+    public func toString(): String {
+        'path: ${path}; method: ${method}'
+    }
 
     private var handle_: (HttpContext) -> Unit = {
         ctx: HttpContext => throw MVCException('Request was not handled')

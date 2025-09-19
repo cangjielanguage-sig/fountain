@@ -18,7 +18,7 @@ package f_bean
 /**
  * bean定义有指定数量时为true
  */
-public enum BeanDefCount {
+public enum BeanDefCount <: ToString {
     /**
      * 没有bean定义
      */
@@ -35,9 +35,18 @@ public enum BeanDefCount {
      * 多于一个bean定义
      */
     | MoreThanOne
+
+    public func toString(): String {
+        match(this){
+            case Zero => "Zero"
+            case OnlyOne => "OnlyOne"
+            case AtLeastOne => "AtLeastOne"
+            case MoreThanOne => "MoreThanOne"
+        }
+    }
 }
 
-public enum BeanType {
+public enum BeanType <: ToString {
     /**
      * 不判断bean类型
      */
@@ -62,6 +71,17 @@ public enum BeanType {
      * bean定义的类型必须是指定类型的祖先类型
      */
     | SuperOfOnly(String)
+
+    public func toString(): String {
+        match(this){
+            case IgnoreType => "IgnoreType"
+            case Current(v) => "Current(${v})"
+            case CurrentOrSubOf(v) => "CurrentOrSubOf(${v})"
+            case SubOfOnly(v) => "SubOfOnly(${v})"
+            case CurrentOrSuperOf(v) => "CurrentOrSuperOf(${v})"
+            case SuperOfOnly(v) => "SuperOfOnly(${v})"
+        }
+    }
 
     public func on(beanType: TypeInfo) {
         match (this) {
@@ -89,6 +109,11 @@ public class BeanDef <: BeanCondition {
         public let count!: BeanDefCount = AtLeastOne,
         public let scope!: ?BeanScope = None
     ) {}
+
+    public func toString(): String {
+        'type: ${beanType}; name:${beanName}; count:${count}; scope:${scope}'
+    }
+
     public func on(factory: BeanFactory): Bool {
         match ((beanType, beanName)) {
             case (IgnoreType, IgnoreName) => return true //相当于没有指定bean初始化条件
