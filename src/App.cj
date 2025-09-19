@@ -32,6 +32,7 @@ import fountain.ticktock.Ticktock
  * App不会发生传参赋值，用命令行参数实例化后只调用boot函数。所以用struct比较合适，不会占用堆空间。
  */
 public struct App {
+    private let starts: DateTime = DateTime.now()
     private let args: Array<String>
     private let idx: Int64
     private let path: Path

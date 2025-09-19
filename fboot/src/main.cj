@@ -15,7 +15,7 @@ limitations under the License.
  */
 package fboot
 
-import fountain.App
+import fountain.*
 
 main(args: Array<String>): Int64 {
     App(args).boot()
