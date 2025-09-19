@@ -124,12 +124,11 @@ public struct App {
                 ''
             }
         }
-        let pattern = Regex('^lib.*(${extractPattern()}).*$')
-        func load(path: Path): Unit {
+        func load(path: Path, pattern: Regex): Unit {
             Directory.walk(path) {
                 fi =>
                 if (fi.isDirectory()) {
-                    load(fi.path)
+                    load(fi.path, pattern)
                 } else if (pattern.matches(fi.path.fileNameWithoutExtension)) {
                     PackageInfo.load(fi.path.toString().replace(ext, ''))
                 }
@@ -137,7 +136,7 @@ public struct App {
             }
         }
         if(dynamic){
-            load(path)
+            load(path, Regex('^lib.*(${extractPattern()}).*$'))
         }
         BeanFactory.instance.afterRegistered()
         Ticktock.getInstance(anyway: false)
