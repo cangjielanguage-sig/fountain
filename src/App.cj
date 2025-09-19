@@ -156,7 +156,7 @@ _/ ____\____  __ __  _____/  |______  |__| ____
  |  | (  <_> )  |  /   |  \  |  / __ \|  |   |  \
  |__|  \____/|____/|___|  /__| (____  /__|___|  /
                         \/          \/        \/'#)
-        println('${app} is started in ${end - start} on ${end} by fountain')
+        println('${app} is started by fountain in ${end - start} on ${end}')
         mvc?.start()
         0
     }
