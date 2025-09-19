@@ -20,11 +20,11 @@
 
 [target]
 [target.x86_64-unknown-linux-gnu]
-  compile-option = "-O2 --lto=full --static --dy-std"
-  override-compile-option = "-O2 --lto=full --static --dy-std"
+  compile-option = "-O2 --lto=full --static"
+  override-compile-option = "-O2 --lto=full --static"
 [target.aarch64-unknown-linux-gnu]
-  compile-option = "-O2 --lto=full --static --dy-std"
-  override-compile-option = "-O2 --lto=full --static --dy-std"
+  compile-option = "-O2 --lto=full --static"
+  override-compile-option = "-O2 --lto=full --static"
 [target.x86_64-w64-mingw32]
   compile-option = "-O2"
   override-compile-option = "-O2"
