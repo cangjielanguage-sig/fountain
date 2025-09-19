@@ -18,5 +18,5 @@ package fboot
 import fountain.*
 
 main(args: Array<String>): Int64 {
-    App(args).boot()
+    App(args, dynamic: true).boot()
 }

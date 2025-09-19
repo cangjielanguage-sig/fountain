@@ -40,7 +40,7 @@ public struct App {
     private let libPathName: String
     private let delim: String
 
-    public App(args: Array<String>, appHomeIsWorkingPath!: Bool = true, private let name!: String = '') {
+    public App(args: Array<String>, appHomeIsWorkingPath!: Bool = true, private let dynamic!: Bool = true, private let name!: String = '') {
         this.args = args
         var idx = -1
         for (i in 1..args.size where !args[i].startsWith("--dylibPattern=")) {
@@ -136,7 +136,9 @@ public struct App {
                 true
             }
         }
-        load(path)
+        if(dynamic){
+            load(path)
+        }
         BeanFactory.instance.afterRegistered()
         Ticktock.getInstance(anyway: false)
         let mvc = MVCStarter.initialize()
