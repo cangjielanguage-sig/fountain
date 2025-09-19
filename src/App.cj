@@ -28,7 +28,6 @@ import fountain.bean.BeanFactory
 import fountain.mvc.MVCStarter
 import fountain.ticktock.Ticktock
 
-private let starts = DateTime.now()
 /**
  * App不会发生传参赋值，用命令行参数实例化后只调用boot函数。所以用struct比较合适，不会占用堆空间。
  */
