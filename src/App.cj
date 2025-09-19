@@ -32,6 +32,7 @@ import fountain.ticktock.Ticktock
  * App不会发生传参赋值，用命令行参数实例化后只调用boot函数。所以用struct比较合适，不会占用堆空间。
  */
 public struct App {
+    private let starts = DateTime.now()
     private let args: Array<String>
     private let idx: Int64
     private let path: Path
@@ -112,7 +113,6 @@ public struct App {
         run(args)
     }
     private func run(args: Array<String>): Int64{
-        let start: DateTime = DateTime.now()
         func extractPattern() {
             if (idx > 0) {
                 let p = args[idx]['--dylibPattern='.size..]
@@ -149,14 +149,15 @@ public struct App {
             path.fileName.toString()
         }
         let end = DateTime.now()
-        println(#'
+        const fountain = #'
   _____                    __         .__
 _/ ____\____  __ __  _____/  |______  |__| ____
 \   __\/  _ \|  |  \/    \   __\__  \ |  |/    \
  |  | (  <_> )  |  /   |  \  |  / __ \|  |   |  \
  |__|  \____/|____/|___|  /__| (____  /__|___|  /
-                        \/          \/        \/'#)
-        println('${app} is started by fountain in ${end - start} on ${end}')
+                        \/          \/        \/'#
+        println(fountain)//fountain不能是多行插值串，因为有\_，编译器认为是错误的转义符。使用\\_就不好看了
+        println('${app} is started by fountain in ${end - starts} on ${end}')
         mvc?.start()
         0
     }
