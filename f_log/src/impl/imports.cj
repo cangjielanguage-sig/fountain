@@ -17,23 +17,19 @@ package f_log.impl
 
 internal import std.collection.HashMap
 internal import std.collection.concurrent.*
-internal import stdx.compress.zlib.{WrapType, CompressLevel, CompressOutputStream}
 internal import std.convert.*
-internal import std.fs.{File, Directory, OpenMode}
-internal import std.io.{SeekPosition, OutputStream}
-internal import std.math.MathExtension
-internal import std.net.{SocketNet, TcpSocket, UnixSocket, SocketKeepAliveConfig}
-internal import std.process.Process
+internal import std.io.OutputStream
+internal import std.net.{TcpSocket, UnixSocket, SocketKeepAliveConfig}
 internal import std.sync.Mutex
 internal import std.time.DateTime
-internal import stdx.log.{Attr, LogValue, Logger, LogRecord, LogWriter, NoopLogger, LogLevel}
+internal import stdx.log.LogLevel
 
 internal import f_base.*
 internal import f_collection.*
 internal import f_data.*
-internal import f_exception.*
+// internal import f_exception.*
 internal import f_log.exception.*
 internal import f_log.output.*
-internal import f_time.{TimeUnit, ExtendDateTime}
+internal import f_time.TimeUnit
 
 public import f_log.*

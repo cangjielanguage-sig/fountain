@@ -17,7 +17,6 @@ package f_log.output
 
 protected import std.io.OutputStream
 protected import std.net.{UnixDatagramSocket, SocketAddress}
-import std.process.Process
 import std.sync.AtomicUInt64
 
 protected class UnixDatagramOutputStream <: OutputStream & Resource {

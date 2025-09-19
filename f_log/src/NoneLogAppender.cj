@@ -15,7 +15,6 @@ limitations under the License.
  */
 package f_log
 
-import std.process.Process
 import std.time.DateTime
 import stdx.log.LogLevel
 import f_io.DummyOutputStream

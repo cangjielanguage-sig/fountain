@@ -17,8 +17,7 @@ package f_log
 
 import std.collection.ArrayList
 import std.env
-import std.process.Process
-import std.time.{DateTime, DateTimeFormat}
+import std.time.DateTime
 import stdx.log.{LogLevel, LogWriter}
 import f_base.OS
 

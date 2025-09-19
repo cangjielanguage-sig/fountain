@@ -20,13 +20,12 @@ import std.collection.concurrent.ArrayBlockingQueue
 import std.env
 import std.fs.{File, Directory, OpenMode, exists, rename, removeIfExists}
 import std.io.{SeekPosition, OutputStream}
-import std.math.MathExtension
-import std.sync.{Timer, Mutex, AtomicReference, AtomicUInt64}
+import std.sync.{Timer, Mutex}
 import std.time.DateTime
 import stdx.compress.zlib.{WrapType, CompressLevel, CompressOutputStream}
 import f_base.*
 import f_io.*
-import f_time.{TimeUnit, ExtendDateTime}
+import f_time.TimeUnit
 internal import f_log.exception.LogException
 
 public class RotatableFileParams <: Hashable & Equatable<RotatableFileParams> {

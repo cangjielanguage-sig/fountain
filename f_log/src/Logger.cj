@@ -21,7 +21,7 @@ import stdx.log.LogLevel
 import stdx.log.Logger as StdLogger
 import f_collection.LinkedHashMap
 import f_data.ObjectData
-import f_util.{TextTemplate, TextTemplateKey, TextTemplateObject}
+import f_util.TextTemplate
 
 /**
  * 函数logLevelEnabled和各种日志级别的Enabled属性，不必在应用代码中显式调用，本日志框架记录日志前已做过判断

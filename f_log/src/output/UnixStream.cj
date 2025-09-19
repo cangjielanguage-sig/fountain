@@ -17,8 +17,6 @@ package f_log.output
 
 protected import std.io.OutputStream
 protected import std.net.{UnixSocket, SocketAddress, UnixSocketAddress}
-import std.process.Process
-import std.sync.AtomicUInt64
 
 protected class UnixOutputStream <: OutputStream & Resource {
     private static func newSocket(addr: UnixSocketAddress, writeTimeout: ?Duration) {
