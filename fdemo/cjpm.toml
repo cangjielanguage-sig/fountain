@@ -1,20 +1,10 @@
 [dependencies]
   fountain = {path = "../"}
-  f_log = {path = "../f_log"}
-  f_time = {path = "../f_time"}
 
-[package]
-  cjc-version = "1.0.0"
-  compile-option = "-O2"
-  description = "nothing here"
-  link-option = ""
-  name = "fdemo"
-  output-type = "executable"
-  override-compile-option = "-O2"
-  src-dir = ""
-  target-dir = ""
-  version = "1.0.0"
-  package-configuration = {}
+[workspace]
+  members=["./user"] 
+  compile-option = "-O2 --lto=full --dy-std"
+  override-compile-option = "-O2 --lto=full --dy-std"
 
 [profile.build]
   incremental = true

@@ -22,11 +22,11 @@ internal import std.env.*
 internal import std.process.Process
 internal import std.reflect.*
 internal import std.sync.{AtomicInt64, AtomicBool, AtomicOptionReference, Mutex}
-internal import f_base.*
 internal import f_config.Config
 internal import f_data.*
 internal import f_regex.*
 public import std.collection.HashMap
+public import f_base.*
 public import f_bean.exception.*
 
 public const SHOULD_INIT_BEAN_CONF_KEY = 'shouldInitBean'

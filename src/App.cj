@@ -47,11 +47,11 @@ public struct App {
             idx = i
             break
         }
-        this.idx = idx
+        this.idx = idx + 1
         path = canonicalize(
-            if (idx > 1 && !(args[0] == 'restart' || args[0] == 'shutdown' || args[0] == 'rerun')) {
+            if (idx >= 1 && !(args[0] == 'restart' || args[0] == 'shutdown' || args[0] == 'rerun')) {
                 Path(args[1])
-            } else if (idx > 2 && !(args[0] == 'restart' || args[0] == 'shutdown' || args[0] == 'rerun')) {
+            } else if (idx >= 2 && !(args[0] == 'restart' || args[0] == 'shutdown' || args[0] == 'rerun')) {
                 Path(args[2])
             } else if (appHomeIsWorkingPath) {
                 getWorkingDirectory()

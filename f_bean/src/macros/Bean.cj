@@ -100,13 +100,18 @@ public macro Bean(attr: Tokens, input: Tokens): Tokens {
             $(`nl`)
             private let _ = {=>
                 $ctorTokens
-                var constructor = None<() -> $beanType>
-                for ((n, f) in ctors where TypeInfos.withAnnotation<$beanType, Constructor>(n, [])) {
-                    constructor = n
-                    break
-                }
-                if (constructor.isNone() && let Some(f) <- ctors.get("init")) {
-                    constructor = f
+                var constructor = if (ctors.isEmpty()) {
+                    {=> $beanType()}
+                } else {
+                    var ctor = None<() -> $beanType>
+                    for ((n, f) in ctors where TypeInfos.withAnnotation<$beanType, Constructor>(n, [])) {
+                        ctor = f
+                        break
+                    }
+                    if (ctor.isNone() && let Some(f) <- ctors.get("init")) {
+                        ctor = f
+                    }
+                    ctor
                 }
                 BeanFactory.instance.register<$beanType>(constructor.getOrThrow{
                     let beanTypeName = $(beanType.toString())
