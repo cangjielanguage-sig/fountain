@@ -13,19 +13,16 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package user.service.impl
+package fdemo
 
-import std.reflect.*
-
-import fountain.bean.*
-import fountain.bean.macros.*
 import user.service.*
+import user.service.impl.*
+import fountain.bean.*
 
-@Bean
-//@BeanMeta
-public class UserServiceImpl <: UserService {
-    public func register(username: String, password: String): Int64 {
-        println('username: ${username}, password: ${password}')
-        0
-    }
+main(args: Array<String>): Unit {
+    BeanFactory.instance.afterRegistered()
+    println('OK')
+    let u = lookup<UserService>()
+    println(TypeInfo.of(u))
+    println(u.register('fountain', '123456'))
 }
