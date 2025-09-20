@@ -122,7 +122,7 @@ public class RequestMeta <: HttpRequestHandler & ToString {
     public func multipart<T>(ctx: HttpContext, name: String): T where T <: ObjectData<T> & DataFields<T> {
         (args[name] as MultipartFormData)
             .getOrThrow()
-            .multipart<T>(name, ctx, pattern.getOrThrow())
+            .multipart<T>(ctx, pattern.getOrThrow())
             .getOrThrow {MVCException('controller func ${name} and request body do not match')}
     }
     private func addMediaTypes(set: HashSet<String>, types: Array<String>, allowAny: Bool): Unit {

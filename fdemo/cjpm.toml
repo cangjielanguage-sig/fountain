@@ -1,5 +1,7 @@
 [dependencies]
   fountain = {path = "../"}
+#  mysql = {git = "https://gitcode.com/Cangjie-TPC/mysqlclient-ffi.git"}
+  mysql = {git = "https://gitcode.com/Cangjie-SIG/mysql-driver.git"}
 
 #[package]
 #  cjc-version = "1.0.0"
@@ -15,7 +17,7 @@
 #  package-configuration = {}
 
 [workspace]
-  members=["./user"] 
+  members=["./common", "./user"]
   compile-option = "-O2 --lto=full --dy-std"
   override-compile-option = "-O2 --lto=full --dy-std"
 

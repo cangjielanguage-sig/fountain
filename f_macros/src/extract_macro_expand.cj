@@ -95,7 +95,7 @@ public func extractIfOneOf(expr: MacroExpandExpr, macroNames: Set<String>): ?(Ma
 
 public func extract(param: MacroExpandParam): FuncParam {
     var p: FuncParam = param
-    while (let m: MacroExpandParam <- param && let pin: FuncParam <- m.macroInputDecl) {
+    while (let m: MacroExpandParam <- p && let pin: FuncParam <- m.macroInputDecl) {
         p = pin
     }
     p

@@ -13,22 +13,18 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package user.service.impl
+package common
 
-import std.reflect.*
+import std.database.sql.*
+import mysql.cdbc.*
+import fountain.orm.{ORM, NamedDatasource}
 
-import fountain.bean.*
-import fountain.bean.macros.*
-import fountain.orm.*
-import user.service.UserService
-import user.dao.UserDAO
-
-@Bean
-@BeanMeta
-public class UserServiceImpl <: UserService {
-    public func register(username: String, password: String): Int64 {
-        println('username: ${username}, password: ${password}')
-        executor().register(username, password)
-        0
-    }
-}
+private let _ = {=>
+    let driver = DriverManager.getDriver("mysql").getOrThrow()
+    let property1 = ("username", "test_user")
+    let property2 = ("password", "test_user")
+    let property3 = ("database", "driver_test")
+    let ds = driver.open("mysql://localhost", [property1, property2, property3])
+    let pool = PooledDatasource(ds)
+    ORM.register(NamedDatasource(true, driver.name, pool))
+}()

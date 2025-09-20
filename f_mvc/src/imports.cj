@@ -29,8 +29,6 @@ internal import std.sync.*
 internal import std.time.{DateTime, MonoTime}
 internal import stdx.encoding.base64.*
 internal import stdx.encoding.hex.*
-internal import stdx.encoding.url.*
-internal import stdx.net.http.*
 internal import stdx.net.tls.*
 internal import stdx.crypto.x509.*
 internal import charset4cj.charset.encoding.Charset
@@ -45,5 +43,7 @@ internal import f_log.LoggerFactory
 internal import f_random.RandomString
 internal import f_regex.*
 internal import f_mvc.exception.*
+public import stdx.encoding.url.*
+public import stdx.net.http.*
 public import f_base.*
 public import f_util.PathPattern

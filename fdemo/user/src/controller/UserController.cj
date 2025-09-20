@@ -21,12 +21,12 @@ import fountain.mvc.*
 import fountain.mvc.macros.*
 import user.service.UserService
 
-// @Controller
-// public class UserController {
-//     private let userService = lookup<UserService>()
+@Controller
+public class UserController {
+    private let userService = lookup<UserService>()
 
-//     @PostMapping[path:'/api/user/register', consumes:'application/x-www-form-urlencoded', produces:'text/plain']
-//     public func register(@RequestParam username: String, @RequestParam password: String): String {
-//         userService.register(username, password).toString()
-//     }
-// }
+    @PostMapping[path:'/api/user/register', consumes:'application/x-www-form-urlencoded', produces:'text/plain']
+    public func register(@RequestParam username: String, @RequestParam password: String): String {
+        userService.register(username, password).toString()
+    }
+}

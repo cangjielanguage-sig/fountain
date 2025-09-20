@@ -30,7 +30,7 @@ abstract class ControllerFuncParam {
     }
 }
 
-@Annotation[target: [MemberFunction]]
+@Annotation[target: [Parameter]]
 public class RequestParam <: ControllerFuncParam {
     public const init() {}
     protected func extract<T>(name: String, ctx: HttpContext, pattern: HttpRequestPathPatterns): ?T where T <: DataFields<T> {
@@ -57,7 +57,7 @@ public class RequestParam <: ControllerFuncParam {
     }
 }
 
-@Annotation[target: [MemberFunction]]
+@Annotation[target: [Parameter]]
 public class PathVariable <: ControllerFuncParam {
     public const init() {}
     protected func extract<T>(name: String, ctx: HttpContext, pattern: HttpRequestPathPatterns): ?T where T <: DataFields<T> {
@@ -70,7 +70,7 @@ public class PathVariable <: ControllerFuncParam {
     }
 }
 
-@Annotation[target: [MemberFunction]]
+@Annotation[target: [Parameter]]
 public class RequestHeader <: ControllerFuncParam {
     public const init() {}
     protected func extract<T>(name: String, ctx: HttpContext, pattern: HttpRequestPathPatterns): ?T where T <: DataFields<T> {
@@ -84,7 +84,7 @@ public class RequestHeader <: ControllerFuncParam {
     }
 }
 
-@Annotation[target: [MemberFunction]]
+@Annotation[target: [Parameter]]
 public class RequestBody <: ControllerFuncParam {
     public const init() {}
     protected func extract<T>(name: String, ctx: HttpContext, pattern: HttpRequestPathPatterns): ?T where T <: DataFields<T> {
@@ -96,14 +96,14 @@ public class RequestBody <: ControllerFuncParam {
     }
 }
 
-@Annotation[target: [MemberFunction]]
+@Annotation[target: [Parameter]]
 public class MultipartFormData <: ControllerFuncParam {
     public const init() {}
 
     protected func extract<T>(name: String, ctx: HttpContext, pattern: HttpRequestPathPatterns): ?T where T <: DataFields<T> {
         throw MVCException()
     }
-    public func multipart<T>(name: String, ctx: HttpContext, pattern: HttpRequestPathPatterns): ?T where T <: ObjectData<T> & DataFields<T> {
+    public func multipart<T>(ctx: HttpContext, pattern: HttpRequestPathPatterns): ?T where T <: ObjectData<T> & DataFields<T> {
         let multiparts = MultipartFormDataParser(ctx).parse()
         let fields = T.dataFields()
         let object = fields.create()

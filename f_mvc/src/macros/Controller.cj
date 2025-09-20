@@ -15,6 +15,8 @@ limitations under the License.
  */
 macro package f_mvc.macros
 
+import std.reflect.*
+
 /**
  * http mvc控制器的宏。请确保作为控制器的类型一定是class，且只有作为请求处理的函数是公共的。
  * 请求处理函数只接收实现了接口fountain.data.DataFields<T>的类型或HttpContext HttpHeaders HttpRequest HttpResponseBuilderw做参数
@@ -36,14 +38,11 @@ private func generate(input: Tokens): Tokens {
     let decl = match(parseDecl(input)){
         case x: ClassDecl => x
         case x: MacroExpandDecl => 
-            var y = x
-            while(let m: MacroExpandDecl <- y.macroInputDecl) {
-                y = m
-            }
-            if(let d: ClassDecl <- y.macroInputDecl) {
-                d
+            let d = extract(x)
+            if(let cd: ClassDecl <- d) {
+                cd
             }else{
-                diagReport(ERROR, y.macroInputs, 'illegal decl', '')
+                diagReport(ERROR, d.toTokens(), 'illegal decl', '')
                 return input
             }
         case _ => 
@@ -59,7 +58,7 @@ private func generate(input: Tokens): Tokens {
                     let fname = $(f.identifier.value)
                     let metas = MVCStarter.generateAndRegister<$klass>($(f.identifier.value), $argTypes)
                     for(meta in metas){
-                        meta.setHandle{controller, ctx, patterns => 
+                        meta.setHandle{controller: $klass, ctx: HttpContext, patterns: HttpRequestPathPatterns => 
                             $argExprs
                             controller.$(f.identifier)($args)
                         }
@@ -73,10 +72,14 @@ private func generate(input: Tokens): Tokens {
 }
 
 private func generateArgs(decl: FuncDecl): (Tokens, Tokens, Tokens) {
-    let argTypes = `lsquare`
-    let exprs = `empty_tokens`
-    let args = `lsquare`
-    for (p in decl.funcParams) {
+    let argTypes = quote([)
+    let exprs = quote()
+    let args = quote()
+    for (fp in decl.funcParams) {
+        let p: FuncParam = match(fp){
+            case x: MacroExpandParam => extract(x)
+            case x => x
+        }
         let pname = p.identifier.value
         let ptype = p.paramType
         let defaultValue = try {
@@ -85,21 +88,17 @@ private func generateArgs(decl: FuncDecl): (Tokens, Tokens, Tokens) {
             `empty_tokens`
         }
         let default = if (defaultValue.size > 0) {
-            quote(, $defaultValue)
+            quote($defaultValue)
         } else {
-            quote(None<T>)
+            quote(None<$ptype>)
         }
         exprs.append(quote(
-            let $(p.identifier) = if(isMultipart(name)){
-                (multipart<$ptype>(ctx, name) as $ptype).getOrThrow()
-            }else{
-                match(None<$ptype>){
-                    case x: ?HttpContext => (ctx as $ptype).getOrThrow()
-                    case x: ?HttpRequest => (ctx.request as $ptype).getOrThrow()
-                    case x: ?HttpHeaders => (ctx.request.headers as $ptype).getOrThrow()
-                    case _: ?HttpResponseBuilder => (ctx.responseBuilder as $ptype).getOrThrow()
-                    case _ => (meta.extract<$ptype>(ctx, $pname $default) as $ptype).getOrThrow()
-                }
+            let $(p.identifier) = match(None<$ptype>){
+                case x: ?HttpContext => (ctx as $ptype).getOrThrow()
+                case x: ?HttpRequest => (ctx.request as $ptype).getOrThrow()
+                case x: ?HttpHeaders => (ctx.request.headers as $ptype).getOrThrow()
+                case _: ?HttpResponseBuilder => (ctx.responseBuilder as $ptype).getOrThrow()
+                case _ => (meta.extract<$ptype>(ctx, $pname, $default) as $ptype).getOrThrow()
             }
             $(`nl`)
         ))
@@ -120,10 +119,9 @@ private func generateArgs(decl: FuncDecl): (Tokens, Tokens, Tokens) {
             argTypes.append(`comma`)
         }
         argTypes.append(quote(
-            TypeInfos.get<$(p.paramType)>()
+            TypeInfos.get<$(ptype)>()
         ))
     }
     argTypes.append(`rsquare`)
-    args.append(`rsquare`)
     (argTypes, exprs, args)
 }
