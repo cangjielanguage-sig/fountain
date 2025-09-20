@@ -93,21 +93,23 @@ public macro DAO(input: Tokens): Tokens {
     match(parseDecl(input)){
         case d: InterfaceDecl => 
             let name = d.identifier
-            input + `nl` + quote(
+            quote(
+                $input
                 extend SqlExecutor <: $(name){}
             )
         case d: MacroExpandDecl => 
-            var m = d
-            while(let md: MacroExpandDecl <- m.macroInputDecl){
-                m = md
+            match(extract(d)){
+                case x: InterfaceDecl => 
+                    quote(
+                        $input
+                        extend SqlExecutor <: $(x.identifier){}
+                    )
+                case _ => 
+                    diagReport(ERROR, input,
+                    'input must be interface decl',
+                    '')
+                    throw IllegalArgumentException("input must be a interface decl")
             }
-            let tokens = quote(
-                @DAO
-                $(m.macroInputs)
-            )
-            m.macroInputs = tokens
-            m.macroInputDecl = parseDecl(tokens)
-            return d.toTokens()
         case _ => 
             diagReport(ERROR, input,
             'input must be interface decl',

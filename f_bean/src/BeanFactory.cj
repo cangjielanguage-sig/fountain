@@ -63,9 +63,9 @@ public class BeanFactory {
                     }
                     .add(manager)
                 if (!klass.isSubtypeOf(TypeInfos.get<Annotation>())) {
-                //     for (annotation in klass.annotations) {//todo klass.annotations会core dump
-                //         typeQueue.addLast(ClassTypeInfo.of(annotation))
-                //     }
+                    // for (annotation in klass.annotations) {//todo klass.annotations会core dump
+                    //     typeQueue.addLast(ClassTypeInfo.of(annotation))
+                    // }
                 }
                 if(klass != any){
                     for (superInterface in klass.superInterfaces where superInterface != any) {

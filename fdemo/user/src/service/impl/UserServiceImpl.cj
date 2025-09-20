@@ -20,10 +20,11 @@ import std.reflect.*
 import fountain.bean.*
 import fountain.bean.macros.*
 import fountain.orm.*
-import user.service.*
+import user.service.UserService
+import user.dao.UserDao
 
 @Bean
-//@BeanMeta
+@BeanMeta
 public class UserServiceImpl <: UserService {
     public func register(username: String, password: String): Int64 {
         println('username: ${username}, password: ${password}')
