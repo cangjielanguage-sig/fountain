@@ -49,8 +49,10 @@ public class BeanFactory {
             }
             let typeQueue = LinkedList<TypeInfo>()
             typeQueue.addLast(beanType)
-            typeQueue.addLast(TypeInfos.get<Any>())
-            typeQueue.addLast(TypeInfos.get<Object>())
+            let any = TypeInfos.get<Any>()
+            let object = TypeInfos.get<Object>()
+            typeQueue.addLast(any)
+            typeQueue.addLast(object)
             while (let Some(klass) <- typeQueue.removeFirst()) {
                 if (let Some(set) <- beanTypeMap.get(klass)) {
                         set
@@ -61,14 +63,16 @@ public class BeanFactory {
                     }
                     .add(manager)
                 if (!klass.isSubtypeOf(TypeInfos.get<Annotation>())) {
-                    for (annotation in klass.annotations) {
-                        typeQueue.addLast(ClassTypeInfo.of(annotation))
+                //     for (annotation in klass.annotations) {//todo klass.annotations会core dump
+                //         typeQueue.addLast(ClassTypeInfo.of(annotation))
+                //     }
+                }
+                if(klass != any){
+                    for (superInterface in klass.superInterfaces where superInterface != any) {
+                        typeQueue.addLast(superInterface)
                     }
                 }
-                for (superInterface in klass.superInterfaces) {
-                    typeQueue.addLast(superInterface)
-                }
-                if (let s: ClassTypeInfo <- klass && let Some(sc) <- s.superClass) {
+                if (klass != object && let s: ClassTypeInfo <- klass && let Some(sc) <- s.superClass && sc != object) {
                     typeQueue.addLast(sc)
                 }
             }

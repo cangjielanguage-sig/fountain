@@ -13,16 +13,18 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package fdemo
+package user.dao
 
-import user.service.*
-import user.service.impl.*
-import fountain.bean.*
+import fountain.orm.*
+import fountain.orm.macros.*
 
-main(args: Array<String>): Unit {
-    BeanFactory.instance.afterRegistered()
-    println('OK')
-    let u = lookup<UserService>()
-    println(TypeInfo.of(u))
-    println(u.register('fountain', '123456'))
+@DAO
+public interface UserDAO <: RootDAO {
+    func register(username: String, password: String): Int64 {
+        executor.setSql('''
+            insert into user_info
+                    set username = ${arg(username)},
+                        password = ${arg(password)}'''
+        ).insert
+    }
 }

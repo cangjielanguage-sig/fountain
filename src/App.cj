@@ -21,6 +21,7 @@ import std.env.{getWorkingDirectory, getVariables, getCommand, getVariables}
 import std.fs.*
 import std.process.{execute, findProcess, Process, ProcessException}
 import std.reflect.PackageInfo
+import std.reflect.TypeInfo
 import std.regex.Regex
 import std.time.DateTime
 import fountain.base.{OS, StringGenerator}
@@ -42,7 +43,7 @@ public struct App {
 
     public App(args: Array<String>, appHomeIsWorkingPath!: Bool = true, private let dynamic!: Bool = true, private let name!: String = '') {
         this.args = args
-        var idx = -1
+        var idx = 0
         for (i in 1..args.size where !args[i].startsWith("--dylibPattern=")) {
             idx = i
             break
@@ -139,6 +140,7 @@ public struct App {
             load(path, Regex('^lib.*(${extractPattern()}).*$'))
         }
         BeanFactory.instance.afterRegistered()
+        let beans = BeanFactory.instance.getList<Object>()
         Ticktock.getInstance(anyway: false)
         let mvc = MVCStarter.initialize()
         //orm 需要应用开发者显式注册数据库驱动及初始化事务切面，

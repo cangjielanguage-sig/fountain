@@ -15,6 +15,8 @@ limitations under the License.
 */
 package user.service
 
-public interface UserService {
+import fountain.orm.RootService
+
+public interface UserService <: RootService {
     func register(username: String, password: String): Int64
 }
