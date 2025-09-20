@@ -1,5 +1,18 @@
 [dependencies]
   fountain = {path = "../"}
+#  user = {path = "./user"}
+#[package]
+#  cjc-version = "1.0.0"
+#  compile-option = "-O2 --lto=full --dy-std"
+#  description = "utility for server app development"
+#  link-option = ""
+#  name = "fountain"
+#  output-type = "executable"
+#  override-compile-option = "-O2 --lto=full --dy-std"
+#  src-dir = ""
+#  target-dir = ""
+#  version = "1.0.0"
+#  package-configuration = {}
 
 [workspace]
   members=["./user"] 

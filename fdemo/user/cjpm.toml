@@ -11,4 +11,5 @@
   link-option = ""
   package-configuration = {}
 
-[dependencies]
+#[dependencies]
+#  fountain = {path = "../../"}
