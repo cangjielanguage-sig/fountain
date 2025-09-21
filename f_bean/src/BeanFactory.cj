@@ -205,12 +205,11 @@ public class BeanFactory {
     }
     public func getList<T>(beanType: TypeInfo, cond!: StringCond = IgnoreCond): ArrayList<T> {
         let list = ArrayList<T>()
-        func put(m: BeanManager) {
-            if (let b: T <- m.bean) {
+        getAll<T>(beanType, cond){bm: BeanManager =>
+            if (let b: T <- bm.bean) {
                 list.add(b)
             }
         }
-        getAll<T>(beanType, cond, put)
         list
     }
     public func getMap<T>(cond!: StringCond = IgnoreCond): HashMap<String, T> {
