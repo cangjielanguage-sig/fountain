@@ -217,12 +217,11 @@ public class BeanFactory {
     }
     public func getMap<T>(beanType: TypeInfo, cond!: StringCond = IgnoreCond): HashMap<String, T> {
         let map = HashMap<String, T>()
-        func put(m: BeanManager) {
+        getAll<T>(beanType, cond){m: BeanManager => 
             if (let b: T <- m.bean) {
                 map[m.name] = b
             }
         }
-        getAll<T>(beanType, cond, put)
         map
     }
 
