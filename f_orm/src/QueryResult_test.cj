@@ -15,9 +15,7 @@ limitations under the License.
  */
 package f_orm
 
-import std.random.Random
-
-public class QueryResultTest <: QueryResultWrap {
+public class QueryResultTest <: QueryResult {
     public func isClosed(): Bool {
         false
     }
@@ -64,5 +62,29 @@ public class QueryResultTest <: QueryResultWrap {
             j++
         }
         true
+    }
+    private var row = 0
+    public func next(): Bool {
+        row++
+        row < 4
+    }
+    public func get<T>(index: Int): T {
+        getOrNull<T>(index).getOrThrow()
+    }
+    public func getOrNull<T>(index: Int): ?T {
+        match(None<T>){
+            case _: Int64 => 
+                i++
+                i as T
+            case _: String => 
+                s+='s'
+                s as T
+            case _: Bool =>
+                b = !b
+                b as T
+            case _: DateTime => 
+                DateTime.now() as T
+            case _ => throw Exception("get error")
+        }
     }
 }

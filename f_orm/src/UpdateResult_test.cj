@@ -12,17 +12,18 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
- */
+*/
 package f_orm
 
-import std.unittest.*
-import std.unittest.testmacro.*
-internal import f_orm.wrap.*
-
-@Test
-public class ORMTest {
-    @TestCase
-    public func test(): Unit {
-        // topTest()
+public class UpdateResultTest <: UpdateResult {
+    public prop lastInsertId: Int64{
+        get(){
+            1
+        }
+    }
+    public prop rowCount: Int64{
+        get(){
+            1
+        }
     }
 }

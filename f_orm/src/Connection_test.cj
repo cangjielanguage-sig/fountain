@@ -12,17 +12,28 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
- */
+*/
 package f_orm
 
-import std.unittest.*
-import std.unittest.testmacro.*
-internal import f_orm.wrap.*
+import std.collection.*
 
-@Test
-public class ORMTest {
-    @TestCase
-    public func test(): Unit {
-        // topTest()
+public class ConnectionTest <: Connection {
+    public prop state: ConnectionState{
+        get(){
+            Connected
+        }
+    }
+    public func createTransaction(): Transaction {
+        TransactionTest()
+    }
+    public func getMetaData(): Map<String, String>{
+        HashMap<String, String>()
+    }
+    public func prepareStatement(sql: String): Statement{
+        StatementTest()
+    }
+    public func close(): Unit {}
+    public func isClosed(): Bool {
+        false
     }
 }

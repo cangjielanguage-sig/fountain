@@ -90,30 +90,24 @@ import f_macros.*
 //        }
 //    }
 public macro DAO(input: Tokens): Tokens {
-    match(parseDecl(input)){
-        case d: InterfaceDecl => 
-            let name = d.identifier
-            quote(
-                $input
-                extend SqlExecutor <: $(name){}
-            )
-        case d: MacroExpandDecl => 
-            match(extract(d)){
-                case x: InterfaceDecl => 
-                    quote(
-                        $input
-                        extend SqlExecutor <: $(x.identifier){}
-                    )
-                case _ => 
-                    diagReport(ERROR, input,
-                    'input must be interface decl',
-                    '')
-                    throw IllegalArgumentException("input must be a interface decl")
-            }
-        case _ => 
-            diagReport(ERROR, input,
-            'input must be interface decl',
-            '')
-            throw IllegalArgumentException("input must be a interface decl")
+    match (parseDecl(input)) {
+        case d: InterfaceDecl => expand(d)
+        case d: MacroExpandDecl => match (extract(d)) {
+            case x: InterfaceDecl => expand(x)
+            case _ => reportError(input)
+        }
+        case _ => reportError(input)
     }
+}
+
+private func expand(d: InterfaceDecl) {
+    quote(
+        $input
+        extend SqlExecutor <: $(d.identifier){}
+    )
+}
+
+private func reportError(input: Tokens) {
+    diagReport(ERROR, input, 'input must be interface decl', '')
+    throw IllegalArgumentException("input must be a interface decl")
 }
