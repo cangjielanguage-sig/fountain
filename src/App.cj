@@ -32,7 +32,7 @@ import fountain.ticktock.Ticktock
 /**
  * App不会发生传参赋值，用命令行参数实例化后只调用boot函数。所以用struct比较合适，不会占用堆空间。
  */
-public struct App {
+public open class App {
     private let starts: DateTime = DateTime.now()
     private let args: Array<String>
     private let idx: Int64
@@ -145,18 +145,8 @@ public struct App {
         //orm 需要应用开发者显式注册数据库驱动及初始化事务切面，
         //执行load函数时一定会加载初始化orm的动态链接库从而完成初始化
         //其它模块是工具API没有专门的初始化API
-        let app = if (name.size > 0) {
-            name
-        } else {
-            path.fileName.toString()
-        }
-        let version = if(let Some(v) <- Config.getString('${app}_version')){
-            v
-        }else if(let Some(v) <- Config.getString('version')){
-            v
-        }else{
-            ''
-        }
+        let app = this.app
+        let version = version(app)
         let end = DateTime.now()
         const fountain = #'
   _____                    __         .__
@@ -169,6 +159,24 @@ _/ ____\____  __ __  _____/  |______  |__| ____
         println('${app}${version} is started by fountain in ${end - starts} on ${end}')
         mvc?.start()
         0
+    }
+    private prop app: String {
+        get() {
+            if (name.size > 0) {
+                name
+            } else {
+                path.fileName.toString()
+            }
+        }
+    }
+    protected static func version(app: String): String {
+        if(let Some(v) <- Config.getString('${app}_version')){
+            v
+        }else if(let Some(v) <- Config.getString('version')){
+            v
+        }else{
+            ''
+        }
     }
     private func pid() {
         Int64.parse(args[1])
