@@ -22,10 +22,13 @@ import fountain.bean.macros.*
 import fountain.orm.*
 import user.service.UserService
 import user.dao.UserDAO
+import fountain.log.*
+
 
 @Bean
 @BeanMeta
 public class UserServiceImpl <: UserService {
+    private static let log = LoggerFactory.getLogger<UserServiceImpl>()
     public func register(username: String, password: String): Int64 {
         println('username: ${username}, password: ${password}')
         executor().register(username, password)
