@@ -21,11 +21,11 @@ import std.env.{getWorkingDirectory, getVariables, getCommand, getVariables}
 import std.fs.*
 import std.process.{execute, findProcess, Process, ProcessException}
 import std.reflect.PackageInfo
-import std.reflect.TypeInfo
 import std.regex.Regex
 import std.time.DateTime
 import fountain.base.{OS, StringGenerator}
 import fountain.bean.BeanFactory
+import fountain.config.Config
 import fountain.mvc.MVCStarter
 import fountain.ticktock.Ticktock
 
@@ -159,7 +159,7 @@ _/ ____\____  __ __  _____/  |______  |__| ____
  |__|  \____/|____/|___|  /__| (____  /__|___|  /
                         \/          \/        \/'#
         println(fountain)//fountain不能是多行插值串，因为有\_，编译器认为是错误的转义符。使用\\_就不好看了
-        println('${app} is started by fountain in ${end - starts} on ${end}')
+        println('${app} ${Config.getString('version')} is started by fountain in ${end - starts} on ${end}')
         mvc?.start()
         0
     }
