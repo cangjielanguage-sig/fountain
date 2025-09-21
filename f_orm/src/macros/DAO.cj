@@ -91,16 +91,16 @@ import f_macros.*
 //    }
 public macro DAO(input: Tokens): Tokens {
     match (parseDecl(input)) {
-        case d: InterfaceDecl => expand(d)
+        case d: InterfaceDecl => expand(d, input)
         case d: MacroExpandDecl => match (extract(d)) {
-            case x: InterfaceDecl => expand(x)
+            case x: InterfaceDecl => expand(x, input)
             case _ => reportError(input)
         }
         case _ => reportError(input)
     }
 }
 
-private func expand(d: InterfaceDecl) {
+private func expand(d: InterfaceDecl, input: Tokens): Tokens {
     quote(
         $input
         extend SqlExecutor <: $(d.identifier){}
