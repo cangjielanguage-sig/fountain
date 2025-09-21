@@ -19,7 +19,6 @@ import std.collection.{HashMap, Map, HashSet}
 import std.collection.concurrent.ConcurrentHashMap
 import std.convert.Parsable
 import std.env
-import std.sync.Mutex
 import std.time.DateTime
 import f_data.DataParsable
 
@@ -38,59 +37,52 @@ public class Config {
     private static let prefix = 'fountain'
     private static let ARGS = ConcurrentHashMap<String, String>()
     private static let REFRESHER = ConcurrentHashMap<String, () -> Unit>()
-    private static let mutex = Mutex()
-    private static func doInit() {
-        //这一段曾经是静态初始化器，这个静态初始化器会导致f_orm.macros.DAO展开时编译错误。所以把它改成静态函数。
-        //将来编译修复这个问题以后再改回静态初始化器。
-        synchronized(mutex){
-            if(ARGS.size > 0) {
-                return
-            }
-            for ((k, v) in env.getVariables()) {
-                ARGS[k] = v
-            }
-            let args = env.getCommandLine()[1..]
-            var i = 0
-            while (i < args.size) {
-                let arg = args[i]
-                if (arg.startsWith('--')) {
-                    if (let Some(idx) <- arg.indexOf('=')) {
-                        let key = arg[2..idx].trimAscii()
-                        let val = arg[idx + 1..].trimAscii()
-                        ARGS[key] = val
-                    } else {
-                        let key = arg[2..].trimAscii()
-                        ARGS[key] = 'true'
-                    }
-                } else if (arg.startsWith('-')) {
-                    let key = arg[1..].trimAscii()
-                    ARGS[key] = if (i < args.size) {
-                        let val = args[i + 1].trimAscii()
-                        if (val.startsWith('-')) {
-                            'true'
-                        } else {
-                            i++
-                            val
-                        }
-                    } else {
-                        'true'
-                    }
+    static init() {
+        for ((k, v) in env.getVariables()) {
+            ARGS[k] = v
+        }
+        let args = env.getCommandLine()[1..]
+        var i = 0
+        while (i < args.size) {
+            let arg = args[i]
+            if (arg.startsWith('--')) {
+                let (key, val) = 
+                if (let Some(idx) <- arg.indexOf('=')) {
+                    let key = arg[2..idx].trimAscii()
+                    let val = arg[idx + 1..].trimAscii()
+                    (key, val)
+                } else {
+                    let key = arg[2..].trimAscii()
+                    (key, 'true')
                 }
-                i++
+                ARGS[key] = val
+            } else if (arg.startsWith('-')) {
+                let key = arg[1..].trimAscii()
+                let val = if (i + 1 < args.size) {
+                    let val = args[i + 1].trimAscii()
+                    if (val.startsWith('-')) {
+                        'true'
+                    } else {
+                        i++
+                        val
+                    }
+                } else {
+                    'true'
+                }
+                ARGS[key] = val
             }
+            i++
         }
     }
     private init() {}
 
     public static func refresher(prefix: String, fn: () -> Unit) {
-        doInit()
         REFRESHER['${prefix}_'] = fn
     }
     /**
      * ifAbsent是true，只有当前配置项不存在时才添加，否则用新的配置覆盖旧的
      */
     public static func set<T>(tuples: Array<(String, T)>, ifAbsent!: Bool = false): Unit where T <: ToString {
-        doInit()
         let set = HashSet<String>()
         for (tpl in tuples) {
             let name = tpl[0]
@@ -114,7 +106,6 @@ public class Config {
 
     }
     public static func getAll(prefix: String): Map<String, String> {
-        doInit()
         let map = HashMap<String, String>()
         for ((k, v) in ARGS where k.startsWith('${prefix}_') || k.startsWith('${Config.prefix}_${prefix}_')) {
             map[k] = v
@@ -122,7 +113,6 @@ public class Config {
         map
     }
     public static func getString(key: String): ?String {
-        doInit()
         if (let Some(v) <- ARGS.get(key)) {
             v
         } else {
