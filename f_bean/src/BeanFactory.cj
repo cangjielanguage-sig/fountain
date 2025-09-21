@@ -173,7 +173,7 @@ public class BeanFactory {
     }
     private func beanTypeIs<T>(beanType: TypeInfo) {
         if (!beanType.isSubtypeOf(TypeInfos.get<T>())) {
-            throw BeanException('${beanType} is sub type of ${TypeInfos.get<T>()}')
+            throw BeanException('${beanType} is not sub type of ${TypeInfos.get<T>()}')
         }
     }
     public func getFirst<T>(beanType: TypeInfo, cond!: StringCond = IgnoreCond): ?T {

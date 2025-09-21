@@ -140,7 +140,6 @@ public struct App {
             load(path, Regex('^lib.*(${extractPattern()}).*$'))
         }
         BeanFactory.instance.afterRegistered()
-        let beans = BeanFactory.instance.getList<Object>()
         Ticktock.getInstance(anyway: false)
         let mvc = MVCStarter.initialize()
         //orm 需要应用开发者显式注册数据库驱动及初始化事务切面，
