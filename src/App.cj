@@ -150,6 +150,13 @@ public struct App {
         } else {
             path.fileName.toString()
         }
+        let version = if(let Some(v) <- Config.getString('${app}_version')){
+            v
+        }else if(let Some(v) <- Config.getString('version')){
+            v
+        }else{
+            ''
+        }
         let end = DateTime.now()
         const fountain = #'
   _____                    __         .__
@@ -159,7 +166,7 @@ _/ ____\____  __ __  _____/  |______  |__| ____
  |__|  \____/|____/|___|  /__| (____  /__|___|  /
                         \/          \/        \/'#
         println(fountain)//fountain不能是多行插值串，因为有\_，编译器认为是错误的转义符。使用\\_就不好看了
-        println('${app} ${Config.getString('version')} is started by fountain in ${end - starts} on ${end}')
+        println('${app}${version} is started by fountain in ${end - starts} on ${end}')
         mvc?.start()
         0
     }
