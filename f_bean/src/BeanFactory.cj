@@ -17,12 +17,17 @@ package f_bean
 
 import f_log.LoggerFactory
 
+private enum BeanType{
+    | AnnotationType(TypeInfo)
+    | ClassType(TypeInfo)
+}
 public class BeanFactory {
     private static let log = LoggerFactory.getLogger<BeanFactory>()
     public static let instance = BeanFactory()
     private let mutex = Mutex()
     private let beans = HashMap<String, BeanManager>()
     private let beanTypeMap = HashMap<TypeInfo, TreeSet<BeanManager>>()
+    private let annotationMap = HashMap<TypeInfo, TreeSet<BeanManager>>()
     private let registered = AtomicBool(false)
 
     private init() {
@@ -47,33 +52,44 @@ public class BeanFactory {
                 throw BeanException(
                     'duplicate bean name ${manager.name}, existed bean type is ${existed.beanType}, current bean type is ${manager.beanType}')
             }
-            let typeQueue = LinkedList<TypeInfo>()
-            typeQueue.addLast(beanType)
+            let typeQueue = LinkedList<BeanType>()
+            typeQueue.addLast(ClassType(beanType))
             let any = TypeInfos.get<Any>()
             let object = TypeInfos.get<Object>()
-            typeQueue.addLast(any)
-            typeQueue.addLast(object)
-            while (let Some(klass) <- typeQueue.removeFirst()) {
-                if (let Some(set) <- beanTypeMap.get(klass)) {
-                        set
-                    } else {
-                        let set = TreeSet<BeanManager>()
-                        beanTypeMap.add(klass, set)
-                        set
-                    }
-                    .add(manager)
-                if (!klass.isSubtypeOf(TypeInfos.get<Annotation>())) {
+            typeQueue.addLast(ClassType(any))
+            typeQueue.addLast(ClassType(object))
+            while (let Some(bt) <- typeQueue.removeFirst()) {
+                let (klass, map, isClass) =
+                match(bt){
+                    case ClassType(klass) => (klass, beanTypeMap, true)
+                    case AnnotationType(klass) => (klass, annotationMap, false)
+                }
+                if (let Some(set) <- map.get(klass)) {
+                    set
+                } else {
+                    let set = TreeSet<BeanManager>()
+                    map.add(klass, set)
+                    set
+                }.add(manager)
+                if (isClass) {
                     // for (annotation in klass.annotations) {//todo klass.annotations会core dump
-                    //     typeQueue.addLast(ClassTypeInfo.of(annotation))
+                    //     typeQueue.addLast(AnnotationType(ClassTypeInfo.of(annotation)))
                     // }
+                }
+                func beanType(typeInfo: TypeInfo) {
+                    if (isClass) {
+                        ClassType(typeInfo)
+                    } else {
+                        AnnotationType(typeInfo)
+                    }
                 }
                 if(klass != any){
                     for (superInterface in klass.superInterfaces where superInterface != any) {
-                        typeQueue.addLast(superInterface)
+                        typeQueue.addLast(beanType(superInterface))
                     }
                 }
                 if (klass != object && let s: ClassTypeInfo <- klass && let Some(sc) <- s.superClass && sc != object) {
-                    typeQueue.addLast(sc)
+                    typeQueue.addLast(beanType(sc))
                 }
             }
         }

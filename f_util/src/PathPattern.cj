@@ -453,7 +453,7 @@ public class PathPattern {
         get(path, Mode.PREFIX, withExtName).data<T>()
     }
 
-    private func get(path: String, mode: Mode, withExtName: Bool): PathNode { //todo
+    private func get(path: String, mode: Mode, withExtName: Bool): PathNode {
         let p = trimRedundantSlash(path)
         let parts = this.parts(p, withExtName)
         match (mode) {

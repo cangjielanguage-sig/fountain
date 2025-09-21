@@ -16,7 +16,7 @@ limitations under the License.
 package f_bean
 
 public func lookup<T>(): T {
-    lookup<T>(IgnoreCond)
+    lookup<T>(StringCond.IgnoreCond)
 }
 
 public func lookup<T>(name: String): T {

@@ -46,7 +46,7 @@ public enum BeanDefCount <: ToString {
     }
 }
 
-public enum BeanType <: ToString {
+public enum BeanDefType <: ToString {
     /**
      * 不判断bean类型
      */
@@ -104,7 +104,7 @@ public enum BeanType <: ToString {
  */
 public class BeanDef <: BeanCondition {
     public const BeanDef(
-        public let beanType!: BeanType = IgnoreType,
+        public let beanType!: BeanDefType = IgnoreType,
         public let beanName!: StringCond = IgnoreCond,
         public let count!: BeanDefCount = AtLeastOne,
         public let scope!: ?BeanScope = None
