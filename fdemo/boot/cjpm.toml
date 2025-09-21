@@ -1,6 +1,6 @@
 [package]
   cjc-version = "1.0.0"
-  name = "common"
+  name = "boot"
   description = "nothing here"
   version = "1.0.0"
   target-dir = ""
