@@ -48,14 +48,21 @@ public class RequestMeta <: HttpRequestHandler & ToString {
     public func respond<T>(response: T, ctx: HttpContext): Unit where T <: DataFields<T> {
         if (let Some(accept) <- ctx.request.headers.getFirst('Accept') && let Some(mediaType) <- MediaTypes.tryParse(accept)) {
             let bytes = mediaType.fromDataFields(response)
-            ctx.responseBuilder.body(bytes)
+            ctx.responseBuilder.header('Content-Type', accept).body(bytes)
         }
     }
     public func respond(response: InputStream, ctx: HttpContext): Unit {
+        populateResponseContentType(ctx) 
         ctx.responseBuilder.body(response)
     }
     public func respond(response: Array<Byte>, ctx: HttpContext): Unit {
+        populateResponseContentType(ctx)
         ctx.responseBuilder.body(response)
+    }
+    private func populateResponseContentType(ctx: HttpContext) {
+        if (let Some(accept) <- ctx.request.headers.getFirst('Accept')) {
+            ctx.responseBuilder.header('Content-Type', accept)
+        }
     }
     public prop ignoreAuth: Bool {
         get() {
