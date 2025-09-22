@@ -164,8 +164,12 @@ _/ ____\____  __ __  _____/  |______  |__| ____
         get() {
             if (name.size > 0) {
                 name
+            } else if (path.toString().endsWith('/target/release')) {
+                path.parent.parent.fileName
+            } else if (path.toString().endsWith('/release')) {
+                path.parent.fileName
             } else {
-                path.fileName.toString()
+                path.fileName
             }
         }
     }
