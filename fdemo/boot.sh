@@ -1,5 +1,8 @@
 #!/bin/bash
 
+path=$2
+echo "target-dir=$path"
+
 run(){
     # pattern可省略，有默认值
     export logger_appender_console_level=ERROR
@@ -9,12 +12,12 @@ run(){
     export logger_appender_file_rotateDuration=DAY
     export LD_LIBRARY_PATH=./fdemo/release/boot:./fdemo/release/mysql:./fdemo/release/user:$LD_LIBRARY_PATH
     export version=1.0.0
-    fboot run $2 --dylibPattern='bootloader|controller'
+    fboot run $path --dylibPattern='bootloader|controller'
 }
 
 build(){
     export CANGJIE_STDX_PATH=$CANGJIE_STDX_DYNAMIC_PATH
-    cjpm build --target-dir=./fdemo
+    cjpm build --target-dir=$path
 }
 
 case "$1" in 
