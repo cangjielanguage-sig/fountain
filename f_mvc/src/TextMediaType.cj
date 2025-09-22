@@ -62,6 +62,7 @@ public abstract class TextMediaType <: MediaType {
 }
 
 public class PlainTextMediaType <: TextMediaType {
+    public static let instance = PlainTextMediaType()
     init(charset!: Charset = Charsets.UTF8) {
         super("text/plain", charset: charset)
     }

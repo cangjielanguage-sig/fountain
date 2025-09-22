@@ -19,14 +19,16 @@ import fountain.bean.*
 import fountain.bean.macros.*
 import fountain.mvc.*
 import fountain.mvc.macros.*
-import user.service.UserService
+// import user.service.UserService
 
 @Controller
 public class UserController {
-    private let userService = lookup<UserService>()
+    // private let userService = lookup<UserService>()
 
     @PostMapping[path:'/api/user/register', consumes:'application/x-www-form-urlencoded', produces:'text/plain']
     public func register(@RequestParam username: String, @RequestParam password: String): String {
-        userService.register(username, password).toString()
+        // userService.register(username, password).toString()
+        println('${username} ${password} @@@@@@@@@@@@@@@@@@@@@@@')
+        'ok'
     }
 }

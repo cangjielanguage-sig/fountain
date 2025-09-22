@@ -20,6 +20,7 @@ public class MediaTypes {
     static init() {
         register(JsonMediaType.instance)
         register(MultipartMediaType.instance)
+        register(PlainTextMediaType.instance)
         registerFromBeanFactory()
     }
     public static func register(mediaType: MediaType) {
