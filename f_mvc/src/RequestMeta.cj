@@ -51,6 +51,12 @@ public class RequestMeta <: HttpRequestHandler & ToString {
             ctx.responseBuilder.body(bytes)
         }
     }
+    public func respond(response: InputStream, ctx: HttpContext): Unit {
+        ctx.responseBuilder.body(response)
+    }
+    public func respond(response: Array<Byte>, ctx: HttpContext): Unit {
+        ctx.responseBuilder.body(response)
+    }
     public prop ignoreAuth: Bool {
         get() {
             ignoreAuth_
