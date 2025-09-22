@@ -1,12 +1,15 @@
 [package]
   cjc-version = "1.0.0"
-  name = "boot"
+  name = "bootloader"
   description = "nothing here"
   version = "1.0.0"
   target-dir = ""
   src-dir = ""
   output-type = "dynamic"
-  compile-option = "-O2 --lto=full --dy-std"
-  override-compile-option = "-O2 --lto=full --dy-std"
+  compile-option = ""
+  override-compile-option = ""
   link-option = ""
   package-configuration = {}
+
+[dependencies]
+  boot = {path = "../boot"}

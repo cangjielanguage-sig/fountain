@@ -10,3 +10,4 @@
   override-compile-option = "-O2 --lto=full --dy-std"
   link-option = ""
   package-configuration = {}
+
