@@ -49,21 +49,24 @@ public open class App {
             break
         }
         this.idx = idx + 1
-        path = canonicalize(
-            if (idx >= 1 && !(args[0] == 'restart' || args[0] == 'shutdown' || args[0] == 'rerun')) {
-                Path(args[1])
-            } else if (idx >= 2 && !(args[0] == 'restart' || args[0] == 'shutdown' || args[0] == 'rerun')) {
-                Path(args[2])
-            } else if (appHomeIsWorkingPath) {
-                getWorkingDirectory()
+        let path = if (idx >= 1 && !(args[0] == 'restart' || args[0] == 'shutdown' || args[0] == 'rerun')) {
+            Path(args[1])
+        } else if (idx >= 2 && !(args[0] == 'restart' || args[0] == 'shutdown' || args[0] == 'rerun')) {
+            Path(args[2])
+        } else if (appHomeIsWorkingPath) {
+            getWorkingDirectory()
+        } else {
+            let p = canonicalize(Path(getCommand()))
+            if (p.parent.fileName == 'bin') {
+                p.parent.parent
             } else {
-                let p = canonicalize(Path(getCommand()))
-                if (p.parent.fileName == 'bin') {
-                    p.parent.parent
-                } else {
-                    p.parent
-                }
-            })
+                p.parent
+            }
+        }
+        if(!exists(path)){
+            Directory.create(path)
+        }
+        this.path = canonicalize(path)
         (ext, libPathName, delim) = match (OS.current) {
             case Windows => (".dll", 'Path', ';')
             case macOS => (".dylib", 'DYLD_FALLBACK_LIBRARY_PATH', ':')
@@ -214,6 +217,17 @@ _/ ____\____  __ __  _____/  |______  |__| ____
         shutdown()
         run(convertArgs('rerun'))
     }
+    private func cleanUpdate(): Int64 {
+        let code = execute('cjpm', ['clean', '--target-dir=${path}'], workingDirectory: path.parent)
+        if(code != 0){
+            return code
+        }
+        removeIfExists('${path.parent}/cjpm.lock')
+        execute('cjpm', ['update'], workingDirectory: path.parent)
+    }
+    private func build(): Int64 {
+        execute('cjpm', ['build', '--target-dir=${path}'], workingDirectory: path.parent)
+    }
     public func boot(): Int64 {
         match (args[0]) {
             case 'start' => start()
@@ -221,6 +235,8 @@ _/ ____\____  __ __  _____/  |______  |__| ____
             case 'run' => run()
             case 'shutdown' => shutdown()
             case 'rerun' => rerun()
+            case 'cleanUpdate' => cleanUpdate()
+            case 'build' => build()
             case _ => throw BootException(
                 'first command arg must be run|start|shutdown|restart, but current args are ${args}')
         }

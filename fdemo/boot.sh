@@ -17,21 +17,19 @@ run(){
 
 build(){
     export CANGJIE_STDX_PATH=$CANGJIE_STDX_DYNAMIC_PATH
-    cjpm build --target-dir=$path
+    fboot build $path
 }
 
-clean(){
-    cjpm clean --target-dir=$path
-    rm -f ./cjpm.lock
-    cjpm update
+cleanUpdate(){
+    fboot cleanUpdate $path
 }
 
 case "$1" in 
 run)
     run
     ;;
-clean)
-    clean
+cleanUpdate)
+    cleanUpdate
     ;;
 build)
     build
