@@ -71,10 +71,13 @@ public class BeanFactory {
                     map.add(klass, set)
                     set
                 }.add(manager)
+                if(klass == any || klass == object){
+                    continue
+                }
                 if (isClass) {
-                    // for (annotation in klass.annotations) {//todo klass.annotations会core dump
-                    //     typeQueue.addLast(AnnotationType(ClassTypeInfo.of(annotation)))
-                    // }
+                    for (annotation in klass.annotations) {
+                        typeQueue.addLast(AnnotationType(ClassTypeInfo.of(annotation)))
+                    }
                 }
                 func beanType(typeInfo: TypeInfo) {
                     if (isClass) {
@@ -83,12 +86,10 @@ public class BeanFactory {
                         AnnotationType(typeInfo)
                     }
                 }
-                if(klass != any){
-                    for (superInterface in klass.superInterfaces where superInterface != any) {
-                        typeQueue.addLast(beanType(superInterface))
-                    }
+                for (superInterface in klass.superInterfaces where superInterface != any) {
+                    typeQueue.addLast(beanType(superInterface))
                 }
-                if (klass != object && let s: ClassTypeInfo <- klass && let Some(sc) <- s.superClass && sc != object) {
+                if (klass is ClassTypeInfo && let s: ClassTypeInfo <- klass && let Some(sc) <- s.superClass && sc != object) {
                     typeQueue.addLast(beanType(sc))
                 }
             }

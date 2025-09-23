@@ -17,7 +17,7 @@
 #  package-configuration = {}
 
 [workspace]
-  members=["./boot","./bootloader", "./user"]
+  members=["./boot", "./user"]
   compile-option = "-O2 --lto=full --dy-std"
   override-compile-option = "-O2 --lto=full --dy-std"
 
