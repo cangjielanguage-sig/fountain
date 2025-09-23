@@ -22,8 +22,8 @@ build(){
 
 clean(){
     cjpm clean --target-dir=$path
-    cjpm update
     rm -f ./cjpm.lock
+    cjpm update
 }
 
 case "$1" in 
