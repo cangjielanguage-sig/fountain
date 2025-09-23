@@ -30,12 +30,10 @@ public class UserController {
     @PostMapping[path:'/api/user/register', consumes:'application/x-www-form-urlencoded', produces:'application/json']
     public func register(@RequestParam username: String, @RequestParam password: String): JsonValue {
         userService.register(username, password).toString()
-        let json: String = '''
-        {
-            "username": "${username}",
-            "password": "${password}"
-        }
-        '''
-        JsonValue.fromStr(json)
+        let json = JsonObject()
+        json.put('username', JsonString(username))
+        json.put('password', JsonString(password))
+        println(json)
+        json
     }
 }
