@@ -32,7 +32,7 @@ import fountain.ticktock.Ticktock
 /**
  * App不会发生传参赋值，用命令行参数实例化后只调用boot函数。所以用struct比较合适，不会占用堆空间。
  */
-public open class App {
+public struct App {
     private let starts: DateTime = DateTime.now()
     private let args: Array<String>
     private let idx: Int64
@@ -234,7 +234,7 @@ _/ ____\____  __ __  _____/  |______  |__| ____
         if(code != 0){
             return code
         }
-        removeIfExists('${path.parent}/cjpm.lock')
+        removeIfExists('${workingDir}/cjpm.lock')
         execute('cjpm', ['update'], workingDirectory: workingDir)
     }
     private func build(): Int64 {
