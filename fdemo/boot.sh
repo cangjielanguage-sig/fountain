@@ -12,7 +12,7 @@ run(){
     export logger_appender_file_rotateDuration=DAY
     export LD_LIBRARY_PATH=./fdemo/release/boot:./fdemo/release/mysql:./fdemo/release/user:$LD_LIBRARY_PATH
     export version=1.0.0
-    fboot run $path --dylibPattern='bootloader|controller'
+    fboot run $path --dylibPattern='boot|controller'
 }
 
 build(){
@@ -20,9 +20,18 @@ build(){
     cjpm build --target-dir=$path
 }
 
+clean(){
+    cjpm clean --target-dir=$path
+    cjpm update
+    rm -f ./cjpm.lock
+}
+
 case "$1" in 
 run)
     run
+    ;;
+clean)
+    clean
     ;;
 build)
     build
