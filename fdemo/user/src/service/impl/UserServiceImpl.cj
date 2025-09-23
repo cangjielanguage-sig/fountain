@@ -24,7 +24,6 @@ import user.service.UserService
 import user.dao.UserDAO
 import fountain.log.*
 
-
 @Bean
 @BeanMeta
 public class UserServiceImpl <: UserService {
