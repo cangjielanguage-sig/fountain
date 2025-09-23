@@ -34,6 +34,9 @@ public class UserController {
         json.put('username', JsonString(username))
         json.put('password', JsonString(password))
         println(json)
+        println(JsonString(username))
+        let u = 'username'
+        println(JsonString(u))
         json
     }
 }
