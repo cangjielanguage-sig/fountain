@@ -43,6 +43,7 @@ internal import f_log.LoggerFactory
 internal import f_random.RandomString
 internal import f_regex.*
 internal import f_mvc.exception.*
+public import stdx.encoding.json.*
 public import stdx.encoding.url.*
 public import stdx.net.http.*
 public import f_base.*

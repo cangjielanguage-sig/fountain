@@ -49,6 +49,18 @@ public class RequestMeta <: HttpRequestHandler & ToString {
         if (let Some(accept) <- ctx.request.headers.getFirst('Accept') && let Some(mediaType) <- MediaTypes.tryParse(accept)) {
             let bytes = mediaType.fromDataFields(response)
             ctx.responseBuilder.header('Content-Type', accept).body(bytes)
+        } else {
+            MultiRequestMethodHandler.NOT_ACCEPTABLE.handle(ctx)
+        }
+    }
+    public func respond(response: JsonValue, ctx: HttpContext): Unit {
+        if (let Some(accept) <- ctx.request.headers.getFirst('Accept') && 
+            let Some(mediaType) <- MediaTypes.tryParse(accept) && 
+            let jmt: JsonMediaType <- mediaType) {
+            let bytes = jmt.fromData(response)
+            ctx.responseBuilder.header('Content-Type', accept).body(bytes)
+        } else {
+            MultiRequestMethodHandler.NOT_ACCEPTABLE.handle(ctx)
         }
     }
     public func respond(response: InputStream, ctx: HttpContext): Unit {

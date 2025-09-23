@@ -88,8 +88,10 @@ public class JsonMediaType <: TextMediaType {
         super.doMake(mediaType){cs => JsonMediaType(charset: cs)}
     }
     public func fromData(data: Data): Array<Byte> {
-        let json = (JsonValue.tryFromData(data) as JsonValue).getOrThrow().toString()
-        charset.newEncoder().encode(json)
+        fromData((JsonValue.tryFromData(data) as JsonValue).getOrThrow())
+    }
+    public func fromData(data: JsonValue): Array<Byte> {
+        charset.newEncoder().encode(data.toString())
     }
     public func toData(data: Array<Byte>): Data {
         toData(charset.newDecoder().decode(data))

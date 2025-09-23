@@ -16,6 +16,7 @@ limitations under the License.
 package user.controller
 
 import std.reflect.*
+import stdx.encoding.json.*
 import fountain.bean.*
 import fountain.bean.macros.*
 import fountain.mvc.*
@@ -26,16 +27,15 @@ import user.service.UserService
 public class UserController {
     private let userService = lookup<UserService>()
 
-    @PostMapping[path:'/api/user/register', consumes:'application/x-www-form-urlencoded', produces:'text/plain']
-    public func register(@RequestParam username: String, @RequestParam password: String): String {
+    @PostMapping[path:'/api/user/register', consumes:'application/x-www-form-urlencoded', produces:'application/json']
+    public func register(@RequestParam username: String, @RequestParam password: String): JsonValue {
         userService.register(username, password).toString()
-        // let json: String = '''
-        // {
-        //     "username": "${username}",
-        //     "password": "${password}"
-        // }
-        // '''
-        // json
-        'success'
+        let json: String = '''
+        {
+            "username": "${username}",
+            "password": "${password}"
+        }
+        '''
+        JsonValue.fromStr(json)
     }
 }
