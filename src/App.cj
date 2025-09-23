@@ -53,7 +53,7 @@ public open class App {
             Path(args[1])
         } else if (idx >= 2 && !(args[0] == 'restart' || args[0] == 'shutdown' || args[0] == 'rerun')) {
             Path(args[2])
-        } else if (appHomeIsWorkingPath) {
+        } else if (appHomeIsWorkingPath || args[0] == 'cleanUpdate' || args[0] == 'build') {
             getWorkingDirectory()
         } else {
             let p = canonicalize(Path(getCommand()))
@@ -217,16 +217,29 @@ _/ ____\____  __ __  _____/  |______  |__| ____
         shutdown()
         run(convertArgs('rerun'))
     }
+    private func directories(){
+        if(path == getWorkingDirectory()){
+            let p = Path('${path}/${path.fileName}')
+            if(!exists(p)){
+                Directory.create(p, recursive: true)
+            }
+            (path, p)
+        }else{
+            (path.parent, path)
+        }
+    }
     private func cleanUpdate(): Int64 {
-        let code = execute('cjpm', ['clean', '--target-dir=${path}'], workingDirectory: path.parent)
+        let (workingDir, targetDir) = directories()
+        let code = execute('cjpm', ['clean', '--target-dir=${targetDir}'], workingDirectory: workingDir)
         if(code != 0){
             return code
         }
         removeIfExists('${path.parent}/cjpm.lock')
-        execute('cjpm', ['update'], workingDirectory: path.parent)
+        execute('cjpm', ['update'], workingDirectory: workingDir)
     }
     private func build(): Int64 {
-        execute('cjpm', ['build', '--target-dir=${path}'], workingDirectory: path.parent)
+        let (workingDir, targetDir) = directories()
+        execute('cjpm', ['build', '--target-dir=${targetDir}'], workingDirectory: workingDir)
     }
     public func boot(): Int64 {
         match (args[0]) {
