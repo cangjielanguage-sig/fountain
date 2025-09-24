@@ -45,6 +45,9 @@ extend String <: ExtendString {
         while(start < this.size && this[start] <= b' ') {
             start++
         }
+        if (start >= this.size) {
+            return ''
+        }
         var end = this.size - 1
         while (end > start && this[end] <= b' ') {
             end--
