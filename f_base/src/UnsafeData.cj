@@ -24,7 +24,7 @@ public interface UnsafeData<T> {
 extend<T> ArrayList<T> <: UnsafeData<T> {
     public func unsafeData(): Array<T> {
         unsafe {
-            this.getRawArray()
+            this.getRawArray()[0 .. this.size]
         }
     }
 }

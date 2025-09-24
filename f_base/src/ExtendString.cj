@@ -35,3 +35,20 @@ public func stringJoin<T, C>(parts: C, delimiter!: String = '', leftPadding!: St
     builder.append(rightPadding)
     builder.toString()
 }
+
+public interface ExtendString {
+    func trimAsciiBlanks(): String 
+}
+extend String <: ExtendString {
+    public func trimAsciiBlanks(): String {
+        var start = 0
+        while(start < this.size && this[start] <= b' ') {
+            start++
+        }
+        var end = this.size - 1
+        while (end > start && this[end] <= b' ') {
+            end--
+        }
+        this[start ..= end]
+    }
+}
