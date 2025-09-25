@@ -5,11 +5,12 @@ echo "target-dir=$path"
 
 run(){
     # pattern可省略，有默认值
-    export logger_appender_console_level=ERROR
-    export logger_appender_console_pattern='[%level-%name]%d{yyyy/MM/dd,HH:mm:ss.SSS}|%m'
-    export logger_appender_file_level=INFO
-    export logger_appender_file_pattern='[%level-%name]%d{yyyy/MM/dd,HH:mm:ss.SSS}|%m'
-    export logger_appender_file_rotateDuration=DAY
+    export logger_console_level=ERROR
+    export logger_console_pattern='[%level-%name]%d{yyyy/MM/dd,HH:mm:ss.SSS}|%m'
+    export logger_file_level=INFO
+    export logger_file_pattern='[%level-%name]%d{yyyy/MM/dd,HH:mm:ss.SSS}|%m'
+    export logger_file_path=./log/fdemo.log
+    export logger_file_rotateDuration=DAY
     export LD_LIBRARY_PATH=./fdemo/release/boot:./fdemo/release/mysql:./fdemo/release/user:$LD_LIBRARY_PATH
     export version=1.0.0
     fboot run $path --dylibPattern='(boot|\.(controller|service\.impl))'
