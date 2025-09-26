@@ -133,7 +133,7 @@ public struct App {
                 fi =>
                 if (fi.isDirectory()) {
                     load(fi.path, pattern)
-                } else if (fi.path.extensionName == ext && pattern.matches(fi.path.fileNameWithoutExtension)) {
+                } else if (pattern.matches(fi.path.fileNameWithoutExtension)) {
                     PackageInfo.load(fi.path.toString().replace(ext, ''))
                 }
                 true
