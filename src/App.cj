@@ -19,6 +19,7 @@ import std.collection.{HashMap, HashSet, Map}
 import std.convert.*
 import std.env.{getWorkingDirectory, getVariables, getCommand, getVariables}
 import std.fs.*
+import std.io.StringReader
 import std.process.{execute, findProcess, Process, ProcessException}
 import std.reflect.PackageInfo
 import std.regex.Regex
@@ -53,7 +54,7 @@ public struct App {
             Path(args[1])
         } else if (idx >= 2 && !(args[0] == 'restart' || args[0] == 'shutdown' || args[0] == 'rerun')) {
             Path(args[2])
-        } else if (appHomeIsWorkingPath || args[0] == 'cleanUpdate' || args[0] == 'build') {
+        } else if (appHomeIsWorkingPath || args[0] == 'cleanUpdate' || args[0] == 'build' || args[0] == 'count') {
             getWorkingDirectory()
         } else {
             let p = canonicalize(Path(getCommand()))
@@ -241,6 +242,46 @@ _/ ____\____  __ __  _____/  |______  |__| ____
         let (workingDir, targetDir) = directories()
         execute('cjpm', ['build', '--target-dir=${targetDir}'], workingDirectory: workingDir)
     }
+    private func count(dir: Path, counter: CodeCounter, ext: String, ignore: Bool): Unit {
+        Directory.walk(dir){fi =>
+            if(fi.isDirectory()){
+                count(fi.path, counter, ext, ignore)
+            }else{
+                if(fi.path.extensionName != ext){
+                    return true
+                }
+                counter.files++
+                try(f = File(fi.path, Read)){
+                    let r = StringReader(f)
+                    for(line in r.lines()){
+                        let l = line.trimAscii()
+                        if(l.isEmpty() || (ignore && '{[(.)]}'.contains(l))){
+                            continue
+                        }
+                        counter.lines++
+                    }
+                }
+            }
+            true
+        }
+    }
+    private func count(): Int64 {
+        var ext = 'cj'
+        var ignore = false
+        for(arg in args[1 ..]){
+            if(arg.startsWith('--ext=')){
+                ext = arg['--ext='.size ..]
+            }else if(arg == '--ignore'){
+                ignore = true
+            }
+        }
+        println('path=${path};ext=${ext};ignore=${ignore}')
+        let counter = CodeCounter()
+        let start = DateTime.now()
+        count(path, counter, ext, ignore)
+        println('files: ${counter.files}, lines: ${counter.lines}, consumes: ${DateTime.now() - start}')
+        0
+    }
     public func boot(): Int64 {
         match (args[0]) {
             case 'start' => start()
@@ -250,8 +291,13 @@ _/ ____\____  __ __  _____/  |______  |__| ____
             case 'rerun' => rerun()
             case 'cleanUpdate' => cleanUpdate()
             case 'build' => build()
+            case 'count' => count()
             case _ => throw BootException(
                 'first command arg must be run|start|shutdown|restart, but current args are ${args}')
         }
     }
+}
+private class CodeCounter{
+    var files = 0
+    var lines = 0
 }
