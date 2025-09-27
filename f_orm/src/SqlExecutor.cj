@@ -44,7 +44,7 @@ public class SqlExecutor <: Resource & RootDAO {
     private static let current = ThreadLocal<HashMap<String, SqlExecutor>>()
     private var sql_ = String.empty
     private var readOnly = false
-    private var args: SqlArgs = SqlArgs.empty
+    private var args: SqlArgs = SqlArgs()
     private var hasRealTx = false
     private var _connection_: Connection
     private var tx = None<TransactionWrap>
@@ -635,7 +635,6 @@ public class SqlExecutor <: Resource & RootDAO {
     }
 
     public func setSql(sql: String): SqlExecutor {
-        args = SqlArgs()
         this.sql = sql
         this
     }
@@ -685,7 +684,7 @@ public class SqlExecutor <: Resource & RootDAO {
                 logger.debug(logMsg(DateTime.now() - start))
             }
             start = DateTime.UnixEpoch
-            args = SqlArgs.empty
+            args.clear()
             sql = String.empty
         }
     }

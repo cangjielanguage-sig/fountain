@@ -16,8 +16,10 @@ limitations under the License.
 package f_orm.wrap
 
 public class SqlArgs <: Hashable & Equatable<SqlArgs> & ToString {
-    protected static let empty = SqlArgs()
     private let args = ArrayList<SqlArg>()
+    protected func clear() {
+        args.clear()
+    }
     protected func set(statement: Statement) {
         for (arg in args) {
             arg.set(statement)

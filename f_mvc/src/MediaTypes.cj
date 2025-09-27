@@ -38,30 +38,23 @@ public class MediaTypes {
         }
     }
     public static func tryParse(mediaType: String): ?MediaType {
-        if (let Some(x) <- mediaTypes
-            .get(mediaType)) {
-                x
+        if (let Some(x) <- mediaTypes.get(mediaType)) {
+            x
+        } else {
+            let idx = mediaType.indexOf(";") ?? -1
+            let mt = if (idx > 0) {
+                mediaType[0..idx]
             } else {
-                let idx = mediaType
-                .indexOf(";") ?? -1
-                let mt = if (idx > 0) {
-                    mediaType[0..idx]
-                } else {
-                    mediaType
-                }
-                if (let Some(x) <- mediaTypes
-                .get(mt)) {
-                    x
-                } else if (let list <- BeanFactory
-                .instance
-                .getList<MediaType>() && list
-                .size > 0) {
-                    register(list)
-                    tryParse(mediaType)
-                } else {
-                    None<MediaType>
-                }
-            }?
-            .make(mediaType)
+                mediaType
+            }
+            if (let Some(x) <- mediaTypes.get(mt)) {
+                x
+            } else if (let list <- BeanFactory.instance.getList<MediaType>() && list.size > 0) {
+                register(list)
+                tryParse(mediaType)
+            } else {
+                None<MediaType>
+            }
+        }?.make(mediaType)
     }
 }

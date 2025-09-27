@@ -25,7 +25,5 @@ private let _ = {=>
     let property1 = ("username", "user_name")
     let property2 = ("password", "PassWord")
     let property3 = ("database", "database")
-    let ds = driver.open("mysql://localhost:3306", [property1, property2, property3])
-    let pool = PooledDatasource(ds)
-    ORM.register(NamedDatasource(true, driver.name, pool))
+    ORM.register(driver, "mysql://172.16.0.8:3306", [property1, property2, property3])
 }()

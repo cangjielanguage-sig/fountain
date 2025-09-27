@@ -114,10 +114,12 @@ public class Options<T, R> {
     }
     private static func doConvert(origin: Option<T>, converter: (T) -> Option<R>, toThrow: Bool): Option<R> {
         if (let Some(v) <- origin) {
-            match (converter(v)) {
-                case Some(r) => r
-                case _ where toThrow => throw IllegalArgumentException()
-                case _ => None<R>
+            if(let Some(r) <- converter(v)){
+                r
+            }else if(toThrow){
+                throw IllegalArgumentException()
+            }else{
+                None<R>
             }
         } else {
             None<R>
