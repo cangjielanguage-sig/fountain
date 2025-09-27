@@ -51,15 +51,21 @@ public class SqlExecutor <: Resource & RootDAO {
     private let cache: Map<SqlCacheKey, Any>
     private var clearCache = false
     private let useCache: Bool
+    private let indexStartsWithZero: Bool
 
     private SqlExecutor(let driverName: String) {
         useCache = ORMConfig.getUseCache(driverName: driverName) ?? true
+        indexStartsWithZero = loadIndexStartsWithZero(driverName)
         cache = if (useCache) {
             HashMap<SqlCacheKey, Any>()
         } else {
             EmptyMap<SqlCacheKey, Any>.INSTANCE()
         }
-        _connection_ = getConnection(driverName)
+        _connection_ = getConnection(driverName, indexStartsWithZero)
+    }
+
+    private static func loadIndexStartsWithZero(driverName: String){
+        ORMConfig.getIndexStartsWithZero(driverName: driverName)
     }
 
     private mut prop sql: String {
@@ -80,14 +86,7 @@ public class SqlExecutor <: Resource & RootDAO {
     }
 
     static func getInstance(driverName: String): SqlExecutor {
-        let em = current.getOrCompute {HashMap<String, SqlExecutor>()}
-        let exe = if (let Some(e) <- em.get(driverName)) {
-            e
-        } else {
-            let e = SqlExecutor(driverName)
-            em[driverName] = e
-            e
-        }
+        let exe = current.getOrCompute {HashMap<String, SqlExecutor>()}.computeIfAbsent(driverName){SqlExecutor(driverName)}
         if (!(exe._connection_ is NoneConnection)) {
             match (exe._connection_.state) {
                 case Closed => exe._connection_ = NoneConnection.instance
@@ -111,8 +110,12 @@ public class SqlExecutor <: Resource & RootDAO {
         }
     }
 
-    private static func getConnection(driverName: String) {
-        ORM.connection(driverName)
+    private static func getConnection(driverName: String, indexStartsWithZero: Bool) {
+        let conn = ORM.connection(driverName)
+        if(let c: ConnectionWrap <- conn) {
+            c.indexStartsWithZero = indexStartsWithZero
+        }
+        conn
     }
     public func isClosed(): Bool {
         _connection_.isClosed()
@@ -171,7 +174,7 @@ public class SqlExecutor <: Resource & RootDAO {
                 //Create a new transaction, and suspend the current transaction if one exists.
                 try {
                 let connection = if (hasRealTx) {
-                    getConnection(driverName)
+                    getConnection(driverName, indexStartsWithZero)
                 } else {
                     this.connection
                 }
@@ -188,7 +191,7 @@ public class SqlExecutor <: Resource & RootDAO {
                 // Execute non-transactionally, suspend the current transaction if one exists.
                 newDummyTx(
                 connection: if (hasRealTx) {
-                    getConnection(driverName)
+                    getConnection(driverName, indexStartsWithZero)
                 } else {
                     this.connection
                 },
@@ -346,7 +349,7 @@ public class SqlExecutor <: Resource & RootDAO {
                         throw ORMException("connection is broken")
                 }
             }
-            this._connection_ = getConnection(driverName)
+            this._connection_ = getConnection(driverName, indexStartsWithZero)
             this._connection_
         }
     }
@@ -547,83 +550,83 @@ public class SqlExecutor <: Resource & RootDAO {
         }
     }
     public func add(arg: Bool) {
-        args.add(arg)
+        args.add(indexStartsWithZero, arg)
         this
     }
     public func add(arg: Int8) {
-        args.add(arg)
+        args.add(indexStartsWithZero, arg)
         this
     }
     public func add(arg: UInt8) {
-        args.add(arg)
+        args.add(indexStartsWithZero, arg)
         this
     }
     public func add(arg: Int16) {
-        args.add(arg)
+        args.add(indexStartsWithZero, arg)
         this
     }
     public func add(arg: UInt16) {
-        args.add(arg)
+        args.add(indexStartsWithZero, arg)
         this
     }
     public func add(arg: Int32) {
-        args.add(arg)
+        args.add(indexStartsWithZero, arg)
         this
     }
     public func add(arg: UInt32) {
-        args.add(arg)
+        args.add(indexStartsWithZero, arg)
         this
     }
     public func add(arg: Int64) {
-        args.add(arg)
+        args.add(indexStartsWithZero, arg)
         this
     }
     public func add(arg: UInt64) {
-        args.add(arg)
+        args.add(indexStartsWithZero, arg)
         this
     }
     public func add(arg: BigInt) {
-        args.add(arg)
+        args.add(indexStartsWithZero, arg)
         this
     }
     public func add(arg: Decimal) {
-        args.add(arg)
+        args.add(indexStartsWithZero, arg)
         this
     }
     public func add(arg: Float16) {
-        args.add(arg)
+        args.add(indexStartsWithZero, arg)
         this
     }
     public func add(arg: Float32) {
-        args.add(arg)
+        args.add(indexStartsWithZero, arg)
         this
     }
     public func add(arg: Float64) {
-        args.add(arg)
+        args.add(indexStartsWithZero, arg)
         this
     }
     public func add(arg: Rune) {
-        args.add(arg)
+        args.add(indexStartsWithZero, arg)
         this
     }
     public func add(arg: String) {
-        args.add(arg)
+        args.add(indexStartsWithZero, arg)
         this
     }
     public func add(arg: InputStream) {
-        args.add(arg)
+        args.add(indexStartsWithZero, arg)
         this
     }
     public func add(arg: Duration) {
-        args.add(arg)
+        args.add(indexStartsWithZero, arg)
         this
     }
     public func add(arg: DateTime) {
-        args.add(arg)
+        args.add(indexStartsWithZero, arg)
         this
     }
     public func add(arg: Array<Byte>) {
-        args.add(arg)
+        args.add(indexStartsWithZero, arg)
         this
     }
     public func add(arg: Any) {

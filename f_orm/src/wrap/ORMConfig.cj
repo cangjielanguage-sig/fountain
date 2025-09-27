@@ -25,6 +25,7 @@ public class ORMConfig {
     public static const transactionAccessMode = confPrefix + "_transactionAccessMode"
     public static const transactionDeferrableMode = confPrefix + "_transactionDeferrableMode"
     public static const useCache = confPrefix + "_useCache"
+    public static const indexStartsWithZero = confPrefix + "_indexStartsWithZero"
     public static const databasePoolInitSize = confPrefix + "_databasePoolInitSize"
     public static const databasePoolMinSize = confPrefix + "_databasePoolMinSize"
     public static const databasePoolMaxSize = confPrefix + "_databasePoolMaxSize"
@@ -83,6 +84,12 @@ public class ORMConfig {
         let iterator = map.iterator()
         Array<(String, String)>(map.size) {
             _ => iterator.next() ?? ('', '')
+        }
+    }
+    public static func getIndexStartsWithZero(driverName!: String = String.empty): Bool {
+        match(getConf(driverName: driverName, key: indexStartsWithZero)){
+            case Some(v) => Bool.tryParse(v) ?? true
+            case _ => true
         }
     }
     public static func getUseCache(driverName!: String = String.empty): ?Bool {

@@ -23,8 +23,8 @@ public interface UserDAO <: RootDAO {
     func register(username: String, password: String): Int64 {
         executor.setSql('''
             insert into user_info
-                    set username = ${arg(username)},
-                        password = ${arg(password)}'''
+                    set `username` = ${arg(username)},
+                        `password` = ${arg(password)}'''
         ).insert
     }
 }

@@ -76,8 +76,6 @@ public interface ExtendMap<K, V> <: ExtendCollection<K, Collection<K>> where K <
             }
         }
     }
-    func addIfAbsent(key: K, fn: () -> V): V
-    func addIfPreset(key: K, fn: () -> V): ?V
     func removeIf(key: K, predicate: (V) -> Bool): ?V
     func removeIf(predicate: (K, V) -> Bool): Unit
 }
@@ -89,26 +87,6 @@ public interface ExtendNonConcurrentMap<K, V> <: ExtendMap<K, V> where K <: Equa
         let value = fn(entry.key, entry.value)
         entry.value = value
         value
-    }
-    func addIfAbsent(key: K, fn: () -> V): V {
-        let view = entryView(key)
-        if (let Some(v) <- view.value) {
-            v
-        } else {
-            let v = fn()
-            view.value = v
-            v
-        }
-    }
-    func addIfPreset(key: K, fn: () -> V): ?V {
-        let view = entryView(key)
-        if (let Some(_) <- view.value) {
-            let v = fn()
-            view.value = v
-            v
-        } else {
-            None<V>
-        }
     }
     func removeIf(key: K, predicate: (V) -> Bool): ?V {
         let view = entryView(key)
@@ -131,20 +109,6 @@ extend<K, V> ConcurrentHashMap<K, V> <: ExtendMap<K, V> where K <: Hashable & Eq
     public func entryView(key: K, fn: (K, ?V) -> ?V): ?V {
         this.entryView(key) {
             entry => entry.value = fn(key, entry.value)//entry.key会导致栈溢出
-        }
-    }
-    public func addIfAbsent(key: K, fn: () -> V): V {
-        entryView(key) {
-            view => if (view.value.isNone()) {
-                view.value = fn()
-            }
-        }.getOrThrow()
-    }
-    public func addIfPreset(key: K, fn: () -> V): ?V {
-        entryView(key) {
-            view => if (view.value.isSome()) {
-                view.value = fn()
-            }
         }
     }
     public func removeIf(key: K, predicate: (V) -> Bool): ?V {

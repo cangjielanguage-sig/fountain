@@ -18,6 +18,7 @@ package f_orm.wrap
 import std.collection.Map
 
 public class ConnectionWrap <: Connection {
+    protected var indexStartsWithZero = true
     public ConnectionWrap(let driverName: String, private let connection: Connection) {}
 
     /**
@@ -43,7 +44,7 @@ public class ConnectionWrap <: Connection {
      * 异 常 SqlException - 语 法 错 误 ， sql 语 句 包 含 不 认 识 的 字 符
      */
     public func prepareStatement(sql: String): Statement {
-        StatementWrap(driverName, connection.prepareStatement(sql))
+        StatementWrap(indexStartsWithZero, driverName, connection.prepareStatement(sql))
     }
 
     /**

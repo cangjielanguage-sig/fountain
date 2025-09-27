@@ -15,15 +15,10 @@ limitations under the License.
 */
 package boot
 
-
-import std.database.sql.*
-import mysql.cdbc.*
-import fountain.orm.{ORM, NamedDatasource}
+import opengauss.driver.*
+import fountain.orm.*
 
 private let _ = {=>
-    let driver = DriverManager.getDriver("mysql").getOrThrow()
-    let property1 = ("username", "user_name")
-    let property2 = ("password", "PassWord")
-    let property3 = ("database", "database")
-    ORM.register(driver, "mysql://172.16.0.8:3306", [property1, property2, property3])
+    let driver = DriverManager.getDriver("opengauss").getOrThrow()
+    ORM.register(driver, "postgres://fountain:Fountain123@pgm-2ze534c0xh8vatxzwo.pg.rds.aliyuncs.com:5432/fountain?sslmode=disable", [])
 }()

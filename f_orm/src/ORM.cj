@@ -16,9 +16,9 @@ limitations under the License.
 package f_orm
 
 import std.collection.concurrent.ConcurrentHashMap
-import std.database.sql.*
 import std.env
 import f_orm.exception.ORMException
+public import std.database.sql.*
 public import f_exception.{BaseException, UnreachableException}
 public import f_orm.wrap.*
 public import f_orm.exception.*

@@ -1,7 +1,8 @@
 [dependencies]
   fountain = {path = "../"}
 #  mysql = {git = "https://gitcode.com/Cangjie-TPC/mysqlclient-ffi.git"}
-  mysql = {git = "https://gitcode.com/runningW/mysql-driver.git"}
+#  mysql = {git = "https://gitcode.com/runningW/mysql-driver.git"}
+  opengauss = {git = "https://gitcode.com/runningW/opengauss-driver.git", branch="master"}
 
 #[package]
 #  cjc-version = "1.0.0"
@@ -34,7 +35,7 @@
 [target.x86_64-unknown-linux-gnu]
   compile-option = "-O2 --lto=full --dy-std"
   override-compile-option = "-O2 --lto=full --dy-std"
-[target .x86_64-unknown-linux-gnu.bin-dependencies]
+[target.x86_64-unknown-linux-gnu.bin-dependencies]
   path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]
 
 [target.aarch64-unknown-linux-gnu]

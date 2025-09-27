@@ -11,13 +11,14 @@ run(){
     export logger_file_pattern='[%level-%name]%d{yyyy/MM/dd,HH:mm:ss.SSS}|%m'
     export logger_file_path=./log/fdemo.log
     export logger_file_rotateDuration=DAY
-    export LD_LIBRARY_PATH=./fdemo/release/boot:./fdemo/release/mysql:./fdemo/release/user:$LD_LIBRARY_PATH
+    export LD_LIBRARY_PATH=./fdemo/release/boot:./fdemo/release/opengauss:./fdemo/release/user:$LD_LIBRARY_PATH
     export version=1.0.0
+    export opengauss_orm_indexStartsWithZero=false
     fboot run $path --dylibPattern='(boot|\.(controller|service\.impl))'
 }
 
 build(){
-    export CANGJIE_STDX_PATH=$CANGJIE_STDX_DYNAMIC_PATH
+    export CANGJIE_STDX=$CANGJIE_STDX_DYNAMIC_PATH
     fboot build $path
 }
 

@@ -17,10 +17,10 @@ package f_config
 
 import std.collection.{HashMap, Map, HashSet}
 import std.collection.concurrent.ConcurrentHashMap
-import std.convert.Parsable
 import std.env
 import std.time.DateTime
-import f_data.DataParsable
+public import f_data.DataParsable
+public import std.convert.Parsable
 
 /**
  * 不依赖配置文件，所有配置都来自环境变量和命令行参数，命令行参数会覆盖同名环境变量。

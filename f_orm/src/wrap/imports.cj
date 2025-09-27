@@ -24,7 +24,7 @@ internal import std.math.numeric.{Decimal, BigInt}
 internal import std.reflect.TypeInfo
 internal import std.regex.Regex
 internal import std.time.DateTime
-internal import f_config.Config
+internal import f_config.*
 internal import f_data.*
 internal import f_regex.*
 internal import f_orm.exception.*
