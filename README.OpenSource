@@ -1,0 +1,20 @@
+[
+    {
+        "Name": " RxJava ",
+        "License": " Apache License 2.0 ",
+        "License File": " LICENSE ",
+        "Owner": ""
+        "Upstream URL": " https://github.com/ReactiveX/RxJava/tree/3.x ",
+        "Version Number": " 3.x ",
+        "Description": " RxJava: Reactive Extensions for the JVM "
+    },
+    {
+        "Name": " spring-webmvc ",
+        "License": " Apache License 2.0 ",
+        "License File": " LICENSE ",
+        "Owner": ""
+        "Upstream URL": " https://github.com/spring-projects/spring-framework/tree/main/spring-webmvc ",
+        "Version Number": " 6.2.11 ",
+        "Description": " Spring Framework "
+    }
+]
