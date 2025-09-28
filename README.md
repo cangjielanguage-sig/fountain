@@ -14,9 +14,9 @@ _/ ____\____  __ __  _____/  |______  |__| ____
 ## 介绍
 
 一个用于服务器应用开发的原创综合工具库。
-  1. f_rx功能参考了RxJava，API原创。
-  2. f_mvc.{HttpStatus, Series} 只有常量定义，自己定义担心遗漏，从springmvc抄过来的。
-  3. f_mvc.{rfc1123, parseRfc1123} 是两个时间和字符串的转换工具，结合仓颉语言特性参考了springmvc的实现。
+  1. `f_rx`功能参考了`RxJava`，API原创。
+  2. `f_mvc.{HttpStatus, Series}` 只有常量定义，自己定义担心遗漏，从`springmvc`抄过来的。
+  3. `f_mvc.{rfc1123, parseRfc1123}` 是两个时间和字符串的转换工具，结合仓颉语言特性参考了`springmvc`的实现。
   4. 其它模块都是纯粹原创
   5. 由于`1. 2. 3. `，应仓颉团队要求，添加README.OpenSource
 
