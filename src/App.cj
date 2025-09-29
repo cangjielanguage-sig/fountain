@@ -173,7 +173,8 @@ public struct App {
             '(${appVersion.version})'
         }
         println(appVersion.banner)//banner不能是多行插值串，因为有\_，编译器认为是错误的转义符。使用\\_就不好看了
-        println('${app}${appver} is started by fountain(@{version}) in ${end - starts} on ${end}')
+        let started = '${app}${appver} is started by fountain(@{version}) in ${end - starts} on ${end}'
+        println(started.replace('(@{version})', ''))
         mvc?.start()
         0
     }

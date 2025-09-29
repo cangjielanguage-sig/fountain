@@ -32,6 +32,9 @@ _/ ____\____  __ __  _____/  |______  |__| ____
 - 深刻利用仓颉语言特性
 - 只需要开发动态链接库，fboot负责加载、初始化并运行。
 - 具体用法请参考fdemo模块
+- 在项目根目录添加banner.txt，使用fboot build编译，fboot run启动时输出cjpm.toml的项目版本号和banner.txt的内容
+  - 如果没有banner.txt，使用fboot build编译会输出fountain ASCII图作为banner和项目cjpm.toml的项目版本号
+- 首次使用cjpm install编译以后再用fboot finstall编译fboot，使用fboot run启动应用项目时可以输出fountain版本号
 
 ## 版本管理
 
