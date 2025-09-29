@@ -44,6 +44,9 @@ public class StringGenerator <: ToString {
         utf8.add(all: content.toString().unsafeBytes())
         this
     }
+    public func appendln<T>(content: T, nextLine!: String = OS.current.nextLine): This where T <: ToString {
+        append<T>(content).append<String>(nextLine)
+    }
     private func indexOf(search: Array<Byte>, fromIndex: Int64): ?Int64 {
         utf8.unsafeData().indexOf(search, fromIndex)
     }

@@ -19,16 +19,16 @@ import std.collection.{HashMap, HashSet, Map}
 import std.convert.*
 import std.env.{getWorkingDirectory, getVariables, getCommand}
 import std.fs.*
-import std.io.StringReader
+import std.io.{StringReader, SeekPosition}
 import std.process.{execute, findProcess, Process, ProcessException}
 import std.reflect.PackageInfo
 import std.regex.Regex
 import std.time.DateTime
 import fountain.base.{OS, StringGenerator}
 import fountain.bean.BeanFactory
-import fountain.config.Config
 import fountain.mvc.MVCStarter
 import fountain.ticktock.Ticktock
+import f_base.UnsafeBytes
 
 /**
  * App不会发生传参赋值，用命令行参数实例化后只调用boot函数。所以用struct比较合适，不会占用堆空间。
@@ -42,7 +42,10 @@ public struct App {
     private let libPathName: String
     private let delim: String
 
-    public App(args: Array<String>, appHomeIsWorkingPath!: Bool = true, private let dynamic!: Bool = true, private let name!: String = '') {
+    public App(args: Array<String>, 
+               appHomeIsWorkingPath!: Bool = true, 
+               private let dynamic!: Bool = true, 
+               private let name!: String = '') {
         this.args = args
         var idx = 0
         for (i in 1..args.size where !args[i].startsWith("--dylibPattern=")) {
@@ -50,7 +53,7 @@ public struct App {
             break
         }
         this.idx = idx + 1
-        let path = if (idx >= 1 && !(args[0] == 'restart' || args[0] == 'shutdown' || args[0] == 'rerun')) {
+        let path = if ((idx >= 1 && !(args[0] == 'restart' || args[0] == 'shutdown' || args[0] == 'rerun')) || args[0] == 'finstall') {
             Path(args[1])
         } else if (idx >= 2 && !(args[0] == 'restart' || args[0] == 'shutdown' || args[0] == 'rerun')) {
             Path(args[2])
@@ -150,17 +153,29 @@ public struct App {
         //执行load函数时一定会加载初始化orm的动态链接库从而完成初始化
         //其它模块是工具API没有专门的初始化API
         let app = this.app
-        let version = version(app)
         let end = DateTime.now()
-        const fountain = #'
+        let appVersion = if (let Some(v) <- BeanFactory.instance.getFirst<AppVersion>()) {
+            v
+        } else {
+            DummyAppVersion.instance
+        }
+        func banner(): String {
+            let path = '${getWorkingDirectory()}/banner.txt'
+            if(exists(path)) {
+                try(file = File(path, Read)){
+                    return StringReader(file).readToEnd()
+                }
+            }
+#'
   _____                    __         .__
 _/ ____\____  __ __  _____/  |______  |__| ____
 \   __\/  _ \|  |  \/    \   __\__  \ |  |/    \
  |  | (  <_> )  |  /   |  \  |  / __ \|  |   |  \
  |__|  \____/|____/|___|  /__| (____  /__|___|  /
                         \/          \/        \/'#
-        println(fountain)//fountain不能是多行插值串，因为有\_，编译器认为是错误的转义符。使用\\_就不好看了
-        println('${app}${version} is started by fountain in ${end - starts} on ${end}')
+        }
+        println(banner())//banner不能是多行插值串，因为有\_，编译器认为是错误的转义符。使用\\_就不好看了
+        println('${app}${appVersion.version} is started by fountain(@{version}) in ${end - starts} on ${end}')
         mvc?.start()
         0
     }
@@ -175,15 +190,6 @@ _/ ____\____  __ __  _____/  |______  |__| ____
             } else {
                 path.fileName
             }
-        }
-    }
-    protected static func version(app: String): String {
-        if(let Some(v) <- Config.getString('${app}_version')){
-            v
-        }else if(let Some(v) <- Config.getString('version')){
-            v
-        }else{
-            ''
         }
     }
     private func pid() {
@@ -238,9 +244,96 @@ _/ ____\____  __ __  _____/  |______  |__| ____
         removeIfExists('${workingDir}/cjpm.lock')
         execute('cjpm', ['update'], workingDirectory: workingDir)
     }
+    private func extract(dir: Path, extractName!: Bool = false){
+        var version = ''
+        var name = ''
+        try(file = File(dir.join('cjpm.toml'), Read)){
+            let reader = StringReader(file)
+            for (line in reader.lines()) {
+                let l = line.trimAscii()
+                if (l.startsWith('version') && let Some(idx) <- l.indexOf('"')) {
+                    version = l[idx + 1 .. l.size - 1]
+                } else if (l.startsWith('name') && let Some(idx) <- l.indexOf('"')) {
+                    name = l[idx + 1 .. l.size - 1]
+                }
+            }
+        }
+        (version, name)
+    }
+    private func finstall(): Int64 {
+        let workingDir = getWorkingDirectory()
+        let fountainPath = 
+        match(workingDir.fileName) {
+            case 'fountain' => 
+                workingDir
+            case 'fboot' =>
+                workingDir.parent
+            case _ => throw BootException('working directory ${workingDir} is not path of project fountain')
+        }
+        var version = extract(fountainPath)[0]
+        if(!version.isEmpty()) {
+            try(file = File(fountainPath.join('src/App.cj'), ReadWrite)){
+                let code = StringReader(file).readToEnd()
+                file.seek(SeekPosition.Begin(0))
+                file.write(code.replace('(@{version})', '(${version})').unsafeBytes())
+                file.flush()
+            }
+        }
+        execute('cjpm', ['install', '--root', '${path}'])
+    }
+    private func genCode(name: String, version: String) {
+'''
+package ${name}_app_version_impl
+import fountain.AppVersion
+import fountain.bean.macros.Bean
+@Bean
+public struct ${name}_AppVersionImpl <: AppVersion {
+    public prop version: String {
+        get() {
+            ${version}
+        }
+    }
+}
+'''
+    }
     private func build(): Int64 {
         let (workingDir, targetDir) = directories()
-        execute('cjpm', ['build', '--target-dir=${targetDir}'], workingDirectory: workingDir)
+        let versionModuleName = '${name}_app_version_impl'
+        let versionModuleDir = workingDir.join(versionModuleName)
+        Directory.create(versionModuleDir, recursive: true)
+        let execode = execute('cjpm', ['init', '--type=dynamic'], workingDirectory: versionModuleDir)
+        var toml = ''
+        try {
+            if(execode != 0) {
+                return execode
+            }
+            var (version, name) = extract(workingDir, extractName: true)
+            try(file = File(versionModuleDir.join('src/${name}_AppVersionImpl.cj'), Write)){
+                let code = genCode(name, version)
+                file.seek(SeekPosition.Begin(0))
+                file.write(code.unsafeBytes())
+                file.flush()
+            }
+            try (file = File(workingDir.join('cjpm.toml'), ReadWrite)) {
+                toml = StringReader(file).readToEnd()
+                if(let Some(membersIdx) <- toml.indexOf('members') && let Some(idx) <- toml.indexOf(']', membersIdx)) {
+                    let members = toml[membersIdx ..= idx]
+                    let newMembers = members.replace(']', ', ./${versionModuleName}]')
+                    let newtoml = toml.replace(members, newMembers)
+                    file.seek(SeekPosition.Begin(0))
+                    file.write(newtoml.unsafeBytes())
+                    file.flush()
+                }
+            }
+            execute('cjpm', ['build', '--target-dir=${targetDir}'], workingDirectory: workingDir)
+        } finally {
+            try (file = File(workingDir.join('cjpm.toml'), Write)) {
+                file.seek(SeekPosition.Begin(0))
+                file.write(toml.unsafeBytes())
+                file.flush()
+            }
+            removeIfExists(versionModuleDir, recursive: true)
+        }
     }
     private func count(dir: Path, counter: CodeCounter, ext: String, ignore: Bool): Unit {
         Directory.walk(dir){fi =>
@@ -290,6 +383,7 @@ _/ ____\____  __ __  _____/  |______  |__| ____
             case 'shutdown' => shutdown()
             case 'rerun' => rerun()
             case 'cleanUpdate' => cleanUpdate()
+            case 'finstall' => finstall()//这个命令专门用来构建fountain
             case 'build' => build()
             case 'count' => count()
             case _ => throw BootException(
