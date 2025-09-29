@@ -24,12 +24,19 @@ import std.process.{execute, findProcess, Process, ProcessException}
 import std.reflect.PackageInfo
 import std.regex.Regex
 import std.time.DateTime
-import fountain.base.{OS, StringGenerator}
+import fountain.base.{OS, StringGenerator, ExtendString}
 import fountain.bean.BeanFactory
 import fountain.mvc.MVCStarter
 import fountain.ticktock.Ticktock
 import f_base.UnsafeBytes
 
+internal const BANNER = #'
+  _____                    __         .__
+_/ ____\____  __ __  _____/  |______  |__| ____
+\   __\/  _ \|  |  \/    \   __\__  \ |  |/    \
+ |  | (  <_> )  |  /   |  \  |  / __ \|  |   |  \
+ |__|  \____/|____/|___|  /__| (____  /__|___|  /
+                        \/          \/        \/'#
 /**
  * App不会发生传参赋值，用命令行参数实例化后只调用boot函数。所以用struct比较合适，不会占用堆空间。
  */
@@ -159,23 +166,13 @@ public struct App {
         } else {
             DummyAppVersion.instance
         }
-        func banner(): String {
-            let path = '${getWorkingDirectory()}/banner.txt'
-            if(exists(path)) {
-                try(file = File(path, Read)){
-                    return StringReader(file).readToEnd()
-                }
-            }
-#'
-  _____                    __         .__
-_/ ____\____  __ __  _____/  |______  |__| ____
-\   __\/  _ \|  |  \/    \   __\__  \ |  |/    \
- |  | (  <_> )  |  /   |  \  |  / __ \|  |   |  \
- |__|  \____/|____/|___|  /__| (____  /__|___|  /
-                        \/          \/        \/'#
+        let appver = if(appVersion.version.isEmpty()){
+            ''
+        }else{
+            '(${appVersion.version})'
         }
-        println(banner())//banner不能是多行插值串，因为有\_，编译器认为是错误的转义符。使用\\_就不好看了
-        println('${app}${appVersion.version} is started by fountain(@{version}) in ${end - starts} on ${end}')
+        println(appVersion.banner)//banner不能是多行插值串，因为有\_，编译器认为是错误的转义符。使用\\_就不好看了
+        println('${app}${appver} is started by fountain(@{version}) in ${end - starts} on ${end}')
         mvc?.start()
         0
     }
@@ -275,11 +272,24 @@ _/ ____\____  __ __  _____/  |______  |__| ____
             try(file = File(fountainPath.join('src/App.cj'), ReadWrite)){
                 let code = StringReader(file).readToEnd()
                 file.seek(SeekPosition.Begin(0))
-                file.write(code.replace('(@{version})', '(${version})').unsafeBytes())
+                file.write(code.replaceFirst('(@{version})', '(${version})').unsafeBytes())
                 file.flush()
             }
         }
         execute('cjpm', ['install', '--root', '${path}'])
+    }
+    private func banner(): String {
+        let path = '${getWorkingDirectory()}/banner.txt'
+        var banner_ = ''
+        if(exists(path)) {
+            try(file = File(path, Read)){
+                banner_ = StringReader(file).readToEnd()
+            }
+        }
+        if(!banner_.isEmpty()){
+            return banner_
+        }
+        BANNER
     }
     private func genCode(name: String, version: String) {
 '''
@@ -291,6 +301,11 @@ public struct ${name}_AppVersionImpl <: AppVersion {
     public prop version: String {
         get() {
             ${version}
+        }
+    }
+    public prop banner: String {
+        get() {
+            ${banner()}
         }
     }
 }

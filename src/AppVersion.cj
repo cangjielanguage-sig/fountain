@@ -17,6 +17,7 @@ package fountain
 
 public interface AppVersion {
     prop version: String
+    prop banner: String
 }
 
 struct DummyAppVersion <: AppVersion {
@@ -25,6 +26,11 @@ struct DummyAppVersion <: AppVersion {
     public prop version: String {
         get() {
             ''
+        }
+    }
+    public prop banner: String {
+        get() {
+            BANNER
         }
     }
 }

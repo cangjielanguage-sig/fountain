@@ -37,7 +37,9 @@ public func stringJoin<T, C>(parts: C, delimiter!: String = '', leftPadding!: St
 }
 
 public interface ExtendString {
-    func trimAsciiBlanks(): String 
+    func trimAsciiBlanks(): String
+    func replaceFirst(old: String, new: String): String
+    func replaceLast(old: String, new: String): String
 }
 extend String <: ExtendString {
     public func trimAsciiBlanks(): String {
@@ -53,5 +55,18 @@ extend String <: ExtendString {
             end--
         }
         this[start ..= end]
+    }
+    private func replace(old: String, new: String, indexFn: (String) -> ?Int64): String {
+        if (let Some(idx) <- indexFn(old)) {
+            '${this[0 .. idx]}${new}${this[idx + old.size ..]}'
+        } else {
+            this
+        }
+    }
+    public func replaceFirst(old: String, new: String): String {
+        replace(old, new){s => this.indexOf(s)}
+    }
+    public func replaceLast(old: String, new: String): String {
+        replace(old, new){s => this.lastIndexOf(s)}
     }
 }
