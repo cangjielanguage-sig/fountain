@@ -21,7 +21,7 @@ _/ ____\____  __ __  _____/  |______  |__| ____
   5. `f_orm.Propagation` 的声明参考了spring事务传播策略。
   6. `f_log`的API跟log4j2有些像，就是`LoggerFactory.getLogger<T>()`
   7. 其它模块都是纯粹原创
-  8. 由于`1. 2. 3. `，应仓颉团队要求，添加README.OpenSource
+  8. 由于`1. ~ 6.`，应仓颉团队要求，添加README.OpenSource
 
 仓颉团队建议不要静态链接跟运行期加载混合使用，否则可能导致预料之外的行为。
 因此fboot子项目使用--dy-std编译，并建议在服务器安装仓颉SDK。
