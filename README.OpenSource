@@ -15,7 +15,16 @@
         "Owner": ""
         "Upstream URL": " https://github.com/spring-projects/spring-framework/tree/main/spring-webmvc ",
         "Version Number": " 6.2.11 ",
-        "Description": " Spring Framework "
+        "Description": " Spring Web MVC "
+    },
+    {
+        "Name": " spring-tx ",
+        "License": " Apache License 2.0 ",
+        "License File": " LICENSE ",
+        "Owner": ""
+        "Upstream URL": " https://github.com/spring-projects/spring-framework/tree/main/spring-tx ",
+        "Version Number": " 6.2.11 ",
+        "Description": " Spring Transaction "
     },
     {
         "Name": " spring-webmvc ",

@@ -80,7 +80,9 @@ public class SqlExecutor <: Resource & RootDAO {
     }
 
     static func getInstance(driverName: String): SqlExecutor {
-        let exe = current.getOrCompute {HashMap<String, SqlExecutor>()}.computeIfAbsent(driverName){SqlExecutor(driverName)}
+        let exe = current
+            .getOrCompute {HashMap<String, SqlExecutor>()}
+            .computeIfAbsent(driverName) {SqlExecutor(driverName)}
         if (!(exe._connection_ is NoneConnection)) {
             match (exe._connection_.state) {
                 case Closed => exe._connection_ = NoneConnection.instance
@@ -139,7 +141,7 @@ public class SqlExecutor <: Resource & RootDAO {
         match (propagation) {
             case Required =>
                 //Support a current transaction, create a new one if none exists.
-                try {
+            try {
                 if (!hasRealTx) {
                     if (let tx: TransactionWrap <- connection.createTransaction()) {
                         hasRealTx = true
