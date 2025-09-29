@@ -41,6 +41,7 @@ _/ ____\____  __ __  _____/  |______  |__| ____
  * App不会发生传参赋值，用命令行参数实例化后只调用boot函数。所以用struct比较合适，不会占用堆空间。
  */
 public struct App {
+    private static const APP_VERSION_MODULE_SUFFIX = '_App__vErsIOn___Impl____'
     private let starts: DateTime = DateTime.now()
     private let args: Array<String>
     private let idx: Int64
@@ -151,7 +152,7 @@ public struct App {
             }
         }
         if(dynamic){
-            load(path, Regex('^lib.*(${extractPattern()}).*$'))
+            load(path, Regex('^lib.*(${extractPattern()}|.+${APP_VERSION_MODULE_SUFFIX}).*$'))
         }
         BeanFactory.instance.afterRegistered()
         Ticktock.getInstance(anyway: false)
@@ -303,9 +304,12 @@ public struct App {
         }
         BANNER
     }
+    private func appVersionModuleName(name: String): String {
+        '${name}${APP_VERSION_MODULE_SUFFIX}'
+    }
     private func genCode(name: String, version: String) {
 '''
-package ${name}_app_version_impl
+package ${appVersionModuleName(name)}
 import fountain.AppVersion
 import fountain.bean.macros.Bean
 @Bean
@@ -326,7 +330,7 @@ public struct ${name}_AppVersionImpl <: AppVersion {
     private func build(): Int64 {
         println('fboot build 此命令专门用来编译使用fountain开发的应用项目')
         let (workingDir, targetDir) = directories()
-        let versionModuleName = '${name}_app_version_impl'
+        let versionModuleName = appVersionModuleName(name)
         let versionModuleDir = workingDir.join(versionModuleName)
         Directory.create(versionModuleDir, recursive: true)
         let execode = execute('cjpm', ['init', '--type=dynamic'], workingDirectory: versionModuleDir)
