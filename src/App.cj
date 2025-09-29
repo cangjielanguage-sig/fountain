@@ -269,15 +269,15 @@ public struct App {
         }
         var version = extract(fountainPath)[0]
         var code = ''
-        if(!version.isEmpty()) {
-            try (file = File(fountainPath.join('src/App.cj'), ReadWrite)) {
-                code = StringReader(file).readToEnd()
-                file.seek(SeekPosition.Begin(0))
-                file.write(code.replaceFirst('(@{version})', '(${version})').unsafeBytes())
-                file.flush()
-            }
-        }
         try {
+            if(!version.isEmpty()) {
+                try (file = File(fountainPath.join('src/App.cj'), ReadWrite)) {
+                    code = StringReader(file).readToEnd()
+                    file.seek(SeekPosition.Begin(0))
+                    file.write(code.replaceFirst('(@{version})', '(${version})').unsafeBytes())
+                    file.flush()
+                }
+            }
             execute('cjpm', ['install', '--root', '${path}'])
         } finally {
             if(!code.isEmpty()){
