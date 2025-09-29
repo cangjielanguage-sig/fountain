@@ -45,12 +45,12 @@ public class StringGenerator <: ToString {
         this
     }
     public func appendln<T>(content: T, nextLine!: String = OS.current.nextLine): This where T <: ToString {
-        append<T>(content).appendln(nextLine: nextLine)
-        this
+        append<T>(content)
+        appendln(nextLine: nextLine)
     }
     public func appendUnixNewLine<T>(content: T): This where T <: ToString {
-        append<T>(content).appendUnixNewLine()
-        this
+        append<T>(content)
+        appendUnixNewLine()
     }
     public func appendln(nextLine!: String = OS.current.nextLine): This {
         append<String>(nextLine)
