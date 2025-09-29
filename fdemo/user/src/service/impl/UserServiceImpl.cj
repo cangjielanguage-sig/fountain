@@ -29,8 +29,12 @@ import fountain.log.*
 public class UserServiceImpl <: UserService {
     private static let log = LoggerFactory.getLogger<UserServiceImpl>()
     public func register(username: String, password: String): Int64 {
-        println('username: ${username}, password: ${password}')
-        executor().register(username, password)
-        0
+        try{
+            println('username: ${username}, password: ${password}')
+            executor().register(username, password)
+        }catch(e: Exception){
+            e.printStackTrace()
+            throw e
+        }
     }
 }

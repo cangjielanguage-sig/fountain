@@ -17,9 +17,10 @@ _/ ____\____  __ __  _____/  |______  |__| ____
   1. `f_rx`功能参考了`RxJava`，API原创。
   2. `f_mvc.{HttpStatus, Series}` 只有常量定义，自己定义担心遗漏，从`springmvc`抄过来的。
   3. `f_mvc.{rfc1123, parseRfc1123}` 是两个时间和字符串的转换工具，结合仓颉语言特性参考了`springmvc`的实现。
-  4. `f_log`的API跟log4j2有些像，就是`LoggerFactory.getLogger<T>()`
-  5. 其它模块都是纯粹原创
-  6. 由于`1. 2. 3. `，应仓颉团队要求，添加README.OpenSource
+  4. `f_mvc.{ContentDisposition, ContentDispositionBuilder, ContentDispositionType}` 也参考了`springmvc`，我不记得不是照抄的了。
+  5. `f_log`的API跟log4j2有些像，就是`LoggerFactory.getLogger<T>()`
+  6. 其它模块都是纯粹原创
+  7. 由于`1. 2. 3. `，应仓颉团队要求，添加README.OpenSource
 
 仓颉团队建议不要静态链接跟运行期加载混合使用，否则可能导致预料之外的行为。
 因此fboot子项目使用--dy-std编译，并建议在服务器安装仓颉SDK。

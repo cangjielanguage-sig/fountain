@@ -51,21 +51,15 @@ public class SqlExecutor <: Resource & RootDAO {
     private let cache: Map<SqlCacheKey, Any>
     private var clearCache = false
     private let useCache: Bool
-    private let indexStartsWithZero: Bool
 
     private SqlExecutor(let driverName: String) {
         useCache = ORMConfig.getUseCache(driverName: driverName) ?? true
-        indexStartsWithZero = loadIndexStartsWithZero(driverName)
         cache = if (useCache) {
             HashMap<SqlCacheKey, Any>()
         } else {
             EmptyMap<SqlCacheKey, Any>.INSTANCE()
         }
-        _connection_ = getConnection(driverName, indexStartsWithZero)
-    }
-
-    private static func loadIndexStartsWithZero(driverName: String){
-        ORMConfig.getIndexStartsWithZero(driverName: driverName)
+        _connection_ = getConnection(driverName)
     }
 
     private mut prop sql: String {
@@ -73,8 +67,8 @@ public class SqlExecutor <: Resource & RootDAO {
             sql_
         }
         set(value) {
-            sql_ = blankRegex.replaceAll(value, " ")
-            if (!(value.trimAscii()[0..6].toAsciiLower() == 'select')) {
+            sql_ = blankRegex.replaceAll(value, " ").trimAsciiBlanks()
+            if (!(sql_.trimAscii()[0..6].toAsciiLower() == 'select')) {
                 readOnly = false
             }
         }
@@ -110,11 +104,8 @@ public class SqlExecutor <: Resource & RootDAO {
         }
     }
 
-    private static func getConnection(driverName: String, indexStartsWithZero: Bool) {
+    private static func getConnection(driverName: String) {
         let conn = ORM.connection(driverName)
-        if(let c: ConnectionWrap <- conn) {
-            c.indexStartsWithZero = indexStartsWithZero
-        }
         conn
     }
     public func isClosed(): Bool {
@@ -174,7 +165,7 @@ public class SqlExecutor <: Resource & RootDAO {
                 //Create a new transaction, and suspend the current transaction if one exists.
                 try {
                 let connection = if (hasRealTx) {
-                    getConnection(driverName, indexStartsWithZero)
+                    getConnection(driverName)
                 } else {
                     this.connection
                 }
@@ -191,7 +182,7 @@ public class SqlExecutor <: Resource & RootDAO {
                 // Execute non-transactionally, suspend the current transaction if one exists.
                 newDummyTx(
                 connection: if (hasRealTx) {
-                    getConnection(driverName, indexStartsWithZero)
+                    getConnection(driverName)
                 } else {
                     this.connection
                 },
@@ -349,7 +340,7 @@ public class SqlExecutor <: Resource & RootDAO {
                         throw ORMException("connection is broken")
                 }
             }
-            this._connection_ = getConnection(driverName, indexStartsWithZero)
+            this._connection_ = getConnection(driverName)
             this._connection_
         }
     }
@@ -389,8 +380,9 @@ public class SqlExecutor <: Resource & RootDAO {
     private prop query: QueryResultWrap {
         get() {
             execute<QueryResultWrap> {
-                args.set(statement)
-                (statement.query() as QueryResultWrap).getOrThrow()
+                let stmt = statement
+                args.set(stmt)
+                (stmt.query() as QueryResultWrap).getOrThrow()
             }
         }
     }
@@ -550,83 +542,83 @@ public class SqlExecutor <: Resource & RootDAO {
         }
     }
     public func add(arg: Bool) {
-        args.add(indexStartsWithZero, arg)
+        args.add(arg)
         this
     }
     public func add(arg: Int8) {
-        args.add(indexStartsWithZero, arg)
+        args.add(arg)
         this
     }
     public func add(arg: UInt8) {
-        args.add(indexStartsWithZero, arg)
+        args.add(arg)
         this
     }
     public func add(arg: Int16) {
-        args.add(indexStartsWithZero, arg)
+        args.add(arg)
         this
     }
     public func add(arg: UInt16) {
-        args.add(indexStartsWithZero, arg)
+        args.add(arg)
         this
     }
     public func add(arg: Int32) {
-        args.add(indexStartsWithZero, arg)
+        args.add(arg)
         this
     }
     public func add(arg: UInt32) {
-        args.add(indexStartsWithZero, arg)
+        args.add(arg)
         this
     }
     public func add(arg: Int64) {
-        args.add(indexStartsWithZero, arg)
+        args.add(arg)
         this
     }
     public func add(arg: UInt64) {
-        args.add(indexStartsWithZero, arg)
+        args.add(arg)
         this
     }
     public func add(arg: BigInt) {
-        args.add(indexStartsWithZero, arg)
+        args.add(arg)
         this
     }
     public func add(arg: Decimal) {
-        args.add(indexStartsWithZero, arg)
+        args.add(arg)
         this
     }
     public func add(arg: Float16) {
-        args.add(indexStartsWithZero, arg)
+        args.add(arg)
         this
     }
     public func add(arg: Float32) {
-        args.add(indexStartsWithZero, arg)
+        args.add(arg)
         this
     }
     public func add(arg: Float64) {
-        args.add(indexStartsWithZero, arg)
+        args.add(arg)
         this
     }
     public func add(arg: Rune) {
-        args.add(indexStartsWithZero, arg)
+        args.add(arg)
         this
     }
     public func add(arg: String) {
-        args.add(indexStartsWithZero, arg)
+        args.add(arg)
         this
     }
     public func add(arg: InputStream) {
-        args.add(indexStartsWithZero, arg)
+        args.add(arg)
         this
     }
     public func add(arg: Duration) {
-        args.add(indexStartsWithZero, arg)
+        args.add(arg)
         this
     }
     public func add(arg: DateTime) {
-        args.add(indexStartsWithZero, arg)
+        args.add(arg)
         this
     }
     public func add(arg: Array<Byte>) {
-        args.add(indexStartsWithZero, arg)
+        args.add(arg)
         this
     }
     public func add(arg: Any) {
@@ -688,14 +680,15 @@ public class SqlExecutor <: Resource & RootDAO {
             }
             start = DateTime.UnixEpoch
             args.clear()
-            sql = String.empty
+            sql_ = String.empty
         }
     }
     private func execute<T>(extract: (UpdateResult) -> T): T {
         clearCache = true
         execute<T> {
-            args.set(statement)
-            let result = statement.update()
+            let stmt = statement
+            args.set(stmt)
+            let result = stmt.update()
             extract(result)
         }
     }

@@ -28,72 +28,65 @@ public class SqlArgs <: Hashable & Equatable<SqlArgs> & ToString {
     public func add(arg: SqlArg) {
         args.add(arg)
     }
-    private func index(indexStartsWithZero: Bool): Int64 {
-        if (indexStartsWithZero) {
-            args.size
-        } else {
-            args.size + 1
-        }
+    public func add(arg: Bool) {
+        add(BoolSqlArg(args.size, arg))
     }
-    public func add(indexStartsWithZero: Bool, arg: Bool) {
-        add(BoolSqlArg(index(indexStartsWithZero), arg))
+    public func add(arg: Int8) {
+        add(Int8SqlArg(args.size, arg))
     }
-    public func add(indexStartsWithZero: Bool, arg: Int8) {
-        add(Int8SqlArg(index(indexStartsWithZero), arg))
+    public func add(arg: UInt8) {
+        add(UInt8SqlArg(args.size, arg))
     }
-    public func add(indexStartsWithZero: Bool, arg: UInt8) {
-        add(UInt8SqlArg(index(indexStartsWithZero), arg))
+    public func add(arg: Int16) {
+        add(Int16SqlArg(args.size, arg))
     }
-    public func add(indexStartsWithZero: Bool, arg: Int16) {
-        add(Int16SqlArg(index(indexStartsWithZero), arg))
+    public func add(arg: UInt16) {
+        add(UInt16SqlArg(args.size, arg))
     }
-    public func add(indexStartsWithZero: Bool, arg: UInt16) {
-        add(UInt16SqlArg(index(indexStartsWithZero), arg))
+    public func add(arg: Int32) {
+        add(Int32SqlArg(args.size, arg))
     }
-    public func add(indexStartsWithZero: Bool, arg: Int32) {
-        add(Int32SqlArg(index(indexStartsWithZero), arg))
+    public func add(arg: UInt32) {
+        add(UInt32SqlArg(args.size, arg))
     }
-    public func add(indexStartsWithZero: Bool, arg: UInt32) {
-        add(UInt32SqlArg(index(indexStartsWithZero), arg))
+    public func add(arg: Int64) {
+        add(Int64SqlArg(args.size, arg))
     }
-    public func add(indexStartsWithZero: Bool, arg: Int64) {
-        add(Int64SqlArg(index(indexStartsWithZero), arg))
+    public func add(arg: UInt64) {
+        add(UInt64SqlArg(args.size, arg))
     }
-    public func add(indexStartsWithZero: Bool, arg: UInt64) {
-        add(UInt64SqlArg(index(indexStartsWithZero), arg))
+    public func add(arg: BigInt) {
+        add(BigIntSqlArg(args.size, arg))
     }
-    public func add(indexStartsWithZero: Bool, arg: BigInt) {
-        add(BigIntSqlArg(index(indexStartsWithZero), arg))
+    public func add(arg: Decimal) {
+        add(DecimalSqlArg(args.size, arg))
     }
-    public func add(indexStartsWithZero: Bool, arg: Decimal) {
-        add(DecimalSqlArg(index(indexStartsWithZero), arg))
+    public func add(arg: Float16) {
+        add(Float16SqlArg(args.size, arg))
     }
-    public func add(indexStartsWithZero: Bool, arg: Float16) {
-        add(Float16SqlArg(index(indexStartsWithZero), arg))
+    public func add(arg: Float32) {
+        add(Float32SqlArg(args.size, arg))
     }
-    public func add(indexStartsWithZero: Bool, arg: Float32) {
-        add(Float32SqlArg(index(indexStartsWithZero), arg))
+    public func add(arg: Float64) {
+        add(Float64SqlArg(args.size, arg))
     }
-    public func add(indexStartsWithZero: Bool, arg: Float64) {
-        add(Float64SqlArg(index(indexStartsWithZero), arg))
+    public func add(arg: Rune) {
+        add(RuneSqlArg(args.size, arg))
     }
-    public func add(indexStartsWithZero: Bool, arg: Rune) {
-        add(RuneSqlArg(index(indexStartsWithZero), arg))
+    public func add(arg: String) {
+        add(StringSqlArg(args.size, arg))
     }
-    public func add(indexStartsWithZero: Bool, arg: String) {
-        add(StringSqlArg(index(indexStartsWithZero), arg))
+    public func add(arg: InputStream) {
+        add(InputStreamSqlArg(args.size, arg))
     }
-    public func add(indexStartsWithZero: Bool, arg: InputStream) {
-        add(InputStreamSqlArg(index(indexStartsWithZero), arg))
+    public func add(arg: Duration) {
+        add(DurationSqlArg(args.size, arg))
     }
-    public func add(indexStartsWithZero: Bool, arg: Duration) {
-        add(DurationSqlArg(index(indexStartsWithZero), arg))
+    public func add(arg: DateTime) {
+        add(DateTimeSqlArg(args.size, arg))
     }
-    public func add(indexStartsWithZero: Bool, arg: DateTime) {
-        add(DateTimeSqlArg(index(indexStartsWithZero), arg))
-    }
-    public func add(indexStartsWithZero: Bool, arg: Array<Byte>) {
-        add(ByteArraySqlArg(index(indexStartsWithZero), arg))
+    public func add(arg: Array<Byte>) {
+        add(ByteArraySqlArg(args.size, arg))
     }
     public func toString() {
         args.toString()

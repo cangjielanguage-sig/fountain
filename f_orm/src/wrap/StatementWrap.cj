@@ -16,7 +16,7 @@ limitations under the License.
 package f_orm.wrap
 
 public class StatementWrap <: Statement {
-    public StatementWrap(let indexStartsWithZero: Bool, let driverName: String, private let statement: Statement) {}
+    public StatementWrap(let driverName: String, private let statement: Statement) {}
 
     public prop parameterColumnInfos: Array<ColumnInfo> {
         get() {
@@ -42,7 +42,7 @@ public class StatementWrap <: Statement {
         statement.update()
     }
     public func query(): QueryResultWrap {
-        QueryResultWrap(indexStartsWithZero, driverName, statement.query())
+        QueryResultWrap(driverName, statement.query())
     }
     public func isClosed(): Bool {
         statement.isClosed()

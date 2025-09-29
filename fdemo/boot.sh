@@ -13,7 +13,6 @@ run(){
     export logger_file_rotateDuration=DAY
     export LD_LIBRARY_PATH=./fdemo/release/boot:./fdemo/release/opengauss:./fdemo/release/user:$LD_LIBRARY_PATH
     export version=1.0.0
-    export opengauss_orm_indexStartsWithZero=false
     fboot run $path --dylibPattern='(boot|\.(controller|service\.impl))'
 }
 

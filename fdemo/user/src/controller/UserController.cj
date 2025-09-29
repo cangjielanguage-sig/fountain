@@ -29,7 +29,7 @@ public class UserController {
 
     @PostMapping[path:'/api/user/register', consumes:'application/x-www-form-urlencoded', produces:'text/plain']
     public func register(@RequestParam username: String, @RequestParam password: String): String {
-        userService.register(username, password).toString()
+        let id = userService.register(username, password).toString()
         // let json = JsonObject()
         // json.put('username', JsonString(username))
         // json.put('password', JsonString(password))
@@ -40,6 +40,7 @@ public class UserController {
         // json
         '''
         {
+            "id": ${id},
             "username": "${username}",
             "password": "${password}"
         }

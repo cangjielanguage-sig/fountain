@@ -21,13 +21,9 @@ import f_base.*
 public class QueryResultWrap <: QueryResult {
     private let columnInfoMap = HashMap<String, Int64>()
     private let list = ArrayList<Any>()
-    public QueryResultWrap(indexStartsWithZero: Bool, private let driverName: String, private let result: QueryResult) {
+    public QueryResultWrap(private let driverName: String, private let result: QueryResult) {
         for (i in 0..columnInfos.size) {
-            columnInfoMap[columnInfos[i].name] = if (indexStartsWithZero) {
-                i
-            } else {
-                i + 1
-            }
+            columnInfoMap[columnInfos[i].name] = i
         }
     }
     public func next(): Bool {
