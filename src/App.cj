@@ -17,7 +17,7 @@ package fountain
 
 import std.collection.{HashMap, HashSet, Map}
 import std.convert.*
-import std.env.{getWorkingDirectory, getVariables, getCommand, getVariables}
+import std.env.{getWorkingDirectory, getVariables, getCommand}
 import std.fs.*
 import std.io.StringReader
 import std.process.{execute, findProcess, Process, ProcessException}
