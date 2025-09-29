@@ -268,15 +268,26 @@ public struct App {
             case _ => throw BootException('working directory ${workingDir} is not path of project fountain')
         }
         var version = extract(fountainPath)[0]
+        var code = ''
         if(!version.isEmpty()) {
-            try(file = File(fountainPath.join('src/App.cj'), ReadWrite)){
-                let code = StringReader(file).readToEnd()
+            try (file = File(fountainPath.join('src/App.cj'), ReadWrite)) {
+                code = StringReader(file).readToEnd()
                 file.seek(SeekPosition.Begin(0))
                 file.write(code.replaceFirst('(@{version})', '(${version})').unsafeBytes())
                 file.flush()
             }
         }
-        execute('cjpm', ['install', '--root', '${path}'])
+        try {
+            execute('cjpm', ['install', '--root', '${path}'])
+        } finally {
+            if(!code.isEmpty()){
+                try (file = File(fountainPath.join('src/App.cj'), Write)) {
+                    file.seek(SeekPosition.Begin(0))
+                    file.write(code.unsafeBytes())
+                    file.flush()
+                }
+            }
+        }
     }
     private func banner(): String {
         let path = '${getWorkingDirectory()}/banner.txt'
