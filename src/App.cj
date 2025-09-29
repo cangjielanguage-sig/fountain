@@ -258,6 +258,7 @@ public struct App {
         (version, name)
     }
     private func finstall(): Int64 {
+        println('fboot finstall 此命令专门用来编译它自己也就是fboot本身')
         let workingDir = getWorkingDirectory()
         let fountainPath = 
         match(workingDir.fileName) {
@@ -323,6 +324,7 @@ public struct ${name}_AppVersionImpl <: AppVersion {
 '''
     }
     private func build(): Int64 {
+        println('fboot build 此命令专门用来编译使用fountain开发的应用项目')
         let (workingDir, targetDir) = directories()
         let versionModuleName = '${name}_app_version_impl'
         let versionModuleDir = workingDir.join(versionModuleName)
