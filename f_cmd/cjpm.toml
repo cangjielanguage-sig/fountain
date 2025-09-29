@@ -4,12 +4,12 @@
   f_regex = {path = "../f_regex"}
 [package]
   cjc-version = "1.0.0"
-  compile-option = ""
+  compile-option = "-O2 --dy-std"
+  override-compile-option = "-O2  --dy-std"
   description = "nothing here"
   link-option = ""
   name = "f_cmd"
   output-type = "dynamic"
-  override-compile-option = ""
   src-dir = ""
   target-dir = ""
   version = "1.0.0"

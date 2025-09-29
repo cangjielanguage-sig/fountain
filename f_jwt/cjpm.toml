@@ -4,45 +4,41 @@
   f_exception = {path = "../f_exception"}
 [package]
   cjc-version = "1.0.0"
-  compile-option = "-O2"
+  compile-option = "-O2 --dy-std"
+  override-compile-option = "-O2 --dy-std"
   description = "nothing here"
   link-option = ""
   name = "f_jwt"
   output-type = "dynamic"
-  override-compile-option = "-O2"
   src-dir = ""
   target-dir = ""
   version = "1.0.0"
   package-configuration = {}
 
 [target]
-[target.x86_64-w64-mingw32]
-  compile-option = "-O2 --lto=full --dy-std"
-  override-compile-option = "-O2 --lto=full --dy-std"
-[target.x86_64-w64-mingw32.bin-dependencies]
-  path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]
-
 [target.x86_64-unknown-linux-gnu]
   compile-option = "-O2 --lto=full --dy-std"
   override-compile-option = "-O2 --lto=full --dy-std"
-[target .x86_64-unknown-linux-gnu.bin-dependencies]
+[target.x86_64-unknown-linux-gnu.bin-dependencies]
   path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]
-
 [target.aarch64-unknown-linux-gnu]
   compile-option = "-O2 --lto=full --dy-std"
   override-compile-option = "-O2 --lto=full --dy-std"
 [target.aarch64-unknown-linux-gnu.bin-dependencies]
   path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]
-
+[target.x86_64-w64-mingw32]
+  compile-option = "-O2 --dy-std"
+  override-compile-option = "-O2 --dy-std"
+[target.x86_64-w64-mingw32.bin-dependencies]
+  path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]
 [target.x86_64-apple-darwin]
-  compile-option = "-O2 --lto=full --dy-std"
-  override-compile-option = "-O2 --lto=full --dy-std"
+  compile-option = "-O2 --dy-std"
+  override-compile-option = "-O2 --dy-std"
 [target.x86_64-apple-darwin.bin-dependencies]
   path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]
-
 [target.aarch64-apple-darwin]
-  compile-option = "-O2 --lto=full --dy-std"
-  override-compile-option = "-O2 --lto=full --dy-std"
+  compile-option = "-O2 --dy-std"
+  override-compile-option = "-O2 --dy-std"
 [target.aarch64-apple-darwin.bin-dependencies]
   path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]
 
