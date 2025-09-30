@@ -329,34 +329,6 @@ ${toml}
             name
         })
     }
-    private func install(): Int64 {
-        println('fboot install 此命令专门用来编译它自己也就是fboot本身')
-        println('fboot install ${path}')
-        let workingDir = getWorkingDirectory()
-        let (fountainPath, fbootPath) = 
-        match(workingDir.fileName) {
-            case 'fountain' => 
-                (workingDir, workingDir.join('fboot'))
-            case 'fboot' =>
-                (workingDir.parent, workingDir)
-            case _ => throw BootException('working directory ${workingDir} is not path of project fountain')
-        }
-        var version = extract(fountainPath)[0]
-        let appPath = fountainPath.join('src/App.cj')
-        var cjpmCode = 0
-        var code = ''
-        try {
-            if(!version.isEmpty()) {
-                code = entireFileText(appPath)
-                File.writeTo(appPath, code.replaceFirst('(@{version})', '(${version})').unsafeBytes())
-            }
-            execute('cjpm', ['install', '--root', '${path}'], workingDirectory: fbootPath)
-        } finally {
-            if(!code.isEmpty()){
-                File.writeTo(appPath, code.unsafeBytes())
-            }
-        }
-    }
     private func banner(): String {
         let path = '${getWorkingDirectory()}/banner.txt'
         var banner_ = ''
@@ -471,7 +443,6 @@ public class ${name}_AppVersionImpl <: AppVersion {
             case 'dynamic' => initDynamic()
             case 'workspace' => initWorkspace()
             case 'cleanUpdate' => cleanUpdate()
-            case 'install' => install()//这个命令专门用来构建fountain
             case 'build' => build()
             case 'count' => count()
             case _ => throw BootException(

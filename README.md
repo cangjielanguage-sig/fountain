@@ -83,8 +83,7 @@ _/ ____\____  __ __  _____/  |______  |__| ____
   6. fboot workspace 将当前目录初始化为仓颉workspace
   7. fboot dynamic 将当前目录初始化为仓颉dynamic项目
   8. fboot build 编译使用fountain开发的应用项目
-  9. fboot install 编译fboot，首次编译fboot使用cjpm install --root </path/of/install>，以后就可以使用fboot install编译，fboot install编译可以输出fountain版本号
-  10.fboot count 数当前目录的仓颉代码行数
+  9. fboot count 数当前目录的仓颉代码行数
 
 ## 构建
   为stdx指定环境变量，为fountain指定编译路径和环境变量，比如下面这样。要完整地使用fboot的功能，务必使用这些环境变量名
