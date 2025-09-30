@@ -471,7 +471,7 @@ public class ${name}_AppVersionImpl <: AppVersion {
             case 'replaceVersion' => replaceVersion()
             case 'version' => version()
             case _ => throw BootException(
-                'first command arg must be run|start|shutdown|restart, but current args are ${args}')
+                'first command arg must be run|start|shutdown|restart|dynamic|workspace|cleanUpdate|build|count|replaceVersion|version, but current args are ${args}')
         }
     }
 }
