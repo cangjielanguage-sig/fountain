@@ -11,6 +11,11 @@
   link-option = ""
   package-configuration = {}
 
+[profile.build]
+  incremental = true
+[profile.build.combined]
+  fountain = "dynamic"
+
 [target]
 [target.x86_64-unknown-linux-gnu]
   compile-option = "-O2 --lto=full --dy-std"
