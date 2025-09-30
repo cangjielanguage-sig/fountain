@@ -20,7 +20,7 @@ import std.convert.*
 import std.env.{getWorkingDirectory, getVariables, getCommand}
 import std.fs.*
 import std.io.{StringReader, SeekPosition}
-import std.process.{execute, findProcess, Process, ProcessException}
+import std.process.*
 import std.reflect.PackageInfo
 import std.regex.Regex
 import std.time.DateTime
@@ -145,7 +145,7 @@ public struct App {
                 fi =>
                 if (fi.isDirectory()) {
                     load(fi.path, pattern)
-                } else if ('.${fi.path.extensionName}' == ext && pattern.matches(fi.path.fileNameWithoutExtension)) {
+                } else if (fi.path.fileName.endsWith(ext) && pattern.matches(fi.path.fileNameWithoutExtension)) {
                     PackageInfo.load(fi.path.toString().replace(ext, ''))
                 }
                 true
@@ -173,7 +173,7 @@ public struct App {
             '(${appVersion.version})'
         }
         println(appVersion.banner)//banner不能是多行插值串，因为有\_，编译器认为是错误的转义符。使用\\_就不好看了
-        println('${app}${appver} is started by fountain(@{version}) in ${end - starts} on ${end}'.replace('(@{version})', ''))
+        println('${app}${appver} is started by fountain(1.0.0) in ${end - starts} on ${end}'.replace('(@{version})', ''))
         mvc?.start()
         0
     }
@@ -343,6 +343,7 @@ ${toml}
         }
         var version = extract(fountainPath)[0]
         let appPath = fountainPath.join('src/App.cj')
+        var cjpmCode = 0
         var code = ''
         try {
             if(!version.isEmpty()) {
@@ -427,10 +428,7 @@ public class ${name}_AppVersionImpl <: AppVersion {
         Directory.walk(dir){fi =>
             if(fi.isDirectory()){
                 count(fi.path, counter, ext, ignore)
-            }else{
-                if(fi.path.extensionName != ext){
-                    return true
-                }
+            } else if(fi.path.fileName.endsWith(ext)){
                 counter.files++
                 try(f = File(fi.path, Read)){
                     let r = StringReader(f)
