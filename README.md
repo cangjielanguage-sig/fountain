@@ -80,6 +80,8 @@ _/ ____\____  __ __  _____/  |______  |__| ____
   3. fboot shutdown <PID>
   4. fboot start <PID> [PATH] --dylibPattern=<DYNAMIC_LIB_NAME_REGEX_WITHOUT_EXTNAME>
   5. fboot restart <PID> [PATH] --dylibPattern=<DYNAMIC_LIB_NAME_REGEX_WITHOUT_EXTNAME>
+  6. fboot build 编译使用fountain开发的应用项目
+  7. fboot install 编译fboot，首次编译fboot使用cjpm install --root </path/of/install>，以后就可以使用fboot install编译，fboot install编译可以输出fountain版本号
 
 ## 构建
   为stdx指定环境变量，比如下面这样

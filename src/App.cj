@@ -61,7 +61,7 @@ public struct App {
             break
         }
         this.idx = idx + 1
-        let path = if ((idx >= 1 && !(args[0] == 'restart' || args[0] == 'shutdown' || args[0] == 'rerun')) || args[0] == 'finstall') {
+        let path = if ((idx >= 1 && !(args[0] == 'restart' || args[0] == 'shutdown' || args[0] == 'rerun')) || args[0] == 'install') {
             Path(args[1])
         } else if (idx >= 2 && !(args[0] == 'restart' || args[0] == 'shutdown' || args[0] == 'rerun')) {
             Path(args[2])
@@ -258,8 +258,8 @@ public struct App {
         }
         (version, name)
     }
-    private func finstall(): Int64 {
-        println('fboot finstall 此命令专门用来编译它自己也就是fboot本身')
+    private func install(): Int64 {
+        println('fboot install 此命令专门用来编译它自己也就是fboot本身')
         let workingDir = getWorkingDirectory()
         let fountainPath = 
         match(workingDir.fileName) {
@@ -415,7 +415,7 @@ public struct ${name}_AppVersionImpl <: AppVersion {
             case 'shutdown' => shutdown()
             case 'rerun' => rerun()
             case 'cleanUpdate' => cleanUpdate()
-            case 'finstall' => finstall()//这个命令专门用来构建fountain
+            case 'install' => install()//这个命令专门用来构建fountain
             case 'build' => build()
             case 'count' => count()
             case _ => throw BootException(
