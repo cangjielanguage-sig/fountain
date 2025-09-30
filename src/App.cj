@@ -278,12 +278,10 @@ public struct App {
         let tomlPath = dir.join('cjpm.toml')
         var content = entireFileText(tomlPath).replace('[workspace]', '''
 [workspace]
-  version = "1.0.0"
-'''
+  version = "1.0.0"'''
 ).replace('[dependencies]', '''
 [dependencies]
-  fountain = {git = "https://gitcode.com/Cangjie-SIG/fountain.git"}
-'''
+  fountain = {git = "https://gitcode.com/Cangjie-SIG/fountain.git"}'''
 )
         content = '''
 ${content}
