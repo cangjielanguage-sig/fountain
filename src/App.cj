@@ -276,9 +276,9 @@ public struct App {
   path-option = ["\${CANGJIE_STDX_DYNAMIC_PATH}", "\${CANGJIE_FOUNTAIN_LIBS}"]
 '''
         let tomlPath = dir.join('cjpm.toml')
-        var content = entireFileText(tomlPath).replace('[dependencies]', '''
-[dependencies]
-  fountain = {git = "https://gitcode.com/Cangjie-SIG/fountain.git"}
+        var content = entireFileText(tomlPath).replace('[workspace]', '''
+[workspace]
+  version = "1.0.0"
 '''
 )
         content = '''
