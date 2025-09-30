@@ -84,6 +84,8 @@ _/ ____\____  __ __  _____/  |______  |__| ____
   7. fboot dynamic 将当前目录初始化为仓颉dynamic项目
   8. fboot build 编译使用fountain开发的应用项目
   9. fboot count 数当前目录的仓颉代码行数
+  10.fboot replaceVersion 用cjpm.toml的版本号替换App.cj的
+  11.fboot version 显示当前fountain版本号
 
 ## 构建
   为stdx指定环境变量，为fountain指定编译路径和环境变量，比如下面这样。要完整地使用fboot的功能，务必使用这些环境变量名

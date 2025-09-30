@@ -173,9 +173,12 @@ public struct App {
             '(${appVersion.version})'
         }
         println(appVersion.banner)//banner不能是多行插值串，因为有\_，编译器认为是错误的转义符。使用\\_就不好看了
-        println('${app}${appver} is started by fountain(1.0.0) in ${end - starts} on ${end}'.replace('(@{version})', ''))
+        println('${app}${appver} is started by fountain(1.0.0) in ${end - starts} on ${end}')
         mvc?.start()
         0
+    }
+    private func version(){
+        println('fountain(1.0.0)')
     }
     private prop app: String {
         get() {
@@ -342,6 +345,26 @@ ${toml}
         }
         BANNER
     }
+    private func replaceVersion(): Int64 {
+        println('fboot replaceVersion ${path}')
+        let workingDir = getWorkingDirectory()
+        let (fountainPath, fbootPath) = 
+        match(workingDir.fileName) {
+            case 'fountain' => 
+                (workingDir, workingDir.join('fboot'))
+            case 'fboot' =>
+                (workingDir.parent, workingDir)
+            case _ => throw BootException('working directory ${workingDir} is not path of project fountain')
+        }
+        var version = extract(fountainPath)[0]
+        let appPath = fountainPath.join('src/App.cj')
+        var cjpmCode = 0
+        var code = ''
+        if(!version.isEmpty()) {
+            code = entireFileText(appPath)
+            File.writeTo(appPath, Regex(#'fountain\((\d+\.)+\d+\)'#).replaceAll(code, 'fountain(${version})').unsafeBytes())
+        }
+    }
     private func appVersionModuleName(name: String): String {
         '${name}${APP_VERSION_MODULE_SUFFIX}'
     }
@@ -445,6 +468,8 @@ public class ${name}_AppVersionImpl <: AppVersion {
             case 'cleanUpdate' => cleanUpdate()
             case 'build' => build()
             case 'count' => count()
+            case 'replaceVersion' => replaceVersion()
+            case 'version' => version()
             case _ => throw BootException(
                 'first command arg must be run|start|shutdown|restart, but current args are ${args}')
         }
