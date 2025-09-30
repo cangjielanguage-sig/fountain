@@ -4,20 +4,8 @@
 #  mysql = {git = "https://gitcode.com/runningW/mysql-driver.git"}
   opengauss = {git = "https://gitcode.com/runningW/opengauss-driver.git", branch="master"}
 
-#[package]
-#  cjc-version = "1.0.0"
-#  compile-option = "-O2 --dy-std"
-#  override-compile-option = "-O2 --dy-std"
-#  description = "utility for server app development"
-#  link-option = ""
-#  name = "fountain"
-#  output-type = "executable"
-#  src-dir = ""
-#  target-dir = ""
-#  version = "1.0.0"
-#  package-configuration = {}
-
 [workspace]
+  version = "1.0.0"
   members=["./boot", "./user"]
   compile-option = "-O2 --dy-std"
   override-compile-option = "-O2 --dy-std"
@@ -32,24 +20,24 @@
   compile-option = "-O2 --lto=full --dy-std"
   override-compile-option = "-O2 --lto=full --dy-std"
 [target.x86_64-unknown-linux-gnu.bin-dependencies]
-  path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]
+  path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}", "${CANGJIE_FOUNTAIN_LIBS}"]
 [target.aarch64-unknown-linux-gnu]
   compile-option = "-O2 --lto=full --dy-std"
   override-compile-option = "-O2 --lto=full --dy-std"
 [target.aarch64-unknown-linux-gnu.bin-dependencies]
-  path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]
+  path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}", "${CANGJIE_FOUNTAIN_LIBS}"]
 [target.x86_64-w64-mingw32]
   compile-option = "-O2 --dy-std"
   override-compile-option = "-O2 --dy-std"
 [target.x86_64-w64-mingw32.bin-dependencies]
-  path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]
+  path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}", "${CANGJIE_FOUNTAIN_LIBS}"]
 [target.x86_64-apple-darwin]
   compile-option = "-O2 --dy-std"
   override-compile-option = "-O2 --dy-std"
 [target.x86_64-apple-darwin.bin-dependencies]
-  path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]
+  path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}", "${CANGJIE_FOUNTAIN_LIBS}"]
 [target.aarch64-apple-darwin]
   compile-option = "-O2 --dy-std"
   override-compile-option = "-O2 --dy-std"
 [target.aarch64-apple-darwin.bin-dependencies]
-  path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]
+  path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}", "${CANGJIE_FOUNTAIN_LIBS}"]

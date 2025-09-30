@@ -233,14 +233,75 @@ public struct App {
             (getWorkingDirectory(), path)
         }
     }
+    private func entireFileText(path: Path){
+        String.fromUtf8(File.readFrom(path))
+    }
+    private func appendToml(dir: Path): Unit {
+        let toml = '''
+
+[profile.build]
+  incremental = true
+[profile.build.combined]
+  ${dir.fileName} = "dynamic"
+
+[target]
+[target.x86_64-unknown-linux-gnu]
+  compile-option = "-O2 --lto=full --dy-std"
+  override-compile-option = "-O2 --lto=full --dy-std"
+[target.x86_64-unknown-linux-gnu.bin-dependencies]
+  path-option = ["\${CANGJIE_STDX_DYNAMIC_PATH}", "\${CANGJIE_FOUNTAIN_LIBS}"]
+[target.aarch64-unknown-linux-gnu]
+  compile-option = "-O2 --lto=full --dy-std"
+  override-compile-option = "-O2 --lto=full --dy-std"
+[target.aarch64-unknown-linux-gnu.bin-dependencies]
+  path-option = ["\${CANGJIE_STDX_DYNAMIC_PATH}", "\${CANGJIE_FOUNTAIN_LIBS}"]
+[target.x86_64-w64-mingw32]
+  compile-option = "-O2 --dy-std"
+  override-compile-option = "-O2 --dy-std"
+[target.x86_64-w64-mingw32.bin-dependencies]
+  path-option = ["\${CANGJIE_STDX_DYNAMIC_PATH}", "\${CANGJIE_FOUNTAIN_LIBS}"]
+[target.x86_64-apple-darwin]
+  compile-option = "-O2 --dy-std"
+  override-compile-option = "-O2 --dy-std"
+[target.x86_64-apple-darwin.bin-dependencies]
+  path-option = ["\${CANGJIE_STDX_DYNAMIC_PATH}", "\${CANGJIE_FOUNTAIN_LIBS}"]
+[target.aarch64-apple-darwin]
+  compile-option = "-O2 --dy-std"
+  override-compile-option = "-O2 --dy-std"
+[target.aarch64-apple-darwin.bin-dependencies]
+  path-option = ["\${CANGJIE_STDX_DYNAMIC_PATH}", "\${CANGJIE_FOUNTAIN_LIBS}"]
+'''
+        let tomlPath = dir.join('cjpm.toml')
+        var content = entireFileText(tomlPath).replace('[dependencies]', '''
+[dependencies]
+  fountain = {git = "https://gitcode.com/Cangjie-SIG/fountain.git"}
+'''
+)
+        content = '''
+${content}
+
+${toml}
+'''
+        File.writeTo(tomlPath, content.unsafeBytes())
+    }
+    private func doInit(arg: String): Int64 {
+        let code = execute('cjpm', ['init', arg], workingDirectory: getWorkingDirectory())
+        code
+    }
     private func initWorkspace(): Int64 {
-        execute('cjpm', ['init', '--workspace'], workingDirectory: getWorkingDirectory())
+        let code = doInit('--workspace')
+        if(code != 0){
+            return code
+        }
+        appendToml(getWorkingDirectory())
+        code
     }
     private func initDynamic(): Int64 {
-        execute('cjpm', ['init', '--type=dynamic'], workingDirectory: getWorkingDirectory())
+        doInit('--type=dynamic')
     }
     private func cleanUpdate(): Int64 {
         let (workingDir, targetDir) = directories()
+        println('fboot cleanUpdate ${workingDir} --target-dir=${targetDir}')
         let code = execute('cjpm', ['clean', '--target-dir=${targetDir}'], workingDirectory: workingDir)
         if(code != 0){
             return code
@@ -262,7 +323,11 @@ public struct App {
                 }
             }
         }
-        (version, name)
+        (version, if (name.isEmpty()) {
+            dir.fileName
+        } else {
+            name
+        })
     }
     private func install(): Int64 {
         println('fboot install 此命令专门用来编译它自己也就是fboot本身')
@@ -277,24 +342,17 @@ public struct App {
             case _ => throw BootException('working directory ${workingDir} is not path of project fountain')
         }
         var version = extract(fountainPath)[0]
+        let appPath = fountainPath.join('src/App.cj')
         var code = ''
         try {
             if(!version.isEmpty()) {
-                try (file = File(fountainPath.join('src/App.cj'), ReadWrite)) {
-                    code = StringReader(file).readToEnd()
-                    file.seek(SeekPosition.Begin(0))
-                    file.write(code.replaceFirst('(@{version})', '(${version})').unsafeBytes())
-                    file.flush()
-                }
+                code = entireFileText(appPath)
+                File.writeTo(appPath, code.replaceFirst('(@{version})', '(${version})').unsafeBytes())
             }
             execute('cjpm', ['install', '--root', '${path}'], workingDirectory: fbootPath)
         } finally {
             if(!code.isEmpty()){
-                try (file = File(fountainPath.join('src/App.cj'), Write)) {
-                    file.seek(SeekPosition.Begin(0))
-                    file.write(code.unsafeBytes())
-                    file.flush()
-                }
+                File.writeTo(appPath, code.unsafeBytes())
             }
         }
     }
@@ -319,16 +377,17 @@ public struct App {
 package ${appVersionModuleName(name)}
 import fountain.AppVersion
 import fountain.bean.macros.Bean
+import fountain.bean.*
 @Bean
-public struct ${name}_AppVersionImpl <: AppVersion {
+public class ${name}_AppVersionImpl <: AppVersion {
     public prop version: String {
         get() {
-            ${version}
+            '${version}'
         }
     }
     public prop banner: String {
         get() {
-            ${banner()}
+            #'${banner()}'#
         }
     }
 }
@@ -338,40 +397,29 @@ public struct ${name}_AppVersionImpl <: AppVersion {
         println('fboot build 此命令专门用来编译使用fountain开发的应用项目')
         let (workingDir, targetDir) = directories()
         println('fboot build ${workingDir} --target-dir=${targetDir}')
-        let versionModuleName = appVersionModuleName(name)
+        let versionModuleName = appVersionModuleName(workingDir.fileName)
         let versionModuleDir = workingDir.join(versionModuleName)
         Directory.create(versionModuleDir, recursive: true)
         let execode = execute('cjpm', ['init', '--type=dynamic'], workingDirectory: versionModuleDir)
+        let tomlPath = workingDir.join('cjpm.toml')
         var toml = ''
         try {
             if(execode != 0) {
                 return execode
             }
             var (version, name) = extract(workingDir, extractName: true)
-            try(file = File(versionModuleDir.join('src/${name}_AppVersionImpl.cj'), Write)){
-                let code = genCode(name, version)
-                file.seek(SeekPosition.Begin(0))
-                file.write(code.unsafeBytes())
-                file.flush()
-            }
-            try (file = File(workingDir.join('cjpm.toml'), ReadWrite)) {
-                toml = StringReader(file).readToEnd()
-                if(let Some(membersIdx) <- toml.indexOf('members') && let Some(idx) <- toml.indexOf(']', membersIdx)) {
-                    let members = toml[membersIdx ..= idx]
-                    let newMembers = members.replaceLast(']', ', "./${versionModuleName}"]')
-                    let newtoml = toml.replaceFirst(members, newMembers)
-                    file.seek(SeekPosition.Begin(0))
-                    file.write(newtoml.unsafeBytes())
-                    file.flush()
-                }
+            let appVersionPath = versionModuleDir.join('src/${name}_AppVersionImpl.cj')
+            File.writeTo(appVersionPath, genCode(workingDir.fileName, version).unsafeBytes())
+            toml = entireFileText(tomlPath)
+            if(let Some(membersIdx) <- toml.indexOf('members') && let Some(idx) <- toml.indexOf(']', membersIdx)) {
+                let members = toml[membersIdx ..= idx]
+                let newMembers = members.replaceLast(']', ', "./${versionModuleName}"]')
+                let newtoml = toml.replaceFirst(members, newMembers)
+                File.writeTo(tomlPath, newtoml.unsafeBytes())
             }
             execute('cjpm', ['build', '--target-dir=${targetDir}'], workingDirectory: workingDir)
         } finally {
-            try (file = File(workingDir.join('cjpm.toml'), Write)) {
-                file.seek(SeekPosition.Begin(0))
-                file.write(toml.unsafeBytes())
-                file.flush()
-            }
+            File.writeTo(tomlPath, toml.unsafeBytes())
             removeIfExists(versionModuleDir, recursive: true)
         }
     }

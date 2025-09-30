@@ -86,10 +86,13 @@ _/ ____\____  __ __  _____/  |______  |__| ____
   9. fboot install 编译fboot，首次编译fboot使用cjpm install --root </path/of/install>，以后就可以使用fboot install编译，fboot install编译可以输出fountain版本号
 
 ## 构建
-  为stdx指定环境变量，比如下面这样
+  为stdx指定环境变量，为fountain指定编译路径和环境变量，比如下面这样。要完整地使用fboot的功能，务必使用这些环境变量名
   ```
   export CANGJIE_STDX_PATH=/path/of/stdx/linux_x86_64_llvm
   export CANGJIE_STDX_DYNAMIC_PATH=$CANGJIE_STDX_PATH/dynamic/stdx
+  cd /path/of/fboot/in/fountain
+  cjpm install --root /path/of/fountain/libs
+  export CANGJIE_FOUNTAIN_LIBS=/path/of/fountain/libs
   ```
 
 ## 功能
