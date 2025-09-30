@@ -358,7 +358,7 @@ public struct ${name}_AppVersionImpl <: AppVersion {
                 toml = StringReader(file).readToEnd()
                 if(let Some(membersIdx) <- toml.indexOf('members') && let Some(idx) <- toml.indexOf(']', membersIdx)) {
                     let members = toml[membersIdx ..= idx]
-                    let newMembers = members.replaceLast(']', ', ./${versionModuleName}]')
+                    let newMembers = members.replaceLast(']', ', "./${versionModuleName}"]')
                     let newtoml = toml.replaceFirst(members, newMembers)
                     file.seek(SeekPosition.Begin(0))
                     file.write(newtoml.unsafeBytes())
