@@ -179,6 +179,7 @@ public struct App {
     }
     private func version(){
         println('fountain(1.0.0)')
+        0
     }
     private prop app: String {
         get() {
@@ -357,13 +358,12 @@ ${toml}
             case _ => throw BootException('working directory ${workingDir} is not path of project fountain')
         }
         var version = extract(fountainPath)[0]
-        let appPath = fountainPath.join('src/App.cj')
-        var cjpmCode = 0
-        var code = ''
         if(!version.isEmpty()) {
-            code = entireFileText(appPath)
+            let appPath = fountainPath.join('src/App.cj')
+            let code = entireFileText(appPath)
             File.writeTo(appPath, Regex(#'fountain\((\d+\.)+\d+\)'#).replaceAll(code, 'fountain(${version})').unsafeBytes())
         }
+        0
     }
     private func appVersionModuleName(name: String): String {
         '${name}${APP_VERSION_MODULE_SUFFIX}'
