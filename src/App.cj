@@ -292,20 +292,34 @@ ${toml}
 '''
         File.writeTo(tomlPath, content.unsafeBytes())
     }
-    private func doInit(arg: String): Int64 {
-        let code = execute('cjpm', ['init', arg], workingDirectory: getWorkingDirectory())
-        code
+    private func doInit(arg: String): (Int64, Path) {
+        let workingDir = if(1 < this.args.size){
+            let sub = this.args[1]            
+            let dir = if(sub.startsWith('/')){
+                Path(sub)
+            } else {
+                getWorkingDirectory().join(this.args[1])
+            }
+            if(!exists(dir)){
+                Directory.create(dir, recursive: true)
+            }
+            dir
+        }else{
+            getWorkingDirectory()
+        }
+        let code = execute('cjpm', ['init', arg], workingDirectory: workingDir)
+        (code, workingDir)
     }
     private func initWorkspace(): Int64 {
-        let code = doInit('--workspace')
+        let (code, dir) = doInit('--workspace')
         if(code != 0){
             return code
         }
-        appendToml(getWorkingDirectory())
+        appendToml(dir)
         code
     }
     private func initDynamic(): Int64 {
-        doInit('--type=dynamic')
+        doInit('--type=dynamic')[0]
     }
     private func cleanUpdate(): Int64 {
         let (workingDir, targetDir) = directories()
