@@ -230,8 +230,14 @@ public struct App {
             }
             (path, p)
         }else{
-            (path.parent, path)
+            (getWorkingDirectory(), path)
         }
+    }
+    private func initWorkspace(): Int64 {
+        execute('cjpm', ['init', '--workspace'], workingDirectory: getWorkingDirectory())
+    }
+    private func initDynamic(): Int64 {
+        execute('cjpm', ['init', '--type=dynamic'], workingDirectory: getWorkingDirectory())
     }
     private func cleanUpdate(): Int64 {
         let (workingDir, targetDir) = directories()
@@ -416,6 +422,8 @@ public struct ${name}_AppVersionImpl <: AppVersion {
             case 'run' => run()
             case 'shutdown' => shutdown()
             case 'rerun' => rerun()
+            case 'dynamic' => initDynamic()
+            case 'workspace' => initWorkspace()
             case 'cleanUpdate' => cleanUpdate()
             case 'install' => install()//这个命令专门用来构建fountain
             case 'build' => build()

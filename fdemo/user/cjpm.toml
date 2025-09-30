@@ -14,7 +14,7 @@
 [profile.build]
   incremental = true
 [profile.build.combined]
-  fountain = "dynamic"
+  user = "dynamic"
 
 [target]
 [target.x86_64-unknown-linux-gnu]
