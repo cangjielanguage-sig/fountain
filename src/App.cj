@@ -401,12 +401,12 @@ public class ${name}_AppVersionImpl <: AppVersion {
         let versionModuleDir = workingDir.join(versionModuleName)
         Directory.create(versionModuleDir, recursive: true)
         let execode = execute('cjpm', ['init', '--type=dynamic'], workingDirectory: versionModuleDir)
+        if (execode != 0) {
+            return execode
+        }
         let tomlPath = workingDir.join('cjpm.toml')
         var toml = ''
         try {
-            if(execode != 0) {
-                return execode
-            }
             var (version, name) = extract(workingDir, extractName: true)
             let appVersionPath = versionModuleDir.join('src/${name}_AppVersionImpl.cj')
             File.writeTo(appVersionPath, genCode(workingDir.fileName, version).unsafeBytes())
@@ -419,7 +419,9 @@ public class ${name}_AppVersionImpl <: AppVersion {
             }
             execute('cjpm', ['build', '--target-dir=${targetDir}'], workingDirectory: workingDir)
         } finally {
-            File.writeTo(tomlPath, toml.unsafeBytes())
+            if (toml.size > 0) {
+                File.writeTo(tomlPath, toml.unsafeBytes())
+            }
             removeIfExists(versionModuleDir, recursive: true)
         }
     }
