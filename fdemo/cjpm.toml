@@ -1,5 +1,5 @@
 [dependencies]
-#  fountain = {path = "../"}
+  fountain = {path = "../"}
 #  mysql = {git = "https://gitcode.com/Cangjie-TPC/mysqlclient-ffi.git"}
 #  mysql = {git = "https://gitcode.com/runningW/mysql-driver.git"}
   opengauss = {git = "https://gitcode.com/runningW/opengauss-driver.git", branch="master"}
