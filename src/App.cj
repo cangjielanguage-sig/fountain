@@ -260,13 +260,14 @@ public struct App {
     }
     private func install(): Int64 {
         println('fboot install 此命令专门用来编译它自己也就是fboot本身')
+        println('fboot install ${path}')
         let workingDir = getWorkingDirectory()
-        let fountainPath = 
+        let (fountainPath, fbootPath) = 
         match(workingDir.fileName) {
             case 'fountain' => 
-                workingDir
+                (workingDir, workingDir.join('fboot'))
             case 'fboot' =>
-                workingDir.parent
+                (workingDir.parent, workingDir)
             case _ => throw BootException('working directory ${workingDir} is not path of project fountain')
         }
         var version = extract(fountainPath)[0]
@@ -280,7 +281,7 @@ public struct App {
                     file.flush()
                 }
             }
-            execute('cjpm', ['install', '--root', '${path}'])
+            execute('cjpm', ['install', '--root', '${path}'], workingDirectory: fbootPath)
         } finally {
             if(!code.isEmpty()){
                 try (file = File(fountainPath.join('src/App.cj'), Write)) {
@@ -330,6 +331,7 @@ public struct ${name}_AppVersionImpl <: AppVersion {
     private func build(): Int64 {
         println('fboot build 此命令专门用来编译使用fountain开发的应用项目')
         let (workingDir, targetDir) = directories()
+        println('fboot build ${workingDir} --target-dir=${targetDir}')
         let versionModuleName = appVersionModuleName(name)
         let versionModuleDir = workingDir.join(versionModuleName)
         Directory.create(versionModuleDir, recursive: true)
