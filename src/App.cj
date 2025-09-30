@@ -329,6 +329,9 @@ ${toml}
                 } else if (l.startsWith('name') && let Some(idx) <- l.indexOf('"')) {
                     name = l[idx + 1 .. l.size - 1]
                 }
+                if (!(version.isEmpty() || name.isEmpty())) {
+                    break
+                }
             }
         }
         (version, if (name.isEmpty()) {
@@ -341,9 +344,7 @@ ${toml}
         let path = '${getWorkingDirectory()}/banner.txt'
         var banner_ = ''
         if(exists(path)) {
-            try(file = File(path, Read)){
-                banner_ = StringReader(file).readToEnd()
-            }
+            banner_ = String.fromUtf8(File.readFrom(path))
         }
         if(!banner_.isEmpty()){
             return banner_
@@ -397,7 +398,9 @@ public class ${name}_AppVersionImpl <: AppVersion {
         println('fboot build 此命令专门用来编译使用fountain开发的应用项目')
         let (workingDir, targetDir) = directories()
         println('fboot build ${workingDir} --target-dir=${targetDir}')
-        let versionModuleName = appVersionModuleName(workingDir.fileName)
+        var (version, name) = extract(workingDir, extractName: true)
+        let n = name.replace('.', '_').replace('-', '_')
+        let versionModuleName = appVersionModuleName(n)
         let versionModuleDir = workingDir.join(versionModuleName)
         Directory.create(versionModuleDir, recursive: true)
         let execode = execute('cjpm', ['init', '--type=dynamic'], workingDirectory: versionModuleDir)
@@ -407,9 +410,8 @@ public class ${name}_AppVersionImpl <: AppVersion {
         let tomlPath = workingDir.join('cjpm.toml')
         var toml = ''
         try {
-            var (version, name) = extract(workingDir, extractName: true)
-            let appVersionPath = versionModuleDir.join('src/${name}_AppVersionImpl.cj')
-            File.writeTo(appVersionPath, genCode(workingDir.fileName, version).unsafeBytes())
+            let appVersionPath = versionModuleDir.join('src/${n}_AppVersionImpl.cj')
+            File.writeTo(appVersionPath, genCode(n, version).unsafeBytes())
             toml = entireFileText(tomlPath)
             if(let Some(membersIdx) <- toml.indexOf('members') && let Some(idx) <- toml.indexOf(']', membersIdx)) {
                 let members = toml[membersIdx ..= idx]
