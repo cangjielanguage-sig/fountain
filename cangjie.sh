@@ -51,7 +51,6 @@ cj(){
     fboot replaceVersion ./
     cd fboot
     cjpm install --root /mnt/d/docs/work/cangjie/installed
-    cp ./target/release/*/*.cjo /mnt/d/docs/work/cangjie/installed/libs/fboot/
     ;;
   installed)
     cd /mnt/d/docs/work/cangjie/installed
