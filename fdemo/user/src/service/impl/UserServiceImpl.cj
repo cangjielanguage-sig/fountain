@@ -16,22 +16,20 @@ limitations under the License.
 package user.service.impl
 
 import std.reflect.*
-
-import fountain.bean.*
-import fountain.bean.macros.*
-import fountain.orm.*
-import user.service.UserService
 import user.dao.UserDAO
-import fountain.log.*
 
 @Bean
 @BeanMeta
 public class UserServiceImpl <: UserService {
     private static let log = LoggerFactory.getLogger<UserServiceImpl>()
     public func register(username: String, password: String): Int64 {
+        println('username: ${username}, password: ${password}')
+        executor().register(username, password)
+    }
+    public func changePassword(username: String, password: String): Int64 {
         try{
             println('username: ${username}, password: ${password}')
-            executor().register(username, password)
+            executor().changePassword(username, password)
         }catch(e: Exception){
             e.printStackTrace()
             throw e

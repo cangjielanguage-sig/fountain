@@ -16,11 +16,6 @@ limitations under the License.
 package user.controller
 
 import std.reflect.*
-import stdx.encoding.json.*
-import fountain.bean.*
-import fountain.bean.macros.*
-import fountain.mvc.*
-import fountain.mvc.macros.*
 import user.service.UserService
 
 @Controller
@@ -46,4 +41,27 @@ public class UserController {
         }
         '''
     }
+    @PutMapping[path:'/api/user/changePassword', consumes:'application/x-www-form-urlencoded', produces:'text/plain']
+    public func changePassword(@RequestParam username: String, @RequestParam password: String): String {
+        let count = userService.changePassword(username, password).toString()
+        '''
+        {
+            "count": ${count},
+            "username": "${username}",
+            "password": "${password}"
+        }
+        '''
+    }
+    @GetMapping[path:'/api/user/{id}', produces:'application/json']
+    public func changePassword(@PathVariable id: Int64): JsonValue {
+        let count = userService.changePassword(username, password).toString()
+        '''
+        {
+            "count": ${count},
+            "username": "${username}",
+            "password": "${password}"
+        }
+        '''
+    }
+    
 }

@@ -15,9 +15,6 @@ limitations under the License.
 */
 package user.dao
 
-import fountain.orm.*
-import fountain.orm.macros.*
-
 @DAO
 public interface UserDAO <: RootDAO {
     func register(username: String, password: String): Int64 {
@@ -30,4 +27,12 @@ public interface UserDAO <: RootDAO {
             returning id'''
         ).insert
     }
+    func changePassword(username: String, password: String): Int64 {
+        executor.setSql('''
+            update user_info 
+               set "password" = ${arg(password)}
+             where username = ${arg(username)}'''
+        ).update
+    }
+    
 }

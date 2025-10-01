@@ -48,9 +48,11 @@ cj(){
     fboot cleanUpdate
     ;;
   install)
+    echo 'cj install 专门用于编译构建fountain，执行此命令前请先执行cj fountain'
     fboot replaceVersion ./
     cd fboot
     cjpm install --root /mnt/d/docs/work/cangjie/installed
+    cd ..
     ;;
   installed)
     cd /mnt/d/docs/work/cangjie/installed

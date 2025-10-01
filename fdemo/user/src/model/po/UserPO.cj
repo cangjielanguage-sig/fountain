@@ -13,9 +13,10 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package user.service
+package user.model.po
 
-public interface UserService <: RootService {
-    func register(username: String, password: String): Int64
-    func changePassword(username: String, password: String): Int64
+public class UserPO {
+    private var id: Int64 = 0
+    private var username: String = ''
+    private var password: String = ''
 }

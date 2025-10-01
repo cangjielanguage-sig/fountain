@@ -14,3 +14,14 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 package user
+
+protected import stdx.encoding.json.*
+
+protected import fountain.base.*
+protected import fountain.orm.*
+protected import fountain.orm.macros.*
+protected import fountain.mvc.*
+protected import fountain.mvc.macros.*
+protected import fountain.bean.*
+protected import fountain.bean.macros.*
+protected import fountain.log.*
