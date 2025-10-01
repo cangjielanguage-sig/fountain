@@ -13,21 +13,4 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package user.model.po
-
-import std.time.DateTime
-
-import fountain.orm.*
-import fountain.orm.macros.*
-
-// @QueryMappersGenerator
-// public class UserPO {
-//     @ORMField[true 'id']
-//     private var id: Int64 = 0
-//     @ORMField['username']
-//     private var username: String = ''
-//     @ORMField['password']
-//     private var password: String = ''
-//     @ORMField['save_time']
-//     private var saveTime: DateTime = zeroValue<DateTime>()
-// }
+package user.model

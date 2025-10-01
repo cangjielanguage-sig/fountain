@@ -22,6 +22,7 @@ import fountain.bean.macros.*
 import fountain.mvc.*
 import fountain.mvc.macros.*
 import user.service.UserService
+import user.model.po.*
 
 @Controller
 public class UserController {
@@ -45,5 +46,40 @@ public class UserController {
             "password": "${password}"
         }
         '''
+    }
+    @PutMapping[path:'/api/user/changePassword', consumes:'application/x-www-form-urlencoded', produces:'text/plain']
+    public func changePassword(@RequestParam username: String, @RequestParam password: String): String {
+        let count = userService.changePassword(username, password).toString()
+        '''
+        {
+            "count": ${count},
+            "username": "${username}",
+            "password": "${password}"
+        }
+        '''
+    }
+    // @GetMapping[path:'/api/user/{id}', produces:'application/json']
+    // public func queryUser(@PathVariable id: Int64): JsonValue {
+    //     let user = userService.queryUser(id)
+    //     let json = '''
+    //     {
+    //         "id": ${user.id},
+    //         "username": "${user.username}",
+    //         "password": "${user.password}",
+    //         "registerTime": "${user.saveTime}"
+    //     }
+    //     '''
+    //     JsonValue.fromStr(json)
+    // }
+    @DeleteMapping[path:'/api/user/{id}', produces:'application/json', consumes:'application/x-www-form-urlencoded']
+    public func deleteUser(@PathVariable id: Int64): JsonValue {
+        println('delete user id is ${id}')
+        let deleted = userService.deleteUser(id)
+        let json = '''
+        {
+            "status": 1,
+            "deleted": ${deleted}
+        }'''
+        JsonValue.fromStr(json)
     }
 }

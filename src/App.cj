@@ -329,7 +329,7 @@ ${toml}
         removeIfExists('${workingDir}/cjpm.lock')
         execute('cjpm', ['update'], workingDirectory: workingDir)
     }
-    private func extract(dir: Path, extractName!: Bool = false){
+    private func extract(dir: Path){
         var version = ''
         var name = ''
         try(file = File(dir.join('cjpm.toml'), Read)){
@@ -410,7 +410,7 @@ public class ${name}_AppVersionImpl <: AppVersion {
         println('fboot build 此命令专门用来编译使用fountain开发的应用项目')
         let (workingDir, targetDir) = directories()
         println('fboot build ${workingDir} --target-dir=${targetDir}')
-        var (version, name) = extract(workingDir, extractName: true)
+        var (version, name) = extract(workingDir)
         let n = name.replace('.', '_').replace('-', '_')
         let versionModuleName = appVersionModuleName(n)
         let versionModuleDir = workingDir.join(versionModuleName)

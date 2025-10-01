@@ -15,6 +15,7 @@ fountain.iml
 .devbrain/*
 .arts/
 .arts/*
+.rules/
 build-script-cache/
 build.cj
 log.txt

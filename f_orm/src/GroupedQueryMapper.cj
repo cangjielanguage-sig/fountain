@@ -62,7 +62,7 @@ public class GroupedSingleQueryMapper<T, O> <: QueryMapper<O> {
     }
     public func populate(result: QueryResultWrap, o: O): O {
         let list = groupedGetter(o)
-        list.add(convert<T>(result.getOrNull<T>(name)))
+        list.add(ORMConverter.convert<T>(result.getOrNull<T>(name)))
         o
     }
 }

@@ -77,6 +77,6 @@ public open class FieldQueryMapper<T, O> <: QueryMapper<O> {
         dataType!: DataType = UnknownDataType(true, ''),
         putter!: (O, T) -> Unit
     ) {
-        super(dataType: dataType, putter: {o, v => putter(o, convert<T>(v))})
+        super(dataType: dataType, putter: {o, v => putter(o, ORMConverter.convert<T>(v))})
     }
 }

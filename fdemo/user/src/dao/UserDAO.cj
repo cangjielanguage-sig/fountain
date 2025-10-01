@@ -15,8 +15,12 @@ limitations under the License.
 */
 package user.dao
 
+import std.collection.Map
+
 import fountain.orm.*
 import fountain.orm.macros.*
+
+import user.model.po.*
 
 @DAO
 public interface UserDAO <: RootDAO {
@@ -29,5 +33,27 @@ public interface UserDAO <: RootDAO {
                         ${arg(password)}) 
             returning id'''
         ).insert
+    }
+    func changePassword(username: String, password: String): Int64 {
+        executor.setSql('''
+            update user_info
+               set "password" = ${arg(password)}
+             where username = ${arg(username)}'''
+        ).update
+    }
+    func findUser(id: Int64): Map<String, Any> {
+        executor.setSql('''
+            select * 
+              from user_info
+             where id = ${arg(id)}'''
+        ).firstToMap()
+    }
+    func deleteUser(id: Int64): Int64 {
+        executor.setSql('''
+            delete 
+              from user_info
+             where id = ${arg(id)} 
+        '''
+        ).delete
     }
 }

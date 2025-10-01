@@ -15,26 +15,45 @@ limitations under the License.
 */
 package user.service.impl
 
+import std.collection.Map
 import std.reflect.*
 
 import fountain.bean.*
 import fountain.bean.macros.*
 import fountain.orm.*
+import fountain.log.*
+
 import user.service.UserService
 import user.dao.UserDAO
-import fountain.log.*
+import user.model.po.*
 
 @Bean
 @BeanMeta
 public class UserServiceImpl <: UserService {
     private static let log = LoggerFactory.getLogger<UserServiceImpl>()
     public func register(username: String, password: String): Int64 {
-        try{
-            println('username: ${username}, password: ${password}')
-            executor().register(username, password)
-        }catch(e: Exception){
-            e.printStackTrace()
-            throw e
-        }
+        println('username: ${username}, password: ${password}')
+        executor().register(username, password)
+    }
+    public func changePassword(username: String, password: String): Int64 {
+        println('username: ${username}, password: ${password}')
+        executor().changePassword(username, password)
+    }
+    // public func queryUser(id: Int64): UserPO {
+    //     try{
+    //         let map = execute.findUser(id)
+    //         let po = UserPO()
+    //         po.id = (map['id'] as Int64) ?? 0
+    //         po.username = (map['username'] as String) ?? ""
+    //         po.password = (map['password'] as String) ?? ""
+    //         po.saveTime = (map['save_time'] as DateTime) ?? zeroValue<DateTime>()
+    //     }catch(e: Exception){
+    //         e.printStackTrace()
+    //         throw e
+    //     }
+    // }
+    public func deleteUser(id: Int64): Int64 {
+        println('id: ${id}')
+        executor().deleteUser(id)
     }
 }

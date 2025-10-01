@@ -150,3 +150,12 @@ public func replaceMacroInputDecl(macroTokens: Tokens, decl: MacroExpandDecl): M
     //经过测试macroInputDecl macroInput互不影响，两个都要修改
     decl
 }
+public func replaceMacroInputDecl(macroDecl: MacroExpandDecl, decl: Decl): MacroExpandDecl {
+    var d = macroDecl
+    while(let md: MacroExpandDecl <- d.macroInputDecl) {
+        d = md
+    }
+    d.macroInputs = decl.toTokens()
+    d.macroInputDecl = decl
+    macroDecl
+}

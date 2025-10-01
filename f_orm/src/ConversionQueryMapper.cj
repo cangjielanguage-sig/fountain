@@ -21,7 +21,7 @@ public class ConversionQueryMaper<D, T, O> <: QueryMapper<O> {
         converter!: (D) -> T,
         putter!: (O, T) -> Unit
     ) {
-        super(dataType: dataType, putter: {o, v => putter(o, converter(convert<D>(v)))})
+        super(dataType: dataType, putter: {o, v => putter(o, converter(ORMConverter.convert<D>(v)))})
     }
     public init(
         name!: String,

@@ -45,32 +45,7 @@ public class RequestMeta <: HttpRequestHandler & ToString {
     public func handle(ctx: HttpContext): Unit {
         handle_(ctx)
     }
-    public func respond<T>(response: T, ctx: HttpContext): Unit where T <: DataFields<T> {
-        if (let Some(accept) <- ctx.request.headers.getFirst('Accept') && let Some(mediaType) <- MediaTypes.tryParse(accept)) {
-            let bytes = mediaType.fromDataFields(response)
-            ctx.responseBuilder.header('Content-Type', accept).body(bytes)
-        } else {
-            MultiRequestMethodHandler.NOT_ACCEPTABLE.handle(ctx)
-        }
-    }
-    public func respond(response: JsonValue, ctx: HttpContext): Unit {
-        if (let Some(accept) <- ctx.request.headers.getFirst('Accept') && 
-            let Some(mediaType) <- MediaTypes.tryParse(accept) && 
-            let jmt: JsonMediaType <- mediaType) {
-            let bytes = jmt.fromData(response)
-            ctx.responseBuilder.header('Content-Type', accept).body(bytes)
-        } else {
-            MultiRequestMethodHandler.NOT_ACCEPTABLE.handle(ctx)
-        }
-    }
-    public func respond(response: InputStream, ctx: HttpContext): Unit {
-        populateResponseContentType(ctx) 
-        ctx.responseBuilder.body(response)
-    }
-    public func respond(response: Array<Byte>, ctx: HttpContext): Unit {
-        populateResponseContentType(ctx)
-        ctx.responseBuilder.body(response)
-    }
+
     private func populateResponseContentType(ctx: HttpContext) {
         if (let Some(accept) <- ctx.request.headers.getFirst('Accept')) {
             ctx.responseBuilder.header('Content-Type', accept)
@@ -102,18 +77,36 @@ public class RequestMeta <: HttpRequestHandler & ToString {
         let request = ctx.request
         this.headers.check(request.headers) && this.params.check(request.form, request.url)
     }
-    public func setHandle<T, R>(fn: (T, HttpContext, HttpRequestPathPatterns) -> R): Unit where T <: Object,
-        R <: DataFields<R> {
+    public func setHandle<T, R>(fn: (T, HttpContext, HttpRequestPathPatterns) -> R): Unit where T <: Object, R <: DataFields<R> {
         let pattern = this.pattern.getOrThrow()
         this.handle_ = {
             ctx =>
             let start = MonoTime.now()
             try {
                 let result = fn(BeanFactory.instance.getFirst<T>().getOrThrow(), ctx, pattern)
-                if (let (GET, GET) <- (this.method, RequestMethod.parse(ctx.request.method))) {
-                    return
+                respond<R>(result, ctx)
+            } finally {
+                let request = ctx.request
+                log.info<ToString>('fountain.mvc {}:{};{}', [request.method, request.url, MonoTime.now() - start])
+            }
+        }
+    }
+    public func setHandle<T>(fn: (T, HttpContext, HttpRequestPathPatterns) -> Any): Unit where T <: Object {
+        let pattern = this.pattern.getOrThrow()
+        this.handle_ = {
+            ctx =>
+            let start = MonoTime.now()
+            try {
+                let result = fn(BeanFactory.instance.getFirst<T>().getOrThrow(), ctx, pattern)
+                match(result){
+                    case x: JsonValue => respond(x, ctx)
+                    case x: InputStream => respond(x, ctx)
+                    case x: Array<Byte> => respond(x, ctx)
+                    case _ => 
+                        let request = ctx.request
+                        log.warn<ToString>('fountain.mvc {}:{};{};{}', [request.method, request.url, TypeInfo.of(result), MonoTime.now() - start])
+                        MultiRequestMethodHandler.NOT_ACCEPTABLE.handle(ctx)
                 }
-                generateResponse<R>(ctx, result)
             } finally {
                 let request = ctx.request
                 log.info<ToString>('fountain.mvc {}:{};{}', [request.method, request.url, MonoTime.now() - start])
@@ -127,19 +120,37 @@ public class RequestMeta <: HttpRequestHandler & ToString {
         produces.add('*')
         consumes.add('*')
     }
-    private func generateResponse<R>(ctx: HttpContext, result: R): Unit where R <: DataFields<R> {
-        if (!(result is Unit)) {
-            let accept = if (let Some(x) <- ctx.request.headers.getFirst('Accept')) {
-                x
-            } else if (let Some(x) <- consumes.iterator().next()) {
-                x
-            } else {
-                ''
-            }
-            let mediaType = MediaTypes.parse(accept)
+    private func respond<R>(result: R, ctx: HttpContext): Unit where R <: DataFields<R> {
+        if (!(result is Unit) && 
+            let Some(accept) <- ctx.request.headers.getFirst('Accept') && 
+            let Some(mediaType) <- MediaTypes.tryParse(accept)) {
             let bytes = mediaType.fromDataFields(result)
-            ctx.responseBuilder.body(bytes)
+            ctx.responseBuilder.header('Content-Type', accept).body(bytes)
+        } else {
+            MultiRequestMethodHandler.NOT_ACCEPTABLE.handle(ctx)
         }
+    }
+    private func respond(response: JsonValue, ctx: HttpContext): Unit {
+        if (let Some(accept) <- ctx.request.headers.getFirst('Accept') && 
+            let Some(mediaType) <- MediaTypes.tryParse(accept) && 
+            let jmt: JsonMediaType <- mediaType) {
+            let bytes = jmt.fromData(response)
+            ctx.responseBuilder.header('Content-Type', accept).body(bytes)
+        } else {
+            MultiRequestMethodHandler.NOT_ACCEPTABLE.handle(ctx)
+        }
+    }
+    private func respond(response: InputStream, ctx: HttpContext): Unit {
+        populateResponseContentType(ctx) 
+        ctx.responseBuilder.body(response)
+    }
+    private func respond(response: Array<Byte>, ctx: HttpContext): Unit {
+        populateResponseContentType(ctx)
+        ctx.responseBuilder.body(response)
+    }
+    private func respond(response: String, ctx: HttpContext): Unit {
+        populateResponseContentType(ctx)
+        ctx.responseBuilder.body(response.unsafeBytes())
     }
     public func isMultipart(name: String) {
         args[name] is MultipartFormData

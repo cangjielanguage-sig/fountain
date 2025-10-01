@@ -60,6 +60,11 @@ cj(){
     ;;
   fountain)
     cd /mnt/d/docs/work/cangjie/projects/fountain
+    if [[ "$2" == "install" ]]; then                                                                                 
+        cj install
+    elif [ -n "$2" ]; then                                                                                           
+        echo 'only "install" can be followed command "cj fountain"'
+    fi
     ;;
   fboot)
     cd /mnt/d/docs/work/cangjie/projects/fountain/fboot

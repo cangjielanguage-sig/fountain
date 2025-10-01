@@ -32,15 +32,22 @@ import f_util.CaseFormat
  * 没有使用@ORMField注解的按照映射的不是主键，且按照列名是LowerUnderScore处理。
  */
 public macro QueryMappersGenerator(input: Tokens): Tokens {
+    expandQueryMappers(input)
+}
+private func expandQueryMappers(input: Tokens): Tokens {
     let decl = match(parseDecl(input)){
         case d: ClassDecl => d
         case d: MacroExpandDecl => 
-            return replaceMacroInputDecl(quote(@QueryMappersGenerator), d).toTokens()
+            var decl = extract(d)
+            let tokens = expandQueryMappers(decl.toTokens())
+            decl = parseDecl(tokens)
+            decl = replaceMacroInputDecl(d, decl)
+            return decl.toTokens()
         case _ => 
             diagReport(ERROR, input, 'QueryMappersGenerator supports a class', '')
             throw ORMException("QueryMappersGenerator supports a class") 
     }
-    let name = quote($(decl.identifier)$(decl.genericParam))
+    let name = quote($(decl.identifier))
     let body = decl.body.decls
     let props = extractMutProps(body)
     let vars = extractVars(body)
@@ -86,7 +93,7 @@ public macro QueryMappersGenerator(input: Tokens): Tokens {
     )
     for (st in superTypes) {
         mapperTokens.append(quote(
-            if (let Some(x) <- QueryMappers<$st.create<$name>(creator, mappers)) {
+            if (let Some(x) <- QueryMappers<$st>.create<$name>(creator, mappers)) {
                 return x
             }
             $(`nl`)
@@ -95,7 +102,7 @@ public macro QueryMappersGenerator(input: Tokens): Tokens {
     if (superTypes.isEmpty()) {
         decl.upperBound = `upperbound`[0]
     }
-    decl.superTypes.add(QualifiedType(quote(orm.QueryMappersInit<$name>)))
+    decl.superTypes.add(RefType(quote(QueryMappersInit<$name>)))
     body.add(
         all: [parseDecl(
             quote(
@@ -167,6 +174,7 @@ func generateMappers(name: Tokens, fieldName: Token, dts: Tokens, meta: (Bool, S
             dataType.append(dts[j + 2])
         } else {
             dataType.append(dt)
+            continue
         }
         break
     }
@@ -179,14 +187,14 @@ func generateMappers(name: Tokens, fieldName: Token, dts: Tokens, meta: (Bool, S
             quote(
                     IdQueryMapper<$dataType, $name>(
                         dataType: $(dataTypeToken)($nullable, $columnName),
-                        putter: {o, v => o.$fieldName = orm.convert<$dataType>(v)}
+                        putter: {o, v => o.$fieldName = ORMConverter.convert<$dataType>(v)}
                     )
                 )
         } else {
             quote(
                     IdQueryMapper<$dataType, $name>(
                         dataType: $(dataTypeToken)($nullable, $columnName),
-                        putter: {o, v => o.$fieldName = orm.convert<$dataType>(v)}
+                        putter: {o, v => o.$fieldName = ORMConverter.convert<$dataType>(v)}
                     )
                 )
         }
@@ -209,37 +217,37 @@ func generateMappers(name: Tokens, fieldName: Token, dts: Tokens, meta: (Bool, S
         }
         if (nullable && columnType.value.isEmpty()) {
             quote(
-                    if ($(listGeneric) is InputStream || $(listGeneric).isSimpleData()) {
-                        GroupedSingleQueryMapper<$listGeneric, $name>(
+                    if (TypeInfo.of<$(listGeneric[2])>().isSubtypeOf(TypeInfo.of<InputStream>()) || $(listGeneric[2]).isSimpleData()) {
+                        GroupedSingleQueryMapper<$(listGeneric[2]), $name>(
                             name: $columnName,
                             groupedGetter: {o => o.$fieldName}
                         )
                     } else {
-                        NullableGroupedQueryMapper<$listGeneric, $name>(
+                        NullableGroupedQueryMapper<$(listGeneric[2]), $name>(
                             ignoreNone: false,
-                            grouped: $(listGeneric).queryMappers,
+                            grouped: $(listGeneric[2]).queryMappers,
                             groupedGetter: {o => o.$fieldName}
                         )
                     }
                 )
         } else if (nullable) {
             quote(
-                    if ($(listGeneric) is InputStream || $(listGeneric).isSimpleData()) {
-                        GroupedSingleQueryMapper<$listGeneric, $name>(
+                    if (TypeInfo.of<$(listGeneric[2])>().isSubtypeOf(TypeInfo.of<InputStream>()) || $(listGeneric[2]).isSimpleData()) {
+                        GroupedSingleQueryMapper<$(listGeneric[2]), $name>(
                             name: $columnName,
                             groupedGetter: {o => o.$fieldName}
                         )
                     } else {
-                        NullableGroupedQueryMapper<$listGeneric, $name>(
+                        NullableGroupedQueryMapper<$(listGeneric[2]), $name>(
                             ignoreNone: false,
-                            grouped: $(listGeneric).queryMappers,
+                            grouped: $(listGeneric[2]).queryMappers,
                             groupedGetter: {o => o.$fieldName}
                         )
                     }
                 )
         } else if (columnType.value == "") {
             quote(
-                    if ($(listGeneric) is InputStream || $(listGeneric).isSimpleData()) {
+                    if (TypeInfo.of<$(listGeneric)>().isSubtypeOf(TypeInfo.of<InputStream>()) || $(listGeneric).isSimpleData()) {
                         GroupedSingleQueryMapper<$listGeneric, $name>(
                             name: $columnName,
                             groupedGetter: {o => o.$fieldName}
@@ -254,7 +262,7 @@ func generateMappers(name: Tokens, fieldName: Token, dts: Tokens, meta: (Bool, S
                 )
         } else {
             quote(
-                    if ($(listGeneric) is InputStream || $(listGeneric).isSimpleData()) {
+                    if (TypeInfo.of<$(listGeneric)>().isSubtypeOf(TypeInfo.of<InputStream>()) || $(listGeneric).isSimpleData()) {
                         GroupedSingleQueryMapper<$listGeneric, $name>(
                             name: $columnName,
                             groupedGetter: {o => o.$fieldName}
@@ -270,7 +278,7 @@ func generateMappers(name: Tokens, fieldName: Token, dts: Tokens, meta: (Bool, S
         }
     } else if (nullable && columnType.value == "") {
         quote(
-                if($(dataType) is InputStream){
+                if(TypeInfo.of<$(dataType)>().isSubtypeOf(TypeInfo.of<InputStream>())){
                     FieldQueryMapper<$dataType, $name> (
                         dataType: InputStreamDataType($nullable, $columnName),
                         putter: {o, v => o.$fieldName = v}
@@ -290,7 +298,7 @@ func generateMappers(name: Tokens, fieldName: Token, dts: Tokens, meta: (Bool, S
             )
     } else if (nullable) {
         quote(
-                if($(dataType) is InputStream){
+                if(TypeInfo.of<$(dataType)>().isSubtypeOf(TypeInfo.of<InputStream>())){
                     FieldQueryMapper<$dataType, $name> (
                         dataType: InputStreamDataType($nullable, $columnName),
                         putter: {o, v => o.$fieldName = v}
@@ -310,7 +318,7 @@ func generateMappers(name: Tokens, fieldName: Token, dts: Tokens, meta: (Bool, S
             )
     } else if (columnType.value == "") {
         quote(
-                if($(dataType) is InputStream){
+                if(TypeInfo.of<$(dataType)>().isSubtypeOf(TypeInfo.of<InputStream>())){
                     QueryMapper<$name> (
                         dataType: InputStreamDataType($nullable, $columnName),
                         putter: {o, v =>
@@ -341,7 +349,7 @@ func generateMappers(name: Tokens, fieldName: Token, dts: Tokens, meta: (Bool, S
             )
     } else {
         quote(
-                if($(dataType) is InputStream){
+                if(TypeInfo.of<$(dataType)>().isSubtypeOf(TypeInfo.of<InputStream>())){
                     QueryMapper<$name> (
                         dataType: InputStreamDataType($nullable, $columnName),
                         putter: {o, v =>

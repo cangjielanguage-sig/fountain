@@ -32,7 +32,10 @@ import f_util.CaseFormat
  */
 public macro ORMField(attrs: Tokens, input: Tokens): Tokens {
     assertParentContext("QueryMappersGenerator") //无法用反射处理QueryMapper的闭包参数的泛型，也就不能用反射创建Q
-    let tokens = quote($input)
+    expandORMField(attrs, input)
+}
+private func expandORMField(attrs: Tokens, input: Tokens): Tokens {
+    var tokens = input
     let decl = parseDecl(input)
     let name = match(decl) {
         case varDecl: VarDecl => 
@@ -49,9 +52,8 @@ public macro ORMField(attrs: Tokens, input: Tokens): Tokens {
                 } else {
                     `empty_tokens`
                 }
-                tokens.append(quote(
+                tokens = quote(
                     private var $varName $varType $assign
-
                     public mut prop $name $varType {
                         get(){
                             this.$varName
@@ -60,8 +62,7 @@ public macro ORMField(attrs: Tokens, input: Tokens): Tokens {
                             this.$varName = value
                         }
                     }
-                    $(`nl`)
-                ))
+                )
                 name
             } else {
                 throw ORMException(
@@ -75,7 +76,12 @@ public macro ORMField(attrs: Tokens, input: Tokens): Tokens {
                     "member of current type which is named as ${decl.identifier.value} must be modified by `public var` or `public mut prop` which is annotated by ORMField")
             }
         case d: MacroExpandDecl => 
-            return replaceMacroInputDecl(quote(@ORMField[$attrs]), d).toTokens()
+            let tokens = expandORMField(attrs, extract(d).toTokens())
+            let (varDecl, next) = parseDeclFragment(tokens, startFrom: 0)
+            return quote(
+                $(replaceMacroInputDecl(d, varDecl))
+                $(tokens[next .. ])
+            )
         case _ => 
             diagReport(ERROR, input, 'illegal decl', '')
             throw ORMException(
