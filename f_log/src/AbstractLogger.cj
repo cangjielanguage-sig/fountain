@@ -56,7 +56,7 @@ public abstract class AbstractLogger <: Logger & Resource {
     }
     public open func close(): Unit {
         match (output) {
-            case r: Resource where closable => r.close()
+            case r: Resource where closable && !isClosed() => r.close()
             case _ => ()
         }
     }

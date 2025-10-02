@@ -66,7 +66,7 @@ public abstract class AsyncLogger <: AbstractLogger {
             }
             sleep(Duration.microsecond * 100)// 等待写线程能够把最后一个字节数组写出
         }
-        if(let r: Resource <- output && closable){
+        if(let r: Resource <- output && closable && !r.isClosed()){
             r.close()
         }
     }
