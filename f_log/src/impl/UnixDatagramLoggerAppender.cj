@@ -17,19 +17,33 @@ package f_log.impl
 
 class UnixDatagramLoggerAppender <: AsyncLogger {
     private static const LOGGER_NAME = 'unixDatagram'
-    public UnixDatagramLoggerAppender(
+    private UnixDatagramLoggerAppender(
         name!: String,
         pattern!: LogPattern,
         level!: LogLevel = LogLevel.INFO,
+        output!: OutputStream,
         private let path!: String,
         private let sendTimeout!: ?Duration,
         private let bufSize!: ?Int64 = None
     ) {
-        super(name, level, pattern, createSocket(path, sendTimeout, bufSize), '${LOGGER_NAME}:///${path}')
+        super(name, level, pattern, output, '${LOGGER_NAME}:///${path}')
+    }
+    public init(
+        name!: String,
+        pattern!: LogPattern,
+        level!: LogLevel = LogLevel.INFO,
+        path!: String,
+        sendTimeout!: ?Duration,
+        bufSize!: ?Int64 = None
+    ) {
+        this(name: name, level: level, pattern: pattern, output: createSocket(path, sendTimeout, bufSize), path: path, sendTimeout: sendTimeout, bufSize: bufSize)
     }
     private static func createSocket(path: String, sendTimeout: ?Duration, bufSize: ?Int64) {
         let sock = UnixDatagramOutputStream(path, sendTimeout: sendTimeout, bufSize: bufSize)
         sock
+    }
+    public func new(name: String): AbstractLogger {
+        UnixDatagramLoggerAppender(name: name, pattern: super.pattern, level: super.level, output: super.actualOutput, path: path, sendTimeout: sendTimeout, bufSize: bufSize)
     }
     private static let appenderMap = ConcurrentHashMap<UnixDatagramLoggerParams, AbstractLogger>()
     public static func register(): Unit {

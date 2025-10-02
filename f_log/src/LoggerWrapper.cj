@@ -30,7 +30,7 @@ public class LoggerWrapper <: AbstractLogger {
         env.atExit {this.facade.load().close()}
     }
 
-    public func logLevelEnabled(level: LogLevel): Bool {/*  */
+    public func logLevelEnabled(level: LogLevel): Bool {
         facade.load().logLevelEnabled(level)
     }
 

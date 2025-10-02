@@ -15,21 +15,23 @@ limitations under the License.
  */
 package f_log
 
-import std.collection.concurrent.{ArrayBlockingQueue, ConcurrentHashMap}
+import std.collection.concurrent.{ArrayBlockingQueue, ConcurrentHashMap, LinkedBlockingQueue}
 import std.env
-import std.io.{OutputStream, ByteBuffer}
+import std.io.OutputStream
 import std.time.DateTime
 import stdx.log.{LogLevel, LogRecord}
 import f_collection.*
 import f_io.DummyOutputStream
 import f_log.exception.LogException
 
+import std.reflect.*
+
 public abstract class AsyncLogger <: AbstractLogger {
     private static let queueMap = ConcurrentHashMap<String, ArrayBlockingQueue<() -> Unit>>()
     private let timeout: Duration
     private let policy: AsyncTimeoutPolicy
     private let queue: ArrayBlockingQueue<() -> Unit>
-    private let output_: OutputStream
+    protected let actualOutput: OutputStream
     public init(
         name: String,
         level: LogLevel,
@@ -38,7 +40,7 @@ public abstract class AsyncLogger <: AbstractLogger {
         queueTag: String
     ) {
         super(name, level, pattern, confirmDummy(output))
-        this.output_ = output
+        this.actualOutput = output
         timeout = LoggerConfig.getAsyncTimeout()
         policy = LoggerConfig.getAsyncTimeoutPolicy()
         this.queue = queueMap.computeIfAbsent(queueTag){
@@ -62,12 +64,12 @@ public abstract class AsyncLogger <: AbstractLogger {
         }
     }
     public open func close(): Unit {
-        doClose(output_, closable)
+        doClose(actualOutput, closable)
     }
     private static func confirmDummy(output: OutputStream): OutputStream {
         match (output) {
             case _: DummyOutputStream => output
-            case _ => ByteBuffer()
+            case _ => SyncQueueOutputStream()
         }
     }
     private static func remove(queue: ArrayBlockingQueue<() -> Unit>): Unit {
@@ -82,12 +84,13 @@ public abstract class AsyncLogger <: AbstractLogger {
         }
     }
     private func append() {
-        let buffer = (super.output as ByteBuffer).getOrThrow()
-        if (buffer.remainLength > 0) {
-            super.output = ByteBuffer()
+        let buffer = (super.output as SyncQueueOutputStream).getOrThrow()
+        if (buffer.queue.size > 0) {
             append {
-                this.output_.write(buffer.bytes())
-                this.output_.flush()
+                while(let Some(bytes) <- buffer.queue.tryRemove()){
+                    this.actualOutput.write(bytes)
+                    this.actualOutput.flush()
+                }
             }
         }
     }
@@ -107,5 +110,11 @@ public abstract class AsyncLogger <: AbstractLogger {
     protected open func append(level: LogLevel, message: String, now: DateTime, ex: Option<Exception>): Unit {
         super.append(level, message, now, ex)
         append()
+    }
+}
+public class SyncQueueOutputStream <: OutputStream {
+    internal let queue = LinkedBlockingQueue<Array<Byte>>()
+    public func write(bytes: Array<Byte>): Unit {
+        queue.add(bytes)
     }
 }

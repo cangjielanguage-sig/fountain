@@ -17,9 +17,17 @@ package f_log.impl
 
 class UnixLoggerAppender <: AsyncLogger {
     private static const LOGGER_NAME = 'unix'
-    private let path: String
-    private let writeTimeout: ?Duration
-    private let bufSize: ?Int64
+    private UnixLoggerAppender(
+        name!: String,
+        pattern!: LogPattern,
+        level!: LogLevel = LogLevel.INFO,
+        output!: OutputStream,
+        private let path!: String,
+        private let writeTimeout!: ?Duration,
+        private let bufSize!: ?Int64
+    ){
+        super(name, level, pattern, output, '${LOGGER_NAME}:///${path}')
+    }
     public init(
         name!: String,
         pattern!: LogPattern,
@@ -28,10 +36,11 @@ class UnixLoggerAppender <: AsyncLogger {
         writeTimeout!: ?Duration,
         bufSize!: ?Int64
     ) {
-        super(name, level, pattern, createSocket(path, writeTimeout, bufSize), '${LOGGER_NAME}:///${path}')
-        this.path = path
-        this.writeTimeout = writeTimeout
-        this.bufSize = bufSize
+        this(name: name, level: level, pattern: pattern, output: createSocket(path, writeTimeout, bufSize), 
+             path: path, writeTimeout: writeTimeout, bufSize: bufSize)
+    }
+    public func new(name: String): AbstractLogger {
+        UnixLoggerAppender(name: name, pattern: super.pattern, level: super.level, output: super.actualOutput, path: path, writeTimeout: writeTimeout, bufSize: bufSize)
     }
     private static func createSocket(path: String, writeTimeout: ?Duration, bufSize: ?Int64) {
         let sock = UnixSocket(path)

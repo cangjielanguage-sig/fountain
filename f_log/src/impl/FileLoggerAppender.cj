@@ -26,7 +26,7 @@ class FileLoggerAppender <: AsyncLogger {
         super(name, level, pattern, file, '${LOGGER_NAME}:///${toPath(file)}')
     }
     protected func new(name: String): AbstractLogger {
-        FileLoggerAppender(name: name, pattern: super.pattern, level: super.level, file: super.output)
+        FileLoggerAppender(name: name, pattern: super.pattern, level: super.level, file: super.actualOutput)
     }
     @When[os == "Linux"]
     private static func toPath(file: OutputStream) {

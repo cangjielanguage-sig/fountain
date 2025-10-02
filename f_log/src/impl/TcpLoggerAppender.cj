@@ -45,7 +45,7 @@ class TcpLoggerAppender <: AsyncLogger {
     }
     protected func new(name: String): AbstractLogger {
         TcpLoggerAppender(name: name, level: super.level, pattern: super.pattern, host: this.host, port: this.port, 
-                          sendBufSize: this.sendBufSize, output: super.output)
+                          sendBufSize: this.sendBufSize, output: super.actualOutput)
     }
     private static func createSocket(host: String, port: UInt16, sendBufSize: ?Int64) {
         let sock = TcpSocket(host, port)

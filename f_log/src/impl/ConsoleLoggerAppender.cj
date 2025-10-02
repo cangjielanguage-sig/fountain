@@ -22,7 +22,9 @@ class ConsoleLoggerAppender <: AsyncLogger {
     private static let appenders = ConcurrentHashMap<ConsoleLoggerParams, AbstractLogger>()
     init(name: String, level: LogLevel, pattern: LogPattern){
         super(name, level, pattern, env.getStdOut(), '${LOGGER_NAME}://')
-
+    }
+    protected func new(name: String): AbstractLogger{
+        ConsoleLoggerAppender(name, this.level, this.pattern)
     }
     public static func register(): Unit {
         ConsoleLoggerParams.register(LOGGER_NAME, appenders)

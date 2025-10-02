@@ -46,7 +46,7 @@ class UdpLoggerAppender <: AsyncLogger {
               output: createSocket(host, port, sendTimeout: sendTimeout))
     }
     public func new(name: String): AbstractLogger {
-        UdpLoggerAppender(name: name, pattern: super.pattern, level: super.level, host: host, port: port, sendTimeout: sendTimeout, output: super.output)
+        UdpLoggerAppender(name: name, pattern: super.pattern, level: super.level, host: host, port: port, sendTimeout: sendTimeout, output: super.actualOutput)
     }
     private static func createSocket(host: String, port: UInt16, sendTimeout!: ?Duration) {
         let sock = UdpOutputStream(host, port, sendTimeout: sendTimeout)
