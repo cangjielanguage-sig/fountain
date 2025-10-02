@@ -195,9 +195,7 @@ protected class RotatableFile <: OutputStream & Resource {
             ne--
             unit = bu
         }
-        Int64
-            .tryParse(bytes[0..ne])
-            .getOrThrow {
+        Int64.tryParse(bytes[0..ne]).getOrThrow {
                 throw IllegalArgumentException(
                     "${b} is illegal bytes description, bytes description supports an integer number follows with r'k' 'kbr' 'mr' 'mbr' 'gr' 'gbr' 'tr' 'tbr' 'er' 'eb' or their upper cases")
             } * 1024 ** match (unit) {
