@@ -62,7 +62,7 @@ public abstract class AsyncLogger <: AbstractLogger {
     private static func doClose(output: OutputStream, closable: Bool, tag: String): Unit {
         if(let Some(output) <- queueOutputMap.remove(tag)){
             while(output.queue.size > 0){
-                sleep(Duration.Zero)
+                sleep(Duration.Zero)// 循环次数可能很多，避免当前线程长时间占用CPU
             }
             sleep(Duration.microsecond * 100)// 等待写线程能够把最后一个字节数组写出
         }
