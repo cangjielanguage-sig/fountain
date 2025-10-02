@@ -48,7 +48,7 @@ cj(){
     fboot cleanUpdate
     ;;
   install)
-    fboot replaceVersion ./
+    fboot version $2
     cd fboot
     cjpm install --root /mnt/d/docs/work/cangjie/installed
     ;;

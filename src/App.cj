@@ -173,16 +173,20 @@ public struct App {
         }
         println(appVersion.banner)//banner不能是多行插值串，因为有\_，编译器认为是错误的转义符。使用\\_就不好看了
         let end = DateTime.now()
-        println('${app}${appver} is started by fountain(1.0.0) in ${end - starts} on ${end}')
+        println('${app}${appver} is started by ${versionStr} in ${end - starts} on ${end}')
         mvc?.start()
         0
     }
+    private let versionStr = 'fountain(1.0.1)'
     private func version(){
         if (this.args.size == 1) {
-            println('fountain(1.0.0)')
+            println(versionStr)
         } else {
+            println('修改版本号后将会自动提交代码，请确保已按照git命令且执行git不需要输入密码')
             let v = args[1]
-            if (Regex(#'^\d+\.\d+.\d+$'#).matches(v)) {
+            if (v.isEmpty()) {
+                println('当前版本是${versionStr}，若要修改版本号请使用命令：fboot version x.y.z')
+            } else if (Regex(#'^\d+\.\d+.\d+$'#).matches(v)) {
                 let tomlPath = getWorkingDirectory().join('cjpm.toml')
                 let reader = StringReader(ByteBuffer(File.readFrom(tomlPath)))
                 let toml = StringGenerator()
@@ -195,11 +199,24 @@ public struct App {
                     })
                 }
                 File.writeTo(tomlPath, toml.unsafeBytes())
+                replaceVersion(v)
                 var code = execute('git', ['add', '.'])
                 if(code != 0){
                     return code
                 }
-                code = execute('git', ['commit', '-m'])
+                code = execute('git', ['commit', '-m', if (args.size > 2) {
+                    '${args[2]}，版本号是 ${v}'
+                } else {
+                    '修改了一些代码，版本号是 ${v}.'
+                }])
+                if (code != 0) {
+                    return code
+                }
+                code = execute('git', ['pull'])
+                if (code != 0) {
+                    return code
+                }
+                execute('git', ['push'])
             } else {
                 println('version must be x.y.z, but current is ${v}')
             }
@@ -388,8 +405,8 @@ ${toml}
         }
         BANNER
     }
-    private func replaceVersion(): Int64 {
-        println('fboot replaceVersion ${path}')
+    private func replaceVersion(version: String): Int64 {
+        println('fboot replaceVersion ${path} ${version}')
         let workingDir = getWorkingDirectory()
         let fountainPath = 
         match(workingDir.fileName) {
@@ -399,7 +416,6 @@ ${toml}
                 workingDir.parent
             case _ => throw BootException('working directory ${workingDir} is not path of project fountain')
         }
-        var version = extract(fountainPath)[0]
         if(!version.isEmpty()) {
             let appPath = fountainPath.join('src/App.cj')
             let code = entireFileText(appPath)
@@ -512,10 +528,9 @@ public class ${name}_AppVersionImpl <: AppVersion {
             case 'cleanUpdate' => cleanUpdate()
             case 'build' => build()
             case 'count' => count()
-            case 'replaceVersion' => replaceVersion()
             case 'version' => version()
             case _ => throw BootException(
-                'first command arg must be run|start|shutdown|restart|dynamic|workspace|cleanUpdate|build|count|replaceVersion|version, but current args are ${args}')
+                'first command arg must be run|start|shutdown|restart|dynamic|workspace|cleanUpdate|build|count|version, but current args are ${args}')
         }
     }
 }
