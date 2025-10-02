@@ -24,8 +24,9 @@ import std.sync.{Timer, Mutex}
 import std.time.DateTime
 import stdx.compress.zlib.{WrapType, CompressLevel, CompressOutputStream}
 import f_base.*
-import f_io.*
+import f_io.*// 必须导入这个包mmap才生效
 import f_time.TimeUnit
+
 internal import f_log.exception.LogException
 
 public class RotatableFileParams <: Hashable & Equatable<RotatableFileParams> {
@@ -137,6 +138,7 @@ protected class RotatableFile <: OutputStream & Resource {
                 fn()
             }
         }
+        println('AAAAAAAAAAAAA ${timeunit} ${timeunit.since()} ${DateTime.now()}')
         let timer = Timer.after(timeunit.since()) {
             rotateFileIfNeed(0)
             this.timeunit.since()

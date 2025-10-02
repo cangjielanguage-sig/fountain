@@ -86,16 +86,13 @@ public class TcpLoggerParams <: BaseLoggerParams<TcpLoggerParams> {
     protected static func newParams(appender: String): TcpLoggerParams {
         var host = "127.0.0.1"
         var port = 65535u16
-        if (let Some(h) <- LoggerConfig.getString(appender, "host") && !h.isEmpty()) {
+        if (let h <- LoggerConfig.getTcpHost(appender) && !h.isEmpty()) {
             host = h
         }
-        if (let Some(p) <- LoggerConfig.getString(appender, "port")) {
-            port = UInt16
-                .tryParse(p)
-                .getOrThrow {
-                    LogException(
-                        "param port of SocketLoggerAppender must be a value of UInt16, however it is ${p}")
-                }
+        if (let p <- LoggerConfig.getTcpPort(appender) && !p.isEmpty()) {
+            port = UInt16.tryParse(p).getOrThrow {
+                LogException("param port of SocketLoggerAppender must be a value of UInt16, however it is ${p}")
+            }
         } else if (let Some(idx) <- host.indexOf(':')) {
             (host, port) = (host[0..idx].trimAscii(), UInt16.parse(host[idx + 1..].trimAscii()))
         }

@@ -64,6 +64,33 @@ public class LoggerConfig {
         }
         return LogPattern.default
     }
+    public static func getLogFilePath(appender: String): String {
+        getString(appenderKeyPart(appender), "path") ?? ''
+    }
+    public static func getLogFileRotateDuration(appender: String): String {
+        getString(appenderKeyPart(appender), "rotateDuration") ?? "DAY"
+    }
+    public static func getLogFileRotateSize(appender: String): String {
+        getString(appenderKeyPart(appender), "rotateSize") ?? "${Int64.Max}"
+    }
+    public static func getLogFileCompressFormat(appender: String): String {
+        getString(appenderKeyPart(appender), "compressFormat") ?? ""
+    }
+    public static func getLogFileMMap(appender: String): Bool {
+        Bool.parse((getString(appenderKeyPart(appender), "mmap") ?? 'false').trimAscii().toAsciiLower())
+    }
+    public static func getTcpHost(appender: String): String {
+        getString(appenderKeyPart(appender), "host") ?? ""
+    }
+    public static func getTcpPort(appender: String): String {
+        getString(appenderKeyPart(appender), "port") ?? ""
+    }
+    public static func getUdpHost(appender: String): String {
+        getString(appenderKeyPart(appender), "host") ?? ""
+    }
+    public static func getUdpPort(appender: String): String {
+        getString(appenderKeyPart(appender), "port") ?? ""
+    }
     public static func getAsyncBufSize(): Int64 {
         Config.getData<Int64>("loggerAsyncBufsize") ?? 1
     }
@@ -107,6 +134,9 @@ public class LoggerConfig {
         } else {
             None<Duration>
         }
+    }
+    public static func getUnixPath(appender: String): String {
+        getString(appenderKeyPart(appender), "path") ?? ""
     }
     public static func getTcpSendBufSize(appender: String): ?Int64 {
         if (let Some(s) <- getString(appenderKeyPart(appender), "bufSize")) {

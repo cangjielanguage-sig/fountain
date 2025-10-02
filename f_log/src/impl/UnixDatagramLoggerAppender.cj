@@ -75,7 +75,7 @@ public class UnixDatagramLoggerParams <: BaseLoggerParams<UnixDatagramLoggerPara
     }
     protected static func newParams(appender: String): UnixDatagramLoggerParams {
         var path = "/tmp/log/unixDatagram.log"
-        if (let Some(h) <- LoggerConfig.getString(appender, "path") && !h.isEmpty()) {
+        if (let h <- LoggerConfig.getUnixPath(appender) && !h.isEmpty()) {
             path = h
         }
         let sendTimeout = LoggerConfig.getUnixWriteTimeout(appender)

@@ -6,7 +6,7 @@
 
 [workspace]
   version = "1.0.0"
-  members=["./boot", "./user"]
+  members=["./boot", "./user", "./fdemo_App__vErsIOn___Impl____"]
   compile-option = "-O2 --dy-std"
   override-compile-option = "-O2 --dy-std"
 

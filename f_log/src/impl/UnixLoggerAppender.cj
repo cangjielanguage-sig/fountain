@@ -80,7 +80,7 @@ public class UnixLoggerParams <: BaseLoggerParams<UnixLoggerParams> {
     }
     protected static func newParams(appender: String): UnixLoggerParams {
         var path = "/tmp/log/unix.log"
-        if (let Some(h) <- LoggerConfig.getString(appender, "path") && !h.isEmpty()) {
+        if (let h <- LoggerConfig.getUnixPath(appender) && !h.isEmpty()) {
             path = h
         }
         let writeTimeout = LoggerConfig.getUnixWriteTimeout(appender)

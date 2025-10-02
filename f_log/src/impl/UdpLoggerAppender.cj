@@ -83,16 +83,13 @@ public class UdpLoggerParams <: BaseLoggerParams<UdpLoggerParams> {
     protected static func newParams(appender: String): UdpLoggerParams {
         var host = "127.0.0.1"
         var port = 65534u16
-        if (let Some(h) <- LoggerConfig.getString(appender, "host") && !h.isEmpty()) {
+        if (let h <- LoggerConfig.getUdpHost(appender) && !h.isEmpty()) {
             host = h
         }
-        if (let Some(p) <- LoggerConfig.getString(appender, "port")) {
-            port = UInt16
-                .tryParse(p)
-                .getOrThrow {
-                    LogException(
-                        "param port of SocketLoggerAppender must be a value of UInt16, however it is ${p}")
-                }
+        if (let p <- LoggerConfig.getUdpPort(appender)) {
+            port = UInt16.tryParse(p).getOrThrow {
+                LogException("param port of SocketLoggerAppender must be a value of UInt16, however it is ${p}")
+            }
         } else if (let Some(idx) <- host.indexOf(':')) {
             (host, port) = (host[0..idx].trimAscii(), UInt16.parse(host[idx + 1..].trimAscii()))
         }

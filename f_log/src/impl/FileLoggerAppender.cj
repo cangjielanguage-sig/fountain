@@ -70,25 +70,20 @@ public class FileLoggerParams <: BaseLoggerParams<FileLoggerParams> {
         } else {
             ''
         }
-        if (let Some(p) <- LoggerConfig.getString(appender, "path") && !p.isEmpty()) {
+        if (let p <- LoggerConfig.getLogFilePath(appender) && !p.isEmpty()) {
             params.path = p
         }
-        if (let Some(d) <- LoggerConfig.getString(appender, "rotateDuration") && let Some(u) <- TimeUnit
-            .tryParse(d)) {
+        if (let d <- LoggerConfig.getLogFileRotateDuration(appender) && 
+            let Some(u) <- TimeUnit.tryParse(d)) {
             params.timeunit = u
         }
-        if (let Some(s) <- LoggerConfig.getString(appender, "rotateSize") && !s.isEmpty()) {
+        if (let s <- LoggerConfig.getLogFileRotateSize(appender) && !s.isEmpty()) {
             params.fileSize = RotatableFile.computeBytes(s)
         }
-        if (let Some(c) <- LoggerConfig.getString(appender, "compressFormat")) {
+        if (let c <- LoggerConfig.getLogFileCompressFormat(appender) && !c.isEmpty()) {
             params.compress = RotatableFile.compressFormat(c)
         }
-        let mmap = 
-        if(let Some(x) <- LoggerConfig.getString(appender, "mmap") && x.trimAscii().toAsciiLower() == 'true'){
-            true
-        }else{
-            false
-        }
+        let mmap = LoggerConfig.getLogFileMMap(appender)
         FileLoggerParams(LoggerConfig.getLevelConf(appender), LoggerConfig.getPatternConf(appender),
             url, params, mmap)
     }
