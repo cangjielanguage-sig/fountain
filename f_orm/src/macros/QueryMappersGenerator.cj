@@ -184,21 +184,12 @@ func generateMappers(name: Tokens, fieldName: Token, dts: Tokens, meta: (Bool, S
     let columnName = Token(STRING_LITERAL, meta[1])
     let columnType = meta[2]
     if (meta[0]) {
-        if (columnType.value.isEmpty()) {
-            quote(
-                    IdQueryMapper<$dataType, $name>(
-                        dataType: $(dataTypeToken)($nullable, $columnName),
-                        putter: {o, v => o.$fieldName = ORMConverter.convert<$dataType>(v)}
-                    )
+        quote(
+                IdQueryMapper<$dataType, $name>(
+                    dataType: $(dataTypeToken)($nullable, $columnName),
+                    putter: {o, v => o.$fieldName = ORMConverter.convert<$dataType>(v)}
                 )
-        } else {
-            quote(
-                    IdQueryMapper<$dataType, $name>(
-                        dataType: $(dataTypeToken)($nullable, $columnName),
-                        putter: {o, v => o.$fieldName = ORMConverter.convert<$dataType>(v)}
-                    )
-                )
-        }
+            )
     } else if (dataType[0].value == "ArrayList") {
         let listGeneric = quote()
         for (j in 2..dataType.size - 1) {

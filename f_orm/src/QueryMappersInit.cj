@@ -19,6 +19,10 @@ public import std.time.DateTime
 public import std.io.InputStream
 
 public interface QueryMappersInit<T> where T <: QueryMappersInit<T> {
+    static func isSimpleData(): Bool 
+    static func queryMappers(): QueryMappers<T> 
+}
+public interface SimpleDataQueryMappersInit<T> <: QueryMappersInit<T> where T <: QueryMappersInit<T> {
     static func isSimpleData(): Bool {
         true
     }
@@ -36,36 +40,36 @@ extend<T> Option<T> <: QueryMappersInit<T> where T <: QueryMappersInit<T> {
     }
 }
 
-extend Int8 <: QueryMappersInit<Int8> {}
+extend Int8 <: SimpleDataQueryMappersInit<Int8> {}
 
-extend UInt8 <: QueryMappersInit<UInt8> {}
+extend UInt8 <: SimpleDataQueryMappersInit<UInt8> {}
 
-extend Int16 <: QueryMappersInit<Int16> {}
+extend Int16 <: SimpleDataQueryMappersInit<Int16> {}
 
-extend UInt16 <: QueryMappersInit<UInt16> {}
+extend UInt16 <: SimpleDataQueryMappersInit<UInt16> {}
 
-extend Int32 <: QueryMappersInit<Int32> {}
+extend Int32 <: SimpleDataQueryMappersInit<Int32> {}
 
-extend UInt32 <: QueryMappersInit<UInt32> {}
+extend UInt32 <: SimpleDataQueryMappersInit<UInt32> {}
 
-extend Int64 <: QueryMappersInit<Int64> {}
+extend Int64 <: SimpleDataQueryMappersInit<Int64> {}
 
-extend UInt64 <: QueryMappersInit<UInt64> {}
+extend UInt64 <: SimpleDataQueryMappersInit<UInt64> {}
 
-extend Float16 <: QueryMappersInit<Float16> {}
+extend Float16 <: SimpleDataQueryMappersInit<Float16> {}
 
-extend Float32 <: QueryMappersInit<Float32> {}
+extend Float32 <: SimpleDataQueryMappersInit<Float32> {}
 
-extend Float64 <: QueryMappersInit<Float64> {}
+extend Float64 <: SimpleDataQueryMappersInit<Float64> {}
 
-extend Rune <: QueryMappersInit<Rune> {}
+extend Rune <: SimpleDataQueryMappersInit<Rune> {}
 
-extend String <: QueryMappersInit<String> {}
+extend String <: SimpleDataQueryMappersInit<String> {}
 
-extend Bool <: QueryMappersInit<Bool> {}
+extend Bool <: SimpleDataQueryMappersInit<Bool> {}
 
-extend Duration <: QueryMappersInit<Duration> {}
+extend Duration <: SimpleDataQueryMappersInit<Duration> {}
 
-extend DateTime <: QueryMappersInit<DateTime> {}
+extend DateTime <: SimpleDataQueryMappersInit<DateTime> {}
 
-extend<T> Array<T> <: QueryMappersInit<Array<T>> where T <: QueryMappersInit<T> {}
+extend<T> Array<T> <: SimpleDataQueryMappersInit<Array<T>> where T <: QueryMappersInit<T> {}
