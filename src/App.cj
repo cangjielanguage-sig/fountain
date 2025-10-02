@@ -177,7 +177,7 @@ public struct App {
         mvc?.start()
         0
     }
-    private let versionStr = 'fountain(1.0.1)'
+    private let versionStr = 'fountain(1.0.0)'
     private func version(){
         if (this.args.size == 1) {
             println(versionStr)
@@ -406,8 +406,8 @@ ${toml}
         BANNER
     }
     private func replaceVersion(version: String): Int64 {
-        println('fboot replaceVersion ${path} ${version}')
         let workingDir = getWorkingDirectory()
+        println('fboot replace version ${workingDir} ${version}')
         let fountainPath = 
         match(workingDir.fileName) {
             case 'fountain' => 
