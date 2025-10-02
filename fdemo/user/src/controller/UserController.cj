@@ -58,19 +58,19 @@ public class UserController {
         }
         '''
     }
-    // @GetMapping[path:'/api/user/{id}', produces:'application/json']
-    // public func queryUser(@PathVariable id: Int64): JsonValue {
-    //     let user = userService.queryUser(id)
-    //     let json = '''
-    //     {
-    //         "id": ${user.id},
-    //         "username": "${user.username}",
-    //         "password": "${user.password}",
-    //         "registerTime": "${user.saveTime}"
-    //     }
-    //     '''
-    //     JsonValue.fromStr(json)
-    // }
+    @GetMapping[path:'/api/user/{id}', produces:'application/json']
+    public func queryUser(@PathVariable id: Int64): JsonValue {
+        let user = userService.queryUser(id)
+        let json = '''
+        {
+            "id": ${user.id},
+            "username": "${user.username}",
+            "password": "${user.password}",
+            "registerTime": "${user.saveTime}"
+        }
+        '''
+        JsonValue.fromStr(json)
+    }
     @DeleteMapping[path:'/api/user/{id}', produces:'application/json', consumes:'application/x-www-form-urlencoded']
     public func deleteUser(@PathVariable id: Int64): JsonValue {
         println('delete user id is ${id}')

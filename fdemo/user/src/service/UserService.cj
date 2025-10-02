@@ -22,6 +22,6 @@ import user.model.po.*
 public interface UserService <: RootService {
     func register(username: String, password: String): Int64
     func changePassword(username: String, password: String): Int64
-    // func queryUser(id: Int64): UserPO
+    func queryUser(id: Int64): UserPO
     func deleteUser(id: Int64): Int64
 }

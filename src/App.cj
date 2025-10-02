@@ -366,12 +366,12 @@ ${toml}
     private func replaceVersion(): Int64 {
         println('fboot replaceVersion ${path}')
         let workingDir = getWorkingDirectory()
-        let (fountainPath, fbootPath) = 
+        let fountainPath = 
         match(workingDir.fileName) {
             case 'fountain' => 
-                (workingDir, workingDir.join('fboot'))
+                workingDir
             case 'fboot' =>
-                (workingDir.parent, workingDir)
+                workingDir.parent
             case _ => throw BootException('working directory ${workingDir} is not path of project fountain')
         }
         var version = extract(fountainPath)[0]

@@ -39,19 +39,19 @@ public class UserServiceImpl <: UserService {
         println('username: ${username}, password: ${password}')
         executor().changePassword(username, password)
     }
-    // public func queryUser(id: Int64): UserPO {
-    //     try{
-    //         let map = execute.findUser(id)
-    //         let po = UserPO()
-    //         po.id = (map['id'] as Int64) ?? 0
-    //         po.username = (map['username'] as String) ?? ""
-    //         po.password = (map['password'] as String) ?? ""
-    //         po.saveTime = (map['save_time'] as DateTime) ?? zeroValue<DateTime>()
-    //     }catch(e: Exception){
-    //         e.printStackTrace()
-    //         throw e
-    //     }
-    // }
+    public func queryUser(id: Int64): UserPO {
+        try{
+            let map = execute.findUser(id)
+            let po = UserPO()
+            po.id = (map['id'] as Int64) ?? 0
+            po.username = (map['username'] as String) ?? ""
+            po.password = (map['password'] as String) ?? ""
+            po.saveTime = (map['save_time'] as DateTime) ?? zeroValue<DateTime>()
+        }catch(e: Exception){
+            e.printStackTrace()
+            throw e
+        }
+    }
     public func deleteUser(id: Int64): Int64 {
         println('id: ${id}')
         executor().deleteUser(id)

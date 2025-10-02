@@ -178,6 +178,7 @@ func generateMappers(name: Tokens, fieldName: Token, dts: Tokens, meta: (Bool, S
         }
         break
     }
+    let dataTypeStr = dataType.toString().replace(' ', '')
     let dataTypeToken = Token(IDENTIFIER, '${dataType[0].value}DataType')
     let fieldNameStr = Token(STRING_LITERAL, fieldName.value)
     let columnName = Token(STRING_LITERAL, meta[1])
@@ -326,7 +327,7 @@ func generateMappers(name: Tokens, fieldName: Token, dts: Tokens, meta: (Bool, S
                             match(v){
                                 case x: Option<$dataType> => x.getOrThrow{ORMException("current value for " + $fieldNameStr + " must not be None")}
                                 case x: $dataType =>  x
-                                case _ => throw ORMException("current value must be type of " + $(dataType).dataType.toString())
+                                case _ => throw ORMException("current value must be type of " + $(dataTypeStr))
                             }
                     })
                 }else if ($(dataType).isSimpleData()) {
@@ -337,7 +338,7 @@ func generateMappers(name: Tokens, fieldName: Token, dts: Tokens, meta: (Bool, S
                             match(v){
                                 case x: Option<$dataType> => x.getOrThrow{ORMException("current value for " + $fieldNameStr + " must not be None")}
                                 case x: $dataType =>  x
-                                case _ => throw ORMException("current value must be type of " + $(dataType).dataType.toString())
+                                case _ => throw ORMException("current value must be type of " + $(dataTypeStr))
                             }
                     })
                 } else {
@@ -357,7 +358,7 @@ func generateMappers(name: Tokens, fieldName: Token, dts: Tokens, meta: (Bool, S
                             match(v){
                                 case x: Option<$dataType> => x.getOrThrow{ORMException("current value for " + $fieldNameStr + " must not be None")}
                                 case x: $dataType =>  x
-                                case _ => throw ORMException("current value must be type of " + $(dataType).dataType.toString())
+                                case _ => throw ORMException("current value must be type of " + $(dataTypeStr))
                             }
                     })
                 }else if ($(dataType).isSimpleData()) {
@@ -368,7 +369,7 @@ func generateMappers(name: Tokens, fieldName: Token, dts: Tokens, meta: (Bool, S
                             match(v){
                                 case x: Option<$dataType> => x.getOrThrow{ORMException("current value for " + $fieldNameStr + " must not be None")}
                                 case x: $dataType =>  x
-                                case _ => throw ORMException("current value must be type of " + $(dataType).dataType.toString())
+                                case _ => throw ORMException("current value must be type of " + $(dataTypeStr))
                             }
                     })
                 } else {
