@@ -15,7 +15,7 @@ limitations under the License.
  */
 package f_log
 
-import std.collection.concurrent.{ArrayBlockingQueue, ConcurrentHashMap, LinkedBlockingQueue}
+import std.collection.concurrent.{ArrayBlockingQueue, ConcurrentHashMap}
 import std.env
 import std.io.OutputStream
 import std.time.DateTime
@@ -24,14 +24,14 @@ import f_collection.*
 import f_io.DummyOutputStream
 import f_log.exception.LogException
 
-import std.reflect.*
-
 public abstract class AsyncLogger <: AbstractLogger {
     private static let queueMap = ConcurrentHashMap<String, ArrayBlockingQueue<() -> Unit>>()
+    private static let queueOutputMap = ConcurrentHashMap<String, SyncQueueOutputStream>()
     private let timeout: Duration
     private let policy: AsyncTimeoutPolicy
     private let queue: ArrayBlockingQueue<() -> Unit>
     protected let actualOutput: OutputStream
+    private let queueTag: String
     public init(
         name: String,
         level: LogLevel,
@@ -39,7 +39,8 @@ public abstract class AsyncLogger <: AbstractLogger {
         output: OutputStream,
         queueTag: String
     ) {
-        super(name, level, pattern, confirmDummy(output))
+        super(name, level, pattern, confirmDummy(output, LoggerConfig.getAsyncBufSize(), queueTag))
+        this.queueTag = queueTag
         this.actualOutput = output
         timeout = LoggerConfig.getAsyncTimeout()
         policy = LoggerConfig.getAsyncTimeoutPolicy()
@@ -49,27 +50,36 @@ public abstract class AsyncLogger <: AbstractLogger {
             remove(queue)
             queue
         }
-        env.atExit{doClose(output, true)}
+        env.atExit{doClose(output, true, queueTag)}
     }
     public open func isClosed(): Bool {
-        if(let r: Resource <- output){
+        if(let r: Resource <- actualOutput){
             r.isClosed()
         }else{
             false
         }
     }
-    private static func doClose(output: OutputStream, closable: Bool){
+    private static func doClose(output: OutputStream, closable: Bool, tag: String): Unit {
+        if(let Some(output) <- queueOutputMap.remove(tag)){
+            while(output.queue.size > 0){
+                sleep(Duration.Zero)
+            }
+            sleep(Duration.microsecond * 100)// 等待写线程能够把最后一个字节数组写出
+        }
         if(let r: Resource <- output && closable){
             r.close()
         }
     }
     public open func close(): Unit {
-        doClose(actualOutput, closable)
+        doClose(actualOutput, closable, queueTag)
     }
-    private static func confirmDummy(output: OutputStream): OutputStream {
+    private static func confirmDummy(output: OutputStream, bufSize: Int64, tag: String): OutputStream {
         match (output) {
             case _: DummyOutputStream => output
-            case _ => SyncQueueOutputStream()
+            case _ => 
+                let output = SyncQueueOutputStream(bufSize)
+                queueOutputMap.put(tag, output)
+                output
         }
     }
     private static func remove(queue: ArrayBlockingQueue<() -> Unit>): Unit {
@@ -113,7 +123,10 @@ public abstract class AsyncLogger <: AbstractLogger {
     }
 }
 public class SyncQueueOutputStream <: OutputStream {
-    internal let queue = LinkedBlockingQueue<Array<Byte>>()
+    internal let queue: ArrayBlockingQueue<Array<Byte>>
+    init(bufSize: Int64){
+        queue = ArrayBlockingQueue<Array<Byte>>(bufSize * 10)
+    }
     public func write(bytes: Array<Byte>): Unit {
         queue.add(bytes)
     }
