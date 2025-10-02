@@ -195,6 +195,11 @@ public struct App {
                     })
                 }
                 File.writeTo(tomlPath, toml.unsafeBytes())
+                var code = execute('git', ['add', '.'])
+                if(code != 0){
+                    return code
+                }
+                code = execute('git', ['commit', '-m'])
             } else {
                 println('version must be x.y.z, but current is ${v}')
             }
