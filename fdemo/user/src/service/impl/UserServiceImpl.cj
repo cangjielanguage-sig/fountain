@@ -41,12 +41,12 @@ public class UserServiceImpl <: UserService {
     }
     public func queryUser(id: Int64): UserPO {
         try{
-            let map = execute.findUser(id)
-            let po = UserPO()
-            po.id = (map['id'] as Int64) ?? 0
-            po.username = (map['username'] as String) ?? ""
-            po.password = (map['password'] as String) ?? ""
-            po.saveTime = (map['save_time'] as DateTime) ?? zeroValue<DateTime>()
+            // let map = executor().findUserToMap(id)
+            // for((k, n) in map){
+            //     println("${k} : ${n as ToString}")
+            // }
+            let po = executor().findUser(id)
+            po
         }catch(e: Exception){
             e.printStackTrace()
             throw e

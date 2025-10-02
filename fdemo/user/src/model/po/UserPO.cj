@@ -30,5 +30,5 @@ public class UserPO {
     @ORMField['password']
     private var password: String = ''
     @ORMField['save_time']
-    private var saveTime: DateTime = unsafeZeroValue<DateTime>()
+    private var saveTime: ?DateTime = None<DateTime>
 }

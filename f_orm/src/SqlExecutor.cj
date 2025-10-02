@@ -393,8 +393,7 @@ public class SqlExecutor <: Resource & RootDAO {
         singleFirst<T>(0)
     }
     public func singleFirst<T>(index: Int64): Option<T> {
-        execute<Option<T>> {
-            let result = query
+        execute<Option<T>> {result =>
             while (result.next()) {
                 let value = result.get<T>(index)
                 return value
@@ -403,8 +402,7 @@ public class SqlExecutor <: Resource & RootDAO {
         }
     }
     public func singleFirst<T>(column: String): Option<T> {
-        execute<Option<T>> {
-            let result = query
+        execute<Option<T>> {result =>
             while (result.next()) {
                 let value = result.get<T>(column)
                 return value
@@ -416,9 +414,8 @@ public class SqlExecutor <: Resource & RootDAO {
         singleList<T>(0)
     }
     public func singleList<T>(index: Int64): ArrayList<T> {
-        execute<ArrayList<T>> {
+        execute<ArrayList<T>> {result =>
             let list = ArrayList<T>()
-            let result = query
             while (result.next()) {
                 let value = result.get<T>(index)
                 list.add(value)
@@ -427,9 +424,8 @@ public class SqlExecutor <: Resource & RootDAO {
         }
     }
     public func singleList<T>(column: String): ArrayList<T> {
-        execute<ArrayList<T>> {
+        execute<ArrayList<T>> {result =>
             let list = ArrayList<T>()
-            let result = query
             while (result.next()) {
                 let value = result.get<T>(column)
                 list.add(value)
@@ -441,18 +437,18 @@ public class SqlExecutor <: Resource & RootDAO {
         singleIterator<T>(0)
     }
     public func singleIterator<T>(index: Int64): Iterator<T> {
-        execute<Iterator<T>> {
-            SingleColumnIterator<T>(query, index: index)
+        execute<Iterator<T>> {r =>
+            SingleColumnIterator<T>(r, index: index)
         }
     }
     public func singleIterator<T>(column: String): Iterator<T> {
-        execute<Iterator<T>> {
-            SingleColumnIterator<T>(query, column: column)
+        execute<Iterator<T>> {r =>
+            SingleColumnIterator<T>(r, column: column)
         }
     }
     public func first<T>(mappers: QueryMappers<T>): Option<T> {
-        execute<Option<T>> {
-            mappers.doMap(query)
+        execute<Option<T>> {r =>
+            mappers.doMap(r)
         }
     }
     public func first<T>(): Option<T> where T <: QueryMappersInit<T> {
@@ -463,8 +459,7 @@ public class SqlExecutor <: Resource & RootDAO {
         }
     }
     public func firstToMap(): Map<String, Any> {
-        execute<Map<String, Any>> {
-            let result = query
+        execute<Map<String, Any>> {result => 
             if (result.next()) {
                 result.toMap()
             } else {
@@ -473,8 +468,8 @@ public class SqlExecutor <: Resource & RootDAO {
         }
     }
     public func list<T>(mappers: QueryMappers<T>): ArrayList<T> {
-        execute<ArrayList<T>> {
-            mappers.list(query)
+        execute<ArrayList<T>> {r =>
+            mappers.list(r)
         }
     }
     public func list<T>(): ArrayList<T> where T <: QueryMappersInit<T> {
@@ -485,8 +480,7 @@ public class SqlExecutor <: Resource & RootDAO {
         }
     }
     public func mapList(): ArrayList<HashMap<String, Any>> {
-        execute<ArrayList<HashMap<String, Any>>> {
-            let result = query
+        execute<ArrayList<HashMap<String, Any>>> {result =>
             let list = ArrayList<HashMap<String, Any>>()
             while (result.next()) {
                 list.add(result.toMap())
@@ -495,8 +489,8 @@ public class SqlExecutor <: Resource & RootDAO {
         }
     }
     public func iterator<T>(mappers: QueryMappers<T>): QueryResultIterator<T> {
-        execute<QueryResultIterator<T>> {
-            mappers.iterator(query)
+        execute<QueryResultIterator<T>> {r =>
+            mappers.iterator(r)
         }
     }
     public func iterator<T>(): Iterator<T> where T <: QueryMappersInit<T> {
@@ -507,8 +501,8 @@ public class SqlExecutor <: Resource & RootDAO {
         }
     }
     public func one<T>(mappers: QueryMappers<T>): Option<T> {
-        execute<Option<T>> {
-            mappers.one(query)
+        execute<Option<T>> {r =>
+            mappers.one(r)
         }
     }
     public func one<T>(): Option<T> where T <: QueryMappersInit<T> {
@@ -692,6 +686,17 @@ public class SqlExecutor <: Resource & RootDAO {
             args.set(stmt)
             let result = stmt.update()
             extract(result)
+        }
+    }
+    private func execute<T>(extract: (QueryResultWrap) -> T): T {
+        execute<T> {
+            var r = None<QueryResultWrap>
+            try{
+                r = query
+                extract(r.getOrThrow())
+            } finally {
+                r?.close()
+            }
         }
     }
     public func execute<T>(executor: (SqlExecutor) -> T): T {

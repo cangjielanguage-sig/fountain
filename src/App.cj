@@ -17,7 +17,7 @@ package fountain
 
 import std.collection.{HashMap, HashSet, Map}
 import std.convert.*
-import std.env.{getWorkingDirectory, getVariables, getCommand}
+import std.env.{getWorkingDirectory, getVariables, getCommand, atExit}
 import std.fs.*
 import std.io.{StringReader, SeekPosition}
 import std.process.*
@@ -30,6 +30,7 @@ import fountain.mvc.MVCStarter
 import fountain.ticktock.Ticktock
 import f_base.UnsafeBytes
 
+private let starts: DateTime = DateTime.now()
 internal const BANNER = #'
   _____                    __         .__
 _/ ____\____  __ __  _____/  |______  |__| ____
@@ -42,7 +43,6 @@ _/ ____\____  __ __  _____/  |______  |__| ____
  */
 public struct App {
     private static const APP_VERSION_MODULE_SUFFIX = '_App__vErsIOn___Impl____'
-    private let starts: DateTime = DateTime.now()
     private let args: Array<String>
     private let idx: Int64
     private let path: Path
@@ -161,7 +161,6 @@ public struct App {
         //执行load函数时一定会加载初始化orm的动态链接库从而完成初始化
         //其它模块是工具API没有专门的初始化API
         let app = this.app
-        let end = DateTime.now()
         let appVersion = if (let Some(v) <- BeanFactory.instance.getFirst<AppVersion>()) {
             v
         } else {
@@ -173,6 +172,7 @@ public struct App {
             '(${appVersion.version})'
         }
         println(appVersion.banner)//banner不能是多行插值串，因为有\_，编译器认为是错误的转义符。使用\\_就不好看了
+        let end = DateTime.now()
         println('${app}${appver} is started by fountain(1.0.0) in ${end - starts} on ${end}')
         mvc?.start()
         0
@@ -413,31 +413,30 @@ public class ${name}_AppVersionImpl <: AppVersion {
         var (version, name) = extract(workingDir)
         let n = name.replace('.', '_').replace('-', '_')
         let versionModuleName = appVersionModuleName(n)
+        println('${versionModuleName} 是fboot build生成的模块，为fountain启动程序提供应用banner和应用版本号，如果编译时被开发者主动结束编译进程，只能由开发者删除这个模块，并将此模块的依赖从项目根cjpm.toml删除。')
         let versionModuleDir = workingDir.join(versionModuleName)
-        Directory.create(versionModuleDir, recursive: true)
-        let execode = execute('cjpm', ['init', '--type=dynamic'], workingDirectory: versionModuleDir)
-        if (execode != 0) {
-            return execode
-        }
         let tomlPath = workingDir.join('cjpm.toml')
-        var toml = ''
-        try {
-            let appVersionPath = versionModuleDir.join('src/${n}_AppVersionImpl.cj')
-            File.writeTo(appVersionPath, genCode(n, version).unsafeBytes())
-            toml = entireFileText(tomlPath)
-            if(let Some(membersIdx) <- toml.indexOf('members') && let Some(idx) <- toml.indexOf(']', membersIdx)) {
-                let members = toml[membersIdx ..= idx]
-                let newMembers = members.replaceLast(']', ', "./${versionModuleName}"]')
-                let newtoml = toml.replaceFirst(members, newMembers)
-                File.writeTo(tomlPath, newtoml.unsafeBytes())
-            }
-            execute('cjpm', ['build', '--target-dir=${targetDir}'], workingDirectory: workingDir)
-        } finally {
+        let toml = entireFileText(tomlPath)
+        atExit{
             if (toml.size > 0) {
                 File.writeTo(tomlPath, toml.unsafeBytes())
             }
             removeIfExists(versionModuleDir, recursive: true)
         }
+        Directory.create(versionModuleDir, recursive: true)
+        let execode = execute('cjpm', ['init', '--type=dynamic'], workingDirectory: versionModuleDir)
+        if (execode != 0) {
+            return execode
+        }
+        let appVersionPath = versionModuleDir.join('src/${n}_AppVersionImpl.cj')
+        File.writeTo(appVersionPath, genCode(n, version).unsafeBytes())
+        if(let Some(membersIdx) <- toml.indexOf('members') && let Some(idx) <- toml.indexOf(']', membersIdx)) {
+            let members = toml[membersIdx ..= idx]
+            let newMembers = members.replaceLast(']', ', "./${versionModuleName}"]')
+            let newtoml = toml.replaceFirst(members, newMembers)
+            File.writeTo(tomlPath, newtoml.unsafeBytes())
+        }
+        execute('cjpm', ['build', '--target-dir=${targetDir}'], workingDirectory: workingDir)
     }
     private func count(dir: Path, counter: CodeCounter, ext: String, ignore: Bool): Unit {
         Directory.walk(dir){fi =>

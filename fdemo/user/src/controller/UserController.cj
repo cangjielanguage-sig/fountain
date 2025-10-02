@@ -58,8 +58,9 @@ public class UserController {
         }
         '''
     }
-    @GetMapping[path:'/api/user/{id}', produces:'application/json']
+    @GetMapping[path:'/api/user/{id}', produces:'application/json', consumes:'application/x-www-form-urlencoded']
     public func queryUser(@PathVariable id: Int64): JsonValue {
+        println('get user by id: ${id}')
         let user = userService.queryUser(id)
         let json = '''
         {
@@ -69,6 +70,7 @@ public class UserController {
             "registerTime": "${user.saveTime}"
         }
         '''
+        println('AAAAAAAAAAAAAA ${json}')
         JsonValue.fromStr(json)
     }
     @DeleteMapping[path:'/api/user/{id}', produces:'application/json', consumes:'application/x-www-form-urlencoded']

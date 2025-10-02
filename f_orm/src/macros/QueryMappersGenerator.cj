@@ -281,7 +281,7 @@ func generateMappers(name: Tokens, fieldName: Token, dts: Tokens, meta: (Bool, S
                 } else {
                     NullableNestQueryMapper<$dataType, $name> (
                         nested: $(dataType).queryMappers(),
-                        nestGetter: {o => o.$fieldName}
+                        nestGetter: {o => o.$fieldName},
                         nestPutter: {o, v => o.$fieldName = v}
                     )
                 }
@@ -301,7 +301,7 @@ func generateMappers(name: Tokens, fieldName: Token, dts: Tokens, meta: (Bool, S
                 } else {
                     NullableNestQueryMapper<$dataType, $name> (
                         nested: $(dataType).queryMappers(),
-                        nestGetter: {o => o.$fieldName}
+                        nestGetter: {o => o.$fieldName},
                         nestPutter: {o, v => o.$fieldName = v}
                     )
                 }

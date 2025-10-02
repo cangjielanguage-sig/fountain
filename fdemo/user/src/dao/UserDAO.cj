@@ -41,7 +41,15 @@ public interface UserDAO <: RootDAO {
              where username = ${arg(username)}'''
         ).update
     }
-    func findUser(id: Int64): Map<String, Any> {
+    func findUser(id: Int64): UserPO {
+        executor.setSql('''
+            select * 
+              from user_info
+             where id = ${arg(id)}'''
+        ).first<UserPO>().getOrThrow()
+    }
+    
+    func findUserToMap(id: Int64): Map<String, Any> {
         executor.setSql('''
             select * 
               from user_info

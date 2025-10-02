@@ -58,7 +58,38 @@ public class QueryResultWrap <: QueryResult {
     public func toMap(): HashMap<String, Any> {
         let map = HashMap<String, Any>()
         for ((column, index) in columnInfoMap) {
-            map[column] = get(index)
+            map[column] = match(columnInfos[index].typeName) {
+                case 'SqlChar' | 'SqlVarchar' | 'String' | 'Rune' => get<String>(index)
+                case 'SqlNullableChar' | 'SqlNullableVarchar' | 'Option<String>' | '?String' | 'Option<Rune>' | '?Rune' => getOrNull<String>(index)
+                case 'SqlClob' | 'InputStream' => get<InputStream>(index)
+                case 'SqlNullableClob' => getOrNull<InputStream>(index)
+                case 'SqlBinary' | 'SqlVarBinary' | 'Array<Byte>' | 'Array<UInt8>' => get<Array<Byte>>(index)
+                case 'SqlNullableBinary' | 'SqlNullableVarBinary' | 'Option<Array<Byte>>' | 'Option<Array<UInt8>>' | '?Array<Byte>' | '?Array<UInt8>' => getOrNull<Array<Byte>>(index)
+                case 'SqlBlob' => get<InputStream>(index)
+                case 'SqlNullableBlob' => getOrNull<InputStream>(index)
+                case 'SqlDecimal' | 'Decimal' => get<Decimal>(index)
+                case 'SqlNullableDecimal' | '?Decimal' | 'Option<Decimal>' => getOrNull<Decimal>(index)
+                case 'SqlBool' | 'Bool' => get<Bool>(index)
+                case 'SqlNullableBool' | '?Bool' | 'Option<Bool>' => getOrNull<Bool>(index)
+                case 'SqlByte' | 'Byte' | 'UInt8' => get<UInt8>(index)
+                case 'SqlNullableByte' | '?Byte' | 'Option<Byte>' | '?UInt8' | 'Option<UInt8>' => getOrNull<UInt8>(index)
+                case 'SqlSmallInt' | 'Int16' => get<Int16>(index)
+                case 'SqlNullableSmallInt' | '?Int16' | 'Option<Int16>' => getOrNull<Int16>(index)
+                case 'SqlInteger' | 'Int32' => get<Int32>(index)
+                case 'SqlNullableInteger' | '?Int32' | 'Option<Int32>' => getOrNull<Int32>(index)
+                case 'SqlBigInt' | 'Int64' => get<Int64>(index)
+                case 'SqlNullableBigInt' | '?Int64' | 'Option<Int64>' => getOrNull<Int64>(index)
+                case 'SqlReal' | 'Float32' => get<Float32>(index)
+                case 'SqlNullableReal' | '?Float32' | 'Option<Float32>' => getOrNull<Float32>(index)
+                case 'SqlDouble' | 'Float64' => get<Float64>(index)
+                case 'SqlNullableDouble' | '?Float64' | 'Option<Float64>' => getOrNull<Float64>(index)
+                case 'SqlDate' | 'SqlTime' | 'SqlTimeTz' | 'SqlTimestamp' | 'DateTime' => get<DateTime>(index)
+                case 'SqlNullableDate' | 'SqlNullableTime' | 'SqlNullableTimeTz' | 'SqlNullableTimestamp' |
+                     '?DateTime' | 'Option<DateTime>' => getOrNull<DateTime>(index)
+                case 'SqlInterval' | 'Duration' => get<Duration>(index)
+                case 'SqlNullableInterval' | '?Duration' | 'Option<Duration>' => getOrNull<Duration>(index)
+                case _ => throw SqlException("Unsupported typeName ${columnInfos[index].typeName}")
+            }
         }
         map
     }

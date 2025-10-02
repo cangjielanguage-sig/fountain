@@ -60,9 +60,8 @@ private func generate(input: Tokens): Tokens {
                     for(meta in metas){
                         meta.setHandle{controller: $klass, ctx: HttpContext, patterns: HttpRequestPathPatterns => 
                             $argExprs
-                            controller.$(f.identifier)($args)
-                            // let ___rEspOnse___ = controller.$(f.identifier)($args)
-                            // meta.respond(___rEspOnse___, ctx)
+                            let any: Any = controller.$(f.identifier)($args)
+                            any
                         }
                     }
                 }()
