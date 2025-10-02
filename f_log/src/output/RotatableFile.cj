@@ -138,7 +138,6 @@ protected class RotatableFile <: OutputStream & Resource {
                 fn()
             }
         }
-        println('AAAAAAAAAAAAA ${timeunit} ${timeunit.since()} ${DateTime.now()}')
         let timer = Timer.after(timeunit.since()) {
             rotateFileIfNeed(0)
             this.timeunit.since()
