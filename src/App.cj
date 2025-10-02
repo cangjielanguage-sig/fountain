@@ -204,7 +204,7 @@ public struct App {
                 if(code != 0){
                     return code
                 }
-                code = execute('git', ['commit', '-m', if (args.size > 2) {
+                code = execute('git', ['commit', '-m', if (args.size > 2 && args[2] != 'tag') {
                     '${args[2]}，版本号是 ${v}'
                 } else {
                     '修改了一些代码，版本号是 ${v}.'
@@ -215,6 +215,32 @@ public struct App {
                 code = execute('git', ['pull'])
                 if (code != 0) {
                     return code
+                }
+                let tagmsg = if(args.size > 3 && args[3] == 'tag'){
+                    args[3 .. ]
+                } else if(args.size > 2 && args[2] == 'tag') {
+                    args[2 ..]
+                } else {
+                    []
+                }
+                if (tagmsg.size > 0) {
+                    let msg = if (tagmsg.size > 1) {
+                        args[1]
+                    } else {
+                        ''
+                    }
+                    code = if (msg.isEmpty()) {
+                        execute('git', ['tag', 'release-${v}'])
+                    } else{
+                        execute('git', ['tag', '-a', 'release-${v}', '-m', msg])
+                    }
+                    if (code != 0) {
+                        if (msg.isEmpty()) {
+                            println('git tag release-${v} 失败，将继续执行git push')
+                        } else {
+                            println('git tag -a release-${v} -m ${msg} 失败，将继续执行git push')
+                        }
+                    }
                 }
                 execute('git', ['push'])
             } else {
