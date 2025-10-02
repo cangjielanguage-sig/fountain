@@ -19,7 +19,7 @@ import std.collection.{HashMap, HashSet, Map}
 import std.convert.*
 import std.env.{getWorkingDirectory, getVariables, getCommand, atExit}
 import std.fs.*
-import std.io.{StringReader, SeekPosition}
+import std.io.{StringReader, ByteBuffer}
 import std.process.*
 import std.reflect.PackageInfo
 import std.regex.Regex
@@ -178,7 +178,27 @@ public struct App {
         0
     }
     private func version(){
-        println('fountain(1.0.0)')
+        if (this.args.size == 1) {
+            println('fountain(1.0.0)')
+        } else {
+            let v = args[1]
+            if (Regex(#'^\d+\.\d+.\d+$'#).matches(v)) {
+                let tomlPath = getWorkingDirectory().join('cjpm.toml')
+                let reader = StringReader(ByteBuffer(File.readFrom(tomlPath)))
+                let toml = StringGenerator()
+                let regexp = Regex(#'^\s*version\s*=\s*"(\d+\.)+\d+"$'#)
+                for (line in reader.lines()) {
+                    toml.appendUnixNewLine(if (regexp.matches(line)) {
+                        '  version = "${v}"'
+                    }else {
+                        line
+                    })
+                }
+                File.writeTo(tomlPath, toml.unsafeBytes())
+            } else {
+                println('version must be x.y.z, but current is ${v}')
+            }
+        }
         0
     }
     private prop app: String {
