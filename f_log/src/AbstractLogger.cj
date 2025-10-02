@@ -120,8 +120,10 @@ public abstract class AbstractLogger <: Logger & Resource {
         }
     }
     protected open func append(level: LogLevel, message: String, now: DateTime, ex: Option<Exception>): Unit {
-        pattern.generate(name, level, message, now, writer)
-        appendException(ex, writer)
+        if (logLevelEnabled(level)) {
+            pattern.generate(name, level, message, now, writer)
+            appendException(ex, writer)
+        }
     }
     protected func doLock<T>(callback: () -> T): T {
         synchronized(lock) {

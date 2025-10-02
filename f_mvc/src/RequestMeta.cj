@@ -81,35 +81,23 @@ public class RequestMeta <: HttpRequestHandler & ToString {
         let pattern = this.pattern.getOrThrow()
         this.handle_ = {
             ctx =>
-            let start = MonoTime.now()
-            try {
-                let result = fn(BeanFactory.instance.getFirst<T>().getOrThrow(), ctx, pattern)
-                respond<R>(result, ctx)
-            } finally {
-                let request = ctx.request
-                log.info<ToString>('fountain.mvc {}:{};{}', [request.method, request.url, MonoTime.now() - start])
-            }
+            let result = fn(BeanFactory.instance.getFirst<T>().getOrThrow(), ctx, pattern)
+            respond<R>(result, ctx)
         }
     }
     public func setHandle<T>(fn: (T, HttpContext, HttpRequestPathPatterns) -> Any): Unit where T <: Object {
         let pattern = this.pattern.getOrThrow()
         this.handle_ = {
             ctx =>
-            let start = MonoTime.now()
-            try {
-                let result = fn(BeanFactory.instance.getFirst<T>().getOrThrow(), ctx, pattern)
-                match(result){
-                    case x: JsonValue => respond(x, ctx)
-                    case x: InputStream => respond(x, ctx)
-                    case x: Array<Byte> => respond(x, ctx)
-                    case _ => 
-                        let request = ctx.request
-                        log.warn<ToString>('fountain.mvc {}:{};{};{}', [request.method, request.url, TypeInfo.of(result), MonoTime.now() - start])
-                        MultiRequestMethodHandler.NOT_ACCEPTABLE.handle(ctx)
-                }
-            } finally {
-                let request = ctx.request
-                log.info<ToString>('fountain.mvc {}:{};{}', [request.method, request.url, MonoTime.now() - start])
+            let result = fn(BeanFactory.instance.getFirst<T>().getOrThrow(), ctx, pattern)
+            match(result){
+                case x: JsonValue => respond(x, ctx)
+                case x: InputStream => respond(x, ctx)
+                case x: Array<Byte> => respond(x, ctx)
+                case _ => 
+                    let request = ctx.request
+                    log.warn<ToString>('fountain.mvc.handle {}:{};{}', [request.method, request.url, TypeInfo.of(result)])
+                    MultiRequestMethodHandler.NOT_ACCEPTABLE.handle(ctx)
             }
         }
     }
@@ -250,6 +238,6 @@ public class RequestMeta <: HttpRequestHandler & ToString {
             case Some(x) => anyToString(x)
             case _ => 'None'
         }
-        log.info('${request.method}:${request.url}?${request.form.toEncodeString()}; consumes:${request.headers.getFirst('Content-Type')}; params:${argGen}; returned: ${result}; elapsed: ${MonoTime.now() - start}')
+        log.info('MVC.accessLog:${request.method}:${request.url}?${request.form.toEncodeString()}; consumes:${request.headers.getFirst('Content-Type')}; params:${argGen}; returned: ${result}; elapsed: ${MonoTime.now() - start}')
     }
 }

@@ -6,7 +6,7 @@ echo "target-dir=$path"
 run(){
     # pattern可省略，有默认值
     export logger_appender_console=FDemoConsole
-    export logger_appender_FDemoConsole_level=INFO
+    export logger_appender_FDemoConsole_level=ERROR
     export logger_appender_FDemoConsole_pattern='[%level-%name]%d{yyyy/MM/dd,HH:mm:ss.SSS}|%m'
     export logger_appender_file=FDemoFile
     export logger_appender_FDemoFile_level=INFO

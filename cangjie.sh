@@ -51,6 +51,8 @@ cj(){
     fboot version $2
     cd fboot
     cjpm install --root /mnt/d/docs/work/cangjie/installed
+    echo -e "\a"
+    cd ..
     ;;
   installed)
     cd /mnt/d/docs/work/cangjie/installed
