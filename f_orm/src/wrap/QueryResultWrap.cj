@@ -27,6 +27,7 @@ public class QueryResultWrap <: QueryResult {
         }
     }
     public func next(): Bool {
+        list.clear()
         result.next()
     }
 

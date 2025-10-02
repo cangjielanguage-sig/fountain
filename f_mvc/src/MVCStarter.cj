@@ -18,7 +18,7 @@ package f_mvc
 public class MVCStarter {
     private static let log = LoggerFactory.getLogger<MVCStarter>()
 
-    private MVCStarter(private let server: Server) {
+    private MVCStarter(private let server: Server, private let host: String, private let port: UInt16) {
         atExit(closeGracefully)
     }
     public static func initialize(): ?MVCStarter {
@@ -28,7 +28,9 @@ public class MVCStarter {
         if (!registered.load()) {
             return None<MVCStarter>
         }
-        let builder = ServerBuilder().addr(MVCConfig.host).port(MVCConfig.port).logger(log)
+        let host = MVCConfig.host
+        let port = MVCConfig.port
+        let builder = ServerBuilder().addr(host).port(port).logger(log)
         if (let Some(x) <- MVCConfig.readTimeout) {
             builder.readTimeout(x)
         }
@@ -69,7 +71,7 @@ public class MVCStarter {
             builder.tlsConfig(tls)
         }
         let server = builder.distributor(HttpRequestDistributorImpl.instance).build()
-        MVCStarter(server)
+        MVCStarter(server, host, port)
     }
     public static func register(mediaType: MediaType) {
         MediaTypes.register(mediaType)
@@ -94,7 +96,13 @@ public class MVCStarter {
             throw WSException('The generateAndRegisterWSEndPoint can only be called before calling MVCStarter.start()')
         }
     }
+    private prop listening: String {
+        get() {
+            '${host}:${port}'
+        }
+    }
     public func start(): Unit {
+        println("MVC正在监听：${listening}")
         server.serve()
     }
     public func closeGracefully(): Unit {

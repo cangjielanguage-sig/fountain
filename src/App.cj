@@ -173,7 +173,7 @@ public struct App {
         }
         println(appVersion.banner)//banner不能是多行插值串，因为有\_，编译器认为是错误的转义符。使用\\_就不好看了
         let end = DateTime.now()
-        println('${app}${appver} is started by ${versionStr} in ${end - starts} on ${end}')
+        println('${app}${appver}由${versionStr}于${end}启动，耗时${end - starts}')
         mvc?.start()
         0
     }
@@ -182,10 +182,10 @@ public struct App {
         if (this.args.size == 1) {
             println(versionStr)
         } else {
-            println('修改版本号后将会自动提交代码，请确保已按照git命令且执行git不需要输入密码')
+            println('修改版本号后将会自动提交代码，请确保已按照git命令且执行git不需要输入密码。')
             let v = args[1]
             if (v.isEmpty()) {
-                println('当前版本是${versionStr}，若要修改版本号请使用命令：fboot version x.y.z')
+                println('当前版本是${versionStr}，若要修改版本号请使用命令：fboot version x.y.z。')
             } else if (Regex(#'^\d+\.\d+.\d+$'#).matches(v)) {
                 let tomlPath = getWorkingDirectory().join('cjpm.toml')
                 let reader = StringReader(ByteBuffer(File.readFrom(tomlPath)))
@@ -207,7 +207,7 @@ public struct App {
                 code = execute('git', ['commit', '-m', if (args.size > 2 && args[2] != 'tag') {
                     '${args[2]}，版本号是 ${v}'
                 } else {
-                    '修改了一些代码，版本号是 ${v}.'
+                    '修改了一些代码，版本号是 ${v}'
                 }])
                 if (code != 0) {
                     return code
@@ -221,7 +221,7 @@ public struct App {
                 } else if(args.size > 2 && args[2] == 'tag') {
                     args[2 ..]
                 } else {
-                    []
+                    Array<String>()
                 }
                 if (tagmsg.size > 0) {
                     let msg = if (tagmsg.size > 1) {
@@ -236,15 +236,15 @@ public struct App {
                     }
                     if (code != 0) {
                         if (msg.isEmpty()) {
-                            println('git tag release-${v} 失败，将继续执行git push')
+                            println('git tag release-${v} 失败，将继续执行git push。')
                         } else {
-                            println('git tag -a release-${v} -m ${msg} 失败，将继续执行git push')
+                            println('git tag -a release-${v} -m ${msg} 失败，将继续执行git push。')
                         }
                     }
                 }
                 execute('git', ['push'])
             } else {
-                println('version must be x.y.z, but current is ${v}')
+                println('版本号格式必须是x.y.z，但是指定版本号为 ${v}')
             }
         }
         0

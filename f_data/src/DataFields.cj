@@ -15,13 +15,15 @@ limitations under the License.
  */
 package f_data
 
-public interface DataFields<T> where T <: DataFields<T> {
+public interface ToData {
+    func toData(): Data
+}
+public interface DataFields<T> <: ToData where T <: DataFields<T> {
     static prop isSimple: Bool {
         get() {
             true
         }
     }
-    func toData(): Data
     static func fromData(data: Data, flag: DataConversionFlag): T {
         match (T.tryFromData(data, flag)) {
             case x: ?T => match (x) {

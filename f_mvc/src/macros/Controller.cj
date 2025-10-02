@@ -52,16 +52,24 @@ private func generate(input: Tokens): Tokens {
     let klass = decl.identifier
     for (d in decl.body.decls) {
         if (let m: MacroExpandDecl <- d && let f: FuncDecl <- extract(m) && !isStatic(f) && isPublic(f)) {
-            let (argTypes, argExprs, args) = generateArgs(f)
+            let (argTypes, argExprs, args, anyargs) = generateArgs(f)
             tokens.append(quote(
                 private let _ = {=>
                     let fname = $(f.identifier.value)
                     let metas = MVCStarter.generateAndRegister<$klass>($(f.identifier.value), $argTypes)
                     for(meta in metas){
                         meta.setHandle{controller: $klass, ctx: HttpContext, patterns: HttpRequestPathPatterns => 
+                            let start = MonoTime.now()
                             $argExprs
-                            let any: Any = controller.$(f.identifier)($args)
-                            any
+                            var any: ?Any = None<Any>
+                            try {
+                                let returned: Any = controller.$(f.identifier)($args)
+                                any = returned
+                                returned
+                            } finally {
+                                $anyargs
+                                RequestMeta.accessLog(start, ctx, anyArgs, any)
+                            }
                         }
                     }
                 }()
@@ -72,10 +80,11 @@ private func generate(input: Tokens): Tokens {
     tokens
 }
 
-private func generateArgs(decl: FuncDecl): (Tokens, Tokens, Tokens) {
+private func generateArgs(decl: FuncDecl): (Tokens, Tokens, Tokens, Tokens) {
     let argTypes = quote([)
     let exprs = quote()
     let args = quote()
+    let anyArgs = quote(let anyArgs = ArrayList<Any>())
     for (fp in decl.funcParams) {
         let p: FuncParam = match(fp){
             case x: MacroExpandParam => extract(x)
@@ -111,11 +120,13 @@ private func generateArgs(decl: FuncDecl): (Tokens, Tokens, Tokens) {
         if (args.size > 0) {
             args.append(`comma`)
         }
-        args.append(if (named) {
+        let arg = if (named) {
             quote($(p.identifier): $(p.identifier))
         } else {
             quote($(p.identifier))
-        })
+        }
+        args.append(arg)
+        anyArgs.append(`nl`).append(quote(anyArgs.add($(p.identifier))))
         if (argTypes.size > 1) {
             argTypes.append(`comma`)
         }
@@ -124,5 +135,5 @@ private func generateArgs(decl: FuncDecl): (Tokens, Tokens, Tokens) {
         ))
     }
     argTypes.append(`rsquare`)
-    (argTypes, exprs, args)
+    (argTypes, exprs, args, anyArgs)
 }

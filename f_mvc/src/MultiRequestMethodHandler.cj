@@ -97,6 +97,7 @@ public class MultiRequestMethodHandler <: HttpRequestHandler {
                 check(ms).handle(ctx)
             } catch (e: Exception) {
                 log.error<ToString>('fountain mvc {}: {}', e, [request.method, request.url])
+                INTERNAL_SERVER_ERROR.handle(ctx)
             }
         }
         if (log.debugEnabled) {

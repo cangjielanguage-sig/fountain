@@ -16,12 +16,13 @@ limitations under the License.
 package user.service
 
 import fountain.orm.RootService
-
 import user.model.po.*
+internal import std.collection.*
 
 public interface UserService <: RootService {
     func register(username: String, password: String): Int64
     func changePassword(username: String, password: String): Int64
     func queryUser(id: Int64): UserPO
+    func listUsers(): ArrayList<UserPO>
     func deleteUser(id: Int64): Int64
 }

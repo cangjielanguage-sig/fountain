@@ -70,8 +70,29 @@ public class UserController {
             "registerTime": "${user.saveTime}"
         }
         '''
-        println('AAAAAAAAAAAAAA ${json}')
+        println('/api/user${id} ${json}')
         JsonValue.fromStr(json)
+    }
+    @GetMapping[path:'/api/users', produces:'application/json', consumes:'application/x-www-form-urlencoded']
+    public func listUsers(): JsonValue {
+        let list = userService.listUsers()
+        let gen = StringGenerator().append('[')
+        for(po in list){
+            if(gen.size > 1){
+                gen.append(',')
+            }
+            gen.append('''
+                {
+                    "id": ${po.id},
+                    "username": "${po.username}",
+                    "password": "${po.password}",
+                    "registerTime": "${po.saveTime}"
+                }'''
+            )
+        }
+        gen.append(']')
+        println('/api/users: ${gen}')
+        JsonValue.fromStr(gen.toString())
     }
     @DeleteMapping[path:'/api/user/{id}', produces:'application/json', consumes:'application/x-www-form-urlencoded']
     public func deleteUser(@PathVariable id: Int64): JsonValue {

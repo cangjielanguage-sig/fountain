@@ -84,7 +84,13 @@ _/ ____\____  __ __  _____/  |______  |__| ____
   7. fboot dynamic 将当前目录初始化为仓颉dynamic项目
   8. fboot build 编译使用fountain开发的应用项目
   9. fboot count 数当前目录的仓颉代码行数
-  10.fboot replaceVersion 用cjpm.toml的版本号替换App.cj的
+  10.fboot version x.y.z 用指定版本号替换cjpm.toml和App.cj的版本号，并提交且推送当前全部修改
+     - fboot version x.y.z
+     - fboot version x.y.z '提交的内容'，以指定内容执行git commit
+     - fboot version x.y.z tag，除了替换版本号，还会用指定的版本号创建tag：release-x.y.z
+     - fboot version x.y.z tag '版本消息'，除了替换版本号，还会以'版本消息'创建附注tag
+     - fboot version x.y.z '提交的内容' tag
+     - fboot version x.y.z '提交的内容' tag '版本消息'
   11.fboot version 显示当前fountain版本号
 
 ## 构建

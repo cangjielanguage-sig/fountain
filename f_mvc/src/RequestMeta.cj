@@ -228,4 +228,28 @@ public class RequestMeta <: HttpRequestHandler & ToString {
         }
         metas
     }
+    public static func accessLog(start: MonoTime, ctx: HttpContext, args: ArrayList<Any>, returned: ?Any){
+        func anyToString(any: Any) {
+            match(any) {
+                case x: ToString => x.toString()
+                case x: ToData => x.toData().toString()
+                case x => TypeInfo.of(x).toString()
+            }
+        }
+        let request = ctx.request
+        let argGen = StringGenerator().append('[')
+        for(arg in args){
+            if (argGen.size > 1) {
+                argGen.append(',')
+            }
+            let s = anyToString(arg)
+            argGen.append(s)
+        }
+        argGen.append(']')
+        let result = match(returned) {
+            case Some(x) => anyToString(x)
+            case _ => 'None'
+        }
+        log.info('${request.method}:${request.url}?${request.form.toEncodeString()}; consumes:${request.headers.getFirst('Content-Type')}; params:${argGen}; returned: ${result}; elapsed: ${MonoTime.now() - start}')
+    }
 }

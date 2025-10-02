@@ -15,7 +15,7 @@ limitations under the License.
 */
 package user.dao
 
-import std.collection.Map
+import std.collection.*
 
 import fountain.orm.*
 import fountain.orm.macros.*
@@ -55,6 +55,12 @@ public interface UserDAO <: RootDAO {
               from user_info
              where id = ${arg(id)}'''
         ).firstToMap()
+    }
+    func listUsers(): ArrayList<UserPO> {
+        executor.setSql('''
+            select * 
+              from user_info'''
+        ).list<UserPO>()
     }
     func deleteUser(id: Int64): Int64 {
         executor.setSql('''

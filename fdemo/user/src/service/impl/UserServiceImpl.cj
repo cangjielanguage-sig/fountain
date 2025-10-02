@@ -52,6 +52,11 @@ public class UserServiceImpl <: UserService {
             throw e
         }
     }
+    public func listUsers(): ArrayList<UserPO> {
+        let list = executor().listUsers()
+        println('AAAAAAAAAAAAAA ${list.size}')
+        list
+    }
     public func deleteUser(id: Int64): Int64 {
         println('id: ${id}')
         executor().deleteUser(id)
