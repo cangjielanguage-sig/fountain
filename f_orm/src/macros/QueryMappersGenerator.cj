@@ -116,10 +116,8 @@ private func expandQueryMappers(input: Tokens): Tokens {
     )),
             parseDecl(
             quote(
-        public static prop isSimpleData: Bool {
-            get(){
-                false
-            }
+        public static func isSimpleData(): Bool {
+            false
         }
     )),
             parseDecl(
@@ -217,7 +215,7 @@ func generateMappers(name: Tokens, fieldName: Token, dts: Tokens, meta: (Bool, S
                     } else {
                         NullableGroupedQueryMapper<$(listGeneric[2]), $name>(
                             ignoreNone: false,
-                            grouped: $(listGeneric[2]).queryMappers,
+                            grouped: $(listGeneric[2]).queryMappers(),
                             groupedGetter: {o => o.$fieldName}
                         )
                     }
@@ -232,7 +230,7 @@ func generateMappers(name: Tokens, fieldName: Token, dts: Tokens, meta: (Bool, S
                     } else {
                         NullableGroupedQueryMapper<$(listGeneric[2]), $name>(
                             ignoreNone: false,
-                            grouped: $(listGeneric[2]).queryMappers,
+                            grouped: $(listGeneric[2]).queryMappers(),
                             groupedGetter: {o => o.$fieldName}
                         )
                     }
@@ -247,7 +245,7 @@ func generateMappers(name: Tokens, fieldName: Token, dts: Tokens, meta: (Bool, S
                     } else {
                         GroupedQueryMapper<$listGeneric, $name>(
                             name: $columnName,
-                            grouped: $(listGeneric).queryMappers,
+                            grouped: $(listGeneric).queryMappers(),
                             groupedGetter: {o => o.$fieldName}
                         )
                     }
@@ -262,7 +260,7 @@ func generateMappers(name: Tokens, fieldName: Token, dts: Tokens, meta: (Bool, S
                     } else {
                         GroupedQueryMapper<$listGeneric, $name>(
                             name: $columnName,
-                            grouped: $(listGeneric).queryMappers,
+                            grouped: $(listGeneric).queryMappers(),
                             groupedGetter: {o => o.$fieldName}
                         )
                     }
@@ -282,7 +280,7 @@ func generateMappers(name: Tokens, fieldName: Token, dts: Tokens, meta: (Bool, S
                     )
                 } else {
                     NullableNestQueryMapper<$dataType, $name> (
-                        nested: $(dataType).queryMappers,
+                        nested: $(dataType).queryMappers(),
                         nestGetter: {o => o.$fieldName}
                         nestPutter: {o, v => o.$fieldName = v}
                     )
@@ -302,7 +300,7 @@ func generateMappers(name: Tokens, fieldName: Token, dts: Tokens, meta: (Bool, S
                     )
                 } else {
                     NullableNestQueryMapper<$dataType, $name> (
-                        nested: $(dataType).queryMappers,
+                        nested: $(dataType).queryMappers(),
                         nestGetter: {o => o.$fieldName}
                         nestPutter: {o, v => o.$fieldName = v}
                     )
@@ -334,7 +332,7 @@ func generateMappers(name: Tokens, fieldName: Token, dts: Tokens, meta: (Bool, S
                     })
                 } else {
                     NestQueryMapper<$dataType, $name> (
-                        nested: $(dataType).queryMappers,
+                        nested: $(dataType).queryMappers(),
                         nestPutter: {o, v => o.$fieldName = v}
                     )
                 }
@@ -365,7 +363,7 @@ func generateMappers(name: Tokens, fieldName: Token, dts: Tokens, meta: (Bool, S
                     })
                 } else {
                     NestQueryMapper<$dataType, $name> (
-                        nested: $(dataType).queryMappers,
+                        nested: $(dataType).queryMappers(),
                         nestPutter: {o, v => o.$fieldName = v}
                     )
                 }
