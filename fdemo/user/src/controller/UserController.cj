@@ -28,39 +28,9 @@ import user.model.po.*
 public class UserController {
     private let userService = lookup<UserService>()
 
-    @PostMapping[path:'/api/user/register', 
-                 consumes:'application/x-www-form-urlencoded', produces:'text/plain',
-                 ignoreAuth: true]
-    public func register(@RequestParam username: String, @RequestParam password: String): String {
-        let id = userService.register(username, password).toString()
-        // let json = JsonObject()
-        // json.put('username', JsonString(username))
-        // json.put('password', JsonString(password))
-        // println(json)
-        // println(JsonString(username))
-        // let u = 'username'
-        // println(JsonString(u))
-        // json
-        '''
-        {
-            "id": ${id},
-            "username": "${username}",
-            "password": "${password}"
-        }
-        '''
-    }
-    @PutMapping[path:'/api/user/changePassword', consumes:'application/x-www-form-urlencoded', produces:'text/plain']
-    public func changePassword(@RequestParam username: String, @RequestParam password: String): String {
-        let count = userService.changePassword(username, password).toString()
-        '''
-        {
-            "count": ${count},
-            "username": "${username}",
-            "password": "${password}"
-        }
-        '''
-    }
-    @GetMapping[path:'/api/user/{id}', produces:'application/json', consumes:'application/x-www-form-urlencoded']
+    @GetMapping[path:'/api/user/{id}', 
+                produces:'application/json', 
+                consumes:'application/x-www-form-urlencoded']
     public func queryUser(@PathVariable id: Int64): JsonValue {
         println('get user by id: ${id}')
         let user = userService.queryUser(id)
@@ -78,7 +48,9 @@ public class UserController {
         println('/api/user${id} ${json}')
         JsonValue.fromStr(json)
     }
-    @GetMapping[path:'/api/users', produces:'application/json', consumes:'application/x-www-form-urlencoded']
+    @GetMapping[path:'/api/users', 
+                produces:'application/json', 
+                consumes:'application/x-www-form-urlencoded']
     public func listUsers(): JsonValue {
         let list = userService.listUsers()
         let gen = StringGenerator().append('[')
@@ -110,7 +82,9 @@ public class UserController {
         '''
         JsonValue.fromStr(json)
     }
-    @DeleteMapping[path:'/api/user/{id}', produces:'application/json', consumes:'application/x-www-form-urlencoded']
+    @DeleteMapping[path:'/api/user/{id}', 
+                   produces:'application/json', 
+                   consumes:'application/x-www-form-urlencoded']
     public func deleteUser(@PathVariable id: Int64): JsonValue {
         println('delete user id is ${id}')
         let deleted = userService.deleteUser(id)

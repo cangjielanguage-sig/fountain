@@ -29,8 +29,44 @@ import user.model.po.*
  * 分开两个类就能正常加载
  */
 @Controller
-public class UserSessionController { 
+@BeanMeta[scope: BeanScope.prototype]//此类不需要prototype，仅做演示
+public class CurrentUserController { 
     private let userService = lookup<UserService>()
+
+    @PostMapping[path:'/api/user/register', 
+                 consumes:'application/x-www-form-urlencoded', produces:'text/plain',
+                 ignoreAuth: true]
+    public func register(@RequestParam username: String, @RequestParam password: String): String {
+        let id = userService.register(username, password).toString()
+        // let json = JsonObject()
+        // json.put('username', JsonString(username))
+        // json.put('password', JsonString(password))
+        // println(json)
+        // println(JsonString(username))
+        // let u = 'username'
+        // println(JsonString(u))
+        // json
+        '''
+        {
+            "id": ${id},
+            "username": "${username}",
+            "password": "${password}"
+        }
+        '''
+    }
+    @PutMapping[path:'/api/user/changePassword', 
+                consumes:'application/x-www-form-urlencoded', 
+                produces:'text/plain']
+    public func changePassword(@RequestParam username: String, @RequestParam password: String): String {
+        let count = userService.changePassword(username, password).toString()
+        '''
+        {
+            "count": ${count},
+            "username": "${username}",
+            "password": "${password}"
+        }
+        '''
+    }
 
     @PostMapping[path:'/api/user/session', 
                 consumes:'application/x-www-form-urlencoded', 
