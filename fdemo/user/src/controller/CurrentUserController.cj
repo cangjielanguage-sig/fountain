@@ -25,7 +25,7 @@ import user.service.UserService
 import user.model.po.*
 
 /**
- * 把UserController UserSessionController合并成一个，加载时会抛出异常。
+ * 把UserController CurrentUserController合并成一个，加载时会抛出异常。
  * 分开两个类就能正常加载
  */
 @Controller
