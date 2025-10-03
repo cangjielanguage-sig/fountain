@@ -28,21 +28,20 @@ public class UserSessionCache {
     public static func generate(userId: Int64): String {
         let session = UserSession(userId, UUID.random().toHexString())
         cache.set('${userId}', session)
-        hmacKey(JWT(), session).keyId(session.userId.toString()).expire(expire).encoder().sign()
+        hmacKey(JWT.encoder(), session).keyId(session.userId.toString()).expire(expire).sign()
     }
     public static func verify(jwtStr: String): Bool {
-        let jwt = JWT()
-        let verifier = jwt.verifier(jwtStr)
-        if(let Some(userIdStr) <- verifier.getKeyId() && userIdStr.size > 0 && 
+        let jwt = JWT.verifier(jwtStr)
+        if(let Some(userIdStr) <- jwt.getKeyId() && userIdStr.size > 0 && 
             let Some(userId) <- Int64.tryParse(userIdStr) && userId > 0 && 
             let Some(session) <- cache.get(userIdStr)){
             hmacKey(jwt, session)
-            verifier.verify()
+            jwt.verify()
         } else {
             false
         }
     }
-    private static func hmacKey(jwt: JWT, session: UserSession) {
+    private static func hmacKey<T>(jwt: T, session: UserSession): T where T <: JWT {
         jwt.hmacMD5(session.toBytes())
     }
     public static func remove(userId: Int64) {
