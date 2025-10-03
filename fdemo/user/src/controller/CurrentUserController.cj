@@ -33,6 +33,10 @@ import user.model.po.*
 public class CurrentUserController { 
     private let userService = lookup<UserService>()
 
+    public init(){
+        println('CurrentUserController init 这一行可以证明这个类是prototype的，多次访问本类的controller映射这一行每次都会输出')
+    }
+
     @PostMapping[path:'/api/user/register', 
                  consumes:'application/x-www-form-urlencoded', produces:'text/plain',
                  ignoreAuth: true]
