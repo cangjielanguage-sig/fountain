@@ -476,7 +476,7 @@ public class ${name}_AppVersionImpl <: AppVersion {
 '''
     }
     private func build(): Int64 {
-        println('fboot build is used to compile the project which is developed based on fountain.')
+        println('fboot build is used to compile the project which depends fountain.')
         let (workingDir, targetDir) = directories()
         println('fboot build ${workingDir} --target-dir=${targetDir}')
         var (version, name) = extract(workingDir)
