@@ -15,7 +15,7 @@ limitations under the License.
  */
 package f_mvc
 
-public class HttpStatus <: ToString {
+public class HttpStatus <: ToString & Equatable<HttpStatus> {
     // 1xx Informational
 
     /**
@@ -946,6 +946,10 @@ public class HttpStatus <: ToString {
      */
     public func toString(): String {
         return "${this.value} ${this.reasonPhrase}"
+    }
+
+    public operator func ==(other: HttpStatus): Bool {
+        this.value == other.value
     }
 
     /**

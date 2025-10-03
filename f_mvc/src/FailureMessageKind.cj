@@ -15,13 +15,19 @@ limitations under the License.
  */
 package f_mvc
 
+/**
+ * Base64Binary：把配置的文本当作BASE64转成字节数组
+ * Text: 把配置的文本当作字符串
+ * Bean: 把配置的文本当作IOC Bean名称，得到的应该是一个ErrorHttpRequestHandler类型的实例
+ */
 public enum FailureMessageKind <: Equatable<FailureMessageKind> & Parsable<FailureMessageKind> & DataParsable<FailureMessageKind> {
     | Base64Binary
     | Text
+    | Bean
 
     public operator func ==(other: FailureMessageKind) {
         match ((this, other)) {
-            case (Base64Binary, Base64Binary) | (Text, Text) => true
+            case (Base64Binary, Base64Binary) | (Text, Text) | (Bean, Bean) => true
             case _ => false
         }
     }
@@ -29,6 +35,7 @@ public enum FailureMessageKind <: Equatable<FailureMessageKind> & Parsable<Failu
         match (kind.toAsciiUpper()) {
             case "BASE64BINARY" => Base64Binary
             case "TEXT" => Text
+            case "BEAN" => Bean
             case _ => None<FailureMessageKind>
         }
     }

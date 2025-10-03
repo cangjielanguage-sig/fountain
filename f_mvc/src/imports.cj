@@ -31,7 +31,6 @@ internal import stdx.net.tls.*
 internal import stdx.crypto.x509.*
 internal import charset4cj.charset.encoding.Charset
 internal import charset4cj.charset.{Charsets, TextReader, TextWriter}
-internal import f_bean.BeanFactory
 internal import f_collection.*
 internal import f_config.*
 internal import f_data.*
@@ -47,5 +46,6 @@ public import stdx.encoding.json.*
 public import stdx.encoding.url.*
 public import stdx.net.http.*
 public import f_base.*
+public import f_bean.*
 public import f_log.*
 public import f_util.PathPattern
