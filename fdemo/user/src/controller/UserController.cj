@@ -91,7 +91,10 @@ public class UserController {
                     "id": ${po.id},
                     "username": "${po.username}",
                     "password": "${po.password}",
-                    "registerTime": "${po.saveTime}"
+                    "registerTime": "${match(po.saveTime){
+                        case Some(d) => '${d}'
+                        case _ => ''
+                    }}"
                 }'''
             )
         }
