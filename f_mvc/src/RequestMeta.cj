@@ -219,6 +219,7 @@ public class RequestMeta <: HttpRequestHandler & ToString {
     public static func accessLog(start: MonoTime, ctx: HttpContext, args: ArrayList<Any>, returned: ?Any){
         func anyToString(any: Any) {
             match(any) {
+                case x: String => x
                 case x: ToString => x.toString()
                 case x: ToData => x.toData().toString()
                 case x => TypeInfo.of(x).toString()

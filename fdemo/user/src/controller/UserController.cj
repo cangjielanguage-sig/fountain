@@ -120,28 +120,4 @@ public class UserController {
         }'''
         JsonValue.fromStr(json)
     }
-    @PostMapping[path:'/api/user/session', 
-                 consumes:'application/x-www-form-urlencoded', 
-                 produces:'application/json',
-                 ignoreAuth: true]
-    public func login(@RequestParam username: String, @RequestParam password: String): JsonValue {
-        let json = 
-        if (let Some((userId, token, logged)) <- userService.userSession(username, password)) {
-            '''
-            {
-                "status": 1,
-                "fields": {
-                    "userId": ${userId},
-                    "token": "${token}",
-                    "logged": ${logged}
-                }
-            }'''
-        } else {
-            '''
-            {
-                "status": 0
-            }'''
-        }
-        JsonValue.fromStr(json)
-    }
 }
