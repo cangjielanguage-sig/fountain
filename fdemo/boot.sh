@@ -15,7 +15,7 @@ run(){
     export logger_appender_FDemoFile_rotateDuration=DAY
     export mvc_port=8080 # 这一行可以没有，默认就是8080
     export LD_LIBRARY_PATH=./fdemo/release/boot:./fdemo/release/opengauss:./fdemo/release/user:$LD_LIBRARY_PATH
-    fboot run $path --dylibPattern='(boot|\.(controller|service\.impl))'
+    fboot run $path --dylibPattern='(boot|user\.util\.auth|\.(controller|service\.impl))'
     echo -e '\a'
 }
 

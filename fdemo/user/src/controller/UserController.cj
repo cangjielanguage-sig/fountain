@@ -28,7 +28,9 @@ import user.model.po.*
 public class UserController {
     private let userService = lookup<UserService>()
 
-    @PostMapping[path:'/api/user/register', consumes:'application/x-www-form-urlencoded', produces:'text/plain']
+    @PostMapping[path:'/api/user/register', 
+                 consumes:'application/x-www-form-urlencoded', produces:'text/plain',
+                 ignoreAuth: true]
     public func register(@RequestParam username: String, @RequestParam password: String): String {
         let id = userService.register(username, password).toString()
         // let json = JsonObject()
@@ -118,7 +120,10 @@ public class UserController {
         }'''
         JsonValue.fromStr(json)
     }
-    @PostMapping[path:'/api/user/session', consumes:'application/x-www-form-urlencoded', produces:'application/json']
+    @PostMapping[path:'/api/user/session', 
+                 consumes:'application/x-www-form-urlencoded', 
+                 produces:'application/json',
+                 ignoreAuth: true]
     public func login(@RequestParam username: String, @RequestParam password: String): JsonValue {
         let json = 
         if (let Some((userId, token, logged)) <- userService.userSession(username, password)) {
