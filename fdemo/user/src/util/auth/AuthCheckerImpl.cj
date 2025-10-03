@@ -19,16 +19,16 @@ import std.convert.*
 import fountain.bean.*
 import fountain.bean.macros.*
 import fountain.mvc.*
+import fountain.jwt.*
 import user.util.*
 
 @Bean
 public class AuthCheckerImpl <: AuthChecker {
     public func check(ctx: HttpContext, patterns: HttpRequestPathPatterns): Bool {
-        let userId = Int64.parse(ctx.request.headers.getFirst('userId') ?? '0')
-        let token = ctx.request.headers.getFirst('token') ?? ''
-        if(userId <= 0 || token.isEmpty()){
-            return false
+        if(let Some(jwt) <- ctx.request.headers.getFirst('Authorization')){
+            UserSessionCache.verify(jwt)
+        }else{
+            false
         }
-        UserSessionCache.check(userId, token)
     }
 }

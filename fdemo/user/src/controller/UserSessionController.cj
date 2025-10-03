@@ -38,13 +38,13 @@ public class UserSessionController {
                 ignoreAuth: true]
     public func login(@RequestParam username: String, @RequestParam password: String): JsonValue {
         let json = 
-        if (let Some((userId, token, logged)) <- userService.userSession(username, password)) {
+        if (let Some((userId, jwt, logged)) <- userService.userSession(username, password)) {
             '''
             {
                 "status": 1,
                 "fields": {
                     "userId": ${userId},
-                    "token": "${token}",
+                    "jwt": "${jwt}",
                     "logged": ${logged}
                 }
             }'''

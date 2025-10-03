@@ -45,14 +45,14 @@ public class JWT {
             this
         }
     }
-    public func hmacMD5(key: Array<Byte>) {
+    public func hmacMD5(key: Array<Byte>): JWT {
         signAlgo = DigestSignAlgo(HMACDigest(key, HashType.MD5))
         HM5
     }
-    public func hmacMD5ByBase64Key(key: String) {
+    public func hmacMD5ByBase64Key(key: String): JWT {
         hmacMD5(fromBase64(key))
     }
-    public func hmacMD5ByHexKey(key: String) {
+    public func hmacMD5ByHexKey(key: String): JWT {
         hmacMD5(fromHex(key))
     }
     private prop HS1: JWT {
@@ -61,14 +61,14 @@ public class JWT {
             this
         }
     }
-    public func hmacSHA1(key: Array<Byte>) {
+    public func hmacSHA1(key: Array<Byte>): JWT {
         signAlgo = DigestSignAlgo(HMACDigest(key, HashType.SHA1))
         HS1
     }
-    public func hmacSHA1ByBase64Key(key: String) {
+    public func hmacSHA1ByBase64Key(key: String): JWT {
         hmacSHA1(fromBase64(key))
     }
-    public func hmacSHA1ByHexKey(key: String) {
+    public func hmacSHA1ByHexKey(key: String): JWT {
         hmacSHA1(fromHex(key))
     }
     private prop HS224: JWT {
@@ -77,14 +77,14 @@ public class JWT {
             this
         }
     }
-    public func hmacSHA224(key: Array<Byte>) {
+    public func hmacSHA224(key: Array<Byte>): JWT {
         signAlgo = DigestSignAlgo(HMACDigest(key, HashType.SHA224))
         HS224
     }
-    public func hmacSHA224ByBase64Key(key: String) {
+    public func hmacSHA224ByBase64Key(key: String): JWT {
         hmacSHA224(fromBase64(key))
     }
-    public func hmacSHA224ByHexKey(key: String) {
+    public func hmacSHA224ByHexKey(key: String): JWT {
         hmacSHA224(fromHex(key))
     }
     private prop HS256: JWT {
@@ -93,14 +93,14 @@ public class JWT {
             this
         }
     }
-    public func hmacSHA256(key: Array<Byte>) {
+    public func hmacSHA256(key: Array<Byte>): JWT {
         signAlgo = DigestSignAlgo(HMACDigest(key, HashType.SHA1))
         HS256
     }
-    public func hmacSHA256ByBase64Key(key: String) {
+    public func hmacSHA256ByBase64Key(key: String): JWT {
         hmacSHA256(fromBase64(key))
     }
-    public func hmacSHA256ByHexKey(key: String) {
+    public func hmacSHA256ByHexKey(key: String): JWT {
         hmacSHA256(fromHex(key))
     }
     private prop HS384: JWT {
@@ -109,14 +109,14 @@ public class JWT {
             this
         }
     }
-    public func hmacSHA384(key: Array<Byte>) {
+    public func hmacSHA384(key: Array<Byte>): JWT {
         signAlgo = DigestSignAlgo(HMACDigest(key, HashType.SHA1))
         HS384
     }
-    public func hmacSHA384ByBase64Key(key: String) {
+    public func hmacSHA384ByBase64Key(key: String): JWT {
         hmacSHA384(fromBase64(key))
     }
-    public func hmacSHA384ByHexKey(key: String) {
+    public func hmacSHA384ByHexKey(key: String): JWT {
         hmacSHA384(fromHex(key))
     }
     private prop HS512: JWT {
@@ -125,14 +125,14 @@ public class JWT {
             this
         }
     }
-    public func hmacSHA512(key: Array<Byte>) {
+    public func hmacSHA512(key: Array<Byte>): JWT {
         signAlgo = DigestSignAlgo(HMACDigest(key, HashType.SHA1))
         HS512
     }
-    public func hmacSHA512ByBase64Key(key: String) {
+    public func hmacSHA512ByBase64Key(key: String): JWT {
         hmacSHA512(fromBase64(key))
     }
-    public func hmacSHA512ByHexKey(key: String) {
+    public func hmacSHA512ByHexKey(key: String): JWT {
         hmacSHA512(fromHex(key))
     }
     private prop ES224: JWT {
@@ -140,7 +140,7 @@ public class JWT {
             header("alg", "ES224")
         }
     }
-    public func ecdsa224(privateKeyPem!: ?String = None<String>, publicKeyPem!: ?String = None<String>) {
+    public func ecdsa224(privateKeyPem!: ?String = None<String>, publicKeyPem!: ?String = None<String>): JWT {
         signAlgo = match ((privateKeyPem, publicKeyPem)) {
             case (Some(pri), Some(pub)) => ECDSASignAlgo(SHA224(), privateKey: ECDSAPrivateKey.decodeFromPem(pri),
                 publicKey: ECDSAPublicKey.decodeFromPem(pub))
@@ -158,7 +158,7 @@ public class JWT {
         }
     }
 
-    public func ecdsa256(privateKeyPem!: ?String = None<String>, publicKeyPem!: ?String = None<String>) {
+    public func ecdsa256(privateKeyPem!: ?String = None<String>, publicKeyPem!: ?String = None<String>): JWT {
         signAlgo = match ((privateKeyPem, publicKeyPem)) {
             case (Some(pri), Some(pub)) => ECDSASignAlgo(SHA256(), privateKey: ECDSAPrivateKey.decodeFromPem(pri),
                 publicKey: ECDSAPublicKey.decodeFromPem(pub))
@@ -175,7 +175,7 @@ public class JWT {
             header("alg", "ES384")
         }
     }
-    public func ecdsa384(privateKeyPem!: ?String = None<String>, publicKeyPem!: ?String = None<String>) {
+    public func ecdsa384(privateKeyPem!: ?String = None<String>, publicKeyPem!: ?String = None<String>): JWT {
         signAlgo = match ((privateKeyPem, publicKeyPem)) {
             case (Some(pri), Some(pub)) => ECDSASignAlgo(SHA384(), privateKey: ECDSAPrivateKey.decodeFromPem(pri),
                 publicKey: ECDSAPublicKey.decodeFromPem(pub))
@@ -192,7 +192,7 @@ public class JWT {
             header("alg", "ES512")
         }
     }
-    public func ecdsa512(privateKeyPem!: ?String = None<String>, publicKeyPem!: ?String = None<String>) {
+    public func ecdsa512(privateKeyPem!: ?String = None<String>, publicKeyPem!: ?String = None<String>): JWT {
         signAlgo = match ((privateKeyPem, publicKeyPem)) {
             case (Some(pri), Some(pub)) => ECDSASignAlgo(SHA512(), privateKey: ECDSAPrivateKey.decodeFromPem(pri),
                 publicKey: ECDSAPublicKey.decodeFromPem(pub))
@@ -210,7 +210,7 @@ public class JWT {
         }
     }
     public func rsa256(privateKeyPem!: ?String = None<String>, publicKeyPem!: ?String = None<String>,
-        padType!: PadOption = PKCS1) {
+        padType!: PadOption = PKCS1): JWT {
         signAlgo = match ((privateKeyPem, publicKeyPem)) {
             case (Some(pri), Some(pub)) => RSASignAlgo(SHA256(), privateKey: RSAPrivateKey.decodeFromPem(pri),
                 publicKey: RSAPublicKey.decodeFromPem(pub), padType: padType)
@@ -231,7 +231,7 @@ public class JWT {
         }
     }
     public func rsa384(privateKeyPem!: ?String = None<String>, publicKeyPem!: ?String = None<String>,
-        padType!: PadOption = PKCS1) {
+        padType!: PadOption = PKCS1): JWT {
         signAlgo = match ((privateKeyPem, publicKeyPem)) {
             case (Some(pri), Some(pub)) => RSASignAlgo(SHA384(), privateKey: RSAPrivateKey.decodeFromPem(pri),
                 publicKey: RSAPublicKey.decodeFromPem(pub), padType: padType)
@@ -252,7 +252,7 @@ public class JWT {
         }
     }
     public func rsa512(privateKeyPem!: ?String = None<String>, publicKeyPem!: ?String = None<String>,
-        padType!: PadOption = PKCS1) {
+        padType!: PadOption = PKCS1): JWT {
         signAlgo = match ((privateKeyPem, publicKeyPem)) {
             case (Some(pri), Some(pub)) => RSASignAlgo(SHA512(), privateKey: RSAPrivateKey.decodeFromPem(pri),
                 publicKey: RSAPublicKey.decodeFromPem(pub), padType: padType)
@@ -394,9 +394,9 @@ public class JWTVerifier {
     JWTVerifier(private let data: String, private let jwt: JWT) {
         let firstDot = data.indexOf(".") ?? -1
         let lastDot = data.lastIndexOf(".", firstDot + 1) ?? -1
-        headerBytes = fromBase64(data[0..firstDot])
-        payloadBytes = fromBase64(data[firstDot + 1..lastDot])
-        signBytes = fromBase64(data[lastDot + 1..])
+        headerBytes = fromBase64(data[0 .. firstDot])
+        payloadBytes = fromBase64(data[firstDot + 1 .. lastDot])
+        signBytes = fromBase64(data[lastDot + 1 ..])
         let headerJson = JsonValue.fromStr(String.fromUtf8(headerBytes))
         let payloadJson = JsonValue.fromStr(String.fromUtf8(payloadBytes))
         populate<String>(headerJson, jwt.headers)
@@ -437,7 +437,9 @@ public class JWTVerifier {
     public func getHeader(name: String): ?String {
         jwt.headers.get(name)
     }
-
+    public func getKeyId(): ?String {
+        getHeader('kid')
+    }
     public func getExpireAt(): ?DateTime {
         if (let Some(d) <- getExpireAtDuration()) {
             DateTime.UnixEpoch + d

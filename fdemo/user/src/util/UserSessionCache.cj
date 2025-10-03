@@ -15,25 +15,44 @@ limitations under the License.
 */
 package user.util
 
+import std.convert.*
+import fountain.base.*
 import fountain.cache.*
+import fountain.jwt.JWT
+import fountain.util.UUID
 
 public class UserSessionCache {
     private static let cache = HeapCache<UserSession>(maxLife: Duration.hour)
+    private static let expire = Duration.hour
     private init(){}
-    public static func set(userId: Int64, token: String) {
-        cache.set('${userId}', UserSession(userId, token))
+    public static func generate(userId: Int64): String {
+        let session = UserSession(userId, UUID.random().toHexString())
+        cache.set('${userId}', session)
+        hmacKey(JWT(), session).keyId(session.userId.toString()).expire(expire).encoder().sign()
     }
-    public static func check(userId: Int64, token: String): Bool {
-        if(let Some(s) <- cache.get('${userId}')){
-            s.token == token
+    public static func verify(jwtStr: String): Bool {
+        let jwt = JWT()
+        let verifier = jwt.verifier(jwtStr)
+        if(let Some(userIdStr) <- verifier.getKeyId() && userIdStr.size > 0 && 
+            let Some(userId) <- Int64.tryParse(userIdStr) && userId > 0 && 
+            let Some(session) <- cache.get(userIdStr)){
+            hmacKey(jwt, session)
+            verifier.verify()
         } else {
             false
         }
+    }
+    private static func hmacKey(jwt: JWT, session: UserSession) {
+        jwt.hmacMD5(session.toBytes())
     }
     public static func remove(userId: Int64) {
         cache.remove('${userId}')
     }
 }
 public class UserSession {
-    UserSession(public let userId: Int64, public let token: String){}
+    UserSession(public let userId: Int64, public let key: String){}
+
+    public func toBytes() {
+        '${userId}_${key}'.unsafeBytes()
+    }
 }

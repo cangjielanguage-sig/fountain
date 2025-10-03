@@ -15,7 +15,7 @@ limitations under the License.
 */
 package user.model.entity
 
-import fountain.util.UUID
+import fountain.jwt.*
 
 import user.util.*
 
@@ -24,9 +24,8 @@ public class UserEntity {
 
     public func makeSession(querier: (String, String) -> ?Int64): ?(Int64, String, Bool) {
         if (let Some(id) <- querier(username, password)) {
-            let token = UUID.random().toHexString()
-            UserSessionCache.set(id, token)
-            (id, token, UserSessionCache.check(id, token))
+            let jwt = UserSessionCache.generate(id)
+            (id, jwt, UserSessionCache.verify(jwt))
         } else {
             None<(Int64, String, Bool)>
         }

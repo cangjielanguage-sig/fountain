@@ -1,4 +1,5 @@
 [dependencies]
+  f_cache = {path = "../f_cache"}
   f_data = {path = "../f_data"}
   f_time = {path = "../f_time"}
   f_exception = {path = "../f_exception"}
