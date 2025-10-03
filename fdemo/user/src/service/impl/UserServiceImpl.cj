@@ -25,6 +25,7 @@ import fountain.log.*
 
 import user.service.UserService
 import user.dao.UserDAO
+import user.model.entity.*
 import user.model.po.*
 
 @Bean
@@ -60,5 +61,8 @@ public class UserServiceImpl <: UserService {
     public func deleteUser(id: Int64): Int64 {
         println('id: ${id}')
         executor().deleteUser(id)
+    }
+    public func userSession(username: String, password: String): ?(Int64, String, Bool) {
+        UserEntity(username, password).makeSession(executor().findUserId)
     }
 }

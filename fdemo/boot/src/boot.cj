@@ -20,5 +20,5 @@ import fountain.orm.*
 
 private let _ = {=>
     let driver = DriverManager.getDriver("opengauss").getOrThrow()
-    ORM.register(driver, "postgres://fountain:Fountain123@pgm-2ze534c0xh8vatxzwo.pg.rds.aliyuncs.com:5432/fountain?sslmode=disable", [])
+    ORM.register(driver, "postgres://fountain:Fountain123@pgm-2ze534c0xh8vatxzwo.pg.rds.aliyuncs.com:5432/fountain?sslmode=disable", []) 
 }()

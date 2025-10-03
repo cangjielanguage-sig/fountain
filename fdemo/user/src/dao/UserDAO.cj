@@ -70,4 +70,12 @@ public interface UserDAO <: RootDAO {
         '''
         ).delete
     }
+    func findUserId(username: String, password: String): ?Int64 {
+        executor.setSql('''
+            select id 
+            from user_info
+            where username = ${arg(username)} and 
+                password = ${arg(password)}'''
+        ).singleFirst<Int64>()
+    }
 }

@@ -64,10 +64,13 @@ public class UserController {
         let user = userService.queryUser(id)
         let json = '''
         {
-            "id": ${user.id},
-            "username": "${user.username}",
-            "password": "${user.password}",
-            "registerTime": "${user.saveTime}"
+            "status":1, 
+            "fields": {
+                "id": ${user.id},
+                "username": "${user.username}",
+                "password": "${user.password}",
+                "registerTime": "${user.saveTime}"
+            }
         }
         '''
         println('/api/user${id} ${json}')
@@ -92,7 +95,15 @@ public class UserController {
         }
         gen.append(']')
         println('/api/users: ${gen}')
-        JsonValue.fromStr(gen.toString())
+        let json = '''
+            {
+                "status": 1,
+                "fields": {
+                    "list": ${gen}
+                }
+            }
+        '''
+        JsonValue.fromStr(json)
     }
     @DeleteMapping[path:'/api/user/{id}', produces:'application/json', consumes:'application/x-www-form-urlencoded']
     public func deleteUser(@PathVariable id: Int64): JsonValue {
@@ -101,8 +112,31 @@ public class UserController {
         let json = '''
         {
             "status": 1,
-            "deleted": ${deleted}
+            "fields": {
+                "deleted": ${deleted}
+            }
         }'''
+        JsonValue.fromStr(json)
+    }
+    @PostMapping[path:'/api/user/session', consumes:'application/x-www-form-urlencoded', produces:'application/json']
+    public func login(@RequestParam username: String, @RequestParam password: String): JsonValue {
+        let json = 
+        if (let Some((userId, token, logged)) <- userService.userSession(username, password)) {
+            '''
+            {
+                "status": 1,
+                "fields": {
+                    "userId": ${userId},
+                    "token": "${token}",
+                    "logged": ${logged}
+                }
+            }'''
+        } else {
+            '''
+            {
+                "status": 0
+            }'''
+        }
         JsonValue.fromStr(json)
     }
 }

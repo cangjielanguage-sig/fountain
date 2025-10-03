@@ -20,11 +20,12 @@ import f_base.*
 
 public class QueryResultWrap <: QueryResult {
     private let columnInfoMap = HashMap<String, Int64>()
-    private let list = ArrayList<Any>()
+    private var list = unsafeZeroValue<ArrayList<Any>>()
     public QueryResultWrap(private let driverName: String, private let result: QueryResult) {
         for (i in 0..columnInfos.size) {
             columnInfoMap[columnInfos[i].name] = i
         }
+        list = ArrayList<Any>(columnInfos.size)
     }
     public func next(): Bool {
         list.clear()

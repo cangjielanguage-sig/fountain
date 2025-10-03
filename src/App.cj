@@ -175,7 +175,7 @@ public struct App {
         }
         println(appVersion.banner)
         let end = DateTime.now()
-        log.info('${app}${appver} started by ${versionStr} in ${end - starts}')
+        println('${app}${appver} started by ${versionStr} in ${end - starts}')
         mvc?.start()
         0
     }
