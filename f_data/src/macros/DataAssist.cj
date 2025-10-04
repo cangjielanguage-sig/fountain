@@ -166,11 +166,12 @@ func generateHash(d: ClassDecl, exclusion: HashSet<String>) {
         d.upperBound = `upperbound`[0]
     }
     d.superTypes.add(RefType(quote(Hashable)))
-    var hashed = `nl`
+    let hashed = quote($(`nl`))
     for (d in d.body.decls where d is VarDecl &&
         !(isStatic(d) || exclusion.contains(d.identifier.value) || exclusion.contains('${d.identifier.value}_'))) {
-        hashed += quote(f_data_hash(hasher, $(d.identifier))$(`nl`))
+        hashed.append(quote(f_data_hash(hasher, $(d.identifier))$(`nl`)))
     }
+    println('AAAAAAAAAAAAAAAAA ${hashed}')
     d.body.decls.add(
             all: [VarDecl(quote(
         private var __hAsh__ = 0
@@ -230,10 +231,7 @@ func generateCompare(d: ClassDecl, exclusion: HashSet<String>) {
             $(`nl`)
         ))
     }
-    d
-        .body
-        .decls
-        .add(
+    d.body.decls.add(
             FuncDecl(
                 quote(
         public $(openTokens(d)) func compare(other: $typeName): Ordering {
@@ -256,10 +254,7 @@ func generateToString(d: ClassDecl, exclusion: HashSet<String>) {
         !(isStatic(d) || exclusion.contains(d.identifier.value) || exclusion.contains('${d.identifier.value}_'))) {
         str.append(`nl`).append(quote(result.append($(d.identifier.value), $(d.identifier))))
     }
-    d
-        .body
-        .decls
-        .add(
+    d.body.decls.add(
             FuncDecl(
                 quote(
         public $(openTokens(d)) func toString(): String {
