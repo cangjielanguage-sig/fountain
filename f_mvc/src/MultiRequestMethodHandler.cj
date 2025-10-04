@@ -22,25 +22,10 @@ public class MultiRequestMethodHandler <: HttpRequestHandler {
     private static let UNSUPPORTED_MEDIA_TYPE = HttpStatusOnlyHandler(HttpStatus.UNSUPPORTED_MEDIA_TYPE)
     private static let NOT_IMPLEMENTED = HttpStatusOnlyHandler(HttpStatus.NOT_IMPLEMENTED)
     private static let INTERNAL_SERVER_ERROR = HttpStatusOnlyHandler(HttpStatus.INTERNAL_SERVER_ERROR)
-    private static let authFailureHandler = HttpStatusOnlyHandler(MVCConfig.authFailureStatus,
-        message: MVCConfig.authFailureMessage, kind: MVCConfig.authFailureMessageKind)
-    private static let privilegeFailureHandler = HttpStatusOnlyHandler(MVCConfig.privilegeFailureStatus,
-        message: MVCConfig.privilegeFailureMessage, kind: MVCConfig.privilegeFailureMessageKind)
 
     private static let accessControlAllowHeaders: String = MVCConfig.accessControlAllowHeaders
     private static let accessControlAllowOrigin: String = MVCConfig.accessControlAllowOrigin
     private static let accessControlMaxAge: Int64 = MVCConfig.accessControlMaxAge
-
-    private prop privilegeChecker: PrivilegeChecker {
-        get() {
-            BeanFactory.instance.getFirst<PrivilegeChecker>() ?? EmptyPrivilegeChecker.instance
-        }
-    }
-    private prop authChecker: AuthChecker {
-        get() {
-            BeanFactory.instance.getFirst<AuthChecker>() ?? EmptyAuthChecker.instance
-        }
-    }
 
     MultiRequestMethodHandler(private let patterns: HttpRequestPathPatterns) {}
 
@@ -77,10 +62,6 @@ public class MultiRequestMethodHandler <: HttpRequestHandler {
                 NOT_ACCEPTABLE
             } else if (!meta.check(ctx)) {
                 NOT_IMPLEMENTED
-            } else if (!(meta.ignoreAuth || authChecker.check(ctx, patterns))) {
-                authFailureHandler
-            } else if (!(meta.ignorePrivilege || privilegeChecker.check(ctx, patterns))) {
-                privilegeFailureHandler
             } else {
                 meta
             }

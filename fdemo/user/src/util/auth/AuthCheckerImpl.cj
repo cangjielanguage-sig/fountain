@@ -16,6 +16,7 @@ limitations under the License.
 package user.util.auth
 
 import std.convert.*
+import stdx.encoding.json.*
 import fountain.bean.*
 import fountain.bean.macros.*
 import fountain.mvc.*
@@ -23,12 +24,17 @@ import fountain.jwt.*
 import user.util.*
 
 @Bean
-public class AuthCheckerImpl <: AuthChecker {
-    public func check(ctx: HttpContext, patterns: HttpRequestPathPatterns): Bool {
-        if(let Some(jwt) <- ctx.request.headers.getFirst('Authorization')){
-            UserSessionCache.verify(jwt)
+public class AuthCheckerImpl <: AuthHandler {
+    public func check(param: AuthParam): AuthStatus {
+        if(let Some(jwt) <- param.ctx.request.headers.getFirst('Authorization') && UserSessionCache.verify(jwt)){
+            OK
         }else{
-            false
+            let json = '''
+            {
+                "status":-1
+            }
+            '''
+            InvalidSession(HttpStatus.UNAUTHORIZED, JsonValue.fromStr(json))
         }
     }
 }

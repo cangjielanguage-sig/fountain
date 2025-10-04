@@ -61,13 +61,17 @@ private func generate(input: Tokens): Tokens {
                         meta.setHandle{controller: $klass, ctx: HttpContext, patterns: HttpRequestPathPatterns => 
                             let start = MonoTime.now()
                             $argExprs
+                            $anyargs
                             var any: ?Any = None<Any>
                             try {
-                                let returned: Any = controller.$(f.identifier)($args)
-                                any = returned
-                                returned
+                                if (meta.checkAuth(ctx, anyArgs)) {
+                                    let returned: Any = controller.$(f.identifier)($args)
+                                    any = returned
+                                    returned
+                                } else {
+                                    ()
+                                }
                             } finally {
-                                $anyargs
                                 RequestMeta.accessLog(start, ctx, anyArgs, any)
                             }
                         }
