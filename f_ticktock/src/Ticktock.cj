@@ -84,11 +84,16 @@ public class Ticktock <: Emitter {
                 if (let Some(tt) <- instance) {
                     tt
                 } else {
-                    instance_.compareAndSwap(instance, Ticktock())
-                    instance_.load().getOrThrow()
+                    let tt = Ticktock()
+                    if (instance_.compareAndSwap(instance, tt)) {
+                        tt
+                    } else {
+                        tt.shutdown()
+                        instance_.load().getOrThrow()
+                    }
                 }
             }
-            func doRegister<T>(taskGetter: () -> ArrayList<T>, register: (Ticktock, T) -> Unit){
+            func doRegister<T>(taskGetter: () -> ArrayList<T>, register: (Ticktock, T) -> Unit) where T <: TicktockTask{
                 if(let list <- taskGetter() && list.size > 0){
                     let tt = swapIfNone()
                     for(task in list){

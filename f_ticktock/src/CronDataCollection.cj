@@ -19,10 +19,13 @@ import std.collection.ArrayList
 import std.collection.HashMap
 import f_base.*
 
-public class CronDataCollection <: Hashable & Equatable<CronDataCollection> {
+public class CronDataCollection <: Hashable & Equatable<CronDataCollection> & ToString{
     public CronDataCollection(private let cron: String) {}
     private var datas = HashMap<TicktockUnit, ArrayList<CronData>>()
 
+    public func toString(): String {
+        cron
+    }
     public func hashCode() {
         cron.hashCode()
     }

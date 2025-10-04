@@ -42,6 +42,13 @@ public interface AuthHandler {
      */
     func check(param: AuthParam): AuthStatus
 }
+/**
+ * ctx: 当前请求上下文
+ * path: 当前请求的controller映射路径，不是请求的路径，是controller函数定义的路径
+ * args: 当前请求的参数
+ * ignoreAuth: 是否忽略登录检查
+ * ignorePrivilege: 是否忽略权限检查
+ */
 public struct AuthParam {
     public AuthParam(
         public let ctx: HttpContext,

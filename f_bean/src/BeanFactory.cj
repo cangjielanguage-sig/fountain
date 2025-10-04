@@ -74,7 +74,27 @@ public class BeanFactory {
                 if(klass == any || klass == object){
                     continue
                 }
-                if (isClass) {
+                if (isClass && 
+                    !(klass.qualifiedName.startsWith('std.') || 
+                      klass.qualifiedName.startsWith('stdx.') || 
+                      klass.qualifiedName.startsWith('Equatable<') ||
+                      klass.qualifiedName == 'Hashable' ||
+                      klass.qualifiedName == 'ToString' ||
+                      klass.qualifiedName == 'Any' || 
+                      klass.qualifiedName == 'Object' || 
+                      klass.qualifiedName.startsWith('Comparable<') ||
+                      klass.qualifiedName.startsWith('Equal<') ||
+                      klass.qualifiedName.startsWith('NotEqual<') ||
+                      klass.qualifiedName.startsWith('Greater<') || 
+                      klass.qualifiedName.startsWith('Less<') || 
+                      klass.qualifiedName.startsWith('LessOrEqual<') || 
+                      klass.qualifiedName.startsWith('GreaterOrEqual<') || 
+                      klass.qualifiedName.startsWith('Countable<') || 
+                      klass.qualifiedName.startsWith('Collection<') ||
+                      klass.qualifiedName.startsWith('Iterable<') || 
+                      klass.qualifiedName.startsWith('Iterator<') ||
+                      klass.qualifiedName.startsWith('Resource<')
+                      )) {
                     for (annotation in klass.annotations) {
                         typeQueue.addLast(AnnotationType(ClassTypeInfo.of(annotation)))
                     }
