@@ -47,7 +47,7 @@ public class PathPattern {
 
     private let mutex = Mutex()
     private let patterns = ArrayList<PathNode>()
-    private let originPatterns = ArrayList<ArrayList<(String, Any)>>()
+    private let originPatterns = ArrayList<ArrayList<(String, () -> Any)>>()
 
     private func parts(path: String, withExtName: Bool): Array<String> {
         return trimExt(path, withExtName).split("/")
@@ -78,9 +78,9 @@ public class PathPattern {
                 }
                 for (i in 1..=len) {
                     if (i < originPatterns.size) {
-                        for ((pattern, data) in originPatterns[i]) {
+                        for ((pattern, supplier) in originPatterns[i]) {
                             let parts = this.parts(pattern, true)
-                            compile(node, parts, data)
+                            compile(false, node, parts, supplier)
                         }
                     }
                 }
@@ -121,11 +121,11 @@ public class PathPattern {
         p
     }
     //pattern是定义的路径，data是路径对应的数据，比如这个路径对应的执行函数、是否匹配当前请求方法等
-    public func compile(pattern: String, data: Any): PathPattern {
-        let p = pretreat(pattern)
-        doCompile(p, data)
+    public func compile<T>(pattern: String, data: T): PathPattern {
+        doCompile<T>(true, pattern){data}
+        this
     }
-    private func doCompile(pattern: String, data: Any): PathPattern {
+    private func doCompile<T>(anyway: Bool, pattern: String, supplier: () -> Any): T {
         let parts = parts(pattern, true)
         synchronized(mutex) {
             if (pattern.contains("**")) {
@@ -134,47 +134,35 @@ public class PathPattern {
                     patterns.add(NonePathNode.INSTANCE)
                 }
                 while (originPatterns.size < count + 1) {
-                    originPatterns.add(ArrayList<(String, Any)>())
+                    originPatterns.add(ArrayList<(String, () -> Any)>())
                 }
-                originPatterns[count].add((pattern, data))
+                originPatterns[count].add((pattern, supplier))
                 for (i in count..patterns.size) {
                     var node = patterns[i]
                     if (node is NonePathNode) {
                         node = PathNode()
                         patterns[i] = node
                     }
-                    compile(node, parts, data)
+                    compile(anyway, node, parts, supplier)
                 }
             }
             let prev = getPathNode(parts.size)
-            return compile(prev, parts, data)
+            return (compile(anyway, prev, parts, supplier) as T).getOrThrow()
         }
     }
     public func compileIfAbsent<T>(pattern: String, supplier: () -> T): T {
         let p = pretreat(pattern)
-        match (this.data<T>(p)) {
-            case Some(d) => d
-            case _ => synchronized(mutex) {
-                match (this.data<T>(p)) {
-                    case Some(d) => d
-                    case _ =>
-                        let d = supplier()
-                        compile(p, d)
-                        d
-                }
-            }
-        }
+        doCompile<T>(false, p){supplier()}
     }
 
-    private func compile(prev: PathNode, parts: Array<String>, data: Any): PathPattern {
+    private func compile(anyway: Bool, prev: PathNode, parts: Array<String>, supplier: ()-> Any): Any {
         var prev_ = prev
         for (i in 0..parts.size) {
             let part = parts[i]
             prev_ = appendSubPathNode(prev_, part)
         }
         prev_.end = true
-        prev_.data(data)
-        return this
+        prev_.setDataIfNone(anyway, supplier)
     }
     private func appendSubPathNode(prev: PathNode, name: String): PathNode {
         return prev.appendSubPathNode(name).getOrThrow()
@@ -572,7 +560,8 @@ open class PathNode <: Equatable<PathNode> {
         }
         let iterator = regexPlaceholderPathNodes.values().iterator()
         var node: PathNode = NonePathNode.INSTANCE
-        if (!(current is PlaceholderRegexPathNode)) {
+        let cur = current ?? node
+        if (!(cur is PlaceholderRegexPathNode)) {
             for (n in iterator) {
                 node = n
                 if (node.matches(value)) {
@@ -580,7 +569,7 @@ open class PathNode <: Equatable<PathNode> {
                 }
             }
         } else {
-            while (current != node && let Some(n) <- iterator.next()) {
+            while (let Some(n) <- iterator.next() && cur != node) {
                 node = n
             }
             for (n in iterator) {
@@ -716,6 +705,12 @@ open class PathNode <: Equatable<PathNode> {
     }
     func data(data: Any): Unit {
         this.data_ = data
+    }
+    func setDataIfNone(anyway: Bool, supplier: () -> Any): Any {
+        if(anyway || this.data_.isNone()){
+            this.data_ = supplier()
+        }
+        this.data_.getOrThrow()
     }
     func data<T>(): Option<T> {
         match (data_) {
