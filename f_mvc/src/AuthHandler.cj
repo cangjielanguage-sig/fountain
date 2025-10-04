@@ -33,6 +33,10 @@ public enum AuthStatus {
     | PrivilegeError(HttpStatus, Any)
     | NoPrivilege(HttpStatus, Any)
 }
+/**
+ * 这个接口的实现类用fountain.bean.macros.@Bean修饰可以实现登录状态与权限检查。
+ * 如果应用项目，登录状态和权限都需要检查，务必在一个类中实现，一次调用就都检查了。
+ */
 public interface AuthHandler {
     /**
      * 检查当前用户登录状态及权限

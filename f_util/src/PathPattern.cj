@@ -111,14 +111,21 @@ public class PathPattern {
         }
         p
     }
-    //pattern是定义的路径，data是路径对应的数据，比如这个路径对应的执行函数、是否匹配当前请求方法等
-    public func compile(pattern: String, data: Any): PathPattern {
+    private func pretreat(pattern: String) {
         var p = pattern
         p = #"/\{\*(?=[a-zA-Z][A-Za-z0-9_]*\})"#.regex(solid: true).replaceAll(p, "/**/{")
         p = #"/\*{3,}"#.regex(solid: true).replaceAll(p, "/**")
         p = #"(/\*{2}){2,}"#.regex(solid: true).replaceAll(p, "/**")
         p = p.replace("//", "/")
         p = trimRedundantSlash(p)
+        p
+    }
+    //pattern是定义的路径，data是路径对应的数据，比如这个路径对应的执行函数、是否匹配当前请求方法等
+    public func compile(pattern: String, data: Any): PathPattern {
+        let p = pretreat(pattern)
+        doCompile(p, data)
+    }
+    private func doCompile(pattern: String, data: Any): PathPattern {
         let parts = parts(pattern, true)
         synchronized(mutex) {
             if (pattern.contains("**")) {
@@ -144,14 +151,15 @@ public class PathPattern {
         }
     }
     public func compileIfAbsent<T>(pattern: String, supplier: () -> T): T {
-        match (this.data<T>(pattern)) {
+        let p = pretreat(pattern)
+        match (this.data<T>(p)) {
             case Some(d) => d
             case _ => synchronized(mutex) {
-                match (this.data<T>(pattern)) {
+                match (this.data<T>(p)) {
                     case Some(d) => d
                     case _ =>
                         let d = supplier()
-                        compile(pattern, d)
+                        compile(p, d)
                         d
                 }
             }

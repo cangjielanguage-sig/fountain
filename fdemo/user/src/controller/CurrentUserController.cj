@@ -96,7 +96,7 @@ public class CurrentUserController {
         }
         JsonValue.fromStr(json)
     }
-    @GetMapping[path:'/api/user/session', 
+    @DeleteMapping[path:'/api/user/session', 
                 consumes:'application/x-www-form-urlencoded', 
                 produces:'application/json']
     public func echoSession(@RequestHeader userId: Int64, @RequestHeader token: String): JsonValue {

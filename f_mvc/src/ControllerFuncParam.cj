@@ -72,9 +72,12 @@ public class PathVariable <: ControllerFuncParam {
 
 @Annotation[target: [Parameter]]
 public class RequestHeader <: ControllerFuncParam {
-    public const init() {}
+    public const RequestHeader(private let name: String) {}
+    public const init(){
+        this('')
+    }
     protected func extract<T>(name: String, ctx: HttpContext, pattern: HttpRequestPathPatterns): ?T where T <: DataFields<T> {
-        let value = ctx.request.headers.get(name)
+        let value = ctx.request.headers.get(if(this.name.isEmpty()){name}else{this.name})
         if (value.isEmpty()) {
             None<T>
         } else {

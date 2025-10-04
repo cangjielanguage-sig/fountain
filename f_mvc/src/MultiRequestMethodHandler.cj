@@ -34,18 +34,20 @@ public class MultiRequestMethodHandler <: HttpRequestHandler {
     func register(meta: RequestMeta): Unit {
         synchronized(mutex) {
             meta.pattern = patterns
-            let map = match (metas.get(meta.method)) {
-                case Some(map) => map
-                case _ =>
-                    let m = HashMap<String, RequestMeta>()
-                    metas[meta.method] = m
-                    m
+            let debuggable = log.debugEnabled
+            if(debuggable){
+                log.debug('MVC.register meta:${meta}; methodRegistered:${metas.contains(meta.method)}')
             }
+            let map = metas.computeIfAbsent(meta.method){HashMap<String, RequestMeta>()}
             meta.iterateConsumes {
-                c => if (let Some(m) <- map.addIfAbsent(c, meta)) {
+                c => 
+                if(debuggable){
+                    log.debug('MVC.register meta:${meta}; methodRegistered:${metas.contains(meta.method)}; consumesRegistered:${c},${map.contains(c)}')
+                }
+                if (let Some(m) <- map.addIfAbsent(c, meta)) {
                     throw MVCException(
-                        'duplicate RequestMeta, method: ${meta.method}, path: ${meta.path}, consumes: ${c}')
-                }else if (log.debugEnabled) {
+                        'duplicate RequestMeta, method: ${meta.method}, path: ${meta.path}, consumes: ${c}, registered: ${m}')
+                }else if (debuggable) {
                     log.debug('RequestMeta registered: ${c} ${meta}')
                 }
             }
