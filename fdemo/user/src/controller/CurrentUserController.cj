@@ -39,7 +39,7 @@ public class CurrentUserController {
 
     @PostMapping[path:'/api/user/register', 
                  consumes:'application/x-www-form-urlencoded', produces:'text/plain',
-                 ignoreAuth: true]
+                 ignoreAuth: true, ignorePrivilege: true]
     public func register(@RequestParam username: String, @RequestParam password: String): String {
         let id = userService.register(username, password).toString()
         // let json = JsonObject()

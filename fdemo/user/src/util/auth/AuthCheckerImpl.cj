@@ -26,9 +26,11 @@ import user.util.*
 @Bean
 public class AuthCheckerImpl <: AuthHandler {
     public func check(param: AuthParam): AuthStatus {
-        if(let Some(jwt) <- param.ctx.request.headers.getFirst('Authorization') && UserSessionCache.verify(jwt)){
+        if (param.ignoreAuth) {
             OK
-        }else{
+        } else if (let Some(jwt) <- param.ctx.request.headers.getFirst('Authorization') && UserSessionCache.verify(jwt)){
+            OK
+        } else {
             let json = '''
             {
                 "status":-1

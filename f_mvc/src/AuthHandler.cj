@@ -46,6 +46,8 @@ public struct AuthParam {
     public AuthParam(
         public let ctx: HttpContext,
         public let path: String,
-        public let args: ArrayList<Any>
+        public let args: ArrayList<Any>,
+        public let ignoreAuth: Bool,
+        public let ignorePrivilege: Bool
     ){}
 }

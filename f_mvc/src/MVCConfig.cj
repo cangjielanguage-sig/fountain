@@ -40,16 +40,6 @@ public class MVCConfig {
     public static let ACCESS_CONTROL_MAX_AGE = "${confPrefix}_accessControlMaxAge"
     public static const DEFAULT_ACCESS_CONTROL_MAX_AGE = 0
 
-    public static let AUTH_FAILURE_STATUS = "${confPrefix}_authFailureStatus"
-    public static const DEFAULT_AUTH_FAILURE_STATUS = 511u16
-    public static let AUTH_FAILURE_MESSAGE = "${confPrefix}_authFailureMessage"
-    public static let AUTH_FAILURE_MESSAGE_KIND = "${confPrefix}_authFailureMessageKind"
-    public static const DEFAULT_AUTH_FAILURE_MESSAGE_KIND = FailureMessageKind.Text
-
-    public static let PRIVILEGE_FAILURE_STATUS = "${confPrefix}_privilegeFailureStatus"
-    public static const DEFAULT_PRIVILEGE_FAILURE_STATUS = 510u16
-    public static let PRIVILEGE_FAILURE_MESSAGE = "${confPrefix}_privilegeFailureMessage"
-    public static let PRIVILEGE_FAILURE_MESSAGE_KIND = "${confPrefix}_privilegeFailureMessageKind"
     public static const DEFAULT_PRIVILEGE_FAILURE_MESSAGE_KIND = FailureMessageKind.Text
 
     public static let HOST = "${confPrefix}_host"
@@ -229,37 +219,6 @@ public class MVCConfig {
         match (Config.getString(key)) {
             case Some(x) => FailureMessageKind.parse(x)
             case _ => kind
-        }
-    }
-    public static prop authFailureStatus: HttpStatus {
-        get() {
-            getStatus(AUTH_FAILURE_STATUS, DEFAULT_AUTH_FAILURE_STATUS)
-        }
-    }
-    public static prop authFailureMessage: String {
-        get() {
-            Config.getString(AUTH_FAILURE_MESSAGE) ?? authFailureStatus.reasonPhrase
-        }
-    }
-    public static prop authFailureMessageKind: FailureMessageKind {
-        get() {
-            getMessageKind(AUTH_FAILURE_MESSAGE_KIND, DEFAULT_AUTH_FAILURE_MESSAGE_KIND)
-        }
-    }
-
-    public static prop privilegeFailureStatus: HttpStatus {
-        get() {
-            getStatus(PRIVILEGE_FAILURE_STATUS, DEFAULT_PRIVILEGE_FAILURE_STATUS)
-        }
-    }
-    public static prop privilegeFailureMessage: String {
-        get() {
-            Config.getString(PRIVILEGE_FAILURE_MESSAGE) ?? privilegeFailureStatus.reasonPhrase
-        }
-    }
-    public static prop privilegeFailureMessageKind: FailureMessageKind {
-        get() {
-            getMessageKind(PRIVILEGE_FAILURE_MESSAGE_KIND, DEFAULT_PRIVILEGE_FAILURE_MESSAGE_KIND)
         }
     }
 
