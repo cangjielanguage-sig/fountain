@@ -147,6 +147,14 @@ func generateProps(decl: ClassDecl, exclusion: HashSet<String>) {
                 for (i in 0..assigns.size) {
                     d.block.nodes.add(assigns[i], at: i)
                 }
+            case d: MacroExpandDecl => 
+                var x: MacroExpandDecl = d
+                while(let md: MacroExpandDecl <- x.macroInputDecl) {
+                    x = md
+                }
+                if(let x: VarDecl <- x.macroInputDecl) {
+                    gen(x)
+                }
             case _ => continue
         }
     }
@@ -158,15 +166,12 @@ func generateHash(d: ClassDecl, exclusion: HashSet<String>) {
         d.upperBound = `upperbound`[0]
     }
     d.superTypes.add(RefType(quote(Hashable)))
-    let hashed = quote($(`nl`))
+    var hashed = `nl`
     for (d in d.body.decls where d is VarDecl &&
         !(isStatic(d) || exclusion.contains(d.identifier.value) || exclusion.contains('${d.identifier.value}_'))) {
-        hashed.append(quote(hasher.append($(d.identifier))$(`nl`)))
+        hashed += quote(f_data_hash(hasher, $(d.identifier))$(`nl`))
     }
-    d
-        .body
-        .decls
-        .add(
+    d.body.decls.add(
             all: [VarDecl(quote(
         private var __hAsh__ = 0
     )),
@@ -194,10 +199,7 @@ func generateEqual(d: ClassDecl, exclusion: HashSet<String>) {
         !(isStatic(d) || exclusion.contains(d.identifier.value) || exclusion.contains('${d.identifier.value}_'))) {
         eq.append(`and`).append(quote(f_data_eq(this.$(d.identifier), other.$(d.identifier)))).append(`nl`)
     }
-    d
-        .body
-        .decls
-        .add(
+    d.body.decls.add(
             all: [FuncDecl(
                 quote(
         public $(openTokens(d)) operator func ==(other: $typeName): Bool {
@@ -299,11 +301,11 @@ func generateToFields(d: ClassDecl, exclusion: HashSet<String>) {
                             ReadonlyField.new<$(klassIdentifier), $(declType)>($(x.identifier.value)){o => o.$(x.identifier)}))
                 }
             case x: PropDecl =>
-                let declType = quote($(x.declType))
+                var declType = quote($(x.declType))
                 if (declType[0].kind == QUEST) {
-                    declType.append( declType[1..])
+                    declType = declType[1..]
                 } else if (declType[0].kind == IDENTIFIER && declType[0].value == 'Option') {
-                    declType.append(declType[2..declType.size - 1])
+                    declType = declType[2..declType.size - 1]
                 }
                 if (x.isMut()) {
                     TrailingClosureExpr(

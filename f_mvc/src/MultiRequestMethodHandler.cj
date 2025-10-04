@@ -144,22 +144,21 @@ class HttpStatusOnlyHandler <: HttpRequestHandler {
         if(let Some(accept) <- httpContext.request.headers.getFirst("Accept")) {
             b.header("Content-Type", accept)
         }
+        if (message.isEmpty()) {
+            b.body(status.reasonPhrase)
+            return
+        }
         match(kind){
-            case Text => b.body(if (message.isEmpty()) {
-                status.reasonPhrase
-            } else {
-                message
-            })
-            case Base64Binary => if(message.size > 0 && let Some(x) <- fromBase64String(message)){
+            case Text => b.body(message)
+            case Base64Binary => if(let Some(x) <- fromBase64String(message)){
                 b.body(x)
-            }else{
-                b.body(status.reasonPhrase)
+                return
             }
-            case Bean => if(message.size > 0 && let Some(x) <- BeanFactory.instance.getFirst<ErrorHttpRequestHandler>(cond: Exactly(message))){
+            case Bean => if(let Some(x) <- BeanFactory.instance.getFirst<ErrorHttpRequestHandler>(cond: Exactly(message))){
                 x.handle(httpContext)
-            } else {
-                b.body(status.reasonPhrase)
+                return
             }
         }
+        b.body(status.reasonPhrase)
     }
 }

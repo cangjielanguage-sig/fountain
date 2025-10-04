@@ -46,3 +46,9 @@ public func f_data_cmp<T1, T2>(a: T1, b: T2): Ordering {
         }
     }
 }
+
+public func f_data_hash<T>(builder: HashBuilder, a: T): Unit {
+    if(let x: Hashable <- a){
+        builder.append(x)
+    }
+}
