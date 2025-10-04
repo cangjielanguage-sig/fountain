@@ -158,15 +158,12 @@ func generateHash(d: ClassDecl, exclusion: HashSet<String>) {
         d.upperBound = `upperbound`[0]
     }
     d.superTypes.add(RefType(quote(Hashable)))
-    let hashed = quote($(`nl`))
+    var hashed = `nl`
     for (d in d.body.decls where d is VarDecl &&
         !(isStatic(d) || exclusion.contains(d.identifier.value) || exclusion.contains('${d.identifier.value}_'))) {
-        hashed.append(quote(hasher.append($(d.identifier))$(`nl`)))
+        hashed += quote(hasher.append($(d.identifier))$(`nl`))
     }
-    d
-        .body
-        .decls
-        .add(
+    d.body.decls.add(
             all: [VarDecl(quote(
         private var __hAsh__ = 0
     )),
@@ -194,10 +191,7 @@ func generateEqual(d: ClassDecl, exclusion: HashSet<String>) {
         !(isStatic(d) || exclusion.contains(d.identifier.value) || exclusion.contains('${d.identifier.value}_'))) {
         eq.append(`and`).append(quote(f_data_eq(this.$(d.identifier), other.$(d.identifier)))).append(`nl`)
     }
-    d
-        .body
-        .decls
-        .add(
+    d.body.decls.add(
             all: [FuncDecl(
                 quote(
         public $(openTokens(d)) operator func ==(other: $typeName): Bool {
