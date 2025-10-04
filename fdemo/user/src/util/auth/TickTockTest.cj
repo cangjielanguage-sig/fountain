@@ -24,7 +24,7 @@ import fountain.bean.macros.*
 public class TickTockTaskImpl <: CronTicktockTask {
     public prop cron: String {
         get() {
-            '1/3-45'
+            '1/3-45'//cron表达式末尾的*可以省略
         }
     }
     public func execute(): Unit {
