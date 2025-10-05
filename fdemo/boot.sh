@@ -19,6 +19,7 @@ run(){
     fboot run $path --dylibPattern='(boot|user\.util\.auth|\.(controller|service\.impl))'
 }
 launch(){
+    printf 'boot.sh launch is just to show how to initialize an application by static loading which is developed by fountain.'
     exports 
     ./fdemo/release/bin/launcher
 }
