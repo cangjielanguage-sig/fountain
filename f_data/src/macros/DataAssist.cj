@@ -71,12 +71,9 @@ public macro DataAssist(attr: Tokens, input: Tokens): Tokens {
             generate('tostring', d, excludeToString, generateToString)
             generate('fields', d, excludeFields, generateToFields)
             d.toTokens()
-        case d: MacroExpandDecl =>
-            return replaceMacroInputDecl(quote(@DataAssist[$attr]), d).toTokens()
-        case _ => 
-            diagReport(ERROR, input,
-            'input must be class decl',
-            '')
+        case d: MacroExpandDecl => return replaceMacroInputDecl(quote(@DataAssist[$attr]), d).toTokens()
+        case _ =>
+            diagReport(ERROR, input, 'input must be class decl', '')
             throw IllegalArgumentException("input must be a class decl")
     }
 }
@@ -163,7 +160,10 @@ func generateHash(d: ClassDecl, exclusion: HashSet<String>) {
         !(isStatic(d) || exclusion.contains(d.identifier.value) || exclusion.contains('${d.identifier.value}_'))) {
         hashed += quote(hasher.append($(d.identifier))$(`nl`))
     }
-    d.body.decls.add(
+    d
+        .body
+        .decls
+        .add(
             all: [VarDecl(quote(
         private var __hAsh__ = 0
     )),
@@ -191,7 +191,10 @@ func generateEqual(d: ClassDecl, exclusion: HashSet<String>) {
         !(isStatic(d) || exclusion.contains(d.identifier.value) || exclusion.contains('${d.identifier.value}_'))) {
         eq.append(`and`).append(quote(f_data_eq(this.$(d.identifier), other.$(d.identifier)))).append(`nl`)
     }
-    d.body.decls.add(
+    d
+        .body
+        .decls
+        .add(
             all: [FuncDecl(
                 quote(
         public $(openTokens(d)) operator func ==(other: $typeName): Bool {
@@ -215,7 +218,8 @@ func generateCompare(d: ClassDecl, exclusion: HashSet<String>) {
     let cmp = quote().append(`nl`)
     for (d in d.body.decls where d is VarDecl &&
         !(isStatic(d) || exclusion.contains(d.identifier.value) || exclusion.contains('${d.identifier.value}_'))) {
-        cmp.append(quote(f_data_cmp(this.$(d.identifier), other.$(d.identifier))) + `nl` + quote(
+        cmp.append(
+            quote(f_data_cmp(this.$(d.identifier), other.$(d.identifier))) + `nl` + quote(
             if(result != EQ){
                 return result
             }
@@ -248,10 +252,7 @@ func generateToString(d: ClassDecl, exclusion: HashSet<String>) {
         !(isStatic(d) || exclusion.contains(d.identifier.value) || exclusion.contains('${d.identifier.value}_'))) {
         str.append(`nl`).append(quote(result.append($(d.identifier.value), $(d.identifier))))
     }
-    d
-        .body
-        .decls
-        .add(
+    d.body.decls.add(
             FuncDecl(
                 quote(
         public $(openTokens(d)) func toString(): String {
@@ -273,43 +274,27 @@ func generateToFields(d: ClassDecl, exclusion: HashSet<String>) {
     klassDecl.superTypes.add(RefType(quote(ObjectData<$(klassIdentifier)>)))
     let body = klassDecl.body.decls
     let fields = ArrayList<Expr>()
-    for (d in body where (d is VarDecl || d is PropDecl) && !isStatic(d) && isPublic(d) &&
-        !exclusion.contains(d.identifier.value)) {
-        let expr = match (d) {
-            case x: VarDecl =>
-                let declType = quote($(x.declType))
-                if (declType[0].kind == QUEST) {
-                    declType.append(declType[1..])
-                } else if (declType[0].kind == IDENTIFIER && declType[0].value == 'Option') {
-                    declType.append(declType[2..declType.size - 1])
-                }
-                if (x.isVar()) {
-                    TrailingClosureExpr(
-                        quote(
-                            MutableField.new<$(klassIdentifier), $(declType)>($(x.identifier.value), {o => o.$(x.identifier)}){o, v => o.$(x.identifier) = v}))
-                } else {
-                    TrailingClosureExpr(
-                        quote(
-                            ReadonlyField.new<$(klassIdentifier), $(declType)>($(x.identifier.value)){o => o.$(x.identifier)}))
-                }
-            case x: PropDecl =>
-                let declType = quote($(x.declType))
-                if (declType[0].kind == QUEST) {
-                    declType.append( declType[1..])
-                } else if (declType[0].kind == IDENTIFIER && declType[0].value == 'Option') {
-                    declType.append(declType[2..declType.size - 1])
-                }
-                if (x.isMut()) {
-                    TrailingClosureExpr(
-                        quote(
-                            MutableField.new<$(klassIdentifier), $(declType)>($(x.identifier.value), {o => o.$(x.identifier)}){o, v => o.$(x.identifier) = v}))
-                } else {
-                    TrailingClosureExpr(
-                        quote(
-                            ReadonlyField.new<$(klassIdentifier), $(declType)>($(x.identifier.value)){o => o.$(x.identifier)}))
-                }
+    for (d in body where !isStatic(d) && isPublic(d) && !exclusion.contains(d.identifier.value)) {
+        var (declType, isVar) = match (d) {
+            case x: VarDecl => (quote($(x.declType)), x.isVar())
+            case x: PropDecl => (quote($(x.declType)), x.isMut())
             case _ => continue
         }
+        if (declType[0].kind == QUEST) {
+            declType = declType[1..]
+        } else if (declType[0].kind == IDENTIFIER && declType[0].value == 'Option') {
+            declType = declType[2..declType.size - 1]
+        }
+        let tokens = if (isVar) {
+            quote(MutableField)
+        } else {
+            quote(ReadonlyField)
+        } + quote(.new<$(klassIdentifier), $(declType)>($(d.identifier.value), {o => o.$(d.identifier)})) + if (isVar) {
+            quote({o, v => o.$(d.identifier) = v})
+        } else {
+            `empty_tokens`
+        }
+        let expr = TrailingClosureExpr(tokens)
         fields.add(expr)
     }
     let openModi = openTokens(klassDecl)

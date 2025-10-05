@@ -16,9 +16,41 @@ limitations under the License.
 package boot
 
 import opengauss.driver.*
+import opengauss.slog.setDefault
+import fountain.data.*
+import fountain.data.macros.*
+import fountain.log.LoggerFactory
 import fountain.orm.*
 
 private let _ = {=>
+    // setDefault(LoggerFactory.getLogger("opengauss"))
     let driver = DriverManager.getDriver("opengauss").getOrThrow()
     ORM.register(driver, "postgres://fountain:Fountain123@pgm-2ze534c0xh8vatxzwo.pg.rds.aliyuncs.com:5432/fountain?sslmode=disable", []) 
+}()
+
+@DataAssist[equal hash tostring props fields]
+public class TestData1 {
+    private var a: Int64 = 1
+    private var b: String = 'asfd'
+    private var c: Bool = true
+    private var d: Float64 = 3.1415926
+    private var e: DateTime = DateTime.now()
+    private var f: Array<Int64> = [1, 2, 3, 4, 5]
+    private var g: ArrayList<String> = ArrayList<String>(['a','b','c','d','e'])
+}
+@DataAssist[equal hash tostring props fields]
+public class TestData2 {
+    private var a: Int64 = 0
+    private var b: String = ''
+    private var c: Bool = false
+    private var d: Float64 = 0.0
+    private var e: ?DateTime = None<DateTime>
+    private var f: Array<Int64> = []
+    private var g: ArrayList<String> = ArrayList<String>()
+}
+private let _ = {=>
+    let data1 = TestData1()
+    let data2 = DataObject<TestData2>.populate(data1).getOrThrow()
+    println('AAAAAAAAAAAAAAAAAAAAAAAAAAAAA ${data2}')
+    println('AAAAAAAAAAAAAAAAAAAAAAAAAAAAA ${data1}')
 }()

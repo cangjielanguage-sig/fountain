@@ -671,7 +671,7 @@ public class SqlExecutor <: Resource & RootDAO {
             }
             throw e
         } finally {
-            if (logger.debugEnabled) {
+            if (sql.size > 0 && logger.debugEnabled) {
                 logger.debug(logMsg(DateTime.now() - start))
             }
             start = DateTime.UnixEpoch

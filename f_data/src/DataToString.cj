@@ -90,6 +90,7 @@ public struct DataToString <: ToString {
         match (value) {
             case Some(x) => match (x) {
                 case v: ToString => builder.append('${name}: ${v}; ')
+                case v: ToData => builder.append('${name}: ${v.toData()};')
                 case v: Object => append(name, v)
                 case _ => builder.append('${name}: _; ')
             }
@@ -98,17 +99,18 @@ public struct DataToString <: ToString {
     }
     public func append(name: String, value: Object): Unit {
         match (value) {
-            case x: ToString => builder.append("${name} = ${x}; ")
+            case x: ToString => builder.append("${name}: ${x}; ")
+            case x: ToData => builder.append("${name}: ${x.toData()}; ")
             case _ => builder.append('${name}: {_}; ')
         }
     }
-    private func append<T>(name: String, value: Collection<T>): Unit {
+    public func append<T, C>(name: String, value: C): Unit where C <: Collection<T> {
         builder.append('${name}: ')
         if (value.isEmpty()) {
-            builder.append("[]")
+            builder.append("[]; ")
             return
         } else if (let x: ToString <- value) {
-            builder.append(x)
+            builder.append(x).append('; ')
             return
         }
         builder.append('[')
@@ -124,7 +126,7 @@ public struct DataToString <: ToString {
             }
             i++
         }
-        builder.append(']')
+        builder.append(']; ')
     }
     public func append<T>(name: String, value: Array<T>): Unit {
         let c: Collection<T> = value
@@ -155,13 +157,13 @@ public struct DataToString <: ToString {
         let c: Collection<T> = value
         append(name, c)
     }
-    private func append<K, V>(name: String, value: Map<K, V>): Unit where K <: Equatable<K> {
+    public func append<K, V, M>(name: String, value: M): Unit where K <: Equatable<K>, M <: Map<K, V> {
         builder.append('${name}: ')
         if (value.isEmpty()) {
-            builder.append("{}")
+            builder.append("{}; ")
             return
         } else if (let x: ToString <- value) {
-            builder.append(x)
+            builder.append(x).append('; ')
             return
         }
         builder.append('{')
@@ -182,21 +184,24 @@ public struct DataToString <: ToString {
     }
     public func append<K, V>(name: String, value: HashMap<K, V>): Unit where K <: Hashable & Equatable<K> {
         let m: Map<K, V> = value
-        append<K, V>(name, m)
+        append(name, m)
     }
     public func append<K, V>(name: String, value: TreeMap<K, V>): Unit where K <: Comparable<K> {
         let m: Map<K, V> = value
-        append<K, V>(name, m)
+        append(name, m)
     }
     public func append<K, V>(name: String, value: LinkedHashMap<K, V>): Unit where K <: Hashable & Equatable<K> {
         let m: Map<K, V> = value
-        append<K, V>(name, m)
+        append(name, m)
     }
 
     public func append<K, V>(name: String, value: ConcurrentHashMap<K, V>): Unit where K <: Hashable & Equatable<K> {
         builder.append('${name}: ')
-        if (let x: ToString <- value) {
-            builder.append(x)
+        if (value.isEmpty()) {
+            builder.append("{}; ")
+            return
+        } else if (let x: ToString <- value) {
+            builder.append(x).append('; ')
             return
         }
         builder.append('{')
@@ -213,6 +218,6 @@ public struct DataToString <: ToString {
             }
             i++
         }
-        builder.append('}')
+        builder.append('}; ')
     }
 }

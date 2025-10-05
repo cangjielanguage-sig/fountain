@@ -16,8 +16,6 @@ limitations under the License.
 package f_mvc
 
 public class MVCStarter {
-    private static let log = LoggerFactory.getLogger<MVCStarter>()
-
     private MVCStarter(private let server: Server, private let host: String, private let port: UInt16) {
         atExit(closeGracefully)
     }
@@ -30,6 +28,7 @@ public class MVCStarter {
         }
         let host = MVCConfig.host
         let port = MVCConfig.port
+        let log = LoggerFactory.getLogger('stdx.net.http')
         let builder = ServerBuilder().addr(host).port(port).logger(log)
         if (let Some(x) <- MVCConfig.readTimeout) {
             builder.readTimeout(x)

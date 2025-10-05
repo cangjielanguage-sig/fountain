@@ -143,7 +143,7 @@ public class DateTimeValidator<T> <: BaseValidator<T> {
 }
 
 public class DurationValidator<T> <: BaseValidator<T> {
-    private static let format = Regex(#"^-?(\d+)(d|h|m|s|ms|us|ns))$"#)
+    private static let format = Regex(#"^-?(\d+(d|h|m|s|ms|us|ns))$"#)
     public init(_name_: String, setter: (T, String) -> Unit) {
         super("Duration", _name_, setter)
     }

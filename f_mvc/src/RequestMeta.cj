@@ -47,8 +47,7 @@ public class RequestMeta <: HttpRequestHandler & ToString {
     }
 
     private func populateResponseContentType(ctx: HttpContext) {
-        let accept =
-        if (let Some(accept) <- ctx.request.headers.getFirst('Accept')) {
+        let accept = if (let Some(accept) <- ctx.request.headers.getFirst('Accept')) {
             accept
         } else {
             '*/*'
@@ -85,51 +84,60 @@ public class RequestMeta <: HttpRequestHandler & ToString {
         let pattern = this.pattern.getOrThrow()
         this.handle_ = {
             ctx =>
-            let result = fn(BeanFactory.instance.getFirst<T>().getOrThrow(), ctx, pattern)
-            match(result){
-                case x: JsonValue => respond(x, ctx)
-                case x: InputStream => respond(x, ctx)
-                case x: Array<Byte> => respond(x, ctx)
-                case _: Unit => ()
-                case x: ToData => respond(x, ctx)
-                case _ => 
-                    let request = ctx.request
-                    log.warn<ToString>('fountain.mvc.handle {}:{};{}', [request.method, request.url, TypeInfo.of(result)])
-                    MultiRequestMethodHandler.NOT_ACCEPTABLE.handle(ctx)
-            }
+                let result = fn(BeanFactory.instance.getFirst<T>().getOrThrow(), ctx, pattern)
+                match (result) {
+                    case x: JsonValue => respond(x, ctx)
+                    case x: InputStream => respond(x, ctx)
+                    case x: Array<Byte> => respond(x, ctx)
+                    case _: Unit => ()
+                    case x: ToData => respond(x, ctx)
+                    case _ =>
+                        let request = ctx.request
+                        log.warn<ToString>('fountain.mvc.handle {}:{};{}',
+                            [request.method, request.url, TypeInfo.of(result)])
+                        MultiRequestMethodHandler.NOT_ACCEPTABLE.handle(ctx)
+                }
         }
     }
     public func checkAuth(ctx: HttpContext, args: ArrayList<Any>): Bool {
-        if(ignoreAuth && ignorePrivilege) {
+        if (ignoreAuth && ignorePrivilege) {
             return true
         }
-        let checked =
-        if(let Some(auth) <- BeanFactory.instance.getFirst<AuthHandler>()) {
+        let checked = if (let Some(auth) <- BeanFactory.instance.getFirst<AuthHandler>()) {
             auth.check(AuthParam(ctx, path, args, ignoreAuth, ignorePrivilege))
         } else {
             AuthStatus.OK
         }
-        let (check, status, resp) =
-        match(checked){
+        let (check, status, resp) = match (checked) {
             case OK => return true
             case SessionNotFound(status, resp) => ('SessionNotFound', status, resp)
+            case SessionNotFound(resp) => ('SessionNotFound', HttpStatus.OK, resp)
             case InvalidSession(status, resp) => ('InvalidSession', status, resp)
+            case InvalidSession(resp) => ('InvalidSession', HttpStatus.OK, resp)
             case SessionError(status, resp) => ('SessionError', status, resp)
+            case SessionError(resp) => ('SessionError', HttpStatus.OK, resp)
             case PrivilegeError(status, resp) => ('PrivilegeError', status, resp)
+            case PrivilegeError(resp) => ('PrivilegeError', HttpStatus.OK, resp)
             case NoPrivilege(status, resp) => ('NoPrivilege', status, resp)
+            case NoPrivilege(resp) => ('NoPrivilege', HttpStatus.OK, resp)
         }
         let accept = ctx.request.headers.getFirst('Accept') ?? '*/*'
         let builder = ctx.responseBuilder.status(status.value).header('Content-Type', accept)
-        func respondStatusReasonPhrase(){
-            builder.body(status.reasonPhrase)
+        func respondStatusReasonPhrase() {
+            builder.body(if (status == HttpStatus.OK) {
+                HttpStatus.UNAUTHORIZED.reasonPhrase
+            } else {
+                status.reasonPhrase
+            })
         }
-        log.warn('fountain.mvc.check ${this}; accept: ${accept}; status: ${status.value}; CheckHandler returns ${TypeInfo.of(resp)}; checked: ${check}')
-        match(resp){
+        log.warn(
+            'fountain.mvc.check ${this}; accept: ${accept}; status: ${status.value}; CheckHandler returns ${TypeInfo.of(resp)}; checked: ${check}')
+        match (resp) {
             case x: String => builder.body(x)
             case x: Array<Byte> => builder.body(x)
             case x: InputStream => builder.body(x)
             case x: ToString => builder.body(x.toString())
-            case x: ToData where accept != '*/*' => match(MediaTypes.tryParse(accept)){
+            case x: ToData where accept != '*/*' => match (MediaTypes.tryParse(accept)) {
                 case Some(mt) => builder.body(mt.fromData(x.toData()))
                 case _ => respondStatusReasonPhrase()
             }
@@ -138,16 +146,15 @@ public class RequestMeta <: HttpRequestHandler & ToString {
         false
     }
     func setHandle<T>(wsmeta: WSMeta<T>) where T <: Object {
-        this.handle_ = {ctx => 
-            wsmeta.handle(BeanFactory.instance.getFirst<T>().getOrThrow(), ctx, pattern.getOrThrow())
+        this.handle_ = {
+            ctx => wsmeta.handle(BeanFactory.instance.getFirst<T>().getOrThrow(), ctx, pattern.getOrThrow())
         }
         produces.add('*')
         consumes.add('*')
     }
     private func respond<R>(result: R, ctx: HttpContext): Unit where R <: ToData {
-        if (!(result is Unit) && 
-            let Some(accept) <- ctx.request.headers.getFirst('Accept') && 
-            let Some(mediaType) <- MediaTypes.tryParse(accept)) {
+        if (!(result is Unit) && let Some(accept) <- ctx.request.headers.getFirst('Accept') && let Some(mediaType) <- MediaTypes
+            .tryParse(accept)) {
             let bytes = mediaType.fromData(result.toData())
             ctx.responseBuilder.header('Content-Type', accept).body(bytes)
         } else {
@@ -155,9 +162,8 @@ public class RequestMeta <: HttpRequestHandler & ToString {
         }
     }
     private func respond(response: JsonValue, ctx: HttpContext): Unit {
-        if (let Some(accept) <- ctx.request.headers.getFirst('Accept') && 
-            let Some(mediaType) <- MediaTypes.tryParse(accept) && 
-            let jmt: JsonMediaType <- mediaType) {
+        if (let Some(accept) <- ctx.request.headers.getFirst('Accept') && let Some(mediaType) <- MediaTypes.tryParse(
+            accept) && let jmt: JsonMediaType <- mediaType) {
             let bytes = jmt.fromData(response)
             ctx.responseBuilder.header('Content-Type', accept).body(bytes)
         } else {
@@ -165,7 +171,7 @@ public class RequestMeta <: HttpRequestHandler & ToString {
         }
     }
     private func respond(response: InputStream, ctx: HttpContext): Unit {
-        populateResponseContentType(ctx) 
+        populateResponseContentType(ctx)
         ctx.responseBuilder.body(response)
     }
     private func respond(response: Array<Byte>, ctx: HttpContext): Unit {
@@ -180,7 +186,7 @@ public class RequestMeta <: HttpRequestHandler & ToString {
         args[name] is MultipartFormData
     }
     public func extract<T>(ctx: HttpContext, name: String, default: ?T): T where T <: DataFields<T> {
-        match(default){
+        match (default) {
             case Some(d) => args.extract<T>(ctx, name, d, pattern)
             case _ => args.extract<T>(ctx, name, pattern)
         }
@@ -225,7 +231,7 @@ public class RequestMeta <: HttpRequestHandler & ToString {
                 toThrow = false
                 break
             }
-            if(toThrow){
+            if (toThrow) {
                 throw MVCException(
                     'parameter of controller function must be with one and only one Annotation as @RequestBody or @RequestParam or @RequestHeader or @PathVariable or @MultipartFormData')
             }
@@ -252,9 +258,9 @@ public class RequestMeta <: HttpRequestHandler & ToString {
         }
         metas
     }
-    public static func accessLog(start: MonoTime, ctx: HttpContext, args: ArrayList<Any>, returned: ?Any){
+    public static func accessLog(start: MonoTime, ctx: HttpContext, args: ArrayList<Any>, returned: ?Any) {
         func anyToString(any: Any) {
-            match(any) {
+            match (any) {
                 case x: String => x
                 case x: ToString => x.toString()
                 case x: ToData => x.toData().toString()
@@ -263,7 +269,7 @@ public class RequestMeta <: HttpRequestHandler & ToString {
         }
         let request = ctx.request
         let argGen = StringGenerator().append('[')
-        for(arg in args){
+        for (arg in args) {
             if (argGen.size > 1) {
                 argGen.append(',')
             }
@@ -271,10 +277,11 @@ public class RequestMeta <: HttpRequestHandler & ToString {
             argGen.append(s)
         }
         argGen.append(']')
-        let result = match(returned) {
+        let result = match (returned) {
             case Some(x) => anyToString(x)
             case _ => 'None'
         }
-        log.info('MVC.accessLog:${request.method}:${request.url}?${request.form.toEncodeString()}; consumes:${request.headers.getFirst('Content-Type')}; params:${argGen}; returned: ${result}; elapsed: ${MonoTime.now() - start}')
+        log.info(
+            'MVC.accessLog:${request.method}:${request.url}?${request.form.toEncodeString()}; consumes:${request.headers.getFirst('Content-Type')}; params:${argGen}; returned: ${result}; elapsed: ${MonoTime.now() - start}')
     }
 }

@@ -24,14 +24,20 @@ package f_mvc
  * SessionError：检查当前用户登录状态时发生错误，可能是服务器内部错误。
  * PrivilegeError：检查当前用户权限时发生错误，可能是服务器内部错误。
  * NoPrivilege：当前用户没有权限访问该资源。
+ * 没有HttpStatus参数的构造器表示响应状态码是200
  */
 public enum AuthStatus {
     | OK
     | SessionNotFound(HttpStatus, Any)
+    | SessionNotFound(Any)
     | InvalidSession(HttpStatus, Any)
+    | InvalidSession(Any)
     | SessionError(HttpStatus, Any)
+    | SessionError(Any)
     | PrivilegeError(HttpStatus, Any)
+    | PrivilegeError(Any)
     | NoPrivilege(HttpStatus, Any)
+    | NoPrivilege(Any)
 }
 /**
  * 这个接口的实现类用fountain.bean.macros.@Bean修饰可以实现登录状态与权限检查。
