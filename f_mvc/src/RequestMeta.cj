@@ -191,11 +191,13 @@ public class RequestMeta <: HttpRequestHandler & ToString {
             case _ => args.extract<T>(ctx, name, pattern)
         }
     }
-    public func multipart<T>(ctx: HttpContext, name: String): T where T <: ObjectData<T> & DataFields<T> {
-        (args[name] as MultipartFormData)
-            .getOrThrow()
-            .multipart<T>(ctx, pattern.getOrThrow())
-            .getOrThrow {MVCException('controller func ${name} and request body do not match')}
+    public func extractObject<T>(ctx: HttpContext, name: String): T where T <: Object & ObjectData<T> {
+        args.extractObject<T>(ctx, name, pattern)
+    }
+    public func extractBytes(ctx: HttpContext): Array<Byte>{
+        let buf = ByteBuffer()
+        copy(ctx.request.body, to: buf)
+        buf.bytes()
     }
     private func addMediaTypes(set: HashSet<String>, types: Array<String>, allowAny: Bool): Unit {
         for (t in types) {

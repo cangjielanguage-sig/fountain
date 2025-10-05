@@ -158,7 +158,7 @@ public class DataObject<T> <: Data & Collection<(String, Data)> & NamedData wher
                     targetData.set(n, d, flag: flag)
                 }
                 target
-            case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) > 0 => None<T>
+            case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) > 0 => target
             case _ => throw DataException("src cannot be converted to ${TypeInfos.get<T>()}")
         }
     }

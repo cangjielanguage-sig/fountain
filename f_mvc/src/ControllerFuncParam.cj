@@ -18,6 +18,9 @@ package f_mvc
 abstract class ControllerFuncParam {
     protected const init() {}
     protected func extract<T>(name: String, ctx: HttpContext, pattern: HttpRequestPathPatterns): ?T where T <: DataFields<T>
+    protected open func extractObject<T>(name: String, ctx: HttpContext, pattern: HttpRequestPathPatterns): T where T <: Object & ObjectData<T> {
+        throw UnsupportedException('TypeInfo.of(this) does not support current operation, func param name is ${name}.')
+    }
     static func concat(list: Collection<String>) {
         let b = StringGenerator()
         for (v in list) {
@@ -32,8 +35,11 @@ abstract class ControllerFuncParam {
 
 @Annotation[target: [Parameter]]
 public class RequestParam <: ControllerFuncParam {
-    public const init() {}
-    protected func extract<T>(name: String, ctx: HttpContext, pattern: HttpRequestPathPatterns): ?T where T <: DataFields<T> {
+    public const RequestParam(private let name: String){}
+    public const init() {
+        this('')
+    }
+    private func extractValue(name: String, ctx: HttpContext): ?String {
         let request = ctx.request
         let form = request.form
         var list: List<String> = EmptyList<String>.INSTANCE()
@@ -48,12 +54,33 @@ public class RequestParam <: ControllerFuncParam {
                 }
             }
         }
-        let value = concat(list)
-        if (value.isEmpty()) {
-            None<T>
-        } else {
-            parseValue<T>(value)
+        if(list.isEmpty()){
+            None<String>
+        }else{
+            concat(list)
         }
+    }
+    protected func extract<T>(name: String, ctx: HttpContext, pattern: HttpRequestPathPatterns): ?T where T <: DataFields<T> {
+        let n = if (this.name.isEmpty()) {
+            name
+        } else {
+            this.name
+        }
+        if (let Some(s) <- extractValue(n, ctx)) {
+            parseValue<T>(s)
+        } else {
+            None<T>
+        }
+    }
+    protected func extractObject<T>(name: String, ctx: HttpContext, pattern: HttpRequestPathPatterns): T where T <: Object & ObjectData<T> {
+        let o = T.dataFields().create()
+        let data = DataObject<T>(o)
+        for(field in data.mutableFields()) {
+            if(let Some(s) <- extractValue(field.name, ctx)) {
+                data[field.name] = s.toData()
+            }
+        }
+        o
     }
 }
 
@@ -97,6 +124,9 @@ public class RequestBody <: ControllerFuncParam {
         let mediaType = MediaTypes.parse(contentType)
         mediaType.toDataFields<T>(body)
     }
+    protected func extractObject<T>(name: String, ctx: HttpContext, pattern: HttpRequestPathPatterns): T where T <: Object & DataFields<T> {
+        extract<T>(name, ctx, pattern).getOrThrow()
+    }
 }
 
 @Annotation[target: [Parameter]]
@@ -104,9 +134,9 @@ public class MultipartFormData <: ControllerFuncParam {
     public const init() {}
 
     protected func extract<T>(name: String, ctx: HttpContext, pattern: HttpRequestPathPatterns): ?T where T <: DataFields<T> {
-        throw MVCException()
+        throw MVCException('To use a class which implements ObjectData<T> to parse multipart/form-data')
     }
-    public func multipart<T>(ctx: HttpContext, pattern: HttpRequestPathPatterns): ?T where T <: ObjectData<T> & DataFields<T> {
+    public func extractObject<T>(name: String, ctx: HttpContext, pattern: HttpRequestPathPatterns): T where T <: Object & ObjectData<T> {
         let multiparts = MultipartFormDataParser(ctx).parse()
         let fields = T.dataFields()
         let object = fields.create()

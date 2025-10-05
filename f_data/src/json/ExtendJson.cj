@@ -45,7 +45,7 @@ public interface ExtendJsonValue {
         JsonValue.fromStr(String.fromUtf8(buffer.bytes()))
     }
     func toData(): Data
-    static func tryFromData(data: Data, flag!: DataConversionFlag): Any
+    static func tryFromData(data: Data, flag!: DataConversionFlag): JsonValue
 }
 
 public let JSON_NULL = JsonNull()
@@ -63,7 +63,7 @@ extend JsonValue <: ExtendJsonValue {
             case _ => throw UnreachableException()
         }
     }
-    public static func tryFromData(data: Data, flag!: DataConversionFlag = DEFAULT_DATA_FLAG): Any {
+    public static func tryFromData(data: Data, flag!: DataConversionFlag = DEFAULT_DATA_FLAG): JsonValue {
         func from(data: Data) {
             match (tryFromData(data, flag: flag)) {
                 case x: JsonValue => x
@@ -126,6 +126,7 @@ extend JsonValue <: ExtendJsonValue {
                     let jv = from(k)
                     obj.put(jk.toString(), jv)
                 }
+                obj
             case _ => throw DataException("can not convert data type to JsonValue")
         }
     }
@@ -166,7 +167,7 @@ public class DataJsonObjectIterator <: Iterator<(String, Data)> {
     public DataJsonObjectIterator(private let itr: Iterator<(String, JsonValue)>) {}
     public func next(): ?(String, Data) {
         for ((k, v) in itr) {
-            (k, v.toData())
+            return (k, v.toData())
         }
         None
     }

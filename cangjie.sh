@@ -1,6 +1,8 @@
 #!/bin/bash
 # 请把本文件复制到你需要的位置，
 # 并在home目录的.bashrc末尾添加source /path/of/cangjie.sh
+# Please copy this file to the location you need,
+# and add 'source /path/of/cangjie.sh' to the end of ~/.bashrc
 export CJPM_CONFIG=/mnt/d/docs/work/cangjie/repository
 
 cangjie_version(){

@@ -23,6 +23,7 @@ import fountain.mvc.*
 import fountain.mvc.macros.*
 import user.service.UserService
 import user.model.po.*
+import user.model.mvc.*
 
 /**
  * 把UserController CurrentUserController合并成一个，加载时会抛出异常。
@@ -73,28 +74,16 @@ public class CurrentUserController {
     }
 
     @PostMapping[path:'/api/user/session', 
-                consumes:'application/x-www-form-urlencoded', 
+                consumes:'application/json', 
                 produces:'application/json',
                 ignoreAuth: true]
-    public func login(@RequestParam username: String, @RequestParam password: String): JsonValue {
-        let json = 
-        if (let Some((userId, jwt, logged)) <- userService.userSession(username, password)) {
-            '''
-            {
-                "status": 1,
-                "fields": {
-                    "userId": ${userId},
-                    "jwt": "${jwt}",
-                    "logged": ${logged}
-                }
-            }'''
-        } else {
-            '''
-            {
-                "status": 0
-            }'''
-        }
-        JsonValue.fromStr(json)
+    public func login(@RequestBody parser: RequestBodyParser): UserResponse {
+        println('AAAAAAAAAAAAAAAAAAA')
+        let user = parser.parse<UserRequest>('parser')
+        println('BBBBBBBBBBBBBBBBBBB username:${user.username} password:${user.password}')
+        let data = userService.userSession(user.username, user.password)
+        println('CCCCCCCCCCCCCCCCCCC')
+        UserResponse(data)
     }
     @DeleteMapping[path:'/api/user/session', 
                 consumes:'application/x-www-form-urlencoded', 

@@ -112,7 +112,11 @@ private func generateArgs(decl: FuncDecl): (Tokens, Tokens, Tokens, Tokens) {
                 case x: ?HttpRequest => (ctx.request as $ptype).getOrThrow()
                 case x: ?HttpHeaders => (ctx.request.headers as $ptype).getOrThrow()
                 case _: ?HttpResponseBuilder => (ctx.responseBuilder as $ptype).getOrThrow()
-                case _ => (meta.extract<$ptype>(ctx, $pname, $default) as $ptype).getOrThrow()
+                case _: ?InputStream => (ctx.request.body as $ptype).getOrThrow()
+                case _: ?Array<Byte> => (meta.extractBytes(ctx) as $ptype).getOrThrow()
+                case _: ?Form => (ctx.request.form as $ptype).getOrThrow()
+                case _: ?RequestBodyParser => (RequestBodyParser(ctx, meta) as $ptype).getOrThrow()
+                case _ => throw MVCException('type of ' + $pname + ': ' + $(ptype.toTokens().toString()) + ' is not supported')
             }
             $(`nl`)
         ))

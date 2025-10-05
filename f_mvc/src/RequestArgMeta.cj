@@ -26,6 +26,9 @@ class RequestArgMeta {
     func extract<T>(ctx: HttpContext, name: String, default: T, pattern: ?HttpRequestPathPatterns): T where T <: DataFields<T> {
         doExtract<T>(ctx, name, pattern) ?? default
     }
+    func extractObject<T>(ctx: HttpContext, name: String, pattern: ?HttpRequestPathPatterns): T where T <: Object & ObjectData<T> {
+        args[name].extractObject<T>(name, ctx, pattern.getOrThrow())
+    }
     func contains(name: String): Bool {
         args.contains(name)
     }
