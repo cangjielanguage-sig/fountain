@@ -281,7 +281,7 @@ public class RequestMeta <: HttpRequestHandler & ToString {
         }
         metas
     }
-    public static func accessLog(start: MonoTime, ctx: HttpContext, args: ArrayList<Any>, returned: ?Any, e: ?Exception) {
+    public func accessLog<T>(start: MonoTime, ctx: HttpContext, args: ArrayList<Any>, returned: ?Any, e: ?Exception) where T <: Object {
         func anyToString(any: Any) {
             let arg = match (any) {
                 case x: String => return x
@@ -314,6 +314,7 @@ public class RequestMeta <: HttpRequestHandler & ToString {
             case Some(x) => anyToString(x)
             case _ => 'None'
         }
+        let log = LoggerFactory.getLogger<T>()
         let logArgs: Array<ToString> = [request.method, request.url, request.form.toEncodeString(), request.headers.getFirst('Content-Type'), argGen, result, getResponseStatus(), MonoTime.now() - start]
         if(let Some(ex) <- e){
             logArgs[logArgs.size - 2] = HttpStatus.INTERNAL_SERVER_ERROR.value

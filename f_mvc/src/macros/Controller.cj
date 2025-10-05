@@ -71,7 +71,7 @@ private func generate(input: Tokens): Tokens {
                             } catch(e: Exception) {
                                 ex = e
                             } finally {
-                                RequestMeta.accessLog(start, ctx, anyArgs, any, ex)
+                                meta.accessLog<$klass>(start, ctx, anyArgs, any, ex)
                             }
                         }
                     }
