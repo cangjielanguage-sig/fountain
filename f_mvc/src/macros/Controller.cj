@@ -32,21 +32,16 @@ public macro Controller(input: Tokens): Tokens {
 }
 
 private func generate(input: Tokens): Tokens {
-    let tokens = quote()
     let decl = match(parseDecl(input)){
         case x: ClassDecl => x
         case x: MacroExpandDecl => 
             let d = extract(x)
-            if(let cd: ClassDecl <- d) {
-                cd
-            }else{
-                diagReport(ERROR, d.toTokens(), 'illegal decl', '')
-                return input
-            }
+            return generate(d.toTokens())
         case _ => 
             diagReport(ERROR, input, 'illegal decl', '')
             return input
     }
+    let tokens = quote()
     let klass = decl.identifier
     for (d in decl.body.decls) {
         if (let m: MacroExpandDecl <- d && let f: FuncDecl <- extract(m) && !isStatic(f) && isPublic(f)) {
