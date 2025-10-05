@@ -107,13 +107,55 @@ public abstract class Logger <: StdLogger {
             ex
         )
     }
+    
+    public func fatal<T>(message: String, args: Array<T>): Unit where T <: ToString {
+        append<T>(LogLevel.FATAL, message, args, None<Exception>)
+    }
+    
+    public func fatal<T>(message: String, args: ArrayList<T>): Unit where T <: ToString {
+        append<T>(LogLevel.FATAL, message, args, None<Exception>)
+    }
+    public func fatal<T>(message: String, args: HashMap<String, T>): Unit where T <: ToString {
+        append<T>(LogLevel.FATAL, message, args, None<Exception>)
+    }
+    public func fatal<T>(message: String, args: ConcurrentHashMap<String, T>): Unit where T <: ToString {
+        append<T>(LogLevel.FATAL, message, args, None<Exception>)
+    }
+    public func fatal<T>(message: String, args: LinkedHashMap<String, T>): Unit where T <: ToString {
+        append<T>(LogLevel.FATAL, message, args, None<Exception>)
+    }
+    public func fatal<T>(message: String, args: TreeMap<String, T>): Unit where T <: ToString {
+        append<T>(LogLevel.FATAL, message, args, None<Exception>)
+    }
+    public func fatal<T>(message: String, args: T): Unit where T <: Object & ObjectData<T> {
+        append<T>(LogLevel.FATAL, message, args, None<Exception>)
+    }
+
+    public func fatal<T>(message: String, ex: Exception, args: Array<T>): Unit where T <: ToString {
+        append<T>(LogLevel.FATAL, message, args, ex)
+    }
+    public func fatal<T>(message: String, ex: Exception, args: ArrayList<T>): Unit where T <: ToString {
+        append<T>(LogLevel.FATAL, message, args, ex)
+    }
+    public func fatal<T>(message: String, ex: Exception, args: HashMap<String, T>): Unit where T <: ToString {
+        append<T>(LogLevel.FATAL, message, args, ex)
+    }
+    public func fatal<T>(message: String, ex: Exception, args: LinkedHashMap<String, T>): Unit where T <: ToString {
+        append<T>(LogLevel.FATAL, message, args, ex)
+    }
+    public func fatal<T>(message: String, ex: Exception, args: ConcurrentHashMap<String, T>): Unit where T <: ToString {
+        append<T>(LogLevel.FATAL, message, args, ex)
+    }
+    public func fatal<T>(message: String, ex: Exception, args: TreeMap<String, T>): Unit where T <: ToString {
+        append<T>(LogLevel.FATAL, message, args, ex)
+    }
+    public func fatal<T>(message: String, ex: Exception, args: T): Unit where T <: Object & ObjectData<T> {
+        append<T>(LogLevel.FATAL, message, args, ex)
+    }
+
     public func error<T>(message: String, args: Array<T>): Unit where T <: ToString {
         append<T>(LogLevel.ERROR, message, args, None<Exception>)
     }
-    public func error<T>(message: String, ex: Exception, args: Array<T>): Unit where T <: ToString {
-        append<T>(LogLevel.ERROR, message, args, ex)
-    }
-
     public func error<T>(message: String, args: ArrayList<T>): Unit where T <: ToString {
         append<T>(LogLevel.ERROR, message, args, None<Exception>)
     }
@@ -133,6 +175,9 @@ public abstract class Logger <: StdLogger {
         append<T>(LogLevel.ERROR, message, args, None<Exception>)
     }
 
+    public func error<T>(message: String, ex: Exception, args: Array<T>): Unit where T <: ToString {
+        append<T>(LogLevel.ERROR, message, args, ex)
+    }
     public func error<T>(message: String, ex: Exception, args: ArrayList<T>): Unit where T <: ToString {
         append<T>(LogLevel.ERROR, message, args, ex)
     }
@@ -155,10 +200,6 @@ public abstract class Logger <: StdLogger {
     public func warn<T>(message: String, args: Array<T>): Unit where T <: ToString {
         append<T>(LogLevel.WARN, message, args, None<Exception>)
     }
-    public func warn<T>(message: String, ex: Exception, args: Array<T>): Unit where T <: ToString {
-        append<T>(LogLevel.WARN, message, args, ex)
-    }
-
     public func warn<T>(message: String, args: ArrayList<T>): Unit where T <: ToString {
         append<T>(LogLevel.WARN, message, args, None<Exception>)
     }
@@ -178,6 +219,12 @@ public abstract class Logger <: StdLogger {
         append<T>(LogLevel.WARN, message, args, None<Exception>)
     }
 
+    public func warn<T>(message: String, ex: Exception, args: Array<T>): Unit where T <: ToString {
+        append<T>(LogLevel.WARN, message, args, ex)
+    }
+    public func warn<T>(message: String, ex: Exception, args: ArrayList<T>): Unit where T <: ToString {
+        append<T>(LogLevel.WARN, message, args, ex)
+    }
     public func warn<T>(message: String, ex: Exception, args: HashMap<String, T>): Unit where T <: ToString {
         append<T>(LogLevel.WARN, message, args, ex)
     }
@@ -197,10 +244,6 @@ public abstract class Logger <: StdLogger {
     public func info<T>(message: String, args: Array<T>): Unit where T <: ToString {
         append<T>(LogLevel.INFO, message, args, None<Exception>)
     }
-    public func info<T>(message: String, ex: Exception, args: Array<T>): Unit where T <: ToString {
-        append<T>(LogLevel.INFO, message, args, ex)
-    }
-
     public func info<T>(message: String, args: ArrayList<T>): Unit where T <: ToString {
         append<T>(LogLevel.INFO, message, args, None<Exception>)
     }
@@ -220,6 +263,9 @@ public abstract class Logger <: StdLogger {
         append<T>(LogLevel.INFO, message, args, None<Exception>)
     }
 
+    public func info<T>(message: String, ex: Exception, args: Array<T>): Unit where T <: ToString {
+        append<T>(LogLevel.INFO, message, args, ex)
+    }
     public func info<T>(message: String, ex: Exception, args: ArrayList<T>): Unit where T <: ToString {
         append<T>(LogLevel.INFO, message, args, ex)
     }
@@ -242,10 +288,6 @@ public abstract class Logger <: StdLogger {
     public func debug<T>(message: String, args: Array<T>): Unit where T <: ToString {
         append<T>(LogLevel.DEBUG, message, args, None<Exception>)
     }
-    public func debug<T>(message: String, ex: Exception, args: Array<T>): Unit where T <: ToString {
-        append<T>(LogLevel.DEBUG, message, args, ex)
-    }
-
     public func debug<T>(message: String, args: ArrayList<T>): Unit where T <: ToString {
         append<T>(LogLevel.DEBUG, message, args, None<Exception>)
     }
@@ -265,6 +307,9 @@ public abstract class Logger <: StdLogger {
         append<T>(LogLevel.DEBUG, message, args, None<Exception>)
     }
 
+    public func debug<T>(message: String, ex: Exception, args: Array<T>): Unit where T <: ToString {
+        append<T>(LogLevel.DEBUG, message, args, ex)
+    }
     public func debug<T>(message: String, ex: Exception, args: ArrayList<T>): Unit where T <: ToString {
         append<T>(LogLevel.DEBUG, message, args, ex)
     }
@@ -287,10 +332,6 @@ public abstract class Logger <: StdLogger {
     public func trace<T>(message: String, args: Array<T>): Unit where T <: ToString {
         append<T>(LogLevel.TRACE, message, args, None<Exception>)
     }
-    public func trace<T>(message: String, ex: Exception, args: Array<T>): Unit where T <: ToString {
-        append<T>(LogLevel.TRACE, message, args, ex)
-    }
-
     public func trace<T>(message: String, args: ArrayList<T>): Unit where T <: ToString {
         append<T>(LogLevel.TRACE, message, args, None<Exception>)
     }
@@ -310,6 +351,9 @@ public abstract class Logger <: StdLogger {
         append<T>(LogLevel.TRACE, message, args, None<Exception>)
     }
 
+    public func trace<T>(message: String, ex: Exception, args: Array<T>): Unit where T <: ToString {
+        append<T>(LogLevel.TRACE, message, args, ex)
+    }
     public func trace<T>(message: String, ex: Exception, args: ArrayList<T>): Unit where T <: ToString {
         append<T>(LogLevel.TRACE, message, args, ex)
     }
@@ -329,6 +373,9 @@ public abstract class Logger <: StdLogger {
         append<T>(LogLevel.TRACE, message, args, ex)
     }
 
+    public func fatal(message: String, ex: Exception): Unit {
+        append(LogLevel.FATAL, message, ex)
+    }
     public func error(message: String, ex: Exception): Unit {
         append(LogLevel.ERROR, message, ex)
     }
@@ -343,6 +390,9 @@ public abstract class Logger <: StdLogger {
     }
     public func trace(message: String, ex: Exception): Unit {
         append(LogLevel.TRACE, message, ex)
+    }
+    public func fatal(ex: Exception, message: () -> String): Unit {
+        append(LogLevel.FATAL, message, ex)
     }
     public func error(ex: Exception, message: () -> String): Unit {
         append(LogLevel.ERROR, message, ex)
@@ -360,6 +410,9 @@ public abstract class Logger <: StdLogger {
         append(LogLevel.TRACE, message, ex)
     }
 
+    public func fatal(ex: Exception): Unit {
+        append(LogLevel.FATAL, String.empty, ex)
+    }
     public func error(ex: Exception): Unit {
         append(LogLevel.ERROR, String.empty, ex)
     }
@@ -376,6 +429,9 @@ public abstract class Logger <: StdLogger {
         append(LogLevel.TRACE, String.empty, ex)
     }
 
+    public func fatal(message: String): Unit {
+        append(LogLevel.FATAL, message)
+    }
     public func error(message: String): Unit {
         append(LogLevel.ERROR, message)
     }
@@ -392,6 +448,9 @@ public abstract class Logger <: StdLogger {
         append(LogLevel.TRACE, message)
     }
 
+    public func fatal(message: () -> String, ex: Exception): Unit {
+        append(LogLevel.FATAL, message, ex)
+    }
     public func error(message: () -> String, ex: Exception): Unit {
         append(LogLevel.ERROR, message, ex)
     }
@@ -408,6 +467,9 @@ public abstract class Logger <: StdLogger {
         append(LogLevel.TRACE, message, ex)
     }
 
+    public func fatal(message: () -> String): Unit {
+        append(LogLevel.FATAL, message)
+    }
     public func error(message: () -> String): Unit {
         append(LogLevel.ERROR, message)
     }
@@ -447,6 +509,11 @@ public abstract class Logger <: StdLogger {
     public prop errorEnabled: Bool {
         get() {
             logLevelEnabled(LogLevel.ERROR)
+        }
+    }
+    public prop fatalEnabled: Bool {
+        get() {
+            logLevelEnabled(LogLevel.FATAL)
         }
     }
 }

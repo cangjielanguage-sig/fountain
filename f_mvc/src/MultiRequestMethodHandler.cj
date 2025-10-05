@@ -21,7 +21,7 @@ public class MultiRequestMethodHandler <: HttpRequestHandler {
     private static let METHOD_NOT_ALLOWED = HttpStatusOnlyHandler(HttpStatus.METHOD_NOT_ALLOWED)
     private static let UNSUPPORTED_MEDIA_TYPE = HttpStatusOnlyHandler(HttpStatus.UNSUPPORTED_MEDIA_TYPE)
     private static let NOT_IMPLEMENTED = HttpStatusOnlyHandler(HttpStatus.NOT_IMPLEMENTED)
-    private static let INTERNAL_SERVER_ERROR = HttpStatusOnlyHandler(HttpStatus.INTERNAL_SERVER_ERROR)
+    static let INTERNAL_SERVER_ERROR = HttpStatusOnlyHandler(HttpStatus.INTERNAL_SERVER_ERROR)
 
     private static let accessControlAllowHeaders: String = MVCConfig.accessControlAllowHeaders
     private static let accessControlAllowOrigin: String = MVCConfig.accessControlAllowOrigin
@@ -76,12 +76,7 @@ public class MultiRequestMethodHandler <: HttpRequestHandler {
             }
         }
         func handle(ms: HashMap<String, RequestMeta>): Unit {
-            try {
-                check(ms).handle(ctx)
-            } catch (e: Exception) {
-                log.error<ToString>('fountain mvc {}: {}', e, [request.method, request.url])
-                INTERNAL_SERVER_ERROR.handle(ctx)
-            }
+            check(ms).handle(ctx)
         }
         if (log.debugEnabled) {
             let request = ctx.request

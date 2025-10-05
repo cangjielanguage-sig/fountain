@@ -61,16 +61,17 @@ private func generate(input: Tokens): Tokens {
                             $argExprs
                             $anyargs
                             var any: ?Any = None<Any>
+                            var ex = None<Exception>
                             try {
                                 if (meta.checkAuth(ctx, anyArgs)) {
                                     let returned: Any = controller.$(f.identifier)($args)
                                     any = returned
-                                    returned
-                                } else {
-                                    ()
+                                    return returned
                                 }
+                            } catch(e: Exception) {
+                                ex = e
                             } finally {
-                                RequestMeta.accessLog(start, ctx, anyArgs, any)
+                                RequestMeta.accessLog(start, ctx, anyArgs, any, ex)
                             }
                         }
                     }
