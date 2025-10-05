@@ -124,6 +124,7 @@ class HttpStatusOnlyHandler <: HttpRequestHandler {
 
     public func handle(httpContext: HttpContext): Unit {
         let b = httpContext.responseBuilder.status(status.value)
+        RequestMeta.setResponseStatus(status)
         if(let Some(accept) <- httpContext.request.headers.getFirst("Accept")) {
             b.header("Content-Type", accept)
         }

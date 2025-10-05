@@ -77,12 +77,9 @@ public class CurrentUserController {
                 consumes:'application/json', 
                 produces:'application/json',
                 ignoreAuth: true]
-    public func login(@RequestBody parser: RequestBodyParser): UserResponse {
-        println('AAAAAAAAAAAAAAAAAAA')
-        let user = parser.parse<UserRequest>('parser')
-        println('BBBBBBBBBBBBBBBBBBB username:${user.username} password:${user.password}')
+    public func login(@RequestBody user: UserRequest): UserResponse {
+        // let user = parser.parse<UserRequest>('parser')
         let data = userService.userSession(user.username, user.password)
-        println('CCCCCCCCCCCCCCCCCCC')
         UserResponse(data)
     }
     @DeleteMapping[path:'/api/user/session', 

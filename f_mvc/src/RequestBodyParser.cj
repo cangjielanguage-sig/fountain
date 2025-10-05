@@ -15,7 +15,7 @@ limitations under the License.
 */
 package f_mvc
 
-public struct RequestBodyParser {
+public struct RequestBodyParser <: DummyDataFields<RequestBodyParser> {
     public RequestBodyParser(private let ctx: HttpContext, private let meta: RequestMeta){}
 
     public func parse<T>(name: String): T where T <: Object & ObjectData<T> {

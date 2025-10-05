@@ -17,6 +17,16 @@ package f_mvc
 
 public class RequestMeta <: HttpRequestHandler & ToString {
     private static let log = LoggerFactory.getLogger<RequestMeta>()
+    static let currentResponseStatus = ThreadLocal<UInt16>()
+    static func setResponseStatus(status: HttpStatus){
+        currentResponseStatus.set(status.value)
+    }
+    private static func getResponseStatus(): UInt16 {
+        match(currentResponseStatus.get()){
+            case Some(c) => c
+            case _ => HttpStatus.OK.value
+        }
+    } 
     private var ignoreAuth_ = false
     private var ignorePrivilege_ = false
 
@@ -121,6 +131,7 @@ public class RequestMeta <: HttpRequestHandler & ToString {
             case NoPrivilege(status, resp) => ('NoPrivilege', status, resp)
             case NoPrivilege(resp) => ('NoPrivilege', HttpStatus.OK, resp)
         }
+        setResponseStatus(status)
         let accept = ctx.request.headers.getFirst('Accept') ?? '*/*'
         let builder = ctx.responseBuilder.status(status.value).header('Content-Type', accept)
         func respondStatusReasonPhrase() {
@@ -185,10 +196,20 @@ public class RequestMeta <: HttpRequestHandler & ToString {
     public func isMultipart(name: String) {
         args[name] is MultipartFormData
     }
+
     public func extract<T>(ctx: HttpContext, name: String, default: ?T): T where T <: DataFields<T> {
         match (default) {
-            case Some(d) => args.extract<T>(ctx, name, d, pattern)
-            case _ => args.extract<T>(ctx, name, pattern)
+            case _: ?HttpContext => (ctx as T).getOrThrow()
+            case _: ?HttpRequest => (ctx.request as T).getOrThrow()
+            case _: ?HttpHeaders => (ctx.request.headers as T).getOrThrow()
+            case _: ?HttpResponseBuilder => (ctx.responseBuilder as T).getOrThrow()
+            case _: ?Array<Byte> => (this.extractBytes(ctx) as T).getOrThrow()
+            case _: ?Form => (ctx.request.form as T).getOrThrow()
+            case _: ?RequestBodyParser => (RequestBodyParser(ctx, this) as T).getOrThrow()
+            case _ => match(default){
+                case Some(d) => args.extract<T>(ctx, name, d, pattern)
+                case _ => args.extract<T>(ctx, name, pattern)
+            }
         }
     }
     public func extractObject<T>(ctx: HttpContext, name: String): T where T <: Object & ObjectData<T> {
@@ -262,12 +283,22 @@ public class RequestMeta <: HttpRequestHandler & ToString {
     }
     public static func accessLog(start: MonoTime, ctx: HttpContext, args: ArrayList<Any>, returned: ?Any) {
         func anyToString(any: Any) {
-            match (any) {
-                case x: String => x
-                case x: ToString => x.toString()
-                case x: ToData => x.toData().toString()
-                case x => TypeInfo.of(x).toString()
+            let arg = match (any) {
+                case x: String => return x
+                case x: ToString => return x.toString()
+                case x: Array<Byte> => return x.toString()
+                case x: ToData => match(any){
+                    case _: HttpContext => x
+                    case _: HttpRequest => x
+                    case _: HttpHeaders => x
+                    case _: HttpResponseBuilder => x
+                    case _: Form => x
+                    case _: RequestBodyParser => x
+                    case _ => return x.toData().toString()
+                }
+                case x => x
             }
+            TypeInfo.of(arg).toString()
         }
         let request = ctx.request
         let argGen = StringGenerator().append('[')
@@ -284,6 +315,6 @@ public class RequestMeta <: HttpRequestHandler & ToString {
             case _ => 'None'
         }
         log.info(
-            'MVC.accessLog:${request.method}:${request.url}?${request.form.toEncodeString()}; consumes:${request.headers.getFirst('Content-Type')}; params:${argGen}; returned: ${result}; elapsed: ${MonoTime.now() - start}')
+            'MVC.accessLog:${request.method}:${request.url}?${request.form.toEncodeString()}; consumes:${request.headers.getFirst('Content-Type')}; params:${argGen}; returned: ${result}; status: ${getResponseStatus()}; elapsed: ${MonoTime.now() - start}')
     }
 }

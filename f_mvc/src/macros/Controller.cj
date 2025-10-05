@@ -15,8 +15,6 @@ limitations under the License.
  */
 macro package f_mvc.macros
 
-import std.reflect.*
-
 /**
  * http mvc控制器的宏。请确保作为控制器的类型一定是class，且只有作为请求处理的函数是公共的。
  * 请求处理函数只接收实现了接口fountain.data.DataFields<T>的类型或HttpContext HttpHeaders HttpRequest HttpResponseBuilderw做参数
@@ -107,18 +105,7 @@ private func generateArgs(decl: FuncDecl): (Tokens, Tokens, Tokens, Tokens) {
             quote(None<$ptype>)
         }
         exprs.append(quote(
-            let $(p.identifier) = match(None<$ptype>){
-                case x: ?HttpContext => (ctx as $ptype).getOrThrow()
-                case x: ?HttpRequest => (ctx.request as $ptype).getOrThrow()
-                case x: ?HttpHeaders => (ctx.request.headers as $ptype).getOrThrow()
-                case _: ?HttpResponseBuilder => (ctx.responseBuilder as $ptype).getOrThrow()
-                case _: ?InputStream => (ctx.request.body as $ptype).getOrThrow()
-                case _: ?Array<Byte> => (meta.extractBytes(ctx) as $ptype).getOrThrow()
-                case _: ?Form => (ctx.request.form as $ptype).getOrThrow()
-                case _: ?RequestBodyParser => (RequestBodyParser(ctx, meta) as $ptype).getOrThrow()
-                case _ => throw MVCException('type of ' + $pname + ': ' + $(ptype.toTokens().toString()) + ' is not supported')
-            }
-            $(`nl`)
+            let $(p.identifier) = meta.extract<$ptype>(ctx, $pname, $default)$(`nl`)
         ))
         let named = try {
             p.not.kind == TokenKind.NOT
