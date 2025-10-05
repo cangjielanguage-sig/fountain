@@ -75,8 +75,7 @@ private func generate(input: Tokens): Tokens {
                             }
                         }
                     }
-                }()
-                $(`nl`)
+                }()$(`nl`)
             ))
         }
     }
