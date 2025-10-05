@@ -510,9 +510,12 @@ public class ${name}_AppVersionImpl <: AppVersion {
     }
     private func count(dir: Path, counter: CodeCounter, ext: String, ignore: Bool): Unit {
         Directory.walk(dir){fi =>
-            if(fi.isDirectory()){
+            if (fi.isDirectory()) {
+                if(fi.path.toString().contains('/src/')){
+                    counter.packages++
+                }
                 count(fi.path, counter, ext, ignore)
-            } else if(fi.path.fileName.endsWith(ext)){
+            } else if (fi.path.extensionName == ext){
                 counter.files++
                 try(f = File(fi.path, Read)){
                     let r = StringReader(f)
@@ -524,6 +527,8 @@ public class ${name}_AppVersionImpl <: AppVersion {
                         counter.lines++
                     }
                 }
+            } else if (fi.path.extensionName == 'toml') {
+                counter.modules++
             }
             true
         }
@@ -542,7 +547,7 @@ public class ${name}_AppVersionImpl <: AppVersion {
         let counter = CodeCounter()
         let start = DateTime.now()
         count(path, counter, ext, ignore)
-        println('files: ${counter.files}, lines: ${counter.lines}, consumes: ${DateTime.now() - start}')
+        println('modules: ${counter.modules}, packages: ${counter.packages}, files: ${counter.files}, lines: ${counter.lines}, consumes: ${DateTime.now() - start}')
         0
     }
     public func boot(): Int64 {
@@ -564,6 +569,8 @@ public class ${name}_AppVersionImpl <: AppVersion {
     }
 }
 private class CodeCounter{
+    var modules = 0
+    var packages = 0
     var files = 0
     var lines = 0
 }
