@@ -521,7 +521,7 @@ public class ${name}_AppVersionImpl <: AppVersion {
                     let r = StringReader(f)
                     for(line in r.lines()){
                         let l = line.trimAscii()
-                        if(l.isEmpty() || (ignore && '{[(.)]}'.contains(l))){
+                        if(l.isEmpty() || (ignore && '{[(.,)]}'.contains(l))){
                             continue
                         }
                         counter.lines++
