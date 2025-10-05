@@ -17,7 +17,7 @@ _/ ____\____  __ __  _____/  |______  |__| ____
   1. `f_rx`功能参考了`RxJava`，API原创。
   2. `f_mvc.{HttpStatus, Series}` 只有常量定义，自己定义担心遗漏，从`springmvc`抄过来的。
   3. `f_mvc.{rfc1123, parseRfc1123}` 是两个时间和字符串的转换工具，结合仓颉语言特性参考了`springmvc`的实现。
-  4. `f_mvc.{ContentDisposition, ContentDispositionBuilder, ContentDispositionType}` 也参考了`springmvc`，我不记得不是照抄的了。
+  4. `f_mvc.{ContentDisposition, ContentDispositionBuilder, ContentDispositionType, MultipartFile}` 也参考了`springmvc`，我不记得不是照抄的了。
   5. `f_mvc.{@PostMapping, @GetMapping, @DeleteMapping, @PutMapping, @PatchMapping, @RequestMapping, macros.Controller}`
      `f_bean.{@macros.Bean, @macros.Configuration, PostConstruct, Destroy}`
       这些API的命名借鉴了springmvc
