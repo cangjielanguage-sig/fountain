@@ -42,6 +42,16 @@ public sealed abstract class TableClause<T> where T <: QueryMappersInit<T> {
         }
         this
     }
+    protected func join<T>(prefix: String, AS: String, ON: String): This where T <: QueryMappersInit<T> {
+        sqlgen.append(' ').append(prefix).append(' join ').append(T.tableName())
+        if(AS.size > 0){
+            sqlgen.append(' AS ').append(AS)
+        }
+        if(ON.size > 0){
+            sqlgen.append(' ON ').append(ON)
+        }
+        this
+    }
     protected open func setSql(): SqlExecutor {
         executor.setSql(sqlgen.toString())
     }
@@ -61,21 +71,13 @@ public class FromClause<T> <: TableClause<T> where T <: QueryMappersInit<T> {
     init(executor: SqlExecutor){
         super(' from ${T.tableName()} ', executor)
     }
-    public prop delete: Int64 {
-        get(){
-            executor.setSql('delete ${sqlgen}').delete
-        }
+    public func DELETE(): Int64 {
+        DELETE('')
     }
-    private func join<T>(prefix: String, AS: String, ON: String): This where T <: QueryMappersInit<T> {
-        sqlgen.append(' ').append(prefix).append(' join ').append(T.tableName())
-        if(AS.size > 0){
-            sqlgen.append(' AS ').append(AS)
-        }
-        if(ON.size > 0){
-            sqlgen.append(' ON ').append(ON)
-        }
-        this
+    public func DELETE(sql: String): Int64 {
+        executor.setSql('delete ${sql} ${sqlgen}').delete
     }
+    
     public func INNER_JOIN<T>(AS!: String = '', ON!: String = ''): This where T <: QueryMappersInit<T> {
         join<T>('inner', AS, ON)
     }
@@ -123,6 +125,18 @@ public class UpdateClause<T> <: TableClause<T> where T <: QueryMappersInit<T> {
     public func WHERE(condition: ()->String): This {
         appendPartial('where', condition)
         this
+    }
+    public func INNER_JOIN<T>(AS!: String = '', ON!: String = ''): This where T <: QueryMappersInit<T> {
+        join<T>('inner', AS, ON)
+    }
+    public func LEFT_JOIN<T>(AS!: String = '', ON!: String = ''): This where T <: QueryMappersInit<T> {
+        join<T>('left outer', AS, ON)
+    }
+    public func RIGHT_JOIN<T>(AS!: String = '', ON!: String = ''): This where T <: QueryMappersInit<T> {
+        join<T>('right outer', AS, ON)
+    }
+    public func FULL_JOIN<T>(AS!: String = '', ON!: String = ''): This where T <: QueryMappersInit<T> {
+        join<T>('full outer', AS, ON)
     }
     public func ORDER_BY(orderBy: ()->String): This {
         appendPartial('order by', orderBy)
