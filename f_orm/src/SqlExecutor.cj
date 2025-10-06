@@ -617,6 +617,10 @@ public class SqlExecutor <: Resource & RootDAO {
         args.add(arg)
         this
     }
+    public func addNull(){
+        args.addNull()
+        this
+    }
     public func add(arg: Any) {
         match (arg) {
             case x: ToString => add<ToString>(x)

@@ -21,7 +21,7 @@ import fountain.base.unsafeZeroValue
 import fountain.orm.*
 import fountain.orm.macros.*
 
-@QueryMappersGenerator
+@QueryMappersGenerator[user_info]
 public class UserPO {
     @ORMField[true 'id']
     private var id: Int64 = 0

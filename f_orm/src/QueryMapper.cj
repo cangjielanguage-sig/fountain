@@ -30,7 +30,7 @@ import f_base.ExtendOption
  */
 public open class QueryMapper<O> {
     public QueryMapper(
-        protected let dataType!: DataType = UnknownDataType(true, ''),
+        protected let dataType!: DataType = UnknownDataType(true, '', ''),
         protected let putter!: (O, Any) -> Unit
     ) {}
 
@@ -69,7 +69,7 @@ public open class QueryMapper<O> {
 
 public open class FieldQueryMapper<T, O> <: QueryMapper<O> {
     public init(
-        dataType!: DataType = UnknownDataType(true, ''),
+        dataType!: DataType = UnknownDataType(true, '', ''),
         putter!: (O, T) -> Unit
     ) {
         super(dataType: dataType, putter: {o, v => putter(o, ORMConverter.convert<T>(v))})

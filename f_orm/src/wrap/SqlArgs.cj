@@ -88,6 +88,9 @@ public class SqlArgs <: Hashable & Equatable<SqlArgs> & ToString {
     public func add(arg: Array<Byte>) {
         add(ByteArraySqlArg(args.size, arg))
     }
+    public func addNull() {
+        add(NullSqlArg(args.size))
+    }
     public func toString() {
         args.toString()
     }

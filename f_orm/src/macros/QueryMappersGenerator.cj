@@ -32,14 +32,17 @@ import f_util.CaseFormat
  * 没有使用@ORMField注解的按照映射的不是主键，且按照列名是LowerUnderScore处理。
  */
 public macro QueryMappersGenerator(input: Tokens): Tokens {
-    expandQueryMappers(input)
+    expandQueryMappers(quote(), input)
 }
-private func expandQueryMappers(input: Tokens): Tokens {
+public macro QueryMappersGenerator(attr: Tokens, input: Tokens): Tokens {
+    expandQueryMappers(attr, input)
+}
+private func expandQueryMappers(attr: Tokens, input: Tokens): Tokens {
     let decl = match(parseDecl(input)){
         case d: ClassDecl => d
         case d: MacroExpandDecl => 
             var decl = extract(d)
-            let tokens = expandQueryMappers(decl.toTokens())
+            let tokens = expandQueryMappers(attr, decl.toTokens())
             decl = parseDecl(tokens)
             decl = replaceMacroInputDecl(d, decl)
             return decl.toTokens()
@@ -103,6 +106,15 @@ private func expandQueryMappers(input: Tokens): Tokens {
         decl.upperBound = `upperbound`[0]
     }
     decl.superTypes.add(RefType(quote(QueryMappersInit<$name>)))
+    let tableName = if(attr.size == 0){
+        CaseFormat.Pascal.convert(decl.identifier.value, CaseFormat.LowerUnderScore)
+    }else{
+        match(attr[0].value){
+            case 'LowerUnderScore' => CaseFormat.Pascal.convert(decl.identifier.value, CaseFormat.LowerUnderScore)
+            case 'UpperUnderScore' => CaseFormat.Pascal.convert(decl.identifier.value, CaseFormat.UpperUnderScore)
+            case x => x
+        }
+    }
     body.add(
         all: [parseDecl(
             quote(
@@ -114,6 +126,13 @@ private func expandQueryMappers(input: Tokens): Tokens {
             )
         }()
     )),
+            parseDecl(
+            quote(
+        public static func tableName(): String {
+            $tableName
+        }
+            )
+            ),
             parseDecl(
             quote(
         public static func isSimpleData(): Bool {
@@ -184,7 +203,7 @@ func generateMappers(name: Tokens, fieldName: Token, dts: Tokens, meta: (Bool, S
     if (meta[0]) {
         quote(
                 IdQueryMapper<$dataType, $name>(
-                    dataType: $(dataTypeToken)($nullable, $columnName),
+                    dataType: $(dataTypeToken)($nullable, $columnName, $fieldNameStr),
                     putter: {o, v => o.$fieldName = ORMConverter.convert<$dataType>(v)}
                 )
             )

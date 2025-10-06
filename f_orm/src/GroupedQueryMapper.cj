@@ -22,7 +22,7 @@ public class GroupedQueryMapper<T, O> <: QueryMapper<O> {
         private let grouped!: QueryMappers<T>,
         private let groupedGetter!: (O) -> ArrayList<T>
     ) {
-        super(putter: {o, v =>}, dataType: UnknownDataType(true, ''))
+        super(putter: {o, v =>}, dataType: UnknownDataType(true, '', ''))
     }
     func newGrouped<SUB>(): QueryMapper<SUB> where SUB <: QueryMappersInit<SUB> {
         GroupedQueryMapper<T, SUB>(
@@ -47,7 +47,7 @@ public class GroupedSingleQueryMapper<T, O> <: QueryMapper<O> {
         private let name!: String,
         private let groupedGetter!: (O) -> ArrayList<T>
     ) {
-        super(putter: {o, v =>}, dataType: UnknownDataType(false, name))
+        super(putter: {o, v =>}, dataType: UnknownDataType(false, name, ''))
     }
     func newGroupedSingle<SUB>(): QueryMapper<SUB> where SUB <: QueryMappersInit<SUB> {
         GroupedSingleQueryMapper<T, SUB>(
@@ -73,7 +73,7 @@ public class NullableGroupedQueryMapper<T, O> <: QueryMapper<O> {
         private let grouped!: QueryMappers<T>,
         private let groupedGetter!: (O) -> ArrayList<Option<T>>
     ) {
-        super(putter: {o, v =>}, dataType: UnknownDataType(true, ''))
+        super(putter: {o, v =>}, dataType: UnknownDataType(true, '', ''))
     }
     func newNullableGrouped<SUB>(): QueryMapper<SUB> {
         NullableGroupedQueryMapper<T, SUB>(

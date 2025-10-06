@@ -28,6 +28,6 @@ public class ConversionQueryMaper<D, T, O> <: QueryMapper<O> {
         converter!: (D) -> T,
         putter!: (O, T) -> Unit
     ) {
-        this(dataType: UnknownDataType(true, name), converter: converter, putter: putter)
+        this(dataType: UnknownDataType(true, name, name), converter: converter, putter: putter)
     }
 }

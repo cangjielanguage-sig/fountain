@@ -94,9 +94,15 @@ public class StringGenerator <: ToString {
         checkIndex(fromIndex, toIndex)
         let search = content.toString().unsafeBytes()
         var fromIdx = fromIndex
+        let torm = ArrayList<Range<Int64>>()
         while (let Some(idx) <- indexOf(search, fromIdx) && idx < toIndex) {
-            utf8.remove(idx..idx + search.size)
-            fromIdx = idx
+            let range = idx .. idx + search.size
+            torm.add(range)
+            fromIdx = range.end
+        }
+        for(i in torm.size - 1 .. 0: -1){
+            let range = torm[i]
+            utf8.remove(range)
         }
         this
     }

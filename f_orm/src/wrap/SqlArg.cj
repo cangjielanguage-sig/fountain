@@ -509,3 +509,20 @@ public class ByteArraySqlArg <: SqlArg {
         })
     }
 }
+public class NullSqlArg <: SqlArg {
+    public init(index: Int64){
+        super(index)
+    }
+    public func set(statement: Statement): Unit {
+        statement.setNull(index)
+    }
+    public func toString(){
+        'null'
+    }
+    public func hashCode(){
+        0
+    }
+    public operator func ==(other: SqlArg): Bool {
+        refEq(this, other) || equals(other)
+    }
+}

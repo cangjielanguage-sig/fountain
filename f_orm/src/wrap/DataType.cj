@@ -18,7 +18,8 @@ package f_orm.wrap
 public abstract class DataType {
     public DataType(
         private let nullable: Bool,
-        public let columnName: String
+        public let columnName: String,
+        public let fieldName: String
     ) {}
     protected func getValue<T>(result: QueryResultWrap): Any {
         let any: Any = if (nullable) {
@@ -32,8 +33,8 @@ public abstract class DataType {
 }
 
 public class UnknownDataType <: DataType {
-    public init(nullable: Bool, columnName: String) {
-        super(nullable, columnName)
+    public init(nullable: Bool, columnName: String, fieldName: String) {
+        super(nullable, columnName, fieldName)
     }
     public func get(result: QueryResultWrap): Any {
         getValue<Any>(result)
@@ -41,8 +42,8 @@ public class UnknownDataType <: DataType {
 }
 
 public class BoolDataType <: DataType {
-    public init(nullable: Bool, columnName: String) {
-        super(nullable, columnName)
+    public init(nullable: Bool, columnName: String, fieldName: String) {
+        super(nullable, columnName, fieldName)
     }
     public func get(result: QueryResultWrap): Any {
         getValue<Bool>(result)
@@ -50,8 +51,8 @@ public class BoolDataType <: DataType {
 }
 
 public class Int8DataType <: DataType {
-    public init(nullable: Bool, columnName: String) {
-        super(nullable, columnName)
+    public init(nullable: Bool, columnName: String, fieldName: String) {
+        super(nullable, columnName, fieldName)
     }
     public func get(result: QueryResultWrap): Any {
         getValue<Int8>(result)
@@ -59,8 +60,8 @@ public class Int8DataType <: DataType {
 }
 
 public class UInt8DataType <: DataType {
-    public init(nullable: Bool, columnName: String) {
-        super(nullable, columnName)
+    public init(nullable: Bool, columnName: String, fieldName: String) {
+        super(nullable, columnName, fieldName)
     }
     public func get(result: QueryResultWrap): Any {
         getValue<UInt8>(result)
@@ -70,8 +71,8 @@ public class UInt8DataType <: DataType {
 type ByteDataType = UInt8DataType
 
 public class Int16DataType <: DataType {
-    public init(nullable: Bool, columnName: String) {
-        super(nullable, columnName)
+    public init(nullable: Bool, columnName: String, fieldName: String) {
+        super(nullable, columnName, fieldName)
     }
     public func get(result: QueryResultWrap): Any {
         getValue<Int16>(result)
@@ -79,8 +80,8 @@ public class Int16DataType <: DataType {
 }
 
 public class UInt16DataType <: DataType {
-    public init(nullable: Bool, columnName: String) {
-        super(nullable, columnName)
+    public init(nullable: Bool, columnName: String, fieldName: String) {
+        super(nullable, columnName, fieldName)
     }
     public func get(result: QueryResultWrap): Any {
         getValue<UInt16>(result)
@@ -88,8 +89,8 @@ public class UInt16DataType <: DataType {
 }
 
 public class Int32DataType <: DataType {
-    public init(nullable: Bool, columnName: String) {
-        super(nullable, columnName)
+    public init(nullable: Bool, columnName: String, fieldName: String) {
+        super(nullable, columnName, fieldName)
     }
     public func get(result: QueryResultWrap): Any {
         getValue<Int32>(result)
@@ -97,8 +98,8 @@ public class Int32DataType <: DataType {
 }
 
 public class UInt32DataType <: DataType {
-    public init(nullable: Bool, columnName: String) {
-        super(nullable, columnName)
+    public init(nullable: Bool, columnName: String, fieldName: String) {
+        super(nullable, columnName, fieldName)
     }
     public func get(result: QueryResultWrap): Any {
         getValue<UInt32>(result)
@@ -106,8 +107,8 @@ public class UInt32DataType <: DataType {
 }
 
 public class Int64DataType <: DataType {
-    public init(nullable: Bool, columnName: String) {
-        super(nullable, columnName)
+    public init(nullable: Bool, columnName: String, fieldName: String) {
+        super(nullable, columnName, fieldName)
     }
     public func get(result: QueryResultWrap): Any {
         getValue<Int64>(result)
@@ -115,26 +116,59 @@ public class Int64DataType <: DataType {
 }
 
 public class UInt64DataType <: DataType {
-    public init(nullable: Bool, columnName: String) {
-        super(nullable, columnName)
+    public init(nullable: Bool, columnName: String, fieldName: String) {
+        super(nullable, columnName, fieldName)
     }
     public func get(result: QueryResultWrap): Any {
         getValue<UInt64>(result)
     }
 }
+public class Float32DataType <: DataType {
+    public init(nullable: Bool, columnName: String, fieldName: String) {
+        super(nullable, columnName, fieldName)
+    }
+    public func get(result: QueryResultWrap): Any {
+        getValue<Float32>(result)
+    }
+}
+public class Float64DataType <: DataType {
+    public init(nullable: Bool, columnName: String, fieldName: String) {
+        super(nullable, columnName, fieldName)
+    }
+    public func get(result: QueryResultWrap): Any {
+        getValue<Float64>(result)
+    }
+}
+public class Float16DataType <: DataType {
+    public init(nullable: Bool, columnName: String, fieldName: String) {
+        super(nullable, columnName, fieldName)
+    }
+    public func get(result: QueryResultWrap): Any {
+        getValue<Float16>(result)
+    }
+}
 
 public class DecimalDataType <: DataType {
-    public init(nullable: Bool, columnName: String) {
-        super(nullable, columnName)
+    public init(nullable: Bool, columnName: String, fieldName: String) {
+        super(nullable, columnName, fieldName)
     }
     public func get(result: QueryResultWrap): Any {
         getValue<Decimal>(result)
     }
 }
 
+public class BigIntDataType <: DataType {
+    public init(nullable: Bool, columnName: String, fieldName: String) {
+        super(nullable, columnName, fieldName)
+    }
+    public func get(result: QueryResultWrap): Any {
+        getValue<BigInt>(result)
+    }
+}
+
 public class RuneDataType <: DataType {
-    public init(nullable: Bool, columnName: String) {
-        super(nullable, columnName)
+    public init(nullable: Bool, columnName: String, fieldName: String) {
+        super(nullable, columnName, fieldName)
     }
     public func get(result: QueryResultWrap): Any {
         getValue<Rune>(result)
@@ -142,8 +176,8 @@ public class RuneDataType <: DataType {
 }
 
 public class StringDataType <: DataType {
-    public init(nullable: Bool, columnName: String) {
-        super(nullable, columnName)
+    public init(nullable: Bool, columnName: String, fieldName: String) {
+        super(nullable, columnName, fieldName)
     }
     public func get(result: QueryResultWrap): Any {
         getValue<String>(result)
@@ -151,8 +185,8 @@ public class StringDataType <: DataType {
 }
 
 public class InputStreamDataType <: DataType {
-    public init(nullable: Bool, columnName: String) {
-        super(nullable, columnName)
+    public init(nullable: Bool, columnName: String, fieldName: String) {
+        super(nullable, columnName, fieldName)
     }
     public func get(result: QueryResultWrap): Any {
         getValue<InputStream>(result)
@@ -160,8 +194,8 @@ public class InputStreamDataType <: DataType {
 }
 
 public class DurationDataType <: DataType {
-    public init(nullable: Bool, columnName: String) {
-        super(nullable, columnName)
+    public init(nullable: Bool, columnName: String, fieldName: String) {
+        super(nullable, columnName, fieldName)
     }
     public func get(result: QueryResultWrap): Any {
         getValue<Duration>(result)
@@ -169,8 +203,8 @@ public class DurationDataType <: DataType {
 }
 
 public class DateTimeDataType <: DataType {
-    public init(nullable: Bool, columnName: String) {
-        super(nullable, columnName)
+    public init(nullable: Bool, columnName: String, fieldName: String) {
+        super(nullable, columnName, fieldName)
     }
     public func get(result: QueryResultWrap): Any {
         getValue<DateTime>(result)
@@ -178,8 +212,8 @@ public class DateTimeDataType <: DataType {
 }
 
 public class ByteArrayDataType <: DataType {
-    public init(nullable: Bool, columnName: String) {
-        super(nullable, columnName)
+    public init(nullable: Bool, columnName: String, fieldName: String) {
+        super(nullable, columnName, fieldName)
     }
     public func get(result: QueryResultWrap): Any {
         getValue<Array<Byte>>(result)

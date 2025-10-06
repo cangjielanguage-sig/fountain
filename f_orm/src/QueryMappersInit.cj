@@ -19,6 +19,7 @@ public import std.time.DateTime
 public import std.io.InputStream
 
 public interface QueryMappersInit<T> where T <: QueryMappersInit<T> {
+    static func tableName(): String
     static func isSimpleData(): Bool 
     static func queryMappers(): QueryMappers<T> 
 }
@@ -29,6 +30,9 @@ public interface SimpleDataQueryMappersInit<T> <: QueryMappersInit<T> where T <:
     static func queryMappers(): QueryMappers<T> {
         throw ORMException("not supported")
     }
+    static func tableName(): String {
+        ''
+    }
 }
 
 extend<T> Option<T> <: QueryMappersInit<T> where T <: QueryMappersInit<T> {
@@ -37,6 +41,9 @@ extend<T> Option<T> <: QueryMappersInit<T> where T <: QueryMappersInit<T> {
     }
     public static func queryMappers(): QueryMappers<T> {
         T.queryMappers()
+    }
+    public static func tableName(): String {
+        T.tableName()
     }
 }
 

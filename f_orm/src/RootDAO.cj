@@ -110,6 +110,10 @@ public interface RootDAO {
         executor.add(value)
         '?'
     }
+    func argNull(){
+        executor.addNull()
+        '?'
+    }
     func meet(condition: Bool, partial: String): MeetCondition {
         MeetCondition(condition, partial, executor)
     }

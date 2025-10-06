@@ -17,7 +17,7 @@ package f_orm
 
 public class IdQueryMapper<ID, O> <: FieldQueryMapper<ID, O> where ID <: Hashable & Equatable<ID> {
     public init(
-        dataType!: DataType = Int64DataType(false, 'id'),
+        dataType!: DataType = Int64DataType(false, 'id', 'id'),
         putter!: (O, ID) -> Unit
     ) {
         super(dataType: dataType, putter: putter)
