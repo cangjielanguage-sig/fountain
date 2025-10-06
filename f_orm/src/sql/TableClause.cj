@@ -200,7 +200,6 @@ public class IntoClause<T> <: TableClause<T> where T <: QueryMappersInit<T> {
     public func SELECT<T>(selectColumns: String, fromClause: (FromClause<T>)->FromClause<T>): This where T <: QueryMappersInit<T> {
         let from = fromClause(executor.FROM<T>())
         sqlgen.append('select ').append(selectColumns).append(from.sqlgen)
-        executor.add(all: from.executor)
         this
     }
     public func execute(){
