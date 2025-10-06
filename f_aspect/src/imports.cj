@@ -23,3 +23,5 @@ internal import f_bean.*
 internal import f_config.*
 internal import f_exception.TypeCastException
 internal import f_regex.*
+
+public import std.reflect.TypeInfo

@@ -19,15 +19,15 @@ import std.ast.*
 import f_aspect.exception.AspectException
 import f_macros.*
 
-public macro Pointcut(attr: Tokens, input: Tokens): Tokens {
+public macro Pointcut(input: Tokens): Tokens {
     if (insideParentContext('Pointcut')) {
         return input
     }
     match(parseDecl(input)){
-        case x: FuncDecl => pointcut(attr, x)
+        case x: FuncDecl => pointcut(x)
         case x: MacroExpandDecl => 
             let d = extract(x)
-            let tokens = pointcut(attr, d)
+            let tokens = pointcut(d)
             x.macroInputDecl = parseDecl(tokens)
             x.macroInputs = tokens
             x.toTokens()
@@ -36,7 +36,7 @@ public macro Pointcut(attr: Tokens, input: Tokens): Tokens {
             throw AspectException()
     }
 }
-private func pointcut(attr: Tokens, decl: Decl): Tokens {
+private func pointcut(decl: Decl): Tokens {
     let tokens = decl.toTokens()
     match (decl) {
         case x: FuncDecl =>
@@ -62,7 +62,6 @@ private func pointcut(attr: Tokens, decl: Decl): Tokens {
                 args.append(paramName)
             }
             args.append(`rsquare`)
-            let qualifiedName = attr[0].value
             let funcName = x.identifier.value
             let funcType = try {
                 x.declType.toTokens()
@@ -80,7 +79,8 @@ private func pointcut(attr: Tokens, decl: Decl): Tokens {
                         $argVars
                         $(x.block.nodes)
                     }
-                    let info = InvocationFuncInfo($qualifiedName, $funcName, $args)
+                    let _tYpEInfO__ = TypeInfo.of(this).qualifiedName
+                    let info = InvocationFuncInfo(_tYpEInfO__, $funcName, $args)
                     $proceed
                 }
             )
