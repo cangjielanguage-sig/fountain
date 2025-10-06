@@ -101,16 +101,13 @@ private func expandClassDecl(decl: ClassDecl): Tokens {
                 @Pointcut
                 $d
             ))
-        } else if (let md: MacroExpandDecl <- d) {
-            var ed = extract(md)
-            if (ed is FuncDecl && !isStatic(ed) && isPublic(ed)) {
-                ed = parseDecl(quote(
-                    @Pointcut
-                    $ed
-                ))
-                md.macroInputDecl = ed
-                md.macroInputs = ed.toTokens()
-            }
+        } else if (let md: MacroExpandDecl <- d && let ed: FuncDecl <- extract(md) && !isStatic(ed) && isPublic(ed)) {
+            let fd = parseDecl(quote(
+                @Pointcut
+                $ed
+            ))
+            md.macroInputDecl = fd
+            md.macroInputs = fd.toTokens()
         }
     }
     decl.toTokens()
