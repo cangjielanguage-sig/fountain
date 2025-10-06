@@ -42,16 +42,7 @@ public sealed abstract class TableClause<T> where T <: QueryMappersInit<T> {
         }
         this
     }
-    protected func join<T>(prefix: String, AS: String, ON: String): This where T <: QueryMappersInit<T> {
-        sqlgen.append(' ').append(prefix).append(' join ').append(T.tableName())
-        if(AS.size > 0){
-            sqlgen.append(' AS ').append(AS)
-        }
-        if(ON.size > 0){
-            sqlgen.append(' ON ').append(ON)
-        }
-        this
-    }
+    
     protected open func setSql(): SqlExecutor {
         executor.setSql(sqlgen.toString())
     }
@@ -67,7 +58,47 @@ public sealed abstract class TableClause<T> where T <: QueryMappersInit<T> {
         }
     }
 }
-public class FromClause<T> <: TableClause<T> where T <: QueryMappersInit<T> {
+public abstract class ExceptInsertClause<T> <: TableClause<T> where T <: QueryMappersInit<T> {
+    protected func join<T>(prefix: String, AS: String, ON: String): This where T <: QueryMappersInit<T> {
+        sqlgen.append(' ').append(prefix).append(' join ').append(T.tableName())
+        if(AS.size > 0){
+            sqlgen.append(' AS ').append(AS)
+        }
+        if(ON.size > 0){
+            sqlgen.append(' ON ').append(ON)
+        }
+        this
+    }
+    init(sql: String, executor: SqlExecutor){
+        super(sql, executor)
+    }
+    public func INNER_JOIN<T>(AS!: String = '', ON!: String = ''): This where T <: QueryMappersInit<T> {
+        join<T>('inner', AS, ON)
+    }
+    public func LEFT_JOIN<T>(AS!: String = '', ON!: String = ''): This where T <: QueryMappersInit<T> {
+        join<T>('left outer', AS, ON)
+    }
+    public func RIGHT_JOIN<T>(AS!: String = '', ON!: String = ''): This where T <: QueryMappersInit<T> {
+        join<T>('right outer', AS, ON)
+    }
+    public func FULL_JOIN<T>(AS!: String = '', ON!: String = ''): This where T <: QueryMappersInit<T> {
+        join<T>('full outer', AS, ON)
+    }
+    public func WHERE(condition: ()->String): This {
+        appendPartial('where', condition)
+    }
+    public func ORDER_BY(orderBy: ()->String): This {
+        appendPartial('order by', orderBy)
+    }
+    public func LIMIT(size: Int64, offset!: Int64 = 0): This {
+        let (one, two, sql) = dialect.limit(size, offset)
+        this.executor.arg(one)
+        this.executor.arg(two)
+        sqlgen.append(' ').append(sql)
+        this
+    }
+}
+public class FromClause<T> <: ExceptInsertClause<T> where T <: QueryMappersInit<T> {
     init(executor: SqlExecutor){
         super(' from ${T.tableName()} ', executor)
     }
@@ -78,75 +109,27 @@ public class FromClause<T> <: TableClause<T> where T <: QueryMappersInit<T> {
         executor.setSql('delete ${sql} ${sqlgen}').delete
     }
     
-    public func INNER_JOIN<T>(AS!: String = '', ON!: String = ''): This where T <: QueryMappersInit<T> {
-        join<T>('inner', AS, ON)
-    }
-    public func LEFT_JOIN<T>(AS!: String = '', ON!: String = ''): This where T <: QueryMappersInit<T> {
-        join<T>('left outer', AS, ON)
-    }
-    public func RIGHT_JOIN<T>(AS!: String = '', ON!: String = ''): This where T <: QueryMappersInit<T> {
-        join<T>('right outer', AS, ON)
-    }
-    public func FULL_JOIN<T>(AS!: String = '', ON!: String = ''): This where T <: QueryMappersInit<T> {
-        join<T>('full outer', AS, ON)
-    }
-    public func WHERE(condition: ()->String): This {
-        appendPartial('where', condition)
-    }
     public func GROUP_BY(groupBy: ()->String): This {
         appendPartial('group by', groupBy)
     }
-    public func ORDER_BY(orderBy: ()->String): This {
-        appendPartial('order by', orderBy)
-    }
+    
     public func first<T>(): ?T where T <: QueryMappersInit<T> {
         executor.setSql('select * ${sqlgen}').first<T>()
     }
     public func list<T>(): ArrayList<T> where T <: QueryMappersInit<T> {
         executor.setSql('select * ${sqlgen}').list<T>()
     }
-    public func list<T>(size: Int64, offset!: Int64 = 0): ArrayList<T> where T <: QueryMappersInit<T> {
-        let (one, two, sql) = dialect.limit(size, offset)
-        this.executor.arg(one)
-        this.executor.arg(two)
-        executor.setSql('select * ${sqlgen} ${sql}').list<T>()
-    }
+
     public func count(): Int64 {
         executor.setSql('select count(*) ${sqlgen}').first<Int64>() ?? 0
     }
 }
-public class UpdateClause<T> <: TableClause<T> where T <: QueryMappersInit<T> {
+public class UpdateClause<T> <: ExceptInsertClause<T> where T <: QueryMappersInit<T> {
     init(executor: SqlExecutor){
         super('update ${T.tableName()} ', executor)
     }
     public func SET(set: ()->String): This {
         appendPartial('set', set)
-    }
-    public func WHERE(condition: ()->String): This {
-        appendPartial('where', condition)
-        this
-    }
-    public func INNER_JOIN<T>(AS!: String = '', ON!: String = ''): This where T <: QueryMappersInit<T> {
-        join<T>('inner', AS, ON)
-    }
-    public func LEFT_JOIN<T>(AS!: String = '', ON!: String = ''): This where T <: QueryMappersInit<T> {
-        join<T>('left outer', AS, ON)
-    }
-    public func RIGHT_JOIN<T>(AS!: String = '', ON!: String = ''): This where T <: QueryMappersInit<T> {
-        join<T>('right outer', AS, ON)
-    }
-    public func FULL_JOIN<T>(AS!: String = '', ON!: String = ''): This where T <: QueryMappersInit<T> {
-        join<T>('full outer', AS, ON)
-    }
-    public func ORDER_BY(orderBy: ()->String): This {
-        appendPartial('order by', orderBy)
-    }
-    public func LIMIT(size: Int64, offset!: Int64 = 0): This {
-        let (one, two, sql) = dialect.limit(size, offset)
-        this.executor.arg(one)
-        this.executor.arg(two)
-        sqlgen.append(sql)
-        this
     }
     public func execute(): Int64 {
         setSql().update

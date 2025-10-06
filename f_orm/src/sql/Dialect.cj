@@ -81,7 +81,7 @@ public class DB2Dialect <: SqlDialect {
         (offset, size, ' OFFSET ? ROWS FETCH FIRST ? ROWS ONLY')
     }
 }
-public class SqlDialectMediator {
+class SqlDialectMediator {
     private init(){
         for(dialect in lookupList<SqlDialect>()){
             this.dialects[dialect.dialect] = dialect
@@ -89,23 +89,23 @@ public class SqlDialectMediator {
     }
     public static let instance = SqlDialectMediator()
 
-    public func getDialect(dialect: String): SqlDialect {
+    func getDialect(dialect: String): SqlDialect {
         dialects[dialect]
     }
 
     private let dialects = ConcurrentHashMap<String, SqlDialect>()
 
-    public func lastInsertId(dialect: String, id: String): String {
+    func lastInsertId(dialect: String, id: String): String {
         dialects[dialect].lastInsertId(id)
     }
-    public func lastInsertId(dialect: String, dataType: DataType): String {
+    func lastInsertId(dialect: String, dataType: DataType): String {
         dialects[dialect].lastInsertId(dataType)
     }
-    public func lastInsertId<ID, O>(dialect: String, id: IdQueryMapper<ID, O>): String where ID <: Hashable & Equatable<ID> {
+    func lastInsertId<ID, O>(dialect: String, id: IdQueryMapper<ID, O>): String where ID <: Hashable & Equatable<ID> {
         dialects[dialect].lastInsertId(id)
     }
 
-    public func limit(dialect: String, size: Int64, offset: Int64): (Int64, Int64, String) {
+    func limit(dialect: String, size: Int64, offset: Int64): (Int64, Int64, String) {
         dialects[dialect].limit(size, offset)
     }
 }

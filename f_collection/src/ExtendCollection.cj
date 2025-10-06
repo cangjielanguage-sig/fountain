@@ -15,7 +15,7 @@ limitations under the License.
  */
 package f_collection
 
-import std.collection.{Set, ArrayList, MapEntryView, HashMapIterator}
+import std.collection.{Set, ArrayList, MapEntryView, EquatableCollection}
 import std.collection.concurrent.ConcurrentHashMap
 
 public interface ExtendCollection<T, C> where T <: Equatable<T>, C <: Collection<T> {
@@ -78,6 +78,9 @@ public interface ExtendMap<K, V> <: ExtendCollection<K, Collection<K>> where K <
     }
     func removeIf(key: K, predicate: (V) -> Bool): ?V
     func removeIf(predicate: (K, V) -> Bool): Unit
+    func keys(): EquatableCollection<K>
+
+    func contains(all!: Collection<K>): Bool
 }
 
 public interface ExtendNonConcurrentMap<K, V> <: ExtendMap<K, V> where K <: Equatable<K> {
@@ -125,5 +128,52 @@ extend<K, V> ConcurrentHashMap<K, V> <: ExtendMap<K, V> where K <: Hashable & Eq
         for ((k, v) in this where predicate(k, v)) {
             remove(k)
         }
+    }
+    public func keys(): EquatableCollection<K> {
+        ConcurrentHashMapKeys<K, V>(this)
+    }
+
+    public func contains(all!: Collection<K>): Bool {
+        for(k in all where !contains(k)){
+            return false
+        }
+        true
+    }
+}
+class ConcurrentHashMapKeys<K, V> <: EquatableCollection<K> where K <: Hashable & Equatable<K> {
+    @Frozen
+    ConcurrentHashMapKeys(private let map: ConcurrentHashMap<K, V>) {}
+
+    @Frozen
+    public prop size: Int64 {
+        get() {
+            return map.size
+        }
+    }
+
+    @Frozen
+    public func isEmpty(): Bool {
+        return map.isEmpty()
+    }
+
+    @Frozen
+    public func contains(element: K): Bool {
+        return map.contains(element)
+    }
+
+    @Frozen
+    public func contains(all!: Collection<K>): Bool {
+        return map.contains(all: all)
+    }
+
+    @Frozen
+    public func iterator(): Iterator<K> {
+        return map.iterator().map<K> {i: (K, V) => i[0]}
+    }
+
+    @Frozen
+    public func toArray(): Array<K> {
+        let itr = iterator()
+        return Array<K>(size){_ => itr.next().getOrThrow()}
     }
 }

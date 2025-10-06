@@ -17,6 +17,7 @@ package f_orm
 
 import std.collection.concurrent.ConcurrentHashMap
 import std.env
+import f_collection.*
 import f_orm.exception.ORMException
 public import std.database.sql.*
 public import std.reflect.*
@@ -40,6 +41,11 @@ public class ORM {
     public static func close() {
         for ((_, s) in datasources) {
             s.close()
+        }
+    }
+    protected static prop driverNames: Iterator<String> {
+        get(){
+            datasources.keys().iterator()
         }
     }
     public static func registerTransactionHook<T>(hook: T): Unit where T <: TransactionHook {
