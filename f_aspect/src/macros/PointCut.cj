@@ -23,14 +23,25 @@ public macro Pointcut(attr: Tokens, input: Tokens): Tokens {
     if (insideParentContext('Pointcut')) {
         return input
     }
-    var decl = parseDecl(input)
-    while (let m: MacroExpandDecl <- decl) {
-        decl = m.macroInputDecl
+    match(parseDecl(input)){
+        case x: FuncDecl => pointcut(attr, x)
+        case x: MacroExpandDecl => 
+            let d = extract(x)
+            let tokens = pointcut(attr, d)
+            x.macroInputDecl = parseDecl(tokens)
+            x.macroInputs = tokens
+            x.toTokens()
+        case x => 
+            diagReport(ERROR, input, '${x.identifier.value} must be a func decl', '')
+            throw AspectException()
     }
+}
+private func pointcut(attr: Tokens, decl: Decl): Tokens {
+    let tokens = decl.toTokens()
     match (decl) {
         case x: FuncDecl =>
             let funcDecl = quote()
-            for (t in input) {
+            for (t in tokens) {
                 if (t.kind == TokenKind.LCURL) {
                     break
                 }
@@ -74,7 +85,7 @@ public macro Pointcut(attr: Tokens, input: Tokens): Tokens {
                 }
             )
         case _ =>
-            diagReport(ERROR, input, '${decl.identifier.value} must be a func decl', '')
+            diagReport(ERROR, tokens, '${decl.identifier.value} must be a func decl', '')
             throw AspectException()
     }
 }
