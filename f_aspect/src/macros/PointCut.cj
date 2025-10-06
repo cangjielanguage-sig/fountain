@@ -25,6 +25,18 @@ public macro Pointcut(input: Tokens): Tokens {
     }
     match(parseDecl(input)){
         case x: FuncDecl => pointcut(x)
+        case x: ClassDecl => 
+            let decls = x.body.decls
+            for(i in 0 .. decls.size) {
+                let d = decls[i]
+                if(d is FuncDecl && !isStatic(d) && isPublic(d)){
+                    decls[i] = parseDecl(quote(
+                        @Pointcut
+                        $d
+                    ))
+                }
+            }
+            x.toTokens()
         case x: MacroExpandDecl => 
             let d = extract(x)
             let tokens = pointcut(d)
