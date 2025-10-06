@@ -91,6 +91,9 @@ public class SqlArgs <: Hashable & Equatable<SqlArgs> & ToString {
     public func addNull() {
         add(NullSqlArg(args.size))
     }
+    protected func add(all!: SqlArgs) {
+        this.args.add(all: all.args)
+    }
     public func toString() {
         args.toString()
     }

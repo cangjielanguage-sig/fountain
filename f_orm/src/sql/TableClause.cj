@@ -124,6 +124,9 @@ public class UpdateClause<T> <: TableClause<T> where T <: QueryMappersInit<T> {
         appendPartial('where', condition)
         this
     }
+    public func ORDER_BY(orderBy: ()->String): This {
+        appendPartial('order by', orderBy)
+    }
     public func LIMIT(size: Int64, offset!: Int64 = 0): This {
         let (one, two, sql) = dialect.limit(size, offset)
         this.executor.arg(one)
@@ -192,6 +195,12 @@ public class IntoClause<T> <: TableClause<T> where T <: QueryMappersInit<T> {
         if(let Some(idType) <- super.idType){
             sqlgen.append(dialect.lastInsertId(idType))
         }
+        this
+    }
+    public func SELECT<T>(selectColumns: String, fromClause: (FromClause<T>)->FromClause<T>): This where T <: QueryMappersInit<T> {
+        let from = fromClause(executor.FROM<T>())
+        sqlgen.append('select ').append(selectColumns).append(from.sqlgen)
+        executor.add(all: from.executor)
         this
     }
     public func execute(){

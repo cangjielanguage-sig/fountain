@@ -628,6 +628,9 @@ public class SqlExecutor <: Resource & RootDAO {
             case _ => throw SqlException("Unsupported data type")
         }
     }
+    protected func add(all!: SqlExecutor){
+        this.args.add(all: all.args)
+    }
 
     public func setSql(sql: String): SqlExecutor {
         this.sql = sql
