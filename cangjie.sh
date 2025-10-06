@@ -76,6 +76,9 @@ cj(){
   fdemo)
     cd /mnt/d/docs/work/cangjie/projects/fountain/fdemo
     ;;
+  run)
+    fboot run $2 --dylibPattern=$3
+    ;;
   '-c')
     f=$2
     cf=${f%.cj*}
