@@ -317,9 +317,22 @@ public class RequestMeta <: HttpRequestHandler & ToString {
         let log = LoggerFactory.getLogger<T>()
         let logArgs: Array<ToString> = [request.method, request.url, request.form.toEncodeString(), request.headers.getFirst('Content-Type'), argGen, result, getResponseStatus(), MonoTime.now() - start]
         if(let Some(ex) <- e){
-            MultiRequestMethodHandler.INTERNAL_SERVER_ERROR.handle(ctx)
+            let exce = 
+            try{
+                MultiRequestMethodHandler.INTERNAL_SERVER_ERROR.handle(ctx)
+                ex
+            }catch(e: Exception){
+                let status = HttpStatus.INTERNAL_SERVER_ERROR
+                let b = ctx.responseBuilder
+                b.status(status.value)
+                b.body(status.reasonPhrase)
+                setResponseStatus(status)
+                let mvcex = MVCException(e)
+                mvcex.addSuppressed(ex)
+                mvcex
+            }
             logArgs[logArgs.size - 2] = getResponseStatus()
-            log.error('MVC.accessLog:{}:{}?{}; consumes:{}; params:{}; returned:{}; status:{}; elapsed:{}', ex, logArgs)
+            log.error('MVC.accessLog:{}:{}?{}; consumes:{}; params:{}; returned:{}; status:{}; elapsed:{}', exce, logArgs)
         } else {
             log.info('MVC.accessLog:{}:{}?{}; consumes:{}; params:{}; returned:{}; status:{}; elapsed:{}', logArgs)
         }
