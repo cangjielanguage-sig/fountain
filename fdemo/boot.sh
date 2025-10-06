@@ -35,7 +35,7 @@ run)
     run
     ;;
 cleanUpdate)
-    cleanUpdate
+    cleanUpdate $2 $3
     ;;
 build)
     build
