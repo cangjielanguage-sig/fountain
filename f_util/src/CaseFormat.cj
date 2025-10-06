@@ -45,9 +45,9 @@ abstract sealed class CaseFormat {
 
     protected CaseFormat(protected let withDelimiter!: Bool) {}
 
-    public func convert(text: String, format: CaseFormat): String {
+    public func convert(text: String, to!: CaseFormat): String {
         let builder = StringGenerator()
-        let caseFormat = format.new()
+        let caseFormat = to.new()
         let withDelim = this.withDelimiter
         for (ch in text.runes()) {
             let delim = isDelimiter(ch)

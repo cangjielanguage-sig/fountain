@@ -96,10 +96,10 @@ private func expandORMField(attrs: Tokens, input: Tokens): Tokens {
             case (SINGLE_QUOTED_STRING_LITERAL, x) => setItem("column", x)
             case (IDENTIFIER, x) => match (x) {
                 case "LowerUnderScore" => setItem("column",
-                    CaseFormat.Camel.convert(name.value, CaseFormat.LowerUnderScore))
+                    CaseFormat.Camel.convert(name.value, to: CaseFormat.LowerUnderScore))
                 case "UpperUnderScore" => setItem("column",
-                    CaseFormat.Camel.convert(name.value, CaseFormat.UpperUnderScore))
-                case "Pascal" => setItem("column", CaseFormat.Camel.convert(name.value, CaseFormat.Pascal))
+                    CaseFormat.Camel.convert(name.value, to: CaseFormat.UpperUnderScore))
+                case "Pascal" => setItem("column", CaseFormat.Camel.convert(name.value, to: CaseFormat.Pascal))
                 case "Camel" => setItem("column", name.value)
                 case x => setItem("dataType", x)
             }

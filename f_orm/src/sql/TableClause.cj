@@ -195,7 +195,7 @@ public class IntoClause<T> <: TableClause<T> where T <: QueryMappersInit<T> {
         this
     }
     public func SELECT<T>(selectColumns: String): This where T <: QueryMappersInit<T> {
-        SELECT<T>(selectColumns){from => from}
+        SELECT<T>(selectColumns){_ => }
     }
     public func SELECT<T>(selectColumns: String, fromClause: (FromClause<T>) -> Unit): This where T <: QueryMappersInit<T> {
         let from = executor.FROM<T>()

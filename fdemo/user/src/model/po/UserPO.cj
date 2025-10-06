@@ -32,3 +32,6 @@ public class UserPO {
     @ORMField['save_time']
     private var saveTime: ?DateTime = None<DateTime>
 }
+private let _ = {=>
+    println('@@@@@@@@@@@@@@@@@@@@ ${UserPO.tableName()}')
+}()

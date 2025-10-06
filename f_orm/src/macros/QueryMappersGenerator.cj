@@ -78,7 +78,7 @@ private func expandQueryMappers(attr: Tokens, input: Tokens): Tokens {
         n: String => if (let Some(m) <- map.get(n)) {
             m
         } else {
-            (false, CaseFormat.Camel.convert(n, CaseFormat.LowerUnderScore), Token(IDENTIFIER, ""))
+            (false, CaseFormat.Camel.convert(n, to: CaseFormat.LowerUnderScore), Token(IDENTIFIER, ""))
         }
     }
     let mappers = quote($(`lsquare`)).append(generateMappers(name, props, mapperMetaFn))
@@ -107,13 +107,13 @@ private func expandQueryMappers(attr: Tokens, input: Tokens): Tokens {
     }
     decl.superTypes.add(RefType(quote(QueryMappersInit<$name>)))
     let tableName = if(attr.size == 0){
-        CaseFormat.Pascal.convert(decl.identifier.value, CaseFormat.LowerUnderScore)
+        CaseFormat.Pascal.convert(decl.identifier.value, to: CaseFormat.LowerUnderScore)
     }else{
         match((attr[0].kind, attr[0].value)){
             case (STRING_LITERAL, x) => x
             case (SINGLE_QUOTED_STRING_LITERAL, x) => x
-            case (IDENTIFIER, 'LowerUnderScore') => CaseFormat.Pascal.convert(decl.identifier.value, CaseFormat.LowerUnderScore)
-            case (IDENTIFIER, 'UpperUnderScore') => CaseFormat.Pascal.convert(decl.identifier.value, CaseFormat.UpperUnderScore)
+            case (IDENTIFIER, 'LowerUnderScore') => CaseFormat.Pascal.convert(decl.identifier.value, to: CaseFormat.LowerUnderScore)
+            case (IDENTIFIER, 'UpperUnderScore') => CaseFormat.Pascal.convert(decl.identifier.value, to: CaseFormat.UpperUnderScore)
             case (IDENTIFIER, 'Pascal') => decl.identifier.value
             case (_, x) => x
         }
