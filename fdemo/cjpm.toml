@@ -6,7 +6,7 @@
 
 [workspace]
   version = "1.0.0"
-  members=["./boot", "./user", "./launcher"]# launcher 不是必须的，仅仅用来演示静态加载动态链接库
+  members=["./boot", "./user"]
   compile-option = "-O2 --dy-std"
   override-compile-option = "-O2 --dy-std"
 
