@@ -32,7 +32,7 @@ cangjie_env(){
   export CANGJIE_STDX_DYNAMIC_PATH=$CANGJIE_STDX_PATH/dynamic/stdx
   export CANGJIE_STDX_STATIC_PATH=$CANGJIE_STDX_PATH/static/stdx
   export CANGJIE_HOME=/mnt/d/docs/work/cangjie/cangjie-linux-bin/$1
-  export LD_LIBRARY_PATH=/usr/local/openssl-3.3.2/lib:$CANGJIE_STDX_PATH/dynamic/stdx:/mnt/d/docs/work/cangjie/installed/libs/fboot:$LD_LIBRARY_PATH
+  export LD_LIBRARY_PATH=/usr/local/openssl-3.3.2/lib:/mnt/d/docs/work/cangjie/installed/libs/fboot:$LD_LIBRARY_PATH
   export PATH=$PATH:/mnt/d/docs/work/cangjie/installed/bin
   export CANGJIE_FOUNTAIN_LIBS=/mnt/d/docs/work/cangjie/installed/libs/fboot
   source $CANGJIE_HOME/envsetup.sh
