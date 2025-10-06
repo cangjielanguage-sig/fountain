@@ -64,6 +64,9 @@ public class MVCConfig {
     public static let TLS_VERIFY_MODE = "${confPrefix}_tlsVerifyMode"
     public static let TLS_SUPPORTED_ALPN_PROTOCOLS = "${confPrefix}_tlsSupportedAlpnProtocols"
 
+    public static let INTERNAL_SERVER_ERROR_MESSAGE_KIND = "${confPrefix}_internalServerErrorMessageKind"
+    public static let INTERNAL_SERVER_ERROR_MESSAGE = "${confPrefix}_internalServerErrorMessage"
+
     public static prop tlsConfig: ?TlsServerConfig {
         get() {
             if (let Some(path) <- Config.getString(TLS_PATH) && path.size > 0 && let paths <- path.split('|') &&
@@ -215,11 +218,18 @@ public class MVCConfig {
         }
         HttpStatus.valueOf(status)
     }
-    private static func getMessageKind(key: String, kind: FailureMessageKind) {
-        match (Config.getString(key)) {
-            case Some(x) => FailureMessageKind.parse(x)
-            case _ => kind
+    private static func getMessageKind(key: String, default: FailureMessageKind) {
+        match (Config.getString(key)?.trimAscii()) {
+            case Some(x) where x.size > 0 => FailureMessageKind.parse(x)
+            case _ => default
         }
+    }
+
+    public static func getInternalServerErrorMessageKind(){
+        getMessageKind(INTERNAL_SERVER_ERROR_MESSAGE_KIND, FailureMessageKind.Text)
+    }
+    public static func getInternalServerErrorMessage(){
+        Config.getString(INTERNAL_SERVER_ERROR_MESSAGE) ?? HttpStatus.INTERNAL_SERVER_ERROR.reasonPhrase
     }
 
     private static func bufferSize(bufferKey: String, default: Int64) {

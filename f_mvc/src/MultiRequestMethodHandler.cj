@@ -21,7 +21,10 @@ public class MultiRequestMethodHandler <: HttpRequestHandler {
     private static let METHOD_NOT_ALLOWED = HttpStatusOnlyHandler(HttpStatus.METHOD_NOT_ALLOWED)
     private static let UNSUPPORTED_MEDIA_TYPE = HttpStatusOnlyHandler(HttpStatus.UNSUPPORTED_MEDIA_TYPE)
     private static let NOT_IMPLEMENTED = HttpStatusOnlyHandler(HttpStatus.NOT_IMPLEMENTED)
-    static let INTERNAL_SERVER_ERROR = HttpStatusOnlyHandler(HttpStatus.INTERNAL_SERVER_ERROR)
+    static let INTERNAL_SERVER_ERROR = HttpStatusOnlyHandler(
+        HttpStatus.INTERNAL_SERVER_ERROR, 
+        message: MVCConfig.getInternalServerErrorMessage(),
+        kind: MVCConfig.getInternalServerErrorMessageKind())
 
     private static let accessControlAllowHeaders: String = MVCConfig.accessControlAllowHeaders
     private static let accessControlAllowOrigin: String = MVCConfig.accessControlAllowOrigin
@@ -116,28 +119,32 @@ public class MultiRequestMethodHandler <: HttpRequestHandler {
 
 class HttpStatusOnlyHandler <: HttpRequestHandler {
     HttpStatusOnlyHandler(private let status: HttpStatus, private let message!: String = '', private let kind!: FailureMessageKind = Text) {}
-
+    
     public func handle(httpContext: HttpContext): Unit {
-        let b = httpContext.responseBuilder.status(status.value)
-        RequestMeta.setResponseStatus(status)
-        if(let Some(accept) <- httpContext.request.headers.getFirst("Accept")) {
-            b.header("Content-Type", accept)
+        func setStatus(){
+            let b = httpContext.responseBuilder.status(status.value)
+            RequestMeta.setResponseStatus(status)
+            if(let Some(accept) <- httpContext.request.headers.getFirst("Accept")) {
+                b.header("Content-Type", accept)
+            }
+            b
         }
         match(kind){
-            case Text => b.body(if (message.isEmpty()) {
+            case Bean => if(message.size > 0 && let Some(x) <- BeanFactory.instance.getFirst<ErrorHttpRequestHandler>(cond: Exactly(message))){
+                RequestMeta.setResponseStatus(x.status)
+                x.handle(httpContext)
+            } else {
+                setStatus().body(status.reasonPhrase)
+            }
+            case Text => setStatus().body(if (message.isEmpty()) {
                 status.reasonPhrase
             } else {
                 message
             })
             case Base64Binary => if(message.size > 0 && let Some(x) <- fromBase64String(message)){
-                b.body(x)
+                setStatus().body(x)
             }else{
-                b.body(status.reasonPhrase)
-            }
-            case Bean => if(message.size > 0 && let Some(x) <- BeanFactory.instance.getFirst<ErrorHttpRequestHandler>(cond: Exactly(message))){
-                x.handle(httpContext)
-            } else {
-                b.body(status.reasonPhrase)
+                setStatus().body(status.reasonPhrase)
             }
         }
     }
