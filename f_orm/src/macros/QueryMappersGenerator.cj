@@ -109,10 +109,13 @@ private func expandQueryMappers(attr: Tokens, input: Tokens): Tokens {
     let tableName = if(attr.size == 0){
         CaseFormat.Pascal.convert(decl.identifier.value, CaseFormat.LowerUnderScore)
     }else{
-        match(attr[0].value){
-            case 'LowerUnderScore' => CaseFormat.Pascal.convert(decl.identifier.value, CaseFormat.LowerUnderScore)
-            case 'UpperUnderScore' => CaseFormat.Pascal.convert(decl.identifier.value, CaseFormat.UpperUnderScore)
-            case x => x
+        match((attr[0].kind, attr[0].value)){
+            case (STRING_LITERAL, x) => x
+            case (SINGLE_QUOTED_STRING_LITERAL, x) => x
+            case (IDENTIFIER, 'LowerUnderScore') => CaseFormat.Pascal.convert(decl.identifier.value, CaseFormat.LowerUnderScore)
+            case (IDENTIFIER, 'UpperUnderScore') => CaseFormat.Pascal.convert(decl.identifier.value, CaseFormat.UpperUnderScore)
+            case (IDENTIFIER, 'Pascal') => decl.identifier.value
+            case (_, x) => x
         }
     }
     body.add(
