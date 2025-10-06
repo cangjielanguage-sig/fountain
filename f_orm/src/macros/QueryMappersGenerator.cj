@@ -289,12 +289,12 @@ func generateMappers(name: Tokens, fieldName: Token, dts: Tokens, meta: (Bool, S
         quote(
                 if(TypeInfo.of<$(dataType)>().isSubtypeOf(TypeInfo.of<InputStream>())){
                     FieldQueryMapper<$dataType, $name> (
-                        dataType: InputStreamDataType($nullable, $columnName),
+                        dataType: InputStreamDataType($nullable, $columnName, $fieldNameStr),
                         putter: {o, v => o.$fieldName = v}
                     )
                 }else if ($(dataType).isSimpleData()) {
                     FieldQueryMapper<$dataType, $name> (
-                        dataType: $(dataTypeToken)($nullable, $columnName),
+                        dataType: $(dataTypeToken)($nullable, $columnName, $fieldNameStr),
                         putter: {o, v => o.$fieldName = v}
                     )
                 } else {
@@ -309,12 +309,12 @@ func generateMappers(name: Tokens, fieldName: Token, dts: Tokens, meta: (Bool, S
         quote(
                 if(TypeInfo.of<$(dataType)>().isSubtypeOf(TypeInfo.of<InputStream>())){
                     FieldQueryMapper<$dataType, $name> (
-                        dataType: InputStreamDataType($nullable, $columnName),
+                        dataType: InputStreamDataType($nullable, $columnName, $fieldNameStr),
                         putter: {o, v => o.$fieldName = v}
                     )
                 }else if ($(dataType).isSimpleData()) {
                     FieldQueryMapper<$dataType, $name> (
-                        dataType: $(dataTypeToken)($nullable, $columnName),
+                        dataType: $(dataTypeToken)($nullable, $columnName, $fieldNameStr),
                         putter: {o, v => o.$fieldName = v}
                     )
                 } else {
@@ -329,7 +329,7 @@ func generateMappers(name: Tokens, fieldName: Token, dts: Tokens, meta: (Bool, S
         quote(
                 if(TypeInfo.of<$(dataType)>().isSubtypeOf(TypeInfo.of<InputStream>())){
                     QueryMapper<$name> (
-                        dataType: InputStreamDataType($nullable, $columnName),
+                        dataType: InputStreamDataType($nullable, $columnName, $fieldNameStr),
                         putter: {o, v =>
                             o.$fieldName =
                             match(v){
@@ -340,7 +340,7 @@ func generateMappers(name: Tokens, fieldName: Token, dts: Tokens, meta: (Bool, S
                     })
                 }else if ($(dataType).isSimpleData()) {
                     QueryMapper<$name> (
-                        dataType: $(dataTypeToken)($nullable, $columnName),
+                        dataType: $(dataTypeToken)($nullable, $columnName, $fieldNameStr),
                         putter: {o, v =>
                             o.$fieldName =
                             match(v){
@@ -360,7 +360,7 @@ func generateMappers(name: Tokens, fieldName: Token, dts: Tokens, meta: (Bool, S
         quote(
                 if(TypeInfo.of<$(dataType)>().isSubtypeOf(TypeInfo.of<InputStream>())){
                     QueryMapper<$name> (
-                        dataType: InputStreamDataType($nullable, $columnName),
+                        dataType: InputStreamDataType($nullable, $columnName, $fieldNameStr),
                         putter: {o, v =>
                             o.$fieldName =
                             match(v){
@@ -371,7 +371,7 @@ func generateMappers(name: Tokens, fieldName: Token, dts: Tokens, meta: (Bool, S
                     })
                 }else if ($(dataType).isSimpleData()) {
                     QueryMapper<$name> (
-                        dataType: $(dataTypeToken)($nullable, $columnName),
+                        dataType: $(dataTypeToken)($nullable, $columnName, $fieldNameStr),
                         putter: {o, v =>
                             o.$fieldName =
                             match(v){
