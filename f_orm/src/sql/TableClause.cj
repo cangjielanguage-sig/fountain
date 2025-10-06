@@ -197,9 +197,10 @@ public class IntoClause<T> <: TableClause<T> where T <: QueryMappersInit<T> {
     public func SELECT<T>(selectColumns: String): This where T <: QueryMappersInit<T> {
         SELECT<T>(selectColumns){from => from}
     }
-    public func SELECT<T>(selectColumns: String, fromClause: (FromClause<T>)->FromClause<T>): This where T <: QueryMappersInit<T> {
-        let from = fromClause(executor.FROM<T>())
-        sqlgen.append('select ').append(selectColumns).append(from.sqlgen)
+    public func SELECT<T>(selectColumns: String, fromClause: (FromClause<T>) -> Unit): This where T <: QueryMappersInit<T> {
+        let from = executor.FROM<T>()
+        fromClause(from)
+        sqlgen.append(' select ').append(selectColumns).append(' ').append(from.sqlgen)
         this
     }
     public func execute(){

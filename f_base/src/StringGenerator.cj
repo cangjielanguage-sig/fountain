@@ -40,19 +40,31 @@ public class StringGenerator <: ToString {
             throw IndexOutOfBoundsException('current size is ${size}, but fromIndex: ${fromIndex}, toIndex: ${toIndex}')
         }
     }
+    public func append(gen: StringGenerator): This {
+        utf8.add(all: gen.utf8.unsafeData())
+        this
+    }
     public func append<T>(content: T): This where T <: ToString {
         utf8.add(all: content.toString().unsafeBytes())
         this
     }
+    public func appendln(gen: StringGenerator, nextLine!: String = OS.current.nextLine): This {
+        append(gen)
+        append(nextLine: nextLine)
+    }
+    public func appendUnixNewLine(gen: StringGenerator): This {
+        append(gen)
+        appendUnixNewLine()
+    }
     public func appendln<T>(content: T, nextLine!: String = OS.current.nextLine): This where T <: ToString {
         append<T>(content)
-        appendln(nextLine: nextLine)
+        append(nextLine: nextLine)
     }
     public func appendUnixNewLine<T>(content: T): This where T <: ToString {
         append<T>(content)
         appendUnixNewLine()
     }
-    public func appendln(nextLine!: String = OS.current.nextLine): This {
+    public func append(nextLine!: String = OS.current.nextLine): This {
         append<String>(nextLine)
     }
     public func appendUnixNewLine(): This {
