@@ -26,17 +26,7 @@ public macro Pointcut(input: Tokens): Tokens {
     match(parseDecl(input)){
         case x: FuncDecl => pointcut(x)
         case x: ClassDecl => 
-            let decls = x.body.decls
-            for(i in 0 .. decls.size) {
-                let d = decls[i]
-                if(d is FuncDecl && !isStatic(d) && isPublic(d)){
-                    decls[i] = parseDecl(quote(
-                        @Pointcut
-                        $d
-                    ))
-                }
-            }
-            x.toTokens()
+            expandClassDecl(x)
         case x: MacroExpandDecl => 
             let d = extract(x)
             let tokens = pointcut(d)
@@ -96,8 +86,32 @@ private func pointcut(decl: Decl): Tokens {
                     $proceed
                 }
             )
+        case x: ClassDecl => expandClassDecl(x)
         case _ =>
             diagReport(ERROR, tokens, '${decl.identifier.value} must be a func decl', '')
             throw AspectException()
     }
+}
+private func expandClassDecl(decl: ClassDecl): Tokens {
+    let decls = decl.body.decls
+    for(i in 0 .. decls.size) {
+        let d = decls[i]
+        if (d is FuncDecl && !isStatic(d) && isPublic(d)) {
+            decls[i] = parseDecl(quote(
+                @Pointcut
+                $d
+            ))
+        } else if (let md: MacroExpandDecl <- d) {
+            var ed = extract(md)
+            if (ed is FuncDecl && !isStatic(ed) && isPublic(ed)) {
+                ed = parseDecl(quote(
+                    @Pointcut
+                    $ed
+                ))
+                md.macroInputDecl = ed
+                md.macroInputs = ed.toTokens()
+            }
+        }
+    }
+    decl.toTokens()
 }
