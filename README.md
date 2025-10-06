@@ -19,7 +19,9 @@ _/ ____\____  __ __  _____/  |______  |__| ____
   3. `f_mvc.{rfc1123, parseRfc1123}` 是两个时间和字符串的转换工具，结合仓颉语言特性参考了`springmvc`的实现。
   4. `f_mvc.{ContentDisposition, ContentDispositionBuilder, ContentDispositionType, MultipartFile}` 也参考了`springmvc`，我不记得不是照抄的了。
   5. `f_mvc.{@PostMapping, @GetMapping, @DeleteMapping, @PutMapping, @PatchMapping, @RequestMapping, macros.Controller}`
+     `f_mvc.{@RequestBody, @RequestParam, @RequestHeader, @PathVariable}`
      `f_bean.{@macros.Bean, @macros.Configuration, PostConstruct, Destroy}`
+
       这些API的命名借鉴了springmvc
   6. `f_orm.Propagation` 的声明参考了spring事务传播策略。
   7. `f_log`的API跟log4j2有些像，就是`LoggerFactory.getLogger<T>()`

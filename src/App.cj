@@ -494,7 +494,7 @@ public class ${name}_AppVersionImpl <: AppVersion {
         }
         removeIfExists(versionModuleDir, recursive: true)
         Directory.create(versionModuleDir, recursive: true)
-        let execode = execute('cjpm', ['init', '--type=dynamic'], workingDirectory: versionModuleDir)
+        var execode = execute('cjpm', ['init', '--type=dynamic'], workingDirectory: versionModuleDir)
         if (execode != 0) {
             return execode
         }
@@ -505,6 +505,10 @@ public class ${name}_AppVersionImpl <: AppVersion {
             let newMembers = members.replaceLast(']', versionModuleMember)
             let newtoml = toml.replaceFirst(members, newMembers)
             File.writeTo(tomlPath, newtoml.unsafeBytes())
+        }
+        execode = execute('cjpm', ['build', '--target-dir=${targetDir}'], workingDirectory: workingDir)
+        if(execode == 0){
+            return 0
         }
         execute('cjpm', ['build', '--target-dir=${targetDir}'], workingDirectory: workingDir)
     }

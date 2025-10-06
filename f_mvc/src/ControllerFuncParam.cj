@@ -35,7 +35,7 @@ abstract class ControllerFuncParam {
 
 @Annotation[target: [Parameter]]
 public class RequestParam <: ControllerFuncParam {
-    public const RequestParam(private let name: String){}
+    public const RequestParam(private let name: String) {}
     public const init() {
         this('')
     }
@@ -54,9 +54,9 @@ public class RequestParam <: ControllerFuncParam {
                 }
             }
         }
-        if(list.isEmpty()){
+        if (list.isEmpty()) {
             None<String>
-        }else{
+        } else {
             concat(list)
         }
     }
@@ -75,8 +75,8 @@ public class RequestParam <: ControllerFuncParam {
     protected func extractObject<T>(name: String, ctx: HttpContext, pattern: HttpRequestPathPatterns): T where T <: Object & ObjectData<T> {
         let o = T.dataFields().create()
         let data = DataObject<T>(o)
-        for(field in data.mutableFields()) {
-            if(let Some(s) <- extractValue(field.name, ctx)) {
+        for (field in data.mutableFields()) {
+            if (let Some(s) <- extractValue(field.name, ctx)) {
                 data[field.name] = s.toData()
             }
         }
@@ -86,10 +86,17 @@ public class RequestParam <: ControllerFuncParam {
 
 @Annotation[target: [Parameter]]
 public class PathVariable <: ControllerFuncParam {
-    public const init() {}
+    public const PathVariable(private let name: String) {}
+    public const init() {
+        this('')
+    }
     protected func extract<T>(name: String, ctx: HttpContext, pattern: HttpRequestPathPatterns): ?T where T <: DataFields<T> {
         let path = ctx.request.url.path
-        let value = pattern.extract(path, name)
+        let value = pattern.extract(path, if (this.name.isEmpty()) {
+            name
+        } else {
+            this.name
+        })
         if (let None <- value) {
             return None<T>
         }
@@ -100,11 +107,15 @@ public class PathVariable <: ControllerFuncParam {
 @Annotation[target: [Parameter]]
 public class RequestHeader <: ControllerFuncParam {
     public const RequestHeader(private let name: String) {}
-    public const init(){
+    public const init() {
         this('')
     }
     protected func extract<T>(name: String, ctx: HttpContext, pattern: HttpRequestPathPatterns): ?T where T <: DataFields<T> {
-        let value = ctx.request.headers.get(if(this.name.isEmpty()){name}else{this.name})
+        let value = ctx.request.headers.get(if (this.name.isEmpty()) {
+            name
+        } else {
+            this.name
+        })
         if (value.isEmpty()) {
             None<T>
         } else {
