@@ -12,48 +12,48 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
-*/
+ */
 package f_orm.sql
 
-public sealed abstract class TableClause<T> <: ToString where T <: QueryMappersInit<T> {
+public abstract sealed class TableClause<T> <: ToString where T <: QueryMappersInit<T> {
     let sqlgen = StringGenerator()
     private var idType_ = None<DataType>
-    TableClause(partial: String, private let exe: SqlExecutor){
-        for(mapper in T.queryMappers().mappers where mapper.isId){
+    TableClause(partial: String, private let exe: SqlExecutor) {
+        for (mapper in T.queryMappers().mappers where mapper.isId) {
             idType_ = mapper.dataType
             break
         }
         sqlgen.append(partial)
     }
     prop tableName: String {
-        get(){
+        get() {
             T.tableName()
         }
     }
     public prop executor: SqlExecutor {
-        get(){
+        get() {
             exe
         }
     }
 
-    protected func appendPartial(prefix: String, partial: ()->String): This {
-        if(let sql <- partial() && sql.size > 0){
+    protected func appendPartial(prefix: String, partial: () -> String): This {
+        if (let sql <- partial() && sql.size > 0) {
             sqlgen.append(' ').append(prefix).append(' ').append(sql)
         }
         this
     }
-    
+
     protected open func setSql(): SqlExecutor {
         executor.setSql(sqlgen.toString())
     }
-    
+
     prop idType: ?DataType {
-        get(){
+        get() {
             idType_
         }
     }
     prop dialect: SqlDialect {
-        get(){
+        get() {
             SqlDialectMediator.instance.getDialect(exe.driverName)
         }
     }
@@ -61,18 +61,19 @@ public sealed abstract class TableClause<T> <: ToString where T <: QueryMappersI
         sqlgen.toString()
     }
 }
+
 public abstract class ExceptInsertClause<T> <: TableClause<T> where T <: QueryMappersInit<T> {
     protected func join<T>(prefix: String, AS: String, ON: String): This where T <: QueryMappersInit<T> {
         sqlgen.append(' ').append(prefix).append(' join ').append(T.tableName())
-        if(AS.size > 0){
+        if (AS.size > 0) {
             sqlgen.append(' AS ').append(AS)
         }
-        if(ON.size > 0){
+        if (ON.size > 0) {
             sqlgen.append(' ON ').append(ON)
         }
         this
     }
-    init(sql: String, executor: SqlExecutor){
+    init(sql: String, executor: SqlExecutor) {
         super(sql, executor)
     }
     public func INNER_JOIN<T>(AS!: String = '', ON!: String = ''): This where T <: QueryMappersInit<T> {
@@ -87,10 +88,10 @@ public abstract class ExceptInsertClause<T> <: TableClause<T> where T <: QueryMa
     public func FULL_JOIN<T>(AS!: String = '', ON!: String = ''): This where T <: QueryMappersInit<T> {
         join<T>('full outer', AS, ON)
     }
-    public func WHERE(condition: ()->String): This {
+    public func WHERE(condition: () -> String): This {
         appendPartial('where', condition)
     }
-    public func ORDER_BY(orderBy: ()->String): This {
+    public func ORDER_BY(orderBy: () -> String): This {
         appendPartial('order by', orderBy)
     }
     public func LIMIT(size: Int64, offset!: Int64 = 0): This {
@@ -101,8 +102,9 @@ public abstract class ExceptInsertClause<T> <: TableClause<T> where T <: QueryMa
         this
     }
 }
+
 public class FromClause<T> <: ExceptInsertClause<T> where T <: QueryMappersInit<T> {
-    init(executor: SqlExecutor){
+    init(executor: SqlExecutor) {
         super(' from ${T.tableName()} ', executor)
     }
     public func DELETE(): Int64 {
@@ -111,11 +113,11 @@ public class FromClause<T> <: ExceptInsertClause<T> where T <: QueryMappersInit<
     public func DELETE(sql: String): Int64 {
         executor.setSql('delete ${sql} ${sqlgen}').delete
     }
-    
-    public func GROUP_BY(groupBy: ()->String): This {
+
+    public func GROUP_BY(groupBy: () -> String): This {
         appendPartial('group by', groupBy)
     }
-    
+
     public func first<T>(): ?T where T <: QueryMappersInit<T> {
         executor.setSql('select * ${sqlgen}').first<T>()
     }
@@ -144,21 +146,20 @@ public class FromClause<T> <: ExceptInsertClause<T> where T <: QueryMappersInit<
     public func singlePage<R>(size: Int64, page!: Int64 = 1): Pagination<R> {
         singlePage<R>('id', size, page: page)
     }
-    private func selectPage<R>(size: Int64, page: Int64, callee: (FromClause<T>)->ArrayList<R>): Pagination<R> {
+    private func selectPage<R>(size: Int64, page: Int64, callee: (FromClause<T>) -> ArrayList<R>): Pagination<R> {
         let c = count()
-        let (rows, list) =
-        if(c == 0){
+        let (rows, list) = if (c == 0) {
             (c, ArrayList<R>())
-        }else{
+        } else {
             (c, callee(LIMIT(size, offset: (page - 1) * size)))
         }
         Pagination<R>(page: page, rows: rows, size: size, list: list)
     }
     public func singlePage<R>(column: String, size: Int64, page!: Int64 = 1): Pagination<R> {
-        selectPage<R>(size, page){from => from.singleList<R>(column)}
+        selectPage<R>(size, page) {from => from.singleList<R>(column)}
     }
     private func doSelectPage<R>(columns: String, size: Int64, page: Int64): Pagination<R> where R <: QueryMappersInit<R> {
-        selectPage<R>(size, page){from => from.list<R>(columns)}
+        selectPage<R>(size, page) {from => from.list<R>(columns)}
     }
     public func page<R>(size: Int64, page!: Int64 = 1): Pagination<R> where R <: QueryMappersInit<R> {
         doSelectPage<R>('*', size, page)
@@ -167,25 +168,27 @@ public class FromClause<T> <: ExceptInsertClause<T> where T <: QueryMappersInit<
         doSelectPage(columns, size, page)
     }
 }
+
 public class UpdateClause<T> <: ExceptInsertClause<T> where T <: QueryMappersInit<T> {
-    init(executor: SqlExecutor){
+    init(executor: SqlExecutor) {
         super('update ${T.tableName()} ', executor)
     }
-    public func SET(set: ()->String): This {
+    public func SET(set: () -> String): This {
         appendPartial('set', set)
     }
     public func execute(): Int64 {
         setSql().update
     }
 }
+
 public class IntoClause<T> <: TableClause<T> where T <: QueryMappersInit<T> {
     private let fields = ArrayList<DataType>()
 
-    init(executor: SqlExecutor){
+    init(executor: SqlExecutor) {
         super('insert into ${T.tableName()}(', executor)
         var i = 0
-        for(mapper in T.queryMappers().mappers){
-            if(i > 0){
+        for (mapper in T.queryMappers().mappers) {
+            if (i > 0) {
                 sqlgen.append(',')
             }
             sqlgen.append(mapper.dataType.columnName)
@@ -197,21 +200,20 @@ public class IntoClause<T> <: TableClause<T> where T <: QueryMappersInit<T> {
     public func VALUES<D>(value: D): This where D <: ObjectData<D> {
         sqlgen.append('values(')
         let data = DataObject<D>(value)
-        for(i in 0 .. fields.size){
-            if(i > 0){
+        for (i in 0..fields.size) {
+            if (i > 0) {
                 sqlgen.append(',')
             }
             let field = fields[i]
             let val = data.get(field.fieldName)
-            let holder = 
-            match(val){
+            let holder = match (val) {
                 case _: DataNone => this.executor.argNull()
                 case x: DataBool => this.executor.arg(x.data)
                 case x: DataString => this.executor.arg(x.data)
                 case x: DataDuration => this.executor.arg(x.data)
                 case x: DataDateTime => this.executor.arg(x.data)
                 case x: DataCollection<Array<Byte>, Byte> => this.executor.arg(x.data)
-                case x: DataReal => match(field){
+                case x: DataReal => match (field) {
                     case _: Int8DataType => this.executor.arg(x.toInt8())
                     case _: UInt8DataType => this.executor.arg(x.toUInt8())
                     case _: Int16DataType => this.executor.arg(x.toInt16())
@@ -225,20 +227,22 @@ public class IntoClause<T> <: TableClause<T> where T <: QueryMappersInit<T> {
                     case _: Float16DataType => this.executor.arg(x.toFloat16())
                     case _: DecimalDataType => this.executor.arg(x.toDecimal())
                     case _: BigIntDataType => this.executor.arg(x.toBigInt())
-                    case x => throw SqlArgException('field ${field.fieldName} is a number, but ${TypeInfo.of(x)} is required.')
+                    case x => throw SqlArgException(
+                        'field ${field.fieldName} is a number, but ${TypeInfo.of(x)} is required.')
                 }
-                case x => throw SqlArgException('type of field ${field.fieldName} is ${TypeInfo.of(x)}, but it is not supported yet.')
+                case x => throw SqlArgException(
+                    'type of field ${field.fieldName} is ${TypeInfo.of(x)}, but it is not supported yet.')
             }
             sqlgen.append(holder)
         }
         sqlgen.append(')')
-        if(let Some(idType) <- super.idType){
+        if (let Some(idType) <- super.idType) {
             sqlgen.append(dialect.lastInsertId(idType))
         }
         this
     }
     public func SELECT<T>(selectColumns: String): This where T <: QueryMappersInit<T> {
-        SELECT<T>(selectColumns){_ => }
+        SELECT<T>(selectColumns) {_ =>}
     }
     public func SELECT<T>(selectColumns: String, fromClause: (FromClause<T>) -> Unit): This where T <: QueryMappersInit<T> {
         let from = executor.FROM<T>()
@@ -246,7 +250,7 @@ public class IntoClause<T> <: TableClause<T> where T <: QueryMappersInit<T> {
         sqlgen.append(' select ').append(selectColumns).append(' ').append(from.sqlgen)
         this
     }
-    public func execute(){
+    public func execute() {
         setSql().insert
     }
 }
