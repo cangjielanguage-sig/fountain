@@ -34,7 +34,7 @@ public class UserPO {
 }
 
 @QueryMappersGenerator[classSuffix: 'PO' table: LowerUnderScore tablePrefix: 't_']
-public class UserInfoPO {
+public class UserInfoPO {//不要使用这个类，仅用于展示@QueryMappersGenerator的用法
     @ORMField[true 'id']
     private var id: Int64 = 0
     @ORMField['username']
