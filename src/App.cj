@@ -220,7 +220,7 @@ public struct App {
                 }
                 let tagmsg = if(args.size > 3 && args[3] == 'tag'){
                     args[3 .. ]
-                } else if(args.size > 2 && args[2] == 'tag') {
+                } else if (args.size > 2 && args[2] == 'tag') {
                     args[2 ..]
                 } else {
                     Array<String>()

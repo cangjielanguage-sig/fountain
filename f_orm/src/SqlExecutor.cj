@@ -114,7 +114,7 @@ public class SqlExecutor <: Resource & RootDAO {
         _connection_.isClosed()
     }
     public func close(): Unit {
-        if (let None <- this.tx) {
+        if (this.tx.isNone()) {
             current.get()?.remove(driverName)
             cache.clear()
             _connection_.close()

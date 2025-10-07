@@ -38,7 +38,7 @@ cangjie_env(){
   source $CANGJIE_HOME/envsetup.sh
 }
 cj(){
-  echo "cj $1 $2 $3"
+  echo "cj $1 $2 $3 $4 $5"
   case "$1" in
   env)
     cangjie_env $2 $3
@@ -50,7 +50,7 @@ cj(){
     fboot cleanUpdate
     ;;
   install)
-    fboot version $2
+    fboot version $2 $3 $4 $5
     cd fboot
     cjpm install --root /mnt/d/docs/work/cangjie/installed
     echo -e "\a"
