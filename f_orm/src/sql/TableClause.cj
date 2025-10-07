@@ -141,8 +141,8 @@ public class FromClause<T> <: ExceptInsertClause<T> where T <: QueryMappersInit<
     public func count(): Int64 {
         executor.setSql('select count(*) ${sqlgen}').first<Int64>() ?? 0
     }
-    public func singlePage<T>(size: Int64, page!: Int64 = 1): Pagination<T> {
-        singlePage<T>('id', size, page: page)
+    public func singlePage<R>(size: Int64, page!: Int64 = 1): Pagination<R> {
+        singlePage<R>('id', size, page: page)
     }
     private func selectPage<R>(size: Int64, page: Int64, callee: (FromClause<T>)->ArrayList<R>): Pagination<R> {
         let c = count()
@@ -154,14 +154,14 @@ public class FromClause<T> <: ExceptInsertClause<T> where T <: QueryMappersInit<
         }
         Pagination<R>(page: page, rows: rows, size: size, list: list)
     }
-    public func singlePage<T>(column: String, size: Int64, page!: Int64 = 1): Pagination<T> {
-        selectPage<T>(size, page){from => from.singleList<T>(column)}
+    public func singlePage<R>(column: String, size: Int64, page!: Int64 = 1): Pagination<R> {
+        selectPage<R>(size, page){from => from.singleList<R>(column)}
     }
-    private func doSelectPage<T>(columns: String, size: Int64, page: Int64): Pagination<T> where T <: QueryMappersInit<T> {
-        selectPage<T>(size, page){from => from.list<T>(columns)}
+    private func doSelectPage<R>(columns: String, size: Int64, page: Int64): Pagination<R> where R <: QueryMappersInit<R> {
+        selectPage<R>(size, page){from => from.list<R>(columns)}
     }
-    public func page<T>(size: Int64, page!: Int64 = 1): Pagination<T> where T <: QueryMappersInit<T> {
-        doSelectPage<T>('*', size, page)
+    public func page<R>(size: Int64, page!: Int64 = 1): Pagination<R> where R <: QueryMappersInit<R> {
+        doSelectPage<R>('*', size, page)
     }
     public func page<T>(columns: String, size: Int64, page!: Int64 = 1): Pagination<T> where T <: QueryMappersInit<T> {
         doSelectPage(columns, size, page)
