@@ -404,11 +404,21 @@ private func transformTableName(attrs: Tokens, decl: Decl): String {
         while(i < attrs.size){
             let attr = attrs[i]
             match((attr.kind, attr.value)){
-                case (IDENTIFIER, 'table') => tableToken = attrs[i + 2]
-                case (_, 'classPrefix') => classPrefix = attrs[i + 2].value
-                case (_, 'classSuffix') => classSuffix = attrs[i + 2].value
-                case (_, 'tablePrefix') => tablePrefix = attrs[i + 2].value
-                case (_, 'tableSuffix') => tableSuffix = attrs[i + 2].value
+                case (IDENTIFIER, 'table') => 
+                    tableToken = attrs[i + 2]
+                    i += 2
+                case (_, 'classPrefix') => 
+                    classPrefix = attrs[i + 2].value
+                    i += 2
+                case (_, 'classSuffix') => 
+                    classSuffix = attrs[i + 2].value
+                    i += 2
+                case (_, 'tablePrefix') => 
+                    tablePrefix = attrs[i + 2].value
+                    i += 2
+                case (_, 'tableSuffix') => 
+                    tableSuffix = attrs[i + 2].value
+                    i += 2
                 case (COMMA, _) | (SEMI, _) => ()
                 case _ =>
                     diagReport(WARNING, attrs, '${attr.value} is illegal attr for @QueryMappersGenerator, which is modifying ${decl.identifier.value}', '')

@@ -17,8 +17,6 @@ package user.controller
 
 import std.reflect.*
 import stdx.encoding.json.*
-import fountain.bean.*
-import fountain.bean.macros.*
 import fountain.data.*
 import fountain.mvc.*
 import fountain.mvc.macros.*
@@ -54,14 +52,11 @@ public class UserController {
                 produces:'application/json', 
                 consumes:'application/x-www-form-urlencoded']
     public func listUsers(): UserList {
-        try{
-            let page =userService.listUsers()
-            JsonValue.tryFromData(page.toData())
-            page
-        }catch(e: Exception){
-            e.printStackTrace()
-            throw e
-        }
+        // let v1 = Some(1234)
+        // println(v1 ?? 0)
+        // let v2 = None<Int64>
+        // println(v2 ?? 1)
+        userService.listUsers()
     }
     @DeleteMapping[path:'/api/user/{id}', 
                    produces:'application/json', 
