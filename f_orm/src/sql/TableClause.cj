@@ -143,10 +143,10 @@ public class FromClause<T> <: ExceptInsertClause<T> where T <: QueryMappersInit<
     public func count(): Int64 {
         executor.setSql('select count(*) ${sqlgen}').first<Int64>() ?? 0
     }
-    public func singlePage<R>(size: Int64, page!: Int64 = 1): Pagination<R> {
+    public func singlePage<R>(size: Int64, page!: Int64 = 1): Pagination<R> where R <: DataFields<R> {
         singlePage<R>('id', size, page: page)
     }
-    private func selectPage<R>(size: Int64, page: Int64, callee: (FromClause<T>) -> ArrayList<R>): Pagination<R> {
+    private func selectPage<R>(size: Int64, page: Int64, callee: (FromClause<T>) -> ArrayList<R>): Pagination<R> where R <: DataFields<R> {
         let c = count()
         let (rows, list) = if (c == 0) {
             (c, ArrayList<R>())
@@ -155,16 +155,16 @@ public class FromClause<T> <: ExceptInsertClause<T> where T <: QueryMappersInit<
         }
         Pagination<R>(page: page, rows: rows, size: size, list: list)
     }
-    public func singlePage<R>(column: String, size: Int64, page!: Int64 = 1): Pagination<R> {
+    public func singlePage<R>(column: String, size: Int64, page!: Int64 = 1): Pagination<R> where R <: DataFields<R> {
         selectPage<R>(size, page) {from => from.singleList<R>(column)}
     }
-    private func doSelectPage<R>(columns: String, size: Int64, page: Int64): Pagination<R> where R <: QueryMappersInit<R> {
+    private func doSelectPage<R>(columns: String, size: Int64, page: Int64): Pagination<R> where R <: QueryMappersInit<R> & DataFields<R> {
         selectPage<R>(size, page) {from => from.list<R>(columns)}
     }
-    public func page<R>(size: Int64, page!: Int64 = 1): Pagination<R> where R <: QueryMappersInit<R> {
+    public func page<R>(size: Int64, page!: Int64 = 1): Pagination<R> where R <: QueryMappersInit<R> & DataFields<R> {
         doSelectPage<R>('*', size, page)
     }
-    public func page<T>(columns: String, size: Int64, page!: Int64 = 1): Pagination<T> where T <: QueryMappersInit<T> {
+    public func page<R>(columns: String, size: Int64, page!: Int64 = 1): Pagination<R> where R <: QueryMappersInit<R> & DataFields<R> {
         doSelectPage(columns, size, page)
     }
 }
