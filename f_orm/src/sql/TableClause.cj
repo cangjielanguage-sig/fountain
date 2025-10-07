@@ -147,13 +147,9 @@ public class FromClause<T> <: ExceptInsertClause<T> where T <: QueryMappersInit<
         singlePage<R>('id', size, page: page)
     }
     private func selectPage<R>(size: Int64, page: Int64, callee: (FromClause<T>) -> ArrayList<R>): Pagination<R> where R <: DataFields<R> {
-        let rows = count()
-        let list = if (rows == 0) {
-            ArrayList<R>()
-        } else {
-            callee(LIMIT(size, offset: (page - 1) * size))
+        Pagination<R>(page: page, rows: count(), size: size){size, offset =>
+            callee(LIMIT(size, offset: offset))
         }
-        Pagination<R>(page: page, rows: rows, size: size, list: list)
     }
     public func singlePage<R>(column: String, size: Int64, page!: Int64 = 1): Pagination<R> where R <: DataFields<R> {
         selectPage<R>(size, page) {from => from.singleList<R>(column)}

@@ -19,10 +19,12 @@ import std.reflect.*
 import stdx.encoding.json.*
 import fountain.bean.*
 import fountain.bean.macros.*
+import fountain.data.*
 import fountain.mvc.*
 import fountain.mvc.macros.*
 import user.service.UserService
 import user.model.po.*
+import user.model.mvc.*
 
 @Controller
 public class UserController {
@@ -51,36 +53,15 @@ public class UserController {
     @GetMapping[path:'/api/users', 
                 produces:'application/json', 
                 consumes:'application/x-www-form-urlencoded']
-    public func listUsers(): JsonValue {
-        let list = userService.listUsers()
-        let gen = StringGenerator().append('[')
-        for(po in list){
-            if(gen.size > 1){
-                gen.append(',')
-            }
-            gen.append('''
-                {
-                    "id": ${po.id},
-                    "username": "${po.username}",
-                    "password": "${po.password}",
-                    "registerTime": "${match(po.saveTime){
-                        case Some(d) => '${d}'
-                        case _ => ''
-                    }}"
-                }'''
-            )
+    public func listUsers(): UserList {
+        try{
+            let page =userService.listUsers()
+            JsonValue.tryFromData(page.toData())
+            page
+        }catch(e: Exception){
+            e.printStackTrace()
+            throw e
         }
-        gen.append(']')
-        println('/api/users: ${gen}')
-        let json = '''
-            {
-                "status": 1,
-                "fields": {
-                    "list": ${gen}
-                }
-            }
-        '''
-        JsonValue.fromStr(json)
     }
     @DeleteMapping[path:'/api/user/{id}', 
                    produces:'application/json', 

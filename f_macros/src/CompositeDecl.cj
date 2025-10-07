@@ -52,25 +52,13 @@ extend ClassDecl <: CompositeDecl & ExtendClassDecl {
         isPrivate(this)
     }
     public func isOpen(): Bool {
-        let modifiers = this.modifiers
-        for (i in 0..modifiers.size where isOpen(modifiers, i)) {
-            return true
-        }
-        false
+        isOpen(this)
     }
     public func isAbstract(): Bool {
-        let modifiers = this.modifiers
-        for (i in 0..modifiers.size where isAbstract(modifiers, i)) {
-            return true
-        }
-        false
+        isAbstract(this)
     }
     public func isSealed(): Bool {
-        let modifiers = this.modifiers
-        for (i in 0..modifiers.size where isModifier(modifiers, i, SEALED)) {
-            return true
-        }
-        false
+        isSealed(this)
     }
 }
 

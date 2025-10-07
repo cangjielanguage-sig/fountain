@@ -25,7 +25,7 @@ package f_orm.sql
  * @param rows 总记录数
  * @param list 数据列表
  */
-public struct Pagination<T> <: ObjectData<Pagination<T>> where T <: DataFields<T> {
+public class Pagination<T> <: ObjectData<Pagination<T>> where T <: DataFields<T> {
     public let pages: Int64
     public Pagination(
         public let page!: Int64,
@@ -37,6 +37,18 @@ public struct Pagination<T> <: ObjectData<Pagination<T>> where T <: DataFields<T
             0
         } else {
             1
+        }
+    }
+    public init(page!: Int64, size!: Int64, rows!: Int64, list!: () -> ArrayList<T>){
+        this(page: page, size: size, rows: rows, list: if (rows == 0) {
+            ArrayList<T>()
+        } else {
+            list()
+        })
+    }
+    public init(page!: Int64, size!: Int64, rows!: Int64, list!: (Int64, Int64) -> ArrayList<T>){
+        this(page: page, size: size, rows: rows){
+            list(size, (page - 1) * size)
         }
     }
     public func toData(): Data {

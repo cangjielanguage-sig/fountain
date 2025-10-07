@@ -27,6 +27,7 @@ import user.service.UserService
 import user.dao.UserDAO
 import user.model.entity.*
 import user.model.po.*
+import user.model.mvc.*
 
 @Bean
 @BeanMeta
@@ -53,10 +54,9 @@ public class UserServiceImpl <: UserService {
             throw e
         }
     }
-    public func listUsers(): ArrayList<UserPO> {
-        let list = executor().listUsers()
-        println('AAAAAAAAAAAAAA ${list.size}')
-        list
+    public func listUsers(): UserList {
+        let page = executor().listUsers()
+        UserList(1, page)
     }
     public func deleteUser(id: Int64): Int64 {
         println('id: ${id}')

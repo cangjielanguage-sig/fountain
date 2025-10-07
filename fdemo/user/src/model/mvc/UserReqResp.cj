@@ -17,6 +17,8 @@ package user.model.mvc
 
 import fountain.data.*
 import fountain.data.macros.*
+import fountain.orm.Pagination
+import user.model.po.UserPO
 
 @DataAssist[props fields]
 public class UserRequest {
@@ -48,5 +50,16 @@ public class UserSession {
         this.userId = userId
         this.jwt = jwt
         this.logged = logged
+    }
+}
+@DataAssist[props fields]
+public class UserList {
+    public UserList(
+        public let status: Int64,
+        public let fields: Pagination<UserPO>
+    ){}
+
+    public init(){
+        this(0, unsafeZeroValue())
     }
 }

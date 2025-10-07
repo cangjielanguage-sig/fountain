@@ -18,9 +18,12 @@ package user.model.po
 import std.time.DateTime
 
 import fountain.base.unsafeZeroValue
+import fountain.data.*
+import fountain.data.macros.*
 import fountain.orm.*
 import fountain.orm.macros.*
 
+@DataAssist[fields]
 @QueryMappersGenerator[user_info]
 public class UserPO {
     @ORMField[true 'id']

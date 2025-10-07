@@ -56,11 +56,8 @@ public interface UserDAO <: RootDAO {
              where id = ${arg(id)}'''
         ).firstToMap()
     }
-    func listUsers(): ArrayList<UserPO> {
-        executor.setSql('''
-            select * 
-              from user_info'''
-        ).list<UserPO>()
+    func listUsers(): Pagination<UserPO> {
+        executor.FROM<UserPO>().page(10, page: 1)
     }
     func deleteUser(id: Int64): Int64 {
         executor.setSql('''
