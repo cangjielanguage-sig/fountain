@@ -25,7 +25,7 @@ package f_orm.sql
  * @param rows 总记录数
  * @param list 数据列表
  */
-public class Pagination<T> <: ObjectData<Pagination<T>> where T <: DataFields<T> {
+public struct Pagination<T> <: ObjectData<Pagination<T>> where T <: DataFields<T> {
     public let pages: Int64
     public Pagination(
         public let page!: Int64,
