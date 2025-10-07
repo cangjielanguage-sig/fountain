@@ -19,6 +19,7 @@ import std.ast.*
 import std.collection.HashMap
 import f_macros.*
 import f_orm.exception.ORMException
+import f_regex.*
 import f_util.CaseFormat
 
 /**
@@ -30,6 +31,15 @@ import f_util.CaseFormat
  * dataType必须是枚举orm.dialect.DataType的值。
  * 每一部分都是可选的。
  * 没有使用@ORMField注解的按照映射的不是主键，且按照列名是LowerUnderScore处理。
+ *
+ * 宏的属性格式：
+ *   table: 是一个字符串或标识符，表示列名转换的格式，可以是LowerUnderScore、UpperUnderScore、Pascal，会把Pascal风格的类名转换成指定风格的名称，并把转换结果作为表名，也可以是表名本身。
+ *   classPrefix: 是一个字符串或标识符，把类名开头匹配的子串裁掉
+ *   classSuffix: 是一个字符串或标识符，把类名结尾匹配的子串裁掉
+ *   tablePrefix: 是一个字符串或标识符，在转换后的表名前面加上这个前缀
+ *   tableSuffix: 是一个字符串或标识符，在转换后的表名后面加上这个后缀
+ *   上面的冒号也是宏属性的一部分。
+ *   如果宏属性只有一个，就把它当作tableName处理。
  */
 public macro QueryMappersGenerator(input: Tokens): Tokens {
     expandQueryMappers(quote(), input)
@@ -81,45 +91,31 @@ private func expandQueryMappers(attr: Tokens, input: Tokens): Tokens {
             (false, CaseFormat.Camel.convert(n, to: CaseFormat.LowerUnderScore), Token(IDENTIFIER, ""))
         }
     }
-    let mappers = quote($(`lsquare`)).append(generateMappers(name, props, mapperMetaFn))
+    var mappers = quote([$(generateMappers(name, props, mapperMetaFn)))
     let varMappers = generateMappers(name, vars, mapperMetaFn)
     if (varMappers.size > 0) {
-        mappers.append(`comma`).append(varMappers)
+        mappers += `comma` + varMappers
     }
-    mappers.append(`rsquare`)
+    mappers += `rsquare`
     let queryMappersName = Token(IDENTIFIER, "_qUEry__mAppErs_")
     let superTypes = decl.superTypes
-    let mapperTokens = quote(
+    var mapperTokens = quote(
         let creator = {=> $name()}
-        let mappers = $mappers
-        $(`nl`)
+        let mappers = $mappers$(`nl`)
     )
     for (st in superTypes) {
-        mapperTokens.append(quote(
+        mapperTokens += quote(
             if (let Some(x) <- QueryMappers<$st>.create<$name>(creator, mappers)) {
                 return x
-            }
-            $(`nl`)
-        ))
+            }$(`nl`)
+        )
     }
     if (superTypes.isEmpty()) {
         decl.upperBound = `upperbound`[0]
     }
     decl.superTypes.add(RefType(quote(QueryMappersInit<$name>)))
-    let tableName = if(attr.size == 0){
-        CaseFormat.Pascal.convert(decl.identifier.value, to: CaseFormat.LowerUnderScore)
-    }else{
-        match((attr[0].kind, attr[0].value)){
-            case (STRING_LITERAL, x) => x
-            case (SINGLE_QUOTED_STRING_LITERAL, x) => x
-            case (IDENTIFIER, 'LowerUnderScore') => CaseFormat.Pascal.convert(decl.identifier.value, to: CaseFormat.LowerUnderScore)
-            case (IDENTIFIER, 'UpperUnderScore') => CaseFormat.Pascal.convert(decl.identifier.value, to: CaseFormat.UpperUnderScore)
-            case (IDENTIFIER, 'Pascal') => decl.identifier.value
-            case (_, x) => x
-        }
-    }
-    body.add(
-        all: [parseDecl(
+    let tableName = transformTableName(attr, decl)
+    body.add(parseDecl(
             quote(
         private static let $queryMappersName = {=>
             $mapperTokens
@@ -128,72 +124,71 @@ private func expandQueryMappers(attr: Tokens, input: Tokens): Tokens {
                 mappers: mappers
             )
         }()
-    )),
-            parseDecl(
+    )))
+    body.add(parseDecl(
             quote(
         public static func tableName(): String {
             $tableName
         }
-            )
-            ),
-            parseDecl(
+    )))
+    body.add(parseDecl(
             quote(
         public static func isSimpleData(): Bool {
             false
         }
-    )),
-            parseDecl(
+    )))
+    body.add(parseDecl(
             quote(
         public static func queryMappers(): QueryMappers<$name>{
             $queryMappersName
         }
-    ))])
+    )))
     decl.toTokens()
 }
 
 func generateMappers(name: Tokens, props: Array<PropDecl>, mapperMetaFn: (String) -> (Bool, String, Token)): Tokens {
-    let tokens = quote()
+    var tokens = quote()
     for (i in 0..props.size) {
         if (i > 0) {
-            tokens.append(`comma`)
+            tokens += `comma`
         }
         let decl = props[i]
         let propName = decl.identifier
         let dts = quote($(decl.declType))
         let meta = mapperMetaFn(propName.value)
-        tokens.append(generateMappers(name, propName, dts, meta))
+        tokens += generateMappers(name, propName, dts, meta)
     }
     tokens
 }
 
 func generateMappers(name: Tokens, vars: Array<VarDecl>, mapperMetaFn: (String) -> (Bool, String, Token)): Tokens {
-    let tokens = quote()
+    var tokens = quote()
     for (i in 0..vars.size) {
         if (i > 0) {
-            tokens.append(`comma`)
+            tokens += `comma`
         }
         let decl = vars[i]
         let varName = decl.identifier
         let dts = quote($(decl.declType))
         let meta = mapperMetaFn(varName.value)
-        tokens.append(generateMappers(name, varName, dts, meta))
+        tokens += generateMappers(name, varName, dts, meta)
     }
     tokens
 }
 
 func generateMappers(name: Tokens, fieldName: Token, dts: Tokens, meta: (Bool, String, Token)): Tokens {
-    let dataType = quote()
+    var dataType = quote()
     var nullable = false
     for (j in 0..dts.size) {
         let dt = dts[j]
         if (j == 0 && dt.value == "?") {
             nullable = true
-            dataType.append(dts[j + 1])
+            dataType += dts[j + 1]
         } else if (j == 0 && dt.value == "Option") {
             nullable = true
-            dataType.append(dts[j + 2])
+            dataType += dts[j + 2]
         } else {
-            dataType.append(dt)
+            dataType += dt
             continue
         }
         break
@@ -211,21 +206,21 @@ func generateMappers(name: Tokens, fieldName: Token, dts: Tokens, meta: (Bool, S
                 )
             )
     } else if (dataType[0].value == "ArrayList") {
-        let listGeneric = quote()
+        var listGeneric = quote()
         for (j in 2..dataType.size - 1) {
             let dt = dataType[j]
             if (j == 2 && dt.value == "?") {
                 nullable = true
-                listGeneric.append(quote(Option<))
+                listGeneric += quote(Option<)
             } else if (j == 2 && dt.value == "Option") {
                 nullable = true
-                listGeneric.append(dt)
+                listGeneric += dt
             } else {
-                listGeneric.append(dt)
+                listGeneric += dt
             }
         }
         if (nullable) {
-            listGeneric.append(`gt`)
+            listGeneric += `gt`
         }
         if (nullable && columnType.value.isEmpty()) {
             quote(
@@ -391,4 +386,46 @@ func generateMappers(name: Tokens, fieldName: Token, dts: Tokens, meta: (Bool, S
                 }
             )
     }
+}
+private func transformTableName(attrs: Tokens, decl: Decl): String {
+    var className = decl.identifier.value
+    if(attrs.size == 0){
+        return CaseFormat.Pascal.convert(className, to: CaseFormat.LowerUnderScore)
+    }
+    var tableToken = Token(STRING_LITERAL, "")
+    var classPrefix = ''
+    var classSuffix = ''
+    var tablePrefix = ''
+    var tableSuffix = ''
+    if(attrs.size == 1){
+        tableToken = attrs[0]
+    } else {
+        var i = 0
+        while(i < attrs.size){
+            let attr = attrs[i]
+            match((attr.kind, attr.value)){
+                case (IDENTIFIER, 'table') => tableToken = attrs[i + 2]
+                case (_, 'classPrefix') => classPrefix = attrs[i + 2].value
+                case (_, 'classSuffix') => classSuffix = attrs[i + 2].value
+                case (_, 'tablePrefix') => tablePrefix = attrs[i + 2].value
+                case (_, 'tableSuffix') => tableSuffix = attrs[i + 2].value
+                case (COMMA, _) | (SEMI, _) => ()
+                case _ =>
+                    diagReport(WARNING, attrs, '${attr.value} is illegal attr for @QueryMappersGenerator, which is modifying ${decl.identifier.value}', '')
+            }
+            i++
+        }
+    }
+
+    className = className.removePrefix(classPrefix).removeSuffix(classSuffix)
+    let tableName =
+    match((tableToken.kind, tableToken.value)){
+        case (STRING_LITERAL, x) => x
+        case (SINGLE_QUOTED_STRING_LITERAL, x) => x
+        case (IDENTIFIER, 'LowerUnderScore') => CaseFormat.Pascal.convert(className, to: CaseFormat.LowerUnderScore)
+        case (IDENTIFIER, 'UpperUnderScore') => CaseFormat.Pascal.convert(className, to: CaseFormat.UpperUnderScore)
+        case (IDENTIFIER, 'Pascal') => className
+        case (_, x) => x
+    }
+    '${tablePrefix}${tableName}${tableSuffix}'
 }

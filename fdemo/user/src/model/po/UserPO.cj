@@ -32,3 +32,19 @@ public class UserPO {
     @ORMField['save_time']
     private var saveTime: ?DateTime = None<DateTime>
 }
+
+@QueryMappersGenerator[classSuffix: 'PO' table: LowerUnderScore tablePrefix: 't_']
+public class UserInfoPO {
+    @ORMField[true 'id']
+    private var id: Int64 = 0
+    @ORMField['username']
+    private var username: String = ''
+    @ORMField['password']
+    private var password: String = ''
+    @ORMField['save_time']
+    private var saveTime: ?DateTime = None<DateTime>
+}
+private let _ = {=>
+    println('@@@@@@@@@@@@@@@@@@@@@@@@@@@@ ${UserPO.tableName()}')
+    println('@@@@@@@@@@@@@@@@@@@@@@@@@@@@ ${UserInfoPO.tableName()}')
+}()
