@@ -41,12 +41,12 @@ private func generate(input: Tokens): Tokens {
             diagReport(ERROR, input, 'illegal decl', '')
             return input
     }
-    let tokens = quote()
+    var tokens = quote()
     let klass = decl.identifier
     for (d in decl.body.decls) {
         if (let m: MacroExpandDecl <- d && let f: FuncDecl <- extract(m) && !isStatic(f) && isPublic(f)) {
             let (argTypes, argExprs, args, anyargs) = generateArgs(f)
-            tokens.append(quote(
+            tokens += quote(
                 private let _ = {=>
                     let fname = $(f.identifier.value)
                     let metas = MVCStarter.generateAndRegister<$klass>($(f.identifier.value), $argTypes)
@@ -71,17 +71,17 @@ private func generate(input: Tokens): Tokens {
                         }
                     }
                 }()$(`nl`)
-            ))
+            )
         }
     }
     tokens
 }
 
 private func generateArgs(decl: FuncDecl): (Tokens, Tokens, Tokens, Tokens) {
-    let argTypes = quote([)
-    let exprs = quote()
-    let args = quote()
-    let anyArgs = quote(let anyArgs = ArrayList<Any>())
+    var argTypes = quote([)
+    var exprs = quote()
+    var args = quote()
+    var anyArgs = quote(let anyArgs = ArrayList<Any>())
     for (fp in decl.funcParams) {
         let p: FuncParam = match(fp){
             case x: MacroExpandParam => extract(x)
@@ -99,31 +99,31 @@ private func generateArgs(decl: FuncDecl): (Tokens, Tokens, Tokens, Tokens) {
         } else {
             quote(None<$ptype>)
         }
-        exprs.append(quote(
+        exprs += quote(
             let $(p.identifier) = meta.extract<$ptype>(ctx, $pname, $default)$(`nl`)
-        ))
+        )
         let named = try {
             p.not.kind == TokenKind.NOT
         } catch (_) {
             false
         }
         if (args.size > 0) {
-            args.append(`comma`)
+            args += `comma`
         }
         let arg = if (named) {
             quote($(p.identifier): $(p.identifier))
         } else {
             quote($(p.identifier))
         }
-        args.append(arg)
-        anyArgs.append(`nl`).append(quote(anyArgs.add($(p.identifier))))
+        args += arg
+        anyArgs += `nl` + quote(anyArgs.add($(p.identifier)))
         if (argTypes.size > 1) {
-            argTypes.append(`comma`)
+            argTypes += `comma`
         }
-        argTypes.append(quote(
+        argTypes += quote(
             TypeInfos.get<$(ptype)>()
-        ))
+        )
     }
-    argTypes.append(`rsquare`)
+    argTypes += `rsquare`
     (argTypes, exprs, args, anyArgs)
 }

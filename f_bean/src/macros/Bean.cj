@@ -47,65 +47,62 @@ private func extractClassDecl(input: Tokens): ClassDecl {
 }
 private func expandBean(attr: Tokens, input: Tokens, klass: ClassDecl): Tokens {
     let identifier = klass.identifier
-
     let list = ArrayList<Tokens>()
     list.add(quote())
-    for(a in attr){
+    for(i in 0 .. attr.size){
+        let a = attr[i]
         if(a.kind == TokenKind.BITOR){
             list.add(quote())
             continue
-        }else{
-            list.last?.append(a)
+        } else {
+            let last = list.size - 1
+            list[last] = list[last] + a
         }
     }
     if(list.size > 1){
         list.removeIf{g => g.size == 0}
     }
+    var tokens = input
     for(g in list){
         let beanType = if(g.size == 0){
             quote($identifier)
         }else{
             quote($identifier<$g>)
         }
-        let ctorTokens = quote(
-            let ctors = HashMap<String, ()-> $beanType>()
-            $(`nl`)
+        var ctorTokens = quote(
+            let ctors = HashMap<String, ()-> $beanType>()$(`nl`)
         )
         for (d in klass.body.decls) {
             match (d) {
-                case f: FuncDecl where f.identifier.value == 'init' => ctorTokens.append(quote(
-                        ctors['init'] = {=> $(beanType)()}
-                        $(`nl`)
-                    ))
+                case f: FuncDecl where f.identifier.value == 'init' => ctorTokens += quote(
+                        ctors['init'] = {=> $(beanType)()}$(`nl`)
+                    )
                 case f: FuncDecl where isStatic(f) && isPublic(f) && f.funcParams.isEmpty() =>
                     let fname = f.identifier.value
-                    ctorTokens.append(quote(
-                        ctors[$fname] = {=> $(beanType).$(f.identifier)()}
-                        $(`nl`)
-                    ))
-                case f: PrimaryCtorDecl where isPublic(f) && f.funcParams.isEmpty() => ctorTokens.append(quote(
-                        ctors['init'] = {=> $(beanType)()}
-                        $(`nl`)
-                    ))
+                    ctorTokens += quote(
+                        ctors[$fname] = {=> $(beanType).$(f.identifier)()}$(`nl`)
+                    )
+                case f: PrimaryCtorDecl where isPublic(f) && f.funcParams.isEmpty() => ctorTokens += quote(
+                        ctors['init'] = {=> $(beanType)()}$(`nl`)
+                    )
                 case med: MacroExpandDecl =>
                     var md: Decl = med
                     while (let d: MacroExpandDecl <- md) {
                         md = d.macroInputDecl
                         match (md) {
-                            case f: FuncDecl where f.identifier.value == 'init' => ctorTokens.append(quote(
-                                    ctors['init'] = {=> $(beanType)()}
-                                    $(`nl`)
-                                ))
+                            case f: FuncDecl where f.identifier.value == 'init' => ctorTokens += quote(
+                                    ctors['init'] = {=> $(beanType)()}$(`nl`)
+                                )
                             case f: FuncDecl where isStatic(f) && isPublic(f) && f.funcParams.isEmpty() =>
                                 let fname = f.identifier.value
-                                ctorTokens.append(quote(
+                                ctorTokens += quote(
                                     ctors[$fname] = {=> $(beanType).$(f.identifier)()}
                                     $(`nl`)
-                                ))
-                            case f: PrimaryCtorDecl where isPublic(f) && f.funcParams.isEmpty() => ctorTokens.append(quote(
+                                )
+                            case f: PrimaryCtorDecl where isPublic(f) && f.funcParams.isEmpty() => ctorTokens += quote(
                                     ctors['init'] = {=> $(beanType)()}
                                     $(`nl`)
-                                ))
+                                )
                             case f: MacroExpandDecl => continue
                             case _ => break
                         }
@@ -114,7 +111,7 @@ private func expandBean(attr: Tokens, input: Tokens, klass: ClassDecl): Tokens {
                 case _ => continue
             }
         }
-        input.append(quote(
+        tokens += quote(
             $(`nl`)
             private let _ = {=>
                 $ctorTokens
@@ -136,7 +133,7 @@ private func expandBean(attr: Tokens, input: Tokens, klass: ClassDecl): Tokens {
                     BeanException('class ' + beanTypeName + ' must be with a public parameterless constructor or a public static parameterless function.')
                 })
             }()
-        ))
+        )
     }
-    input
+    tokens
 }

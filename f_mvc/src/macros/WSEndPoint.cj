@@ -57,21 +57,20 @@ private func generate(attr: Tokens, input: Tokens): Tokens {
             return input
     }
     let klass = decl.identifier
-    let metaTokens = quote(
-        let metaHandles = HashMap<String, (WSFuncMeta<$klass>, Bool) -> Unit>()
-        $(`nl`)
+    var metaTokens = quote(
+        let metaHandles = HashMap<String, (WSFuncMeta<$klass>, Bool) -> Unit>()$(`nl`)
     )
     for(d in decl.body.decls where isPublic(d) && !isStatic(d)) {
         if(let f: FuncDecl <- d){
-            let paramTokens = quote()
-            let factParams = quote()
+            var paramTokens = quote()
+            var factParams = quote()
             for(p in f.funcParams){
                 let default = try{
                     p.expr.toTokens()
                 }catch(_){
                     `empty_tokens`
                 }
-                paramTokens.append(quote(
+                paramTokens += quote(
                     let $(p.identifier) = match(None<$(p.paramType)>){
                         case _: ?HttpContext => (ctx as $(p.paramType)).getOrThrow()
                         case _: ?HttpRequest => (ctx.request as $(p.paramType)).getOrThrow()
@@ -80,27 +79,25 @@ private func generate(attr: Tokens, input: Tokens): Tokens {
                         case _: ?Array<Byte> => (payload as $(p.paramType)).getOrThrow()
                         case _ where cf => (WSCloseFrame(payload) as $(p.paramType)).getOrThrow()
                         case _ => (m.extract<$(p.paramType)>(ctx, $(p.identifier.value), pattern, ws, payload) as $(p.paramType)).getOrThrow()
-                    }
-                    $(`nl`)
-                ))
+                    }$(`nl`)
+                )
                 if(factParams.size > 0){
-                    factParams.append(`comma`)
+                    factParams += `comma`
                 }
-                factParams.append(if(default.size > 0) {
+                factParams += if(default.size > 0) {
                     quote($(p.identifier): $(p.identifier) ?? $(default))
                 }else{
                     quote($(p.identifier).getOrThrow())
-                })
+                }
             }
-            metaTokens.append(quote(
+            metaTokens += quote(
                 metaHandles[$(f.identifier.value)] = {m, cf => 
                     m.setHandle{endpoint, ctx, pattern, ws, payload => 
                         $paramTokens
                         endpoint.$(f.identifier)($factParams)
                     }
-                }
-                $(`nl`)
-            ))
+                }$(`nl`)
+            )
         }
     }
     quote(

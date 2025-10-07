@@ -42,28 +42,28 @@ private func pointcut(decl: Decl): Tokens {
     let tokens = decl.toTokens()
     match (decl) {
         case x: FuncDecl =>
-            let funcDecl = quote()
+            var funcDecl = quote()
             for (t in tokens) {
                 if (t.kind == TokenKind.LCURL) {
                     break
                 }
-                funcDecl.append(t)
+                funcDecl += t
             }
             let params = x.funcParams
-            let argVars = quote()
-            let args = quote($(`lsquare`))
+            var argVars = quote()
+            var args = quote([)
             for (i in 0..params.size) {
                 let param = params[i]
                 let paramName = param.identifier
-                argVars.append(quote(
+                argVars += quote(
                     let $paramName = (args[$(i)] as $(param.paramType)).getOrThrow()
-                )).append(`nl`)
+                ) + `nl`
                 if (i > 0) {
-                    args.append( `comma`)
+                    args += `comma`
                 }
-                args.append(paramName)
+                args += paramName
             }
-            args.append(`rsquare`)
+            args += `rsquare`
             let funcName = x.identifier.value
             let funcType = try {
                 x.declType.toTokens()

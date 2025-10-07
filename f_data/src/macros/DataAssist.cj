@@ -186,10 +186,10 @@ func generateEqual(d: ClassDecl, exclusion: HashSet<String>) {
     }
     let typeName = quote($(d.identifier)$(d.genericParamTokens))
     d.superTypes.add(RefType(quote(Equatable<$typeName>)))
-    let eq = quote((!(this is Hashable) || this.hashCode() == other.hashCode())$(`nl`))
+    var eq = quote((!(this is Hashable) || this.hashCode() == other.hashCode())$(`nl`))
     for (d in d.body.decls where d is VarDecl &&
         !(isStatic(d) || exclusion.contains(d.identifier.value) || exclusion.contains('${d.identifier.value}_'))) {
-        eq.append(`and`).append(quote(f_data_eq(this.$(d.identifier), other.$(d.identifier)))).append(`nl`)
+        eq += `and` +quote(f_data_eq(this.$(d.identifier), other.$(d.identifier))) + `nl`
     }
     d
         .body
@@ -215,21 +215,17 @@ func generateCompare(d: ClassDecl, exclusion: HashSet<String>) {
     }
     let typeName = quote($(d.identifier)$(d.genericParamTokens))
     d.superTypes.add(RefType(quote(Comparable<$typeName>)))
-    let cmp = quote().append(`nl`)
+    var cmp = `nl`
     for (d in d.body.decls where d is VarDecl &&
         !(isStatic(d) || exclusion.contains(d.identifier.value) || exclusion.contains('${d.identifier.value}_'))) {
-        cmp.append(
-            quote(f_data_cmp(this.$(d.identifier), other.$(d.identifier))) + `nl` + quote(
+        cmp += quote(f_data_cmp(this.$(d.identifier), other.$(d.identifier))) + `nl` + quote(
             if(result != EQ){
                 return result
             }
             $(`nl`)
-        ))
+        )
     }
-    d
-        .body
-        .decls
-        .add(
+    d.body.decls.add(
             FuncDecl(
                 quote(
         public $(openTokens(d)) func compare(other: $typeName): Ordering {
@@ -245,12 +241,12 @@ func generateToString(d: ClassDecl, exclusion: HashSet<String>) {
         d.upperBound = `upperbound`[0]
     }
     d.superTypes.add(RefType(quote(ToString)))
-    let str = quote(
+    var str = quote(
         result.append<$(d.identifier)$(d.genericParamTokens)>()
     )
     for (d in d.body.decls where d is VarDecl &&
         !(isStatic(d) || exclusion.contains(d.identifier.value) || exclusion.contains('${d.identifier.value}_'))) {
-        str.append(`nl`).append(quote(result.append($(d.identifier.value), $(d.identifier))))
+        str += `nl` + quote(result.append($(d.identifier.value), $(d.identifier)))
     }
     d.body.decls.add(
             FuncDecl(
@@ -299,14 +295,14 @@ func generateToFields(d: ClassDecl, exclusion: HashSet<String>) {
     }
     let openModi = openTokens(klassDecl)
     let fieldsName = Token(IDENTIFIER, "___dAtA__fIElds_")
-    let fieldTokens = quote().append(`lsquare`)
+    var fieldTokens = `lsquare`
     for (f in fields) {
         if (fieldTokens.size > 1) {
-            fieldTokens.append(`comma`)
+            fieldTokens += `comma`
         }
-        fieldTokens.append(f.toTokens())
+        fieldTokens += f.toTokens()
     }
-    fieldTokens.append(`rsquare`)
+    fieldTokens += `rsquare`
     body.add(
         all: [
             VarDecl(

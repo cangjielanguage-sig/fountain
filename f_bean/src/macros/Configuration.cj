@@ -21,8 +21,8 @@ macro package f_bean.macros
 public macro Configuration(input: Tokens): Tokens {
     let klass = ClassDecl(input)
     let identifier = klass.identifier
-    let staticTokens = quote()
-    let instanceTokens = quote()
+    var staticTokens = quote()
+    var instanceTokens = quote()
     for (d in klass.body.decls) {
         match (d) {
             case med: MacroExpandDecl =>
@@ -32,16 +32,14 @@ public macro Configuration(input: Tokens): Tokens {
                     match (md) {
                         case f: FuncDecl where d.fullIdentifier.value == 'Constructor' && isStatic(f) && isPublic(f) && f.funcParams.isEmpty() =>
                             let fname = f.identifier.value
-                            instanceTokens.append(quote(
-                                BeanFactory.instance.register<$identifier>($fname){$(identifier).$(f.identifier)()}
-                                $(`nl`)
-                            ))
+                            instanceTokens += quote(
+                                BeanFactory.instance.register<$identifier>($fname){$(identifier).$(f.identifier)()}$(`nl`)
+                            )
                         case f: FuncDecl where d.fullIdentifier.value == 'Constructor' && !isStatic(f) && isPublic(f) && f.funcParams.isEmpty() =>
                             let fname = f.identifier.value
-                            staticTokens.append(quote(
-                                BeanFactory.instance.register<$identifier>($fname){configuration.$(f.identifier)()}
-                                $(`nl`)
-                            ))
+                            staticTokens += quote(
+                                BeanFactory.instance.register<$identifier>($fname){configuration.$(f.identifier)()}$(`nl`)
+                            )
                         case f: MacroExpandDecl => continue
                         case _ => break
                     }
