@@ -40,6 +40,11 @@ import f_util.CaseFormat
  *   tableSuffix: 是一个字符串或标识符，在转换后的表名后面加上这个后缀
  *   上面的冒号也是宏属性的一部分。
  *   如果宏属性只有一个，就把它当作tableName处理。
+ * 如果要把fountain.data.macros.DataAssist跟@QueryMappersGenerator一起使用，需要满足以下条件：
+ * 1. 不要对被修饰类使用DataAssist宏的props属性，@QueryMappersGenerator会为被修饰类添加属性
+ * 2. 如果要复制实例成员或者把类的实例转换为JsonValue，@QueryMappersGenerator要先于@DataAssist展开，
+ *    即@DataAssist要在@QueryMappersGenerator前面。
+ * 3. 如果没有2. 这种需求，则二者顺序没有要求，但是1. 还需要满足。
  */
 public macro QueryMappersGenerator(input: Tokens): Tokens {
     expandQueryMappers(quote(), input)
