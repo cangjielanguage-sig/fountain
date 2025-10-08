@@ -28,6 +28,10 @@ import f_macros.*
  * Compare: 实现Comparable<T>
  * Equal: 实现Equatable<T>
  * Fields: 实现实例复制
+ * @DataAssist只能修饰类，并且要使用fields属性，类的实例成员变量类型T必须是实现了fountain.data.DataFields<T>接口的类型。
+ * fountain.data包对基本类型、字符串、Duration、DateTime、实现了DataFields接口的类型和被@DataAssist[fields]修饰的类做泛型实参的数组、集合、Option实现了DataFields的扩展。
+ * 只有类的实例成员变量是这些类型才可以被@DataAssist[fields]修饰，否则会报错。
+ * 被@DataAssist[fields]修饰的类可以被转换为JsonValue和实例成员复制。
  */
 public macro DataAssist(attr: Tokens, input: Tokens): Tokens {
     match (parseDecl(input)) {
