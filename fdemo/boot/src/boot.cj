@@ -16,14 +16,17 @@ limitations under the License.
 package boot
 
 import opengauss.driver.*
-import opengauss.slog.setDefault
+import opengauss.slog
 import fountain.data.*
 import fountain.data.macros.*
 import fountain.log.LoggerFactory
 import fountain.orm.*
 
+import std.reflect.*
+
 private let _ = {=>
-    setDefault(LoggerFactory.getLogger("opengauss"))
+    let logger = LoggerFactory.getLogger("opengauss")
+    slog.setDefault(logger)
     let driver = DriverManager.getDriver("opengauss").getOrThrow()
     ORM.register(driver, "postgres://fountain:Fountain123@pgm-2ze534c0xh8vatxzwo.pg.rds.aliyuncs.com:5432/fountain?sslmode=disable", []) 
 }()
