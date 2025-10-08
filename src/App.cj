@@ -394,6 +394,9 @@ ${toml}
         if(dir == getWorkingDirectory() || dir.parent == getWorkingDirectory()){
             addModule(dir.parent, dir.fileName)
         }
+        try (file = File.create(dir.join('src/${dir.fileName}.cj'))) {
+            file.write('package ${dir.fileName}\n\n'.unsafeBytes())
+        }
         code
     }
     private func cleanUpdate(): Int64 {
