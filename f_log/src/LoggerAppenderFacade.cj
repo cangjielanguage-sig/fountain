@@ -16,7 +16,7 @@ limitations under the License.
 package f_log
 
 import std.time.DateTime
-import stdx.log.LogLevel
+import stdx.log.{LogLevel, LogRecord}
 import f_io.DummyOutputStream
 
 public class LoggerAppenderFacade <: AsyncLogger {
@@ -33,7 +33,13 @@ public class LoggerAppenderFacade <: AsyncLogger {
         }
         return false
     }
-
+    public open func log(record: LogRecord): Unit {
+        append {
+            for (appender in appenders) {
+                appender.log(record)
+            }
+        }
+    }
     protected func append(level: LogLevel, message: String, now: DateTime, ex: Option<Exception>): Unit {
         append {
             for (appender in appenders) {

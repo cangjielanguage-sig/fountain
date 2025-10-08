@@ -23,7 +23,7 @@ import fountain.log.LoggerFactory
 import fountain.orm.*
 
 private let _ = {=>
-    // setDefault(LoggerFactory.getLogger("opengauss"))
+    setDefault(LoggerFactory.getLogger("opengauss"))
     let driver = DriverManager.getDriver("opengauss").getOrThrow()
     ORM.register(driver, "postgres://fountain:Fountain123@pgm-2ze534c0xh8vatxzwo.pg.rds.aliyuncs.com:5432/fountain?sslmode=disable", []) 
 }()

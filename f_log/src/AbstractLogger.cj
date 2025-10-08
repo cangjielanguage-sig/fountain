@@ -93,11 +93,12 @@ public abstract class AbstractLogger <: Logger & Resource {
                             attr[1].writeTo(writer)
                         }
                         writer.endObject()
-                        writer.writeString(OS.current.nextLine)
+                        writer.writeString(';')
                     }
                     writeAttrs(globalAttrMap.get(name) ?? [])
                     writeAttrs(this.attrs.get() ?? [])
                     writeAttrs(record.attrs)
+                    writer.writeString(OS.current.nextLine)
                 }
             }
         } finally {

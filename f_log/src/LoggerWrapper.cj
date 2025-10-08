@@ -18,7 +18,7 @@ package f_log
 import std.env
 import std.sync.AtomicReference
 import std.time.DateTime
-import stdx.log.LogLevel
+import stdx.log.{LogLevel, LogRecord}
 import f_io.DummyOutputStream
 
 public class LoggerWrapper <: AbstractLogger {
@@ -34,6 +34,9 @@ public class LoggerWrapper <: AbstractLogger {
         facade.load().logLevelEnabled(level)
     }
 
+    public open func log(record: LogRecord): Unit {
+        facade.load().log(record)
+    }
     protected func append(level: LogLevel, message: String, now: DateTime, ex: Option<Exception>): Unit {
         facade.load().append(level, message, now, ex)
     }
