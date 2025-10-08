@@ -80,7 +80,9 @@ public class RequestMeta <: HttpRequestHandler & ToString {
         }
     }
     private func checkHeader(ctx: HttpContext, headers: HashSet<String>, name: String): Bool {
-        headers.contains(ctx.request.headers.getFirst(name) ?? '') || headers.contains("*")
+        headers.isEmpty() || 
+        headers.contains(ctx.request.headers.getFirst(name) ?? '') || 
+        headers.contains('*/*') || headers.contains("*") || headers.contains('')
     }
     public func checkProduces(ctx: HttpContext) {
         checkHeader(ctx, produces, "Accept")
