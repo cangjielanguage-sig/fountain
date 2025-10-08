@@ -32,6 +32,9 @@ import f_macros.*
  * fountain.data包对基本类型、字符串、Duration、DateTime、实现了DataFields接口的类型和被@DataAssist[fields]修饰的类做泛型实参的数组、集合、Option实现了DataFields的扩展。
  * 只有类的实例成员变量是这些类型才可以被@DataAssist[fields]修饰，否则会报错。
  * 被@DataAssist[fields]修饰的类可以被转换为JsonValue和实例成员复制。
+ * 如果@DataAssist[fields]修饰的是泛型类，而泛型形参是实例成员变量的类型，则会编译错误。
+ * 因为实例成员变量的类型会作为fountain.data.{ReadonlyField, MutableField}类型的泛型实参，而@DataAssist[fields]展开用它们的实例数组声明了静态成员变量。
+ * 现在的编译器不允许泛型形参出现在静态成员变量的声明当中，所以会编译错误。
  */
 public macro DataAssist(attr: Tokens, input: Tokens): Tokens {
     match (parseDecl(input)) {
