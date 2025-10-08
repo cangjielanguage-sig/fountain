@@ -387,7 +387,14 @@ ${toml}
         code
     }
     private func initDynamic(): Int64 {
-        doInit('--type=dynamic')[0]
+        let (code, dir) = doInit('--type=dynamic')
+        if(code != 0){
+            return code
+        }
+        if(dir == getWorkingDirectory() || dir.parent == getWorkingDirectory()){
+            addModule(dir.parent, dir.fileName)
+        }
+        code
     }
     private func cleanUpdate(): Int64 {
         let (workingDir, targetDir) = directories()
@@ -475,6 +482,18 @@ public class ${name}_AppVersionImpl <: AppVersion {
 }
 '''
     }
+    private func addModule(dir: Path, module: String): (String, String, Path) {
+        let tomlPath = dir.join('cjpm.toml')
+        let moduleMember = ', "./${module}"]'
+        let toml = entireFileText(tomlPath)
+        if(!toml.contains(moduleMember) && let Some(membersIdx) <- toml.indexOf('members') && let Some(idx) <- toml.indexOf(']', membersIdx)) {
+            let members = toml[membersIdx ..= idx]
+            let newMembers = members.replaceLast(']', moduleMember).replace('[, ', '[')
+            let newtoml = toml.replaceFirst(members, newMembers)
+            File.writeTo(tomlPath, newtoml.unsafeBytes())
+        }
+        (toml, moduleMember, tomlPath)
+    }
     private func build(): Int64 {
         println('fboot build is used to compile the project which depends fountain.')
         let (workingDir, targetDir) = directories()
@@ -483,9 +502,7 @@ public class ${name}_AppVersionImpl <: AppVersion {
         let n = name.replace('.', '_').replace('-', '_')
         let versionModuleName = appVersionModuleName(n)
         let versionModuleDir = workingDir.join(versionModuleName)
-        let tomlPath = workingDir.join('cjpm.toml')
-        let toml = entireFileText(tomlPath)
-        let versionModuleMember = ', "./${versionModuleName}"]'
+        let (toml, versionModuleMember, tomlPath) = addModule(workingDir, versionModuleName)
         atExit{
             if (toml.size > 0) {
                 File.writeTo(tomlPath, toml.replace(versionModuleMember, ']').unsafeBytes())
@@ -500,12 +517,6 @@ public class ${name}_AppVersionImpl <: AppVersion {
         }
         let appVersionPath = versionModuleDir.join('src/${n}_AppVersionImpl.cj')
         File.writeTo(appVersionPath, genCode(n, version).unsafeBytes())
-        if(!toml.contains(versionModuleMember) && let Some(membersIdx) <- toml.indexOf('members') && let Some(idx) <- toml.indexOf(']', membersIdx)) {
-            let members = toml[membersIdx ..= idx]
-            let newMembers = members.replaceLast(']', versionModuleMember)
-            let newtoml = toml.replaceFirst(members, newMembers)
-            File.writeTo(tomlPath, newtoml.unsafeBytes())
-        }
         execode = execute('cjpm', ['build', '--target-dir=${targetDir}'], workingDirectory: workingDir)
         if(execode == 0){
             return 0
