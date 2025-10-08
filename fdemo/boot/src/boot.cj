@@ -15,6 +15,7 @@ limitations under the License.
 */
 package boot
 
+import std.env
 import opengauss.driver.*
 import opengauss.slog
 import fountain.data.*
@@ -22,13 +23,12 @@ import fountain.data.macros.*
 import fountain.log.LoggerFactory
 import fountain.orm.*
 
-import std.reflect.*
-
 private let _ = {=>
     let logger = LoggerFactory.getLogger("opengauss")
     slog.setDefault(logger)
     let driver = DriverManager.getDriver("opengauss").getOrThrow()
-    ORM.register(driver, "postgres://fountain:Fountain123@pgm-2ze534c0xh8vatxzwo.pg.rds.aliyuncs.com:5432/fountain?sslmode=disable", []) 
+    let url = env.getVariable('POSTGRES')
+    ORM.register(driver, url, []) 
 }()
 ///////////////////////////////////////////////////////////////////////////////
 /**这一行往下单纯只是为了演示实例复制和类实例与json互相转换的功能*******************/
