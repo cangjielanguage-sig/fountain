@@ -283,18 +283,16 @@ public class RequestMeta <: HttpRequestHandler & ToString {
     public func accessLog<T>(start: MonoTime, ctx: HttpContext, args: ArrayList<Any>, returned: ?Any, e: ?Exception) where T <: Object {
         func anyToString(any: Any) {
             let arg = match (any) {
+                case x: HttpContext => x
+                case x: HttpRequest => x
+                case x: HttpHeaders => x
+                case x: HttpResponseBuilder => x
+                case x: RequestBodyParser => x
+                case x: Form => return x.toEncodeString()
                 case x: String => return x
                 case x: ToString => return x.toString()
-                case x: Array<Byte> => return x.toString()
-                case x: ToData => match(any){
-                    case _: HttpContext => x
-                    case _: HttpRequest => x
-                    case _: HttpHeaders => x
-                    case _: HttpResponseBuilder => x
-                    case _: Form => x
-                    case _: RequestBodyParser => x
-                    case _ => return x.toData().toString()
-                }
+                case x: Array<Byte> => return toBase64String(x)
+                case x: ToData => return JsonValue.tryFromData(x.toData()).toString()
                 case x => x
             }
             TypeInfo.of(arg).toString()
