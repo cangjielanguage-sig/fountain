@@ -18,24 +18,4 @@ package f_mvc
 public interface ErrorHttpRequestHandler <: HttpRequestHandler {
     prop status: HttpStatus
     func response(): Any
-    func handle(ctx: HttpContext): Unit {
-        let status = this.status
-        let b = ctx.responseBuilder.status(status.value)
-        var accept = ''
-        if(let Some(x) <- ctx.request.headers.getFirst('Accept')) {
-            b.header("Content-Type", x)
-            accept = x
-        }
-        match(response()){
-            case x: String => b.body(x)
-            case x: ToString => b.body(x.toString())
-            case x: InputStream => b.body(x)
-            case x: Array<Byte> => b.body(x)
-            case x: ToData where accept.size > 0 => match(MediaTypes.tryParse(accept)){
-                case Some(mt) => b.body(mt.fromData(x.toData()))
-                case _ => b.body(status.reasonPhrase)
-            }
-            case _ => b.body(status.reasonPhrase)
-        }
-    }
 }

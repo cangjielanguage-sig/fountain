@@ -120,11 +120,11 @@ public class MultiRequestMethodHandler <: HttpRequestHandler {
 class HttpStatusOnlyHandler <: HttpRequestHandler {
     HttpStatusOnlyHandler(private let status: HttpStatus, private let message!: String = '', private let kind!: FailureMessageKind = Text) {}
     
-    public func handle(httpContext: HttpContext): Unit {
+    public func handle(ctx: HttpContext): Unit {
         func setStatus(){
-            let b = httpContext.responseBuilder.status(status.value)
+            let b = ctx.responseBuilder.status(status.value)
             RequestMeta.setResponseStatus(status)
-            if(let Some(accept) <- httpContext.request.headers.getFirst("Accept")) {
+            if(let Some(accept) <- ctx.request.headers.getFirst("Accept")) {
                 b.header("Content-Type", accept)
             }
             b
@@ -132,7 +132,24 @@ class HttpStatusOnlyHandler <: HttpRequestHandler {
         match(kind){
             case Bean => if(message.size > 0 && let Some(x) <- BeanFactory.instance.getFirst<ErrorHttpRequestHandler>(cond: Exactly(message))){
                 RequestMeta.setResponseStatus(x.status)
-                x.handle(httpContext)
+                let status = x.status
+                let b = ctx.responseBuilder.status(status.value)
+                var accept = ''
+                if(let Some(acc) <- ctx.request.headers.getFirst('Accept')) {
+                    b.header("Content-Type", acc)
+                    accept = acc
+                }
+                match(x.response()){
+                    case x: String => b.body(x)
+                    case x: ToString => b.body(x.toString())
+                    case x: InputStream => b.body(x)
+                    case x: Array<Byte> => b.body(x)
+                    case x: ToData where accept.size > 0 => match(MediaTypes.tryParse(accept)){
+                        case Some(mt) => b.body(mt.fromData(x.toData()))
+                        case _ => b.body(status.reasonPhrase)
+                    }
+                    case _ => b.body(status.reasonPhrase)
+                }
             } else {
                 setStatus().body(status.reasonPhrase)
             }
