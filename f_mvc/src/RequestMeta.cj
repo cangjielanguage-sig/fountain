@@ -314,8 +314,7 @@ public class RequestMeta <: HttpRequestHandler & ToString {
         let log = LoggerFactory.getLogger<T>()
         let logArgs: Array<ToString> = [request.method, request.url, request.form.toEncodeString(), request.headers.getFirst('Content-Type'), argGen, result, getResponseStatus(), MonoTime.now() - start]
         if(let Some(ex) <- e){
-            let exce = 
-            try{
+            let exce = try{
                 MultiRequestMethodHandler.INTERNAL_SERVER_ERROR.handle(ctx)
                 ex
             }catch(e: Exception){
