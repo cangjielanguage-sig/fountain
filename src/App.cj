@@ -320,28 +320,28 @@ public struct App {
 
 [target]
 [target.x86_64-unknown-linux-gnu]
-  compile-option = "-O2 --lto=full --dy-std"
-  override-compile-option = "-O2 --lto=full --dy-std"
+  compile-option = "-O2 --lto=full --dy-std -Woff all"
+  override-compile-option = "-O2 --lto=full --dy-std -Woff all"
 [target.x86_64-unknown-linux-gnu.bin-dependencies]
   path-option = ["\${CANGJIE_STDX_DYNAMIC_PATH}", "\${CANGJIE_FOUNTAIN_LIBS}"]
 [target.aarch64-unknown-linux-gnu]
-  compile-option = "-O2 --lto=full --dy-std"
-  override-compile-option = "-O2 --lto=full --dy-std"
+  compile-option = "-O2 --lto=full --dy-std -Woff all"
+  override-compile-option = "-O2 --lto=full --dy-std -Woff all"
 [target.aarch64-unknown-linux-gnu.bin-dependencies]
   path-option = ["\${CANGJIE_STDX_DYNAMIC_PATH}", "\${CANGJIE_FOUNTAIN_LIBS}"]
 [target.x86_64-w64-mingw32]
-  compile-option = "-O2 --dy-std"
-  override-compile-option = "-O2 --dy-std"
+  compile-option = "-O2 --dy-std -Woff all"
+  override-compile-option = "-O2 --dy-std -Woff all"
 [target.x86_64-w64-mingw32.bin-dependencies]
   path-option = ["\${CANGJIE_STDX_DYNAMIC_PATH}", "\${CANGJIE_FOUNTAIN_LIBS}"]
 [target.x86_64-apple-darwin]
-  compile-option = "-O2 --dy-std"
-  override-compile-option = "-O2 --dy-std"
+  compile-option = "-O2 --dy-std -Woff all"
+  override-compile-option = "-O2 --dy-std -Woff all"
 [target.x86_64-apple-darwin.bin-dependencies]
   path-option = ["\${CANGJIE_STDX_DYNAMIC_PATH}", "\${CANGJIE_FOUNTAIN_LIBS}"]
 [target.aarch64-apple-darwin]
-  compile-option = "-O2 --dy-std"
-  override-compile-option = "-O2 --dy-std"
+  compile-option = "-O2 --dy-std -Woff all"
+  override-compile-option = "-O2 --dy-std -Woff all"
 [target.aarch64-apple-darwin.bin-dependencies]
   path-option = ["\${CANGJIE_STDX_DYNAMIC_PATH}", "\${CANGJIE_FOUNTAIN_LIBS}"]
 '''
@@ -349,7 +349,10 @@ public struct App {
         var content = entireFileText(tomlPath).replace('[workspace]', '''
 [workspace]
   version = "1.0.0"'''
-).replace('[dependencies]', '''
+)
+.replace('compile-option = ""', 'compile-option = "-O2 --dy-std -Woff all"')
+.replace('override-compile-option = ""', 'override-compile-option = "-O2 --dy-std -Woff all"')
+.replace('[dependencies]', '''
 [dependencies]
   fountain = {git = "https://gitcode.com/Cangjie-SIG/fountain.git"}'''
 )
