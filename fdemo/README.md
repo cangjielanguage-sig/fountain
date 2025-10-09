@@ -4,4 +4,5 @@
 2. 执行以下命令
 ```bash
 export CANGJIE_STDX_PATH=$CANGJIE_STDX_DYNAMIC_PATH
+export POSTGRES=url_of_postgres
 ```
