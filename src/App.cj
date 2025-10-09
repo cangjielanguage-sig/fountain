@@ -312,7 +312,6 @@ public struct App {
     }
     private func appendToml(dir: Path): Unit {
         let toml = '''
-
 [profile.build]
   incremental = true
 [profile.build.combined]
@@ -358,7 +357,6 @@ public struct App {
 )
         content = '''
 ${content}
-
 ${toml}
 '''
         File.writeTo(tomlPath, content.unsafeBytes())
