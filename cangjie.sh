@@ -1,9 +1,9 @@
 #!/bin/bash
-# 请把本文件复制到你需要的位置，
 # 并在home目录的.bashrc末尾添加source /path/of/cangjie.sh
 # Please copy this file to the location you need,
 # and add 'source /path/of/cangjie.sh' to the end of ~/.bashrc
-export CJPM_CONFIG=/mnt/d/docs/work/cangjie/repository
+
+export FOUNTAIN_HOME=`dirname $0`
 
 cangjie_version(){
   echo "$ lsb_release -a"
@@ -28,6 +28,8 @@ cangjie_version(){
   echo
 }
 cangjie_env(){
+  export CJPM_CONFIG=/mnt/d/docs/work/cangjie/repository
+  export CJPM_INSTALL=/mnt/d/docs/work/cangjie/installed
   export CANGJIE_STDX_PATH=/mnt/d/docs/work/cangjie/stdx/$2/linux_x86_64_llvm
   export CANGJIE_STDX_DYNAMIC_PATH=$CANGJIE_STDX_PATH/dynamic/stdx
   export CANGJIE_STDX_STATIC_PATH=$CANGJIE_STDX_PATH/static/stdx
@@ -52,18 +54,18 @@ cj(){
   install)
     fboot version $2 $3 $4 $5
     cd fboot
-    cjpm install --root /mnt/d/docs/work/cangjie/installed
+    cjpm install --root $CJPM_INSTALL
     echo -e "\a"
     cd ..
     ;;
   installed)
-    cd /mnt/d/docs/work/cangjie/installed
+    cd $CJPM_INSTALL
     ;;
   study)
     cd /mnt/d/docs/work/cangjie/study
     ;;
   fountain)
-    cd /mnt/d/docs/work/cangjie/projects/fountain
+    cd $FOUNTAIN_HOME
     if [[ "$2" == "install" ]]; then                                                                                 
         cj install
     elif [ -n "$2" ]; then                                                                                           
@@ -71,10 +73,10 @@ cj(){
     fi
     ;;
   fboot)
-    cd /mnt/d/docs/work/cangjie/projects/fountain/fboot
+    cd $FOUNTAIN_HOME/fboot
     ;;
   fdemo)
-    cd /mnt/d/docs/work/cangjie/projects/fountain/fdemo
+    cd $FOUNTAIN_HOME/fdemo
     ;;
   '-c')
     f=$2
