@@ -353,7 +353,7 @@ public struct App {
 .replace('override-compile-option = ""', 'override-compile-option = "-O2 --dy-std -Woff all"')
 .replace('[dependencies]', '''
 [dependencies]
-  fountain = {git = "https://gitcode.com/Cangjie-SIG/fountain.git"}'''
+  fountain = {git = "https://gitcode.com/Cangjie-SIG/fountain.git", branch = "lts/1.0.0"}'''
 )
         content = '''
 ${content}
@@ -457,8 +457,10 @@ ${toml}
         }
         if(!version.isEmpty()) {
             let appPath = fountainPath.join('src/App.cj')
-            let code = entireFileText(appPath)
-            File.writeTo(appPath, Regex(#'fountain\((\d+\.)+\d+\)'#).replaceAll(code, 'fountain(${version})').unsafeBytes())
+            var code = entireFileText(appPath)
+            code = Regex(#'fountain\((\d+\.)+\d+\)'#).replaceAll(code, 'fountain(${version})')
+            code = Regex(#'release-(\d+\.)+\d+'#).replaceAll(code, 'release-${version}')
+            File.writeTo(appPath, code.unsafeBytes())
         }
         0
     }
