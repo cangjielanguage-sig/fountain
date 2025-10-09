@@ -15,7 +15,7 @@ limitations under the License.
  */
 package f_bean
 
-import f_log.LoggerFactory
+import f_log.{LoggerFactory, LogFilter, LoggerConfig}
 
 private enum BeanType{
     | AnnotationType(TypeInfo)
@@ -141,6 +141,9 @@ public class BeanFactory {
         if (!beans.isEmpty()) {
             check()
             initBeansIfNeed()
+            if(let Some(lf) <- getFirst<LogFilter>()){
+                LoggerConfig.filter = lf
+            }
         }
     }
     private func check() {

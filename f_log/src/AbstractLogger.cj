@@ -88,9 +88,10 @@ public abstract class AbstractLogger <: Logger & Resource {
                             if (i > 0) {
                                 writer.writeString(',')
                             }
-                            let attr = attrs[i]
-                            writer.writeString('${attr[0]}:')
-                            attr[1].writeTo(writer)
+                            if(let Some(attr) <- LoggerConfig.filter.filter(attrs[i])){
+                                writer.writeString('${attr[0]}:')
+                                attr[1].writeTo(writer)
+                            }
                         }
                         writer.endObject()
                         writer.writeString(';')

@@ -15,12 +15,13 @@ limitations under the License.
  */
 package f_log
 
-import std.collection.{ArrayList, HashMap, TreeMap, Map}
+import std.collection.{ArrayList, HashMap, TreeMap}
 import std.collection.concurrent.ConcurrentHashMap
 import stdx.log.LogLevel
 import stdx.log.Logger as StdLogger
+import f_base.*
 import f_collection.LinkedHashMap
-import f_data.ObjectData
+import f_data.*
 import f_util.TextTemplate
 
 /**
@@ -43,7 +44,6 @@ public abstract class Logger <: StdLogger {
     public func append(level: LogLevel, message: String, ex: Option<Exception>): Unit {
         append(level, {=> message}, ex)
     }
-
     public func append<T>(level: LogLevel, message: String, args: Array<T>, ex: ?Exception): Unit where T <: ToString {
         append(
             level,
@@ -56,26 +56,43 @@ public abstract class Logger <: StdLogger {
     public func append<T>(level: LogLevel, message: String, args: T, ex: ?Exception): Unit where T <: Object & ObjectData<T> {
         append(
             level,
-            {
-                => TextTemplate.compile(message, prefix: "{", suffix: "}").format<T>(args)
+            {=> 
+                let filter = LoggerConfig.filter
+                if(let _: DummyLogFilter <- filter){
+                    return TextTemplate.compile(message, prefix: "{", suffix: "}").format<T>(args)
+                }
+                let map = HashMap<String, String>()
+                for(field in DataObject<T>(args).fields()){
+                    let name = field.name
+                    let data = field.get(args).toString()
+                    if(let Some((n, v)) <- filter.filter(name, data)){
+                        map.add(n, v)
+                    }
+                }
+                TextTemplate.compile(message, prefix: "{", suffix: "}").format<String>(map)
             },
             ex
         )
     }
     public func append<T>(level: LogLevel, message: String, args: ArrayList<T>, ex: ?Exception): Unit where T <: ToString {
-        append(
-            level,
-            {
-                => TextTemplate.compile(message, prefix: "{", suffix: "}").format<T>(args)
-            },
-            ex
-        )
+        append<T>(level, message, args.unsafeData(), ex)
     }
+    
     public func append<T>(level: LogLevel, message: String, args: HashMap<String, T>, ex: ?Exception): Unit where T <: ToString {
         append(
             level,
-            {
-                => TextTemplate.compile(message, prefix: "{", suffix: "}").format<T>(args)
+            {=> 
+                let filter = LoggerConfig.filter
+                if(let _: DummyLogFilter <- filter){
+                    return TextTemplate.compile(message, prefix: "{", suffix: "}").format<T>(args)
+                }
+                let map = HashMap<String, String>()
+                for ((n, v) in args) {
+                    if(let Some((n, v)) <- filter.filter(n, v.toString())){
+                        map[n] = v
+                    }
+                }
+                TextTemplate.compile(message, prefix: "{", suffix: "}").format<String>(map)
             },
             ex
         )
@@ -83,8 +100,18 @@ public abstract class Logger <: StdLogger {
     public func append<T>(level: LogLevel, message: String, args: ConcurrentHashMap<String, T>, ex: ?Exception): Unit where T <: ToString {
         append(
             level,
-            {
-                => TextTemplate.compile(message, prefix: "{", suffix: "}").format<T>(args)
+            {=> 
+                let filter = LoggerConfig.filter
+                if(let _: DummyLogFilter <- filter){
+                    return TextTemplate.compile(message, prefix: "{", suffix: "}").format<T>(args)
+                }
+                let map = HashMap<String, String>()
+                for((n, v) in args){
+                    if(let Some((n, v)) <- filter.filter(n, v.toString())){
+                        map[n] = v
+                    }
+                }
+                TextTemplate.compile(message, prefix: "{", suffix: "}").format<String>(map)
             },
             ex
         )
@@ -92,8 +119,18 @@ public abstract class Logger <: StdLogger {
     public func append<T>(level: LogLevel, message: String, args: TreeMap<String, T>, ex: ?Exception): Unit where T <: ToString {
         append(
             level,
-            {
-                => TextTemplate.compile(message, prefix: "{", suffix: "}").format<T>(args)
+            {=> 
+                let filter = LoggerConfig.filter
+                if(let _: DummyLogFilter <- filter){
+                    return TextTemplate.compile(message, prefix: "{", suffix: "}").format<T>(args)
+                }
+                let map = HashMap<String, String>()
+                for((n, v) in args){
+                    if(let Some((n, v)) <- filter.filter(n, v.toString())){
+                        map[n] = v
+                    }
+                }
+                TextTemplate.compile(message, prefix: "{", suffix: "}").format<String>(map)
             },
             ex
         )
@@ -101,8 +138,18 @@ public abstract class Logger <: StdLogger {
     public func append<T>(level: LogLevel, message: String, args: LinkedHashMap<String, T>, ex: ?Exception): Unit where T <: ToString {
         append(
             level,
-            {
-                => TextTemplate.compile(message, prefix: "{", suffix: "}").format<T>(args)
+            {=> 
+                let filter = LoggerConfig.filter
+                if(let _: DummyLogFilter <- filter){
+                    return TextTemplate.compile(message, prefix: "{", suffix: "}").format<T>(args)
+                }
+                let map = HashMap<String, String>()
+                for((n, v) in args){
+                    if(let Some((n, v)) <- filter.filter(n, v.toString())){
+                        map[n] = v
+                    }
+                }
+                TextTemplate.compile(message, prefix: "{", suffix: "}").format<String>(map)
             },
             ex
         )

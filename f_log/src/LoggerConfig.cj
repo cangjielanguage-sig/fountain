@@ -15,6 +15,7 @@ limitations under the License.
  */
 package f_log
 
+import std.sync.AtomicReference
 import std.convert.Parsable
 import stdx.log.LogLevel
 import f_config.Config
@@ -29,12 +30,21 @@ public class LoggerConfig {
     //confItem 可以是level pattern 等，还可以有Appender特有配置项
     private static const confPrefix = "logger"
     public static const appender = "appender"
+    private static let filter_ = AtomicReference<Box<LogFilter>>(Box(DummyLogFilter.instance))
 
     private init() {
     }
     static init() {
         Config.refresher(confPrefix, LoggerFactory.refresh)
     }
+    public static mut prop filter: LogFilter {
+        get(){
+            filter_.load().value
+        }
+        set(value){
+            filter_.store(Box(value))
+        }
+    } 
     public static func createFacade(name: String): LoggerAppenderFacade {
         LoggerAppenderCreator.create(name)
     }

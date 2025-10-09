@@ -78,7 +78,7 @@ public abstract class AsyncLogger <: AbstractLogger {
             case _: DummyOutputStream => output
             case _ => 
                 let output = SyncQueueOutputStream(bufSize)
-                queueOutputMap.put(tag, output)
+                queueOutputMap.add(tag, output)
                 output
         }
     }
