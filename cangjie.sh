@@ -3,7 +3,7 @@
 # Please copy this file to the location you need,
 # and add 'source /path/of/cangjie.sh' to the end of ~/.bashrc
 
-export FOUNTAIN_HOME=`dirname $0`
+export FOUNTAIN_HOME=$( cd -- "$( dirname -- "${BASH_SOURCE}" )" &> /dev/null && pwd -P )
 
 cangjie_version(){
   echo "$ lsb_release -a"
