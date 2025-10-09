@@ -195,7 +195,7 @@ _/ ____\____  __ __  _____/  |______  |__| ____
   @Expect(jwt.verifier(sign).verify(), true)
   ```
 
-- 日志
+### 日志
 
   ```cj
   import fountain.log.LoggerFactory
@@ -253,7 +253,13 @@ _/ ____\____  __ __  _____/  |______  |__| ____
     export fountain_logger_appender_UnixLoggerName_path=/path/of/unix/file.log # 默认是/tmp/log/unix.log
     export fountain_logger_appender_UnixLoggerName_pattern=..... # unix日志格式
   ```
+#### 日志过滤器
+实现fountain.log.LogFilter可以转换、过滤日志内容
+可以这样记日志log.info('content:{password}', map)
+map里的键值对逐个调用LogFilter实现，用返回的键值对作为新的日志内容。
+map也可以换成被`@DataAssist[fields]`修饰的类
 
+LogFilter实现被`@Bean`修饰即可生效。也可以调用`LoggerConfig.filter = <一个LogFilter实例>``
 
 ### 零复制
   - MMapFile
