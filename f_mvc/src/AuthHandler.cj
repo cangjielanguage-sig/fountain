@@ -110,6 +110,9 @@ class AuthHandlerProxy <: AuthHandler {
             synchronized(mutex){
                 if(authHandler.isNone()){
                     for(h in lookupList<AuthHandler>()){
+                        if(authHandler.isSome() || (sessionHandler.isSome() && privilegeHandler.isSome())){
+                            break
+                        }
                         if (sessionHandler.isNone() && let sh: UserSessionHandler <- h) {
                             sessionHandler = sh
                         } else if (privilegeHandler.isNone() && let ph: PrivilegeHandler <- h) {
@@ -130,7 +133,8 @@ class AuthHandlerProxy <: AuthHandler {
                 }
             }
         }
-        if(let _: DummyAuthHandler <- authHandler){}else{
+        if(let Some(_: DummyAuthHandler) <- authHandler){
+        }else if(authHandler.isSome()){
             return authHandler?.check(param) ?? AuthStatus.OK
         }
         var checked = if(param.ignoreAuth){
