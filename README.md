@@ -99,7 +99,7 @@ _/ ____\____  __ __  _____/  |______  |__| ____
      - fboot version x.y.z tag '版本消息'，除了替换版本号，还会以'版本消息'创建附注tag
      - fboot version x.y.z '提交的内容' tag
      - fboot version x.y.z '提交的内容' tag '版本消息'
-  11.fboot version 显示当前fountain版本号
+  13.fboot version 显示当前fountain版本号
 
 ## 构建
   为stdx指定环境变量，为fountain指定编译路径和环境变量，比如下面这样。要完整地使用fboot的功能，务必使用这些环境变量名
