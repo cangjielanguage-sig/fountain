@@ -80,26 +80,26 @@ _/ ____\____  __ __  _____/  |______  |__| ____
 ## fboot
 
 - 把fboot加入PATH环境变量
-  1. 应用项目只需要编译为动态链接库，把应用的动态链接库加入LD_LIBRARY_PATH
-  2. `fboot run [PATH] --dylibPattern=<DYNAMIC_LIB_NAME_REGEX_WITHOUT_EXTNAME>`
-  3. `fboot shutdown <PID>`
-  4. `fboot start <PID> [PATH] --dylibPattern=<DYNAMIC_LIB_NAME_REGEX_WITHOUT_EXTNAME>`
-  5. `fboot restart <PID> [PATH] --dylibPattern=<DYNAMIC_LIB_NAME_REGEX_WITHOUT_EXTNAME>`
-  6. `fboot workspace` 将当前目录初始化为仓颉workspace
-  7. `fboot workspace <spacename>` 在当前目录创建名为`<spacename>`的子目录，并将它初始化为仓颉workspace
-  8. `fboot workspace <direct_path>` 将绝对路径创建为仓颉workspace
-  8. `fboot dynamic` 将当前目录初始化为仓颉dynamic项目
-  9. `fboot dynamic <module_name>` 在当前目录创建名为`<module_name>`的子目录，并初始化为仓颉dynamic模块，并把模块加入当前目录的cjpm.toml
-  10.fboot build 编译使用fountain开发的应用项目
-  11.fboot count 数当前目录的仓颉代码行数
-  12.fboot version x.y.z 用指定版本号替换cjpm.toml和App.cj的版本号，并提交且推送当前全部修改
-     - fboot version x.y.z
-     - fboot version x.y.z '提交的内容'，以指定内容执行git commit
-     - fboot version x.y.z tag，除了替换版本号，还会用指定的版本号创建tag：release-x.y.z
-     - fboot version x.y.z tag '版本消息'，除了替换版本号，还会以'版本消息'创建附注tag
-     - fboot version x.y.z '提交的内容' tag
-     - fboot version x.y.z '提交的内容' tag '版本消息'
-  13.fboot version 显示当前fountain版本号
+  1.  应用项目只需要编译为动态链接库，把应用的动态链接库加入LD_LIBRARY_PATH
+  2.  `fboot run [PATH] --dylibPattern=<DYNAMIC_LIB_NAME_REGEX_WITHOUT_EXTNAME>`
+  3.  `fboot shutdown <PID>`
+  4.  `fboot start <PID> [PATH] --dylibPattern=<DYNAMIC_LIB_NAME_REGEX_WITHOUT_EXTNAME>`
+  5.  `fboot restart <PID> [PATH] --dylibPattern=<DYNAMIC_LIB_NAME_REGEX_WITHOUT_EXTNAME>`
+  6.  `fboot workspace` 将当前目录初始化为仓颉workspace
+  7.  `fboot workspace <spacename>` 在当前目录创建名为`<spacename>`的子目录，并将它初始化为仓颉workspace
+  8.  `fboot workspace <direct_path>` 将绝对路径创建为仓颉workspace
+  8.  `fboot dynamic` 将当前目录初始化为仓颉dynamic项目
+  9.  `fboot dynamic <module_name>` 在当前目录创建名为`<module_name>`的子目录，并初始化为仓颉dynamic模块，并把模块加入当前目录的cjpm.toml
+  10. fboot build 编译使用fountain开发的应用项目
+  11. fboot count 数当前目录的仓颉代码行数
+  12. fboot version x.y.z 用指定版本号替换cjpm.toml和App.cj的版本号，并提交且推送当前全部修改
+      - fboot version x.y.z
+      - fboot version x.y.z '提交的内容'，以指定内容执行git commit
+      - fboot version x.y.z tag，除了替换版本号，还会用指定的版本号创建tag：release-x.y.z
+      - fboot version x.y.z tag '版本消息'，除了替换版本号，还会以'版本消息'创建附注tag
+      - fboot version x.y.z '提交的内容' tag
+      - fboot version x.y.z '提交的内容' tag '版本消息'
+  13. fboot version 显示当前fountain版本号
 
 ## 构建
   为stdx指定环境变量，为fountain指定编译路径和环境变量，比如下面这样。要完整地使用fboot的功能，务必使用这些环境变量名
