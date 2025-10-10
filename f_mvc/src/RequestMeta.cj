@@ -192,7 +192,7 @@ public class RequestMeta <: HttpRequestHandler & ToString {
                 MultiRequestMethodHandler.NOT_ACCEPTABLE.handle(ctx)
             }
         } else {
-            MultiRequestMethodHandler.NOT_ACCEPTABLE.handle(ctx)
+            ctx.responseBuilder.header('Content-Type', 'application/json').body(response.toString())
         }
     }
     private func respond(response: InputStream, ctx: HttpContext): Unit {

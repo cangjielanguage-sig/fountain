@@ -20,7 +20,7 @@ run(){
 }
 
 build(){
-    export CANGJIE_STDX=$CANGJIE_STDX_DYNAMIC_PATH
+    export CANGJIE_STDX_PATH=$CANGJIE_STDX_DYNAMIC_PATH
     fboot build $path
     echo -e '\a'
 }
