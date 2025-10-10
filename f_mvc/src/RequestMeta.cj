@@ -163,7 +163,8 @@ public class RequestMeta <: HttpRequestHandler & ToString {
         consumes.add('*')
     }
     private func respond<R>(result: R, ctx: HttpContext): Unit where R <: ToData {
-        if (!(result is Unit) && let Some(accept) <- ctx.request.headers.getFirst('Accept')) {
+        let accept = ctx.request.headers.getFirst('Accept')
+        if (!(result is Unit) && let Some(accept) <- accept) {
             if(let Some(mediaType) <- MediaTypes.tryParse(accept)){
                 let bytes = mediaType.fromData(result.toData())
                 ctx.responseBuilder.header('Content-Type', accept).body(bytes)
@@ -175,8 +176,10 @@ public class RequestMeta <: HttpRequestHandler & ToString {
             }else{
                 MultiRequestMethodHandler.NOT_ACCEPTABLE.handle(ctx)
             }
-        } else if ((result is Unit) && let Some(accept) <- ctx.request.headers.getFirst('Accept') && accept == '*/*'){
+        } else if ((result is Unit) && let Some(accept) <- accept && accept == '*/*'){
             ctx.responseBuilder.header('Content-Type', accept).body('')
+        } else if ((result is Unit) && accept.isNone()) {
+            ctx.responseBuilder.body('')
         } else {
             MultiRequestMethodHandler.NOT_ACCEPTABLE.handle(ctx)
         }
