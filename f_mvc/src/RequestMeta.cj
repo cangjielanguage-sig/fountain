@@ -163,19 +163,34 @@ public class RequestMeta <: HttpRequestHandler & ToString {
         consumes.add('*')
     }
     private func respond<R>(result: R, ctx: HttpContext): Unit where R <: ToData {
-        if (!(result is Unit) && let Some(accept) <- ctx.request.headers.getFirst('Accept') && let Some(mediaType) <- MediaTypes
-            .tryParse(accept)) {
-            let bytes = mediaType.fromData(result.toData())
-            ctx.responseBuilder.header('Content-Type', accept).body(bytes)
+        if (!(result is Unit) && let Some(accept) <- ctx.request.headers.getFirst('Accept')) {
+            if(let Some(mediaType) <- MediaTypes.tryParse(accept)){
+                let bytes = mediaType.fromData(result.toData())
+                ctx.responseBuilder.header('Content-Type', accept).body(bytes)
+            }else if(accept == '*/*'){
+                let acc = 'application/json'
+                let mt = MediaTypes.parse(acc)
+                let bytes = mt.fromData(result.toData())
+                ctx.responseBuilder.header('Content-Type', acc).body(bytes)
+            }else{
+                MultiRequestMethodHandler.NOT_ACCEPTABLE.handle(ctx)
+            }
+        } else if ((result is Unit) && let Some(accept) <- ctx.request.headers.getFirst('Accept') && accept == '*/*'){
+            ctx.responseBuilder.header('Content-Type', accept).body('')
         } else {
             MultiRequestMethodHandler.NOT_ACCEPTABLE.handle(ctx)
         }
     }
     private func respond(response: JsonValue, ctx: HttpContext): Unit {
-        if (let Some(accept) <- ctx.request.headers.getFirst('Accept') && let Some(mediaType) <- MediaTypes.tryParse(
-            accept) && let jmt: JsonMediaType <- mediaType) {
-            let bytes = jmt.fromData(response)
-            ctx.responseBuilder.header('Content-Type', accept).body(bytes)
+        if (let Some(accept) <- ctx.request.headers.getFirst('Accept')) {
+            if(let Some(mediaType) <- MediaTypes.tryParse(accept) && let jmt: JsonMediaType <- mediaType){
+                let bytes = jmt.fromData(response)
+                ctx.responseBuilder.header('Content-Type', accept).body(bytes)
+            }else if(accept == '*/*'){
+                ctx.responseBuilder.header('Content-Type', 'application/json').body(response.toString())
+            }else{
+                MultiRequestMethodHandler.NOT_ACCEPTABLE.handle(ctx)
+            }
         } else {
             MultiRequestMethodHandler.NOT_ACCEPTABLE.handle(ctx)
         }
