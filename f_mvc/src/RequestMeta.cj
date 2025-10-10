@@ -114,10 +114,8 @@ public class RequestMeta <: HttpRequestHandler & ToString {
     public func checkAuth(ctx: HttpContext, args: ArrayList<Any>): Bool {
         let checked = if (ignoreAuth && ignorePrivilege) {
             return true
-        } else if (let Some(auth) <- BeanFactory.instance.getFirst<AuthHandler>()) {
-            auth.check(AuthParam(ctx, path, args, ignoreAuth, ignorePrivilege))
         } else {
-            AuthStatus.OK
+            AuthHandlerProxy.instance.check(AuthParam(ctx, path, args, ignoreAuth, ignorePrivilege))
         }
         let (check, status, resp) = match (checked) {
             case OK => return true

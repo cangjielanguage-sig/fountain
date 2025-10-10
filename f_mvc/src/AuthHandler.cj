@@ -68,3 +68,80 @@ public struct AuthParam {
         public let ignorePrivilege: Bool
     ){}
 }
+/**
+ * 登录检查
+ */
+public interface UserSessionHandler <: AuthHandler {}
+/**
+ * 权限检查
+ */
+public interface PrivilegeHandler <: AuthHandler {}
+
+struct DummyUserSessionHandler <: UserSessionHandler {
+    static let instance = DummyUserSessionHandler()
+    private init(){}
+    public func check(param: AuthParam): AuthStatus {
+        return AuthStatus.OK
+    }
+}
+struct DummyPrivilegeHandler <: PrivilegeHandler {
+    static let instance = DummyPrivilegeHandler()
+    private init(){}
+    public func check(param: AuthParam): AuthStatus {
+        return AuthStatus.OK
+    }
+}
+struct DummyAuthHandler <: AuthHandler {
+    static let instance = DummyAuthHandler()
+    private init(){}
+    public func check(param: AuthParam): AuthStatus {
+        return AuthStatus.OK
+    }
+}
+class AuthHandlerProxy <: AuthHandler {
+    static let instance = AuthHandlerProxy()
+    private init(){}
+    private let mutex = Mutex()
+    private var authHandler = None<AuthHandler>
+    private var sessionHandler = None<UserSessionHandler>
+    private var privilegeHandler = None<PrivilegeHandler>
+    public func check(param: AuthParam): AuthStatus {
+        if(authHandler.isNone()){
+            synchronized(mutex){
+                if(authHandler.isNone()){
+                    for(h in lookupList<AuthHandler>()){
+                        if (sessionHandler.isNone() && let sh: UserSessionHandler <- h) {
+                            sessionHandler = sh
+                        } else if (privilegeHandler.isNone() && let ph: PrivilegeHandler <- h) {
+                            privilegeHandler = ph
+                        } else if (authHandler.isNone()) {
+                            authHandler = h
+                        }
+                    }
+                    if(sessionHandler.isNone()){
+                        sessionHandler = DummyUserSessionHandler.instance
+                    }
+                    if(privilegeHandler.isNone()){
+                        privilegeHandler = DummyPrivilegeHandler.instance
+                    }
+                    if(authHandler.isNone()){
+                        authHandler = DummyAuthHandler.instance
+                    }
+                }
+            }
+        }
+        if(let _: DummyAuthHandler <- authHandler){}else{
+            return authHandler?.check(param) ?? AuthStatus.OK
+        }
+        var checked = if(param.ignoreAuth){
+            AuthStatus.OK
+        }else{
+            sessionHandler?.check(param) ?? AuthStatus.OK
+        }
+        if(let AuthStatus.OK <- checked && !param.ignorePrivilege){
+            privilegeHandler?.check(param) ?? AuthStatus.OK
+        }else{
+            checked
+        }
+    }
+}
