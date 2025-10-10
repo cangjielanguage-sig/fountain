@@ -571,6 +571,32 @@ public class ${name}_AppVersionImpl <: AppVersion {
         println('modules: ${counter.modules}, packages: ${counter.packages}, files: ${counter.files}, lines: ${counter.lines}, consumes: ${DateTime.now() - start}')
         0
     }
+    private func help(): Int64 {
+'''
+1.  应用项目只需要编译为动态链接库，把应用的动态链接库加入LD_LIBRARY_PATH
+2.  `fboot run [PATH] --dylibPattern=<DYNAMIC_LIB_NAME_REGEX_WITHOUT_EXTNAME>`
+3.  `fboot shutdown <PID>`
+4.  `fboot start <PID> [PATH] --dylibPattern=<DYNAMIC_LIB_NAME_REGEX_WITHOUT_EXTNAME>`
+5.  `fboot restart <PID> [PATH] --dylibPattern=<DYNAMIC_LIB_NAME_REGEX_WITHOUT_EXTNAME>`
+6.  `fboot workspace` 将当前目录初始化为仓颉workspace
+7.  `fboot workspace <spacename>` 在当前目录创建名为`<spacename>`的子目录，并将它初始化为仓颉workspace
+8.  `fboot workspace <direct_path>` 将绝对路径创建为仓颉workspace
+8.  `fboot dynamic` 将当前目录初始化为仓颉dynamic项目
+9.  `fboot dynamic <module_name>` 在当前目录创建名为`<module_name>`的子目录，并初始化为仓颉dynamic模块，并把模块加入当前目录的cjpm.toml
+10. fboot build 编译使用fountain开发的应用项目
+11. fboot count 数当前目录的仓颉代码模块数、包数、文件数、行数、计数耗时
+12. fboot version x.y.z 用指定版本号替换cjpm.toml和App.cj的版本号，并提交且推送当前全部修改
+    - fboot version x.y.z
+    - fboot version x.y.z '提交的内容'，以指定内容执行git commit
+    - fboot version x.y.z tag，除了替换版本号，还会用指定的版本号创建tag：release-x.y.z
+    - fboot version x.y.z tag '版本消息'，除了替换版本号，还会以'版本消息'创建附注tag
+    - fboot version x.y.z '提交的内容' tag
+    - fboot version x.y.z '提交的内容' tag '版本消息'
+13. fboot version 显示当前fountain版本号
+14. fboot help 显示命令列表
+'''
+        0
+    }
     public func boot(): Int64 {
         match (args[0]) {
             case 'start' => start()
@@ -584,6 +610,7 @@ public class ${name}_AppVersionImpl <: AppVersion {
             case 'build' => build()
             case 'count' => count()
             case 'version' => version()
+            case 'help' => help()
             case _ => throw BootException(
                 'first command arg must be run|start|shutdown|restart|dynamic|workspace|cleanUpdate|build|count|version, but current args are ${args}')
         }
