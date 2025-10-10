@@ -28,7 +28,7 @@ import f_data.{ObjectData, DataObject}
 import f_exception.UnreadableException
 import f_jwt.exception.JWTException
 
-public sealed abstract class JWT {
+sealed abstract class JWT {
     let headers = HashMap<String, String>()
     let payload = HashMap<String, Any>()
     var signAlgo: SignAlgo = NoneSignAlgo.INSTANCE

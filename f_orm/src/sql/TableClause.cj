@@ -15,7 +15,7 @@ limitations under the License.
  */
 package f_orm.sql
 
-public abstract sealed class TableClause<T> <: ToString where T <: QueryMappersInit<T> {
+abstract sealed class TableClause<T> <: ToString where T <: QueryMappersInit<T> {
     let sqlgen = StringGenerator()
     private var idType_ = None<DataType>
     TableClause(partial: String, private let exe: SqlExecutor) {
