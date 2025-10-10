@@ -258,12 +258,15 @@ public class RequestMeta <: HttpRequestHandler & ToString {
                     'parameter of controller function must be with one and only one Annotation as @RequestBody or @RequestParam or @RequestHeader or @PathVariable or @MultipartFormData')
             }
         }
+        let ignoreSecurity = function.findAnnotation<IgnoreSecurity>().isSome()
+        let ignoreAuthGlobal = ignoreSecurity || function.findAnnotation<IgnoreAuth>().isSome()
+        let ignorePrivilegeGlobal = ignoreSecurity || function.findAnnotation<IgnorePrivilege>().isSome()
         for (annotation in function.annotations) {
             match (annotation) {
                 case a: RequestMapping =>
                     let method = a.method
-                    let ignoreAuth = a.ignoreAuth
-                    let ignorePrivilege = a.ignorePrivilege
+                    let ignoreAuth = a.ignoreAuth || ignoreAuthGlobal
+                    let ignorePrivilege = a.ignorePrivilege || ignorePrivilegeGlobal
                     let params = RequestCondition.compile(a.params)
                     let headers = RequestCondition.compile(a.headers)
                     for (path in a.path.split('|')) {
