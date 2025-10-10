@@ -572,6 +572,7 @@ public class ${name}_AppVersionImpl <: AppVersion {
         0
     }
     private func help(): Int64 {
+        let content = 
 '''
 1.  应用项目只需要编译为动态链接库，把应用的动态链接库加入LD_LIBRARY_PATH
 2.  fboot run [PATH] --dylibPattern=<DYNAMIC_LIB_NAME_REGEX_WITHOUT_EXTNAME>
@@ -595,6 +596,7 @@ public class ${name}_AppVersionImpl <: AppVersion {
 13. fboot version 显示当前fountain版本号
 14. fboot help 显示命令列表
 '''
+        println(content)
         0
     }
     public func boot(): Int64 {
