@@ -586,6 +586,7 @@ public class ${name}_AppVersionImpl <: AppVersion {
 9.  fboot dynamic <module_name> 在当前目录创建名为<module_name>的子目录，并初始化为仓颉dynamic模块，并把模块加入当前目录的cjpm.toml
 10. fboot build 编译使用fountain开发的应用项目
 11. fboot count 数当前目录的仓颉代码模块数、包数、文件数、行数、计数耗时
+==============下面的命令用来管理fountain本身===================
 12. fboot version x.y.z 用指定版本号替换cjpm.toml和App.cj的版本号，并提交且推送当前全部修改
     - fboot version x.y.z
     - fboot version x.y.z '提交的内容'，以指定内容执行git commit
