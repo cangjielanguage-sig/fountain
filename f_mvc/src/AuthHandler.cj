@@ -81,13 +81,14 @@ class AuthHandlerProxy <: AuthHandler {
     static let instance = AuthHandlerProxy()
     private init(){}
     private let mutex = Mutex()
+    private var noHandlers = true
     private var authHandler = None<AuthHandler>
     private var sessionHandler = None<UserSessionHandler>
     private var privilegeHandler = None<PrivilegeHandler>
     public func check(param: AuthParam): AuthStatus {
-        if(authHandler.isNone()){
+        if(noHandlers){
             synchronized(mutex){
-                if(authHandler.isNone()){
+                if(noHandlers){
                     for(h in lookupList<AuthHandler>()){
                         if (sessionHandler.isNone() && let sh: UserSessionHandler <- h) {
                             sessionHandler = sh
@@ -100,6 +101,7 @@ class AuthHandlerProxy <: AuthHandler {
                             break
                         }
                     }
+                    noHandlers = false
                 }
             }
         }
