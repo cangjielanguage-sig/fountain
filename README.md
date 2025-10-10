@@ -176,6 +176,10 @@ _/ ____\____  __ __  _____/  |______  |__| ____
       - AuthHandler，优先级最高，如果定义了这个接口的实现就忽略执行下面的接口实现
       - UserSessionHandler <: AuthHandler，mvc框架用它检查登录状态
       - PrivilegeHandler <: AuthHandler，mvc框架用它检查权限
+      - @*Mapping 有ignoreAuth ignorePrivilege成员，前者控制是否检查登录状态，后者控制是否检查权限 
+        - ignore成员是false时，下面的controller函数注解生效
+        - @IgnoreAuth @IgnorePrivilege
+        - @IgnoreSecurity 同时忽略登录状态和权限检查
     - 自动生成文档
       - 自带文档请求接口
 ### 网络流水线
