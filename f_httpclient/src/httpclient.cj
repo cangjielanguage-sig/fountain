@@ -206,19 +206,11 @@ public interface ExtendHttpResponse {
 }
 extend HttpResponse <: ExtendHttpResponse {
     public func convert<T>(): ?T where T <: DataFields<T> {
+        let contentType = this.headers.getFirst('Content-Type') ?? 'application/json'
         if(let Some(s) <- this.bodySize){
-            let buffer = ByteBuffer()
-            copy(this.body, to: buffer)
-            let bytes = buffer.bytes()
-            let contentType = this.headers.getFirst('Content-Type') ?? 'application/json'
-            let data = MediaTypes.tryParse(contentType).getOrThrow{
+            MediaTypes.tryParse(contentType).getOrThrow{
                 MediaTypeException('${contentType} is not a valid media type')
-            }.toData(bytes)
-            match(T.tryFromData(data)){
-                case x: T => x
-                case x: ?T => x
-                case _ => throw DataException('bytes which base64 is ${base64.toBase64String(bytes)} cannot be converted to ${TypeInfos.get<T>()}')
-            }
+            }.toDataFields<T>(this.body)
         }else{
             None<T>
         }
