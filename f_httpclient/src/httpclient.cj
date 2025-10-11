@@ -154,9 +154,11 @@ public class HttpClient {
         this
     }
     public func put<T>(contentType: String, body: T): HttpResponse where T <: ToData {
+        header('Content-Type', contentType)
         this.body<T>(contentType, body).put()
     }
     public func post<T>(contentType: String, body: T): HttpResponse where T <: ToData {
+        header('Content-Type', contentType)
         this.body<T>(contentType, body).post()
     }
 
