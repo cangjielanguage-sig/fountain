@@ -15,13 +15,16 @@ limitations under the License.
 */
 package f_httpclient
 
-public import std.io.InputStream
+public import std.io.{InputStream, ByteBuffer, copy}
 public import std.net.{SocketAddress, StreamingSocket}
 public import stdx.net.tls.*
 public import stdx.encoding.url.*
 public import stdx.log.Logger
 public import stdx.net.http.*
 public import f_data.*
+import stdx.encoding.base64
+import f_base.*
+import f_data.exception.DataException
 import f_http.{MediaType, MediaTypes}
 import f_http.exception.MediaTypeException
 
@@ -196,5 +199,28 @@ public class FormBuilder {
     }
     public func post(): HttpResponse {
         return client.post(form.toEncodeString())
+    }
+}
+public interface ExtendHttpResponse {
+    func convert<T>(): ?T where T <: DataFields<T>
+}
+extend HttpResponse <: ExtendHttpResponse {
+    public func convert<T>(): ?T where T <: DataFields<T> {
+        if(let Some(s) <- this.bodySize){
+            let buffer = ByteBuffer()
+            copy(this.body, to: buffer)
+            let bytes = buffer.bytes()
+            let contentType = this.headers.getFirst('Content-Type') ?? 'application/json'
+            let data = MediaTypes.tryParse(contentType).getOrThrow{
+                MediaTypeException('${contentType} is not a valid media type')
+            }.toData(bytes)
+            match(T.tryFromData(data)){
+                case x: T => x
+                case x: ?T => x
+                case _ => throw DataException('bytes which base64 is ${base64.toBase64String(bytes)} cannot be converted to ${TypeInfos.get<T>()}')
+            }
+        }else{
+            None<T>
+        }
     }
 }
