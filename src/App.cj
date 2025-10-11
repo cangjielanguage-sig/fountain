@@ -311,7 +311,20 @@ public struct App {
         String.fromUtf8(File.readFrom(path))
     }
     private func appendToml(dir: Path): Unit {
-        let toml = '''
+        let tomlPath = dir.join('cjpm.toml')
+        var content = entireFileText(tomlPath).replace('[workspace]', '''
+[workspace]
+  version = "1.0.0"'''
+)
+.replace('compile-option = ""', 'compile-option = "-O2 --dy-std -Woff all"')
+.replace('override-compile-option = ""', 'override-compile-option = "-O2 --dy-std -Woff all"')
+.replace('[dependencies]', '''
+[dependencies]
+  fountain = {git = "https://gitcode.com/Cangjie-SIG/fountain.git", branch = "lts/1.0.0"}'''
+)
+        content = '''
+${content}
+
 [profile.build]
   incremental = true
 [profile.build.combined]
@@ -343,21 +356,6 @@ public struct App {
   override-compile-option = "-O2 --dy-std -Woff all"
 [target.aarch64-apple-darwin.bin-dependencies]
   path-option = ["\${CANGJIE_STDX_DYNAMIC_PATH}", "\${CANGJIE_FOUNTAIN_LIBS}"]
-'''
-        let tomlPath = dir.join('cjpm.toml')
-        var content = entireFileText(tomlPath).replace('[workspace]', '''
-[workspace]
-  version = "1.0.0"'''
-)
-.replace('compile-option = ""', 'compile-option = "-O2 --dy-std -Woff all"')
-.replace('override-compile-option = ""', 'override-compile-option = "-O2 --dy-std -Woff all"')
-.replace('[dependencies]', '''
-[dependencies]
-  fountain = {git = "https://gitcode.com/Cangjie-SIG/fountain.git", branch = "lts/1.0.0"}'''
-)
-        content = '''
-${content}
-${toml}
 '''
         File.writeTo(tomlPath, content.unsafeBytes())
     }
