@@ -6,6 +6,8 @@
 export FOUNTAIN_HOME=$( cd -- "$( dirname -- "${BASH_SOURCE}" )" &> /dev/null && pwd -P )
 
 cangjie_version(){
+  echo '### 系统环境'
+  echo '```bash'
   echo "$ lsb_release -a"
   lsb_release -a
   echo
@@ -14,7 +16,22 @@ cangjie_version(){
   echo
   echo "$ cjc -v"
   cjc -v
-  echo
+  echo '```'
+  echo '
+### 问题描述
+```bash
+git clone https://gitcode.com/Cangjie-SIG/fountain.git
+cd fountain
+git checkout -t origin/feature/mvc
+cd fboot
+cjpm install --root ../installed
+export LDLIBRARY_PATH=$LD_LIBRARY_PATH:../installed/libs/fboot
+export PATH=$PATH:../installed/bin
+cd ../fdemo
+export CANGJIE_STDX_DYNAMIC_PATH=/path/of/stdx/dynamic/libs
+./boot.sh build
+```
+'
   echo '$ echo $CANGJIE_HOME'
   echo $CANGJIE_HOME
   echo
