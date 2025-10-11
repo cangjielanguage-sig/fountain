@@ -432,10 +432,10 @@ ${content}
         })
     }
     private func banner(): String {
-        let path = '${getWorkingDirectory()}/banner.txt'
+        let path = getWorkingDirectory().join('banner.txt')
         var banner_ = ''
         if(exists(path)) {
-            banner_ = String.fromUtf8(File.readFrom(path))
+            banner_ = entireFileText(path)
         }
         if(!banner_.isEmpty()){
             return banner_
