@@ -433,12 +433,8 @@ ${content}
     }
     private func banner(): String {
         let path = getWorkingDirectory().join('banner.txt')
-        var banner_ = ''
-        if(exists(path)) {
-            banner_ = entireFileText(path)
-        }
-        if(!banner_.trimAscii().isEmpty()){
-            return banner_
+        if(exists(path) && let banner <- entireFileText(path) && !banner.trimAscii().isEmpty()) {
+            return banner
         }
         BANNER
     }
