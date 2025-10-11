@@ -15,11 +15,12 @@ limitations under the License.
  */
 package fountain
 
+import std.ast.*
 import std.collection.{HashMap, HashSet, Map}
 import std.convert.*
 import std.env.{getWorkingDirectory, getVariables, getCommand, atExit}
 import std.fs.*
-import std.io.{StringReader, ByteBuffer}
+import std.io.{StringReader, ByteBuffer, InputStream}
 import std.process.*
 import std.reflect.PackageInfo
 import std.regex.Regex
@@ -527,23 +528,38 @@ public class ${name}_AppVersionImpl <: AppVersion {
         }
         execute('cjpm', ['build', '--target-dir=${targetDir}'], workingDirectory: workingDir)
     }
-    private func count(dir: Path, counter: CodeCounter, ext: String, ignore: Bool): Unit {
+    private func count(dir: Path, counter: CodeCounter, ext: String, ignoreBrackets: Bool, ignoreComments: Bool): Unit {
         Directory.walk(dir){fi =>
             if (fi.isDirectory()) {
                 if(fi.path.toString().contains('/src/')){
                     counter.packages++
                 }
-                count(fi.path, counter, ext, ignore)
+                count(fi.path, counter, ext, ignoreBrackets, ignoreComments)
             } else if (fi.path.extensionName == ext){
                 counter.files++
-                try(f = File(fi.path, Read)){
-                    let r = StringReader(f)
+                func count(input: InputStream){
+                    let r = StringReader(input)
                     for(line in r.lines()){
                         let l = line.trimAscii()
-                        if(l.isEmpty() || (ignore && '{[(.,)]}'.contains(l))){
-                            continue
+                        if(l.size > 0 && !(ignoreBrackets && '{[()]}'.contains(l))){
+                            counter.lines++
                         }
-                        counter.lines++
+                    }
+                }
+                if (ignoreComments && ext == 'cj') {
+                    let code = entireFileText(fi.path)
+                    let tokens = cangjieLex(code)
+                    try {
+                        let bytes = Program(tokens).toTokens().toString().unsafeBytes()
+                        count(ByteBuffer(bytes))
+                    } catch (e: Exception) {
+                        println(code)
+                        e.printStackTrace()
+                        count(ByteBuffer(code.unsafeBytes()))
+                    }
+                }else{
+                    try(f = File(fi.path, Read)){
+                        count(f)
                     }
                 }
             } else if (fi.path.extensionName == 'toml') {
@@ -553,19 +569,27 @@ public class ${name}_AppVersionImpl <: AppVersion {
         }
     }
     private func count(): Int64 {
+        let path = if (args.size <= 1 || args[1].startsWith('--')) {
+            getWorkingDirectory()
+        } else {
+            Path(args[1])
+        }
         var ext = 'cj'
-        var ignore = false
-        for(arg in args[1 ..]){
-            if(arg.startsWith('--ext=')){
+        var ignoreBrackets = false
+        var ignoreComments = false
+        for (arg in args[1 ..]) {
+            if (arg.startsWith('--ext=')) {
                 ext = arg['--ext='.size ..]
-            }else if(arg == '--ignore'){
-                ignore = true
+            } else if (arg == '--ignoreBrackets') {
+                ignoreBrackets = true
+            } else if (arg == '--ignoreComments') {
+                ignoreComments = true
             }
         }
-        println('path=${path};ext=${ext};ignore=${ignore}')
+        println('path=${path};ext=${ext};ignoreBrackets=${ignoreBrackets};ignoreComments=${ignoreComments}')
         let counter = CodeCounter()
         let start = DateTime.now()
-        count(path, counter, ext, ignore)
+        count(path, counter, ext, ignoreBrackets, ignoreComments)
         println('modules: ${counter.modules}, packages: ${counter.packages}, files: ${counter.files}, lines: ${counter.lines}, consumes: ${DateTime.now() - start}')
         0
     }
