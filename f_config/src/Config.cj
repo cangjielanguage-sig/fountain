@@ -169,4 +169,26 @@ public class Config {
     public static func getDurations(key: String, delim!: String = ','): Array<Duration> {
         getDatas<Duration>(key, delim: delim)
     }
+    public static func bufferSize(bufferKey: String, default: Int64, debugging: Bool) {
+        if (let Some(x) <- Config.getValue<Int>(bufferKey)) {
+            if (x > 0 && debugging) {
+                return x
+            } else if (x <= 0) {
+                return default
+            } else if (((x - 1) & x) == 0) {
+                return x
+            }
+            var s = 1
+            while (s < x) {
+                s <<= 1
+            }
+            if (s >= default) {
+                s
+            } else {
+                default
+            }
+        } else {
+            default
+        }
+    }
 }

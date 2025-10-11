@@ -13,14 +13,14 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_mvc
+package f_http
 
 public class Multiparts {
     private let files = HashMap<String, Multipart>()
     private var form_ = ('', Form())
     private let medias = HashMap<String, ArrayList<MultipartMedia>>()
 
-    func setForm(name: String, form: Form) {
+    public func setForm(name: String, form: Form) {
         this.form_ = (name, form)
     }
     public prop form: (String, Form) {
@@ -29,7 +29,7 @@ public class Multiparts {
         }
     }
 
-    func get(name: String): ?Any {
+    public func get(name: String): ?Any {
         if (let Some(x) <- files.get(name)) {
             x
         } else if (form[0] == name) {
@@ -40,7 +40,7 @@ public class Multiparts {
             None<Any>
         }
     }
-    func add(media: MultipartMedia) {
+    public func add(media: MultipartMedia) {
         match (medias
             .get(media.name)) {
                 case Some(x) => x
@@ -56,7 +56,7 @@ public class Multiparts {
         medias.get(name)
     }
 
-    func add<P>(part: P) where P <: Multipart {
+    public func add<P>(part: P) where P <: Multipart {
         if (part is MultipartFile || part is MultipartMixed) {
             files[part.name] = part
         } else {

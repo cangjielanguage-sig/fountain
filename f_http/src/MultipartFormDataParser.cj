@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_mvc
+package f_http
 
 /**
 https://www.rfc-editor.org/rfc/rfc1867
@@ -58,9 +58,9 @@ multipart/form-data multipart/mixed
         --BbC04y--
         --AaB03x--
  */
-class MultipartFormDataParser {
-    private static let uploadDir = MVCConfig.uploadDir
-    private static let uploadStoreInMemory = MVCConfig.uploadStoreInMemory
+public class MultipartFormDataParser {
+    private static let uploadDir = HttpConfig.uploadDir
+    private static let uploadStoreInMemory = HttpConfig.uploadStoreInMemory
     private let boundary: String
     private let bodyStream: InputStream
     private let bodyDelimiter: Array<Byte>
@@ -69,7 +69,7 @@ class MultipartFormDataParser {
     private let bodyIndexer: BodyIndexer
     private let path: String
     private let indexer: BodyIndexer
-    MultipartFormDataParser(private let ctx: HttpContext) {
+    public MultipartFormDataParser(private let ctx: HttpContext) {
         let contentType = ctx.request.headers.getFirst("Content-Type") ?? ""
         if (contentType == "") {
             throw HttpRequestHeaderException("No Content-Type of http request header")
@@ -115,7 +115,7 @@ class MultipartFormDataParser {
     static func extractBoundary(contentType: String) {
         contentType["multipart/form-data; boundary=".size..]
     }
-    func parse(): Multiparts {
+    public func parse(): Multiparts {
         let parts = Multiparts()
         while (indexer.notEnd()) {
             var header = extractHeaderFromBody(indexer)
@@ -195,9 +195,9 @@ class MultipartFormDataParser {
                     (stream, file)
                 } else {
                     let filepath = "${path}/${filename}"
-                    let stream = File(filepath, Read)
+                    let stream = File(filepath, OpenMode.Read)
                     let file = MultipartFile(contentDisposition, stream)
-                    (File(filepath, Write), file)
+                    (File(filepath, OpenMode.Write), file)
                 }
                 try {
                     var partEnd = -1
@@ -239,7 +239,7 @@ class MultipartFormDataParser {
 }
 
 class BodyIndexer {
-    private static let uploadHalfBufferSize = MVCConfig.uploadHalfBufferSize
+    private static let uploadHalfBufferSize = HttpConfig.uploadHalfBufferSize
     BodyIndexer(
         private let body: InputStream,
         var bodyStart: Array<Byte>,

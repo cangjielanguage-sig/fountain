@@ -13,9 +13,9 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_mvc
+package f_http
 
-func rfc1123(t: DateTime) {
+public func rfc1123(t: DateTime) {
     //Wed, 16 Nov 2022 14:57:48 +0800
     let offset = t.zoneOffset.toSeconds() / 3600
     let zoneId = if (offset == 0) {
@@ -34,7 +34,7 @@ func rfc1123(t: DateTime) {
     "${t.dayOfWeek.toString()[0..3]}, ${t.dayOfMonth} ${t.month.toString()[0..3]} ${t.year} ${t.hour}:${t.minute}:${t.second} ${zoneId}"
 }
 
-func parseRfc1123(date: String): DateTime {
+public func parseRfc1123(date: String): DateTime {
     let zoneIdx = date.lastIndexOf(" ").getOrThrow()
     let zoneId = date[zoneIdx + 1..zoneIdx + 3]
     let zone = if (zoneId == "GMT") {

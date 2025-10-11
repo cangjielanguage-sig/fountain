@@ -13,6 +13,20 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_mvc
+package f_http.exception
 
-public import f_http.*
+internal import f_base.BaseException
+
+public open class MediaTypeException <: BaseException {
+    public init() {}
+
+    public init(message: String) {
+        super(message)
+    }
+    public init(caused: Exception) {
+        super(caused)
+    }
+    public init(message: String, caused: Exception) {
+        super(message, caused)
+    }
+}

@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_mvc
+package f_http
 
 public class MultipartFile <: Multipart & InputStream & Resource & DataFields<MultipartFile> & Data {
     MultipartFile(
@@ -30,16 +30,16 @@ public class MultipartFile <: Multipart & InputStream & Resource & DataFields<Mu
         this
     }
     public func toString(): String {
-        throw MVCException('Not Supported')
+        throw MediaTypeException('Not Supported')
     }
     public static func tryFromData(data: Data, flag: DataConversionFlag): Any {
-        throw MVCException('Not Supported')
+        throw MediaTypeException('Not Supported')
     }
     public static func parse(string: String): Data {
         tryParse(string).getOrThrow()
     }
     public static func tryParse(string: String): ?Data {
-        throw MVCException('Not Supported')
+        throw MediaTypeException('Not Supported')
     }
     public prop empty: Bool {
         get() {

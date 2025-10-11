@@ -13,18 +13,18 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_mvc.exception
+package f_http
 
-public class MultipartFormDataException <: BaseException {
-    public init() {}
+abstract sealed class Multipart {
+    public Multipart(public let contentDisposition: ContentDisposition) {}
 
-    public init(message: String) {
-        super(message)
+    public prop name: String {
+        get() {
+            contentDisposition.getName()
+        }
     }
-    public init(caused: Exception) {
-        super(caused)
-    }
-    public init(message: String, caused: Exception) {
-        super(message, caused)
+
+    func setName(name: String): Unit {
+        contentDisposition.setName(name)
     }
 }

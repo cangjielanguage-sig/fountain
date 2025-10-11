@@ -12,6 +12,8 @@
   f_exception = {path = "./f_exception"}
   f_io = {path = "./f_io"}
   f_jwt = {path = "./f_jwt"}
+  f_http = {path = "./f_http"}
+  f_httpclient = {path = "./f_httpclient"}
   f_log = {path = "./f_log"}
   f_macros = {path = "./f_macros"}
   f_mvc = {path = "./f_mvc"}

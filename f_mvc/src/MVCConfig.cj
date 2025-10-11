@@ -17,19 +17,11 @@ package f_mvc
 
 public class MVCConfig {
     private static const confPrefix = "mvc"
-    public static let UPLOAD_HALF_BUFFER_SIZE = "${confPrefix}_uploadHalfBufferSize"
-    public static const DEFAULT_UPLOAD_HALF_BUFFER_SIZE = 2048
     public static let DOWNLOAD_BUFFER_SIZE = "${confPrefix}_downloadHalfBufferSize"
     public static const DEFAULT_DOWNLOAD_BUFFER_SIZE = 4096
 
-    public static let MVC_DEBUGGING = "${confPrefix}_mvcDebugging"
+    public static let MVC_DEBUGGING = "${confPrefix}_debugging"
     public static const DEFAULT_MVC_DEBUGGING = false
-
-    public static let UPLOAD_DIR = "${confPrefix}_uploadDir"
-    public static const DEFAULT_UPLOAD_DIR = "/tmp/fountain/upload"
-
-    public static let UPLOAD_STORE_IN_MEMORY = "${confPrefix}_uploadStoreInMemory"
-    public static const DEFAULT_UPLOAD_STORE_IN_MEMORY = false
 
     public static let ACCESS_CONTROL_ALLOW_ORIGIN = "${confPrefix}_accessControlAllowOrigin"
     public static const DEFAULT_ACCESS_CONTROL_ALLOW_ORIGIN = "*"
@@ -233,47 +225,14 @@ public class MVCConfig {
     }
 
     private static func bufferSize(bufferKey: String, default: Int64) {
-        if (let Some(x) <- Config.getValue<Int>(bufferKey)) {
-            if (x > 0 && isMVCDebugging) {
-                return x
-            } else if (x <= 0) {
-                return default
-            } else if (((x - 1) & x) == 0) {
-                return x
-            }
-            var s = 1
-            while (s < x) {
-                s <<= 1
-            }
-            if (s >= default) {
-                s
-            } else {
-                default
-            }
-        } else {
-            default
-        }
-    }
-    public static prop uploadHalfBufferSize: Int64 {
-        get() {
-            bufferSize(UPLOAD_HALF_BUFFER_SIZE, DEFAULT_UPLOAD_HALF_BUFFER_SIZE)
-        }
+        Config.bufferSize(bufferKey, default, isMVCDebugging)
     }
     public static prop downloadBufferSize: Int64 {
         get() {
             bufferSize(DOWNLOAD_BUFFER_SIZE, DEFAULT_DOWNLOAD_BUFFER_SIZE)
         }
     }
-    public static prop uploadDir: String {
-        get() {
-            Config.getString(UPLOAD_DIR) ?? DEFAULT_UPLOAD_DIR
-        }
-    }
-    public static prop uploadStoreInMemory: Bool {
-        get() {
-            Config.getValue<Bool>(UPLOAD_STORE_IN_MEMORY) ?? DEFAULT_UPLOAD_STORE_IN_MEMORY
-        }
-    }
+    
     public static prop accessControlAllowOrigin: String {
         get() {
             Config.getString(ACCESS_CONTROL_ALLOW_ORIGIN) ?? DEFAULT_ACCESS_CONTROL_ALLOW_ORIGIN

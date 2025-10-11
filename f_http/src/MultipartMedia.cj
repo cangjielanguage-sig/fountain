@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_mvc
+package f_http
 
 public class MultipartMedia <: Multipart & Data & DataFields<MultipartMedia> {
     public MultipartMedia(
@@ -30,7 +30,7 @@ public class MultipartMedia <: Multipart & Data & DataFields<MultipartMedia> {
         }
     }
     public static func tryFromData(data: Data, flag: DataConversionFlag): Any {
-        throw MVCException('Not Supported')
+        throw MediaTypeException('Not Supported')
     }
     public func toDataFields<T>(): T where T <: DataFields<T> {
         (mediaType?.toDataFields<T>(bytes)).getOrThrow()
@@ -43,7 +43,7 @@ public class MultipartMedia <: Multipart & Data & DataFields<MultipartMedia> {
         tryParse(string).getOrThrow()
     }
     public static func tryParse(string: String): ?Data {
-        throw MVCException('Not Supported')
+        throw MediaTypeException('Not Supported')
     }
     public func to<T>(): ?T where T <: Parsable<T> {
         T.tryParse(toString())
