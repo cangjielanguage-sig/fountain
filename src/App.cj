@@ -437,7 +437,7 @@ ${content}
         if(exists(path)) {
             banner_ = entireFileText(path)
         }
-        if(!banner_.isEmpty()){
+        if(!banner_.trimAscii().isEmpty()){
             return banner_
         }
         BANNER
