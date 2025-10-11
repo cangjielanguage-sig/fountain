@@ -22,9 +22,6 @@ public import stdx.encoding.url.*
 public import stdx.log.Logger
 public import stdx.net.http.*
 public import f_data.*
-import stdx.encoding.base64
-import f_base.*
-import f_data.exception.DataException
 import f_http.{MediaType, MediaTypes}
 import f_http.exception.MediaTypeException
 
@@ -149,18 +146,18 @@ public class HttpClient {
         request.body(body)
         post()
     }
-    private func body<T>(contentType: String, body: T): This where T <: ToData {
+    private func body<T>(contentType: String, body: T): This where T <: DataFields<T> {
         let bytes = MediaTypes.tryParse(contentType).getOrThrow{
             MediaTypeException('${contentType} is not a valid media type')
-        }.fromData(body.toData())
+        }.fromDataFields<T>(body)
         request.body(bytes)
         this
     }
-    public func put<T>(contentType: String, body: T): HttpResponse where T <: ToData {
+    public func put<T>(contentType: String, body: T): HttpResponse where T <: DataFields<T> {
         header('Content-Type', contentType)
         this.body<T>(contentType, body).put()
     }
-    public func post<T>(contentType: String, body: T): HttpResponse where T <: ToData {
+    public func post<T>(contentType: String, body: T): HttpResponse where T <: DataFields<T> {
         header('Content-Type', contentType)
         this.body<T>(contentType, body).post()
     }

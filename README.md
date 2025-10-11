@@ -271,6 +271,21 @@ map也可以换成被`@DataAssist[fields]`修饰的类
 
 LogFilter实现被`@Bean`修饰即可生效。也可以调用`LoggerConfig.filter = <一个LogFilter实例>``
 
+### HttpClient
+```cj
+import fountain.http.*
+main(args: Array<String>){
+  let url = args[0]
+  let data = ...//data 的类型应该是fountain.data.DataFields<T>的实现类型，
+  //所有基本类型、String、集合类型、Duration、 DateTime，
+  //fountain.data.macros.@DataAssist[fields]修饰的类都实现了这个接口
+  let response: /**/HttpResponse =
+  HttpClient(url).header('Accept', 'application/json')
+                 .post('application/json', data)
+  response.convert<D>()//D 的类型也是DataFields<T>的实现类型
+}
+```
+
 ### 零复制
   - MMapFile
 ### 响应式编程
