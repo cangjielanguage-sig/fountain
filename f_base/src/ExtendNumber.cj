@@ -41,6 +41,7 @@ public interface Integer<T> <: Number<T> & Modable<T> & BitAndable<T> & BitOrabl
         }
     }
     prop isEven: Bool
+    func to<T>(): T where T <: Integer<T> 
 }
 
 public interface SignedInteger<S, T> <: Integer<S> where S <: SignedInteger<S, T>, T <: UnsignedInteger<T, S> {
@@ -114,6 +115,20 @@ extend Int8 <: ExtendInt8 {
             0u8
         }
     }
+    public func to<T>(): T where T <: Integer<T> {
+        let any: Any = match(None<T>){
+            case _: ?Int8 => this
+            case _: ?Int16 => Int16(this)
+            case _: ?Int32 => Int32(this)
+            case _: ?Int64 => Int64(this)
+            case _: ?UInt8 => this.toUInt()
+            case _: ?UInt16 => UInt16(this.toUInt())
+            case _: ?UInt32 => UInt32(this.toUInt())
+            case _: ?UInt64 => UInt64(this.toUInt())
+            case _ => this
+        }
+        (any as T).getOrThrow()
+    }
 }
 
 public interface ExtendInt16 <: SignedInteger<Int16, UInt16> {
@@ -180,6 +195,20 @@ extend Int16 <: ExtendInt16 {
         } else {
             0u16
         }
+    }
+    public func to<T>(): T where T <: Integer<T> {
+        let any: Any = match(None<T>){
+            case _: ?Int8 => Int8(this)
+            case _: ?Int16 => this
+            case _: ?Int32 => Int32(this)
+            case _: ?Int64 => Int64(this)
+            case _: ?UInt8 => UInt8(this.toUInt())
+            case _: ?UInt16 => this.toUInt()
+            case _: ?UInt32 => UInt32(this.toUInt())
+            case _: ?UInt64 => UInt64(this.toUInt())
+            case _ => this
+        }
+        (any as T).getOrThrow()
     }
 }
 
@@ -252,6 +281,20 @@ extend Int32 <: ExtendInt32 {
         } else {
             0u32
         }
+    }
+    public func to<T>(): T where T <: Integer<T> {
+        let any: Any = match(None<T>){
+            case _: ?Int8 => Int8(this)
+            case _: ?Int16 => Int16(this)
+            case _: ?Int32 => this
+            case _: ?Int64 => Int64(this)
+            case _: ?UInt8 => UInt8(this.toUInt())
+            case _: ?UInt16 => UInt16(this.toUInt())
+            case _: ?UInt32 => this.toUInt()
+            case _: ?UInt64 => UInt64(this.toUInt())
+            case _ => this
+        }
+        (any as T).getOrThrow()
     }
 }
 
@@ -329,6 +372,20 @@ extend Int64 <: ExtendInt64 {
             0u64
         }
     }
+    public func to<T>(): T where T <: Integer<T> {
+        let any: Any = match(None<T>){
+            case _: ?Int8 => Int8(this)
+            case _: ?Int16 => Int16(this)
+            case _: ?Int32 => Int32(this)
+            case _: ?Int64 => this
+            case _: ?UInt8 => UInt8(this.toUInt())
+            case _: ?UInt16 => UInt16(this.toUInt())
+            case _: ?UInt32 => UInt32(this.toUInt())
+            case _: ?UInt64 => this.toUInt()
+            case _ => this
+        }
+        (any as T).getOrThrow()
+    }
 }
 
 public interface ExtendUInt8 <: UnsignedInteger<UInt8, Int8> {
@@ -390,6 +447,20 @@ extend UInt8 <: ExtendUInt8 {
         } else {
             0i8
         }
+    }
+    public func to<T>(): T where T <: Integer<T> {
+        let any: Any = match(None<T>){
+            case _: ?Int8 => this.toInt()
+            case _: ?Int16 => Int16(this.toInt())
+            case _: ?Int32 => Int32(this.toInt())
+            case _: ?Int64 => Int64(this.toInt())
+            case _: ?UInt8 => this
+            case _: ?UInt16 => UInt16(this)
+            case _: ?UInt32 => UInt32(this)
+            case _: ?UInt64 => UInt64(this)
+            case _ => this
+        }
+        (any as T).getOrThrow()
     }
 }
 
@@ -456,6 +527,20 @@ extend UInt16 <: ExtendUInt16 {
         } else {
             0i16
         }
+    }
+    public func to<T>(): T where T <: Integer<T> {
+        let any: Any = match(None<T>){
+            case _: ?Int8 => Int8(this.toInt())
+            case _: ?Int16 => this.toInt()
+            case _: ?Int32 => Int32(this.toInt())
+            case _: ?Int64 => Int64(this.toInt())
+            case _: ?UInt8 => UInt8(this)
+            case _: ?UInt16 => this
+            case _: ?UInt32 => UInt32(this)
+            case _: ?UInt64 => UInt64(this)
+            case _ => this
+        }
+        (any as T).getOrThrow()
     }
 }
 
@@ -526,6 +611,20 @@ extend UInt32 <: ExtendUInt32 {
         } else {
             0i32
         }
+    }
+    public func to<T>(): T where T <: Integer<T> {
+        let any: Any = match(None<T>){
+            case _: ?Int8 => Int8(this.toInt())
+            case _: ?Int16 => Int16(this.toInt())
+            case _: ?Int32 => this.toInt()
+            case _: ?Int64 => Int64(this.toInt())
+            case _: ?UInt8 => UInt8(this)
+            case _: ?UInt16 => UInt16(this)
+            case _: ?UInt32 => this
+            case _: ?UInt64 => UInt64(this)
+            case _ => this
+        }
+        (any as T).getOrThrow()
     }
 }
 
@@ -601,6 +700,20 @@ extend UInt64 <: ExtendUInt64 {
         } else {
             0i64
         }
+    }
+    public func to<T>(): T where T <: Integer<T> {
+        let any: Any = match(None<T>){
+            case _: ?Int8 => Int8(this.toInt())
+            case _: ?Int16 => Int16(this.toInt())
+            case _: ?Int32 => Int32(this.toInt())
+            case _: ?Int64 => this.toInt()
+            case _: ?UInt8 => UInt8(this)
+            case _: ?UInt16 => UInt16(this)
+            case _: ?UInt32 => UInt32(this)
+            case _: ?UInt64 => this
+            case _ => this
+        }
+        (any as T).getOrThrow()
     }
 }
 

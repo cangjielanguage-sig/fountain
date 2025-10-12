@@ -29,11 +29,8 @@ public class ObjectFields <: Collection<ReadableField> {
             func populateField(name: String, field: ReadableField, throwIfDuplicate!: Bool = true) {
                 if (that.readables.addIfAbsent(name, field).isSome() && throwIfDuplicate) {
                     throw DataException('duplicate field ${name}}')
-                }
-                match (field) {
-                    case x: MutableField where that.mutables.addIfAbsent(name, x).isSome() && throwIfDuplicate => throw DataException(
-                        'duplicate field ${name}}')
-                    case _ => false
+                } else if (let x: MutableField <- field) {
+                    that.mutables.addIfAbsent(name, x)
                 }
             }
             func populateFields(fields: Iterable<ReadableField>, throwIfDuplicate!: Bool = true) {
@@ -48,11 +45,10 @@ public class ObjectFields <: Collection<ReadableField> {
                     return
                 }
                 for (annotation in annotations) {
-                    match (annotation) {
-                        case x: FieldAlias => for (n in x.name.split(',')) {
+                    if(let x: FieldAlias <- annotation){
+                        for (n in x.name.split(',')) {
                             populateField(n, f)
                         }
-                        case _ => ()
                     }
                 }
             }
