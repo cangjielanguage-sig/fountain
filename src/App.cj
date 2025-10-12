@@ -536,7 +536,7 @@ public class ${name}_AppVersionImpl <: AppVersion {
                     let r = StringReader(input)
                     for(line in r.lines()){
                         let l = line.trimAscii()
-                        if(l.size > 0 && !(ignoreBrackets && '{[()]}'.contains(l))){
+                        if(l.size > 0 && !(ignoreBrackets && ')]}{[('.contains(l))){
                             counter.lines++
                         }
                     }
