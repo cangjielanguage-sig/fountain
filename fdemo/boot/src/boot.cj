@@ -33,17 +33,21 @@ private let _ = {=>
 ///////////////////////////////////////////////////////////////////////////////
 /**这一行往下单纯只是为了演示实例复制和类实例与json互相转换的功能*******************/
 @DataAssist[equal hash tostring props fields]
-public class TestData1 {
+public open class TestData1 {
     private var a: Int64 = 1
     private var b: String = 'asfd'
     private var c: Bool = true
     private var d: Float64 = 3.1415926
+}
+@DataAssist[equal hash tostring props fields]
+public class TestData2 <: TestData1 {
     private var e: DateTime = DateTime.now()
     private var f: Array<Int64> = [1, 2, 3, 4, 5]
     private var g: ArrayList<String> = ArrayList<String>(['a','b','c','d','e'])
 }
+
 @DataAssist[equal hash tostring props fields]
-public class TestData2 {
+public class TestData3 {
     private var a: Int64 = 0
     private var b: String = ''
     private var c: Bool = false
@@ -53,14 +57,14 @@ public class TestData2 {
     private var g: ArrayList<String> = ArrayList<String>()
 }
 private let _ = {=>
-    let data1 = TestData1()
-    var data2 = DataObject<TestData2>.populate(data1).getOrThrow()
-    println('AAAAAAAAAAAAAAAAAAAAAAAAAAAAA ${data1}')
+    let data2 = TestData2()
+    var data3 = DataObject<TestData3>.populate(data2).getOrThrow()
     println('AAAAAAAAAAAAAAAAAAAAAAAAAAAAA ${data2}')
-    let dobj = DataObject<TestData1>(data1)
+    println('AAAAAAAAAAAAAAAAAAAAAAAAAAAAA ${data3}')
+    let dobj = DataObject<TestData2>(data2)
     let json = JsonValue.tryFromData(dobj)
     println('AAAAAAAAAAAAAAAAAAAAAAAAAAAAA ${json}')
     let data = json.toData()
-    data2 = DataObject<TestData2>.populate(data1).getOrThrow()
-    println('AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA ${data2}')
+    data3 = DataObject<TestData3>.populate(data2).getOrThrow()
+    println('AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA ${data3}')
 }()

@@ -24,7 +24,7 @@ public interface DataFields<T> <: ToData where T <: DataFields<T> {
             true
         }
     }
-    static func fromData(data: Data, flag: DataConversionFlag): T {
+    static func fromData(data: Data, flag: DataConversionFlag): Any {
         match (T.tryFromData(data, flag)) {
             case x: ?T => match (x) {
                 case Some(x) => x

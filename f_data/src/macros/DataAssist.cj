@@ -15,6 +15,7 @@ limitations under the License.
  */
 macro package f_data.macros
 
+import std.ast
 import std.ast.*
 import std.collection.{HashSet, ArrayList}
 import f_data.*
@@ -121,7 +122,7 @@ func generateProps(decl: ClassDecl, exclusion: HashSet<String>) {
         )))
     }
     let vars = ArrayList<Decl>()
-    let assigns = ArrayList<Node>()
+    let assigns = ArrayList<ast.Node>()
     for (decl in decls) {
         match (decl) {
             case d: VarDecl where !(d.isStatic() || d.isPublic()) => gen(d)
@@ -280,7 +281,8 @@ func generateToFields(d: ClassDecl, exclusion: HashSet<String>) {
     if (klassDecl.superTypes.isEmpty()) {
         klassDecl.upperBound = `upperbound`[0]
     }
-    klassDecl.superTypes.add(RefType(quote(ObjectData<$(klassIdentifier)>)))
+    let superTypes = klassDecl.superTypes
+    superTypes.add(RefType(quote(ObjectData<$(klassIdentifier)>)))
     let body = klassDecl.body.decls
     let fields = ArrayList<Expr>()
     for (d in body where !isStatic(d) && isPublic(d) && !exclusion.contains(d.identifier.value)) {
@@ -316,7 +318,6 @@ func generateToFields(d: ClassDecl, exclusion: HashSet<String>) {
         appendExpr(declType, isVar)
     }
     let openModi = openTokens(klassDecl)
-    let fieldsName = Token(IDENTIFIER, "___dAtA__fIElds_")
     var fieldTokens = `lsquare`
     for (f in fields) {
         if (fieldTokens.size > 1) {
@@ -327,16 +328,12 @@ func generateToFields(d: ClassDecl, exclusion: HashSet<String>) {
     fieldTokens += `rsquare`
     body.add(
         all: [
-            VarDecl(
-                quote(
-        private static let $(fieldsName) = ObjectFields<$klassIdentifier>($fieldTokens){
-            $klassIdentifier()
-        }
-    )),
             FuncDecl(
                 quote(
-        public static func dataFields(): ObjectFields<$klassIdentifier> {
-            $fieldsName
+        public static func dataFields(): ObjectFields {
+            ObjectFields.getObjectFields<$klassIdentifier>{
+                ($fieldTokens, {=>$klassIdentifier()})
+            }
         }
     )),
             FuncDecl(

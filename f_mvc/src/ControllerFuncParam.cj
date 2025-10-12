@@ -73,7 +73,7 @@ public class RequestParam <: ControllerFuncParam {
         }
     }
     protected func extractObject<T>(name: String, ctx: HttpContext, pattern: HttpRequestPathPatterns): T where T <: Object & ObjectData<T> {
-        let o = T.dataFields().create()
+        let o = (T.dataFields().create() as T).getOrThrow()
         let data = DataObject<T>(o)
         for (field in data.mutableFields()) {
             if (let Some(s) <- extractValue(field.name, ctx)) {
@@ -167,6 +167,6 @@ public class MultipartFormData <: ControllerFuncParam {
             }
             mf.set(object, data)
         }
-        object
+        (object as T).getOrThrow()
     }
 }

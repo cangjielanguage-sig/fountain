@@ -57,15 +57,17 @@ public class Pagination<T> <: ObjectData<Pagination<T>> where T <: DataFields<T>
     public static func tryFromData(data: Data, flag: DataConversionFlag): Any {
         f_data_tryFromData<Pagination<T>>(data, flag)
     }
-    public static func dataFields(): ObjectFields<Pagination<T>> {
-        ObjectFields<Pagination<T>>([
-            ReadonlyField.new<Pagination<T>, Int64>('page'){o => o.page},
-            ReadonlyField.new<Pagination<T>, Int64>('size'){o => o.size},
-            ReadonlyField.new<Pagination<T>, Int64>('rows'){o => o.rows},
-            ReadonlyField.new<Pagination<T>, Int64>('pages'){o => o.pages},
-            ReadonlyField.new<Pagination<T>, ArrayList<T>>('list'){o => o.list}
-        ]){
-            throw IllegalAccessException()
+    public static func dataFields(): ObjectFields {
+        ObjectFields.getObjectFields<Pagination<T>>{
+            let fields: Array<ReadableField> = [
+                ReadonlyField.new<Pagination<T>, Int64>('page'){o => o.page},
+                ReadonlyField.new<Pagination<T>, Int64>('size'){o => o.size},
+                ReadonlyField.new<Pagination<T>, Int64>('rows'){o => o.rows},
+                ReadonlyField.new<Pagination<T>, Int64>('pages'){o => o.pages},
+                ReadonlyField.new<Pagination<T>, ArrayList<T>>('list'){o => o.list}
+            ]
+            let creator: () -> Object = {=> throw IllegalAccessException()}
+            (fields, creator)
         }
     }
 }

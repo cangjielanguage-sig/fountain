@@ -21,7 +21,7 @@ internal import std.math.numeric.{Decimal, BigInt, OverflowStrategy}
 internal import std.sync.AtomicReference
 internal import std.time.{DateTime, MonoTime}
 internal import stdx.encoding.base64.*
-internal import f_collection.{LinkedHashMap, LinkedHashSet}
+internal import f_collection.*
 internal import f_concurrent.ConcurrentHashSet
 internal import f_exception.UnreachableException
 internal import f_regex.*

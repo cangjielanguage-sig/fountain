@@ -71,13 +71,16 @@ public abstract class MediaType <: ToString & Hashable & Equatable<MediaType> {
     public open func toData(data: String): Data {
         toData(data.toArray())
     }
+    public func toDataFields<T>(data: Data): T where T <: DataFields<T> {
+        (T.fromData(data) as T).getOrThrow{MediaTypeException(data.toString())}
+    }
     public func toDataFields<T>(data: Array<Byte>): T where T <: DataFields<T> {
-        T.fromData(toData(data))
+        toDataFields<T>(toData(data))
     }
     public func toDataFields<T>(input: InputStream): T where T <: DataFields<T> {
-        T.fromData(toData(input))
+        toDataFields<T>(toData(input))
     }
     public func toDataFields<T>(data: String): T where T <: DataFields<T> {
-        T.fromData(toData(data))
+        toDataFields<T>(toData(data))
     }
 }

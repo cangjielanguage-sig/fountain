@@ -23,7 +23,7 @@ public interface ObjectData<T> <: DataFields<T> where T <: ObjectData<T> & DataF
             false
         }
     }
-    static func dataFields(): ObjectFields<T>
+    static func dataFields(): ObjectFields
 
     func toData(): Data
 
@@ -166,7 +166,7 @@ public class DataObject<T> <: Data & Collection<(String, Data)> & NamedData wher
         if ((flag & DEEP) == 0 && let d: DataObject<T> <- src) {
             return d.data
         }
-        populate(src, T.dataFields().create(), flag: flag)
+        populate(src, (T.dataFields().create() as T).getOrThrow(), flag: flag)
     }
     public static func populate<S>(src: S, flag!: DataConversionFlag = DEFAULT_DATA_FLAG): ?T where S <: ObjectData<S> {
         populate(DataObject<S>(src), flag: flag)
