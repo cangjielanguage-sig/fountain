@@ -50,10 +50,10 @@ cangjie_env(){
   export CANGJIE_STDX_PATH=/mnt/d/docs/work/cangjie/stdx/$2/linux_x86_64_llvm
   export CANGJIE_STDX_DYNAMIC_PATH=$CANGJIE_STDX_PATH/dynamic/stdx
   export CANGJIE_STDX_STATIC_PATH=$CANGJIE_STDX_PATH/static/stdx
-  export CANGJIE_HOME=/mnt/d/docs/work/cangjie/cangjie-linux-bin/$1
-  export LD_LIBRARY_PATH=/usr/local/openssl-3.3.2/lib:/mnt/d/docs/work/cangjie/installed/libs/fboot:$LD_LIBRARY_PATH
-  export PATH=$PATH:$CJPM_INSTALL/bin
   export CANGJIE_FOUNTAIN_LIBS=$CJPM_INSTALL/libs/fboot
+  export CANGJIE_HOME=/mnt/d/docs/work/cangjie/cangjie-linux-bin/$1
+  export LD_LIBRARY_PATH=/usr/local/openssl-3.3.2/lib:$CANGJIE_FOUNTAIN_LIBS:$LD_LIBRARY_PATH
+  export PATH=$PATH:$CJPM_INSTALL/bin
   source $CANGJIE_HOME/envsetup.sh
 }
 cj(){
