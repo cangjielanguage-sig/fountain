@@ -26,7 +26,12 @@ class RequestArgMeta {
             }else{
                 n
             }
-            throw HttpRequestException('Invalid request data ${k}:${v} and its type is ${TypeInfo.of<T>()}')
+            let opt = if (data.isNone()){
+                'None<${TypeInfo.of<T>()}>'
+            }else{
+                v
+            }
+            throw HttpRequestException('Invalid request data ${k}:${opt} and its type is ${TypeInfo.of<T>()}')
         }else{
             return data
         }
