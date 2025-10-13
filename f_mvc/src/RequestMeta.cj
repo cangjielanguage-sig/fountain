@@ -262,14 +262,31 @@ public class RequestMeta <: HttpRequestHandler & ToString {
         let typeInfo = TypeInfos.get<T>()
         let metas = ArrayList<RequestMeta>()
         let function = typeInfo.getInstanceFunction(fnName, argTypes)
-        let args = HashMap<String, ControllerFuncParam>()
+        let args = HashMap<String, (ControllerFuncParam, Validator)>()
+        let zero = unsafeZeroValue<ControllerFuncParam>()
         for (param in function.parameters) {
             let pname = param.name
             var toThrow = true
             for (annotation in param.annotations where annotation is ControllerFuncParam) {
-                args[pname] = (annotation as ControllerFuncParam).getOrThrow()
-                toThrow = false
-                break
+                match (annotation) {
+                    case x: ControllerFuncParam => match (args.get(pname)) {
+                        case Some((p, v)) where refEq(p, zero) => 
+                            args[pname] = (x, v)
+                            toThrow = false
+                            break
+                        case None => args[pname] = (x, DummyValidator.instance)
+                        case _ => throw UnreachableException()
+                    }
+                    case x: Validator => match (args.get(pname)) {
+                        case Some((p, v)) where v is DummyValidator => 
+                            args[pname] = (p, x)
+                            toThrow = false
+                            break
+                        case None => args[pname] = (zero, x)
+                        case _ => throw UnreachableException()
+                    }
+                    case _ => continue
+                }
             }
             if (toThrow) {
                 throw MVCException(

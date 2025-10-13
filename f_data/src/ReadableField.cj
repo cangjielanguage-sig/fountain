@@ -35,6 +35,7 @@ abstract sealed class ReadableField {
         get(){
             let validatorType = TypeInfo.of<Validator>()
             (annotations.computeIfAbsent(validatorType){
+                let cti = (typeInfo as ClassTypeInfo).getOrThrow()
                 func getValidator(name: String){
                     try{
                         cti.getInstanceProperty(name).findAnnotation<Validator>() ?? DummyValidator.instance
@@ -42,7 +43,6 @@ abstract sealed class ReadableField {
                         cti.getInstanceVariable(name).findAnnotation<Validator>() ?? DummyValidator.instance
                     }
                 }
-                let cti = (typeInfo as ClassTypeInfo).getOrThrow()
                 try{
                     getValidator(name)
                 }catch(_){

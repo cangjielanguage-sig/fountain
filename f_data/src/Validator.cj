@@ -38,19 +38,19 @@ public class DummyValidator <: Validator {
     }
 }
 public class AndValidator <: Validator{
-    private AndValidator(private let left: Validator, private let right: Validator){}
+    const AndValidator(private let left: Validator, private let right: Validator){}
     public func validate(value: String): Bool {
         left.validate(value) && right.validate(value)
     }
 }
 public class OrValidator <: Validator{
-    private OrValidator(private let left: Validator, private let right: Validator){}
+    const OrValidator(private let left: Validator, private let right: Validator){}
     public func validate(value: String): Bool {
         left.validate(value) || right.validate(value)
     }
 }
 public class NotValidator <: Validator{
-    private NotValidator(private let condition: Validator){}
+    const NotValidator(private let condition: Validator){}
     public func validate(value: String): Bool {
         !condition.validate(value)
     }

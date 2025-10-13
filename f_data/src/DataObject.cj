@@ -19,6 +19,9 @@ import std.convert.Parsable
 
 public interface ToDataFields <: ToData {
     static func dataFields(): ObjectFields
+    func getDataFields(): ObjectFields {
+        dataFields()
+    }
 }
 public interface ObjectData<T> <: ToDataFields & DataFields<T> where T <: ObjectData<T> & DataFields<T> {
     static prop isSimple: Bool {
@@ -39,8 +42,10 @@ class FieldIterator<T> <: Iterator<(String, Data)> where T <: DataFields<T> {
         None<(String, Data)>
     }
 }
-
-public class DataObject<T> <: Data & Collection<(String, Data)> & NamedData where T <: ObjectData<T> & DataFields<T> {
+public interface SimpleDataObject {
+    func fields(): Iterator<ReadableField> 
+}
+public class DataObject<T> <: SimpleDataObject & Data & Collection<(String, Data)> & NamedData where T <: ObjectData<T> & DataFields<T> {
     public DataObject(public let data: T) {
     }
     public prop size: Int64 {
