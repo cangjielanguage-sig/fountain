@@ -206,10 +206,13 @@ public struct App {
                 if(code != 0){
                     return code
                 }
+                var msg = ''
                 code = execute('git', ['commit', '-m', if (args.size > 2 && args[2] != 'tag') {
-                    '${args[2]}, version: ${v}'
+                    msg = '${args[2]}, version: ${v}'
+                    msg
                 } else {
-                    'Some codes were changed, version is ${v}'
+                    msg = 'version: ${v}'
+                    'Some codes were changed, ${msg}'
                 }])
                 if (code != 0) {
                     return code
@@ -226,8 +229,8 @@ public struct App {
                     Array<String>()
                 }
                 if (tagmsg.size > 0) {
-                    let msg = if (tagmsg.size > 1) {
-                        args[1]
+                    msg += if (tagmsg.size > 1) {
+                        '\n${args[1]}'
                     } else {
                         ''
                     }
