@@ -18,7 +18,7 @@ package f_data.validation
 import std.convert.*
 import f_base.*
 import f_regex.*
-import f_data.Validator
+import f_data.*
 
 @Annotation[target: [MemberVariable, MemberProperty, Parameter]]
 public class IsNotEmpty <: Validator {

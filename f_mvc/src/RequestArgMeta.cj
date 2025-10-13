@@ -20,30 +20,16 @@ class RequestArgMeta {
     private func doExtract<T>(ctx: HttpContext, name: String, pattern: ?HttpRequestPathPatterns): ?T where T <: DataFields<T> {
         let (param, validator) = args[name]
         let data = param.extract<T>(name, ctx, pattern.getOrThrow())
-        if(let Some(x) <- data){
-            match(x){
-                case x: ToDataFields => 
-                    func validate(fields: Iterator<ReadableField>): Unit {
-                        for(df in fields){
-                            match(df.get(x)){
-                                case x: SimpleDataObject => validate(x.fields())
-                                case x => 
-                                    let value = x.toString()
-                                    if(!df.validator.validate(value)){
-                                        throw HttpRequestException('type of parameter ${name} is ${TypeInfo.of(x)}, its field ${df.name} ${df.typeInfo} is not valid, field value is ${value}')
-                                    }
-                            }
-                        }
-                    }
-                    validate(x.getDataFields().iterator())
-                case x where !validator.validate(x.toData().toString()) => 
-                    throw HttpRequestException('parameter ${name} is not valid, which value is ${data.toData()}')
-                case _ => () 
+        if(let Some((n, v)) <- validator.validate(data)){
+            let k = if(n.isEmpty()){
+                name
+            }else{
+                n
             }
-        } else if(!validator.validate('')) {
-            throw HttpRequestException('parameter ${name} is not valid, which value is ${data.toData()}')
+            throw HttpRequestException('Invalid request data ${k}:${v} and its type is ${TypeInfo.of<T>()}')
+        }else{
+            return data
         }
-        data
     }
     func extract<T>(ctx: HttpContext, name: String, pattern: ?HttpRequestPathPatterns): T where T <: DataFields<T> {
         doExtract<T>(ctx, name, pattern).getOrThrow()

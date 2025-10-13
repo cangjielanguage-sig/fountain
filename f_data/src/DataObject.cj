@@ -42,10 +42,10 @@ class FieldIterator<T> <: Iterator<(String, Data)> where T <: DataFields<T> {
         None<(String, Data)>
     }
 }
-public interface SimpleDataObject {
+public interface SimpleDataObject <: Data {
     func fields(): Iterator<ReadableField> 
 }
-public class DataObject<T> <: SimpleDataObject & Data & Collection<(String, Data)> & NamedData where T <: ObjectData<T> & DataFields<T> {
+public class DataObject<T> <: SimpleDataObject & Collection<(String, Data)> & NamedData where T <: ObjectData<T> & DataFields<T> {
     public DataObject(public let data: T) {
     }
     public prop size: Int64 {

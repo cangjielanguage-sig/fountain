@@ -28,6 +28,40 @@ public abstract class Validator {
     public const operator func !(){
         NotValidator(this)
     }
+    public func validate<T>(value: ?T): ?(String, String) where T <: DataFields<T> {
+        if(let Some(x) <- value){
+            match(x){
+                case x: ToDataFields => 
+                    func validate(fields: Iterator<ReadableField>): ?(String, String) {
+                        for(df in fields){
+                            match(df.get(x)){
+                                case x: SimpleDataObject => if(let Some(x) <- validate(x.fields())){
+                                    return x
+                                }
+                                case x => 
+                                    let value = x.toString()
+                                    if(!df.validator.validate(value)){
+                                        return (df.name, value)
+                                    }
+                            }
+                        }
+                        None
+                    }
+                    validate(x.getDataFields().iterator())
+                case x => 
+                    let value = x.toData().toString()
+                    if(this.validate(value)){
+                        None
+                    } else {
+                        ('', value)
+                    }
+            }
+        } else if(this.validate('')) {
+            None
+        } else {
+            ('', '')
+        }
+    }
 }
 
 public class DummyValidator <: Validator {
