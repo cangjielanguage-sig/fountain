@@ -17,16 +17,15 @@ package f_data
 
 import std.convert.Parsable
 
-public interface ObjectData<T> <: DataFields<T> where T <: ObjectData<T> & DataFields<T> {
+public interface ToDataFields <: ToData {
+    static func dataFields(): ObjectFields
+}
+public interface ObjectData<T> <: ToDataFields & DataFields<T> where T <: ObjectData<T> & DataFields<T> {
     static prop isSimple: Bool {
         get() {
             false
         }
     }
-    static func dataFields(): ObjectFields
-
-    func toData(): Data
-
     static func tryFromData(data: Data, flag: DataConversionFlag): Any
 }
 
