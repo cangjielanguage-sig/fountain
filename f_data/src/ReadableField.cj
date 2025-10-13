@@ -18,6 +18,7 @@ package f_data
 import f_base.*
 
 abstract sealed class ReadableField {
+    private let annotations = ConcurrentHashMap<TypeInfo, Annotation>()
     public let name: String
     public ReadableField(
         name: String,
@@ -28,6 +29,26 @@ abstract sealed class ReadableField {
             name[1..name.size - 1]
         } else {
             name
+        }
+    }
+    public prop validator: Validator {
+        get(){
+            let validatorType = TypeInfo.of<Validator>()
+            (annotations.computeIfAbsent(validatorType){
+                func getValidator(name: String){
+                    try{
+                        cti.getInstanceProperty(name).findAnnotation<Validator>() ?? DummyValidator.instance
+                    } catch (_){
+                        cti.getInstanceVariable(name).findAnnotation<Validator>() ?? DummyValidator.instance
+                    }
+                }
+                let cti = (typeInfo as ClassTypeInfo).getOrThrow()
+                try{
+                    getValidator(name)
+                }catch(_){
+                    getValidator('`${name}`')
+                }
+            } as Validator) ?? DummyValidator.instance
         }
     }
     public func get(instance: Any): Data {
