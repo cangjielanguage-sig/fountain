@@ -16,11 +16,11 @@ limitations under the License.
 package f_data
 
 public class ReadonlyField <: ReadableField {
-    public init(name: String, typeInfo: TypeInfo, getter: (Any) -> Data) {
-        super(name, typeInfo, getter)
+    public init(name: String, classTypeInfo: ClassTypeInfo, fieldTypeInfo: TypeInfo, getter: (Any) -> Data) {
+        super(name, classTypeInfo, fieldTypeInfo, getter)
     }
     public static func new<O, F>(name: String, getter: (O) -> F): ReadonlyField where O <: ObjectData<O>,
         F <: DataFields<F> {
-        ReadonlyField(name, TypeInfos.get<F>(), newGetter<O, F>(getter))
+        ReadonlyField(name, ClassTypeInfo.of<O>(), TypeInfos.get<F>(), newGetter<O, F>(getter))
     }
 }

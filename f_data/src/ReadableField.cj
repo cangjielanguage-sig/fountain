@@ -18,11 +18,12 @@ package f_data
 import f_base.*
 
 abstract sealed class ReadableField {
-    private let annotations = ConcurrentHashMap<TypeInfo, Annotation>()
+    private let annotations = ConcurrentHashMap<TypeInfo, ?Annotation>()
     public let name: String
     public ReadableField(
         name: String,
-        public let typeInfo: TypeInfo,
+        public let classTypeInfo: ClassTypeInfo,
+        public let fieldTypeInfo: TypeInfo,
         private let getter: (Any) -> Data
     ) {
         this.name = if (name[0] == b'`') {
@@ -31,24 +32,35 @@ abstract sealed class ReadableField {
             name
         }
     }
+    public func tryFindAnnotation<A>(): ?A where A <: Annotation {
+        let annotationType = TypeInfo.of<A>()
+        let annotation = annotations.computeIfAbsent(annotationType){
+            func getAnnotation(name: String): ?Annotation {
+                let a = try{
+                    classTypeInfo.getInstanceProperty(name).findAnnotation<A>()
+                } catch (_){
+                    classTypeInfo.getInstanceVariable(name).findAnnotation<A>()
+                }
+                if(let Some(x: Annotation) <- a){
+                    x
+                }else{
+                    None<Annotation>
+                }
+            }
+            try{
+                getAnnotation(name)
+            }catch(_){
+                getAnnotation('`${name}`')
+            }
+        }
+        match(annotation){
+            case Some(a: A) => a
+            case _ => None<A>
+        }
+    }
     public prop validator: Validator {
         get(){
-            let validatorType = TypeInfo.of<Validator>()
-            (annotations.computeIfAbsent(validatorType){
-                let cti = (typeInfo as ClassTypeInfo).getOrThrow()
-                func getValidator(name: String){
-                    try{
-                        cti.getInstanceProperty(name).findAnnotation<Validator>() ?? DummyValidator.instance
-                    } catch (_){
-                        cti.getInstanceVariable(name).findAnnotation<Validator>() ?? DummyValidator.instance
-                    }
-                }
-                try{
-                    getValidator(name)
-                }catch(_){
-                    getValidator('`${name}`')
-                }
-            } as Validator) ?? DummyValidator.instance
+            tryFindAnnotation<Validator>() ?? DummyValidator.instance
         }
     }
     public func get(instance: Any): Data {

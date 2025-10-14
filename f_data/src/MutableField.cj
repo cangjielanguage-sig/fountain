@@ -16,9 +16,9 @@ limitations under the License.
 package f_data
 
 public class MutableField <: ReadableField {
-    public MutableField(name: String, typeInfo: TypeInfo, getter: (Any) -> Data,
+    public MutableField(name: String, classTypeInfo: ClassTypeInfo, fieldTypeInfo: TypeInfo, getter: (Any) -> Data,
         private let setter: (Any, Data, UInt64) -> Bool) {
-        super(name, typeInfo, getter)
+        super(name, classTypeInfo, fieldTypeInfo, getter)
     }
 
     public func set(instance: Any, data: Data, flag!: DataConversionFlag = DEFAULT_DATA_FLAG): Bool {
@@ -27,7 +27,7 @@ public class MutableField <: ReadableField {
     public static func new<O, F>(name: String, getter: (O) -> ?F, setter: (O, ?F) -> Unit): MutableField where O <: ObjectData<O>,
         F <: DataFields<F> {
         let fieldType = TypeInfos.get<F>()
-        MutableField(name, fieldType, newGetter<O, F>(getter),
+        MutableField(name, ClassTypeInfo.of<O>(), fieldType, newGetter<O, F>(getter),
             {
                 o, data, flag => if (data is DataNone) {
                     if ((flag & IGNORE_NONE) != 0) {
