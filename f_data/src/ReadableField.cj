@@ -48,9 +48,17 @@ abstract sealed class ReadableField {
                 }
             }
             try{
-                getAnnotation(name)
+                try{
+                    if(let Some(x) <- getAnnotation(name)){
+                        x
+                    }else{
+                        getAnnotation('`${name}`')
+                    }
+                }catch(_){
+                    getAnnotation('`${name}`')
+                }
             }catch(_){
-                getAnnotation('`${name}`')
+                None<Annotation>
             }
         }
         match(annotation){
