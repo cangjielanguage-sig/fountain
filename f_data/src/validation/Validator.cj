@@ -126,12 +126,30 @@ public class IsDateTime <: Validator {
             false
         }
     }
+    public func valiate(data: Data): Bool {
+        if(let d: DataDateTime <- data){
+            true
+        }else if (let d: DataString <- data){
+            validate(d.data)
+        }else{
+            false
+        }
+    }
 }
 @Annotation[target: [MemberVariable, MemberProperty, Parameter]]
 public class IsDuration <: Validator {
     public const init() {}
     public func validate(value: String): Bool {
         Regex.DURATION.matches(value)
+    }
+    public func valiate(data: Data): Bool {
+        if(let d: DataDuration <- data){
+            true
+        }else if (let d: DataString <- data){
+            validate(d.data)
+        }else{
+            false
+        }
     }
 }
 @Annotation[target: [MemberVariable, MemberProperty, Parameter]]

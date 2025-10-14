@@ -449,6 +449,19 @@ Observable.replaySize(capacity)
     - 还支持`DataPath.solid(pathString)`，两种模式的使用方式都一样。
     - solid会一直保存path的编译结果，直到进程结束
     - cache最多保存一万个path，最长保存一天的时间。
+  - Validator
+    - @IsNotEmpty：当前参数或实例成员是否为空串
+    - @IsNotBlank：当前参数或实例成员是否为空白符，是空串的情况也会被判false
+    - @IsInteger：当前参数或实例成员是否整型
+    - @IsDecimal：当前参数或实例成员是否小数
+    - @Email：当前参数或实例成员是否符合电子邮箱格式
+    - @IsChineseCellPhone：当前参数或实例成员是否符合中国手机号，可以用参数决定是否包含国家区号
+    - @IsIntegerRange：当前参数或实例成员是否是整数且在指定区间内
+    - @IsBool：当前参数或实例成员是否true或false
+    - @IsDateTime：当前参数或实例成员是否能够按指定格式转化为DateTime
+    - @IsDuration：当前参数或实例成员是否能转换为Duration
+    - @IsIntegers：当前参数或实例成员是否按指定分隔符分隔的整数
+    - @DoesMatchRegex：当前参数或实例成员是否符合指定的正则表达式
 - 功能更丰富的json
 - 并发
   - 限流策略

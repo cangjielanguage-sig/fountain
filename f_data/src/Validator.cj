@@ -28,6 +28,9 @@ public abstract class Validator {
     public const operator func !(){
         NotValidator(this)
     }
+    public open func validate(value: Data): Bool {
+        validate(value.toString())
+    }
     public func validate<T>(value: ?T): ?(String, String) where T <: DataFields<T> {
         if(let Some(x) <- value){
             match(x){
@@ -39,9 +42,8 @@ public abstract class Validator {
                                     return x
                                 }
                                 case x => 
-                                    let value = x.toString()
-                                    if(!df.validator.validate(value)){
-                                        return (df.name, value)
+                                    if(!df.validator.validate(x)){
+                                        return (df.name, x.toString())
                                     }
                             }
                         }
@@ -49,11 +51,11 @@ public abstract class Validator {
                     }
                     validate(x.getDataFields().iterator())
                 case x => 
-                    let value = x.toData().toString()
+                    let value = x.toData()
                     if(this.validate(value)){
                         None
                     } else {
-                        ('', value)
+                        ('', value.toString())
                     }
             }
         } else if(this.validate('')) {
