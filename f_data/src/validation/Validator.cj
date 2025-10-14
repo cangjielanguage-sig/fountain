@@ -143,8 +143,8 @@ public class IsIntegers <: Validator {
 }
 
 @Annotation[target: [MemberVariable, MemberProperty, Parameter]]
-public class IsRegex <: Validator {
-    public const IsRegex(private let rege: String) {}
+public class DoesMatchRegex <: Validator {
+    public const DoesMatchRegex(private let rege: String) {}
     public func validate(value: String): Bool {
         rege.regex(solid: true).matches(value)
     }

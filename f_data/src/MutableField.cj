@@ -62,7 +62,7 @@ public class MutableField <: ReadableField {
     public static func new<O, F>(name: String, getter: (O) -> F, setter: (O, F) -> Unit): MutableField where O <: ObjectData<O>,
         F <: DataFields<F> {
         let fieldType = TypeInfos.get<F>()
-        MutableField(name, fieldType, newGetter<O, F>(getter),
+        MutableField(name, ClassTypeInfo.of<O>(), fieldType, newGetter<O, F>(getter),
             {
                 o, data, flag => if (data is DataNone) {
                     if ((flag & IGNORE_NONE) != 0) {
