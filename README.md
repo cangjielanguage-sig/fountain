@@ -462,6 +462,7 @@ Observable.replaySize(capacity)
     - @IsDuration：当前参数或实例成员是否能转换为Duration
     - @IsIntegers：当前参数或实例成员是否按指定分隔符分隔的整数
     - @DoesMatchRegex：当前参数或实例成员是否符合指定的正则表达式
+    - 每种规则都是fountain.data.Validator的子类型，Validator重载了& | !操作符，可以用这些操作符连接各种规则
 - 功能更丰富的json
 - 并发
   - 限流策略

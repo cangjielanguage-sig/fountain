@@ -31,7 +31,7 @@ public abstract class Validator {
     public open func validate(value: Data): Bool {
         validate(value.toString())
     }
-    public func validate<T>(value: ?T): ?(String, String) where T <: DataFields<T> {
+    public func validate<T>(value: ?T): ?(String, String) where T <: DataFields<T> {//todo 这个可以用effect-handle优化报错方式
         if(let Some(x) <- value){
             match(x){
                 case x: ToDataFields => 
