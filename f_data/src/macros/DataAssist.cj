@@ -89,7 +89,7 @@ public macro DataAssist(attr: Tokens, input: Tokens): Tokens {
 func generateProps(decl: ClassDecl, exclusion: HashSet<String>) {
     let decls = decl.body.decls
     let appended = ArrayList<Decl>()
-    func gen(v: VarDecl) {
+    func gen(v: VarDecl, macroTokens: Tokens) {
         if (v.isStatic() || v.isPublic()) {
             return
         }
@@ -110,8 +110,7 @@ func generateProps(decl: ClassDecl, exclusion: HashSet<String>) {
             let empty = quote()
             (empty, empty)
         }
-        appended.add(
-            PropDecl(
+        let propDecl = PropDecl(
                 quote(
             public $mutToken prop $name: $(t){
                 get(){
@@ -119,50 +118,70 @@ func generateProps(decl: ClassDecl, exclusion: HashSet<String>) {
                 }
                 $(setter)
             }
-        )))
+        ))
+        appended.add(if(macroTokens.size == 0){
+            propDecl
+        }else{
+            let md = MacroExpandDecl(macroTokens)
+            md.macroInputs = propDecl.toTokens()
+            md.macroInputDecl = propDecl
+            md
+        })
     }
     let vars = ArrayList<Decl>()
     let assigns = ArrayList<ast.Node>()
     for (decl in decls) {
         match (decl) {
-            case d: VarDecl where !(d.isStatic() || d.isPublic()) => gen(d)
+            case d: VarDecl where !(d.isStatic() || d.isPublic()) => gen(d, quote())
             case d: PrimaryCtorDecl =>
                 let funcParams = d.funcParams
                 for (i in 0 .. funcParams.size) {
-                    let p = funcParams[i]
-                    if(!p.isMemberParam()){
-                        continue
-                    }
-                    let paramTokens = p.toTokens()
-                    var c = 0
-                    for (j in 0 .. paramTokens.size where paramTokens[j].kind == IDENTIFIER) {
-                        c = j
-                        break
-                    }
-                    var end = paramTokens.size
-                    if (paramTokens[end - 1].kind == COMMA) {
-                        end--
-                    }
-                    funcParams[i] = FuncParam(paramTokens[c .. end])
-                    let member = VarDecl()
-                    member.modifiers = p.modifiers
-                    member.keyword = p.keyword
-                    member.identifier = p.identifier
-                    member.colon = p.colon
-                    member.declType = p.paramType
-                    try{
-                        if (p.assign.kind == ASSIGN) {
-                            member.assign = p.assign
-                            member.expr = p.expr
+                    func gen(p: FuncParam, macroTokens: Tokens){
+                        let paramTokens = p.toTokens()
+                        var c = 0
+                        for (j in 0 .. paramTokens.size where paramTokens[j].kind == IDENTIFIER) {
+                            c = j
+                            break
                         }
-                    }catch(_){}
-                    vars.add(member)
-                    p.modifiers = ArrayList<Modifier>()
-                    p.keyword = Token(ILLEGAL)
-                    gen(member)
-                    assigns.add(parseExpr(quote(this.$(member.identifier) = $(p.identifier))))
+                        var end = paramTokens.size
+                        if (paramTokens[end - 1].kind == COMMA) {
+                            end--
+                        }
+                        funcParams[i] = FuncParam(paramTokens[c .. end])
+                        let member = VarDecl()
+                        member.modifiers = p.modifiers
+                        member.keyword = p.keyword
+                        member.identifier = p.identifier
+                        member.colon = p.colon
+                        member.declType = p.paramType
+                        try{
+                            if (p.assign.kind == ASSIGN) {
+                                member.assign = p.assign
+                                member.expr = p.expr
+                            }
+                        }catch(_){}
+                        vars.add(member)
+                        p.modifiers = ArrayList<Modifier>()
+                        p.keyword = Token(ILLEGAL)
+                        gen(member, macroTokens)
+                        assigns.add(parseExpr(quote(this.$(member.identifier) = $(p.identifier))))
+                    }
+                    let p = funcParams[i]
+                    if (let x: MacroExpandParam <- p) {//TODO: x.macroInputDecl x.toTokens()有BUG，无法完成，等待修复
+                        let mp = extract(x)
+                        if(mp.isMemberParam()){
+                            gen(mp, x.toTokens())
+                        }
+                    } else if (p.isMemberParam()) {
+                        gen(p, quote())
+                    }
                 }
                 d.block.nodes.add(all: assigns, at: 0)
+            case d: MacroExpandDecl => 
+                var md = extract(d)
+                if(let x: VarDecl <- md && !(x.isStatic() || x.isPublic())){
+                    gen(x, d.toTokens())
+                }
             case _ => continue
         }
     }
