@@ -48,12 +48,9 @@ public macro Configuration(input: Tokens): Tokens {
             case _ => ()
         }
     }
-    quote(
-        $input
-        private let _ = {=>
-            $staticTokens
-            let configuration = $(identifier)()
-            $instanceTokens
-        }()
-    )
+    topMacroAnonymousClosure(quote(
+        $staticTokens
+        let configuration = $(identifier)()
+        $instanceTokens
+    ))
 }
