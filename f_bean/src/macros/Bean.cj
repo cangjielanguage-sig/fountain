@@ -111,29 +111,26 @@ private func expandBean(attr: Tokens, input: Tokens, klass: ClassDecl): Tokens {
                 case _ => continue
             }
         }
-        tokens += quote(
-            $(`nl`)
-            private let _ = {=>
-                $ctorTokens
-                var constructor = if (ctors.isEmpty()) {
-                    {=> $beanType()}
-                } else {
-                    var ctor = None<() -> $beanType>
-                    for ((n, f) in ctors where TypeInfos.withAnnotation<$beanType, Constructor>(n, [])) {
-                        ctor = f
-                        break
-                    }
-                    if (ctor.isNone() && let Some(f) <- ctors.get("init")) {
-                        ctor = f
-                    }
-                    ctor
+        tokens += `nl` + topMacroAnonymousClosure(quote(
+            $ctorTokens
+            var constructor = if (ctors.isEmpty()) {
+                {=> $beanType()}
+            } else {
+                var ctor = None<() -> $beanType>
+                for ((n, f) in ctors where TypeInfos.withAnnotation<$beanType, Constructor>(n, [])) {
+                    ctor = f
+                    break
                 }
-                BeanFactory.instance.register<$beanType>(constructor.getOrThrow{
-                    let beanTypeName = $(beanType.toString())
-                    BeanException('class ' + beanTypeName + ' must be with a public parameterless constructor or a public static parameterless function.')
-                })
-            }()
-        )
+                if (ctor.isNone() && let Some(f) <- ctors.get("init")) {
+                    ctor = f
+                }
+                ctor
+            }
+            BeanFactory.instance.register<$beanType>(constructor.getOrThrow{
+                let beanTypeName = $(beanType.toString())
+                BeanException('class ' + beanTypeName + ' must be with a public parameterless constructor or a public static parameterless function.')
+            })
+        ))
     }
     tokens
 }

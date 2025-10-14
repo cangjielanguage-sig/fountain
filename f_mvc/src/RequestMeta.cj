@@ -274,7 +274,9 @@ public class RequestMeta <: HttpRequestHandler & ToString {
                             args[pname] = (x, v)
                             toThrow = false
                             break
-                        case None => args[pname] = (x, DummyValidator.instance)
+                        case None => 
+                            args[pname] = (x, DummyValidator.instance)
+                            toThrow = false
                         case _ => throw UnreachableException()
                     }
                     case x: Validator => match (args.get(pname)) {
