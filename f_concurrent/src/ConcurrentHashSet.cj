@@ -16,30 +16,30 @@ limitations under the License.
 package f_concurrent
 
 public class ConcurrentHashSetIterator<T> <: Iterator<T> {
-    public ConcurrentHashSetIterator(public let itr: Iterator<(T, T)>) {}
+    public ConcurrentHashSetIterator(public let itr: Iterator<(T, Unit)>) {}
     public func next(): ?T {
         itr.next()?[0]
     }
 }
 
 public class ConcurrentHashSet<T> <: Set<T> where T <: Hashable & Equatable<T> {
-    private let store: ConcurrentHashMap<T, T>
+    private let store: ConcurrentHashMap<T, Unit>
     public init() {
-        store = ConcurrentHashMap<T, T>()
+        store = ConcurrentHashMap<T, Unit>()
     }
     public init(capacity: Int64) {
-        store = ConcurrentHashMap<T, T>(capacity)
+        store = ConcurrentHashMap<T, Unit>(capacity)
     }
     public init(elements: Collection<T>) {
         this()
         for (v in elements) {
-            store[v] = v
+            store[v] = ()
         }
     }
     public init(elements: Array<T>) {
         this()
         for (v in elements) {
-            store[v] = v
+            store[v] = ()
         }
     }
     public prop size: Int64 {
@@ -54,7 +54,7 @@ public class ConcurrentHashSet<T> <: Set<T> where T <: Hashable & Equatable<T> {
         ConcurrentHashSetIterator<T>(store.iterator())
     }
     public func add(value: T): Bool {
-        store.add(value, value).isNone()
+        store.add(value, ()).isNone()
     }
     public func add(all!: Collection<T>): Unit {
         for (v in all) {
@@ -91,7 +91,7 @@ public class ConcurrentHashSet<T> <: Set<T> where T <: Hashable & Equatable<T> {
     }
     public func removeIf(predicate: (T) -> Bool): Unit {
         let keys = ArrayList<T>()
-        for ((k, v) in store where predicate(v)) {
+        for ((k, v) in store where predicate(k)) {
             keys.add(k)
         }
         for (k in keys) {

@@ -31,7 +31,7 @@ public class RequestMeta <: HttpRequestHandler & ToString {
     private var ignorePrivilege_ = false
 
     private let produces = HashSet<String>()
-    private let consumes = HashSet<String>()
+    let consumes = HashSet<String>()
 
     private let args = RequestArgMeta()
 
@@ -44,6 +44,9 @@ public class RequestMeta <: HttpRequestHandler & ToString {
         private let headers!: RequestCondition = DummyRequestCondition.instance
     ) {}
 
+    func intersectionConsumes(consumes: HashSet<String>): Set<String> {
+        consumes.intersection(consumes)
+    }
     public func toString(): String {
         'path: ${path}; method: ${method}; consumes: ${consumes}'
     }
@@ -313,6 +316,7 @@ public class RequestMeta <: HttpRequestHandler & ToString {
                         meta.ignoreAuth_ = ignoreAuth
                         meta.ignorePrivilege_ = ignorePrivilege
                         meta.args.add(all: args)
+                        RequestMetas.instance.tryAdd(meta)
                         metas.add(meta)
                     }
                 case _ => ()

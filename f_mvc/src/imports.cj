@@ -31,6 +31,7 @@ internal import stdx.crypto.x509.*
 internal import charset4cj.charset.encoding.Charset
 internal import charset4cj.charset.{Charsets, TextReader, TextWriter}
 internal import f_collection.*
+internal import f_concurrent.ConcurrentHashSet
 internal import f_config.*
 internal import f_data.*
 internal import f_data.json.*

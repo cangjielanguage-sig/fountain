@@ -3,6 +3,7 @@
   f_base = {path = "../f_base"}
   f_bean = {path = "../f_bean"}
   f_collection = {path = "../f_collection"}
+  f_concurrent = {path = "../f_concurrent"}
   f_config = {path = "../f_config"}
   f_data = {path = "../f_data"}
   f_exception = {path = "../f_exception"}
