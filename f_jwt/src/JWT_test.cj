@@ -31,10 +31,10 @@ public class JWTTest {
      */
     @TestCase
     public func testBasicHmacSHA1() {
-        let jwt = JWT().hmacSHA1('1234567890'.toArray())
-        let sign = jwt.keyId('1234567890').expire(Duration.minute).addPayload('name', 'Bob').encoder().sign()
+        let jwt = JWT.encoder().hmacSHA1('1234567890'.toArray())
+        let sign = jwt.keyId('1234567890').expire(Duration.minute).addPayload('name', 'Bob').sign()
         println(sign)
-        @Expect(jwt.verifier(sign).verify(), true)
+        @Expect(JWT.verifier(sign).verify(), true)
     }
 
     /**
@@ -44,11 +44,11 @@ public class JWTTest {
     @TestCase
     public func testHmacMD5ByHexKey() {
         let hexKey = "48656c6c6f576f726c64" // "HelloWorld" in hex
-        let jwt = JWT().hmacMD5ByHexKey(hexKey)
-        let token = jwt.addPayload("user", "testUser").encoder().sign()
+        let jwt = JWT.encoder().hmacMD5ByHexKey(hexKey)
+        let token = jwt.addPayload("user", "testUser").sign()
         
         // 验证token可以被正确验证
-        let verifier = jwt.verifier(token)
+        let verifier = JWT.verifier(token)
         @Expect(verifier.verifySign(), true)
         
         // 验证header中包含正确的算法
@@ -65,20 +65,20 @@ public class JWTTest {
     @TestCase
     public func testHmacMD5ByHexKeyEdgeCases() {
         // 测试空十六进制字符串
-        let jwt1 = JWT().hmacMD5ByHexKey("")
-        let token1 = jwt1.addPayload("test", "value").encoder().sign()
-        @Expect(jwt1.verifier(token1).verifySign(), true)
+        let jwt1 = JWT.encoder().hmacMD5ByHexKey("")
+        let token1 = jwt1.addPayload("test", "value").sign()
+        @Expect(JWT.verifier(token1).verifySign(), true)
         
         // 测试单个字符的十六进制
-        let jwt2 = JWT().hmacMD5ByHexKey("41") // "A" in hex
-        let token2 = jwt2.addPayload("test", "value").encoder().sign()
-        @Expect(jwt2.verifier(token2).verifySign(), true)
+        let jwt2 = JWT.encoder().hmacMD5ByHexKey("41") // "A" in hex
+        let token2 = jwt2.addPayload("test", "value").sign()
+        @Expect(JWT.verifier(token2).verifySign(), true)
         
         // 测试长十六进制密钥
         let longHexKey = "0123456789abcdef" * 8 // 128个字符
-        let jwt3 = JWT().hmacMD5ByHexKey(longHexKey)
-        let token3 = jwt3.addPayload("test", "value").encoder().sign()
-        @Expect(jwt3.verifier(token3).verifySign(), true)
+        let jwt3 = JWT.encoder().hmacMD5ByHexKey(longHexKey)
+        let token3 = jwt3.addPayload("test", "value").sign()
+        @Expect(JWT.verifier(token3).verifySign(), true)
     }
 
     /**
@@ -88,11 +88,11 @@ public class JWTTest {
     @TestCase
     public func testHmacMD5ByBase64Key() {
         let base64Key = toBase64String("HelloWorld".toArray())
-        let jwt = JWT().hmacMD5ByBase64Key(base64Key)
-        let token = jwt.addPayload("user", "testUser").encoder().sign()
+        let jwt = JWT.encoder().hmacMD5ByBase64Key(base64Key)
+        let token = jwt.addPayload("user", "testUser").sign()
         
         // 验证token可以被正确验证
-        let verifier = jwt.verifier(token)
+        let verifier = JWT.verifier(token)
         @Expect(verifier.verifySign(), true)
         
         // 验证header中包含正确的算法
@@ -111,46 +111,46 @@ public class JWTTest {
         payload["role"] = "admin"
         
         // 测试HMAC MD5
-        let jwtMD5 = JWT().hmacMD5(key)
+        let jwtMD5 = JWT.encoder().hmacMD5(key)
         jwtMD5.addPayload(payload)
-        let tokenMD5 = jwtMD5.encoder().sign()
-        @Expect(jwtMD5.verifier(tokenMD5).verifySign(), true)
-        @Expect(jwtMD5.verifier(tokenMD5).getHeader("alg"), Some("HM5"))
+        let tokenMD5 = jwtMD5.sign()
+        @Expect(JWT.verifier(tokenMD5).verifySign(), true)
+        @Expect(JWT.verifier(tokenMD5).getHeader("alg"), Some("HM5"))
         
         // 测试HMAC SHA1
-        let jwtSHA1 = JWT().hmacSHA1(key)
+        let jwtSHA1 = JWT.encoder().hmacSHA1(key)
         jwtSHA1.addPayload(payload)
-        let tokenSHA1 = jwtSHA1.encoder().sign()
-        @Expect(jwtSHA1.verifier(tokenSHA1).verifySign(), true)
-        @Expect(jwtSHA1.verifier(tokenSHA1).getHeader("alg"), Some("HS1"))
+        let tokenSHA1 = jwtSHA1.sign()
+        @Expect(JWT.verifier(tokenSHA1).verifySign(), true)
+        @Expect(JWT.verifier(tokenSHA1).getHeader("alg"), Some("HS1"))
         
         // 测试HMAC SHA224
-        let jwtSHA224 = JWT().hmacSHA224(key)
+        let jwtSHA224 = JWT.encoder().hmacSHA224(key)
         jwtSHA224.addPayload(payload)
-        let tokenSHA224 = jwtSHA224.encoder().sign()
-        @Expect(jwtSHA224.verifier(tokenSHA224).verifySign(), true)
-        @Expect(jwtSHA224.verifier(tokenSHA224).getHeader("alg"), Some("HS224"))
+        let tokenSHA224 = jwtSHA224.sign()
+        @Expect(JWT.verifier(tokenSHA224).verifySign(), true)
+        @Expect(JWT.verifier(tokenSHA224).getHeader("alg"), Some("HS224"))
         
         // 测试HMAC SHA256
-        let jwtSHA256 = JWT().hmacSHA256(key)
+        let jwtSHA256 = JWT.encoder().hmacSHA256(key)
         jwtSHA256.addPayload(payload)
-        let tokenSHA256 = jwtSHA256.encoder().sign()
-        @Expect(jwtSHA256.verifier(tokenSHA256).verifySign(), true)
-        @Expect(jwtSHA256.verifier(tokenSHA256).getHeader("alg"), Some("HS256"))
+        let tokenSHA256 = jwtSHA256.sign()
+        @Expect(JWT.verifier(tokenSHA256).verifySign(), true)
+        @Expect(JWT.verifier(tokenSHA256).getHeader("alg"), Some("HS256"))
         
         // 测试HMAC SHA384
-        let jwtSHA384 = JWT().hmacSHA384(key)
+        let jwtSHA384 = JWT.encoder().hmacSHA384(key)
         jwtSHA384.addPayload(payload)
-        let tokenSHA384 = jwtSHA384.encoder().sign()
-        @Expect(jwtSHA384.verifier(tokenSHA384).verifySign(), true)
-        @Expect(jwtSHA384.verifier(tokenSHA384).getHeader("alg"), Some("HS384"))
+        let tokenSHA384 = jwtSHA384.sign()
+        @Expect(JWT.verifier(tokenSHA384).verifySign(), true)
+        @Expect(JWT.verifier(tokenSHA384).getHeader("alg"), Some("HS384"))
         
         // 测试HMAC SHA512
-        let jwtSHA512 = JWT().hmacSHA512(key)
+        let jwtSHA512 = JWT.encoder().hmacSHA512(key)
         jwtSHA512.addPayload(payload)
-        let tokenSHA512 = jwtSHA512.encoder().sign()
-        @Expect(jwtSHA512.verifier(tokenSHA512).verifySign(), true)
-        @Expect(jwtSHA512.verifier(tokenSHA512).getHeader("alg"), Some("HS512"))
+        let tokenSHA512 = jwtSHA512.sign()
+        @Expect(JWT.verifier(tokenSHA512).verifySign(), true)
+        @Expect(JWT.verifier(tokenSHA512).getHeader("alg"), Some("HS512"))
     }
 
     /**
@@ -159,13 +159,13 @@ public class JWTTest {
      */
     @TestCase
     public func testHeaderFunctionality() {
-        let jwt = JWT().hmacSHA256("secret".toArray())
+        let jwt = JWT.encoder().hmacSHA256("secret".toArray())
         jwt.header("typ", "JWT")
         jwt.header("custom", "value")
         jwt.keyId("key123")
         
-        let token = jwt.addPayload("test", "data").encoder().sign()
-        let verifier = jwt.verifier(token)
+        let token = jwt.addPayload("test", "data").sign()
+        let verifier = JWT.verifier(token)
         
         @Expect(verifier.getHeader("typ"), Some("JWT"))
         @Expect(verifier.getHeader("custom"), Some("value"))
@@ -180,7 +180,7 @@ public class JWTTest {
      */
     @TestCase
     public func testPayloadFunctionality() {
-        let jwt = JWT().hmacSHA256("secret".toArray())
+        let jwt = JWT.encoder().hmacSHA256("secret".toArray())
         
         // 测试标准声明
         jwt.issuer("testIssuer")
@@ -195,8 +195,8 @@ public class JWTTest {
         jwt.addPayload("intValue", 123)
         jwt.addPayload("boolValue", true)
         
-        let token = jwt.encoder().sign()
-        let verifier = jwt.verifier(token)
+        let token = jwt.sign()
+        let verifier = JWT.verifier(token)
         
         @Expect(verifier.getPayload("iss"), Some("testIssuer"))
         @Expect(verifier.getPayload("sub"), Some("testSubject"))
@@ -213,7 +213,7 @@ public class JWTTest {
      */
     @TestCase
     public func testTimeFunctionality() {
-        let jwt = JWT().hmacSHA256("secret".toArray())
+        let jwt = JWT.encoder().hmacSHA256("secret".toArray())
         let now = DateTime.now()
         let futureTime = now + Duration.hour
         let pastTime = now - Duration.hour
@@ -223,12 +223,12 @@ public class JWTTest {
         jwt.notBeforeAt(pastTime)
         jwt.issuedAt(now)
         
-        let token = jwt.addPayload("test", "data").encoder().sign()
-        let verifier = jwt.verifier(token)
+        let token = jwt.addPayload("test", "data").sign()
+        let verifier = JWT.verifier(token)
         
         // 验证时间相关方法
-        @Expect(verifier.isExpired(now), false) // 未过期
-        @Expect(verifier.isNotBefore(now), true) // 已生效
+        @Expect(verifier.isExpired(time: now), false) // 未过期
+        @Expect(verifier.isNotBefore(time: now), true) // 已生效
         
         // 测试过期时间获取
         let expireAt = verifier.getExpireAt()
@@ -245,14 +245,14 @@ public class JWTTest {
      */
     @TestCase
     public func testVerificationFunctionality() {
-        let jwt = JWT().hmacSHA256("secret".toArray())
+        let jwt = JWT.encoder().hmacSHA256("secret".toArray())
         jwt.issuer("testIssuer")
         jwt.subject("testSubject")
         jwt.audience("testAudience")
         jwt.expireAt(DateTime.now() + Duration.hour)
         
-        let token = jwt.encoder().sign()
-        let verifier = jwt.verifier(token)
+        let token = jwt.sign()
+        let verifier = JWT.verifier(token)
         
         // 测试整体验证
         @Expect(verifier.verify(), true)
@@ -279,26 +279,26 @@ public class JWTTest {
      */
     @TestCase
     public func testErrorHandling() {
-        let jwt = JWT().hmacSHA256("secret".toArray())
-        let token = jwt.addPayload("test", "data").encoder().sign()
+        let jwt = JWT.encoder().hmacSHA256("secret".toArray())
+        let token = jwt.addPayload("test", "data").sign()
         
         // 测试错误密钥验证
-        let wrongJwt = JWT().hmacSHA256("wrongSecret".toArray())
-        let wrongVerifier = wrongJwt.verifier(token)
+        let wrongJwt = JWT.encoder().hmacSHA256("wrongSecret".toArray())
+        let wrongVerifier = JWT.verifier(token)
         @Expect(wrongVerifier.verifySign(), false)
         
         // 测试过期token
-        let expiredJwt = JWT().hmacSHA256("secret".toArray())
+        let expiredJwt = JWT.encoder().hmacSHA256("secret".toArray())
         expiredJwt.expireAt(DateTime.now() - Duration.hour) // 已过期
-        let expiredToken = expiredJwt.addPayload("test", "data").encoder().sign()
-        let expiredVerifier = expiredJwt.verifier(expiredToken)
+        let expiredToken = expiredJwt.addPayload("test", "data").sign()
+        let expiredVerifier = JWT.verifier(expiredToken)
         @Expect(expiredVerifier.isExpired(), true)
         
         // 测试未生效token
-        let notYetValidJwt = JWT().hmacSHA256("secret".toArray())
+        let notYetValidJwt = JWT.encoder().hmacSHA256("secret".toArray())
         notYetValidJwt.notBeforeAt(DateTime.now() + Duration.hour) // 未来时间
-        let notYetValidToken = notYetValidJwt.addPayload("test", "data").encoder().sign()
-        let notYetValidVerifier = notYetValidJwt.verifier(notYetValidToken)
+        let notYetValidToken = notYetValidJwt.addPayload("test", "data").sign()
+        let notYetValidVerifier = JWT.verifier(notYetValidToken)
         @Expect(notYetValidVerifier.isNotBefore(), false)
     }
 
@@ -308,7 +308,7 @@ public class JWTTest {
      */
     @TestCase
     public func testChainedCalls() {
-        let jwt = JWT()
+        let jwt = JWT.encoder()
             .hmacSHA256("secret".toArray())
             .header("typ", "JWT")
             .keyId("key123")
@@ -318,8 +318,8 @@ public class JWTTest {
             .expire(Duration.hour)
             .addPayload("custom", "value")
         
-        let token = jwt.encoder().sign()
-        let verifier = jwt.verifier(token)
+        let token = jwt.sign()
+        let verifier = JWT.verifier(token)
         
         @Expect(verifier.verifySign(), true)
         @Expect(verifier.getHeader("typ"), Some("JWT"))
@@ -341,29 +341,29 @@ public class JWTTest {
         let base64Key = toBase64String(originalKey.toArray())
         
         // 使用原始字节数组
-        let jwt1 = JWT().hmacSHA256(originalKey.toArray())
-        let token1 = jwt1.addPayload("test", "value").encoder().sign()
+        let jwt1 = JWT.encoder().hmacSHA256(originalKey.toArray())
+        let token1 = jwt1.addPayload("test", "value").sign()
         
         // 使用十六进制密钥
-        let jwt2 = JWT().hmacSHA256ByHexKey(hexKey)
-        let token2 = jwt2.addPayload("test", "value").encoder().sign()
+        let jwt2 = JWT.encoder().hmacSHA256ByHexKey(hexKey)
+        let token2 = jwt2.addPayload("test", "value").sign()
         
         // 使用Base64密钥
-        let jwt3 = JWT().hmacSHA256ByBase64Key(base64Key)
-        let token3 = jwt3.addPayload("test", "value").encoder().sign()
+        let jwt3 = JWT.encoder().hmacSHA256ByBase64Key(base64Key)
+        let token3 = jwt3.addPayload("test", "value").sign()
         
         // 所有三种方式应该产生相同的结果
-        @Expect(jwt1.verifier(token1).verifySign(), true)
-        @Expect(jwt2.verifier(token2).verifySign(), true)
-        @Expect(jwt3.verifier(token3).verifySign(), true)
+        @Expect(JWT.verifier(token1).verifySign(), true)
+        @Expect(JWT.verifier(token2).verifySign(), true)
+        @Expect(JWT.verifier(token3).verifySign(), true)
         
         // 交叉验证应该成功
-        @Expect(jwt1.verifier(token2).verifySign(), true)
-        @Expect(jwt1.verifier(token3).verifySign(), true)
-        @Expect(jwt2.verifier(token1).verifySign(), true)
-        @Expect(jwt2.verifier(token3).verifySign(), true)
-        @Expect(jwt3.verifier(token1).verifySign(), true)
-        @Expect(jwt3.verifier(token2).verifySign(), true)
+        @Expect(JWT.verifier(token2).verifySign(), true)
+        @Expect(JWT.verifier(token3).verifySign(), true)
+        @Expect(JWT.verifier(token1).verifySign(), true)
+        @Expect(JWT.verifier(token3).verifySign(), true)
+        @Expect(JWT.verifier(token1).verifySign(), true)
+        @Expect(JWT.verifier(token2).verifySign(), true)
     }
 
     /**
@@ -372,15 +372,15 @@ public class JWTTest {
      */
     @TestCase
     public func testLargePayload() {
-        let jwt = JWT().hmacSHA256("secret".toArray())
+        let jwt = JWT.encoder().hmacSHA256("secret".toArray())
         
         // 添加大量载荷数据
         for (i in 0..100) {
             jwt.addPayload("key${i}", "value${i}")
         }
         
-        let token = jwt.encoder().sign()
-        let verifier = jwt.verifier(token)
+        let token = jwt.sign()
+        let verifier = JWT.verifier(token)
         
         @Expect(verifier.verifySign(), true)
         
@@ -396,27 +396,25 @@ public class JWTTest {
      */
     @TestCase
     public func testBoundaryValues() {
-        let jwt = JWT().hmacSHA256("secret".toArray())
+        let jwt = JWT.encoder().hmacSHA256("secret".toArray())
         
         // 测试空字符串
         jwt.addPayload("empty", "")
         jwt.addPayload("space", " ")
-        jwt.addPayload("newline", "
-")
+        jwt.addPayload("newline", "\n")
         jwt.addPayload("tab", "\t")
         
         // 测试特殊字符
         jwt.addPayload("special", "!@#$%^&*()_+-=[]{}|;':\",./<>?")
         jwt.addPayload("unicode", "你好世界🌍")
         
-        let token = jwt.encoder().sign()
-        let verifier = jwt.verifier(token)
+        let token = jwt.sign()
+        let verifier = JWT.verifier(token)
         
         @Expect(verifier.verifySign(), true)
         @Expect(verifier.getPayload("empty"), Some(""))
         @Expect(verifier.getPayload("space"), Some(" "))
-        @Expect(verifier.getPayload("newline"), Some("
-"))
+        @Expect(verifier.getPayload("newline"), Some("\n"))
         @Expect(verifier.getPayload("tab"), Some("\t"))
         @Expect(verifier.getPayload("special"), Some("!@#$%^&*()_+-=[]{}|;':\",./<>?"))
         @Expect(verifier.getPayload("unicode"), Some("你好世界🌍"))

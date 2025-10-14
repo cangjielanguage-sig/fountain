@@ -548,7 +548,7 @@ public class ${name}_AppVersionImpl <: AppVersion {
                     let code = entireFileText(fi.path)
                     let tokens = cangjieLex(code)
                     try {
-                        let bytes = Program(tokens).toTokens().toString().unsafeBytes()
+                        let bytes = parseProgram(tokens).toTokens().toString().unsafeBytes()
                         count(ByteBuffer(bytes))
                     } catch (e: Exception) {
                         println(code)
