@@ -58,12 +58,12 @@ public class UserController {
         // println(v2 ?? 1)
         userService.listUsers()
     }
-    // @GetMapping[path:'/api/users', 
-    //             produces:'application/json', 
-    //             consumes:'application/x-www-form-urlencoded']
-    // public func listUsers2(): UserList {
-    //     userService.listUsers()
-    // }
+    @GetMapping[path:'/api/users', 
+                produces:'application/json', 
+                consumes:'application/x-www-form-urlencoded']
+    public func listUsers2(): UserList {
+        userService.listUsers()
+    }
     @DeleteMapping[path:'/api/user/{id}', 
                    produces:'application/json', 
                    consumes:'application/x-www-form-urlencoded']
