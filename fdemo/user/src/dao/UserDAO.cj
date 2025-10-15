@@ -56,9 +56,11 @@ public interface UserDAO <: RootDAO {
              where id = ${arg(id)}'''
         ).firstToMap()
     }
+
     func listUsers(): Pagination<UserPO> {
         executor.FROM<UserPO>().page(10, page: 1)
     }
+
     func deleteUser(id: Int64): Int64 {
         executor.setSql('''
             delete 
@@ -68,7 +70,10 @@ public interface UserDAO <: RootDAO {
         ).delete
     }
     func findUserId(username: String, password: String): ?Int64 {
-        let list = executor.FROM<UserPO>().WHERE{'username = ${arg(username)}'}.LIMIT(10, offset: 20).list<UserPO>()
+        let list = executor.FROM<UserPO>()
+                           .WHERE{'username = ${arg(username)}'}
+                           .LIMIT(10, offset: 20)
+                           .list<UserPO>()
         println('QQQQQQQQQQQQQQQQQ ${list.size}')
         executor.setSql('''
             select id 
