@@ -15,22 +15,11 @@ limitations under the License.
 */
 package fountain
 
-public interface AppVersion {
-    prop version: String
-    prop banner: String
-}
-
-struct DummyAppVersion <: AppVersion {
-    static let instance = DummyAppVersion()
-    private init(){}
-    public prop version: String {
-        get() {
-            ''
-        }
-    }
-    public prop banner: String {
-        get() {
-            BANNER
-        }
+public struct AppVersion {
+    static var banner = ''
+    static var version = ''
+    public static func set(banner: String, version: String){
+        AppVersion.banner = banner
+        AppVersion.version = version
     }
 }

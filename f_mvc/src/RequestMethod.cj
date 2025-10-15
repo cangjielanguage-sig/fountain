@@ -15,7 +15,7 @@ limitations under the License.
  */
 package f_mvc
 
-public enum RequestMethod <: Hashable & Equatable<RequestMethod> & ToString & Parsable<RequestMethod> & DataParsable<RequestMethod> {
+public enum RequestMethod <: Hashable & Equatable<RequestMethod> & ToString & Parsable<RequestMethod> & DataParsable<RequestMethod> & Comparable<RequestMethod> {
     | GET
     | POST
     | PUT
@@ -35,6 +35,9 @@ public enum RequestMethod <: Hashable & Equatable<RequestMethod> & ToString & Pa
                 | (HEAD, HEAD) => true
             case _ => false
         }
+    }
+    public operator func !=(other: RequestMethod) {
+        !(this == other)
     }
     public func toString() {
         match (this) {
@@ -60,6 +63,9 @@ public enum RequestMethod <: Hashable & Equatable<RequestMethod> & ToString & Pa
             case "WS" => WS
             case _ => None
         }
+    }
+    public func compare(other: RequestMethod): Ordering {
+        this.toString().compare(other.toString())
     }
     public static func parse(value: String): RequestMethod {
         tryParse(value).getOrThrow {IllegalArgumentException("${value} is an illegal http request method")}

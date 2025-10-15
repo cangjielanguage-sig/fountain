@@ -44,7 +44,7 @@ _/ ____\____  __ __  _____/  |______  |__| ____
  */
 public struct App {
     private static let log = LoggerFactory.getLogger<App>()
-    private static const APP_VERSION_MODULE_SUFFIX = '_App__vErsIOn___Impl____'
+    private static const APP_STATIC_RESOURCE_SUFFIX = '_stAtIc__'
     private let args: Array<String>
     private let idx: Int64
     private let path: Path
@@ -154,7 +154,7 @@ public struct App {
             }
         }
         if(dynamic){
-            load(path, Regex('^lib.*(${extractPattern()}|.+${APP_VERSION_MODULE_SUFFIX}).*$'))
+            load(path, Regex('^lib.*(${extractPattern()}|.+${APP_STATIC_RESOURCE_SUFFIX}).*$'))
         }
         BeanFactory.instance.afterRegistered()
         Ticktock.getInstance(anyway: false)
@@ -163,17 +163,12 @@ public struct App {
         //执行load函数时一定会加载初始化orm的动态链接库从而完成初始化
         //其它模块是工具API没有专门的初始化API
         let app = this.app
-        let appVersion = if (let Some(v) <- BeanFactory.instance.getFirst<AppVersion>()) {
-            v
-        } else {
-            DummyAppVersion.instance
-        }
-        let appver = if(appVersion.version.isEmpty()){
+        let appver = if(AppVersion.version.isEmpty()){
             ''
         }else{
-            '(${appVersion.version})'
+            '(${AppVersion.version})'
         }
-        println(appVersion.banner)
+        println(AppVersion.banner)
         let end = DateTime.now()
         println('${app}${appver} started by ${versionStr} in ${end - starts}')
         mvc?.start()
@@ -462,27 +457,13 @@ ${content}
         0
     }
     private func appVersionModuleName(name: String): String {
-        '${name}${APP_VERSION_MODULE_SUFFIX}'
+        '${name}${APP_STATIC_RESOURCE_SUFFIX}'
     }
     private func genCode(name: String, version: String) {
 '''
 package ${appVersionModuleName(name)}
 import fountain.AppVersion
-import fountain.bean.macros.Bean
-import fountain.bean.*
-@Bean
-public class ${name}_AppVersionImpl <: AppVersion {
-    public prop version: String {
-        get() {
-            '${version}'
-        }
-    }
-    public prop banner: String {
-        get() {
-            #'${banner()}'#
-        }
-    }
-}
+private let _ = AppVersion.set(#'${banner()}'#, '${version}')
 '''
     }
     private func addModule(dir: Path, module: String): (String, String, Path) {
@@ -518,7 +499,7 @@ public class ${name}_AppVersionImpl <: AppVersion {
         if (execode != 0) {
             return execode
         }
-        let appVersionPath = versionModuleDir.join('src/${n}_AppVersionImpl.cj')
+        let appVersionPath = versionModuleDir.join('src/${n}_AppVersion.cj')
         File.writeTo(appVersionPath, genCode(n, version).unsafeBytes())
         execode = execute('cjpm', ['build', '--target-dir=${targetDir}'], workingDirectory: workingDir)
         if(execode == 0){

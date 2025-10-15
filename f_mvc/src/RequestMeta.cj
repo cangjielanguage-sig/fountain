@@ -15,7 +15,7 @@ limitations under the License.
  */
 package f_mvc
 
-public class RequestMeta <: HttpRequestHandler & ToString {
+public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMeta> {
     private static let log = LoggerFactory.getLogger<RequestMeta>()
     static let currentResponseStatus = ThreadLocal<UInt16>()
     static func setResponseStatus(status: HttpStatus){
@@ -31,7 +31,7 @@ public class RequestMeta <: HttpRequestHandler & ToString {
     private var ignorePrivilege_ = false
 
     private let produces = HashSet<String>()
-    let consumes = HashSet<String>()
+    private let consumes = HashSet<String>()
 
     private let args = RequestArgMeta()
 
@@ -44,8 +44,22 @@ public class RequestMeta <: HttpRequestHandler & ToString {
         private let headers!: RequestCondition = DummyRequestCondition.instance
     ) {}
 
-    func intersectionConsumes(consumes: HashSet<String>): Set<String> {
-        consumes.intersection(consumes)
+    public func compare(other: RequestMeta): Ordering {
+        var cmp = path.compare(other.path)
+        if(cmp == Ordering.EQ){
+            cmp = method.compare(other.method)
+        }
+        if(cmp == Ordering.EQ){
+            let tree1 = TreeSet<String>(consumes).iterator()
+            let tree2 = TreeSet<String>(other.consumes).iterator()
+            while(cmp == Ordering.EQ && let Some(c1) <- tree1.next() && let Some(c2) <- tree2.next()){
+                cmp = c1.compare(c2)
+            }
+        }
+        if(cmp == Ordering.EQ){
+            cmp = consumes.size.compare(other.consumes.size)
+        }
+        return cmp
     }
     public func toString(): String {
         'path: ${path}; method: ${method}; consumes: ${consumes}'
@@ -316,7 +330,7 @@ public class RequestMeta <: HttpRequestHandler & ToString {
                         meta.ignoreAuth_ = ignoreAuth
                         meta.ignorePrivilege_ = ignorePrivilege
                         meta.args.add(all: args)
-                        RequestMetas.instance.tryAdd(meta)
+                        RequestMetas.instance.add(meta)
                         metas.add(meta)
                     }
                 case _ => ()

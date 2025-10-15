@@ -18,29 +18,10 @@ package f_mvc
 public class RequestMetas {
     private let mutex = Mutex()
     public static let instance = RequestMetas()
-    private let metas = ArrayList<RequestMeta>()
-    private let tags = ConcurrentHashMap<String, HashSet<String>>()
+    private let metas = TreeSet<RequestMeta>()
     private init(){}
-    func tryAdd(meta: RequestMeta){
+    func add(meta: RequestMeta){
         synchronized(mutex){
-            let key = '${meta.method}:${meta.path}'
-            if(let Some(s) <- tags.get(key)){
-                if(let intersection <- meta.intersectionConsumes(s) && intersection.size > 0){
-                    let gen = StringGenerator('[')
-                    for(c in intersection){
-                        if(gen.size > 1){
-                            gen.append(',')
-                        }
-                        gen.append(c)
-                    }
-                    gen.append(']')
-                    throw MVCException('duplicate request meta: ${key}; consumes: ${gen}')
-                }else{
-                    s.add(all: meta.consumes)
-                }
-            }else{
-                tags.add(key, HashSet<String>(meta.consumes))
-            }
             metas.add(meta)
         }
     }
