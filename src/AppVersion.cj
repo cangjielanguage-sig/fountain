@@ -18,6 +18,7 @@ package fountain
 public struct AppVersion {
     static var banner = ''
     static var version = ''
+    private init(){}
     public static func set(banner: String, version: String){
         AppVersion.banner = banner
         AppVersion.version = version
