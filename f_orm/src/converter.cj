@@ -20,9 +20,12 @@ import f_orm.exception.ORMException
 public struct ORMConverter {
     private init(){}
     public static func convert<T>(value: Any): T {
+        convertNullable<T>(value).getOrThrow {ORMException('value is none')}
+    }
+    public static func convertNullable<T>(value: Any): ?T {
         match (value) {
             case x: T => x
-            case x: ?T => x.getOrThrow {ORMException('value is none')}
+            case x: ?T => x
             case x: ToString => match (x.toString()) {
                 case x: T => x
                 case _ => throw ORMException("type of param does not match generic type")
@@ -30,5 +33,4 @@ public struct ORMConverter {
             case _ => throw ORMException("type of param does not match generic type")
         }
     }
-
 }

@@ -17,7 +17,7 @@ package f_orm.wrap
 
 public abstract class DataType {
     public DataType(
-        private let nullable: Bool,
+        public let nullable: Bool,
         public let columnName: String,
         public let fieldName: String
     ) {}

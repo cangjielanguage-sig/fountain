@@ -72,6 +72,14 @@ public open class FieldQueryMapper<T, O> <: QueryMapper<O> {
         dataType!: DataType = UnknownDataType(true, '', ''),
         putter!: (O, T) -> Unit
     ) {
-        super(dataType: dataType, putter: {o, v => putter(o, ORMConverter.convert<T>(v))})
+        super(dataType: dataType, putter: {o, v => 
+            if(dataType.nullable){
+                if(let Some(v) <- ORMConverter.convertNullable<T>(v)){
+                    putter(o, v)
+                }
+            }else{
+                putter(o, ORMConverter.convert<T>(v))
+            }
+        })
     }
 }
