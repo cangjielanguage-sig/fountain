@@ -534,6 +534,27 @@ public class SqlExecutor <: Resource & RootDAO {
             case x: Duration => add(x)
             case x: DateTime => add(x)
             case x: Array<Byte> => add(x)
+
+            case x: ?Bool => add(x)
+            case x: ?Int8 => add(x)
+            case x: ?UInt8 => add(x)
+            case x: ?Int16 => add(x)
+            case x: ?UInt16 => add(x)
+            case x: ?Int32 => add(x)
+            case x: ?UInt32 => add(x)
+            case x: ?Int64 => add(x)
+            case x: ?UInt64 => add(x)
+            case x: ?BigInt => add(x)
+            case x: ?Decimal => add(x)
+            case x: ?Float16 => add(x)
+            case x: ?Float32 => add(x)
+            case x: ?Float64 => add(x)
+            case x: ?Rune => add(x)
+            case x: ?String => add(x)
+            case x: ?Duration => add(x)
+            case x: ?DateTime => add(x)
+            case x: ?Array<Byte> => add(x)
+
             case x => add(x.toString())
         }
     }
@@ -541,81 +562,201 @@ public class SqlExecutor <: Resource & RootDAO {
         args.add(arg)
         this
     }
+    public func add(arg: ?Bool) {
+        match(arg){
+            case Some(x) => add(x)
+            case _ => addNull()
+        }
+    }
     public func add(arg: Int8) {
         args.add(arg)
         this
+    }
+    public func add(arg: ?Int8) {
+        match(arg){
+            case Some(x) => add(x)
+            case _ => addNull()
+        }
     }
     public func add(arg: UInt8) {
         args.add(arg)
         this
     }
+    public func add(arg: ?UInt8) {
+        match(arg){
+            case Some(x) => add(x)
+            case _ => addNull()
+        }
+    }
     public func add(arg: Int16) {
         args.add(arg)
         this
+    }
+    public func add(arg: ?Int16) {
+        match(arg){
+            case Some(x) => add(x)
+            case _ => addNull()
+        }
     }
     public func add(arg: UInt16) {
         args.add(arg)
         this
     }
+    public func add(arg: ?UInt16) {
+        match(arg){
+            case Some(x) => add(x)
+            case _ => addNull()
+        }
+    }
     public func add(arg: Int32) {
         args.add(arg)
         this
+    }
+    public func add(arg: ?Int32) {
+        match(arg){
+            case Some(x) => add(x)
+            case _ => addNull()
+        }
     }
     public func add(arg: UInt32) {
         args.add(arg)
         this
     }
+    public func add(arg: ?UInt32) {
+        match(arg){
+            case Some(x) => add(x)
+            case _ => addNull()
+        }
+    }
     public func add(arg: Int64) {
         args.add(arg)
         this
+    }
+    public func add(arg: ?Int64) {
+        match(arg){
+            case Some(x) => add(x)
+            case _ => addNull()
+        }
     }
     public func add(arg: UInt64) {
         args.add(arg)
         this
     }
+    public func add(arg: ?UInt64) {
+        match(arg){
+            case Some(x) => add(x)
+            case _ => addNull()
+        }
+    }
     public func add(arg: BigInt) {
         args.add(arg)
         this
+    }
+    public func add(arg: ?BigInt) {
+        match(arg){
+            case Some(x) => add(x)
+            case _ => addNull()
+        }
     }
     public func add(arg: Decimal) {
         args.add(arg)
         this
     }
+    public func add(arg: ?Decimal) {
+        match(arg){
+            case Some(x) => add(x)
+            case _ => addNull()
+        }
+    }
     public func add(arg: Float16) {
         args.add(arg)
         this
+    }
+    public func add(arg: ?Float16) {
+        match(arg){
+            case Some(x) => add(x)
+            case _ => addNull()
+        }
     }
     public func add(arg: Float32) {
         args.add(arg)
         this
     }
+    public func add(arg: ?Float32) {
+        match(arg){
+            case Some(x) => add(x)
+            case _ => addNull()
+        }
+    }
     public func add(arg: Float64) {
         args.add(arg)
         this
+    }
+    public func add(arg: ?Float64) {
+        match(arg){
+            case Some(x) => add(x)
+            case _ => addNull()
+        }
     }
     public func add(arg: Rune) {
         args.add(arg)
         this
     }
+    public func add(arg: ?Rune) {
+        match(arg){
+            case Some(x) => add(x)
+            case _ => addNull()
+        }
+    }
     public func add(arg: String) {
         args.add(arg)
         this
+    }
+    public func add(arg: ?String) {
+        match(arg){
+            case Some(x) => add(x)
+            case _ => addNull()
+        }
     }
     public func add(arg: InputStream) {
         args.add(arg)
         this
     }
+    public func add(arg: ?InputStream) {
+        match(arg){
+            case Some(x) => add(x)
+            case _ => addNull()
+        }
+    }
     public func add(arg: Duration) {
         args.add(arg)
         this
+    }
+    public func add(arg: ?Duration) {
+        match(arg){
+            case Some(x) => add(x)
+            case _ => addNull()
+        }
     }
     public func add(arg: DateTime) {
         args.add(arg)
         this
     }
+    public func add(arg: ?DateTime) {
+        match(arg){
+            case Some(x) => add(x)
+            case _ => addNull()
+        }
+    }
     public func add(arg: Array<Byte>) {
         args.add(arg)
         this
+    }
+    public func add(arg: ?Array<Byte>) {
+        match(arg){
+            case Some(x) => add(x)
+            case _ => addNull()
+        }
     }
     public func addNull(){
         args.addNull()
@@ -625,6 +766,7 @@ public class SqlExecutor <: Resource & RootDAO {
         match (arg) {
             case x: ToString => add<ToString>(x)
             case x: InputStream => add(x)
+            case x: ?InputStream => add(x)
             case _ => throw SqlException("Unsupported data type")
         }
     }

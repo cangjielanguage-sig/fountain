@@ -34,81 +34,201 @@ public interface RootDAO {
         executor.add(value)
         '?'
     }
+    func arg(value: ?Bool): String {
+        match(value){
+            case Some(x) => arg(x)
+            case _ => argNull()
+        }
+    }
     func arg(value: Int8): String {
         executor.add(value)
         '?'
+    }
+    func arg(value: ?Int8): String {
+        match(value){
+            case Some(x) => arg(x)
+            case _ => argNull()
+        }
     }
     func arg(value: UInt8): String {
         executor.add(value)
         '?'
     }
+    func arg(value: ?UInt8): String {
+        match(value){
+            case Some(x) => arg(x)
+            case _ => argNull()
+        }
+    }
     func arg(value: Int16): String {
         executor.add(value)
         '?'
+    }
+    func arg(value: ?Int16): String {
+        match(value){
+            case Some(x) => arg(x)
+            case _ => argNull()
+        }
     }
     func arg(value: UInt16): String {
         executor.add(value)
         '?'
     }
+    func arg(value: ?UInt16): String {
+        match(value){
+            case Some(x) => arg(x)
+            case _ => argNull()
+        }
+    }
     func arg(value: Int32): String {
         executor.add(value)
         '?'
+    }
+    func arg(value: ?Int32): String {
+        match(value){
+            case Some(x) => arg(x)
+            case _ => argNull()
+        }
     }
     func arg(value: UInt32): String {
         executor.add(value)
         '?'
     }
+    func arg(value: ?UInt32): String {
+        match(value){
+            case Some(x) => arg(x)
+            case _ => argNull()
+        }
+    }
     func arg(value: Int64): String {
         executor.add(value)
         '?'
+    }
+    func arg(value: ?Int64): String {
+        match(value){
+            case Some(x) => arg(x)
+            case _ => argNull()
+        }
     }
     func arg(value: UInt64): String {
         executor.add(value)
         '?'
     }
+    func arg(value: ?UInt64): String {
+        match(value){
+            case Some(x) => arg(x)
+            case _ => argNull()
+        }
+    }
     func arg(value: Float16): String {
         executor.add(value)
         '?'
+    }
+    func arg(value: ?Float16): String {
+        match(value){
+            case Some(x) => arg(x)
+            case _ => argNull()
+        }
     }
     func arg(value: Float32): String {
         executor.add(value)
         '?'
     }
+    func arg(value: ?Float32): String {
+        match(value){
+            case Some(x) => arg(x)
+            case _ => argNull()
+        }
+    }
     func arg(value: Float64): String {
         executor.add(value)
         '?'
+    }
+    func arg(value: ?Float64): String {
+        match(value){
+            case Some(x) => arg(x)
+            case _ => argNull()
+        }
     }
     func arg(value: BigInt): String {
         executor.add(value)
         '?'
     }
+    func arg(value: ?BigInt): String {
+        match(value){
+            case Some(x) => arg(x)
+            case _ => argNull()
+        }
+    }
     func arg(value: Decimal): String {
         executor.add(value)
         '?'
+    }
+    func arg(value: ?Decimal): String {
+        match(value){
+            case Some(x) => arg(x)
+            case _ => argNull()
+        }
     }
     func arg(value: Rune): String {
         executor.add(value)
         '?'
     }
+    func arg(value: ?Rune): String {
+        match(value){
+            case Some(x) => arg(x)
+            case _ => argNull()
+        }
+    }
     func arg(value: String): String {
         executor.add(value)
         '?'
+    }
+    func arg(value: ?String): String {
+        match(value){
+            case Some(x) => arg(x)
+            case _ => argNull()
+        }
     }
     func arg(value: InputStream): String {
         executor.add(value)
         '?'
     }
+    func arg(value: ?InputStream): String {
+        match(value){
+            case Some(x) => arg(x)
+            case _ => argNull()
+        }
+    }
     func arg(value: Duration): String {
         executor.add(value)
         '?'
+    }
+    func arg(value: ?Duration): String {
+        match(value){
+            case Some(x) => arg(x)
+            case _ => argNull()
+        }
     }
     func arg(value: DateTime): String {
         executor.add(value)
         '?'
     }
+    func arg(value: ?DateTime): String {
+        match(value){
+            case Some(x) => arg(x)
+            case _ => argNull()
+        }
+    }
     func arg(value: Array<Byte>): String {
         executor.add(value)
         '?'
+    }
+    func arg(value: ?Array<Byte>): String {
+        match(value){
+            case Some(x) => arg(x)
+            case _ => argNull()
+        }
     }
     func argNull(){
         executor.addNull()
