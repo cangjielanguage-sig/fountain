@@ -70,13 +70,13 @@ public interface UserDAO <: RootDAO {
         ).delete
     }
     func findUserId(username: String, password: String): ?Int64 {
-        let list = executor.FROM<UserPO>()
+        let page = executor.FROM<UserPO>()
                            .WHERE{
                                 meet(username.size > 0, ' username like '){
                                     '%${username}%'
                                 }
                            }.page<UserPO>(10, page: 1)
-        println('QQQQQQQQQQQQQQQQQ ${list.size}')
+        println('QQQQQQQQQQQQQQQQQ ${page.size}')
         executor.setSql('''
             select id 
             from user_info
