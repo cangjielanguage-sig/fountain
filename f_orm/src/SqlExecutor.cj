@@ -51,6 +51,7 @@ public class SqlExecutor <: Resource & RootDAO {
     private let cache: Map<SqlCacheKey, Any>
     private var clearCache = false
     private let useCache: Bool
+    private var clearArgsAfterExec_ = true
 
     private SqlExecutor(let driverName: String) {
         useCache = ORMConfig.getUseCache(driverName: driverName) ?? true
@@ -774,7 +775,8 @@ public class SqlExecutor <: Resource & RootDAO {
         this.args.add(all: all.args)
     }
 
-    public func setSql(sql: String): SqlExecutor {
+    public func setSql(sql: String, clearArgsAfterExec!: Bool = true): SqlExecutor {
+        this.clearArgsAfterExec_ = clearArgsAfterExec
         this.sql = sql
         this
     }
@@ -824,7 +826,9 @@ public class SqlExecutor <: Resource & RootDAO {
                 logger.debug(logMsg(DateTime.now() - start))
             }
             start = DateTime.UnixEpoch
-            args.clear()
+            if(clearArgsAfterExec_){
+                args.clear()
+            }
             sql_ = String.empty
         }
     }

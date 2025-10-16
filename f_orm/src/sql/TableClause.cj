@@ -141,13 +141,16 @@ public class FromClause<T> <: ExceptInsertClause<T> where T <: QueryMappersInit<
     }
 
     public func count(): Int64 {
-        executor.setSql('select count(*) ${sqlgen}').first<Int64>() ?? 0
+        count(true)
+    }
+    private func count(clearArgsAfterExec: Bool): Int64 {
+        executor.setSql('select count(*) ${sqlgen}', clearArgsAfterExec: clearArgsAfterExec).first<Int64>() ?? 0
     }
     public func singlePage<R>(size: Int64, page!: Int64 = 1): Pagination<R> where R <: DataFields<R> {
         singlePage<R>('id', size, page: page)
     }
     private func selectPage<R>(size: Int64, page: Int64, callee: (FromClause<T>) -> ArrayList<R>): Pagination<R> where R <: DataFields<R> {
-        Pagination<R>(page: page, rows: count(), size: size){size, offset =>
+        Pagination<R>(page: page, rows: count(false), size: size){size, offset =>
             callee(LIMIT(size, offset: offset))
         }
     }

@@ -76,7 +76,7 @@ public interface UserDAO <: RootDAO {
                                     '%${username}%'
                                 }
                            }.page<UserPO>(10, page: 1)
-        println('QQQQQQQQQQQQQQQQQ ${page.size}')
+        println('QQQQQQQQQQQQQQQQQ ${page.list.size}')
         executor.setSql('''
             select id 
             from user_info
