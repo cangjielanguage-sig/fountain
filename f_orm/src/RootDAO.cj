@@ -18,7 +18,6 @@ package f_orm
 
 import std.math.numeric.{BigInt, Decimal}
 import std.time.DateTime
-import f_orm.exception.ORMException
 
 /**
  * 所有的DAO接口都要继承本接口

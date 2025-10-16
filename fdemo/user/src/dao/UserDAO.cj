@@ -71,9 +71,11 @@ public interface UserDAO <: RootDAO {
     }
     func findUserId(username: String, password: String): ?Int64 {
         let list = executor.FROM<UserPO>()
-                           .WHERE{'username = ${arg(username)}'}
-                           .LIMIT(10, offset: 20)
-                           .list<UserPO>()
+                           .WHERE{
+                                meet(username.size > 0, ' username like '){
+                                    '%${username}%'
+                                }
+                           }.page<UserPO>(10, page: 1)
         println('QQQQQQQQQQQQQQQQQ ${list.size}')
         executor.setSql('''
             select id 
