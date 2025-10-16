@@ -237,7 +237,7 @@ public interface RootDAO {
     func meet(condition: Bool, partial: String): MeetCondition {
         MeetCondition(condition, partial, executor)
     }
-    func meet(condition: Bool, partial: String, value: ()->Any): Unit {
+    func meet(condition: Bool, partial: String, value: ()->Any): String {
         meet(condition, partial).value(value).done()
     }
     prop choose: ChooseCondition {
