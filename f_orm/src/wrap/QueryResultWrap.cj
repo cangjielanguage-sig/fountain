@@ -46,9 +46,18 @@ public class QueryResultWrap <: QueryResult {
                 list.add(result.getOrNull<T>(i))
             }
         }
-        (list[index] as ?T).getOrThrow{
-            let column = columnInfos[index]
-            ORMException('colum index: ${index}, column type: ${column.typeName}, column name: ${column.name}, requires: ${TypeInfo.of<T>()}')
+        match(list[index]){
+            case x: T => x
+            case x: ?T => x
+            case x: ??T => match(x){
+                case Some(x) => x
+                case _ => 
+                    let column = columnInfos[index]
+                    throw ORMException('colum index: ${index}, column type: ${column.typeName}, column name: ${column.name}, requires: ${TypeInfo.of<T>()}')
+            }
+            case _ => 
+                let column = columnInfos[index]
+                throw ORMException('colum index: ${index}, column type: ${column.typeName}, column name: ${column.name}, requires: ${TypeInfo.of<T>()}')
         }
     }
     public func get<T>(columnName: String): T {
