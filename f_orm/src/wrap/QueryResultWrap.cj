@@ -51,7 +51,9 @@ public class QueryResultWrap <: QueryResult {
             case x: ?T => x
             case x: ??T => match(x){
                 case Some(x) => x
-                case _ => None<T>
+                case _ => 
+                    let column = columnInfos[index]
+                    throw ORMException('colum index: ${index}, column type: ${column.typeName}, column name: ${column.name}, requires: ${TypeInfo.of<T>()}')
             }
             case _ => 
                 let column = columnInfos[index]
