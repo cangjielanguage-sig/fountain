@@ -231,26 +231,8 @@ public interface RootDAO {
             case _ => argNull()
         }
     }
-    func argNull(){
-        executor.addNull()
-        '?'
-    }
-    func meet(condition: Bool, partial: String): MeetCondition {
-        MeetCondition(condition, partial, executor)
-    }
-    func meet(condition: Bool, partial: String, value: ()->Any): String {
-        meet(condition, partial).value(value).done()
-    }
-    prop choose: ChooseCondition {
-        get() {
-            ChooseCondition(executor)
-        }
-    }
-    func loop<I, T>(values: I): LoopCondition<I, T> where I <: Iterable<T> {
-        Condition.loop<I, T>(values, executor)
-    }
-    func IN<I, T>(value: I): String where I <: Iterable<T> {
-        let frag = StringGenerator(' in (')
+    func arg<I, T>(value: I): String where I <: Iterable<T> {
+        let frag = StringGenerator(' (')
         let s = frag.size
         for(v in value){
             if(frag.size > s){
@@ -302,8 +284,36 @@ public interface RootDAO {
             }
             frag.append('?')
         }
+        if(frag.size == s){
+            return ''
+        }
         frag.append(')')
         frag.toString()
+    }
+    func argNull(){
+        executor.addNull()
+        '?'
+    }
+    func meet(condition: Bool, partial: String): MeetCondition {
+        MeetCondition(condition, partial, executor)
+    }
+    func meet(condition: Bool, partial: String, value: ()->Any): String {
+        meet(condition, partial).value(value).done()
+    }
+    prop choose: ChooseCondition {
+        get() {
+            ChooseCondition(executor)
+        }
+    }
+    func loop<I, T>(values: I): LoopCondition<I, T> where I <: Iterable<T> {
+        Condition.loop<I, T>(values, executor)
+    }
+    func IN<I, T>(value: I): String where I <: Iterable<T> {
+        let args = arg<I, T>(value)
+        if(args.isEmpty()){
+            return ''
+        }
+        ' in ${args} '
     }
     func SET(partial: () -> String): String {
         Condition.SET(partial)
