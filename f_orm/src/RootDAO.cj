@@ -19,6 +19,8 @@ package f_orm
 import std.math.numeric.{BigInt, Decimal}
 import std.time.DateTime
 
+import f_base.*
+
 /**
  * 所有的DAO接口都要继承本接口
  */
@@ -246,6 +248,65 @@ public interface RootDAO {
     }
     func loop<I, T>(values: I): LoopCondition<I, T> where I <: Iterable<T> {
         Condition.loop<I, T>(values, executor)
+    }
+    func IN<I, T>(value: I): String where I <: Iterable<T> {
+        IN<I, T>('', value)
+    }
+    func IN<I, T>(partial: String, value: I): String where I <: Iterable<T> {
+        let frag = StringGenerator(' ${partial} in (')
+        let s = frag.size
+        for(v in value){
+            if(frag.size > s){
+                frag.append(',')
+            }
+            match(v){
+                case x: Int8 => arg(x)
+                case x: Int16 => arg(x)
+                case x: Int32 => arg(x)
+                case x: Int64 => arg(x)
+                case x: UInt8 => arg(x)
+                case x: UInt16 => arg(x)
+                case x: UInt32 => arg(x)
+                case x: UInt64 => arg(x)
+                case x: Float16 => arg(x)
+                case x: Float32 => arg(x)
+                case x: Float64 => arg(x)
+                case x: BigInt => arg(x)
+                case x: Decimal => arg(x)
+                case x: String => arg(x)
+                case x: Duration => arg(x)
+                case x: DateTime => arg(x)
+                case x: InputStream => arg(x)
+                case x: Array<Byte> => arg(x)
+                case x: Rune => arg(x)
+                case x: Bool => arg(x)
+
+                case x: ?Int8 => arg(x)
+                case x: ?Int16 => arg(x)
+                case x: ?Int32 => arg(x)
+                case x: ?Int64 => arg(x)
+                case x: ?UInt8 => arg(x)
+                case x: ?UInt16 => arg(x)
+                case x: ?UInt32 => arg(x)
+                case x: ?UInt64 => arg(x)
+                case x: ?Float16 => arg(x)
+                case x: ?Float32 => arg(x)
+                case x: ?Float64 => arg(x)
+                case x: ?BigInt => arg(x)
+                case x: ?Decimal => arg(x)
+                case x: ?String => arg(x)
+                case x: ?Duration => arg(x)
+                case x: ?DateTime => arg(x)
+                case x: ?InputStream => arg(x)
+                case x: ?Array<Byte> => arg(x)
+                case x: ?Rune => arg(x)
+                case x: ?Bool => arg(x)
+                case _ => throw ORMException('type does not support')
+            }
+            frag.append('?')
+        }
+        frag.append(')')
+        frag.toString()
     }
     func SET(partial: () -> String): String {
         Condition.SET(partial)
