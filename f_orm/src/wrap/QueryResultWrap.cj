@@ -41,23 +41,28 @@ public class QueryResultWrap <: QueryResult {
         getOrNull<T>(index).getOrThrow()
     }
     public func getOrNull<T>(index: Int64): ?T {
-        if (index >= list.size) {
-            for (i in list.size..=index) {
-                list.add(result.getOrNull<T>(i))
+        try{
+            if (index >= list.size) {
+                for (i in list.size..=index) {
+                    list.add(result.getOrNull<T>(i))
+                }
             }
-        }
-        match(list[index]){
-            case x: T => x
-            case x: ?T => x
-            case x: ??T => match(x){
-                case Some(x) => x
+            match(list[index]){
+                case x: T => x
+                case x: ?T => x
+                case x: ??T => match(x){
+                    case Some(x) => x
+                    case _ => 
+                        let column = columnInfos[index]
+                        throw ORMException('colum index: ${index}, column type: ${column.typeName}, column name: ${column.name}, requires: ${TypeInfo.of<T>()}')
+                }
                 case _ => 
                     let column = columnInfos[index]
                     throw ORMException('colum index: ${index}, column type: ${column.typeName}, column name: ${column.name}, requires: ${TypeInfo.of<T>()}')
             }
-            case _ => 
-                let column = columnInfos[index]
-                throw ORMException('colum index: ${index}, column type: ${column.typeName}, column name: ${column.name}, requires: ${TypeInfo.of<T>()}')
+        }catch(e: Exception){
+            let column = columnInfos[index]
+            throw ORMException('colum index: ${index}, column type: ${column.typeName}, column name: ${column.name}, requires: ${TypeInfo.of<T>()}', e)
         }
     }
     public func get<T>(columnName: String): T {
