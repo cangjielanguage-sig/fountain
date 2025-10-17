@@ -46,7 +46,10 @@ public class QueryResultWrap <: QueryResult {
                 list.add(result.getOrNull<T>(i))
             }
         }
-        (list[index] as ?T).getOrThrow()
+        (list[index] as ?T).getOrThrow{
+            let column = columnInfos[index]
+            ORMException('colum index: ${index}, column type: ${column.typeName}, column name: ${column.name}, requires: ${TypeInfo.of<T>()}')
+        }
     }
     public func get<T>(columnName: String): T {
         get<T>(columnInfoMap[columnName])
