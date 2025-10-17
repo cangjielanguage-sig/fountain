@@ -16,6 +16,7 @@ limitations under the License.
 package f_orm
 
 public import std.time.DateTime
+public import std.math.numeric.{Decimal, BigInt}
 public import std.io.InputStream
 
 public interface QueryMappersInit<T> where T <: QueryMappersInit<T> {
@@ -80,3 +81,6 @@ extend Duration <: SimpleDataQueryMappersInit<Duration> {}
 extend DateTime <: SimpleDataQueryMappersInit<DateTime> {}
 
 extend<T> Array<T> <: SimpleDataQueryMappersInit<Array<T>> where T <: QueryMappersInit<T> {}
+
+extend Decimal <: SimpleDataQueryMappersInit<Decimal> {}
+extend BigInt <: SimpleDataQueryMappersInit<BigInt> {}
