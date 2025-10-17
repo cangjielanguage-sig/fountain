@@ -250,10 +250,7 @@ public interface RootDAO {
         Condition.loop<I, T>(values, executor)
     }
     func IN<I, T>(value: I): String where I <: Iterable<T> {
-        IN<I, T>('', value)
-    }
-    func IN<I, T>(partial: String, value: I): String where I <: Iterable<T> {
-        let frag = StringGenerator(' ${partial} in (')
+        let frag = StringGenerator(' in (')
         let s = frag.size
         for(v in value){
             if(frag.size > s){
