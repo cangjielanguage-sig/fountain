@@ -66,7 +66,7 @@ public class QueryResultWrap <: QueryResult {
         }
     }
     public func get<T>(columnName: String): T {
-        get<T>(columnInfoMap[columnName])
+        getOrNull<T>(columnName).getOrThrow()
     }
     public func getOrNull<T>(columnName: String): ?T {
         match(columnInfoMap.get(columnName)){
