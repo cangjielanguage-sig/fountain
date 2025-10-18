@@ -13,7 +13,7 @@ exports(){
     export logger_appender_FDemoConsole_level=DEBUG
     export logger_appender_FDemoConsole_pattern='[%level-%name]%d{yyyy/MM/dd,HH:mm:ss.SSS}|%m'
     export logger_appender_file=FDemoFile
-    export logger_appender_FDemoFile_level=DEBUG
+    export logger_appender_FDemoFile_level=INFO
     export logger_appender_FDemoFile_pattern='[%level-%name]%d{yyyy/MM/dd,HH:mm:ss.SSS}|%m'
     export logger_appender_FDemoFile_path=./log/fdemo.log
     export logger_appender_FDemoFile_rotateDuration=DAY
