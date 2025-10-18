@@ -32,6 +32,18 @@ private struct SyncQueueStream{
     init(bufSize: Int64){
         queue = ArrayBlockingQueue<() -> Unit>(bufSize)
         output = SyncQueueOutputStream(bufSize * 10)
+        remove(queue)
+    }
+    private static func remove(queue: ArrayBlockingQueue<() -> Unit>): Unit {
+        spawn {
+            while (true) {
+                try {
+                    queue.remove()()
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+        }
     }
 }
 public abstract class AsyncLogger <: AbstractLogger {
@@ -89,23 +101,10 @@ public abstract class AsyncLogger <: AbstractLogger {
     private static func queueStream(tag: String){
         let q = queueMap.computeIfAbsent(tag){
             let bufSize = LoggerConfig.getAsyncBufSize()
-            let s = SyncQueueStream(bufSize)
-            remove(s.queue)
-            s
+            SyncQueueStream(bufSize)
         }
         q.refCount.fetchAdd(1)
         q
-    }
-    private static func remove(queue: ArrayBlockingQueue<() -> Unit>): Unit {
-        spawn {
-            while (true) {
-                try {
-                    queue.remove()()
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
-            }
-        }
     }
     private func append() {
         let buffer = (super.output as SyncQueueOutputStream).getOrThrow()
