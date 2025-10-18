@@ -70,6 +70,12 @@ public interface UserDAO <: RootDAO {
         ).delete
     }
     func findUserId(username: String, password: String): ?Int64 {
+        let med = executor.setSql('''
+        select pre_amount
+          from med_allocation
+         limit 1 offset 0 
+        ''').first<MedAllocationPO>()
+        println('MMMMMMMMMMMMMMM ${med?.preAmount}')
         let page = executor.FROM<UserPO>()
                            .WHERE{
                                 meet(username.size > 0, ' username like '){

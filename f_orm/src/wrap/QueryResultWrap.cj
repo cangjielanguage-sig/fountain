@@ -69,7 +69,10 @@ public class QueryResultWrap <: QueryResult {
         get<T>(columnInfoMap[columnName])
     }
     public func getOrNull<T>(columnName: String): ?T {
-        getOrNull<T>(columnInfoMap[columnName])
+        match(columnInfoMap.get(columnName)){
+            case Some(idx) => getOrNull<T>(idx)
+            case _ => None<T>
+        }
     }
     public func next(values: Array<SqlDbType>): Bool {
         throw ORMException('this func is deprecated')

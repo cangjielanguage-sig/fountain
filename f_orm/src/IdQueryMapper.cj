@@ -27,12 +27,6 @@ public class IdQueryMapper<ID, O> <: FieldQueryMapper<ID, O> where ID <: Hashabl
             true
         }
     }
-    public func populate(result: QueryResultWrap, o: O): O {
-        if (let Some(id) <- super.get<ID>(result)) {
-            putter(o, id)
-        }
-        o
-    }
     public func id(result: QueryResultWrap): ID {
         super.get<ID>(result).getOrThrow()
     }

@@ -22,12 +22,7 @@ public abstract class DataType {
         public let fieldName: String
     ) {}
     protected func getValue<T>(result: QueryResultWrap): Any {
-        let any: Any = if (nullable) {
-            result.getOrNull<T>(columnName)
-        } else {
-            result.get<T>(columnName)
-        }
-        any
+        result.getOrNull<T>(columnName)
     }
     public func get(result: QueryResultWrap): Any
 }

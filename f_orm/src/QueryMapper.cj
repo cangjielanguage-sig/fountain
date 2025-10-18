@@ -58,7 +58,7 @@ public open class QueryMapper<O> {
         match (dataType.get(result)) {
             case x: T => x
             case x: ?T => x
-            case _ => throw TypeCastException("${dataType.columnName}")
+            case _ => None<T>
         }
     }
     public open func populate(result: QueryResultWrap, o: O): O {
@@ -81,5 +81,11 @@ public open class FieldQueryMapper<T, O> <: QueryMapper<O> {
                 putter(o, ORMConverter.convert<T>(v))
             }
         })
+    }
+    public open func populate(result: QueryResultWrap, o: O): O {
+        if (let Some(id) <- super.get<T>(result)) {
+            putter(o, id)
+        }
+        o
     }
 }
