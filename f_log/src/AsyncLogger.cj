@@ -18,15 +18,24 @@ package f_log
 import std.collection.concurrent.{ArrayBlockingQueue, ConcurrentHashMap}
 import std.env
 import std.io.OutputStream
+import std.sync.AtomicInt64
 import std.time.DateTime
 import stdx.log.{LogLevel, LogRecord}
 import f_collection.*
 import f_io.DummyOutputStream
 import f_log.exception.LogException
 
+private struct SyncQueueStream{
+    let queue: ArrayBlockingQueue<() -> Unit>
+    let output: SyncQueueOutputStream
+    let refCount = AtomicInt64(0)
+    init(bufSize: Int64){
+        queue = ArrayBlockingQueue<() -> Unit>(bufSize)
+        output = SyncQueueOutputStream(bufSize * 10)
+    }
+}
 public abstract class AsyncLogger <: AbstractLogger {
-    private static let queueMap = ConcurrentHashMap<String, ArrayBlockingQueue<() -> Unit>>()
-    private static let queueOutputMap = ConcurrentHashMap<String, SyncQueueOutputStream>()
+    private static let queueMap = ConcurrentHashMap<String, SyncQueueStream>()
     private let timeout: Duration
     private let policy: AsyncTimeoutPolicy
     private let queue: ArrayBlockingQueue<() -> Unit>
@@ -44,12 +53,7 @@ public abstract class AsyncLogger <: AbstractLogger {
         this.actualOutput = output
         timeout = LoggerConfig.getAsyncTimeout()
         policy = LoggerConfig.getAsyncTimeoutPolicy()
-        this.queue = queueMap.computeIfAbsent(queueTag){
-            let bufSize = LoggerConfig.getAsyncBufSize()
-            let queue = ArrayBlockingQueue<() -> Unit>(bufSize)
-            remove(queue)
-            queue
-        }
+        this.queue = queueStream(queueTag).queue
         env.atExit{doClose(output, true, queueTag)}
     }
     public open func isClosed(): Bool {
@@ -60,15 +64,16 @@ public abstract class AsyncLogger <: AbstractLogger {
         }
     }
     private static func doClose(output: OutputStream, closable: Bool, tag: String): Unit {
-        if(let Some(output) <- queueOutputMap.remove(tag)){
-            while(output.queue.size > 0){
+        if(let Some(q) <- queueMap.get(tag) && q.refCount.fetchSub(1) == 1){
+            while(q.queue.size > 0){
                 sleep(Duration.Zero)// 循环次数可能很多，避免当前线程长时间占用CPU
             }
             sleep(Duration.microsecond * 100)// 等待写线程能够把最后一个字节数组写出
         }
-        if(let r: Resource <- output && closable && !r.isClosed()){
+        if(closable && let r: Resource <- output &&!r.isClosed()){
             r.close()
         }
+        queueMap.remove(tag)
     }
     public open func close(): Unit {
         doClose(actualOutput, closable, queueTag)
@@ -77,10 +82,19 @@ public abstract class AsyncLogger <: AbstractLogger {
         match (output) {
             case _: DummyOutputStream => output
             case _ => 
-                let output = SyncQueueOutputStream(bufSize)
-                queueOutputMap.add(tag, output)
-                output
+                let q = queueStream(tag)
+                q.output
         }
+    }
+    private static func queueStream(tag: String){
+        let q = queueMap.computeIfAbsent(tag){
+            let bufSize = LoggerConfig.getAsyncBufSize()
+            let s = SyncQueueStream(bufSize)
+            remove(s.queue)
+            s
+        }
+        q.refCount.fetchAdd(1)
+        q
     }
     private static func remove(queue: ArrayBlockingQueue<() -> Unit>): Unit {
         spawn {
