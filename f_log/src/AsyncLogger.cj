@@ -27,11 +27,16 @@ import f_log.exception.LogException
 
 private struct SyncQueueStream{
     let queue: ArrayBlockingQueue<() -> Unit>
-    let output: SyncQueueOutputStream
+    let output: OutputStream
     let refCount = AtomicInt64(0)
-    init(bufSize: Int64){
+    init(output: OutputStream){
+        let bufSize = LoggerConfig.getAsyncBufSize()
         queue = ArrayBlockingQueue<() -> Unit>(bufSize)
-        output = SyncQueueOutputStream(bufSize * 10)
+        this.output = match(output){
+            case x: DummyOutputStream => output
+            case _ => 
+                SyncQueueOutputStream(bufSize * 10)
+        }
         remove(queue)
     }
     private static func remove(queue: ArrayBlockingQueue<() -> Unit>): Unit {
@@ -60,12 +65,12 @@ public abstract class AsyncLogger <: AbstractLogger {
         output: OutputStream,
         queueTag: String
     ) {
-        super(name, level, pattern, confirmDummy(output, LoggerConfig.getAsyncBufSize(), queueTag))
+        super(name, level, pattern, confirmDummy(output, queueTag))
         this.queueTag = queueTag
         this.actualOutput = output
         timeout = LoggerConfig.getAsyncTimeout()
         policy = LoggerConfig.getAsyncTimeoutPolicy()
-        this.queue = queueStream(queueTag).queue
+        this.queue = queueStream(output, queueTag).queue
         env.atExit{doClose(output, true, queueTag)}
     }
     public open func isClosed(): Bool {
@@ -90,18 +95,12 @@ public abstract class AsyncLogger <: AbstractLogger {
     public open func close(): Unit {
         doClose(actualOutput, closable, queueTag)
     }
-    private static func confirmDummy(output: OutputStream, bufSize: Int64, tag: String): OutputStream {
-        match (output) {
-            case _: DummyOutputStream => output
-            case _ => 
-                let q = queueStream(tag)
-                q.output
-        }
+    private static func confirmDummy(output: OutputStream, tag: String): OutputStream {
+        queueStream(output, tag).output
     }
-    private static func queueStream(tag: String){
+    private static func queueStream(output: OutputStream, tag: String){
         let q = queueMap.computeIfAbsent(tag){
-            let bufSize = LoggerConfig.getAsyncBufSize()
-            SyncQueueStream(bufSize)
+            SyncQueueStream(output)
         }
         q.refCount.fetchAdd(1)
         q
@@ -135,7 +134,7 @@ public abstract class AsyncLogger <: AbstractLogger {
         append()
     }
 }
-public class SyncQueueOutputStream <: OutputStream {
+public struct SyncQueueOutputStream <: OutputStream {
     internal let queue: ArrayBlockingQueue<Array<Byte>>
     init(bufSize: Int64){
         queue = ArrayBlockingQueue<Array<Byte>>(bufSize * 10)
