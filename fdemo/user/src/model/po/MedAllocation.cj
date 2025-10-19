@@ -15,6 +15,7 @@ limitations under the License.
 */
 package user.model.po
 
+import std.math.numeric.Decimal
 import std.time.DateTime
 
 import fountain.base.unsafeZeroValue
@@ -29,5 +30,5 @@ public class MedAllocationPO {
     @ORMField[true 'id']
     private var id: Int64 = 0
     @ORMField['pre_amount']
-    private var preAmount: String = ''
+    private var preAmount: String = ''//Decimal.zero
 }

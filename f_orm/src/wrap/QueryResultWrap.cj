@@ -16,6 +16,7 @@ limitations under the License.
 package f_orm.wrap
 
 import std.database.sql.*
+import std.reflect.*
 import f_base.*
 
 public class QueryResultWrap <: QueryResult {
@@ -43,19 +44,53 @@ public class QueryResultWrap <: QueryResult {
     public func getOrNull<T>(index: Int64): ?T {
         try{
             if (index >= list.size) {
-                for (i in list.size..=index) {
-                    list.add(result.getOrNull<T>(i))
+                let columns = result.columnInfos
+                for (i in list.size..index) {
+                    let column = columns[i]
+                    let v = match(column.typeName){
+                        case 'SqlChar' | 'SqlVarchar' | 'String' => result.getOrNull<String>(i)
+                        case 'SqlClob' | 'SqlBlob' | 'std.io.InputStream' | 'InputStream' => result.getOrNull<InputStream>(i)
+                        case 'SqlBinary' | 'SqlVarBinary' | 'Array<Byte>' | 'Array<UInt8>' => result.getOrNull<Array<Byte>>(i)
+                        case 'SqlDecimal' | 'Decimal' | 'std.math.numeric.Decimal' => result.getOrNull<Decimal>(i)
+                        case 'SqlBool' | 'Bool' => result.getOrNull<Bool>(i)
+                        case 'SqlByte' | 'Int8' => result.getOrNull<Int8>(i)
+                        case 'UInt8' | 'Byte' => result.getOrNull<UInt8>(i)
+                        case 'SqlSmallInt' | 'Int16' => result.getOrNull<Int16>(i)
+                        case 'UInt16' => result.getOrNull<UInt16>(i)
+                        case 'SqlInteger' | 'Int32' => result.getOrNull<Int32>(i)
+                        case 'UInt32' => result.getOrNull<UInt32>(i)
+                        case 'SqlBigInt' | 'Int64' => result.getOrNull<Int64>(i)
+                        case 'UInt64' => result.getOrNull<UInt64>(i)
+                        case 'SqlReal' | 'Float32' => result.getOrNull<Float32>(i)
+                        case 'SqlDouble' | 'Float64' => result.getOrNull<Float64>(i)
+                        case 'SqlDate' | 'SqlTime' | 'SqlTimeTz' | 'SqlTimestamp' | 'DateTime' | 'std.time.DateTime' => result.getOrNull<DateTime>(i)
+                        case 'SqlInterval' | 'Duration' => result.getOrNull<Duration>(i)
+                        case _ => result.getOrNull<String>(i)
+                    }
+                    list.add(v)
+                }
+                list.add(result.getOrNull<T>(list.size))
+            }
+            func convert(idx: Int64, s: ?String): ?T {
+                match(s){
+                    case Some(x) where TypeInfo.of<T>().isSubtypeOf(TypeInfo.of<Parsable<T>>()) => 
+                        let ti = TypeInfo.of<T>()
+                        let fn = ti.getStaticFunction('tryParse', [TypeInfo.of<String>()])
+                        let v = match(fn.apply(ti, [x])){
+                            case x: ?T => x
+                            case _ => None<T>
+                        }
+                        list[idx] = v
+                        v
+                    case _ => None<T>
                 }
             }
             match(list[index]){
                 case x: T => x
                 case x: ?T => x
-                case x: ??T => match(x){
-                    case Some(x) => x
-                    case _ => 
-                        let column = columnInfos[index]
-                        throw ORMException('colum index: ${index}, column type: ${column.typeName}, column name: ${column.name}, requires: ${TypeInfo.of<T>()}')
-                }
+                case x: String => convert(index, x)
+                case x: ?String => convert(index, x)
+                case x: ToString => convert(index, '${x}')
                 case _ => 
                     let column = columnInfos[index]
                     throw ORMException('colum index: ${index}, column type: ${column.typeName}, column name: ${column.name}, requires: ${TypeInfo.of<T>()}')

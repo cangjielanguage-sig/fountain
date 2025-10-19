@@ -71,7 +71,7 @@ public interface UserDAO <: RootDAO {
     }
     func findUserId(username: String, password: String): ?Int64 {
         let med = executor.setSql('''
-        select pre_amount
+        select create_time, pre_amount
           from med_allocation
          limit 1 offset 0 
         ''').first<MedAllocationPO>()
