@@ -38,6 +38,15 @@ public enum AuthStatus {
     | PrivilegeError(Any)
     | NoPrivilege(HttpStatus, Any)
     | NoPrivilege(Any)
+
+    public prop isOK: Bool {
+        get(){
+            match(this){
+                case OK => true
+                case _ => false
+            }
+        }
+    }
 }
 /**
  * 这个接口的实现类用fountain.bean.macros.@Bean修饰可以实现登录状态与权限检查。
@@ -109,18 +118,16 @@ class AuthHandlerProxy <: AuthHandler {
                 }
             }
         }
-        if(let Some(x) <- authHandler){
-            return x.check(param)
-        }
-        var checked = if(param.ignoreAuth){
+        if (param.ignoreAuth && param.ignorePrivilege) {
             AuthStatus.OK
-        }else{
-            sessionHandler?.check(param) ?? AuthStatus.OK
-        }
-        if(let AuthStatus.OK <- checked && !param.ignorePrivilege){
-            privilegeHandler?.check(param) ?? AuthStatus.OK
-        }else{
-            checked
+        } else if (let Some(x) <- authHandler) {
+            x.check(param)
+        } else if (!param.ignoreAuth && let Some(h) <- sessionHandler && let s <- h.check(param) && s.isOK) {
+            s
+        } else if (!param.ignorePrivilege && let Some(h) <- privilegeHandler) {
+            h.check(param)
+        } else {
+            AuthStatus.OK
         }
     }
 }
