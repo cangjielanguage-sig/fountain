@@ -69,7 +69,7 @@ public class QueryResultWrap <: QueryResult {
                     }
                     list.add(v)
                 }
-                list.add(result.getOrNull<T>(list.size))
+                list.add(result.getOrNull<T>(index))
             }
             func convert(idx: Int64, s: ?String): ?T {
                 match(s){
