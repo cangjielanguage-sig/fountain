@@ -47,7 +47,7 @@ public class QueryResultWrap <: QueryResult {
                 let columns = result.columnInfos
                 for (i in list.size..index) {
                     let column = columns[i]
-                    let v = match(column.typeName){
+                    let v: Any = match(column.typeName){
                         case 'SqlChar' | 'SqlVarchar' | 'String' => result.getOrNull<String>(i)
                         case 'SqlClob' | 'SqlBlob' | 'std.io.InputStream' | 'InputStream' => result.getOrNull<InputStream>(i)
                         case 'SqlBinary' | 'SqlVarBinary' | 'Array<Byte>' | 'Array<UInt8>' => result.getOrNull<Array<Byte>>(i)
