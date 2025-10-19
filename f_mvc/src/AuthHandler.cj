@@ -97,7 +97,11 @@ class AuthHandlerProxy <: AuthHandler {
                         } else if (authHandler.isNone()) {
                             authHandler = h
                         }
-                        if(authHandler.isSome() || (sessionHandler.isSome() && privilegeHandler.isSome())){
+                        if(authHandler.isSome()){
+                            sessionHandler = None<UserSessionHandler>
+                            privilegeHandler = None<PrivilegeHandler>
+                            break
+                        } else if (sessionHandler.isSome() && privilegeHandler.isSome()) {
                             break
                         }
                     }
