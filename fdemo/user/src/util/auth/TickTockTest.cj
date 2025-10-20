@@ -20,7 +20,7 @@ import fountain.ticktock.*
 import fountain.bean.*
 import fountain.bean.macros.*
 
-@Bean
+// @Bean
 public class TickTockTaskImpl <: CronTicktockTask {
     public prop cron: String {
         get() {

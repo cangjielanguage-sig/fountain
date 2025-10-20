@@ -48,8 +48,9 @@ public class MultiRequestMethodHandler <: HttpRequestHandler {
                     log.debug('MVC.register meta:${meta}; methodRegistered:${metas.contains(meta.method)}; consumesRegistered:${c},${map.contains(c)}')
                 }
                 if (let Some(m) <- map.addIfAbsent(c, meta)) {
-                    throw MVCException(
-                        'duplicate RequestMeta, method: ${meta.method}, path: ${meta.path}, consumes: ${c}, registered: ${m}')
+                    let msg = 'duplicate RequestMeta, method: ${meta.method}, path: ${meta.path}, consumes: ${c}, registered: ${m}'
+                    log.warn(msg)
+                    throw MVCException(msg)
                 }else if (debuggable) {
                     log.debug('RequestMeta registered: ${c} ${meta}')
                 }

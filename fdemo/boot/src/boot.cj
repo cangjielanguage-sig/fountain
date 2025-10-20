@@ -24,8 +24,8 @@ import fountain.log.LoggerFactory
 import fountain.orm.*
 
 private let _ = {=>
-    let logger = LoggerFactory.getLogger("opengauss")
-    slog.setDefault(logger)
+    // let logger = LoggerFactory.getLogger("opengauss")
+    // slog.setDefault(logger)
     let driver = DriverManager.getDriver("opengauss").getOrThrow()
     let url = env.getVariable('POSTGRES') ?? ''
     ORM.register(driver, url, []) 

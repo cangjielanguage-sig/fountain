@@ -28,8 +28,9 @@ public class MVCStarter {
         }
         let host = MVCConfig.host
         let port = MVCConfig.port
-        let log = LoggerFactory.getLogger('stdx.net.http')
-        let builder = ServerBuilder().addr(host).port(port).logger(log)
+        let builder = ServerBuilder().addr(host).port(port)
+        // let log = LoggerFactory.getLogger('stdx.net.http')
+        //builder.logger(log)
         if (let Some(x) <- MVCConfig.readTimeout) {
             builder.readTimeout(x)
         }
