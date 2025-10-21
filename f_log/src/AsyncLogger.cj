@@ -169,7 +169,8 @@ public struct SyncQueueOutputStream <: OutputStream {
             buf
         }
         if(bytes[bytes.size - 1] == b'\0'){
-            buf.add(bytes[0 .. bytes.size - 1])
+            let b = bytes[0 .. bytes.size - 1]
+            buf.add(b)
             queue.add(buf)
             buffer.set(None)
         }else{

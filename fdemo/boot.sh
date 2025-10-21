@@ -9,10 +9,10 @@ exports(){
     # %name 记录当前日志名称
     # %d 记录当前日志时间，花括号内是时间格式
     # %m 记录当前日志消息文本
-#    export logger_appender_console=FDemoConsole
+    export logger_appender_console=FDemoConsole
     export logger_appender_FDemoConsole_level=DEBUG
     export logger_appender_FDemoConsole_pattern='[%level-%name]%d{yyyy/MM/dd,HH:mm:ss.SSS}|%tid;%m'
-#    export logger_appender_file=FDemoFile
+    export logger_appender_file=FDemoFile
     export logger_appender_FDemoFile_level=INFO
     export logger_appender_FDemoFile_pattern='[%level-%name]%d{yyyy/MM/dd,HH:mm:ss.SSS}|%tid;%m'
     export logger_appender_FDemoFile_path=./log/fdemo.log
