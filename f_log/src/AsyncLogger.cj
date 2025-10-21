@@ -116,7 +116,7 @@ public abstract class AsyncLogger <: AbstractLogger {
             append {
                 while(let Some(buf) <- buffer.tryRemove() && let s <- buf.size && s > 0){
                     try{
-                        for(bytes in buf){
+                        for(bytes in buf where bytes.size > 0){
                             this.actualOutput.write(bytes)
                         }
                         this.actualOutput.flush()
