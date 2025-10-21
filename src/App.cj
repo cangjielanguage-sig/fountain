@@ -148,7 +148,12 @@ public struct App {
                 if (fi.isDirectory()) {
                     load(fi.path, pattern)
                 } else if (fi.path.fileName.endsWith(ext) && pattern.matches(fi.path.fileNameWithoutExtension)) {
-                    PackageInfo.load(fi.path.toString().replace(ext, ''))
+                    try{
+                        PackageInfo.load(fi.path.toString().replace(ext, ''))
+                    }catch(e: Exception){
+                        log.error('dylib loading error', e)
+                        throw e
+                    }
                 }
                 true
             }

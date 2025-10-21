@@ -1,7 +1,7 @@
 [dependencies]
   fountain = {path = "../"}
-  opengauss = {git = "https://gitcode.com/runningW/opengauss-driver.git", branch="master"}
-#  opengauss = {path = "../../opengauss-driver"}
+#  opengauss = {git = "https://gitcode.com/runningW/opengauss-driver.git", branch="master"}
+  opengauss = {path = "../../opengauss-driver"}
 
 [workspace]
   version = "1.0.0"

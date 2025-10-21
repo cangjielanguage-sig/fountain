@@ -15,26 +15,29 @@ limitations under the License.
  */
 package f_log
 
+import std.collection.concurrent.ConcurrentHashMap
 import std.io.OutputStream
 import std.sync.Mutex
 import std.time.DateTime
 import stdx.log.{LogLevel, Attr, LogRecord, LogWriter}
-import f_base.OS
+import f_collection.*
 import f_log.output.LogWriterImpl
 
 public abstract class AbstractLogger <: Logger & Resource {
-    private let lock = Mutex()
+    private let locks = ConcurrentHashMap<String, Mutex>()
     protected let name: String
     private var level_: LogLevel
     protected let pattern: LogPattern
     private var output_: OutputStream
-    private var writer: LogWriter
-    protected init(name: String, level: LogLevel, pattern: LogPattern, output: OutputStream) {
+    private var writer: LogWriterImpl
+    private let tag: String
+    protected init(name: String, level: LogLevel, pattern: LogPattern, output: OutputStream, tag: String) {
         this.name = name
         this.level_ = level
         this.pattern = pattern
         this.output_ = output
         this.writer = LogWriterImpl(output)
+        this.tag = tag
     }
     protected open func new(name: String): AbstractLogger{
         this
@@ -83,6 +86,7 @@ public abstract class AbstractLogger <: Logger & Resource {
                         if (attrs.isEmpty()) {
                             return
                         }
+                        writer.writeString(';')
                         writer.startObject()
                         for (i in 0..attrs.size) {
                             if (i > 0) {
@@ -94,12 +98,11 @@ public abstract class AbstractLogger <: Logger & Resource {
                             }
                         }
                         writer.endObject()
-                        writer.writeString(';')
                     }
                     writeAttrs(globalAttrMap.get(name) ?? [])
                     writeAttrs(this.attrs.get() ?? [])
                     writeAttrs(record.attrs)
-                    writer.writeString(OS.current.nextLine)
+                    writer.writeString('\0')
                 }
             }
         } finally {
@@ -108,12 +111,8 @@ public abstract class AbstractLogger <: Logger & Resource {
     }
 
     protected func append(level: LogLevel, message: () -> String, ex: Option<Exception>): Unit {
-        if (logLevelEnabled(level)) {
-            let now = DateTime.now()//产生日志的时间比记录时间重要，可能记日志的顺序跟时间不一致了，不过不重要。
-            doLock {
-                append(level, message(), now, ex)
-            }
-        }
+        let now = DateTime.now()//产生日志的时间比记录时间重要，可能记日志的顺序跟时间不一致了，不过不重要。
+        append(level, message(), now, ex)
     }
 
     protected func appendException(ex: ?Exception, output: LogWriter): Unit {
@@ -123,11 +122,15 @@ public abstract class AbstractLogger <: Logger & Resource {
     }
     protected open func append(level: LogLevel, message: String, now: DateTime, ex: Option<Exception>): Unit {
         if (logLevelEnabled(level)) {
-            pattern.generate(name, level, message, now, writer)
-            appendException(ex, writer)
+            doLock{
+                pattern.generate(name, level, message, now, writer)
+                appendException(ex, writer)
+                writer.writeString('\0')
+            }
         }
     }
     protected func doLock<T>(callback: () -> T): T {
+        let lock = locks.computeIfAbsent(tag){Mutex()}
         synchronized(lock) {
             callback()
         }

@@ -102,7 +102,7 @@ public class LoggerConfig {
         getString(appenderKeyPart(appender), "port") ?? ""
     }
     public static func getAsyncBufSize(): Int64 {
-        Config.getData<Int64>("loggerAsyncBufsize") ?? 1
+        Config.getData<Int64>("loggerAsyncBufsize") ?? 1024
     }
     public static func getAsyncTimeout(): Duration {
         if (let Some(d) <- Config.getString("loggerAsyncTimeout")) {

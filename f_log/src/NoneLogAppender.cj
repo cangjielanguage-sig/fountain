@@ -22,7 +22,7 @@ import f_io.DummyOutputStream
 public class NoneLogAppender <: AbstractLogger {
     public static let instance = NoneLogAppender()
     private init() {
-        super("", LogLevel.OFF, LogPattern.default, DummyOutputStream.THROW_ON_ACCESSING)
+        super("", LogLevel.OFF, LogPattern.default, DummyOutputStream.THROW_ON_ACCESSING, '')
     }
 
     public static func register(): Unit {

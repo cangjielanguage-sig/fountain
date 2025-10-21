@@ -29,6 +29,7 @@ export LDLIBRARY_PATH=$LD_LIBRARY_PATH:../installed/libs/fboot
 export PATH=$PATH:../installed/bin
 cd ../fdemo
 export CANGJIE_STDX_DYNAMIC_PATH=/path/of/stdx/dynamic/libs
+export POSTGRES=<URL_OF_POSTGRES>
 ./boot.sh build
 ```
 '

@@ -19,15 +19,17 @@ import std.time.*
 import fountain.ticktock.*
 import fountain.bean.*
 import fountain.bean.macros.*
+import fountain.log.LoggerFactory
 
 @Bean
 public class TickTockTaskImpl <: CronTicktockTask {
+    private static let log = LoggerFactory.getLogger<TickTockTaskImpl>()
     public prop cron: String {
         get() {
             '1/3-45'//cron表达式末尾的*可以省略
         }
     }
     public func execute(): Unit {
-        println('TickTockTaskImpl is executing ${DateTime.now()}')
+        log.info('TickTockTaskImpl is executing')
     }
 }

@@ -21,6 +21,7 @@ import f_base.{printStackTrace, BaseException}
 
 protected class LogWriterImpl <: LogWriter {
     public LogWriterImpl(private let writer: OutputStream) {}
+
     public func writeNone(): Unit {
         writeString('None')
     }

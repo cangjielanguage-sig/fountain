@@ -11,10 +11,10 @@ exports(){
     # %m 记录当前日志消息文本
     export logger_appender_console=FDemoConsole
     export logger_appender_FDemoConsole_level=DEBUG
-    export logger_appender_FDemoConsole_pattern='[%level-%name]%d{yyyy/MM/dd,HH:mm:ss.SSS}|%m'
-    export logger_appender_file=FDemoFile
+    export logger_appender_FDemoConsole_pattern='[%level-%name]%d{yyyy/MM/dd,HH:mm:ss.SSS}|%tid;%m'
+#    export logger_appender_file=FDemoFile
     export logger_appender_FDemoFile_level=INFO
-    export logger_appender_FDemoFile_pattern='[%level-%name]%d{yyyy/MM/dd,HH:mm:ss.SSS}|%m'
+    export logger_appender_FDemoFile_pattern='[%level-%name]%d{yyyy/MM/dd,HH:mm:ss.SSS}|%tid;%m'
     export logger_appender_FDemoFile_path=./log/fdemo.log
     export logger_appender_FDemoFile_rotateDuration=DAY
     export mvc_port=8080 # 这一行可以没有，默认就是8080                                                                         

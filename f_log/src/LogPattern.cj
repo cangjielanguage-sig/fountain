@@ -26,6 +26,7 @@ public class LogPattern <: LogPart & Hashable & Equatable<LogPattern> {
     private static let levelLogPart = LevelLogPart()
     private static let nameLogPart = NameLogPart()
     private static let messageLogPart = MessageLogPart()
+    private static let threadIdLogPart = ThreadIdLogPart()
     public static let default = LogPattern("[%level-%name] %d{yyyy/MM/dd,HH:mm:ss.SSS}|%m") //pattern共44个字符
     private let patterns: ArrayList<LogPart>
     private let pattern: String
@@ -66,6 +67,10 @@ public class LogPattern <: LogPart & Hashable & Equatable<LogPattern> {
                     appendOrigin()
                     patterns.add(nameLogPart)
                     i += 5
+                } else if (i + 3 < size && pattern[i + 1 ..= i + 3] == 'tid') {
+                    appendOrigin()
+                    patterns.add(threadIdLogPart)
+                    i += 4
                 } else if (i + 3 < size && pattern[i + 1] == b'd') {
                     if (pattern[i + 2] == b'{') {
                         let ds = i + 3
@@ -158,5 +163,11 @@ class MessageLogPart <: LogPart {
     init() {}
     public func generate(_: String, _: LogLevel, message: ToString, _: DateTime, writer: LogWriter): Unit {
         writer.writeString(message.toString())
+    }
+}
+class ThreadIdLogPart <: LogPart { 
+    init(){}
+    public func generate(_: String, _: LogLevel, _: ToString, _: DateTime, writer: LogWriter): Unit {
+        writer.writeString(Thread.currentThread.id.toString())
     }
 }

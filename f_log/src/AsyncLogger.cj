@@ -15,6 +15,7 @@ limitations under the License.
  */
 package f_log
 
+import std.collection.ArrayList
 import std.collection.concurrent.{ArrayBlockingQueue, ConcurrentHashMap}
 import std.env
 import std.io.OutputStream
@@ -65,12 +66,13 @@ public abstract class AsyncLogger <: AbstractLogger {
         output: OutputStream,
         queueTag: String
     ) {
-        super(name, level, pattern, confirmDummy(output, queueTag))
+        super(name, level, pattern, confirmDummy(output, queueTag), queueTag)
         this.queueTag = queueTag
         this.actualOutput = output
         timeout = LoggerConfig.getAsyncTimeout()
         policy = LoggerConfig.getAsyncTimeoutPolicy()
-        this.queue = queueStream(output, queueTag).queue
+        let qstream = queueStream(output, queueTag)
+        this.queue = qstream.queue
         env.atExit{doClose(output, true, queueTag)}
     }
     public open func isClosed(): Bool {
@@ -82,9 +84,12 @@ public abstract class AsyncLogger <: AbstractLogger {
     }
     private static func doClose(output: OutputStream, closable: Bool, tag: String): Unit {
         if(let Some(q) <- queueMap.get(tag) && q.refCount.fetchSub(1) == 1){
-            while(q.queue.size > 0){
-                sleep(Duration.Zero)// 循环次数可能很多，避免当前线程长时间占用CPU
+            func wait(q: ArrayBlockingQueue<() -> Unit>){
+                while(q.size > 0){
+                    sleep(Duration.Zero)// 循环次数可能很多，避免当前线程长时间占用CPU
+                }
             }
+            wait(q.queue)
             sleep(Duration.microsecond * 100)// 等待写线程能够把最后一个字节数组写出
         }
         if(closable && let r: Resource <- output &&!r.isClosed()){
@@ -109,10 +114,15 @@ public abstract class AsyncLogger <: AbstractLogger {
         let buffer = (super.output as SyncQueueOutputStream).getOrThrow()
         if (buffer.queue.size > 0) {
             append {
-                while(let Some(bytes) <- buffer.queue.tryRemove() && let s <- bytes.size && s > 0){
-                    this.actualOutput.write(bytes)
-                    if(bytes[s - 1] == b'\n'){
+                while(let Some(buf) <- buffer.queue.tryRemove() && let s <- buf.size && s > 0){
+                    try{
+                        for(bytes in buf){
+                            this.actualOutput.write(bytes)
+                        }
                         this.actualOutput.flush()
+                    }finally{
+                        buf.clear()
+                        buffer.returnBuffer(buf)
                     }
                 }
             }
@@ -137,11 +147,36 @@ public abstract class AsyncLogger <: AbstractLogger {
     }
 }
 public struct SyncQueueOutputStream <: OutputStream {
-    internal let queue: ArrayBlockingQueue<Array<Byte>>
+    private static let pool: ArrayBlockingQueue<ArrayList<Array<Byte>>>
+    static init() {
+        let size = LoggerConfig.getAsyncBufSize()
+        pool = ArrayBlockingQueue<ArrayList<Array<Byte>>>(size)
+        for(i in 0 .. size){
+            pool.add(ArrayList<Array<Byte>>())
+        }
+    }
+    internal let queue: ArrayBlockingQueue<ArrayList<Array<Byte>>>
+    private let buffer = ThreadLocal<ArrayList<Array<Byte>>>()
     init(bufSize: Int64){
-        queue = ArrayBlockingQueue<Array<Byte>>(bufSize * 10)
+        queue = ArrayBlockingQueue<ArrayList<Array<Byte>>>(bufSize)
     }
     public func write(bytes: Array<Byte>): Unit {
-        queue.add(bytes)
+        let buf = if(let Some(buf) <- buffer.get()){
+            buf
+        }else{
+            let buf = pool.remove()
+            buffer.set(buf)
+            buf
+        }
+        if(bytes[bytes.size - 1] == b'\0'){
+            buf.add(bytes[0 .. bytes.size - 1])
+            queue.add(buf)
+            buffer.set(None)
+        }else{
+            buf.add(bytes)
+        }
+    }
+    func returnBuffer(buf: ArrayList<Array<Byte>>){
+        pool.add(buf)
     }
 }
