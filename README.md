@@ -246,6 +246,7 @@ _/ ____\____  __ __  _____/  |______  |__| ____
     # %d     日志产生时间，按照yyyy-MM-dd,HH:mm:ss.SSS格式输出
     # %d{...}日志产生时间，花括号内是时间格式
     # %m     日志内容
+    # %tid   线程id
     # %app   当前应用名称，即当前进程名
     export fountain_logger_appender_tcp=TcpLoggerName # 也是支持英文逗号分隔的多个TcpLoggerName
     export fountain_logger_appender_TcpLoggerName_host=127.0.0.1:65535 # 这个host也是默认参数
