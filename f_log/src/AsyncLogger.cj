@@ -112,16 +112,15 @@ public abstract class AsyncLogger <: AbstractLogger {
     }
     private func append() {
         let buffer = (super.output as SyncQueueOutputStream).getOrThrow()
-        if (buffer.queue.size > 0) {
+        if (buffer.size > 0) {
             append {
-                while(let Some(buf) <- buffer.queue.tryRemove() && let s <- buf.size && s > 0){
+                while(let Some(buf) <- buffer.tryRemove() && let s <- buf.size && s > 0){
                     try{
                         for(bytes in buf){
                             this.actualOutput.write(bytes)
                         }
                         this.actualOutput.flush()
                     }finally{
-                        buf.clear()
                         buffer.returnBuffer(buf)
                     }
                 }
@@ -155,7 +154,7 @@ public struct SyncQueueOutputStream <: OutputStream {
             pool.add(ArrayList<Array<Byte>>())
         }
     }
-    internal let queue: ArrayBlockingQueue<ArrayList<Array<Byte>>>
+    private let queue: ArrayBlockingQueue<ArrayList<Array<Byte>>>
     private let buffer = ThreadLocal<ArrayList<Array<Byte>>>()
     init(bufSize: Int64){
         queue = ArrayBlockingQueue<ArrayList<Array<Byte>>>(bufSize)
@@ -177,7 +176,16 @@ public struct SyncQueueOutputStream <: OutputStream {
             buf.add(bytes)
         }
     }
+    prop size: Int64 {
+        get(){
+            queue.size
+        }
+    }
+    func tryRemove(){
+        queue.tryRemove()
+    }
     func returnBuffer(buf: ArrayList<Array<Byte>>){
+        buf.clear()
         pool.add(buf)
     }
 }
