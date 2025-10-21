@@ -24,11 +24,11 @@ import fountain.log.LoggerFactory
 import fountain.orm.*
 
 private let _ = {=>
-    // let logger = LoggerFactory.getLogger("opengauss")
-    // slog.setDefault(logger)
+    let logger = LoggerFactory.getLogger("opengauss")
+    slog.setDefault(logger)
     let driver = DriverManager.getDriver("opengauss").getOrThrow()
     let url = env.getVariable('POSTGRES') ?? ''
-    ORM.register(driver, url, []) 
+    ORM.register(driver, url, [])
 }()
 ///////////////////////////////////////////////////////////////////////////////
 /**这一行往下单纯只是为了演示实例复制和类实例与json互相转换的功能*******************/

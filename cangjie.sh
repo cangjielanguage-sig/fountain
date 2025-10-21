@@ -24,11 +24,11 @@ git clone https://gitcode.com/Cangjie-SIG/fountain.git
 cd fountain
 git checkout -t origin/feature/mvc
 cd fboot
+export CANGJIE_STDX_DYNAMIC_PATH=/path/of/stdx/dynamic/libs
 cjpm install --root ../installed
 export LDLIBRARY_PATH=$LD_LIBRARY_PATH:../installed/libs/fboot
 export PATH=$PATH:../installed/bin
 cd ../fdemo
-export CANGJIE_STDX_DYNAMIC_PATH=/path/of/stdx/dynamic/libs
 export POSTGRES=<URL_OF_POSTGRES>
 ./boot.sh build
 ```
