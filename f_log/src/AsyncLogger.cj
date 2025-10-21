@@ -167,7 +167,7 @@ public struct SyncQueueOutputStream <: OutputStream {
             buffer.set(buf)
             buf
         }
-        if(bytes[bytes.size - 1] == b'\0'){
+        if(bytes[bytes.size - 1] == b'\0'){//todo 这个做法性能有些低，但是性能高的做法会导致BUG。
             let b = bytes[0 .. bytes.size - 1]
             buf.add(b)
             queue.add(buf)
