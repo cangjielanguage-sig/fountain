@@ -49,7 +49,7 @@ public class GetMapping <: RequestMapping {
     public const init(
         path!: String,
         produces!: String = 'application/json',
-        consumes!: String = 'application/json',
+        consumes!: String = '',
         params!: String = '',
         headers!: String = '',
         ignoreAuth!: Bool = false,
@@ -81,7 +81,7 @@ public class DeleteMapping <: RequestMapping {
     public const init(
         path!: String,
         produces!: String = 'application/json',
-        consumes!: String = 'application/json',
+        consumes!: String = '',
         params!: String = '',
         headers!: String = '',
         ignoreAuth!: Bool = false,
