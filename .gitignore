@@ -15,5 +15,13 @@ fountain.iml
 .devbrain/*
 .arts/
 .arts/*
+.rules/
 build-script-cache/
 build.cj
+log.txt
+
+fdemo/fdemo/
+fdemo/fdemo/*
+fdemo/logs/
+fdemo/log/
+fdemo/fdemo_*/
