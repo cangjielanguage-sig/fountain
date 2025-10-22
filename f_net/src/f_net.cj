@@ -21,7 +21,7 @@ internal import std.process.Process
 internal import std.sync.AtomicBool
 internal import f_concurrent.{RateLimiter, UnlimitedRateLimiter}
 internal import f_exception.UnreachableException
-internal import f_log.LoggerFactory
+internal import f_log.impl.LoggerFactory
 
 public func initTcpServer(port!: UInt16) {
     TcpServerSocket(bindAt: port)

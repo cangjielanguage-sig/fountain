@@ -19,7 +19,7 @@ import std.collection.concurrent.ArrayBlockingQueue
 import std.env
 import std.sync.{AtomicInt64, AtomicBool}
 import std.time.MonoTime
-import f_log.LoggerFactory
+import f_log.impl.LoggerFactory
 
 public interface PooledManager<T> where T <: Object {
     func create(): T

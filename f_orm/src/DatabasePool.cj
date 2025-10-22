@@ -19,7 +19,7 @@ public import std.database.sql.*
 import std.collection.Map
 import std.sync.AtomicUInt64
 import std.unicode.UnicodeStringExtension
-import f_log.LoggerFactory
+import f_log.impl.LoggerFactory
 import f_pool.Pool
 
 public class DatabasePool <: Resource & Datasource {

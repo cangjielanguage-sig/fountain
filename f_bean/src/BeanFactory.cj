@@ -15,7 +15,7 @@ limitations under the License.
  */
 package f_bean
 
-import f_log.{LoggerFactory, LogFilter, LoggerConfig}
+import f_log.impl.{LoggerFactory, LogFilter, LoggerConfig}
 
 private enum BeanType{
     | AnnotationType(TypeInfo)

@@ -22,7 +22,7 @@ import std.env
 import std.sync.{AtomicOptionReference, Mutex}
 public import std.time.DateTime
 import f_bean.BeanFactory
-import f_log.LoggerFactory
+import f_log.impl.LoggerFactory
 
 /**
  * 本类对象能接收的cron表达式，简单说明如下：

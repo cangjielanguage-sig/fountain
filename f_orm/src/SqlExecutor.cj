@@ -18,7 +18,7 @@ package f_orm
 import std.collection.HashMap
 import f_collection.*
 import f_data.*
-import f_log.*
+import f_log.impl.*
 import f_orm.wrap.*
 import f_orm.exception.*
 
