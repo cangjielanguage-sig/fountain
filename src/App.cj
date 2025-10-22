@@ -238,7 +238,8 @@ public struct App {
                         }
                     }
                 }
-                execute('git', ['push', '--tags'])
+                execute('git', ['push'])
+                execute('git', ['push', 'origin', 'release-${v}'])
             } else {
                 println('Format of version must be x.y.z, but ${v} was specified.')
             }
