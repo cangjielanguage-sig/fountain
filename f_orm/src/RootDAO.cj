@@ -1,18 +1,25 @@
 /*
-   Copyright (c) [2022] [WuJingrun（吴京润）]
-   fountain is licensed under Mulan PSL v2.
-   You can use this software according to the terms and conditions of the Mulan PSL v2.
-   You may obtain a copy of Mulan PSL v2 at:
-           http://license.coscl.org.cn/MulanPSL2
-   THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-   See the Mulan PSL v2 for more details.
+Copyright (c) 2025 WuJingrun（吴京润）
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
  */
 
 package f_orm
 
 import std.math.numeric.{BigInt, Decimal}
 import std.time.DateTime
-import f_orm.exception.ORMException
+
+import f_base.*
 
 /**
  * 所有的DAO接口都要继承本接口
@@ -28,101 +35,294 @@ public interface RootDAO {
         executor.add(value)
         '?'
     }
+    func arg(value: ?Bool): String {
+        match(value){
+            case Some(x) => arg(x)
+            case _ => argNull()
+        }
+    }
     func arg(value: Int8): String {
         executor.add(value)
         '?'
+    }
+    func arg(value: ?Int8): String {
+        match(value){
+            case Some(x) => arg(x)
+            case _ => argNull()
+        }
     }
     func arg(value: UInt8): String {
         executor.add(value)
         '?'
     }
+    func arg(value: ?UInt8): String {
+        match(value){
+            case Some(x) => arg(x)
+            case _ => argNull()
+        }
+    }
     func arg(value: Int16): String {
         executor.add(value)
         '?'
+    }
+    func arg(value: ?Int16): String {
+        match(value){
+            case Some(x) => arg(x)
+            case _ => argNull()
+        }
     }
     func arg(value: UInt16): String {
         executor.add(value)
         '?'
     }
+    func arg(value: ?UInt16): String {
+        match(value){
+            case Some(x) => arg(x)
+            case _ => argNull()
+        }
+    }
     func arg(value: Int32): String {
         executor.add(value)
         '?'
+    }
+    func arg(value: ?Int32): String {
+        match(value){
+            case Some(x) => arg(x)
+            case _ => argNull()
+        }
     }
     func arg(value: UInt32): String {
         executor.add(value)
         '?'
     }
+    func arg(value: ?UInt32): String {
+        match(value){
+            case Some(x) => arg(x)
+            case _ => argNull()
+        }
+    }
     func arg(value: Int64): String {
         executor.add(value)
         '?'
+    }
+    func arg(value: ?Int64): String {
+        match(value){
+            case Some(x) => arg(x)
+            case _ => argNull()
+        }
     }
     func arg(value: UInt64): String {
         executor.add(value)
         '?'
     }
+    func arg(value: ?UInt64): String {
+        match(value){
+            case Some(x) => arg(x)
+            case _ => argNull()
+        }
+    }
     func arg(value: Float16): String {
         executor.add(value)
         '?'
+    }
+    func arg(value: ?Float16): String {
+        match(value){
+            case Some(x) => arg(x)
+            case _ => argNull()
+        }
     }
     func arg(value: Float32): String {
         executor.add(value)
         '?'
     }
+    func arg(value: ?Float32): String {
+        match(value){
+            case Some(x) => arg(x)
+            case _ => argNull()
+        }
+    }
     func arg(value: Float64): String {
         executor.add(value)
         '?'
+    }
+    func arg(value: ?Float64): String {
+        match(value){
+            case Some(x) => arg(x)
+            case _ => argNull()
+        }
     }
     func arg(value: BigInt): String {
         executor.add(value)
         '?'
     }
+    func arg(value: ?BigInt): String {
+        match(value){
+            case Some(x) => arg(x)
+            case _ => argNull()
+        }
+    }
     func arg(value: Decimal): String {
         executor.add(value)
         '?'
+    }
+    func arg(value: ?Decimal): String {
+        match(value){
+            case Some(x) => arg(x)
+            case _ => argNull()
+        }
     }
     func arg(value: Rune): String {
         executor.add(value)
         '?'
     }
+    func arg(value: ?Rune): String {
+        match(value){
+            case Some(x) => arg(x)
+            case _ => argNull()
+        }
+    }
     func arg(value: String): String {
         executor.add(value)
         '?'
+    }
+    func arg(value: ?String): String {
+        match(value){
+            case Some(x) => arg(x)
+            case _ => argNull()
+        }
     }
     func arg(value: InputStream): String {
         executor.add(value)
         '?'
     }
+    func arg(value: ?InputStream): String {
+        match(value){
+            case Some(x) => arg(x)
+            case _ => argNull()
+        }
+    }
     func arg(value: Duration): String {
         executor.add(value)
         '?'
+    }
+    func arg(value: ?Duration): String {
+        match(value){
+            case Some(x) => arg(x)
+            case _ => argNull()
+        }
     }
     func arg(value: DateTime): String {
         executor.add(value)
         '?'
     }
+    func arg(value: ?DateTime): String {
+        match(value){
+            case Some(x) => arg(x)
+            case _ => argNull()
+        }
+    }
     func arg(value: Array<Byte>): String {
         executor.add(value)
+        '?'
+    }
+    func arg(value: ?Array<Byte>): String {
+        match(value){
+            case Some(x) => arg(x)
+            case _ => argNull()
+        }
+    }
+    func arg<I, T>(value: I): String where I <: Iterable<T> {
+        let frag = StringGenerator(' (')
+        let s = frag.size
+        for(v in value){
+            if(frag.size > s){
+                frag.append(',')
+            }
+            match(v){
+                case x: Int8 => arg(x)
+                case x: Int16 => arg(x)
+                case x: Int32 => arg(x)
+                case x: Int64 => arg(x)
+                case x: UInt8 => arg(x)
+                case x: UInt16 => arg(x)
+                case x: UInt32 => arg(x)
+                case x: UInt64 => arg(x)
+                case x: Float16 => arg(x)
+                case x: Float32 => arg(x)
+                case x: Float64 => arg(x)
+                case x: BigInt => arg(x)
+                case x: Decimal => arg(x)
+                case x: String => arg(x)
+                case x: Duration => arg(x)
+                case x: DateTime => arg(x)
+                case x: InputStream => arg(x)
+                case x: Array<Byte> => arg(x)
+                case x: Rune => arg(x)
+                case x: Bool => arg(x)
+
+                case x: ?Int8 => arg(x)
+                case x: ?Int16 => arg(x)
+                case x: ?Int32 => arg(x)
+                case x: ?Int64 => arg(x)
+                case x: ?UInt8 => arg(x)
+                case x: ?UInt16 => arg(x)
+                case x: ?UInt32 => arg(x)
+                case x: ?UInt64 => arg(x)
+                case x: ?Float16 => arg(x)
+                case x: ?Float32 => arg(x)
+                case x: ?Float64 => arg(x)
+                case x: ?BigInt => arg(x)
+                case x: ?Decimal => arg(x)
+                case x: ?String => arg(x)
+                case x: ?Duration => arg(x)
+                case x: ?DateTime => arg(x)
+                case x: ?InputStream => arg(x)
+                case x: ?Array<Byte> => arg(x)
+                case x: ?Rune => arg(x)
+                case x: ?Bool => arg(x)
+                case _ => throw ORMException('type does not support')
+            }
+            frag.append('?')
+        }
+        if(frag.size == s){
+            return ''
+        }
+        frag.append(')')
+        frag.toString()
+    }
+    func argNull(){
+        executor.addNull()
         '?'
     }
     func meet(condition: Bool, partial: String): MeetCondition {
         MeetCondition(condition, partial, executor)
     }
-    prop choose: ChooseCondition{
-        get(){
+    func meet(condition: Bool, partial: String, value: ()->Any): String {
+        meet(condition, partial).value(value).done()
+    }
+    prop choose: ChooseCondition {
+        get() {
             ChooseCondition(executor)
         }
     }
     func loop<I, T>(values: I): LoopCondition<I, T> where I <: Iterable<T> {
         Condition.loop<I, T>(values, executor)
     }
-    func `set`(partial: () -> String): String {
-        Condition.`set`(partial)
+    func IN<I, T>(value: I): String where I <: Iterable<T> {
+        let args = arg<I, T>(value)
+        if(args.isEmpty()){
+            return ''
+        }
+        ' in ${args} '
     }
-    func `where`(partial: () -> String): String {
-        Condition.`where`(partial)
+    func SET(partial: () -> String): String {
+        Condition.SET(partial)
     }
-    func `where`(delimiter: String, partial: () -> String): String {
-        Condition.`where`(delimiter, partial)
+    func WHERE(partial: () -> String): String {
+        Condition.WHERE(partial)
+    }
+    func WHERE(delimiter: String, partial: () -> String): String {
+        Condition.WHERE(delimiter, partial)
     }
     func trim(prefix!: String, suffix!: String, partial!: () -> String): String {
         Condition.trim(prefix: prefix, suffix: suffix, partial: partial)

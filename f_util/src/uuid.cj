@@ -1,25 +1,31 @@
 /*
-    Copyright (c) [2022] [WuJingrun（吴京润）]
-    fountain is licensed under Mulan PSL v2.
-    You can use this software according to the terms and conditions of the Mulan PSL v2.
-    You may obtain a copy of Mulan PSL v2 at:
-            http://license.coscl.org.cn/MulanPSL2
-    THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-    See the Mulan PSL v2 for more details.
+Copyright (c) 2025 WuJingrun（吴京润）
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
  */
 package f_util
 
 import std.convert.Parsable
-import std.env
 import std.fs.{File, Directory, OpenMode}
-import std.io.SeekPosition
+import std.io.{SeekPosition, StringReader}
 import std.math.numeric.BigInt
-import std.process.Process
 import std.sync.{AtomicUInt16, AtomicInt64, Mutex}
 import std.time.{TimeZone, DateTime}
 import stdx.crypto.crypto.*
 import stdx.crypto.digest.{MD5, SHA1}
 import f_base.{HashBuilder, StringGenerator}
+import f_data.*
+import f_data.exception.DataException
 import f_exception.UnreachableException
 import f_random.*
 import f_util.exception.UUIDException
@@ -27,10 +33,26 @@ import f_util.exception.UUIDException
 /**
  * reference https://www.ietf.org/archive/id/draft-ietf-uuidrev-rfc4122bis-00.html
  */
-public struct UUID <: Hashable & Comparable<UUID> & ToString & Parsable<UUID> {
+public struct UUID <: Hashable & Comparable<UUID> & ToString & Parsable<UUID> & DataParsable<UUID> & DataFields<UUID> {
     private let h: Int64
     UUID(private let values!: Array<Byte> = Array<Byte>(16, repeat: 0)) {
         h = HashBuilder().append<Byte, Array<Byte>>(values).build()
+    }
+
+    public func toData(): Data{
+        toString().toData()
+    }
+    public static func tryFromData(data: Data, flag: DataConversionFlag): Any {
+        match(data){
+            case x: DataString => 
+                match(UUID.tryParse(x.data)){
+                    case Some(x) => x
+                    case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) > 0 => None<UUID>
+                    case _ => throw DataException('data ${data} which type is ${TypeInfo.of(data)} cannot converted to UUID')
+                }
+            case _  where (flag & IGNORE_NONE) > 0 || (flag & IGNORE_FIELD_TYPE_NOT_MATCH) > 0 => None<UUID>
+            case _ => throw DataException('data ${data} which type is ${TypeInfo.of(data)} cannot converted to UUID')
+        }
     }
 
     public func hashCode(): Int64 {
@@ -268,7 +290,7 @@ public struct UUID <: Hashable & Comparable<UUID> & ToString & Parsable<UUID> {
        +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
      */
     public static func md5(value: String): UUID {
-        md5(value.toArray())
+        md5(value.unsafeBytes())
     }
     public static func randomMd5(bytes!: Int64 = 16): UUID {
         md5(ThreadLocalRandom.current.nextBytes(bytes))
@@ -306,7 +328,7 @@ public struct UUID <: Hashable & Comparable<UUID> & ToString & Parsable<UUID> {
        最后的sha_low在原文是md5_low，此处应该是一个错误
      */
     public static func sha1(value: String): UUID {
-        sha1(value.toArray())
+        sha1(value.unsafeBytes())
     }
     public static func randomSha1(bytes!: Int64 = 20): UUID {
         sha1(ThreadLocalRandom.current.nextBytes(bytes))
@@ -396,7 +418,7 @@ public struct UUID <: Hashable & Comparable<UUID> & ToString & Parsable<UUID> {
     }
 }
 
-public class TimeBasedUUIDBuilder {
+public class TimeBasedUUIDBuilder <: Resource {
     private let seqGen = TimestampSequenceBuilder()
     private let version: Byte
     private var timestamp: Int64 = 0
@@ -407,6 +429,12 @@ public class TimeBasedUUIDBuilder {
         } else {
             6
         }
+    }
+    public func isClosed(): Bool {
+        seqGen.isClosed()
+    }
+    public func close(): Unit {
+        seqGen.close()
     }
     public func registerSequenceGenerator(generator: (Int64) -> UInt16): This {
         seqGen.registerSequenceGenerator(generator)
@@ -436,6 +464,17 @@ public class TimeBasedUUIDBuilder {
         while (timestamp == 0 || seq == 0) {
             (timestamp, seq) = seqGen.timestampAndSequence(randomSeq)
         }
+    }
+    @When[os == 'Linux']
+    public func eth0(){
+        etherName('eth0')
+    }
+    @When[os == 'Linux']
+    public func etherName(name: String): UUID {
+        try(f = File('/sys/class/net/${name}/address', Read)){
+            return ether(StringReader(f).readToEnd())
+        }
+        throw UnreachableException()
     }
     public func ether(ether: String): UUID {
         //00:00:00:00:00:00
@@ -542,19 +581,35 @@ public class TimeBasedUUIDBuilder {
     }
 }
 
-public class TimestampSequenceBuilder {
+public class TimestampSequenceBuilder <: Resource {
     private var seqGen: (Int64) -> UInt16
+    private var closer: SequenceResource = SequenceResource.empty
+    ~init(){
+        closer.close()
+    }
     init() {
         let seq = AtomicUInt16(0)
         seqGen = {_: Int64 => seq.fetchAdd(1)}
     }
+    public func isClosed(): Bool {
+        closer.isClosed()
+    }
+    public func close(): Unit {
+        closer.close()
+    }
+    private func emptyCloser(){
+        closer.close()
+        closer = SequenceResource.empty
+    }
     public func registerSequenceGenerator(generator: (Int64) -> UInt16) {
+        emptyCloser()
         seqGen = generator
     }
     public func registerFileSequenceGenerator() {
         let dir = Directory.createTemp('/tmp')
         let file = File("${dir}/${DateTime.now().format('yyyyMMddHHmmssSSS')}", OpenMode.ReadWrite)
-        env.atExit {file.close()}
+        closer.close()
+        closer = SequenceResource({=> file.close()}, {=> file.isClosed()})
         seqGen = {
             timestamp =>
             let bytes = Array<Byte>(10, repeat: 0)
@@ -583,6 +638,7 @@ public class TimestampSequenceBuilder {
                 let pos: SeekPosition = Begin(0)
                 file.seek(pos)
                 file.write(bytes)
+                file.flush()
                 file.seek(pos)
                 seq
             }
@@ -591,6 +647,7 @@ public class TimestampSequenceBuilder {
     public func registerSequenceGenerator() {
         let lastNanos = AtomicInt64(0)
         let seq = AtomicUInt16(0)
+        emptyCloser()
         seqGen = {
             timestamp =>
             let last = lastNanos.load()
@@ -615,6 +672,21 @@ public class TimestampSequenceBuilder {
             } else {
                 (timestamp, seqGen(timestamp))
             }
+        }
+    }
+}
+public struct SequenceResource <: Resource {
+    static let empty = SequenceResource({=>}, {=> false})
+    SequenceResource(
+        private let closer: () -> Unit,
+        private let isClosedFn: () -> Bool
+    ){}
+    public func isClosed(): Bool {
+        isClosedFn()
+    }
+    public func close(): Unit {
+        if(!isClosedFn()){
+            closer()
         }
     }
 }

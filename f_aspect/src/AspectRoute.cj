@@ -1,17 +1,22 @@
 /*
-    Copyright (c) [2022] [WuJingrun（吴京润）]
-    fountain is licensed under Mulan PSL v2.
-    You can use this software according to the terms and conditions of the Mulan PSL v2.
-    You may obtain a copy of Mulan PSL v2 at:
-            http://license.coscl.org.cn/MulanPSL2
-    THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-    See the Mulan PSL v2 for more details.
+Copyright (c) 2025 WuJingrun（吴京润）
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
  */
 package f_aspect
 
 public import std.reflect.*
 import f_base.*
-import f_aspect.exception.AspectException
 import f_regex.*
 
 /**
@@ -37,17 +42,17 @@ public class AspectRoute <: RouteRule {
  * argTypes参数是参数全限定名，多个参数之间用,分割，适用通配符**表示任意数量和类型的参数类型
  * returnType参数是返回类型全限定名，适用通配符*表示任意返回类型
  * 类型全限定名不支持反射尚不支持的类型
-*/
+ */
 public abstract class RouteRule {
-    public const init(){}
+    public const init() {}
     public func matches(funcInfo: InvocationFuncInfo): Bool
-    public const operator func &(right: RouteRule){
+    public operator const func &(right: RouteRule) {
         AndRouteRule(this, right)
     }
-    public const operator func |(right: RouteRule){
+    public operator const func |(right: RouteRule) {
         OrRouteRule(this, right)
     }
-    public const operator func !(){
+    public operator const func !() {
         NotRouteRule(this)
     }
 }
@@ -58,13 +63,10 @@ public class ExecutionRouteRule <: AndRouteRule {
     public const init(
         within: WithinRouteRule,
         funcType: FuncRouteRule
-    ){
+    ) {
         super(within, funcType)
     }
-    public const init(qualifiedName: String,
-                      funcName: String,
-                      argTypes: String,
-                      returnType: String){
+    public const init(qualifiedName: String, funcName: String, argTypes: String, returnType: String) {
         this(WithinRouteRule(qualifiedName), FuncRouteRule(funcName, argTypes, returnType))
     }
 }
@@ -72,9 +74,7 @@ public class ExecutionRouteRule <: AndRouteRule {
  * 类型包名匹配packageName，类型名匹配typeName的全部类型将会匹配，匹配的类型全部公共实例函数将被织入，
  */
 public class WithinRouteRule <: RouteRule {
-    public const WithinRouteRule(
-        public let qualifiedName: String
-    ){}
+    public const WithinRouteRule(public let qualifiedName: String) {}
     public func matches(funcInfo: InvocationFuncInfo): Bool {
         Regex.wildcard(qualifiedName).matches(funcInfo.typeInfo.qualifiedName)
     }
@@ -90,34 +90,32 @@ public class WithinRouteRule <: RouteRule {
  * 按照仓颉的子类型关系，任意类型都是其自身的子类型。
  */
 public class ArgsRouteRule <: RouteRule {
-    public const ArgsRouteRule(
-        public let argTypes: String
-    ){}
+    public const ArgsRouteRule(public let argTypes: String) {}
     public func matches(funcInfo: InvocationFuncInfo): Bool {
-        if(argTypes == '**'){
+        if (argTypes == '**') {
             return true
         }
         let types = argTypes.split(',')
         let params = funcInfo.funcInfo.parameters
-        if(params.size < types.size){
+        if (params.size < types.size) {
             return false
         }
         func check(i: Int64): Bool {
             let pt = params[i].typeInfo
-            if(i < types.size){
+            if (i < types.size) {
                 let t = types[i].trimAscii()
                 t == '*' || if (t.startsWith('<:')) {
-                    pt.isSubtypeOf(TypeInfos.get(t[2 ..].trimAscii()))
-                } else if (t.endsWith('<:')){
-                    TypeInfos.get(t[0 .. t.size - 2].trimAscii()).isSubtypeOf(pt)
-                }else{
+                    pt.isSubtypeOf(TypeInfos.get(t[2..].trimAscii()))
+                } else if (t.endsWith('<:')) {
+                    TypeInfos.get(t[0..t.size - 2].trimAscii()).isSubtypeOf(pt)
+                } else {
                     TypeInfos.get(t) == pt
                 }
-            }else{
+            } else {
                 types[types.size - 1] == '**'
             }
         }
-        for(i in 0 .. params.size where !check(i)){
+        for (i in 0..params.size where !check(i)) {
             return false
         }
         true
@@ -127,10 +125,8 @@ public class ArgsRouteRule <: RouteRule {
  * 因为切面修改以后的返回类型必须是原函数返回类型的子类型，才能按原函数的返回类型返回，
  * 所以returnType是目标函数返回类型的子类型将被织入，returnType是一个类型全限定名
  */
-public class ReturnTypeRouteRule <: RouteRule{
-    public const ReturnTypeRouteRule(
-        public let returnType: String
-    ){}
+public class ReturnTypeRouteRule <: RouteRule {
+    public const ReturnTypeRouteRule(public let returnType: String) {}
     public func matches(funcInfo: InvocationFuncInfo): Bool {
         returnType == '*' && TypeInfos.get(returnType).isSubtypeOf(funcInfo.funcInfo.returnType)
     }
@@ -142,27 +138,29 @@ public class FuncTypeRouteRule <: AndRouteRule {
     public const init(
         argTypes: ArgsRouteRule,
         returnType: ReturnTypeRouteRule
-    ){
+    ) {
         super(argTypes, returnType)
     }
-    public const init(argTypes: String, returnType: String){
+    public const init(argTypes: String, returnType: String) {
         this(ArgsRouteRule(argTypes), ReturnTypeRouteRule(returnType))
     }
 }
+
 public class FuncNameRouteRule <: RouteRule {
-    public const FuncNameRouteRule(public let name: String){}
+    public const FuncNameRouteRule(public let name: String) {}
     public func matches(funcInfo: InvocationFuncInfo): Bool {
         Regex.wildcard(name).matches(funcInfo.funcInfo.name)
     }
 }
-public class FuncRouteRule <: AndRouteRule{
+
+public class FuncRouteRule <: AndRouteRule {
     public const init(
         name: FuncNameRouteRule,
         funcType: FuncTypeRouteRule
-    ){
+    ) {
         super(name, funcType)
     }
-    public const init(name: String, argTypes: String, returnType: String){
+    public const init(name: String, argTypes: String, returnType: String) {
         this(FuncNameRouteRule(name), FuncTypeRouteRule(argTypes, returnType))
     }
 }
@@ -170,40 +168,39 @@ public class FuncRouteRule <: AndRouteRule{
  * 参数是一个类型全限定名，这个类型及它的子类型全部公共实例函数将被织入
  */
 public class TargetRouteRule <: RouteRule {
-    public const TargetRouteRule(
-        public let targetQualifiedName: String
-    ){}
+    public const TargetRouteRule(public let targetQualifiedName: String) {}
     public func matches(funcInfo: InvocationFuncInfo): Bool {
         funcInfo.typeInfo.isSubtypeOf(TypeInfos.get(targetQualifiedName))
     }
 }
-private func contains(annotations: Collection<Annotation>, annotationNames: Array<String>, sub!: Bool = false){
-    if(sub){
+
+private func contains(annotations: Collection<Annotation>, annotationNames: Array<String>, sub!: Bool = false) {
+    if (sub) {
         let list = ArrayList<TypeInfo>()
         let supers = ArrayList<TypeInfo>()
-        for(annotation in annotations){
+        for (annotation in annotations) {
             list.add(ClassTypeInfo.of(annotation))
         }
-        for(name in annotationNames){
+        for (name in annotationNames) {
             supers.add(TypeInfos.get(name.trimAscii()))
         }
-        for(superType in supers){
+        for (superType in supers) {
             var matched = false
-            for(annotationType in list where annotationType.isSubtypeOf(superType)){
+            for (annotationType in list where annotationType.isSubtypeOf(superType)) {
                 matched = true
                 break
             }
-            if(!matched){
+            if (!matched) {
                 return false
             }
         }
         true
-    }else{
+    } else {
         let set = HashSet<String>()
-        for(annotation in annotations){
+        for (annotation in annotations) {
             set.add(ClassTypeInfo.of(annotation).qualifiedName)
         }
-        for(name in annotationNames where !set.contains(name.trimAscii())){
+        for (name in annotationNames where !set.contains(name.trimAscii())) {
             return false
         }
         true
@@ -218,7 +215,7 @@ public class TargetAnnotationRouteRule <: RouteRule {
     public const TargetAnnotationRouteRule(
         public let annotationTypes: String,
         public let sub!: Bool = false
-    ){}
+    ) {}
     public func matches(funcInfo: InvocationFuncInfo): Bool {
         let annotationNames = annotationTypes.split('&')
         contains(funcInfo.funcInfo.annotations, annotationNames, sub: sub)
@@ -233,7 +230,7 @@ public class FuncAnnotationRouteRule <: RouteRule {
     public const FuncAnnotationRouteRule(
         public let annotationTypes: String,
         public let sub!: Bool = false
-    ){}
+    ) {}
     public func matches(funcInfo: InvocationFuncInfo): Bool {
         let annotationNames = annotationTypes.split('&')
         contains(funcInfo.funcInfo.annotations, annotationNames, sub: sub)
@@ -247,19 +244,17 @@ public class FuncAnnotationRouteRule <: RouteRule {
  * a.Annotation1,*,b.Annotation2表示目标函数有三个参数，忽略第二个参数的注解，第一第三个参数必须有a.Annotation1和b.Annotation2
  */
 public class ArgAnnotationsRouteRule <: RouteRule {
-    public const ArgAnnotationsRouteRule(
-        public let annotationTypes: String
-    ){}
+    public const ArgAnnotationsRouteRule(public let annotationTypes: String) {}
     public func matches(funcInfo: InvocationFuncInfo): Bool {
         let params = funcInfo.funcInfo.parameters
         let annotationNames = annotationTypes.split('&')
-        for(i in 0 .. params.size){
+        for (i in 0..params.size) {
             let param = params[i]
             let annotationName = annotationNames[i].trimAscii()
-            if(annotationName == '*'){
+            if (annotationName == '*') {
                 continue
             }
-            for(annotation in param.annotations where ClassTypeInfo.of(annotation).qualifiedName == annotationName){
+            for (annotation in param.annotations where ClassTypeInfo.of(annotation).qualifiedName == annotationName) {
                 continue
             }
             return false
@@ -271,34 +266,33 @@ public class ArgAnnotationsRouteRule <: RouteRule {
  * 目标函数任意一个参数拥有指定的全部注解将被织入，本规则不适用通配符，多个注解用,分割
  */
 public class AnyArgAnnotationsRouteRule <: RouteRule {
-    public const AnyArgAnnotationsRouteRule(
-        public let annotationTypes: String
-    ){}
+    public const AnyArgAnnotationsRouteRule(public let annotationTypes: String) {}
     public func matches(funcInfo: InvocationFuncInfo): Bool {
         let params = funcInfo.funcInfo.parameters
         let annotationNames = annotationTypes.split('|')
-        for(param in params where contains(param.annotations, annotationNames)){
+        for (param in params where contains(param.annotations, annotationNames)) {
             return true
         }
         false
     }
 }
-private func matches(asc: Bool, funcInfo: InvocationFuncInfo, annotationTypes: String){
+
+private func matches(asc: Bool, funcInfo: InvocationFuncInfo, annotationTypes: String) {
     let annotations = annotationTypes.split(',')
     let params = funcInfo.funcInfo.parameters
-    let range = if(asc){
-        0 .. params.size
-    }else{
-        params.size - 1 ..= 0
+    let range = if (asc) {
+        0..params.size
+    } else {
+        params.size - 1..=0
     }
-    for(i in range){
+    for (i in range) {
         let current = annotations[i]
         var matched = false
-        for(annotation in params[i].annotations where ClassTypeInfo.of(annotation).qualifiedName == current){
+        for (annotation in params[i].annotations where ClassTypeInfo.of(annotation).qualifiedName == current) {
             matched = true
             break
         }
-        if(!matched){
+        if (!matched) {
             return false
         }
     }
@@ -312,9 +306,7 @@ private func matches(asc: Bool, funcInfo: InvocationFuncInfo, annotationTypes: S
  * public func test3(@Annotation1 a: String, c: String, @Annotation2 b: String){}
  */
 public class ArgPrefixAnnotationsRouteRule <: RouteRule {
-    public const ArgPrefixAnnotationsRouteRule(
-        public let annotationTypes: String
-    ){}
+    public const ArgPrefixAnnotationsRouteRule(public let annotationTypes: String) {}
     public func matches(funcInfo: InvocationFuncInfo): Bool {
         matches(true, funcInfo, annotationTypes)
     }
@@ -327,9 +319,7 @@ public class ArgPrefixAnnotationsRouteRule <: RouteRule {
  * public func test3(@Annotation1 a: String, c: String, @Annotation2 b: String){}
  */
 public class ArgSuffixAnnotationsRouteRule <: RouteRule {
-    public const ArgSuffixAnnotationsRouteRule(
-        public let annotationTypes: String
-    ){}
+    public const ArgSuffixAnnotationsRouteRule(public let annotationTypes: String) {}
     public func matches(funcInfo: InvocationFuncInfo): Bool {
         matches(false, funcInfo, annotationTypes)
     }
@@ -338,13 +328,11 @@ public class ArgSuffixAnnotationsRouteRule <: RouteRule {
  * 目标对象的beanName符合本规则，目标的全部公共实例函数将被织入
  */
 public class BeanNameRouteRule <: RouteRule {
-    public const BeanNameRouteRule(
-        public let beanName: String
-    ) {}
+    public const BeanNameRouteRule(public let beanName: String) {}
     public func matches(funcInfo: InvocationFuncInfo): Bool {
         let managers = BeanFactory.instance.iterator<Object>(funcInfo.typeInfo)
         let regex = Regex.wildcard(beanName)
-        for(m in managers where regex.matches(m.name) && m.beanType == funcInfo.typeInfo){
+        for (m in managers where regex.matches(m.name) && m.beanType == funcInfo.typeInfo) {
             return true
         }
         false
@@ -354,7 +342,7 @@ public class BeanNameRouteRule <: RouteRule {
  * 两个规则都匹配的公共实例函数将被织入
  */
 public open class AndRouteRule <: RouteRule {
-    public const AndRouteRule(private let left: RouteRule, private let right: RouteRule){}
+    public const AndRouteRule(private let left: RouteRule, private let right: RouteRule) {}
     public func matches(funcInfo: InvocationFuncInfo): Bool {
         left.matches(funcInfo) && right.matches(funcInfo)
     }
@@ -363,7 +351,7 @@ public open class AndRouteRule <: RouteRule {
  * 匹配任意一个规则的公共实例函数将被织入
  */
 public class OrRouteRule <: RouteRule {
-    public const OrRouteRule(public let left: RouteRule, public let right: RouteRule){}
+    public const OrRouteRule(public let left: RouteRule, public let right: RouteRule) {}
     public func matches(funcInfo: InvocationFuncInfo): Bool {
         left.matches(funcInfo) || right.matches(funcInfo)
     }
@@ -372,7 +360,7 @@ public class OrRouteRule <: RouteRule {
  * 对指定规则匹配结果取反。
  */
 public class NotRouteRule <: RouteRule {
-    public const NotRouteRule(public let rule: RouteRule){}
+    public const NotRouteRule(public let rule: RouteRule) {}
     public func matches(funcInfo: InvocationFuncInfo): Bool {
         !rule.matches(funcInfo)
     }

@@ -1,27 +1,35 @@
 /*
-    Copyright (c) [2022] [WuJingrun（吴京润）]
-    fountain is licensed under Mulan PSL v2.
-    You can use this software according to the terms and conditions of the Mulan PSL v2.
-    You may obtain a copy of Mulan PSL v2 at:
-            http://license.coscl.org.cn/MulanPSL2
-    THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-    See the Mulan PSL v2 for more details.
+Copyright (c) 2025 WuJingrun（吴京润）
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
  */
 package f_data
 
 import std.collection.concurrent.{ConcurrentHashMap, ConcurrentMap}
 
-public class DataConcurrentMapIterator<K, V> <: Iterator<(Data, Data)> where K <: Hashable & Equatable<K> & DataFields<K>, V <: DataFields<V> {
+public class DataConcurrentMapIterator<K, V> <: Iterator<(Data, Data)> where K <: Hashable & Equatable<K> & DataFields<K>,
+    V <: DataFields<V> {
     public DataConcurrentMapIterator(private let itr: Iterator<(K, V)>) {}
     public func next(): ?(Data, Data) {
-        for((k, v) in itr){
+        for ((k, v) in itr) {
             return (k.toData(), v.toData())
         }
         return None
     }
 }
 
-public class DataConcurrentMap<M, K, V> <: Data & Collection<(Data, Data)> where K <: Hashable & Equatable<K> & DataFields<K>, V <: DataFields<V>, M <: DataFields<M> & ConcurrentMap<K, V> & Collection<(K, V)> {
+public class DataConcurrentMap<M, K, V> <: Data & Collection<(Data, Data)> where K <: Hashable & Equatable<K> & DataFields<K>,
+    V <: DataFields<V>, M <: DataFields<M> & ConcurrentMap<K, V> & Collection<(K, V)> {
     public DataConcurrentMap(public let data: M) {}
     public func iterator(): Iterator<(Data, Data)> {
         DataConcurrentMapIterator<K, V>(data.iterator())
@@ -53,50 +61,61 @@ public class DataConcurrentMap<M, K, V> <: Data & Collection<(Data, Data)> where
     }
 }
 
-public interface ConcurrentMapData<M, K, V> <: DataFields<M> & MapRawType where K <: Equatable<K> & DataFields<K>, V <: DataFields<V>, M <: DataFields<M> & ConcurrentMap<K, V> {
+public interface ConcurrentMapData<M, K, V> <: DataFields<M> & MapRawType where K <: Equatable<K> & DataFields<K>,
+    V <: DataFields<V>, M <: DataFields<M> & ConcurrentMap<K, V> {
     func toData(): Data
     static func tryFromData(data: Data, flag: DataConversionFlag): Any
-    prop rawType: (TypeInfo, TypeInfo){
-        get(){
+    prop rawType: (TypeInfo, TypeInfo) {
+        get() {
             (TypeInfos.get<K>(), TypeInfos.get<V>())
         }
     }
 }
-extend<K, V> ConcurrentHashMap<K, V> <: ConcurrentMapData<ConcurrentHashMap<K, V>, K, V> where K <: Hashable & Equatable<K> & DataFields<K>, V <: DataFields<V> {
+
+extend<K, V> ConcurrentHashMap<K, V> <: ConcurrentMapData<ConcurrentHashMap<K, V>, K, V> where K <: Hashable & Equatable<K> & DataFields<K>,
+    V <: DataFields<V> {
     public func toData(): Data {
         DataConcurrentMap(this)
     }
     public static func tryFromData(data: Data, flag: DataConversionFlag): Any {
-        match(data){
+        match (data) {
             case x: DataConcurrentMap<ConcurrentHashMap<K, V>, K, V> where (flag & DEEP) == 0 => x.data
-            case itr: Iterable<(Data, Data)> => 
+            case itr: Iterable<(Data, Data)> =>
                 let map = ConcurrentHashMap<K, V>()
-                for((dk, dv) in itr){
-                    if(let (Some(k: K), Some(v: V)) <- (internal_f_data_tryFromData<K>(dk, flag), internal_f_data_tryFromData<V>(dv, flag))){
+                for ((dk, dv) in itr) {
+                    if (let (Some(k: K), Some(v: V)) <- (internal_f_data_tryFromData<K>(dk, flag),
+                        internal_f_data_tryFromData<V>(dv, flag))) {
                         map.add(k, v)
-                    }else if((flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0){
-                        throw DataException('data cannot be converted to tuple for ${TypeInfos.get<ConcurrentHashMap<K, V>>()} ')
+                    } else if ((flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0) {
+                        throw DataException(
+                            'data cannot be converted to tuple for ${TypeInfos.get<ConcurrentHashMap<K, V>>()} ')
                     }
                 }
                 map
             case itr: Iterable<(String, Data)> =>
                 let map = ConcurrentHashMap<K, V>()
-                for((k, v) in itr){
-                    match(k){
-                        case mk: K => if(let Some(mv: V) <- internal_f_data_tryFromData<V>(v, flag)){
-                            map.add(mk, mv)
-                        }else if((flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0){
-                            throw DataException('data cannot be converted to tuple for ${TypeInfos.get<ConcurrentHashMap<K, V>>()}, current tuple is (${k}, ${v})')
-                        }
-                        case _ => if(let (Some(mk: K), Some(mv: V)) <- (internal_f_data_tryFromData<K>(k.toData(), flag), internal_f_data_tryFromData<V>(v, flag))){
-                            map.add(mk, mv)
-                        }else if((flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0){
-                            throw DataException('data cannot be converted to tuple for ${TypeInfos.get<ConcurrentHashMap<K, V>>()}, current tuple is (${k}, ${v})')
-                        }
+                for ((k, v) in itr) {
+                    match (k) {
+                        case mk: K =>
+                            if (let Some(mv: V) <- internal_f_data_tryFromData<V>(v, flag)) {
+                                map.add(mk, mv)
+                            } else if ((flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0) {
+                                throw DataException(
+                                    'data cannot be converted to tuple for ${TypeInfos.get<ConcurrentHashMap<K, V>>()}, current tuple is (${k}, ${v})')
+                            }
+                        case _ =>
+                            if (let (Some(mk: K), Some(mv: V)) <- (internal_f_data_tryFromData<K>(k.toData(), flag),
+                                internal_f_data_tryFromData<V>(v, flag))) {
+                                map.add(mk, mv)
+                            } else if ((flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0) {
+                                throw DataException(
+                                    'data cannot be converted to tuple for ${TypeInfos.get<ConcurrentHashMap<K, V>>()}, current tuple is (${k}, ${v})')
+                            }
                     }
                 }
                 map
-            case _ where (flag & IGNORE_FIELD_TYPE_NOT_MATCH) == 0 => throw DataException('data cannot be converted to tuple for ${TypeInfos.get<ConcurrentHashMap<K, V>>()}, data is ${data}')
+            case _ where (flag & IGNORE_FIELD_TYPE_NOT_MATCH) == 0 => throw DataException(
+                'data cannot be converted to tuple for ${TypeInfos.get<ConcurrentHashMap<K, V>>()}, data is ${data}')
             case _ => ConcurrentHashMap<K, V>()
         }
     }

@@ -1,12 +1,18 @@
 /*
-    Copyright (c) [2022] [WuJingrun（吴京润）]
-    fountain is licensed under Mulan PSL v2.
-    You can use this software according to the terms and conditions of the Mulan PSL v2.
-    You may obtain a copy of Mulan PSL v2 at:
-            http://license.coscl.org.cn/MulanPSL2
-    THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-    See the Mulan PSL v2 for more details.
-*/
+Copyright (c) 2025 WuJingrun（吴京润）
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+ */
 package f_macros
 
 public interface CompositeDecl <: ToTokens {
@@ -21,18 +27,20 @@ public interface CompositeDecl <: ToTokens {
     mut prop upperBound: Token
     mut prop superTypes: ArrayList<TypeNode>
     mut prop body: Body
-    func isPublic(): Bool 
-    func isProtected(): Bool 
-    func isPrivate(): Bool 
+    func isPublic(): Bool
+    func isProtected(): Bool
+    func isPrivate(): Bool
     func isInternal(): Bool {
         !(isPublic() || isProtected() || isPrivate())
     }
 }
+
 public interface ExtendClassDecl {
     func isOpen(): Bool
     func isAbstract(): Bool
     func isSealed(): Bool
 }
+
 extend ClassDecl <: CompositeDecl & ExtendClassDecl {
     public func isPublic(): Bool {
         isPublic(this)
@@ -43,29 +51,18 @@ extend ClassDecl <: CompositeDecl & ExtendClassDecl {
     public func isPrivate(): Bool {
         isPrivate(this)
     }
-    public func isOpen(): Bool{
-        let modifiers = this.modifiers
-        for(i in 0 .. modifiers.size where isOpen(modifiers, i)){
-            return true
-        }
-        false
+    public func isOpen(): Bool {
+        isOpen(this)
     }
-    public func isAbstract(): Bool{
-        let modifiers = this.modifiers
-        for(i in 0 .. modifiers.size where isAbstract(modifiers, i)){
-            return true
-        }
-        false
+    public func isAbstract(): Bool {
+        isAbstract(this)
     }
-    public func isSealed(): Bool{
-        let modifiers = this.modifiers
-        for(i in 0 .. modifiers.size where isModifier(modifiers, i, SEALED)){
-            return true
-        }
-        false
+    public func isSealed(): Bool {
+        isSealed(this)
     }
 }
-extend StructDecl <: CompositeDecl{
+
+extend StructDecl <: CompositeDecl {
     public func isPublic(): Bool {
         isPublic(this)
     }

@@ -1,20 +1,24 @@
 /*
-    Copyright (c) [2022] [WuJingrun（吴京润）]
-    fountain is licensed under Mulan PSL v2.
-    You can use this software according to the terms and conditions of the Mulan PSL v2.
-    You may obtain a copy of Mulan PSL v2 at:
-            http://license.coscl.org.cn/MulanPSL2
-    THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-    See the Mulan PSL v2 for more details.
+Copyright (c) 2025 WuJingrun（吴京润）
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
  */
 package f_pool
 
 import std.collection.concurrent.ArrayBlockingQueue
 import std.env
-import std.process.Process
 import std.sync.{AtomicInt64, AtomicBool}
 import std.time.MonoTime
-
 import f_log.LoggerFactory
 
 public interface PooledManager<T> where T <: Object {
@@ -27,7 +31,7 @@ public interface PooledManager<T> where T <: Object {
  */
 public class Pool<T> <: Resource where T <: Object {
     // private static let log = LoggerFactory.getLogger<Pool<T>>()
-    private static func getLog(){
+    private static func getLog() {
         LoggerFactory.getLogger<Pool<T>>()
     }
     private let queue: ArrayBlockingQueue<(T, MonoTime)>
@@ -68,7 +72,7 @@ public class Pool<T> <: Resource where T <: Object {
         manager!: PooledManager<T>
     ) {
         this(initSize: initSize, minSize: minSize, maxSize: maxSize, elementLife: elementLife,
-            checkOnCreation: checkOnCreation, checkOnBorrowing: checkOnBorrowing, checkOnReturning: checkOnReturning, 
+            checkOnCreation: checkOnCreation, checkOnBorrowing: checkOnBorrowing, checkOnReturning: checkOnReturning,
             checkInterval: checkInterval, creator: manager.create, checker: manager.check, destroier: manager.destroy)
     }
     private func startCheckingSchedule() {
@@ -77,18 +81,19 @@ public class Pool<T> <: Resource where T <: Object {
                 var i = 0
                 while (running.load() && i < this.size.load() && let (o, t) <- queue.remove()) {
                     i++
-                    try{
+                    try {
                         if (MonoTime.now() - t >= elementLife || !checker(o)) {
                             destroy(o, true)
-                            if(this.size.load() < minSize){
+                            if (this.size.load() < minSize) {
                                 tasks.tryAdd(())
                             }
                         } else {
                             queue.add((o, t))
                         }
-                    }catch(e: Exception){
+                    } catch (e: Exception) {
                         getLog().warn('Pool checking schedule', e)
                     }
+                    sleep(Duration.Zero)
                 }
                 sleep(checkInterval)
             }
@@ -99,9 +104,9 @@ public class Pool<T> <: Resource where T <: Object {
             while (running.load() && let _ <- tasks.remove()) {
                 if (running.load() && size.load() < maxSize) {
                     let object = creator()
-                    if(checkOnCreation && !checker(object)){
+                    if (checkOnCreation && !checker(object)) {
                         destroy(object, true, decr: false)
-                    }else if(add(object, decrIfOverload: false)){
+                    } else if (add(object, decrIfOverload: false)) {
                         size.fetchAdd(1)
                     }
                 }
@@ -109,34 +114,36 @@ public class Pool<T> <: Resource where T <: Object {
         }
     }
     private func destroy(o: T, logOnEx: Bool, decr!: Bool = true) {
-        try{
+        try {
             destroier(o)
-        }catch(e: Exception){
-            if(logOnEx){
+        } catch (e: Exception) {
+            if (logOnEx) {
                 getLog().warn('error occurred on destring object in pool', e)
-            }else{
+            } else {
                 throw e
             }
-        }finally{
-            if(decr){
+        } finally {
+            if (decr) {
                 size.fetchSub(1)
             }
         }
-        if(size.load() < 0){
-            let ex = PoolException('current size of pool is less than zero, may be some instances which were not be created by current pool were destroied by current pool on giving back.')
-            if(logOnEx){
+        if (size.load() < 0) {
+            let ex = PoolException(
+                'current size of pool is less than zero, may be some instances which were not be created by current pool were destroied by current pool on giving back.')
+            if (logOnEx) {
                 getLog().warn(ex)
-            }else{
+            } else {
                 throw ex
             }
         }
     }
     private func add(object: T, decrIfOverload!: Bool = true): Bool {
-        if(!queue.tryAdd((object, MonoTime.now()))){
-            getLog().warn("current size of pool is larger than maxSize(${maxSize}), may be some instances which were not be created by current pool were given back to current pool.")
+        if (!queue.tryAdd((object, MonoTime.now()))) {
+            getLog().warn(
+                "current size of pool is larger than maxSize(${maxSize}), may be some instances which were not be created by current pool were given back to current pool.")
             destroy(object, false, decr: decrIfOverload)
             false
-        }else{
+        } else {
             true
         }
     }
@@ -145,7 +152,7 @@ public class Pool<T> <: Resource where T <: Object {
     }
     public func close(): Unit {
         running.store(false)
-        while(let Some(c) <- tasks.tryRemove()){}
+        while (let Some(c) <- tasks.tryRemove()) {}
         while (let Some((o, _)) <- queue.tryRemove()) {
             destroy(o, true)
         }
@@ -182,9 +189,9 @@ public class Pool<T> <: Resource where T <: Object {
         None<T>
     }
     public func giveBack(object: T): Unit {
-        if(!running.load()){
+        if (!running.load()) {
             destroy(object, true)
-        }else if (checkOnReturning) {
+        } else if (checkOnReturning) {
             if (checker(object)) {
                 add(object)
             } else {

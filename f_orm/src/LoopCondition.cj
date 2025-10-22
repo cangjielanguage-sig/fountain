@@ -1,12 +1,18 @@
 /*
-    Copyright (c) [2022] [WuJingrun（吴京润）]
-    fountain is licensed under Mulan PSL v2.
-    You can use this software according to the terms and conditions of the Mulan PSL v2.
-    You may obtain a copy of Mulan PSL v2 at:
-            http://license.coscl.org.cn/MulanPSL2
-    THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-    See the Mulan PSL v2 for more details.  
-*/
+Copyright (c) 2025 WuJingrun（吴京润）
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+ */
 package f_orm
 
 import f_base.StringGenerator
@@ -20,9 +26,11 @@ public class LoopCondition<I, T> where I <: Iterable<T> {
     private var _delimiter = ''
     private var _argInSql = false
     private var _condition: (T, Int64) -> Bool = {v, i => true}
-    private var _partial: (T, Int64) -> (String, Any) = {v, i => throw ORMException('partial for loop is not specified')}
+    private var _partial: (T, Int64) -> (String, Any) = {
+        v, i => throw ORMException('partial for loop is not specified')
+    }
 
-    LoopCondition(private let values: I, private let executor: SqlExecutor){}
+    LoopCondition(private let values: I, private let executor: SqlExecutor) {}
 
     public func wrap(left: String, right: String): LoopCondition<I, T> {
         _wrapLeft = left
@@ -55,7 +63,7 @@ public class LoopCondition<I, T> where I <: Iterable<T> {
         this
     }
     public prop argInSql: LoopCondition<I, T> {
-        get(){
+        get() {
             _argInSql = true
             this
         }
@@ -75,7 +83,7 @@ public class LoopCondition<I, T> where I <: Iterable<T> {
         this.partial(callee)
     }
     public func done(): String {
-        let sqlFrag = Condition.trim(prefix: _trimLeft, suffix: _trimRight){
+        let sqlFrag = Condition.trim(prefix: _trimLeft, suffix: _trimRight) {
             let builder = StringGenerator()
             var i = 0
             for (v in values where _condition(v, i)) {
@@ -86,14 +94,14 @@ public class LoopCondition<I, T> where I <: Iterable<T> {
                 }
                 let (frag, arg) = _partial(v, i)
                 builder.append(frag)
-                if(_argInSql) {
-                    match(arg){
+                if (_argInSql) {
+                    match (arg) {
                         case x: ToString => builder.append(x)
                         case x =>
                             executor.add(arg)
                             builder.append('?')
                     }
-                }else{
+                } else {
                     executor.add(arg)
                     builder.append('?')
                 }

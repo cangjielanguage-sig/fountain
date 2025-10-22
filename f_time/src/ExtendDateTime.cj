@@ -1,11 +1,17 @@
 /*
-    Copyright (c) [2022] [WuJingrun（吴京润）]
-    fountain is licensed under Mulan PSL v2.
-    You can use this software according to the terms and conditions of the Mulan PSL v2.
-    You may obtain a copy of Mulan PSL v2 at:
-            http://license.coscl.org.cn/MulanPSL2
-    THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-    See the Mulan PSL v2 for more details.
+Copyright (c) 2025 WuJingrun（吴京润）
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
  */
 package f_time
 
@@ -36,6 +42,7 @@ public interface ExtendDateTime {
     func toUnixEpochMicros(): Int64
     func toUnixEpochNanos(): Int64
 }
+
 extend DateTime <: ExtendDateTime {
     public static prop currentDuration: Duration {
         get() {
@@ -174,7 +181,7 @@ extend DateTime <: ExtendDateTime {
     }
     public prop isLastMonthDay: Bool {
         get() {
-            match(this.month){
+            match (this.month) {
                 case January | March | May | July | August | October | December => this.dayOfMonth == 31
                 case April | June | September | November => this.dayOfMonth == 30
                 case February => (isLeapYear && this.dayOfMonth == 29) || this.dayOfMonth == 28

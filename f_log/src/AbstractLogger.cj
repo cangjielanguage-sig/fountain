@@ -1,37 +1,46 @@
 /*
-   Copyright (c) [2022] [WuJingrun（吴京润）]
-   fountain is licensed under Mulan PSL v2.
-   You can use this software according to the terms and conditions of the Mulan PSL v2.
-   You may obtain a copy of Mulan PSL v2 at:
-           http://license.coscl.org.cn/MulanPSL2
-   THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-   See the Mulan PSL v2 for more details.
- */
+Copyright (c) 2025 WuJingrun（吴京润）
 
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+ */
 package f_log
 
+import std.collection.concurrent.ConcurrentHashMap
 import std.io.OutputStream
-import std.sync.{AtomicBool, Mutex}
+import std.sync.Mutex
 import std.time.DateTime
 import stdx.log.{LogLevel, Attr, LogRecord, LogWriter}
-import f_base.{OS, BaseException, printStackTrace}
-import f_exception.UnsupportedAccessException
-import f_log.exception.LogException
+import f_collection.*
 import f_log.output.LogWriterImpl
 
 public abstract class AbstractLogger <: Logger & Resource {
-    private let lock = Mutex()
+    private let locks = ConcurrentHashMap<String, Mutex>()
     protected let name: String
-    protected var level_: LogLevel
+    private var level_: LogLevel
     protected let pattern: LogPattern
     private var output_: OutputStream
-    private var writer: LogWriter
-    protected init(name: String, level: LogLevel, pattern: LogPattern, output: OutputStream) {
+    private var writer: LogWriterImpl
+    private let tag: String
+    protected init(name: String, level: LogLevel, pattern: LogPattern, output: OutputStream, tag: String) {
         this.name = name
         this.level_ = level
         this.pattern = pattern
         this.output_ = output
         this.writer = LogWriterImpl(output)
+        this.tag = tag
+    }
+    protected open func new(name: String): AbstractLogger{
+        this
     }
     protected mut prop output: OutputStream {
         get() {
@@ -50,7 +59,7 @@ public abstract class AbstractLogger <: Logger & Resource {
     }
     public open func close(): Unit {
         match (output) {
-            case r: Resource => r.close()
+            case r: Resource where closable && !isClosed() => r.close()
             case _ => ()
         }
     }
@@ -71,27 +80,29 @@ public abstract class AbstractLogger <: Logger & Resource {
     public open func log(record: LogRecord): Unit {
         try {
             if (logLevelEnabled(record.level)) {
-                doLock{
-                    append(record.level, record.message, record.time, None<Exception>)
+                doLock {
+                    append(record.level, record.message, record.time, Thread.currentThread.id, None<Exception>)
                     func writeAttrs(attrs: Array<Attr>) {
                         if (attrs.isEmpty()) {
                             return
                         }
+                        writer.writeString(';')
                         writer.startObject()
-                        for(i in 0 .. attrs.size) {
-                            if(i > 0){
+                        for (i in 0..attrs.size) {
+                            if (i > 0) {
                                 writer.writeString(',')
                             }
-                            let attr = attrs[i]
-                            writer.writeString('${attr[0]}:')
-                            attr[1].writeTo(writer)
+                            if(let Some(attr) <- LoggerConfig.filter.filter(attrs[i])){
+                                writer.writeString('${attr[0]}:')
+                                attr[1].writeTo(writer)
+                            }
                         }
                         writer.endObject()
-                        writer.writeString(OS.current.nextLine)
                     }
                     writeAttrs(globalAttrMap.get(name) ?? [])
                     writeAttrs(this.attrs.get() ?? [])
                     writeAttrs(record.attrs)
+                    writer.writeString('\0')
                 }
             }
         } finally {
@@ -100,12 +111,9 @@ public abstract class AbstractLogger <: Logger & Resource {
     }
 
     protected func append(level: LogLevel, message: () -> String, ex: Option<Exception>): Unit {
-        if(logLevelEnabled(level)){
-            doLock {
-                let now = DateTime.now()
-                append(level, message(), now, ex)
-            }
-        }
+        let now = DateTime.now()//产生日志的时间比记录时间重要，可能记日志的顺序跟时间不一致了，不过不重要。
+        let tid = Thread.currentThread.id
+        append(level, message(), now, tid , ex)
     }
 
     protected func appendException(ex: ?Exception, output: LogWriter): Unit {
@@ -113,19 +121,28 @@ public abstract class AbstractLogger <: Logger & Resource {
             output.writeException(e)
         }
     }
-    protected open func append(level: LogLevel, message: String, now: DateTime, ex: Option<Exception>): Unit {
-        pattern.generate(name, level, message, now, writer)
-        appendException(ex, writer)
+    protected open func append(level: LogLevel, message: String, now: DateTime, tid: Int64, ex: Option<Exception>): Unit {
+        if (logLevelEnabled(level)) {
+            doLock{
+                pattern.generate(name, level, message, now, tid, writer)
+                appendException(ex, writer)
+                writer.writeString('\0')
+            }
+        }
     }
     protected func doLock<T>(callback: () -> T): T {
+        let lock = locks.computeIfAbsent(tag){Mutex()}
         synchronized(lock) {
             callback()
         }
     }
-
-    public open prop closable: Bool {
+    private var closable_ = false
+    public open mut prop closable: Bool {
         get() {
-            true
+            closable_
+        }
+        set(value){
+            closable_ = value
         }
     }
 }

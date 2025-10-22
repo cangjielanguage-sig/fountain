@@ -1,5 +1,6 @@
 [dependencies]
-  charset4cj = { git = "https://gitcode.com/Cangjie-TPC/charset4cj.git", branch = "develop", version = "0.0.1"}
+  charset4cj = { git = "https://gitcode.com/Cangjie-TPC/charset4cj.git", branch="develop"}
+  f_app = {path = "./f_app"}
   f_aspect = {path = "./f_aspect"}
   f_base = {path = "./f_base"}
   f_bean = {path = "./f_bean"}
@@ -12,6 +13,8 @@
   f_exception = {path = "./f_exception"}
   f_io = {path = "./f_io"}
   f_jwt = {path = "./f_jwt"}
+  f_http = {path = "./f_http"}
+  f_httpclient = {path = "./f_httpclient"}
   f_log = {path = "./f_log"}
   f_macros = {path = "./f_macros"}
   f_mvc = {path = "./f_mvc"}
@@ -21,33 +24,54 @@
   f_process = {path = "./f_process"}
   f_random = {path = "./f_random"}
   f_regex = {path = "./f_regex"}
+  f_rx = {path = "./f_rx"}
   f_ticktock = {path = "./f_ticktock"}
   f_time = {path = "./f_time"}
   f_util = {path = "./f_util"}
 
 [package]
-  cjc-version = "0.60.5"
-  compile-option = "-O2"
+  cjc-version = "1.0.0"
+  compile-option = "-O2 --dy-std"
+  override-compile-option = "-O2 --dy-std"
   description = "utility for server app development"
   link-option = ""
   name = "fountain"
   output-type = "dynamic"
-  override-compile-option = "-O2"
   src-dir = ""
   target-dir = ""
   version = "1.0.0"
   package-configuration = {}
 
-[target.x86_64-w64-mingw32]
-  [target.x86_64-w64-mingw32.bin-dependencies]
-    path-option = ["D:\\docs\\work\\cangjie\\cangjie-win-bin\\windows_x86_64_llvm\\dynamic\\stdx"]
-
+[target]
 [target.x86_64-unknown-linux-gnu]
-  [target.x86_64-unknown-linux-gnu.bin-dependencies]
-    path-option = ["${CANGJIE_STDX_PATH}/dynamic/stdx"]
+  compile-option = "-O2 --lto=full --dy-std"
+  override-compile-option = "-O2 --lto=full --dy-std"
+[target.x86_64-unknown-linux-gnu.bin-dependencies]
+  path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]
+[target.aarch64-unknown-linux-gnu]
+  compile-option = "-O2 --lto=full --dy-std"
+  override-compile-option = "-O2 --lto=full --dy-std"
+[target.aarch64-unknown-linux-gnu.bin-dependencies]
+  path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]
+[target.x86_64-w64-mingw32]
+  compile-option = "-O2 --dy-std"
+  override-compile-option = "-O2 --dy-std"
+[target.x86_64-w64-mingw32.bin-dependencies]
+  path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]
+[target.x86_64-apple-darwin]
+  compile-option = "-O2 --dy-std"
+  override-compile-option = "-O2 --dy-std"
+[target.x86_64-apple-darwin.bin-dependencies]
+  path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]
+[target.aarch64-apple-darwin]
+  compile-option = "-O2 --dy-std"
+  override-compile-option = "-O2 --dy-std"
+[target.aarch64-apple-darwin.bin-dependencies]
+  path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]
 
 [profile.build]
   lto = "full"
   incremental = true
+
 [profile.build.combined]
   fountain = "dynamic"

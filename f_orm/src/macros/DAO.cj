@@ -1,11 +1,17 @@
 /*
-    Copyright (c) [2022] [WuJingrun（吴京润）]
-    fountain is licensed under Mulan PSL v2.
-    You can use this software according to the terms and conditions of the Mulan PSL v2.
-    You may obtain a copy of Mulan PSL v2 at:
-            http://license.coscl.org.cn/MulanPSL2
-    THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-    See the Mulan PSL v2 for more details.
+Copyright (c) 2025 WuJingrun（吴京润）
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
  */
 macro package f_orm.macros
 
@@ -51,15 +57,18 @@ import f_macros.*
 //    public interface SomeDAO {
 //        prop executor: SqlExecutor//所有dao必须有这一行
 //        func listSomePO(arg: ArgData): ArrayList<SomePO>{
-//            executor.generateSql{sqlargs: SqlArgs =>
+//            executor.setSql(
 //                """
 //                select *
 //                  from some_table
-//                 where ${sqlargs.appendArg(" id = ", arg.id)}
-//                       ${sqlargs.meet(arg.name != String.empty, " `name` like ", "${arg.name}%", prefix: " and ")}
-//                       ${sqlargs.meet(arg.minBirthday.isSome() && arg.maxBirthday.isSome(), "${sqlargs.appendArg(" birthday between ", arg.minBirthday)} ${sqlargs.appendArg(" and ", arg.maxBirthday)}")}
+//                 WHERE('and'){'''
+//                       id = ${arg(arg.id)}
+//                   and ${meet(arg.name != String.empty, " `name` like ").value{"${arg.name}%"}.donw()}
+//                   and ${meet(arg.minBirthday.isSome() && arg.maxBirthday.isSome(), " birthday ").BETWEEN(arg.minBirthday.getOrThrow(), arg.maxBirthday.getOrThrow())}")}
+//                 ''''
+//                }
 //                """
-//            }.list<SomePO>(somePOMappers)
+//            ).list<SomePO>(somePOMappers)
 //        }
 //        prop somePOMappers: QueryMappers<SomePO>{
 //            get(){
@@ -81,8 +90,24 @@ import f_macros.*
 //        }
 //    }
 public macro DAO(input: Tokens): Tokens {
-    let name = parseDecl(input).identifier
-    input + `nl` + quote(
-        extend SqlExecutor <: $(name){}
+    match (parseDecl(input)) {
+        case d: InterfaceDecl => expand(d, input)
+        case d: MacroExpandDecl => match (extract(d)) {
+            case x: InterfaceDecl => expand(x, input)
+            case _ => reportError(input)
+        }
+        case _ => reportError(input)
+    }
+}
+
+private func expand(d: InterfaceDecl, input: Tokens): Tokens {
+    quote(
+        $input
+        extend SqlExecutor <: $(d.identifier){}
     )
+}
+
+private func reportError(input: Tokens) {
+    diagReport(ERROR, input, 'input must be interface decl', '')
+    throw IllegalArgumentException("input must be a interface decl")
 }

@@ -1,43 +1,57 @@
 /*
-    Copyright (c) [2022] [WuJingrun（吴京润）]
-    fountain is licensed under Mulan PSL v2.
-    You can use this software according to the terms and conditions of the Mulan PSL v2.
-    You may obtain a copy of Mulan PSL v2 at:
-            http://license.coscl.org.cn/MulanPSL2
-    THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-    See the Mulan PSL v2 for more details.
+Copyright (c) 2025 WuJingrun（吴京润）
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
  */
 package f_log
 
 import std.env
 import std.sync.AtomicReference
-import std.process.Process
 import std.time.DateTime
-import stdx.log.LogLevel
-
+import stdx.log.{LogLevel, LogRecord}
 import f_io.DummyOutputStream
 
 public class LoggerWrapper <: AbstractLogger {
     private var facade: AtomicReference<LoggerAppenderFacade>
 
     public LoggerWrapper(name: String) {
-        super(name, LogLevel.ALL, LogPattern.default, DummyOutputStream.THROW_ON_ACCESSING)
+        super(name, LogLevel.ALL, LogPattern.default, DummyOutputStream.THROW_ON_ACCESSING, name)
         this.facade = AtomicReference<LoggerAppenderFacade>(LoggerConfig.createFacade(name))
         env.atExit {this.facade.load().close()}
     }
-
+    private func refreshIfEmpty(){
+        if(facade.load().isEmpty()){
+            refresh()
+        }
+    }
     public func logLevelEnabled(level: LogLevel): Bool {
+        refreshIfEmpty()
         facade.load().logLevelEnabled(level)
     }
 
-    protected func append(level: LogLevel, message: String, now: DateTime, ex: Option<Exception>): Unit {
-        facade.load().append(level, message, now, ex)
+    public open func log(record: LogRecord): Unit {
+        refreshIfEmpty()
+        facade.load().log(record)
+    }
+    protected func append(level: LogLevel, message: String, now: DateTime, tid: Int64, ex: Option<Exception>): Unit {
+        refreshIfEmpty()
+        facade.load().append(level, message, now, tid, ex)
     }
     public func refresh() {
         var replaced = false
-        while(!replaced) {
+        while (!replaced) {
             try {
-                let (facade, replaced_) = super.doLock{
+                let (facade, replaced_) = super.doLock {
                     let new = LoggerConfig.createFacade(name)
                     let old = this.facade.load()
                     if (this.facade.compareAndSwap(old, new)) {
@@ -48,7 +62,7 @@ public class LoggerWrapper <: AbstractLogger {
                 }
                 replaced = replaced_
                 facade.close()
-            }catch(e: Exception){
+            } catch (e: Exception) {
                 e.printStackTrace()
             }
         }

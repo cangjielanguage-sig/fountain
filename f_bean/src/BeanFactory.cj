@@ -1,19 +1,33 @@
 /*
-    Copyright (c) [2022] [WuJingrun（吴京润）]
-    fountain is licensed under Mulan PSL v2.
-    You can use this software according to the terms and conditions of the Mulan PSL v2.
-    You may obtain a copy of Mulan PSL v2 at:
-            http://license.coscl.org.cn/MulanPSL2
-    THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-    See the Mulan PSL v2 for more details.
+Copyright (c) 2025 WuJingrun（吴京润）
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
  */
 package f_bean
 
+import f_log.{LoggerFactory, LogFilter, LoggerConfig}
+
+private enum BeanType{
+    | AnnotationType(TypeInfo)
+    | ClassType(TypeInfo)
+}
 public class BeanFactory {
+    private static let log = LoggerFactory.getLogger<BeanFactory>()
     public static let instance = BeanFactory()
     private let mutex = Mutex()
     private let beans = HashMap<String, BeanManager>()
     private let beanTypeMap = HashMap<TypeInfo, TreeSet<BeanManager>>()
+    private let annotationMap = HashMap<TypeInfo, TreeSet<BeanManager>>()
     private let registered = AtomicBool(false)
 
     private init() {
@@ -36,33 +50,72 @@ public class BeanFactory {
         synchronized(mutex) {
             if (let Some(existed) <- beans.addIfAbsent(manager.name, manager)) {
                 throw BeanException(
-                    'duplicate bean name ${manager.name}, existed bean type is ${existed.beanType}, current bean type is ${manager.beanType}'
-                )
+                    'duplicate bean name ${manager.name}, existed bean type is ${existed.beanType}, current bean type is ${manager.beanType}')
             }
-            let typeQueue = LinkedList<TypeInfo>()
-            typeQueue.addLast(beanType)
-            typeQueue.addLast(TypeInfos.get<Any>())
-            typeQueue.addLast(TypeInfos.get<Object>())
-            while (let Some(klass) <- typeQueue.removeFirst()) {
-                if (let Some(set) <- beanTypeMap.get(klass)) {
-                        set
-                    } else {
-                        let set = TreeSet<BeanManager>()
-                        beanTypeMap.add(klass, set)
-                        set
-                    }.add(manager)
-                if (!klass.isSubtypeOf(TypeInfos.get<Annotation>())) {
+            let typeQueue = LinkedList<BeanType>()
+            typeQueue.addLast(ClassType(beanType))
+            let any = TypeInfos.get<Any>()
+            let object = TypeInfos.get<Object>()
+            typeQueue.addLast(ClassType(any))
+            typeQueue.addLast(ClassType(object))
+            while (let Some(bt) <- typeQueue.removeFirst()) {
+                let (klass, map, isClass) =
+                match(bt){
+                    case ClassType(klass) => (klass, beanTypeMap, true)
+                    case AnnotationType(klass) => (klass, annotationMap, false)
+                }
+                if (let Some(set) <- map.get(klass)) {
+                    set
+                } else {
+                    let set = TreeSet<BeanManager>()
+                    map.add(klass, set)
+                    set
+                }.add(manager)
+                if(klass == any || klass == object){
+                    continue
+                }
+                if (isClass && 
+                    !(klass.qualifiedName.startsWith('std.') || 
+                      klass.qualifiedName.startsWith('stdx.') || 
+                      klass.qualifiedName.startsWith('Equatable<') ||
+                      klass.qualifiedName == 'Hashable' ||
+                      klass.qualifiedName == 'ToString' ||
+                      klass.qualifiedName == 'Any' || 
+                      klass.qualifiedName == 'Object' || 
+                      klass.qualifiedName.startsWith('Comparable<') ||
+                      klass.qualifiedName.startsWith('Equal<') ||
+                      klass.qualifiedName.startsWith('NotEqual<') ||
+                      klass.qualifiedName.startsWith('Greater<') || 
+                      klass.qualifiedName.startsWith('Less<') || 
+                      klass.qualifiedName.startsWith('LessOrEqual<') || 
+                      klass.qualifiedName.startsWith('GreaterOrEqual<') || 
+                      klass.qualifiedName.startsWith('Countable<') || 
+                      klass.qualifiedName.startsWith('Collection<') ||
+                      klass.qualifiedName.startsWith('Iterable<') || 
+                      klass.qualifiedName.startsWith('Iterator<') ||
+                      klass.qualifiedName.startsWith('Resource<')
+                      )) {
                     for (annotation in klass.annotations) {
-                        typeQueue.addLast(ClassTypeInfo.of(annotation))
+                        typeQueue.addLast(AnnotationType(ClassTypeInfo.of(annotation)))
                     }
                 }
-                for (superInterface in klass.superInterfaces) {
-                    typeQueue.addLast(superInterface)
+                func beanType(typeInfo: TypeInfo) {
+                    if (isClass) {
+                        ClassType(typeInfo)
+                    } else {
+                        AnnotationType(typeInfo)
+                    }
                 }
-                if (let s: ClassTypeInfo <- klass && let Some(sc) <- s.superClass) {
-                    typeQueue.addLast(sc)
+                for (superInterface in klass.superInterfaces where superInterface != any) {
+                    typeQueue.addLast(beanType(superInterface))
+                }
+                if (klass is ClassTypeInfo && let s: ClassTypeInfo <- klass && let Some(sc) <- s.superClass && sc != object) {
+                    typeQueue.addLast(beanType(sc))
                 }
             }
+        }
+        if(log.debugEnabled) {
+            log.debug('bean registered ${manager}')
         }
     }
     public func register<T>(creator: () -> T) where T <: Object {
@@ -74,11 +127,23 @@ public class BeanFactory {
         }
         doRegister<T>(meta, creator)
     }
+    public func register<T>(constructor: String, creator: () -> T) where T <: Object {
+        if(TypeInfos.withAnnotation<T, Constructor>(constructor, [])){
+            if(let Some(meta) <- TypeInfos.get<T>().getInstanceFunction(constructor, []).findAnnotation<BeanMeta>()){
+                doRegister<T>(meta, creator)
+            }else{
+                register<T>(creator)
+            }
+        }
+    }
     public func afterRegistered() {
         this.registered.store(true)
-        if(!beans.isEmpty()){
+        if (!beans.isEmpty()) {
             check()
             initBeansIfNeed()
+            if(let Some(lf) <- getFirst<LogFilter>()){
+                LoggerConfig.filter = lf
+            }
         }
     }
     private func check() {
@@ -86,6 +151,9 @@ public class BeanFactory {
             let discarded = TreeSet<BeanManager>()
             for ((_, m) in beans where !(discarded.contains(m) || m.on(this))) {
                 discarded.add(m)
+                if(log.debugEnabled){
+                    log.debug("bean discarded: ${m}")
+                }
             }
             let removed = HashSet<TypeInfo>()
             for (d in discarded) {
@@ -101,9 +169,11 @@ public class BeanFactory {
         }
     }
     private func initBeansIfNeed() {
-        if(shouldInitBean){
+        if (shouldInitBean) {
             for ((_, m) in beans) {
-                m.initIfNeed()
+                if(m.initIfNeed() && log.debugEnabled){
+                    log.debug('bean init on starting: ${m}')
+                }
             }
         }
     }
@@ -113,21 +183,21 @@ public class BeanFactory {
     private func matches<T>(m: BeanManager) {
         matches(TypeInfos.get<T>(), m)
     }
-    private func matches(beanType: TypeInfo, m: BeanManager){
+    private func matches(beanType: TypeInfo, m: BeanManager) {
         m.beanType.isSubtypeOf(beanType)
     }
     private func matches<T>(cond: StringCond, m: BeanManager) {
         matches(TypeInfos.get<T>(), cond, m)
     }
-    private func matches(beanType: TypeInfo, cond: StringCond, m: BeanManager){
+    private func matches(beanType: TypeInfo, cond: StringCond, m: BeanManager) {
         matches(beanType, m) && cond.on(m.name)
     }
     public func getFirst<T>(cond!: StringCond = IgnoreCond): ?T {
         getFirst<T>(TypeInfos.get<T>(), cond: cond)
     }
-    private func beanTypeIs<T>(beanType: TypeInfo){
-        if(!beanType.isSubtypeOf(TypeInfos.get<T>())){
-            throw BeanException('${beanType} is sub type of ${TypeInfos.get<T>()}')
+    private func beanTypeIs<T>(beanType: TypeInfo) {
+        if (!beanType.isSubtypeOf(TypeInfos.get<T>())) {
+            throw BeanException('${beanType} is not sub type of ${TypeInfos.get<T>()}')
         }
     }
     public func getFirst<T>(beanType: TypeInfo, cond!: StringCond = IgnoreCond): ?T {
@@ -150,7 +220,7 @@ public class BeanFactory {
         getAll<T>(TypeInfos.get<T>(), cond, put)
     }
     private func getAll<T>(beanType: TypeInfo, cond: StringCond, put: (BeanManager) -> Unit) {
-        for(m in iterator<T>(beanType, cond: cond)){
+        for (m in iterator<T>(beanType, cond: cond)) {
             put(m)
         }
     }
@@ -159,12 +229,11 @@ public class BeanFactory {
     }
     public func getList<T>(beanType: TypeInfo, cond!: StringCond = IgnoreCond): ArrayList<T> {
         let list = ArrayList<T>()
-        func put(m: BeanManager) {
-            if (let b: T <- m.bean) {
+        getAll<T>(beanType, cond){bm: BeanManager =>
+            if (let b: T <- bm.bean) {
                 list.add(b)
             }
         }
-        getAll<T>(beanType, cond, put)
         list
     }
     public func getMap<T>(cond!: StringCond = IgnoreCond): HashMap<String, T> {
@@ -172,12 +241,11 @@ public class BeanFactory {
     }
     public func getMap<T>(beanType: TypeInfo, cond!: StringCond = IgnoreCond): HashMap<String, T> {
         let map = HashMap<String, T>()
-        func put(m: BeanManager) {
+        getAll<T>(beanType, cond){m: BeanManager => 
             if (let b: T <- m.bean) {
                 map[m.name] = b
             }
         }
-        getAll<T>(beanType, cond, put)
         map
     }
 
@@ -229,7 +297,7 @@ public class BeanFactory {
     public func get<T>(name: String): ?T {
         getFirst<T>(cond: Exactly(name))
     }
-    public func iterator<T>(cond!: StringCond = IgnoreCond): Iterator<BeanManager>{
+    public func iterator<T>(cond!: StringCond = IgnoreCond): Iterator<BeanManager> {
         iterator<T>(TypeInfos.get<T>(), cond: cond)
     }
     public func iterator<T>(beanType: TypeInfo, cond!: StringCond = IgnoreCond): Iterator<BeanManager> {
@@ -240,7 +308,7 @@ public class BeanFactory {
                 case _ => EmptyIterator<BeanManager>.INSTANCE()
             }
             case _ => match (beanTypeMap.get(beanType)) {
-                case Some(tree) => tree.iterator().filter{m => matches(beanType, cond, m)}
+                case Some(tree) => tree.iterator().filter {m => matches(beanType, cond, m)}
                 case _ => EmptyIterator<BeanManager>.INSTANCE()
             }
         }

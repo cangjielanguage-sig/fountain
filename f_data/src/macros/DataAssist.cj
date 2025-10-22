@@ -1,15 +1,21 @@
 /*
-   Copyright (c) [2022] [WuJingrun（吴京润）]
-   fountain is licensed under Mulan PSL v2.
-   You can use this software according to the terms and conditions of the Mulan PSL v2.
-   You may obtain a copy of Mulan PSL v2 at:
-            http://license.coscl.org.cn/MulanPSL2
-   THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-   See the Mulan PSL v2 for more details.
- */
+Copyright (c) 2025 WuJingrun（吴京润）
 
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+ */
 macro package f_data.macros
 
+import std.ast
 import std.ast.*
 import std.collection.{HashSet, ArrayList}
 import f_data.*
@@ -23,6 +29,13 @@ import f_macros.*
  * Compare: 实现Comparable<T>
  * Equal: 实现Equatable<T>
  * Fields: 实现实例复制
+ * @DataAssist只能修饰类，并且要使用fields属性，类的实例成员变量类型T必须是实现了fountain.data.DataFields<T>接口的类型。
+ * fountain.data包对基本类型、字符串、Duration、DateTime、实现了DataFields接口的类型和被@DataAssist[fields]修饰的类做泛型实参的数组、集合、Option实现了DataFields的扩展。
+ * 只有类的实例成员变量是这些类型才可以被@DataAssist[fields]修饰，否则会报错。
+ * 被@DataAssist[fields]修饰的类可以被转换为JsonValue和实例成员复制。
+ * 如果@DataAssist[fields]修饰的是泛型类，而泛型形参是实例成员变量的类型，则会编译错误。
+ * 因为实例成员变量的类型会作为fountain.data.{ReadonlyField, MutableField}类型的泛型实参，而@DataAssist[fields]展开用它们的实例数组声明了静态成员变量。
+ * 现在的编译器不允许泛型形参出现在静态成员变量的声明当中，所以会编译错误。
  */
 public macro DataAssist(attr: Tokens, input: Tokens): Tokens {
     match (parseDecl(input)) {
@@ -66,14 +79,17 @@ public macro DataAssist(attr: Tokens, input: Tokens): Tokens {
             generate('tostring', d, excludeToString, generateToString)
             generate('fields', d, excludeFields, generateToFields)
             d.toTokens()
-        case _ => throw IllegalArgumentException("input must be a class decl")
+        case d: MacroExpandDecl => return replaceMacroInputDecl(quote(@DataAssist[$attr]), d).toTokens()
+        case _ =>
+            diagReport(ERROR, input, 'input must be class decl', '')
+            throw IllegalArgumentException("input must be a class decl")
     }
 }
 
 func generateProps(decl: ClassDecl, exclusion: HashSet<String>) {
     let decls = decl.body.decls
     let appended = ArrayList<Decl>()
-    func gen(v: VarDecl) {
+    func gen(v: VarDecl, macroTokens: Tokens) {
         if (v.isStatic() || v.isPublic()) {
             return
         }
@@ -94,8 +110,7 @@ func generateProps(decl: ClassDecl, exclusion: HashSet<String>) {
             let empty = quote()
             (empty, empty)
         }
-        appended.add(
-            PropDecl(
+        let propDecl = PropDecl(
                 quote(
             public $mutToken prop $name: $(t){
                 get(){
@@ -103,43 +118,74 @@ func generateProps(decl: ClassDecl, exclusion: HashSet<String>) {
                 }
                 $(setter)
             }
-        )
-            ))
+        ))
+        appended.add(if(macroTokens.size == 0){
+            propDecl
+        }else{
+            let md = MacroExpandDecl(macroTokens)
+            md.macroInputs = propDecl.toTokens()
+            md.macroInputDecl = propDecl
+            md
+        })
     }
+    let vars = ArrayList<Decl>()
+    let assigns = ArrayList<ast.Node>()
     for (decl in decls) {
         match (decl) {
-            case d: VarDecl where !(d.isStatic() || d.isPublic()) => gen(d)
+            case d: VarDecl where !(d.isStatic() || d.isPublic()) => gen(d, quote())
             case d: PrimaryCtorDecl =>
-                let vars = ArrayList<Decl>()
-                let assigns = ArrayList<Node>()
-                let args = ArrayList<FuncParam>()
-                for (p in d.funcParams where p.isMemberParam()) {
-                    let member = VarDecl()
-                    member.modifiers = p.modifiers
-                    member.keyword = p.keyword
-                    member.identifier = p.identifier
-                    member.colon = p.colon
-                    member.declType = p.paramType
-                    if (p.assign.kind.toString() == 'ASSIGN') {
-                        member.assign = p.assign
-                        member.expr = p.expr
+                let funcParams = d.funcParams
+                for (i in 0 .. funcParams.size) {
+                    func gen(p: FuncParam, macroTokens: Tokens){
+                        let paramTokens = p.toTokens()
+                        var c = 0
+                        for (j in 0 .. paramTokens.size where paramTokens[j].kind == IDENTIFIER) {
+                            c = j
+                            break
+                        }
+                        var end = paramTokens.size
+                        if (paramTokens[end - 1].kind == COMMA) {
+                            end--
+                        }
+                        funcParams[i] = FuncParam(paramTokens[c .. end])
+                        let member = VarDecl()
+                        member.modifiers = p.modifiers
+                        member.keyword = p.keyword
+                        member.identifier = p.identifier
+                        member.colon = p.colon
+                        member.declType = p.paramType
+                        try{
+                            if (p.assign.kind == ASSIGN) {
+                                member.assign = p.assign
+                                member.expr = p.expr
+                            }
+                        }catch(_){}
+                        vars.add(member)
+                        p.modifiers = ArrayList<Modifier>()
+                        p.keyword = Token(ILLEGAL)
+                        gen(member, macroTokens)
+                        assigns.add(parseExpr(quote(this.$(member.identifier) = $(p.identifier))))
                     }
-                    vars.add(member)
-                    args.add(p)
-                    p.modifiers = ArrayList<Modifier>()
-                    p.keyword = Token(ILLEGAL)
-                    gen(member)
-                    assigns.add(parseExpr(quote(this.$(member.identifier) = $(p.identifier))))
+                    let p = funcParams[i]
+                    if (let x: MacroExpandParam <- p) {//TODO: x.macroInputDecl x.toTokens()有BUG，无法完成，等待修复
+                        let mp = extract(x)
+                        if(mp.isMemberParam()){
+                            gen(mp, x.toTokens())
+                        }
+                    } else if (p.isMemberParam()) {
+                        gen(p, quote())
+                    }
                 }
-                for (i in 0..vars.size) {
-                    decls.add(vars[i], at: i)
-                }
-                for (i in 0..assigns.size) {
-                    d.block.nodes.add(assigns[i], at: i)
+                d.block.nodes.add(all: assigns, at: 0)
+            case d: MacroExpandDecl => 
+                var md = extract(d)
+                if(let x: VarDecl <- md && !(x.isStatic() || x.isPublic())){
+                    gen(x, d.toTokens())
                 }
             case _ => continue
         }
     }
+    decls.add(all: vars, at: 0)
     decls.add(all: appended)
 }
 
@@ -151,12 +197,9 @@ func generateHash(d: ClassDecl, exclusion: HashSet<String>) {
     var hashed = `nl`
     for (d in d.body.decls where d is VarDecl &&
         !(isStatic(d) || exclusion.contains(d.identifier.value) || exclusion.contains('${d.identifier.value}_'))) {
-        hashed += quote(hasher.append($(d.identifier))) + `nl`
+        hashed += quote(hasher.append($(d.identifier))$(`nl`))
     }
-    d
-        .body
-        .decls
-        .add(
+    d.body.decls.add(
             all: [VarDecl(quote(
         private var __hAsh__ = 0
     )),
@@ -170,8 +213,7 @@ func generateHash(d: ClassDecl, exclusion: HashSet<String>) {
             }
             __hAsh__
         }
-    )
-            )])
+    ))])
 }
 
 func generateEqual(d: ClassDecl, exclusion: HashSet<String>) {
@@ -180,19 +222,16 @@ func generateEqual(d: ClassDecl, exclusion: HashSet<String>) {
     }
     let typeName = quote($(d.identifier)$(d.genericParamTokens))
     d.superTypes.add(RefType(quote(Equatable<$typeName>)))
-    var eq = quote((!(this is Hashable) || this.hashCode() == other.hashCode())) + `nl`
+    var eq = quote((!(this is Hashable) || this.hashCode() == other.hashCode())$(`nl`))
     for (d in d.body.decls where d is VarDecl &&
         !(isStatic(d) || exclusion.contains(d.identifier.value) || exclusion.contains('${d.identifier.value}_'))) {
-        eq += `and` + quote(f_data_eq(this.$(d.identifier), other.$(d.identifier))) + `nl`
+        eq += `and` +quote(f_data_eq(this.$(d.identifier), other.$(d.identifier))) + `nl`
     }
-    d
-        .body
-        .decls
-        .add(
+    d.body.decls.add(
             all: [FuncDecl(
                 quote(
         public $(openTokens(d)) operator func ==(other: $typeName): Bool {
-            $eq
+            refEq(this, other) || ($eq)
         }
     )),
                 FuncDecl(
@@ -200,8 +239,7 @@ func generateEqual(d: ClassDecl, exclusion: HashSet<String>) {
         public $(openTokens(d)) operator func !=(other: $typeName): Bool {
             !(this == other)
         }
-    )
-            )])
+    ))])
 }
 
 func generateCompare(d: ClassDecl, exclusion: HashSet<String>) {
@@ -217,13 +255,10 @@ func generateCompare(d: ClassDecl, exclusion: HashSet<String>) {
             if(result != EQ){
                 return result
             }
-        ) +
-            `nl`
+            $(`nl`)
+        )
     }
-    d
-        .body
-        .decls
-        .add(
+    d.body.decls.add(
             FuncDecl(
                 quote(
         public $(openTokens(d)) func compare(other: $typeName): Ordering {
@@ -231,8 +266,7 @@ func generateCompare(d: ClassDecl, exclusion: HashSet<String>) {
             $cmp
             result
         }
-    )
-            ))
+    )))
 }
 
 func generateToString(d: ClassDecl, exclusion: HashSet<String>) {
@@ -247,10 +281,7 @@ func generateToString(d: ClassDecl, exclusion: HashSet<String>) {
         !(isStatic(d) || exclusion.contains(d.identifier.value) || exclusion.contains('${d.identifier.value}_'))) {
         str += `nl` + quote(result.append($(d.identifier.value), $(d.identifier)))
     }
-    d
-        .body
-        .decls
-        .add(
+    d.body.decls.add(
             FuncDecl(
                 quote(
         public $(openTokens(d)) func toString(): String {
@@ -258,8 +289,7 @@ func generateToString(d: ClassDecl, exclusion: HashSet<String>) {
             $str
             result.toString()
         }
-    )
-            ))
+    )))
 }
 
 func generateToFields(d: ClassDecl, exclusion: HashSet<String>) {
@@ -270,54 +300,43 @@ func generateToFields(d: ClassDecl, exclusion: HashSet<String>) {
     if (klassDecl.superTypes.isEmpty()) {
         klassDecl.upperBound = `upperbound`[0]
     }
-    klassDecl.superTypes.add(RefType(quote(ObjectData<$(klassIdentifier)>)))
+    let superTypes = klassDecl.superTypes
+    superTypes.add(RefType(quote(ObjectData<$(klassIdentifier)>)))
     let body = klassDecl.body.decls
-    var fields = ArrayList<Expr>()
-    for (d in body where (d is VarDecl || d is PropDecl) && !isStatic(d) && isPublic(d) &&
-        !exclusion.contains(d.identifier.value)) {
-        let expr = match (d) {
-            case x: VarDecl =>
-                var declType = x.declType.toTokens()
-                if (declType[0].kind == QUEST) {
-                    declType = declType[1..]
-                } else if (declType[0].kind == IDENTIFIER && declType[0].value == 'Option') {
-                    declType = declType[2..declType.size - 1]
+    let fields = ArrayList<Expr>()
+    for (d in body where !isStatic(d) && isPublic(d) && !exclusion.contains(d.identifier.value)) {
+        func appendExpr(dt: Tokens, isVar: Bool){
+            var declType = dt
+            if (declType[0].kind == QUEST) {
+                declType = declType[1..]
+            } else if (declType[0].kind == IDENTIFIER && declType[0].value == 'Option') {
+                declType = declType[2..declType.size - 1]
+            }
+            let tokens = if (isVar) {
+                quote(MutableField)
+            } else {
+                quote(ReadonlyField)
+            } + quote(.new<$(klassIdentifier), $(declType)>($(d.identifier.value), {o => o.$(d.identifier)})) + if (isVar) {
+                quote({o, v => o.$(d.identifier) = v})
+            } else {
+                `empty_tokens`
+            }
+            let expr = parseExpr(tokens)
+            fields.add(expr)
+        }
+        let (declType, isVar) = match (d) {
+            case x: VarDecl => (quote($(x.declType)), x.isVar())
+            case x: PropDecl => (quote($(x.declType)), x.isMut())
+            case x: PrimaryCtorDecl =>
+                for (p in x.funcParams where p.isMemberParam() && isPublic(p)) {
+                    appendExpr(p.paramType.toTokens(), isVar(p))
                 }
-                if (x.isVar()) {
-                    TrailingClosureExpr(
-                        quote(
-                            MutableField.new<$(klassIdentifier), $(declType)>($(x.identifier.value), {o => o.$(x.identifier)}){o, v => o.$(x.identifier) = v})
-                    )
-                } else {
-                    TrailingClosureExpr(
-                        quote(
-                            ReadonlyField.new<$(klassIdentifier), $(declType)>($(x.identifier.value)){o => o.$(x.identifier)})
-                    )
-                }
-            case x: PropDecl =>
-                var declType = x.declType.toTokens()
-                if (declType[0].kind == QUEST) {
-                    declType = declType[1..]
-                } else if (declType[0].kind == IDENTIFIER && declType[0].value == 'Option') {
-                    declType = declType[2..declType.size - 1]
-                }
-                if (x.isMut()) {
-                    TrailingClosureExpr(
-                        quote(
-                            MutableField.new<$(klassIdentifier), $(declType)>($(x.identifier.value), {o => o.$(x.identifier)}){o, v => o.$(x.identifier) = v})
-                    )
-                } else {
-                    TrailingClosureExpr(
-                        quote(
-                            ReadonlyField.new<$(klassIdentifier), $(declType)>($(x.identifier.value)){o => o.$(x.identifier)})
-                    )
-                }
+                continue
             case _ => continue
         }
-        fields.add(expr)
+        appendExpr(declType, isVar)
     }
     let openModi = openTokens(klassDecl)
-    let fieldsName = Token(IDENTIFIER, "___dAtA__fIElds_")
     var fieldTokens = `lsquare`
     for (f in fields) {
         if (fieldTokens.size > 1) {
@@ -328,37 +347,30 @@ func generateToFields(d: ClassDecl, exclusion: HashSet<String>) {
     fieldTokens += `rsquare`
     body.add(
         all: [
-            VarDecl(
-                quote(
-        private static let $(fieldsName) = ObjectFields<$klassIdentifier>($fieldTokens){
-            $klassIdentifier()
-        }
-    )
-            ),
             FuncDecl(
                 quote(
-        public static func dataFields(): ObjectFields<$klassIdentifier> {
-            $fieldsName
+        public static func dataFields(): ObjectFields {
+            ObjectFields.getObjectFields<$klassIdentifier>{
+                ($fieldTokens, {=>$klassIdentifier()})
+            }
         }
-    )
-            ),
+    )),
             FuncDecl(
                 quote(
         public $openModi func toData(): Data {
             DataObject<$klassIdentifier>(this)
         }
-    )
-            ),
+    )),
             FuncDecl(
                 quote(
         public static func tryFromData(data: Data, flag: DataConversionFlag): Any {
             f_data_tryFromData<$klassIdentifier>(data, flag)
         }
-    )
-            )
+    ))
         ]
     )
 }
+
 private func openTokens(klassDecl: ClassDecl): Tokens {
     if (klassDecl.isAbstract() || klassDecl.isOpen()) {
         `open`

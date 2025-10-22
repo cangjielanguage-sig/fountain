@@ -1,11 +1,17 @@
 /*
-    Copyright (c) [2022] [WuJingrun（吴京润）]
-    fountain is licensed under Mulan PSL v2.
-    You can use this software according to the terms and conditions of the Mulan PSL v2.
-    You may obtain a copy of Mulan PSL v2 at:
-            http://license.coscl.org.cn/MulanPSL2
-    THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-    See the Mulan PSL v2 for more details.
+Copyright (c) 2025 WuJingrun（吴京润）
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
  */
 package f_orm
 
@@ -22,13 +28,12 @@ import f_orm.wrap.ORMConfig
 @AspectRoute[FuncAnnotationRouteRule("f_orm.Transactional") | ConfigExecutionRouteRule(ORMConfig.transactionalFuncExecution)]
 @BeanMeta
 public class TransactionAspect <: Aspect {
-    static init(){
+    static init() {
         BeanFactory.instance.register<TransactionAspect>({=> TransactionAspect()})
     }
     private init() {}
     private let rollbackExceptions = ConcurrentHashMap<String, HashSet<TypeInfo>>()
     private let mutex = Mutex()
-    private let transactionalMap = ConcurrentHashMap<String, Transactional>()
 
     public func proceed(funcInfo: InvocationFuncInfo, point: (Array<Any>) -> Any): Any {
         let transactional = funcInfo.funcInfo.findAnnotation<Transactional>()
@@ -46,16 +51,16 @@ public class TransactionAspect <: Aspect {
             accessMode = x.accessMode
             deferrableMode = x.deferrableMode
         }
-        if(propagation.isNone()){
+        if (propagation.isNone()) {
             propagation = ORMConfig.getTransactionPropagation(driverName: driverName)
         }
-        if(isoLevel.isNone()){
+        if (isoLevel.isNone()) {
             isoLevel = ORMConfig.getTransactionLevel(driverName: driverName)
         }
-        if(accessMode.isNone()){
+        if (accessMode.isNone()) {
             accessMode = ORMConfig.getTransactionAccessMode(driverName: driverName)
         }
-        if(deferrableMode.isNone()){
+        if (deferrableMode.isNone()) {
             deferrableMode = ORMConfig.getTransactionDeferrableMode(driverName: driverName)
         }
         var exe = ORM.executor(driverName) // 如果此处发生异常就无所谓回滚事务了，所以ORM.executor(driverName)不必在try块内
@@ -78,18 +83,15 @@ public class TransactionAspect <: Aspect {
             ORM.hooks.afterThrowing(e)
             let et = ClassTypeInfo.of(e)
             func genExceptionSet(ex: String) {
-                if (let Some(s) <- rollbackExceptions.get(ex)) {
-                    s
-                } else {
+                rollbackExceptions.computeIfAbsent(ex){
                     let set = HashSet<TypeInfo>()
                     for (e in ex.split("|") where e.size > 0) {
                         set.add(TypeInfos.get(e.trimAscii()))
                     }
-                    rollbackExceptions[ex] = set
                     set
                 }
             }
-            
+
             if (let Some(noRollbackFor) <- transactional?.noRollbackFor) {
                 let set: Set<TypeInfo> = genExceptionSet(noRollbackFor)
                 for (noRollback in set where et.isSubtypeOf(noRollback)) {

@@ -1,11 +1,17 @@
 /*
-    Copyright (c) [2022] [WuJingrun（吴京润）]
-    fountain is licensed under Mulan PSL v2.
-    You can use this software according to the terms and conditions of the Mulan PSL v2.
-    You may obtain a copy of Mulan PSL v2 at:
-            http://license.coscl.org.cn/MulanPSL2
-    THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-    See the Mulan PSL v2 for more details.
+Copyright (c) 2025 WuJingrun（吴京润）
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
  */
 package f_base
 
@@ -17,33 +23,32 @@ public enum OS <: Equatable<OS> & ToString & Hashable {
 
     public operator func ==(other: OS): Bool {
         match ((this, other)) {
-            case (Linux, Linux) | (Windows, Windows) | (macOS, macOS) | (HarmonyOS, HarmonyOS)
-             => true
+            case (Linux, Linux) | (Windows, Windows) | (macOS, macOS) | (HarmonyOS, HarmonyOS) => true
             case _ => false
         }
     }
     public prop isWindows: Bool {
-        get(){
+        get() {
             this == Windows
         }
     }
     public prop isLinux: Bool {
-        get(){
+        get() {
             this == Linux
         }
     }
     public prop isMacOS: Bool {
-        get(){
+        get() {
             this == macOS
         }
     }
     public prop isHarmonyOS: Bool {
-        get(){
+        get() {
             this == HarmonyOS
         }
     }
     public func toString(): String {
-        match(this){
+        match (this) {
             case Linux => "Linux"
             case Windows => "Windows"
             case macOS => "macOS"
@@ -51,7 +56,7 @@ public enum OS <: Equatable<OS> & ToString & Hashable {
         }
     }
     public static func valueOf(value: String): OS {
-        match(value.toAsciiLower()){
+        match (value.toAsciiLower()) {
             case "linux" => Linux
             case "windows" => Windows
             case "macos" => macOS
@@ -62,39 +67,45 @@ public enum OS <: Equatable<OS> & ToString & Hashable {
     public func hashCode(): Int64 {
         'fountain.base.OS.${this}'.hashCode()
     }
+
     @When[os == "Linux"]
     public static prop current: OS {
-        get(){
+        get() {
             Linux
         }
     }
+
     @When[os == "Windows"]
     public static prop current: OS {
-        get(){
+        get() {
             Windows
         }
     }
+
     @When[os == "macOS"]
     public static prop current: OS {
-        get(){
+        get() {
             macOS
         }
     }
+
     @When[os == "HarmonyOS"]
     public static prop current: OS {
-        get(){
+        get() {
             HarmonyOS
         }
     }
+
     @When[os != "Windows"]
     public prop nextLine: String {
-        get(){
+        get() {
             '\n'
         }
     }
+
     @When[os == "Windows"]
     public prop nextLine: String {
-        get(){
+        get() {
             '\r\n'
         }
     }

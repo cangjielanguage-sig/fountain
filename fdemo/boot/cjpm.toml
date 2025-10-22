@@ -1,0 +1,12 @@
+[package]
+  cjc-version = "1.0.0"
+  name = "boot"
+  description = "nothing here"
+  version = "1.0.0"
+  target-dir = ""
+  src-dir = ""
+  output-type = "dynamic"
+  compile-option = "-O2 --dy-std"
+  override-compile-option = "-O2 --dy-std"
+  link-option = ""
+  package-configuration = {}

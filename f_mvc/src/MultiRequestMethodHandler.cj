@@ -1,11 +1,17 @@
 /*
-    Copyright (c) [2022] [WuJingrun（吴京润）]
-    fountain is licensed under Mulan PSL v2.
-    You can use this software according to the terms and conditions of the Mulan PSL v2.
-    You may obtain a copy of Mulan PSL v2 at:
-            http://license.coscl.org.cn/MulanPSL2
-    THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-    See the Mulan PSL v2 for more details.
+Copyright (c) 2025 WuJingrun（吴京润）
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
  */
 package f_mvc
 
@@ -15,26 +21,14 @@ public class MultiRequestMethodHandler <: HttpRequestHandler {
     private static let METHOD_NOT_ALLOWED = HttpStatusOnlyHandler(HttpStatus.METHOD_NOT_ALLOWED)
     private static let UNSUPPORTED_MEDIA_TYPE = HttpStatusOnlyHandler(HttpStatus.UNSUPPORTED_MEDIA_TYPE)
     private static let NOT_IMPLEMENTED = HttpStatusOnlyHandler(HttpStatus.NOT_IMPLEMENTED)
-    private static let INTERNAL_SERVER_ERROR = HttpStatusOnlyHandler(HttpStatus.INTERNAL_SERVER_ERROR)
-    private static let authFailureHandler = HttpStatusOnlyHandler(MVCConfig.authFailureStatus,
-        message: MVCConfig.authFailureMessage)
-    private static let privilegeFailureHandler = HttpStatusOnlyHandler(MVCConfig.privilegeFailureStatus,
-        message: MVCConfig.privilegeFailureMessage)
+    static let INTERNAL_SERVER_ERROR = HttpStatusOnlyHandler(
+        HttpStatus.INTERNAL_SERVER_ERROR, 
+        message: MVCConfig.getInternalServerErrorMessage(),
+        kind: MVCConfig.getInternalServerErrorMessageKind())
 
     private static let accessControlAllowHeaders: String = MVCConfig.accessControlAllowHeaders
     private static let accessControlAllowOrigin: String = MVCConfig.accessControlAllowOrigin
     private static let accessControlMaxAge: Int64 = MVCConfig.accessControlMaxAge
-
-    private prop privilegeChecker: PrivilegeChecker {
-        get() {
-            BeanFactory.instance.getFirst<PrivilegeChecker>() ?? EmptyPrivilegeChecker.instance
-        }
-    }
-    private prop authChecker: AuthChecker {
-        get() {
-            BeanFactory.instance.getFirst<AuthChecker>() ?? EmptyAuthChecker.instance
-        }
-    }
 
     MultiRequestMethodHandler(private let patterns: HttpRequestPathPatterns) {}
 
@@ -43,17 +37,22 @@ public class MultiRequestMethodHandler <: HttpRequestHandler {
     func register(meta: RequestMeta): Unit {
         synchronized(mutex) {
             meta.pattern = patterns
-            let map = match (metas.get(meta.method)) {
-                case Some(map) => map
-                case _ =>
-                    let m = HashMap<String, RequestMeta>()
-                    metas[meta.method] = m
-                    m
+            let debuggable = log.debugEnabled
+            if(debuggable){
+                log.debug('MVC.register meta:${meta}; methodRegistered:${metas.contains(meta.method)}')
             }
+            let map = metas.computeIfAbsent(meta.method){HashMap<String, RequestMeta>()}
             meta.iterateConsumes {
-                c => if (let Some(m) <- map.addIfAbsent(c, meta)) {
-                    throw MVCException(
-                        'duplicate RequestMeta, method: ${meta.method}, path: ${meta.path}, consumes: ${c}')
+                c => 
+                if(debuggable){
+                    log.debug('MVC.register meta:${meta}; methodRegistered:${metas.contains(meta.method)}; consumesRegistered:${c},${map.contains(c)}')
+                }
+                if (let Some(m) <- map.addIfAbsent(c, meta)) {
+                    let msg = 'duplicate RequestMeta, method: ${meta.method}, path: ${meta.path}, consumes: ${c}, registered: ${m}'
+                    log.warn(msg)
+                    throw MVCException(msg)
+                }else if (debuggable) {
+                    log.debug('RequestMeta registered: ${c} ${meta}')
                 }
             }
         }
@@ -69,10 +68,6 @@ public class MultiRequestMethodHandler <: HttpRequestHandler {
                 NOT_ACCEPTABLE
             } else if (!meta.check(ctx)) {
                 NOT_IMPLEMENTED
-            } else if (!(meta.ignoreAuth || authChecker.check(ctx, patterns))) {
-                authFailureHandler
-            } else if (!(meta.ignorePrivilege || privilegeChecker.check(ctx, patterns))) {
-                privilegeFailureHandler
             } else {
                 meta
             }
@@ -85,11 +80,7 @@ public class MultiRequestMethodHandler <: HttpRequestHandler {
             }
         }
         func handle(ms: HashMap<String, RequestMeta>): Unit {
-            try {
-                check(ms).handle(ctx)
-            } catch (e: Exception) {
-                log.error<ToString>('fountain mvc {}: {}', e, [request.method, request.url])
-            }
+            check(ms).handle(ctx)
         }
         if (log.debugEnabled) {
             let request = ctx.request
@@ -128,16 +119,51 @@ public class MultiRequestMethodHandler <: HttpRequestHandler {
 }
 
 class HttpStatusOnlyHandler <: HttpRequestHandler {
-    HttpStatusOnlyHandler(private let status: HttpStatus, private let message!: String = '') {}
-
-    public func handle(httpContext: HttpContext): Unit {
-        httpContext
-            .responseBuilder
-            .status(status.value)
-            .body(if (message.isEmpty()) {
+    HttpStatusOnlyHandler(private let status: HttpStatus, private let message!: String = '', private let kind!: FailureMessageKind = Text) {}
+    
+    public func handle(ctx: HttpContext): Unit {
+        func setStatus(){
+            let b = ctx.responseBuilder.status(status.value)
+            RequestMeta.setResponseStatus(status)
+            if(let Some(accept) <- ctx.request.headers.getFirst("Accept")) {
+                b.header("Content-Type", accept)
+            }
+            b
+        }
+        match(kind){
+            case Bean => if(message.size > 0 && let Some(x) <- BeanFactory.instance.getFirst<ErrorHttpRequestHandler>(cond: Exactly(message))){
+                RequestMeta.setResponseStatus(x.status)
+                let status = x.status
+                let b = ctx.responseBuilder.status(status.value)
+                var accept = ''
+                if(let Some(acc) <- ctx.request.headers.getFirst('Accept')) {
+                    b.header("Content-Type", acc)
+                    accept = acc
+                }
+                match(x.response()){
+                    case x: String => b.body(x)
+                    case x: ToString => b.body(x.toString())
+                    case x: InputStream => b.body(x)
+                    case x: Array<Byte> => b.body(x)
+                    case x: ToData where accept.size > 0 => match(MediaTypes.tryParse(accept)){
+                        case Some(mt) => b.body(mt.fromData(x.toData()))
+                        case _ => b.body(status.reasonPhrase)
+                    }
+                    case _ => b.body(status.reasonPhrase)
+                }
+            } else {
+                setStatus().body(status.reasonPhrase)
+            }
+            case Text => setStatus().body(if (message.isEmpty()) {
                 status.reasonPhrase
             } else {
                 message
             })
+            case Base64Binary => if(message.size > 0 && let Some(x) <- fromBase64String(message)){
+                setStatus().body(x)
+            }else{
+                setStatus().body(status.reasonPhrase)
+            }
+        }
     }
 }

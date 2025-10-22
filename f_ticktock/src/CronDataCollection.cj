@@ -1,11 +1,17 @@
 /*
-    Copyright (c) [2022] [WuJingrun（吴京润）]
-    fountain is licensed under Mulan PSL v2.
-    You can use this software according to the terms and conditions of the Mulan PSL v2.
-    You may obtain a copy of Mulan PSL v2 at:
-            http://license.coscl.org.cn/MulanPSL2
-    THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-    See the Mulan PSL v2 for more details.
+Copyright (c) 2025 WuJingrun（吴京润）
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
  */
 package f_ticktock
 
@@ -13,15 +19,18 @@ import std.collection.ArrayList
 import std.collection.HashMap
 import f_base.*
 
-public class CronDataCollection <: Hashable & Equatable<CronDataCollection> {
+public class CronDataCollection <: Hashable & Equatable<CronDataCollection> & ToString{
     public CronDataCollection(private let cron: String) {}
     private var datas = HashMap<TicktockUnit, ArrayList<CronData>>()
 
+    public func toString(): String {
+        cron
+    }
     public func hashCode() {
         cron.hashCode()
     }
     public operator func ==(other: CronDataCollection) {
-        this.cron == other.cron
+        refEq(this, other) || this.cron == other.cron
     }
 
     public func put(unit: TicktockUnit, data: CronData): Unit {
@@ -40,7 +49,6 @@ public class CronDataCollection <: Hashable & Equatable<CronDataCollection> {
         put(unit, CronData(unit, value))
     }
     public func putLast(unit: TicktockUnit) {
-        var value = unit.lastRange
         put(unit, CronData.createLast(unit))
     }
     public func get(unit: TicktockUnit): Option<Collection<CronData>> {
@@ -51,6 +59,9 @@ public class CronDataCollection <: Hashable & Equatable<CronDataCollection> {
         }
     }
     public func matches(date: DateTime) {
+        if(datas.isEmpty()){//如果datas是空的，表示cron表达式是* * * * * * *
+            return true
+        }
         for (crons in datas.values()) {
             var result = false
             for (cron in crons where cron.matches(date)) {
@@ -60,7 +71,6 @@ public class CronDataCollection <: Hashable & Equatable<CronDataCollection> {
             if (!result) {
                 return false
             }
-            result = false
         }
         true
     }

@@ -1,15 +1,15 @@
 [dependencies]
-  charset4cj = { git = "https://gitcode.com/Cangjie-TPC/charset4cj.git", branch = "develop", version = "0.0.1"}
+  charset4cj = { git = "https://gitcode.com/Cangjie-TPC/charset4cj.git", branch = "develop"}
   f_io = {path = "../f_io"}
   f_regex = {path = "../f_regex"}
 [package]
-  cjc-version = "0.60.5"
-  compile-option = "-O2"
+  cjc-version = "1.0.0"
+  compile-option = "-O2 --dy-std"
+  override-compile-option = "-O2 --dy-std"
   description = "nothing here"
   link-option = ""
   name = "f_process"
   output-type = "dynamic"
-  override-compile-option = "-O2"
   src-dir = ""
   target-dir = ""
   version = "1.0.0"
@@ -18,3 +18,20 @@
 [profile.build]
   lto = "full"
   incremental = true
+
+[target]
+[target.x86_64-unknown-linux-gnu]
+  compile-option = "-O2 --lto=full --dy-std"
+  override-compile-option = "-O2 --lto=full --dy-std"
+[target.aarch64-unknown-linux-gnu]
+  compile-option = "-O2 --lto=full --dy-std"
+  override-compile-option = "-O2 --lto=full --dy-std"
+[target.x86_64-w64-mingw32]
+  compile-option = "-O2 --dy-std"
+  override-compile-option = "-O2 --dy-std"
+[target.x86_64-apple-darwin]
+  compile-option = "-O2 --dy-std"
+  override-compile-option = "-O2 --dy-std"
+[target.aarch64-apple-darwin]
+  compile-option = "-O2 --dy-std"
+  override-compile-option = "-O2 --dy-std"

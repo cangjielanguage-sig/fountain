@@ -1,11 +1,17 @@
 /*
-    Copyright (c) [2022] [WuJingrun（吴京润）]
-    fountain is licensed under Mulan PSL v2.
-    You can use this software according to the terms and conditions of the Mulan PSL v2.
-    You may obtain a copy of Mulan PSL v2 at:
-            http://license.coscl.org.cn/MulanPSL2
-    THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-    See the Mulan PSL v2 for more details.
+Copyright (c) 2025 WuJingrun（吴京润）
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
  */
 package f_util
 
@@ -16,40 +22,40 @@ import std.unittest.testmacro.*
 public class CaseFormat_test {
     @TestCase
     public func test(): Unit {
-        @Assert(CaseFormat.Pascal.convert("CaseFormat", CaseFormat.Camel), "caseFormat")
-        @Assert(CaseFormat.Pascal.convert("CaseFormat", CaseFormat.LowerUnderScore), "case_format")
-        @Assert(CaseFormat.Pascal.convert("CaseFormat", CaseFormat.UpperUnderScore), "CASE_FORMAT")
-        @Assert(CaseFormat.Pascal.convert("CaseFormat", CaseFormat.LowerHyphen), "case-format")
-        @Assert(CaseFormat.Pascal.convert("CaseFormat", CaseFormat.UpperHyphen), "CASE-FORMAT")
+        @Assert(CaseFormat.Pascal.convert("CaseFormat", to: CaseFormat.Camel), "caseFormat")
+        @Assert(CaseFormat.Pascal.convert("CaseFormat", to: CaseFormat.LowerUnderScore), "case_format")
+        @Assert(CaseFormat.Pascal.convert("CaseFormat", to: CaseFormat.UpperUnderScore), "CASE_FORMAT")
+        @Assert(CaseFormat.Pascal.convert("CaseFormat", to: CaseFormat.LowerHyphen), "case-format")
+        @Assert(CaseFormat.Pascal.convert("CaseFormat", to: CaseFormat.UpperHyphen), "CASE-FORMAT")
 
-        @Assert(CaseFormat.Camel.convert("caseFormat", CaseFormat.Pascal), "CaseFormat")
-        @Assert(CaseFormat.Camel.convert("caseFormat", CaseFormat.LowerUnderScore), "case_format")
-        @Assert(CaseFormat.Camel.convert("caseFormat", CaseFormat.UpperUnderScore), "CASE_FORMAT")
-        @Assert(CaseFormat.Camel.convert("caseFormat", CaseFormat.LowerHyphen), "case-format")
-        @Assert(CaseFormat.Camel.convert("caseFormat", CaseFormat.UpperHyphen), "CASE-FORMAT")
+        @Assert(CaseFormat.Camel.convert("caseFormat", to: CaseFormat.Pascal), "CaseFormat")
+        @Assert(CaseFormat.Camel.convert("caseFormat", to: CaseFormat.LowerUnderScore), "case_format")
+        @Assert(CaseFormat.Camel.convert("caseFormat", to: CaseFormat.UpperUnderScore), "CASE_FORMAT")
+        @Assert(CaseFormat.Camel.convert("caseFormat", to: CaseFormat.LowerHyphen), "case-format")
+        @Assert(CaseFormat.Camel.convert("caseFormat", to: CaseFormat.UpperHyphen), "CASE-FORMAT")
 
-        @Assert(CaseFormat.LowerUnderScore.convert("case_format", CaseFormat.Camel), "caseFormat")
-        @Assert(CaseFormat.LowerUnderScore.convert("case_format", CaseFormat.Pascal), "CaseFormat")
-        @Assert(CaseFormat.LowerUnderScore.convert("case_format", CaseFormat.UpperUnderScore), "CASE_FORMAT")
-        @Assert(CaseFormat.LowerUnderScore.convert("case_format", CaseFormat.LowerHyphen), "case-format")
-        @Assert(CaseFormat.LowerUnderScore.convert("case_format", CaseFormat.UpperHyphen), "CASE-FORMAT")
+        @Assert(CaseFormat.LowerUnderScore.convert("case_format", to: CaseFormat.Camel), "caseFormat")
+        @Assert(CaseFormat.LowerUnderScore.convert("case_format", to: CaseFormat.Pascal), "CaseFormat")
+        @Assert(CaseFormat.LowerUnderScore.convert("case_format", to: CaseFormat.UpperUnderScore), "CASE_FORMAT")
+        @Assert(CaseFormat.LowerUnderScore.convert("case_format", to: CaseFormat.LowerHyphen), "case-format")
+        @Assert(CaseFormat.LowerUnderScore.convert("case_format", to: CaseFormat.UpperHyphen), "CASE-FORMAT")
 
-        @Assert(CaseFormat.UpperUnderScore.convert("CASE_FORMAT", CaseFormat.Camel), "caseFormat")
-        @Assert(CaseFormat.UpperUnderScore.convert("CASE_FORMAT", CaseFormat.Pascal), "CaseFormat")
-        @Assert(CaseFormat.UpperUnderScore.convert("CASE_FORMAT", CaseFormat.LowerUnderScore), "case_format")
-        @Assert(CaseFormat.UpperUnderScore.convert("CASE_FORMAT", CaseFormat.LowerHyphen), "case-format")
-        @Assert(CaseFormat.UpperUnderScore.convert("CASE_FORMAT", CaseFormat.UpperHyphen), "CASE-FORMAT")
+        @Assert(CaseFormat.UpperUnderScore.convert("CASE_FORMAT", to: CaseFormat.Camel), "caseFormat")
+        @Assert(CaseFormat.UpperUnderScore.convert("CASE_FORMAT", to: CaseFormat.Pascal), "CaseFormat")
+        @Assert(CaseFormat.UpperUnderScore.convert("CASE_FORMAT", to: CaseFormat.LowerUnderScore), "case_format")
+        @Assert(CaseFormat.UpperUnderScore.convert("CASE_FORMAT", to: CaseFormat.LowerHyphen), "case-format")
+        @Assert(CaseFormat.UpperUnderScore.convert("CASE_FORMAT", to: CaseFormat.UpperHyphen), "CASE-FORMAT")
 
-        @Assert(CaseFormat.LowerHyphen.convert("case-format", CaseFormat.Camel), "caseFormat")
-        @Assert(CaseFormat.LowerHyphen.convert("case-format", CaseFormat.Pascal), "CaseFormat")
-        @Assert(CaseFormat.LowerHyphen.convert("case-format", CaseFormat.LowerUnderScore), "case_format")
-        @Assert(CaseFormat.LowerHyphen.convert("case-format", CaseFormat.UpperUnderScore), "CASE_FORMAT")
-        @Assert(CaseFormat.LowerHyphen.convert("case-format", CaseFormat.UpperHyphen), "CASE-FORMAT")
+        @Assert(CaseFormat.LowerHyphen.convert("case-format", to: CaseFormat.Camel), "caseFormat")
+        @Assert(CaseFormat.LowerHyphen.convert("case-format", to: CaseFormat.Pascal), "CaseFormat")
+        @Assert(CaseFormat.LowerHyphen.convert("case-format", to: CaseFormat.LowerUnderScore), "case_format")
+        @Assert(CaseFormat.LowerHyphen.convert("case-format", to: CaseFormat.UpperUnderScore), "CASE_FORMAT")
+        @Assert(CaseFormat.LowerHyphen.convert("case-format", to: CaseFormat.UpperHyphen), "CASE-FORMAT")
 
-        @Assert(CaseFormat.UpperHyphen.convert("CASE-FORMAT", CaseFormat.Camel), "caseFormat")
-        @Assert(CaseFormat.UpperHyphen.convert("CASE-FORMAT", CaseFormat.Pascal), "CaseFormat")
-        @Assert(CaseFormat.UpperHyphen.convert("CASE-FORMAT", CaseFormat.LowerUnderScore), "case_format")
-        @Assert(CaseFormat.UpperHyphen.convert("CASE-FORMAT", CaseFormat.UpperUnderScore), "CASE_FORMAT")
-        @Assert(CaseFormat.UpperHyphen.convert("CASE-FORMAT", CaseFormat.LowerHyphen), "case-format")
+        @Assert(CaseFormat.UpperHyphen.convert("CASE-FORMAT", to: CaseFormat.Camel), "caseFormat")
+        @Assert(CaseFormat.UpperHyphen.convert("CASE-FORMAT", to: CaseFormat.Pascal), "CaseFormat")
+        @Assert(CaseFormat.UpperHyphen.convert("CASE-FORMAT", to: CaseFormat.LowerUnderScore), "case_format")
+        @Assert(CaseFormat.UpperHyphen.convert("CASE-FORMAT", to: CaseFormat.UpperUnderScore), "CASE_FORMAT")
+        @Assert(CaseFormat.UpperHyphen.convert("CASE-FORMAT", to: CaseFormat.LowerHyphen), "case-format")
     }
 }

@@ -1,11 +1,17 @@
 /*
-    Copyright (c) [2022] [WuJingrun（吴京润）]
-    fountain is licensed under Mulan PSL v2.
-    You can use this software according to the terms and conditions of the Mulan PSL v2.
-    You may obtain a copy of Mulan PSL v2 at:
-            http://license.coscl.org.cn/MulanPSL2
-    THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-    See the Mulan PSL v2 for more details.
+Copyright (c) 2025 WuJingrun（吴京润）
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
  */
 package f_aspect
 
@@ -15,28 +21,30 @@ import f_base.*
 import f_bean.{BeanFactory, BeanManager}
 import f_collection.*
 import f_macros.*
-import f_regex.*
 
 public class Aspects {
     private static let aspects = ConcurrentHashMap<QualifiedFuncInfo, (Array<Any>) -> Any>()
     private static let mutex = Mutex()
     private static func doProceed<T>(funcInfo: InvocationFuncInfo, fn: (Array<Any>) -> T): T {
-        let r = if(let Some(f) <- aspects.get(funcInfo.qualifiedFuncInfo)){
+        let r = if (let Some(f) <- aspects.get(funcInfo.qualifiedFuncInfo)) {
             f
-        }else{
-            synchronized(mutex){
-                if(let Some(f) <- aspects.get(funcInfo.qualifiedFuncInfo)){
+        } else {
+            synchronized(mutex) {
+                if (let Some(f) <- aspects.get(funcInfo.qualifiedFuncInfo)) {
                     f
-                }else{
+                } else {
                     let list = ArrayList<String>()
-                    for(m in BeanFactory.instance.iterator<Aspect>() 
-                        where m.beanType.findAnnotation<AspectRoute>()?.matches(funcInfo) ?? false){
+                    for (m in BeanFactory.instance.iterator<Aspect>() where m
+                        .beanType
+                        .findAnnotation<AspectRoute>()?
+                        .matches(funcInfo) ?? false) {
                         list.add(m.name)
                     }
                     var f: (Array<Any>) -> Any = {args => fn(args)}
-                    for(i in list.size - 1 ..= 0: -1){
+                    for (i in list.size - 1..=0 : -1) {
                         let aspected = f
-                        f = {args => 
+                        f = {
+                            args =>
                             funcInfo.setArgs(args)
                             BeanFactory.instance.get<Aspect>(list[i]).getOrThrow().proceed(funcInfo, aspected)
                         }
@@ -46,7 +54,7 @@ public class Aspects {
                 }
             }
         }(funcInfo.args)
-        match(r){
+        match (r) {
             case x: T => x
             case _ => throw TypeCastException('Type of ${TypeInfo.of(r)} does not match ${TypeInfos.get<T>()}')
         }
@@ -55,7 +63,7 @@ public class Aspects {
     /**本函数不是给开发者用的，是给工具库生成切点使用的*/
     public static func proceed<T>(funcInfo: InvocationFuncInfo, fn: (Array<Any>) -> T): T {
         func setRecursiveSerial() {
-            try {//避免递归调用切点函数时切面也被重复执行
+            try { //避免递归调用切点函数时切面也被重复执行
                 recursiveInvocationFlag.set(true)
                 doProceed<T>(funcInfo, fn)
             } finally {

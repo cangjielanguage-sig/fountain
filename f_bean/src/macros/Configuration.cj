@@ -1,11 +1,17 @@
 /*
-   Copyright (c) [2022] [WuJingrun（吴京润）]
-   fountain is licensed under Mulan PSL v2.
-   You can use this software according to the terms and conditions of the Mulan PSL v2.
-   You may obtain a copy of Mulan PSL v2 at:
-            http://license.coscl.org.cn/MulanPSL2
-   THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-   See the Mulan PSL v2 for more details.
+Copyright (c) 2025 WuJingrun（吴京润）
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
  */
 macro package f_bean.macros
 
@@ -15,25 +21,24 @@ macro package f_bean.macros
 public macro Configuration(input: Tokens): Tokens {
     let klass = ClassDecl(input)
     let identifier = klass.identifier
-    var ctorTokens = quote(
-        let ctors = HashMap<String, ()-> $identifier>()
-    ) + `nl`
-    for(d in klass.body.decls){
-        match(d){
-            case med: MacroExpandDecl => 
+    var staticTokens = quote()
+    var instanceTokens = quote()
+    for (d in klass.body.decls) {
+        match (d) {
+            case med: MacroExpandDecl =>
                 var md: Decl = med
-                while(let d: MacroExpandDecl <- md){
+                while (let d: MacroExpandDecl <- md) {
                     md = d.macroInputDecl
-                    match(md){
-                        case f: FuncDecl where isStatic(f) && isPublic(f) && f.funcParams.isEmpty() => 
+                    match (md) {
+                        case f: FuncDecl where d.fullIdentifier.value == 'Constructor' && isStatic(f) && isPublic(f) && f.funcParams.isEmpty() =>
                             let fname = f.identifier.value
-                            ctorTokens += quote(
-                                ctors[$fname] = {=> $(identifier).$(f.identifier)()}
-                            ) + `nl`
-                        case f: FuncDecl where !isStatic(f) && isPublic(f) && f.funcParams.isEmpty() => 
+                            instanceTokens += quote(
+                                BeanFactory.instance.register<$identifier>($fname){$(identifier).$(f.identifier)()}$(`nl`)
+                            )
+                        case f: FuncDecl where d.fullIdentifier.value == 'Constructor' && !isStatic(f) && isPublic(f) && f.funcParams.isEmpty() =>
                             let fname = f.identifier.value
-                            ctorTokens += quote(
-                                ctors[$fname] = {=> configuration.$(f.identifier)()}
+                            staticTokens += quote(
+                                BeanFactory.instance.register<$identifier>($fname){configuration.$(f.identifier)()}$(`nl`)
                             )
                         case f: MacroExpandDecl => continue
                         case _ => break
@@ -43,14 +48,9 @@ public macro Configuration(input: Tokens): Tokens {
             case _ => ()
         }
     }
-    quote(
-        $input
-        private let _ = {=>
-            let configuration = $(identifier)()
-            $ctorTokens
-            for ((n, f) in ctors where TypeInfos.withAnnotation<$identifier, Constructor>(n, [])) {
-                BeanFactory.instance.register<$identifier>(f)
-            }
-        }()
-    )
+    topMacroAnonymousClosure(quote(
+        $staticTokens
+        let configuration = $(identifier)()
+        $instanceTokens
+    ))
 }

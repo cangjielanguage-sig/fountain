@@ -1,18 +1,24 @@
 /*
-    Copyright (c) [2022] [WuJingrun（吴京润）]
-    fountain is licensed under Mulan PSL v2.
-    You can use this software according to the terms and conditions of the Mulan PSL v2.
-    You may obtain a copy of Mulan PSL v2 at:
-            http://license.coscl.org.cn/MulanPSL2
-    THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-    See the Mulan PSL v2 for more details.
+Copyright (c) 2025 WuJingrun（吴京润）
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
  */
 package f_bean
 
 /**
  * bean定义有指定数量时为true
  */
-public enum BeanDefCount {
+public enum BeanDefCount <: ToString {
     /**
      * 没有bean定义
      */
@@ -29,9 +35,18 @@ public enum BeanDefCount {
      * 多于一个bean定义
      */
     | MoreThanOne
+
+    public func toString(): String {
+        match(this){
+            case Zero => "Zero"
+            case OnlyOne => "OnlyOne"
+            case AtLeastOne => "AtLeastOne"
+            case MoreThanOne => "MoreThanOne"
+        }
+    }
 }
 
-public enum BeanType {
+public enum BeanDefType <: ToString {
     /**
      * 不判断bean类型
      */
@@ -57,6 +72,17 @@ public enum BeanType {
      */
     | SuperOfOnly(String)
 
+    public func toString(): String {
+        match(this){
+            case IgnoreType => "IgnoreType"
+            case Current(v) => "Current(${v})"
+            case CurrentOrSubOf(v) => "CurrentOrSubOf(${v})"
+            case SubOfOnly(v) => "SubOfOnly(${v})"
+            case CurrentOrSuperOf(v) => "CurrentOrSuperOf(${v})"
+            case SuperOfOnly(v) => "SuperOfOnly(${v})"
+        }
+    }
+
     public func on(beanType: TypeInfo) {
         match (this) {
             case IgnoreType => true
@@ -78,11 +104,16 @@ public enum BeanType {
  */
 public class BeanDef <: BeanCondition {
     public const BeanDef(
-        public let beanType!: BeanType = IgnoreType,
+        public let beanType!: BeanDefType = IgnoreType,
         public let beanName!: StringCond = IgnoreCond,
         public let count!: BeanDefCount = AtLeastOne,
         public let scope!: ?BeanScope = None
     ) {}
+
+    public func toString(): String {
+        'type: ${beanType}; name:${beanName}; count:${count}; scope:${scope}'
+    }
+
     public func on(factory: BeanFactory): Bool {
         match ((beanType, beanName)) {
             case (IgnoreType, IgnoreName) => return true //相当于没有指定bean初始化条件
@@ -94,8 +125,8 @@ public class BeanDef <: BeanCondition {
     }
     private func on(factory: BeanFactory, typeInfo: TypeInfo): Bool {
         var count = 0
-        for (m in factory.beanManagers(typeInfo) where beanType.on(m.beanType) && beanName.on(m.name) && (scope.isNone() ||
-            scope.getOrThrow() == m.meta.scope)) {
+        for (m in factory.beanManagers(typeInfo) where beanType.on(m.beanType) && beanName.on(m.name) && (scope
+            .isNone() || scope.getOrThrow() == m.meta.scope)) {
             count++
             match (this.count) {
                 case AtLeastOne => return true

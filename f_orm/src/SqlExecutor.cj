@@ -1,13 +1,18 @@
 /*
-   Copyright (c) [2022] [WuJingrun（吴京润）]
-   fountain is licensed under Mulan PSL v2.
-   You can use this software according to the terms and conditions of the Mulan PSL v2.
-   You may obtain a copy of Mulan PSL v2 at:
-           http://license.coscl.org.cn/MulanPSL2
-   THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-   See the Mulan PSL v2 for more details.
- */
+Copyright (c) 2025 WuJingrun（吴京润）
 
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+ */
 package f_orm
 
 import std.collection.HashMap
@@ -26,25 +31,27 @@ public class SqlCacheKey <: Hashable & Equatable<SqlCacheKey> & ToString {
         h
     }
     public operator func ==(other: SqlCacheKey): Bool {
-        h == other.h && sql == other.sql && args == other.args
+        refEq(this, other) || (h == other.h && sql == other.sql && args == other.args)
     }
     public func toString(): String {
         "${sql} | ${args}"
     }
 }
+
 public class SqlExecutor <: Resource & RootDAO {
     private static let logger = LoggerFactory.getLogger<SqlExecutor>()
     private static let blankRegex = Regex(#"\s{2,}"#)
     private static let current = ThreadLocal<HashMap<String, SqlExecutor>>()
     private var sql_ = String.empty
     private var readOnly = false
-    private var args: SqlArgs = SqlArgs.empty
+    private var args: SqlArgs = SqlArgs()
     private var hasRealTx = false
     private var _connection_: Connection
     private var tx = None<TransactionWrap>
     private let cache: Map<SqlCacheKey, Any>
     private var clearCache = false
     private let useCache: Bool
+    private var clearArgsAfterExec_ = true
 
     private SqlExecutor(let driverName: String) {
         useCache = ORMConfig.getUseCache(driverName: driverName) ?? true
@@ -61,34 +68,29 @@ public class SqlExecutor <: Resource & RootDAO {
             sql_
         }
         set(value) {
-            sql_ = blankRegex.replaceAll(value, " ")
-            if(!(value.trimAscii()[0 .. 6].toAsciiLower() == 'select')){
+            sql_ = blankRegex.replaceAll(value, " ").trimAsciiBlanks()
+            if (!(sql_.trimAscii()[0..6].toAsciiLower() == 'select')) {
                 readOnly = false
             }
         }
     }
     public prop isReadOnly: Bool {
-        get(){
+        get() {
             readOnly
         }
     }
 
     static func getInstance(driverName: String): SqlExecutor {
-        let em = current.getOrCompute{HashMap<String, SqlExecutor>()}
-        let exe = if(let Some(e) <- em.get(driverName)) {
-            e
-        }else{
-            let e = SqlExecutor(driverName)
-            em[driverName] = e
-            e
-        }
-        if(!(exe._connection_ is NoneConnection)){
-            match(exe._connection_.state){
+        let exe = current
+            .getOrCompute {HashMap<String, SqlExecutor>()}
+            .computeIfAbsent(driverName) {SqlExecutor(driverName)}
+        if (!(exe._connection_ is NoneConnection)) {
+            match (exe._connection_.state) {
                 case Closed => exe._connection_ = NoneConnection.instance
                 case Broken =>
-                    try{
+                    try {
                         exe._connection_.close()
-                    }catch(_){}
+                    } catch (_) {}
                     exe._connection_ = NoneConnection.instance
                 case _ => ()
             }
@@ -106,13 +108,14 @@ public class SqlExecutor <: Resource & RootDAO {
     }
 
     private static func getConnection(driverName: String) {
-        ORM.connection(driverName)
+        let conn = ORM.connection(driverName)
+        conn
     }
     public func isClosed(): Bool {
         _connection_.isClosed()
     }
     public func close(): Unit {
-        if (let None <- this.tx) {
+        if (this.tx.isNone()) {
             current.get()?.remove(driverName)
             cache.clear()
             _connection_.close()
@@ -124,8 +127,7 @@ public class SqlExecutor <: Resource & RootDAO {
         propagation!: Propagation = ORMConfig.getTransactionPropagation(driverName: driverName),
         isoLevel!: ?TransactionIsoLevel = ORMConfig.getTransactionLevel(driverName: driverName),
         accessMode!: ?TransactionAccessMode = ORMConfig.getTransactionAccessMode(driverName: driverName),
-        deferrableMode!: ?TransactionDeferrableMode = ORMConfig.getTransactionDeferrableMode(
-            driverName: driverName)
+        deferrableMode!: ?TransactionDeferrableMode = ORMConfig.getTransactionDeferrableMode(driverName: driverName)
     ): TransactionWrap {
         func newDummyTx(
             mode!: DummyTransactionMode = Common,
@@ -140,7 +142,7 @@ public class SqlExecutor <: Resource & RootDAO {
         match (propagation) {
             case Required =>
                 //Support a current transaction, create a new one if none exists.
-                try {
+            try {
                 if (!hasRealTx) {
                     if (let tx: TransactionWrap <- connection.createTransaction()) {
                         hasRealTx = true
@@ -157,13 +159,11 @@ public class SqlExecutor <: Resource & RootDAO {
                 newDummyTx()
             case Mandatory =>
                 //Support a current transaction, throw an exception if none exists.
-                newDummyTx(
-                mode: if (hasRealTx) {
-                    Common
-                } else {
-                    Mandatory
-                }
-            )
+                newDummyTx(mode: if (hasRealTx) {
+                Common
+            } else {
+                Mandatory
+            })
             case RequiresNew =>
                 //Create a new transaction, and suspend the current transaction if one exists.
                 try {
@@ -193,13 +193,11 @@ public class SqlExecutor <: Resource & RootDAO {
             )
             case Never =>
                 //Execute non-transactionally, throw an exception if a transaction exists.
-                newDummyTx(
-                mode: if (hasRealTx) {
-                    Never
-                } else {
-                    Common
-                }
-            )
+                newDummyTx(mode: if (hasRealTx) {
+                Never
+            } else {
+                Common
+            })
             case Nested =>
                 //Execute within a nested transaction if a current transaction exists, behave like REQUIRED otherwise.
                 try {
@@ -228,8 +226,7 @@ public class SqlExecutor <: Resource & RootDAO {
         propagation!: Propagation = ORMConfig.getTransactionPropagation(driverName: driverName),
         isoLevel!: ?TransactionIsoLevel = ORMConfig.getTransactionLevel(driverName: driverName),
         accessMode!: ?TransactionAccessMode = ORMConfig.getTransactionAccessMode(driverName: driverName),
-        deferrableMode!: ?TransactionDeferrableMode = ORMConfig.getTransactionDeferrableMode(
-            driverName: driverName)
+        deferrableMode!: ?TransactionDeferrableMode = ORMConfig.getTransactionDeferrableMode(driverName: driverName)
     ): SqlExecutor {
         createTransaction(
             propagation: propagation,
@@ -253,7 +250,7 @@ public class SqlExecutor <: Resource & RootDAO {
             if (let Some(tx) <- this.tx) {
                 try {
                     callback(tx)
-                    if(!withSavepoint){
+                    if (!withSavepoint) {
                         this.tx = tx.wrapping
                     }
                 } catch (e: Exception) {
@@ -284,8 +281,7 @@ public class SqlExecutor <: Resource & RootDAO {
         try {
             commit()
         } catch (ex: Exception) {
-            let re: BaseException = 
-            match(ex){
+            let re: BaseException = match (ex) {
                 case x: BaseException =>
                     x.addSuppressed(e)
                     x
@@ -387,8 +383,9 @@ public class SqlExecutor <: Resource & RootDAO {
     private prop query: QueryResultWrap {
         get() {
             execute<QueryResultWrap> {
-                args.set(statement)
-                (statement.query() as QueryResultWrap).getOrThrow()
+                let stmt = statement
+                args.set(stmt)
+                (stmt.query() as QueryResultWrap).getOrThrow()
             }
         }
     }
@@ -397,8 +394,7 @@ public class SqlExecutor <: Resource & RootDAO {
         singleFirst<T>(0)
     }
     public func singleFirst<T>(index: Int64): Option<T> {
-        execute<Option<T>> {
-            let result = query
+        execute<Option<T>> {result =>
             while (result.next()) {
                 let value = result.get<T>(index)
                 return value
@@ -407,8 +403,7 @@ public class SqlExecutor <: Resource & RootDAO {
         }
     }
     public func singleFirst<T>(column: String): Option<T> {
-        execute<Option<T>> {
-            let result = query
+        execute<Option<T>> {result =>
             while (result.next()) {
                 let value = result.get<T>(column)
                 return value
@@ -420,9 +415,8 @@ public class SqlExecutor <: Resource & RootDAO {
         singleList<T>(0)
     }
     public func singleList<T>(index: Int64): ArrayList<T> {
-        execute<ArrayList<T>> {
+        execute<ArrayList<T>> {result =>
             let list = ArrayList<T>()
-            let result = query
             while (result.next()) {
                 let value = result.get<T>(index)
                 list.add(value)
@@ -431,9 +425,8 @@ public class SqlExecutor <: Resource & RootDAO {
         }
     }
     public func singleList<T>(column: String): ArrayList<T> {
-        execute<ArrayList<T>> {
+        execute<ArrayList<T>> {result =>
             let list = ArrayList<T>()
-            let result = query
             while (result.next()) {
                 let value = result.get<T>(column)
                 list.add(value)
@@ -445,18 +438,18 @@ public class SqlExecutor <: Resource & RootDAO {
         singleIterator<T>(0)
     }
     public func singleIterator<T>(index: Int64): Iterator<T> {
-        execute<Iterator<T>> {
-            SingleColumnIterator<T>(query, index: index)
+        execute<Iterator<T>> {r =>
+            SingleColumnIterator<T>(r, index: index)
         }
     }
     public func singleIterator<T>(column: String): Iterator<T> {
-        execute<Iterator<T>> {
-            SingleColumnIterator<T>(query, column: column)
+        execute<Iterator<T>> {r =>
+            SingleColumnIterator<T>(r, column: column)
         }
     }
     public func first<T>(mappers: QueryMappers<T>): Option<T> {
-        execute<Option<T>> {
-            mappers.doMap(query)
+        execute<Option<T>> {r =>
+            mappers.doMap(r)
         }
     }
     public func first<T>(): Option<T> where T <: QueryMappersInit<T> {
@@ -467,18 +460,17 @@ public class SqlExecutor <: Resource & RootDAO {
         }
     }
     public func firstToMap(): Map<String, Any> {
-        execute<Map<String, Any>> {
-            let result = query
+        execute<Map<String, Any>> {result => 
             if (result.next()) {
                 result.toMap()
-            }else{
+            } else {
                 EmptyMap<String, Any>.INSTANCE()
             }
         }
     }
     public func list<T>(mappers: QueryMappers<T>): ArrayList<T> {
-        execute<ArrayList<T>> {
-            mappers.list(query)
+        execute<ArrayList<T>> {r =>
+            mappers.list(r)
         }
     }
     public func list<T>(): ArrayList<T> where T <: QueryMappersInit<T> {
@@ -489,8 +481,7 @@ public class SqlExecutor <: Resource & RootDAO {
         }
     }
     public func mapList(): ArrayList<HashMap<String, Any>> {
-        execute<ArrayList<HashMap<String, Any>>> {
-            let result = query
+        execute<ArrayList<HashMap<String, Any>>> {result =>
             let list = ArrayList<HashMap<String, Any>>()
             while (result.next()) {
                 list.add(result.toMap())
@@ -499,8 +490,8 @@ public class SqlExecutor <: Resource & RootDAO {
         }
     }
     public func iterator<T>(mappers: QueryMappers<T>): QueryResultIterator<T> {
-        execute<QueryResultIterator<T>> {
-            mappers.iterator(query)
+        execute<QueryResultIterator<T>> {r =>
+            mappers.iterator(r)
         }
     }
     public func iterator<T>(): Iterator<T> where T <: QueryMappersInit<T> {
@@ -511,8 +502,8 @@ public class SqlExecutor <: Resource & RootDAO {
         }
     }
     public func one<T>(mappers: QueryMappers<T>): Option<T> {
-        execute<Option<T>> {
-            mappers.one(query)
+        execute<Option<T>> {r =>
+            mappers.one(r)
         }
     }
     public func one<T>(): Option<T> where T <: QueryMappersInit<T> {
@@ -523,12 +514,8 @@ public class SqlExecutor <: Resource & RootDAO {
         }
     }
 
-    public func setSql(sql: String): SqlExecutor {
-        this.sql = sql
-        this
-    }
     public func add<T>(arg: T): SqlExecutor where T <: ToString {
-        match(arg){
+        match (arg) {
             case x: Bool => add(x)
             case x: Int8 => add(x)
             case x: UInt8 => add(x)
@@ -548,104 +535,253 @@ public class SqlExecutor <: Resource & RootDAO {
             case x: Duration => add(x)
             case x: DateTime => add(x)
             case x: Array<Byte> => add(x)
+
+            case x: ?Bool => add(x)
+            case x: ?Int8 => add(x)
+            case x: ?UInt8 => add(x)
+            case x: ?Int16 => add(x)
+            case x: ?UInt16 => add(x)
+            case x: ?Int32 => add(x)
+            case x: ?UInt32 => add(x)
+            case x: ?Int64 => add(x)
+            case x: ?UInt64 => add(x)
+            case x: ?BigInt => add(x)
+            case x: ?Decimal => add(x)
+            case x: ?Float16 => add(x)
+            case x: ?Float32 => add(x)
+            case x: ?Float64 => add(x)
+            case x: ?Rune => add(x)
+            case x: ?String => add(x)
+            case x: ?Duration => add(x)
+            case x: ?DateTime => add(x)
+            case x: ?Array<Byte> => add(x)
+
             case x => add(x.toString())
         }
     }
-    public func add(arg: Bool){
+    public func add(arg: Bool) {
         args.add(arg)
         this
     }
-    public func add(arg: Int8){
-        args.add(arg)
-        this
-    }
-    public func add(arg: UInt8){
-        args.add(arg)
-        this
-    }
-    public func add(arg: Int16){
-        args.add(arg)
-        this
-    }
-    public func add(arg: UInt16){
-        args.add(arg)
-        this
-    }
-    public func add(arg: Int32){
-        args.add(arg)
-        this
-    }
-    public func add(arg: UInt32){
-        args.add(arg)
-        this
-    }
-    public func add(arg: Int64){
-        args.add(arg)
-        this
-    }
-    public func add(arg: UInt64){
-        args.add(arg)
-        this
-    }
-    public func add(arg: BigInt){
-        args.add(arg)
-        this
-    }
-    public func add(arg: Decimal){
-        args.add(arg)
-        this
-    }
-    public func add(arg: Float16){
-        args.add(arg)
-        this
-    }
-    public func add(arg: Float32){
-        args.add(arg)
-        this
-    }
-    public func add(arg: Float64){
-        args.add(arg)
-        this
-    }
-    public func add(arg: Rune){
-        args.add(arg)
-        this
-    }
-    public func add(arg: String){
-        args.add(arg)
-        this
-    }
-    public func add(arg: InputStream){
-        args.add(arg)
-        this
-    }
-    public func add(arg: Duration){
-        args.add(arg)
-        this
-    }
-    public func add(arg: DateTime){
-        args.add(arg)
-        this
-    }
-    public func add(arg: Array<Byte>){
-        args.add(arg)
-        this
-    }
-    public func add(arg: Any){
+    public func add(arg: ?Bool) {
         match(arg){
+            case Some(x) => add(x)
+            case _ => addNull()
+        }
+    }
+    public func add(arg: Int8) {
+        args.add(arg)
+        this
+    }
+    public func add(arg: ?Int8) {
+        match(arg){
+            case Some(x) => add(x)
+            case _ => addNull()
+        }
+    }
+    public func add(arg: UInt8) {
+        args.add(arg)
+        this
+    }
+    public func add(arg: ?UInt8) {
+        match(arg){
+            case Some(x) => add(x)
+            case _ => addNull()
+        }
+    }
+    public func add(arg: Int16) {
+        args.add(arg)
+        this
+    }
+    public func add(arg: ?Int16) {
+        match(arg){
+            case Some(x) => add(x)
+            case _ => addNull()
+        }
+    }
+    public func add(arg: UInt16) {
+        args.add(arg)
+        this
+    }
+    public func add(arg: ?UInt16) {
+        match(arg){
+            case Some(x) => add(x)
+            case _ => addNull()
+        }
+    }
+    public func add(arg: Int32) {
+        args.add(arg)
+        this
+    }
+    public func add(arg: ?Int32) {
+        match(arg){
+            case Some(x) => add(x)
+            case _ => addNull()
+        }
+    }
+    public func add(arg: UInt32) {
+        args.add(arg)
+        this
+    }
+    public func add(arg: ?UInt32) {
+        match(arg){
+            case Some(x) => add(x)
+            case _ => addNull()
+        }
+    }
+    public func add(arg: Int64) {
+        args.add(arg)
+        this
+    }
+    public func add(arg: ?Int64) {
+        match(arg){
+            case Some(x) => add(x)
+            case _ => addNull()
+        }
+    }
+    public func add(arg: UInt64) {
+        args.add(arg)
+        this
+    }
+    public func add(arg: ?UInt64) {
+        match(arg){
+            case Some(x) => add(x)
+            case _ => addNull()
+        }
+    }
+    public func add(arg: BigInt) {
+        args.add(arg)
+        this
+    }
+    public func add(arg: ?BigInt) {
+        match(arg){
+            case Some(x) => add(x)
+            case _ => addNull()
+        }
+    }
+    public func add(arg: Decimal) {
+        args.add(arg)
+        this
+    }
+    public func add(arg: ?Decimal) {
+        match(arg){
+            case Some(x) => add(x)
+            case _ => addNull()
+        }
+    }
+    public func add(arg: Float16) {
+        args.add(arg)
+        this
+    }
+    public func add(arg: ?Float16) {
+        match(arg){
+            case Some(x) => add(x)
+            case _ => addNull()
+        }
+    }
+    public func add(arg: Float32) {
+        args.add(arg)
+        this
+    }
+    public func add(arg: ?Float32) {
+        match(arg){
+            case Some(x) => add(x)
+            case _ => addNull()
+        }
+    }
+    public func add(arg: Float64) {
+        args.add(arg)
+        this
+    }
+    public func add(arg: ?Float64) {
+        match(arg){
+            case Some(x) => add(x)
+            case _ => addNull()
+        }
+    }
+    public func add(arg: Rune) {
+        args.add(arg)
+        this
+    }
+    public func add(arg: ?Rune) {
+        match(arg){
+            case Some(x) => add(x)
+            case _ => addNull()
+        }
+    }
+    public func add(arg: String) {
+        args.add(arg)
+        this
+    }
+    public func add(arg: ?String) {
+        match(arg){
+            case Some(x) => add(x)
+            case _ => addNull()
+        }
+    }
+    public func add(arg: InputStream) {
+        args.add(arg)
+        this
+    }
+    public func add(arg: ?InputStream) {
+        match(arg){
+            case Some(x) => add(x)
+            case _ => addNull()
+        }
+    }
+    public func add(arg: Duration) {
+        args.add(arg)
+        this
+    }
+    public func add(arg: ?Duration) {
+        match(arg){
+            case Some(x) => add(x)
+            case _ => addNull()
+        }
+    }
+    public func add(arg: DateTime) {
+        args.add(arg)
+        this
+    }
+    public func add(arg: ?DateTime) {
+        match(arg){
+            case Some(x) => add(x)
+            case _ => addNull()
+        }
+    }
+    public func add(arg: Array<Byte>) {
+        args.add(arg)
+        this
+    }
+    public func add(arg: ?Array<Byte>) {
+        match(arg){
+            case Some(x) => add(x)
+            case _ => addNull()
+        }
+    }
+    public func addNull(){
+        args.addNull()
+        this
+    }
+    public func add(arg: Any) {
+        match (arg) {
             case x: ToString => add<ToString>(x)
             case x: InputStream => add(x)
+            case x: ?InputStream => add(x)
             case _ => throw SqlException("Unsupported data type")
         }
     }
+    protected func add(all!: SqlExecutor){
+        this.args.add(all: all.args)
+    }
 
-    public func generateSql(sql: String): SqlExecutor {
-        args = SqlArgs()
+    public func setSql(sql: String, clearArgsAfterExec!: Bool = true): SqlExecutor {
+        this.clearArgsAfterExec_ = clearArgsAfterExec
         this.sql = sql
         this
     }
     public operator func ()(sql: String): SqlExecutor {
-        generateSql(sql)
+        setSql(sql)
     }
 
     private func execute<T>(executor: () -> T): T {
@@ -686,20 +822,34 @@ public class SqlExecutor <: Resource & RootDAO {
             }
             throw e
         } finally {
-            if (logger.debugEnabled) {
+            if (sql.size > 0 && logger.debugEnabled) {
                 logger.debug(logMsg(DateTime.now() - start))
             }
             start = DateTime.UnixEpoch
-            args = SqlArgs.empty
-            sql = String.empty
+            if(clearArgsAfterExec_){
+                args.clear()
+            }
+            sql_ = String.empty
         }
     }
     private func execute<T>(extract: (UpdateResult) -> T): T {
         clearCache = true
         execute<T> {
-            args.set(statement)
-            let result = statement.update()
+            let stmt = statement
+            args.set(stmt)
+            let result = stmt.update()
             extract(result)
+        }
+    }
+    private func execute<T>(extract: (QueryResultWrap) -> T): T {
+        execute<T> {
+            var r = None<QueryResultWrap>
+            try{
+                r = query
+                extract(r.getOrThrow())
+            } finally {
+                r?.close()
+            }
         }
     }
     public func execute<T>(executor: (SqlExecutor) -> T): T {
@@ -729,7 +879,7 @@ public class SqlExecutor <: Resource & RootDAO {
                 } catch (e1: Exception) {
                     ORM.hooks.afterThrowing(e1)
                     try {
-                        if(!txStatus.isCommitted){
+                        if (!txStatus.isCommitted) {
                             ORM.hooks.beforeRollback(e1)
                             rollback()
                             txStatus = Rollback

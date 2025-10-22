@@ -1,26 +1,33 @@
 /*
-   Copyright (c) [2022] [WuJingrun（吴京润）]
-   fountain is licensed under Mulan PSL v2.
-   You can use this software according to the terms and conditions of the Mulan PSL v2.
-   You may obtain a copy of Mulan PSL v2 at:
-           http://license.coscl.org.cn/MulanPSL2
-   THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-   See the Mulan PSL v2 for more details.
- */
+Copyright (c) 2025 WuJingrun（吴京润）
 
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+ */
 package f_log.impl
 
-import std.net.UnixSocket
-import std.time.DateTime
-import f_log.output.UnixOutputStream
-import stdx.log.LogLevel
-
-
-private class UnixLoggerAppender <: AsyncLogger {
+class UnixLoggerAppender <: AsyncLogger {
     private static const LOGGER_NAME = 'unix'
-    private let path: String
-    private let writeTimeout: ?Duration
-    private let bufSize: ?Int64
+    private UnixLoggerAppender(
+        name!: String,
+        pattern!: LogPattern,
+        level!: LogLevel = LogLevel.INFO,
+        output!: OutputStream,
+        private let path!: String,
+        private let writeTimeout!: ?Duration,
+        private let bufSize!: ?Int64
+    ){
+        super(name, level, pattern, output, '${LOGGER_NAME}:///${path}')
+    }
     public init(
         name!: String,
         pattern!: LogPattern,
@@ -29,53 +36,68 @@ private class UnixLoggerAppender <: AsyncLogger {
         writeTimeout!: ?Duration,
         bufSize!: ?Int64
     ) {
-        super(name, level, pattern, createSocket(path, writeTimeout, bufSize), '${LOGGER_NAME}:///${path}')
-        this.path = path
-        this.writeTimeout = writeTimeout
-        this.bufSize = bufSize
+        this(name: name, level: level, pattern: pattern, output: createSocket(path, writeTimeout, bufSize), 
+             path: path, writeTimeout: writeTimeout, bufSize: bufSize)
+    }
+    public func new(name: String): AbstractLogger {
+        UnixLoggerAppender(name: name, pattern: super.pattern, level: super.level, output: super.actualOutput, path: path, writeTimeout: writeTimeout, bufSize: bufSize)
     }
     private static func createSocket(path: String, writeTimeout: ?Duration, bufSize: ?Int64) {
         let sock = UnixSocket(path)
         sock.writeTimeout = writeTimeout
-        if(let Some(s) <- bufSize){
+        if (let Some(s) <- bufSize) {
             sock.sendBufferSize = s
         }
         sock
     }
+    private static let appenderMap = ConcurrentHashMap<UnixLoggerParams, AbstractLogger>()
     public static func register(): Unit {
-        LoggerAppenderCreator.register(LOGGER_NAME) {
-            name =>
-            let appenders = LoggerConfig.getAppenders(LOGGER_NAME)
-            if(appenders.isEmpty()){
-                [NoneLogAppender.instance]
-            }else{
-                Array<AbstractLogger>(appenders.size){i =>
-                    let appender = appenders[i]
-                    var path = "/tmp/log/unix.log"
-                    if (let Some(h) <- LoggerConfig.getString(appender, "path") && !h.isEmpty()) {
-                        path = h
-                    }
-                    let writeTimeout = LoggerConfig.getUnixWriteTimeout(appender)
-                    let bufSize = LoggerConfig.getUnixBufSize(appender)
-                    UnixLoggerAppender(
-                        name: name,
-                        level: LoggerConfig.getLevelConf(appender),
-                        pattern: LoggerConfig.getPatternConf(appender),
-                        path: path,
-                        writeTimeout: writeTimeout,
-                        bufSize: bufSize
-                    )
-                }
-            }
-        }
+        UnixLoggerParams.register(LOGGER_NAME, appenderMap)
     }
-    protected func append(level: LogLevel, message: String, now: DateTime, ex: Option<Exception>): Unit {
+    protected func append(level: LogLevel, message: String, now: DateTime, tid: Int64, ex: Option<Exception>): Unit {
         var sock = (super.output as UnixSocket).getOrThrow()
         if (sock.isClosed()) {
             sock = createSocket(path, writeTimeout, bufSize)
             super.output = sock
         }
-        super.append(level, message, now, ex)
+        super.append(level, message, now, tid, ex)
+    }
+}
+public class UnixLoggerParams <: BaseLoggerParams<UnixLoggerParams> {
+    public UnixLoggerParams(
+        level: LogLevel,
+        pattern: LogPattern,
+        private let path: String,
+        private let writeTimeout: ?Duration,
+        private let bufSize: ?Int64
+    ){
+        super(level, pattern)
+        h = HashBuilder().append(level).append(pattern).append(path).append(writeTimeout).append(bufSize).build()
+    }
+    public operator func ==(that: UnixLoggerParams): Bool {
+        this.h == that.h && this.level == that.level && this.pattern == that.pattern && 
+        this.path == that.path && this.writeTimeout == that.writeTimeout && this.bufSize == that.bufSize
+    }
+    protected static func newParams(appender: String): UnixLoggerParams {
+        var path = "/tmp/log/unix.log"
+        if (let h <- LoggerConfig.getUnixPath(appender) && !h.isEmpty()) {
+            path = h
+        }
+        let writeTimeout = LoggerConfig.getUnixWriteTimeout(appender)
+        let bufSize = LoggerConfig.getUnixBufSize(appender)
+        UnixLoggerParams(
+            LoggerConfig.getLevelConf(appender), LoggerConfig.getPatternConf(appender),
+            path, writeTimeout, bufSize)
+    }
+    protected func newAppender(name: String): AbstractLogger {
+        UnixLoggerAppender(
+            name: name,
+            level: level,
+            pattern: pattern,
+            path: path,
+            writeTimeout: writeTimeout,
+            bufSize: bufSize
+        )
     }
 }
 let _ = UnixLoggerAppender.register()

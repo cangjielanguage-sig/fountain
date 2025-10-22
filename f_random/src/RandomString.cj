@@ -1,17 +1,22 @@
 /*
-    Copyright (c) [2022] [WuJingrun（吴京润）]
-    fountain is licensed under Mulan PSL v2.
-    You can use this software according to the terms and conditions of the Mulan PSL v2.
-    You may obtain a copy of Mulan PSL v2 at:
-            http://license.coscl.org.cn/MulanPSL2
-    THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-    See the Mulan PSL v2 for more details.
+Copyright (c) 2025 WuJingrun（吴京润）
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
  */
 package f_random
 
 import std.collection.ArrayList
 import stdx.crypto.crypto.SecureRandom
-
 import f_base.*
 
 /*
@@ -23,8 +28,19 @@ import f_base.*
    异常。
  */
 public class RandomString {
-    private static func concat(arrays: Array<Array<Rune>>){
-        arrays.iterator().flatMap{c => c.iterator()}.fold<ArrayList<Rune>>(ArrayList<Rune>(), {acc, e => acc.add(e);acc}).toArray()
+    private static func concat(arrays: Array<Array<Rune>>) {
+        arrays
+            .iterator()
+            .flatMap {c => c.iterator()}
+            .fold<ArrayList<Rune>>(
+                ArrayList<Rune>(),
+                {
+                    acc, e =>
+                    acc.add(e);
+                    acc
+                }
+            )
+            .toArray()
     }
     private static let LOWER_LETTERS = "abcdefghijklmnopqrstuvwxyz".toRuneArray()
     private static let UPPER_LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".toRuneArray()
@@ -33,7 +49,8 @@ public class RandomString {
     private static let LOWER_LETTERS_AND_NUMBERS = concat(LOWER_LETTERS, NUMBERS)
     private static let UPPER_LETTERS_AND_NUMBERS = concat(UPPER_LETTERS, NUMBERS)
     private static let ALL_LETTERS_AND_NUMBERS = concat(ALL_LETTERS, NUMBERS)
-    private static let ALL_PRINTABLE_ASCIIS = concat(ALL_LETTERS_AND_NUMBERS, "`~!@#$%^&*()-_=+[{]}\\|'\";:/?.>,<".toRuneArray())
+    private static let ALL_PRINTABLE_ASCIIS = concat(ALL_LETTERS_AND_NUMBERS,
+        "`~!@#$%^&*()-_=+[{]}\\|'\";:/?.>,<".toRuneArray())
     //utf32规范认为0~10ffff足够表示所有字符；d800~dfff不在utf32范围内，这部分是utf16特殊字符，需要前面一半数做高位，后面一半数做低位组合成一个字符，utf32没有使用这一段。
     //已经试过Rune(0xd800u32) Rune(0xdc00u32) Rune((0xd800u32 << 16) | 0xdc00u32)，都会出编译错误
     private static let ALL_CHARS = [(UInt32(0x0000), UInt32(0xD7FF)), (UInt32(0xE000), UInt32(0x10FFFF))]
@@ -45,7 +62,7 @@ public class RandomString {
 
     public func randomAscii(count: Int64) {
         var builder = StringGenerator()
-        for (_ in 0 .. count) {
+        for (_ in 0..count) {
             builder.append(Rune(rand.nextUInt32(128)))
         }
         return builder.toString()
@@ -58,7 +75,7 @@ public class RandomString {
     }
     public func random(count: Int64, source: Array<Rune>) {
         var builder = StringGenerator()
-        for (_ in 0 .. count) {
+        for (_ in 0..count) {
             builder.append(source[rand.nextInt64(source.size)])
         }
         return builder.toString()
@@ -120,7 +137,7 @@ public class RandomString {
     }
     public func randomAllChars(count: Int64) {
         var builder = StringGenerator()
-        for (_ in 0 .. count) {
+        for (_ in 0..count) {
             let idx = rand.nextInt64(2)
             let (start, end) = ALL_CHARS[idx]
             builder.append(Rune(rand.nextUInt32(start, end, closed: true)))

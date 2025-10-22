@@ -1,11 +1,17 @@
 /*
-    Copyright (c) [2022] [WuJingrun（吴京润）]
-    utility is licensed under Mulan PSL v2.
-    You can use this software according to the terms and conditions of the Mulan PSL v2.
-    You may obtain a copy of Mulan PSL v2 at:
-            http://license.coscl.org.cn/MulanPSL2
-    THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-    See the Mulan PSL v2 for more details.
+Copyright (c) 2025 WuJingrun（吴京润）
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
  */
 package f_util
 
@@ -13,8 +19,7 @@ import std.sync.Mutex
 import std.collection.{ArrayList, Map, HashMap}
 import std.convert.Parsable
 import std.time.DateTime
-
-import f_base.{EmptyMap, StringGenerator}
+import f_base.*
 import f_data.DataParsable
 import f_regex.*
 
@@ -37,13 +42,12 @@ import f_regex.*
  * 匹配优先级是a>b=c=d>e=f=g>h
  * (b)(c)可以同时出现在同一级路径中
  */
-
 public class PathPattern {
     public init() {}
 
     private let mutex = Mutex()
     private let patterns = ArrayList<PathNode>()
-    private let originPatterns = ArrayList<ArrayList<(String, Any)>>()
+    private let originPatterns = ArrayList<ArrayList<(String, () -> Any)>>()
 
     private func parts(path: String, withExtName: Bool): Array<String> {
         return trimExt(path, withExtName).split("/")
@@ -74,9 +78,9 @@ public class PathPattern {
                 }
                 for (i in 1..=len) {
                     if (i < originPatterns.size) {
-                        for ((pattern, data) in originPatterns[i]) {
+                        for ((pattern, supplier) in originPatterns[i]) {
                             let parts = this.parts(pattern, true)
-                            compile(node, parts, data)
+                            compile(false, node, parts, supplier)
                         }
                     }
                 }
@@ -107,14 +111,21 @@ public class PathPattern {
         }
         p
     }
-    //pattern是定义的路径，data是路径对应的数据，比如这个路径对应的执行函数、是否匹配当前请求方法等
-    public func compile(pattern: String, data: Any): PathPattern {
+    private func pretreat(pattern: String) {
         var p = pattern
         p = #"/\{\*(?=[a-zA-Z][A-Za-z0-9_]*\})"#.regex(solid: true).replaceAll(p, "/**/{")
         p = #"/\*{3,}"#.regex(solid: true).replaceAll(p, "/**")
         p = #"(/\*{2}){2,}"#.regex(solid: true).replaceAll(p, "/**")
         p = p.replace("//", "/")
         p = trimRedundantSlash(p)
+        p
+    }
+    //pattern是定义的路径，data是路径对应的数据，比如这个路径对应的执行函数、是否匹配当前请求方法等
+    public func compile<T>(pattern: String, data: T): PathPattern {
+        doCompile<T>(true, pattern){data}
+        this
+    }
+    private func doCompile<T>(anyway: Bool, pattern: String, supplier: () -> Any): T {
         let parts = parts(pattern, true)
         synchronized(mutex) {
             if (pattern.contains("**")) {
@@ -123,47 +134,35 @@ public class PathPattern {
                     patterns.add(NonePathNode.INSTANCE)
                 }
                 while (originPatterns.size < count + 1) {
-                    originPatterns.add(ArrayList<(String, Any)>())
+                    originPatterns.add(ArrayList<(String, () -> Any)>())
                 }
-                originPatterns[count].add((pattern, data))
+                originPatterns[count].add((pattern, supplier))
                 for (i in count..patterns.size) {
                     var node = patterns[i]
                     if (node is NonePathNode) {
                         node = PathNode()
                         patterns[i] = node
                     }
-                    compile(node, parts, data)
+                    compile(anyway, node, parts, supplier)
                 }
             }
             let prev = getPathNode(parts.size)
-            return compile(prev, parts, data)
+            return (compile(anyway, prev, parts, supplier) as T).getOrThrow()
         }
     }
     public func compileIfAbsent<T>(pattern: String, supplier: () -> T): T {
-        match (this.data<T>(pattern)) {
-            case Some(d) => d
-            case _ =>
-                synchronized(mutex) {
-                    match(this.data<T>(pattern)) {
-                        case Some(d) => d
-                        case _ =>
-                            let d = supplier()
-                            compile(pattern, d)
-                            d
-                    }
-                }
-        }
+        let p = pretreat(pattern)
+        doCompile<T>(false, p){supplier()}
     }
 
-    private func compile(prev: PathNode, parts: Array<String>, data: Any): PathPattern {
+    private func compile(anyway: Bool, prev: PathNode, parts: Array<String>, supplier: ()-> Any): Any {
         var prev_ = prev
         for (i in 0..parts.size) {
             let part = parts[i]
             prev_ = appendSubPathNode(prev_, part)
         }
         prev_.end = true
-        prev_.data(data)
-        return this
+        prev_.setDataIfNone(anyway, supplier)
     }
     private func appendSubPathNode(prev: PathNode, name: String): PathNode {
         return prev.appendSubPathNode(name).getOrThrow()
@@ -450,7 +449,7 @@ public class PathPattern {
         get(path, Mode.PREFIX, withExtName).data<T>()
     }
 
-    private func get(path: String, mode: Mode, withExtName: Bool): PathNode { //todo
+    private func get(path: String, mode: Mode, withExtName: Bool): PathNode {
         let p = trimRedundantSlash(path)
         let parts = this.parts(p, withExtName)
         match (mode) {
@@ -466,6 +465,7 @@ public class PathPattern {
         } ?? NonePathNode.INSTANCE
     }
 }
+
 extend<T> Option<T> where T <: PathNode {
     func matches(value: String): Bool {
         match (this) {
@@ -474,6 +474,7 @@ extend<T> Option<T> where T <: PathNode {
         }
     }
 }
+
 open class PathNode <: Equatable<PathNode> {
     protected var name: String
     let prev: Option<PathNode>
@@ -559,7 +560,8 @@ open class PathNode <: Equatable<PathNode> {
         }
         let iterator = regexPlaceholderPathNodes.values().iterator()
         var node: PathNode = NonePathNode.INSTANCE
-        if (!(current is PlaceholderRegexPathNode)) {
+        let cur = current ?? node
+        if (!(cur is PlaceholderRegexPathNode)) {
             for (n in iterator) {
                 node = n
                 if (node.matches(value)) {
@@ -567,7 +569,7 @@ open class PathNode <: Equatable<PathNode> {
                 }
             }
         } else {
-            while (current != node && let Some(n) <- iterator.next()) {
+            while (let Some(n) <- iterator.next() && cur != node) {
                 node = n
             }
             for (n in iterator) {
@@ -612,27 +614,27 @@ open class PathNode <: Equatable<PathNode> {
         return doubleStarNode
     }
     func appendSub(name: String): Option<PathNode> {
-        match(subs.get(name)){
+        match (subs.get(name)) {
             case Some(x) => x
-            case _ => 
+            case _ =>
                 let node = SubPathNode(name, this)
                 subs.addIfAbsent(name, node)
                 node
         }
     }
     func appendRegexNode(name: String, protogenesis: Bool): Option<PathNode> {
-        match(regexPathNodes.get(name)){
+        match (regexPathNodes.get(name)) {
             case Some(x) => x
-            case _ => 
+            case _ =>
                 let node = RegexPathNode(name, protogenesis, this)
                 regexPathNodes.addIfAbsent(name, node)
                 node
         }
     }
     func createPlaceholderRegexNodeIfAbsent(name: String, reg: String, protogenesis: Bool): Option<PathNode> {
-        match(regexPlaceholderPathNodes.get(name)){
+        match (regexPlaceholderPathNodes.get(name)) {
             case Some(x) => x
-            case _ => 
+            case _ =>
                 let node = PlaceholderRegexPathNode(name, reg, protogenesis, this)
                 regexPlaceholderPathNodes.addIfAbsent(name, node)
                 node
@@ -651,18 +653,18 @@ open class PathNode <: Equatable<PathNode> {
         return doubleStarNode
     }
     func createPlaceholderNodeIfAbsent(name: String): Option<PathNode> {
-        match(placeholderPathNodes.get(name)){
+        match (placeholderPathNodes.get(name)) {
             case Some(x) => x
-            case _ => 
+            case _ =>
                 let node = PlaceholderPathNode(name, this)
                 placeholderPathNodes.addIfAbsent(name, node)
                 node
         }
     }
     func createComplexPathNode(name: String): Option<PathNode> {
-        match(complexPathNodes.get(name)){
+        match (complexPathNodes.get(name)) {
             case Some(x) => x
-            case _ => 
+            case _ =>
                 let node = ComplexPathNode(name, this)
                 complexPathNodes.addIfAbsent(name, node)
                 node
@@ -672,24 +674,25 @@ open class PathNode <: Equatable<PathNode> {
         match (name) {
             case "*" => this.createStarNodeIfAbsent()
             case "**" => this.createDoubleStarNodeIfAbsent()
-            case _ => if (#"^\{#regex:.+\}$"#.regex(solid: true).matches(name)) {
-                let idx = (name.indexOf(":") ?? -1) + 1
-                let n = name[idx..name.size - 1]
-                this.appendRegexNode(n, true)
-            } else if (#"^\{[a-zA-Z_]+\w*:.+\}$"#.regex(solid: true).matches(name)) {
-                let idx = name.indexOf(":") ?? -1
-                let reg = name[idx + 1..name.size - 1]
-                let n = name[1..idx]
-                this.createPlaceholderRegexNodeIfAbsent(n, reg, true)
-            } else if (#"^\{[a-zA-Z_]+\w*\}$"#.regex(solid: true).matches(name)) {
-                return this.createPlaceholderNodeIfAbsent(name[1..name.size - 1])
-            } else if (#"^(.*\{[a-zA-Z_]+\w*\}.*)+$"#.regex(solid: true).matches(name)) {
-                return this.createComplexPathNode(name)
-            } else if (name.contains("*") || name.contains("?")) {
-                return this.appendRegexNode(name, false)
-            } else {
-                return this.appendSub(name)
-            }
+            case _ =>
+                if (#"^\{#regex:.+\}$"#.regex(solid: true).matches(name)) {
+                    let idx = (name.indexOf(":") ?? -1) + 1
+                    let n = name[idx..name.size - 1]
+                    this.appendRegexNode(n, true)
+                } else if (#"^\{[a-zA-Z_]+\w*:.+\}$"#.regex(solid: true).matches(name)) {
+                    let idx = name.indexOf(":") ?? -1
+                    let reg = name[idx + 1..name.size - 1]
+                    let n = name[1..idx]
+                    this.createPlaceholderRegexNodeIfAbsent(n, reg, true)
+                } else if (#"^\{[a-zA-Z_]+\w*\}$"#.regex(solid: true).matches(name)) {
+                    return this.createPlaceholderNodeIfAbsent(name[1..name.size - 1])
+                } else if (#"^(.*\{[a-zA-Z_]+\w*\}.*)+$"#.regex(solid: true).matches(name)) {
+                    return this.createComplexPathNode(name)
+                } else if (name.contains("*") || name.contains("?")) {
+                    return this.appendRegexNode(name, false)
+                } else {
+                    return this.appendSub(name)
+                }
         }
     }
     mut prop end: Bool {
@@ -703,6 +706,12 @@ open class PathNode <: Equatable<PathNode> {
     func data(data: Any): Unit {
         this.data_ = data
     }
+    func setDataIfNone(anyway: Bool, supplier: () -> Any): Any {
+        if(anyway || this.data_.isNone()){
+            this.data_ = supplier()
+        }
+        this.data_.getOrThrow()
+    }
     func data<T>(): Option<T> {
         match (data_) {
             case Some(x) => x as T
@@ -711,10 +720,10 @@ open class PathNode <: Equatable<PathNode> {
     }
     protected open operator func ==(o: Any): Bool {
         match (o) {
-            case x: PathNode => name == x.name
+            case x: PathNode => refEq(this, x) || name == x.name
             case x: String => name == x
             case opt: Option<PathNode> => match (opt) {
-                case Some(x) => name == x.name
+                case Some(x) => refEq(this, x) || name == x.name
                 case _ => false
             }
             case opt: Option<String> => match (opt) {
@@ -725,7 +734,7 @@ open class PathNode <: Equatable<PathNode> {
         }
     }
     public operator func ==(node: PathNode): Bool {
-        name == node.name
+        refEq(this, node) || name == node.name
     }
     public operator func !=(node: PathNode): Bool {
         name != node.name
@@ -734,11 +743,15 @@ open class PathNode <: Equatable<PathNode> {
         return this == value
     }
 }
+
 class NonePathNode <: PathNode {
     static let INSTANCE: PathNode = NonePathNode()
     private init() {}
     protected operator func ==(o: Any): Bool {
-        o is NonePathNode || (o as Option<NonePathNode>).isSome()
+        match(o){
+            case x: Object => refEq(this, x)
+            case _ => false
+        } || o is NonePathNode || (o as Option<NonePathNode>).isSome()
     }
 }
 //实路径节点
@@ -753,6 +766,10 @@ class StarPathNode <: PathNode {
         super("*", prev)
     }
     protected operator func ==(o: Any): Bool {
+        match(o){
+            case x: Object => refEq(this, x)
+            case _ => false
+        } ||
         o is PathNode || o is String || (o as Option<DoubleStarPathNode>).isSome() ||
             (o as Option<StarPathNode>).isSome() || (o as Option<RegexPathNode>).isSome() ||
             (o as Option<PlaceholderPathNode>).isSome() || (o as Option<ComplexPathNode>).isSome() ||
@@ -766,6 +783,10 @@ class DoubleStarPathNode <: PathNode {
         super("**", prev)
     }
     protected operator func ==(o: Any) {
+        match(o){
+            case x: Object => refEq(this, x)
+            case _ => false
+        } ||
         o is PathNode || o is String || (o as Option<DoubleStarPathNode>).isSome() ||
             (o as Option<StarPathNode>).isSome() || (o as Option<RegexPathNode>).isSome() ||
             (o as Option<PlaceholderPathNode>).isSome() || (o as Option<ComplexPathNode>).isSome() ||
@@ -773,6 +794,7 @@ class DoubleStarPathNode <: PathNode {
             (o as Option<String>).isSome()
     }
 }
+
 open class RegexPathNode <: PathNode {
     private var reg: Regex
     init(name: String, protogenesis: Bool, prev: PathNode) {
@@ -804,17 +826,23 @@ open class RegexPathNode <: PathNode {
         return reg.matches(name)
     }
 }
+
 class PlaceholderRegexPathNode <: RegexPathNode {
     init(name: String, reg: String, protogenesis: Bool, prev: PathNode) {
         super(reg, protogenesis, prev)
         super.name = name
     }
 }
+
 class PlaceholderPathNode <: PathNode {
     init(name: String, prev: PathNode) {
         super(name, prev)
     }
     protected operator func ==(o: Any): Bool {
+        match(o){
+            case x: Object => refEq(this, x)
+            case _ => false
+        } ||
         o is PlaceholderPathNode || o is String || (o as Option<PlaceholderPathNode>).isSome() ||
             (o as Option<String>).isSome()
     }
@@ -822,6 +850,7 @@ class PlaceholderPathNode <: PathNode {
         return this == name
     }
 }
+
 class ComplexPathNode <: PathNode {
     private let patterns = ArrayList<PathNode>()
     private let reg: Regex
@@ -854,7 +883,7 @@ class ComplexPathNode <: PathNode {
             part = name[start..]
             patterns.add(tmp.appendSubPathNode(part).getOrThrow())
         }
-        return "^(${String.join(parts.toArray(), delimiter: ")(")})$".regex() //正则非贪婪匹配
+        return "^(${String.join(parts.unsafeData(), delimiter: ")(")})$".regex() //正则非贪婪匹配
     }
     private static func appendPart(tmp: PathNode, parts: ArrayList<String>, name: String, start: Int64, end: Int64): PathNode {
         let part = name[start..end]
@@ -907,6 +936,7 @@ class ComplexPathNode <: PathNode {
         return datas
     }
 }
+
 enum Mode {
     | MATCHING
     | EXTRACTION

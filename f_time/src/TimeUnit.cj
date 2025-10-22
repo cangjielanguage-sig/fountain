@@ -1,17 +1,24 @@
 /*
-    Copyright (c) [2022] [WuJingrun（吴京润）]
-    fountain is licensed under Mulan PSL v2.
-    You can use this software according to the terms and conditions of the Mulan PSL v2.
-    You may obtain a copy of Mulan PSL v2 at:
-            http://license.coscl.org.cn/MulanPSL2
-    THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-    See the Mulan PSL v2 for more details.
+Copyright (c) 2025 WuJingrun（吴京润）
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
  */
 package f_time
 
 import std.convert.Parsable
 
 public type TU = TimeUnit
+
 public enum TimeUnit <: ToString & Parsable<TimeUnit> {
     | NANOSECOND
     | MICROSECOND
@@ -25,7 +32,7 @@ public enum TimeUnit <: ToString & Parsable<TimeUnit> {
     | YEAR
 
     public static func parse(value: String): TimeUnit {
-        tryParse(value).getOrThrow{IllegalArgumentException('${value} cannot be parsed to TimeUnit')}
+        tryParse(value).getOrThrow {IllegalArgumentException('${value} cannot be parsed to TimeUnit')}
     }
     public static func tryParse(value: String): Option<TimeUnit> {
         match (value.toAsciiUpper()) {
@@ -52,9 +59,9 @@ public enum TimeUnit <: ToString & Parsable<TimeUnit> {
      * 比如datetime是2023-10-11 12:31:32.568900，当前时间单位是minute，duration是1，返回值是2023-10-11 12:32:00.000000
      */
     public func next(datetime!: DateTime = DateTime.now(), duration!: Int64 = 1, toTrim!: Bool = true): DateTime {
-        let d = if(toTrim){
+        let d = if (toTrim) {
             trim(datetime)
-        }else{
+        } else {
             datetime
         }
         match (this) {

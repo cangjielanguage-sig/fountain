@@ -1,25 +1,33 @@
 /*
-    Copyright (c) [2022] [WuJingrun（吴京润）]
-    fountain is licensed under Mulan PSL v2.
-    You can use this software according to the terms and conditions of the Mulan PSL v2.
-    You may obtain a copy of Mulan PSL v2 at:
-            http://license.coscl.org.cn/MulanPSL2
-    THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-    See the Mulan PSL v2 for more details.
+Copyright (c) 2025 WuJingrun（吴京润）
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
  */
 package f_concurrent
 
 public class BloomFilter<T> where T <: Hashable {
-    private let mutex = Mutex()
+    private let lock = ReadWriteLock()
+    private let wl = lock.writeLock
+    private let rl = lock.readLock
     private let bits = BitSet()
     public BloomFilter(private let hashers: Array<(T, Int64) -> Int64>) {}
     public init(iterate!: Int64 = 5) {
         this(genHashers(iterate))
     }
     public init(hashers: Array<(T) -> Int64>) {
-        this(Array<(T, Int64) -> Int64>(hashers.size) {i =>
-            {v: T, _: Int64 =>
-                hashers[i](v)
+        this(Array<(T, Int64) -> Int64>(hashers.size) {
+            i => {
+                v: T, _: Int64 => hashers[i](v)
             }
         })
     }
@@ -32,9 +40,9 @@ public class BloomFilter<T> where T <: Hashable {
     }
     public func set(value: T): Unit {
         var h = value.hashCode()
-        synchronized(mutex){
+        synchronized(wl) {
             bits[h] = true
-            for(hasher in hashers){
+            for (hasher in hashers) {
                 h = hasher(value, h)
                 bits[h] = true
             }
@@ -42,11 +50,11 @@ public class BloomFilter<T> where T <: Hashable {
     }
     public func contains(value: T): Bool {
         var h = value.hashCode()
-        synchronized(mutex){
+        synchronized(rl) {
             var result = bits[h]
             if (result) {
                 var i = 0
-                while(result && i < hashers.size) {
+                while (result && i < hashers.size) {
                     h = hashers[i](value, h)
                     result &&= bits[h]
                     i++

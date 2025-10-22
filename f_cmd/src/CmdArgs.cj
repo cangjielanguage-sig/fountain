@@ -1,12 +1,18 @@
 /*
-    Copyright (c) [2022] [WuJingrun（吴京润）]
-    fountain is licensed under Mulan PSL v2.
-    You can use this software according to the terms and conditions of the Mulan PSL v2.
-    You may obtain a copy of Mulan PSL v2 at:
-            http://license.coscl.org.cn/MulanPSL2
-    THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-    See the Mulan PSL v2 for more details.  
-*/
+Copyright (c) 2025 WuJingrun（吴京润）
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+ */
 package f_cmd
 
 import std.collection.{HashMap, ArrayList}
@@ -14,8 +20,8 @@ import std.convert.Parsable
 import std.fs.Path
 import std.env
 import std.process.Process
+import f_base.*
 import f_regex.*
-
 import f_cmd.exception.CmdException
 
 public class CmdArgs {
@@ -23,7 +29,7 @@ public class CmdArgs {
     private var appName = env.getCommand()
     private var _currentWorkingDir = env.getWorkingDirectory()
     private init() {
-        this(env.getCommandLine()[1 ..])
+        this(env.getCommandLine()[1..])
     }
     private init(args: Array<String>) {
         var prev = ''
@@ -32,16 +38,16 @@ public class CmdArgs {
                 prev = ''
                 let idxopt = arg.indexOf("=")
                 if (let Some(idx) <- idxopt) {
-                    let key = arg[2 .. idx].trimAscii()
-                    let val = arg[idx + 1 ..].trimAscii()
-                    if(let Some(l) <- this.args.get(key)){
+                    let key = arg[2..idx].trimAscii()
+                    let val = arg[idx + 1..].trimAscii()
+                    if (let Some(l) <- this.args.get(key)) {
                         l.add(val)
-                    }else{
+                    } else {
                         let l = ArrayList<String>()
                         l.add(val)
                         this.args.add(key, l)
                     }
-                }else if(let key <- arg[2 ..].trimAscii() && !this.args.contains(key)){
+                } else if (let key <- arg[2..].trimAscii() && !this.args.contains(key)) {
                     this.args[key] = ArrayList<String>()
                 }
             } else if (arg.startsWith("-")) {
@@ -60,7 +66,7 @@ public class CmdArgs {
         for (key in args.keys() where key.startsWith(prefix)) {
             list.add(key)
         }
-        list.toArray()
+        list.unsafeData()
     }
     public func contains(name: String): Bool {
         args.contains(name)
@@ -78,7 +84,7 @@ public class CmdArgs {
         return appName
     }
     public prop currentWorkingDirectory: Path {
-        get(){
+        get() {
             _currentWorkingDir
         }
     }

@@ -1,19 +1,26 @@
 /*
-    Copyright (c) [2022] [WuJingrun（吴京润）]
-    fountain is licensed under Mulan PSL v2.
-    You can use this software according to the terms and conditions of the Mulan PSL v2.
-    You may obtain a copy of Mulan PSL v2 at:
-            http://license.coscl.org.cn/MulanPSL2
-    THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-    See the Mulan PSL v2 for more details.
+Copyright (c) 2025 WuJingrun（吴京润）
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
  */
 package f_util
 
 import std.collection.HashMap
-import f_exception.IllegalAccessException
+import std.reflect.TypeInfo
+import f_base.TypeInfos
+import f_exception.{IllegalAccessException, TypeNotMatchException}
 
-public interface Producer<N, A, O> where N <: Hashable & Equatable<N> {
-    prop name: N
+public interface Producer<A, O> {
     func produce(): O {
         throw IllegalAccessException("unimplemented")
     }
@@ -21,21 +28,28 @@ public interface Producer<N, A, O> where N <: Hashable & Equatable<N> {
         throw IllegalAccessException("unimplemented")
     }
 }
-public class Factory<N, A, O> where N <: Hashable & Equatable<N> {
-    private let producers = HashMap<N, Producer<N, A, O>>()
 
-    public func assemble(producer: Producer<N, A, O>): Unit {
-        producers.add(producer.name, producer)
+public class Factory<A, O> {
+    private let producers = HashMap<TypeInfo, Producer<A, O>>()
+
+    public func assemble<T>(producer: Producer<A, O>): Unit {
+        producers.add(TypeInfos.get<T>(), producer)
     }
-    public func assemble(producers: Iterable<Producer<N, A, O>>): Unit {
+    public func assemble<T>(producers: Iterable<Producer<A, O>>): Unit {
         for (producer in producers) {
-            assemble(producer)
+            assemble<T>(producer)
         }
     }
-    public func produce(name: N): O {
-        producers[name].produce()
+    private func convert<T>(o: O): T {
+        match(o){
+            case x: T => x
+            case _ => throw TypeNotMatchException('${TypeInfos.get<T>()} must be subtype of ${TypeInfos.get<O>()}')
+        }
     }
-    public func produce(name: N, arg: A): O {
-        producers[name].produce(arg)
+    public func produce<T>(): T {
+        convert<T>(producers[TypeInfos.get<T>()].produce())
+    }
+    public func produce<T>(arg: A): T {
+        convert<T>(producers[TypeInfos.get<T>()].produce(arg))
     }
 }

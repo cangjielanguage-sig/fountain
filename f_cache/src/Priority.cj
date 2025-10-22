@@ -1,11 +1,17 @@
 /*
-    Copyright (c) [2022] [WuJingrun（吴京润）]
-    fountain is licensed under Mulan PSL v2.
-    You can use this software according to the terms and conditions of the Mulan PSL v2.
-    You may obtain a copy of Mulan PSL v2 at:
-            http://license.coscl.org.cn/MulanPSL2
-    THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-    See the Mulan PSL v2 for more details.
+Copyright (c) 2025 WuJingrun（吴京润）
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
  */
 package f_cache
 
@@ -27,32 +33,38 @@ public open class Priority<V> <: Comparable<Priority<V>> where V <: Object {
     private var usedUtilLastChecked = ref.load() //缓存数据截至上次检查时间的使用次数
     private var lastUsed = birth //缓存数据上次使用时间
     private var maxLife_: Duration //缓存数据的最大生存期，每条数据的生存期可以不同
+    private let checkDuration: Duration
     private let once_ = AtomicBool(false) //控制缓存数据的生存时间，true从出生开始算，false从上次使用时间开始算
     let key: String
     private let value: AtomicReference<V>
 
-    protected init(key: String, value: V, maxLife: Duration, once: Bool) {
+    protected init(key: String, value: V, maxLife: Duration, checkDuration: Duration, once: Bool) {
         this.key = key
         this.value = AtomicReference<V>(value)
         this.maxLife_ = maxLife
+        this.checkDuration = checkDuration
         this.once_.store(once)
     }
     public open func compare(other: Priority<V>): Ordering {
         let lastUsed = this.lastUsedTime
         let otherLastUsed = other.lastUsedTime
         func cmp(): Ordering {
-            let duration = (lastUsed - lastCheckedTime).toSeconds()
-            let otherDuration = (otherLastUsed - other.lastCheckedTime).toSeconds()
+            let duration = (lastUsed - lastCheckedTime)
+            let otherDuration = (otherLastUsed - other.lastCheckedTime)
 
             var ordering: Ordering = (usedCount - usedCountUtilLastChecked).compare(
                 other.usedCount - other.usedCountUtilLastChecked)
             ordering = match (ordering) {
-                case EQ => duration.compare(otherDuration)
+                case EQ => otherDuration.compare(duration)
                 case _ => return ordering
             }
             ordering = match (ordering) {
-                case EQ => lastUsed.compare(otherLastUsed)
+                case EQ => otherLastUsed.compare(lastUsed)
                 case _ => return ordering
+            }
+            ordering = match (ordering) {
+                case EQ => other.ref.load().compare(this.ref.load())
+                case _ => ordering
             }
             match (ordering) {
                 case EQ => this.birth.compare(other.birth)
@@ -66,9 +78,9 @@ public open class Priority<V> <: Comparable<Priority<V>> where V <: Object {
         //在数据段头同时最后访问时间还在最近一个生命周期之内，要么是整个数据段都是刚刚出生，要么是整个数据段使用都很频繁
         if (ageSub >= -1.0 && ageSub <= 1.0) {
             cmp() //两个待比较数据都在最近一个生命周期内刚访问过
-        } else if (age <= 1.0 && otherAge > 1.0) { //两个待比较数据的最后访问时间距今的时间差超过一个生命周期，保护新生
+        } else if (ageSub > 1.0) { //两个待比较数据的最后访问时间距今的时间差超过一个生命周期，保护新生
             GT
-        } else if (age > 1.0 && otherAge <= 1.0) {
+        } else if (age < -1.0) {
             LT
         } else { //两个待比较数据的最后访问时间距今都超过了一个生命周期，成年了不需要保护了
             cmp()
@@ -81,7 +93,7 @@ public open class Priority<V> <: Comparable<Priority<V>> where V <: Object {
                     birth
                 } else {
                     lastUsed
-                }) / maxLife_
+                }) / checkDuration
             }
         }
     }

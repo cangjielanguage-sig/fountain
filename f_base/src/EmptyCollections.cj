@@ -1,11 +1,17 @@
 /*
-    Copyright (c) [2022] [WuJingrun（吴京润）]
-    fountain is licensed under Mulan PSL v2.
-    You can use this software according to the terms and conditions of the Mulan PSL v2.
-    You may obtain a copy of Mulan PSL v2 at:
-            http://license.coscl.org.cn/MulanPSL2
-    THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-    See the Mulan PSL v2 for more details.
+Copyright (c) 2025 WuJingrun（吴京润）
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
  */
 package f_base
 
@@ -18,9 +24,10 @@ public class EmptyArray<T> {
     }
     private init() {}
 }
+
 public class EmptySet<T> <: Set<T> where T <: Equatable<T> {
     // public static let INSTANCE = EmptySet<T>()
-    public static func INSTANCE(){
+    public static func INSTANCE() {
         EmptySet<T>()
     }
 
@@ -132,9 +139,10 @@ public class EmptySet<T> <: Set<T> where T <: Equatable<T> {
         this
     }
 }
+
 public class EmptyIterator<T> <: Iterator<T> {
     // public static let INSTANCE = EmptyIterator<T>()
-    public static func INSTANCE(){
+    public static func INSTANCE() {
         EmptyIterator<T>()
     }
     private init() {}
@@ -142,9 +150,10 @@ public class EmptyIterator<T> <: Iterator<T> {
         None<T>
     }
 }
+
 public class EmptyIterable<T> <: Iterable<T> {
     // public static let INSTANCE = EmptyIterable<T>()
-    public static func INSTANCE(){
+    public static func INSTANCE() {
         EmptyIterable<T>()
     }
     private init() {}
@@ -152,9 +161,10 @@ public class EmptyIterable<T> <: Iterable<T> {
         EmptyIterator<T>.INSTANCE()
     }
 }
+
 public class EmptyMap<K, V> <: Map<K, V> & Bucket<K, V> where K <: Equatable<K> {
     // public static let INSTANCE = EmptyMap<K, V>()
-    public static func INSTANCE(){
+    public static func INSTANCE() {
         EmptyMap<K, V>()
     }
 
@@ -326,23 +336,25 @@ public class EmptyMap<K, V> <: Map<K, V> & Bucket<K, V> where K <: Equatable<K> 
         EmptyMapEntryView<K, V>(k)
     }
 }
+
 public class EmptyMapEntryView<K, V> <: MapEntryView<K, V> {
-    EmptyMapEntryView(private let k: K){}
+    EmptyMapEntryView(private let k: K) {}
     public prop key: K {
-        get(){
+        get() {
             k
         }
     }
     public mut prop value: ?V {
-        get(){
+        get() {
             None<V>
         }
-        set(value){}
+        set(value) {}
     }
 }
+
 public class EmptyEquatableCollection<K> <: EquatableCollection<K> where K <: Equatable<K> {
     // public static let INSTANCE = EmptyEquatableCollection<K>()
-    public static func INSTANCE(){
+    public static func INSTANCE() {
         EmptyEquatableCollection<K>()
     }
     private init() {}
@@ -398,7 +410,7 @@ public class EmptyEquatableCollection<K> <: EquatableCollection<K> where K <: Eq
 
 public class EmptyCollection<T> <: Collection<T> {
     // public static let INSTANCE = EmptyCollection<T>()
-    public static func INSTANCE(){
+    public static func INSTANCE() {
         EmptyCollection<T>()
     }
     private init() {}
@@ -432,12 +444,13 @@ public class EmptyCollection<T> <: Collection<T> {
         EmptyIterator<T>.INSTANCE()
     }
 }
+
 public class EmptyList<T> <: List<T> {
     // public static let INSTANCE = EmptyList<T>()
-    public static func INSTANCE(){
+    public static func INSTANCE() {
         EmptyList<T>()
     }
-    private init(){}
+    private init() {}
     public func isEmpty(): Bool {
         true
     }
@@ -449,23 +462,25 @@ public class EmptyList<T> <: List<T> {
             0
         }
     }
-    public func add(element: T): Unit{}
-    public func add(all!: Collection<T>): Unit{}
-    public func add(element: T, at!: Int64): Unit{}
-    public func add(all!: Collection<T>, at!: Int64): Unit{}
-    public func remove(at!: Int64): T{
+    public func add(element: T): Unit {}
+    public func add(all!: Collection<T>): Unit {}
+    public func add(element: T, at!: Int64): Unit {}
+    public func add(all!: Collection<T>, at!: Int64): Unit {}
+    public func remove(at!: Int64): T {
         throw IndexOutOfBoundsException('current list is empty')
     }
-    public func remove(range: Range<Int64>): Unit{}
+    public func remove(range: Range<Int64>): Unit {}
     public func removeIf(predicate: (T) -> Bool): Unit {}
     public func clear(): Unit {}
-    
-    public operator func [](index: Int64, value!: T): Unit{}
+
+    public operator func [](index: Int64, value!: T): Unit {}
     public operator func [](index: Int64): T {
         throw IndexOutOfBoundsException('current list is empty')
     }
     public func insert(at: Int64, element: T): Unit {}
-    public func remove(element: T): Bool {false}
+    public func remove(element: T): Bool {
+        false
+    }
     public func contains(element: T): Bool {
         false
     }
@@ -488,12 +503,12 @@ public class EmptyList<T> <: List<T> {
         0
     }
     public prop first: ?T {
-        get(){
+        get() {
             None<T>
         }
     }
     public prop last: ?T {
-        get(){
+        get() {
             None<T>
         }
     }

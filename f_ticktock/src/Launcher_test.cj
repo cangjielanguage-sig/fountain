@@ -1,11 +1,17 @@
 /*
-    Copyright (c) [2022] [WuJingrun（吴京润）]
-    fountain is licensed under Mulan PSL v2.
-    You can use this software according to the terms and conditions of the Mulan PSL v2.
-    You may obtain a copy of Mulan PSL v2 at:
-            http://license.coscl.org.cn/MulanPSL2
-    THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-    See the Mulan PSL v2 for more details.
+Copyright (c) 2025 WuJingrun（吴京润）
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
  */
 package f_ticktock
 
@@ -14,7 +20,7 @@ import std.sync.{Mutex, AtomicInt64}
 @Test
 public class Launcher_test {
     private let lock = Mutex()
-    private let condition = synchronized(lock){
+    private let condition = synchronized(lock) {
         lock.condition()
     }
     private func waitAndShutdown(launcher: Ticktock) {
@@ -400,6 +406,7 @@ public class Launcher_test {
     //     launcher.shutdown()
     // }
 }
+
 class LauncherTestTask0 <: TicktockTask {
     public prop name: String {
         get() {
@@ -420,6 +427,7 @@ class LauncherTestTask0 <: TicktockTask {
         println("${name} ${integer.fetchAdd(1)} ${DateTime.now()} ${elapsed}")
     }
 }
+
 class LauncherTestTask1_1 <: TicktockTask {
     public prop name: String {
         get() {
@@ -437,6 +445,7 @@ class LauncherTestTask1_1 <: TicktockTask {
         println("${name} ${integer.fetchAdd(1)} ${DateTime.now()} ${elapsed}")
     }
 }
+
 class LauncherTestTask1_2 <: TicktockTask {
     public prop name: String {
         get() {
@@ -454,10 +463,11 @@ class LauncherTestTask1_2 <: TicktockTask {
         println("${name} ${integer.fetchAdd(1)} ${DateTime.now()} ${elapsed}")
     }
 }
+
 class LauncherTestTask2 <: TicktockTask {
     private let condition: Condition
     LauncherTestTask2(let lock: Mutex) {
-        synchronized(lock){
+        synchronized(lock) {
             condition = lock.condition()
         }
     }
@@ -473,6 +483,7 @@ class LauncherTestTask2 <: TicktockTask {
         }
     }
 }
+
 class LauncherTestTask3 <: TicktockTask {
     public prop name: String {
         get() {
@@ -485,6 +496,7 @@ class LauncherTestTask3 <: TicktockTask {
         println("${name} ${integer.fetchAdd(1)} ${DateTime.now()}")
     }
 }
+
 class LauncherTestTask4 <: TicktockTask {
     public prop name: String {
         get() {
@@ -497,6 +509,7 @@ class LauncherTestTask4 <: TicktockTask {
         println("${name} ${integer.fetchAdd(1)} ${DateTime.now()}")
     }
 }
+
 class LauncherTestTask5 <: TicktockTask {
     public prop name: String {
         get() {
@@ -509,6 +522,7 @@ class LauncherTestTask5 <: TicktockTask {
         println("${name} ${integer.fetchAdd(1)} ${DateTime.now()}")
     }
 }
+
 class LauncherTestTask6 <: TicktockTask {
     public prop name: String {
         get() {
@@ -521,6 +535,7 @@ class LauncherTestTask6 <: TicktockTask {
         println("${name} ${integer.fetchAdd(1)} ${DateTime.now()}")
     }
 }
+
 class LauncherTestTask7 <: TicktockTask {
     public prop name: String {
         get() {
@@ -533,6 +548,7 @@ class LauncherTestTask7 <: TicktockTask {
         println("${name} ${integer.fetchAdd(1)} ${DateTime.now()}")
     }
 }
+
 class LauncherTestTask8 <: TicktockTask {
     public prop name: String {
         get() {
@@ -545,6 +561,7 @@ class LauncherTestTask8 <: TicktockTask {
         println("${name} ${integer.fetchAdd(1)} ${DateTime.now()}")
     }
 }
+
 class LauncherTestTask9 <: TicktockTask {
     public prop name: String {
         get() {
@@ -556,6 +573,7 @@ class LauncherTestTask9 <: TicktockTask {
         println("${name} ${DateTime.now()}")
     }
 }
+
 class LauncherTestTask10 <: TicktockTask {
     public prop name: String {
         get() {
@@ -565,6 +583,7 @@ class LauncherTestTask10 <: TicktockTask {
 
     public func execute(): Unit {}
 }
+
 class LauncherTestTask11 <: TicktockTask {
     public prop name: String {
         get() {
@@ -581,6 +600,7 @@ class LauncherTestTask11 <: TicktockTask {
         }
     }
 }
+
 class LauncherTestTask12 <: TicktockTask {
     private var executed = 0
 
@@ -596,6 +616,7 @@ class LauncherTestTask12 <: TicktockTask {
         throw Exception()
     }
 }
+
 class LauncherTestTask13 <: TicktockTask {
     private var executed = 0
 
@@ -610,6 +631,7 @@ class LauncherTestTask13 <: TicktockTask {
         println("executed: ${name}-${executed}-DateTime.now()")
     }
 }
+
 class LauncherTestTask14 <: TicktockTask {
     public prop name: String {
         get() {

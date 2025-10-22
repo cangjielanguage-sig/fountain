@@ -1,12 +1,18 @@
 /*
-    Copyright (c) [2022] [WuJingrun（吴京润）]
-    fountain is licensed under Mulan PSL v2.
-    You can use this software according to the terms and conditions of the Mulan PSL v2.
-    You may obtain a copy of Mulan PSL v2 at:
-            http://license.coscl.org.cn/MulanPSL2
-    THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-    See the Mulan PSL v2 for more details.
-*/
+Copyright (c) 2025 WuJingrun（吴京润）
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+ */
 package f_util
 
 import std.math.numeric.Decimal
@@ -41,10 +47,11 @@ import f_random.ThreadLocalRandom
  * let aliceKey=alice.key(B,p);//alice保存key，不对外公开
  */
 public struct Semi {
-    public Semi(public let g: Array<Byte>, public let p: Array<Byte>, public let A: BigInt){}
+    public Semi(public let g: Array<Byte>, public let p: Array<Byte>, public let A: BigInt) {}
 }
-public class DiffieHellmanKeyExchangerClient <: DiffieHellmanKeyExchanger{
-    public func semi(gBytes!: Int32 = 16, pBytes!: Int32 = 16){
+
+public class DiffieHellmanKeyExchangerClient <: DiffieHellmanKeyExchanger {
+    public func semi(gBytes!: Int32 = 16, pBytes!: Int32 = 16) {
         ab()
         let g = randomBytes(bytes: gBytes)
         let p = randomBytes(bytes: pBytes)
@@ -53,47 +60,47 @@ public class DiffieHellmanKeyExchangerClient <: DiffieHellmanKeyExchanger{
     }
 }
 
-public class DiffieHellmanKeyExchangerServer <: DiffieHellmanKeyExchanger{
-    public func key(m: Array<Byte>, p: Array<Byte>): String{
+public class DiffieHellmanKeyExchangerServer <: DiffieHellmanKeyExchanger {
+    public func key(m: Array<Byte>, p: Array<Byte>): String {
         var result = "0"
-        while(result == '0'){
-            ab_=0
-            result = super.key(m,p)
+        while (result == '0') {
+            ab_ = 0
+            result = super.key(m, p)
         }
         return result
     }
     /**
-        * Bob 必须首先执行Bob.key
-        * @param g
-        * @param p
-        * @return B
-        */
-    public func finish(g: Array<Byte>, p: Array<Byte>): BigInt{
+     * Bob 必须首先执行Bob.key
+     * @param g
+     * @param p
+     * @return B
+     */
+    public func finish(g: Array<Byte>, p: Array<Byte>): BigInt {
         return middle(g, p)
     }
 }
 
-abstract sealed class DiffieHellmanKeyExchanger{
-    protected var ab_: Int64 = random()//ab
+abstract sealed class DiffieHellmanKeyExchanger {
+    protected var ab_: Int64 = random() //ab
 
-    protected func ab(){
-        if(ab_ == 0){
-            ab_ = random();
+    protected func ab() {
+        if (ab_ == 0) {
+            ab_ = random()
         }
     }
     public open func key(m: Array<Byte>, p: Array<Byte>): String {
         ab()
-        let mm = middle(m,p)
+        let mm = middle(m, p)
         return mm.toString(radix: 36)
     }
 
     protected func middle(g: Array<Byte>, p: Array<Byte>): BigInt {
         (Decimal(BigInt(true, g)) ** ab_).toBigInt() % BigInt(true, p)
     }
-    protected static func random(){
+    protected static func random() {
         ThreadLocalRandom.current.nextInt64()
     }
-    protected static func randomBytes(bytes!: Int32 = 16){
+    protected static func randomBytes(bytes!: Int32 = 16) {
         ThreadLocalRandom.current.nextBytes(bytes)
     }
     public static func randomByteLen(): Int32 {
@@ -101,7 +108,7 @@ abstract sealed class DiffieHellmanKeyExchanger{
         var r = 0i32
         do {
             r = rand.nextInt32()
-        }while(r <= 0)
+        } while (r <= 0)
         r
     }
 }

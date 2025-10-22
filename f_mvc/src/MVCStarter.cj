@@ -1,28 +1,36 @@
 /*
-    Copyright (c) [2022] [WuJingrun（吴京润）]
-    fountain is licensed under Mulan PSL v2.
-    You can use this software according to the terms and conditions of the Mulan PSL v2.
-    You may obtain a copy of Mulan PSL v2 at:
-            http://license.coscl.org.cn/MulanPSL2
-    THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-    See the Mulan PSL v2 for more details.
+Copyright (c) 2025 WuJingrun（吴京润）
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
  */
 package f_mvc
 
 public class MVCStarter {
-    private static let log = LoggerFactory.getLogger<MVCStarter>()
-    
-    private MVCStarter(private let server: Server){
+    private MVCStarter(private let server: Server, private let host: String, private let port: UInt16) {
         atExit(closeGracefully)
     }
     public static func initialize(): ?MVCStarter {
-        if(!initial_.compareAndSwap(false, true)){
+        if (!initial_.compareAndSwap(false, true)) {
             throw MVCException('mvc has been started')
         }
-        if(!registered.load()) {
+        if (!registered.load()) {
             return None<MVCStarter>
         }
-        let builder = ServerBuilder().addr(MVCConfig.host).port(MVCConfig.port).logger(log)
+        let host = MVCConfig.host
+        let port = MVCConfig.port
+        let builder = ServerBuilder().addr(host).port(port)
+        let log = LoggerFactory.getLogger('stdx.net.http')
+        builder.logger(log)
         if (let Some(x) <- MVCConfig.readTimeout) {
             builder.readTimeout(x)
         }
@@ -59,8 +67,11 @@ public class MVCStarter {
         if (let Some(x) <- MVCConfig.servicePoolConfig) {
             builder.servicePoolConfig(x)
         }
+        if (let Some(tls) <- MVCConfig.tlsConfig) {
+            builder.tlsConfig(tls)
+        }
         let server = builder.distributor(HttpRequestDistributorImpl.instance).build()
-        MVCStarter(server)
+        MVCStarter(server, host, port)
     }
     public static func register(mediaType: MediaType) {
         MediaTypes.register(mediaType)
@@ -73,10 +84,25 @@ public class MVCStarter {
             registered.compareAndSwap(false, list.size > 0)
             list
         } else {
-            throw Exception("The generateAndregister can only be called before calling MVCLauncher.launch().")
+            throw MVCException("The generateAndRegister can only be called before calling MVCStarter.start().")
+        }
+    }
+    public static func generateAndRegisterWSEndPoint<T>(path: String): WSMeta<T> where T <: Object {
+        if(!initial_.load()) {
+            let meta = HttpRequestDistributorImpl.instance.generateAndRegisterWSEndPoint<T>(path)
+            registered.compareAndSwap(false, true)
+            meta
+        }else{
+            throw WSException('The generateAndRegisterWSEndPoint can only be called before calling MVCStarter.start()')
+        }
+    }
+    private prop listening: String {
+        get() {
+            '${host}:${port}'
         }
     }
     public func start(): Unit {
+        println("MVC is listening: ${listening}")
         server.serve()
     }
     public func closeGracefully(): Unit {

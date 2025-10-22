@@ -1,11 +1,17 @@
 /*
-    Copyright (c) [2022] [WuJingrun（吴京润）]
-    fountain is licensed under Mulan PSL v2.
-    You can use this software according to the terms and conditions of the Mulan PSL v2.
-    You may obtain a copy of Mulan PSL v2 at:
-            http://license.coscl.org.cn/MulanPSL2
-    THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-    See the Mulan PSL v2 for more details.
+Copyright (c) 2025 WuJingrun（吴京润）
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
  */
 package f_util
 
@@ -13,35 +19,35 @@ import f_base.StringGenerator
 
 abstract sealed class CaseFormat {
     /**
-      * 首字母大写的驼峰
-      */
+     * 首字母大写的驼峰
+     */
     public static let Pascal: CaseFormat = PascalCaseFormat()
     /**
-      * 首字母小写的驼峰
-      */
+     * 首字母小写的驼峰
+     */
     public static let Camel: CaseFormat = CamelCaseFormat()
     /**
-      * 全小写按下划线分割
-      */
+     * 全小写按下划线分割
+     */
     public static let LowerUnderScore: CaseFormat = LowerUnderScoreCaseFormat()
     /**
-      * 全大写按下划线分割
-      */
+     * 全大写按下划线分割
+     */
     public static let UpperUnderScore: CaseFormat = UpperUnderScoreCaseFormat()
     /**
-      * 全小写按-分割
-      */
+     * 全小写按-分割
+     */
     public static let LowerHyphen: CaseFormat = LowerHyphenCaseFormat()
     /**
-      * 全大写按-分割
-      */
+     * 全大写按-分割
+     */
     public static let UpperHyphen: CaseFormat = UpperHyphenCaseFormat()
 
     protected CaseFormat(protected let withDelimiter!: Bool) {}
 
-    public func convert(text: String, format: CaseFormat): String {
+    public func convert(text: String, to!: CaseFormat): String {
         let builder = StringGenerator()
-        let caseFormat = format.new()
+        let caseFormat = to.new()
         let withDelim = this.withDelimiter
         for (ch in text.runes()) {
             let delim = isDelimiter(ch)
@@ -60,6 +66,7 @@ abstract sealed class CaseFormat {
     protected func isDelimiter(ch: Rune): Bool
     protected func new(): CaseFormat
 }
+
 class PascalCaseFormat <: CaseFormat {
     init() {
         super(withDelimiter: true)
@@ -87,6 +94,7 @@ class PascalCaseFormat <: CaseFormat {
         sectionStart = true
     }
 }
+
 class CamelCaseFormat <: CaseFormat {
     init() {
         super(withDelimiter: true)
@@ -114,6 +122,7 @@ class CamelCaseFormat <: CaseFormat {
         sectionStart = true
     }
 }
+
 class LowerUnderScoreCaseFormat <: CaseFormat {
     init() {
         super(withDelimiter: false)
@@ -139,6 +148,7 @@ class LowerUnderScoreCaseFormat <: CaseFormat {
         this
     }
 }
+
 class UpperUnderScoreCaseFormat <: CaseFormat {
     init() {
         super(withDelimiter: false)
@@ -164,6 +174,7 @@ class UpperUnderScoreCaseFormat <: CaseFormat {
         this
     }
 }
+
 class LowerHyphenCaseFormat <: CaseFormat {
     init() {
         super(withDelimiter: false)
@@ -189,6 +200,7 @@ class LowerHyphenCaseFormat <: CaseFormat {
         this
     }
 }
+
 class UpperHyphenCaseFormat <: CaseFormat {
     init() {
         super(withDelimiter: false)

@@ -1,16 +1,21 @@
 /*
-    Copyright (c) [2022] [WuJingrun（吴京润）]
-    fountain is licensed under Mulan PSL v2.
-    You can use this software according to the terms and conditions of the Mulan PSL v2.
-    You may obtain a copy of Mulan PSL v2 at:
-            http://license.coscl.org.cn/MulanPSL2
-    THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-    See the Mulan PSL v2 for more details.
+Copyright (c) 2025 WuJingrun（吴京润）
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
  */
 package f_collection
 
-import std.collection.{HashMap, Map, EquatableCollection, MapEntryView}
-
+import std.collection.{HashMap, Map, EquatableCollection, MapEntryView, ArrayList}
 import f_exception.UnreachableException
 
 public class LinkedHashMap<K, V> <: Map<K, V> where K <: Hashable & Equatable<K> {
@@ -46,7 +51,7 @@ public class LinkedHashMap<K, V> <: Map<K, V> where K <: Hashable & Equatable<K>
         map = HashMap<K, ValueNode<(K, V)>>(size)
         this.size_ = size
         this.max = false
-        for(i in 0..size) {
+        for (i in 0..size) {
             let (k, v) = initElement(i)
             add(k, v)
         }
@@ -76,8 +81,8 @@ public class LinkedHashMap<K, V> <: Map<K, V> where K <: Hashable & Equatable<K>
      */
     public func toArray(): Array<(K, V)> {
         let itr = iterator()
-        Array<(K, V)>(size){_ =>
-            itr.next().getOrThrow()
+        Array<(K, V)>(size) {
+            _ => itr.next().getOrThrow()
         }
     }
 
@@ -85,7 +90,7 @@ public class LinkedHashMap<K, V> <: Map<K, V> where K <: Hashable & Equatable<K>
      * 返回实例类型的迭代器
      * 返回值 Iterator<(K,V)> - 返回实例类型的迭代器。
      */
-    public func iterator(): Iterator<(K, V)> {
+    public func iterator(): LinkedNodeIterator<(K, V)> {
         return LinkedNodeIterator<(K, V)>(head)
     }
     private func turnToTail(entry: ValueNode<(K, V)>) {
@@ -258,10 +263,12 @@ public class LinkedHashMap<K, V> <: Map<K, V> where K <: Hashable & Equatable<K>
      * 参数 predicate - 传递一个 lambda 表达式进行判断
      */
     public func removeIf(predicate: (K, V) -> Bool): Unit {
-        for ((k, v) in iterator()) {
-            if (predicate(k, v)) {
-                remove(k)
+        map.removeIf{k, n => 
+            let r = predicate(k, n.value[1])
+            if(r){
+                n.remove()
             }
+            r
         }
     }
 
@@ -316,10 +323,11 @@ public class LinkedHashMap<K, V> <: Map<K, V> where K <: Hashable & Equatable<K>
         return MapValues<K, V>(this)
     }
 }
+
 public class LinkedHashMapEntryView<K, V> <: MapEntryView<K, V> where K <: Hashable & Equatable<K> {
     public LinkedHashMapEntryView(private let k: K, private let map: LinkedHashMap<K, V>) {}
     public prop key: K {
-        get(){
+        get() {
             k
         }
     }
@@ -327,8 +335,8 @@ public class LinkedHashMapEntryView<K, V> <: MapEntryView<K, V> where K <: Hasha
         get() {
             map.get(k)
         }
-        set(value){
-            match(value){
+        set(value) {
+            match (value) {
                 case Some(v) => map[k] = v
                 case _ => map.remove(k)
             }

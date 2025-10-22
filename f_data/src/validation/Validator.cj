@@ -1,179 +1,169 @@
 /*
-    Copyright (c) [2022] [WuJingrun（吴京润）]
-    fountain is licensed under Mulan PSL v2.
-    You can use this software according to the terms and conditions of the Mulan PSL v2.
-    You may obtain a copy of Mulan PSL v2 at:
-            http://license.coscl.org.cn/MulanPSL2
-    THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-    See the Mulan PSL v2 for more details.
-*/
+Copyright (c) 2025 WuJingrun（吴京润）
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+ */
 package f_data.validation
 
-import std.collection.HashMap
-import std.convert.Parsable
-import std.time.DateTime
-
+import std.convert.*
+import f_base.*
+import f_regex.*
 import f_data.*
 
-public interface Validator<T> {
-    prop name: String
-    func set(data: T, value: String): Unit
-}
-public class Validators<T>{
-    private let validatorMap = HashMap<String, Validator<T>>()
-    public init(validators: Array<Validator<T>>){
-        for(v in validators where !(v is DummyValidator<T>)){
-            validatorMap[v.name] = v
-        }
-    }
-    public func validator(name: String): Validator<T>{
-        validatorMap[name]
+@Annotation[target: [MemberVariable, MemberProperty, Parameter]]
+public class IsNotEmpty <: Validator {
+    public const init() {}
+    public func validate(value: String): Bool {
+        value.size > 0
     }
 }
-public interface ValidatorsExtend<T>{
-    static func validators(): Validators<T>
-}
-public class DummyValidator<T> <: Validator<T> {
-    public const init(){}
-    // public static const instance = DummyValidator<T>()
-    public prop name: String {
-        get(){
-            ""
-        }
-    }
-    public func set(data: T, value: String): Unit {
 
+@Annotation[target: [MemberVariable, MemberProperty, Parameter]]
+public class IsNotBlank <: Validator {
+    public const init() {}
+    public func validate(value: String): Bool {
+        value.trimAsciiBlanks().size > 0
     }
 }
-abstract sealed class BaseValidator<T> <: Validator<T> {
-    BaseValidator(private let rule: String, private let _name_: String, private let setter: (T, String) -> Unit){}
-    public prop name: String {
-        get(){
-            _name_
+
+@Annotation[target: [MemberVariable, MemberProperty, Parameter]]
+public class IsInteger <: Validator {
+    public const init() {}
+    public func validate(value: String): Bool {
+        Regex.INTEGER.matches(value)
+    }
+}
+
+@Annotation[target: [MemberVariable, MemberProperty, Parameter]]
+public class IsDecimal <: Validator {
+    public const init() {}
+    public func validate(value: String): Bool {
+        Regex.DECIMAL.matches(value)
+    }
+}
+
+@Annotation[target: [MemberVariable, MemberProperty, Parameter]]
+public class IsEmail <: Validator {
+    public const init() {}
+    public func validate(value: String): Bool {
+        Regex.EMAIL.matches(value)
+    }
+}
+
+@Annotation[target: [MemberVariable, MemberProperty, Parameter]]
+public class IsChineseCellPhone <: Validator {
+    public const IsChineseCellPhone(
+        private let withCountryCode!: Bool = false,
+        private let countryCodeSeparator!: String = ')'
+    ) {}
+    public func validate(value: String): Bool {
+        var rege = ''
+        if (withCountryCode) {
+            rege = match (countryCodeSeparator) {
+                case ')' => '(86)'
+                case x => '86${x}'
+            }
         }
-    }
-    protected open func validate(value: String): Bool{
-        validate(rule, value)
-    }
-    public func set(data: T, value: String): Unit {
-        if(validate(value)){
-            setter(data, value)
-        }else{
-            throw IllegalArgumentException("${value} does not match")
-        }
+        return '^${rege}1\\d{10}'.regex(solid: true).matches(value)
     }
 }
-public class IntegerValidator<T> <: BaseValidator<T> {
-    public init(_name_: String, setter: (T, String) -> Unit){
-        super("Integer", _name_, setter)
-    }
-}
-public class DecimalValidator<T> <: BaseValidator<T> {
-    public init(_name_: String, setter: (T, String) -> Unit){
-        super("Decimal", _name_, setter)
-    }
-}
-public class EmailValidator<T> <: BaseValidator<T> {
-    public init(_name_: String, setter: (T, String) -> Unit){
-        super("Email", _name_, setter)
-    }
-}
-public class ChineseCellPhoneValidator<T> <: BaseValidator<T> {
-    private let withCode: Bool
-    private let separator: String
-    public init(withCode: Bool, separator: String, _name_: String, setter: (T, String) -> Unit){
-        super("ChineseCellPhone", _name_, setter)
-        this.withCode = withCode
-        this.separator = separator
+
+@Annotation[target: [MemberVariable, MemberProperty, Parameter]]
+public class IsIntegerRange <: Validator {
+    public const IsIntegerRange(
+        private let min!: Int64 = 0,
+        private let max!: Int64 = 0x7FFF_FFFF_FFFF_FFFF,
+        private let minInclusive!: Bool = true,
+        private let maxInclusive!: Bool = false
+    ) {}
+    public const init(range: Range<Int64>){
+        this(min: range.start, max: range.end, minInclusive: range.hasStart, maxInclusive: range.isClosed || range.hasEnd)
     }
     public func validate(value: String): Bool {
-        super.validate(value) && (!withCode || match(separator){
-            case ")" => value.startsWith("(86)")
-            case x => value.startsWith("86${x}")
-        })
+        match (Int64.tryParse(value)) {
+            case Some(x) => if (minInclusive) {
+                x >= min
+            } else {
+                x > min
+            } && if (maxInclusive) {
+                x <= max
+            } else {
+                x < max
+            }
+            case _ => false
+        }
     }
 }
-public class IntegerRangeValidator<T> <: BaseValidator<T> {
-    private let range: Range<Int64>
-    public init(range: String, _name_: String, setter: (T, String) -> Unit){
-        super("IntegerRange", _name_, setter)
-        let (start, end) =
-        match((range[0], range[range.size - 1])){
-            case (b'[', b']') => (true, true)
-            case (b'[', b')') => (true, false)
-            case (b'(', b']') => (false, true)
-            case (b'(', b')') => (false, false)
-            case _ => throw IllegalArgumentException("illegal IntegerRange: ${range}")
-        }
-        let r = range[1 .. range.size - 1].split(",")
-        this.range = Range(Int64.parse(r[0].trimAscii()), Int64.parse(r[1].trimAscii()), 1, start, end, end)
-    }
+
+@Annotation[target: [MemberVariable, MemberProperty, Parameter]]
+public class IsBool <: Validator {
+    public const init() {}
     public func validate(value: String): Bool {
-        if(let Some(v) <- Int64.tryParse(value)){
-            ((range.hasStart && v >= range.start) || (!range.hasStart && v > range.start)) &&
-            ((range.hasEnd && v <= range.end) || (!range.hasEnd && v < range.end))
+        let val = value.toAsciiLower()
+        return val == 'true' || val == 'false'
+    }
+}
+@Annotation[target: [MemberVariable, MemberProperty, Parameter]]
+public class IsDateTime <: Validator {
+    public const IsDateTime(
+        private let format!: String = "yyyy-MM-dd HH:mm:ss"
+    ) {}
+    public func validate(value: String): Bool {
+        try {
+            DateTime.parse(value, format)
+            true
+        } catch (_){
+            false
+        }
+    }
+    public func valiate(data: Data): Bool {
+        if(let d: DataDateTime <- data){
+            true
+        }else if (let d: DataString <- data){
+            validate(d.data)
         }else{
             false
         }
     }
 }
-public class DateTimeValidator<T> <: BaseValidator<T> {
-    private let format: String
-    public init(format: String, _name_: String, setter: (T, String) -> Unit){
-        super("DateTime: ${format}", _name_, setter)
-        this.format = format
-    }
+@Annotation[target: [MemberVariable, MemberProperty, Parameter]]
+public class IsDuration <: Validator {
+    public const init() {}
     public func validate(value: String): Bool {
-        DateTime.parse(value, format)
-        true
+        Regex.DURATION.matches(value)
+    }
+    public func valiate(data: Data): Bool {
+        if(let d: DataDuration <- data){
+            true
+        }else if (let d: DataString <- data){
+            validate(d.data)
+        }else{
+            false
+        }
     }
 }
-public class DurationValidator<T> <: BaseValidator<T> {
-    private static let format = Regex(#"^-?(\d+)(d|h|m|s|ms|us|ns))$"#)
-    public init(_name_: String, setter: (T, String) -> Unit){
-        super("Duration", _name_, setter)
-    }
+@Annotation[target: [MemberVariable, MemberProperty, Parameter]]
+public class IsIntegers <: Validator {
+    public const IsIntegers(private let separator!: String = ",") {}
     public func validate(value: String): Bool {
-        format.matches(value)
+        '^\\d+(${separator}\\d+)*$'.regex(solid: true).matches(value)
     }
 }
-public class IntegersValidator<T> <: BaseValidator<T> {
-    public init(_name_: String, setter: (T, String) -> Unit){
-        super("Integers", _name_, setter)
-    }
-}
-public class PascalsValidator<T> <: BaseValidator<T> {
-    public init(_name_: String, setter: (T, String) -> Unit){
-        super("Pascals", _name_, setter)
-    }
-}
-public class CamelsValidator<T> <: BaseValidator<T> {
-    public init(_name_: String, setter: (T, String) -> Unit){
-        super("Camels", _name_, setter)
-    }
-}
-public class LowerUnderScoresValidator<T> <: BaseValidator<T> {
-    public init(_name_: String, setter: (T, String) -> Unit){
-        super("LowerUnderScores", _name_, setter)
-    }
-}
-public class UpperUnderScoresValidator<T> <: BaseValidator<T> {
-    public init(_name_: String, setter: (T, String) -> Unit){
-        super("UpperUnderScores", _name_, setter)
-    }
-}
-public class LowerHyphensValidator<T> <: BaseValidator<T> {
-    public init(_name_: String, setter: (T, String) -> Unit){
-        super("LowerHyphens", _name_, setter)
-    }
-}
-public class UpperHyphensValidator<T> <: BaseValidator<T> {
-    public init(_name_: String, setter: (T, String) -> Unit){
-        super("UpperHyphens", _name_, setter)
-    }
-}
-public class CustomisedValidator<T> <: BaseValidator<T>{
-    public init(rule: String, _name_: String, setter: (T, String) -> Unit){
-        super(rule, _name_, setter)
+
+@Annotation[target: [MemberVariable, MemberProperty, Parameter]]
+public class DoesMatchRegex <: Validator {
+    public const DoesMatchRegex(private let rege: String) {}
+    public func validate(value: String): Bool {
+        rege.regex(solid: true).matches(value)
     }
 }

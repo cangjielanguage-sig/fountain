@@ -1,15 +1,20 @@
 /*
-    Copyright (c) [2022] [WuJingrun（吴京润）]
-    fountain is licensed under Mulan PSL v2.
-    You can use this software according to the terms and conditions of the Mulan PSL v2.
-    You may obtain a copy of Mulan PSL v2 at:
-            http://license.coscl.org.cn/MulanPSL2
-    THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-    See the Mulan PSL v2 for more details.
+Copyright (c) 2025 WuJingrun（吴京润）
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
  */
 package f_concurrent.eventbus
 
-import std.collection.{TreeMap, ArrayList}
 import std.collection.concurrent.{LinkedBlockingQueue, ConcurrentHashMap}
 import std.runtime.getProcessorCount
 import std.sync.{Mutex, AtomicBool}
@@ -25,11 +30,11 @@ public class EventBus {
     private static let THREAD_LOCAL_RANDOM = ThreadLocal<SecureRandom>()
     private let mutex = Mutex()
     private let monitor = Mutex()
-    private let condition = synchronized(monitor){
+    private let condition = synchronized(monitor) {
         monitor.condition()
     }
     private var workers: Array<Worker> = []
-    
+
     private var maxQueueSize = (-1, -1) // (maxQueueSize, longestQueueIndex)
     private let queueMutex = Mutex()
     private let seizeQueue: LinkedBlockingQueue<Int64>
@@ -55,7 +60,7 @@ public class EventBus {
         doArrange = genDoArrange(maxWaitingJobPerWorker, fullJobQueueStrategy)
         seize()
     }
-    private func seize(){
+    private func seize() {
         spawn {
             var (prevMaxQueueSize, prevMaxQueueIndex): (Int64, Int64) = (-1, -1)
             while (true) {
@@ -64,19 +69,21 @@ public class EventBus {
                     this.maxQueueSize
                 }
                 var i = 0
-                while((prevMaxQueueIndex == maxQueueIndex || prevMaxQueueSize > maxQueueSize) && i < this.workers.size){
-                    if(i == maxQueueIndex){
+                while ((prevMaxQueueIndex == maxQueueIndex || prevMaxQueueSize > maxQueueSize) && i < this.workers.size) {
+                    if (i == maxQueueIndex) {
                         i++
                         continue
                     }
-                    if(let s <- this.workers[i].waitingJobSize && maxQueueSize < s){
+                    if (let s <- this.workers[i].waitingJobSize && maxQueueSize < s) {
                         (maxQueueSize, maxQueueIndex) = (s, i)
                         break
                     }
                     i++
                 }
                 (prevMaxQueueSize, prevMaxQueueIndex) = (maxQueueSize, maxQueueIndex)
-                if (maxQueueSize > 0 && maxQueueIndex != sizedBy && let Some(e) <- this.workers[maxQueueIndex].tryRemove()) {
+                if (maxQueueSize > 0 && maxQueueIndex != sizedBy && let Some(e) <- this
+                    .workers[maxQueueIndex]
+                    .tryRemove()) {
                     e.workerId = sizedBy
                     this.workers[sizedBy].arrange(e)
                     putQueueSize(sizedBy)
@@ -265,8 +272,8 @@ public class EventBus {
     private func discard(workerId: Int64) {
         workers[workerId].discard()
     }
-    
-    func putQueueSize(workerId: Int64) {//分别在增加减少Worker任务队列的时候调用了此函数
+
+    func putQueueSize(workerId: Int64) { //分别在增加减少Worker任务队列的时候调用了此函数
         synchronized(queueMutex) {
             let waitingJobSize = workers[workerId].waitingJobSize
             if (waitingJobSize > maxQueueSize[0] || workerId == maxQueueSize[1]) {

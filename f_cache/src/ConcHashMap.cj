@@ -1,17 +1,22 @@
 /*
-    Copyright (c) [2022] [WuJingrun（吴京润）]
-    fountain is licensed under Mulan PSL v2.
-    You can use this software according to the terms and conditions of the Mulan PSL v2.
-    You may obtain a copy of Mulan PSL v2 at:
-            http://license.coscl.org.cn/MulanPSL2
-    THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-    See the Mulan PSL v2 for more details.
+Copyright (c) 2025 WuJingrun（吴京润）
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
  */
 package f_cache
 
 import std.collection.{Map, EquatableCollection}
-import std.sync.{AtomicInt64, SyncCounter}
-
+import std.sync.AtomicInt64
 import f_base.EmptyIterator
 
 class ConcHashMapKeysIterator<V> <: Iterator<String> {
@@ -28,6 +33,7 @@ class ConcHashMapKeysIterator<V> <: Iterator<String> {
         return None<String>
     }
 }
+
 class ConcHashMapKeys<V> <: EquatableCollection<String> {
     ConcHashMapKeys(private let map: ConcHashMap<V>) {}
 
@@ -67,12 +73,13 @@ class ConcHashMapKeys<V> <: EquatableCollection<String> {
     }
 
     public func contains(all!: Collection<String>): Bool {
-        for(e in all where contains(e)){
+        for (e in all where contains(e)) {
             return true
         }
         false
     }
 }
+
 class ConcHashMapValuesIterator<V> <: Iterator<V> {
     ConcHashMapValuesIterator(private let itr: Iterator<(String, V)>) {}
 
@@ -87,6 +94,7 @@ class ConcHashMapValuesIterator<V> <: Iterator<V> {
         return None<V>
     }
 }
+
 class ConcHashMapValues<V> <: Collection<V> {
     ConcHashMapValues(private let map: ConcHashMap<V>) {}
 
@@ -123,6 +131,7 @@ class ConcHashMapValues<V> <: Collection<V> {
         map.clear()
     }
 }
+
 class ConcHashMapIterator<V> <: Iterator<(String, V)> {
     private var cur = 0
     private var itr: Iterator<(String, V)> = EmptyIterator<(String, V)>.INSTANCE()
@@ -160,9 +169,10 @@ class ConcHashMapIterator<V> <: Iterator<(String, V)> {
         m.segments[idx].iterator()
     }
 }
-class ConcHashMap<V> <: Collection<(String, V)>{
+
+class ConcHashMap<V> <: Collection<(String, V)> {
     static const DEFAULT_CONCURRENCY = 16
-    private var size_ = AtomicInt64(0)
+    private let size_ = AtomicInt64(0)
     private let hashMask: Int64
 
     private ConcHashMap(let segments: Array<SyncLinkedHashMap<V>>, let concurrency: Int64) {
@@ -193,6 +203,9 @@ class ConcHashMap<V> <: Collection<(String, V)>{
         }
     }
     private static func conc(concurrencyLevel: Int64) {
+        if(((concurrencyLevel - 1) & concurrencyLevel) == 0){
+            return concurrencyLevel
+        }
         var concurrency = 1
         while (concurrency < concurrencyLevel) {
             concurrency <<= 1
@@ -268,7 +281,7 @@ class ConcHashMap<V> <: Collection<(String, V)>{
             incrSize()
         }
     }
-    func computeIfAbsent(key: String, callable: ()->V): V {
+    func computeIfAbsent(key: String, callable: () -> V): V {
         segment(key).computeIfAbsent(key, callable)
     }
 
@@ -292,6 +305,18 @@ class ConcHashMap<V> <: Collection<(String, V)>{
     func removeAll(keys: Collection<String>): Unit {
         for (key in keys) {
             remove(key)
+        }
+    }
+    /**
+     * 
+     */
+    func removeIf(predicate: (String, V) -> Bool): Unit {
+        for(segment in segments){
+            segment.removeIf{k, v => 
+                let r = predicate(k, v)
+                decrSize()
+                r
+            }
         }
     }
 

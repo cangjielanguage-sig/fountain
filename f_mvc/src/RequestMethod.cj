@@ -1,15 +1,21 @@
 /*
-    Copyright (c) [2022] [WuJingrun（吴京润）]
-    fountain is licensed under Mulan PSL v2.
-    You can use this software according to the terms and conditions of the Mulan PSL v2.
-    You may obtain a copy of Mulan PSL v2 at:
-            http://license.coscl.org.cn/MulanPSL2
-    THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-    See the Mulan PSL v2 for more details.
-*/
+Copyright (c) 2025 WuJingrun（吴京润）
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+ */
 package f_mvc
 
-public enum RequestMethod <: Hashable & Equatable<RequestMethod> & ToString & Parsable<RequestMethod> & DataParsable<RequestMethod> {
+public enum RequestMethod <: Hashable & Equatable<RequestMethod> & ToString & Parsable<RequestMethod> & DataParsable<RequestMethod> & Comparable<RequestMethod> {
     | GET
     | POST
     | PUT
@@ -17,18 +23,24 @@ public enum RequestMethod <: Hashable & Equatable<RequestMethod> & ToString & Pa
     | PATCH
     | OPTIONS
     | HEAD
+    | WS
+
     public func hashCode(): Int64 {
         toString().hashCode()
     }
 
     public operator func ==(other: RequestMethod) {
-        match((this, other)) {
-            case (GET, GET) | (POST, POST) | (PUT, PUT) | (DELETE, DELETE) | (PATCH, PATCH) | (OPTIONS, OPTIONS) | (HEAD, HEAD) => true
+        match ((this, other)) {
+            case (GET, GET) | (POST, POST) | (PUT, PUT) | (DELETE, DELETE) | (PATCH, PATCH) | (OPTIONS, OPTIONS)
+                | (HEAD, HEAD) => true
             case _ => false
         }
     }
+    public operator func !=(other: RequestMethod) {
+        !(this == other)
+    }
     public func toString() {
-        match(this) {
+        match (this) {
             case GET => "GET"
             case PUT => "PUT"
             case POST => "POST"
@@ -36,10 +48,11 @@ public enum RequestMethod <: Hashable & Equatable<RequestMethod> & ToString & Pa
             case PATCH => "PATCH"
             case OPTIONS => "OPTIONS"
             case HEAD => "HEAD"
+            case WS => "WS"
         }
     }
     public static func tryParse(value: String): ?RequestMethod {
-        match(value.toAsciiUpper()) {
+        match (value.toAsciiUpper()) {
             case "GET" => GET
             case "PUT" => PUT
             case "POST" => POST
@@ -47,10 +60,14 @@ public enum RequestMethod <: Hashable & Equatable<RequestMethod> & ToString & Pa
             case "PATCH" => PATCH
             case "OPTIONS" => OPTIONS
             case "HEAD" => HEAD
+            case "WS" => WS
             case _ => None
         }
     }
+    public func compare(other: RequestMethod): Ordering {
+        this.toString().compare(other.toString())
+    }
     public static func parse(value: String): RequestMethod {
-        tryParse(value).getOrThrow{IllegalArgumentException("${value} is an illegal http request method")}
+        tryParse(value).getOrThrow {IllegalArgumentException("${value} is an illegal http request method")}
     }
 }

@@ -1,32 +1,30 @@
 /*
-   Copyright (c) [2022] [WuJingrun（吴京润）]
-   fountain is licensed under Mulan PSL v2.
-   You can use this software according to the terms and conditions of the Mulan PSL v2.
-   You may obtain a copy of Mulan PSL v2 at:
-           http://license.coscl.org.cn/MulanPSL2
-   THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-   See the Mulan PSL v2 for more details.
+Copyright (c) 2025 WuJingrun（吴京润）
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
  */
 
 package f_ticktock
 
+import std.collection.ArrayList
 import std.collection.concurrent.ConcurrentHashMap
-import std.collection.Map
-import std.collection.HashMap
-import std.collection.Set
 import std.env
-import std.process.Process
-import std.sync.*
+import std.sync.{AtomicOptionReference, Mutex}
 public import std.time.DateTime
-
-import f_exception.IllegalStateException
+import f_bean.BeanFactory
 import f_log.LoggerFactory
-import f_ticktock.exception.TicktockException
 
 /**
- * 时间轮单位初始化顺序任意，TicktockTaskExecutor必须先初始化；所有时间轮单位都初始化完成才能launch()
- * 执行launch以前或以后都可以随时增删任务
- * create*Wheel(Currently)是为了方便单元测试的，实际使用默认就够了
  * 本类对象能接收的cron表达式，简单说明如下：
  * 多个表达式可以用|分隔
  * 包含用空格分隔的六部分，从左至右依次是秒 分 时 日 月 星期
@@ -56,7 +54,64 @@ import f_ticktock.exception.TicktockException
  */
 public class Ticktock <: Emitter {
     private static let LOGGER = LoggerFactory.getLogger<Ticktock>()
-    public static let instance = Ticktock()
+    private static let mutex = Mutex()
+    private static let instance_ = AtomicOptionReference<Ticktock>()
+
+    /**
+     * 等价于getInstance(anyway: true)
+     */
+    public static prop instance: Ticktock {
+        get(){
+            getInstance(anyway: true).getOrThrow()
+        }
+    }
+
+    /**
+     * 如果需要调用此函数后并注册定时任务,anyway必须是true。
+     * 如果只是想从IOC获得定时任务初始化，如果IOC内没有注册定时任务就不初始化，此时anyway应该是false，
+     * anyway是false且IOC没有注册过定时任务将返回None<Ticktock>。
+     */
+    public static func getInstance(anyway!: Bool = true): ?Ticktock {
+        if(let Some(x) <- instance_.load()){
+            return x
+        }
+        synchronized(mutex){
+            if (let Some(x) <- instance_.load()) {
+                return x
+            }
+            func swapIfNone() {
+                let instance = instance_.load()
+                if (let Some(tt) <- instance) {
+                    tt
+                } else {
+                    let tt = Ticktock()
+                    if (instance_.compareAndSwap(instance, tt)) {
+                        tt
+                    } else {
+                        tt.shutdown()
+                        instance_.load().getOrThrow()
+                    }
+                }
+            }
+            func doRegister<T>(taskGetter: () -> ArrayList<T>, register: (Ticktock, T) -> Unit) where T <: TicktockTask{
+                if(let list <- taskGetter() && list.size > 0){
+                    let tt = swapIfNone()
+                    for(task in list){
+                        register(tt, task)
+                    }
+                    return tt
+                }
+                None<Ticktock>
+            }
+            var tt = doRegister(getTasksFromBeanFactory){tt, task => tt.addOrReplaceTask(task)}
+            tt = doRegister(getDelayedTasksFromBeanFactory){tt, task => tt.addOrReplaceDelayTask(task)}
+            if (anyway && tt.isNone()) {
+                swapIfNone()
+            } else {
+                tt
+            }
+        }
+    }
 
     private let tasks = ConcurrentHashMap<String, (TicktockTask, Collection<CronDataCollection>)>()
     private let ticktock = Chrono()
@@ -100,7 +155,13 @@ public class Ticktock <: Emitter {
         }
         addOrReplaceTask(task, task.cron)
     }
-
+    private static func getTasksFromBeanFactory() {
+        BeanFactory.instance.getList<CronTicktockTask>()
+    }
+    private static func getDelayedTasksFromBeanFactory(){
+        BeanFactory.instance.getList<DelayedCronTicktockTask>()
+    }
+    
     public func addOrReplaceTask(task: CronTicktockTask) {
         addOrReplaceTask(task, task.cron)
     }
@@ -141,19 +202,17 @@ public class Ticktock <: Emitter {
                 var emitted = false
                 var once = false
                 try {
-                    for(cron in crons where cron.matches(now)){
+                    for (cron in crons where cron.matches(now)) {
                         task.run()
                         once = task.once
-                        if(once){
+                        if (once) {
                             this.removeTask(task)
                         }
                         emitted = true
                         break
                     }
                     if (LOGGER.debugEnabled) {
-                        LOGGER.debug(
-                            "Ticktock.emit:${name}; ${emitted}; ${once}"
-                        )
+                        LOGGER.debug("Ticktock.emit:${name}; ${emitted}; ${once}")
                     }
                 } catch (e: Exception) {
                     LOGGER.warn(

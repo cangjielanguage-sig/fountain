@@ -1,18 +1,25 @@
 /*
-    Copyright (c) [2022] [WuJingrun（吴京润）]
-    fountain is licensed under Mulan PSL v2.
-    You can use this software according to the terms and conditions of the Mulan PSL v2.
-    You may obtain a copy of Mulan PSL v2 at:
-            http://license.coscl.org.cn/MulanPSL2
-    THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-    See the Mulan PSL v2 for more details.
+Copyright (c) 2025 WuJingrun（吴京润）
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
  */
 package f_collection
 
 import f_exception.UnreachableException
 
-class LinkedNodeIterator<T> <: Iterator<T> {
+public class LinkedNodeIterator<T> <: Iterator<T> {
     private let reversed: Bool
+    private var node = None<ValueNode<T>>
     LinkedNodeIterator(private var current: Node<T>) {
         this.current = match (current) {
             case n: HeadNode<T> =>
@@ -32,6 +39,7 @@ class LinkedNodeIterator<T> <: Iterator<T> {
     public func next(): Option<T> {
         match (current) {
             case n: ValueNode<T> =>
+                node = n
                 let val = n.value
                 current = if (reversed) {
                     n.prev
@@ -39,10 +47,24 @@ class LinkedNodeIterator<T> <: Iterator<T> {
                     n.next
                 }
                 val
+            case _ => 
+                node = None<ValueNode<T>>
+                None<T>
+        }
+    }
+    /**
+     * 删除当前节点
+     */
+    public func remove(): ?T {
+        match(node){
+            case Some(n) => 
+                n.remove()
+                n.value
             case _ => None<T>
         }
     }
 }
+
 public interface Node<T> {
     func insertPrev(value: T): ValueNode<T> {
         throw UnreachableException()
@@ -62,11 +84,12 @@ public interface Node<T> {
 }
 
 public class NoneNode<T> <: Node<T> {
-    static const func instance(){
+    static const func instance() {
         NoneNode<T>()
     }
     private const init() {}
 }
+
 public class HeadNode<T> <: Node<T> & Iterable<T> {
     var next: Node<T>
     let tail = TailNode<T>()
@@ -92,6 +115,7 @@ public class HeadNode<T> <: Node<T> & Iterable<T> {
         LinkedNodeIterator<T>(this)
     }
 }
+
 public class TailNode<T> <: Node<T> & Iterable<T> {
     TailNode(var prev!: Node<T> = NoneNode<T>.instance()) {}
     public func insertPrev(value: T): ValueNode<T> {
@@ -108,6 +132,7 @@ public class TailNode<T> <: Node<T> & Iterable<T> {
         LinkedNodeIterator<T>(this)
     }
 }
+
 public class ValueNode<T> <: Node<T> {
     ValueNode(var value: T, var prev: Node<T>, var next: Node<T>) {
         match (next) {

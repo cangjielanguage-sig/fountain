@@ -1,23 +1,26 @@
 /*
-    Copyright (c) [2022] [WuJingrun（吴京润）]
-    fountain is licensed under Mulan PSL v2.
-    You can use this software according to the terms and conditions of the Mulan PSL v2.
-    You may obtain a copy of Mulan PSL v2 at:
-            http://license.coscl.org.cn/MulanPSL2
-    THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-    See the Mulan PSL v2 for more details.
+Copyright (c) 2025 WuJingrun（吴京润）
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
  */
 package f_log
 
+import std.sync.AtomicReference
 import std.convert.Parsable
-import std.regex.Regex
-import std.sync.Mutex
 import stdx.log.LogLevel
 import f_config.Config
 import f_data.*
 import f_log.exception.LogException
-import f_time.*
-import f_util.computeBytes
 
 /**
  *
@@ -27,12 +30,21 @@ public class LoggerConfig {
     //confItem 可以是level pattern 等，还可以有Appender特有配置项
     private static const confPrefix = "logger"
     public static const appender = "appender"
+    private static let filter_ = AtomicReference<Box<LogFilter>>(Box(DummyLogFilter.instance))
 
     private init() {
     }
-    static init(){
+    static init() {
         Config.refresher(confPrefix, LoggerFactory.refresh)
     }
+    public static mut prop filter: LogFilter {
+        get(){
+            filter_.load().value
+        }
+        set(value){
+            filter_.store(Box(value))
+        }
+    } 
     public static func createFacade(name: String): LoggerAppenderFacade {
         LoggerAppenderCreator.create(name)
     }
@@ -40,14 +52,14 @@ public class LoggerConfig {
     public static func getString(appender: String, item: String): Option<String> {
         Config.getString("${confPrefix}_${appender}_${item}")
     }
-    public static func getAppenders(kind: String): Array<String>{
-        if(let Some(appenders) <- getString(appender, kind)){
+    public static func getAppenders(kind: String): Array<String> {
+        if (let Some(appenders) <- getString(appender, kind)) {
             appenders.split(",")
-        }else{
+        } else {
             []
         }
     }
-    private static func appenderKeyPart(appender: String){
+    private static func appenderKeyPart(appender: String) {
         '${LoggerConfig.appender}_${appender}'
     }
     public static func getLevelConf(appender: String): LogLevel {
@@ -62,56 +74,94 @@ public class LoggerConfig {
         }
         return LogPattern.default
     }
+    public static func getLogFilePath(appender: String): String {
+        getString(appenderKeyPart(appender), "path") ?? ''
+    }
+    public static func getLogFileRotateDuration(appender: String): String {
+        getString(appenderKeyPart(appender), "rotateDuration") ?? "DAY"
+    }
+    public static func getLogFileRotateSize(appender: String): String {
+        getString(appenderKeyPart(appender), "rotateSize") ?? "${Int64.Max}"
+    }
+    public static func getLogFileCompressFormat(appender: String): String {
+        getString(appenderKeyPart(appender), "compressFormat") ?? ""
+    }
+    public static func getLogFileMMap(appender: String): Bool {
+        Bool.parse((getString(appenderKeyPart(appender), "mmap") ?? 'false').trimAscii().toAsciiLower())
+    }
+    public static func getTcpHost(appender: String): String {
+        getString(appenderKeyPart(appender), "host") ?? ""
+    }
+    public static func getTcpPort(appender: String): String {
+        getString(appenderKeyPart(appender), "port") ?? ""
+    }
+    public static func getUdpHost(appender: String): String {
+        getString(appenderKeyPart(appender), "host") ?? ""
+    }
+    public static func getUdpPort(appender: String): String {
+        getString(appenderKeyPart(appender), "port") ?? ""
+    }
     public static func getAsyncBufSize(): Int64 {
-        Config.getData<Int64>("loggerAsyncBufsize") ?? 1
+        Config.getData<Int64>("loggerAsyncBufsize") ?? 1024
     }
     public static func getAsyncTimeout(): Duration {
-        if(let Some(d) <- Config.getString("loggerAsyncTimeout")){
-            let timeout = Duration.tryParse(d).getOrThrow{LogException("illegal async timeout duration ${d}")}
+        if (let Some(d) <- Config.getString("loggerAsyncTimeout")) {
+            let timeout = Duration.tryParse(d).getOrThrow {LogException("illegal async timeout duration ${d}")}
             if (timeout == Duration.Zero) {
                 Duration.Max
             } else {
                 timeout
             }
-        }else{
+        } else {
             Duration.Max
         }
     }
     public static func getAsyncTimeoutPolicy(): AsyncTimeoutPolicy {
-        if(let Some(p) <- Config.getString("loggerAsyncTimeoutPolicy")) {
-            match(p.toAsciiLower()){
+        if (let Some(p) <- Config.getString("loggerAsyncTimeoutPolicy")) {
+            match (p.toAsciiLower()) {
                 case "discard" => Discard
                 case "abort" => Abort
                 case _ => AlwaysWaiting
             }
         } else {
-            AlwaysWaiting
+            Discard
         }
     }
     public static func getUdpSendTimeout(appender: String): ?Duration {
         if (let Some(d) <- getString(appenderKeyPart(appender), "sendTimeout")) {
-            Duration.tryParse(d).getOrThrow{LogException("${d} is an illegal duration string for ${appender} udp sendTimeout")}
+            Duration
+                .tryParse(d)
+                .getOrThrow {LogException("${d} is an illegal duration string for ${appender} udp sendTimeout")}
         } else {
             None<Duration>
         }
     }
     public static func getUnixWriteTimeout(appender: String): ?Duration {
         if (let Some(d) <- getString(appenderKeyPart(appender), "writeTimeout")) {
-            Duration.tryParse(d).getOrThrow{LogException("${d} is an illegal duration string for ${appender} unix writeTimeout")}
+            Duration
+                .tryParse(d)
+                .getOrThrow {LogException("${d} is an illegal duration string for ${appender} unix writeTimeout")}
         } else {
             None<Duration>
         }
     }
+    public static func getUnixPath(appender: String): String {
+        getString(appenderKeyPart(appender), "path") ?? ""
+    }
     public static func getTcpSendBufSize(appender: String): ?Int64 {
         if (let Some(s) <- getString(appenderKeyPart(appender), "bufSize")) {
-            Int64.tryParse(s).getOrThrow{LogException("${s} is an illegal duration string for ${appender} tcp sendBufSize")}
+            Int64
+                .tryParse(s)
+                .getOrThrow {LogException("${s} is an illegal duration string for ${appender} tcp sendBufSize")}
         } else {
             None<Int64>
         }
     }
     public static func getUnixBufSize(appender: String): ?Int64 {
         if (let Some(s) <- getString(appenderKeyPart(appender), "bufSize")) {
-            Int64.tryParse(s).getOrThrow{LogException("${s} is an illegal duration string for ${appender} unix sendBufSize")}
+            Int64
+                .tryParse(s)
+                .getOrThrow {LogException("${s} is an illegal duration string for ${appender} unix sendBufSize")}
         } else {
             None<Int64>
         }
@@ -127,6 +177,5 @@ public class LoggerConfig {
             case "ALL" => LogLevel.ALL
             case _ => LogLevel.INFO
         }
-        
     }
 }

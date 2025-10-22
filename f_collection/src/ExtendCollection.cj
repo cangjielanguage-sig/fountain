@@ -1,15 +1,21 @@
 /*
-    Copyright (c) [2022] [WuJingrun（吴京润）]
-    fountain is licensed under Mulan PSL v2.
-    You can use this software according to the terms and conditions of the Mulan PSL v2.
-    You may obtain a copy of Mulan PSL v2 at:
-            http://license.coscl.org.cn/MulanPSL2
-    THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-    See the Mulan PSL v2 for more details.
+Copyright (c) 2025 WuJingrun（吴京润）
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
  */
 package f_collection
 
-import std.collection.{Set, ArrayList, MapEntryView}
+import std.collection.{Set, ArrayList, MapEntryView, EquatableCollection}
 import std.collection.concurrent.ConcurrentHashMap
 
 public interface ExtendCollection<T, C> where T <: Equatable<T>, C <: Collection<T> {
@@ -52,9 +58,29 @@ public interface ExtendMap<K, V> <: ExtendCollection<K, Collection<K>> where K <
         }
     }
     func entryView(key: K, fn: (K, ?V) -> ?V): ?V
-    func addIfAbsent(key: K, fn: () -> V): V
-    func addIfPreset(key: K, fn: () -> V): ?V
+    func computeIfAbsent(key: K, fn: () -> V): V {
+        entryView(key){k, optv =>
+            if(let Some(_) <- optv){
+                optv
+            }else{
+                fn()
+            }
+        }.getOrThrow()
+    }
+    func computeIfPresent(key: K, fn: () -> V): ?V {
+        entryView(key){k, optv => 
+            if(let Some(_) <- optv){
+                fn()
+            }else{
+                None<V>
+            }
+        }
+    }
     func removeIf(key: K, predicate: (V) -> Bool): ?V
+    func removeIf(predicate: (K, V) -> Bool): Unit
+    func keys(): EquatableCollection<K>
+
+    func contains(all!: Collection<K>): Bool
 }
 
 public interface ExtendNonConcurrentMap<K, V> <: ExtendMap<K, V> where K <: Equatable<K> {
@@ -65,32 +91,12 @@ public interface ExtendNonConcurrentMap<K, V> <: ExtendMap<K, V> where K <: Equa
         entry.value = value
         value
     }
-    func addIfAbsent(key: K, fn: () -> V): V {
-        let view = entryView(key)
-        if (let Some(v) <- view.value) {
-            v
-        } else {
-            let v = fn()
-            view.value = v
-            v
-        }
-    }
-    func addIfPreset(key: K, fn: () -> V): ?V {
-        let view = entryView(key)
-        if (let Some(_) <- view.value) {
-            let v = fn()
-            view.value = v
-            v
-        } else {
-            None<V>
-        }
-    }
     func removeIf(key: K, predicate: (V) -> Bool): ?V {
-        let view =entryView(key)
-        if(let Some(v) <- view.value && predicate(v)) {
+        let view = entryView(key)
+        if (let Some(v) <- view.value && predicate(v)) {
             view.value = None<V>
             v
-        }else{
+        } else {
             None<V>
         }
     }
@@ -105,31 +111,69 @@ extend<K, V> LinkedHashMap<K, V> <: ExtendNonConcurrentMap<K, V> where K <: Hash
 extend<K, V> ConcurrentHashMap<K, V> <: ExtendMap<K, V> where K <: Hashable & Equatable<K> {
     public func entryView(key: K, fn: (K, ?V) -> ?V): ?V {
         this.entryView(key) {
-            entry => entry.value = fn(entry.key, entry.value)
-        }
-    }
-    public func addIfAbsent(key: K, fn: () -> V): V {
-        entryView(key){view => 
-            if(view.value.isNone()) {
-                view.value = fn()
-            }
-        }.getOrThrow()
-    }
-    public func addIfPreset(key: K, fn: () -> V): ?V {
-        entryView(key) {view => 
-            if(view.value.isSome()) {
-                view.value = fn()
-            }
+            entry => entry.value = fn(key, entry.value)//entry.key会导致栈溢出
         }
     }
     public func removeIf(key: K, predicate: (V) -> Bool): ?V {
-        entryView(key) {view =>
-            if(let Some(v) <- view.value && predicate(v)) {
+        entryView(key) {
+            view => if (let Some(v) <- view.value && predicate(v)) {
                 view.value = None<V>
                 v
-            }else{
+            } else {
                 None<V>
             }
         }
+    }
+    public func removeIf(predicate: (K, V) -> Bool): Unit {
+        for ((k, v) in this where predicate(k, v)) {
+            remove(k)
+        }
+    }
+    public func keys(): EquatableCollection<K> {
+        ConcurrentHashMapKeys<K, V>(this)
+    }
+
+    public func contains(all!: Collection<K>): Bool {
+        for(k in all where !contains(k)){
+            return false
+        }
+        true
+    }
+}
+class ConcurrentHashMapKeys<K, V> <: EquatableCollection<K> where K <: Hashable & Equatable<K> {
+    @Frozen
+    ConcurrentHashMapKeys(private let map: ConcurrentHashMap<K, V>) {}
+
+    @Frozen
+    public prop size: Int64 {
+        get() {
+            return map.size
+        }
+    }
+
+    @Frozen
+    public func isEmpty(): Bool {
+        return map.isEmpty()
+    }
+
+    @Frozen
+    public func contains(element: K): Bool {
+        return map.contains(element)
+    }
+
+    @Frozen
+    public func contains(all!: Collection<K>): Bool {
+        return map.contains(all: all)
+    }
+
+    @Frozen
+    public func iterator(): Iterator<K> {
+        return map.iterator().map<K> {i: (K, V) => i[0]}
+    }
+
+    @Frozen
+    public func toArray(): Array<K> {
+        let itr = iterator()
+        return Array<K>(size){_ => itr.next().getOrThrow()}
     }
 }

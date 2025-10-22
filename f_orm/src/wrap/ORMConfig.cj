@@ -1,13 +1,18 @@
 /*
-   Copyright (c) [2022] [WuJingrun（吴京润）]
-   fountain is licensed under Mulan PSL v2.
-   You can use this software according to the terms and conditions of the Mulan PSL v2.
-   You may obtain a copy of Mulan PSL v2 at:
-           http://license.coscl.org.cn/MulanPSL2
-   THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-   See the Mulan PSL v2 for more details.
- */
+Copyright (c) 2025 WuJingrun（吴京润）
 
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+ */
 package f_orm.wrap
 
 public class ORMConfig {
@@ -35,7 +40,7 @@ public class ORMConfig {
     public static const stdPoolKeepaliveTime = confPrefix + "_pooledDatasourceKeepaliveTime"
     public static const stdPoolMaxSize = confPrefix + "_pooledDatasourceMaxSize"
     public static const stdPoolMaxIdleSize = confPrefix + "_pooledDatasourceMaxIdleSize"
-    
+
     public static const transactionalFuncExecution = confPrefix + '_transactionalFuncExecution'
 
     private static let dot = Regex(#"\."#)
@@ -67,7 +72,7 @@ public class ORMConfig {
         let confMap = Config.getAll(confPrefix)
         if (!driverName.isEmpty()) {
             let driverConfs = Config.getAll("${driverName}_${confPrefix}")
-            for((k, v) in driverConfs) {
+            for ((k, v) in driverConfs) {
                 confMap[k.replace('${driverName}_', '')] = v
             }
         }
@@ -76,8 +81,8 @@ public class ORMConfig {
     public static func getAllConfigTuples(driverName!: String = String.empty): Array<(String, String)> {
         let map = getAllConfigs(driverName: driverName)
         let iterator = map.iterator()
-        Array<(String, String)>(map.size){_ => 
-            iterator.next() ?? ('', '')
+        Array<(String, String)>(map.size) {
+            _ => iterator.next() ?? ('', '')
         }
     }
     public static func getUseCache(driverName!: String = String.empty): ?Bool {
@@ -99,8 +104,7 @@ public class ORMConfig {
             case Some(x) => x
             case _ where !driverName.isEmpty() => getUrl()
             case _ => throw ORMException(
-                "connection url for ${driverName} is not be configed, config which key is ${driverName}.${connectionUrl} or ${connectionUrl} must be specified"
-            )
+                "connection url for ${driverName} is not be configed, config which key is ${driverName}.${connectionUrl} or ${connectionUrl} must be specified")
         }
     }
     private static func get<T>(driverName!: String = String.empty, key!: String, default!: T): T where T <: Parsable<T> {
@@ -150,7 +154,8 @@ public class ORMConfig {
                 case "Mandatory" | "mandatory" | "MANDATORY" => Mandatory
                 case "RequiresNew" | "requires_new" | "REQUIRES_NEW" | "requires-new" | "REQUIRES-NEW" | "requiresNew" => RequiresNew
                 case "Never" | "never" | "NEVER" => Never
-                case "NotSupported" | "not_supported" | "not-supported" | "NOT_SUPPORTED" | "NOT-SUPPORTED" | "notSupported" => NotSupported
+                case "NotSupported" | "not_supported" | "not-supported" | "NOT_SUPPORTED" | "NOT-SUPPORTED"
+                    | "notSupported" => NotSupported
                 case "Nested" | "nested" | "NESTED" => Nested
                 case x => throw IllegalArgumentException("${x} is not llegal transaction propagation")
             }
@@ -162,9 +167,12 @@ public class ORMConfig {
             case Some(x) => match (x) {
                 case "Default" | "default" | "DEFAULT" => Unspecified
                 case "Unspecified" | "unspecified" | "UNSPECIFIED" => Unspecified
-                case "ReadCommitted" | "READ_COMMITTED" | "read_committed" | "read-committed" | "READ-COMMITTED" | "readCommitted" => ReadCommitted
-                case "ReadUncommitted" | "READ_UNCOMMITTED" | "read_uncommitted" | "read-uncommitted" | "READ-UNCOMMITTED" | "readUncommitted" => ReadUncommitted
-                case "RepeatableRead" | "REPEATABLE_READ" | "REPEATABLE-READ" | "repeatable_read" | "repeatable-read" | "repeatableRead" => RepeatableRead
+                case "ReadCommitted" | "READ_COMMITTED" | "read_committed" | "read-committed" | "READ-COMMITTED"
+                    | "readCommitted" => ReadCommitted
+                case "ReadUncommitted" | "READ_UNCOMMITTED" | "read_uncommitted" | "read-uncommitted"
+                    | "READ-UNCOMMITTED" | "readUncommitted" => ReadUncommitted
+                case "RepeatableRead" | "REPEATABLE_READ" | "REPEATABLE-READ" | "repeatable_read" | "repeatable-read"
+                    | "repeatableRead" => RepeatableRead
                 case "Snapshot" | "SNAPSHOT" | "snapshot" => Snapshot
                 case "Serializable" | "SERIALIZABLE" | "serializable" => Serializable
                 case "Linearizable" | "linearizable" | "LINEARIZABLE" => Linearizable
@@ -194,7 +202,8 @@ public class ORMConfig {
                 case "Default" | "default" | "DEFAULT" => Unspecified
                 case "Unspecified" | "unspecified" | "UNSPECIFIED" => Unspecified
                 case "Deferrable" | "deferrable" | "DEFERRABLE" => Deferrable
-                case "NotDeferrable" | "not_deferrable" | "not-deferrable" | "NOT_DEFERRABLE" | "NOT-DEFERRABLE" | "notDeferrable" => NotDeferrable
+                case "NotDeferrable" | "not_deferrable" | "not-deferrable" | "NOT_DEFERRABLE" | "NOT-DEFERRABLE"
+                    | "notDeferrable" => NotDeferrable
                 case _ => throw IllegalArgumentException()
             }
             case _ where !driverName.isEmpty() => getTransactionDeferrableMode()

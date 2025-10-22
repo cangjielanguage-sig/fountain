@@ -1,11 +1,17 @@
 /*
-    Copyright (c) [2022] [WuJingrun（吴京润）]
-    fountain is licensed under Mulan PSL v2.
-    You can use this software according to the terms and conditions of the Mulan PSL v2.
-    You may obtain a copy of Mulan PSL v2 at:
-            http://license.coscl.org.cn/MulanPSL2
-    THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-    See the Mulan PSL v2 for more details.
+Copyright (c) 2025 WuJingrun（吴京润）
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
  */
 package f_random
 
@@ -14,6 +20,10 @@ public import std.random.Random
 public import stdx.crypto.crypto.SecureRandom
 
 public interface ExtendRandom<R> where R <: ExtendRandom<R> {
+    func nextFloat64(): Float64
+    func nextFloat32(): Float32
+    func nextFloat64(min: Float64, max: Float64, closed!: Bool): Float64
+    func nextFloat32(min: Float32, max: Float32, closed!: Bool): Float32
     func nextInt64(min: Int64, max: Int64, closed!: Bool): Int64
     func nextUInt64(min: UInt64, max: UInt64, closed!: Bool): UInt64
     func nextInt32(min: Int32, max: Int32, closed!: Bool): Int32
@@ -35,79 +45,60 @@ public interface ExtendRandom<R> where R <: ExtendRandom<R> {
    如果不加这个限制，那么目前函数没有直接的方法，可以通过仅对超过max的部分下取整来解决
  */
 extend Random <: ExtendRandom<Random> {
+    public func nextFloat64(min: Float64, max: Float64, closed!: Bool = false): Float64{
+        nextFloat64() * (max - min + if (closed) {
+            1.0
+        } else {
+            0.0
+        }) + min
+    }
+    public func nextFloat32(min: Float32, max: Float32, closed!: Bool = false): Float32 {
+        nextFloat32() * (max - min + if (closed) {
+            1.0
+        } else {
+            0.0
+        }) + min
+    }
     public func nextInt64(min: Int64, max: Int64, closed!: Bool = false): Int64 {
-        return Int64(floor(
-                nextFloat64() * (Float64(max) - Float64(min) + if (closed) {
-                    1.0
-                } else {
-                    0.0
-                }) + Float64(min)
-            ))
+        return Int64(floor(nextFloat64(Float64(min), Float64(max), closed: closed)))
     }
     public func nextUInt64(min: UInt64, max: UInt64, closed!: Bool = false): UInt64 {
-        return UInt64(floor(
-                nextFloat64() * (Float64(max) - Float64(min) + if (closed) {
-                    1.0
-                } else {
-                    0.0
-                }) + Float64(min)
-            ))
+        return UInt64(floor(nextFloat64(Float64(min), Float64(max), closed: closed)))
     }
     public func nextInt32(min: Int32, max: Int32, closed!: Bool = false): Int32 {
-        return Int32(floor(
-                nextFloat32() * (Float32(max) - Float32(min) + if (closed) {
-                    1.0
-                } else {
-                    0.0
-                }) + Float32(min)
-            ))
+        return Int32(floor(nextFloat32(Float32(min), Float32(max), closed: closed)))
     }
     public func nextUInt32(min: UInt32, max: UInt32, closed!: Bool = false): UInt32 {
-        return UInt32(floor(
-                nextFloat32() * (Float32(max) - Float32(min) + if (closed) {
-                    1.0
-                } else {
-                    0.0
-                }) + Float32(min)
-            ))
+        return UInt32(floor(nextFloat32(Float32(min), Float32(max), closed: closed)))
     }
 }
+
 extend SecureRandom <: ExtendRandom<SecureRandom> {
+    public func nextFloat64(min: Float64, max: Float64, closed!: Bool = false): Float64{
+        nextFloat64() * (max - min + if (closed) {
+            1.0
+        } else {
+            0.0
+        }) + min
+    }
+    public func nextFloat32(min: Float32, max: Float32, closed!: Bool = false): Float32 {
+        nextFloat32() * (max - min + if (closed) {
+            1.0
+        } else {
+            0.0
+        }) + min
+    }
     public func nextInt64(min: Int64, max: Int64, closed!: Bool = false): Int64 {
-        return Int64(floor(
-                nextFloat64() * (Float64(max) - Float64(min) + if (closed) {
-                    1.0
-                } else {
-                    0.0
-                }) + Float64(min)
-            ))
+        return Int64(floor(nextFloat64(Float64(min), Float64(max), closed: closed)))
     }
     public func nextUInt64(min: UInt64, max: UInt64, closed!: Bool = false): UInt64 {
-        return UInt64(floor(
-                nextFloat64() * (Float64(max) - Float64(min) + if (closed) {
-                    1.0
-                } else {
-                    0.0
-                }) + Float64(min)
-            ))
+        return UInt64(floor(nextFloat64(Float64(min), Float64(max), closed: closed)))
     }
     public func nextInt32(min: Int32, max: Int32, closed!: Bool = false): Int32 {
-        return Int32(floor(
-                nextFloat32() * (Float32(max) - Float32(min) + if (closed) {
-                    1.0
-                } else {
-                    0.0
-                }) + Float32(min)
-            ))
+        return Int32(floor(nextFloat32(Float32(min), Float32(max), closed: closed)))
     }
     public func nextUInt32(min: UInt32, max: UInt32, closed!: Bool = false): UInt32 {
-        return UInt32(floor(
-                nextFloat32() * (Float32(max) - Float32(min) + if (closed) {
-                    1.0
-                } else {
-                    0.0
-                }) + Float32(min)
-            ))
+        return UInt32(floor(nextFloat32(Float32(min), Float32(max), closed: closed)))
     }
 }
 
@@ -267,15 +258,15 @@ public interface BaseRandom<R> where R <: BaseRandom<R> {
     func randomInt32(min: Int32, max: Int32, closed!: Bool): Iterator<Int32>
     func randomUInt32(min: UInt32, max: UInt32, closed!: Bool): Iterator<UInt32>
     func nextBytes(length: Int64): Array<Byte> {
-        Array<UInt8>(length){_ => nextUInt8()}
+        Array<UInt8>(length) {_ => nextUInt8()}
     }
     /**
      * 生成随机数替换入参数组中的每个元素
      * 参数类型 array - 传入一个数组
      * 返回值 Array<UInt8> - 返回替换后的 Array
      */
-    func nextUInt8s(array: Array<UInt8>): Array<UInt8>{
-        for(i in 0 .. array.size){
+    func nextUInt8s(array: Array<UInt8>): Array<UInt8> {
+        for (i in 0..array.size) {
             array[i] = nextUInt8()
         }
         array
@@ -285,17 +276,17 @@ public interface BaseRandom<R> where R <: BaseRandom<R> {
      * 获取高斯 Float16 的随机数
      * 返回值 Float16 - 返回一个 Float16 类型的高斯随机数
      */
-    func randomGaussianFloat16Stream(mean!: Float16, sigma!: Float16): Iterator<Float16> 
+    func randomGaussianFloat16Stream(mean!: Float16, sigma!: Float16): Iterator<Float16>
 
     /**
      * 获取高斯 Float32 的随机数
      * 返回值 Float32 - 返回一个 Float32 类型的高斯随机数
      */
-    func randomGaussianFloat32Stream(mean!: Float32, sigma!: Float32): Iterator<Float32> 
+    func randomGaussianFloat32Stream(mean!: Float32, sigma!: Float32): Iterator<Float32>
 
     /**
      * 获取高斯 Float64 的随机数
      * 返回值 Float64 - 返回一个 Float64 类型的高斯随机数
      */
-    func randomGaussianFloat64Stream(mean!: Float64, sigma!: Float64): Iterator<Float64> 
+    func randomGaussianFloat64Stream(mean!: Float64, sigma!: Float64): Iterator<Float64>
 }

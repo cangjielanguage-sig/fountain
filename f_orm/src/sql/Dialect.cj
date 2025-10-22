@@ -1,0 +1,111 @@
+/*
+Copyright (c) 2025 WuJingrun（吴京润）
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+package f_orm.sql
+
+import f_bean.macros.*
+
+public abstract class SqlDialect {
+    public prop dialect: String
+    public open func lastInsertId(id: String): String {
+        ''
+    }
+    public func lastInsertId(dataType: DataType): String {
+        lastInsertId(dataType.columnName)
+    }
+    public func lastInsertId<ID, O>(id: IdQueryMapper<ID, O>): String where ID <: Hashable & Equatable<ID> {
+        lastInsertId(id.dataType)
+    }
+    public open func limit(size: Int64, offset: Int64): (Int64, Int64, String) {
+        (size, offset, ' limit ? offset ?')
+    }
+}
+@Bean
+public open class MySqlDialect <: SqlDialect {
+    public prop dialect: String {
+        get(){
+            'mysql'
+        }
+    }
+}
+@Bean
+public open class PostgresDialect <: SqlDialect {
+    public open prop dialect: String {
+        get(){
+            'postgres'
+        }
+    }
+    public open func lastInsertId(id: String): String {
+        ' returning ${id}'
+    }
+}
+@Bean
+public class OpenGaussDialect <: PostgresDialect {
+    public prop dialect: String {
+        get(){
+            'opengauss'
+        }
+    }
+}
+@Bean
+public class OracleDialect <: SqlDialect {
+    public prop dialect: String {
+        get(){
+            'oracle'
+        }
+    }
+    public func limit(size: Int64, offset: Int64): (Int64, Int64, String) {
+        (offset, size, ' OFFSET ? ROWS FETCH NEXT ? ROWS ONLY')
+    }
+}
+@Bean
+public class DB2Dialect <: SqlDialect {
+    public prop dialect: String {
+        get(){
+            'db2'
+        }
+    }
+    public func limit(size: Int64, offset: Int64): (Int64, Int64, String) {
+        (offset, size, ' OFFSET ? ROWS FETCH FIRST ? ROWS ONLY')
+    }
+}
+class SqlDialectMediator {
+    private init(){
+        for(dialect in lookupList<SqlDialect>()){
+            this.dialects[dialect.dialect] = dialect
+        }
+    }
+    public static let instance = SqlDialectMediator()
+
+    func getDialect(dialect: String): SqlDialect {
+        dialects[dialect]
+    }
+
+    private let dialects = ConcurrentHashMap<String, SqlDialect>()
+
+    func lastInsertId(dialect: String, id: String): String {
+        dialects[dialect].lastInsertId(id)
+    }
+    func lastInsertId(dialect: String, dataType: DataType): String {
+        dialects[dialect].lastInsertId(dataType)
+    }
+    func lastInsertId<ID, O>(dialect: String, id: IdQueryMapper<ID, O>): String where ID <: Hashable & Equatable<ID> {
+        dialects[dialect].lastInsertId(id)
+    }
+
+    func limit(dialect: String, size: Int64, offset: Int64): (Int64, Int64, String) {
+        dialects[dialect].limit(size, offset)
+    }
+}

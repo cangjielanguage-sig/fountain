@@ -1,38 +1,45 @@
 /*
-    Copyright (c) [2022] [WuJingrun（吴京润）]
-    fountain is licensed under Mulan PSL v2.
-    You can use this software according to the terms and conditions of the Mulan PSL v2.
-    You may obtain a copy of Mulan PSL v2 at:
-            http://license.coscl.org.cn/MulanPSL2
-    THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-    See the Mulan PSL v2 for more details.
+Copyright (c) 2025 WuJingrun（吴京润）
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
  */
 package f_concurrent
 
-public class ConcurrentHashSetIterator<T> <: Iterator<T>{
-    public ConcurrentHashSetIterator(public let itr: Iterator<(T, T)>){}
-    public func next(): ?T{
+public class ConcurrentHashSetIterator<T> <: Iterator<T> {
+    public ConcurrentHashSetIterator(public let itr: Iterator<(T, Unit)>) {}
+    public func next(): ?T {
         itr.next()?[0]
     }
 }
+
 public class ConcurrentHashSet<T> <: Set<T> where T <: Hashable & Equatable<T> {
-    private let store: ConcurrentHashMap<T, T>
+    private let store: ConcurrentHashMap<T, Unit>
     public init() {
-        store = ConcurrentHashMap<T, T>()
+        store = ConcurrentHashMap<T, Unit>()
     }
-    public init(capacity: Int64){
-        store = ConcurrentHashMap<T, T>(capacity)
+    public init(capacity: Int64) {
+        store = ConcurrentHashMap<T, Unit>(capacity)
     }
-    public init(elements: Collection<T>){
+    public init(elements: Collection<T>) {
         this()
-        for(v in elements){
-            store[v] = v
+        for (v in elements) {
+            store[v] = ()
         }
     }
-    public init(elements: Array<T>){
+    public init(elements: Array<T>) {
         this()
-        for(v in elements){
-            store[v] = v
+        for (v in elements) {
+            store[v] = ()
         }
     }
     public prop size: Int64 {
@@ -47,10 +54,10 @@ public class ConcurrentHashSet<T> <: Set<T> where T <: Hashable & Equatable<T> {
         ConcurrentHashSetIterator<T>(store.iterator())
     }
     public func add(value: T): Bool {
-        store.add(value, value).isNone()
+        store.add(value, ()).isNone()
     }
     public func add(all!: Collection<T>): Unit {
-        for(v in all){
+        for (v in all) {
             add(v)
         }
     }
@@ -64,7 +71,7 @@ public class ConcurrentHashSet<T> <: Set<T> where T <: Hashable & Equatable<T> {
         return true
     }
     public func retain(all!: Set<T>): Unit {
-        for((k, _) in store where !all.contains(k)){
+        for ((k, _) in store where !all.contains(k)) {
             store.remove(k)
         }
     }
@@ -84,15 +91,15 @@ public class ConcurrentHashSet<T> <: Set<T> where T <: Hashable & Equatable<T> {
     }
     public func removeIf(predicate: (T) -> Bool): Unit {
         let keys = ArrayList<T>()
-        for((k, v) in store where predicate(v)) {
+        for ((k, v) in store where predicate(k)) {
             keys.add(k)
         }
-        for(k in keys){
+        for (k in keys) {
             store.remove(k)
         }
     }
     public func clear(): Unit {
-        removeIf{_ => true}
+        removeIf {_ => true}
     }
     public func retainAll(values: Set<T>): Unit {
         for (v in this where !values.contains(v)) {
@@ -103,27 +110,31 @@ public class ConcurrentHashSet<T> <: Set<T> where T <: Hashable & Equatable<T> {
         ConcurrentHashSet<T>(this)
     }
 }
+
 extend<T> ConcurrentHashSet<T> <: Equatable<ConcurrentHashSet<T>> where T <: Hashable & Equatable<T> {
     public operator func ==(other: ConcurrentHashSet<T>): Bool {
-        if(this.size != other.size){
+        if(refEq(this, other)){
+            return true
+        }else if (this.size != other.size) {
             return false
         }
         let itr1 = this.iterator()
         let itr2 = other.iterator()
         var i = 0
-        while(let (Some(x), Some(y)) <- (itr1.next(), itr2.next()) && x == y){
+        while (let (Some(x), Some(y)) <- (itr1.next(), itr2.next()) && x == y) {
             i++
         }
         i == this.size
     }
 }
-extend<T> ConcurrentHashSet<T> <: ToString where T <: Hashable & Equatable<T> & ToString{
+
+extend<T> ConcurrentHashSet<T> <: ToString where T <: Hashable & Equatable<T> & ToString {
     public func toString(): String {
         let builder = StringGenerator()
         builder.append('[')
         var i = 0
-        for(v in this){
-            if(i > 0){
+        for (v in this) {
+            if (i > 0) {
                 builder.append(', ')
             }
             builder.append(v)
@@ -131,5 +142,16 @@ extend<T> ConcurrentHashSet<T> <: ToString where T <: Hashable & Equatable<T> & 
         }
         builder.append(']')
         builder.toString()
+    }
+}
+extend<T> ConcurrentHashSet<T> <: SetOp<T> where T <: Hashable & Equatable<T> {
+    public func intersection<C>(collection: C): Set<T> where C <: Collection<T>{
+        IntersectionSetView<T, C>(this, ConcurrentHashSet<T>(collection))
+    }
+    public func union<C>(collection: C): Set<T> where C <: Collection<T>{
+        UnionSetView<T, C>(this, ConcurrentHashSet<T>(collection))
+    }
+    public func difference<C>(collection: C): Set<T> where C <: Collection<T>{
+        DifferenceSetView<T, C>(this, ConcurrentHashSet<T>(collection))
     }
 }

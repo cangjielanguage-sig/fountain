@@ -1,12 +1,18 @@
 /*
-    Copyright (c) [2022] [WuJingrun（吴京润）]
-    fountain is licensed under Mulan PSL v2.
-    You can use this software according to the terms and conditions of the Mulan PSL v2.
-    You may obtain a copy of Mulan PSL v2 at:
-            http://license.coscl.org.cn/MulanPSL2
-    THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-    See the Mulan PSL v2 for more details.
-*/
+Copyright (c) 2025 WuJingrun（吴京润）
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+ */
 package f_log.output
 
 import std.convert.Parsable
@@ -14,23 +20,36 @@ import std.collection.concurrent.ArrayBlockingQueue
 import std.env
 import std.fs.{File, Directory, OpenMode, exists, rename, removeIfExists}
 import std.io.{SeekPosition, OutputStream}
-import std.math.MathExtension
-import std.process.Process
-import std.sync.{Timer, Mutex, AtomicReference, AtomicUInt64}
+import std.sync.{Timer, Mutex}
 import std.time.DateTime
 import stdx.compress.zlib.{WrapType, CompressLevel, CompressOutputStream}
 import f_base.*
-import f_time.{TimeUnit, ExtendDateTime}
+import f_io.*// 必须导入这个包mmap才生效
+import f_time.TimeUnit
+
 internal import f_log.exception.LogException
 
-public class RotatableFileParams{
+public class RotatableFileParams <: Hashable & Equatable<RotatableFileParams> {
     public var path = "${env.getWorkingDirectory()}/logs/${env.getCommand()}.log"
     public var fileSize = Int64.Max
     public var timeunit = TimeUnit.DAY
     public var compress = LogFileCompressFormat.NonCompression
+
+    public operator func ==(that: RotatableFileParams): Bool {
+        this.path == that.path && this.fileSize == that.fileSize && 
+        this.timeunit.toString() == that.timeunit.toString() && this.compress == that.compress
+    }
+    private var h = 0
+    public func hashCode(): Int64 {
+        if (h == 0){
+            h = HashBuilder().append(path).append(fileSize).append(timeunit.toString()).append(compress).build()
+        }
+        h
+    }
 }
-protected class RotatableFile <: OutputStream & Resource{
-    private let queue = ArrayBlockingQueue<()->Unit>(1)
+
+protected class RotatableFile <: OutputStream & Resource {
+    private let queue = ArrayBlockingQueue<() -> Unit>(1)
     private var rotateTimer = ZERO_TIMER
     private let fileSize: Int64
     private let timeunit: TimeUnit
@@ -38,43 +57,43 @@ protected class RotatableFile <: OutputStream & Resource{
     private let directory: String
     private var file: File
 
-    public init(url: String, params: RotatableFileParams){
-        let fileInfo = url["file://".size .. ]
+    public init(url: String, params: RotatableFileParams) {
+        let fileInfo = url["file://".size..]
         var idx = fileInfo.indexOf("?") ?? fileInfo.size
-        let path = fileInfo[0 .. idx]
+        let path = fileInfo[0..idx]
         (this.directory, this.file) = createDirIfNeed(path)
-        if(idx < fileInfo.size){
+        if (idx < fileInfo.size) {
             idx = fileInfo.indexOf("rotateSize=") ?? -1
             if (idx > 0) {
                 let end = fileInfo.indexOf("&", idx) ?? fileInfo.size
-                fileSize = Int64.parse(fileInfo[idx + "rotateSize=".size .. end])
+                fileSize = Int64.parse(fileInfo[idx + "rotateSize=".size..end])
             } else {
                 fileSize = params.fileSize
             }
             idx = fileInfo.indexOf("rotateDuration=") ?? -1
             if (idx > 0) {
                 let end = fileInfo.indexOf("&", idx) ?? fileInfo.size
-                let duration = fileInfo[idx + "rotateDuration=".size .. end]
-                timeunit = TimeUnit.tryParse(duration).getOrThrow{LogException("rotateDuration=${duration}")}
+                let duration = fileInfo[idx + "rotateDuration=".size..end]
+                timeunit = TimeUnit.tryParse(duration).getOrThrow {LogException("rotateDuration=${duration}")}
             } else {
                 timeunit = params.timeunit
             }
             idx = fileInfo.indexOf("compressFormat=") ?? fileInfo.size
             if (idx > 0) {
                 let end = fileInfo.indexOf("&", idx) ?? fileInfo.size
-                let format = fileInfo[idx + "compressFormat=".size .. end]
+                let format = fileInfo[idx + "compressFormat=".size..end]
                 compress = compressFormat(format)
             } else {
                 compress = params.compress
             }
-        }else{
+        } else {
             fileSize = params.fileSize
             timeunit = params.timeunit
             compress = params.compress
         }
         rotateTimer = createRotateTimer()
     }
-    public init(params: RotatableFileParams){
+    public init(params: RotatableFileParams) {
         this.timeunit = params.timeunit
         this.fileSize = params.fileSize
         this.compress = params.compress
@@ -84,29 +103,50 @@ protected class RotatableFile <: OutputStream & Resource{
     public func isClosed(): Bool {
         file.isClosed()
     }
+    @When[os != "Linux"]
     public func close(): Unit {
         file.close()
     }
+    @When[os == "Linux"]
+    public func close(): Unit {
+        if(let Some(mm) <- this.mmapf){
+            mm.setLength()
+            mm.close()
+        }else{
+            file.close()
+        }
+    }
+    @When[os == "Linux"]
+    private var mmapf = None<RotatableMMapFile>
+    @When[os == "Linux"]
+    protected func mmap() {
+        let len = file.length
+        let mm = file.mmap(0, fileSize)
+        mm.writeOffset = len
+        let rmmf = RotatableMMapFile(this, mm)
+        this.mmapf = rmmf
+        rmmf
+    }
     protected prop path: String {
-        get(){
+        get() {
             this.file.info.path.toString()
         }
     }
     private func createRotateTimer() {
-        spawn{
-            while(let fn <- queue.remove()){
+        spawn {
+            while (let fn <- queue.remove()) {
                 fn()
             }
         }
         let timer = Timer.after(timeunit.since()) {
-            rotateFileIfNeed()
+            rotateFileIfNeed(0)
             this.timeunit.since()
         }
-        env.atExit{timer.cancel()}
+        env.atExit {timer.cancel()}
         timer
     }
-    private static func createDirIfNeed(path: String){
-        let directory = path[0 .. (path.lastIndexOf("/") ?? path.size)]
+    private static func createDirIfNeed(path: String) {
+        let directory = path[0..(path.lastIndexOf("/") ?? path.size)]
         if (!exists(directory)) {
             Directory.create(directory, recursive: true)
         }
@@ -115,18 +155,17 @@ protected class RotatableFile <: OutputStream & Resource{
     public static func compressFormat(format: String): LogFileCompressFormat {
         match (format) {
             case "None" => LogFileCompressFormat.NonCompression
-            case "Deflate(BestSpeed)" | "DeflateFormat(BestSpeed)" => LogFileCompressFormat.Deflate(
-                BestSpeed)
-            case "Deflate(DefaultCompression)" | "Deflate(Default)" | "Deflate" | "DeflateFormat" | "DeflateFormat(DefaultCompression)" | "DeflateFormat(Default)" => LogFileCompressFormat.
-                Deflate(DefaultCompression)
-            case "Deflate(BestCompression)" | "DeflateFormat(BestCompression)" => LogFileCompressFormat.
-                Deflate(BestCompression)
+            case "Deflate(BestSpeed)" | "DeflateFormat(BestSpeed)" => LogFileCompressFormat.Deflate(BestSpeed)
+            case "Deflate(DefaultCompression)" | "Deflate(Default)" | "Deflate" | "DeflateFormat"
+                | "DeflateFormat(DefaultCompression)" | "DeflateFormat(Default)" => LogFileCompressFormat.Deflate(
+                DefaultCompression)
+            case "Deflate(BestCompression)" | "DeflateFormat(BestCompression)" => LogFileCompressFormat.Deflate(
+                BestCompression)
 
             case "GZip(BestSpeed)" | "GZipFormat(BestSpeed)" => LogFileCompressFormat.GZip(BestSpeed)
-            case "GZip(DefaultCompression)" | "GZip(Default)" | "GZip" | "GZipFormat" | "GZipFormat(DefaultCompression)" | "GZipFormat(Default)" => LogFileCompressFormat.
-                GZip(DefaultCompression)
-            case "GZip(BestCompression)" | "GZipFormat(BestCompression)" => LogFileCompressFormat.GZip(
-                BestCompression)
+            case "GZip(DefaultCompression)" | "GZip(Default)" | "GZip" | "GZipFormat" | "GZipFormat(DefaultCompression)"
+                | "GZipFormat(Default)" => LogFileCompressFormat.GZip(DefaultCompression)
+            case "GZip(BestCompression)" | "GZipFormat(BestCompression)" => LogFileCompressFormat.GZip(BestCompression)
             case _ => throw IllegalArgumentException(
                 "unsupported compress config ${format}. " +
                     " The supported compressing configs are None, Deflate(BestSpeed), DeflateFormat(BestSpeed)," +
@@ -136,8 +175,7 @@ protected class RotatableFile <: OutputStream & Resource{
                     " GZip(BestSpeed), GZipFormat(BestSpeed)," +
                     " GZip(DefaultCompression), GZipFormat(Default), GZip, GZipFormat," +
                     " GZipFormat(DefaultCompression), GZipFormat(Default)" +
-                    " GZip(BestCompression), GZipFormat(BestCompression)."
-            )
+                    " GZip(BestCompression), GZipFormat(BestCompression).")
         }
     }
     public static func computeBytes(bytes: String): Int64 {
@@ -145,7 +183,7 @@ protected class RotatableFile <: OutputStream & Resource{
         var unit = b'b'
         var ne = bytes.size
         var bu = bytes[ne - 1]
-        if (bu == b'b' || bu == b'B'){
+        if (bu == b'b' || bu == b'B') {
             ne--
             bu = bytes[ne - 1]
             if ((bu >= b'a' && bu <= b'z') || (bu >= b'A' && bu <= b'Z')) {
@@ -156,10 +194,10 @@ protected class RotatableFile <: OutputStream & Resource{
             ne--
             unit = bu
         }
-        Int64.tryParse(bytes[0 .. ne]).getOrThrow{
-            throw IllegalArgumentException("${b} is illegal bytes description, bytes description supports an integer number follows with r'k' 'kbr' 'mr' 'mbr' 'gr' 'gbr' 'tr' 'tbr' 'er' 'eb' or their upper cases")
-        } * 1024 **
-        match(unit){
+        Int64.tryParse(bytes[0..ne]).getOrThrow {
+                throw IllegalArgumentException(
+                    "${b} is illegal bytes description, bytes description supports an integer number follows with r'k' 'kbr' 'mr' 'mbr' 'gr' 'gbr' 'tr' 'tbr' 'er' 'eb' or their upper cases")
+            } * 1024 ** match (unit) {
             case b'b' | b'B' => 0
             case b'k' | b'K' => 1
             case b'm' | b'M' => 2
@@ -185,17 +223,17 @@ protected class RotatableFile <: OutputStream & Resource{
         }
     }
     private let fileLock = Mutex()
-    private func rotateFileIfNeed() {
-        synchronized(fileLock) {//此处不能使用双重检查锁，否则可能导致一个线程试图向另一个线程已经重命名的文件导致写失败
+    func rotateFileIfNeed(appended: Int64) {
+        synchronized(fileLock) { //此处不能使用双重检查锁，否则可能导致一个线程试图向另一个线程已经重命名的文件导致写失败
             let current = timeunit.trim(DateTime.now())
-            let (need, file) = needRotate(current)
+            let (need, file) = needRotate(current, appended)
             if (need) {
                 let originPath = file.info.path.toString()
                 try {
                     let time = genTime(timeunit, current)
                     let path = "${originPath}.${time}"
                     try {
-                        file.close()
+                        this.close()
                     } catch (e: Exception) {
                         e.printStackTrace()
                     }
@@ -208,16 +246,21 @@ protected class RotatableFile <: OutputStream & Resource{
                 } catch (e: Exception) {
                     e.printStackTrace()
                 }
-                if(!exists(originPath)){
+                if (!exists(originPath)) {
                     this.file = File(originPath, Append)
+                    @When[os == "Linux"]
+                    let _ = if(let Some(mm) <- this.mmapf){
+                        mm.mmap = this.file.mmap(0, this.fileSize)
+                        mm.mmap.writeOffset = 0
+                    }
                 }
             }
         }
     }
-    private func needRotate(current: DateTime) {
+    private func needRotate(current: DateTime, appended: Int64) {
         let file = this.file
         let fileInfo = file.info
-        (fileInfo.creationTime < current || fileInfo.size >= fileSize, file)
+        (fileInfo.creationTime < current || fileInfo.size + appended >= fileSize, file)
     }
     private func closeFile(file: ?File): Unit {
         if (let Some(f) <- file) {
@@ -235,12 +278,12 @@ protected class RotatableFile <: OutputStream & Resource{
         var f = None<File>
         var compressedFile = None<File>
         try {
-            f = File(path, Read)
+            f = File(path, OpenMode.Read)
             let fsize = f?.length ?? 0
             if (fsize == 0) {
                 return
             }
-            compressedFile = File("${path}${ext}", Write)
+            compressedFile = File("${path}${ext}", OpenMode.Write)
             let compressedOutput = CompressOutputStream(
                 compressedFile.getOrThrow(),
                 wrap: wrap,
@@ -278,16 +321,17 @@ protected class RotatableFile <: OutputStream & Resource{
         }
     }
     private func compressAndDeleteOld(path: String) {
-        queue.add({=>
-            match (compress) {
-                case Deflate(level) => doCompress(path, ".lz", DeflateFormat, level)
-                case GZip(level) => doCompress(path, ".gz", GzipFormat, level)
-                case NonCompression => return
-            }
-        })
+        queue.add(
+            {
+                => match (compress) {
+                    case Deflate(level) => doCompress(path, ".lz", DeflateFormat, level)
+                    case GZip(level) => doCompress(path, ".gz", GzipFormat, level)
+                    case NonCompression => return
+                }
+            })
     }
     public func write(buffer: Array<Byte>): Unit {
-        rotateFileIfNeed()
+        rotateFileIfNeed(buffer.size)
         file.write(buffer)
     }
     public func flush(): Unit {
@@ -295,8 +339,42 @@ protected class RotatableFile <: OutputStream & Resource{
     }
 }
 
-public enum LogFileCompressFormat {
+public enum LogFileCompressFormat <: ToString & Hashable & Equatable<LogFileCompressFormat> {
     | NonCompression
     | Deflate(CompressLevel)
     | GZip(CompressLevel)
+
+    private func eq(x: CompressLevel, y: CompressLevel): Bool {
+        match((x, y)){
+            case (BestCompression, BestCompression) => true
+            case (BestSpeed, BestSpeed) => true
+            case (DefaultCompression, DefaultCompression) => true
+            case _ => false
+        }
+    }
+    public operator func ==(that: LogFileCompressFormat): Bool {
+        match((this, that)){
+            case (NonCompression, NonCompression) => true
+            case (Deflate(x), Deflate(y)) => eq(x, y)
+            case (GZip(x), GZip(y)) => eq(x, y)
+            case _ => false
+        }
+    }
+    private func compressLevelString(level: CompressLevel){
+        match(level){
+            case BestCompression => "BestCompression"
+            case BestSpeed => "BestSpeed"
+            case DefaultCompression => "DefaultCompression"
+        }
+    }
+    public func toString(): String {
+        match(this){
+            case NonCompression => "NonCompression"
+            case Deflate(x) => 'Deflate(${compressLevelString(x)})'
+            case GZip(x) => 'GZip(${compressLevelString(x)})'
+        }
+    }
+    public func hashCode(): Int64 {
+        toString().hashCode()
+    }
 }

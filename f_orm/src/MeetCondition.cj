@@ -1,22 +1,28 @@
 /*
-    Copyright (c) [2022] [WuJingrun（吴京润）]
-    fountain is licensed under Mulan PSL v2.
-    You can use this software according to the terms and conditions of the Mulan PSL v2.
-    You may obtain a copy of Mulan PSL v2 at:
-            http://license.coscl.org.cn/MulanPSL2
-    THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-    See the Mulan PSL v2 for more details.  
-*/
+Copyright (c) 2025 WuJingrun（吴京润）
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+ */
 package f_orm
 
-public class MeetCondition{
+public class MeetCondition {
     //condition: Bool, sqlFrag: String, argInSql!: Bool, value!: () -> ToString
     private var _argInSql = false
     private var _value: () -> Any = {=> ''}
-    public MeetCondition(private let condition: Bool, private let partial: String, private let executor: SqlExecutor){}
-    
+    public MeetCondition(private let condition: Bool, private let partial: String, private let executor: SqlExecutor) {}
+
     public prop argInSql: MeetCondition {
-        get(){
+        get() {
             _argInSql = true
             this
         }
@@ -29,20 +35,61 @@ public class MeetCondition{
         this._value = {=> value}
         this
     }
-    public func done(): String {
+    public func frag(frag: String): String {
+        this.frag{frag}
+    }
+    public func frag(frag: () -> String): String {
         if(condition){
-            if(_argInSql){
-                match(_value()){
-                    case x: ToString => ' ${partial} ${x} ${Condition.delimiter} '
-                    case x => 
-                        executor.add(_value())
-                        ' ${partial} ? ${Condition.delimiter} '
-                }        
+            '${partial} ${frag()} ${Condition.delimiter}'
+        }else{
+            ''
+        }
+    }
+    public func BETWEEN(one: Any, two: Any): String {
+        frag{
+            if(_argInSql && let (x: ToString, y: ToString) <- (one, two)){
+                ' between ${x} and ${y} '
             }else{
+                executor.add(one)
+                executor.add(two)
+                ' between ? and ? '
+            }
+        }
+    }
+    public func IN<I, T>(itr: I): String where I <: Iterable<T> {
+        frag{
+            let builder = StringBuilder(' in (')
+            var i = 0
+            for(v in itr){
+                if(i > 0){
+                    builder.append(',')
+                }
+                if(_argInSql && let x: ToString <- v){
+                    builder.append(x)
+                }else{
+                    executor.add(v)
+                    builder.append('?')
+                }
+                i++
+            }
+            builder.append(') ')
+            builder.toString()
+        }
+    }
+    public func done(): String {
+        if (condition) {
+            if (_argInSql) {
+                match (_value()) {
+                    case x: ToString => ' ${partial} ${x} ${Condition.delimiter} '
+                    case x =>
+                        executor.add(x)
+                        ' ${partial} ? ${Condition.delimiter} '
+                }
+            } else {
                 executor.add(_value())
                 ' ${partial} ? ${Condition.delimiter} '
             }
-        }else{
+        } else {
             ''
         }
     }

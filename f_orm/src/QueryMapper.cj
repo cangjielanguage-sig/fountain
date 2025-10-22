@@ -1,13 +1,18 @@
 /*
-   Copyright (c) [2022] [WuJingrun（吴京润）]
-   fountain is licensed under Mulan PSL v2.
-   You can use this software according to the terms and conditions of the Mulan PSL v2.
-   You may obtain a copy of Mulan PSL v2 at:
-           http://license.coscl.org.cn/MulanPSL2
-   THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-   See the Mulan PSL v2 for more details.
- */
+Copyright (c) 2025 WuJingrun（吴京润）
 
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+ */
 package f_orm
 
 import std.collection.{ArrayList, Map, HashMap, Set, List}
@@ -25,15 +30,15 @@ import f_base.ExtendOption
  */
 public open class QueryMapper<O> {
     public QueryMapper(
-        protected let dataType!: DataType = UnknownDataType(true, ''),
+        protected let dataType!: DataType = UnknownDataType(true, '', ''),
         protected let putter!: (O, Any) -> Unit
     ) {}
 
     protected func new<T>(): QueryMapper<T> {
         QueryMapper<T>(
             dataType: dataType,
-            putter: {instance, value =>
-                putter((instance as O).getOrThrow(), value)
+            putter: {
+                instance, value => putter((instance as O).getOrThrow(), value)
             }
         )
     }
@@ -49,16 +54,11 @@ public open class QueryMapper<O> {
         }
     }
 
-    //获取单列的单行的数据
     public func get<T>(result: QueryResultWrap): ?T {
-        if(result.next()){
-            match(dataType.get(result)){
-                case x: T => x
-                case x: ?T => x
-                case _ => throw TypeCastException("${dataType.columnName}")
-            }
-        }else{
-            None
+        match (dataType.get(result)) {
+            case x: T => x
+            case x: ?T => x
+            case _ => None<T>
         }
     }
     public open func populate(result: QueryResultWrap, o: O): O {
@@ -66,11 +66,26 @@ public open class QueryMapper<O> {
         o
     }
 }
+
 public open class FieldQueryMapper<T, O> <: QueryMapper<O> {
     public init(
-        dataType!: DataType = UnknownDataType(true, ''),
+        dataType!: DataType = UnknownDataType(true, '', ''),
         putter!: (O, T) -> Unit
     ) {
-        super(dataType: dataType, putter: {o, v => putter(o, convert<T>(v))})
+        super(dataType: dataType, putter: {o, v => 
+            if(dataType.nullable){
+                if(let Some(v) <- ORMConverter.convertNullable<T>(v)){
+                    putter(o, v)
+                }
+            }else{
+                putter(o, ORMConverter.convert<T>(v))
+            }
+        })
+    }
+    public open func populate(result: QueryResultWrap, o: O): O {
+        if (let Some(id) <- super.get<T>(result)) {
+            putter(o, id)
+        }
+        o
     }
 }

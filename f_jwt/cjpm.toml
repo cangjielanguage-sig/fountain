@@ -1,27 +1,47 @@
 [dependencies]
+  f_cache = {path = "../f_cache"}
   f_data = {path = "../f_data"}
   f_time = {path = "../f_time"}
   f_exception = {path = "../f_exception"}
 [package]
-  cjc-version = "0.60.5"
-  compile-option = "-O2"
+  cjc-version = "1.0.0"
+  compile-option = "-O2 --dy-std"
+  override-compile-option = "-O2 --dy-std"
   description = "nothing here"
   link-option = ""
   name = "f_jwt"
   output-type = "dynamic"
-  override-compile-option = "-O2"
   src-dir = ""
   target-dir = ""
   version = "1.0.0"
   package-configuration = {}
 
-[target.x86_64-w64-mingw32]
-  [target.x86_64-w64-mingw32.bin-dependencies]
-    path-option = ["D:\\docs\\work\\cangjie\\cangjie-win-bin\\windows_x86_64_llvm\\dynamic\\stdx"]
-
+[target]
 [target.x86_64-unknown-linux-gnu]
-  [target.x86_64-unknown-linux-gnu.bin-dependencies]
-    path-option = ["${CANGJIE_STDX_PATH}/dynamic/stdx"]
+  compile-option = "-O2 --lto=full --dy-std"
+  override-compile-option = "-O2 --lto=full --dy-std"
+[target.x86_64-unknown-linux-gnu.bin-dependencies]
+  path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]
+[target.aarch64-unknown-linux-gnu]
+  compile-option = "-O2 --lto=full --dy-std"
+  override-compile-option = "-O2 --lto=full --dy-std"
+[target.aarch64-unknown-linux-gnu.bin-dependencies]
+  path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]
+[target.x86_64-w64-mingw32]
+  compile-option = "-O2 --dy-std"
+  override-compile-option = "-O2 --dy-std"
+[target.x86_64-w64-mingw32.bin-dependencies]
+  path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]
+[target.x86_64-apple-darwin]
+  compile-option = "-O2 --dy-std"
+  override-compile-option = "-O2 --dy-std"
+[target.x86_64-apple-darwin.bin-dependencies]
+  path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]
+[target.aarch64-apple-darwin]
+  compile-option = "-O2 --dy-std"
+  override-compile-option = "-O2 --dy-std"
+[target.aarch64-apple-darwin.bin-dependencies]
+  path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]
 
 [profile.build]
   lto = "full"

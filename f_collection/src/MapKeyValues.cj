@@ -1,16 +1,21 @@
 /*
-    Copyright (c) [2022] [WuJingrun（吴京润）]
-    fountain is licensed under Mulan PSL v2.
-    You can use this software according to the terms and conditions of the Mulan PSL v2.
-    You may obtain a copy of Mulan PSL v2 at:
-            http://license.coscl.org.cn/MulanPSL2
-    THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-    See the Mulan PSL v2 for more details.
+Copyright (c) 2025 WuJingrun（吴京润）
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
  */
 package f_collection
 
 import std.collection.{Map, EquatableCollection}
-import f_base.ExtendOption
 
 class MapKeyIterator<K, V> <: Iterator<K> {
     MapKeyIterator(private let entryIterator: Iterator<(K, V)>) {}
@@ -18,6 +23,7 @@ class MapKeyIterator<K, V> <: Iterator<K> {
         entryIterator.next()?[0]
     }
 }
+
 class MapKeys<K, V> <: EquatableCollection<K> where K <: Equatable<K> {
     MapKeys(private let map: Map<K, V>) {}
 
@@ -45,8 +51,8 @@ class MapKeys<K, V> <: EquatableCollection<K> where K <: Equatable<K> {
      */
     public func toArray(): Array<K> {
         let itr = iterator()
-        return Array<K>(size){_ => 
-            itr.next().getOrThrow()
+        return Array<K>(size) {
+            _ => itr.next().getOrThrow()
         }
     }
 
@@ -75,12 +81,14 @@ class MapKeys<K, V> <: EquatableCollection<K> where K <: Equatable<K> {
         return map.contains(all: all)
     }
 }
+
 class MapValueIterator<K, V> <: Iterator<V> {
     MapValueIterator(private let entryIterator: Iterator<(K, V)>) {}
     public func next(): Option<V> {
         entryIterator.next()?[1]
     }
 }
+
 class MapValues<K, V> <: Collection<V> where K <: Equatable<K> {
     private var map: Map<K, V>
     init(map: Map<K, V>) {
@@ -124,10 +132,10 @@ class MapValues<K, V> <: Collection<V> where K <: Equatable<K> {
     public func clear(): Unit {
         map.clear()
     }
-    public func toArray(): Array<V>{
+    public func toArray(): Array<V> {
         let itr = iterator()
-        Array<V>(size){_ => 
-            itr.next().getOrThrow()
+        Array<V>(size) {
+            _ => itr.next().getOrThrow()
         }
     }
 }

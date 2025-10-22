@@ -1,23 +1,26 @@
 /*
-    Copyright (c) [2022] [WuJingrun（吴京润）]
-    fountain is licensed under Mulan PSL v2.
-    You can use this software according to the terms and conditions of the Mulan PSL v2.
-    You may obtain a copy of Mulan PSL v2 at:
-            http://license.coscl.org.cn/MulanPSL2
-    THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-    See the Mulan PSL v2 for more details.
+Copyright (c) 2025 WuJingrun（吴京润）
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
  */
 package f_cache
 
-import std.collection.{HashMap, HashSet, Set}
+import std.collection.HashMap
 import std.collection.concurrent.LinkedBlockingQueue
-import std.math.MathExtension
 import std.env.atExit
-import std.process.Process
 import std.time.DateTime
-import std.sync.{Mutex, AtomicInt64, AtomicReference, Timer, AtomicBool}
+import std.sync.{Mutex, Timer, AtomicBool}
 import f_base.*
-import f_exception.UnreachableException
 import f_collection.PriorityQueue
 
 public class HeapCache<V> where V <: Object {
@@ -34,8 +37,7 @@ public class HeapCache<V> where V <: Object {
     ) {
         if (maxLife < Duration.Zero || maxSize <= 0 || concurrencyLevel <= 0 || checkDuration <= Duration.Zero) {
             throw IllegalArgumentException(
-                "maxLife must not be less than zero. maxSize and concurrencyLevel must be greater than zero. checkDuration must be greater than Duration.Zero. however current are ${maxLife}, ${maxSize}, ${concurrencyLevel}, ${checkDuration}"
-            )
+                "maxLife must not be less than zero. maxSize and concurrencyLevel must be greater than zero. checkDuration must be greater than Duration.Zero. however current are ${maxLife}, ${maxSize}, ${concurrencyLevel}, ${checkDuration}")
         }
         this.store = ConcHashMap<Priority<V>>.create(concurrencyLevel: concurrencyLevel)
         startTimer()
@@ -70,15 +72,15 @@ public class HeapCache<V> where V <: Object {
         }
     }
     private func checkTimeout(evictionQueue: LinkedBlockingQueue<(String, V)>): Unit {
-        removeIf{k, p =>
-            if(alive.load()){
-                if(evicated(p)){
+        removeIf {
+            k, p => if (alive.load()) {
+                if (evicated(p)) {
                     evictionQueue.add((k, p.load()))
                     true
-                }else{
+                } else {
                     false
                 }
-            }else{
+            } else {
                 return true
             }
         }
@@ -128,15 +130,11 @@ public class HeapCache<V> where V <: Object {
         tops.clear()
     }
     private func evicated(p: Priority<V>): Bool {
-        DateTime.now() - if(p.once){
-            p.birthTime
-        }else{
-            p.lastUsedTime
-        } >= p.maxLife
+        DateTime.now() >= p.deathTime
     }
 
     public func get(key: String): Option<V> {
-        match(store.get(key)){
+        match (store.get(key)) {
             case Some(p) where !evicated(p) => p.load()
             case _ => None<V>
         }
@@ -186,7 +184,7 @@ public class HeapCache<V> where V <: Object {
                 old
             }
         } else {
-            store.add(key, Priority<V>(key, value, maxLife, once))
+            store.add(key, Priority<V>(key, value, maxLife, checkDuration, once))
             Option<V>.None
         }
     }
@@ -207,32 +205,30 @@ public class HeapCache<V> where V <: Object {
     public func getOrCompute(key: String, callable: () -> (V, DateTime)): V {
         store.computeIfAbsent(key) {
             let data = callable()
-            Priority<V>(key, data[0], data[1] - DateTime.now(), true)
+            Priority<V>(key, data[0], data[1] - DateTime.now(), checkDuration, true)
         }.load()
     }
     public func getOrCompute(key: String, callable: () -> (V, Duration, Bool)): V {
         store.computeIfAbsent(key) {
             let data = callable()
-            Priority<V>(key, data[0], data[1], data[2])
+            Priority<V>(key, data[0], data[1], checkDuration, data[2])
         }.load()
     }
     public func remove(key: String): Option<V> {
         store.remove(key)?.load()
     }
     public func removeIf(predicate: (String, V) -> Bool): Unit {
-        removeIf{k: String, p: Priority<V> => predicate(k, p.load())}
+        removeIf {k: String, p: Priority<V> => predicate(k, p.load())}
     }
     private func removeIf(predicate: (String, Priority<V>) -> Bool): Unit {
-        for ((k, p) in store where predicate(k, p)) {
-            remove(k)
-        }
+        store.removeIf(predicate)
     }
     public prop size: Int64 {
         get() {
             store.size
         }
     }
-    public func clear(){
+    public func clear() {
         store.clear()
     }
     public func destroy(): Unit {

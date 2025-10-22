@@ -1,11 +1,17 @@
 /*
-    Copyright (c) [2022] [WuJingrun（吴京润）]
-    fountain is licensed under Mulan PSL v2.
-    You can use this software according to the terms and conditions of the Mulan PSL v2.
-    You may obtain a copy of Mulan PSL v2 at:
-            http://license.coscl.org.cn/MulanPSL2
-    THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-    See the Mulan PSL v2 for more details.
+Copyright (c) 2025 WuJingrun（吴京润）
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
  */
 package f_base
 
@@ -26,8 +32,7 @@ public class Options<T, R> {
         !isEmpty(current)
     }
     public static func isEmptyOrUnit(current: Option<T>): Bool {
-        isEmpty(current) ||
-        match (current) {
+        isEmpty(current) || match (current) {
             case Some(v) => v is Unit
             case Option<T>.None => true
         }
@@ -36,8 +41,7 @@ public class Options<T, R> {
         !isEmptyOrUnit(current)
     }
     public static func isEmptyOrZero(current: Option<T>): Bool {
-        isEmpty(current) ||
-        match (current) {
+        isEmpty(current) || match (current) {
             case Some(v) => match (v) {
                 case x: Int64 where x == 0 => true
                 case x: UInt64 where x == 0 => true
@@ -64,8 +68,7 @@ public class Options<T, R> {
         func isBlankRune(c: Rune) {
             c == r'\0' || c.isWhiteSpace()
         }
-        isEmpty(current) ||
-        match (current.getOrThrow()) {
+        isEmpty(current) || match (current.getOrThrow()) {
             case v: String => v.isBlank()
             case v: Iterable<Rune> =>
                 for (c in v where !isBlankRune(c)) {
@@ -111,10 +114,12 @@ public class Options<T, R> {
     }
     private static func doConvert(origin: Option<T>, converter: (T) -> Option<R>, toThrow: Bool): Option<R> {
         if (let Some(v) <- origin) {
-            match (converter(v)) {
-                case Some(r) => r
-                case _ where toThrow => throw IllegalArgumentException()
-                case _ => None<R>
+            if(let Some(r) <- converter(v)){
+                r
+            }else if(toThrow){
+                throw IllegalArgumentException()
+            }else{
+                None<R>
             }
         } else {
             None<R>

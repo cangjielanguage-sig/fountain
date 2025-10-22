@@ -1,34 +1,36 @@
 /*
-    Copyright (c) [2022] [WuJingrun（吴京润）]
-    fountain is licensed under Mulan PSL v2.
-    You can use this software according to the terms and conditions of the Mulan PSL v2.
-    You may obtain a copy of Mulan PSL v2 at:
-            http://license.coscl.org.cn/MulanPSL2
-    THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-    See the Mulan PSL v2 for more details.
-*/
+Copyright (c) 2025 WuJingrun（吴京润）
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+ */
 package f_data
 
 public class DataString <: Data & Hashable & Comparable<DataString> {
-    public DataString(public let data: String){}
-    public init(data: ToString){
+    public DataString(public let data: String) {}
+    public init(data: ToString) {
         this(data.toString())
     }
-    private init(){
+    private init() {
         this("")
     }
     public func toString(): String {
-        '"${data.replace('"', '\\"')}"'
+        data
     }
     public static func tryParse(data: String): ?Data {
         parse(data)
     }
     public static func parse(data: String): Data {
-        DataString(if(data.startsWith('"') && data.endsWith('"')){
-            data[1 .. data.size - 1].replace('\\"', '"')
-        }else{
-            data
-        })
+        DataString(data)
     }
     public func hashCode(): Int64 {
         data.hashCode()
@@ -37,15 +39,17 @@ public class DataString <: Data & Hashable & Comparable<DataString> {
         data.compare(other.data)
     }
 }
+
 extend String <: DataFields<String> {
     public func toData(): Data {
         DataString(this)
     }
     public static func tryFromData(data: Data, flag: DataConversionFlag): Any {
-        match(data){
+        match (data) {
             case x: DataString => x.data
             case x: DataNone => None<String>
-            case _ where (flag & IGNORE_FIELD_TYPE_NOT_MATCH) == 0 => throw DataException('(${data}) does not match to ${TypeInfos.get<String>()}')
+            case _ where (flag & IGNORE_FIELD_TYPE_NOT_MATCH) == 0 => throw DataException(
+                '(${data}) does not match to ${TypeInfos.get<String>()}')
             case x => x.toString()
         }
     }

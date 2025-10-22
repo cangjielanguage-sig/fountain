@@ -1,11 +1,17 @@
 /*
-    Copyright (c) [2022] [WuJingrun（吴京润）]
-    fountain is licensed under Mulan PSL v2.
-    You can use this software according to the terms and conditions of the Mulan PSL v2.
-    You may obtain a copy of Mulan PSL v2 at:
-            http://license.coscl.org.cn/MulanPSL2
-    THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-    See the Mulan PSL v2 for more details.
+Copyright (c) 2025 WuJingrun（吴京润）
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
  */
 package f_data
 
@@ -14,7 +20,7 @@ import std.math.numeric.{BigInt, Decimal}
 import f_regex.*
 
 public interface DataParsable<T> where T <: DataParsable<T> {
-    static func parse(s: String): T 
+    static func parse(s: String): T
     static func tryParse(s: String): ?T
 }
 
@@ -45,29 +51,45 @@ extend Duration <: DataParsable<Duration> {
                     }
                 case b's' => Duration.second
                 case b'u' where s[i] == b's' =>
-                    i++ 
+                    i++
                     Duration.microsecond
                 case b'n' where s[i] == b's' =>
                     i++
                     Duration.nanosecond
-                case _ => 
-                    throw DataParsableException('${s} cannot be parsed to Duration')
-            } * Int64.tryParse(String.fromUtf8(bytes.toArray())).getOrThrow {DataParsableException('${s} cannot be parsed to Duration')}
+                case _ => throw DataParsableException('${s} cannot be parsed to Duration')
+            } *
+                Int64
+                .tryParse(String.fromUtf8(bytes.unsafeData()))
+                .getOrThrow {DataParsableException('${s} cannot be parsed to Duration')}
         }
         duration
     }
 }
-extend Int64 <: DataParsable<Int64>{}
-extend UInt64 <: DataParsable<UInt64>{}
-extend Int32 <: DataParsable<Int32>{}
-extend UInt32 <: DataParsable<UInt32>{}
-extend Int16 <: DataParsable<Int16>{}
-extend UInt16 <: DataParsable<UInt16>{}
-extend Int8 <: DataParsable<Int8>{}
-extend UInt8 <: DataParsable<UInt8>{}
-extend Float64 <: DataParsable<Float64>{}
-extend Float32 <: DataParsable<Float32>{}
-extend Float16 <: DataParsable<Float16>{}
-extend Bool <: DataParsable<Bool>{}
-extend BigInt <: DataParsable<BigInt>{}
-extend Decimal <: DataParsable<Decimal>{}
+
+extend Int64 <: DataParsable<Int64> {}
+
+extend UInt64 <: DataParsable<UInt64> {}
+
+extend Int32 <: DataParsable<Int32> {}
+
+extend UInt32 <: DataParsable<UInt32> {}
+
+extend Int16 <: DataParsable<Int16> {}
+
+extend UInt16 <: DataParsable<UInt16> {}
+
+extend Int8 <: DataParsable<Int8> {}
+
+extend UInt8 <: DataParsable<UInt8> {}
+
+extend Float64 <: DataParsable<Float64> {}
+
+extend Float32 <: DataParsable<Float32> {}
+
+extend Float16 <: DataParsable<Float16> {}
+
+extend Bool <: DataParsable<Bool> {}
+
+extend BigInt <: DataParsable<BigInt> {}
+
+extend Decimal <: DataParsable<Decimal> {}

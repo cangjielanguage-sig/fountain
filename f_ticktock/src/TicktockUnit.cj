@@ -1,31 +1,36 @@
 /*
-    Copyright (c) [2022] [WuJingrun（吴京润）]
-    fountain is licensed under Mulan PSL v2.
-    You can use this software according to the terms and conditions of the Mulan PSL v2.
-    You may obtain a copy of Mulan PSL v2 at:
-            http://license.coscl.org.cn/MulanPSL2
-    THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-    See the Mulan PSL v2 for more details.
+Copyright (c) 2025 WuJingrun（吴京润）
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
  */
 package f_ticktock
 
 import std.collection.ArrayList
-
 import f_time.ExtendDateTime
 
 abstract sealed class TicktockUnit <: Currently & ToString & Hashable & Equatable<TicktockUnit> {
-    public static let SECONDLY = SecondlyTicktockUnit(0, false, 0 ..= 59, 59 ..= 59)
-    public static let MINUTELY = MinutelyTicktockUnit(1, false, 0 ..= 59, 59 ..= 59)
-    public static let HOURLY = HourlyTicktockUnit(2, false, 0 ..= 23, 23 ..= 23)
-    public static let MONTH_DAILY = MonthDailyTicktockUnit(3, true, 1..= 31, 28 ..= 31)
-    public static let MONTHLY = MonthlyTicktockUnit(4, true, 1..= 12, 12..= 12)
-    public static let WEEK_DAILY = WeekDailyTicktockUnit(5, true, 1..= 7, 7..= 7)
-    public static let YEARLY = YearlyTicktockUnit(6, false, DateTime.now().year ..= Int64.Max, Int64.Max ..= Int64.Max)
+    public static let SECONDLY = SecondlyTicktockUnit(0, false, 0..=59, 59..=59)
+    public static let MINUTELY = MinutelyTicktockUnit(1, false, 0..=59, 59..=59)
+    public static let HOURLY = HourlyTicktockUnit(2, false, 0..=23, 23..=23)
+    public static let MONTH_DAILY = MonthDailyTicktockUnit(3, true, 1..=31, 28..=31)
+    public static let MONTHLY = MonthlyTicktockUnit(4, true, 1..=12, 12..=12)
+    public static let WEEK_DAILY = WeekDailyTicktockUnit(5, true, 1..=7, 7..=7)
+    public static let YEARLY = YearlyTicktockUnit(6, false, DateTime.now().year..=Int64.Max, Int64.Max..=Int64.Max)
 
-    private var value_: Int64
-    private var oneStart: Bool
-    private var range_: Range<Int64>
-    private var lastRange_: Range<Int64>
+    private let value_: Int64
+    private let oneStart: Bool
+    private let range_: Range<Int64>
+    private let lastRange_: Range<Int64>
 
     init(value: Int64, oneStart: Bool, range: Range<Int64>, lastRange: Range<Int64>) {
         this(value, oneStart, 0, range, lastRange)
@@ -34,9 +39,10 @@ abstract sealed class TicktockUnit <: Currently & ToString & Hashable & Equatabl
     init(value: Int64, oneStart: Bool, rangeBase: Int64, range: Range<Int64>, lastRange: Range<Int64>) {
         this.value_ = value
         this.oneStart = oneStart
+
         @OverflowSaturating
-        func newRange(range: Range<Int64>){
-            range.start + rangeBase ..= range.end + rangeBase
+        func newRange(range: Range<Int64>) {
+            range.start + rangeBase..=range.end + rangeBase
         }
         this.range_ = newRange(range)
         this.lastRange_ = newRange(lastRange)
@@ -70,7 +76,7 @@ abstract sealed class TicktockUnit <: Currently & ToString & Hashable & Equatabl
         value
     }
     public operator func ==(unit: TicktockUnit) {
-        this.value == unit.value
+        refEq(this, unit) || this.value == unit.value
     }
     public operator func !=(unit: TicktockUnit) {
         !(this == unit)
@@ -124,24 +130,20 @@ abstract sealed class TicktockUnit <: Currently & ToString & Hashable & Equatabl
             throw IllegalArgumentException("${begin}-${end}, end must be greater than zero")
         } else if (begin > range.end) {
             throw IllegalArgumentException(
-                "${begin}-${end}, start must be less than or equals to the max value in range of ${name}, max value: ${range.end}"
-            )
+                "${begin}-${end}, start must be less than or equals to the max value in range of ${name}, max value: ${range.end}")
         } else if (end > range.end) {
             throw IllegalArgumentException(
-                "${begin}-${end}, end must be less than or equals to the max value in range of ${name} , max value: ${range.end}"
-            )
+                "${begin}-${end}, end must be less than or equals to the max value in range of ${name} , max value: ${range.end}")
         } else if (begin > end) {
             throw IllegalArgumentException("start must be less than end, start:${begin}, end:${end}")
         } else if (begin < range.start) {
             throw IllegalArgumentException(
-                "start must be greater than or equals to min value of ${name} range, between ${range.start} and ${range.end}, start: ${begin}"
-            )
+                "start must be greater than or equals to min value of ${name} range, between ${range.start} and ${range.end}, start: ${begin}")
         } else if (end < range.start) {
             throw IllegalArgumentException(
-                "end must be greater than or equals to min value of ${name} range, between ${range.start} and ${range.end}, end: ${end}"
-            )
+                "end must be greater than or equals to min value of ${name} range, between ${range.start} and ${range.end}, end: ${end}")
         }
-        return [begin ..= end]
+        return [begin..=end]
     }
     public func convertRange(exprPart: ArrayList<Int64>): Array<Range<Int64>> {
         let size = exprPart.size
@@ -156,8 +158,7 @@ abstract sealed class TicktockUnit <: Currently & ToString & Hashable & Equatabl
             second = exprPart[1]
             if (first > second) {
                 throw IllegalArgumentException(
-                    "first value must be less than the second one, which in the same part of cron expression!!! current TicktockUnit is ${name}"
-                )
+                    "first value must be less than the second one, which in the same part of cron expression!!! current TicktockUnit is ${name}")
             }
         } else {
             second = exprPart[0]
@@ -165,10 +166,10 @@ abstract sealed class TicktockUnit <: Currently & ToString & Hashable & Equatabl
         }
         var result = convertRange(first, second)
         var range = this.range
-        for(r in result where !(range.start <= r.start && r.start <= range.end && range.start <= r.end && r.end <= range.end)){
+        for (r in result where !(range.start <= r.start && r.start <= range.end && range.start <= r.end && r.end <= range
+            .end)) {
             throw IllegalArgumentException(
-                "at least one of the two values in same part of cron expression overflow!!! current TicktockUnit is ${name}, min: ${range.start}, max: ${range.end}"
-            )
+                "at least one of the two values in same part of cron expression overflow!!! current TicktockUnit is ${name}, min: ${range.start}, max: ${range.end}")
         }
         result
     }
@@ -179,12 +180,10 @@ abstract sealed class TicktockUnit <: Currently & ToString & Hashable & Equatabl
             throw IllegalArgumentException("${start}-${end}, end must be greater than zero")
         } else if (start > range.end) {
             throw IllegalArgumentException(
-                "${start}/${duration}-${end}, start must be less than or equals to the toplimit in range of ${name}, toplimit: ${range.end}"
-            )
+                "${start}/${duration}-${end}, start must be less than or equals to the toplimit in range of ${name}, toplimit: ${range.end}")
         } else if (end > range.end) {
             throw IllegalArgumentException(
-                "${start}/${duration}-${end}, end must be less than or equals to the toplimit in range of ${name}, toplimit: ${range.end}"
-            )
+                "${start}/${duration}-${end}, end must be less than or equals to the toplimit in range of ${name}, toplimit: ${range.end}")
         } else if (duration == 0) {
             throw IllegalArgumentException("duration must be great than zero, duration: ${duration}")
         } else if (start > end) {
@@ -192,17 +191,15 @@ abstract sealed class TicktockUnit <: Currently & ToString & Hashable & Equatabl
                 "start must be less than end, start:${start}, end:${end}, duration:${duration}")
         } else if (start < range.start) {
             throw IllegalArgumentException(
-                "start must be greater than or equals to min value of ${name} range, between ${range.start} and ${range.end}, start: ${start}"
-            )
+                "start must be greater than or equals to min value of ${name} range, between ${range.start} and ${range.end}, start: ${start}")
         } else if (end < range.start) {
             throw IllegalArgumentException(
-                "end must be greater than or equals to min value of ${name} range, between ${range.start} and ${range.end}, end: ${end}"
-            )
+                "end must be greater than or equals to min value of ${name} range, between ${range.start} and ${range.end}, end: ${end}")
         }
         if (oneStart && start == 0) {
-            return [duration ..= end: duration]
+            return [duration..=end : duration]
         }
-        return [start ..= end: duration]
+        return [start..=end : duration]
     }
     public open func convertSingle(value: Int64) {
         let range = this.range
@@ -229,6 +226,7 @@ public class SecondlyTicktockUnit <: TicktockUnit {
         return now.second
     }
 }
+
 public class MinutelyTicktockUnit <: TicktockUnit {
     init(value: Int64, oneStart: Bool, range: Range<Int64>, lastRange: Range<Int64>) {
         this(value, oneStart, 0, range, lastRange)
@@ -256,6 +254,7 @@ public class HourlyTicktockUnit <: TicktockUnit {
         return now.hour
     }
 }
+
 public class MonthDailyTicktockUnit <: TicktockUnit {
     init(value: Int64, oneStart: Bool, range: Range<Int64>, lastRange: Range<Int64>) {
         this(value, oneStart, 0, range, lastRange)
@@ -272,6 +271,7 @@ public class MonthDailyTicktockUnit <: TicktockUnit {
         now.isLastMonthDay
     }
 }
+
 public class MonthlyTicktockUnit <: TicktockUnit {
     init(value: Int64, oneStart: Bool, range: Range<Int64>, lastRange: Range<Int64>) {
         this(value, oneStart, 0, range, lastRange)
@@ -284,6 +284,7 @@ public class MonthlyTicktockUnit <: TicktockUnit {
         return now.month.toInteger()
     }
 }
+
 public class WeekDailyTicktockUnit <: TicktockUnit {
     init(value: Int64, oneStart: Bool, range: Range<Int64>, lastRange: Range<Int64>) {
         this(value, oneStart, 0, range, lastRange)
@@ -293,7 +294,7 @@ public class WeekDailyTicktockUnit <: TicktockUnit {
     }
 
     public func current(now: DateTime): Int64 {
-        match(now.dayOfWeek.toInteger()){
+        match (now.dayOfWeek.toInteger()) {
             case 0 => 7
             case x => x
         }
@@ -302,11 +303,11 @@ public class WeekDailyTicktockUnit <: TicktockUnit {
     public override func convertRange(start: Int64, end: Int64): Array<Range<Int64>> {
         if (start == 0) {
             if (end == 0) {
-                return [7 ..= 7]
+                return [7..=7]
             } else if (end == 7 || end == 6) {
-                return [1 ..= 7]
+                return [1..=7]
             } else {
-                return [1 ..= end, 7 ..= 7]
+                return [1..=end, 7..=7]
             }
         }
         return super.convertRange(start, end)
@@ -314,7 +315,7 @@ public class WeekDailyTicktockUnit <: TicktockUnit {
 
     public override func convertDuration(start: Int64, end: Int64, duration: Int64): Array<Range<Int64>> {
         if (start == 0) {
-            return [super.convertDuration(duration, end, duration)[0], 7 ..= 7]
+            return [super.convertDuration(duration, end, duration)[0], 7..=7]
         } else {
             return super.convertDuration(start, end, duration)
         }
@@ -327,6 +328,7 @@ public class WeekDailyTicktockUnit <: TicktockUnit {
         return super.convertSingle(value)
     }
 }
+
 public class YearlyTicktockUnit <: TicktockUnit {
     init(value: Int64, oneStart: Bool, range: Range<Int64>, lastRange: Range<Int64>) {
         this(value, oneStart, 0, range, lastRange)
