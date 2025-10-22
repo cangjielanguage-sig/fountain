@@ -21,16 +21,31 @@ macro package f_mvc.macros
  * 如果有其它公共函数，或者试图使用其它类型作为请求处理函数的参数将会在本宏展开时发生编译错误。
  * 所有基本类型 Duration DateTime String 都实现了DataFields<T>接口，可以直接用。
  * 使用fountain.data.macros.DataAssist，@DataAssist[fields]注解的类也实现了DataFields<T>。
+ * @Controller宏的属性用于@Bean[$attr]，具体用法见@Bean宏的解释。
  */
 public macro Controller(input: Tokens): Tokens {
-    let tokens = generate(input)
-    quote(
-        @Bean
-        $input
-        $tokens
-    )
+    generateController(`empty_tokens`, input)
+}
+public macro Controller(attr: Tokens, input: Tokens): Tokens {
+    generateController(attr, input)
 }
 
+private func generateController(attr: Tokens, input: Tokens): Tokens {
+    for(t in input where t.kind == COALESCING){
+        diagReport(ERROR, input, '?? cannot be used in Controller class at Cangjie version 1.0.3 due to a compiler bug, or the project cannot be compiled.', '')
+        throw Exception()
+    }
+    let beanAttr = if(attr.size > 0){
+        quote([$attr])
+    }else{
+        `empty_tokens`
+    }
+    quote(
+        @Bean$beanAttr
+        $input
+        $(generate(input))
+    )
+}
 private func generate(input: Tokens): Tokens {
     let decl = match(parseDecl(input)){
         case x: ClassDecl => x
