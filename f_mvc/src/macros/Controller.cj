@@ -31,7 +31,7 @@ public macro Controller(attr: Tokens, input: Tokens): Tokens {
 }
 
 private func generateController(attr: Tokens, input: Tokens): Tokens {
-    for(t in input where t.kind == COALESCING){
+    for(t in input where t.kind == COALESCING){//todo 下次发版删除这个判断
         diagReport(ERROR, input, '?? cannot be used in Controller class at Cangjie version 1.0.3 due to a compiler bug, or the project cannot be compiled.', '')
         throw Exception()
     }
