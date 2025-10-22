@@ -33,13 +33,6 @@ import f_mvc.MVCStarter
 import f_ticktock.Ticktock
 
 private let starts: DateTime = DateTime.now()
-internal const BANNER = #'
-  _____                    __         .__
-_/ ____\____  __ __  _____/  |______  |__| ____
-\   __\/  _ \|  |  \/    \   __\__  \ |  |/    \
- |  | (  <_> )  |  /   |  \  |  / __ \|  |   |  \
- |__|  \____/|____/|___|  /__| (____  /__|___|  /
-                        \/          \/        \/'#
 /**
  * App不会发生传参赋值，用命令行参数实例化后只调用boot函数。所以用struct比较合适，不会占用堆空间。
  */
@@ -437,7 +430,12 @@ ${content}
         if(exists(path) && let banner <- entireFileText(path) && !banner.trimAscii().isEmpty()) {
             return banner
         }
-        BANNER
+#'  _____                    __         .__
+  _/ ____\____  __ __  _____/  |______  |__| ____
+  \   __\/  _ \|  |  \/    \   __\__  \ |  |/    \
+   |  | (  <_> )  |  /   |  \  |  / __ \|  |   |  \
+   |__|  \____/|____/|___|  /__| (____  /__|___|  /
+                          \/          \/        \/'#
     }
     private func replaceVersion(version: String): Int64 {
         let workingDir = getWorkingDirectory()
