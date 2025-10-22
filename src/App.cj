@@ -178,6 +178,10 @@ public struct App {
             if (v.isEmpty()) {
                 println('current version is ${versionStr}. To execute fboot version x.y.z, if you want to edit version.')
             } else if (Regex(#'^\d+\.\d+.\d+$'#).matches(v)) {
+                var code = execute('git', ['pull'])
+                if (code != 0) {
+                    return code
+                }
                 let tomlPath = getWorkingDirectory().join('cjpm.toml')
                 let reader = StringReader(ByteBuffer(File.readFrom(tomlPath)))
                 let toml = StringGenerator()
@@ -191,7 +195,7 @@ public struct App {
                 }
                 File.writeTo(tomlPath, toml.unsafeBytes())
                 replaceVersion(v)
-                var code = execute('git', ['add', '.'])
+                code = execute('git', ['add', '.'])
                 if(code != 0){
                     return code
                 }
@@ -206,10 +210,7 @@ public struct App {
                 if (code != 0) {
                     return code
                 }
-                code = execute('git', ['pull'])
-                if (code != 0) {
-                    return code
-                }
+                
                 let tagmsg = if(args.size > 3 && args[3] == 'tag'){
                     args[3 .. ]
                 } else if (args.size > 2 && args[2] == 'tag') {
