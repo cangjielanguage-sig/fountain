@@ -5,7 +5,7 @@
 
 [workspace]
   version = "1.0.0"
-  members=["./boot", "./user"]
+  members=["./boot", "./user", "./fdemo_stAtIc__"]
   compile-option = "-O2 --dy-std -Woff unused"
   override-compile-option = "-O2 --dy-std -Woff unused"
 
