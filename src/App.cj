@@ -236,9 +236,14 @@ public struct App {
                         } else {
                             println('git tag -a release-${v} -m ${msg} FAILED, git push is to be executed.')
                         }
+                        return code
                     }
                 }
-                execute('git', ['push'])
+                code = execute('git', ['push'])
+                if (code != 0) {
+                    println('git push FAILED')
+                    return code
+                }
                 execute('git', ['push', 'origin', 'release-${v}'])
             } else {
                 println('Format of version must be x.y.z, but ${v} was specified.')
