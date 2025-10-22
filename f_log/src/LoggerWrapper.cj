@@ -37,8 +37,8 @@ public class LoggerWrapper <: AbstractLogger {
     public open func log(record: LogRecord): Unit {
         facade.load().log(record)
     }
-    protected func append(level: LogLevel, message: String, now: DateTime, ex: Option<Exception>): Unit {
-        facade.load().append(level, message, now, ex)
+    protected func append(level: LogLevel, message: String, now: DateTime, tid: Int64, ex: Option<Exception>): Unit {
+        facade.load().append(level, message, now, tid, ex)
     }
     public func refresh() {
         var replaced = false

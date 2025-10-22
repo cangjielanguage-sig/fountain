@@ -81,7 +81,7 @@ public abstract class AbstractLogger <: Logger & Resource {
         try {
             if (logLevelEnabled(record.level)) {
                 doLock {
-                    append(record.level, record.message, record.time, None<Exception>)
+                    append(record.level, record.message, record.time, Thread.currentThread.id, None<Exception>)
                     func writeAttrs(attrs: Array<Attr>) {
                         if (attrs.isEmpty()) {
                             return
@@ -112,7 +112,8 @@ public abstract class AbstractLogger <: Logger & Resource {
 
     protected func append(level: LogLevel, message: () -> String, ex: Option<Exception>): Unit {
         let now = DateTime.now()//产生日志的时间比记录时间重要，可能记日志的顺序跟时间不一致了，不过不重要。
-        append(level, message(), now, ex)
+        let tid = Thread.currentThread.id
+        append(level, message(), now, tid , ex)
     }
 
     protected func appendException(ex: ?Exception, output: LogWriter): Unit {
@@ -120,10 +121,10 @@ public abstract class AbstractLogger <: Logger & Resource {
             output.writeException(e)
         }
     }
-    protected open func append(level: LogLevel, message: String, now: DateTime, ex: Option<Exception>): Unit {
+    protected open func append(level: LogLevel, message: String, now: DateTime, tid: Int64, ex: Option<Exception>): Unit {
         if (logLevelEnabled(level)) {
             doLock{
-                pattern.generate(name, level, message, now, writer)
+                pattern.generate(name, level, message, now, tid, writer)
                 appendException(ex, writer)
                 writer.writeString('\0')
             }

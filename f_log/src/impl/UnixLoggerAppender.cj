@@ -54,13 +54,13 @@ class UnixLoggerAppender <: AsyncLogger {
     public static func register(): Unit {
         UnixLoggerParams.register(LOGGER_NAME, appenderMap)
     }
-    protected func append(level: LogLevel, message: String, now: DateTime, ex: Option<Exception>): Unit {
+    protected func append(level: LogLevel, message: String, now: DateTime, tid: Int64, ex: Option<Exception>): Unit {
         var sock = (super.output as UnixSocket).getOrThrow()
         if (sock.isClosed()) {
             sock = createSocket(path, writeTimeout, bufSize)
             super.output = sock
         }
-        super.append(level, message, now, ex)
+        super.append(level, message, now, tid, ex)
     }
 }
 public class UnixLoggerParams <: BaseLoggerParams<UnixLoggerParams> {

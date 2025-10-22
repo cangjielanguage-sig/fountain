@@ -40,10 +40,10 @@ public class LoggerAppenderFacade <: AsyncLogger {
             }
         }
     }
-    protected func append(level: LogLevel, message: String, now: DateTime, ex: Option<Exception>): Unit {
+    protected func append(level: LogLevel, message: String, now: DateTime, tid: Int64, ex: Option<Exception>): Unit {
         append {
             for (appender in appenders) {
-                appender.append(level, message, now, ex)
+                appender.append(level, message, now, tid, ex)
             }
         }
     }

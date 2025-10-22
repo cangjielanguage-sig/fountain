@@ -25,11 +25,12 @@ import std.process.*
 import std.reflect.PackageInfo
 import std.regex.Regex
 import std.time.DateTime
-import fountain.base.*
-import fountain.bean.BeanFactory
-import fountain.log.*
-import fountain.mvc.MVCStarter
-import fountain.ticktock.Ticktock
+import f_app.*
+import f_base.*
+import f_bean.BeanFactory
+import f_log.*
+import f_mvc.MVCStarter
+import f_ticktock.Ticktock
 
 private let starts: DateTime = DateTime.now()
 internal const BANNER = #'
@@ -145,15 +146,12 @@ public struct App {
         func load(path: Path, pattern: Regex): Unit {
             Directory.walk(path) {
                 fi =>
+                log.debug('scanning: ${fi.path}')
                 if (fi.isDirectory()) {
                     load(fi.path, pattern)
                 } else if (fi.path.fileName.endsWith(ext) && pattern.matches(fi.path.fileNameWithoutExtension)) {
-                    try{
-                        PackageInfo.load(fi.path.toString().replace(ext, ''))
-                    }catch(e: Exception){
-                        log.error('dylib loading error', e)
-                        throw e
-                    }
+                    log.debug("loading: ${fi.path}")
+                    PackageInfo.load(fi.path.toString().replace(ext, ''))
                 }
                 true
             }
@@ -179,7 +177,7 @@ public struct App {
         mvc?.start()
         0
     }
-    private let versionStr = 'fountain(1.0.0)'
+    private let versionStr = FountainVersion
     private func version(){
         if (this.args.size == 1) {
             println(versionStr)
@@ -453,7 +451,7 @@ ${content}
             case _ => throw BootException('working directory ${workingDir} is not path of project fountain')
         }
         if(!version.isEmpty()) {
-            let appPath = fountainPath.join('src/App.cj')
+            let appPath = fountainPath.join('f_app/src/FountainVersion.cj')
             var code = entireFileText(appPath)
             code = Regex(#'fountain\((\d+\.)+\d+\)'#).replaceAll(code, 'fountain(${version})')
             code = Regex(#'release-(\d+\.)+\d+'#).replaceAll(code, 'release-${version}')
@@ -467,8 +465,8 @@ ${content}
     private func genCode(name: String, version: String) {
 '''
 package ${appVersionModuleName(name)}
-import fountain.AppVersion
-private let _ = AppVersion.set(#'${banner()}'#, '${version}')
+import fountain.app.AppVersion
+private let _ = AppVersion.set(#'${banner()}'#, '${name}', '${version}')
 '''
     }
     private func addModule(dir: Path, module: String): (String, String, Path) {

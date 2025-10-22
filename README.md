@@ -241,13 +241,16 @@ _/ ____\____  __ __  _____/  |______  |__| ____
     # public var timeunit = TimeUnit.DAY
     # public var compress = LogFileCompressFormat.NonCompression
     # 默认日志格式[%level-%name] %d{yyyy/MM/dd,HH:mm:ss.SSS}|%m
-    # %level 日志级别
-    # %name  日志记录器的名字，这个是初始化日志记录器是从LoggerFactory.getLogger传入的名字
-    # %d     日志产生时间，按照yyyy-MM-dd,HH:mm:ss.SSS格式输出
-    # %d{...}日志产生时间，花括号内是时间格式
-    # %m     日志内容
-    # %tid   线程id
-    # %app   当前应用名称，即当前进程名
+    # %level  日志级别
+    # %name   日志记录器的名字，这个是初始化日志记录器是从LoggerFactory.getLogger传入的名字
+    # %d      日志产生时间，按照yyyy-MM-dd,HH:mm:ss.SSS格式输出
+    # %d{...} 日志产生时间，花括号内是时间格式
+    # %m      日志内容
+    # %tid    线程id
+    # %tname  线程名
+    # %app    当前应用名称，即当前进程名
+    # %appver 当前应用版本
+    # %fver   fountain版本
     export fountain_logger_appender_tcp=TcpLoggerName # 也是支持英文逗号分隔的多个TcpLoggerName
     export fountain_logger_appender_TcpLoggerName_host=127.0.0.1:65535 # 这个host也是默认参数
     export fountain_logger_appender_TcpLoggerName_pattern=..... # tcp日志格式

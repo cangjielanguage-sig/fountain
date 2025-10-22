@@ -49,13 +49,13 @@ class UnixDatagramLoggerAppender <: AsyncLogger {
     public static func register(): Unit {
         UnixDatagramLoggerParams.register(LOGGER_NAME, appenderMap)
     }
-    protected func append(level: LogLevel, message: String, now: DateTime, ex: Option<Exception>): Unit {
+    protected func append(level: LogLevel, message: String, now: DateTime, tid: Int64, ex: Option<Exception>): Unit {
         var sock = (super.output as UnixDatagramOutputStream).getOrThrow()
         if (sock.isClosed()) {
             sock = createSocket(path, sendTimeout, bufSize)
             super.output = sock
         }
-        super.append(level, message, now, ex)
+        super.append(level, message, now, tid, ex)
     }
 }
 public class UnixDatagramLoggerParams <: BaseLoggerParams<UnixDatagramLoggerParams>{
