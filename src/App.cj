@@ -238,7 +238,7 @@ public struct App {
                         }
                     }
                 }
-                execute('git', ['push'])
+                execute('git', ['push', '--tags'])
             } else {
                 println('Format of version must be x.y.z, but ${v} was specified.')
             }
