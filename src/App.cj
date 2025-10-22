@@ -444,7 +444,7 @@ _/ ____\____  __ __  _____/  |______  |__| ____
  |__|  \____/|____/|___|  /__| (____  /__|___|  /
                         \/          \/        \/'#.removePrefix('\n')
     }
-    private func replaceVersion(version: String): Int64 {
+    private func replaceVersion(version: String) {
         let workingDir = getWorkingDirectory()
         println('fboot replace version ${workingDir} ${version}')
         let fountainPath = 
@@ -453,7 +453,9 @@ _/ ____\____  __ __  _____/  |______  |__| ____
                 workingDir
             case 'fboot' =>
                 workingDir.parent
-            case _ => throw BootException('working directory ${workingDir} is not path of project fountain')
+            case _ => 
+                println('working directory ${workingDir} is not path of project fountain')
+                return
         }
         if(!version.isEmpty()) {
             let appPath = fountainPath.join('f_app/src/FountainVersion.cj')
@@ -462,7 +464,6 @@ _/ ____\____  __ __  _____/  |______  |__| ____
             code = Regex(#'release-(\d+\.)+\d+'#).replaceAll(code, 'release-${version}')
             File.writeTo(appPath, code.unsafeBytes())
         }
-        0
     }
     private func appVersionModuleName(name: String): String {
         '${name}${APP_STATIC_RESOURCE_SUFFIX}'
