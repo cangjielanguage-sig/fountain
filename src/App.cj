@@ -430,12 +430,13 @@ ${content}
         if(exists(path) && let banner <- entireFileText(path) && !banner.trimAscii().isEmpty()) {
             return banner
         }
-#'  _____                    __         .__
-  _/ ____\____  __ __  _____/  |______  |__| ____
-  \   __\/  _ \|  |  \/    \   __\__  \ |  |/    \
-   |  | (  <_> )  |  /   |  \  |  / __ \|  |   |  \
-   |__|  \____/|____/|___|  /__| (____  /__|___|  /
-                          \/          \/        \/'#
+#'
+  _____                    __         .__
+_/ ____\____  __ __  _____/  |______  |__| ____
+\   __\/  _ \|  |  \/    \   __\__  \ |  |/    \
+ |  | (  <_> )  |  /   |  \  |  / __ \|  |   |  \
+ |__|  \____/|____/|___|  /__| (____  /__|___|  /
+                        \/          \/        \/'#
     }
     private func replaceVersion(version: String): Int64 {
         let workingDir = getWorkingDirectory()
