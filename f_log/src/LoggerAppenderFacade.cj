@@ -20,13 +20,15 @@ import stdx.log.{LogLevel, LogRecord}
 import f_io.DummyOutputStream
 
 public class LoggerAppenderFacade <: AsyncLogger {
-    private var appenders: Array<AbstractLogger>
+    private let appenders: Array<AbstractLogger>
     public init(name: String, appenders: Array<AbstractLogger>) {
         super(name, LogLevel.ALL, LogPattern.default, DummyOutputStream.THROW_ON_ACCESSING,
             'f_log.LoggerAppenderFacade_${name}')
         this.appenders = appenders
     }
-
+    func isEmpty(){
+        appenders.isEmpty()
+    }
     public func logLevelEnabled(level: LogLevel): Bool {
         for (appender in appenders where appender.logLevelEnabled(level)) {
             return true

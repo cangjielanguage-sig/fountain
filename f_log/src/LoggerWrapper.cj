@@ -29,15 +29,22 @@ public class LoggerWrapper <: AbstractLogger {
         this.facade = AtomicReference<LoggerAppenderFacade>(LoggerConfig.createFacade(name))
         env.atExit {this.facade.load().close()}
     }
-
+    private func refreshIfEmpty(){
+        if(facade.load().isEmpty()){
+            refresh()
+        }
+    }
     public func logLevelEnabled(level: LogLevel): Bool {
+        refreshIfEmpty()
         facade.load().logLevelEnabled(level)
     }
 
     public open func log(record: LogRecord): Unit {
+        refreshIfEmpty()
         facade.load().log(record)
     }
     protected func append(level: LogLevel, message: String, now: DateTime, tid: Int64, ex: Option<Exception>): Unit {
+        refreshIfEmpty()
         facade.load().append(level, message, now, tid, ex)
     }
     public func refresh() {
