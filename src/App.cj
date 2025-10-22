@@ -436,7 +436,7 @@ _/ ____\____  __ __  _____/  |______  |__| ____
 \   __\/  _ \|  |  \/    \   __\__  \ |  |/    \
  |  | (  <_> )  |  /   |  \  |  / __ \|  |   |  \
  |__|  \____/|____/|___|  /__| (____  /__|___|  /
-                        \/          \/        \/'#
+                        \/          \/        \/'#.removePrefix('\n')
     }
     private func replaceVersion(version: String): Int64 {
         let workingDir = getWorkingDirectory()
