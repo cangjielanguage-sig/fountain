@@ -24,7 +24,7 @@ import std.io.{StringReader, ByteBuffer, InputStream}
 import std.process.*
 import std.reflect.PackageInfo
 import std.regex.Regex
-import std.time.DateTime
+import std.time.MonoTime
 import f_app.*
 import f_base.*
 import f_bean.BeanFactory
@@ -32,7 +32,6 @@ import f_log.*
 import f_mvc.MVCStarter
 import f_ticktock.Ticktock
 
-private let starts: DateTime = DateTime.now()
 /**
  * App不会发生传参赋值，用命令行参数实例化后只调用boot函数。所以用struct比较合适，不会占用堆空间。
  */
@@ -165,8 +164,7 @@ public struct App {
             '(${AppVersion.version})'
         }
         println(AppVersion.banner)
-        let end = DateTime.now()
-        println('${app}${appver} started by ${versionStr} in ${end - starts}')
+        println('${app}${appver} started by ${versionStr} in ${MonoTime.now() - AppStarts}')
         mvc?.start()
         0
     }
@@ -576,9 +574,9 @@ private let _ = AppVersion.set(#'${banner()}'#, '${name}', '${version}')
         }
         println('path=${path};ext=${ext};ignoreBrackets=${ignoreBrackets};ignoreComments=${ignoreComments}')
         let counter = CodeCounter()
-        let start = DateTime.now()
+        let start = MonoTime.now()
         count(path, counter, ext, ignoreBrackets, ignoreComments)
-        println('modules: ${counter.modules}, packages: ${counter.packages}, files: ${counter.files}, lines: ${counter.lines}, consumes: ${DateTime.now() - start}')
+        println('modules: ${counter.modules}, packages: ${counter.packages}, files: ${counter.files}, lines: ${counter.lines}, consumes: ${MonoTime.now() - start}')
         0
     }
     private func help(): Int64 {
