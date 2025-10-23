@@ -15,6 +15,7 @@ limitations under the License.
  */
 package fountain
 
+import fountain.app.*
 import std.ast.*
 import std.collection.{HashMap, HashSet, Map}
 import std.convert.*
@@ -25,7 +26,6 @@ import std.process.*
 import std.reflect.PackageInfo
 import std.regex.Regex
 import std.time.MonoTime
-import fountain.app.*
 import fountain.base.*
 import fountain.bean.BeanFactory
 import fountain.log.*

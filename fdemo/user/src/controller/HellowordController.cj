@@ -20,7 +20,7 @@ import fountain.mvc.macros.*
 
 @Controller
 public class HellowordController {
-    @GetMapping[path:"/helloworld",consumes:'application/x-www-form-urlencoded', produces:'text/plain']
+    @GetMapping[path:"/helloworld", produces:'text/plain']
     @IgnoreSecurity
     public func helloworld(): String {
         return "helloworld"

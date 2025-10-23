@@ -62,7 +62,7 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
         return cmp
     }
     public func toString(): String {
-        'path: ${path}; method: ${method}; consumes: ${consumes}'
+        'path: ${path}; method: ${method}; consumes: ${consumes}; consumesSize: ${consumes.size}'
     }
 
     private var handle_: (HttpContext) -> Unit = {
@@ -254,26 +254,35 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
         copy(ctx.request.body, to: buf)
         buf.bytes()
     }
-    private func addMediaTypes(set: HashSet<String>, types: Array<String>, allowAny: Bool): Unit {
+    private func addMediaTypes(set: HashSet<String>, types: Array<String>, allowAny: Bool, allowEmpty: Bool): Unit {
+        if(types.isEmpty()){
+            if(!allowEmpty){
+                throw IllegalArgumentException('mime type must not be empty string')
+            }
+            set.add('')
+            return
+        }
         for (t in types) {
             match (t.trimAscii()) {
                 case '*' | '*/*' where !allowAny => throw IllegalArgumentException(
                     "Invalid mime type: ${t} in ${types.toString().replace(', ', '|').replace('[', '').replace(']', '')}")
-                case '*' | '*/*' => set.add('*')
-                case '' => throw IllegalArgumentException(
+                case '*' | '*/*' => 
+                    set.add('*')
+                    set.add('*/*')
+                case '' where !allowEmpty => throw IllegalArgumentException(
                     "mime type must not be empty string in ${types.toString().replace(', ', '|').replace('[', '').replace(']', '')}")
                 case x => set.add(x)
             }
         }
     }
-    private func addMediaTypes(set: HashSet<String>, types: String, allowAny: Bool): Unit {
-        addMediaTypes(set, types.split("|"), allowAny)
+    private func addMediaTypes(set: HashSet<String>, types: String, allowAny: Bool, allowEmpty: Bool): Unit {
+        addMediaTypes(set, types.split("|"), allowAny, allowEmpty)
     }
     private func addProduces(types: String) {
-        addMediaTypes(produces, types, false)
+        addMediaTypes(produces, types, true, false)
     }
     private func addConsumes(types: String) {
-        addMediaTypes(consumes, types, false)
+        addMediaTypes(consumes, types, false, true)
     }
     public static func generate<T>(fnName: String, argTypes: Array<TypeInfo>): ArrayList<RequestMeta> where T <: Object {
         let typeInfo = TypeInfos.get<T>()
