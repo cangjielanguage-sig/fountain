@@ -99,10 +99,14 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
     private func checkHeader(ctx: HttpContext, headers: HashSet<String>, name: String): Bool {
         headers.isEmpty() || 
         headers.contains(ctx.request.headers.getFirst(name) ?? '') || 
-        headers.contains('*/*') || headers.contains("*") || headers.contains('')
+        headers.contains('*/*') || headers.contains("*") || headers.contains('') 
     }
     public func checkProduces(ctx: HttpContext) {
-        checkHeader(ctx, produces, "Accept")
+        checkHeader(ctx, produces, "Accept") || if(let Some(accept) <- ctx.request.headers.getFirst('Accept')){
+            accept.isEmpty() || accept == '*' || accept == '*/*'
+        } else {
+            true
+        }
     }
 
     public func check(ctx: HttpContext): Bool {
@@ -186,7 +190,7 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
                 let bytes = mediaType.fromData(result.toData())
                 ctx.responseBuilder.header('Content-Type', accept).body(bytes)
             }else if(accept == '*/*'){
-                let acc = 'application/json'
+                let acc = this.produces.iterator().next() ?? 'application/json'
                 let mt = MediaTypes.parse(acc)
                 let bytes = mt.fromData(result.toData())
                 ctx.responseBuilder.header('Content-Type', acc).body(bytes)
