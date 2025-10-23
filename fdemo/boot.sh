@@ -18,6 +18,7 @@ exports(){
     export logger_appender_FDemoFile_path=./log/fdemo.log
     export logger_appender_FDemoFile_rotateDuration=DAY
     export mvc_port=8080 # 这一行可以没有，默认就是8080                                                                         
+    export mvc_overallElapsedSwitch=true
     export LD_LIBRARY_PATH=./fdemo/release/boot:./fdemo/release/opengauss:./fdemo/release/user:$LD_LIBRARY_PATH     
 }
 run(){

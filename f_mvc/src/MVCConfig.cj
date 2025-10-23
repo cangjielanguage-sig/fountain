@@ -59,6 +59,8 @@ public class MVCConfig {
     public static let INTERNAL_SERVER_ERROR_MESSAGE_KIND = "${confPrefix}_internalServerErrorMessageKind"
     public static let INTERNAL_SERVER_ERROR_MESSAGE = "${confPrefix}_internalServerErrorMessage"
 
+    public static let MVC_OVERALL_ELAPSED_SWITCH = "${confPrefix}_overallElapsedSwitch"
+
     public static prop tlsConfig: ?TlsServerConfig {
         get() {
             if (let Some(path) <- Config.getString(TLS_PATH) && path.size > 0 && let paths <- path.split('|') &&
@@ -246,6 +248,11 @@ public class MVCConfig {
     public static prop accessControlMaxAge: Int64 {
         get() {
             Config.getValue<Int>(ACCESS_CONTROL_MAX_AGE) ?? DEFAULT_ACCESS_CONTROL_MAX_AGE
+        }
+    }
+    public static prop mvcOverallElapsedSwitch: Bool {
+        get(){
+            Config.getValue<Bool>(MVC_OVERALL_ELAPSED_SWITCH) ?? false
         }
     }
 }

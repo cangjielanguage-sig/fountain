@@ -43,11 +43,9 @@ abstract sealed class HttpRequestPathPatterns <: HttpRequestDistributor {
         patterns.data<HttpRequestHandler>(path)
     }
 }
-let ACCESS_START = ThreadLocal<MonoTime>()
 class HttpRequestDistributorImpl <: HttpRequestPathPatterns {
     static let instance = HttpRequestDistributorImpl()
     private static let NOT_FOUND = NotFoundHandler()
-
     private init() {}
     public func register(path: String, handler: HttpRequestHandler): Unit {
         throw MVCException("func register(String, HttpRequestHandler): Unit is not implemented")
@@ -57,7 +55,7 @@ class HttpRequestDistributorImpl <: HttpRequestPathPatterns {
     }
 
     public func distribute(path: String): HttpRequestHandler {
-        ACCESS_START.set(MonoTime.now())
+        OverallStopwatch.doStart(path)
         let handler = getHandler(path)
         match (handler) {
             case Some(h) => h

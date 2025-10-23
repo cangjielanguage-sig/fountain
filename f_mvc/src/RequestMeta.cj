@@ -183,18 +183,15 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
         produces.add('*')
         consumes.add('*')
     }
-    private func respond(fn: ()->Unit): Unit {
+    private func respond(method: String, fn: ()->Unit): Unit {
         try{
             fn()
         }finally{
-            if(let Some(mono) <- ACCESS_START.get()){
-                ACCESS_START.set(None)
-                log.debug('MVC.access.overallElapsed:{}', MonoTime.now() - mono)
-            }
+            OverallStopwatch.elapsed(method)
         }
     }
     private func respond<R>(result: R, ctx: HttpContext): Unit where R <: ToData {
-        respond{
+        respond(ctx.request.method){
             let accept = ctx.request.headers.getFirst('Accept')
             if (!(result is Unit) && let Some(accept) <- accept) {
                 if(let Some(mediaType) <- MediaTypes.tryParse(accept)){
@@ -225,7 +222,7 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
         }
     }
     private func respond(response: JsonValue, ctx: HttpContext): Unit {
-        respond{
+        respond(ctx.request.method){
             if (let Some(accept) <- ctx.request.headers.getFirst('Accept')) {
                 if(let Some(mediaType) <- MediaTypes.tryParse(accept) && let jmt: JsonMediaType <- mediaType){
                     let bytes = jmt.fromData(response)
@@ -241,19 +238,19 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
         }
     }
     private func respond(response: InputStream, ctx: HttpContext): Unit {
-        respond{
+        respond(ctx.request.method){
             populateResponseContentType(ctx)
             ctx.responseBuilder.body(response)
         }
     }
     private func respond(response: Array<Byte>, ctx: HttpContext): Unit {
-        respond{
+        respond(ctx.request.method){
             populateResponseContentType(ctx)
             ctx.responseBuilder.body(response)
         }
     }
     private func respond(response: String, ctx: HttpContext): Unit {
-        respond{
+        respond(ctx.request.method){
             populateResponseContentType(ctx)
             ctx.responseBuilder.body(response.unsafeBytes())
         }
