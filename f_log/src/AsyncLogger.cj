@@ -140,7 +140,7 @@ public abstract class AsyncLogger <: AbstractLogger {
             }
         }
     }
-    protected open func append(level: LogLevel, message: String, now: DateTime, tid: Int64, ex: Option<Exception>): Unit {
+    protected open func append(level: LogLevel, message: () -> String, now: DateTime, tid: Int64, ex: Option<Exception>): Unit {
         super.append(level, message, now, tid, ex)
         append()
     }
