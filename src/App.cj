@@ -70,10 +70,12 @@ public struct App {
                 p.parent
             }
         }
-        if(!exists(path) && args[0] != 'version'){
+        this.path = if(!exists(path) && args[0] != 'version'){
             Directory.create(path)
+            canonicalize(path)
+        } else {
+            canonicalize(Path('./'))
         }
-        this.path = canonicalize(path)
         (ext, libPathName, delim) = match (OS.current) {
             case Windows => (".dll", 'Path', ';')
             case macOS => (".dylib", 'DYLD_FALLBACK_LIBRARY_PATH', ':')
