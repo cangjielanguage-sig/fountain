@@ -60,10 +60,10 @@ class TcpLoggerAppender <: AsyncLogger {
         TcpLoggerParams.register(LOGGER_NAME, appenderMap)
     }
     protected func append(level: LogLevel, message: () -> String, now: DateTime, tid: Int64, ex: Option<Exception>): Unit {
-        var sock = (super.output as TcpSocket).getOrThrow()
+        var sock = (super.actualOutput as TcpSocket).getOrThrow()
         if (sock.isClosed()) {
             sock = createSocket(host, port, sendBufSize)
-            super.output = sock
+            super.actualOutput = sock
         }
         super.append(level, message, now, tid, ex)
     }

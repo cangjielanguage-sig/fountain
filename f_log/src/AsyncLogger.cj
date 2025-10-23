@@ -57,7 +57,7 @@ public abstract class AsyncLogger <: AbstractLogger {
     private let timeout: Duration
     private let policy: AsyncTimeoutPolicy
     private let queue: ArrayBlockingQueue<() -> Unit>
-    protected let actualOutput: OutputStream
+    protected var actualOutput: OutputStream
     private let queueTag: String
     public init(
         name: String,

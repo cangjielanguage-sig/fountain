@@ -57,10 +57,10 @@ class UdpLoggerAppender <: AsyncLogger {
         UdpLoggerParams.register(LOGGER_NAME, appenderMap)
     }
     protected func append(level: LogLevel, message: () -> String, now: DateTime, tid: Int64, ex: Option<Exception>): Unit {
-        var sock = (super.output as UdpOutputStream).getOrThrow()
+        var sock = (super.actualOutput as UdpOutputStream).getOrThrow()
         if (sock.isClosed()) {
             sock = createSocket(host, port, sendTimeout: sendTimeout)
-            super.output = sock
+            super.actualOutput = sock
         }
         super.append(level, message, now, tid, ex)
     }
