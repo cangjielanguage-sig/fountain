@@ -195,6 +195,13 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
                 let bytes = mt.fromData(result.toData())
                 ctx.responseBuilder.header('Content-Type', acc).body(bytes)
             }else{
+                if(let r: Resource <- result){
+                    try{
+                        r.close()
+                    }catch(e: Exception){
+                        log.warn('Error occurred on closing ${TypeInfo.of(result)}; path: {}; accept: {}', e, [path, accept])
+                    }
+                }
                 MultiRequestMethodHandler.NOT_ACCEPTABLE.handle(ctx)
             }
         } else if ((result is Unit) && let Some(accept) <- accept && accept == '*/*'){
