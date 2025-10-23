@@ -70,7 +70,7 @@ public struct App {
                 p.parent
             }
         }
-        if(!exists(path)){
+        if(!exists(path) && args[0] != 'version'){
             Directory.create(path)
         }
         this.path = canonicalize(path)
