@@ -39,7 +39,7 @@ internal import f_exception.{UnreachableException, IllegalArgException}
 internal import f_random.RandomString
 internal import f_regex.*
 
-public import std.collection.{ArrayList, HashMap, HashSet}
+public import std.collection.{ArrayList, HashMap, HashSet, TreeMap}
 public import std.io.{InputStream, OutputStream, ByteBuffer, copy}
 public import std.time.{DateTime, MonoTime}
 public import stdx.encoding.json.*
