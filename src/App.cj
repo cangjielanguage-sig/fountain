@@ -15,7 +15,7 @@ limitations under the License.
  */
 package fountain
 
-import fountain.app.*
+import f_version.*
 import std.ast.*
 import std.collection.{HashMap, HashSet, Map}
 import std.convert.*
@@ -26,11 +26,11 @@ import std.process.*
 import std.reflect.PackageInfo
 import std.regex.Regex
 import std.time.MonoTime
-import fountain.base.*
-import fountain.bean.BeanFactory
-import fountain.log.*
-import fountain.mvc.MVCStarter
-import fountain.ticktock.Ticktock
+import f_base.*
+import f_bean.BeanFactory
+import f_log.*
+import f_mvc.MVCStarter
+import f_ticktock.Ticktock
 
 /**
  * App不会发生传参赋值，用命令行参数实例化后只调用boot函数。所以用struct比较合适，不会占用堆空间。
@@ -461,7 +461,7 @@ _/ ____\____  __ __  _____/  |______  |__| ____
                 return
         }
         if(!version.isEmpty()) {
-            let appPath = fountainPath.join('f_app/src/FountainVersion.cj')
+            let appPath = fountainPath.join('f_version/src/FountainVersion.cj')
             var code = entireFileText(appPath)
             code = Regex(#'fountain\((\d+\.)+\d+\)'#).replaceAll(code, 'fountain(${version})')
             code = Regex(#'release-(\d+\.)+\d+'#).replaceAll(code, 'release-${version}')
@@ -474,7 +474,7 @@ _/ ____\____  __ __  _____/  |______  |__| ____
     private func genCode(name: String, version: String) {
 '''
 package ${appVersionModuleName(name)}
-import fountain.app.AppVersion
+import fountain.version.AppVersion
 private let _ = AppVersion.set(#'${banner()}'#, '${name}', '${version}')
 '''
     }

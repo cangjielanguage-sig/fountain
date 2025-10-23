@@ -19,8 +19,8 @@ import std.collection.ArrayList
 import std.env
 import std.time.DateTime
 import stdx.log.{LogLevel, LogWriter}
-import f_app.*
 import f_base.OS
+import f_version.*
 
 public class LogPattern <: LogPart & Hashable & Equatable<LogPattern> {
     private static let appLogPart = AppLogPart()

@@ -1,5 +1,4 @@
 [dependencies]
-  f_app = {path = "../f_app"}
   f_base = {path = "../f_base"}
   f_config = {path = "../f_config"}
   f_collection = {path = "../f_collection"}
@@ -8,6 +7,7 @@
   f_io = {path = "../f_io"}
   f_time = {path = "../f_time"}
   f_util = {path = "../f_util"}
+  f_version = {path = "../f_version"}
 [package]
   cjc-version = "1.0.0"
   compile-option = "-O2 --dy-std"
