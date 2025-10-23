@@ -56,7 +56,7 @@ public struct App {
             break
         }
         this.idx = idx + 1
-        let path = if ((idx >= 1 && !(args[0] == 'restart' || args[0] == 'shutdown' || args[0] == 'rerun')) || args[0] == 'install') {
+        var path = if ((idx >= 1 && !(args[0] == 'restart' || args[0] == 'shutdown' || args[0] == 'rerun')) || args[0] == 'install') {
             Path(args[1])
         } else if (idx >= 2 && !(args[0] == 'restart' || args[0] == 'shutdown' || args[0] == 'rerun')) {
             Path(args[2])
@@ -70,12 +70,14 @@ public struct App {
                 p.parent
             }
         }
-        this.path = if(!exists(path) && args[0] != 'version'){
-            Directory.create(path)
-            canonicalize(path)
-        } else {
-            canonicalize(Path('./'))
+        if(!exists(path)){
+            if(args[0] == 'version'){
+                path = Path('./')
+            }else{
+                Directory.create(path)
+            }
         }
+        this.path = canonicalize(path)
         (ext, libPathName, delim) = match (OS.current) {
             case Windows => (".dll", 'Path', ';')
             case macOS => (".dylib", 'DYLD_FALLBACK_LIBRARY_PATH', ':')
