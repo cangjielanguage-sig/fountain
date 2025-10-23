@@ -183,60 +183,80 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
         produces.add('*')
         consumes.add('*')
     }
+    private func respond(fn: ()->Unit): Unit {
+        try{
+            fn()
+        }finally{
+            if(let Some(mono) <- ACCESS_START.get()){
+                ACCESS_START.set(None)
+                log.debug('MVC.access.overallElapsed:{}', MonoTime.now() - mono)
+            }
+        }
+    }
     private func respond<R>(result: R, ctx: HttpContext): Unit where R <: ToData {
-        let accept = ctx.request.headers.getFirst('Accept')
-        if (!(result is Unit) && let Some(accept) <- accept) {
-            if(let Some(mediaType) <- MediaTypes.tryParse(accept)){
-                let bytes = mediaType.fromData(result.toData())
-                ctx.responseBuilder.header('Content-Type', accept).body(bytes)
-            }else if(accept == '*/*'){
-                let acc = this.produces.iterator().next() ?? 'application/json'
-                let mt = MediaTypes.parse(acc)
-                let bytes = mt.fromData(result.toData())
-                ctx.responseBuilder.header('Content-Type', acc).body(bytes)
-            }else{
-                if(let r: Resource <- result){
-                    try{
-                        r.close()
-                    }catch(e: Exception){
-                        log.warn('Error occurred on closing ${TypeInfo.of(result)}; path: {}; accept: {}', e, [path, accept])
+        respond{
+            let accept = ctx.request.headers.getFirst('Accept')
+            if (!(result is Unit) && let Some(accept) <- accept) {
+                if(let Some(mediaType) <- MediaTypes.tryParse(accept)){
+                    let bytes = mediaType.fromData(result.toData())
+                    ctx.responseBuilder.header('Content-Type', accept).body(bytes)
+                }else if(accept == '*/*'){
+                    let acc = this.produces.iterator().next() ?? 'application/json'
+                    let mt = MediaTypes.parse(acc)
+                    let bytes = mt.fromData(result.toData())
+                    ctx.responseBuilder.header('Content-Type', acc).body(bytes)
+                }else{
+                    if(let r: Resource <- result){
+                        try{
+                            r.close()
+                        }catch(e: Exception){
+                            log.warn('Error occurred on closing ${TypeInfo.of(result)}; path: {}; accept: {}', e, [path, accept])
+                        }
                     }
+                    MultiRequestMethodHandler.NOT_ACCEPTABLE.handle(ctx)
                 }
+            } else if ((result is Unit) && let Some(accept) <- accept && accept == '*/*'){
+                ctx.responseBuilder.header('Content-Type', accept).body('')
+            } else if ((result is Unit) && accept.isNone()) {
+                ctx.responseBuilder.body('')
+            } else {
                 MultiRequestMethodHandler.NOT_ACCEPTABLE.handle(ctx)
             }
-        } else if ((result is Unit) && let Some(accept) <- accept && accept == '*/*'){
-            ctx.responseBuilder.header('Content-Type', accept).body('')
-        } else if ((result is Unit) && accept.isNone()) {
-            ctx.responseBuilder.body('')
-        } else {
-            MultiRequestMethodHandler.NOT_ACCEPTABLE.handle(ctx)
         }
     }
     private func respond(response: JsonValue, ctx: HttpContext): Unit {
-        if (let Some(accept) <- ctx.request.headers.getFirst('Accept')) {
-            if(let Some(mediaType) <- MediaTypes.tryParse(accept) && let jmt: JsonMediaType <- mediaType){
-                let bytes = jmt.fromData(response)
-                ctx.responseBuilder.header('Content-Type', accept).body(bytes)
-            }else if(accept == '*/*'){
+        respond{
+            if (let Some(accept) <- ctx.request.headers.getFirst('Accept')) {
+                if(let Some(mediaType) <- MediaTypes.tryParse(accept) && let jmt: JsonMediaType <- mediaType){
+                    let bytes = jmt.fromData(response)
+                    ctx.responseBuilder.header('Content-Type', accept).body(bytes)
+                }else if(accept == '*/*'){
+                    ctx.responseBuilder.header('Content-Type', 'application/json').body(response.toString())
+                }else{
+                    MultiRequestMethodHandler.NOT_ACCEPTABLE.handle(ctx)
+                }
+            } else {
                 ctx.responseBuilder.header('Content-Type', 'application/json').body(response.toString())
-            }else{
-                MultiRequestMethodHandler.NOT_ACCEPTABLE.handle(ctx)
             }
-        } else {
-            ctx.responseBuilder.header('Content-Type', 'application/json').body(response.toString())
         }
     }
     private func respond(response: InputStream, ctx: HttpContext): Unit {
-        populateResponseContentType(ctx)
-        ctx.responseBuilder.body(response)
+        respond{
+            populateResponseContentType(ctx)
+            ctx.responseBuilder.body(response)
+        }
     }
     private func respond(response: Array<Byte>, ctx: HttpContext): Unit {
-        populateResponseContentType(ctx)
-        ctx.responseBuilder.body(response)
+        respond{
+            populateResponseContentType(ctx)
+            ctx.responseBuilder.body(response)
+        }
     }
     private func respond(response: String, ctx: HttpContext): Unit {
-        populateResponseContentType(ctx)
-        ctx.responseBuilder.body(response.unsafeBytes())
+        respond{
+            populateResponseContentType(ctx)
+            ctx.responseBuilder.body(response.unsafeBytes())
+        }
     }
     public func isMultipart(name: String) {
         args[name] is MultipartFormData

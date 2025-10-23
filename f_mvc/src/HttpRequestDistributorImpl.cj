@@ -43,7 +43,7 @@ abstract sealed class HttpRequestPathPatterns <: HttpRequestDistributor {
         patterns.data<HttpRequestHandler>(path)
     }
 }
-
+let ACCESS_START = ThreadLocal<MonoTime>()
 class HttpRequestDistributorImpl <: HttpRequestPathPatterns {
     static let instance = HttpRequestDistributorImpl()
     private static let NOT_FOUND = NotFoundHandler()
@@ -57,6 +57,7 @@ class HttpRequestDistributorImpl <: HttpRequestPathPatterns {
     }
 
     public func distribute(path: String): HttpRequestHandler {
+        ACCESS_START.set(MonoTime.now())
         let handler = getHandler(path)
         match (handler) {
             case Some(h) => h
