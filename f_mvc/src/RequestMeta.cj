@@ -125,18 +125,22 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
                         } else {
                             mt.size
                         }
-                        (Float64.parse(mt[qi..e]), idx)
+                        (-Float64.parse(mt[qi..e]), idx)
                     } else {
-                        (1.0f64, mt.size)
+                        (-1.0f64, mt.size)
                     }
-                    priority.add((q, priority.size, mt[0..e]))
+                    let s = priority.size
+                    let submt = mt[0..e]
+                    log.debug{'RequestMeta.checkProduces.addAccept:${q};${s};${submt}'}
+                    priority.add((q, s, submt))
                     start += mt.size + 1
                     if (start >= accept.size) {
                         break
                     }
                     end = accept.indexOf(',', start)
                 }
-                while (let Some((_, _, c)) <- priority.remove()) {
+                while (let Some((q, idx, c)) <- priority.remove()) {
+                    log.debug{'RequestMeta.checkProduces.MultiAccept:${q};${idx};${c}'}
                     if (c.startsWith('*/*') || produces.contains(c)) {
                         ctx.request.headers.set('Accept', c)
                         return true
