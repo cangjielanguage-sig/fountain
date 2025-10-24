@@ -16,6 +16,8 @@ limitations under the License.
 package f_base
 
 import std.collection.ArrayList
+internal import charset4cj.charset.encoding.Charset
+internal import charset4cj.charset.Charsets
 
 public class StringGenerator <: ToString {
     private let utf8 = ArrayList<Byte>()
@@ -72,6 +74,9 @@ public class StringGenerator <: ToString {
     }
     public func appendFromUtf8(utf8: Array<Byte>): This {
         append<String>(String.fromUtf8(utf8))
+    }
+    public func appendFromBytes(bytes: Array<Byte>, charset!: Charset = Charsets.UTF8): This {
+        append<String>(charset.newDecoder().decode(bytes))
     }
     private func indexOf(search: Array<Byte>, fromIndex: Int64): ?Int64 {
         utf8.unsafeData().indexOf(search, fromIndex)
