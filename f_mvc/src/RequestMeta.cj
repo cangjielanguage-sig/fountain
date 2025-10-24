@@ -106,9 +106,9 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
                 .indexOf(',')) {
                 let priority = PriorityQueue<(Float64, Int64, String)>({
                     t1, t2 => if (let cmp <- t1[0].compare(t2[0]) && cmp != EQ) {
-                        t1[1].compare(t2[1])
+                        cmp
                     } else {
-                        EQ
+                        t1[1].compare(t2[1])
                     }
                 })
                 var start = 0
