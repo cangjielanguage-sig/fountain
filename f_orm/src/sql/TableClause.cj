@@ -37,7 +37,7 @@ abstract sealed class TableClause<T> <: ToString where T <: QueryMappersInit<T> 
     }
 
     protected func appendPartial(prefix: String, trim: String, partial: () -> String): This {
-        let sql = '^(${trim})|${trim}$'.regex(flags: [IgnoreCase], solid: true).replaceAll(partial(), '')
+        let sql = '^(\\s*${trim}\\s*)|(\\s*${trim}\\s*)$'.regex(flags: [IgnoreCase], solid: true).replaceAll(partial(), '')
         if(sql.size > 0){
             sqlgen.append(' ').append(prefix).append(' ').append(sql)
         }
