@@ -77,10 +77,13 @@ public interface UserDAO <: RootDAO {
         ''').first<MedAllocationPO>()
         println('MMMMMMMMMMMMMMM ${med?.preAmount}')
         let page = executor.FROM<UserPO>()
-                           .WHERE{
-                                meet(username.size > 0, ' username like '){
+                           .WHERE{'''
+                                ${meet(username.size > 0, ' username like '){
                                     '%${username}%'
-                                }
+                                }}
+                                ${meet(password.size > 0, ' and "password" like '){
+                                    '%${password}%'
+                                }}'''
                            }.page<UserPO>(10, page: 1)
         println('QQQQQQQQQQQQQQQQQ ${page.list.size}')
         executor.setSql('''

@@ -36,8 +36,9 @@ abstract sealed class TableClause<T> <: ToString where T <: QueryMappersInit<T> 
         }
     }
 
-    protected func appendPartial(prefix: String, partial: () -> String): This {
-        if (let sql <- partial() && sql.size > 0) {
+    protected func appendPartial(prefix: String, trim: String, partial: () -> String): This {
+        let sql = '^(\\s*${trim}\\s*)|(\\s*${trim}\\s*)$'.regex(flags: [IgnoreCase], solid: true).replaceAll(partial(), '')
+        if(sql.size > 0){
             sqlgen.append(' ').append(prefix).append(' ').append(sql)
         }
         this
@@ -89,10 +90,10 @@ public abstract class ExceptInsertClause<T> <: TableClause<T> where T <: QueryMa
         join<T>('full outer', AS, ON)
     }
     public func WHERE(condition: () -> String): This {
-        appendPartial('where', condition)
+        appendPartial('where', 'and|or', condition)
     }
     public func ORDER_BY(orderBy: () -> String): This {
-        appendPartial('order by', orderBy)
+        appendPartial('order by', ',', orderBy)
     }
     public func LIMIT(size: Int64, offset!: Int64 = 0): This {
         let (one, two, sql) = dialect.limit(size, offset)
@@ -115,7 +116,7 @@ public class FromClause<T> <: ExceptInsertClause<T> where T <: QueryMappersInit<
     }
 
     public func GROUP_BY(groupBy: () -> String): This {
-        appendPartial('group by', groupBy)
+        appendPartial('group by', ',', groupBy)
     }
 
     public func first<T>(): ?T where T <: QueryMappersInit<T> {
@@ -173,7 +174,7 @@ public class UpdateClause<T> <: ExceptInsertClause<T> where T <: QueryMappersIni
         super('update ${T.tableName()} ', executor)
     }
     public func SET(set: () -> String): This {
-        appendPartial('set', set)
+        appendPartial('set', ',', set)
     }
     public func execute(): Int64 {
         setSql().update
