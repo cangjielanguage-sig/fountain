@@ -45,7 +45,7 @@ abstract sealed class TableClause<T> <: ToString where T <: QueryMappersInit<T> 
     }
 
     protected open func setSql(): SqlExecutor {
-        executor.setSql(sqlgen.toString())
+        exe.setSql(sqlgen.toString())
     }
 
     prop idType: ?DataType {
@@ -91,6 +91,16 @@ public abstract class ExceptInsertClause<T> <: TableClause<T> where T <: QueryMa
     }
     public func WHERE(condition: () -> String): This {
         appendPartial('where', 'and|or', condition)
+    }
+    public func WHERE(arg: Map<String, Any>, condition: () -> String): This {
+        WHERE{
+            parseSqlFromMap(executor, condition(), arg)
+        }
+    }
+    public func WHERE<T>(arg: T, condition: () -> String): This where T <: ObjectData<T> {
+        WHERE{
+            parseSqlFromObject<T>(executor, condition(), arg)
+        }
     }
     public func ORDER_BY(orderBy: () -> String): This {
         appendPartial('order by', ',', orderBy)
@@ -175,6 +185,16 @@ public class UpdateClause<T> <: ExceptInsertClause<T> where T <: QueryMappersIni
     }
     public func SET(set: () -> String): This {
         appendPartial('set', ',', set)
+    }
+    public func SET(arg: Map<String, Any>, condition: () -> String): This {
+        SET{
+            parseSqlFromMap(executor, condition(), arg)
+        }
+    }
+    public func SET<T>(arg: T, condition: () -> String): This where T <: ObjectData<T> {
+        SET{
+            parseSqlFromObject<T>(executor, condition(), arg)
+        }
     }
     public func execute(): Int64 {
         setSql().update
