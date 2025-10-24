@@ -102,8 +102,50 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
         headers.contains('*/*') || headers.contains("*") || headers.contains('') 
     }
     public func checkProduces(ctx: HttpContext) {
-        checkHeader(ctx, produces, "Accept") || if(let Some(accept) <- ctx.request.headers.getFirst('Accept')){
-            accept.isEmpty() || accept == '*' || accept == '*/*'
+        if(let Some(accept) <- ctx.request.headers.getFirst('Accept')){
+            accept.isEmpty() || accept == '*' || accept == '*/*' || produces.contains(accept) || if(let Some(idx) <- accept.indexOf(',')){
+                try{
+                    let tree = TreeMap<Float64, ArrayList<String>>()
+                    var start = 0
+                    var end = Some(idx)
+                    while(true){
+                        let mt = accept[start .. if(let Some(e) <- end){
+                            e
+                        } else {
+                            accept.size
+                        }]
+                        let (q, e) = if(let Some(idx) <- mt.lastIndexOf(';q=') && let qi <- idx + 3){
+                            let e = if(let Some(e) <- mt.indexOf(';', qi)){
+                                e
+                            } else {
+                                mt.size
+                            }
+                            (Float64.parse(mt[qi .. e]), idx)
+                        }else{
+                            (1.0f64, mt.size)
+                        }
+                        println()
+                        tree.computeIfAbsent(q){ArrayList<String>()}.add(mt[0 .. e])
+                        start += mt.size + 1
+                        if(start >= accept.size){
+                            break
+                        }
+                        end = accept.indexOf(',', start)
+                    }
+                    for((_, list) in tree.backward(1.0f64)){
+                        for(c in list where c.startsWith('*/*') || produces.contains(c)){
+                            ctx.request.headers.set('Accept', c)
+                            return true
+                        }
+                    }
+                }catch(e: Exception){
+                    e.printStackTrace()
+                    throw e
+                }
+                false
+            }else{
+                false
+            }
         } else {
             true
         }

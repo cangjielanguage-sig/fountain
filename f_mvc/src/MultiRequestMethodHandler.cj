@@ -73,37 +73,11 @@ public class MultiRequestMethodHandler <: HttpRequestHandler {
             }
         }
         func check(metas: HashMap<String, RequestMeta>): HttpRequestHandler {
-            let tree = TreeMap<Float64, ArrayList<String>>()
-            var start = 0
-            while(start < consumes.size && let end <- consumes.indexOf(',', start)){
-                let mt = consumes[start .. if(let Some(c) <- end){
-                    c
-                } else {
-                    consumes.size
-                }]
-                let (q, e) = if(let Some(idx) <- mt.lastIndexOf(';q=') && let qi <- idx + 3){
-                    let e = if(let Some(e) <- mt.indexOf(';', qi)){
-                        e
-                    } else {
-                        mt.size
-                    }
-                    (Float64.parse(mt[qi .. e]), idx)
-                }else{
-                    (1.0f64, mt.size)
-                }
-                tree.computeIfAbsent(q){ArrayList<String>()}.add(mt[0 .. e])
-                start += mt.size + 1
+            if (let Some(m) <- metas.get(consumes) && let h <- check(m)) {
+                h
+            } else {
+                UNSUPPORTED_MEDIA_TYPE
             }
-            for((_, list) in tree.backward(1.0f64)){
-                for(c in list){
-                    if(let Some(m) <- metas.get(c) && let h <- check(m)){
-                        return h
-                    }else if(let Some(i) <- c.indexOf(';') && let Some(m) <- metas.get(c[0 .. i]) && let h <- check(m)){
-                        return h
-                    }
-                }
-            }
-            UNSUPPORTED_MEDIA_TYPE
         }
         func handle(ms: HashMap<String, RequestMeta>): Unit {
             check(ms).handle(ctx)
