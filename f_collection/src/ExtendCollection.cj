@@ -59,13 +59,14 @@ public interface ExtendMap<K, V> <: ExtendCollection<K, Collection<K>> where K <
     }
     func entryView(key: K, fn: (K, ?V) -> ?V): ?V
     func computeIfAbsent(key: K, fn: () -> V): V {
+        println('$$$$$$$$$$$$$$$$$ ${key as ToString} ${Thread.currentThread.id}')
         entryView(key){k, optv =>
-            println('AAAAAAAAAAAAAAAA ${key as Float64}')
+            println('AAAAAAAAAAAAAAAA ${key as ToString} ${k as ToString} ${Thread.currentThread.id}')
             if(let Some(_) <- optv){
-                println('BBBBBBBBBBBBBBBBB ${key as Float64}')
+                println('BBBBBBBBBBBBBBBBB ${key as ToString} ${k as ToString} ${Thread.currentThread.id}')
                 optv
             }else{
-                println('CCCCCCCCCCCCCCCCCC ${key as Float64}')
+                println('CCCCCCCCCCCCCCCCCC ${key as ToString} ${k as ToString} ${Thread.currentThread.id}')
                 fn()
             }
         }.getOrThrow()
@@ -89,9 +90,16 @@ public interface ExtendMap<K, V> <: ExtendCollection<K, Collection<K>> where K <
 public interface ExtendNonConcurrentMap<K, V> <: ExtendMap<K, V> where K <: Equatable<K> {
     func entryView(key: K): MapEntryView<K, V>
     func entryView(key: K, fn: (K, ?V) -> ?V): ?V {
+        println('%%%%%%%%%%%%%%%%% ${key as ToString}  ${Thread.currentThread.id}')
         let entry = this.entryView(key)
-        let value = fn(entry.key, entry.value)
-        println('DDDDDDDDDDDDDDDD ${value.isSome()} ${key as Float64}')
+        println('^^^^^^^^^^^^^^^^^^^^^ ${key as ToString}  ${Thread.currentThread.id}')
+        let value = try{
+            fn(entry.key, entry.value)
+        }catch(e: Exception){
+            e.printStackTrace()
+            throw e
+        }
+        println('&&&&&&&&&&&&&&&&&&& ${value.isSome()} ${key as ToString} ${Thread.currentThread.id}')
         entry.value = value
         value
     }

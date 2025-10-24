@@ -124,7 +124,7 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
                         }else{
                             (1.0f64, mt.size)
                         }
-                        println()
+                        println('################### ${q} ${Thread.currentThread.id}')
                         tree.computeIfAbsent(q){ArrayList<String>()}.add(mt[0 .. e])
                         start += mt.size + 1
                         if(start >= accept.size){
