@@ -35,7 +35,7 @@ class PriorityQueueIterator<T> <: Iterator<T> {
 }
 
 public class PriorityQueue<T> <: Queue<T> & Iterable<T> & Collection<T> & Growable {
-
+    private static const DEFAULT_CAPACITY = 16
     /**
      * current size
      */
@@ -48,40 +48,33 @@ public class PriorityQueue<T> <: Queue<T> & Iterable<T> & Collection<T> & Growab
 
     public PriorityQueue(
         private let comparator: (T, T) -> Ordering,
-        private var capacity!: Int64 = 0,
+        private var capacity!: Int64 = DEFAULT_CAPACITY,
         private let overSizePolicy!: OverSizePolicy<PriorityQueue<T>> = DiscardOverSizePolicy<PriorityQueue<T>>()
     ) {
-        queue = Array<Option<T>>(
-            if (capacity == 0) {
-                16
-            } else {
-                capacity
-            },
-            repeat: None<T>
-        )
+        queue = Array<Option<T>>(capacity,repeat: None<T>)
     }
     public init(
         comparator: Comparator<T>,
-        capacity!: Int64 = 0,
+        capacity!: Int64 = DEFAULT_CAPACITY,
         overSizePolicy!: OverSizePolicy<PriorityQueue<T>> = DiscardOverSizePolicy<PriorityQueue<T>>()
     ) {
         this(comparator.comparator, capacity: capacity, overSizePolicy: overSizePolicy)
     }
     public static func create<T>(
-        capacity!: Int64 = 0,
+        capacity!: Int64 = DEFAULT_CAPACITY,
         overSizePolicy!: OverSizePolicy<PriorityQueue<T>> = DiscardOverSizePolicy<PriorityQueue<T>>()
     ) where T <: Comparable<T> {
         PriorityQueue<T>.create(Comparator<T>.create<T>(), capacity: capacity, overSizePolicy: overSizePolicy)
     }
     public static func createReverse<T>(
-        capacity!: Int64 = 0,
+        capacity!: Int64 = DEFAULT_CAPACITY,
         overSizePolicy!: OverSizePolicy<PriorityQueue<T>> = DiscardOverSizePolicy<PriorityQueue<T>>()
     ) where T <: Comparable<T> {
         PriorityQueue<T>.create(Comparator<T>.create<T>().reverse(), capacity: capacity, overSizePolicy: overSizePolicy)
     }
     public static func create(
         comparator: Comparator<T>,
-        capacity!: Int64 = 0,
+        capacity!: Int64 = DEFAULT_CAPACITY,
         overSizePolicy!: OverSizePolicy<PriorityQueue<T>> = DiscardOverSizePolicy<PriorityQueue<T>>()
     ) {
         PriorityQueue<T>(comparator.comparator, capacity: capacity, overSizePolicy: overSizePolicy)

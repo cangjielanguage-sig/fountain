@@ -18,15 +18,15 @@ package f_mvc
 public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMeta> {
     private static let log = LoggerFactory.getLogger<RequestMeta>()
     static let currentResponseStatus = ThreadLocal<UInt16>()
-    static func setResponseStatus(status: HttpStatus){
+    static func setResponseStatus(status: HttpStatus) {
         currentResponseStatus.set(status.value)
     }
     private static func getResponseStatus(): UInt16 {
-        match(currentResponseStatus.get()){
+        match (currentResponseStatus.get()) {
             case Some(c) => c
             case _ => HttpStatus.OK.value
         }
-    } 
+    }
     private var ignoreAuth_ = false
     private var ignorePrivilege_ = false
 
@@ -46,17 +46,17 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
 
     public func compare(other: RequestMeta): Ordering {
         var cmp = path.compare(other.path)
-        if(cmp == Ordering.EQ){
+        if (cmp == Ordering.EQ) {
             cmp = method.compare(other.method)
         }
-        if(cmp == Ordering.EQ){
+        if (cmp == Ordering.EQ) {
             let tree1 = TreeSet<String>(consumes).iterator()
             let tree2 = TreeSet<String>(other.consumes).iterator()
-            while(cmp == Ordering.EQ && let Some(c1) <- tree1.next() && let Some(c2) <- tree2.next()){
+            while (cmp == Ordering.EQ && let Some(c1) <- tree1.next() && let Some(c2) <- tree2.next()) {
                 cmp = c1.compare(c2)
             }
         }
-        if(cmp == Ordering.EQ){
+        if (cmp == Ordering.EQ) {
             cmp = consumes.size.compare(other.consumes.size)
         }
         return cmp
@@ -97,13 +97,55 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
         }
     }
     private func checkHeader(ctx: HttpContext, headers: HashSet<String>, name: String): Bool {
-        headers.isEmpty() || 
-        headers.contains(ctx.request.headers.getFirst(name) ?? '') || 
-        headers.contains('*/*') || headers.contains("*") || headers.contains('') 
+        headers.isEmpty() || headers.contains(ctx.request.headers.getFirst(name) ?? '') || headers.contains('*/*') ||
+            headers.contains("*") || headers.contains('')
     }
     public func checkProduces(ctx: HttpContext) {
-        checkHeader(ctx, produces, "Accept") || if(let Some(accept) <- ctx.request.headers.getFirst('Accept')){
-            accept.isEmpty() || accept == '*' || accept == '*/*'
+        if (let Some(accept) <- ctx.request.headers.getFirst('Accept')) {
+            accept.isEmpty() || accept == '*' || accept == '*/*' || produces.contains(accept) || if (let Some(idx) <- accept
+                .indexOf(',')) {
+                let priority = PriorityQueue<(Float64, Int64, String)>({
+                    t1, t2 => if (let cmp <- t1[0].compare(t2[0]) && cmp != EQ) {
+                        t1[1].compare(t2[1])
+                    } else {
+                        EQ
+                    }
+                })
+                var start = 0
+                var end = Some(idx)
+                while (true) {
+                    let mt = accept[start..if (let Some(e) <- end) {
+                            e
+                        } else {
+                            accept.size
+                        }]
+                    let (q, e) = if (let Some(idx) <- mt.lastIndexOf(';q=') && let qi <- idx + 3) {
+                        let e = if (let Some(e) <- mt.indexOf(';', qi)) {
+                            e
+                        } else {
+                            mt.size
+                        }
+                        (Float64.parse(mt[qi..e]), idx)
+                    } else {
+                        (1.0f64, mt.size)
+                    }
+                    priority.add((q, priority.size, mt[0..e]))
+                    start += mt.size + 1
+                    if (start >= accept.size) {
+                        break
+                    }
+                    end = accept.indexOf(',', start)
+                }
+                while (let Some((_, _, c)) <- priority.remove()) {
+                    if (c.startsWith('*/*') || produces.contains(c)) {
+                        ctx.request.headers.set('Accept', c)
+                        return true
+                    }
+                }
+                false
+            } else {
+                false
+            }
         } else {
             true
         }
@@ -183,36 +225,37 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
         produces.add('*')
         consumes.add('*')
     }
-    private func respond(method: String, fn: ()->Unit): Unit {
-        try{
+    private func respond(method: String, fn: () -> Unit): Unit {
+        try {
             fn()
-        }finally{
+        } finally {
             OverallStopwatch.elapsed(method)
         }
     }
     private func respond<R>(result: R, ctx: HttpContext): Unit where R <: ToData {
-        respond(ctx.request.method){
+        respond(ctx.request.method) {
             let accept = ctx.request.headers.getFirst('Accept')
             if (!(result is Unit) && let Some(accept) <- accept) {
-                if(let Some(mediaType) <- MediaTypes.tryParse(accept)){
+                if (let Some(mediaType) <- MediaTypes.tryParse(accept)) {
                     let bytes = mediaType.fromData(result.toData())
                     ctx.responseBuilder.header('Content-Type', accept).body(bytes)
-                }else if(accept == '*/*'){
+                } else if (accept == '*/*') {
                     let acc = this.produces.iterator().next() ?? 'application/json'
                     let mt = MediaTypes.parse(acc)
                     let bytes = mt.fromData(result.toData())
                     ctx.responseBuilder.header('Content-Type', acc).body(bytes)
-                }else{
-                    if(let r: Resource <- result){
-                        try{
+                } else {
+                    if (let r: Resource <- result) {
+                        try {
                             r.close()
-                        }catch(e: Exception){
-                            log.warn('Error occurred on closing ${TypeInfo.of(result)}; path: {}; accept: {}', e, [path, accept])
+                        } catch (e: Exception) {
+                            log.warn('Error occurred on closing ${TypeInfo.of(result)}; path: {}; accept: {}', e,
+                                [path, accept])
                         }
                     }
                     MultiRequestMethodHandler.NOT_ACCEPTABLE.handle(ctx)
                 }
-            } else if ((result is Unit) && let Some(accept) <- accept && accept == '*/*'){
+            } else if ((result is Unit) && let Some(accept) <- accept && accept == '*/*') {
                 ctx.responseBuilder.header('Content-Type', accept).body('')
             } else if ((result is Unit) && accept.isNone()) {
                 ctx.responseBuilder.body('')
@@ -222,14 +265,14 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
         }
     }
     private func respond(response: JsonValue, ctx: HttpContext): Unit {
-        respond(ctx.request.method){
+        respond(ctx.request.method) {
             if (let Some(accept) <- ctx.request.headers.getFirst('Accept')) {
-                if(let Some(mediaType) <- MediaTypes.tryParse(accept) && let jmt: JsonMediaType <- mediaType){
+                if (let Some(mediaType) <- MediaTypes.tryParse(accept) && let jmt: JsonMediaType <- mediaType) {
                     let bytes = jmt.fromData(response)
                     ctx.responseBuilder.header('Content-Type', accept).body(bytes)
-                }else if(accept == '*/*'){
+                } else if (accept == '*/*') {
                     ctx.responseBuilder.header('Content-Type', 'application/json').body(response.toString())
-                }else{
+                } else {
                     MultiRequestMethodHandler.NOT_ACCEPTABLE.handle(ctx)
                 }
             } else {
@@ -238,19 +281,19 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
         }
     }
     private func respond(response: InputStream, ctx: HttpContext): Unit {
-        respond(ctx.request.method){
+        respond(ctx.request.method) {
             populateResponseContentType(ctx)
             ctx.responseBuilder.body(response)
         }
     }
     private func respond(response: Array<Byte>, ctx: HttpContext): Unit {
-        respond(ctx.request.method){
+        respond(ctx.request.method) {
             populateResponseContentType(ctx)
             ctx.responseBuilder.body(response)
         }
     }
     private func respond(response: String, ctx: HttpContext): Unit {
-        respond(ctx.request.method){
+        respond(ctx.request.method) {
             populateResponseContentType(ctx)
             ctx.responseBuilder.body(response.unsafeBytes())
         }
@@ -268,7 +311,7 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
             case _: ?Array<Byte> => (this.extractBytes(ctx) as T).getOrThrow()
             case _: ?Form => (ctx.request.form as T).getOrThrow()
             case _: ?RequestBodyParser => (RequestBodyParser(ctx, this) as T).getOrThrow()
-            case _ => match(default){
+            case _ => match (default) {
                 case Some(d) => args.extract<T>(ctx, name, d, pattern)
                 case _ => args.extract<T>(ctx, name, pattern)
             }
@@ -277,14 +320,14 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
     public func extractObject<T>(ctx: HttpContext, name: String): T where T <: Object & ObjectData<T> {
         args.extractObject<T>(ctx, name, pattern)
     }
-    public func extractBytes(ctx: HttpContext): Array<Byte>{
+    public func extractBytes(ctx: HttpContext): Array<Byte> {
         let buf = ByteBuffer()
         copy(ctx.request.body, to: buf)
         buf.bytes()
     }
     private func addMediaTypes(set: HashSet<String>, types: Array<String>, allowAny: Bool, allowEmpty: Bool): Unit {
-        if(types.isEmpty()){
-            if(!allowEmpty){
+        if (types.isEmpty()) {
+            if (!allowEmpty) {
                 throw IllegalArgumentException('mime type must not be empty string')
             }
             set.add('')
@@ -294,7 +337,7 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
             match (t.trimAscii()) {
                 case '*' | '*/*' where !allowAny => throw IllegalArgumentException(
                     "Invalid mime type: ${t} in ${types.toString().replace(', ', '|').replace('[', '').replace(']', '')}")
-                case '*' | '*/*' => 
+                case '*' | '*/*' =>
                     set.add('*')
                     set.add('*/*')
                 case '' where !allowEmpty => throw IllegalArgumentException(
@@ -324,17 +367,17 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
             for (annotation in param.annotations where annotation is ControllerFuncParam) {
                 match (annotation) {
                     case x: ControllerFuncParam => match (args.get(pname)) {
-                        case Some((p, v)) where refEq(p, zero) => 
+                        case Some((p, v)) where refEq(p, zero) =>
                             args[pname] = (x, v)
                             toThrow = false
                             break
-                        case None => 
+                        case None =>
                             args[pname] = (x, DummyValidator.instance)
                             toThrow = false
                         case _ => throw UnreachableException()
                     }
                     case x: Validator => match (args.get(pname)) {
-                        case Some((p, v)) where v is DummyValidator => 
+                        case Some((p, v)) where v is DummyValidator =>
                             args[pname] = (p, x)
                             toThrow = false
                             break
@@ -407,12 +450,13 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
             case _ => 'None'
         }
         let log = LoggerFactory.getLogger<T>()
-        let logArgs: Array<ToString> = [request.method, request.url, request.form.toEncodeString(), request.headers.getFirst('Content-Type'), argGen, result, getResponseStatus(), MonoTime.now() - start]
-        if(let Some(ex) <- e){
-            let exce = try{
+        let logArgs: Array<ToString> = [request.method, request.url, request.form.toEncodeString(),
+            request.headers.getFirst('Content-Type'), argGen, result, getResponseStatus(), MonoTime.now() - start]
+        if (let Some(ex) <- e) {
+            let exce = try {
                 MultiRequestMethodHandler.INTERNAL_SERVER_ERROR.handle(ctx)
                 ex
-            }catch(e: Exception){
+            } catch (e: Exception) {
                 let status = HttpStatus.INTERNAL_SERVER_ERROR
                 let b = ctx.responseBuilder
                 b.status(status.value)
@@ -423,7 +467,8 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
                 mvcex
             }
             logArgs[logArgs.size - 2] = getResponseStatus()
-            log.error('MVC.accessLog:{}:{}?{}; consumes:{}; params:{}; returned:{}; status:{}; elapsed:{}', exce, logArgs)
+            log.error('MVC.accessLog:{}:{}?{}; consumes:{}; params:{}; returned:{}; status:{}; elapsed:{}', exce,
+                logArgs)
         } else {
             log.info('MVC.accessLog:{}:{}?{}; consumes:{}; params:{}; returned:{}; status:{}; elapsed:{}', logArgs)
         }
