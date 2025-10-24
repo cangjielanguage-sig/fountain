@@ -60,12 +60,9 @@ public interface ExtendMap<K, V> <: ExtendCollection<K, Collection<K>> where K <
     func entryView(key: K, fn: (K, ?V) -> ?V): ?V
     func computeIfAbsent(key: K, fn: () -> V): V {
         entryView(key){k, optv =>
-            println('AAAAAAAAAAAAAAAA ${key as Float64}')
             if(let Some(_) <- optv){
-                println('BBBBBBBBBBBBBBBBB ${key as Float64}')
                 optv
             }else{
-                println('CCCCCCCCCCCCCCCCCC ${key as Float64}')
                 fn()
             }
         }.getOrThrow()
@@ -91,7 +88,6 @@ public interface ExtendNonConcurrentMap<K, V> <: ExtendMap<K, V> where K <: Equa
     func entryView(key: K, fn: (K, ?V) -> ?V): ?V {
         let entry = this.entryView(key)
         let value = fn(entry.key, entry.value)
-        println('DDDDDDDDDDDDDDDD ${value.isSome()} ${key as Float64}')
         entry.value = value
         value
     }
