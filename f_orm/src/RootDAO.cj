@@ -294,6 +294,13 @@ public interface RootDAO {
         executor.addNull()
         '?'
     }
+    func meet(condition: Bool, partial: ()->String): String {
+        if(condition){
+            partial()
+        }else{
+            ''
+        }
+    }
     func meet(condition: Bool, partial: String): MeetCondition {
         MeetCondition(condition, partial, executor)
     }

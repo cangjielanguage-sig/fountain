@@ -71,7 +71,7 @@ public struct App {
             }
         }
         if(!exists(path)){
-            if(args[0] == 'version'){
+            if(args[0].startsWith('--') || args[0] == 'version'){
                 path = Path('./')
             }else{
                 Directory.create(path)

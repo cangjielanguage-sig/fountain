@@ -16,6 +16,7 @@ limitations under the License.
 package f_orm.sql
 
 internal import std.collection.concurrent.ConcurrentHashMap
+internal import f_collection.*
 internal import f_exception.IllegalAccessException
 internal import f_regex.*
 internal import f_orm.exception.*
