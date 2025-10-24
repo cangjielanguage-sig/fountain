@@ -37,11 +37,9 @@ abstract sealed class TableClause<T> <: ToString where T <: QueryMappersInit<T> 
     }
 
     protected func appendPartial(prefix: String, trim: String, partial: () -> String): This {
-        if (let sql <- partial()) {
-            let tsql = '^(${trim})|${trim}$'.regex(flags: [IgnoreCase], solid: true).replaceAll(sql, '')
-            if(tsql.size > 0){
-                sqlgen.append(' ').append(prefix).append(' ').append(tsql)
-            }
+        let sql = '^(${trim})|${trim}$'.regex(flags: [IgnoreCase], solid: true).replaceAll(partial(), '')
+        if(sql.size > 0){
+            sqlgen.append(' ').append(prefix).append(' ').append(sql)
         }
         this
     }
