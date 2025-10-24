@@ -104,7 +104,19 @@ public interface ExtendNonConcurrentMap<K, V> <: ExtendMap<K, V> where K <: Equa
 
 extend<K, V> HashMap<K, V> <: ExtendNonConcurrentMap<K, V> where K <: Hashable & Equatable<K> {}
 
-extend<K, V> TreeMap<K, V> <: ExtendNonConcurrentMap<K, V> where K <: Comparable<K> {}
+extend<K, V> TreeMap<K, V> <: ExtendNonConcurrentMap<K, V> where K <: Comparable<K> {
+    public func entryView(key: K, fn: (K, ?V) -> ?V): ?V {
+        let entry = this.entryView(key)
+        // let value = fn(entry.key, entry.value)//todo 我认为TreeMapEntryView有BUG，entry.value会出NoneValueException
+        let value = fn(key, if(let Some(v) <- this.get(key)){
+            v
+        }else{
+            None<V>
+        })
+        entry.value = value
+        value
+    }
+}
 
 extend<K, V> LinkedHashMap<K, V> <: ExtendNonConcurrentMap<K, V> where K <: Hashable & Equatable<K> {}
 
