@@ -70,6 +70,9 @@ public class StringGenerator <: ToString {
     public func appendUnixNewLine(): This {
         append<String>(OS.Linux.nextLine)
     }
+    public func appendFromUtf8(utf8: Array<Byte>): This {
+        append<String>(String.fromUtf8(utf8))
+    }
     private func indexOf(search: Array<Byte>, fromIndex: Int64): ?Int64 {
         utf8.unsafeData().indexOf(search, fromIndex)
     }
