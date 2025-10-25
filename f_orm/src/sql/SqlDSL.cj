@@ -72,7 +72,7 @@ private func compile(dsl: String){
                                     path += tokens[i]
                                     i++
                                 }
-                                if(tokens[i].kind != RCURL){
+                                if((i < tokens.size && tokens[i].kind != RCURL) || tokens[tokens.size - 1].kind != RCURL){
                                     throw IllegalArgumentException('not completely data path in ${dsl}, it is lack of RCURL')
                                 } else if (path.size == 0) {
                                     throw IllegalArgumentException('sql dsl can not be empty path in ${dsl} between :{ and }')
