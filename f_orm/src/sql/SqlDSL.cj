@@ -80,7 +80,7 @@ private func compile(dsl: String){
                                     list.add(ArgSqlDSLPart(path[0].value))
                                 } else {
                                     if(path[0].kind != DOLLAR){
-                                        path = Token(DOLLAR) + path
+                                        path = Token(DOLLAR) + quote(.) + path
                                     }
                                     let name = path[path.size - 1].value
                                     let dataPath = DataPath.solid(path.toString())
