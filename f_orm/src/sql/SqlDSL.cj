@@ -97,7 +97,7 @@ private func compile(dsl: String){
         if(gen.size > 0){
             list.add(StringSqlDSLPart(gen.toString()))
         }
-        (list, Duration.day, false)
+        list
     }
 }
 private func convert<T>(exe: SqlExecutor, sqlgen: StringGenerator, name: String, data: ?Data): Unit {
