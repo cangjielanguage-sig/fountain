@@ -16,6 +16,7 @@ limitations under the License.
 package f_orm.sql
 
 import std.ast.*
+import f_cache.HeapCache
 import f_data.path.*
 
 public interface SqlDSL {
@@ -41,9 +42,9 @@ private class DataPathDSLPart <: SqlDSLPart {
         path.get(arg.toData()).next()
     }
 }
-private let dslmap = ConcurrentHashMap<String, ArrayList<SqlDSLPart>>()
+private let dslcache = HeapCache<ArrayList<SqlDSLPart>>(maxLife: Duration.day, maxSize: 10000)
 private func compile(dsl: String){
-    dslmap.computeIfAbsent(dsl){
+    dslcache.getOrCompute(dsl){
         let list = ArrayList<SqlDSLPart>()
         let gen = StringGenerator(' ')
         let tokens = cangjieLex(dsl)
@@ -96,7 +97,7 @@ private func compile(dsl: String){
         if(gen.size > 0){
             list.add(StringSqlDSLPart(gen.toString()))
         }
-        list
+        (list, Duration.day, false)
     }
 }
 private func convert<T>(exe: SqlExecutor, sqlgen: StringGenerator, name: String, data: ?Data): Unit {
