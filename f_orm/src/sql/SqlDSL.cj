@@ -75,7 +75,9 @@ private func compile(dsl: String){
                                     throw IllegalArgumentException('not completely data path in ${dsl}, it is lack of RCURL')
                                 } else if (path.size == 0) {
                                     throw IllegalArgumentException('sql dsl can not be empty path in ${dsl} between :{ and }')
-                                }else{
+                                } else if (path.size == 1 && path[0].kind == IDENTIFIER) {
+                                    list.add(ArgSqlDSLPart(part[0].value))
+                                } else {
                                     if(path[0].kind != DOLLAR){
                                         path = Token(DOLLAR) + path
                                     }
