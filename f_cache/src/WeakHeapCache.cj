@@ -19,15 +19,36 @@ import std.collection.concurrent.ConcurrentHashMap
 import std.ref.*
 import f_collection.*
 
+private struct WeakKey <: Hashable & Equatable<WeakKey> {
+    private let key: WeakRef<Box<String>>
+    private init(key: String, policy: CleanupPolicy){
+        this.key = WeakRef<Box<String>>(Box<String>(key), policy)
+    }
+    static func deferred(key: String){
+        WeakKey(key, DEFERRED)
+    }
+    public func hashCode(): Int64 {
+        key.value?.hashCode() ?? 0
+    }
+    public operator func ==(other: WeakKey){
+        match((key.value, other.key.value)){
+            case (Some(x), Some(y)) => x.value == y.value
+            case _ => false
+        }
+    }
+    func isNone(){
+        key.value.isNone()
+    }
+    func getKey(): ?String {
+        key.value?.value
+    }
+}
 public class WeakHeapCache<T> where T <: Object {
-    private let cache = ConcurrentHashMap<String, WeakRef<T>>()
+    private let cache = ConcurrentHashMap<WeakKey, WeakRef<T>>()
     public init() {
         spawn {
             while (true) {
-                for ((k, r) in cache where r.value.isNone()) {
-                    cache.remove(k)
-                    sleep(Duration.Zero)
-                }
+                cache.removeIf{k, v => k.isNone() || v.value.isNone()}
                 sleep(Duration.second)
             }
         }
@@ -37,40 +58,34 @@ public class WeakHeapCache<T> where T <: Object {
     }
     public func set(key: String, value: T): ?T {
         try {
-            if (let Some(r) <- cache.get(key) && let Some(v) <- r.value) {
+            if (let Some(r) <- cache.get(WeakKey.deferred(key)) && let Some(v) <- r.value) {
                 return v
             }
             None<T>
         } finally {
-            cache[key] = weakRef(value)
+            cache[WeakKey.deferred(key)] = weakRef(value)
         }
     }
     public func getOrCompute(key: String, fn: () -> ?T): ?T {
-        cache
-            .entryView(key) {
-                entry => if (let Some(r) <- entry.value && let Some(v) <- r.value) {
+        cache.entryView(WeakKey.deferred(key)) {
+            entry => if (let Some(r) <- entry.value && let Some(v) <- r.value) {
+            } else {
+                entry.value = if (let Some(v) <- fn()) {
+                    weakRef(v)
                 } else {
-                    entry.value = if (let Some(v) <- fn()) {
-                        weakRef(v)
-                    } else {
-                        None
-                    }
+                    None
                 }
-            }?
-            .value ?? None<T>
+            }
+        }?.value ?? None<T>
     }
     public func get(key: String): ?T {
-        let box = Box<?T>(None<T>)
-        cache.entryView(key){view => 
+        cache.entryView(WeakKey.deferred(key)){view => 
             if(let Some(r) <- view.value && let Some(v) <- r.value){
-                box.value = v
                 r
             }else{
-                box.value = None<T>
                 None<WeakRef<T>>
             }
-        }
-        box.value
+        }?.value ?? None
     }
     public func getOrDefault(key: String, default: T): T {
         get(key) ?? default
@@ -79,11 +94,11 @@ public class WeakHeapCache<T> where T <: Object {
         getOrCompute(key) {value} ?? value
     }
     public func remove(key: String): ?T {
-        cache.remove(key)?.value ?? None<T>
+        cache.remove(WeakKey.deferred(key))?.value ?? None<T>
     }
     public func removeIf(predicate: (String, T) -> Bool): Unit {
         cache.removeIf {
-            k, r => if (let Some(v) <- r.value) {
+            k, r => if (let (Some(k), Some(v)) <- (k.getKey(), r.value)) {
                 predicate(k, v)
             } else {
                 true
