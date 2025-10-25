@@ -111,6 +111,6 @@ public class WeakHeapCache<T> where T <: Object {
         }
     }
     public func clear(): Unit {
-        removeIf {_, _ => true}
+        cache.removeIf {_, _ => true}
     }
 }
