@@ -45,7 +45,7 @@ public class QueryResultWrap <: QueryResult {
         try{
             if (index >= list.size) {
                 let columns = result.columnInfos
-                for (i in list.size..index) {
+                for (i in list.size..=index) {
                     let column = columns[i]
                     let v: Any = match(column.typeName){
                         case 'SqlChar' | 'SqlVarchar' | 'String' => result.getOrNull<String>(i)
@@ -69,28 +69,876 @@ public class QueryResultWrap <: QueryResult {
                     }
                     list.add(v)
                 }
-                list.add(result.getOrNull<T>(index))
+                // list.add(result.getOrNull<T>(index))
             }
-            func convert(idx: Int64, s: ?String): ?T {
+            func convertFromString(idx: Int64, s: ?String): ?T {
                 match(s){
-                    case Some(x) where TypeInfo.of<T>().isSubtypeOf(TypeInfo.of<Parsable<T>>()) => 
-                        let ti = TypeInfo.of<T>()
-                        let fn = ti.getStaticFunction('tryParse', [TypeInfo.of<String>()])
-                        let v = match(fn.apply(ti, [x])){
-                            case x: ?T => x
-                            case _ => None<T>
+                    case Some(x) => 
+                        let v: Any = match(None<T>){
+                            case _: ?Int8 => Int8.parse(x)
+                            case _: ?Int16 => Int16.parse(x)
+                            case _: ?Int32 => Int32.parse(x)
+                            case _: ?Int64 => Int64.parse(x)
+                            case _: ?UInt8 => UInt8.parse(x)
+                            case _: ?UInt16 => UInt16.parse(x)
+                            case _: ?UInt32 => UInt32.parse(x)
+                            case _: ?UInt64 => UInt64.parse(x)
+                            case _: ?Float16 => Float16.parse(x)
+                            case _: ?Float32 => Float32.parse(x)
+                            case _: ?Float64 => Float64.parse(x)
+                            case _: ?BigInt => BigInt.parse(x)
+                            case _: ?Decimal => Decimal.parse(x)
+                            case _: ?Duration => Duration.parse(x)
+                            case _: ?DateTime => DateTime.parse(x)
+                            case _ => throw ORMException('String ${x} cannot be parsed to ${TypeInfo.of<T>()}')
                         }
                         list[idx] = v
-                        v
+                        v as T
                     case _ => None<T>
                 }
             }
             match(list[index]){
                 case x: T => x
                 case x: ?T => x
-                case x: String => convert(index, x)
-                case x: ?String => convert(index, x)
-                case x: ToString => convert(index, '${x}')
+                case x: String => convertFromString(index, x)
+                case x: ?String => convertFromString(index, x)
+                case x: ?Int8 => match(None<T>){
+                    case _: ?Int8 => match(x){
+                        case Some(x) => x as T
+                        case _ => None<T>
+                    }
+                    case _: ?Int16 => match(x){
+                        case Some(x) => Int16(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?Int32 => match(x){
+                        case Some(x) => Int32(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?Int64 => match(x){
+                        case Some(x) => Int64(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?UInt8 => match(x){
+                        case Some(x) => UInt8(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?UInt16 => match(x){
+                        case Some(x) => UInt16(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?UInt32 => match(x){
+                        case Some(x) => UInt32(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?UInt64 => match(x){
+                        case Some(x) => UInt64(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?Float16 => match(x){
+                        case Some(x) => Float16(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?Float32 => match(x){
+                        case Some(x) => Float32(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?Float64 => match(x){
+                        case Some(x) => Float64(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?BigInt => match(x){
+                        case Some(x) => BigInt(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?Decimal => match(x){
+                        case Some(x) => Decimal(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?String => match(x){
+                        case Some(x) => x.toString() as T
+                        case _ => None<T>
+                    }
+                    case _ => 
+                        let column = columnInfos[index]
+                        throw ORMException('colum index: ${index}, column type: ${column.typeName}, column name: ${column.name}, requires: ${TypeInfo.of<T>()}')
+                }
+                case x: ?Int16 => match(None<T>){
+                    case _: ?Int8 => match(x){
+                        case Some(x) => Int8(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?Int16 => match(x){
+                        case Some(x) => x as T
+                        case _ => None<T>
+                    }
+                    case _: ?Int32 => match(x){
+                        case Some(x) => Int32(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?Int64 => match(x){
+                        case Some(x) => Int64(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?UInt8 => match(x){
+                        case Some(x) => UInt8(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?UInt16 => match(x){
+                        case Some(x) => UInt16(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?UInt32 => match(x){
+                        case Some(x) => UInt32(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?UInt64 => match(x){
+                        case Some(x) => UInt64(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?Float16 => match(x){
+                        case Some(x) => Float16(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?Float32 => match(x){
+                        case Some(x) => Float32(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?Float64 => match(x){
+                        case Some(x) => Float64(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?BigInt => match(x){
+                        case Some(x) => BigInt(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?Decimal => match(x){
+                        case Some(x) => Decimal(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?String => match(x){
+                        case Some(x) => x.toString() as T
+                        case _ => None<T>
+                    }
+                    case _ => 
+                        let column = columnInfos[index]
+                        throw ORMException('colum index: ${index}, column type: ${column.typeName}, column name: ${column.name}, requires: ${TypeInfo.of<T>()}')
+                }
+                case x: ?Int32 => match(None<T>){
+                    case _: ?Int8 => match(x){
+                        case Some(x) => Int8(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?Int16 => match(x){
+                        case Some(x) => Int16(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?Int32 => match(x){
+                        case Some(x) => x as T
+                        case _ => None<T>
+                    }
+                    case _: ?Int64 => match(x){
+                        case Some(x) => Int64(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?UInt8 => match(x){
+                        case Some(x) => UInt8(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?UInt16 => match(x){
+                        case Some(x) => UInt16(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?UInt32 => match(x){
+                        case Some(x) => UInt32(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?UInt64 => match(x){
+                        case Some(x) => UInt64(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?Float16 => match(x){
+                        case Some(x) => Float16(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?Float32 => match(x){
+                        case Some(x) => Float32(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?Float64 => match(x){
+                        case Some(x) => Float64(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?BigInt => match(x){
+                        case Some(x) => BigInt(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?Decimal => match(x){
+                        case Some(x) => Decimal(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?String => match(x){
+                        case Some(x) => x.toString() as T
+                        case _ => None<T>
+                    }
+                    case _ => 
+                        let column = columnInfos[index]
+                        throw ORMException('colum index: ${index}, column type: ${column.typeName}, column name: ${column.name}, requires: ${TypeInfo.of<T>()}')
+                }
+                case x: ?Int64 => match(None<T>){
+                    case _: ?Int8 => match(x){
+                        case Some(x) => Int8(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?Int16 => match(x){
+                        case Some(x) => Int16(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?Int32 => match(x){
+                        case Some(x) => Int32(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?Int64 => match(x){
+                        case Some(x) => x as T
+                        case _ => None<T>
+                    }
+                    case _: ?UInt8 => match(x){
+                        case Some(x) => UInt8(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?UInt16 => match(x){
+                        case Some(x) => UInt16(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?UInt32 => match(x){
+                        case Some(x) => UInt32(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?UInt64 => match(x){
+                        case Some(x) => UInt64(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?Float16 => match(x){
+                        case Some(x) => Float16(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?Float32 => match(x){
+                        case Some(x) => Float32(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?Float64 => match(x){
+                        case Some(x) => Float64(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?BigInt => match(x){
+                        case Some(x) => BigInt(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?Decimal => match(x){
+                        case Some(x) => Decimal(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?String => match(x){
+                        case Some(x) => x.toString() as T
+                        case _ => None<T>
+                    }
+                    case _ => 
+                        let column = columnInfos[index]
+                        throw ORMException('colum index: ${index}, column type: ${column.typeName}, column name: ${column.name}, requires: ${TypeInfo.of<T>()}')
+                }
+                case x: ?UInt8 => match(None<T>){
+                    case _: ?Int8 => match(x){
+                        case Some(x) => Int8(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?Int16 => match(x){
+                        case Some(x) => Int16(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?Int32 => match(x){
+                        case Some(x) => Int32(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?Int64 => match(x){
+                        case Some(x) => Int64(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?UInt8 => match(x){
+                        case Some(x) => x as T
+                        case _ => None<T>
+                    }
+                    case _: ?UInt16 => match(x){
+                        case Some(x) => UInt16(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?UInt32 => match(x){
+                        case Some(x) => UInt32(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?UInt64 => match(x){
+                        case Some(x) => UInt64(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?Float16 => match(x){
+                        case Some(x) => Float16(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?Float32 => match(x){
+                        case Some(x) => Float32(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?Float64 => match(x){
+                        case Some(x) => Float64(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?BigInt => match(x){
+                        case Some(x) => BigInt(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?Decimal => match(x){
+                        case Some(x) => Decimal(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?String => match(x){
+                        case Some(x) => x.toString() as T
+                        case _ => None<T>
+                    }
+                    case _ => 
+                        let column = columnInfos[index]
+                        throw ORMException('colum index: ${index}, column type: ${column.typeName}, column name: ${column.name}, requires: ${TypeInfo.of<T>()}')
+                }
+                case x: ?UInt16 => match(None<T>){
+                    case _: ?Int8 => match(x){
+                        case Some(x) => Int8(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?Int16 => match(x){
+                        case Some(x) => Int16(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?Int32 => match(x){
+                        case Some(x) => Int32(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?Int64 => match(x){
+                        case Some(x) => Int64(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?UInt8 => match(x){
+                        case Some(x) => UInt8(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?UInt16 => match(x){
+                        case Some(x) => x as T
+                        case _ => None<T>
+                    }
+                    case _: ?UInt32 => match(x){
+                        case Some(x) => UInt32(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?UInt64 => match(x){
+                        case Some(x) => UInt64(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?Float16 => match(x){
+                        case Some(x) => Float16(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?Float32 => match(x){
+                        case Some(x) => Float32(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?Float64 => match(x){
+                        case Some(x) => Float64(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?BigInt => match(x){
+                        case Some(x) => BigInt(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?Decimal => match(x){
+                        case Some(x) => Decimal(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?String => match(x){
+                        case Some(x) => x.toString() as T
+                        case _ => None<T>
+                    }
+                    case _ => 
+                        let column = columnInfos[index]
+                        throw ORMException('colum index: ${index}, column type: ${column.typeName}, column name: ${column.name}, requires: ${TypeInfo.of<T>()}')
+                }
+                case x: ?UInt32 => match(None<T>){
+                    case _: ?Int8 => match(x){
+                        case Some(x) => Int8(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?Int16 => match(x){
+                        case Some(x) => Int16(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?Int32 => match(x){
+                        case Some(x) => Int32(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?Int64 => match(x){
+                        case Some(x) => Int64(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?UInt8 => match(x){
+                        case Some(x) => UInt8(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?UInt16 => match(x){
+                        case Some(x) => UInt16(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?UInt32 => match(x){
+                        case Some(x) => x as T
+                        case _ => None<T>
+                    }
+                    case _: ?UInt64 => match(x){
+                        case Some(x) => UInt64(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?Float16 => match(x){
+                        case Some(x) => Float16(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?Float32 => match(x){
+                        case Some(x) => Float32(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?Float64 => match(x){
+                        case Some(x) => Float64(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?BigInt => match(x){
+                        case Some(x) => BigInt(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?Decimal => match(x){
+                        case Some(x) => Decimal(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?String => match(x){
+                        case Some(x) => x.toString() as T
+                        case _ => None<T>
+                    }
+                    case _ => 
+                        let column = columnInfos[index]
+                        throw ORMException('colum index: ${index}, column type: ${column.typeName}, column name: ${column.name}, requires: ${TypeInfo.of<T>()}')
+                }
+                case x: ?UInt64 => match(None<T>){
+                    case _: ?Int8 => match(x){
+                        case Some(x) => Int8(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?Int16 => match(x){
+                        case Some(x) => Int16(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?Int32 => match(x){
+                        case Some(x) => Int32(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?Int64 => match(x){
+                        case Some(x) => Int64(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?UInt8 => match(x){
+                        case Some(x) => UInt8(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?UInt16 => match(x){
+                        case Some(x) => UInt16(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?UInt32 => match(x){
+                        case Some(x) => UInt32(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?UInt64 => match(x){
+                        case Some(x) => x as T
+                        case _ => None<T>
+                    }
+                    case _: ?Float16 => match(x){
+                        case Some(x) => Float16(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?Float32 => match(x){
+                        case Some(x) => Float32(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?Float64 => match(x){
+                        case Some(x) => Float64(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?BigInt => match(x){
+                        case Some(x) => BigInt(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?Decimal => match(x){
+                        case Some(x) => Decimal(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?String => match(x){
+                        case Some(x) => x.toString() as T
+                        case _ => None<T>
+                    }
+                    case _ => 
+                        let column = columnInfos[index]
+                        throw ORMException('colum index: ${index}, column type: ${column.typeName}, column name: ${column.name}, requires: ${TypeInfo.of<T>()}')
+                }
+                case x: ?Float16 => match(None<T>){
+                    case _: ?Int8 => match(x){
+                        case Some(x) => Int8(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?Int16 => match(x){
+                        case Some(x) => Int16(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?Int32 => match(x){
+                        case Some(x) => Int32(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?Int64 => match(x){
+                        case Some(x) => Int64(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?UInt8 => match(x){
+                        case Some(x) => UInt8(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?UInt16 => match(x){
+                        case Some(x) => UInt16(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?UInt32 => match(x){
+                        case Some(x) => UInt32(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?UInt64 => match(x){
+                        case Some(x) => UInt64(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?Float16 => match(x){
+                        case Some(x) => x as T
+                        case _ => None<T>
+                    }
+                    case _: ?Float32 => match(x){
+                        case Some(x) => Float32(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?Float64 => match(x){
+                        case Some(x) => Float64(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?BigInt => match(x){
+                        case Some(x) => BigInt(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?Decimal => match(x){
+                        case Some(x) => Decimal(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?String => match(x){
+                        case Some(x) => x.toString() as T
+                        case _ => None<T>
+                    }
+                    case _ => 
+                        let column = columnInfos[index]
+                        throw ORMException('colum index: ${index}, column type: ${column.typeName}, column name: ${column.name}, requires: ${TypeInfo.of<T>()}')
+                }
+                case x: ?Float32 => match(None<T>){
+                    case _: ?Int8 => match(x){
+                        case Some(x) => Int8(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?Int16 => match(x){
+                        case Some(x) => Int16(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?Int32 => match(x){
+                        case Some(x) => Int32(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?Int64 => match(x){
+                        case Some(x) => Int64(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?UInt8 => match(x){
+                        case Some(x) => UInt8(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?UInt16 => match(x){
+                        case Some(x) => UInt16(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?UInt32 => match(x){
+                        case Some(x) => UInt32(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?UInt64 => match(x){
+                        case Some(x) => UInt64(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?Float16 => match(x){
+                        case Some(x) => Float16(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?Float32 => match(x){
+                        case Some(x) => x as T
+                        case _ => None<T>
+                    }
+                    case _: ?Float64 => match(x){
+                        case Some(x) => Float64(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?BigInt => match(x){
+                        case Some(x) => BigInt(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?Decimal => match(x){
+                        case Some(x) => Decimal(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?String => match(x){
+                        case Some(x) => x.toString() as T
+                        case _ => None<T>
+                    }
+                    case _ => 
+                        let column = columnInfos[index]
+                        throw ORMException('colum index: ${index}, column type: ${column.typeName}, column name: ${column.name}, requires: ${TypeInfo.of<T>()}')
+                }
+                case x: ?Float64 => match(None<T>){
+                    case _: ?Int8 => match(x){
+                        case Some(x) => Int8(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?Int16 => match(x){
+                        case Some(x) => Int16(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?Int32 => match(x){
+                        case Some(x) => Int32(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?Int64 => match(x){
+                        case Some(x) => Int64(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?UInt8 => match(x){
+                        case Some(x) => UInt8(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?UInt16 => match(x){
+                        case Some(x) => UInt16(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?UInt32 => match(x){
+                        case Some(x) => UInt32(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?UInt64 => match(x){
+                        case Some(x) => UInt64(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?Float16 => match(x){
+                        case Some(x) => Float16(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?Float32 => match(x){
+                        case Some(x) => Float32(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?Float64 => match(x){
+                        case Some(x) => x as T
+                        case _ => None<T>
+                    }
+                    case _: ?BigInt => match(x){
+                        case Some(x) => BigInt(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?Decimal => match(x){
+                        case Some(x) => Decimal(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?String => match(x){
+                        case Some(x) => x.toString() as T
+                        case _ => None<T>
+                    }
+                    case _ => 
+                        let column = columnInfos[index]
+                        throw ORMException('colum index: ${index}, column type: ${column.typeName}, column name: ${column.name}, requires: ${TypeInfo.of<T>()}')
+                }
+                case x: ?BigInt => match(None<T>){
+                    case _: ?Int8 => match(x){
+                        case Some(x) => x.toInt8() as T
+                        case _ => None<T>
+                    }
+                    case _: ?Int16 => match(x){
+                        case Some(x) => x.toInt16() as T
+                        case _ => None<T>
+                    }
+                    case _: ?Int32 => match(x){
+                        case Some(x) => x.toInt32() as T
+                        case _ => None<T>
+                    }
+                    case _: ?Int64 => match(x){
+                        case Some(x) => x.toInt64() as T
+                        case _ => None<T>
+                    }
+                    case _: ?UInt8 => match(x){
+                        case Some(x) => x.toUInt8() as T
+                        case _ => None<T>
+                    }
+                    case _: ?UInt16 => match(x){
+                        case Some(x) => x.toUInt16() as T
+                        case _ => None<T>
+                    }
+                    case _: ?UInt32 => match(x){
+                        case Some(x) => x.toUInt32() as T
+                        case _ => None<T>
+                    }
+                    case _: ?UInt64 => match(x){
+                        case Some(x) => x.toUInt64() as T
+                        case _ => None<T>
+                    }
+                    case _: ?Float16 => match(x){
+                        case Some(x) => Float16(x.toInt64()) as T
+                        case _ => None<T>
+                    }
+                    case _: ?Float32 => match(x){
+                        case Some(x) => Float32(x.toInt64()) as T
+                        case _ => None<T>
+                    }
+                    case _: ?Float64 => match(x){
+                        case Some(x) => Float64(x.toInt64()) as T
+                        case _ => None<T>
+                    }
+                    case _: ?BigInt => match(x){
+                        case Some(x) => x as T
+                        case _ => None<T>
+                    }
+                    case _: ?Decimal => match(x){
+                        case Some(x) => Decimal(x) as T
+                        case _ => None<T>
+                    }
+                    case _: ?String => match(x){
+                        case Some(x) => x.toString() as T
+                        case _ => None<T>
+                    }
+                    case _ => 
+                        let column = columnInfos[index]
+                        throw ORMException('colum index: ${index}, column type: ${column.typeName}, column name: ${column.name}, requires: ${TypeInfo.of<T>()}')
+                }
+                case x: ?Decimal => match(None<T>){
+                    case _: ?Int8 => match(x){
+                        case Some(x) => x.toInt8() as T
+                        case _ => None<T>
+                    }
+                    case _: ?Int16 => match(x){
+                        case Some(x) => x.toInt16() as T
+                        case _ => None<T>
+                    }
+                    case _: ?Int32 => match(x){
+                        case Some(x) => x.toInt32() as T
+                        case _ => None<T>
+                    }
+                    case _: ?Int64 => match(x){
+                        case Some(x) => x.toInt64() as T
+                        case _ => None<T>
+                    }
+                    case _: ?UInt8 => match(x){
+                        case Some(x) => x.toUInt8() as T
+                        case _ => None<T>
+                    }
+                    case _: ?UInt16 => match(x){
+                        case Some(x) => x.toUInt16() as T
+                        case _ => None<T>
+                    }
+                    case _: ?UInt32 => match(x){
+                        case Some(x) => x.toUInt32() as T
+                        case _ => None<T>
+                    }
+                    case _: ?UInt64 => match(x){
+                        case Some(x) => x.toUInt64() as T
+                        case _ => None<T>
+                    }
+                    case _: ?Float16 => match(x){
+                        case Some(x) => x.toFloat16() as T
+                        case _ => None<T>
+                    }
+                    case _: ?Float32 => match(x){
+                        case Some(x) => x.toFloat32() as T
+                        case _ => None<T>
+                    }
+                    case _: ?Float64 => match(x){
+                        case Some(x) => x.toFloat64() as T
+                        case _ => None<T>
+                    }
+                    case _: ?BigInt => match(x){
+                        case Some(x) => x.toBigInt() as T
+                        case _ => None<T>
+                    }
+                    case _: ?Decimal => match(x){
+                        case Some(x) => x as T
+                        case _ => None<T>
+                    }
+                    case _: ?String => match(x){
+                        case Some(x) => x.toString() as T
+                        case _ => None<T>
+                    }
+                    case _ => 
+                        let column = columnInfos[index]
+                        throw ORMException('colum index: ${index}, column type: ${column.typeName}, column name: ${column.name}, requires: ${TypeInfo.of<T>()}')
+                }
+                case x: ?Duration => match(None<T>){
+                    case _: ?Duration => match(x){
+                        case Some(x) => x as T
+                        case _ => None<T>
+                    }
+                    case _: ?String => match(x){
+                        case Some(x) => x.toString() as T
+                        case _ => None<T>
+                    }
+                    case _ => 
+                        let column = columnInfos[index]
+                        throw ORMException('colum index: ${index}, column type: ${column.typeName}, column name: ${column.name}, requires: ${TypeInfo.of<T>()}')
+                }
+                case x: ?DateTime => match(None<T>){
+                    case _: ?DateTime => match(x){
+                        case Some(x) => x as T
+                        case _ => None<T>
+                    }
+                    case _: ?String => match(x){
+                        case Some(x) => x.toString() as T
+                        case _ => None<T>
+                    }
+                    case _ => 
+                        let column = columnInfos[index]
+                        throw ORMException('colum index: ${index}, column type: ${column.typeName}, column name: ${column.name}, requires: ${TypeInfo.of<T>()}')
+                }
+                case x: ?Array<Byte> => match(None<T>){
+                    case _: ?Array<Byte> => match(x){
+                        case Some(x) => x as T
+                        case _ => None<T>
+                    }
+                    case _ => 
+                        let column = columnInfos[index]
+                        throw ORMException('colum index: ${index}, column type: ${column.typeName}, column name: ${column.name}, requires: ${TypeInfo.of<T>()}')
+                }
+                case x: ?InputStream => match(None<T>){
+                    case _: ?InputStream => match(x){
+                        case Some(x) => x as T
+                        case _ => None<T>
+                    }
+                    case _ => 
+                        let column = columnInfos[index]
+                        throw ORMException('colum index: ${index}, column type: ${column.typeName}, column name: ${column.name}, requires: ${TypeInfo.of<T>()}')
+                }
                 case _ => 
                     let column = columnInfos[index]
                     throw ORMException('colum index: ${index}, column type: ${column.typeName}, column name: ${column.name}, requires: ${TypeInfo.of<T>()}')

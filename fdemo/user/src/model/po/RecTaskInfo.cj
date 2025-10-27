@@ -13,9 +13,18 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package f_version
+package user.model.po
 
-import std.time.MonoTime
+import fountain.data.*
+import fountain.data.macros.*
+import fountain.orm.*
+import fountain.orm.macros.*
 
-public let AppStarts = MonoTime.now()
-public const FountainVersion = "fountain(1.0.9)"
+@DataAssist[fields]
+@QueryMappersGenerator[rec_task_info]
+public class RecTaskInfo {
+    @ORMField[true 'id']
+    private var id: Int64 = 0
+    @ORMField['is_valid']
+    private var isValid: Int8 = 0
+}

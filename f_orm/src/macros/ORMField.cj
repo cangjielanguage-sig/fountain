@@ -26,7 +26,7 @@ import f_util.CaseFormat
  * @ORMField[true LowerUnderScore dataType] 表示当前属性映射主键，属性名转为LowerUnderScore就是列名，列的类型是dataType。
  * @ORMField[true "column_name" dataType] 表示当前属性映射主键，不论属性名是什么列名一定是"column_name"。
  * 第一部分可以是true或false，true表示当前属性映射主键，false表示映射的不是主键。
- * dataType必须是枚举orm.dialect.DataType的值。
+ * dataType必须是枚举orm.DataType的值。
  * 每一部分都是可选的，且顺序任意，不是true false也不是LowerUnderScore UpperUnderScore Pascal Camel的一律认为是DataType。
  * 没有使用@ORMField注解的公共实例成员变量或公共实例成员属性被认为映射的不是主键，且按照列名是LowerUnderScore处理。
  */

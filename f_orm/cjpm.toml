@@ -3,6 +3,7 @@
   f_aspect = {path = "../f_aspect"}
   f_base = {path = "../f_base"}
   f_bean = {path = "../f_bean"}
+  f_cache = {path = "../f_cache"}
   f_collection = {path = "../f_collection"}
   f_config = {path = "../f_config"}
   f_data = {path = "../f_data"}

@@ -16,6 +16,7 @@ limitations under the License.
 package f_orm.sql
 
 import std.ast.*
+import f_cache.HeapCache
 import f_data.path.*
 
 public interface SqlDSL {
@@ -41,9 +42,9 @@ private class DataPathDSLPart <: SqlDSLPart {
         path.get(arg.toData()).next()
     }
 }
-private let dslmap = ConcurrentHashMap<String, ArrayList<SqlDSLPart>>()
+private let dslcache = HeapCache<ArrayList<SqlDSLPart>>(maxLife: Duration.day, maxSize: 10000)
 private func compile(dsl: String){
-    dslmap.computeIfAbsent(dsl){
+    dslcache.getOrCompute(dsl){
         let list = ArrayList<SqlDSLPart>()
         let gen = StringGenerator(' ')
         let tokens = cangjieLex(dsl)
@@ -71,7 +72,7 @@ private func compile(dsl: String){
                                     path += tokens[i]
                                     i++
                                 }
-                                if(tokens[i].kind != RCURL){
+                                if((i < tokens.size && tokens[i].kind != RCURL) || tokens[tokens.size - 1].kind != RCURL){
                                     throw IllegalArgumentException('not completely data path in ${dsl}, it is lack of RCURL')
                                 } else if (path.size == 0) {
                                     throw IllegalArgumentException('sql dsl can not be empty path in ${dsl} between :{ and }')
@@ -79,7 +80,7 @@ private func compile(dsl: String){
                                     list.add(ArgSqlDSLPart(path[0].value))
                                 } else {
                                     if(path[0].kind != DOLLAR){
-                                        path = Token(DOLLAR) + path
+                                        path = Token(DOLLAR) + quote(.) + path
                                     }
                                     let name = path[path.size - 1].value
                                     let dataPath = DataPath.solid(path.toString())

@@ -19,6 +19,7 @@ import std.collection.concurrent.ConcurrentHashMap
 import std.env
 import f_collection.*
 import f_orm.exception.ORMException
+public import std.convert.*
 public import std.database.sql.*
 public import std.reflect.*
 public import f_exception.{BaseException, UnreachableException}
