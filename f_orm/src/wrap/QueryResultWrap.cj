@@ -75,7 +75,7 @@ public class QueryResultWrap <: QueryResult {
                 match(s){
                     case Some(x) where TypeInfo.of<T>().isSubtypeOf(TypeInfo.of<Parsable<T>>()) => 
                         let ti = TypeInfo.of<T>()
-                        let fn = ti.getStaticFunction('tryParse', [TypeInfo.of<String>()])
+                        let fn = ti.getStaticFunction('parse', [TypeInfo.of<String>()])
                         let v = match(fn.apply(ti, [x])){
                             case x: ?T => x
                             case _ => None<T>
