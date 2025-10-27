@@ -73,15 +73,27 @@ public class QueryResultWrap <: QueryResult {
             }
             func convert(idx: Int64, s: ?String): ?T {
                 match(s){
-                    case Some(x) where TypeInfo.of<T>().isSubtypeOf(TypeInfo.of<Parsable<T>>()) => 
-                        let ti = TypeInfo.of<T>()
-                        let fn = ti.getStaticFunction('parse', [TypeInfo.of<String>()])
-                        let v = match(fn.apply(ti, [x])){
-                            case x: ?T => x
-                            case _ => None<T>
+                    case Some(x) => 
+                        let v: Any = match(None<T>){
+                            case _: ?Int8 => Int8.parse(x)
+                            case _: ?Int16 => Int16.parse(x)
+                            case _: ?Int32 => Int32.parse(x)
+                            case _: ?Int64 => Int64.parse(x)
+                            case _: ?UInt8 => UInt8.parse(x)
+                            case _: ?UInt16 => UInt16.parse(x)
+                            case _: ?UInt32 => UInt32.parse(x)
+                            case _: ?UInt64 => UInt64.parse(x)
+                            case _: ?Float16 => Float16.parse(x)
+                            case _: ?Float32 => Float32.parse(x)
+                            case _: ?Float64 => Float64.parse(x)
+                            case _: ?BigInt => BigInt.parse(x)
+                            case _: ?Decimal => Decimal.parse(x)
+                            case _: ?Duration => Duration.parse(x)
+                            case _: ?DateTime => DateTime.parse(x)
+                            case _ => throw ORMException('String ${x} cannot be parsed to ${TypeInfo.of<T>()}')
                         }
                         list[idx] = v
-                        v
+                        v as T
                     case _ => None<T>
                 }
             }
