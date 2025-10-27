@@ -45,7 +45,7 @@ public class QueryResultWrap <: QueryResult {
         try{
             if (index >= list.size) {
                 let columns = result.columnInfos
-                for (i in list.size..index) {
+                for (i in list.size..=index) {
                     let column = columns[i]
                     let v: Any = match(column.typeName){
                         case 'SqlChar' | 'SqlVarchar' | 'String' => result.getOrNull<String>(i)
@@ -69,9 +69,9 @@ public class QueryResultWrap <: QueryResult {
                     }
                     list.add(v)
                 }
-                list.add(result.getOrNull<T>(index))
+                // list.add(result.getOrNull<T>(index))
             }
-            func convert(idx: Int64, s: ?String): ?T {
+            func convertFromString(idx: Int64, s: ?String): ?T {
                 match(s){
                     case Some(x) => 
                         let v: Any = match(None<T>){
@@ -97,12 +97,32 @@ public class QueryResultWrap <: QueryResult {
                     case _ => None<T>
                 }
             }
+            func convert<V>(idx: Int64, v: ?V): ?T where V <: ToString {
+                match(v){
+                    case Some(x) => convertFromString(idx, x.toString())
+                    case _ => None<T>
+                }
+            }
             match(list[index]){
                 case x: T => x
                 case x: ?T => x
-                case x: String => convert(index, x)
-                case x: ?String => convert(index, x)
-                case x: ToString => convert(index, '${x}')
+                case x: String => convertFromString(index, x)
+                case x: ?String => convertFromString(index, x)
+                case x: ?Int8 => convert<Int8>(index, x)
+                case x: ?Int16 => convert<Int16>(index, x)
+                case x: ?Int32 => convert<Int32>(index, x)
+                case x: ?Int64 => convert<Int64>(index, x)
+                case x: ?UInt8 => convert<UInt8>(index, x)
+                case x: ?UInt16 => convert<UInt16>(index, x)
+                case x: ?UInt32 => convert<UInt32>(index, x)
+                case x: ?UInt64 => convert<UInt64>(index, x)
+                case x: ?Float16 => convert<Float16>(index, x)
+                case x: ?Float32 => convert<Float32>(index, x)
+                case x: ?Float64 => convert<Float64>(index, x)
+                case x: ?BigInt => convert<BigInt>(index, x)
+                case x: ?Decimal => convert<Decimal>(index, x)
+                case x: ?Duration => convert<Duration>(index, x)
+                case x: ?DateTime => convert<DateTime>(index, x)
                 case _ => 
                     let column = columnInfos[index]
                     throw ORMException('colum index: ${index}, column type: ${column.typeName}, column name: ${column.name}, requires: ${TypeInfo.of<T>()}')

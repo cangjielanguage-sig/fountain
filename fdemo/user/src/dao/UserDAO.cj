@@ -70,6 +70,10 @@ public interface UserDAO <: RootDAO {
         ).delete
     }
     func findUserId(username: String, password: String): ?Int64 {
+        let task = executor.setSql('''
+            select id, is_valid from rec_task_info limit 1 offset 0
+        ''').first<RecTaskInfo>()
+        println('TTTTTTTTTTTTTTT ${task?.isValid}')
         let med = executor.setSql('''
         select create_time, pre_amount
           from med_allocation
