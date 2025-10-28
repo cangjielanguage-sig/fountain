@@ -155,7 +155,7 @@ public class FromClause<T> <: ExceptInsertClause<T> where T <: QueryMappersInit<
         count(true)
     }
     private func count(clearArgsAfterExec: Bool): Int64 {
-        let reg = #'order\s+by\s+((([a-zA-Z_]+\w*\.)?[a-zA-Z_]+\w*\s+(asc|desc)?)(\s*,\s*(([a-zA-Z_]+\w*\.)?[a-zA-Z_]+\w*\s+(asc|desc)?))*)\s*$'#
+        let reg = #'order\s+by\s+((([a-zA-Z_]+\w*\.)?[a-zA-Z_]+\w*\s*(\s(asc|desc))?)(\s*,\s*(([a-zA-Z_]+\w*\.)?[a-zA-Z_]+\w*\s*(\s(asc|desc))?))*)\s*$'#
         let partial = reg.regex(flags: [IgnoreCase], solid: true).replace(sqlgen.toString(), '')
         executor.setSql('select count(*) ${partial}', clearArgsAfterExec: clearArgsAfterExec).first<Int64>() ?? 0
     }

@@ -87,7 +87,7 @@ public interface UserDAO <: RootDAO {
                                 }}
                                 ${meet(password.size > 0, ' and "password" like '){
                                     '%${password}%'
-                                }}'''
+                                }} order by id'''
                            }.page<UserPO>(10, page: 1)
         println('QQQQQQQQQQQQQQQQQ ${page.list.size}')
         executor.setSql('''
