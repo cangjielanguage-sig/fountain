@@ -155,7 +155,9 @@ public class FromClause<T> <: ExceptInsertClause<T> where T <: QueryMappersInit<
         count(true)
     }
     private func count(clearArgsAfterExec: Bool): Int64 {
-        executor.setSql('select count(*) ${sqlgen}', clearArgsAfterExec: clearArgsAfterExec).first<Int64>() ?? 0
+        let reg = #'order\s+by\s+((([a-zA-Z_]+\w*\.)?[a-zA-Z_]+\w*\s+(asc|desc)?)(\s*,\s*(([a-zA-Z_]+\w*\.)?[a-zA-Z_]+\w*\s+(asc|desc)?))*)\s*$'#
+        let partial = reg.regex(flags: [IgnoreCase], solid: true).replace(sqlgen.toString(), '')
+        executor.setSql('select count(*) ${partial}', clearArgsAfterExec: clearArgsAfterExec).first<Int64>() ?? 0
     }
     public func singlePage<R>(size: Int64, page!: Int64 = 1): Pagination<R> where R <: DataFields<R> {
         singlePage<R>('id', size, page: page)
