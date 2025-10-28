@@ -307,6 +307,7 @@ public interface RootDAO {
     func meet(condition: Bool, partial: String, value: ()->Any): String {
         meet(condition, partial).value(value).done()
     }
+    
     prop choose: ChooseCondition {
         get() {
             ChooseCondition(executor)
@@ -321,6 +322,19 @@ public interface RootDAO {
             return ''
         }
         ' in ${args} '
+    }
+    func NOT_IN<I, T>(value: I): String where I <: Iterable<T> {
+        let args = arg<I, T>(value)
+        if(args.isEmpty()){
+            return ''
+        }
+        ' not in ${args} '
+    }
+    func EXISTS(exists: () -> String): String {
+        ' exists (${exists()}) '
+    }
+    func NOT_EXISTS(notExists: () -> String): String {
+        ' not exists (${notExists()}) '
     }
     func SET(partial: () -> String): String {
         Condition.SET(partial)

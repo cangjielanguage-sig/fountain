@@ -56,6 +56,17 @@ public class MeetCondition {
             }
         }
     }
+    public func NOT_BETWEEN(one: Any, two: Any): String {
+        frag{
+            if(_argInSql && let (x: ToString, y: ToString) <- (one, two)){
+                ' not between ${x} and ${y} '
+            }else{
+                executor.add(one)
+                executor.add(two)
+                ' not between ? and ? '
+            }
+        }
+    }
     public func IN<I, T>(itr: I): String where I <: Iterable<T> {
         frag{
             let builder = StringBuilder(' in (')
@@ -74,6 +85,36 @@ public class MeetCondition {
             }
             builder.append(') ')
             builder.toString()
+        }
+    }
+    public func NOT_IN<I, T>(itr: I): String where I <: Iterable<T> {
+        frag{
+            let builder = StringBuilder(' not in (')
+            var i = 0
+            for(v in itr){
+                if(i > 0){
+                    builder.append(',')
+                }
+                if(_argInSql && let x: ToString <- v){
+                    builder.append(x)
+                }else{
+                    executor.add(v)
+                    builder.append('?')
+                }
+                i++
+            }
+            builder.append(') ')
+            builder.toString()
+        }
+    }
+    public func EXISTS(fn: () -> String): String {
+        frag {
+            ' exists (${fn()})'
+        }
+    }
+    public func NOT_EXISTS(fn: () -> String): String {
+        frag {
+            ' not exists (${fn()})'
         }
     }
     public func done(): String {
