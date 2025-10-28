@@ -104,7 +104,7 @@ extend JsonValue <: ExtendJsonValue {
             case x: DataNone => JsonNull()
             case x: DataBool => JsonBool(x.data)
             case x: DataReal => if(x.data.isInteger()){
-                JsonInt(x.data)
+                JsonInt(x.data.toInt64())
             }else{
                 JsonFloat(x.data.toFloat64())
             }
