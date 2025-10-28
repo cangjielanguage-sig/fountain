@@ -16,51 +16,54 @@ limitations under the License.
 package f_data
 
 public class DataReal <: Data & Hashable & Comparable<DataReal> {
-    public DataReal(public let data: Decimal) {}
+    public DataReal(public let data: Decimal, public let isInt: Bool) {}
+    public init(data: Decimal){
+        this(data, false)
+    }
     public init(data: BigInt) {
-        this(Decimal.parse(data.toString()))
+        this(Decimal.parse(data.toString()), true)
     }
     public init(data: Int8) {
-        this(Decimal(data))
+        this(Decimal(data), true)
     }
     public init(data: UInt8) {
-        this(Decimal(data))
+        this(Decimal(data), true)
     }
     public init(data: Int16) {
-        this(Decimal(data))
+        this(Decimal(data), true)
     }
     public init(data: UInt16) {
-        this(Decimal(data))
+        this(Decimal(data), true)
     }
     public init(data: Int32) {
-        this(Decimal(data))
+        this(Decimal(data), true)
     }
     public init(data: UInt32) {
-        this(Decimal(data))
+        this(Decimal(data), true)
     }
     public init(data: Int64) {
-        this(Decimal(data))
+        this(Decimal(data), true)
     }
     public init(data: UInt64) {
-        this(Decimal(data))
+        this(Decimal(data), true)
     }
     public init(data: IntNative) {
-        this(Decimal(data))
+        this(Decimal(data), true)
     }
     public init(data: UIntNative) {
-        this(Decimal(data))
+        this(Decimal(data), true)
     }
     public init(data: Float16) {
-        this(Decimal(data))
+        this(Decimal(data), false)
     }
     public init(data: Float32) {
-        this(Decimal(data))
+        this(Decimal(data), false)
     }
     public init(data: Float64) {
-        this(Decimal(data))
+        this(Decimal(data), false)
     }
     public init(data: String) {
-        this(Decimal.parse(data))
+        this(Decimal.parse(data), data.contains('.'))
     }
 
     public func toDecimal() {
