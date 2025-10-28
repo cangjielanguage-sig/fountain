@@ -103,8 +103,11 @@ extend JsonValue <: ExtendJsonValue {
             case x: DataJsonObject => x.json
             case x: DataNone => JsonNull()
             case x: DataBool => JsonBool(x.data)
-            case x: DataReal where x.isInt => JsonInt(x.data.toInt64())
-            case x: DataReal => JsonFloat(x.data.toFloat64())
+            case x: DataReal => if(x.data.isInteger()){
+                JsonInt(x.data)
+            }else{
+                JsonFloat(x.data.toFloat64())
+            }
             case x: DataString => JsonString(x.data)
             case x: DataDateTime => JsonString(x.data.toString())
             case x: DataDuration => JsonString(x.data.toString())
