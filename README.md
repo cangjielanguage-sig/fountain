@@ -83,13 +83,12 @@ _/ ____\____  __ __  _____/  |______  |__| ____
   1.  应用项目只需要编译为动态链接库，把应用的动态链接库加入LD_LIBRARY_PATH
   2.  `fboot run [PATH] --dylibPattern=<DYNAMIC_LIB_NAME_REGEX_WITHOUT_EXTNAME>`
   3.  `fboot shutdown <PID>`
-  4.  `fboot start <PID> [PATH] --dylibPattern=<DYNAMIC_LIB_NAME_REGEX_WITHOUT_EXTNAME>`
-  5.  `fboot restart <PID> [PATH] --dylibPattern=<DYNAMIC_LIB_NAME_REGEX_WITHOUT_EXTNAME>`
-  6.  `fboot workspace` 将当前目录初始化为仓颉workspace
-  7.  `fboot workspace <spacename>` 在当前目录创建名为`<spacename>`的子目录，并将它初始化为仓颉workspace
-  8.  `fboot workspace <direct_path>` 将绝对路径创建为仓颉workspace
-  8.  `fboot dynamic` 将当前目录初始化为仓颉dynamic项目
-  9.  `fboot dynamic <module_name>` 在当前目录创建名为`<module_name>`的子目录，并初始化为仓颉dynamic模块，并把模块加入当前目录的cjpm.toml
+  4.  `fboot restart <PID> [PATH] --dylibPattern=<DYNAMIC_LIB_NAME_REGEX_WITHOUT_EXTNAME>`
+  5.  `fboot workspace` 将当前目录初始化为仓颉workspace
+  6.  `fboot workspace <spacename>` 在当前目录创建名为`<spacename>`的子目录，并将它初始化为仓颉workspace
+  7.  `fboot workspace <direct_path>` 将绝对路径创建为仓颉workspace
+  8.  `fboot module` 将当前目录初始化为仓颉dynamic项目
+  9.  `fboot module <module_name>` 在当前目录创建名为`<module_name>`的子目录，并初始化为仓颉dynamic模块，并把模块加入当前目录的cjpm.toml
   10. fboot build 编译使用fountain开发的应用项目
   11. fboot count 数当前目录的仓颉代码模块数、包数、文件数、行数、计数耗时
   ==============下面的命令用来管理fountain本身===================
