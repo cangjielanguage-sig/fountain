@@ -317,6 +317,12 @@ ${content}
   path-option = ["\${CANGJIE_STDX_DYNAMIC_PATH}", "\${CANGJIE_FOUNTAIN_LIBS}"]
 '''
         File.writeTo(tomlPath, content.unsafeBytes())
+        var path = dir.join('run')
+        Directory.create(path, recursive: true)
+        File.writeTo(path.join('cjpm.toml'), content.unsafeBytes())
+        path = dir.join('test')
+        Directory.create(path, recursive: true)
+        File.writeTo(path.join('cjpm.toml'), content.replace('-O2', '-O0').replace('--lto=full', '').unsafeBytes())
     }
     private func doInit(arg: String): (Int64, Path) {
         let workingDir = if(1 < this.args.size){
@@ -447,8 +453,7 @@ private let _ = AppVersion.set(#'${banner()}'#, '${name}', '${version}')
         }
         (toml, moduleMember, tomlPath)
     }
-    private func build(): Int64 {
-        let (_, path) = confirmPath(args)
+    private func doBuild(path: Path): Int64 {
         println('fboot build is used to compile the project which depends fountain.')
         let (workingDir, targetDir) = directories(path)
         println('fboot build ${workingDir} --target-dir=${targetDir}')
@@ -476,6 +481,31 @@ private let _ = AppVersion.set(#'${banner()}'#, '${name}', '${version}')
             return 0
         }
         execute('cjpm', ['build', '--target-dir=${targetDir}'], workingDirectory: workingDir)
+    }
+    private func copyToml(source: String, path: Path){
+        copy(path.join('${source}/cjpm.toml'), to: path.join('cjpm.toml'), overwrite: true)
+    }
+    private func build(){
+        let (_, path) = confirmPath(args)
+        copyToml('run', path)
+        doBuild(path)
+    }
+    private func test(): Int64 {
+        let (_, path) = confirmPath(args)
+        copyToml('test', path)
+        let code = doBuild(path)
+        if(code != 0){
+            return code
+        }
+        var dylibPattern = ''
+        for(arg in this.args where arg.startsWith('--dylibPattern=')){
+            dylibPattern = arg
+            break
+        }
+        if(dylibPattern.isEmpty()){
+            throw BootException("arg --dylibPattern='...' in command line is required")
+        }
+        run(['run', path.toString(), dylibPattern])
     }
     private func count(dir: Path, counter: CodeCounter, ext: String, ignoreBrackets: Bool, ignoreComments: Bool): Unit {
         Directory.walk(dir){fi =>
@@ -580,6 +610,7 @@ private let _ = AppVersion.set(#'${banner()}'#, '${name}', '${version}')
             case 'workspace' => initWorkspace()
             case 'cleanUpdate' => cleanUpdate()
             case 'build' => build()
+            case 'test' => test()
             case 'count' => count()
             case 'version' => version()
             case 'help' => help()

@@ -25,6 +25,11 @@ run(){
     exports
     fboot run $path --dylibPattern='(boot|user\.util\.auth|\.(controller|service\.impl))'
 }
+test(){
+    exports
+    export CANGJIE_STDX_PATH=$CANGJIE_STDX_DYNAMIC_PATH
+    fboot test $path --dylibPattern='(boot|user\.util\.auth|\.(controller|service\.impl))'
+}
 perf(){
     exports
     cjprof record -f max -- fboot run $path --dylibPattern='(boot|user\.util\.auth|\.(controller|service\.impl))'
@@ -44,6 +49,9 @@ cleanUpdate(){
 case "$1" in 
 run)
     run
+    ;;
+test)
+    test
     ;;
 perf)
     perf
