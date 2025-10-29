@@ -322,7 +322,7 @@ ${content}
         File.writeTo(path.join('cjpm.toml'), content.unsafeBytes())
         path = dir.join('test')
         Directory.create(path, recursive: true)
-        File.writeTo(path.join('cjpm.toml'), content.replace('-O2', '-O0').replace('--lto=full', '').unsafeBytes())
+        File.writeTo(path.join('cjpm.toml'), content.replace('-O2', '-O0 -g').replace('--lto=full', '').unsafeBytes())
     }
     private func doInit(arg: String): (Int64, Path) {
         let workingDir = if(1 < this.args.size){

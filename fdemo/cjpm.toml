@@ -5,9 +5,9 @@
 
 [workspace]
   version = "1.0.0"
-  members=["./boot", "./user"]
-  compile-option = "-O0 --dy-std -Woff unused"
-  override-compile-option = "-O0 --dy-std -Woff unused"
+  members=["./boot", "./user", "./fdemo_stAtIc__"]
+  compile-option = "-O0 -g --dy-std -Woff unused"
+  override-compile-option = "-O0 -g --dy-std -Woff unused"
 
 [profile.build]
   incremental = true
@@ -16,27 +16,27 @@
 
 [target]
 [target.x86_64-unknown-linux-gnu]
-  compile-option = "-O0  --dy-std -Woff unused"
-  override-compile-option = "-O0  --dy-std -Woff unused"
+  compile-option = "-O0 -g  --dy-std -Woff unused"
+  override-compile-option = "-O0 -g  --dy-std -Woff unused"
 [target.x86_64-unknown-linux-gnu.bin-dependencies]
   path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]
 [target.aarch64-unknown-linux-gnu]
-  compile-option = "-O0  --dy-std -Woff unused"
-  override-compile-option = "-O0  --dy-std -Woff unused"
+  compile-option = "-O0 -g  --dy-std -Woff unused"
+  override-compile-option = "-O0 -g  --dy-std -Woff unused"
 [target.aarch64-unknown-linux-gnu.bin-dependencies]
   path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]
 [target.x86_64-w64-mingw32]
-  compile-option = "-O0 --dy-std -Woff unused"
-  override-compile-option = "-O0 --dy-std -Woff unused"
+  compile-option = "-O0 -g --dy-std -Woff unused"
+  override-compile-option = "-O0 -g --dy-std -Woff unused"
 [target.x86_64-w64-mingw32.bin-dependencies]
   path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]
 [target.x86_64-apple-darwin]
-  compile-option = "-O0 --dy-std -Woff unused"
-  override-compile-option = "-O0 --dy-std -Woff unused"
+  compile-option = "-O0 -g --dy-std -Woff unused"
+  override-compile-option = "-O0 -g --dy-std -Woff unused"
 [target.x86_64-apple-darwin.bin-dependencies]
   path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]
 [target.aarch64-apple-darwin]
-  compile-option = "-O0 --dy-std -Woff unused"
-  override-compile-option = "-O0 --dy-std -Woff unused"
+  compile-option = "-O0 -g --dy-std -Woff unused"
+  override-compile-option = "-O0 -g --dy-std -Woff unused"
 [target.aarch64-apple-darwin.bin-dependencies]
   path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]

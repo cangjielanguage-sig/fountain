@@ -54,7 +54,7 @@ cangjie_env(){
   export CANGJIE_FOUNTAIN_LIBS=$CJPM_INSTALL/libs/fboot
   export CANGJIE_HOME=/mnt/d/docs/work/cangjie/cangjie-linux-bin/$1
   export LD_LIBRARY_PATH=/usr/local/openssl-3.3.2/lib:$CANGJIE_FOUNTAIN_LIBS:$LD_LIBRARY_PATH
-  export PATH=$PATH:$CJPM_INSTALL/bin
+  export PATH=$PATH:$CJPM_INSTALL/bin:$CANGJIE_HOME/third_party/llvm/lldb/bin/
   source $CANGJIE_HOME/envsetup.sh
 }
 cj(){
