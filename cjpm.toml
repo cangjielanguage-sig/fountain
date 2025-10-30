@@ -39,7 +39,7 @@
   output-type = "dynamic"
   src-dir = ""
   target-dir = ""
-  version = "1.0.12"
+  version = "1.0.13"
   package-configuration = {}
 
 [target]
