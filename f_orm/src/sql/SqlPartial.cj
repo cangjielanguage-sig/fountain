@@ -19,6 +19,8 @@ public interface SqlPartial <: RootDAO {
     func INTO<T>(): IntoClause<T> where T <: QueryMappersInit<T>
     func UPDATE<T>(): UpdateClause<T> where T <: QueryMappersInit<T>
     func FROM<T>(): FromClause<T> where T <: QueryMappersInit<T>
+    func page<R>(sql: String, size: Int64, page!: Int64): Pagination<R> where R <: QueryMappersInit<R> & DataFields<R>
+    func singlePage<R>(sql: String, size: Int64, page!: Int64): Pagination<R> where R <: DataFields<R>
 }
 extend SqlExecutor <: SqlPartial {
     public func INTO<T>(): IntoClause<T> where T <: QueryMappersInit<T> {
