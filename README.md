@@ -494,5 +494,4 @@ Observable.replaySize(capacity)
 
 ## Stargazers over time
 
-![Stargazers over time]
-(https://gitcode.com/Cangjie-SIG/fountain/starcharts.svg?variant=adaptive)
+![Stargazers over time](https://gitcode.com/Cangjie-SIG/fountain/starcharts.svg?variant=adaptive)
