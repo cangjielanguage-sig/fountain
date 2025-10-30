@@ -31,7 +31,7 @@ extend SqlExecutor <: SqlPartial {
         FromClause<T>(this)
     }
     private func selectPage<R>(partial: String, size: Int64, page: Int64, callee: (SqlExecutor) -> ArrayList<R>): Pagination<R> where R <: DataFields<R> {
-        let countSql = 'select count(*) from (${partial}) as __tmp___'
+        let countSql = 'select count(*) from (${partial}) as __tmp___'//如果sql中包含order by 这样也可以执行
         let count = executor.setSql(countSql, clearArgsAfterExec: false).first<Int64>() ?? 0
         Pagination<R>(page: page, rows: count, size: size){size: Int64, offset: Int64 =>
             let (one, two, psql) = SqlDialectMediator.instance.getDialect(this.driverName).limit(size, offset)
