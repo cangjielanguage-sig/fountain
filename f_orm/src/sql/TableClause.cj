@@ -107,8 +107,7 @@ public abstract class ExceptInsertClause<T> <: TableClause<T> where T <: QueryMa
     }
     public func LIMIT(size: Int64, offset!: Int64 = 0): This {
         let (one, two, sql) = dialect.limit(size, offset)
-        this.executor.arg(one)
-        this.executor.arg(two)
+        this.executor.add(one).add(two)
         sqlgen.append(' ').append(sql)
         this
     }
@@ -155,29 +154,24 @@ public class FromClause<T> <: ExceptInsertClause<T> where T <: QueryMappersInit<
         count(true)
     }
     private func count(clearArgsAfterExec: Bool): Int64 {
-        let reg = #'order\s+by\s+((([a-zA-Z_]+\w*\.)?[a-zA-Z_]+\w*\s*(\s(asc|desc))?)(\s*,\s*(([a-zA-Z_]+\w*\.)?[a-zA-Z_]+\w*\s*(\s(asc|desc))?))*)\s*$'#
-        let partial = reg.regex(flags: [IgnoreCase], solid: true).replace(sqlgen.toString(), '')
-        executor.setSql('select count(*) ${partial}', clearArgsAfterExec: clearArgsAfterExec).first<Int64>() ?? 0
+        executor.setSql('select count(*) from (select 1 ${sqlgen}) as __tmp___', clearArgsAfterExec: clearArgsAfterExec).first<Int64>() ?? 0
     }
     public func singlePage<R>(size: Int64, page!: Int64 = 1): Pagination<R> where R <: DataFields<R> {
         singlePage<R>('id', size, page: page)
     }
-    private func selectPage<R>(size: Int64, page: Int64, callee: (FromClause<T>) -> ArrayList<R>): Pagination<R> where R <: DataFields<R> {
-        Pagination<R>(page: page, rows: count(false), size: size){size, offset =>
-            callee(LIMIT(size, offset: offset))
-        }
-    }
+
     public func singlePage<R>(column: String, size: Int64, page!: Int64 = 1): Pagination<R> where R <: DataFields<R> {
-        selectPage<R>(size, page) {from => from.singleList<R>(column)}
+        executor.singlePage<R>('select ${column} ${sqlgen}', size, page: page)
     }
+    
     private func doSelectPage<R>(columns: String, size: Int64, page: Int64): Pagination<R> where R <: QueryMappersInit<R> & DataFields<R> {
-        selectPage<R>(size, page) {from => from.list<R>(columns)}
+        executor.page<R>('select ${columns} ${sqlgen}', size, page: page)
     }
     public func page<R>(size: Int64, page!: Int64 = 1): Pagination<R> where R <: QueryMappersInit<R> & DataFields<R> {
         doSelectPage<R>('*', size, page)
     }
     public func page<R>(columns: String, size: Int64, page!: Int64 = 1): Pagination<R> where R <: QueryMappersInit<R> & DataFields<R> {
-        doSelectPage(columns, size, page)
+        doSelectPage<R>(columns, size, page)
     }
 }
 
