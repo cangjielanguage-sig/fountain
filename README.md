@@ -491,3 +491,8 @@ Observable.replaySize(capacity)
 - 文档
   - f_doc.* 的宏用来声明文档，可以对各种声明生成markdown文档。
   - 生成文档的路径从环境变量获得
+
+## Stargazers over time
+
+![Stargazers over time]
+(https://gitcode.com/Cangjie-SIG/fountain/starcharts.svg?variant=adaptive)
