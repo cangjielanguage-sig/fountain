@@ -31,12 +31,11 @@ extend SqlExecutor <: SqlPartial {
         FromClause<T>(this)
     }
     private func selectPage<R>(partial: String, size: Int64, page: Int64, callee: (SqlExecutor) -> ArrayList<R>): Pagination<R> where R <: DataFields<R> {
-        let sql = partial.toAsciiLower()
-        let countSql = 'select count(*) from (${sql}) as __tmp___'
+        let countSql = 'select count(*) from (${partial}) as __tmp___'
         let count = executor.setSql(countSql, clearArgsAfterExec: false).first<Int64>() ?? 0
         Pagination<R>(page: page, rows: count, size: size){size: Int64, offset: Int64 =>
             let (one, two, psql) = SqlDialectMediator.instance.getDialect(this.driverName).limit(size, offset)
-            executor.add(one).add(two).setSql('select * from (${sql}) as __tmp___ ${psql}') |> callee
+            executor.add(one).add(two).setSql('select * from (${partial}) as __tmp___ ${psql}') |> callee
         }
     }
     public func page<R>(sql: String, size: Int64, page!: Int64 = 1): Pagination<R> where R <: QueryMappersInit<R> & DataFields<R> {
