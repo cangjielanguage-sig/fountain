@@ -153,51 +153,25 @@ public class FromClause<T> <: ExceptInsertClause<T> where T <: QueryMappersInit<
     public func count(): Int64 {
         count(true)
     }
-    private static let orderRegex = #'order\s+by\s+((([a-zA-Z_]+\w*\.)?[a-zA-Z_]+\w*\s*(\s(asc|desc))?)(\s*,\s*(([a-zA-Z_]+\w*\.)?[a-zA-Z_]+\w*\s*(\s(asc|desc))?))*)\s*$'#.regex(flags: [IgnoreCase], solid: true)
     private func count(clearArgsAfterExec: Bool): Int64 {
-        let partial = orderRegex.replace(sqlgen.toString(), '')
-        executor.setSql('select count(*) ${partial}', clearArgsAfterExec: clearArgsAfterExec).first<Int64>() ?? 0
+        executor.setSql('select count(*) from (select 1 ${sqlgen}) as __tmp___', clearArgsAfterExec: clearArgsAfterExec).first<Int64>() ?? 0
     }
     public func singlePage<R>(size: Int64, page!: Int64 = 1): Pagination<R> where R <: DataFields<R> {
         singlePage<R>('id', size, page: page)
     }
-    private func selectPage<R>(size: Int64, page: Int64, callee: (FromClause<T>) -> ArrayList<R>): Pagination<R> where R <: DataFields<R> {
-        Pagination<R>(page: page, rows: count(false), size: size){size, offset =>
-            callee(LIMIT(size, offset: offset))
-        }
-    }
-    private func selectPage<R>(partial: String, size: Int64, page: Int64, callee: (SqlExecutor) -> ArrayList<R>): Pagination<R> where R <: DataFields<R> {
-        let sql = partial.toAsciiLower()
-        let countSql = 'select count(*) from (${sql}) as __tmp___'
-        let count = executor.setSql(countSql, clearArgsAfterExec: false).first<Int64>() ?? 0
-        Pagination<R>(page: page, rows: count, size: size){size: Int64, offset: Int64 =>
-            let (one, two, psql) = dialect.limit(size, offset)
-            callee(executor.add(one).add(two).setSql('select * from (${sql}) as __tmp___ ${psql}'))
-        }
-    }
-    private func startsWithSelect(partial: String){
-        partial.trimAsciiStart()[0..6].toAsciiLower() == 'select'
-    }
-    public func singlePage<R>(partial: String, size: Int64, page!: Int64 = 1): Pagination<R> where R <: DataFields<R> {
-        if(startsWithSelect(partial)){
-            selectPage<R>(partial, size, page){exe => exe.singleList<R>()}
-        }else{
-            selectPage<R>(size, page) {from => from.singleList<R>(partial)}
-        }
+
+    public func singlePage<R>(column: String, size: Int64, page!: Int64 = 1): Pagination<R> where R <: DataFields<R> {
+        executor.singlePage<R>('select ${column} ${sqlgen}', size, page: page)
     }
     
-    private func doSelectPage<R>(partial: String, size: Int64, page: Int64): Pagination<R> where R <: QueryMappersInit<R> & DataFields<R> {
-        if(startsWithSelect(partial)){
-            selectPage<R>(partial, size, page){exe => exe.list<R>()}
-        }else{
-            selectPage<R>(size, page) {from => from.list<R>(partial)}
-        }
+    private func doSelectPage<R>(columns: String, size: Int64, page: Int64): Pagination<R> where R <: QueryMappersInit<R> & DataFields<R> {
+        executor.page<R>('select ${columns} ${sqlgen}', size, page: page)
     }
     public func page<R>(size: Int64, page!: Int64 = 1): Pagination<R> where R <: QueryMappersInit<R> & DataFields<R> {
         doSelectPage<R>('*', size, page)
     }
-    public func page<R>(partial: String, size: Int64, page!: Int64 = 1): Pagination<R> where R <: QueryMappersInit<R> & DataFields<R> {
-        doSelectPage<R>(partial, size, page)
+    public func page<R>(columns: String, size: Int64, page!: Int64 = 1): Pagination<R> where R <: QueryMappersInit<R> & DataFields<R> {
+        doSelectPage<R>(columns, size, page)
     }
 }
 
