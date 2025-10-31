@@ -7,7 +7,7 @@ _/ ____\____  __ __  _____/  |______  |__| ____
                         \/          \/        \/
 ```
 
-![fountain](.assets/README/fountain.png)
+![fountain](.assets/README/fountain.jpg)
 
 # fountain
 
