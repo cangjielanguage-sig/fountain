@@ -32,7 +32,7 @@ extend SqlExecutor <: SqlPartial {
     public func FROM<T>(): FromClause<T> where T <: QueryMappersInit<T> {
         FromClause<T>(this)
     }
-    private func selectPage<R>(partial: String, size: Int64, page: Int64, callee: (SqlExecutor) -> ArrayList<R>): Pagination<R> where R <: DataFields<R> {
+    private func page<R>(partial: String, size: Int64, page: Int64, callee: (SqlExecutor) -> ArrayList<R>): Pagination<R> where R <: DataFields<R> {
         let partial_ = partial.trimAsciiStart()
         if(partial_[0 .. 6].toAsciiLower() == 'select' && partial_[7] <= b' '){
             throw ORMException('${partial} is not a select.')
@@ -45,9 +45,9 @@ extend SqlExecutor <: SqlPartial {
         }
     }
     public func page<R>(sql: String, size: Int64, page!: Int64 = 1): Pagination<R> where R <: QueryMappersInit<R> & DataFields<R> {
-        selectPage<R>(sql, size, page){exe => exe.list<R>()}
+        page<R>(sql, size, page){exe => exe.list<R>()}
     }
     public func singlePage<R>(sql: String, size: Int64, page!: Int64 = 1): Pagination<R> where R <: DataFields<R> {
-        selectPage<R>(sql, size, page){exe => exe.singleList<R>()}
+        page<R>(sql, size, page){exe => exe.singleList<R>()}
     }
 }
