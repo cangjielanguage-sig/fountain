@@ -33,6 +33,10 @@ extend SqlExecutor <: SqlPartial {
         FromClause<T>(this)
     }
     private func selectPage<R>(partial: String, size: Int64, page: Int64, callee: (SqlExecutor) -> ArrayList<R>): Pagination<R> where R <: DataFields<R> {
+        let partial_ = partial.trimAsciiStart()
+        if(partial_[0 .. 6].toAsciiLower() == 'select' && partial_[7] <= b' '){
+            throw ORMException('${partial} is not a select.')
+        }
         let countSql = 'select count(*) from (${partial}) as __tmp___'//如果sql中包含order by 这样也可以执行
         let count = executor.setSql(countSql, clearArgsAfterExec: false).first<Int64>() ?? 0
         Pagination<R>(page: page, rows: count, size: size){size: Int64, offset: Int64 =>
