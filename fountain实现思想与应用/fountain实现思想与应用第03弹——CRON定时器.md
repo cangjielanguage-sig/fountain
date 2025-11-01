@@ -1,6 +1,6 @@
-# fountain实现思想与应用第二弹
+# fountain实现思想与应用第三弹
 
-##### ——IOC
+##### ——ticktock
 
 先上项目链接 https://gitcode.com/Cangjie-SIG/fountain
 
