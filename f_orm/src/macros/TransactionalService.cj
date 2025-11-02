@@ -19,12 +19,14 @@ import std.ast.*
 import f_macros.*
 import f_orm.exception.*
 public import f_aspect.macros.*
+public import f_bean.macros.*
 
-public macro TransationalService(input: Tokens): Tokens {
-    quote(
+public macro TransactionalService(input: Tokens): Tokens {
+    let tokens = quote(
         @Bean
         $(transational(input))
     )
+    tokens
 }
 private func transational(input: Tokens): Tokens{
     match(parseDecl(input)){
@@ -34,7 +36,7 @@ private func transational(input: Tokens): Tokens{
                 func pointcut(f: FuncDecl){
                     parseDecl(quote(
                         @Pointcut
-                        $x
+                        $f
                     ))
                 }
                 match(decls[i]){

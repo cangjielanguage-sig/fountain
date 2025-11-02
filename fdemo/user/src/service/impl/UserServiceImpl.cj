@@ -20,6 +20,7 @@ import std.reflect.*
 
 import fountain.bean.*
 import fountain.bean.macros.*
+import fountain.orm.macros.*
 import fountain.orm.*
 import fountain.log.*
 
@@ -29,8 +30,9 @@ import user.model.entity.*
 import user.model.po.*
 import user.model.mvc.*
 
-@Bean
-@BeanMeta
+// @Bean
+// @BeanMeta
+@TransactionalService
 public class UserServiceImpl <: UserService {
     private static let log = LoggerFactory.getLogger<UserServiceImpl>()
     public func register(username: String, password: String): Int64 {

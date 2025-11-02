@@ -487,7 +487,7 @@ private let _ = AppVersion.set(#'${banner()}'#, '${name}', '${version}')
     }
     private func build(){
         let (_, path) = confirmPath(args)
-        copyToml('run', path)
+        // copyToml('run', path)
         doBuild(path)
     }
     private func test(): Int64 {
