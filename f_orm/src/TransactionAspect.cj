@@ -24,6 +24,7 @@ import f_base.*
 import f_bean.{BeanFactory, BeanMeta}
 import f_collection.*
 import f_orm.wrap.ORMConfig
+public import f_aspect.*
 
 @AspectRoute[FuncAnnotationRouteRule("f_orm.Transactional") | ConfigExecutionRouteRule(ORMConfig.transactionalFuncExecution)]
 @BeanMeta
