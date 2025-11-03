@@ -77,7 +77,7 @@ public func murmurHash64(data: Array<Byte>, seed!: Int64 = 0x1234567890ABCDEF): 
 public func murmurHash64(data: String, seed!: Int64 = 0x1234567890ABCDEF): Int64 {
     murmurHash64(data.unsafeBytes(), seed: seed)
 }
-public struct MurmurHash128X64 <: Hashable & Equatable<MurmurHash128X64> {
+public struct MurmurHash128X64 <: Hashable & Comparable<MurmurHash128X64> {
     private let h: Int64
     MurmurHash128X64(private let one: Int64, private let two: Int64){
         h = one ^ two
@@ -85,8 +85,13 @@ public struct MurmurHash128X64 <: Hashable & Equatable<MurmurHash128X64> {
     public func hashCode(){
         h
     }
-    public operator func ==(other: MurmurHash128X64){
-        this.h == other.h && one == other.one && this.two == other.two
+    public func compare(other: MurmurHash128X64): Ordering {
+        let cmp = this.one.compare(other.one)
+        if(cmp == EQ){
+            this.two.compare(other.two)
+        }else{
+            cmp
+        }
     }
 }
 /**
