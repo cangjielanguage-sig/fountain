@@ -16,6 +16,7 @@ limitations under the License.
 package f_util
 
 import std.overflow.WrappingOp
+import f_base.UnsafeBytes
 import f_base.*
 import f_util.exception.MurmurHashException
 
@@ -71,6 +72,10 @@ public func murmurHash64(data: Array<Byte>, seed!: Int64 = 0x1234567890ABCDEF): 
     h ^= h >> r
 
     return h
+}
+
+public func murmurHash64(data: String, seed!: Int64 = 0x1234567890ABCDEF): Int64 {
+    murmurHash64(data.unsafeBytes(), seed: seed)
 }
 public struct MurmurHash128X64 <: Hashable & Equatable<MurmurHash128X64> {
     private let h: Int64
@@ -244,4 +249,8 @@ public func murmurHash126X64(data: Array<Byte>, seed!: Int64 = 0x1234567890ABCDE
     h1 += h2
     h2 += h1
     MurmurHash128X64(h1, h2)
+}
+
+public func murmurHash126X64(data: String, seed!: Int64 = 0x1234567890ABCDEF): MurmurHash128X64 {
+    murmurHash126X64(data.unsafeBytes(), seed: seed)
 }
