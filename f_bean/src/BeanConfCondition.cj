@@ -24,7 +24,7 @@ public enum ConfCond <: BeanCondition {
      */
     | IgnoreConf
     /**
-     * 存在配置项是返回true
+     * 存在配置项时返回true
      */
     | Exists(String)
     /**
