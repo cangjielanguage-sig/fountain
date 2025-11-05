@@ -60,6 +60,7 @@ public class MVCConfig {
     public static let INTERNAL_SERVER_ERROR_MESSAGE = "${confPrefix}_internalServerErrorMessage"
 
     public static let MVC_OVERALL_ELAPSED_SWITCH = "${confPrefix}_overallElapsedSwitch"
+    public static const MVC_DOC_ENABLED = confPrefix + "_docEnabled"
 
     public static prop tlsConfig: ?TlsServerConfig {
         get() {
@@ -253,6 +254,11 @@ public class MVCConfig {
     public static prop mvcOverallElapsedSwitch: Bool {
         get(){
             Config.getValue<Bool>(MVC_OVERALL_ELAPSED_SWITCH) ?? false
+        }
+    }
+    public static prop mvcDocEnabled: Bool {
+        get(){
+            Config.getValue<Bool>(MVC_DOC_ENABLED) ?? false
         }
     }
 }

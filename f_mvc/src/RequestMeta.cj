@@ -27,11 +27,12 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
             case _ => HttpStatus.OK.value
         }
     }
+    internal var doc = None<ApiDoc>
     private var ignoreAuth_ = false
     private var ignorePrivilege_ = false
 
-    private let produces = HashSet<String>()
-    private let consumes = HashSet<String>()
+    internal let produces = HashSet<String>()
+    internal let consumes = HashSet<String>()
 
     private let args = RequestArgMeta()
 
@@ -409,6 +410,7 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
                     let headers = RequestCondition.compile(a.headers)
                     for (path in a.path.split('|')) {
                         let meta = RequestMeta(path, method, params: params, headers: headers)
+                        meta.doc = function.findAnnotation<ApiDoc>()
                         meta.addProduces(a.produces)
                         meta.addConsumes(a.consumes)
                         meta.ignoreAuth_ = ignoreAuth

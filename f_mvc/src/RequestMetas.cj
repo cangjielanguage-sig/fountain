@@ -18,7 +18,7 @@ package f_mvc
 public class RequestMetas {
     private let mutex = Mutex()
     public static let instance = RequestMetas()
-    private let metas = TreeSet<RequestMeta>()
+    internal let metas = TreeSet<RequestMeta>()
     private init(){}
     func add(meta: RequestMeta){
         synchronized(mutex){
