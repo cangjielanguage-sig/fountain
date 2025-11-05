@@ -34,7 +34,6 @@ public class TransactionAspect <: Aspect {
     }
     private init() {}
     private let rollbackExceptions = ConcurrentHashMap<String, HashSet<TypeInfo>>()
-    private let mutex = Mutex()
 
     public func proceed(funcInfo: InvocationFuncInfo, point: (Array<Any>) -> Any): Any {
         let transactional = funcInfo.funcInfo.findAnnotation<Transactional>()

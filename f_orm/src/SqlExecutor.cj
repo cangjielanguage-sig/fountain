@@ -63,7 +63,7 @@ public class SqlExecutor <: Resource & RootDAO {
         _connection_ = getConnection(driverName)
     }
 
-    private mut prop sql: String {
+    protected mut prop sql: String {
         get() {
             sql_
         }

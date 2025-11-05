@@ -129,13 +129,13 @@ public class FromClause<T> <: ExceptInsertClause<T> where T <: QueryMappersInit<
     }
 
     public func first<T>(): ?T where T <: QueryMappersInit<T> {
-        executor.setSql('select * ${sqlgen}').first<T>()
+        executor.setSql('select * ${sqlgen} ${LIMIT(1)}').first<T>()
     }
     public func first<T>(columns: String): ?T where T <: QueryMappersInit<T> {
-        executor.setSql('select ${columns} ${sqlgen}').first<T>()
+        executor.setSql('select ${columns} ${sqlgen} ${LIMIT(1)}').first<T>()
     }
     public func singleFirst<T>(column: String): ?T {
-        executor.setSql('select ${column} ${sqlgen}').singleFirst<T>()
+        executor.setSql('select ${column} ${sqlgen} ${LIMIT(1)}').singleFirst<T>()
     }
     public func list<T>(): ArrayList<T> where T <: QueryMappersInit<T> {
         executor.setSql('select * ${sqlgen}').list<T>()

@@ -43,10 +43,11 @@ public class Aspects {
                     var f: (Array<Any>) -> Any = {args => fn(args)}
                     for (i in list.size - 1..=0 : -1) {
                         let aspected = f
+                        let aspectName = list[i]
                         f = {
                             args =>
                             funcInfo.setArgs(args)
-                            BeanFactory.instance.get<Aspect>(list[i]).getOrThrow().proceed(funcInfo, aspected)
+                            BeanFactory.instance.get<Aspect>(aspectName).getOrThrow().proceed(funcInfo, aspected)
                         }
                     }
                     aspects[funcInfo.qualifiedFuncInfo] = f
