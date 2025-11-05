@@ -38,7 +38,7 @@ public class StringGenerator <: ToString {
     }
 
     private func checkIndex(fromIndex: Int64, toIndex: Int64) {
-        if (fromIndex < 0 || fromIndex > size || toIndex < fromIndex || toIndex > size) {
+        if (fromIndex < 0 || fromIndex >= size || toIndex < fromIndex || toIndex > size) {
             throw IndexOutOfBoundsException('current size is ${size}, but fromIndex: ${fromIndex}, toIndex: ${toIndex}')
         }
     }

@@ -60,13 +60,8 @@ public struct App {
         run(args)
     }
     private func confirmPath(args: Array<String>): (Int64, Path){
-        var idx = 0
-        for (i in 1..args.size where !args[i].startsWith("--dylibPattern=")) {
-            idx = i
-            break
-        }
-        idx = idx + 1
-        var path = if (idx >= args.size || appHomeIsWorkingPath || args[0] == 'cleanUpdate' || args[0] == 'build' || args[0] == 'count') {
+        var idx = 1
+        var path = if (appHomeIsWorkingPath || args[0] == 'count' || idx >= args.size) {
             getWorkingDirectory()
         } else if (idx >= 1) {
             Path(args[1])
@@ -86,14 +81,31 @@ public struct App {
         }
         (idx, path)
     }
+    private func confirmTargetPath(args: Array<String>){
+        let path = if(args.size > 1){
+            Path(args[1])
+        }else{
+            getWorkingDirectory()
+        }
+        if(!exists(path)){
+            Directory.create(path)
+        }
+        canonicalize(path)
+    }
     private func run(args: Array<String>): Int64{
-        let (idx, path) = confirmPath(args)
+        let path = confirmTargetPath(args)
         let (ext, libPathName, delim) = match (OS.current) {
             case Windows => (".dll", 'Path', ';')
             case macOS => (".dylib", 'DYLD_FALLBACK_LIBRARY_PATH', ':')
             case _ => (".so", 'LD_LIBRARY_PATH', ':')
         }
         func extractPattern() {
+            var idx = 0
+            for (i in 1..args.size where !args[i].startsWith("--dylibPattern=")) {
+                idx = i
+                break
+            }
+            idx++
             if (idx > 0) {
                 let p = args[idx]['--dylibPattern='.size..]
                 if ((p.startsWith("'") && p.endsWith("'")) || (p.startsWith('"') && p.endsWith('"'))) {
@@ -366,7 +378,7 @@ ${content}
         code
     }
     private func cleanUpdate(): Int64 {
-        let (_, path) = confirmPath(args)
+        let path = confirmTargetPath(args)
         let (workingDir, targetDir) = directories(path)
         println('fboot cleanUpdate ${workingDir} --target-dir=${targetDir}')
         let code = execute('cjpm', ['clean', '--target-dir=${targetDir}'], workingDirectory: workingDir)
@@ -488,12 +500,12 @@ private let _ = AppVersion.set(#'${banner()}'#, '${name}', '${version}')
         copy(path.join('${source}/cjpm.toml'), to: path.join('cjpm.toml'), overwrite: true)
     }
     private func build(){
-        let (_, path) = confirmPath(args)
+        let path = confirmTargetPath(args)
         // copyToml('run', path)
         doBuild(path)
     }
     private func test(): Int64 {
-        let (_, path) = confirmPath(args)
+        let path = confirmTargetPath(args)
         copyToml('test', path)
         let code = doBuild(path)
         if(code != 0){
