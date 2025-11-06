@@ -23,6 +23,15 @@ public class HellowordController {
     @GetMapping[path:"/helloworld", produces:'text/plain']
     @IgnoreSecurity
     public func helloworld(): String {
+        let username = "aaa"
+        var zero:Int64 = 1
+        var res :Int64 = 1
+        if(username.size> 0){
+            zero--
+            println("zero new value: ${zero}")
+        }
+        res = 1/zero
+        println("res: ${res}")
         return "helloworld"
     }
 }
