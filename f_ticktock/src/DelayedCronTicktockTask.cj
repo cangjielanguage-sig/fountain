@@ -18,10 +18,7 @@ package f_ticktock
 import std.time.Month
 import std.time.DateTime
 
-public abstract class DelayedCronTicktockTask <: CronTicktockTask {
-    public DelayedCronTicktockTask() {
-    }
-
+public abstract class DelayedTicktockTask <: CronTicktockTask {
     public prop delayedPeriodic: DelayedPeriodic 
     public prop immediate: Bool 
     public prop delay: Duration 
