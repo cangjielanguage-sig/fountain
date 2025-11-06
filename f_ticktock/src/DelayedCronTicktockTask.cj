@@ -18,71 +18,56 @@ package f_ticktock
 import std.time.Month
 import std.time.DateTime
 
-public class DelayedCronTicktockTask <: FuncInvocationTask {
-    private var executingTime = DateTime.now()
-    private var delayedPeriodic_: DelayedPeriodic
-    private var immediate_: Bool = false
-    private var delay_: Duration
-
-    public init(name: String, delayedPeriodic: DelayedPeriodic, delay: Duration, immediate: Bool, function: () -> Unit) {
-        super(name, function)
-        this.executingTime += delay
-        this.delayedPeriodic_ = delayedPeriodic
-        this.delay_ = delay
-        this.immediate_ = immediate
-        setOnce(true)
-    }
-    public init(task: DelayedCronTicktockTaskDef) {
-        this(task.name, task.delayedPeriodic, task.delay, task.immediate, task.execute)
+public abstract class DelayedCronTicktockTask <: CronTicktockTask {
+    public DelayedCronTicktockTask() {
     }
 
-    prop delayedPeriodic: DelayedPeriodic {
-        get() {
-            delayedPeriodic_
-        }
-    }
-
-    public prop immediate: Bool {
-        get() {
-            return immediate_
-        }
-    }
-
-    public prop delay: Duration {
-        get() {
-            delay_
-        }
-    }
-
+    public prop delayedPeriodic: DelayedPeriodic 
+    public prop immediate: Bool 
+    public prop delay: Duration 
+    
     public prop cron: String {
         get() {
-            let t = executingTime
+            let t = DateTime.now() + delay
             "${t.second} ${t.minute} ${t.hour} ${t.dayOfMonth} ${t.month.toInteger()} ${t.dayOfWeek.toInteger()} ${t.year}"
         }
     }
-    public func wrapExecutor(remover: (String) -> Unit, repeater: (DelayedCronTicktockTask) -> Unit) {
-        let fn = function
-        if (once) {
-            function = {
-                =>
-                remover(name)
-                fn()
+    
+    protected func run(): Unit {
+        func nextCall(): Unit {
+            if(!once){
+                Ticktock.instance.addOrReplaceTask(this)
             }
-        } else {
-            function = match (delayedPeriodic) {
-                case FixedRate => {
-                    =>
-                    remover(name)
-                    repeater(this)
-                    fn()
-                }
-                case FixedDelay => {
-                    =>
-                    remover(name)
-                    fn()
-                    repeater(this)
-                }
+        }
+        func call(){
+            match(delayedPeriodic){
+                case FixedDelay => 
+                    try{
+                        execute()
+                    }finally{
+                        nextCall()
+                    }
+                case FixedRate => 
+                    nextCall()
+                    execute()
             }
+        }
+        let currentStamp = stamped.fetchAdd(1) + 1
+        func doExec() {
+            try{
+                call()
+            }finally{
+                reset(currentStamp)
+            }
+        }
+        if (executing(currentStamp)) {
+            if (concurrentable && !this.once) {
+                doExec()
+            } else {
+                nextCall()
+            }
+        }else{
+            doExec()
         }
     }
 }

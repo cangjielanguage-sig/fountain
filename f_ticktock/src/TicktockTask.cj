@@ -19,13 +19,12 @@ import std.reflect.ClassTypeInfo
 import std.sync.AtomicInt64
 
 public abstract class TicktockTask <: TicktockTaskDef & Hashable & Equatable<TicktockTaskDef> & Equatable<String> {
-    private var stamped = AtomicInt64(0)
-
+    internal let stamped = AtomicInt64(0)
     /**
      * 不需要覆盖本方法，任务逻辑都在void execute()方法实现，
      * 控制逻辑都在concurrentable: Bool executing(boolean): Bool 和  once(): Bool
      */
-    public func run(): Unit {
+    protected open func run(): Unit {
         let currentStamp = stamped.fetchAdd(1) + 1
         if (!executing(currentStamp) || (concurrentable && !this.once)) {
             try {
