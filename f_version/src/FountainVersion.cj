@@ -18,4 +18,4 @@ package f_version
 import std.time.MonoTime
 
 public let AppStarts = MonoTime.now()
-public const FountainVersion = "fountain(1.0.18)"
+public const FountainVersion = "fountain(1.0.19)"
