@@ -79,7 +79,7 @@ public class CurrentUserController {
                 ignoreAuth: true]
     public func login(@RequestBody user: UserRequest): UserResponse {
         // let user = parser.parse<UserRequest>('parser')
-        let data = userService.newUserSession(user.username, user.password)
+        let data = userService.userSession(user.username, user.password)
         UserResponse(data)
     }
     @DeleteMapping[path:'/api/user/session', 
