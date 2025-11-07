@@ -79,7 +79,9 @@ public class SqlExecutor <: Resource & RootDAO {
     }
     internal func clearSql(){
         sql_ = ''
-        args.clear()
+        if(clearArgsAfterExec_){
+            args.clear()
+        }
     }
     public prop isReadOnly: Bool {
         get() {
@@ -838,9 +840,6 @@ public class SqlExecutor <: Resource & RootDAO {
                 logger.debug(logMsg(DateTime.now() - start))
             }
             start = DateTime.UnixEpoch
-            if(clearArgsAfterExec_){
-                args.clear()
-            }
             clearSql()
         }
     }

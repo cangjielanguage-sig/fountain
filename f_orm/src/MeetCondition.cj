@@ -120,22 +120,18 @@ public class MeetCondition {
         }
     }
     public func done(): String {
-        let sql = if (condition) {
-            if (_argInSql) {
-                match (_value()) {
-                    case x: ToString => ' ${partial} ${x} ${Condition.delimiter} '
+        frag{
+            if(_argInSql){
+                match(_value()){
+                    case x: ToString => x.toString()
                     case x =>
                         executor.add(x)
-                        ' ${partial} ? ${Condition.delimiter} '
+                        '?'
                 }
-            } else {
+            }else{
                 executor.add(_value())
-                ' ${partial} ? ${Condition.delimiter} '
+                '?'
             }
-        } else {
-            ''
         }
-        executor.partials.append(sql)
-        sql
     }
 }
