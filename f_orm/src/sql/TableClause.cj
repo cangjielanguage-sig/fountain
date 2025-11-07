@@ -286,33 +286,39 @@ public class IntoClause<T> <: TableClause<T> where T <: QueryMappersInit<T> {
                 sqlgen.append(',')
             }
             let field = fields[i]
-            let val = data.get(field.fieldName)
-            let holder = match (val) {
-                case _: DataNone => this.executor.argNull()
-                case x: DataBool => this.executor.arg(x.data)
-                case x: DataString => this.executor.arg(x.data)
-                case x: DataDuration => this.executor.arg(x.data)
-                case x: DataDateTime => this.executor.arg(x.data)
-                case x: DataCollection<Array<Byte>, Byte> => this.executor.arg(x.data)
-                case x: DataReal => match (field) {
-                    case _: Int8DataType => this.executor.arg(x.toInt8())
-                    case _: UInt8DataType => this.executor.arg(x.toUInt8())
-                    case _: Int16DataType => this.executor.arg(x.toInt16())
-                    case _: UInt16DataType => this.executor.arg(x.toUInt16())
-                    case _: Int32DataType => this.executor.arg(x.toInt32())
-                    case _: UInt32DataType => this.executor.arg(x.toUInt32())
-                    case _: Int64DataType => this.executor.arg(x.toInt64())
-                    case _: UInt64DataType => this.executor.arg(x.toUInt64())
-                    case _: Float32DataType => this.executor.arg(x.toFloat32())
-                    case _: Float64DataType => this.executor.arg(x.toFloat64())
-                    case _: Float16DataType => this.executor.arg(x.toFloat16())
-                    case _: DecimalDataType => this.executor.arg(x.toDecimal())
-                    case _: BigIntDataType => this.executor.arg(x.toBigInt())
+            func convert(val: Data){
+                match (val) {
+                    case _: DataNone => this.executor.argNull()
+                    case x: DataBool => this.executor.arg(x.data)
+                    case x: DataString => this.executor.arg(x.data)
+                    case x: DataDuration => this.executor.arg(x.data)
+                    case x: DataDateTime => this.executor.arg(x.data)
+                    case x: DataCollection<Array<Byte>, Byte> => this.executor.arg(x.data)
+                    case x: DataReal => match (field) {
+                        case _: Int8DataType => this.executor.arg(x.toInt8())
+                        case _: UInt8DataType => this.executor.arg(x.toUInt8())
+                        case _: Int16DataType => this.executor.arg(x.toInt16())
+                        case _: UInt16DataType => this.executor.arg(x.toUInt16())
+                        case _: Int32DataType => this.executor.arg(x.toInt32())
+                        case _: UInt32DataType => this.executor.arg(x.toUInt32())
+                        case _: Int64DataType => this.executor.arg(x.toInt64())
+                        case _: UInt64DataType => this.executor.arg(x.toUInt64())
+                        case _: Float32DataType => this.executor.arg(x.toFloat32())
+                        case _: Float64DataType => this.executor.arg(x.toFloat64())
+                        case _: Float16DataType => this.executor.arg(x.toFloat16())
+                        case _: DecimalDataType => this.executor.arg(x.toDecimal())
+                        case _: BigIntDataType => this.executor.arg(x.toBigInt())
+                        case x => throw SqlArgException(
+                            'field ${field.fieldName} is a number, but ${TypeInfo.of(x)} is required.')
+                    }
                     case x => throw SqlArgException(
-                        'field ${field.fieldName} is a number, but ${TypeInfo.of(x)} is required.')
+                        'type of field ${field.fieldName} is ${TypeInfo.of(x)}, but it is not supported yet.')
                 }
-                case x => throw SqlArgException(
-                    'type of field ${field.fieldName} is ${TypeInfo.of(x)}, but it is not supported yet.')
+            }
+            let val = data.get(field.fieldName)
+            let holder = match(val){
+                case Some(x) => convert(x)
+                case _ => this.executor.argNull()
             }
             sqlgen.append(holder)
         }
