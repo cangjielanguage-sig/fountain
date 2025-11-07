@@ -21,16 +21,19 @@ import f_orm.wrap.ORMConfig
 public class Transactional {
     public const Transactional(
         public let driverName!: String = '',
-        public let propagation!: Propagation = Required,
+        public let propagation!: ?Propagation = None,
         public let isoLevel!: ?TransactionIsoLevel = None,
         public let accessMode!: ?TransactionAccessMode = None,
         public let deferrableMode!: ?TransactionDeferrableMode = None,
         public let rollbackFor!: String = '',
-        public let noRollbackFor!: String = "",
+        public let noRollbackFor!: String = ""
     ) {}
 
     public func getPropagation(): Propagation {
-        propagation
+        match(propagation){
+            case Some(p) => p
+            case _ => Required
+        }
     }
     public func getIsoLevel(): ?TransactionIsoLevel {
         if (let Some(l) <- isoLevel) {
