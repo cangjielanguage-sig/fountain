@@ -36,10 +36,10 @@ abstract sealed class TableClause<T> <: ToString where T <: QueryMappersInit<T> 
         }
     }
 
-    protected func appendPartial(prefix: String, trim: String, partial: String): This {
+    protected func appendPartial(keyword: String, trim: String, partial: String): This {
         let sql = '^(\\s*${trim}\\s*)|(\\s*${trim}\\s*)$'.regex(flags: [IgnoreCase], solid: true).replaceAll(partial, '')
         if(sql.size > 0){
-            sqlgen.append(' ').append(prefix).append(' ').append(sql)
+            sqlgen.append(' ').append(keyword).append(' ').append(sql)
         }
         this
     }
@@ -64,8 +64,8 @@ abstract sealed class TableClause<T> <: ToString where T <: QueryMappersInit<T> 
 }
 
 public abstract class ExceptInsertClause<T> <: TableClause<T> where T <: QueryMappersInit<T> {
-    protected func join<T>(prefix: String, AS: String, ON: String): This where T <: QueryMappersInit<T> {
-        sqlgen.append(' ').append(prefix).append(' join ').append(T.tableName())
+    protected func join<T>(keyword: String, AS: String, ON: String): This where T <: QueryMappersInit<T> {
+        sqlgen.append(' ').append(keyword).append(' join ').append(T.tableName())
         if (AS.size > 0) {
             sqlgen.append(' AS ').append(AS)
         }
@@ -89,21 +89,76 @@ public abstract class ExceptInsertClause<T> <: TableClause<T> where T <: QueryMa
     public func FULL_JOIN<T>(AS!: String = '', ON!: String = ''): This where T <: QueryMappersInit<T> {
         join<T>('full outer', AS, ON)
     }
-    public func WHERE(condition: () -> Unit): This {
+    private func condition(cond: () -> Unit, keyword: String, trim: String): This {
         try{
             executor.partials.clear()
-            condition()
+            cond()
             let sql = executor.partials.toString()
             if(sql.size > 0){
-                WHERE(sql)
+                appendPartial(keyword, trim, sql)
             }
         }finally{
             executor.partials.clear()
         }
         this
     }
+    public func WHERE(condition: () -> Unit): This {
+        this.condition(condition, 'where', 'and|or')
+    }
     public func WHERE(condition: String): This {
-        appendPartial('where', 'and|or', condition)
+        appendPartial('where', 'and|or', condition)//这个不能用this.condition
+    }
+    public func AND(condition: () -> Unit): This {
+        this.condition(condition, 'and', 'and|or')
+    }
+    public func AND(condition: String): This {
+        appendPartial('and', 'and|or', condition)
+    }
+    public func OR(condition: () -> Unit): This {
+        this.condition(condition, 'or', 'and|or')
+    }
+    public func OR(condition: String): This {
+        appendPartial('or', 'and|or', condition)
+    }
+    public func NOT(condition: () -> Unit): This {
+        this.condition(condition, 'not', 'and|or')
+    }
+    public func NOT(condition: String): This {
+        appendPartial('not', 'and|or', condition)
+    }
+    public func PAREN(condition: () -> Unit): This {
+        try{
+            executor.partials.clear()
+            condition()
+            let sql = executor.partials.toString()
+            PAREN(sql)
+        }finally{
+            executor.partials.clear()
+        }
+        this
+    }
+    public func PAREN(condition: String): This {
+        if(condition.size > 0){
+            sqlgen.append(' (').append(condition).append(') ')
+        }
+        this
+    }
+    public func PAREN(op: CondRelOp, condition: () -> Unit): This {
+        try{
+            executor.partials.clear()
+            condition()
+            let sql = executor.partials.toString()
+            PAREN(op, sql)
+        }finally{
+            executor.partials.clear()
+        }
+        this
+    }
+    public func PAREN(op: CondRelOp, condition: String): This {
+        if(condition.size > 0){
+            sqlgen.append(' ${op} (').append(condition).append(') ')
+        }
+        this
     }
     public func WHERE(arg: Map<String, Any>, condition: () -> String): This {
         WHERE(parseSqlFromMap(executor, condition(), arg))
