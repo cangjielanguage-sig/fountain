@@ -64,7 +64,7 @@ public class UserServiceImpl <: UserService {
         println('id: ${id}')
         executor().deleteUser(id)
     }
-    // @Transactional//仅做演示，此函数只有查询，不需要事务控制，如果事务生效，控制台会输出日志
+    @Transactional//仅做演示，此函数只有查询，不需要事务控制，如果事务生效，控制台会输出日志
     public func newUserSession(username: String, password: String): ?(Int64, String, Bool) {
         UserEntity(username, password).makeSession(executor().findUserId)
     }
