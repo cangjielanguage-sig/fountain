@@ -15,6 +15,9 @@ limitations under the License.
  */
 package f_orm.wrap
 
+/**
+ * orm_option_或<driverName>_orm_option_开头的配置项可以作为数据库驱动的初始化options，配置项名_option_后面的部分是驱动初始化key
+ */
 public class ORMConfig {
     private static const confPrefix = "orm"
     public static const connectionUrl = confPrefix + "_connectionUrl"

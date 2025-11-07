@@ -92,7 +92,7 @@ public class TransactionAspect <: Aspect {
                 }
             }
 
-            if (let Some(noRollbackFor) <- transactional?.noRollbackFor) {
+            if (let Some(noRollbackFor) <- transactional?.noRollbackFor && noRollbackFor.size > 0) {
                 let set: Set<TypeInfo> = genExceptionSet(noRollbackFor)
                 for (noRollback in set where et.isSubtypeOf(noRollback)) {
                     ORM.hooks.beforeCommit(exe.isReadOnly)
@@ -102,7 +102,7 @@ public class TransactionAspect <: Aspect {
                     throw thrown
                 }
             }
-            if (let Some(rollbackFor) <- transactional?.rollbackFor) {
+            if (let Some(rollbackFor) <- transactional?.rollbackFor && rollbackFor.size > 0) {
                 let set: Set<TypeInfo> = genExceptionSet(rollbackFor)
                 for (rollback in set where et.isSubtypeOf(rollback)) {
                     ORM.hooks.beforeRollback(e)

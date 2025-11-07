@@ -40,21 +40,27 @@ public class ConfigExecutionRouteRule <: ConfigRouteRule {
     }
     public func matches(funcInfo: InvocationFuncInfo): Bool {
         doMatches(funcInfo){qualified =>
-            let colon = qualified.lastIndexOf(':').getOrThrow {AspectException('${qualified} does not contain returnType')}
-            let rparen = qualified
-                .lastIndexOf(')', colon)
-                .getOrThrow {AspectException('${qualified} does not contain argTypes')}
-            let lparen = qualified
-                .indexOf('(', rparen)
-                .getOrThrow {AspectException('${qualified} does not contain argTypes')}
-            let lastDot = qualified
-                .lastIndexOf('.', lparen)
-                .getOrThrow {AspectException('${qualified} does not contain qualifiedName or funcName')}
-            let returnType = qualified[colon + 1..]
-            let argTypes = qualified[lparen + 1..rparen]
-            let funcName = qualified[lastDot + 1..lparen]
-            let qualifiedName = qualified[0..lastDot]
-            ExecutionRouteRule(qualifiedName, funcName, argTypes, returnType).matches(funcInfo)
+            for(qualified in qualified.split('|')){
+                let colon = qualified.lastIndexOf(':').getOrThrow {AspectException('${qualified} does not contain returnType')}
+                let rparen = qualified
+                    .lastIndexOf(')', colon)
+                    .getOrThrow {AspectException('${qualified} does not contain argTypes')}
+                let lparen = qualified
+                    .indexOf('(', rparen)
+                    .getOrThrow {AspectException('${qualified} does not contain argTypes')}
+                let lastDot = qualified
+                    .lastIndexOf('.', lparen)
+                    .getOrThrow {AspectException('${qualified} does not contain qualifiedName or funcName')}
+                let returnType = qualified[colon + 1..]
+                let argTypes = qualified[lparen + 1..rparen]
+                let funcName = qualified[lastDot + 1..lparen]
+                let qualifiedName = qualified[0..lastDot]
+                let matched = ExecutionRouteRule(qualifiedName, funcName, argTypes, returnType).matches(funcInfo)
+                if(matched){
+                    return true
+                }
+            }
+            false
         }
     }
 }

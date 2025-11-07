@@ -77,6 +77,10 @@ public class SqlExecutor <: Resource & RootDAO {
             }
         }
     }
+    internal func clearSql(){
+        sql_ = ''
+        args.clear()
+    }
     public prop isReadOnly: Bool {
         get() {
             readOnly
@@ -837,7 +841,7 @@ public class SqlExecutor <: Resource & RootDAO {
             if(clearArgsAfterExec_){
                 args.clear()
             }
-            sql_ = String.empty
+            clearSql()
         }
     }
     private func execute<T>(extract: (UpdateResult) -> T): T {

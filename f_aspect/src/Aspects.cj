@@ -40,7 +40,9 @@ public class Aspects {
                         .matches(funcInfo) ?? false) {
                         list.add(m.name)
                     }
-                    var f: (Array<Any>) -> Any = {args => fn(args)}
+                    var f: (Array<Any>) -> Any = {args => 
+                        fn(args)
+                    }
                     for (i in list.size - 1..=0 : -1) {
                         let aspected = f
                         let aspectName = list[i]

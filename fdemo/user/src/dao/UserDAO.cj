@@ -93,8 +93,8 @@ public interface UserDAO <: RootDAO {
         executor.setSql('''
             select id 
             from user_info
-            where username = ${arg(username)} and 
-                password = ${arg(password)}'''
+            where username = ${arg(username)} 
+              and password = ${arg(password)}'''
         ).singleFirst<Int64>()
     }
 }
