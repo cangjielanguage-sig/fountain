@@ -15,26 +15,22 @@ limitations under the License.
  */
 package f_orm
 
-import std.collection.HashSet
+import f_orm.wrap.ORMConfig
 
 @Annotation[target: [MemberFunction]]
 public class Transactional {
     public const Transactional(
-        public let rollbackFor!: String = "",
-        public let noRollbackFor!: String = "",
-        public let driverName!: String = String.empty,
-        public let propagation!: ?Propagation = None,
+        public let driverName!: String = '',
+        public let propagation!: Propagation = Required,
         public let isoLevel!: ?TransactionIsoLevel = None,
         public let accessMode!: ?TransactionAccessMode = None,
-        public let deferrableMode!: ?TransactionDeferrableMode = None
+        public let deferrableMode!: ?TransactionDeferrableMode = None,
+        public let rollbackFor!: String = '',
+        public let noRollbackFor!: String = "",
     ) {}
 
     public func getPropagation(): Propagation {
-        if (let Some(p) <- propagation) {
-            p
-        } else {
-            ORMConfig.getTransactionPropagation(driverName: this.driverName)
-        }
+        propagation
     }
     public func getIsoLevel(): ?TransactionIsoLevel {
         if (let Some(l) <- isoLevel) {
