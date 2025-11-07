@@ -90,11 +90,7 @@ public class ConcurrentHashSet<T> <: Set<T> where T <: Hashable & Equatable<T> {
         }
     }
     public func removeIf(predicate: (T) -> Bool): Unit {
-        let keys = ArrayList<T>()
-        for ((k, v) in store where predicate(k)) {
-            keys.add(k)
-        }
-        for (k in keys) {
+        for ((k, _) in store where predicate(k)) {
             store.remove(k)
         }
     }
