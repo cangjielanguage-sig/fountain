@@ -869,45 +869,83 @@ public class SqlExecutor <: Resource & RootDAO {
         }
     }
 
+    private let rollbackExceptions = ConcurrentHashMap<String, HashSet<TypeInfo>>()
     //executor返回元组的第二个值，如果是true就执行commit，否则执行rollback
-    public func execute<T>(executor: (SqlExecutor) -> (T, Bool)): T {
+    public func execute<T>(
+        propagation!: Propagation = ORMConfig.getTransactionPropagation(driverName: driverName),
+        isoLevel!: ?TransactionIsoLevel = ORMConfig.getTransactionLevel(driverName: driverName),
+        accessMode!: ?TransactionAccessMode = ORMConfig.getTransactionAccessMode(driverName: driverName),
+        deferrableMode!: ?TransactionDeferrableMode = ORMConfig.getTransactionDeferrableMode(driverName: driverName),
+        noRollbackFor!: ?String = ORMConfig.getTransactionNoRollbackFor(driverName: driverName),
+        rollbackFor!: ?String = ORMConfig.getTransactionRollbackFor(driverName: driverName),
+        executor!: (SqlExecutor) -> (T, Bool)): T {
         if (tx.isNone()) {
             execute<T> {
                 var txStatus = TransactionStatus.Unknown
                 try {
                     ORM.hooks.beforeTx()
-                    newTxAndBegin()
-                    let result = executor(this)
-                    if (result[1]) {
-                        ORM.hooks.beforeCommit(readOnly)
-                        commit()
+                    this.newTxAndBegin(
+                        propagation: propagation,
+                        isoLevel: isoLevel,
+                        accessMode: accessMode,
+                        deferrableMode: deferrableMode
+                    )
+                    let (result, commit) = executor(this)
+                    if(commit){
+                        ORM.hooks.beforeCommit(this.isReadOnly)
+                        this.commit()
                         txStatus = Committed
                         ORM.hooks.afterCommit()
-                        result[0]
-                    } else {
+                        result
+                    }else{
                         throw ORMException()
                     }
-                } catch (e1: Exception) {
-                    ORM.hooks.afterThrowing(e1)
-                    try {
-                        if (!txStatus.isCommitted) {
-                            ORM.hooks.beforeRollback(e1)
-                            rollback()
-                            txStatus = Rollback
-                            ORM.hooks.afterRollback(e1)
+                } catch (e: Exception) {
+                    ORM.hooks.afterThrowing(e)
+                    let et = ClassTypeInfo.of(e)
+                    func genExceptionSet(ex: String) {
+                        rollbackExceptions.computeIfAbsent(ex){
+                            let set = HashSet<TypeInfo>()
+                            for (e in ex.split("|") where e.size > 0) {
+                                set.add(TypeInfos.get(e.trimAscii()))
+                            }
+                            set
                         }
-                    } catch (e2: Exception) {
-                        let e = ORMException(e2)
-                        e.addSuppressed(e1)
+                    }
+                    if (let Some(noRollbackFor) <- noRollbackFor && noRollbackFor.size > 0) {
+                        let set: Set<TypeInfo> = genExceptionSet(noRollbackFor)
+                        for (noRollback in set where et.isSubtypeOf(noRollback)) {
+                            ORM.hooks.beforeCommit(this.isReadOnly)
+                            let thrown = this.noRollbackFor(e)
+                            txStatus = Committed
+                            ORM.hooks.afterCommit()
+                            throw thrown
+                        }
+                    }
+                    if (let Some(rollbackFor) <- rollbackFor && rollbackFor.size > 0) {
+                        let set: Set<TypeInfo> = genExceptionSet(rollbackFor)
+                        for (rollback in set where et.isSubtypeOf(rollback)) {
+                            ORM.hooks.beforeRollback(e)
+                            let thrown = this.rollbackFor(e)
+                            txStatus = Rollback
+                            ORM.hooks.afterRollback(e)
+                            throw thrown
+                        }
+                        ORM.hooks.beforeCommit(this.isReadOnly)
+                        let thrown = this.noRollbackFor(e)
+                        txStatus = Committed
+                        ORM.hooks.afterCommit()
+                        throw thrown
+                    } else {
+                        ORM.hooks.beforeRollback(e)
+                        this.rollback()
+                        txStatus = Rollback
+                        ORM.hooks.afterRollback(e)
                         throw e
                     }
-                    if (e1 is ORMException) {
-                        throw e1
-                    }
-                    throw ORMException(e1)
                 } finally {
                     ORM.hooks.afterComplete(txStatus)
-                    close()
+                    this.close()
                 }
             }
         } else {

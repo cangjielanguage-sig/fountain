@@ -21,7 +21,7 @@ exports(){
     export mvc_overallElapsedSwitch=true
     # orm_transactionalFuncExecution 和@Transactional注解只要有一个生效就会将事务切面织入到函数
     # 使用这个环境变量或--orm_transactionalFuncExecution命令行参数会导致opengauss-driver不能创建连接。
-     export orm_transactionalFuncExecution='*..*.delete*(**): *|*..*.remove*(**): *|*..*.save*(**): *|*..*.add*(**): **..*.insert*(**): **..*.update*(**): *|*..*.change*(**): *'
+    export orm_transactionalFuncExecution='*..*.delete*(**): *|*..*.remove*(**): *|*..*.save*(**): *|*..*.add*(**): *|*..*.new*(**): *|*..*.create*(**): *|*..*.insert*(**): *|*..*.update*(**): *|*..*.change*(**): *'
     
     if [[ "$path" == "" ]]; then
         path='./fdemo'

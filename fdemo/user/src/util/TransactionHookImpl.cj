@@ -24,24 +24,24 @@ import fountain.orm.*
 public class TransactionHookImpl <: TransactionHook {
     private let log = LoggerFactory.getLogger('TransactionHook')
     public func beforeTx(): Unit {
-        println('beforeTx')
+        log.info('beforeTx')
     }
     public func beforeCommit(readOnly: Bool): Unit {
-        println('beforeCommit')
+        log.info('beforeCommit')
     }
     public func afterCommit(): Unit {
-        println('afterCommit')
+        log.info('afterCommit')
     }
     public func afterThrowing(e: Exception): Unit {
-        println('afterThrowing')
+        log.info('afterThrowing')
     }
     public func beforeRollback(e: Exception): Unit {
-        println('beforeRollback')
+        log.info('beforeRollback')
     }
     public func afterRollback(e: Exception): Unit {
-        println('afterRollback')
+        log.info('afterRollback')
     }
     public func afterComplete(status: TransactionStatus): Unit {
-        println('afterComplete')
+        log.info('afterComplete')
     }
 }

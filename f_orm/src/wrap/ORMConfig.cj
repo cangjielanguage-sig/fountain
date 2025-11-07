@@ -27,6 +27,8 @@ public class ORMConfig {
     public static const transactionLevel = confPrefix + "_transactionLevel"
     public static const transactionAccessMode = confPrefix + "_transactionAccessMode"
     public static const transactionDeferrableMode = confPrefix + "_transactionDeferrableMode"
+    public static const transactionNoRollbackFor = confPrefix + "_transactionNoRollbackFor"
+    public static const transactionRollbackFor = confPrefix + "_transactionRollbackFor"
     public static const useCache = confPrefix + "_useCache"
     public static const databasePoolInitSize = confPrefix + "_databasePoolInitSize"
     public static const databasePoolMinSize = confPrefix + "_databasePoolMinSize"
@@ -212,6 +214,12 @@ public class ORMConfig {
             case _ where !driverName.isEmpty() => getTransactionDeferrableMode()
             case _ => None<TransactionDeferrableMode>
         }
+    }
+    public static func getTransactionNoRollbackFor(driverName!: String = String.empty): ?String {
+        getConf(driverName: driverName, key: transactionNoRollbackFor)
+    }
+    public static func getTransactionRollbackFor(driverName!: String = String.empty): ?String {
+        getConf(driverName: driverName, key: transactionRollbackFor)
     }
 
     public static func getStdPoolIdleTimeout(driverName!: String = String.empty): ?Duration {
