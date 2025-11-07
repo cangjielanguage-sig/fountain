@@ -36,8 +36,8 @@ abstract sealed class TableClause<T> <: ToString where T <: QueryMappersInit<T> 
         }
     }
 
-    protected func appendPartial(prefix: String, trim: String, partial: () -> String): This {
-        let sql = '^(\\s*${trim}\\s*)|(\\s*${trim}\\s*)$'.regex(flags: [IgnoreCase], solid: true).replaceAll(partial(), '')
+    protected func appendPartial(prefix: String, trim: String, partial: String): This {
+        let sql = '^(\\s*${trim}\\s*)|(\\s*${trim}\\s*)$'.regex(flags: [IgnoreCase], solid: true).replaceAll(partial, '')
         if(sql.size > 0){
             sqlgen.append(' ').append(prefix).append(' ').append(sql)
         }
@@ -89,21 +89,30 @@ public abstract class ExceptInsertClause<T> <: TableClause<T> where T <: QueryMa
     public func FULL_JOIN<T>(AS!: String = '', ON!: String = ''): This where T <: QueryMappersInit<T> {
         join<T>('full outer', AS, ON)
     }
-    public func WHERE(condition: () -> String): This {
+    public func WHERE(condition: () -> Unit): This {
+        try{
+            executor.partials.clear()
+            condition()
+            let sql = executor.partials.toString()
+            if(sql.size > 0){
+                WHERE(sql)
+            }
+        }finally{
+            executor.partials.clear()
+        }
+        this
+    }
+    public func WHERE(condition: String): This {
         appendPartial('where', 'and|or', condition)
     }
     public func WHERE(arg: Map<String, Any>, condition: () -> String): This {
-        WHERE{
-            parseSqlFromMap(executor, condition(), arg)
-        }
+        WHERE(parseSqlFromMap(executor, condition(), arg))
     }
     public func WHERE<T>(arg: T, condition: () -> String): This where T <: ObjectData<T> {
-        WHERE{
-            parseSqlFromObject<T>(executor, condition(), arg)
-        }
+        WHERE(parseSqlFromObject<T>(executor, condition(), arg))
     }
     public func ORDER_BY(orderBy: () -> String): This {
-        appendPartial('order by', ',', orderBy)
+        appendPartial('order by', ',', orderBy())
     }
     public func LIMIT(size: Int64, offset!: Int64 = 0): This {
         let (one, two, sql) = dialect.limit(size, offset)
@@ -125,7 +134,7 @@ public class FromClause<T> <: ExceptInsertClause<T> where T <: QueryMappersInit<
     }
 
     public func GROUP_BY(groupBy: () -> String): This {
-        appendPartial('group by', ',', groupBy)
+        appendPartial('group by', ',', groupBy())
     }
 
     public func first<T>(): ?T where T <: QueryMappersInit<T> {
@@ -180,7 +189,7 @@ public class UpdateClause<T> <: ExceptInsertClause<T> where T <: QueryMappersIni
         super('update ${T.tableName()} ', executor)
     }
     public func SET(set: () -> String): This {
-        appendPartial('set', ',', set)
+        appendPartial('set', ',', set())
     }
     public func SET(arg: Map<String, Any>, condition: () -> String): This {
         SET{
@@ -200,10 +209,11 @@ public class UpdateClause<T> <: ExceptInsertClause<T> where T <: QueryMappersIni
 public class IntoClause<T> <: TableClause<T> where T <: QueryMappersInit<T> {
     private let fields = ArrayList<DataType>()
 
-    init(executor: SqlExecutor) {
+    init(executor: SqlExecutor, ignores: Array<String>) {
         super('insert into ${T.tableName()}(', executor)
+        let set = HashSet<String>(ignores)
         var i = 0
-        for (mapper in T.queryMappers().mappers) {
+        for (mapper in T.queryMappers().mappers where !set.contains(mapper.dataType.columnName)) {
             if (i > 0) {
                 sqlgen.append(',')
             }

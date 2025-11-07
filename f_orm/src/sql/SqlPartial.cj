@@ -16,7 +16,7 @@ limitations under the License.
 package f_orm.sql
 
 public interface SqlPartial <: RootDAO {
-    func INTO<T>(): IntoClause<T> where T <: QueryMappersInit<T>
+    func INTO<T>(ignoreColumns!: Array<String>): IntoClause<T> where T <: QueryMappersInit<T>
     func UPDATE<T>(): UpdateClause<T> where T <: QueryMappersInit<T>
     func FROM<T>(): FromClause<T> where T <: QueryMappersInit<T>
     func page<R>(sql: String, size: Int64, page!: Int64): Pagination<R> where R <: QueryMappersInit<R> & DataFields<R>
@@ -31,8 +31,8 @@ public interface SqlPartial <: RootDAO {
     func firstToMap(sql: String): Map<String, Any> 
 }
 extend SqlExecutor <: SqlPartial {
-    public func INTO<T>(): IntoClause<T> where T <: QueryMappersInit<T> {
-        IntoClause<T>(this)
+    public func INTO<T>(ignoreColumns!: Array<String> = []): IntoClause<T> where T <: QueryMappersInit<T> {
+        IntoClause<T>(this, ignoreColumns)
     }
     public func UPDATE<T>(): UpdateClause<T> where T <: QueryMappersInit<T> {
         UpdateClause<T>(this)

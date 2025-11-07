@@ -85,16 +85,28 @@ public class StringGenerator <: ToString {
         let search = content.toString().unsafeBytes()
         indexOf(search, fromIndex)
     }
-    private func lastIndexOf(search: Array<Byte>, fromIndex: Int64): ?Int64 {
+    private func lastIndexOf(search: Array<Byte>, fromIndex!: Int64 = 0): ?Int64 {
         let array = utf8.unsafeData()
         array.lastIndexOf(search, fromIndex)
     }
-    public func lastIndexOf<T>(content: T, fromIndex!: Int64 = size): ?Int64 where T <: ToString {
+    public func lastIndexOf<T>(content: T, fromIndex!: Int64 = 0): ?Int64 where T <: ToString {
         let search = content.toString().unsafeBytes()
-        lastIndexOf(search, fromIndex)
+        lastIndexOf(search, fromIndex: fromIndex)
     }
     public func contains<T>(content: T): Bool where T <: ToString {
         indexOf<T>(content).isSome()
+    }
+    public func startsWith(content: String){
+        (indexOf(content) ?? -1) == 0
+    }
+    public func endsWith(content: String){
+        (utf8.size >= content.size && utf8.unsafeData()[size - content.size..] == content.unsafeBytes())
+    }
+    public func substring(start: Int64, end: Int64): String {
+        String.fromUtf8(utf8[start .. end].unsafeData())
+    }
+    public func clear(){
+        utf8.clear()
     }
     public func removeFirst<T>(content: T, fromIndex!: Int64 = 0): This where T <: ToString {
         let bytes = content.toString().unsafeBytes()
@@ -103,9 +115,9 @@ public class StringGenerator <: ToString {
         }
         this
     }
-    public func removeLast<T>(content: T, fromIndex!: Int64 = size): This where T <: ToString {
+    public func removeLast<T>(content: T, fromIndex!: Int64 = 0): This where T <: ToString {
         let bytes = content.toString().unsafeBytes()
-        if (let Some(idx) <- lastIndexOf(bytes, fromIndex)) {
+        if (let Some(idx) <- lastIndexOf(bytes, fromIndex: fromIndex)) {
             utf8.remove(idx..idx + bytes.size)
         }
         this
@@ -193,7 +205,7 @@ public class StringGenerator <: ToString {
         checkIndex(fromIndex, toIndex)
         let oldBytes = old.toString().unsafeBytes()
         let newBytes = new.toString().unsafeBytes()
-        if (let Some(idx) <- lastIndexOf(oldBytes, fromIndex) && idx < toIndex) {
+        if (let Some(idx) <- lastIndexOf(oldBytes, fromIndex: fromIndex) && idx < toIndex) {
             if (oldBytes.size == newBytes.size) {
                 utf8.unsafeData()[idx..idx + oldBytes.size] = newBytes
             } else if (oldBytes.size < newBytes.size) {

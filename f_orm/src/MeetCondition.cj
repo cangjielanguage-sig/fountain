@@ -118,7 +118,7 @@ public class MeetCondition {
         }
     }
     public func done(): String {
-        if (condition) {
+        let sql = if (condition) {
             if (_argInSql) {
                 match (_value()) {
                     case x: ToString => ' ${partial} ${x} ${Condition.delimiter} '
@@ -133,5 +133,7 @@ public class MeetCondition {
         } else {
             ''
         }
+        executor.partials.append(sql)
+        sql
     }
 }

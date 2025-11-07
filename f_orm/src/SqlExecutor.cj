@@ -41,7 +41,8 @@ public class SqlCacheKey <: Hashable & Equatable<SqlCacheKey> & ToString {
 public class SqlExecutor <: Resource & RootDAO {
     private static let logger = LoggerFactory.getLogger<SqlExecutor>()
     private static let blankRegex = Regex(#"\s{2,}"#)
-    private static let current = ThreadLocal<HashMap<String, SqlExecutor>>()
+    private static let currents = ThreadLocal<HashMap<String, SqlExecutor>>()
+    private static let current = ThreadLocal<SqlExecutor>()
     private var sql_ = String.empty
     private var readOnly = false
     private var args: SqlArgs = SqlArgs()
@@ -52,6 +53,8 @@ public class SqlExecutor <: Resource & RootDAO {
     private var clearCache = false
     private let useCache: Bool
     private var clearArgsAfterExec_ = true
+
+    internal let partials = Partials()
 
     private SqlExecutor(let driverName: String) {
         useCache = ORMConfig.getUseCache(driverName: driverName) ?? true
@@ -81,7 +84,7 @@ public class SqlExecutor <: Resource & RootDAO {
     }
 
     static func getInstance(driverName: String): SqlExecutor {
-        let exe = current
+        let exe = currents
             .getOrCompute {HashMap<String, SqlExecutor>()}
             .computeIfAbsent(driverName) {SqlExecutor(driverName)}
         if (!(exe._connection_ is NoneConnection)) {
@@ -95,7 +98,11 @@ public class SqlExecutor <: Resource & RootDAO {
                 case _ => ()
             }
         }
+        current.set(exe)
         exe
+    }
+    static func getCurrent(): SqlExecutor {
+        current.get().getOrThrow()
     }
 
     /**
@@ -116,7 +123,8 @@ public class SqlExecutor <: Resource & RootDAO {
     }
     public func close(): Unit {
         if (this.tx.isNone()) {
-            current.get()?.remove(driverName)
+            current.set(None)
+            currents.get()?.remove(driverName)
             cache.clear()
             _connection_.close()
             _connection_ = NoneConnection.instance
@@ -783,7 +791,7 @@ public class SqlExecutor <: Resource & RootDAO {
     public operator func ()(sql: String): SqlExecutor {
         setSql(sql)
     }
-
+    
     private func execute<T>(executor: () -> T): T {
         try {
             func exec() {
