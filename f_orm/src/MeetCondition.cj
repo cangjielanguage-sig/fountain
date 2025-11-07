@@ -39,11 +39,13 @@ public class MeetCondition {
         this.frag{frag}
     }
     public func frag(frag: () -> String): String {
-        if(condition){
+        let sql = if(condition){
             '${partial} ${frag()} ${Condition.delimiter}'
         }else{
             ''
         }
+        executor.partials.append(sql)
+        sql
     }
     public func BETWEEN(one: Any, two: Any): String {
         frag{
