@@ -90,12 +90,13 @@ public interface UserDAO <: RootDAO {
                                 }} order by id'''
                            }.page<UserPO>(10, page: 1)
         println('QQQQQQQQQQQQQQQQQ ${page.list.size}')
-        executor.FROM<UserPO>()
+        let user = executor.FROM<UserPO>()
                 .WHERE{
                     meet(username.size > 0){
                         EXISTS{'select 1 from user_info where id > 0 limit 1'}
                     }
                 }.first<UserPO>()
+        // executor.INTO<UserPO>(ignoreColumns:['id']).VALUES(user.getOrThrow()).execute()
         executor.setSql('''
             select id 
             from user_info
