@@ -143,6 +143,32 @@ TransactionWrap的实例是SqlExecution的成员，发生一次事务函数的�
 
 使用@TransactionalService修饰需要事务控制的类，宏展开时为它修饰的类添加@Bean宏修饰，为这个类的公共实例成员函数添加@Pointcut宏修饰。
 
+### 事务钩子
+
+实现接口TransactionHook并注册到IOC的实例都是事务钩子。
+
+```cj
+public interface TransactionHook {
+    func beforeTx(): Unit {}//事务开启前
+    func beforeCommit(readOnly: Bool): Unit {}//事务提交前
+    func afterCommit(): Unit {}//事务提交后
+    func afterThrowing(e: Exception): Unit {}//抛出异常后
+    func beforeRollback(e: Exception): Unit {}//回滚前
+    func afterRollback(e: Exception): Unit {}//回滚后
+    func afterComplete(status: TransactionStatus): Unit {}//函数返回前
+    /**
+     * 用于决定钩子的执行顺序
+     */
+    prop order: Int64 {
+        get() {
+            Int64.Max
+        }
+    }
+}
+```
+
+
+
 ### 事务例子
 
 定义环境变量：
@@ -168,3 +194,39 @@ public class UserServiceImpl <: UserService {
 //只要使用宏@TransactionalService修饰的类事务控制都会生效
 ```
 
+定义一个事务钩子：
+
+```cj
+import fountain.bean.*
+import fountain.bean.macros.*
+import fountain.log.*
+import fountain.orm.*
+
+@Bean
+public class TransactionHookImpl <: TransactionHook {
+    private let log = LoggerFactory.getLogger('TransactionHook')
+    public func beforeTx(): Unit {
+        log.info('beforeTx')
+    }
+    public func beforeCommit(readOnly: Bool): Unit {
+        log.info('beforeCommit')
+    }
+    public func afterCommit(): Unit {
+        log.info('afterCommit')
+    }
+    public func afterThrowing(e: Exception): Unit {
+        log.info('afterThrowing')
+    }
+    public func beforeRollback(e: Exception): Unit {
+        log.info('beforeRollback')
+    }
+    public func afterRollback(e: Exception): Unit {
+        log.info('afterRollback')
+    }
+    public func afterComplete(status: TransactionStatus): Unit {
+        log.info('afterComplete')
+    }
+}
+```
+
+如果事务控制生效了执行到希望开启事务的函数时会记录这些日志。
