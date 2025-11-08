@@ -133,11 +133,7 @@ extend Regex <: ExtendRegex {
             for (md in mds) {
                 let pos = md.matchPosition()
                 builder.append(sub[prevEnd..pos.start])
-                builder.append(if (let Some(s) <- replacement(md)) {
-                    s
-                } else {
-                    md.matchString()
-                })
+                builder.append(replacement(md) ?? md.matchString())
                 prevEnd = pos.end
             }
             builder.append(sub[prevEnd..])

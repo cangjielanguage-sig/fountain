@@ -19,7 +19,8 @@ public class InvocationFuncInfo {
     public InvocationFuncInfo(
         private let _funcInfo: QualifiedFuncInfo,
         private var _args: Array<Any>
-    ) {}
+    ) {
+    }
     public init(
         qualifiedName: String,
         funcName: String,

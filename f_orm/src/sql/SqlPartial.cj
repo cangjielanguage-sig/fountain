@@ -16,7 +16,7 @@ limitations under the License.
 package f_orm.sql
 
 public interface SqlPartial <: RootDAO {
-    func INTO<T>(): IntoClause<T> where T <: QueryMappersInit<T>
+    func INTO<T>(ignoreColumns!: Array<String>): IntoClause<T> where T <: QueryMappersInit<T>
     func UPDATE<T>(): UpdateClause<T> where T <: QueryMappersInit<T>
     func FROM<T>(): FromClause<T> where T <: QueryMappersInit<T>
     func page<R>(sql: String, size: Int64, page!: Int64): Pagination<R> where R <: QueryMappersInit<R> & DataFields<R>
@@ -31,8 +31,8 @@ public interface SqlPartial <: RootDAO {
     func firstToMap(sql: String): Map<String, Any> 
 }
 extend SqlExecutor <: SqlPartial {
-    public func INTO<T>(): IntoClause<T> where T <: QueryMappersInit<T> {
-        IntoClause<T>(this)
+    public func INTO<T>(ignoreColumns!: Array<String> = []): IntoClause<T> where T <: QueryMappersInit<T> {
+        IntoClause<T>(this, ignoreColumns)
     }
     public func UPDATE<T>(): UpdateClause<T> where T <: QueryMappersInit<T> {
         UpdateClause<T>(this)
@@ -47,9 +47,12 @@ extend SqlExecutor <: SqlPartial {
         }
         let countSql = 'select count(*) from (${partial}) as __tmp___'//如果sql中包含order by 这样也可以执行
         let count = executor.setSql(countSql, clearArgsAfterExec: false).first<Int64>() ?? 0
+        if(count == 0){
+            executor.clearSql()
+        }
         Pagination<R>(page: page, rows: count, size: size){size: Int64, offset: Int64 =>
             let (one, two, psql) = SqlDialectMediator.instance.getDialect(this.driverName).limit(size, offset)
-            executor.add(one).add(two).setSql('select * from (${partial}) as __tmp___ ${psql}') |> callee
+            executor.add(one).add(two).setSql('select * from (${partial}) as __tmp___ ${psql}', clearArgsAfterExec: true) |> callee
         }
     }
     public func page<R>(sql: String, size: Int64, page!: Int64 = 1): Pagination<R> where R <: QueryMappersInit<R> & DataFields<R> {

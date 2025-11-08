@@ -295,14 +295,19 @@ public interface RootDAO {
         '?'
     }
     func meet(condition: Bool, partial: ()->String): String {
-        if(condition){
+        let sql = if(condition){
             partial()
         }else{
             ''
         }
+        executor.partials.append(sql)
+        sql
     }
     func meet(condition: Bool, partial: String): MeetCondition {
         MeetCondition(condition, partial, executor)
+    }
+    func meet(condition: Bool, partial: String, value: Any): String {
+        meet(condition, partial){value}
     }
     func meet(condition: Bool, partial: String, value: ()->Any): String {
         meet(condition, partial).value(value).done()

@@ -12,13 +12,19 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
- */
-package f_ticktock
+*/
+package f_orm.sql
 
-public interface DelayedCronTicktockTaskDef {
-    prop name: String
-    prop delayedPeriodic: DelayedPeriodic
-    prop immediate: Bool
-    prop delay: Duration
-    func execute(): Unit
+public enum CondRelOp <: ToString {
+    | AND
+    | OR
+    | NOT
+
+    public func toString() {
+        match(this){
+            case AND => 'and'
+            case OR => 'or'
+            case NOT => 'not'
+        }
+    }
 }
