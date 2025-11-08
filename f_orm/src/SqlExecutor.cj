@@ -180,13 +180,13 @@ public class SqlExecutor <: Resource & RootDAO {
             })
             case RequiresNew =>
                 //Create a new transaction, and suspend the current transaction if one exists.
-                try {
-                let connection = if (hasRealTx) {
-                    getConnection(driverName)
-                } else {
-                    this.connection
-                }
-                if (let tx: TransactionWrap <- connection.createTransaction()) {
+            try {
+                // let connection = if (hasRealTx) {
+                //     getConnection(driverName)
+                // } else {
+                //     this.connection
+                // }
+                if (let tx: TransactionWrap <- this.connection.createTransaction()) {
                     tx.wrapping = this.tx
                     tx.suspend = hasRealTx
                     hasRealTx = true

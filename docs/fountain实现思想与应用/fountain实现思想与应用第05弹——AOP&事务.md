@@ -105,9 +105,66 @@ public class TransactionAspect <: Aspect
 相关配置项如下：
 
 ```
-orm_transactionPropagation
-orm_transactionLevel
-orm_transactionAccessMode
-orm_transactionDeferrableMode
+orm_transactionPropagation    # 事务传播配置
+orm_transactionLevel          # 事务级别
+orm_transactionAccessMode     # TransactionAccessMode
+orm_transactionDeferrableMode # TransactionDeferrableMode
+orm_transactionNoRollbackFor  # 可以提交的异常
+orm_transactionRollbackFor    # 需要回滚的异常
+```
+
+下面是事务传播特性：
+
+```cj
+/*
+ * RequiresNew 和 NotSupported 会创建新连接，在这两个特性的作用范围内如果有其它传播特性判定还是以原连接是否创建了事务为依据。
+ * 多个指定事务的函数嵌套调用的时候由事务传播枚举决定是创建新的事务还是复用外层函数的事务。
+ */
+public enum Propagation {
+    | Required //外层函数开启了事务就使用这个事务，如果没有事务就创建一个新事务。
+    | Supports //外层函数开启了事务就使用这个事务，如果没有事务就不用事务。
+    | Mandatory //外层函数开启了事务就使用这个事务，没有事务就抛异常
+    | RequiresNew //创建一个新连接，创建新事务。
+    | Never //不使用事务，如果外层函数开启了事务就抛出异常。
+    | NotSupported //不使用事务，如果外层函数开启了事务就创建一个新的数据库连接执行当前函数的业务。
+    | Nested //如果外层函数开启了事务就开启一个新事务，如果没有当前函数也不使用事务。
+}
+```
+
+事务传播的核心是因为有以下类型：
+
+![事务传播](.assets/fountain%E5%AE%9E%E7%8E%B0%E6%80%9D%E6%83%B3%E4%B8%8E%E5%BA%94%E7%94%A8%E7%AC%AC05%E5%BC%B9%E2%80%94%E2%80%94AOP&%E4%BA%8B%E5%8A%A1/%E4%BA%8B%E5%8A%A1%E4%BC%A0%E6%92%AD.jpg)
+
+每次调用受事务控制的函数，不论当前函数是否需要创建事务都会用外层函数的TransactionWrap创建一个新的TransactionWrap，TransactionWrap包装着真实的事务实例，如果当前函数不需要创建新事务会使用DummyTransaction顶位，如果需要创建新的事务就用新建的事务。
+
+TransactionWrap的实例是SqlExecution的成员，发生一次事务函数的调用就包一层新的TransactionWrap的皮，事务函数返回时就脱一层。
+
+### 事务宏
+
+使用@TransactionalService修饰需要事务控制的类，宏展开时为它修饰的类添加@Bean宏修饰，为这个类的公共实例成员函数添加@Pointcut宏修饰。
+
+### 事务例子
+
+定义环境变量：
+
+```bash
+export orm_transactionalFuncExecution='*..*.delete*(**): *|*..*.remove*(**): *|*..*.save*(**): *|*..*.add*(**): *|*..*.new*(**): *|*..*.create*(**): *|*..*.insert*(**): *|*..*.update*(**): *|*..*.change*(**): *'
+```
+
+定义类
+
+```cj
+@TransactionalService//如果不需要事务控制可以用@Bean修饰
+public class UserServiceImpl <: UserService {
+    public func register(username: String, password: String): Int64 {
+        println('username: ${username}, password: ${password}')
+        executor().register(username, password)
+    }
+    @Transactional//仅做演示，此函数只有查询，不需要事务控制，如果事务生效，控制台会输出日志
+    public func userSession(username: String, password: String): ?(Int64, String, Bool) {
+        UserEntity(username, password).makeSession(executor().findUserId)
+    }
+}
+//只要使用宏@TransactionalService修饰的类事务控制都会生效
 ```
 
