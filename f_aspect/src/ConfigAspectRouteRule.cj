@@ -40,7 +40,7 @@ public class ConfigExecutionRouteRule <: ConfigRouteRule {
     }
     public func matches(funcInfo: InvocationFuncInfo): Bool {
         doMatches(funcInfo){qualified =>
-            for(qualified in qualified.split('|')){//*..*.delete*(**): *
+            for(qualified in qualified.split('|')){
                 let colon = qualified.lastIndexOf(':').getOrThrow {AspectException('${qualified} does not contain returnType')}
                 let lparen = qualified
                     .indexOf('(')
