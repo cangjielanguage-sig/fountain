@@ -1,4 +1,4 @@
-# fountain实现思想与应用第四弹
+# fountain实现思想与应用第五弹
 
 ##### ——事务
 
@@ -111,6 +111,10 @@ orm_transactionAccessMode     # TransactionAccessMode
 orm_transactionDeferrableMode # TransactionDeferrableMode
 orm_transactionNoRollbackFor  # 可以提交的异常
 orm_transactionRollbackFor    # 需要回滚的异常
+```
+如果同时依赖了不止一个数据库，还可以针对不同的数据库添加事务配置，比如下面就为opengauss添加了事务传播特性：
+```
+opengauss_orm_transactionPropagation=Requires
 ```
 
 下面是事务传播特性：
