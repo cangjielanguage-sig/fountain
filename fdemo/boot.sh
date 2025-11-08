@@ -19,13 +19,24 @@ exports(){
     export logger_appender_FDemoFile_rotateDuration=DAY
     export mvc_port=8080 # 这一行可以没有，默认就是8080                                                                         
     export mvc_overallElapsedSwitch=true
-    export LD_LIBRARY_PATH=./fdemo/release/boot:./fdemo/release/opengauss:./fdemo/release/user:$LD_LIBRARY_PATH     
+    # orm_transactionalFuncExecution 和@Transactional注解只要有一个生效就会将事务切面织入到函数
+    # 使用这个环境变量或--orm_transactionalFuncExecution命令行参数会导致opengauss-driver不能创建连接。
+    export orm_transactionalFuncExecution='*..*.delete*(**): *|*..*.remove*(**): *|*..*.save*(**): *|*..*.add*(**): *|*..*.new*(**): *|*..*.create*(**): *|*..*.insert*(**): *|*..*.update*(**): *|*..*.change*(**): *'
+    
+    if [[ "$path" == "" ]]; then
+        path='./fdemo'
+    fi
+    export LD_LIBRARY_PATH=$path/release/boot:$path/release/opengauss:$path/release/user:$LD_LIBRARY_PATH    
 }
 run(){
     exports
     fboot run $path --dylibPattern='(boot|user\.util\.auth|\.(controller|service\.impl))'
 }
+perf(){
+    exports
+    cjprof record -f max -- fboot run $path --dylibPattern='(boot|user\.util\.auth|\.(controller|service\.impl))'
 
+}
 build(){
     export CANGJIE_STDX_PATH=$CANGJIE_STDX_DYNAMIC_PATH
     fboot build $path
@@ -40,6 +51,9 @@ cleanUpdate(){
 case "$1" in 
 run)
     run
+    ;;
+perf)
+    perf
     ;;
 cleanUpdate)
     cleanUpdate $2 $3

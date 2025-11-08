@@ -103,7 +103,11 @@ extend JsonValue <: ExtendJsonValue {
             case x: DataJsonObject => x.json
             case x: DataNone => JsonNull()
             case x: DataBool => JsonBool(x.data)
-            case x: DataReal => JsonFloat(x.data.toInt64())
+            case x: DataReal => if(x.data.isInteger()){
+                JsonInt(x.data.toInt64())
+            }else{
+                JsonFloat(x.data.toFloat64())
+            }
             case x: DataString => JsonString(x.data)
             case x: DataDateTime => JsonString(x.data.toString())
             case x: DataDuration => JsonString(x.data.toString())
@@ -122,9 +126,12 @@ extend JsonValue <: ExtendJsonValue {
             case x: Iterable<(Data, Data)> =>
                 let obj = JsonObject()
                 for ((k, v) in x) {
-                    let jk = from(k)
-                    let jv = from(k)
-                    obj.put(jk.toString(), jv)
+                    let ks = match(from(k)){
+                        case x: JsonString => x.getValue()
+                        case x => x.toString()
+                    }
+                    let vs = from(v)
+                    obj.put(ks, vs)
                 }
                 obj
             case _ => throw DataException("can not convert data type to JsonValue")

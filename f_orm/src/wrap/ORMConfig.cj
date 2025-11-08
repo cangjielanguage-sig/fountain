@@ -15,6 +15,9 @@ limitations under the License.
  */
 package f_orm.wrap
 
+/**
+ * orm_option_或<driverName>_orm_option_开头的配置项可以作为数据库驱动的初始化options，配置项名_option_后面的部分是驱动初始化key
+ */
 public class ORMConfig {
     private static const confPrefix = "orm"
     public static const connectionUrl = confPrefix + "_connectionUrl"
@@ -24,6 +27,8 @@ public class ORMConfig {
     public static const transactionLevel = confPrefix + "_transactionLevel"
     public static const transactionAccessMode = confPrefix + "_transactionAccessMode"
     public static const transactionDeferrableMode = confPrefix + "_transactionDeferrableMode"
+    public static const transactionNoRollbackFor = confPrefix + "_transactionNoRollbackFor"
+    public static const transactionRollbackFor = confPrefix + "_transactionRollbackFor"
     public static const useCache = confPrefix + "_useCache"
     public static const databasePoolInitSize = confPrefix + "_databasePoolInitSize"
     public static const databasePoolMinSize = confPrefix + "_databasePoolMinSize"
@@ -209,6 +214,12 @@ public class ORMConfig {
             case _ where !driverName.isEmpty() => getTransactionDeferrableMode()
             case _ => None<TransactionDeferrableMode>
         }
+    }
+    public static func getTransactionNoRollbackFor(driverName!: String = String.empty): ?String {
+        getConf(driverName: driverName, key: transactionNoRollbackFor)
+    }
+    public static func getTransactionRollbackFor(driverName!: String = String.empty): ?String {
+        getConf(driverName: driverName, key: transactionRollbackFor)
     }
 
     public static func getStdPoolIdleTimeout(driverName!: String = String.empty): ?Duration {

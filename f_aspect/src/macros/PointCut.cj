@@ -25,8 +25,7 @@ public macro Pointcut(input: Tokens): Tokens {
     }
     match(parseDecl(input)){
         case x: FuncDecl => pointcut(x)
-        case x: ClassDecl => 
-            expandClassDecl(x)
+        case x: ClassDecl => expandClassDecl(x)
         case x: MacroExpandDecl => 
             let d = extract(x)
             let tokens = pointcut(d)
@@ -75,7 +74,7 @@ private func pointcut(decl: Decl): Tokens {
             } else {
                 quote(Aspects.proceed<$funcType>(info, callee))
             }
-            quote(
+            let tokens = quote(
                 $funcDecl {
                     func callee(args: Array<Any>){
                         $argVars
@@ -86,6 +85,7 @@ private func pointcut(decl: Decl): Tokens {
                     $proceed
                 }
             )
+            tokens
         case x: ClassDecl => expandClassDecl(x)
         case _ =>
             diagReport(ERROR, tokens, '${decl.identifier.value} must be a func decl', '')

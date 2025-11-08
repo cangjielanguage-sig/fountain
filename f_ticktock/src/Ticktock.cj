@@ -128,23 +128,10 @@ public class Ticktock <: Emitter {
         tasks.remove(name)
     }
 
-    public func addOrReplaceDelayTask(
-        name: String,
-        delayedPeriodic: DelayedPeriodic,
-        delay: Duration,
-        immediate: Bool,
-        function: () -> Unit
-    ) {
-        addOrReplaceDelayTask(DelayedCronTicktockTask(name, delayedPeriodic, delay, immediate, function))
-    }
-    public func addOrReplaceDelayTask(task: DelayedCronTicktockTaskDef) {
-        addOrReplaceDelayTask(DelayedCronTicktockTask(task))
-    }
-    public func addOrReplaceDelayTask(task: DelayedCronTicktockTask) {
-        task.wrapExecutor(removeTask, addOrReplaceDelayTask0)
+    public func addOrReplaceDelayTask(task: DelayedTicktockTask) {
         addOrReplaceDelayTask0(task)
     }
-    private func addOrReplaceDelayTask0(task: DelayedCronTicktockTask): Unit {
+    private func addOrReplaceDelayTask0(task: DelayedTicktockTask): Unit {
         if (task.immediate) {
             spawn {
                 task.execute()
@@ -152,14 +139,15 @@ public class Ticktock <: Emitter {
             if (task.once) {
                 return
             }
+        }else{
+            addOrReplaceTask(task, task.cron)
         }
-        addOrReplaceTask(task, task.cron)
     }
     private static func getTasksFromBeanFactory() {
         BeanFactory.instance.getList<CronTicktockTask>()
     }
     private static func getDelayedTasksFromBeanFactory(){
-        BeanFactory.instance.getList<DelayedCronTicktockTask>()
+        BeanFactory.instance.getList<DelayedTicktockTask>()
     }
     
     public func addOrReplaceTask(task: CronTicktockTask) {

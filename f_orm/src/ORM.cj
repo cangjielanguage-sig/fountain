@@ -22,6 +22,7 @@ import f_orm.exception.ORMException
 public import std.convert.*
 public import std.database.sql.*
 public import std.reflect.*
+public import f_bean.*
 public import f_exception.{BaseException, UnreachableException}
 public import f_orm.wrap.*
 public import f_orm.exception.*
@@ -47,6 +48,11 @@ public class ORM {
     protected static prop driverNames: Iterator<String> {
         get(){
             datasources.keys().iterator()
+        }
+    }
+    public static func registerTransactionHooks<T>(): Unit where T <: TransactionHook {
+        for(hook in lookupList<T>()) {
+            registerTransactionHook<T>(hook)
         }
     }
     public static func registerTransactionHook<T>(hook: T): Unit where T <: TransactionHook {

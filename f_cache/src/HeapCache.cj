@@ -19,12 +19,11 @@ import std.collection.HashMap
 import std.collection.concurrent.LinkedBlockingQueue
 import std.env.atExit
 import std.time.DateTime
-import std.sync.{Mutex, Timer, AtomicBool}
+import std.sync.{Timer, AtomicBool}
 import f_base.*
 import f_collection.PriorityQueue
 
 public class HeapCache<V> where V <: Object {
-    private let mutex = Mutex()
     private let store: ConcHashMap<Priority<V>>
     private let alive = AtomicBool(true)
 

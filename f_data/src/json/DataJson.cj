@@ -47,7 +47,7 @@ extend DataNone <: ToJsonString {
 
 extend DataString <: ToJsonString {
     public func toJsonString(): String {
-        '\"${toString()}\"'
+        '"${toString()}"'
     }
 }
 
@@ -68,7 +68,7 @@ extend<T> DataObject<T> <: ToJsonString where T <: ObjectData<T> {
             if (builder.size > 1) {
                 builder.append(',')
             }
-            builder.append('\"${name}\"')
+            builder.append('"${name}"')
             builder.append(':')
             builder.append(valStr)
         }
@@ -110,7 +110,7 @@ extend<M, K, V> DataMap<M, K, V> <: ToJsonString where K <: DataFields<K>, V <: 
             if (ks.startsWith('"') && ks.endsWith('"')) {
                 builder.append(ks)
             } else {
-                builder.append('\"${ks}\"')
+                builder.append('"${ks}"')
             }
             builder.append(':')
             builder.append(vs)
@@ -135,7 +135,7 @@ extend<M, K, V> DataConcurrentMap<M, K, V> <: ToJsonString where K <: DataFields
             if (ks.startsWith('"') && ks.endsWith('"')) {
                 builder.append(ks)
             } else {
-                builder.append('\"${ks}\"')
+                builder.append('"${ks}"')
             }
             builder.append(':')
             builder.append(vs)

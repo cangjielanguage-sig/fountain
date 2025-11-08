@@ -104,9 +104,14 @@ public class ChooseCondition {
                 ' ? ${Condition.delimiter} '
             }
         }
-        for ((cond, partial) in conditions where cond()) {
-            return gen(partial)
+        func gen(){
+            for ((cond, partial) in conditions where cond()) {
+                return gen(partial)
+            }
+            gen(_otherwise)
         }
-        gen(_otherwise)
+        let sql = gen()
+        executor.partials.append(sql)
+        sql
     }
 }

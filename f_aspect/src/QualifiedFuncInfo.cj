@@ -19,17 +19,17 @@ public class InvocationFuncInfo {
     public InvocationFuncInfo(
         private let _funcInfo: QualifiedFuncInfo,
         private var _args: Array<Any>
-    ) {}
+    ) {
+    }
     public init(
         qualifiedName: String,
         funcName: String,
         args: Array<Any>
     ) {
-        this._args = args
-        this._funcInfo = QualifiedFuncInfo(qualifiedName, funcName,
+        this(QualifiedFuncInfo(qualifiedName, funcName,
             Array<TypeInfo>(args.size) {
                 i => TypeInfo.of(args[i])
-            })
+            }), args)
     }
     func setArgs(args: Array<Any>) {
         this._args = args
@@ -69,9 +69,7 @@ public class QualifiedFuncInfo <: Hashable & Equatable<QualifiedFuncInfo> {
         funcName: String,
         argTypes: Array<TypeInfo>
     ) {
-        this.typeInfo = TypeInfos.get(qualifiedName)
-        this.funcInfo = typeInfo.getInstanceFunction(funcName, argTypes)
-        this.hash = doHash(typeInfo, funcInfo)
+        this(ClassTypeInfo.get(qualifiedName), ClassTypeInfo.get(qualifiedName).getInstanceFunction(funcName, argTypes))
     }
     private static func doHash(typeInfo: TypeInfo, funcInfo: InstanceFunctionInfo) {
         HashBuilder().append(typeInfo).append(funcInfo).build()

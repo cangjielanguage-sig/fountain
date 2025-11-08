@@ -15,6 +15,7 @@ limitations under the License.
 */
 package boot
 
+import std.collection.*
 import std.env
 import opengauss.driver.*
 import opengauss.slog
@@ -67,4 +68,10 @@ private let _ = {=>
     let data = json.toData()
     data3 = DataObject<TestData3>.populate(data2).getOrThrow()
     println('AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA ${data3}')
+    let map = HashMap<String, Int64>()
+    map['0'] = 0
+    map['1'] = 1
+    map['2'] = 2
+    let data4 = map.toData()
+    println('AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA ${JsonValue.tryFromData(data4)}')
 }()

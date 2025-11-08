@@ -41,7 +41,8 @@ public class SqlCacheKey <: Hashable & Equatable<SqlCacheKey> & ToString {
 public class SqlExecutor <: Resource & RootDAO {
     private static let logger = LoggerFactory.getLogger<SqlExecutor>()
     private static let blankRegex = Regex(#"\s{2,}"#)
-    private static let current = ThreadLocal<HashMap<String, SqlExecutor>>()
+    private static let currents = ThreadLocal<HashMap<String, SqlExecutor>>()
+    private static let current = ThreadLocal<SqlExecutor>()
     private var sql_ = String.empty
     private var readOnly = false
     private var args: SqlArgs = SqlArgs()
@@ -53,6 +54,8 @@ public class SqlExecutor <: Resource & RootDAO {
     private let useCache: Bool
     private var clearArgsAfterExec_ = true
 
+    internal let partials = Partials()
+
     private SqlExecutor(let driverName: String) {
         useCache = ORMConfig.getUseCache(driverName: driverName) ?? true
         cache = if (useCache) {
@@ -63,7 +66,7 @@ public class SqlExecutor <: Resource & RootDAO {
         _connection_ = getConnection(driverName)
     }
 
-    private mut prop sql: String {
+    protected mut prop sql: String {
         get() {
             sql_
         }
@@ -74,6 +77,12 @@ public class SqlExecutor <: Resource & RootDAO {
             }
         }
     }
+    internal func clearSql(){
+        sql_ = ''
+        if(clearArgsAfterExec_){
+            args.clear()
+        }
+    }
     public prop isReadOnly: Bool {
         get() {
             readOnly
@@ -81,7 +90,7 @@ public class SqlExecutor <: Resource & RootDAO {
     }
 
     static func getInstance(driverName: String): SqlExecutor {
-        let exe = current
+        let exe = currents
             .getOrCompute {HashMap<String, SqlExecutor>()}
             .computeIfAbsent(driverName) {SqlExecutor(driverName)}
         if (!(exe._connection_ is NoneConnection)) {
@@ -95,7 +104,11 @@ public class SqlExecutor <: Resource & RootDAO {
                 case _ => ()
             }
         }
+        current.set(exe)
         exe
+    }
+    static func getCurrent(): SqlExecutor {
+        current.get().getOrThrow()
     }
 
     /**
@@ -116,7 +129,8 @@ public class SqlExecutor <: Resource & RootDAO {
     }
     public func close(): Unit {
         if (this.tx.isNone()) {
-            current.get()?.remove(driverName)
+            current.set(None)
+            currents.get()?.remove(driverName)
             cache.clear()
             _connection_.close()
             _connection_ = NoneConnection.instance
@@ -783,7 +797,7 @@ public class SqlExecutor <: Resource & RootDAO {
     public operator func ()(sql: String): SqlExecutor {
         setSql(sql)
     }
-
+    
     private func execute<T>(executor: () -> T): T {
         try {
             func exec() {
@@ -826,10 +840,7 @@ public class SqlExecutor <: Resource & RootDAO {
                 logger.debug(logMsg(DateTime.now() - start))
             }
             start = DateTime.UnixEpoch
-            if(clearArgsAfterExec_){
-                args.clear()
-            }
-            sql_ = String.empty
+            clearSql()
         }
     }
     private func execute<T>(extract: (UpdateResult) -> T): T {
@@ -858,45 +869,83 @@ public class SqlExecutor <: Resource & RootDAO {
         }
     }
 
+    private let rollbackExceptions = ConcurrentHashMap<String, HashSet<TypeInfo>>()
     //executor返回元组的第二个值，如果是true就执行commit，否则执行rollback
-    public func execute<T>(executor: (SqlExecutor) -> (T, Bool)): T {
+    public func execute<T>(
+        propagation!: Propagation = ORMConfig.getTransactionPropagation(driverName: driverName),
+        isoLevel!: ?TransactionIsoLevel = ORMConfig.getTransactionLevel(driverName: driverName),
+        accessMode!: ?TransactionAccessMode = ORMConfig.getTransactionAccessMode(driverName: driverName),
+        deferrableMode!: ?TransactionDeferrableMode = ORMConfig.getTransactionDeferrableMode(driverName: driverName),
+        noRollbackFor!: ?String = ORMConfig.getTransactionNoRollbackFor(driverName: driverName),
+        rollbackFor!: ?String = ORMConfig.getTransactionRollbackFor(driverName: driverName),
+        executor!: (SqlExecutor) -> (T, Bool)): T {
         if (tx.isNone()) {
             execute<T> {
                 var txStatus = TransactionStatus.Unknown
                 try {
                     ORM.hooks.beforeTx()
-                    newTxAndBegin()
-                    let result = executor(this)
-                    if (result[1]) {
-                        ORM.hooks.beforeCommit(readOnly)
-                        commit()
+                    this.newTxAndBegin(
+                        propagation: propagation,
+                        isoLevel: isoLevel,
+                        accessMode: accessMode,
+                        deferrableMode: deferrableMode
+                    )
+                    let (result, commit) = executor(this)
+                    if(commit){
+                        ORM.hooks.beforeCommit(this.isReadOnly)
+                        this.commit()
                         txStatus = Committed
                         ORM.hooks.afterCommit()
-                        result[0]
-                    } else {
+                        result
+                    }else{
                         throw ORMException()
                     }
-                } catch (e1: Exception) {
-                    ORM.hooks.afterThrowing(e1)
-                    try {
-                        if (!txStatus.isCommitted) {
-                            ORM.hooks.beforeRollback(e1)
-                            rollback()
-                            txStatus = Rollback
-                            ORM.hooks.afterRollback(e1)
+                } catch (e: Exception) {
+                    ORM.hooks.afterThrowing(e)
+                    let et = ClassTypeInfo.of(e)
+                    func genExceptionSet(ex: String) {
+                        rollbackExceptions.computeIfAbsent(ex){
+                            let set = HashSet<TypeInfo>()
+                            for (e in ex.split("|") where e.size > 0) {
+                                set.add(TypeInfos.get(e.trimAscii()))
+                            }
+                            set
                         }
-                    } catch (e2: Exception) {
-                        let e = ORMException(e2)
-                        e.addSuppressed(e1)
+                    }
+                    if (let Some(noRollbackFor) <- noRollbackFor && noRollbackFor.size > 0) {
+                        let set: Set<TypeInfo> = genExceptionSet(noRollbackFor)
+                        for (noRollback in set where et.isSubtypeOf(noRollback)) {
+                            ORM.hooks.beforeCommit(this.isReadOnly)
+                            let thrown = this.noRollbackFor(e)
+                            txStatus = Committed
+                            ORM.hooks.afterCommit()
+                            throw thrown
+                        }
+                    }
+                    if (let Some(rollbackFor) <- rollbackFor && rollbackFor.size > 0) {
+                        let set: Set<TypeInfo> = genExceptionSet(rollbackFor)
+                        for (rollback in set where et.isSubtypeOf(rollback)) {
+                            ORM.hooks.beforeRollback(e)
+                            let thrown = this.rollbackFor(e)
+                            txStatus = Rollback
+                            ORM.hooks.afterRollback(e)
+                            throw thrown
+                        }
+                        ORM.hooks.beforeCommit(this.isReadOnly)
+                        let thrown = this.noRollbackFor(e)
+                        txStatus = Committed
+                        ORM.hooks.afterCommit()
+                        throw thrown
+                    } else {
+                        ORM.hooks.beforeRollback(e)
+                        this.rollback()
+                        txStatus = Rollback
+                        ORM.hooks.afterRollback(e)
                         throw e
                     }
-                    if (e1 is ORMException) {
-                        throw e1
-                    }
-                    throw ORMException(e1)
                 } finally {
                     ORM.hooks.afterComplete(txStatus)
-                    close()
+                    this.close()
                 }
             }
         } else {

@@ -39,11 +39,13 @@ public class MeetCondition {
         this.frag{frag}
     }
     public func frag(frag: () -> String): String {
-        if(condition){
+        let sql = if(condition){
             '${partial} ${frag()} ${Condition.delimiter}'
         }else{
             ''
         }
+        executor.partials.append(sql)
+        sql
     }
     public func BETWEEN(one: Any, two: Any): String {
         frag{
@@ -53,6 +55,17 @@ public class MeetCondition {
                 executor.add(one)
                 executor.add(two)
                 ' between ? and ? '
+            }
+        }
+    }
+    public func NOT_BETWEEN(one: Any, two: Any): String {
+        frag{
+            if(_argInSql && let (x: ToString, y: ToString) <- (one, two)){
+                ' not between ${x} and ${y} '
+            }else{
+                executor.add(one)
+                executor.add(two)
+                ' not between ? and ? '
             }
         }
     }
@@ -76,21 +89,49 @@ public class MeetCondition {
             builder.toString()
         }
     }
+    public func NOT_IN<I, T>(itr: I): String where I <: Iterable<T> {
+        frag{
+            let builder = StringBuilder(' not in (')
+            var i = 0
+            for(v in itr){
+                if(i > 0){
+                    builder.append(',')
+                }
+                if(_argInSql && let x: ToString <- v){
+                    builder.append(x)
+                }else{
+                    executor.add(v)
+                    builder.append('?')
+                }
+                i++
+            }
+            builder.append(') ')
+            builder.toString()
+        }
+    }
+    public func EXISTS(fn: () -> String): String {
+        frag {
+            ' exists (${fn()})'
+        }
+    }
+    public func NOT_EXISTS(fn: () -> String): String {
+        frag {
+            ' not exists (${fn()})'
+        }
+    }
     public func done(): String {
-        if (condition) {
-            if (_argInSql) {
-                match (_value()) {
-                    case x: ToString => ' ${partial} ${x} ${Condition.delimiter} '
+        frag{
+            if(_argInSql){
+                match(_value()){
+                    case x: ToString => x.toString()
                     case x =>
                         executor.add(x)
-                        ' ${partial} ? ${Condition.delimiter} '
+                        '?'
                 }
-            } else {
+            }else{
                 executor.add(_value())
-                ' ${partial} ? ${Condition.delimiter} '
+                '?'
             }
-        } else {
-            ''
         }
     }
 }

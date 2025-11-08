@@ -17,9 +17,8 @@ package fountain
 
 import f_version.*
 import std.ast.*
-import std.collection.{HashMap, HashSet, Map}
 import std.convert.*
-import std.env.{getWorkingDirectory, getVariables, getCommand, atExit}
+import std.env.{getWorkingDirectory, getCommand, atExit}
 import std.fs.*
 import std.io.{StringReader, ByteBuffer, InputStream}
 import std.process.*
@@ -30,6 +29,7 @@ import f_base.*
 import f_bean.BeanFactory
 import f_log.*
 import f_mvc.MVCStarter
+import f_orm.{ORM, TransactionHook}
 import f_ticktock.Ticktock
 
 /**
@@ -38,52 +38,11 @@ import f_ticktock.Ticktock
 public struct App {
     private static let log = LoggerFactory.getLogger<App>()
     private static const APP_STATIC_RESOURCE_SUFFIX = '_stAtIc__'
-    private let args: Array<String>
-    private let idx: Int64
-    private let path: Path
-    private let ext: String
-    private let libPathName: String
-    private let delim: String
 
-    public App(args: Array<String>, 
-               appHomeIsWorkingPath!: Bool = true, 
-               private let dynamic!: Bool = true, 
-               private let name!: String = '') {
-        this.args = args
-        var idx = 0
-        for (i in 1..args.size where !args[i].startsWith("--dylibPattern=")) {
-            idx = i
-            break
-        }
-        this.idx = idx + 1
-        var path = if ((idx >= 1 && !(args[0] == 'restart' || args[0] == 'shutdown' || args[0] == 'rerun')) || args[0] == 'install') {
-            Path(args[1])
-        } else if (idx >= 2 && !(args[0] == 'restart' || args[0] == 'shutdown' || args[0] == 'rerun')) {
-            Path(args[2])
-        } else if (appHomeIsWorkingPath || args[0] == 'cleanUpdate' || args[0] == 'build' || args[0] == 'count') {
-            getWorkingDirectory()
-        } else {
-            let p = canonicalize(Path(getCommand()))
-            if (p.parent.fileName == 'bin') {
-                p.parent.parent
-            } else {
-                p.parent
-            }
-        }
-        if(!exists(path)){
-            if(args[0].startsWith('--') || args[0] == 'version'){
-                path = Path('./')
-            }else{
-                Directory.create(path)
-            }
-        }
-        this.path = canonicalize(path)
-        (ext, libPathName, delim) = match (OS.current) {
-            case Windows => (".dll", 'Path', ';')
-            case macOS => (".dylib", 'DYLD_FALLBACK_LIBRARY_PATH', ':')
-            case _ => (".so", 'LD_LIBRARY_PATH', ':')
-        }
-    }
+    public App(private let args: Array<String>,
+               private let appHomeIsWorkingPath!: Bool = true,
+               private let dynamic!: Bool = true,
+               private let name!: String = '') {}
     private func convertArgs(first: String){
         match (this.args[0]) {
             case x where x == first => Array<String>(args.size - 1) {
@@ -96,39 +55,57 @@ public struct App {
             case _ => args
         }
     }
-    private func start(): Int64 {
-        let libSet = HashSet<String>()
-        let env = HashMap<String, String>(getVariables())
-        let ldlibPath = StringGenerator(env.get(libPathName) ?? '')
-        func genLibPath(path: Path): Unit {
-            Directory.walk(path) {
-                fi =>
-                if (fi.isDirectory()) {
-                    genLibPath(fi.path)
-                } else if (fi.path.fileName.endsWith(ext) && let libpath <- fi.path.parent.toString() &&
-                    !libSet.contains(libpath)) {
-                    libSet.add(libpath)
-                    if (ldlibPath.size > 0) {
-                        ldlibPath.append(delim)
-                    }
-                    ldlibPath.append(libpath)
-                }
-                true
-            }
-        }
-        genLibPath(path)
-        env[libPathName] = ldlibPath.toString()
-        start(convertArgs('restart'), env)
-    }
-    private func start(args: Array<String>, env: Map<String, String>) {
-        args[0] = 'run'
-        execute(getCommand(), args, workingDirectory: path, environment: env)
-    }
+
     private func run(): Int64 {
         run(args)
     }
+    private func confirmPath(args: Array<String>): (Int64, Path){
+        var idx = 1
+        var path = if (appHomeIsWorkingPath || args[0] == 'count' || idx >= args.size) {
+            getWorkingDirectory()
+        } else if (idx >= 1) {
+            Path(args[1])
+        } else if (idx >= 2) {
+            Path(args[2])
+        } else {
+            let p = canonicalize(Path(getCommand()))
+            if (p.parent.fileName == 'bin') {
+                p.parent.parent
+            } else {
+                p.parent
+            }
+        }
+        path = canonicalize(path)
+        if(!exists(path)){
+            Directory.create(path)
+        }
+        (idx, path)
+    }
+    private func confirmTargetPath(args: Array<String>){
+        let path = if(args.size > 1){
+            Path(args[1])
+        }else{
+            getWorkingDirectory()
+        }
+        if(!exists(path)){
+            Directory.create(path)
+        }
+        canonicalize(path)
+    }
     private func run(args: Array<String>): Int64{
+        let path = confirmTargetPath(args)
+        let (ext, libPathName, delim) = match (OS.current) {
+            case Windows => (".dll", 'Path', ';')
+            case macOS => (".dylib", 'DYLD_FALLBACK_LIBRARY_PATH', ':')
+            case _ => (".so", 'LD_LIBRARY_PATH', ':')
+        }
         func extractPattern() {
+            var idx = 0
+            for (i in 1..args.size where !args[i].startsWith("--dylibPattern=")) {
+                idx = i
+                break
+            }
+            idx++
             if (idx > 0) {
                 let p = args[idx]['--dylibPattern='.size..]
                 if ((p.startsWith("'") && p.endsWith("'")) || (p.startsWith('"') && p.endsWith('"'))) {
@@ -157,11 +134,12 @@ public struct App {
         }
         BeanFactory.instance.afterRegistered()
         Ticktock.getInstance(anyway: false)
+        ORM.registerTransactionHooks<TransactionHook>()
         let mvc = MVCStarter.initialize()
         //orm 需要应用开发者显式注册数据库驱动及初始化事务切面，
         //执行load函数时一定会加载初始化orm的动态链接库从而完成初始化
         //其它模块是工具API没有专门的初始化API
-        let app = this.app
+        let app = this.app(path)
         let appver = if(AppVersion.version.isEmpty()){
             ''
         }else{
@@ -214,7 +192,7 @@ public struct App {
                 if (code != 0) {
                     return code
                 }
-                
+
                 let tagmsg = if(args.size > 3 && args[3] == 'tag'){
                     args[3 .. ]
                 } else if (args.size > 2 && args[2] == 'tag') {
@@ -254,17 +232,15 @@ public struct App {
         }
         0
     }
-    private prop app: String {
-        get() {
-            if (name.size > 0) {
-                name
-            } else if (path.toString().endsWith('/target/release')) {
-                path.parent.parent.fileName
-            } else if (path.toString().endsWith('/release')) {
-                path.parent.fileName
-            } else {
-                path.fileName
-            }
+    private func app(path: Path): String {
+        if (name.size > 0) {
+            name
+        } else if (path.toString().endsWith('/target/release')) {
+            path.parent.parent.fileName
+        } else if (path.toString().endsWith('/release')) {
+            path.parent.fileName
+        } else {
+            path.fileName
         }
     }
     private func pid() {
@@ -289,17 +265,11 @@ public struct App {
         }
         0
     }
-    private func restart(): Int64 {
-        let pid = this.pid()
-        let process = findProcess(pid)
-        shutdown(pid, process)
-        start()
-    }
-    private func rerun(): Int64 {
+    private func restart(){
         shutdown()
-        run(convertArgs('rerun'))
+        run()
     }
-    private func directories(){
+    private func directories(path: Path){
         if(path == getWorkingDirectory()){
             let p = Path('${path}/${path.fileName}')
             if(!exists(p)){
@@ -361,10 +331,16 @@ ${content}
   path-option = ["\${CANGJIE_STDX_DYNAMIC_PATH}", "\${CANGJIE_FOUNTAIN_LIBS}"]
 '''
         File.writeTo(tomlPath, content.unsafeBytes())
+        // var path = dir.join('run')
+        // Directory.create(path, recursive: true)
+        // File.writeTo(path.join('cjpm.toml'), content.unsafeBytes())
+        // path = dir.join('test')
+        // Directory.create(path, recursive: true)
+        // File.writeTo(path.join('cjpm.toml'), content.replace('-O2', '-O0 -g').replace('--lto=full', '').unsafeBytes())
     }
     private func doInit(arg: String): (Int64, Path) {
         let workingDir = if(1 < this.args.size){
-            let sub = this.args[1]            
+            let sub = this.args[1]
             let dir = if(sub.startsWith('/')){
                 Path(sub)
             } else {
@@ -388,7 +364,7 @@ ${content}
         appendToml(dir)
         code
     }
-    private func initDynamic(): Int64 {
+    private func initModule(): Int64 {
         let (code, dir) = doInit('--type=dynamic')
         if(code != 0){
             return code
@@ -402,7 +378,8 @@ ${content}
         code
     }
     private func cleanUpdate(): Int64 {
-        let (workingDir, targetDir) = directories()
+        let path = confirmTargetPath(args)
+        let (workingDir, targetDir) = directories(path)
         println('fboot cleanUpdate ${workingDir} --target-dir=${targetDir}')
         let code = execute('cjpm', ['clean', '--target-dir=${targetDir}'], workingDirectory: workingDir)
         if(code != 0){
@@ -450,15 +427,15 @@ _/ ____\____  __ __  _____/  |______  |__| ____
     private func replaceVersion(version: String) {
         let workingDir = getWorkingDirectory()
         println('fboot replace version ${workingDir} ${version}')
-        let fountainPath = 
+        let fountainPath =
         match(workingDir.fileName) {
-            case 'fountain' => 
-                workingDir
+            case 'fountain' =>
+            workingDir
             case 'fboot' =>
-                workingDir.parent
-            case _ => 
-                println('working directory ${workingDir} is not path of project fountain')
-                return
+            workingDir.parent
+            case _ =>
+            println('working directory ${workingDir} is not path of project fountain')
+            return
         }
         if(!version.isEmpty()) {
             let appPath = fountainPath.join('f_version/src/FountainVersion.cj')
@@ -490,9 +467,9 @@ private let _ = AppVersion.set(#'${banner()}'#, '${name}', '${version}')
         }
         (toml, moduleMember, tomlPath)
     }
-    private func build(): Int64 {
+    private func doBuild(path: Path): Int64 {
         println('fboot build is used to compile the project which depends fountain.')
-        let (workingDir, targetDir) = directories()
+        let (workingDir, targetDir) = directories(path)
         println('fboot build ${workingDir} --target-dir=${targetDir}')
         var (version, name) = extract(workingDir)
         let n = name.replace('.', '_').replace('-', '_')
@@ -518,6 +495,31 @@ private let _ = AppVersion.set(#'${banner()}'#, '${name}', '${version}')
             return 0
         }
         execute('cjpm', ['build', '--target-dir=${targetDir}'], workingDirectory: workingDir)
+    }
+    private func copyToml(source: String, path: Path){
+        copy(path.join('${source}/cjpm.toml'), to: path.join('cjpm.toml'), overwrite: true)
+    }
+    private func build(){
+        let path = confirmTargetPath(args)
+        // copyToml('run', path)
+        doBuild(path)
+    }
+    private func test(): Int64 {
+        let path = confirmTargetPath(args)
+        copyToml('test', path)
+        let code = doBuild(path)
+        if(code != 0){
+            return code
+        }
+        var dylibPattern = ''
+        for(arg in this.args where arg.startsWith('--dylibPattern=')){
+            dylibPattern = arg
+            break
+        }
+        if(dylibPattern.isEmpty()){
+            throw BootException("arg --dylibPattern='...' in command line is required")
+        }
+        run(['run', path.toString(), dylibPattern])
     }
     private func count(dir: Path, counter: CodeCounter, ext: String, ignoreBrackets: Bool, ignoreComments: Bool): Unit {
         Directory.walk(dir){fi =>
@@ -585,18 +587,17 @@ private let _ = AppVersion.set(#'${banner()}'#, '${name}', '${version}')
         0
     }
     private func help(): Int64 {
-        let content = 
+        let content =
 '''
 1.  应用项目只需要编译为动态链接库，把应用的动态链接库加入LD_LIBRARY_PATH
 2.  fboot run [PATH] --dylibPattern=<DYNAMIC_LIB_NAME_REGEX_WITHOUT_EXTNAME>
 3.  fboot shutdown <PID>
-4.  fboot start <PID> [PATH] --dylibPattern=<DYNAMIC_LIB_NAME_REGEX_WITHOUT_EXTNAME>
-5.  fboot restart <PID> [PATH] --dylibPattern=<DYNAMIC_LIB_NAME_REGEX_WITHOUT_EXTNAME>
-6.  fboot workspace 将当前目录初始化为仓颉workspace
-7.  fboot workspace <spacename> 在当前目录创建名为<spacename>的子目录，并将它初始化为仓颉workspace
-8.  fboot workspace <direct_path> 将绝对路径创建为仓颉workspace
-8.  fboot dynamic 将当前目录初始化为仓颉dynamic项目
-9.  fboot dynamic <module_name> 在当前目录创建名为<module_name>的子目录，并初始化为仓颉dynamic模块，并把模块加入当前目录的cjpm.toml
+4.  fboot restart <PID> [PATH] --dylibPattern=<DYNAMIC_LIB_NAME_REGEX_WITHOUT_EXTNAME>
+5.  fboot workspace 将当前目录初始化为仓颉workspace
+6.  fboot workspace <spacename> 在当前目录创建名为<spacename>的子目录，并将它初始化为仓颉workspace
+7.  fboot workspace <direct_path> 将绝对路径创建为仓颉workspace
+8.  fboot module 将当前目录初始化为仓颉dynamic项目
+9.  fboot module <module_name> 在当前目录创建名为<module_name>的子目录，并初始化为仓颉dynamic模块，并把模块加入当前目录的cjpm.toml
 10. fboot build 编译使用fountain开发的应用项目
 11. fboot count 数当前目录的仓颉代码模块数、包数、文件数、行数、计数耗时
 ==============下面的命令用来管理fountain本身===================
@@ -613,22 +614,22 @@ private let _ = AppVersion.set(#'${banner()}'#, '${name}', '${version}')
         println(content)
         0
     }
+
     public func boot(): Int64 {
         match (args[0]) {
-            case 'start' => start()
-            case 'restart' => restart()
             case 'run' => run()
             case 'shutdown' => shutdown()
-            case 'rerun' => rerun()
-            case 'dynamic' => initDynamic()
+            case 'restart' => restart()
+            case 'module' => initModule()
             case 'workspace' => initWorkspace()
             case 'cleanUpdate' => cleanUpdate()
             case 'build' => build()
+            case 'test' => test()
             case 'count' => count()
             case 'version' => version()
             case 'help' => help()
             case _ => throw BootException(
-                'first command arg must be run|start|shutdown|restart|dynamic|workspace|cleanUpdate|build|count|version, but current args are ${args}')
+                    'first command arg must be run|shutdow|restart|module|workspace|cleanUpdate|build|count|version, but current args are ${args}')
         }
     }
 }

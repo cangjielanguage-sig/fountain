@@ -20,6 +20,7 @@ import std.reflect.*
 
 import fountain.bean.*
 import fountain.bean.macros.*
+import fountain.orm.macros.*
 import fountain.orm.*
 import fountain.log.*
 
@@ -29,8 +30,9 @@ import user.model.entity.*
 import user.model.po.*
 import user.model.mvc.*
 
-@Bean
-@BeanMeta
+// @Bean
+// @BeanMeta
+@TransactionalService//如果不需要事务控制可以用@Bean修饰
 public class UserServiceImpl <: UserService {
     private static let log = LoggerFactory.getLogger<UserServiceImpl>()
     public func register(username: String, password: String): Int64 {
@@ -62,6 +64,7 @@ public class UserServiceImpl <: UserService {
         println('id: ${id}')
         executor().deleteUser(id)
     }
+    @Transactional//仅做演示，此函数只有查询，不需要事务控制，如果事务生效，控制台会输出日志
     public func userSession(username: String, password: String): ?(Int64, String, Bool) {
         UserEntity(username, password).makeSession(executor().findUserId)
     }

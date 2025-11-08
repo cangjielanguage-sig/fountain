@@ -30,26 +30,19 @@ class BitSetIterator <: Iterator<Bool> {
 
 public class BitSet <: Iterable<Bool> {
     private static let MASK = 1u64 << 63
-    private let bits = ArrayList<UInt64>()
+    private let bits: ArrayList<UInt64>
 
     public init() {
         this(1)
     }
     public init(capacity: Int64) {
-        var i = 0
-        while (i < capacity) {
+        bits = ArrayList<UInt64>(capacity)
+        for(i in 0 .. capacity){
             bits.add(0)
-            i++
         }
     }
     public init(set: BitSet) {
-        var idx = 0u32
-        for (v in set) {
-            if (v) {
-                this[idx]
-            }
-            idx++
-        }
+        this.bits = ArrayList<UInt64>(set.bits)
     }
     public prop size: Int64 {
         get() {
