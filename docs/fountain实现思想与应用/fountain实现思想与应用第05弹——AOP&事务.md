@@ -20,7 +20,7 @@ Aspects是AOP的中枢，宏@Pointcut把被它修饰的函数体包装成嵌套�
 
 RouteRule是织入规则，典型的就是图中展示的几个RouteRule子类型，各种RouteRule实例可以使用`&` `|` `!`操作符连接起来。
 
-TargetAnnotationRouteRule的初始化参数是注解的全限定名，使用这个规则的注解将被织入这个注解修饰的函数。
+TargetAnnotationRouteRule的初始化参数是注解的全限定名，使用这个规则的切面将被织入符合这个规则的函数。
 
 ConfigRouteRule是从配置项获得规则的抽象父类，ConfigExecutionRouteRule是使用表示成员函数所在类的全限定名、函数名、函数参数、函数返回类型的字符串定义规则，这些规则定义如下：
 
@@ -70,7 +70,7 @@ AspectRoute是一个注解，被它修饰的且实现了Aspect接口的类才是
 
 ### AOP的织入原理。
 
-@Pointcut把它修饰的函数包装成无参嵌套函数`fn`，构造的InvocationFuncInfo和嵌套函数用实参调用`Aspects.proceed`函数。proceed函数从IOC获得全部Aspect实现的切面列表，遍历切面对象，获得声明切面的AspectRoute，用InvocationFuncInfo调用AspectRoute的matches函数，AspectRoute会调用RouteRule，从RouteRule返回true的表示当前函数符合织入规则。
+@Pointcut把它修饰的函数包装成无参嵌套函数`fn`，构造的InvocationFuncInfo和嵌套函数作为实参调用`Aspects.proceed`函数。proceed函数从IOC获得全部Aspect实现的切面列表，遍历切面对象，获得声明切面的AspectRoute，用InvocationFuncInfo调用AspectRoute的matches函数，AspectRoute会调用RouteRule，从RouteRule返回true的表示当前函数符合织入规则。
 
 嵌套函数包装成`var f: (Array<Any>) -> Any = {args => fn(args)}`。
 
@@ -139,7 +139,7 @@ public enum Propagation {
 
 ![事务传播](.assets/fountain%E5%AE%9E%E7%8E%B0%E6%80%9D%E6%83%B3%E4%B8%8E%E5%BA%94%E7%94%A8%E7%AC%AC05%E5%BC%B9%E2%80%94%E2%80%94AOP&%E4%BA%8B%E5%8A%A1/%E4%BA%8B%E5%8A%A1%E4%BC%A0%E6%92%AD.jpg)
 
-每次调用受事务控制的函数，不论当前函数是否需要创建事务都会用外层函数的TransactionWrap创建一个新的TransactionWrap，TransactionWrap包装着真实的事务实例，如果当前函数不需要创建新事务会使用DummyTransaction顶位，如果需要创建新的事务就用新建的事务。
+每次调用受事务控制的函数，不论当前函数是否需要创建事务都会用外层函数的TransactionWrap创建一个新的TransactionWrap，TransactionWrap包装着真实的事务实例，如果当前函数需要创建新的事务就用新建的事务，如果不需要创建新事务会使用DummyTransaction顶替。
 
 TransactionWrap的实例是SqlExecution的成员，发生一次事务函数的调用就包一层新的TransactionWrap的皮，事务函数返回时就脱一层。
 
