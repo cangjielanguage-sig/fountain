@@ -67,11 +67,9 @@ public class UserController {
     @DeleteMapping[path:'/api/user/{id}', 
                    produces:'application/json', 
                    consumes:'application/x-www-form-urlencoded']
-    @IgnoreSecurity
     public func deleteUser(@PathVariable id: Int64): JsonValue {
         println('delete user id is ${id}')
-        // let deleted = userService.deleteUser(id)
-        let deleted = 1
+        let deleted = userService.deleteUser(id)
         let json = '''
         {
             "status": 1,
