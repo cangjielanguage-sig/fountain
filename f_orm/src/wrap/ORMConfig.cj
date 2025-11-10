@@ -221,25 +221,37 @@ public class ORMConfig {
     public static func getTransactionRollbackFor(driverName!: String = String.empty): ?String {
         getConf(driverName: driverName, key: transactionRollbackFor)
     }
-
+    /**
+     * 单位是秒
+     */
     public static func getStdPoolIdleTimeout(driverName!: String = String.empty): ?Duration {
         match (getConf(driverName: driverName, key: stdPoolIdleTimeout)) {
             case Some(x) => Duration.second * Int64.parse(x)
             case _ => None
         }
     }
+    /**
+     * 单位是秒
+     */
     public static func getStdPoolMaxLifeTime(driverName!: String = String.empty): ?Duration {
         match (getConf(driverName: driverName, key: stdPoolMaxLifeTime)) {
             case Some(x) => Duration.second * Int64.parse(x)
             case _ => None
         }
     }
+
+    /**
+     * 单位是微秒
+     */
     public static func getStdPoolConnectionTimeout(driverName!: String = String.empty): ?Duration {
         match (getConf(driverName: driverName, key: stdPoolConnectionTimeout)) {
             case Some(x) => Duration.microsecond * Int64.parse(x)
             case _ => None
         }
     }
+    /**
+     * 单位是秒
+     */
     public static func getStdPoolKeepaliveTime(driverName!: String = String.empty): ?Duration {
         match (getConf(driverName: driverName, key: stdPoolKeepaliveTime)) {
             case Some(x) => Duration.second * Int64.parse(x)
