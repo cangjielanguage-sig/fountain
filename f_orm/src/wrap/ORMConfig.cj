@@ -87,10 +87,10 @@ public class ORMConfig {
     }
     public static func getAllConfigTuples(driverName!: String = String.empty): Array<(String, String)> {
         let map = getAllConfigs(driverName: driverName)
-        let iterator = map.iterator()
-        Array<(String, String)>(map.size) {
-            _ => iterator.next() ?? ('', '')
-        }
+        map.iterator().filter{tpl => tpl[0].contains('orm_options_')}.map{tpl => 
+            let tp = tpl[1].split('=')
+            (tp[0], tp[1])
+        }.toArray()
     }
     public static func getUseCache(driverName!: String = String.empty): ?Bool {
         match (getConf(driverName: driverName, key: useCache)) {
