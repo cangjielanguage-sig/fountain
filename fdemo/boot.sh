@@ -19,6 +19,8 @@ exports(){
     export logger_appender_FDemoFile_rotateDuration=DAY
     export mvc_port=8080 # 这一行可以没有，默认就是8080                                                                         
     export mvc_overallElapsedSwitch=true
+    export mvc_internalServerErrorMessageKind=BEAN
+    export mvc_internalServerErrorMessage=NameOf500Handler
     export orm_pooledDatasourceMaxSize=1
     export orm_pooledDatasourceMaxIdleSize=1
     export orm_pooledDatasourceIdleTimeout=86400

@@ -19,10 +19,13 @@ import std.collection.*
 import std.env
 import opengauss.driver.*
 import opengauss.slog
+import fountain.bean.*
+import fountain.bean.macros.*
 import fountain.data.*
 import fountain.data.macros.*
 import fountain.log.LoggerFactory
 import fountain.orm.*
+import fountain.mvc.{ErrorHttpRequestHandler, HttpStatus}
 
 private let _ = {=>
     try{
@@ -36,6 +39,18 @@ private let _ = {=>
         throw e 
     }
 }()
+@Bean
+@BeanMeta[name:'NameOf500Handler']
+public class Http500Handler <: ErrorHttpRequestHandler {
+    public prop status: HttpStatus {
+        get(){
+            HttpStatus.OK
+        }
+    }
+    public func response(): Any {
+        '{"status":-500}'
+    }
+}
 ///////////////////////////////////////////////////////////////////////////////
 /**这一行往下单纯只是为了演示实例复制和类实例与json互相转换的功能*******************/
 @DataAssist[equal hash tostring props fields]
