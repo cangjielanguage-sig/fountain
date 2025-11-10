@@ -22,14 +22,12 @@ public class InvocationFuncInfo {
     ) {
     }
     public init(
-        qualifiedName: String,
+        typeInfo: TypeInfo,
         funcName: String,
+        argTypes: Array<TypeInfo>,
         args: Array<Any>
     ) {
-        this(QualifiedFuncInfo(qualifiedName, funcName,
-            Array<TypeInfo>(args.size) {
-                i => TypeInfo.of(args[i])
-            }), args)
+        this(QualifiedFuncInfo(typeInfo, funcName, argTypes), args)
     }
     func setArgs(args: Array<Any>) {
         this._args = args
@@ -65,11 +63,11 @@ public class QualifiedFuncInfo <: Hashable & Equatable<QualifiedFuncInfo> {
         hash = doHash(typeInfo, funcInfo)
     }
     public init(
-        qualifiedName: String,
+        typeInfo: TypeInfo,
         funcName: String,
         argTypes: Array<TypeInfo>
     ) {
-        this(ClassTypeInfo.get(qualifiedName), ClassTypeInfo.get(qualifiedName).getInstanceFunction(funcName, argTypes))
+        this(typeInfo, typeInfo.getInstanceFunction(funcName, argTypes))
     }
     private static func doHash(typeInfo: TypeInfo, funcInfo: InstanceFunctionInfo) {
         HashBuilder().append(typeInfo).append(funcInfo).build()
