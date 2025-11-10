@@ -236,7 +236,7 @@ public class ORMConfig {
     }
     public static func getStdPoolConnectionTimeout(driverName!: String = String.empty): ?Duration {
         match (getConf(driverName: driverName, key: stdPoolConnectionTimeout)) {
-            case Some(x) => Duration.second * Int64.parse(x)
+            case Some(x) => Duration.microsecond * Int64.parse(x)
             case _ => None
         }
     }

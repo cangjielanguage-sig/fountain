@@ -19,6 +19,12 @@ exports(){
     export logger_appender_FDemoFile_rotateDuration=DAY
     export mvc_port=8080 # 这一行可以没有，默认就是8080                                                                         
     export mvc_overallElapsedSwitch=true
+    export orm_pooledDatasourceMaxSize=1
+    export orm_pooledDatasourceMaxIdleSize=1
+    export orm_pooledDatasourceIdleTimeout=86400
+    export orm_stdPoolMaxLifeTime=86400
+    export orm_pooledDatasourceConnectionTimeout=86400
+    export orm_pooledDatasourceKeepaliveTime=86400
     # orm_transactionalFuncExecution 和@Transactional注解只要有一个生效就会将事务切面织入到函数
     export orm_transactionalFuncExecution='*..*.delete*(**): *|*..*.remove*(**): *|*..*.save*(**): *|*..*.add*(**): *|*..*.new*(**): *|*..*.create*(**): *|*..*.insert*(**): *|*..*.update*(**): *|*..*.change*(**): *|*..*.register*(**): *'
     
