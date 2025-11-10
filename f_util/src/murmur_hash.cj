@@ -112,7 +112,7 @@ public struct MurmurHash128X64 <: Hashable & Comparable<MurmurHash128X64> {
  * - 结果由两个64位整数组成，表示128位哈希值
  * - 默认种子为0x1234567890ABCDEF
  */
-public func murmurHash126X64(data: Array<Byte>, seed!: Int64 = 0x1234567890ABCDEF): MurmurHash128X64 {
+public func murmurHash128X64(data: Array<Byte>, seed!: Int64 = 0x1234567890ABCDEF): MurmurHash128X64 {
     // Constants for 128-bit variant
     let C1 = 0x87c37b91114253d5u64.toInt()
     const C2 = 0x4cf5ad432745937f
@@ -256,6 +256,6 @@ public func murmurHash126X64(data: Array<Byte>, seed!: Int64 = 0x1234567890ABCDE
     MurmurHash128X64(h1, h2)
 }
 
-public func murmurHash126X64(data: String, seed!: Int64 = 0x1234567890ABCDEF): MurmurHash128X64 {
-    murmurHash126X64(data.unsafeBytes(), seed: seed)
+public func murmurHash128X64(data: String, seed!: Int64 = 0x1234567890ABCDEF): MurmurHash128X64 {
+    murmurHash128X64(data.unsafeBytes(), seed: seed)
 }
