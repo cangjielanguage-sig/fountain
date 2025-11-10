@@ -227,7 +227,7 @@ public struct App {
                 }
                 execute('git', ['push', 'origin', 'release-${v}'])
             } else {
-                println('Format of version must be x.y.z, but ${v} was specified.')
+                println('Format of version must be x.y.z or x.y.z_a, but ${v} was specified.')
             }
         }
         0
