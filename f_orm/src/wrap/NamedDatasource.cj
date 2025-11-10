@@ -27,9 +27,9 @@ public class NamedDatasource <: Datasource & Resource {
             }
         }
     }
-    public static func new(driver: Driver, options: Array<(String ,String)>): NamedDatasource {
+    public static func new(driver: Driver, url: String, options: Array<(String, String)>){
         let driverName = driver.name
-        let ds = match (driver.open(ORMConfig.getUrl(driverName: driverName), options)) {
+        let ds = match (driver.open(url, options)) {
             case x: PooledDatasource => x
             case x where driver.preferredPooling =>
                 let p = PooledDatasource(x)
@@ -56,10 +56,23 @@ public class NamedDatasource <: Datasource & Resource {
         }
         NamedDatasource(options.size > 0, driverName, ds)
     }
+    private static func getUrl(driver: Driver){
+        ORMConfig.getUrl(driverName: driver.name)
+    }
+    private static func getOptions(driver: Driver){
+        ORMConfig.getAllConfigTuples(driverName: driver.name)
+    }
+    public static func new(driver: Driver, options: Array<(String ,String)>): NamedDatasource {
+        new(driver, getUrl(driver), options)
+    }
+    public static func new(driver: Driver, url: String){
+        new(driver, url, getOptions(driver))
+    }
     public static func new(driver: Driver){
         let driverName = driver.name
-        new(driver, ORMConfig.getAllConfigTuples(driverName: driverName))
+        new(driver, getUrl(driver), getOptions(driver))
     }
+
 
     public func connect(): Connection {
         ConnectionWrap(driverName, datasource.connect())

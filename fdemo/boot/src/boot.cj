@@ -29,9 +29,8 @@ private let _ = {=>
         let logger = LoggerFactory.getLogger("opengauss")
         slog.setDefault(logger)
         let driver = DriverManager.getDriver("opengauss").getOrThrow()
-        let url = env.getVariable('POSTGRES') ?? ''
-        println('AAAAAAAAAAAAAAAAAAAA ${url}')
-        ORM.register(driver, url, [])
+        // let url = env.getVariable('POSTGRES') ?? ''
+        ORM.register(driver)
     }catch(e: Exception){
         e.printStackTrace()
         throw e 

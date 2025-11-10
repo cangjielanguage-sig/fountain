@@ -72,8 +72,14 @@ public class ORM {
     public static func register(driver: Driver, default!: Bool = true): Unit {
         register(NamedDatasource.new(driver), default: default)
     }
-    public static func register(driver: Driver, url: String, opts: Array<(String, String)>, default!: Bool = true): Unit {
+    public static func register(driver: Driver, opts: Array<(String, String)>, default!: Bool = true): Unit {
         register(NamedDatasource.new(driver, opts), default: default)
+    }
+    public static func register(driver: Driver, url: String, default!: Bool = true): Unit {
+        register(NamedDatasource.new(driver, url), default: default)
+    }
+    public static func register(driver: Driver, url: String, opts: Array<(String, String)>, default!: Bool = true): Unit {
+        register(NamedDatasource.new(driver, url, opts), default: default)
     }
     public static func deregister(name: String): Unit {
         if(let Some(d) <- datasources.remove(name)){
