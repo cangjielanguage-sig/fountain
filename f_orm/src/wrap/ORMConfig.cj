@@ -20,6 +20,8 @@ package f_orm.wrap
  */
 public class ORMConfig {
     private static const confPrefix = "orm"
+    public static const defaultDriver = confPrefix + "_defaultDriver"
+    public static const drivers = confPrefix + "_drivers"
     public static const connectionUrl = confPrefix + "_connectionUrl"
     public static const transactionIncluding = confPrefix + "_transactionIncluding"
     public static const transactionExcluding = confPrefix + "_transactionExcluding"
@@ -85,10 +87,10 @@ public class ORMConfig {
     }
     public static func getAllConfigTuples(driverName!: String = String.empty): Array<(String, String)> {
         let map = getAllConfigs(driverName: driverName)
-        let iterator = map.iterator()
-        Array<(String, String)>(map.size) {
-            _ => iterator.next() ?? ('', '')
-        }
+        map.iterator().filter{tpl => tpl[0].contains('orm_options_')}.map{tpl => 
+            let tp = tpl[1].split('=')
+            (tp[0], tp[1])
+        }.toArray()
     }
     public static func getUseCache(driverName!: String = String.empty): ?Bool {
         match (getConf(driverName: driverName, key: useCache)) {
@@ -103,6 +105,12 @@ public class ORMConfig {
         } else {
             Config.getString(key)
         }
+    }
+    public static func getDefaultDriver(): String {
+        Config.getString(defaultDriver) ?? ''
+    }
+    public static func getDrivers(): Iterator<Driver> {
+        (Config.getString(drivers)?.split(',') ?? []).iterator().map{d => DriverManager.getDriver(d).getOrThrow()}
     }
     public static func getUrl(driverName!: String = String.empty): String {
         match (getConf(driverName: driverName, key: connectionUrl)) {
@@ -221,25 +229,37 @@ public class ORMConfig {
     public static func getTransactionRollbackFor(driverName!: String = String.empty): ?String {
         getConf(driverName: driverName, key: transactionRollbackFor)
     }
-
+    /**
+     * 单位是秒
+     */
     public static func getStdPoolIdleTimeout(driverName!: String = String.empty): ?Duration {
         match (getConf(driverName: driverName, key: stdPoolIdleTimeout)) {
             case Some(x) => Duration.second * Int64.parse(x)
             case _ => None
         }
     }
+    /**
+     * 单位是秒
+     */
     public static func getStdPoolMaxLifeTime(driverName!: String = String.empty): ?Duration {
         match (getConf(driverName: driverName, key: stdPoolMaxLifeTime)) {
             case Some(x) => Duration.second * Int64.parse(x)
             case _ => None
         }
     }
+
+    /**
+     * 单位是微秒
+     */
     public static func getStdPoolConnectionTimeout(driverName!: String = String.empty): ?Duration {
         match (getConf(driverName: driverName, key: stdPoolConnectionTimeout)) {
-            case Some(x) => Duration.second * Int64.parse(x)
+            case Some(x) => Duration.microsecond * Int64.parse(x)
             case _ => None
         }
     }
+    /**
+     * 单位是秒
+     */
     public static func getStdPoolKeepaliveTime(driverName!: String = String.empty): ?Duration {
         match (getConf(driverName: driverName, key: stdPoolKeepaliveTime)) {
             case Some(x) => Duration.second * Int64.parse(x)

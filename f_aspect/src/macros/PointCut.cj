@@ -50,7 +50,8 @@ private func pointcut(decl: Decl): Tokens {
             }
             let params = x.funcParams
             var argVars = quote()
-            var args = quote([)
+            var args = `lsquare`
+            var argTypes = `lsquare`
             for (i in 0..params.size) {
                 let param = params[i]
                 let paramName = param.identifier
@@ -59,10 +60,13 @@ private func pointcut(decl: Decl): Tokens {
                 ) + `nl`
                 if (i > 0) {
                     args += `comma`
+                    argTypes += `comma`
                 }
                 args += paramName
+                argTypes += quote(TypeInfo.of<$(param.paramType)>())
             }
             args += `rsquare`
+            argTypes += `rsquare`
             let funcName = x.identifier.value
             let funcType = try {
                 x.declType.toTokens()
@@ -80,8 +84,7 @@ private func pointcut(decl: Decl): Tokens {
                         $argVars
                         $(x.block.nodes)
                     }
-                    let _tYpEInfO__ = TypeInfo.of(this).qualifiedName
-                    let info = InvocationFuncInfo(_tYpEInfO__, $funcName, $args)
+                    let info = InvocationFuncInfo(TypeInfo.of(this), $funcName, $argTypes, $args)
                     $proceed
                 }
             )

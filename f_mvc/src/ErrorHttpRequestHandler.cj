@@ -15,7 +15,6 @@ limitations under the License.
 */
 package f_mvc
 
-public interface ErrorHttpRequestHandler <: HttpRequestHandler {
-    prop status: HttpStatus
-    func response(): Any
+public interface ErrorHttpRequestHandler {
+    func handle(ctx: HttpContext, e: ?Exception): (HttpStatus, Any)
 }

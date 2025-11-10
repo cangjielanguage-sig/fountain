@@ -81,6 +81,27 @@ public class ORM {
     public static func register(driver: Driver, url: String, opts: Array<(String, String)>, default!: Bool = true): Unit {
         register(NamedDatasource.new(driver, url, opts), default: default)
     }
+    private static func getDriver(driver: String){
+        DriverManager.getDriver(driver).getOrThrow()
+    }
+    public static func register(driver: String, default!: Bool = true): Unit {
+        register(getDriver(driver), default: default)
+    }
+    public static func register(driver: String, opts: Array<(String, String)>, default!: Bool = true){
+        register(getDriver(driver), opts, default: default)
+    }
+    public static func register(driver: String, url: String, default!: Bool = true){
+        register(getDriver(driver), url, default: default)
+    }
+    public static func register(driver: String, url: String, opts: Array<(String, String)>, default!: Bool = true){
+        register(getDriver(driver), url, opts, default: default)
+    }
+    public static func register(){
+        let default = ORMConfig.getDefaultDriver()
+        for(d in ORMConfig.getDrivers()){
+            register(d, default: default.isEmpty() || d.name == default)
+        }
+    }
     public static func deregister(name: String): Unit {
         if(let Some(d) <- datasources.remove(name)){
             DriverManager.deregister(name)

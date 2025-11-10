@@ -179,7 +179,6 @@ public class TargetRouteRule <: RouteRule {
 
 private func contains(annotations: Collection<Annotation>, annotationNames: Array<String>, sub!: Bool = false) {
     if (sub) {
-        
         let list = ArrayList<TypeInfo>(annotations.size)
         let supers = ArrayList<TypeInfo>(annotationNames.size)
         for (annotation in annotations) {

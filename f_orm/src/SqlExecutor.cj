@@ -48,6 +48,7 @@ public class SqlExecutor <: Resource & RootDAO {
     private var args: SqlArgs = SqlArgs()
     private var hasRealTx = false
     private var _connection_: Connection
+    private var stmt = None<Statement>
     private var tx = None<TransactionWrap>
     private let cache: Map<SqlCacheKey, Any>
     private var clearCache = false
@@ -132,6 +133,10 @@ public class SqlExecutor <: Resource & RootDAO {
             current.set(None)
             currents.get()?.remove(driverName)
             cache.clear()
+            if(!(stmt?.isClosed() ?? true)){
+                stmt?.close()
+                stmt = None<Statement>
+            }
             _connection_.close()
             _connection_ = NoneConnection.instance
         }
@@ -369,6 +374,8 @@ public class SqlExecutor <: Resource & RootDAO {
         get() {
             start = DateTime.now()
             let stmt = connection.prepareStatement(sql)
+            this.stmt = stmt
+            args.set(stmt)
             stmt
         }
     }
@@ -396,9 +403,7 @@ public class SqlExecutor <: Resource & RootDAO {
 
     private prop query: QueryResultWrap {
         get() {
-            execute<QueryResultWrap> {
-                let stmt = statement
-                args.set(stmt)
+            execute<QueryResultWrap> {stmt =>
                 (stmt.query() as QueryResultWrap).getOrThrow()
             }
         }
@@ -843,11 +848,14 @@ public class SqlExecutor <: Resource & RootDAO {
             clearSql()
         }
     }
+    private func execute<T>(executor: (Statement) -> T): T {
+        execute<T>{
+            executor(statement)
+        }
+    }
     private func execute<T>(extract: (UpdateResult) -> T): T {
         clearCache = true
-        execute<T> {
-            let stmt = statement
-            args.set(stmt)
+        execute<T> {stmt =>
             let result = stmt.update()
             extract(result)
         }
