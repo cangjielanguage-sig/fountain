@@ -159,7 +159,7 @@ public struct App {
             let v = args[1]
             if (v.isEmpty()) {
                 println('current version is ${versionStr}. To execute fboot version x.y.z, if you want to edit version.')
-            } else if (Regex(#'^\d+\.\d+.\d+$'#).matches(v)) {
+            } else if (Regex(#'^\d+\.\d+.\d+(_\d+)?$'#).matches(v)) {
                 var code = execute('git', ['pull'])
                 if (code != 0) {
                     return code
@@ -167,7 +167,7 @@ public struct App {
                 let tomlPath = getWorkingDirectory().join('cjpm.toml')
                 let reader = StringReader(ByteBuffer(File.readFrom(tomlPath)))
                 let toml = StringGenerator()
-                let regexp = Regex(#'^\s*version\s*=\s*"(\d+\.)+\d+"$'#)
+                let regexp = Regex(#'^\s*version\s*=\s*"(\d+\.)+\d+(_\d+)?"$'#)
                 for (line in reader.lines()) {
                     toml.appendUnixNewLine(if (regexp.matches(line)) {
                         '  version = "${v}"'
