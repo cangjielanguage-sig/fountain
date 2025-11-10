@@ -20,8 +20,7 @@ exports(){
     export mvc_port=8080 # 这一行可以没有，默认就是8080                                                                         
     export mvc_overallElapsedSwitch=true
     # orm_transactionalFuncExecution 和@Transactional注解只要有一个生效就会将事务切面织入到函数
-    # 使用这个环境变量或--orm_transactionalFuncExecution命令行参数会导致opengauss-driver不能创建连接。
-    export orm_transactionalFuncExecution='*..*.delete*(**): *|*..*.remove*(**): *|*..*.save*(**): *|*..*.add*(**): *|*..*.new*(**): *|*..*.create*(**): *|*..*.insert*(**): *|*..*.update*(**): *|*..*.change*(**): *'
+    export orm_transactionalFuncExecution='*..*.delete*(**): *|*..*.remove*(**): *|*..*.save*(**): *|*..*.add*(**): *|*..*.new*(**): *|*..*.create*(**): *|*..*.insert*(**): *|*..*.update*(**): *|*..*.change*(**): *|*..*.register*(**): *'
     
     if [[ "$path" == "" ]]; then
         path='./fdemo'
