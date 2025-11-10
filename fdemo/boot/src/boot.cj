@@ -17,6 +17,7 @@ package boot
 
 import std.collection.*
 import std.env
+import stdx.net.http.HttpContext
 import opengauss.driver.*
 import opengauss.slog
 import fountain.bean.*
@@ -42,13 +43,8 @@ private let _ = {=>
 @Bean
 @BeanMeta[name:'NameOf500Handler']
 public class Http500Handler <: ErrorHttpRequestHandler {
-    public prop status: HttpStatus {
-        get(){
-            HttpStatus.OK
-        }
-    }
-    public func response(): Any {
-        '{"status":-500}'
+    public func handle(_: HttpContext, _: ?Exception): (HttpStatus, Any) {
+        (HttpStatus.OK, '{"status":-500}')
     }
 }
 ///////////////////////////////////////////////////////////////////////////////

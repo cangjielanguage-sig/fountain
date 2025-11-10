@@ -458,7 +458,7 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
             request.headers.getFirst('Content-Type'), argGen, result, getResponseStatus(), MonoTime.now() - start]
         if (let Some(ex) <- e) {
             let exce = try {
-                MultiRequestMethodHandler.INTERNAL_SERVER_ERROR.handle(ctx)
+                MultiRequestMethodHandler.INTERNAL_SERVER_ERROR.handle(ctx, ex)
                 ex
             } catch (e: Exception) {
                 let status = HttpStatus.INTERNAL_SERVER_ERROR
