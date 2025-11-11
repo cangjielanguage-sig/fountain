@@ -50,7 +50,6 @@ private func transational(input: Tokens): Tokens{
                         if (let x: FuncDecl <- md.macroInputDecl && x.isPublic() && !x.isStatic()) {
                             let d = pointcut(x)
                             md.macroInputs = d.toTokens()
-                            md.macroInputDecl = parseDecl(d.toTokens())
                         }
                     case _ => continue
                 }
@@ -63,7 +62,6 @@ private func transational(input: Tokens): Tokens{
             }
             let tokens = transational(md.macroInputs)
             md.macroInputs = tokens
-            md.macroInputDecl = parseDecl(tokens)
             x.toTokens()
         case _ => 
             diagReport(ERROR, input, 'input must be a class decl', '')

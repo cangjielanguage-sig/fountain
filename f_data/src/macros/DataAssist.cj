@@ -89,7 +89,6 @@ private func assist(attr: Tokens, input: Tokens): Tokens {
             }
             let tokens = assist(attr, ind.macroInputs)
             ind.macroInputs = tokens
-            ind.macroInputDecl = parseDecl(tokens)
             d.toTokens()
         case _ =>
             diagReport(ERROR, input, 'input must be class decl', '')
@@ -134,7 +133,6 @@ func generateProps(decl: ClassDecl, exclusion: HashSet<String>) {
             propDecl
         }else{
             let md = MacroExpandDecl(macroTokens)
-            md.macroInputs = propDecl.toTokens()
             md.macroInputDecl = propDecl
             md
         })

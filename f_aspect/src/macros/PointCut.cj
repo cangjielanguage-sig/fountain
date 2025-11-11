@@ -29,7 +29,6 @@ public macro Pointcut(input: Tokens): Tokens {
         case x: MacroExpandDecl => 
             let d = extract(x)
             let tokens = pointcut(d)
-            x.macroInputDecl = parseDecl(tokens)
             x.macroInputs = tokens
             x.toTokens()
         case x => 
@@ -109,8 +108,6 @@ private func expandClassDecl(decl: ClassDecl): Tokens {
                 @Pointcut
                 $ed
             )
-            let fd = parseDecl(tokens)
-            md.macroInputDecl = fd
             md.macroInputs = tokens
         }
     }
