@@ -136,6 +136,9 @@ class HttpStatusOnlyHandler <: HttpRequestHandler {
         match(kind){
             case Bean => if(message.size > 0 && let Some(x) <- BeanFactory.instance.getFirst<ErrorHttpRequestHandler>(cond: Exactly(message))){
                 let (status, resp) = x.handle(ctx, ex)
+                if(resp is Unit){
+                    return
+                }
                 RequestMeta.setResponseStatus(status)
                 let b = ctx.responseBuilder.status(status.value)
                 var accept = ''
@@ -144,7 +147,6 @@ class HttpStatusOnlyHandler <: HttpRequestHandler {
                     accept = acc
                 }
                 match(resp){
-                    case _: Unit => ()
                     case x: String => b.body(x)
                     case x: ToString => b.body(x.toString())
                     case x: InputStream => b.body(x)
