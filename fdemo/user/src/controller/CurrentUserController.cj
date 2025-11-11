@@ -81,7 +81,7 @@ public class CurrentUserController {
         // let user = parser.parse<UserRequest>('parser')
         let data = userService.userSession(user.username, user.password)
         UserResponse(data)
-        throw Exception()
+        // throw Exception()
     }
     @DeleteMapping[path:'/api/user/session', 
                 consumes:'application/x-www-form-urlencoded', 
