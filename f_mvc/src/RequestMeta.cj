@@ -368,7 +368,7 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
         for (param in function.parameters) {
             let pname = param.name
             var toThrow = true
-            for (annotation in param.annotations where annotation is ControllerFuncParam) {
+            for (annotation in param.annotations) {
                 match (annotation) {
                     case x: ControllerFuncParam => match (args.get(pname)) {
                         case Some((p, v)) where refEq(p, zero) =>
