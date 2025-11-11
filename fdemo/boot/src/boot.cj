@@ -44,7 +44,31 @@ private let _ = {=>
 @BeanMeta[name:'NameOf500Handler']
 public class Http500Handler <: ErrorHttpRequestHandler {
     public func handle(_: HttpContext, _: ?Exception): (HttpStatus, Any) {
-        (HttpStatus.OK, '{"status":-500}')
+        (HttpStatus.OK, BaseResponse.error('error'))
+    }
+}
+@DataAssist[fields]
+public open class BaseResponse {
+    public var code: UInt16 = 0
+    public var msg: String = "ok"
+
+    public init() {}
+    public init(code: UInt16, msg: String) {
+        super()
+        this.code = code
+        this.msg = msg
+    }
+
+    public static func success(): BaseResponse {
+        BaseResponse(0, "ok")
+    }
+
+    public static func success(msg: String): BaseResponse {
+        BaseResponse(0, msg)
+    }
+
+    public static func error(msg: String): BaseResponse {
+        BaseResponse(1, msg)
     }
 }
 ///////////////////////////////////////////////////////////////////////////////
