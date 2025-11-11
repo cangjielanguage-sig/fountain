@@ -185,3 +185,50 @@ public class HellowordController {
 }
 ```
 
+### 错误处理器
+```cj
+import stdx.net.http.HttpContext
+import fountain.bean.*
+import fountain.bean.macros.*
+import fountain.data.*
+import fountain.data.macros.*
+import fountain.mvc.{ErrorHttpRequestHandler, HttpStatus}
+
+@Bean
+@BeanMeta[name:'NameOf500Handler']
+public class Http500Handler <: ErrorHttpRequestHandler {
+    public func handle(_: HttpContext, _: ?Exception): (HttpStatus, Any) {
+        (HttpStatus.OK, BaseResponse.error('error'))
+    }
+}
+@DataAssist[fields]
+public open class BaseResponse {
+    public var code: UInt16 = 0
+    public var msg: String = "ok"
+
+    public init() {}
+    public init(code: UInt16, msg: String) {
+        super()
+        this.code = code
+        this.msg = msg
+    }
+
+    public static func success(): BaseResponse {
+        BaseResponse(0, "ok")
+    }
+
+    public static func success(msg: String): BaseResponse {
+        BaseResponse(0, msg)
+    }
+
+    public static func error(msg: String): BaseResponse {
+        BaseResponse(1, msg)
+    }
+}
+```
+### MVC初始化
+```bash
+    export mvc_port=8080 # 这一行可以没有，默认就是8080                                                                         
+    export mvc_internalServerErrorMessageKind=BEAN # 错误处理类型
+    export mvc_internalServerErrorMessage=NameOf500Handler # 错误处理BEAN名称，如果没有这两行配置前面的错误处理器将不会生效
+```
