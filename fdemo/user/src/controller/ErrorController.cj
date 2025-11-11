@@ -20,9 +20,9 @@ import fountain.mvc.macros.*
 
 @Controller
 public class ErrorController {
-    @GetMapping[path:"/api/error", produces:'text/plain']
+    @GetMapping[path:"/api/error", produces:'application/json']
     @IgnoreSecurity
-    public func error(): String {
+    public func error(): JsonValue {
         throw Exception()
     }
 }
