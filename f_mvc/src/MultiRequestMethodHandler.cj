@@ -152,7 +152,7 @@ class HttpStatusOnlyHandler <: HttpRequestHandler {
                     case x: InputStream => b.body(x)
                     case x: Array<Byte> => b.body(x)
                     case x: ToData where accept.size > 0 => 
-                        if(accept.isEmpty() || accept.startsWith('*/*')){
+                        if(accept.isEmpty() || accept.contains('*/*')){
                             b.body(x.toData().toString())
                         }else if (let Some(mt) <- MediaTypes.tryParse(accept)){
                             b.body(mt.fromData(x.toData()))
