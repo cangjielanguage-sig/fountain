@@ -144,6 +144,7 @@ class HttpStatusOnlyHandler <: HttpRequestHandler {
                     accept = acc
                 }
                 match(resp){
+                    case _: Unit => ()
                     case x: String => b.body(x)
                     case x: ToString => b.body(x.toString())
                     case x: InputStream => b.body(x)
