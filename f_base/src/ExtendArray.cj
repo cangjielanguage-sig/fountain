@@ -41,12 +41,17 @@ extend<T> Array<T> <: ExtendArray<T> {
             case Last => this[this.size - 1]
             case ZeroValue => unsafe{zeroValue<T>()}
             case Other(v) => v
-            case Repeat => return Array<T>(size){i => 
-                this[i % this.size]
+            case Repeat => return if(this.size == 1){
+                let v = this[0]
+                Array<T>(size){_ => v}
+            }else{
+                let s = this.size
+                Array<T>(size){i => this[i % s]}
             }
         }
+        let s = this.size
         Array<T>(size){i =>
-            if(i < this.size){
+            if(i < s){
                 this[i]
             }else{
                 newval
