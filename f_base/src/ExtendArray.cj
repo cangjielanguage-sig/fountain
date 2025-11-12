@@ -36,20 +36,19 @@ extend<T> Array<T> <: ExtendArray<T> {
         if(size < this.size){
             throw IllegalArgumentException('new size must be greater than old, but new size is ${size} and current size is ${this.size}')
         }
+        let s = this.size
         let newval = match(new){
             case First => this[0]
             case Last => this[this.size - 1]
             case ZeroValue => unsafe{zeroValue<T>()}
             case Other(v) => v
-            case Repeat => return if(this.size == 1){
+            case Repeat => return if(s == 1){
                 let v = this[0]
                 Array<T>(size){_ => v}
             }else{
-                let s = this.size
                 Array<T>(size){i => this[i % s]}
             }
         }
-        let s = this.size
         Array<T>(size){i =>
             if(i < s){
                 this[i]
