@@ -26,7 +26,7 @@ public interface ExtendArray<T>{
     /**
      * 扩容数组，如果新的size小于当前数组大小会抛出IllegalArgumentException
      * 如果新的size等于当前数组大小仅仅是复制当前数组
-     * 如果新的size大于当前数组大小，扩容的新值是new，默认是当前数组的最后一个值
+     * 如果新的size大于当前数组大小，扩容的新值是new，默认是泛型实参的零值
      */
     func grow(size: Int64, new!: GrownArrayNewValue<T>): Array<T>
     operator func *(repeat: Int64): Array<T>
