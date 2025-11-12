@@ -15,25 +15,41 @@ limitations under the License.
 */
 package f_base
 
+public enum GrownArrayNewValue<T>{
+    | First
+    | Last
+    | ZeroValue
+    | Repeat
+    | Other(T)
+}
 public interface ExtendArray<T>{
     /**
      * 扩容数组，如果新的size小于当前数组大小会抛出IllegalArgumentException
      * 如果新的size等于当前数组大小仅仅是复制当前数组
-     * 如果新的size大于当前数组大小，扩容的新值是new，默认是zeroValue<T>()
+     * 如果新的size大于当前数组大小，扩容的新值是new，默认是当前数组的最后一个值
      */
-    func grow(size: Int64, new!: T): Array<T>
+    func grow(size: Int64, new!: GrownArrayNewValue<T>): Array<T>
     operator func *(repeat: Int64): Array<T>
 }
 extend<T> Array<T> <: ExtendArray<T> {
-    public func grow(size: Int64, new!: T = unsafe{zeroValue<T>()}): Array<T> {
+    public func grow(size: Int64, new!: GrownArrayNewValue<T> = Last): Array<T> {
         if(size < this.size){
             throw IllegalArgumentException('new size must be greater than old, but new size is ${size} and current size is ${this.size}')
+        }
+        let newval = match(new){
+            case First => this[0]
+            case Last => this[this.size - 1]
+            case ZeroValue => unsafe{zeroValue<T>()}
+            case Other(v) => v
+            case Repeat => return Array<T>(size){i => 
+                this[i % this.size]
+            }
         }
         Array<T>(size){i =>
             if(i < this.size){
                 this[i]
             }else{
-                new
+                newval
             }
         }
     }
