@@ -54,8 +54,6 @@ extend<T> Array<T> <: ExtendArray<T> {
         }
     }
     public operator func *(repeat: Int64): Array<T>{
-        Array<T>(this.size * repeat){i => 
-           this[i % this.size]
-        }
+        grow(this.size * repeat, new: Repeat)
     }
 }
