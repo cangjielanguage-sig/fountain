@@ -32,7 +32,7 @@ public interface ExtendArray<T>{
     operator func *(repeat: Int64): Array<T>
 }
 extend<T> Array<T> <: ExtendArray<T> {
-    public func grow(size: Int64, new!: GrownArrayNewValue<T> = Last): Array<T> {
+    public func grow(size: Int64, new!: GrownArrayNewValue<T> = ZeroValue): Array<T> {
         if(size < this.size){
             throw IllegalArgumentException('new size must be greater than old, but new size is ${size} and current size is ${this.size}')
         }
