@@ -102,43 +102,8 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
     }
     public func checkProduces(ctx: HttpContext) {
         if (let Some(accept) <- ctx.request.headers.getFirst('Accept')) {
-            accept.isEmpty() || accept == '*' || accept == '*/*' || produces.contains(accept) || if (let Some(idx) <- accept
-                .indexOf(',')) {
-                let priority = PriorityQueue<(Float64, Int64, String)>({
-                    t1, t2 => if (let cmp <- t1[0].compare(t2[0]) && cmp != EQ) {
-                        cmp
-                    } else {
-                        t1[1].compare(t2[1])
-                    }
-                })
-                var start = 0
-                var end = Some(idx)
-                while (true) {
-                    let mt = accept[start..if (let Some(e) <- end) {
-                            e
-                        } else {
-                            accept.size
-                        }]
-                    let (q, e) = if (let Some(idx) <- mt.lastIndexOf(';q=') && let qi <- idx + 3) {
-                        let e = if (let Some(e) <- mt.indexOf(';', qi)) {
-                            e
-                        } else {
-                            mt.size
-                        }
-                        (-Float64.parse(mt[qi..e]), idx)
-                    } else {
-                        (-1.0f64, mt.size)
-                    }
-                    let s = priority.size
-                    let submt = mt[0..e]
-                    log.debug{'RequestMeta.checkProduces.addAccept:${q};${s};${submt}'}
-                    priority.add((q, s, submt))
-                    start += mt.size + 1
-                    if (start >= accept.size) {
-                        break
-                    }
-                    end = accept.indexOf(',', start)
-                }
+            accept.isEmpty() || accept == '*' || accept == '*/*' || produces.contains(accept) || if (accept.indexOf(',').isSome()) {
+                let priority = AcceptQueue(accept)
                 while (let Some((q, idx, c)) <- priority.remove()) {
                     log.debug{'RequestMeta.checkProduces.MultiAccept:${q};${idx};${c}'}
                     if (c.startsWith('*/*') || produces.contains(c)) {

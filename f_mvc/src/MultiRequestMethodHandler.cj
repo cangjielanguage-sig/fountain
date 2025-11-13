@@ -154,6 +154,15 @@ class HttpStatusOnlyHandler <: HttpRequestHandler {
                     case x: ToData where accept.size > 0 => 
                         if(accept.isEmpty() || accept.contains('*/*')){
                             b.body(x.toData().toString())
+                        }else if(accept.indexOf(',').isSome()){
+                            let queue = AcceptQueue(accept)
+                            while(let Some((_, _, accept)) <- queue.remove()){
+                                if(let Some(mt) <- MediaTypes.tryParse(accept)){
+                                    b.body(mt.fromData(x.toData()))
+                                    return
+                                }
+                            }
+                            b.body(x.toData().toString())
                         }else if (let Some(mt) <- MediaTypes.tryParse(accept)){
                             b.body(mt.fromData(x.toData()))
                         }else{
