@@ -22,10 +22,9 @@ bi2: 超过i取值区间的，l是bi.toBytes()的长度的字节数（如果是�
 r1|r2: 为避免损失精度，不转成基本类型。获得r.value，严格按照bi输出。后面跟着精度和标度。详细格式如下：
 |-  r  -|s|- l -|
 | bytes of value|
-|-preci-|-scale-|
-| bytes of preci|
-| bytes of scale|
-preci是精度字节数，scale是标度字节数，bytes of preci是精度值的字节序列，bytes of scale是标度值的字节序列。如果scale是0，则没有bytes of scale。r.value在i取值区间的， l和bytes of value采用bi1；超过这个区间的采用bi2。对于r值是0的，s+l是0000，没有bytes of value，preci是1，没有bytes of preci，scale照前述输出。
+|- sc-|- bytes -|
+|- of scale    -|
+sc是标度字节数，占三比特，bytes of scale是标度值的字节序列，scale<=0x1f的sc值是0，bytes of scale独占一字节。r.value在i取值区间的， l和bytes of value采用bi1，编号是r1；超过这个区间的采用bi2，编号是r2。对于r值是0，scale>0的，s+l是0000，没有bytes of value，scale照前述输出。对于scale是0的，不论r值，一律作为bi1输出。
 d1|d2: BigInt(d.toSeconds()) * BigInt(10**9) + BigInt((d - Duration.second * d.toSeconds()).toNanoseconds())，再严格按照bi1|bi2输出。
 t1|t2: t - DateTime.Epoch再按照d1|d2的格式输出。
 l: ll是集合长度的字节数，紧跟着长度的字节序列，然后按照各种数据格式输出
