@@ -15,10 +15,10 @@ limitations under the License.
  */
 package f_util
 
+import std.math.numeric.BigInt
 import std.overflow.WrappingOp
 import f_base.UnsafeBytes
 import f_base.*
-import f_util.exception.MurmurHashException
 
 let MURMUR_HASH_MASK = 0xc6a4a7935bd1e995_u64.
 toInt()
@@ -92,6 +92,18 @@ public struct MurmurHash128X64 <: Hashable & Comparable<MurmurHash128X64> {
         }else{
             cmp
         }
+    }
+    public func toBigInt(): BigInt {
+        func to(x: Int64, a: Int64){
+            Int8((x >> (a * 8)) & 0xffi64).toUInt()
+        }
+        BigInt(true, Array<Byte>(16){i =>
+            if(i < 8){
+                to(one, 7 - i)
+            }else{
+                to(two, 15 - i)
+            }
+        })
     }
 }
 /**

@@ -24,12 +24,15 @@ r1|r2: 为避免损失精度，不转成基本类型。获得r.value，严格按
 | bytes of value|
 |- sc-|- bytes -|
 |- of scale    -|
-sc是标度字节数，占三比特，bytes of scale是标度值的字节序列，scale<=0x1f的sc值是0，bytes of scale独占一字节。r.value在i取值区间的， l和bytes of value采用bi1，编号是r1；超过这个区间的采用bi2，编号是r2。对于r值是0，scale>0的，s+l是0000，没有bytes of value，scale照前述输出。对于scale是0的，不论r值，一律作为bi1输出。
+sc是标度字节数，占三比特，bytes of scale是标度值的字节序列，scale<=0x1f的sc值是0，bytes of scale独占一字节。r.value在i取值区间的， l和bytes of value采用bi1，编号是r1；超过这个区间的采用bi2，编号是r2。
+对于r值是0，scale>0的，s+l是0000，没有bytes of value，scale照前述输出。
+对于scale是0的，按照bi1|bi2输出。
 d1|d2: BigInt(d.toSeconds()) * BigInt(10**9) + BigInt((d - Duration.second * d.toSeconds()).toNanoseconds())，再严格按照bi1|bi2输出。
 t1|t2: t - DateTime.Epoch再按照d1|d2的格式输出。
 l: ll是集合长度的字节数，紧跟着长度的字节序列，然后按照各种数据格式输出
 m: ml是map长度的字节数，紧跟着长度的字节序列，然后按照遍历顺序和各种数据格式输出
-o: ol是object fields数量的字节数，紧跟着fields数的字节序列，然后按照DataObject<T>(object).fields()的名称murmur_hash128比较顺序输出Data。反序列化就是按照murmur_hash128查找对应的field
+o: ol是object fields数量的字节数，紧跟着fields数的字节序列，然后按照DataObject<T>(object).fields()的名称murmur_hash128比较顺序输出Data。反序列化就是按照murmur_hash128查找对应的field。
+可以按照序列化参数或配置项决定是否输出field名。如果需要输出field名称，且field名称字符串字节数<=16字节的按照s输出field名称字符串；超过16字节的将field名称字符串的murmur_hash128转换为无符号BigInt再按bi2输出。
 ```
 | 类型（t）           | 编号\|二进制        |
 | ------------------- | ------------------- |

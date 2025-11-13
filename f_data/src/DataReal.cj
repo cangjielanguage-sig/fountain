@@ -66,7 +66,7 @@ public class DataReal <: Data & Hashable & Comparable<DataReal> {
         this(Decimal(data))
     }
     public init(data: String) {
-        this(Decimal.parse(data), Regex.INTEGER.matches(data))
+        this(Decimal.parse(data))
     }
 
     public func toDecimal() {

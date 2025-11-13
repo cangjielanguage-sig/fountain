@@ -29,13 +29,22 @@ public interface ExtendArray<T>{
      * 如果新的size大于当前数组大小，扩容的新值是new，默认是泛型实参的零值
      */
     func grow(size: Int64, new!: GrownArrayNewValue<T>): Array<T>
+    /**
+     * 扩容数组，如果新的size小于当前数组大小会抛出IllegalArgumentException
+     * 如果新的size等于当前数组大小仅仅是复制当前数组
+     * 如果新的size大于当前数组大小，扩容的新值是new(i)，调用new的第一个i是数组的size，第二个是size + 1，...。
+     */
+    func grow(size: Int64, new: (Int64) -> T): Array<T>
     operator func *(repeat: Int64): Array<T>
 }
 extend<T> Array<T> <: ExtendArray<T> {
-    public func grow(size: Int64, new!: GrownArrayNewValue<T> = ZeroValue): Array<T> {
+    private func check(size: Int64){
         if(size < this.size){
             throw IllegalArgumentException('new size must be greater than old, but new size is ${size} and current size is ${this.size}')
         }
+    }
+    public func grow(size: Int64, new!: GrownArrayNewValue<T> = ZeroValue): Array<T> {
+        check(size)
         let s = this.size
         let newval = match(new){
             case First => this[0]
@@ -54,6 +63,17 @@ extend<T> Array<T> <: ExtendArray<T> {
                 this[i]
             }else{
                 newval
+            }
+        }
+    }
+    public func grow(size: Int64, new: (Int64) -> T): Array<T> {
+        check(size)
+        let s = this.size
+        Array<T>(size){i => 
+            if(i < s){
+                this[i]
+            }else{
+                new(i)
             }
         }
     }
