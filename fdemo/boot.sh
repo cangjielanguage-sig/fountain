@@ -39,10 +39,14 @@ run(){
     exports
     fboot run $path --dylibPattern='(boot|user\.util\.auth|\.(controller|service\.impl))'
 }
-perf(){
+perfRecord(){
     exports
-    cjprof record -f max -- fboot run $path --dylibPattern='(boot|user\.util\.auth|\.(controller|service\.impl))'
+    cjprof record -f max -- $CJPM_INSTALL/bin/fboot run $path --dylibPattern='(boot|user\.util\.auth|\.(controller|service\.impl))'
 
+}
+perfReport(){
+    exports
+    cjprof report -F 
 }
 build(){
     export CANGJIE_STDX_PATH=$CANGJIE_STDX_DYNAMIC_PATH
@@ -59,8 +63,11 @@ case "$1" in
 run)
     run
     ;;
-perf)
-    perf
+perfRecord)
+    perfRecord
+    ;;
+perfReport)
+    perfReport
     ;;
 cleanUpdate)
     cleanUpdate $2 $3
