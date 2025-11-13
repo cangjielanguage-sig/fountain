@@ -23,6 +23,7 @@ public enum GrownArrayNewValue<T>{
     | Other(T)
 }
 public interface ExtendArray<T>{
+    prop size: Int64
     /**
      * 扩容数组，如果新的size小于当前数组大小会抛出IllegalArgumentException
      * 如果新的size等于当前数组大小仅仅是复制当前数组
@@ -30,11 +31,24 @@ public interface ExtendArray<T>{
      */
     func grow(size: Int64, new!: GrownArrayNewValue<T>): Array<T>
     /**
+     * expandSize + size == grow的size参数
+     */
+    func expand(expandSize: Int64, new!: GrownArrayNewValue<T>): Array<T>{
+        grow(expandSize + size, new: new)
+    }
+    /**
      * 扩容数组，如果新的size小于当前数组大小会抛出IllegalArgumentException
      * 如果新的size等于当前数组大小仅仅是复制当前数组
      * 如果新的size大于当前数组大小，扩容的新值是new(i)，调用new的第一个i是数组的size，第二个是size + 1，...。
      */
     func grow(size: Int64, new: (Int64) -> T): Array<T>
+    /**
+     * expandSize + size == grow的size参数，grow的new闭包参数 - size是expand的new闭包参数。
+     */
+    func expand(expandSize: Int64, new: (Int64) -> T): Array<T> {
+        let s = size
+        grow(expandSize + s){i => new(i - s)}
+    }
     operator func *(repeat: Int64): Array<T>
 }
 extend<T> Array<T> <: ExtendArray<T> {
