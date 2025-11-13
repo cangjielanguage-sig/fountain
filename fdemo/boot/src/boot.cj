@@ -25,7 +25,7 @@ import fountain.data.*
 import fountain.data.macros.*
 import fountain.log.LoggerFactory
 import fountain.orm.*
-
+/*
 private let _ = {=>
     try{
         let logger = LoggerFactory.getLogger("opengauss")
@@ -38,7 +38,7 @@ private let _ = {=>
         throw e 
     }
 }()
-
+*/
 ///////////////////////////////////////////////////////////////////////////////
 /**这一行往下单纯只是为了演示实例复制和类实例与json互相转换的功能*******************/
 @DataAssist[equal hash tostring props fields]
