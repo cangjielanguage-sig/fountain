@@ -42,17 +42,17 @@ public interface ExtendRegex {
 extend Regex <: ExtendRegex {
     public static prop INTEGER: Regex {
         get() {
-            #"^\d+$"#.regex(solid: true)
+            #"^[\+-]?\d+$"#.regex(solid: true)
         }
     }
     public static prop DECIMAL: Regex {
         get() {
-            #"^\d+\.\d+$"#.regex(solid: true)
+            #"^[\+-]?\d+\.\d+$"#.regex(solid: true)
         }
     }
     public static prop REAL_NUMBER: Regex {
         get() {
-            #"^\d+(\.\d*)?$"#.regex(solid: true)
+            #"^[\+-]?\d+(\.\d*)?$"#.regex(solid: true)
         }
     }
     public static prop EMAIL: Regex {
