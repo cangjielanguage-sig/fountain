@@ -228,14 +228,11 @@ public class FromClause<T> <: ExceptInsertClause<T> where T <: QueryMappersInit<
         executor.singlePage<R>('select ${column} ${sqlgen}', size, page: page)
     }
     
-    private func doSelectPage<R>(columns: String, size: Int64, page: Int64): Pagination<R> where R <: QueryMappersInit<R> & DataFields<R> {
-        executor.page<R>('select ${columns} ${sqlgen}', size, page: page)
-    }
     public func page<R>(size: Int64, page!: Int64 = 1): Pagination<R> where R <: QueryMappersInit<R> & DataFields<R> {
-        doSelectPage<R>('*', size, page)
+        this.page<R>('*', size, page: page)
     }
     public func page<R>(columns: String, size: Int64, page!: Int64 = 1): Pagination<R> where R <: QueryMappersInit<R> & DataFields<R> {
-        doSelectPage<R>(columns, size, page)
+        executor.page<R>('select ${columns} ${sqlgen}', size, page: page)
     }
 }
 
