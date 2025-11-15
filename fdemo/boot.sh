@@ -33,7 +33,7 @@ exports(){
     if [[ "$path" == "" ]]; then
         path='./fdemo'
     fi
-    export LD_LIBRARY_PATH=$path/release/boot:$path/release/opengauss:$path/release/user:$LD_LIBRARY_PATH    
+    export LD_LIBRARY_PATH=$path/release/boot:$path/release/opengauss:$path/release/user:$LD_LIBRARY_PATH
 }
 run(){
     exports
