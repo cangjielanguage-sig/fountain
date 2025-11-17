@@ -40,7 +40,7 @@ https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901027
 | ----------------------- | ---------------------- | --------- | --------- | --------- | --------- |
 | CONNECT                 | Reserved               | 0         | 0         | 0         | 0         |
 | CONNACK                 | Reserved               | 0         | 0         | 0         | 0         |
-| PUBLISH                 | Used in MQTT v5.0      | DUP       | QoS       | RETAIN    |           |
+| PUBLISH                 | Used in MQTT v5.0      | DUP       | QoS1      | Qos0      | RETAIN    |
 | PUBACK                  | Reserved               | 0         | 0         | 0         | 0         |
 | PUBREC                  | Reserved               | 0         | 0         | 0         | 0         |
 | PUBREL                  | Reserved               | 0         | 0         | 1         | 0         |
