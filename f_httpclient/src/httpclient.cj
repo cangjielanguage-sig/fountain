@@ -26,10 +26,25 @@ import f_http.{MediaType, MediaTypes}
 import f_http.exception.MediaTypeException
 
 public class HttpClient {
+    private static var readTimeout_ = None<Duration>
+    private static var writeTimeout_ = None<Duration>
+    public static func globalReadTimeout(readTimeout: Duration): Unit {
+        readTimeout_ = readTimeout
+    }
+    public static func globalWriteTimeout(writeTimeout: Duration): Unit {
+        writeTimeout_ = writeTimeout
+    }
     private let builder = ClientBuilder()
     private let request = HttpRequestBuilder()
 
-    public HttpClient(var url: String){}
+    public HttpClient(var url: String){
+        if(let Some(x) <- readTimeout_){
+            readTimeout(x)
+        }
+        if(let Some(x) <- writeTimeout_){
+            writeTimeout(x)
+        }
+    }
 
     public func autoRedirect(auto: Bool): This {
         builder.autoRedirect(auto)
@@ -181,7 +196,7 @@ public class FormBuilder {
         form.remove(key)
         this
     }
-    public func build(): HttpClient {
+    private func build(): HttpClient {
         client.url = '${client.url}?${form.toEncodeString()}'
         client
     }
