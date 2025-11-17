@@ -1,17 +1,32 @@
+```
+ 0 1 2 3 4 5 6 7 bit
+|-|-|-|-|-|-|-|-|
+|-type -|d|qos|r|
+|- msgl-|-bytes-|
+|- of length  -|
+|- body bytes -|
+type: 消息类型
+d：dup
+qos: QoS
+r: Retain
+msgl: 消息长度的字节数，除当前字节以外往后还有多少字节表示消息体字节数；msgl后面四比特是bytes of length的最低位四比特，后续是bytes of length剩余比特位按小端序编码。如果消息体字节数<16，则msgl是0。
+对于没有消息体的消息类型，也没有msgl和bytes of length
+```
+
 https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901027
 
-除了一字节协议头，其它的都是自定义。
+消息体长度和编解码格式采用[codec.md](./编解码器/codec.md)。其它特性尽量采用MQTT，以消息体字节数尽量少为第一优先级。
 
 | **Name**    | **Value** | **Direction of flow**                | **Description**                          |
 | ----------- | --------- | ------------------------------------ | ---------------------------------------- |
 | Reserved    | 0         | Forbidden                            | Reserved                                 |
 | CONNECT     | 1         | Client to Server                     | Connection request                       |
 | CONNACK     | 2         | Server to Client                     | Connect acknowledgment                   |
-| PUBLISH     | 3         | Client to Server orServer to Client  | Publish message                          |
-| PUBACK      | 4         | Client to Server orServer to Client  | Publish acknowledgment (QoS 1)           |
-| PUBREC      | 5         | Client to Server orServer to Client  | Publish received (QoS 2 delivery part 1) |
-| PUBREL      | 6         | Client to Server orServer to Client  | Publish release (QoS 2 delivery part 2)  |
-| PUBCOMP     | 7         | Client to Server orServer to Client  | Publish complete (QoS 2 delivery part 3) |
+| PUBLISH     | 3         | Client to Server or Server to Client | Publish message                          |
+| PUBACK      | 4         | Client to Server or Server to Client | Publish acknowledgment (QoS 1)           |
+| PUBREC      | 5         | Client to Server or Server to Client | Publish received (QoS 2 delivery part 1) |
+| PUBREL      | 6         | Client to Server or Server to Client | Publish release (QoS 2 delivery part 2)  |
+| PUBCOMP     | 7         | Client to Server or Server to Client | Publish complete (QoS 2 delivery part 3) |
 | SUBSCRIBE   | 8         | Client to Server                     | Subscribe request                        |
 | SUBACK      | 9         | Server to Client                     | Subscribe acknowledgment                 |
 | UNSUBSCRIBE | 10        | Client to Server                     | Unsubscribe request                      |

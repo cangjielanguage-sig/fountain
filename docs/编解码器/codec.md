@@ -45,10 +45,10 @@ bi2: 超过i取值区间的，l是bi.toBytes()的长度的字节数（如果是�
 r1|r2: 为避免损失精度，不转成基本类型。获得r.value，严格按照bi输出。后面跟着精度和标度。详细格式如下：
 |-  r  -|s|- l -|
 | bytes of value|
-|- sc-|- bytes -|
+|- sc  -|-bytes-|
 |- of scale    -|
 sc是标度字节数，占四比特，sc表示本字节后面还有几字节是标度字节。
-bytes of scale是标度值的字节序列，scale<=15的，没有sc值，bytes of scale独占一字节。
+bytes of scale是标度值的字节序列，scale<=15的，sc是0，bytes of scale独占一字节；scale>15的，sc后面的四比特是scale最低位四比特，然后按小端序编码scale。
 r.value在i取值区间的， l和bytes of value采用bi1，编号是r1；超过这个区间的采用bi2，编号是r2。
 对于r值是0，scale>0的，s+l是0000，没有bytes of value，scale照前述输出。
 对于scale是0的，按照bi1|bi2输出，编号是bi1|bi2。
