@@ -111,6 +111,14 @@ public class DatabasePool <: Resource & Datasource {
             checkSql: ORMConfig.getPoolCheckSql(driverName: driver.name)
         )
     }
+    public static func byConfig(driver: Driver, options: Array<(String, String)>){
+        let ds = driver.open(ORMConfig.getUrl(), options)
+        byConfig(driver){ds.connect()}
+    }
+    public static func byConfig(driverName: String, options: Array<(String, String)>){
+        let driver = DriverManager.getDriver(driverName).getOrThrow()
+        byConfig(driver, options)
+    }
 
     public func isClosed(): Bool {
         let poolClosed = pool.isClosed()

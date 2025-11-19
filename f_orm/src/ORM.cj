@@ -102,6 +102,23 @@ public class ORM {
             register(d, default: default.isEmpty() || d.name == default)
         }
     }
+    public static func registerWithORMPool(driverName: String, default!: Bool = true){
+        register(NamedDatasource(false, driverName, DatabasePool.byConfig(driverName)), default: default)
+    }
+    public static func registerWithORMPool(){
+        let default = ORMConfig.getDefaultDriver()
+        for(d in ORMConfig.getDriverNames()){
+            registerWithORMPool(d, default: default.isEmpty() || d == default)
+        }
+    }
+    public static func initialize(){
+        if(ORM.getUseStdxPool()){
+            register()
+        }else{
+            registerWithORMPool()
+        }
+        registerTransactionHooks<TransactionHook>()
+    }
     public static func deregister(name: String): Unit {
         if(let Some(d) <- datasources.remove(name)){
             DriverManager.deregister(name)

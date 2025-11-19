@@ -32,6 +32,7 @@ public class ORMConfig {
     public static const transactionNoRollbackFor = confPrefix + "_transactionNoRollbackFor"
     public static const transactionRollbackFor = confPrefix + "_transactionRollbackFor"
     public static const useCache = confPrefix + "_useCache"
+    public static const useStdxPool = confPrefix + "_useStdxPool"
     public static const databasePoolInitSize = confPrefix + "_databasePoolInitSize"
     public static const databasePoolMinSize = confPrefix + "_databasePoolMinSize"
     public static const databasePoolMaxSize = confPrefix + "_databasePoolMaxSize"
@@ -109,8 +110,11 @@ public class ORMConfig {
     public static func getDefaultDriver(): String {
         Config.getString(defaultDriver) ?? ''
     }
+    public static func getDriverNames(): Iterator<String>{
+        (Config.getString(drivers)?.split(',') ?? []).iterator()
+    }
     public static func getDrivers(): Iterator<Driver> {
-        (Config.getString(drivers)?.split(',') ?? []).iterator().map{d => DriverManager.getDriver(d).getOrThrow()}
+        getDriverNames().map{d => DriverManager.getDriver(d).getOrThrow()}
     }
     public static func getUrl(driverName!: String = String.empty): String {
         match (getConf(driverName: driverName, key: connectionUrl)) {
@@ -127,6 +131,9 @@ public class ORMConfig {
         }
     }
 
+    public static func getUseStdxPool(): Bool {
+        get<Bool>(driverName: '', key: useStdxPool, default: true)
+    }
     public static func getPoolInitSize(driverName!: String = String.empty): Int64 {
         get<Int64>(driverName: driverName, key: databasePoolInitSize, default: 10)
     }

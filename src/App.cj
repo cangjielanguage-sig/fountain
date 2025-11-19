@@ -134,7 +134,7 @@ public struct App {
         }
         BeanFactory.instance.afterRegistered()
         Ticktock.getInstance(anyway: false)
-        ORM.registerTransactionHooks<TransactionHook>()
+        ORM.initialize()
         let mvc = MVCStarter.initialize()
         //orm 需要应用开发者显式注册数据库驱动及初始化事务切面，
         //执行load函数时一定会加载初始化orm的动态链接库从而完成初始化
