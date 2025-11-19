@@ -1,0 +1,166 @@
+```
+ 0 1 2 3 4 5 6 7 bit
+|-|-|-|-|-|-|-|-|
+|-type -|d|qos|r|
+|- msgl-|-bytes-|
+|- of length  -|
+|- body bytes -|
+type: 消息类型
+d：dup
+qos: QoS
+r: Retain
+msgl: 消息长度的字节数，除当前字节以外往后还有多少字节表示消息体字节数；msgl后面四比特是bytes of length的最低位四比特，后续是bytes of length剩余比特位按小端序编码。如果消息体字节数<16，则msgl是0。
+对于没有消息体的消息类型，也没有msgl和bytes of length
+```
+
+https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc3901027
+
+消息体长度和编解码格式采用[codec.md](./编解码器/codec.md)。其它特性尽量采用MQTT，以消息体字节数尽量少为第一优先级。
+
+| **Name**    | **Value** | **Direction of flow**                | **Description**                          |
+| ----------- | --------- | ------------------------------------ | ---------------------------------------- |
+| Reserved    | 0         | Forbidden                            | Reserved                                 |
+| CONNECT     | 1         | Client to Server                     | Connection request                       |
+| CONNACK     | 2         | Server to Client                     | Connect acknowledgment                   |
+| PUBLISH     | 3         | Client to Server or Server to Client | Publish message                          |
+| PUBACK      | 4         | Client to Server or Server to Client | Publish acknowledgment (QoS 1)           |
+| PUBREC      | 5         | Client to Server or Server to Client | Publish received (QoS 2 delivery part 1) |
+| PUBREL      | 6         | Client to Server or Server to Client | Publish release (QoS 2 delivery part 2)  |
+| PUBCOMP     | 7         | Client to Server or Server to Client | Publish complete (QoS 2 delivery part 3) |
+| SUBSCRIBE   | 8         | Client to Server                     | Subscribe request                        |
+| SUBACK      | 9         | Server to Client                     | Subscribe acknowledgment                 |
+| UNSUBSCRIBE | 10        | Client to Server                     | Unsubscribe request                      |
+| UNSUBACK    | 11        | Server to Client                     | Unsubscribe acknowledgment               |
+| PINGREQ     | 12        | Client to Server                     | PING request                             |
+| PINGRESP    | 13        | Server to Client                     | PING response                            |
+| DISCONNECT  | 14        | Client to Server orServer to Client  | Disconnect notification                  |
+| AUTH        | 15        | Client to Server or Server to Client | Authentication exchange                  |
+
+| **MQTT Control Packet** | **Fixed Header flags** | **Bit 3** | **Bit 2** | **Bit 1** | **Bit 0** |
+| ----------------------- | ---------------------- | --------- | --------- | --------- | --------- |
+| CONNECT                 | Reserved               | 0         | 0         | 0         | 0         |
+| CONNACK                 | Reserved               | 0         | 0         | 0         | 0         |
+| PUBLISH                 | Used in MQTT v5.0      | DUP       | QoS1      | Qos0      | RETAIN    |
+| PUBACK                  | Reserved               | 0         | 0         | 0         | 0         |
+| PUBREC                  | Reserved               | 0         | 0         | 0         | 0         |
+| PUBREL                  | Reserved               | 0         | 0         | 1         | 0         |
+| PUBCOMP                 | Reserved               | 0         | 0         | 0         | 0         |
+| SUBSCRIBE               | Reserved               | 0         | 0         | 1         | 0         |
+| SUBACK                  | Reserved               | 0         | 0         | 0         | 0         |
+| UNSUBSCRIBE             | Reserved               | 0         | 0         | 1         | 0         |
+| UNSUBACK                | Reserved               | 0         | 0         | 0         | 0         |
+| PINGREQ                 | Reserved               | 0         | 0         | 0         | 0         |
+| PINGRESP                | Reserved               | 0         | 0         | 0         | 0         |
+| DISCONNECT              | Reserved               | 0         | 0         | 0         | 0         |
+| AUTH                    | Reserved               | 0         | 0         | 0         | 0         |
+
+####   DUP
+
+**Position:** byte 1, bit 3.
+
+If the DUP flag is set to 0, it indicates that this is the first occasion that the Client or Server has attempted to send this PUBLISH packet. If the DUP flag is set to 1, it indicates that this might be re-delivery of an earlier attempt to send the packet.
+
+ 
+
+The DUP flag MUST be set to 1 by the Client or Server when it attempts to re-deliver a PUBLISH packet [MQTT-3.3.1-1]. The DUP flag MUST be set to 0 for all QoS 0 messages [MQTT-3.3.1-2].
+
+ 
+
+The value of the DUP flag from an incoming PUBLISH packet is not propagated when the PUBLISH packet is sent to subscribers by the Server. The DUP flag in the outgoing PUBLISH packet is set independently to the incoming PUBLISH packet, its value MUST be determined solely by whether the outgoing PUBLISH packet is a retransmission [MQTT-3.3.1-3].
+
+ 
+
+**Non-normative comment**
+
+The receiver of an MQTT Control Packet that contains the DUP flag set to 1 cannot assume that it has seen an earlier copy of this packet.
+
+ 
+
+**Non-normative comment**
+
+It is important to note that the DUP flag refers to the MQTT Control Packet itself and not to the Application Message that it contains. When using QoS 1, it is possible for a Client to receive a PUBLISH packet with DUP flag set to 0 that contains a repetition of an Application Message that it received earlier, but with a different Packet Identifier.[ Section 2.2.1](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Toc358219870) provides more information about Packet Identifiers.
+
+ 
+
+####  QoS
+
+**Position:** byte 1, bits 2-1.
+
+This field indicates the level of assurance for delivery of an Application Message. The QoS levels are shown below.
+
+ 
+
+Table 3‑2 - QoS definitions
+
+| **QoS value** | **Bit 2** | **bit 1** | **Description**             |
+| ------------- | --------- | --------- | --------------------------- |
+| 0             | 0         | 0         | At most once delivery       |
+| 1             | 0         | 1         | At least once delivery      |
+| 2             | 1         | 0         | Exactly once delivery       |
+| -             | 1         | 1         | Reserved – must not be used |
+
+ 
+
+If the Server included a Maximum QoS in its CONNACK response to a Client and it receives a PUBLISH packet with a QoS greater than this, then it uses DISCONNECT with Reason Code 0x9B (QoS not supported) as described in [section 4.13](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#S4_13_Errors) Handling errors.
+
+ 
+
+A PUBLISH Packet MUST NOT have both QoS bits set to 1 [MQTT-3.3.1-4]. If a Server or Client receives a PUBLISH packet which has both QoS bits set to 1 it is a Malformed Packet. Use DISCONNECT with Reason Code 0x81 (Malformed Packet) as described in [section 4.13](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#S4_13_Errors).
+
+ 
+
+#### RETAIN
+
+**Position:** byte 1, bit 0.
+
+ 
+
+If the RETAIN flag is set to 1 in a PUBLISH packet sent by a Client to a Server, the Server MUST replace any existing retained message for this topic and store the Application Message [MQTT-3.3.1-5], so that it can be delivered to future subscribers whose subscriptions match its Topic Name. If the Payload contains zero bytes it is processed normally by the Server but any retained message with the same topic name MUST be removed and any future subscribers for the topic will not receive a retained message [MQTT-3.3.1-6]. A retained message with a Payload containing zero bytes MUST NOT be stored as a retained message on the Server [MQTT-3.3.1-7].
+
+ 
+
+If the RETAIN flag is 0 in a PUBLISH packet sent by a Client to a Server, the Server MUST NOT store the message as a retained message and MUST NOT remove or replace any existing retained message [MQTT-3.3.1-8].
+
+ 
+
+If the Server included Retain Available in its CONNACK response to a Client with its value set to 0 and it receives a PUBLISH packet with the RETAIN flag is set to 1, then it uses the DISCONNECT Reason Code of 0x9A (Retain not supported) as described in [section 4.13](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#S4_13_Errors).
+
+ 
+
+When a new Non‑shared Subscription is made, the last retained message, if any, on each matching topic name is sent to the Client as directed by the Retain Handling Subscription Option. These messages are sent with the RETAIN flag set to 1. Which retained messages are sent is controlled by the Retain Handling Subscription Option. At the time of the Subscription:
+
+·     If Retain Handling is set to 0 the Server MUST send the retained messages matching the Topic Filter of the subscription to the Client [MQTT-3.3.1-9].
+
+·     If Retain Handling is set to 1 then if the subscription did not already exist, the Server MUST send all retained message matching the Topic Filter of the subscription to the Client, and if the subscription did exist the Server MUST NOT send the retained messages. [MQTT-3.3.1-10].
+
+·     If Retain Handling is set to 2, the Server MUST NOT send the retained messages [MQTT-3.3.1-11].
+
+ 
+
+Refer to [section 3.8.3.1](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Subscription_Options) for a definition of the Subscription Options.
+
+ 
+
+If the Server receives a PUBLISH packet with the RETAIN flag set to 1, and QoS 0 it SHOULD store the new QoS 0 message as the new retained message for that topic, but MAY choose to discard it at any time. If this happens there will be no retained message for that topic.
+
+ 
+
+If the current retained message for a Topic expires, it is discarded and there will be no retained message for that topic.
+
+ 
+
+The setting of the RETAIN flag in an Application Message forwarded by the Server from an established connection is controlled by the Retain As Published subscription option. Refer to [section 3.8.3.1](https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html#_Subscription_Options) for a definition of the Subscription Options.
+
+ 
+
+·     If the value of Retain As Published subscription option is set to 0, the Server MUST set the RETAIN flag to 0 when forwarding an Application Message regardless of how the RETAIN flag was set in the received PUBLISH packet [MQTT-3.3.1-12].
+
+·     If the value of Retain As Published subscription option is set to 1, the Server MUST set the RETAIN flag equal to the RETAIN flag in the received PUBLISH packet [MQTT-3.3.1-13].
+
+ 
+
+**Non-normative comment**
+
+Retained messages are useful where publishers send state messages on an irregular basis. A new non-shared subscriber will receive the most recent state.
+
+ 

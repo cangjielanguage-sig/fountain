@@ -13,9 +13,16 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package f_version
+package user.controller
 
-import std.time.MonoTime
+import fountain.mvc.*
+import fountain.mvc.macros.*
 
-public let AppStarts = MonoTime.now()
-public const FountainVersion = "fountain(1.0.26)"
+@Controller
+public class ErrorController {
+    @GetMapping[path:"/api/error", produces:'application/json']
+    @IgnoreSecurity
+    public func error(): JsonValue {
+        throw Exception()
+    }
+}

@@ -38,6 +38,9 @@ import f_macros.*
  * 现在的编译器不允许泛型形参出现在静态成员变量的声明当中，所以会编译错误。
  */
 public macro DataAssist(attr: Tokens, input: Tokens): Tokens {
+    assist(attr, input)
+}
+private func assist(attr: Tokens, input: Tokens): Tokens {
     match (parseDecl(input)) {
         case d: ClassDecl =>
             let set = HashSet<String>()
@@ -79,7 +82,14 @@ public macro DataAssist(attr: Tokens, input: Tokens): Tokens {
             generate('tostring', d, excludeToString, generateToString)
             generate('fields', d, excludeFields, generateToFields)
             d.toTokens()
-        case d: MacroExpandDecl => return replaceMacroInputDecl(quote(@DataAssist[$attr]), d).toTokens()
+        case d: MacroExpandDecl => 
+            var ind = d
+            while(let md: MacroExpandDecl <- ind.macroInputDecl) {
+                ind = md
+            }
+            let tokens = assist(attr, ind.macroInputs)
+            ind.macroInputs = tokens
+            d.toTokens()
         case _ =>
             diagReport(ERROR, input, 'input must be class decl', '')
             throw IllegalArgumentException("input must be a class decl")
@@ -123,7 +133,6 @@ func generateProps(decl: ClassDecl, exclusion: HashSet<String>) {
             propDecl
         }else{
             let md = MacroExpandDecl(macroTokens)
-            md.macroInputs = propDecl.toTokens()
             md.macroInputDecl = propDecl
             md
         })

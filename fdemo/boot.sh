@@ -29,20 +29,24 @@ exports(){
     export orm_pooledDatasourceKeepaliveTime=86400
     # orm_transactionalFuncExecution 和@Transactional注解只要有一个生效就会将事务切面织入到函数
     export orm_transactionalFuncExecution='*..*.delete*(**): *|*..*.remove*(**): *|*..*.save*(**): *|*..*.add*(**): *|*..*.new*(**): *|*..*.create*(**): *|*..*.insert*(**): *|*..*.update*(**): *|*..*.change*(**): *|*..*.register*(**): *'
-    
+    export opengauss_orm_connectionUrl=$POSTGRES
     if [[ "$path" == "" ]]; then
         path='./fdemo'
     fi
-    export LD_LIBRARY_PATH=$path/release/boot:$path/release/opengauss:$path/release/user:$LD_LIBRARY_PATH    
+    export LD_LIBRARY_PATH=$path/release/boot:$path/release/opengauss:$path/release/user:$LD_LIBRARY_PATH
 }
 run(){
     exports
     fboot run $path --dylibPattern='(boot|user\.util\.auth|\.(controller|service\.impl))'
 }
-perf(){
+perfRecord(){
     exports
-    cjprof record -f max -- fboot run $path --dylibPattern='(boot|user\.util\.auth|\.(controller|service\.impl))'
+    cjprof record -f max -- $CJPM_INSTALL/bin/fboot run $path --dylibPattern='(boot|user\.util\.auth|\.(controller|service\.impl))'
 
+}
+perfReport(){
+    exports
+    cjprof report -F 
 }
 build(){
     export CANGJIE_STDX_PATH=$CANGJIE_STDX_DYNAMIC_PATH
@@ -59,8 +63,11 @@ case "$1" in
 run)
     run
     ;;
-perf)
-    perf
+perfRecord)
+    perfRecord
+    ;;
+perfReport)
+    perfReport
     ;;
 cleanUpdate)
     cleanUpdate $2 $3

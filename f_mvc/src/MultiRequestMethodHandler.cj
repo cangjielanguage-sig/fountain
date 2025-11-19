@@ -122,6 +122,9 @@ class HttpStatusOnlyHandler <: HttpRequestHandler {
     HttpStatusOnlyHandler(private let status: HttpStatus, private let message!: String = '', private let kind!: FailureMessageKind = Text) {}
     
     public func handle(ctx: HttpContext): Unit {
+        handle(ctx, None<Exception>)
+    }
+    public func handle(ctx: HttpContext, ex: ?Exception): Unit {
         func setStatus(){
             let b = ctx.responseBuilder.status(status.value)
             RequestMeta.setResponseStatus(status)
@@ -132,23 +135,39 @@ class HttpStatusOnlyHandler <: HttpRequestHandler {
         }
         match(kind){
             case Bean => if(message.size > 0 && let Some(x) <- BeanFactory.instance.getFirst<ErrorHttpRequestHandler>(cond: Exactly(message))){
-                RequestMeta.setResponseStatus(x.status)
-                let status = x.status
+                let (status, resp) = x.handle(ctx, ex)
+                if(resp is Unit){
+                    return
+                }
+                RequestMeta.setResponseStatus(status)
                 let b = ctx.responseBuilder.status(status.value)
                 var accept = ''
                 if(let Some(acc) <- ctx.request.headers.getFirst('Accept')) {
                     b.header("Content-Type", acc)
                     accept = acc
                 }
-                match(x.response()){
+                match(resp){
                     case x: String => b.body(x)
                     case x: ToString => b.body(x.toString())
                     case x: InputStream => b.body(x)
                     case x: Array<Byte> => b.body(x)
-                    case x: ToData where accept.size > 0 => match(MediaTypes.tryParse(accept)){
-                        case Some(mt) => b.body(mt.fromData(x.toData()))
-                        case _ => b.body(status.reasonPhrase)
-                    }
+                    case x: ToData where accept.size > 0 => 
+                        if(accept.isEmpty() || accept.contains('*/*')){
+                            b.body(x.toData().toString())
+                        }else if(accept.indexOf(',').isSome()){
+                            let queue = AcceptQueue(accept)
+                            while(let Some((_, _, accept)) <- queue.remove()){
+                                if(let Some(mt) <- MediaTypes.tryParse(accept)){
+                                    b.body(mt.fromData(x.toData()))
+                                    return
+                                }
+                            }
+                            b.body(x.toData().toString())
+                        }else if (let Some(mt) <- MediaTypes.tryParse(accept)){
+                            b.body(mt.fromData(x.toData()))
+                        }else{
+                            b.body(x.toData().toString())
+                        }
                     case _ => b.body(status.reasonPhrase)
                 }
             } else {

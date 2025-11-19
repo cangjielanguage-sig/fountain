@@ -25,32 +25,21 @@ import fountain.data.*
 import fountain.data.macros.*
 import fountain.log.LoggerFactory
 import fountain.orm.*
-import fountain.mvc.{ErrorHttpRequestHandler, HttpStatus}
 
 private let _ = {=>
     try{
         let logger = LoggerFactory.getLogger("opengauss")
         slog.setDefault(logger)
-        let driver = DriverManager.getDriver("opengauss").getOrThrow()
+        // let driver = DriverManager.getDriver("opengauss").getOrThrow()
         // let url = env.getVariable('POSTGRES') ?? ''
-        ORM.register(driver)
+        // ORM.register(driver)
+        ORM.register('opengauss')
     }catch(e: Exception){
         e.printStackTrace()
         throw e 
     }
 }()
-@Bean
-@BeanMeta[name:'NameOf500Handler']
-public class Http500Handler <: ErrorHttpRequestHandler {
-    public prop status: HttpStatus {
-        get(){
-            HttpStatus.OK
-        }
-    }
-    public func response(): Any {
-        '{"status":-500}'
-    }
-}
+
 ///////////////////////////////////////////////////////////////////////////////
 /**这一行往下单纯只是为了演示实例复制和类实例与json互相转换的功能*******************/
 @DataAssist[equal hash tostring props fields]

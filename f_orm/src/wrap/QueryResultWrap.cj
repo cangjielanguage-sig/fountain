@@ -42,9 +42,12 @@ public class QueryResultWrap <: QueryResult {
         getOrNull<T>(index).getOrThrow()
     }
     public func getOrNull<T>(index: Int64): ?T {
+        let columns = result.columnInfos
+        if(columns.size <= index){
+            return None<T>
+        }
         try{
             if (index >= list.size) {
-                let columns = result.columnInfos
                 for (i in list.size..=index) {
                     let column = columns[i]
                     let v: Any = match(column.typeName){

@@ -15,7 +15,7 @@ limitations under the License.
  */
 package f_base
 
-import std.reflect.TypeInfo
+import std.collection.HashMap
 
 public class AsyncIterator<T> <: Iterator<Future<?T>> {
     public AsyncIterator(private let itr: Iterator<T>) {}
@@ -49,6 +49,7 @@ public interface ExtendIterator<T> {
     func toArrayList(): ArrayList<T>{
         collect<ArrayList<T>>(ArrayList<T>()){v, l => l.add(v)}
     }
+    func groupBy<K>(key: (T) -> K): HashMap<K, T> where K <: Hashable & Equatable<K> 
 }
 
 extend<T> Iterator<T> <: ExtendIterator<T> {
@@ -95,5 +96,12 @@ extend<T> Iterator<T> <: ExtendIterator<T> {
             collector(v, collection)
         }
         collection
+    }
+    public func groupBy<K>(key: (T) -> K): HashMap<K, T> where K <: Hashable & Equatable<K> {
+        let m = HashMap<K, T>()
+        for(t in this){
+            m[key(t)] = t
+        }
+        m
     }
 }

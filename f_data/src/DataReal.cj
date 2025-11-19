@@ -16,9 +16,15 @@ limitations under the License.
 package f_data
 
 public class DataReal <: Data & Hashable & Comparable<DataReal> {
-    public DataReal(public let data: Decimal) {}
+    public let integer: Bool
+    public DataReal(public let data: Decimal) {
+        integer = data.scale == 0
+    }
     public init(data: BigInt) {
-        this(Decimal.parse(data.toString()))
+        this(Decimal(data))
+    }
+    public init(data: BigInt, scale: Int32){
+        this(Decimal(data, scale))
     }
     public init(data: Int8) {
         this(Decimal(data))
