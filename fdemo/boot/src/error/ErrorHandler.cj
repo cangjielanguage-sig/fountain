@@ -31,7 +31,7 @@ public class Http500Handler <: ErrorHttpRequestHandler {
 }
 @DataAssist[fields]
 public open class BaseResponse {
-    public var code: UInt16 = 0
+    public var status: Int64 = 0
     public var msg: String = "ok"
 
     public init() {}
@@ -46,10 +46,10 @@ public open class BaseResponse {
     }
 
     public static func success(msg: String): BaseResponse {
-        BaseResponse(0, msg)
+        BaseResponse(1, msg)
     }
 
     public static func error(msg: String): BaseResponse {
-        BaseResponse(1, msg)
+        BaseResponse(-1, msg)
     }
 }
