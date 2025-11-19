@@ -148,7 +148,7 @@ public class Pool<T> <: Resource where T <: Object {
         }
     }
     public func isClosed(): Bool {
-        running.load()
+        !running.load()
     }
     public func close(): Unit {
         running.store(false)

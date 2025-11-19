@@ -363,7 +363,7 @@ public class SqlExecutor <: Resource & RootDAO {
                 }
             }
             this._connection_ = getConnection(driverName)
-            this._connection_
+            this.connection
         }
     }
     private func logMsg(duration: Duration): String {

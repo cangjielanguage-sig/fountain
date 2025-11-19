@@ -88,10 +88,17 @@ public class DatabasePool <: Resource & Datasource {
             checkInterval: checkInterval,
             creator: creator,
             checker: {
-                c => if (checkSql[0..6].toLower().startsWith("select")) {
-                    c.prepareStatement(checkSql).query().next()
+                c => 
+                if (checkSql[0..6].toLower() == "select") {
+                    try(stmt = c.prepareStatement(checkSql), r = stmt.query()){
+                        return r.next()
+                    }
+                    false
                 } else {
-                    c.prepareStatement(checkSql).update().rowCount > 0
+                    try(stmt = c.prepareStatement(checkSql)){
+                        return stmt.update().rowCount > 0
+                    }
+                    false
                 }
             }
         )
@@ -121,11 +128,7 @@ public class DatabasePool <: Resource & Datasource {
     }
 
     public func isClosed(): Bool {
-        let poolClosed = pool.isClosed()
-        if (!poolClosed) {
-            pool.close()
-        }
-        poolClosed
+        pool.isClosed()
     }
     public func close(): Unit {
         if (!isClosed()) {
