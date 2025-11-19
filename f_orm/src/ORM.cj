@@ -112,7 +112,7 @@ public class ORM {
         }
     }
     public static func initialize(){
-        if(ORMConfig.getUseStdxPool()){
+        if(ORMConfig.getUseStdPool()){
             register()
         }else{
             registerWithORMPool()
