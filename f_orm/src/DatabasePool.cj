@@ -112,7 +112,7 @@ public class DatabasePool <: Resource & Datasource {
         )
     }
     public static func byConfig(driver: Driver, options: Array<(String, String)>){
-        let ds = driver.open(ORMConfig.getUrl(), options)
+        let ds = driver.open(ORMConfig.getUrl(driverName: driver.name), options)
         byConfig(driver){ds.connect()}
     }
     public static func byConfig(driverName: String, options: Array<(String, String)>){

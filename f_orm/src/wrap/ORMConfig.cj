@@ -121,7 +121,7 @@ public class ORMConfig {
             case Some(x) => x
             case _ where !driverName.isEmpty() => getUrl()
             case _ => throw ORMException(
-                "connection url for ${driverName} is not be configed, config which key is ${driverName}.${connectionUrl} or ${connectionUrl} must be specified")
+                "connection url for ${driverName} is not be configed, config which key is ${driverName}_${connectionUrl} or ${connectionUrl} must be specified")
         }
     }
     private static func get<T>(driverName!: String = String.empty, key!: String, default!: T): T where T <: Parsable<T> {
