@@ -21,7 +21,7 @@ exports(){
     export mvc_overallElapsedSwitch=true
     export mvc_internalServerErrorMessageKind=BEAN
     export mvc_internalServerErrorMessage=NameOf500Handler
-    export orm_noPool=true # 默认是false，true表示不用连接池
+#    export orm_noPool=true # 默认是false，true表示不用连接池
     export orm_useStdPool=false # 默认是true
     export orm_drivers=opengauss
     export orm_databasePoolInitSize=10

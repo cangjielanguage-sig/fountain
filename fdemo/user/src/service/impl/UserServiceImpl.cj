@@ -64,6 +64,7 @@ public class UserServiceImpl <: UserService {
         println('id: ${id}')
         executor().deleteUser(id)
     }
+    @Transactional
     public func notLikeDemo1(username: String): ArrayList<UserPO> {
         executor().notLikeDemo1(username)
     }

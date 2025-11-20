@@ -809,7 +809,7 @@ public class SqlExecutor <: Resource & RootDAO {
                 if (let Some(_) <- tx) {
                     return executor()
                 }
-                try {
+                try { 
                     return executor()
                 } finally {
                     if (!this.isClosed()) {
