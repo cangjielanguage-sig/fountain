@@ -31,7 +31,7 @@ cd ../installed
 CJPM_INSTALL=`pwd`
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$CJPM_INSTALL/libs/fboot
 export PATH=$PATH:$CJPM_INSTALL/bin
-cd ./fdemo
+cd ../fdemo
 export POSTGRES=<URL_OF_POSTGRES>
 ./boot.sh build
 ```
