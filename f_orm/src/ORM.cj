@@ -140,11 +140,6 @@ public class ORM {
         }
     }
     public static func initialize(){
-        if(ORMConfig.getUseStdPool()){
-            register()
-        }else{
-            registerWithORMPool()
-        }
         let defaultDriverName = ORMConfig.getDefaultDriver()
         for(d in ORMConfig.getDriverNames()){
             let default = defaultDriverName.isEmpty() || d == defaultDriverName
