@@ -27,9 +27,11 @@ echo '
 cd fboot
 export CANGJIE_STDX_DYNAMIC_PATH=/path/of/stdx/dynamic/libs
 cjpm install --root ../installed
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:../installed/libs/fboot
-export PATH=$PATH:../installed/bin
-cd ../fdemo
+cd ../installed
+CJPM_INSTALL=`pwd`
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$CJPM_INSTALL/libs/fboot
+export PATH=$PATH:$CJPM_INSTALL/bin
+cd ./fdemo
 export POSTGRES=<URL_OF_POSTGRES>
 ./boot.sh build
 ```
