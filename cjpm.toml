@@ -74,5 +74,5 @@
   lto = "full"
   incremental = true
 
-[profile.build.combined]
-  fountain = "dynamic"
+#[profile.build.combined]
+#  fountain = "dynamic"

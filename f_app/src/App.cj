@@ -300,8 +300,6 @@ ${content}
 
 [profile.build]
   incremental = true
-[profile.build.combined]
-  ${dir.fileName} = "dynamic"
 
 [target]
 [target.x86_64-unknown-linux-gnu]
