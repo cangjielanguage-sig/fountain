@@ -1,5 +1,6 @@
 [dependencies]
   charset4cj = { git = "https://gitcode.com/Cangjie-TPC/charset4cj.git", branch="develop"}
+  f_app = {path = "./f_app"}
   f_aspect = {path = "./f_aspect"}
   f_base = {path = "./f_base"}
   f_bean = {path = "./f_bean"}
@@ -73,5 +74,5 @@
   lto = "full"
   incremental = true
 
-[profile.build.combined]
-  fountain = "dynamic"
+#[profile.build.combined]
+#  fountain = "dynamic"

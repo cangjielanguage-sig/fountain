@@ -16,33 +16,40 @@ cangjie_version(){
   echo
   echo "$ cjc -v"
   cjc -v
+  echo
+  echo '$ echo $CANGJIE_STDX_DYNAMIC_PATH'
+  echo $CANGJIE_STDX_DYNAMIC_PATH
   echo '```'
+  STDX_VERSION=`echo $CANGJIE_STDX_DYNAMIC_PATH|awk -F'/' '{print $8}'`
   echo '
 ### 问题描述
 ```bash
 git clone https://gitcode.com/Cangjie-SIG/fountain.git
-cd fountain
-git checkout -t origin/feature/mvc
-cd fboot
-export CANGJIE_STDX_DYNAMIC_PATH=/path/of/stdx/dynamic/libs
+cd fountain'
+echo "git checkout -t origin/$1"
+echo 'cd fboot'
+echo "export CANGJIE_STDX_DYNAMIC_PATH=/path/of/stdx/$STDX_VERSION/linux_x86_64_llvm/dynamic/stdx"
+echo '
 cjpm install --root ../installed
-export LDLIBRARY_PATH=$LD_LIBRARY_PATH:../installed/libs/fboot
-export PATH=$PATH:../installed/bin
+cd ../installed
+CJPM_INSTALL=`pwd`
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$CJPM_INSTALL/libs/fboot
+export PATH=$PATH:$CJPM_INSTALL/bin
 cd ../fdemo
 export POSTGRES=<URL_OF_POSTGRES>
 ./boot.sh build
 ```
 '
-  echo '$ echo $CANGJIE_HOME'
-  echo $CANGJIE_HOME
-  echo
-  echo '$ echo $CANGJIE_STDX_DYNAMIC_PATH'
-  echo $CANGJIE_STDX_DYNAMIC_PATH
-  echo
-  echo '$ ls $CANGJIE_STDX_DYNAMIC_PATH'
-  ls $CANGJIE_STDX_DYNAMIC_PATH
-  echo '$ ls $CANGJIE_FOUNTAIN_LIBS'
-  ls $CANGJIE_FOUNTAIN_LIBS
+#  echo '$ echo $CANGJIE_HOME'
+#  echo $CANGJIE_HOME
+#  echo
+#  echo '$ echo $CANGJIE_STDX_DYNAMIC_PATH'
+##  echo $CANGJIE_STDX_DYNAMIC_PATH
+#  echo
+#  echo '$ ls $CANGJIE_STDX_DYNAMIC_PATH'
+#  ls $CANGJIE_STDX_DYNAMIC_PATH
+#  echo '$ ls $CANGJIE_FOUNTAIN_LIBS'
+#  ls $CANGJIE_FOUNTAIN_LIBS
   echo
 }
 cangjie_env(){
@@ -64,7 +71,7 @@ cj(){
     cangjie_env $2 $3
     ;;
   version)
-    cangjie_version
+    cangjie_version $2
     ;;
   cleanUpdate)
     fboot cleanUpdate

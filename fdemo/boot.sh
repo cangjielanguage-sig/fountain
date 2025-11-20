@@ -21,7 +21,7 @@ exports(){
     export mvc_overallElapsedSwitch=true
     export mvc_internalServerErrorMessageKind=BEAN
     export mvc_internalServerErrorMessage=NameOf500Handler
-    export orm_useStdPool=false # 默认是true
+    export orm_useStdxPool=false # 默认是true
     export orm_drivers=opengauss
     export orm_databasePoolInitSize=10
     export orm_databasePoolMinSize=10
@@ -40,7 +40,7 @@ exports(){
 #    export orm_pooledDatasourceKeepaliveTime=86400
     # orm_transactionalFuncExecution 和@Transactional注解只要有一个生效就会将事务切面织入到函数
     export orm_transactionalFuncExecution='*..*.delete*(**): *|*..*.remove*(**): *|*..*.save*(**): *|*..*.add*(**): *|*..*.new*(**): *|*..*.create*(**): *|*..*.insert*(**): *|*..*.update*(**): *|*..*.change*(**): *|*..*.register*(**): *'
-    export opengauss_orm_connectionUrl=$POSTGRES
+    # export opengauss_orm_connectionUrl=$POSTGRES
     if [[ "$path" == "" ]]; then
         path='./fdemo'
     fi
