@@ -19,6 +19,7 @@ import std.collection.concurrent.ConcurrentHashMap
 import std.env
 import f_collection.*
 import f_orm.exception.ORMException
+import f_log.*
 public import std.convert.*
 public import std.database.sql.*
 public import std.reflect.*
@@ -32,6 +33,7 @@ public import f_orm.exception.*
  * 应用项目应当有一个初始化文件用来调用ORM.register(...)完成初始化
  */
 public class ORM {
+    private static let log = LoggerFactory.getLogger<ORM>()
     private static var default = String.empty
     private static let datasources = ConcurrentHashMap<String, NamedDatasource>()
     static let hooks = TransactionHooks()
@@ -74,24 +76,30 @@ public class ORM {
     }
     public static func register(driver: Driver, default!: Bool = true): Unit {
         if(datasources.contains(driver.name)){
+            log.warn('driver ${driver.name} has been registered')
             return
         }
+        log.debug('driver ${driver.name} registering...')
         register(NamedDatasource.new(driver), default: default)
     }
     public static func register(driver: Driver, opts: Array<(String, String)>, default!: Bool = true): Unit {
         if(datasources.contains(driver.name)){
             return
         }
+        log.debug('driver ${driver.name} registering...')
         register(NamedDatasource.new(driver, opts), default: default)
     }
     public static func register(driver: Driver, url: String, default!: Bool = true): Unit {
         if(datasources.contains(driver.name)){
+            log.warn('driver ${driver.name} has been registered')
             return
         }
+        log.debug('driver ${driver.name} registering...')
         register(NamedDatasource.new(driver, url), default: default)
     }
     public static func register(driver: Driver, url: String, opts: Array<(String, String)>, default!: Bool = true): Unit {
         if(datasources.contains(driver.name)){
+            log.warn('driver ${driver.name} has been registered')
             return
         }
         register(NamedDatasource.new(driver, url, opts), default: default)
@@ -119,8 +127,10 @@ public class ORM {
     }
     public static func registerWithORMPool(driverName: String, default!: Bool = true){
         if(datasources.contains(driverName)){
+            log.warn('driver ${driverName} has been registered')
             return
         }
+        log.debug('driver ${driverName} registering...')
         register(NamedDatasource(false, driverName, DatabasePool.byConfig(driverName)), default: default)
     }
     public static func registerWithORMPool(){
@@ -134,6 +144,20 @@ public class ORM {
             register()
         }else{
             registerWithORMPool()
+        }
+        let defaultDriverName = ORMConfig.getDefaultDriver()
+        for(d in ORMConfig.getDriverNames()){
+            let default = defaultDriverName.isEmpty() || d == defaultDriverName
+            if(ORMConfig.getNoPool(driverName: d)){
+                let driver = DriverManager.getDriver(d).getOrThrow()
+                let url = ORMConfig.getUrl(driverName: d)
+                let ds = driver.open(url)
+                register(NamedDatasource(false, d, ds), default: default)
+            }else if(ORMConfig.getUseStdPool(driverName: d)){
+                register(d, default: default)
+            }else{
+                registerWithORMPool(d, default: default)
+            }
         }
         registerTransactionHooks<TransactionHook>()
     }

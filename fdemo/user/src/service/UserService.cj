@@ -26,5 +26,6 @@ public interface UserService <: RootService {
     func queryUser(id: Int64): UserPO
     func listUsers(): UserList
     func deleteUser(id: Int64): Int64
+    func notLikeDemo1(username: String): ArrayList<UserPO>
     func userSession(username: String, password: String): ?(Int64, String, Bool)
 }
