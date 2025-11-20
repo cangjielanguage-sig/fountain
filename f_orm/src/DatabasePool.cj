@@ -88,10 +88,17 @@ public class DatabasePool <: Resource & Datasource {
             checkInterval: checkInterval,
             creator: creator,
             checker: {
-                c => if (checkSql[0..6].toLower().startsWith("select")) {
-                    c.prepareStatement(checkSql).query().next()
+                c => 
+                if (checkSql[0..6].toLower() == "select") {
+                    try(stmt = c.prepareStatement(checkSql), r = stmt.query()){
+                        return r.next()
+                    }
+                    false
                 } else {
-                    c.prepareStatement(checkSql).update().rowCount > 0
+                    try(stmt = c.prepareStatement(checkSql)){
+                        return stmt.update().rowCount > 0
+                    }
+                    false
                 }
             }
         )
@@ -111,13 +118,17 @@ public class DatabasePool <: Resource & Datasource {
             checkSql: ORMConfig.getPoolCheckSql(driverName: driver.name)
         )
     }
+    public static func byConfig(driver: Driver, options: Array<(String, String)>){
+        let ds = driver.open(ORMConfig.getUrl(driverName: driver.name), options)
+        byConfig(driver){ds.connect()}
+    }
+    public static func byConfig(driverName: String, options: Array<(String, String)>){
+        let driver = DriverManager.getDriver(driverName).getOrThrow()
+        byConfig(driver, options)
+    }
 
     public func isClosed(): Bool {
-        let poolClosed = pool.isClosed()
-        if (!poolClosed) {
-            pool.close()
-        }
-        poolClosed
+        pool.isClosed()
     }
     public func close(): Unit {
         if (!isClosed()) {
