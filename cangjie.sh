@@ -20,15 +20,16 @@ cangjie_version(){
   echo '$ echo $CANGJIE_STDX_DYNAMIC_PATH'
   echo $CANGJIE_STDX_DYNAMIC_PATH
   echo '```'
+  STDX_VERSION=`echo $CANGJIE_STDX_DYNAMIC_PATH|awk -F'/' '{print $8}'`
   echo '
 ### 问题描述
 ```bash
 git clone https://gitcode.com/Cangjie-SIG/fountain.git
 cd fountain'
 echo "git checkout -t origin/$1"
+echo 'cd fboot'
+echo "export CANGJIE_STDX_DYNAMIC_PATH=/path/of/stdx/$STDX_VERSION/linux_x86_64_llvm/dynamic/stdx"
 echo '
-cd fboot
-export CANGJIE_STDX_DYNAMIC_PATH=/path/of/stdx/dynamic/libs
 cjpm install --root ../installed
 cd ../installed
 CJPM_INSTALL=`pwd`
