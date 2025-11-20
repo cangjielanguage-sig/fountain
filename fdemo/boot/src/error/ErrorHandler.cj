@@ -35,9 +35,9 @@ public open class BaseResponse {
     public var msg: String = "ok"
 
     public init() {}
-    public init(code: UInt16, msg: String) {
+    public init(status: Int64, msg: String) {
         super()
-        this.code = code
+        this.status = status
         this.msg = msg
     }
 
