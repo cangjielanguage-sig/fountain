@@ -90,6 +90,7 @@ public interface UserDAO <: RootDAO {
                                 }} order by id'''
                            }.page<UserPO>(10, page: 1)
         println('QQQQQQQQQQQQQQQQQ ${page.list.size}')
+        
         let user = executor.FROM<UserPO>()
                 .WHERE{
                     meet(username.size > 0){
@@ -103,5 +104,14 @@ public interface UserDAO <: RootDAO {
             where username = ${arg(username)} 
               and password = ${arg(password)}'''
         ).singleFirst<Int64>()
+    }
+    func notLikeDemo1(username: String): ArrayList<UserPO> {
+        executor.setSql('''
+            select *
+              from user_info
+              where username not like '%${username}%'
+              order by id asc
+              '''
+        ).list<UserPO>()
     }
 }
