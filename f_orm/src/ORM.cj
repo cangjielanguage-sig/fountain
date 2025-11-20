@@ -60,25 +60,40 @@ public class ORM {
     }
 
     public static func register(datasource: NamedDatasource, default!: Bool = true): Unit {
-        if (default) {
-            ORM.default = datasource.driverName
+        if(datasources.addIfAbsent(datasource.driverName, datasource).isNone()){
+            if(default){
+                ORM.default = datasource.driverName
+            }
+        }else{
+            datasource.close()
         }
-        datasources[datasource.driverName] = datasource
     }
     public static func register(creator: DatasourceCreator, default!: Bool = true): Unit {
         let ds = creator.create()
         register(ds, default: default)
     }
     public static func register(driver: Driver, default!: Bool = true): Unit {
+        if(datasources.contains(driver.name)){
+            return
+        }
         register(NamedDatasource.new(driver), default: default)
     }
     public static func register(driver: Driver, opts: Array<(String, String)>, default!: Bool = true): Unit {
+        if(datasources.contains(driver.name)){
+            return
+        }
         register(NamedDatasource.new(driver, opts), default: default)
     }
     public static func register(driver: Driver, url: String, default!: Bool = true): Unit {
+        if(datasources.contains(driver.name)){
+            return
+        }
         register(NamedDatasource.new(driver, url), default: default)
     }
     public static func register(driver: Driver, url: String, opts: Array<(String, String)>, default!: Bool = true): Unit {
+        if(datasources.contains(driver.name)){
+            return
+        }
         register(NamedDatasource.new(driver, url, opts), default: default)
     }
     private static func getDriver(driver: String){
@@ -103,6 +118,9 @@ public class ORM {
         }
     }
     public static func registerWithORMPool(driverName: String, default!: Bool = true){
+        if(datasources.contains(driverName)){
+            return
+        }
         register(NamedDatasource(false, driverName, DatabasePool.byConfig(driverName)), default: default)
     }
     public static func registerWithORMPool(){
