@@ -21,12 +21,13 @@ cangjie_version(){
 ### 问题描述
 ```bash
 git clone https://gitcode.com/Cangjie-SIG/fountain.git
-cd fountain
-git checkout -t origin/feature/mvc
+cd fountain'
+echo "git checkout -t origin/$1"
+echo '
 cd fboot
 export CANGJIE_STDX_DYNAMIC_PATH=/path/of/stdx/dynamic/libs
 cjpm install --root ../installed
-export LDLIBRARY_PATH=$LD_LIBRARY_PATH:../installed/libs/fboot
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:../installed/libs/fboot
 export PATH=$PATH:../installed/bin
 cd ../fdemo
 export POSTGRES=<URL_OF_POSTGRES>
@@ -64,7 +65,7 @@ cj(){
     cangjie_env $2 $3
     ;;
   version)
-    cangjie_version
+    cangjie_version $2
     ;;
   cleanUpdate)
     fboot cleanUpdate
