@@ -16,6 +16,9 @@ cangjie_version(){
   echo
   echo "$ cjc -v"
   cjc -v
+  echo
+  echo '$ echo $CANGJIE_STDX_DYNAMIC_PATH'
+  echo $CANGJIE_STDX_DYNAMIC_PATH
   echo '```'
   echo '
 ### 问题描述
@@ -36,16 +39,16 @@ export POSTGRES=<URL_OF_POSTGRES>
 ./boot.sh build
 ```
 '
-  echo '$ echo $CANGJIE_HOME'
-  echo $CANGJIE_HOME
-  echo
-  echo '$ echo $CANGJIE_STDX_DYNAMIC_PATH'
-  echo $CANGJIE_STDX_DYNAMIC_PATH
-  echo
-  echo '$ ls $CANGJIE_STDX_DYNAMIC_PATH'
-  ls $CANGJIE_STDX_DYNAMIC_PATH
-  echo '$ ls $CANGJIE_FOUNTAIN_LIBS'
-  ls $CANGJIE_FOUNTAIN_LIBS
+#  echo '$ echo $CANGJIE_HOME'
+#  echo $CANGJIE_HOME
+#  echo
+#  echo '$ echo $CANGJIE_STDX_DYNAMIC_PATH'
+##  echo $CANGJIE_STDX_DYNAMIC_PATH
+#  echo
+#  echo '$ ls $CANGJIE_STDX_DYNAMIC_PATH'
+#  ls $CANGJIE_STDX_DYNAMIC_PATH
+#  echo '$ ls $CANGJIE_FOUNTAIN_LIBS'
+#  ls $CANGJIE_FOUNTAIN_LIBS
   echo
 }
 cangjie_env(){
