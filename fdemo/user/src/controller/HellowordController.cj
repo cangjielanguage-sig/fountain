@@ -18,22 +18,14 @@ package user.controller
 import std.collection.ArrayList
 import fountain.mvc.*
 import fountain.mvc.macros.*
-import user.service.UserService
 import user.model.po.*
 import user.model.mvc.*
 
 @Controller
 public class HellowordController {
-    private let userService = lookup<UserService>()
     @GetMapping[path:"/helloworld", produces:'text/plain']
     @IgnoreSecurity
     public func helloworld(): String {
         return "helloworld"
     }
-    @PostMapping[path:'/api/db/notLikeDemo1']
-    @IgnoreSecurity
-    public func notLikeDemo1(@RequestBody user: UserRequest): ArrayList<UserPO> {
-        userService.notLikeDemo1(user.username)
-    }
-
 }

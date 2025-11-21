@@ -45,7 +45,7 @@ exports(){
     if [[ "$path" == "" ]]; then
         path='./fdemo'
     fi
-    export LD_LIBRARY_PATH=$path/release/boot:$path/release/opengauss:$path/release/user:$LD_LIBRARY_PATH
+    export LD_LIBRARY_PATH=$path/release/boot:$path/release/opengauss:$path/release/user:$path/release/dbtest:$LD_LIBRARY_PATH
 }
 run(){
     exports
@@ -94,7 +94,14 @@ loop)
     for i in $(seq 1 $2); do 
         echo -e "\n================= 第 $i 次循环 =================\n";
 #       curl -XPOST -H'Content-Type:application/json' -H'Accept:application/json' -d'{"username":"asdf","password":"bcbcbcbc"}' http://localhost:8080/api/user/session
-        curl -XGET -H'Accept:text/plain' http://localhost:8080/helloworld
+#        curl -XGET -H'Accept:text/plain' http://localhost:8080/helloworld
+#curl -XPOST http://localhost:8080/api/db/likeDemo1 \
+#-H'Content-Type:application/json' \
+#-H'Accept:application/json' \
+#-d'{
+#  "username": "admin"
+#}'
+       ./curl.sh
     done
     ;;
 esac
