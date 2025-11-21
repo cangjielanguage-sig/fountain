@@ -95,13 +95,13 @@ loop)
         echo -e "\n================= 第 $i 次循环 =================\n";
         # curl -XPOST -H'Content-Type:application/json' -H'Accept:application/json' -d'{"username":"asdf","password":"bcbcbcbc"}' http://localhost:8080/api/user/session
         # curl -XGET -H'Accept:text/plain' http://localhost:8080/helloworld
-        curl -XPOST http://localhost:8080/api/db/likeDemo1 \
-        -H'Content-Type:application/json' \
-        -H'Accept:application/json' \
-        -d'{
-        "username": "admin"
-        }'
-    #    ./curl.sh
+        # curl -XPOST http://localhost:8080/api/db/likeDemo1 \
+        # -H'Content-Type:application/json' \
+        # -H'Accept:application/json' \
+        # -d'{
+        # "username": "admin"
+        # }'
+        ./curl.sh
     done
     ;;
 esac
