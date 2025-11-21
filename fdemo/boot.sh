@@ -104,6 +104,9 @@ loop)
         ./curl.sh
     done
     ;;
+ab)
+    ab -c $2 -n 3 -T "application/json" -H "Accept: application/json" -p post_data.json http://127.0.0.1:8090/api/db/first
+    ;;
 esac
 
 exit $?
