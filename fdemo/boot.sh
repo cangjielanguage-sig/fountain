@@ -40,7 +40,7 @@ exports(){
 #    export orm_pooledDatasourceConnectionTimeout=86400
 #    export orm_pooledDatasourceKeepaliveTime=86400
     # orm_transactionalFuncExecution 和@Transactional注解只要有一个生效就会将事务切面织入到函数
-    export orm_transactionalFuncExecution='*..*.delete*(**): *|*..*.remove*(**): *|*..*.save*(**): *|*..*.add*(**): *|*..*.new*(**): *|*..*.create*(**): *|*..*.insert*(**): *|*..*.update*(**): *|*..*.change*(**): *|*..*.register*(**): *'
+#    export orm_transactionalFuncExecution='*..*.delete*(**): *|*..*.remove*(**): *|*..*.save*(**): *|*..*.add*(**): *|*..*.new*(**): *|*..*.create*(**): *|*..*.insert*(**): *|*..*.update*(**): *|*..*.change*(**): *|*..*.register*(**): *'
 #    export opengauss_orm_connectionUrl=$POSTGRES
     if [[ "$path" == "" ]]; then
         path='./fdemo'
