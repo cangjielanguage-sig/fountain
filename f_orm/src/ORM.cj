@@ -140,21 +140,26 @@ public class ORM {
         }
     }
     public static func initialize(){
-        let defaultDriverName = ORMConfig.getDefaultDriver()
-        for(d in ORMConfig.getDriverNames()){
-            let default = defaultDriverName.isEmpty() || d == defaultDriverName
-            if(ORMConfig.getNoPool(driverName: d)){
-                let driver = DriverManager.getDriver(d).getOrThrow()
-                let url = ORMConfig.getUrl(driverName: d)
-                let ds = driver.open(url)
-                register(NamedDatasource(false, d, ds), default: default)
-            }else if(ORMConfig.getUseStdPool(driverName: d)){
-                register(d, default: default)
-            }else{
-                registerWithORMPool(d, default: default)
+        try{
+            let defaultDriverName = ORMConfig.getDefaultDriver()
+            for(d in ORMConfig.getDriverNames()){
+                let default = defaultDriverName.isEmpty() || d == defaultDriverName
+                if(ORMConfig.getNoPool(driverName: d)){
+                    let driver = DriverManager.getDriver(d).getOrThrow()
+                    let url = ORMConfig.getUrl(driverName: d)
+                    let ds = driver.open(url)
+                    register(NamedDatasource(false, d, ds), default: default)
+                }else if(ORMConfig.getUseStdPool(driverName: d)){
+                    register(d, default: default)
+                }else{
+                    registerWithORMPool(d, default: default)
+                }
             }
+            registerTransactionHooks<TransactionHook>()
+        }catch(e: Exception){
+            log.error('ORM initialization failed', e)
+            throw e
         }
-        registerTransactionHooks<TransactionHook>()
     }
     public static func deregister(name: String): Unit {
         if(let Some(d) <- datasources.remove(name)){
