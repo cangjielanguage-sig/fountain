@@ -41,7 +41,7 @@ exports(){
 #    export orm_pooledDatasourceKeepaliveTime=86400
     # orm_transactionalFuncExecution 和@Transactional注解只要有一个生效就会将事务切面织入到函数
 #    export orm_transactionalFuncExecution='*..*.delete*(**): *|*..*.remove*(**): *|*..*.save*(**): *|*..*.add*(**): *|*..*.new*(**): *|*..*.create*(**): *|*..*.insert*(**): *|*..*.update*(**): *|*..*.change*(**): *|*..*.register*(**): *'
-    export orm_transactionalFuncExecution='*..*.notLikeDemo*(**): *'
+#    export orm_transactionalFuncExecution='*..*.notLikeDemo*(**): *'
     export opengauss_orm_connectionUrl=$POSTGRES
     if [[ "$path" == "" ]]; then
         path='./fdemo'
@@ -96,13 +96,14 @@ loop)
         echo -e "\n================= 第 $i 次循环 =================\n";
         # curl -XPOST -H'Content-Type:application/json' -H'Accept:application/json' -d'{"username":"asdf","password":"bcbcbcbc"}' http://localhost:8080/api/user/session
         # curl -XGET -H'Accept:text/plain' http://localhost:8080/helloworld
-        # curl -XPOST http://localhost:8080/api/db/likeDemo1 \
-        # -H'Content-Type:application/json' \
-        # -H'Accept:application/json' \
-        # -d'{
-        # "username": "admin"
-        # }'
-        ./curl.sh
+         curl -XPOST http://localhost:8080/api/db/notLikeDemo1 \
+         -H'Content-Type:application/json' \
+         -H'Accept:application/json' \
+         -d'{
+         "username": "asdf"
+         }'
+	 sleep 1
+#        ./curl.sh
     done
     ;;
 ab)
