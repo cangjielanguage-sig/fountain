@@ -133,7 +133,6 @@ public class DbTestServiceImpl <: DbTestService {
     public func likeDemo2(username: String): ArrayList<UserPO> {
         executor().likeDemo2(username)
     }
-
     public func notLikeDemo1(username: String): ArrayList<UserPO> {
         executor().notLikeDemo1(username)
     }
