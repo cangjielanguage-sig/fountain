@@ -102,7 +102,7 @@ loop)
          -d'{
          "username": "asdf"
          }'
-	 sleep 1
+	#  sleep 1
 #        ./curl.sh
     done
     ;;
