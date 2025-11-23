@@ -107,6 +107,7 @@ loop)
     done
     ;;
 ab)
+#    apt install apache2-utils 执行前需安装apache2-utils
 #    ab -c $2 -n $3 -T "application/json" -H "Accept: application/json" -p post_data.json http://127.0.0.1:8080/helloworld
      ab -c $2 -n $3 -T '' -H 'Accept:text/plain' -m GET http://localhost:8080/helloworld
     ;;
