@@ -22,7 +22,7 @@ public import stdx.encoding.url.*
 public import stdx.log.Logger
 public import stdx.net.http.*
 public import f_data.*
-import f_http.{MediaType, MediaTypes}
+import f_http.*
 import f_http.exception.MediaTypeException
 
 public class HttpClient {
@@ -180,6 +180,9 @@ public class HttpClient {
     public func form(): FormBuilder {
         FormBuilder(this)
     }
+    public func multipartFormdata(): MultipartFormDataBuilder {
+        MultipartFormDataBuilder(this)
+    }
 }
 public class FormBuilder {
     FormBuilder(private let client: HttpClient){}
@@ -226,5 +229,20 @@ extend HttpResponse <: ExtendHttpResponse {
         }else{
             None<T>
         }
+    }
+}
+public class MultipartFormDataBuilder {
+    private let data = MultipartFormData()
+    MultipartFormDataBuilder(private let client: HttpClient){
+        client.header('Content-Type', 'multipart/form-data, boundary=${data.boundary}')
+    }
+    public func newPart(): MultipartFileBuilder{
+        data.newPart()
+    }
+    public func put(){
+        client.put(data.input())
+    }
+    public func post(){
+        client.post(data.input())
     }
 }
