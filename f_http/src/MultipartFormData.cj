@@ -111,7 +111,7 @@ public class MultipartFileInputStream <: InputStream {
                 }
             case Current(idx, input) =>
                 let l = input.read(buf)
-                if(l == 0 || l < buf.size){
+                if(l == 0){
                     cur = Current(idx, data.parts[idx], CRLF_Boundary)
                 }
                 l
