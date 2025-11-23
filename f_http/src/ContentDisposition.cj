@@ -231,7 +231,7 @@ public class ContentDisposition <: Equatable<ContentDisposition> & Equatable<Any
             builder.append(rfc1123(d))
             builder.append('\"')
         }
-        return builder.toString()
+        return builder.append('\r\n\r\n').toString()
     }
 
     /**
