@@ -81,7 +81,7 @@ public abstract class AbstractLogger <: Logger & Resource {
         try {
             if (logLevelEnabled(record.level)) {
                 doLock {
-                    append(record.level, record.message, record.time, Thread.currentThread.id, None<Exception>)
+                    doAppend(record.level, record.message, record.time, Thread.currentThread.id, None<Exception>)
                     func writeAttrs(attrs: Array<Attr>) {
                         if (attrs.isEmpty()) {
                             return
@@ -115,17 +115,18 @@ public abstract class AbstractLogger <: Logger & Resource {
         let tid = Thread.currentThread.id
         append(level, message, now, tid , ex)
     }
-
     protected func appendException(ex: ?Exception, output: LogWriter): Unit {
         if (let Some(e) <- ex) {
             output.writeException(e)
         }
     }
     private func append(level: LogLevel, message: String, now: DateTime, tid: Int64, ex: Option<Exception>): Unit {
+        doAppend(level, message, now, tid, ex)
+        writer.writeString('\0')
+    }
+    private func doAppend(level: LogLevel, message: String, now: DateTime, tid: Int64, ex: Option<Exception>): Unit {
         pattern.generate(name, level, message, now, tid, writer)
         appendException(ex, writer)
-        println('@@@@@@@@@@@@@@@@@@@@@@ ${level} ${message} ${now} ${tid} ${ex}')
-        writer.writeString('\0')
     }
     protected open func append(level: LogLevel, message: () -> String, now: DateTime, tid: Int64, ex: Option<Exception>): Unit {
         if (logLevelEnabled(level)) {
