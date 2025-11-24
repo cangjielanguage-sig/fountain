@@ -114,12 +114,14 @@ public abstract class AsyncLogger <: AbstractLogger {
         let buffer = (super.output as SyncQueueOutputStream).getOrThrow()
         if (buffer.size > 0) {
             append {
-                while(let Some(buf) <- buffer.tryRemove() && let s <- buf.size && s > 0){
+                while(let Some(buf) <- buffer.tryRemove()){
                     try{
-                        for(bytes in buf where bytes.size > 0){
-                            this.actualOutput.write(bytes)
+                        if(buf.size > 0){
+                            for(bytes in buf where bytes.size > 0){
+                                this.actualOutput.write(bytes)
+                            }
+                            this.actualOutput.flush()
                         }
-                        this.actualOutput.flush()
                     }finally{
                         buffer.returnBuffer(buf)
                     }
@@ -167,9 +169,15 @@ public struct SyncQueueOutputStream <: OutputStream {
             buffer.set(buf)
             buf
         }
-        if(bytes[bytes.size - 1] == b'\0'){//todo 这个做法性能有些低，但是性能高的做法会导致BUG。
-            let b = bytes[0 .. bytes.size - 1]
-            buf.add(b)
+        // if(bytes[bytes.size - 1] == b'\0'){//todo 这个做法性能有些低，但是性能高的做法会导致BUG。
+        //     let b = bytes[0 .. bytes.size - 1]
+        //     buf.add(b)
+        //     queue.add(buf)
+        //     buffer.set(None)
+        // }else{
+        //     buf.add(bytes)
+        // }
+        if(bytes[0] == b'\0'){
             queue.add(buf)
             buffer.set(None)
         }else{
