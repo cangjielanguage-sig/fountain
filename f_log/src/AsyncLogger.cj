@@ -114,12 +114,14 @@ public abstract class AsyncLogger <: AbstractLogger {
         let buffer = (super.output as SyncQueueOutputStream).getOrThrow()
         if (buffer.size > 0) {
             append {
-                while(let Some(buf) <- buffer.tryRemove() && let s <- buf.size && s > 0){
+                while(let Some(buf) <- buffer.tryRemove()){
                     try{
-                        for(bytes in buf where bytes.size > 0){
-                            this.actualOutput.write(bytes)
+                        if(let s <- buf.size && s > 0){
+                            for(bytes in buf where bytes.size > 0){
+                                this.actualOutput.write(bytes)
+                            }
+                            this.actualOutput.flush()
                         }
-                        this.actualOutput.flush()
                     }finally{
                         buffer.returnBuffer(buf)
                     }
