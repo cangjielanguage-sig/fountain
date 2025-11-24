@@ -22,7 +22,7 @@ exports(){
     export mvc_internalServerErrorMessageKind=BEAN
     export mvc_internalServerErrorMessage=NameOf500Handler
 #    export orm_noPool=true # 默认是false，true表示不用连接池
-    export orm_useStdPool=false # 默认是true
+#    export orm_useStdPool=false # 默认是true
     export orm_drivers=opengauss
     export orm_databasePoolInitSize=10
     export orm_databasePoolMinSize=10
@@ -33,12 +33,12 @@ exports(){
     export orm_databasePoolConnectionLife=86400
     export orm_databasePoolCheckInterval=300 # 默认是300，单位是秒
     export orm_databasePoolCheckSql='select 1'
-#    export orm_pooledDatasourceMaxSize=1
-#    export orm_pooledDatasourceMaxIdleSize=1
-#    export orm_pooledDatasourceIdleTimeout=86400
-#    export orm_stdPoolMaxLifeTime=86400
-#    export orm_pooledDatasourceConnectionTimeout=86400
-#    export orm_pooledDatasourceKeepaliveTime=86400
+    export orm_pooledDatasourceMaxSize=10
+    export orm_pooledDatasourceMaxIdleSize=10
+    export orm_pooledDatasourceIdleTimeout=86400
+    export orm_stdPoolMaxLifeTime=86400
+    export orm_pooledDatasourceConnectionTimeout=86400
+    export orm_pooledDatasourceKeepaliveTime=86400
     # orm_transactionalFuncExecution 和@Transactional注解只要有一个生效就会将事务切面织入到函数
 #    export orm_transactionalFuncExecution='*..*.delete*(**): *|*..*.remove*(**): *|*..*.save*(**): *|*..*.add*(**): *|*..*.new*(**): *|*..*.create*(**): *|*..*.insert*(**): *|*..*.update*(**): *|*..*.change*(**): *|*..*.register*(**): *'
 #    export orm_transactionalFuncExecution='*..*.notLikeDemo*(**): *'
@@ -94,14 +94,14 @@ launch)
 loop)
     for i in $(seq 1 $2); do 
         echo -e "\n================= 第 $i 次循环 =================\n";
-        # curl -XPOST -H'Content-Type:application/json' -H'Accept:application/json' -d'{"username":"asdf","password":"bcbcbcbc"}' http://localhost:8080/api/user/session
+         curl -XPOST -H'Content-Type:application/json' -H'Accept:application/json' -d'{"username":"asdf","password":"bcbcbcbc"}' http://localhost:8080/api/user/session
         # curl -XGET -H'Accept:text/plain' http://localhost:8080/helloworld
-         curl -XPOST http://localhost:8080/api/db/notLikeDemo1 \
-         -H'Content-Type:application/json' \
-         -H'Accept:application/json' \
-         -d'{
-         "username": "asdf"
-         }'
+#         curl -XPOST http://localhost:8080/api/db/notLikeDemo1 \
+#         -H'Content-Type:application/json' \
+#         -H'Accept:application/json' \
+#         -d'{
+#         "username": "asdf"
+#         }'
 	#  sleep 1
 #        ./curl.sh
     done
