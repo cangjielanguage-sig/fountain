@@ -124,6 +124,7 @@ public abstract class AbstractLogger <: Logger & Resource {
     private func append(level: LogLevel, message: String, now: DateTime, tid: Int64, ex: Option<Exception>): Unit {
         pattern.generate(name, level, message, now, tid, writer)
         appendException(ex, writer)
+        println('@@@@@@@@@@@@@@@@@@@@@@ ${level} ${message} ${now} ${tid} ${ex}')
         writer.writeString('\0')
     }
     protected open func append(level: LogLevel, message: () -> String, now: DateTime, tid: Int64, ex: Option<Exception>): Unit {

@@ -121,6 +121,8 @@ public abstract class AsyncLogger <: AbstractLogger {
                                 this.actualOutput.write(bytes)
                             }
                             this.actualOutput.flush()
+                        }else{
+                            println('############################## ')
                         }
                     }finally{
                         buffer.returnBuffer(buf)
@@ -178,6 +180,7 @@ public struct SyncQueueOutputStream <: OutputStream {
         //     buf.add(bytes)
         // }
         if(bytes[0] == b'\0'){
+            println('$$$$$$$$$$$$$$$$$$$$ ${buf.size} ${Thread.currentThread.id}')
             queue.add(buf)
             buffer.set(None)
         }else{
