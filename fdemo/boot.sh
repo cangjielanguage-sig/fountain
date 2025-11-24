@@ -92,10 +92,11 @@ launch)
     launch
     ;;
 loop)
+    start=$(date +%s.%N)
     for i in $(seq 1 $2); do 
         echo -e "\n================= 第 $i 次循环 =================\n";
-         curl -XPOST -H'Content-Type:application/json' -H'Accept:application/json' -d'{"username":"asdf","password":"bcbcbcbc"}' http://localhost:8080/api/user/session
-        # curl -XGET -H'Accept:text/plain' http://localhost:8080/helloworld
+#         curl -XPOST -H'Content-Type:application/json' -H'Accept:application/json' -d'{"username":"asdf","password":"bcbcbcbc"}' http://localhost:8080/api/user/session
+         curl -XGET -H'Accept:text/plain' http://localhost:8080/helloworld
 #         curl -XPOST http://localhost:8080/api/db/notLikeDemo1 \
 #         -H'Content-Type:application/json' \
 #         -H'Accept:application/json' \
@@ -105,6 +106,9 @@ loop)
 	#  sleep 1
 #        ./curl.sh
     done
+    end=$(date +%s.%N)
+    elapsed=$(echo "$end - $start" | bc)
+    echo "耗时: $elapsed 秒"
     ;;
 ab)
 #    apt install apache2-utils 执行前需安装apache2-utils
