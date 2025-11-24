@@ -26,19 +26,23 @@ import fountain.data.macros.*
 import fountain.log.LoggerFactory
 import fountain.orm.*
 
-// private let _ = {=>
-//     try{
-//         let logger = LoggerFactory.getLogger("opengauss")
-//         slog.setDefault(logger)
-//         // let driver = DriverManager.getDriver("opengauss").getOrThrow()
-//         // let url = env.getVariable('POSTGRES') ?? ''
-//         // ORM.register(driver)
-//         // ORM.register('opengauss')
-//     }catch(e: Exception){
-//         e.printStackTrace()
-//         throw e 
-//     }
-// }()
+private let _ = {=>
+    try{
+        let logger = LoggerFactory.getLogger("opengauss")
+        slog.setDefault(logger)
+        let url = env.getVariable('POSTGRES') ?? ''
+        let driverName = 'opengauss'
+        let driver = DriverManager.getDriver(driverName).getOrThrow()
+        // ORM.register(driver)
+        // ORM.register('opengauss')
+        //下面的代码不用池，启用下面的代码boot.sh的池配置环境变量会被忽略。代码初始化数据库的优先级高于环境变量
+        // let ds = driver.open(url)
+        // ORM.register(NamedDatasource(false, driverName, ds))
+    }catch(e: Exception){
+        e.printStackTrace()
+        throw e 
+    }
+}()
 
 ///////////////////////////////////////////////////////////////////////////////
 /**这一行往下单纯只是为了演示实例复制和类实例与json互相转换的功能*******************/

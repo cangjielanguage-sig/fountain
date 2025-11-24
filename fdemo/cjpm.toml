@@ -5,14 +5,13 @@
 
 [workspace]
   version = "1.0.0"
-  members=["./boot", "./user"]
+  members=["./boot", "./user", "./dbtest"]
   compile-option = "-O2 --dy-std -Woff unused"
   override-compile-option = "-O2 --dy-std -Woff unused"
 
 [profile.build]
+  lto = "full"
   incremental = true
-#[profile.build.combined]
-#  fdemo = "dynamic"
 
 [target]
 [target.x86_64-unknown-linux-gnu]

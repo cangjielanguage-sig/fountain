@@ -44,7 +44,6 @@
 [target.aarch64-apple-darwin.bin-dependencies]
   path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]
 
-
 [profile.build]
   lto = "full"
   incremental = true
