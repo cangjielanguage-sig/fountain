@@ -61,8 +61,9 @@ private let _ = {=>
 在初始化脚本增加环境变量：
 
 ```bash
-#    export orm_noPool=true # 默认是false，true表示不用连接池
+#    export orm_noPool=true # 默认是false，true表示不用连接池，值是true时忽略所有连接池配置
 #    export orm_useStdPool=false # 默认是true，true表示使用std.datasource.sql.PooledDatasource，否则使用fountain.orm.DatasourcePool
+    # 使用orm池会忽略标准库池的配置，反之亦然
     export orm_drivers=opengauss # 逗号分隔的驱动名称
     # orm_datasourcePool*是fountain.orm.DatasourcePool的初始化参数
     export orm_databasePoolInitSize=10 # 池的初始连接数
