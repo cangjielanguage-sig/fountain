@@ -38,10 +38,10 @@ exports(){
     # orm_stdPool开头的是std.datasource.sql.PooledDatasource的配置项
     export orm_stdPoolMaxSize=10 # 连接池最大连接数
     export orm_stdPoolMaxIdleSize=10 # 连接池最大空闲连接数
-    export orm_stdPoolIdleTimeout=86400 # 连接闲置时间
-    export orm_stdPoolMaxLifeTime=86400 # 连接存活时间
-    export orm_stdPoolConnectionTimeout=86400 # 连接获取超时时间
-    export orm_stdPoolKeepaliveTime=86400 # 连接保活检查周期
+    export orm_stdPoolIdleTimeout=86400 # 连接闲置时间，默认是10分钟
+    export orm_stdPoolMaxLifeTime=86400 # 连接存活时间，默认30分钟
+    export orm_stdPoolConnectionTimeout=86400 # 连接获取超时时间，默认30分钟
+    export orm_stdPoolKeepaliveTime=86400 # 连接保活检查周期，默认1分钟
     # orm_transactionalFuncExecution 和@Transactional注解只要有一个生效就会将事务切面织入到函数
 #    export orm_transactionalFuncExecution='*..*.delete*(**): *|*..*.remove*(**): *|*..*.save*(**): *|*..*.add*(**): *|*..*.new*(**): *|*..*.create*(**): *|*..*.insert*(**): *|*..*.update*(**): *|*..*.change*(**): *|*..*.register*(**): *'
 #    export orm_transactionalFuncExecution='*..*.notLikeDemo*(**): *'
