@@ -114,8 +114,11 @@ public class ORMConfig {
     public static func getDriverNames(): Iterator<String>{
         (Config.getString(drivers)?.split(',') ?? []).iterator()
     }
+    protected static func getDriver(driverName: String){
+        DriverManager.getDriver(driverName).getOrThrow{ORMException('database driver ${driverName} does not initialize')}
+    }
     public static func getDrivers(): Iterator<Driver> {
-        getDriverNames().map{d => DriverManager.getDriver(d).getOrThrow()}
+        getDriverNames().map{d => getDriver(d)}
     }
     public static func getUrl(driverName!: String = String.empty): String {
         match (getConf(driverName: driverName, key: connectionUrl)) {

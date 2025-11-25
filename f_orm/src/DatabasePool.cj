@@ -123,7 +123,7 @@ public class DatabasePool <: Resource & Datasource {
         byConfig(driver){ds.connect()}
     }
     public static func byConfig(driverName: String, options: Array<(String, String)>){
-        let driver = DriverManager.getDriver(driverName).getOrThrow()
+        let driver = ORM.getDriver(driverName)
         byConfig(driver, options)
     }
 

@@ -104,8 +104,8 @@ public class ORM {
         }
         register(NamedDatasource.new(driver, url, opts), default: default)
     }
-    private static func getDriver(driver: String){
-        DriverManager.getDriver(driver).getOrThrow()
+    public static func getDriver(driver: String){
+        ORMConfig.getDriver(driver)
     }
     public static func register(driver: String, default!: Bool = true): Unit {
         register(getDriver(driver), default: default)
@@ -145,7 +145,7 @@ public class ORM {
             for(d in ORMConfig.getDriverNames()){
                 let default = defaultDriverName.isEmpty() || d == defaultDriverName
                 if(ORMConfig.getNoPool(driverName: d)){
-                    let driver = DriverManager.getDriver(d).getOrThrow()
+                    let driver = getDriver(d)
                     let url = ORMConfig.getUrl(driverName: d)
                     let ds = driver.open(url)
                     register(NamedDatasource(false, d, ds), default: default)

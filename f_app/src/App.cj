@@ -29,7 +29,7 @@ import f_base.*
 import f_bean.BeanFactory
 import f_log.*
 import f_mvc.MVCStarter
-import f_orm.{ORM, TransactionHook}
+import f_orm.ORM
 import f_ticktock.Ticktock
 
 /**

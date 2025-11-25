@@ -30,9 +30,9 @@ private let _ = {=>
     try{
         let logger = LoggerFactory.getLogger("opengauss")
         slog.setDefault(logger)
-        let url = env.getVariable('POSTGRES') ?? ''
-        let driverName = 'opengauss'
-        let driver = DriverManager.getDriver(driverName).getOrThrow()
+        // let url = env.getVariable('POSTGRES') ?? ''
+        // let driverName = 'opengauss'
+        // let driver = ORM.getDriver(driverName)
         // ORM.register(driver)
         // ORM.register('opengauss')
         //下面的代码不用池，启用下面的代码boot.sh的池配置环境变量会被忽略。代码初始化数据库的优先级高于环境变量
