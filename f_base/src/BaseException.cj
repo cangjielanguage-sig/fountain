@@ -21,7 +21,7 @@ import std.collection.ArrayList
 public func printStackTrace(exception: Exception, output: OutputStream): Unit {
     printStackTrace(output) {
         buf =>
-        buf.write("An exception has occured: ${exception}".unsafeBytes())
+        buf.write("An exception has occured:${OS.current.nextLine}${exception}${OS.current.nextLine}".unsafeBytes())
         for (stack in exception.getStackTrace()) {
             buf.write(
                 "         at ${stack.declaringClass}.${stack.methodName}(${stack.fileName}: ${stack.lineNumber})${OS.current.nextLine}"
