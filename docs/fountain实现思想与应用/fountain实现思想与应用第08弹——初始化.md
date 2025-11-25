@@ -65,22 +65,22 @@ private let _ = {=>
 #    export orm_useStdPool=false # 默认是true，true表示使用std.datasource.sql.PooledDatasource，否则使用fountain.orm.DatasourcePool
     export orm_drivers=opengauss # 逗号分隔的驱动名称
     # orm_datasourcePool*是fountain.orm.DatasourcePool的初始化参数
-    export orm_databasePoolInitSize=10
-    export orm_databasePoolMinSize=10
-    export orm_databasePoolMaxSize=10
-    export orm_databasePoolCheckOnCreation=true
-    export orm_databasePoolCheckOnBorrowing=true
-    export orm_databasePoolCheckOnReturning=false
-    export orm_databasePoolConnectionLife=86400
-    export orm_databasePoolCheckInterval=300 # 默认是300，单位是秒
-    export orm_databasePoolCheckSql='select 1'
+    export orm_databasePoolInitSize=10 # 池的初始连接数
+    export orm_databasePoolMinSize=10 # 池的最小连接数
+    export orm_databasePoolMaxSize=10 # 池的最大连接数
+    export orm_databasePoolCheckOnCreation=true # 默认false，true表示创建连接时检查连接
+    export orm_databasePoolCheckOnBorrowing=true # 默认true，true表示在获取连接时检查连接
+    export orm_databasePoolCheckOnReturning=false # 默认true，true表示在返回连接时检查连接
+    export orm_databasePoolConnectionLife=86400 # 默认是3600，单位是秒，连接存活时间
+    export orm_databasePoolCheckInterval=300 # 默认是300，单位是秒，连接有效性检查周期
+    export orm_databasePoolCheckSql='select 1' # 默认是select 1，检查连接有效性的SQL
     # orm_stdPool*是std.datasource.sql.PooledDatasource的初始化参数
-    export orm_stdPoolMaxSize=1
-    export orm_stdPoolMaxIdleSize=1
-    export orm_stdPoolTimeout=86400
-    export orm_stdPoolMaxLifeTime=86400
-    export orm_stdPoolConnectionTimeout=86400
-    export orm_stdPoolKeepaliveTime=86400
+    export orm_stdPoolMaxSize=1 # 最大连接数
+    export orm_stdPoolMaxIdleSize=1 # 最大空闲连接数
+    export orm_stdPoolIdleTimeout=86400 # 连接闲置时间
+    export orm_stdPoolMaxLifeTime=86400 # 连接存活时间
+    export orm_stdPoolConnectionTimeout=86400 # 从池中获取连接的超时时间
+    export orm_stdPoolKeepaliveTime=86400 # 检查连接有效性的周期
     # 以上是数据库连接池的初始化参数
     # orm_transactionalFuncExecution 和@Transactional注解只要有一个生效就会将事务切面织入到函数
     export orm_transactionalFuncExecution='*..*.delete*(**): *|*..*.remove*(**): *|*..*.save*(**): *|*..*.add*(**): *|*..*.new*(**): *|*..*.create*(**): *|*..*.insert*(**): *|*..*.update*(**): *|*..*.change*(**): *|*..*.register*(**): *'
