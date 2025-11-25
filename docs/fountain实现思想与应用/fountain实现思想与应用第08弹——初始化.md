@@ -61,12 +61,26 @@ private let _ = {=>
 在初始化脚本增加环境变量：
 
 ```bash
-    export orm_pooledDatasourceMaxSize=1
-    export orm_pooledDatasourceMaxIdleSize=1
-    export orm_pooledDatasourceIdleTimeout=86400
+#    export orm_noPool=true # 默认是false，true表示不用连接池
+#    export orm_useStdPool=false # 默认是true，true表示使用std.datasource.sql.PooledDatasource，否则使用fountain.orm.DatasourcePool
+    export orm_drivers=opengauss # 逗号分隔的驱动名称
+    # orm_datasourcePool*是fountain.orm.DatasourcePool的初始化参数
+    export orm_databasePoolInitSize=10
+    export orm_databasePoolMinSize=10
+    export orm_databasePoolMaxSize=10
+    export orm_databasePoolCheckOnCreation=true
+    export orm_databasePoolCheckOnBorrowing=true
+    export orm_databasePoolCheckOnReturning=false
+    export orm_databasePoolConnectionLife=86400
+    export orm_databasePoolCheckInterval=300 # 默认是300，单位是秒
+    export orm_databasePoolCheckSql='select 1'
+    # orm_stdPool*是std.datasource.sql.PooledDatasource的初始化参数
+    export orm_stdPoolMaxSize=1
+    export orm_stdPoolMaxIdleSize=1
+    export orm_stdPoolTimeout=86400
     export orm_stdPoolMaxLifeTime=86400
-    export orm_pooledDatasourceConnectionTimeout=86400
-    export orm_pooledDatasourceKeepaliveTime=86400
+    export orm_stdPoolConnectionTimeout=86400
+    export orm_stdPoolKeepaliveTime=86400
     # 以上是数据库连接池的初始化参数
     # orm_transactionalFuncExecution 和@Transactional注解只要有一个生效就会将事务切面织入到函数
     export orm_transactionalFuncExecution='*..*.delete*(**): *|*..*.remove*(**): *|*..*.save*(**): *|*..*.add*(**): *|*..*.new*(**): *|*..*.create*(**): *|*..*.insert*(**): *|*..*.update*(**): *|*..*.change*(**): *|*..*.register*(**): *'

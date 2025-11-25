@@ -34,12 +34,12 @@ exports(){
     export orm_databasePoolConnectionLife=86400
     export orm_databasePoolCheckInterval=300 # 默认是300，单位是秒
     export orm_databasePoolCheckSql='select 1'
-    export orm_pooledDatasourceMaxSize=10
-    export orm_pooledDatasourceMaxIdleSize=10
-    export orm_pooledDatasourceIdleTimeout=86400
+    export orm_stdPoolMaxSize=10
+    export orm_stdPoolMaxIdleSize=10
+    export orm_stdPoolIdleTimeout=86400
     export orm_stdPoolMaxLifeTime=86400
-    export orm_pooledDatasourceConnectionTimeout=86400
-    export orm_pooledDatasourceKeepaliveTime=86400
+    export orm_stdPoolConnectionTimeout=86400
+    export orm_stdPoolKeepaliveTime=86400
     # orm_transactionalFuncExecution 和@Transactional注解只要有一个生效就会将事务切面织入到函数
 #    export orm_transactionalFuncExecution='*..*.delete*(**): *|*..*.remove*(**): *|*..*.save*(**): *|*..*.add*(**): *|*..*.new*(**): *|*..*.create*(**): *|*..*.insert*(**): *|*..*.update*(**): *|*..*.change*(**): *|*..*.register*(**): *'
 #    export orm_transactionalFuncExecution='*..*.notLikeDemo*(**): *'

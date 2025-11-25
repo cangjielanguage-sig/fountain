@@ -43,12 +43,12 @@ public class ORMConfig {
     public static const databasePoolCheckOnBorrowing = confPrefix + "_databasePoolCheckOnBorrowing"
     public static const databasePoolCheckOnReturning = confPrefix + "_databasePoolCheckOnReturning"
     public static const databasePoolCheckSql = confPrefix + "_databasePoolCheckSql"
-    public static const stdPoolIdleTimeout = confPrefix + "_pooledDatasourceIdleTimeout"
+    public static const stdPoolIdleTimeout = confPrefix + "_stdPoolIdleTimeout"
     public static const stdPoolMaxLifeTime = confPrefix + "_pooledDatasourceMaxLifeTime"
-    public static const stdPoolConnectionTimeout = confPrefix + "_pooledDatasourceConnectionTimeout"
-    public static const stdPoolKeepaliveTime = confPrefix + "_pooledDatasourceKeepaliveTime"
-    public static const stdPoolMaxSize = confPrefix + "_pooledDatasourceMaxSize"
-    public static const stdPoolMaxIdleSize = confPrefix + "_pooledDatasourceMaxIdleSize"
+    public static const stdPoolConnectionTimeout = confPrefix + "_stdPoolConnectionTimeout"
+    public static const stdPoolKeepaliveTime = confPrefix + "_stdPoolKeepaliveTime"
+    public static const stdPoolMaxSize = confPrefix + "_stdPoolMaxSize"
+    public static const stdPoolMaxIdleSize = confPrefix + "_stdPoolMaxIdleSize"
 
     public static const transactionalFuncExecution = confPrefix + '_transactionalFuncExecution'
 
