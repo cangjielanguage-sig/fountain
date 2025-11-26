@@ -105,13 +105,4 @@ public interface UserDAO <: RootDAO {
               and password = ${arg(password)}'''
         ).singleFirst<Int64>()
     }
-    func notLikeDemo1(username: String): ArrayList<UserPO> {
-        executor.setSql('''
-            select *
-              from user_info
-              where username not like '%${username}%'
-              order by id asc
-              '''
-        ).list<UserPO>()
-    }
 }
