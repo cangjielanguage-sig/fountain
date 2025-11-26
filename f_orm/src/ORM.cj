@@ -39,6 +39,12 @@ public class ORM {
     static let hooks = TransactionHooks()
 
     static init() {
+        try{
+            initialize()
+        }catch(e: Exception){
+            e.printStackTrace()
+            throw e
+        }
         env.atExit(close)
     }
 
@@ -139,7 +145,7 @@ public class ORM {
             registerWithORMPool(d, default: default.isEmpty() || d == default)
         }
     }
-    public static func initialize(){
+    private static func initialize(){
         try{
             let defaultDriverName = ORMConfig.getDefaultDriver()
             for(d in ORMConfig.getDriverNames()){

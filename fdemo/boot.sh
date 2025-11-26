@@ -22,6 +22,7 @@ exports(){
     export mvc_overallElapsedSwitch=true
     export mvc_internalServerErrorMessageKind=BEAN
     export mvc_internalServerErrorMessage=NameOf500Handler
+    # 如果不使用fountain连接池，也不使用标准库连接池，就不要配置以下orm变量，只能用代码初始化第三方连接池
 #    export orm_noPool=true # 默认是false，true表示不用连接池
     export orm_useStdPool=false # 默认是true，表示使用标准库连接池
     export orm_drivers=opengauss # 逗号分隔的驱动名称
@@ -43,8 +44,8 @@ exports(){
     export orm_stdPoolConnectionTimeout=86400 # 连接获取超时时间，默认30分钟
     export orm_stdPoolKeepaliveTime=86400 # 连接保活检查周期，默认1分钟
     # orm_transactionalFuncExecution 和@Transactional注解只要有一个生效就会将事务切面织入到函数
-#    export orm_transactionalFuncExecution='*..*.delete*(**): *|*..*.remove*(**): *|*..*.save*(**): *|*..*.add*(**): *|*..*.new*(**): *|*..*.create*(**): *|*..*.insert*(**): *|*..*.update*(**): *|*..*.change*(**): *|*..*.register*(**): *'
-#    export orm_transactionalFuncExecution='*..*.notLikeDemo*(**): *'
+   export orm_transactionalFuncExecution='*..*.delete*(**): *|*..*.remove*(**): *|*..*.save*(**): *|*..*.add*(**): *|*..*.new*(**): *|*..*.create*(**): *|*..*.insert*(**): *|*..*.update*(**): *|*..*.change*(**): *|*..*.register*(**): *'
+   export orm_transactionalFuncExecution='*..*.notLikeDemo*(**): *'
     export opengauss_orm_connectionUrl=$POSTGRES
     if [[ "$path" == "" ]]; then
         path='./fdemo'
@@ -100,12 +101,6 @@ loop)
         echo -e "\n================= 第 $i 次循环 =================\n";
 #         curl -XPOST -H'Content-Type:application/json' -H'Accept:application/json' -d'{"username":"asdf","password":"bcbcbcbc"}' http://localhost:8080/api/user/session
          curl -XGET -H'Accept:text/plain' http://localhost:8080/helloworld
-#         curl -XPOST http://localhost:8080/api/db/notLikeDemo1 \
-#         -H'Content-Type:application/json' \
-#         -H'Accept:application/json' \
-#         -d'{
-#         "username": "asdf"
-#         }'
 	#  sleep 1
 #        ./curl.sh
     done

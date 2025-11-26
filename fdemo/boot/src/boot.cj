@@ -24,7 +24,7 @@ import fountain.bean.macros.*
 import fountain.data.*
 import fountain.data.macros.*
 import fountain.log.LoggerFactory
-import fountain.orm.*
+// import fountain.orm.*
 
 private let _ = {=>
     try{
