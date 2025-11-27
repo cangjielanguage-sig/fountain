@@ -97,7 +97,7 @@ public struct MurmurHash128X64 <: Hashable & Comparable<MurmurHash128X64> {
         func to(x: Int64, a: Int64){
             Int8((x >> (a * 8)) & 0xffi64).toUInt()
         }
-        BigInt(true, Array<Byte>(16){i =>
+        BigInt(one >= 0, Array<Byte>(16){i =>
             if(i < 8){
                 to(one, 7 - i)
             }else{
