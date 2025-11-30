@@ -15,6 +15,10 @@ limitations under the License.
  */
 package f_http
 
+import f_collection.*
+import f_data.*
+import f_io.RotatableBuffer
+import f_util.UUID
 /**
 https://www.rfc-editor.org/rfc/rfc1867
 multipart/form-data
@@ -59,380 +63,143 @@ multipart/form-data multipart/mixed
         --AaB03x--
  */
 public class MultipartFormDataParser {
-    private static let uploadDir = HttpConfig.uploadDir
-    private static let uploadStoreInMemory = HttpConfig.uploadStoreInMemory
-    private let boundary: String
-    private let bodyStream: InputStream
-    private let bodyDelimiter: Array<Byte>
-    private let bodyStart: Array<Byte>
-    private let bodyEnd: Array<Byte>
-    private let bodyIndexer: BodyIndexer
-    private let path: String
-    private let indexer: BodyIndexer
-    public MultipartFormDataParser(private let ctx: HttpContext) {
-        let contentType = ctx.request.headers.getFirst("Content-Type") ?? ""
-        if (contentType == "") {
-            throw HttpRequestHeaderException("No Content-Type of http request header")
-        } else if (!contentType.startsWith("multipart/form-data; boundary=")) {
-            throw HttpRequestHeaderException(
-                "Content-Type of http request header does not match, ${contentType}, Content-Type must start with multipart/form-data; boundary=")
-        }
-        boundary = extractBoundary(contentType)
-        bodyStream = ctx.request.body
-        bodyStart = genBodyStart(boundary)
-        bodyDelimiter = genBodyDelimiter(boundary)
-        bodyEnd = genBodyEnd(boundary)
-        bodyIndexer = BodyIndexer(bodyStream, bodyStart, bodyDelimiter, bodyEnd)
-        path = if (!uploadStoreInMemory) {
-            let part = "${DateTime.now()}${boundary}"
-            let path = if (uploadDir.endsWith("/")) {
-                "${uploadDir}${part}"
-            } else {
-                "${uploadDir}/${part}"
+    private let stream: RotatableBuffer
+    private let boundaryBytes: Array<Byte>
+    
+    public MultipartFormDataParser(input: InputStream, private let boundary: String){
+        stream = RotatableBuffer(input, halfBufferSize: HttpConfig.halfBufferSize)
+        boundaryBytes = '--${boundary}'.unsafeBytes()
+    }
+    public static func new(ctx: HttpContext){
+        let contentType = ctx.request.headers.getFirst("Content-Type").getOrThrow()
+        let boundary = contentType[contentType.indexOf('boundary=').getOrThrow() + 'boundary='.size ..]
+        MultipartFormDataParser(ctx.request.body, boundary)
+    }
+    public func parse(){
+        let path = Path('/tmp/${UUID.random()}')
+        let crlf = Array<Byte>(2, repeat: 0)
+        let parts = DataMultiparts()
+        var start = stream.indexOf(boundaryBytes)
+        while(true){
+            if(start < 0){
+                throw MultipartFormDataException()
             }
-            Directory.createTemp(path)
-            path
-        } else {
-            ""
-        }
-        indexer = BodyIndexer(bodyStream, bodyStart, bodyDelimiter, bodyEnd)
-        if (!indexer.checkStart()) {
-            throw MultipartFormDataException(
-                "current request body does not match multipart/form-data, it does not starts with the boundary")
-        }
-    }
-    private static func genBodyStart(boundary: String) {
-        "\r\n--${boundary}\r\n".unsafeBytes()
-    }
-    private static func genBodyDelimiter(boundary: String) {
-        "\r\n--${boundary}\r\n".unsafeBytes()
-    }
-    private static func genBodyEnd(boundary: String) {
-        "\r\n--${boundary}--".unsafeBytes()
-    }
-    private static let CONTENT_TYPE_BYTES = "Content-Type".unsafeBytes()
-
-    static func extractBoundary(contentType: String) {
-        contentType["multipart/form-data; boundary=".size..]
-    }
-    public func parse(): Multiparts {
-        let parts = Multiparts()
-        while (indexer.notEnd()) {
-            var header = extractHeaderFromBody(indexer)
-            let contentDisposition = ContentDisposition.parse(header[1])
-            if (contentDisposition.getFilename().isEmpty()) {
-                func partPadding() {
-                    var partEnd = -1
-                    let list = ArrayList<Byte>()
-                    do {
-                        partEnd = indexer.indexOf(bodyDelimiter)
-                        indexer.slice(false, list)
-                    } while (partEnd < 0)
-                    list
-                }
-                if (indexer.sliceFrom == indexer.indexOf(CONTENT_TYPE_BYTES)) {
-                    header = extractHeaderFromBody(indexer)
-                    let headerValue = header[1]
-                    if (headerValue.startsWith("multipart/mixed")) {
-                        let boundary = headerValue[headerValue
-                                .indexOf(", boundary=")
-                                .getOrThrow {MultipartFormDataException("${headerValue} is without boundary")} + ", boundary="
-                                .size..]
-                        let bodyStart = indexer.bodyStart
-                        let bodyDelimiter = indexer.bodyDelimiter
-                        let bodyEnd = indexer.bodyEnd
-                        indexer.bodyStart = genBodyStart(boundary)
-                        indexer.bodyDelimiter = genBodyDelimiter(boundary)
-                        indexer.bodyEnd = genBodyEnd(boundary)
-                        parts.add(
-                            match (parse()) {
-                                case x: Multiparts => MultipartMixed(contentDisposition, x)
-                                case x: Multiparts => MultipartMixed(contentDisposition, x)
-                                case _ => throw MultipartFormDataException("unreachable")
-                            })
-                        indexer.bodyStart = bodyStart
-                        indexer.bodyDelimiter = bodyDelimiter
-                        indexer.bodyEnd = bodyEnd
-                        indexer.sliceFrom -= 2
-                        indexer.indexOf(bodyDelimiter, rotate: true)
-                        continue
-                    } else if (headerValue == "application/x-www-form-urlencoded") {
-                        indexer.indexOf(lineDelim, rotate: true) //此处必须有一行这个，必须跟【OTHER】处的相同代码同时存在
-                        let list = partPadding()
-                        if (!list.isEmpty()) {
-                            parts.setForm(contentDisposition.getName(), Form((String.fromUtf8(list.unsafeData()))))
+            start += boundaryBytes.size
+            stream.read(crlf)
+            match((crlf[0], crlf[1])){
+                case (b'\r', b'\n') =>
+                    start += 2
+                    var end = stream.indexOf([b'\r', b'\n', b'\r', b'\n'], from: start)
+                    var buf = Array<Byte>(end - start, repeat: 0)
+                    stream.read(buf)
+                    let partHeader = String.fromUtf8(buf).split('\r\n')
+                    let contentDisposition = ContentDisposition.parse(partHeader[0])
+                    let contentType = MediaTypes.parse(partHeader[1].replace('Content-Type:', '').trimAscii())
+                    let filename = contentDisposition.getFilename()
+                    stream.addOffset(4)
+                    end = stream.indexOf(boundaryBytes)
+                    if(end > 0){
+                        buf = Array<Byte>(end - start, repeat: 0)
+                        stream.read(buf)
+                        if(filename.isEmpty()){
+                            let value = if(let Some(charset) <- contentDisposition.getCharset()){
+                                charset.newDecoder().decode(buf)
+                            }else{
+                                String.fromUtf8(buf)
+                            }
+                            parts.add(contentDisposition.getName(), contentType.toData(value))
+                        }else{
+                            let part = MultipartFile(contentDisposition, ByteBuffer(buf), charset: contentDisposition.getCharset() ?? Charsets.UTF8)
+                            parts.add(contentDisposition.getName(), part)
                         }
-                        continue
-                    } else {
-                        indexer.indexOf(lineDelim, rotate: true) //此处必须有一行这个，必须跟【OTHER】处的相同代码同时存在
-                        let list = partPadding()
-                        let mediaType = if (headerValue.isEmpty()) {
-                            None<MediaType>
-                        } else {
-                            MediaTypes.parse(headerValue)
+                    }else if(filename.isEmpty()){
+                        buf = Array<Byte>(1024, repeat: 0)
+                        let bytes = ArrayList<Byte>()
+                        while(let (len, _, _) <- stream.read(buf)){
+                            bytes.add(all: buf[0..len])
+                            end = stream.indexOf(boundaryBytes)
+                            start = stream.offset
+                            if(end > 0){
+                                buf = Array<Byte>(end - start, repeat: 0)
+                                stream.read(buf)
+                                bytes.add(all: buf)
+                                break
+                            }
                         }
-                        let part = MultipartMedia(contentDisposition, mediaType, list.unsafeData())
-                        parts.add(part)
-                        continue
+                        buf = bytes.unsafeData()
+                        let value = if(let Some(charset) <- contentDisposition.getCharset()){
+                            charset.newDecoder().decode(buf)
+                        }else{
+                            String.fromUtf8(buf)
+                        }
+                        parts.add(contentDisposition.getName(), contentType.toData(value))
+                    }else{
+                        let file = File(path.join(filename), ReadWrite)
+                        buf = Array<Byte>(1024, repeat: 0)
+                        while(let (len, _, _) <- stream.read(buf)){
+                            file.write(buf[0..len])
+                            end = stream.indexOf(boundaryBytes)
+                            start = stream.offset
+                            if(end > 0){
+                                buf = Array<Byte>(end - start, repeat: 0)
+                                stream.read(buf)
+                                file.write(buf)
+                                break
+                            }
+                        }
+                        let part = MultipartFile(contentDisposition, file, charset: contentDisposition.getCharset()?? Charsets.UTF8)
+                        parts.add(contentDisposition.getName(), part)
                     }
-                }
-                indexer.indexOf(lineDelim, rotate: true) //【OTHER】
-                var partEnd = -1
-                let list = partPadding()
-                let value = if (list.isEmpty()) {
-                    ""
-                } else {
-                    URL.parse(String.fromUtf8(list.unsafeData())).path
-                }
-                ctx.request.form.add(contentDisposition.getName(), value)
-            } else {
-                let filename = contentDisposition.getFilename()
-                ctx.request.form.add(contentDisposition.getName(), filename)
-                let header = extractHeaderFromBody(indexer)
-                let (stream, file): (OutputStream, Multipart) = if (uploadStoreInMemory) {
-                    let stream = ByteBuffer()
-                    let file = MultipartFile(contentDisposition, stream)
-                    (stream, file)
-                } else {
-                    let filepath = "${path}/${filename}"
-                    let stream = File(filepath, OpenMode.Read)
-                    let file = MultipartFile(contentDisposition, stream)
-                    (File(filepath, OpenMode.Write), file)
-                }
-                try {
-                    var partEnd = -1
-                    do {
-                        partEnd = indexer.indexOf(bodyDelimiter)
-                        indexer.output(false, stream)
-                    } while (partEnd < 0)
-                    parts.add(file)
-                } finally {
-                    match (stream) {
-                        case x: Resource => x.close()
-                        case _ => ()
-                    }
-                }
+                case (b'-', b'-') => break
+                case _ => throw MultipartFormDataException()
             }
         }
         parts
     }
-    private static let headerDelim = ":".unsafeBytes()
-    private static let lineDelim = "\r\n".unsafeBytes()
-    private func extractHeaderFromBody(indexer: BodyIndexer) {
-        let headerName = findSlice(indexer, headerDelim)
-        let headerValue = findSlice(indexer, lineDelim)
-        if (headerName.isEmpty()) {
-            ('', '')
-        } else {
-            (headerName, headerValue)
-        }
-    }
-    private func findSlice(indexer: BodyIndexer, delim: Array<Byte>): String {
-        let found = indexer.indexOf(delim)
-        if (found > 0) {
-            let slice = indexer.slice(delim == lineDelim)
-            String.fromUtf8(slice).trimAscii()
-        } else {
-            ''
-        }
-    }
 }
 
-class BodyIndexer {
-    private static let uploadHalfBufferSize = HttpConfig.uploadHalfBufferSize
-    BodyIndexer(
-        private let body: InputStream,
-        var bodyStart: Array<Byte>,
-        var bodyDelimiter: Array<Byte>,
-        var bodyEnd: Array<Byte>
-    ) {
-        rotateIfNecessary(false)
-    }
+public class DataMultiparts <: Data & Iterable<(String, Data)>{
+    private let map = HashMap<String, ArrayList<Data>>()
 
-    private var first = EmptyArray<Byte>.INSTANCE()
-    private var second = EmptyArray<Byte>.INSTANCE()
-    private var firstLength = 0
-    private var secondLength = 0
-    var foundOffset = -1
-    var sliceFrom = 0
+    public func add(name: String, input: Data){
+        map.computeIfAbsent(name){ArrayList<Data>()}.add(input)
+    }
+    public func get(name: String){
+        match(map.get(name)){
+            case Some(x) where x.size == 1 => x[0]
+            case Some(x) => DataIterable(x)
+            case _ => DataNone.INSTANCE 
+        }
+    }
+    public func iterator(): Iterator<(String, Data)> {
+        DataMultipartsIterator(map.iterator())
+    }
+    public static func tryParse(_: String): ?Data {
+        throw IllegalAccessException()
+    }
+    public static func parse(_: String): Data {
+        throw IllegalAccessException()
+    }
+    public static func tryFromData(data: Data, flag: DataConversionFlag): Any {
+        throw IllegalAccessException()
+    }
+    public func toString(): String {
+        throw IllegalAccessException()
+    }
+}
+public class DataMultipartsIterator <: Iterator<(String, Data)>{
+    DataMultipartsIterator(private let itr: Iterator<(String, ArrayList<Data>)>){}
 
-    public prop size: Int64 {
-        get() {
-            firstLength + secondLength
-        }
-    }
-    public func at(index: Int64): Option<Byte> {
-        if (index < firstLength) {
-            first[index]
-        } else if (index - firstLength < secondLength) {
-            second[index - firstLength]
-        } else {
-            None
-        }
-    }
-    func output(lineSlice: Bool, stream: OutputStream): Unit {
-        func innerOutput(secondLen: Int64) {
-            stream.write(first[sliceFrom..firstLength])
-            stream.write(second[0..secondLen])
-        }
-        if (foundOffset < 0) {
-            innerOutput(secondLength)
-        } else if (foundOffset <= firstLength) {
-            stream.write(first[sliceFrom..foundOffset])
-        } else if (foundOffset > firstLength) {
-            innerOutput(foundOffset - firstLength)
-        }
-        rotateIfNecessary(lineSlice)
-    }
-    func slice(lineSlice: Bool): Array<Byte> {
-        func innerSlice(secondLen: Int64) {
-            let list = ArrayList<Byte>()
-            list.add(all: first[sliceFrom..firstLength])
-            list.add(all: second[0..secondLen])
-            list.unsafeData()
-        }
-        var slc: Array<Byte> = []
-        if (foundOffset < 0) {
-            slc = innerSlice(secondLength)
-        } else if (foundOffset <= firstLength) {
-            slc = first[sliceFrom..foundOffset]
-        } else if (foundOffset > firstLength) {
-            slc = innerSlice(foundOffset - firstLength)
-        }
-        rotateIfNecessary(lineSlice)
-        slc
-    }
-    func slice(lineSlice: Bool, list: ArrayList<Byte>): Unit {
-        func innerSlice(secondLen: Int64) {
-            list.add(all: first[sliceFrom..firstLength])
-            list.add(all: second[0..secondLen])
-        }
-        if (foundOffset < 0) {
-            innerSlice(secondLength)
-        } else if (foundOffset < firstLength) {
-            list.add(all: first[sliceFrom..foundOffset])
-        } else {
-            innerSlice(foundOffset - firstLength)
-        }
-        rotateIfNecessary(lineSlice)
-    }
-    private func rotateIfNecessary(lineSlice: Bool): Unit {
-        func innerRotate() {
-            let idle = first
-            first = second
-            firstLength = first.size
-            let (second, secondLength) = fillBuffer(idle)
-            this.second = second
-            this.secondLength = secondLength
-        }
-        let delimiterSize = if (lineSlice) {
-            2
-        } else {
-            bodyDelimiter.size
-        }
-        if (foundOffset < 0) {
-            let (first, firstLength) = createBuffer()
-            this.first = first
-            this.firstLength = firstLength
-            let (second, secondLength) = createBuffer()
-            this.second = second
-            this.secondLength = secondLength
-            sliceFrom = 0
-        } else if (size - foundOffset < delimiterSize) {
-            innerRotate()
-            sliceFrom = foundOffset - firstLength
-        } else if (foundOffset >= firstLength) {
-            sliceFrom = if (secondLength == 0) {
-                first = EmptyArray<Byte>.INSTANCE()
-                second = EmptyArray<Byte>.INSTANCE()
-                firstLength = 0
-                secondLength = 0
-                0
-            } else {
-                innerRotate()
-                foundOffset - firstLength + delimiterSize
-            }
-            foundOffset = 0
-        } else if (firstLength - foundOffset <= delimiterSize) {
-            innerRotate()
-            sliceFrom = secondLength - delimiterSize + firstLength - foundOffset
-        } else {
-            sliceFrom = foundOffset + delimiterSize
-        }
-    }
-    private func createBuffer() {
-        let buffer = Array<Byte>(uploadHalfBufferSize, repeat: 0)
-        fillBuffer(buffer)
-    }
-    private func fillBuffer(buffer: Array<Byte>) {
-        if (buffer.size > 0) {
-            let len = body.read(buffer)
-            (buffer, len)
-        } else {
-            (buffer, 0)
-        }
-    }
-    func checkStart(): Bool {
-        let start = indexOf(bodyStart.size, bodyStart, bodyStart.size, 0) == 0
-        rotateIfNecessary(false)
-        start
-    }
-    func notEnd(): Bool {
-        let end = b'-'
-        match ((this.at(sliceFrom), this.at(sliceFrom + 1))) {
-            case (Some(x), Some(y)) => !(x == end && y == end)
-            case (None, None) => false
-            case _ => true
-        }
-    }
-    func indexOf(sub: Array<Byte>, rotate!: Bool = false): Int64 {
-        try {
-            indexOf(this.size, sub, sub.size, sliceFrom)
-        } finally {
-            if (rotate) {
-                rotateIfNecessary(sub.size == 2)
+    public func next(): ?(String, Data) {
+        while(let Some((k, v)) <- itr.next()){
+            if(v.isEmpty()){
+                continue
+            }else if(v.size == 1){
+                return (k, v[0])
+            }else{
+                return (k, DataIterable(v))
             }
         }
-    }
-
-    private func indexOf(valueCount: Int64, sub: Array<Byte>, subCount: Int64, fromIndex: Int64): Int64 {
-        foundOffset = if (valueCount == 0 || valueCount == fromIndex) {
-            -1
-        } else {
-            indexOf(this, valueCount, sub, subCount, fromIndex) ?? -1
-        }
-        return foundOffset
-    }
-    private func indexOf(src: BodyIndexer, srcCount: Int64, dst: Array<Byte>, dstCount: Int64, start: Int64): ?Int64 {
-        let first = dst[0]
-        let max = srcCount - dstCount
-        var i = start
-        while (i <= max) {
-            while (i <= max && if (let Some(x) <- src.at(i)) {
-                    x != first
-                } else {
-                    return None<Int64>
-                }) {
-                i++
-            }
-            if (i <= max) {
-                var j = i + 1
-                let end = j + dstCount - 1
-                var k = 1
-                while (j < end && if (let Some(x) <- src.at(j)) {
-                        x == dst[k]
-                    } else {
-                        return None<Int64>
-                    }) {
-                    j++
-                    k++
-                }
-                if (j == end) {
-                    return i
-                }
-            }
-            i++
-        }
-        return None<Int64>
+        None<(String, Data)>
     }
 }

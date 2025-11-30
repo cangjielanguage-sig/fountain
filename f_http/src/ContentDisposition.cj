@@ -100,6 +100,7 @@ public class ContentDisposition <: Equatable<ContentDisposition> & Equatable<Any
         this.filename = filename
         this
     }
+
     /**
      * Return the charset defined in {@literal filename*} parameter, or {@code null} if not defined.
      */

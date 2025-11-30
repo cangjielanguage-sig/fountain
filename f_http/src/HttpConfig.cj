@@ -17,11 +17,11 @@ package f_http
 
 public class HttpConfig{
     public static const CONF_PREFIX = "http"
-    public static const DEFAULT_UPLOAD_HALF_BUFFER_SIZE = 2048
+    public static const DEFAULT_HALF_BUFFER_SIZE = 2048
     public static const DEFAULT_UPLOAD_STORE_IN_MEMORY = false
     public static const DEFAULT_HTTP_DEBUGGING = false
     public static let HTTP_DEBUGGING = "${CONF_PREFIX}_debugging"
-    public static let UPLOAD_HALF_BUFFER_SIZE = "${CONF_PREFIX}_uploadHalfBufferSize"
+    public static let HALF_BUFFER_SIZE = "${CONF_PREFIX}_halfBufferSize"
     public static let UPLOAD_DIR = "${CONF_PREFIX}_uploadDir"
     public static const DEFAULT_UPLOAD_DIR = "/tmp/fountain/upload"
     public static let UPLOAD_STORE_IN_MEMORY = "${CONF_PREFIX}_uploadStoreInMemory"
@@ -35,9 +35,9 @@ public class HttpConfig{
     private static func bufferSize(bufferKey: String, default: Int64) {
         Config.bufferSize(bufferKey, default, isHttpDebugging)
     }
-    public static prop uploadHalfBufferSize: Int64 {
+    public static prop halfBufferSize: Int64 {
         get() {
-            bufferSize(UPLOAD_HALF_BUFFER_SIZE, DEFAULT_UPLOAD_HALF_BUFFER_SIZE)
+            bufferSize(HALF_BUFFER_SIZE, DEFAULT_HALF_BUFFER_SIZE)
         }
     }
     public static prop uploadDir: String {

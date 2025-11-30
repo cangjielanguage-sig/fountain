@@ -148,23 +148,13 @@ public class MultipartFormData <: ControllerFuncParam {
         throw MVCException('To use a class which implements ObjectData<T> to parse multipart/form-data')
     }
     public func extractObject<T>(name: String, ctx: HttpContext, pattern: HttpRequestPathPatterns): T where T <: Object & ObjectData<T> {
-        let multiparts = MultipartFormDataParser(ctx).parse()
+        let multiparts = MultipartFormDataParser.new(ctx).parse()
         let fields = T.dataFields()
         let object = fields.create()
         let mutables = fields.mutableFields()
         for (mf in mutables) {
             let name = mf.name
-            let data = match (multiparts.get(name)) {
-                case Some(x: MultipartFile) => x.toData()
-                case Some(x: ArrayList<MultipartMedia>) =>
-                    if (x.size == 1) {
-                        x[0].toData()
-                    } else {
-                        x.toData()
-                    }
-                case _ => throw MVCException(
-                    'media type of field ${name} in ${TypeInfos.get<T>()} cannot be parsed from multipart request')
-            }
+            let data = multiparts.get(name)
             mf.set(object, data)
         }
         (object as T).getOrThrow()

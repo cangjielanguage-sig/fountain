@@ -63,17 +63,7 @@ public class MultipartMediaType <: MediaType {
     public func toData(data: Array<Byte>): Data {
         throw MediaTypeException("${MEDIA_TYPE_NAME} does not support current access")
     }
-    private static let multipart = ThreadLocal<Any>()
-    public func parse(ctx: HttpContext): Multiparts {
-        match (multipart.get()) {
-            case Some(x) => (x as Multiparts).getOrThrow()
-            case _ =>
-                let parts = MultipartFormDataParser(ctx).parse()
-                multipart.set(parts)
-                parts
-        }
-    }
-    func clear() {
-        multipart.remove()
+    public func toData(input: InputStream): Data {
+        MultipartFormDataParser(input, boundary).parse()
     }
 }

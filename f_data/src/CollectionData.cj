@@ -231,3 +231,21 @@ extend<T> LinkedHashSet<T> <: CollectionData<LinkedHashSet<T>, T> where T <: Has
         }
     }
 }
+public class DataIterable <: Data & Iterable<Data>{
+    public DataIterable(private let list: Iterable<Data>){}
+    public func iterator(): Iterator<Data>{
+        list.iterator()
+    }
+    public static func tryParse(_: String): ?Data {
+        throw DataException()
+    }
+    public static func parse(_: String): Data {
+        throw DataException()
+    }
+    public static func tryFromData(data: Data, flag: DataConversionFlag): Any {
+        throw DataException()
+    }
+    public func toString(): String {
+        throw DataException()
+    }
+}

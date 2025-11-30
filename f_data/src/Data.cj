@@ -15,7 +15,11 @@ limitations under the License.
  */
 package f_data
 
-public interface Data <: ToString & DataParsable<Data> {}
+public interface Data <: ToString & DataParsable<Data> {
+    public func toData(): Data {
+        return this
+    }
+}
 
 func extractPureString(data: String) {
     if ((data.startsWith('"') && data.endsWith('"')) || (data.startsWith("'") && data.endsWith("'"))) {
