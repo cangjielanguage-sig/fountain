@@ -121,8 +121,6 @@ public abstract class AsyncLogger <: AbstractLogger {
                                 this.actualOutput.write(bytes)
                             }
                             this.actualOutput.flush()
-                        }else{
-                            println('############################## ')
                         }
                     }finally{
                         buffer.returnBuffer(buf)
