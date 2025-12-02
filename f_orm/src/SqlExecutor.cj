@@ -836,14 +836,10 @@ public class SqlExecutor <: Resource & RootDAO {
             }
             v
         } catch (e: Exception) {
-            if (logger.debugEnabled) {
-                logger.debug(logMsg(DateTime.now() - start), e)
-            }
+            logger.debug(e){logMsg(DateTime.now() - start)}
             throw e
         } finally {
-            if (sql.size > 0 && logger.debugEnabled) {
-                logger.debug(logMsg(DateTime.now() - start))
-            }
+            logger.debug{logMsg(DateTime.now() - start)}
             start = DateTime.UnixEpoch
             clearSql()
         }
