@@ -20,21 +20,23 @@ public abstract class DataConverter<T> {
     public func convert(data: Data, flag!: DataConversionFlag): ?T 
 }
 
-@Annotation[target: [MemberProperty, MemberVariable, Parameter]]
-public class DateTimeConverter <: DataConverter<DateTime> {
-    public const DateTimeConverter(public let format: String){}
-
-    public func convert(data: Data, flag!: DataConversionFlag = DEFAULT_DATA_FLAG): ?DateTime {
+public abstract class AbstractDateTimeConverter <: DataConverter<DateTime> {
+    public const init(){}
+    protected func doConvert(data: Data, flag: DataConversionFlag, format: String): ?DateTime {
         try{
-            match(data){
-                case x: DataString => DateTime.parse(x.data, format)
-                case x => DateTime.parse(x.toString(), format)
-            }
+            DateTime.parse(data.toString(), format)
         } catch(e: Exception) {
             if((flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0){
                 throw e
             }
             None<DateTime>
         }
+    }
+}
+@Annotation[target: [MemberProperty, MemberVariable, Parameter]]
+public class DateTimeConverter <: AbstractDateTimeConverter {
+    public const DateTimeConverter(private let format: String){}
+    public func convert(data: Data, flag!: DataConversionFlag = DEFAULT_DATA_FLAG): ?DateTime {
+        doConvert(data, flag, format)
     }
 }

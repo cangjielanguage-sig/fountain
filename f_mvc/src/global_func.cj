@@ -15,7 +15,7 @@ limitations under the License.
  */
 package f_mvc
 
-func parseValue<T>(value: ?String, converter: ?DateTimeConverter): ?T {
+func parseValue<T>(value: ?String, converter: ?AbstractDateTimeConverter): ?T {
     let none = None<T>
     if (let None <- value) {
         return none
@@ -39,7 +39,7 @@ func parseValue<T>(value: ?String, converter: ?DateTimeConverter): ?T {
         case _: ?Decimal => Decimal.tryParse(val)
         case _: ?Duration => Duration.tryParse(val)
         case _: ?DateTime => if(let Some(c) <- converter){
-            c.convert(val.toData())
+            c.convert(val.toData(), flag: DEFAULT_DATA_FLAG)
         }else{
             DateTime.tryParse(val)
         }
@@ -61,7 +61,7 @@ func parseValue<T>(value: ?String, converter: ?DateTimeConverter): ?T {
         case _: ??Decimal => Decimal.tryParse(val)
         case _: ??Duration => Duration.tryParse(val)
         case _: ??DateTime => if(let Some(c) <- converter){
-            c.convert(val.toData())
+            c.convert(val.toData(), flag: DEFAULT_DATA_FLAG)
         }else{
             DateTime.tryParse(val)
         }

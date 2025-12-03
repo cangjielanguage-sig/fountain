@@ -332,7 +332,7 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
         for(param in function.parameters){
             functionParamMap[param.name] = param
         }
-        let args = HashMap<String, (ControllerFuncParam, Validator, ?DateTimeConverter)>()
+        let args = HashMap<String, (ControllerFuncParam, Validator, ?AbstractDateTimeConverter)>()
         let zero = unsafeZeroValue<ControllerFuncParam>()
         for (param in function.parameters) {
             let pname = param.name
@@ -345,7 +345,7 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
                             toThrow = false
                             break
                         case None =>
-                            args[pname] = (x, DummyValidator.instance, None<DateTimeConverter>)
+                            args[pname] = (x, DummyValidator.instance, None<AbstractDateTimeConverter>)
                             toThrow = false
                         case _ => throw UnreachableException()
                     }
@@ -354,10 +354,10 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
                             args[pname] = (p, x, c)
                             toThrow = false
                             break
-                        case None => args[pname] = (zero, x, None<DateTimeConverter>)
+                        case None => args[pname] = (zero, x, None<AbstractDateTimeConverter>)
                         case _ => throw UnreachableException()
                     }
-                    case x: DateTimeConverter => match(args.get(pname)){
+                    case x: AbstractDateTimeConverter => match(args.get(pname)){
                         case Some((p, v, c)) where c.isNone() => 
                             args[pname] = (p, v, x)
                             toThrow = false

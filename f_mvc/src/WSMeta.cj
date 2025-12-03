@@ -18,9 +18,9 @@ package f_mvc
 sealed abstract class WSFuncMeta<T> {
     WSFuncMeta(public let name: String, public let mediaType: String, public let responseFrameType: ?WebSocketFrameType){}
     let args = RequestArgMeta()
-    var handle = {_: T, _: ?DateTimeConverter, _: HttpContext, _: HttpRequestPathPatterns, _: WebSocket, _: Array<Byte> => Array<Byte>()}
+    var handle = {_: T, _: ?AbstractDateTimeConverter, _: HttpContext, _: HttpRequestPathPatterns, _: WebSocket, _: Array<Byte> => Array<Byte>()}
 
-    public func setHandle<R>(handle: (T, ?DateTimeConverter, HttpContext, HttpRequestPathPatterns, WebSocket, Array<Byte>) -> R): Unit where R <: DataFields<R> {
+    public func setHandle<R>(handle: (T, ?AbstractDateTimeConverter, HttpContext, HttpRequestPathPatterns, WebSocket, Array<Byte>) -> R): Unit where R <: DataFields<R> {
         this.handle = {endpoint, converter, ctx, pattern, ws, payload =>
             let r = handle(endpoint, converter, ctx, pattern, ws, payload)
             if(mediaType.isEmpty()){
@@ -33,7 +33,7 @@ sealed abstract class WSFuncMeta<T> {
             }
         }
     }
-    public func extract<T>(ctx: HttpContext, name: String, converter: ?DateTimeConverter, pattern: HttpRequestPathPatterns, ws: WebSocket, payload: Array<Byte>): ?T where T <: DataFields<T> {
+    public func extract<T>(ctx: HttpContext, name: String, converter: ?AbstractDateTimeConverter, pattern: HttpRequestPathPatterns, ws: WebSocket, payload: Array<Byte>): ?T where T <: DataFields<T> {
         match(args[name]){
             case x: WSDataFrame => x.extract<T>(payload)
             case x => x.extract<T>(name, converter, ctx, pattern)
@@ -155,7 +155,7 @@ public class WSMeta<T> where T <: Object {
     public static func writeBinary(ws: WebSocket, data: Array<UInt8>): Unit {
         ws.write(BinaryWebFrame, data)
     }
-    public func exec(endpoint: T, converter: ?DateTimeConverter, ctx: HttpContext, pattern: HttpRequestPathPatterns, ws: WebSocket): Unit {
+    public func exec(endpoint: T, converter: ?AbstractDateTimeConverter, ctx: HttpContext, pattern: HttpRequestPathPatterns, ws: WebSocket): Unit {
         openMeta_?.handle(endpoint, converter, ctx, pattern, ws, [])
         let pingTimer = if(let Some(f) <- pingFunc_) {
             let duration = f.duration

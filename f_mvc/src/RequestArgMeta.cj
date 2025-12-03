@@ -16,7 +16,7 @@ limitations under the License.
 package f_mvc
 
 class RequestArgMeta {
-    private let args = HashMap<String, (ControllerFuncParam, Validator, ?DateTimeConverter)>()
+    private let args = HashMap<String, (ControllerFuncParam, Validator, ?AbstractDateTimeConverter)>()
     private func doExtract<T>(ctx: HttpContext, name: String, pattern: ?HttpRequestPathPatterns): ?T where T <: DataFields<T> {
         let (param, validator, converter) = args[name]
         let data = param.extract<T>(name, converter, ctx, pattern.getOrThrow())
@@ -57,10 +57,10 @@ class RequestArgMeta {
         args[name] = if(let Some((p, v, c)) <- args.get(name)){
             (value, v, c)
         }else{
-            (value, DummyValidator.instance, None<DateTimeConverter>)
+            (value, DummyValidator.instance, None<AbstractDateTimeConverter>)
         }
     }
-    func add(all!: HashMap<String, (ControllerFuncParam, Validator, ?DateTimeConverter)>): Unit {
+    func add(all!: HashMap<String, (ControllerFuncParam, Validator, ?AbstractDateTimeConverter)>): Unit {
         args.add(all: all)
     }
 }

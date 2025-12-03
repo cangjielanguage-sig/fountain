@@ -17,7 +17,7 @@ package f_mvc
 
 abstract sealed class WSDataFrame <: ControllerFuncParam {
     public const WSDataFrame(protected let mediaType: String) {}
-    protected func extract<T>(_: String, _: ?DateTimeConverter, _: HttpContext, _: HttpRequestPathPatterns): ?T where T <: DataFields<T> {
+    protected func extract<T>(_: String, _: ?AbstractDateTimeConverter, _: HttpContext, _: HttpRequestPathPatterns): ?T where T <: DataFields<T> {
         throw MVCException()
     }
     protected func extract<T>(frame: Array<Byte>): T where T <: DataFields<T>
