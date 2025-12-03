@@ -15,7 +15,7 @@ limitations under the License.
  */
 package f_mvc
 
-func parseValue<T>(value: ?String): ?T {
+func parseValue<T>(value: ?String, converter: ?DateTimeConverter): ?T {
     let none = None<T>
     if (let None <- value) {
         return none
@@ -35,8 +35,14 @@ func parseValue<T>(value: ?String): ?T {
         case _: ?UInt16 => UInt16.tryParse(val)
         case _: ?UInt32 => UInt32.tryParse(val)
         case _: ?UInt64 => UInt64.tryParse(val)
-        case _: ?BigInt => BigInt.parse(val)
-        case _: ?Decimal => Decimal.parse(val)
+        case _: ?BigInt => BigInt.tryParse(val)
+        case _: ?Decimal => Decimal.tryParse(val)
+        case _: ?Duration => Duration.tryParse(val)
+        case _: ?DateTime => if(let Some(c) <- converter){
+            c.convert(val.toData())
+        }else{
+            DateTime.tryParse(val)
+        }
 
         case _: ??String => val
         case _: ??Bool => Bool.tryParse(val)
@@ -51,8 +57,14 @@ func parseValue<T>(value: ?String): ?T {
         case _: ??UInt16 => UInt16.tryParse(val)
         case _: ??UInt32 => UInt32.tryParse(val)
         case _: ??UInt64 => UInt64.tryParse(val)
-        case _: ??BigInt => BigInt.parse(val)
-        case _: ??Decimal => Decimal.parse(val)
+        case _: ??BigInt => BigInt.tryParse(val)
+        case _: ??Decimal => Decimal.tryParse(val)
+        case _: ??Duration => Duration.tryParse(val)
+        case _: ??DateTime => if(let Some(c) <- converter){
+            c.convert(val.toData())
+        }else{
+            DateTime.tryParse(val)
+        }
 
         case _: ?Array<String> => val.split(",")
         case _: ?Array<Bool> =>
@@ -130,6 +142,9 @@ func parseValue<T>(value: ?String): ?T {
             Array<Decimal>(array.size) {
                 i => Decimal.parse(array[i])
             }
+        case _: ?Array<Duration> => 
+            let array = val.split(',')
+            Array<Duration>(array.size){i => Duration.parse(array[i])}
         case _ => throw MVCException('${value} cannot be parsed to ${TypeInfos.get<T>()}')
     }
     match (any) {

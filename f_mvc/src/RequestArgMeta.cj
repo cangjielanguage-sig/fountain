@@ -16,10 +16,10 @@ limitations under the License.
 package f_mvc
 
 class RequestArgMeta {
-    private let args = HashMap<String, (ControllerFuncParam, Validator)>()
+    private let args = HashMap<String, (ControllerFuncParam, Validator, ?DateTimeConverter)>()
     private func doExtract<T>(ctx: HttpContext, name: String, pattern: ?HttpRequestPathPatterns): ?T where T <: DataFields<T> {
-        let (param, validator) = args[name]
-        let data = param.extract<T>(name, ctx, pattern.getOrThrow())
+        let (param, validator, converter) = args[name]
+        let data = param.extract<T>(name, converter, ctx, pattern.getOrThrow())
         if(let Some((n, v)) <- validator.validate(data)){
             let k = if(n.isEmpty()){
                 name
@@ -43,7 +43,7 @@ class RequestArgMeta {
         doExtract<T>(ctx, name, pattern) ?? default
     }
     func extractObject<T>(ctx: HttpContext, name: String, pattern: ?HttpRequestPathPatterns): T where T <: Object & ObjectData<T> {
-        let (param, validator) = args[name]
+        let (param, _, _) = args[name]
         param.extractObject<T>(name, ctx, pattern.getOrThrow())
     }
     func contains(name: String): Bool {
@@ -54,13 +54,13 @@ class RequestArgMeta {
         args[name][0]
     }
     operator func [](name: String, value!: ControllerFuncParam): Unit {
-        args[name] = if(let Some((p, v)) <- args.get(name)){
-            (value, v)
+        args[name] = if(let Some((p, v, c)) <- args.get(name)){
+            (value, v, c)
         }else{
-            (value, DummyValidator.instance)
+            (value, DummyValidator.instance, None<DateTimeConverter>)
         }
     }
-    func add(all!: HashMap<String, (ControllerFuncParam, Validator)>): Unit {
+    func add(all!: HashMap<String, (ControllerFuncParam, Validator, ?DateTimeConverter)>): Unit {
         args.add(all: all)
     }
 }

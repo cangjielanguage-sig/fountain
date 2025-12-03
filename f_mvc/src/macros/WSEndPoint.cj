@@ -70,6 +70,12 @@ private func generate(attr: Tokens, input: Tokens): Tokens {
                 }catch(_){
                     `empty_tokens`
                 }
+                let named = try{
+                    p.not
+                    true
+                }catch(_){
+                    false
+                }
                 paramTokens += quote(
                     let $(p.identifier) = match(None<$(p.paramType)>){
                         case _: ?HttpContext => (ctx as $(p.paramType)).getOrThrow()
@@ -78,21 +84,25 @@ private func generate(attr: Tokens, input: Tokens): Tokens {
                         case _: ?WebSocket => (ws as $(p.paramType)).getOrThrow()
                         case _: ?Array<Byte> => (payload as $(p.paramType)).getOrThrow()
                         case _ where cf => (WSCloseFrame(payload) as $(p.paramType)).getOrThrow()
-                        case _ => (m.extract<$(p.paramType)>(ctx, $(p.identifier.value), pattern, ws, payload) as $(p.paramType)).getOrThrow()
+                        case _ => (m.extract<$(p.paramType)>(ctx, $(p.identifier.value), converter, pattern, ws, payload) as $(p.paramType)).getOrThrow()
                     }$(`nl`)
                 )
                 if(factParams.size > 0){
                     factParams += `comma`
                 }
-                factParams += if(default.size > 0) {
+                factParams += if(named && default.size > 0) {
                     quote($(p.identifier): $(p.identifier) ?? $(default))
-                }else{
+                } else if (named && default.size == 0){
+                    quote($(p.identifier): $(p.identifier))
+                } else if (!named && default.size > 0) {
+                    quote($(p.identifier) ?? $default)
+                } else {
                     quote($(p.identifier).getOrThrow())
                 }
             }
             metaTokens += quote(
                 metaHandles[$(f.identifier.value)] = {m, cf => 
-                    m.setHandle{endpoint, ctx, pattern, ws, payload => 
+                    m.setHandle{endpoint, converter, ctx, pattern, ws, payload => 
                         $paramTokens
                         endpoint.$(f.identifier)($factParams)
                     }

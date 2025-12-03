@@ -328,7 +328,11 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
         let typeInfo = TypeInfos.get<T>()
         let metas = ArrayList<RequestMeta>()
         let function = typeInfo.getInstanceFunction(fnName, argTypes)
-        let args = HashMap<String, (ControllerFuncParam, Validator)>()
+        let functionParamMap = HashMap<String, ParameterInfo>()
+        for(param in function.parameters){
+            functionParamMap[param.name] = param
+        }
+        let args = HashMap<String, (ControllerFuncParam, Validator, ?DateTimeConverter)>()
         let zero = unsafeZeroValue<ControllerFuncParam>()
         for (param in function.parameters) {
             let pname = param.name
@@ -336,21 +340,29 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
             for (annotation in param.annotations) {
                 match (annotation) {
                     case x: ControllerFuncParam => match (args.get(pname)) {
-                        case Some((p, v)) where refEq(p, zero) =>
-                            args[pname] = (x, v)
+                        case Some((p, v, c)) where refEq(p, zero) =>
+                            args[pname] = (x, v, c)
                             toThrow = false
                             break
                         case None =>
-                            args[pname] = (x, DummyValidator.instance)
+                            args[pname] = (x, DummyValidator.instance, None<DateTimeConverter>)
                             toThrow = false
                         case _ => throw UnreachableException()
                     }
                     case x: Validator => match (args.get(pname)) {
-                        case Some((p, v)) where v is DummyValidator =>
-                            args[pname] = (p, x)
+                        case Some((p, v, c)) where v is DummyValidator =>
+                            args[pname] = (p, x, c)
                             toThrow = false
                             break
-                        case None => args[pname] = (zero, x)
+                        case None => args[pname] = (zero, x, None<DateTimeConverter>)
+                        case _ => throw UnreachableException()
+                    }
+                    case x: DateTimeConverter => match(args.get(pname)){
+                        case Some((p, v, c)) where c.isNone() => 
+                            args[pname] = (p, v, x)
+                            toThrow = false
+                            break
+                        case None => args[pname] = (zero, DummyValidator.instance, x)
                         case _ => throw UnreachableException()
                     }
                     case _ => continue
@@ -365,24 +377,22 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
         let ignoreAuthGlobal = ignoreSecurity || function.findAnnotation<IgnoreAuth>().isSome()
         let ignorePrivilegeGlobal = ignoreSecurity || function.findAnnotation<IgnorePrivilege>().isSome()
         for (annotation in function.annotations) {
-            match (annotation) {
-                case a: RequestMapping =>
-                    let method = a.method
-                    let ignoreAuth = a.ignoreAuth || ignoreAuthGlobal
-                    let ignorePrivilege = a.ignorePrivilege || ignorePrivilegeGlobal
-                    let params = RequestCondition.compile(a.params)
-                    let headers = RequestCondition.compile(a.headers)
-                    for (path in a.path.split('|')) {
-                        let meta = RequestMeta(path, method, params: params, headers: headers)
-                        meta.addProduces(a.produces)
-                        meta.addConsumes(a.consumes)
-                        meta.ignoreAuth_ = ignoreAuth
-                        meta.ignorePrivilege_ = ignorePrivilege
-                        meta.args.add(all: args)
-                        RequestMetas.instance.add(meta)
-                        metas.add(meta)
-                    }
-                case _ => ()
+            if(let a: RequestMapping <- annotation){
+                let method = a.method
+                let ignoreAuth = a.ignoreAuth || ignoreAuthGlobal
+                let ignorePrivilege = a.ignorePrivilege || ignorePrivilegeGlobal
+                let params = RequestCondition.compile(a.params)
+                let headers = RequestCondition.compile(a.headers)
+                for (path in a.path.split('|')) {
+                    let meta = RequestMeta(path, method, params: params, headers: headers)
+                    meta.addProduces(a.produces)
+                    meta.addConsumes(a.consumes)
+                    meta.ignoreAuth_ = ignoreAuth
+                    meta.ignorePrivilege_ = ignorePrivilege
+                    meta.args.add(all: args)
+                    RequestMetas.instance.add(meta)
+                    metas.add(meta)
+                }
             }
         }
         metas
