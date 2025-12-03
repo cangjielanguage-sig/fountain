@@ -88,9 +88,9 @@ public class WSMeta<T> where T <: Object {
     private var pongMeta_ = None<WSPongMeta<T>>
     private var pingFunc_ = None<WSPingFunc<T>>
 
-    var handle = {_:T, _: HttpContext, _: HttpRequestPathPatterns => ()}
+    var handle = {_:T, _: AbstractDateTimeConverter, _: HttpContext, _: HttpRequestPathPatterns => ()}
 
-    public func setHandle(fn: (T, HttpContext, HttpRequestPathPatterns) -> Unit): Unit {
+    public func setHandle(fn: (T, AbstractDateTimeConveter, HttpContext, HttpRequestPathPatterns) -> Unit): Unit {
         handle = fn
     }
 

@@ -135,9 +135,9 @@ private func generate(attr: Tokens, input: Tokens): Tokens {
             if(let Some(m) <- meta.pingFunc){
                 metaHandles[m.name](m, false)
             }
-            meta.setHandle{endpoint, ctx, pattern => 
+            meta.setHandle{endpoint, converter, ctx, pattern => 
                 let ws = meta.upgrade(ctx, $upgradeAttrs)
-                meta.exec(endpoint, ctx, pattern, ws)
+                meta.exec(endpoint, converter, ctx, pattern, ws)
             }
         }()
     )
