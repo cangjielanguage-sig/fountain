@@ -17,8 +17,20 @@ package f_data
 
 import f_base.*
 
+struct AnnotationTag <: Hashable & Equatable<AnnotationTag> {
+    private let h: Int64
+    AnnotationTag(private let annotationType: TypeInfo, private let typeInfo: ClassTypeInfo, private let name: String){
+        h = HashBuilder().append(annotationType).append(typeInfo).append(name).build()
+    }
+    public func hashCode(): Int64 {
+        h
+    }
+    public operator func ==(other: AnnotationTag){
+        this.h == other.h && this.annotationType == other.annotationType && this.typeInfo == other.typeInfo && this.name == other.name
+    }
+}
 abstract sealed class ReadableField {
-    private let annotations = ConcurrentHashMap<TypeInfo, ?Annotation>()
+    private static let annotations = ConcurrentHashMap<AnnotationTag, ?Annotation>()
     public let name: String
     public ReadableField(
         name: String,
@@ -32,9 +44,10 @@ abstract sealed class ReadableField {
             name
         }
     }
-    public func tryFindAnnotation<A>(): ?A where A <: Annotation {
+    public static func tryGetAnnotation<A>(classTypeInfo: ClassTypeInfo, name: String): ?A where A <: Annotation {
         let annotationType = TypeInfo.of<A>()
-        let annotation = annotations.computeIfAbsent(annotationType){
+        let tag = AnnotationTag(annotationType, classTypeInfo, name)
+        let annotation = annotations.computeIfAbsent(tag){
             func getAnnotation(name: String): ?Annotation {
                 let a = try{
                     classTypeInfo.getInstanceProperty(name).findAnnotation<A>()
@@ -65,6 +78,9 @@ abstract sealed class ReadableField {
             case Some(a: A) => a
             case _ => None<A>
         }
+    }
+    public func tryFindAnnotation<A>(): ?A where A <: Annotation {
+        tryGetAnnotation<A>(classTypeInfo, name)
     }
     public prop validator: Validator {
         get(){

@@ -27,31 +27,30 @@ public class MutableField <: ReadableField {
     public static func new<O, F>(name: String, getter: (O) -> ?F, setter: (O, ?F) -> Unit): MutableField where O <: ObjectData<O>,
         F <: DataFields<F> {
         let fieldType = TypeInfos.get<F>()
-        MutableField(name, ClassTypeInfo.of<O>(), fieldType, newGetter<O, F>(getter),
+        let classTypeInfo = ClassTypeInfo.of<O>()
+        func doSet(o: Any, v: ?F){
+            match (o) {
+                case x: O => setter(x, None<F>)
+                case _ =>
+                    let x: Any = o
+                    throw DataException(
+                        "type of current instance does not match, expected ${classTypeInfo}, but receives ${TypeInfo.of(x)}")
+            }
+            true
+        }
+        MutableField(name, classTypeInfo, fieldType, newGetter<O, F>(getter),
             {
                 o, data, flag => if (data is DataNone) {
                     if ((flag & IGNORE_NONE) != 0) {
                         false
                     } else {
-                        match (o) {
-                            case x: O => setter(x, None<F>)
-                            case _ =>
-                                let x: Any = o
-                                throw DataException(
-                                    "type of current instance does not match, expected ${TypeInfos.get<O>()}, but receives ${TypeInfo.of(x)}")
-                        }
-                        true
+                        doSet(o, None<F>)
                     }
                 } else if (let Some(v: F) <- convert<F>(data, flag: flag)) {
-                    match (o) {
-                        case x: O =>
-                            setter(x, v)
-                            true
-                        case _ =>
-                            let x: Any = o
-                            throw DataException(
-                                "type of current instance does not match, expected ${TypeInfos.get<O>()}, but receives ${TypeInfo.of(x)}")
-                    }
+                    doSet(o, v)
+                } else if (let Some(converter) <- ReadableField.tryGetAnnotation<DataConverter<F>>(classTypeInfo, name) && 
+                            let Some(v: F) <- converter.convert(data, flag: flag)) {
+                    doSet(o, v)
                 } else if ((flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0) {
                     throw DataException("data ${data} cannot be converted to ${fieldType}")
                 } else {
