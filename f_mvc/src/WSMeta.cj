@@ -18,11 +18,11 @@ package f_mvc
 sealed abstract class WSFuncMeta<T> {
     WSFuncMeta(public let name: String, public let mediaType: String, public let responseFrameType: ?WebSocketFrameType){}
     let args = RequestArgMeta()
-    var handle = {_: T, _: ?AbstractDateTimeConverter, _: HttpContext, _: HttpRequestPathPatterns, _: WebSocket, _: Array<Byte> => Array<Byte>()}
+    var handle = {_: T, _: HttpContext, _: HttpRequestPathPatterns, _: WebSocket, _: Array<Byte> => Array<Byte>()}
 
-    public func setHandle<R>(handle: (T, ?AbstractDateTimeConverter, HttpContext, HttpRequestPathPatterns, WebSocket, Array<Byte>) -> R): Unit where R <: DataFields<R> {
-        this.handle = {endpoint, converter, ctx, pattern, ws, payload =>
-            let r = handle(endpoint, converter, ctx, pattern, ws, payload)
+    public func setHandle<R>(handle: (T, HttpContext, HttpRequestPathPatterns, WebSocket, Array<Byte>) -> R): Unit where R <: DataFields<R> {
+        this.handle = {endpoint, ctx, pattern, ws, payload =>
+            let r = handle(endpoint, ctx, pattern, ws, payload)
             if(mediaType.isEmpty()){
                 match(r){
                     case x: Array<Byte> => x
@@ -88,9 +88,9 @@ public class WSMeta<T> where T <: Object {
     private var pongMeta_ = None<WSPongMeta<T>>
     private var pingFunc_ = None<WSPingFunc<T>>
 
-    var handle = {_:T, _: AbstractDateTimeConverter, _: HttpContext, _: HttpRequestPathPatterns => ()}
+    var handle = {_:T, _: HttpContext, _: HttpRequestPathPatterns => ()}
 
-    public func setHandle(fn: (T, AbstractDateTimeConveter, HttpContext, HttpRequestPathPatterns) -> Unit): Unit {
+    public func setHandle(fn: (T, HttpContext, HttpRequestPathPatterns) -> Unit): Unit {
         handle = fn
     }
 
@@ -155,13 +155,13 @@ public class WSMeta<T> where T <: Object {
     public static func writeBinary(ws: WebSocket, data: Array<UInt8>): Unit {
         ws.write(BinaryWebFrame, data)
     }
-    public func exec(endpoint: T, converter: ?AbstractDateTimeConverter, ctx: HttpContext, pattern: HttpRequestPathPatterns, ws: WebSocket): Unit {
-        openMeta_?.handle(endpoint, converter, ctx, pattern, ws, [])
+    public func exec(endpoint: T, ctx: HttpContext, pattern: HttpRequestPathPatterns, ws: WebSocket): Unit {
+        openMeta_?.handle(endpoint, ctx, pattern, ws, [])
         let pingTimer = if(let Some(f) <- pingFunc_) {
             let duration = f.duration
             let h = f.handle
             Timer.repeat(duration, duration, {=>
-                ws.writePingFrame(h(endpoint, converter, ctx, pattern, ws, []))
+                ws.writePingFrame(h(endpoint, ctx, pattern, ws, []))
             })
         }else{
             None<Timer>
@@ -174,7 +174,7 @@ public class WSMeta<T> where T <: Object {
                 if(fin){
                     func doExec<M>(meta: ?M, metaType: String) where M <: WSFuncMeta<T>  {
                         let m = meta.getOrThrow{WSException('${metaType} meta for ws is not specified')}
-                        let resp = m.handle(endpoint, converter, ctx, pattern, ws, bytes.unsafeData())
+                        let resp = m.handle(endpoint, ctx, pattern, ws, bytes.unsafeData())
                         match(m.responseFrameType){
                             case Some(t) => match(t){
                                 case TextWebFrame | BinaryWebFrame => ws.write(t, resp)
@@ -206,19 +206,19 @@ public class WSMeta<T> where T <: Object {
                         bytes = doExec(frame.payload, frame.fin, frameType, bytes)
                     case PingWebFrame => 
                         if(let Some(ping) <- pingMeta_){
-                            let bytes = ping.handle(endpoint, converter, ctx, pattern, ws, frame.payload)
+                            let bytes = ping.handle(endpoint, ctx, pattern, ws, frame.payload)
                             ws.writePongFrame(bytes)
                         }else{
                             ws.writePongFrame(frame.payload)
                         }
                     case PongWebFrame =>
                         if(let Some(pong) <- pongMeta_){
-                            pong.handle(endpoint, converter, ctx, pattern, ws, frame.payload)
+                            pong.handle(endpoint, ctx, pattern, ws, frame.payload)
                         }
                     case CloseWebFrame =>
                         try{
                             if(let Some(c) <- closeMeta_){
-                                let bytes = c.handle(endpoint, converter, ctx, pattern, ws, frame.payload)
+                                let bytes = c.handle(endpoint, ctx, pattern, ws, frame.payload)
                                 if(!bytes.isEmpty()){
                                     ws.write(CloseWebFrame, bytes)
                                 }

@@ -60,9 +60,11 @@ private func generate(attr: Tokens, input: Tokens): Tokens {
     var metaTokens = quote(
         let metaHandles = HashMap<String, (WSFuncMeta<$klass>, Bool) -> Unit>()$(`nl`)
     )
+    let typeInfo = quote(let classTypeInfo = ClassTypeInfo.of<$(decl.identifier)>())
     for(d in decl.body.decls where isPublic(d) && !isStatic(d)) {
         if(let f: FuncDecl <- d){
             var paramTokens = quote()
+            var paramTypes = quote([)
             var factParams = quote()
             for(p in f.funcParams){
                 let default = try{
@@ -99,19 +101,29 @@ private func generate(attr: Tokens, input: Tokens): Tokens {
                 } else {
                     quote($(p.identifier).getOrThrow())
                 }
+                if(paramTypes.size > 0){
+                    paramTypes += `comma`
+                }
+                paramTypes += quote(TypeInfo.of<$(p.paramType)>())
             }
+            paramTypes += quote(])
             metaTokens += quote(
-                metaHandles[$(f.identifier.value)] = {m, cf => 
-                    m.setHandle{endpoint, converter, ctx, pattern, ws, payload => 
-                        $paramTokens
-                        endpoint.$(f.identifier)($factParams)
+                metaHandles[$(f.identifier.value)] = {=>
+                    let fInfo = classTypeInfo.getInstanceFunction($(f.identifier.value), $paramTypes)
+                    let converter = fInfo.findAnnotation<AbstractDateTimeConverter>()
+                    {m, cf => 
+                        m.setHandle{endpoint, ctx, pattern, ws, payload => 
+                            $paramTokens
+                            endpoint.$(f.identifier)($factParams)
+                        }
                     }
-                }$(`nl`)
+                }()$(`nl`)
             )
         }
     }
     quote(
         private let _ = {=>
+            $typeInfo
             $metaTokens
             let meta = MVCStarter.generateAndRegisterWSEndPoint<$klass>($path)
             if(let Some(m) <- meta.openMeta){

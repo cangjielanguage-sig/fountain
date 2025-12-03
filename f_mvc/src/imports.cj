@@ -32,8 +32,6 @@ internal import charset4cj.charset.encoding.Charset
 internal import charset4cj.charset.{Charsets, TextReader, TextWriter}
 internal import f_collection.*
 internal import f_concurrent.ConcurrentHashSet
-internal import f_config.*
-internal import f_data.*
 internal import f_data.json.*
 internal import f_exception.{UnreachableException, IllegalArgException}
 internal import f_random.RandomString
@@ -47,6 +45,8 @@ public import stdx.encoding.url.*
 public import stdx.net.http.*
 public import f_base.*
 public import f_bean.*
+public import f_config.*
+public import f_data.*
 public import f_log.impl.*
 public import f_mvc.exception.*
 public import f_util.PathPattern
