@@ -134,7 +134,7 @@ public struct App {
         BeanFactory.instance.afterRegistered()
         Ticktock.getInstance(anyway: false)
         let mvc = MVCStarter.initialize()
-        //orm 需要应用开发者显式注册数据库驱动及初始化事务切面，
+        //orm 会在初始化第一个DAO时初始化orm包，此时会从配置获得数据库连接配置从而完成orm初始化
         //执行load函数时一定会加载初始化orm的动态链接库从而完成初始化
         //其它模块是工具API没有专门的初始化API
         let app = this.app(path)
