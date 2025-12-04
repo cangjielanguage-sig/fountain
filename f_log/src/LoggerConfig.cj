@@ -106,12 +106,7 @@ public class LoggerConfig {
     }
     public static func getAsyncTimeout(): Duration {
         if (let Some(d) <- Config.getString("loggerAsyncTimeout")) {
-            let timeout = Duration.tryParse(d).getOrThrow {LogException("illegal async timeout duration ${d}")}
-            if (timeout == Duration.Zero) {
-                Duration.Max
-            } else {
-                timeout
-            }
+            Duration.tryParse(d).getOrThrow {LogException("illegal async timeout duration ${d}")}
         } else {
             Duration.Max
         }
