@@ -71,7 +71,7 @@ public class Ticktock <: Emitter {
      * 如果只是想从IOC获得定时任务初始化，如果IOC内没有注册定时任务就不初始化，此时anyway应该是false，
      * anyway是false且IOC没有注册过定时任务将返回None<Ticktock>。
      */
-    public static func getInstance(anyway!: Bool = true): ?Ticktock {
+    private static func doGetInstance(anyway!: Bool = true): ?Ticktock {
         if(let Some(x) <- instance_.load()){
             return x
         }
@@ -111,6 +111,12 @@ public class Ticktock <: Emitter {
                 tt
             }
         }
+    }
+    public static func getInstance(){
+        doGetInstance(anyway: false)
+    }
+    public static func getInstanceAnyway(){
+        doGetInstance(anyway: true)
     }
 
     private let tasks = ConcurrentHashMap<String, (TicktockTask, Collection<CronDataCollection>)>()
