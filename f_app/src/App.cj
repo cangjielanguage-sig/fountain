@@ -18,7 +18,7 @@ package f_app
 import f_version.*
 import std.ast.*
 import std.convert.*
-import std.env.{getWorkingDirectory, getCommand, atExit}
+import std.env.{getWorkingDirectory, getCommand, atExit, getStdOut}
 import std.fs.*
 import std.io.{StringReader, ByteBuffer, InputStream}
 import std.process.*
@@ -34,6 +34,7 @@ import f_log.*
 public struct App {
     private static let log = LoggerFactory.getLogger<App>()
     private static const APP_STATIC_RESOURCE_SUFFIX = '_stAtIc__'
+    private static let stdOut = getStdOut()
 
     public App(private let args: Array<String>,
                private let appHomeIsWorkingPath!: Bool = true,
@@ -168,8 +169,8 @@ public struct App {
         }else{
             '(${AppVersion.version})'
         }
-        println(AppVersion.banner)
-        println('${app}${appver} started by ${versionStr} in ${MonoTime.now() - AppStarts}')
+        stdOut.writeln(AppVersion.banner)
+        stdOut.writeln('${app}${appver} started by ${versionStr} in ${MonoTime.now() - AppStarts}')
         if(let Some(t) <- mvcTypeInfo){
             startFn?.apply(t, [])
         }
@@ -178,12 +179,12 @@ public struct App {
     private let versionStr = FountainVersion
     private func version(){
         if (this.args.size == 1) {
-            println(versionStr)
+            stdOut.writeln(versionStr)
         } else {
-            println('project is going to be committed, after editing version. Please confirm git has been installed and can be operated without password.')
+            stdOut.writeln('project is going to be committed, after editing version. Please confirm git has been installed and can be operated without password.')
             let v = args[1]
             if (v.isEmpty()) {
-                println('current version is ${versionStr}. To execute fboot version x.y.z, if you want to edit version.')
+                stdOut.writeln('current version is ${versionStr}. To execute fboot version x.y.z, if you want to edit version.')
             } else if (Regex(#'^\d+\.\d+.\d+$'#).matches(v)) {
                 var code = execute('git', ['pull'])
                 if (code != 0) {
@@ -238,21 +239,21 @@ public struct App {
                     }
                     if (code != 0) {
                         if (msg.isEmpty()) {
-                            println('git tag release-${v} FAILED, git push is to be executed.')
+                            stdOut.writeln('git tag release-${v} FAILED, git push is to be executed.')
                         } else {
-                            println('git tag -a release-${v} -m ${msg} FAILED, git push is to be executed.')
+                            stdOut.writeln('git tag -a release-${v} -m ${msg} FAILED, git push is to be executed.')
                         }
                         return code
                     }
                 }
                 code = execute('git', ['push'])
                 if (code != 0) {
-                    println('git push FAILED')
+                    stdOut.writeln('git push FAILED')
                     return code
                 }
                 execute('git', ['push', 'origin', 'release-${v}'])
             } else {
-                println('Format of version must be x.y.z, but ${v} was specified.')
+                stdOut.writeln('Format of version must be x.y.z, but ${v} was specified.')
             }
         }
         0
@@ -403,7 +404,7 @@ ${content}
     private func cleanUpdate(): Int64 {
         let path = confirmTargetPath(args)
         let (workingDir, targetDir) = directories(path)
-        println('fboot cleanUpdate ${workingDir} --target-dir=${targetDir}')
+        stdOut.writeln('fboot cleanUpdate ${workingDir} --target-dir=${targetDir}')
         let code = execute('cjpm', ['clean', '--target-dir=${targetDir}'], workingDirectory: workingDir)
         if(code != 0){
             return code
@@ -449,7 +450,7 @@ _/ ____\____  __ __  _____/  |______  |__| ____
     }
     private func replaceVersion(version: String) {
         let workingDir = getWorkingDirectory()
-        println('fboot replace version ${workingDir} ${version}')
+        stdOut.writeln('fboot replace version ${workingDir} ${version}')
         let fountainPath =
         match(workingDir.fileName) {
             case 'fountain' =>
@@ -457,7 +458,7 @@ _/ ____\____  __ __  _____/  |______  |__| ____
             case 'fboot' =>
             workingDir.parent
             case _ =>
-            println('working directory ${workingDir} is not path of project fountain')
+            stdOut.writeln('working directory ${workingDir} is not path of project fountain')
             return
         }
         if(!version.isEmpty()) {
@@ -491,9 +492,9 @@ private let _ = AppVersion.set(#'${banner()}'#, '${name}', '${version}')
         (toml, moduleMember, tomlPath)
     }
     private func doBuild(path: Path): Int64 {
-        println('fboot build is used to compile the project which depends fountain.')
+        stdOut.writeln('fboot build is used to compile the project which depends fountain.')
         let (workingDir, targetDir) = directories(path)
-        println('fboot build ${workingDir} --target-dir=${targetDir}')
+        stdOut.writeln('fboot build ${workingDir} --target-dir=${targetDir}')
         var (version, name) = extract(workingDir)
         let n = name.replace('.', '_').replace('-', '_')
         let versionModuleName = appVersionModuleName(n)
@@ -569,7 +570,7 @@ private let _ = AppVersion.set(#'${banner()}'#, '${name}', '${version}')
                         let bytes = parseProgram(tokens).toTokens().toString().unsafeBytes()
                         count(ByteBuffer(bytes))
                     } catch (e: Exception) {
-                        println(code)
+                        stdOut.writeln(code)
                         e.printStackTrace()
                         count(ByteBuffer(code.unsafeBytes()))
                     }
@@ -602,11 +603,11 @@ private let _ = AppVersion.set(#'${banner()}'#, '${name}', '${version}')
                 ignoreComments = true
             }
         }
-        println('path=${path};ext=${ext};ignoreBrackets=${ignoreBrackets};ignoreComments=${ignoreComments}')
+        stdOut.writeln('path=${path};ext=${ext};ignoreBrackets=${ignoreBrackets};ignoreComments=${ignoreComments}')
         let counter = CodeCounter()
         let start = MonoTime.now()
         count(path, counter, ext, ignoreBrackets, ignoreComments)
-        println('modules: ${counter.modules}, packages: ${counter.packages}, files: ${counter.files}, lines: ${counter.lines}, consumes: ${MonoTime.now() - start}')
+        stdOut.writeln('modules: ${counter.modules}, packages: ${counter.packages}, files: ${counter.files}, lines: ${counter.lines}, consumes: ${MonoTime.now() - start}')
         0
     }
     private func help(): Int64 {
@@ -634,7 +635,7 @@ private let _ = AppVersion.set(#'${banner()}'#, '${name}', '${version}')
 13. fboot version 显示当前fountain版本号
 14. fboot help 显示命令列表
 '''
-        println(content)
+        stdOut.writeln(content)
         0
     }
 
