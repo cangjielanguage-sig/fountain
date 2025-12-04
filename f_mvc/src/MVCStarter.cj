@@ -19,12 +19,13 @@ public class MVCStarter {
     private MVCStarter(private let server: Server, private let host: String, private let port: UInt16) {
         atExit(closeGracefully)
     }
-    public static func initialize(): ?MVCStarter {
+    private static var starter = None<MVCStarter>
+    public static func initialize(): Unit {
         if (!initial_.compareAndSwap(false, true)) {
             throw MVCException('mvc has been started')
         }
         if (!registered.load()) {
-            return None<MVCStarter>
+            return 
         }
         let host = MVCConfig.host
         let port = MVCConfig.port
@@ -71,7 +72,7 @@ public class MVCStarter {
             builder.tlsConfig(tls)
         }
         let server = builder.distributor(HttpRequestDistributorImpl.instance).build()
-        MVCStarter(server, host, port)
+        starter = MVCStarter(server, host, port)
     }
     public static func register(mediaType: MediaType) {
         MediaTypes.register(mediaType)
@@ -101,7 +102,10 @@ public class MVCStarter {
             '${host}:${port}'
         }
     }
-    public func start(): Unit {
+    public static func start(): Unit {
+        starter?.doStart()
+    }
+    private func doStart(): Unit {
         println("MVC is listening: ${listening}")
         server.serve()
     }

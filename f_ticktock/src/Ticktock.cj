@@ -65,7 +65,9 @@ public class Ticktock <: Emitter {
             getInstance(anyway: true).getOrThrow()
         }
     }
-
+    public static func loadTasks(): Unit {
+        getInstance(anyway: false)
+    }
     /**
      * 如果需要调用此函数后并注册定时任务,anyway必须是true。
      * 如果只是想从IOC获得定时任务初始化，如果IOC内没有注册定时任务就不初始化，此时anyway应该是false，

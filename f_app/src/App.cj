@@ -22,14 +22,11 @@ import std.env.{getWorkingDirectory, getCommand, atExit}
 import std.fs.*
 import std.io.{StringReader, ByteBuffer, InputStream}
 import std.process.*
-import std.reflect.PackageInfo
+import std.reflect.*
 import std.regex.Regex
 import std.time.MonoTime
 import f_base.*
-import f_bean.BeanFactory
 import f_log.*
-import f_mvc.MVCStarter
-import f_ticktock.Ticktock
 
 /**
  * App不会发生传参赋值，用命令行参数实例化后只调用boot函数。所以用struct比较合适，不会占用堆空间。
@@ -131,9 +128,37 @@ public struct App {
         if(dynamic){
             load(path, Regex('^lib.*(${extractPattern()}|.+${APP_STATIC_RESOURCE_SUFFIX}).*$'))
         }
-        BeanFactory.instance.afterRegistered()
-        Ticktock.getInstance(anyway: false)
-        let mvc = MVCStarter.initialize()
+
+        let beanFactoryType = try{
+            ClassTypeInfo.get('f_bean.BeanFactory')
+        }catch(_){
+            None<ClassTypeInfo>
+        }
+        if(let Some(t) <- beanFactoryType){
+            let instance = t.getStaticVariable('instance').getValue()
+            let afterFn = t.getInstanceFunction('afterRegistered', [])
+            afterFn.apply(instance, [])
+        }
+        let ticktockType = try{
+            ClassTypeInfo.get('f_ticktock.Ticktock')
+        }catch(_){
+            None<ClassTypeInfo>
+        }
+        if(let Some(t) <- ticktockType){
+            let getFn = t.getStaticFunction('loadTasks', [])
+            getFn.apply(t, [])
+        }
+        let mvcTypeInfo = try{
+            ClassTypeInfo.get('f_mvc.MVCStarter')
+        }catch(_){
+            None<ClassTypeInfo>
+        }
+        var startFn = None<StaticFunctionInfo>
+        if(let Some(t) <- mvcTypeInfo){
+            let initFn = t.getStaticFunction('initialize', [])
+            initFn.apply(t, [])
+            startFn = t.getStaticFunction('start', [])
+        }
         //orm 会在初始化第一个DAO时初始化orm包，此时会从配置获得数据库连接配置从而完成orm初始化
         //执行load函数时一定会加载初始化orm的动态链接库从而完成初始化
         //其它模块是工具API没有专门的初始化API
@@ -145,7 +170,9 @@ public struct App {
         }
         println(AppVersion.banner)
         println('${app}${appver} started by ${versionStr} in ${MonoTime.now() - AppStarts}')
-        mvc?.start()
+        if(let Some(t) <- mvcTypeInfo){
+            startFn?.apply(t, [])
+        }
         0
     }
     private let versionStr = FountainVersion
