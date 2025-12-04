@@ -114,9 +114,7 @@ public class BeanFactory {
                 }
             }
         }
-        if(log.debugEnabled) {
-            log.debug('bean registered ${manager}')
-        }
+        log.debug{'bean registered ${manager}'}
     }
     public func register<T>(creator: () -> T) where T <: Object {
         let typeInfo = TypeInfos.get<T>()
@@ -151,9 +149,7 @@ public class BeanFactory {
             let discarded = TreeSet<BeanManager>()
             for ((_, m) in beans where !(discarded.contains(m) || m.on(this))) {
                 discarded.add(m)
-                if(log.debugEnabled){
-                    log.debug("bean discarded: ${m}")
-                }
+                log.debug{"bean discarded: ${m}"}
             }
             let removed = HashSet<TypeInfo>()
             for (d in discarded) {
@@ -171,8 +167,8 @@ public class BeanFactory {
     private func initBeansIfNeed() {
         if (shouldInitBean) {
             for ((_, m) in beans) {
-                if(m.initIfNeed() && log.debugEnabled){
-                    log.debug('bean init on starting: ${m}')
+                if(m.initIfNeed()){
+                    log.debug{'bean init on starting: ${m}'}
                 }
             }
         }

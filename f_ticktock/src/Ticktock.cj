@@ -201,14 +201,11 @@ public class Ticktock <: Emitter {
                         emitted = true
                         break
                     }
-                    if (LOGGER.debugEnabled) {
-                        LOGGER.debug("Ticktock.emit:${name}; ${emitted}; ${once}")
-                    }
+                    let (n, e, o) = (name, emitted, once)
+                    LOGGER.debug{"Ticktock.emit:${n}; ${e}; ${o}"}
                 } catch (e: Exception) {
-                    LOGGER.warn(
-                        "Ticktock.emit:${name}; ${emitted}; ${once}",
-                        e
-                    )
+                    let (n, em, o) = (name, emitted, once)
+                    LOGGER.warn("Ticktock.emit:${n}; ${em}; ${o}", e)
                 }
             }
         }

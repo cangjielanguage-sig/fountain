@@ -37,22 +37,17 @@ public class MultiRequestMethodHandler <: HttpRequestHandler {
     func register(meta: RequestMeta): Unit {
         synchronized(mutex) {
             meta.pattern = patterns
-            let debuggable = log.debugEnabled
-            if(debuggable){
-                log.debug('MVC.register meta:${meta}; methodRegistered:${metas.contains(meta.method)}')
-            }
+            log.debug{'MVC.register meta:${meta}; methodRegistered:${metas.contains(meta.method)}'}
             let map = metas.computeIfAbsent(meta.method){HashMap<String, RequestMeta>()}
             meta.iterateConsumes {
                 c => 
-                if(debuggable){
-                    log.debug('MVC.register meta:${meta}; methodRegistered:${metas.contains(meta.method)}; consumesRegistered:${c},${map.contains(c)}')
-                }
+                log.debug{'MVC.register meta:${meta}; methodRegistered:${metas.contains(meta.method)}; consumesRegistered:${c},${map.contains(c)}'}
                 if (let Some(m) <- map.addIfAbsent(c, meta)) {
                     let msg = 'duplicate RequestMeta, method: ${meta.method}, path: ${meta.path}, consumes: ${c}, registered: ${m}'
                     log.warn(msg)
                     throw MVCException(msg)
-                }else if (debuggable) {
-                    log.debug('RequestMeta registered: ${c} ${meta}')
+                } else {
+                    log.debug{'RequestMeta registered: ${c} ${meta}'}
                 }
             }
         }
@@ -82,10 +77,7 @@ public class MultiRequestMethodHandler <: HttpRequestHandler {
         func handle(ms: HashMap<String, RequestMeta>): Unit {
             check(ms).handle(ctx)
         }
-        if (log.debugEnabled) {
-            let request = ctx.request
-            log.debug<ToString>('fountain mvc {}: {}', [request.method, request.url])
-        }
+        log.debug{'fountain mvc ${request.method}: ${request.url}'}
         match ((metas.get(method), method)) {
             case (Some(ms), OPTIONS) => check(ms).handle(ctx)
             case (_, OPTIONS) =>

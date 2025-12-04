@@ -11,7 +11,7 @@ exports(){
     # %m 记录当前日志消息文本
 #    export loggerAsyncBufsize=2 # 异步日志缓存池的初始化大小
     export logger_appender_console=FDemoConsole
-    export logger_appender_FDemoConsole_level=DEBUG
+    export logger_appender_FDemoConsole_level=ERROR
     export logger_appender_FDemoConsole_pattern='[%level-%name]%d{yyyy/MM/dd,HH:mm:ss.SSS}|%tid;%m'
     export logger_appender_file=FDemoFile
     export logger_appender_FDemoFile_level=INFO

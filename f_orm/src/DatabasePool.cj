@@ -163,36 +163,26 @@ class PooledConnection <: Connection {
     }
     public func close(): Unit {
         assigned = false
-        if (logger.debugEnabled) {
-            logger.debug("database Connection ${serial} is returning")
-        }
+        logger.debug{"database Connection ${serial} is returning"}
         returnFn(this)
-        if (logger.debugEnabled) {
-            logger.debug("database Connection ${serial} is returned")
-        }
+        logger.debug{"database Connection ${serial} is returned"}
     }
     func activate(returnFn: (PooledConnection) -> Unit): Connection {
         assigned = true
         this.returnFn = returnFn
-        if (logger.debugEnabled) {
-            logger.debug("database Connection ${serial} is assigned")
-        }
+        logger.debug{"database Connection ${serial} is assigned"}   
         this
     }
     func isDestroied(): Bool {
         connection.isClosed()
     }
     func destroy(): Unit {
-        if (logger.debugEnabled) {
-            logger.debug("database Connection ${serial} is closing")
-        }
+        logger.debug{"database Connection ${serial} is closing"}
         if (!(assigned || connection.isClosed())) {
             connection.close()
-            if (logger.debugEnabled) {
-                logger.debug("database Connection ${serial} is closed")
-            }
-        } else if (logger.debugEnabled) {
-            logger.debug("database Connection ${serial} cannot close")
+            logger.debug{"database Connection ${serial} is closed"}
+        } else {
+            logger.debug{"database Connection ${serial} cannot close"}
         }
     }
 
@@ -202,13 +192,9 @@ class PooledConnection <: Connection {
      * 返回值 Statement - 一个可以执行 sql 语句的实例对象
      */
     public func prepareStatement(sql: String): Statement {
-        if (logger.debugEnabled) {
-            logger.debug("database Connection ${serial} is preparing a statement")
-        }
+        logger.debug{"database Connection ${serial} is preparing a statement"}
         let stmt = connection.prepareStatement(sql)
-        if (logger.debugEnabled) {
-            logger.debug("database Connection ${serial} a statement is prepared")
-        }
+        logger.debug{"database Connection ${serial} a statement is prepared"}
         stmt
     }
 
@@ -218,13 +204,9 @@ class PooledConnection <: Connection {
      * 开始事务
      */
     public func createTransaction(): Transaction {
-        if (logger.debugEnabled) {
-            logger.debug("database Connection ${serial} a transaction is beginning")
-        }
+        logger.debug{"database Connection ${serial} a transaction is beginning"}
         let tx = connection.createTransaction()
-        if (logger.debugEnabled) {
-            logger.debug("database Connection ${serial} a transaction began")
-        }
+        logger.debug{"database Connection ${serial} a transaction began"}
         tx
     }
     public prop state: ConnectionState {
