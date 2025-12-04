@@ -27,6 +27,7 @@ import std.regex.Regex
 import std.time.MonoTime
 import f_base.*
 import f_log.*
+import f_log.impl.*
 
 /**
  * App不会发生传参赋值，用命令行参数实例化后只调用boot函数。所以用struct比较合适，不会占用堆空间。
@@ -116,11 +117,11 @@ public struct App {
         func load(path: Path, pattern: Regex): Unit {
             Directory.walk(path) {
                 fi =>
-                log.debug('scanning: ${fi.path}')
+                log.debug{'scanning: ${fi.path}'}
                 if (fi.isDirectory()) {
                     load(fi.path, pattern)
                 } else if (fi.path.fileName.endsWith(ext) && pattern.matches(fi.path.fileNameWithoutExtension)) {
-                    log.debug("loading: ${fi.path}")
+                    log.debug{"loading: ${fi.path}"}
                     PackageInfo.load(fi.path.toString().replace(ext, ''))
                 }
                 true
