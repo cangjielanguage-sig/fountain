@@ -24,24 +24,36 @@ macro package f_mvc.macros
  * @Controller宏的属性用于@Bean[$attr]，具体用法见@Bean宏的解释。
  */
 public macro Controller(input: Tokens): Tokens {
-    generateController(`empty_tokens`, input)
-}
-public macro Controller(attr: Tokens, input: Tokens): Tokens {
-    generateController(attr, input)
-}
-
-private func generateController(attr: Tokens, input: Tokens): Tokens {
-    let beanAttr = if(attr.size > 0){
-        quote([$attr])
-    }else{
-        `empty_tokens`
-    }
     quote(
-        @Bean$beanAttr
+        @Bean
         $input
         $(generate(input))
     )
 }
+public macro Controller(attr: Tokens, input: Tokens): Tokens {
+    quote(
+        @Bean[$attr]
+        $input
+        $(generate(input))
+    )
+}
+public macro WeavedController(input: Tokens): Tokens {
+    quote(
+        @Pointcut
+        @Bean
+        $input
+        $(generate(input))
+    )
+}
+public macro WeavedController(attr: Tokens, input: Tokens): Tokens {
+    quote(
+        @Pointcut
+        @Bean[$attr]
+        $input
+        $(generate(input))
+    )
+}
+
 private func generate(input: Tokens): Tokens {
     let decl = match(parseDecl(input)){
         case x: ClassDecl => x
@@ -58,28 +70,27 @@ private func generate(input: Tokens): Tokens {
         if (let m: MacroExpandDecl <- d && let f: FuncDecl <- extract(m) && !isStatic(f) && isPublic(f)) {
             let (argTypes, argExprs, args, anyargs) = generateArgs(f)
             tokens += topMacroAnonymousClosure(quote(
-                let fname = $(f.identifier.value)
-                    let metas = MVCStarter.generateAndRegister<$klass>($(f.identifier.value), $argTypes)
-                    for(meta in metas){
-                        meta.setHandle{controller: $klass, ctx: HttpContext, patterns: HttpRequestPathPatterns => 
-                            let start = MonoTime.now()
-                            $argExprs
-                            $anyargs
-                            var any: ?Any = None<Any>
-                            var ex = None<Exception>
-                            try {
-                                if (meta.checkAuth(ctx, anyArgs)) {
-                                    let returned: Any = controller.$(f.identifier)($args)
-                                    any = returned
-                                    return returned
-                                }
-                            } catch(e: Exception) {
-                                ex = e
-                            } finally {
-                                meta.accessLog<$klass>(start, ctx, anyArgs, any, ex)
+                let metas = MVCStarter.generateAndRegister<$klass>($(f.identifier.value), $argTypes)
+                for(meta in metas){
+                    meta.setHandle{controller: $klass, ctx: HttpContext, patterns: HttpRequestPathPatterns => 
+                        let start = MonoTime.now()
+                        $argExprs
+                        $anyargs
+                        var any: ?Any = None<Any>
+                        var ex = None<Exception>
+                        try {
+                            if (meta.checkAuth(ctx, anyArgs)) {
+                                let returned: Any = controller.$(f.identifier)($args)
+                                any = returned
+                                return returned
                             }
+                        } catch(e: Exception) {
+                            ex = e
+                        } finally {
+                            meta.accessLog<$klass>(start, ctx, anyArgs, any, ex)
                         }
                     }
+                }
             )) + `nl`
         }
     }

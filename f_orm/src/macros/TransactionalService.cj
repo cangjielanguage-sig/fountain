@@ -16,55 +16,5 @@ limitations under the License.
 macro package f_orm.macros
 
 import std.ast.*
-import f_macros.*
-import f_orm.exception.*
-public import f_aspect.macros.*
-public import f_bean.macros.*
-
-public macro TransactionalService(input: Tokens): Tokens {
-    let tokens = quote(
-        @Bean
-        $(transational(input))
-    )
-    tokens
-}
-private func transational(input: Tokens): Tokens{
-    match(parseDecl(input)){
-        case x: ClassDecl => 
-            let decls = x.body.decls
-            for(i in 0 .. decls.size){
-                func pointcut(f: FuncDecl){
-                    parseDecl(quote(
-                        @Pointcut
-                        $f
-                    ))
-                }
-                match(decls[i]){
-                    case x: FuncDecl where x.isPublic() && !x.isStatic() => 
-                        decls[i] = pointcut(x)
-                    case x: MacroExpandDecl => 
-                        var md = x
-                        while(let x: MacroExpandDecl <- md.macroInputDecl){
-                            md = x
-                        }
-                        if (let x: FuncDecl <- md.macroInputDecl && x.isPublic() && !x.isStatic()) {
-                            let d = pointcut(x)
-                            md.macroInputs = d.toTokens()
-                        }
-                    case _ => continue
-                }
-            }
-            x.toTokens()
-        case x: MacroExpandDecl => 
-            var md = x
-            while(let x: MacroExpandDecl <- md.macroInputDecl){
-                md = x
-            }
-            let tokens = transational(md.macroInputs)
-            md.macroInputs = tokens
-            x.toTokens()
-        case _ => 
-            diagReport(ERROR, input, 'input must be a class decl', '')
-            throw ORMException()
-    }
-}
+public import f_aspect.macros.Pointcut
+public import f_aspect.macros.WeavedBean as TransactionalService

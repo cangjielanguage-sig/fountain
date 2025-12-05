@@ -18,6 +18,7 @@ macro package f_aspect.macros
 import std.ast.*
 import f_aspect.exception.AspectException
 import f_macros.*
+import std.reflect.*
 
 public macro Pointcut(input: Tokens): Tokens {
     if (insideParentContext('Pointcut')) {
@@ -27,88 +28,108 @@ public macro Pointcut(input: Tokens): Tokens {
         case x: FuncDecl => pointcut(x)
         case x: ClassDecl => expandClassDecl(x)
         case x: MacroExpandDecl => 
-            let d = extract(x)
-            let tokens = pointcut(d)
-            x.macroInputs = tokens
+            var m: MacroExpandDecl = x
+            while(let md: MacroExpandDecl <- m.macroInputDecl){
+                m = md
+            }
+            let tokens = match(m.macroInputDecl){
+                case x: FuncDecl => pointcut(x)
+                case x: ClassDecl => expandClassDecl(x)
+                case x => x.toTokens()
+            }
+            m.macroInputDecl = parseDecl(tokens)
             x.toTokens()
         case x => 
             diagReport(ERROR, input, '${x.identifier.value} must be a func decl', '')
             throw AspectException()
     }
 }
-private func pointcut(decl: Decl): Tokens {
-    let tokens = decl.toTokens()
-    match (decl) {
-        case x: FuncDecl =>
-            var funcDecl = quote()
-            for (t in tokens) {
-                if (t.kind == TokenKind.LCURL) {
-                    break
-                }
-                funcDecl += t
-            }
-            let params = x.funcParams
-            var argVars = quote()
-            var args = `lsquare`
-            var argTypes = `lsquare`
-            for (i in 0..params.size) {
-                let param = params[i]
-                let paramName = param.identifier
-                argVars += quote(
-                    let $paramName = (args[$(i)] as $(param.paramType)).getOrThrow()
-                ) + `nl`
-                if (i > 0) {
-                    args += `comma`
-                    argTypes += `comma`
-                }
-                args += paramName
-                argTypes += quote(TypeInfo.of<$(param.paramType)>())
-            }
-            args += `rsquare`
-            argTypes += `rsquare`
-            let funcName = x.identifier.value
-            let funcType = try {
-                x.declType.toTokens()
-            } catch (_) {
-                `empty_tokens`
-            }
-            let proceed = if (funcType.size == 0) {
-                quote(Aspects.proceed(info, callee))
-            } else {
-                quote(Aspects.proceed<$funcType>(info, callee))
-            }
-            let tokens = quote(
-                $funcDecl {
-                    func callee(args: Array<Any>){
-                        $argVars
-                        $(x.block.nodes)
-                    }
-                    let info = InvocationFuncInfo(TypeInfo.of(this), $funcName, $argTypes, $args)
-                    $proceed
-                }
-            )
-            tokens
-        case x: ClassDecl => expandClassDecl(x)
-        case _ =>
-            diagReport(ERROR, tokens, '${decl.identifier.value} must be a func decl', '')
-            throw AspectException()
+func pointcut(decl: FuncDecl): Tokens {
+    var tokens = decl.toTokens()
+    var funcDecl = quote()
+    for (t in tokens) {
+        if (t.kind == TokenKind.LCURL) {
+            break
+        }
+        funcDecl += t
     }
+    let params = decl.funcParams
+    var argVars = quote()
+    var args = `lsquare`
+    var argTypes = `lsquare`
+    for (i in 0..params.size) {
+        let param = match(params[i]){
+            case x: MacroExpandParam => 
+                var mp: MacroExpandParam = x
+                while(let m: MacroExpandParam <- mp.macroInputDecl){
+                    mp = m
+                }
+                match(mp.macroInputDecl){
+                    case x: FuncParam => x
+                    case x: MacroExpandDecl => 
+                        var md: MacroExpandDecl = x
+                        while(let m: MacroExpandDecl <- md.macroInputDecl){
+                            md = m
+                        }
+                        match(md.macroInputDecl){
+                            case x: FuncParam => x
+                            case x => FuncParam(x.toTokens())
+                        }
+                    case x => throw AspectException('unexpected decl ${x.toTokens()} ${ClassTypeInfo.of(x)}')
+                }
+            case x: FuncParam => x
+            case x => throw AspectException('unexpected decl ${x.toTokens()} ${ClassTypeInfo.of(x)}')
+        }
+        let paramName = param.identifier
+        argVars += quote(
+            let $paramName = (args[$(i)] as $(param.paramType)).getOrThrow()
+        ) + `nl`
+        if (i > 0) {
+            args += `comma`
+            argTypes += `comma`
+        }
+        args += paramName
+        argTypes += quote(TypeInfo.of<$(param.paramType)>())
+    }
+    args += `rsquare`
+    argTypes += `rsquare`
+    let funcName = decl.identifier.value
+    let funcType = try {
+        decl.declType.toTokens()
+    } catch (_) {
+        `empty_tokens`
+    }
+    let proceed = if (funcType.size == 0) {
+        quote(Aspects.proceed(info, callee))
+    } else {
+        quote(Aspects.proceed<$funcType>(info, callee))
+    }
+    tokens = quote(
+        $funcDecl {
+            func callee(args: Array<Any>){
+                $argVars
+                $(decl.block.nodes)
+            }
+            let info = InvocationFuncInfo(TypeInfo.of(this), $funcName, $argTypes, $args)
+            $proceed
+        }
+    )
+    tokens
 }
 private func expandClassDecl(decl: ClassDecl): Tokens {
     let decls = decl.body.decls
     for(i in 0 .. decls.size) {
         let d = decls[i]
-        if (d is FuncDecl && !isStatic(d) && isPublic(d)) {
-            decls[i] = parseDecl(quote(
-                @Pointcut
-                $d
-            ))
-        } else if (let md: MacroExpandDecl <- d && let ed: FuncDecl <- extract(md) && !isStatic(ed) && isPublic(ed)) {
-            let tokens = quote(
-                @Pointcut
-                $ed
-            )
-            md.macroInputs = tokens
+        if (let f: FuncDecl <- d && !isStatic(d) && isPublic(d) && d.identifier.value != 'init') {
+            decls[i] = parseDecl(pointcut(f))
+        } else if (let md: MacroExpandDecl <- d) {
+            var m: MacroExpandDecl = md
+            while(let md: MacroExpandDecl <- m.macroInputDecl){
+                m = md
+            }
+            if(let f: FuncDecl <- m.macroInputDecl && !isStatic(f) && isPublic(f)){
+                m.macroInputDecl = parseDecl(pointcut(f))
+            }
         }
     }
     decl.toTokens()

@@ -18,3 +18,4 @@ macro package f_mvc.macros
 internal import std.ast.*
 internal import f_macros.*
 public import f_bean.macros.*
+public import f_aspect.macros.*

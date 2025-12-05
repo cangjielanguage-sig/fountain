@@ -11,13 +11,14 @@ exports(){
     # %m 记录当前日志消息文本
 #    export loggerAsyncBufsize=2 # 异步日志缓存池的初始化大小
     export logger_appender_console=FDemoConsole
-    export logger_appender_FDemoConsole_level=ERROR
+    export logger_appender_FDemoConsole_level=INFO
     export logger_appender_FDemoConsole_pattern='[%level-%name]%d{yyyy/MM/dd,HH:mm:ss.SSS}|%tid;%m'
     export logger_appender_file=FDemoFile
     export logger_appender_FDemoFile_level=INFO
     export logger_appender_FDemoFile_pattern='[%level-%name]%d{yyyy/MM/dd,HH:mm:ss.SSS}|%tid;%m'
     export logger_appender_FDemoFile_path=./log/fdemo.log
     export logger_appender_FDemoFile_rotateDuration=DAY
+    export controllerPointcut='*..*Controller.*(**): *'
     export mvc_port=8080 # 这一行可以没有，默认就是8080                                                                         
     export mvc_overallElapsedSwitch=true
     export mvc_internalServerErrorMessageKind=BEAN
@@ -44,13 +45,21 @@ exports(){
     export orm_stdPoolConnectionTimeout=86400 # 连接获取超时时间，默认30分钟
     export orm_stdPoolKeepaliveTime=86400 # 连接保活检查周期，默认1分钟
     # orm_transactionalFuncExecution 和@Transactional注解只要有一个生效就会将事务切面织入到函数
-   export orm_transactionalFuncExecution='*..*.delete*(**): *|*..*.remove*(**): *|*..*.save*(**): *|*..*.add*(**): *|*..*.new*(**): *|*..*.create*(**): *|*..*.insert*(**): *|*..*.update*(**): *|*..*.change*(**): *|*..*.register*(**): *'
-   export orm_transactionalFuncExecution='*..*.notLikeDemo*(**): *'
-    export opengauss_orm_connectionUrl=$POSTGRES
+   export orm_transactionalFuncExecution='*..*ServiceImpl.delete*(**): *'
+   export orm_transactionalFuncExecution="$orm_transactionalFuncExecution|*..*ServiceImpl.remove*(**): *"
+   export orm_transactionalFuncExecution="$orm_transactionalFuncExecution|*..*ServiceImpl.save*(**): *"
+   export orm_transactionalFuncExecution="$orm_transactionalFuncExecution|*..*ServiceImpl.add*(**): *"
+   export orm_transactionalFuncExecution="$orm_transactionalFuncExecution|*..*ServiceImpl.new*(**): *"
+   export orm_transactionalFuncExecution="$orm_transactionalFuncExecution|*..*ServiceImpl.create*(**): *"
+   export orm_transactionalFuncExecution="$orm_transactionalFuncExecution|*..*ServiceImpl.update*(**): *"
+   export orm_transactionalFuncExecution="$orm_transactionalFuncExecution|*..*ServiceImpl.change*(**): *"
+   export orm_transactionalFuncExecution="$orm_transactionalFuncExecution|*..*ServiceImpl.register*(**): *"
+   export orm_transactionalFuncExecution='*..*.userSession(**): *'
+   export opengauss_orm_connectionUrl=$POSTGRES
     if [[ "$path" == "" ]]; then
         path='./fdemo'
     fi
-    export LD_LIBRARY_PATH=$path/release/boot:$path/release/opengauss:$path/release/user:$path/release/dbtest:$LD_LIBRARY_PATH
+    export LD_LIBRARY_PATH=$path/release/boot:$path/release/opengauss:$path/release/user:$LD_LIBRARY_PATH
 }
 run(){
     exports

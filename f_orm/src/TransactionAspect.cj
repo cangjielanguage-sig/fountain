@@ -41,9 +41,7 @@ public class TransactionAspect <: Aspect {
         var rollbackFor = None<String>
         if (let Some(x) <- transactional) {
             driverName = x.driverName
-            if (let Some(p) <- x.propagation) {
-                propagation = p
-            }
+            propagation = x.propagation
             isoLevel = x.isoLevel
             accessMode = x.accessMode
             deferrableMode = x.deferrableMode

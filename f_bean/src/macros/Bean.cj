@@ -117,7 +117,7 @@ private func expandBean(attr: Tokens, input: Tokens, klass: ClassDecl): Tokens {
                 {=> $beanType()}
             } else {
                 var ctor = None<() -> $beanType>
-                for ((n, f) in ctors where TypeInfos.withAnnotation<$beanType, Constructor>(n, [])) {
+                for ((n, f) in ctors where n != 'init' && TypeInfo.of<$beanType>().getInstanceFunction(n, []).findAnnotation<Constructor>().isSome()) {
                     ctor = f
                     break
                 }

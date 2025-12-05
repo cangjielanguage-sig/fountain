@@ -17,6 +17,8 @@ package user.controller
 
 import std.reflect.*
 import stdx.encoding.json.*
+import fountain.aspect.*
+import fountain.aspect.macros.*
 import fountain.bean.*
 import fountain.bean.macros.*
 import fountain.mvc.*
@@ -29,8 +31,9 @@ import user.model.mvc.*
  * 把UserController CurrentUserController合并成一个，加载时会抛出异常。
  * 分开两个类就能正常加载
  */
+// @BeanMeta[scope: BeanScope.prototype]//此类不需要prototype，仅做演示
 @Controller
-@BeanMeta[scope: BeanScope.prototype]//此类不需要prototype，仅做演示
+@Pointcut
 public class CurrentUserController { 
     private let userService = lookup<UserService>()
 

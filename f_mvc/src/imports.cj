@@ -43,6 +43,7 @@ public import std.time.{DateTime, MonoTime}
 public import stdx.encoding.json.*
 public import stdx.encoding.url.*
 public import stdx.net.http.*
+public import f_aspect.*
 public import f_base.*
 public import f_bean.*
 public import f_config.*

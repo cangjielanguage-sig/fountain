@@ -149,6 +149,15 @@ public struct App {
             let getFn = t.getStaticFunction('loadTasks', [])
             getFn.apply(t, [])
         }
+        let ormType = try{
+            ClassTypeInfo.get('f_orm.ORM')
+        }catch(_){
+            None<ClassTypeInfo>
+        }
+        if(let Some(t) <- ormType){
+            let initFn = t.getStaticFunction('initialize', [])
+            initFn.apply(t, [])
+        }
         let mvcTypeInfo = try{
             ClassTypeInfo.get('f_mvc.MVCStarter')
         }catch(_){

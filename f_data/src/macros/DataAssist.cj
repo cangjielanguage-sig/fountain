@@ -88,7 +88,7 @@ private func assist(attr: Tokens, input: Tokens): Tokens {
                 ind = md
             }
             let tokens = assist(attr, ind.macroInputs)
-            ind.macroInputs = tokens
+            ind.macroInputDecl = parseDecl(tokens)
             d.toTokens()
         case _ =>
             diagReport(ERROR, input, 'input must be class decl', '')

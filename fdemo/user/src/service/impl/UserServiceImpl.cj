@@ -18,6 +18,7 @@ package user.service.impl
 import std.collection.Map
 import std.reflect.*
 
+import fountain.aspect.macros.*
 import fountain.bean.*
 import fountain.bean.macros.*
 import fountain.orm.macros.*
