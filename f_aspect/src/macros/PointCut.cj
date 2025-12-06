@@ -24,25 +24,23 @@ public macro Pointcut(input: Tokens): Tokens {
     if (insideParentContext('Pointcut')) {
         return input
     }
-    match(parseDecl(input)){
-        case x: FuncDecl => pointcut(x)
-        case x: ClassDecl => expandClassDecl(x)
-        case x: MacroExpandDecl => 
-            var m: MacroExpandDecl = x
-            while(let md: MacroExpandDecl <- m.macroInputDecl){
-                m = md
-            }
-            let tokens = match(m.macroInputDecl){
-                case x: FuncDecl => pointcut(x)
-                case x: ClassDecl => expandClassDecl(x)
-                case x => x.toTokens()
-            }
-            m.macroInputDecl = parseDecl(tokens)
-            x.toTokens()
-        case x => 
-            diagReport(ERROR, input, '${x.identifier.value} must be a func decl', '')
-            throw AspectException()
+    func doPointcut(decl: Decl): Tokens {
+        match(decl){
+            case x: FuncDecl => pointcut(x)
+            case x: ClassDecl => pointcut(x)
+            case x: MacroExpandDecl =>
+                var m: MacroExpandDecl = x
+                while(let md: MacroExpandDecl <- m.macroInputDecl){
+                    m = md
+                }
+                m.macroInputDecl = parseDecl(doPointcut(m.macroInputDecl))
+                x.toTokens()
+            case x => 
+                diagReport(ERROR, input, '${x.identifier.value} must be a func decl or a class decl', '')
+                throw AspectException()
+        }
     }
+    doPointcut(parseDecl(input))
 }
 func pointcut(decl: FuncDecl): Tokens {
     var tokens = decl.toTokens()
@@ -116,7 +114,7 @@ func pointcut(decl: FuncDecl): Tokens {
     )
     tokens
 }
-private func expandClassDecl(decl: ClassDecl): Tokens {
+private func pointcut(decl: ClassDecl): Tokens {
     let decls = decl.body.decls
     for(i in 0 .. decls.size) {
         let d = decls[i]
