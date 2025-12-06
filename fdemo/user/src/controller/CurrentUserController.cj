@@ -31,8 +31,8 @@ import user.model.mvc.*
  * 把UserController CurrentUserController合并成一个，加载时会抛出异常。
  * 分开两个类就能正常加载
  */
-// @BeanMeta[scope: BeanScope.prototype]//此类不需要prototype，仅做演示
 @WeavedController
+@BeanMeta[scope: BeanScope.prototype]//此类不需要prototype，仅做演示
 public class CurrentUserController { 
     private let userService = lookup<UserService>()
 
