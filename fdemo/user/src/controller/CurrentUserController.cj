@@ -32,8 +32,7 @@ import user.model.mvc.*
  * 分开两个类就能正常加载
  */
 // @BeanMeta[scope: BeanScope.prototype]//此类不需要prototype，仅做演示
-@Controller
-@Pointcut
+@WeavedController
 public class CurrentUserController { 
     private let userService = lookup<UserService>()
 

@@ -39,16 +39,16 @@ public macro Controller(attr: Tokens, input: Tokens): Tokens {
 }
 public macro WeavedController(input: Tokens): Tokens {
     quote(
-        @Pointcut
         @Bean
+        @Pointcut
         $input
         $(generate(input))
     )
 }
 public macro WeavedController(attr: Tokens, input: Tokens): Tokens {
     quote(
-        @Pointcut
         @Bean[$attr]
+        @Pointcut
         $input
         $(generate(input))
     )
