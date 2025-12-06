@@ -15,7 +15,7 @@ limitations under the License.
 */
 package f_mvc
 
-public struct ThreadLocalContext {
+public struct CurrentHttpContext {
     private static let context = ThreadLocal<HttpContext>()
     private init(){}
     static func set(ctx: HttpContext){
@@ -24,7 +24,7 @@ public struct ThreadLocalContext {
     static func clear(): Unit {
         context.set(None<HttpContext>)
     }
-    public static prop current: HttpContext {
+    public static prop instance: HttpContext {
         get(){
             context.get().getOrThrow()
         }

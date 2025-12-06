@@ -129,10 +129,10 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
         this.handle_ = {
             ctx =>
                 let result = try{
-                    ThreadLocalContext.set(ctx)
+                    CurrentHttpContext.set(ctx)
                     fn(BeanFactory.instance.getFirst<T>().getOrThrow(), ctx, pattern)
                 }finally{
-                    ThreadLocalContext.clear()
+                    CurrentHttpContext.clear()
                 }
                 match (result) {
                     case x: JsonValue => respond(x, ctx)
