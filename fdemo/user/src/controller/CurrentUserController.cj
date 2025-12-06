@@ -17,10 +17,10 @@ package user.controller
 
 import std.reflect.*
 import stdx.encoding.json.*
-import fountain.aspect.*
-import fountain.aspect.macros.*
-import fountain.bean.*
-import fountain.bean.macros.*
+// import fountain.aspect.*
+// import fountain.aspect.macros.*
+// import fountain.bean.*
+// import fountain.bean.macros.*
 import fountain.mvc.*
 import fountain.mvc.macros.*
 import user.service.UserService

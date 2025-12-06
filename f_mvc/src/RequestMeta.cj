@@ -128,7 +128,12 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
         let pattern = this.pattern.getOrThrow()
         this.handle_ = {
             ctx =>
-                let result = fn(BeanFactory.instance.getFirst<T>().getOrThrow(), ctx, pattern)
+                let result = try{
+                    ThreadLocalContext.set(ctx)
+                    fn(BeanFactory.instance.getFirst<T>().getOrThrow(), ctx, pattern)
+                }finally{
+                    ThreadLocalContext.clear()
+                }
                 match (result) {
                     case x: JsonValue => respond(x, ctx)
                     case x: InputStream => respond(x, ctx)
