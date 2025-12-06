@@ -17,7 +17,7 @@ package f_mvc
 
 public struct ThreadLocalContext {
     private static let context = ThreadLocal<HttpContext>()
-
+    private init(){}
     static func set(ctx: HttpContext){
         context.set(ctx)
     }
