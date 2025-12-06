@@ -15,6 +15,9 @@ limitations under the License.
 */
 package f_mvc
 
+/**
+ * 服务器处理http访问时，CurrentHttpContext.instance返回当前HttpContext
+ */
 public struct CurrentHttpContext {
     private static let context = ThreadLocal<HttpContext>()
     private init(){}
