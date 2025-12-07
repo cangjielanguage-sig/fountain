@@ -13,10 +13,20 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package f_codec
+package f_codec.exception
 
-internal import std.fs.File
-internal import std.io.*
+import f_base.BaseException
 
-internal import f_base.*
-internal import f_data.*
+public class CodecException <: BaseException {
+    public init() {}
+
+    public init(message: String) {
+        super(message)
+    }
+    public init(caused: Exception) {
+        super(caused)
+    }
+    public init(message: String, caused: Exception) {
+        super(message, caused)
+    }
+}

@@ -13,10 +13,13 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package f_codec
+package f_codec.default
 
-internal import std.fs.File
-internal import std.io.*
-
-internal import f_base.*
-internal import f_data.*
+internal import std.collection.{ArrayList, Map, TreeMap}
+internal import std.fs.{File, rename, Path, OpenMode}
+internal import std.math.numeric.{BigInt, Decimal}
+internal import std.time.DateTime
+internal import f_codec.*
+internal import f_codec.exception.*
+internal import f_exception.UnreachableException
+internal import f_util.UUID

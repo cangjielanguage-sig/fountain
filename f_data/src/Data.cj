@@ -15,7 +15,7 @@ limitations under the License.
  */
 package f_data
 
-public interface Data <: ToString & DataParsable<Data> {
+public interface Data <: ToString & DataParsable<Data> & ToData {
     public func toData(): Data {
         return this
     }

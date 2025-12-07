@@ -14,3 +14,5 @@
 [dependencies]
   f_base = {path = "../f_base"}
   f_data = {path = "../f_data"}
+  f_exception = {path = "../f_exception"}
+  f_util = {path = "../f_util"}
