@@ -109,7 +109,7 @@ public class Int64DataType <: DataType {
         getValue<Int64>(result)
     }
 }
-
+type IntDataType = Int64DataType
 public class UInt64DataType <: DataType {
     public init(nullable: Bool, columnName: String, fieldName: String) {
         super(nullable, columnName, fieldName)
@@ -118,6 +118,7 @@ public class UInt64DataType <: DataType {
         getValue<UInt64>(result)
     }
 }
+type UIntDataType = UInt64DataType
 public class Float32DataType <: DataType {
     public init(nullable: Bool, columnName: String, fieldName: String) {
         super(nullable, columnName, fieldName)

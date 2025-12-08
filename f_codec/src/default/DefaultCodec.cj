@@ -597,8 +597,9 @@ public class DefaultCodec <: Codec {
         }
     }
     public func finish(): InputStream {
-        ChainedInputStream<InputStream>(
-            [ByteBuffer(encodeSizeOfEncoded(size)), ChainedInputStream<InputStream>(inputs.unsafeData())])
+        // ChainedInputStream<InputStream>(
+        //     [ByteBuffer(encodeSizeOfEncoded(size)), ChainedInputStream<InputStream>(inputs.unsafeData())])
+        ChainedInputStream<InputStream>(inputs.unsafeData())
     }
     private static let hex = '0123456789abcdef'.toRuneArray()
     private func toHex(b: Byte): String {
@@ -634,7 +635,7 @@ public class DefaultCodec <: Codec {
         v
     }
     private func decodeData(input: InputStream, fileThreshold: Int64): Data {
-        decodeSizeOfEncoded(input)
+        // decodeSizeOfEncoded(input)
         var bytes = [0u8]
         var size = input.read(bytes)
         if(size == 0 || bytes[0] == 0){
