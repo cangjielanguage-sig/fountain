@@ -74,25 +74,20 @@ private func generate(input: Tokens): Tokens {
                 for(meta in metas){
                     meta.setHandle{controller: $klass, ctx: HttpContext, patterns: HttpRequestPathPatterns => 
                         let start = MonoTime.now()
+                        var any: ?Any = None<Any>
+                        var ex = None<Exception>
                         try {
                             $argExprs
                             $anyargs
-                            var any: ?Any = None<Any>
-                            var ex = None<Exception>
-                            try {
-                                if (meta.checkAuth(ctx, anyArgs)) {
-                                    let returned: Any = controller.$(f.identifier)($args)
-                                    any = returned
-                                    return returned
-                                }
-                            } catch (e: Exception) {
-                                ex = e
-                            } finally {
-                                meta.accessLog<$klass>(start, ctx, anyArgs, any, ex)
+                            if (meta.checkAuth(ctx, anyArgs)) {
+                                let returned: Any = controller.$(f.identifier)($args)
+                                any = returned
+                                return returned
                             }
                         } catch (e: Exception) {
-                            meta.accessLog<$klass>(start, ctx, ArrayList<Any>(), None<Any>, e)
-                            throw e
+                            ex = e
+                        } finally {
+                            meta.accessLog<$klass>(start, ctx, anyArgs, any, ex)
                         }
                     }
                 }
