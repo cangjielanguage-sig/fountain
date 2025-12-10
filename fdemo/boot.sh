@@ -14,10 +14,10 @@ exports(){
     # %m 记录当前日志消息文本
     # %tid 记录当前线程ID
 #    export loggerAsyncBufsize=2 # 异步日志缓存池的初始化大小，默认是1024
-    export logger_appender_console=FDemoConsole
+    export logger_appender_console=FDemoConsole # 这是控制台日志记录器的名称，可以任意起名，名称得符合标识符规范
     export logger_appender_FDemoConsole_level=INFO
     export logger_appender_FDemoConsole_pattern='[%level-%name]%d{yyyy/MM/dd,HH:mm:ss.SSS}|%tid;%m'
-    export logger_appender_file=FDemoFile
+    export logger_appender_file=FDemoFile # 这是文件日志记录器的名称，可以任意起名
     export logger_appender_FDemoFile_level=INFO
     export logger_appender_FDemoFile_pattern='[%level-%name]%d{yyyy/MM/dd,HH:mm:ss.SSS}|%tid;%m'
     export logger_appender_FDemoFile_path=./log/fdemo.log
