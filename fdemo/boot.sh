@@ -60,7 +60,7 @@ exports(){
         path='./fdemo'
     fi
 #    export LD_LIBRARY_PATH=$path/release/boot:$path/release/opengauss:$path/release/user:$LD_LIBRARY_PATH
-    export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:`find $path/release -type d -print0|xargs -0 -I {} echo "{}"|tr '\n' ':'`
+    export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:`find ./fdemo/release/* -type d -print0|xargs -0 -I {} echo "{}"|grep -v -P 'f_.+|\.build-logs|fountain|bin|_stAtIc__|charset4cj|boot'|tr '\n' ':'`
 }
 run(){
     exports
