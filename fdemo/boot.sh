@@ -9,6 +9,7 @@ exports(){
     # %name 记录当前日志名称
     # %d 记录当前日志时间，花括号内是时间格式
     # %m 记录当前日志消息文本
+    # %tid 记录当前线程ID
 #    export loggerAsyncBufsize=2 # 异步日志缓存池的初始化大小
     export logger_appender_console=FDemoConsole
     export logger_appender_FDemoConsole_level=INFO
