@@ -111,7 +111,7 @@ loop)
     for i in $(seq 1 $2); do 
         echo -e "\n================= 第 $i 次循环 =================\n";
 #         curl -XPOST -H'Content-Type:application/json' -H'Accept:application/json' -d'{"username":"asdf","password":"bcbcbcbc"}' http://localhost:8080/api/user/session
-         curl -XGET -H'Accept:text/plain' http://localhost:8080/helloworld
+        curl -XGET -H'Accept:text/plain' http://localhost:8080/helloworld
 	#  sleep 1
 #        ./curl.sh
     done
@@ -122,7 +122,7 @@ loop)
 ab)
 #    apt install apache2-utils 执行前需安装apache2-utils
 #    ab -c $2 -n $3 -T "application/json" -H "Accept: application/json" -p post_data.json http://127.0.0.1:8080/helloworld
-     ab -c $2 -n $3 -T '' -H 'Accept:text/plain' -m GET http://localhost:8080/helloworld
+    ab -c $2 -n $3 -T '' -H 'Accept:text/plain' -m GET http://localhost:8080/helloworld
     ;;
 esac
 
