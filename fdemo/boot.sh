@@ -58,9 +58,8 @@ exports(){
     export orm_transactionalFuncExecution="$orm_transactionalFuncExecution|*..*ServiceImpl.update*(**): *"
     export orm_transactionalFuncExecution="$orm_transactionalFuncExecution|*..*ServiceImpl.change*(**): *"
     export orm_transactionalFuncExecution="$orm_transactionalFuncExecution|*..*ServiceImpl.register*(**): *"
-    export orm_transactionalFuncExecution='*..*.userSession(**): *'
+    export orm_transactionalFuncExecution="$orm_transactionalFuncExecution|*..*.userSession(**): *"
     export opengauss_orm_connectionUrl=$POSTGRES
-#    export LD_LIBRARY_PATH=$path/release/boot:$path/release/opengauss:$path/release/user:$LD_LIBRARY_PATH
     export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:`find ./fdemo/release/* -type d -print0|xargs -0 -I {} echo "{}"|grep -v -P 'f_.+|\.build-logs|fountain|bin|_stAtIc__|charset4cj|boot'|tr '\n' ':'`
 }
 run(){
