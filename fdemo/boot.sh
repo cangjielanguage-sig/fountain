@@ -23,7 +23,7 @@ exports(){
     export logger_appender_FDemoFile_path=./log/fdemo.log
     export logger_appender_FDemoFile_rotateDuration=DAY
     export controllerPointcut='*..*Controller.*(**): *'
-    export mvc_port=8080 # 这一行可以没有，默认就是8080                                                                         
+    export mvc_port=8080 # 这一行可以没有，默认就是8080
     export mvc_overallElapsedSwitch=true
     export mvc_internalServerErrorMessageKind=BEAN
     export mvc_internalServerErrorMessage=NameOf500Handler
