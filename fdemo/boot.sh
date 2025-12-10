@@ -1,6 +1,9 @@
 #!/bin/bash
 
 path=$2
+if [[ "$path" == "" ]]; then
+    path='./fdemo'
+fi
 echo "target-dir=$path"
 
 exports(){
@@ -26,7 +29,7 @@ exports(){
     export mvc_internalServerErrorMessage=NameOf500Handler
     # 如果不使用fountain连接池，也不使用标准库连接池，就不要配置以下orm变量，只能用代码初始化第三方连接池
 #    export orm_noPool=true # 默认是false，true表示不用连接池
-    export orm_useStdPool=false # 默认是true，表示使用标准库连接池
+    export orm_useStdPool=false # 默认是true，表示使用标准库连接池，false是使用fountain连接池
     export orm_drivers=opengauss # 逗号分隔的驱动名称
     # orm_databasePool开头的是fountain.orm.DatabasePool的配置项
     export orm_databasePoolInitSize=10 # 初始连接数
@@ -57,9 +60,6 @@ exports(){
     export orm_transactionalFuncExecution="$orm_transactionalFuncExecution|*..*ServiceImpl.register*(**): *"
     export orm_transactionalFuncExecution='*..*.userSession(**): *'
     export opengauss_orm_connectionUrl=$POSTGRES
-    if [[ "$path" == "" ]]; then
-        path='./fdemo'
-    fi
 #    export LD_LIBRARY_PATH=$path/release/boot:$path/release/opengauss:$path/release/user:$LD_LIBRARY_PATH
     export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:`find ./fdemo/release/* -type d -print0|xargs -0 -I {} echo "{}"|grep -v -P 'f_.+|\.build-logs|fountain|bin|_stAtIc__|charset4cj|boot'|tr '\n' ':'`
 }
