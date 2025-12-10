@@ -27,7 +27,7 @@ exports(){
     export mvc_overallElapsedSwitch=true
     export mvc_internalServerErrorMessageKind=BEAN
     export mvc_internalServerErrorMessage=NameOf500Handler
-    # 如果不使用fountain连接池，也不使用标准库连接池，就不要配置以下orm变量，只能用代码初始化第三方连接池
+    # 如果不使用fountain连接池，也不使用标准库连接池，就不要配置以下orm_*Pool*变量，只配置orm_noPool，只能用代码初始化第三方连接池
 #    export orm_noPool=true # 默认是false，true表示不用连接池
     export orm_useStdPool=false # 默认是true，表示使用标准库连接池，false是使用fountain连接池
     export orm_drivers=opengauss # 逗号分隔的驱动名称
