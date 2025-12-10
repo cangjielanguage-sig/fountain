@@ -199,8 +199,8 @@ class PooledConnection <: Connection {
     }
 
     /**
-       接口 Statement ，sql 语句预执行接口，它绑定了一个 Connection , 继承该接口的 class、interface、
-       struct 也需要遵守该接口中函数的入参及返回值定义。
+     * 接口 Statement ，sql 语句预执行接口，它绑定了一个 Connection , 继承该接口的 class、interface、
+     * struct 也需要遵守该接口中函数的入参及返回值定义。
      * 开始事务
      */
     public func createTransaction(): Transaction {
