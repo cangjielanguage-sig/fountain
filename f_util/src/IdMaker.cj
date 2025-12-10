@@ -21,7 +21,7 @@ import f_config.*
 import f_util.exception.IdException
 
 public class IdMaker {
-    public static const HOST_SERIAL = "hostSerial"
+    public static const HOST_SERIAL = "idMakerHostSerial"
 
     private let startMillis: Int64 = (DateTime.now() - DateTime.UnixEpoch).toMilliseconds()
     private let current: AtomicInt64
