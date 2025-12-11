@@ -76,14 +76,14 @@ public class ORM {
             return
         }
         log.debug('driver ${driver.name} registering...')
-        register(NamedDatasource.new(driver), default: default)
+        register(NamedDatasource(driver), default: default)
     }
     public static func register(driver: Driver, opts: Array<(String, String)>, default!: Bool = true): Unit {
         if(datasources.contains(driver.name)){
             return
         }
         log.debug('driver ${driver.name} registering...')
-        register(NamedDatasource.new(driver, opts), default: default)
+        register(NamedDatasource(driver, opts), default: default)
     }
     public static func register(driver: Driver, url: String, default!: Bool = true): Unit {
         if(datasources.contains(driver.name)){
@@ -91,66 +91,39 @@ public class ORM {
             return
         }
         log.debug('driver ${driver.name} registering...')
-        register(NamedDatasource.new(driver, url), default: default)
+        register(NamedDatasource(driver, url), default: default)
     }
     public static func register(driver: Driver, url: String, opts: Array<(String, String)>, default!: Bool = true): Unit {
         if(datasources.contains(driver.name)){
             log.warn('driver ${driver.name} has been registered')
             return
         }
-        register(NamedDatasource.new(driver, url, opts), default: default)
+        register(NamedDatasource(driver, url, opts), default: default)
     }
     public static func getDriver(driver: String){
         ORMConfig.getDriver(driver)
     }
     public static func register(driver: String, default!: Bool = true): Unit {
-        register(getDriver(driver), default: default)
+        register(NamedDatasource(getDriver(driver)), default: default)
     }
     public static func register(driver: String, opts: Array<(String, String)>, default!: Bool = true){
-        register(getDriver(driver), opts, default: default)
+        register(NamedDatasource(getDriver(driver), opts), default: default)
     }
     public static func register(driver: String, url: String, default!: Bool = true){
-        register(getDriver(driver), url, default: default)
+        register(NamedDatasource(getDriver(driver), url), default: default)
     }
     public static func register(driver: String, url: String, opts: Array<(String, String)>, default!: Bool = true){
-        register(getDriver(driver), url, opts, default: default)
+        register(NamedDatasource(getDriver(driver), url, opts), default: default)
     }
     public static func register(){
         let default = ORMConfig.getDefaultDriver()
         for(d in ORMConfig.getDrivers()){
-            register(d, default: default.isEmpty() || d.name == default)
-        }
-    }
-    public static func registerWithORMPool(driverName: String, default!: Bool = true){
-        if(datasources.contains(driverName)){
-            log.warn('driver ${driverName} has been registered')
-            return
-        }
-        log.debug('driver ${driverName} registering...')
-        register(NamedDatasource(false, driverName, DatabasePool(driverName)), default: default)
-    }
-    public static func registerWithORMPool(){
-        let default = ORMConfig.getDefaultDriver()
-        for(d in ORMConfig.getDriverNames()){
-            registerWithORMPool(d, default: default.isEmpty() || d == default)
+            register(NamedDatasource(d), default: default.isEmpty() || d.name == default)
         }
     }
     public static func initialize(){
         try{
-            let defaultDriverName = ORMConfig.getDefaultDriver()
-            for(d in ORMConfig.getDriverNames()){
-                let default = defaultDriverName.isEmpty() || d == defaultDriverName
-                if(ORMConfig.getNoPool(driverName: d)){
-                    let driver = getDriver(d)
-                    let url = ORMConfig.getUrl(driverName: d)
-                    let ds = driver.open(url)
-                    register(NamedDatasource(false, d, ds), default: default)
-                }else if(ORMConfig.getUseStdPool(driverName: d)){
-                    register(d, default: default)
-                }else{
-                    registerWithORMPool(d, default: default)
-                }
-            }
+            register()
             registerTransactionHooks<TransactionHook>()
         }catch(e: Exception){
             log.error('ORM initialization failed', e)

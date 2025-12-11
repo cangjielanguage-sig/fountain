@@ -27,34 +27,47 @@ public class NamedDatasource <: Datasource & Resource {
             }
         }
     }
-    public static func new(driver: Driver, url: String, options: Array<(String, String)>){
-        let driverName = driver.name
-        let ds = match (driver.open(url, options)) {
+    public init(driver: Driver, url: String, options: Array<(String, String)>){
+        this(options.size > 0, driver.name, match (driver.open(url, options)) {
             case x: PooledDatasource => x
             case x where driver.preferredPooling =>
-                let p = PooledDatasource(x)
-                if (let Some(x) <- ORMConfig.getStdPoolConnectionTimeout(driverName: driverName)) {
-                    p.connectionTimeout = x
+                if (ORMConfig.getNoPool(driverName: driver.name)) {
+                    x
+                } else if (ORMConfig.getUseStdPool(driverName: driver.name)) {
+                    let p = PooledDatasource(x)
+                    if (let Some(x) <- ORMConfig.getStdPoolConnectionTimeout(driverName: driver.name)) {
+                        p.connectionTimeout = x
+                    }
+                    if (let Some(x) <- ORMConfig.getStdPoolIdleTimeout(driverName: driver.name)) {
+                        p.idleTimeout = x
+                    }
+                    if (let Some(x) <- ORMConfig.getStdPoolKeepaliveTime(driverName: driver.name)) {
+                        p.keepaliveTime = x
+                    }
+                    if (let Some(x) <- ORMConfig.getStdPoolMaxLifeTime(driverName: driver.name)) {
+                        p.maxLifeTime = x
+                    }
+                    if (let Some(x) <- ORMConfig.getStdPoolMaxIdleSize(driverName: driver.name)) {
+                        p.maxIdleSize = x
+                    }
+                    if (let Some(x) <- ORMConfig.getStdPoolMaxSize(driverName: driver.name)) {
+                        p.maxSize = x
+                    }
+                    p
+                } else {
+                    DatabasePool(driver)
                 }
-                if (let Some(x) <- ORMConfig.getStdPoolIdleTimeout(driverName: driverName)) {
-                    p.idleTimeout = x
-                }
-                if (let Some(x) <- ORMConfig.getStdPoolKeepaliveTime(driverName: driverName)) {
-                    p.keepaliveTime = x
-                }
-                if (let Some(x) <- ORMConfig.getStdPoolMaxLifeTime(driverName: driverName)) {
-                    p.maxLifeTime = x
-                }
-                if (let Some(x) <- ORMConfig.getStdPoolMaxIdleSize(driverName: driverName)) {
-                    p.maxIdleSize = x
-                }
-                if (let Some(x) <- ORMConfig.getStdPoolMaxSize(driverName: driverName)) {
-                    p.maxSize = x
-                }
-                p
             case x => x
-        }
-        NamedDatasource(options.size > 0, driverName, ds)
+        })
+    }
+    public init(driver: Driver, options: Array<(String ,String)>) {
+        this(driver, getUrl(driver), options)
+    }
+    public init(driver: Driver, url: String){
+        this(driver, url, getOptions(driver))
+    }
+    public init(driver: Driver){
+        this(driver, getUrl(driver), getOptions(driver))
     }
     private static func getUrl(driver: Driver){
         ORMConfig.getUrl(driverName: driver.name)
@@ -62,18 +75,7 @@ public class NamedDatasource <: Datasource & Resource {
     private static func getOptions(driver: Driver){
         ORMConfig.getAllConfigTuples(driverName: driver.name)
     }
-    public static func new(driver: Driver, options: Array<(String ,String)>): NamedDatasource {
-        new(driver, getUrl(driver), options)
-    }
-    public static func new(driver: Driver, url: String){
-        new(driver, url, getOptions(driver))
-    }
-    public static func new(driver: Driver){
-        let driverName = driver.name
-        new(driver, getUrl(driver), getOptions(driver))
-    }
-
-
+    
     public func connect(): Connection {
         ConnectionWrap(driverName, datasource.connect())
     }
