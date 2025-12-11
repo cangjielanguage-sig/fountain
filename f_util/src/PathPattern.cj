@@ -865,15 +865,29 @@ class ComplexPathNode <: PathNode {
 
     func extract(value: String): Map<String, String> {
         let datas = HashMap<String, String>()
+        var start = 0
         for (i in 0..parts.size : 2) {
             let p = parts[i]
-            let start = value.indexOf(p).getOrThrow() + p.size
+            if (start == 0) {
+                start = if(let Some(idx) <- value.indexOf(p)){
+                    idx + p.size
+                } else {
+                    datas.clear()
+                    return datas
+                }
+            } 
             let end = if (i + 2 < parts.size) {
-                value.indexOf(parts[i + 2]).getOrThrow()
+                if(let Some(idx) <- value.indexOf(parts[i + 2], start)){
+                    idx
+                }else{
+                    datas.clear()
+                    return datas
+                }
             } else {
                 value.size
             }
             datas[parts[i + 1]] = value[start..end]
+            start = end + parts[i + 2].size
         }
         return datas
     }
