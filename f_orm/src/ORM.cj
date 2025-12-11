@@ -127,7 +127,7 @@ public class ORM {
             return
         }
         log.debug('driver ${driverName} registering...')
-        register(NamedDatasource(false, driverName, DatabasePool.byConfig(driverName)), default: default)
+        register(NamedDatasource(false, driverName, DatabasePool(driverName)), default: default)
     }
     public static func registerWithORMPool(){
         let default = ORMConfig.getDefaultDriver()

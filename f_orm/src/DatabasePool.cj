@@ -103,8 +103,8 @@ public class DatabasePool <: Resource & Datasource {
             }
         )
     }
-    public static func byConfig(driver: Driver, creator: () -> Connection) {
-        DatabasePool(
+    public init(driver: Driver, creator: () -> Connection) {
+        this(
             driver: driver,
             initSize: ORMConfig.getPoolInitSize(driverName: driver.name),
             minSize: ORMConfig.getPoolMinSize(driverName: driver.name),
@@ -118,13 +118,16 @@ public class DatabasePool <: Resource & Datasource {
             checkSql: ORMConfig.getPoolCheckSql(driverName: driver.name)
         )
     }
-    public static func byConfig(driver: Driver, options: Array<(String, String)>){
-        let ds = driver.open(ORMConfig.getUrl(driverName: driver.name), options)
-        byConfig(driver){ds.connect()}
+    public init(driver: Driver, options: Array<(String, String)>){
+        this(driver, {=>
+            let ds = driver.open(ORMConfig.getUrl(driverName: driver.name), options)
+            {=> 
+                ds.connect()
+            }
+        }())
     }
-    public static func byConfig(driverName: String, options: Array<(String, String)>){
-        let driver = ORM.getDriver(driverName)
-        byConfig(driver, options)
+    public init(driverName: String, options: Array<(String, String)>){
+        this(ORM.getDriver(driverName), options)
     }
 
     public func isClosed(): Bool {
