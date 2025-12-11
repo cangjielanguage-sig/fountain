@@ -122,7 +122,7 @@ public class PathPattern {
     }
     //pattern是定义的路径，data是路径对应的数据，比如这个路径对应的执行函数、是否匹配当前请求方法等
     public func compile<T>(pattern: String, data: T): PathPattern {
-        doCompile<T>(true, pattern){data}
+        doCompile<T>(true, pattern) {data}
         this
     }
     private func doCompile<T>(anyway: Bool, pattern: String, supplier: () -> Any): T {
@@ -152,10 +152,10 @@ public class PathPattern {
     }
     public func compileIfAbsent<T>(pattern: String, supplier: () -> T): T {
         let p = pretreat(pattern)
-        doCompile<T>(false, p){supplier()}
+        doCompile<T>(false, p) {supplier()}
     }
 
-    private func compile(anyway: Bool, prev: PathNode, parts: Array<String>, supplier: ()-> Any): Any {
+    private func compile(anyway: Bool, prev: PathNode, parts: Array<String>, supplier: () -> Any): Any {
         var prev_ = prev
         for (i in 0..parts.size) {
             let part = parts[i]
@@ -686,7 +686,7 @@ open class PathNode <: Equatable<PathNode> {
                     this.createPlaceholderRegexNodeIfAbsent(n, reg, true)
                 } else if (#"^\{[a-zA-Z_]+\w*\}$"#.regex(solid: true).matches(name)) {
                     return this.createPlaceholderNodeIfAbsent(name[1..name.size - 1])
-                } else if (#"^(.*\{[a-zA-Z_]+\w*\}.*)+$"#.regex(solid: true).matches(name)) {
+                } else if (#'^(.*?)\{(.+?)\}(.*?)$'#.regex(solid: true).matches(name)) {
                     return this.createComplexPathNode(name)
                 } else if (name.contains("*") || name.contains("?")) {
                     return this.appendRegexNode(name, false)
@@ -707,7 +707,7 @@ open class PathNode <: Equatable<PathNode> {
         this.data_ = data
     }
     func setDataIfNone(anyway: Bool, supplier: () -> Any): Any {
-        if(anyway || this.data_.isNone()){
+        if (anyway || this.data_.isNone()) {
             this.data_ = supplier()
         }
         this.data_.getOrThrow()
@@ -748,7 +748,7 @@ class NonePathNode <: PathNode {
     static let INSTANCE: PathNode = NonePathNode()
     private init() {}
     protected operator func ==(o: Any): Bool {
-        match(o){
+        match (o) {
             case x: Object => refEq(this, x)
             case _ => false
         } || o is NonePathNode || (o as Option<NonePathNode>).isSome()
@@ -766,11 +766,10 @@ class StarPathNode <: PathNode {
         super("*", prev)
     }
     protected operator func ==(o: Any): Bool {
-        match(o){
+        match (o) {
             case x: Object => refEq(this, x)
             case _ => false
-        } ||
-        o is PathNode || o is String || (o as Option<DoubleStarPathNode>).isSome() ||
+        } || o is PathNode || o is String || (o as Option<DoubleStarPathNode>).isSome() ||
             (o as Option<StarPathNode>).isSome() || (o as Option<RegexPathNode>).isSome() ||
             (o as Option<PlaceholderPathNode>).isSome() || (o as Option<ComplexPathNode>).isSome() ||
             (o as Option<PlaceholderRegexPathNode>).isSome() || (o as Option<SubPathNode>).isSome() ||
@@ -783,11 +782,10 @@ class DoubleStarPathNode <: PathNode {
         super("**", prev)
     }
     protected operator func ==(o: Any) {
-        match(o){
+        match (o) {
             case x: Object => refEq(this, x)
             case _ => false
-        } ||
-        o is PathNode || o is String || (o as Option<DoubleStarPathNode>).isSome() ||
+        } || o is PathNode || o is String || (o as Option<DoubleStarPathNode>).isSome() ||
             (o as Option<StarPathNode>).isSome() || (o as Option<RegexPathNode>).isSome() ||
             (o as Option<PlaceholderPathNode>).isSome() || (o as Option<ComplexPathNode>).isSome() ||
             (o as Option<PlaceholderRegexPathNode>).isSome() || (o as Option<SubPathNode>).isSome() ||
@@ -839,11 +837,10 @@ class PlaceholderPathNode <: PathNode {
         super(name, prev)
     }
     protected operator func ==(o: Any): Bool {
-        match(o){
+        match (o) {
             case x: Object => refEq(this, x)
             case _ => false
-        } ||
-        o is PlaceholderPathNode || o is String || (o as Option<PlaceholderPathNode>).isSome() ||
+        } || o is PlaceholderPathNode || o is String || (o as Option<PlaceholderPathNode>).isSome() ||
             (o as Option<String>).isSome()
     }
     protected func matches(name: String) {
@@ -852,86 +849,31 @@ class PlaceholderPathNode <: PathNode {
 }
 
 class ComplexPathNode <: PathNode {
-    private let patterns = ArrayList<PathNode>()
-    private let reg: Regex
+    private let parts = ArrayList<String>()
+    private let reg = #'(.*?)\{(.+?)\}(.*?)'#.regex(solid: true)
     init(name: String, prev: PathNode) {
         super(name, prev)
-        reg = compile(name, patterns)
-    }
-    private static func compile(name: String, patterns: ArrayList<PathNode>): Regex {
-        var start = 0
-        var len = name.size
-        var part: String
-        let parts = ArrayList<String>()
-        let tmp = PathNode()
-        let charr = name.toRuneArray()
-        var i = 0
-        while (i < len) {
-            let c = charr[i]
-            if (c == r'{') { //patterns.append(node.getOrThrow())
-                var node = appendPart(tmp, parts, name, start, i)
-                patterns.add(node)
-                let end = name.indexOf("}", i + 1) ?? -1
-                node = appendPart(tmp, parts, name, i, end + 1)
-                patterns.add(node)
-                i = end
-                start = i + 1
-            }
-            i++
+        for (md in reg.lazyFindAll(name, group: true)) {
+            parts.add(md.matchString(1))
+            parts.add(md.matchString(2))
         }
-        if (start < len) {
-            part = name[start..]
-            patterns.add(tmp.appendSubPathNode(part).getOrThrow())
-        }
-        return "^(${String.join(parts.unsafeData(), delimiter: ")(")})$".regex() //正则非贪婪匹配
     }
-    private static func appendPart(tmp: PathNode, parts: ArrayList<String>, name: String, start: Int64, end: Int64): PathNode {
-        let part = name[start..end]
-        let node = tmp.appendSubPathNode(part).getOrThrow()
-        if (node is SubPathNode) {
-            parts.add(part)
-        } else {
-            parts.add(".+?")
-        }
-        node
-    }
+
     protected func matches(value: String): Bool {
-        for (i in 0..patterns.size) {
-            let node = patterns[i]
-            if (node is SubPathNode || node is RegexPathNode) {
-                match (reg.find(value, group: true)) {
-                    case Some(md) where !node.matches(md.matchString(i + 1)) => return false
-                    case _ => return false
-                }
-            }
-        }
-        return true
+        reg.matches(value)
     }
 
     func extract(value: String): Map<String, String> {
         let datas = HashMap<String, String>()
-        var matches = true
-        for (i in 0..patterns.size) {
-            let node = patterns[i]
-            if (node is PlaceholderPathNode || node is PlaceholderRegexPathNode) {
-                match (reg.find(value, group: true)) {
-                    case Some(md) =>
-                        let part = md.matchString(i + 1)
-                        if (node.matches(part)) {
-                            let name = node.name
-                            datas.add(name, part)
-                        } else {
-                            matches = false
-                            break
-                        }
-                    case _ =>
-                        matches = false
-                        break
-                }
+        for (i in 0..parts.size : 2) {
+            let p = parts[i]
+            let start = value.indexOf(p).getOrThrow() + p.size
+            let end = if (i + 2 < parts.size) {
+                value.indexOf(parts[i + 2]).getOrThrow()
+            } else {
+                value.size
             }
-        }
-        if (!matches) {
-            datas.clear()
+            datas[parts[i + 1]] = value[start..end]
         }
         return datas
     }
