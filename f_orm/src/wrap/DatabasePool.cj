@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_orm
+package f_orm.wrap
 
 public import std.database.sql.*
 import std.collection.Map
@@ -103,8 +103,8 @@ public class DatabasePool <: Resource & Datasource {
             }
         )
     }
-    public static func byConfig(driver: Driver, creator: () -> Connection) {
-        DatabasePool(
+    public init(driver: Driver, creator: () -> Connection) {
+        this(
             driver: driver,
             initSize: ORMConfig.getPoolInitSize(driverName: driver.name),
             minSize: ORMConfig.getPoolMinSize(driverName: driver.name),
@@ -118,13 +118,13 @@ public class DatabasePool <: Resource & Datasource {
             checkSql: ORMConfig.getPoolCheckSql(driverName: driver.name)
         )
     }
-    public static func byConfig(driver: Driver, options: Array<(String, String)>){
-        let ds = driver.open(ORMConfig.getUrl(driverName: driver.name), options)
-        byConfig(driver){ds.connect()}
-    }
-    public static func byConfig(driverName: String, options: Array<(String, String)>){
-        let driver = ORM.getDriver(driverName)
-        byConfig(driver, options)
+    public init(driver: Driver, options: Array<(String, String)>){
+        this(driver, {=>
+            let ds = driver.open(ORMConfig.getUrl(driverName: driver.name), options)
+            {=> 
+                ds.connect()
+            }
+        }())
     }
 
     public func isClosed(): Bool {
@@ -199,8 +199,8 @@ class PooledConnection <: Connection {
     }
 
     /**
-       接口 Statement ，sql 语句预执行接口，它绑定了一个 Connection , 继承该接口的 class、interface、
-       struct 也需要遵守该接口中函数的入参及返回值定义。
+     * 接口 Statement ，sql 语句预执行接口，它绑定了一个 Connection , 继承该接口的 class、interface、
+     * struct 也需要遵守该接口中函数的入参及返回值定义。
      * 开始事务
      */
     public func createTransaction(): Transaction {

@@ -58,6 +58,7 @@ public class TestData2 <: TestData1 {
     private var e: DateTime = DateTime.now()
     private var f: Array<Int64> = [1, 2, 3, 4, 5]
     private var g: ArrayList<String> = ArrayList<String>(['a','b','c','d','e'])
+    private var m: HashMap<String, Int64> = HashMap<String, Int64>([('a', 1),('b',2),('c',3)])
 }
 
 @DataAssist[equal hash tostring props fields]
@@ -69,22 +70,28 @@ public class TestData3 {
     private var e: ?DateTime = None<DateTime>
     private var f: Array<Int64> = []
     private var g: ArrayList<String> = ArrayList<String>()
+    private var m: HashMap<String, Int64> = HashMap<String, Int64>()
 }
 private let _ = {=>
-    let data2 = TestData2()
-    var data3 = DataObject<TestData3>.populate(data2).getOrThrow()
-    println('AAAAAAAAAAAAAAAAAAAAAAAAAAAAA ${data2}')
-    println('AAAAAAAAAAAAAAAAAAAAAAAAAAAAA ${data3}')
-    let dobj = DataObject<TestData2>(data2)
-    let json = JsonValue.tryFromData(dobj)
-    println('AAAAAAAAAAAAAAAAAAAAAAAAAAAAA ${json}')
-    let data = json.toData()
-    data3 = DataObject<TestData3>.populate(data2).getOrThrow()
-    println('AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA ${data3}')
-    let map = HashMap<String, Int64>()
-    map['0'] = 0
-    map['1'] = 1
-    map['2'] = 2
-    let data4 = map.toData()
-    println('AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA ${JsonValue.tryFromData(data4)}')
+    try{
+        let data2 = TestData2()
+        var data3 = DataObject<TestData3>.populate(data2).getOrThrow()
+        println('AAAAAAAAAAAAAAAAAAAAAAAAAAAAA ${data2}')
+        println('AAAAAAAAAAAAAAAAAAAAAAAAAAAAA ${data3}')
+        let dobj = DataObject<TestData2>(data2)
+        let json = JsonValue.tryFromData(dobj)
+        println('AAAAAAAAAAAAAAAAAAAAAAAAAAAAA ${json}')
+        let data = json.toData()
+        data3 = DataObject<TestData3>.populate(data2).getOrThrow()
+        println('AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA ${data3}')
+        let map = HashMap<String, Int64>()
+        map['0'] = 0
+        map['1'] = 1
+        map['2'] = 2
+        let data4 = map.toData()
+        println('AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA ${JsonValue.tryFromData(data4)}')
+    }catch(e: Exception){
+        e.printStackTrace()
+        throw e
+    }
 }()

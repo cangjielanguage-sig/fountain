@@ -29,6 +29,15 @@ public class MultipartMedia <: Multipart & Data & DataFields<MultipartMedia> {
             case _ => toString().toData()
         }
     }
+    public static func fromData(data: Data){
+        fromData(data, DEFAULT_DATA_FLAG)
+    }
+    public static func tryFromData(data: Data){
+        tryFromData(data, DEFAULT_DATA_FLAG)
+    }
+    public static func fromData(data: Data, flag: DataConversionFlag): Any {
+        tryFromData(data, flag)
+    }
     public static func tryFromData(data: Data, flag: DataConversionFlag): Any {
         throw MediaTypeException('Not Supported')
     }

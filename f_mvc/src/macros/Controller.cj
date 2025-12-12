@@ -73,21 +73,22 @@ private func generate(input: Tokens): Tokens {
                 let metas = MVCStarter.generateAndRegister<$klass>($(f.identifier.value), $argTypes)
                 for(meta in metas){
                     meta.setHandle{controller: $klass, ctx: HttpContext, patterns: HttpRequestPathPatterns => 
-                        let start = MonoTime.now()
-                        $argExprs
-                        $anyargs
+                        let start_ = MonoTime.now()
                         var any: ?Any = None<Any>
                         var ex = None<Exception>
+                        let anyArgs = ArrayList<Any>()
                         try {
+                            $argExprs
+                            $anyargs
                             if (meta.checkAuth(ctx, anyArgs)) {
                                 let returned: Any = controller.$(f.identifier)($args)
                                 any = returned
                                 return returned
                             }
-                        } catch(e: Exception) {
+                        } catch (e: Exception) {
                             ex = e
                         } finally {
-                            meta.accessLog<$klass>(start, ctx, anyArgs, any, ex)
+                            meta.accessLog<$klass>(start_, ctx, anyArgs, any, ex)
                         }
                     }
                 }
@@ -101,7 +102,7 @@ private func generateArgs(decl: FuncDecl): (Tokens, Tokens, Tokens, Tokens) {
     var argTypes = quote([)
     var exprs = quote()
     var args = quote()
-    var anyArgs = quote(let anyArgs = ArrayList<Any>())
+    var anyArgs = quote()
     for (fp in decl.funcParams) {
         let p: FuncParam = match(fp){
             case x: MacroExpandParam => extract(x)

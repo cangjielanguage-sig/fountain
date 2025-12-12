@@ -23,6 +23,7 @@ public interface ToDataFields <: ToData {
         dataFields()
     }
 }
+
 public interface ObjectData<T> <: ToDataFields & DataFields<T> where T <: ObjectData<T> & DataFields<T> {
     static prop isSimple: Bool {
         get() {
@@ -42,9 +43,11 @@ class FieldIterator<T> <: Iterator<(String, Data)> where T <: DataFields<T> {
         None<(String, Data)>
     }
 }
+
 public interface SimpleDataObject <: Data {
-    func fields(): Iterator<ReadableField> 
+    func fields(): Iterator<ReadableField>
 }
+
 public class DataObject<T> <: SimpleDataObject & Collection<(String, Data)> & NamedData where T <: ObjectData<T> & DataFields<T> {
     public DataObject(public let data: T) {
     }
@@ -96,10 +99,12 @@ public class DataObject<T> <: SimpleDataObject & Collection<(String, Data)> & Na
     public func set(name: String, value: Data, flag!: DataConversionFlag = DEFAULT_DATA_FLAG): Unit {
         match (T.dataFields().mutableField(name)) {
             case Some(f) where f.set(data, value, flag: flag) => ()
-            case Some(_) where (flag & IGNORE_FIELD_NOT_CONVERTABLE) != 0 => ()
-            case Some(_) => throw DataException("source field ${name} in ${TypeInfos.get<T>()} connot be converted")
-            case _ where (flag & IGNORE_FIELD_NOT_FOUND) == 0 => ()
-            case _ => throw DataException("field name ${name} is not found from ${TypeInfos.get<T>()}")
+            case Some(_) where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException(
+                "source field ${name} in ${TypeInfo.of<T>()} connot be converted")
+            case Some(_) => ()
+            case _ where (flag & IGNORE_FIELD_NOT_FOUND) == 0 => throw DataException(
+                "field name ${name} is not found from ${TypeInfos.get<T>()}")
+            case _ => ()
         }
     }
     public func get(name: String): ?Data {
@@ -110,11 +115,13 @@ public class DataObject<T> <: SimpleDataObject & Collection<(String, Data)> & Na
             case Some(x) => match (V.tryFromData(x, flag)) {
                 case x: ?V => x
                 case x: V => x
-                case _ where (flag & IGNORE_FIELD_NOT_FOUND) == 0 => None<V>
-                case _ => throw DataException('field ${name} is not found in ${TypeInfos.get<T>()}')
+                case _ where (flag & IGNORE_FIELD_NOT_FOUND) == 0 => throw DataException(
+                    'field ${name} is not found in ${TypeInfos.get<T>()}')
+                case _ => None<V>
             }
-            case _ where (flag & IGNORE_FIELD_NOT_FOUND) == 0 => None<V>
-            case _ => throw DataException('field ${name} is not found in ${TypeInfos.get<T>()}')
+            case _ where (flag & IGNORE_FIELD_NOT_FOUND) == 0 => throw DataException(
+                'field ${name} is not found in ${TypeInfos.get<T>()}')
+            case _ => None<V>
         }
     }
     public func toString(): String {
@@ -162,8 +169,9 @@ public class DataObject<T> <: SimpleDataObject & Collection<(String, Data)> & Na
                     targetData.set(n, d, flag: flag)
                 }
                 target
-            case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) > 0 => target
-            case _ => throw DataException("src cannot be converted to ${TypeInfos.get<T>()}")
+            case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException(
+                "src cannot be converted to ${TypeInfos.get<T>()}")
+            case _ => target
         }
     }
     public static func populate(src: Data, flag!: DataConversionFlag = DEFAULT_DATA_FLAG): ?T {

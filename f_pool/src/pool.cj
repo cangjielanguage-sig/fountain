@@ -30,10 +30,7 @@ public interface PooledManager<T> where T <: Object {
  * 本类型无法分辨返还的实例是不是从Pool借出去的，也无法分辨借出实例的Pool跟返回实例的Pool是不是同一个，因此调用giveBack返还实例的时候，如果返回时检查失败了一定会销毁返还的实例，池维护的实例数随之减1。
  */
 public class Pool<T> <: Resource where T <: Object {
-    // private static let log = LoggerFactory.getLogger<Pool<T>>()
-    private static func getLog() {
-        LoggerFactory.getLogger<Pool<T>>()
-    }
+    private static let log = LoggerFactory.getLogger('fountain.pool')
     private let queue: ArrayBlockingQueue<(T, MonoTime)>
     private let tasks: ArrayBlockingQueue<Unit>
     private let size = AtomicInt64(0)
@@ -91,7 +88,7 @@ public class Pool<T> <: Resource where T <: Object {
                             queue.add((o, t))
                         }
                     } catch (e: Exception) {
-                        getLog().warn('Pool checking schedule', e)
+                        log.warn('Pool checking schedule', e)
                     }
                     sleep(Duration.Zero)
                 }
@@ -118,7 +115,7 @@ public class Pool<T> <: Resource where T <: Object {
             destroier(o)
         } catch (e: Exception) {
             if (logOnEx) {
-                getLog().warn('error occurred on destring object in pool', e)
+                log.warn('error occurred on destring object in pool', e)
             } else {
                 throw e
             }
@@ -131,7 +128,7 @@ public class Pool<T> <: Resource where T <: Object {
             let ex = PoolException(
                 'current size of pool is less than zero, may be some instances which were not be created by current pool were destroied by current pool on giving back.')
             if (logOnEx) {
-                getLog().warn(ex)
+                log.warn(ex)
             } else {
                 throw ex
             }
@@ -139,7 +136,7 @@ public class Pool<T> <: Resource where T <: Object {
     }
     private func add(object: T, decrIfOverload!: Bool = true): Bool {
         if (!queue.tryAdd((object, MonoTime.now()))) {
-            getLog().warn(
+            log.warn(
                 "current size of pool is larger than maxSize(${maxSize}), may be some instances which were not be created by current pool were given back to current pool.")
             destroy(object, false, decr: decrIfOverload)
             false

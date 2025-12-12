@@ -32,7 +32,7 @@
   f_version = {path = "./f_version"}
 
 [package]
-  cjc-version = "1.0.0"
+  cjc-version = "1.0.4"
   compile-option = "-O2 --dy-std"
   override-compile-option = "-O2 --dy-std"
   description = "utility for server app development"
@@ -41,7 +41,7 @@
   output-type = "dynamic"
   src-dir = ""
   target-dir = ""
-  version = "1.0.33"
+  version = "1.0.36"
   package-configuration = {}
 
 [target]
@@ -72,7 +72,7 @@
   path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]
 
 [profile.build]
-  lto = "full"
+#  lto = "full"
   incremental = true
 
 #[profile.build.combined]
