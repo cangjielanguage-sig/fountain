@@ -242,9 +242,6 @@ public class DataIterable <: Data & Iterable<Data>{
     public static func parse(_: String): Data {
         throw DataException()
     }
-    public static func tryFromData(data: Data, flag: DataConversionFlag): Any {
-        throw DataException()
-    }
     public func toString(): String {
         throw DataException()
     }

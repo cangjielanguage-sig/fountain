@@ -100,7 +100,7 @@ public class DataObject<T> <: SimpleDataObject & Collection<(String, Data)> & Na
         match (T.dataFields().mutableField(name)) {
             case Some(f) where f.set(data, value, flag: flag) => ()
             case Some(_) where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException(
-                "source field ${name} in ${TypeInfos.get<T>()} connot be converted")
+                "source field ${name} in ${TypeInfo.of<T>()} connot be converted")
             case Some(_) => ()
             case _ where (flag & IGNORE_FIELD_NOT_FOUND) == 0 => throw DataException(
                 "field name ${name} is not found from ${TypeInfos.get<T>()}")

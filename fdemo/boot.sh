@@ -13,6 +13,7 @@ exports(){
     # %d 记录当前日志时间，花括号内是时间格式
     # %m 记录当前日志消息文本
     # %tid 记录当前线程ID
+    # %pid 记录当前进程ID
 #    export loggerAsyncBufsize=2 # 异步日志缓存池的初始化大小，默认是1024
     export logger_appender_console=FDemoConsole # 这是控制台日志记录器的名称，可以任意起名，名称得符合标识符规范
     export logger_appender_FDemoConsole_level=INFO

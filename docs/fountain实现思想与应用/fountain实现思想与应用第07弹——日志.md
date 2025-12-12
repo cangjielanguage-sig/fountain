@@ -17,6 +17,7 @@
 -   %fver——fountain的版本号。
 -   %tname——当前线程的名称。
 -   %tid——当前线程的ID。
+-   %pid——当前进程的ID。
 -   除此之外日志模板中的其它内容都初始化为OriginLogPart，日志记录器会原样输出这些文本。
 
 默认的格式为`"[%level-%name] %d{yyyy/MM/dd,HH:mm:ss.SSS}|%m"`。

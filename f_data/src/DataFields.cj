@@ -18,7 +18,18 @@ package f_data
 public interface ToData {
     func toData(): Data
 }
-public interface DataFields<T> <: ToData where T <: DataFields<T> {
+public interface FromData {
+    static func fromData(data: Data, flag: DataConversionFlag): Any 
+    static func fromData(data: Data){
+        fromData(data, DEFAULT_DATA_FLAG)
+    }
+    static func tryFromData(data: Data, flag: DataConversionFlag): Any
+    static func tryFromData(data: Data){
+        tryFromData(data, DEFAULT_DATA_FLAG)
+    }
+}
+public interface FromToData <: FromData & ToData {}
+public interface DataFields<T> <: FromToData where T <: DataFields<T> {
     static prop isSimple: Bool {
         get() {
             true
@@ -33,13 +44,6 @@ public interface DataFields<T> <: ToData where T <: DataFields<T> {
             case x: T => x
             case _ => throw DataException('data ${data} cannot be converted to ${TypeInfos.get<T>()}')
         }
-    }
-    static func fromData(data: Data) {
-        fromData(data, DEFAULT_DATA_FLAG)
-    }
-    static func tryFromData(data: Data, flag: DataConversionFlag): Any
-    static func tryFromData(data: Data) {
-        tryFromData(data, DEFAULT_DATA_FLAG)
     }
 }
 

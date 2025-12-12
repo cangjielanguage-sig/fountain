@@ -70,7 +70,7 @@ public class TestData3 {
     private var e: ?DateTime = None<DateTime>
     private var f: Array<Int64> = []
     private var g: ArrayList<String> = ArrayList<String>()
-    // private var m: HashMap<String, Int64> = HashMap<String, Int64>()
+    private var m: HashMap<String, Int64> = HashMap<String, Int64>()
 }
 private let _ = {=>
     try{

@@ -15,9 +15,15 @@ limitations under the License.
  */
 package f_data
 
-public interface Data <: ToString & DataParsable<Data> {
-    public func toData(): Data {
+public interface Data <: FromToData & ToString & DataParsable<Data> {
+    func toData(): Data {
         return this
+    }
+    static func fromData(data: Data, flag: DataConversionFlag): Any{
+        data
+    }
+    static func tryFromData(data: Data, flag: DataConversionFlag): Any {
+        data
     }
 }
 

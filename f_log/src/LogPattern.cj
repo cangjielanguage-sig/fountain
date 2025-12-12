@@ -30,6 +30,7 @@ public class LogPattern <: LogPart & Hashable & Equatable<LogPattern> {
     private static let messageLogPart = MessageLogPart()
     private static let threadIdLogPart = ThreadIdLogPart()
     private static let threadNameLogPart = ThreadNameLogPart()
+    private static let processIdLogPart = ProcessIdLogPart()
     private static let fountainVersionLogPart = FountainVersionLogPart()
     public static let default = LogPattern("[%level-%name] %d{yyyy/MM/dd,HH:mm:ss.SSS}|%m") //pattern共44个字符
     private let patterns: ArrayList<LogPart>
@@ -86,6 +87,10 @@ public class LogPattern <: LogPart & Hashable & Equatable<LogPattern> {
                 } else if (i + 3 < size && pattern[i + 1 ..= i + 3] == 'tid') {
                     appendOrigin()
                     patterns.add(threadIdLogPart)
+                    i += 4
+                } else if (i + 3 < size && pattern[i + 1 ..= i + 3] == 'pid') {
+                    appendOrigin()
+                    patterns.add(processIdLogPart)
                     i += 4
                 } else if (i + 3 < size && pattern[i + 1] == b'd') {
                     if (pattern[i + 2] == b'{') {
@@ -188,7 +193,7 @@ class MessageLogPart <: LogPart {
         writer.writeString(message.toString())
     }
 }
-class ThreadIdLogPart <: LogPart { 
+class ThreadIdLogPart <: LogPart {
     init(){}
     public func generate(_: String, _: LogLevel, _: ToString, _: DateTime, tid: Int64, writer: LogWriter): Unit {
         writer.writeInt(tid)
@@ -198,6 +203,13 @@ class ThreadNameLogPart <: LogPart {
     init(){}
     public func generate(_: String, _: LogLevel, _: ToString, _: DateTime, _: Int64, writer: LogWriter): Unit {
         writer.writeString(Thread.currentThread.name)
+    }
+}
+class ProcessIdLogPart <: LogPart {
+    init(){}
+    private let pid = env.getProcessId()
+    public func generate(_: String, _: LogLevel, _: ToString, _: DateTime, _: Int64, writer: LogWriter): Unit {
+        writer.writeInt(pid)
     }
 }
 class FountainVersionLogPart <: LogPart { 
