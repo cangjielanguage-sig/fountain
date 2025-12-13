@@ -58,7 +58,14 @@ public class TestData2 <: TestData1 {
     private var e: DateTime = DateTime.now()
     private var f: Array<Int64> = [1, 2, 3, 4, 5]
     private var g: ArrayList<String> = ArrayList<String>(['a','b','c','d','e'])
-    private var m: HashMap<String, Int64> = HashMap<String, Int64>([('a', 1),('b',2),('c',3)])
+    private var m1: HashMap<String, Int64> = HashMap<String, Int64>([('a', 1),('b',2),('c',3)])
+    private var m2: HashMap<String, DataAny> = {=>
+        let map = HashMap<String, DataAny>()
+        map.addData('a', 1)
+        map.addData('b', true)
+        map.addData('c', 'asdf')
+        map
+    }()
 }
 
 @DataAssist[equal hash tostring props fields]
@@ -70,7 +77,8 @@ public class TestData3 {
     private var e: ?DateTime = None<DateTime>
     private var f: Array<Int64> = []
     private var g: ArrayList<String> = ArrayList<String>()
-    private var m: HashMap<String, Int64> = HashMap<String, Int64>()
+    private var m1: HashMap<String, Int64> = HashMap<String, Int64>()
+    private var m2: HashMap<String, DataAny> = HashMap<String, DataAny>()
 }
 private let _ = {=>
     try{
