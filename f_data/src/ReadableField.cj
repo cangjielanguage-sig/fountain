@@ -97,7 +97,7 @@ abstract sealed class ReadableField {
                 case _ =>
                     let x: Any = o
                     throw DataException(
-                        "type of current instance does not match, expected ${TypeInfos.get<O>()}, but receives ${TypeInfo.of(x)}")
+                        "type of current instance does not match, expected ${TypeInfo.of<O>()}, but receives ${TypeInfo.of(x)}")
             }
         }
     }
@@ -108,7 +108,7 @@ abstract sealed class ReadableField {
                 case _ =>
                     let x: Any = o
                     throw DataException(
-                        "type of current instance does not match, expected ${TypeInfos.get<O>()}, but receives ${TypeInfo.of(x)}")
+                        "type of current instance does not match, expected ${TypeInfo.of<O>()}, but receives ${TypeInfo.of(x)}")
             }
         }
     }
