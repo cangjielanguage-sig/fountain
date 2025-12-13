@@ -42,10 +42,26 @@ public class DefaultCodec <: Codec {
     private static let MIN_INT = BigInt(Int64.Min)
     private static let MAX_INT = BigInt(UInt64.Max)
     private static let TEN_POW_NINE = BigInt(10 ** 9)
-    private static let typeMurmurHashs = ConcurrentHashMap<String, BigInt>()
+    private static let typeMurmurHashs = ConcurrentHashMap<TypeInfo, BigInt>()
     private static let typeMurmurCreators = ConcurrentHashMap<BigInt, () -> SimpleDataObject>()
     private var size = 0
     private let inputs = ArrayList<InputStream>([ByteBuffer()])
+
+    public static func registerType<T>(): BigInt where T <: Object & ObjectData<T> & DataFields<T> {
+        let typeInfo = ClassTypeInfo.of<T>()
+        let typeMurmur = typeMurmurHashs.computeIfAbsent(typeInfo) {murmurHash128X64(typeInfo.qualifiedName).value}
+        let option = typeMurmurCreators.addIfAbsent(typeMurmur, {
+            => if (let o: T <- T.dataFields().create() && let x: SimpleDataObject <- o.toData()) {
+                x
+            } else {
+                throw UnreachableException()
+            }
+        })
+        if(option.isSome()){
+            throw CodecException('duplicate murmur hash ${typeMurmur} for ${typeInfo}')
+        }
+        typeMurmur
+    }
 
     private func lastBuffer(): ByteBuffer {
         match (inputs[inputs.size - 1]) {
@@ -83,10 +99,12 @@ public class DefaultCodec <: Codec {
                 case x => throw CodecException(
                     'current InputStream cannot be serialized due to without size, which type is ${TypeInfo.of(x)}')
             }
-            case x: SimpleDataObject => 
-                let typeName = x.typeInfo.qualifiedName
-                let typeMurmur = typeMurmurHashs.computeIfAbsent(typeName){murmurHash128X64(typeName).value}
-                let typeMurmurCreator = typeMurmurCreators.computeIfAbsent(typeMurmur){{=>x.newData()}}
+            case x: SimpleDataObject =>
+                let typeInfo = x.typeInfo
+                let typeMurmur = typeMurmurHashs.computeIfAbsent(typeInfo) {murmurHash128X64(typeInfo.qualifiedName).value}
+                if(typeMurmurCreators.addIfAbsent(typeMurmur, x.dataCreator()).isSome()){
+                    throw CodecException('duplicate murmur hash ${typeMurmur} for ${typeInfo}')
+                }
                 encodeBigInt2(OBJECT, typeMurmur, buffer)
                 let sizeBuf = encodeSizeOfEncoded(x.size)
                 inputs.add(ByteBuffer(sizeBuf))
@@ -205,7 +223,7 @@ public class DefaultCodec <: Codec {
                     1 << 3
                 }
             } else {
-                UInt8((value >> (8 * (2 - i))) & 0xff)
+                UInt8((value >> (8 * (size - i))) & 0xff)
             }
         })
         this.size += 1 + size
@@ -246,7 +264,7 @@ public class DefaultCodec <: Codec {
                     1 << 3
                 }
             } else {
-                UInt8((value >> (8 * (4 - i))) & 0xff)
+                UInt8((value >> (8 * (size - i))) & 0xff)
             }
         })
         this.size += 1 + size
@@ -287,7 +305,12 @@ public class DefaultCodec <: Codec {
         } else {
             0
         }
-        buffer.write(Array<Byte>(1 + size) {
+        let s = if (size == 0) {
+            8
+        } else {
+            size
+        }
+        buffer.write(Array<Byte>(1 + s) {
             i => if (i == 0) {
                 dataType.value | UInt8(size) | if (sign) {
                     0
@@ -295,7 +318,7 @@ public class DefaultCodec <: Codec {
                     1 << 3
                 }
             } else {
-                UInt8((value >> (8 * (4 - i))) & 0xff)
+                UInt8((value >> (8 * (s - i))) & 0xff)
             }
         })
         this.size += 1 + size
@@ -540,7 +563,12 @@ public class DefaultCodec <: Codec {
         } else {
             8
         }
-        let bytes = Array<Byte>(s + 1) {
+        let ss = if (s == 0) {
+            8
+        } else {
+            s
+        }
+        let bytes = Array<Byte>(ss + 1) {
             i => if (i == 0) {
                 dataType.value | UInt8(s) | if (!forInt || sign) {
                     0
@@ -548,7 +576,7 @@ public class DefaultCodec <: Codec {
                     1 << 3
                 }
             } else {
-                UInt8((value >> (8 * (s - i))) & 0xff)
+                UInt8((value >> (8 * (ss - i))) & 0xff)
             }
         }
         bytes
@@ -587,16 +615,17 @@ public class DefaultCodec <: Codec {
     private func decodeSizeOfEncoded(input: InputStream): Int64 {
         var bytes = [0u8]
         var size = input.read(bytes)
-        if(size == 0){
+        if (size == 0) {
             throw CodecException('size of bytes to decode must not be zero')
         }
         let head = bytes[0]
         bytes = Array<Byte>(Int64(head >> 4), repeat: 0)
         size = input.read(bytes)
-        if(size < bytes.size){
-            throw CodecException('size of bytes to decode is less than encoded in head, head: ${toHex(head)}, actual: ${bytes.size}')
+        if (size < bytes.size) {
+            throw CodecException(
+                'size of bytes to decode is less than encoded in head, head: ${toHex(head)}, actual: ${bytes.size}')
         }
-        if(size == 0){
+        if (size == 0) {
             Int64(head & 0x0f)
         } else if (size == 1) {
             Int64(head & 0x0f) << 8 | Int64(bytes[0])
@@ -607,13 +636,17 @@ public class DefaultCodec <: Codec {
         } else if (size == 4) {
             Int64(head & 0x0f) << 32 | Int64(bytes[0]) << 24 | Int64(bytes[1]) << 16 | Int64(bytes[2]) << 8 | Int64(bytes[3])
         } else if (size == 5) {
-            Int64(head & 0x0f) << 40 | Int64(bytes[0]) << 32 | Int64(bytes[1]) << 24 | Int64(bytes[2]) << 16 | Int64(bytes[3]) << 8 | Int64(bytes[4])
+            Int64(head & 0x0f) << 40 | Int64(bytes[0]) << 32 | Int64(bytes[1]) << 24 | Int64(bytes[2]) << 16 |
+                Int64(bytes[3]) << 8 | Int64(bytes[4])
         } else if (size == 6) {
-            Int64(head & 0x0f) << 48 | Int64(bytes[0]) << 40 | Int64(bytes[1]) << 32 | Int64(bytes[2]) << 24 | Int64(bytes[3]) << 16 | Int64(bytes[4]) << 8 | Int64(bytes[5])
+            Int64(head & 0x0f) << 48 | Int64(bytes[0]) << 40 | Int64(bytes[1]) << 32 | Int64(bytes[2]) << 24 |
+                Int64(bytes[3]) << 16 | Int64(bytes[4]) << 8 | Int64(bytes[5])
         } else if (size == 7) {
-            Int64(head & 0x0f) << 56 | Int64(bytes[0]) << 48 | Int64(bytes[1]) << 40 | Int64(bytes[2]) << 32 | Int64(bytes[3]) << 24 | Int64(bytes[4]) << 16 | Int64(bytes[5]) << 8 | Int64(bytes[6])
+            Int64(head & 0x0f) << 56 | Int64(bytes[0]) << 48 | Int64(bytes[1]) << 40 | Int64(bytes[2]) << 32 |
+                Int64(bytes[3]) << 24 | Int64(bytes[4]) << 16 | Int64(bytes[5]) << 8 | Int64(bytes[6])
         } else {
-            Int64(bytes[0]) << 56 | Int64(bytes[1]) << 48 | Int64(bytes[2]) << 40 | Int64(bytes[3]) << 32 | Int64(bytes[4]) << 24 | Int64(bytes[5]) << 16 | Int64(bytes[6]) << 8 | Int64(bytes[7])
+            Int64(bytes[0]) << 56 | Int64(bytes[1]) << 48 | Int64(bytes[2]) << 40 | Int64(bytes[3]) << 32 |
+                Int64(bytes[4]) << 24 | Int64(bytes[5]) << 16 | Int64(bytes[6]) << 8 | Int64(bytes[7])
         }
     }
     public func finish(): InputStream {
@@ -638,19 +671,23 @@ public class DefaultCodec <: Codec {
         } else if (s == 5) {
             Int64(bytes[0]) << 32 | Int64(bytes[1]) << 24 | Int64(bytes[2]) << 16 | Int64(bytes[3]) << 8 | Int64(bytes[4])
         } else if (s == 6) {
-            Int64(bytes[0]) << 40 | Int64(bytes[1]) << 32 | Int64(bytes[2]) << 24 | Int64(bytes[3]) << 16 | Int64(bytes[4]) << 8 | Int64(bytes[5])
+            Int64(bytes[0]) << 40 | Int64(bytes[1]) << 32 | Int64(bytes[2]) << 24 | Int64(bytes[3]) << 16 |
+                Int64(bytes[4]) << 8 | Int64(bytes[5])
         } else if (s == 7) {
-            Int64(bytes[0]) << 48 | Int64(bytes[1]) << 40 | Int64(bytes[2]) << 32 | Int64(bytes[3]) << 24 | Int64(bytes[4]) << 16 | Int64(bytes[5]) << 8 | Int64(bytes[6])
+            Int64(bytes[0]) << 48 | Int64(bytes[1]) << 40 | Int64(bytes[2]) << 32 | Int64(bytes[3]) << 24 |
+                Int64(bytes[4]) << 16 | Int64(bytes[5]) << 8 | Int64(bytes[6])
         } else {
-            Int64(bytes[0]) << 56 | Int64(bytes[1]) << 48 | Int64(bytes[2]) << 40 | Int64(bytes[3]) << 32 | Int64(bytes[4]) << 24 | Int64(bytes[5]) << 16 | Int64(bytes[6]) << 8 | Int64(bytes[7])
+            Int64(bytes[0]) << 56 | Int64(bytes[1]) << 48 | Int64(bytes[2]) << 40 | Int64(bytes[3]) << 32 |
+                Int64(bytes[4]) << 24 | Int64(bytes[5]) << 16 | Int64(bytes[6]) << 8 | Int64(bytes[7])
         }
-        v = if(sign){
+        v = if (sign) {
             v
         } else {
             !v
         }
-        if((sign && v < 0) || (!sign && v > 0)){
-            throw CodecException('current data head is ${toHex(head)}, but sign mark is opposite to actual value, value: ${v}, bytes: ${bytes}.')
+        if ((sign && v < 0) || (!sign && v > 0)) {
+            throw CodecException(
+                'current data head is ${toHex(head)}, but sign mark is opposite to actual value, value: ${v}, bytes: ${bytes}.')
         }
         v
     }
@@ -658,47 +695,47 @@ public class DefaultCodec <: Codec {
         // decodeSizeOfEncoded(input)
         var bytes = [0u8]
         var size = input.read(bytes)
-        if(size == 0 || bytes[0] == 0){
+        if (size == 0 || bytes[0] == 0) {
             return DataNone.INSTANCE
         } else if (bytes[0] <= 0x0f) {
             throw CodecException('Illegal serialization header ${toHex(bytes[0])}')
         }
-        let head = bytes[0] 
+        let head = bytes[0]
         let dataType = head & 0xf0
         if (dataType == DataType.STRING.value) {
             let ss = Int64(head & 0x0f)
-            if(ss == 0){
+            if (ss == 0) {
                 return ''.toData()
             }
             bytes = Array<Byte>(ss, repeat: 0)
             size = input.read(bytes)
-            if(size < ss){
+            if (size < ss) {
                 throw CodecException('current data head is ${toHex(head)} but read ${size} bytes')
             }
             String.fromUtf8(bytes).toData()
         } else if (dataType == DataType.BOOL.value) {
             let value = head & 0xff
-            if(value == 0x01) {
+            if (value == 0x01) {
                 DataBool.TRUE
-            }else if(value == 0x00){
+            } else if (value == 0x00) {
                 DataBool.FALSE
-            }else{
+            } else {
                 throw CodecException('current data head is ${toHex(head)}, it is type of BOOL but illegal value')
             }
         } else if (dataType == DataType.INT.value) {
             var s = Int64(head & 0x07)
-            if (s == 0){
+            if (s == 0) {
                 s = 8
             }
             bytes = Array<Byte>(s, repeat: 0)
             size = input.read(bytes)
-            if(size < s){
+            if (size < s) {
                 throw CodecException('current data head is ${toHex(head)}, but read ${size} bytes')
             }
-            let sign = (head & 0x08) == 0 
+            let sign = (head & 0x08) == 0
             Decimal(BigInt(sign, bytes)).toData()
         } else if (dataType == DataType.FLOAT.value) {
-            if (head == DataType.FLOAT.value){
+            if (head == DataType.FLOAT.value) {
                 return Float64.NaN.toData()
             } else if ((head & 0x0f) == 0x0f) {
                 return (-Float64.Inf).toData()
@@ -708,7 +745,7 @@ public class DefaultCodec <: Codec {
                 throw CodecException('current data head is ${toHex(head)}')
             }
             var s = Int64(head & 0x07)
-            if (s == 0){
+            if (s == 0) {
                 s = 8
             }
             if (s != 2 && s != 4 && s != 8) {
@@ -716,14 +753,20 @@ public class DefaultCodec <: Codec {
             }
             bytes = Array<Byte>(s, repeat: 0)
             size = input.read(bytes)
-            if(size < s){
+            if (size < s) {
                 throw CodecException('current data head is ${toHex(head)}, but read ${size} bytes')
             }
             let sign = (head & 0x08) == 0
-            match(s){
+            match (s) {
                 case 2 => Float16.fromBits(UInt16(bytes[0]) << 8 | UInt16(bytes[1])).toData()
-                case 4 => Float32.fromBits(UInt32(bytes[0]) << 24 | UInt32(bytes[1]) << 16 | UInt32(bytes[2]) << 8 | UInt32(bytes[3])).toData()
-                case 8 => Float32.fromBits(UInt32(bytes[0]) << 56 | UInt32(bytes[1]) << 48 | UInt32(bytes[2]) << 40 | UInt32(bytes[3]) << 32 | UInt32(bytes[4]) << 24 | UInt32(bytes[5]) << 16 | UInt32(bytes[6]) << 8 | UInt32(bytes[7])).toData()
+                case 4 => Float32
+                    .fromBits(UInt32(bytes[0]) << 24 | UInt32(bytes[1]) << 16 | UInt32(bytes[2]) << 8 | UInt32(bytes[3]))
+                    .toData()
+                case 8 => Float32
+                    .fromBits(
+                        UInt32(bytes[0]) << 56 | UInt32(bytes[1]) << 48 | UInt32(bytes[2]) << 40 | UInt32(bytes[3]) << 32 |
+                            UInt32(bytes[4]) << 24 | UInt32(bytes[5]) << 16 | UInt32(bytes[6]) << 8 | UInt32(bytes[7]))
+                    .toData()
                 case _ => throw UnreachableException()
             }
         } else if (dataType == DataType.BIGINT.value) {
@@ -749,11 +792,11 @@ public class DefaultCodec <: Codec {
             let s = Int64(head & 0x0f)
             bytes = Array<Byte>(s, repeat: 0)
             size = input.read(bytes)
-            if(size < s){
+            if (size < s) {
                 throw CodecException('current data head is ${toHex(head)}, but read ${size} bytes')
             }
             size = parseInt64(head, true, bytes)
-            for(_ in 0 .. size){
+            for (_ in 0..size) {
                 list.add(decodeData(input, fileThreshold))
             }
             list
@@ -762,24 +805,25 @@ public class DefaultCodec <: Codec {
             let s = Int64(head & 0x0f)
             bytes = Array<Byte>(s, repeat: 0)
             size = input.read(bytes)
-            if(size < s) {
+            if (size < s) {
                 throw CodecException('current data head is ${toHex(head)}, but read ${size} bytes')
             }
             size = parseInt64(head, true, bytes)
-            for (_ in 0 .. size){
+            for (_ in 0..size) {
                 let key = decodeData(input, fileThreshold)
                 let value = decodeData(input, fileThreshold)
                 tuples.add(key, value)
             }
             tuples
-        } else if (dataType == DataType.OBJECT.value) {//todo
+        } else if (dataType == DataType.OBJECT.value) { //todo
             let murmur = readBigInt2(head, input)
             let object = typeMurmurCreators[murmur]()
             let fieldSize = decodeSizeOfEncoded(input)
-            for(_ in 0 .. size){
-                let name = match(decodeData(input, fileThreshold)){
+            for (_ in 0..size) {
+                let name = match (decodeData(input, fileThreshold)) {
                     case x: DataString => x.data
-                    case x => throw CodecException('current data head is ${toHex(head)} and it need a string as item name, but it is ${TypeInfo.of(x)}')
+                    case x => throw CodecException(
+                        'current data head is ${toHex(head)} and it need a string as item name, but it is ${TypeInfo.of(x)}')
                 }
                 let value = decodeData(input, fileThreshold)
                 object.set(name, value)
@@ -787,30 +831,31 @@ public class DefaultCodec <: Codec {
             object
         } else if (dataType == DataType.INPUTSTREAM.value) {
             var s = Int64(head & 0x07)
-            if(s == 0){
+            if (s == 0) {
                 s = 8
             }
             let f = head & 0x08
             bytes = Array<Byte>(s, repeat: 0)
             size = input.read(bytes)
-            if(size < s){
+            if (size < s) {
                 throw CodecException('current data head is ${toHex(head)}, but read size is ${size}')
             }
             size = parseInt64(head, true, bytes)
-            if(size <= fileThreshold){
+            if (size <= fileThreshold) {
                 let array = Array<Byte>(size, repeat: 0)
                 size = input.read(array)
-                if(size < s){
+                if (size < s) {
                     throw CodecException('current data head is ${toHex(head)}, but read size is ${size}')
                 }
-                return if(f == 0){
+                return if (f == 0) {
                     array.toData()
-                }else{
+                } else {
                     let fileNameSize = decodeSizeOfEncoded(input)
                     bytes = Array<Byte>(fileNameSize, repeat: 0)
                     size = input.read(bytes)
-                    if(size < fileNameSize){
-                        throw CodecException('current data head is ${toHex(head)}, file name need ${fileNameSize} bytes, but read ${size}')
+                    if (size < fileNameSize) {
+                        throw CodecException(
+                            'current data head is ${toHex(head)}, file name need ${fileNameSize} bytes, but read ${size}')
                     }
                     let fileName = String.fromUtf8(bytes)
                     let file = File.createTemp('/tmp/${fileName}')
@@ -822,21 +867,22 @@ public class DefaultCodec <: Codec {
             let file = File.createTemp(dir)
             var buffer = Array<Byte>(fileThreshold, repeat: 0)
             var readSize = 0
-            while(true){
+            while (true) {
                 readSize += input.read(buffer)
                 file.write(buffer)
-                if(readSize == size){
+                if (readSize == size) {
                     break
-                }else if(readSize < size && size - readSize < buffer.size){
-                    buffer = buffer[0 .. size - readSize]
+                } else if (readSize < size && size - readSize < buffer.size) {
+                    buffer = buffer[0..size - readSize]
                 }
             }
-            if(f != 0){
+            if (f != 0) {
                 let fileNameSize = decodeSizeOfEncoded(input)
                 bytes = Array<Byte>(fileNameSize, repeat: 0)
                 size = input.read(bytes)
-                if(size < fileNameSize){
-                    throw CodecException('current data head is ${toHex(head)}, file name need ${fileNameSize} bytes, but read ${size}')
+                if (size < fileNameSize) {
+                    throw CodecException(
+                        'current data head is ${toHex(head)}, file name need ${fileNameSize} bytes, but read ${size}')
                 }
                 let fileName = String.fromUtf8(bytes)
                 let path = '${dir}/${fileName}'
@@ -851,45 +897,45 @@ public class DefaultCodec <: Codec {
     }
     public func decode<T>(input: InputStream, fileThreshold!: Int64 = 1024 ** 2): ?T where T <: DataFields<T> {
         let d = T.tryFromData(decodeData(input, fileThreshold))
-        match(d){
+        match (d) {
             case x: T => x
             case x: ?T => x
             case _ => throw UnreachableException()
         }
     }
-    private func readDuration1(head: Byte, input: InputStream){
+    private func readDuration1(head: Byte, input: InputStream) {
         let valval = readBigInt1(head, input)
         let seconds = valval / TEN_POW_NINE
         let nanos = valval - seconds * TEN_POW_NINE
         Duration.second * seconds.toInt64() + Duration.nanosecond * nanos.toInt64()
     }
-    private func readDuration2(head: Byte, input: InputStream){
+    private func readDuration2(head: Byte, input: InputStream) {
         let valval = readBigInt2(head, input)
         let seconds = valval / TEN_POW_NINE
         let nanos = valval - seconds * TEN_POW_NINE
         Duration.second * seconds.toInt64() + Duration.nanosecond * nanos.toInt64()
     }
-    private func readBigInt1(head: Byte, input: InputStream){
+    private func readBigInt1(head: Byte, input: InputStream) {
         var s = Int64(head & 0x07)
-        if(s == 0){
+        if (s == 0) {
             s = 8
         }
         let bytes = Array<Byte>(s, repeat: 0)
         size = input.read(bytes)
-        if(size < s){
+        if (size < s) {
             throw CodecException('current data head is ${toHex(head)}, but read ${size} bytes')
         }
         let sign = (head & 0x08) == 0
         BigInt(parseInt64(head, sign, bytes))
     }
-    private func readBigInt2(head: Byte, input: InputStream){
+    private func readBigInt2(head: Byte, input: InputStream) {
         var s = Int64(head & 0x07)
-        if(s == 0){
+        if (s == 0) {
             s = 8
         }
         var bytes = Array<Byte>(s, repeat: 0)
         size = input.read(bytes)
-        if(size < s){
+        if (size < s) {
             throw CodecException('current data head is ${toHex(head)}, but read ${size} bytes')
         }
         let sign = (head & 0x08) == 0
@@ -897,8 +943,9 @@ public class DefaultCodec <: Codec {
         let sizeBytes = bytes
         bytes = Array<Byte>(size, repeat: 0)
         size = input.read(bytes)
-        if(size < s){
-            throw CodecException('current data head is ${toHex(head)}, but read size of value is ${size}, need ${s}(bytes of need size: ${sizeBytes})')
+        if (size < s) {
+            throw CodecException(
+                'current data head is ${toHex(head)}, but read size of value is ${size}, need ${s}(bytes of need size: ${sizeBytes})')
         }
         BigInt(sign, bytes)
     }

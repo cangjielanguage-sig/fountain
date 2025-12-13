@@ -48,7 +48,7 @@ public interface SimpleDataObject <: Data {
     prop typeInfo: TypeInfo
     func getData<T>(): T
     func new<T>(): T where T <: ObjectData<T> & DataFields<T>
-    func newData(): SimpleDataObject 
+    func dataCreator(): () -> SimpleDataObject
     prop size: Int64
     func fields(): Iterator<ReadableField>
     func set(name: String, value: Data, flag: DataConversionFlag): Unit
@@ -58,7 +58,7 @@ public interface SimpleDataObject <: Data {
     func set<V>(name: String, value: V): Unit where V <: DataFields<V> {
         set(name, value.toData(), DEFAULT_DATA_FLAG)
     }
-    func set(name: String, value: Data){
+    func set(name: String, value: Data) {
         set(name, value, DEFAULT_DATA_FLAG)
     }
 }
@@ -99,7 +99,7 @@ public class DataObject<T> <: SimpleDataObject & Collection<(String, Data)> & Na
         FieldIterator<T>(data, fields)
     }
     public prop typeInfo: TypeInfo {
-        get(){
+        get() {
             TypeInfo.of<T>()
         }
     }
@@ -183,10 +183,13 @@ public class DataObject<T> <: SimpleDataObject & Collection<(String, Data)> & Na
     public func new<T>(): T where T <: ObjectData<T> & DataFields<T> {
         (T.dataFields().create() as T).getOrThrow()
     }
-    public func newData(): SimpleDataObject {
-        match(new<T>().toData()) {
-            case x: SimpleDataObject => x
-            case _ => throw UnreachableException()
+    public func dataCreator(): () -> SimpleDataObject {
+        {
+            => if (let o: T <- T.dataFields().create() && let x: SimpleDataObject <- o.toData()) {
+                x
+            } else {
+                throw UnreachableException()
+            }
         }
     }
     public static func populate(src: Data, target: T, flag!: DataConversionFlag = DEFAULT_DATA_FLAG): ?T {
