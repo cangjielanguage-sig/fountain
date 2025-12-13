@@ -46,8 +46,7 @@ class FieldIterator<T> <: Iterator<(String, Data)> where T <: DataFields<T> {
 
 public interface SimpleDataObject <: Data {
     prop typeInfo: TypeInfo
-    func getData<T>(): T
-    func new<T>(): T where T <: ObjectData<T> & DataFields<T>
+    func getData(): Any
     func dataCreator(): () -> SimpleDataObject
     prop size: Int64
     func fields(): Iterator<ReadableField>
@@ -65,8 +64,8 @@ public interface SimpleDataObject <: Data {
 
 public class DataObject<T> <: SimpleDataObject & Collection<(String, Data)> & NamedData where T <: ObjectData<T> & DataFields<T> {
     public DataObject(public let data: T) {}
-    public func getData<T>(): T {
-        (this.data as T).getOrThrow()
+    public func getData(): Any {
+        this.data
     }
     public prop size: Int64 {
         get() {
@@ -180,9 +179,7 @@ public class DataObject<T> <: SimpleDataObject & Collection<(String, Data)> & Na
     public static func parse(string: String): Data {
         tryParse(string).getOrThrow {DataException("current type ${TypeInfos.get<T>()} is not Parsable")}
     }
-    public func new<T>(): T where T <: ObjectData<T> & DataFields<T> {
-        (T.dataFields().create() as T).getOrThrow()
-    }
+
     public func dataCreator(): () -> SimpleDataObject {
         {
             => if (let o: T <- T.dataFields().create() && let x: SimpleDataObject <- o.toData()) {

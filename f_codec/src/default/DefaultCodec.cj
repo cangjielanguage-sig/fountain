@@ -818,7 +818,7 @@ public class DefaultCodec <: Codec {
         } else if (dataType == DataType.OBJECT.value) { //todo
             let murmur = readBigInt2(head, input)
             let object = typeMurmurCreators[murmur]()
-            let fieldSize = decodeSizeOfEncoded(input)
+            size = decodeSizeOfEncoded(input)
             for (_ in 0..size) {
                 let name = match (decodeData(input, fileThreshold)) {
                     case x: DataString => x.data

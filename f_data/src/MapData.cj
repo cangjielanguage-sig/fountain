@@ -17,29 +17,6 @@ package f_data
 
 import f_collection.*
 
-public class DataTuples <: Iterator<(Data, Data)> & Data {
-    public DataTuples(private let itr: Iterator<(Data, Data)>){}
-    public func next(): ?(Data, Data) {
-        itr.next()
-    }
-    public func toString(): String {
-        let b = StringGenerator('{')
-        for (d in this) {
-            if (b.size > 1) {
-                b.append(',')
-            }
-            b.append('${d[0]},${d[1]}')
-        }
-        b.append('}')
-        b.toString()
-    }
-    public static func tryParse(s: String): ?Data {
-        None<Data>
-    }
-    public static func parse(s: String): Data {
-        throw DataParsableException('${s} cannot be parsed to ${TypeInfo.of<DataTuples>()}')
-    }
-}
 public class DataMapIterator<K, V> <: Iterator<(Data, Data)> where K <: Equatable<K> & DataFields<K>, V <: DataFields<V> {
     public DataMapIterator(private let itr: Iterator<(K, V)>) {}
     public func next(): ?(Data, Data) {
