@@ -24,6 +24,7 @@ public class MutableField <: ReadableField {
     public func set(instance: Any, data: Data, flag!: DataConversionFlag = DEFAULT_DATA_FLAG): Bool {
         setter(instance, data, flag)
     }
+
     public static func new<O, F>(name: String, getter: (O) -> ?F, setter: (O, ?F) -> Unit): MutableField where O <: ObjectData<O>,
         F <: DataFields<F> {
         let fieldType = TypeInfos.get<F>()
@@ -60,14 +61,14 @@ public class MutableField <: ReadableField {
     }
     public static func new<O, F>(name: String, getter: (O) -> F, setter: (O, F) -> Unit): MutableField where O <: ObjectData<O>,
         F <: DataFields<F> {
-        let fieldType = TypeInfos.get<F>()
+        let fieldType = TypeInfo.of<F>()
         MutableField(name, ClassTypeInfo.of<O>(), fieldType, newGetter<O, F>(getter),
             {
                 o, data, flag => if (data is DataNone) {
-                    if ((flag & IGNORE_NONE) != 0) {
-                        false
+                    if ((flag & IGNORE_NONE) == 0) {
+                        throw DataException('data none for field ${name} of ${TypeInfo.of<O>()}')
                     } else {
-                        throw DataException('data none for field ${name} of ${TypeInfos.get<O>()}')
+                        false
                     }
                 } else if (let Some(v: F) <- convert<F>(data, flag: flag)) {
                     match (o) {
@@ -77,7 +78,7 @@ public class MutableField <: ReadableField {
                         case _ =>
                             let x: Any = o
                             throw DataException(
-                                "type of current instance does not match, expected ${TypeInfos.get<O>()}, but receives ${TypeInfo.of(x)}")
+                                "type of current instance does not match, expected ${TypeInfo.of<O>()}, but receives ${TypeInfo.of(x)}")
                     }
                 } else if ((flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0) {
                     throw DataException("data ${data} cannot be converted to ${fieldType}")

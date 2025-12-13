@@ -17,6 +17,29 @@ package f_data
 
 import f_collection.*
 
+public class DataTuples <: Iterator<(Data, Data)> & Data {
+    public DataTuples(private let itr: Iterator<(Data, Data)>){}
+    public func next(): ?(Data, Data) {
+        itr.next()
+    }
+    public func toString(): String {
+        let b = StringGenerator('{')
+        for (d in this) {
+            if (b.size > 1) {
+                b.append(',')
+            }
+            b.append('${d[0]},${d[1]}')
+        }
+        b.append('}')
+        b.toString()
+    }
+    public static func tryParse(s: String): ?Data {
+        None<Data>
+    }
+    public static func parse(s: String): Data {
+        throw DataParsableException('${s} cannot be parsed to ${TypeInfo.of<DataTuples>()}')
+    }
+}
 public class DataMapIterator<K, V> <: Iterator<(Data, Data)> where K <: Equatable<K> & DataFields<K>, V <: DataFields<V> {
     public DataMapIterator(private let itr: Iterator<(K, V)>) {}
     public func next(): ?(Data, Data) {
@@ -56,7 +79,7 @@ public class DataMap<M, K, V> <: Data & Collection<(Data, Data)> where K <: Equa
         None<Data>
     }
     public static func parse(s: String): Data {
-        throw DataParsableException('${s} cannot be parsed to ${TypeInfos.get<DataMap<M, K, V>>()}')
+        throw DataParsableException('${s} cannot be parsed to ${TypeInfo.of<DataMap<M, K, V>>()}')
     }
 }
 
@@ -86,7 +109,7 @@ private func tryFromDataToMap<M, K, V>(data: Data, flag: DataConversionFlag, cre
                     internal_f_data_tryFromData<V>(dv, flag))) {
                     map[k] = v
                 } else if ((flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0) {
-                    throw DataException('data cannot be converted to tuple for ${TypeInfos.get<M>()} ')
+                    throw DataException('data cannot be converted to tuple for ${TypeInfo.of<M>()} ')
                 }
             }
             map
@@ -99,7 +122,7 @@ private func tryFromDataToMap<M, K, V>(data: Data, flag: DataConversionFlag, cre
                             map[mk] = mv
                         } else if ((flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0) {
                             throw DataException(
-                                'data cannot be converted to tuple for ${TypeInfos.get<M>()}, current tuple is (${k}, ${v})')
+                                'data cannot be converted to tuple for ${TypeInfo.of<M>()}, current tuple is (${k}, ${v})')
                         }
                     case _ =>
                         if (let (Some(mk: K), Some(mv: V)) <- (internal_f_data_tryFromData<K>(k.toData(), flag),
@@ -107,13 +130,13 @@ private func tryFromDataToMap<M, K, V>(data: Data, flag: DataConversionFlag, cre
                             map[mk] = mv
                         } else if ((flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0) {
                             throw DataException(
-                                'data cannot be converted to tuple for ${TypeInfos.get<M>()}, current tuple is (${k}, ${v})')
+                                'data cannot be converted to tuple for ${TypeInfo.of<M>()}, current tuple is (${k}, ${v})')
                         }
                 }
             }
             map
         case _ where (flag & IGNORE_FIELD_TYPE_NOT_MATCH) == 0 => throw DataException(
-            'data cannot be converted to tuple for ${TypeInfos.get<M>()}, data is ${data}')
+            'data cannot be converted to tuple for ${TypeInfo.of<M>()}, data is ${data}')
         case _ => creator()
     }
 }
