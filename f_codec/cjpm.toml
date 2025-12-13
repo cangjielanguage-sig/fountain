@@ -13,6 +13,7 @@
 
 [dependencies]
   f_base = {path = "../f_base"}
+  f_collection = {path = "../f_collection"}
   f_data = {path = "../f_data"}
   f_exception = {path = "../f_exception"}
   f_util = {path = "../f_util"}

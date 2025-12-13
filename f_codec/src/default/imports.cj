@@ -16,10 +16,12 @@ limitations under the License.
 package f_codec.default
 
 internal import std.collection.{ArrayList, Map, TreeMap}
+internal import std.collection.concurrent.ConcurrentHashMap
 internal import std.fs.{File, rename, Path, OpenMode}
 internal import std.math.numeric.{BigInt, Decimal}
 internal import std.time.DateTime
+internal import f_collection.*
 internal import f_codec.*
 internal import f_codec.exception.*
 internal import f_exception.UnreachableException
-internal import f_util.UUID
+internal import f_util.{UUID, murmurHash128X64}

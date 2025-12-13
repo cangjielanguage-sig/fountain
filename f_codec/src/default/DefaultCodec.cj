@@ -42,6 +42,8 @@ public class DefaultCodec <: Codec {
     private static let MIN_INT = BigInt(Int64.Min)
     private static let MAX_INT = BigInt(UInt64.Max)
     private static let TEN_POW_NINE = BigInt(10 ** 9)
+    private static let typeMurmurHashs = ConcurrentHashMap<String, BigInt>()
+    private static let typeMurmurCreators = ConcurrentHashMap<BigInt, () -> SimpleDataObject>()
     private var size = 0
     private let inputs = ArrayList<InputStream>([ByteBuffer()])
 
@@ -71,6 +73,7 @@ public class DefaultCodec <: Codec {
                     return this
                 }
                 let sizeBuf = encodeSizeOfValue(COLLECTION, x.size)
+                inputs.add(ByteBuffer(sizeBuf))
                 for (item in x) {
                     encode(item)
                 }
@@ -81,6 +84,7 @@ public class DefaultCodec <: Codec {
                     return this
                 }
                 let sizeBuf = encodeSizeOfValue(MAP, x.size)
+                inputs.add(ByteBuffer(sizeBuf))
                 for ((k, v) in x) {
                     encode(k)
                     encode(v)
@@ -91,18 +95,27 @@ public class DefaultCodec <: Codec {
                 case x => throw CodecException(
                     'current InputStream cannot be serialized due to without size, which type is ${TypeInfo.of(x)}')
             }
+            case x: SimpleDataObject => 
+                let typeName = x.typeInfo.qualifiedName
+                let typeMurmur = typeMurmurHashs.computeIfAbsent(typeName){murmurHash128X64(typeName).value}
+                let typeMurmurCreator = typeMurmurCreators.computeIfAbsent(typeMurmur){{=>x.newData()}}
+                encodeBigInt2(OBJECT, typeMurmur, buffer)
+                let sizeBuf = encodeSizeOfEncoded(x.size)
+                inputs.add(ByteBuffer(sizeBuf))
+                for (f in x.fields()) {
+                    encode(f.name)
+                    encode(f.get(x.getData()))
+                }
+                this
             case x: Collection<(String, Data)> =>
                 if (x.isEmpty()) {
-                    buffer.writeByte(OBJECT.value)
+                    buffer.writeByte(MAP.value)
                     return this
                 }
-                let tree = TreeMap<String, Data>()
-                for((n, d) in x){
-                    tree[n] = d
-                }
-                let sizeBuf = encodeSizeOfValue(OBJECT, x.size)
-                for ((n, d) in tree) {
-                    encode(n)
+                let sizeBuf = encodeSizeOfValue(MAP, x.size)
+                inputs.add(ByteBuffer(sizeBuf))
+                for ((n, d) in x) {
+                    encode(n.toData())
                     encode(d)
                 }
                 this
@@ -356,24 +369,31 @@ public class DefaultCodec <: Codec {
     public func encode(value: Float64): Encoder {
         encode(value, lastBuffer())
     }
-    private func encode(value: BigInt, buffer: ByteBuffer): Encoder {
-        if (value >= MIN_INT && value < ZERO_BIGINT) {
-            encode(value.toInt64(), buffer)
-        } else if (value >= ZERO_BIGINT && value <= MAX_INT) {
-            encode(value.toUInt64(), buffer)
+    private func encodeBigInt2(dataType: DataType, value: BigInt, buffer: ByteBuffer): Encoder {
+        let sign = value >= ZERO_BIGINT
+        let bytes = if (sign) {
+            value.toBytes()[1..]
         } else {
-            let sign = value >= ZERO_BIGINT
-            let bytes = if (sign) {
-                value.toBytes()[1..]
-            } else {
-                value.toBytes()
-            }
-            let sizeBytes = encodeSizeOfValue(DataType.BIGINT, sign, bytes.size, forInt: true)
-            buffer.write(sizeBytes)
-            buffer.write(bytes)
-            size += sizeBytes.size + bytes.size
+            value.toBytes()
+        }
+        let sizeBytes = encodeSizeOfValue(dataType, sign, bytes.size, forInt: true)
+        buffer.write(sizeBytes)
+        buffer.write(bytes)
+        size += sizeBytes.size + bytes.size
+        this
+    }
+    private func encode(dataType: DataType, value: BigInt, buffer: ByteBuffer): Encoder {
+        if (value >= MIN_INT && value < ZERO_BIGINT) {
+            encode(dataType, false, UInt64(!value.toInt64()), buffer)
+        } else if (value >= ZERO_BIGINT && value <= MAX_INT) {
+            encode(dataType, true, value.toUInt64(), buffer)
+        } else {
+            encodeBigInt2(dataType, value, buffer)
         }
         this
+    }
+    private func encode(value: BigInt, buffer: ByteBuffer): Encoder {
+        encode(DataType.BIGINT, value, buffer)
     }
     public func encode(value: BigInt): Encoder {
         encode(value, lastBuffer())
@@ -752,24 +772,19 @@ public class DefaultCodec <: Codec {
                 tuples.add(key, value)
             }
             tuples
-        } else if (dataType == DataType.OBJECT.value) {
-            let dict = DataDict()
-            let s = Int64(head & 0x0f)
-            bytes = Array<Byte>(s, repeat: 0)
-            size = input.read(bytes)
-            if (size < s){
-                throw CodecException('current data head is ${toHex(head)}, but read ${size} bytes')
-            }
-            size = parseInt64(head, true, bytes)
+        } else if (dataType == DataType.OBJECT.value) {//todo
+            let murmur = readBigInt2(head, input)
+            let object = typeMurmurCreators[murmur]()
+            let fieldSize = decodeSizeOfEncoded(input)
             for(_ in 0 .. size){
                 let name = match(decodeData(input, fileThreshold)){
                     case x: DataString => x.data
                     case x => throw CodecException('current data head is ${toHex(head)} and it need a string as item name, but it is ${TypeInfo.of(x)}')
                 }
                 let value = decodeData(input, fileThreshold)
-                dict.add(name, value)
+                object.set(name, value)
             }
-            dict
+            object
         } else if (dataType == DataType.INPUTSTREAM.value) {
             var s = Int64(head & 0x07)
             if(s == 0){
