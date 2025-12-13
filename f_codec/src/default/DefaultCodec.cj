@@ -78,18 +78,6 @@ public class DefaultCodec <: Codec {
                     encode(item)
                 }
                 this
-            case x: Collection<(Data, Data)> =>
-                if (x.isEmpty()) {
-                    buffer.writeByte(MAP.value)
-                    return this
-                }
-                let sizeBuf = encodeSizeOfValue(MAP, x.size)
-                inputs.add(ByteBuffer(sizeBuf))
-                for ((k, v) in x) {
-                    encode(k)
-                    encode(v)
-                }
-                this
             case x: DataInputStream => match (x.data) {
                 case f: File => encode(f)
                 case x => throw CodecException(
@@ -105,6 +93,18 @@ public class DefaultCodec <: Codec {
                 for (f in x.fields()) {
                     encode(f.name)
                     encode(f.get(x.getData()))
+                }
+                this
+            case x: Collection<(Data, Data)> =>
+                if (x.isEmpty()) {
+                    buffer.writeByte(MAP.value)
+                    return this
+                }
+                let sizeBuf = encodeSizeOfValue(MAP, x.size)
+                inputs.add(ByteBuffer(sizeBuf))
+                for ((k, v) in x) {
+                    encode(k)
+                    encode(v)
                 }
                 this
             case x: Collection<(String, Data)> =>
