@@ -112,4 +112,21 @@ abstract sealed class ReadableField {
             }
         }
     }
+    protected static func newGetter<O, M>(fn: (O) -> Map<String, Any>): (Any) -> Data where O <: ObjectData<O>, M <: Map<String, Any> {
+        {
+            o => match(o){
+                case x: O => 
+                    DataTuples(fn(x).iterator().map{tpl => (tpl[0].toData(), if (let x: ToData <- tpl[1]) {
+                        x.toData()
+                    } else {
+                        throw DataException('type of current value is not ToData, ${TypeInfo.of(tpl[1])}')
+                    })})
+                case _ => 
+                    let x: Any = o
+                    throw DataException(
+                        'type of current instance does not match, expected ${TypeInfo.of<O>()}, but receives ${TypeInfo.of(x)}'
+                    )
+            }
+        }
+    }
 }

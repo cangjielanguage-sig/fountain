@@ -56,6 +56,44 @@ public func convert<T>(data: Data, flag!: DataConversionFlag = DEFAULT_DATA_FLAG
         case _ => None<T>
     }
 }
+public func convertToMap<M>(data: Data, flag!: DataConversionFlag = DEFAULT_DATA_FLAG): ?M where M <: Map<String, Any> {
+    match(data){
+        case x: DataTuples => 
+            let mapType = TypeInfo.of<M>()
+            let map = if (mapType == ClassTypeInfo.of<HashMap<String, Any>>() || mapType == TypeInfo.of<Map<String, Any>>()) {
+                HashMap<String, Any>() as M
+            } else if (mapType == ClassTypeInfo.of<TreeMap<String, Any>>()){
+                TreeMap<String, Any>() as M
+            } else if (mapType == ClassTypeInfo.of<LinkedHashMap<String, Any>>()) {
+                LinkedHashMap<String, Any>() as M
+            } else if ((flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0)  {
+                None<M>
+            } else {
+                throw DataException('data ${data} cannot be converted to ${TypeInfo.of<M>()}')
+            }
+            if(let Some(m) <- map){
+                for((k, v) in x) {
+                    m[k.toString()] = match(v) {
+                        case x: DataReal => x.data
+                        case x: DataString => x.data
+                        case x: DataBool => x.data
+                        case x: DataDuration => x.data
+                        case x: DataDateTime => x.data
+                        case x: DataTuples => convertToMap<HashMap<String, Any>>(x, flag: flag)
+                        case x: Iterable<(Data, Data)> => convertToMap<HashMap<String, Any>>(DataTuples(x.iterator()), flag: flag)
+                        case x: Collection<(String, Data)> => 
+                            convertToMap<HashMap<String, Any>>(DataTuples(x.iterator().map{tpl => (tpl[0].toData(), tpl[1])}), flag: flag)
+                        case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => 
+                            throw DataException('data ${v} with key ${k} cannot be converted to (String, Any)')
+                        case _ => continue
+                    }
+                }
+            }
+            map
+        case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException('data ${data} cannot be converted to ${TypeInfos.get<M>()}')
+        case _ => None<M>
+    }
+}
 
 public func f_data_tryFromData<O>(data: Data, flag: DataConversionFlag): Any where O <: ObjectData<O> {
     match (DataObject<O>.populate(data, flag: flag)) {

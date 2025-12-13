@@ -19,7 +19,9 @@ public class ReadonlyField <: ReadableField {
     public init(name: String, classTypeInfo: ClassTypeInfo, fieldTypeInfo: TypeInfo, getter: (Any) -> Data) {
         super(name, classTypeInfo, fieldTypeInfo, getter)
     }
-
+    public static func new<O, M>(name: String, getter: (O) -> Map<String, Any>): ReadonlyField where O <: ObjectData<O>, M <: Map<String, Any> {
+        ReadonlyField(name, ClassTypeInfo.of<O>(), TypeInfo.of<M>(), newGetter<O, M>(getter))
+    }
     public static func new<O, F>(name: String, getter: (O) -> F): ReadonlyField where O <: ObjectData<O>,
         F <: DataFields<F> {
         ReadonlyField(name, ClassTypeInfo.of<O>(), TypeInfo.of<F>(), newGetter<O, F>(getter))
