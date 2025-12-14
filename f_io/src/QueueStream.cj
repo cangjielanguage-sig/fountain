@@ -28,13 +28,13 @@ public class QueueStream <: InputStream {
         add(ByteBuffer(bytes))
     }
     public func read(buffer: Array<Byte>): Int64 {
-        if(let Some(q) <- queue.peek() && let s <- q.read(buffer)){
+        while(let Some(q) <- queue.peek() && let s <- q.read(buffer)){
             if(s == 0){
                 queue.remove()
+                continue
             }
-            s
-        }else{
-            0
+            return s
         }
+        0
     }
 }
