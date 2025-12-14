@@ -15,8 +15,8 @@ limitations under the License.
 */
 package f_io
 
-public class QueueStream <: InputStream {
-    private let queue: ArrayBlockingQueue<InputStream>
+sealed abstract class QueueStream <: InputStream {
+    protected let queue: ArrayBlockingQueue<InputStream>
 
     public init(size: Int64){
         queue = ArrayBlockingQueue<InputStream>(size)
@@ -27,14 +27,35 @@ public class QueueStream <: InputStream {
     public func add(bytes: Array<Byte>){
         add(ByteBuffer(bytes))
     }
+}
+public class NonblockingQueueStream <: QueueStream {
+    public init(size: Int64) {
+        super(size)
+    }
     public func read(buffer: Array<Byte>): Int64 {
-        if(let Some(q) <- queue.peek() && let s <- q.read(buffer)){
-            if(s == 0){
+        while (let Some(q) <- queue.peek() && let s <- q.read(buffer)) {
+            if (s == 0) {
                 queue.remove()
+                continue
             }
-            s
-        }else{
-            0
+            return s
         }
+        0
+    }
+}
+public class BlockingQueueStream <: QueueStream {
+    private var current = None<InputStream>
+    public init(size: Int64) {
+        super(size)
+    }
+    public func read(buffer: Array<Byte>): Int64 {
+        while (true) {
+            if (let Some(input) <- current && let s <- input.read(buffer) && s > 0) {
+                return s
+            } else {
+                current = queue.remove()
+            }
+        }
+        0
     }
 }
