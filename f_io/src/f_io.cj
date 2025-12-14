@@ -15,7 +15,8 @@ limitations under the License.
  */
 package f_io
 
-internal import std.io.{InputStream, OutputStream}
+internal import std.io.{InputStream, OutputStream, ByteBuffer}
+internal import std.collection.concurrent.ArrayBlockingQueue
 import f_base.*
 import f_exception.IllegalSizeException
 
