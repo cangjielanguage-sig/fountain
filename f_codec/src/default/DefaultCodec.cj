@@ -889,8 +889,9 @@ public class DefaultCodec <: Codec {
                 }
                 let fileName = String.fromUtf8(bytes)
                 let path = '${dir}/${fileName}'
-                rename(file.info.path, to: Path(path), overwrite: false)
+                let srcPath = file.info.path
                 file.close()
+                rename(srcPath, to: Path(path), overwrite: false)
                 return File(path, Read).toData()
             }
             file.toData()
