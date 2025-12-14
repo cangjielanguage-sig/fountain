@@ -15,14 +15,15 @@ limitations under the License.
 */
 package f_codec.default
 
-internal import std.collection.{ArrayList, Map, TreeMap}
-internal import std.collection.concurrent.ConcurrentHashMap
-internal import std.fs.{File, rename, Path, OpenMode, exists, Directory}
-internal import std.io.SeekPosition
-internal import std.math.numeric.{BigInt, Decimal}
-internal import std.time.DateTime
-internal import f_collection.*
-internal import f_codec.*
-internal import f_codec.exception.*
-internal import f_exception.UnreachableException
-internal import f_util.{UUID, murmurHash128X64}
+import f_data.macros.*
+
+@DataAssist[props fields equal]
+public class TestObject {
+    private var i: Int64 = 0
+    private var s: String = ''
+    public init(){}
+    public init(i: Int64, s: String){
+        this.i = i
+        this.s = s
+    }
+}

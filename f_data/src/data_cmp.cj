@@ -28,6 +28,16 @@ public func f_data_eq<T1, T2>(a: T1, b: T2): Bool {
         }
     }
 }
+public func f_data_hash_eq<T>(a: T, b: T): Bool where T <: Hashable {
+    a.hashCode() == b.hashCode()
+}
+public func f_data_hash_eq<T1, T2>(a: T1, b: T2): Bool {
+    if(let h1: Hashable <- a && let h2: Hashable <- b){
+        h1.hashCode() == h2.hashCode()
+    } else {
+        true
+    }
+}
 
 public func f_data_cmp<T>(a: T, b: T): Ordering where T <: Comparable<T> {
     a.compare(b)

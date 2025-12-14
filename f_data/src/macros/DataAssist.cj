@@ -231,10 +231,10 @@ func generateEqual(d: ClassDecl, exclusion: HashSet<String>) {
     }
     let typeName = quote($(d.identifier)$(d.genericParamTokens))
     d.superTypes.add(RefType(quote(Equatable<$typeName>)))
-    var eq = quote((!(this is Hashable) || this.hashCode() == other.hashCode())$(`nl`))
+    var eq = quote(f_data_hash_eq(this, other)$(`nl`))
     for (d in d.body.decls where d is VarDecl &&
         !(isStatic(d) || exclusion.contains(d.identifier.value) || exclusion.contains('${d.identifier.value}_'))) {
-        eq += `and` +quote(f_data_eq(this.$(d.identifier), other.$(d.identifier))) + `nl`
+        eq += `and` + quote(f_data_eq(this.$(d.identifier), other.$(d.identifier))) + `nl`
     }
     d.body.decls.add(
             all: [FuncDecl(
