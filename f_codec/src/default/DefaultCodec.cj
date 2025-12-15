@@ -451,31 +451,7 @@ public class DefaultCodec <: Codec {
     public func encode(value: DateTime): Encoder {
         encode(value, lastBuffer())
     }
-    // public func encode<T, C>(value: C): Encoder where T <: DataFields<T>, C <: Collection<T> {
-    //     if (value.isEmpty()) {
-    //         lastBuffer().writeByte(COLLECTION.value)
-    //         return this
-    //     }
-    //     let sizeBuf = encodeSizeOfValue(COLLECTION, value.size)
-    //     lastBuffer().write(sizeBuf)
-    //     for (item in value) {
-    //         encode<T>(item)
-    //     }
-    //     this
-    // }
-    // public func encode<K, V>(value: Map<K, V>): Encoder where K <: Equatable<K> & DataFields<K>, V <: DataFields<V> {
-    //     if (value.isEmpty()) {
-    //         lastBuffer().writeByte(MAP.value)
-    //         return this
-    //     }
-    //     let sizeBuf = encodeSizeOfValue(MAP, value.size)
-    //     lastBuffer().write(sizeBuf)
-    //     for ((k, v) in value) {
-    //         encode<K>(k)
-    //         encode<V>(v)
-    //     }
-    //     this
-    // }
+    
     public func encode(value: Array<Byte>): Encoder {
         encode(ByteBuffer(value), value.size)
     }

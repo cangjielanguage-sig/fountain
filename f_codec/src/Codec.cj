@@ -56,8 +56,6 @@ public interface Encoder {
     func encode(value: Decimal): Encoder
     func encode(value: Duration): Encoder
     func encode(value: DateTime): Encoder
-    // func encode<T, C>(value: C): Encoder where T <: DataFields<T>, C <: Collection<T>
-    // func encode<K, V>(value: Map<K, V>): Encoder where K <: Equatable<K> & DataFields<K>, V <: DataFields<V>
     func encode(value: Array<Byte>): Encoder
     func encode(value: ArrayList<Byte>): Encoder {
         encode(value.unsafeData())
