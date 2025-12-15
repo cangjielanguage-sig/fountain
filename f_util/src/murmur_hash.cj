@@ -93,17 +93,20 @@ public struct MurmurHash128X64 <: Hashable & Comparable<MurmurHash128X64> {
             cmp
         }
     }
-    public func toBigInt(): BigInt {
+    public func toBytes(): Array<Byte> {
         func to(x: Int64, a: Int64){
             Int8((x >> (a * 8)) & 0xffi64).toUInt()
         }
-        BigInt(one >= 0, Array<Byte>(16){i =>
+        Array<Byte>(16){i =>
             if(i < 8){
                 to(one, 7 - i)
             }else{
                 to(two, 15 - i)
             }
-        })
+        }
+    }
+    public func toBigInt(): BigInt {
+        BigInt(true, toBytes())
     }
 }
 /**
