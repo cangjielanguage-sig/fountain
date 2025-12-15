@@ -1,3 +1,4 @@
+![star](https://gitcode.com/Cangjie-SIG/fountain/star/2025top.svg)
 ```
   _____                    __         .__
 _/ ____\____  __ __  _____/  |______  |__| ____
