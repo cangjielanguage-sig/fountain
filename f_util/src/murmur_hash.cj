@@ -15,10 +15,13 @@ limitations under the License.
  */
 package f_util
 
+import std.convert.*
 import std.math.numeric.BigInt
 import std.overflow.WrappingOp
+import stdx.encoding.hex.*
 import f_base.UnsafeBytes
 import f_base.*
+import f_util.exception.MurmurHashException
 
 let MURMUR_HASH_MASK = 0xc6a4a7935bd1e995_u64.
 toInt()
@@ -77,11 +80,12 @@ public func murmurHash64(data: Array<Byte>, seed!: Int64 = 0x1234567890ABCDEF): 
 public func murmurHash64(data: String, seed!: Int64 = 0x1234567890ABCDEF): Int64 {
     murmurHash64(data.unsafeBytes(), seed: seed)
 }
-public struct MurmurHash128X64 <: Hashable & Comparable<MurmurHash128X64> {
+public struct MurmurHash128X64 <: Hashable & Comparable<MurmurHash128X64> & ToString {
     private let h: Int64
     MurmurHash128X64(private let one: Int64, private let two: Int64){
         h = one ^ two
     }
+    
     public func hashCode(){
         h
     }
@@ -107,6 +111,27 @@ public struct MurmurHash128X64 <: Hashable & Comparable<MurmurHash128X64> {
     }
     public func toBigInt(): BigInt {
         BigInt(true, toBytes())
+    }
+    public func toString(): String {
+        toHexString(toBytes())
+    }
+    public func parse(s: String): MurmurHash128X64 {
+        parse(fromHexString(s))
+    }
+    public func parse(bytes: Array<Byte>): MurmurHash128X64 {
+        if(bytes.size != 16){
+            throw MurmurHashException('size of byte array must be 16, but ${bytes}')
+        }
+        var (one, two) = (0, 0)
+        for(i in 0 .. 16){
+            let b = bytes[i]
+            if(i < 8){
+                one = (one << 8) | Int64(b)
+            }else{
+                two = (two << 8) | Int64(b)
+            }
+        }
+        MurmurHash128X64(one, two)
     }
 }
 /**
