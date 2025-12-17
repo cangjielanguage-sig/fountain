@@ -42,14 +42,14 @@ public class DefaultCodec <: Codec {
     private static let MIN_INT = BigInt(Int64.Min)
     private static let MAX_INT = BigInt(UInt64.Max)
     private static let TEN_POW_NINE = BigInt(10 ** 9)
-    private static let typeMurmurHashs = ConcurrentHashMap<TypeInfo, BigInt>()
-    private static let typeMurmurCreators = ConcurrentHashMap<BigInt, () -> SimpleDataObject>()
+    private static let typeMurmurHashs = ConcurrentHashMap<TypeInfo, MurmurHash128X64>()
+    private static let typeMurmurCreators = ConcurrentHashMap<MurmurHash128X64, () -> SimpleDataObject>()
     private var size = 0
     private let inputs = ArrayList<InputStream>([ByteBuffer()])
 
     public static func registerType<T>(): BigInt where T <: Object & ObjectData<T> & DataFields<T> {
         let typeInfo = ClassTypeInfo.of<T>()
-        let typeMurmur = typeMurmurHashs.computeIfAbsent(typeInfo) {murmurHash128X64(typeInfo.qualifiedName).value}
+        let typeMurmur = typeMurmurHashs.computeIfAbsent(typeInfo) {murmurHash128X64(typeInfo.qualifiedName)}
         let option = typeMurmurCreators.addIfAbsent(typeMurmur, {
             => if (let o: T <- T.dataFields().create() && let x: SimpleDataObject <- o.toData()) {
                 x
@@ -102,12 +102,12 @@ public class DefaultCodec <: Codec {
             case x: SimpleDataObject =>
                 let typeInfo = x.typeInfo
                 let typeMurmur = typeMurmurHashs.computeIfAbsent(typeInfo) {
-                    murmurHash128X64(typeInfo.qualifiedName).value
+                    murmurHash128X64(typeInfo.qualifiedName)
                 }
                 if (typeMurmurCreators.addIfAbsent(typeMurmur, x.dataCreator()).isSome()) {
                     throw CodecException('duplicate murmur hash ${typeMurmur} for ${typeInfo}')
                 }
-                encodeBigInt2(OBJECT, typeMurmur, buffer)
+                encodeBytes(OBJECT, typeMurmur.toBytes(), buffer)
                 let sizeBuf = encodeSizeOfEncoded(x.size)
                 inputs.add(ByteBuffer(sizeBuf))
                 for (f in x.fields()) {
@@ -381,6 +381,13 @@ public class DefaultCodec <: Codec {
         buffer.write(sizeBytes)
         buffer.write(bytes)
         size += sizeBytes.size + bytes.size
+        this
+    }
+    private func encodeBytes(dataType: DataType, value: Array<Byte>, buffer: ByteBuffer): Encoder {
+        let sizeBytes = encodeSizeOfValue(dataType, true, value.size, forInt: false)
+        buffer.write(sizeBytes)
+        buffer.write(value)
+        size += sizeBytes.size + value.size
         this
     }
 
@@ -786,8 +793,8 @@ public class DefaultCodec <: Codec {
                 tuples.add(key, value)
             }
             tuples
-        } else if (dataType == DataType.OBJECT.value) { //todo
-            let murmur = readBigInt2(head, input)
+        } else if (dataType == DataType.OBJECT.value) {
+            let murmur = MurmurHash128X64.parse(readBytes(head, input))
             let object = typeMurmurCreators[murmur]()
             size = decodeSizeOfEncoded(input)
             for (_ in 0..size) {
@@ -909,20 +916,22 @@ public class DefaultCodec <: Codec {
         BigInt(parseInt64(head, sign, bytes))
     }
     private func readBigInt2(head: Byte, input: InputStream) {
+        BigInt(readBytes(head, input))
+    }
+    private func readBytes(head: Byte, input: InputStream){
         var s = Int64(head & 0x0f)
         var bytes = Array<Byte>(s, repeat: 0)
         size = input.read(bytes)
         if (size < s) {
-            throw CodecException('current data head is ${toHex(head)}, but read ${size} bytes')
+            throw CodecException('current data ehad is ${toHex(head)}, but read ${size} bytes')
         }
         s = parseInt64(head, true, bytes)
         let sizeBytes = bytes
         bytes = Array<Byte>(s, repeat: 0)
         size = input.read(bytes)
         if (size < s) {
-            throw CodecException(
-                'current data head is ${toHex(head)}, but read size of value is ${size}, need ${s}(bytes of need size: ${sizeBytes})')
+            throw CodecException('current data head is ${toHex(head)}, but read size of value is ${size}, need ${s}(bytes of need size: ${sizeBytes})')
         }
-        BigInt(bytes)
+        bytes
     }
 }

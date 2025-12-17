@@ -115,10 +115,10 @@ public struct MurmurHash128X64 <: Hashable & Comparable<MurmurHash128X64> & ToSt
     public func toString(): String {
         toHexString(toBytes())
     }
-    public func parse(s: String): MurmurHash128X64 {
+    public static func parse(s: String): MurmurHash128X64 {
         parse(fromHexString(s))
     }
-    public func parse(bytes: Array<Byte>): MurmurHash128X64 {
+    public static func parse(bytes: Array<Byte>): MurmurHash128X64 {
         if(bytes.size != 16){
             throw MurmurHashException('size of byte array must be 16, but ${bytes}')
         }
