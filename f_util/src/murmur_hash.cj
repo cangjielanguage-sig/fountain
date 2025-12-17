@@ -99,7 +99,7 @@ public struct MurmurHash128X64 <: Hashable & Comparable<MurmurHash128X64> & ToSt
     }
     public func toBytes(): Array<Byte> {
         func to(x: Int64, a: Int64){
-            Int8((x >> (a * 8)) & 0xffi64).toUInt()
+            UInt8((x >> (a * 8)) & 0xffi64)
         }
         Array<Byte>(16){i =>
             if(i < 8){
@@ -116,7 +116,7 @@ public struct MurmurHash128X64 <: Hashable & Comparable<MurmurHash128X64> & ToSt
         toHexString(toBytes())
     }
     public static func parse(s: String): MurmurHash128X64 {
-        parse(fromHexString(s))
+        parse(fromHexString(s) ?? [])
     }
     public static func parse(bytes: Array<Byte>): MurmurHash128X64 {
         if(bytes.size != 16){
@@ -152,6 +152,7 @@ public struct MurmurHash128X64 <: Hashable & Comparable<MurmurHash128X64> & ToSt
  * - 结果由两个64位整数组成，表示128位哈希值
  * - 默认种子为0x1234567890ABCDEF
  */
+@OverflowWrapping
 public func murmurHash128X64(data: Array<Byte>, seed!: Int64 = 0x1234567890ABCDEF): MurmurHash128X64 {
     // Constants for 128-bit variant
     let C1 = 0x87c37b91114253d5u64.toInt()
@@ -173,15 +174,15 @@ public func murmurHash128X64(data: Array<Byte>, seed!: Int64 = 0x1234567890ABCDE
         ((Int64(data[index + 7]) & 0xff) << 56)
     }
     func rotateLeft(i: Int64, distance: Int64) {
-        return (i << distance) | (i.toUInt() >> -distance.toUInt()).toInt();
+        return (i << distance) | (i >> (64 - distance))
     }
     func fmix64(hash: Int64) {
         var h = hash
-        h ^= (h.toUInt() >> 33u64).toInt()
+        h ^= h >> 33
         h *= 0xff51afd7ed558ccdu64.toInt()
-        h ^= (h.toUInt() >> 33u64).toInt()
+        h ^= h >> 33
         h *= 0xc4ceb9fe1a85ec53u64.toInt()
-        h ^= (h.toUInt() >> 33u64).toInt()
+        h ^= h >> 33
         h
     }
     var h1 = seed

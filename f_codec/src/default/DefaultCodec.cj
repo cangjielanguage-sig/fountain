@@ -47,7 +47,7 @@ public class DefaultCodec <: Codec {
     private var size = 0
     private let inputs = ArrayList<InputStream>([ByteBuffer()])
 
-    public static func registerType<T>(): BigInt where T <: Object & ObjectData<T> & DataFields<T> {
+    public static func registerType<T>(): MurmurHash128X64 where T <: Object & ObjectData<T> & DataFields<T> {
         let typeInfo = ClassTypeInfo.of<T>()
         let typeMurmur = typeMurmurHashs.computeIfAbsent(typeInfo) {murmurHash128X64(typeInfo.qualifiedName)}
         let option = typeMurmurCreators.addIfAbsent(typeMurmur, {
