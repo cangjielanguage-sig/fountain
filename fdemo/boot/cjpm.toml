@@ -8,5 +8,7 @@
   output-type = "dynamic"
   compile-option = "-O2 --dy-std"
   override-compile-option = "-O2 --dy-std"
+  #compile-option = "-g -O0 --dy-std"
+  #override-compile-option = "-g -O0 --dy-std"
   link-option = ""
   package-configuration = {}

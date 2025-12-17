@@ -145,7 +145,7 @@ class HttpStatusOnlyHandler <: HttpRequestHandler {
                     case x: Array<Byte> => b.body(x)
                     case x: ToData where accept.size > 0 => 
                         if(accept.isEmpty() || accept.contains('*/*')){
-                            b.body(x.toData().toString())
+                            b.body(MediaTypes.parse('application/json').fromData(x.toData()))
                         }else if(accept.indexOf(',').isSome()){
                             let queue = AcceptQueue(accept)
                             while(let Some((_, _, accept)) <- queue.remove()){
@@ -158,7 +158,7 @@ class HttpStatusOnlyHandler <: HttpRequestHandler {
                         }else if (let Some(mt) <- MediaTypes.tryParse(accept)){
                             b.body(mt.fromData(x.toData()))
                         }else{
-                            b.body(x.toData().toString())
+                            b.body(MediaTypes.parse('application/json').fromData(x.toData()))
                         }
                     case _ => b.body(status.reasonPhrase)
                 }
