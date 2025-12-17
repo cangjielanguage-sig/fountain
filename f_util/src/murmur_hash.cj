@@ -18,8 +18,10 @@ package f_util
 import std.convert.*
 import std.math.numeric.BigInt
 import std.overflow.WrappingOp
+import stdx.encoding.hex.*
 import f_base.UnsafeBytes
 import f_base.*
+import f_util.exception.MurmurHashException
 
 let MURMUR_HASH_MASK = 0xc6a4a7935bd1e995_u64.
 toInt()
@@ -34,7 +36,6 @@ toInt()
  * @note 此实现使用MurmurHash64算法，适用于非加密用途的哈希计算
  * @see 参考MurmurHash算法规范
  */
-@OverflowWrapping
 public func murmurHash64(data: Array<Byte>, seed!: Int64 = 0x1234567890ABCDEF): Int64 {
     let length = data.size
     func getLong(buf: Array<Byte>, cur: Int64): (Int64, Int64) {
@@ -79,40 +80,58 @@ public func murmurHash64(data: Array<Byte>, seed!: Int64 = 0x1234567890ABCDEF): 
 public func murmurHash64(data: String, seed!: Int64 = 0x1234567890ABCDEF): Int64 {
     murmurHash64(data.unsafeBytes(), seed: seed)
 }
-public struct MurmurHash128X64 <: Hashable & Comparable<MurmurHash128X64> & ToString & RadixConvertible<MurmurHash128X64> {
-    private MurmurHash128X64(public let value: BigInt){}
-    init(one: Int64, two: Int64){
-        func to(x: Int64, a: Int64){
-            UInt8(((x >> (a * 8)) & 0xffi64).toUInt())
+public struct MurmurHash128X64 <: Hashable & Comparable<MurmurHash128X64> & ToString {
+    private let h: Int64
+    MurmurHash128X64(private let one: Int64, private let two: Int64){
+        h = one ^ two
+    }
+    
+    public func hashCode(){
+        h
+    }
+    public func compare(other: MurmurHash128X64): Ordering {
+        let cmp = this.one.compare(other.one)
+        if(cmp == EQ){
+            this.two.compare(other.two)
+        }else{
+            cmp
         }
-        value = BigInt(true, Array<Byte>(16){i =>
+    }
+    public func toBytes(): Array<Byte> {
+        func to(x: Int64, a: Int64){
+            Int8((x >> (a * 8)) & 0xffi64).toUInt()
+        }
+        Array<Byte>(16){i =>
             if(i < 8){
                 to(one, 7 - i)
             }else{
                 to(two, 15 - i)
             }
-        })
+        }
     }
-    public func hashCode(){
-        value.hashCode()
-    }
-    public func compare(other: MurmurHash128X64): Ordering {
-        this.value.compare(other.value)
+    public func toBigInt(): BigInt {
+        BigInt(true, toBytes())
     }
     public func toString(): String {
-        value.toString()
+        toHexString(toBytes())
     }
-    public func toString(radix!: Int64){
-        value.toString(radix: radix)
+    public func parse(s: String): MurmurHash128X64 {
+        parse(fromHexString(s))
     }
-    public static func parse(value: String, radix!: Int64): MurmurHash128X64 {
-        MurmurHash128X64(BigInt.parse(value, radix: radix))
-    }
-    public static func tryParse(value: String, radix!: Int64): Option<MurmurHash128X64> {
-        match(BigInt.tryParse(value, radix: radix)){
-            case Some(x) => MurmurHash128X64(x)
-            case _ => None<MurmurHash128X64>
+    public func parse(bytes: Array<Byte>): MurmurHash128X64 {
+        if(bytes.size != 16){
+            throw MurmurHashException('size of byte array must be 16, but ${bytes}')
         }
+        var (one, two) = (0, 0)
+        for(i in 0 .. 16){
+            let b = bytes[i]
+            if(i < 8){
+                one = (one << 8) | Int64(b)
+            }else{
+                two = (two << 8) | Int64(b)
+            }
+        }
+        MurmurHash128X64(one, two)
     }
 }
 /**
@@ -133,7 +152,6 @@ public struct MurmurHash128X64 <: Hashable & Comparable<MurmurHash128X64> & ToSt
  * - 结果由两个64位整数组成，表示128位哈希值
  * - 默认种子为0x1234567890ABCDEF
  */
-@OverflowWrapping
 public func murmurHash128X64(data: Array<Byte>, seed!: Int64 = 0x1234567890ABCDEF): MurmurHash128X64 {
     // Constants for 128-bit variant
     let C1 = 0x87c37b91114253d5u64.toInt()
@@ -155,15 +173,15 @@ public func murmurHash128X64(data: Array<Byte>, seed!: Int64 = 0x1234567890ABCDE
         ((Int64(data[index + 7]) & 0xff) << 56)
     }
     func rotateLeft(i: Int64, distance: Int64) {
-        return (i << distance) | (i >> (64 - distance))
+        return (i << distance) | (i.toUInt() >> -distance.toUInt()).toInt();
     }
     func fmix64(hash: Int64) {
         var h = hash
-        h ^= h >> 33
+        h ^= (h.toUInt() >> 33u64).toInt()
         h *= 0xff51afd7ed558ccdu64.toInt()
-        h ^= h >> 33
+        h ^= (h.toUInt() >> 33u64).toInt()
         h *= 0xc4ceb9fe1a85ec53u64.toInt()
-        h ^= h >> 33
+        h ^= (h.toUInt() >> 33u64).toInt()
         h
     }
     var h1 = seed
