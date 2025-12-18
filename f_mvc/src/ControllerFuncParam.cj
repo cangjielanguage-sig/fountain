@@ -35,8 +35,8 @@ abstract class ControllerFuncParam {
 
 @Annotation[target: [Parameter]]
 public class RequestParam <: ControllerFuncParam {
-    public const RequestParam(private let name: String, private let default!: ?String = '') {}
-    public const init(default!: ?String = '') {
+    public const RequestParam(private let name: String, private let default!: ?String = None) {}
+    public const init(default!: ?String = None) {
         this('', default: default)
     }
     private func extractValue(name: String, ctx: HttpContext): ?String {
@@ -89,8 +89,8 @@ public class RequestParam <: ControllerFuncParam {
 
 @Annotation[target: [Parameter]]
 public class PathVariable <: ControllerFuncParam {
-    public const PathVariable(private let name: String, private let default!: ?String = '') {}
-    public const init(default!: ?String = '') {
+    public const PathVariable(private let name: String, private let default!: ?String = None) {}
+    public const init(default!: ?String = None) {
         this('', default: default)
     }
     protected func extract<T>(name: String, converter: ?AbstractDateTimeConverter, ctx: HttpContext, pattern: HttpRequestPathPatterns): ?T where T <: DataFields<T> {
@@ -112,8 +112,8 @@ public class PathVariable <: ControllerFuncParam {
 
 @Annotation[target: [Parameter]]
 public class RequestHeader <: ControllerFuncParam {
-    public const RequestHeader(private let name: String, private let default!: ?String = '') {}
-    public const init(default!: ?String = '') {
+    public const RequestHeader(private let name: String, private let default!: ?String = None) {}
+    public const init(default!: ?String = None) {
         this('', default: default)
     }
     protected func extract<T>(name: String, converter: ?AbstractDateTimeConverter, ctx: HttpContext, pattern: HttpRequestPathPatterns): ?T where T <: DataFields<T> {
