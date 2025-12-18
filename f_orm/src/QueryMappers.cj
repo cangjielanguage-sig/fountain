@@ -54,6 +54,11 @@ public class QueryMappers<O> {
                 }
             }, creator: creator)
     }
+    protected prop idName: ?String {
+        get(){
+            idMapper?.columnName
+        }
+    }
     /**
      * 映射单个对象
      */

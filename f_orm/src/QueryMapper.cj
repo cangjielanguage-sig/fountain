@@ -42,7 +42,11 @@ public open class QueryMapper<O> {
             }
         )
     }
-
+    protected prop columnName: String {
+        get(){
+            dataType.columnName
+        }
+    }
     protected open prop isGrouped: Bool {
         get() {
             false
