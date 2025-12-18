@@ -366,8 +366,13 @@ public class SqlExecutor <: Resource & RootDAO {
             this.connection
         }
     }
-    private func logMsg(duration: Duration): String {
-        "${driverName} is executing a sql: ${sql}, args: ${args}, consumed: ${duration}"
+    private func logMsg(now: DateTime): () -> String {
+        let duration = now - start
+        let sql = this.sql_
+        let args = this.args.clone()
+        {=>
+            "${driverName} is executing a sql: ${sql}, args: ${args}, consumed: ${duration}"
+        }
     }
     private var start = DateTime.UnixEpoch
     private prop statement: Statement {
@@ -836,10 +841,10 @@ public class SqlExecutor <: Resource & RootDAO {
             }
             v
         } catch (e: Exception) {
-            logger.debug(e){logMsg(DateTime.now() - start)}
+            logger.debug(e, logMsg(DateTime.now()))
             throw e
         } finally {
-            logger.debug{logMsg(DateTime.now() - start)}
+            logger.debug(logMsg(DateTime.now()))
             start = DateTime.UnixEpoch
             clearSql()
         }
