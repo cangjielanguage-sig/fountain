@@ -37,7 +37,11 @@ abstract sealed class TableClause<T> <: ToString where T <: QueryMappersInit<T> 
     }
 
     protected func appendPartial(keyword: String, trim: String, partial: String): This {
-        let sql = '^(\\s*${trim}\\s*)|(\\s*${trim}\\s*)$'.regex(flags: [IgnoreCase], solid: true).replaceAll(partial, '')
+        let sql = if(trim.isEmpty()){
+            partial
+        }else{
+            '^(\\s*${trim}\\s*)|(\\s*${trim}\\s*)$'.regex(flags: [IgnoreCase], solid: true).replaceAll(partial, '')
+        }
         if(sql.size > 0){
             sqlgen.append(' ').append(keyword).append(' ').append(sql)
         }
@@ -191,7 +195,26 @@ public class FromClause<T> <: ExceptInsertClause<T> where T <: QueryMappersInit<
     public func GROUP_BY(groupBy: () -> String): This {
         appendPartial('group by', ',', groupBy())
     }
+    public func findById(id: Int64): ?T {
+        executor.setSql('select * ${this} where id=${executor.arg(id)}').first<T>()
+    }
+    public func findById(id: UInt64): ?T {
+        executor.setSql('select * ${this} where id=${executor.arg(id)}').first<T>()
+    }
+    public func findById(id: String): ?T {
+        executor.setSql('select * ${this} where id=${executor.arg(id)}').first<T>()
+    }
 
+    public func deleteById(id: Int64): ?T {
+        executor.setSql('delete ${this} where id=${executor.arg(id)}').first<T>()
+    }
+    public func deleteById(id: UInt64): ?T {
+        executor.setSql('delete ${this} where id=${executor.arg(id)}').first<T>()
+    }
+    public func deleteById(id: String): ?T {
+        executor.setSql('delete ${this} where id=${executor.arg(id)}').first<T>()
+    }
+    
     public func first<T>(): ?T where T <: QueryMappersInit<T> {
         executor.setSql('select * ${LIMIT(1)}').first<T>()
     }
@@ -255,6 +278,16 @@ public class UpdateClause<T> <: ExceptInsertClause<T> where T <: QueryMappersIni
     }
     public func execute(): Int64 {
         setSql().update
+    }
+    
+    public func byId(id: Int64): Int64 {
+        appendPartial('where', '', 'id=${executor.arg(id)}').execute()
+    }
+    public func byId(id: UInt64): Int64 {
+        appendPartial('where', '', 'id=${executor.arg(id)}').execute()
+    }
+    public func byId(id: String): Int64 {
+        appendPartial('where', '', 'id=${executor.arg(id)}').execute()
     }
 }
 
