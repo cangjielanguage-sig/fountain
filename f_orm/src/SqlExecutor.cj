@@ -809,19 +809,19 @@ public class SqlExecutor <: Resource & RootDAO {
     }
     
     private func execute<T>(executor: () -> T): T {
-        try {
-            func exec() {
-                if (let Some(_) <- tx) {
-                    return executor()
-                }
-                try { 
-                    return executor()
-                } finally {
-                    if (!this.isClosed()) {
-                        this.close()
-                    }
+        func exec() {
+            if (let Some(_) <- tx) {
+                return executor()
+            }
+            try { 
+                return executor()
+            } finally {
+                if (!this.isClosed()) {
+                    this.close()
                 }
             }
+        }
+        try {
             let v = if (useCache && !clearCache) {
                 let key = SqlCacheKey(sql, args)
                 match (cache.get(key)) {
@@ -841,12 +841,14 @@ public class SqlExecutor <: Resource & RootDAO {
             }
             v
         } catch (e: Exception) {
-            logger.debug(e, logMsg(DateTime.now()))
+            logger.warn(e, logMsg(DateTime.now()))
             throw e
         } finally {
-            logger.debug(logMsg(DateTime.now()))
-            start = DateTime.UnixEpoch
-            clearSql()
+            if(sql.size > 0){
+                logger.debug(logMsg(DateTime.now()))
+                start = DateTime.UnixEpoch
+                clearSql()
+            }
         }
     }
     private func execute<T>(executor: (Statement) -> T): T {

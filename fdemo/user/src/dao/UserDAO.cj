@@ -70,33 +70,33 @@ public interface UserDAO <: RootDAO {
         ).delete
     }
     func findUserId(username: String, password: String): ?Int64 {
-        let task = executor.setSql('''
-            select id, is_valid from rec_task_info limit 1 offset 0
-        ''').first<RecTaskInfo>()
-        println('TTTTTTTTTTTTTTT ${task?.isValid}')
-        let med = executor.setSql('''
-        select create_time, pre_amount
-          from med_allocation
-         limit 1 offset 0 
-        ''').first<MedAllocationPO>()
-        println('MMMMMMMMMMMMMMM ${med?.preAmount}')
-        let page = executor.FROM<UserPO>()
-                           .WHERE{'''
-                                ${meet(username.size > 0, ' username like '){
-                                    '%${username}%'
-                                }}
-                                ${meet(password.size > 0, ' and "password" like '){
-                                    '%${password}%'
-                                }} order by id'''
-                           }.page<UserPO>(10, page: 1)
-        println('QQQQQQQQQQQQQQQQQ ${page.list.size}')
+        // let task = executor.setSql('''
+        //     select id, is_valid from rec_task_info limit 1 offset 0
+        // ''').first<RecTaskInfo>()
+        // println('TTTTTTTTTTTTTTT ${task?.isValid}')
+        // let med = executor.setSql('''
+        // select create_time, pre_amount
+        //   from med_allocation
+        //  limit 1 offset 0 
+        // ''').first<MedAllocationPO>()
+        // println('MMMMMMMMMMMMMMM ${med?.preAmount}')
+        // let page = executor.FROM<UserPO>()
+        //                    .WHERE{'''
+        //                         ${meet(username.size > 0, ' username like '){
+        //                             '%${username}%'
+        //                         }}
+        //                         ${meet(password.size > 0, ' and "password" like '){
+        //                             '%${password}%'
+        //                         }} order by id'''
+        //                    }.page<UserPO>(100, page: 1)
+        // println('QQQQQQQQQQQQQQQQQ ${page.list.size}')
         
-        let user = executor.FROM<UserPO>()
-                .WHERE{
-                    meet(username.size > 0){
-                        EXISTS{'select 1 from user_info where id > 0 limit 1'}
-                    }
-                }.first<UserPO>()
+        // let user = executor.FROM<UserPO>()
+        //         .WHERE{
+        //             meet(username.size > 0){
+        //                 EXISTS{'select 1 from user_info where id > 0 limit 1'}
+        //             }
+        //         }.first<UserPO>()
         // executor.INTO<UserPO>(ignoreColumns:['id']).VALUES(user.getOrThrow()).execute()
         executor.setSql('''
             select id 
