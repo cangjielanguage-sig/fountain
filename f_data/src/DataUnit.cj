@@ -56,10 +56,10 @@ extend Unit <: DataFields<Unit> {
             case x: DataUnit => x.tryToUnit()
             case _: DataNone => None<Unit>
             case _ where (flag & IGNORE_FIELD_TYPE_NOT_MATCH) == 0 => throw DataException(
-                '(${data}) does not match ${TypeInfos.get<Unit>()}')
+                '(${data}) does not match ${TypeInfo.of<Unit>()}')
             case x: DataString => DataUnit.tryParse(x.toString())
             case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException(
-                '(${data}) cannot be converted to ${TypeInfos.get<Unit>()}')
+                '(${data}) cannot be converted to ${TypeInfo.of<Unit>()}')
             case _ => None<Unit>
         }
     }

@@ -236,7 +236,7 @@ class ValueGetter {
                     .qualifiedName
                     .startsWith("f_util.ObjectTextTemplateArgs"))) => data[x]
                 case _ => throw TextTemplateException(
-                    "data type ${TypeInfo.of(data)} is without field ${key} or the field is not a ${TypeInfos.get<K>()}")
+                    "data type ${TypeInfo.of(data)} is without field ${key} or the field is not a ${TypeInfo.of<K>()}")
             }
         }
     }
@@ -472,7 +472,7 @@ public class ObjectTextTemplateArgs<T> <: TextTemplateObject<String, ToString, O
         T
             .dataFields()
             .readableField(key)
-            .getOrThrow {TextTemplateException("type ${TypeInfos.get<T>()} is without field ${key}")}
+            .getOrThrow {TextTemplateException("type ${TypeInfo.of<T>()} is without field ${key}")}
             .get(arg)
             .toString()
     }

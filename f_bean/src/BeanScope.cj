@@ -46,7 +46,7 @@ public class PrototypeBeanScope <: BeanScope {
     internal const init() {}
     public prop typeInfo: TypeInfo {
         get() {
-            TypeInfos.get<PrototypeBeanScope>()
+            TypeInfo.of<PrototypeBeanScope>()
         }
     }
     public func toString(): String {
@@ -58,7 +58,7 @@ public class SingletonBeanScope <: BeanScope {
     internal const init() {}
     public prop typeInfo: TypeInfo {
         get() {
-            TypeInfos.get<SingletonBeanScope>()
+            TypeInfo.of<SingletonBeanScope>()
         }
     }
     public func toString(): String {

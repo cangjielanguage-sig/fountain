@@ -29,7 +29,7 @@ public class AsyncIterator<T> <: Iterator<Future<?T>> {
 public class TypeFilterIterator<T, R> <: Iterator<R> {
     public TypeFilterIterator(private let itr: Iterator<T>, private let exactly: Bool) {}
     public func next(): ?R {
-        for (v in itr where (exactly && TypeInfo.of(v) == TypeInfos.get<R>()) || v is R) {
+        for (v in itr where (exactly && TypeInfo.of(v) == TypeInfo.of<R>()) || v is R) {
             return v as R
         }
         None
@@ -79,7 +79,7 @@ extend<T> Iterator<T> <: ExtendIterator<T> {
                 v => match (v) {
                     case x: Iterator<R> => x
                     case _ => throw IllegalArgumentException(
-                        '${TypeInfos.get<T>()} does not match ${TypeInfos.get<Iterator<R>>()}')
+                        '${TypeInfo.of<T>()} does not match ${TypeInfo.of<Iterator<R>>()}')
                 }
             }
         } else {

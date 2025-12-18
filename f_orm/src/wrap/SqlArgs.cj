@@ -107,7 +107,7 @@ public class SqlArgs <: Hashable & Equatable<SqlArgs> & ToString {
     public func hashCode() {
         if (h == 0) {
             let hasher = HashBuilder()
-            hasher.append(TypeInfos.get<SqlArgs>())
+            hasher.append(TypeInfo.of<SqlArgs>())
             for (arg in args) {
                 hasher.append(arg)
             }

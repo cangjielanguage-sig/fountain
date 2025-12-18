@@ -37,14 +37,14 @@ internal interface DataFilter {
         }
     }
     static func parse<T>(value: String): T {
-        let t = TypeInfos.get<T>()
-        let any: Any = if (t == TypeInfos.get<String>()) {
+        let t = TypeInfo.of<T>()
+        let any: Any = if (t == TypeInfo.of<String>()) {
             value
-        } else if (t == TypeInfos.get<Int64>()) {
+        } else if (t == TypeInfo.of<Int64>()) {
             Int64.parse(value)
-        } else if (t == TypeInfos.get<Float64>()) {
+        } else if (t == TypeInfo.of<Float64>()) {
             Float64.parse(value)
-        } else if (t == TypeInfos.get<Bool>()) {
+        } else if (t == TypeInfo.of<Bool>()) {
             Bool.parse(value)
         } else {
             throw DataException('unsupported for comparing type ${t}')

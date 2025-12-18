@@ -22,7 +22,7 @@ public class ObjectFields <: Collection<ReadableField> {
     private ObjectFields(private let creator: () -> Object){}
     public static func getObjectFields<T>(metas: () -> (Array<ReadableField>, ()->Object)): ObjectFields 
     where T <: ObjectData<T> & DataFields<T> {
-        let currentType = (TypeInfos.get<T>() as ClassTypeInfo).getOrThrow()
+        let currentType = (TypeInfo.of<T>() as ClassTypeInfo).getOrThrow()
         allFields.computeIfAbsent(currentType){
             let (fields, creator) = metas()
             let that = ObjectFields(creator)

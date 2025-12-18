@@ -53,7 +53,7 @@ public class DataCollection<C, T> <: Data & Collection<Data> where T <: DataFiel
         None<Data>
     }
     public static func parse(s: String): Data {
-        throw DataParsableException('${s} cannot be parsed to ${TypeInfos.get<DataCollection<C, T>>()}')
+        throw DataParsableException('${s} cannot be parsed to ${TypeInfo.of<DataCollection<C, T>>()}')
     }
 }
 
@@ -67,7 +67,7 @@ public interface CollectionData<C, T> <: DataFields<C> & CollectionRawType where
     static func tryFromData(data: Data, flag: DataConversionFlag): Any
     prop rawType: TypeInfo {
         get() {
-            TypeInfos.get<T>()
+            TypeInfo.of<T>()
         }
     }
 }

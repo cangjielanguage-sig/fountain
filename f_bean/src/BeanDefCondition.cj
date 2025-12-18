@@ -120,7 +120,7 @@ public class BeanDef <: BeanCondition {
             case (CurrentOrSubOf(t), _) => on(factory, TypeInfos.get(t))
             case (Current(t), _) => on(factory, TypeInfos.get(t))
             case (SubOfOnly(t), _) => on(factory, TypeInfos.get(t))
-            case _ => on(factory, TypeInfos.get<Object>())
+            case _ => on(factory, TypeInfo.of<Object>())
         }
     }
     private func on(factory: BeanFactory, typeInfo: TypeInfo): Bool {

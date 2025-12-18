@@ -27,7 +27,7 @@ public func lookup<T>(cond: StringCond): T {
     BeanFactory
         .instance
         .getFirst<T>(cond: cond)
-        .getOrThrow {BeanException('bean type ${TypeInfos.get<T>()} with bean name condition ${cond} does not exist.')}
+        .getOrThrow {BeanException('bean type ${TypeInfo.of<T>()} with bean name condition ${cond} does not exist.')}
 }
 
 public func lookupList<T>(): ArrayList<T> {

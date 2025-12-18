@@ -330,7 +330,7 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
         addMediaTypes(consumes, types, false, true)
     }
     public static func generate<T>(fnName: String, argTypes: Array<TypeInfo>): ArrayList<RequestMeta> where T <: Object {
-        let typeInfo = TypeInfos.get<T>()
+        let typeInfo = TypeInfo.of<T>()
         let metas = ArrayList<RequestMeta>()
         let function = typeInfo.getInstanceFunction(fnName, argTypes)
         let functionParamMap = HashMap<String, ParameterInfo>()

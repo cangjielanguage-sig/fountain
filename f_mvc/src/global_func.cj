@@ -145,7 +145,7 @@ func parseValue<T>(value: ?String, converter: ?AbstractDateTimeConverter): ?T {
         case _: ?Array<Duration> => 
             let array = val.split(',')
             Array<Duration>(array.size){i => Duration.parse(array[i])}
-        case _ => throw MVCException('${value} cannot be parsed to ${TypeInfos.get<T>()}')
+        case _ => throw MVCException('${value} cannot be parsed to ${TypeInfo.of<T>()}')
     }
     match (any) {
         case x: T => Some(x)

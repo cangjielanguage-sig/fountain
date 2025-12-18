@@ -57,7 +57,7 @@ public class DataConcurrentMap<M, K, V> <: Data & Collection<(Data, Data)> where
         None<Data>
     }
     public static func parse(s: String): Data {
-        throw DataParsableException('${s} cannot be parsed to ${TypeInfos.get<DataConcurrentMap<M, K, V>>()}')
+        throw DataParsableException('${s} cannot be parsed to ${TypeInfo.of<DataConcurrentMap<M, K, V>>()}')
     }
 }
 
@@ -67,7 +67,7 @@ public interface ConcurrentMapData<M, K, V> <: DataFields<M> & MapRawType where 
     static func tryFromData(data: Data, flag: DataConversionFlag): Any
     prop rawType: (TypeInfo, TypeInfo) {
         get() {
-            (TypeInfos.get<K>(), TypeInfos.get<V>())
+            (TypeInfo.of<K>(), TypeInfo.of<V>())
         }
     }
 }
@@ -88,7 +88,7 @@ extend<K, V> ConcurrentHashMap<K, V> <: ConcurrentMapData<ConcurrentHashMap<K, V
                         map.add(k, v)
                     } else if ((flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0) {
                         throw DataException(
-                            'data cannot be converted to tuple for ${TypeInfos.get<ConcurrentHashMap<K, V>>()} ')
+                            'data cannot be converted to tuple for ${TypeInfo.of<ConcurrentHashMap<K, V>>()} ')
                     }
                 }
                 map
@@ -101,7 +101,7 @@ extend<K, V> ConcurrentHashMap<K, V> <: ConcurrentMapData<ConcurrentHashMap<K, V
                                 map.add(mk, mv)
                             } else if ((flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0) {
                                 throw DataException(
-                                    'data cannot be converted to tuple for ${TypeInfos.get<ConcurrentHashMap<K, V>>()}, current tuple is (${k}, ${v})')
+                                    'data cannot be converted to tuple for ${TypeInfo.of<ConcurrentHashMap<K, V>>()}, current tuple is (${k}, ${v})')
                             }
                         case _ =>
                             if (let (Some(mk: K), Some(mv: V)) <- (internal_f_data_tryFromData<K>(k.toData(), flag),
@@ -109,13 +109,13 @@ extend<K, V> ConcurrentHashMap<K, V> <: ConcurrentMapData<ConcurrentHashMap<K, V
                                 map.add(mk, mv)
                             } else if ((flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0) {
                                 throw DataException(
-                                    'data cannot be converted to tuple for ${TypeInfos.get<ConcurrentHashMap<K, V>>()}, current tuple is (${k}, ${v})')
+                                    'data cannot be converted to tuple for ${TypeInfo.of<ConcurrentHashMap<K, V>>()}, current tuple is (${k}, ${v})')
                             }
                     }
                 }
                 map
             case _ where (flag & IGNORE_FIELD_TYPE_NOT_MATCH) == 0 => throw DataException(
-                'data cannot be converted to tuple for ${TypeInfos.get<ConcurrentHashMap<K, V>>()}, data is ${data}')
+                'data cannot be converted to tuple for ${TypeInfo.of<ConcurrentHashMap<K, V>>()}, data is ${data}')
             case _ => ConcurrentHashMap<K, V>()
         }
     }

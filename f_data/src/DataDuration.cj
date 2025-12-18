@@ -55,16 +55,16 @@ extend Duration <: DataFields<Duration> {
             case x: DataDuration => x.tryToDuration()
             case _: DataNone => None<Duration>
             case _ where (flag & IGNORE_FIELD_TYPE_NOT_MATCH) == 0 => throw DataException(
-                '(${data}) does not match to ${TypeInfos.get<Duration>()}')
+                '(${data}) does not match to ${TypeInfo.of<Duration>()}')
             case x: DataDateTime => match (x.tryToDateTime()) {
                 case Some(x) => x - DateTime.UnixEpoch
                 case _ where (flag & IGNORE_FIELD_TYPE_NOT_MATCH) == 0 => throw DataException(
-                    '(${data}) does not match to ${TypeInfos.get<Duration>()}')
+                    '(${data}) does not match to ${TypeInfo.of<Duration>()}')
                 case _ => return None<Duration>
             }
             case x: DataString => Duration.tryParse(x.data)
             case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException(
-                '(${data}) cannot be converted to ${TypeInfos.get<Duration>()}')
+                '(${data}) cannot be converted to ${TypeInfo.of<Duration>()}')
             case _ => None<Duration>
         }
     }

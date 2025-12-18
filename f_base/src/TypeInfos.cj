@@ -79,6 +79,6 @@ public interface SubTypeOf {
 
 extend TypeInfo <: SubTypeOf {
     public func isSubtypeOf<S>(): Bool {
-        this.isSubtypeOf(TypeInfos.get<S>())
+        this.isSubtypeOf(TypeInfo.of<S>())
     }
 }
