@@ -36,8 +36,8 @@ abstract class ControllerFuncParam {
 @Annotation[target: [Parameter]]
 public class RequestParam <: ControllerFuncParam {
     public const RequestParam(private let name: String, private let default!: ?String = '') {}
-    public const init() {
-        this('')
+    public const init(default!: ?String = '') {
+        this('', default: default)
     }
     private func extractValue(name: String, ctx: HttpContext): ?String {
         let request = ctx.request
@@ -90,8 +90,8 @@ public class RequestParam <: ControllerFuncParam {
 @Annotation[target: [Parameter]]
 public class PathVariable <: ControllerFuncParam {
     public const PathVariable(private let name: String, private let default!: ?String = '') {}
-    public const init() {
-        this('')
+    public const init(default!: ?String = '') {
+        this('', default: default)
     }
     protected func extract<T>(name: String, converter: ?AbstractDateTimeConverter, ctx: HttpContext, pattern: HttpRequestPathPatterns): ?T where T <: DataFields<T> {
         let path = ctx.request.url.path
@@ -113,8 +113,8 @@ public class PathVariable <: ControllerFuncParam {
 @Annotation[target: [Parameter]]
 public class RequestHeader <: ControllerFuncParam {
     public const RequestHeader(private let name: String, private let default!: ?String = '') {}
-    public const init() {
-        this('')
+    public const init(default!: ?String = '') {
+        this('', default: default)
     }
     protected func extract<T>(name: String, converter: ?AbstractDateTimeConverter, ctx: HttpContext, pattern: HttpRequestPathPatterns): ?T where T <: DataFields<T> {
         var value = ctx.request.headers.get(if (this.name.isEmpty()) {
