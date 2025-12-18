@@ -141,10 +141,10 @@ public class DataObject<T> <: SimpleDataObject & Collection<(String, Data)> & Na
         }
     }
     public static func tryParse(string: String): ?Data {
-        let typeInfo = TypeInfos.get<T>()
-        if (typeInfo.isSubtypeOf(TypeInfos.get<Parsable<T>>())) {
+        let typeInfo = TypeInfo.of<T>()
+        if (typeInfo.isSubtypeOf(TypeInfo.of<Parsable<T>>())) {
             let data = (TypeMemberInfos
-                .staticFunction(typeInfo, 'tryParse', [TypeInfos.get<String>()])?
+                .staticFunction(typeInfo, 'tryParse', [TypeInfo.of<String>()])?
                 .apply(typeInfo, string))
                 .getOrThrow()
             match (data) {

@@ -38,12 +38,12 @@ public class QueryMappers<O> {
         }
     }
     public static func create<T>(mappers!: Array<QueryMapper<T>>, creator!: () -> T): ?QueryMappers<T> {
-        if (!(TypeInfos.get<O>().isSubtypeOf(TypeInfos.get<Object>()) && TypeInfos
+        if (!(TypeInfo.of<O>().isSubtypeOf(TypeInfo.of<Object>()) && TypeInfos
             .get<T>()
-            .isSubtypeOf(TypeInfos.get<O>()))) {
+            .isSubtypeOf(TypeInfo.of<O>()))) {
             return None<QueryMappers<T>>
         }
-        let oType = TypeInfos.get<O>()
+        let oType = TypeInfo.of<O>()
         let oMappers = (oType.getStaticFunction("queryMappers").apply(oType) as QueryMappers<O>).getOrThrow().mappers
         QueryMappers<T>(
             mappers: Array<QueryMapper<T>>(oMappers.size + mappers.size) {
