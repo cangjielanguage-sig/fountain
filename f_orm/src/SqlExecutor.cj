@@ -844,11 +844,9 @@ public class SqlExecutor <: Resource & RootDAO {
             logger.warn(e, logMsg(DateTime.now()))
             throw e
         } finally {
-            if(sql.size > 0){
-                logger.debug(logMsg(DateTime.now()))
-                start = DateTime.UnixEpoch
-                clearSql()
-            }
+            logger.debug(logMsg(DateTime.now()))
+            start = DateTime.UnixEpoch
+            clearSql()
         }
     }
     private func execute<T>(executor: (Statement) -> T): T {
