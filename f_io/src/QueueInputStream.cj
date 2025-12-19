@@ -18,7 +18,7 @@ package f_io
 sealed abstract class QueueInputStream <: InputStream {
     protected let queue: ArrayBlockingQueue<InputStream>
 
-    public init(size: Int64){
+    public QueueInputStream(size: Int64, protected let closeOnEnd!: Bool = true){
         queue = ArrayBlockingQueue<InputStream>(size)
     }
     public func add(stream: InputStream){
@@ -29,13 +29,15 @@ sealed abstract class QueueInputStream <: InputStream {
     }
 }
 public class NonblockingQueueStream <: QueueInputStream {
-    public init(size: Int64) {
-        super(size)
+    public init(size: Int64, closeOnEnd!: Bool = true) {
+        super(size, closeOnEnd: closeOnEnd)
     }
     public func read(buffer: Array<Byte>): Int64 {
         while (let Some(q) <- queue.peek() && let s <- q.read(buffer)) {
             if (s == 0) {
-                queue.remove()
+                if(closeOnEnd && let r: Resource <- queue.remove() && !r.isClosed()) {
+                    r.close()
+                }
                 continue
             }
             return s
@@ -43,18 +45,21 @@ public class NonblockingQueueStream <: QueueInputStream {
         0
     }
 }
-public class BlockingQueueStream <: QueueStream {
+public class BlockingQueueStream <: QueueInputStream {
     private var current = None<InputStream>
-    public init(size: Int64) {
-        super(size)
+    public init(size: Int64, closeOnEnd!: Bool = true) {
+        super(size, closeOnEnd: closeOnEnd)
     }
     public func read(buffer: Array<Byte>): Int64 {
         while (true) {
-            if (let Some(input) <- current && let s <- input.read(buffer) && s > 0) {
-                return s
-            } else {
-                current = queue.remove()
+            if (let Some(input) <- current) {
+                if(let s <- input.read(buffer) && s > 0){
+                    return s
+                }else if(closeOnEnd && let r: Resource <- input && !r.isClosed()) {
+                    r.close()
+                }
             }
+            current = queue.remove()
         }
         0
     }
