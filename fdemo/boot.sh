@@ -7,6 +7,7 @@ fi
 echo "target-dir=$path"
 
 exports(){
+    export cjHeapSize=7MB
     # pattern可省略，有默认值
     # %level 记录当前日志级别
     # %name 记录当前日志名称
@@ -33,14 +34,14 @@ exports(){
     export orm_useStdPool=false # 默认是true，表示使用标准库连接池，false是使用fountain连接池
     export orm_drivers=opengauss # 逗号分隔的驱动名称
     # orm_databasePool开头的是fountain.orm.DatabasePool的配置项
-    export orm_databasePoolInitSize=10 # 初始连接数
-    export orm_databasePoolMinSize=10 # 最小连接数
-    export orm_databasePoolMaxSize=10 # 最大连接数
+    export orm_databasePoolInitSize=1 # 初始连接数
+    export orm_databasePoolMinSize=1 # 最小连接数
+    export orm_databasePoolMaxSize=1 # 最大连接数
     export orm_databasePoolCheckOnCreation=true # 创建连接时是否检查连接有效性，默认是false
     export orm_databasePoolCheckOnBorrowing=true # 获取连接时是否检查连接有效性，默认是true
     export orm_databasePoolCheckOnReturning=false # 归还连接时是否检查连接有效性，默认是true
-    export orm_databasePoolConnectionLife=86400 # 连接存活时间，默认是3600，单位是秒
-    export orm_databasePoolCheckInterval=300 # 连接有效性检查周期，默认是300，单位是秒
+    export orm_databasePoolConnectionLife=1 # 连接存活时间，默认是3600，单位是秒
+    export orm_databasePoolCheckInterval=1 # 连接有效性检查周期，默认是300，单位是秒
     export orm_databasePoolCheckSql='select 1' # 检查连接有效性的SQL，默认是select 1
     # orm_stdPool开头的是std.datasource.sql.PooledDatasource的配置项
     export orm_stdPoolMaxSize=10 # 连接池最大连接数

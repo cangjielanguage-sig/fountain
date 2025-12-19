@@ -60,7 +60,7 @@ public class DatabasePool <: Resource & Datasource {
                     false
                 }
             },
-            destroier: {c => c.destroy()}
+            destroier: {c => if(!c.isDestroied()){c.destroy()}}
         )
     }
     public init(
@@ -90,8 +90,10 @@ public class DatabasePool <: Resource & Datasource {
             checker: {
                 c => 
                 if (checkSql[0..6].toLower() == "select") {
-                    try(stmt = c.prepareStatement(checkSql), r = stmt.query()){
-                        return r.next()
+                    try(stmt = c.prepareStatement(checkSql)){
+                        try(r = stmt.query()){
+                            return r.next()
+                        }
                     }
                     false
                 } else {
