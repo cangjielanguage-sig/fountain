@@ -15,8 +15,7 @@ limitations under the License.
  */
 package f_data.json
 
-import std.io.{InputStream, StringReader, OutputStream, StringWriter, ByteBuffer}
-import stdx.encoding.json.*
+import std.io.{InputStream, StringReader, StringWriter, ByteBuffer}
 import f_data.exception.DataException
 import charset4cj.charset.encoding.Charset
 import charset4cj.charset.{Charsets, TextReader, TextWriter}
