@@ -810,7 +810,7 @@ public class SqlExecutor <: Resource & RootDAO {
     
     private func execute<T>(executor: () -> T): T {
         func exec() {
-            if (let Some(_) <- tx) {
+            if (tx.isSome()) {
                 return executor()
             }
             try { 
@@ -843,7 +843,10 @@ public class SqlExecutor <: Resource & RootDAO {
         } catch (e: Exception) {
             logger.warn(e, logMsg(DateTime.now()))
             throw e
-        } finally {
+        } finally { 
+            //事务切面也会执行这个函数，从而一次事务内除了每次执行SQL会执行到这个finally，
+            //结束事务时也会执行这个finally，不过结束事务前sql已经清除了，会导致记一行空日志
+            //因此，记录日志前要做这个判断
             if(sql.size > 0){
                 logger.debug(logMsg(DateTime.now()))
                 start = DateTime.UnixEpoch
