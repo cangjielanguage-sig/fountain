@@ -60,7 +60,15 @@ public class DatabasePool <: Resource & Datasource {
                     false
                 }
             },
-            destroier: {c => if(!c.isDestroied()){c.destroy()}}
+            destroier: {
+                c => try {
+                    if (!c.isDestroied()) {
+                        c.destroy()
+                    }
+                } catch (e: Exception) {
+                    logger.warn('to destroy connection in DatabasePool failed', e)
+                }
+            }
         )
     }
     public init(
@@ -88,16 +96,15 @@ public class DatabasePool <: Resource & Datasource {
             checkInterval: checkInterval,
             creator: creator,
             checker: {
-                c => 
-                if (checkSql[0..6].toLower() == "select") {
-                    try(stmt = c.prepareStatement(checkSql)){
-                        try(r = stmt.query()){
+                c => if (checkSql[0..6].toLower() == "select") {
+                    try (stmt = c.prepareStatement(checkSql)) {
+                        try (r = stmt.query()) {
                             return r.next()
                         }
                     }
                     false
                 } else {
-                    try(stmt = c.prepareStatement(checkSql)){
+                    try (stmt = c.prepareStatement(checkSql)) {
                         return stmt.update().rowCount > 0
                     }
                     false
@@ -120,12 +127,13 @@ public class DatabasePool <: Resource & Datasource {
             checkSql: ORMConfig.getPoolCheckSql(driverName: driver.name)
         )
     }
-    public init(driver: Driver, options: Array<(String, String)>){
-        this(driver, {=>
-            let ds = driver.open(ORMConfig.getUrl(driverName: driver.name), options)
-            {=> 
-                ds.connect()
-            }
+    public init(driver: Driver, options: Array<(String, String)>) {
+        this(driver, {
+            =>
+                let ds = driver.open(ORMConfig.getUrl(driverName: driver.name), options)
+                {
+                    => ds.connect()
+                }
         }())
     }
 
@@ -165,26 +173,26 @@ class PooledConnection <: Connection {
     }
     public func close(): Unit {
         assigned = false
-        logger.debug{"database Connection ${serial} is returning"}
+        logger.debug {"database Connection ${serial} is returning"}
         returnFn(this)
-        logger.debug{"database Connection ${serial} is returned"}
+        logger.debug {"database Connection ${serial} is returned"}
     }
     func activate(returnFn: (PooledConnection) -> Unit): Connection {
         assigned = true
         this.returnFn = returnFn
-        logger.debug{"database Connection ${serial} is assigned"}   
+        logger.debug {"database Connection ${serial} is assigned"}
         this
     }
     func isDestroied(): Bool {
         connection.isClosed()
     }
     func destroy(): Unit {
-        logger.debug{"database Connection ${serial} is closing"}
+        logger.debug {"database Connection ${serial} is closing"}
         if (!(assigned || connection.isClosed())) {
             connection.close()
-            logger.debug{"database Connection ${serial} is closed"}
+            logger.debug {"database Connection ${serial} is closed"}
         } else {
-            logger.debug{"database Connection ${serial} cannot close"}
+            logger.debug {"database Connection ${serial} cannot close"}
         }
     }
 
@@ -194,9 +202,9 @@ class PooledConnection <: Connection {
      * 返回值 Statement - 一个可以执行 sql 语句的实例对象
      */
     public func prepareStatement(sql: String): Statement {
-        logger.debug{"database Connection ${serial} is preparing a statement"}
+        logger.debug {"database Connection ${serial} is preparing a statement"}
         let stmt = connection.prepareStatement(sql)
-        logger.debug{"database Connection ${serial} a statement is prepared"}
+        logger.debug {"database Connection ${serial} a statement is prepared"}
         stmt
     }
 
@@ -206,9 +214,9 @@ class PooledConnection <: Connection {
      * 开始事务
      */
     public func createTransaction(): Transaction {
-        logger.debug{"database Connection ${serial} a transaction is beginning"}
+        logger.debug {"database Connection ${serial} a transaction is beginning"}
         let tx = connection.createTransaction()
-        logger.debug{"database Connection ${serial} a transaction began"}
+        logger.debug {"database Connection ${serial} a transaction began"}
         tx
     }
     public prop state: ConnectionState {
