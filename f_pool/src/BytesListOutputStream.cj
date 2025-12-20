@@ -19,13 +19,17 @@ import std.collection.ArrayList
 import std.io.OutputStream
 
 public class BytesListOutputStream <: OutputStream & BytesCopyTo {
-    BytesListOutputStream(private let list: ArrayList<Array<Byte>>){}
+    BytesListOutputStream(private let list: ArrayList<Array<Byte>>, private let pool: ArrayListPool<Array<Byte>>){}
     public func write(bytes: Array<Byte>): Unit {
         list.add(bytes)
     }
     public func copy(to!: OutputStream): Unit {
-        for(bytes in list){
-            to.write(bytes)
+        try{
+            for(bytes in list){
+                to.write(bytes)
+            }
+        }finally{
+            pool.giveBack(list)
         }
     }
     public static func builder(
@@ -55,7 +59,7 @@ public class BytesListOutputStreamBuilder {
     }
     public func build(timeout!: Duration = Duration.Max){
         if(let Some(l) <- pool.borrow(timeout: timeout)){
-            BytesListOutputStream(l)
+            BytesListOutputStream(l, pool)
         }else{
             None<BytesListOutputStream>
         }

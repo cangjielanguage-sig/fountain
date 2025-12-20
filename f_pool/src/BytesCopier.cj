@@ -29,18 +29,31 @@ public interface BytesCopier <: BytesCopyTo & BytesCopyFrom {}
 public struct PooledBufferBytesCopyTo <: BytesCopyTo { 
     public PooledBufferBytesCopyTo(private let input: InputStream, private let pool: ArrayPool<Byte>){}
     public func copy(to!: OutputStream): Unit {
-        let buf = pool.borrow() ?? Array<Byte>(4096, repeat: 0)
-        while(let s <- input.read(buf) && s > 0){
-            to.write(buf[0..s])
+        func copyTo(buf: Array<Byte>){
+            while(let s <- input.read(buf) && s > 0){
+                to.write(buf[0..s])
+            }
+        }
+        if(let Some(buf) <- pool.borrow()){
+            copyTo(buf)
+        }else{
+            let buf = Array<Byte>(4096, repeat: 0)
+            copyTo(buf)
         }
     }
 }
 public struct PooledBufferedBytesCopyFrom <: BytesCopyFrom {
     public PooledBufferedBytesCopyFrom(private let output: OutputStream, private let pool: ArrayPool<Byte>){}
     public func copy(from!: InputStream): Unit {
-        let buf = pool.borrow() ?? Array<Byte>(4096, repeat: 0)
-        while(let s <- from.read(buf) && s > 0){
-            output.write(buf[0..s])
+        func copyTo(buf: Array<Byte>){
+            while(let s <- from.read(buf) && s > 0){
+                output.write(buf[0..s])
+            }
+        }
+        if(let Some(buf) <- pool.borrow()){
+            copyTo(buf)
+        }else{
+            copyTo(Array<Byte>(4096, repeat: 0))
         }
     }
 }

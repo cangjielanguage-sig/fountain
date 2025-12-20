@@ -114,9 +114,6 @@ public class DataObject<T> <: SimpleDataObject & Collection<(String, Data)> & Na
     public operator func [](name: String, value!: Data): Unit {
         set(name, value)
     }
-    public func set<V>(name: String, value: V, flag!: DataConversionFlag = DEFAULT_DATA_FLAG): Unit where V <: DataFields<V> {
-        set(name, value.toData(), flag: flag)
-    }
     public func set(name: String, value: Data, flag: DataConversionFlag): Unit {
         match (T.dataFields().mutableField(name)) {
             case Some(f) where f.set(data, value, flag: flag) => ()
