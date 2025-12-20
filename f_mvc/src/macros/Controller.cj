@@ -142,7 +142,7 @@ private func generateArgs(decl: FuncDecl): (Tokens, Tokens, Tokens, Tokens) {
             argTypes += `comma`
         }
         argTypes += quote(
-            TypeInfos.get<$(ptype)>()
+            TypeInfo.of<$(ptype)>()
         )
     }
     argTypes += `rsquare`

@@ -25,7 +25,7 @@ public abstract class SqlArg <: Hashable & Equatable<SqlArg> & ToString {
                 case _ => statement.setNull(index)
             }
             case _ => SqlArgException(
-                'sql index ${index}, requires ${TypeInfos.get<T>()}, actually ${TypeInfo.of(value)}')
+                'sql index ${index}, requires ${TypeInfo.of<T>()}, actually ${TypeInfo.of(value)}')
         }
     }
     public func set(statement: Statement): Unit
@@ -51,17 +51,17 @@ public abstract class SqlArg <: Hashable & Equatable<SqlArg> & ToString {
             case x: DateTime => DateTimeSqlArg(index, x)
             case x: Array<Byte> => ByteArraySqlArg(index, x)
             case x: InputStream => InputStreamSqlArg(index, x)
-            case _ => throw SqlArgException('type of arg index ${index} which is ${TypeInfos.get<T>()} does not exist')
+            case _ => throw SqlArgException('type of arg index ${index} which is ${TypeInfo.of<T>()} does not exist')
         }
     }
 
     protected func toString<T>(value: T): String where T <: ToString {
-        '(${index}, ${TypeInfos.get<T>()}, ${value})'
+        '(${index}, ${TypeInfo.of<T>()}, ${value})'
     }
     protected var h = 0
     protected func hashCode<T>(value: T): Int64 where T <: Hashable {
         if (h == 0) {
-            h = HashBuilder().append(index).append(TypeInfos.get<T>()).append(value).build()
+            h = HashBuilder().append(index).append(TypeInfo.of<T>()).append(value).build()
         }
         h
     }
@@ -431,11 +431,11 @@ public class InputStreamSqlArg <: SqlArg {
         setValue<InputStream>(statement, value)
     }
     public func toString() {
-        '(${index}, ${TypeInfos.get<InputStream>()}, std.io.InputStream)'
+        '(${index}, ${TypeInfo.of<InputStream>()}, std.io.InputStream)'
     }
     public func hashCode() {
         if (h == 0) {
-            h = HashBuilder().append(index).append(TypeInfos.get<InputStream>()).append('std.io.InputStream').build()
+            h = HashBuilder().append(index).append(TypeInfo.of<InputStream>()).append('std.io.InputStream').build()
         }
         h
     }

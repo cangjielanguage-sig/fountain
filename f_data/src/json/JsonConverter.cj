@@ -13,9 +13,16 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package f_version
+package f_data.json
 
-import std.time.MonoTime
-
-public let AppStarts = MonoTime.now()
-public const FountainVersion = "fountain(1.0.38)"
+public func toJson<T>(d: T, flag!: DataConversionFlag = DEFAULT_DATA_FLAG): String where T <: ToData {
+    JsonValue.tryFromData(d.toData(), flag: flag).toString()
+}
+public func fromJson<T>(s: String, flag!: DataConversionFlag = DEFAULT_DATA_FLAG): ?T where T <: FromData {
+    match(T.tryFromData(JsonValue.fromStr(s).toData(), flag)){
+        case x: T => x
+        case x: ?T => x
+        case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) != 0 => None<T>
+        case _ => throw DataException('${s} cannot be converted to ${TypeInfo.of<T>()}')
+    }
+}

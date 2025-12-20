@@ -15,8 +15,7 @@ limitations under the License.
  */
 package f_data.json
 
-import std.io.{InputStream, StringReader, OutputStream, StringWriter, ByteBuffer}
-import stdx.encoding.json.*
+import std.io.{InputStream, StringReader, StringWriter, ByteBuffer}
 import f_data.exception.DataException
 import charset4cj.charset.encoding.Charset
 import charset4cj.charset.{Charsets, TextReader, TextWriter}
@@ -166,7 +165,7 @@ public class DataJsonArray <: Data & Collection<Data> {
         JsonValue.fromStr(s).toData()
     }
     public static func parse(s: String): Data {
-        tryParse(s).getOrThrow {DataParsableException('${s} cannot be parsed to ${TypeInfos.get<DataJsonArray>()}')}
+        tryParse(s).getOrThrow {DataParsableException('${s} cannot be parsed to ${TypeInfo.of<DataJsonArray>()}')}
     }
 }
 
@@ -200,6 +199,6 @@ public class DataJsonObject <: Data & Collection<(String, Data)> {
         JsonValue.fromStr(s).toData()
     }
     public static func parse(s: String): Data {
-        tryParse(s).getOrThrow {DataParsableException('${s} cannot be parsed to ${TypeInfos.get<DataJsonObject>()}')}
+        tryParse(s).getOrThrow {DataParsableException('${s} cannot be parsed to ${TypeInfo.of<DataJsonObject>()}')}
     }
 }

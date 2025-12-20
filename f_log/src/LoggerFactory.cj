@@ -43,7 +43,7 @@ public class LoggerFactory {
      * 把泛型O的全限定名作为日志实例的唯一标识
      */
     public static func getLogger<O>(attrs: Array<Attr>): AbstractLogger {
-        getLogger(TypeInfos.get<O>(), attrs)
+        getLogger(TypeInfo.of<O>(), attrs)
     }
     /**
      * 把typeInfo的全限定名作为日志实例的唯一标识

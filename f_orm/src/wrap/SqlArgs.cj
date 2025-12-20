@@ -16,9 +16,15 @@ limitations under the License.
 package f_orm.wrap
 
 public class SqlArgs <: Hashable & Equatable<SqlArgs> & ToString {
-    private let args = ArrayList<SqlArg>()
+    protected SqlArgs(private var args: ArrayList<SqlArg>){}
+    public init(){
+        this.args = ArrayList<SqlArg>()
+    }
     protected func clear() {
-        args.clear()
+        args = ArrayList<SqlArg>()
+    }
+    protected func clone(){
+        SqlArgs(args)
     }
     protected func set(statement: Statement) {
         for (arg in args) {
@@ -101,7 +107,7 @@ public class SqlArgs <: Hashable & Equatable<SqlArgs> & ToString {
     public func hashCode() {
         if (h == 0) {
             let hasher = HashBuilder()
-            hasher.append(TypeInfos.get<SqlArgs>())
+            hasher.append(TypeInfo.of<SqlArgs>())
             for (arg in args) {
                 hasher.append(arg)
             }

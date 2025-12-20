@@ -26,7 +26,7 @@ public interface DataParsable<T> where T <: DataParsable<T> {
 
 extend Duration <: DataParsable<Duration> {
     public static func parse(s: String): Duration {
-        tryParse(s).getOrThrow {DataParsableException('${s} cannot be parsed to ${TypeInfos.get<Duration>()}')}
+        tryParse(s).getOrThrow {DataParsableException('${s} cannot be parsed to ${TypeInfo.of<Duration>()}')}
     }
     public static func tryParse(s: String): ?Duration {
         let bytes = ArrayList<Byte>()

@@ -57,7 +57,7 @@ public class Aspects {
         }(funcInfo.args)
         match (r) {
             case x: T => x
-            case _ => throw TypeCastException('Type of ${TypeInfo.of(r)} does not match ${TypeInfos.get<T>()}')
+            case _ => throw TypeCastException('Type of ${TypeInfo.of(r)} does not match ${TypeInfo.of<T>()}')
         }
     }
     private static let recursiveInvocationFlag = ThreadLocal<Bool>()

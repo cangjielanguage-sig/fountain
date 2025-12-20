@@ -27,7 +27,7 @@ public class MutableField <: ReadableField {
 
     public static func new<O, F>(name: String, getter: (O) -> ?F, setter: (O, ?F) -> Unit): MutableField where O <: ObjectData<O>,
         F <: DataFields<F> {
-        let fieldType = TypeInfos.get<F>()
+        let fieldType = TypeInfo.of<F>()
         let classTypeInfo = ClassTypeInfo.of<O>()
         func doSet(o: Any, v: ?F){
             match (o) {

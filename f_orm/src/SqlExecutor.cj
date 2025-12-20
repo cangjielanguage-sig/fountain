@@ -366,8 +366,13 @@ public class SqlExecutor <: Resource & RootDAO {
             this.connection
         }
     }
-    private func logMsg(duration: Duration): String {
-        "${driverName} is executing a sql: ${sql}, args: ${args}, consumed: ${duration}"
+    private func logMsg(now: DateTime): () -> String {
+        let duration = now - start
+        let sql = this.sql_
+        let args = this.args.clone()
+        {=>
+            "${driverName} is executing a sql: ${sql}, args: ${args}, consumed: ${duration}"
+        }
     }
     private var start = DateTime.UnixEpoch
     private prop statement: Statement {
@@ -804,19 +809,19 @@ public class SqlExecutor <: Resource & RootDAO {
     }
     
     private func execute<T>(executor: () -> T): T {
-        try {
-            func exec() {
-                if (let Some(_) <- tx) {
-                    return executor()
-                }
-                try { 
-                    return executor()
-                } finally {
-                    if (!this.isClosed()) {
-                        this.close()
-                    }
+        func exec() {
+            if (tx.isSome()) {
+                return executor()
+            }
+            try { 
+                return executor()
+            } finally {
+                if (!this.isClosed()) {
+                    this.close()
                 }
             }
+        }
+        try {
             let v = if (useCache && !clearCache) {
                 let key = SqlCacheKey(sql, args)
                 match (cache.get(key)) {
@@ -836,12 +841,17 @@ public class SqlExecutor <: Resource & RootDAO {
             }
             v
         } catch (e: Exception) {
-            logger.debug(e){logMsg(DateTime.now() - start)}
+            logger.warn(e, logMsg(DateTime.now()))
             throw e
-        } finally {
-            logger.debug{logMsg(DateTime.now() - start)}
-            start = DateTime.UnixEpoch
-            clearSql()
+        } finally { 
+            //事务切面也会执行这个函数，从而一次事务内除了每次执行SQL会执行到这个finally，
+            //结束事务时也会执行这个finally，不过结束事务前sql已经清除了，会导致记一行空日志
+            //因此，记录日志前要做这个判断
+            if(sql.size > 0){
+                logger.debug(logMsg(DateTime.now()))
+                start = DateTime.UnixEpoch
+                clearSql()
+            }
         }
     }
     private func execute<T>(executor: (Statement) -> T): T {

@@ -27,7 +27,7 @@ extend Int8 <: DataFields<Int8> {
             case x: DataReal where (flag & SATURATING_ON_INT_OVERFLOW) != 0 => x.toInt8(strategy: Saturating)
             case _: DataNone => None<Int8>
             case _ where (flag & IGNORE_FIELD_TYPE_NOT_MATCH) == 0 => throw DataException(
-                '(${data}) does not match ${TypeInfos.get<Int8>()}')
+                '(${data}) does not match ${TypeInfo.of<Int8>()}')
             case x: DataString where #'^-?(\d+|0[xX][0-9a-fA-F]+|0[oO][0-7]+|0[bB][01]+)$'#
                 .regex(solid: true)
                 .matches(x.toString().trimAscii()) && (flag & IGNORE_FIELD_NOT_CONVERTABLE) != 0 => DataReal(
@@ -45,7 +45,7 @@ extend Int8 <: DataFields<Int8> {
                 .matches(x.toString().trimAscii()) && (flag & SATURATING_ON_INT_OVERFLOW) != 0 => DataReal(
                 x.toString().trimAscii()).toInt8(strategy: Saturating)
             case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException(
-                '(${data}) cannot be converted ${TypeInfos.get<Int8>()}')
+                '(${data}) cannot be converted ${TypeInfo.of<Int8>()}')
             case _ => None<Int8>
         }
     }
@@ -63,7 +63,7 @@ extend UInt8 <: DataFields<UInt8> {
             case x: DataReal where (flag & SATURATING_ON_INT_OVERFLOW) != 0 => x.toUInt8(strategy: Saturating)
             case _: DataNone => None<UInt8>
             case _ where (flag & IGNORE_FIELD_TYPE_NOT_MATCH) == 0 => throw DataException(
-                '(${data}) does not match ${TypeInfos.get<UInt8>()}')
+                '(${data}) does not match ${TypeInfo.of<UInt8>()}')
             case x: DataString where #'^(\d+|0[xX][0-9a-fA-F]+|0[oO][0-7]+|0[bB][01]+)$'#
                 .regex(solid: true)
                 .matches(x.toString().trimAscii()) && (flag & IGNORE_FIELD_NOT_CONVERTABLE) != 0 => DataReal(
@@ -81,7 +81,7 @@ extend UInt8 <: DataFields<UInt8> {
                 .matches(x.toString().trimAscii()) && (flag & SATURATING_ON_INT_OVERFLOW) != 0 => DataReal(
                 x.toString().trimAscii()).toUInt8(strategy: Saturating)
             case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException(
-                '(${data}) cannot be converted ${TypeInfos.get<UInt8>()}')
+                '(${data}) cannot be converted ${TypeInfo.of<UInt8>()}')
             case _ => None<UInt8>
         }
     }
@@ -99,7 +99,7 @@ extend Int16 <: DataFields<Int16> {
             case x: DataReal where (flag & SATURATING_ON_INT_OVERFLOW) != 0 => x.toInt16(strategy: Saturating)
             case _: DataNone => None<Int16>
             case _ where (flag & IGNORE_FIELD_TYPE_NOT_MATCH) == 0 => throw DataException(
-                '(${data}) does not match ${TypeInfos.get<Int16>()}')
+                '(${data}) does not match ${TypeInfo.of<Int16>()}')
             case x: DataString where #'^-?(\d+|0[xX][0-9a-fA-F]+|0[oO][0-7]+|0[bB][01]+)$'#
                 .regex(solid: true)
                 .matches(x.toString().trimAscii()) && (flag & IGNORE_FIELD_NOT_CONVERTABLE) != 0 => DataReal(
@@ -117,7 +117,7 @@ extend Int16 <: DataFields<Int16> {
                 .matches(x.toString().trimAscii()) && (flag & SATURATING_ON_INT_OVERFLOW) != 0 => DataReal(
                 x.toString().trimAscii()).toInt16(strategy: Saturating)
             case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException(
-                '(${data}) cannot be converted ${TypeInfos.get<Int16>()}')
+                '(${data}) cannot be converted ${TypeInfo.of<Int16>()}')
             case _ => None<Int16>
         }
     }
@@ -135,7 +135,7 @@ extend UInt16 <: DataFields<UInt16> {
             case x: DataReal where (flag & SATURATING_ON_INT_OVERFLOW) != 0 => x.toUInt16(strategy: Saturating)
             case _: DataNone => None<UInt16>
             case _ where (flag & IGNORE_FIELD_TYPE_NOT_MATCH) == 0 => throw DataException(
-                '(${data}) does not match ${TypeInfos.get<UInt16>()}')
+                '(${data}) does not match ${TypeInfo.of<UInt16>()}')
             case x: DataString where #'^(\d+|0[xX][0-9a-fA-F]+|0[oO][0-7]+|0[bB][01]+)$'#
                 .regex(solid: true)
                 .matches(x.toString().trimAscii()) && (flag & IGNORE_FIELD_NOT_CONVERTABLE) != 0 => DataReal(
@@ -153,7 +153,7 @@ extend UInt16 <: DataFields<UInt16> {
                 .matches(x.toString().trimAscii()) && (flag & SATURATING_ON_INT_OVERFLOW) != 0 => DataReal(
                 x.toString().trimAscii()).toUInt16(strategy: Saturating)
             case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException(
-                '(${data}) cannot be converted ${TypeInfos.get<UInt16>()}')
+                '(${data}) cannot be converted ${TypeInfo.of<UInt16>()}')
             case _ => None<UInt16>
         }
     }
@@ -171,7 +171,7 @@ extend Int32 <: DataFields<Int32> {
             case x: DataReal where (flag & SATURATING_ON_INT_OVERFLOW) != 0 => x.toInt32(strategy: Saturating)
             case _: DataNone => None<Int32>
             case _ where (flag & IGNORE_FIELD_TYPE_NOT_MATCH) == 0 => throw DataException(
-                '(${data}) does not match ${TypeInfos.get<Int32>()}')
+                '(${data}) does not match ${TypeInfo.of<Int32>()}')
             case x: DataString where #'^-?(\d+|0[xX][0-9a-fA-F]+|0[oO][0-7]+|0[bB][01]+)$'#
                 .regex(solid: true)
                 .matches(x.toString().trimAscii()) && (flag & IGNORE_FIELD_NOT_CONVERTABLE) != 0 => DataReal(
@@ -189,7 +189,7 @@ extend Int32 <: DataFields<Int32> {
                 .matches(x.toString().trimAscii()) && (flag & SATURATING_ON_INT_OVERFLOW) != 0 => DataReal(
                 x.toString().trimAscii()).toInt32(strategy: Saturating)
             case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException(
-                '(${data}) cannot be converted ${TypeInfos.get<Int32>()}')
+                '(${data}) cannot be converted ${TypeInfo.of<Int32>()}')
             case _ => None<Int32>
         }
     }
@@ -207,7 +207,7 @@ extend UInt32 <: DataFields<UInt32> {
             case x: DataReal where (flag & SATURATING_ON_INT_OVERFLOW) != 0 => x.toUInt32(strategy: Saturating)
             case _: DataNone => None<UInt32>
             case _ where (flag & IGNORE_FIELD_TYPE_NOT_MATCH) == 0 => throw DataException(
-                '(${data}) does not match ${TypeInfos.get<UInt32>()}')
+                '(${data}) does not match ${TypeInfo.of<UInt32>()}')
             case x: DataString where #'^(\d+|0[xX][0-9a-fA-F]+|0[oO][0-7]+|0[bB][01]+)$'#
                 .regex(solid: true)
                 .matches(x.toString().trimAscii()) && (flag & IGNORE_FIELD_NOT_CONVERTABLE) != 0 => DataReal(
@@ -225,7 +225,7 @@ extend UInt32 <: DataFields<UInt32> {
                 .matches(x.toString().trimAscii()) && (flag & SATURATING_ON_INT_OVERFLOW) != 0 => DataReal(
                 x.toString().trimAscii()).toUInt32(strategy: Saturating)
             case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException(
-                '(${data}) cannot be converted ${TypeInfos.get<UInt32>()}')
+                '(${data}) cannot be converted ${TypeInfo.of<UInt32>()}')
             case _ => None<UInt32>
         }
     }
@@ -243,7 +243,7 @@ extend Int64 <: DataFields<Int64> {
             case x: DataReal where (flag & SATURATING_ON_INT_OVERFLOW) != 0 => x.toInt64(strategy: Saturating)
             case _: DataNone => None<Int64>
             case _ where (flag & IGNORE_FIELD_TYPE_NOT_MATCH) == 0 => throw DataException(
-                '(${data}) does not match ${TypeInfos.get<Int64>()}')
+                '(${data}) does not match ${TypeInfo.of<Int64>()}')
             case x: DataString where #'^-?(\d+|0[xX][0-9a-fA-F]+|0[oO][0-7]+|0[bB][01]+)$'#
                 .regex(solid: true)
                 .matches(x.toString().trimAscii()) && (flag & IGNORE_FIELD_NOT_CONVERTABLE) != 0 => DataReal(
@@ -261,7 +261,7 @@ extend Int64 <: DataFields<Int64> {
                 .matches(x.toString().trimAscii()) && (flag & SATURATING_ON_INT_OVERFLOW) != 0 => DataReal(
                 x.toString().trimAscii()).toInt64(strategy: Saturating)
             case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException(
-                '(${data}) cannot be converted ${TypeInfos.get<Int64>()}')
+                '(${data}) cannot be converted ${TypeInfo.of<Int64>()}')
             case _ => None<Int64>
         }
     }
@@ -279,7 +279,7 @@ extend UInt64 <: DataFields<UInt64> {
             case x: DataReal where (flag & SATURATING_ON_INT_OVERFLOW) != 0 => x.toUInt64(strategy: Saturating)
             case _: DataNone => None<UInt64>
             case _ where (flag & IGNORE_FIELD_TYPE_NOT_MATCH) == 0 => throw DataException(
-                '(${data}) does not match ${TypeInfos.get<UInt64>()}')
+                '(${data}) does not match ${TypeInfo.of<UInt64>()}')
             case x: DataString where #'^(\d+|0[xX][0-9a-fA-F]+|0[oO][0-7]+|0[bB][01]+)$'#
                 .regex(solid: true)
                 .matches(x.toString().trimAscii()) && (flag & IGNORE_FIELD_NOT_CONVERTABLE) != 0 => DataReal(
@@ -297,7 +297,7 @@ extend UInt64 <: DataFields<UInt64> {
                 .matches(x.toString().trimAscii()) && (flag & SATURATING_ON_INT_OVERFLOW) != 0 => DataReal(
                 x.toString().trimAscii()).toUInt64(strategy: Saturating)
             case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException(
-                '(${data}) cannot be converted ${TypeInfos.get<UInt64>()}')
+                '(${data}) cannot be converted ${TypeInfo.of<UInt64>()}')
             case _ => None<UInt64>
         }
     }
@@ -315,7 +315,7 @@ extend IntNative <: DataFields<IntNative> {
             case x: DataReal where (flag & SATURATING_ON_INT_OVERFLOW) != 0 => x.toIntNative(strategy: Saturating)
             case _: DataNone => None<IntNative>
             case _ where (flag & IGNORE_FIELD_TYPE_NOT_MATCH) == 0 => throw DataException(
-                '(${data}) does not match ${TypeInfos.get<IntNative>()}')
+                '(${data}) does not match ${TypeInfo.of<IntNative>()}')
             case x: DataString where #'^(\d+|0[xX][0-9a-fA-F]+|0[oO][0-7]+|0[bB][01]+)$'#
                 .regex(solid: true)
                 .matches(x.toString().trimAscii()) && (flag & IGNORE_FIELD_NOT_CONVERTABLE) != 0 => DataReal(
@@ -333,7 +333,7 @@ extend IntNative <: DataFields<IntNative> {
                 .matches(x.toString().trimAscii()) && (flag & SATURATING_ON_INT_OVERFLOW) != 0 => DataReal(
                 x.toString().trimAscii()).toIntNative(strategy: Saturating)
             case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException(
-                '(${data}) cannot be converted ${TypeInfos.get<IntNative>()}')
+                '(${data}) cannot be converted ${TypeInfo.of<IntNative>()}')
             case _ => None<IntNative>
         }
     }
@@ -351,7 +351,7 @@ extend UIntNative <: DataFields<UIntNative> {
             case x: DataReal where (flag & SATURATING_ON_INT_OVERFLOW) != 0 => x.toUIntNative(strategy: Saturating)
             case _: DataNone => None<UIntNative>
             case _ where (flag & IGNORE_FIELD_TYPE_NOT_MATCH) == 0 => throw DataException(
-                '(${data}) does not match ${TypeInfos.get<UIntNative>()}')
+                '(${data}) does not match ${TypeInfo.of<UIntNative>()}')
             case x: DataString where #'^(\d+|0[xX][0-9a-fA-F]+|0[oO][0-7]+|0[bB][01]+)$'#
                 .regex(solid: true)
                 .matches(x.toString().trimAscii()) && (flag & IGNORE_FIELD_NOT_CONVERTABLE) != 0 => DataReal(
@@ -369,7 +369,7 @@ extend UIntNative <: DataFields<UIntNative> {
                 .matches(x.toString().trimAscii()) && (flag & SATURATING_ON_INT_OVERFLOW) != 0 => DataReal(
                 x.toString().trimAscii()).toUIntNative(strategy: Saturating)
             case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException(
-                '(${data}) cannot be converted ${TypeInfos.get<UIntNative>()}')
+                '(${data}) cannot be converted ${TypeInfo.of<UIntNative>()}')
             case _ => None<UIntNative>
         }
     }
@@ -384,12 +384,12 @@ extend Float64 <: DataFields<Float64> {
             case x: DataReal => x.tryToFloat64()
             case _: DataNone => None<Float64>
             case _ where (flag & IGNORE_FIELD_TYPE_NOT_MATCH) == 0 => throw DataException(
-                '(${data}) does not match ${TypeInfos.get<Float64>()}')
+                '(${data}) does not match ${TypeInfo.of<Float64>()}')
             case x: DataString where #'^(-?((\d+(\.\d+)?|\.\d+)(-?[eE]\d+)?|0[xX][0-9a-fA-F]+(\.[0-9a-fA-F]+)?(-?[pP]\d+)?))$'#
                 .regex(solid: true)
                 .matches(x.toString().trimAscii()) => DataReal(x.toString().trimAscii()).tryToFloat64()
             case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException(
-                '(${data}) cannot be converted ${TypeInfos.get<Float64>()}')
+                '(${data}) cannot be converted ${TypeInfo.of<Float64>()}')
             case _ => None<Float64>
         }
     }
@@ -404,12 +404,12 @@ extend Float32 <: DataFields<Float32> {
             case x: DataReal => x.tryToFloat32()
             case _: DataNone => None<Float32>
             case _ where (flag & IGNORE_FIELD_TYPE_NOT_MATCH) == 0 => throw DataException(
-                '(${data}) does not match ${TypeInfos.get<Float32>()}')
+                '(${data}) does not match ${TypeInfo.of<Float32>()}')
             case x: DataString where #'^(-?((\d+(\.\d+)?|\.\d+)(-?[eE]\d+)?|0[xX][0-9a-fA-F]+(\.[0-9a-fA-F]+)?(-?[pP]\d+)?))$'#
                 .regex(solid: true)
                 .matches(x.toString().trimAscii()) => DataReal(x.toString().trimAscii()).tryToFloat32()
             case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException(
-                '(${data}) cannot be converted ${TypeInfos.get<Float32>()}')
+                '(${data}) cannot be converted ${TypeInfo.of<Float32>()}')
             case _ => None<Float32>
         }
     }
@@ -424,12 +424,12 @@ extend Float16 <: DataFields<Float16> {
             case x: DataReal => x.tryToFloat16()
             case _: DataNone => None<Float16>
             case _ where (flag & IGNORE_FIELD_TYPE_NOT_MATCH) == 0 => throw DataException(
-                '(${data}) does not match ${TypeInfos.get<Float16>()}')
+                '(${data}) does not match ${TypeInfo.of<Float16>()}')
             case x: DataString where #'^(-?((\d+(\.\d+)?|\.\d+)(-?[eE]\d+)?|0[xX][0-9a-fA-F]+(\.[0-9a-fA-F]+)?(-?[pP]\d+)?))$'#
                 .regex(solid: true)
                 .matches(x.toString().trimAscii()) => DataReal(x.toString().trimAscii()).tryToFloat16()
             case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException(
-                '(${data}) cannot be converted ${TypeInfos.get<Float16>()}')
+                '(${data}) cannot be converted ${TypeInfo.of<Float16>()}')
             case _ => None<Float16>
         }
     }
@@ -444,7 +444,7 @@ extend BigInt <: DataFields<BigInt> {
             case x: DataReal => x.tryToBigInt()
             case _: DataNone => None<BigInt>
             case _ where (flag & IGNORE_FIELD_TYPE_NOT_MATCH) == 0 => throw DataException(
-                '(${data}) does not match ${TypeInfos.get<BigInt>()}')
+                '(${data}) does not match ${TypeInfo.of<BigInt>()}')
             case x: DataString where #'^(-?(\d+|0[xX][0-9a-fA-F]+|0[oO][0-7]+|0[bB][01]+))$'#
                 .regex(solid: true)
                 .matches(x.toString().trimAscii()) => DataReal(x.toString().trimAscii()).tryToBigInt()
@@ -462,7 +462,7 @@ extend Decimal <: DataFields<Decimal> {
             case x: DataReal => x.tryToDecimal()
             case _: DataNone => None<Decimal>
             case _ where (flag & IGNORE_FIELD_TYPE_NOT_MATCH) == 0 => throw DataException(
-                '(${data}) does not match ${TypeInfos.get<Decimal>()}')
+                '(${data}) does not match ${TypeInfo.of<Decimal>()}')
             case x: DataString where #'^(-?((\d+(\.\d+)?|\.\d+)(-?[eE]\d+)?|0[xX][0-9a-fA-F]+(\.[0-9a-fA-F]+)?(-?[pP]\d+)?))$'#
                 .regex(solid: true)
                 .matches(x.toString().trimAscii()) => DataReal(x.toString().trimAscii()).tryToDecimal()

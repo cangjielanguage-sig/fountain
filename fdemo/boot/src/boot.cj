@@ -98,6 +98,10 @@ private let _ = {=>
         map['2'] = 2
         let data4 = map.toData()
         println('AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA ${JsonValue.tryFromData(data4)}')
+        let s = toJson(data2)//把仓颉对象转成JSON串
+        let d = fromJson<TestData2>(s)//把JSON串转成仓颉类对象
+        println('AAAAAAAAAAAAAAAAAAA ${s}')
+        println('AAAAAAAAAAAAAAAAAAAA ${d.toData()}')
     }catch(e: Exception){
         e.printStackTrace()
         throw e

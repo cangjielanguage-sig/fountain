@@ -49,7 +49,7 @@ extend String <: DataFields<String> {
             case x: DataString => x.data
             case x: DataNone => None<String>
             case _ where (flag & IGNORE_FIELD_TYPE_NOT_MATCH) == 0 => throw DataException(
-                '(${data}) does not match to ${TypeInfos.get<String>()}')
+                '(${data}) does not match to ${TypeInfo.of<String>()}')
             case x => x.toString()
         }
     }

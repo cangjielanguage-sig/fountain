@@ -45,7 +45,7 @@ public class BeanFactory {
         if (registered.load()) {
             throw BeanException('To register bean to a registered BeanFactory is forbidden')
         }
-        var beanType = TypeInfos.get<T>()
+        var beanType = TypeInfo.of<T>()
         let manager = BeanManager(meta, beanType, creator)
         synchronized(mutex) {
             if (let Some(existed) <- beans.addIfAbsent(manager.name, manager)) {
@@ -54,8 +54,8 @@ public class BeanFactory {
             }
             let typeQueue = LinkedList<BeanType>()
             typeQueue.addLast(ClassType(beanType))
-            let any = TypeInfos.get<Any>()
-            let object = TypeInfos.get<Object>()
+            let any = TypeInfo.of<Any>()
+            let object = TypeInfo.of<Object>()
             typeQueue.addLast(ClassType(any))
             typeQueue.addLast(ClassType(object))
             while (let Some(bt) <- typeQueue.removeFirst()) {
@@ -117,7 +117,7 @@ public class BeanFactory {
         log.debug{'bean registered ${manager}'}
     }
     public func register<T>(creator: () -> T) where T <: Object {
-        let typeInfo = TypeInfos.get<T>()
+        let typeInfo = TypeInfo.of<T>()
         let meta = if (let Some(meta) <- typeInfo.findAnnotation<BeanMeta>()) {
             meta
         } else {
@@ -127,7 +127,7 @@ public class BeanFactory {
     }
     public func register<T>(constructor: String, creator: () -> T) where T <: Object {
         if(TypeInfos.withAnnotation<T, Constructor>(constructor, [])){
-            if(let Some(meta) <- TypeInfos.get<T>().getInstanceFunction(constructor, []).findAnnotation<BeanMeta>()){
+            if(let Some(meta) <- TypeInfo.of<T>().getInstanceFunction(constructor, []).findAnnotation<BeanMeta>()){
                 doRegister<T>(meta, creator)
             }else{
                 register<T>(creator)
@@ -177,23 +177,23 @@ public class BeanFactory {
         beanTypeMap.get(typeInfo) ?? []
     }
     private func matches<T>(m: BeanManager) {
-        matches(TypeInfos.get<T>(), m)
+        matches(TypeInfo.of<T>(), m)
     }
     private func matches(beanType: TypeInfo, m: BeanManager) {
         m.beanType.isSubtypeOf(beanType)
     }
     private func matches<T>(cond: StringCond, m: BeanManager) {
-        matches(TypeInfos.get<T>(), cond, m)
+        matches(TypeInfo.of<T>(), cond, m)
     }
     private func matches(beanType: TypeInfo, cond: StringCond, m: BeanManager) {
         matches(beanType, m) && cond.on(m.name)
     }
     public func getFirst<T>(cond!: StringCond = IgnoreCond): ?T {
-        getFirst<T>(TypeInfos.get<T>(), cond: cond)
+        getFirst<T>(TypeInfo.of<T>(), cond: cond)
     }
     private func beanTypeIs<T>(beanType: TypeInfo) {
-        if (!beanType.isSubtypeOf(TypeInfos.get<T>())) {
-            throw BeanException('${beanType} is not sub type of ${TypeInfos.get<T>()}')
+        if (!beanType.isSubtypeOf(TypeInfo.of<T>())) {
+            throw BeanException('${beanType} is not sub type of ${TypeInfo.of<T>()}')
         }
     }
     public func getFirst<T>(beanType: TypeInfo, cond!: StringCond = IgnoreCond): ?T {
@@ -213,7 +213,7 @@ public class BeanFactory {
         None
     }
     private func getAll<T>(cond: StringCond, put: (BeanManager) -> Unit) {
-        getAll<T>(TypeInfos.get<T>(), cond, put)
+        getAll<T>(TypeInfo.of<T>(), cond, put)
     }
     private func getAll<T>(beanType: TypeInfo, cond: StringCond, put: (BeanManager) -> Unit) {
         for (m in iterator<T>(beanType, cond: cond)) {
@@ -221,7 +221,7 @@ public class BeanFactory {
         }
     }
     public func getList<T>(cond!: StringCond = IgnoreCond): ArrayList<T> {
-        getList<T>(TypeInfos.get<T>(), cond: cond)
+        getList<T>(TypeInfo.of<T>(), cond: cond)
     }
     public func getList<T>(beanType: TypeInfo, cond!: StringCond = IgnoreCond): ArrayList<T> {
         let list = ArrayList<T>()
@@ -233,7 +233,7 @@ public class BeanFactory {
         list
     }
     public func getMap<T>(cond!: StringCond = IgnoreCond): HashMap<String, T> {
-        getMap<T>(TypeInfos.get<T>(), cond: cond)
+        getMap<T>(TypeInfo.of<T>(), cond: cond)
     }
     public func getMap<T>(beanType: TypeInfo, cond!: StringCond = IgnoreCond): HashMap<String, T> {
         let map = HashMap<String, T>()
@@ -266,7 +266,7 @@ public class BeanFactory {
     public func getFirstTuple<T>(cond!: StringCond = IgnoreCond): ?(String, T, () -> Unit) {
         match (cond) {
             case Exactly(n) => return generateTuple<T>(beans.get(n))
-            case _ => match (beanTypeMap.get(TypeInfos.get<T>())) {
+            case _ => match (beanTypeMap.get(TypeInfo.of<T>())) {
                 case Some(tree) => for (m in tree where matches<T>(cond, m)) {
                     if (let bean <- m.bean && let b: T <- bean) {
                         return (m.name, b, m.generateDestroy(bean))
@@ -294,7 +294,7 @@ public class BeanFactory {
         getFirst<T>(cond: Exactly(name))
     }
     public func iterator<T>(cond!: StringCond = IgnoreCond): Iterator<BeanManager> {
-        iterator<T>(TypeInfos.get<T>(), cond: cond)
+        iterator<T>(TypeInfo.of<T>(), cond: cond)
     }
     public func iterator<T>(beanType: TypeInfo, cond!: StringCond = IgnoreCond): Iterator<BeanManager> {
         beanTypeIs<T>(beanType)

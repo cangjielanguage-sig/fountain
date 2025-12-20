@@ -35,9 +35,9 @@ abstract class ControllerFuncParam {
 
 @Annotation[target: [Parameter]]
 public class RequestParam <: ControllerFuncParam {
-    public const RequestParam(private let name: String) {}
-    public const init() {
-        this('')
+    public const RequestParam(private let name: String, private let default!: ?String = None) {}
+    public const init(default!: ?String = None) {
+        this('', default: default)
     }
     private func extractValue(name: String, ctx: HttpContext): ?String {
         let request = ctx.request
@@ -53,6 +53,9 @@ public class RequestParam <: ControllerFuncParam {
                     list = l
                 }
             }
+        }
+        if(list.isEmpty() && let Some(d) <- default){
+            list = ArrayList<String>(d.split(','))
         }
         if (list.isEmpty()) {
             None<String>
@@ -86,18 +89,21 @@ public class RequestParam <: ControllerFuncParam {
 
 @Annotation[target: [Parameter]]
 public class PathVariable <: ControllerFuncParam {
-    public const PathVariable(private let name: String) {}
-    public const init() {
-        this('')
+    public const PathVariable(private let name: String, private let default!: ?String = None) {}
+    public const init(default!: ?String = None) {
+        this('', default: default)
     }
     protected func extract<T>(name: String, converter: ?AbstractDateTimeConverter, ctx: HttpContext, pattern: HttpRequestPathPatterns): ?T where T <: DataFields<T> {
         let path = ctx.request.url.path
-        let value = pattern.extract(path, if (this.name.isEmpty()) {
+        var value = pattern.extract(path, if (this.name.isEmpty()) {
             name
         } else {
             this.name
         })
-        if (let None <- value) {
+        if(value.isNone() && default.isSome()){
+            value = default
+        }
+        if (value.isNone()) {
             return None<T>
         }
         parseValue<T>(value, converter)
@@ -106,16 +112,19 @@ public class PathVariable <: ControllerFuncParam {
 
 @Annotation[target: [Parameter]]
 public class RequestHeader <: ControllerFuncParam {
-    public const RequestHeader(private let name: String) {}
-    public const init() {
-        this('')
+    public const RequestHeader(private let name: String, private let default!: ?String = None) {}
+    public const init(default!: ?String = None) {
+        this('', default: default)
     }
     protected func extract<T>(name: String, converter: ?AbstractDateTimeConverter, ctx: HttpContext, pattern: HttpRequestPathPatterns): ?T where T <: DataFields<T> {
-        let value = ctx.request.headers.get(if (this.name.isEmpty()) {
+        var value = ctx.request.headers.get(if (this.name.isEmpty()) {
             name
         } else {
             this.name
         })
+        if(value.isEmpty() && let Some(d) <- default){
+            value = d.split(',')
+        }
         if (value.isEmpty()) {
             None<T>
         } else {

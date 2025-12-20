@@ -27,7 +27,7 @@ extend<M, V> DataMap<M, String, V> <: NamedData where V <: DataFields<V>, M <: D
         this.data.get(name)?.toData()
     }
     public operator func [](name: String): Data {
-        get(name).getOrThrow {DataException('key ${name} is not found in ${TypeInfos.get<M>()}')}
+        get(name).getOrThrow {DataException('key ${name} is not found in ${TypeInfo.of<M>()}')}
     }
 }
 
@@ -37,6 +37,6 @@ extend<M, V> DataConcurrentMap<M, String, V> <: NamedData where V <: DataFields<
         this.data.get(name)?.toData()
     }
     public operator func [](name: String): Data {
-        get(name).getOrThrow {DataException('key ${name} is not found in ${TypeInfos.get<M>()}')}
+        get(name).getOrThrow {DataException('key ${name} is not found in ${TypeInfo.of<M>()}')}
     }
 }

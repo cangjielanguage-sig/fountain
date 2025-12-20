@@ -109,10 +109,13 @@ public class DataObject<T> <: SimpleDataObject & Collection<(String, Data)> & Na
         T.dataFields().mutableFields()
     }
     public operator func [](name: String): Data {
-        get(name).getOrThrow {DataException('field ${name} is not found in ${TypeInfos.get<T>()}')}
+        get(name).getOrThrow {DataException('field ${name} is not found in ${TypeInfo.of<T>()}')}
     }
     public operator func [](name: String, value!: Data): Unit {
         set(name, value)
+    }
+    public func set<V>(name: String, value: V, flag!: DataConversionFlag = DEFAULT_DATA_FLAG): Unit where V <: DataFields<V> {
+        set(name, value.toData(), flag: flag)
     }
     public func set(name: String, value: Data, flag: DataConversionFlag): Unit {
         match (T.dataFields().mutableField(name)) {
@@ -121,7 +124,7 @@ public class DataObject<T> <: SimpleDataObject & Collection<(String, Data)> & Na
                 "source field ${name} in ${TypeInfo.of<T>()} connot be converted")
             case Some(_) => ()
             case _ where (flag & IGNORE_FIELD_NOT_FOUND) == 0 => throw DataException(
-                "field name ${name} is not found from ${TypeInfos.get<T>()}")
+                "field name ${name} is not found from ${TypeInfo.of<T>()}")
             case _ => ()
         }
     }
@@ -134,11 +137,11 @@ public class DataObject<T> <: SimpleDataObject & Collection<(String, Data)> & Na
                 case x: ?V => x
                 case x: V => x
                 case _ where (flag & IGNORE_FIELD_NOT_FOUND) == 0 => throw DataException(
-                    'field ${name} is not found in ${TypeInfos.get<T>()}')
+                    'field ${name} is not found in ${TypeInfo.of<T>()}')
                 case _ => None<V>
             }
             case _ where (flag & IGNORE_FIELD_NOT_FOUND) == 0 => throw DataException(
-                'field ${name} is not found in ${TypeInfos.get<T>()}')
+                'field ${name} is not found in ${TypeInfo.of<T>()}')
             case _ => None<V>
         }
     }
@@ -159,10 +162,10 @@ public class DataObject<T> <: SimpleDataObject & Collection<(String, Data)> & Na
         }
     }
     public static func tryParse(string: String): ?Data {
-        let typeInfo = TypeInfos.get<T>()
-        if (typeInfo.isSubtypeOf(TypeInfos.get<Parsable<T>>())) {
+        let typeInfo = TypeInfo.of<T>()
+        if (typeInfo.isSubtypeOf(TypeInfo.of<Parsable<T>>())) {
             let data = (TypeMemberInfos
-                .staticFunction(typeInfo, 'tryParse', [TypeInfos.get<String>()])?
+                .staticFunction(typeInfo, 'tryParse', [TypeInfo.of<String>()])?
                 .apply(typeInfo, string))
                 .getOrThrow()
             match (data) {
@@ -177,7 +180,7 @@ public class DataObject<T> <: SimpleDataObject & Collection<(String, Data)> & Na
         }
     }
     public static func parse(string: String): Data {
-        tryParse(string).getOrThrow {DataException("current type ${TypeInfos.get<T>()} is not Parsable")}
+        tryParse(string).getOrThrow {DataException("current type ${TypeInfo.of<T>()} is not Parsable")}
     }
 
     public func dataCreator(): () -> SimpleDataObject {
@@ -198,7 +201,7 @@ public class DataObject<T> <: SimpleDataObject & Collection<(String, Data)> & Na
                 }
                 target
             case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException(
-                "src cannot be converted to ${TypeInfos.get<T>()}")
+                "src cannot be converted to ${TypeInfo.of<T>()}")
             case _ => target
         }
     }
@@ -229,12 +232,12 @@ public class DataObject<T> <: SimpleDataObject & Collection<(String, Data)> & Na
                 case x: ?V => match (x) {
                     case Some(x) => map[k] = x
                     case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException(
-                        'field ${k} of ${TypeInfos.get<T>()} cannot be converted to ${TypeInfos.get<V>()}')
+                        'field ${k} of ${TypeInfo.of<T>()} cannot be converted to ${TypeInfo.of<V>()}')
                     case _ => continue
                 }
                 case x: V => map[k] = x
                 case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException(
-                    'field ${k} of ${TypeInfos.get<T>()} cannot be converted to ${TypeInfos.get<V>()}')
+                    'field ${k} of ${TypeInfo.of<T>()} cannot be converted to ${TypeInfo.of<V>()}')
                 case _ => continue
             }
         }

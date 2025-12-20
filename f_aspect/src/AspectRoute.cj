@@ -26,7 +26,7 @@ import f_regex.*
 public class AspectRoute <: RouteRule {
     public const AspectRoute(public let route: RouteRule) {}
     public func isAspect<T>(): Bool {
-        TypeInfos.get<T>().isSubtypeOf(TypeInfos.get<Aspect>())
+        TypeInfo.of<T>().isSubtypeOf(TypeInfo.of<Aspect>())
     }
     public func matches(funcInfo: InvocationFuncInfo): Bool {
         route.matches(funcInfo)

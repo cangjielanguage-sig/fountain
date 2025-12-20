@@ -39,7 +39,7 @@ public func copyToCType<T>(input: InputStream): T where T <: CType {
     let buf = Array<Byte>(size, repeat: 0)
     let len = input.read(buf)
     if(len < size) {
-        throw IllegalSizeException("remainder bytes in InputStream is ${len}, but size of ${TypeInfos.get<T>()} is ${size}")
+        throw IllegalSizeException("remainder bytes in InputStream is ${len}, but size of ${TypeInfo.of<T>()} is ${size}")
     }
     unsafe{
         let handle = acquireArrayRawData<Byte>(buf)

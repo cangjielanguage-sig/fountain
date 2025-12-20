@@ -61,7 +61,7 @@ extend DateTime <: DataFields<DateTime> & ExtendDateTimeData {
             case x: DataDateTime => x.tryToDateTime()
             case _: DataNone => None<DateTime>
             case _ where (flag & IGNORE_FIELD_TYPE_NOT_MATCH) == 0 => throw DataException(
-                '(${data}) does not match ${TypeInfos.get<DateTime>()}')
+                '(${data}) does not match ${TypeInfo.of<DateTime>()}')
             case x: DataDuration => match (x.tryToDuration()) {
                 case Some(x) => DateTime.UnixEpoch + x
                 case _ => None<DateTime>
@@ -82,7 +82,7 @@ extend DateTime <: DataFields<DateTime> & ExtendDateTimeData {
                     }
                 }
             case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException(
-                '(${data}) cannot be converted to ${TypeInfos.get<DateTime>()}')
+                '(${data}) cannot be converted to ${TypeInfo.of<DateTime>()}')
             case _ => None<DateTime>
         }
     }

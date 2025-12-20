@@ -70,7 +70,7 @@ public interface MapData<M, K, V> <: DataFields<M> & MapRawType where K <: Equat
     static func tryFromData(data: Data, flag: DataConversionFlag): Any
     prop rawType: (TypeInfo, TypeInfo) {
         get() {
-            (TypeInfos.get<K>(), TypeInfos.get<V>())
+            (TypeInfo.of<K>(), TypeInfo.of<V>())
         }
     }
 }

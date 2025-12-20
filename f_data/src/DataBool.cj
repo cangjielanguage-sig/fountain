@@ -62,7 +62,7 @@ extend Bool <: DataFields<Bool> {
             case x: DataBool => x.tryToBool()
             case _: DataNone => None<Bool>
             case _ where (flag & IGNORE_FIELD_TYPE_NOT_MATCH) == 0 => throw DataException(
-                '(${data}) does not match ${TypeInfos.get<Bool>()}')
+                '(${data}) does not match ${TypeInfo.of<Bool>()}')
             case x: DataString =>
                 let s = x.toString().toAsciiLower()
                 if (s == "true" || s == "false") {
@@ -72,7 +72,7 @@ extend Bool <: DataFields<Bool> {
                 }
             case x: DataReal => x.toDecimal() != Decimal.zero
             case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException(
-                '(${data}) cannot be converted to ${TypeInfos.get<Bool>()}')
+                '(${data}) cannot be converted to ${TypeInfo.of<Bool>()}')
             case _ => None<Bool>
         }
     }

@@ -46,7 +46,7 @@ public interface State<D> {
         }else{
             match(this.data){
                 case x: D => x
-                case x => throw IllegalStateException('data type requires ${TypeInfos.get<D>()} but current is ${TypeInfo.of(x)} which is from instance of ${TypeInfo.of(this)}')
+                case x => throw IllegalStateException('data type requires ${TypeInfo.of<D>()} but current is ${TypeInfo.of(x)} which is from instance of ${TypeInfo.of(this)}')
             }
         }
     }

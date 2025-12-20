@@ -33,7 +33,7 @@ public class Factory<A, O> {
     private let producers = HashMap<TypeInfo, Producer<A, O>>()
 
     public func assemble<T>(producer: Producer<A, O>): Unit {
-        producers.add(TypeInfos.get<T>(), producer)
+        producers.add(TypeInfo.of<T>(), producer)
     }
     public func assemble<T>(producers: Iterable<Producer<A, O>>): Unit {
         for (producer in producers) {
@@ -43,13 +43,13 @@ public class Factory<A, O> {
     private func convert<T>(o: O): T {
         match(o){
             case x: T => x
-            case _ => throw TypeNotMatchException('${TypeInfos.get<T>()} must be subtype of ${TypeInfos.get<O>()}')
+            case _ => throw TypeNotMatchException('${TypeInfo.of<T>()} must be subtype of ${TypeInfo.of<O>()}')
         }
     }
     public func produce<T>(): T {
-        convert<T>(producers[TypeInfos.get<T>()].produce())
+        convert<T>(producers[TypeInfo.of<T>()].produce())
     }
     public func produce<T>(arg: A): T {
-        convert<T>(producers[TypeInfos.get<T>()].produce(arg))
+        convert<T>(producers[TypeInfo.of<T>()].produce(arg))
     }
 }

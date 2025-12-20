@@ -23,7 +23,7 @@ public struct DataToString <: ToString {
         builder.toString()
     }
     public func append<T>(): Unit {
-        builder.append(TypeInfos.get<T>())
+        builder.append(TypeInfo.of<T>())
         builder.append('{')
     }
     public func append(name: String, value: Bool): Unit {

@@ -39,10 +39,10 @@ public interface DataFields<T> <: FromToData where T <: DataFields<T> {
         match (T.tryFromData(data, flag)) {
             case x: ?T => match (x) {
                 case Some(x) => x
-                case _ => throw DataException('data ${data} cannot be converted to ${TypeInfos.get<T>()}')
+                case _ => throw DataException('data ${data} cannot be converted to ${TypeInfo.of<T>()}')
             }
             case x: T => x
-            case _ => throw DataException('data ${data} cannot be converted to ${TypeInfos.get<T>()}')
+            case _ => throw DataException('data ${data} cannot be converted to ${TypeInfo.of<T>()}')
         }
     }
 }
@@ -52,7 +52,7 @@ public func convert<T>(data: Data, flag!: DataConversionFlag = DEFAULT_DATA_FLAG
         case x: ?T => x
         case x: T => x
         case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException(
-            'data ${data} cannot be converted to ${TypeInfos.get<T>()}')
+            'data ${data} cannot be converted to ${TypeInfo.of<T>()}')
         case _ => None<T>
     }
 }
@@ -61,7 +61,7 @@ public func f_data_tryFromData<O>(data: Data, flag: DataConversionFlag): Any whe
     match (DataObject<O>.populate(data, flag: flag)) {
         case Some(o: O) => o
         case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException(
-            '${data} cannot be converted to ${TypeInfos.get<O>()}')
+            '${data} cannot be converted to ${TypeInfo.of<O>()}')
         case _ => None<O>
     }
 }
@@ -72,9 +72,9 @@ internal func internal_f_data_tryFromData<T>(data: Data, flag: DataConversionFla
         case x: ?T => match (x) {
             case Some(x) => x
             case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) != 0 => None<T>
-            case _ => throw DataException("cannot convert data to ${TypeInfos.get<T>()}")
+            case _ => throw DataException("cannot convert data to ${TypeInfo.of<T>()}")
         }
         case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) != 0 => None<T>
-        case _ => throw DataException("cannot convert data to ${TypeInfos.get<T>()}")
+        case _ => throw DataException("cannot convert data to ${TypeInfo.of<T>()}")
     }
 }
