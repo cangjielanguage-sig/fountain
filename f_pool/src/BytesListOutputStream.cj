@@ -17,7 +17,6 @@ package f_pool
 
 import std.collection.ArrayList
 import std.io.OutputStream
-import f_io.BytesCopyTo
 
 public class BytesListOutputStream <: OutputStream & BytesCopyTo {
     BytesListOutputStream(private let list: ArrayList<Array<Byte>>){}
