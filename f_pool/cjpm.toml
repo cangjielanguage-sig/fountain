@@ -1,6 +1,7 @@
 [dependencies]
   f_base = {path = "../f_base"}
   f_exception = {path = "../f_exception"}
+  f_io = {path = "../f_io"}
   f_log = {path = "../f_log"}
 [package]
   cjc-version = "1.0.0"
