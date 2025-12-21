@@ -16,4 +16,5 @@
   f_collection = {path = "../f_collection"}
   f_data = {path = "../f_data"}
   f_exception = {path = "../f_exception"}
+  f_pool = {path = "../f_pool"}
   f_util = {path = "../f_util"}

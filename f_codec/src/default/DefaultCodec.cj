@@ -44,9 +44,23 @@ public class DefaultCodec <: Codec {
     private static let TEN_POW_NINE = BigInt(10 ** 9)
     private static let typeMurmurHashs = ConcurrentHashMap<TypeInfo, MurmurHash128X64>()
     private static let typeMurmurCreators = ConcurrentHashMap<MurmurHash128X64, () -> SimpleDataObject>()
+    private static var byteListOutputBuilder = BytesListOutputStream.builder(initSize: 1024, minSize: 1024, maxSize: 1024)
+    private static var fileThreshold = 4096
+    private static var bytesPool = ArrayPool<Byte>(initSize: 0, minSize: 1, maxSize: 1024, arraySize: 4096)
     private var size = 0
-    private let inputs = ArrayList<InputStream>([ByteBuffer()])
+    private let inputs = {=> 
+        let list = ArrayList<BytesCopyTo>()
+        list.add(byteListOutputBuilder.build().getOrThrow())
+        list
+    }()
 
+    public static func setBytesPool(output: BytesListOutputStreamBuilder): Unit {
+        byteListOutputBuilder = output
+    }
+    public static func setBytesPool(initSize!: Int64 = 0, minSize!: Int64 = 1, maxSize!: Int64 = 1024, arraySize!: Int64 = 4096): Unit {
+        bytesPool = ArrayPool<Byte>(initSize: initSize, minSize: minSize, maxSize: maxSize, arraySize: arraySize)
+        fileThreshold = arraySize
+    }
     public static func registerType<T>(): MurmurHash128X64 where T <: Object & ObjectData<T> & DataFields<T> {
         let typeInfo = ClassTypeInfo.of<T>()
         let typeMurmur = typeMurmurHashs.computeIfAbsent(typeInfo) {murmurHash128X64(typeInfo.qualifiedName)}
@@ -63,11 +77,11 @@ public class DefaultCodec <: Codec {
         typeMurmur
     }
 
-    private func lastBuffer(): ByteBuffer {
+    private func lastBuffer(): BytesListOutputStream {
         match (inputs[inputs.size - 1]) {
-            case x: ByteBuffer => x
+            case x: BytesListOutputStream => x
             case _ =>
-                let buf = ByteBuffer()
+                let buf = byteListOutputBuilder.build().getOrThrow()
                 inputs.add(buf)
                 buf
         }
@@ -85,11 +99,11 @@ public class DefaultCodec <: Codec {
             case x: DataCollection<Array<Byte>, Byte> => encode(x.data)
             case x: Collection<Data> =>
                 if (x.isEmpty()) {
-                    buffer.writeByte(COLLECTION.value)
+                    buffer.write([COLLECTION.value])
                     return this
                 }
                 let sizeBuf = encodeSizeOfValue(COLLECTION, x.size)
-                inputs.add(ByteBuffer(sizeBuf))
+                buffer.write(sizeBuf)
                 for (item in x) {
                     encode(item)
                 }
@@ -109,19 +123,20 @@ public class DefaultCodec <: Codec {
                 }
                 encodeBytes(OBJECT, typeMurmur.toBytes(), buffer)
                 let sizeBuf = encodeSizeOfEncoded(x.size)
-                inputs.add(ByteBuffer(sizeBuf))
+                buffer.write(sizeBuf)
+                let instance = x.getData()
                 for (f in x.fields()) {
                     encode(f.name)
-                    encode(f.get(x.getData()))
+                    encode(f.get(instance))
                 }
                 this
             case x: Collection<(Data, Data)> =>
                 if (x.isEmpty()) {
-                    buffer.writeByte(MAP.value)
+                    buffer.write([MAP.value])
                     return this
                 }
                 let sizeBuf = encodeSizeOfValue(MAP, x.size)
-                inputs.add(ByteBuffer(sizeBuf))
+                buffer.write(sizeBuf)
                 for ((k, v) in x) {
                     encode(k)
                     encode(v)
@@ -129,11 +144,11 @@ public class DefaultCodec <: Codec {
                 this
             case x: Collection<(String, Data)> =>
                 if (x.isEmpty()) {
-                    buffer.writeByte(MAP.value)
+                    buffer.write([MAP.value])
                     return this
                 }
                 let sizeBuf = encodeSizeOfValue(MAP, x.size)
-                inputs.add(ByteBuffer(sizeBuf))
+                buffer.write(sizeBuf)
                 for ((n, d) in x) {
                     encode(n.toData())
                     encode(d)
@@ -150,19 +165,19 @@ public class DefaultCodec <: Codec {
         encode(data.toData())
         this
     }
-    private func encodeNone(buffer: ByteBuffer): Encoder {
-        buffer.writeByte(DataType.NONE.value)
+    private func encodeNone(buffer: BytesListOutputStream): Encoder {
+        buffer.write([DataType.NONE.value])
         size++
         this
     }
     public func encodeNone(): Encoder {
         encodeNone(lastBuffer())
     }
-    private func encode(value: Bool, buffer: ByteBuffer): Encoder {
-        buffer.writeByte(if (value) {
-            DataType.BOOL.value | 1
+    private func encode(value: Bool, buffer: BytesListOutputStream): Encoder {
+        buffer.write(if (value) {
+            [DataType.BOOL.value | 1]
         } else {
-            DataType.BOOL.value
+            [DataType.BOOL.value]
         })
         size++
         this
@@ -170,10 +185,10 @@ public class DefaultCodec <: Codec {
     public func encode(value: Bool): Encoder {
         encode(value, lastBuffer())
     }
-    private func encode(value: String, buffer: ByteBuffer): Encoder {
+    private func encode(value: String, buffer: BytesListOutputStream): Encoder {
         let ss = value.size
         if (ss == 0) {
-            buffer.writeByte(DataType.STRING.value)
+            buffer.write([DataType.STRING.value])
             size++
         } else {
             let buf = encodeSizeOfValue(STRING, ss)
@@ -187,7 +202,7 @@ public class DefaultCodec <: Codec {
     public func encode(value: String): Encoder {
         encode(value, lastBuffer())
     }
-    private func encode(value: Int8, buffer: ByteBuffer): Encoder {
+    private func encode(value: Int8, buffer: BytesListOutputStream): Encoder {
         buffer.write([DataType.INT.value | 1 | if (value < 0) {
             1 << 3
         } else {
@@ -203,7 +218,7 @@ public class DefaultCodec <: Codec {
     public func encode(value: Int8): Encoder {
         encode(value, lastBuffer())
     }
-    private func encode(value: UInt8, buffer: ByteBuffer): Encoder {
+    private func encode(value: UInt8, buffer: BytesListOutputStream): Encoder {
         buffer.write([DataType.INT.value | 1, value])
         size += 2
         this
@@ -211,7 +226,7 @@ public class DefaultCodec <: Codec {
     public func encode(value: UInt8): Encoder {
         encode(value, lastBuffer())
     }
-    private func encode(dataType: DataType, sign: Bool, value: UInt16, buffer: ByteBuffer): Encoder {
+    private func encode(dataType: DataType, sign: Bool, value: UInt16, buffer: BytesListOutputStream): Encoder {
         let size = if (value <= 0xff) {
             1
         } else {
@@ -231,7 +246,7 @@ public class DefaultCodec <: Codec {
         this.size += 1 + size
         this
     }
-    private func encode(value: Int16, buffer: ByteBuffer): Encoder {
+    private func encode(value: Int16, buffer: BytesListOutputStream): Encoder {
         let sign = value >= 0
         encode(DataType.INT, sign, if (sign) {
             UInt16(value)
@@ -242,13 +257,13 @@ public class DefaultCodec <: Codec {
     public func encode(value: Int16): Encoder {
         encode(value, lastBuffer())
     }
-    private func encode(value: UInt16, buffer: ByteBuffer): Encoder {
+    private func encode(value: UInt16, buffer: BytesListOutputStream): Encoder {
         encode(DataType.INT, true, value, buffer)
     }
     public func encode(value: UInt16): Encoder {
         encode(value, lastBuffer())
     }
-    private func encode(dataType: DataType, sign: Bool, value: UInt32, buffer: ByteBuffer): Encoder {
+    private func encode(dataType: DataType, sign: Bool, value: UInt32, buffer: BytesListOutputStream): Encoder {
         let size: Int64 = if (value <= 0xff) {
             1
         } else if (value <= 0xffff) {
@@ -272,7 +287,7 @@ public class DefaultCodec <: Codec {
         this.size += 1 + size
         this
     }
-    private func encode(value: Int32, buffer: ByteBuffer): Encoder {
+    private func encode(value: Int32, buffer: BytesListOutputStream): Encoder {
         let sign = value >= 0
         encode(DataType.INT, sign, if (sign) {
             UInt32(value)
@@ -283,13 +298,13 @@ public class DefaultCodec <: Codec {
     public func encode(value: Int32): Encoder {
         encode(value, lastBuffer())
     }
-    private func encode(value: UInt32, buffer: ByteBuffer): Encoder {
+    private func encode(value: UInt32, buffer: BytesListOutputStream): Encoder {
         encode(DataType.INT, true, value, buffer)
     }
     public func encode(value: UInt32): Encoder {
         encode(value, lastBuffer())
     }
-    private func encode(dataType: DataType, sign: Bool, value: UInt64, buffer: ByteBuffer): Encoder {
+    private func encode(dataType: DataType, sign: Bool, value: UInt64, buffer: BytesListOutputStream): Encoder {
         let size: Int64 = if (value <= 0xffu64) {
             1
         } else if (value <= 0xffffu64) {
@@ -327,7 +342,7 @@ public class DefaultCodec <: Codec {
         this.size += bytes.size
         this
     }
-    private func encode(value: Int64, buffer: ByteBuffer): Encoder {
+    private func encode(value: Int64, buffer: BytesListOutputStream): Encoder {
         let sign = value >= 0
         encode(DataType.INT, sign, if (sign) {
             UInt64(value)
@@ -338,13 +353,13 @@ public class DefaultCodec <: Codec {
     public func encode(value: Int64): Encoder {
         encode(value, lastBuffer())
     }
-    private func encode(value: UInt64, buffer: ByteBuffer): Encoder {
+    private func encode(value: UInt64, buffer: BytesListOutputStream): Encoder {
         encode(DataType.INT, true, value, buffer)
     }
     public func encode(value: UInt64): Encoder {
         encode(value, lastBuffer())
     }
-    private func encode(value: Float16, buffer: ByteBuffer): Encoder {
+    private func encode(value: Float16, buffer: BytesListOutputStream): Encoder {
         if (value.isNaN() || value == Float16.Inf || value == -Float16.Inf) {
             throw CodecException('float value must not be NaN or Inf')
         } else {
@@ -354,7 +369,7 @@ public class DefaultCodec <: Codec {
     public func encode(value: Float16): Encoder {
         encode(value, lastBuffer())
     }
-    private func encode(value: Float32, buffer: ByteBuffer): Encoder {
+    private func encode(value: Float32, buffer: BytesListOutputStream): Encoder {
         if (value.isNaN() || value == Float32.Inf || value == -Float32.Inf) {
             throw CodecException('float value must not be NaN or Inf')
         } else {
@@ -364,7 +379,7 @@ public class DefaultCodec <: Codec {
     public func encode(value: Float32): Encoder {
         encode(value, lastBuffer())
     }
-    private func encode(value: Float64, buffer: ByteBuffer): Encoder {
+    private func encode(value: Float64, buffer: BytesListOutputStream): Encoder {
         if (value.isNaN() || value == Float64.Inf || value == -Float64.Inf) {
             throw CodecException('float value must not be NaN or Inf')
         } else {
@@ -374,7 +389,7 @@ public class DefaultCodec <: Codec {
     public func encode(value: Float64): Encoder {
         encode(value, lastBuffer())
     }
-    private func encodeBigInt2(dataType: DataType, value: BigInt, buffer: ByteBuffer): Encoder {
+    private func encodeBigInt2(dataType: DataType, value: BigInt, buffer: BytesListOutputStream): Encoder {
         let sign = value >= ZERO_BIGINT
         let bytes = value.toBytes()
         let sizeBytes = encodeSizeOfValue(dataType, sign, bytes.size, forInt: false)
@@ -383,7 +398,7 @@ public class DefaultCodec <: Codec {
         size += sizeBytes.size + bytes.size
         this
     }
-    private func encodeBytes(dataType: DataType, value: Array<Byte>, buffer: ByteBuffer): Encoder {
+    private func encodeBytes(dataType: DataType, value: Array<Byte>, buffer: BytesListOutputStream): Encoder {
         let sizeBytes = encodeSizeOfValue(dataType, true, value.size, forInt: false)
         buffer.write(sizeBytes)
         buffer.write(value)
@@ -391,7 +406,7 @@ public class DefaultCodec <: Codec {
         this
     }
 
-    private func encode(value: BigInt, buffer: ByteBuffer): Encoder {
+    private func encode(value: BigInt, buffer: BytesListOutputStream): Encoder {
         if (value >= MIN_INT && value < ZERO_BIGINT) {
             encode(DataType.INT, false, UInt64(!value.toInt64()), buffer)
         } else if (value >= ZERO_BIGINT && value <= MAX_INT) {
@@ -404,7 +419,7 @@ public class DefaultCodec <: Codec {
     public func encode(value: BigInt): Encoder {
         encode(value, lastBuffer())
     }
-    private func encode(value: Decimal, buffer: ByteBuffer): Encoder {
+    private func encode(value: Decimal, buffer: BytesListOutputStream): Encoder {
         let sign = value >= ZERO_DECIMAL
         let scale = value.scale
         let valval = value.value
@@ -427,7 +442,7 @@ public class DefaultCodec <: Codec {
     public func encode(value: Decimal): Encoder {
         encode(value, lastBuffer())
     }
-    private func encode(value: Duration, buffer: ByteBuffer): Encoder {
+    private func encode(value: Duration, buffer: BytesListOutputStream): Encoder {
         let int = BigInt(value.toSeconds()) * TEN_POW_NINE + BigInt(
             (value - Duration.second * value.toSeconds()).toNanoseconds())
         if (int >= MIN_INT && int < ZERO_BIGINT) {
@@ -442,7 +457,7 @@ public class DefaultCodec <: Codec {
     public func encode(value: Duration): Encoder {
         encode(value, lastBuffer())
     }
-    private func encode(value: DateTime, buffer: ByteBuffer): Encoder {
+    private func encode(value: DateTime, buffer: BytesListOutputStream): Encoder {
         let duration = value - DateTime.UnixEpoch
         let int = BigInt(duration.toSeconds()) * TEN_POW_NINE + BigInt(
             (duration - Duration.second * duration.toSeconds()).toNanoseconds())
@@ -460,15 +475,21 @@ public class DefaultCodec <: Codec {
     }
     
     public func encode(value: Array<Byte>): Encoder {
-        encode(ByteBuffer(value), value.size)
+        let sizeBuf = encodeSizeOfValue(INPUTSTREAM, true, value.size, forInt: true)
+        let buffer = lastBuffer()
+        buffer.write(sizeBuf)
+        buffer.write(value)
+        this.size += size + sizeBuf.size
+        this
     }
     public func encode(data: InputStream, size: Int64): Encoder {
         encode(data, size, false)
     }
     private func encode(data: InputStream, size: Int64, isFile: Bool){
         let sizeBuf = encodeSizeOfValue(INPUTSTREAM, !isFile, size, forInt: true)
-        inputs.add(ByteBuffer(sizeBuf))
-        inputs.add(data)
+        let buffer = lastBuffer()
+        buffer.write(sizeBuf)
+        inputs.add(PooledBufferBytesCopyTo(data, bytesPool))
         this.size += size + sizeBuf.size //+sizeBuf.size是类型头的1字节 + size序列化后的字节数
         this
     }
@@ -476,8 +497,9 @@ public class DefaultCodec <: Codec {
         encode(data, data.info.size, true)
         let fileName = data.info.path.fileName.unsafeBytes()
         let sizeBuf = encodeSizeOfEncoded(fileName.size)
-        inputs.add(ByteBuffer(sizeBuf))
-        inputs.add(ByteBuffer(fileName))
+        let buffer = lastBuffer()
+        buffer.write(sizeBuf)
+        buffer.write(fileName)
         this.size += sizeBuf.size + fileName.size
         this
     }
@@ -588,10 +610,8 @@ public class DefaultCodec <: Codec {
                 Int64(bytes[4]) << 24 | Int64(bytes[5]) << 16 | Int64(bytes[6]) << 8 | Int64(bytes[7])
         }
     }
-    public func finish(): InputStream {
-        // ChainedInputStream<InputStream>(
-        //     [ByteBuffer(encodeSizeOfEncoded(size)), ChainedInputStream<InputStream>(inputs.unsafeData())])
-        ChainedInputStream<InputStream>(inputs.unsafeData())
+    public func finish(): BytesCopyTo {
+        ChainedBytesCopyTo(inputs.unsafeData())
     }
     private static let hex = '0123456789abcdef'.toRuneArray()
     private func toHex(b: Byte): String {
@@ -630,7 +650,7 @@ public class DefaultCodec <: Codec {
         }
         v
     }
-    private func decodeData(input: InputStream, fileThreshold: Int64): Data {
+    private func decodeData(input: InputStream): Data {
         // decodeSizeOfEncoded(input)
         var bytes = [0u8]
         var size = input.read(bytes)
@@ -775,7 +795,7 @@ public class DefaultCodec <: Codec {
             }
             size = parseInt64(head, true, bytes)
             for (_ in 0..size) {
-                list.add(decodeData(input, fileThreshold))
+                list.add(decodeData(input))
             }
             list
         } else if (dataType == DataType.MAP.value) {
@@ -788,8 +808,8 @@ public class DefaultCodec <: Codec {
             }
             size = parseInt64(head, true, bytes)
             for (_ in 0..size) {
-                let key = decodeData(input, fileThreshold)
-                let value = decodeData(input, fileThreshold)
+                let key = decodeData(input)
+                let value = decodeData(input)
                 tuples.add(key, value)
             }
             tuples
@@ -798,12 +818,12 @@ public class DefaultCodec <: Codec {
             let object = typeMurmurCreators[murmur]()
             size = decodeSizeOfEncoded(input)
             for (_ in 0..size) {
-                let name = match (decodeData(input, fileThreshold)) {
+                let name = match (decodeData(input)) {
                     case x: DataString => x.data
                     case x => throw CodecException(
                         'current data head is ${toHex(head)} and it need a string as item name, but it is ${TypeInfo.of(x)}')
                 }
-                let value = decodeData(input, fileThreshold)
+                let value = decodeData(input)
                 object.set(name, value)
             }
             object
@@ -882,8 +902,8 @@ public class DefaultCodec <: Codec {
             throw UnreachableException()
         }
     }
-    public func decode<T>(input: InputStream, fileThreshold!: Int64 = 1024 ** 2): ?T where T <: DataFields<T> {
-        let d = T.tryFromData(decodeData(input, fileThreshold))
+    public func decode<T>(input: InputStream): ?T where T <: DataFields<T> {
+        let d = T.tryFromData(decodeData(input))
         match (d) {
             case x: T => x
             case x: ?T => x

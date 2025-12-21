@@ -18,24 +18,35 @@ package f_pool
 import std.io.{InputStream, OutputStream}
 
 public interface BytesCopyTo {
-    func copy(to!: OutputStream): Unit
+    func copy(to!: OutputStream, closeOnEnd!: Bool): Unit
 }
 public interface BytesCopyFrom {
-    func copy(from!: InputStream): Unit
+    func copy(from!: InputStream, closeOnEnd!: Bool): Unit
 }
 
 public interface BytesCopier <: BytesCopyTo & BytesCopyFrom {}
 
 public struct PooledBufferBytesCopyTo <: BytesCopyTo { 
-    public PooledBufferBytesCopyTo(private let input: InputStream, private let pool: ArrayPool<Byte>){}
-    public func copy(to!: OutputStream): Unit {
+    public PooledBufferBytesCopyTo(private let input: InputStream, 
+                                    private let pool: ArrayPool<Byte>){}
+    public func copy(to!: OutputStream, closeOnEnd!: Bool = true): Unit {
         func copyTo(buf: Array<Byte>){
-            while(let s <- input.read(buf) && s > 0){
-                to.write(buf[0..s])
+            try{
+                while(let s <- input.read(buf) && s > 0){
+                    to.write(buf[0..s])
+                }
+            }finally{
+                if(closeOnEnd && let r: Resource <- input && !r.isClosed()){
+                    r.close()
+                }
             }
         }
         if(let Some(buf) <- pool.borrow()){
-            copyTo(buf)
+            try{
+                copyTo(buf)
+            }finally{
+                pool.giveBack(buf)
+            }
         }else{
             let buf = Array<Byte>(4096, repeat: 0)
             copyTo(buf)
@@ -43,17 +54,37 @@ public struct PooledBufferBytesCopyTo <: BytesCopyTo {
     }
 }
 public struct PooledBufferedBytesCopyFrom <: BytesCopyFrom {
-    public PooledBufferedBytesCopyFrom(private let output: OutputStream, private let pool: ArrayPool<Byte>){}
-    public func copy(from!: InputStream): Unit {
+    public PooledBufferedBytesCopyFrom(private let output: OutputStream, 
+                                        private let pool: ArrayPool<Byte>,
+                                        private let closeOnEnd!: Bool = true){}
+    public func copy(from!: InputStream, closeOnEnd!: Bool = true): Unit {
         func copyTo(buf: Array<Byte>){
-            while(let s <- from.read(buf) && s > 0){
-                output.write(buf[0..s])
+            try{
+                while(let s <- from.read(buf) && s > 0){
+                    output.write(buf[0..s])
+                }
+            }finally{
+                if(closeOnEnd && let r: Resource <- output && !r.isClosed()){
+                    r.close()
+                }
             }
         }
         if(let Some(buf) <- pool.borrow()){
-            copyTo(buf)
+            try{
+                copyTo(buf)
+            }finally{
+                pool.giveBack(buf)
+            }
         }else{
             copyTo(Array<Byte>(4096, repeat: 0))
+        }
+    }
+}
+public struct ChainedBytesCopyTo <: BytesCopyTo {
+    public ChainedBytesCopyTo(private let bytes: Array<BytesCopyTo>){}
+    public func copy(to!: OutputStream, closeOnEnd!: Bool = true): Unit {
+        for(b in bytes){
+            b.copy(to: to, closeOnEnd: closeOnEnd)
         }
     }
 }

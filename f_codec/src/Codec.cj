@@ -62,11 +62,11 @@ public interface Encoder {
     }
     func encode(data: InputStream, size: Int64): Encoder
     func encode(data: File): Encoder
-    func finish(): InputStream
+    func finish(): BytesCopyTo
 }
 
 public interface Decoder {
-    func decode<T>(input: InputStream, fileThreshold!: Int64): ?T where T <: DataFields<T>
+    func decode<T>(input: InputStream): ?T where T <: DataFields<T>
 }
 
 public interface Codec <: Encoder & Decoder {}

@@ -24,7 +24,8 @@ public class DefaultCodec_test {
     @TestCase
     public func testNone(): Unit {
         let encoder = DefaultCodec()
-        let input = encoder.encodeNone().encodeNone().finish()
+        let input = ByteBuffer()
+        encoder.encodeNone().encodeNone().finish().copy(to: input, closeOnEnd: true)
         let decoder = DefaultCodec()
         let bool = decoder.decode<Bool>(input)
         @Assert(bool, None<Bool>)
@@ -34,7 +35,8 @@ public class DefaultCodec_test {
     @TestCase
     public func testBool(): Unit {
         let encoder = DefaultCodec()
-        let input = encoder.encode(true).encode(false).finish()
+        let input = ByteBuffer()
+        encoder.encode(true).encode(false).finish().copy(to: input, closeOnEnd: true)
         let decoder = DefaultCodec()
         var bool = decoder.decode<Bool>(input)
         @Assert(bool, true)
@@ -44,7 +46,8 @@ public class DefaultCodec_test {
     @TestCase
     public func testInt64(): Unit {
         let encoder = DefaultCodec()
-        let input = encoder
+        let input = ByteBuffer()
+        encoder
             .encode(0)
             .encode(1)
             .encode(-1)
@@ -75,7 +78,7 @@ public class DefaultCodec_test {
             .encode(-1 << 40)
             .encode(-1 << 48)
             .encode(-1 << 56)
-            .finish()
+            .finish().copy(to: input, closeOnEnd: true)
         let decoder = DefaultCodec()
         var int = decoder.decode<Int64>(input)
         @Assert(int, 0)
@@ -150,7 +153,8 @@ public class DefaultCodec_test {
             let bytes4 = Array<Byte>(bytes.size){i => bytes[i]}
             let encoder = DefaultCodec()
             encoder.encode(BigInt(true, bytes1))
-            let input = encoder.encode(BigInt(false, bytes2)).finish()
+            let input = ByteBuffer()
+            encoder.encode(BigInt(false, bytes2)).finish().copy(to: input, closeOnEnd: true)
             let decoder = DefaultCodec()
             var bigint = decoder.decode<BigInt>(input)
             @Assert(bigint, BigInt(true, bytes3))
@@ -164,11 +168,12 @@ public class DefaultCodec_test {
         for(i in 0 .. 100){
             let float1 = rand.nextFloat64() * 123412.0
             let float2 = rand.nextFloat64() * 125313452.0
-            let input = DefaultCodec()
+            let input = ByteBuffer()
+            DefaultCodec()
             .encode(float1).encode(float2)
             .encode(-float1).encode(-float2)
             .encode(0.0).encode(-0.0)
-            .finish()
+            .finish().copy(to: input, closeOnEnd: true)
             let decoder = DefaultCodec()
             var float = decoder.decode<Float64>(input)
             @Assert(float, float1)
@@ -190,11 +195,12 @@ public class DefaultCodec_test {
         for(i in 0 .. 100){
             let float1 = Decimal('${rand.nextInt64(10000)}.${rand.nextInt64(10000)}') 
             let float2 = Decimal('${rand.nextInt64(10000)}.${rand.nextInt64(10000)}')
-            let input = DefaultCodec()
+            let input = ByteBuffer()
+            DefaultCodec()
             .encode(float1).encode(float2)
             .encode(-float1).encode(-float2)
             .encode(Decimal('0.0')).encode(Decimal('-0.0'))
-            .finish()
+            .finish().copy(to: input, closeOnEnd: true)
             let decoder = DefaultCodec()
             var float = decoder.decode<Decimal>(input)
             @Assert(float, float1)
@@ -216,11 +222,12 @@ public class DefaultCodec_test {
         for(i in 0 .. 100){
             let float1 = Decimal(rand.nextFloat64() * 123412.0)
             let float2 = Decimal(rand.nextFloat64() * 125313452.0)
-            let input = DefaultCodec()
+            let input = ByteBuffer()
+            DefaultCodec()
             .encode(float1).encode(float2)
             .encode(-float1).encode(-float2)
             .encode(Decimal(0.0)).encode(Decimal(-0.0))
-            .finish()
+            .finish().copy(to: input, closeOnEnd: true)
             let decoder = DefaultCodec()
             var float = decoder.decode<Decimal>(input)
             @Assert(float, float1)
@@ -250,7 +257,8 @@ public class DefaultCodec_test {
     @TestCase
     public func testString(): Unit {
         let encoder = DefaultCodec()
-        let input = encoder.encode('').finish()
+        let input = ByteBuffer()
+        encoder.encode('').finish().copy(to: input, closeOnEnd: true)
         let s = DefaultCodec().decode<String>(input)
         @Assert(s, '')
         let rand = Random()
@@ -274,7 +282,8 @@ public class DefaultCodec_test {
                 hex[i] = toHex(bytes)
                 encoder.encode(hex[i])
             }
-            let input = encoder.finish()
+            let input = ByteBuffer()
+            encoder.finish().copy(to: input, closeOnEnd: true)
             for(i in 0 .. 2){
                 let s = decoder.decode<String>(input)
                 @Assert(s, hex[i])
@@ -284,12 +293,13 @@ public class DefaultCodec_test {
     @TestCase
     public func testDuration(): Unit {
         let encoder = DefaultCodec()
-        let input = encoder.encode(Duration.Zero)
+        let input = ByteBuffer()
+        encoder.encode(Duration.Zero)
                    .encode(Duration.nanosecond * 2411342152354)
                    .encode(Duration.nanosecond * -2411342152354)
                    .encode(Duration.Max)
                    .encode(Duration.Min)
-                   .finish()
+                   .finish().copy(to: input, closeOnEnd: true)
         let decoder = DefaultCodec()
         var duration = decoder.decode<Duration>(input)
         @Assert(duration, Duration.Zero)
@@ -306,11 +316,12 @@ public class DefaultCodec_test {
     public func testDateTime(): Unit {
         let now = DateTime.now()
         let encoder = DefaultCodec()
-        let input = encoder.encode(now)
+        let input = ByteBuffer()
+        encoder.encode(now)
                    .encode(DateTime.UnixEpoch)
                    .encode(DateTime.UnixEpoch + Duration.nanosecond * 2411342152354)
                    .encode(DateTime.UnixEpoch + Duration.nanosecond * -2411342152354)
-                   .finish()
+                   .finish().copy(to: input, closeOnEnd: true)
         let decoder = DefaultCodec()
         var datetime = decoder.decode<DateTime>(input)
         @Assert(datetime, now)
@@ -341,7 +352,8 @@ public class DefaultCodec_test {
         for(i in 0 .. 100){
             let bytes1 = make()
             let bytes2 = make()
-            let input = DefaultCodec().encode(bytes1).encode(bytes2).finish()
+            let input = ByteBuffer()
+            DefaultCodec().encode(bytes1).encode(bytes2).finish().copy(to: input, closeOnEnd: true)
             let decoder = DefaultCodec()
             var bytes = decoder.decode<Array<Byte>>(input)
             @Assert(bytes, bytes1)
@@ -377,7 +389,8 @@ public class DefaultCodec_test {
     //         file2.flush()
     //         file1.seek(SeekPosition.Begin(0))
     //         file2.seek(SeekPosition.Begin(0))
-    //         let input = DefaultCodec().encode(file1).encode(file2).finish()
+    //         let input = ByteBuffer()
+    //         DefaultCodec().encode(file1).encode(file2).finish().copy(to: input, closeOnEnd: true)
     //         let decoder = DefaultCodec()
     //         var file = decoder.decode<File>(input)
     //         @Assert(file?.info.name, file1.info.name)
@@ -389,7 +402,8 @@ public class DefaultCodec_test {
     public func testList(): Unit {
         let list1 = ArrayList<Int64>([12,2,3,3,4344,51])
         let list2 = ArrayList<String>(['14531', '2q95504', 'zxca', 'asdf4', '5asdf'])
-        let input = DefaultCodec().encode(list1).encode(list2).finish()
+        let input = ByteBuffer()
+        DefaultCodec().encode(list1).encode(list2).finish().copy(to: input, closeOnEnd: true)
         let decoder = DefaultCodec()
         let ints = decoder.decode<ArrayList<Int64>>(input) ?? ArrayList<Int64>()
         @Assert(ints.size, list1.size)
@@ -406,7 +420,8 @@ public class DefaultCodec_test {
     public func testMap(): Unit {
         let map1 = HashMap<Int64, String>([(1234, 'awrqewr'), (123535, 'xzcvaq'), (8096, 'sdfgp'), (84234, '8ofi398ruio')])
         let map2 = HashMap<String, Int64>([('14531', 31351), ('2q95504', 830951), ('zxca', 348301), ('asdf4', 5127), ('5asdf', 8301234)])
-        let input = DefaultCodec().encode(map1).encode(map2).finish()
+        let input = ByteBuffer()
+        DefaultCodec().encode(map1).encode(map2).finish().copy(to: input, closeOnEnd: true)
         let decoder = DefaultCodec()
         let m1 = decoder.decode<HashMap<Int64, String>>(input) ?? HashMap<Int64, String>()
         @Assert(m1.size, map1.size)
@@ -428,7 +443,8 @@ public class DefaultCodec_test {
     @TestCase
     public func testObject(): Unit {
         let object = TestObject(124, 'asdfas')
-        let input = DefaultCodec().encode(object).finish()
+        let input = ByteBuffer()
+        DefaultCodec().encode(object).finish().copy(to: input, closeOnEnd: true)
         let decoder = DefaultCodec()
         let o = decoder.decode<TestObject>(input)
         @Assert(o, object)

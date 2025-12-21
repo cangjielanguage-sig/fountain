@@ -17,7 +17,7 @@ package f_codec.default
 
 import f_data.macros.*
 
-@DataAssist[props fields equal]
+@DataAssist[props fields equal tostring]
 public class TestObject {
     private var i: Int64 = 0
     private var s: String = ''

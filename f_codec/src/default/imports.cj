@@ -25,4 +25,5 @@ internal import f_collection.*
 internal import f_codec.*
 internal import f_codec.exception.*
 internal import f_exception.UnreachableException
+internal import f_pool.*
 internal import f_util.{UUID, murmurHash128X64, MurmurHash128X64}

@@ -23,7 +23,7 @@ public class BytesListOutputStream <: OutputStream & BytesCopyTo {
     public func write(bytes: Array<Byte>): Unit {
         list.add(bytes)
     }
-    public func copy(to!: OutputStream): Unit {
+    public func copy(to!: OutputStream, closeOnEnd!: Bool = true): Unit {
         try{
             for(bytes in list){
                 to.write(bytes)
@@ -57,7 +57,7 @@ public class BytesListOutputStreamBuilder {
             checkInterval: checkInterval, 
             clearOnReturning: clearOnReturning)
     }
-    public func build(timeout!: Duration = Duration.Max){
+    public func build(timeout!: Duration = Duration.Max): ?BytesListOutputStream {
         if(let Some(l) <- pool.borrow(timeout: timeout)){
             BytesListOutputStream(l, pool)
         }else{
