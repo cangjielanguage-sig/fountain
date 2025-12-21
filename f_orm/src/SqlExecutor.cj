@@ -100,7 +100,9 @@ public class SqlExecutor <: Resource & RootDAO {
                 case Broken =>
                     try {
                         exe._connection_.close()
-                    } catch (_) {}
+                    } catch (e: Exception) {
+                        logger.warn(e)
+                    }
                     exe._connection_ = NoneConnection.instance
                 case _ => ()
             }
@@ -134,10 +136,18 @@ public class SqlExecutor <: Resource & RootDAO {
             currents.get()?.remove(driverName)
             cache.clear()
             if(!(stmt?.isClosed() ?? true)){
-                stmt?.close()
+                try{
+                    stmt?.close()
+                }catch(e: Exception){
+                    logger.warn(e)
+                }
                 stmt = None<Statement>
             }
-            _connection_.close()
+            try{
+                _connection_.close()
+            }catch(e: Exception){
+                logger.warn(e)
+            }
             _connection_ = NoneConnection.instance
         }
     }
@@ -281,7 +291,11 @@ public class SqlExecutor <: Resource & RootDAO {
                     if (tx.suspend && !withSavepoint) {
                         try {
                             if (!tx.connection.isClosed()) {
-                                tx.connection.close()
+                                try{
+                                    tx.connection.close()
+                                }catch(e: Exception){
+                                    logger.warn(e)
+                                }
                                 tx.connection = NoneConnection.instance
                             }
                         } catch (e: Exception) {
@@ -358,7 +372,9 @@ public class SqlExecutor <: Resource & RootDAO {
                     case Broken =>
                         try {
                             this._connection_.close()
-                        } catch (_) {}
+                        } catch (e: Exception) {
+                            logger.warn(e)
+                        }
                         throw ORMException("connection is broken")
                 }
             }
@@ -873,7 +889,11 @@ public class SqlExecutor <: Resource & RootDAO {
                 r = query
                 extract(r.getOrThrow())
             } finally {
-                r?.close()
+                try{
+                    r?.close()
+                }catch(e: Exception){
+                    logger.warn(e)
+                }
             }
         }
     }
