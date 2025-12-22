@@ -203,14 +203,20 @@ class ConcHashMap<V> <: Collection<(String, V)> {
         }
     }
     private static func conc(concurrencyLevel: Int64) {
-        if(((concurrencyLevel - 1) & concurrencyLevel) == 0){
-            return concurrencyLevel
+        if(concurrencyLevel <= 0){
+            return 128
         }
-        var concurrency = 1
-        while (concurrency < concurrencyLevel) {
-            concurrency <<= 1
+        var n = concurrencyLevel
+        if(((n - 1) & n) == 0){
+            return n
         }
-        return concurrency
+        n |= n >> 1
+        n |= n >> 2
+        n |= n >> 4
+        n |= n >> 8
+        n |= n >> 16
+        n |= n >> 32
+        return n + 1
     }
     private func segment(key: String): SyncLinkedHashMap<V> {
         segments[key.hashCode() & (hashMask)]
