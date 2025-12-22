@@ -362,6 +362,16 @@ ${content}
   override-compile-option = "-O2 --dy-std -Woff all"
 [target.aarch64-apple-darwin.bin-dependencies]
   path-option = ["\${CANGJIE_STDX_DYNAMIC_PATH}", "\${CANGJIE_FOUNTAIN_LIBS}"]
+[target.aarch64-linux-ohos]
+  compile-option = "-O2 --dy-std"
+  override-compile-option = "-O2 --dy-std"
+[target.aarch64-linux-ohos.bin-dependencies]
+  path-option = ["\${CANGJIE_STDX_DYNAMIC_PATH}, "\${CANGJIE_FOUNTAIN_LIBS}""]
+[target.x86_64-linux-ohos]
+  compile-option = "-O2 --dy-std"
+  override-compile-option = "-O2 --dy-std"
+[target.x86_64-linux-ohos.bin-dependencies]
+  path-option = ["\${CANGJIE_STDX_DYNAMIC_PATH}, "\${CANGJIE_FOUNTAIN_LIBS}""]
 '''
         File.writeTo(tomlPath, content.unsafeBytes())
         // var path = dir.join('run')
