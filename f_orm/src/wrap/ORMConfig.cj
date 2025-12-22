@@ -34,6 +34,7 @@ public class ORMConfig {
     public static const useCache = confPrefix + "_useCache"
     public static const noPool = confPrefix + "_noPool"
     public static const useStdPool = confPrefix + "_useStdPool"
+    public static const useThirdPartyPool = confPrefix + "_useThirdPartyPool"
     public static const databasePoolInitSize = confPrefix + "_databasePoolInitSize"
     public static const databasePoolMinSize = confPrefix + "_databasePoolMinSize"
     public static const databasePoolMaxSize = confPrefix + "_databasePoolMaxSize"
@@ -107,6 +108,9 @@ public class ORMConfig {
         } else {
             Config.getString(key)
         }
+    }
+    public static func getUseThirdPartyPool(driverName: String){
+        get<Bool>(driverName: driverName, key: useThirdPartyPool, default: false)
     }
     public static func getDefaultDriver(): String {
         Config.getString(defaultDriver) ?? ''
