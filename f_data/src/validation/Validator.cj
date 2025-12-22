@@ -35,6 +35,13 @@ public class IsNotBlank <: Validator {
         value.trimAsciiBlanks().size > 0
     }
 }
+@Annotation[target: [MemberVariable, MemberProperty, Parameter]]
+public class StringSize <: Validator {
+    public const StringSize(private let min!: Int64 = 0, private let max!: Int64 = 0x7FFF_FFFF_FFFF_FFFF) {}
+    public func validate(value: String): Bool {
+        value.size >= 0 && value.size <= max
+    }
+}
 
 @Annotation[target: [MemberVariable, MemberProperty, Parameter]]
 public class IsInteger <: Validator {
