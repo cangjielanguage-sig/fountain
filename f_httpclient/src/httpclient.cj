@@ -38,7 +38,7 @@ public class HttpClient <: Resource {
     private let request = HttpRequestBuilder()
     private var client = None<Client>
 
-    public HttpClient(private let url: String){
+    public HttpClient(var url: String){
         if(let Some(x) <- readTimeout_){
             readTimeout(x)
         }
