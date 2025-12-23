@@ -28,6 +28,9 @@ abstract class ControllerFuncParam {
         }
         b.toString()
     }
+}
+sealed abstract class AbstractRequestParam <: ControllerFuncParam{
+    public const init(){}
     protected func extractValue(name: String, ctx: HttpContext, default: ?String): ?String {
         let request = ctx.request
         let form = request.form
@@ -53,9 +56,8 @@ abstract class ControllerFuncParam {
         }
     }
 }
-
 @Annotation[target: [Parameter]]
-public class RequestParam <: ControllerFuncParam {
+public class RequestParam <: AbstractRequestParam {
     public const RequestParam(private let name: String, private let default!: ?String = None) {}
     public const init(default!: ?String = None) {
         this('', default: default)
@@ -74,7 +76,7 @@ public class RequestParam <: ControllerFuncParam {
     }
 }
 @Annotation[target: [Parameter]]
-public class RequestParamObject <: ControllerFuncParam {
+public class RequestParamObject <: AbstractRequestParam {
     public const init(){}
     protected func extract<T>(name: String, _: ?AbstractDateTimeConverter, ctx: HttpContext, pattern: HttpRequestPathPatterns): ?T where T <: DataFields<T> {
         if (let ti <- TypeInfo.of<T>() && 
