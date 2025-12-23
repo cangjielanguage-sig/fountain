@@ -20,19 +20,20 @@ class RequestArgMeta {
     private func doExtract<T>(ctx: HttpContext, name: String, pattern: ?HttpRequestPathPatterns): ?T where T <: DataFields<T> {
         let (param, validator, converter) = args[name]
         let data = param.extract<T>(name, converter, ctx, pattern.getOrThrow())
-        if(let Some((n, v)) <- validator.validate(data)){
-            let k = if(n.isEmpty()){
+        if (!(validator is DummyValidator) && let Some((n, v)) <- validator.validate(data)) {
+            let k = if (n.isEmpty()) {
                 name
-            }else{
+            } else {
                 n
             }
-            let opt = if (data.isNone()){
+            let opt = if (data.isNone()) {
                 'None<${TypeInfo.of<T>()}>'
-            }else{
+            } else {
                 v
             }
-            throw HttpRequestException('Invalid request data ${k}:${opt} and its type is ${TypeInfo.of<T>()}')
-        }else{
+            throw HttpRequestException(
+                'Invalid request data ${k}:${opt} and its type is ${TypeInfo.of<T>()} ${if (validator.messageIfNotMatch.size > 0) { validator.messageIfNotMatch } else { '' }}')
+        } else {
             return data
         }
     }
@@ -54,9 +55,9 @@ class RequestArgMeta {
         args[name][0]
     }
     operator func [](name: String, value!: ControllerFuncParam): Unit {
-        args[name] = if(let Some((p, v, c)) <- args.get(name)){
+        args[name] = if (let Some((p, v, c)) <- args.get(name)) {
             (value, v, c)
-        }else{
+        } else {
             (value, DummyValidator.instance, None<AbstractDateTimeConverter>)
         }
     }

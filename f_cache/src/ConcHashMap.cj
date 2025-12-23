@@ -17,8 +17,7 @@ package f_cache
 
 import std.collection.{Map, EquatableCollection}
 import std.sync.AtomicInt64
-import f_base.EmptyIterator
-import f_util.nextPowerOf2
+import f_base.{EmptyIterator, nextPowerOf2}
 
 class ConcHashMapKeysIterator<V> <: Iterator<String> {
     ConcHashMapKeysIterator(private let itr: Iterator<(String, V)>) {}

@@ -133,7 +133,11 @@ func generateProps(decl: ClassDecl, exclusion: HashSet<String>) {
             propDecl
         }else{
             let md = MacroExpandDecl(macroTokens)
-            md.macroInputDecl = propDecl
+            var m = md
+            while(let x: MacroExpandDecl <- m.macroInputDecl) {
+                m = x
+            }
+            m.macroInputDecl = propDecl
             md
         })
     }
@@ -313,8 +317,8 @@ func generateToFields(d: ClassDecl, exclusion: HashSet<String>) {
     superTypes.add(RefType(quote(ObjectData<$(klassIdentifier)>)))
     let body = klassDecl.body.decls
     let fields = ArrayList<Expr>()
-    for (d in body where !isStatic(d) && isPublic(d) && !exclusion.contains(d.identifier.value)) {
-        func appendExpr(dt: Tokens, isVar: Bool){
+    for (d in body where (!isStatic(d) && isPublic(d) && !exclusion.contains(d.identifier.value)) || (d is MacroExpandDecl)) {
+        func appendExpr(d: Decl, dt: Tokens, isVar: Bool){
             var declType = dt
             if (declType[0].kind == QUEST) {
                 declType = declType[1..]
@@ -333,17 +337,42 @@ func generateToFields(d: ClassDecl, exclusion: HashSet<String>) {
             let expr = parseExpr(tokens)
             fields.add(expr)
         }
-        let (declType, isVar) = match (d) {
-            case x: VarDecl => (quote($(x.declType)), x.isVar())
-            case x: PropDecl => (quote($(x.declType)), x.isMut())
+        func appendExpr(dt: Tokens, isVar: Bool){
+            appendExpr(d, dt, isVar)
+        }
+        match (d) {
+            case x: VarDecl => appendExpr(quote($(x.declType)), x.isVar())
+            case x: PropDecl => appendExpr(quote($(x.declType)), x.isMut())
             case x: PrimaryCtorDecl =>
                 for (p in x.funcParams where p.isMemberParam() && isPublic(p)) {
                     appendExpr(p.paramType.toTokens(), isVar(p))
                 }
                 continue
+            case x: MacroExpandDecl => 
+                match (extract(x)) {
+                    case x: VarDecl where !isStatic(x) && isPublic(x) => appendExpr(x, quote($(x.declType)), x.isVar())
+                    case x: PropDecl where !isStatic(x) && isPublic(x) => appendExpr(x, quote($(x.declType)), x.isMut())
+                    case x: PrimaryCtorDecl where isPublic(d) =>
+                        for (p in x.funcParams) {
+                            match(p){
+                                case x: MacroExpandParam => 
+                                    var m: Decl = x
+                                    while(let d: MacroExpandParam <- m){
+                                        m = d.macroInputDecl
+                                    }
+                                    if(let x: FuncParam <- m && x.isMemberParam() && isPublic(x)){
+                                        appendExpr(x, quote($(x.paramType)), x.isVar)
+                                    }
+                                case x: FuncParam where x.isMemberParam() && isPublic(p) => appendExpr(x, quote($(x.paramType)), isVar(x))
+                                case _ => continue
+                            }
+                            appendExpr(p.paramType.toTokens(), isVar(p))
+                        }
+                        continue
+                    case _ => continue
+                }
             case _ => continue
         }
-        appendExpr(declType, isVar)
     }
     let openModi = openTokens(klassDecl)
     var fieldTokens = `lsquare`

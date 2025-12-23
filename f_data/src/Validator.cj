@@ -16,7 +16,7 @@ limitations under the License.
 package f_data
 
 public abstract class Validator {
-    public const init() {}
+    public const Validator(public let messageIfNotMatch!: String = '') {}
     public func validate(value: String): Bool
 
     public const operator func &(right: Validator){
@@ -35,21 +35,7 @@ public abstract class Validator {
         if(let Some(x) <- value){
             match(x){
                 case x: ToDataFields => 
-                    func validate(fields: Iterator<ReadableField>): ?(String, String) {
-                        for(df in fields){
-                            match(df.get(x)){
-                                case x: SimpleDataObject => if(let Some(x) <- validate(x.fields())){
-                                    return x
-                                }
-                                case x => 
-                                    if(!df.validator.validate(x)){
-                                        return (df.name, x.toString())
-                                    }
-                            }
-                        }
-                        None
-                    }
-                    validate(x.getDataFields().iterator())
+                    None
                 case x => 
                     let value = x.toData()
                     if(this.validate(value)){

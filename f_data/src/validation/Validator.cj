@@ -22,7 +22,9 @@ import f_data.*
 
 @Annotation[target: [MemberVariable, MemberProperty, Parameter]]
 public class IsNotEmpty <: Validator {
-    public const init() {}
+    public const init(messageIfNotMatch!: String = '') {
+        super(messageIfNotMatch: messageIfNotMatch)
+    }
     public func validate(value: String): Bool {
         value.size > 0
     }
@@ -30,14 +32,18 @@ public class IsNotEmpty <: Validator {
 
 @Annotation[target: [MemberVariable, MemberProperty, Parameter]]
 public class IsNotBlank <: Validator {
-    public const init() {}
+    public const init(messageIfNotMatch!: String = '') {
+        super(messageIfNotMatch: messageIfNotMatch)
+    }
     public func validate(value: String): Bool {
         value.trimAsciiBlanks().size > 0
     }
 }
 @Annotation[target: [MemberVariable, MemberProperty, Parameter]]
 public class StringSize <: Validator {
-    public const StringSize(private let min!: Int64 = 0, private let max!: Int64 = 0x7FFF_FFFF_FFFF_FFFF) {}
+    public const StringSize(messageIfNotMatch!: String = '', private let min!: Int64 = 0, private let max!: Int64 = 0x7FFF_FFFF_FFFF_FFFF) {
+        super(messageIfNotMatch: messageIfNotMatch)
+    }
     public func validate(value: String): Bool {
         value.size >= 0 && value.size <= max
     }
@@ -45,7 +51,9 @@ public class StringSize <: Validator {
 
 @Annotation[target: [MemberVariable, MemberProperty, Parameter]]
 public class IsInteger <: Validator {
-    public const init() {}
+    public const init(messageIfNotMatch!: String = '') {
+        super(messageIfNotMatch: messageIfNotMatch)
+    }
     public func validate(value: String): Bool {
         Regex.INTEGER.matches(value)
     }
@@ -53,7 +61,9 @@ public class IsInteger <: Validator {
 
 @Annotation[target: [MemberVariable, MemberProperty, Parameter]]
 public class IsDecimal <: Validator {
-    public const init() {}
+    public const init(messageIfNotMatch!: String = '') {
+        super(messageIfNotMatch: messageIfNotMatch)
+    }
     public func validate(value: String): Bool {
         Regex.DECIMAL.matches(value)
     }
@@ -61,7 +71,9 @@ public class IsDecimal <: Validator {
 
 @Annotation[target: [MemberVariable, MemberProperty, Parameter]]
 public class IsEmail <: Validator {
-    public const init() {}
+    public const init(messageIfNotMatch!: String = '') {
+        super(messageIfNotMatch: messageIfNotMatch)
+    }
     public func validate(value: String): Bool {
         Regex.EMAIL.matches(value)
     }
@@ -70,9 +82,12 @@ public class IsEmail <: Validator {
 @Annotation[target: [MemberVariable, MemberProperty, Parameter]]
 public class IsChineseCellPhone <: Validator {
     public const IsChineseCellPhone(
+        messageIfNotMatch!: String = '',
         private let withCountryCode!: Bool = false,
         private let countryCodeSeparator!: String = ')'
-    ) {}
+    ) {
+        super(messageIfNotMatch: messageIfNotMatch)
+    }
     public func validate(value: String): Bool {
         var rege = ''
         if (withCountryCode) {
@@ -88,11 +103,14 @@ public class IsChineseCellPhone <: Validator {
 @Annotation[target: [MemberVariable, MemberProperty, Parameter]]
 public class IsIntegerRange <: Validator {
     public const IsIntegerRange(
+        messageIfNotMatch!: String = '',
         private let min!: Int64 = 0,
         private let max!: Int64 = 0x7FFF_FFFF_FFFF_FFFF,
         private let minInclusive!: Bool = true,
         private let maxInclusive!: Bool = false
-    ) {}
+    ) {
+        super(messageIfNotMatch: messageIfNotMatch)
+    }
     public const init(range: Range<Int64>){
         this(min: range.start, max: range.end, minInclusive: range.hasStart, maxInclusive: range.isClosed || range.hasEnd)
     }
@@ -114,7 +132,9 @@ public class IsIntegerRange <: Validator {
 
 @Annotation[target: [MemberVariable, MemberProperty, Parameter]]
 public class IsBool <: Validator {
-    public const init() {}
+    public const init(messageIfNotMatch!: String = '') {
+        super(messageIfNotMatch: messageIfNotMatch)
+    }
     public func validate(value: String): Bool {
         let val = value.toAsciiLower()
         return val == 'true' || val == 'false'
@@ -123,8 +143,11 @@ public class IsBool <: Validator {
 @Annotation[target: [MemberVariable, MemberProperty, Parameter]]
 public class IsDateTime <: Validator {
     public const IsDateTime(
+        messageIfNotMatch!: String = '',
         private let format!: String = "yyyy-MM-dd HH:mm:ss"
-    ) {}
+    ) {
+        super(messageIfNotMatch: messageIfNotMatch)
+    }
     public func validate(value: String): Bool {
         try {
             DateTime.parse(value, format)
@@ -145,7 +168,9 @@ public class IsDateTime <: Validator {
 }
 @Annotation[target: [MemberVariable, MemberProperty, Parameter]]
 public class IsDuration <: Validator {
-    public const init() {}
+    public const init(messageIfNotMatch!: String = '') {
+        super(messageIfNotMatch: messageIfNotMatch)
+    }
     public func validate(value: String): Bool {
         Regex.DURATION.matches(value)
     }
@@ -161,7 +186,9 @@ public class IsDuration <: Validator {
 }
 @Annotation[target: [MemberVariable, MemberProperty, Parameter]]
 public class IsIntegers <: Validator {
-    public const IsIntegers(private let separator!: String = ",") {}
+    public const IsIntegers(messageIfNotMatch!: String = '', private let separator!: String = ",") {
+        super(messageIfNotMatch: messageIfNotMatch)
+    }
     public func validate(value: String): Bool {
         '^\\d+(${separator}\\d+)*$'.regex(solid: true).matches(value)
     }
@@ -169,8 +196,10 @@ public class IsIntegers <: Validator {
 
 @Annotation[target: [MemberVariable, MemberProperty, Parameter]]
 public class DoesMatchRegex <: Validator {
-    public const DoesMatchRegex(private let rege: String) {}
+    public const DoesMatchRegex(messageIfNotMatch!: String = '', private let regex!: String) {
+        super(messageIfNotMatch: messageIfNotMatch)
+    }
     public func validate(value: String): Bool {
-        rege.regex(solid: true).matches(value)
+        this.regex.regex(solid: true).matches(value)
     }
 }
