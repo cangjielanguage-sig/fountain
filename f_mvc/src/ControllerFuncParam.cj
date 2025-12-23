@@ -77,11 +77,11 @@ public class RequestParam <: ControllerFuncParam {
 public class RequestParamObject <: ControllerFuncParam {
     public const init(){}
     protected func extract<T>(name: String, _: ?AbstractDateTimeConverter, ctx: HttpContext, pattern: HttpRequestPathPatterns): ?T where T <: DataFields<T> {
-        if(let ti <- TypeInfo.of<T>() && 
+        if (let ti <- TypeInfo.of<T>() && 
             let df: ObjectFields <- ti.getStaticFunction('dataFields', []).apply(ti, []) && 
-            let o: T <- df.create() && let data: SimpleDataObject <- o.toData()){
-            for(field in data.mutableFields()) {
-                if(let Some(s) <- extractValue(field.name, ctx, None<String>)){
+            let o: T <- df.create() && let data: SimpleDataObject <- o.toData()) {
+            for (field in data.mutableFields()) {
+                if (let Some(s) <- extractValue(field.name, ctx, None<String>)) {
                     data.set(field.name, s.toData())
                 }
             }
