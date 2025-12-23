@@ -361,7 +361,7 @@ func generateToFields(d: ClassDecl, exclusion: HashSet<String>) {
                                         m = d.macroInputDecl
                                     }
                                     if(let x: FuncParam <- m && x.isMemberParam() && isPublic(x)){
-                                        appendExpr(x, quote($(x.paramType)), x.isVar)
+                                        appendExpr(x, quote($(x.paramType)), isVar(x))
                                     }
                                 case x: FuncParam where x.isMemberParam() && isPublic(p) => appendExpr(x, quote($(x.paramType)), isVar(x))
                                 case _ => continue
