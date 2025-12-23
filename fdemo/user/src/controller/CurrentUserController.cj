@@ -84,6 +84,14 @@ public class CurrentUserController {
         let data = userService.userSession(user.username, user.password)
         UserResponse(data)
     }
+    @PostMapping[path:'/api/user/echo', 
+                consumes:'application/x-www-form-urlencoded', 
+                produces:'application/json',
+                ignoreAuth: true]
+    public func echo(@RequestParamObject user: UserRequest): UserRequest {
+        user
+    }
+    
     @DeleteMapping[path:'/api/user/session', 
                 consumes:'application/x-www-form-urlencoded', 
                 produces:'application/json']

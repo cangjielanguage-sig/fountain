@@ -45,11 +45,29 @@ class FieldIterator<T> <: Iterator<(String, Data)> where T <: DataFields<T> {
 }
 
 public interface SimpleDataObject <: Data {
+    func iterator(): Iterator<(String, Data)>
+    prop typeInfo: TypeInfo
+    func getData(): Any
+    func dataCreator(): () -> SimpleDataObject
+    prop size: Int64
     func fields(): Iterator<ReadableField>
+    func mutableFields(): Iterator<MutableField>
+    func set(name: String, value: Data, flag: DataConversionFlag): Unit
+    func set<V>(name: String, value: V, flag: DataConversionFlag): Unit where V <: DataFields<V> {
+        set(name, value.toData(), flag)
+    }
+    func set<V>(name: String, value: V): Unit where V <: DataFields<V> {
+        set(name, value.toData(), DEFAULT_DATA_FLAG)
+    }
+    func set(name: String, value: Data) {
+        set(name, value, DEFAULT_DATA_FLAG)
+    }
 }
 
 public class DataObject<T> <: SimpleDataObject & Collection<(String, Data)> & NamedData where T <: ObjectData<T> & DataFields<T> {
-    public DataObject(public let data: T) {
+    public DataObject(public let data: T) {}
+    public func getData(): Any {
+        this.data
     }
     public prop size: Int64 {
         get() {
@@ -81,6 +99,11 @@ public class DataObject<T> <: SimpleDataObject & Collection<(String, Data)> & Na
         let fields = fields()
         FieldIterator<T>(data, fields)
     }
+    public prop typeInfo: TypeInfo {
+        get() {
+            TypeInfo.of<T>()
+        }
+    }
     public func fields(): Iterator<ReadableField> {
         T.dataFields().iterator()
     }
@@ -93,10 +116,7 @@ public class DataObject<T> <: SimpleDataObject & Collection<(String, Data)> & Na
     public operator func [](name: String, value!: Data): Unit {
         set(name, value)
     }
-    public func set<V>(name: String, value: V, flag!: DataConversionFlag = DEFAULT_DATA_FLAG): Unit where V <: DataFields<V> {
-        set(name, value.toData(), flag: flag)
-    }
-    public func set(name: String, value: Data, flag!: DataConversionFlag = DEFAULT_DATA_FLAG): Unit {
+    public func set(name: String, value: Data, flag: DataConversionFlag): Unit {
         match (T.dataFields().mutableField(name)) {
             case Some(f) where f.set(data, value, flag: flag) => ()
             case Some(_) where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException(
@@ -110,7 +130,7 @@ public class DataObject<T> <: SimpleDataObject & Collection<(String, Data)> & Na
     public func get(name: String): ?Data {
         T.dataFields().readableField(name)?.get(data)
     }
-    public func get<V>(name: String, flag!: DataConversionFlag = DEFAULT_DATA_FLAG): ?V where V <: DataFields<V> {
+    public func get<V>(name: String, flag: DataConversionFlag): ?V where V <: DataFields<V> {
         match (get(name)) {
             case Some(x) => match (V.tryFromData(x, flag)) {
                 case x: ?V => x
@@ -161,12 +181,22 @@ public class DataObject<T> <: SimpleDataObject & Collection<(String, Data)> & Na
     public static func parse(string: String): Data {
         tryParse(string).getOrThrow {DataException("current type ${TypeInfo.of<T>()} is not Parsable")}
     }
+
+    public func dataCreator(): () -> SimpleDataObject {
+        {
+            => if (let o: T <- T.dataFields().create() && let x: SimpleDataObject <- o.toData()) {
+                x
+            } else {
+                throw UnreachableException()
+            }
+        }
+    }
     public static func populate(src: Data, target: T, flag!: DataConversionFlag = DEFAULT_DATA_FLAG): ?T {
         match (src) {
             case x: Iterable<(String, Data)> =>
                 let targetData = DataObject<T>(target)
                 for ((n, d) in x) {
-                    targetData.set(n, d, flag: flag)
+                    targetData.set(n, d, flag)
                 }
                 target
             case _ where (flag & IGNORE_FIELD_NOT_CONVERTABLE) == 0 => throw DataException(
