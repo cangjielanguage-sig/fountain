@@ -22,14 +22,30 @@ public import stdx.encoding.url.*
 public import stdx.log.Logger
 public import stdx.net.http.*
 public import f_data.*
-import f_http.{MediaType, MediaTypes}
+import f_http.*
 import f_http.exception.MediaTypeException
 
-public class HttpClient {
+public class HttpClient <: Resource {
+    private static var readTimeout_ = None<Duration>
+    private static var writeTimeout_ = None<Duration>
+    public static func globalReadTimeout(readTimeout: Duration): Unit {
+        readTimeout_ = readTimeout
+    }
+    public static func globalWriteTimeout(writeTimeout: Duration): Unit {
+        writeTimeout_ = writeTimeout
+    }
     private let builder = ClientBuilder()
     private let request = HttpRequestBuilder()
+    private var client = None<Client>
 
-    public HttpClient(var url: String){}
+    public HttpClient(var url: String){
+        if(let Some(x) <- readTimeout_){
+            readTimeout(x)
+        }
+        if(let Some(x) <- writeTimeout_){
+            writeTimeout(x)
+        }
+    }
 
     public func autoRedirect(auto: Bool): This {
         builder.autoRedirect(auto)
@@ -106,9 +122,18 @@ public class HttpClient {
     public func header<T>(key: String, value: T): This where T <: ToString {
         header(key, value.toString())
     }
+    private var closed = false
+    public func isClosed(): Bool {
+        closed
+    }
+    public func close(): Unit {
+        client?.close()
+        closed = true
+    }
     private func send(method: String): HttpResponse {
         request.method(method).url(url)
-        builder.build().send(request.build())
+        client = builder.build()
+        (client?.send(request.build())).getOrThrow()
     }
     public func get(): HttpResponse {
         send('GET')
@@ -181,7 +206,7 @@ public class FormBuilder {
         form.remove(key)
         this
     }
-    public func build(): HttpClient {
+    private func build(): HttpClient {
         client.url = '${client.url}?${form.toEncodeString()}'
         client
     }
