@@ -25,7 +25,7 @@ public import f_data.*
 import f_http.*
 import f_http.exception.MediaTypeException
 
-public class HttpClient {
+public class HttpClient <: Resource {
     private static var readTimeout_ = None<Duration>
     private static var writeTimeout_ = None<Duration>
     public static func globalReadTimeout(readTimeout: Duration): Unit {
@@ -36,6 +36,7 @@ public class HttpClient {
     }
     private let builder = ClientBuilder()
     private let request = HttpRequestBuilder()
+    private var client = None<Client>
 
     public HttpClient(var url: String){
         if(let Some(x) <- readTimeout_){
@@ -121,9 +122,18 @@ public class HttpClient {
     public func header<T>(key: String, value: T): This where T <: ToString {
         header(key, value.toString())
     }
+    private var closed = false
+    public func isClosed(): Bool {
+        closed
+    }
+    public func close(): Unit {
+        client?.close()
+        closed = true
+    }
     private func send(method: String): HttpResponse {
         request.method(method).url(url)
-        builder.build().send(request.build())
+        client = builder.build()
+        (client?.send(request.build())).getOrThrow()
     }
     public func get(): HttpResponse {
         send('GET')
