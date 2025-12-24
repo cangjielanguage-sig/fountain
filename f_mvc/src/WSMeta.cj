@@ -36,7 +36,7 @@ sealed abstract class WSFuncMeta<T> {
     public func extract<T>(ctx: HttpContext, name: String, converter: ?AbstractDateTimeConverter, pattern: HttpRequestPathPatterns, ws: WebSocket, payload: Array<Byte>): ?T where T <: DataFields<T> {
         match(args[name]){
             case x: WSDataFrame => x.extract<T>(payload)
-            case x => x.extract<T>(name, converter, ctx, pattern)
+            case x => x.extract<T>(name, converter, ctx, pattern, DummyValidator.instance)
         }
     }
 }

@@ -17,7 +17,7 @@ package f_mvc
 
 abstract class ControllerFuncParam {
     protected const init() {}
-    protected func extract<T>(name: String, converter: ?AbstractDateTimeConverter, ctx: HttpContext, pattern: HttpRequestPathPatterns): ?T where T <: DataFields<T>
+    protected func extract<T>(name: String, converter: ?AbstractDateTimeConverter, ctx: HttpContext, pattern: HttpRequestPathPatterns, validator: Validator): ?T where T <: DataFields<T>
     static func concat(list: Collection<String>) {
         let b = StringGenerator()
         for (v in list) {
@@ -27,6 +27,12 @@ abstract class ControllerFuncParam {
             b.append(v)
         }
         b.toString()
+    }
+    protected func validate<T>(name: String, value: ?String, validator: Validator){
+        if(!validator.validate(value)){
+            throw HttpRequestException(
+            'Invalid request data ${name}:${value} and its type is ${TypeInfo.of<T>()} ${if (validator.messageIfNotMatch.size > 0) { validator.messageIfNotMatch } else { '' }}')
+        }
     }
 }
 sealed abstract class AbstractRequestParam <: ControllerFuncParam{
@@ -62,23 +68,25 @@ public class RequestParam <: AbstractRequestParam {
     public const init(default!: ?String = None) {
         this('', default: default)
     }
-    protected func extract<T>(name: String, converter: ?AbstractDateTimeConverter, ctx: HttpContext, _: HttpRequestPathPatterns): ?T where T <: DataFields<T> {
+    protected func extract<T>(name: String, converter: ?AbstractDateTimeConverter, ctx: HttpContext, _: HttpRequestPathPatterns, validator: Validator): ?T where T <: DataFields<T> {
         let n = if (this.name.isEmpty()) {
             name
         } else {
             this.name
         }
-        if (let Some(s) <- extractValue(n, ctx, default)) {
-            parseValue<T>(s, converter)
+        let value = extractValue(n, ctx, default)
+        validate<T>(n, value, validator)
+        if (let Some(s) <- value) {
+            parseValue<T>(s, converter) 
         } else {
             None<T>
-        }
+        } 
     }
 }
 @Annotation[target: [Parameter]]
 public class RequestParamObject <: AbstractRequestParam {
     public const init(){}
-    protected func extract<T>(name: String, _: ?AbstractDateTimeConverter, ctx: HttpContext, pattern: HttpRequestPathPatterns): ?T where T <: DataFields<T> {
+    protected func extract<T>(name: String, _: ?AbstractDateTimeConverter, ctx: HttpContext, pattern: HttpRequestPathPatterns, _: Validator): ?T where T <: DataFields<T> {
         if (let ti <- TypeInfo.of<T>() && 
             let df: ObjectFields <- ti.getStaticFunction('dataFields', []).apply(ti, []) && 
             let o: T <- df.create() && let data: SimpleDataObject <- o.toData()) {
@@ -99,16 +107,18 @@ public class PathVariable <: ControllerFuncParam {
     public const init(default!: ?String = None) {
         this('', default: default)
     }
-    protected func extract<T>(name: String, converter: ?AbstractDateTimeConverter, ctx: HttpContext, pattern: HttpRequestPathPatterns): ?T where T <: DataFields<T> {
+    protected func extract<T>(name: String, converter: ?AbstractDateTimeConverter, ctx: HttpContext, pattern: HttpRequestPathPatterns, validator: Validator): ?T where T <: DataFields<T> {
         let path = ctx.request.url.path
-        var value = pattern.extract(path, if (this.name.isEmpty()) {
+        let n = if (this.name.isEmpty()) {
             name
         } else {
             this.name
-        })
+        }
+        var value = pattern.extract(path, n)
         if(value.isNone() && default.isSome()){
             value = default
         }
+        validate<T>(n, value, validator)
         if (value.isNone()) {
             return None<T>
         }
@@ -122,19 +132,25 @@ public class RequestHeader <: ControllerFuncParam {
     public const init(default!: ?String = None) {
         this('', default: default)
     }
-    protected func extract<T>(name: String, converter: ?AbstractDateTimeConverter, ctx: HttpContext, pattern: HttpRequestPathPatterns): ?T where T <: DataFields<T> {
-        var value = ctx.request.headers.get(if (this.name.isEmpty()) {
+    protected func extract<T>(name: String, converter: ?AbstractDateTimeConverter, ctx: HttpContext, pattern: HttpRequestPathPatterns, validator: Validator): ?T where T <: DataFields<T> {
+        let n = if (this.name.isEmpty()) {
             name
         } else {
             this.name
-        })
+        }
+        var value = ctx.request.headers.get(n)
         if(value.isEmpty() && let Some(d) <- default){
             value = d.split(',')
         }
+        let v = if(value.isEmpty()){
+            ''
+        }else{
+            concat(value)
+        }
+        validate<T>(n, v, validator)
         if (value.isEmpty()) {
             None<T>
         } else {
-            let v = concat(value)
             parseValue<T>(v, converter)
         }
     }
@@ -143,7 +159,7 @@ public class RequestHeader <: ControllerFuncParam {
 @Annotation[target: [Parameter]]
 public class RequestBody <: ControllerFuncParam {
     public const init() {}
-    protected func extract<T>(name: String, _: ?AbstractDateTimeConverter, ctx: HttpContext, pattern: HttpRequestPathPatterns): ?T where T <: DataFields<T> {
+    protected func extract<T>(name: String, _: ?AbstractDateTimeConverter, ctx: HttpContext, pattern: HttpRequestPathPatterns, _: Validator): ?T where T <: DataFields<T> {
         let body = ctx.request.body
         let size = ctx.request.bodySize
         let contentType = ctx.request.headers.getFirst("Content-Type").getOrThrow()

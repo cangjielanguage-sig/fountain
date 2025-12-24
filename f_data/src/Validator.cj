@@ -17,7 +17,7 @@ package f_data
 
 public abstract class Validator {
     public const Validator(public let messageIfNotMatch!: String = '') {}
-    public func validate(value: String): Bool
+    public func validate(value: ?String): Bool
 
     public const operator func &(right: Validator){
         AndValidator(this, right)
@@ -28,52 +28,30 @@ public abstract class Validator {
     public const operator func !(){
         NotValidator(this)
     }
-    public open func validate(value: Data): Bool {
-        validate(value.toString())
-    }
-    public func validate<T>(value: ?T): ?(String, String) where T <: DataFields<T> {//todo 这个可以用effect-handle优化报错方式
-        if(let Some(x) <- value){
-            match(x){
-                case x: ToDataFields => 
-                    None
-                case x => 
-                    let value = x.toData()
-                    if(this.validate(value)){
-                        None
-                    } else {
-                        ('', value.toString())
-                    }
-            }
-        } else if(this.validate('')) {
-            None
-        } else {
-            ('', '')
-        }
-    }
 }
 
 public class DummyValidator <: Validator {
     public static const instance = DummyValidator()
     private const init() {}
-    public func validate(value: String): Bool {
+    public func validate(value: ?String): Bool {
         return true
     }
 }
 public class AndValidator <: Validator{
     const AndValidator(private let left: Validator, private let right: Validator){}
-    public func validate(value: String): Bool {
+    public func validate(value: ?String): Bool {
         left.validate(value) && right.validate(value)
     }
 }
 public class OrValidator <: Validator{
     const OrValidator(private let left: Validator, private let right: Validator){}
-    public func validate(value: String): Bool {
+    public func validate(value: ?String): Bool {
         left.validate(value) || right.validate(value)
     }
 }
 public class NotValidator <: Validator{
     const NotValidator(private let condition: Validator){}
-    public func validate(value: String): Bool {
+    public func validate(value: ?String): Bool {
         !condition.validate(value)
     }
 }
