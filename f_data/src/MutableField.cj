@@ -22,8 +22,8 @@ public class MutableField <: ReadableField {
     }
 
     public func set(instance: Any, data: Data, flag!: DataConversionFlag = DEFAULT_DATA_FLAG): Bool {
-        if ((flag & IGNORE_VALIDATION) == 0 && let Some(validator) <- tryGetAnnotation<Validator>(classTypeInfo, name) && let x: DataString <- data &&
-            !validator.validate(x.data)) {
+        if ((flag & IGNORE_VALIDATION) == 0 && let Some(validator) <- tryGetAnnotation<Validator>(classTypeInfo, name) &&
+            let x: DataString <- data && !validator.validate(x.data)) {
             if ((flag & IGNORE_NOT_MATCHED_VALIDATION) == 0) {
                 throw ValidationException(if (validator.messageIfNotMatch.size > 0) {
                     validator.messageIfNotMatch
