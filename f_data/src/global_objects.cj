@@ -28,10 +28,15 @@ public const DEEP: DataConversionFlag = 1 << 4
 public const WRAPPING_ON_INT_OVERFLOW: DataConversionFlag = 1 << 5
 public const THROWING_ON_INT_OVERFLOW: DataConversionFlag = 1 << 6
 public const SATURATING_ON_INT_OVERFLOW: DataConversionFlag = 1 << 7
+
+/**
+ * 忽略验证
+ */
+public const IGNORE_VALIDATION: DataConversionFlag = 1 << 8
 /**
  * 忽略未匹配的验证
  */
-public const IGNORE_NOT_MATCHED_VALIDATION: DataConversionFlag = 1 << 8
+public const IGNORE_NOT_MATCHED_VALIDATION: DataConversionFlag = 1 << 9
 public const SILENCE: DataConversionFlag = IGNORE_FIELD_NOT_FOUND | IGNORE_FIELD_TYPE_NOT_MATCH |
     IGNORE_FIELD_NOT_CONVERTABLE | IGNORE_NONE
 public const DEFAULT_DATA_FLAG: DataConversionFlag = WRAPPING_ON_INT_OVERFLOW | SILENCE

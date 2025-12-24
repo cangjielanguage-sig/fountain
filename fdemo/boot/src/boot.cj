@@ -84,6 +84,10 @@ private let _ = {=>
     try{
         var data2 = TestData2()
         var data3 = DataObject<TestData3>.populate(data2).getOrThrow()
+        //忽略验证：
+        // data3 = DataObject<TestData3>.populate(data2, flag: DEFAULT_DATA_FLAG | IGNORE_VALIDATION).getOrThrow()
+        //忽略验证失败：
+        // data3 = DataObject<TestData3>.populate(data2, flag: DEFAULT_DATA_FLAG | IGNORE_NOT_MATCHED_VALIDATION).getOrThrow()
         println('AAAAAAAAAAAAAAAAAAAAAAAAAAAAA ${data2}')
         println('BBBBBBBBBBBBBBBBBBBBBBBBBBBBB ${data3}')
         let dobj = DataObject<TestData2>(data2)
