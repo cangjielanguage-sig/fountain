@@ -31,7 +31,7 @@ public class MutableField <: ReadableField {
         let classTypeInfo = ClassTypeInfo.of<O>()
         func doSet(o: Any, v: ?F){
             match (o) {
-                case x: O => setter(x, None<F>)
+                case x: O => setter(x, v)
                 case _ =>
                     let x: Any = o
                     throw DataException(
