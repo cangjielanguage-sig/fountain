@@ -17,18 +17,21 @@ package f_data
 
 public type DataConversionFlag = UInt64
 
-public const IGNORE_FIELD_NOT_FOUND: DataConversionFlag = 0x1u64
-public const IGNORE_FIELD_TYPE_NOT_MATCH: DataConversionFlag = 0x2u64
-public const IGNORE_FIELD_NOT_CONVERTABLE: DataConversionFlag = 0x4u64
-public const IGNORE_NONE: DataConversionFlag = 0x8u64
-public const DEEP: DataConversionFlag = 0x10u64
+public const IGNORE_FIELD_NOT_FOUND: DataConversionFlag = 1 << 0
+public const IGNORE_FIELD_TYPE_NOT_MATCH: DataConversionFlag = 1 << 1
+public const IGNORE_FIELD_NOT_CONVERTABLE: DataConversionFlag = 1 << 2
+public const IGNORE_NONE: DataConversionFlag = 1 << 3
+public const DEEP: DataConversionFlag = 1 << 4
 /**
  * 优先级 WRAPPING > THROWING > SATURATING
  */
-public const WRAPPING_ON_INT_OVERFLOW: DataConversionFlag = 0x20u64
-public const THROWING_ON_INT_OVERFLOW: DataConversionFlag = 0x40u64
-public const SATURATING_ON_INT_OVERFLOW: DataConversionFlag = 0x80u64
-public const IGNORE_NOT_MATCHED_VALIDATION: DataConversionFlag = 0x100u64
+public const WRAPPING_ON_INT_OVERFLOW: DataConversionFlag = 1 << 5
+public const THROWING_ON_INT_OVERFLOW: DataConversionFlag = 1 << 6
+public const SATURATING_ON_INT_OVERFLOW: DataConversionFlag = 1 << 7
+/**
+ * 忽略未匹配的验证
+ */
+public const IGNORE_NOT_MATCHED_VALIDATION: DataConversionFlag = 1 << 8
 public const SILENCE: DataConversionFlag = IGNORE_FIELD_NOT_FOUND | IGNORE_FIELD_TYPE_NOT_MATCH |
     IGNORE_FIELD_NOT_CONVERTABLE | IGNORE_NONE
 public const DEFAULT_DATA_FLAG: DataConversionFlag = WRAPPING_ON_INT_OVERFLOW | SILENCE
