@@ -24,11 +24,15 @@ public class MutableField <: ReadableField {
     public func set(instance: Any, data: Data, flag!: DataConversionFlag = DEFAULT_DATA_FLAG): Bool {
         if (let Some(validator) <- tryGetAnnotation<Validator>(classTypeInfo, name) && let x: DataString <- data &&
             !validator.validate(x.data)) {
-            throw ValidationException(if (validator.messageIfNotMatch.size > 0) {
-                validator.messageIfNotMatch
+            if ((flag & IGNORE_NOT_MATCHED_VALIDATION) == 0) {
+                throw ValidationException(if (validator.messageIfNotMatch.size > 0) {
+                    validator.messageIfNotMatch
+                } else {
+                    'Invalid data for field ${name}: ${fieldTypeInfo} of ${classTypeInfo} with data ${x.data}.'
+                })
             } else {
-                'Invalid data for field ${name}: ${fieldTypeInfo} of ${classTypeInfo} with data ${x.data}.'
-            })
+                return false
+            }
         }
         setter(instance, data, flag)
     }
