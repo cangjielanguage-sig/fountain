@@ -57,10 +57,9 @@ abstract sealed class AbstractRequestParam <: ControllerFuncParam {
                 }
             }
         }
-        if (list.isEmpty() && let Some(d) <- default) {
-            list = ArrayList<String>(d.split(','))
-        }
-        if (list.isEmpty()) {
+        if (list.isEmpty() && let Some(_) <- default) {
+            default
+        } else if (list.isEmpty()) {
             None<String>
         } else {
             concat(list)

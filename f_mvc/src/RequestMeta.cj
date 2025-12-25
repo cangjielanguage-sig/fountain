@@ -299,7 +299,7 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
                     match(val){
                         case x: T => x
                         case Some(x: T) => x
-                        case _ => throw UnreachableException()
+                        case _ => throw HttpRequestException('NO param for controller func, which request param name is ${name}')
                     }
             }
         }
