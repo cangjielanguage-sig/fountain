@@ -124,7 +124,7 @@ protected class RotatableFile <: OutputStream & Resource {
     private var mmapf = None<RotatableMMapFile>
     @When[os == "Linux"]
     protected func mmap() {
-        let file = this.file().load().getOrThrow()
+        let file = this.file.load().getOrThrow()
         let len = file.length
         let mm = file.mmap(0, fileSize)
         mm.writeOffset = len
