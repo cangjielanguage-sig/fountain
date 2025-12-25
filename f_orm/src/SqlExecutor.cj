@@ -188,20 +188,20 @@ public class SqlExecutor <: Resource & RootDAO {
                 newDummyTx()
             case Mandatory =>
                 //Support a current transaction, throw an exception if none exists.
-                newDummyTx(mode: if (hasRealTx) {
-                Common
-            } else {
-                Mandatory
-            })
+                if(hasRealTx){
+                    newDummyTx(mode: DummyTransactionMode.Mandatory)
+                }else{
+                    throw MandatoryTransactionException()
+                }
             case RequiresNew =>
                 //Create a new transaction, and suspend the current transaction if one exists.
             try {
-                // let connection = if (hasRealTx) {
-                //     getConnection(driverName)
-                // } else {
-                //     this.connection
-                // }
-                if (let tx: TransactionWrap <- this.connection.createTransaction()) {
+                let connection = if (hasRealTx) {
+                    getConnection(driverName)
+                } else {
+                    this.connection
+                }
+                if (let tx: TransactionWrap <- connection.createTransaction()) {
                     tx.wrapping = this.tx
                     tx.suspend = hasRealTx
                     hasRealTx = true
@@ -222,11 +222,11 @@ public class SqlExecutor <: Resource & RootDAO {
             )
             case Never =>
                 //Execute non-transactionally, throw an exception if a transaction exists.
-                newDummyTx(mode: if (hasRealTx) {
-                Never
-            } else {
-                Common
-            })
+                if(hasRealTx){
+                    throw NeverTransactionException()
+                }else{
+                    newDummyTx(mode: DummyTransactionMode.Never)
+                }
             case Nested =>
                 //Execute within a nested transaction if a current transaction exists, behave like REQUIRED otherwise.
                 try {
@@ -305,7 +305,9 @@ public class SqlExecutor <: Resource & RootDAO {
                 }
             }
         } finally {
-            close()
+            if(!(tx?.suspend ?? false) && !withSavepoint){
+                close()
+            }
         }
     }
     public func noRollbackFor(e: Exception): Exception {
@@ -909,77 +911,73 @@ public class SqlExecutor <: Resource & RootDAO {
         noRollbackFor!: ?String = ORMConfig.getTransactionNoRollbackFor(driverName: driverName),
         rollbackFor!: ?String = ORMConfig.getTransactionRollbackFor(driverName: driverName),
         executor!: (SqlExecutor) -> (T, Bool)): T {
-        if (tx.isNone()) {
-            execute<T> {
-                var txStatus = TransactionStatus.Unknown
-                try {
-                    ORM.hooks.beforeTx()
-                    this.newTxAndBegin(
-                        propagation: propagation,
-                        isoLevel: isoLevel,
-                        accessMode: accessMode,
-                        deferrableMode: deferrableMode
-                    )
-                    let (result, commit) = executor(this)
-                    if(commit){
-                        ORM.hooks.beforeCommit(this.isReadOnly)
-                        this.commit()
-                        txStatus = Committed
-                        ORM.hooks.afterCommit()
-                        result
-                    }else{
-                        throw ORMException()
-                    }
-                } catch (e: Exception) {
-                    ORM.hooks.afterThrowing(e)
-                    let et = ClassTypeInfo.of(e)
-                    func genExceptionSet(ex: String) {
-                        rollbackExceptions.computeIfAbsent(ex){
-                            let set = HashSet<TypeInfo>()
-                            for (e in ex.split("|") where e.size > 0) {
-                                set.add(TypeInfos.get(e.trimAscii()))
-                            }
-                            set
+        execute<T> {
+            var txStatus = TransactionStatus.Unknown
+            try {
+                ORM.hooks.beforeTx()
+                this.newTxAndBegin(
+                    propagation: propagation,
+                    isoLevel: isoLevel,
+                    accessMode: accessMode,
+                    deferrableMode: deferrableMode
+                )
+                let (result, commit) = executor(this)
+                if(commit){
+                    ORM.hooks.beforeCommit(this.isReadOnly)
+                    this.commit()
+                    txStatus = Committed
+                    ORM.hooks.afterCommit()
+                    result
+                }else{
+                    throw ORMException()
+                }
+            } catch (e: Exception) {
+                ORM.hooks.afterThrowing(e)
+                let et = ClassTypeInfo.of(e)
+                func genExceptionSet(ex: String) {
+                    rollbackExceptions.computeIfAbsent(ex){
+                        let set = HashSet<TypeInfo>()
+                        for (e in ex.split("|") where e.size > 0) {
+                            set.add(TypeInfos.get(e.trimAscii()))
                         }
+                        set
                     }
-                    if (let Some(noRollbackFor) <- noRollbackFor && noRollbackFor.size > 0) {
-                        let set: Set<TypeInfo> = genExceptionSet(noRollbackFor)
-                        for (noRollback in set where et.isSubtypeOf(noRollback)) {
-                            ORM.hooks.beforeCommit(this.isReadOnly)
-                            let thrown = this.noRollbackFor(e)
-                            txStatus = Committed
-                            ORM.hooks.afterCommit()
-                            throw thrown
-                        }
-                    }
-                    if (let Some(rollbackFor) <- rollbackFor && rollbackFor.size > 0) {
-                        let set: Set<TypeInfo> = genExceptionSet(rollbackFor)
-                        for (rollback in set where et.isSubtypeOf(rollback)) {
-                            ORM.hooks.beforeRollback(e)
-                            let thrown = this.rollbackFor(e)
-                            txStatus = Rollback
-                            ORM.hooks.afterRollback(e)
-                            throw thrown
-                        }
+                }
+                if (let Some(noRollbackFor) <- noRollbackFor && noRollbackFor.size > 0) {
+                    let set: Set<TypeInfo> = genExceptionSet(noRollbackFor)
+                    for (noRollback in set where et.isSubtypeOf(noRollback)) {
                         ORM.hooks.beforeCommit(this.isReadOnly)
                         let thrown = this.noRollbackFor(e)
                         txStatus = Committed
                         ORM.hooks.afterCommit()
                         throw thrown
-                    } else {
+                    }
+                }
+                if (let Some(rollbackFor) <- rollbackFor && rollbackFor.size > 0) {
+                    let set: Set<TypeInfo> = genExceptionSet(rollbackFor)
+                    for (rollback in set where et.isSubtypeOf(rollback)) {
                         ORM.hooks.beforeRollback(e)
-                        this.rollback()
+                        let thrown = this.rollbackFor(e)
                         txStatus = Rollback
                         ORM.hooks.afterRollback(e)
-                        throw e
+                        throw thrown
                     }
-                } finally {
-                    ORM.hooks.afterComplete(txStatus)
-                    this.close()
+                    ORM.hooks.beforeCommit(this.isReadOnly)
+                    let thrown = this.noRollbackFor(e)
+                    txStatus = Committed
+                    ORM.hooks.afterCommit()
+                    throw thrown
+                } else {
+                    ORM.hooks.beforeRollback(e)
+                    this.rollback()
+                    txStatus = Rollback
+                    ORM.hooks.afterRollback(e)
+                    throw e
                 }
+            } finally {
+                ORM.hooks.afterComplete(txStatus)
+                this.close()
             }
-        } else {
-            executor(this)[0]
         }
     }
 }
