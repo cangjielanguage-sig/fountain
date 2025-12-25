@@ -88,6 +88,7 @@ public interface UserDAO <: RootDAO {
                                 ${meet(password.size > 0, ' and "password" like '){
                                     '%${password}%'
                                 }} order by id'''
+                                throw Exception('make an exception')
                            }.page<UserPO>(100, page: 1)
         println('QQQQQQQQQQQQQQQQQ ${page.list.size}')
         let page2 = executor.FROM<UserPO>()

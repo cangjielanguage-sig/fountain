@@ -170,17 +170,18 @@ public class Pool<T> <: Resource {
             o
         }
         let start = MonoTime.now()
-        while (running.load() && MonoTime.now() - start < timeout && let Some((o, _)) <- queue.tryRemove() && let Some(x) <- doCheck(
-                o)) {
-            return x
-        }
-        var consumed = MonoTime.now() - start
-        while (running.load() && timeout > consumed) {
-            tasks.tryAdd(())
-            if (let Some((o, _)) <- queue.remove(timeout - consumed) && let Some(x) <- doCheck(o)) {
-                return x
+        while (running.load() && MonoTime.now() - start < timeout) {
+            if(let Some((o, _)) <- queue.tryRemove()){
+                if(let Some(x) <- doCheck(o)){
+                    return x
+                }
+            }else{
+                tasks.tryAdd(())
+                if (let consumed <- MonoTime.now() - start && consumed < timeout && 
+                    let Some((o, _)) <- queue.remove(timeout - consumed) && let Some(x) <- doCheck(o)) {
+                    return x
+                }
             }
-            consumed = MonoTime.now() - start
         }
         None<T>
     }

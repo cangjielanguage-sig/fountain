@@ -110,18 +110,21 @@ private func generateArgs(decl: FuncDecl): (Tokens, Tokens, Tokens, Tokens) {
         }
         let pname = p.identifier.value
         let ptype = p.paramType
-        let defaultValue = try {
+        let ptt = ptype.toTokens()
+        let pt = if(ptt[0].kind == QUEST){
+            ptt[1 ..]
+        }else if(ptt[0].value == 'Option'){
+            ptt[2 .. ptt.size - 1]
+        }else{
+            ptt
+        }
+        let default = try {
             p.expr.toTokens()
         } catch (_) {
-            `empty_tokens`
-        }
-        let default = if (defaultValue.size > 0) {
-            quote($defaultValue)
-        } else {
-            quote(None<$ptype>)
+            quote(None<$pt>)
         }
         exprs += quote(
-            let $(p.identifier) = meta.extract<$ptype>(ctx, $pname, $default)$(`nl`)
+            let $(p.identifier) = meta.extract<$ptype, $pt>(ctx, $pname, $default)$(`nl`)
         )
         let named = try {
             p.not.kind == TokenKind.NOT

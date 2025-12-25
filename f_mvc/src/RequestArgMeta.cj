@@ -21,8 +21,8 @@ class RequestArgMeta {
         let (param, validator, converter) = args[name]
         param.extract<T>(name, converter, ctx, pattern.getOrThrow(), validator)
     }
-    func extract<T>(ctx: HttpContext, name: String, pattern: ?HttpRequestPathPatterns): T where T <: DataFields<T> {
-        doExtract<T>(ctx, name, pattern).getOrThrow()
+    func extract<T>(ctx: HttpContext, name: String, pattern: ?HttpRequestPathPatterns): ?T where T <: DataFields<T> {
+        doExtract<T>(ctx, name, pattern)
     }
     func extract<T>(ctx: HttpContext, name: String, default: T, pattern: ?HttpRequestPathPatterns): T where T <: DataFields<T> {
         doExtract<T>(ctx, name, pattern) ?? default

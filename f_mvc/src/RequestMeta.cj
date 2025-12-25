@@ -276,7 +276,7 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
         args[name] is MultipartFormData
     }
 
-    public func extract<T>(ctx: HttpContext, name: String, default: ?T): T where T <: DataFields<T> {
+    public func extract<T, P>(ctx: HttpContext, name: String, default: ?P): T where T <: DataFields<T> {
         match (default) {
             case _: ?HttpContext => (ctx as T).getOrThrow()
             case _: ?HttpRequest => (ctx.request as T).getOrThrow()
@@ -284,9 +284,23 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
             case _: ?HttpResponseBuilder => (ctx.responseBuilder as T).getOrThrow()
             case _: ?Array<Byte> => (this.extractBytes(ctx) as T).getOrThrow()
             case _: ?Form => (ctx.request.form as T).getOrThrow()
-            case _ => match (default) {
-                case Some(d) => args.extract<T>(ctx, name, d, pattern)
-                case _ => args.extract<T>(ctx, name, pattern)
+            case _ => match(default){
+                case Some(d: P) => 
+                    let val = args.extract<P>(ctx, name, d, pattern)
+                    if(let x: T <- val){
+                        x
+                    }else if(let x: T <- Some(val)){
+                        x
+                    }else{
+                        throw UnreachableException()
+                    }
+                case _ => 
+                    let val = args.extract<P>(ctx, name, pattern)
+                    match(val){
+                        case x: T => x
+                        case Some(x: T) => x
+                        case _ => throw UnreachableException()
+                    }
             }
         }
     }

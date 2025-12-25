@@ -131,7 +131,7 @@ public class SqlExecutor <: Resource & RootDAO {
         _connection_.isClosed()
     }
     public func close(): Unit {
-        if (this.tx.isNone()) {
+        if (this.tx.isNone() && !isClosed()) {
             current.set(None)
             currents.get()?.remove(driverName)
             cache.clear()
@@ -305,9 +305,7 @@ public class SqlExecutor <: Resource & RootDAO {
                 }
             }
         } finally {
-            if (!isClosed()) {
-                close()
-            }
+            close()
         }
     }
     public func noRollbackFor(e: Exception): Exception {
@@ -832,9 +830,7 @@ public class SqlExecutor <: Resource & RootDAO {
             try { 
                 return executor()
             } finally {
-                if (!this.isClosed()) {
-                    this.close()
-                }
+                this.close()
             }
         }
         try {
