@@ -81,15 +81,14 @@ public interface UserDAO <: RootDAO {
         // ''').first<MedAllocationPO>()
         // println('MMMMMMMMMMMMMMM ${med?.preAmount}')
         let page = executor.FROM<UserPO>()
-                           .WHERE{'''
+                        .WHERE{'''
                                 ${meet(username.size > 0, ' username like '){
                                     '%${username}%'
                                 }}
                                 ${meet(password.size > 0, ' and "password" like '){
                                     '%${password}%'
                                 }} order by id'''
-                                throw Exception('make an exception')
-                           }.page<UserPO>(100, page: 1)
+                        }.page<UserPO>(100, page: 1)
         println('QQQQQQQQQQQQQQQQQ ${page.list.size}')
         let page2 = executor.FROM<UserPO>()
                            .WHERE{
