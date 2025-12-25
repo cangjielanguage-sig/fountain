@@ -276,7 +276,7 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
         args[name] is MultipartFormData
     }
 
-    public func extract<T, P>(ctx: HttpContext, name: String, default: ?P): T where T <: DataFields<T> {
+    public func extract<T, P>(ctx: HttpContext, name: String, default: ?P): T where P <: DataFields<P> {
         match (default) {
             case _: ?HttpContext => (ctx as T).getOrThrow()
             case _: ?HttpRequest => (ctx.request as T).getOrThrow()
