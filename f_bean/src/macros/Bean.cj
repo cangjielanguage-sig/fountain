@@ -111,11 +111,14 @@ private func expandBean(attr: Tokens, input: Tokens, klass: ClassDecl): Tokens {
                 case _ => continue
             }
         }
+        let ctorStr = ctorTokens.toString()
         tokens += `nl` + quote(
             private let _ = println('################################ start ' + TypeInfo.of<$beanType>().toString())
+            private let _ = println('################################ ctors ' + $ctorStr)
         ) + `nl` + topMacroAnonymousClosure(quote(
             $ctorTokens
             let constructor = if (ctors.isEmpty()) {
+                println('~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~')
                 {=> $beanType()}
             } else {
                 var ctor = None<() -> $beanType>
@@ -126,8 +129,10 @@ private func expandBean(attr: Tokens, input: Tokens, klass: ClassDecl): Tokens {
                 if (ctor.isNone() && let Some(f) <- ctors.get("init")) {
                     ctor = f
                 }
+                println('```````````````````````````````````````````````````````````````````')
                 ctor
             }
+            println('^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^' + constructor.isSome().toString())
             BeanFactory.instance.register<$beanType>(constructor.getOrThrow{
                 let beanTypeName = $(beanType.toString())
                 BeanException('class ' + beanTypeName + ' must be with a public parameterless constructor or a public static parameterless function.')
