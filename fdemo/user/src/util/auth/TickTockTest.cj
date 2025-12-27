@@ -21,6 +21,7 @@ import fountain.bean.*
 import fountain.bean.macros.*
 import fountain.log.LoggerFactory
 
+private let _ = println('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
 @Bean
 public class TickTockTaskImpl <: CronTicktockTask {
     private static let log = LoggerFactory.getLogger<TickTockTaskImpl>()
