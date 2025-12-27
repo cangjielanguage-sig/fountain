@@ -50,6 +50,7 @@ public class MultiRequestMethodHandler <: HttpRequestHandler {
                     log.debug{'RequestMeta registered: ${c} ${meta}'}
                 }
             }
+            log.debug{'MVC.registered metas:${meta.method}; ${map}'}
         }
     }
 

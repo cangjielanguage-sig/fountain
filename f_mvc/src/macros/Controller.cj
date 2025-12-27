@@ -69,7 +69,9 @@ private func generate(input: Tokens): Tokens {
     for (d in decl.body.decls) {
         if (let m: MacroExpandDecl <- d && let f: FuncDecl <- extract(m) && !isStatic(f) && isPublic(f)) {
             let (argTypes, argExprs, args, anyargs) = generateArgs(f)
-            tokens += topMacroAnonymousClosure(quote(
+            tokens += `nl` + quote(
+                private let _ = println('￥￥￥￥￥￥￥￥￥￥￥￥￥￥￥￥￥ start ' + TypeInfo.of<$klass>().toString())
+            ) + `nl` + topMacroAnonymousClosure(quote(
                 let metas = MVCStarter.generateAndRegister<$klass>($(f.identifier.value), $argTypes)
                 for(meta in metas){
                     meta.setHandle{controller: $klass, ctx: HttpContext, patterns: HttpRequestPathPatterns => 
@@ -92,7 +94,9 @@ private func generate(input: Tokens): Tokens {
                         }
                     }
                 }
-            )) + `nl`
+            )) + `nl` + quote(
+                private let _ = println('￥￥￥￥￥￥￥￥￥￥￥￥￥￥￥￥￥￥￥￥ end ' + TypeInfo.of<$klass>().toString())
+            ) + `nl`
         }
     }
     tokens

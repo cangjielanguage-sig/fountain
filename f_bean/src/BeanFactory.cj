@@ -42,9 +42,11 @@ public class BeanFactory {
         meta: BeanMeta,
         creator: () -> Object
     ) where T <: Object {
+        println('11111111111111111111111111111111111 ${registered.load()}')
         if (registered.load()) {
             throw BeanException('To register bean to a registered BeanFactory is forbidden')
         }
+        println('2222222222222222222222222222222222')
         var beanType = TypeInfo.of<T>()
         let manager = BeanManager(meta, beanType, creator)
         synchronized(mutex) {
@@ -52,6 +54,7 @@ public class BeanFactory {
                 throw BeanException(
                     'duplicate bean name ${manager.name}, existed bean type is ${existed.beanType}, current bean type is ${manager.beanType}')
             }
+            println('33333333333333333333333333333')
             let typeQueue = LinkedList<BeanType>()
             typeQueue.addLast(ClassType(beanType))
             let any = TypeInfo.of<Any>()
@@ -71,6 +74,7 @@ public class BeanFactory {
                     map.add(klass, set)
                     set
                 }.add(manager)
+                println('44444444444444444444444444444444 ${klass} ${manager}')
                 if(klass == any || klass == object){
                     continue
                 }
@@ -99,6 +103,7 @@ public class BeanFactory {
                         typeQueue.addLast(AnnotationType(ClassTypeInfo.of(annotation)))
                     }
                 }
+                println('5555555555555555555555555555555555')
                 func beanType(typeInfo: TypeInfo) {
                     if (isClass) {
                         ClassType(typeInfo)
@@ -109,21 +114,32 @@ public class BeanFactory {
                 for (superInterface in klass.superInterfaces where superInterface != any) {
                     typeQueue.addLast(beanType(superInterface))
                 }
+                println('6666666666666666666666666666')
                 if (klass is ClassTypeInfo && let s: ClassTypeInfo <- klass && let Some(sc) <- s.superClass && sc != object) {
                     typeQueue.addLast(beanType(sc))
                 }
+                println('77777777777777777777777777777')
             }
         }
-        log.debug{'bean registered ${manager}'}
+        println('8888888888888888888888888888888')
     }
+    private static const DEFAULT_BEAN_META = BeanMeta()
     public func register<T>(creator: () -> T) where T <: Object {
-        let typeInfo = TypeInfo.of<T>()
-        let meta = if (let Some(meta) <- typeInfo.findAnnotation<BeanMeta>()) {
-            meta
-        } else {
-            BeanMeta()
+        try{
+            let typeInfo = TypeInfo.of<T>()
+            println('!!!!!!!!!!!!!!!!!!!!!!')
+            log.debug{'BeanFactory.registering ${typeInfo}'}
+            println('@@@@@@@@@@@@@@@@@@@@@@@@@')
+            let meta = typeInfo.findAnnotation<BeanMeta>() ?? DEFAULT_BEAN_META
+            println('############################')
+            doRegister<T>(meta, creator)
+            println('$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$')
+            log.debug{'BeanFactory.registered ${typeInfo}'}
+            println('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
+        }catch(e: Exception){
+            e.printStackTrace()
+            throw e
         }
-        doRegister<T>(meta, creator)
     }
     public func register<T>(constructor: String, creator: () -> T) where T <: Object {
         if(TypeInfos.withAnnotation<T, Constructor>(constructor, [])){

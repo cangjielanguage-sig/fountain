@@ -111,9 +111,11 @@ private func expandBean(attr: Tokens, input: Tokens, klass: ClassDecl): Tokens {
                 case _ => continue
             }
         }
-        tokens += `nl` + topMacroAnonymousClosure(quote(
+        tokens += `nl` + quote(
+            private let _ = println('################################ start ' + TypeInfo.of<$beanType>().toString())
+        ) + `nl` + topMacroAnonymousClosure(quote(
             $ctorTokens
-            var constructor = if (ctors.isEmpty()) {
+            let constructor = if (ctors.isEmpty()) {
                 {=> $beanType()}
             } else {
                 var ctor = None<() -> $beanType>
@@ -130,7 +132,9 @@ private func expandBean(attr: Tokens, input: Tokens, klass: ClassDecl): Tokens {
                 let beanTypeName = $(beanType.toString())
                 BeanException('class ' + beanTypeName + ' must be with a public parameterless constructor or a public static parameterless function.')
             })
-        ))
+        )) + `nl` + quote(
+            private let _ = println('################################# end ' + TypeInfo.of<$beanType>().toString())
+        ) + `nl`
     }
     tokens
 }

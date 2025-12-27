@@ -16,6 +16,7 @@ limitations under the License.
 package f_mvc
 
 public class MVCStarter {
+    private static let log = LoggerFactory.getLogger<MVCStarter>()
     private MVCStarter(private let server: Server, private let host: String, private let port: UInt16) {
         atExit(closeGracefully)
     }
@@ -30,8 +31,8 @@ public class MVCStarter {
         let host = MVCConfig.host
         let port = MVCConfig.port
         let builder = ServerBuilder().addr(host).port(port)
-        let log = LoggerFactory.getLogger('stdx.net.http')
-        builder.logger(log)
+        let httplog = LoggerFactory.getLogger('stdx.net.http')
+        builder.logger(httplog)
         if (let Some(x) <- MVCConfig.readTimeout) {
             builder.readTimeout(x)
         }
@@ -80,12 +81,23 @@ public class MVCStarter {
     private static let initial_ = AtomicBool(false)
     private static let registered = AtomicBool(false)
     public static func generateAndRegister<T>(fnName: String, argTypes: Array<TypeInfo>): ArrayList<RequestMeta> where T <: Object {
+        println('AAAAAAAAAAAAAAAAAAAAAAAAAAA')
+        log.debug{'MVC.registering.init:${initial_.load()}: ${TypeInfo.of<T>()} ${fnName} ${argTypes}'}
+        println('BBBBBBBBBBBBBBBBBBBBBBBBBBBB')
         if (!initial_.load()) {
+            println('CCCCCCCCCCCCCCCCCCCCCCCCCCCC')
             let list = HttpRequestDistributorImpl.instance.generateAndRegister<T>(fnName, argTypes)
+            println('DDDDDDDDDDDDDDDDDDDDDDDDDDDD')
             registered.compareAndSwap(false, list.size > 0)
+            println('EEEEEEEEEEEEEEEEEEEEEEEEEEEEE')
+            log.debug{'MVC.registered:${list}'}
+            println('FFFFFFFFFFFFFFFFFFFFFFFFFFFF')
             list
         } else {
-            throw MVCException("The generateAndRegister can only be called before calling MVCStarter.start().")
+            println('GGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG')
+            let e = MVCException("The generateAndRegister can only be called before calling MVCStarter.start().")
+            e.printStackTrace()
+            throw e
         }
     }
     public static func generateAndRegisterWSEndPoint<T>(path: String): WSMeta<T> where T <: Object {
