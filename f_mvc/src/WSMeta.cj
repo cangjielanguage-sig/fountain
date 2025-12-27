@@ -36,7 +36,7 @@ sealed abstract class WSFuncMeta<T> {
     public func extract<T>(ctx: HttpContext, name: String, converter: ?AbstractDateTimeConverter, pattern: HttpRequestPathPatterns, ws: WebSocket, payload: Array<Byte>): ?T where T <: DataFields<T> {
         match(args[name]){
             case x: WSDataFrame => x.extract<T>(payload)
-            case x => x.extract<T>(name, converter, ctx, pattern)
+            case x => x.extract<T>(name, converter, ctx, pattern, DummyValidator.instance)
         }
     }
 }
@@ -242,7 +242,11 @@ public class WSMeta<T> where T <: Object {
     }
     
     private func doExtractArgOption<P, M>(meta: ?M, ctx: HttpContext, name: String): ?P where P <: DataFields<P>, M <: WSFuncMeta<T> {
-        meta?.args.extract<P>(ctx, name, pattern)
+        let val = meta?.args.extract<P>(ctx, name, pattern)
+        match(val){
+            case Some(x) => x
+            case _ => None<P>
+        }
     }
     private func doExtractArg<P, M>(meta: ?M, ctx: HttpContext, name: String): P where P <: DataFields<P>, M <: WSFuncMeta<T> {
         doExtractArgOption<P, M>(meta, ctx, name).getOrThrow()

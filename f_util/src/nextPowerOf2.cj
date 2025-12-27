@@ -13,9 +13,21 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package f_version
+package f_util
 
-import std.time.MonoTime
-
-public let AppStarts = MonoTime.now()
-public const FountainVersion = "fountain(1.0.40)"
+public func nextPowerOf2(n: Int64, default!: Int64 = 128): Int64 {
+    if(n <= 0){
+        return default
+    }
+    var x = n
+    if(((x - 1) & x) == 0){
+        return x
+    }
+    x |= x >> 1
+    x |= x >> 2
+    x |= x >> 4
+    x |= x >> 8
+    x |= x >> 16
+    x |= x >> 32
+    return x + 1
+}

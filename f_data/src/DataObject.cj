@@ -45,11 +45,13 @@ class FieldIterator<T> <: Iterator<(String, Data)> where T <: DataFields<T> {
 }
 
 public interface SimpleDataObject <: Data {
+    func iterator(): Iterator<(String, Data)>
     prop typeInfo: TypeInfo
     func getData(): Any
     func dataCreator(): () -> SimpleDataObject
     prop size: Int64
     func fields(): Iterator<ReadableField>
+    func mutableFields(): Iterator<MutableField>
     func set(name: String, value: Data, flag: DataConversionFlag): Unit
     func set<V>(name: String, value: V, flag: DataConversionFlag): Unit where V <: DataFields<V> {
         set(name, value.toData(), flag)

@@ -16,6 +16,7 @@ limitations under the License.
 package f_mvc
 
 public class MVCStarter {
+    private static let log = LoggerFactory.getLogger<MVCStarter>()
     private MVCStarter(private let server: Server, private let host: String, private let port: UInt16) {
         atExit(closeGracefully)
     }
@@ -106,7 +107,7 @@ public class MVCStarter {
         starter?.doStart()
     }
     private func doStart(): Unit {
-        println("MVC is listening: ${listening}")
+        log.debug{"MVC is listening: ${listening}"}
         server.serve()
     }
     public func closeGracefully(): Unit {

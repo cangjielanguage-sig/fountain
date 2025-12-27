@@ -118,6 +118,9 @@ public class ORM {
     public static func register(){
         let default = ORMConfig.getDefaultDriver()
         for(d in ORMConfig.getDrivers()){
+            if(ORMConfig.getUseThirdPartyPool(d.name)){
+                continue
+            }
             register(NamedDatasource(d), default: default.isEmpty() || d.name == default)
         }
     }

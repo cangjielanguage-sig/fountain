@@ -276,7 +276,7 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
         args[name] is MultipartFormData
     }
 
-    public func extract<T>(ctx: HttpContext, name: String, default: ?T): T where T <: DataFields<T> {
+    public func extract<T, P>(ctx: HttpContext, name: String, default: ?P): T where P <: DataFields<P> {
         match (default) {
             case _: ?HttpContext => (ctx as T).getOrThrow()
             case _: ?HttpRequest => (ctx.request as T).getOrThrow()
@@ -284,16 +284,27 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
             case _: ?HttpResponseBuilder => (ctx.responseBuilder as T).getOrThrow()
             case _: ?Array<Byte> => (this.extractBytes(ctx) as T).getOrThrow()
             case _: ?Form => (ctx.request.form as T).getOrThrow()
-            case _: ?RequestBodyParser => (RequestBodyParser(ctx, this) as T).getOrThrow()
-            case _ => match (default) {
-                case Some(d) => args.extract<T>(ctx, name, d, pattern)
-                case _ => args.extract<T>(ctx, name, pattern)
+            case _ => match(default){
+                case Some(d: P) => 
+                    let val = args.extract<P>(ctx, name, d, pattern)
+                    if(let x: T <- val){
+                        x
+                    }else if(let x: T <- Some(val)){
+                        x
+                    }else{
+                        throw UnreachableException()
+                    }
+                case _ => 
+                    let val = args.extract<P>(ctx, name, pattern)
+                    match(val){
+                        case x: T => x
+                        case Some(x: T) => x
+                        case _ => throw HttpRequestException('NO param for controller func, which request param name is ${name}')
+                    }
             }
         }
     }
-    public func extractObject<T>(ctx: HttpContext, name: String): T where T <: Object & ObjectData<T> {
-        args.extractObject<T>(ctx, name, pattern)
-    }
+
     public func extractBytes(ctx: HttpContext): Array<Byte> {
         let buf = ByteBuffer()
         copy(ctx.request.body, to: buf)
@@ -409,7 +420,6 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
                 case x: HttpRequest => x
                 case x: HttpHeaders => x
                 case x: HttpResponseBuilder => x
-                case x: RequestBodyParser => x
                 case x: Form => return x.toEncodeString()
                 case x: String => return x
                 case x: ToString => return x.toString()

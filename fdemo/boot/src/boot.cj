@@ -71,7 +71,7 @@ public class TestData2 <: TestData1 {
 @DataAssist[equal hash tostring props fields]
 public class TestData3 {
     private var a: Int64 = 0
-    private var b: String = ''
+    private var b: ?String = ''
     private var c: Bool = false
     private var d: Float64 = 0.0
     private var e: ?DateTime = None<DateTime>
@@ -82,26 +82,33 @@ public class TestData3 {
 }
 private let _ = {=>
     try{
-        let data2 = TestData2()
+        var data2 = TestData2()
         var data3 = DataObject<TestData3>.populate(data2).getOrThrow()
+        //忽略验证：
+        // data3 = DataObject<TestData3>.populate(data2, flag: DEFAULT_DATA_FLAG | IGNORE_VALIDATION).getOrThrow()
+        //忽略验证失败：
+        // data3 = DataObject<TestData3>.populate(data2, flag: DEFAULT_DATA_FLAG | IGNORE_NOT_MATCHED_VALIDATION).getOrThrow()
         println('AAAAAAAAAAAAAAAAAAAAAAAAAAAAA ${data2}')
-        println('AAAAAAAAAAAAAAAAAAAAAAAAAAAAA ${data3}')
+        println('BBBBBBBBBBBBBBBBBBBBBBBBBBBBB ${data3}')
         let dobj = DataObject<TestData2>(data2)
         let json = JsonValue.tryFromData(dobj)
-        println('AAAAAAAAAAAAAAAAAAAAAAAAAAAAA ${json}')
+        println('CCCCCCCCCCCCCCCCCCCCCCCCCCCCC ${json}')
         let data = json.toData()
         data3 = DataObject<TestData3>.populate(data2).getOrThrow()
-        println('AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA ${data3}')
+        println('DDDDDDDDDDDDDDDDDDDDDDDDDDDDD ${data3}')
+        data2.b=''
+        data2 = DataObject<TestData2>.populate(data3).getOrThrow()
+        println('EEEEEEEEEEEEEEEEEEEEEEEEEEEEE ${data2} ${data2.b}')
         let map = HashMap<String, Int64>()
         map['0'] = 0
         map['1'] = 1
         map['2'] = 2
         let data4 = map.toData()
-        println('AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA ${JsonValue.tryFromData(data4)}')
+        println('FFFFFFFFFFFFFFFFFFFFFFFFFFFFF ${JsonValue.tryFromData(data4)}')
         let s = toJson(data2)//把仓颉对象转成JSON串
         let d = fromJson<TestData2>(s)//把JSON串转成仓颉类对象
-        println('AAAAAAAAAAAAAAAAAAA ${s}')
-        println('AAAAAAAAAAAAAAAAAAAA ${d.toData()}')
+        println('GGGGGGGGGGGGGGGGGGGGGGGGGGGGG ${s}')
+        println('HHHHHHHHHHHHHHHHHHHHHHHHHHHHH ${d.toData()}')
     }catch(e: Exception){
         e.printStackTrace()
         throw e

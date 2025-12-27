@@ -20,7 +20,7 @@ import std.collection.concurrent.ArrayBlockingQueue
 import std.env
 import std.fs.{File, Directory, OpenMode, exists, rename, removeIfExists}
 import std.io.{SeekPosition, OutputStream}
-import std.sync.{Timer, Mutex}
+import std.sync.{Timer, Mutex, AtomicOptionReference}
 import std.time.DateTime
 import stdx.compress.zlib.{WrapType, CompressLevel, CompressOutputStream}
 import f_base.*
@@ -55,13 +55,15 @@ protected class RotatableFile <: OutputStream & Resource {
     private let timeunit: TimeUnit
     private let compress: LogFileCompressFormat
     private let directory: String
-    private var file: File
+    private let file = AtomicOptionReference<File>()
 
     public init(url: String, params: RotatableFileParams) {
         let fileInfo = url["file://".size..]
         var idx = fileInfo.indexOf("?") ?? fileInfo.size
         let path = fileInfo[0..idx]
-        (this.directory, this.file) = createDirIfNeed(path)
+        let (directory, file) = createDirIfNeed(path)
+        this.directory = directory
+        this.file.store(file)
         if (idx < fileInfo.size) {
             idx = fileInfo.indexOf("rotateSize=") ?? -1
             if (idx > 0) {
@@ -97,15 +99,17 @@ protected class RotatableFile <: OutputStream & Resource {
         this.timeunit = params.timeunit
         this.fileSize = params.fileSize
         this.compress = params.compress
-        (this.directory, this.file) = createDirIfNeed(params.path)
+        let (directory, file) = createDirIfNeed(params.path)
+        this.directory = directory
+        this.file.store(file)
         rotateTimer = createRotateTimer()
     }
     public func isClosed(): Bool {
-        file.isClosed()
+        file.load()?.isClosed() ?? true
     }
     @When[os != "Linux"]
     public func close(): Unit {
-        file.close()
+        file.load()?.close()
     }
     @When[os == "Linux"]
     public func close(): Unit {
@@ -113,13 +117,14 @@ protected class RotatableFile <: OutputStream & Resource {
             mm.setLength()
             mm.close()
         }else{
-            file.close()
+            file.load()?.close()
         }
     }
     @When[os == "Linux"]
     private var mmapf = None<RotatableMMapFile>
     @When[os == "Linux"]
     protected func mmap() {
+        let file = this.file.load().getOrThrow()
         let len = file.length
         let mm = file.mmap(0, fileSize)
         mm.writeOffset = len
@@ -129,7 +134,7 @@ protected class RotatableFile <: OutputStream & Resource {
     }
     protected prop path: String {
         get() {
-            this.file.info.path.toString()
+            (this.file.load()?.info.path.toString()).getOrThrow()
         }
     }
     private func createRotateTimer() {
@@ -138,9 +143,9 @@ protected class RotatableFile <: OutputStream & Resource {
                 fn()
             }
         }
-        let timer = Timer.after(timeunit.since()) {
+        let timer = Timer.after(timeunit.since(datetime: timeunit.trim(DateTime.now()))) {
             rotateFileIfNeed(0)
-            this.timeunit.since()
+            this.timeunit.since(datetime: timeunit.trim(DateTime.now()))
         }
         env.atExit {timer.cancel()}
         timer
@@ -238,7 +243,7 @@ protected class RotatableFile <: OutputStream & Resource {
                         e.printStackTrace()
                     }
                     try {
-                        rename(originPath, to: path, overwrite: true)
+                        rename(originPath, to: path, overwrite: false)
                     } catch (e: Exception) {
                         e.printStackTrace()
                     }
@@ -247,10 +252,10 @@ protected class RotatableFile <: OutputStream & Resource {
                     e.printStackTrace()
                 }
                 if (!exists(originPath)) {
-                    this.file = File(originPath, Append)
+                    this.file.store(File(originPath, Append))
                     @When[os == "Linux"]
                     let _ = if(let Some(mm) <- this.mmapf){
-                        mm.mmap = this.file.mmap(0, this.fileSize)
+                        mm.mmap = this.file.load().getOrThrow().mmap(0, this.fileSize)
                         mm.mmap.writeOffset = 0
                     }
                 }
@@ -258,7 +263,7 @@ protected class RotatableFile <: OutputStream & Resource {
         }
     }
     private func needRotate(current: DateTime, appended: Int64) {
-        let file = this.file
+        let file = this.file.load().getOrThrow()
         let fileInfo = file.info
         (fileInfo.creationTime < current || fileInfo.size + appended >= fileSize, file)
     }
@@ -332,10 +337,10 @@ protected class RotatableFile <: OutputStream & Resource {
     }
     public func write(buffer: Array<Byte>): Unit {
         rotateFileIfNeed(buffer.size)
-        file.write(buffer)
+        file.load()?.write(buffer)
     }
     public func flush(): Unit {
-        file.flush()
+        file.load()?.flush()
     }
 }
 

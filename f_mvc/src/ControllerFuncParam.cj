@@ -17,10 +17,8 @@ package f_mvc
 
 abstract class ControllerFuncParam {
     protected const init() {}
-    protected func extract<T>(name: String, converter: ?AbstractDateTimeConverter, ctx: HttpContext, pattern: HttpRequestPathPatterns): ?T where T <: DataFields<T>
-    protected open func extractObject<T>(name: String, ctx: HttpContext, _: HttpRequestPathPatterns): T where T <: Object & ObjectData<T> {
-        throw UnsupportedException('TypeInfo.of(this) does not support current operation, func param name is ${name}.')
-    }
+    protected func extract<T>(name: String, converter: ?AbstractDateTimeConverter, ctx: HttpContext,
+        pattern: HttpRequestPathPatterns, validator: Validator): ?T where T <: DataFields<T>
     static func concat(list: Collection<String>) {
         let b = StringGenerator()
         for (v in list) {
@@ -31,15 +29,20 @@ abstract class ControllerFuncParam {
         }
         b.toString()
     }
+    protected func validate<T>(name: String, value: ?String, validator: Validator) {
+        if (!validator.validate(value)) {
+            throw ValidationException(if (validator.messageIfNotMatch.size > 0) {
+                validator.messageIfNotMatch
+            } else {
+                'Invalid request data ${name}:${value} and its type is ${TypeInfo.of<T>()}'
+            })
+        }
+    }
 }
 
-@Annotation[target: [Parameter]]
-public class RequestParam <: ControllerFuncParam {
-    public const RequestParam(private let name: String, private let default!: ?String = None) {}
-    public const init(default!: ?String = None) {
-        this('', default: default)
-    }
-    private func extractValue(name: String, ctx: HttpContext): ?String {
+abstract sealed class AbstractRequestParam <: ControllerFuncParam {
+    public const init() {}
+    protected func extractValue(name: String, ctx: HttpContext, default: ?String): ?String {
         let request = ctx.request
         let form = request.form
         var list: List<String> = EmptyList<String>.INSTANCE()
@@ -54,36 +57,54 @@ public class RequestParam <: ControllerFuncParam {
                 }
             }
         }
-        if(list.isEmpty() && let Some(d) <- default){
-            list = ArrayList<String>(d.split(','))
-        }
-        if (list.isEmpty()) {
+        if (list.isEmpty() && let Some(_) <- default) {
+            default
+        } else if (list.isEmpty()) {
             None<String>
         } else {
             concat(list)
         }
     }
-    protected func extract<T>(name: String, converter: ?AbstractDateTimeConverter, ctx: HttpContext, _: HttpRequestPathPatterns): ?T where T <: DataFields<T> {
+}
+
+@Annotation[target: [Parameter]]
+public class RequestParam <: AbstractRequestParam {
+    public const RequestParam(private let name: String, private let default!: ?String = None) {}
+    public const init(default!: ?String = None) {
+        this('', default: default)
+    }
+    protected func extract<T>(name: String, converter: ?AbstractDateTimeConverter, ctx: HttpContext,
+        _: HttpRequestPathPatterns, validator: Validator): ?T where T <: DataFields<T> {
         let n = if (this.name.isEmpty()) {
             name
         } else {
             this.name
         }
-        if (let Some(s) <- extractValue(n, ctx)) {
+        let value = extractValue(n, ctx, default)
+        validate<T>(n, value, validator)
+        if (let Some(s) <- value) {
             parseValue<T>(s, converter)
         } else {
             None<T>
         }
     }
-    protected func extractObject<T>(name: String, ctx: HttpContext, _: HttpRequestPathPatterns): T where T <: Object & ObjectData<T> {
-        let o = (T.dataFields().create() as T).getOrThrow()
-        let data = DataObject<T>(o)
-        for (field in data.mutableFields()) {
-            if (let Some(s) <- extractValue(field.name, ctx)) {
-                data[field.name] = s.toData()
+}
+
+@Annotation[target: [Parameter]]
+public class RequestParamObject <: AbstractRequestParam {
+    public const init() {}
+    protected func extract<T>(name: String, _: ?AbstractDateTimeConverter, ctx: HttpContext,
+        pattern: HttpRequestPathPatterns, _: Validator): ?T where T <: DataFields<T> {
+        if (let ti <- TypeInfo.of<T>() && let df: ObjectFields <- ti.getStaticFunction('dataFields', []).apply(ti, []) &&
+            let o: T <- df.create() && let data: SimpleDataObject <- o.toData()) {
+            for (field in data.mutableFields()) {
+                if (let Some(s) <- extractValue(field.name, ctx, None<String>)) {
+                    data.set(field.name, s.toData())
+                }
             }
+            return o
         }
-        o
+        None<T>
     }
 }
 
@@ -93,16 +114,19 @@ public class PathVariable <: ControllerFuncParam {
     public const init(default!: ?String = None) {
         this('', default: default)
     }
-    protected func extract<T>(name: String, converter: ?AbstractDateTimeConverter, ctx: HttpContext, pattern: HttpRequestPathPatterns): ?T where T <: DataFields<T> {
+    protected func extract<T>(name: String, converter: ?AbstractDateTimeConverter, ctx: HttpContext,
+        pattern: HttpRequestPathPatterns, validator: Validator): ?T where T <: DataFields<T> {
         let path = ctx.request.url.path
-        var value = pattern.extract(path, if (this.name.isEmpty()) {
+        let n = if (this.name.isEmpty()) {
             name
         } else {
             this.name
-        })
-        if(value.isNone() && default.isSome()){
+        }
+        var value = pattern.extract(path, n)
+        if (value.isNone() && default.isSome()) {
             value = default
         }
+        validate<T>(n, value, validator)
         if (value.isNone()) {
             return None<T>
         }
@@ -116,19 +140,26 @@ public class RequestHeader <: ControllerFuncParam {
     public const init(default!: ?String = None) {
         this('', default: default)
     }
-    protected func extract<T>(name: String, converter: ?AbstractDateTimeConverter, ctx: HttpContext, pattern: HttpRequestPathPatterns): ?T where T <: DataFields<T> {
-        var value = ctx.request.headers.get(if (this.name.isEmpty()) {
+    protected func extract<T>(name: String, converter: ?AbstractDateTimeConverter, ctx: HttpContext,
+        pattern: HttpRequestPathPatterns, validator: Validator): ?T where T <: DataFields<T> {
+        let n = if (this.name.isEmpty()) {
             name
         } else {
             this.name
-        })
-        if(value.isEmpty() && let Some(d) <- default){
+        }
+        var value = ctx.request.headers.get(n)
+        if (value.isEmpty() && let Some(d) <- default) {
             value = d.split(',')
         }
+        let v = if (value.isEmpty()) {
+            ''
+        } else {
+            concat(value)
+        }
+        validate<T>(n, v, validator)
         if (value.isEmpty()) {
             None<T>
         } else {
-            let v = concat(value)
             parseValue<T>(v, converter)
         }
     }
@@ -137,35 +168,12 @@ public class RequestHeader <: ControllerFuncParam {
 @Annotation[target: [Parameter]]
 public class RequestBody <: ControllerFuncParam {
     public const init() {}
-    protected func extract<T>(name: String, _: ?AbstractDateTimeConverter, ctx: HttpContext, pattern: HttpRequestPathPatterns): ?T where T <: DataFields<T> {
+    protected func extract<T>(name: String, _: ?AbstractDateTimeConverter, ctx: HttpContext,
+        pattern: HttpRequestPathPatterns, _: Validator): ?T where T <: DataFields<T> {
         let body = ctx.request.body
         let size = ctx.request.bodySize
         let contentType = ctx.request.headers.getFirst("Content-Type").getOrThrow()
         let mediaType = MediaTypes.parse(contentType)
         mediaType.toDataFields<T>(body)
-    }
-    protected func extractObject<T>(name: String, ctx: HttpContext, pattern: HttpRequestPathPatterns): T where T <: Object & DataFields<T> {
-        extract<T>(name, None<AbstractDateTimeConverter>, ctx, pattern).getOrThrow()
-    }
-}
-
-@Annotation[target: [Parameter]]
-public class MultipartFormData <: ControllerFuncParam {
-    public const init() {}
-
-    protected func extract<T>(name: String, _: ?AbstractDateTimeConverter, ctx: HttpContext, pattern: HttpRequestPathPatterns): ?T where T <: DataFields<T> {
-        throw MVCException('To use a class which implements ObjectData<T> to parse multipart/form-data')
-    }
-    public func extractObject<T>(name: String, ctx: HttpContext, pattern: HttpRequestPathPatterns): T where T <: Object & ObjectData<T> {
-        let multiparts = MultipartFormDataParser.new(ctx).parse()
-        let fields = T.dataFields()
-        let object = fields.create()
-        let mutables = fields.mutableFields()
-        for (mf in mutables) {
-            let name = mf.name
-            let data = multiparts.get(name)
-            mf.set(object, data)
-        }
-        (object as T).getOrThrow()
     }
 }

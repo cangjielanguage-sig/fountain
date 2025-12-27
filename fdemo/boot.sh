@@ -17,7 +17,7 @@ exports(){
     # %pid 记录当前进程ID
 #    export loggerAsyncBufsize=2 # 异步日志缓存池的初始化大小，默认是1024
     export logger_appender_console=FDemoConsole # 这是控制台日志记录器的名称，可以任意起名，名称得符合标识符规范
-    export logger_appender_FDemoConsole_level=INFO
+    export logger_appender_FDemoConsole_level=DEBUG
     export logger_appender_FDemoConsole_pattern='[%level-%name]%d{yyyy/MM/dd,HH:mm:ss.SSS}|%tid;%m'
     export logger_appender_file=FDemoFile # 这是文件日志记录器的名称，可以任意起名
     export logger_appender_FDemoFile_level=INFO
@@ -30,13 +30,16 @@ exports(){
     export mvc_internalServerErrorMessageKind=BEAN
     export mvc_internalServerErrorMessage=NameOf500Handler
     # 如果不使用fountain连接池，也不使用标准库连接池，就不要配置以下orm_*Pool*变量，只配置orm_noPool，只能用代码初始化第三方连接池
-#    export orm_noPool=true # 默认是false，true表示不用连接池
+    # export orm_useThirdPartyPool=false # 使用第三方连接池，不使用fountain.orm的连接池，也不使用标准库的连接池。
+    # export opengauss_orm_useThirdPartyPool=flase # 可以为指定的数据库驱动配置是否使用第三方池
+    # 此时使用ORM.register(datasource, default: false) # 开发者自己用代码初始化Driver和连接池、调用这个函数注册连接池
+    # export orm_noPool=true # 默认是false，true表示不用连接池
     export orm_useStdPool=false # 默认是true，表示使用标准库连接池，false是使用fountain连接池
     export orm_drivers=opengauss # 逗号分隔的驱动名称
     # orm_databasePool开头的是fountain.orm.DatabasePool的配置项
-    export orm_databasePoolInitSize=10 # 初始连接数
-    export orm_databasePoolMinSize=10 # 最小连接数
-    export orm_databasePoolMaxSize=10 # 最大连接数
+    export orm_databasePoolInitSize=1 # 初始连接数
+    export orm_databasePoolMinSize=1 # 最小连接数
+    export orm_databasePoolMaxSize=1 # 最大连接数
     export orm_databasePoolCheckOnCreation=true # 创建连接时是否检查连接有效性，默认是false
     export orm_databasePoolCheckOnBorrowing=true # 获取连接时是否检查连接有效性，默认是true
     export orm_databasePoolCheckOnReturning=false # 归还连接时是否检查连接有效性，默认是true

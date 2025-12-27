@@ -19,33 +19,15 @@ class RequestArgMeta {
     private let args = HashMap<String, (ControllerFuncParam, Validator, ?AbstractDateTimeConverter)>()
     private func doExtract<T>(ctx: HttpContext, name: String, pattern: ?HttpRequestPathPatterns): ?T where T <: DataFields<T> {
         let (param, validator, converter) = args[name]
-        let data = param.extract<T>(name, converter, ctx, pattern.getOrThrow())
-        if(let Some((n, v)) <- validator.validate(data)){
-            let k = if(n.isEmpty()){
-                name
-            }else{
-                n
-            }
-            let opt = if (data.isNone()){
-                'None<${TypeInfo.of<T>()}>'
-            }else{
-                v
-            }
-            throw HttpRequestException('Invalid request data ${k}:${opt} and its type is ${TypeInfo.of<T>()}')
-        }else{
-            return data
-        }
+        param.extract<T>(name, converter, ctx, pattern.getOrThrow(), validator)
     }
-    func extract<T>(ctx: HttpContext, name: String, pattern: ?HttpRequestPathPatterns): T where T <: DataFields<T> {
-        doExtract<T>(ctx, name, pattern).getOrThrow()
+    func extract<T>(ctx: HttpContext, name: String, pattern: ?HttpRequestPathPatterns): ?T where T <: DataFields<T> {
+        doExtract<T>(ctx, name, pattern)
     }
     func extract<T>(ctx: HttpContext, name: String, default: T, pattern: ?HttpRequestPathPatterns): T where T <: DataFields<T> {
         doExtract<T>(ctx, name, pattern) ?? default
     }
-    func extractObject<T>(ctx: HttpContext, name: String, pattern: ?HttpRequestPathPatterns): T where T <: Object & ObjectData<T> {
-        let (param, _, _) = args[name]
-        param.extractObject<T>(name, ctx, pattern.getOrThrow())
-    }
+
     func contains(name: String): Bool {
         args.contains(name)
     }
@@ -54,9 +36,9 @@ class RequestArgMeta {
         args[name][0]
     }
     operator func [](name: String, value!: ControllerFuncParam): Unit {
-        args[name] = if(let Some((p, v, c)) <- args.get(name)){
+        args[name] = if (let Some((p, v, c)) <- args.get(name)) {
             (value, v, c)
-        }else{
+        } else {
             (value, DummyValidator.instance, None<AbstractDateTimeConverter>)
         }
     }

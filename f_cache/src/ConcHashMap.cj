@@ -17,7 +17,7 @@ package f_cache
 
 import std.collection.{Map, EquatableCollection}
 import std.sync.AtomicInt64
-import f_base.EmptyIterator
+import f_base.{EmptyIterator, nextPowerOf2}
 
 class ConcHashMapKeysIterator<V> <: Iterator<String> {
     ConcHashMapKeysIterator(private let itr: Iterator<(String, V)>) {}
@@ -203,14 +203,7 @@ class ConcHashMap<V> <: Collection<(String, V)> {
         }
     }
     private static func conc(concurrencyLevel: Int64) {
-        if(((concurrencyLevel - 1) & concurrencyLevel) == 0){
-            return concurrencyLevel
-        }
-        var concurrency = 1
-        while (concurrency < concurrencyLevel) {
-            concurrency <<= 1
-        }
-        return concurrency
+        nextPowerOf2(concurrencyLevel, default: 128)
     }
     private func segment(key: String): SyncLinkedHashMap<V> {
         segments[key.hashCode() & (hashMask)]

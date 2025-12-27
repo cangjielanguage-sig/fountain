@@ -22,8 +22,12 @@ import user.model.po.UserPO
 
 @DataAssist[props fields]
 public class UserRequest {
+    @IsNotBlank[messageIfNotMatch: '请输入用户名']
     private var username: String = ''
+    @IsNotBlank[messageIfNotMatch: '请输入密码']
     private var password: String = ''
+    // @IsIntegerRange[min: 1, max: 100]
+    // private var int: Int64 = 0
 }
 
 @DataAssist[props fields]
