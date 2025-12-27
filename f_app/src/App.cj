@@ -121,6 +121,7 @@ public struct App {
                     load(fi.path, pattern)
                 } else if (fi.path.fileName.endsWith(ext) && pattern.matches(fi.path.fileNameWithoutExtension)) {
                     log.debug{"loading: ${fi.path}"}
+                    println('SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS')
                     PackageInfo.load(fi.path.toString().replace(ext, ''))
                 }
                 true
