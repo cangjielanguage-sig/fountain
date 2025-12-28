@@ -480,6 +480,8 @@ public class DefaultCodec <: Codec {
         buffer.write(sizeBuf)
         buffer.write(value)
         this.size += size + sizeBuf.size
+        println('000000000000000000000000 ${value}')
+        println('000000000000000000000000 ${sizeBuf}')
         this
     }
     public func encode(data: InputStream, size: Int64): Encoder {
@@ -654,6 +656,7 @@ public class DefaultCodec <: Codec {
         // decodeSizeOfEncoded(input)
         var bytes = [0u8]
         var size = input.read(bytes)
+        println('======================= ${size}  ${bytes}')
         if (size == 0 || bytes[0] == 0) {
             return DataNone.INSTANCE
         } else if (bytes[0] <= 0x0f) {
@@ -661,6 +664,7 @@ public class DefaultCodec <: Codec {
         }
         let head = bytes[0]
         let dataType = head & 0xf0
+        println('====================== ${dataType}  ${DataType.INPUTSTREAM.value}')
         if (dataType == DataType.STRING.value) {
             let ss = Int64(head & 0x0f)
             if (ss == 0) {
@@ -828,24 +832,33 @@ public class DefaultCodec <: Codec {
             }
             object
         } else if (dataType == DataType.INPUTSTREAM.value) {
+            println('1111111111111111111111111111')
             var s = Int64(head & 0x07)
+            println('2222222222222222222222222222   ${s}')
             if (s == 0) {
                 s = 8
             }
+            println('3333333333333333333333333333   ${s}')
             let f = head & 0x08
             bytes = Array<Byte>(s, repeat: 0)
             size = input.read(bytes)
+            println('4444444444444444444444444444   ${size}  ${bytes}')
             if (size < s) {
                 throw CodecException('current data head is ${toHex(head)}, but read size is ${size}')
             }
             size = parseInt64(head, true, bytes)
+            println('BBBBBBBBBBBBBBBBBBBBBBBBBBB ${size} ${bytes}')
             if (size <= fileThreshold) {
+                println('5555555555555555555555555')
                 let array = Array<Byte>(size, repeat: 0)
                 size = input.read(array)
+                println('6666666666666666666666666666 ${size}  ${array}')
                 if (size < s) {
                     throw CodecException('current data head is ${toHex(head)}, but read size is ${size}')
                 }
+                println('77777777777777777777777777777')
                 return if (f == 0) {
+                    println('88888888888888888888888888888')
                     array.toData()
                 } else {
                     let fileNameSize = decodeSizeOfEncoded(input)

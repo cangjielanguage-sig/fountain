@@ -332,35 +332,7 @@ public class DefaultCodec_test {
         datetime = decoder.decode<DateTime>(input)
         @Assert(datetime, DateTime.UnixEpoch + Duration.nanosecond * -2411342152354)
     }
-    @TestCase
-    public func testBytes(): Unit {
-        let rand = Random()
-        func make(){
-            let s = if(let s <- rand.nextInt32(128)) {
-                if(s < 0){
-                    -s
-                } else if (s == 0){
-                    1i32
-                } else {
-                    s
-                }
-            }else{
-                1i32
-            }
-            rand.nextBytes(s)
-        }
-        for(i in 0 .. 1){
-            let bytes1 = make()
-            let bytes2 = make()
-            let input = ByteBuffer()
-            DefaultCodec().encode(bytes1).encode(bytes2).finish().copy(to: input, closeOnEnd: true)
-            let decoder = DefaultCodec()
-            var bytes = decoder.decode<Array<Byte>>(input)
-            @Assert(bytes, bytes1)
-            bytes = decoder.decode<Array<Byte>>(input)
-            @Assert(bytes, bytes2)
-        }
-    }
+
     // @TestCase
     // public func testFile(): Unit {
     //     let rand = Random()
@@ -448,5 +420,39 @@ public class DefaultCodec_test {
         let decoder = DefaultCodec()
         let o = decoder.decode<TestObject>(input)
         @Assert(o, object)
+    }
+    @TestCase
+    public func testBytes(): Unit {
+        let rand = Random()
+        func make(){
+            let s = if(let s <- rand.nextInt32(128)) {
+                if(s < 0){
+                    -s
+                } else if (s == 0){
+                    1i32
+                } else {
+                    s
+                }
+            }else{
+                1i32
+            }
+            rand.nextBytes(s)
+        }
+        for(i in 0 .. 100){
+            let bytes1 = make()
+            let bytes2 = make()
+            let input = ByteBuffer()
+            DefaultCodec().encode(bytes1).finish().copy(to: input, closeOnEnd: true)
+            let decoder = DefaultCodec()
+            println('~~~~~~~~~~~~~~~~~~~~~~~~~~~~   ${bytes1}')
+            println('AAAAAAAAAAAAAAAAAAAAAAAAAAAA   ${input.bytes()}')
+            input.seek(Begin(0))
+            var bytes = decoder.decode<Array<Byte>>(input)
+            println('AAAAAAAAAAAAAAAAAAAAAAAAAAAA ${i} ${bytes1.size} ${bytes?.size}')
+            println(bytes1)
+            println(bytes)
+            println('AAAAAAAAAAAAAAAAAAAAAAAAAAAA')
+            @Assert(bytes, bytes1)
+        }
     }
 }
