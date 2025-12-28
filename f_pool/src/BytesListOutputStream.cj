@@ -34,7 +34,7 @@ public class BytesListOutputStream <: OutputStream & BytesCopyTo {
         maxSize!: Int64 = 1024,
         elementLife!: Duration = Duration.Max, 
         checkInterval!: Duration = Duration.Max, 
-        clearOnReturning!: Bool = false,
+        clearOnReturning!: Bool = true,
         capacity!: Int64 = 16
     ): BytesListOutputStreamBuilder {
         BytesListOutputStreamBuilder(initSize, minSize, maxSize, elementLife, checkInterval, clearOnReturning, capacity)
