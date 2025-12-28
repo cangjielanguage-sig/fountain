@@ -871,15 +871,20 @@ public class DefaultCodec <: Codec {
                 Directory.create(dir)
             }
             let file = File.createTemp(dir)
-            var buffer = Array<Byte>(fileThreshold, repeat: 0)
-            var readSize = 0
-            while (true) {
-                readSize += input.read(buffer)
-                file.write(buffer)
-                if (readSize == size) {
-                    break
-                } else if (readSize < size && size - readSize < buffer.size) {
-                    buffer = buffer[0..size - readSize]
+            if(let Some(buffer) <- bytesPool.borrow()){
+                try{
+                    while (true) {
+                        let readSize = input.read(buffer)
+                        if (readSize == size) {
+                            file.write(buffer)
+                        } else if (readSize < buffer.size) {
+                            let buf = buffer[0..size - readSize]
+                            file.write(buf)
+                            break
+                        }
+                    }
+                }finally{
+                    bytesPool.giveBack(buffer)
                 }
             }
             if (f != 0) {
