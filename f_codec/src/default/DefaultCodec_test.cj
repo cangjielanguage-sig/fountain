@@ -349,7 +349,7 @@ public class DefaultCodec_test {
             }
             rand.nextBytes(s)
         }
-        for(i in 0 .. 1){
+        for(i in 0 .. 100){
             let bytes1 = make()
             let bytes2 = make()
             let input = ByteBuffer()
