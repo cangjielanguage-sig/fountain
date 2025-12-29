@@ -1,0 +1,20 @@
+[package]
+  cjc-version = "1.0.0"
+  compile-option = "-O2 --dy-std"
+  override-compile-option = "-O2 --dy-std"
+  description = "nothing here"
+  link-option = ""
+  name = "f_security"
+  output-type = "dynamic"
+  src-dir = ""
+  target-dir = ""
+  version = "1.0.0"
+  package-configuration = {}
+
+[profile.build]
+  lto = "full"
+  incremental = true
+
+[dependencies]
+  f_base = {path = "../f_base"}
+  f_data = {path = "../f_data"}
