@@ -19,6 +19,7 @@ import std.convert.*
 import fountain.base.*
 import fountain.cache.*
 import fountain.jwt.JWT
+import fountain.mvc.CurrentHttpContext
 import fountain.util.UUID
 
 public class UserSessionCache {
@@ -38,6 +39,13 @@ public class UserSessionCache {
             hmacKey(jwt, session)
             jwt.verify()
         } else {
+            false
+        }
+    }
+    public static func verify(): Bool {
+        if(let Some(jwt) <- CurrentHttpContext.instance.request.headers.getFirst('Authorization')){
+            verify(jwt)
+        }else{
             false
         }
     }
