@@ -25,7 +25,7 @@ public class UserEntity {
     public func makeSession(querier: (String, String) -> ?Int64): ?(Int64, String, Bool) {
         if (let Some(id) <- querier(username, password)) {
             let jwt = UserSessionCache.generate(id)
-            (id, jwt, UserSessionCache.verify(jwt))
+            (id, jwt, true)
         } else {
             None<(Int64, String, Bool)>
         }

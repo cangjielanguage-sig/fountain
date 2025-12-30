@@ -18,7 +18,7 @@ package f_security
 public class UserTokenSecurityContext<ID, U> <: SecurityContext<ID, U, UserTokenPrincipal<ID>, (ID, String)> where ID <: Hashable & Equatable<ID>, U <: BaseUserData<U>{
     public init(
         store: PrincipalStore<ID, UserTokenPrincipal<ID>>,
-        principalMaker: (BaseUserData<U>) -> ?UserTokenPrincipal<ID>
+        principalMaker: (U) -> ?UserTokenPrincipal<ID>
     ){
         super(store, principalMaker){tpl => 
             if(let Some(p) <- store.get(tpl[0]) && p.token == tpl[1]){

@@ -18,4 +18,5 @@ package f_security
 public interface PrincipalStore<ID, P> where ID <: Hashable & Equatable<ID>, P <: Principal<ID, P> {
     func store(principal: P): Unit
     func get(id: ID): ?P
+    func remove(id: ID): ?P
 }

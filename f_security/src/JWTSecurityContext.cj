@@ -18,8 +18,8 @@ package f_security
 public class JWTSecurityContext<U> <: SecurityContext<String, U, JWTPrincipal<String>, Unit> where U <: BaseUserData<U> {
     public init(
         store: PrincipalStore<String, JWTPrincipal<String>>,
-        principalMaker: (BaseUserData<U>) -> ?JWTPrincipal<String>,
-        check: (JWTVerifier, JWTPrincipal<String>) -> Bool
+        principalMaker: (U) -> ?JWTPrincipal<String>,
+        keySetter: (JWTVerifier, JWTPrincipal<String>) -> JWTVerifier
     ){
         super(store, principalMaker){_ =>
             let headers = CurrentHttpContext.instance.request.headers
@@ -36,7 +36,7 @@ public class JWTSecurityContext<U> <: SecurityContext<String, U, JWTPrincipal<St
                 let verifier = JWT.verifier(jwt)
                 if(let Some(userId) <- verifier.getKeyId() && userId.size > 0 && 
                 let Some(principal) <- store.get(userId)){
-                    return check(verifier, principal)
+                    return keySetter(verifier, principal).verify()
                 }
             }
             false

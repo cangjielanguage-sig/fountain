@@ -15,23 +15,17 @@ limitations under the License.
 */
 package f_security
 
-public abstract class SecurityContext<ID, U, P, S> where ID <: Hashable & Equatable<ID>, U <: BaseUserData<U>, P <: Principal<ID, P> {
-    public SecurityContext(
-        protected let store: PrincipalStore<ID, P>,
-        private let principalMaker: (U) -> ?P,
-        public let check: (S) -> Bool
-    ){}
-    public func login(data: U): ?P {
-        if(let Some(principal) <- principalMaker(data)){
-            store.store(principal)
-            principal
-        }else{
-            None<P>
+extend String <: BaseUserData<String>{
+    public prop username: String {
+        get(){
+            this
         }
     }
-
-    public func get(id: ID): ?P {
-        store.get(id)
+}
+extend Int64 <: BaseUserData<Int64>{
+    public prop username: String {
+        get(){
+            this.toString()
+        }
     }
-    public func checkAndGet(s: S): ?P
 }

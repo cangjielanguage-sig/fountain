@@ -15,6 +15,14 @@ limitations under the License.
 */
 package f_security
 
-public interface UserNamePasswordUserData<U> <: BaseUserData<U> where U <: UserNamePasswordUserData<U>{
-    prop password: String
+public struct UserNamePasswordUserData <: BaseUserData<UserNamePasswordUserData> {
+    public UserNamePasswordUserData(
+        private let name: String,
+        public let password: String
+    ){}
+    public prop username: String {
+        get(){
+            name
+        }
+    }
 }

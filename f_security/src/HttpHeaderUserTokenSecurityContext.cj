@@ -23,7 +23,7 @@ public class HttpHeaderUserTokenSecurityContext<U> <: SecurityContext<String, U,
         userIdHeader: String,
         tokenHeader: String,
         store: PrincipalStore<String, UserTokenPrincipal<String>>,
-        principalMaker: (BaseUserData<U>) -> ?UserTokenPrincipal<String>
+        principalMaker: (U) -> ?UserTokenPrincipal<String>
     ){
         super(store, principalMaker){_ => 
             let headers = CurrentHttpContext.instance.request.headers

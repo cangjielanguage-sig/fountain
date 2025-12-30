@@ -16,3 +16,4 @@ limitations under the License.
 package fountain.security
 
 public import f_security.*
+public import f_security.exception.*
