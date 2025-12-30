@@ -23,22 +23,8 @@ import fountain.mvc.CurrentHttpContext
 import fountain.security.*
 import fountain.util.UUID
 
-public struct JWTStore <: PrincipalStore<String, JWTPrincipal<String>> {
-    private let cache = HeapCache<JWTPrincipal<String>>(maxLife: Duration.hour)
-    public func store(principal: JWTPrincipal<String>): Unit {
-        cache.set(principal.id, principal)
-    }
-    public func get(id: String): ?JWTPrincipal<String> {
-        cache.get(id)
-    }
-    public func remove(id: String): ?JWTPrincipal<String> {
-        cache.remove(id)
-    }
-}
-
-
 public class UserSessionCache {
-    private static let context = JWTSecurityContext<String>(JWTStore(),{id => 
+    private static let context = JWTSecurityContext<String>(JWTHeapCacheStore(Duration.hour),{id => 
         JWTPrincipal<String>(id, '', UUID.random().toHexString())
     }){verifier, principal => 
         hmacKey(verifier, principal)

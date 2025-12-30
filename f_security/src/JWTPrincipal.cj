@@ -15,7 +15,7 @@ limitations under the License.
 */
 package f_security
 
-public class JWTPrincipal<ID> <: Principal<ID, JWTPrincipal<ID>> where ID <: Hashable & Equatable<ID> {
+public open class JWTPrincipal<ID> <: Principal<ID, JWTPrincipal<ID>> where ID <: Hashable & Equatable<ID> {
     public JWTPrincipal(
         private let uid: ID,
         private let name: String,

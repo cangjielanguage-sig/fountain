@@ -17,6 +17,7 @@
 
 [dependencies]
   f_base = {path = "../f_base"}
+  f_cache = {path = "../f_cache"}
   f_jwt = {path = "../f_jwt"}
   f_mvc = {path = "../f_mvc"}
 

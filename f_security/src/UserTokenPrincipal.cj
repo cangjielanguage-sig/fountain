@@ -15,7 +15,7 @@ limitations under the License.
 */
 package f_security
 
-public struct UserTokenPrincipal<ID> <: Principal<ID, UserTokenPrincipal<ID>> where ID <: Hashable & Equatable<ID> {
+public open class UserTokenPrincipal<ID> <: Principal<ID, UserTokenPrincipal<ID>> where ID <: Hashable & Equatable<ID> {
     public UserTokenPrincipal(
         private let uid: ID,
         private let name: String,
