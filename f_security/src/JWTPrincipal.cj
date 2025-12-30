@@ -15,22 +15,21 @@ limitations under the License.
 */
 package f_security
 
-public abstract class SecurityContext<ID, U, P, S> where ID <: Hashable & Equatable<ID>, U <: BaseUserData<U>, P <: Principal<ID, P> {
-    public SecurityContext(
-        protected let store: PrincipalStore<ID, P>,
-        private let principalMaker: (BaseUserData<U>) -> ?P,
-        protected let check: (S) -> Bool
+public struct JWTPrincipal<ID> <: Principal<ID, JWTPrincipal<ID>> where ID <: Hashable & Equatable<ID> {
+    public JWTPrincipal(
+        private let uid: ID,
+        private let name: String,
+        public let key: String
     ){}
-    public func login(data: BaseUserData<U>): ?P {
-        if(let Some(principal) <- principalMaker(data)){
-            store.store(principal)
-            principal
-        }else{
-            None<P>
+    
+    public prop id: ID {
+        get(){
+            uid
         }
     }
-    public func get(id: ID): ?P {
-        store.get(id)
+    public prop username: String {
+        get(){
+            name
+        }
     }
-    public func checkAndGet(s: S): ?P
 }
