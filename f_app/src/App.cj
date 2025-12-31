@@ -207,9 +207,18 @@ public struct App {
                 for (line in reader.lines()) {
                     toml.appendUnixNewLine(if (versionRegex.matches(line)) {
                         '  version = "${v}"'
-                    }else if (cjcVersionRegex.matches(line) && let (code, stdout, _) <- executeWithOutput('cjc', ['-v']) && code == 0) {
-                        let cjcv = String.fromUtf8(stdout).split('\n')[0].replace('Cangjie Compiler: ', '').replace(' (cjnative)', '').replace('\r', '').trimAscii()
-                        '  cjc-version = "${cjcv}"'
+                    }else if (cjcVersionRegex.matches(line)) {
+                        try{
+                            if(let (code, stdout, _) <- executeWithOutput('cjc', ['-v']) && code == 0){
+                                let cjcv = String.fromUtf8(stdout).split('\n')[0].replace('Cangjie Compiler: ', '').replace(' (cjnative)', '').replace('\r', '').trimAscii()
+                                '  cjc-version = "${cjcv}"'
+                            }else{
+                                line
+                            }
+                        }catch(e: Exception){
+                            log.warn('error occurred on cjc -v', e)
+                            line
+                        }
                     } else {
                         line
                     })
