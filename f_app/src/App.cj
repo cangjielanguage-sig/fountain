@@ -202,11 +202,15 @@ public struct App {
                 let tomlPath = getWorkingDirectory().join('cjpm.toml')
                 let reader = StringReader(ByteBuffer(File.readFrom(tomlPath)))
                 let toml = StringGenerator()
-                let regexp = Regex(#'^\s*version\s*=\s*"(\d+\.)+\d+"$'#)
+                let versionRegex = Regex(#'^\s*version\s*=\s*"(\d+\.)+\d+"$'#)
+                let cjcVersionRegex = Regex(#'^\s*cjc-version\s*=\s*"(\d+\.)+\d+"$'#)
                 for (line in reader.lines()) {
-                    toml.appendUnixNewLine(if (regexp.matches(line)) {
+                    toml.appendUnixNewLine(if (versionRegex.matches(line)) {
                         '  version = "${v}"'
-                    }else {
+                    }else if (cjcVersionRegex.matches(line) && let (code, stdout, _) <- executeWithOutput('cjc', ['-v']) && code == 0) {
+                        let cjcv = String.fromUtf8(stdout).split('\n')[0].replace('Cangjie Compiler: ', '').replace(' (cjnative)', '').replace('\r', '').trimAscii()
+                        '  cjc-version = "${cjcv}"'
+                    } else {
                         line
                     })
                 }
