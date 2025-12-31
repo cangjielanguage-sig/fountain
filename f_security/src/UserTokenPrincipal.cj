@@ -13,9 +13,22 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package f_version
+package f_security
 
-import std.time.MonoTime
-
-public let AppStarts = MonoTime.now()
-public const FountainVersion = "fountain(1.0.42)"
+public open class UserTokenPrincipal<ID> <: Principal<ID, UserTokenPrincipal<ID>> where ID <: Hashable & Equatable<ID> {
+    public UserTokenPrincipal(
+        private let uid: ID,
+        private let name: String,
+        public let token: String
+    ){}
+    public prop id: ID {
+        get(){
+            uid
+        }
+    }
+    public prop username: String {
+        get(){
+            name
+        }
+    }
+}

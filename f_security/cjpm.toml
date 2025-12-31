@@ -1,0 +1,60 @@
+[package]
+  cjc-version = "1.0.0"
+  compile-option = "-O2 --dy-std"
+  override-compile-option = "-O2 --dy-std"
+  description = "nothing here"
+  link-option = ""
+  name = "f_security"
+  output-type = "dynamic"
+  src-dir = ""
+  target-dir = ""
+  version = "1.0.0"
+  package-configuration = {}
+
+[profile.build]
+  lto = "full"
+  incremental = true
+
+[dependencies]
+  f_base = {path = "../f_base"}
+  f_cache = {path = "../f_cache"}
+  f_jwt = {path = "../f_jwt"}
+  f_mvc = {path = "../f_mvc"}
+
+
+[target]
+[target.x86_64-unknown-linux-gnu]
+  compile-option = "-O2 --lto=full --dy-std -Woff unused"
+  override-compile-option = "-O2 --lto=full --dy-std -Woff unused"
+[target.x86_64-unknown-linux-gnu.bin-dependencies]
+  path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]
+[target.aarch64-unknown-linux-gnu]
+  compile-option = "-O2 --lto=full --dy-std -Woff unused"
+  override-compile-option = "-O2 --lto=full --dy-std -Woff unused"
+[target.aarch64-unknown-linux-gnu.bin-dependencies]
+  path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]
+[target.x86_64-w64-mingw32]
+  compile-option = "-O2 --dy-std -Woff unused"
+  override-compile-option = "-O2 --dy-std -Woff unused"
+[target.x86_64-w64-mingw32.bin-dependencies]
+  path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]
+[target.x86_64-apple-darwin]
+  compile-option = "-O2 --dy-std -Woff unused"
+  override-compile-option = "-O2 --dy-std -Woff unused"
+[target.x86_64-apple-darwin.bin-dependencies]
+  path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]
+[target.aarch64-apple-darwin]
+  compile-option = "-O2 --dy-std -Woff unused"
+  override-compile-option = "-O2 --dy-std -Woff unused"
+[target.aarch64-apple-darwin.bin-dependencies]
+  path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]
+[target.aarch64-linux-ohos]
+  compile-option = "-O2 --dy-std"
+  override-compile-option = "-O2 --dy-std"
+[target.aarch64-linux-ohos.bin-dependencies]
+  path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]
+[target.x86_64-linux-ohos]
+  compile-option = "-O2 --dy-std"
+  override-compile-option = "-O2 --dy-std"
+[target.x86_64-linux-ohos.bin-dependencies]
+  path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]

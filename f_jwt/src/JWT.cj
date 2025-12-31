@@ -251,10 +251,10 @@ sealed abstract class JWT {
         this.expire(Duration.second * expire)
     }
     public func expire(duration: Duration): This {
-        expireAt(DateTime.now() + duration)
+        expireAt(DateTime.nowUTC() + duration)
     }
     public func expireAt(expireAt: DateTime): This {
-        this.expireAt(expireAt - DateTime.UnixEpoch)
+        this.expireAt(expireAt.inUTC().toUnixTimeStamp())
     }
     public func expireAt(duration: Duration): This {
         this.expireAt(duration.toSeconds())
@@ -270,7 +270,7 @@ sealed abstract class JWT {
         notBeforeAt(nbf.toSeconds())
     }
     public func notBeforeAt(nbf: DateTime): This {
-        notBeforeAt(nbf.toUnixTimeStamp())
+        notBeforeAt(nbf.inUTC().toUnixTimeStamp())
     }
     public func issuedAt(iat: Int64): This {
         addPayload("iat", iat)
@@ -279,14 +279,14 @@ sealed abstract class JWT {
         addPayload("iat", iat.toSeconds())
     }
     public func issuedAt(iat: DateTime): This {
-        addPayload("iat", iat.toUnixTimeStamp())
+        addPayload("iat", iat.inUTC().toUnixTimeStamp())
     }
     public func jwtId<T>(jti: T, expire: Duration, cache: JwtIdCache<T>): This where T <: Equatable<T> & ToString {
         cache.put(jti, expire)
         addPayload("jti", jti)
     }
     public func jwtId<T>(jti: T, expireAt: DateTime, cache: JwtIdCache<T>): This where T <: Equatable<T> & ToString {
-        cache.put(jti, expireAt)
+        cache.put(jti, expireAt.inUTC())
         addPayload("jti", jti)
     }
 
@@ -464,14 +464,14 @@ public class JWTVerifier <: JWT {
             None<T>
         }
     }
-    public func isNotBefore(time!: DateTime = DateTime.now()): Bool {
-        (this.getNotBefore() ?? time) <= time
+    public func isNotBefore(time!: DateTime = DateTime.nowUTC()): Bool {
+        (this.getNotBefore() ?? time.inUTC()) <= time
     }
-    public func isExpired(time!: DateTime = DateTime.now()): Bool {
+    public func isExpired(time!: DateTime = DateTime.nowUTC()): Bool {
         if (let Some(d) <- this.getExpireAt()) {
-            d > time
+            d <= time.inUTC()
         } else {
-            true
+            false
         }
     }
     public func verifySign(): Bool {
@@ -481,8 +481,8 @@ public class JWTVerifier <: JWT {
      * 检查了exp nbf sign，如果没有指定exp 或nbf 就认为jwt在相应时间字段当前时间有效。
      */
     public func verify(): Bool {
-        let now = DateTime.now()
-        isExpired(time: now) && isNotBefore(time: now) && verifySign()
+        let now = DateTime.nowUTC()
+        !isExpired(time: now) && isNotBefore(time: now) && verifySign()
     }
     public func verifyPayload<V>(name: String, value: V): Bool where V <: Equatable<V> {
         if (let Some(o) <- getPayload(name) && let v: Equatable<V> <- o) {
@@ -507,7 +507,7 @@ public class JWTVerifier <: JWT {
         verifyIssueAt(issueAt.toSeconds())
     }
     public func verifyIssueAt(issueAt: DateTime): Bool {
-        verifyIssueAt(issueAt - DateTime.UnixEpoch)
+        verifyIssueAt(issueAt.inUTC() - DateTime.UnixEpoch)
     }
     public func verifyId<T>(cache: JwtIdCache<T>): Bool where T <: Equatable<T> {
         match(getPayload('jti')) {

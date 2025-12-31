@@ -13,9 +13,19 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package f_version
+package f_security
 
-import std.time.MonoTime
-
-public let AppStarts = MonoTime.now()
-public const FountainVersion = "fountain(1.0.42)"
+extend String <: BaseUserData<String>{
+    public prop username: String {
+        get(){
+            this
+        }
+    }
+}
+extend Int64 <: BaseUserData<Int64>{
+    public prop username: String {
+        get(){
+            this.toString()
+        }
+    }
+}

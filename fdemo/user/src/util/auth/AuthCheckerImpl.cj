@@ -28,7 +28,7 @@ public class AuthCheckerImpl <: AuthHandler {
     public func check(param: AuthParam): AuthStatus {
         if (param.ignoreAuth) {
             OK
-        } else if (let Some(jwt) <- param.ctx.request.headers.getFirst('Authorization') && UserSessionCache.verify(jwt)){
+        } else if (UserSessionCache.verify()){
             OK
         } else {
             let json = '''

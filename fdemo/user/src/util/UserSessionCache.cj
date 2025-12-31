@@ -19,39 +19,35 @@ import std.convert.*
 import fountain.base.*
 import fountain.cache.*
 import fountain.jwt.JWT
+import fountain.mvc.CurrentHttpContext
+import fountain.security.*
 import fountain.util.UUID
 
 public class UserSessionCache {
-    private static let cache = HeapCache<UserSession>(maxLife: Duration.hour)
+    private static let context = JWTSecurityContext<String>(JWTHeapCacheStore(Duration.hour),{id => 
+        JWTPrincipal<String>(id, '', UUID.random().toHexString())
+    }){verifier, principal => 
+        hmacKey(verifier, principal)
+    }
+    private static func keyId(principal: JWTPrincipal<String>){
+        principal.key.unsafeBytes()
+    }
+    private static func hmacKey<T>(jwt: T, principal: JWTPrincipal<String>): T where T <: JWT {
+        hmacKey(jwt, keyId(principal))
+    }
+    private static func hmacKey<T>(jwt: T, key: Array<Byte>): T where T <: JWT {
+        jwt.hmacMD5(key)
+    }
     private static let expire = Duration.hour
     private init(){}
     public static func generate(userId: Int64): String {
-        let session = UserSession(userId, UUID.random().toHexString())
-        cache.set('${userId}', session)
-        hmacKey(JWT.encoder(), session).keyId(session.userId.toString()).expire(expire).sign()
+        let uids = userId.toString()
+        let principal = context.login(uids).getOrThrow{SecurityException()}
+        hmacKey(JWT.encoder(), principal).keyId(uids).expire(expire).sign()
     }
-    public static func verify(jwtStr: String): Bool {
-        let jwt = JWT.verifier(jwtStr)
-        if(let Some(userIdStr) <- jwt.getKeyId() && userIdStr.size > 0 && 
-            let Some(userId) <- Int64.tryParse(userIdStr) && userId > 0 && 
-            let Some(session) <- cache.get(userIdStr)){
-            hmacKey(jwt, session)
-            jwt.verify()
-        } else {
-            false
-        }
-    }
-    private static func hmacKey<T>(jwt: T, session: UserSession): T where T <: JWT {
-        jwt.hmacMD5(session.toBytes())
-    }
-    public static func remove(userId: Int64) {
-        cache.remove('${userId}')
-    }
-}
-public class UserSession {
-    UserSession(public let userId: Int64, public let key: String){}
 
-    public func toBytes() {
-        '${userId}_${key}'.unsafeBytes()
+    public static func verify(): Bool {
+        let v = context.check(())
+        v
     }
 }

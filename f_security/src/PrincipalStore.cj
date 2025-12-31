@@ -13,9 +13,10 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package f_version
+package f_security
 
-import std.time.MonoTime
-
-public let AppStarts = MonoTime.now()
-public const FountainVersion = "fountain(1.0.42)"
+public interface PrincipalStore<ID, P> where ID <: Hashable & Equatable<ID>, P <: Principal<ID, P> {
+    func store(principal: P): Unit
+    func get(id: ID): ?P
+    func remove(id: ID): ?P
+}

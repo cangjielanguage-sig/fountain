@@ -26,6 +26,7 @@
   f_random = {path = "./f_random"}
   f_regex = {path = "./f_regex"}
   f_rx = {path = "./f_rx"}
+  f_security = {path = "./f_security"}
   f_ticktock = {path = "./f_ticktock"}
   f_time = {path = "./f_time"}
   f_util = {path = "./f_util"}
@@ -41,7 +42,7 @@
   output-type = "dynamic"
   src-dir = ""
   target-dir = ""
-  version = "1.0.40"
+  version = "1.0.42"
   package-configuration = {}
 
 [target]
