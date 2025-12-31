@@ -19,21 +19,25 @@ import std.collection.ArrayList
 import std.io.OutputStream
 
 public class BytesListOutputStream <: OutputStream & BytesCopyTo {
-    BytesListOutputStream(private let list: ArrayList<Array<Byte>>){}
+    BytesListOutputStream(private let list: ArrayList<Array<Byte>>, private let pool: ArrayListPool<Array<Byte>>){}
     public func write(bytes: Array<Byte>): Unit {
         list.add(bytes)
     }
-    public func copy(to!: OutputStream): Unit {
-        for(bytes in list){
-            to.write(bytes)
+    public func copy(to!: OutputStream, closeOnEnd!: Bool = true): Unit {
+        try{
+            for(bytes in list){
+                to.write(bytes)
+            }
+        }finally{
+            pool.giveBack(list)
         }
     }
     public static func builder(
-        initSize!: Int64 = 1024, 
-        minSize!: Int64 = 1024, 
+        initSize!: Int64 = 1024,
+        minSize!: Int64 = 1024,
         maxSize!: Int64 = 1024,
-        elementLife!: Duration = Duration.Max, 
-        checkInterval!: Duration = Duration.Max, 
+        elementLife!: Duration = Duration.Max,
+        checkInterval!: Duration = Duration.Max,
         clearOnReturning!: Bool = true,
         capacity!: Int64 = 16
     ): BytesListOutputStreamBuilder {
@@ -46,16 +50,16 @@ public class BytesListOutputStreamBuilder {
         initSize: Int64, minSize: Int64, maxSize: Int64, elementLife: Duration, checkInterval: Duration, clearOnReturning: Bool, capacity: Int64
     ){
         pool = ArrayListPool<Array<Byte>>(
-            initSize: initSize, 
-            minSize: minSize, 
-            maxSize: maxSize, 
-            elementLife: elementLife, 
-            checkInterval: checkInterval, 
+            initSize: initSize,
+            minSize: minSize,
+            maxSize: maxSize,
+            elementLife: elementLife,
+            checkInterval: checkInterval,
             clearOnReturning: clearOnReturning)
     }
-    public func build(timeout!: Duration = Duration.Max){
+    public func build(timeout!: Duration = Duration.Max): ?BytesListOutputStream {
         if(let Some(l) <- pool.borrow(timeout: timeout)){
-            BytesListOutputStream(l)
+            BytesListOutputStream(l, pool)
         }else{
             None<BytesListOutputStream>
         }
