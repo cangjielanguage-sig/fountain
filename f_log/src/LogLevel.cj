@@ -25,15 +25,15 @@ extend LogLevel <: ExtendLogLevel {
     public prop text: String {
         get() {
             if (this == FATAL) {
-                '\u{1B}[1;5;43;91mFATAL\u{1B}[0m'
+                'FATAL'
             } else if (this == ERROR) {
-                '\u{1B}[1;91mERROR\u{1B}[0m'
+                'ERROR'
             } else if (this == WARN) {
-                '\u{1B}[1;91mWARN\u{1B}[0m'
+                'WARN'
             } else if (this == INFO) {
-                '\u{1B}[92mINFO\u{1B}[0m'
+                'INFO'
             } else if (this == DEBUG) {
-                '\u{1B}[34mDEBUG\u{1B}[0m'
+                'DEBUG'
             } else {
                 this.toString()
             }

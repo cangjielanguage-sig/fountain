@@ -27,7 +27,7 @@ public interface BytesCopyFrom {
 public interface BytesCopier <: BytesCopyTo & BytesCopyFrom {}
 
 public struct PooledBufferBytesCopyTo <: BytesCopyTo { 
-    public PooledBufferBytesCopyTo(private let input: InputStream, 
+    public PooledBufferBytesCopyTo(private let input: InputStream,
                                     private let pool: ArrayPool<Byte>){}
     public func copy(to!: OutputStream, closeFromOnEnd!: Bool = true, closeToOnEnd!: Bool = false): Unit {
         func copyTo(buf: Array<Byte>){
@@ -57,7 +57,7 @@ public struct PooledBufferBytesCopyTo <: BytesCopyTo {
     }
 }
 public struct PooledBufferedBytesCopyFrom <: BytesCopyFrom {
-    public PooledBufferedBytesCopyFrom(private let output: OutputStream, 
+    public PooledBufferedBytesCopyFrom(private let output: OutputStream,
                                         private let pool: ArrayPool<Byte>,
                                         private let closeOnEnd!: Bool = true){}
     public func copy(from!: InputStream, closeFromOnEnd!: Bool = false, closeToOnEnd!: Bool = true): Unit {
