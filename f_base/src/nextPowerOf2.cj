@@ -17,7 +17,7 @@ package f_base
 
 public func nextPowerOf2(n: Int64, default!: Int64 = 128): Int64 {
     if(n <= 0){
-        return default
+        return nextPowerOf2(default)
     }
     var x = n
     if(((x - 1) & x) == 0){
