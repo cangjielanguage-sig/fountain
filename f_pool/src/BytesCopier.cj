@@ -18,7 +18,7 @@ package f_pool
 import std.io.{InputStream, OutputStream}
 
 public interface BytesCopyTo {
-    func copy(to!: OutputStream): Unit
+    func copy(to!: OutputStream, closeOnEnd!: Bool): Unit
 }
 public interface BytesCopyFrom {
     func copy(from!: InputStream): Unit

@@ -15,7 +15,7 @@ limitations under the License.
 */
 package f_log
 
-import stdx.log.{Attr, LogValue}
+import stdx.log.Attr
 
 public interface LogFilter {
     func filter(attr: Attr): ?Attr {
