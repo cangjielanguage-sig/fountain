@@ -23,13 +23,16 @@ public class BytesListOutputStream <: OutputStream & BytesCopyTo {
     public func write(bytes: Array<Byte>): Unit {
         list.add(bytes)
     }
-    public func copy(to!: OutputStream, closeOnEnd!: Bool = true): Unit {
+    public func copy(to!: OutputStream, closeFromOnEnd!: Bool = true, closeToOnEnd!: Bool = false): Unit {
         try{
             for(bytes in list){
                 to.write(bytes)
             }
         }finally{
             pool.giveBack(list)
+            if(closeToOnEnd && let r: Resource <- to && !r.isClosed()){
+                r.close()
+            }
         }
     }
     public static func builder(
