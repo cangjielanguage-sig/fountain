@@ -1,8 +1,8 @@
 [package]
   cjc-version = "1.0.4"
-  name = "f_codec"
+  name = "f_protocol"
   organization="fountain"
-  description = "codec"
+  description = "a protocol implementation"
   version = "1.0.0"
   target-dir = ""
   src-dir = ""
@@ -14,8 +14,4 @@
 
 [dependencies]
   f_base = {path = "../f_base"}
-  f_collection = {path = "../f_collection"}
-  f_data = {path = "../f_data"}
-  f_exception = {path = "../f_exception"}
-  f_pool = {path = "../f_pool"}
-  f_util = {path = "../f_util"}
+  f_protocol = {path = "../f_protocol"}

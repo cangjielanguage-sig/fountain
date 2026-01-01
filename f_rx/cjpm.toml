@@ -1,7 +1,8 @@
 [package]
   cjc-version = "1.0.0"
   name = "f_rx"
-  description = "nothing here"
+  organization="fountain"
+  description = "rxcj"
   version = "1.0.0"
   target-dir = ""
   src-dir = ""

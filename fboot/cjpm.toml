@@ -12,6 +12,7 @@
   src-dir = ""
   target-dir = ""
   version = "1.0.0"
+  organization = "fountain"
   package-configuration = {}
 
 [profile.build]

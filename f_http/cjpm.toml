@@ -1,7 +1,8 @@
 [package]
   cjc-version = "1.0.3"
   name = "f_http"
-  description = "nothing here"
+  organization="fountain"
+  description = "some media types"
   version = "1.0.0"
   target-dir = ""
   src-dir = ""

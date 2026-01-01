@@ -1,6 +1,7 @@
 [package]
   cjc-version = "1.0.4"
   name = "f_app"
+  organization="fountain"
   description = "nothing here"
   version = "1.0.0"
   target-dir = ""
