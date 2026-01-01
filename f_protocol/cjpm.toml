@@ -14,4 +14,7 @@
 
 [dependencies]
   f_base = {path = "../f_base"}
+  f_codec = {path = "../f_codec"}
+  f_data = {path = "../f_data"}
   f_protocol = {path = "../f_protocol"}
+  f_pool = {path = "../f_pool"}

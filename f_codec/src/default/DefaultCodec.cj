@@ -87,17 +87,18 @@ public class DefaultCodec <: Codec {
         }
     }
     private func encode(data: Data): Encoder {
-        let buffer = lastBuffer()
         match (data) {
-            case _: DataNone => encodeNone(buffer)
-            case x: DataBool => encode(x.data, buffer)
-            case x: DataString => encode(x.data, buffer)
-            case x: DataReal => encode(x.data, buffer)
-            case x: DataDuration => encode(x.data, buffer)
-            case x: DataDateTime => encode(x.data, buffer)
+            case x: DataAny => encode(x.data)
+            case _: DataNone => encodeNone(lastBuffer())
+            case x: DataBool => encode(x.data, lastBuffer())
+            case x: DataString => encode(x.data, lastBuffer())
+            case x: DataReal => encode(x.data, lastBuffer())
+            case x: DataDuration => encode(x.data, lastBuffer())
+            case x: DataDateTime => encode(x.data, lastBuffer())
             case x: DataCollection<ArrayList<Byte>, Byte> => encode(x.data)
             case x: DataCollection<Array<Byte>, Byte> => encode(x.data)
             case x: Collection<Data> =>
+                let buffer = lastBuffer()
                 if (x.isEmpty()) {
                     buffer.write([COLLECTION.value])
                     return this
@@ -114,6 +115,7 @@ public class DefaultCodec <: Codec {
                     'current InputStream cannot be serialized due to without size, which type is ${TypeInfo.of(x)}')
             }
             case x: SimpleDataObject =>
+                let buffer = lastBuffer()
                 let typeInfo = x.typeInfo
                 let typeMurmur = typeMurmurHashs.computeIfAbsent(typeInfo) {
                     murmurHash128X64(typeInfo.qualifiedName)
@@ -131,6 +133,7 @@ public class DefaultCodec <: Codec {
                 }
                 this
             case x: Collection<(Data, Data)> =>
+                let buffer = lastBuffer()
                 if (x.isEmpty()) {
                     buffer.write([MAP.value])
                     return this
@@ -143,6 +146,7 @@ public class DefaultCodec <: Codec {
                 }
                 this
             case x: Collection<(String, Data)> =>
+                let buffer = lastBuffer()
                 if (x.isEmpty()) {
                     buffer.write([MAP.value])
                     return this
@@ -160,6 +164,9 @@ public class DefaultCodec <: Codec {
                 throw CodecException('Unsupported type', e)
             }
         }
+    }
+    public func encode(data: DataAny): Encoder {
+        encode(data.data)
     }
     public func encode<T>(data: T): Encoder where T <: DataFields<T> {
         encode(data.toData())
@@ -613,10 +620,7 @@ public class DefaultCodec <: Codec {
     public func finish(): BytesCopyTo {
         ChainedBytesCopyTo(inputs.unsafeData())
     }
-    private static let hex = '0123456789abcdef'.toRuneArray()
-    private func toHex(b: Byte): String {
-        '${hex[Int64(b >> 4)]}${hex[Int64(b & 0x0f)]}'
-    }
+
     private func parseInt64(head: Byte, sign: Bool, bytes: Array<Byte>): Int64 {
         let s = bytes.size
         var v = if (s == 1) {
