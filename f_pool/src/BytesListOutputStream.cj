@@ -33,11 +33,11 @@ public class BytesListOutputStream <: OutputStream & BytesCopyTo {
         }
     }
     public static func builder(
-        initSize!: Int64 = 1024, 
-        minSize!: Int64 = 1024, 
+        initSize!: Int64 = 1024,
+        minSize!: Int64 = 1024,
         maxSize!: Int64 = 1024,
-        elementLife!: Duration = Duration.Max, 
-        checkInterval!: Duration = Duration.Max, 
+        elementLife!: Duration = Duration.Max,
+        checkInterval!: Duration = Duration.Max,
         clearOnReturning!: Bool = true,
         capacity!: Int64 = 16
     ): BytesListOutputStreamBuilder {
@@ -50,11 +50,11 @@ public class BytesListOutputStreamBuilder {
         initSize: Int64, minSize: Int64, maxSize: Int64, elementLife: Duration, checkInterval: Duration, clearOnReturning: Bool, capacity: Int64
     ){
         pool = ArrayListPool<Array<Byte>>(
-            initSize: initSize, 
-            minSize: minSize, 
-            maxSize: maxSize, 
-            elementLife: elementLife, 
-            checkInterval: checkInterval, 
+            initSize: initSize,
+            minSize: minSize,
+            maxSize: maxSize,
+            elementLife: elementLife,
+            checkInterval: checkInterval,
             clearOnReturning: clearOnReturning)
     }
     public func build(timeout!: Duration = Duration.Max): ?BytesListOutputStream {
