@@ -23,5 +23,6 @@ internal import f_base.*
 internal import f_codec.*
 internal import f_codec.default.*
 internal import f_data.*
+internal import f_exception.UnreachableException
 internal import f_pool.BytesCopyTo
 internal import f_protocol.exception.*

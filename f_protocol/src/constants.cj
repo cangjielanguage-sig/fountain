@@ -42,6 +42,27 @@ public const EXACTLY_ONCE = 4u8
 public const APPROVE = 4u8
 public const RETAIN = 1u8
 public const ACK = 1u8
+
+public enum QoS {
+    | AtMostOnce
+    | AtLeastOnce 
+    | ExactlyOnce
+    public prop value: Byte {
+        match(this){
+            case AtMostOnce => AT_MOST_ONCE
+            case AtLeastOnce => AT_LEAST_ONCE
+            case ExactlyOnce => EXACTLY_ONCE
+        }
+    }
+    public static func parse(value: Byte): QoS {
+        match(value & 6u8){
+            case AT_MOST_ONCE => AtMostOnce
+            case AT_LEAST_ONCE => AtLeastOnce
+            case EXACTLY_ONCE => ExactlyOnce
+            case _ => throw UnreachableException()
+        }
+    }
+}
 /*
 | **Name**    | **Value** | **Direction of flow**                | **Description**                          |
 | ----------- | --------- | ------------------------------------ | ---------------------------------------- |

@@ -27,6 +27,65 @@ public struct Message {
     public static func builder(command: Command) {
         MessageBuilder(command)
     }
+/*
+| **  Control Packet   ** | **Bit 3** | **Bit 2** | **Bit 1** | **Bit 0** |
+| ----------------------- | --------- | --------- | --------- | --------- |
+| AUTH                    | HASDATA   | 0         | 0         | ACK       |
+| SLAVEOF                 | REG       | 0         | 0         | ACK       |
+| REGISTER                | 0         | 0         | 0         | ACK       |
+| PUBLISH                 | DUP       | QoS1      | Qos0      | RETAIN    |
+| SUBSCRIBE               | 0         | 0         | 0         | ACK       |
+| UNSUBSCRIBE             | 0         | 0         | 0         | ACK       |
+| CONSUME                 | ONCE      | QoS1      | QoS0      | 0         |
+| RESP                    | 0         | QoS1      | QoS0      | ACK       |
+| PING                    | 0         | 0         | 0         | ACK       |
+| ELECT                   | VOTE      | APPROVE   | 0         | ACK       |
+| ACK                     | 0         | 0         | 0         | 0         |
+| UNREGISTER              | 0         | 0         | 0         | ACK       |
+*/
+    public static func auth(hasData!: Bool, ack!: Bool){
+        builder(AUTH(to(hasData, ack) | to(ack, ACK)))
+    }
+    public static func slafeof(reg!: Bool, ack!: Bool){
+        builder(SLAFEOF(to(reg, REG) | to(ack, ACK)))
+    }
+    public static func register(){
+        builder(REGISTER)
+    }
+    public static func publish(dup!: Bool, qos!: QoS, retain!: Bool){
+        builder(PUBLISH(to(dup, DUP) | qos.value | to(retain, RETAIN)))
+    }
+    public static func subscribe(){
+        builder(SUBSCRIBE)
+    }
+    public static func unsubscribe(){
+        builder(UNSUBSCRIBE)
+    }
+    public static func consume(once!: Bool, qos!: QoS){
+        builder(CONSUME(to(once, ONCE) | qos.value))
+    }
+    public static func resp(qos!: QoS, ack!: Bool){
+        builder(RESP(qos.value | to(ack, ACK)))
+    }
+    public static func ping(){
+        builder(PING)
+    }
+    public static func elect(vote!: Bool, approve!: Bool, ack!: Bool){
+        builder(ELECT(to(vote, VOTE) | to(approve, APPROVE) | to(ack, ACK)))
+    }
+    public static func ack(){
+        builder(ACK)
+    }
+    public static func unregister(){
+        builder(UNREGISTER)
+    }
+    private static func to(bool: Bool, byte: Byte){
+        if(bool){
+            byte
+        }else{
+            0
+        }
+    }
     public func encode(): EncodedMessage {
         let encoder = DefaultCodec()
         encoder.encode(id.pid).encode(id.tid).encode(id.time).encode(data)
