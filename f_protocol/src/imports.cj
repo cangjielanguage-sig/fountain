@@ -18,6 +18,8 @@ package f_protocol
 internal import std.collection.ArrayList
 internal import std.env.getProcessId
 internal import std.io.{InputStream, OutputStream, BufferedInputStream}
+internal import std.net.{IPAddress, TcpSocket, IPSocketAddress}
+internal import std.reflect.*
 internal import std.time.DateTime
 internal import f_base.*
 internal import f_codec.*

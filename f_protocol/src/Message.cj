@@ -43,13 +43,25 @@ public struct Message {
 | ACK                     | 0         | 0         | 0         | 0         |
 | UNREGISTER              | 0         | 0         | 0         | ACK       |
 */
-    public static func auth(hasData!: Bool, ack!: Bool){
-        builder(AUTH(to(hasData, ack) | to(ack, ACK)))
+    public static func auth<T>(hasData!: Bool, ack!: Bool, authData!: T): EncodedMessage where T <: DataFields<T> {
+        builder(AUTH(to(hasData, HASDATA) | to(ack, ACK))).add(authData).build().encode()
     }
-    public static func slafeof(reg!: Bool, ack!: Bool){
-        builder(SLAFEOF(to(reg, REG) | to(ack, ACK)))
+    public static func slaveof(reg!: Bool, ack!: Bool){
+        builder(SLAVEOF(to(reg, REG) | to(ack, ACK))).build().encode()
     }
-    public static func register(){
+    public static func slaveof(reg!: Bool, ack!: Bool, masterHost!: String, masterPort!: UInt16): EncodedMessage {
+        builder(SLAVEOF(to(reg, REG) | to(ack, ACK))).add('${masterHost}:${masterPort}').build().encode()
+    }
+    public static func slaveof(reg!: Bool, ack!: Bool, masterHost!: IPAddress, masterPort!: UInt16): EncodedMessage {
+        slaveof(reg: reg, ack: ack, masterHost: masterHost.toString(), masterPort: masterPort)
+    }
+    public static func slaveof(reg!: Bool, ack!: Bool, masterAddress!: IPSocketAddress): EncodedMessage {
+        slaveof(reg: reg, ack: ack, masterHost: masterAddress.address, masterPort: masterAddress.port)
+    }
+    public static func slaveof(reg!: Bool, ack!: Bool, masterSocket!: TcpSocket): EncodedMessage {
+        slaveof(reg: reg, ack: ack, masterAddress: (masterSocket.remoteAddress as IPSocketAddress).getOrThrow())
+    }
+    public static func register(){//todo
         builder(REGISTER)
     }
     public static func publish(dup!: Bool, qos!: QoS, retain!: Bool){
@@ -74,7 +86,7 @@ public struct Message {
         builder(ELECT(to(vote, VOTE) | to(approve, APPROVE) | to(ack, ACK)))
     }
     public static func ack(){
-        builder(ACK)
+        builder(Command.ACK)
     }
     public static func unregister(){
         builder(UNREGISTER)
@@ -83,7 +95,7 @@ public struct Message {
         if(bool){
             byte
         }else{
-            0
+            0u8
         }
     }
     public func encode(): EncodedMessage {

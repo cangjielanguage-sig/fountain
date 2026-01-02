@@ -48,10 +48,12 @@ public enum QoS {
     | AtLeastOnce 
     | ExactlyOnce
     public prop value: Byte {
-        match(this){
-            case AtMostOnce => AT_MOST_ONCE
-            case AtLeastOnce => AT_LEAST_ONCE
-            case ExactlyOnce => EXACTLY_ONCE
+        get(){
+            match(this){
+                case AtMostOnce => AT_MOST_ONCE
+                case AtLeastOnce => AT_LEAST_ONCE
+                case ExactlyOnce => EXACTLY_ONCE
+            }
         }
     }
     public static func parse(value: Byte): QoS {
