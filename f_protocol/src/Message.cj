@@ -61,35 +61,35 @@ public struct Message {
     public static func slaveof(reg!: Bool, ack!: Bool, masterSocket!: TcpSocket): EncodedMessage {
         slaveof(reg: reg, ack: ack, masterAddress: (masterSocket.remoteAddress as IPSocketAddress).getOrThrow())
     }
-    public static func register(){//todo
-        builder(REGISTER)
+    public static func register<T>(data!: T): EncodedMessage where T <: DataFields<T> {
+        builder(REGISTER).add(data).build().encode()
     }
-    public static func publish(dup!: Bool, qos!: QoS, retain!: Bool){
-        builder(PUBLISH(to(dup, DUP) | qos.value | to(retain, RETAIN)))
+    public static func publish<T>(dup!: Bool, qos!: QoS, retain!: Bool, data!: T): EncodedMessage where T <: DataFields<T>{
+        builder(PUBLISH(to(dup, DUP) | qos.value | to(retain, RETAIN))).add(data).build().encode()
     }
-    public static func subscribe(){
-        builder(SUBSCRIBE)
+    public static func subscribe<T>(data!: T): EncodedMessage where T <: DataFields<T> {
+        builder(SUBSCRIBE).add(data).build().encode()
     }
-    public static func unsubscribe(){
-        builder(UNSUBSCRIBE)
+    public static func unsubscribe<T>(data!: T): EncodedMessage where T <: DataFields<T> {
+        builder(UNSUBSCRIBE).add(data).build().encode()
     }
-    public static func consume(once!: Bool, qos!: QoS){
-        builder(CONSUME(to(once, ONCE) | qos.value))
+    public static func consume<T>(once!: Bool, qos!: QoS, data!: T): EncodedMessage where T <: DataFields<T> {
+        builder(CONSUME(to(once, ONCE) | qos.value)).add(data).build().encode()
     }
-    public static func resp(qos!: QoS, ack!: Bool){
-        builder(RESP(qos.value | to(ack, ACK)))
+    public static func resp<T>(qos!: QoS, ack!: Bool, data!: T): EncodedMessage where T <: DataFields<T> {
+        builder(RESP(qos.value | to(ack, ACK))).add(data).build().encode()
     }
-    public static func ping(){
-        builder(PING)
+    public static func ping(): EncodedMessage {
+        builder(PING).build().encode()
     }
-    public static func elect(vote!: Bool, approve!: Bool, ack!: Bool){
-        builder(ELECT(to(vote, VOTE) | to(approve, APPROVE) | to(ack, ACK)))
+    public static func elect<T>(vote!: Bool, approve!: Bool, ack!: Bool, data!: T): EncodedMessage where T <: DataFields<T> {
+        builder(ELECT(to(vote, VOTE) | to(approve, APPROVE) | to(ack, ACK))).add(data).build().encode()
     }
-    public static func ack(){
-        builder(Command.ACK)
+    public static func ack<T>(data!: T): EncodedMessage where T <: DataFields<T> {
+        builder(Command.ACK).add(data).build().encode()
     }
-    public static func unregister(){
-        builder(UNREGISTER)
+    public static func unregister<T>(data!: T): EncodedMessage where T <: DataFields<T> {
+        builder(UNREGISTER).add(data).build().encode()
     }
     private static func to(bool: Bool, byte: Byte){
         if(bool){
