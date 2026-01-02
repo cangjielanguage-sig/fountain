@@ -29,7 +29,7 @@ package f_protocol
 | PING                    | 0         | 0         | 0         | ACK       |
 | ELECT                   | VOTE      | APPROVE   | 0         | ACK       |
 | ACK                     | 0         | 0         | 0         | 0         |
-| UNREGISTER              | 0         | 0         | 0         | ACK       |
+| DEREGISTER              | 0         | 0         | 0         | ACK       |
 */
 public const HASDATA = 8u8
 public const REG = 8u8
@@ -83,7 +83,7 @@ public enum QoS {
 | PING        | 12        | Client to Server                     | PING request                             |
 | ELECT       | 13        | EACH OTHER among Masters             |                                          |
 | ACK         | 14        | Client to Server or Server to Client |                                          |
-| UNREGISTER  | 15        | Unregister a topic                   | Unregister a topic                       |
+| DEREGISTER  | 15        | Deregister a topic                   | Deregister a topic                       |
 */
 public enum Command {
     | AUTH(Byte)    //0
@@ -97,7 +97,7 @@ public enum Command {
     | PING          //12
     | ELECT(Byte)   //13
     | ACK           //14
-    | UNREGISTER    //15
+    | DEREGISTER    //15
 
     private static func tag(x: Byte){
         x & 0xf
@@ -116,7 +116,7 @@ public enum Command {
                 case PING        => (12 << 4) | 1
                 case ELECT(x)    => (13 << 4) | tag(x)
                 case ACK         => (14 << 4) | 0
-                case UNREGISTER  => (15 << 4) | 1
+                case DEREGISTER  => (15 << 4) | 1
             }
         }
     }
@@ -136,7 +136,7 @@ public enum Command {
             case 12 => PING
             case 13 => ELECT(tag())
             case 14 => ACK
-            case 15 => UNREGISTER
+            case 15 => DEREGISTER
             case _ => throw CommandException(toHex(value))
         }
     }

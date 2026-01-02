@@ -44,7 +44,7 @@ public struct Message {
 | PING                    | 0         | 0         | 0         | ACK       |
 | ELECT                   | VOTE      | APPROVE   | 0         | ACK       |
 | ACK                     | 0         | 0         | 0         | 0         |
-| UNREGISTER              | 0         | 0         | 0         | ACK       |
+| DEREGISTER              | 0         | 0         | 0         | ACK       |
 */
     private static func build<T>(command: Command, data: T): EncodedMessage where T <: DataFields<T> {
         Message(command, data.toData()).encode()
@@ -97,8 +97,8 @@ public struct Message {
     public static func ack<T>(data!: T): EncodedMessage where T <: DataFields<T> {
         build<T>(Command.ACK, data)
     }
-    public static func unregister<T>(data!: T): EncodedMessage where T <: DataFields<T> {
-        build<T>(UNREGISTER, data)
+    public static func deregister<T>(data!: T): EncodedMessage where T <: DataFields<T> {
+        build<T>(DEREGISTER, data)
     }
     private static func to(bool: Bool, byte: Byte){
         if(bool){
