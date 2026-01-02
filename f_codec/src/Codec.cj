@@ -37,6 +37,8 @@ package f_codec
 ```
 */
 public interface Encoder {
+    func encode(data: Data): Encoder
+    func encode(data: DataAny): Encoder
     func encode<T>(data: T): Encoder where T <: DataFields<T> 
     func encodeNone(): Encoder
     func encode(value: Bool): Encoder

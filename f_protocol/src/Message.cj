@@ -19,13 +19,16 @@ public struct Message {
     public Message(
         public let command: Command,
         public let id: MessageID,
-        public let data: Array<DataAny>
+        public let data: Data
     ) {}
-    public init(command: Command, data: Array<DataAny>) {
+    public init(command: Command, data: Data) {
         this(command, MessageID(), data)
     }
-    public static func builder(command: Command) {
-        MessageBuilder(command)
+    public init(command: Command){
+        this(command, DataNone.INSTANCE)
+    }
+    public func tryFromData<T>() where T <: DataFields<T> {
+        T.tryFromData(data)
     }
 /*
 | **  Control Packet   ** | **Bit 3** | **Bit 2** | **Bit 1** | **Bit 0** |
@@ -43,14 +46,20 @@ public struct Message {
 | ACK                     | 0         | 0         | 0         | 0         |
 | UNREGISTER              | 0         | 0         | 0         | ACK       |
 */
-    public static func auth<T>(hasData!: Bool, ack!: Bool, authData!: T): EncodedMessage where T <: DataFields<T> {
-        builder(AUTH(to(hasData, HASDATA) | to(ack, ACK))).add(authData).build().encode()
+    private static func build<T>(command: Command, data: T): EncodedMessage where T <: DataFields<T> {
+        Message(command, data.toData()).encode()
     }
-    public static func slaveof(reg!: Bool, ack!: Bool){
-        builder(SLAVEOF(to(reg, REG) | to(ack, ACK))).build().encode()
+    private static func build(command: Command): EncodedMessage {
+        Message(command).encode()
+    }
+    public static func auth<T>(hasData!: Bool, ack!: Bool, authData!: T): EncodedMessage  where T <: DataFields<T> {
+        build<T>(AUTH(to(hasData, HASDATA) | to(ack, ACK)), authData)
+    }
+    public static func slaveof(reg!: Bool, ack!: Bool): EncodedMessage {
+        build(SLAVEOF(to(reg, REG) | to(ack, ACK)))
     }
     public static func slaveof(reg!: Bool, ack!: Bool, masterHost!: String, masterPort!: UInt16): EncodedMessage {
-        builder(SLAVEOF(to(reg, REG) | to(ack, ACK))).add('${masterHost}:${masterPort}').build().encode()
+        build<String>(SLAVEOF(to(reg, REG) | to(ack, ACK)), '${masterHost}:${masterPort}')
     }
     public static func slaveof(reg!: Bool, ack!: Bool, masterHost!: IPAddress, masterPort!: UInt16): EncodedMessage {
         slaveof(reg: reg, ack: ack, masterHost: masterHost.toString(), masterPort: masterPort)
@@ -61,35 +70,35 @@ public struct Message {
     public static func slaveof(reg!: Bool, ack!: Bool, masterSocket!: TcpSocket): EncodedMessage {
         slaveof(reg: reg, ack: ack, masterAddress: (masterSocket.remoteAddress as IPSocketAddress).getOrThrow())
     }
-    public static func register<T>(data!: T): EncodedMessage where T <: DataFields<T> {
-        builder(REGISTER).add(data).build().encode()
+    public static func register<T>(data!: T): EncodedMessage  where T <: DataFields<T> {
+        build<T>(REGISTER, data)
     }
-    public static func publish<T>(dup!: Bool, qos!: QoS, retain!: Bool, data!: T): EncodedMessage where T <: DataFields<T>{
-        builder(PUBLISH(to(dup, DUP) | qos.value | to(retain, RETAIN))).add(data).build().encode()
+    public static func publish<T>(dup!: Bool, qos!: QoS, retain!: Bool, data!: T): EncodedMessage where T <: DataFields<T> {
+        build<T>(PUBLISH(to(dup, DUP) | qos.value | to(retain, RETAIN)), data)
     }
     public static func subscribe<T>(data!: T): EncodedMessage where T <: DataFields<T> {
-        builder(SUBSCRIBE).add(data).build().encode()
+        build<T>(SUBSCRIBE, data)
     }
     public static func unsubscribe<T>(data!: T): EncodedMessage where T <: DataFields<T> {
-        builder(UNSUBSCRIBE).add(data).build().encode()
+        build<T>(UNSUBSCRIBE, data)
     }
     public static func consume<T>(once!: Bool, qos!: QoS, data!: T): EncodedMessage where T <: DataFields<T> {
-        builder(CONSUME(to(once, ONCE) | qos.value)).add(data).build().encode()
+        build<T>(CONSUME(to(once, ONCE) | qos.value), data)
     }
     public static func resp<T>(qos!: QoS, ack!: Bool, data!: T): EncodedMessage where T <: DataFields<T> {
-        builder(RESP(qos.value | to(ack, ACK))).add(data).build().encode()
+        build<T>(RESP(qos.value | to(ack, ACK)), data)
     }
     public static func ping(): EncodedMessage {
-        builder(PING).build().encode()
+        build(PING)
     }
     public static func elect<T>(vote!: Bool, approve!: Bool, ack!: Bool, data!: T): EncodedMessage where T <: DataFields<T> {
-        builder(ELECT(to(vote, VOTE) | to(approve, APPROVE) | to(ack, ACK))).add(data).build().encode()
+        build<T>(ELECT(to(vote, VOTE) | to(approve, APPROVE) | to(ack, ACK)), data)
     }
     public static func ack<T>(data!: T): EncodedMessage where T <: DataFields<T> {
-        builder(Command.ACK).add(data).build().encode()
+        build<T>(Command.ACK, data)
     }
     public static func unregister<T>(data!: T): EncodedMessage where T <: DataFields<T> {
-        builder(UNREGISTER).add(data).build().encode()
+        build<T>(UNREGISTER, data)
     }
     private static func to(bool: Bool, byte: Byte){
         if(bool){
@@ -99,11 +108,16 @@ public struct Message {
         }
     }
     public func encode(): EncodedMessage {
-        let encoder = DefaultCodec()
-        encoder.encode(id.pid).encode(id.tid).encode(id.time).encode(data)
-        EncodedMessage(command.value, encoder.finish())
+        // let codec = DefaultCodec()
+        // codec.encode(id.pid)
+        // codec.encode(id.tid)
+        // codec.encode(id.time)
+        // codec.encode(data)
+        // let bytes = codec.finish()
+        let bytes = DefaultCodec().encode(id.pid).encode(id.tid).encode(id.time).encode(data).finish()
+        EncodedMessage(command.value, bytes)
     }
-    public static func decode<T>(input: BufferedInputStream<T>, closeFromOnEnd!: Bool = false): Message where T <: InputStream {
+    public static func decode<I, T>(input: BufferedInputStream<I>, closeFromOnEnd!: Bool = false): Message where I <: InputStream, T <: DataFields<T> {
         let b = [0u8]
         let l = input.read(b)
         if (l == 0) {
@@ -114,8 +128,8 @@ public struct Message {
         let pid = decoder.decode<Int64>(input).getOrThrow {IllegalArgumentException()}
         let tid = decoder.decode<Int64>(input).getOrThrow {IllegalArgumentException()}
         let time = decoder.decode<DateTime>(input).getOrThrow {IllegalArgumentException()}
-        let data = decoder.decode<Array<DataAny>>(input).getOrThrow {IllegalArgumentException()}
-        Message(command, MessageID(pid: pid, tid: tid, time: time), data)
+        let data = decoder.decode<T>(input)
+        Message(command, MessageID(pid: pid, tid: tid, time: time), data.toData())
     }
 }
 
@@ -128,23 +142,5 @@ public struct EncodedMessage {
         to.write([command])
         bytes.copy(to: to, closeToOnEnd: closeToOnEnd, closeFromOnEnd: false)
         to.flush()
-    }
-}
-
-public struct MessageBuilder {
-    private let data = ArrayList<DataAny>()
-    public MessageBuilder(private let command: Command) {}
-    public func add<T>(data: T): MessageBuilder where T <: DataFields<T> {
-        this.data.add(match (data) {
-            case x: DataAny => x
-            case _ => match (data.toData()) {
-                case x: DataAny => x
-                case x => DataAny(x)
-            }
-        })
-        this
-    }
-    public func build(): Message {
-        Message(command, data.unsafeData())
     }
 }

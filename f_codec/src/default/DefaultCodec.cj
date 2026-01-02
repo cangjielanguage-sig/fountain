@@ -86,7 +86,7 @@ public class DefaultCodec <: Codec {
                 buf
         }
     }
-    private func encode(data: Data): Encoder {
+    public func encode(data: Data): Encoder {
         match (data) {
             case x: DataAny => encode(x.data)
             case _: DataNone => encodeNone(lastBuffer())
