@@ -108,12 +108,6 @@ public struct Message {
         }
     }
     public func encode(): EncodedMessage {
-        // let codec = DefaultCodec()
-        // codec.encode(id.pid)
-        // codec.encode(id.tid)
-        // codec.encode(id.time)
-        // codec.encode(data)
-        // let bytes = codec.finish()
         let bytes = DefaultCodec().encode(id.pid).encode(id.tid).encode(id.time).encode(data).finish()
         EncodedMessage(command.value, bytes)
     }
