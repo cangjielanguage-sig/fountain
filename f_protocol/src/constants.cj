@@ -36,6 +36,7 @@ public const REG = 8u8
 public const DUP = 8u8
 public const ONCE = 8u8
 public const VOTE = 8u8
+public const WITHNODE = 8u8
 public const AT_MOST_ONCE = 0u8
 public const AT_LEAST_ONCE = 2u8
 public const EXACTLY_ONCE = 4u8
@@ -94,7 +95,7 @@ public enum Command {
     | UNSUBSCRIBE   //9
     | CONSUME(Byte) //10
     | RESP(Byte)    //11
-    | PING          //12
+    | PING(Byte)    //12
     | ELECT(Byte)   //13
     | ACK           //14
     | DEREGISTER    //15
@@ -113,7 +114,7 @@ public enum Command {
                 case UNSUBSCRIBE => ( 9 << 4) | 1
                 case CONSUME(x)  => (10 << 4) | tag(x)
                 case RESP(x)     => (11 << 4) | tag(x)
-                case PING        => (12 << 4) | 1
+                case PING        => (12 << 4) | tag(x) | 1
                 case ELECT(x)    => (13 << 4) | tag(x)
                 case ACK         => (14 << 4) | 0
                 case DEREGISTER  => (15 << 4) | 1

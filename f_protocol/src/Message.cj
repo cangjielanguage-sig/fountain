@@ -89,7 +89,10 @@ public struct Message {
         build<T>(RESP(qos.value | to(ack, ACK)), data)
     }
     public static func ping(): EncodedMessage {
-        build(PING)
+        build(PING(1))
+    }
+    public static func ping<T>(): EncodedMessage where T <: DataFields<T> {
+        build<T>(PING(WITHDATA | ACK), data)
     }
     public static func elect<T>(vote!: Bool, approve!: Bool, ack!: Bool, data!: T): EncodedMessage where T <: DataFields<T> {
         build<T>(ELECT(to(vote, VOTE) | to(approve, APPROVE) | to(ack, ACK)), data)
