@@ -26,7 +26,7 @@ package f_protocol
 | UNSUBSCRIBE             | 0         | 0         | 0         | ACK       |
 | CONSUME                 | ONCE      | QoS1      | QoS0      | 0         |
 | RESP                    | 0         | QoS1      | QoS0      | ACK       |
-| PING                    | 0         | 0         | 0         | ACK       |
+| PING                    | WITHNODE  | 0         | 0         | ACK       |
 | ELECT                   | VOTE      | APPROVE   | 0         | ACK       |
 | ACK                     | 0         | 0         | 0         | 0         |
 | DEREGISTER              | 0         | 0         | 0         | ACK       |
@@ -114,7 +114,7 @@ public enum Command {
                 case UNSUBSCRIBE => ( 9 << 4) | 1
                 case CONSUME(x)  => (10 << 4) | tag(x)
                 case RESP(x)     => (11 << 4) | tag(x)
-                case PING        => (12 << 4) | tag(x) | 1
+                case PING(x)     => (12 << 4) | tag(x) | 1
                 case ELECT(x)    => (13 << 4) | tag(x)
                 case ACK         => (14 << 4) | 0
                 case DEREGISTER  => (15 << 4) | 1
@@ -134,7 +134,7 @@ public enum Command {
             case  9 => UNSUBSCRIBE
             case 10 => CONSUME(tag())
             case 11 => RESP(tag())
-            case 12 => PING
+            case 12 => PING(tag())
             case 13 => ELECT(tag())
             case 14 => ACK
             case 15 => DEREGISTER
