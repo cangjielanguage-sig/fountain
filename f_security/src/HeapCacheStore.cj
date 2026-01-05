@@ -30,7 +30,7 @@ public struct HeapCacheStore<ID, P> <: PrincipalStore<ID, P> where ID <: Hashabl
         cache.remove(id.toString())
     }
 }
-type JWTHeapCacheStore = HeapCacheStore<String, JWTPrincipal<String>>
+public type JWTHeapCacheStore = HeapCacheStore<String, JWTPrincipal<String>>
 
 public struct UserTokenHeapCacheStore<ID> <: PrincipalStore<ID, UserTokenPrincipal<ID>> where ID <: Hashable & Equatable<ID> & ToString {
     private let store_: HeapCacheStore<ID, UserTokenPrincipal<ID>>
