@@ -350,18 +350,18 @@ ${content}
 
 [target]
 [target.x86_64-unknown-linux-gnu]
-  compile-option = "-O2 --lto=full --dy-std -Woff all"
-  override-compile-option = "-O2 --lto=full --dy-std -Woff all"
+  compile-option = "-O2 --lto=full --dy-std -Woff all -ldl"
+  override-compile-option = "-O2 --lto=full --dy-std -Woff all -ldl"
 [target.x86_64-unknown-linux-gnu.bin-dependencies]
   path-option = ["\${CANGJIE_STDX_DYNAMIC_PATH}", "\${CANGJIE_FOUNTAIN_LIBS}"]
 [target.aarch64-unknown-linux-gnu]
-  compile-option = "-O2 --lto=full --dy-std -Woff all"
-  override-compile-option = "-O2 --lto=full --dy-std -Woff all"
+  compile-option = "-O2 --lto=full --dy-std -Woff all -ldl"
+  override-compile-option = "-O2 --lto=full --dy-std -Woff all -ldl"
 [target.aarch64-unknown-linux-gnu.bin-dependencies]
   path-option = ["\${CANGJIE_STDX_DYNAMIC_PATH}", "\${CANGJIE_FOUNTAIN_LIBS}"]
 [target.x86_64-w64-mingw32]
-  compile-option = "-O2 --dy-std -Woff all"
-  override-compile-option = "-O2 --dy-std -Woff all"
+  compile-option = "-O2 --dy-std -Woff all -lcrypt32"
+  override-compile-option = "-O2 --dy-std -Woff all -lcrypt32"
 [target.x86_64-w64-mingw32.bin-dependencies]
   path-option = ["\${CANGJIE_STDX_DYNAMIC_PATH}", "\${CANGJIE_FOUNTAIN_LIBS}"]
 [target.x86_64-apple-darwin]
@@ -375,13 +375,13 @@ ${content}
 [target.aarch64-apple-darwin.bin-dependencies]
   path-option = ["\${CANGJIE_STDX_DYNAMIC_PATH}", "\${CANGJIE_FOUNTAIN_LIBS}"]
 [target.aarch64-linux-ohos]
-  compile-option = "-O2 --dy-std"
-  override-compile-option = "-O2 --dy-std"
+  compile-option = "-O2 --dy-std -ldl"
+  override-compile-option = "-O2 --dy-std -ldl"
 [target.aarch64-linux-ohos.bin-dependencies]
   path-option = ["\${CANGJIE_STDX_DYNAMIC_PATH}, "\${CANGJIE_FOUNTAIN_LIBS}""]
 [target.x86_64-linux-ohos]
-  compile-option = "-O2 --dy-std"
-  override-compile-option = "-O2 --dy-std"
+  compile-option = "-O2 --dy-std -ldl"
+  override-compile-option = "-O2 --dy-std -ldl"
 [target.x86_64-linux-ohos.bin-dependencies]
   path-option = ["\${CANGJIE_STDX_DYNAMIC_PATH}, "\${CANGJIE_FOUNTAIN_LIBS}""]
 '''
