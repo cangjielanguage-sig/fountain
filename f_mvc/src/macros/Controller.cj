@@ -126,11 +126,7 @@ private func generateArgs(decl: FuncDecl): (Tokens, Tokens, Tokens, Tokens) {
         exprs += quote(
             let $(p.identifier) = meta.extract<$ptype, $pt>(ctx, $pname, $default)$(`nl`)
         )
-        let named = try {
-            p.not.kind == TokenKind.NOT
-        } catch (_) {
-            false
-        }
+        let named = p.not.kind == TokenKind.NOT
         if (args.size > 0) {
             args += `comma`
         }
