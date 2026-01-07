@@ -1,5 +1,5 @@
 [dependencies]
-  f_data = {path = "../f_data"}
+  f_data  = {path = "../f_data ", version = "1.0.43"}
 [package]
   cjc-version = "1.0.0"
   compile-option = "-O2 --dy-std"
@@ -10,7 +10,7 @@
   output-type = "dynamic"
   src-dir = ""
   target-dir = ""
-  version = "1.0.0"
+  version = "1.0.43"
   package-configuration = {}
 
 [profile.build]

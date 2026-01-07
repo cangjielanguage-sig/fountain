@@ -2,7 +2,7 @@
   cjc-version = "1.0.0"
   name = "boot"
   description = "nothing here"
-  version = "1.0.0"
+  version = "1.0.43"
   target-dir = ""
   src-dir = ""
   output-type = "dynamic"

@@ -10,7 +10,7 @@
   output-type = "dynamic"
   src-dir = ""
   target-dir = ""
-  version = "1.0.0"
+  version = "1.0.43"
   package-configuration = {}
 
 [profile.build]

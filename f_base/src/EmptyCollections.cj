@@ -69,11 +69,7 @@ public class EmptySet<T> <: Set<T> where T <: Equatable<T> {
      * 返回值 Bool - 如果包含，则返回 true；否则，返回 false
      */
     public func contains(all!: Collection<T>): Bool {
-        if (all.isEmpty()) {
-            true
-        } else {
-            false
-        }
+        all.isEmpty()
     }
 
     /**
@@ -194,11 +190,7 @@ public class EmptyMap<K, V> <: Map<K, V> & Bucket<K, V> where K <: Equatable<K> 
      * 返回值 Bool - 如果存在，则返回 true；否则，返回 false
      */
     public func contains(all!: Collection<K>): Bool {
-        if (all.isEmpty()) {
-            true
-        } else {
-            false
-        }
+        all.isEmpty()
     }
 
     /**
@@ -400,11 +392,7 @@ public class EmptyEquatableCollection<K> <: EquatableCollection<K> where K <: Eq
      * 返回值 Bool - 如果存在，则返回 true；否则，返回 false
      */
     public func contains(all!: Collection<K>): Bool {
-        if (all.isEmpty()) {
-            true
-        } else {
-            false
-        }
+        all.isEmpty()
     }
 }
 
