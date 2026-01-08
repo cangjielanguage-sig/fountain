@@ -12,9 +12,9 @@
   package-configuration = {}
 
 [dependencies]
-  f_base  = {path = "../f_base ", version = "1.0.43"}
-  f_log  = {path = "../f_log ", version = "1.0.43"}
-  f_version  = {path = "../f_version ", version = "1.0.43"}
+  f_base  = {path = "../f_base", version = "1.0.43"}
+  f_log  = {path = "../f_log", version = "1.0.43"}
+  f_version  = {path = "../f_version", version = "1.0.43"}
 
 [profile.build]
   lto = "full"

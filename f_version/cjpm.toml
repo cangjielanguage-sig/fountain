@@ -1,5 +1,5 @@
 [package]
-  cjc-version = "1.0.3"
+  cjc-version = "1.0.4"
   name = "f_version"
   description = "nothing here"
   version = "1.0.43"
@@ -10,14 +10,6 @@
   override-compile-option = ""
   link-option = ""
   package-configuration = {}
-
-[dependencies]
- f_base  = {path = "../f_base ", version = "1.0.43"}
- f_bean  = {path = "../f_bean ", version = "1.0.43"}
- f_log  = {path = "../f_log ", version = "1.0.43"}
- f_mvc  = {path = "../f_mvc ", version = "1.0.43"}
- f_ticktock  = {path = "../f_ticktock ", version = "1.0.43"}
-
 
 [target]
 [target.x86_64-unknown-linux-gnu]

@@ -1,5 +1,5 @@
 [package]
-  cjc-version = "1.0.0"
+  cjc-version = "1.0.4"
   compile-option = "-O2 --dy-std"
   override-compile-option = "-O2 --dy-std"
   description = "nothing here"
@@ -16,10 +16,10 @@
   incremental = true
 
 [dependencies]
-  f_base  = {path = "../f_base ", version = "1.0.43"}
-  f_cache  = {path = "../f_cache ", version = "1.0.43"}
-  f_jwt  = {path = "../f_jwt ", version = "1.0.43"}
-  f_mvc  = {path = "../f_mvc ", version = "1.0.43"}
+  f_base  = {path = "../f_base", version = "1.0.43"}
+  f_cache  = {path = "../f_cache", version = "1.0.43"}
+  f_jwt  = {path = "../f_jwt", version = "1.0.43"}
+  f_mvc  = {path = "../f_mvc", version = "1.0.43"}
 
 
 [target]

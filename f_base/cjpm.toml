@@ -1,7 +1,7 @@
 [dependencies]
   charset4cj = { git = "https://gitcode.com/Cangjie-TPC/charset4cj.git", branch = "develop"}
 [package]
-  cjc-version = "1.0.0"
+  cjc-version = "1.0.4"
   compile-option = "-O2 --dy-std"
   override-compile-option = "-O2 --dy-std"
   description = "nothing here"

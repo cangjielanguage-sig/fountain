@@ -2,7 +2,7 @@
   fountain = {path = "../"}
 
 [package]
-  cjc-version = "1.0.0"
+  cjc-version = "1.0.4"
   compile-option = "-O2 --dy-std"
   override-compile-option = "-O2 --dy-std"
   description = "fountain boot program"

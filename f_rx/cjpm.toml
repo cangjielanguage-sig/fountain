@@ -1,5 +1,5 @@
 [package]
-  cjc-version = "1.0.0"
+  cjc-version = "1.0.4"
   name = "f_rx"
   description = "nothing here"
   version = "1.0.43"
@@ -12,8 +12,8 @@
   package-configuration = {}
 
 [dependencies]
-  f_base  = {path = "../f_base ", version = "1.0.43"}
-  f_concurrent  = {path = "../f_concurrent ", version = "1.0.43"}
+  f_base  = {path = "../f_base", version = "1.0.43"}
+  f_concurrent  = {path = "../f_concurrent", version = "1.0.43"}
 
 [profile.build]
   lto = "full"
