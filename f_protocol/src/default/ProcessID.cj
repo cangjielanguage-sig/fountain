@@ -13,18 +13,19 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package f_protocol
+package f_protocol.default
 
-internal import std.collection.ArrayList
-internal import std.env.getProcessId
-internal import std.io.{InputStream, OutputStream, BufferedInputStream}
-internal import std.net.{IPAddress, TcpSocket, IPSocketAddress}
-internal import std.reflect.*
-internal import std.time.DateTime
-internal import f_base.*
-internal import f_codec.*
-internal import f_codec.default.*
-internal import f_data.*
-internal import f_exception.UnreachableException
-internal import f_pool.BytesCopyTo
-internal import f_protocol.exception.*
+public interface ProcessID {
+    prop value: Int64
+}
+
+public struct CurrentProcessID <: ProcessID {
+    private static let pid = getProcessId()
+    public static let instance = CurrentProcessID()
+    private init(){}
+    public prop value: Int64 {
+        get(){
+            pid
+        }
+    }
+}

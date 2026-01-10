@@ -15,17 +15,10 @@ limitations under the License.
 */
 package f_protocol
 
-public interface ProcessID {
-    prop value: Int64
-}
+import std.io.{BufferedInputStream, InputStream}
+import f_data.DataFields
 
-public struct CurrentProcessID <: ProcessID {
-    private static let pid = getProcessId()
-    public static let instance = CurrentProcessID()
-    private init(){}
-    public prop value: Int64 {
-        get(){
-            pid
-        }
-    }
+public interface Protocol<EN, DE> {
+    func encode(): EN
+    static func decode<I, T>(input: BufferedInputStream<I>, closeFromOnEnd!: Bool): DE where I <: InputStream, T <: DataFields<T>
 }
