@@ -18,7 +18,7 @@ package f_net
 import std.collection.ArrayList
 import std.net.{SocketKeepAliveConfig, TcpSocket}
 
-public class SocketParams {
+internal class SocketParams {
     private var bindToDevice_ = None<String>
     private var keepAlive_ = None<SocketKeepAliveConfig>
     private var linger_ = None<Duration>

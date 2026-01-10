@@ -15,27 +15,28 @@ limitations under the License.
 */
 package f_net.client
 
-import std.io.BufferedInputStream
+import std.io.{BufferedInputStream, OutputStream}
 import std.collection.ArrayList
 import std.collection.concurrent.{ArrayBlockingQueue, ConcurrentHashMap}
-import std.sync.{Mutex, Timer}
+import std.sync.{Timer, CatchupStyle}
 import std.net.{TcpServerSocket, TcpSocket, IPSocketAddress, SocketKeepAliveConfig}
 import f_data.*
+import f_log.*
 import f_protocol.*
 import f_random.*
-import f_net.SocketParams
+import f_net.*
 
 public struct Client<DE, EN, M, T, ID> where EN <: MessageCopier, M <: Protocol<EN, DE>, T <: DataFields<T>, ID <: Hashable & Equatable<ID> {
     private static let log = LoggerFactory.getLogger('fountain::net.Client')
-    private let futures: ConcurrentHashMap<ID, ClientFuture<DE>>
-    private let buffer: Array<ClientBuffer>
+    private let futures = ConcurrentHashMap<ID, MessageFuture<DE>>()
+    private let buffers: Array<ClientBuffer>
+
     Client(queueSize: Int64, idGetter: (DE) -> ID, 
-        checkDuration: Duration, checker: (TcpSocket) -> Bool,
-        private let builder: SocketBuilder<DE, EN, M, T, ID>,
+        checkDuration: Duration, checker: (ClientBuffer) -> Bool,
+        private let socketCreator: () -> TcpSocket,
         private let sockets: Array<TcpSocket>){
-        let futures = ConcurrentHashMap<ID, ClientFuture<DE>>()
-        this.futures = futures
-        buffer = Array<ClientBuffer>(sockets.size){i => 
+        let futures = this.futures
+        let buffers = Array<ClientBuffer>(sockets.size){i => 
             let buffer = ClientBuffer(queueSize, sockets[i])
             spawn {
                 let de = M.decode<TcpSocket, T>(buffer.buffered, closeFromOnEnd: false)
@@ -47,20 +48,22 @@ public struct Client<DE, EN, M, T, ID> where EN <: MessageCopier, M <: Protocol<
             }
             buffer
         }
-        Timer.repeat(checkDuration, checkDuration){
+        this.buffers = buffers
+        Timer.repeat(checkDuration, checkDuration, {=>
             for(i in 0 .. sockets.size){
                 spawn{
                     func new(){
                         try{
-                            sockets[i] = builder.newSocket()
+                            sockets[i] = socketCreator()
                         }catch(e: Exception){
                             log.error('TcpSocket.new', e)
                             throw e
                         }
                     }
-                    let socket = sockets[i]
+                    let buffer = buffers[i]
+                    let socket = buffer.socket
                     try{
-                        if(!checker(socket)){
+                        if(!checker(buffer)){
                             if(!socket.isClosed()){
                                 socket.close()
                             }
@@ -77,37 +80,51 @@ public struct Client<DE, EN, M, T, ID> where EN <: MessageCopier, M <: Protocol<
                     }
                 }
             }
-        }
+        }, style: Burst)
     }
+    /**
+     * @param queueSize 写数据任务队列大小
+     * @param socketCount 连接数
+     * @param host      待连接的主机名、域名、IP
+     * @param port      待连接的服务端号号
+     * @param idGetter  从DE获得消息ID的函数
+     * @param checkDuration 连接有效性的检查周期
+     * @param checker   连接有效性检查函数，务必使用client.transfer(clientBuffer, id, message, timeout)传检查包
+     */
     public static func builder(queueSize!: Int64 = 1024, 
                             socketCount!: Int64 = 1, 
                             host!: String, 
                             port!: UInt16, 
                             idGetter!: (DE) -> ID,
                             checkDuration!: Duration,
-                            checker!: (TcpSocket) -> Bool){
+                            checker!: (ClientBuffer) -> Bool){
         SocketBuilder<DE, EN, M, T, ID>(socketCount: queueSize, host: host, port: port, idGetter: idGetter,
                             checkDuration: checkDuration, checker: checker)
     }
-    public func transfer(id: ID, message: M): ClientFuture<DE> {
+    public func transfer(id: ID, message: M): MessageFuture<DE> {
         let index = ThreadLocalRandom.current.nextInt64(0, sockets.size, closed: true)
         transfer(index, id, message)
     }
-    private func transfer(index: Int64, id: ID, message: M): ClientFuture<DE> {
-        let socket = sockets[index]
-        let future = ClientFuture<DE>()
+    private func transfer(index: Int64, id: ID, message: M): MessageFuture<DE> {
+        transfer(buffers[index], id, message)
+    }
+    public func transfer(buffer: ClientBuffer, id: ID, message: M): MessageFuture<DE> {
+        let future = MessageFuture<DE>()
         futures.add(id, future)
         let en = message.encode()
-        buffer[index].queue.add({=>
-            en.copy(to: socket, closeToOnEnd: false)
+        buffer.queue.add({=>
+            en.copy(to: buffer.socket, closeToOnEnd: false)
         })
         future
     }
+    public func transfer(buffer: ClientBuffer, id: ID, message: M, timeout: Duration): ?DE {
+        transfer(buffer, id, message).tryGet(timeout)
+    }
 }
-private struct ClientBuffer {
+public struct ClientBuffer {
     let buffered: BufferedInputStream<TcpSocket>
     let queue: ArrayBlockingQueue<() -> Unit>
-    init(queueSize: Int64, socket: TcpSocket){
+    ClientBuffer(queueSize: Int64, let socket: TcpSocket){
         buffered = BufferedInputStream<TcpSocket>(socket)
         let queue = ArrayBlockingQueue<() -> Unit>(queueSize)
         this.queue = queue
@@ -118,44 +135,7 @@ private struct ClientBuffer {
         }
     }
 }
-public struct ClientFuture<DE>{
-    private let mutex = Mutex()
-    private var ref = None<DE>
-    private let condition = synchronized(mutex){
-        mutex.condition()
-    }
-    mut func set(data: DE): Unit {
-        synchronized(mutex){
-            ref = data
-            condition.notify()
-        }
-    }
-    public func get(): DE {
-        synchronized(mutex){
-            if(let Some(d) <- ref){
-                d
-            }else{
-                condition.wait()
-                ref.getOrThrow()
-            }
-        }
-    }
-    public func tryGet(): ?DE {
-        synchronized(mutex){
-            ref
-        }
-    }
-    public func tryGet(timeout: Duration): ?DE {
-        synchronized(mutex){
-            if(let Some(d) <- ref){
-                d
-            }else{
-                condition.wait(timeout: timeout)
-                ref
-            }
-        }
-    }
-}
+
 public class SocketBuilder<DE, EN, M, T, ID> where EN <: MessageCopier, M <: Protocol<EN, DE>, T <: DataFields<T>, ID <: Hashable & Equatable<ID> {
     SocketBuilder(let queueSize!: Int64 = 1024, 
                 private let socketCount!: Int64 = 1, 
@@ -163,7 +143,7 @@ public class SocketBuilder<DE, EN, M, T, ID> where EN <: MessageCopier, M <: Pro
                 private let port!: UInt16,
                 private let idGetter!: (DE) -> ID,
                 private let checkDuration!: Duration,
-                private let checker!: (TcpSocket) -> Bool){}
+                private let checker!: (ClientBuffer) -> Bool){}
     private let params = SocketParams()
 
     public func bindToDevice(bindToDevice: ?String): This {
@@ -215,7 +195,7 @@ public class SocketBuilder<DE, EN, M, T, ID> where EN <: MessageCopier, M <: Pro
         this
     }
     public func build(): Client<DE, EN, M, T, ID> {
-        Client<DE, EN, M, T, ID>(queueSize, idGetter, checkDuration, checker, this, Array<TcpSocket>(socketCount){_ => newSocket()})
+        Client<DE, EN, M, T, ID>(queueSize, idGetter, checkDuration, checker, this.newSocket, Array<TcpSocket>(socketCount){_ => newSocket()})
     }
     func newSocket(){
         TcpSocket(host, port) |> params.populate

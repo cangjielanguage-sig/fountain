@@ -16,19 +16,21 @@ limitations under the License.
 package f_net.server
 
 import std.io.BufferedInputStream
-import std.collection.concurrent.{ArrayBlockingQueue, LinkedBlockingQueue}
+import std.collection.concurrent.{ArrayBlockingQueue, LinkedBlockingQueue, ConcurrentHashMap}
 import std.net.{TcpServerSocket, TcpSocket, IPSocketAddress}
-import std.sync.Timer
+import std.sync.{Timer, CatchupStyle}
 import f_data.*
 import f_log.*
 import f_protocol.*
-import f_net.SocketParams
+import f_net.*
 
-public struct Server <: Resource {
-    private static let log = LoggerFactory.getLogger<Server>()
+public struct Server<DE, EN, M, T, ID> <: Resource where EN <: MessageCopier, M <: Protocol<EN, DE>, T <: DataFields<T>, ID <: Hashable & Equatable<ID> {
+    private static let log = LoggerFactory.getLogger('fountain:net.Server')
     private let queue: ArrayBlockingQueue<() -> Unit>
     private let sockets = LinkedBlockingQueue<TcpSocket>()
-    public Server(queueSize!: Int64 = 1024, 
+    private let futures = ConcurrentHashMap<ID, MessageFuture<M>>()
+
+    internal Server(queueSize!: Int64 = 1024, 
                 checkDuration!: Duration, checker!: (TcpSocket) -> Bool, 
                 private let server!: TcpServerSocket, private let params!: SocketParams){
         let queue = ArrayBlockingQueue<() -> Unit>(queueSize)
@@ -38,7 +40,8 @@ public struct Server <: Resource {
                 task()
             }
         }
-        Timer.repeat(checkDuration, checkDuration){
+        let sockets = this.sockets
+        Timer.repeat(checkDuration, checkDuration, {=>
             let size = sockets.size
             var i = 0
             while(i < size && let socket <- sockets.remove()){
@@ -63,29 +66,50 @@ public struct Server <: Resource {
                 }
                 i++
             }
-        }
+        }, style: Burst)
     }
+    /**
+     * @param queueSize 数据传输任务队列
+     * @param bindAt    绑定的端口号
+     * @param checkDuration tcp连接有效性检查周期
+     * @param checker   tcp连接有效性检查函数，务必使用server.transfer(socket, id, message, timeout)
+     */
     public init(queueSize!: Int64 = 1024, bindAt!: UInt16, checkDuration!: Duration, checker!: (TcpSocket) -> Bool){
         this(queueSize: queueSize, checkDuration: checkDuration, checker: checker, server: TcpServerSocket(bindAt: bindAt), params: SocketParams())
     }
-    public static func build(queueSize!: Int64 = 1024, checkDuration!: Duration, checker!: (TcpSocket) -> Bool, bindAt!: UInt16): ServerBuilder {
-        ServerBuilder(queueSize, checkDuration, checker, bindAt)
+    public static func build(queueSize!: Int64 = 1024, checkDuration!: Duration, checker!: (TcpSocket) -> Bool, bindAt!: UInt16): ServerBuilder<DE, EN, M, T, ID> {
+        ServerBuilder<DE, EN, M, T, ID>(queueSize, checkDuration, checker, bindAt)
     }
-    public func start<DE, EN, M, T>(executor: (DE) -> M): Unit where EN <: MessageCopier, M <: Protocol<EN, DE>, T <: DataFields<T> {
+    public func start(executor: (DE) -> M, idGetter: (M) -> ID): Unit {
         while(let socket <- server.accept()){
             this.sockets.add(socket)
             params.populate(socket)
-            let buffered = BufferedInputStream(socket)
+            let buffered = BufferedInputStream<TcpSocket>(socket)
             spawn {
                 while(!socket.isClosed()){
                     let m = M.decode<TcpSocket, T>(buffered, closeFromOnEnd: false) |> executor
-                    let en = m.encode()
-                    queue.add({=>
-                        en.copy(to: socket, closeToOnEnd: false)
-                    })
+                    let id = idGetter(m)
+                    if(let Some(fut) <- futures.remove(id)){
+                        var f = fut
+                        f.set(m)
+                        continue
+                    }
+                    transfer(socket, m)
                 }
             }
         }
+    }
+    private func transfer(socket: TcpSocket, message: M): Unit {
+        let en = message.encode()
+        queue.add({=>
+            en.copy(to: socket, closeToOnEnd: false)
+        })
+    }
+    public func transfer(socket: TcpSocket, id: ID, message: M, timeout: Duration): ?M {
+        let future = MessageFuture<M>()
+        futures.add(id, future)
+        transfer(socket, message)
+        future.tryGet(timeout)
     }
     public func isClosed(): Bool {
         server.isClosed()
@@ -94,18 +118,17 @@ public struct Server <: Resource {
         server.close()
     }
 }
-public class ServerBuilder {
+public class ServerBuilder<DE, EN, M, T, ID> where EN <: MessageCopier, M <: Protocol<EN, DE>, T <: DataFields<T>, ID <: Hashable & Equatable<ID> {
     private let server: TcpServerSocket
     private let params = SocketParams()
-    private let checkDuration = Duration.minute
     ServerBuilder(private let queueSize: Int64, 
                 private let checkDuration: Duration, 
                 private let checker: (TcpSocket) -> Bool, 
                 private let bindAt: UInt16){
         server = TcpServerSocket(bindAt: bindAt)
     }
-    public func build(): Server {
-        Server(queueSize: queueSize, checkDuration: checkDuration, checker: checker, server: server, params: params)
+    public func build(): Server<DE, EN, M, T, ID> {
+        Server<DE, EN, M, T, ID>(queueSize: queueSize, checkDuration: checkDuration, checker: checker, server: server, params: params)
     }
     public func backlogSize(size: Int64): This {
         server.backlogSize = size
