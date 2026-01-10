@@ -1,6 +1,7 @@
 [dependencies]
   f_base  = {path = "../f_base", version = "1.0.43"}
   f_data = {path = "../f_data", version = "1.0.43"}
+  f_log = {path = "../f_log", version = "1.0.43"}
   f_random = {path = "../f_random", version = "1.0.43"}
   f_protocol = {path = "../f_protocol", version = "1.0.43"}
 

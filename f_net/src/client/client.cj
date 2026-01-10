@@ -18,7 +18,7 @@ package f_net.client
 import std.io.BufferedInputStream
 import std.collection.ArrayList
 import std.collection.concurrent.{ArrayBlockingQueue, ConcurrentHashMap}
-import std.sync.Mutex
+import std.sync.{Mutex, Timer}
 import std.net.{TcpServerSocket, TcpSocket, IPSocketAddress, SocketKeepAliveConfig}
 import f_data.*
 import f_protocol.*
@@ -26,9 +26,13 @@ import f_random.*
 import f_net.SocketParams
 
 public struct Client<DE, EN, M, T, ID> where EN <: MessageCopier, M <: Protocol<EN, DE>, T <: DataFields<T>, ID <: Hashable & Equatable<ID> {
+    private static let log = LoggerFactory.getLogger('fountain::net.Client')
     private let futures: ConcurrentHashMap<ID, ClientFuture<DE>>
     private let buffer: Array<ClientBuffer>
-    Client(queueSize: Int64, idGetter: (DE) -> ID, private let sockets: Array<TcpSocket>){
+    Client(queueSize: Int64, idGetter: (DE) -> ID, 
+        checkDuration: Duration, checker: (TcpSocket) -> Bool,
+        private let builder: SocketBuilder<DE, EN, M, T, ID>,
+        private let sockets: Array<TcpSocket>){
         let futures = ConcurrentHashMap<ID, ClientFuture<DE>>()
         this.futures = futures
         buffer = Array<ClientBuffer>(sockets.size){i => 
@@ -43,12 +47,53 @@ public struct Client<DE, EN, M, T, ID> where EN <: MessageCopier, M <: Protocol<
             }
             buffer
         }
+        Timer.repeat(checkDuration, checkDuration){
+            for(i in 0 .. sockets.size){
+                spawn{
+                    func new(){
+                        try{
+                            sockets[i] = builder.newSocket()
+                        }catch(e: Exception){
+                            log.error('TcpSocket.new', e)
+                            throw e
+                        }
+                    }
+                    let socket = sockets[i]
+                    try{
+                        if(!checker(socket)){
+                            if(!socket.isClosed()){
+                                socket.close()
+                            }
+                            new()
+                        }
+                    }catch(e: Exception){
+                        log.error('TcpSocket.checker', e)
+                        try{
+                            socket.close()
+                        }catch(e: Exception){
+                            log.error('TcpSocket.close', e)
+                        }
+                        new()
+                    }
+                }
+            }
+        }
     }
-    public static func builder(queueSize!: Int64 = 1024, socketCount!: Int64 = 1, host!: String, port!: UInt16, idGetter!: (DE) -> ID){
-        SocketBuilder<DE, EN, M, T, ID>(socketCount: queueSize, host: host, port: port, idGetter: idGetter)
+    public static func builder(queueSize!: Int64 = 1024, 
+                            socketCount!: Int64 = 1, 
+                            host!: String, 
+                            port!: UInt16, 
+                            idGetter!: (DE) -> ID,
+                            checkDuration!: Duration,
+                            checker!: (TcpSocket) -> Bool){
+        SocketBuilder<DE, EN, M, T, ID>(socketCount: queueSize, host: host, port: port, idGetter: idGetter,
+                            checkDuration: checkDuration, checker: checker)
     }
     public func transfer(id: ID, message: M): ClientFuture<DE> {
         let index = ThreadLocalRandom.current.nextInt64(0, sockets.size, closed: true)
+        transfer(index, id, message)
+    }
+    private func transfer(index: Int64, id: ID, message: M): ClientFuture<DE> {
         let socket = sockets[index]
         let future = ClientFuture<DE>()
         futures.add(id, future)
@@ -116,7 +161,9 @@ public class SocketBuilder<DE, EN, M, T, ID> where EN <: MessageCopier, M <: Pro
                 private let socketCount!: Int64 = 1, 
                 private let host!: String, 
                 private let port!: UInt16,
-                private let idGetter!: (DE) -> ID){}
+                private let idGetter!: (DE) -> ID,
+                private let checkDuration!: Duration,
+                private let checker!: (TcpSocket) -> Bool){}
     private let params = SocketParams()
 
     public func bindToDevice(bindToDevice: ?String): This {
@@ -168,8 +215,9 @@ public class SocketBuilder<DE, EN, M, T, ID> where EN <: MessageCopier, M <: Pro
         this
     }
     public func build(): Client<DE, EN, M, T, ID> {
-        Client<DE, EN, M, T, ID>(queueSize, idGetter, Array<TcpSocket>(socketCount){_ =>
-            TcpSocket(host, port) |> params.populate
-        })
+        Client<DE, EN, M, T, ID>(queueSize, idGetter, checkDuration, checker, this, Array<TcpSocket>(socketCount){_ => newSocket()})
+    }
+    func newSocket(){
+        TcpSocket(host, port) |> params.populate
     }
 }

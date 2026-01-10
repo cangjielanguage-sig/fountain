@@ -16,15 +16,21 @@ limitations under the License.
 package f_net.server
 
 import std.io.BufferedInputStream
-import std.collection.concurrent.ArrayBlockingQueue
+import std.collection.concurrent.{ArrayBlockingQueue, LinkedBlockingQueue}
 import std.net.{TcpServerSocket, TcpSocket, IPSocketAddress}
+import std.sync.Timer
 import f_data.*
+import f_log.*
 import f_protocol.*
 import f_net.SocketParams
 
 public struct Server <: Resource {
+    private static let log = LoggerFactory.getLogger<Server>()
     private let queue: ArrayBlockingQueue<() -> Unit>
-    public Server(queueSize!: Int64 = 1024, private let server!: TcpServerSocket, private let params!: SocketParams){
+    private let sockets = LinkedBlockingQueue<TcpSocket>()
+    public Server(queueSize!: Int64 = 1024, 
+                checkDuration!: Duration, checker!: (TcpSocket) -> Bool, 
+                private let server!: TcpServerSocket, private let params!: SocketParams){
         let queue = ArrayBlockingQueue<() -> Unit>(queueSize)
         this.queue = queue
         spawn {
@@ -32,15 +38,42 @@ public struct Server <: Resource {
                 task()
             }
         }
+        Timer.repeat(checkDuration, checkDuration){
+            let size = sockets.size
+            var i = 0
+            while(i < size && let socket <- sockets.remove()){
+                spawn{
+                    let available = try{
+                        checker(socket)
+                    }catch(e: Exception){
+                        log.warn('TcpSocket.check', e)
+                        false
+                    }
+                    if(available){
+                        sockets.add(socket)
+                    }else{
+                        try{
+                            if(!socket.isClosed()){
+                                socket.close()
+                            }
+                        }catch(e: Exception){
+                            log.warn('TcpSocket.close', e)
+                        }
+                    }
+                }
+                i++
+            }
+        }
     }
-    public init(queueSize!: Int64 = 1024, bindAt!: UInt16){
-        this(queueSize: queueSize, server: TcpServerSocket(bindAt: bindAt), params: SocketParams())
+    public init(queueSize!: Int64 = 1024, bindAt!: UInt16, checkDuration!: Duration, checker!: (TcpSocket) -> Bool){
+        this(queueSize: queueSize, checkDuration: checkDuration, checker: checker, server: TcpServerSocket(bindAt: bindAt), params: SocketParams())
     }
-    public static func build(bindAt!: UInt16): ServerBuilder {
-        ServerBuilder(bindAt)
+    public static func build(queueSize!: Int64 = 1024, checkDuration!: Duration, checker!: (TcpSocket) -> Bool, bindAt!: UInt16): ServerBuilder {
+        ServerBuilder(queueSize, checkDuration, checker, bindAt)
     }
     public func start<DE, EN, M, T>(executor: (DE) -> M): Unit where EN <: MessageCopier, M <: Protocol<EN, DE>, T <: DataFields<T> {
         while(let socket <- server.accept()){
+            this.sockets.add(socket)
             params.populate(socket)
             let buffered = BufferedInputStream(socket)
             spawn {
@@ -63,17 +96,16 @@ public struct Server <: Resource {
 }
 public class ServerBuilder {
     private let server: TcpServerSocket
-    private var qsize = 1024
     private let params = SocketParams()
-    init(bindAt: UInt16){
+    private let checkDuration = Duration.minute
+    ServerBuilder(private let queueSize: Int64, 
+                private let checkDuration: Duration, 
+                private let checker: (TcpSocket) -> Bool, 
+                private let bindAt: UInt16){
         server = TcpServerSocket(bindAt: bindAt)
     }
     public func build(): Server {
-        Server(queueSize: qsize, server: server, params: params)
-    }
-    public func queueSize(size: Int64): This {
-        this.qsize = size
-        this
+        Server(queueSize: queueSize, checkDuration: checkDuration, checker: checker, server: server, params: params)
     }
     public func backlogSize(size: Int64): This {
         server.backlogSize = size
