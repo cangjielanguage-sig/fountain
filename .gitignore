@@ -16,6 +16,7 @@ fountain.iml
 .arts/
 .arts/*
 .rules/
+.codebuddy
 build-script-cache/
 build.cj
 log.txt
