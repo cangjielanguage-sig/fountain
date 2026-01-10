@@ -130,7 +130,7 @@ public struct Message <: Protocol<EncodedMessage, Message> {
     }
 }
 
-public struct EncodedMessage {
+public struct EncodedMessage <: MessageCopier {
     EncodedMessage(
         private let command: Byte,
         private let bytes: BytesCopyTo

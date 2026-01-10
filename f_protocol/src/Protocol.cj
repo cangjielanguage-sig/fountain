@@ -15,10 +15,13 @@ limitations under the License.
 */
 package f_protocol
 
-import std.io.{BufferedInputStream, InputStream}
+import std.io.{BufferedInputStream, InputStream, OutputStream}
 import f_data.DataFields
 
-public interface Protocol<EN, DE> {
+public interface Protocol<EN, DE> where EN <: MessageCopier {
     func encode(): EN
     static func decode<I, T>(input: BufferedInputStream<I>, closeFromOnEnd!: Bool): DE where I <: InputStream, T <: DataFields<T>
+}
+public interface MessageCopier {
+    func copy(to!: OutputStream, closeToOnEnd!: Bool): Unit
 }
