@@ -72,12 +72,7 @@ private func generate(attr: Tokens, input: Tokens): Tokens {
                 }catch(_){
                     `empty_tokens`
                 }
-                let named = try{
-                    p.not
-                    true
-                }catch(_){
-                    false
-                }
+                let named = p.not.kind == TokenKind.NOT
                 paramTokens += quote(
                     let $(p.identifier) = match(None<$(p.paramType)>){
                         case _: ?HttpContext => (ctx as $(p.paramType)).getOrThrow()

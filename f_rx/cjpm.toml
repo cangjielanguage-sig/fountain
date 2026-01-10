@@ -1,9 +1,9 @@
 [package]
-  cjc-version = "1.0.0"
+  cjc-version = "1.0.4"
   name = "f_rx"
   organization="fountain"
   description = "rxcj"
-  version = "1.0.0"
+  version = "1.0.43"
   target-dir = ""
   src-dir = ""
   output-type = "dynamic"
@@ -13,8 +13,8 @@
   package-configuration = {}
 
 [dependencies]
-  f_base = {path = "../f_base"}
-  f_concurrent = {path = "../f_concurrent"}
+  f_base  = {path = "../f_base", version = "1.0.43"}
+  f_concurrent  = {path = "../f_concurrent", version = "1.0.43"}
 
 [profile.build]
   lto = "full"
@@ -22,14 +22,14 @@
 
 [target]
 [target.x86_64-unknown-linux-gnu]
-  compile-option = "-O2 --lto=full --dy-std"
-  override-compile-option = "-O2 --lto=full --dy-std"
+  compile-option = "-O2 --lto=full --dy-std -ldl"
+  override-compile-option = "-O2 --lto=full --dy-std -ldl"
 [target.aarch64-unknown-linux-gnu]
-  compile-option = "-O2 --lto=full --dy-std"
-  override-compile-option = "-O2 --lto=full --dy-std"
+  compile-option = "-O2 --lto=full --dy-std -ldl"
+  override-compile-option = "-O2 --lto=full --dy-std -ldl"
 [target.x86_64-w64-mingw32]
-  compile-option = "-O2 --dy-std"
-  override-compile-option = "-O2 --dy-std"
+  compile-option = "-O2 --dy-std -lcrypt32"
+  override-compile-option = "-O2 --dy-std -lcrypt32"
 [target.x86_64-apple-darwin]
   compile-option = "-O2 --dy-std"
   override-compile-option = "-O2 --dy-std"

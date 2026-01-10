@@ -1,7 +1,7 @@
 [dependencies]
   charset4cj = { git = "https://gitcode.com/Cangjie-TPC/charset4cj.git", branch = "develop"}
 [package]
-  cjc-version = "1.0.0"
+  cjc-version = "1.0.4"
   compile-option = "-O2 --dy-std"
   override-compile-option = "-O2 --dy-std"
   description = "some extends for Iterator, enum OS, unsafe bytes for String, unsafe data for ArrayList, extend Option, extend Array, extend Range, extend Number, extend String, extend ThreadLocal, HashBuilder, StringGenerator，etc."
@@ -11,7 +11,7 @@
   output-type = "dynamic"
   src-dir = ""
   target-dir = ""
-  version = "1.0.0"
+  version = "1.0.43"
   package-configuration = {}
 
 [profile.build]
@@ -20,17 +20,23 @@
 
 [target]
 [target.x86_64-unknown-linux-gnu]
-  compile-option = "-O2 --lto=full --dy-std"
-  override-compile-option = "-O2 --lto=full --dy-std"
+  compile-option = "-O2 --lto=full --dy-std -ldl"
+  override-compile-option = "-O2 --lto=full --dy-std -ldl"
 [target.aarch64-unknown-linux-gnu]
-  compile-option = "-O2 --lto=full --dy-std"
-  override-compile-option = "-O2 --lto=full --dy-std"
+  compile-option = "-O2 --lto=full --dy-std -ldl"
+  override-compile-option = "-O2 --lto=full --dy-std -ldl"
 [target.x86_64-w64-mingw32]
-  compile-option = "-O2 --dy-std"
-  override-compile-option = "-O2 --dy-std"
+  compile-option = "-O2 --dy-std -lcrypt32"
+  override-compile-option = "-O2 --dy-std -lcrypt32"
 [target.x86_64-apple-darwin]
   compile-option = "-O2 --dy-std"
   override-compile-option = "-O2 --dy-std"
 [target.aarch64-apple-darwin]
   compile-option = "-O2 --dy-std"
   override-compile-option = "-O2 --dy-std"
+[target.aarch64-linux-ohos]
+  compile-option = "-O2 --dy-std -ldl"
+  override-compile-option = "-O2 --dy-std -ldl"
+[target.x86_64-linux-ohos]
+  compile-option = "-O2 --dy-std -ldl"
+  override-compile-option = "-O2 --dy-std -ldl"

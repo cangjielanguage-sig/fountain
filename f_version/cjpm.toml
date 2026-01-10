@@ -1,9 +1,9 @@
 [package]
-  cjc-version = "1.0.3"
+  cjc-version = "1.0.4"
   name = "f_version"
   organization="fountain"
   description = "fountain and app version "
-  version = "1.0.0"
+  version = "1.0.43"
   target-dir = ""
   src-dir = ""
   output-type = "dynamic"
@@ -12,28 +12,20 @@
   link-option = ""
   package-configuration = {}
 
-[dependencies]
- f_base = {path = "../f_base"}
- f_bean = {path = "../f_bean"}
- f_log = {path = "../f_log"}
- f_mvc = {path = "../f_mvc"}
- f_ticktock = {path = "../f_ticktock"}
-
-
 [target]
 [target.x86_64-unknown-linux-gnu]
-  compile-option = "-O2 --lto=full --dy-std"
-  override-compile-option = "-O2 --lto=full --dy-std"
+  compile-option = "-O2 --lto=full --dy-std -ldl"
+  override-compile-option = "-O2 --lto=full --dy-std -ldl"
 [target.x86_64-unknown-linux-gnu.bin-dependencies]
   path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]
 [target.aarch64-unknown-linux-gnu]
-  compile-option = "-O2 --lto=full --dy-std"
-  override-compile-option = "-O2 --lto=full --dy-std"
+  compile-option = "-O2 --lto=full --dy-std -ldl"
+  override-compile-option = "-O2 --lto=full --dy-std -ldl"
 [target.aarch64-unknown-linux-gnu.bin-dependencies]
   path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]
 [target.x86_64-w64-mingw32]
-  compile-option = "-O2 --dy-std"
-  override-compile-option = "-O2 --dy-std"
+  compile-option = "-O2 --dy-std -lcrypt32"
+  override-compile-option = "-O2 --dy-std -lcrypt32"
 [target.x86_64-w64-mingw32.bin-dependencies]
   path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]
 [target.x86_64-apple-darwin]
@@ -47,13 +39,13 @@
 [target.aarch64-apple-darwin.bin-dependencies]
   path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]
 [target.aarch64-linux-ohos]
-  compile-option = "-O2 --dy-std"
-  override-compile-option = "-O2 --dy-std"
+  compile-option = "-O2 --dy-std -ldl"
+  override-compile-option = "-O2 --dy-std -ldl"
 [target.aarch64-linux-ohos.bin-dependencies]
   path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]
 [target.x86_64-linux-ohos]
-  compile-option = "-O2 --dy-std"
-  override-compile-option = "-O2 --dy-std"
+  compile-option = "-O2 --dy-std -ldl"
+  override-compile-option = "-O2 --dy-std -ldl"
 [target.x86_64-linux-ohos.bin-dependencies]
   path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]
   
