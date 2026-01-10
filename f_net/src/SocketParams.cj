@@ -16,7 +16,6 @@ limitations under the License.
 package f_net
 
 import std.collection.ArrayList
-import std.net.{SocketKeepAliveConfig, TcpSocket}
 
 internal class SocketParams {
     private var bindToDevice_ = None<String>
