@@ -199,30 +199,34 @@ public struct App {
                 if (code != 0) {
                     return code
                 }
-                let tomlPath = getWorkingDirectory().join('cjpm.toml')
-                let reader = StringReader(ByteBuffer(File.readFrom(tomlPath)))
-                let toml = StringGenerator()
                 let versionRegex = Regex(#'^\s*version\s*=\s*"(\d+\.)+\d+"$'#)
                 let cjcVersionRegex = Regex(#'^\s*cjc-version\s*=\s*"(\d+\.)+\d+"$'#)
-                for (line in reader.lines()) {
-                    func genLine(){
-                        if (versionRegex.matches(line)) {
-                            return '  version = "${v}"'
-                        }else if (cjcVersionRegex.matches(line)) {
-                            try{
-                                if(let (code, stdout, _) <- executeWithOutput('cjc', ['-v']) && code == 0){
-                                    let cjcv = String.fromUtf8(stdout).split('\n')[0].replace('Cangjie Compiler: ', '').replace(' (cjnative)', '').replace('\r', '').trimAscii()
-                                    return '  cjc-version = "${cjcv}"'
+                Directory.walk(getWorkingDirectory()){fi => 
+                    if(!fi.isDirectory() && fi.path.fileName == 'cjpm.toml'){
+                        let tomlPath = fi.path
+                        let reader = StringReader(ByteBuffer(File.readFrom(tomlPath)))
+                        let toml = StringGenerator()
+                        for (line in reader.lines()) {
+                            func genLine(){
+                                if (versionRegex.matches(line)) {
+                                    return '  version = "${v}"'
+                                }else if (cjcVersionRegex.matches(line)) {
+                                    try{
+                                        if(let (code, stdout, _) <- executeWithOutput('cjc', ['-v']) && code == 0){
+                                            let cjcv = String.fromUtf8(stdout).split('\n')[0].replace('Cangjie Compiler: ', '').replace(' (cjnative)', '').replace('\r', '').trimAscii()
+                                            return '  cjc-version = "${cjcv}"'
+                                        }
+                                    }catch(e: Exception){
+                                        log.warn('error occurred on cjc -v', e)
+                                    }
                                 }
-                            }catch(e: Exception){
-                                log.warn('error occurred on cjc -v', e)
+                                line
                             }
+                            toml.appendUnixNewLine(genLine())
                         }
-                        line
+                        File.writeTo(tomlPath, toml.unsafeBytes())
                     }
-                    toml.appendUnixNewLine(genLine())
                 }
-                File.writeTo(tomlPath, toml.unsafeBytes())
                 replaceVersion(v)
                 code = execute('git', ['add', '.'])
                 if(code != 0){
