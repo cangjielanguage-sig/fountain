@@ -49,29 +49,18 @@ abstract sealed class ReadableField {
         let tag = AnnotationTag(annotationType, classTypeInfo, name)
         let annotation = annotations.computeIfAbsent(tag){
             func getAnnotation(name: String): ?Annotation {
-                let a = try{
-                    classTypeInfo.getInstanceProperty(name).findAnnotation<A>()
-                } catch (_){
-                    classTypeInfo.getInstanceVariable(name).findAnnotation<A>()
-                }
-                if(let Some(x: Annotation) <- a){
-                    x
-                }else{
+                if (let Some(x) <- TypeMemberInfos.instanceProperty(classTypeInfo, name)){
+                    x.findAnnotation<Annotation>()
+                } else if (let Some(x) <- TypeMemberInfos.instanceVariable(classTypeInfo, name)) {
+                    x.findAnnotation<Annotation>()
+                } else {
                     None<Annotation>
                 }
             }
-            try{
-                try{
-                    if(let Some(x) <- getAnnotation(name)){
-                        x
-                    }else{
-                        getAnnotation('`${name}`')
-                    }
-                }catch(_){
-                    getAnnotation('`${name}`')
-                }
-            }catch(_){
-                None<Annotation>
+            if(let Some(x) <- getAnnotation(name)){
+                x
+            }else{
+                getAnnotation('`${name}`')
             }
         }
         match(annotation){

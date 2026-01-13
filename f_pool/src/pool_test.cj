@@ -29,7 +29,7 @@ public class Test {
 public class PoolTest {
     @TestCase
     public func test0(): Unit {
-        let pool = Pool<Test>(initSize: 1, minSize: 1, maxSize: 2, elementLife: Duration.second * 10,
+        let pool = Pool<Test>(initSize: 1, minSize: 1, maxSize: 2, idleTimeout: Duration.second * 10,
             checkInterval: Duration.second, creator: {=> Test()}, checker: {x: Test => x.valid},
             destroier: {x => x.destroy()})
         sleep(Duration.millisecond)

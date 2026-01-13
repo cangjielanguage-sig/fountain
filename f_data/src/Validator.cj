@@ -29,7 +29,17 @@ public abstract class Validator {
         NotValidator(this)
     }
 }
-
+public class CombinedValidator <: Validator {
+    public const CombinedValidator(messageIfNotMatch: String, public let validator: Validator){
+        super(messageIfNotMatch: messageIfNotMatch)
+    }
+    public const init(validator: Validator){
+        this('', validator)
+    }
+    public func validate(value: ?String): Bool {
+        this.validator.validate(value)
+    }
+}
 public class DummyValidator <: Validator {
     public static const instance = DummyValidator()
     private const init() {}
