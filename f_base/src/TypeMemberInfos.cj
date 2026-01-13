@@ -15,7 +15,6 @@ limitations under the License.
  */
 package f_base
 
-import std.collection.LinkedList
 import std.collection.concurrent.ConcurrentHashMap
 
 public class TypeMemberInfos {

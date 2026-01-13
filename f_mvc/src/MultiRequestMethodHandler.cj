@@ -125,6 +125,10 @@ class HttpStatusOnlyHandler <: HttpRequestHandler {
             }
             b
         }
+        if(let Some(e: ValidationException) <- ex && e.message.size > 0){
+            ctx.responseBuilder.status(HttpStatus.INTERNAL_SERVER_ERROR.value).body(e.message)
+            return
+        }
         match(kind){
             case Bean => if(message.size > 0 && let Some(x) <- BeanFactory.instance.getFirst<ErrorHttpRequestHandler>(cond: Exactly(message))){
                 let (status, resp) = x.handle(ctx, ex)
