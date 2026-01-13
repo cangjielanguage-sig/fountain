@@ -128,7 +128,8 @@ public class DatabasePool <: Resource & Datasource {
             checkOnCreation: ORMConfig.getCheckOnCreation(driverName: driver.name),
             checkOnBorrowing: ORMConfig.getCheckOnBorrowing(driverName: driver.name),
             checkOnReturning: ORMConfig.getCheckOnReturning(driverName: driver.name),
-            idleTimeout: ORMConfig.getConnectionLife(driverName: driver.name),
+            connectionLife: ORMConfig.getConnectionLife(driverName: driver.name),
+            idleTimeout: ORMConfig.getIdleTimeout(driverName: driver.name),
             checkInterval: ORMConfig.getPoolCheckInterval(driverName: driver.name),
             creator: creator,
             checkSql: ORMConfig.getPoolCheckSql(driverName: driver.name)
