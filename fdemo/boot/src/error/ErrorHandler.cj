@@ -12,7 +12,7 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
-*/
+ */
 package boot.error
 
 import stdx.net.http.HttpContext
@@ -23,12 +23,17 @@ import fountain.data.macros.*
 import fountain.mvc.{ErrorHttpRequestHandler, HttpStatus}
 
 @Bean
-@BeanMeta[name:'NameOf500Handler']
+@BeanMeta[name: 'NameOf500Handler']
 public class Http500Handler <: ErrorHttpRequestHandler {
-    public func handle(_: HttpContext, _: ?Exception): (HttpStatus, Any) {
-        (HttpStatus.OK, BaseResponse.error('error'))
+    public func handle(_: HttpContext, ex: ?Exception): (HttpStatus, Any) {
+        if (let Some(e: ValidationException) <- ex) {
+            (HttpStatus.INTERNAL_SERVER_ERROR, BaseResponse.error(e.message))
+        } else {
+            (HttpStatus.OK, BaseResponse.error('error'))
+        }
     }
 }
+
 @DataAssist[fields]
 public open class BaseResponse {
     public var status: Int64 = 0

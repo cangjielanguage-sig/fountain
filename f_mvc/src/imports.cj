@@ -48,6 +48,7 @@ public import f_base.*
 public import f_bean.*
 public import f_config.*
 public import f_data.*
+public import f_data.exception.ValidationException
 public import f_log.impl.*
 public import f_mvc.exception.*
 public import f_util.PathPattern
