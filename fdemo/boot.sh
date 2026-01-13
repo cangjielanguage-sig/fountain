@@ -43,6 +43,7 @@ exports(){
     export orm_databasePoolCheckOnCreation=true # 创建连接时是否检查连接有效性，默认是false
     export orm_databasePoolCheckOnBorrowing=true # 获取连接时是否检查连接有效性，默认是true
     export orm_databasePoolCheckOnReturning=false # 归还连接时是否检查连接有效性，默认是true
+    export orm_databasePoolIdleTimeout=0 # 连接闲置时间，默认是0，表示闲置不过期
     export orm_databasePoolConnectionLife=86400 # 连接存活时间，默认是3600，单位是秒
     export orm_databasePoolCheckInterval=300 # 连接有效性检查周期，默认是300，单位是秒
     export orm_databasePoolCheckSql='select 1' # 检查连接有效性的SQL，默认是select 1
