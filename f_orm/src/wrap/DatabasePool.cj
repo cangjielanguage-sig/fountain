@@ -37,6 +37,7 @@ public class DatabasePool <: Resource & Datasource {
         checkOnBorrowing!: Bool = true,
         checkOnReturning!: Bool = true,
         connectionLife!: Duration = Duration.hour,
+        idleTimeout!: Duration = Duration.Zero,
         checkInterval!: Duration = Duration.minute * 5,
         creator!: () -> Connection,
         checker!: (Connection) -> Bool
@@ -49,12 +50,16 @@ public class DatabasePool <: Resource & Datasource {
             checkOnCreation: checkOnCreation,
             checkOnBorrowing: checkOnBorrowing,
             checkOnReturning: checkOnReturning,
-            elementLife: connectionLife,
+            idleTimeout: idleTimeout,
             checkInterval: checkInterval,
             creator: {=> PooledConnection(creator())},
             checker: {
                 c => try {
-                    return !c.isDestroied() && checker(c)
+                    if(connectionLife > Duration.Zero && let conn: PooledConnection <- c && MonoTime.now() - conn.birth >= connectionLife) {
+                        false
+                    } else {
+                        !c.isDestroied() && checker(c)
+                    }
                 } catch (e: Exception) {
                     logger.error("database check failed", e)
                     false
@@ -80,6 +85,7 @@ public class DatabasePool <: Resource & Datasource {
         checkOnBorrowing!: Bool = true,
         checkOnReturning!: Bool = true,
         connectionLife!: Duration = Duration.hour,
+        idleTimeout!: Duration = Duration.Zero,
         checkInterval!: Duration = Duration.minute * 5,
         creator!: () -> Connection,
         checkSql!: String = "select 1"
@@ -93,6 +99,7 @@ public class DatabasePool <: Resource & Datasource {
             checkOnBorrowing: checkOnBorrowing,
             checkOnReturning: checkOnReturning,
             connectionLife: connectionLife,
+            idleTimeout: idleTimeout,
             checkInterval: checkInterval,
             creator: creator,
             checker: {
@@ -121,7 +128,7 @@ public class DatabasePool <: Resource & Datasource {
             checkOnCreation: ORMConfig.getCheckOnCreation(driverName: driver.name),
             checkOnBorrowing: ORMConfig.getCheckOnBorrowing(driverName: driver.name),
             checkOnReturning: ORMConfig.getCheckOnReturning(driverName: driver.name),
-            connectionLife: ORMConfig.getConnectionLife(driverName: driver.name),
+            idleTimeout: ORMConfig.getConnectionLife(driverName: driver.name),
             checkInterval: ORMConfig.getPoolCheckInterval(driverName: driver.name),
             creator: creator,
             checkSql: ORMConfig.getPoolCheckSql(driverName: driver.name)
@@ -162,6 +169,7 @@ class PooledConnection <: Connection {
     private static let logger = LoggerFactory.getLogger<PooledConnection>()
     private static let serialGen = AtomicUInt64(1)
     private let serial = serialGen.fetchAdd(1)
+    let birth = MonoTime.now()
     PooledConnection(private let connection: Connection) {}
 
     private var returnFn = {c: PooledConnection => ()}
