@@ -15,6 +15,7 @@ limitations under the License.
  */
 package f_base
 
+import std.collection.LinkedList
 import std.collection.concurrent.ConcurrentHashMap
 
 public class TypeMemberInfos {
@@ -26,8 +27,19 @@ public class TypeMemberInfos {
             case _ =>
                 let map = HashMap<String, StaticPropertyInfo>()
                 staticPropertyMap[typeInfo] = map
-                for (p in typeInfo.staticProperties) {
-                    map[p.name] = p
+                func addProp(ti: TypeInfo){
+                    for (p in typeInfo.staticProperties) {
+                        map[p.name] = p
+                    }
+                }
+                if(let cti: ClassTypeInfo <- typeInfo){
+                    var ti = Some(cti)
+                    while(let Some(c) <- ti && c != ClassTypeInfo.of<Object>()){
+                        addProp(c)
+                        ti = c.superClass
+                    }
+                }else{
+                    addProp(typeInfo)
                 }
                 map
         }
@@ -51,8 +63,19 @@ public class TypeMemberInfos {
             case Some(map) => map
             case _ =>
                 let map = HashMap<String, InstancePropertyInfo>()
-                for (p in typeInfo.instanceProperties) {
-                    map[p.name] = p
+                func addProps(ti: TypeInfo){
+                    for (p in ti.instanceProperties) {
+                        map[p.name] = p
+                    }
+                }
+                if(let cti: ClassTypeInfo <- typeInfo){
+                    var ti = Some(cti)
+                    while(let Some(c) <- ti && c != ClassTypeInfo.of<Object>()){
+                        addProps(c)
+                        ti = c.superClass
+                    }
+                }else{
+                    addProps(typeInfo)
                 }
                 instancePropertyMap[typeInfo] = map
                 map
@@ -77,13 +100,24 @@ public class TypeMemberInfos {
             case Some(map) => map
             case _ =>
                 let map = HashMap<FuncMeta, StaticFunctionInfo>()
-                for (f in typeInfo.staticFunctions) {
-                    let params = f.parameters
-                    map[FuncMeta(f.name, Array<TypeInfo>(params.size) {
-                            i => params[i].typeInfo
-                        })] = f
-                }
                 staticFunctionMap[typeInfo] = map
+                func addFunc(ti: TypeInfo){
+                    for (f in typeInfo.staticFunctions) {
+                        let params = f.parameters
+                        map.addIfAbsent(FuncMeta(f.name, Array<TypeInfo>(params.size) {
+                                i => params[i].typeInfo
+                            }), f)
+                    }
+                }
+                if(let cti: ClassTypeInfo <- typeInfo){
+                    var ti = Some(cti)
+                    while(let Some(c) <- ti && c != ClassTypeInfo.of<Object>()){
+                        addFunc(c)
+                        ti = c.superClass
+                    }
+                }else{
+                    addFunc(typeInfo)
+                }
                 map
         }
     }
@@ -106,11 +140,22 @@ public class TypeMemberInfos {
             case Some(map) => map
             case _ =>
                 let map = HashMap<FuncMeta, InstanceFunctionInfo>()
-                for (f in typeInfo.instanceFunctions) {
-                    let params = f.parameters
-                    map[FuncMeta(f.name, Array<TypeInfo>(params.size) {
-                            i => params[i].typeInfo
-                        })] = f
+                func addFunc(ti: TypeInfo){
+                    for (f in ti.instanceFunctions) {
+                        let params = f.parameters
+                        map.addIfAbsent(FuncMeta(f.name, Array<TypeInfo>(params.size) {
+                                i => params[i].typeInfo
+                            }), f)
+                    }
+                }
+                if(let cti: ClassTypeInfo <- typeInfo){
+                    var ti = Some(cti)
+                    while(let Some(c) <- ti && c != ClassTypeInfo.of<Object>()){
+                        addFunc(c)
+                        ti = c.superClass
+                    }
+                }else{
+                    addFunc(typeInfo)
                 }
                 instanceFunctionMap[typeInfo] = map
                 map
@@ -143,8 +188,12 @@ public class TypeMemberInfos {
                     map
                 case x: ClassTypeInfo =>
                     let map = HashMap<String, StaticVariableInfo>()
-                    for (v in x.staticVariables) {
-                        map[v.name] = v
+                    var cti = Some(x)
+                    while(let Some(c) <- cti && c != ClassTypeInfo.of<Object>()){
+                        for (v in c.staticVariables) {
+                            map[v.name] = v
+                        }
+                        cti = c.superClass
                     }
                     staticVariableMap[typeInfo] = map
                     map
@@ -179,8 +228,12 @@ public class TypeMemberInfos {
                     map
                 case x: ClassTypeInfo =>
                     let map = HashMap<String, InstanceVariableInfo>()
-                    for (v in x.instanceVariables) {
-                        map[v.name] = v
+                    var cti = Some(x)
+                    while(let Some(c) <- cti && c != ClassTypeInfo.of<Object>()){
+                        for (v in x.instanceVariables) {
+                            map[v.name] = v
+                        }
+                        cti = c.superClass
                     }
                     instanceVariableMap[typeInfo] = map
                     map
