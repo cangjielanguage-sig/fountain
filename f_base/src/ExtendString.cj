@@ -54,9 +54,6 @@ extend String <: ExtendString {
         while (end > start && this[end] <= b' ') {
             end--
         }
-        if (start >= end){
-            return ''
-        }
         this[start ..= end]
     }
     private func replace(old: String, new: String, indexFn: (String) -> ?Int64): String {
