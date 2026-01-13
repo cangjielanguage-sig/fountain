@@ -31,7 +31,7 @@ public struct ArrayPool<T> {
             initSize: initSize,
             minSize: minSize,
             maxSize: maxSize,
-            elementLife: elementLife,
+            idleTimeout: elementLife,
             checkOnCreation: false,
             checkOnBorrowing: false,
             checkOnReturning: false,

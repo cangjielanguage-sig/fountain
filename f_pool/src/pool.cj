@@ -40,7 +40,7 @@ public class Pool<T> <: Resource {
         private let initSize!: Int64 = 0,
         private let minSize!: Int64 = 0,
         private let maxSize!: Int64 = Int64.Max,
-        private let elementLife!: Duration = Duration.hour,
+        private let idleTimeout!: Duration = Duration.hour,
         private let checkOnCreation!: Bool = false,
         private let checkOnBorrowing!: Bool = true,
         private let checkOnReturning!: Bool = true,
@@ -64,14 +64,14 @@ public class Pool<T> <: Resource {
         initSize!: Int64 = 0,
         minSize!: Int64 = 0,
         maxSize!: Int64 = Int64.Max,
-        elementLife!: Duration = Duration.hour,
+        idleTimeout!: Duration = Duration.hour,
         checkOnCreation!: Bool = false,
         checkOnBorrowing!: Bool = true,
         checkOnReturning!: Bool = true,
         checkInterval!: Duration = Duration.minute,
         manager!: PooledManager<T>
     ) {
-        this(initSize: initSize, minSize: minSize, maxSize: maxSize, elementLife: elementLife,
+        this(initSize: initSize, minSize: minSize, maxSize: maxSize, idleTimeout: idleTimeout,
             checkOnCreation: checkOnCreation, checkOnBorrowing: checkOnBorrowing, checkOnReturning: checkOnReturning,
             checkInterval: checkInterval, creator: manager.create, checker: manager.check, destroier: manager.destroy,
             clear: manager.clear)
@@ -86,7 +86,7 @@ public class Pool<T> <: Resource {
                 while (running.load() && i < this.size.load() && let (o, t) <- queue.remove()) {
                     i++
                     try {
-                        if (MonoTime.now() - t >= elementLife || !checker(o)) {
+                        if ((idleTimeout > Duration.Zero && MonoTime.now() - t >= idleTimeout) || !checker(o)) {
                             destroy(o, true)
                             if (this.size.load() < minSize) {
                                 tasks.tryAdd(())
