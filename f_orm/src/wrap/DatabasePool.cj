@@ -168,7 +168,7 @@ public class DatabasePool <: Resource & Datasource {
     }
     public func setOption(key: String, value: String): Unit {}
     public func connect(): Connection {
-        getConnection() ?? NoneConnection.instance
+        getConnection().getOrThrow{ConnectionException()}
     }
 }
 
