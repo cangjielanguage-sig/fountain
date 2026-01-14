@@ -243,6 +243,9 @@ public struct UUID <: Hashable & Comparable<UUID> & ToString & Parsable<UUID> & 
             values[i] = (b1 << 4) | b2
             i++
         }
+        if(values[6] >> 4 == 2 || values[8] >> 6 != 2){
+            return None<UUID>
+        }
         UUID(values: values)
     }
     /**
@@ -277,6 +280,7 @@ public struct UUID <: Hashable & Comparable<UUID> & ToString & Parsable<UUID> & 
         TimeBasedUUIDBuilder(timeLowFirst)
     }
     /**
+       version 3
        0                   1                   2                   3
        0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
        +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
@@ -305,6 +309,9 @@ public struct UUID <: Hashable & Comparable<UUID> & ToString & Parsable<UUID> & 
         md[8] |= 2 << 6
         UUID(values: md)
     }
+    /**
+     * version 4
+     */
     public static func random(): UUID {
         let rand = ThreadLocalRandom.current.nextBytes(16)
         rand[6] &= 0xf
@@ -314,6 +321,7 @@ public struct UUID <: Hashable & Comparable<UUID> & ToString & Parsable<UUID> & 
         UUID(values: rand)
     }
     /**
+       version 5
        0                   1                   2                   3
        0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
        +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
@@ -353,6 +361,7 @@ public struct UUID <: Hashable & Comparable<UUID> & ToString & Parsable<UUID> & 
         UUID(values: values)
     }
     /**
+       version 7
        0                   1                   2                   3
        0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
        +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
@@ -384,6 +393,7 @@ public struct UUID <: Hashable & Comparable<UUID> & ToString & Parsable<UUID> & 
         UUID(values: values)
     }
     /**
+       version 8
        0                   1                   2                   3
        0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
        +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
