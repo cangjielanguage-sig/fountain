@@ -1,11 +1,11 @@
 [dependencies]
-  f_base  = {path = "../f_base", version = "1.0.43"}
-  f_bean  = {path = "../f_bean", version = "1.0.43"}
-  f_collection  = {path = "../f_collection", version = "1.0.43"}
-  f_exception  = {path = "../f_exception", version = "1.0.43"}
-  f_log  = {path = "../f_log", version = "1.0.43"}
-  f_regex  = {path = "../f_regex", version = "1.0.43"}
-  f_time  = {path = "../f_time", version = "1.0.43"}
+  f_base  = {path = "../f_base", version = "1.0.44"}
+  f_bean  = {path = "../f_bean", version = "1.0.44"}
+  f_collection  = {path = "../f_collection", version = "1.0.44"}
+  f_exception  = {path = "../f_exception", version = "1.0.44"}
+  f_log  = {path = "../f_log", version = "1.0.44"}
+  f_regex  = {path = "../f_regex", version = "1.0.44"}
+  f_time  = {path = "../f_time", version = "1.0.44"}
   
 [package]
   cjc-version = "1.0.4"
@@ -17,7 +17,7 @@
   output-type = "dynamic"
   src-dir = ""
   target-dir = ""
-  version = "1.0.43"
+  version = "1.0.44"
   package-configuration = {}
 
 [profile.build]

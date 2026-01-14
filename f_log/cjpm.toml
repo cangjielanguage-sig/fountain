@@ -1,13 +1,13 @@
 [dependencies]
-  f_base  = {path = "../f_base", version = "1.0.43"}
-  f_config  = {path = "../f_config", version = "1.0.43"}
-  f_collection  = {path = "../f_collection", version = "1.0.43"}
-  f_data  = {path = "../f_data", version = "1.0.43"}
-  f_exception  = {path = "../f_exception", version = "1.0.43"}
-  f_io  = {path = "../f_io", version = "1.0.43"}
-  f_time  = {path = "../f_time", version = "1.0.43"}
-  f_util  = {path = "../f_util", version = "1.0.43"}
-  f_version  = {path = "../f_version", version = "1.0.43"}
+  f_base  = {path = "../f_base", version = "1.0.44"}
+  f_config  = {path = "../f_config", version = "1.0.44"}
+  f_collection  = {path = "../f_collection", version = "1.0.44"}
+  f_data  = {path = "../f_data", version = "1.0.44"}
+  f_exception  = {path = "../f_exception", version = "1.0.44"}
+  f_io  = {path = "../f_io", version = "1.0.44"}
+  f_time  = {path = "../f_time", version = "1.0.44"}
+  f_util  = {path = "../f_util", version = "1.0.44"}
+  f_version  = {path = "../f_version", version = "1.0.44"}
 [package]
   cjc-version = "1.0.4"
   compile-option = "-O2 --dy-std"
@@ -18,7 +18,7 @@
   output-type = "dynamic"
   src-dir = ""
   target-dir = ""
-  version = "1.0.43"
+  version = "1.0.44"
   package-configuration = {}
 
 [target]

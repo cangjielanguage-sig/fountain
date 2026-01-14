@@ -102,10 +102,12 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
     }
     public func checkProduces(ctx: HttpContext) {
         if (let Some(accept) <- ctx.request.headers.getFirst('Accept')) {
-            accept.isEmpty() || accept == '*' || accept == '*/*' || produces.contains(accept) || if (accept.indexOf(',').isSome()) {
+            accept.isEmpty() || accept == '*' || accept == '*/*' || produces.contains(accept) || if (accept
+                .indexOf(',')
+                .isSome()) {
                 let priority = AcceptQueue(accept)
                 while (let Some((q, idx, c)) <- priority.remove()) {
-                    log.debug{'RequestMeta.checkProduces.MultiAccept:${q};${idx};${c}'}
+                    log.debug {'RequestMeta.checkProduces.MultiAccept:${q};${idx};${c}'}
                     if (c.startsWith('*/*') || produces.contains(c)) {
                         ctx.request.headers.set('Accept', c)
                         return true
@@ -128,10 +130,10 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
         let pattern = this.pattern.getOrThrow()
         this.handle_ = {
             ctx =>
-                let result = try{
+                let result = try {
                     CurrentHttpContext.set(ctx)
                     fn(BeanFactory.instance.getFirst<T>().getOrThrow(), ctx, pattern)
-                }finally{
+                } finally {
                     CurrentHttpContext.clear()
                 }
                 match (result) {
@@ -142,8 +144,7 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
                     case x: ToData => respond(x, ctx)
                     case _ =>
                         let request = ctx.request
-                        log.warn<ToString>('fountain.mvc.handle {}:{};{}',
-                            [request.method, request.url, TypeInfo.of(result)])
+                        log.warn {'fountain.mvc.handle ${request.method}:${request.url};${TypeInfo.of(result)}'}
                         MultiRequestMethodHandler.NOT_ACCEPTABLE.handle(ctx)
                 }
         }
@@ -177,8 +178,9 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
                 status.reasonPhrase
             })
         }
-        log.warn(
-            'fountain.mvc.check ${this}; accept: ${accept}; status: ${status.value}; CheckHandler returns ${TypeInfo.of(resp)}; checked: ${check}')
+        log.warn {
+            'fountain.mvc.check ${this}; accept: ${accept}; status: ${status.value}; CheckHandler returns ${TypeInfo.of(resp)}; checked: ${check}'
+        }
         match (resp) {
             case x: String => builder.body(x)
             case x: Array<Byte> => builder.body(x)
@@ -223,8 +225,7 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
                         try {
                             r.close()
                         } catch (e: Exception) {
-                            log.warn('Error occurred on closing ${TypeInfo.of(result)}; path: {}; accept: {}', e,
-                                [path, accept])
+                            log.warn(e){'Error occurred on closing ${TypeInfo.of(result)}; path: ${path}; accept: ${accept}'}
                         }
                     }
                     MultiRequestMethodHandler.NOT_ACCEPTABLE.handle(ctx)
@@ -284,22 +285,23 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
             case _: ?HttpResponseBuilder => (ctx.responseBuilder as T).getOrThrow()
             case _: ?Array<Byte> => (this.extractBytes(ctx) as T).getOrThrow()
             case _: ?Form => (ctx.request.form as T).getOrThrow()
-            case _ => match(default){
-                case Some(d: P) => 
+            case _ => match (default) {
+                case Some(d: P) =>
                     let val = args.extract<P>(ctx, name, d, pattern)
-                    if(let x: T <- val){
+                    if (let x: T <- val) {
                         x
-                    }else if(let x: T <- Some(val)){
+                    } else if (let x: T <- Some(val)) {
                         x
-                    }else{
+                    } else {
                         throw UnreachableException()
                     }
-                case _ => 
+                case _ =>
                     let val = args.extract<P>(ctx, name, pattern)
-                    match(val){
+                    match (val) {
                         case x: T => x
                         case Some(x: T) => x
-                        case _ => throw HttpRequestException('NO param for controller func, which request param name is ${name}')
+                        case _ => throw HttpRequestException(
+                            'NO param for controller func, which request param name is ${name}')
                     }
             }
         }
@@ -345,7 +347,7 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
         let metas = ArrayList<RequestMeta>()
         let function = typeInfo.getInstanceFunction(fnName, argTypes)
         let functionParamMap = HashMap<String, ParameterInfo>()
-        for(param in function.parameters){
+        for (param in function.parameters) {
             functionParamMap[param.name] = param
         }
         let args = HashMap<String, (ControllerFuncParam, Validator, ?AbstractDateTimeConverter)>()
@@ -373,8 +375,8 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
                         case None => args[pname] = (zero, x, None<AbstractDateTimeConverter>)
                         case _ => throw UnreachableException()
                     }
-                    case x: AbstractDateTimeConverter => match(args.get(pname)){
-                        case Some((p, v, c)) where c.isNone() => 
+                    case x: AbstractDateTimeConverter => match (args.get(pname)) {
+                        case Some((p, v, c)) where c.isNone() =>
                             args[pname] = (p, v, x)
                             toThrow = false
                             break
@@ -393,7 +395,7 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
         let ignoreAuthGlobal = ignoreSecurity || function.findAnnotation<IgnoreAuth>().isSome()
         let ignorePrivilegeGlobal = ignoreSecurity || function.findAnnotation<IgnorePrivilege>().isSome()
         for (annotation in function.annotations) {
-            if(let a: RequestMapping <- annotation){
+            if (let a: RequestMapping <- annotation) {
                 let method = a.method
                 let ignoreAuth = a.ignoreAuth || ignoreAuthGlobal
                 let ignorePrivilege = a.ignorePrivilege || ignorePrivilegeGlobal
@@ -444,8 +446,9 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
             case _ => 'None'
         }
         let log = LoggerFactory.getLogger<T>()
-        let logArgs: Array<ToString> = [request.method, request.url, request.form.toEncodeString(),
-            request.headers.getFirst('Content-Type'), argGen, result, getResponseStatus(), MonoTime.now() - start]
+        func logContent(){
+            'MVC.accessLog:${request.method}:${request.url}?${request.form.toEncodeString()}; consumes:${request.headers.getFirst('Content-Type')}; params:${argGen}; returned:${result}; status:${getResponseStatus()}; elapsed:${MonoTime.now() - start}'
+        }
         if (let Some(ex) <- e) {
             let exce = try {
                 MultiRequestMethodHandler.INTERNAL_SERVER_ERROR.handle(ctx, ex)
@@ -460,11 +463,9 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
                 mvcex.addSuppressed(ex)
                 mvcex
             }
-            logArgs[logArgs.size - 2] = getResponseStatus()
-            log.error('MVC.accessLog:{}:{}?{}; consumes:{}; params:{}; returned:{}; status:{}; elapsed:{}', exce,
-                logArgs)
+            log.error(exce, logContent)
         } else {
-            log.info('MVC.accessLog:{}:{}?{}; consumes:{}; params:{}; returned:{}; status:{}; elapsed:{}', logArgs)
+            log.info(logContent)
         }
     }
 }

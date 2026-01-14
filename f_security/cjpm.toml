@@ -8,7 +8,7 @@
   output-type = "dynamic"
   src-dir = ""
   target-dir = ""
-  version = "1.0.43"
+  version = "1.0.44"
   package-configuration = {}
 
 [profile.build]
@@ -16,10 +16,10 @@
   incremental = true
 
 [dependencies]
-  f_base  = {path = "../f_base", version = "1.0.43"}
-  f_cache  = {path = "../f_cache", version = "1.0.43"}
-  f_jwt  = {path = "../f_jwt", version = "1.0.43"}
-  f_mvc  = {path = "../f_mvc", version = "1.0.43"}
+  f_base  = {path = "../f_base", version = "1.0.44"}
+  f_cache  = {path = "../f_cache", version = "1.0.44"}
+  f_jwt  = {path = "../f_jwt", version = "1.0.44"}
+  f_mvc  = {path = "../f_mvc", version = "1.0.44"}
 
 
 [target]

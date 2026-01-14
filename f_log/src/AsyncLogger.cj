@@ -22,6 +22,7 @@ import std.io.OutputStream
 import std.sync.AtomicInt64
 import std.time.DateTime
 import stdx.log.{LogLevel, LogRecord}
+import f_base.console
 import f_collection.*
 import f_io.DummyOutputStream
 import f_log.exception.LogException
@@ -114,18 +115,7 @@ public abstract class AsyncLogger <: AbstractLogger {
         let buffer = (super.output as SyncQueueOutputStream).getOrThrow()
         if (buffer.size > 0) {
             append {
-                while(let Some(buf) <- buffer.tryRemove()){
-                    try{
-                        if(buf.size > 0){
-                            for(bytes in buf where bytes.size > 0){
-                                this.actualOutput.write(bytes)
-                            }
-                            this.actualOutput.flush()
-                        }
-                    }finally{
-                        buffer.returnBuffer(buf)
-                    }
-                }
+                buffer.writeTo(actualOutput)
             }
         }
     }
@@ -164,10 +154,12 @@ public struct SyncQueueOutputStream <: OutputStream {
     public func write(bytes: Array<Byte>): Unit {
         let buf = if(let Some(buf) <- buffer.get()){
             buf
-        }else{
-            let buf = pool.remove()
+        }else if (let Some(buf) <- pool.remove(Duration.millisecond * 5)) {
             buffer.set(buf)
             buf
+        } else {
+            console.writeln('AsyncLogger.SyncQueueOutputStream.EmptyPool')
+            return
         }
         // if(bytes[bytes.size - 1] == b'\0'){//todo 这个做法性能有些低，但是性能高的做法会导致BUG。
         //     let b = bytes[0 .. bytes.size - 1]
@@ -189,10 +181,21 @@ public struct SyncQueueOutputStream <: OutputStream {
             queue.size
         }
     }
-    func tryRemove(){
-        queue.tryRemove()
+    func writeTo(output: OutputStream): Unit {
+        while (let Some(buf) <- queue.peek()){
+            try{
+                if(buf.size > 0){
+                    for(bytes in buf where bytes.size > 0) {
+                        output.write(bytes)
+                    }
+                }
+            } finally {
+                output.flush()
+                returnBuffer(queue.remove())
+            }
+        }
     }
-    func returnBuffer(buf: ArrayList<Array<Byte>>){
+    private func returnBuffer(buf: ArrayList<Array<Byte>>){
         buf.clear()
         pool.add(buf)
     }

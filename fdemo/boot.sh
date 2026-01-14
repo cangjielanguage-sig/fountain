@@ -117,8 +117,8 @@ loop)
     start=$(date +%s.%N)
     for i in $(seq 1 $2); do 
         echo -e "\n================= 第 $i 次循环 =================\n";
-         curl -XPOST -H'Content-Type:application/json' -H'Accept:application/json' -d'{"username":"asdf","password":"bcbcbcbc"}' http://localhost:8080/api/user/session
-#        curl -XGET -H'Accept:text/plain' http://localhost:8080/helloworld
+#W         curl -XPOST -H'Content-Type:application/json' -H'Accept:application/json' -d'{"username":"asdf","password":"bcbcbcbc"}' http://localhost:8080/api/user/session
+        curl -XGET -H'Accept:text/plain' http://localhost:8080/helloworld
 	#  sleep 1
 #        ./curl.sh
     done
