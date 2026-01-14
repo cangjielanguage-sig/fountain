@@ -26,7 +26,7 @@ exports(){
     export logger_appender_FDemoFile_rotateDuration=DAY
     export controllerPointcut='*..*Controller.*(**): *'
     export mvc_port=8080 # 这一行可以没有，默认就是8080
-    export mvc_overallElapsedSwitch=true
+    export mvc_overallElapsedSwitch=true # 生产环境建议改为false，默认是false
     export mvc_internalServerErrorMessageKind=BEAN
     export mvc_internalServerErrorMessage=NameOf500Handler
     # 如果不使用fountain连接池，也不使用标准库连接池，就不要配置以下orm_*Pool*变量，只配置orm_noPool，只能用代码初始化第三方连接池
