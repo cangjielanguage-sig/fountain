@@ -27,6 +27,7 @@ public class DatabasePool <: Resource & Datasource {
 
     private let driver: Driver
     private let pool: Pool<PooledConnection>
+    private var connectTimeout: Duration
 
     public init(
         driver!: Driver,
@@ -39,10 +40,12 @@ public class DatabasePool <: Resource & Datasource {
         connectionLife!: Duration = Duration.hour,
         idleTimeout!: Duration = Duration.Zero,
         checkInterval!: Duration = Duration.minute * 5,
+        connectTimeout!: Duration = Duration.Max,
         creator!: () -> Connection,
         checker!: (Connection) -> Bool
     ) {
         this.driver = driver
+        this.connectTimeout = connectTimeout
         this.pool = Pool<PooledConnection>(
             initSize: initSize,
             minSize: minSize,
@@ -87,6 +90,7 @@ public class DatabasePool <: Resource & Datasource {
         connectionLife!: Duration = Duration.hour,
         idleTimeout!: Duration = Duration.Zero,
         checkInterval!: Duration = Duration.minute * 5,
+        connectTimeout!: Duration = Duration.Max,
         creator!: () -> Connection,
         checkSql!: String = "select 1"
     ) {
@@ -101,6 +105,7 @@ public class DatabasePool <: Resource & Datasource {
             connectionLife: connectionLife,
             idleTimeout: idleTimeout,
             checkInterval: checkInterval,
+            connectTimeout: connectTimeout,
             creator: creator,
             checker: {
                 c => if (checkSql[0..6].toLower() == "select") {
@@ -131,6 +136,7 @@ public class DatabasePool <: Resource & Datasource {
             connectionLife: ORMConfig.getConnectionLife(driverName: driver.name),
             idleTimeout: ORMConfig.getIdleTimeout(driverName: driver.name),
             checkInterval: ORMConfig.getPoolCheckInterval(driverName: driver.name),
+            connectTimeout: ORMConfig.getConnectTimeout(driverName: driver.name),
             creator: creator,
             checkSql: ORMConfig.getPoolCheckSql(driverName: driver.name)
         )
@@ -154,7 +160,7 @@ public class DatabasePool <: Resource & Datasource {
         }
     }
 
-    public func getConnection(timeout!: Duration = Duration.Max): Option<Connection> {
+    public func getConnection(timeout!: Duration = connectTimeout): Option<Connection> {
         if (isClosed()) {
             return None<Connection>
         }

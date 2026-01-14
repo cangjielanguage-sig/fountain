@@ -46,6 +46,7 @@ exports(){
     export orm_databasePoolIdleTimeout=0 # 连接闲置时间，默认是0，表示闲置不过期
     export orm_databasePoolConnectionLife=86400 # 连接存活时间，默认是3600，单位是秒
     export orm_databasePoolCheckInterval=300 # 连接有效性检查周期，默认是300，单位是秒
+    export orm_databasePoolConnectTimeout=50 # 默认是50，单位是毫秒，从fountain.orm.DatabasePool获取连接的超时时间
     export orm_databasePoolCheckSql='select 1' # 检查连接有效性的SQL，默认是select 1
     # orm_stdPool开头的是std.datasource.sql.PooledDatasource的配置项
     export orm_stdPoolMaxSize=10 # 连接池最大连接数
