@@ -29,6 +29,7 @@ public abstract class Validator {
         NotValidator(this)
     }
 }
+@Annotation[target: [MemberVariable, MemberProperty, Parameter]]
 public class CombinedValidator <: Validator {
     public const CombinedValidator(messageIfNotMatch: String, public let validator: Validator){
         super(messageIfNotMatch: messageIfNotMatch)
