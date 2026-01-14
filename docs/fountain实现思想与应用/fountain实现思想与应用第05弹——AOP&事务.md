@@ -143,9 +143,33 @@ public enum Propagation {
 
 TransactionWrap的实例是SqlExecution的成员，发生一次事务函数的调用就包一层新的TransactionWrap的皮，事务函数返回时就脱一层。
 
+### WeavedBean
+
+AOP模块提供了宏@WeavedBean，weave函数会为每个公共实例成员函数完成织入，相当于@Bean+@Pointcut同时修饰一个类。
+
+```cj
+public macro WeavedBean(input: Tokens): Tokens {
+    let tokens = quote(
+        @Bean
+        $(weave(input))
+    )
+    tokens
+}
+public macro WeavedBean(attr: Tokens, input: Tokens): Tokens {
+    quote(
+        @Bean[$attr]
+        $(weave(input))
+    )
+}
+```
+
+
+
 ### 事务宏
 
 使用@TransactionalService修饰需要事务控制的类，宏展开时为它修饰的类添加@Bean宏修饰，为这个类的公共实例成员函数添加@Pointcut宏修饰。
+
+@TransactionalService做了跟@WeavedBean一样的事，因为前者是后者的别名。
 
 ### 事务钩子
 
