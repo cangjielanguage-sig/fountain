@@ -7,7 +7,7 @@ fi
 echo "target-dir=$path"
 
 exports(){
-    export cjHeapSize=7MB
+    # export cjHeapSize=4GB
     # pattern可省略，有默认值
     # %level 记录当前日志级别
     # %name 记录当前日志名称
