@@ -72,11 +72,11 @@ exports(){
 }
 run(){
     exports
-    fboot run $path --dylibPattern='(boot|user\.util\.auth|\.(controller|service\.impl))'
+    fboot run $path --dylibPattern='(boot|user\.util\.(auth|cron)|\.(controller|service\.impl))'
 }
 perfRecord(){
     exports
-    cjprof record -f max -- $CJPM_INSTALL/bin/fboot run $path --dylibPattern='(boot|user\.util\.auth|\.(controller|service\.impl))'
+    cjprof record -f max -- $CJPM_INSTALL/bin/fboot run $path --dylibPattern='(boot|user\.util\.(auth|cron)|\.(controller|service\.impl))'
 
 }
 perfReport(){
