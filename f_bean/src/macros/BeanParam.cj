@@ -18,10 +18,10 @@ macro package f_bean.macros
 public macro BeanParam(attr: Tokens, input: Tokens): Tokens {
     func setItem(attr: Tokens, param: FuncParam): Unit {
         setItem('name', param.identifier.value)
-        setItem('cond', if(attr[0].kind == STRING_LITERAL){
-            attr
-        }else{
-            quote(StringCond.$attr)
+        let first = attr[0]
+        setItem('cond', match((first.kind, first.value)){
+            case (STRING_LITERAL, _) | (IDENTIFIER, 'StringCond') => attr
+            case _ => quote(StringCond.$attr)
         })
     }
     assertParentContext('Constructor')
