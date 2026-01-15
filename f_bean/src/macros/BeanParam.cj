@@ -18,7 +18,11 @@ macro package f_bean.macros
 public macro BeanParam(attr: Tokens, input: Tokens): Tokens {
     func setItem(attr: Tokens, param: FuncParam): Unit {
         setItem('name', param.identifier.value)
-        setItem('cond', attr)
+        setItem('cond', if(attr[0].kind == STRING_LITERAL){
+            attr
+        }else{
+            quote(StringCond.$attr)
+        })
     }
     assertParentContext('Constructor')
     match(parseDecl(attr)){
