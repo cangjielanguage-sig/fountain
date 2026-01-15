@@ -89,7 +89,7 @@ public macro Value(attr: Tokens, input: Tokens): Tokens {
                     quote( ?? $default)
                 }
             }
-            case x where x[0].kind = QUEST => match (x[1].value) {
+            case x where x[0].kind == QUEST => match (x[1].value) {
                 case 'String' => quote(Config.getString($name)) + if (default.size == 0) {
                     `empty_tokens`
                 } else {
@@ -117,7 +117,7 @@ public macro Value(attr: Tokens, input: Tokens): Tokens {
                     quote( ?? $default)
                 }
             }
-            case x where x[0].value == Array => match (x[2].value) {
+            case x where x[0].value == 'Array' => match (x[2].value) {
                 case 'String' => quote(Config.getStringArray($name, delim: $delim))
                 case 'DateTime' =>
                     if (dateFormat.size > 0) {
@@ -128,7 +128,7 @@ public macro Value(attr: Tokens, input: Tokens): Tokens {
                 case 'Duration' => quote(Config.getDurations($name, delim: $delim))
                 case _ => quote(Config.getValues<$(x[2])>($name, delim: $delim))
             }
-            case _ => quote(Config.getValue<$(x[0])>($name)) + if (default.size == 0) {
+            case x => quote(Config.getValue<$(x[0])>($name)) + if (default.size == 0) {
                 `empty_tokens`
             } else {
                 quote( ?? $default)
