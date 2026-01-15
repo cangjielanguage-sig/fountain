@@ -26,8 +26,11 @@ internal import f_config.Config
 internal import f_data.*
 internal import f_regex.*
 public import std.collection.{HashMap, ArrayList}
+public import std.convert.*
 public import f_base.*
 public import f_bean.exception.*
+public import f_config.*
+public import f_data.*
 
 public const SHOULD_INIT_BEAN_CONF_KEY = 'shouldInitBean'
 /**

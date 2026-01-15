@@ -18,29 +18,33 @@ macro package f_bean.macros
 public macro Constructor(input: Tokens): Tokens {
     assertParentContext('Bean')
     let beanCond = HashMap<String, Tokens>()
+    let valueCond = HashMap<String, Tokens>()
     for(msg in getChildMessages('BeanParam')){
         beanCond[msg.getString('name')] = msg.getTokens('cond')
     }
-    constructor(parseDecl(input), beanCond)
+    for(msg in getChildMessages('Value')){
+        valueCond[msg.getString('name')] = msg.getTokens('cond')
+    }
+    constructor(parseDecl(input), beanCond, valueCond)
     input
 }
-private func constructor(decl: Decl, cond: HashMap<String, Tokens>): Unit {
+private func constructor(decl: Decl, beanCond: HashMap<String, Tokens>, valueCond: HashMap<String, Tokens>): Unit {
     match(decl){
         case x: FuncDecl where x.isPublic() && x.identifier.value == 'init' =>
-            argTokens(x.funcParams, cond)
+            argTokens(x.funcParams, beanCond, valueCond)
             setItem('constructor', 'init')
         case x: FuncDecl where x.isPublic() && x.isStatic() && isGenericFunc(x) =>
-            argTokens(x.funcParams, cond)
+            argTokens(x.funcParams, beanCond, valueCond)
             setItem('constructor', x.identifier.value)
         case x: PrimaryCtorDecl where x.isPublic() =>
-            argTokens(x.funcParams, cond)
+            argTokens(x.funcParams, beanCond, valueCond)
             setItem('constructor', 'init')
         case x: MacroExpandDecl =>
             var d: Decl = x
             while(let md: MacroExpandDecl <- d){
                 d = md.macroInputDecl
             }
-            constructor(d, cond)
+            constructor(d, beanCond, valueCond)
         case _ => 
             let tokens = decl.toTokens()
             diagReport(ERROR, tokens, '${decl.identifier.value} must be a public constructor or public static func without generic parameter', '')
@@ -53,7 +57,7 @@ private func isGenericFunc(decl: FuncDecl){
         false
     }
 }
-private func argTokens(params: ArrayList<FuncParam>, condMap: HashMap<String, Tokens>): Unit {
+private func argTokens(params: ArrayList<FuncParam>, beanCond: HashMap<String, Tokens>, valueCond: HashMap<String, Tokens>): Unit {
     var assigns = quote()
     var actualArgs = quote()
     for(param in params){
@@ -68,18 +72,22 @@ private func argTokens(params: ArrayList<FuncParam>, condMap: HashMap<String, To
         }
         let paramTypeTokens = param.paramType.toTokens()
         assigns += quote(let $(param.identifier) = ) + 
-        if(let Some(cond) <- condMap.get(param.identifier.value)){
+        if(let Some(cond) <- beanCond.get(param.identifier.value)){
             match(paramTypeTokens[0].value){
                 case 'ArrayList' | 'List' => quote(lookupList<$(paramTypeTokens[2 .. paramTypeTokens.size - 1])>($cond))
+                case 'Array' => quote(lookupList<$(paramTypeTokens[2 .. paramTypeTokens.size - 1])>($cond).toArray())
                 case 'HashSet' | 'Set' => quote(lookupSet<$(paramTypeTokens[2 .. paramTypeTokens.size - 1])>($cond))
                 case 'Option' => quote(lookupOption<$(paramTypeTokens[2 .. paramTypeTokens.size - 1])>($cond))
                 case '?' => quote(lookupOption<$(paramTypeTokens[1 .. ])>($cond))
                 case 'HashMap' | 'Map' => quote(lookupMap<$(paramTypeTokens[4 .. paramTypeTokens.size - 1])>($cond))
                 case _ => quote(lookup<$(param.paramType)>($cond))
             }
-        }else{
+        }else if (let Some(cond) <- valueCond.get(param.identifier.value)) {
+            cond
+        } else{
             match(paramTypeTokens[0].value){
                 case 'ArrayList' | 'List' => quote(lookupList<$(paramTypeTokens[2 .. paramTypeTokens.size - 1])>())
+                case 'Array' => quote(lookupList<$(paramTypeTokens[2 .. paramTypeTokens.size - 1])>().toArray())
                 case 'HashSet' | 'Set' => quote(lookupSet<$(paramTypeTokens[2 .. paramTypeTokens.size - 1])>())
                 case 'Option' => quote(if(let Some(x) <- lookupOption<$(paramTypeTokens[2 .. paramTypeTokens.size - 1])>($(param.identifier.value))){
                     x

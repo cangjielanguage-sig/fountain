@@ -16,6 +16,10 @@ limitations under the License.
 macro package f_bean.macros
 
 public macro BeanParam(attr: Tokens, input: Tokens): Tokens {
+    func setItem(attr: Tokens, param: FuncParam): Unit {
+        setItem('name', param.identifier.value)
+        setItem('cond', attr)
+    }
     assertParentContext('Constructor')
     match(parseDecl(attr)){
         case x: FuncParam => 
@@ -34,8 +38,4 @@ public macro BeanParam(attr: Tokens, input: Tokens): Tokens {
             diagReport(ERROR, input, '${input} must be a FuncParam or a MacroExpandParam', '')
     }
     input
-}
-private func setItem(attr: Tokens, param: FuncParam): Unit {
-    setItem('name', param.identifier.value)
-    setItem('cond', attr)
 }
