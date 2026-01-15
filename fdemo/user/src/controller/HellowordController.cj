@@ -23,7 +23,7 @@ import user.model.mvc.*
 
 @Controller
 public class HellowordController {
-    @GetMapping[path:"/helloworld", produces:'text/plain']
+    @GetMapping[path:"/helloworld", produces:'text/plain', consumes:'application/x-www-form-urlencoded']
     @IgnoreSecurity
     public func helloworld(): String {
         return "helloworld"

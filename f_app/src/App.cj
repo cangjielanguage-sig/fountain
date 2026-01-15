@@ -178,8 +178,9 @@ public struct App {
         }else{
             '(${AppVersion.version})'
         }
-        stdOut.writeln(AppVersion.banner)
-        stdOut.writeln('${app}${appver} started by ${versionStr} in ${MonoTime.now() - AppStarts}')
+        stdOut.writeln(
+            AppVersion.banner + OS.current.nextLine + 
+            '${app}${appver} started by ${versionStr} in ${MonoTime.now() - AppStarts}')
         if(let Some(t) <- mvcTypeInfo){
             startFn?.apply(t, [])
         }
