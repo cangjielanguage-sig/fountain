@@ -20,7 +20,11 @@ public class MockQueryResult <: QueryResult {
     private var rowData = MOCKDB.getQueryResultRows()
     public prop columnInfos: Array<ColumnInfo> {
         get() {
-            MOCKDB.queryResultColumnInfos
+            let infos = MOCKDB.queryResultColumnInfos
+            if(infos.isEmpty()){
+                throw MockDbException('column infos from QueryResult must not be empty, to invoke MOCKDB.addQueryResultColumnInfo(name: "...", nullable: "...", typeName: "...") to add ColumnInfo for QueryResult.')
+            }
+            infos
         }
     }
     public func next(values: Array<SqlDbType>): Bool {
