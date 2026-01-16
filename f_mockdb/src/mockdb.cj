@@ -26,7 +26,7 @@ internal let output = getStdOut()
 public class MOCKDB {
     private init(){}
 
-    private static let execution_ = ThreadLocal<() -> Unit>()
+    private static let execution_ = ThreadLocal<(String, ArrayList<Any>) -> Unit>()
     private static let queryResultList_ = ThreadLocal<ArrayList<Array<Any>>>()
     private static let queryResultColumnInfos_ = ThreadLocal<ArrayList<ColumnInfo>>()
     private static let lastInsertId_ = ThreadLocal<Int64>()
@@ -61,9 +61,12 @@ public class MOCKDB {
             Thread.currentThread.id
         }
     }
-    public static mut prop execution: () -> Unit {
+    /**
+     * 本函数会在Statement.update/query两个函数执行，可以在本函数执行本类的其他函数
+     */
+    public static mut prop execution: (String, ArrayList<Any>) -> Unit {
         get(){
-            execution_.get() ?? {=>}
+            execution_.get() ?? {_, _=>}
         }
         set(value){
             execution_.set(value)
