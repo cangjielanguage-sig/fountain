@@ -3,7 +3,7 @@
   name = "f_protocol"
   organization="fountain"
   description = "a protocol implementation"
-  version = "1.0.0"
+  version = "1.0.44"
   target-dir = ""
   src-dir = ""
   output-type = "dynamic"
