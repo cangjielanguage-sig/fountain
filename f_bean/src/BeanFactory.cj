@@ -46,6 +46,11 @@ public class BeanFactory {
             throw BeanException('To register bean to a registered BeanFactory is forbidden')
         }
         var beanType = TypeInfo.of<T>()
+        if(beanType.isSubtypeOf(TypeInfo.of<FactoryBean>()) && 
+            let Some(p) <- TypeMemberInfos.staticProperty(beanType, 'typeInfo') && 
+            let t: TypeInfo <- p.getValue()){
+            beanType = t
+        }
         let manager = BeanManager(meta, beanType, creator)
         synchronized(mutex) {
             if (let Some(existed) <- beans.addIfAbsent(manager.name, manager)) {
