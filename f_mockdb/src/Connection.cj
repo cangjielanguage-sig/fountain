@@ -16,6 +16,9 @@ limitations under the License.
 package f_mockdb
 
 public class MockConnection <: Connection {
+    public init(){
+        MOCKDB.execution()
+    }
     public prop state: ConnectionState {
         get(){
             Connected
