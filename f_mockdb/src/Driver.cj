@@ -16,9 +16,14 @@ limitations under the License.
 package f_mockdb
 
 public class MockDriver <: Driver {
+    private init(){}
+    private static const dbname = 'mockdb'
+    static init(){
+        DriverManager.register(dbname, MockDriver())
+    }
     public prop name: String {
         get(){
-            'mockdb'
+            dbname
         }
     }
     public prop preferredPooling: Bool {
@@ -40,4 +45,3 @@ public class MockDriver <: Driver {
         ds
     }
 }
-private let _ = DriverManager.register('mockdb', MockDriver())
