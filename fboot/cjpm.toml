@@ -11,8 +11,8 @@
   output-type = "executable"
   src-dir = ""
   target-dir = ""
-  version = "1.0.43"
   organization = "fountain"
+  version = "1.0.44"
   package-configuration = {}
 
 [profile.build]

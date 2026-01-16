@@ -3,7 +3,7 @@
   name = "f_version"
   organization="fountain"
   description = "fountain and app version "
-  version = "1.0.43"
+  version = "1.0.44"
   target-dir = ""
   src-dir = ""
   output-type = "dynamic"

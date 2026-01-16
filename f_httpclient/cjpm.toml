@@ -1,8 +1,8 @@
 [dependencies]
   charset4cj = { git = "https://gitcode.com/Cangjie-TPC/charset4cj.git", branch = "develop"}
-  f_base  = {path = "../f_base", version = "1.0.43"}
-  f_data  = {path = "../f_data", version = "1.0.43"}
-  f_http  = {path = "../f_http", version = "1.0.43"}
+  f_base  = {path = "../f_base", version = "1.0.44"}
+  f_data  = {path = "../f_data", version = "1.0.44"}
+  f_http  = {path = "../f_http", version = "1.0.44"}
 
 [package]
   cjc-version = "1.0.4"
@@ -15,7 +15,7 @@
   output-type = "dynamic"
   src-dir = ""
   target-dir = ""
-  version = "1.0.43"
+  version = "1.0.44"
   package-configuration = {}
 
 [target]

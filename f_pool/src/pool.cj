@@ -143,8 +143,9 @@ public class Pool<T> <: Resource {
     }
     private func add(object: T, decrIfOverload!: Bool = true): Bool {
         if (!queue.tryAdd((object, MonoTime.now()))) {
-            log.warn(
-                "current size of pool is larger than maxSize(${maxSize}), may be some instances which were not be created by current pool were given back to current pool.")
+            log.warn {
+                "current size of pool is larger than maxSize(${maxSize}), may be some instances which were not be created by current pool were given back to current pool."
+            }
             destroy(object, false, decr: decrIfOverload)
             false
         } else {
@@ -171,14 +172,14 @@ public class Pool<T> <: Resource {
         }
         let start = MonoTime.now()
         while (running.load() && MonoTime.now() - start < timeout) {
-            if(let Some((o, _)) <- queue.tryRemove()){
-                if(let Some(x) <- doCheck(o)){
+            if (let Some((o, _)) <- queue.tryRemove()) {
+                if (let Some(x) <- doCheck(o)) {
                     return x
                 }
-            }else{
+            } else {
                 tasks.tryAdd(())
-                if (let consumed <- MonoTime.now() - start && consumed < timeout && 
-                    let Some((o, _)) <- queue.remove(timeout - consumed) && let Some(x) <- doCheck(o)) {
+                if (let consumed <- MonoTime.now() - start && consumed < timeout && let Some((o, _)) <- queue.remove(
+                    timeout - consumed) && let Some(x) <- doCheck(o)) {
                     return x
                 }
             }

@@ -20,7 +20,6 @@ import stdx.encoding.json.*
 import fountain.bean.*
 import fountain.bean.macros.*
 import fountain.mvc.*
-import fountain.jwt.*
 import user.util.*
 
 @Bean

@@ -227,8 +227,13 @@ public open class BaseResponse {
 }
 ```
 ### MVC初始化
+
 ```bash
     export mvc_port=8080 # 这一行可以没有，默认就是8080                                                                         
     export mvc_internalServerErrorMessageKind=BEAN # 错误处理类型
     export mvc_internalServerErrorMessage=NameOf500Handler # 错误处理BEAN名称，如果没有这两行配置前面的错误处理器将不会生效
 ```
+
+### controller切面
+
+有些时候可能需要为controller织入切面，此时就需要用宏@WeavedController，除了完成@Controller宏的功能，还用@Pointcut重新修饰了controller类声明。

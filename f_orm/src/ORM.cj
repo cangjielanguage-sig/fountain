@@ -71,22 +71,22 @@ public class ORM {
     }
     public static func register(driver: Driver, default!: Bool = true): Unit {
         if(datasources.contains(driver.name)){
-            log.warn('driver ${driver.name} has been registered')
+            log.warn{'driver ${driver.name} has been registered'}
             return
         }
-        log.debug('driver ${driver.name} registering...')
+        log.debug{'driver ${driver.name} registering...'}
         register(NamedDatasource(driver), default: default)
     }
     public static func register(driver: Driver, opts: Array<(String, String)>, default!: Bool = true): Unit {
         if(datasources.contains(driver.name)){
             return
         }
-        log.debug('driver ${driver.name} registering...')
+        log.debug{'driver ${driver.name} registering...'}
         register(NamedDatasource(driver, opts), default: default)
     }
     public static func register(driver: Driver, url: String, default!: Bool = true): Unit {
         if(datasources.contains(driver.name)){
-            log.warn('driver ${driver.name} has been registered')
+            log.warn{'driver ${driver.name} has been registered'}
             return
         }
         log.debug('driver ${driver.name} registering...')
@@ -94,7 +94,7 @@ public class ORM {
     }
     public static func register(driver: Driver, url: String, opts: Array<(String, String)>, default!: Bool = true): Unit {
         if(datasources.contains(driver.name)){
-            log.warn('driver ${driver.name} has been registered')
+            log.warn{'driver ${driver.name} has been registered'}
             return
         }
         register(NamedDatasource(driver, url, opts), default: default)

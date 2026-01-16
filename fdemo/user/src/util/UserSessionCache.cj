@@ -17,7 +17,6 @@ package user.util
 
 import std.convert.*
 import fountain.base.*
-import fountain.cache.*
 import fountain.jwt.JWT
 import fountain.mvc.CurrentHttpContext
 import fountain.security.*

@@ -26,3 +26,9 @@ fdemo/fdemo/*
 fdemo/logs/
 fdemo/log/
 fdemo/fdemo_*/
+
+cj_OOM_pid*.dat
+item_data.dat.cache
+post_data.json
+console.log
+

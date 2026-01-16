@@ -1,5 +1,5 @@
 [dependencies]
-  f_exception  = {path = "../f_exception", version = "1.0.43"}
+  f_exception  = {path = "../f_exception", version = "1.0.44"}
 [package]
   cjc-version = "1.0.4"
   compile-option = "-O2 --dy-std"
@@ -11,7 +11,7 @@
   output-type = "dynamic"
   src-dir = ""
   target-dir = ""
-  version = "1.0.43"
+  version = "1.0.44"
   package-configuration = {}
 
 [profile.build]

@@ -7,7 +7,7 @@ fi
 echo "target-dir=$path"
 
 exports(){
-    export cjHeapSize=7MB
+    # export cjHeapSize=4GB
     # pattern可省略，有默认值
     # %level 记录当前日志级别
     # %name 记录当前日志名称
@@ -26,7 +26,7 @@ exports(){
     export logger_appender_FDemoFile_rotateDuration=DAY
     export controllerPointcut='*..*Controller.*(**): *'
     export mvc_port=8080 # 这一行可以没有，默认就是8080
-    export mvc_overallElapsedSwitch=true
+    export mvc_overallElapsedSwitch=true # 生产环境建议改为false，默认是false
     export mvc_internalServerErrorMessageKind=BEAN
     export mvc_internalServerErrorMessage=NameOf500Handler
     # 如果不使用fountain连接池，也不使用标准库连接池，就不要配置以下orm_*Pool*变量，只配置orm_noPool，只能用代码初始化第三方连接池
@@ -46,6 +46,7 @@ exports(){
     export orm_databasePoolIdleTimeout=0 # 连接闲置时间，默认是0，表示闲置不过期
     export orm_databasePoolConnectionLife=86400 # 连接存活时间，默认是3600，单位是秒
     export orm_databasePoolCheckInterval=300 # 连接有效性检查周期，默认是300，单位是秒
+    export orm_databasePoolConnectTimeout=50 # 默认是50，单位是毫秒，从fountain.orm.DatabasePool获取连接的超时时间
     export orm_databasePoolCheckSql='select 1' # 检查连接有效性的SQL，默认是select 1
     # orm_stdPool开头的是std.datasource.sql.PooledDatasource的配置项
     export orm_stdPoolMaxSize=10 # 连接池最大连接数
@@ -67,14 +68,15 @@ exports(){
     export orm_transactionalFuncExecution="$orm_transactionalFuncExecution|*..*.userSession(**): *"
     export opengauss_orm_connectionUrl=$POSTGRES
     export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:`find ./fdemo/release/* -type d|grep -a -v -P 'f_.+|\.build-logs|fountain|bin|_stAtIc__|charset4cj|boot'|tr '\n' ':'`
+    echo "LD_LIBRARY_PATH=$LD_LIBRARY_PATH"
 }
 run(){
     exports
-    fboot run $path --dylibPattern='(boot|user\.util\.auth|\.(controller|service\.impl))'
+    fboot run $path --dylibPattern='(boot|user\.util\.(auth|cron)|\.(controller|service\.impl))'
 }
 perfRecord(){
     exports
-    cjprof record -f max -- $CJPM_INSTALL/bin/fboot run $path --dylibPattern='(boot|user\.util\.auth|\.(controller|service\.impl))'
+    cjprof record -f max -- $CJPM_INSTALL/bin/fboot run $path --dylibPattern='(boot|user\.util\.(auth|cron)|\.(controller|service\.impl))'
 
 }
 perfReport(){
@@ -115,8 +117,8 @@ loop)
     start=$(date +%s.%N)
     for i in $(seq 1 $2); do 
         echo -e "\n================= 第 $i 次循环 =================\n";
-         curl -XPOST -H'Content-Type:application/json' -H'Accept:application/json' -d'{"username":"asdf","password":"bcbcbcbc"}' http://localhost:8080/api/user/session
-#        curl -XGET -H'Accept:text/plain' http://localhost:8080/helloworld
+#W         curl -XPOST -H'Content-Type:application/json' -H'Accept:application/json' -d'{"username":"asdf","password":"bcbcbcbc"}' http://localhost:8080/api/user/session
+        curl -XGET -H'Accept:text/plain' http://localhost:8080/helloworld
 	#  sleep 1
 #        ./curl.sh
     done
@@ -127,7 +129,7 @@ loop)
 ab)
 #    apt install apache2-utils 执行前需安装apache2-utils
 #    ab -c $2 -n $3 -T "application/json" -H "Accept: application/json" -p post_data.json http://127.0.0.1:8080/helloworld
-    ab -c $2 -n $3 -T '' -H 'Accept:text/plain' -m GET http://localhost:8080/helloworld
+    ab -c $2 -n $3 -T '' -H 'Accept:text/plain' -H'Content-Type:application/x-www-form-urlencoded' -m GET http://localhost:8080/helloworld
     ;;
 esac
 

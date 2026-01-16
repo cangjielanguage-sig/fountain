@@ -22,7 +22,7 @@ import user.model.po.UserPO
 
 @DataAssist[props fields]
 public class UserRequest {
-    @IsNotBlank[messageIfNotMatch: '请输入用户名']
+    @CombinedValidator[IsNotBlank(messageIfNotMatch: '请输入用户名') & StringSize(min: 6, max: 50)]
     private var username: String = ''
     @IsNotBlank[messageIfNotMatch: '请输入密码']
     private var password: String = ''

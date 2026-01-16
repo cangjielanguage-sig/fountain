@@ -243,6 +243,9 @@ public struct UUID <: Hashable & Comparable<UUID> & ToString & Parsable<UUID> & 
             values[i] = (b1 << 4) | b2
             i++
         }
+        if(values[8] >> 6 != 2){
+            return None<UUID>
+        }
         UUID(values: values)
     }
     /**
@@ -253,6 +256,20 @@ public struct UUID <: Hashable & Comparable<UUID> & ToString & Parsable<UUID> & 
        |                          time_low                             |
        +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
        |       time_mid                | ver   | time_hi_and_version   |
+       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+       |clk_seq_hi_res |  clk_seq_low  |         node (0-1)            |
+       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+       |                         node (2-5)                            |
+       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+     */
+    /**
+       version 2
+       0                   1                   2                   3
+       0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+       |                          time_low                             |
+       +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+       |       time_mid                | ver   | UID/GID_and_version   |
        +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
        |clk_seq_hi_res |  clk_seq_low  |         node (0-1)            |
        +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
@@ -277,6 +294,7 @@ public struct UUID <: Hashable & Comparable<UUID> & ToString & Parsable<UUID> & 
         TimeBasedUUIDBuilder(timeLowFirst)
     }
     /**
+       version 3
        0                   1                   2                   3
        0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
        +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
@@ -305,6 +323,9 @@ public struct UUID <: Hashable & Comparable<UUID> & ToString & Parsable<UUID> & 
         md[8] |= 2 << 6
         UUID(values: md)
     }
+    /**
+     * version 4
+     */
     public static func random(): UUID {
         let rand = ThreadLocalRandom.current.nextBytes(16)
         rand[6] &= 0xf
@@ -314,6 +335,7 @@ public struct UUID <: Hashable & Comparable<UUID> & ToString & Parsable<UUID> & 
         UUID(values: rand)
     }
     /**
+       version 5
        0                   1                   2                   3
        0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
        +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
@@ -353,6 +375,7 @@ public struct UUID <: Hashable & Comparable<UUID> & ToString & Parsable<UUID> & 
         UUID(values: values)
     }
     /**
+       version 7
        0                   1                   2                   3
        0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
        +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
@@ -384,6 +407,7 @@ public struct UUID <: Hashable & Comparable<UUID> & ToString & Parsable<UUID> & 
         UUID(values: values)
     }
     /**
+       version 8
        0                   1                   2                   3
        0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
        +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
@@ -420,9 +444,10 @@ public struct UUID <: Hashable & Comparable<UUID> & ToString & Parsable<UUID> & 
 
 public class TimeBasedUUIDBuilder <: Resource {
     private let seqGen = TimestampSequenceBuilder()
-    private let version: Byte
+    private var version: Byte
     private var timestamp: Int64 = 0
     private var seq: UInt16 = 0
+    private var uid: UInt32 = 0
     init(timeLowFirst: Bool) {
         version = if (timeLowFirst) {
             1
@@ -459,6 +484,14 @@ public class TimeBasedUUIDBuilder <: Resource {
             genTimestampAndSequence(false)
             this
         }
+    }
+    public func UID(uid: UInt32): TimeBasedUUIDBuilder {
+        this.version = 2
+        this.uid = uid
+        this
+    }
+    public func GID(gid: UInt32): TimeBasedUUIDBuilder {
+        UID(gid)
     }
     private func genTimestampAndSequence(randomSeq: Bool) {
         while (timestamp == 0 || seq == 0) {
@@ -531,7 +564,7 @@ public class TimeBasedUUIDBuilder <: Resource {
         generate {i => node[i]}
     }
     private func generate(node: (Int64) -> Byte): UUID {
-        let timeFn = if (version == 1) {
+        let timeFn = if (version == 1 || version == 2) {
             timeLowFirst(timestamp)
         } else {
             timeHighFirst(timestamp)
@@ -553,14 +586,22 @@ public class TimeBasedUUIDBuilder <: Resource {
         {
             idx => if (idx < 4) {
                 UInt8((timestamp >> ((3 - idx) * 8)) & 0xff)
-            } else if (idx == 4) {
-                UInt8((timestamp >> 32) & 0xff)
-            } else if (idx == 5) {
-                UInt8((timestamp >> 40) & 0xff)
-            } else if (idx == 6) {
-                UInt8((timestamp >> 48) & 0xf) | (version << 4)
-            } else {
-                UInt8((timestamp >> 56) & 0xff)
+            } else if(version == 1){
+                match(idx){
+                    case 4 => UInt8((timestamp >> 32) & 0xff)
+                    case 5 => UInt8((timestamp >> 40) & 0xff)
+                    case 6 => UInt8((timestamp >> 48) & 0xf) | (version << 4)
+                    case 7 => UInt8((timestamp >> 56) & 0xff)
+                    case _ => throw UnreachableException()
+                }
+            }else{
+                match(idx){
+                    case 4 => UInt8((uid >> 24) & 0xff)
+                    case 5 => UInt8((uid >> 16) & 0xff)
+                    case 6 => UInt8(((uid >> 8) & 0xff)) | (version << 4)
+                    case 7 => UInt8(uid & 0xff)
+                    case _ => throw UnreachableException()
+                }
             }
         }
     }
@@ -568,14 +609,14 @@ public class TimeBasedUUIDBuilder <: Resource {
         {
             idx => if (idx < 4) {
                 UInt8((timestamp >> ((7 - idx) * 8)) & 0xff)
-            } else if (idx == 4) {
-                UInt8((timestamp >> 24) & 0xff)
-            } else if (idx == 5) {
-                UInt8((timestamp >> 16) & 0xff)
-            } else if (idx == 6) {
-                UInt8((timestamp >> 8) & 0xf) | (version << 4)
             } else {
-                UInt8(timestamp & 0xff)
+                match(idx){
+                    case 4 => UInt8((timestamp >> 24) & 0xff)
+                    case 5 => UInt8((timestamp >> 16) & 0xff)
+                    case 6 => UInt8((timestamp >> 8) & 0xf) | (version << 4)
+                    case 7 => UInt8(timestamp & 0xff)
+                    case _ => throw UnreachableException()
+                }
             }
         }
     }

@@ -39,6 +39,7 @@ public class ORMConfig {
     public static const databasePoolMinSize = confPrefix + "_databasePoolMinSize"
     public static const databasePoolMaxSize = confPrefix + "_databasePoolMaxSize"
     public static const databasePoolCheckInterval = confPrefix + "_databasePoolCheckInterval"
+    public static const databasePoolConnectTimeout = confPrefix + "_databasePoolConnectTimeout"
     public static const databasePoolIdleTimeout = confPrefix + "_databasePoolIdleTimeout"
     public static const databasePoolConnectionLife = confPrefix + "_databasePoolConnectionLife"
     public static const databasePoolCheckOnCreation = confPrefix + "_databasePoolCheckOnCreation"
@@ -172,6 +173,9 @@ public class ORMConfig {
     }
     public static func getPoolCheckInterval(driverName!: String = String.empty): Duration {
         Duration.second * get<Int64>(driverName: driverName, key: databasePoolCheckInterval, default: 300)
+    }
+    public static func getConnectTimeout(driverName!: String = String.empty): Duration {
+        Duration.millisecond * get<Int64>(driverName: driverName, key: databasePoolConnectTimeout, default: 50)
     }
     public static func getPoolCheckSql(driverName!: String = String.empty, default!: String = 'select 1'): String {
         getConf(driverName: driverName, key: databasePoolCheckSql) ?? default

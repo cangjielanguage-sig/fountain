@@ -119,6 +119,7 @@ public class Config {
             ARGS.get("${prefix}_${key}")
         }
     }
+
     public static func getValue<T>(key: String, parser: (String) -> ?T): ?T {
         if (let Some(x) <- getString(key)) {
             parser(x)

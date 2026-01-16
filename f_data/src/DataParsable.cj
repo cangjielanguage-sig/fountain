@@ -17,7 +17,6 @@ package f_data
 
 import std.convert.*
 import std.math.numeric.{BigInt, Decimal}
-import f_regex.*
 
 public interface DataParsable<T> where T <: DataParsable<T> {
     static func parse(s: String): T

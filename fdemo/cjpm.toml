@@ -4,7 +4,7 @@
 #  opengauss = {path = "../../opengauss-driver"}
 
 [workspace]
-  version = "1.0.43"
+  version = "1.0.44"
   organization = "fountain"
   description = "demo for how to develop by fountain "
   members=["./boot", "./user"]

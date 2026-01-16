@@ -3,7 +3,7 @@
   name = "f_app"
   organization="fountain"
   description = "nothing here"
-  version = "1.0.43"
+  version = "1.0.44"
   target-dir = ""
   src-dir = ""
   output-type = "dynamic"
@@ -13,9 +13,9 @@
   package-configuration = {}
 
 [dependencies]
-  f_base  = {path = "../f_base", version = "1.0.43"}
-  f_log  = {path = "../f_log", version = "1.0.43"}
-  f_version  = {path = "../f_version", version = "1.0.43"}
+  f_base  = {path = "../f_base", version = "1.0.44"}
+  f_log  = {path = "../f_log", version = "1.0.44"}
+  f_version  = {path = "../f_version", version = "1.0.44"}
 
 [profile.build]
   lto = "full"

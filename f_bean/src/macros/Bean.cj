@@ -62,6 +62,7 @@ private func expandBean(attr: Tokens, input: Tokens, klass: ClassDecl): Tokens {
     if(list.size > 1){
         list.removeIf{g => g.size == 0}
     }
+    let messages = getChildMessages('Constructor')
     var tokens = input
     for(g in list){
         let beanType = if(g.size == 0){
@@ -69,68 +70,31 @@ private func expandBean(attr: Tokens, input: Tokens, klass: ClassDecl): Tokens {
         }else{
             quote($identifier<$g>)
         }
-        var ctorTokens = quote(
-            let ctors = HashMap<String, ()-> $beanType>()$(`nl`)
-        )
-        for (d in klass.body.decls) {
-            match (d) {
-                case f: FuncDecl where f.identifier.value == 'init' => ctorTokens += quote(
-                        ctors['init'] = {=> $(beanType)()}$(`nl`)
-                    )
-                case f: FuncDecl where isStatic(f) && isPublic(f) && f.funcParams.isEmpty() =>
-                    let fname = f.identifier.value
-                    ctorTokens += quote(
-                        ctors[$fname] = {=> $(beanType).$(f.identifier)()}$(`nl`)
-                    )
-                case f: PrimaryCtorDecl where isPublic(f) && f.funcParams.isEmpty() => ctorTokens += quote(
-                        ctors['init'] = {=> $(beanType)()}$(`nl`)
-                    )
-                case med: MacroExpandDecl =>
-                    var md: Decl = med
-                    while (let d: MacroExpandDecl <- md) {
-                        md = d.macroInputDecl
-                        match (md) {
-                            case f: FuncDecl where f.identifier.value == 'init' => ctorTokens += quote(
-                                    ctors['init'] = {=> $(beanType)()}$(`nl`)
-                                )
-                            case f: FuncDecl where isStatic(f) && isPublic(f) && f.funcParams.isEmpty() =>
-                                let fname = f.identifier.value
-                                ctorTokens += quote(
-                                    ctors[$fname] = {=> $(beanType).$(f.identifier)()}
-                                    $(`nl`)
-                                )
-                            case f: PrimaryCtorDecl where isPublic(f) && f.funcParams.isEmpty() => ctorTokens += quote(
-                                    ctors['init'] = {=> $(beanType)()}
-                                    $(`nl`)
-                                )
-                            case f: MacroExpandDecl => continue
-                            case _ => break
-                        }
-                        break
-                    }
-                case _ => continue
-            }
+        if(messages.isEmpty()){
+            tokens += `nl` + topMacroAnonymousClosure(quote(
+                BeanFactory.instance.register<$beanType>{$beanType()}
+            ))
+            continue
         }
-        tokens += `nl` + topMacroAnonymousClosure(quote(
-            $ctorTokens
-            var constructor = if (ctors.isEmpty()) {
-                {=> $beanType()}
-            } else {
-                var ctor = None<() -> $beanType>
-                for ((n, f) in ctors where n != 'init' && TypeInfo.of<$beanType>().getInstanceFunction(n, []).findAnnotation<Constructor>().isSome()) {
-                    ctor = f
-                    break
-                }
-                if (ctor.isNone() && let Some(f) <- ctors.get("init")) {
-                    ctor = f
-                }
-                ctor
+        for(msg in messages){
+            let constructor = msg.getString('constructor')
+            let assigns = msg.getTokens('assigns')
+            let actualArgs = msg.getTokens('actualArgs')
+            let ctor = if(constructor == 'init'){
+                quote({
+                    $assigns
+                    $beanType($actualArgs)
+                })
+            }else{
+                quote({
+                    $assigns
+                    $beanType.$(Token(IDENTIFIER, constructor))($actualArgs)
+                })
             }
-            BeanFactory.instance.register<$beanType>(constructor.getOrThrow{
-                let beanTypeName = $(beanType.toString())
-                BeanException('class ' + beanTypeName + ' must be with a public parameterless constructor or a public static parameterless function.')
-            })
-        ))
+            tokens += `nl` + topMacroAnonymousClosure(quote(
+                BeanFactory.instance.register<$beanType>$ctor
+            ))
+        }
     }
     tokens
 }
