@@ -16,6 +16,7 @@ limitations under the License.
 package f_orm
 
 import std.collection.HashMap
+import f_base.Console
 import f_collection.*
 import f_data.*
 import f_log.impl.*
@@ -875,6 +876,7 @@ public class SqlExecutor <: Resource & RootDAO {
                 executor(stmt)
             }finally{
                 stmt.close()
+                this.stmt = None<Statement>
             }
         }
     }

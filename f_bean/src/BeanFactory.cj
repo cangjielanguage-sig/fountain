@@ -46,11 +46,10 @@ public class BeanFactory {
             throw BeanException('To register bean to a registered BeanFactory is forbidden')
         }
         var beanType = TypeInfo.of<T>()
-        if(beanType.isSubtypeOf(TypeInfo.of<FactoryBean>()) && 
-            let Some(p) <- TypeMemberInfos.staticProperty(beanType, 'typeInfo') && 
-            let t: TypeInfo <- p.getValue()){
+        if(let Some(p) <- TypeMemberInfos.staticProperty(beanType, 'typeInfo') && 
+            let t: TypeInfo <- p.getValue() && beanType.isSubtypeOf(TypeInfo.of<FactoryBean>())){
             beanType = t
-        }
+        }//todo 这里有个反射BUG，调用isSubtypeOf会导致得不到类实现的直接接口，所以把isSubtypeOf放到if条件最后面
         let manager = BeanManager(meta, beanType, creator)
         synchronized(mutex) {
             if (let Some(existed) <- beans.addIfAbsent(manager.name, manager)) {
@@ -195,12 +194,16 @@ public class BeanFactory {
     public func getFirst<T>(beanType: TypeInfo, cond!: StringCond = IgnoreCond): ?T {
         beanTypeIs<T>(beanType)
         match (cond) {
-            case Exactly(n) => match (beans.get(n)) {
-                case Some(m) where matches(beanType, m) => return m.bean as T
+            case Exactly(n) => 
+            match (beans.get(n)) {
+                case Some(m) where matches(beanType, m) => 
+                    return m.bean as T
                 case _ => ()
             }
-            case _ => match (beanTypeMap.get(beanType)) {
-                case Some(tree) => for (m in tree where matches(beanType, cond, m)) {
+            case _ => 
+                match (beanTypeMap.get(beanType)) {
+                case Some(tree) => 
+                for (m in tree where matches(beanType, cond, m)) {
                     return m.bean as T
                 }
                 case _ => ()

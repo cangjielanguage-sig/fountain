@@ -22,7 +22,7 @@ import std.io.OutputStream
 import std.sync.AtomicInt64
 import std.time.DateTime
 import stdx.log.{LogLevel, LogRecord}
-import f_base.console
+import f_base.Console
 import f_collection.*
 import f_io.DummyOutputStream
 import f_log.exception.LogException
@@ -158,7 +158,7 @@ public struct SyncQueueOutputStream <: OutputStream {
             buffer.set(buf)
             buf
         } else {
-            console.writeln('AsyncLogger.SyncQueueOutputStream.EmptyPool')
+            Console.writeln('AsyncLogger.SyncQueueOutputStream.EmptyPool')
             return
         }
         // if(bytes[bytes.size - 1] == b'\0'){//todo 这个做法性能有些低，但是性能高的做法会导致BUG。
