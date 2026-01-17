@@ -870,7 +870,12 @@ public class SqlExecutor <: Resource & RootDAO {
     }
     private func execute<T>(executor: (Statement) -> T): T {
         execute<T>{
-            executor(statement)
+            let stmt = statement
+            try{
+                executor(stmt)
+            }finally{
+                stmt.close()
+            }
         }
     }
     private func execute<T>(extract: (UpdateResult) -> T): T {
