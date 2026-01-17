@@ -18,33 +18,35 @@ package f_base
 import std.env.{getStdOut, getStdIn, ConsoleWriter, ConsoleReader}
 public import std.env.ConsoleWriter
 
-public let console = Console()
 public struct Console {
-    init(){}
-    private let output = getStdOut()
-    private let input = getStdIn()
-    public func write<T>(v: T): Unit where T <: ToString {
+    private init(){}
+    private static let output = getStdOut()
+    private static let input = getStdIn()
+    public static func write<T>(v: T): Unit where T <: ToString {
         output.write<T>(v)
     }
-    public func writeln<T>(v: T): Unit where T <: ToString {
+    public static func writeln<T>(v: T): Unit where T <: ToString {
         output.writeln<T>(v)
     }
-    public func write<T>(fn: () -> T): Unit where T <: ToString {
+    public static func write<T>(fn: () -> T): Unit where T <: ToString {
         output.write<T>(fn())
     }
-    public func writeln<T>(fn: () -> T): Unit where T <: ToString {
+    public static func writeln<T>(fn: () -> T): Unit where T <: ToString {
         output.writeln<T>(fn())
     }
-    public func read(): ?Rune {
+    public static func writeln(): Unit {
+        output.writeln()
+    }
+    public static func read(): ?Rune {
         input.read()
     }
-    public func readUntil(r: Rune): ?String {
+    public static func readUntil(r: Rune): ?String {
         input.readUntil(r)
     }
-    public func readUntil(predicate: (Rune) -> Bool): ?String {
+    public static func readUntil(predicate: (Rune) -> Bool): ?String {
         input.readUntil(predicate)
     }
-    public func readln(): ?String {
+    public static func readln(): ?String {
         input.readln()
     }
 }

@@ -16,5 +16,6 @@ limitations under the License.
 package f_bean
 
 public interface FactoryBean {
+    static prop typeInfo: TypeInfo
     func get(): Object
 }
