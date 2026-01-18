@@ -4,7 +4,7 @@
   compile-option = "-O2 --dy-std"
   override-compile-option = "-O2 --dy-std"
   description = "mock database"
-  version = "1.0.44"
+  version = "1.0.45"
   target-dir = ""
   src-dir = ""
   output-type = "dynamic"

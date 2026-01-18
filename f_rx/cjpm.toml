@@ -2,7 +2,7 @@
   cjc-version = "1.0.4"
   name = "f_rx"
   description = "nothing here"
-  version = "1.0.44"
+  version = "1.0.45"
   target-dir = ""
   src-dir = ""
   output-type = "dynamic"
@@ -12,8 +12,8 @@
   package-configuration = {}
 
 [dependencies]
-  f_base  = {path = "../f_base", version = "1.0.44"}
-  f_concurrent  = {path = "../f_concurrent", version = "1.0.44"}
+  f_base  = {path = "../f_base", version = "1.0.45"}
+  f_concurrent  = {path = "../f_concurrent", version = "1.0.45"}
 
 [profile.build]
   lto = "full"

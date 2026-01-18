@@ -2,7 +2,7 @@
   cjc-version = "1.0.4"
   name = "user"
   description = "nothing here"
-  version = "1.0.44"
+  version = "1.0.45"
   target-dir = ""
   src-dir = ""
   output-type = "dynamic"
