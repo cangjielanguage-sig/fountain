@@ -81,7 +81,7 @@ public class DB2Dialect <: SqlDialect {
         (offset, size, ' OFFSET ? ROWS FETCH FIRST ? ROWS ONLY')
     }
 }
-class SqlDialectMediator {
+struct SqlDialectMediator {
     private init(){
         for(dialect in lookupList<SqlDialect>()){
             this.dialects[dialect.dialect] = dialect
