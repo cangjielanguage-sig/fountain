@@ -44,6 +44,17 @@ public interface SqlPartial <: RootDAO {
     func firstToMap(sql: String): Map<String, Any> 
 }
 extend SqlExecutor <: SqlPartial {
+    private prop dialect: SqlDialect {
+        get(){
+            SqlDialectMediator.instance.getDialect(this.driverName)
+        }
+    }
+    private func involve(identifier: String){
+        dialect.involvedIdentifier(identifier)
+    }
+    private func involveTable<T>(): String where T <: QueryMappersInit<T> {
+        involve(T.tableName())
+    }
     public func INTO<T>(ignoreColumns!: Array<String> = []): IntoClause<T> where T <: QueryMappersInit<T> {
         IntoClause<T>(this, ignoreColumns)
     }
@@ -59,7 +70,7 @@ extend SqlExecutor <: SqlPartial {
         }
         var idField = ''
         var idColumn = ''
-        let sql = StringGenerator().append('UPDATE ').append(T.tableName()).append(' SET ')
+        let sql = StringGenerator().append('UPDATE ').append(involveTable<T>()).append(' SET ')
         let sqlsize = sql.size
         for(m in T.queryMappers().mappers){
             let column = m.columnName
@@ -73,9 +84,9 @@ extend SqlExecutor <: SqlPartial {
                 sql.append(', ')
             }
             if(let Some(v) <- values.get(field)){
-                sql.append(column).append('=').append(arg(v))
+                sql.append(involve(column)).append('=').append(arg(v))
             }else if(let Some(v) <- values.get(column)){
-                sql.append(column).append('=').append(arg(v))
+                sql.append(involve(column)).append('=').append(arg(v))
             }
         }
         if(idColumn.isEmpty()){
@@ -83,7 +94,7 @@ extend SqlExecutor <: SqlPartial {
         }else if (sql.size == sqlsize){
             throw SqlArgException('no column to update')
         }
-        sql.append(' WHERE ').append(idColumn).append('=').append(if(let Some(v) <- values.get(idField)){
+        sql.append(' WHERE ').append(involve(idColumn)).append('=').append(if(let Some(v) <- values.get(idField)){
             arg(v)
         }else{
             arg(values[idColumn])
@@ -94,8 +105,9 @@ extend SqlExecutor <: SqlPartial {
         if(values.isEmpty()){
             throw SqlArgException('no column to udpate')
         }
+        let dialect = this.dialect
         var idColumn = ''
-        let sql = StringGenerator().append('UPDATE ').append(T.tableName()).append(' SET ')
+        let sql = StringGenerator().append('UPDATE ').append(involveTable<T>()).append(' SET ')
         let sqlsize = sql.size
         for(m in T.queryMappers().mappers){
             let column = m.columnName
@@ -108,9 +120,9 @@ extend SqlExecutor <: SqlPartial {
                 sql.append(', ')
             }
             if(let Some(v) <- values.get(field)){
-                sql.append(column).append('=').append(arg(v))
+                sql.append(involve(column)).append('=').append(arg(v))
             }else if(let Some(v) <- values.get(column)){
-                sql.append(column).append('=').append(arg(v))
+                sql.append(involve(column)).append('=').append(arg(v))
             }
         }
         if(idColumn.isEmpty()){
@@ -118,7 +130,7 @@ extend SqlExecutor <: SqlPartial {
         }else if (sql.size == sqlsize){
             throw SqlArgException('no column to update')
         }
-        sql.append(' WHERE ').append(idColumn).append('=').append(arg(id))
+        sql.append(' WHERE ').append(involve(idColumn)).append('=').append(arg(id))
         executor.setSql(sql.toString()).update
     }
     public func UPDATE<T>(values: T, ignoreColumns!: Array<String> = [], includingColumns!: Array<String> = []): Int64 where T <: QueryMappersInit<T> & ObjectData<T> {
@@ -127,7 +139,7 @@ extend SqlExecutor <: SqlPartial {
         let data = DataObject<T>(values)
         let includings = HashSet<String>(includingColumns)
         let ignored = HashSet<String>(ignoreColumns)
-        let sql = StringGenerator().append('UPDATE ').append(T.tableName()).append(' SET ')
+        let sql = StringGenerator().append('UPDATE ').append(involveTable<T>()).append(' SET ')
         let sqlsize = sql.size
         for(m in T.queryMappers().mappers){
             let column = m.columnName
@@ -141,7 +153,7 @@ extend SqlExecutor <: SqlPartial {
                 if(sql.size > sqlsize){
                     sql.append(', ')
                 }
-                sql.append(column).append('=').append(arg(data[field]))
+                sql.append(involve(column)).append('=').append(arg(data[field]))
             }else if (includings.size > 0 && ignored.size > 0){
                 throw IllegalArgumentException('ignoreColumns and includingColumns must not be specified both.')
             }
@@ -151,7 +163,7 @@ extend SqlExecutor <: SqlPartial {
         }else if (sql.size == sqlsize){
             throw SqlArgException('no column to update')
         }
-        sql.append(' WHERE ').append(idColumn).append('=').append(arg(data[idField]))
+        sql.append(' WHERE ').append(involve(idColumn)).append('=').append(arg(data[idField]))
         executor.setSql(sql.toString()).update
     }
     public func FROM<T>(): FromClause<T> where T <: QueryMappersInit<T> {
@@ -168,7 +180,7 @@ extend SqlExecutor <: SqlPartial {
             executor.clearSql()
         }
         Pagination<R>(page: page, rows: count, size: size){size: Int64, offset: Int64 =>
-            let (one, two, psql) = SqlDialectMediator.instance.getDialect(this.driverName).limit(size, offset)
+            let (one, two, psql) = dialect.limit(size, offset)
             executor.add(one).add(two).setSql('select * from (${partial}) as __tmp___ ${psql}', clearArgsAfterExec: true) |> callee
         }
     }
@@ -179,7 +191,7 @@ extend SqlExecutor <: SqlPartial {
         selectPage<R>(sql, size, page){exe => exe.singleList<R>()}
     }
     private func limit(size: Int64, offset!: Int64 = 0): String {
-        let (one, two, sql) = SqlDialectMediator.instance.getDialect(executor.driverName).limit(size, offset)
+        let (one, two, sql) = dialect.limit(size, offset)
         this.executor.add(one).add(two)
         sql
     }
