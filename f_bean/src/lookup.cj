@@ -15,7 +15,7 @@ limitations under the License.
  */
 package f_bean
 import f_log.*
-private let log = LoggerFactory.getLogger('lookup')
+private let log = LoggerFactory.getLogger('fountain::bean.lookup')
 public func lookup<T>(): T {
     lookup<T>(StringCond.IgnoreCond)
 }
