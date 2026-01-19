@@ -64,8 +64,7 @@ extend SqlExecutor <: SqlPartial {
             if(m.isId){
                 idField = field
                 idColumn = column
-            }
-            if(let Some(v) <- values.get(field)){
+            }else if(let Some(v) <- values.get(field)){
                 sql.append(column).append('=').append(arg(v))
             }else if(let Some(v) <- values.get(column)){
                 sql.append(column).append('=').append(arg(v))
@@ -82,7 +81,6 @@ extend SqlExecutor <: SqlPartial {
         executor.setSql(sql.toString()).update
     }
     public func UPDATE<T, ID>(values: Map<String, Any>, id: ID): Int64 where T <: QueryMappersInit<T> {
-        var idField = ''
         var idColumn = ''
         let sql = StringGenerator().append('UPDATE ').append(T.tableName()).append(' SET ')
         let sqlsize = sql.size
@@ -90,7 +88,6 @@ extend SqlExecutor <: SqlPartial {
             let column = m.columnName
             let field = m.fieldName
             if(m.isId){
-                idField = field
                 idColumn = column
             }else if(let Some(v) <- values.get(field)){
                 sql.append(column).append('=').append(arg(v))
@@ -118,8 +115,7 @@ extend SqlExecutor <: SqlPartial {
             if(m.isId){
                 idField = field
                 idColumn = column
-            }
-            if((includings.isEmpty() && ignored.isEmpty()) || 
+            }else if((includings.isEmpty() && ignored.isEmpty()) || 
                (includings.isEmpty() && !(ignored.contains(column) || ignored.contains(field))) || 
                (ignored.isEmpty() && (includings.contains(column) || includings.contains(field)))){
                 if(sql.size > sqlsize){
