@@ -20,6 +20,7 @@ import std.math.numeric.{BigInt, Decimal}
 import std.time.DateTime
 
 import f_base.*
+import f_data.*
 
 /**
  * 所有的DAO接口都要继承本接口
@@ -239,6 +240,7 @@ public interface RootDAO {
             case x: DataDuration => arg(x.data)
             case x: DataDateTime => arg(x.data)
             case x: DataCollection<Array<Byte>, Byte> => arg(x.data)
+            case x: DataAny => arg(x.data)
             case x: DataNone => argNull()
             case x => throw SqlArgException('${TypeInfo.of(x)} does not support for sql arg')
         }
