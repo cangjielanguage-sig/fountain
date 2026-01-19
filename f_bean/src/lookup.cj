@@ -47,7 +47,7 @@ public func lookupList<T>(): ArrayList<T> {
 
 private func debugBeans<T>(cond: StringCond){
     log.debug{
-        let msg = StringGenerator('lookupList:')
+        let msg = StringGenerator('lookupList: ')
         let msgsize = msg.size
         for(bean in BeanFactory.instance.iterator<T>(cond: cond)){
             if(msg.size > msgsize){
