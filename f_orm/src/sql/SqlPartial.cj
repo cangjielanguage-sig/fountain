@@ -92,8 +92,7 @@ extend SqlExecutor <: SqlPartial {
             if(m.isId){
                 idField = field
                 idColumn = column
-            }
-            if(let Some(v) <- values.get(field)){
+            }else if(let Some(v) <- values.get(field)){
                 sql.append(column).append('=').append(arg(v))
             }else if(let Some(v) <- values.get(column)){
                 sql.append(column).append('=').append(arg(v))
