@@ -54,6 +54,9 @@ extend SqlExecutor <: SqlPartial {
         UpdateClause<T>(this)
     }
     public func UPDATE<T>(values: Map<String, Any>): Int64 where T <: QueryMappersInit<T> {
+        if(values.isEmpty()){
+            throw SqlArgException('no column to udpate')
+        }
         var idField = ''
         var idColumn = ''
         let sql = StringGenerator().append('UPDATE ').append(T.tableName()).append(' SET ')
@@ -64,7 +67,12 @@ extend SqlExecutor <: SqlPartial {
             if(m.isId){
                 idField = field
                 idColumn = column
-            }else if(let Some(v) <- values.get(field)){
+                continue
+            }
+            if(sql.size > sqlsize){
+                sql.append(', ')
+            }
+            if(let Some(v) <- values.get(field)){
                 sql.append(column).append('=').append(arg(v))
             }else if(let Some(v) <- values.get(column)){
                 sql.append(column).append('=').append(arg(v))
@@ -72,6 +80,8 @@ extend SqlExecutor <: SqlPartial {
         }
         if(idColumn.isEmpty()){
             throw NoIdException(TypeInfo.of<T>().qualifiedName)
+        }else if (sql.size == sqlsize){
+            throw SqlArgException('no column to update')
         }
         sql.append(' WHERE ').append(idColumn).append('=').append(if(let Some(v) <- values.get(idField)){
             arg(v)
@@ -81,6 +91,9 @@ extend SqlExecutor <: SqlPartial {
         executor.setSql(sql.toString()).update
     }
     public func UPDATE<T, ID>(values: Map<String, Any>, id: ID): Int64 where T <: QueryMappersInit<T> {
+        if(values.isEmpty()){
+            throw SqlArgException('no column to udpate')
+        }
         var idColumn = ''
         let sql = StringGenerator().append('UPDATE ').append(T.tableName()).append(' SET ')
         let sqlsize = sql.size
@@ -89,7 +102,12 @@ extend SqlExecutor <: SqlPartial {
             let field = m.fieldName
             if(m.isId){
                 idColumn = column
-            }else if(let Some(v) <- values.get(field)){
+                continue
+            }
+            if(sql.size > sqlsize){
+                sql.append(', ')
+            }
+            if(let Some(v) <- values.get(field)){
                 sql.append(column).append('=').append(arg(v))
             }else if(let Some(v) <- values.get(column)){
                 sql.append(column).append('=').append(arg(v))
@@ -97,6 +115,8 @@ extend SqlExecutor <: SqlPartial {
         }
         if(idColumn.isEmpty()){
             throw NoIdException(TypeInfo.of<T>().qualifiedName)
+        }else if (sql.size == sqlsize){
+            throw SqlArgException('no column to update')
         }
         sql.append(' WHERE ').append(idColumn).append('=').append(arg(id))
         executor.setSql(sql.toString()).update
@@ -128,6 +148,8 @@ extend SqlExecutor <: SqlPartial {
         }
         if(idColumn.isEmpty()){
             throw NoIdException(TypeInfo.of<T>().qualifiedName)
+        }else if (sql.size == sqlsize){
+            throw SqlArgException('no column to update')
         }
         sql.append(' WHERE ').append(idColumn).append('=').append(arg(data[idField]))
         executor.setSql(sql.toString()).update
