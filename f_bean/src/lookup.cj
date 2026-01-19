@@ -14,7 +14,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
  */
 package f_bean
-
+import f_log.*
+private let log = LoggerFactory.getLogger('lookup')
 public func lookup<T>(): T {
     lookup<T>(StringCond.IgnoreCond)
 }
@@ -34,6 +35,9 @@ public func lookupOption<T>(name: String): ?T {
     lookupOption<T>(Exactly(name))
 }
 public func lookupOption<T>(cond: StringCond): ?T {
+    log.debug{
+        'lookupOption: ${BeanFactory.instance.iterator<T>(cond: cond).next()?.beanType}'
+    }
     BeanFactory.instance.getFirst<T>(cond: cond)
 }
 
@@ -41,7 +45,21 @@ public func lookupList<T>(): ArrayList<T> {
     lookupList<T>(IgnoreCond)
 }
 
+private func debugBeans<T>(cond: StringCond){
+    log.debug{
+        let msg = StringGenerator('lookupList:')
+        let msgsize = msg.size
+        for(bean in BeanFactory.instance.iterator<T>(cond: cond)){
+            if(msg.size > msgsize){
+                msg.append(', ')
+            }
+            msg.append(bean.beanType)
+        }
+        msg.toString()
+    }
+}
 public func lookupList<T>(cond: StringCond): ArrayList<T> {
+    debugBeans<T>(cond)
     BeanFactory.instance.getList<T>(cond: cond)
 }
 
@@ -66,6 +84,7 @@ public func lookupHashMap<T>(): HashMap<String, T> where T <: Object {
 }
 
 public func lookupHashMap<T>(cond: StringCond): HashMap<String, T> where T <: Object {
+    debugBeans<T>(cond)
     BeanFactory.instance.getMap<T>(cond: cond)
 }
 
