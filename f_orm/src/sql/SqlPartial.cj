@@ -17,7 +17,14 @@ package f_orm.sql
 
 public interface SqlPartial <: RootDAO {
     func INTO<T>(ignoreColumns!: Array<String>): IntoClause<T> where T <: QueryMappersInit<T>
+    func INTO<T>(values: T, ignoreColumns!: Array<String>): Int64 where T <: QueryMappersInit<T> & ObjectData<T>
     func UPDATE<T>(): UpdateClause<T> where T <: QueryMappersInit<T>
+    func UPDATE<T>(values: Map<String, Any>): Int64 where T <: QueryMappersInit<T>
+    func UPDATE<T, ID>(values: Map<String, Any>, id: ID): Int64 where T <: QueryMappersInit<T>
+    /**
+     * ignoreColumns/includingColumns可以指定values的公共成员或对应的列名，两个参数要么都不指定，要么只指定一个，都指定会抛异常
+     */
+    func UPDATE<T>(values: T, ignoreColumns!: Array<String>, includingColumns!: Array<String>): Int64 where T <: QueryMappersInit<T> & ObjectData<T>
     func FROM<T>(): FromClause<T> where T <: QueryMappersInit<T>
     func page<R>(sql: String, size: Int64, page!: Int64): Pagination<R> where R <: QueryMappersInit<R> & DataFields<R>
     func singlePage<R>(sql: String, size: Int64, page!: Int64): Pagination<R> where R <: DataFields<R>
@@ -34,8 +41,95 @@ extend SqlExecutor <: SqlPartial {
     public func INTO<T>(ignoreColumns!: Array<String> = []): IntoClause<T> where T <: QueryMappersInit<T> {
         IntoClause<T>(this, ignoreColumns)
     }
+    public func INTO<T>(values: T, ignoreColumns!: Array<String>): Int64 where T <: QueryMappersInit<T> & ObjectData<T> {
+        INTO<T>(ignoreColumns: ignoreColumns).VALUES<T>(values).execute()
+    }
     public func UPDATE<T>(): UpdateClause<T> where T <: QueryMappersInit<T> {
         UpdateClause<T>(this)
+    }
+    public func UPDATE<T>(values: Map<String, Any>): Int64 where T <: QueryMappersInit<T> {
+        var idField = ''
+        var idColumn = ''
+        let sql = StringGenerator().append('UPDATE ').append(T.tableName()).append(' SET ')
+        let sqlsize = sql.size
+        for(m in T.queryMappers().mappers){
+            let column = m.columnName
+            let field = m.fieldName
+            if(m.isId){
+                idField = field
+                idColumn = column
+            }
+            if(let Some(v) <- values.get(field)){
+                sql.append(column).append('=').append(arg(v))
+            }else if(let Some(v) <- values.get(column)){
+                sql.append(column).append('=').append(arg(v))
+            }
+        }
+        if(idColumn.isEmpty()){
+            throw NoIdException(TypeInfo.of<T>().qualifiedName)
+        }
+        sql.append(' WHERE ').append(idColumn).append('=').append(if(let Some(v) <- values.get(idField)){
+            arg(v)
+        }else{
+            arg(values[idColumn])
+        })
+        executor.setSql(sql.toString()).update
+    }
+    public func UPDATE<T, ID>(values: Map<String, Any>, id: ID): Int64 where T <: QueryMappersInit<T> {
+        var idField = ''
+        var idColumn = ''
+        let sql = StringGenerator().append('UPDATE ').append(T.tableName()).append(' SET ')
+        let sqlsize = sql.size
+        for(m in T.queryMappers().mappers){
+            let column = m.columnName
+            let field = m.fieldName
+            if(m.isId){
+                idField = field
+                idColumn = column
+            }
+            if(let Some(v) <- values.get(field)){
+                sql.append(column).append('=').append(arg(v))
+            }else if(let Some(v) <- values.get(column)){
+                sql.append(column).append('=').append(arg(v))
+            }
+        }
+        if(idColumn.isEmpty()){
+            throw NoIdException(TypeInfo.of<T>().qualifiedName)
+        }
+        sql.append(' WHERE ').append(idColumn).append('=').append(arg(id))
+        executor.setSql(sql.toString()).update
+    }
+    public func UPDATE<T>(values: T, ignoreColumns!: Array<String> = [], includingColumns!: Array<String> = []): Int64 where T <: QueryMappersInit<T> & ObjectData<T> {
+        var idField = ''
+        var idColumn = ''
+        let data = DataObject<T>(values)
+        let includings = HashSet<String>(includingColumns)
+        let ignored = HashSet<String>(ignoreColumns)
+        let sql = StringGenerator().append('UPDATE ').append(T.tableName()).append(' SET ')
+        let sqlsize = sql.size
+        for(m in T.queryMappers().mappers){
+            let column = m.columnName
+            let field = m.fieldName
+            if(m.isId){
+                idField = field
+                idColumn = column
+            }
+            if((includings.isEmpty() && ignored.isEmpty()) || 
+               (includings.isEmpty() && !(ignored.contains(column) || ignored.contains(field))) || 
+               (ignored.isEmpty() && (includings.contains(column) || includings.contains(field)))){
+                if(sql.size > sqlsize){
+                    sql.append(', ')
+                }
+                sql.append(column).append('=').append(arg(data[field]))
+            }else if (includings.size > 0 && ignored.size > 0){
+                throw IllegalArgumentException('ignoreColumns and includingColumns must not be specified both.')
+            }
+        }
+        if(idColumn.isEmpty()){
+            throw NoIdException(TypeInfo.of<T>().qualifiedName)
+        }
+        sql.append(' WHERE ').append(idColumn).append('=').append(arg(data[idField]))
+        executor.setSql(sql.toString()).update
     }
     public func FROM<T>(): FromClause<T> where T <: QueryMappersInit<T> {
         FromClause<T>(this)
