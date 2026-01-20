@@ -113,7 +113,7 @@ public class BeanFactory {
                 for (superInterface in klass.superInterfaces where superInterface != any) {
                     typeQueue.addLast(beanType(superInterface))
                 }
-                if (klass is ClassTypeInfo && let s: ClassTypeInfo <- klass && let Some(sc) <- s.superClass && sc != object) {
+                if (let s: ClassTypeInfo <- klass && let Some(sc) <- s.superClass && sc != object) {
                     typeQueue.addLast(beanType(sc))
                 }
             }
