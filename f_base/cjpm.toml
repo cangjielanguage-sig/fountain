@@ -4,7 +4,7 @@
   cjc-version = "1.0.4"
   compile-option = "-O2 --dy-std"
   override-compile-option = "-O2 --dy-std"
-  description = "nothing here"
+  description = "fountain的基本模块"
   link-option = ""
   name = "f_base"
   output-type = "dynamic"
@@ -12,6 +12,10 @@
   target-dir = ""
   version = "1.0.45"
   package-configuration = {}
+  category = ["Utility"]
+  license = ["Apache-2.0"]
+  include = ["src"]
+  authors = ["吴京润"]
 
 [profile.build]
   lto = "full"

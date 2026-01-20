@@ -19,7 +19,7 @@
   cjc-version = "1.0.4"
   compile-option = "-O2 --dy-std"
   override-compile-option = "-O2 --dy-std"
-  description = "nothing here"
+  description = "MVC"
   link-option = ""
   name = "f_mvc"
   output-type = "dynamic"
@@ -27,6 +27,10 @@
   target-dir = ""
   version = "1.0.45"
   package-configuration = {}
+  category = ["Utility"]
+  license = ["Apache-2.0"]
+  include = ["src"]
+  authors = ["吴京润"]
 
 [target]
 [target.x86_64-unknown-linux-gnu]

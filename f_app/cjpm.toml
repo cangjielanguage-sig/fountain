@@ -1,7 +1,7 @@
 [package]
   cjc-version = "1.0.4"
   name = "f_app"
-  description = "nothing here"
+  description = "依赖fountain开发的应用进程启动模块"
   version = "1.0.45"
   target-dir = ""
   src-dir = ""
@@ -10,6 +10,10 @@
   override-compile-option = ""
   link-option = ""
   package-configuration = {}
+  category = ["Utility"]
+  license = ["Apache-2.0"]
+  include = ["src"]
+  authors = ["吴京润"]
 
 [dependencies]
   f_base  = {path = "../f_base", version = "1.0.45"}
