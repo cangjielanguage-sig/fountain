@@ -262,10 +262,10 @@ class FixedScheduler<T> <: Scheduler<T> {
     }
 
     public init(observer: Observer<T>, threads: Int64, policy!: BackPressure<T> = CurrentThread<T>()) {
-        this(Array<SingleScheduler<T>>(threads) {i => SingleScheduler<T>(observer, policy: policy, index: i)})
+        this(Array<SingleScheduler<T>>(threads) {i => SingleScheduler<T>(observer, policy: policy.clone(), index: i)})
     }
     public init(observer: Observer<T>, threads: Int64, queueSize: Int64, policy!: BackPressure<T> = CurrentThread<T>()) {
-        this(Array<SingleScheduler<T>>(threads) {i => SingleScheduler(observer, queueSize, policy: policy, index: i)})
+        this(Array<SingleScheduler<T>>(threads) {i => SingleScheduler(observer, queueSize, policy: policy.clone(), index: i)})
     }
     private prop nextIndex: Int64 {
         get() {

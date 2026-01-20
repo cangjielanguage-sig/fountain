@@ -15,17 +15,21 @@ limitations under the License.
  */
 package f_rx
 
+/**
+ * 背压策略决定发往观察者内部由多少线程处理数据
+ * asyncCombined决定是一个线程执行全部观察者还是每个观察者一个线程
+ */
 public class Observable<T> {
     private var iterator = None<Iterator<T>>
-    private Observable(private let items: () -> Iterator<T>, 
-                       private let asyncCombined!: Bool = false,
-                       private let observer!: CombinedObserver<T> = CombinedObserver<T>(async: asyncCombined),
-                       private var errorResumer!: ?(Exception) -> ?Iterable<T> = None,
-                       private var scheduler!: Scheduler<T> = Scheduler<T>.current(observer),
-                       private let disposed_!: AtomicBool = AtomicBool(false),
-                       private let completionOnDisposing!: AtomicBool = AtomicBool(false),
-                       private var cache!: Cache<T> = EmptyCache<T>()) {
+    private Observable(private let items: () -> Iterator<T>, private let asyncCombined!: Bool = false,
+        private let observer!: CombinedObserver<T> = CombinedObserver<T>(async: asyncCombined),
+        private var errorResumer!: ?(Exception) -> ?Iterable<T> = None,
+        private var scheduler!: Scheduler<T> = Scheduler<T>.current(observer),
+        private let disposed_!: AtomicBool = AtomicBool(false),
+        private let completionOnDisposing!: AtomicBool = AtomicBool(false),
+        private var cache!: Cache<T> = EmptyCache<T>()) {
     }
+
     /**
      * 使用迭代器I构造被观察者
      * asyncCombined决定是否异步执行每个观察者，false：单线程执行所有观察者，true：每个观察者对应一个线程；观察者接收到的数据是否启用新线程由背压策略决定
@@ -54,7 +58,7 @@ public class Observable<T> {
     public static func iterable<I>(items: I, asyncCombined!: Bool = false): Observable<T> where I <: Iterable<T> {
         iterable<I>({=> items}, asyncCombined: asyncCombined)
     }
-    
+
     /**
      * 将每个Future的结果连接成一个迭代器
      * asyncCombined决定是否异步执行每个观察者，false：单线程执行所有观察者，true：每个观察者对应一个线程；观察者接收到的数据是否启用新线程由背压策略决定
@@ -85,13 +89,12 @@ public class Observable<T> {
         let f: () -> Iterable<Future<T>> = {=> futures.iterator()}
         iterable(f, asyncCombined: asyncCombined)
     }
-    
     /**
      * 使用数据发射器构造被观察者
      */
     public static func emitter(emit: (Emitter<T>) -> Unit, bufSize!: Int64 = 1, asyncCombined!: Bool = false): Observable<T> {
-        iterable({=>
-            EmitterIterator<T>(Emitter<T>(qsize: bufSize, fn: emit))
+        iterable({
+            => EmitterIterator<T>(Emitter<T>(qsize: bufSize, fn: emit))
         }, asyncCombined: asyncCombined)
     }
 
@@ -127,7 +130,7 @@ public class Observable<T> {
         asyncCombined!: Bool = false): Observable<T> {
         single({=> item}, iterator: iterator, asyncCombined: asyncCombined)
     }
-    
+
     /**
      * 只有一个数据的被观察者，iterator把item转化成迭代器
      * asyncCombined决定是否异步执行每个观察者，false：单线程执行所有观察者，true：每个观察者对应一个线程；观察者接收到的数据是否启用新线程由背压策略决定
@@ -165,9 +168,9 @@ public class Observable<T> {
      * 创建空的被观察者，每个观察者只会执行一次onComplete()
      */
     public static func empty(asyncCombined!: Bool = false): Observable<T> {
-        Observable<T>({=> EmptyIterator<T>.INSTANCE()}, asyncCombined: asyncCombined)
+        Observable<T>({=> EmptyIterator<T>()}, asyncCombined: asyncCombined)
     }
-    
+
     /**
      * 把所有类型是I的迭代器连接成一个迭代器，
      * asyncCombined决定是否异步执行每个观察者，false：单线程执行所有观察者，true：每个观察者对应一个线程；观察者接收到的数据是否启用新线程由背压策略决定
@@ -184,7 +187,7 @@ public class Observable<T> {
         I2 <: Iterable<I1> {
         concat<I1, I2>({=> iterables}, asyncCombined: asyncCombined)
     }
-    
+
     /**
      * 把所有类型是I的迭代器连接成一个迭代器，
      * asyncCombined决定是否异步执行每个观察者，false：单线程执行所有观察者，true：每个观察者对应一个线程；观察者接收到的数据是否启用新线程由背压策略决定
@@ -208,9 +211,9 @@ public class Observable<T> {
      * 添加一个FuncObserver<T>，name是观察者名称，creator接收刚添加的观察者实例，可在此闭包内对观察者做修改
      */
     public func subscribe(name: String, creator: (FuncObserver<T>) -> Unit): This {
-        let ob = FuncObserver<T>()
+        let ob = FuncObserver<T>(name)
         creator(ob)
-        replayCached(ob){
+        replayCached(ob) {
             this.observer.add(name, ob)
         }
         disposed_.store(false)
@@ -220,7 +223,7 @@ public class Observable<T> {
      * 订阅观察者
      */
     public func subscribe(observer: Observer<T>): This {
-        replayCached(observer){
+        replayCached(observer) {
             this.observer.add(observer)
         }
         disposed_.store(false)
@@ -230,7 +233,7 @@ public class Observable<T> {
      * 订阅一个观察者，name是观察者名称
      */
     public func subscribe(name: String, observer: Observer<T>): This {
-        replayCached(observer){
+        replayCached(observer) {
             this.observer.add(name, observer)
         }
         disposed_.store(false)
@@ -282,15 +285,14 @@ public class Observable<T> {
      * 指定重放大小
      */
     public func replaySize(capacity!: Int64 = 0): This {
-        this.cache = 
-        if(capacity <= 0){
+        this.cache = if (capacity <= 0) {
             EmptyCache<T>()
-        }else{
+        } else {
             QueuedCache<T>(capacity)
         }
         this
     }
-    private func setErrorResumer(resumer: (Exception)-> ?Iterable<T>): This {
+    private func setErrorResumer(resumer: (Exception) -> ?Iterable<T>): This {
         this.errorResumer = resumer
         this
     }
@@ -299,12 +301,12 @@ public class Observable<T> {
      * 多次调用本函数及其重载函数只有最后一个恢复器生效。
      */
     public func setErrorResumer(resumeIfNone: Bool, resumer: (Exception) -> ?Iterable<T>): This {
-        this.errorResumer = {e => 
-            return if(let Some(i) <- resumer(e)){
+        this.errorResumer = {
+            e => return if (let Some(i) <- resumer(e)) {
                 i.iterator()
-            }else if(resumeIfNone){
-                EmptyIterator<T>.INSTANCE()
-            }else{
+            } else if (resumeIfNone) {
+                EmptyIterator<T>()
+            } else {
                 None<Iterable<T>>
             }
         }
@@ -314,13 +316,28 @@ public class Observable<T> {
      * 指定错误恢复器，产生或消费数据时如果抛出异常将执行当前指定的恢复器，并使用恢复器返回的数据和当前Observable的成员创建新的Observable
      * 多次调用本函数及其重载函数只有最后一个恢复器第一次。
      */
-    public func setErrorResumer(resumeIfNone: Bool, resumer: (Exception) -> ?T) : This {
-        setErrorResumer{e => 
-            return if(let Some(v) <- resumer(e)){
+    public func setErrorResumer(resumeIfNone: Bool, resumer: (Exception) -> ?T): This {
+        setErrorResumer {
+            e => return if (let Some(v) <- resumer(e)) {
                 SingleIterator<T>(v)
-            }else if(resumeIfNone){
-                EmptyIterator<T>.INSTANCE()
-            }else{
+            } else if (resumeIfNone) {
+                EmptyIterator<T>()
+            } else {
+                None<Iterable<T>>
+            }
+        }
+    }
+    /**
+     * 指定错误恢复器，产生或消费数据时如果抛出异常将执行当前指定的恢复器，并使用恢复器返回的数据和当前Observable的成员创建新的Observable
+     * 多次调用本函数及其重载函数只有最后一个恢复器第一次。
+     */
+    public func setErrorResumer(resumeIfNone: Bool, bufSize!: Int64 = 1, resumer!: (Exception) -> ?(Emitter<T>) -> Unit): This {
+        setErrorResumer {
+            e => return if (let Some(e) <- resumer(e)) {
+                EmitterIterator<T>(Emitter<T>(qsize: bufSize, fn: e))
+            } else if (resumeIfNone) {
+                EmptyIterator<T>()
+            } else {
                 None<Iterable<T>>
             }
         }
@@ -331,28 +348,14 @@ public class Observable<T> {
      * 如果resumeWithEmpty是true使用空迭代器恢复，否则使用当前迭代器恢复
      */
     public func setErrorResumer(resumeWithEmpty: Bool, resumer: (Exception) -> Unit): This {
-        this.setErrorResumer{e => 
-            resumer(e)
-            if(resumeWithEmpty){
-                EmptyIterator<T>.INSTANCE()
-            }else{
-                this.iterator.getOrThrow()
-            }
-        }
-    }
-    /**
-     * 指定错误恢复器，产生或消费数据时如果抛出异常将执行当前指定的恢复器，并使用恢复器返回的数据和当前Observable的成员创建新的Observable
-     * 多次调用本函数及其重载函数只有最后一个恢复器第一次。
-     */
-    public func setErrorResumer(resumeIfNone: Bool, bufSize!: Int64 = 1, resumer!: (Exception) -> ?(Emitter<T>)-> Unit) : This {
-        setErrorResumer{e => 
-            return if(let Some(e) <- resumer(e)){
-                EmitterIterator<T>(Emitter<T>(qsize: bufSize, fn: e))
-            }else if(resumeIfNone){
-                EmptyIterator<T>.INSTANCE()
-            }else{
-                None<Iterable<T>>
-            }
+        this.setErrorResumer {
+            e =>
+                resumer(e)
+                if (resumeWithEmpty) {
+                    EmptyIterator<T>()
+                } else {
+                    this.iterator.getOrThrow()
+                }
         }
     }
     /**
@@ -360,12 +363,12 @@ public class Observable<T> {
      * 多次调用本函数及其重载函数只有最后一个恢复器生效
      */
     public func setErrorResumer(resumeIfFalse: Bool, resumer: (Exception) -> Bool): This {
-        this.setErrorResumer{e => 
-            if(resumer(e)){
+        this.setErrorResumer {
+            e => if (resumer(e)) {
                 this.iterator.getOrThrow()
-            }else if(resumeIfFalse){
-                EmptyIterator<T>.INSTANCE()
-            }else{
+            } else if (resumeIfFalse) {
+                EmptyIterator<T>()
+            } else {
                 None<Iterable<T>>
             }
         }
@@ -375,8 +378,8 @@ public class Observable<T> {
      */
     public prop isDisposed: Bool {
         get() {
-            if(disposed_.load()){
-                if(completionOnDisposing.load()){
+            if (disposed_.load()) {
+                if (completionOnDisposing.load()) {
                     scheduler.schedule(None<T>)
                 }
                 return true
@@ -384,6 +387,7 @@ public class Observable<T> {
             false
         }
     }
+
     /**
      * 暂停执行，如果completion是true就向消费者发送完成事件
      * 只停止不清空观察者
@@ -392,15 +396,15 @@ public class Observable<T> {
         disposed_.store(true)
         completionOnDisposing.store(completion)
     }
-    private func noObserver(){
-        if(this.observer.size == 0){
+    private func noObserver() {
+        if (this.observer.size == 0) {
             disposed_.store(true)
         }
     }
     /**
      * 取消全部观察者
      */
-    public func disposeAll(completion!: Bool = false){
+    public func disposeAll(completion!: Bool = false): Unit {
         this.observer.clear(completion)
         disposed_.store(true)
     }
@@ -440,23 +444,20 @@ public class Observable<T> {
             if (isDisposed) {
                 return
             }
-            func getIterator(){
-                if(let Some(i) <- this.iterator){
-                    i
-                }else{
-                    let iterator = this.items()
-                    this.iterator = iterator
-                    iterator
-                }
+            let itr = if (let Some(i) <- this.iterator) {
+                i
+            } else {
+                let iterator = this.items()
+                this.iterator = iterator
+                iterator
             }
-            let itr = getIterator()
-            while(isDisposed && let Some(item) <- itr.next()){
+            while (!isDisposed && let Some(item) <- itr.next()) {
                 this.cache.set(item)
                 scheduler.schedule(item)
                 if (isDisposed) {
                     return
                 }
-                if(observer.size == 0){
+                if (observer.size == 0) {
                     noObserver()
                     return
                 }
@@ -464,8 +465,9 @@ public class Observable<T> {
             scheduler.schedule(None<T>)
         } catch (e: Exception) {
             scheduler.schedule(e)
-            if(let Some(r) <- errorResumer && let Some(i) <- r(e)){
-                Observable<T>({=> i.iterator()}, 
+            if (let Some(r) <- errorResumer && let Some(i) <- r(e)) {
+                Observable<T>(
+                    {=> i.iterator()},
                     asyncCombined: this.asyncCombined,
                     observer: this.observer,
                     errorResumer: this.errorResumer,
@@ -489,5 +491,21 @@ public class Observable<T> {
      */
     public func defer(): This {
         delay(Duration.Zero)
+    }
+}
+
+public class SingleIterator<T> <: Iterator<T> {
+    public SingleIterator(private var item: ?T) {}
+
+    public func next(): Option<T> {
+        let r = item
+        item = None<T>
+        r
+    }
+}
+
+public class EmptyIterator<T> <: Iterator<T> {
+    public func next(): Option<T> {
+        None
     }
 }
