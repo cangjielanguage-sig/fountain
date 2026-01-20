@@ -20,6 +20,7 @@ import std.math.numeric.{BigInt, Decimal}
 import std.time.DateTime
 
 import f_base.*
+import f_data.*
 
 /**
  * 所有的DAO接口都要继承本接口
@@ -229,6 +230,71 @@ public interface RootDAO {
         match(value){
             case Some(x) => arg(x)
             case _ => argNull()
+        }
+    }
+    func arg(value: Data): String {
+        match(value){
+            case x: DataBool => arg(x.data)
+            case x: DataReal => arg(x.data.toString())
+            case x: DataString => arg(x.data)
+            case x: DataDuration => arg(x.data)
+            case x: DataDateTime => arg(x.data)
+            case x: DataCollection<Array<Byte>, Byte> => arg(x.data)
+            case x: DataAny => arg(x.data)
+            case x: DataNone => argNull()
+            case x => throw SqlArgException('${TypeInfo.of(x)} does not support for sql arg')
+        }
+    }
+    func arg(value: Any): String {
+        match(value){
+            case x: Data => arg(x)
+            case x: Bool => arg(x)
+            case x: ?Bool => arg(x)
+            case x: Int8 => arg(x)
+            case x: ?Int8 => arg(x)
+            case x: UInt8 => arg(x)
+            case x: ?UInt8 => arg(x)
+            case x: Int16 => arg(x)
+            case x: ?Int16 => arg(x)
+            case x: UInt16 => arg(x)
+            case x: ?UInt16 => arg(x)
+            case x: Int32 => arg(x)
+            case x: ?Int32 => arg(x)
+            case x: UInt32 => arg(x)
+            case x: ?UInt32 => arg(x)
+            case x: Int64 => arg(x)
+            case x: ?Int64 => arg(x)
+            case x: UInt64 => arg(x)
+            case x: ?UInt64 => arg(x)
+            case x: Float16 => arg(x)
+            case x: ?Float16 => arg(x)
+            case x: Float32 => arg(x)
+            case x: ?Float32 => arg(x)
+            case x: Float64 => arg(x)
+            case x: ?Float64 => arg(x)
+            case x: BigInt => arg(x)
+            case x: ?BigInt => arg(x)
+            case x: Decimal => arg(x)
+            case x: ?Decimal => arg(x)
+            case x: Float16 => arg(x)
+            case x: ?Float16 => arg(x)
+            case x: Rune => arg(x)
+            case x: ?Rune => arg(x)
+            case x: String => arg(x)
+            case x: ?String => arg(x)
+            case x: InputStream => arg(x)
+            case x: ?InputStream => arg(x)
+            case x: Duration => arg(x)
+            case x: ?Duration => arg(x)
+            case x: DateTime => arg(x)
+            case x: ?DateTime => arg(x)
+            case x: Array<Byte> => arg(x)
+            case x: ?Array<Byte> => arg(x)
+            case x: ?Any => match(x){
+                case Some(y) => arg(y)
+                case _ => argNull()
+            }
+            case x => throw SqlArgException('${TypeInfo.of(x)} does not support for sql arg')
         }
     }
     func arg<I, T>(value: I): String where I <: Iterable<T> {

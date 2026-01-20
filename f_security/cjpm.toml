@@ -2,25 +2,29 @@
   cjc-version = "1.0.4"
   compile-option = "-O2 --dy-std"
   override-compile-option = "-O2 --dy-std"
-  description = "security module for mvc"
+  description = "配置MVC使用的安全模块"
   link-option = ""
   name = "f_security"
   organization="fountain"
   output-type = "dynamic"
   src-dir = ""
   target-dir = ""
-  version = "1.0.44"
+  version = "1.0.45"
   package-configuration = {}
+  category = ["Utility"]
+  license = ["Apache-2.0"]
+  include = ["src"]
+  authors = ["吴京润"]
 
 [profile.build]
   lto = "full"
   incremental = true
 
 [dependencies]
-  f_base  = {path = "../f_base", version = "1.0.44"}
-  f_cache  = {path = "../f_cache", version = "1.0.44"}
-  f_jwt  = {path = "../f_jwt", version = "1.0.44"}
-  f_mvc  = {path = "../f_mvc", version = "1.0.44"}
+  f_base  = {path = "../f_base", version = "1.0.45"}
+  f_cache  = {path = "../f_cache", version = "1.0.45"}
+  f_jwt  = {path = "../f_jwt", version = "1.0.45"}
+  f_mvc  = {path = "../f_mvc", version = "1.0.45"}
 
 
 [target]

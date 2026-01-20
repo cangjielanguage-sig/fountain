@@ -31,6 +31,9 @@ public abstract class SqlDialect {
     public open func limit(size: Int64, offset: Int64): (Int64, Int64, String) {
         (size, offset, ' limit ? offset ?')
     }
+    public open func involvedIdentifier(identifier: String): String {
+        '`${identifier}`'
+    }
 }
 @Bean
 public open class MySqlDialect <: SqlDialect {
@@ -49,6 +52,9 @@ public open class PostgresDialect <: SqlDialect {
     }
     public open func lastInsertId(id: String): String {
         ' returning ${id}'
+    }
+    public func involvedIdentifier(identifier: String): String {
+        '"${identifier}"'
     }
 }
 @Bean
@@ -81,7 +87,7 @@ public class DB2Dialect <: SqlDialect {
         (offset, size, ' OFFSET ? ROWS FETCH FIRST ? ROWS ONLY')
     }
 }
-class SqlDialectMediator {
+struct SqlDialectMediator {
     private init(){
         for(dialect in lookupList<SqlDialect>()){
             this.dialects[dialect.dialect] = dialect

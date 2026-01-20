@@ -15,6 +15,8 @@ limitations under the License.
  */
 package f_bean
 
+import f_log.*
+
 public func lookup<T>(): T {
     lookup<T>(StringCond.IgnoreCond)
 }
@@ -24,15 +26,19 @@ public func lookup<T>(name: String): T {
 }
 
 public func lookup<T>(cond: StringCond): T {
-    lookupOption<T>(cond).getOrThrow {BeanException('bean type ${TypeInfo.of<T>()} with bean name condition ${cond} does not exist.')}
+    lookupOption<T>(cond).getOrThrow {
+        BeanException('bean type ${TypeInfo.of<T>()} with bean name condition ${cond} does not exist.')
+    }
 }
 
 public func lookupOption<T>(): ?T {
     lookupOption<T>(StringCond.IgnoreCond)
 }
+
 public func lookupOption<T>(name: String): ?T {
     lookupOption<T>(Exactly(name))
 }
+
 public func lookupOption<T>(cond: StringCond): ?T {
     BeanFactory.instance.getFirst<T>(cond: cond)
 }
@@ -73,8 +79,7 @@ public func lookupLabels<L, T>(): HashMap<L, T> where L <: Hashable & Equatable<
     lookupLabels<L, T>(IgnoreCond)
 }
 
-public func lookupLabels<L, T>(cond: StringCond): HashMap<L, T> where L <: Hashable & Equatable<L>,
-    T <: BeanLabel<L> {
+public func lookupLabels<L, T>(cond: StringCond): HashMap<L, T> where L <: Hashable & Equatable<L>, T <: BeanLabel<L> {
     let map = HashMap<L, T>()
     for (bean in lookupList<T>(cond)) {
         map[bean.label] = bean

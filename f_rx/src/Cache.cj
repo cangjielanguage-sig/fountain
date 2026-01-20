@@ -12,7 +12,7 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
-*/
+ */
 package f_rx
 
 public interface Cache<T> <: Iterable<T> {
@@ -25,10 +25,14 @@ public class EmptyCache<T> <: Cache<T> {
         this
     }
     public func iterator(): Iterator<T> {
-        EmptyIterator<T>.INSTANCE()
+        EmptyIterator<T>()
     }
-    public func set(value: T): Unit{}
-    public func replay(observer: Observer<T>, fn: () -> Unit): Unit {}
+    public func set(value: T): Unit{
+
+    }
+    public func replay(observer: Observer<T>, fn: () -> Unit): Unit {
+        fn()
+    }
 }
 public class QueuedCache<T> <: Cache<T> {
     private let queue: LinkedList<T>

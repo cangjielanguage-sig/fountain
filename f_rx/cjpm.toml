@@ -1,9 +1,9 @@
 [package]
   cjc-version = "1.0.4"
   name = "f_rx"
-organization="fountain"
-  description = "rxcj"
-  version = "1.0.44"
+  organization = "fountain"
+  description = "反应式编程"
+  version = "1.0.45"
   target-dir = ""
   src-dir = ""
   output-type = "dynamic"
@@ -11,10 +11,14 @@ organization="fountain"
   override-compile-option = "-O2 --dy-std"
   link-option = ""
   package-configuration = {}
+  category = ["Utility"]
+  license = ["Apache-2.0"]
+  include = ["src"]
+  authors = ["吴京润"]
 
 [dependencies]
-  f_base  = {path = "../f_base", version = "1.0.44"}
-  f_concurrent  = {path = "../f_concurrent", version = "1.0.44"}
+  f_base  = {path = "../f_base", version = "1.0.45"}
+  f_concurrent  = {path = "../f_concurrent", version = "1.0.45"}
 
 [profile.build]
   lto = "full"

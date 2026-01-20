@@ -2,7 +2,7 @@
   cjc-version = "1.0.4"
   name = "f_app"
   organization="fountain"
-  description = "nothing here"
+  description = "依赖fountain开发的应用进程启动模块"
   version = "1.0.44"
   target-dir = ""
   src-dir = ""
@@ -11,11 +11,15 @@
   override-compile-option = ""
   link-option = ""
   package-configuration = {}
+  category = ["Utility"]
+  license = ["Apache-2.0"]
+  include = ["src"]
+  authors = ["吴京润"]
 
 [dependencies]
-  f_base  = {path = "../f_base", version = "1.0.44"}
-  f_log  = {path = "../f_log", version = "1.0.44"}
-  f_version  = {path = "../f_version", version = "1.0.44"}
+  f_base  = {path = "../f_base", version = "1.0.45"}
+  f_log  = {path = "../f_log", version = "1.0.45"}
+  f_version  = {path = "../f_version", version = "1.0.45"}
 
 [profile.build]
   lto = "full"

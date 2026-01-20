@@ -1,20 +1,24 @@
 [dependencies]
   charset4cj = { git = "https://gitcode.com/Cangjie-TPC/charset4cj.git", branch = "develop"}
-  f_io  = {path = "../f_io", version = "1.0.44"}
-  f_regex  = {path = "../f_regex", version = "1.0.44"}
+  f_io  = {path = "../f_io", version = "1.0.45"}
+  f_regex  = {path = "../f_regex", version = "1.0.45"}
 [package]
   cjc-version = "1.0.4"
   compile-option = "-O2 --dy-std"
   override-compile-option = "-O2 --dy-std"
-  description = "extend process"
+  description = "进程扩展模块"
   link-option = ""
   name = "f_process"
   organization="fountain"
   output-type = "dynamic"
   src-dir = ""
   target-dir = ""
-  version = "1.0.44"
+  version = "1.0.45"
   package-configuration = {}
+  category = ["Utility"]
+  license = ["Apache-2.0"]
+  include = ["src"]
+  authors = ["吴京润"]
 
 [profile.build]
   lto = "full"

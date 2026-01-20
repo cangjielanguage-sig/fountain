@@ -11,8 +11,8 @@ Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
-limitations under the License.  
-*/
+limitations under the License.
+ */
 package f_rx
 
 public interface Observer<T> {
@@ -39,7 +39,7 @@ public class FuncObserver<T> <: Observer<T> {
     private var nextFunc: (T) -> Unit = {_ => }
     private var errorFunc: (Exception) -> Unit = {_ => }
     private var completeFunc: () -> Unit = { => }
-    init(){}
+    FuncObserver(let name: String){}
     public func onNext(item: T): Unit {
         try{
             nextFunc(item)
@@ -67,7 +67,7 @@ public class FuncObserver<T> <: Observer<T> {
      * 注册数据处理函数
      */
     public func setNext(callee: (T) -> Unit): This {
-        nextFunc = callee
+        nextFunc = {v => callee(v)}
         this
     }
     /**
@@ -85,6 +85,7 @@ public class FuncObserver<T> <: Observer<T> {
         this
     }
 }
+
 /**
  * 多个观察者的组合，async决定是所有观察者由一个线程执行，还是观察者跟线程一一对应
  */
@@ -116,7 +117,11 @@ public class CombinedObserver<T> <: Observer<T> {
      * 如果如果试图注册FuncObserver<T>会抛出异常，如果同一类型的观察者重复注册会抛出异常
      */
     public func add(observer: Observer<T>): This{
-        add(TypeInfo.of(observer).qualifiedName, observer)
+        add(if(let ob: FuncObserver<T> <- observer){
+            ob.name
+        }else{
+            TypeInfo.of(observer).qualifiedName
+        }, observer)
         this
     }
     /**
@@ -124,9 +129,6 @@ public class CombinedObserver<T> <: Observer<T> {
      * name是观察者名称，observer是注册的观察者
      */
     public func add(name: String, observer: Observer<T>): This {
-        if(observer is FuncObserver<T>){
-            throw ObserverRegistrationException('to invoke add(name: String) or add(name: String, observer: Observer<T>) insdead')
-        }
         addIfAbsent(name, observer)
         this
     }

@@ -113,7 +113,7 @@ public class BeanFactory {
                 for (superInterface in klass.superInterfaces where superInterface != any) {
                     typeQueue.addLast(beanType(superInterface))
                 }
-                if (klass is ClassTypeInfo && let s: ClassTypeInfo <- klass && let Some(sc) <- s.superClass && sc != object) {
+                if (let s: ClassTypeInfo <- klass && let Some(sc) <- s.superClass && sc != object) {
                     typeQueue.addLast(beanType(sc))
                 }
             }
@@ -191,12 +191,18 @@ public class BeanFactory {
             throw BeanException('${beanType} is not sub type of ${TypeInfo.of<T>()}')
         }
     }
+    private func beanLog(logPrefix: String, requiredType: TypeInfo, cond: StringCond, manager: BeanManager){
+        log.debug {
+            'BeanFactory.${logPrefix}:requiredType-${requiredType}; beanNameCondition-${cond}; beanType-${manager.beanType}'
+        }
+    }
     public func getFirst<T>(beanType: TypeInfo, cond!: StringCond = IgnoreCond): ?T {
         beanTypeIs<T>(beanType)
         match (cond) {
             case Exactly(n) => 
             match (beans.get(n)) {
                 case Some(m) where matches(beanType, m) => 
+                    beanLog('getFirst', beanType, cond, m)
                     return m.bean as T
                 case _ => ()
             }
@@ -204,6 +210,7 @@ public class BeanFactory {
                 match (beanTypeMap.get(beanType)) {
                 case Some(tree) => 
                 for (m in tree where matches(beanType, cond, m)) {
+                    beanLog('getFirst', beanType, cond, m)
                     return m.bean as T
                 }
                 case _ => ()
@@ -216,6 +223,7 @@ public class BeanFactory {
     }
     private func getAll<T>(beanType: TypeInfo, cond: StringCond, put: (BeanManager) -> Unit) {
         for (m in iterator<T>(beanType, cond: cond)) {
+            beanLog('getAll', beanType, cond, m)
             put(m)
         }
     }
@@ -262,13 +270,13 @@ public class BeanFactory {
     /**
      * 返回的元组分别是(beanName, bean, bean的销毁函数)
      */
-    public func getFirstTuple<T>(cond!: StringCond = IgnoreCond): ?(String, T, () -> Unit) {
+    public func getFirstTuple<T>(cond!: StringCond = IgnoreCond): ?(String, T, () -> Unit) where T <: Object {
         match (cond) {
             case Exactly(n) => return generateTuple<T>(beans.get(n))
             case _ => match (beanTypeMap.get(TypeInfo.of<T>())) {
                 case Some(tree) => for (m in tree where matches<T>(cond, m)) {
-                    if (let bean <- m.bean && let b: T <- bean) {
-                        return (m.name, b, m.generateDestroy(bean))
+                    if (let bean: T <- m.bean) {
+                        return (m.name, bean, m.generateDestroy(bean))
                     }
                 }
                 case _ => ()

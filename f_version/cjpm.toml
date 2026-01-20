@@ -1,9 +1,9 @@
 [package]
   cjc-version = "1.0.4"
   name = "f_version"
-  organization="fountain"
-  description = "fountain and app version "
-  version = "1.0.44"
+  organization = "fountain"
+  description = "应用与fountain的版本信息和应用BANNER"
+  version = "1.0.45"
   target-dir = ""
   src-dir = ""
   output-type = "dynamic"
@@ -11,6 +11,10 @@
   override-compile-option = ""
   link-option = ""
   package-configuration = {}
+  category = ["Utility"]
+  license = ["Apache-2.0"]
+  include = ["src"]
+  authors = ["吴京润"]
 
 [target]
 [target.x86_64-unknown-linux-gnu]

@@ -43,7 +43,7 @@
   output-type = "dynamic"
   src-dir = ""
   target-dir = ""
-  version = "1.0.44"
+  version = "1.0.45"
   organization = "fountain"
   package-configuration = {}
 

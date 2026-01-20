@@ -1,18 +1,22 @@
 [dependencies]
-  f_data  = {path = "../f_data", version = "1.0.44"}
+  f_data  = {path = "../f_data", version = "1.0.45"}
 [package]
   cjc-version = "1.0.4"
   compile-option = "-O2 --dy-std"
   override-compile-option = "-O2 --dy-std"
-  description = "config api"
+  description = "配置模块"
   link-option = ""
   name = "f_config"
   organization="fountain"
   output-type = "dynamic"
   src-dir = ""
   target-dir = ""
-  version = "1.0.44"
+  version = "1.0.45"
   package-configuration = {}
+  category = ["Utility"]
+  license = ["Apache-2.0"]
+  include = ["src"]
+  authors = ["吴京润"]
 
 [profile.build]
   lto = "full"
