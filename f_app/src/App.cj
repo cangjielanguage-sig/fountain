@@ -546,10 +546,6 @@ private let _ = AppVersion.set(#'${banner()}'#, '${name}', '${version}')
         }
         let appVersionPath = versionModuleDir.join('src/${n}_AppVersion.cj')
         File.writeTo(appVersionPath, genCode(n, version).unsafeBytes())
-        execode = execute('cjpm', ['build', '--target-dir=${targetDir}'], workingDirectory: workingDir)
-        if(execode == 0){
-            return 0
-        }
         execute('cjpm', ['build', '--target-dir=${targetDir}'], workingDirectory: workingDir)
     }
     private func copyToml(source: String, path: Path){
