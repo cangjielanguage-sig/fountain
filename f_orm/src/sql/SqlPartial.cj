@@ -27,10 +27,15 @@ public interface SqlPartial <: RootDAO {
      * map的key可以是列名或T的公共实例成员名
      */
     func UPDATE<T, ID>(values: Map<String, Any>, id: ID): Int64 where T <: QueryMappersInit<T>
+    func UPDATE<T>(values: T, ignoredColumns!: HashSet<String>, includingColumns!: HashSet<String>): Int64 where T <: QueryMappersInit<T> & ObjectData<T>
     /**
-     * ignoreColumns/includingColumns可以指定values的公共成员或对应的列名，两个参数要么都不指定，要么只指定一个，都指定会抛异常
+     * 泛型实参必须同时被@QueryMappersGenerator[dirty]和@DataAssist[fields]修饰，具体见相关宏文档
      */
-    func UPDATE<T>(values: T, ignoreColumns!: Array<String>, includingColumns!: Array<String>): Int64 where T <: QueryMappersInit<T> & ObjectData<T>
+    func updateDirty<T>(values: T): Int64 where T <: QueryMappersInit<T> & ObjectData<T>
+    /**
+     * ignoredColumns/includingColumns可以指定values的公共成员或对应的列名，两个参数要么都不指定，要么只指定一个，都指定会抛异常
+     */
+    func UPDATE<T>(values: T, ignoredColumns!: Array<String>, includingColumns!: Array<String>): Int64 where T <: QueryMappersInit<T> & ObjectData<T>
     func FROM<T>(): FromClause<T> where T <: QueryMappersInit<T>
     func page<R>(sql: String, size: Int64, page!: Int64): Pagination<R> where R <: QueryMappersInit<R> & DataFields<R>
     func singlePage<R>(sql: String, size: Int64, page!: Int64): Pagination<R> where R <: DataFields<R>
@@ -133,12 +138,13 @@ extend SqlExecutor <: SqlPartial {
         sql.append(' WHERE ').append(involve(idColumn)).append('=').append(arg(id))
         executor.setSql(sql.toString()).update
     }
-    public func UPDATE<T>(values: T, ignoreColumns!: Array<String> = [], includingColumns!: Array<String> = []): Int64 where T <: QueryMappersInit<T> & ObjectData<T> {
+    public func UPDATE<T>(values: T, ignoredColumns!: HashSet<String> = HashSet<String>(), includingColumns!: HashSet<String> = HashSet<String>()): Int64 where T <: QueryMappersInit<T> & ObjectData<T> {
+        if (ignoredColumns.size > 0 && includingColumns.size > 0){
+            throw IllegalArgumentException('ignoreColumns and includingColumns must not be specified both.')
+        }
         var idField = ''
         var idColumn = ''
         let data = DataObject<T>(values)
-        let includings = HashSet<String>(includingColumns)
-        let ignored = HashSet<String>(ignoreColumns)
         let sql = StringGenerator().append('UPDATE ').append(involveTable<T>()).append(' SET ')
         let sqlsize = sql.size
         for(m in T.queryMappers().mappers){
@@ -147,16 +153,17 @@ extend SqlExecutor <: SqlPartial {
             if(m.isId){
                 idField = field
                 idColumn = column
-            }else if((includings.isEmpty() && ignored.isEmpty()) || 
-               (includings.isEmpty() && !(ignored.contains(column) || ignored.contains(field))) || 
-               (ignored.isEmpty() && (includings.contains(column) || includings.contains(field)))){
+            }else if((includingColumns.isEmpty() && ignoredColumns.isEmpty()) || 
+               (includingColumns.isEmpty() && !(ignoredColumns.contains(column) || ignoredColumns.contains(field))) || 
+               (ignoredColumns.isEmpty() && (includingColumns.contains(column) || includingColumns.contains(field)))){
                 if(sql.size > sqlsize){
                     sql.append(', ')
                 }
                 sql.append(involve(column)).append('=').append(arg(data[field]))
-            }else if (includings.size > 0 && ignored.size > 0){
-                throw IllegalArgumentException('ignoreColumns and includingColumns must not be specified both.')
             }
+        }
+        if(sql.size > sqlsize){
+            return 0
         }
         if(idColumn.isEmpty()){
             throw NoIdException(TypeInfo.of<T>().qualifiedName)
@@ -165,6 +172,28 @@ extend SqlExecutor <: SqlPartial {
         }
         sql.append(' WHERE ').append(involve(idColumn)).append('=').append(arg(data[idField]))
         executor.setSql(sql.toString()).update
+    }
+    public func updateDirty<T>(values: T): Int64 where T <: QueryMappersInit<T> & ObjectData<T> {
+        let dirtyFields = f_orm_getDirtyFields<T>()
+        if(dirtyFields.isEmpty()){
+            return 0
+        }
+        try{
+            UPDATE<T>(values, includingColumns: dirtyFields)
+        }finally{
+            f_orm_clear<T>()
+        }
+    }
+    public func UPDATE<T>(values: T, ignoredColumns!: Array<String> = [], includingColumns!: Array<String> = []): Int64 where T <: QueryMappersInit<T> & ObjectData<T> {
+        if (ignoredColumns.size > 0 && includingColumns.size > 0){
+            throw IllegalArgumentException('ignoredColumns and includingColumns must not be specified both.')
+        }else if(includingColumns.size > 0){
+            UPDATE<T>(values, includingColumns: HashSet<String>(includingColumns))
+        }else if(ignoredColumns.size > 0){
+            UPDATE<T>(values, ignoredColumns: HashSet<String>(ignoredColumns))
+        }else{
+            UPDATE<T>(values, ignoredColumns: HashSet<String>())
+        }
     }
     public func FROM<T>(): FromClause<T> where T <: QueryMappersInit<T> {
         FromClause<T>(this)

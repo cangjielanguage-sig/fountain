@@ -149,6 +149,7 @@ public class SqlExecutor <: Resource & RootDAO {
                 logger.warn(e)
             }
             _connection_ = NoneConnection.instance
+            f_orm_clearAll()
         }
     }
 
