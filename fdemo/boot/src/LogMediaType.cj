@@ -40,7 +40,7 @@ public class LogTextMediaType <: MediaType {
     }
     public operator func ==(other: MediaType) {
         match (other) {
-            case x: LogTextMediaType => refEq(this, other) || (x.mediaType == this.mediaType)
+            case x: LogTextMediaType => refEq(this, other) || (this.hashCode() == other.hashCode() && x.mediaType == this.mediaType)
             case _ => false
         }
     }

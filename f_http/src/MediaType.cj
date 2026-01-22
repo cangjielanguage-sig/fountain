@@ -49,7 +49,7 @@ public abstract class MediaType <: ToString & Hashable & Equatable<MediaType> {
     }
     public func make(mediaType: String): MediaType
     public open operator func ==(other: MediaType): Bool {
-        refEq(this, other) || this.mediaType == other.mediaType
+        refEq(this, other) || (this.hashCode() == other.hashCode() && this.mediaType == other.mediaType)
     }
     public func fromDataFields<T>(data: T): Array<Byte> where T <: DataFields<T> {
         fromData(data.toData())
