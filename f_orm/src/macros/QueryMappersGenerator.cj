@@ -88,26 +88,35 @@ private func expandQueryMappers(attr: Tokens, input: Tokens): Tokens {
                 modifiers[i] = Modifier(Token(PRIVATE))
                 break
             }
-            let setDirty = if(dirty){
-                quote(f_orm_setDirtyField<$name>($(identifier.value)))
+            let (mutProp, set) = if(v.isVar()){
+                (`mut`, quote(
+                    set(value){
+                        $(v.identifier) = value
+                    }
+                ))
             }else{
-                `empty_tokens`
+                (`empty_tokens`, `empty_tokens`)
             }
             let p = PropDecl(quote(
-                public mur prop $identifier: $(v.declType) {
+                public $mutProp prop $identifier: $(v.declType) {
                     get(){
                         $(v.identifier)
                     }
-                    set(value){
-                        $setDirty
-                        $(v.identifier) = value
-                    }
+                    $set
                 }
             ))
             props.add(p)
             body.add(p)
         }
         vars.clear()
+    }
+    if(dirty){
+        for(p in props where p.isMut()){
+            let expr = parseExpr(quote(f_orm_setDirtyField<$name>($(p.identifier.value))))
+            try{
+                p.setter.block.nodes.add(expr)
+            }catch(_){}
+        }
     }
     let map = HashMap<String, (Bool, String, Token)>()
     for (m in getChildMessages("ORMField")) {
@@ -137,10 +146,6 @@ private func expandQueryMappers(attr: Tokens, input: Tokens): Tokens {
         }
     }
     var mappers = quote([$(generateMappers(name, props, mapperMetaFn)))
-    let varMappers = generateMappers(name, vars, mapperMetaFn)
-    if (varMappers.size > 0) {
-        mappers += `comma` + varMappers
-    }
     mappers += `rsquare`
     let queryMappersName = Token(IDENTIFIER, "_qUEry__mAppErs_")
     let superTypes = decl.superTypes
