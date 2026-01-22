@@ -77,39 +77,6 @@ private func expandQueryMappers(attr: Tokens, input: Tokens): Tokens {
     let name = quote($(decl.identifier))
     let body = decl.body.decls
     let props = extractMutProps(body)
-    let vars = extractVars(body)
-    if(vars.size > 0){
-        for(i in 0 .. vars.size){
-            let v = vars[i]
-            let identifier = v.identifier
-            v.identifier = Token(IDENTIFIER, '_${identifier.value}_')
-            let modifiers = v.modifiers
-            for(j in 0 .. modifiers.size where modifiers[i].keyword.kind == PUBLIC){
-                modifiers[i] = Modifier(Token(PRIVATE))
-                break
-            }
-            let (mutProp, set) = if(v.isVar()){
-                (`mut`, quote(
-                    set(value){
-                        $(v.identifier) = value
-                    }
-                ))
-            }else{
-                (`empty_tokens`, `empty_tokens`)
-            }
-            let p = PropDecl(quote(
-                public $mutProp prop $identifier: $(v.declType) {
-                    get(){
-                        $(v.identifier)
-                    }
-                    $set
-                }
-            ))
-            props.add(p)
-            body.add(p)
-        }
-        vars.clear()
-    }
     if(dirty){
         for(p in props where p.isMut()){
             let expr = parseExpr(quote(f_orm_setDirtyField<$name>($(p.identifier.value))))
@@ -145,8 +112,7 @@ private func expandQueryMappers(attr: Tokens, input: Tokens): Tokens {
             (false, CaseFormat.Camel.convert(n, to: CaseFormat.LowerUnderScore), Token(IDENTIFIER, ""))
         }
     }
-    var mappers = quote([$(generateMappers(name, props, mapperMetaFn)))
-    mappers += `rsquare`
+    let mappers = quote([$(generateMappers(name, props, mapperMetaFn))])
     let queryMappersName = Token(IDENTIFIER, "_qUEry__mAppErs_")
     let superTypes = decl.superTypes
     var mapperTokens = quote(
