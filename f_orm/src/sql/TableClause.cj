@@ -367,6 +367,10 @@ public class IntoClause<T> <: TableClause<T> where T <: QueryMappersInit<T> {
         sqlgen.append(' select ').append(selectColumns).append(' ').append(from.sqlgen)
         this
     }
+    public func ON_DUPLICATE_KEY_UPDATE(columns: ()-> String): This {
+        sqlgen.append(' on duplicate key update ').append(columns())
+        this
+    }
     public func execute() {
         setSql().insert
     }
