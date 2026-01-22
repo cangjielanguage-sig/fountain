@@ -35,7 +35,8 @@ import f_util.CaseFormat
  * 宏的属性格式：
  *   dirty 指定这个属性的表示被此宏修饰的类的属性发生变化时会向ORM标记修改历史，可以调用executor.updateDirty<T>()更新修改过的属性，
  *          本属性没有值只有属性名。
- *   table: 是一个字符串或标识符，表示列名转换的格式，可以是LowerUnderScore、UpperUnderScore、Pascal，会把Pascal风格的类名转换成指定风格的名称，并把转换结果作为表名，也可以是表名本身。
+ *   table: 是一个字符串或标识符，表示列名转换的格式，
+ *          可以是LowerUnderScore、UpperUnderScore、Pascal，会把Pascal风格的类名转换成指定风格的名称，并把转换结果作为表名，也可以是表名本身。
  *   classPrefix: 是一个字符串或标识符，把类名开头匹配的子串裁掉
  *   classSuffix: 是一个字符串或标识符，把类名结尾匹配的子串裁掉
  *   tablePrefix: 是一个字符串或标识符，在转换后的表名前面加上这个前缀
