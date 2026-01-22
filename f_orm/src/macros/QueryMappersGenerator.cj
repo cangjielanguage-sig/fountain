@@ -112,7 +112,12 @@ private func expandQueryMappers(attr: Tokens, input: Tokens): Tokens {
             (false, CaseFormat.Camel.convert(n, to: CaseFormat.LowerUnderScore), Token(IDENTIFIER, ""))
         }
     }
-    let mappers = quote([$(generateMappers(name, props, mapperMetaFn))])
+    var mappers = quote([$(generateMappers(name, props, mapperMetaFn)))
+    let varMappers = generateMappers(name, extractVars(body), mapperMetaFn)//这里不能去掉，对于级联映射会用到
+    if (varMappers.size > 0) {
+        mappers += `comma` + varMappers
+    }
+    mappers += `rsquare`
     let queryMappersName = Token(IDENTIFIER, "_qUEry__mAppErs_")
     let superTypes = decl.superTypes
     var mapperTokens = quote(
