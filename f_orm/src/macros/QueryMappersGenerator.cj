@@ -34,7 +34,8 @@ import f_util.CaseFormat
  *
  * 宏的属性格式：
  *   dirty 指定这个属性的表示被此宏修饰的类的属性发生变化时会向ORM标记修改历史，可以调用executor.updateDirty<T>()更新修改过的属性，
- *          本属性没有值只有属性名。
+ *         本属性没有值只有属性名。
+ *         只有被@ORMField修饰的成员变量才对dirty生效。
  *   table: 是一个字符串或标识符，表示列名转换的格式，
  *          可以是LowerUnderScore、UpperUnderScore、Pascal，会把Pascal风格的类名转换成指定风格的名称，并把转换结果作为表名，也可以是表名本身。
  *   classPrefix: 是一个字符串或标识符，把类名开头匹配的子串裁掉
@@ -77,14 +78,6 @@ private func expandQueryMappers(attr: Tokens, input: Tokens): Tokens {
     let name = quote($(decl.identifier))
     let body = decl.body.decls
     let props = extractMutProps(body)
-    if(dirty){
-        for(p in props){
-            let expr = parseExpr(quote(f_orm_setDirtyField<$name>($(p.identifier.value))))
-            try{
-                p.setter.block.nodes.add(expr)
-            }catch(_){}
-        }
-    }
     let map = HashMap<String, (Bool, String, Token)>()
     for (m in getChildMessages("ORMField")) {
         let name = m.getString("field")
@@ -112,7 +105,7 @@ private func expandQueryMappers(attr: Tokens, input: Tokens): Tokens {
             (false, CaseFormat.Camel.convert(n, to: CaseFormat.LowerUnderScore), Token(IDENTIFIER, ""))
         }
     }
-    var mappers = quote([$(generateMappers(name, props, mapperMetaFn)))
+    var mappers = quote([$(generateMappers(name, props, dirty, mapperMetaFn)))
     let varMappers = generateMappers(name, extractVars(body), mapperMetaFn)//这里不能去掉，对于级联映射会用到
     if (varMappers.size > 0) {
         mappers += `comma` + varMappers
@@ -177,7 +170,7 @@ private func expandQueryMappers(attr: Tokens, input: Tokens): Tokens {
     )
 }
 
-func generateMappers(name: Tokens, props: ArrayList<PropDecl>, mapperMetaFn: (String) -> (Bool, String, Token)): Tokens {
+func generateMappers(name: Tokens, props: ArrayList<PropDecl>, dirty: Bool, mapperMetaFn: (String) -> (Bool, String, Token)): Tokens {
     var tokens = quote()
     for (i in 0..props.size) {
         if (i > 0) {
@@ -185,7 +178,13 @@ func generateMappers(name: Tokens, props: ArrayList<PropDecl>, mapperMetaFn: (St
         }
         let decl = props[i]
         let propName = decl.identifier
-        let dts = quote($(decl.declType))
+        let dts = decl.declType.toTokens()
+        if(dirty && (dts.size <= 2 || dts[0].value == 'Option')){
+            let expr = parseExpr(quote(f_orm_setDirtyField<$name>($(decl.identifier.value))))
+            try{
+                decl.setter.block.nodes.add(expr)
+            }catch(_){}
+        }
         let meta = mapperMetaFn(propName.value)
         tokens += generateMappers(name, propName, dts, meta)
     }
