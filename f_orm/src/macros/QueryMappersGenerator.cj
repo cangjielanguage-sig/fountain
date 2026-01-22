@@ -78,7 +78,7 @@ private func expandQueryMappers(attr: Tokens, input: Tokens): Tokens {
     let body = decl.body.decls
     let props = extractMutProps(body)
     if(dirty){
-        for(p in props where p.isMut()){
+        for(p in props){
             let expr = parseExpr(quote(f_orm_setDirtyField<$name>($(p.identifier.value))))
             try{
                 p.setter.block.nodes.add(expr)
