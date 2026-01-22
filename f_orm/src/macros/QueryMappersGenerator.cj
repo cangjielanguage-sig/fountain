@@ -58,11 +58,6 @@ public macro QueryMappersGenerator(attr: Tokens, input: Tokens): Tokens {
     expandQueryMappers(attr, input)
 }
 private func expandQueryMappers(attr: Tokens, input: Tokens): Tokens {
-    var dirty = false
-    for(token in attr where token.kind == IDENTIFIER && token.value.toAsciiLower() == 'dirty'){
-        dirty = true
-        break
-    }
     let decl = match(parseDecl(input)){
         case d: ClassDecl => d
         case d: MacroExpandDecl => 
@@ -104,6 +99,11 @@ private func expandQueryMappers(attr: Tokens, input: Tokens): Tokens {
         } else {
             (false, CaseFormat.Camel.convert(n, to: CaseFormat.LowerUnderScore), Token(IDENTIFIER, ""))
         }
+    }
+    var dirty = false
+    for(token in attr where token.kind == IDENTIFIER && token.value.toAsciiLower() == 'dirty'){
+        dirty = true
+        break
     }
     var mappers = quote([$(generateMappers(name, props, dirty, mapperMetaFn)))
     let varMappers = generateMappers(name, extractVars(body), mapperMetaFn)//这里不能去掉，对于级联映射会用到
