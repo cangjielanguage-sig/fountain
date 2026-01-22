@@ -20,8 +20,10 @@ internal import f_collection.*
 internal import f_exception.IllegalAccessException
 internal import f_regex.*
 internal import f_orm.exception.*
+internal import f_orm.{f_orm_getDirtyFields, f_orm_clear}
 
 public import f_base.*
 public import f_bean.*
 public import f_data.*
 public import f_orm.*
+

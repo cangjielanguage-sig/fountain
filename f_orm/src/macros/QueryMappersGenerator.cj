@@ -33,13 +33,18 @@ import f_util.CaseFormat
  * 没有使用@ORMField注解的按照映射的不是主键，且按照列名是LowerUnderScore处理。
  *
  * 宏的属性格式：
- *   table: 是一个字符串或标识符，表示列名转换的格式，可以是LowerUnderScore、UpperUnderScore、Pascal，会把Pascal风格的类名转换成指定风格的名称，并把转换结果作为表名，也可以是表名本身。
+ *   dirty 指定这个属性的表示被此宏修饰的类的属性发生变化时会向ORM标记修改历史，可以调用executor.updateDirty<T>()更新修改过的属性，
+ *         本属性没有值只有属性名。
+ *         只有被@ORMField修饰的成员变量才对dirty生效。
+ *   table: 是一个字符串或标识符，表示列名转换的格式，
+ *          可以是LowerUnderScore、UpperUnderScore、Pascal，会把Pascal风格的类名转换成指定风格的名称，并把转换结果作为表名，也可以是表名本身。
  *   classPrefix: 是一个字符串或标识符，把类名开头匹配的子串裁掉
  *   classSuffix: 是一个字符串或标识符，把类名结尾匹配的子串裁掉
  *   tablePrefix: 是一个字符串或标识符，在转换后的表名前面加上这个前缀
  *   tableSuffix: 是一个字符串或标识符，在转换后的表名后面加上这个后缀
  *   上面的冒号也是宏属性的一部分。
- *   如果宏属性只有一个，就把它当作tableName处理。
+ *   如果宏属性只有一个，且不是dirty，就把它当作tableName处理。
+ *   如果没有宏属性或只有一个dirty属性，则把类名按照Pascal风格转成LowerUnderScore。
  * 如果要把fountain.data.macros.DataAssist跟@QueryMappersGenerator一起使用，需要满足以下条件：
  * 1. 不要对被修饰类使用DataAssist宏的props属性，@QueryMappersGenerator会为被修饰类添加属性
  * 2. 如果要复制实例成员或者把类的实例转换为JsonValue，@QueryMappersGenerator要先于@DataAssist展开，
@@ -68,7 +73,6 @@ private func expandQueryMappers(attr: Tokens, input: Tokens): Tokens {
     let name = quote($(decl.identifier))
     let body = decl.body.decls
     let props = extractMutProps(body)
-    let vars = extractVars(body)
     let map = HashMap<String, (Bool, String, Token)>()
     for (m in getChildMessages("ORMField")) {
         let name = m.getString("field")
@@ -96,8 +100,13 @@ private func expandQueryMappers(attr: Tokens, input: Tokens): Tokens {
             (false, CaseFormat.Camel.convert(n, to: CaseFormat.LowerUnderScore), Token(IDENTIFIER, ""))
         }
     }
-    var mappers = quote([$(generateMappers(name, props, mapperMetaFn)))
-    let varMappers = generateMappers(name, vars, mapperMetaFn)
+    var dirty = false
+    for(token in attr where token.kind == IDENTIFIER && token.value.toAsciiLower() == 'dirty'){
+        dirty = true
+        break
+    }
+    var mappers = quote([$(generateMappers(name, props, dirty, mapperMetaFn)))
+    let varMappers = generateMappers(name, extractVars(body), mapperMetaFn)//这里不能去掉，对于级联映射会用到
     if (varMappers.size > 0) {
         mappers += `comma` + varMappers
     }
@@ -148,10 +157,20 @@ private func expandQueryMappers(attr: Tokens, input: Tokens): Tokens {
             $queryMappersName
         }
     )))
-    decl.toTokens()
+    let registerDirty = if(dirty){
+        quote(
+            private let _ = f_orm_register<$name>()
+        )
+    }else{
+        `empty_tokens`
+    }
+    quote(
+        $decl
+        $registerDirty
+    )
 }
 
-func generateMappers(name: Tokens, props: Array<PropDecl>, mapperMetaFn: (String) -> (Bool, String, Token)): Tokens {
+func generateMappers(name: Tokens, props: ArrayList<PropDecl>, dirty: Bool, mapperMetaFn: (String) -> (Bool, String, Token)): Tokens {
     var tokens = quote()
     for (i in 0..props.size) {
         if (i > 0) {
@@ -159,14 +178,20 @@ func generateMappers(name: Tokens, props: Array<PropDecl>, mapperMetaFn: (String
         }
         let decl = props[i]
         let propName = decl.identifier
-        let dts = quote($(decl.declType))
+        let dts = decl.declType.toTokens()
+        if(dirty && (dts.size == 1 || (dts.size == 2 && dts[0].kind == QUEST) || (dts.size == 4 && dts[0].value == 'Option'))){
+            let expr = parseExpr(quote(f_orm_setDirtyField<$name>($(decl.identifier.value))))
+            try{
+                decl.setter.block.nodes.add(expr)
+            }catch(_){}
+        }
         let meta = mapperMetaFn(propName.value)
         tokens += generateMappers(name, propName, dts, meta)
     }
     tokens
 }
 
-func generateMappers(name: Tokens, vars: Array<VarDecl>, mapperMetaFn: (String) -> (Bool, String, Token)): Tokens {
+func generateMappers(name: Tokens, vars: ArrayList<VarDecl>, mapperMetaFn: (String) -> (Bool, String, Token)): Tokens {
     var tokens = quote()
     for (i in 0..vars.size) {
         if (i > 0) {
@@ -394,7 +419,7 @@ func generateMappers(name: Tokens, fieldName: Token, dts: Tokens, meta: (Bool, S
 }
 private func transformTableName(attrs: Tokens, decl: Decl): String {
     var className = decl.identifier.value
-    if(attrs.size == 0){
+    if(attrs.size == 0 || (attrs.size == 1 && attrs[0].kind == IDENTIFIER && attrs[0].value.toAsciiLower() == 'dirty')){
         return CaseFormat.Pascal.convert(className, to: CaseFormat.LowerUnderScore)
     }
     var tableToken = Token(STRING_LITERAL, "")
@@ -424,7 +449,7 @@ private func transformTableName(attrs: Tokens, decl: Decl): String {
                 case (_, 'tableSuffix') => 
                     tableSuffix = attrs[i + 2].value
                     i += 2
-                case (COMMA, _) | (SEMI, _) => ()
+                case (COMMA, _) | (SEMI, _) | (IDENTIFIER, 'dirty') => ()
                 case _ =>
                     diagReport(WARNING, attrs, '${attr.value} is illegal attr for @QueryMappersGenerator, which is modifying ${decl.identifier.value}', '')
             }

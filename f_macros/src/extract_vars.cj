@@ -17,16 +17,16 @@ package f_macros
 
 import f_base.*
 
-public func extractAllVars(decls: Array<Decl>): Array<VarDecl> {
+public func extractAllVars(decls: Array<Decl>): ArrayList<VarDecl> {
     let list = ArrayList<VarDecl>()
     for (decl in decls where decl is VarDecl) {
         list.add((decl as VarDecl).getOrThrow())
     }
-    list.unsafeData()
+    list
 }
 
 public func extractVars(decls: ArrayList<Decl>, extractPublic!: Bool = true, extractVar!: Bool = true,
-    extractStatic!: Bool = false): Array<VarDecl> {
+    extractStatic!: Bool = false): ArrayList<VarDecl> {
     let list = ArrayList<VarDecl>()
     for (decl in decls where decl is VarDecl && (!extractPublic || isPublic(decl)) && (!extractStatic || isStatic(decl))) {
         let varDecl = (decl as VarDecl).getOrThrow()
@@ -34,5 +34,5 @@ public func extractVars(decls: ArrayList<Decl>, extractPublic!: Bool = true, ext
             list.add(varDecl)
         }
     }
-    list.unsafeData()
+    list
 }
