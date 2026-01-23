@@ -5,6 +5,7 @@ if [[ "$path" == "" ]]; then
     path='./fdemo'
 fi
 echo "target-dir=$path"
+args=${@:3}
 
 exports(){
     # export cjHeapSize=4GB
@@ -85,7 +86,7 @@ perfReport(){
 }
 build(){
     export CANGJIE_STDX_PATH=$CANGJIE_STDX_DYNAMIC_PATH
-    fboot build $path
+    fboot build $path $args
     echo -e '\a'
 }
 
@@ -108,7 +109,7 @@ cleanUpdate)
     cleanUpdate $2 $3
     ;;
 build)
-    build
+    build 
     ;;
 launch)
     launch

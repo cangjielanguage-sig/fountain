@@ -16,7 +16,7 @@ fountain.iml
 .arts/
 .arts/*
 .rules/
-.codebuddy
+.codebuddy/
 build-script-cache/
 build.cj
 log.txt
@@ -31,3 +31,5 @@ cj_OOM_pid*.dat
 item_data.dat.cache
 post_data.json
 console.log
+.codeartsdoer/
+.codemate/

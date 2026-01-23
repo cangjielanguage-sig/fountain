@@ -79,8 +79,8 @@ public class CurrentUserController {
                 consumes:'application/json+log', 
                 produces:'application/json+log',
                 ignoreAuth: true]
-    public func loginLog(@RequestBody user: UserRequest): UserResponse {
-        login(user)
+    public func loginLog(@RequestBody user: UserRequest): UserRequest {
+        user
     }
     @PostMapping[path:'/api/user/session', 
                 consumes:'application/json', 
