@@ -17,9 +17,9 @@
   authors = ["吴京润"]
 
 [dependencies]
-  f_base  = {path = "../f_base", version = "1.0.45"}
-  f_log  = {path = "../f_log", version = "1.0.45"}
-  f_version  = {path = "../f_version", version = "1.0.45"}
+  f_base  = {path = "../f_base"}
+  f_log  = {path = "../f_log"}
+  f_version  = {path = "../f_version"}
 
 [profile.build]
   lto = "full"

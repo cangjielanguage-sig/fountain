@@ -21,10 +21,10 @@
   incremental = true
 
 [dependencies]
-  f_base  = {path = "../f_base", version = "1.0.45"}
-  f_cache  = {path = "../f_cache", version = "1.0.45"}
-  f_jwt  = {path = "../f_jwt", version = "1.0.45"}
-  f_mvc  = {path = "../f_mvc", version = "1.0.45"}
+  f_base  = {path = "../f_base"}
+  f_cache  = {path = "../f_cache"}
+  f_jwt  = {path = "../f_jwt"}
+  f_mvc  = {path = "../f_mvc"}
 
 
 [target]

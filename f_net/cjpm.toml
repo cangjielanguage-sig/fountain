@@ -1,9 +1,9 @@
 [dependencies]
-  f_base  = {path = "../f_base", version = "1.0.44"}
-  f_data = {path = "../f_data", version = "1.0.44"}
-  f_log = {path = "../f_log", version = "1.0.44"}
-  f_random = {path = "../f_random", version = "1.0.44"}
-  f_protocol = {path = "../f_protocol", version = "1.0.44"}
+  f_base  = {path = "../f_base"}
+  f_data = {path = "../f_data"}
+  f_log = {path = "../f_log"}
+  f_random = {path = "../f_random"}
+  f_protocol = {path = "../f_protocol"}
 
 [package]
   cjc-version = "1.0.4"
