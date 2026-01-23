@@ -13,11 +13,11 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package f_orm.sql
+package fountain::f_orm.sql
 
 import std.ast.*
-import f_cache.HeapCache
-import f_data.path.*
+import fountain::f_cache.HeapCache
+import fountain::f_data.path.*
 
 public interface SqlDSL {
     func setSqlFromObject<T>(dsl: String, arg: T, clearArgsAfterExec!: Bool): SqlExecutor where T <: ObjectData<T>

@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_util
+package fountain::f_util
 
 import std.collection.{ArrayList, TreeMap, HashMap, Map}
 import std.collection.concurrent.ConcurrentHashMap
@@ -23,13 +23,13 @@ import std.math.numeric.Decimal
 import std.reflect.TypeInfo
 import std.sync.Mutex
 import std.time.DateTime
-import f_base.*
-import f_collection.*
-import f_data.*
-import f_exception.UnreachableException
-import f_regex.*
-import f_time.*
-import f_util.exception.TextTemplateException
+import fountain::f_base.*
+import fountain::f_collection.*
+import fountain::f_data.*
+import fountain::f_exception.UnreachableException
+import fountain::f_regex.*
+import fountain::f_time.*
+import fountain::f_util.exception.TextTemplateException
 /**
  * 简单文本模板
  * 本类依赖ThreadLocalStringBuilder，如果使用本类的方法也使用了ThreadLocalStringBuilder请不要在那个方法内构造字符串时调用本类方法。

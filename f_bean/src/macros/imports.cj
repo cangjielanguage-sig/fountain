@@ -13,9 +13,9 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-macro package f_bean.macros
+macro package fountain::f_bean.macros
 
 internal import std.ast.*
 internal import std.collection.{ArrayList, HashMap}
-internal import f_macros.*
-internal import f_bean.exception.*
+internal import fountain::f_macros.*
+internal import fountain::f_bean.exception.*

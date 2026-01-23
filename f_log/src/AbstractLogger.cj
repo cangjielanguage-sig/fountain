@@ -13,15 +13,15 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_log
+package fountain::f_log
 
 import std.collection.concurrent.ConcurrentHashMap
 import std.io.OutputStream
 import std.sync.Mutex
 import std.time.DateTime
 import stdx.log.{LogLevel, Attr, LogRecord, LogWriter}
-import f_collection.*
-import f_log.output.LogWriterImpl
+import fountain::f_collection.*
+import fountain::f_log.output.LogWriterImpl
 
 public abstract class AbstractLogger <: Logger & Resource {
     private let locks = ConcurrentHashMap<String, Mutex>()

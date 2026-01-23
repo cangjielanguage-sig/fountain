@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-macro package f_bean.macros
+macro package fountain::f_bean.macros
 
 /**
  * 只能修饰类。将@Bean修饰的类注册到BeanFactory。如果不是泛型类型建议使用无属性的@Bean宏。

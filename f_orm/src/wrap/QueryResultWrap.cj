@@ -13,11 +13,11 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_orm.wrap
+package fountain::f_orm.wrap
 
 import std.database.sql.*
 import std.reflect.*
-import f_base.*
+import fountain::f_base.*
 
 public class QueryResultWrap <: QueryResult {
     private let columnInfoMap = HashMap<String, Int64>()

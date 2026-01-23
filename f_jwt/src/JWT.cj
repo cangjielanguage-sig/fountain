@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_jwt
+package fountain::f_jwt
 
 import std.collection.{HashMap, Map}
 import std.convert.Parsable
@@ -24,9 +24,9 @@ import stdx.encoding.json.*
 import stdx.encoding.hex.*
 import stdx.encoding.base64.*
 import stdx.crypto.keys.*
-import f_data.{ObjectData, DataObject}
-import f_exception.UnreadableException
-import f_jwt.exception.JWTException
+import fountain::f_data.{ObjectData, DataObject}
+import fountain::f_exception.UnreadableException
+import fountain::f_jwt.exception.JWTException
 
 sealed abstract class JWT {
     let headers = HashMap<String, String>()

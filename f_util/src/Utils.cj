@@ -13,11 +13,11 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_util
+package fountain::f_util
 
 import std.regex.Regex
 import std.convert.Parsable
-import f_regex.RegexFromString
+import fountain::f_regex.RegexFromString
 
 /**
  * compute parameter such as 123KB 24M etc。 to a UInt64,

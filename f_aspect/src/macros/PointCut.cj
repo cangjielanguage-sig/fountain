@@ -13,11 +13,11 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-macro package f_aspect.macros
+macro package fountain::f_aspect.macros
 
 import std.ast.*
-import f_aspect.exception.AspectException
-import f_macros.*
+import fountain::f_aspect.exception.AspectException
+import fountain::f_macros.*
 import std.reflect.*
 
 public macro Pointcut(input: Tokens): Tokens {

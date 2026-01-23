@@ -13,10 +13,10 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_orm
+package fountain::f_orm
 
-import f_base.StringGenerator
-import f_orm.exception.ORMException
+import fountain::f_base.StringGenerator
+import fountain::f_orm.exception.ORMException
 
 public class LoopCondition<I, T> where I <: Iterable<T> {
     private var _wrapLeft = ''

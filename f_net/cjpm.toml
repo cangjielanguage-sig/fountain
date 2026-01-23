@@ -1,12 +1,12 @@
 [dependencies]
-  f_base  = {path = "../f_base", version = "1.0.44"}
-  f_data = {path = "../f_data", version = "1.0.44"}
-  f_log = {path = "../f_log", version = "1.0.44"}
-  f_random = {path = "../f_random", version = "1.0.44"}
-  f_protocol = {path = "../f_protocol", version = "1.0.44"}
+  "fountain::f_base" = {path = "../f_base"}
+  "fountain::f_data" = {path = "../f_data"}
+  "fountain::f_log" = {path = "../f_log"}
+  "fountain::f_random" = {path = "../f_random"}
+  "fountain::f_protocol" = {path = "../f_protocol"}
 
 [package]
-  cjc-version = "1.0.4"
+  cjc-version = "1.1.0"
   compile-option = "-O2 --dy-std"
   override-compile-option = "-O2 --dy-std"
   description = "网络通讯"
@@ -16,7 +16,7 @@
   output-type = "dynamic"
   src-dir = ""
   target-dir = ""
-  version = "1.0.45"
+  version = "1.1.0"
   package-configuration = {}
   category = ["Utility"]
   license = ["Apache-2.0"]

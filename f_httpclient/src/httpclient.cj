@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package f_httpclient
+package fountain::f_httpclient
 
 public import std.io.{InputStream, ByteBuffer, copy}
 public import std.net.{SocketAddress, StreamingSocket}
@@ -21,9 +21,9 @@ public import stdx.net.tls.*
 public import stdx.encoding.url.*
 public import stdx.log.Logger
 public import stdx.net.http.*
-public import f_data.*
-import f_http.*
-import f_http.exception.MediaTypeException
+public import fountain::f_data.*
+import fountain::f_http.*
+import fountain::f_http.exception.MediaTypeException
 
 public class HttpClient <: Resource {
     private static var readTimeout_ = None<Duration>

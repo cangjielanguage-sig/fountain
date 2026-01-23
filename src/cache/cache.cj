@@ -15,4 +15,4 @@ limitations under the License.
  */
 package fountain.cache
 
-public import f_cache.*
+public import fountain::f_cache.*

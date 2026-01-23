@@ -1,9 +1,9 @@
 [package]
-  cjc-version = "1.0.4"
+  cjc-version = "1.1.0"
   name = "f_codec"
   organization="fountain"
   description = "codec"
-  version = "1.0.44"
+  version = "1.1.0"
   target-dir = ""
   src-dir = ""
   output-type = "dynamic"
@@ -13,9 +13,9 @@
   package-configuration = {}
 
 [dependencies]
-  f_base = {path = "../f_base"}
-  f_collection = {path = "../f_collection"}
-  f_data = {path = "../f_data"}
-  f_exception = {path = "../f_exception"}
-  f_pool = {path = "../f_pool"}
-  f_util = {path = "../f_util"}
+  "fountain::f_base" = {path = "../f_base"}
+  "fountain::f_collection" = {path = "../f_collection"}
+  "fountain::f_data" = {path = "../f_data"}
+  "fountain::f_exception" = {path = "../f_exception"}
+  "fountain::f_pool" = {path = "../f_pool"}
+  "fountain::f_util" = {path = "../f_util"}

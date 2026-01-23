@@ -13,12 +13,12 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.  
 */
-package f_util
+package fountain::f_util
 
 import std.convert.Parsable
-import f_base.*
-import f_data.DataParsable
-import f_util.exception.GeoHashException
+import fountain::f_base.*
+import fountain::f_data.DataParsable
+import fountain::f_util.exception.GeoHashException
 
 public struct GeoHash <: Hashable & Equatable<GeoHash> & ToString & Parsable<GeoHash> & DataParsable<GeoHash> {
     private static const MAX_LATITUDE: Float64 = 90.0

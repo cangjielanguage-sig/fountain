@@ -13,10 +13,10 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_http
+package fountain::f_http
 
 import std.reflect.ClassTypeInfo
-import f_log.*
+import fountain::f_log.*
 
 public class MediaTypes {
     private static let log = LoggerFactory.getLogger<MediaTypes>()

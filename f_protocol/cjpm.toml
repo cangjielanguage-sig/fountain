@@ -1,9 +1,9 @@
 [package]
-  cjc-version = "1.0.4"
+  cjc-version = "1.1.0"
   name = "f_protocol"
   organization="fountain"
   description = "a protocol implementation"
-  version = "1.0.44"
+  version = "1.1.0"
   target-dir = ""
   src-dir = ""
   output-type = "dynamic"
@@ -13,9 +13,9 @@
   package-configuration = {}
 
 [dependencies]
-  f_base = {path = "../f_base", version = "1.0.43"}
-  f_codec = {path = "../f_codec", version = "1.0.43"}
-  f_data = {path = "../f_data", version = "1.0.43"}
-  f_exception = {path = "../f_exception", version = "1.0.43"}
-  f_protocol = {path = "../f_protocol", version = "1.0.43"}
-  f_pool = {path = "../f_pool", version = "1.0.43"}
+  "fountain::f_base" = {path = "../f_base"}
+  "fountain::f_codec" = {path = "../f_codec"}
+  "fountain::f_data" = {path = "../f_data"}
+  "fountain::f_exception" = {path = "../f_exception"}
+  "fountain::f_protocol" = {path = "../f_protocol"}
+  "fountain::f_pool" = {path = "../f_pool"}

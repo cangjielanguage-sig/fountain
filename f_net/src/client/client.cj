@@ -13,18 +13,18 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_net.client
+package fountain::f_net.client
 
 import std.io.OutputStream
 import std.collection.ArrayList
 import std.collection.concurrent.ConcurrentHashMap
 import std.sync.{Timer, CatchupStyle}
 import std.net.IPSocketAddress
-import f_data.*
-import f_log.*
-import f_protocol.*
-import f_random.*
-import f_net.*
+import fountain::f_data.*
+import fountain::f_log.*
+import fountain::f_protocol.*
+import fountain::f_random.*
+import fountain::f_net.*
 
 public struct Client<DE, EN, M, T, ID> where EN <: MessageCopier, M <: Protocol<EN, DE>, T <: DataFields<T>,
     ID <: Hashable & Equatable<ID> {

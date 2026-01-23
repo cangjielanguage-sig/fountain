@@ -13,9 +13,9 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package f_util
+package fountain::f_util
 
-import f_data.Validator
+import fountain::f_data.Validator
 
 @Annotation[target: [MemberVariable, MemberProperty, Parameter]]
 public class IsUUID <: Validator {

@@ -15,4 +15,4 @@ limitations under the License.
  */
 package fountain.process
 
-public import f_process.*
+public import fountain::f_process.*

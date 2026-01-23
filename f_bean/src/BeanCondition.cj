@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_bean
+package fountain::f_bean
 
 /**
  * bean初始化条件，满足条件的bean才初始化，否则将被从BeanFactory删除

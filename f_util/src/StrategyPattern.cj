@@ -13,10 +13,10 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_util
+package fountain::f_util
 
 import std.collection.{HashMap, ArrayList}
-import f_exception.IllegalAccessException
+import fountain::f_exception.IllegalAccessException
 
 /*
  * 策略模式的接口，所有策略都要实现此接口

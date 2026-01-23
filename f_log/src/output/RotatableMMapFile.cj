@@ -13,10 +13,10 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package f_log.output
+package fountain::f_log.output
 
 import std.collection.concurrent.ArrayBlockingQueue
-import f_io.*
+import fountain::f_io.*
 
 @When[os == "Linux"]
 protected class RotatableMMapFile <: OutputStream & Resource {

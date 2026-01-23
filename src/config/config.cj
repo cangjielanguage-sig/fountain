@@ -15,4 +15,4 @@ limitations under the License.
  */
 package fountain.config
 
-public import f_config.*
+public import fountain::f_config.*

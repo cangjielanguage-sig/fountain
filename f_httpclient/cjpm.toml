@@ -1,11 +1,11 @@
 [dependencies]
-  charset4cj = { git = "https://gitcode.com/Cangjie-TPC/charset4cj.git", branch = "develop"}
-  f_base  = {path = "../f_base", version = "1.0.45"}
-  f_data  = {path = "../f_data", version = "1.0.45"}
-  f_http  = {path = "../f_http", version = "1.0.45"}
+  "cangjie_tpc::charset4cj" = "1.0.5"
+  "fountain::f_base" = {path = "../f_base"}
+  "fountain::f_data" = {path = "../f_data"}
+  "fountain::f_http" = {path = "../f_http"}
 
 [package]
-  cjc-version = "1.0.4"
+  cjc-version = "1.1.0"
   compile-option = "-O2 --dy-std"
   override-compile-option = "-O2 --dy-std"
   description = "HTTP客户端"
@@ -15,7 +15,7 @@
   output-type = "dynamic"
   src-dir = ""
   target-dir = ""
-  version = "1.0.45"
+  version = "1.1.0"
   package-configuration = {}
   category = ["Utility"]
   license = ["Apache-2.0"]

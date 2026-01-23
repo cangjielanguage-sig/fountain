@@ -13,16 +13,16 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_log
+package fountain::f_log
 
 import std.collection.{ArrayList, HashMap, TreeMap}
 import std.collection.concurrent.ConcurrentHashMap
 import stdx.log.LogLevel
 import stdx.log.Logger as StdLogger
-import f_base.*
-import f_collection.LinkedHashMap
-import f_data.*
-import f_util.TextTemplate
+import fountain::f_base.*
+import fountain::f_collection.LinkedHashMap
+import fountain::f_data.*
+import fountain::f_util.TextTemplate
 
 /**
  * 函数logLevelEnabled和各种日志级别的Enabled属性，不必在应用代码中显式调用，本日志框架记录日志前已做过判断

@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_data
+package fountain::f_data
 
 public func f_data_eq<T>(a: T, b: T): Bool where T <: Equatable<T> {
     a == b

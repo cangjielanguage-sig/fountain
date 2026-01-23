@@ -13,16 +13,16 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_cmd
+package fountain::f_cmd
 
 import std.collection.{HashMap, ArrayList}
 import std.convert.Parsable
 import std.fs.Path
 import std.env
 import std.process.Process
-import f_base.*
-import f_regex.*
-import f_cmd.exception.CmdException
+import fountain::f_base.*
+import fountain::f_regex.*
+import fountain::f_cmd.exception.CmdException
 
 public class CmdArgs {
     private var args = HashMap<String, ArrayList<String>>()

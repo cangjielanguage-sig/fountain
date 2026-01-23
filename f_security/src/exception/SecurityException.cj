@@ -13,9 +13,9 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package f_security.exception
+package fountain::f_security.exception
 
-import f_base.BaseException
+import fountain::f_base.BaseException
 
 public class SecurityException <: BaseException {
     public init() {}

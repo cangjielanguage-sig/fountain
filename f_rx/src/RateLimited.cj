@@ -13,9 +13,9 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package f_rx
+package fountain::f_rx
 
-import f_concurrent.{RateLimiter, AnyMomentRateLimiter, LeakingBucketRateLimiter, SlidingWindowRateLimiter, TokenBucketRateLimiter}
+import fountain::f_concurrent.{RateLimiter, AnyMomentRateLimiter, LeakingBucketRateLimiter, SlidingWindowRateLimiter, TokenBucketRateLimiter}
 
 /**
  * limiter 是限流算法，policy是被限流算法命中时执行的策略，discardedPolicy是被限流算法丢弃时的背压策略

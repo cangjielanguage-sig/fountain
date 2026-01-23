@@ -15,4 +15,4 @@ limitations under the License.
  */
 macro package fountain.aspect.macros
 
-public import f_aspect.macros.*
+public import fountain::f_aspect.macros.*

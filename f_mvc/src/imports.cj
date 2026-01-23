@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_mvc
+package fountain::f_mvc
 
 internal import std.ast.*
 internal import std.collection.concurrent.ConcurrentHashMap
@@ -28,14 +28,14 @@ internal import stdx.encoding.base64.*
 internal import stdx.encoding.hex.*
 internal import stdx.net.tls.*
 internal import stdx.crypto.x509.*
-internal import charset4cj.charset.encoding.Charset
-internal import charset4cj.charset.{Charsets, TextReader, TextWriter}
-internal import f_collection.*
-internal import f_concurrent.ConcurrentHashSet
-internal import f_data.json.*
-internal import f_exception.{UnreachableException, IllegalArgException}
-internal import f_random.RandomString
-internal import f_regex.*
+internal import cangjie_tpc::charset4cj.charset.encoding.Charset
+internal import cangjie_tpc::charset4cj.charset.{Charsets, TextReader, TextWriter}
+internal import fountain::f_collection.*
+internal import fountain::f_concurrent.ConcurrentHashSet
+internal import fountain::f_data.json.*
+internal import fountain::f_exception.{UnreachableException, IllegalArgException}
+internal import fountain::f_random.RandomString
+internal import fountain::f_regex.*
 
 public import std.collection.{ArrayList, HashMap, HashSet, TreeMap}
 public import std.io.{InputStream, OutputStream, ByteBuffer, copy}
@@ -43,12 +43,12 @@ public import std.time.{DateTime, MonoTime}
 public import stdx.encoding.json.*
 public import stdx.encoding.url.*
 public import stdx.net.http.*
-public import f_aspect.*
-public import f_base.*
-public import f_bean.*
-public import f_config.*
-public import f_data.*
-public import f_data.exception.ValidationException
-public import f_log.impl.*
-public import f_mvc.exception.*
-public import f_util.PathPattern
+public import fountain::f_aspect.*
+public import fountain::f_base.*
+public import fountain::f_bean.*
+public import fountain::f_config.*
+public import fountain::f_data.*
+public import fountain::f_data.exception.ValidationException
+public import fountain::f_log.impl.*
+public import fountain::f_mvc.exception.*
+public import fountain::f_util.PathPattern

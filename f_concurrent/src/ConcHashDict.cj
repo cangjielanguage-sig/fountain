@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_concurrent
+package fountain::f_concurrent
 
 public class ConcHashDict<K, V> <: ConcDict<K, V> {
     private ConcHashDict(let map: ConcurrentHashMap<HashKey<K>, V>, private let hasher: (K) -> Int64, private let equals: (K, K) -> Bool){}

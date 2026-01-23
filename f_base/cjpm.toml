@@ -1,7 +1,7 @@
 [dependencies]
-  charset4cj = { git = "https://gitcode.com/Cangjie-TPC/charset4cj.git", branch = "develop"}
+  "cangjie_tpc::charset4cj" = "1.0.5"
 [package]
-  cjc-version = "1.0.4"
+  cjc-version = "1.1.0"
   compile-option = "-O2 --dy-std"
   override-compile-option = "-O2 --dy-std"
   description = "some extends for Iterator, enum OS, unsafe bytes for String, unsafe data for ArrayList, extend Option, extend Array, extend Range, extend Number, extend String, extend ThreadLocal, HashBuilder, StringGenerator，etc."
@@ -11,7 +11,7 @@
   output-type = "dynamic"
   src-dir = ""
   target-dir = ""
-  version = "1.0.45"
+  version = "1.1.0"
   package-configuration = {}
   category = ["Utility"]
   license = ["Apache-2.0"]

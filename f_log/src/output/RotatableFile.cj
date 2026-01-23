@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_log.output
+package fountain::f_log.output
 
 import std.convert.Parsable
 import std.collection.concurrent.ArrayBlockingQueue
@@ -23,11 +23,11 @@ import std.io.{SeekPosition, OutputStream}
 import std.sync.{Timer, Mutex, AtomicOptionReference}
 import std.time.DateTime
 import stdx.compress.zlib.{WrapType, CompressLevel, CompressOutputStream}
-import f_base.*
-import f_io.*// 必须导入这个包mmap才生效
-import f_time.TimeUnit
+import fountain::f_base.*
+import fountain::f_io.*// 必须导入这个包mmap才生效
+import fountain::f_time.TimeUnit
 
-internal import f_log.exception.LogException
+internal import fountain::f_log.exception.LogException
 
 public class RotatableFileParams <: Hashable & Equatable<RotatableFileParams> {
     public var path = "${env.getWorkingDirectory()}/logs/${env.getCommand()}.log"

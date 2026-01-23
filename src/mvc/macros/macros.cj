@@ -15,4 +15,4 @@ limitations under the License.
  */
 macro package fountain.mvc.macros
 
-public import f_mvc.macros.*
+public import fountain::f_mvc.macros.*

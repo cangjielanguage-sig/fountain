@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_collection
+package fountain::f_collection
 
 public class IntersectionSetIterator<T> <: Iterator<T> {
     IntersectionSetIterator(private let itr: Iterator<T>, private let set: Set<T>){}

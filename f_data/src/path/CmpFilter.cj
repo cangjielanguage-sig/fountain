@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_data.path
+package fountain::f_data.path
 
 internal class CmpFilter<T> <: DataFilter where T <: Comparable<T> {
     CmpFilter(private let left: DataPath, private let right: T, private let ordering: Ordering, private let eq: Bool) {}

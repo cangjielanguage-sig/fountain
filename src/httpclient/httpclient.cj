@@ -15,4 +15,4 @@ limitations under the License.
 */
 package fountain.httpclient
 
-public import f_httpclient.*
+public import fountain::f_httpclient.*

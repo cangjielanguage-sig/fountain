@@ -13,13 +13,13 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-macro package f_data.macros
+macro package fountain::f_data.macros
 
 import std.ast
 import std.ast.*
 import std.collection.{HashSet, ArrayList}
-import f_data.*
-import f_macros.*
+import fountain::f_data.*
+import fountain::f_macros.*
 
 /**
  * 支持以下特性，不分大小写

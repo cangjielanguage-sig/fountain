@@ -13,14 +13,14 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-macro package f_orm.macros
+macro package fountain::f_orm.macros
 
 import std.ast.*
 import std.collection.HashMap
-import f_macros.*
-import f_orm.exception.ORMException
-import f_regex.*
-import f_util.CaseFormat
+import fountain::f_macros.*
+import fountain::f_orm.exception.ORMException
+import fountain::f_regex.*
+import fountain::f_util.CaseFormat
 
 /**
  * 必须跟@ORMField配合使用

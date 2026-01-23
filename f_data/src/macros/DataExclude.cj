@@ -13,11 +13,11 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-macro package f_data.macros
+macro package fountain::f_data.macros
 
 import std.ast.*
-import f_data.exception.DataException
-import f_macros.*
+import fountain::f_data.exception.DataException
+import fountain::f_macros.*
 
 /**
  * attrs取值可以是prop hash equal compare tostring field或Prop Hash Equal Compare ToString toString Field

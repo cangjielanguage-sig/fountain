@@ -15,4 +15,4 @@ limitations under the License.
  */
 package fountain.base
 
-public import f_base.*
+public import fountain::f_base.*

@@ -15,4 +15,4 @@ limitations under the License.
  */
 package fountain.net
 
-public import f_net.*
+public import fountain::f_net.*

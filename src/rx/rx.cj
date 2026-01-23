@@ -15,4 +15,4 @@ limitations under the License.
 */
 package fountain.rx
 
-public import f_rx.*
+public import fountain::f_rx.*

@@ -13,12 +13,12 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_http
+package fountain::f_http
 
-import f_collection.*
-import f_data.*
-import f_io.RotatableBuffer
-import f_util.UUID
+import fountain::f_collection.*
+import fountain::f_data.*
+import fountain::f_io.RotatableBuffer
+import fountain::f_util.UUID
 /**
 https://www.rfc-editor.org/rfc/rfc1867
 multipart/form-data

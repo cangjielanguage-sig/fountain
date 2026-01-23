@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package f_log.impl
+package fountain::f_log.impl
 
 internal import std.collection.HashMap
 internal import std.collection.concurrent.*
@@ -24,12 +24,12 @@ internal import std.sync.Mutex
 internal import std.time.DateTime
 internal import stdx.log.LogLevel
 
-internal import f_base.*
-internal import f_collection.*
-internal import f_data.*
-// internal import f_exception.*
-internal import f_log.exception.*
-internal import f_log.output.*
-internal import f_time.TimeUnit
+internal import fountain::f_base.*
+internal import fountain::f_collection.*
+internal import fountain::f_data.*
+// internal import fountain::f_exception.*
+internal import fountain::f_log.exception.*
+internal import fountain::f_log.output.*
+internal import fountain::f_time.TimeUnit
 
-public import f_log.*
+public import fountain::f_log.*

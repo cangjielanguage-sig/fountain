@@ -15,4 +15,4 @@ limitations under the License.
  */
 package fountain.concurrent
 
-public import f_concurrent.*
+public import fountain::f_concurrent.*

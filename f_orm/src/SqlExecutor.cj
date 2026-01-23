@@ -13,14 +13,14 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_orm
+package fountain::f_orm
 
 import std.collection.HashMap
-import f_collection.*
-import f_data.*
-import f_log.impl.*
-import f_orm.wrap.*
-import f_orm.exception.*
+import fountain::f_collection.*
+import fountain::f_data.*
+import fountain::f_log.impl.*
+import fountain::f_orm.wrap.*
+import fountain::f_orm.exception.*
 
 public class SqlCacheKey <: Hashable & Equatable<SqlCacheKey> & ToString {
     private let h: Int64

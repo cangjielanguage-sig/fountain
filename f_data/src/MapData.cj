@@ -13,9 +13,9 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_data
+package fountain::f_data
 
-import f_collection.*
+import fountain::f_collection.*
 
 public class DataMapIterator<K, V> <: Iterator<(Data, Data)> where K <: Equatable<K> & DataFields<K>, V <: DataFields<V> {
     public DataMapIterator(private let itr: Iterator<(K, V)>) {}

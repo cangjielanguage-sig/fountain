@@ -1,7 +1,7 @@
 [dependencies]
-  f_exception  = {path = "../f_exception", version = "1.0.45"}
+  "fountain::f_exception" = {path = "../f_exception"}
 [package]
-  cjc-version = "1.0.4"
+  cjc-version = "1.1.0"
   compile-option = "-O2 --dy-std"
   override-compile-option = "-O2 --dy-std"
   description = "时间扩展"
@@ -11,7 +11,7 @@
   output-type = "dynamic"
   src-dir = ""
   target-dir = ""
-  version = "1.0.45"
+  version = "1.1.0"
   package-configuration = {}
   category = ["Utility"]
   license = ["Apache-2.0"]

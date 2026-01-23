@@ -13,15 +13,15 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_process
+package fountain::f_process
 
 import std.collection.{Map, HashMap}
 import std.env.*
 import std.fs.Path
 import std.io.{InputStream, OutputStream}
 import std.process.{Process, SubProcess, ProcessRedirect, launch}
-import f_io.{asyncPipe, pipe}
-import f_regex.*
+import fountain::f_io.{asyncPipe, pipe}
+import fountain::f_regex.*
 
 public interface ExtendProcess {
     func piped(workingDirectory!: ?Path, environment!: ?Map<String, String>, stdIn!: InputStream, stdOut!: OutputStream,

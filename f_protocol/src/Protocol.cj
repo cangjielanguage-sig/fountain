@@ -13,10 +13,10 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package f_protocol
+package fountain::f_protocol
 
 import std.io.{BufferedInputStream, InputStream, OutputStream}
-import f_data.DataFields
+import fountain::f_data.DataFields
 
 public interface Protocol<EN, DE> where EN <: MessageCopier {
     func encode(): EN

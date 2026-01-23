@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package f_protocol.default
+package fountain::f_protocol.default
 
 internal import std.collection.ArrayList
 internal import std.env.getProcessId
@@ -21,11 +21,11 @@ internal import std.io.{InputStream, OutputStream, BufferedInputStream}
 internal import std.net.{IPAddress, TcpSocket, IPSocketAddress}
 internal import std.reflect.*
 internal import std.time.DateTime
-internal import f_base.*
-internal import f_codec.*
-internal import f_codec.default.*
-internal import f_data.*
-internal import f_exception.UnreachableException
-internal import f_pool.BytesCopyTo
-internal import f_protocol.exception.*
-internal import f_protocol.*
+internal import fountain::f_base.*
+internal import fountain::f_codec.*
+internal import fountain::f_codec.default.*
+internal import fountain::f_data.*
+internal import fountain::f_exception.UnreachableException
+internal import fountain::f_pool.BytesCopyTo
+internal import fountain::f_protocol.exception.*
+internal import fountain::f_protocol.*

@@ -13,15 +13,15 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_util
+package fountain::f_util
 
 import std.sync.Mutex
 import std.collection.{ArrayList, Map, HashMap}
 import std.convert.Parsable
 import std.time.DateTime
-import f_base.*
-import f_data.DataParsable
-import f_regex.*
+import fountain::f_base.*
+import fountain::f_data.DataParsable
+import fountain::f_regex.*
 
 /**
  * 路径匹配工具，可以匹配各种绝对路径，这个工具从一个java版本的实现复制过来，java版本已经在生产环境使用。

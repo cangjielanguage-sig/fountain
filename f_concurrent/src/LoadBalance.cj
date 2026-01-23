@@ -13,14 +13,14 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package f_concurrent
+package fountain::f_concurrent
 
 import std.collection.TreeMap
 import std.math.Number as StdNumber
 import std.sync.*
 import stdx.crypto.crypto.SecureRandom
-import f_base.Addable
-import f_random.*
+import fountain::f_base.Addable
+import fountain::f_random.*
 
 public interface LoadBalanceAlgo<W> where W <: Addable<W> & Comparable<W> {
     mut func next(): W

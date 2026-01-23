@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_log
+package fountain::f_log
 
 import std.collection.ArrayList
 import std.collection.concurrent.{ArrayBlockingQueue, ConcurrentHashMap}
@@ -22,10 +22,10 @@ import std.io.OutputStream
 import std.sync.AtomicInt64
 import std.time.DateTime
 import stdx.log.{LogLevel, LogRecord}
-import f_base.Console
-import f_collection.*
-import f_io.DummyOutputStream
-import f_log.exception.LogException
+import fountain::f_base.Console
+import fountain::f_collection.*
+import fountain::f_io.DummyOutputStream
+import fountain::f_log.exception.LogException
 
 private struct SyncQueueStream{
     let queue: ArrayBlockingQueue<() -> Unit>

@@ -13,13 +13,13 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_io
+package fountain::f_io
 
 import std.io.*
 import std.fs.*
 import std.sync.AtomicInt64
-import f_base.*
-import f_io.exception.MMapException
+import fountain::f_base.*
+import fountain::f_io.exception.MMapException
 
 /**
  * 内存映射文件，本类没有做并发安全处理

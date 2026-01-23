@@ -15,4 +15,4 @@ limitations under the License.
  */
 package fountain.macros
 
-public import f_macros.*
+public import fountain::f_macros.*

@@ -13,13 +13,13 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_jwt
+package fountain::f_jwt
 
 import std.crypto.digest.{Digest, digest as stdDigest}
 import stdx.crypto.digest.*
 import stdx.crypto.keys.*
 import stdx.crypto.x509.{PrivateKey, PublicKey}
-import f_jwt.exception.*
+import fountain::f_jwt.exception.*
 
 abstract sealed class SignAlgo {
     protected SignAlgo(protected let digest: Digest) {}

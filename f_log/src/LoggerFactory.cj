@@ -13,13 +13,13 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_log
+package fountain::f_log
 
 import std.collection.concurrent.ConcurrentHashMap
 import std.reflect.TypeInfo
 import stdx.log.Attr
-import f_base.*
-import f_collection.*
+import fountain::f_base.*
+import fountain::f_collection.*
 
 internal let globalAttrMap = ConcurrentHashMap<String, Array<Attr>>()
 

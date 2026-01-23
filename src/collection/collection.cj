@@ -15,4 +15,4 @@ limitations under the License.
  */
 package fountain.collection
 
-public import f_collection.*
+public import fountain::f_collection.*

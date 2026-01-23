@@ -13,14 +13,14 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package f_http
+package fountain::f_http
 
 import std.collection.ArrayList
 import std.io.{InputStream, OutputStream, ByteBuffer, copy}
 import std.fs.File
 import std.time.DateTime
-import f_base.*
-import f_random.RandomString
+import fountain::f_base.*
+import fountain::f_random.RandomString
 
 public class MultipartFormData {
     public let boundary = 'FountainBoundary${RandomString().randomLettersNumbers(32)}'

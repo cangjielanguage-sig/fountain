@@ -15,4 +15,4 @@ limitations under the License.
  */
 package fountain.regex
 
-public import f_regex.*
+public import fountain::f_regex.*

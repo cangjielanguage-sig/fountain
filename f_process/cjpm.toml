@@ -1,9 +1,9 @@
 [dependencies]
-  charset4cj = { git = "https://gitcode.com/Cangjie-TPC/charset4cj.git", branch = "develop"}
-  f_io  = {path = "../f_io", version = "1.0.45"}
-  f_regex  = {path = "../f_regex", version = "1.0.45"}
+  "cangjie_tpc::charset4cj" = "1.0.5"
+  "fountain::f_io" = {path = "../f_io"}
+  "fountain::f_regex" = {path = "../f_regex"}
 [package]
-  cjc-version = "1.0.4"
+  cjc-version = "1.1.0"
   compile-option = "-O2 --dy-std"
   override-compile-option = "-O2 --dy-std"
   description = "进程扩展模块"
@@ -13,7 +13,7 @@
   output-type = "dynamic"
   src-dir = ""
   target-dir = ""
-  version = "1.0.45"
+  version = "1.1.0"
   package-configuration = {}
   category = ["Utility"]
   license = ["Apache-2.0"]

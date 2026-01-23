@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
  */
 
-package f_orm
+package fountain::f_orm
 
 public interface RootService {
     func executor(name: String): SqlExecutor {

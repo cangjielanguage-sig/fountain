@@ -15,4 +15,4 @@ limitations under the License.
  */
 package fountain.util
 
-public import f_util.*
+public import fountain::f_util.*

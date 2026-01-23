@@ -13,14 +13,14 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_log
+package fountain::f_log
 
 import std.sync.AtomicReference
 import std.convert.Parsable
 import stdx.log.LogLevel
-import f_config.Config
-import f_data.*
-import f_log.exception.LogException
+import fountain::f_config.Config
+import fountain::f_data.*
+import fountain::f_log.exception.LogException
 
 /**
  *

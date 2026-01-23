@@ -13,10 +13,10 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_ticktock
+package fountain::f_ticktock
 
 import std.collection.ArrayList
-import f_time.ExtendDateTime
+import fountain::f_time.ExtendDateTime
 
 abstract sealed class TicktockUnit <: Currently & ToString & Hashable & Equatable<TicktockUnit> {
     public static let SECONDLY = SecondlyTicktockUnit(0, false, 0..=59, 59..=59)

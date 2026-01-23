@@ -13,11 +13,11 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_random
+package fountain::f_random
 
 import std.collection.ArrayList
 import stdx.crypto.crypto.SecureRandom
-import f_base.*
+import fountain::f_base.*
 
 /*
    Rune 到 UInt32 的转换使用 UInt32(e) 的方式，其中 e 是一个 Rune 类型的表达式， UInt32(e)

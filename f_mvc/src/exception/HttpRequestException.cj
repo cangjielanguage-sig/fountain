@@ -13,9 +13,9 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_mvc.exception
+package fountain::f_mvc.exception
 
-internal import f_exception.BaseException
+internal import fountain::f_exception.BaseException
 
 public class HttpRequestException <: BaseException {
     public init() {}

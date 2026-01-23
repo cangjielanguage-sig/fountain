@@ -13,12 +13,12 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_io
+package fountain::f_io
 
 internal import std.io.{InputStream, OutputStream, ByteBuffer}
 internal import std.collection.concurrent.ArrayBlockingQueue
-import f_base.*
-import f_exception.IllegalSizeException
+import fountain::f_base.*
+import fountain::f_exception.IllegalSizeException
 
 public func pipe<I, O>(input!: I, output!: O, bufferSize!: Int64 = 4096): Unit where I <: InputStream, O <: OutputStream {
     let buf = Array<Byte>(bufferSize, repeat: 0)

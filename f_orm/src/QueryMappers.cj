@@ -13,11 +13,11 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_orm
+package fountain::f_orm
 
 import std.collection.HashMap
-import f_base.*
-import f_collection.{LinkedHashMap, ExtendMap}
+import fountain::f_base.*
+import fountain::f_collection.{LinkedHashMap, ExtendMap}
 
 public class QueryMappers<O> {
     private var hasGroup = false

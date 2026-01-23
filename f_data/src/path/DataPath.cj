@@ -13,16 +13,16 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_data.path
+package fountain::f_data.path
 
 import std.ast.{cangjieLex, Tokens, Token, TokenKind}
 import std.collection.{ArrayList, LinkedList, HashSet}
 import std.convert.Parsable
 import std.reflect.*
-import f_base.*
-import f_macros.*
-import f_data.exception.DataException
-public import f_data.*
+import fountain::f_base.*
+import fountain::f_macros.*
+import fountain::f_data.exception.DataException
+public import fountain::f_data.*
 
 /**
  * $                根元素

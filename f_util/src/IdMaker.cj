@@ -13,12 +13,12 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_util
+package fountain::f_util
 
 import std.time.DateTime
 import std.sync.AtomicInt64
-import f_config.*
-import f_util.exception.IdException
+import fountain::f_config.*
+import fountain::f_util.exception.IdException
 
 public class IdMaker {
     public static const HOST_SERIAL = "idMakerHostSerial"

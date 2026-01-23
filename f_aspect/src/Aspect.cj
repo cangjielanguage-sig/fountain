@@ -13,9 +13,9 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_aspect
+package fountain::f_aspect
 
-public import f_aspect.exception.AspectBeforeException
+public import fountain::f_aspect.exception.AspectBeforeException
 
 /**
  * 所有切面必须实现本接口，且必须被@AspectRoute修饰。

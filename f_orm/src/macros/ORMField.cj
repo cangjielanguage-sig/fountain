@@ -13,12 +13,12 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-macro package f_orm.macros
+macro package fountain::f_orm.macros
 
 import std.ast.*
-import f_macros.*
-import f_orm.exception.*
-import f_util.CaseFormat
+import fountain::f_macros.*
+import fountain::f_orm.exception.*
+import fountain::f_util.CaseFormat
 
 /**
  * 必须跟@QueryMappersGenerator配合使用

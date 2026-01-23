@@ -13,9 +13,9 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_data
+package fountain::f_data
 
-import f_base.*
+import fountain::f_base.*
 
 struct AnnotationTag <: Hashable & Equatable<AnnotationTag> {
     private let h: Int64

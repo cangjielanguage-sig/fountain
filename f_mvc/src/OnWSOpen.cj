@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.  
 */
-package f_mvc
+package fountain::f_mvc
 
 /**
  * 如果需要主动向客户端写应为被@OnWSOpen注解的函数声明WebSocket参数并设法保持此WebSocket实例。

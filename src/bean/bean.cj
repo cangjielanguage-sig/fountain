@@ -15,4 +15,4 @@ limitations under the License.
  */
 package fountain.bean
 
-public import f_bean.*
+public import fountain::f_bean.*

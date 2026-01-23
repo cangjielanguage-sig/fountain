@@ -15,4 +15,4 @@ limitations under the License.
  */
 package fountain.ticktock
 
-public import f_ticktock.*
+public import fountain::f_ticktock.*

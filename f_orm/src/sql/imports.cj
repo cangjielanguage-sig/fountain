@@ -13,17 +13,17 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package f_orm.sql
+package fountain::f_orm.sql
 
 internal import std.collection.concurrent.ConcurrentHashMap
-internal import f_collection.*
-internal import f_exception.IllegalAccessException
-internal import f_regex.*
-internal import f_orm.exception.*
-internal import f_orm.{f_orm_getDirtyFields, f_orm_clear}
+internal import fountain::f_collection.*
+internal import fountain::f_exception.IllegalAccessException
+internal import fountain::f_regex.*
+internal import fountain::f_orm.exception.*
+internal import fountain::f_orm.{f_orm_getDirtyFields, f_orm_clear}
 
-public import f_base.*
-public import f_bean.*
-public import f_data.*
-public import f_orm.*
+public import fountain::f_base.*
+public import fountain::f_bean.*
+public import fountain::f_data.*
+public import fountain::f_orm.*
 

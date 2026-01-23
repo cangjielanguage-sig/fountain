@@ -13,12 +13,12 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package f_orm
+package fountain::f_orm
 
 import std.collection.HashSet
 import std.collection.concurrent.ConcurrentHashMap
 import std.reflect.TypeInfo
-import f_orm.exception.DirtyFieldException
+import fountain::f_orm.exception.DirtyFieldException
 
 private let dirtyFields = ConcurrentHashMap<TypeInfo, ThreadLocal<HashSet<String>>>()
 

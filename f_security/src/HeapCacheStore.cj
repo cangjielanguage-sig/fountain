@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package f_security
+package fountain::f_security
 
 public struct HeapCacheStore<ID, P> <: PrincipalStore<ID, P> where ID <: Hashable & Equatable<ID> & ToString, P <: Object & Principal<ID, P> {
     private let cache: HeapCache<P>

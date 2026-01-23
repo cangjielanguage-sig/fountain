@@ -15,4 +15,4 @@ limitations under the License.
  */
 package fountain.aspect
 
-public import f_aspect.*
+public import fountain::f_aspect.*

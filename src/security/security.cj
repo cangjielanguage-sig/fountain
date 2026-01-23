@@ -15,5 +15,5 @@ limitations under the License.
 */
 package fountain.security
 
-public import f_security.*
-public import f_security.exception.*
+public import fountain::f_security.*
+public import fountain::f_security.exception.*

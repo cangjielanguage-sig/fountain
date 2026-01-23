@@ -15,4 +15,4 @@ limitations under the License.
  */
 package fountain.pool
 
-public import f_pool.Pool
+public import fountain::f_pool.Pool

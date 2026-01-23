@@ -13,11 +13,11 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_orm
+package fountain::f_orm
 
 import std.unittest.*
 import std.unittest.testmacro.*
-internal import f_orm.wrap.*
+internal import fountain::f_orm.wrap.*
 
 @Test
 public class ORMTest {

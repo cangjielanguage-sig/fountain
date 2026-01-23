@@ -13,11 +13,11 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_aspect
+package fountain::f_aspect
 
 public import std.reflect.*
-import f_base.*
-import f_regex.*
+import fountain::f_base.*
+import fountain::f_regex.*
 
 /**
  * 用来修饰切面也就是Aspect的实现类

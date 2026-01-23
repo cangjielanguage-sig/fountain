@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_bean
+package fountain::f_bean
 
 internal import std.collection.{TreeMap, LinkedList, ArrayList, TreeSet, HashSet}
 internal import std.collection.concurrent.ConcurrentHashMap
@@ -22,15 +22,15 @@ internal import std.env.*
 internal import std.process.Process
 internal import std.reflect.*
 internal import std.sync.{AtomicInt64, AtomicBool, AtomicOptionReference, Mutex}
-internal import f_config.Config
-internal import f_data.*
-internal import f_regex.*
+internal import fountain::f_config.Config
+internal import fountain::f_data.*
+internal import fountain::f_regex.*
 public import std.collection.{HashMap, ArrayList}
 public import std.convert.*
-public import f_base.*
-public import f_bean.exception.*
-public import f_config.*
-public import f_data.*
+public import fountain::f_base.*
+public import fountain::f_bean.exception.*
+public import fountain::f_config.*
+public import fountain::f_data.*
 
 public const SHOULD_INIT_BEAN_CONF_KEY = 'shouldInitBean'
 /**

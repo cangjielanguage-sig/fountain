@@ -13,10 +13,10 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_jwt
+package fountain::f_jwt
 
 import std.time.DateTime
-import f_cache.*
+import fountain::f_cache.*
 
 public interface JwtIdCache<T> where T <: Equatable<T> {
     func put(id: T, expire: Duration): Unit

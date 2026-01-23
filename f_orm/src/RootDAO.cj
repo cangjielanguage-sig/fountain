@@ -14,13 +14,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
  */
 
-package f_orm
+package fountain::f_orm
 
 import std.math.numeric.{BigInt, Decimal}
 import std.time.DateTime
 
-import f_base.*
-import f_data.*
+import fountain::f_base.*
+import fountain::f_data.*
 
 /**
  * 所有的DAO接口都要继承本接口

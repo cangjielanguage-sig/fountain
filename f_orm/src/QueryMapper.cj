@@ -13,13 +13,13 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_orm
+package fountain::f_orm
 
 import std.collection.{ArrayList, Map, HashMap, Set, List}
-import f_base.OverSizeException
-import f_exception.TypeCastException
-import f_base.EmptyMap
-import f_base.ExtendOption
+import fountain::f_base.OverSizeException
+import fountain::f_exception.TypeCastException
+import fountain::f_base.EmptyMap
+import fountain::f_base.ExtendOption
 
 /* 数据映射类型，把数据库里的值，读出来调用putter，把值填充到指定的对象，
  * 一个数据库列对应一个QueryMapper, 泛型O是要填充的对象类型

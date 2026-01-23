@@ -13,10 +13,10 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-macro package f_mvc.macros
+macro package fountain::f_mvc.macros
 
 import std.ast.*
-import f_macros.*
+import fountain::f_macros.*
 
 /**
  * attr的可选项

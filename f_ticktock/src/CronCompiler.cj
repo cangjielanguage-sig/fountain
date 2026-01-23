@@ -13,12 +13,12 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_ticktock
+package fountain::f_ticktock
 
 import std.collection.ArrayList
 import std.convert.Parsable
 import std.regex.Regex
-import f_regex.RegexFromString
+import fountain::f_regex.RegexFromString
 
 public class CronCompiler {
     /**

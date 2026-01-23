@@ -13,10 +13,10 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-macro package f_orm.macros
+macro package fountain::f_orm.macros
 
 import std.ast.*
-import f_macros.*
+import fountain::f_macros.*
 
 //DAO 接口必须是public，不能带泛型形参，且必须继承orm.RootDAO
 //在DAO接口函数的默认实现添加生成sql和调用RootDAO函数完成访问数据库的工作

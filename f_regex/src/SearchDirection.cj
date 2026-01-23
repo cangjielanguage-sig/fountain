@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_regex
+package fountain::f_regex
 
 /**
  * LOOK_AHEAD: 前向匹配，(?=X)

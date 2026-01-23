@@ -13,14 +13,14 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_process
+package fountain::f_process
 
 import std.io.{InputStream, OutputStream}
 import std.env.*
 public import std.fs.{Path, canonicalize}
-import charset4cj.charset.encoding.Charset
-import charset4cj.charset.{Charsets, TextReader, TextWriter}
-// import charset4cj.{Charset, Charsets, TextReader, TextWriter}
+import cangjie_tpc::charset4cj.charset.encoding.Charset
+import cangjie_tpc::charset4cj.charset.{Charsets, TextReader, TextWriter}
+// import cangjie_tpc::charset4cj.{Charset, Charsets, TextReader, TextWriter}
 
 public func stdReader(charset!: Charset = Charsets.UTF8): TextReader {
     TextReader(getStdIn(), charset: charset)

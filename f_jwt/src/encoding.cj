@@ -13,11 +13,11 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_jwt
+package fountain::f_jwt
 
 import stdx.encoding.base64.*
 import stdx.encoding.hex.*
-import f_jwt.exception.*
+import fountain::f_jwt.exception.*
 
 func fromBase64(src: String): Array<Byte> {
     fromBase64String(src).getOrThrow {JWTException('${src} is not base64')}

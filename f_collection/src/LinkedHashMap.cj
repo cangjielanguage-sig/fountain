@@ -13,10 +13,10 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_collection
+package fountain::f_collection
 
 import std.collection.{HashMap, Map, EquatableCollection, MapEntryView, ArrayList}
-import f_exception.UnreachableException
+import fountain::f_exception.UnreachableException
 
 public class LinkedHashMap<K, V> <: Map<K, V> where K <: Hashable & Equatable<K> {
     private let map: HashMap<K, ValueNode<(K, V)>>

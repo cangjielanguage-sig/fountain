@@ -13,13 +13,13 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_data.json
+package fountain::f_data.json
 
 import std.io.{InputStream, StringReader, StringWriter, ByteBuffer}
-import f_data.exception.DataException
-import charset4cj.charset.encoding.Charset
-import charset4cj.charset.{Charsets, TextReader, TextWriter}
-// import charset4cj.{Charset, Charsets, TextReader, TextWriter}
+import fountain::f_data.exception.DataException
+import cangjie_tpc::charset4cj.charset.encoding.Charset
+import cangjie_tpc::charset4cj.charset.{Charsets, TextReader, TextWriter}
+// import cangjie_tpc::charset4cj.{Charset, Charsets, TextReader, TextWriter}
 
 public interface ExtendJsonValue {
     static func fromInput(input: InputStream, charset!: Charset): JsonValue {

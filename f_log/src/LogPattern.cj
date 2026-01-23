@@ -13,14 +13,14 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_log
+package fountain::f_log
 
 import std.collection.ArrayList
 import std.env
 import std.time.DateTime
 import stdx.log.{LogLevel, LogWriter}
-import f_base.OS
-import f_version.*
+import fountain::f_base.OS
+import fountain::f_version.*
 
 public class LogPattern <: LogPart & Hashable & Equatable<LogPattern> {
     private static let appLogPart = AppLogPart()

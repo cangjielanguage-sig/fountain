@@ -13,11 +13,11 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_cache
+package fountain::f_cache
 
 import std.collection.{Map, EquatableCollection}
 import std.sync.AtomicInt64
-import f_base.{EmptyIterator, nextPowerOf2}
+import fountain::f_base.{EmptyIterator, nextPowerOf2}
 
 class ConcHashMapKeysIterator<V> <: Iterator<String> {
     ConcHashMapKeysIterator(private let itr: Iterator<(String, V)>) {}

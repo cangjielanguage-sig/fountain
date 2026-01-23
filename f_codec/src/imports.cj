@@ -13,11 +13,11 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package f_codec
+package fountain::f_codec
 
 internal import std.fs.File
 internal import std.io.*
 
-internal import f_base.*
-internal import f_data.*
-internal import f_pool.*
+internal import fountain::f_base.*
+internal import fountain::f_data.*
+internal import fountain::f_pool.*

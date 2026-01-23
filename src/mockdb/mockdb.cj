@@ -15,4 +15,4 @@ limitations under the License.
 */
 package fountain.mockdb
 
-public import f_mockdb.*
+public import fountain::f_mockdb.*

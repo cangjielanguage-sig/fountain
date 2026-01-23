@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_concurrent
+package fountain::f_concurrent
 
 internal import std.sync.*
 internal import std.collection.{Set, ArrayList, ReadOnlySet, MapEntryView}
@@ -22,6 +22,6 @@ internal import std.env.*
 internal import std.process.Process
 internal import std.reflect.TypeInfo
 internal import std.time.MonoTime
-internal import f_base.*
-internal import f_collection.*
-internal import f_concurrent.exception.RateLimiterException
+internal import fountain::f_base.*
+internal import fountain::f_collection.*
+internal import fountain::f_concurrent.exception.RateLimiterException

@@ -13,13 +13,13 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_pool
+package fountain::f_pool
 
 import std.collection.concurrent.ArrayBlockingQueue
 import std.env
 import std.sync.{AtomicInt64, AtomicBool}
 import std.time.MonoTime
-import f_log.impl.LoggerFactory
+import fountain::f_log.impl.LoggerFactory
 
 public interface PooledManager<T> {
     func create(): T

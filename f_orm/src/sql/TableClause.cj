@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_orm.sql
+package fountain::f_orm.sql
 
 abstract sealed class TableClause<T> <: ToString where T <: QueryMappersInit<T> {
     let sqlgen = StringGenerator()

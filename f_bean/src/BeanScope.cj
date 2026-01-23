@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_bean
+package fountain::f_bean
 
 /**
  * 定义bean的作用范围。prototype和singleton，可以在其它模块定义新的作用范围。

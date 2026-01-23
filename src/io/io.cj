@@ -15,4 +15,4 @@ limitations under the License.
  */
 package fountain.io
 
-public import f_io.*
+public import fountain::f_io.*

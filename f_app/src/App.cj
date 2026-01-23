@@ -13,9 +13,9 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_app
+package fountain::f_app
 
-import f_version.*
+import fountain::f_version.*
 import std.ast.*
 import std.convert.*
 import std.env.{getWorkingDirectory, getCommand, atExit, getStdOut}
@@ -25,8 +25,8 @@ import std.process.*
 import std.reflect.*
 import std.regex.Regex
 import std.time.MonoTime
-import f_base.*
-import f_log.impl.*
+import fountain::f_base.*
+import fountain::f_log.impl.*
 
 /**
  * App不会发生传参赋值，用命令行参数实例化后只调用boot函数。所以用struct比较合适，不会占用堆空间。

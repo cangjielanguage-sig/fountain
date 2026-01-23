@@ -13,11 +13,11 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_log.output
+package fountain::f_log.output
 
 import std.time.DateTime
 import stdx.log.{LogWriter, LogValue}
-import f_base.{printStackTrace, BaseException}
+import fountain::f_base.{printStackTrace, BaseException}
 
 protected class LogWriterImpl <: LogWriter {
     public LogWriterImpl(private let writer: OutputStream) {}

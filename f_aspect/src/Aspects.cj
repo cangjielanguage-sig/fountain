@@ -13,14 +13,14 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_aspect
+package fountain::f_aspect
 
 import std.collection.concurrent.ConcurrentHashMap
 import std.sync.Mutex
-import f_base.*
-import f_bean.{BeanFactory, BeanManager}
-import f_collection.*
-import f_macros.*
+import fountain::f_base.*
+import fountain::f_bean.{BeanFactory, BeanManager}
+import fountain::f_collection.*
+import fountain::f_macros.*
 
 public class Aspects {
     private static let aspects = ConcurrentHashMap<QualifiedFuncInfo, (Array<Any>) -> Any>()

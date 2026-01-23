@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_log
+package fountain::f_log
 
 // //'\u{1B}[1;43;31mTEXT\u{1B}[0m'
 // //\u{1B}[大于等于0个;分隔的样式数字串;0或1个背景色数字串;0或1个前景色数字串m显示的文本\u{1B}[0m

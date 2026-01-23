@@ -1,8 +1,8 @@
 [package]
-  cjc-version = "1.0.4"
+  cjc-version = "1.1.0"
   name = "boot"
   description = "nothing here"
-  version = "1.0.45"
+  version = "1.1.0"
   target-dir = ""
   src-dir = ""
   output-type = "dynamic"

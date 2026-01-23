@@ -15,4 +15,4 @@ limitations under the License.
  */
 package fountain.random
 
-public import f_random.*
+public import fountain::f_random.*

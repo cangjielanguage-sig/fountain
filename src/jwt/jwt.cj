@@ -15,4 +15,4 @@ limitations under the License.
  */
 package fountain.jwt
 
-public import f_jwt.*
+public import fountain::f_jwt.*

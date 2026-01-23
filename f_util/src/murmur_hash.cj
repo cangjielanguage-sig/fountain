@@ -13,15 +13,15 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_util
+package fountain::f_util
 
 import std.convert.*
 import std.math.numeric.BigInt
 import std.overflow.WrappingOp
 import stdx.encoding.hex.*
-import f_base.UnsafeBytes
-import f_base.*
-import f_util.exception.MurmurHashException
+import fountain::f_base.UnsafeBytes
+import fountain::f_base.*
+import fountain::f_util.exception.MurmurHashException
 
 let MURMUR_HASH_MASK = 0xc6a4a7935bd1e995_u64.
 toInt()

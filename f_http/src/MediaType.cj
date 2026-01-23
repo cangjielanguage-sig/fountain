@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_http
+package fountain::f_http
 
 internal import std.collection.ArrayList
 internal import std.collection.concurrent.ConcurrentHashMap
@@ -25,16 +25,16 @@ internal import stdx.encoding.hex.*
 internal import stdx.encoding.json.*
 internal import stdx.encoding.url.*
 internal import stdx.net.http.*
-internal import charset4cj.charset.encoding.Charset
-internal import charset4cj.charset.{Charsets, TextReader, TextWriter}
-internal import f_bean.*
-internal import f_config.*
-internal import f_data.*
-internal import f_data.json.*
-internal import f_exception.*
-internal import f_http.exception.*
-internal import f_io.*
-internal import f_regex.*
+internal import cangjie_tpc::charset4cj.charset.encoding.Charset
+internal import cangjie_tpc::charset4cj.charset.{Charsets, TextReader, TextWriter}
+internal import fountain::f_bean.*
+internal import fountain::f_config.*
+internal import fountain::f_data.*
+internal import fountain::f_data.json.*
+internal import fountain::f_exception.*
+internal import fountain::f_http.exception.*
+internal import fountain::f_io.*
+internal import fountain::f_regex.*
 
 public abstract class MediaType <: ToString & Hashable & Equatable<MediaType> {
     protected var hash: Int64

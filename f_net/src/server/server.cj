@@ -13,15 +13,15 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_net.server
+package fountain::f_net.server
 
 import std.collection.concurrent.{LinkedBlockingQueue, ConcurrentHashMap}
 import std.net.{TcpServerSocket, IPSocketAddress}
 import std.sync.{Timer, CatchupStyle}
-import f_data.*
-import f_log.*
-import f_protocol.*
-import f_net.*
+import fountain::f_data.*
+import fountain::f_log.*
+import fountain::f_protocol.*
+import fountain::f_net.*
 
 public struct Server<DE, EN, M, T, ID> <: Resource where EN <: MessageCopier, M <: Protocol<EN, DE>, T <: DataFields<T>,
     ID <: Hashable & Equatable<ID> {

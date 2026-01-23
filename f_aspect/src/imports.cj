@@ -13,15 +13,15 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_aspect
+package fountain::f_aspect
 
 internal import std.collection.{HashSet, ArrayList}
 internal import std.reflect.*
-internal import f_aspect.exception.*
-internal import f_base.*
-internal import f_bean.*
-internal import f_config.*
-internal import f_exception.TypeCastException
-internal import f_regex.*
+internal import fountain::f_aspect.exception.*
+internal import fountain::f_base.*
+internal import fountain::f_bean.*
+internal import fountain::f_config.*
+internal import fountain::f_exception.TypeCastException
+internal import fountain::f_regex.*
 
 public import std.reflect.TypeInfo

@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_orm.wrap
+package fountain::f_orm.wrap
 
 /**
  * orm_option_或<driverName>_orm_option_开头的配置项可以作为数据库驱动的初始化options，配置项名_option_后面的部分是驱动初始化key

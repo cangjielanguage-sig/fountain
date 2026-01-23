@@ -15,4 +15,4 @@ limitations under the License.
  */
 package fountain.exception
 
-public import f_exception.*
+public import fountain::f_exception.*

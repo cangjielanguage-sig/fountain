@@ -15,4 +15,4 @@ limitations under the License.
  */
 package fountain.time
 
-public import f_time.*
+public import fountain::f_time.*

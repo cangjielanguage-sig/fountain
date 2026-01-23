@@ -15,4 +15,4 @@ limitations under the License.
  */
 package fountain.mvc
 
-public import f_mvc.*
+public import fountain::f_mvc.*

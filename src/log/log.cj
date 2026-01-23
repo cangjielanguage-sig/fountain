@@ -15,4 +15,4 @@ limitations under the License.
  */
 package fountain.log
 
-public import f_log.impl.*
+public import fountain::f_log.impl.*

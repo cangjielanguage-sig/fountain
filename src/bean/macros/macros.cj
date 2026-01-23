@@ -15,4 +15,4 @@ limitations under the License.
  */
 macro package fountain.bean.macros
 
-public import f_bean.macros.*
+public import fountain::f_bean.macros.*

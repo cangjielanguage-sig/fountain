@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package f_protocol.exception
+package fountain::f_protocol.exception
 
 public class CommandException <: BaseException {
     public init() {}

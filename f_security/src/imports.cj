@@ -13,9 +13,9 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package f_security
+package fountain::f_security
 
 internal import std.convert.Parsable
-internal import f_cache.HeapCache
-internal import f_jwt.*
-internal import f_mvc.CurrentHttpContext
+internal import fountain::f_cache.HeapCache
+internal import fountain::f_jwt.*
+internal import fountain::f_mvc.CurrentHttpContext

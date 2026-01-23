@@ -13,15 +13,15 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_regex
+package fountain::f_regex
 
 public import std.regex.*
 import std.collection.ArrayList
 import std.convert.Parsable
-import f_base.*
-import f_exception.UnreachableException
-import f_cache.HeapCache
-import f_regex.exception.RegexBuilderException
+import fountain::f_base.*
+import fountain::f_exception.UnreachableException
+import fountain::f_cache.HeapCache
+import fountain::f_regex.exception.RegexBuilderException
 
 public interface ExtendRegex {
     static prop INTEGER: Regex

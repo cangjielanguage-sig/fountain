@@ -13,13 +13,13 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_log
+package fountain::f_log
 
 import std.env
 import std.sync.AtomicReference
 import std.time.DateTime
 import stdx.log.{LogLevel, LogRecord}
-import f_io.DummyOutputStream
+import fountain::f_io.DummyOutputStream
 
 public class LoggerWrapper <: AbstractLogger {
     private var facade: AtomicReference<LoggerAppenderFacade>

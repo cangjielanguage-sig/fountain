@@ -13,10 +13,10 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_collection
+package fountain::f_collection
 
 import std.collection.{Set, ReadOnlySet}
-import f_base.StringGenerator
+import fountain::f_base.StringGenerator
 
 public class LinkedHashSet<T> <: Set<T> where T <: Hashable & Equatable<T> {
     private let map: LinkedHashMap<T, Unit>
