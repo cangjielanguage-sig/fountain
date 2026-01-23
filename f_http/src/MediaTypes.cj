@@ -42,8 +42,9 @@ public class MediaTypes {
             register(m)
         }
     }
-    public static func tryParse(mediaType: String): ?MediaType {
+    private static func doTryParse(mediaType: String, recursived: Bool): ?MediaType{
         if (let Some(x) <- mediaTypes.get(mediaType)) {
+            log.debug{'MediaTypes.tryParse:${mediaType} ${x} ${ClassTypeInfo.of(x)}'}
             x
         } else {
             let idx = mediaType.indexOf(";") ?? -1
@@ -53,13 +54,18 @@ public class MediaTypes {
                 mediaType
             }
             if (let Some(x) <- mediaTypes.get(mt)) {
+                log.debug{'MediaTypes.tryParse:${mediaType} ${x} ${ClassTypeInfo.of(x)}'}
                 x
-            } else if (let list <- BeanFactory.instance.getList<MediaType>() && list.size > 0) {
+            } else if (!recursived && let list <- BeanFactory.instance.getList<MediaType>() && list.size > 0) {
                 register(list)
-                tryParse(mediaType)
+                doTryParse(mediaType, true)
             } else {
+                log.debug{'MediaTypes.tryParse:${mediaType} None'}
                 None<MediaType>
             }
         }?.make(mediaType)
+    }
+    public static func tryParse(mediaType: String): ?MediaType {
+        doTryParse(mediaType, false)
     }
 }
