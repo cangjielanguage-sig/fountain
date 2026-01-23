@@ -523,7 +523,7 @@ private let _ = AppVersion.set(#'${banner()}'#, '${name}', '${version}')
         }
         (toml, moduleMember, tomlPath)
     }
-    private func doBuild(path: Path): Int64 {
+    private func doBuild(path: Path, args: Array<String>): Int64 {
         stdOut.writeln('fboot build is used to compile the project which depends fountain.')
         let (workingDir, targetDir) = directories(path)
         stdOut.writeln('fboot build ${workingDir} --target-dir=${targetDir}')
@@ -546,20 +546,38 @@ private let _ = AppVersion.set(#'${banner()}'#, '${name}', '${version}')
         }
         let appVersionPath = versionModuleDir.join('src/${n}_AppVersion.cj')
         File.writeTo(appVersionPath, genCode(n, version).unsafeBytes())
-        execute('cjpm', ['build', '--target-dir=${targetDir}'], workingDirectory: workingDir)
+        let argArray = Array<String>(2 + args.size){i => 
+            match(i){
+                case 0 => 'build'
+                case 1 => '--target-dir=${targetDir}'
+                case _ => args[i - 2]
+            }
+        }
+        stdOut.writeln('BUILD ARGS: ${argArray}')
+        execute('cjpm', argArray, workingDirectory: workingDir)
     }
     private func copyToml(source: String, path: Path){
         copy(path.join('${source}/cjpm.toml'), to: path.join('cjpm.toml'), overwrite: true)
     }
+    private func confirmBuildArgs(){
+        let (path, args) = if(this.args.size > 1 && !this.args[1].startsWith('-')){
+            (Path(this.args[1]), this.args[2 ..])
+        }else{
+            (getWorkingDirectory(), this.args[1 ..])
+        }
+        if(!exists(path)){
+            Directory.create(path)
+        }
+        (canonicalize(path), args)
+    }
     private func build(){
-        let path = confirmTargetPath(args)
-        // copyToml('run', path)
-        doBuild(path)
+        let (path, args) = confirmBuildArgs()
+        doBuild(path, args)
     }
     private func test(): Int64 {
-        let path = confirmTargetPath(args)
+        let (path, args) = confirmBuildArgs()
         copyToml('test', path)
-        let code = doBuild(path)
+        let code = doBuild(path, args)
         if(code != 0){
             return code
         }
