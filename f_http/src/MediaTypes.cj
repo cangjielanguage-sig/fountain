@@ -15,7 +15,11 @@ limitations under the License.
  */
 package f_http
 
+import std.reflect.ClassTypeInfo
+import f_log.*
+
 public class MediaTypes {
+    private static let log = LoggerFactory.getLogger<MediaTypes>()
     private static let mediaTypes = ConcurrentHashMap<String, MediaType>()
     static init() {
         register(JsonMediaType.instance)
@@ -24,6 +28,7 @@ public class MediaTypes {
         registerFromBeanFactory()
     }
     public static func register(mediaType: MediaType) {
+        log.debug{'MediaTypes.register: ${mediaType} ${ClassTypeInfo.of(mediaType)}'}
         mediaTypes[mediaType.mediaType] = mediaType
     }
     public static func parse(mediaType: String) {
