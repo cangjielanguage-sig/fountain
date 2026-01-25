@@ -11,6 +11,10 @@
   override-compile-option = ""
   link-option = ""
   package-configuration = {}
+  category = ["Utility"]
+  license = ["Apache-2.0"]
+  include = ["src"]
+  authors = ["吴京润"]
 
 [dependencies]
   "fountain::f_base" = {path = "../f_base"}
