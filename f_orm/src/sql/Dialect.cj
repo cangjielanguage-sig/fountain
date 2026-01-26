@@ -95,6 +95,29 @@ public class DB2Dialect <: SqlDialect {
         (offset, size, ' OFFSET ? ROWS FETCH FIRST ? ROWS ONLY')
     }
 }
+@Bean
+public class MockdbDialect <: SqlDialect {
+    private var mock_: String = 'opengauss'
+    public prop dialect: String {
+        get(){
+            'mockdb'
+        }
+    }
+    public mut prop mock: String {
+        get(){
+            mock_
+        }
+        set(value){
+            mock_ = value
+        }
+    }
+    public func limit(size: Int64, offset: Int64): (Int64, Int64, String) {
+        SqlDialectMediator.instance.getDialect(this.mock_).limit(size, offset)
+    }
+    public func involvedIdentifier(identifier: String): String {
+        SqlDialectMediator.instance.getDialect(this.mock_).involvedIdentifier(identifier)
+    }
+}
 struct SqlDialectMediator {
     private init(){
         for(dialect in lookupList<SqlDialect>()){

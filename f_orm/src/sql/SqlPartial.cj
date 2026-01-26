@@ -48,6 +48,7 @@ public interface SqlPartial <: RootDAO {
     func first<T>(sql: String): Option<T> where T <: QueryMappersInit<T> 
     func firstToMap(sql: String): Map<String, Any> 
 }
+private let sqlPartialLog = LoggerFactory.getLogger('fountain::f_orm.sqlpartial')
 extend SqlExecutor <: SqlPartial {
     private prop dialect: SqlDialect {
         get(){
@@ -139,6 +140,7 @@ extend SqlExecutor <: SqlPartial {
         executor.setSql(sql.toString()).update
     }
     public func UPDATE<T>(values: T, ignoredColumns!: HashSet<String> = HashSet<String>(), includingColumns!: HashSet<String> = HashSet<String>()): Int64 where T <: QueryMappersInit<T> & ObjectData<T> {
+        sqlPartialLog.debug{'SqlPartial.UPDATE<${TypeInfo.of<T>()}> ${involveTable<T>()} ${ignoredColumns} ${includingColumns}'}
         if (ignoredColumns.size > 0 && includingColumns.size > 0){
             throw IllegalArgumentException('ignoreColumns and includingColumns must not be specified both.')
         }
@@ -162,7 +164,7 @@ extend SqlExecutor <: SqlPartial {
                 sql.append(involve(column)).append('=').append(arg(data[field]))
             }
         }
-        if(sql.size > sqlsize){
+        if(sql.size == sqlsize){
             return 0
         }
         if(idColumn.isEmpty()){
