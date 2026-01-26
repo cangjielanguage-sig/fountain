@@ -157,17 +157,7 @@ private func expandQueryMappers(attr: Tokens, input: Tokens): Tokens {
             $queryMappersName
         }
     )))
-    let registerDirty = if(dirty){
-        quote(
-            private let _ = f_orm_register<$name>()
-        )
-    }else{
-        `empty_tokens`
-    }
-    quote(
-        $decl
-        $registerDirty
-    )
+    decl.toTokens()
 }
 
 func generateMappers(name: Tokens, props: ArrayList<PropDecl>, dirty: Bool, mapperMetaFn: (String) -> (Bool, String, Token)): Tokens {

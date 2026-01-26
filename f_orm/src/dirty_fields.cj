@@ -22,8 +22,9 @@ import f_orm.exception.DirtyFieldException
 
 private let dirtyFields = ConcurrentHashMap<TypeInfo, ThreadLocal<HashSet<String>>>()
 
-public func f_orm_register<T>(): Unit where T <: QueryMappersInit<T> & ObjectData<T> {
-    dirtyFields[TypeInfo.of<T>()] = ThreadLocal<HashSet<String>>()
+private func f_orm_register<T>(): Unit where T <: QueryMappersInit<T> & ObjectData<T> {
+    let typeInfo = TypeInfo.of<T>()
+    dirtyFields[typeInfo] = ThreadLocal<HashSet<String>>()
 }
 
 public func f_orm_setDirtyField<T>(field: String): Unit where T <: QueryMappersInit<T> & ObjectData<T> {
@@ -36,7 +37,8 @@ public func f_orm_setDirtyField<T>(field: String): Unit where T <: QueryMappersI
             set
         }.add(field)
     } else {
-        throw DirtyFieldException('${TypeInfo.of<T>()} is not registered for dirty field.')
+        f_orm_register<T>()
+        f_orm_setDirtyField<T>(field)
     }
 }
 func f_orm_getDirtyFields<T>(): HashSet<String> where T <: QueryMappersInit<T> & ObjectData<T> {
