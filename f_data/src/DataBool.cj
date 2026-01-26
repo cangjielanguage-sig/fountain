@@ -17,7 +17,7 @@ package f_data
 
 import std.convert.Parsable
 
-public class DataBool <: Data & Hashable & Equatable<DataBool> {
+public struct DataBool <: Data & Hashable & Equatable<DataBool> {
     public static let TRUE = DataBool(true)
     public static let FALSE = DataBool(false)
     private DataBool(public let data: Bool) {}
@@ -45,7 +45,7 @@ public class DataBool <: Data & Hashable & Equatable<DataBool> {
         data.hashCode()
     }
     public operator func ==(other: DataBool): Bool {
-        refEq(this, other) || data == other.data
+        data == other.data
     }
 }
 
