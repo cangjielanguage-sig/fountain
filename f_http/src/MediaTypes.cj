@@ -23,6 +23,7 @@ public class MediaTypes {
     private static let log = LoggerFactory.getLogger<MediaTypes>()
     private static let mediaTypes = ConcurrentHashMap<String, MediaType>()
     private static let mediaTypeBeansRegistered = AtomicBool(false)
+    private init(){}
     static init() {
         register(JsonMediaType.instance)
         register(MultipartMediaType.instance)

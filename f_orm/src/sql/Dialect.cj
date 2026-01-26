@@ -32,7 +32,11 @@ public abstract class SqlDialect {
         (size, offset, ' limit ? offset ?')
     }
     public open func involvedIdentifier(identifier: String): String {
-        '`${identifier}`'
+        if(let Some(idx) <- identifier.indexOf('.')){
+            '`${identifier[0 .. idx]}`.`${identifier[idx + 1 ..]}`'
+        }else{
+            '`${identifier}`'
+        }
     }
 }
 @Bean
@@ -54,7 +58,11 @@ public open class PostgresDialect <: SqlDialect {
         ' returning ${id}'
     }
     public func involvedIdentifier(identifier: String): String {
-        '"${identifier}"'
+        if(let Some(idx) <- identifier.indexOf('.')){
+            '"${identifier[0 .. idx]}"."${identifier[idx + 1 ..]}"'
+        }else{
+            '"${identifier}"'
+        }
     }
 }
 @Bean
