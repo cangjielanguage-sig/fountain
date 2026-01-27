@@ -75,7 +75,7 @@ public class UserServiceImpl <: UserService {
             let user = UserPO()
             user.id = 1
             user.password = '24124141324'
-            
+            //DirtyTag.setBeforeDirty<UserPO>()
             user.username = 'asdfsafadfsfsdf'
             executor().UPDATE<UserPO>(user, dirty: true)
         }catch(e: Exception){

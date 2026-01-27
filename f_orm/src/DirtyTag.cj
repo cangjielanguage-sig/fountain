@@ -21,15 +21,17 @@ import std.reflect.TypeInfo
 
 public struct DirtyTag {
     private static let DIRTY_TAGS = ConcurrentHashMap<TypeInfo, DirtyTag>()
-    private var beforeDirty = false
-    private let dirtyFields = ThreadLocal<HashSet<String>>()
-    private init(){}
+    private DirtyTag(
+        private let beforeDirty!: Bool = false,
+        private let dirtyFields!: ThreadLocal<HashSet<String>> = ThreadLocal<HashSet<String>>()){}
     private static func register<T>(): Unit {
         let typeInfo = TypeInfo.of<T>()
-        DIRTY_TAGS[typeInfo] = DirtyTag()
+        if(!DIRTY_TAGS.contains(typeInfo)){
+            DIRTY_TAGS[typeInfo] = DirtyTag()
+        }
     }
 
-    public static func setDirtyField<T>(field: String): Unit {
+    static func setDirtyField<T>(field: String): Unit {
         if(let Some(tag) <- DIRTY_TAGS.get(TypeInfo.of<T>())){
             if(tag.beforeDirty){
                 if(let Some(set) <- tag.dirtyFields.get()){
@@ -45,10 +47,10 @@ public struct DirtyTag {
             setDirtyField<T>(field)
         }
     }
-    static func setBeforeDirty<T>(): Unit {
-        if(let Some(tag) <- DIRTY_TAGS.get(TypeInfo.of<T>())){
-            var t = tag
-            t.beforeDirty = true
+    public static func setBeforeDirty<T>(): Unit {
+        let typeInfo = TypeInfo.of<T>()
+        if(let Some(tag) <- DIRTY_TAGS.get(typeInfo)){
+            DIRTY_TAGS[typeInfo] = DirtyTag(beforeDirty: true, dirtyFields: tag.dirtyFields)
         }else{
             register<T>()
             setBeforeDirty<T>()
@@ -63,9 +65,8 @@ public struct DirtyTag {
     }
     private static func clear(typeInfo: TypeInfo) {
         if(let Some(tag) <-DIRTY_TAGS.get(typeInfo)){
-            var t = tag
-            t.beforeDirty = false
             tag.dirtyFields.set(None)
+            DIRTY_TAGS[typeInfo] = DirtyTag(beforeDirty: false, dirtyFields: tag.dirtyFields)
         }
     }
     static func clear<T>(): Unit {
