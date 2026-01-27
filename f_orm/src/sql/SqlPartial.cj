@@ -148,7 +148,7 @@ extend SqlExecutor <: SqlPartial {
             try{
                 return UPDATE<T>(values, includingColumns: dirtyFields)
             }finally{
-                DirtyTag.clear<T>()
+                dirtyFields.clear()
             }
         }
         var idField = ''
