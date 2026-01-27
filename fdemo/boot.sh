@@ -36,7 +36,7 @@ exports(){
     # 此时使用ORM.register(datasource, default: false) # 开发者自己用代码初始化Driver和连接池、调用这个函数注册连接池
     export orm_noPool=true # 默认是false，true表示不用连接池
     # export orm_useStdPool=false # 默认是true，表示使用标准库连接池，false是使用fountain连接池
-    # export orm_drivers=mockdb # 逗号分隔的驱动名称
+    export orm_drivers=mockdb,opengauss # 逗号分隔的驱动名称
     # orm_databasePool开头的是fountain.orm.DatabasePool的配置项
     export orm_databasePoolInitSize=1 # 初始连接数
     export orm_databasePoolMinSize=1 # 最小连接数

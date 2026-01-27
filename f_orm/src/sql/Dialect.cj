@@ -52,8 +52,9 @@ public abstract class SqlDialect {
     }
 }
 @Bean
+@BeanMeta[condition: ConfCond.Value('orm_drivers', StringCond.Contains('mysql'))]
 public open class MySqlDialect <: SqlDialect {
-    public prop dialect: String {
+    public open prop dialect: String {
         get(){
             'mysql'
         }
@@ -70,8 +71,16 @@ public open class MySqlDialect <: SqlDialect {
     }
 }
 @Bean
-public class MariaDBDialect <: MySqlDialect {}
+@BeanMeta[condition: ConfCond.Value('orm_drivers', StringCond.Contains('mariadb'))]
+public class MariaDBDialect <: MySqlDialect {
+    public open prop dialect: String {
+        get(){
+            'mariadb'
+        }
+    }
+}
 @Bean
+@BeanMeta[condition: ConfCond.Value('orm_drivers', StringCond.Contains('sqlite'))]
 public class SqliteDialect <: SqlDialect {
     public prop dialect: String {
         get(){
@@ -80,6 +89,7 @@ public class SqliteDialect <: SqlDialect {
     }
 }
 @Bean
+@BeanMeta[condition: ConfCond.Value('orm_drivers', StringCond.Contains('postgres'))]
 public open class PostgresDialect <: SqlDialect {
     public open prop dialect: String {
         get(){
@@ -91,6 +101,7 @@ public open class PostgresDialect <: SqlDialect {
     }
 }
 @Bean
+@BeanMeta[condition: ConfCond.Value('orm_drivers', StringCond.Contains('opengauss'))]
 public class OpenGaussDialect <: PostgresDialect {
     public prop dialect: String {
         get(){
@@ -99,6 +110,7 @@ public class OpenGaussDialect <: PostgresDialect {
     }
 }
 @Bean
+@BeanMeta[condition: ConfCond.Value('orm_drivers', StringCond.Contains('oracle'))]
 public class OracleDialect <: SqlDialect {
     public prop dialect: String {
         get(){
@@ -110,6 +122,7 @@ public class OracleDialect <: SqlDialect {
     }
 }
 @Bean
+@BeanMeta[condition: ConfCond.Value('orm_drivers', StringCond.Contains('db2'))]
 public class DB2Dialect <: SqlDialect {
     public prop dialect: String {
         get(){
@@ -121,6 +134,7 @@ public class DB2Dialect <: SqlDialect {
     }
 }
 @Bean
+@BeanMeta[condition: ConfCond.Value('orm_drivers', StringCond.Contains('mockdb'))]
 public class MockdbDialect <: SqlDialect {
     private var mock_: String = 'opengauss'
     public prop dialect: String {
@@ -133,6 +147,9 @@ public class MockdbDialect <: SqlDialect {
             mock_
         }
         set(value){
+            if(value == dialect){
+                throw MockDBException('cannot mock itself')
+            }
             mock_ = value
         }
     }
@@ -151,30 +168,31 @@ public class MockdbDialect <: SqlDialect {
     }
 }
 struct SqlDialectMediator {
-    private init(){
-        for(dialect in lookupList<SqlDialect>()){
-            this.dialects[dialect.dialect] = dialect
-        }
-    }
+    private init(){}
     public static let instance = SqlDialectMediator()
 
     func getDialect(dialect: String): SqlDialect {
+        if(dialects.isEmpty()){
+            for(dialect in lookupList<SqlDialect>()){
+                this.dialects[dialect.dialect] = dialect
+            }
+        }
         dialects[dialect]
     }
 
     private let dialects = ConcurrentHashMap<String, SqlDialect>()
 
     func lastInsertId(dialect: String, id: String): String {
-        dialects[dialect].lastInsertId(id)
+        getDialect(dialect).lastInsertId(id)
     }
     func lastInsertId(dialect: String, dataType: DataType): String {
-        dialects[dialect].lastInsertId(dataType)
+        getDialect(dialect).lastInsertId(dataType)
     }
     func lastInsertId<ID, O>(dialect: String, id: IdQueryMapper<ID, O>): String where ID <: Hashable & Equatable<ID> {
-        dialects[dialect].lastInsertId(id)
+        getDialect(dialect).lastInsertId(id)
     }
 
     func limit(dialect: String, size: Int64, offset: Int64): (Int64, Int64, String) {
-        dialects[dialect].limit(size, offset)
+        getDialect(dialect).limit(size, offset)
     }
 }

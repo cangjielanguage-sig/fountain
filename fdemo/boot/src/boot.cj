@@ -17,8 +17,8 @@ package boot
 
 import std.collection.*
 import std.env
-// import opengauss.driver.*
-// import opengauss.slog
+import opengauss.driver.*
+import opengauss.slog
 import fountain.bean.*
 import fountain.bean.macros.*
 import fountain.data.*
@@ -29,8 +29,8 @@ import fountain.orm.* // orm初始化不要再导入这个包，会在首个DAO�
 
 private let _ = {=>
     try{
-        // let logger = LoggerFactory.getLogger("opengauss")
-        // slog.setDefault(logger)
+        let logger = LoggerFactory.getLogger("opengauss")
+        slog.setDefault(logger)//必须初始化opengauss，否则无法启动，因为配置项orm_drivers指定了opengauss
         // let url = env.getVariable('POSTGRES') ?? ''
         let driverName = 'mockdb'
         let driver = ORM.getDriver(driverName)
@@ -39,6 +39,8 @@ private let _ = {=>
         //下面的代码不用池，启用下面的代码boot.sh的池配置环境变量会被忽略。代码初始化数据库的优先级高于环境变量
         let ds = driver.open('mockdb://')
         ORM.register(NamedDatasource(false, driverName, ds))
+        lookup<MockdbDialect>().mock = 'opengauss'
+        println(lookup<OpenGaussDialect>().dialect)
     }catch(e: Exception){
         e.printStackTrace()
         throw e 

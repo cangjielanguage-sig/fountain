@@ -43,6 +43,14 @@ public enum StringCond <: Equatable<StringCond> & Equatable<String> & ToString {
      * 传入on的字符串符合指定正则表达式
      */
     | Regexp(String)
+    /**
+     * 构造器参数是传入on的字符串的子串
+     */
+    | Contains(String)
+    /**
+     * 传on的字符串是构造器参数的子串
+     */
+    | In(String)
 
     public func toString() {
         match (this) {
@@ -52,6 +60,8 @@ public enum StringCond <: Equatable<StringCond> & Equatable<String> & ToString {
             case Suffix(n) => 'Suffix(${n})'
             case Wildcard(n) => 'Wildcard(${n})'
             case Regexp(n) => 'Regexp(${n})'
+            case Contains(n) => 'Contains(${n})'
+            case In(n) => 'In(${n})'
         }
     }
 
@@ -63,6 +73,8 @@ public enum StringCond <: Equatable<StringCond> & Equatable<String> & ToString {
             case Suffix(v) => s.endsWith(v)
             case Wildcard(v) => Regex.wildcard(v).matches(s)
             case Regexp(v) => v.regex().matches(s)
+            case Contains(v) => s.contains(v)
+            case In(v) => v.contains(s)
         }
     }
     public prop ignored: Bool {
@@ -81,6 +93,8 @@ public enum StringCond <: Equatable<StringCond> & Equatable<String> & ToString {
             case (Suffix(a), Suffix(b)) => a == b
             case (Wildcard(a), Wildcard(b)) => a == b
             case (Regexp(a), Regexp(b)) => a == b
+            case (Contains(a), Contains(b)) => a == b
+            case (In(a), In(b)) => a == b
             case _ => false
         }
     }
