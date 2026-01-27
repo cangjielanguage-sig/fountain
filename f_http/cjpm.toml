@@ -68,5 +68,4 @@
   path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]
 
 [profile.build]
-#  lto = "full"
   incremental = true
