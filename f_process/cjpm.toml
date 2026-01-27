@@ -1,7 +1,7 @@
 [dependencies]
   charset4cj = { git = "https://gitcode.com/Cangjie-TPC/charset4cj.git", branch = "develop"}
-  f_io  = {path = "../f_io", version = "1.0.45"}
-  f_regex  = {path = "../f_regex", version = "1.0.45"}
+  f_io  = {path = "../f_io"}
+  f_regex  = {path = "../f_regex"}
 [package]
   cjc-version = "1.0.4"
   compile-option = "--dy-std"

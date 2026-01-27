@@ -1,5 +1,5 @@
 [dependencies]
-  f_data  = {path = "../f_data", version = "1.0.45"}
+  f_data  = {path = "../f_data"}
 [package]
   cjc-version = "1.0.4"
   compile-option = "--dy-std"

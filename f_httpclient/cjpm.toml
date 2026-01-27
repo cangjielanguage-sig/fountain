@@ -1,8 +1,8 @@
 [dependencies]
   charset4cj = { git = "https://gitcode.com/Cangjie-TPC/charset4cj.git", branch = "develop"}
-  f_base  = {path = "../f_base", version = "1.0.45"}
-  f_data  = {path = "../f_data", version = "1.0.45"}
-  f_http  = {path = "../f_http", version = "1.0.45"}
+  f_base  = {path = "../f_base"}
+  f_data  = {path = "../f_data"}
+  f_http  = {path = "../f_http"}
 
 [package]
   cjc-version = "1.0.4"
