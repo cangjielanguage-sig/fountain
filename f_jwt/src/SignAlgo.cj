@@ -16,9 +16,9 @@ limitations under the License.
 package fountain::f_jwt
 
 import std.crypto.digest.{Digest, digest as stdDigest}
+import stdx.crypto.common.*
 import stdx.crypto.digest.*
 import stdx.crypto.keys.*
-import stdx.crypto.x509.{PrivateKey, PublicKey}
 import fountain::f_jwt.exception.*
 
 abstract sealed class SignAlgo {

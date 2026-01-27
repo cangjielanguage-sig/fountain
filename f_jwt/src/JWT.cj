@@ -23,6 +23,7 @@ import stdx.crypto.keys.PadOption
 import stdx.encoding.json.*
 import stdx.encoding.hex.*
 import stdx.encoding.base64.*
+import stdx.crypto.common.*
 import stdx.crypto.keys.*
 import fountain::f_data.{ObjectData, DataObject}
 import fountain::f_exception.UnreadableException
