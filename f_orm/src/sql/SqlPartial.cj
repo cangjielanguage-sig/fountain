@@ -141,14 +141,14 @@ extend SqlExecutor <: SqlPartial {
             (ignoredColumns.size > 0 && dirty) || 
             (includingColumns.size > 0 && dirty)){
             throw IllegalArgumentException('ignoreColumns includingColumns and true value for dirty must not be specified at the same time for update.')
-        } else if (dirty && let dirtyFields <- f_orm_getDirtyFields<T>()) {
+        } else if (dirty && let dirtyFields <- DirtyTag.getDirtyFields<T>()) {
             if(dirtyFields.isEmpty()){
                 return 0
             }
             try{
                 return UPDATE<T>(values, includingColumns: dirtyFields)
             }finally{
-                f_orm_clear<T>()
+                DirtyTag.clear<T>()
             }
         }
         var idField = ''

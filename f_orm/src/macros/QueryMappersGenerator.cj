@@ -170,7 +170,7 @@ func generateMappers(name: Tokens, props: ArrayList<PropDecl>, dirty: Bool, mapp
         let propName = decl.identifier
         let dts = decl.declType.toTokens()
         if(dirty && (dts.size == 1 || (dts.size == 2 && dts[0].kind == QUEST) || (dts.size == 4 && dts[0].value == 'Option'))){
-            let expr = parseExpr(quote(f_orm_setDirtyField<$name>($(decl.identifier.value))))
+            let expr = parseExpr(quote(DirtyTag.setDirtyField<$name>($(decl.identifier.value))))
             try{
                 decl.setter.block.nodes.add(expr)
             }catch(_){}

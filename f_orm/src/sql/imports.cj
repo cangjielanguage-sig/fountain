@@ -21,7 +21,7 @@ internal import f_exception.IllegalAccessException
 internal import f_log.*
 internal import f_regex.*
 internal import f_orm.exception.*
-internal import f_orm.{f_orm_getDirtyFields, f_orm_clear}
+internal import f_orm.DirtyTag
 
 public import f_base.*
 public import f_bean.*

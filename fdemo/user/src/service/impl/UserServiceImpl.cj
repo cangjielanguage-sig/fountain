@@ -74,8 +74,10 @@ public class UserServiceImpl <: UserService {
         try{
             let user = UserPO()
             user.id = 1
+            user.password = '24124141324'
+            
             user.username = 'asdfsafadfsfsdf'
-            executor().updateDirty<UserPO>(user)
+            executor().UPDATE<UserPO>(user, dirty: true)
         }catch(e: Exception){
             e.printStackTrace()
         }

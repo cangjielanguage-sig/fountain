@@ -31,11 +31,23 @@ public abstract class SqlDialect {
     public open func limit(size: Int64, offset: Int64): (Int64, Int64, String) {
         (size, offset, ' limit ? offset ?')
     }
-    public open func involvedIdentifier(identifier: String): String {
-        if(let Some(idx) <- identifier.indexOf('.')){
-            '`${identifier[0 .. idx]}`.`${identifier[idx + 1 ..]}`'
+    public open prop startInvolver: String {
+        get(){
+            '"'
+        }
+    }
+    public open prop endInvolver: String {
+        get(){
+            '"'
+        }
+    }
+    public func involvedIdentifier(identifier: String): String {
+        if(identifier.startsWith(startInvolver)){
+            return identifier
+        }else if(let Some(idx) <- identifier.indexOf('.')){
+            '${startInvolver}${identifier[0 .. idx]}${endInvolver}.${startInvolver}${identifier[idx + 1 ..]}${endInvolver}'
         }else{
-            '`${identifier}`'
+            '${startInvolver}${identifier}${endInvolver}'
         }
     }
 }
@@ -44,6 +56,26 @@ public open class MySqlDialect <: SqlDialect {
     public prop dialect: String {
         get(){
             'mysql'
+        }
+    }
+    public prop startInvolver: String {
+        get(){
+            '`'
+        }
+    }
+    public prop endInvolver: String {
+        get(){
+            '`'
+        }
+    }
+}
+@Bean
+public class MariaDBDialect <: MySqlDialect {}
+@Bean
+public class SqliteDialect <: SqlDialect {
+    public prop dialect: String {
+        get(){
+            'sqlite'
         }
     }
 }
@@ -56,13 +88,6 @@ public open class PostgresDialect <: SqlDialect {
     }
     public open func lastInsertId(id: String): String {
         ' returning ${id}'
-    }
-    public func involvedIdentifier(identifier: String): String {
-        if(let Some(idx) <- identifier.indexOf('.')){
-            '"${identifier[0 .. idx]}"."${identifier[idx + 1 ..]}"'
-        }else{
-            '"${identifier}"'
-        }
     }
 }
 @Bean
@@ -114,8 +139,15 @@ public class MockdbDialect <: SqlDialect {
     public func limit(size: Int64, offset: Int64): (Int64, Int64, String) {
         SqlDialectMediator.instance.getDialect(this.mock_).limit(size, offset)
     }
-    public func involvedIdentifier(identifier: String): String {
-        SqlDialectMediator.instance.getDialect(this.mock_).involvedIdentifier(identifier)
+    public prop startInvolver: String {
+        get(){
+            SqlDialectMediator.instance.getDialect(this.mock_).startInvolver
+        }
+    }
+    public prop endInvolver: String {
+        get(){
+            SqlDialectMediator.instance.getDialect(this.mock_).endInvolver
+        }
     }
 }
 struct SqlDialectMediator {
