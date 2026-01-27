@@ -144,7 +144,7 @@ extend SqlExecutor <: SqlPartial {
         if ((ignoredColumns.size > 0 && includingColumns.size > 0) || 
             (ignoredColumns.size > 0 && dirty) || 
             (includingColumns.size > 0 && dirty)){
-            throw IllegalArgumentException('ignoreColumns includingColumns and true value of dirty must not be specified at the same time.')
+            throw IllegalArgumentException('ignoreColumns includingColumns and true value for dirty must not be specified at the same time for update.')
         } else if (dirty && let dirtyFields <- f_orm_getDirtyFields<T>()) {
             if(dirtyFields.isEmpty()){
                 return 0
