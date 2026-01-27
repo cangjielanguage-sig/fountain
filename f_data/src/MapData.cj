@@ -27,7 +27,7 @@ public class DataMapIterator<K, V> <: Iterator<(Data, Data)> where K <: Equatabl
     }
 }
 
-public class DataMap<M, K, V> <: Data & Collection<(Data, Data)> where K <: Equatable<K> & DataFields<K>,
+public struct DataMap<M, K, V> <: Data & Collection<(Data, Data)> where K <: Equatable<K> & DataFields<K>,
     V <: DataFields<V>, M <: DataFields<M> & Map<K, V> {
     public DataMap(public let data: M) {}
     public func iterator(): Iterator<(Data, Data)> {

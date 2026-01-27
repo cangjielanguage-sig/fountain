@@ -23,8 +23,8 @@ import fountain.data.macros.*
 import fountain.orm.*
 import fountain.orm.macros.*
 
-@DataAssist[fields]
-@QueryMappersGenerator[user_info]
+@DataAssist[fields tostring]
+@QueryMappersGenerator[table: user_info dirty]
 public class UserPO {
     @ORMField[true 'id']
     private var id: Int64 = 0
@@ -50,4 +50,8 @@ public class UserInfoPO {//不要使用这个类，仅用于展示@QueryMappersG
 private let _ = {=>
     println('@@@@@@@@@@@@@@@@@@@@@@@@@@@@ ${UserPO.tableName()}')
     println('@@@@@@@@@@@@@@@@@@@@@@@@@@@@ ${UserInfoPO.tableName()}')
+    let user = UserPO()
+    user.id = 1
+    user.username = 'asdfasdfasdf'
+    println('@@@@@@@@@@@@@@@@@@@@@@@@@@@@ ${user}')
 }()

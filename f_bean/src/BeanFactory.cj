@@ -146,16 +146,24 @@ public class BeanFactory {
                 discarded.add(m)
                 log.debug{"bean discarded: ${m}"}
             }
-            let removed = HashSet<TypeInfo>()
+            let typeRemoved = HashSet<TypeInfo>()
+            let annotationRemoved = HashSet<TypeInfo>()
             for (d in discarded) {
                 beans.remove(d.name)
                 for ((t, set) in beanTypeMap) {
                     set.remove(d)
-                    removed.add(t)
+                    typeRemoved.add(t)
+                }
+                for((t, set) in annotationMap){
+                    set.remove(d)
+                    annotationRemoved.add(t)
                 }
             }
-            for (t in removed where beanTypeMap[t].isEmpty()) {
+            for (t in typeRemoved where beanTypeMap[t].isEmpty()) {
                 beanTypeMap.remove(t)
+            }
+            for(t in annotationRemoved where annotationMap[t].isEmpty()){
+                annotationMap.remove(t)
             }
         }
     }

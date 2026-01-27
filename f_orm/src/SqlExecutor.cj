@@ -149,7 +149,7 @@ public class SqlExecutor <: Resource & RootDAO {
                 logger.warn(e)
             }
             _connection_ = NoneConnection.instance
-            f_orm_clearAll()
+            DirtyTag.clearAll()
         }
     }
 
@@ -490,7 +490,11 @@ public class SqlExecutor <: Resource & RootDAO {
     }
     public func first<T>(mappers: QueryMappers<T>): Option<T> {
         execute<Option<T>> {r =>
-            mappers.doMap(r)
+            try{
+                mappers.doMap(r)
+            }finally{
+                DirtyTag.setBeforeDirty<T>()
+            }
         }
     }
     public func first<T>(): Option<T> where T <: QueryMappersInit<T> {
@@ -511,7 +515,11 @@ public class SqlExecutor <: Resource & RootDAO {
     }
     public func list<T>(mappers: QueryMappers<T>): ArrayList<T> {
         execute<ArrayList<T>> {r =>
-            mappers.list(r)
+            try{
+                mappers.list(r)
+            }finally{
+                DirtyTag.setBeforeDirty<T>()
+            }
         }
     }
     public func list<T>(): ArrayList<T> where T <: QueryMappersInit<T> {

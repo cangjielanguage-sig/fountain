@@ -15,7 +15,7 @@ limitations under the License.
  */
 package fountain::f_data
 
-public class ObjectFields <: Collection<ReadableField> {
+public struct ObjectFields <: Collection<ReadableField> {
     private static let allFields = ConcurrentHashMap<TypeInfo, ObjectFields>()
     private let mutables = HashMap<String, MutableField>()
     private let readables = HashMap<String, ReadableField>()

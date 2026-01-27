@@ -13,15 +13,18 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package fountain::f_mvc
+package f_orm.exception
 
-public func responseBody<T>(ctx: HttpContext, data: T): Unit where T <: Object & ObjectData<T> {
-    let d = data.toData()
-    let mediaType = ctx
-        .request
-        .headers
-        .getFirst("Accept")
-        .getOrThrow {HttpRequestHeaderException("current request header does not contain Accept")}
-    let bytes = MediaTypes.parse(mediaType).fromData(d)
-    HttpResponseWriter(ctx).write(bytes)
+public class MockDBException <: ORMException {
+    public init() {}
+
+    public init(message: String) {
+        super(message)
+    }
+    public init(caused: Exception) {
+        super(caused)
+    }
+    public init(message: String, caused: Exception) {
+        super(message, caused)
+    }
 }

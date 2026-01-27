@@ -80,6 +80,7 @@ public class CurrentUserController {
                 produces:'application/json+log',
                 ignoreAuth: true]
     public func loginLog(@RequestBody user: UserRequest): UserRequest {
+        userService.userSessionLog(user.username, user.password)
         user
     }
     @PostMapping[path:'/api/user/session', 

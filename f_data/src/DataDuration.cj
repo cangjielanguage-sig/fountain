@@ -15,7 +15,7 @@ limitations under the License.
  */
 package fountain::f_data
 
-public class DataDuration <: Data & Hashable & Comparable<DataDuration> {
+public struct DataDuration <: Data & Hashable & Comparable<DataDuration> {
     public DataDuration(public let data: Duration) {}
     public func toString(): String {
         data.toString()

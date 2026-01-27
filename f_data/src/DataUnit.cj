@@ -15,7 +15,7 @@ limitations under the License.
  */
 package fountain::f_data
 
-public class DataUnit <: Data & Hashable & Equatable<DataUnit> {
+public struct DataUnit <: Data & Hashable & Equatable<DataUnit> {
     public static let UNIT = DataUnit()
     private init() {}
     public func toString(): String {

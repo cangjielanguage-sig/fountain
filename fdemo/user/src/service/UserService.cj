@@ -27,4 +27,5 @@ public interface UserService <: RootService {
     func listUsers(): UserList
     func deleteUser(id: Int64): Int64
     func userSession(username: String, password: String): ?(Int64, String, Bool)
+    func userSessionLog(username: String, password: String): ?(Int64, String, Bool)
 }

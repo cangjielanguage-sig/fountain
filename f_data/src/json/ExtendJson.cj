@@ -145,7 +145,7 @@ public class DataJsonArrayIterator <: Iterator<Data> {
     }
 }
 
-public class DataJsonArray <: Data & Collection<Data> {
+public struct DataJsonArray <: Data & Collection<Data> {
     public DataJsonArray(public let json: JsonArray) {}
     public prop size: Int64 {
         get() {
@@ -179,7 +179,7 @@ public class DataJsonObjectIterator <: Iterator<(String, Data)> {
     }
 }
 
-public class DataJsonObject <: Data & Collection<(String, Data)> {
+public struct DataJsonObject <: Data & Collection<(String, Data)> {
     public DataJsonObject(public let json: JsonObject) {}
     public prop size: Int64 {
         get() {

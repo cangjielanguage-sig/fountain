@@ -18,9 +18,10 @@ package fountain::f_orm.sql
 internal import std.collection.concurrent.ConcurrentHashMap
 internal import fountain::f_collection.*
 internal import fountain::f_exception.IllegalAccessException
+internal import fountain::f_log.*
 internal import fountain::f_regex.*
 internal import fountain::f_orm.exception.*
-internal import fountain::f_orm.{f_orm_getDirtyFields, f_orm_clear}
+internal import fountain::f_orm.DirtyTag
 
 public import fountain::f_base.*
 public import fountain::f_bean.*

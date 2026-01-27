@@ -15,7 +15,7 @@ limitations under the License.
  */
 package fountain::f_data
 
-public class DataNone <: Data {
+public struct DataNone <: Data {
     public static let INSTANCE = DataNone()
     private init() {}
     public func toString(): String {

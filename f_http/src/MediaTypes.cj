@@ -17,15 +17,17 @@ package fountain::f_http
 
 import std.reflect.ClassTypeInfo
 import fountain::f_log.*
+import std.sync.AtomicBool
 
 public class MediaTypes {
     private static let log = LoggerFactory.getLogger<MediaTypes>()
     private static let mediaTypes = ConcurrentHashMap<String, MediaType>()
+    private static let mediaTypeBeansRegistered = AtomicBool(false)
+    private init(){}
     static init() {
         register(JsonMediaType.instance)
         register(MultipartMediaType.instance)
         register(PlainTextMediaType.instance)
-        registerFromBeanFactory()
     }
     public static func register(mediaType: MediaType) {
         log.debug{'MediaTypes.register: ${mediaType} ${ClassTypeInfo.of(mediaType)}'}
@@ -35,14 +37,17 @@ public class MediaTypes {
         tryParse(mediaType).getOrThrow {MediaTypeException("${mediaType} is an illegal MediaType string")}
     }
     private static func registerFromBeanFactory() {
-        register(BeanFactory.instance.getList<MediaType>())
+        if(mediaTypeBeansRegistered.compareAndSwap(false, true)){
+            register(BeanFactory.instance.getList<MediaType>())
+        }
     }
     private static func register(mediaTypes: ArrayList<MediaType>) {
         for (m in mediaTypes) {
             register(m)
         }
     }
-    private static func doTryParse(mediaType: String, recursived: Bool): ?MediaType{
+    private static func doTryParse(mediaType: String): ?MediaType{
+        registerFromBeanFactory()
         if (let Some(x) <- mediaTypes.get(mediaType)) {
             log.debug{'MediaTypes.tryParse:${mediaType} ${x} ${ClassTypeInfo.of(x)}'}
             x
@@ -56,9 +61,6 @@ public class MediaTypes {
             if (let Some(x) <- mediaTypes.get(mt)) {
                 log.debug{'MediaTypes.tryParse:${mediaType} ${x} ${ClassTypeInfo.of(x)}'}
                 x
-            } else if (!recursived && let list <- BeanFactory.instance.getList<MediaType>() && list.size > 0) {
-                register(list)
-                doTryParse(mediaType, true)
             } else {
                 log.debug{'MediaTypes.tryParse:${mediaType} None'}
                 None<MediaType>
@@ -66,6 +68,6 @@ public class MediaTypes {
         }?.make(mediaType)
     }
     public static func tryParse(mediaType: String): ?MediaType {
-        doTryParse(mediaType, false)
+        doTryParse(mediaType)
     }
 }
