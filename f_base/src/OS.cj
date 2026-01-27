@@ -68,7 +68,7 @@ public enum OS <: Equatable<OS> & ToString & Hashable {
         'fountain.base.OS.${this}'.hashCode()
     }
 
-    @When[os == "Linux"]
+    @When[os == "Linux" && env == "gnu"]
     public static prop current: OS {
         get() {
             Linux
@@ -89,7 +89,7 @@ public enum OS <: Equatable<OS> & ToString & Hashable {
         }
     }
 
-    @When[os == "HarmonyOS"]
+    @When[os == "Linux" && env == 'ohos']
     public static prop current: OS {
         get() {
             HarmonyOS
