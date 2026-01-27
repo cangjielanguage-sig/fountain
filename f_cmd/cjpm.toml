@@ -21,15 +21,15 @@
 
 [profile.build]
   incremental = true
-  lto = "full"
+# lto = "full"
 
 [target]
 [target.x86_64-unknown-linux-gnu]
-  compile-option = "-O2 --lto=full --dy-std -ldl"
-  override-compile-option = "-O2 --lto=full --dy-std -ldl"
+  compile-option = "-O2 --dy-std -ldl"
+  override-compile-option = "-O2 --dy-std -ldl"
 [target.aarch64-unknown-linux-gnu]
-  compile-option = "-O2 --lto=full --dy-std -ldl"
-  override-compile-option = "-O2 --lto=full --dy-std -ldl"
+  compile-option = "-O2 --dy-std -ldl"
+  override-compile-option = "-O2 --dy-std -ldl"
 [target.x86_64-w64-mingw32]
   compile-option = "-O2 --dy-std -lcrypt32"
   override-compile-option = "-O2 --dy-std -lcrypt32"
