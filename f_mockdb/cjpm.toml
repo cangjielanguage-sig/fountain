@@ -1,8 +1,8 @@
 [package]
   cjc-version = "1.0.4"
   name = "f_mockdb"
-  compile-option = "-O2 --dy-std"
-  override-compile-option = "-O2 --dy-std"
+  compile-option = "--dy-std"
+  override-compile-option = "--dy-std"
   description = "mock database"
   version = "1.0.45"
   target-dir = ""
