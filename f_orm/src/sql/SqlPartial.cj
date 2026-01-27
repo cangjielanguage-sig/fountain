@@ -27,11 +27,7 @@ public interface SqlPartial <: RootDAO {
      * map的key可以是列名或T的公共实例成员名
      */
     func UPDATE<T, ID>(values: Map<String, Any>, id: ID): Int64 where T <: QueryMappersInit<T>
-    func UPDATE<T>(values: T, ignoredColumns!: HashSet<String>, includingColumns!: HashSet<String>): Int64 where T <: QueryMappersInit<T> & ObjectData<T>
-    /**
-     * 泛型实参必须同时被@QueryMappersGenerator[dirty]和@DataAssist[fields]修饰，具体见相关宏文档
-     */
-    func updateDirty<T>(values: T): Int64 where T <: QueryMappersInit<T> & ObjectData<T>
+    func UPDATE<T>(values: T, ignoredColumns!: HashSet<String>, includingColumns!: HashSet<String>, dirty!: Bool): Int64 where T <: QueryMappersInit<T> & ObjectData<T>
     /**
      * ignoredColumns/includingColumns可以指定values的公共成员或对应的列名，两个参数要么都不指定，要么只指定一个，都指定会抛异常
      */
