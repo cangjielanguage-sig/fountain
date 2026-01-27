@@ -47,13 +47,13 @@
 
 [target]
 [target.x86_64-unknown-linux-gnu]
-  compile-option = "-O2 --dy-std -ldl"
-  override-compile-option = "-O2 --dy-std -ldl"
+  compile-option = "-O2 --lto=full --dy-std -ldl"
+  override-compile-option = "-O2 --lto=full --dy-std -ldl"
 [target.x86_64-unknown-linux-gnu.bin-dependencies]
   path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]
 [target.aarch64-unknown-linux-gnu]
-  compile-option = "-O2 --dy-std -ldl"
-  override-compile-option = "-O2 --dy-std -ldl"
+  compile-option = "-O2 --lto=full --dy-std -ldl"
+  override-compile-option = "-O2 --lto=full --dy-std -ldl"
 [target.aarch64-unknown-linux-gnu.bin-dependencies]
   path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]
 [target.x86_64-w64-mingw32]
@@ -72,13 +72,13 @@
 [target.aarch64-apple-darwin.bin-dependencies]
   path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]
 [target.aarch64-linux-ohos]
-  compile-option = "-O2 --dy-std -ldl"
-  override-compile-option = "-O2 --dy-std -ldl"
+  compile-option = "-O2 --lto=full --dy-std -ldl"
+  override-compile-option = "-O2 --lto=full --dy-std -ldl"
 [target.aarch64-linux-ohos.bin-dependencies]
   path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]
 [target.x86_64-linux-ohos]
-  compile-option = "-O2 --dy-std -ldl"
-  override-compile-option = "-O2 --dy-std -ldl"
+  compile-option = "-O2 --lto=full --dy-std -ldl"
+  override-compile-option = "-O2 --lto=full --dy-std -ldl"
 [target.x86_64-linux-ohos.bin-dependencies]
   path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]
 
