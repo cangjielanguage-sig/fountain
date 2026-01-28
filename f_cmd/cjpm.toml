@@ -21,7 +21,6 @@
 
 [profile.build]
   incremental = true
-#  lto = "full"
 
 [target]
 [target.x86_64-unknown-linux-gnu]

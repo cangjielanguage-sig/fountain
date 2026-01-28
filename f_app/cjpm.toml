@@ -21,7 +21,6 @@
   f_version  = {path = "../f_version"}
 
 [profile.build]
-##  lto = "full"
   incremental = true
 
 [target]

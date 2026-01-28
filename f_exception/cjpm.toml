@@ -18,7 +18,6 @@
   authors = ["吴京润"]
 
 [profile.build]
-#  lto = "full"
   incremental = true
 
 [target]

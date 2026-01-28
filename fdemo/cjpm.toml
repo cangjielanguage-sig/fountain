@@ -10,7 +10,6 @@
   override-compile-option = "--dy-std -Woff unused"
 
 [profile.build]
-##  lto = "full"
   incremental = true
 
 [target]
