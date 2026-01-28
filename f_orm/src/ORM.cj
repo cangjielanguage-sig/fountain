@@ -116,11 +116,17 @@ public class ORM {
     }
     public static func register(){
         let default = ORMConfig.getDefaultDriver()
-        for(d in ORMConfig.getDrivers()){
-            if(ORMConfig.getUseThirdPartyPool(d.name)){
-                continue
+        func doRegister(driver: Driver){
+            register(NamedDatasource(driver), default: default.isEmpty() || driver.name == default)
+        }
+        for(d in ORMConfig.getDriverNames() where d == 'mockdb'){//使用mockdb的时候不再初始化其他驱动的Datasource
+            if(!ORMConfig.getUseThirdPartyPool(d)){
+                getDriver(d) |> doRegister
             }
-            register(NamedDatasource(d), default: default.isEmpty() || d.name == default)
+            return
+        }
+        for(d in ORMConfig.getDrivers() where !ORMConfig.getUseThirdPartyPool(d.name)){
+            doRegister(d)
         }
     }
     public static func initialize(){
