@@ -31,12 +31,12 @@ exports(){
     export mvc_internalServerErrorMessageKind=BEAN
     export mvc_internalServerErrorMessage=NameOf500Handler
     # 如果不使用fountain连接池，也不使用标准库连接池，就不要配置以下orm_*Pool*变量，只配置orm_noPool，只能用代码初始化第三方连接池
-    # export orm_useThirdPartyPool=false # 使用第三方连接池，不使用fountain.orm的连接池，也不使用标准库的连接池。
+    export orm_useThirdPartyPool=true # 使用第三方连接池，不使用fountain.orm的连接池，也不使用标准库的连接池。
     # export opengauss_orm_useThirdPartyPool=flase # 可以为指定的数据库驱动配置是否使用第三方池
     # 此时使用ORM.register(datasource, default: false) # 开发者自己用代码初始化Driver和连接池、调用这个函数注册连接池
-    # export orm_noPool=true # 默认是false，true表示不用连接池
-    export orm_useStdPool=false # 默认是true，表示使用标准库连接池，false是使用fountain连接池
-    export orm_drivers=opengauss # 逗号分隔的驱动名称
+    export orm_noPool=true # 默认是false，true表示不用连接池
+    # export orm_useStdPool=false # 默认是true，表示使用标准库连接池，false是使用fountain连接池
+    export orm_drivers=mockdb,opengauss # 逗号分隔的驱动名称
     # orm_databasePool开头的是fountain.orm.DatabasePool的配置项
     export orm_databasePoolInitSize=1 # 初始连接数
     export orm_databasePoolMinSize=1 # 最小连接数

@@ -15,7 +15,7 @@ limitations under the License.
  */
 package f_data
 
-public class DataReal <: Data & Hashable & Comparable<DataReal> {
+public struct DataReal <: Data & Hashable & Comparable<DataReal> {
     public let integer: Bool
     public DataReal(public let data: Decimal) {
         integer = data.scale == 0

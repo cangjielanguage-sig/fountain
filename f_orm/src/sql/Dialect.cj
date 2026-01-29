@@ -31,19 +31,65 @@ public abstract class SqlDialect {
     public open func limit(size: Int64, offset: Int64): (Int64, Int64, String) {
         (size, offset, ' limit ? offset ?')
     }
-    public open func involvedIdentifier(identifier: String): String {
-        '`${identifier}`'
-    }
-}
-@Bean
-public open class MySqlDialect <: SqlDialect {
-    public prop dialect: String {
+    public open prop startInvolver: String {
         get(){
-            'mysql'
+            '"'
+        }
+    }
+    public open prop endInvolver: String {
+        get(){
+            '"'
+        }
+    }
+    public func involvedIdentifier(identifier: String): String {
+        if(identifier.startsWith(startInvolver)){
+            return identifier
+        }else if(let Some(idx) <- identifier.indexOf('.')){
+            '${startInvolver}${identifier[0 .. idx]}${endInvolver}.${startInvolver}${identifier[idx + 1 ..]}${endInvolver}'
+        }else{
+            '${startInvolver}${identifier}${endInvolver}'
         }
     }
 }
 @Bean
+@BeanMeta[condition: ConfCond.Value('orm_drivers', StringCond.Contains('mysql'))]
+public open class MySqlDialect <: SqlDialect {
+    public open prop dialect: String {
+        get(){
+            'mysql'
+        }
+    }
+    public prop startInvolver: String {
+        get(){
+            '`'
+        }
+    }
+    public prop endInvolver: String {
+        get(){
+            '`'
+        }
+    }
+}
+@Bean
+@BeanMeta[condition: ConfCond.Value('orm_drivers', StringCond.Contains('mariadb'))]
+public class MariaDBDialect <: MySqlDialect {
+    public open prop dialect: String {
+        get(){
+            'mariadb'
+        }
+    }
+}
+@Bean
+@BeanMeta[condition: ConfCond.Value('orm_drivers', StringCond.Contains('sqlite'))]
+public class SqliteDialect <: SqlDialect {
+    public prop dialect: String {
+        get(){
+            'sqlite'
+        }
+    }
+}
+@Bean
+@BeanMeta[condition: ConfCond.Value('orm_drivers', StringCond.Contains('postgres'))]
 public open class PostgresDialect <: SqlDialect {
     public open prop dialect: String {
         get(){
@@ -53,11 +99,9 @@ public open class PostgresDialect <: SqlDialect {
     public open func lastInsertId(id: String): String {
         ' returning ${id}'
     }
-    public func involvedIdentifier(identifier: String): String {
-        '"${identifier}"'
-    }
 }
 @Bean
+@BeanMeta[condition: ConfCond.Value('orm_drivers', StringCond.Contains('opengauss'))]
 public class OpenGaussDialect <: PostgresDialect {
     public prop dialect: String {
         get(){
@@ -66,6 +110,7 @@ public class OpenGaussDialect <: PostgresDialect {
     }
 }
 @Bean
+@BeanMeta[condition: ConfCond.Value('orm_drivers', StringCond.Contains('oracle'))]
 public class OracleDialect <: SqlDialect {
     public prop dialect: String {
         get(){
@@ -77,6 +122,7 @@ public class OracleDialect <: SqlDialect {
     }
 }
 @Bean
+@BeanMeta[condition: ConfCond.Value('orm_drivers', StringCond.Contains('db2'))]
 public class DB2Dialect <: SqlDialect {
     public prop dialect: String {
         get(){
@@ -87,31 +133,66 @@ public class DB2Dialect <: SqlDialect {
         (offset, size, ' OFFSET ? ROWS FETCH FIRST ? ROWS ONLY')
     }
 }
-struct SqlDialectMediator {
-    private init(){
-        for(dialect in lookupList<SqlDialect>()){
-            this.dialects[dialect.dialect] = dialect
+@Bean
+@BeanMeta[condition: ConfCond.Value('orm_drivers', StringCond.Contains(ORMConfig.mockdb))]
+public class MockdbDialect <: SqlDialect {
+    private var mock_: String = 'opengauss'
+    public prop dialect: String {
+        get(){
+            ORMConfig.mockdb
         }
     }
+    public mut prop mock: String {
+        get(){
+            mock_
+        }
+        set(value){
+            if(value == dialect){
+                throw MockDBException('cannot mock itself')
+            }
+            mock_ = value
+        }
+    }
+    public func limit(size: Int64, offset: Int64): (Int64, Int64, String) {
+        SqlDialectMediator.instance.getDialect(this.mock_).limit(size, offset)
+    }
+    public prop startInvolver: String {
+        get(){
+            SqlDialectMediator.instance.getDialect(this.mock_).startInvolver
+        }
+    }
+    public prop endInvolver: String {
+        get(){
+            SqlDialectMediator.instance.getDialect(this.mock_).endInvolver
+        }
+    }
+}
+struct SqlDialectMediator {
+    private init(){}
     public static let instance = SqlDialectMediator()
 
     func getDialect(dialect: String): SqlDialect {
+        if(dialects.isEmpty()){
+            for(dialect in lookupList<SqlDialect>()){
+                this.dialects[dialect.dialect] = dialect
+            }
+        }
         dialects[dialect]
     }
 
     private let dialects = ConcurrentHashMap<String, SqlDialect>()
 
     func lastInsertId(dialect: String, id: String): String {
-        dialects[dialect].lastInsertId(id)
+        getDialect(dialect).lastInsertId(id)
     }
     func lastInsertId(dialect: String, dataType: DataType): String {
-        dialects[dialect].lastInsertId(dataType)
+        getDialect(dialect).lastInsertId(dataType)
     }
     func lastInsertId<ID, O>(dialect: String, id: IdQueryMapper<ID, O>): String where ID <: Hashable & Equatable<ID> {
-        dialects[dialect].lastInsertId(id)
+        getDialect(dialect).lastInsertId(id)
     }
 
     func limit(dialect: String, size: Int64, offset: Int64): (Int64, Int64, String) {
-        dialects[dialect].limit(size, offset)
+        getDialect(dialect).limit(size, offset)
     }
 }

@@ -15,7 +15,7 @@ limitations under the License.
  */
 package f_mvc
 
-public func responseBody<T>(ctx: HttpContext, data: T): Unit where T <: Object & DataObject<T> {
+public func responseBody<T>(ctx: HttpContext, data: T): Unit where T <: Object & ObjectData<T> {
     let d = data.toData()
     let mediaType = ctx
         .request

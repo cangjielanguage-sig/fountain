@@ -15,7 +15,7 @@ limitations under the License.
  */
 package f_data
 
-public class DataString <: Data & Hashable & Comparable<DataString> {
+public struct DataString <: Data & Hashable & Comparable<DataString> {
     public DataString(public let data: String) {}
     public init(data: ToString) {
         this(data.toString())

@@ -70,4 +70,17 @@ public class UserServiceImpl <: UserService {
     public func userSession(username: String, password: String): ?(Int64, String, Bool) {
         UserEntity(username, password).makeSession(executor().findUserId)
     }
+    public func userSessionLog(username: String, password: String): ?(Int64, String, Bool){
+        try{
+            let user = UserPO()
+            user.id = 1
+            user.password = '24124141324'
+            //DirtyTag.setBeforeDirty<UserPO>()
+            user.username = 'asdfsafadfsfsdf'
+            executor().UPDATE<UserPO>(user, dirty: true)
+        }catch(e: Exception){
+            e.printStackTrace()
+        }
+        None<(Int64, String, Bool)>
+    }
 }

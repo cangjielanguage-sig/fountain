@@ -10,14 +10,15 @@
   f_exception  = {path = "../f_exception"}
   f_log  = {path = "../f_log"}
   f_macros  = {path = "../f_macros"}
+  f_mockdb  = {path = "../f_mockdb"}
   f_regex  = {path = "../f_regex"}
   f_pool  = {path = "../f_pool"}
   f_util  = {path = "../f_util"}
 
 [package]
   cjc-version = "1.0.4"
-  compile-option = "-O2 --dy-std"
-  override-compile-option = "-O2 --dy-std"
+  compile-option = "--dy-std"
+  override-compile-option = "--dy-std"
   description = "orm"
   link-option = ""
   name = "f_orm"
@@ -33,28 +34,27 @@
   authors = ["吴京润"]
 
 [profile.build]
-  lto = "full"
   incremental = true
 
 [target]
 [target.x86_64-unknown-linux-gnu]
-  compile-option = "-O2 --lto=full --dy-std -ldl"
-  override-compile-option = "-O2 --lto=full --dy-std -ldl"
+  compile-option = "--dy-std -ldl"
+  override-compile-option = "--dy-std -ldl"
 [target.aarch64-unknown-linux-gnu]
-  compile-option = "-O2 --lto=full --dy-std -ldl"
-  override-compile-option = "-O2 --lto=full --dy-std -ldl"
+  compile-option = "--dy-std -ldl"
+  override-compile-option = "--dy-std -ldl"
 [target.x86_64-w64-mingw32]
-  compile-option = "-O2 --dy-std -lcrypt32"
-  override-compile-option = "-O2 --dy-std -lcrypt32"
+  compile-option = "--dy-std -lcrypt32"
+  override-compile-option = "--dy-std -lcrypt32"
 [target.x86_64-apple-darwin]
-  compile-option = "-O2 --dy-std"
-  override-compile-option = "-O2 --dy-std"
+  compile-option = "--dy-std"
+  override-compile-option = "--dy-std"
 [target.aarch64-apple-darwin]
-  compile-option = "-O2 --dy-std"
-  override-compile-option = "-O2 --dy-std"
+  compile-option = "--dy-std"
+  override-compile-option = "--dy-std"
 [target.aarch64-linux-ohos]
-  compile-option = "-O2 --dy-std -ldl"
-  override-compile-option = "-O2 --dy-std -ldl"
+  compile-option = "--dy-std -ldl"
+  override-compile-option = "--dy-std -ldl"
 [target.x86_64-linux-ohos]
-  compile-option = "-O2 --dy-std -ldl"
-  override-compile-option = "-O2 --dy-std -ldl"
+  compile-option = "--dy-std -ldl"
+  override-compile-option = "--dy-std -ldl"

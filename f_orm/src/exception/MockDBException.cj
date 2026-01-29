@@ -13,10 +13,18 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
  */
-package f_rx
+package f_orm.exception
 
-public enum CombinedObserverPolicy{
-    | Async(Duration)
-    | AsyncOrdering
-    | Sync
+public class MockDBException <: ORMException {
+    public init() {}
+
+    public init(message: String) {
+        super(message)
+    }
+    public init(caused: Exception) {
+        super(caused)
+    }
+    public init(message: String, caused: Exception) {
+        super(message, caused)
+    }
 }

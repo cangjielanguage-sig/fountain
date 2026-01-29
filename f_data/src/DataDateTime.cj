@@ -15,7 +15,7 @@ limitations under the License.
  */
 package f_data
 
-public class DataDateTime <: Data & Hashable & Comparable<DataDateTime> {
+public struct DataDateTime <: Data & Hashable & Comparable<DataDateTime> {
     public DataDateTime(public let data: DateTime) {}
     public func toString(): String {
         data.toString()
