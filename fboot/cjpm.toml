@@ -1,5 +1,5 @@
 [dependencies]
-  f_app = {path = "../f_app"}
+  fountain = {path = "../"}
 
 [package]
   cjc-version = "1.0.4"
