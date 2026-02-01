@@ -86,7 +86,7 @@ public class MOCKDB {
     }
     public static func addQueryResultColumnInfo(
         name!: String, nullable!: Bool, typeName!: String
-    ){
+    ): Unit {
         let info = MockColumnInfo(name, nullable, typeName)
         if(let Some(list) <- queryResultColumnInfos_.get()){
             list
