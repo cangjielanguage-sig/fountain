@@ -426,7 +426,9 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
                 case x: String => return x
                 case x: ToString => return x.toString()
                 case x: Array<Byte> => return toBase64String(x)
+                case x: MultipartFile => return JsonString(x.toString()).toString()
                 case x: ToData => return JsonValue.tryFromData(x.toData()).toString()
+                case x: Data => return JsonValue.tryFromData(x).toString()
                 case x => x
             }
             TypeInfo.of(arg).toString()

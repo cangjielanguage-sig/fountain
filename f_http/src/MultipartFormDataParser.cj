@@ -15,6 +15,7 @@ limitations under the License.
  */
 package fountain::f_http
 
+import std.io.*
 import fountain::f_collection.*
 import fountain::f_data.*
 import fountain::f_io.RotatableBuffer
@@ -22,7 +23,7 @@ import fountain::f_util.UUID
 /**
 https://www.rfc-editor.org/rfc/rfc1867
 multipart/form-data
-        Content-type: multipart/form-data, boundary=AaB03x
+        Content-type: multipart/form-data; boundary=AaB03x
 
         --AaB03x
         content-disposition: form-data; name="field1"
@@ -38,7 +39,7 @@ multipart/form-data
 
 
 multipart/form-data multipart/mixed
-        Content-type: multipart/form-data, boundary=AaB03x
+        Content-type: multipart/form-data; boundary=AaB03x
 
         --AaB03x
         content-disposition: form-data; name="field1"
@@ -46,7 +47,7 @@ multipart/form-data multipart/mixed
         Joe Blow
         --AaB03x
         content-disposition: form-data; name="pics"
-        Content-type: multipart/mixed, boundary=BbC04y
+        Content-type: multipart/mixed; boundary=BbC04y
 
         --BbC04y
         Content-disposition: attachment; filename="file1.txt"
@@ -63,41 +64,43 @@ multipart/form-data multipart/mixed
         --AaB03x--
  */
 public class MultipartFormDataParser {
+    private static let DOUBLE_CRLF = [b'\r', b'\n', b'\r', b'\n']
     private let stream: RotatableBuffer
-    private let boundaryBytes: Array<Byte>
+    private let seperatorBoundaryBytes: Array<Byte>
     
     public MultipartFormDataParser(input: InputStream, private let boundary: String){
-        stream = RotatableBuffer(input, halfBufferSize: HttpConfig.halfBufferSize)
-        boundaryBytes = '--${boundary}'.unsafeBytes()
+        seperatorBoundaryBytes = '\r\n--${boundary}'.unsafeBytes()
+        stream = RotatableBuffer(input, seperatorBoundaryBytes, halfBufferSize: HttpConfig.halfBufferSize)
     }
     public static func new(ctx: HttpContext){
         let contentType = ctx.request.headers.getFirst("Content-Type").getOrThrow()
         let boundary = contentType[contentType.indexOf('boundary=').getOrThrow() + 'boundary='.size ..]
         MultipartFormDataParser(ctx.request.body, boundary)
     }
-    public func parse(){
+    public func parse(): DataMultiparts {
+        let boundaryBytes = seperatorBoundaryBytes[2 ..]
         let path = Path('/tmp/${UUID.random()}')
         let crlf = Array<Byte>(2, repeat: 0)
         let parts = DataMultiparts()
         var start = stream.indexOf(boundaryBytes)
+        if(start < 0){
+            throw MultipartFormDataException()
+        }
+        stream.addOffset(boundaryBytes.size)
+        start += boundaryBytes.size
         while(true){
-            if(start < 0){
-                throw MultipartFormDataException()
-            }
-            start += boundaryBytes.size
-            stream.read(crlf)
+            let (l, _, _) = stream.read(crlf)
             match((crlf[0], crlf[1])){
                 case (b'\r', b'\n') =>
                     start += 2
-                    var end = stream.indexOf([b'\r', b'\n', b'\r', b'\n'], from: start)
-                    var buf = Array<Byte>(end - start, repeat: 0)
+                    var end = stream.indexOf(DOUBLE_CRLF, from: start)
+                    var buf = Array<Byte>(end - start + DOUBLE_CRLF.size, repeat: 0)
                     stream.read(buf)
                     let partHeader = String.fromUtf8(buf).split('\r\n')
-                    let contentDisposition = ContentDisposition.parse(partHeader[0])
-                    let contentType = MediaTypes.parse(partHeader[1].replace('Content-Type:', '').trimAscii())
+                    let contentDisposition = ContentDisposition.parse(partHeader[0]['Content-Disposition: '.size ..])
                     let filename = contentDisposition.getFilename()
-                    stream.addOffset(4)
-                    end = stream.indexOf(boundaryBytes)
+                    end = stream.indexOf(seperatorBoundaryBytes)
+                    start += seperatorBoundaryBytes.size
                     if(end > 0){
                         buf = Array<Byte>(end - start, repeat: 0)
                         stream.read(buf)
@@ -107,58 +110,64 @@ public class MultipartFormDataParser {
                             }else{
                                 String.fromUtf8(buf)
                             }
+                            let contentType = MediaTypes.parse(partHeader[1].replace('Content-Type:', '').trimAscii())
                             parts.add(contentDisposition.getName(), contentType.toData(value))
                         }else{
                             let part = MultipartFile(contentDisposition, ByteBuffer(buf), charset: contentDisposition.getCharset() ?? Charsets.UTF8)
                             parts.add(contentDisposition.getName(), part)
                         }
-                    }else if(filename.isEmpty()){
+                    }else if (filename.isEmpty()){
+                        let byteList = ArrayList<Byte>()
                         buf = Array<Byte>(1024, repeat: 0)
-                        let bytes = ArrayList<Byte>()
                         while(let (len, _, _) <- stream.read(buf)){
-                            bytes.add(all: buf[0..len])
-                            end = stream.indexOf(boundaryBytes)
-                            start = stream.offset
-                            if(end > 0){
-                                buf = Array<Byte>(end - start, repeat: 0)
-                                stream.read(buf)
-                                bytes.add(all: buf)
+                            byteList.add(all: buf[0 .. len])
+                            if(len < buf.size){
                                 break
                             }
                         }
-                        buf = bytes.unsafeData()
+                        let bytes = byteList.unsafeData()
                         let value = if(let Some(charset) <- contentDisposition.getCharset()){
-                            charset.newDecoder().decode(buf)
+                            charset.newDecoder().decode(bytes)
                         }else{
-                            String.fromUtf8(buf)
+                            String.fromUtf8(bytes)
                         }
+                        let contentType = MediaTypes.parse(partHeader[1].replace('Content-Type:', '').trimAscii())
                         parts.add(contentDisposition.getName(), contentType.toData(value))
                     }else{
+                        Directory.create(path, recursive: true)
                         let file = File(path.join(filename), ReadWrite)
                         buf = Array<Byte>(1024, repeat: 0)
+                        let tmpbuf = ByteBuffer()
+                        var l = 0
                         while(let (len, _, _) <- stream.read(buf)){
-                            file.write(buf[0..len])
-                            end = stream.indexOf(boundaryBytes)
-                            start = stream.offset
-                            if(end > 0){
-                                buf = Array<Byte>(end - start, repeat: 0)
-                                stream.read(buf)
-                                file.write(buf)
+                            l += len
+                            if(len < buf.size){
+                                tmpbuf.write(buf[0..len])
+                                file.write(buf[0..len])
                                 break
+                            }else{
+                                tmpbuf.write(buf)
+                                file.write(buf)
                             }
                         }
+                        file.seek(Begin(0))
                         let part = MultipartFile(contentDisposition, file, charset: contentDisposition.getCharset()?? Charsets.UTF8)
+                        part.setSize(file.length)
                         parts.add(contentDisposition.getName(), part)
                     }
-                case (b'-', b'-') => break
-                case _ => throw MultipartFormDataException()
+                case (b'-', b'-') =>
+                    break
+                case _ =>
+                    let tmp = Array<Byte>(24, repeat: 0)
+                    let (l, _, _) = stream.read(tmp)
+                    throw MultipartFormDataException()
             }
         }
         parts
     }
 }
 
-public class DataMultiparts <: Data & Iterable<(String, Data)>{
+public struct DataMultiparts <: Data & Iterable<(String, Data)>{
     private let map = HashMap<String, ArrayList<Data>>()
 
     public func add(name: String, input: Data){

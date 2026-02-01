@@ -21,7 +21,6 @@
   "fountain::f_concurrent" = {path = "../f_concurrent"}
 
 [profile.build]
-#  lto = "full"
   incremental = true
 
 [target]

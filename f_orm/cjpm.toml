@@ -10,6 +10,7 @@
   "fountain::f_exception" = {path = "../f_exception"}
   "fountain::f_log" = {path = "../f_log"}
   "fountain::f_macros" = {path = "../f_macros"}
+  "fountain::f_mockdb" = {path = "../f_mockdb"}
   "fountain::f_regex" = {path = "../f_regex"}
   "fountain::f_pool" = {path = "../f_pool"}
   "fountain::f_util" = {path = "../f_util"}

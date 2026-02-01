@@ -16,7 +16,7 @@ limitations under the License.
 package fountain::f_http
 
 /**
- * multipart/form-data, boundary=AaB03x
+ * multipart/form-data; boundary=AaB03x
  */
 public class MultipartMediaType <: MediaType {
     private static const MEDIA_TYPE_NAME = "multipart/form-data"
@@ -44,9 +44,9 @@ public class MultipartMediaType <: MediaType {
     }
     public func make(mediaType: String): MediaType {
         if (mediaType.startsWith(MEDIA_TYPE_NAME)) {
-            let idx = mediaType.indexOf(", boundary=") ?? -1
+            let idx = mediaType.indexOf("; boundary=") ?? -1
             if (idx > 0) {
-                MultipartMediaType(mediaType[0..idx], boundary: mediaType[idx + ", boundary=".size..])
+                MultipartMediaType(mediaType[0..idx], boundary: mediaType[idx + "; boundary=".size..])
             } else if (mediaType == MEDIA_TYPE_NAME) {
                 this
             } else {
