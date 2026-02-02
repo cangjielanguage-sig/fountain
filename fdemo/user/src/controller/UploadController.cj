@@ -24,7 +24,7 @@ public class UploadController {
     @PostMapping[path: '/upload', produces: 'text/plain', consumes: 'multipart/form-data']
     @IgnoreSecurity
     public func upload(@RequestBody multipart: UploadRequest): String {
-        println('UUUUUUUUUUUUUUUUUUUUUUUUUUUUUU ${multipart.file?.size}')
+        println('UUUUUUUUUUUUUUUUUUUUUUUUUUUUUU ${multipart.file?.size} ${multipart.name}')
         'ok'
     }
 }

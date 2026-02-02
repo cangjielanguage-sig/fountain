@@ -92,7 +92,7 @@ public class MultipartFormDataParser {
             let (l, _, _) = stream.read(crlf)
             match((crlf[0], crlf[1])){
                 case (b'\r', b'\n') =>
-                    start += 2
+                    start = stream.offset
                     var end = stream.indexOf(DOUBLE_CRLF, from: start)
                     var buf = Array<Byte>(end - start + DOUBLE_CRLF.size, repeat: 0)
                     stream.read(buf)
@@ -100,9 +100,8 @@ public class MultipartFormDataParser {
                     let contentDisposition = ContentDisposition.parse(partHeader[0]['Content-Disposition: '.size ..])
                     let filename = contentDisposition.getFilename()
                     end = stream.indexOf(seperatorBoundaryBytes)
-                    start += seperatorBoundaryBytes.size
                     if(end > 0){
-                        buf = Array<Byte>(end - start, repeat: 0)
+                        buf = Array<Byte>(end - stream.offset, repeat: 0)
                         stream.read(buf)
                         if(filename.isEmpty()){
                             let value = if(let Some(charset) <- contentDisposition.getCharset()){
@@ -110,10 +109,15 @@ public class MultipartFormDataParser {
                             }else{
                                 String.fromUtf8(buf)
                             }
-                            let contentType = MediaTypes.parse(partHeader[1].replace('Content-Type:', '').trimAscii())
-                            parts.add(contentDisposition.getName(), contentType.toData(value))
+                            if(let mediaType <- partHeader[1].replace('Content-Type:', '').trimAscii() && mediaType.size > 0){
+                                let contentType = MediaTypes.parse(mediaType)
+                                parts.add(contentDisposition.getName(), contentType.toData(value))
+                            }else{
+                                parts.add(contentDisposition.getName(), value.toData())
+                            }
                         }else{
                             let part = MultipartFile(contentDisposition, ByteBuffer(buf), charset: contentDisposition.getCharset() ?? Charsets.UTF8)
+                            part.setSize(buf.size)
                             parts.add(contentDisposition.getName(), part)
                         }
                     }else if (filename.isEmpty()){
@@ -131,8 +135,12 @@ public class MultipartFormDataParser {
                         }else{
                             String.fromUtf8(bytes)
                         }
-                        let contentType = MediaTypes.parse(partHeader[1].replace('Content-Type:', '').trimAscii())
-                        parts.add(contentDisposition.getName(), contentType.toData(value))
+                        if(let mediaType <- partHeader[1].replace('Content-Type:', '').trimAscii() && mediaType.size > 0){
+                            let contentType = MediaTypes.parse(mediaType)
+                            parts.add(contentDisposition.getName(), contentType.toData(value))
+                        }else{
+                            parts.add(contentDisposition.getName(), value.toData())
+                        }
                     }else{
                         Directory.create(path, recursive: true)
                         let file = File(path.join(filename), ReadWrite)
@@ -157,10 +165,7 @@ public class MultipartFormDataParser {
                     }
                 case (b'-', b'-') => 
                     break
-                case _ => 
-                    let tmp = Array<Byte>(24, repeat: 0)
-                    let (l, _, _) = stream.read(tmp)
-                    throw MultipartFormDataException()
+                case _ => throw MultipartFormDataException()
             }
         }
         parts
