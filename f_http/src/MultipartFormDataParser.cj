@@ -145,16 +145,13 @@ public class MultipartFormDataParser {
                         Directory.create(path, recursive: true)
                         let file = File(path.join(filename), ReadWrite)
                         buf = Array<Byte>(1024, repeat: 0)
-                        let tmpbuf = ByteBuffer()
                         var l = 0
                         while(let (len, _, _) <- stream.read(buf)){
                             l += len
                             if(len < buf.size){
-                                tmpbuf.write(buf[0..len])
                                 file.write(buf[0..len])
                                 break
                             }else{
-                                tmpbuf.write(buf)
                                 file.write(buf)
                             }
                         }
