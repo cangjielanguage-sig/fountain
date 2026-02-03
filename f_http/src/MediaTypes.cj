@@ -27,7 +27,8 @@ public class MediaTypes {
     private init(){}
     static init() {
         register(JsonMediaType.instance)
-        register(MultipartMediaType.instance)
+        register(MultipartMediaType.formData)
+        register(MultipartMediaType.mixed)
         register(PlainTextMediaType.instance)
     }
     public static func register(mediaType: MediaType) {

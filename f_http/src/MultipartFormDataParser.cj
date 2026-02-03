@@ -68,23 +68,29 @@ public class MultipartFormDataParser {
     private let stream: RotatableBuffer
     private let seperatorBoundaryBytes: Array<Byte>
     
-    public MultipartFormDataParser(input: InputStream, private let boundary: String){
+    public MultipartFormDataParser(input: InputStream, private let mediaType: String, private let boundary: String){
         seperatorBoundaryBytes = '\r\n--${boundary}'.unsafeBytes()
         stream = RotatableBuffer(input, seperatorBoundaryBytes, halfBufferSize: HttpConfig.halfBufferSize)
     }
     public static func new(ctx: HttpContext){
         let contentType = ctx.request.headers.getFirst("Content-Type").getOrThrow()
         let boundary = contentType[contentType.indexOf('boundary=').getOrThrow() + 'boundary='.size ..]
-        MultipartFormDataParser(ctx.request.body, boundary)
+        MultipartFormDataParser(ctx.request.body, contentType, boundary)
     }
-    public func parse(): DataMultiparts {
+    public func parse(): Data {
         let boundaryBytes = seperatorBoundaryBytes[2 ..]
         let path = Path('/tmp/${UUID.random()}')
         let crlf = Array<Byte>(2, repeat: 0)
-        let parts = DataMultiparts()
+        let parts = if(mediaType.startsWith('multipart/form-data')){
+            DataMultipartTuples()
+        }else if(mediaType.startsWith('multipart/mixed')){
+            DataMultipartList()
+        }else{
+            throw MultipartException('${mediaType} is not be supported.')
+        }
         var start = stream.indexOf(boundaryBytes)
         if(start < 0){
-            throw MultipartFormDataException()
+            throw MultipartException()
         }
         stream.addOffset(boundaryBytes.size)
         start += boundaryBytes.size
@@ -109,16 +115,27 @@ public class MultipartFormDataParser {
                             }else{
                                 String.fromUtf8(buf)
                             }
+                            let name = contentDisposition.getName()
                             if(let mediaType <- partHeader[1].replace('Content-Type:', '').trimAscii() && mediaType.size > 0){
                                 let contentType = MediaTypes.parse(mediaType)
-                                parts.add(contentDisposition.getName(), contentType.toData(value))
-                            }else{
-                                parts.add(contentDisposition.getName(), value.toData())
+                                if(let p: DataMultipartTuples <- parts){
+                                    p.add(name, contentType.toData(value))
+                                }else if(let p: DataMultipartList <- parts){
+                                    p.add(contentType.toData(value))
+                                }
+                            }else if(let p: DataMultipartTuples <- parts){
+                                p.add(name, value.toData())
+                            }else if(let p: DataMultipartList <- parts){
+                                p.add(value.toData())
                             }
                         }else{
                             let part = MultipartFile(contentDisposition, ByteBuffer(buf), charset: contentDisposition.getCharset() ?? Charsets.UTF8)
                             part.setSize(buf.size)
-                            parts.add(contentDisposition.getName(), part)
+                            if(let p: DataMultipartTuples <- parts){
+                                p.add(contentDisposition.getName(), part)
+                            }else if(let p: DataMultipartList <- parts){
+                                p.add(part)
+                            }
                         }
                     }else if (filename.isEmpty()){
                         let byteList = ArrayList<Byte>()
@@ -135,11 +152,18 @@ public class MultipartFormDataParser {
                         }else{
                             String.fromUtf8(bytes)
                         }
+                        let name = contentDisposition.getName()
                         if(let mediaType <- partHeader[1].replace('Content-Type:', '').trimAscii() && mediaType.size > 0){
                             let contentType = MediaTypes.parse(mediaType)
-                            parts.add(contentDisposition.getName(), contentType.toData(value))
-                        }else{
-                            parts.add(contentDisposition.getName(), value.toData())
+                            if(let p: DataMultipartTuples <- parts){
+                                p.add(name, contentType.toData(value))
+                            }else if(let p: DataMultipartList <- parts){
+                                p.add(contentType.toData(value))
+                            }
+                        }else if(let p: DataMultipartTuples <- parts){
+                            p.add(name, value.toData())
+                        }else if(let p: DataMultipartList <- parts){
+                            p.add(value.toData())
                         }
                     }else{
                         Directory.create(path, recursive: true)
@@ -158,21 +182,30 @@ public class MultipartFormDataParser {
                         file.seek(Begin(0))
                         let part = MultipartFile(contentDisposition, file, charset: contentDisposition.getCharset()?? Charsets.UTF8)
                         part.setSize(file.length)
-                        parts.add(contentDisposition.getName(), part)
+                        if(let p: DataMultipartTuples <- parts){
+                            p.add(contentDisposition.getName(), part)
+                        }else if(let p: DataMultipartList <- parts){
+                            p.add(part)
+                        }
                     }
                 case (b'-', b'-') => 
                     break
-                case _ => throw MultipartFormDataException()
+                case _ => throw MultipartException()
             }
         }
         parts
     }
 }
-
-public struct DataMultiparts <: Data & Iterable<(String, Data)>{
+public interface DataMultiparts<T> <: Data {
+    func add(value: T): Unit
+}
+public struct DataMultipartTuples <: DataMultiparts<(String, Data)> & Iterable<(String, Data)>{
     private let map = HashMap<String, ArrayList<Data>>()
 
-    public func add(name: String, input: Data){
+    public func add(value: (String, Data)): Unit {
+        add(value[0], value[1])
+    }
+    public func add(name: String, input: Data): Unit {
         map.computeIfAbsent(name){ArrayList<Data>()}.add(input)
     }
     public func get(name: String){
@@ -183,7 +216,7 @@ public struct DataMultiparts <: Data & Iterable<(String, Data)>{
         }
     }
     public func iterator(): Iterator<(String, Data)> {
-        DataMultipartsIterator(map.iterator())
+        DataMultipartTuplesIterator(map.iterator())
     }
     public static func tryParse(_: String): ?Data {
         throw IllegalAccessException()
@@ -198,19 +231,58 @@ public struct DataMultiparts <: Data & Iterable<(String, Data)>{
         throw IllegalAccessException()
     }
 }
-public class DataMultipartsIterator <: Iterator<(String, Data)>{
-    DataMultipartsIterator(private let itr: Iterator<(String, ArrayList<Data>)>){}
+public struct DataMultipartList <: DataMultiparts<Data> & Iterable<Data>{
+    private let list = ArrayList<Data>()
+
+    public func add(input: Data){
+        list.add(input)
+    }
+    public func get(index: Int64){
+        list.get(index)
+    }
+    public func iterator(): Iterator<Data> {
+        DataMultipartListIterator(list.iterator())
+    }
+    public static func tryParse(_: String): ?Data {
+        throw IllegalAccessException()
+    }
+    public static func parse(_: String): Data {
+        throw IllegalAccessException()
+    }
+    public static func tryFromData(data: Data, flag: DataConversionFlag): Any {
+        throw IllegalAccessException()
+    }
+    public func toString(): String {
+        throw IllegalAccessException()
+    }
+}
+public class DataMultipartTuplesIterator <: Iterator<(String, Data)>{
+    DataMultipartTuplesIterator(private let itr: Iterator<(String, ArrayList<Data>)>){}
 
     public func next(): ?(String, Data) {
         while(let Some((k, v)) <- itr.next()){
-            if(v.isEmpty()){
+            return if(v.isEmpty()){
                 continue
             }else if(v.size == 1){
-                return (k, v[0])
+                if(let l: DataMultipartList <- v[0]){
+                    (k, DataIterable(l))
+                }else{
+                    (k, v[0])
+                }
             }else{
-                return (k, DataIterable(v))
+                (k, DataIterable(v))
             }
         }
         None<(String, Data)>
+    }
+}
+public class DataMultipartListIterator <: Iterator<Data> {
+    DataMultipartListIterator(private let itr: Iterator<Data>){}
+
+    public func next(): ?Data {
+        while(let Some(d) <- itr.next()){
+            d
+        }
+        None<Data>
     }
 }
