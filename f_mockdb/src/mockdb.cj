@@ -26,12 +26,12 @@ internal let output = getStdOut()
 public class MOCKDB {
     private init(){}
 
-    private static let execution_ = ThreadLocal<() -> Unit>()
+    private static let execution_ = ThreadLocal<(String, ArrayList<Any>) -> Unit>()
     private static let queryResultList_ = ThreadLocal<ArrayList<Array<Any>>>()
     private static let queryResultColumnInfos_ = ThreadLocal<ArrayList<ColumnInfo>>()
     private static let lastInsertId_ = ThreadLocal<Int64>()
     private static let rowCount_ = ThreadLocal<Int64>()
-    private static let toThrowOnExecuting_ = ThreadLocal<(String, ArrayList<Any>) -> Bool>()
+    private static let toThrowOnExecuting_ = ThreadLocal<Bool>()
     private static let metadata_ = ThreadLocal<Map<String, String>>()
     private static let toThrowOnBeginning_ = ThreadLocal<Bool>()
     private static let toThrowOnCommitting_ = ThreadLocal<Bool>()
@@ -62,11 +62,11 @@ public class MOCKDB {
         }
     }
     /**
-     * 本函数会在MockConnection构造函数执行，可以在本函数执行本类的其他函数
+     * 本函数会在MockStatement的update和query函数执行，可以在本函数执行本类的其他函数
      */
-    public static mut prop execution: () -> Unit {
+    public static mut prop execution: (String, ArrayList<Any>) -> Unit {
         get(){
-            execution_.get() ?? {=>}
+            execution_.get() ?? {_, _ =>}
         }
         set(value){
             execution_.set(value)
@@ -117,9 +117,9 @@ public class MOCKDB {
             rowCount_.set(value)
         }
     }
-    public static mut prop toThrowOnExecuting: (String, ArrayList<Any>) -> Bool {
+    public static mut prop toThrowOnExecuting: Bool {
         get() {
-            toThrowOnExecuting_.get() ?? {_, _ => false}
+            toThrowOnExecuting_.get() ?? false
         }
         set(value){
             toThrowOnExecuting_.set(value)
