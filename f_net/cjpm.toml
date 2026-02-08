@@ -11,7 +11,7 @@
   override-compile-option = "--dy-std"
   description = "网络通讯"
   link-option = ""
-  name = "f_net"
+  name = "fountain::f_net"
   organization="fountain"
   output-type = "dynamic"
   src-dir = ""

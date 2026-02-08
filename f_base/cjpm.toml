@@ -6,7 +6,7 @@
   override-compile-option = "--dy-std"
   description = "some extends for Iterator, enum OS, unsafe bytes for String, unsafe data for ArrayList, extend Option, extend Array, extend Range, extend Number, extend String, extend ThreadLocal, HashBuilder, StringGenerator，etc."
   link-option = ""
-  name = "f_base"
+  name = "fountain::f_base"
   organization="fountain"
   output-type = "dynamic"
   src-dir = ""

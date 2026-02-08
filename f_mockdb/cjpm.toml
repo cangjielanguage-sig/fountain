@@ -1,6 +1,6 @@
 [package]
   cjc-version = "1.1.0"
-  name = "f_mockdb"
+  name = "fountain::f_mockdb"
   organization = "fountain"
   compile-option = "--dy-std"
   override-compile-option = "--dy-std"

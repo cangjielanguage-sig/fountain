@@ -6,7 +6,7 @@
   override-compile-option = "--dy-std"
   description = "异常模块"
   link-option = ""
-  name = "f_exception"
+  name = "fountain::f_exception"
   organization="fountain"
   output-type = "dynamic"
   src-dir = ""

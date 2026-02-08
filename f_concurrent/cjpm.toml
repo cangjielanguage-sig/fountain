@@ -10,7 +10,7 @@
   override-compile-option = "--dy-std"
   description = "load balance, rate limited, some concurrent collections"
   link-option = ""
-  name = "f_concurrent"
+  name = "fountain::f_concurrent"
   organization="fountain"
   output-type = "dynamic"
   src-dir = ""

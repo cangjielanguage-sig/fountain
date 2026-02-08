@@ -1,6 +1,6 @@
 [package]
   cjc-version = "1.1.0"
-  name = "f_app"
+  name = "fountain::f_app"
   organization="fountain"
   description = "依赖fountain开发的应用进程启动模块"
   version = "1.1.0"

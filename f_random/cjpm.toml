@@ -6,7 +6,7 @@
   override-compile-option = "--dy-std"
   description = "extend random, ThreadLocalRandom, reservoir, RandomString"
   link-option = ""
-  name = "f_random"
+  name = "fountain::f_random"
   organization="fountain"
   output-type = "dynamic"
   src-dir = ""

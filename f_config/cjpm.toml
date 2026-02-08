@@ -6,7 +6,7 @@
   override-compile-option = "--dy-std"
   description = "配置模块"
   link-option = ""
-  name = "f_config"
+  name = "fountain::f_config"
   organization="fountain"
   output-type = "dynamic"
   src-dir = ""

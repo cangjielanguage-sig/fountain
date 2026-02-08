@@ -14,7 +14,7 @@
   override-compile-option = "--dy-std"
   description = "日志"
   link-option = ""
-  name = "f_log"
+  name = "fountain::f_log"
   organization="fountain"
   output-type = "dynamic"
   src-dir = ""

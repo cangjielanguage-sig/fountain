@@ -21,7 +21,7 @@
   override-compile-option = "--dy-std"
   description = "orm"
   link-option = ""
-  name = "f_orm"
+  name = "fountain::f_orm"
   organization="fountain"
   output-type = "dynamic"
   src-dir = ""

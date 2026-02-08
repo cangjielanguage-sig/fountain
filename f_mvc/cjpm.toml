@@ -21,7 +21,7 @@
   override-compile-option = "--dy-std"
   description = "MVC"
   link-option = ""
-  name = "f_mvc"
+  name = "fountain::f_mvc"
   organization="fountain"
   output-type = "dynamic"
   src-dir = ""

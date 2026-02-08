@@ -13,7 +13,7 @@
   override-compile-option = "--dy-std"
   description = "CRON定时器模块"
   link-option = ""
-  name = "f_ticktock"
+  name = "fountain::f_ticktock"
   organization="fountain"
   output-type = "dynamic"
   src-dir = ""
