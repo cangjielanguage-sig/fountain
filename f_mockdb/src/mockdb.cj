@@ -16,6 +16,7 @@ limitations under the License.
 package f_mockdb
 
 import std.env.getStdOut
+import std.sync.AtomicOptionReference
 internal import std.reflect.*
 internal import std.collection.{HashMap, Map, ArrayList}
 internal import std.env.ConsoleWriter
@@ -25,8 +26,10 @@ internal let output = getStdOut()
 
 public class MOCKDB {
     private init(){}
-
-    private static let execution_ = ThreadLocal<(String, ArrayList<Any>) -> Unit>()
+    private static let EMPTY_EXECUTION = {_: String, _: ArrayList<Any> =>
+        output.writeln('EMPTY_EXECUTION')
+    }
+    private static var execution_ = AtomicOptionReference<Box<(String, ArrayList<Any>) -> Unit>>()
     private static let queryResultList_ = ThreadLocal<ArrayList<Array<Any>>>()
     private static let queryResultColumnInfos_ = ThreadLocal<ArrayList<ColumnInfo>>()
     private static let lastInsertId_ = ThreadLocal<Int64>()
@@ -41,7 +44,6 @@ public class MOCKDB {
     private static let toThrowOnSavingSavePoint_ = ThreadLocal<HashMap<String, Bool>>()
 
     static func clear(): Unit {
-        execution_.set(None)
         queryResultList_.set(None)
         queryResultColumnInfos_.set(None)
         lastInsertId_.set(None)
@@ -66,10 +68,10 @@ public class MOCKDB {
      */
     public static mut prop execution: (String, ArrayList<Any>) -> Unit {
         get(){
-            execution_.get() ?? {_, _ =>}
+            execution_.load()?.value ?? EMPTY_EXECUTION
         }
         set(value){
-            execution_.set(value)
+            execution_.store(Box<(String, ArrayList<Any>) -> Unit>(value))
         }
     }
     public static func addQueryResultRow(row: Array<Any>): Unit {

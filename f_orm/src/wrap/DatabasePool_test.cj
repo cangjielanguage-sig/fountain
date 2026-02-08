@@ -19,29 +19,36 @@ import std.unittest.*
 import std.unittest.testmacro.*
 import std.database.sql.*
 import std.reflect.*
+import std.time.MonoTime
 import f_mockdb.*
 
 @Test
 public class DatabasePoolTest {
     @TestCase
     public func testDatabasePool(): Unit {
-        MOCKDB.addQueryResultColumnInfo(name: '1', nullable: false, typeName: 'SqlBigInt')
-        MOCKDB.addQueryResultRow([1])
+        MOCKDB.execution = {_, _ => 
+            MOCKDB.addQueryResultColumnInfo(name: '1', nullable: false, typeName: 'SqlBigInt')
+            MOCKDB.addQueryResultRow([1])
+        }
         let driver: Driver = DriverManager.getDriver('mockdb').getOrThrow()
         let ds = driver.open('mockdb://')
-        let pool = DatabasePool(driver: driver, initSize:1, minSize: 1, maxSize:1, creator: {=>ds.connect()})
-        // for(_ in 0 .. 10){
-        //     spawn{
-        //         while(true){
-        //             let c = pool.connect()
-        //             println(TypeInfo.of(c))
-        //             c.close()
-        //         }
-        //     }
-        // }
-        let c = pool.connect()
-        println(TypeInfo.of(c))
-        c.close()
-        // sleep(Duration.day)
+        let pool = DatabasePool(driver: driver, initSize:1, minSize: 1, maxSize:1, creator: {=>ds.connect()}, connectTimeout: Duration.millisecond * 50)
+        for(_ in 0 .. 10){
+            spawn{
+                while(true){
+                    println('AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA 1')
+                    let start = MonoTime.now()
+                    try(c = pool.connect()){
+                        println('AAAAAAAAAAAAAAAAAAAAAAAAA 2 ${TypeInfo.of(c)}')
+                    }
+                    println('AAAAAAAAAAAAAAAAAAAAAAAAA 3 ${MonoTime.now() - start}')
+                }
+            }
+        }
+
+        // let c = pool.connect()
+        // println(TypeInfo.of(c))
+        // c.close()
+        sleep(Duration.second * 30)
     }
 }
