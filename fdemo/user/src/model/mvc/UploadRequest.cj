@@ -21,5 +21,6 @@ import fountain.mvc.MultipartFile
 
 @DataAssist[props fields]
 public class UploadRequest {
+    private var name: String = ''
     private var file: ?MultipartFile = None
 }
