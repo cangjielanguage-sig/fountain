@@ -12,7 +12,7 @@
   override-compile-option = "--dy-std"
   description = "AOP"
   link-option = ""
-  name = "fountain::f_aspect"
+  name = "f_aspect"
   organization="fountain"
   output-type = "dynamic"
   src-dir = ""

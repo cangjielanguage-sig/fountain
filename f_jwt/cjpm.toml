@@ -9,7 +9,7 @@
   override-compile-option = "--dy-std"
   description = "JWT"
   link-option = ""
-  name = "fountain::f_jwt"
+  name = "f_jwt"
   organization="fountain"
   output-type = "dynamic"
   src-dir = ""

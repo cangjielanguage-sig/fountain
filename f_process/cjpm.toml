@@ -8,7 +8,7 @@
   override-compile-option = "--dy-std"
   description = "进程扩展模块"
   link-option = ""
-  name = "fountain::f_process"
+  name = "f_process"
   organization="fountain"
   output-type = "dynamic"
   src-dir = ""

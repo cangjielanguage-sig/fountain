@@ -13,7 +13,7 @@
   override-compile-option = "--dy-std"
   description = "crc16/密钥交换协议/命名风格转换/常用设计模式/geohash/snowflake/UUID/murmur_hash/路径匹配/文本模板/树结构转换/"
   link-option = ""
-  name = "fountain::f_util"
+  name = "f_util"
   organization="fountain"
   output-type = "dynamic"
   src-dir = ""

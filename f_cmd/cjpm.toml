@@ -8,7 +8,7 @@
   override-compile-option = "--dy-std"
   description = "命令行工具"
   link-option = ""
-  name = "fountain::f_cmd"
+  name = "f_cmd"
   organization="fountain"
   output-type = "dynamic"
   src-dir = ""

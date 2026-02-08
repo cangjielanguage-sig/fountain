@@ -10,7 +10,7 @@
   override-compile-option = "--dy-std"
   description = "正则表达式扩展、正则缓存、正则DSL"
   link-option = ""
-  name = "fountain::f_regex"
+  name = "f_regex"
   organization="fountain"
   output-type = "dynamic"
   src-dir = ""

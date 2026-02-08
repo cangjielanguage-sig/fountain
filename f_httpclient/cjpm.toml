@@ -10,7 +10,7 @@
   override-compile-option = "--dy-std"
   description = "HTTP客户端"
   link-option = ""
-  name = "fountain::f_httpclient"
+  name = "f_httpclient"
   organization="fountain"
   output-type = "dynamic"
   src-dir = ""

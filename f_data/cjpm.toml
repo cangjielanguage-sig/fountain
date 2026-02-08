@@ -14,7 +14,7 @@
   override-compile-option = "--dy-std"
   description = "数据复制模块"
   link-option = ""
-  name = "fountain::f_data"
+  name = "f_data"
   organization="fountain"
   output-type = "dynamic"
   src-dir = ""

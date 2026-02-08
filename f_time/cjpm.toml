@@ -6,7 +6,7 @@
   override-compile-option = "--dy-std"
   description = "时间扩展"
   link-option = ""
-  name = "fountain::f_time"
+  name = "f_time"
   organization="fountain"
   output-type = "dynamic"
   src-dir = ""

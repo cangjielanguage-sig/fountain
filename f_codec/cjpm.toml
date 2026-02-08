@@ -1,6 +1,6 @@
 [package]
   cjc-version = "1.1.0"
-  name = "fountain::f_codec"
+  name = "f_codec"
   organization="fountain"
   description = "codec"
   version = "1.1.0"

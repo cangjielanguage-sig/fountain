@@ -7,7 +7,7 @@
   override-compile-option = "--dy-std"
   description = "宏工具API"
   link-option = ""
-  name = "fountain::f_macros"
+  name = "f_macros"
   organization="fountain"
   output-type = "dynamic"
   src-dir = ""

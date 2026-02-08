@@ -7,7 +7,7 @@
   override-compile-option = "--dy-std"
   description = "fountain boot program"
   link-option = ""
-  name = "fountain::fboot"
+  name = "fboot"
   output-type = "executable"
   src-dir = ""
   target-dir = ""

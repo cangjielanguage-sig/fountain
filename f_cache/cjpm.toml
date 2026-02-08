@@ -9,7 +9,7 @@
   override-compile-option = "--dy-std"
   description = "堆缓存"
   link-option = ""
-  name = "fountain::f_cache"
+  name = "f_cache"
   organization="fountain"
   output-type = "dynamic"
   src-dir = ""

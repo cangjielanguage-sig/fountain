@@ -14,7 +14,7 @@
   override-compile-option = "--dy-std"
   description = "IOC"
   link-option = ""
-  name = "fountain::f_bean"
+  name = "f_bean"
   organization="fountain"
   output-type = "dynamic"
   src-dir = ""
