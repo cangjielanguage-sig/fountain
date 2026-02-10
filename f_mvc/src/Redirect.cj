@@ -26,7 +26,7 @@ public struct Redirect {
     public static func permanently(location: String): Redirect {
         Redirect(HttpStatus.MOVED_PERMANENTLY, location)
     }
-    public static func temporarily(localtion: String): Redirect {
+    public static func temporarily(location: String): Redirect {
         Redirect(HttpStatus.MOVED_TEMPORARILY, location)
     }
 }
