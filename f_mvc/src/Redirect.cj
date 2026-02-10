@@ -15,6 +15,9 @@ limitations under the License.
  */
 package f_mvc
 
+/**
+ * 重定向类型，controller函数返回本类型的实例即可实现重定向
+ */
 public struct Redirect {
     private Redirect(
         public let status: HttpStatus,
