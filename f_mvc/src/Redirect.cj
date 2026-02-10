@@ -19,7 +19,7 @@ public struct Redirect {
     private Redirect(
         public let status: HttpStatus,
         public let location: String
-    )
+    ){}
     public static func found(location: String): Redirect {
         Redirect(HttpStatus.FOUND, location)
     }
