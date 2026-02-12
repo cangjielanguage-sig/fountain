@@ -23,7 +23,6 @@ internal import std.net.{TcpSocket, UnixSocket}
 internal import std.math.numeric.{Decimal, BigInt, OverflowStrategy}
 internal import std.sync.AtomicReference
 internal import std.time.{DateTime, MonoTime}
-internal import stdx.effect.*
 internal import stdx.encoding.base64.*
 internal import fountain::f_collection.*
 internal import fountain::f_concurrent.ConcurrentHashSet
