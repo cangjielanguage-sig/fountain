@@ -69,10 +69,19 @@ cangjie_env(){
   rm -f /mnt/d/docs/work/cangjie/cangjie-linux-bin/current/$2
 }
 cjpub(){
-  sed -E -i.bak "$1" cjpm.toml
-  cjpm bundle --skip-test
-  cjpm publish
-  mv cjpm.toml.bak cjpm.toml
+  if [[ "$2" == "" ]]; then
+    sed -E -i.bak "$1" cjpm.toml
+    cjpm bundle --skip-test
+    cjpm publish
+    mv cjpm.toml.bak cjpm.toml
+    echo -e "\a"
+  else
+    curdir=`pwd`
+    echo $2
+    cd $2
+    cjpub $1
+    cd $curdir
+  fi
 }
 cj(){
   echo "cj $1 $2 $3 $4 $5"
@@ -100,12 +109,10 @@ cj(){
     cj install $2 $3 $4 $5
     pattern="s/\{path ?= ?\".+\"\}/\"$2\"/g"
     cjpub $pattern
+    cjpub $pattern fboot
     for d in ./*; do
       if [[ -d "$d" && "$d" == ./f_* ]]; then
-        echo $d
-        cd $d
-        cjpub $pattern
-        cd ..
+        cjpub $pattern $d
       fi
     done
     ;;
