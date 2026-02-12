@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package fountain::f_mvc
+package fountain::f_data
 
 public class BreakingCommand <: Command<Data>{
     private BreakingCommand(public let status: HttpStatus, public let data: Data){}
