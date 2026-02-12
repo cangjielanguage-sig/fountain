@@ -133,6 +133,8 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
                 let result = try {
                     CurrentHttpContext.set(ctx)
                     fn(BeanFactory.instance.getFirst<T>().getOrThrow(), ctx, pattern)
+                } handle (cmd: BreakingCommand) {
+                    return respond(cmd, ctx)
                 } finally {
                     CurrentHttpContext.clear()
                 }
@@ -209,18 +211,20 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
             OverallStopwatch.elapsed(method)
         }
     }
-    private func respond<R>(result: R, ctx: HttpContext): Unit where R <: ToData {
+    
+    private func respond<R>(status: HttpStatus, result: R, ctx: HttpContext): Unit where R <: ToData {
         respond(ctx.request.method) {
+            let emptyResult = result is Unit || result is DataUnit || result is DataNone
             let accept = ctx.request.headers.getFirst('Accept')
-            if (!(result is Unit) && let Some(accept) <- accept) {
+            if (!emptyResult && let Some(accept) <- accept) {
                 if (let Some(mediaType) <- MediaTypes.tryParse(accept)) {
                     let bytes = mediaType.fromData(result.toData())
-                    ctx.responseBuilder.header('Content-Type', accept).body(bytes)
+                    ctx.responseBuilder.status(status.value).header('Content-Type', accept).body(bytes)
                 } else if (accept == '*/*') {
                     let acc = this.produces.iterator().next() ?? 'application/json'
                     let mt = MediaTypes.parse(acc)
                     let bytes = mt.fromData(result.toData())
-                    ctx.responseBuilder.header('Content-Type', acc).body(bytes)
+                    ctx.responseBuilder.status(status.value).header('Content-Type', acc).body(bytes)
                 } else {
                     if (let r: Resource <- result) {
                         try {
@@ -231,14 +235,20 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
                     }
                     MultiRequestMethodHandler.NOT_ACCEPTABLE.handle(ctx)
                 }
-            } else if ((result is Unit) && let Some(accept) <- accept && accept == '*/*') {
-                ctx.responseBuilder.header('Content-Type', accept).body('')
-            } else if ((result is Unit) && accept.isNone()) {
-                ctx.responseBuilder.body('')
+            } else if (emptyResult && let Some(accept) <- accept && accept == '*/*') {
+                ctx.responseBuilder.status(status.value).header('Content-Type', accept).body('')
+            } else if (emptyResult && accept.isNone()) {
+                ctx.responseBuilder.status(status.value).body('')
             } else {
                 MultiRequestMethodHandler.NOT_ACCEPTABLE.handle(ctx)
             }
         }
+    }
+    private fucn respond(cmd: BreakingCommand, ctx: HttpContext): Unit {
+        respond<Data>(cmd.status, cmd.data, ctx)
+    }
+    private func respond<R>(result: R, ctx: HttpContext): Unit where R <: ToData {
+        result<R>(HttpStatus.OK, result, ctx)
     }
     private func respond(response: JsonValue, ctx: HttpContext): Unit {
         respond(ctx.request.method) {

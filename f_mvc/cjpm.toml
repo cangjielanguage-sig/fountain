@@ -18,7 +18,7 @@
   "fountain::f_util" = {path = "../f_util"}
 [package]
   cjc-version = "1.1.0"
-  compile-option = "--dy-std"
+  compile-option = "--dy-std --enable-eh --experimental"
   override-compile-option = "--dy-std"
   description = "MVC"
   link-option = ""
