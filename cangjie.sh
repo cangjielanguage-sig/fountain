@@ -96,17 +96,21 @@ cj(){
     fboot cleanUpdate
     ;;
   install)
-    fboot version $2 $3 $4 $5
-    cd fboot
-    cjpm install --root $CJPM_INSTALL
-    echo -e "\a"
-    cd ..
+    if [[ "$2" == "publish"]]; then
+      cj install $3 $4 $5 $6
+      cj publish $3
+    else
+      fboot version $2 $3 $4 $5
+      cd fboot
+      cjpm install --root $CJPM_INSTALL
+      echo -e "\a"
+      cd ..
+    fi
     ;;
   installed)
     cd $CJPM_INSTALL
     ;;
   publish)
-    cj install $2 $3 $4 $5
     pattern="s/\{path ?= ?\".+\"\}/\"$2\"/g"
     cjpub $pattern
     cjpub $pattern fboot
