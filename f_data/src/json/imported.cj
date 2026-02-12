@@ -16,5 +16,5 @@ limitations under the License.
 package fountain::f_data.json
 
 public import stdx.encoding.json.*
-public import fountain::f_data.*
+public import fountain::f_data.base.*
 internal import fountain::f_exception.UnreadableException

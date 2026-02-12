@@ -16,6 +16,3 @@ limitations under the License.
 package fountain::fountain.data
 
 public import fountain::f_data.*
-public import fountain::f_data.validation.*
-public import fountain::f_data.json.*
-public import fountain::f_data.path.*

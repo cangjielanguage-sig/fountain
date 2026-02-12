@@ -18,7 +18,7 @@ package fountain::f_data.validation
 import std.convert.*
 import fountain::f_base.*
 import fountain::f_regex.*
-import fountain::f_data.*
+import fountain::f_data.base.*
 
 @Annotation[target: [MemberVariable, MemberProperty, Parameter]]
 public class IsNotEmpty <: Validator {

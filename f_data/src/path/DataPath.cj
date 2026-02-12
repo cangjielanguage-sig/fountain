@@ -22,7 +22,7 @@ import std.reflect.*
 import fountain::f_base.*
 import fountain::f_macros.*
 import fountain::f_data.exception.DataException
-public import fountain::f_data.*
+internal import fountain::f_data.base.*
 
 /**
  * $                根元素

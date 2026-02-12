@@ -32,4 +32,4 @@ internal import fountain::f_log.exception.*
 internal import fountain::f_log.output.*
 internal import fountain::f_time.TimeUnit
 
-public import fountain::f_log.*
+public import fountain::f_log.base.*
