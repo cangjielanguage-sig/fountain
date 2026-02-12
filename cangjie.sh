@@ -64,6 +64,12 @@ cangjie_env(){
   export PATH=$PATH:$CJPM_INSTALL/bin
   source $CANGJIE_HOME/envsetup.sh
 }
+cjpub(){                                                                                                                                                    
+  sed -E -i.bak "$1" cjpm.toml
+  cjpm bundle --skip-test                                                                                                                                   
+  cjpm publish
+  mv cjpm.toml.bak cjpm.toml
+}
 cj(){
   echo "cj $1 $2 $3 $4 $5"
   case "$1" in
@@ -85,6 +91,19 @@ cj(){
     ;;
   installed)
     cd $CJPM_INSTALL
+    ;;
+  publish)
+    cj install $2 $3 $4 $5
+    pattern="s/\{path ?= ?\".+\"\}/\"$2\"/g"
+    cjpub $pattern
+    for d in ./*; do
+      if [[ -d "$d" && "$d" == ./f_* ]]; then
+        echo $d
+        cd $d
+        cjpub $pattern
+        cd ..
+      fi
+    done
     ;;
   study)
     cd /mnt/d/docs/work/cangjie/study

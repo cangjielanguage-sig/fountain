@@ -20,6 +20,7 @@
   category = ["Utility"]
   license = ["Apache-2.0"]
   include = ["src"]
+  exclude = ["cjpm.toml.bak", "cjpm.lock", "target"]
   authors = ["吴京润"]
 
 [target]
