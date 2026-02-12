@@ -18,16 +18,16 @@ package fountain::f_mvc
 public class BreakingCommand <: Command<Data>{
     private BreakingCommand(public let status: HttpStatus, public let data: Data){}
 
-    public static func new<T>(status: HttpStatus, data: T): BreakingCommand where T <: DataFields<T>{
+    public static func new<T>(status: HttpStatus, data: T): BreakingCommand where T <: ToData {
         BreakingCommand(status, data.toData())
     }
     public static func new(status: HttpStatus): BreakingCommand {
-        BreakingCommand(status, DataNone.INSTANCE)
+        BreakingCommand(status, DataUnit.UNIT)
     }
     public static func new(): BreakingCommand {
         new(HttpStatus.OK)
     }
-    public static func new<T>(data: T): BreakingCommand where T <: DataFields<T> {
+    public static func new<T>(data: T): BreakingCommand where T <: ToData {
         new<T>(HttpStatus.OK, data)
     }
 }
