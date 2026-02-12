@@ -10,6 +10,7 @@
   "fountain::f_collection" = {path = "./f_collection"}
   "fountain::f_concurrent" = {path = "./f_concurrent"}
   "fountain::f_config" = {path = "./f_config"}
+  "fountain::f_crypto" = {path = "./f_crypto"}
   "fountain::f_data" = {path = "./f_data"}
   "fountain::f_exception" = {path = "./f_exception"}
   "fountain::f_io" = {path = "./f_io"}

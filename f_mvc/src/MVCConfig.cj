@@ -54,6 +54,8 @@ public class MVCConfig {
 
     public static let TLS_PATH = "${confPrefix}_tlsPath"
     public static let TLS_VERIFY_MODE = "${confPrefix}_tlsVerifyMode"
+    public static let TLS_VERIFY_PEM = "${confPrefix}_tlsVerifyPem"
+    public static let TLS_VERIFY_BEAN = "${confPrefix}_tlsVerifyBean"
     public static let TLS_SUPPORTED_ALPN_PROTOCOLS = "${confPrefix}_tlsSupportedAlpnProtocols"
 
     public static let INTERNAL_SERVER_ERROR_MESSAGE_KIND = "${confPrefix}_internalServerErrorMessageKind"
@@ -61,14 +63,20 @@ public class MVCConfig {
 
     public static let MVC_OVERALL_ELAPSED_SWITCH = "${confPrefix}_overallElapsedSwitch"
 
+    private static prop cryptoKit: CryptoKit {
+        get(){
+            lookupOption<CryptoKit>() ?? getGlobalCryptoKit()
+        }
+    }
+
     public static prop tlsConfig: ?TlsServerConfig {
         get() {
             if (let Some(path) <- Config.getString(TLS_PATH) && path.size > 0 && let paths <- path.split('|') &&
                 paths.size == 2) {
-                let x509Pem = String.fromUtf8(File.readFrom(paths[0]))
+                let pem = String.fromUtf8(File.readFrom(paths[0]))
                 let privateKeyPem = String.fromUtf8(File.readFrom(paths[1]))
-                let x509 = X509Certificate.decodeFromPem(x509Pem)
-                let privateKey = PrivateKey.decodeFromPem(privateKeyPem)
+                let x509 = X509Certificate.decodeFromPem(pem)
+                let privateKey = GeneralPrivateKey.decodeFromPem(privateKeyPem)
                 var tls = TlsServerConfig(x509, privateKey)
                 if (let Some(alpn) <- Config.getString(TLS_SUPPORTED_ALPN_PROTOCOLS) && alpn.size > 0 && let alpns <- alpn
                     .split('|') && alpns.size > 0) {
@@ -78,10 +86,23 @@ public class MVCConfig {
                     tls.verifyMode = match (mode.toAsciiLower()) {
                         case "trustall" | 'trust_all' | 'trust-all' => TrustAll
                         case "default" => Default
-                        case _ =>
-                            let modePem = String.fromUtf8(File.readFrom(mode))
-                            let custom = X509Certificate.decodeFromPem(modePem)
+                        case "customca" | 'custom-ca' | 'custom_ca' =>
+                            let pem = Config.getString(TLS_VERIFY_PEM) ?? ''
+                            if(pem.isEmpty()){
+                                throw MVCException('tls verify mode is CustomCA, but pem for certification is not specified.')
+                            }
+                            let custom = cryptoKit.certificateFromPem(pem)
                             CustomCA(custom)
+                        case 'customverify' | 'custom_verify' | 'custom-verify' => 
+                            let beanName = Config.getString(TLS_VERIFY_BEAN) ?? ''
+                            if(beanName.isEmpty()){
+                                throw MVCException('tls verify mode is CustomVerify, but verifier bean name is not specified.')
+                            } else if (let Some(verifier) <- lookupOption<CertificateVerifier>(beanName)){
+                                CustomVerify(verifier.verify)
+                            } else {
+                                throw MVCException('bean name for tls verify mode CustomVerify is ${beanName}, but the bean is not found')
+                            }
+                        case _ => throw MVCException('config for tls verify mode is illegal ${mode}')
                     }
                 }
                 tls
