@@ -3,7 +3,8 @@
 # Please copy this file to the location you need,
 # and add 'source /path/of/cangjie.sh' to the end of ~/.bashrc
 
-export FOUNTAIN_HOME=$( cd -- "$( dirname -- "${BASH_SOURCE}" )" &> /dev/null && pwd -P )
+export CANGJIE_HOME=$( cd -- "$( dirname -- "${BASH_SOURCE}" )" &> /dev/null && pwd -P )
+export FOUNTAIN_HOME=$CANGJIE_HOME/projects/fountain
 
 cangjie_version(){
   echo '### 系统环境'
@@ -36,7 +37,6 @@ CJPM_INSTALL=`pwd`
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$CJPM_INSTALL/libs/fboot
 export PATH=$PATH:$CJPM_INSTALL/bin
 cd ../fdemo
-export POSTGRES=<URL_OF_POSTGRES>
 ./boot.sh build
 ```
 '
@@ -44,7 +44,7 @@ export POSTGRES=<URL_OF_POSTGRES>
 #  echo $CANGJIE_HOME
 #  echo
 #  echo '$ echo $CANGJIE_STDX_DYNAMIC_PATH'
-##  echo $CANGJIE_STDX_DYNAMIC_PATH
+#  echo $CANGJIE_STDX_DYNAMIC_PATH
 #  echo
 #  echo '$ ls $CANGJIE_STDX_DYNAMIC_PATH'
 #  ls $CANGJIE_STDX_DYNAMIC_PATH
@@ -55,18 +55,22 @@ export POSTGRES=<URL_OF_POSTGRES>
 cangjie_env(){
   export CJPM_CONFIG=/mnt/d/docs/work/cangjie/repository
   export CJPM_INSTALL=/mnt/d/docs/work/cangjie/installed
-  export CANGJIE_STDX_PATH=/mnt/d/docs/work/cangjie/stdx/$2/linux_x86_64_llvm
+  export CANGJIE_STDX_PATH=/mnt/d/docs/work/cangjie/stdx/$2/linux_x86_64_cjnative
   export CANGJIE_STDX_DYNAMIC_PATH=$CANGJIE_STDX_PATH/dynamic/stdx
   export CANGJIE_STDX_STATIC_PATH=$CANGJIE_STDX_PATH/static/stdx
   export CANGJIE_FOUNTAIN_LIBS=$CJPM_INSTALL/libs/fboot
-  export CANGJIE_HOME=/mnt/d/docs/work/cangjie/cangjie-linux-bin/$1
+  export CANGJIE_HOME=/mnt/d/docs/work/cangjie/cangjie-linux-bin/$1/cangjie
   export LD_LIBRARY_PATH=/usr/local/openssl-3.3.2/lib:$CANGJIE_FOUNTAIN_LIBS:$LD_LIBRARY_PATH
-  export PATH=$PATH:$CJPM_INSTALL/bin
+  export PATH=$PATH:$CJPM_INSTALL/bin:$CANGJIE_HOME/third_party/llvm/lldb/bin
   source $CANGJIE_HOME/envsetup.sh
+  rm -f /mnt/d/docs/work/cangjie/cangjie-linux-bin/current/$2
+  rm -f /mnt/d/docs/work/cangjie/cangjie-linux-bin/current
+  ln -s $CANGJIE_HOME /mnt/d/docs/work/cangjie/cangjie-linux-bin/current
+  rm -f /mnt/d/docs/work/cangjie/cangjie-linux-bin/current/$2
 }
-cjpub(){                                                                                                                                                    
+cjpub(){
   sed -E -i.bak "$1" cjpm.toml
-  cjpm bundle --skip-test                                                                                                                                   
+  cjpm bundle --skip-test
   cjpm publish
   mv cjpm.toml.bak cjpm.toml
 }
@@ -110,10 +114,10 @@ cj(){
     ;;
   fountain)
     cd $FOUNTAIN_HOME
-    if [[ "$2" == "install" ]]; then                                                                                 
+    if [[ "$2" == "install" ]]; then
         cj install
-    elif [ -n "$2" ]; then                                                                                           
-        echo 'only "install" can be followed command "cj fountain"'
+    elif [ -n "$2" ]; then
+        cd $2
     fi
     ;;
   fboot)
@@ -121,6 +125,9 @@ cj(){
     ;;
   fdemo)
     cd $FOUNTAIN_HOME/fdemo
+    ;;
+  cj)
+    cd /mnt/d/docs/work/cangjie/$2
     ;;
   '-c')
     f=$2
@@ -130,4 +137,4 @@ cj(){
   esac
 }
 
-cj env 1.0.3 1.0.3.1
+cj env 1.0.5 1.0.5.1
