@@ -142,6 +142,7 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
                     case x: Array<Byte> => respond(x, ctx)
                     case _: Unit => ()
                     case x: ToData => respond(x, ctx)
+                    case x: Redirect => respond(x, ctx)
                     case _ =>
                         let request = ctx.request
                         log.warn {'fountain.mvc.handle ${request.method}:${request.url};${TypeInfo.of(result)}'}
@@ -255,6 +256,11 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
             }
         }
     }
+    private func respond(redirect: Redirect, ctx: HttpContext): Unit {
+        respond(ctx.request.method) {
+            ctx.responseBuilder.status(redirect.status.value).header('Location', redirect.location)
+        }
+    }
     private func respond(response: InputStream, ctx: HttpContext): Unit {
         respond(ctx.request.method) {
             populateResponseContentType(ctx)
@@ -273,6 +279,7 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
             ctx.responseBuilder.body(response.unsafeBytes())
         }
     }
+    
     public func isMultipart(name: String) {
         args[name] is MultipartFormData
     }
