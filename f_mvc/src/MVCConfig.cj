@@ -17,7 +17,7 @@ package fountain::f_mvc
 
 public class MVCConfig {
     private static const confPrefix = "mvc"
-    public static let DOWNLOAD_BUFFER_SIZE = "${confPrefix}_downloadHalfBufferSize"
+    public static let DOWNLOAD_BUFFER_SIZE = "${confPrefix}_downloadBufferSize"
     public static const DEFAULT_DOWNLOAD_BUFFER_SIZE = 4096
 
     public static let MVC_DEBUGGING = "${confPrefix}_debugging"

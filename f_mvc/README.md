@@ -15,8 +15,8 @@
     export mvc_maxRequestHeaderSize=102400 # 请求头最大字节数
     export mvc_maxRequestBodySize=67108864 # 请求体最大字节数，不指定就是stdx.net.http的默认值2MB
 
-    # 以下配置MVC指定了默认值
-    export mvc_downloadHalfBufferSize=4096 # 下载文件缓冲区大小的一半
+    # 以下配置stdx.net.http没有默认值，不过MVC指定了默认值
+    export mvc_downloadBufferSize=4096 # 下载文件缓冲区大小，默认是4096
     export mvc_accessControlAllowOrigin='*' # 指定响应头Access-Control-Allow-Origin，默认就是* 
     export mvc_accessControlAllowHeaders='*' # 指定响应头Access-Control-Allow-Headers，默认就是*
     export mvc_accessControlMaxAge=0 # 指定响应头Access-Control-Max-Age，默认是0
