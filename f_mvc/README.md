@@ -54,7 +54,7 @@ import fountain::f_mvc.macros.*
 //@Controller宏除了将controller公共实例函数函数注册到mvc，还会执行IOC @Bean宏展开，同时支持属性宏和非属性宏。
 //@Controller属性宏的属性可以作为@Bean宏的属性
 //如果需要为controller函数织入切面，可以使用@WeavedController修饰controller类
-//@WeavedController除了拥有@Controller的完整功能，还会执行切点宏@Pointcut展开
+//@WeavedController除了拥有@Controller的完整功能，还会执行切点宏@Pointcut展开，织入规则由切面开发者自己定义
 @Controller
 public class HelloworldController {
     //只有被Mapping结尾的注解修饰的公共实例函数才会注册到MVC
