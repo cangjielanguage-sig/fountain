@@ -102,6 +102,9 @@ public class HelloworldController {
 
 ## 重定向
 ```cj
+/**
+ * controller函数返回Redirect实例，MVC会按照Redirect的实例执行重定向
+ */
 public struct Redirect {
     private Redirect(
         public let status: HttpStatus,
