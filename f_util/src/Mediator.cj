@@ -19,7 +19,7 @@ import std.collection.HashMap
 
 public class Mediator<N, C, A, R> where C <: Colleague<N, A, R>, A <: ColleagueArgument<N>, N <: Hashable & Equatable<N> {
     private let colleagues = HashMap<N, Colleague<N, A, R>>()
-    public func register(colleague: Colleague<N, A, R>) {
+    public func register(colleague: Colleague<N, A, R>): Unit {
         colleagues[colleague.name] = colleague
     }
     public func execute(arg: A): R {

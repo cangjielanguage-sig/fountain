@@ -18,23 +18,23 @@ package fountain::f_base
 import std.collection.{Set, Map, EquatableCollection}
 
 public class EmptyArray<T> {
-    // public static let INSTANCE = Array<T>() 
-    public static func INSTANCE() {
+    // public static let instance = Array<T>() 
+    public static func instance(): Array<T> {
         Array<T>()
     }
     private init() {}
 }
 
 public class EmptySet<T> <: Set<T> where T <: Equatable<T> {
-    // public static let INSTANCE = EmptySet<T>()
-    public static func INSTANCE() {
+    // public static let instance = EmptySet<T>()
+    public static func instance(): Set<T> {
         EmptySet<T>()
     }
 
     private init() {}
 
     public func iterator(): Iterator<T> {
-        EmptyIterator<T>.INSTANCE()
+        EmptyIterator<T>.instance()
     }
     public func isEmpty(): Bool {
         true
@@ -50,7 +50,7 @@ public class EmptySet<T> <: Set<T> where T <: Equatable<T> {
      * 参数 element - 需要判断的元素
      * 返回值 Bool - 如果存在，则返回 true；否则，返回 false
      */
-    public func contains(element: T): Bool {
+    public func contains(_: T): Bool {
         false
     }
 
@@ -59,7 +59,7 @@ public class EmptySet<T> <: Set<T> where T <: Equatable<T> {
      * 参数 other - 其他集合
      * 返回值 Bool - 如果它是子集，则返回 true，否则返回 false
      */
-    public func subsetOf(other: ReadOnlySet<T>): Bool {
+    public func subsetOf(_: ReadOnlySet<T>): Bool {
         true
     }
 
@@ -76,7 +76,7 @@ public class EmptySet<T> <: Set<T> where T <: Equatable<T> {
      * 添加元素操作。如果元素已经存在，则不会添加它
      * 参数 element - 要添加的元素
      */
-    public func add(element: T): Bool {
+    public func add(_: T): Bool {
         false
     }
 
@@ -92,7 +92,7 @@ public class EmptySet<T> <: Set<T> where T <: Equatable<T> {
      * 从该结合中移除指定元素（如果存在）
      * 参数 element - 要删除的元素
      */
-    public func remove(element: T): Bool {
+    public func remove(_: T): Bool {
         false
     }
 
@@ -108,7 +108,7 @@ public class EmptySet<T> <: Set<T> where T <: Equatable<T> {
      * 传入 lambda 表达式，如果满足 true 条件，则删除对应的元素
      * 参数 predicate - 传入一个 lambda 表达式进行判断
      */
-    public func removeIf(predicate: (T) -> Bool): Unit {
+    public func removeIf(_: (T) -> Bool): Unit {
         ()
     }
 
@@ -137,8 +137,8 @@ public class EmptySet<T> <: Set<T> where T <: Equatable<T> {
 }
 
 public class EmptyIterator<T> <: Iterator<T> {
-    // public static let INSTANCE = EmptyIterator<T>()
-    public static func INSTANCE() {
+    // public static let instance = EmptyIterator<T>()
+    public static func instance(): Iterator<T> {
         EmptyIterator<T>()
     }
     private init() {}
@@ -148,19 +148,19 @@ public class EmptyIterator<T> <: Iterator<T> {
 }
 
 public class EmptyIterable<T> <: Iterable<T> {
-    // public static let INSTANCE = EmptyIterable<T>()
-    public static func INSTANCE() {
+    // public static let instance = EmptyIterable<T>()
+    public static func instance(): Iterable<T> {
         EmptyIterable<T>()
     }
     private init() {}
     public func iterator(): Iterator<T> {
-        EmptyIterator<T>.INSTANCE()
+        EmptyIterator<T>.instance()
     }
 }
 
 public class EmptyMap<K, V> <: Map<K, V> & Bucket<K, V> where K <: Equatable<K> {
-    // public static let INSTANCE = EmptyMap<K, V>()
-    public static func INSTANCE() {
+    // public static let instance = EmptyMap<K, V>()
+    public static func instance(): Map<K, V> {
         EmptyMap<K, V>()
     }
 
@@ -171,7 +171,7 @@ public class EmptyMap<K, V> <: Map<K, V> & Bucket<K, V> where K <: Equatable<K> 
      * 参数 key - 传递 key，获取 value
      * 返回值 Option<V> - key 对应的值是用 Option 封装的
      */
-    public func get(key: K): Option<V> {
+    public func get(_: K): Option<V> {
         None<V>
     }
 
@@ -180,7 +180,7 @@ public class EmptyMap<K, V> <: Map<K, V> & Bucket<K, V> where K <: Equatable<K> 
      * 参数 key - 传递要判断的 key
      * 返回值 Bool - 如果存在，则返回 true；否则，返回 false
      */
-    public func contains(key: K): Bool {
+    public func contains(_: K): Bool {
         false
     }
 
@@ -202,7 +202,7 @@ public class EmptyMap<K, V> <: Map<K, V> & Bucket<K, V> where K <: Equatable<K> 
      * 返回值 Option<V> - 如果赋值之前 key 存在，旧的 value 用 Option 封装；
      * 否则，返回 Option<V>.None
      */
-    public func add(key: K, value: V): Option<V> {
+    public func add(_: K, _: V): Option<V> {
         None<V>
     }
 
@@ -214,10 +214,10 @@ public class EmptyMap<K, V> <: Map<K, V> & Bucket<K, V> where K <: Equatable<K> 
     public func add(all!: Collection<(K, V)>): Unit {
         ()
     }
-    public func addIfAbsent(key: K, value: V): ?V {
+    public func addIfAbsent(_: K, _: V): ?V {
         None<V>
     }
-    public func replace(key: K, value: V): ?V {
+    public func replace(_: K, _: V): ?V {
         None<V>
     }
 
@@ -226,7 +226,7 @@ public class EmptyMap<K, V> <: Map<K, V> & Bucket<K, V> where K <: Equatable<K> 
      * 参数 key - 传入要删除的 key
      * 返回值 Option<V> - 被移除映射的 V 用 Option 封装
      */
-    public func remove(key: K): Option<V> {
+    public func remove(_: K): Option<V> {
         None<V>
     }
 
@@ -242,7 +242,7 @@ public class EmptyMap<K, V> <: Map<K, V> & Bucket<K, V> where K <: Equatable<K> 
      * 传入 lambda 表达式，如果满足条件，则删除对应的键值
      * 参数 predicate - 传递一个 lambda 表达式进行判断
      */
-    public func removeIf(predicate: (K, V) -> Bool): Unit {
+    public func removeIf(_: (K, V) -> Bool): Unit {
         ()
     }
 
@@ -266,7 +266,7 @@ public class EmptyMap<K, V> <: Map<K, V> & Bucket<K, V> where K <: Equatable<K> 
      * 参数 key - 传递值进行判断
      * 返回值 V - 与键对应的值
      */
-    public operator func [](key: K): V {
+    public operator func [](_: K): V {
         None<V>.getOrThrow()
     }
 
@@ -276,7 +276,7 @@ public class EmptyMap<K, V> <: Map<K, V> & Bucket<K, V> where K <: Equatable<K> 
      * 参数 key - 传递值进行判断
      * 参数 value - 传递要设置的值
      */
-    public operator func [](key: K, value!: V): Unit {
+    public operator func [](_: K, value!: V): Unit {
         ()
     }
 
@@ -285,7 +285,7 @@ public class EmptyMap<K, V> <: Map<K, V> & Bucket<K, V> where K <: Equatable<K> 
      * 返回值 Keys<K> - 保存所有返回的 key
      */
     public func keys(): EquatableCollection<K> {
-        EmptyEquatableCollection<K>.INSTANCE()
+        EmptyEquatableCollection<K>.instance()
     }
 
     /**
@@ -293,7 +293,7 @@ public class EmptyMap<K, V> <: Map<K, V> & Bucket<K, V> where K <: Equatable<K> 
      * 返回值 Values<V> - 保存所有返回的 value
      */
     public func values(): Collection<V> {
-        EmptyCollection<V>.INSTANCE()
+        EmptyCollection<V>.instance()
     }
 
     /**
@@ -319,7 +319,7 @@ public class EmptyMap<K, V> <: Map<K, V> & Bucket<K, V> where K <: Equatable<K> 
      * 返回值 Iterator<(K,V)> - Map 的迭代器
      */
     public func iterator(): Iterator<(K, V)> {
-        EmptyIterator<(K, V)>.INSTANCE()
+        EmptyIterator<(K, V)>.instance()
     }
     public func toArray(): Array<(K, V)> {
         []
@@ -345,8 +345,8 @@ public class EmptyMapEntryView<K, V> <: MapEntryView<K, V> {
 }
 
 public class EmptyEquatableCollection<K> <: EquatableCollection<K> where K <: Equatable<K> {
-    // public static let INSTANCE = EmptyEquatableCollection<K>()
-    public static func INSTANCE() {
+    // public static let instance = EmptyEquatableCollection<K>()
+    public static func instance(): EquatableCollection<K> {
         EmptyEquatableCollection<K>()
     }
     private init() {}
@@ -356,7 +356,7 @@ public class EmptyEquatableCollection<K> <: EquatableCollection<K> where K <: Eq
      * 返回值 Iterator<K> - Keys 的迭代器
      */
     public func iterator(): Iterator<K> {
-        EmptyIterator<K>.INSTANCE()
+        EmptyIterator<K>.instance()
     }
 
     /**
@@ -382,7 +382,7 @@ public class EmptyEquatableCollection<K> <: EquatableCollection<K> where K <: Eq
      * 参数 element - K
      * 返回值 Bool - 如果存在，则返回 true；否则，返回 false
      */
-    public func contains(element: K): Bool {
+    public func contains(_: K): Bool {
         false
     }
 
@@ -397,8 +397,8 @@ public class EmptyEquatableCollection<K> <: EquatableCollection<K> where K <: Eq
 }
 
 public class EmptyCollection<T> <: Collection<T> {
-    // public static let INSTANCE = EmptyCollection<T>()
-    public static func INSTANCE() {
+    // public static let instance = EmptyCollection<T>()
+    public static func instance(): Collection<T> {
         EmptyCollection<T>()
     }
     private init() {}
@@ -426,16 +426,16 @@ public class EmptyCollection<T> <: Collection<T> {
      * 返回值 Array<T> - 转换后的数组
      */
     public func toArray(): Array<T> {
-        EmptyArray<T>.INSTANCE()
+        EmptyArray<T>.instance()
     }
     public func iterator(): Iterator<T> {
-        EmptyIterator<T>.INSTANCE()
+        EmptyIterator<T>.instance()
     }
 }
 
 public class EmptyList<T> <: List<T> {
-    // public static let INSTANCE = EmptyList<T>()
-    public static func INSTANCE() {
+    // public static let instance = EmptyList<T>()
+    public static func instance(): List<T> {
         EmptyList<T>()
     }
     private init() {}
@@ -443,50 +443,50 @@ public class EmptyList<T> <: List<T> {
         true
     }
     public func iterator(): Iterator<T> {
-        EmptyIterator<T>.INSTANCE()
+        EmptyIterator<T>.instance()
     }
     public prop size: Int64 {
         get() {
             0
         }
     }
-    public func add(element: T): Unit {}
+    public func add(_: T): Unit {}
     public func add(all!: Collection<T>): Unit {}
-    public func add(element: T, at!: Int64): Unit {}
+    public func add(_: T, at!: Int64): Unit {}
     public func add(all!: Collection<T>, at!: Int64): Unit {}
     public func remove(at!: Int64): T {
         throw IndexOutOfBoundsException('current list is empty')
     }
-    public func remove(range: Range<Int64>): Unit {}
-    public func removeIf(predicate: (T) -> Bool): Unit {}
+    public func remove(_: Range<Int64>): Unit {}
+    public func removeIf(_: (T) -> Bool): Unit {}
     public func clear(): Unit {}
 
-    public operator func [](index: Int64, value!: T): Unit {}
-    public operator func [](index: Int64): T {
+    public operator func [](_: Int64, value!: T): Unit {}
+    public operator func [](_: Int64): T {
         throw IndexOutOfBoundsException('current list is empty')
     }
-    public func insert(at: Int64, element: T): Unit {}
-    public func remove(element: T): Bool {
+    public func insert(_: Int64, _: T): Unit {}
+    public func remove(_: T): Bool {
         false
     }
-    public func contains(element: T): Bool {
+    public func contains(_: T): Bool {
         false
     }
     public func contains(all!: Collection<T>): Bool {
         false
     }
-    public func indexOf(element: T): ?Int64 {
+    public func indexOf(_: T): ?Int64 {
         None<Int64>
     }
-    public func lastIndexOf(element: T): ?Int64 {
+    public func lastIndexOf(_: T): ?Int64 {
         None<Int64>
     }
-    public func count(element: T): Int64 {
+    public func count(_: T): Int64 {
         0
     }
     public func reverse(): Unit {}
-    public func sortBy(comparator: (T, T) -> Ordering, stable!: Bool): Unit {}
-    public func reserve(additional: Int64): Unit {}
+    public func sortBy(_: (T, T) -> Ordering, stable!: Bool): Unit {}
+    public func reserve(_: Int64): Unit {}
     public func capacity(): Int64 {
         0
     }
@@ -500,7 +500,7 @@ public class EmptyList<T> <: List<T> {
             None<T>
         }
     }
-    public func get(index: Int64): ?T {
+    public func get(_: Int64): ?T {
         None<T>
     }
 }

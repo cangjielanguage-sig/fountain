@@ -282,6 +282,6 @@ func crc16(bytes: Array<Byte>, s: Int64, e: Int64) {
     return crc & 0xFFFF;
 }
 
-public func crc16(bytes: Array<Byte>) {
+public func crc16(bytes: Array<Byte>): UInt16 {
     return crc16(bytes, 0, bytes.size)
 }

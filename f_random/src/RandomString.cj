@@ -60,82 +60,82 @@ public class RandomString {
         this(rand: SecureRandom(priv: priv))
     }
 
-    public func randomAscii(count: Int64) {
+    public func randomAscii(count: Int64): String {
         var builder = StringGenerator()
         for (_ in 0..count) {
             builder.append(Rune(rand.nextUInt32(128)))
         }
         return builder.toString()
     }
-    public func randomAscii(min: Int64, max: Int64) {
+    public func randomAscii(min: Int64, max: Int64): String {
         randomAscii(rand.nextInt64(min, max, closed: true))
     }
-    public func random(count: Int64, source: String) {
+    public func random(count: Int64, source: String): String {
         random(count, source.toRuneArray())
     }
-    public func random(count: Int64, source: Array<Rune>) {
+    public func random(count: Int64, source: Array<Rune>): String {
         var builder = StringGenerator()
         for (_ in 0..count) {
             builder.append(source[rand.nextInt64(source.size)])
         }
         return builder.toString()
     }
-    public func random(min: Int64, max: Int64, source: String) {
+    public func random(min: Int64, max: Int64, source: String): String {
         random(rand.nextInt64(min, max, closed: true), source)
     }
-    public func randomLowerLetters(count: Int64) {
+    public func randomLowerLetters(count: Int64): String {
         random(count, LOWER_LETTERS)
     }
-    public func randomLowerLetters(min: Int64, max: Int64) {
+    public func randomLowerLetters(min: Int64, max: Int64): String {
         randomLowerLetters(rand.nextInt64(min, max))
     }
 
-    public func randomUpperLetters(count: Int64) {
+    public func randomUpperLetters(count: Int64): String {
         random(count, UPPER_LETTERS)
     }
-    public func randomUpperLetters(min: Int64, max: Int64) {
+    public func randomUpperLetters(min: Int64, max: Int64): String {
         randomUpperLetters(rand.nextInt64(min, max))
     }
 
-    public func randomAllLetters(count: Int64) {
+    public func randomAllLetters(count: Int64): String {
         random(count, ALL_LETTERS)
     }
-    public func randomAllLetters(min: Int64, max: Int64) {
+    public func randomAllLetters(min: Int64, max: Int64): String {
         randomLowerLetters(rand.nextInt64(min, max))
     }
 
-    public func randomNumbers(count: Int64) {
+    public func randomNumbers(count: Int64): String {
         random(count, NUMBERS)
     }
-    public func randomNumbers(min: Int64, max: Int64) {
+    public func randomNumbers(min: Int64, max: Int64): String {
         randomNumbers(rand.nextInt64(min, max))
     }
 
-    public func randomLowerLettersNumbers(count: Int64) {
+    public func randomLowerLettersNumbers(count: Int64): String {
         random(count, LOWER_LETTERS_AND_NUMBERS)
     }
-    public func randomLowerLettersNumbers(min: Int64, max: Int64) {
+    public func randomLowerLettersNumbers(min: Int64, max: Int64): String {
         randomLowerLettersNumbers(rand.nextInt64(min, max))
     }
-    public func randomUpperLettersNumbers(count: Int64) {
+    public func randomUpperLettersNumbers(count: Int64): String {
         random(count, UPPER_LETTERS_AND_NUMBERS)
     }
-    public func randomUpperLettersNumbers(min: Int64, max: Int64) {
+    public func randomUpperLettersNumbers(min: Int64, max: Int64): String {
         randomLowerLettersNumbers(rand.nextInt64(min, max))
     }
-    public func randomLettersNumbers(count: Int64) {
+    public func randomLettersNumbers(count: Int64): String {
         random(count, ALL_LETTERS_AND_NUMBERS)
     }
-    public func randomLettersNumbers(min: Int64, max: Int64) {
+    public func randomLettersNumbers(min: Int64, max: Int64): String {
         randomLowerLettersNumbers(rand.nextInt64(min, max))
     }
-    public func randomPrintableAsciis(count: Int64) {
+    public func randomPrintableAsciis(count: Int64): String {
         random(count, ALL_PRINTABLE_ASCIIS)
     }
-    public func randomPrintableAsciis(min: Int64, max: Int64) {
+    public func randomPrintableAsciis(min: Int64, max: Int64): String {
         randomPrintableAsciis(rand.nextInt64(min, max))
     }
-    public func randomAllChars(count: Int64) {
+    public func randomAllChars(count: Int64): String {
         var builder = StringGenerator()
         for (_ in 0..count) {
             let idx = rand.nextInt64(2)
@@ -144,7 +144,7 @@ public class RandomString {
         }
         return builder.toString()
     }
-    public func randomAllChars(min: Int64, max: Int64) {
+    public func randomAllChars(min: Int64, max: Int64): String {
         randomAllChars(rand.nextInt64(min, max))
     }
 }

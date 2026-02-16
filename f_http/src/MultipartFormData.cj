@@ -28,7 +28,7 @@ public class MultipartFormData {
     public func newPart(): MultipartFileBuilder {
         MultipartFileBuilder(this)
     }
-    public func encode(output: OutputStream){
+    public func encode(output: OutputStream): Unit {
         for(part in parts){
             output.write('--${boundary}\r\n'.unsafeBytes())
             let cd = part.contentDisposition.toString().unsafeBytes()

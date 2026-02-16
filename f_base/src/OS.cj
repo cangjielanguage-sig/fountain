@@ -65,7 +65,7 @@ public enum OS <: Equatable<OS> & ToString & Hashable {
         }
     }
     public func hashCode(): Int64 {
-        'fountain.base.OS.${this}'.hashCode()
+        'fountain::f_base.OS.${this}'.hashCode()
     }
 
     @When[os == "Linux" && env == "gnu"]

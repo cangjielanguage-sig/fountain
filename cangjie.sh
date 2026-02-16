@@ -96,7 +96,7 @@ cj(){
     fboot cleanUpdate
     ;;
   install)
-    if [[ "$2" == "publish"]]; then
+    if [[ "$2" == "publish" ]]; then
       cj install $3 $4 $5 $6
       cj publish $3
     else

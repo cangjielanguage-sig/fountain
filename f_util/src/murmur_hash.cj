@@ -86,7 +86,7 @@ public struct MurmurHash128X64 <: Hashable & Comparable<MurmurHash128X64> & ToSt
         h = one ^ two
     }
     
-    public func hashCode(){
+    public func hashCode(): Int64 {
         h
     }
     public func compare(other: MurmurHash128X64): Ordering {

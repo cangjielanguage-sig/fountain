@@ -63,17 +63,17 @@ public class LoadBalance<W, D, R> where W <: Addable<W> & Comparable<W> {
     private let mutex = Mutex()
     private let tree = TreeMap<W, (D) -> R>()
     public LoadBalance(private let min: W, private let algo: LoadBalanceAlgo<W>){}
-    public func add(weight: W, fn: (D) -> R){
+    public func add(weight: W, fn: (D) -> R): Unit {
         let max = tree.last?[0] ?? min
         let new = max + weight
         tree[new] = fn
     }
-    public func add(all!: Collection<(W, (D) -> R)>){
+    public func add(all!: Collection<(W, (D) -> R)>): Unit {
         for((w, fn) in all){
             add(w, fn)
         }
     }
-    public func add(all!: Array<(W, (D) -> R)>){
+    public func add(all!: Array<(W, (D) -> R)>): Unit {
         let c: Collection<(W, (D) -> R)> = all
         add(all: c)
     }

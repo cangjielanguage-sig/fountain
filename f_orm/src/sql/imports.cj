@@ -26,5 +26,5 @@ internal import fountain::f_orm.DirtyTag
 public import fountain::f_base.*
 public import fountain::f_bean.*
 public import fountain::f_data.*
-public import fountain::f_orm.*
+public import fountain::f_orm.base.*
 

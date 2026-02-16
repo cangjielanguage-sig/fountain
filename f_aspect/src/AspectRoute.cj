@@ -20,19 +20,6 @@ import fountain::f_base.*
 import fountain::f_regex.*
 
 /**
- * 用来修饰切面也就是Aspect的实现类
- */
-@Annotation[target: [Type]]
-public class AspectRoute <: RouteRule {
-    public const AspectRoute(public let route: RouteRule) {}
-    public func isAspect<T>(): Bool {
-        TypeInfo.of<T>().isSubtypeOf(TypeInfo.of<Aspect>())
-    }
-    public func matches(funcInfo: InvocationFuncInfo): Bool {
-        route.matches(funcInfo)
-    }
-}
-/**
  * 以下所有规则除非特别说明都适用本注释的说明。
  * 任意参数都可以用通配符*表示任意大于等于0个字符，?表示0或1个字符
  * packageName参数是包名，
@@ -46,16 +33,30 @@ public class AspectRoute <: RouteRule {
 public abstract class RouteRule {
     public const init() {}
     public func matches(funcInfo: InvocationFuncInfo): Bool
-    public operator const func &(right: RouteRule) {
+    public operator const func &(right: RouteRule): RouteRule {
         AndRouteRule(this, right)
     }
-    public operator const func |(right: RouteRule) {
+    public operator const func |(right: RouteRule): RouteRule {
         OrRouteRule(this, right)
     }
-    public operator const func !() {
+    public operator const func !(): RouteRule {
         NotRouteRule(this)
     }
 }
+/**
+ * 用来修饰切面也就是Aspect的实现类
+ */
+@Annotation[target: [Type]]
+public class AspectRoute <: RouteRule {
+    public const AspectRoute(public let route: RouteRule) {}
+    public func isAspect<T>(): Bool {
+        TypeInfo.of<T>().isSubtypeOf(TypeInfo.of<Aspect>())
+    }
+    public func matches(funcInfo: InvocationFuncInfo): Bool {
+        route.matches(funcInfo)
+    }
+}
+
 /**
  * 匹配的公共实例函数将被织入
  */

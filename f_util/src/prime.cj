@@ -56,7 +56,7 @@ public func millerRabin(x: UInt64, p: UInt64) {
  * @param p
  * @return
  */
-public func isPrime(p: UInt64) {
+public func isPrime(p: UInt64): Bool {
     if (p < 2) {
         return false
     }

@@ -20,6 +20,11 @@ package fountain::f_concurrent
  */
 public class TokenBucketRateLimiter<T> <: RateLimiter<T> {
     private let tokens: LinkedBlockingQueue<Unit>
+    /**
+     * @param tokens 令牌总数
+     * @param timeout 阻塞时长
+     * @param populationPeriod 填充令牌的周期
+     */
     public init(tokens!: Int64, timeout!: Duration, populationPeriod!: Duration) {
         super(timeout)
         if (tokens <= 0 || timeout <= Duration.Zero || populationPeriod <= Duration.Zero) {

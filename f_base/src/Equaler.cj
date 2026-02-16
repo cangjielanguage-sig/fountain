@@ -21,7 +21,7 @@ public struct Equaler<T> {
     public static func equals<T>(left: T, right: T): Bool where T <: Equal<T> {
         left == right
     }
-    public static func create<T>() where T <: Equal<T> {
+    public static func create<T>(): Equaler<T> where T <: Equal<T> {
         Equaler<T>(equals<T>)
     }
     public operator func ()(left: T, right: T): Bool {

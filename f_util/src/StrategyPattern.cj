@@ -18,7 +18,7 @@ package fountain::f_util
 import std.collection.{HashMap, ArrayList}
 import fountain::f_exception.IllegalAccessException
 
-/*
+/**
  * 策略模式的接口，所有策略都要实现此接口
  * N 是策略的标识，需要用N找到对应的策略，
  * S 是策略的具体实现，N与S需要一一对应
@@ -37,7 +37,7 @@ public interface Strategy<N, A, R> where N <: Hashable & Equatable<N> {
     func execute(arg: A): R
 }
 
-/*策略的集合*/
+/**策略的集合*/
 public class Strategies<N, A, R> where N <: Hashable & Equatable<N> {
     private let strategies = HashMap<N, Strategy<N, A, R>>()
     public init() {}

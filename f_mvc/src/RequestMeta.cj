@@ -145,7 +145,7 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
                     case x: Redirect => respond(x, ctx)
                     case _ =>
                         let request = ctx.request
-                        log.warn {'fountain.mvc.handle ${request.method}:${request.url};${TypeInfo.of(result)}'}
+                        log.warn {'fountain::f_mvc.handle ${request.method}:${request.url};${TypeInfo.of(result)}'}
                         MultiRequestMethodHandler.NOT_ACCEPTABLE.handle(ctx)
                 }
         }
@@ -180,7 +180,7 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
             })
         }
         log.warn {
-            'fountain.mvc.check ${this}; accept: ${accept}; status: ${status.value}; CheckHandler returns ${TypeInfo.of(resp)}; checked: ${check}'
+            'fountain::f_mvc.check ${this}; accept: ${accept}; status: ${status.value}; CheckHandler returns ${TypeInfo.of(resp)}; checked: ${check}'
         }
         match (resp) {
             case x: String => builder.body(x)

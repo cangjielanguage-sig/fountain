@@ -18,7 +18,7 @@ package fountain::f_base
 public enum NoneOrder <: Comparable<NoneOrder> {
     Greatest | Least
 
-    public func compare(other: NoneOrder) {
+    public func compare(other: NoneOrder): Ordering {
         match ((this, other)) {
             case (Greatest, Greatest) | (Least, Least) => EQ
             case (Greatest, Least) => GT

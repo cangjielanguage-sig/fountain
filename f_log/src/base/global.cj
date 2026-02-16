@@ -18,4 +18,4 @@ package fountain::f_log.base
 import stdx.log.setGlobalLogger
 public import stdx.log.getGlobalLogger
 
-let _ = setGlobalLogger(LoggerFactory.getLogger('fountain.log.global'))
+let _ = setGlobalLogger(LoggerFactory.getLogger('fountain::f_log.global'))

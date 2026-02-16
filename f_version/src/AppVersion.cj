@@ -20,7 +20,7 @@ public struct AppVersion {
     private static var name_ = ''
     private static var version_ = ''
     private init(){}
-    public static func set(banner: String, name: String, version: String){
+    public static func set(banner: String, name: String, version: String): Unit {
         banner_ = banner
         name_ = name
         version_ = version

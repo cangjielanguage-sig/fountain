@@ -50,7 +50,7 @@ import fountain::f_util.exception.TextTemplateException
  * a.0.b.c，表示参数的a属性是一个数组或list，它的索引0有一个属性b（如果是map就是key）,属性b有一个属性c，属性c的值是用来格式化的内容
  * 由于在number: regex: time:等模式中`有特殊意义
  */
-public class TextTemplate {
+public class TextTemplate <: ToString {
     private static let templates = ConcurrentHashMap<String, TextTemplate>()
     private static let mutex = Mutex()
     private static const TIME_FORMAT_PREFIX = "time:"
@@ -59,13 +59,13 @@ public class TextTemplate {
     private let compiled = ArrayList<Value2String>()
     private TextTemplate(private let template: String) {}
 
-    public func toString() {
+    public func toString(): String {
         template
     }
-    public static func compile(template: String, placeholder!: String = "#") {
+    public static func compile(template: String, placeholder!: String = "#"): TextTemplate {
         compile(template, prefix: placeholder, suffix: placeholder)
     }
-    public static func compile(template: String, prefix!: String = #"${"#, suffix!: String = "}") {
+    public static func compile(template: String, prefix!: String = #"${"#, suffix!: String = "}"): TextTemplate {
         templates.computeIfAbsent(template){
             let instance = TextTemplate(template)
             instance.doCompile(template, prefix, suffix)

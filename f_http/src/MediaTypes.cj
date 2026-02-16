@@ -32,11 +32,11 @@ public class MediaTypes {
         register(MultipartMediaType.mixed)
         register(PlainTextMediaType.instance)
     }
-    public static func register(mediaType: MediaType) {
+    public static func register(mediaType: MediaType): Unit {
         log.debug{'MediaTypes.register: ${mediaType} ${ClassTypeInfo.of(mediaType)}'}
         mediaTypes[mediaType.mediaType] = mediaType
     }
-    public static func parse(mediaType: String) {
+    public static func parse(mediaType: String): MediaType {
         tryParse(mediaType).getOrThrow {MediaTypeException("${mediaType} is an illegal MediaType string")}
     }
     private static func registerFromBeanFactory() {

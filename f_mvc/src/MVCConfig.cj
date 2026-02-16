@@ -63,6 +63,9 @@ public class MVCConfig {
 
     public static let MVC_OVERALL_ELAPSED_SWITCH = "${confPrefix}_overallElapsedSwitch"
 
+    static init(){
+        lookupOption<GlobalCryptoKit>()
+    }
     private static prop cryptoKit: CryptoKit {
         get(){
             lookupOption<CryptoKit>() ?? getGlobalCryptoKit()

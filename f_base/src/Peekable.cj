@@ -39,7 +39,7 @@ public interface Peekable<T>{
     func peekable(): PeekableIterator<T>
 }
 extend<T> Iterator<T> <: Peekable<T> {
-    public func peekable() {
+    public func peekable(): PeekableIterator<T> {
         PeekableIterator<T>(this)
     }
 }

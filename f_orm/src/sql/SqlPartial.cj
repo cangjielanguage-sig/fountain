@@ -34,7 +34,10 @@ public interface SqlPartial <: RootDAO {
     func UPDATE<T>(values: T, ignoredColumns!: Array<String>, includingColumns!: Array<String>): Int64 where T <: QueryMappersInit<T> & ObjectData<T>
     func FROM<T>(): FromClause<T> where T <: QueryMappersInit<T>
     func page<R>(sql: String, size: Int64, page!: Int64): Pagination<R> where R <: QueryMappersInit<R> & DataFields<R>
-    func singlePage<R>(sql: String, size: Int64, page!: Int64): Pagination<R> where R <: DataFields<R>
+    func singlePage<R>(sql: String, size: Int64, page!: Int64): Pagination<R> where R <: DataFields<R> {
+        singlePage<R>(sql, 0, size, page: page)
+    }
+    func singlePage<R>(sql: String, column: size: Int64, page!: Int64): Pagination<R> where R <: DataFields<R>
     func singleFirst<T>(sql: String): ?T{
         singleFirst<T>(sql, 0)
     }
@@ -214,8 +217,8 @@ extend SqlExecutor <: SqlPartial {
     public func page<R>(sql: String, size: Int64, page!: Int64 = 1): Pagination<R> where R <: QueryMappersInit<R> & DataFields<R> {
         selectPage<R>(sql, size, page){exe => exe.list<R>()}
     }
-    public func singlePage<R>(sql: String, size: Int64, page!: Int64 = 1): Pagination<R> where R <: DataFields<R> {
-        selectPage<R>(sql, size, page){exe => exe.singleList<R>()}
+    public func singlePage<R>(sql: String, column: Int64, size: Int64, page!: Int64 = 1): Pagination<R> where R <: DataFields<R> {
+        selectPage<R>(sql, size, page){exe => exe.singleList<R>(column)}
     }
     private func limit(size: Int64, offset!: Int64 = 0): String {
         let (one, two, sql) = dialect.limit(size, offset)

@@ -316,11 +316,11 @@ public class BeanFactory {
         match (cond) {
             case Exactly(n) => match (beans.get(n)) {
                 case Some(m) where matches(beanType, m) => [m].iterator()
-                case _ => EmptyIterator<BeanManager>.INSTANCE()
+                case _ => EmptyIterator<BeanManager>.instance()
             }
             case _ => match (beanTypeMap.get(beanType)) {
                 case Some(tree) => tree.iterator().filter {m => matches(beanType, cond, m)}
-                case _ => EmptyIterator<BeanManager>.INSTANCE()
+                case _ => EmptyIterator<BeanManager>.instance()
             }
         }
     }

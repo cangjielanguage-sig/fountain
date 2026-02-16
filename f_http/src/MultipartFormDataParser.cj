@@ -79,7 +79,7 @@ public class MultipartFormDataParser {
     }
     public func parse(): Data {
         let boundaryBytes = seperatorBoundaryBytes[2 ..]
-        let path = Path('/tmp/${UUID.random()}')
+        let path = Path(HttpConfig.uploadDir).join(UUID.random().toString())
         let crlf = Array<Byte>(2, repeat: 0)
         let parts = if(mediaType.startsWith('multipart/form-data')){
             DataMultipartTuples()

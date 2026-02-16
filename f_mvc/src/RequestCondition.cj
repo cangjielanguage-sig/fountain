@@ -33,7 +33,7 @@ abstract class RequestCondition {
         match (expr) {
             case e: ParenExpr => compile(e.parenthesizedExpr)
             case e: UnaryExpr where e.op.kind.toString() == '!' => NotRequestCondition(compile(e.expr))
-            case e: RefExpr => ContainsRequestCondition(e.identifier.value)
+            case e: RefExpr | STRING_LITERAL | SINGLE_QUOTED_STRING_LITERAL => ContainsRequestCondition(e.identifier.value)
             case e: CallExpr =>
                 let call = (e.callFunc as MemberAccess).getOrThrow()
                 let key = call.baseExpr.toTokens().toString()

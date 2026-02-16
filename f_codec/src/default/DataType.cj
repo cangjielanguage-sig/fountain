@@ -54,7 +54,7 @@ public enum DataType <: ToString {
     | OBJECT
     | INPUTSTREAM
     
-    public func toString(){
+    public func toString(): String {
         match(this){
             case NONE => 'NONE'
             case STRING => 'STRING'

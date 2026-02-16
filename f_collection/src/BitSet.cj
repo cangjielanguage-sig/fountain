@@ -53,11 +53,7 @@ public class BitSet <: Iterable<Bool> {
         BitSetIterator(this)
     }
     private func growIfNeed(index: Int64, grow!: Bool = true): Int64 {
-        var idx = if (index < 0) {
-            -index
-        } else {
-            index
-        } / 64
+        let idx = index / 64
 
         if (grow && idx >= bits.size) {
             for (_ in 0..idx - bits.size + 1) {
@@ -76,11 +72,16 @@ public class BitSet <: Iterable<Bool> {
         get(index.toInt())
     }
     func get(index: Int64): ?Bool {
-        let idx = growIfNeed(index, grow: false)
+        let idx0 = if (index < 0) {
+            !index
+        } else {
+            index
+        }
+        let idx = growIfNeed(idx0, grow: false)
         if (idx >= bits.size) {
             None<Bool>
         } else {
-            (bits[idx] & computePosition(index)) != 0
+            (bits[idx] & computePosition(idx0)) != 0
         }
     }
     public func contains<T>(value: T): Bool where T <: Hashable {
@@ -170,7 +171,9 @@ public class BitSet <: Iterable<Bool> {
         let idx = growIfNeed(index)
         let val = bits[idx]
         let mask = computePosition(index)
-        (val & mask) != 0
+        let r = val & mask
+        bits[idx] =r
+        r != 0
     }
     /**
      * 切换指定bit位的值，返回切换之前的状态

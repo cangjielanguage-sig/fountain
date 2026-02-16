@@ -15,7 +15,7 @@ limitations under the License.
 */
 package fountain::f_base
 
-public func unsafeZeroValue<T>() {
+public func unsafeZeroValue<T>(): T {
     unsafe{
         zeroValue<T>()
     }

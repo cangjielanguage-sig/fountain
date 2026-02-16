@@ -196,7 +196,7 @@ public class TypeMemberInfos {
                     }
                     staticVariableMap[typeInfo] = map
                     map
-                case _ => EmptyMap<String, StaticVariableInfo>.INSTANCE()
+                case _ => EmptyMap<String, StaticVariableInfo>.instance()
             }
         }
     }
@@ -236,7 +236,7 @@ public class TypeMemberInfos {
                     }
                     instanceVariableMap[typeInfo] = map
                     map
-                case _ => EmptyMap<String, InstanceVariableInfo>.INSTANCE()
+                case _ => EmptyMap<String, InstanceVariableInfo>.instance()
             }
         }
     }

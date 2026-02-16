@@ -23,21 +23,12 @@ import fountain::f_bean.*
 public interface CertificateVerifier{
     func verify(certificate: Array<Certificate>): Bool
 }
-public interface GlobalCryptoKit <: CryptoKit {}
+public interface GlobalCryptoKit <: CryptoKit & PostConstruct {
+    func postConstruct(): Unit {
+        setGlobalCryptoKit(this)
+    }
+}
 
 private let _ = {=>
-    try{
-        getGlobalCryptoKit()
-    }catch(_){
-        let kits = lookupList<CryptoKit>()
-        var set = false
-        for (kit in kits where kit is GlobalCryptoKit) {
-            setGlobalCryptoKit(kit)
-            set = true
-            break
-        }
-        if(!set){
-            setGlobalCryptoKit(DefaultCryptoKit())
-        }
-    }
+    setGlobalCryptoKit(DefaultCryptoKit())
 }()

@@ -31,7 +31,7 @@ public interface PooledManager<T> {
  * 本类型无法分辨返还的实例是不是从Pool借出去的，也无法分辨借出实例的Pool跟返回实例的Pool是不是同一个，因此调用giveBack返还实例的时候，如果返回时检查失败了一定会销毁返还的实例，池维护的实例数随之减1。
  */
 public class Pool<T> <: Resource {
-    private static let log = LoggerFactory.getLogger('fountain.pool.Pool')
+    private static let log = LoggerFactory.getLogger('fountain::f_pool.Pool')
     private let queue: ArrayBlockingQueue<(T, MonoTime)>
     private let tasks: ArrayBlockingQueue<Unit>
     private let size = AtomicInt64(0)

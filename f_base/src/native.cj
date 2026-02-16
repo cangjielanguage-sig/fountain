@@ -23,11 +23,11 @@ foreign {
 /**
  * 当前系统内存页大小
  */
-public let MEM_PAGE_SIZE = unsafe { Int64(getpagesize()) }
+public let MEM_PAGE_SIZE: Int64 = unsafe { Int64(getpagesize()) }
 /**
  * null void*
  */
-public let nullptr = unsafe { zeroValue<CPointer<Unit>>() }
+public let nullptr: CPointer<Unit> = unsafe { zeroValue<CPointer<Unit>>() }
 
 /**
  * 简单调用memcpy
