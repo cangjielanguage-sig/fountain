@@ -8,10 +8,42 @@
 - equal 为被修饰的类实现Equatable接口
 - hash 为被修饰的类实现Hashable接口
 - tostring 为被修饰的类实现ToString接口
-- props 把被修饰的类的非公共实例成员变量增加公共实例成员属性
+- props 把被修饰的类的非公共实例成员变量添加公共实例成员属性
+  ```cj
+  //假设存在类
+  @DataAssist[props]
+  public class A {
+      private var a: String = ''
+      private let b: Int64 = 0
+  }
+  //上面的宏展开结果为
+  /*
+  public class A {
+      private var a_: String = ''
+      private let b_: Int64 = 0
+      public mut prop a: String {
+          get {
+              a_
+          }
+          value(value){
+            a_ = value
+          }
+      }
+      public prop b: Int64 {
+          get {
+              b_
+          }
+          value(value){
+              b_ = value
+          }
+      }
+  }
+   */
+  ```
 - fields 为被修饰的类实现实例间和类实例与JSON之间的互相复制
 
 ```cj
+import fountain.f_data.*
 /**这一行往下单纯只是为了演示实例复制和类实例与json互相转换的功能*******************/
 //@DataAssist[fields]宏修饰的类即可做到以上这些
 @DataAssist[equal hash tostring props fields]
@@ -48,6 +80,7 @@ public class TestData3 {
     private var m1: HashMap<String, Int64> = HashMap<String, Int64>()
     private var m2: HashMap<String, DataAny> = HashMap<String, DataAny>()
 }
+//下面的populate、tryFromData、toJson fromJson等函数调用能够执行是因为它们都被@DataAssist[props fields] 修饰
 private let _ = {=>
     try{
         var data2 = TestData2()
@@ -86,6 +119,7 @@ private let _ = {=>
 
 ## 数据验证
 ```cj
+package fountain::f_data.validation
 public abstract class Validator {
     /**messageIfNotMatch是数据不符合时返回的消息*/
     public const Validator(public let messageIfNotMatch!: String = '') {}
@@ -108,13 +142,14 @@ public class CombinedValidator <: Validator {
 }
 ```
 
-### @IsNotEmpty 
+### 以下注解都是`fountain::f_data.validation.Validator`的子类
+#### @IsNotEmpty 
 数据必须非空
 
-### @IsNotBlank
+#### @IsNotBlank
 数据必须非空且不能是空白字符
 
-### @StringSize
+#### @StringSize
 ```cj
 /**
  * messageIfNotMatch是数据不符合时返回的消息
@@ -124,19 +159,19 @@ public class CombinedValidator <: Validator {
 @StringSize[messageIfNotMatch: 'not match message', min: 0, max: 10]
 ```
 
-### @IsInteger
+#### @IsInteger
 数据必须是整数
 
-### @IsDecimal
+#### @IsDecimal
 数据必须是实数，包括整数和小数
 
-### @IsEmail
+#### @IsEmail
 数据必须是电邮
 
-### IsChineseCellPhone
+#### IsChineseCellPhone
 数据必须是中国手机号
 
-### IsIntegerRange
+#### IsIntegerRange
 ```cj
 /**
  * 验证数据是否是整数且在指定范围
@@ -149,10 +184,10 @@ public class CombinedValidator <: Validator {
                 min: 0, max: 1000, minInclusive: true, maxInclusive: false]
 ```
 
-### @IsBool
+#### @IsBool
 数据必须是true或false
 
-### IsDateTime
+#### IsDateTime
 ```cj
 /**
  * format 数据必须满足指定格式
@@ -160,10 +195,10 @@ public class CombinedValidator <: Validator {
 @IsDateTime[messageIfNotMatch: 'not match message', format: 'yyyy-MM-dd HH:mm:ss']
 ```
 
-### IsDuration
+#### IsDuration
 数据必须是Duration字符串
 
-### IsIntegers
+#### IsIntegers
 ```cj
 /**
  * seperator 数据的分割符，用seperator分割数据且分割每一部分都必须是整数
@@ -171,7 +206,7 @@ public class CombinedValidator <: Validator {
 @IsIntegers[messageIfNotMatch: 'not match message', separator: ',']
 ```
 
-### @DoesMatchRegex
+#### @DoesMatchRegex
 ```cj
 /**
  * regex 数据必须符合指定的正则表达式
