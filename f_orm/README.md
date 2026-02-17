@@ -358,7 +358,7 @@ dataType必须是枚举orm.dialect.DataType的值。
 没有使用@ORMField注解的按照映射的不是主键，且按照列名是LowerUnderScore处理。
  *
 宏的属性格式：
-  dirty 指定这个属性的表示被此宏修饰的类的属性发生变化时会向ORM标记修改历史，可以调用executor.updateDirty<T>()更新修改过的属性，
+  dirty 指定这个属性的表示被此宏修饰的类的属性发生变化时会向ORM标记修改历史，可以调用`executor.update<T>(dirty:true)`更新修改过的属性，
         本属性没有值只有属性名。
         只有被@ORMField修饰的成员变量才对dirty生效。
   table: 是一个字符串或标识符，表示列名转换的格式，
