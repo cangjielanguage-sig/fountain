@@ -363,8 +363,8 @@ dataType必须是枚举orm.dialect.DataType的值。
         只有被@ORMField修饰的成员变量才对dirty生效。
   table: 是一个字符串或标识符，表示列名转换的格式，
          可以是LowerUnderScore、UpperUnderScore、Pascal，会把Pascal风格的类名转换成指定风格的名称，并把转换结果作为表名，也可以是表名本身。
-  classPrefix: 是一个字符串或标识符，把类名开头匹配的子串裁掉
-  classSuffix: 是一个字符串或标识符，把类名结尾匹配的子串裁掉
+  classPrefix: 是一个字符串或标识符，把类名开头匹配的子串裁掉，映射的表名不包含这部分
+  classSuffix: 是一个字符串或标识符，把类名结尾匹配的子串裁掉，映射的表名不包含这部分
   tablePrefix: 是一个字符串或标识符，在转换后的表名前面加上这个前缀
   tableSuffix: 是一个字符串或标识符，在转换后的表名后面加上这个后缀
   上面的冒号也是宏属性的一部分。
@@ -385,6 +385,34 @@ dataType必须是枚举orm.dialect.DataType的值。
 dataType必须是枚举orm.DataType的值。
 每一部分都是可选的，且顺序任意，不是true false也不是LowerUnderScore UpperUnderScore Pascal Camel的一律认为是DataType。
 没有使用@ORMField注解的公共实例成员变量或公共实例成员属性被认为映射的不是主键，且按照列名是LowerUnderScore处理。
+
+### 例子
+```cj
+@DataAssist[fields tostring]//同时使用@DataAssist 和 @QueryMappersGenerator，@DataAssist必须在上面
+@QueryMappersGenerator[table: user_info dirty]//映射的表名是user_info，且可以使用executor.update<UserPO>(dirty: true)更新脏数据
+public class UserPO {
+    @ORMField[true 'id']
+    private var id: Int64 = 0
+    @ORMField['username']
+    private var username: String = ''
+    @ORMField['password']
+    private var password: String = ''
+    @ORMField['save_time']
+    private var saveTime: ?DateTime = None<DateTime>
+}
+
+@QueryMappersGenerator[classSuffix: 'PO' table: LowerUnderScore tablePrefix: 't_']//映射的表名是t_user_info
+public class UserInfoPO {//不要使用这个类，仅用于展示@QueryMappersGenerator的用法
+    @ORMField[true 'id']
+    private var id: Int64 = 0
+    @ORMField['username']
+    private var username: String = ''
+    @ORMField['password']
+    private var password: String = ''
+    @ORMField['save_time']
+    private var saveTime: ?DateTime = None<DateTime>
+}
+```
 
 ## `RootService`
 业务层的类型必须实现以下接口
