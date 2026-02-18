@@ -129,6 +129,9 @@ public class AsyncDispatcher <: Dispatcher & AsyncEndExecutorGetter {
         let tid = Thread.currentThread.id
         spawn{
             while(let event <- getEvent()){
+                if(event is DummyEvent){
+                    continue
+                }
                 doDispatch(tid, event)
             }
         }

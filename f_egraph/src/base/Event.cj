@@ -74,3 +74,9 @@ public class ErrorEvent <: DataEvent {
         super(eventType: EventType.Error, category: category, tag: tag, name: EventType.Error.toString(), data: error)
     }
 }
+public class DummyEvent <: Event {
+    public static let instance = DummyEvent()
+    private init(){
+        super(eventType: EventType.Dummy, category: '', tag: '', name: '')
+    }
+}

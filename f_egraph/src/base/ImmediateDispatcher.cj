@@ -53,7 +53,9 @@ public class ImmediateDispatcher <: Dispatcher {
             throw GraphException('To invoke func dispatch must be after accepting an Event instance')
         }
         while(let event <- getEvent()){
-            if(let Some(executors) <- getExecutors(event)){
+            if(event is DummyEvent){
+                continue
+            } else if (let Some(executors) <- getExecutors(event)){
                 for(executor in executors){
                     executor.accept(event)
                     if(let end: EndExecutor <- executor){

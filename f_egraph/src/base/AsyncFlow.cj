@@ -16,29 +16,34 @@ limitations under the License.
 package fountain::f_egraph.base
 
 public struct AsyncFlow <: Flow<AsyncEndExecutorGetter> {
-    private static let dispatcher = AsyncDispatcher()
-
+    private static var dispatcher =  None<AsyncDispatcher>
+    public static func initDispatcher(clearTimerDuration!: Duration = Duration.second, toThrowIfNoExecutor!: Bool = true){
+        dispatcher = AsyncDispatcher(clearTimerDuration: clearTimerDuration, toThrowIfNoExecutor: toThrowIfNoExecutor)
+    }
     public AsyncFlow(private let category!: String, private let tag!: String){}
     public static func remove(category!: String, tag!: String): Unit {
-        dispatcher.removeIf{e => e.category == category && e.tag == tag}
+        dispatcher?.removeIf{e => e.category == category && e.tag == tag}
     } 
     
     public func registerStart(): Unit {
-        dispatcher.registerStart(category: category, tag: tag)
+        dispatcher?.registerStart(category: category, tag: tag)
     }
     public func registerEnd(): Unit {
-        dispatcher.registerEnd(category: category, tag: tag)
+        dispatcher?.registerEnd(category: category, tag: tag)
     }
     public func registerError(): Unit {
-        dispatcher.registerError(category: category, tag: tag)
+        dispatcher?.registerError(category: category, tag: tag)
     }
     public func registerTask(name: String, task: (Event) -> Event): Unit {
-        dispatcher.registerTask(category: category, tag: tag, name: name, task: task)
+        dispatcher?.registerTask(category: category, tag: tag, name: name, task: task)
     }
     public func registerTask(task: Task): Unit {
         registerTask(task.name, task.exec)
     }
     public func start(data: Any): AsyncEndExecutorGetter {
-        (dispatcher.start(StartEvent(category: category, tag: tag, data: data)) as AsyncEndExecutorGetter).getOrThrow()
+        match(dispatcher?.start(StartEvent(category: category, tag: tag, data: data))){
+            case Some(x: AsyncEndExecutorGetter) => x
+            case _ => throw GraphException()
+        }
     }
 }
