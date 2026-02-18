@@ -162,4 +162,3 @@ create table mind (
 );
 alter table mind add constraint mind_pkey primary key (id);
 create unique index idx_mind_role_id on mind (role_id);
-
