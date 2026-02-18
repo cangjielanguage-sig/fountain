@@ -17,10 +17,10 @@ package fountain::f_egraph.base
 
 public interface Flow<G> where G <: EndExecutorGetter {
     static func remove(category!: String, tag!: String): Unit 
-    func registerStart(taskName: String): Unit
+    mut func registerStart(name: String): Unit
     func registerEnd(): Unit
     func registerError(): Unit
-    func registerTask(name: String, task: (Event) -> Event): Unit
-    func registerTask(task: Task): Unit
+    mut func registerTask(name: String, task: (Event) -> Event): Unit
+    mut func registerTask(task: Task): Unit
     func start(data: Any): G
 }

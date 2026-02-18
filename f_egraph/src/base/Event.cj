@@ -52,8 +52,8 @@ public open class DataEvent <: Event {
     }
 }
 public class StartEvent <: DataEvent {
-    public init(category!: String, tag!: String, data!: Any){
-        super(eventType: Start, category: category, tag: tag, name: EventType.Start.toString(), data: data)
+    public init(category!: String, tag!: String, name!: String, data!: Any){
+        super(eventType: Start, category: category, tag: tag, name: name, data: data)
     }
 }
 public class EndEvent <: DataEvent {

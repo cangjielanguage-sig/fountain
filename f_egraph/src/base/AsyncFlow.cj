@@ -28,8 +28,13 @@ public struct AsyncFlow <: Flow<AsyncEndExecutorGetter> {
     private func getDispatcher(){
         dispatcher.getOrThrow()
     }
-    public func registerStart(taskName: String): Unit {
-        getDispatcher().registerStart(category: category, tag: tag, taskName: taskName)
+
+    private var startName = ''
+    private var hasFirstTask = false
+
+    public mut func registerStart(name: String): Unit {
+        startName = name
+        getDispatcher().registerStart(category: category, tag: tag, name: name)
     }
     public func registerEnd(): Unit {
         getDispatcher().registerEnd(category: category, tag: tag)
@@ -37,14 +42,21 @@ public struct AsyncFlow <: Flow<AsyncEndExecutorGetter> {
     public func registerError(): Unit {
         getDispatcher().registerError(category: category, tag: tag)
     }
-    public func registerTask(name: String, task: (Event) -> Event): Unit {
+    public mut func registerTask(name: String, task: (Event) -> Event): Unit {
+        if(startName.size == 0){
+            throw GraphException('There must be with StartExecutor before registering first TaskExecutor')
+        }else if(!hasFirstTask && startName == name){
+            hasFirstTask = true
+        }else if(!hasFirstTask){
+            throw GraphException('First TaskExecutor name must be same as StartExecutor name')
+        }
         getDispatcher().registerTask(category: category, tag: tag, name: name, task: task)
     }
-    public func registerTask(task: Task): Unit {
+    public mut func registerTask(task: Task): Unit {
         registerTask(task.name, task.exec)
     }
     public func start(data: Any): AsyncEndExecutorGetter {
-        match(getDispatcher().start(StartEvent(category: category, tag: tag, data: data))){
+        match(getDispatcher().start(StartEvent(category: category, tag: tag, name: startName, data: data))){
             case x: AsyncEndExecutorGetter => x
             case _ => throw GraphException()
         }

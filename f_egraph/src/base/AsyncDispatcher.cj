@@ -34,9 +34,9 @@ public class AsyncDispatcher <: Dispatcher & AsyncEndExecutorGetter {
             }
         }
     }
-    public func registerStart(category!: String, tag!: String, taskName!: String): Unit {
+    public func registerStart(category!: String, tag!: String, name!: String): Unit {
         synchronized(mutex){
-            dispatcher.registerStart(category: category, tag: tag, taskName: taskName)
+            dispatcher.registerStart(category: category, tag: tag, name: name)
         }
     }
     public func registerEnd(category!: String, tag!: String): Unit {

@@ -18,6 +18,7 @@ package fountain::f_egraph.base
 public class ImmediateDispatcher <: Dispatcher {
     private let executors = HashMap<Event, ArrayList<Executor>>()
     private let eventQueue = LinkedBlockingQueue<Event>()
+
     private func doRegister(name: String, executor: Executor){
         let list = executors.computeIfAbsent(executor.acceptable){
             ArrayList<Executor>()
@@ -28,8 +29,8 @@ public class ImmediateDispatcher <: Dispatcher {
             list.add(executor)
         }
     }
-    public func registerStart(category!: String, tag!: String, taskName!: String): Unit {
-        doRegister('StartExecutor', StartExecutor(acceptingEvent: Event(eventType: EventType.Start, category: category, tag: tag, name: EventType.Start.toString()), accepter: this, taskName: taskName))
+    public func registerStart(category!: String, tag!: String, name!: String): Unit {
+        doRegister('StartExecutor', StartExecutor(acceptingEvent: Event(eventType: EventType.Start, category: category, tag: tag, name: name), accepter: this))
     }
     public func registerError(category!: String, tag!: String): Unit {
         doRegister('ErrorExecutor', ErrorExecutor(acceptingEvent: Event(eventType: EventType.Error, category: category, tag: tag, name: EventType.Error.toString())))

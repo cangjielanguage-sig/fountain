@@ -16,13 +16,13 @@ limitations under the License.
 package fountain::f_egraph.base
 
 public class StartExecutor <: ImmediateExecutor {
-    public StartExecutor(acceptingEvent!: Event, private let taskName!: String, private let accepter!: Accepter){
+    public StartExecutor(acceptingEvent!: Event, private let accepter!: Accepter){
         super(acceptingEvent: acceptingEvent)
     }
 
     public func execute(event: Event) {
         if(let e: DataEvent <- event){
-            accepter.accept(TaskEvent(category: e.category, tag: e.tag, name: taskName, data: e.data))
+            accepter.accept(TaskEvent(category: e.category, tag: e.tag, name: e.name, data: e.data))
         }else{
             throw GraphException('event on executing must be DataEvent, but current is ${TypeInfo.of(event)}')
         }

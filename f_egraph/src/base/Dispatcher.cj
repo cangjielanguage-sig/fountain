@@ -16,7 +16,7 @@ limitations under the License.
 package fountain::f_egraph.base
 
 public abstract class Dispatcher <: Accepter & EndExecutorGetter {
-    public func registerStart(category!: String, tag!: String, taskName!: String): Unit
+    public func registerStart(category!: String, tag!: String, name!: String): Unit
     public func registerError(category!: String, tag!: String): Unit
     public func registerEnd(category!: String, tag!: String): Unit
     public func registerTask(category!: String, tag!: String, name!: String, task!: (Event) -> Event): Unit 
