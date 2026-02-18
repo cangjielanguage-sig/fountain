@@ -347,8 +347,8 @@ public struct App {
 [workspace]
   version = "1.0.0"'''
 )
-.replace('compile-option = ""', 'compile-option = "-O2 --dy-std -Woff all"')
-.replace('override-compile-option = ""', 'override-compile-option = "-O2 --dy-std -Woff all"')
+.replace('compile-option = ""', 'compile-option = "--dy-std -Woff all"')
+.replace('override-compile-option = ""', 'override-compile-option = "--dy-std -Woff all"')
 .replace('[dependencies]', '''
 [dependencies]
   fountain = {git = "https://gitcode.com/Cangjie-SIG/fountain.git", branch = "lts/1.0.0"}'''
@@ -361,38 +361,38 @@ ${content}
 
 [target]
 [target.x86_64-unknown-linux-gnu]
-  compile-option = "-O2 --lto=full --dy-std -Woff all -ldl"
-  override-compile-option = "-O2 --lto=full --dy-std -Woff all -ldl"
+  compile-option = "--lto=full --dy-std -Woff all -ldl"
+  override-compile-option = "--lto=full --dy-std -Woff all -ldl"
 [target.x86_64-unknown-linux-gnu.bin-dependencies]
   path-option = ["\${CANGJIE_STDX_DYNAMIC_PATH}", "\${CANGJIE_FOUNTAIN_LIBS}"]
 [target.aarch64-unknown-linux-gnu]
-  compile-option = "-O2 --lto=full --dy-std -Woff all -ldl"
-  override-compile-option = "-O2 --lto=full --dy-std -Woff all -ldl"
+  compile-option = "--lto=full --dy-std -Woff all -ldl"
+  override-compile-option = "--lto=full --dy-std -Woff all -ldl"
 [target.aarch64-unknown-linux-gnu.bin-dependencies]
   path-option = ["\${CANGJIE_STDX_DYNAMIC_PATH}", "\${CANGJIE_FOUNTAIN_LIBS}"]
 [target.x86_64-w64-mingw32]
-  compile-option = "-O2 --dy-std -Woff all -lcrypt32"
-  override-compile-option = "-O2 --dy-std -Woff all -lcrypt32"
+  compile-option = "--dy-std -Woff all -lcrypt32"
+  override-compile-option = "--dy-std -Woff all -lcrypt32"
 [target.x86_64-w64-mingw32.bin-dependencies]
   path-option = ["\${CANGJIE_STDX_DYNAMIC_PATH}", "\${CANGJIE_FOUNTAIN_LIBS}"]
 [target.x86_64-apple-darwin]
-  compile-option = "-O2 --dy-std -Woff all"
-  override-compile-option = "-O2 --dy-std -Woff all"
+  compile-option = "--dy-std -Woff all"
+  override-compile-option = "--dy-std -Woff all"
 [target.x86_64-apple-darwin.bin-dependencies]
   path-option = ["\${CANGJIE_STDX_DYNAMIC_PATH}", "\${CANGJIE_FOUNTAIN_LIBS}"]
 [target.aarch64-apple-darwin]
-  compile-option = "-O2 --dy-std -Woff all"
-  override-compile-option = "-O2 --dy-std -Woff all"
+  compile-option = "--dy-std -Woff all"
+  override-compile-option = "--dy-std -Woff all"
 [target.aarch64-apple-darwin.bin-dependencies]
   path-option = ["\${CANGJIE_STDX_DYNAMIC_PATH}", "\${CANGJIE_FOUNTAIN_LIBS}"]
 [target.aarch64-linux-ohos]
-  compile-option = "-O2 --dy-std -ldl"
-  override-compile-option = "-O2 --dy-std -ldl"
+  compile-option = "--dy-std -ldl"
+  override-compile-option = "--dy-std -ldl"
 [target.aarch64-linux-ohos.bin-dependencies]
   path-option = ["\${CANGJIE_STDX_DYNAMIC_PATH}, "\${CANGJIE_FOUNTAIN_LIBS}""]
 [target.x86_64-linux-ohos]
-  compile-option = "-O2 --dy-std -ldl"
-  override-compile-option = "-O2 --dy-std -ldl"
+  compile-option = "--dy-std -ldl"
+  override-compile-option = "--dy-std -ldl"
 [target.x86_64-linux-ohos.bin-dependencies]
   path-option = ["\${CANGJIE_STDX_DYNAMIC_PATH}, "\${CANGJIE_FOUNTAIN_LIBS}""]
 '''

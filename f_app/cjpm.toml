@@ -7,8 +7,8 @@
   target-dir = ""
   src-dir = ""
   output-type = "dynamic"
-  compile-option = ""
-  override-compile-option = ""
+  compile-option = "--dy-std"
+  override-compile-option = "--dy-std"
   link-option = ""
   package-configuration = {}
   category = ["Utility"]

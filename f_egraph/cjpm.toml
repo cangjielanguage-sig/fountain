@@ -1,0 +1,19 @@
+[package]
+  cjc-version = "1.1.0"
+  name = "f_egraph"
+  organization = "fountain"
+  description = "一个事件驱动的流程管理器"
+  compile-option = "--dy-std"
+  override-compile-option = "--dy-std"
+  version = "1.1.0"
+  target-dir = ""
+  script-dir = ""
+  output-type = "dynamic"
+  link-option = ""
+  package-configuration = {}
+
+[dependencies]
+  "fountain::f_base" = {path = "../f_base"}
+  "fountain::f_collection" = {path = "../f_collection"}
+  "fountain::f_data" = {path = "../f_data"}
+  "fountain::f_log" = {path = "../f_log"}

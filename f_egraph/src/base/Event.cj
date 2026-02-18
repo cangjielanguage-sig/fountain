@@ -1,0 +1,76 @@
+/*
+Copyright (c) 2025 WuJingrun（吴京润）
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+package fountain::f_egraph.base
+ 
+public open class Event <: ToString & Hashable & Equatable<Event> {
+    private let hash: Int64
+    public Event(
+        public let eventType!: EventType,
+        public let category!: String,
+        public let tag!: String,
+        public let name!: String 
+    ){
+        hash = HashBuilder().append(eventType).append(category).append(tag).append(name).build()
+    }
+    public operator func ==(other: Event): Bool {
+        return hash == other.hash && eventType == other.eventType && category == other.category && 
+                tag == other.tag && name == other.name
+    }
+    public func hashCode(): Int64 {
+        return hash
+    }
+    public func toString(): String {
+        return "Event(eventType: ${eventType}, category: ${category}, tag: ${tag}, name: ${name})"
+    }
+}
+
+public open class DataEvent <: Event {
+    public DataEvent (
+        eventType!: EventType,
+        category!: String,
+        tag!: String,
+        name!: String,
+        public let data!: Any
+    ) {
+        super(eventType: eventType, category: category, tag: tag, name: name)
+    }
+    public func tryGet<T>(): ?T {
+        data as T
+    }
+}
+public class StartEvent <: DataEvent {
+    public init(category!: String, tag!: String, data!: Any){
+        super(eventType: Start, category: category, tag: tag, name: EventType.Start.toString(), data: data)
+    }
+}
+public class EndEvent <: DataEvent {
+    public init(category!: String, tag!: String, data!: Any){
+        super(eventType: End, category: category, tag: tag, name: EventType.End.toString(), data: data)
+    }
+}
+public class TaskEvent <: DataEvent {
+    public init(category!: String, tag!: String, name!: String, data!: Any){
+        super(eventType: EventType.Task, category: category, tag: tag, name: name, data: data)
+    }
+}
+public class ErrorEvent <: DataEvent {
+    public init(category!: String, tag!: String, message!: String){
+        super(eventType: EventType.Error, category: category, tag: tag, name: EventType.Error.toString(), data: message)
+    }
+    public init(category!: String, tag!: String, error!: Exception){
+        super(eventType: EventType.Error, category: category, tag: tag, name: EventType.Error.toString(), data: error)
+    }
+}
