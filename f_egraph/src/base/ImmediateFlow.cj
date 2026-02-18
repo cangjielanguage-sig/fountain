@@ -35,8 +35,8 @@ public struct ImmediateFlow <: Flow<EndExecutorGetter> & Hashable & Equatable<Im
             ImmediateDispatcher()
         }
     }
-    public func registerStart(): Unit {
-        getDispatcher().registerStart(category: category, tag: tag)
+    public func registerStart(taskName: String): Unit {
+        getDispatcher().registerStart(category: category, tag: tag, taskName: taskName)
     }
     public func registerEnd(): Unit {
         getDispatcher().registerEnd(category: category, tag: tag)

@@ -17,7 +17,7 @@ package fountain::f_egraph.base
 
 public interface Flow<G> where G <: EndExecutorGetter {
     static func remove(category!: String, tag!: String): Unit 
-    func registerStart(): Unit
+    func registerStart(taskName: String): Unit
     func registerEnd(): Unit
     func registerError(): Unit
     func registerTask(name: String, task: (Event) -> Event): Unit

@@ -28,11 +28,11 @@ public class ImmediateDispatcher <: Dispatcher {
             list.add(executor)
         }
     }
-    public func registerStart(category!: String, tag!: String): Unit {
-        doRegister('StartExecutor', StartExecutor(acceptingEvent: Event(eventType: EventType.Start, category: category, tag: tag, name: EventType.Start.toString()), accepter: this))
+    public func registerStart(category!: String, tag!: String, taskName!: String): Unit {
+        doRegister('StartExecutor', StartExecutor(acceptingEvent: Event(eventType: EventType.Start, category: category, tag: tag, name: EventType.Start.toString()), accepter: this, taskName: taskName))
     }
     public func registerError(category!: String, tag!: String): Unit {
-        doRegister(ErrorExecutor(acceptingEvent: Event(eventType: EventType.Error, category: category, tag: tag, name: EventType.Error.toString())))
+        doRegister('ErrorExecutor', ErrorExecutor(acceptingEvent: Event(eventType: EventType.Error, category: category, tag: tag, name: EventType.Error.toString())))
     }
     public func registerEnd(category!: String, tag!: String): Unit {
         doRegister('EndExecutor', EndExecutor(acceptingEvent: Event(eventType: EventType.End, category: category, tag: tag, name: EventType.End.toString())))

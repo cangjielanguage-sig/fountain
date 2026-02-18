@@ -16,8 +16,8 @@ limitations under the License.
 package fountain::f_egraph.base
 
 public struct AsyncFlow <: Flow<AsyncEndExecutorGetter> {
-    private static var dispatcher =  None<AsyncDispatcher>
-    public static func initDispatcher(clearTimerDuration!: Duration = Duration.second, toThrowIfNoExecutor!: Bool = true){
+    private static var dispatcher = None<AsyncDispatcher>
+    public static func initDispatcher(clearTimerDuration!: Duration = Duration.second, toThrowIfNoExecutor!: Bool = true): Unit {
         dispatcher = AsyncDispatcher(clearTimerDuration: clearTimerDuration, toThrowIfNoExecutor: toThrowIfNoExecutor)
     }
     public AsyncFlow(private let category!: String, private let tag!: String){}
@@ -25,24 +25,27 @@ public struct AsyncFlow <: Flow<AsyncEndExecutorGetter> {
         dispatcher?.removeIf{e => e.category == category && e.tag == tag}
     } 
     
-    public func registerStart(): Unit {
-        dispatcher?.registerStart(category: category, tag: tag)
+    private func getDispatcher(){
+        dispatcher.getOrThrow()
+    }
+    public func registerStart(taskName: String): Unit {
+        getDispatcher().registerStart(category: category, tag: tag, taskName: taskName)
     }
     public func registerEnd(): Unit {
-        dispatcher?.registerEnd(category: category, tag: tag)
+        getDispatcher().registerEnd(category: category, tag: tag)
     }
     public func registerError(): Unit {
-        dispatcher?.registerError(category: category, tag: tag)
+        getDispatcher().registerError(category: category, tag: tag)
     }
     public func registerTask(name: String, task: (Event) -> Event): Unit {
-        dispatcher?.registerTask(category: category, tag: tag, name: name, task: task)
+        getDispatcher().registerTask(category: category, tag: tag, name: name, task: task)
     }
     public func registerTask(task: Task): Unit {
         registerTask(task.name, task.exec)
     }
     public func start(data: Any): AsyncEndExecutorGetter {
-        match(dispatcher?.start(StartEvent(category: category, tag: tag, data: data))){
-            case Some(x: AsyncEndExecutorGetter) => x
+        match(getDispatcher().start(StartEvent(category: category, tag: tag, data: data))){
+            case x: AsyncEndExecutorGetter => x
             case _ => throw GraphException()
         }
     }
