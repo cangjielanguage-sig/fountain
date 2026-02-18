@@ -3,7 +3,7 @@ CREATE TEXT SEARCH CONFIGURATION chinese_english (PARSER = zhparser);
 ALTER TEXT SEARCH CONFIGURATION chinese_english ADD MAPPING FOR n,v,a,i,e,l WITH simple;
 ALTER ROLE ALL SET zhparser.punctuation_ignore = ON;
 ALTER ROLE ALL SET zhparser.multi_short = ON;
-
+-----------------------------------------------------
 CREATE OR REPLACE FUNCTION update_modified_column()
 RETURNS TRIGGER AS $$
 BEGIN
