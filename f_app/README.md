@@ -17,7 +17,7 @@ main(args: Array<String>): Unit {
 ### `workspace <name> <FountainVersion>`
 在工作目录创建workspace项目
 `<name>`可以是一个标识符，将在当前目录创建仓颉workspace项目；也可以是绝对路径，将在`<name>`表示的路径初始化workspace项目；也可以相对路径，将在`<name>`表示的相对于当前目录的子目录初始化workspace项目
-`FountainVersion`是即将创建的项目所依赖的fountain版本号，此命令将自动添加`fountain::f_base`和`fountain::f_version`依赖。
+`FountainVersion`是即将创建的项目所依赖的fountain版本号，此命令将自动添加`fountain::f_base`和`fountain::f_version`中心仓依赖。
 
 ### cleanUpdate 
 工作目录是仓颉项目，并为此项目执行`cjpm clean; cjpm update`
