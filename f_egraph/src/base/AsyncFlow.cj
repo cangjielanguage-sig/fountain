@@ -28,9 +28,9 @@ public class AsyncFlow <: Flow<AsyncEndExecutorGetter> {
                 let dependencied = StringGenerator()
                 for(d in x){
                     if(dependencied.size > 0){
-                        dependencied.add(', ')
+                        dependencied.append(', ')
                     }
-                    dependencied.add(d)
+                    dependencied.append(d)
                 }
                 throw GraphException('${flow} to be removed is dependencied by ${dependencied}')
             }else{
@@ -59,7 +59,11 @@ public class AsyncFlow <: Flow<AsyncEndExecutorGetter> {
     private func getDispatcher(){
         dispatcher.getOrThrow()
     }
-
+    public prop dependencied: ConcurrentHashSet<String>{
+        get(){
+            dependencied_.computeIfAbsent(this){ConcurrentHashSet<String>()}
+        }
+    }
     private var startName = ''
     private var hasFirstTask = false
 

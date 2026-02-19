@@ -434,6 +434,10 @@ public interface Task{
  */
 public interface Flow<G> where G <: EndExecutorGetter {
     /**
+     * 返回的是把当前流程当作子流程依赖的其它流程，集合保存的字符串是流程的'${category}-${tag}'
+     */
+    prop dependencied: ConcurrentHashSet<String>
+    /**
      * 删除指定流程
      */
     static func remove(category!: String, tag!: String): Unit 

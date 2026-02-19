@@ -15,7 +15,7 @@ limitations under the License.
 */
 package fountain::f_egraph.base
 
-public class ImmediateFlow <: Flow<EndExecutorGetter> & Hashable & Equatable<ImmediateFlow> {
+public class ImmediateFlow <: Flow<EndExecutorGetter> {
     private static let dispatchers = ConcurrentHashMap<ImmediateFlow, ImmediateDispatcher>()
     private static let dependencied_ = ConcurrentHashMap<ImmediateFlow, ConcurrentHashSet<String>>()
     let h: Int64
@@ -29,9 +29,9 @@ public class ImmediateFlow <: Flow<EndExecutorGetter> & Hashable & Equatable<Imm
                 let dependencied = StringGenerator()
                 for(d in x){
                     if(dependencied.size > 0){
-                        dependencied.add(', ')
+                        dependencied.append(', ')
                     }
-                    dependencied.add(d)
+                    dependencied.append(d)
                 }
                 throw GraphException('${flow} to be removed is dependencied by ${dependencied}')
             }else{
