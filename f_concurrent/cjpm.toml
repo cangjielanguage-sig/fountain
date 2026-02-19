@@ -8,7 +8,7 @@
   cjc-version = "1.1.0"
   compile-option = "--dy-std"
   override-compile-option = "--dy-std"
-  description = "load balance, rate limited, some concurrent collections"
+  description = "负载均衡、限流算法、标准库尚不支持的并发集合和标准库并发集合扩展"
   link-option = ""
   name = "f_concurrent"
   organization="fountain"

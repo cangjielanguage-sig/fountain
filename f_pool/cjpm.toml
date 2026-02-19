@@ -6,7 +6,7 @@
   cjc-version = "1.1.0"
   compile-option = "--dy-std"
   override-compile-option = "--dy-std"
-  description = "a pool implementation"
+  description = "一个池的实现，提供了对象池、数组池、ArrayList池"
   link-option = ""
   name = "f_pool"
   organization="fountain"

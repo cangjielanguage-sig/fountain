@@ -2,7 +2,7 @@
   cjc-version = "1.1.0"
   name = "f_rx"
   organization = "fountain"
-  description = "反应式编程"
+  description = "反应式编程API"
   version = "1.1.0"
   target-dir = ""
   src-dir = ""

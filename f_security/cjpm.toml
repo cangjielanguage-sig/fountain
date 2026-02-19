@@ -2,7 +2,7 @@
   cjc-version = "1.1.0"
   compile-option = "--dy-std"
   override-compile-option = "--dy-std"
-  description = "配置MVC使用的安全模块"
+  description = "配合MVC使用的安全模块"
   link-option = ""
   name = "f_security"
   organization="fountain"

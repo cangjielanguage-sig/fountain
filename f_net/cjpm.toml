@@ -9,7 +9,7 @@
   cjc-version = "1.1.0"
   compile-option = "--dy-std"
   override-compile-option = "--dy-std"
-  description = "网络通讯"
+  description = "事件驱动的网络通讯模块"
   link-option = ""
   name = "f_net"
   organization="fountain"

@@ -2,7 +2,7 @@
   cjc-version = "1.1.0"
   name = "f_protocol"
   organization="fountain"
-  description = "a protocol implementation"
+  description = "一个网络通讯协议实现"
   version = "1.1.0"
   target-dir = ""
   src-dir = ""

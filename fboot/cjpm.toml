@@ -5,7 +5,7 @@
   cjc-version = "1.1.0"
   compile-option = "--dy-std"
   override-compile-option = "--dy-std"
-  description = "fountain boot program"
+  description = "依赖fountain的应用项目启动程序"
   link-option = ""
   name = "fboot"
   output-type = "executable"

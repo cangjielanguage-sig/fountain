@@ -12,7 +12,7 @@
   cjc-version = "1.1.0"
   compile-option = "--dy-std"
   override-compile-option = "--dy-std"
-  description = "数据复制模块"
+  description = "数据复制、数据验证"
   link-option = ""
   name = "f_data"
   organization="fountain"

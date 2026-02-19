@@ -4,7 +4,7 @@
   cjc-version = "1.1.0"
   compile-option = "--dy-std"
   override-compile-option = "--dy-std"
-  description = "时间扩展"
+  description = "标准库的时间API扩展"
   link-option = ""
   name = "f_time"
   organization="fountain"

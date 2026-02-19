@@ -2,7 +2,7 @@
   cjc-version = "1.1.0"
   name = "f_codec"
   organization="fountain"
-  description = "codec"
+  description = "编解码器"
   version = "1.1.0"
   target-dir = ""
   src-dir = ""

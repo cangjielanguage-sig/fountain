@@ -2,7 +2,7 @@
   cjc-version = "1.1.0"
   name = "f_egraph"
   organization = "fountain"
-  description = "一个事件驱动的流程管理器"
+  description = "一个事件驱动的业务流程执行器"
   compile-option = "--dy-std"
   override-compile-option = "--dy-std"
   version = "1.1.0"
