@@ -17,7 +17,7 @@ package fountain::f_egraph.base
 
 public class ImmediateFlow <: Flow<EndExecutorGetter> & Hashable & Equatable<ImmediateFlow> {
     private static let dispatchers = ConcurrentHashMap<ImmediateFlow, ImmediateDispatcher>()
-    private static let dependencied_ = ConcurrentHashMap<ImmediateFlow, ConcurrentHashSet<String>()
+    private static let dependencied_ = ConcurrentHashMap<ImmediateFlow, ConcurrentHashSet<String>>()
     let h: Int64
     public ImmediateFlow(let category!: String, let tag!: String){
         h = HashBuilder().append(category).append(tag).build()
@@ -50,7 +50,6 @@ public class ImmediateFlow <: Flow<EndExecutorGetter> & Hashable & Equatable<Imm
     public operator func ==(other: AsyncFlow): Bool {
         h == other.h && category == other.category && tag == other.tag
     }
-    public operator 
     public func toString(): String {
         '${category}-${tag}'
     }

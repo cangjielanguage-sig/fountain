@@ -20,7 +20,7 @@ public class AsyncFlow <: Flow<AsyncEndExecutorGetter> {
     public static func initDispatcher(clearTimerDuration!: Duration = Duration.second, toThrowIfNoExecutor!: Bool = true): Unit {
         dispatcher = AsyncDispatcher(clearTimerDuration: clearTimerDuration, toThrowIfNoExecutor: toThrowIfNoExecutor)
     }
-    private static let dependencied_ = ConcurrentHashMap<AsyncFlow, ConcurrentHashSet<String>()
+    private static let dependencied_ = ConcurrentHashMap<AsyncFlow, ConcurrentHashSet<String>>()
     public static func remove(category!: String, tag!: String): Unit {
         let flow = AsyncFlow(category: category, tag: tag)
         if(let Some(x) <- dependencied_.get(flow)){
@@ -53,7 +53,9 @@ public class AsyncFlow <: Flow<AsyncEndExecutorGetter> {
     public operator func ==(other: ImmediateFlow): Bool {
         h == other.h && category == other.category && tag == other.tag
     }
-
+    public func toString(): String {
+        '${category}-${tag}'
+    }
     private func getDispatcher(){
         dispatcher.getOrThrow()
     }
