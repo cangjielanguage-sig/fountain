@@ -26,24 +26,24 @@ public interface Flow<G> where G <: EndExecutorGetter {
      * 使用指定流程作为任务执行器的构造函数参数
      * @param flow 任务事件执行器的逻辑
      */
-    public func registerTaskByFlow<G, F>(name!: String, flow!: F): Unit where G <: EndExecutorGetter, F <: Flow<G> {
-        registerTask(name: name, task: {e => flow.start(((e as DataEvent).getOrThrow()).data).get().get()})
+    mut func registerTaskByFlow<G, F>(name!: String, flow!: F): Unit where G <: EndExecutorGetter, F <: Flow<G> {
+        registerTask(name) {e => flow.start(((e as DataEvent).getOrThrow()).data).get().get()}
     }
     /**
      * 使用指定的同步流程作为任务执行器的构造函数参数
      * @param subCategory 子流程的唯一标识
      * @param subTag 子流程的版本
      */
-    public func registerTaskByImmediateFlow(name!: String, subCategory!: String, subTag!: String): Unit {
-        registerTaskByFlow<EndExecutorGetter, ImmediateFlow>(acceptingEvent: acceptingEvent, accepter: accepter, flow: ImmediateFlow(category: subCategory, tag: subTag))
+    mut func registerTaskByImmediateFlow(name!: String, subCategory!: String, subTag!: String): Unit {
+        registerTaskByFlow<EndExecutorGetter, ImmediateFlow>(name: name, flow: ImmediateFlow(category: subCategory, tag: subTag))
     }
     /**
      * 使用指定的异步流程作为任务执行器的构造函数参数
      * @param subCategory 子流程的唯一标识
      * @param subTag 子流程的版本
      */
-    public func registerTaskByAsyncFlow(name!: String, subCategory!: String, subTag!: String): Unit {
-        registerTaskByFlow<AsyncEndExecutorGetter, AsyncFlow>(acceptingEvent: acceptingEvent, accepter: accepter, flow: AsyncFlow(category: subCategory, tag: subTag))
+    mut func registerTaskByAsyncFlow(name!: String, subCategory!: String, subTag!: String): Unit {
+        registerTaskByFlow<AsyncEndExecutorGetter, AsyncFlow>(name: name, flow: AsyncFlow(category: subCategory, tag: subTag))
     }
     func start(data: Any): G
 }
