@@ -19,7 +19,15 @@ public class TaskExecutor <: ImmediateExecutor {
     public TaskExecutor(acceptingEvent!: Event, private let accepter!: Accepter, private let task!: (Event) -> Event){
         super(acceptingEvent: acceptingEvent)
     }
-
+    public static func newByFlow<G, F>(acceptingEvent!: Event, accepter!: Accepter, flow!: F): TaskExecutor where G <: EndExecutorGetter, F <: Flow<G> {
+        TaskExecutor(acceptingEvent: acceptingEvent, accepter: accepter, task: {e => flow.start(((e as DataEvent).getOrThrow()).data).get().get()})
+    }
+    public static func newByImmediateFlow(acceptingEvent!: Event, accepter!: Accepter, subCategory!: String, subTag!: String): TaskExecutor {
+        newByFlow<EndExecutorGetter, ImmediateFlow>(acceptingEvent: acceptingEvent, accepter: accepter, flow: ImmediateFlow(category: subCategory, tag: subTag))
+    }
+    public static func newByAsyncFlow(acceptingEvent!: Event, accepter!: Accepter, subCategory!: String, subTag!: String): TaskExecutor  {
+        newByFlow<AsyncEndExecutorGetter, AsyncFlow>(acceptingEvent: acceptingEvent, accepter: accepter, flow: AsyncFlow(category: subCategory, tag: subTag))
+    }
     public func execute(event: Event): Unit {
         accepter.accept(task(event))
     }

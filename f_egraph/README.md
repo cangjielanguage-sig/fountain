@@ -79,8 +79,11 @@ public open class DataEvent <: Event {
 ### 开始事件`StartEvent`
 ```cj
 public class StartEvent <: DataEvent {
-    public init(category!: String, tag!: String, data!: Any){
-        super(eventType: Start, category: category, tag: tag, name: EventType.Start.toString(), data: data)
+    /**
+     * 开始事件对应的StartExecutor什么也不做只是把数据转给流程的第一个任务执行器，为了任务执行器能收到事件，开始事件的name必须与第一个任务执行器的事件名一致
+     */
+    public init(category!: String, tag!: String, name!: String, data!: Any){
+        super(eventType: Start, category: category, tag: tag, name: name, data: data)
     }
 }
 ```
@@ -172,6 +175,9 @@ public abstract class ImmediateExecutor <: Executor {
 ```cj
 public class StartExecutor <: ImmediateExecutor {
     /**
+     * 一个流程必须且只能有一个开始事件执行器，它是流程的起点。
+     * StartExecutor什么也不做，只是把它的事件发给流程的第一个任务执行器。
+     * 
      * @param acceptingEvent 当前执行器接收的事件
      * @param accepter 当前执行器把事件
      */
@@ -187,6 +193,10 @@ public class StartExecutor <: ImmediateExecutor {
 
 #### 结束事件执行器`EndExecutor`
 ```cj
+/**
+ * 一个流程必须且只能有一个结束事件执行器。
+ * 结束事件执行器什么也不做只是接收到事件，并在调用它的get/tryGet函数时返回事件包含的数据。
+ */
 public class EndExecutor <: ImmediateExecutor {
     public init(acceptingEvent!: Event){
         super(acceptingEvent: acceptingEvent)
@@ -206,6 +216,11 @@ public class EndExecutor <: ImmediateExecutor {
 
 #### 错误事件执行器`ErrorExecutor`
 ```cj
+/**
+ * 一个流程可以有零或一个错误事件执行器。
+ * 错误事件执行器把接收到的错误信息包装成fountain::f_egraph.exception.GraphException并抛出去。
+ * 如果需要流程内部处理错误，则把错误作为任务事件交给专门的任务事件执行器处理。
+ */
 public class ErrorExecutor <: ImmediateExecutor {
     public init(acceptingEvent!: Event){
         super(acceptingEvent: acceptingEvent)
@@ -227,10 +242,37 @@ public class ErrorExecutor <: ImmediateExecutor {
 #### 同步任务事件执行器`TaskExecutor`
 ```cj
 public class TaskExecutor <: ImmediateExecutor {
+    /**
+     * @param acceptingEvent 当前任务事件执行器接收到的事件
+     * @param accepter 当前任务事件执行器的task返回的事件转发的目标
+     * @param task 任务事件执行器的逻辑
+     */
     public TaskExecutor(acceptingEvent!: Event, private let accepter!: Accepter, private let task!: (Event) -> Event){
         super(acceptingEvent: acceptingEvent)
     }
-
+    /**
+     * 使用指定流程作为任务执行器的构造函数参数
+     * @param acceptingEvent 当前任务事件执行器接收到的事件
+     * @param accepter 当前任务事件执行器的task返回的事件转发的目标
+     * @param flow 用一个流程作为任务事件执行器的逻辑
+     */
+    public static func newByFlow<G, F>(acceptingEvent!: Event, accepter!: Accepter, flow!: F): TaskExecutor where G <: EndExecutorGetter, F <: Flow<G> 
+    /**
+     * 使用指定的同步流程作为任务执行器的构造函数参数
+     * @param acceptingEvent 当前任务事件执行器接收到的事件
+     * @param accepter 当前任务事件执行器的task返回的事件转发的目标
+     * @param subCategory 子流程的唯一标识
+     * @param subTag 子流程的版本
+     */
+    public static func newByImmediateFlow(acceptingEvent!: Event, accepter!: Accepter, subCategory!: String, subTag!: String): TaskExecutor 
+    /**
+     * 使用指定的异步流程作为任务执行器的构造函数参数
+     * @param acceptingEvent 当前任务事件执行器接收到的事件
+     * @param accepter 当前任务事件执行器的task返回的事件转发的目标
+     * @param subCategory 子流程的唯一标识
+     * @param subTag 子流程的版本
+     */
+    public static func newByAsyncFlow(acceptingEvent!: Event, accepter!: Accepter, subCategory!: String, subTag!: String): TaskExecutor  
     public func execute(event: Event): Unit {
         accepter.accept(task(event))
     }
@@ -250,16 +292,18 @@ public class AsyncTaskExecutor <: Executor {
 ```
 
 ## 事件调度器`Dispatcher`
-所有事件执行器都注册到调度器实现类的实例当中，所有
 ```cj
+/**
+ * 所有事件执行器都注册到调度器实现类的实例当中
+ * 所有函数的category参数都是用来区分流程的标识。
+ * tag是同一流程的版本标识，同一流程的不同版本不能长时间共存，应当尽快删除旧版
+ */
 public abstract class Dispatcher <: Accepter & EndExecutorGetter {
     /**
      * 注册开始事件执行器，一个流程只能有一个开始事件执行器
-     * @param category
-     * @param tag
-     * @param taskName  开始事件之后的任务执行器的名称
+     * @param name  开始事件名，必须与流程的第一个任务事件执行器所拥有的事件名相同
      */
-    public func registerStart(category!: String, tag!: String, taskName!: String): Unit
+    public func registerStart(category!: String, tag!: String, name!: String): Unit
     /**
      * 注册错误事件执行器，一个流程只能有一个错误事件执行器
      */
@@ -271,7 +315,30 @@ public abstract class Dispatcher <: Accepter & EndExecutorGetter {
     /**
      * 注册任务事件执行器，一个流程可以有大于等于一个开始事件执行器
      */
-    public func registerTask(category!: String, tag!: String, name!: String, task!: (Event) -> Event): Unit 
+    public func registerTask(category!: String, tag!: String, name!: String, task!: (Event) -> Event): Unit
+    /**
+     * 使用指定流程作为任务执行器的构造函数参数
+     * @param flow 任务事件执行器的逻辑
+     */
+    public func registerTaskByFlow<G, F>(category!: String, tag!: String, name!: String, flow!: F): Unit where G <: EndExecutorGetter, F <: Flow<G> {
+        registerTask(category: category, tag: tag, name: name, task: {e => flow.start(((e as DataEvent).getOrThrow()).data).get().get()})
+    }
+    /**
+     * 使用指定的同步流程作为任务执行器的构造函数参数
+     * @param subCategory 子流程的唯一标识
+     * @param subTag 子流程的版本
+     */
+    public func registerTaskByImmediateFlow(category!: String, tag!: String, name!: String, subCategory!: String, subTag!: String): Unit {
+        registerTaskByFlow<EndExecutorGetter, ImmediateFlow>(category: category, tag: tag, name: name, flow: ImmediateFlow(category: subCategory, tag: subTag))
+    }
+    /**
+     * 使用指定的异步流程作为任务执行器的构造函数参数
+     * @param subCategory 子流程的唯一标识
+     * @param subTag 子流程的版本
+     */
+    public func registerTaskByAsyncFlow(category!: String, tag!: String, name!: String, subCategory!: String, subTag!: String): Unit {
+        registerTaskByFlow<AsyncEndExecutorGetter, AsyncFlow>(category: category, tag: tag, name: name, flow: AsyncFlow(category: subCategory, tag: subTag))
+    }
     /**
      * 调度事件执行器。必须先接收到一个事件才能调用本函数
      */
@@ -302,7 +369,7 @@ public abstract class Dispatcher <: Accepter & EndExecutorGetter {
 ### 同步调度器`ImmediateDispatcher`
 ```cj
 public class ImmediateDispatcher <: Dispatcher {
-    public func registerStart(category!: String, tag!: String, taskName!: String): Unit 
+    public func registerStart(category!: String, tag!: String, name!: String): Unit 
     public func registerError(category!: String, tag!: String): Unit 
     public func registerEnd(category!: String, tag!: String): Unit 
     public func registerTask(category!: String, tag!: String, name!: String, task!: (Event) -> Event): Unit 
@@ -335,7 +402,7 @@ public class AsyncDispatcher <: Dispatcher & AsyncEndExecutorGetter {
     public AsyncDispatcher(
         clearTimerDuration!: Duration = Duration.second,
         private let toThrowIfNoExecutor!: Bool = true)
-    public func registerStart(category!: String, tag!: String, taskName!: String): Unit 
+    public func registerStart(category!: String, tag!: String, name!: String): Unit 
     public func registerEnd(category!: String, tag!: String): Unit 
     public func registerError(category!: String, tag!: String): Unit 
     public func registerTask(category!: String, tag!: String, name!: String, task!: (Event) -> Event): Unit 
@@ -383,15 +450,20 @@ public interface Task{
 
 ## 流程`Flow<G> where G <: EndExecutorGetter`
 ```cj
+/**
+ * 创建一个流程，
+ * category是流程唯一标识，tag是流程的版本标识
+ * name是事件执行器所对应的事件名称
+ */
 public interface Flow<G> where G <: EndExecutorGetter {
     /**
      * 删除指定流程
      */
     static func remove(category!: String, tag!: String): Unit 
     /**
-     * 向流程注册开始事件执行器
+     * 向流程注册开始事件执行器，name是开始事件名，必须与流程的第一个任务事件执行器对应的事件名称相同
      */
-    func registerStart(taskName: String): Unit
+    func registerStart(name: String): Unit
     /**
      * 向流程注册结束事件执行器
      */
@@ -409,6 +481,29 @@ public interface Flow<G> where G <: EndExecutorGetter {
      */
     func registerTask(task: Task): Unit
     /**
+     * 使用指定流程作为任务执行器的构造函数参数
+     * @param flow 任务事件执行器的逻辑
+     */
+    public func registerTaskByFlow<G, F>(name!: String, flow!: F): Unit where G <: EndExecutorGetter, F <: Flow<G> {
+        registerTask(name: name, task: {e => flow.start(((e as DataEvent).getOrThrow()).data).get().get()})
+    }
+    /**
+     * 使用指定的同步流程作为任务执行器的构造函数参数
+     * @param subCategory 子流程的唯一标识
+     * @param subTag 子流程的版本
+     */
+    public func registerTaskByImmediateFlow(name!: String, subCategory!: String, subTag!: String): Unit {
+        registerTaskByFlow<EndExecutorGetter, ImmediateFlow>(acceptingEvent: acceptingEvent, accepter: accepter, flow: ImmediateFlow(category: subCategory, tag: subTag))
+    }
+    /**
+     * 使用指定的异步流程作为任务执行器的构造函数参数
+     * @param subCategory 子流程的唯一标识
+     * @param subTag 子流程的版本
+     */
+    public func registerTaskByAsyncFlow(name!: String, subCategory!: String, subTag!: String): Unit {
+        registerTaskByFlow<AsyncEndExecutorGetter, AsyncFlow>(acceptingEvent: acceptingEvent, accepter: accepter, flow: AsyncFlow(category: subCategory, tag: subTag))
+    }
+    /**
      * 将data包装成开始事件，开始执行一个流程
      */
     func start(data: Any): G
@@ -425,7 +520,7 @@ public struct ImmediateFlow <: Flow<EndExecutorGetter> & Hashable & Equatable<Im
     public static func remove(category!: String, tag!: String): Unit 
     public func hashCode(): Int64 
     public operator func ==(other: ImmediateFlow): Bool 
-    public func registerStart(taskName: String): Unit 
+    public func registerStart(name: String): Unit 
     public func registerEnd(): Unit 
     public func registerError(): Unit 
     public func registerTask(name: String, task: (Event) -> Event): Unit 
@@ -448,7 +543,7 @@ public struct AsyncFlow <: Flow<AsyncEndExecutorGetter> {
     public AsyncFlow(private let category!: String, private let tag!: String){}
     public static func remove(category!: String, tag!: String): Unit 
     
-    public func registerStart(taskName: String): Unit 
+    public func registerStart(name: String): Unit 
     public func registerEnd(): Unit 
     public func registerError(): Unit 
     public func registerTask(name: String, task: (Event) -> Event): Unit 

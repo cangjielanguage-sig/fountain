@@ -20,10 +20,10 @@ public struct AsyncFlow <: Flow<AsyncEndExecutorGetter> {
     public static func initDispatcher(clearTimerDuration!: Duration = Duration.second, toThrowIfNoExecutor!: Bool = true): Unit {
         dispatcher = AsyncDispatcher(clearTimerDuration: clearTimerDuration, toThrowIfNoExecutor: toThrowIfNoExecutor)
     }
-    public AsyncFlow(private let category!: String, private let tag!: String){}
     public static func remove(category!: String, tag!: String): Unit {
         dispatcher?.removeIf{e => e.category == category && e.tag == tag}
-    } 
+    }
+    public AsyncFlow(private let category!: String, private let tag!: String){}
     
     private func getDispatcher(){
         dispatcher.getOrThrow()
