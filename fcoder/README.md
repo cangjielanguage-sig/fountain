@@ -47,7 +47,7 @@ END;
 $$ LANGUAGE plpgsql;
 ```
 ## 表
-[所有建表sql](./fcoder.sql)
+[所有建表sql](./docs/fcoder.sql)
 - 大模型配置`llm_conf`
 大模型的配置都在这个表，安装本项目后务必将所需大模型保存到此表
 - 记录tokens使用情况`llm_token_usage`
