@@ -861,7 +861,6 @@ extend<T> Array<T> {
 extend<T> ExtendedType<T> <: ExtendInterface<T> where T <: SuperGenericType {}
 ```
 
-
 ## 集合
 >以下添加元素都用`add`方法添加，修改可以使用`[]`下标方式修改， 移除是`remove`, 列表是`remove(at: 1)`
 - Array：不需要增加和删除元素，但需要修改元素
@@ -871,6 +870,42 @@ extend<T> ExtendedType<T> <: ExtendInterface<T> where T <: SuperGenericType {}
 - HashMap：希望存储一系列的映射关系
   - 字面量:  `let map:HashMap<String, Int> = HashMap( ("A", 1), ("B", 2), ("C",3) )`
 
+## 异常
+所有异常都是`std.core.Exception`的子类
+```cj
+try{
+    throw Exception()//主动抛出一个异常
+    //try内抛出的异常会被catch捕获
+}catch(e: Exception1){//当前catch块可以捕获的异常类型，指定异常和它的子类型会被捕获
+    //可以在catch块内处理这个异常，或者包装后重新抛出
+    throw Exception(e)
+}catch(e: Exception2 | Exception3){//一个catch块可以捕获多个不同类型的异常
+
+}catch(_){//不论什么类型的异常都会被捕获，被捕获的异常会被忽略无法在catch内使用
+    //
+}finally{
+    //在try块捕获的catch块结束以后，finally块的代码一定会执行不论有没有异常
+}
+```
+⚠️ **注意**：
+- catch(_) 和catch(e: Exception) 只能是最后一个catch块，且此二者一个try块只能使用一个
+- try块后面可以有零个或多个catch块，finally可以有也可以没有
+    - 可以同时有try catch finally
+    - 可以只有try catch
+    - 可以只有try finally
+- try表达式不论有没有finally块的类型
+    - 是try块和各个catch块的最小公共父类型
+    - 当最小公共父类型是Any时可在赋值表达式右边但是不可用于变量类型推断，也不可用于函数类型推断
+
+## 自动关闭
+实现了`std.core.Resource`接口的类型的实例可以使用try-with-resource关闭
+```cj
+try(a = Resource1()
+    b = Resource2()){
+    // 在此处使用a b两个变量，a b 不可变
+}
+```
+⚠️ **注意**：try-with-resource的类型是`Unit`
 
 ## 包
 
@@ -1060,7 +1095,7 @@ main() {
 ### `std.core`
 core 包是标准库的核心包，提供了适用仓颉语言编程最基本的一些 API 能力。
 
-提供了内置类型（有符号整型、无符号整型、浮点型等）、常用函数（print、println、eprint 等）、常用接口（ToString、Hashable、`Equatable<T>`、`Collection<T>`、`Comparable<T>` 等）、常用类和结构体（`Array<T>`、String、`Range<T>` 等）、时间长度（Duration）、线程类型（Thread、`Future<T>`）、常用异常类（Error、Exception 以及它们的一些细分子类）。
+提供了内置类型（有符号整型、无符号整型、浮点型等）、常用函数（print、println、eprint 等）、常用接口（ToString、Hashable、`Equatable<T>`、`Collection<T>`、`Comparable<T>` 等）、常用类和结构体（`Array<T>`、String、`Range<T>` 等）、时间长度（Duration）、线程类型（Thread、`Future<T>`）、可关闭的资源（Resource）、常用异常类（Error、Exception 以及它们的一些细分子类）。
 
 ### `std.ast`
 宏编程API
