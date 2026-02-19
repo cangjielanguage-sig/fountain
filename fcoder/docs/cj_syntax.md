@@ -279,7 +279,7 @@ do {
 ```
 
 #### for-in 表达式
-
+⚠️ **重要：**迭代变量不可变
 ```cj
 for (迭代变量 in 序列) {
     循环体
@@ -332,6 +332,7 @@ main() {
 - 可以是class struct enum interface 的成员
 - 可以是顶级声明
 - 可以在另一个函数体内声明
+- ⚠️ **重要：**函数参数不可变，不可在函数体内重新赋值
 
 ### 函数类型
 
@@ -496,10 +497,10 @@ main() {
 #### 绑定模式
 
 使用标识符，匹配并绑定值
-
+⚠️ **重要：**绑定的变量不可变
 ```cj
 main() {
-    let x = -10
+    let x = -10 
     let y = match (x) {
         case 0 => "zero"
         case n => "x is not zero and x = ${n}"  // n 绑定匹配的值
@@ -876,7 +877,7 @@ extend<T> ExtendedType<T> <: ExtendInterface<T> where T <: SuperGenericType {}
 try{
     throw Exception()//主动抛出一个异常
     //try内抛出的异常会被catch捕获
-}catch(e: Exception1){//当前catch块可以捕获的异常类型，指定异常和它的子类型会被捕获
+}catch(e: Exception1){//:右面是可捕获的异常类型，指定异常和它的子类型会被捕获，左面是绑定异常实例的变量。
     //可以在catch块内处理这个异常，或者包装后重新抛出
     throw Exception(e)
 }catch(e: Exception2 | Exception3){//一个catch块可以捕获多个不同类型的异常
@@ -887,6 +888,7 @@ try{
     //在try块捕获的catch块结束以后，finally块的代码一定会执行不论有没有异常
 }
 ```
+⚠️ **重要：**捕获的异常变量不可变
 ⚠️ **注意**：
 - catch(_) 和catch(e: Exception) 只能是最后一个catch块，且此二者一个try块只能使用一个
 - try块后面可以有零个或多个catch块，finally可以有也可以没有
@@ -905,7 +907,7 @@ try(a = Resource1()
     // 在此处使用a b两个变量，a b 不可变
 }
 ```
-⚠️ **注意**：try-with-resource的类型是`Unit`
+⚠️ **重要**：try-with-resource的类型是`Unit`
 
 ## 包
 
