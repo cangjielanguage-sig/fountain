@@ -15,7 +15,7 @@ limitations under the License.
 */
 package fountain::f_egraph.base
 
-public struct AsyncFlow <: Flow<AsyncEndExecutorGetter> {
+public class AsyncFlow <: Flow<AsyncEndExecutorGetter> {
     private static var dispatcher = None<AsyncDispatcher>
     public static func initDispatcher(clearTimerDuration!: Duration = Duration.second, toThrowIfNoExecutor!: Bool = true): Unit {
         dispatcher = AsyncDispatcher(clearTimerDuration: clearTimerDuration, toThrowIfNoExecutor: toThrowIfNoExecutor)
@@ -32,7 +32,7 @@ public struct AsyncFlow <: Flow<AsyncEndExecutorGetter> {
     private var startName = ''
     private var hasFirstTask = false
 
-    public mut func registerStart(name: String): Unit {
+    public func registerStart(name: String): Unit {
         startName = name
         getDispatcher().registerStart(category: category, tag: tag, name: name)
     }
@@ -42,7 +42,7 @@ public struct AsyncFlow <: Flow<AsyncEndExecutorGetter> {
     public func registerError(): Unit {
         getDispatcher().registerError(category: category, tag: tag)
     }
-    public mut func registerTask(name: String, task: (Event) -> Event): Unit {
+    public func registerTask(name: String, task: (Event) -> Event): Unit {
         if(startName.size == 0){
             throw GraphException('There must be with StartExecutor before registering first TaskExecutor')
         }else if(!hasFirstTask && startName == name){
@@ -52,7 +52,7 @@ public struct AsyncFlow <: Flow<AsyncEndExecutorGetter> {
         }
         getDispatcher().registerTask(category: category, tag: tag, name: name, task: task)
     }
-    public mut func registerTask(task: Task): Unit {
+    public func registerTask(task: Task): Unit {
         registerTask(task.name, task.exec)
     }
     public func start(data: Any): AsyncEndExecutorGetter {

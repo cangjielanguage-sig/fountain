@@ -463,7 +463,7 @@ public interface Flow<G> where G <: EndExecutorGetter {
     /**
      * 向流程注册开始事件执行器，name是开始事件名，必须与流程的第一个任务事件执行器对应的事件名称相同
      */
-    mut func registerStart(name: String): Unit
+    func registerStart(name: String): Unit
     /**
      * 向流程注册结束事件执行器
      */
@@ -475,16 +475,16 @@ public interface Flow<G> where G <: EndExecutorGetter {
     /**
      * 向流程注册任务事件执行器
      */
-    mut func registerTask(name: String, task: (Event) -> Event): Unit
+    func registerTask(name: String, task: (Event) -> Event): Unit
     /**
      * 向流程注册任务事件执行器
      */
-    mut func registerTask(task: Task): Unit
+    func registerTask(task: Task): Unit
     /**
      * 使用指定流程作为任务执行器的构造函数参数
      * @param flow 任务事件执行器的逻辑
      */
-    mut func registerTaskByFlow<G, F>(name!: String, flow!: F): Unit where G <: EndExecutorGetter, F <: Flow<G> {
+    func registerTaskByFlow<G, F>(name!: String, flow!: F): Unit where G <: EndExecutorGetter, F <: Flow<G> {
         registerTask(name){e => flow.start(((e as DataEvent).getOrThrow()).data).get().get()}
     }
     /**
@@ -492,7 +492,7 @@ public interface Flow<G> where G <: EndExecutorGetter {
      * @param subCategory 子流程的唯一标识
      * @param subTag 子流程的版本
      */
-    mut func registerTaskByImmediateFlow(name!: String, subCategory!: String, subTag!: String): Unit {
+    func registerTaskByImmediateFlow(name!: String, subCategory!: String, subTag!: String): Unit {
         registerTaskByFlow<EndExecutorGetter, ImmediateFlow>(name: name, flow: ImmediateFlow(category: subCategory, tag: subTag))
     }
     /**
@@ -500,7 +500,7 @@ public interface Flow<G> where G <: EndExecutorGetter {
      * @param subCategory 子流程的唯一标识
      * @param subTag 子流程的版本
      */
-    mut func registerTaskByAsyncFlow(name!: String, subCategory!: String, subTag!: String): Unit {
+    func registerTaskByAsyncFlow(name!: String, subCategory!: String, subTag!: String): Unit {
         registerTaskByFlow<AsyncEndExecutorGetter, AsyncFlow>(name: name, flow: AsyncFlow(category: subCategory, tag: subTag))
     }
     /**
@@ -515,7 +515,7 @@ public interface Flow<G> where G <: EndExecutorGetter {
 /**
  * 一个同步调度器是一个流程，ImmediateFlow维持着若干个流程
  */
-public struct ImmediateFlow <: Flow<EndExecutorGetter> & Hashable & Equatable<ImmediateFlow> {
+public class ImmediateFlow <: Flow<EndExecutorGetter> & Hashable & Equatable<ImmediateFlow> {
     public ImmediateFlow(private let category!: String, private let tag!: String)
     public static func remove(category!: String, tag!: String): Unit 
     public func hashCode(): Int64 
@@ -534,7 +534,7 @@ public struct ImmediateFlow <: Flow<EndExecutorGetter> & Hashable & Equatable<Im
 
 ### 异步流程`AsyncFlow`
 ```cj
-public struct AsyncFlow <: Flow<AsyncEndExecutorGetter> {
+public class AsyncFlow <: Flow<AsyncEndExecutorGetter> {
     /**
      * AsyncDispatcher是本类型的实例成员变量，用本参数clearTimerDuration和toThrowIfNoExecutor实例化一个AsyncDispatcher。
      * 一个AsyncFlow实例会维持多个流程，相同category的执行器构成一个流程，相同的category不应长时间同时存在多个tag。应尽快将旧的tag删除。

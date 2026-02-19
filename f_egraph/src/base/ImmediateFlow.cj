@@ -15,7 +15,7 @@ limitations under the License.
 */
 package fountain::f_egraph.base
 
-public struct ImmediateFlow <: Flow<EndExecutorGetter> & Hashable & Equatable<ImmediateFlow> {
+public class ImmediateFlow <: Flow<EndExecutorGetter> & Hashable & Equatable<ImmediateFlow> {
     private static let dispatchers = ConcurrentHashMap<ImmediateFlow, ImmediateDispatcher>()
     private let h: Int64
     public ImmediateFlow(private let category!: String, private let tag!: String){
@@ -37,7 +37,7 @@ public struct ImmediateFlow <: Flow<EndExecutorGetter> & Hashable & Equatable<Im
     }
     private var startName = ''
     private var hasFirstTask = false
-    public mut func registerStart(name: String): Unit {
+    public func registerStart(name: String): Unit {
         startName = name
         getDispatcher().registerStart(category: category, tag: tag, name: name)
     }
@@ -47,7 +47,7 @@ public struct ImmediateFlow <: Flow<EndExecutorGetter> & Hashable & Equatable<Im
     public func registerError(): Unit {
         getDispatcher().registerError(category: category, tag: tag)
     }
-    public mut func registerTask(name: String, task: (Event) -> Event): Unit {
+    public func registerTask(name: String, task: (Event) -> Event): Unit {
         if(startName.size == 0){
             throw GraphException('There must be with StartExecutor before registering first TaskExecutor')
         }else if(!hasFirstTask && startName == name){
@@ -57,7 +57,7 @@ public struct ImmediateFlow <: Flow<EndExecutorGetter> & Hashable & Equatable<Im
         }
         getDispatcher().registerTask(category: category, tag: tag, name: name, task: task)
     }
-    public mut func registerTask(task: Task): Unit {
+    public func registerTask(task: Task): Unit {
         registerTask(task.name, task.exec)
     }
     public func start(data: Any): EndExecutorGetter {

@@ -17,16 +17,16 @@ package fountain::f_egraph.base
 
 public interface Flow<G> where G <: EndExecutorGetter {
     static func remove(category!: String, tag!: String): Unit 
-    mut func registerStart(name: String): Unit
+    func registerStart(name: String): Unit
     func registerEnd(): Unit
     func registerError(): Unit
-    mut func registerTask(name: String, task: (Event) -> Event): Unit
-    mut func registerTask(task: Task): Unit
+    func registerTask(name: String, task: (Event) -> Event): Unit
+    func registerTask(task: Task): Unit
     /**
      * 使用指定流程作为任务执行器的构造函数参数
      * @param flow 任务事件执行器的逻辑
      */
-    mut func registerTaskByFlow<G, F>(name!: String, flow!: F): Unit where G <: EndExecutorGetter, F <: Flow<G> {
+    func registerTaskByFlow<G, F>(name!: String, flow!: F): Unit where G <: EndExecutorGetter, F <: Flow<G> {
         registerTask(name) {e => flow.start(((e as DataEvent).getOrThrow()).data).get().get()}
     }
     /**
@@ -34,7 +34,7 @@ public interface Flow<G> where G <: EndExecutorGetter {
      * @param subCategory 子流程的唯一标识
      * @param subTag 子流程的版本
      */
-    mut func registerTaskByImmediateFlow(name!: String, subCategory!: String, subTag!: String): Unit {
+    func registerTaskByImmediateFlow(name!: String, subCategory!: String, subTag!: String): Unit {
         registerTaskByFlow<EndExecutorGetter, ImmediateFlow>(name: name, flow: ImmediateFlow(category: subCategory, tag: subTag))
     }
     /**
@@ -42,7 +42,7 @@ public interface Flow<G> where G <: EndExecutorGetter {
      * @param subCategory 子流程的唯一标识
      * @param subTag 子流程的版本
      */
-    mut func registerTaskByAsyncFlow(name!: String, subCategory!: String, subTag!: String): Unit {
+    func registerTaskByAsyncFlow(name!: String, subCategory!: String, subTag!: String): Unit {
         registerTaskByFlow<AsyncEndExecutorGetter, AsyncFlow>(name: name, flow: AsyncFlow(category: subCategory, tag: subTag))
     }
     func start(data: Any): G
