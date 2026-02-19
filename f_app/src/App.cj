@@ -35,6 +35,11 @@ public struct App {
     private static let log = LoggerFactory.getLogger<App>()
     private static const APP_STATIC_RESOURCE_SUFFIX = '_stAtIc__'
     private static let stdOut = getStdOut()
+    private static prop versionRegex: Regex {
+        get(){
+            Regex(#'^\d+\.\d+\.\d+$'#)
+        }
+    }
 
     public App(private let args: Array<String>,
                private let appHomeIsWorkingPath!: Bool = true,
@@ -342,6 +347,16 @@ public struct App {
         String.fromUtf8(File.readFrom(path))
     }
     private func appendToml(dir: Path): Unit {
+        let version = if(this.args.size > 1){
+            var sub = ''
+            for(arg in this.args[1 .. ] where versionRegex.matches(arg)){
+                sub = arg
+                break
+            }
+            sub
+        }else{
+            throw BootException('fountain version must be specified for fboot workspace. The correct command line is fboot workspace /path/of/workspace x.y.z, x.y.z is fountain version')
+        }
         let tomlPath = dir.join('cjpm.toml')
         var content = entireFileText(tomlPath).replace('[workspace]', '''
 [workspace]
@@ -351,8 +366,9 @@ public struct App {
 .replace('override-compile-option = ""', 'override-compile-option = "--dy-std -Woff all"')
 .replace('[dependencies]', '''
 [dependencies]
-  fountain = {git = "https://gitcode.com/Cangjie-SIG/fountain.git", branch = "lts/1.0.0"}'''
-)
+  "fountain::f_base" = "${version}"
+  "fountain::f_version" = "${version}"'''
+)//todo
         content = '''
 ${content}
 
@@ -406,14 +422,17 @@ ${content}
     }
     private func doInit(arg: String): (Int64, Path) {
         let workingDir = if(1 < this.args.size){
-            let sub = this.args[1]
-            let dir = if(sub.startsWith('/')){
-                Path(sub)
-            } else {
-                getWorkingDirectory().join(this.args[1])
+            var sub = ''
+            for(arg in this.args[1 .. ] where !versionRegex.matches(arg)){
+                sub = arg
+                break
             }
-            if(!exists(dir)){
-                Directory.create(dir, recursive: true)
+            let dir = if (sub.startsWith('/')){
+                Path(sub)
+            }else if(sub.size > 0){
+                getWorkingDirectory().join(sub)
+            }else{
+                getWorkingDirectory()
             }
             dir
         }else{
@@ -517,7 +536,7 @@ _/ ____\____  __ __  _____/  |______  |__| ____
     private func genCode(name: String, version: String) {
 '''
 package ${appVersionModuleName(name)}
-import fountain.version.AppVersion
+import fountain::f_version.AppVersion
 private let _ = AppVersion.set(#'${banner()}'#, '${name}', '${version}')
 '''
     }
