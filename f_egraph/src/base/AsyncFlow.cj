@@ -20,11 +20,40 @@ public class AsyncFlow <: Flow<AsyncEndExecutorGetter> {
     public static func initDispatcher(clearTimerDuration!: Duration = Duration.second, toThrowIfNoExecutor!: Bool = true): Unit {
         dispatcher = AsyncDispatcher(clearTimerDuration: clearTimerDuration, toThrowIfNoExecutor: toThrowIfNoExecutor)
     }
+    private static let dependencied_ = ConcurrentHashMap<AsyncFlow, ConcurrentHashSet<String>()
     public static func remove(category!: String, tag!: String): Unit {
+        let flow = AsyncFlow(category: category, tag: tag)
+        if(let Some(x) <- dependencied_.get(flow)){
+            if(x.size > 0){
+                let dependencied = StringGenerator()
+                for(d in x){
+                    if(dependencied.size > 0){
+                        dependencied.add(', ')
+                    }
+                    dependencied.add(d)
+                }
+                throw GraphException('${flow} to be removed is dependencied by ${dependencied}')
+            }else{
+                dependencied_.remove(flow)
+            }
+        }
         dispatcher?.removeIf{e => e.category == category && e.tag == tag}
     }
-    public AsyncFlow(private let category!: String, private let tag!: String){}
+    let h: Int64
+    public AsyncFlow(let category!: String, let tag!: String){
+        h = HashBuilder().append(category).append(tag).build()
+    }
     
+    public func hashCode(): Int64 {
+        h
+    }
+    public operator func ==(other: AsyncFlow): Bool {
+        h == other.h && category == other.category && tag == other.tag
+    }
+    public operator func ==(other: ImmediateFlow): Bool {
+        h == other.h && category == other.category && tag == other.tag
+    }
+
     private func getDispatcher(){
         dispatcher.getOrThrow()
     }

@@ -15,8 +15,9 @@ limitations under the License.
 */
 package fountain::f_egraph.base
 
-public interface Flow<G> where G <: EndExecutorGetter {
+public interface Flow<G> <: Hashable & Equatable<ImmediateFlow> & Equatable<AsyncFlow> & ToString where G <: EndExecutorGetter {
     static func remove(category!: String, tag!: String): Unit 
+    prop dependencied: ConcurrentHashSet<String>
     func registerStart(name: String): Unit
     func registerEnd(): Unit
     func registerError(): Unit
@@ -28,6 +29,7 @@ public interface Flow<G> where G <: EndExecutorGetter {
      */
     func registerTaskByFlow<G, F>(name!: String, flow!: F): Unit where G <: EndExecutorGetter, F <: Flow<G> {
         registerTask(name) {e => flow.start(((e as DataEvent).getOrThrow()).data).get().get()}
+        flow.dependencied.add(this.toString())
     }
     /**
      * 使用指定的同步流程作为任务执行器的构造函数参数

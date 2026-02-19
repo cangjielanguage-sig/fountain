@@ -17,18 +17,47 @@ package fountain::f_egraph.base
 
 public class ImmediateFlow <: Flow<EndExecutorGetter> & Hashable & Equatable<ImmediateFlow> {
     private static let dispatchers = ConcurrentHashMap<ImmediateFlow, ImmediateDispatcher>()
-    private let h: Int64
-    public ImmediateFlow(private let category!: String, private let tag!: String){
+    private static let dependencied_ = ConcurrentHashMap<ImmediateFlow, ConcurrentHashSet<String>()
+    let h: Int64
+    public ImmediateFlow(let category!: String, let tag!: String){
         h = HashBuilder().append(category).append(tag).build()
     }
     public static func remove(category!: String, tag!: String): Unit {
+        let flow = ImmediateFlow(category: category, tag: tag)
+        if(let Some(x) <- dependencied_.get(flow)){
+            if(x.size > 0){
+                let dependencied = StringGenerator()
+                for(d in x){
+                    if(dependencied.size > 0){
+                        dependencied.add(', ')
+                    }
+                    dependencied.add(d)
+                }
+                throw GraphException('${flow} to be removed is dependencied by ${dependencied}')
+            }else{
+                dependencied_.remove(flow)
+            }
+        }
         dispatchers.remove(ImmediateFlow(category: category, tag: tag))
-    } 
+    }
+
     public func hashCode(): Int64 {
         h
     }
     public operator func ==(other: ImmediateFlow): Bool {
         h == other.h && category == other.category && tag == other.tag
+    }
+    public operator func ==(other: AsyncFlow): Bool {
+        h == other.h && category == other.category && tag == other.tag
+    }
+    public operator 
+    public func toString(): String {
+        '${category}-${tag}'
+    }
+    public prop dependencied: ConcurrentHashSet<String>{
+        get(){
+            dependencied_.computeIfAbsent(this){ConcurrentHashSet<String>()}
+        }
     }
     private func getDispatcher() {
         dispatchers.computeIfAbsent(this){

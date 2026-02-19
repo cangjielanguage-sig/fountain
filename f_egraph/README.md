@@ -317,29 +317,6 @@ public abstract class Dispatcher <: Accepter & EndExecutorGetter {
      */
     public func registerTask(category!: String, tag!: String, name!: String, task!: (Event) -> Event): Unit
     /**
-     * 使用指定流程作为任务执行器的构造函数参数
-     * @param flow 任务事件执行器的逻辑
-     */
-    public func registerTaskByFlow<G, F>(category!: String, tag!: String, name!: String, flow!: F): Unit where G <: EndExecutorGetter, F <: Flow<G> {
-        registerTask(category: category, tag: tag, name: name, task: {e => flow.start(((e as DataEvent).getOrThrow()).data).get().get()})
-    }
-    /**
-     * 使用指定的同步流程作为任务执行器的构造函数参数
-     * @param subCategory 子流程的唯一标识
-     * @param subTag 子流程的版本
-     */
-    public func registerTaskByImmediateFlow(category!: String, tag!: String, name!: String, subCategory!: String, subTag!: String): Unit {
-        registerTaskByFlow<EndExecutorGetter, ImmediateFlow>(category: category, tag: tag, name: name, flow: ImmediateFlow(category: subCategory, tag: subTag))
-    }
-    /**
-     * 使用指定的异步流程作为任务执行器的构造函数参数
-     * @param subCategory 子流程的唯一标识
-     * @param subTag 子流程的版本
-     */
-    public func registerTaskByAsyncFlow(category!: String, tag!: String, name!: String, subCategory!: String, subTag!: String): Unit {
-        registerTaskByFlow<AsyncEndExecutorGetter, AsyncFlow>(category: category, tag: tag, name: name, flow: AsyncFlow(category: subCategory, tag: subTag))
-    }
-    /**
      * 调度事件执行器。必须先接收到一个事件才能调用本函数
      */
     protected func dispatch(): Unit

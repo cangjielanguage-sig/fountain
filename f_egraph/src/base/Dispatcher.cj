@@ -20,15 +20,7 @@ public abstract class Dispatcher <: Accepter & EndExecutorGetter {
     public func registerError(category!: String, tag!: String): Unit
     public func registerEnd(category!: String, tag!: String): Unit
     public func registerTask(category!: String, tag!: String, name!: String, task!: (Event) -> Event): Unit 
-    public func registerTaskByFlow<G, F>(category!: String, tag!: String, name!: String, flow!: F): Unit where G <: EndExecutorGetter, F <: Flow<G> {
-        registerTask(category: category, tag: tag, name: name, task: {e => flow.start(((e as DataEvent).getOrThrow()).data).get().get()})
-    }
-    public func registerTaskByImmediateFlow(category!: String, tag!: String, name!: String, subCategory!: String, subTag!: String): Unit {
-        registerTaskByFlow<EndExecutorGetter, ImmediateFlow>(category: category, tag: tag, name: name, flow: ImmediateFlow(category: subCategory, tag: subTag))
-    }
-    public func registerTaskByAsyncFlow(category!: String, tag!: String, name!: String, subCategory!: String, subTag!: String): Unit {
-        registerTaskByFlow<AsyncEndExecutorGetter, AsyncFlow>(category: category, tag: tag, name: name, flow: AsyncFlow(category: subCategory, tag: subTag))
-    }
+
     protected func dispatch(): Unit
     public func accept(event: Event): Unit
     public func start(event: StartEvent): Dispatcher
