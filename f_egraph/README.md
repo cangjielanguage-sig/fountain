@@ -438,7 +438,7 @@ public interface Flow<G> where G <: EndExecutorGetter {
      */
     prop dependencied: ConcurrentHashSet<String>
     /**
-     * 删除指定流程
+     * 删除指定流程，如果有其它流程依赖这个流程作为子流程，会抛出异常
      */
     static func remove(category!: String, tag!: String): Unit 
     /**
