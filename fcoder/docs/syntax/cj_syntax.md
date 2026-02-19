@@ -964,65 +964,6 @@ package orgname::demo
 package orgname::demo.directory_0
 ```
 
-## 依赖
-在模块或项目的cjpm.tom `[dependencies]`按以下方式添加依赖
-```toml
-[dependencies]
-  "orgname::module_name" = "x.y.z" # = 左面是依赖的标识，右面是依赖的版本号；::左面是依赖的模块所属组织，::右面是依赖的模块
-  "org2::mod2" = {path = "/path/of/dependency/on/local/machine"}
-  "org3::mod3" = {git = "https://domain.name/path/of.git"}
-```
-
-
-## 单元测试
-
-### 测试宏
-
-- `@Test` - 应用于顶级函数或类，转换为单元测试类
-- `@TestCase` - 标记测试类内的函数为测试用例
-- `@Fail` - 标记测试失败
-
-### 断言宏
-
-#### Assert 断言（失败停止用例）
-
-```cj
-@Assert(leftExpr, rightExpr)      // 判断相等
-@Assert(condition: Bool)          // 判断条件
-```
-
-#### Expect 断言（失败继续执行）
-
-```cj
-@Expect(leftExpr, rightExpr)      // 判断相等
-@Expect(condition: Bool)          // 判断条件
-```
-
-### 完整示例
-
-```cj
-@Test
-class LexerTest {
-    @TestCase
-    func test() {
-        let a = 1
-
-        // 方式一：手动判断
-        if (a != 1) {
-            @Fail("a is not 1")
-        }
-
-        // 方式二：Assert 条件
-        @Assert(a != 1)
-
-        // 方式三：Assert 相等
-        @Assert(a, 1)
-    }
-}
-```
-
----
-
 ## 常见错误与注意事项
 
 ### 变量相关
@@ -1101,7 +1042,8 @@ main() {
 ### `std.core`
 core 包是标准库的核心包，提供了适用仓颉语言编程最基本的一些 API 能力。
 
-提供了内置类型（有符号整型、无符号整型、浮点型等）、常用函数（print、println、eprint 等）、常用接口（ToString、Hashable、`Equatable<T>`、`Collection<T>`、`Comparable<T>` 等）、常用类和结构体（`Array<T>`、String、`Range<T>` 等）、时间长度（Duration）、线程类型（Thread、`Future<T>`）、可关闭的资源（Resource）、常用异常类（Error、Exception 以及它们的一些细分子类）。
+提供了内置类型（有符号整型、无符号整型、浮点型等）、常用函数（print、println、eprint 等）、常用接口（ToString、Hashable、`Equatable<T>`、`Collection<T>`、`Comparable<T>`、`Iterable<T>` 等）、常用类和结构体（`Array<T>`、String、`Range<T>` 等）、迭代器（`Iterator<T>`）、时间长度（Duration）、线程类型（Thread、`Future<T>`）、可关闭的资源（Resource）、常用异常类（Error、Exception 以及它们的一些细分子类）。
+⚠️ **重要**：`Equatable<T>`声明了两个重载的操作符`==`和`!=`。
 
 ### `std.ast`
 宏编程API
@@ -1205,28 +1147,3 @@ I/O 操作是指程序与外部设备进行数据交换的操作。仓颉提供�
 
 ### `std.time`
  包提供了与时间相关的类型，包括日期时间，单调时间和时区等，并提供了计算和比较的功能。
-
-## 仓颉项目/模块目录结构
-```
-module_dir
-`--src
-    `-- directory_0
-        |-- directory_1
-        |    |-- a.cj
-        |    `-- b.cj
-        `-- c.cj
-    `-- module.cj
-
-```
-## 构建命令
-- **cjpm init --type=dynamic** - 将当前文件夹初始化为一个动态链接库模块，当前文件夹必须是空的
-- **cjpm clean** - 当前文件夹是一个仓颉模块，清空这个模块的编译结果
-- **cjpm build** - 当前文件夹是一个仓颉模块，构建当前模块
-- **cjpm test**
-    - **cjpm test -i src/pkg** - 当前文件夹是一个仓颉模块，执行指定文件夹下的单元测试用例
-    - **cjpm test -i --filter=<value>** - 执行符合过滤规则的单元测试用例
-        - --filter <value> 用于过滤测试的子集，value 的形式如下所示：
-        - --filter=* 匹配所有测试类
-        - --filter=*.* 匹配所有测试类的所有测试用例（结果和*相同）
-        - --filter=*.*Test,*.*case* 匹配所有测试类中以 Test 结尾的用例，或者所有测试类中名字中带有 case 的测试用例
-        - --filter=MyTest*.*Test,*.*case*,-*.*myTest 匹配所有 MyTest 开头测试类中以 Test 结尾的用例，或者名字中带有 case 的用例，或者名字中不带有 myTest 的测试用例

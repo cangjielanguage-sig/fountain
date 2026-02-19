@@ -53,8 +53,9 @@ public enum AnnotationKind {
 ```cj
 macro package package_name.for_macro 
 import std.ast.*
+//Tokens是std.ast的类型，参数Tokens是被宏修饰的声明或表达式转换的Tokens，返回的是宏展开的结果，宏展开的结果应当是可被仓颉编译器编译运行的代码
 //非属性宏
-public macro MacroName(input: Tokens): Tokens {//Tokens是被宏修饰的声明或表达式转换的Tokens
+public macro MacroName(input: Tokens): Tokens {
 
 }
 //属性宏
@@ -62,7 +63,29 @@ public macro MacroName(input: Tokens): Tokens {//Tokens是被宏修饰的声明�
 //attr可以用来控制宏的行为以及定义一些元数据
 public macro MacroName(attr: Tokens, input: Tokens): Tokens {
     //宏体
+    //两个Tokens实例可以用+连接起来
+    quote(
+        let a = $(expr)
+    )//quote() 这对括号里面包含的都会被编译器转换为Tokens
+    //$() 包含的表达式可以正常运行，运行的结果会被转换为Tokens
 }
+```
+⚠️ **重要**：`$(...)`只能在`quote()`内部使用
+⚠️ **重要**：`$(token.value)`，value是字符串，这个`$(token.value)`的运行结果相当于以下代码
+⚠️ **重要**：宏操作的都是声明类型实例（Decl）和表达式类型实例（Expr）跟Tokens之间的互相转换。
+    - Token是一个结构体有两个成员，kind和value，kind是一个表示Token类型的枚举，value是表示Token内容的字体串。
+    - Tokens是一个类，它内部是一系列Tokens，常用成员：
+    ```cj
+    prop size: Int64 //Tokens包含的Token数量
+    operator func [](index: Int64): Token //返回指定索引的Token
+    operator func [](index: Int64, value!: Token): Unit //修改指定索引的Token
+    func iterator(): Iterator<Token> //遍历Tokens
+    ```
+```cj
+let tv = token.value
+let st = Token(STRING_LITERAL, tv)
+let tokens = quote($(st))
+tokens
 ```
 ```cj
 @MacroName//可以用来修饰各种声明和表达式，甚至不符合仓颉语法的Tokens，只要输出的Tokens符合仓颉语法就可以
