@@ -37,7 +37,7 @@ public interface SqlPartial <: RootDAO {
     func singlePage<R>(sql: String, size: Int64, page!: Int64): Pagination<R> where R <: DataFields<R> {
         singlePage<R>(sql, 0, size, page: page)
     }
-    func singlePage<R>(sql: String, column: size: Int64, page!: Int64): Pagination<R> where R <: DataFields<R>
+    func singlePage<R>(sql: String, column: Int64, size: Int64, page!: Int64): Pagination<R> where R <: DataFields<R>
     func singleFirst<T>(sql: String): ?T{
         singleFirst<T>(sql, 0)
     }
