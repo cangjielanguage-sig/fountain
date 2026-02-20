@@ -15,9 +15,9 @@ limitations under the License.
 */
 package fountain::f_orm.base
 
-internal class Partials {
+protected class Partials {
     private let partials = StringGenerator()
-    internal func clear(){
+    protected func clear(){
         partials.clear()
     }
     private func append(op: String, sql: String){
@@ -33,34 +33,34 @@ internal class Partials {
             partials.removeLast(rel)
         }
     }
-    internal func append(sql: String): This {
+    protected func append(sql: String): This {
         partials.append(sql)
         this
     }
-    internal func AND(sql: String): Unit {
+    protected func AND(sql: String): Unit {
         append('and', sql)
     }
-    internal func AND(sql: () -> Unit): Unit {
+    protected func AND(sql: () -> Unit): Unit {
         append('and', sql)
     }
-    internal func OR(sql: String): Unit {
+    protected func OR(sql: String): Unit {
         append('or', sql)
     }
-    internal func OR(sql: () -> Unit): Unit {
+    protected func OR(sql: () -> Unit): Unit {
         append('or', sql)
     }
-    internal func NOT(sql: String): Unit {
+    protected func NOT(sql: String): Unit {
         append('not', sql)
     }
-    internal func NOT(sql: () -> Unit): Unit {
+    protected func NOT(sql: () -> Unit): Unit {
         append('not', sql)
     }
-    internal func PAREN(sql: String): Unit {
+    protected func PAREN(sql: String): Unit {
         if(sql.trimAscii().size > 0){
             partials.append(' (').append(sql).append(') ')
         }
     }
-    internal func PAREN(sql: () -> Unit): Unit {
+    protected func PAREN(sql: () -> Unit): Unit {
         partials.append(' (')
         sql()
         if(partials.endsWith(' (')){
@@ -69,13 +69,13 @@ internal class Partials {
             partials.append(') ')
         }
     }
-    internal operator func ()(sql: String): Unit {
+    protected operator func ()(sql: String): Unit {
         PAREN(sql)
     }
-    internal operator func ()(sql: () -> Unit): Unit {
+    protected operator func ()(sql: () -> Unit): Unit {
         PAREN(sql)
     }
-    internal func toString(){
+    protected func toString(){
         partials.toString().trimAscii()
     }
 }

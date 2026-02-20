@@ -47,7 +47,7 @@ public struct DirtyTag {
             setDirtyField<T>(field)
         }
     }
-    static func setBeforeDirty<T>(): Unit {
+    protected static func setBeforeDirty<T>(): Unit {
         let typeInfo = TypeInfo.of<T>()
         if(let Some(tag) <- DIRTY_TAGS.get(typeInfo)){
             DIRTY_TAGS[typeInfo] = DirtyTag(beforeDirty: true, dirtyFields: tag.dirtyFields)
@@ -56,7 +56,7 @@ public struct DirtyTag {
             setBeforeDirty<T>()
         }
     }
-    static func getDirtyFields<T>(): HashSet<String> {
+    protected static func getDirtyFields<T>(): HashSet<String> {
         if(let Some(tags) <- DIRTY_TAGS.get(TypeInfo.of<T>()) && let Some(set) <- tags.dirtyFields.get()){
             set
         }else{
@@ -69,10 +69,10 @@ public struct DirtyTag {
             DIRTY_TAGS[typeInfo] = DirtyTag(beforeDirty: false, dirtyFields: tag.dirtyFields)
         }
     }
-    static func clear<T>(): Unit {
+    protected static func clear<T>(): Unit {
         clear(TypeInfo.of<T>())
     }
-    static func clearAll(): Unit {
+    protected static func clearAll(): Unit {
         for((typeInfo, tag) in DIRTY_TAGS){
             clear(typeInfo)
         }

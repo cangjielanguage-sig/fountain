@@ -93,7 +93,7 @@ public abstract class ExceptInsertClause<T> <: TableClause<T> where T <: QueryMa
     public func FULL_JOIN<T>(AS!: String = '', ON!: String = ''): This where T <: QueryMappersInit<T> {
         join<T>('full outer', AS, ON)
     }
-    private func condition(cond: () -> Unit, keyword: String, trim: String): This {
+    protected func condition(cond: () -> Unit, keyword: String, trim: String): This {
         try{
             executor.partials.clear()
             cond()

@@ -17,7 +17,7 @@ package fountain::f_orm.base
 
 import std.unittest.*
 import std.unittest.testmacro.*
-internal import fountain::f_orm.wrap.*
+protected import fountain::f_orm.wrap.*
 
 @Test
 public class ORMTest {

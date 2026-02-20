@@ -55,9 +55,9 @@ public class SqlExecutor <: Resource & RootDAO {
     private let useCache: Bool
     private var clearArgsAfterExec_ = true
 
-    internal let partials = Partials()
+    protected let partials = Partials()
 
-    private SqlExecutor(let driverName: String) {
+    private SqlExecutor(protected let driverName: String) {
         useCache = ORMConfig.getUseCache(driverName: driverName) ?? true
         cache = if (useCache) {
             HashMap<SqlCacheKey, Any>()
@@ -78,7 +78,7 @@ public class SqlExecutor <: Resource & RootDAO {
             }
         }
     }
-    internal func clearSql(){
+    protected func clearSql(){
         sql_ = ''
         if(clearArgsAfterExec_){
             args.clear()
@@ -90,7 +90,7 @@ public class SqlExecutor <: Resource & RootDAO {
         }
     }
 
-    static func getInstance(driverName: String): SqlExecutor {
+    protected static func getInstance(driverName: String): SqlExecutor {
         let exe = currents
             .getOrCompute {HashMap<String, SqlExecutor>()}
             .computeIfAbsent(driverName) {SqlExecutor(driverName)}
@@ -110,7 +110,7 @@ public class SqlExecutor <: Resource & RootDAO {
         current.set(exe)
         exe
     }
-    static func getCurrent(): SqlExecutor {
+    protected static func getCurrent(): SqlExecutor {
         current.get().getOrThrow()
     }
 
