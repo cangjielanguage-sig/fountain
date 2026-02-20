@@ -97,7 +97,9 @@ public struct Client<DE, EN, M, T, ID> where EN <: MessageCopier, M <: Protocol<
             checkDuration: checkDuration, checker: checker)
     }
     private prop index: Int64 {
-        ThreadLocalRandom.current.nextInt64(0, sockets.size, closed: true)
+        get(){
+            ThreadLocalRandom.current.nextInt64(0, sockets.size, closed: true)
+        }
     }
     public func transfer(id: ID, message: M): MessageFuture<DE> {
         transfer(index, id, message)
