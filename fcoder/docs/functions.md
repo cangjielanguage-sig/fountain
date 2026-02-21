@@ -6,9 +6,20 @@
     ```json
     {
         "function":"search",
-        "params":["{{keywords}}"]
+        "params":["{{keywords}}"],
+        "embeddingWeight": 0.7,
+        "confidence": 0.75
     }
     ```
+
+    - 参数说明
+        |参数            |描述|
+        |:--------------|:--|
+        |function       |函数名|
+        |params         |函数参数，参数为字符串数组|
+        |embeddingWeight|向量匹配的权重，范围0-1，默认为0.7|
+        |confidence     |搜索结果的最低置信度，范围0-1，默认为0.75|
+
     - 函数返回
     ```json
     {
@@ -24,6 +35,7 @@
         "params":["{{title}}"]
     }
     ```
+
     - 函数返回
     ```json
     {
@@ -36,9 +48,20 @@
     ```json
     {
         "function":"select",
-        "params":["{{keywords}}"]
+        "params":["{{keywords}}"],
+        "embeddingWeight": 0.7,
+        "confidence": 0.75
     }
     ```
+
+    - 参数说明
+        |参数            |描述|
+        |:--------------|:--|
+        |function       |函数名|
+        |params         |函数参数，参数为字符串数组|
+        |embeddingWeight|向量匹配的权重，范围0-1，默认为0.7|
+        |confidence     |搜索结果的最低置信度，范围0-1，默认为0.75|
+
     - 函数返回
     ```json
     {

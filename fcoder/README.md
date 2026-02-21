@@ -79,13 +79,20 @@ $$ LANGUAGE plpgsql;
 - 知识`knowledge`
     - 文本SQL
         ```sql
-        SELECT id, title, content 
-        FROM knowledge 
-        WHERE kind in ('<kind>',...) and 
-            search_vector @@ to_tsquery('zh_cn', '搜索的内容')
-        ORDER 
-            BY embedding <=> '[0.1, 0.2, ...]' -- 字符串内是向量数组
-        LIMIT 50;
+        WITH confidence AS (
+             SELECT id, title, content, kind, query,
+                    (1.0 - (embedding <=> '[0.1, 0.2, ...]')) * 0.7 +  -- 字符串内是向量数组
+                    ts_rank(to_tsvector('chinese_english', content), query) * 0.3 as confidence
+               FROM knowledge, to_tsquery('chinese_english', '搜索的内容') as query
+         )
+         SELECT id, title, content
+           FROM confidence
+          WHERE kind IN ('<kind>',...)
+            AND to_tsvector('chinese_english', content) @@ query
+            AND confidence >= 0.75                                                                                                                          
+          ORDER                                                                                                                                             
+             BY confidence DESC
+          LIMIT 50;
         ```
 - 项目`projects`
 - 代码`codes`
