@@ -91,4 +91,7 @@ public class ImmediateFlow <: Flow<EndExecutorGetter> {
     public func start(data: Any): EndExecutorGetter {
         dispatchers[this].start(StartEvent(category: category, tag: tag, name: startName, data: data))
     }
+    public func emit(eventType!: EventType, name!: String, data!: Any): Unit {
+        dispatchers.get(this).getOrThrow().accept(DataEvent(eventType: eventType, category: category, tag: tag, name: name, data: data))
+    }
 }

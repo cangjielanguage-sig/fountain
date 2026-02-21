@@ -15,7 +15,7 @@ limitations under the License.
 */
 package fountain::f_egraph.base
 
-public interface Flow<G> <: Hashable & Equatable<ImmediateFlow> & Equatable<AsyncFlow> & ToString where G <: EndExecutorGetter {
+public interface Flow<G> <: Emitter & Hashable & Equatable<ImmediateFlow> & Equatable<AsyncFlow> & ToString where G <: EndExecutorGetter {
     static func remove(category!: String, tag!: String): Unit 
     prop dependencied: ConcurrentHashSet<String>
     func registerStart(name: String): Unit

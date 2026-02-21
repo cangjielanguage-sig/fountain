@@ -246,8 +246,12 @@ public class TaskExecutor <: ImmediateExecutor {
      * @param acceptingEvent 当前任务事件执行器接收到的事件
      * @param accepter 当前任务事件执行器的task返回的事件转发的目标
      * @param task 任务事件执行器的逻辑
+     *             task: {e => ImmediateFlow(category: e.category, tag: e.tag)
+     *                           .emmit(eventType: e.eventType, 'eventName', eventData)}
+     *             task: {e => AsyncFlow(category: e.category, tag: e.tag)
+     *                           .emmit(eventType: e.eventType, 'eventName', eventData)}
      */
-    public TaskExecutor(acceptingEvent!: Event, private let accepter!: Accepter, private let task!: (Event) -> Event){
+    public TaskExecutor(acceptingEvent!: Event, private let accepter!: Accepter, private let task!: (Event) -> Unit){
         super(acceptingEvent: acceptingEvent)
     }
     /**
@@ -282,7 +286,7 @@ public class TaskExecutor <: ImmediateExecutor {
 #### 异步任务事件执行器`AsyncTaskExecutor`
 ```cj
 public class AsyncTaskExecutor <: Executor {
-    public init(acceptingEvent!: Event, accepter!: Accepter, task!: (Event) -> Event){
+    public init(acceptingEvent!: Event, accepter!: Accepter, task!: (Event) -> Unit){
         executor = TaskExecutor(acceptingEvent: acceptingEvent, accepter: accepter, task: task)
     }
     public prop acceptable: Event 
@@ -425,6 +429,13 @@ public interface Task{
 }
 ```
 
+## 事件发射器`Emitter`
+```cj
+public interface Emitter {
+    func emit(eventType!: EventType, name!: String, data!: Any): Unit
+}
+```
+
 ## 流程`Flow<G> where G <: EndExecutorGetter`
 ```cj
 /**
@@ -432,7 +443,7 @@ public interface Task{
  * category是流程唯一标识，tag是流程的版本标识
  * name是事件执行器所对应的事件名称
  */
-public interface Flow<G> where G <: EndExecutorGetter {
+public interface Flow<G> <: Emitter & Hashable & Equatable<ImmediateFlow> & Equatable<AsyncFlow> & ToString where G <: EndExecutorGetter {
     /**
      * 返回的是把当前流程当作子流程依赖的其它流程，集合保存的字符串是流程的'${category}-${tag}'
      */

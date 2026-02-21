@@ -96,4 +96,7 @@ public class AsyncFlow <: Flow<AsyncEndExecutorGetter> {
             case _ => throw GraphException()
         }
     }
+    public func emit(eventType!: EventType, name!: String, data!: Any): Unit {
+        dispatcher.getOrThrow().accept(DataEvent(eventType: eventType, category: category, tag: tag, name: name, data: data))
+    }
 }

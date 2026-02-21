@@ -17,7 +17,14 @@ package fountain::f_egraph.base
 
 public class AsyncTaskExecutor <: Executor {
     private let executor: TaskExecutor
-
+        /**
+     * task: {e => ImmediateFlow(category: e.category, tag: e.tag).emmit(eventType: e.eventType, 'eventName', eventData)
+     *             ...
+     *       }
+     * task: {e => AsyncFlow(category: e.category, tag: e.tag).emmit(eventType: e.eventType, 'eventName', eventData)
+     *            ....
+     *       }
+     */
     public init(acceptingEvent!: Event, accepter!: Accepter, task!: (Event) -> Event){
         executor = TaskExecutor(acceptingEvent: acceptingEvent, accepter: accepter, task: task)
     }

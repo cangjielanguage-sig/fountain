@@ -16,6 +16,14 @@ limitations under the License.
 package fountain::f_egraph.base
 
 public class TaskExecutor <: ImmediateExecutor {
+    /**
+     * task: {e => ImmediateFlow(category: e.category, tag: e.tag).emmit(eventType: e.eventType, 'eventName', eventData)
+     *             ...
+     *       }
+     * task: {e => AsyncFlow(category: e.category, tag: e.tag).emmit(eventType: e.eventType, 'eventName', eventData)
+     *            ....
+     *       }
+     */
     public TaskExecutor(acceptingEvent!: Event, private let accepter!: Accepter, private let task!: (Event) -> Event){
         super(acceptingEvent: acceptingEvent)
     }
