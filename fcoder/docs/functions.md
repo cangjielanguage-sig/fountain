@@ -6,7 +6,7 @@
     ```json
     {
         "function":"search",
-        "params":["{{keywords}}"],
+        "params":"{{keywords}}",
         "embeddingWeight": 0.7,
         "minConfidence": 0.75
     }
@@ -16,7 +16,7 @@
         |参数           |描述|
         |:--------------|:--|
         |function       |函数名|
-        |params         |函数参数，参数为字符串数组|
+        |params         |函数参数，参数为字符串数组，搜索内容不要超过70个字符|
         |embeddingWeight|向量匹配的权重，范围0-1，默认为0.7|
         |minConfidence  |搜索结果的最低置信度，范围0-1，默认为0.75|
         - ⚠️embeddingWeight是向量匹配的权重，
