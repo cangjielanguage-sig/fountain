@@ -33,6 +33,31 @@ sudo apt install binutils libc6-dev libc++-dev libgcc-11-dev
 | v     | verb,动词          | 设计     | ['simple']   | simple     | ['设计']     |
 | n     | noun,名词          | 文档     | ['simple']   | simple     | ['文档']     |
 
+- 安装向量插件
+1. 安装向量软件
+```
+# 更新包列表
+sudo apt update
+# 安装对应版本的插件（请将18替换为您的PostgreSQL主版本号）
+sudo apt install postgresql-18-pgvector
+################ 源码安装
+# 克隆源码（推荐使用/tmp目录）
+cd /tmp
+git clone --branch v0.8.1 https://github.com/pgvector/pgvector.git
+cd pgvector
+
+# 编译并安装
+make
+sudo make install
+```
+2. 在postgres执行`CREATE EXTENSION vector;`
+3. 验证：`SELECT * FROM pg_extension WHERE extname = 'vector';`
+4. 查询时可使用SET指定ef_search，再执行select：
+    ```sql
+        SET ef_search = 100;
+        select ...
+    ```
+
 **提示：**安装openssl xunsearch和zhparser vector等postgres插件的过程中会出很多兼容性错误，如果不熟悉postgresql刚开始使用也会遇到一些权限问题，把执行的命令和发生的错误都复制到xiao.huawei.com按照回复一步步执行都可以解决。
 
 ## 触发器函数
