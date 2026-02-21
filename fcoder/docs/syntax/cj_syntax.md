@@ -1,5 +1,7 @@
 # 仓颉语言基础语法参考
 
+> 本文档是仓颉1.1.0 的语法参考
+
 > **重要提示**：本文档标注 ⚠️ 的内容为实际使用中容易出错的关键点，AI 编写仓颉代码时请特别关注。
 
 仓颉语言（Cangjie），文件后缀为 `.cj`，简称 `cj`。
@@ -956,12 +958,22 @@ func test() {
 ```
 
 ## 组织
-在模块或项目的cjpm.toml 的`[package]`节点增加`organization = "orgname"`即定义了一个组织名。当前模块下面的包声明都按照以下方式声明：
+在模块或项目的cjpm.toml 的`[package]`节点增加`organization = "orgname"`即定义了一个组织名。
+⚠️模块下面的包都按照以下方式声明：
 ```cj
 //a.cj
-package orgname::demo
+package org_name::demo
 //b.cj
-package orgname::demo.directory_0
+package org_name::demo.directory_0
+```
+
+## 第三方依赖
+- 在模块`cjpm.toml`文件的`[dependencies]`添加依赖：
+```toml
+[dependencies]
+    "org_name1::foo" = "0.1.0" # 这是仓颉中心仓依赖
+    "org_name2::bar" = { path = "../bar" } # 这是本地依赖
+    "org_name3::baz" = { git = "https://domain.name/org_name3/baz.git" } # 这是git依赖
 ```
 
 ## 常见错误与注意事项
