@@ -944,18 +944,20 @@ package demo.directory_0 // root 包 demo 的子包 directory_0
 ### 导入
 ```cj
 package a
-import std.math.* //导入标准库std.math包下的所有成员
+import std.math.* //导入标准库std.math包下的所有顶级声明
 import package1.foo // 导入一个包，可以使用foo.TopDecl 访问package1.foo包下的顶级声明
 import {package1.foo, package2.bar, package1.MyClass}
 import package1.bar as b // 导入一个包，并起别名b
 import package1.foobar.TopDecl2 as FooBarTopDecl // 导入一个包下的顶级声明，并起别名FooBarTopDecl
 
 
-直接使用导入的方法，类型
+//直接使用导入的方法，类型
 func test() {
     let a = pow(1,2) // std.math.pow
     foo() // 方法
     let b = MyClass()
+    let c = b.Bar()
+    let d = foo.Foo()//只导入了包，而没有导入包下的顶级声明，必须以`包名.顶级声明`访问
 }
 ```
 
