@@ -944,9 +944,11 @@ package demo.directory_0 // root 包 demo 的子包 directory_0
 ### 导入
 ```cj
 package a
-import std.math.*
-import package1.foo
+import std.math.* //导入标准库std.math包下的所有成员
+import package1.foo // 导入一个包，可以使用foo.TopDecl 访问package1.foo包下的顶级声明
 import {package1.foo, package2.bar, package1.MyClass}
+import package1.bar as b // 导入一个包，并起别名b
+import package1.foobar.TopDecl2 as FooBarTopDecl // 导入一个包下的顶级声明，并起别名FooBarTopDecl
 
 
 直接使用导入的方法，类型
@@ -1004,7 +1006,8 @@ package org_name::demo.directory_0
 10. `Unit` 类型只支持赋值、判等、判不等操作
 11. Lambda 表达式可以立即调用：`{ => 123 }()`
 12. 插值字符串使用 `${}` 而非 `{}`
-13. `Duration` 和 `sleep` 在 `std.core` 里不需导入
+13. 标准库包`std.core`默认导入
+14.`Duration` 和 `sleep` 在 `std.core` 里不需导入
 
 ---
 
@@ -1051,6 +1054,11 @@ main() {
 ---
 
 ## 标准库
+
+### 导入标准库
+- `std.`开头的包名都是标准库
+- 标准库没有组织名，`import std.xxx.*`即可导入相应的包内顶级声明
+
 ### `std.core`
 core 包是标准库的核心包，提供了适用仓颉语言编程最基本的一些 API 能力。
 
