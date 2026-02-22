@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package fountain::f_egraph.base
+package f_egraph.base
 
 public enum EventType <: ToString & Hashable & Equatable<EventType> {
     | Start
@@ -32,7 +32,7 @@ public enum EventType <: ToString & Hashable & Equatable<EventType> {
         }
     }
     public func hashCode(): Int64 {
-        'fountain::f_egraph.base.EventType.${this}'.hashCode()
+        'f_egraph.base.EventType.${this}'.hashCode()
     }
     public operator func ==(other: EventType): Bool {
         match((this, other)){

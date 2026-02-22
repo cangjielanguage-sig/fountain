@@ -32,6 +32,7 @@ public class AspectRoute <: RouteRule {
         route.matches(funcInfo)
     }
 }
+
 /**
  * 以下所有规则除非特别说明都适用本注释的说明。
  * 任意参数都可以用通配符*表示任意大于等于0个字符，?表示0或1个字符
@@ -54,19 +55,6 @@ public abstract class RouteRule {
     }
     public operator const func !(): RouteRule {
         NotRouteRule(this)
-    }
-}
-/**
- * 用来修饰切面也就是Aspect的实现类
- */
-@Annotation[target: [Type]]
-public class AspectRoute <: RouteRule {
-    public const AspectRoute(public let route: RouteRule) {}
-    public func isAspect<T>(): Bool {
-        TypeInfo.of<T>().isSubtypeOf(TypeInfo.of<Aspect>())
-    }
-    public func matches(funcInfo: InvocationFuncInfo): Bool {
-        route.matches(funcInfo)
     }
 }
 

@@ -17,7 +17,7 @@ package f_data.path
 
 internal class RecursiveDescentIterator <: Iterator<Data> {
     private let list = LinkedList<Iterator<Data>>()
-    private var itr: Iterator<Data> = EmptyIterator<Data>.INSTANCE()
+    private var itr: Iterator<Data> = EmptyIterator<Data>.instance()
     init(data: Data) {
         append(data)
     }
