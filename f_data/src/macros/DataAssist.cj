@@ -107,9 +107,11 @@ func generateProps(decl: ClassDecl, exclusion: HashSet<String>) {
         if (exclusion.contains(name.value)) {
             return
         }
+        println('AAAAAAAAAAAAAAAAAAA ${v.toTokens()}')
         let t = v.declType
         let mutable = v.keyword.value == 'var'
-        v.identifier = Token(IDENTIFIER, v.identifier.value + '_')
+        let nameVal = name.value
+        v.identifier = Token(IDENTIFIER, if(nameVal.startsWith('`')){nameVal[1 .. nameVal.size - 1]}else{nameVal} + '_')
         let (mutToken, setter) = if (mutable) {
             (quote(mut), quote(
                 set(value){
