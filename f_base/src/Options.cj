@@ -82,10 +82,10 @@ public class Options<T, R> {
     public static func isNotEmptyOrBlank(current: Option<T>): Bool {
         !isEmptyOrBlank(current)
     }
-    public static func isEmptyOrZeroOrBlank(current: Option<T>) {
+    public static func isEmptyOrZeroOrBlank(current: Option<T>): Bool {
         isEmptyOrZero(current) || isEmptyOrBlank(current)
     }
-    public static func isNotEmptyOrZeroOrBlank(current: Option<T>) {
+    public static func isNotEmptyOrZeroOrBlank(current: Option<T>): Bool {
         !isEmptyOrZeroOrBlank(current)
     }
     public static func convert(origin: Option<T>, default: R, converter: (T) -> Option<R>): R {
@@ -109,7 +109,7 @@ public class Options<T, R> {
     public static func convert(origin: Option<T>, converter: (T) -> Option<R>): Option<R> {
         doConvert(origin, converter, false)
     }
-    public static func convertOrThrow(origin: Option<T>, converter: (T) -> Option<R>) {
+    public static func convertOrThrow(origin: Option<T>, converter: (T) -> Option<R>): Option<R> {
         doConvert(origin, converter, true)
     }
     private static func doConvert(origin: Option<T>, converter: (T) -> Option<R>, toThrow: Bool): Option<R> {

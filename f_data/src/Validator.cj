@@ -19,13 +19,13 @@ public abstract class Validator {
     public const Validator(public let messageIfNotMatch!: String = '') {}
     public func validate(value: ?String): Bool
 
-    public const operator func &(right: Validator){
+    public const operator func &(right: Validator): Validator {
         AndValidator(this, right)
     }
-    public const operator func |(right: Validator){
+    public const operator func |(right: Validator): Validator {
         OrValidator(this, right)
     }
-    public const operator func !(){
+    public const operator func !(): Validator {
         NotValidator(this)
     }
 }

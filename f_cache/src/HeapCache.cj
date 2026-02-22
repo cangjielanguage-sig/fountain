@@ -227,7 +227,7 @@ public class HeapCache<V> where V <: Object {
             store.size
         }
     }
-    public func clear() {
+    public func clear(): Unit {
         store.clear()
     }
     public func destroy(): Unit {

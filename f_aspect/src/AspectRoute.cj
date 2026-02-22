@@ -46,16 +46,30 @@ public class AspectRoute <: RouteRule {
 public abstract class RouteRule {
     public const init() {}
     public func matches(funcInfo: InvocationFuncInfo): Bool
-    public operator const func &(right: RouteRule) {
+    public operator const func &(right: RouteRule): RouteRule {
         AndRouteRule(this, right)
     }
-    public operator const func |(right: RouteRule) {
+    public operator const func |(right: RouteRule): RouteRule {
         OrRouteRule(this, right)
     }
-    public operator const func !() {
+    public operator const func !(): RouteRule {
         NotRouteRule(this)
     }
 }
+/**
+ * 用来修饰切面也就是Aspect的实现类
+ */
+@Annotation[target: [Type]]
+public class AspectRoute <: RouteRule {
+    public const AspectRoute(public let route: RouteRule) {}
+    public func isAspect<T>(): Bool {
+        TypeInfo.of<T>().isSubtypeOf(TypeInfo.of<Aspect>())
+    }
+    public func matches(funcInfo: InvocationFuncInfo): Bool {
+        route.matches(funcInfo)
+    }
+}
+
 /**
  * 匹配的公共实例函数将被织入
  */

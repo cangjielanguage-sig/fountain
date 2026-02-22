@@ -96,17 +96,18 @@ public class StringGenerator <: ToString {
     public func contains<T>(content: T): Bool where T <: ToString {
         indexOf<T>(content).isSome()
     }
-    public func startsWith(content: String){
+    public func startsWith(content: String): Bool {
         (indexOf(content) ?? -1) == 0
     }
-    public func endsWith(content: String){
+    public func endsWith(content: String): Bool {
         (utf8.size >= content.size && utf8.unsafeData()[size - content.size..] == content.unsafeBytes())
     }
     public func substring(start: Int64, end: Int64): String {
         String.fromUtf8(utf8[start .. end].unsafeData())
     }
-    public func clear(){
+    public func clear(): This {
         utf8.clear()
+        this
     }
     public func removeFirst<T>(content: T, fromIndex!: Int64 = 0): This where T <: ToString {
         let bytes = content.toString().unsafeBytes()
@@ -231,7 +232,7 @@ public class StringGenerator <: ToString {
         }
         this
     }
-    public func toString() {
+    public func toString(): String {
         String.fromUtf8(unsafeBytes())
     }
     public func unsafeBytes(): Array<Byte> {

@@ -126,35 +126,35 @@ public enum Result<T, E> {
             case _ => NoResult
         }
     }
-    public func filterOk() {
+    public func filterOk(): Result<T, E> {
         if (isOk) {
             this
         } else {
             NoResult
         }
     }
-    public func filterErr() {
+    public func filterErr(): Result<T, E> {
         if (isErr) {
             this
         } else {
             NoResult
         }
     }
-    public func filterWithE() {
+    public func filterWithE(): Result<T, E> {
         if (withE) {
             this
         } else {
             NoResult
         }
     }
-    public func filterWithValue() {
+    public func filterWithValue(): Result<T, E> {
         if (withValue) {
             this
         } else {
             NoResult
         }
     }
-    public func filter() {
+    public func filter(): ResultFilter<T, E> {
         ResultFilter<T, E>(this)
     }
     public func flatten<U>(): Result<U, E> {
@@ -211,27 +211,27 @@ public class ResultFilter<T, E> {
     private var filterErrFn_: ?(E) -> Bool = None
     private var filterWithValue_: ?Bool = None
     private var filterWithE_: ?Bool = None
-    public func filterOk(predicate: (T) -> Bool) {
+    public func filterOk(predicate: (T) -> Bool): ResultFilter<T, E> {
         filterOkFn_ = predicate
         this
     }
-    public func filterOk() {
+    public func filterOk(): ResultFilter<T, E> {
         filterOk_ = true
         this
     }
-    public func filterErr(predicate: (E) -> Bool) {
+    public func filterErr(predicate: (E) -> Bool): ResultFilter<T, E> {
         filterErrFn_ = predicate
         this
     }
-    public func filterErr() {
+    public func filterErr(): ResultFilter<T, E> {
         filterErr_ = true
         this
     }
-    public func filterWithValue() {
+    public func filterWithValue(): ResultFilter<T, E> {
         filterWithValue_ = true
         this
     }
-    public func filterWithE() {
+    public func filterWithE(): ResultFilter<T, E> {
         filterWithE_ = true
         this
     }

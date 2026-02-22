@@ -49,7 +49,8 @@ public interface ExtendIterator<T> {
     func toArrayList(): ArrayList<T>{
         collect<ArrayList<T>>(ArrayList<T>()){v, l => l.add(v)}
     }
-    func groupBy<K>(key: (T) -> K): HashMap<K, T> where K <: Hashable & Equatable<K> 
+    func collect<K>(key: (T) -> K): HashMap<K, T> where K <: Hashable & Equatable<K>
+    func groupBy<K>(key: (T) -> K): HashMap<K, ArrayList<T>> where K <: Hashable & Equatable<K>
 }
 
 extend<T> Iterator<T> <: ExtendIterator<T> {
@@ -77,7 +78,7 @@ extend<T> Iterator<T> <: ExtendIterator<T> {
         if (toThrow) {
             flatMap<R> {
                 v => match (v) {
-                    case x: Iterator<R> => x
+                    case x: Iterable<R> => x.iterator()
                     case _ => throw IllegalArgumentException(
                         '${TypeInfo.of<T>()} does not match ${TypeInfo.of<Iterator<R>>()}')
                 }
@@ -85,8 +86,8 @@ extend<T> Iterator<T> <: ExtendIterator<T> {
         } else {
             flatMap<R> {
                 v => match (v) {
-                    case x: Iterator<R> => x
-                    case _ => EmptyIterator<R>.INSTANCE()
+                    case x: Iterable<R> => x.iterator()
+                    case _ => EmptyIterator<R>.instance()
                 }
             }
         }
@@ -97,10 +98,22 @@ extend<T> Iterator<T> <: ExtendIterator<T> {
         }
         collection
     }
-    public func groupBy<K>(key: (T) -> K): HashMap<K, T> where K <: Hashable & Equatable<K> {
+    public func collect<K>(key: (T) -> K): HashMap<K, T> where K <: Hashable & Equatable<K> {
         let m = HashMap<K, T>()
         for(t in this){
             m[key(t)] = t
+        }
+        m
+    }
+    public func groupBy<K>(key: (T) -> K): HashMap<K, ArrayList<T>> where K <: Hashable & Equatable<K> {
+        let m = HashMap<K, ArrayList<T>>()
+        for(t in this){
+            let k = key(t)
+            if(let Some(list) <- m.get(k)){
+                list
+            }else{
+                ArrayList<T>()
+            }.add(t)
         }
         m
     }

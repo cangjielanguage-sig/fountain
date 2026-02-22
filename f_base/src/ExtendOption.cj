@@ -115,7 +115,7 @@ public class OptionCaller<T, R> {
         private let someCallee: (T) -> R,
         private var noneCallee!: ?() -> R = None<() -> R>
     ) {}
-    public func none(callee: () -> R) {
+    public func none(callee: () -> R): OptionCaller<T, R> {
         noneCallee = callee
         this
     }

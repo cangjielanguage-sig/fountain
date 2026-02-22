@@ -86,14 +86,11 @@ public struct Server<DE, EN, M, T, ID> <: Resource where EN <: MessageCopier, M 
             this.buffers.add(buffer)
             params.populate(socket)
             spawn {
+                let future = MessageFuture<M>()
                 while (!socket.isClosed()) {
-                    let m = M.decode<TcpSocket, T>(buffer.buffered, closeFromOnEnd: false) |> executor
+                    let req = M.decode<TcpSocket, T>(buffer.buffered, closeFromOnEnd: false)
+                    let m = req |> executor
                     let id = idGetter(m)
-                    if (let Some(fut) <- futures.remove(id)) {
-                        var f = fut
-                        f.set(m)
-                        continue
-                    }
                     transfer(buffer, m)
                 }
             }
@@ -104,12 +101,6 @@ public struct Server<DE, EN, M, T, ID> <: Resource where EN <: MessageCopier, M 
         buffer.queue.add({
             => en.copy(to: buffer.socket, closeToOnEnd: false)
         })
-    }
-    public func transfer(buffer: SocketBuffer, id: ID, message: M, timeout: Duration): ?M {
-        let future = MessageFuture<M>()
-        futures.add(id, future)
-        transfer(buffer, message)
-        future.tryGet(timeout)
     }
     public func isClosed(): Bool {
         server.isClosed()

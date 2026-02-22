@@ -13,10 +13,10 @@
   package-configuration = {}
 
 [dependencies]
-  "fountain::f_base" = {path = "../f_base"}
-  "fountain::f_bean" = {path = "../f_bean"}
-  "fountain::f_data" = {path = "../f_data"}
-  "fountain::f_egraph" = {path = "../f_egraph"}
-  "fountain::f_log" = {path = "../f_log"}
-  "fountain::f_orm" = {path = "../f_orm"}
-  "fountain::f_version" = {path = "../f_version"}
+  f_base = {path = "../f_base"}
+  f_bean = {path = "../f_bean"}
+  f_data = {path = "../f_data"}
+  f_egraph = {path = "../f_egraph"}
+  f_log = {path = "../f_log"}
+  f_orm = {path = "../f_orm"}
+  f_version = {path = "../f_version"}

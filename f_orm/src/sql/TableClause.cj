@@ -93,7 +93,7 @@ public abstract class ExceptInsertClause<T> <: TableClause<T> where T <: QueryMa
     public func FULL_JOIN<T>(AS!: String = '', ON!: String = ''): This where T <: QueryMappersInit<T> {
         join<T>('full outer', AS, ON)
     }
-    private func condition(cond: () -> Unit, keyword: String, trim: String): This {
+    protected func condition(cond: () -> Unit, keyword: String, trim: String): This {
         try{
             executor.partials.clear()
             cond()
@@ -194,6 +194,18 @@ public class FromClause<T> <: ExceptInsertClause<T> where T <: QueryMappersInit<
 
     public func GROUP_BY(groupBy: () -> String): This {
         appendPartial('group by', ',', groupBy())
+    }
+    public func HAVING(condition: () -> Unit): This {
+        this.condition(condition, 'having', 'and|or')
+    }
+    public func HAVING(condition: String): This {
+        appendPartial('having', 'and|or', condition)//这个不能用this.condition
+    }
+    public func HAVING(arg: Map<String, Any>, condition: () -> String): This {
+        HAVING(parseSqlFromMap(executor, condition(), arg))
+    }
+    public func HAVING<T>(arg: T, condition: () -> String): This where T <: ObjectData<T> {
+        HAVING(parseSqlFromObject<T>(executor, condition(), arg))
     }
     public func findById(id: Int64): ?T {
         executor.setSql('select * ${this} where ${T.queryMappers().idName ?? 'id'}=${executor.arg(id)}').first<T>()

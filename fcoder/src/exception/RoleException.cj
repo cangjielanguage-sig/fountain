@@ -13,9 +13,9 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package fountain::fcoder.exception
+package fcoder.exception
 
-import fountain::f_base.BaseException
+import f_base.BaseException
 
 public class RoleException <: BaseException {
     public init() {}

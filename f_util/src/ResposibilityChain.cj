@@ -63,7 +63,8 @@ public class ResposibilityChain<C, A, R> {
         }
     }
 
-    /**  执行一个策略，遍历策略集合，直到遇到一个Resposibility.check(condition)返回true的策略，并执行这个策略。
+    /**
+     * 执行一个策略，遍历策略集合，直到遇到一个Resposibility.check(condition)返回true的策略，并执行这个策略。
      * 如果没有策略满足条件，就抛出IllegalAccessException
      */
     public func execute(condition: C, arg: A): R {

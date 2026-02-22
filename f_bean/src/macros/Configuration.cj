@@ -30,12 +30,12 @@ public macro Configuration(input: Tokens): Tokens {
                 while (let d: MacroExpandDecl <- md) {
                     md = d.macroInputDecl
                     match (md) {
-                        case f: FuncDecl where d.fullIdentifier.value == 'Constructor' && isStatic(f) && isPublic(f) && f.funcParams.isEmpty() =>
+                        case f: FuncDecl where d.fullIdentifier.value == 'BeanInit' && isStatic(f) && isPublic(f) && f.funcParams.isEmpty() =>
                             let fname = f.identifier.value
                             instanceTokens += quote(
                                 BeanFactory.instance.register<$identifier>($fname){$(identifier).$(f.identifier)()}$(`nl`)
                             )
-                        case f: FuncDecl where d.fullIdentifier.value == 'Constructor' && !isStatic(f) && isPublic(f) && f.funcParams.isEmpty() =>
+                        case f: FuncDecl where d.fullIdentifier.value == 'BeanInit' && !isStatic(f) && isPublic(f) && f.funcParams.isEmpty() =>
                             let fname = f.identifier.value
                             staticTokens += quote(
                                 BeanFactory.instance.register<$identifier>($fname){configuration.$(f.identifier)()}$(`nl`)

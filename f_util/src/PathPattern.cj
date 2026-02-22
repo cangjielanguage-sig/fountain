@@ -248,7 +248,7 @@ public class PathPattern {
         let variables: Map<Int64, Any> = if (let EXTRACTION <- mode) {
             HashMap<Int64, Any>()
         } else {
-            EmptyMap<Int64, Any>.INSTANCE()
+            EmptyMap<Int64, Any>.instance()
         }
         var i = 0
         while (i < parts.size) {

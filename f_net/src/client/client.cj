@@ -92,18 +92,28 @@ public struct Client<DE, EN, M, T, ID> where EN <: MessageCopier, M <: Protocol<
      * @param checker   连接有效性检查函数，务必使用client.transfer(socketBuffer, id, message, timeout)传检查包
      */
     public static func builder(queueSize!: Int64 = 1024, socketCount!: Int64 = 1, host!: String, port!: UInt16,
-        idGetter!: (DE) -> ID, checkDuration!: Duration, checker!: (SocketBuffer) -> Bool) {
+        idGetter!: (DE) -> ID, checkDuration!: Duration, checker!: (SocketBuffer) -> Bool): SocketBuilder<DE, EN, M, T, ID> {
         SocketBuilder<DE, EN, M, T, ID>(socketCount: queueSize, host: host, port: port, idGetter: idGetter,
             checkDuration: checkDuration, checker: checker)
     }
+    private prop index: Int64 {
+        get(){
+            ThreadLocalRandom.current.nextInt64(0, sockets.size, closed: true)
+        }
+    }
     public func transfer(id: ID, message: M): MessageFuture<DE> {
-        let index = ThreadLocalRandom.current.nextInt64(0, sockets.size, closed: true)
         transfer(index, id, message)
+    }
+    public func transfer(id: ID, message: M, timeout: Duration): ?DE {
+        transfer(index, id, message, timeout)
     }
     private func transfer(index: Int64, id: ID, message: M): MessageFuture<DE> {
         transfer(buffers[index], id, message)
     }
-    public func transfer(buffer: SocketBuffer, id: ID, message: M): MessageFuture<DE> {
+    private func transfer(index: Int64, id: ID, message: M, timeout: Duration): ?DE {
+        transfer(buffers[index], id, message, timeout)
+    }
+    private func transfer(buffer: SocketBuffer, id: ID, message: M): MessageFuture<DE> {
         let future = MessageFuture<DE>()
         futures.add(id, future)
         let en = message.encode()
@@ -112,7 +122,7 @@ public struct Client<DE, EN, M, T, ID> where EN <: MessageCopier, M <: Protocol<
         })
         future
     }
-    public func transfer(buffer: SocketBuffer, id: ID, message: M, timeout: Duration): ?DE {
+    private func transfer(buffer: SocketBuffer, id: ID, message: M, timeout: Duration): ?DE {
         transfer(buffer, id, message).tryGet(timeout)
     }
 }

@@ -28,7 +28,7 @@ public struct GeoHash <: Hashable & Equatable<GeoHash> & ToString & Parsable<Geo
 
     private GeoHash(public let hash: UInt64){}
 
-    public static func encode(latitude: Float64, longitude: Float64): GeoHash {
+    public static func encode(longitude: Float64, latitude: Float64): GeoHash {
         var lowlat = MIN_LATITUDE
         var highlat = MAX_LATITUDE
         var lowlng = MIN_LONGITUDE
@@ -95,7 +95,7 @@ public struct GeoHash <: Hashable & Equatable<GeoHash> & ToString & Parsable<Geo
     public func hashCode(): Int64 {
         this.hash.hashCode()
     }
-    public func toString(){
+    public func toString(): String {
         let gen = StringGenerator()
         for(shift in 62 ..= 0: -2) {
             gen.append((hash >> shift) & 3u64)

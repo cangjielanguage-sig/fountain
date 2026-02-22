@@ -17,4 +17,4 @@ package f_base
 
 public import std.sync.Timer
 
-public let ZERO_TIMER = unsafe { zeroValue<Timer>() }
+public let ZERO_TIMER: Timer = unsafe { zeroValue<Timer>() }

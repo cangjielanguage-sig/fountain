@@ -35,6 +35,11 @@ public struct App {
     private static let log = LoggerFactory.getLogger<App>()
     private static const APP_STATIC_RESOURCE_SUFFIX = '_stAtIc__'
     private static let stdOut = getStdOut()
+    private static prop versionRegex: Regex {
+        get(){
+            Regex(#'^\d+\.\d+\.\d+$'#)
+        }
+    }
 
     public App(private let args: Array<String>,
                private let appHomeIsWorkingPath!: Bool = true,
@@ -342,13 +347,23 @@ public struct App {
         String.fromUtf8(File.readFrom(path))
     }
     private func appendToml(dir: Path): Unit {
+        let version = if(this.args.size > 1){
+            var sub = ''
+            for(arg in this.args[1 .. ] where versionRegex.matches(arg)){
+                sub = arg
+                break
+            }
+            sub
+        }else{
+            throw BootException('fountain version must be specified for fboot workspace. The correct command line is fboot workspace /path/of/workspace x.y.z or fboot workspace workspace_name x.y.z, x.y.z is fountain version')
+        }
         let tomlPath = dir.join('cjpm.toml')
         var content = entireFileText(tomlPath).replace('[workspace]', '''
 [workspace]
   version = "1.0.0"'''
 )
-.replace('compile-option = ""', 'compile-option = "-O2 --dy-std -Woff all"')
-.replace('override-compile-option = ""', 'override-compile-option = "-O2 --dy-std -Woff all"')
+.replace('compile-option = ""', 'compile-option = "--dy-std -Woff all"')
+.replace('override-compile-option = ""', 'override-compile-option = "--dy-std -Woff all"')
 .replace('[dependencies]', '''
 [dependencies]
   fountain = {git = "https://gitcode.com/Cangjie-SIG/fountain.git", branch = "lts/1.0.0"}'''
@@ -361,38 +376,38 @@ ${content}
 
 [target]
 [target.x86_64-unknown-linux-gnu]
-  compile-option = "-O2 --lto=full --dy-std -Woff all -ldl"
-  override-compile-option = "-O2 --lto=full --dy-std -Woff all -ldl"
+  compile-option = "--lto=full --dy-std -Woff all -ldl"
+  override-compile-option = "--lto=full --dy-std -Woff all -ldl"
 [target.x86_64-unknown-linux-gnu.bin-dependencies]
   path-option = ["\${CANGJIE_STDX_DYNAMIC_PATH}", "\${CANGJIE_FOUNTAIN_LIBS}"]
 [target.aarch64-unknown-linux-gnu]
-  compile-option = "-O2 --lto=full --dy-std -Woff all -ldl"
-  override-compile-option = "-O2 --lto=full --dy-std -Woff all -ldl"
+  compile-option = "--lto=full --dy-std -Woff all -ldl"
+  override-compile-option = "--lto=full --dy-std -Woff all -ldl"
 [target.aarch64-unknown-linux-gnu.bin-dependencies]
   path-option = ["\${CANGJIE_STDX_DYNAMIC_PATH}", "\${CANGJIE_FOUNTAIN_LIBS}"]
 [target.x86_64-w64-mingw32]
-  compile-option = "-O2 --dy-std -Woff all -lcrypt32"
-  override-compile-option = "-O2 --dy-std -Woff all -lcrypt32"
+  compile-option = "--dy-std -Woff all -lcrypt32"
+  override-compile-option = "--dy-std -Woff all -lcrypt32"
 [target.x86_64-w64-mingw32.bin-dependencies]
   path-option = ["\${CANGJIE_STDX_DYNAMIC_PATH}", "\${CANGJIE_FOUNTAIN_LIBS}"]
 [target.x86_64-apple-darwin]
-  compile-option = "-O2 --dy-std -Woff all"
-  override-compile-option = "-O2 --dy-std -Woff all"
+  compile-option = "--dy-std -Woff all"
+  override-compile-option = "--dy-std -Woff all"
 [target.x86_64-apple-darwin.bin-dependencies]
   path-option = ["\${CANGJIE_STDX_DYNAMIC_PATH}", "\${CANGJIE_FOUNTAIN_LIBS}"]
 [target.aarch64-apple-darwin]
-  compile-option = "-O2 --dy-std -Woff all"
-  override-compile-option = "-O2 --dy-std -Woff all"
+  compile-option = "--dy-std -Woff all"
+  override-compile-option = "--dy-std -Woff all"
 [target.aarch64-apple-darwin.bin-dependencies]
   path-option = ["\${CANGJIE_STDX_DYNAMIC_PATH}", "\${CANGJIE_FOUNTAIN_LIBS}"]
 [target.aarch64-linux-ohos]
-  compile-option = "-O2 --dy-std -ldl"
-  override-compile-option = "-O2 --dy-std -ldl"
+  compile-option = "--dy-std -ldl"
+  override-compile-option = "--dy-std -ldl"
 [target.aarch64-linux-ohos.bin-dependencies]
   path-option = ["\${CANGJIE_STDX_DYNAMIC_PATH}, "\${CANGJIE_FOUNTAIN_LIBS}""]
 [target.x86_64-linux-ohos]
-  compile-option = "-O2 --dy-std -ldl"
-  override-compile-option = "-O2 --dy-std -ldl"
+  compile-option = "--dy-std -ldl"
+  override-compile-option = "--dy-std -ldl"
 [target.x86_64-linux-ohos.bin-dependencies]
   path-option = ["\${CANGJIE_STDX_DYNAMIC_PATH}, "\${CANGJIE_FOUNTAIN_LIBS}""]
 '''
@@ -406,14 +421,17 @@ ${content}
     }
     private func doInit(arg: String): (Int64, Path) {
         let workingDir = if(1 < this.args.size){
-            let sub = this.args[1]
-            let dir = if(sub.startsWith('/')){
-                Path(sub)
-            } else {
-                getWorkingDirectory().join(this.args[1])
+            var sub = ''
+            for(arg in this.args[1 .. ] where !versionRegex.matches(arg)){
+                sub = arg
+                break
             }
-            if(!exists(dir)){
-                Directory.create(dir, recursive: true)
+            let dir = if (sub.startsWith('/')){
+                Path(sub)
+            }else if(sub.size > 0){
+                getWorkingDirectory().join(sub)
+            }else{
+                getWorkingDirectory()
             }
             dir
         }else{

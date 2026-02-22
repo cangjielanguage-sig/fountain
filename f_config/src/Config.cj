@@ -76,7 +76,7 @@ public class Config {
     }
     private init() {}
 
-    public static func refresher(prefix: String, fn: () -> Unit) {
+    public static func refresher(prefix: String, fn: () -> Unit): Unit {
         REFRESHER['${prefix}_'] = fn
     }
     /**
@@ -105,6 +105,9 @@ public class Config {
         }
 
     }
+    /**
+     * 得到相同前缀的配置项
+     */
     public static func getAll(prefix: String): Map<String, String> {
         let map = HashMap<String, String>()
         for ((k, v) in ARGS where k.startsWith('${prefix}_') || k.startsWith('${Config.prefix}_${prefix}_')) {
@@ -112,6 +115,9 @@ public class Config {
         }
         map
     }
+    /**
+     * 得到名是key的配置项
+     */
     public static func getString(key: String): ?String {
         if (let Some(v) <- ARGS.get(key)) {
             v
@@ -170,7 +176,7 @@ public class Config {
     public static func getDurations(key: String, delim!: String = ','): Array<Duration> {
         getDatas<Duration>(key, delim: delim)
     }
-    public static func bufferSize(bufferKey: String, default: Int64, debugging: Bool) {
+    public static func bufferSize(bufferKey: String, default: Int64, debugging: Bool): Int64 {
         if (let Some(x) <- Config.getValue<Int>(bufferKey)) {
             if (x > 0 && debugging) {
                 return x

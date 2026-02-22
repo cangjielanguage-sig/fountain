@@ -39,7 +39,7 @@ public struct UUID <: Hashable & Comparable<UUID> & ToString & Parsable<UUID> & 
         h = HashBuilder().append<Byte, Array<Byte>>(values).build()
     }
 
-    public func toData(): Data{
+    public func toData(): Data {
         toString().toData()
     }
     public static func tryFromData(data: Data, flag: DataConversionFlag): Any {
@@ -104,7 +104,7 @@ public struct UUID <: Hashable & Comparable<UUID> & ToString & Parsable<UUID> & 
         }
         BigInt(true, values).toString(radix: radix)
     }
-    public func toHexString() {
+    public func toHexString(): String {
         toString(false)
     }
     public prop version: Int64 {

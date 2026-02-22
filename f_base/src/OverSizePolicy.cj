@@ -27,13 +27,13 @@ public interface OverSizePolicy<T> {
 
 public class AbortOverSizePolicy<T> <: OverSizePolicy<T> {
     public AbortOverSizePolicy(private let max: Int64) {}
-    public func reject(o: T, fn: () -> Unit): Unit {
+    public func reject(_: T, _: () -> Unit): Unit {
         throw OverSizeException("max size is ${max}")
     }
 }
 
 public class DiscardOverSizePolicy<T> <: OverSizePolicy<T> {
-    public func reject(o: T, fn: () -> Unit): Unit {}
+    public func reject(_: T, _: () -> Unit): Unit {}
 }
 
 public class RemoveSomeOnePolicy<T> <: OverSizePolicy<T> {
@@ -45,7 +45,7 @@ public class RemoveSomeOnePolicy<T> <: OverSizePolicy<T> {
 }
 
 public class CallerRunsOverSizePolicy<T> <: OverSizePolicy<T> {
-    public func reject(o: T, fn: () -> Unit): Unit {
+    public func reject(_: T, fn: () -> Unit): Unit {
         fn()
     }
 }
@@ -68,12 +68,12 @@ public class BlockingOverSizePolicy<T> <: OverSizePolicy<T> {
             policy.reject(o, fn)
         }
     }
-    public func notifyAll() {
+    public func notifyAll(): Unit {
         synchronized(monitor) {
             condition.notifyAll()
         }
     }
-    public func notify() {
+    public func notify(): Unit {
         synchronized(monitor) {
             condition.notify()
         }

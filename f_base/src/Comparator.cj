@@ -21,7 +21,7 @@ public struct Comparator<T> {
     public static func compare<T>(left: T, right: T): Ordering where T <: Comparable<T> {
         left.compare(right)
     }
-    public static func create<T>() where T <: Comparable<T> {
+    public static func create<T>(): Comparator<T> where T <: Comparable<T> {
         Comparator<T>(compare<T>)
     }
     public operator func ()(left: T, right: T): Ordering {

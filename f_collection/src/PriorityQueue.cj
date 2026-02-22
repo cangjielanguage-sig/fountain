@@ -63,20 +63,20 @@ public class PriorityQueue<T> <: Queue<T> & Iterable<T> & Collection<T> & Growab
     public static func create<T>(
         capacity!: Int64 = DEFAULT_CAPACITY,
         overSizePolicy!: OverSizePolicy<PriorityQueue<T>> = DiscardOverSizePolicy<PriorityQueue<T>>()
-    ) where T <: Comparable<T> {
+    ): PriorityQueue<T> where T <: Comparable<T> {
         PriorityQueue<T>.create(Comparator<T>.create<T>(), capacity: capacity, overSizePolicy: overSizePolicy)
     }
     public static func createReverse<T>(
         capacity!: Int64 = DEFAULT_CAPACITY,
         overSizePolicy!: OverSizePolicy<PriorityQueue<T>> = DiscardOverSizePolicy<PriorityQueue<T>>()
-    ) where T <: Comparable<T> {
+    ): PriorityQueue<T> where T <: Comparable<T> {
         PriorityQueue<T>.create(Comparator<T>.create<T>().reverse(), capacity: capacity, overSizePolicy: overSizePolicy)
     }
     public static func create(
         comparator: Comparator<T>,
         capacity!: Int64 = DEFAULT_CAPACITY,
         overSizePolicy!: OverSizePolicy<PriorityQueue<T>> = DiscardOverSizePolicy<PriorityQueue<T>>()
-    ) {
+    ): PriorityQueue<T> {
         PriorityQueue<T>(comparator.comparator, capacity: capacity, overSizePolicy: overSizePolicy)
     }
 
@@ -132,7 +132,7 @@ public class PriorityQueue<T> <: Queue<T> & Iterable<T> & Collection<T> & Growab
     /**
      * offer all elements in values to current queue
      */
-    public func add(all!: Collection<T>) {
+    public func add(all!: Collection<T>): Unit {
         for (value in all) {
             add(value)
         }
@@ -141,7 +141,7 @@ public class PriorityQueue<T> <: Queue<T> & Iterable<T> & Collection<T> & Growab
     /**
      * is current heap full? if capacity is not greater than 0, heap is infinity
      */
-    private func isFull() {
+    private func isFull(): Bool {
         return currentSize >= queue.size
     }
 

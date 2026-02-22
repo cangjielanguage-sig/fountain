@@ -84,7 +84,7 @@ public interface Node<T> {
 }
 
 public class NoneNode<T> <: Node<T> {
-    static const func instance() {
+    static const func instance(): NoneNode<T> {
         NoneNode<T>()
     }
     private const init() {}

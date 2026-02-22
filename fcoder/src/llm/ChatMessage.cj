@@ -13,14 +13,14 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package fountain::fcoder.llm
+package fcoder.llm
 
 import std.collection.ArrayList
 
-import fountain::f_data.*
-import fountain::f_data.macros.*
+import f_data.*
+import f_data.macros.*
 
-import fountain::fcoder.constant.{Role, ToolType}
+import fcoder.constant.{Role, ToolType}
 
 @DataAssist[props fields]
 public open class ChatMessage {

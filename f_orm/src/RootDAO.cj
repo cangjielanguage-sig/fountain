@@ -356,7 +356,7 @@ public interface RootDAO {
         frag.append(')')
         frag.toString()
     }
-    func argNull(){
+    func argNull(): String {
         executor.addNull()
         '?'
     }

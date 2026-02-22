@@ -45,7 +45,7 @@ abstract sealed class AbstractRequestParam <: ControllerFuncParam {
     protected func extractValue(name: String, ctx: HttpContext, default: ?String): ?String {
         let request = ctx.request
         let form = request.form
-        var list: List<String> = EmptyList<String>.INSTANCE()
+        var list: List<String> = EmptyList<String>.instance()
         if (let l <- form.getAll(name) && l.size > 0) {
             list = l
         } else {
