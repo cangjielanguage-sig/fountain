@@ -44,7 +44,7 @@ public interface SqlPartial <: RootDAO {
     func first<T>(sql: String): Option<T> where T <: QueryMappersInit<T> 
     func firstToMap(sql: String): Map<String, Any> 
 }
-private let sqlPartialLog = LoggerFactory.getLogger('fountain::f_orm.sqlpartial')
+private let sqlPartialLog = LoggerFactory.getLogger('f_orm.sqlpartial')
 extend SqlExecutor <: SqlPartial {
     private prop dialect: SqlDialect {
         get(){
