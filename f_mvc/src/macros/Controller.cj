@@ -55,6 +55,9 @@ public macro WeavedController(attr: Tokens, input: Tokens): Tokens {
 }
 
 private func generate(input: Tokens): Tokens {
+    println('AAAAAAAAAAAAAAAAAAAAAAA')
+    println(input)
+    println('AAAAAAAAAAAAAAAAAAAAAAAA')
     let decl = match(parseDecl(input)){
         case x: ClassDecl => x
         case x: MacroExpandDecl => 

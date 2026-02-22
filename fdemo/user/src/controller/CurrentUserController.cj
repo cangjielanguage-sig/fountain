@@ -33,7 +33,7 @@ import user.model.mvc.*
  */
 @WeavedController
 @BeanMeta[scope: BeanScope.prototype]//此类不需要prototype，仅做演示，BeanMeta必须在@WeavedController下面，或者不用这个注解
-public class CurrentUserController { 
+public class CurrentUserController {
     private let userService = lookup<UserService>()
 
     public init(){
