@@ -1,0 +1,22 @@
+[package]
+  cjc-version = "1.1.0"
+  name = "fcoder"
+  organization = "fountain"
+  description = "nothing here"
+  version = "1.0.0"
+  target-dir = ""
+  script-dir = ""
+  output-type = "executable"
+  compile-option = "--dy-std"
+  override-compile-option = "--dy-std"
+  link-option = ""
+  package-configuration = {}
+
+[dependencies]
+  "fountain::f_base" = {path = "../f_base"}
+  "fountain::f_bean" = {path = "../f_bean"}
+  "fountain::f_data" = {path = "../f_data"}
+  "fountain::f_egraph" = {path = "../f_egraph"}
+  "fountain::f_log" = {path = "../f_log"}
+  "fountain::f_orm" = {path = "../f_orm"}
+  "fountain::f_version" = {path = "../f_version"}
