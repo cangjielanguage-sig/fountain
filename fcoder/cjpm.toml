@@ -23,3 +23,6 @@
   "fountain::f_orm" = {path = "../f_orm"}
   "fountain::f_util" = {path = "../f_util"}
   "fountain::f_version" = {path = "../f_version"}
+
+[profile.build]
+  incremental = true
