@@ -41,3 +41,13 @@ public const KNOWLEDGE_KIND_COPYRIGHT = 'COPYRIGHT'
 public const KNOWLEDGE_KIND_SKILL_RESOURCE = 'SKILL_RESOURCE'
 public const KNOWLEDGE_KIND_SKILL_REFERENCE = 'SKILL_REFERENCE'
 public const KNOWLEDGE_KIND_SKILL_TOOL = 'SKILL_TOOL'
+
+public type LLMType = String 
+//text embedding rerank code video audio image
+public const LLM_TYPE_TEXT = 'text'
+public const LLM_TYPE_EMBEDDING = 'embedding'
+public const LLM_TYPE_RERANK = 'rerank'
+public const LLM_TYPE_CODE = 'code'
+public const LLM_TYPE_VIDEO = 'video'
+public const LLM_TYPE_AUDIO = 'audio'
+public const LLM_TYPE_IMAGE = 'image'

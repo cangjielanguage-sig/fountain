@@ -26,11 +26,15 @@ public struct ObjectFields <: Collection<ReadableField> {
         allFields.computeIfAbsent(currentType){
             let (fields, creator) = metas()
             let that = ObjectFields(creator)
-            func populateField(name: String, field: ReadableField, throwIfDuplicate!: Bool = true) {
+            func populateField(name: String, field: ReadableField, throwIfDuplicate!: Bool = true): Unit {
                 if (that.readables.addIfAbsent(name, field).isSome() && throwIfDuplicate) {
                     throw DataException('duplicate field ${name}}')
                 } else if (let x: MutableField <- field) {
                     that.mutables.addIfAbsent(name, x)
+                }
+                if(name.startsWith('`')){
+                    let n = name[1 .. name.size - 1]
+                    populateField(n, field, throwIfDuplicate: throwIfDuplicate)
                 }
             }
             func populateFields(fields: Iterable<ReadableField>, throwIfDuplicate!: Bool = true) {

@@ -15,22 +15,14 @@ limitations under the License.
 */
 package fountain::fcoder.llm
 
-import std.collection.ArrayList
-
-import fountain::f_data.*
 import fountain::f_data.macros.*
-
-import fountain::fcoder.constant.{Role, ToolType}
 
 @DataAssist[props fields]
 public open class ChatMessage {
-    private var role: Role
-    private var content: String = ''
-    public init(role: Role) {
-        this.role = role
-    }
+    private var content: String = ""
+    public ChatMessage(private var role: Role) {}
     public init(){
-        this('')
+        this("")
     }
 }
 
@@ -40,6 +32,16 @@ public class SystemMessage <: ChatMessage {
         super(ROLE_SYSTEM)
     }
 }
+
+@DataAssist[props fields]
+public open class AssistantMessage <: ChatMessage {
+    @FieldAlias['reasoning_content']
+    private var reasoningContent: String = ""
+    public init(){
+        super(ROLE_ASSISTANT)
+    }
+}
+
 @DataAssist[props fields]
 public class UserMessage <: ChatMessage {
     public init(){
@@ -48,17 +50,20 @@ public class UserMessage <: ChatMessage {
 }
 
 @DataAssist[props fields]
-public class AssistantMessage <: ChatMessage {
-    @FieldAlias['reasoning_content']
-    private var reasoningContent: String = ''
+public class ToolCallFunction {
+    public ToolCallFunction(
+        private var name: String,
+        private var arguments: String
+    ){}
     public init(){
-        super(ROLE_ASSISTANT)
+        this("", "")
     }
 }
+
 @DataAssist[props fields]
 public class ToolCallMessage <: AssistantMessage {
     @FieldAlias['tool_calls']
-    private let toolCalls = ArrayList<ToolCall>()
+    private let toolCalls: ArrayList<ToolCall> = ArrayList<ToolCall>()
 
     public func addToolCall(call: ToolCall){
         toolCalls.add(call)
@@ -70,22 +75,22 @@ public class ToolCallMessage <: AssistantMessage {
 
 @DataAssist[props fields]
 public class ToolCall {
-    private var id: String = ''
-    @FieldAlias['type']
-    private var toolType: ToolType = ''
-    private var function: ?ToolCallFunction = None<ToolCallFunction>
-}
+    public ToolCall(
+        private var id: String,
+        @FieldAlias['type']
+        private var toolType: ToolType,
+        private var function: ?ToolCallFunction
+    ){}
 
-@DataAssist[props fields]
-public class ToolCallFunction {
-    private var name: String = ''
-    private var arguments: String = ''
+    public init(){
+        this('', '', None)
+    }
 }
 
 @DataAssist[props fields]
 public class ToolMessage <: ChatMessage {
     @FieldAlias['tool_call_id']
-    private var toolCallId: String = ''
+    private var toolCallId: String = ""
     public init(){
         super(ROLE_TOOL)
     }

@@ -19,9 +19,9 @@ internal import std.collection.{HashSet, ArrayList}
 internal import std.reflect.*
 internal import fountain::f_aspect.exception.*
 internal import fountain::f_base.*
-internal import fountain::f_bean.*
 internal import fountain::f_config.*
 internal import fountain::f_exception.TypeCastException
 internal import fountain::f_regex.*
 
+public import fountain::f_bean.*
 public import std.reflect.TypeInfo
