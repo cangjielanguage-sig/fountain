@@ -16,11 +16,11 @@ limitations under the License.
 package boot.error
 
 import stdx.net.http.HttpContext
-import fountain.bean.*
-import fountain.bean.macros.*
-import fountain.data.*
-import fountain.data.macros.*
-import fountain.mvc.{ErrorHttpRequestHandler, HttpStatus}
+import fountain::fountain.bean.*
+import fountain::fountain.bean.macros.*
+import fountain::fountain.data.*
+import fountain::fountain.data.macros.*
+import fountain::fountain.mvc.{ErrorHttpRequestHandler, HttpStatus}
 
 @Bean
 @BeanMeta[name: 'NameOf500Handler']

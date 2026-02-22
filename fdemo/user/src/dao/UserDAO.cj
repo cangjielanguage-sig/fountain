@@ -17,8 +17,8 @@ package user.dao
 
 import std.collection.*
 
-import fountain.orm.*
-import fountain.orm.macros.*
+import fountain::fountain.orm.*
+import fountain::fountain.orm.macros.*
 
 import user.model.po.*
 

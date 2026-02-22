@@ -16,8 +16,8 @@ limitations under the License.
 package user.controller
 
 import std.collection.ArrayList
-import fountain.mvc.*
-import fountain.mvc.macros.*
+import fountain::fountain.mvc.*
+import fountain::fountain.mvc.macros.*
 import user.model.po.*
 import user.model.mvc.*
 

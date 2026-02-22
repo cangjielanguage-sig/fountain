@@ -15,11 +15,11 @@ limitations under the License.
 */
 package boot
 
-import fountain.bean.*
-import fountain.bean.macros.*
-import fountain.aspect.*
-import fountain.aspect.macros.*
-import fountain.log.*
+import fountain::fountain.bean.*
+import fountain::fountain.bean.macros.*
+import fountain::fountain.aspect.*
+import fountain::fountain.aspect.macros.*
+import fountain::fountain.log.*
 
 @AspectRoute[ConfigExecutionRouteRule('controllerPointcut')]
 @Bean

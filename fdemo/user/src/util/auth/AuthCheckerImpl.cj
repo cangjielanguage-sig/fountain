@@ -17,9 +17,9 @@ package user.util.auth
 
 import std.convert.*
 import stdx.encoding.json.*
-import fountain.bean.*
-import fountain.bean.macros.*
-import fountain.mvc.*
+import fountain::fountain.bean.*
+import fountain::fountain.bean.macros.*
+import fountain::fountain.mvc.*
 import user.util.*
 
 @Bean

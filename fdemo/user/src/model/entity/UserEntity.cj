@@ -15,7 +15,7 @@ limitations under the License.
 */
 package user.model.entity
 
-import fountain.jwt.*
+import fountain::fountain.jwt.*
 
 import user.util.*
 

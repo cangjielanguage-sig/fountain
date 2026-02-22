@@ -15,10 +15,10 @@ limitations under the License.
 */
 package user.model.po
 
-import fountain.data.*
-import fountain.data.macros.*
-import fountain.orm.*
-import fountain.orm.macros.*
+import fountain::fountain.data.*
+import fountain::fountain.data.macros.*
+import fountain::fountain.orm.*
+import fountain::fountain.orm.macros.*
 
 @DataAssist[fields]
 @QueryMappersGenerator[rec_task_info]

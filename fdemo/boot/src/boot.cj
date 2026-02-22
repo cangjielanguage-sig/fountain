@@ -19,13 +19,13 @@ import std.collection.*
 import std.env
 // import opengauss.driver.*
 // import opengauss.slog
-import fountain.bean.*
-import fountain.bean.macros.*
-import fountain.data.*
-import fountain.data.macros.*
-import fountain.log.LoggerFactory
-import fountain.mockdb.*
-import fountain.orm.* // orm初始化不要再导入这个包，会在首个DAO初始化时自动初始化orm
+import fountain::fountain.bean.*
+import fountain::fountain.bean.macros.*
+import fountain::fountain.data.*
+import fountain::fountain.data.macros.*
+import fountain::fountain.log.LoggerFactory
+import fountain::fountain.mockdb.*
+import fountain::fountain.orm.* // orm初始化不要再导入这个包，会在首个DAO初始化时自动初始化orm
 
 private let _ = {=>
     try{

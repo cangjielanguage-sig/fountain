@@ -15,7 +15,7 @@ limitations under the License.
 */
 package user.service
 
-import fountain.orm.RootService
+import fountain::fountain.orm.RootService
 internal import user.model.po.*
 internal import user.model.mvc.*
 internal import std.collection.*

@@ -17,9 +17,9 @@ package user.controller
 
 import std.reflect.*
 import stdx.encoding.json.*
-import fountain.data.*
-import fountain.mvc.*
-import fountain.mvc.macros.*
+import fountain::fountain.data.*
+import fountain::fountain.mvc.*
+import fountain::fountain.mvc.macros.*
 import user.service.UserService
 import user.model.po.*
 import user.model.mvc.*

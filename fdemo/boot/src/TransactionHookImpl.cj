@@ -15,10 +15,10 @@ limitations under the License.
 */
 package boot
 
-import fountain.bean.*
-import fountain.bean.macros.*
-import fountain.log.*
-import fountain.orm.*
+import fountain::fountain.bean.*
+import fountain::fountain.bean.macros.*
+import fountain::fountain.log.*
+import fountain::fountain.orm.*
 
 @Bean
 public class TransactionHookImpl <: TransactionHook {

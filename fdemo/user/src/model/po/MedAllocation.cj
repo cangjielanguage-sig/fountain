@@ -18,11 +18,11 @@ package user.model.po
 import std.math.numeric.Decimal
 import std.time.DateTime
 
-import fountain.base.unsafeZeroValue
-import fountain.data.*
-import fountain.data.macros.*
-import fountain.orm.*
-import fountain.orm.macros.*
+import fountain::fountain.base.unsafeZeroValue
+import fountain::fountain.data.*
+import fountain::fountain.data.macros.*
+import fountain::fountain.orm.*
+import fountain::fountain.orm.macros.*
 
 @DataAssist[fields]
 @QueryMappersGenerator[med_allocation]

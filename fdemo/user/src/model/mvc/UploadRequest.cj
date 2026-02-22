@@ -15,9 +15,9 @@ limitations under the License.
 */
 package user.model.mvc
 
-import fountain.data.*
-import fountain.data.macros.*
-import fountain.mvc.MultipartFile
+import fountain::fountain.data.*
+import fountain::fountain.data.macros.*
+import fountain::fountain.mvc.MultipartFile
 
 @DataAssist[props fields]
 public class UploadRequest {

@@ -16,12 +16,12 @@ limitations under the License.
 package boot
 
 import stdx.encoding.json.*
-import fountain.mvc.MediaType
-import fountain.base.*
-import fountain.bean.*
-import fountain.bean.macros.*
-import fountain.data.*
-import fountain.log.*
+import fountain::fountain.mvc.MediaType
+import fountain::fountain.base.*
+import fountain::fountain.bean.*
+import fountain::fountain.bean.macros.*
+import fountain::fountain.data.*
+import fountain::fountain.log.*
 
 @Bean
 public class LogTextMediaType <: MediaType {

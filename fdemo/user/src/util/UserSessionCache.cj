@@ -16,11 +16,11 @@ limitations under the License.
 package user.util
 
 import std.convert.*
-import fountain.base.*
-import fountain.jwt.JWT
-import fountain.mvc.CurrentHttpContext
-import fountain.security.*
-import fountain.util.UUID
+import fountain::fountain.base.*
+import fountain::fountain.jwt.JWT
+import fountain::fountain.mvc.CurrentHttpContext
+import fountain::fountain.security.*
+import fountain::fountain.util.UUID
 
 public class UserSessionCache {
     private static let context = JWTSecurityContext<String>(JWTHeapCacheStore(Duration.hour),{id => 
