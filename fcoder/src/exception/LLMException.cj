@@ -13,19 +13,18 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package fountain::fcoder.llm
+package fountain::fcoder.exception
 
-public sealed abstract class AbstractLLMContext {
-    private AbstractLLMContext(
-        protected let name: String,
-        protected let llmType: String,
-        protected let url: String,
-        protected let conf: String,
-        protected let threshold: Int64
-    ) {}
-    public init(conf: LLMConf){
-        this(conf.name, conf.llmType, conf.url, conf.conf, conf.threshold)
+public class LLMException <: BaseException {
+    public init() {}
+
+    public init(message: String) {
+        super(message)
     }
-
-    public func access(params: LLMParams): LLMResp
+    public init(caused: Exception) {
+        super(caused)
+    }
+    public init(message: String, caused: Exception) {
+        super(message, caused)
+    }
 }

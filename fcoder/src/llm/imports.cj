@@ -18,11 +18,13 @@ package fountain::fcoder.llm
 internal import std.collection.*
 internal import std.sync.Mutex
 
+internal import fountain::f_base.*
 internal import fountain::f_bean.*
 internal import fountain::f_data.*
 internal import fountain::f_httpclient.*
 internal import fountain::f_util.UUID
 
 internal import fountain::fcoder.constant.*
+internal import fountain::fcoder.exception.LLMException
 internal import fountain::fcoder.model.po.*
 internal import fountain::fcoder.service.*

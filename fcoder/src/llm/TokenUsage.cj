@@ -15,17 +15,25 @@ limitations under the License.
 */
 package fountain::fcoder.llm
 
-public sealed abstract class AbstractLLMContext {
-    private AbstractLLMContext(
-        protected let name: String,
-        protected let llmType: String,
-        protected let url: String,
-        protected let conf: String,
-        protected let threshold: Int64
-    ) {}
-    public init(conf: LLMConf){
-        this(conf.name, conf.llmType, conf.url, conf.conf, conf.threshold)
-    }
+import fountain::f_data.macros.*
+/*
+    "usage": {
+        "prompt_tokens": 123,
+        "completion_tokens": 123,
+        "prompt_tokens_details": {
+            "cached_tokens": 123
+        },
+        "total_tokens": 123
+    },
+*/
 
-    public func access(params: LLMParams): LLMResp
+@DataAssist[props fields]
+public class TokenUsage {
+    @FieldAlias['prompt_tokens']
+    private var prompt: Int64 = 0
+    @FieldAlias['completion_tokens']
+    private var completion: Int64 = 0
+    @FieldAlias['total_tokens']
+    private var total: Int64 = 0
+    private var cached: Int64 = 0
 }

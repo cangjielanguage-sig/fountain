@@ -15,17 +15,10 @@ limitations under the License.
 */
 package fountain::fcoder.llm
 
-public sealed abstract class AbstractLLMContext {
-    private AbstractLLMContext(
-        protected let name: String,
-        protected let llmType: String,
-        protected let url: String,
-        protected let conf: String,
-        protected let threshold: Int64
-    ) {}
-    public init(conf: LLMConf){
-        this(conf.name, conf.llmType, conf.url, conf.conf, conf.threshold)
-    }
+import fountain::f_data.macros.*
 
-    public func access(params: LLMParams): LLMResp
+@DataAssist[props fields]
+public class LLMResp {
+    private var usage: TokenUsage = TokenUsage()
+    private var messages: ArrayList<ChatMessage> = ArrayList<ChatMessage>()
 }

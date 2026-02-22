@@ -15,7 +15,7 @@ limitations under the License.
 */
 package fountain::fcoder.exception
 
-import fountain::f_base.BaseException
+internal import fountain::f_base.BaseException
 
 public class RoleException <: BaseException {
     public init() {}

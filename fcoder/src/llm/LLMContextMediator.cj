@@ -47,7 +47,7 @@ public class LLMContextMediator {
             }
         }
     }
-    public func access(llmType: String, params: LLMParams): ChatMessage {
+    public func access(llmType: String, params: LLMParams): LLMResp {
         load()
         let key = '${params.model}+${llmType}'
         return contexts[key].access(params)
