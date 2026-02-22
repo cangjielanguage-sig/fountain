@@ -28,7 +28,7 @@ import fountain::f_net.*
 
 public struct Client<DE, EN, M, T, ID> where EN <: MessageCopier, M <: Protocol<EN, DE>, T <: DataFields<T>,
     ID <: Hashable & Equatable<ID> {
-    private static let log = LoggerFactory.getLogger('fountain::net.Client')
+    private static let log = LoggerFactory.getLogger('fountain::f_net.Client')
     private let futures = ConcurrentHashMap<ID, MessageFuture<DE>>()
     private let buffers: Array<SocketBuffer>
 
