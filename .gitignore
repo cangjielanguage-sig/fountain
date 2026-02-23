@@ -33,3 +33,7 @@ post_data.json
 console.log
 .codeartsdoer/
 .codemate/
+
+*.cjo
+*.so
+*.dll
