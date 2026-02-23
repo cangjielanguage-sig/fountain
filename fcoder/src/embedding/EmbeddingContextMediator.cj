@@ -13,25 +13,25 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package fountain::fcoder.llm
+package fountain::fcoder.embedding
 
-public class LLMContextMediator {
-    private static let contextCreators = HashMap<String, (LLMConf) -> AbstractLLMContext>()
+public class EmbeddingContextMediator {
+    private static let contextCreators = HashMap<String, (LLMConf) -> AbstractEmbeddingContext>()
     
     static init(){
-        contextCreators['glm-5+${LLM_TYPE_TEXT}'] = {conf: LLMConf => GLMContext(conf)}
-        contextCreators['glm-5+${LLM_TYPE_CODE}'] = {conf: LLMConf => GLMContext(conf)}
+        contextCreators['embedding-3+${LLM_TYPE_EMBEDDING}'] = {conf: LLMConf => GLMEmbeddingContext(conf)}
     }
 
-    private let contexts = HashMap<String, AbstractLLMContext>()
+    private let contexts = HashMap<String, AbstractEmbeddingContext>()
     private init(){}
 
-    private static let instance_ = LLMContextMediator()
-    public static prop instance: LLMContextMediator {
+    private static let instance_ = EmbeddingContextMediator()
+    public static prop instance: EmbeddingContextMediator {
         get(){
             instance_
         }
     }
+
     private let mutex = Mutex()
     private func load(key: String){
         if(let Some(x) <- contexts.get(key)){
@@ -41,7 +41,7 @@ public class LLMContextMediator {
             if(let Some(x) <- contexts.get(key)){
                 return x
             }
-            for(conf in lookup<LLMService>().listConfs([LLM_TYPE_TEXT, LLM_TYPE_CODE])){
+            for(conf in lookup<LLMService>().listConfs([LLM_TYPE_EMBEDDING])){
                 let key = '${conf.name}+${conf.llmType}'
                 if(let Some(newer) <- contextCreators.get(key)){
                     contexts[key] = newer(conf)
@@ -50,8 +50,8 @@ public class LLMContextMediator {
             return contexts[key]
         }
     }
-    public func access(llmType: String, params: LLMParams): LLMResp {
-        let key = '${params.model}+${llmType}'
-        load(key).access(params)
+    public func access(model: String, input: String, dimension: Int64): Array<Float64> {
+        let key = '${model}+${LLM_TYPE_EMBEDDING}'
+        load(key).access(input, dimension)
     }
 }

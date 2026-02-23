@@ -21,13 +21,13 @@ import fountain::f_data.macros.*
 public open class LLMParams {
     private var model: String = ''
     private var messages: ArrayList<ChatMessage> = ArrayList<ChatMessage>()
-    // public let thinking: Thinking = Thinking()
+    public let thinking: Thinking = Thinking()
     private var do_sample: Bool = true
     private var temperature: Float64 = 0.0
     private let max_tokens: Int64 = 131072
     private let response_format: String = 'json'
     private let request_id: String = UUID.random().toString()
-    private let user_id: String = 'fcoder'
+    private let user_id: String = FCODER_USER
 }
 
 @DataAssist[props fields]

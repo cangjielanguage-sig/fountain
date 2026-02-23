@@ -13,10 +13,11 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package fountain::fcoder.llm
+package fountain::fcoder.embedding
 
 internal import std.collection.*
 internal import std.sync.Mutex
+internal import stdx.encoding.json.*
 
 internal import fountain::f_base.*
 internal import fountain::f_bean.*

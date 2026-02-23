@@ -13,20 +13,16 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package fountain::fcoder.llm
+package fountain::fcoder.embedding
 
-internal import std.collection.*
-internal import std.sync.Mutex
-
-internal import fountain::f_base.*
-internal import fountain::f_bean.*
-internal import fountain::f_data.*
-internal import fountain::f_httpclient.*
-internal import fountain::f_log.*
-internal import fountain::f_util.UUID
-
-internal import fountain::fcoder.constant.*
-internal import fountain::fcoder.exception.LLMException
-internal import fountain::fcoder.model.po.*
-internal import fountain::fcoder.service.*
-internal import fountain::fcoder.util.*
+public abstract class AbstractEmbeddingContext {
+    public AbstractEmbeddingContext(
+        protected let name: String,
+        protected let url: String,
+        protected let conf: String
+    ){}
+    public init(conf: LLMConf){
+        this(conf.name, conf.url, conf.conf)
+    }
+    public func access(input: String, dimension: Int64): Array<Float64>
+}

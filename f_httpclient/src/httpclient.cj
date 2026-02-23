@@ -226,21 +226,7 @@ public class FormBuilder {
         return client.post(form.toEncodeString())
     }
 }
-public interface ExtendHttpResponse {
-    func convert<T>(): ?T where T <: DataFields<T>
-}
-extend HttpResponse <: ExtendHttpResponse {
-    public func convert<T>(): ?T where T <: DataFields<T> {
-        let contentType = this.headers.getFirst('Content-Type') ?? 'application/json'
-        if(let Some(s) <- this.bodySize){
-            MediaTypes.tryParse(contentType).getOrThrow{
-                MediaTypeException('${contentType} is not a valid media type')
-            }.toDataFields<T>(this.body)
-        }else{
-            None<T>
-        }
-    }
-}
+
 public class MultipartFormDataBuilder {
     private let data = MultipartFormData()
     MultipartFormDataBuilder(private let client: HttpClient){

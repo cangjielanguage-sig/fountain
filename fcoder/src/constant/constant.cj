@@ -19,6 +19,8 @@ import std.convert.*
 
 import fountain::fcoder.exception.*
 
+public const FCODER_USER = 'fcoder'
+
 public type Role = String
 public const ROLE_SYSTEM = "system"
 public const ROLE_USER = "user"
@@ -51,3 +53,6 @@ public const LLM_TYPE_CODE = 'code'
 public const LLM_TYPE_VIDEO = 'video'
 public const LLM_TYPE_AUDIO = 'audio'
 public const LLM_TYPE_IMAGE = 'image'
+
+public const CONTENT_SIZE_MEDIUM = 'medium'
+public const CONTENT_SIZE_HIGH = 'high'
