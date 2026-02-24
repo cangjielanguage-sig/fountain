@@ -280,9 +280,6 @@ public class DataMultipartListIterator <: Iterator<Data> {
     DataMultipartListIterator(private let itr: Iterator<Data>){}
 
     public func next(): ?Data {
-        while(let Some(d) <- itr.next()){
-            d
-        }
-        None<Data>
+        itr.next()
     }
 }
