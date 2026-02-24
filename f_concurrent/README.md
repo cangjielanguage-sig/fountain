@@ -286,3 +286,17 @@ public class AnyMomentRateLimiter<T> <: RateLimiter<T> {
     public init(maxTokens!: Int64, timeout!: Duration)
 }
 ```
+
+## 只计算一次
+```cj
+public struct Constants {
+    /**
+     * 获取一个常量，如果key对应的值不存在就调用fn计算并返回
+     */
+    public static func get<T>(key: String, fn: () -> T): T
+    /**
+     * 获取一个常量，如果key对应的值不存在就调用fn计算并返回
+     */
+    public static func get<T>(fn: () -> T): T 
+}
+```
