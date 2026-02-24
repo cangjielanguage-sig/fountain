@@ -37,6 +37,7 @@ public class GLMContext <: AbstractLLMContext {
                 }
                 let usageJson = json.get('usage').getOrThrow().asObject()
                 let usage = llmResp.usage
+                usage.llmId = super.id
                 DataObject<TokenUsage>.populate(usageJson.toData(), usage)
                 usage.cached = usageJson.get('prompt_tokens_details')?.asObject().get('cached_tokens')?.asInt().getValue() ?? 0
                 llmResp

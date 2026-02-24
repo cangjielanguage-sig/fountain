@@ -22,16 +22,22 @@ public class GLMEmbeddingContext <: AbstractEmbeddingContext {
     public init(conf: LLMConf){
         super(conf)
     }
-    public func access(input: String, dimension: Int64): Array<Float64> {
+    public func access(input: String, dimension: Int64): EmbeddingResp {
         resource(http(url, conf)){http => 
             let params = JsonObject()
             try{
                 params.put('model', JsonString(name))
                 params.put('input', JsonString(input))
                 params.put('dimensions', JsonInt(dimension))
-                let resp = http.post(params.toString()).readJson().asObject()
-                    .get('data')?.asArray()[0].asObject().get('embedding')?.asArray() ?? JsonArray()
-                f_data.convert<Array<Float64>>(resp.toData()) ?? []
+                let respJson = http.post(params.toString()).readJson().asObject()
+                let embeddingJson = respJson.get('data')?.asArray()[0].asObject().get('embedding')?.asArray() ?? JsonArray()
+                let usageJson = respJson.get('usage').getOrThrow().asObject()
+                let resp = EmbeddingResp()
+                resp.embedding = f_data.convert<Array<Float64>>(embeddingJson.toData()) ?? []
+                let usage = resp.usage
+                usage.llmId = super.id
+                DataObject<TokenUsage>.populate(usageJson.toData(), usage)
+                resp
             }catch(e: Exception){
                 log.error(e){'embedding error ${params}'}
                 throw e

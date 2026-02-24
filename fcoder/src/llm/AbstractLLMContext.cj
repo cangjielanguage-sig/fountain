@@ -17,6 +17,7 @@ package fountain::fcoder.llm
 
 public sealed abstract class AbstractLLMContext {
     private AbstractLLMContext(
+        protected let id: Int64,
         protected let name: String,
         protected let llmType: String,
         protected let url: String,
@@ -24,7 +25,7 @@ public sealed abstract class AbstractLLMContext {
         protected let threshold: Int64
     ) {}
     public init(conf: LLMConf){
-        this(conf.name, conf.llmType, conf.url, conf.conf, conf.threshold)
+        this(conf.id, conf.name, conf.llmType, conf.url, conf.conf, conf.threshold)
     }
 
     public func access(params: LLMParams): LLMResp

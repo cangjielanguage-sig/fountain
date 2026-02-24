@@ -19,6 +19,6 @@ import fountain::f_data.macros.*
 
 @DataAssist[props fields]
 public class LLMResp {
-    private var usage: TokenUsage = TokenUsage()
-    private var messages: ArrayList<ChatMessage> = ArrayList<ChatMessage>()
+    private let usage: TokenUsage = TokenUsage()
+    private let messages: ArrayList<ChatMessage> = ArrayList<ChatMessage>()
 }

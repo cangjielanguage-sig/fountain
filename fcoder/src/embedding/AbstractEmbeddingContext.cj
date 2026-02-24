@@ -17,12 +17,13 @@ package fountain::fcoder.embedding
 
 public abstract class AbstractEmbeddingContext {
     public AbstractEmbeddingContext(
+        protected let id: Int64,
         protected let name: String,
         protected let url: String,
         protected let conf: String
     ){}
     public init(conf: LLMConf){
-        this(conf.name, conf.url, conf.conf)
+        this(conf.id, conf.name, conf.url, conf.conf)
     }
-    public func access(input: String, dimension: Int64): Array<Float64>
+    public func access(input: String, dimension: Int64): EmbeddingResp
 }

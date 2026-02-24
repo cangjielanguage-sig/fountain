@@ -50,7 +50,7 @@ public class EmbeddingContextMediator {
             return contexts[key]
         }
     }
-    public func access(model: String, input: String, dimension: Int64): Array<Float64> {
+    public func access(model: String, input: String, dimension: Int64): EmbeddingResp {
         let key = '${model}+${LLM_TYPE_EMBEDDING}'
         load(key).access(input, dimension)
     }
