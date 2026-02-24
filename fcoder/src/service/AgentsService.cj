@@ -15,6 +15,6 @@ limitations under the License.
 */
 package fountain::fcoder.service
 
-public interface AgentsService {
+public interface AgentsService <: RootService {
     func listAgents(): ArrayList<Agent>
 }
