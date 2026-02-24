@@ -13,6 +13,17 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package fountain::fcoder.model
+package fountain::fcoder.service.impl
 
-internal import fountain::fcoder.constant.*
+import fountain::f_aspect.macros.*
+import fountain::f_orm.macros.*
+
+@TransactionalService
+public class SkillsServiceImpl <: SkillsService {
+    public func listMetas(agentId: Int64): ArrayList<SkillMetadata> {
+        executor().listMetas(agentId)
+    }
+    public func querySkill(agentId: Int64, title: String): ?String {
+        executor().findSkill(agentId, title)
+    }
+}

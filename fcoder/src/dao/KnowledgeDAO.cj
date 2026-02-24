@@ -1,0 +1,41 @@
+/*
+Copyright (c) 2026 WuJingrun（吴京润）
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+package fountain::fcoder.dao
+
+import fountain::f_orm.macros.*
+
+@DAO
+public interface KnowledgeDAO <: RootDAO {
+    func search(param: KnowledgeParam): ArrayList<String> {
+        executor.setSql('''
+            WITH confidence AS (
+          SELECT id, title, content, kind, query,
+                 (1.0 - (embedding <=> ${arg(param.embedding.toString())})) * ${arg(param.weight)} + 
+                 ts_rank(to_tsvector('chinese_english', content), query) * (1.0 - ${arg(param.weight)}) as confidence
+            FROM knowledge, to_tsquery('chinese_english', ${arg(param.content)}) as query
+         )
+         SELECT content
+           FROM confidence
+          WHERE kind ${IN(param.kind)}
+            AND to_tsvector('chinese_english', content) @@ query
+            AND confidence >= ${arg(param.confidence)}
+          ORDER
+             BY confidence DESC
+          LIMIT ${arg(param.size)}
+         OFFSET 0
+        ''').singleList<String>()
+    }
+}

@@ -13,6 +13,20 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package fountain::fcoder.model
+package fountain::fcoder.dao
 
-internal import fountain::fcoder.constant.*
+import fountain::f_orm.macros.*
+
+@DAO
+public interface SkillsDAO <: RootDAO {
+    func listMetas(agentId: Int64): ArrayList<SkillMetadata> {
+        executor.FROM<SkillMetadata>()
+                .WHERE{'agent_id = ${arg(agentId)}'}
+                .list('title, metadata')
+    }
+    func findSkill(agentId: Int64, title: String): ?String {
+        executor.FROM<SkillMetadata>()
+                .WHERE{'agent_id = ${arg(agentId)} AND title = ${arg(title)}'}
+                .singleFirst<String>('details')
+    }
+}

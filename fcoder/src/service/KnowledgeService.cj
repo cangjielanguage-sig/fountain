@@ -13,6 +13,8 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package fountain::fcoder.model
+package fountain::fcoder.service
 
-internal import fountain::fcoder.constant.*
+public interface KnowledgeService <: RootService {
+    func search(param: KnowledgeParam): ArrayList<String>
+}

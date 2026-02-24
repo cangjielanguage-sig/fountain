@@ -15,4 +15,13 @@ limitations under the License.
 */
 package fountain::fcoder.model
 
-internal import fountain::fcoder.constant.*
+public class KnowledgeParam {
+    public KnowledgeParam(
+        public let content!: String, 
+        public let embedding!: Array<Float64>, 
+        public let weight!: Float64, 
+        public let kind!: Array<KnowledgeKind>, 
+        public let confidence!: Float64, 
+        public let size!: Int64
+    ){}
+}

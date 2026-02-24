@@ -19,4 +19,5 @@ internal import std.collection.*
 
 internal import fountain::f_orm.*
 
+internal import fountain::fcoder.model.*
 internal import fountain::fcoder.model.po.*

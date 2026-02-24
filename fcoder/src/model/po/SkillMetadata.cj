@@ -13,6 +13,19 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package fountain::fcoder.model
+package fountain::fcoder.model.po
 
-internal import fountain::fcoder.constant.*
+
+import fountain::f_data.*
+import fountain::f_data.macros.*
+import fountain::f_orm.*
+import fountain::f_orm.macros.*
+
+@DataAssist[fields]
+@QueryMappersGenerator[table: skills]
+public class SkillMetadata {
+    @ORMField['title']
+    private var title: String = ''
+    @ORMField['metadata']
+    private var metadata: String = ''
+}
