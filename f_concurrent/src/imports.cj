@@ -25,3 +25,4 @@ internal import std.time.MonoTime
 internal import fountain::f_base.*
 internal import fountain::f_collection.*
 internal import fountain::f_concurrent.exception.RateLimiterException
+internal import fountain::f_exception.TypeNotMatchException
