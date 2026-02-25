@@ -80,7 +80,7 @@ $$ LANGUAGE plpgsql;
     - 文本SQL
         ```sql
         WITH confidence AS (
-             SELECT id, title, content, kind, query,
+             SELECT id, title, content, kind, query, search_vector,
                     (1.0 - (embedding <=> '[0.1, 0.2, ...]')) * 0.7 +  -- 字符串内是向量数组
                     ts_rank(search_vector, query) * 0.3 as confidence
                FROM knowledge, to_tsquery('chinese_english', '搜索的内容') as query

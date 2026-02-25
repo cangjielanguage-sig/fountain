@@ -22,7 +22,7 @@ public interface KnowledgeDAO <: RootDAO {
     func search(param: KnowledgeParam): ArrayList<String> {
         executor.setSql('''
             WITH confidence AS (
-          SELECT id, title, content, kind, query,
+          SELECT id, title, content, kind, query, search_vector,
                  (1.0 - (embedding <=> ${arg(param.embedding.toString())})) * ${arg(param.weight)} + 
                  ts_rank(search_vector, query) * (1.0 - ${arg(param.weight)}) as confidence
             FROM knowledge, to_tsquery('chinese_english', ${arg(param.content)}) as query
