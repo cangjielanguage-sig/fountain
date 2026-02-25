@@ -21,6 +21,7 @@ import fountain::fcoder.util
 
 @TransactionalService
 public class KnowledgeServiceImpl <: KnowledgeService {
+    @Transactional
     public func search(param: KnowledgeParam): ArrayList<String> {
         let exe = executor()
         exe.search(param)
