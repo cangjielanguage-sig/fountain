@@ -29,7 +29,7 @@ public class KnowledgeServiceImpl <: KnowledgeService {
             .queryConf(exe.listConfs)
             .search{conf, content => util.search(conf.url, conf.conf, content, param.size)}
             .save(
-                embeddingAccessor: {model, content, dimension => EmbeddingContextMediator.instance.access(model, content, dimension)},
+                embeddingAccessor: EmbeddingContextMediator.instance.access,
                 knowledgeSaver: exe.saveKnowledge,
                 usageSaver: exe.saveTokenUsage
             )
