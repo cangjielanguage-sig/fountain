@@ -38,4 +38,16 @@ public interface KnowledgeDAO <: RootDAO {
          OFFSET 0
         ''').singleList<String>()
     }
+    func saveKnowledge(knowledge: Knowledge): Unit {
+        executor.setSql('''
+        insert 
+          into knowledge(kind, md5, source, title, content, embedding)
+        values(${arg(knowledge.kind)}, 
+               ${arg(knowledge.md5)}, 
+               ${arg(knowledge.source)}, 
+               ${arg(knowledge.title)}, 
+               ${arg(knowledge.content)}, 
+               ${arg(knowledge.embedding)})
+        ''').insert
+    }
 }

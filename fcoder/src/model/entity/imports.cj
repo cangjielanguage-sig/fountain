@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package fountain::fcoder.service.impl
+package fountain::fcoder.model.entity
 
 internal import std.collection.*
 
@@ -21,12 +21,9 @@ internal import stdx.crypto.digest.MD5
 internal import stdx.encoding.hex.toHexString
 
 internal import fountain::f_base.*
-internal import fountain::f_aspect.*
-internal import fountain::f_orm.*
 
 internal import fountain::fcoder.constant.*
-internal import fountain::fcoder.dao.*
 internal import fountain::fcoder.embedding.*
-internal import fountain::fcoder.model.entity.*
+internal import fountain::fcoder.model.*
 internal import fountain::fcoder.model.po.*
-internal import fountain::fcoder.service.*
+internal import fountain::fcoder.util.SearchResult

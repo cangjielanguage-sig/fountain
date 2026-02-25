@@ -53,6 +53,12 @@ public const LLM_TYPE_CODE = 'code'
 public const LLM_TYPE_VIDEO = 'video'
 public const LLM_TYPE_AUDIO = 'audio'
 public const LLM_TYPE_IMAGE = 'image'
+public const LLM_TYPE_SEARCH = 'search'
 
 public const CONTENT_SIZE_MEDIUM = 'medium'
 public const CONTENT_SIZE_HIGH = 'high'
+
+public type ModelName = String
+public const MODEL_NAME_GLM5 = 'glm-5'
+public const MODEL_NAME_GLM5_CODE = 'glm-5-code'
+public const MODEL_NAME_GLM_EMBEDDING3 = 'embedding-3'

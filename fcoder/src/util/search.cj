@@ -44,8 +44,8 @@ public class SearchParams {
     private let userId: String = FCODER_USER
 }
 private let log = LoggerFactory.getLogger('fountain::fcoder.util.search')
-public func search(auth: String, keywords: String, count: Int64): ArrayList<SearchResult> {
-    resource(http('https://open.bigmodel.cn/api/paas/v4/web_search', auth)){http =>
+public func search(url: String, auth: String, keywords: String, count: Int64): ArrayList<SearchResult> {
+    resource(http(url, auth)){http =>//'https://open.bigmodel.cn/api/paas/v4/web_search'
         let params = SearchParams()
         try{
             params.searchQuery = keywords

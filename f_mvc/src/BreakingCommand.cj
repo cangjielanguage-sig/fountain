@@ -15,7 +15,7 @@ limitations under the License.
 */
 package fountain::f_mvc
 
-public class BreakingCommand <: Command<Data>{
+public class BreakingCommand <: Command<Unit>{
     private BreakingCommand(public let status: HttpStatus, public let data: Data){}
 
     public static func new<T>(status: HttpStatus, data: T): BreakingCommand where T <: ToData {

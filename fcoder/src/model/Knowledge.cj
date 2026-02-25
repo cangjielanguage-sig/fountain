@@ -13,33 +13,19 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package fountain::fcoder.service.impl
+package fountain::fcoder.model
 
-import fountain::f_aspect.macros.*
-import fountain::f_orm.macros.*
-import fountain::fcoder.util
-
-@TransactionalService
-public class KnowledgeServiceImpl <: KnowledgeService {
-    public func search(param: KnowledgeParam): ArrayList<String> {
-        let exe = executor()
-        exe.search(param)
-        var result = None<ArrayList<String>>
-        try{
-            KnowledgeEntity(param, exe.search)
-                .search()
-                .queryConf(exe.listConfs)
-                .search(
-                    searcher: {conf, content => util.search(conf.url, conf.conf, content, param.size)},
-                    embeddingAccessor: {model, content, dimension => EmbeddingContextMediator.instance.access(model, content, dimension)},
-                    knowledgeSaver: exe.saveKnowledge,
-                    usageSaver: exe.saveTokenUsage
-                )
-        }handle(knowledge: BaseCommand<ArrayList<String>, Unit>){
-            result = knowledge.data
-        }
-        result ?? ArrayList<String>()
-    }
+public class Knowledge {
+    public Knowledge(
+        public let codeLang!: String = '',
+        public let kind!: String = '',
+        public let md5!: String = '',
+        public let source!: String = '',
+        public let entire!: Bool = false,
+        public let title!: String,
+        public let content!: String,
+        public let embedding!: Array<Float64>
+    ){}
 }
 /*
 +---------------+--------------------------+--------------------------------------------------------------------------------------------------------------->
@@ -59,4 +45,5 @@ public class KnowledgeServiceImpl <: KnowledgeService {
 | embedding     | vector(1024)             |                                                                                                               >
 | search_vector | tsvector                 |  default setweight(to_tsvector('chinese_english'::regconfig, COALESCE(title, ''::character varying)::text), 'A>
 +---------------+--------------------------+--------------------------------------------------------------------------------------------------------------->
+Indexes:
 */
