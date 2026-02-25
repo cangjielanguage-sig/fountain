@@ -32,13 +32,13 @@ public class KnowledgeEntity {
         }
         this
     }
-    protected func remoteSearch(searcher!: (LLMConf, String) -> ArrayList<SearchResult>): This {
+    protected func search(searcher!: (LLMConf, String) -> ArrayList<SearchResult>): This {
         if(list.size < param.size){
             remoteResults = searcher(conf.getOrThrow(), param.content)
         }
         this
     }
-    protected func search(
+    protected func save(
         embeddingAccessor!: (ModelName, String, Int64) -> EmbeddingResp,
         knowledgeSaver!: (Knowledge) -> Unit,
         usageSaver!: (TokenUsage) -> Unit): ArrayList<String> {
