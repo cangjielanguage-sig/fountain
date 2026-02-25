@@ -24,7 +24,6 @@ public class KnowledgeServiceImpl <: KnowledgeService {
     @Transactional
     public func search(param: KnowledgeParam): ArrayList<String> {
         let exe = executor()
-        exe.search(param)
         KnowledgeEntity(param, exe.search)
             .queryConf(exe.listConfs)
             .search{conf, content => util.search(conf.url, conf.conf, content, param.size)}
