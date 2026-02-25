@@ -46,8 +46,7 @@ public class KnowledgeEntity {
             return list
         }
         let results = remoteResults.getOrThrow()
-        for(result in results){ 
-            let url = result.link
+        for(result in results){
             let title = result.title
             let content = '''
             ${title}
@@ -55,7 +54,6 @@ public class KnowledgeEntity {
             ${result.content}
             '''
             let resp = embeddingAccessor(MODEL_NAME_GLM_EMBEDDING3, content, 1024)
-            let embedding = resp.embedding
             let knowledge = Knowledge(
                 kind: KNOWLEDGE_KIND_ARTICLE,
                 md5: {=> 
@@ -63,10 +61,10 @@ public class KnowledgeEntity {
                     content.unsafeBytes() |> md5.write
                     md5.finish() |> toHexString
                 }(),
-                source: url,
+                source: result.link,
                 title: title,
                 content: content,
-                embedding: embedding
+                embedding: resp.embedding
             )
             let usage = resp.usage
             knowledgeSaver(knowledge)
