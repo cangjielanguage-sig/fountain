@@ -22,6 +22,10 @@ import fountain::f_orm.macros.*
 @DAO
 public interface AgentsDAO <: RootDAO {
     func listAgents(): ArrayList<Agent> {
-        executor.FROM<Agent>().list<Agent>()
+        executor.setSql('''
+        select a.*, f.category, f.tag 
+          from flow as f, agent as a 
+         where f.agent_id = a.id
+        ''').list<Agent>()
     }
 }

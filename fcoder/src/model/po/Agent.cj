@@ -29,6 +29,10 @@ public class Agent {
     private var agent: String = ''
     @ORMField['acceptable']
     private var acceptable: String = ''
+    @ORMField['category']
+    private var category: String = ''
+    @ORMField['tag']
+    private var tag: String = ''
 
     public prop acceptableEvents: Array<String> {
         get(){
