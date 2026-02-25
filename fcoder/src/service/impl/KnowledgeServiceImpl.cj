@@ -27,8 +27,8 @@ public class KnowledgeServiceImpl <: KnowledgeService {
         var result = None<ArrayList<String>>
         KnowledgeEntity(param, exe.search)
             .queryConf(exe.listConfs)
+            .remoteSearch{conf, content => util.search(conf.url, conf.conf, content, param.size)}
             .search(
-                searcher: {conf, content => util.search(conf.url, conf.conf, content, param.size)},
                 embeddingAccessor: {model, content, dimension => EmbeddingContextMediator.instance.access(model, content, dimension)},
                 knowledgeSaver: exe.saveKnowledge,
                 usageSaver: exe.saveTokenUsage

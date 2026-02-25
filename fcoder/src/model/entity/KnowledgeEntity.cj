@@ -24,20 +24,28 @@ public class KnowledgeEntity {
     }
     private let list: ArrayList<String>
     private var conf: ?LLMConf = None
+    private var remoteResults = None<ArrayList<SearchResult>>
 
     protected func queryConf(finder: (Array<LLMType>) -> ArrayList<LLMConf>): This {
-        conf = finder([LLM_TYPE_SEARCH])[0]
+        if(list.size < param.size){
+            conf = finder([LLM_TYPE_SEARCH])[0]
+        }
+        this
+    }
+    protected func remoteSearch(searcher!: (LLMConf, String) -> ArrayList<SearchResult>): This {
+        if(list.size < param.size){
+            remoteResults = searcher(conf.getOrThrow(), param.content)
+        }
         this
     }
     protected func search(
-        searcher!: (LLMConf, String) -> ArrayList<SearchResult>,
         embeddingAccessor!: (ModelName, String, Int64) -> EmbeddingResp,
         knowledgeSaver!: (Knowledge) -> Unit,
         usageSaver!: (TokenUsage) -> Unit): ArrayList<String> {
         if(list.size == param.size){
             return list
         }
-        let results = searcher(conf.getOrThrow(), param.content)
+        let results = remoteResults.getOrThrow()
         for(result in results){ 
             let url = result.link
             let title = result.title
