@@ -79,7 +79,7 @@ GENERATED ALWAYS AS (
 CREATE INDEX idx_knowledge_search_vector ON knowledge USING GIN(search_vector);
 CREATE INDEX ON knowledge USING hnsw (embedding vector_cosine_ops) WITH (m = 16, ef_construction = 64);
 create index idx_knowledge_codelang on knowledge(code_lang, kind, source, entire);
-create unique index uk_knowledge_md5 on knowledge (md5);
+create unique index uk_knowledge_md5 on knowledge (md5, code_lang, kind);
 comment on column knowledge.code_lang is '代码文件的扩展名';
 comment on column knowledge.kind is 'STD API SYNTAX EXPERIENCE CODESPEC ARTICLE COPYRIGHT SKILL_RESOURCE SKILL_REFERENCE SKILL_TOOL, STD、API、SYNTAX、CODESPEC和EXPERIENCE跟语言强相关，ARTICLE不一定跟语言相关，STD是标准库文档，API工具库文档，SYNTAX是语言特性，ARTICLE是技术文章，EXPERIENCE是犯过的错误、解决过的BUG、git提交的差异和提交信息的总结等，CODESPEC是代码规范，COPYRIGHT是版权声明，COPYRIGHT对应的code_lang是开源协议名，SKILL_RESOURCE是技能资源，SKILL_REFERENCE是技能参考资料，SKILL_TOOL是技能需要的工具';
 comment on column knowledge.md5 is 'content的md5值，用于去重';
