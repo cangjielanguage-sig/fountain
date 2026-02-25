@@ -24,13 +24,13 @@ public interface KnowledgeDAO <: RootDAO {
             WITH confidence AS (
           SELECT id, title, content, kind, query,
                  (1.0 - (embedding <=> ${arg(param.embedding.toString())})) * ${arg(param.weight)} + 
-                 ts_rank(to_tsvector('chinese_english', content), query) * (1.0 - ${arg(param.weight)}) as confidence
+                 ts_rank(search_vector, query) * (1.0 - ${arg(param.weight)}) as confidence
             FROM knowledge, to_tsquery('chinese_english', ${arg(param.content)}) as query
          )
          SELECT content
            FROM confidence
-          WHERE kind ${IN(param.kind)}
-            AND to_tsvector('chinese_english', content) @@ query
+          WHERE ${meet(param.kind.size > 0){'kind ${IN(param.kind)} AND '}}
+                search_vector @@ query
             AND confidence >= ${arg(param.confidence)}
           ORDER
              BY confidence DESC

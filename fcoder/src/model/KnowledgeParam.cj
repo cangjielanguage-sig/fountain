@@ -19,9 +19,9 @@ public class KnowledgeParam {
     public KnowledgeParam(
         public let content!: String, 
         public let embedding!: Array<Float64>, 
-        public let weight!: Float64, 
-        public let kind!: Array<KnowledgeKind>, 
-        public let confidence!: Float64, 
-        public let size!: Int64
+        public let weight!: Float64 = 0.7, 
+        public let kind!: Array<KnowledgeKind> = [], 
+        public let confidence!: Float64 = 0.8, 
+        public let size!: Int64 = 10
     ){}
 }
