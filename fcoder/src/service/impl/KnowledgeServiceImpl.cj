@@ -25,20 +25,14 @@ public class KnowledgeServiceImpl <: KnowledgeService {
         let exe = executor()
         exe.search(param)
         var result = None<ArrayList<String>>
-        try{
-            KnowledgeEntity(param, exe.search)
-                .search()
-                .queryConf(exe.listConfs)
-                .search(
-                    searcher: {conf, content => util.search(conf.url, conf.conf, content, param.size)},
-                    embeddingAccessor: {model, content, dimension => EmbeddingContextMediator.instance.access(model, content, dimension)},
-                    knowledgeSaver: exe.saveKnowledge,
-                    usageSaver: exe.saveTokenUsage
-                )
-        }handle(knowledge: BaseCommand<ArrayList<String>, Unit>){
-            result = knowledge.data
-        }
-        result ?? ArrayList<String>()
+        KnowledgeEntity(param, exe.search)
+            .queryConf(exe.listConfs)
+            .search(
+                searcher: {conf, content => util.search(conf.url, conf.conf, content, param.size)},
+                embeddingAccessor: {model, content, dimension => EmbeddingContextMediator.instance.access(model, content, dimension)},
+                knowledgeSaver: exe.saveKnowledge,
+                usageSaver: exe.saveTokenUsage
+            )
     }
 }
 /*

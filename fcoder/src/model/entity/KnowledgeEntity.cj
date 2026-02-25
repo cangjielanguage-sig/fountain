@@ -19,16 +19,12 @@ public class KnowledgeEntity {
     public KnowledgeEntity(
         private let param: KnowledgeParam,
         private let searchExecutor: (KnowledgeParam) -> ArrayList<String>
-    ){}
-
+    ){
+        list = searchExecutor(param)
+    }
+    private let list: ArrayList<String>
     private var conf: ?LLMConf = None
 
-    protected func search(): This {
-        if(let list <- searchExecutor(param) && list.size == param.size){
-            perform BaseCommand<ArrayList<String>, Unit>(list)
-        }
-        this
-    }
     protected func queryConf(finder: (Array<LLMType>) -> ArrayList<LLMConf>): This {
         conf = finder([LLM_TYPE_SEARCH])[0]
         this
@@ -37,7 +33,10 @@ public class KnowledgeEntity {
         searcher!: (LLMConf, String) -> ArrayList<SearchResult>,
         embeddingAccessor!: (ModelName, String, Int64) -> EmbeddingResp,
         knowledgeSaver!: (Knowledge) -> Unit,
-        usageSaver!: (TokenUsage) -> Unit): Unit {
+        usageSaver!: (TokenUsage) -> Unit): ArrayList<String> {
+        if(list.size == param.size){
+            return list
+        }
         let results = searcher(conf.getOrThrow(), param.content)
         for(result in results){ 
             let url = result.link
@@ -65,6 +64,6 @@ public class KnowledgeEntity {
             knowledgeSaver(knowledge)
             usageSaver(usage)
         }
-        perform BaseCommand<ArrayList<String>, Unit>(searchExecutor(param))
+        searchExecutor(param)
     }
 }
