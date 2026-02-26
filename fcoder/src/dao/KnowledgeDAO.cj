@@ -19,11 +19,11 @@ import fountain::f_orm.macros.*
 
 @DAO
 public interface KnowledgeDAO <: RootDAO {
-    func search(param: KnowledgeParam): ArrayList<String> {
+    func search(param: KnowledgeParam, embedding: Array<Float64>): ArrayList<String> {
         executor.setSql('''
             WITH confidence AS (
           SELECT id, title, content, kind, query, search_vector,
-                 (1.0 - (embedding <=> ${arg(param.embedding.toString())})) * ${arg(param.weight)} + 
+                 (1.0 - (embedding <=> ${arg(embedding.toString())})) * ${arg(param.weight)} + 
                  ts_rank(search_vector, query) * (1.0 - ${arg(param.weight)}) as confidence
             FROM knowledge, to_tsquery('chinese_english', ${arg(param.content)}) as query
          )

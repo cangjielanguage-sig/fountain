@@ -24,6 +24,7 @@ internal import fountain::f_base.*
 
 internal import fountain::fcoder.constant.*
 internal import fountain::fcoder.embedding.*
+internal import fountain::fcoder.llm.*
 internal import fountain::fcoder.model.*
 internal import fountain::fcoder.model.po.*
 internal import fountain::fcoder.util.SearchResult

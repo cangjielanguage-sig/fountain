@@ -21,47 +21,17 @@ import fountain::fcoder.util
 
 @TransactionalService
 public class KnowledgeServiceImpl <: KnowledgeService {
-    private func extractKeywords(content: String){
-        let params = LLMParams()
-        params.model = MODEL_NAME_GLM4_7_FLASH
-        params.thinking.clear_thinking = true
-        let messages = ArrayList<ChatMessage>()
-        params.messages = messages
-        let system = SystemMessage()
-        system.content = '''
-为指定的内容提取关键词，并以JSON格式返回。
-## JSON格式
-```json
-{
-    "keywords": [
-        "关键词1",
-        "关键词2",
-        "关键词3"
-    ]
-}
-'''
-        messages.add(system)
-        let user = UserMessage()
-        user.content = content
-        messages.add(user)
-        let llmResp = LLMContextMediator.instance.access(LLM_TYPE_TEXT, params)
-        executor().saveTokenUsage(llmResp.usage)
-        let json = llmResp.messages[0].content
-        let start = json.indexOf('[').getOrThrow()
-        let end = json.lastIndexOf(']').getOrThrow()
-        json[start + 1 .. end].replace('"', '').trimAscii()
-    }
     @Transactional
     public func search(param: KnowledgeParam): ArrayList<String> {
         let exe = executor()
-        KnowledgeEntity(param, exe.search)
+        KnowledgeEntity(param, 
+            searchExecutor: exe.search, 
+            llmAccessor: LLMContextMediator.instance.access, 
+            embeddingAccessor: EmbeddingContextMediator.instance.access,
+            usageSaver: exe.saveTokenUsage)
             .queryConf(exe.listConfs)
-            .search{conf, content => util.search(conf.url, conf.conf, content |> extractKeywords, param.size)}
-            .save(
-                embeddingAccessor: EmbeddingContextMediator.instance.access,
-                knowledgeSaver: exe.saveKnowledge,
-                usageSaver: exe.saveTokenUsage
-            )
+            .search{conf, content => util.search(conf.url, conf.conf, content, param.size)}
+            .save(knowledgeSaver: exe.saveKnowledge)
     }
 }
 /*

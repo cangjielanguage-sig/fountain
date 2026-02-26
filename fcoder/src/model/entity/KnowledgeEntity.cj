@@ -18,10 +18,52 @@ package fountain::fcoder.model.entity
 public class KnowledgeEntity {
     public KnowledgeEntity(
         private let param: KnowledgeParam,
-        private let searchExecutor: (KnowledgeParam) -> ArrayList<String>
+        private let searchExecutor!: (KnowledgeParam, Array<Float64>) -> ArrayList<String>,
+        private let llmAccessor!: (LLMType, LLMParams) -> LLMResp,
+        private let embeddingAccessor!: (ModelName, String, Int64) -> EmbeddingResp,
+        private let usageSaver!: (TokenUsage) -> Unit
     ){
-        list = searchExecutor(param)
+        keywords = extractKeywords(param.content, llmAccessor, usageSaver)
+        let embeddingResp = embeddingAccessor(MODEL_NAME_GLM_EMBEDDING3, keywords, 1024)
+        keywordsEmbedding = embeddingResp.embedding
+        usageSaver(embeddingResp.usage)
+        param.content = keywords
+        list = searchExecutor(param, keywordsEmbedding)
     }
+
+    private static func extractKeywords(content: String, llmAccessor: (LLMType, LLMParams) -> LLMResp, usageSaver: (TokenUsage) -> Unit){
+        let params = LLMParams()
+        params.model = MODEL_NAME_GLM4_7_FLASH
+        params.thinking.clear_thinking = true
+        let messages = ArrayList<ChatMessage>()
+        params.messages = messages
+        let system = SystemMessage()
+        system.content = '''
+为指定的内容提取关键词，并以JSON格式返回。
+## JSON格式
+```json
+{
+    "keywords": [
+        "关键词1",
+        "关键词2",
+        "关键词3"
+    ]
+}
+'''
+        messages.add(system)
+        let user = UserMessage()
+        user.content = content
+        messages.add(user)
+        let llmResp = llmAccessor(LLM_TYPE_TEXT, params)
+        usageSaver(llmResp.usage)
+        let json = llmResp.messages[0].content
+        let start = json.indexOf('[').getOrThrow()
+        let end = json.lastIndexOf(']').getOrThrow()
+        json[start + 1 .. end].replace('"', '').trimAscii()
+    }
+
+    private let keywords: String
+    private let keywordsEmbedding: Array<Float64>
     private let list: ArrayList<String>
     private var conf: ?LLMConf = None
     private var remoteResults = None<ArrayList<SearchResult>>
@@ -38,10 +80,7 @@ public class KnowledgeEntity {
         }
         this
     }
-    protected func save(
-        embeddingAccessor!: (ModelName, String, Int64) -> EmbeddingResp,
-        knowledgeSaver!: (Knowledge) -> Unit,
-        usageSaver!: (TokenUsage) -> Unit): ArrayList<String> {
+    protected func save(knowledgeSaver!: (Knowledge) -> Unit): ArrayList<String> {
         if(list.size == param.size){
             return list
         }
@@ -70,6 +109,6 @@ public class KnowledgeEntity {
             knowledgeSaver(knowledge)
             usageSaver(usage)
         }
-        searchExecutor(param)
+        searchExecutor(param, keywordsEmbedding)
     }
 }

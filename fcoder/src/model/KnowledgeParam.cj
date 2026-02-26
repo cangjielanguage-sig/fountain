@@ -17,8 +17,7 @@ package fountain::fcoder.model
 
 public class KnowledgeParam {
     public KnowledgeParam(
-        public let content!: String, 
-        public let embedding!: Array<Float64>, 
+        public var content!: String, 
         public let weight!: Float64 = 0.7, 
         public let kind!: Array<KnowledgeKind> = [], 
         public let confidence!: Float64 = 0.8, 

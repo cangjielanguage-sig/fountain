@@ -1,8 +1,9 @@
 # 在命令行运行的人工智能编程工具
 ## 依赖
-- `>=glm-5` `>=glm-5-coder` 智谱搜索
+- `>=glm-5` `>=glm-5-coder` `glm-4.7` 智谱搜索
   - glm-5 负责生成spec
   - glm-5-coder 负责生成代码
+  - glm-4.7 负责从文本提取关键词
 - 仓颉1.1.0
 - ubuntu-24.04
 ```bash
@@ -34,7 +35,6 @@ sudo apt install binutils libc6-dev libc++-dev libgcc-11-dev
 | n     | noun,名词          | 文档     | ['simple']   | simple     | ['文档']     |
 
 - 安装向量插件
-1. 安装向量软件
 ```
 # 更新包列表
 sudo apt update
