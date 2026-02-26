@@ -59,6 +59,11 @@ public const CONTENT_SIZE_MEDIUM = 'medium'
 public const CONTENT_SIZE_HIGH = 'high'
 
 public type ModelName = String
+public const MODEL_NAME_GLM4_7_FLASH = 'glm-4.7-flash'
 public const MODEL_NAME_GLM5 = 'glm-5'
 public const MODEL_NAME_GLM5_CODE = 'glm-5-code'
 public const MODEL_NAME_GLM_EMBEDDING3 = 'embedding-3'
+
+public type ThinkingSwitch = String
+public const THINGKING_ENABLED = 'enabled'
+public const THINGKING_DISABLED = 'disabled'

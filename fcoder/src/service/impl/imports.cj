@@ -27,6 +27,7 @@ internal import fountain::f_orm.*
 internal import fountain::fcoder.constant.*
 internal import fountain::fcoder.dao.*
 internal import fountain::fcoder.embedding.*
+internal import fountain::fcoder.llm.*
 internal import fountain::fcoder.model.entity.*
 internal import fountain::fcoder.model.po.*
 internal import fountain::fcoder.service.*

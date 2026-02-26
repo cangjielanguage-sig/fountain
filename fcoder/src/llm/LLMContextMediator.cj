@@ -19,6 +19,7 @@ public class LLMContextMediator {
     private static let contextCreators = HashMap<String, (LLMConf) -> AbstractLLMContext>()
     
     static init(){
+        contextCreators['glm-4.7-flash+${LLM_TYPE_TEXT}'] = {conf: LLMConf => GLMContext(conf)}
         contextCreators['glm-5+${LLM_TYPE_TEXT}'] = {conf: LLMConf => GLMContext(conf)}
         contextCreators['glm-5+${LLM_TYPE_CODE}'] = {conf: LLMConf => GLMContext(conf)}
     }
@@ -50,7 +51,7 @@ public class LLMContextMediator {
             return contexts[key]
         }
     }
-    public func access(llmType: String, params: LLMParams): LLMResp {
+    public func access(llmType: LLMType, params: LLMParams): LLMResp {
         let key = '${params.model}+${llmType}'
         load(key).access(params)
     }

@@ -37,7 +37,7 @@ public class LLMToolParams <: LLMParams {
 
 @DataAssist[props fields]
 public class Thinking {
-    private var `type`: String = ''
+    private var `type`: ThinkingSwitch = THINGKING_ENABLED
     private var clear_thinking: Bool = false
 }
 
