@@ -105,6 +105,15 @@ $$ LANGUAGE plpgsql;
 删除解决的问题
 - agents`agents`
 
+## 配置LLM
+建表之后向llm_conf添加大模型配置，智谱search 等工具API也配置在这里面
+```sql
+insert into llm_conf(llm_name,llm_type,llm_url,conf,token_threshold)values('glm-5', 'text', 'https://.....','llm.key', 300000);
+--对于search，llm_type是'search'；llm_name不重要，可以是'glm-search'，其它都一样
+```
+## 配置知识库、智能体、技能
+执行`docs/fcoder.sql`，建表SQL后面就是insert into
+
 ## session
 进程堆内存按照以下两个维度保存上下文
 - role
