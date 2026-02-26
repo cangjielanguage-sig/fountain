@@ -980,6 +980,21 @@ package org_name::demo.directory_0
     "org_name3::baz" = { git = "https://domain.name/org_name3/baz.git" } # 这是git依赖
 ```
 
+## 注释
+```cj
+//单行注释
+/*
+ * 多行注释
+ */
+
+/**
+ * 文档注释。这里用来说明声明的功能、目的和意义
+ * @param 参数名 参数的目的和意义。如果有多个参数，一个参数一行，每行都是@param 后跟参数名和参数的解释
+ * @return 返回值类型
+ * @throws 抛出的异常类型并说明抛出异常的原因
+ */
+```
+
 ## 常见错误与注意事项
 
 ### 变量相关
