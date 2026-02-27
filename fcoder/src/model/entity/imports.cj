@@ -19,6 +19,7 @@ internal import std.collection.*
 
 internal import stdx.crypto.digest.MD5
 internal import stdx.encoding.hex.toHexString
+internal import stdx.encoding.json.*
 
 internal import fountain::f_base.*
 

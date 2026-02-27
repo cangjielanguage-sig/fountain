@@ -17,21 +17,22 @@ package fountain::fcoder.model.entity
 
 public class KnowledgeEntity {
     public KnowledgeEntity(
-        private let param: KnowledgeParam,
+        private let content!: String, 
+        private let kind!: Array<KnowledgeKind>, 
+        private let size!: Int64,
         private let searchExecutor!: (KnowledgeParam, Array<Float64>) -> ArrayList<String>,
         private let llmAccessor!: (LLMType, LLMParams) -> LLMResp,
         private let embeddingAccessor!: (ModelName, String, Int64) -> EmbeddingResp,
         private let usageSaver!: (TokenUsage) -> Unit
     ){
-        keywords = extractKeywords(param.content, llmAccessor, usageSaver)
-        let embeddingResp = embeddingAccessor(MODEL_NAME_GLM_EMBEDDING3, keywords, 1024)
+        params = extractKeywords(content, kind, size, llmAccessor, usageSaver)
+        let embeddingResp = embeddingAccessor(MODEL_NAME_GLM_EMBEDDING3, params.content, 1024)
         keywordsEmbedding = embeddingResp.embedding
         usageSaver(embeddingResp.usage)
-        param.content = keywords
-        list = searchExecutor(param, keywordsEmbedding)
+        list = searchExecutor(params, keywordsEmbedding)
     }
 
-    private static func extractKeywords(content: String, llmAccessor: (LLMType, LLMParams) -> LLMResp, usageSaver: (TokenUsage) -> Unit){
+    private static func extractKeywords(content: String, kind: Array<KnowledgeKind>, size: Int64, llmAccessor: (LLMType, LLMParams) -> LLMResp, usageSaver: (TokenUsage) -> Unit): KnowledgeParam {
         let params = LLMParams()
         params.model = MODEL_NAME_GLM4_7_FLASH
         params.thinking.clear_thinking = true
@@ -47,8 +48,17 @@ public class KnowledgeEntity {
         "关键词1",
         "关键词2",
         "关键词3"
-    ]
+    ],
+    "weight": 0.7,
+    "confidence": 0.8
 }
+
+### 响应JSON各字段的意义
+|字段名|说明|是否必须|
+|:----|:---|:------|
+|keywords|关键词列表，每个关键词是一个字符串|
+|weight|向量索引的权重，范围0到1的浮点数，默认是0.7，将keywords与本地知识库的向量距离和全文匹配查询，weight是向量距离的权重，(1 - weight)是全文匹配的权重|
+|confidence|查询结果的置信度，范围0到1的浮点数，默认是0.8，用keywords在本地知识库查询到的文档的最低置信度，置信度高于这个值的文档才被采纳|
 '''
         messages.add(system)
         let user = UserMessage()
@@ -56,32 +66,46 @@ public class KnowledgeEntity {
         messages.add(user)
         let llmResp = llmAccessor(LLM_TYPE_TEXT, params)
         usageSaver(llmResp.usage)
-        let json = llmResp.messages[0].content
-        let start = json.indexOf('[').getOrThrow()
-        let end = json.lastIndexOf(']').getOrThrow()
-        json[start + 1 .. end].replace('"', '').trimAscii()
+        let json = (llmResp.messages[0].content |> JsonValue.fromStr).asObject()
+        let weight = json.get('weight')?.asFloat().getValue() ?? 0.7
+        let confidence = json.get('confidence')?.asFloat().getValue() ?? 0.8
+        let keywords = (json.get('keywords')?.asArray() ?? JsonArray()).getItems()
+        let keytext = StringGenerator()
+        for(keyword in keywords){
+            if(keytext.size > 0){
+                keytext.append(',')
+            }
+            keytext.append(keyword)
+        }
+        KnowledgeParam(
+            content: keytext.toString(),
+            kind: kind,
+            size: size,
+            weight: weight,
+            confidence: confidence
+        )
     }
 
-    private let keywords: String
+    private let params: KnowledgeParam
     private let keywordsEmbedding: Array<Float64>
     private let list: ArrayList<String>
     private var conf: ?LLMConf = None
     private var remoteResults = None<ArrayList<SearchResult>>
 
     protected func queryConf(finder: (Array<LLMType>) -> ArrayList<LLMConf>): This {
-        if(list.size < param.size){
+        if(list.size < params.size){
             conf = finder([LLM_TYPE_SEARCH])[0]
         }
         this
     }
     protected func search(searcher!: (LLMConf, String) -> ArrayList<SearchResult>): This {
-        if(list.size < param.size){
-            remoteResults = searcher(conf.getOrThrow(), param.content)
+        if(list.size < params.size){
+            remoteResults = searcher(conf.getOrThrow(), params.content)
         }
         this
     }
     protected func save(knowledgeSaver!: (Knowledge) -> Unit): ArrayList<String> {
-        if(list.size == param.size){
+        if(list.size == params.size){
             return list
         }
         let results = remoteResults.getOrThrow()
@@ -109,6 +133,6 @@ public class KnowledgeEntity {
             knowledgeSaver(knowledge)
             usageSaver(usage)
         }
-        searchExecutor(param, keywordsEmbedding)
+        searchExecutor(params, keywordsEmbedding)
     }
 }

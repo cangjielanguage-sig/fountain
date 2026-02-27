@@ -16,7 +16,7 @@ limitations under the License.
 package fountain::fcoder.service
 
 public interface KnowledgeService <: RootService {
-    func search(param: KnowledgeParam): ArrayList<String>
+    func search(content: String, kind: Array<KnowledgeKind>, size: Int64): ArrayList<String>
     func saveKnowledge(knowledge: Knowledge): Unit
     func findKnowledge(kind: KnowledgeKind, title: String): ?String
 }
