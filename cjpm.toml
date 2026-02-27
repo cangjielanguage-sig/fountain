@@ -49,8 +49,8 @@
   package-configuration = {}
   category = ["Utility"]
   license = ["Apache-2.0"]
-  include = ["./src"]
-  exclude = ["cjpm.toml.bak", "cangjie.sh", ".gitignore", ".gitatributes", "CHANGELOG", "cjpm.lock", "target", ".modules", "f_*"]
+  include = ["src"]
+  exclude = ["cjpm.toml.bak", "cangjie.sh", ".gitignore", ".gitatributes", "CHANGELOG", "cjpm.lock", "target", ".modules", "f*", "docs"]
   authors = ["吴京润"] 
 
 [target]
