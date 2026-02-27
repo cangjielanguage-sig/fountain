@@ -173,7 +173,12 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
         }
         setResponseStatus(status)
         let accept = ctx.request.headers.getFirst('Accept') ?? '*/*'
-        let builder = ctx.responseBuilder.status(status.value).header('Content-Type', accept)
+        let firstAccept = if (accept.contains(',')){
+            AcceptQueue(accept).first() ?? 'application/sjon'
+        }else{
+            accept
+        }
+        let builder = ctx.responseBuilder.status(status.value).header('Content-Type', firstAccept)
         func respondStatusReasonPhrase() {
             builder.body(if (status == HttpStatus.OK) {
                 HttpStatus.UNAUTHORIZED.reasonPhrase
@@ -189,7 +194,7 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
             case x: Array<Byte> => builder.body(x)
             case x: InputStream => builder.body(x)
             case x: ToString => builder.body(x.toString())
-            case x: ToData where accept != '*/*' => match (MediaTypes.tryParse(accept)) {
+            case x: ToData where firstAccept != '*/*' => match (MediaTypes.tryParse(firstAccept)) {
                 case Some(mt) => builder.body(mt.fromData(x.toData()))
                 case _ => respondStatusReasonPhrase()
             }
@@ -217,25 +222,34 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
             let emptyResult = result is Unit || result is DataUnit || result is DataNone
             let accept = ctx.request.headers.getFirst('Accept')
             if (!emptyResult && let Some(accept) <- accept) {
-                if (let Some(mediaType) <- MediaTypes.tryParse(accept)) {
-                    let bytes = mediaType.fromData(result.toData())
-                    ctx.responseBuilder.status(status.value).header('Content-Type', accept).body(bytes)
-                } else if (accept == '*/*') {
-                    let acc = this.produces.iterator().next() ?? 'application/json'
-                    let mt = MediaTypes.parse(acc)
-                    let bytes = mt.fromData(result.toData())
-                    ctx.responseBuilder.status(status.value).header('Content-Type', acc).body(bytes)
-                } else {
-                    if (let r: Resource <- result) {
-                        try {
-                            r.close()
-                        } catch (e: Exception) {
-                            log.warn(e){'Error occurred on closing ${TypeInfo.of(result)}; path: ${path}; accept: ${accept}'}
-                        }
+                func genBody(accept: String): Bool {
+                    if (let Some(mediaType) <- MediaTypes.tryParse(accept)) {
+                        let bytes = mediaType.fromData(result.toData())
+                        ctx.responseBuilder.status(status.value).header('Content-Type', accept).body(bytes)
+                        return true
+                    } else if (accept == '*/*') {
+                        let acc = this.produces.iterator().next() ?? 'application/json'
+                        let mt = MediaTypes.parse(acc)
+                        let bytes = mt.fromData(result.toData())
+                        ctx.responseBuilder.status(status.value).header('Content-Type', acc).body(bytes)
+                        return true
                     }
-                    MultiRequestMethodHandler.NOT_ACCEPTABLE.`handle`(ctx)
+                    false
                 }
-            } else if (emptyResult && let Some(accept) <- accept && accept == '*/*') {
+                let accepted = if(accept.indexOf(',').isSome()){
+                    (AcceptQueue(accept).first() ?? '*/*') |> genBody
+                } else {
+                    genBody(accept)
+                }
+                if (!accepted && let r: Resource <- result) {
+                    try {
+                        r.close()
+                    } catch (e: Exception) {
+                        log.warn(e){'Error occurred on closing ${TypeInfo.of(result)}; path: ${path}; accept: ${accept}'}
+                    }
+                }
+                MultiRequestMethodHandler.NOT_ACCEPTABLE.`handle`(ctx)
+            } else if (emptyResult && let Some(accept) <- accept && accept.contains('*/*')) {
                 ctx.responseBuilder.status(status.value).header('Content-Type', accept).body('')
             } else if (emptyResult && accept.isNone()) {
                 ctx.responseBuilder.status(status.value).body('')
@@ -253,10 +267,15 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
     private func respond(response: JsonValue, ctx: HttpContext): Unit {
         respond(ctx.request.method) {
             if (let Some(accept) <- ctx.request.headers.getFirst('Accept')) {
-                if (let Some(mediaType) <- MediaTypes.tryParse(accept) && let jmt: JsonMediaType <- mediaType) {
+                let firstAccept = if(accept.contains(',')){
+                    AcceptQueue(accept).first() ?? 'application/json'
+                }else{
+                    accept
+                }
+                if (let Some(mediaType) <- MediaTypes.tryParse(firstAccept) && let jmt: JsonMediaType <- mediaType) {
                     let bytes = jmt.fromData(response)
-                    ctx.responseBuilder.header('Content-Type', accept).body(bytes)
-                } else if (accept == '*/*') {
+                    ctx.responseBuilder.header('Content-Type', firstAccept).body(bytes)
+                } else if (firstAccept == '*/*') {
                     ctx.responseBuilder.header('Content-Type', 'application/json').body(response.toString())
                 } else {
                     MultiRequestMethodHandler.NOT_ACCEPTABLE.`handle`(ctx)

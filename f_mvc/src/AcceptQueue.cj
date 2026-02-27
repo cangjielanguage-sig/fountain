@@ -54,9 +54,14 @@ struct AcceptQueue {
                 }
                 end = accept.indexOf(',', start)
             }
+        } else {
+            priority.add((-1.0f64, 0, accept))
         }
     }
     func remove(): ?(Float64, Int64, String){
         priority.remove()
+    }
+    func first(): ?String {
+        remove()?[2]
     }
 }
