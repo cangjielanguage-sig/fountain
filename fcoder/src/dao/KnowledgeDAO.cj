@@ -48,6 +48,7 @@ public interface KnowledgeDAO <: RootDAO {
                ${arg(knowledge.title)}, 
                ${arg(knowledge.content)}, 
                ${arg(knowledge.embedding)})
+        on conflict(md5, code_lang, kind) do nothing
         ''').insert
     }
     func findKnowledge(kind: KnowledgeKind, title: String): ?String {
