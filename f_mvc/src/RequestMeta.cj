@@ -69,7 +69,7 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
         ctx: HttpContext => throw MVCException('Request was not handled')
     }
 
-    public func handle(ctx: HttpContext): Unit {
+    public func `handle`(ctx: HttpContext): Unit {
         handle_(ctx)
     }
 
@@ -130,23 +130,25 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
         let pattern = this.pattern.getOrThrow()
         this.handle_ = {
             ctx =>
-                let result = try {
+                try {
                     CurrentHttpContext.set(ctx)
-                    fn(BeanFactory.instance.getFirst<T>().getOrThrow(), ctx, pattern)
+                    let result = fn(BeanFactory.instance.getFirst<T>().getOrThrow(), ctx, pattern)
+                    match (result) {
+                        case x: JsonValue => respond(x, ctx)
+                        case x: InputStream => respond(x, ctx)
+                        case x: Array<Byte> => respond(x, ctx)
+                        case _: Unit => ()
+                        case x: ToData => respond(x, ctx)
+                        case x: Redirect => respond(x, ctx)
+                        case _ =>
+                            let request = ctx.request
+                            log.warn {'fountain::f_mvc.`handle` ${request.method}:${request.url};${TypeInfo.of(result)}'}
+                            MultiRequestMethodHandler.NOT_ACCEPTABLE.`handle`(ctx)
+                    }
+                } handle (cmd: BreakingCommand) {
+                    respond(cmd, ctx)
                 } finally {
                     CurrentHttpContext.clear()
-                }
-                match (result) {
-                    case x: JsonValue => respond(x, ctx)
-                    case x: InputStream => respond(x, ctx)
-                    case x: Array<Byte> => respond(x, ctx)
-                    case _: Unit => ()
-                    case x: ToData => respond(x, ctx)
-                    case x: Redirect => respond(x, ctx)
-                    case _ =>
-                        let request = ctx.request
-                        log.warn {'fountain::f_mvc.handle ${request.method}:${request.url};${TypeInfo.of(result)}'}
-                        MultiRequestMethodHandler.NOT_ACCEPTABLE.handle(ctx)
                 }
         }
     }
@@ -197,7 +199,7 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
     }
     func setHandle<T>(wsmeta: WSMeta<T>) where T <: Object {
         this.handle_ = {
-            ctx => wsmeta.handle(BeanFactory.instance.getFirst<T>().getOrThrow(), ctx, pattern.getOrThrow())
+            ctx => wsmeta.`handle`(BeanFactory.instance.getFirst<T>().getOrThrow(), ctx, pattern.getOrThrow())
         }
         produces.add('*')
         consumes.add('*')
@@ -209,18 +211,20 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
             OverallStopwatch.elapsed(method)
         }
     }
-    private func respond<R>(result: R, ctx: HttpContext): Unit where R <: ToData {
+    
+    private func respond<R>(status: HttpStatus, result: R, ctx: HttpContext): Unit where R <: ToData {
         respond(ctx.request.method) {
+            let emptyResult = result is Unit || result is DataUnit || result is DataNone
             let accept = ctx.request.headers.getFirst('Accept')
-            if (!(result is Unit) && let Some(accept) <- accept) {
+            if (!emptyResult && let Some(accept) <- accept) {
                 if (let Some(mediaType) <- MediaTypes.tryParse(accept)) {
                     let bytes = mediaType.fromData(result.toData())
-                    ctx.responseBuilder.header('Content-Type', accept).body(bytes)
+                    ctx.responseBuilder.status(status.value).header('Content-Type', accept).body(bytes)
                 } else if (accept == '*/*') {
                     let acc = this.produces.iterator().next() ?? 'application/json'
                     let mt = MediaTypes.parse(acc)
                     let bytes = mt.fromData(result.toData())
-                    ctx.responseBuilder.header('Content-Type', acc).body(bytes)
+                    ctx.responseBuilder.status(status.value).header('Content-Type', acc).body(bytes)
                 } else {
                     if (let r: Resource <- result) {
                         try {
@@ -229,16 +233,22 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
                             log.warn(e){'Error occurred on closing ${TypeInfo.of(result)}; path: ${path}; accept: ${accept}'}
                         }
                     }
-                    MultiRequestMethodHandler.NOT_ACCEPTABLE.handle(ctx)
+                    MultiRequestMethodHandler.NOT_ACCEPTABLE.`handle`(ctx)
                 }
-            } else if ((result is Unit) && let Some(accept) <- accept && accept == '*/*') {
-                ctx.responseBuilder.header('Content-Type', accept).body('')
-            } else if ((result is Unit) && accept.isNone()) {
-                ctx.responseBuilder.body('')
+            } else if (emptyResult && let Some(accept) <- accept && accept == '*/*') {
+                ctx.responseBuilder.status(status.value).header('Content-Type', accept).body('')
+            } else if (emptyResult && accept.isNone()) {
+                ctx.responseBuilder.status(status.value).body('')
             } else {
-                MultiRequestMethodHandler.NOT_ACCEPTABLE.handle(ctx)
+                MultiRequestMethodHandler.NOT_ACCEPTABLE.`handle`(ctx)
             }
         }
+    }
+    private func respond(cmd: BreakingCommand, ctx: HttpContext): Unit {
+        respond<Data>(cmd.status, cmd.data, ctx)
+    }
+    private func respond<R>(result: R, ctx: HttpContext): Unit where R <: ToData {
+        respond<R>(HttpStatus.OK, result, ctx)
     }
     private func respond(response: JsonValue, ctx: HttpContext): Unit {
         respond(ctx.request.method) {
@@ -249,7 +259,7 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
                 } else if (accept == '*/*') {
                     ctx.responseBuilder.header('Content-Type', 'application/json').body(response.toString())
                 } else {
-                    MultiRequestMethodHandler.NOT_ACCEPTABLE.handle(ctx)
+                    MultiRequestMethodHandler.NOT_ACCEPTABLE.`handle`(ctx)
                 }
             } else {
                 ctx.responseBuilder.header('Content-Type', 'application/json').body(response.toString())
@@ -460,7 +470,7 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
         }
         if (let Some(ex) <- e) {
             let exce = try {
-                MultiRequestMethodHandler.INTERNAL_SERVER_ERROR.handle(ctx, ex)
+                MultiRequestMethodHandler.INTERNAL_SERVER_ERROR.`handle`(ctx, ex)
                 ex
             } catch (e: Exception) {
                 let status = HttpStatus.INTERNAL_SERVER_ERROR
