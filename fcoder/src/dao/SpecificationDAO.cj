@@ -27,7 +27,7 @@ public interface SpecificationDAO <: RootDAO {
                and kind = ${arg(kind)}
         ''').singleList<String>()
     }
-    func findSpecByTitle(projectId: Int64, kind: SpecKind, title: String): ?String{
+    func findSpecByTitle(projectId: Int64, kind: SpecKind, title: String): ?String {
         executor.setSql('''
             select content 
               from specification
@@ -35,5 +35,23 @@ public interface SpecificationDAO <: RootDAO {
                and kind = ${arg(kind)}
                and title = ${arg(title)}
         ''').singleFirst<String>()
+    }
+    func saveSpecification(spec: Specification, embedding: Array<Float64>): Unit {
+        executor.setSql('''
+            insert 
+              into specification(
+                   project_id,
+                   code_lang,
+                   kind,
+                   title,
+                   content,
+                   embedding
+           )values(${arg(spec.projectId)},
+                   ${arg(spec.codeLang)},
+                   ${arg(spec.kind)},
+                   ${arg(spec.title)},
+                   ${arg(spec.content)},
+                   ${arg(embedding)}
+            )''').insert
     }
 }

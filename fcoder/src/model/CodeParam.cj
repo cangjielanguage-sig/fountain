@@ -16,10 +16,12 @@ limitations under the License.
 package fountain::fcoder.model
 
 public class CodeParam {
-    public var projectId: Int64 = 0
-    public var moduleName: String = ''
-    public var packageName: String = ''
-    public var code: String = ''
-    public var weight: Float64 = 0.0
-    public var confidence: Float64 = 0.0
+    public CodeParam(
+        public let projectId!: Int64 = 0,
+        public let moduleName!: String = '',
+        public let packageName!: String = '',
+        public let code!: String = '',
+        public let weight!: Float64 = 0.0,
+        public let confidence!: Float64 = 0.0
+    ){}
 }

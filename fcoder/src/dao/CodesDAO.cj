@@ -48,4 +48,25 @@ public interface CodesDAO <: RootDAO {
          'WHERE confidence >= ${arg(params.confidence)}'}}
         ''').singleList<String>()
     }
+
+    func saveCode(code: Code, embedding: Array<Float64>): Unit {
+        executor.setSql('''
+        insert 
+          into codes(
+               project_id,
+               file_path,
+               module_name,
+               package_name,
+               code_lang,
+               code,
+               embedding
+       )values(${arg(code.projectId)},
+               ${arg(code.filePath)},
+               ${arg(code.moduleName)},
+               ${arg(code.packageName)},
+               ${arg(code.codeLang)},
+               ${arg(code.code)},
+               ${arg(embedding.toString())}
+       )''').insert
+    }
 }

@@ -37,20 +37,3 @@ public interface TokenUsageDAO <: RootDAO {
         ''').insert
     }
 }
-/*
-    @ORMField['llm_id']
-    private var llmId: Int64 = 0
-    @ORMField['prompt_tokens']
-    private var prompt: Int64 = 0
-    @ORMField['completion_tokens']
-    private var completion: Int64 = 0
-    @ORMField['total_tokens']
-    private var total: Int64 = 0
-    @ORMField['cached_tokens']
-    private var cached: Int64 = 0
-    @ORMField['usage_time']
-    private var usageTime: Int64 = {=>
-        let now = DateTime.now()
-        now.year * 100000000 + now.month.toInteger() * 1000000 + now.dayOfMonth * 10000 + now.hour * 100 + now.minute
-    }()
-*/
