@@ -19,7 +19,7 @@ import fountain::f_orm.macros.*
 
 @DAO
 public interface KnowledgeDAO <: RootDAO {
-    func search(param: KnowledgeParam, embedding: Array<Float64>): ArrayList<String> {
+    func searchKnowledge(param: KnowledgeParam, embedding: Array<Float64>): ArrayList<String> {
         executor.setSql('''
             WITH confidence AS (
           SELECT id, title, content, kind, query, search_vector,
@@ -49,5 +49,13 @@ public interface KnowledgeDAO <: RootDAO {
                ${arg(knowledge.content)}, 
                ${arg(knowledge.embedding)})
         ''').insert
+    }
+    func findKnowledge(kind: KnowledgeKind, title: String): ?String {
+        executor.setSql('''
+            select content
+              from knowledge
+             where kind = ${arg(kind)}
+               and title = ${arg(title)}
+        ''').singleFirst<String>()
     }
 }

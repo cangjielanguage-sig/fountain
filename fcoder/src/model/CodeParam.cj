@@ -13,12 +13,13 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package fountain::fcoder.service
+package fountain::fcoder.model
 
-internal import std.collection.*
-
-internal import fountain::f_orm.*
-
-internal import fountain::fcoder.constant.*
-internal import fountain::fcoder.model.*
-internal import fountain::fcoder.model.po.*
+public class CodeParam {
+    public var projectId: Int64 = 0
+    public var moduleName: String = ''
+    public var packageName: String = ''
+    public var code: String = ''
+    public var weight: Float64 = 0.0
+    public var confidence: Float64 = 0.0
+}

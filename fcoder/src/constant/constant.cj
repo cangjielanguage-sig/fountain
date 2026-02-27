@@ -67,3 +67,12 @@ public const MODEL_NAME_GLM_EMBEDDING3 = 'embedding-3'
 public type ThinkingSwitch = String
 public const THINGKING_ENABLED = 'enabled'
 public const THINGKING_DISABLED = 'disabled'
+
+public type SpecKind = String
+public const SPEC_KIND_CONSTITUTION = 'CONSTITUTION'
+public const SPEC_KIND_FEASIBILITY = 'FEASIBILITY'
+public const SPEC_KIND_REQUIREMENT = 'REQUIREMENT'
+public const SPEC_KIND_PRELIMINARY = 'PRELIMINARY'
+public const SPEC_KIND_DETAIL = 'DETAIL'
+public const SPEC_KIND_PLAN = 'PLAN'
+public const SPEC_KIND_TASK = 'TASK'

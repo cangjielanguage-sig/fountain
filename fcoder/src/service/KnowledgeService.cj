@@ -17,4 +17,6 @@ package fountain::fcoder.service
 
 public interface KnowledgeService <: RootService {
     func search(param: KnowledgeParam): ArrayList<String>
+    func saveKnowledge(knowledge: Knowledge): Unit
+    func findKnowledge(kind: KnowledgeKind, title: String): ?String
 }

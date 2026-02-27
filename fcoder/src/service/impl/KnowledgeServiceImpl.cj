@@ -25,13 +25,20 @@ public class KnowledgeServiceImpl <: KnowledgeService {
     public func search(param: KnowledgeParam): ArrayList<String> {
         let exe = executor()
         KnowledgeEntity(param, 
-            searchExecutor: exe.search, 
+            searchExecutor: exe.searchKnowledge, 
             llmAccessor: LLMContextMediator.instance.access, 
             embeddingAccessor: EmbeddingContextMediator.instance.access,
             usageSaver: exe.saveTokenUsage)
             .queryConf(exe.listConfs)
             .search{conf, content => util.search(conf.url, conf.conf, content, param.size)}
             .save(knowledgeSaver: exe.saveKnowledge)
+    }
+    @Transactional
+    public func saveKnowledge(knowledge: Knowledge): Unit {
+        executor().saveKnowledge(knowledge)
+    }
+    public func findKnowledge(kind: KnowledgeKind, title: String): ?String {
+        executor().findKnowledge(kind, title)
     }
 }
 /*
