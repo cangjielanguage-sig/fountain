@@ -53,7 +53,7 @@ public class MultiRequestMethodHandler <: HttpRequestHandler {
         }
     }
 
-    public func handle(ctx: HttpContext): Unit {
+    public func `handle`(ctx: HttpContext): Unit {
         let request = ctx.request
         let headers = request.headers
         let consumes = headers.getFirst('Content-Type') ?? ''
@@ -80,12 +80,12 @@ public class MultiRequestMethodHandler <: HttpRequestHandler {
                 UNSUPPORTED_MEDIA_TYPE
             }
         }
-        func handle(ms: HashMap<String, RequestMeta>): Unit {
-            check(ms).handle(ctx)
+        func `handle`(ms: HashMap<String, RequestMeta>): Unit {
+            check(ms).`handle`(ctx)
         }
         log.debug{'fountain mvc ${request.method}: ${request.url}'}
         match ((metas.get(method), method)) {
-            case (Some(ms), OPTIONS) => check(ms).handle(ctx)
+            case (Some(ms), OPTIONS) => check(ms).`handle`(ctx)
             case (_, OPTIONS) =>
                 let allow = StringGenerator()
                 allow.append(method)
@@ -107,11 +107,11 @@ public class MultiRequestMethodHandler <: HttpRequestHandler {
                     resp.header("Access-Control-Max-Age", accessControlMaxAge.toString())
                 }
             case (Some(m), HEAD) => match (metas.get(RequestMethod.GET)) {
-                case Some(ms) => handle(ms)
-                case _ => METHOD_NOT_ALLOWED.handle(ctx)
+                case Some(ms) => `handle`(ms)
+                case _ => METHOD_NOT_ALLOWED.`handle`(ctx)
             }
-            case (Some(ms), _) => handle(ms)
-            case _ => METHOD_NOT_ALLOWED.handle(ctx)
+            case (Some(ms), _) => `handle`(ms)
+            case _ => METHOD_NOT_ALLOWED.`handle`(ctx)
         }
     }
 }
@@ -119,10 +119,10 @@ public class MultiRequestMethodHandler <: HttpRequestHandler {
 class HttpStatusOnlyHandler <: HttpRequestHandler {
     HttpStatusOnlyHandler(private let status: HttpStatus, private let message!: String = '', private let kind!: FailureMessageKind = Text) {}
     
-    public func handle(ctx: HttpContext): Unit {
-        handle(ctx, None<Exception>)
+    public func `handle`(ctx: HttpContext): Unit {
+        `handle`(ctx, None<Exception>)
     }
-    public func handle(ctx: HttpContext, ex: ?Exception): Unit {
+    public func `handle`(ctx: HttpContext, ex: ?Exception): Unit {
         func setStatus(){
             let b = ctx.responseBuilder.status(status.value)
             RequestMeta.setResponseStatus(status)
@@ -133,7 +133,7 @@ class HttpStatusOnlyHandler <: HttpRequestHandler {
         }
         match(kind){
             case Bean => if(message.size > 0 && let Some(x) <- BeanFactory.instance.getFirst<ErrorHttpRequestHandler>(cond: Exactly(message))){
-                let (status, resp) = x.handle(ctx, ex)
+                let (status, resp) = x.`handle`(ctx, ex)
                 if(resp is Unit){
                     return
                 }

@@ -16,5 +16,5 @@ limitations under the License.
 package fountain::f_mvc
 
 public interface ErrorHttpRequestHandler {
-    func handle(ctx: HttpContext, e: ?Exception): (HttpStatus, Any)
+    func `handle`(ctx: HttpContext, e: ?Exception): (HttpStatus, Any)
 }
