@@ -51,7 +51,7 @@ Fountain 终于稳定运行在真实医疗环境中，成为仓颉语言应用�
 应用进程管理模块，可以用本模块加载使用fountain开发的应用项目动态链接库。
 也可以使用`fountain::fountain.app`包使用本模块的同名API。
 
-[详情请见](https://pkg.cangjie-lang.cn/package/fountain::f_app/1.1.0/readme)
+**详情请见：**<https://pkg.cangjie-lang.cn/package/fountain::f_app/1.1.0/readme>
 
 ### `fountain::f_aspect`
 AOP
