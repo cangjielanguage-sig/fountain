@@ -307,7 +307,13 @@ public class ORMConfig {
             case _ => None
         }
     }
-    public static func getIndexStartsWithZero(driverName!: String = String.empty): Bool {
-        get<Bool>(driverName: driverName, key: indexStartsWithZero, default: false)
+    public static func getIndexStartsWith(driverName!: String = String.empty): Int64 {
+        let zero = get<Bool>(driverName: driverName, key: indexStartsWithZero, default: true)
+        if(zero){
+            0
+        }else{
+            1
+        }
     }
+
 }

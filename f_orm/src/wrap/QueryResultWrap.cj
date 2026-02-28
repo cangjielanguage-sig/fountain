@@ -24,11 +24,7 @@ public class QueryResultWrap <: QueryResult {
     private var list = unsafeZeroValue<ArrayList<Any>>()
     private let indexStartsWith: Int64
     public QueryResultWrap(private let driverName: String, private let result: QueryResult) {
-        indexStartsWith = if(ORMConfig.getIndexStartsWithZero(driverName: driverName)){
-            0
-        }else{
-            1
-        }
+        indexStartsWith = ORMConfig.getIndexStartsWith(driverName: driverName)
         for (i in 0..columnInfos.size) {
             columnInfoMap[columnInfos[i].name] = i
         }

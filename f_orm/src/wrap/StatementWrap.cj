@@ -18,11 +18,7 @@ package fountain::f_orm.wrap
 public class StatementWrap <: Statement {
     private let indexStartsWith: Int64
     public StatementWrap(let driverName: String, private let statement: Statement) {
-        indexStartsWith = if(ORMConfig.getIndexStartsWithZero(driverName: driverName)){
-            0
-        }else{
-            1
-        }
+        indexStartsWith = ORMConfig.getIndexStartsWith(driverName: driverName)
     }
 
     public prop parameterColumnInfos: Array<ColumnInfo> {
