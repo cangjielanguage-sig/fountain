@@ -375,7 +375,8 @@ public interface UserDAO <: RootDAO {//必须是RootDAO的子接口
 @ORMFIeld[id column: LowerUnderScore converter: 'org::pkg.ConverterQualifiedTypeName']
 @ORMField[id column: "column_name" converter: 'beanNameOfConverter'] 
 id 是一个单属性，表示当前ORMField修饰的成员映射主键
-column: 列名转换的格式，可以是LowerUnderScore、UpperUnderScore、Pascal，会把Camel风格的类名转换成指定风格的名称，并把转换结果作为列名，
+column: 列名转换的格式，可以是LowerUnderScore、UpperUnderScore、Pascal、Camel，会把Camel风格的类名转换成指定风格的名称，并把转换结果作为列名，
+        column对应的值是是标识符，又不是LowerUnderScore、UpperUnderScore、Pascal、Camel之一的，把标识符作为列名
         如果column对应的值是字符串，这个字符串就是映射的列名，
         如果没有指定column，会把ORMField修饰的成员名称转换成LowerUnderScore风格，并把转换结果作为列名
 converter: 对应的值是数据转换器的名称，可以是`fountain::f_bean`管理的bean名称，也可以是`fountain::f_orm.QueryMapperConverter`的子类全限定名。指定了converter的被映射成员类型必须是`fountain::f_data.DataFields<T>`的子类型。
