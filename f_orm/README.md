@@ -346,8 +346,7 @@ public interface UserDAO <: RootDAO {//必须是RootDAO的子接口
 ## 数据映射
 现在支持表和类实例的映射，一对一和一对多的级联映射，映射类的成员类型是另一个映射类时会实现一对一的级联映射，当映射类的成员类型是另一个映射类的集合时会实现一对多的级联映射。
 
-### 数据映射
-#### `@QueryMappersGenerator`和`@QueryMappersGenerator[attr]`
+### `@QueryMappersGenerator`和`@QueryMappersGenerator[attr]`
 `@QueryMappersGenerator`宏修饰的类即为映射类，宏会自动为它修饰的类添加`QueryMappersInit<T>`接口实现，`T`是宏修饰的类型。这个宏必须跟@ORMField配合使用。
 `@QueryMappersGenerator`宏的属性格式：
   dirty 指定这个属性的表示被此宏修饰的类的属性发生变化时会向ORM标记修改历史，可以调用`executor.update<T>(dirty:true)`更新修改过的属性，
@@ -368,7 +367,7 @@ public interface UserDAO <: RootDAO {//必须是RootDAO的子接口
    即@DataAssist要在@QueryMappersGenerator前面。
 3. 如果没有2. 这种需求，则二者顺序没有要求，但是1. 还需要满足。
 
-#### `@ORMField`和`@ORMField[attr]`
+### `@ORMField`和`@ORMField[attr]`
 使用宏@ORMField 修饰public mut prop或public var指定当前属性或成员变量是不是主键以及映射的列名，所有的仓颉mut prop必须是驼峰命名法。
 @ORMField[true LowerUnderScore] 表示当前属性映射主键，属性名转为LowerUnderScore就是列名，列的类型是dataType。
 @ORMField[true "column_name"] 表示当前属性映射主键，不论属性名是什么列名一定是"column_name"。
@@ -383,7 +382,7 @@ converter: 对应的值是数据转换器的名称，可以是`fountain::f_bean`
 每一部分都是可选的，且两种属性风格可以混用。
 没有使用@ORMField注解的成员认为映射的不是主键，且按照列名是LowerUnderScore处理。
 
-#### 例子
+### 例子
 ```cj
 @DataAssist[fields tostring]//同时使用@DataAssist 和 @QueryMappersGenerator，@DataAssist必须在上面
 @QueryMappersGenerator[table: user_info dirty]//映射的表名是user_info，且可以使用executor.update<UserPO>(dirty: true)更新脏数据
