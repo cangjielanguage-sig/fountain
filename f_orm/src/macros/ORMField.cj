@@ -122,7 +122,7 @@ private func expandORMField(attrs: Tokens, input: Tokens): Tokens {
                             case "UpperUnderScore" => CaseFormat.Camel.convert(name.value, to: CaseFormat.UpperUnderScore)
                             case "Pascal" => CaseFormat.Camel.convert(name.value, to: CaseFormat.Pascal)
                             case "Camel" => name.value
-                            case _ => throw ORMException("unsupported TokenKind in attrs of @ORMFIld kind: ${attr.kind} value: ${attr.value}")
+                            case _ => x
                         }
                         case _ => throw ORMException("unsupported TokenKind in attrs of @ORMFIld kind: ${attr.kind} value: ${attr.value}")
                     }
