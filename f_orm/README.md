@@ -411,7 +411,7 @@ public class UserInfoPO {//不要使用这个类，仅用于展示@QueryMappersG
     private var userProps: UserProps = UserProps()
 }
 
-@DataAssist[props fields]//所有基本类型、DateTime、Duration、Jsonvalue、String和被@DataAssist修饰的类都是fountain::f_data.DataFields<T>的子类型
+@DataAssist[props fields]//所有基本类型、DateTime、Duration、Jsonvalue、String和被@DataAssist修饰的类，以及Option<T>泛型实参是这些类型的，都是fountain::f_data.DataFields<T>的子类型
 public class UserProps {
     private var registerTime: ?DataTime = None<DateTime>
     private var lastLoginTime: ?DataTime = None<DateTime>
