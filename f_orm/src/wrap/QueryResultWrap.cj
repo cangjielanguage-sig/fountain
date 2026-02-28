@@ -22,7 +22,13 @@ import fountain::f_base.*
 public class QueryResultWrap <: QueryResult {
     private let columnInfoMap = HashMap<String, Int64>()
     private var list = unsafeZeroValue<ArrayList<Any>>()
+    private let indexStartsWith: Int64
     public QueryResultWrap(private let driverName: String, private let result: QueryResult) {
+        indexStartsWith = if(ORMConfig.getIndexStartsWithZero(driverName: driverName)){
+            0
+        }else{
+            1
+        }
         for (i in 0..columnInfos.size) {
             columnInfoMap[columnInfos[i].name] = i
         }
@@ -50,27 +56,29 @@ public class QueryResultWrap <: QueryResult {
             if (index >= list.size) {
                 for (i in list.size..=index) {
                     let column = columns[i]
-                    let v: Any = match(column.typeName){
-                        case 'SqlChar' | 'SqlVarchar' | 'String' => result.getOrNull<String>(i)
-                        case 'SqlClob' | 'SqlBlob' | 'std.io.InputStream' | 'InputStream' => result.getOrNull<InputStream>(i)
-                        case 'SqlBinary' | 'SqlVarBinary' | 'Array<Byte>' | 'Array<UInt8>' => result.getOrNull<Array<Byte>>(i)
-                        case 'SqlDecimal' | 'Decimal' | 'std.math.numeric.Decimal' => result.getOrNull<Decimal>(i)
-                        case 'SqlBool' | 'Bool' => result.getOrNull<Bool>(i)
-                        case 'SqlByte' | 'Int8' => result.getOrNull<Int8>(i)
-                        case 'UInt8' | 'Byte' => result.getOrNull<UInt8>(i)
-                        case 'SqlSmallInt' | 'Int16' => result.getOrNull<Int16>(i)
-                        case 'UInt16' => result.getOrNull<UInt16>(i)
-                        case 'SqlInteger' | 'Int32' => result.getOrNull<Int32>(i)
-                        case 'UInt32' => result.getOrNull<UInt32>(i)
-                        case 'SqlBigInt' | 'Int64' => result.getOrNull<Int64>(i)
-                        case 'UInt64' => result.getOrNull<UInt64>(i)
-                        case 'SqlReal' | 'Float32' => result.getOrNull<Float32>(i)
-                        case 'SqlDouble' | 'Float64' => result.getOrNull<Float64>(i)
-                        case 'SqlDate' | 'SqlTime' | 'SqlTimeTz' | 'SqlTimestamp' | 'DateTime' | 'std.time.DateTime' => result.getOrNull<DateTime>(i)
-                        case 'SqlInterval' | 'Duration' => result.getOrNull<Duration>(i)
-                        case _ => result.getOrNull<String>(i)
+                    func get(i: Int64): Any {
+                        match(column.typeName){
+                            case 'SqlChar' | 'SqlVarchar' | 'String' => result.getOrNull<String>(i)
+                            case 'SqlClob' | 'SqlBlob' | 'std.io.InputStream' | 'InputStream' => result.getOrNull<InputStream>(i)
+                            case 'SqlBinary' | 'SqlVarBinary' | 'Array<Byte>' | 'Array<UInt8>' => result.getOrNull<Array<Byte>>(i)
+                            case 'SqlDecimal' | 'Decimal' | 'std.math.numeric.Decimal' => result.getOrNull<Decimal>(i)
+                            case 'SqlBool' | 'Bool' => result.getOrNull<Bool>(i)
+                            case 'SqlByte' | 'Int8' => result.getOrNull<Int8>(i)
+                            case 'UInt8' | 'Byte' => result.getOrNull<UInt8>(i)
+                            case 'SqlSmallInt' | 'Int16' => result.getOrNull<Int16>(i)
+                            case 'UInt16' => result.getOrNull<UInt16>(i)
+                            case 'SqlInteger' | 'Int32' => result.getOrNull<Int32>(i)
+                            case 'UInt32' => result.getOrNull<UInt32>(i)
+                            case 'SqlBigInt' | 'Int64' => result.getOrNull<Int64>(i)
+                            case 'UInt64' => result.getOrNull<UInt64>(i)
+                            case 'SqlReal' | 'Float32' => result.getOrNull<Float32>(i)
+                            case 'SqlDouble' | 'Float64' => result.getOrNull<Float64>(i)
+                            case 'SqlDate' | 'SqlTime' | 'SqlTimeTz' | 'SqlTimestamp' | 'DateTime' | 'std.time.DateTime' => result.getOrNull<DateTime>(i)
+                            case 'SqlInterval' | 'Duration' => result.getOrNull<Duration>(i)
+                            case _ => result.getOrNull<String>(i)
+                        }
                     }
-                    list.add(v)
+                    i + indexStartsWith |> get |> list.add
                 }
                 // list.add(result.getOrNull<T>(index))
             }

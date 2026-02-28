@@ -56,6 +56,8 @@ public class ORMConfig {
 
     public static const transactionalFuncExecution = confPrefix + '_transactionalFuncExecution'
 
+    public static const indexStartsWithZero = confPrefix + '_indexStartsWithZero'
+
     private static let dot = Regex(#"\."#)
 
     private static let converterMap = ConcurrentHashMap<String, Any>()
@@ -304,5 +306,8 @@ public class ORMConfig {
             case Some(x) => Int32.parse(x)
             case _ => None
         }
+    }
+    public static func getIndexStartsWithZero(driverName!: String = String.empty): Bool {
+        get<Bool>(driverName: driverName, key: indexStartsWithZero, default: false)
     }
 }

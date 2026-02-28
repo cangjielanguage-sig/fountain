@@ -16,7 +16,14 @@ limitations under the License.
 package fountain::f_orm.wrap
 
 public class StatementWrap <: Statement {
-    public StatementWrap(let driverName: String, private let statement: Statement) {}
+    private let indexStartsWith: Int64
+    public StatementWrap(let driverName: String, private let statement: Statement) {
+        indexStartsWith = if(ORMConfig.getIndexStartsWithZero(driverName: driverName)){
+            0
+        }else{
+            1
+        }
+    }
 
     public prop parameterColumnInfos: Array<ColumnInfo> {
         get() {
@@ -27,10 +34,10 @@ public class StatementWrap <: Statement {
         statement.setOption(key, value)
     }
     public func set<T>(index: Int64, value: T): Unit {
-        statement.set<T>(index, value)
+        statement.set<T>(index + indexStartsWith, value)
     }
     public func setNull(index: Int64): Unit {
-        statement.setNull(index)
+        statement.setNull(index + indexStartsWith)
     }
     public func update(params: Array<SqlDbType>): UpdateResult {
         throw ORMException('current access is deprecated')
