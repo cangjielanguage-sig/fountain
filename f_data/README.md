@@ -130,7 +130,11 @@ public abstract class Validator {
     /**两个Validator 任意一个满足就返回true*/
     public const operator func |(right: Validator): Validator 
     /**Validator 不满足时返回true*/
-    public const operator func !(): Validator 
+    public const operator func !(): Validator
+    /**
+     * 对当前验证器的行为描述
+     */
+    public prop description: String
 }
 /**
  * messageIfNotMatch是数据不符合时返回的消息

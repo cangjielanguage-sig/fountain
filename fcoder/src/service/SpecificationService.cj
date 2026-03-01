@@ -15,7 +15,7 @@ limitations under the License.
 */
 package fountain::fcoder.service
 
-public interface SpecificationService <: RootService {
+public interface SpecificationService <: SpecificationFinder & RootService {
     func findSpec(projectId: Int64, kind: SpecKind): ArrayList<String>
     func findSpecByTitle(projectId: Int64, kind: SpecKind, title: String): ?String
     func saveSpecification(spec: Specification): Unit

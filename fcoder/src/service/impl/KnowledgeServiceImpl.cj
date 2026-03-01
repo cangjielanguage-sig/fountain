@@ -17,22 +17,22 @@ package fountain::fcoder.service.impl
 
 import fountain::f_aspect.macros.*
 import fountain::f_orm.macros.*
-import fountain::fcoder.util
+
+import fountain::fcoder.config.FCoderConfig
 
 @TransactionalService
 public class KnowledgeServiceImpl <: KnowledgeService {
+    private static let SEARCH_ENGINE = FCoderConfig.getSearchEngine()
     @Transactional
-    public func search(content: String, kind: Array<KnowledgeKind>, size: Int64): ArrayList<String> {
+    public func search(params: KnowledgeParam): ArrayList<String> {
         let exe = executor()
-        KnowledgeEntity(
-            content: content, kind: kind, size: size, 
+        KnowledgeEntity(params, 
             searchExecutor: exe.searchKnowledge, 
-            llmAccessor: LLMContextMediator.instance.access, 
             embeddingAccessor: EmbeddingContextMediator.instance.access,
-            usageSaver: exe.saveTokenUsage)
-            .queryConf(exe.listConfs)
-            .search{conf, content => util.search(conf.url, conf.conf, content, size)}
-            .save(knowledgeSaver: exe.saveKnowledge)
+            usageSaver: exe.saveTokenUsage
+        ).queryConf(exe.listConfs)
+         .search{content => SearchMediator.instance.search(SEARCH_ENGINE, content, params.maxResults)}
+         .save(knowledgeSaver: exe.saveKnowledge)
     }
     @Transactional
     public func saveKnowledge(knowledge: Knowledge): Unit {

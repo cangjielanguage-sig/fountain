@@ -24,10 +24,13 @@ internal import fountain::f_base.*
 internal import fountain::f_aspect.*
 internal import fountain::f_orm.*
 
-internal import fountain::fcoder.constant.*
+internal import fountain::f_llm.constant.*
+internal import fountain::f_llm.embedding.*
+internal import fountain::f_llm.llm.*
+internal import fountain::f_llm.model.*
+internal import fountain::f_llm.model.entity.*
+internal import fountain::f_llm.model.po.*
+internal import fountain::f_llm.search.*
+
 internal import fountain::fcoder.dao.*
-internal import fountain::fcoder.embedding.*
-internal import fountain::fcoder.llm.*
-internal import fountain::fcoder.model.entity.*
-internal import fountain::fcoder.model.po.*
 internal import fountain::fcoder.service.*

@@ -178,10 +178,12 @@ create table skills (
     title varchar(64) not null,
     metadata varchar(1024) not null,
     details text not null,
+    functions varchar(128) not null,
     update_time timestamptz not null default current_timestamp
 );
 alter table skills add constraint skills_pkey primary key (id);
 ALTER TABLE skills ALTER update_time SET DEFAULT now();
+alter table skills alter functions SET DEFAULT '';
 create unique index uk_skills_agent_event ON skills (agent_id, accepted_event);
 CREATE UNIQUE INDEX idx_skills_title ON skills (title);
 comment on column skills.agent_id is '技能对应的agent.id，0表示全局技能，指定了角色的技能只能由具体的角色agent加载';

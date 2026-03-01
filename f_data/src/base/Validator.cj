@@ -28,6 +28,7 @@ public abstract class Validator {
     public const operator func !(): Validator {
         NotValidator(this)
     }
+    public prop description: String
 }
 @Annotation[target: [MemberVariable, MemberProperty, Parameter]]
 public class CombinedValidator <: Validator {
@@ -40,6 +41,11 @@ public class CombinedValidator <: Validator {
     public func validate(value: ?String): Bool {
         this.validator.validate(value)
     }
+    public prop description: String {
+        get(){
+            validator.description
+        }
+    }
 }
 public class DummyValidator <: Validator {
     public static const instance = DummyValidator()
@@ -47,11 +53,21 @@ public class DummyValidator <: Validator {
     public func validate(value: ?String): Bool {
         return true
     }
+    public prop description: String {
+        get(){
+            ''
+        }
+    }
 }
 public class AndValidator <: Validator{
     const AndValidator(private let left: Validator, private let right: Validator){}
     public func validate(value: ?String): Bool {
         left.validate(value) && right.validate(value)
+    }
+    public prop description: String {
+        get(){
+            '(必须同时满足 ${left.description} 与 ${right.description})'
+        }
     }
 }
 public class OrValidator <: Validator{
@@ -59,10 +75,20 @@ public class OrValidator <: Validator{
     public func validate(value: ?String): Bool {
         left.validate(value) || right.validate(value)
     }
+    public prop description: String {
+        get(){
+            '(满足 ${left.description} 或 ${right.description} 之一)'
+        }
+    }
 }
 public class NotValidator <: Validator{
     const NotValidator(private let condition: Validator){}
     public func validate(value: ?String): Bool {
         !condition.validate(value)
+    }
+    public prop description: String {
+        get(){
+            '(必须不满足 ${condition.description})'
+        }
     }
 }

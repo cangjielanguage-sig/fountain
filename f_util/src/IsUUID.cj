@@ -27,4 +27,9 @@ public class IsUUID <: Validator {
             false
         }
     }
+    public prop description: String {
+        get(){
+            '必须是UUID格式的字符串'
+        }
+    }
 }

@@ -28,6 +28,11 @@ public class IsNotEmpty <: Validator {
     public func validate(value: ?String): Bool {
         (value ?? '').size > 0
     }
+    public prop description: String {
+        get(){
+            '必须是非空字符串'
+        }
+    }
 }
 
 @Annotation[target: [MemberVariable, MemberProperty, Parameter]]
@@ -38,6 +43,11 @@ public class IsNotBlank <: Validator {
     public func validate(value: ?String): Bool {
         (value ?? '').trimAsciiBlanks().size > 0
     }
+    public prop description: String {
+        get(){
+            '必须是非空字符串，且不能全部都是空白符'
+        }
+    }
 }
 @Annotation[target: [MemberVariable, MemberProperty, Parameter]]
 public class StringSize <: Validator {
@@ -47,6 +57,11 @@ public class StringSize <: Validator {
     public func validate(value: ?String): Bool {
         let v = value ?? ''
         v.size >= 0 && v.size <= max
+    }
+    public prop description: String {
+        get(){
+            '字符串长度必须在${min}到${max}之间'
+        }
     }
 }
 
@@ -59,6 +74,11 @@ public class IsInteger <: Validator {
         let v = value ?? ''
         Regex.INTEGER.matches(v)
     }
+    public prop description: String {
+        get(){
+            '必须为整数'
+        }
+    }
 }
 
 @Annotation[target: [MemberVariable, MemberProperty, Parameter]]
@@ -70,6 +90,11 @@ public class IsDecimal <: Validator {
         let v = value ?? ''
         Regex.DECIMAL.matches(v)
     }
+    public prop description: String {
+        get(){
+            '必须为小数'
+        }
+    }
 }
 
 @Annotation[target: [MemberVariable, MemberProperty, Parameter]]
@@ -80,6 +105,11 @@ public class IsEmail <: Validator {
     public func validate(value: ?String): Bool {
         let v = value ?? ''
         Regex.EMAIL.matches(v)
+    }
+    public prop description: String {
+        get(){
+            '必须为电子邮箱'
+        }
     }
 }
 
@@ -101,6 +131,11 @@ public class IsChineseCellPhone <: Validator {
             }
         }
         return '^${rege}1\\d{10}'.regex(solid: true).matches(value ?? '')
+    }
+    public prop description: String {
+        get(){
+            '必须为中国手机号码'
+        }
     }
 }
 
@@ -132,6 +167,11 @@ public class IsIntegerRange <: Validator {
             case _ => false
         }
     }
+    public prop description: String {
+        get(){
+            '必须为整数，且必须满足${min} ${if(minInclusive){'<='}else{'<'}} value ${if(maxInclusive){'<='}else{'<'}} ${max}'
+        }
+    }
 }
 
 @Annotation[target: [MemberVariable, MemberProperty, Parameter]]
@@ -142,6 +182,11 @@ public class IsBool <: Validator {
     public func validate(value: ?String): Bool {
         let val = (value ?? '').toAsciiLower()
         return val == 'true' || val == 'false'
+    }
+    public prop description: String {
+        get(){
+            '必须为布尔值'
+        }
     }
 }
 @Annotation[target: [MemberVariable, MemberProperty, Parameter]]
@@ -160,6 +205,11 @@ public class IsDateTime <: Validator {
             false
         }
     }
+    public prop description: String {
+        get(){
+            '必须为日期时间'
+        }
+    }
 }
 @Annotation[target: [MemberVariable, MemberProperty, Parameter]]
 public class IsDuration <: Validator {
@@ -168,6 +218,11 @@ public class IsDuration <: Validator {
     }
     public func validate(value: ?String): Bool {
         Regex.DURATION.matches(value ?? '')
+    }
+    public prop description: String {
+        get(){
+            '必须为时间间隔'
+        }
     }
 }
 @Annotation[target: [MemberVariable, MemberProperty, Parameter]]
@@ -178,6 +233,11 @@ public class IsIntegers <: Validator {
     public func validate(value: ?String): Bool {
         '^\\d+(${separator}\\d+)*$'.regex(solid: true).matches(value ?? '')
     }
+    public prop description: String {
+        get(){
+            '必须为${separator}分隔的整数列表'
+        }
+    }
 }
 
 @Annotation[target: [MemberVariable, MemberProperty, Parameter]]
@@ -187,5 +247,10 @@ public class DoesMatchRegex <: Validator {
     }
     public func validate(value: ?String): Bool {
         this.regex.regex(solid: true).matches(value ?? '')
+    }
+    public prop description: String {
+        get(){
+            '必须匹配正则表达式 ${regex}'
+        }
     }
 }

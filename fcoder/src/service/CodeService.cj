@@ -15,7 +15,7 @@ limitations under the License.
 */
 package fountain::fcoder.service
 
-public interface CodeService <: RootService {
+public interface CodeService <: CodeFinder & RootService {
     func findCodes(params: CodeParam): ArrayList<String>
     func saveCode(code: Code): Unit
 }

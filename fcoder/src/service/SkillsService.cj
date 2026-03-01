@@ -15,7 +15,6 @@ limitations under the License.
 */
 package fountain::fcoder.service
 
-public interface SkillsService <: RootService {
-    func listMetas(agentId: Int64): ArrayList<SkillMetadata>
-    func querySkill(agentId: Int64, title: String): ?String
+public interface SkillsService <: SkillsFinder & RootService {
+    func querySkill(agentId: Int64, event: String): ?Skill
 }

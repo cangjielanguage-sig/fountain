@@ -15,6 +15,6 @@ limitations under the License.
 */
 package fountain::fcoder.service
 
-public interface LLMService <: RootService {
+public interface LLMService <: LLMFinder & RootService {
     func listConfs(llmTypes: Array<String>): ArrayList<LLMConf>
 }

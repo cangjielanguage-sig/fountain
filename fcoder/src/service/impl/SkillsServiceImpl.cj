@@ -20,10 +20,7 @@ import fountain::f_orm.macros.*
 
 @TransactionalService
 public class SkillsServiceImpl <: SkillsService {
-    public func listMetas(agentId: Int64): ArrayList<SkillMetadata> {
-        executor().listMetas(agentId)
-    }
-    public func querySkill(agentId: Int64, title: String): ?String {
-        executor().findSkill(agentId, title)
+    public func querySkill(agentId: Int64, event: String): ?Skill {
+        executor().findSkill(agentId, event)
     }
 }

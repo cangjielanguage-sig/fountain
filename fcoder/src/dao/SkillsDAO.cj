@@ -19,14 +19,18 @@ import fountain::f_orm.macros.*
 
 @DAO
 public interface SkillsDAO <: RootDAO {
-    func listMetas(agentId: Int64): ArrayList<SkillMetadata> {
-        executor.FROM<SkillMetadata>()
-                .WHERE{'agent_id = ${arg(agentId)}'}
-                .list('title, metadata')
-    }
-    func findSkill(agentId: Int64, title: String): ?String {
-        executor.FROM<SkillMetadata>()
-                .WHERE{'agent_id = ${arg(agentId)} AND title = ${arg(title)}'}
-                .singleFirst<String>('details')
+    func findSkill(agentId: Int64, event: String): ?Skill {
+        executor.setSql('''
+        select id,
+               agent_id,
+               accepted_event,
+               returned_event,
+               title,
+               metadata,
+               details
+          from skills
+         where agent_id = ${arg(agentId)}
+           and accepted_event = ${arg(event)}
+        ''').first<Skill>()
     }
 }
