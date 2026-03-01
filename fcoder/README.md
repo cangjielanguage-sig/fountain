@@ -103,28 +103,38 @@ $$ LANGUAGE plpgsql;
 临时记录开发过程中发现的问题，比如修改BUG时发现的“另一个潜在问题、一个需要重构的地方、或一个缺失的测试用例”。
 每完成一个任务或修复一个BUG都检查这个表。
 删除解决的问题
-- agents`agents`
+- 智能体`agents`
 
 ## 配置LLM
-建表之后向llm_conf添加大模型配置，智谱search 等工具API也配置在这里面
+建表之后向llm_conf添加大模型配置，智谱search 等工具API也配置在这里面，按照以下SQL配置
 ```sql
-insert into llm_conf(llm_name,llm_type,llm_url,conf,token_threshold)values('glm-5', 'text', 'https://.....','llm.key', 300000);
+insert into llm_conf(llm_name,llm_type,llm_url,conf,token_threshold)values('glm-5', 'text', 'https://.....','llm.key', 80000);
 --对于search，llm_type是'search'；llm_name不重要，可以是'glm-search'，其它都一样
 ```
 ## 配置知识库、智能体、技能
 执行`docs/fcoder.sql`，建表SQL后面就是insert into
 
+## 智能体、技能、事件、流程的关系
+- 流程是事件和智能体的集合
+- 一个事件会被不同的智能体接收
+- 一个智能体可以接收多个事件，拥有多个技能
+- 不同的智能体会使用不同的技能处理同一个事件
+- 智能体+事件确定一个技能
+- 一个智能体会加入不同的流程，不论智能体在哪个流程，都会用一样的技能处理一样的事件
+- 不同的流程可以有意义不同但同名的事件（尽量避免），这些事件必须由不同的智能体接收
+- 技能名称必须唯一
+
 ## session
 进程堆内存按照以下两个维度保存上下文
 - role
 - sessionId
-role是agent扮演的角色，一个角色一个线程，一个角色可能有多个会话，一个会话一个sessionId。
+一个智能体一个线程，一个智能体可能有多个会话，一个会话一个sessionId。
 会话上下文按照需要可以做以下操作：
 - 尽量保持短会话
     - 每一步都开启新的会话
         ```
         功能：用户登录后的会话管理
-        [对话 1] 调研现有代码结构    ├── 了解 auth 模块的实现
+        [对话 1] 调研现有代码结构    ├── 了解【模块】的实现
             ├── 查看 session 管理的现状    └── 输出：关键文件列表和当前架构理解
         [对话 2] 实现基础功能   ├── 参考对话 1 的发现          ├── 实现核心的 session 保存逻辑
             └── 输出：基础实现代码

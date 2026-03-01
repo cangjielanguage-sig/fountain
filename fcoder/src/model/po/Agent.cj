@@ -23,7 +23,7 @@ import fountain::f_orm.macros.*
 @DataAssist[fields]
 @QueryMappersGenerator[table: agents]
 public class Agent {
-    @ORMField[true 'id']
+    @ORMField[id column: 'id']
     private var id: Int64 = 0
     @ORMField['agent']
     private var agent: String = ''
@@ -34,9 +34,9 @@ public class Agent {
     @ORMField['tag']
     private var tag: String = ''
     @ORMField['llm_type']
-    private var llm_type: String = ''
+    private var llmType: String = ''
     @ORMField['llm_name']
-    private var llm_name: String = ''
+    private var llmName: String = ''
 
     public prop acceptableEvents: Array<String> {
         get(){

@@ -15,6 +15,19 @@ limitations under the License.
 */
 package fountain::fcoder.agents
 
-internal import fountain::fcoder.llm.*
-internal import fountain::fcoder.service.AgentsSerivice
-internal import fountain::f_egraph.*
+public class AgentTask <: Task {
+    public AgentTask(private let agent: Agent){}
+    public prop name: String{
+        get(){
+            agent.agent
+        }
+    }
+    public prop acceptableEvents: Array<String> {
+        get(){
+            agent.accpetableEvents
+        }
+    }
+    public func exec(e: Event): Event {
+        
+    }
+}
