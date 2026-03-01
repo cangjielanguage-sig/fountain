@@ -134,7 +134,7 @@ insert into llm_conf(llm_name,llm_type,llm_url,conf,token_threshold)values('glm-
     4. 按照函数返回构造事件、返回事件
     - 这样做可以：
         - 节省让大模型判断应该使用哪个技能，调用哪个函数的tokens。
-        - 也不必再编写技能列表，判断使用技能、调用函数的提示词
+        - 也不必再编写技能列表、判断使用哪个技能、调用哪个函数的提示词
 
 ## session
 进程堆内存按照以下两个维度保存上下文
