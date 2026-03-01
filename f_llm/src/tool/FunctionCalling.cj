@@ -39,16 +39,33 @@ public struct FunctionResult {
 public interface FunctionCalling<T> where T <: ObjectData<T> {
     /**
      * JSON SCHEMA形式描述的大模型函数定义
+     * 默认实现调用fountain::f_data.json的JsonObject.toJsonSchema<T>()扩展函数获得
      */
-    prop definition: String
+    prop definition: String {
+        get() {
+            JsonObject.toJsonSchema<T>()
+        }
+    }
     /**
      * 函数名称
      */
     prop name: String
+    /**
+     * 函数描述
+     */
+    prop description: String
     /**
      * 函数调用
      * @param params 函数参数
      * @return 函数调用结果
      */
     func call(params: T): FunctionResult
+    /**
+     * 函数调用，这个函数供agent调用，开发者实现`func call(params: T): FunctionResult`即可
+     * @param params 函数参数
+     * @return 函数调用结果
+     */
+    func call(json: JsonValue): FunctionResult {
+        DataObject<T>.populate(json.toData()).getOrThrow() |> call
+    }
 }
