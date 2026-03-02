@@ -63,6 +63,10 @@ public const MODEL_NAME_GLM4_7_FLASH = 'glm-4.7-flash'
 public const MODEL_NAME_GLM5 = 'glm-5'
 public const MODEL_NAME_GLM5_CODE = 'glm-5-code'
 public const MODEL_NAME_GLM_EMBEDDING3 = 'embedding-3'
+public const MODEL_NAME_GLM_SEARCH_STD = 'glm|search-std'
+public const MODEL_NAME_GLM_SEARCH_PRO = 'glm|search-pro'
+public const MODEL_NAME_GLM_SEARCH_PRO_QUARK = 'glm|search-pro-quark'
+public const MODEL_NAME_GLM_SEARCH_PRO_SOGOU = 'glm|search-pro-quark-sogou'
 
 public type ThinkingSwitch = String
 public const THINGKING_ENABLED = 'enabled'

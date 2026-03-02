@@ -22,7 +22,7 @@ public class GLMSearcher <: AbstractSearcher {
     private let engine: String
     public init(conf: LLMConf){
         super(conf)
-        this.engine = super.name[4 ..]
+        this.engine = super.name.split('|')[1]
     }
     public func search(keywords: String, count: Int64): ArrayList<SearchResult> {
         resource(http(url, conf)){http =>//'https://open.bigmodel.cn/api/paas/v4/web_search'

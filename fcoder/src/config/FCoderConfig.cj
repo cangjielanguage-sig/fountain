@@ -16,12 +16,13 @@ limitations under the License.
 package fountain::fcoder.config
 
 import fountain::f_config.*
+import fountain::f_llm.constant.*
 
 public struct FCoderConfig {
     private init(){}
     public static const FCODER = 'fcoder'
     public static const FCODER_SEARCH_ENGINE = FCODER + '_searchEngine'
-    public static const FCODER_DEFAULT_SEARCH_ENGINE = 'glm-search_pro'
+    public static const FCODER_DEFAULT_SEARCH_ENGINE = MODEL_NAME_GLM_SEARCH_PRO
 
     public static func getSearchEngine(){
         Config.getString(FCODER_SEARCH_ENGINE) ?? FCODER_DEFAULT_SEARCH_ENGINE
