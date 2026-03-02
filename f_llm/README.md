@@ -24,13 +24,9 @@ public struct FunctionResult {
 public interface FunctionCalling<T> where T <: DataFields<T> {
     /**
      * JSON SCHEMA形式描述的大模型函数定义
-     * 默认实现调用fountain::f_data.json的JsonObject.toJsonSchema<T>()扩展函数获得
+     * 默认实现调用fountain::f_data.json的JsonObject.toJsonSchema<T>()扩展函数获得参数定义，并把本接口的name和description属性与从泛型实参转换来的Json作为大模型函数定义
      */
-    prop definition: String {
-        get() {
-            JsonObject.toJsonSchema<T>()
-        }
-    }
+    prop definition: String 
     /**
      * 函数名称
      */
@@ -51,7 +47,7 @@ public interface FunctionCalling<T> where T <: DataFields<T> {
      * @return 函数调用结果
      */
     func call(json: JsonValue): FunctionResult {
-        DataObject<TestData3>.populate(json.toData()).getOrThrow() |> call
+        DataObject<T>.populate(json.toData()).getOrThrow() |> call
     }
 }
 ```

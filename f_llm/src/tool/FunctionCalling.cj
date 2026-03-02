@@ -16,35 +16,28 @@ limitations under the License.
 package fountain::f_llm.tool
 
 import std.reflect.*
-import stdx.encoding.json.JsonValue
+import stdx.encoding.json.*
 
 import fountain::f_data.*
 
 /**
- * 函数调用结果，本模块是f_llm的辅助模块，而f_llm依赖f_egraph定义的事件和流程
- */
-public struct FunctionResult {
-    /**
-     * 函数调用结果
-     * @param event 本函数的结果要包装的事件名称
-     * @param result 函数调用结果，要么是简单字符串，要么是MARKDOWN格式的文本
-     */
-    public FunctionResult(
-        public let event!: String,
-        public let result!: String
-    ){}
-}
-/**
+ * 大模型函数定义接口
  * 此接口的实现必须是类且被fountain::f_bean.macros.Bean修饰
  */
 public interface FunctionCalling<T> where T <: ObjectData<T> {
     /**
      * JSON SCHEMA形式描述的大模型函数定义
-     * 默认实现调用fountain::f_data.json的JsonObject.toJsonSchema<T>()扩展函数获得
+     * 默认实现调用fountain::f_data.json的JsonObject.toJsonSchema<T>()扩展函数获得参数定义，并把本接口的name和description属性与从泛型实参转换来的Json作为大模型函数定义
      */
     prop definition: String {
         get() {
-            JsonObject.toJsonSchema<T>()
+            let function = JsonObject()
+            function.put("type", JsonString('function'))
+            let function = JsonObject()
+            function.put("name", JsonString(name))
+            function.put("description", JsonString(description))
+            function.put("parameters", JsonObject.toJsonSchema<T>())
+            function.toString()            
         }
     }
     /**

@@ -16,7 +16,7 @@ limitations under the License.
 package fountain::f_data.json
 
 public interface ToJsonSchema {
-    static func toJsonSchema<T>(): String where T <: ObjectData<T>
+    static func toJsonSchema<T>(): JsonObject where T <: ObjectData<T>
 }
 
 extend JsonObject <: ToJsonSchema {
@@ -137,7 +137,9 @@ extend JsonObject <: ToJsonSchema {
             let qualifiedName = fieldType.qualifiedName
             let start = qualifiedName.indexOf('<').getOrThrow() + 1
             let generic = qualifiedName[start .. qualifiedName.size - 1] |> TypeInfo.get
-            return toJsonSchema(generic, schema)
+            let property = toJsonSchema(generic, schema)
+            property.put("nullable", JsonBool(true))
+            return property
         }else if(fieldType.qualifiedName.startsWith('Array<') || 
                 fieldType.qualifiedName.startsWith('std.core.Array<') || 
                 fieldType.qualifiedName.startsWith('std.collection.ArrayList<') || 
@@ -203,8 +205,8 @@ extend JsonObject <: ToJsonSchema {
         }
         schema
     }
-    public static func toJsonSchema<T>(): String where T <: ObjectData<T> {
-        toJsonSchema(TypeInfo.of<T>()).toString()
+    public static func toJsonSchema<T>(): JsonObject where T <: ObjectData<T> {
+        toJsonSchema(TypeInfo.of<T>())
     }
 }
 
