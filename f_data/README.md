@@ -217,3 +217,29 @@ public class CombinedValidator <: Validator {
  */
 @DoesMatchRegex[messageIfNotMatch: 'not match message', regex: '<REGEXP>']
 ```
+
+## 数据转换
+有些情况无法完成默认转换，比较把字符串格式的时间转成`std.time.DateTime`类型。
+```cj
+/**
+ * T是转换的目标类型
+ */
+public abstract class DataConverter<T> {
+    public const init(){}
+    /**
+     * @param data 待转换的数据
+     */
+    public func convert(data: Data, flag!: DataConversionFlag): ?T 
+}
+public class DateTimeConverter <: DataConverter<DateTime> {
+    /**
+     * @param format 把convert函数的data按照这个格式转成DateTime
+     */
+    public const DateTimeConverter(private let format: String){}
+    /**
+     * 把data转成字符串，再把字符串串按照format转成DateTime
+     */
+    public func convert(data: Data, flag!: DataConversionFlag = DEFAULT_DATA_FLAG): ?DateTime 
+}
+
+``

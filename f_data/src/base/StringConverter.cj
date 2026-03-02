@@ -20,9 +20,10 @@ public abstract class DataConverter<T> {
     public func convert(data: Data, flag!: DataConversionFlag): ?T 
 }
 
-public abstract class AbstractDateTimeConverter <: DataConverter<DateTime> {
-    public const init(){}
-    protected func doConvert(data: Data, flag: DataConversionFlag, format: String): ?DateTime {
+@Annotation[target: [MemberProperty, MemberVariable, Parameter]]
+public class DateTimeConverter <: DataConverter<DateTime> {
+    public const DateTimeConverter(private let format: String){}
+    public func convert(data: Data, flag!: DataConversionFlag = DEFAULT_DATA_FLAG): ?DateTime {
         try{
             DateTime.parse(data.toString(), format)
         } catch(e: Exception) {
@@ -31,12 +32,5 @@ public abstract class AbstractDateTimeConverter <: DataConverter<DateTime> {
             }
             None<DateTime>
         }
-    }
-}
-@Annotation[target: [MemberProperty, MemberVariable, Parameter]]
-public class DateTimeConverter <: AbstractDateTimeConverter {
-    public const DateTimeConverter(private let format: String){}
-    public func convert(data: Data, flag!: DataConversionFlag = DEFAULT_DATA_FLAG): ?DateTime {
-        doConvert(data, flag, format)
     }
 }
