@@ -54,11 +54,7 @@ public interface FunctionCalling<T> where T <: ObjectData<T> {
     /**
      * 函数描述
      */
-    prop description: String {
-        get(){
-            TypeInfo.of(this).findAnnotation<Description>()?.value ?? ''
-        }
-    }
+    prop description: String 
     /**
      * 函数调用
      * @param params 函数参数
