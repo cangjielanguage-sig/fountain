@@ -15,6 +15,7 @@ limitations under the License.
 */
 package fountain::f_llm.tool
 
+import std.reflect.*
 import stdx.encoding.json.JsonValue
 
 import fountain::f_data.*
@@ -53,7 +54,11 @@ public interface FunctionCalling<T> where T <: ObjectData<T> {
     /**
      * 函数描述
      */
-    prop description: String
+    prop description: String {
+        get(){
+            TypeInfo.of(this).findAnnotation<Description>()?.value ?? ''
+        }
+    }
     /**
      * 函数调用
      * @param params 函数参数
