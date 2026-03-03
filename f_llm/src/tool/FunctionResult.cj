@@ -15,6 +15,8 @@ limitations under the License.
 */
 package fountain::f_llm.tool
 
+import fountain::f_llm.exception.FunctionCallingException
+
 /**
  * 函数调用结果，本模块是f_llm的辅助模块，而f_llm依赖f_egraph定义的事件和流程
  */
@@ -22,16 +24,14 @@ public struct FunctionResult {
     /**
      * 函数调用结果
      * @param event 本函数的结果要包装的事件名称
-     * @param result 函数调用结果，要么是简单字符串，要么是MARKDOWN格式的文本
+     * @param result 函数调用结果，要么是简单字符串，要么是MARKDOWN格式的文本。是空串时表示函数调用结果不产生新数据
      */
     public FunctionResult(
         public let event!: String,
-        public let result!: String
-    ){}
-    /**
-     * 结果数据是空串，表示函数调用结果不产生新数据
-     */
-    public init(event: String){
-        this(event: event, result: "")
+        public let result!: String = ''
+    ){
+        if(event.isEmpty()){
+            throw FunctionCallingException('event name cannot be empty')
+        }
     }
 }
