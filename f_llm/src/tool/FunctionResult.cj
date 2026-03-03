@@ -28,4 +28,7 @@ public struct FunctionResult {
         public let event!: String,
         public let result!: String
     ){}
+    public init(event: String){
+        this(event: event, result: "")
+    }
 }
