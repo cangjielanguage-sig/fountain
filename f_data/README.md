@@ -231,7 +231,14 @@ public abstract class DataConverter<T> {
      */
     public func convert(data: Data, flag!: DataConversionFlag): ?T 
 }
-public class DateTimeConverter <: DataConverter<DateTime> {
+/**
+ * 抽象时间转换器，有些实现不一定能够立即确定时间格式，所以需要提供抽象类供这种情况实现
+ */
+public open class AbstractDateTimeConverter <: DataConverter<DateTime> {
+    public const init(){}
+    protected func doConvert(data: Data, flag: DataConversionFlag, format: String)
+}
+public class DateTimeConverter <: AbstractDateTimeConverter {
     /**
      * @param format 把convert函数的data按照这个格式转成DateTime
      */

@@ -20,26 +20,11 @@ import stdx.encoding.json.*
 
 import fountain::f_data.*
 
-/**
- * 大模型函数定义接口
- * 此接口的实现必须是类且被fountain::f_bean.macros.Bean修饰
- */
-public interface FunctionCalling<T> where T <: ObjectData<T> {
+public interface CommonFunctionCalling {
     /**
      * JSON SCHEMA形式描述的大模型函数定义
-     * 默认实现调用fountain::f_data.json的JsonObject.toJsonSchema<T>()扩展函数获得参数定义，并把本接口的name和description属性与从泛型实参转换来的Json作为大模型函数定义
      */
-    prop definition: String {
-        get() {
-            let function = JsonObject()
-            function.put("type", JsonString('function'))
-            let function = JsonObject()
-            function.put("name", JsonString(name))
-            function.put("description", JsonString(description))
-            function.put("parameters", JsonObject.toJsonSchema<T>())
-            function.toString()            
-        }
-    }
+    prop definition: String
     /**
      * 函数名称
      */
@@ -48,6 +33,35 @@ public interface FunctionCalling<T> where T <: ObjectData<T> {
      * 函数描述
      */
     prop description: String 
+    /**
+     * 函数调用，这个函数供agent调用，开发者实现`func call(params: T): FunctionResult`即可
+     * @param params 函数参数
+     * @return 函数调用结果
+     */
+    func call(json: JsonObject): FunctionResult
+}
+/**
+ * 大模型函数定义接口
+ * 此接口的实现必须是类且被fountain::f_bean.macros.Bean修饰
+ */
+public interface FunctionCalling<T> <: CommonFunctionCalling where T <: ObjectData<T> {
+    /**
+     * JSON SCHEMA形式描述的大模型函数定义
+     * 默认实现调用fountain::f_data.json的JsonObject.toJsonSchema<T>()扩展函数获得参数定义，并把本接口的name和description属性与从泛型实参转换来的Json作为大模型函数定义
+     */
+    prop definition: String {
+        get() {
+            let def = JsonObject()
+            def.put("type", JsonString('function'))
+            let function = JsonObject()
+            def.put("function", function)
+            function.put("name", JsonString(name))
+            function.put("description", JsonString(description))
+            function.put("parameters", JsonObject.toJsonSchema<T>())
+            def.toString()            
+        }
+    }
+    
     /**
      * 函数调用
      * @param params 函数参数
@@ -59,7 +73,7 @@ public interface FunctionCalling<T> where T <: ObjectData<T> {
      * @param params 函数参数
      * @return 函数调用结果
      */
-    func call(json: JsonValue): FunctionResult {
+    func call(json: JsonObject): FunctionResult {
         DataObject<T>.populate(json.toData()).getOrThrow() |> call
     }
 }

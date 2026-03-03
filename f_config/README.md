@@ -1,5 +1,19 @@
-# 配置工具
+配置模块
+可从命令行参数和环境变量中获取配置项。
+命令行参数会覆盖同名环境变量。
+ * 命令行参数需要遵守以下规则
+ *   1. --argName=argValue
+ *   2. --argName
+ *      * 相当于--argName=true
+ *   3. -argName argVal
+ *   4. -argName
+ *      * 相当于-argName true
+---
+
+## 配置工具
 ```cj
+package fountain::f_config
+
 /**
  * 不依赖配置文件，所有配置都来自环境变量和命令行参数，命令行参数会覆盖同名环境变量。
  * 本工具不会修改环境变量和命令行参数命名风格，仓颉运行时环境变量都是驼峰命名法，建议用于应用配置的环境变量和命令行参数也采用此风格。
@@ -72,5 +86,18 @@ public class Config {
      * 得到名是bufferKey的配置项，并转换成Int64，如果没有相应配置项或者值是负数就返回default
      */
     public static func bufferSize(bufferKey: String, default: Int64, debugging: Bool): Int64
+}
+```
+
+## 可配置时间转换器
+```cj
+package fountain::f_config
+
+import fountain::f_data.*
+
+@Annotation[target: [MemberProperty, MemberVariable, Parameter]]
+public class DateTimeConfConverter <: DateTimeConverter {
+    public const DateTimeConfConverter(private let conf: String, private let default!: String = 'yyyy-MM-dd HH:mm:ss'){}
+    public func convert(data: Data, flag!: DataConversionFlag = DEFAULT_DATA_FLAG): ?DateTime
 }
 ```

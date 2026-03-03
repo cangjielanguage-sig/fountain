@@ -19,11 +19,12 @@ public abstract class DataConverter<T> {
     public const init(){}
     public func convert(data: Data, flag!: DataConversionFlag): ?T 
 }
-
-@Annotation[target: [MemberProperty, MemberVariable, Parameter]]
-public class DateTimeConverter <: DataConverter<DateTime> {
-    public const DateTimeConverter(private let format: String){}
-    public func convert(data: Data, flag!: DataConversionFlag = DEFAULT_DATA_FLAG): ?DateTime {
+/**
+ * 抽象时间转换器，有些实现不一定能够立即确定时间格式，所以需要提供抽象类供这种情况实现
+ */
+public abstract class AbstractDateTimeConverter <: DataConverter<DateTime> {
+    public const init(){}
+    protected func doConvert(data: Data, flag: DataConversionFlag, format: String){
         try{
             DateTime.parse(data.toString(), format)
         } catch(e: Exception) {
@@ -32,5 +33,13 @@ public class DateTimeConverter <: DataConverter<DateTime> {
             }
             None<DateTime>
         }
+    }
+}
+
+@Annotation[target: [MemberProperty, MemberVariable, Parameter]]
+public class DateTimeConverter <: AbstractDateTimeConverter {
+    public const DateTimeConverter(private let format: String){}
+    public func convert(data: Data, flag!: DataConversionFlag = DEFAULT_DATA_FLAG): ?DateTime {
+        doConvert(data, flag, format)
     }
 }
