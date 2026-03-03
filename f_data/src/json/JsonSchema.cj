@@ -47,10 +47,18 @@ extend JsonObject <: ToJsonSchema {
             property.put("type", JsonString("integer"))
             if(let Some(s: JsonIntSchema) <- schema){
                 if(let Some(minimum) <- s.minimum){
-                    property.put("minimum", JsonInt(minimum))
+                    if(s.exclusiveMinimum){
+                        property.put("exclusiveMinimum", JsonInt(minimum))
+                    }else{
+                        property.put("minimum", JsonInt(minimum))
+                    }
                 }
                 if(let Some(maximum) <- s.maximum){
-                    property.put("maximum", JsonInt(maximum))
+                    if(s.exclusiveMaximum){
+                        property.put("exclusiveMaximum", JsonInt(maximum))
+                    }else{
+                        property.put("maximum", JsonInt(maximum))
+                    }
                 }
                 if(let Some(multipleOf) <- s.multipleOf){
                     property.put("multipleOf", JsonInt(multipleOf))
@@ -64,12 +72,6 @@ extend JsonObject <: ToJsonSchema {
                 if(let Some(description) <- s.description){
                     property.put("description", JsonString(description))
                 }
-                if(let Some(exclusiveMinimum) <- s.exclusiveMinimum){
-                    property.put("exclusiveMinimum", JsonBool(exclusiveMinimum))
-                }
-                if(let Some(exclusiveMaximum) <- s.exclusiveMaximum){
-                    property.put("exclusiveMaximum", JsonBool(exclusiveMaximum))
-                }
                 if(let Some(default) <- s.default){
                     property.put("default", JsonInt(default))
                 }
@@ -81,10 +83,18 @@ extend JsonObject <: ToJsonSchema {
             property.put("type", JsonString("number"))
             if(let Some(s: JsonFloatSchema) <- schema){
                 if(let Some(minimum) <- s.minimum){
-                    property.put("minimum", JsonFloat(minimum))
+                    if(s.exclusiveMinimum){
+                        property.put("exclusiveMinimum", JsonFloat(minimum))
+                    }else{
+                        property.put("minimum", JsonFloat(minimum))
+                    }
                 }
                 if(let Some(maximum) <- s.maximum){
-                    property.put("maximum", JsonFloat(maximum))
+                    if(s.exclusiveMaximum){
+                        property.put("exclusiveMaximum", JsonFloat(maximum))
+                    }else{
+                        property.put("maximum", JsonFloat(maximum))
+                    }
                 }
                 if(let Some(multipleOf) <- s.multipleOf){
                     property.put("multipleOf", JsonFloat(multipleOf))
@@ -97,12 +107,6 @@ extend JsonObject <: ToJsonSchema {
                 }
                 if(let Some(description) <- s.description){
                     property.put("description", JsonString(description))
-                }
-                if(let Some(exclusiveMinimum) <- s.exclusiveMinimum){
-                    property.put("exclusiveMinimum", JsonBool(exclusiveMinimum))
-                }
-                if(let Some(exclusiveMaximum) <- s.exclusiveMaximum){
-                    property.put("exclusiveMaximum", JsonBool(exclusiveMaximum))
                 }
                 if(let Some(default) <- s.default){
                     property.put("default", JsonFloat(default))
@@ -228,8 +232,8 @@ public class JsonIntSchema <: JsonSchema {
         public let minimum!: ?Int64 = None,
         public let maximum!: ?Int64 = None,
         public let multipleOf!: ?Int64 = None,
-        public let exclusiveMinimum!: ?Bool = None,
-        public let exclusiveMaximum!: ?Bool = None,
+        public let exclusiveMinimum!: Bool = false,
+        public let exclusiveMaximum!: Bool = false,
         public let default!: ?Int64 = None,
         public let enumeration!: ?String = None,
         public let title!: ?String = None,
@@ -242,8 +246,8 @@ public class JsonFloatSchema <: JsonSchema {
         public let minimum!: ?Float64 = None,
         public let maximum!: ?Float64 = None,
         public let multipleOf!: ?Float64 = None,
-        public let exclusiveMinimum!: ?Bool = None,
-        public let exclusiveMaximum!: ?Bool = None,
+        public let exclusiveMinimum!: Bool = false,
+        public let exclusiveMaximum!: Bool = false,
         public let default!: ?Float64 = None,
         public let enumeration!: ?String = None,
         public let title!: ?String = None,
