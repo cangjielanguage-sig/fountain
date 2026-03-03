@@ -28,6 +28,9 @@ public struct FunctionResult {
         public let event!: String,
         public let result!: String
     ){}
+    /**
+     * 结果数据是空串，表示函数调用结果不产生新数据
+     */
     public init(event: String){
         this(event: event, result: "")
     }
