@@ -16,7 +16,10 @@ limitations under the License.
 package fountain::f_data.base
 
 public abstract class Validator {
-    public const Validator(public let messageIfNotMatch!: String = '') {}
+    private let messageIfNotMatch_: String
+    public const Validator(messageIfNotMatch!: String = '') {
+        this.messageIfNotMatch_ = messageIfNotMatch
+    }
     public func validate(value: ?String): Bool
 
     public const operator func &(right: Validator): Validator {
@@ -29,6 +32,15 @@ public abstract class Validator {
         NotValidator(this)
     }
     public prop description: String
+    public prop messageIfNotMatch: String {
+        get(){
+            if(this.messageIfNotMatch_.isEmpty()){
+                description
+            }else{
+                this.messageIfNotMatch_
+            }
+        }
+    }
 }
 @Annotation[target: [MemberVariable, MemberProperty, Parameter]]
 public class CombinedValidator <: Validator {
