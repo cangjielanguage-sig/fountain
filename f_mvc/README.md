@@ -1,5 +1,3 @@
-# MVC
-
 ## 配置
 ```bash
     export mvc_port=8080 # 这一行可以没有，默认就是8080
@@ -1030,5 +1028,19 @@ public struct Series <: Equatable<Series> {
         let code = status / 100
         series.get(code)
     }
+}
+```
+
+## 当前数据不足以完成业务要求时
+执行`perform BreakingCommand(...)`，status是希望本次响应的HTTP状态码，data是希望返回的数据，Data是`f_data.Data`。
+所有基本类型、字符串、Duration、DateTime的实例，以及所有使用`f_data.macros.DataAssist`修饰的类的实例都可以调用`toData()`函数转换成`Data`实例。
+```cj
+public class BreakingCommand <: Command<Unit>{
+    private BreakingCommand(public let status: HttpStatus, public let data: Data){}
+
+    public static func new<T>(status: HttpStatus, data: T): BreakingCommand where T <: ToData 
+    public static func new(status: HttpStatus): BreakingCommand 
+    public static func new(): BreakingCommand 
+    public static func new<T>(data: T): BreakingCommand where T <: ToData 
 }
 ```
