@@ -15,18 +15,32 @@ limitations under the License.
 */
 package fountain::f_llm.llm
 
-public sealed abstract class AbstractLLMContext<P> where P <: LLMParams {
-    private AbstractLLMContext(
-        protected let id: Int64,
-        protected let name: String,
-        protected let llmType: String,
-        protected let url: String,
-        protected let conf: String,
-        protected let threshold: Int64
-    ) {}
-    public init(conf: LLMConf){
-        this(conf.id, conf.name, conf.llmType, conf.url, conf.conf, conf.threshold)
+public interface ResponseFormat {
+    prop response_format: String {
+        get(){
+            'json_object'
+        }
     }
-
-    public func access(params: P): LLMResp
+}
+public interface FrequencyPenalty{
+    prop frequency_penalty: Float64 {
+        get(){
+            0.5
+        }
+    }
+}
+public interface ThinkingBudget{
+    prop thinking_budget: Int64 {
+        get(){
+            1024
+        }
+    }
+}
+public interface DoSample {
+    mut prop do_sample: Bool {
+        get(){
+            true
+        }
+        set(value){}
+    }
 }

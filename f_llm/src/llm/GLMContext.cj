@@ -15,27 +15,86 @@ limitations under the License.
 */
 package fountain::f_llm.llm
 
-public class GLMContext <: AbstractLLMContext {
+public interface GLMSpeciallyParam <: ResponseFormat & DoSample {
+    prop request_id: String {
+        get(){
+            UUID.random().toString()
+        }
+    }
+    prop user_id: String {
+        get(){
+            FCODER_USER
+        }
+    }
+}
+
+@DataAssist[fields]
+public open class GLMParams <: LLMParams & GLMSpeciallyParam {
+    public init(
+        model!: String = '',
+        messages!: ArrayList<ChatMessage> = ArrayList<ChatMessage>()
+    ){
+        super(model: model, messages: messages)
+    }
+    public prop response_format: String {
+        get(){
+            'json_object'
+        }
+    }
+    private var doSample: Bool = true
+    public mut prop do_sample: Bool {
+        get(){
+            doSample
+        }
+        set(value){
+            doSample = value
+        }
+    }
+    public prop request_id: String {
+        get(){
+            UUID.random().toString()
+        }
+    }
+    public prop user_id: String {
+        get(){
+            FCODER_USER
+        }
+    }
+}
+@DataAssist[props fields]
+public open class GLMToolParams <: GLMParams {
+    public init(
+        model!: String = '',
+        messages!: ArrayList<ChatMessage> = ArrayList<ChatMessage>()
+    ){
+        super(model: model, messages: messages)
+    }
+    private let tools: ArrayList<FunctionCall> = ArrayList<FunctionCall>()
+}
+
+public class GLMContext <: AbstractLLMContext<GLMParams> {
     private static let log = LoggerFactory.getLogger<GLMContext>()
     public init(conf: LLMConf){
         super(conf)
     }
 
-    public func access(params: LLMParams): LLMResp {
+    public func access(params: GLMParams): LLMResp {
         resource(http(url, conf)){http =>
+            var json = None<JsonValue>
             try{
-                let json = http.post('application/json', params).readJson().asObject()
-                let choices = json.get('choices').getOrThrow().asArray()
+                json = http.post('application/json', params).readJson()
+                let jsonObj = json.getOrThrow().asObject()
+                let choices = jsonObj.get('choices').getOrThrow().asArray()
                 let llmResp = LLMResp()
                 for(i in 0 .. choices.size()){
-                    let message = choices[i].asObject().get('message').getOrThrow{LLMException(json.toString())}.asObject()
+                    let message = choices[i].asObject().get('message').getOrThrow{LLMException(jsonObj.toString())}.asObject()
                     if(message.containsKey('tool_calls')){
                         llmResp.messages.add(DataObject<ToolCallMessage>.populate(message.toData()).getOrThrow())
                     }else{
                         llmResp.messages.add(DataObject<AssistantMessage>.populate(message.toData()).getOrThrow())
                     }
                 }
-                let usageJson = json.get('usage').getOrThrow().asObject()
+                let usageJson = jsonObj.get('usage').getOrThrow().asObject()
                 let usage = llmResp.usage
                 usage.llmId = super.id
                 DataObject<TokenUsage>.populate(usageJson.toData(), usage)
@@ -43,8 +102,10 @@ public class GLMContext <: AbstractLLMContext {
                 llmResp
             }catch(e: Exception) {
                 let requestId = params.request_id
-                log.error(e){"GLMContext.access error, requestId: ${requestId}"}
+                log.error(e){"GLMContext.access error, requestId: ${requestId}, resp: ${json}"}
                 throw e
+            }finally{
+                log.info{'GLMContext.access end, requestId: ${params.request_id}, resp: ${json}'}
             }
         }
     }
