@@ -15,7 +15,7 @@ limitations under the License.
  */
 package fountain::f_data.base
 
-@Annotation[target: [MemberProperty, MemberVariable]]
+@Annotation[target: [MemberProperty, MemberVariable, Parameter]]
 public class FieldAlias {
     public const FieldAlias(public let name: String) {}
 }

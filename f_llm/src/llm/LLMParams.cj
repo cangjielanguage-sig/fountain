@@ -19,26 +19,39 @@ import fountain::f_data.macros.*
 
 @DataAssist[props fields]
 public open class LLMParams {
-    private var model: String = ''
-    private var messages: ArrayList<ChatMessage> = ArrayList<ChatMessage>()
-    public let thinking: Thinking = Thinking()
-    private var do_sample: Bool = true
-    private var temperature: Float64 = 0.0
+    public LLMParams(
+        private var model!: String = '',
+        private var messages!: ArrayList<ChatMessage> = ArrayList<ChatMessage>()
+    ){}
+    private let thinking: Thinking = Thinking()
+    //不能用驼峰命名法再用@FieldAlias['do_sample']修饰，因为要用这个类的实例转换为JSON，这样命名会产生JSON字段冗余
+    private let do_sample: Bool = true
+    private let temperature: Float64 = 0.0
     private let max_tokens: Int64 = 131072
-    private let response_format: String = 'json'
-    private let request_id: String = UUID.random().toString()
-    private let user_id: String = FCODER_USER
+    private let response_format: String = 'json_object'
+    private let frequency_penalty: Float64 = 0.5//抑制重复用词，有些模型支持
+    private let thinking_budget: Int64 = 1024//最大思维链长度，有些模型支持
+    private let request_id: String = UUID.random().toString()//智谱专用
+    private let user_id: String = FCODER_USER//智谱专用
 }
 
 @DataAssist[props fields]
 public class LLMToolParams <: LLMParams {
+    public init(
+        model!: String = '',
+        messages!: ArrayList<ChatMessage> = ArrayList<ChatMessage>()
+    ){
+        super(model: model, messages: messages)
+    }
     private let tools: ArrayList<FunctionCall> = ArrayList<FunctionCall>()
 }
 
 @DataAssist[props fields]
 public class Thinking {
-    private var `type`: ThinkingSwitch = THINGKING_ENABLED
-    private var clear_thinking: Bool = false
+    public Thinking(
+        private var `type`!: ThinkingSwitch = THINGKING_ENABLED,
+        private var clear_thinking!: Bool = false
+    ){}
 }
 
 @DataAssist[props fields]
@@ -48,15 +61,19 @@ public class FunctionCall {
 }
 
 @DataAssist[props fields]
-public class Function { 
-    private var name: String = ''
-    private var description: String = ''
-    private var parameters: Parameters = Parameters()
+public class Function {
+    public Function(
+        private var name!: String = '',
+        private var description!: String = '',
+        private var parameters!: Parameters = Parameters(),
+    ){}
 }
 
 @DataAssist[props fields]
 public class Parameters { 
-    private var `type`: String = 'object'
+    public Parameters(
+        private var `type`!: String = 'object'
+    ){}
     private var properties: HashMap<String, Property> = HashMap<String, Property>()
     private var required: ArrayList<String> = ArrayList<String>()
 
@@ -64,7 +81,7 @@ public class Parameters {
         this.required.add(name)
     }
     public func addProperty(name!: String, `type`!: String, description!: String) {
-        this.properties.add(name, Property(`type`, description))
+        this.properties.add(name, Property(`type`: `type`, description: description))
     }
     public func addProperty(name: String, property: Property){
         this.properties.add(name, property)
@@ -74,10 +91,7 @@ public class Parameters {
 @DataAssist[props fields]
 public class Property {
     public Property(
-        private var `type`: String,
-        private var description: String
+        private var `type`!: String = '',
+        private var description!: String = ''
     ){}
-    public init(){
-        this('', '')
-    }
 }
