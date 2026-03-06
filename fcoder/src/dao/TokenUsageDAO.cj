@@ -39,7 +39,7 @@ public interface TokenUsageDAO <: RootDAO {
                ${arg(usage.total)},
                ${arg(usage.cached)},
                ${arg(usage.usageTime)}
-        )on conflict(llm_id, usage_time) do update set 
+        )on conflict(llm_id, agent_id, skill_id, usage_time) do update set 
         prompt_tokens = prompt_tokens + ${arg(usage.prompt)},
         completion_tokens = completion_tokens + ${arg(usage.completion)},
         total_tokens = total_tokens + ${arg(usage.total)},
