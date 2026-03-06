@@ -36,14 +36,7 @@ public interface DataFields<T> <: FromToData where T <: DataFields<T> {
         }
     }
     static func fromData(data: Data, flag: DataConversionFlag): Any {
-        match (T.tryFromData(data, flag)) {
-            case x: ?T => match (x) {
-                case Some(x) => x
-                case _ => throw DataException('data ${data} cannot be converted to ${TypeInfo.of<T>()}')
-            }
-            case x: T => x
-            case _ => throw DataException('data ${data} cannot be converted to ${TypeInfo.of<T>()}')
-        }
+        transform(from: data, flag: flag)
     }
     static func transform(from!: Data, flag!: DataConversionFlag): T {
         tryTransform(from: from, flag: flag) ?? throw DataException('data ${from} cannot be converted to ${TypeInfo.of<T>()}')
