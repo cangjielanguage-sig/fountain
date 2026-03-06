@@ -22,8 +22,18 @@ public interface TokenUsageDAO <: RootDAO {
     func saveTokenUsage(usage: TokenUsage): Unit{
         executor.setSql('''
         insert 
-          into token_usage(llm_id, prompt_tokens, completion_tokens, total_tokens, cached_tokens, usage_time) 
-        values(${arg(usage.llmId)},
+          into token_usage(
+               llm_id, 
+               agent_id, 
+               skill_id, 
+               prompt_tokens, 
+               completion_tokens, 
+               total_tokens, 
+               cached_tokens, 
+               usage_time
+       )values(${arg(usage.llmId)},
+               ${arg(usage.agentId)},
+               ${arg(usage.skillId)},
                ${arg(usage.prompt)},
                ${arg(usage.completion)},
                ${arg(usage.total)},

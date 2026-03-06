@@ -36,6 +36,10 @@ import fountain::f_orm.macros.*
 public class TokenUsage {
     @ORMField['llm_id']
     private var llmId: Int64 = 0
+    @ORMField['agent_id']
+    private var agentId: Int64 = 0
+    @ORMField['skill_id']
+    private var skillId: Int64 = 0
     @ORMField['prompt_tokens']
     private var prompt: Int64 = 0
     @ORMField['completion_tokens']
