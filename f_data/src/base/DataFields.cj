@@ -45,6 +45,22 @@ public interface DataFields<T> <: FromToData where T <: DataFields<T> {
             case _ => throw DataException('data ${data} cannot be converted to ${TypeInfo.of<T>()}')
         }
     }
+    static func transform(from!: Data, flag!: DataConversionFlag): T {
+        tryTransform(from: from, flag: flag) ?? throw DataException('data ${from} cannot be converted to ${TypeInfo.of<T>()}')
+    }
+    static func transform(from!: Data): T {
+        transform(from: from, flag: DEFAULT_DATA_FLAG)
+    }
+    static func tryTransform(from!: Data, flag!: DataConversionFlag): ?T {
+        match (tryFromData(from, flag)) {
+            case x: ?T => x
+            case x: T => x
+            case _ => throw DataException('data ${from} cannot be converted to ${TypeInfo.of<T>()}')
+        }
+    }
+    static func tryTransform(from!: Data): ?T {
+        tryTransform(from: from, flag: DEFAULT_DATA_FLAG)
+    }
 }
 
 public func convert<T>(data: Data, flag!: DataConversionFlag = DEFAULT_DATA_FLAG): ?T where T <: DataFields<T> {
