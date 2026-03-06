@@ -15,7 +15,7 @@ limitations under the License.
 */
 package fountain::f_llm.llm
 
-public sealed abstract class AbstractLLMContext<P> where P <: LLMParams {
+public sealed abstract class AbstractLLMContext {
     private AbstractLLMContext(
         protected let id: Int64,
         protected let name: String,
@@ -28,5 +28,5 @@ public sealed abstract class AbstractLLMContext<P> where P <: LLMParams {
         this(conf.id, conf.name, conf.llmType, conf.url, conf.conf, conf.threshold)
     }
 
-    public func access(params: P): LLMResp
+    public func access(params: LLMParams): LLMResp
 }

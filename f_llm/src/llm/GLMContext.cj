@@ -15,6 +15,8 @@ limitations under the License.
 */
 package fountain::f_llm.llm
 
+import fountain::f_data.macros.*
+
 public interface GLMSpeciallyParam <: ResponseFormat & DoSample {
     prop request_id: String {
         get(){
@@ -72,13 +74,13 @@ public open class GLMToolParams <: GLMParams {
     private let tools: ArrayList<FunctionCall> = ArrayList<FunctionCall>()
 }
 
-public class GLMContext <: AbstractLLMContext<GLMParams> {
+public class GLMContext <: AbstractLLMContext {
     private static let log = LoggerFactory.getLogger<GLMContext>()
     public init(conf: LLMConf){
         super(conf)
     }
 
-    public func access(params: GLMParams): LLMResp {
+    public func access(params: LLMParams): LLMResp {
         resource(http(url, conf)){http =>
             var json = None<JsonValue>
             try{
@@ -101,11 +103,13 @@ public class GLMContext <: AbstractLLMContext<GLMParams> {
                 usage.cached = usageJson.get('prompt_tokens_details')?.asObject().get('cached_tokens')?.asInt().getValue() ?? 0
                 llmResp
             }catch(e: Exception) {
-                let requestId = params.request_id
-                log.error(e){"GLMContext.access error, requestId: ${requestId}, resp: ${json}"}
+                let resp = json
+                let requestId = (params as GLMParams)?.request_id
+                log.error(e){"GLMContext.access error, requestId: ${requestId}, resp: ${resp}"}
                 throw e
             }finally{
-                log.info{'GLMContext.access end, requestId: ${params.request_id}, resp: ${json}'}
+                let resp = json
+                log.info{'GLMContext.access end, requestId: ${(params as GLMParams)?.request_id}, resp: ${resp}'}
             }
         }
     }
