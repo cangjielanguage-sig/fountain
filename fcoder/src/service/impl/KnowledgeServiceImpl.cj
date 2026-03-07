@@ -23,6 +23,7 @@ import fountain::fcoder.config.FCoderConfig
 @TransactionalService
 public class KnowledgeServiceImpl <: KnowledgeService {
     private static let SEARCH_ENGINE = FCoderConfig.getSearchEngine()
+    @Transactional
     public func search(params: KnowledgeParam): ArrayList<String> {
         let exe = executor()
         KnowledgeEntity(params, 
@@ -33,6 +34,7 @@ public class KnowledgeServiceImpl <: KnowledgeService {
          .search{content => SearchMediator.instance.search(SEARCH_ENGINE, content, params.maxResults)}
          .save(knowledgeSaver: exe.saveKnowledge)
     }
+    @Transactional
     public func saveKnowledge(knowledge: Knowledge): Unit {
         executor().saveKnowledge(knowledge)
     }

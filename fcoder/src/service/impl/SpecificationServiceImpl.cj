@@ -28,6 +28,7 @@ public class SpecificationServiceImpl <: SpecificationService {
         executor().findSpecByTitle(projectId, kind, title)
     }
 
+    @Transactional
     public func saveSpecification(spec: Specification): Unit {
         let resp = EmbeddingContextMediator.instance.access(MODEL_NAME_GLM_EMBEDDING3, EmbeddingParam(
             agentId: spec.agentId,

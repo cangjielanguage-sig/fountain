@@ -35,13 +35,14 @@ public class CodeServiceImpl <: CodeService {
         exe.saveTokenUsage(usage)
         exe.findCodes(params, embedding)
     }
+    @Transactional
     public func saveCode(code: Code): Unit {
         let embeddingParams = EmbeddingParam(
             agentId: code.agentId,
             skillId: code.skillId,
             input: code.code
         )
-        let resp = EmbeddingContextMediator.instance.access(MODEL_NAME_GLM_EMBEDDING3, embeddingParams)
+        let resp = EmbeddingContextMediator.instance.access(MODEL_NAME_GLM_EMBEDDING3, code.code, 1024)
         let embedding = resp.embedding
         let usage = resp.usage
         usage.agentId = code.agentId
