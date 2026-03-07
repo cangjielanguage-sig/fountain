@@ -24,6 +24,7 @@ public class GLMEmbeddingContext <: AbstractEmbeddingContext {
     }
     public func access(param: EmbeddingParam): EmbeddingResp {
         http(url, conf){http => 
+            let start = MonoTime.now()
             let params = JsonObject()
             try{
                 params.put('model', JsonString(name))
@@ -43,6 +44,8 @@ public class GLMEmbeddingContext <: AbstractEmbeddingContext {
             }catch(e: Exception){
                 log.error(e){'embedding error ${params}'}
                 throw e
+            }finally{
+                log.info{'embedding model: ${name} agent: ${param.agentId} skill: ${param.skillId} elapsed: ${MonoTime.now() - start}'}
             }
         }
     }

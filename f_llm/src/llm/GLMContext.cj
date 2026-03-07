@@ -82,6 +82,7 @@ public class GLMContext <: AbstractLLMContext {
 
     public func access(params: LLMParams): LLMResp {
         http(url, conf){http =>
+            let start = MonoTime.now()
             var json = None<JsonValue>
             try{
                 json = http.post('application/json', params).readJson()
@@ -111,7 +112,7 @@ public class GLMContext <: AbstractLLMContext {
                 throw e
             }finally{
                 let resp = json
-                log.info{'GLMContext.access end, requestId: ${(params as GLMParams)?.request_id}, resp: ${resp}'}
+                log.info{'GLMContext.access end, requestId: ${(params as GLMParams)?.request_id}, agentId: ${params.agentId}, skillId: ${params.skillId}, resp: ${resp}, elapsed: ${MonoTime.now() - start}'}
             }
         }
     }

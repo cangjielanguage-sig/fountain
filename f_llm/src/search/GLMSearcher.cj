@@ -26,6 +26,7 @@ public class GLMSearcher <: AbstractSearcher {
     }
     public func search(keywords: String, count: Int64): ArrayList<SearchResult> {
         http(url, conf){http =>//'https://open.bigmodel.cn/api/paas/v4/web_search'
+            let start = MonoTime.now()
             let params = SearchParams()
             try{
                 params.searchQuery = keywords
@@ -42,6 +43,8 @@ public class GLMSearcher <: AbstractSearcher {
                 let requestId = params.requestId
                 log.error(e){'search failed, requestId: ${requestId}'}
                 throw e
+            }finally{
+                log.info{'search (url: ${url}, keywords: ${keywords}, count: ${count}, engine: ${super.name}), elapsed: ${MonoTime.now() - start}'}
             }
         }
     }

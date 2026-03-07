@@ -17,6 +17,7 @@ package fountain::f_llm.embedding
 
 internal import std.collection.*
 internal import std.sync.Mutex
+internal import std.time.MonoTime
 internal import stdx.encoding.json.*
 
 internal import fountain::f_base.*

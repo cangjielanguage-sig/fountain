@@ -16,6 +16,7 @@ limitations under the License.
 package fountain::f_llm.search
 
 internal import std.collection.*
+internal import std.time.MonoTime
 
 internal import fountain::f_base.*
 internal import fountain::f_data.*
