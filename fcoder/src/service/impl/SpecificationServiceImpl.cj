@@ -36,9 +36,7 @@ public class SpecificationServiceImpl <: SpecificationService {
             input: '''
 ${spec.title}
 
-${spec.content}
-'''
-        ))
+${spec.content}'''))
         let embedding = resp.embedding
         let usage = resp.usage
         usage.agentId = spec.agentId
