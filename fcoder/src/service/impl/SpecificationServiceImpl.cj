@@ -30,17 +30,15 @@ public class SpecificationServiceImpl <: SpecificationService {
 
     @Transactional
     public func saveSpecification(spec: Specification): Unit {
-        let embeddingContent = '''
-        ${spec.title}
-
-        ${spec.content}
-        '''
-        let params = EmbeddingParam(
+        let resp = EmbeddingContextMediator.instance.access(MODEL_NAME_GLM_EMBEDDING3, EmbeddingParam(
             agentId: spec.agentId,
             skillId: spec.skillId,
-            input: embeddingContent
-        )
-        let resp = EmbeddingContextMediator.instance.access(MODEL_NAME_GLM_EMBEDDING3, params)
+            input: '''
+${spec.title}
+
+${spec.content}
+'''
+        ))
         let embedding = resp.embedding
         let usage = resp.usage
         usage.agentId = spec.agentId
