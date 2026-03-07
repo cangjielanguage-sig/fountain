@@ -34,7 +34,7 @@ public class SpecificationServiceImpl <: SpecificationService {
             agentId: spec.agentId,
             skillId: spec.skillId,
             input: '''
-${spec.title}
+# ${spec.title}
 
 ${spec.content}'''))
         let embedding = resp.embedding
