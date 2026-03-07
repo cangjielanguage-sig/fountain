@@ -21,9 +21,12 @@ import fountain::f_orm.macros.*
 @TransactionalService
 public class CodeServiceImpl <: CodeService {
     public func findCodes(params: CodeParam): ArrayList<String> {
-        let embeddingParams = EmbeddingParam()
-        embeddingParams.input = params.code
-        let resp = EmbeddingContextMediator.instance.access(MODEL_NAME_GLM_EMBEDDING3, params.code, 1024)
+        let embeddingParams = EmbeddingParam(
+            agentId: params.agentId,
+            skillId: params.skillId,
+            input: params.code
+        )
+        let resp = EmbeddingContextMediator.instance.access(MODEL_NAME_GLM_EMBEDDING3, embeddingParams)
         let embedding = resp.embedding
         let usage = resp.usage
         usage.agentId = params.agentId
@@ -34,7 +37,12 @@ public class CodeServiceImpl <: CodeService {
     }
     @Transactional
     public func saveCode(code: Code): Unit {
-        let resp = EmbeddingContextMediator.instance.access(MODEL_NAME_GLM_EMBEDDING3, code.code, 1024)
+        let embeddingParams = EmbeddingParam(
+            agentId: code.agentId,
+            skillId: code.skillId,
+            input: code.code
+        )
+        let resp = EmbeddingContextMediator.instance.access(MODEL_NAME_GLM_EMBEDDING3, embeddingParams)
         let embedding = resp.embedding
         let usage = resp.usage
         usage.agentId = code.agentId

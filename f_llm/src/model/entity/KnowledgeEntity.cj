@@ -19,15 +19,18 @@ public class KnowledgeEntity {
     public KnowledgeEntity(
         private let params: KnowledgeParam,
         private let searchExecutor!: (KnowledgeParam, Array<Float64>) -> ArrayList<String>,
-        private let embeddingAccessor!: (ModelName, String, Int64) -> EmbeddingResp,
+        private let embeddingAccessor!: (ModelName, EmbeddingParam) -> EmbeddingResp,
         private let usageSaver!: (TokenUsage) -> Unit
     ){
-        let embeddingResp = embeddingAccessor(MODEL_NAME_GLM_EMBEDDING3, params.keywords, 1024)
+        let embeddingResp = embeddingAccessor(MODEL_NAME_GLM_EMBEDDING3, EmbeddingParam(
+            agentId: params.agentId,
+            skillId: params.skillId,
+            input: params.keywords
+        ))
         keywordsEmbedding = embeddingResp.embedding
         usageSaver(embeddingResp.usage)
         list = searchExecutor(params, keywordsEmbedding)
     }
-
     private let keywordsEmbedding: Array<Float64>
     private let list: ArrayList<String>
     private var conf: ?LLMConf = None
@@ -57,7 +60,12 @@ public class KnowledgeEntity {
 
             ${result.content}
             '''
-            let resp = embeddingAccessor(MODEL_NAME_GLM_EMBEDDING3, content, 1024)
+            let params = EmbeddingParam(
+                agentId: params.agentId,
+                skillId: params.skillId,
+                input: content
+            )
+            let resp = embeddingAccessor(MODEL_NAME_GLM_EMBEDDING3, params)
             let knowledge = Knowledge(
                 kind: KNOWLEDGE_KIND_ARTICLE,
                 md5: {=> 
