@@ -25,7 +25,7 @@ public class GLMSearcher <: AbstractSearcher {
         this.engine = super.name.split('|')[1]
     }
     public func search(keywords: String, count: Int64): ArrayList<SearchResult> {
-        resource(http(url, conf)){http =>//'https://open.bigmodel.cn/api/paas/v4/web_search'
+        http(url, conf){http =>//'https://open.bigmodel.cn/api/paas/v4/web_search'
             let params = SearchParams()
             try{
                 params.searchQuery = keywords

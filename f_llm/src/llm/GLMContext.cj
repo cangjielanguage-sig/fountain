@@ -81,7 +81,7 @@ public class GLMContext <: AbstractLLMContext {
     }
 
     public func access(params: LLMParams): LLMResp {
-        resource(http(url, conf)){http =>
+        http(url, conf){http =>
             var json = None<JsonValue>
             try{
                 json = http.post('application/json', params).readJson()

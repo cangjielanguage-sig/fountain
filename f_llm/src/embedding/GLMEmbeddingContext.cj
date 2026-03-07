@@ -23,7 +23,7 @@ public class GLMEmbeddingContext <: AbstractEmbeddingContext {
         super(conf)
     }
     public func access(param: EmbeddingParam): EmbeddingResp {
-        resource(http(url, conf)){http => 
+        http(url, conf){http => 
             let params = JsonObject()
             try{
                 params.put('model', JsonString(name))

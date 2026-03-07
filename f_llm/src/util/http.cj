@@ -15,7 +15,7 @@ limitations under the License.
 */
 package fountain::f_llm.util
 
-public func http(url: String, auth: String): HttpClient {
+public func http<T>(url: String, auth: String, callback: (HttpClient) -> T): T {
     let client = HttpClient(url)
     client.header("Authorization", 'Bearer ${auth}')
     client.header("Content-Type", "application/json")
@@ -23,4 +23,5 @@ public func http(url: String, auth: String): HttpClient {
     var tls = TlsClientConfig()
     tls.verifyMode = CertificateVerifyMode.TrustAll
     client.tlsConfig(tls)
+    resource(client, callback)
 }
