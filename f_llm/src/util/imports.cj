@@ -16,6 +16,8 @@ limitations under the License.
 package fountain::f_llm.util
 
 internal import std.collection.*
+internal import stdx.net.tls.*
+internal import stdx.net.tls.common.*
 
 internal import fountain::f_base.*
 internal import fountain::f_data.*

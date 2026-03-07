@@ -20,5 +20,7 @@ public func http(url: String, auth: String): HttpClient {
     client.header("Authorization", 'Bearer ${auth}')
     client.header("Content-Type", "application/json")
     client.header("Accept", "application/json")
-    client
+    var tls = TlsClientConfig()
+    tls.verifyMode = CertificateVerifyMode.TrustAll
+    client.tlsConfig(tls)
 }
