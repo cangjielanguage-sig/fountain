@@ -35,24 +35,13 @@ public interface DataFields<T> <: FromToData where T <: DataFields<T> {
             true
         }
     }
+    //这里不能有返回T或?T的函数，因为DataFields的实现会有子类，子类也会被DataAssist修饰，从而实现tryFromData，由于不同的泛型实参导致覆盖错误
     static func fromData(data: Data, flag: DataConversionFlag): Any {
-        transform(from: data, flag: flag)
-    }
-    static func transform(from!: Data, flag!: DataConversionFlag): T {
-        tryTransform(from: from, flag: flag) ?? throw DataException('data ${from} cannot be converted to ${TypeInfo.of<T>()}')
-    }
-    static func transform(from!: Data): T {
-        transform(from: from, flag: DEFAULT_DATA_FLAG)
-    }
-    static func tryTransform(from!: Data, flag!: DataConversionFlag): ?T {
-        match (tryFromData(from, flag)) {
-            case x: ?T => x
+        match (tryFromData(data, flag)) {
+            case x: ?T => x ?? throw DataException('data ${data} cannot be converted to ${TypeInfo.of<T>()}')
             case x: T => x
-            case _ => throw DataException('data ${from} cannot be converted to ${TypeInfo.of<T>()}')
+            case _ => throw DataException('data ${data} cannot be converted to ${TypeInfo.of<T>()}')
         }
-    }
-    static func tryTransform(from!: Data): ?T {
-        tryTransform(from: from, flag: DEFAULT_DATA_FLAG)
     }
 }
 

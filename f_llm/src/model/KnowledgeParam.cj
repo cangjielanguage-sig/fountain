@@ -17,6 +17,8 @@ package fountain::f_llm.model
 
 public class KnowledgeParam {
     public KnowledgeParam(
+        public let agentId!: Int64,
+        public let skillId!: Int64,
         public let keywords!: String, 
         public let embeddingWeight!: Float64 = 0.7, 
         public let kind!: Array<KnowledgeKind> = [], 

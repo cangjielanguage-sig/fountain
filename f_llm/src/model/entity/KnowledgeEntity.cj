@@ -71,6 +71,8 @@ public class KnowledgeEntity {
                 embedding: resp.embedding
             )
             let usage = resp.usage
+            usage.agentId = params.agentId
+            usage.skillId = params.skillId
             knowledgeSaver(knowledge)
             usageSaver(usage)
         }

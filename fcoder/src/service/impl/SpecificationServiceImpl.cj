@@ -38,6 +38,8 @@ public class SpecificationServiceImpl <: SpecificationService {
         let resp = EmbeddingContextMediator.instance.access(MODEL_NAME_GLM_EMBEDDING3, embeddingContent, 1024)
         let embedding = resp.embedding
         let usage = resp.usage
+        usage.agentId = spec.agentId
+        usage.skillId = spec.skillId
         let exe = executor()
         exe.saveTokenUsage(usage)
         exe.saveSpecification(spec, embedding)

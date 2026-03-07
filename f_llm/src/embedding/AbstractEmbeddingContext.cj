@@ -25,5 +25,5 @@ public abstract class AbstractEmbeddingContext {
     public init(conf: LLMConf){
         this(conf.id, conf.name, conf.url, conf.conf)
     }
-    public func access(input: String, dimension: Int64): EmbeddingResp
+    public func access(param: EmbeddingParam): EmbeddingResp
 }

@@ -13,17 +13,15 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package fountain::f_llm.model
+package fountain::f_llm.embedding
 
-public class Code {
-    public Code(
+import fountain::f_data.macros.*
+
+public class EmbeddingParam {
+    public EmbeddingParam(
         public let agentId!: Int64,
         public let skillId!: Int64,
-        public let projectId!: Int64,
-        public let filePath!: String,
-        public let moduleName!: String,
-        public let packageName!: String,
-        public let codeLang!: String,
-        public let code!: String
+        public let input!: String,
+        public let dimension!: Int64 = 1024
     ){}
 }

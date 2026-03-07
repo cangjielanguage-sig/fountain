@@ -168,12 +168,6 @@ func generateProps(decl: ClassDecl, exclusion: HashSet<String>) {
                         member.identifier = p.identifier
                         member.colon = p.colon
                         member.declType = p.paramType
-                        try{
-                            if (p.assign.kind == ASSIGN) {
-                                member.assign = p.assign
-                                member.expr = p.expr
-                            }
-                        }catch(_){}
                         vars.add(member)
                         p.modifiers = ArrayList<Modifier>()
                         p.keyword = Token(ILLEGAL)
