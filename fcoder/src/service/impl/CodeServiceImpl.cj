@@ -42,7 +42,7 @@ public class CodeServiceImpl <: CodeService {
             skillId: code.skillId,
             input: code.code
         )
-        let resp = EmbeddingContextMediator.instance.access(MODEL_NAME_GLM_EMBEDDING3, code.code, 1024)
+        let resp = EmbeddingContextMediator.instance.access(MODEL_NAME_GLM_EMBEDDING3, embeddingParams)
         let embedding = resp.embedding
         let usage = resp.usage
         usage.agentId = code.agentId
