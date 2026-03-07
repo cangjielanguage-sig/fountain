@@ -35,7 +35,6 @@ public class CodeServiceImpl <: CodeService {
         exe.saveTokenUsage(usage)
         exe.findCodes(params, embedding)
     }
-    @Transactional
     public func saveCode(code: Code): Unit {
         let embeddingParams = EmbeddingParam(
             agentId: code.agentId,
