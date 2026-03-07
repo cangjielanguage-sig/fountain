@@ -29,8 +29,8 @@ public class ImmediateDispatcher <: Dispatcher {
             list.add(executor)
         }
     }
-    public func registerStart(category!: String, tag!: String, name!: String): Unit {
-        doRegister('StartExecutor', StartExecutor(acceptingEvent: Event(eventType: EventType.Start, category: category, tag: tag, name: name), accepter: this))
+    public func registerStart(category!: String, tag!: String, eventName!: String): Unit {
+        doRegister('StartExecutor', StartExecutor(acceptingEvent: Event(eventType: EventType.Start, category: category, tag: tag, name: eventName), accepter: this))
     }
     public func registerError(category!: String, tag!: String): Unit {
         doRegister('ErrorExecutor', ErrorExecutor(acceptingEvent: Event(eventType: EventType.Error, category: category, tag: tag, name: EventType.Error.toString())))
@@ -43,8 +43,8 @@ public class ImmediateDispatcher <: Dispatcher {
             ArrayList<Executor>() 
         }.add(executor)
     }
-    public func registerTask(category!: String, tag!: String, name!: String, task!: (Event) -> Event): Unit {
-        let executor = TaskExecutor(acceptingEvent: Event(eventType: EventType.Task, category: category, tag: tag, name: name), 
+    public func registerTask(category!: String, tag!: String, eventName!: String, task!: (Event) -> Event): Unit {
+        let executor = TaskExecutor(acceptingEvent: Event(eventType: EventType.Task, category: category, tag: tag, name: eventName), 
             accepter: this, task: task)
         doRegister(executor)
     }

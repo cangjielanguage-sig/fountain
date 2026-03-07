@@ -18,17 +18,17 @@ package fountain::f_egraph.base
 public interface Flow<G> <: Emitter & Hashable & Equatable<ImmediateFlow> & Equatable<AsyncFlow> & ToString where G <: EndExecutorGetter {
     static func remove(category!: String, tag!: String): Unit 
     prop dependencied: ConcurrentHashSet<String>
-    func registerStart(name: String): Unit
+    func registerStart(eventName: String): Unit
     func registerEnd(): Unit
     func registerError(): Unit
-    func registerTask(name: String, task: (Event) -> Event): Unit
+    func registerTask(eventName: String, task: (Event) -> Event): Unit
     func registerTask(task: Task): Unit
     /**
      * 使用指定流程作为任务执行器的构造函数参数
      * @param flow 任务事件执行器的逻辑
      */
-    func registerTaskByFlow<G, F>(name!: String, flow!: F): Unit where G <: EndExecutorGetter, F <: Flow<G> {
-        registerTask(name) {e => flow.start(((e as DataEvent).getOrThrow()).data).get().get()}
+    func registerTaskByFlow<G, F>(eventName!: String, flow!: F): Unit where G <: EndExecutorGetter, F <: Flow<G> {
+        registerTask(eventName) {e => flow.start(((e as DataEvent).getOrThrow()).data).get().get()}
         flow.dependencied.add(this.toString())
     }
     /**
@@ -36,16 +36,16 @@ public interface Flow<G> <: Emitter & Hashable & Equatable<ImmediateFlow> & Equa
      * @param subCategory 子流程的唯一标识
      * @param subTag 子流程的版本
      */
-    func registerTaskByImmediateFlow(name!: String, subCategory!: String, subTag!: String): Unit {
-        registerTaskByFlow<EndExecutorGetter, ImmediateFlow>(name: name, flow: ImmediateFlow(category: subCategory, tag: subTag))
+    func registerTaskByImmediateFlow(eventName!: String, subCategory!: String, subTag!: String): Unit {
+        registerTaskByFlow<EndExecutorGetter, ImmediateFlow>(eventName: eventName, flow: ImmediateFlow(category: subCategory, tag: subTag))
     }
     /**
      * 使用指定的异步流程作为任务执行器的构造函数参数
      * @param subCategory 子流程的唯一标识
      * @param subTag 子流程的版本
      */
-    func registerTaskByAsyncFlow(name!: String, subCategory!: String, subTag!: String): Unit {
-        registerTaskByFlow<AsyncEndExecutorGetter, AsyncFlow>(name: name, flow: AsyncFlow(category: subCategory, tag: subTag))
+    func registerTaskByAsyncFlow(eventName!: String, subCategory!: String, subTag!: String): Unit {
+        registerTaskByFlow<AsyncEndExecutorGetter, AsyncFlow>(eventName: eventName, flow: AsyncFlow(category: subCategory, tag: subTag))
     }
     func start(data: Any): G
 }

@@ -65,9 +65,9 @@ public class ImmediateFlow <: Flow<EndExecutorGetter> {
     }
     private var startName = ''
     private var hasFirstTask = false
-    public func registerStart(name: String): Unit {
-        startName = name
-        getDispatcher().registerStart(category: category, tag: tag, name: name)
+    public func registerStart(eventName: String): Unit {
+        startName = eventName
+        getDispatcher().registerStart(category: category, tag: tag, eventName: eventName)
     }
     public func registerEnd(): Unit {
         getDispatcher().registerEnd(category: category, tag: tag)
@@ -75,18 +75,20 @@ public class ImmediateFlow <: Flow<EndExecutorGetter> {
     public func registerError(): Unit {
         getDispatcher().registerError(category: category, tag: tag)
     }
-    public func registerTask(name: String, task: (Event) -> Event): Unit {
+    public func registerTask(eventName: String, task: (Event) -> Event): Unit {
         if(startName.size == 0){
             throw GraphException('There must be with StartExecutor before registering first TaskExecutor')
-        }else if(!hasFirstTask && startName == name){
+        }else if(!hasFirstTask && startName == eventName){
             hasFirstTask = true
         }else if(!hasFirstTask){
             throw GraphException('First TaskExecutor name must be same as StartExecutor name')
         }
-        getDispatcher().registerTask(category: category, tag: tag, name: name, task: task)
+        getDispatcher().registerTask(category: category, tag: tag, eventName: eventName, task: task)
     }
     public func registerTask(task: Task): Unit {
-        registerTask(task.name, task.exec)
+        for(e in task.acceptableEvents){
+            registerTask(e, task.exec)
+        }
     }
     public func start(data: Any): EndExecutorGetter {
         dispatchers[this].start(StartEvent(category: category, tag: tag, name: startName, data: data))

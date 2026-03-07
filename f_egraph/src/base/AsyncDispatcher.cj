@@ -34,9 +34,9 @@ public class AsyncDispatcher <: Dispatcher & AsyncEndExecutorGetter {
             }
         }
     }
-    public func registerStart(category!: String, tag!: String, name!: String): Unit {
+    public func registerStart(category!: String, tag!: String, eventName!: String): Unit {
         synchronized(mutex){
-            dispatcher.registerStart(category: category, tag: tag, name: name)
+            dispatcher.registerStart(category: category, tag: tag, eventName: eventName)
         }
     }
     public func registerEnd(category!: String, tag!: String): Unit {
@@ -49,9 +49,9 @@ public class AsyncDispatcher <: Dispatcher & AsyncEndExecutorGetter {
             dispatcher.registerError(category: category, tag: tag)
         }
     }
-    public func registerTask(category!: String, tag!: String, name!: String, task!: (Event) -> Event): Unit {
+    public func registerTask(category!: String, tag!: String, eventName!: String, task!: (Event) -> Event): Unit {
         synchronized(mutex){
-            dispatcher.registerTask(category: category, tag: tag, name: name, task: task)
+            dispatcher.registerTask(category: category, tag: tag, eventName: eventName, task: task)
         }
     }
     public func accept(event: Event): Unit {
