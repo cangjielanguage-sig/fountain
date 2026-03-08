@@ -218,7 +218,7 @@ public sealed abstract class JsonSchema {
     public const init(){}
 }
 
-@Annotation[target: [MemberVariable, MemberProperty]]
+@Annotation[target: [MemberVariable, MemberProperty, Parameter]]
 public class JsonBoolSchema <: JsonSchema {
     public const JsonBoolSchema(
         public let default!: ?Bool = None,
@@ -226,7 +226,7 @@ public class JsonBoolSchema <: JsonSchema {
         public let description!: ?String = None){}
 }
 
-@Annotation[target: [MemberVariable, MemberProperty]]
+@Annotation[target: [MemberVariable, MemberProperty, Parameter]]
 public class JsonIntSchema <: JsonSchema {
     public const JsonIntSchema(
         public let minimum!: ?Int64 = None,
@@ -240,7 +240,7 @@ public class JsonIntSchema <: JsonSchema {
         public let description!: ?String = None){}
 }
 
-@Annotation[target: [MemberVariable, MemberProperty]]
+@Annotation[target: [MemberVariable, MemberProperty, Parameter]]
 public class JsonFloatSchema <: JsonSchema {
     public const JsonFloatSchema(
         public let minimum!: ?Float64 = None,
@@ -253,7 +253,7 @@ public class JsonFloatSchema <: JsonSchema {
         public let title!: ?String = None,
         public let description!: ?String = None){}
 }
-@Annotation[target: [MemberVariable, MemberProperty]]
+@Annotation[target: [MemberVariable, MemberProperty, Parameter]]
 public class JsonStringSchema <: JsonSchema {
     public const JsonStringSchema(
         public let minLength!: ?Int64 = None,
@@ -265,7 +265,7 @@ public class JsonStringSchema <: JsonSchema {
         public let title!: ?String = None,
         public let description!: ?String = None){}
 }
-@Annotation[target: [MemberVariable, MemberProperty]]
+@Annotation[target: [MemberVariable, MemberProperty, Parameter]]
 public class JsonArraySchema <: JsonSchema {
     public const JsonArraySchema(
         public let items!: ?JsonSchema = None,
@@ -275,7 +275,7 @@ public class JsonArraySchema <: JsonSchema {
         public let title!: ?String = None,
         public let description!: ?String = None){}
 }
-@Annotation[target: [MemberVariable, MemberProperty]]
+@Annotation[target: [MemberVariable, MemberProperty, Parameter]]
 public class JsonObjectSchema <: JsonSchema {
     public const JsonObjectSchema(
         public let required!: ?String = None,

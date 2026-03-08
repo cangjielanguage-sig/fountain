@@ -15,8 +15,6 @@ limitations under the License.
 */
 package fountain::f_llm.tool
 
-import fountain::f_llm.exception.FunctionCallingException
-
 /**
  * 函数调用结果，本模块是f_llm的辅助模块，而f_llm依赖f_egraph定义的事件和流程
  */

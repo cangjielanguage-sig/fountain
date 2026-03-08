@@ -15,11 +15,6 @@ limitations under the License.
 */
 package fountain::f_llm.tool
 
-import std.reflect.*
-import stdx.encoding.json.*
-
-import fountain::f_data.*
-
 public interface CommonFunctionCalling {
     /**
      * JSON SCHEMA形式描述的大模型函数定义
@@ -47,7 +42,8 @@ public interface CommonFunctionCalling {
 public interface FunctionCalling<T> <: CommonFunctionCalling where T <: ObjectData<T> {
     /**
      * JSON SCHEMA形式描述的大模型函数定义
-     * 默认实现调用fountain::f_data.json的JsonObject.toJsonSchema<T>()扩展函数获得参数定义，并把本接口的name和description属性与从泛型实参转换来的Json作为大模型函数定义
+     * 默认实现调用fountain::f_data.json的JsonObject.toJsonSchema<T>()扩展函数获得参数定义，
+     * 并把本接口的name和description属性与从泛型实参转换来的Json作为大模型函数定义
      */
     prop definition: JsonObject {
         get() {
@@ -63,11 +59,13 @@ public interface FunctionCalling<T> <: CommonFunctionCalling where T <: ObjectDa
     }
     
     /**
-     * 函数调用
+     * 函数调用。默认实现只抛出FunctionCallingException
      * @param params 函数参数
      * @return 函数调用结果
      */
-    func call(params: T): FunctionResult
+    func call(params: T): FunctionResult {
+        throw FunctionCallingException("default implementation")
+    }
     /**
      * 函数调用，这个函数供agent调用，开发者实现`func call(params: T): FunctionResult`即可
      * @param params 函数参数

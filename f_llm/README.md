@@ -56,7 +56,7 @@ public interface FunctionCalling<T> <: CommonFunctionCalling where T <: DataFiel
      */
     prop description: String
     /**
-     * 函数调用
+     * 函数调用。默认实现只抛出FunctionCallingException
      * @param params 函数参数
      * @return 函数调用结果
      */
