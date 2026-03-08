@@ -24,7 +24,7 @@ public interface CommonFunctionCalling {
     /**
      * JSON SCHEMA形式描述的大模型函数定义
      */
-    prop definition: String
+    prop definition: JsonObject
     /**
      * 函数名称
      */
@@ -49,7 +49,7 @@ public interface FunctionCalling<T> <: CommonFunctionCalling where T <: ObjectDa
      * JSON SCHEMA形式描述的大模型函数定义
      * 默认实现调用fountain::f_data.json的JsonObject.toJsonSchema<T>()扩展函数获得参数定义，并把本接口的name和description属性与从泛型实参转换来的Json作为大模型函数定义
      */
-    prop definition: String {
+    prop definition: JsonObject {
         get() {
             let def = JsonObject()
             def.put("type", JsonString('function'))
@@ -58,7 +58,7 @@ public interface FunctionCalling<T> <: CommonFunctionCalling where T <: ObjectDa
             function.put("name", JsonString(name))
             function.put("description", JsonString(description))
             function.put("parameters", JsonObject.toJsonSchema<T>())
-            def.toString()            
+            def
         }
     }
     

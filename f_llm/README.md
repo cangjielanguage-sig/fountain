@@ -18,15 +18,35 @@ public struct FunctionResult {
         public prop result!: String
     ){}
 }
+public interface CommonFunctionCalling {
+    /**
+     * JSON SCHEMA形式描述的大模型函数定义
+     */
+    prop definition: JsonObject
+    /**
+     * 函数名称
+     */
+    prop name: String
+    /**
+     * 函数描述
+     */
+    prop description: String 
+    /**
+     * 函数调用，这个函数供agent调用，开发者实现`func call(params: T): FunctionResult`即可
+     * @param params 函数参数
+     * @return 函数调用结果
+     */
+    func call(json: JsonObject): FunctionResult
+}
 /**
  * 此接口的实现必须是类且被fountain::f_bean.macros.Bean修饰
  */
-public interface FunctionCalling<T> where T <: DataFields<T> {
+public interface FunctionCalling<T> <: CommonFunctionCalling where T <: DataFields<T> {
     /**
      * JSON SCHEMA形式描述的大模型函数定义
      * 默认实现调用fountain::f_data.json的JsonObject.toJsonSchema<T>()扩展函数获得参数定义，并把本接口的name和description属性与从泛型实参转换来的Json作为大模型函数定义
      */
-    prop definition: String 
+    prop definition: JsonObject 
     /**
      * 函数名称
      */
