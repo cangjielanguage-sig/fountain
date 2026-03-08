@@ -40,6 +40,12 @@ public open class LLMToolParams <: LLMParams {
         super(model: model, messages: messages)
     }
     private let tools: ArrayList<FunctionCall> = ArrayList<FunctionCall>()
+
+    public func addTools<I>(tools: I): Unit where I <: Iterable<FunctionCall> {
+        for (tool in tools) {
+            this.tools.add(tool)
+        }
+    }
 }
 
 @DataAssist[props fields]

@@ -25,6 +25,8 @@ import fountain::f_orm.macros.*
 public class Agent {
     @ORMField[id column: 'id']
     private var id: Int64 = 0
+    @ORMField['agent_name']
+    private var name: String = ''
     @ORMField['agent']
     private var agent: String = ''
     @ORMField['acceptable']

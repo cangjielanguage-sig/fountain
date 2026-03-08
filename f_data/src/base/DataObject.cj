@@ -62,6 +62,8 @@ public interface SimpleDataObject <: Data {
     func set(name: String, value: Data) {
         set(name, value, DEFAULT_DATA_FLAG)
     }
+    func get(name: String): ?Data 
+    func get<V>(name: String, flag: DataConversionFlag): ?V where V <: DataFields<V>
 }
 
 public class DataObject<T> <: SimpleDataObject & Collection<(String, Data)> & NamedData where T <: ObjectData<T> & DataFields<T> {

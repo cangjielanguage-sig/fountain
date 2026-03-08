@@ -38,4 +38,13 @@ public class Skill {
     private var metadata: String = ""
     @ORMField['details']
     private var details: String = ""
+    @ORMField['functions']
+    private var functions: String = ""
+
+    @DataExclude[field]
+    public prop functionNames: Iterator<String> {
+        get(){
+            functions.lazySplit(',', removeEmpty: true).map{f => f.trimAscii()}
+        }
+    }
 }

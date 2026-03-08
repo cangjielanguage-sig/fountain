@@ -19,17 +19,21 @@ import fountain::f_data.macros.*
 
 @DataAssist[props fields]
 public open class ChatMessage {
-    private var content: String = ""
-    public ChatMessage(private var role: Role) {}
+    public ChatMessage(
+        private var role: Role,
+        private var content: String) {}
     public init(){
-        this("")
+        this('', '')
     }
 }
 
 @DataAssist[props fields]
 public class SystemMessage <: ChatMessage {
     public init(){
-        super(ROLE_SYSTEM)
+        super(ROLE_SYSTEM, '')
+    }
+    public init(content: String){
+        super(ROLE_SYSTEM, content)
     }
 }
 
@@ -38,14 +42,20 @@ public open class AssistantMessage <: ChatMessage {
     @FieldAlias['reasoning_content']
     private var reasoningContent: String = ""
     public init(){
-        super(ROLE_ASSISTANT)
+        super(ROLE_ASSISTANT, '')
+    }
+    public init(content: String){
+        super(ROLE_ASSISTANT, content)
     }
 }
 
 @DataAssist[props fields]
 public class UserMessage <: ChatMessage {
     public init(){
-        super(ROLE_USER)
+        super(ROLE_USER, '')
+    }
+    public init(content: String){
+        super(ROLE_USER, content)
     }
 }
 
@@ -79,19 +89,18 @@ public class ToolCall {
         private var id: String,
         @FieldAlias['type']
         private var toolType: ToolType,
-        private var function: ?ToolCallFunction
+        private var function: ToolCallFunction
     ){}
 
     public init(){
-        this('', '', None)
+        this('', '', ToolCallFunction())
     }
 }
 
 @DataAssist[props fields]
 public class ToolMessage <: ChatMessage {
-    @FieldAlias['tool_call_id']
-    private var toolCallId: String = ""
+    private var tool_call_id: String = ""
     public init(){
-        super(ROLE_TOOL)
+        super(ROLE_TOOL, '')
     }
 }

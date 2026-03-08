@@ -19,7 +19,9 @@ internal import std.collection.concurrent.ConcurrentHashMap
 internal import std.reflect.*
 internal import std.sync.{Mutex, AtomicBool}
 internal import stdx.encoding.json.*
+internal import fountain::f_egraph.*
 internal import fountain::f_bean.*
 internal import fountain::f_data.*
+internal import fountain::f_llm.llm.*
 internal import fountain::f_llm.exception.FunctionCallingException
 internal import fountain::f_llm.exception.FunctionNotFoundException

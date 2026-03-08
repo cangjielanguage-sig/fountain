@@ -207,6 +207,9 @@ public class TextTemplate <: ToString {
     public func format<T>(data: T, noneConverter!: ?String = None<String>): String where T <: Object & ObjectData<T> {
         format<String, ToString, ObjectTextTemplateArgs<T>>(ObjectTextTemplateArgs<T>(data), noneConverter)
     }
+    public func format(data: SimpleDataObject, noneConverter!: ?String = None<String>): String {
+        format<String, ToString, SimpleDataObjectTextTemplateArgs>(SimpleDataObjectTextTemplateArgs(data), noneConverter)
+    }
 }
 
 /**
@@ -466,7 +469,7 @@ extend<K, V> TreeMap<K, V> <: TextTemplateObject<K, V, TreeMap<K, V>> where K <:
 extend<K, V> LinkedHashMap<K, V> <: TextTemplateObject<K, V, LinkedHashMap<K, V>> where K <: Equatable<K> & TextTemplateKey<K>,
     V <: ToString {}
 
-public class ObjectTextTemplateArgs<T> <: TextTemplateObject<String, ToString, ObjectTextTemplateArgs<T>> where T <: Object & ObjectData<T> {
+public struct ObjectTextTemplateArgs<T> <: TextTemplateObject<String, ToString, ObjectTextTemplateArgs<T>> where T <: Object & ObjectData<T> {
     public ObjectTextTemplateArgs(private let arg: T) {}
     public operator func [](key: String): ToString {
         T
@@ -475,5 +478,11 @@ public class ObjectTextTemplateArgs<T> <: TextTemplateObject<String, ToString, O
             .getOrThrow {TextTemplateException("type ${TypeInfo.of<T>()} is without field ${key}")}
             .get(arg)
             .toString()
+    }
+}
+public struct SimpleDataObjectTextTemplateArgs <: TextTemplateObject<String, ToString, SimpleDataObjectTextTemplateArgs> {
+    public SimpleDataObjectTextTemplateArgs(private let arg: SimpleDataObject) {}
+    public operator func [](key: String): ToString {
+        arg.get(key).getOrThrow {TextTemplateException("type ${TypeInfo.of(arg)} is without field ${key}")}.toString()
     }
 }

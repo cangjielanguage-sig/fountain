@@ -15,13 +15,10 @@ limitations under the License.
 */
 package fountain::f_llm.agents
 
-internal import fountain::f_bean.*
-internal import fountain::f_egraph.*
-internal import fountain::f_util.*
-
-internal import fountain::f_llm.constant.*
-internal import fountain::f_llm.exception.*
-internal import fountain::f_llm.finder.*
-internal import fountain::f_llm.llm.*
-internal import fountain::f_llm.model.po.{Agent, Skill}
-internal import fountain::f_llm.tool.*
+public class AgentEventData {
+    public AgentEventData(
+        public let data!: ?Any = None,
+        public let messages!: ArrayList<ChatMessage> = ArrayList<ChatMessage>(),
+        public let message!: String = ''
+    ){}
+}

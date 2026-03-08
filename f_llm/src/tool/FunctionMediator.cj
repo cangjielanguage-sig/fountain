@@ -15,36 +15,57 @@ limitations under the License.
 */
 package fountain::f_llm.tool
 
+public struct FunctionMeta {
+    public FunctionMeta(
+        public let definition: JsonObject,
+        public let callee: (JsonObject) -> FunctionResult
+    ){}
+    public init(
+        definition: FunctionCall,
+        callee: (JsonObject) -> FunctionResult
+    ){
+        this(JsonValue.tryFromData(definition.toData()).asObject(), callee)
+    }
+}
 /**
  * 大模型函数调用的统一入口，所有函数实现都都需要注册到 FunctionMediator 中
  */
 public struct FunctionMediator {
     private init(){}
     private static let mutex = Mutex()
-    private static let functions = ConcurrentHashMap<String, (JsonObject) -> FunctionResult>()
+    private static let functions = ConcurrentHashMap<String, FunctionMeta>()
     private static let loaded = AtomicBool(false)
 
+    public static func getDefinitions<I>(funcNames: I): Iterator<FunctionCall> where I <: Iterable<String> {
+        funcNames.iterator().map{f =>
+            let def = functions[f].definition.toData()
+            let fncall = FunctionCall()
+            DataObject<Function>.populate(def, fncall.function)
+            fncall
+        }
+    }
+
     public static func call(function: String, args: JsonObject): FunctionResult {
-        if (let Some(fn) <- functions.get(function)){
-            return fn(args)
+        if (let Some(meta) <- functions.get(function)){
+            return meta.callee(args)
         }else if(loaded.load()){
             throw FunctionNotFoundException(function)
         }
         synchronized(mutex){
-            if (let Some(fn) <- functions.get(function)){
-                return fn(args)
+            if (let Some(meta) <- functions.get(function)){
+                return meta.callee(args)
             }else if(loaded.load()){
                 throw FunctionNotFoundException(function)
             }
             for(bm in BeanFactory.instance.iterator<CommonFunctionCalling>()){
                 let bean = bm.bean
                 if(let calling: CommonFunctionCalling <- bean){
-                    functions[calling.name] = callee(bm)
+                    functions[calling.name] = FunctionMeta(calling.definition, callee(bm))
                     closeIfNeed(bm.meta.scope.isPrototype, bean)
                 }
             }
             loaded.store(true)
-            return functions[function](args)
+            return functions[function].callee(args)
         }
     }
     private static func callee(bm: BeanManager): (JsonObject) -> FunctionResult {

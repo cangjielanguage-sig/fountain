@@ -25,6 +25,7 @@ public struct FunctionResult {
      * @param result 函数调用结果，要么是简单字符串，要么是MARKDOWN格式的文本。是空串时表示函数调用结果不产生新数据
      */
     public FunctionResult(
+        public let eventType!: EventType = EventType.Task,
         public let event!: String,
         public let result!: String = ''
     ){
