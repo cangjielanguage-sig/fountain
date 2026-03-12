@@ -27,8 +27,8 @@ public open class LLMParams {
     private var skillId: Int64 = 0
     private let thinking: Thinking = Thinking()
     //不能用驼峰命名法再用@FieldAlias['do_sample']修饰，因为要用这个类的实例转换为JSON，这样命名会产生JSON字段冗余
-    private let temperature: Float64 = 0.0
-    private let max_tokens: Int64 = 131072
+    private let temperature: Float64 = 1.0
+    private let max_tokens: Int64 = 65536
 }
 
 @DataAssist[props fields]
