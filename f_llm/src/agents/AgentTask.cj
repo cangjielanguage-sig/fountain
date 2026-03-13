@@ -116,7 +116,7 @@ ${culture}
     private func genPromptsTemplate(e: Event, primarySkills: StringGenerator, auxiliaryMetadatas: StringGenerator){
 '''
 ${doGenCulture()}
-> **重要提示**：本文档标注 ⚠️ 的内容为特别提醒，需要重点关注，请勿忽略。
+> **重要提示**：标注 ⚠️ 的内容为特别提醒，需要重点关注，请勿忽略。
 
 智能体描述
 ===
