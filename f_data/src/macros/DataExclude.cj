@@ -28,20 +28,11 @@ public macro DataExclude(attrs: Tokens, input: Tokens): Tokens {
     match (decl) {
         case d: VarDecl where !d.isStatic() => for (attr in attrs) {
             let tag = attr.value.toAsciiLower()
-            if (tag == 'field' && !d.isPublic()) {
-                diagReport(ERROR, extractDeclSignature(d),
-                    'input must be non-static public prop/public mut prop for @DataExclude[field]', '')
-            }
             setItem(tag, d.identifier.value)
         }
         case d: PropDecl where !d.isStatic() && d.isPublic() => for (attr in attrs) {
             let tag = attr.value.toAsciiLower()
-            if (tag == 'field') {
-                setItem(tag, d.identifier.value)
-            } else {
-                diagReport(WARNING, extractDeclSignature(d),
-                    'only @DataExclude[field] can only modify public prop or public mut prop', '')
-            }
+            setItem(tag, d.identifier.value)
         }
         case d: MacroExpandDecl => 
             return replaceMacroInputDecl(quote(@DataExclude[$attrs]), d).toTokens()

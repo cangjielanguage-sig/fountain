@@ -15,6 +15,10 @@ limitations under the License.
 */
 package fountain::f_llm.tool
 
+public enum ResultType {
+    | Text
+    | Skill
+}
 /**
  * 函数调用结果，本模块是f_llm的辅助模块，而f_llm依赖f_egraph定义的事件和流程
  */
@@ -27,10 +31,18 @@ public struct FunctionResult {
     public FunctionResult(
         public let eventType!: EventType = EventType.Task,
         public let event!: String,
-        public let result!: String = ''
+        public let result!: Any = '',
+        private let resultType!: ResultType = ResultType.Text
     ){
         if(event.isEmpty()){
             throw FunctionCallingException('event name cannot be empty')
         }
+    }
+    public init(
+        eventType!: EventType = EventType.Task,
+        event!: String,
+        result!: String = ''
+    ){
+        this(eventType: eventType, event: event, result: JsonString(result))
     }
 }

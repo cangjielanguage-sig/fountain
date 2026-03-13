@@ -19,13 +19,13 @@ import fountain::f_orm.macros.*
 
 @DAO
 public interface OrganizationDAO <: RootDAO {
-    func queryOrgCulture(agentId: Int64): String {
+    func findOrgCulture(agentId: Int64): String {
         executor.setSql('''
         select culture 
           from organization as o 
          inner 
           join agents as a
             on o.id = a.org_id
-         where a.id = ${arg(agentId)}''').singleFirst<String>()
+         where a.id = ${arg(agentId)}''').singleFirst<String>() ?? ''
     }
 }

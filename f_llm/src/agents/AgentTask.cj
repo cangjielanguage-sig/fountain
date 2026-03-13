@@ -42,6 +42,8 @@ package fountain::f_llm.agents
  *      - 总结全部上下文
  *      - 使用全部上下文直到上下文饱和才截取最后N轮ChatMessage
  *      - 使用全部上下文直到上下文饱和才总结上下文
+ * todo 需要为AgentTask增加session的概念，并记录到token_usage
+ *      - session用event传递
  */
 public class AgentTask <: Task {
     public AgentTask(private let agent: Agent){}
@@ -79,43 +81,56 @@ public class AgentTask <: Task {
             }
         }
     }
-    public func exec(e: Event): Event {
-        let skills = skillsFinder.querySkills(agent.id, e.name) ?? throw SkillNotFoundException('agent: ${agent.id}, event: ${e.name}')
-        var auxiliaryMetadatas  = StringGenerator()
-        var primarySkills = StringGenerator()
-        for(skill in skills){
-            if(skill.skillType == SKILL_TYPE_PRIMARY){
-                primarySkills.append('''
-### 技能标题：${skill.title}
+    private func genSkillDetails(skill: Skill){
+'''
+## 技能标题：${skill.title}
 
+### 技能描述
 ${skill.details}
+___
+'''
+    }
+    private func genAuxiliarySkill(skill: Skill){
+'''
+## 技能标题：${skill.title}
 
-''')
-            }else{
-                auxiliaryMetadatas.append('''
-### 技能标题：${skill.title}
-
+### 技能元数据
 ${skill.metadata}
-
-''')
-            }
+___
+'''
+    }
+    private func doGenCulture(culture: String){
+'''
+组织文化
+===
+${culture}
+'''
+    }
+    private func doGenCulture(){
+        if(let culture <- orgFinder.queryOrgCulture(agent.id) && culture.size > 0){
+            doGenCulture(culture)
+        }else{
+            ''
         }
-        let promptsTemplate = '''
-# 组织文化
-${orgFinder.queryOrgCulture(agent.id)}
+    }
+    private func genPromptsTemplate(e: Event, primarySkills: StringGenerator, auxiliarySkills: StringGenerator){
+'''
+${doGenCulture()}
 > **重要提示**：本文档标注 ⚠️ 的内容为特别提醒，需要重点关注，请勿忽略。
 
-# 智能体描述
+智能体描述
+===
 ${agent.agent}
 
-# 技能列表
-## 主技能
+技能列表
+===
+# 主技能
 此处包含主技能全部描述。
 ${primarySkills}
 
-## 辅助技能元数据
-辅助技能只包含元数据，需要时调用技能载函数（loadSkill）加载相应技能。
-务必使用以下格式调用loadSkill函数。
+# 辅助技能元数据
+辅助技能只预加载元数据，需要时调用技能加载函数（loadSkill）加载相应技能的详细描述。
+务必使用以下参数调用loadSkill函数。
 ⚠️ 注意：此处loadSkill函数的event参数固定为"${e.name}"，请勿修改。
 ```json
 {
@@ -125,37 +140,83 @@ ${primarySkills}
 ```
 ${auxiliaryMetadatas}
 '''
-        let functionNames = skill.functionNames
-        let skillId = skill.id
+    }
+    private func populatePromptsParams(messages: ArrayList<ChatMessage>, promptsTemplate: String, data: SimpleDataObject){
+        let msg = if(promptsTemplate.contains('{{')){
+            TextTemplate.compile(promptsTemplate, prefix: '{{', suffix: '}}').format(data)
+        }else{
+            promptsTemplate
+        }
+        SystemMessage(msg)
+    }
+    private func assembleAuxiliarySkills(agentData: AgentEventData){
+        if(agentData.skillDetails.size > 0){
+            let auxiliarySkills = StringGenerator('## 辅助技能列表\n')
+            for(skill in agentData.skillDetails){
+                auxiliarySkills.append(skill).append('---\n\n')
+            }
+            auxiliarySkills.toString()
+        }else{
+            ''
+        }
+    }
+    private func assembleNoParamPrompts(messages: ArrayList<ChatMessage>, agentPrompts: String, agentData: AgentEventData){
+        messages.add(SystemMessage(agentPrompts))
+        let auxiliarySkills = assembleAuxiliarySkills(agentData)
+        if(auxiliarySkills.size > 0){
+            messages.add(SystemMessage(auxiliarySkills))
+        }
+    }
+    public func exec(e: Event): Event {
+        let skills = skillsFinder.querySkills(agent.id, e.name) ?? throw SkillNotFoundException('agent: ${agent.id}, event: ${e.name}')
+        var auxiliaryMetadatas  = StringGenerator()
+        var primarySkills = StringGenerator()
+        let functionNames = ArrayList<String>()
+        for(skill in skills){
+            if(skill.skillType == SKILL_TYPE_PRIMARY){
+                functionNames.add(all: skill.functionNames)
+                primarySkills.append(genSkillDetails(skill))
+            }else{
+                auxiliaryMetadatas.append(genAuxiliarySkill(skill))
+            }
+        }
+        let promptsTemplate = genPromptsTemplate(e, primarySkills, auxiliaryMetadatas)
         let messages = ArrayList<ChatMessage>()
         var eData = None<Any>
+        var functions = ArrayList<FunctionCall>()
         if(let e: DataEvent <- e && let any: ToData <- e.data && let data: SimpleDataObject <- any.toData()){
             eData = any
-            let msg = TextTemplate.compile(promptsTemplate, prefix: '{{', suffix: '}}').format(data)
-            messages.add(SystemMessage(msg))
-        }else if (let e: DataEvent <- e && let agentData: AgentEventData <- e.data && let Some(any: ToData) <- agentData.data && let data: SimpleDataObject <- any.toData()) {
-            let msg = TextTemplate.compile(promptsTemplate, prefix: '{{', suffix: '}}').format(data)
-            messages.add(SystemMessage(msg))
-            let msgs = agentData.messages
-            messages.add(all: if(msgs.size > 0 && let msg <- msgs[0] && msg.role == ROLE_SYSTEM){
-                msgs[1 ..]
+            populatePromptsParams(messages, promptsTemplate, data)
+        }else if (let e: DataEvent <- e && let agentData: AgentEventData <- e.data) {
+            if(let Some(any: ToData) <- agentData.data && let data: SimpleDataObject <- any.toData()){
+                populatePromptsParams(messages, promptsTemplate, data)
+                let auxiliarySkills = assembleAuxiliarySkills(agentData)
+                if(auxiliarySkills.size > 0){
+                    populatePromptsParams(messages, auxiliarySkills, data)
+                }
+                let msgs = agentData.messages
+                messages.add(all: if(msgs.size > 0 && let msg <- msgs[0] && msg.role == ROLE_SYSTEM){
+                    msgs[1 ..]
+                }else{
+                    msgs
+                })
+                eData = agentData
+                if(let content <- agentData.message && content.size > 0) {
+                    messages.add(UserMessage(content))
+                }
             }else{
-                msgs
-            })
-            eData = agentData
-            if(let content <- agentData.message && content.size > 0) {
-                messages.add(UserMessage(content))
+                assembleNoParamPrompts(messages, promptsTemplate, agentData)
             }
+            functions = agentData.functions
         }else{
-            messages.add(SystemMessage(promptsTemplate))
+            assembleNoParamPrompts(messages, promptsTemplate, agentData)
         }
-        let functions = FunctionMediator.getDefinitions(functionNames)
         let params = LLMToolParams(model: agent.llmName, messages: messages)
-        params.addTools(functions)
+        params.addFunctions(functions)
+        FunctionMediator.getDefinitions(functionNames) |> params.addFunctions
         params.agentId = agent.id
-        params.skillId = skillId
         let resp = LLMContextMediator.instance.access(agent.llmType, params)
-        let eventData = AgentEventData(data: eData, messages: messages)
+        let eventData = AgentEventData(data: eData, messages: messages, functions: params.functions)
         var eventName = ''
         var eventType = EventType.Task
         for(msg in resp.messages){
@@ -169,10 +230,19 @@ ${auxiliaryMetadatas}
                     let fnResult = FunctionMediator.call(name, json)
                     eventName = fnResult.event
                     eventType = fnResult.eventType
-                    let toolmsg = ToolMessage()
-                    toolmsg.tool_call_id = tool.id
-                    toolmsg.content = fnResult.result
-                    messages.add(toolmsg)
+                    match(fnResult.resultType){
+                        case ResultType.Text => 
+                            let toolmsg = ToolMessage()
+                            toolmsg.tool_call_id = tool.id
+                            toolmsg.content = (fnResult.result as String).getOrThrow()
+                            messages.add(toolmsg)
+                        case ResultType.Skill => 
+                            let skill = (fnResult.result as Skill).getOrThrow()
+                            eventData.skillDetails.add(genSkillDetails(skill))
+                            eventData.skillId.add(skill.id)
+                            let functions = FunctionMediator.getDefinitions(skill.functionNames)
+                            eventData.addFunctions(functions)
+                    }
                 }
             }else if(let m: AssistantMessage <- msg){
                 messages.add(m)

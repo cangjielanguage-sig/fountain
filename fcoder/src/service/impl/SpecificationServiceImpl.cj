@@ -32,7 +32,6 @@ public class SpecificationServiceImpl <: SpecificationService {
     public func saveSpecification(spec: Specification): Unit {
         let resp = EmbeddingContextMediator.instance.access(MODEL_NAME_GLM_EMBEDDING3, EmbeddingParam(
             agentId: spec.agentId,
-            skillId: spec.skillId,
             input: '''
 # ${spec.title}
 
@@ -40,7 +39,6 @@ ${spec.content}'''))
         let embedding = resp.embedding
         let usage = resp.usage
         usage.agentId = spec.agentId
-        usage.skillId = spec.skillId
         let exe = executor()
         exe.saveTokenUsage(usage)
         exe.saveSpecification(spec, embedding)

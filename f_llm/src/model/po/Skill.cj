@@ -15,7 +15,6 @@ limitations under the License.
 */
 package fountain::f_llm.model.po
 
-
 import fountain::f_data.*
 import fountain::f_data.macros.*
 import fountain::f_orm.*
@@ -41,7 +40,7 @@ public class Skill {
     @ORMField['functions']
     private var functions: String = ""
     @ORMField['skill_type']
-    private var skillType: SkillType = ""
+    private var skillType: String = ""
 
     @DataExclude[field]
     public prop functionNames: Iterator<String> {

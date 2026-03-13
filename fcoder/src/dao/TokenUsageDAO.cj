@@ -25,7 +25,6 @@ public interface TokenUsageDAO <: RootDAO {
           into token_usage(
                llm_id, 
                agent_id, 
-               skill_id, 
                prompt_tokens, 
                completion_tokens, 
                total_tokens, 
@@ -33,13 +32,12 @@ public interface TokenUsageDAO <: RootDAO {
                usage_time
        )values(${arg(usage.llmId)},
                ${arg(usage.agentId)},
-               ${arg(usage.skillId)},
                ${arg(usage.prompt)},
                ${arg(usage.completion)},
                ${arg(usage.total)},
                ${arg(usage.cached)},
                ${arg(usage.usageTime)}
-        )on conflict(llm_id, agent_id, skill_id, usage_time) do update set 
+        )on conflict(llm_id, agent_id, usage_time) do update set 
         prompt_tokens = prompt_tokens + ${arg(usage.prompt)},
         completion_tokens = completion_tokens + ${arg(usage.completion)},
         total_tokens = total_tokens + ${arg(usage.total)},

@@ -16,5 +16,5 @@ limitations under the License.
 package fountain::f_llm.finder
 
 public interface OrganizationFinder {
-    func queryCulture(agentId: Int64): String
+    func queryOrgCulture(agentId: Int64): String
 }

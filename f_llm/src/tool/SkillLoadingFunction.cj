@@ -28,7 +28,7 @@ public class SkillLoading {
 
 
 @Bean
-public class AnswerFunction <: FunctionCalling<SkillLoading> {
+public class SkillLoadingFunction <: FunctionCalling<SkillLoading> {
     private let skillsFinder = lookup<SkillsFinder>()
     /**
      * 函数名称
@@ -52,6 +52,6 @@ public class AnswerFunction <: FunctionCalling<SkillLoading> {
      * @return 函数调用结果
      */
     public func call(params: SkillLoading): FunctionResult {
-        FunctionResult(event: params.event, result: skillsFinder.loadSkill(params.title))
+        FunctionResult(event: params.event, result: skillsFinder.loadSkill(params.title), resultType: ResultType.Skill)
     }
 }

@@ -101,7 +101,6 @@ public class GLMContext <: AbstractLLMContext {
                 let usage = llmResp.usage
                 usage.llmId = super.id
                 usage.agentId = params.agentId
-                usage.skillId = params.skillId
                 DataObject<TokenUsage>.populate(usageJson.toData(), usage)
                 usage.cached = usageJson.get('prompt_tokens_details')?.asObject().get('cached_tokens')?.asInt().getValue() ?? 0
                 llmResp
@@ -112,7 +111,7 @@ public class GLMContext <: AbstractLLMContext {
                 throw e
             }finally{
                 let resp = json
-                log.info{'GLMContext.access end, requestId: ${(params as GLMParams)?.request_id}, agentId: ${params.agentId}, skillId: ${params.skillId}, resp: ${resp}, elapsed: ${MonoTime.now() - start}'}
+                log.info{'GLMContext.access end, requestId: ${(params as GLMParams)?.request_id}, agentId: ${params.agentId}, resp: ${resp}, elapsed: ${MonoTime.now() - start}'}
             }
         }
     }

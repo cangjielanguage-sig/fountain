@@ -23,5 +23,5 @@ internal import fountain::f_egraph.*
 internal import fountain::f_bean.*
 internal import fountain::f_data.*
 internal import fountain::f_llm.llm.*
-internal import fountain::f_llm.exception.FunctionCallingException
-internal import fountain::f_llm.exception.FunctionNotFoundException
+internal import fountain::f_llm.exception.*
+internal import fountain::f_llm.finder.*

@@ -23,14 +23,12 @@ public class CodeServiceImpl <: CodeService {
     public func findCodes(params: CodeParam): ArrayList<String> {
         let embeddingParams = EmbeddingParam(
             agentId: params.agentId,
-            skillId: params.skillId,
             input: params.code
         )
         let resp = EmbeddingContextMediator.instance.access(MODEL_NAME_GLM_EMBEDDING3, embeddingParams)
         let embedding = resp.embedding
         let usage = resp.usage
         usage.agentId = params.agentId
-        usage.skillId = params.skillId
         let exe = executor()
         exe.saveTokenUsage(usage)
         exe.findCodes(params, embedding)
@@ -39,14 +37,12 @@ public class CodeServiceImpl <: CodeService {
     public func saveCode(code: Code): Unit {
         let embeddingParams = EmbeddingParam(
             agentId: code.agentId,
-            skillId: code.skillId,
             input: code.code
         )
         let resp = EmbeddingContextMediator.instance.access(MODEL_NAME_GLM_EMBEDDING3, embeddingParams)
         let embedding = resp.embedding
         let usage = resp.usage
         usage.agentId = code.agentId
-        usage.skillId = code.skillId
         let exe = executor()
         exe.saveTokenUsage(usage)
         exe.saveCode(code, embedding)

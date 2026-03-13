@@ -16,9 +16,25 @@ limitations under the License.
 package fountain::f_llm.agents
 
 public class AgentEventData {
+    var skillIds = HashSet<String>()
+    @DataExclude[prop field]
+    private let fnNames = HashSet<String>()
     public AgentEventData(
         public let data!: ?Any = None,
         public let messages!: ArrayList<ChatMessage> = ArrayList<ChatMessage>(),
-        public let message!: String = ''
-    ){}
+        public let message!: String = '',
+        public let functions!: ArrayList<FunctionCall> = ArrayList<FunctionCall>(),
+        public let skillDetails!: ArrayList<String> = ArrayList<String>()
+    ){
+        for(f in functions){
+            fnNames.add(f.name)
+        }
+    }
+
+    public func addFunctions<I>(functions: I): Unit where I <: Iterable<FunctionCall> {
+        for (function in functions where !fnNames.contains(function.name)) {
+            this.functions.add(function)
+            fnNames.add(function.name)
+        }
+    }
 }

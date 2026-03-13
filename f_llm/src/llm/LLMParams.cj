@@ -24,7 +24,6 @@ public open class LLMParams {
         private var messages!: ArrayList<ChatMessage> = ArrayList<ChatMessage>()
     ){}
     private var agentId: Int64 = 0
-    private var skillId: Int64 = 0
     private let thinking: Thinking = Thinking()
     //不能用驼峰命名法再用@FieldAlias['do_sample']修饰，因为要用这个类的实例转换为JSON，这样命名会产生JSON字段冗余
     private let temperature: Float64 = 1.0
@@ -39,11 +38,14 @@ public open class LLMToolParams <: LLMParams {
     ){
         super(model: model, messages: messages)
     }
-    private let tools: ArrayList<FunctionCall> = ArrayList<FunctionCall>()
-
-    public func addTools<I>(tools: I): Unit where I <: Iterable<FunctionCall> {
-        for (tool in tools) {
-            this.tools.add(tool)
+    protected let functions: ArrayList<FunctionCall> = ArrayList<FunctionCall>()
+    
+    @DataExclude[prop field]
+    private let fnNames = HashSet<String>()
+    public func addFunctions<I>(functions: I): Unit where I <: Iterable<FunctionCall> {
+        for (function in functions where !fnNames.contains(function.function.name)) {
+            this.functions.add(function)
+            fnNames.add(function.function.name)
         }
     }
 }

@@ -20,7 +20,6 @@ import fountain::f_data.macros.*
 public class EmbeddingParam {
     public EmbeddingParam(
         public let agentId!: Int64,
-        public let skillId!: Int64,
         public let input!: String,
         public let dimension!: Int64 = 1024
     ){}

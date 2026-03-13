@@ -19,7 +19,7 @@ import fountain::f_orm.macros.*
 
 @DAO
 public interface SkillsDAO <: RootDAO {
-    func findSkill(agentId: Int64, event: String): ArrayList<Skill> {
+    func findSkills(agentId: Int64, event: String): ArrayList<Skill> {
         executor.setSql('''
         select s.id,
                ag.agent_id,
@@ -47,7 +47,6 @@ public interface SkillsDAO <: RootDAO {
                details
           from skills
          where title = ${arg(title)}
-        ''').first<Skill>()
-
+        ''').first<Skill>().getOrThrow()
     }
 }
