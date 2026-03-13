@@ -69,7 +69,7 @@ public class AgentTask <: Task {
             }
         }
     }
-    private var orgFinder_: ?OrgFinder = None
+    private var orgFinder_: ?OrganizationFinder = None
     private prop orgFinder: OrganizationFinder {
         get(){
             if(let Some(f) <- orgFinder_){
@@ -113,7 +113,7 @@ ${culture}
             ''
         }
     }
-    private func genPromptsTemplate(e: Event, primarySkills: StringGenerator, auxiliarySkills: StringGenerator){
+    private func genPromptsTemplate(e: Event, primarySkills: StringGenerator, auxiliaryMetadatas: StringGenerator){
 '''
 ${doGenCulture()}
 > **重要提示**：本文档标注 ⚠️ 的内容为特别提醒，需要重点关注，请勿忽略。
@@ -147,7 +147,7 @@ ${auxiliaryMetadatas}
         }else{
             promptsTemplate
         }
-        SystemMessage(msg)
+        messages.add(SystemMessage(msg))
     }
     private func assembleAuxiliarySkills(agentData: AgentEventData){
         if(agentData.skillDetails.size > 0){
@@ -168,13 +168,15 @@ ${auxiliaryMetadatas}
         }
     }
     public func exec(e: Event): Event {
-        let skills = skillsFinder.querySkills(agent.id, e.name) ?? throw SkillNotFoundException('agent: ${agent.id}, event: ${e.name}')
+        let skills = skillsFinder.querySkills(agent.id, e.name)
         var auxiliaryMetadatas  = StringGenerator()
         var primarySkills = StringGenerator()
         let functionNames = ArrayList<String>()
         for(skill in skills){
             if(skill.skillType == SKILL_TYPE_PRIMARY){
-                functionNames.add(all: skill.functionNames)
+                for(n in skill.functionNames){
+                    functionNames.add(n)
+                }
                 primarySkills.append(genSkillDetails(skill))
             }else{
                 auxiliaryMetadatas.append(genAuxiliarySkill(skill))
@@ -209,7 +211,7 @@ ${auxiliaryMetadatas}
             }
             functions = agentData.functions
         }else{
-            assembleNoParamPrompts(messages, promptsTemplate, agentData)
+            messages.add(SystemMessage(promptsTemplate))
         }
         let params = LLMToolParams(model: agent.llmName, messages: messages)
         params.addFunctions(functions)
@@ -239,7 +241,6 @@ ${auxiliaryMetadatas}
                         case ResultType.Skill => 
                             let skill = (fnResult.result as Skill).getOrThrow()
                             eventData.skillDetails.add(genSkillDetails(skill))
-                            eventData.skillId.add(skill.id)
                             let functions = FunctionMediator.getDefinitions(skill.functionNames)
                             eventData.addFunctions(functions)
                     }

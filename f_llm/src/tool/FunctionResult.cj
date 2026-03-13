@@ -32,7 +32,7 @@ public struct FunctionResult {
         public let eventType!: EventType = EventType.Task,
         public let event!: String,
         public let result!: Any = '',
-        private let resultType!: ResultType = ResultType.Text
+        public let resultType!: ResultType = ResultType.Text
     ){
         if(event.isEmpty()){
             throw FunctionCallingException('event name cannot be empty')
