@@ -15,6 +15,7 @@ limitations under the License.
 */
 package fountain::f_llm.agents
 
+internal import fountain::f_base.*
 internal import fountain::f_bean.*
 internal import fountain::f_egraph.*
 internal import fountain::f_util.*

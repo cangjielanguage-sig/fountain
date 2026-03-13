@@ -67,12 +67,64 @@ public class AgentTask <: Task {
             }
         }
     }
+    private var orgFinder_: ?OrgFinder = None
+    private prop orgFinder: OrganizationFinder {
+        get(){
+            if(let Some(f) <- orgFinder_){
+                f
+            }else{
+                let f = lookup<OrganizationFinder>()
+                orgFinder_ = f
+                f
+            }
+        }
+    }
     public func exec(e: Event): Event {
-        let skill = skillsFinder.querySkill(agent.id, e.name) ?? throw SkillNotFoundException('agent: ${agent.id}, event: ${e.name}')
+        let skills = skillsFinder.querySkills(agent.id, e.name) ?? throw SkillNotFoundException('agent: ${agent.id}, event: ${e.name}')
+        var auxiliaryMetadatas  = StringGenerator()
+        var primarySkills = StringGenerator()
+        for(skill in skills){
+            if(skill.skillType == SKILL_TYPE_PRIMARY){
+                primarySkills.append('''
+### 技能标题：${skill.title}
+
+${skill.details}
+
+''')
+            }else{
+                auxiliaryMetadatas.append('''
+### 技能标题：${skill.title}
+
+${skill.metadata}
+
+''')
+            }
+        }
         let promptsTemplate = '''
+# 组织文化
+${orgFinder.queryOrgCulture(agent.id)}
+> **重要提示**：本文档标注 ⚠️ 的内容为特别提醒，需要重点关注，请勿忽略。
+
+# 智能体描述
 ${agent.agent}
 
-${skill.details}'''
+# 技能列表
+## 主技能
+此处包含主技能全部描述。
+${primarySkills}
+
+## 辅助技能元数据
+辅助技能只包含元数据，需要时调用技能载函数（loadSkill）加载相应技能。
+务必使用以下格式调用loadSkill函数。
+⚠️ 注意：此处loadSkill函数的event参数固定为"${e.name}"，请勿修改。
+```json
+{
+    "event": "${e.name}",
+    "title": "技能标题"
+}
+```
+${auxiliaryMetadatas}
+'''
         let functionNames = skill.functionNames
         let skillId = skill.id
         let messages = ArrayList<ChatMessage>()

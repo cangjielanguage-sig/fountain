@@ -15,7 +15,6 @@ limitations under the License.
 */
 package fountain::f_llm.finder
 
-public interface SkillsFinder {
-    func querySkills(agentId: Int64, event: String): ArrayList<Skill>
-    func loadSkill(title: String): Skill
+public interface OrganizationFinder {
+    func queryCulture(agentId: Int64): String
 }

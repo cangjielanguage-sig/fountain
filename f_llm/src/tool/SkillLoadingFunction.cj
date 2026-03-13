@@ -19,21 +19,23 @@ import fountain::f_bean.macros.*
 import fountain::f_data.macros.*
 
 @DataAssist[props fields]
-public class Answer {
-    @JsonStringSchema[description:'流程下一步的事件名称']
+public class SkillLoading {
+    @JsonStringSchema[description:'流程当前步骤的事件名称']
     private var event: String = ''
-    @JsonStringSchema[description:'你的回复，将作为流程下一步事件的参数']
-    private var answer: String = ''
+    @JsonStringSchema[description:'技能标题，具备唯一性']
+    private var title: String = ''
 }
 
+
 @Bean
-public class AnswerFunction <: FunctionCalling<Answer> {
+public class AnswerFunction <: FunctionCalling<SkillLoading> {
+    private let skillsFinder = lookup<SkillsFinder>()
     /**
      * 函数名称
      */
     public prop name: String {
         get(){
-            'answer'
+            'loadSkill'
         }
     }
     /**
@@ -41,15 +43,15 @@ public class AnswerFunction <: FunctionCalling<Answer> {
      */
     public prop description: String {
         get(){
-            '如果需要直接输出回复，而不依赖其它函数的结果，务必使用此函数传递回复'
+            '加载技能详细描述'
         }
     }
     /**
-     * 用来解析大模型的返回
+     * 用来加载技能详细描述
      * @param params 函数参数
      * @return 函数调用结果
      */
-    public func call(params: Answer): FunctionResult {
-        FunctionResult(event: params.event, result: params.answer)
+    public func call(params: SkillLoading): FunctionResult {
+        FunctionResult(event: params.event, result: skillsFinder.loadSkill(params.title))
     }
 }

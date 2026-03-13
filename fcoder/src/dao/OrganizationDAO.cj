@@ -13,9 +13,19 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package fountain::f_llm.finder
+package fountain::fcoder.dao
 
-public interface SkillsFinder {
-    func querySkills(agentId: Int64, event: String): ArrayList<Skill>
-    func loadSkill(title: String): Skill
+import fountain::f_orm.macros.*
+
+@DAO
+public interface OrganizationDAO <: RootDAO {
+    func queryOrgCulture(agentId: Int64): String {
+        executor.setSql('''
+        select culture 
+          from organization as o 
+         inner 
+          join agents as a
+            on o.id = a.org_id
+         where a.id = ${arg(agentId)}''').singleFirst<String>()
+    }
 }

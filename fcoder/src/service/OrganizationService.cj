@@ -13,9 +13,8 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package fountain::f_llm.finder
+package fountain::fcoder.service
 
-public interface SkillsFinder {
-    func querySkills(agentId: Int64, event: String): ArrayList<Skill>
-    func loadSkill(title: String): Skill
+public interface OrganizationService <: OrganizationFinder & RootService {
+
 }

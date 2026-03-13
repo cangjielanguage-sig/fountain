@@ -16,5 +16,4 @@ limitations under the License.
 package fountain::fcoder.service
 
 public interface SkillsService <: SkillsFinder & RootService {
-    func querySkill(agentId: Int64, event: String): ?Skill
 }

@@ -80,3 +80,7 @@ public const SPEC_KIND_PRELIMINARY = 'PRELIMINARY'
 public const SPEC_KIND_DETAIL = 'DETAIL'
 public const SPEC_KIND_PLAN = 'PLAN'
 public const SPEC_KIND_TASK = 'TASK'
+
+public type SkillType = String
+public const SKILL_TYPE_PRIMARY = 'primary'
+public const SKILL_TYPE_AUXILIARY = 'auxiliary'

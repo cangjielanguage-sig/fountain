@@ -40,6 +40,8 @@ public class Skill {
     private var details: String = ""
     @ORMField['functions']
     private var functions: String = ""
+    @ORMField['skill_type']
+    private var skillType: SkillType = ""
 
     @DataExclude[field]
     public prop functionNames: Iterator<String> {
