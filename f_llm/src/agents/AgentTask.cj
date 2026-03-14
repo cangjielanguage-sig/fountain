@@ -18,11 +18,30 @@ package fountain::f_llm.agents
 /**
  * 1. 使用事件名+agent.id查询skill
  * 2. 把agent.agent+skill.details组成完整的提示词模板
- *    skill.details包含skill.title + skill.metadata
+ *    技能包含主技能和辅助技能，组织文化、智能体描述、主技能描述、辅助技能元数据拼在一起
  *    ```md
- *    ${agent.agent}
+ *    组织文化
+ *    ===
+ *    ${culture}
  *
+ *    > **重要提示**：标注 ⚠️ 的内容为特别提醒，需要重点关注，请勿忽略。
+ *
+ *    智能体描述
+ *    ===
+ *    ${agent.agent}
+ *    ___
+ *
+ *    技能列表
+ *    ===
+ *    # 主技能
+ *    ## 技能标题：${skill.title}
  *    ${skill.details}
+ *    ___
+ *
+ *    # 辅助技能元数据
+ *    ## 技能标题：${skill.title}
+ *    ${skill.metadata}
+ *    ___
  *    ```
  * 3. 把exec(e: Event)的e.data做以下转换((e.data as ToData)?.toData()).getOrThrow() as SimpleDataObject，
  *    将转换后的实例作为模板参数替换提示词模板中的{{...}}占位符
@@ -88,6 +107,7 @@ public class AgentTask <: Task {
 ### 技能描述
 ${skill.details}
 ___
+
 '''
     }
     private func genAuxiliarySkill(skill: Skill){
@@ -97,6 +117,7 @@ ___
 ### 技能元数据
 ${skill.metadata}
 ___
+
 '''
     }
     private func doGenCulture(culture: String){
@@ -104,6 +125,8 @@ ___
 组织文化
 ===
 ${culture}
+___
+
 '''
     }
     private func doGenCulture(){
@@ -121,12 +144,14 @@ ${doGenCulture()}
 智能体描述
 ===
 ${agent.agent}
+___
 
 技能列表
 ===
 # 主技能
 此处包含主技能全部描述。
 ${primarySkills}
+___
 
 # 辅助技能元数据
 辅助技能只预加载元数据，需要时调用技能加载函数（loadSkill）加载相应技能的详细描述。
