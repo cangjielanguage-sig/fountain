@@ -25,7 +25,7 @@ public interface GLMSpeciallyParam <: ResponseFormat & DoSample {
     }
     prop user_id: String {
         get(){
-            FCODER_USER
+            FOUNTAIN_LLM_AGENT
         }
     }
 }
@@ -33,12 +33,10 @@ public interface GLMSpeciallyParam <: ResponseFormat & DoSample {
 @DataAssist[fields]
 public open class GLMParams <: LLMParams & GLMSpeciallyParam {
     public init(
-        agentId!: Int64 = 0,
-        session!: String = '',
         model!: String = '',
         messages!: ArrayList<ChatMessage> = ArrayList<ChatMessage>()
     ){
-        super(agentId: agentId, session: session, model: model, messages: messages)
+        super(model: model, messages: messages)
     }
     public prop response_format: String {
         get(){
@@ -61,22 +59,21 @@ public open class GLMParams <: LLMParams & GLMSpeciallyParam {
     }
     public prop user_id: String {
         get(){
-            FCODER_USER
+            FOUNTAIN_LLM_AGENT
         }
     }
 }
 @DataAssist[props fields]
 public open class GLMToolParams <: GLMParams {
     public init(
-        agentId!: Int64 = 0,
-        session!: String = '',
         model!: String = '',
         messages!: ArrayList<ChatMessage> = ArrayList<ChatMessage>()
     ){
-        super(agentId: agentId, session: session, model: model, messages: messages)
+        super(model: model, messages: messages)
     }
-    private let tools: ArrayList<FunctionCall> = ArrayList<FunctionCall>()
+    private let functions: ArrayList<FunctionCall> = ArrayList<FunctionCall>()
 }
+
 
 public class GLMContext <: AbstractLLMContext {
     private static let log = LoggerFactory.getLogger<GLMContext>()
@@ -84,12 +81,30 @@ public class GLMContext <: AbstractLLMContext {
         super(conf)
     }
 
-    public func access(params: LLMParams): LLMResp {
+    public func access(agentId: Int64, session: String, params: LLMParams): LLMResp {
+        let glm: GLMParams = if (let glm: GLMParams <- params){
+            glm
+        }else if(let p: LLMToolParams <- params){
+            let glm = GLMToolParams(model: params.model, messages: params.messages)
+            glm.thinking.`type` = params.thinking.`type`
+            glm.thinking.clear_thinking = params.thinking.clear_thinking
+            glm.temperature = params.temperature
+            glm.max_tokens = params.max_tokens
+            glm.functions.add(all: p.functions)
+            glm
+        }else{
+            let glm = GLMParams(model: params.model, messages: params.messages)
+            glm.thinking.`type` = params.thinking.`type`
+            glm.thinking.clear_thinking = params.thinking.clear_thinking
+            glm.temperature = params.temperature
+            glm.max_tokens = params.max_tokens
+            glm
+        }
         http(url, conf){http =>
             let start = MonoTime.now()
             var json = None<JsonValue>
             try{
-                json = http.post('application/json', params).readJson()
+                json = http.post('application/json', glm).readJson()
                 let jsonObj = json.getOrThrow().asObject()
                 let choices = jsonObj.get('choices').getOrThrow().asArray()
                 let llmResp = LLMResp()
@@ -104,20 +119,28 @@ public class GLMContext <: AbstractLLMContext {
                 let usageJson = jsonObj.get('usage').getOrThrow().asObject()
                 let usage = llmResp.usage
                 usage.llmId = super.id
-                usage.agentId = params.agentId
-                usage.session = params.session
+                usage.agentId = agentId
+                usage.session = session
                 DataObject<TokenUsage>.populate(usageJson.toData(), usage)
                 usage.cached = usageJson.get('prompt_tokens_details')?.asObject().get('cached_tokens')?.asInt().getValue() ?? 0
                 llmResp
             }catch(e: Exception) {
                 let resp = json
-                let requestId = (params as GLMParams)?.request_id
-                log.error(e){"GLMContext.access error, requestId: ${requestId}, agentId: ${params.agentId}, session: ${params.session}, resp: ${resp}"}
+                let requestId = glm.request_id
+                log.error(e){"GLMContext.access error, requestId: ${requestId}, agentId: ${agentId}, session: ${session}, resp: ${resp}"}
                 throw e
             }finally{
                 let resp = json
-                log.info{'GLMContext.access end, requestId: ${(params as GLMParams)?.request_id}, agentId: ${params.agentId}, session: ${params.session}, resp: ${resp}, elapsed: ${MonoTime.now() - start}'}
+                log.info{'GLMContext.access end, requestId: ${glm.request_id}, agentId: ${agentId}, session: ${session}, resp: ${resp}, elapsed: ${MonoTime.now() - start}'}
             }
+        }
+    }
+    public func tokenize(model: String, messages: ArrayList<ChatMessage>): Int64 {
+        let params = TokenizerParams(model: model, messages: messages)
+        http('https://open.bigmodel.cn/api/paas/v4/tokenizer', conf){http =>
+            let json = http.post('application/json', params).readJson()
+            let jsonObj = json.asObject()
+            jsonObj.get('total_tokens').getOrThrow().asInt().getValue()
         }
     }
 }

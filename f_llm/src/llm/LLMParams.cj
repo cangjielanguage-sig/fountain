@@ -20,8 +20,6 @@ import fountain::f_data.macros.*
 @DataAssist[props fields]
 public open class LLMParams {
     public LLMParams(
-        private let agentId!: Int64 = 0,
-        private let session!: String = '',
         private let model!: String = '',
         private let messages!: ArrayList<ChatMessage> = ArrayList<ChatMessage>()
     ){}
@@ -34,12 +32,10 @@ public open class LLMParams {
 @DataAssist[props fields]
 public open class LLMToolParams <: LLMParams {
     public init(
-        agentId!: Int64 = 0,
-        session!: String = '',
         model!: String = '',
         messages!: ArrayList<ChatMessage> = ArrayList<ChatMessage>()
     ){
-        super(agentId: agentId, session: session, model: model, messages: messages)
+        super(model: model, messages: messages)
     }
     protected let functions: ArrayList<FunctionCall> = ArrayList<FunctionCall>()
     

@@ -336,17 +336,17 @@ func generateToFields(d: ClassDecl, exclusion: HashSet<String>) {
             appendExpr(d, dt, isVar)
         }
         match (d) {
-            case x: VarDecl => appendExpr(quote($(x.declType)), x.isVar())
-            case x: PropDecl => appendExpr(quote($(x.declType)), x.isMut())
+            case x: VarDecl => appendExpr(x.declType.toTokens(), x.isVar())
+            case x: PropDecl => appendExpr(x.declType.toTokens(), x.isMut())
             case x: PrimaryCtorDecl =>
                 for (p in x.funcParams where p.isMemberParam() && isPublic(p)) {
-                    appendExpr(p.paramType.toTokens(), isVar(p))
+                    appendExpr(p, p.paramType.toTokens(), isVar(p))
                 }
                 continue
             case x: MacroExpandDecl => 
                 match (extract(x)) {
-                    case x: VarDecl where !isStatic(x) && isPublic(x) => appendExpr(x, quote($(x.declType)), x.isVar())
-                    case x: PropDecl where !isStatic(x) && isPublic(x) => appendExpr(x, quote($(x.declType)), x.isMut())
+                    case x: VarDecl where !isStatic(x) && isPublic(x) => appendExpr(x, x.declType.toTokens(), x.isVar())
+                    case x: PropDecl where !isStatic(x) && isPublic(x) => appendExpr(x, x.declType.toTokens(), x.isMut())
                     case x: PrimaryCtorDecl where isPublic(d) =>
                         for (p in x.funcParams) {
                             match(p){
@@ -356,9 +356,9 @@ func generateToFields(d: ClassDecl, exclusion: HashSet<String>) {
                                         m = d.macroInputDecl
                                     }
                                     if(let x: FuncParam <- m && x.isMemberParam() && isPublic(x)){
-                                        appendExpr(x, quote($(x.paramType)), isVar(x))
+                                        appendExpr(x, x.paramType.toTokens(), isVar(x))
                                     }
-                                case x: FuncParam where x.isMemberParam() && isPublic(p) => appendExpr(x, quote($(x.paramType)), isVar(x))
+                                case x: FuncParam where x.isMemberParam() && isPublic(p) => appendExpr(x, x.paramType.toTokens(), isVar(x))
                                 case _ => continue
                             }
                             appendExpr(p.paramType.toTokens(), isVar(p))

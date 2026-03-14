@@ -13,16 +13,13 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package fountain::fcoder.service.impl
+package fountain::f_llm.constant
 
-import fountain::f_bean.macros.*
-
-@Bean
-public class AgentsServiceImpl <: AgentsService {
-    public func listAgents(): ArrayList<Agent> {
-        executor().listAgents()
-    }
-    public func queryAgent(id: Int64): Agent {
-        executor().findAgent(id)
-    }
-}
+public type SpecKind = String
+public const SPEC_KIND_CONSTITUTION = 'CONSTITUTION'
+public const SPEC_KIND_FEASIBILITY = 'FEASIBILITY'
+public const SPEC_KIND_REQUIREMENT = 'REQUIREMENT'
+public const SPEC_KIND_PRELIMINARY = 'PRELIMINARY'
+public const SPEC_KIND_DETAIL = 'DETAIL'
+public const SPEC_KIND_PLAN = 'PLAN'
+public const SPEC_KIND_TASK = 'TASK'

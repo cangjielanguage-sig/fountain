@@ -15,19 +15,12 @@ limitations under the License.
 */
 package fountain::f_llm.llm
 
-public sealed abstract class AbstractLLMContext {
-    private AbstractLLMContext(
-        protected let id: Int64,
-        protected let name: String,
-        protected let llmType: String,
-        protected let url: String,
-        protected let conf: String,
-        protected let threshold: Int64
-    ) {}
-    public init(conf: LLMConf){
-        this(conf.id, conf.name, conf.llmType, conf.url, conf.conf, conf.threshold)
-    }
+import fountain::f_data.macros.*
 
-    public func access(agentId: Int64, session: String, params: LLMParams): LLMResp
-    public func tokenize(model: String, messages: ArrayList<ChatMessage>): Int64
+@DataAssist[fields]
+public class TokenizerParams{
+    public TokenizerParams(
+        public let model!: String = '',
+        public let messages!: ArrayList<ChatMessage> = ArrayList<ChatMessage>()
+    ){}
 }

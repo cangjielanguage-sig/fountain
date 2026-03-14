@@ -13,16 +13,30 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package fountain::fcoder.service.impl
+package fountain::f_llm.constant
 
-import fountain::f_bean.macros.*
-
-@Bean
-public class AgentsServiceImpl <: AgentsService {
-    public func listAgents(): ArrayList<Agent> {
-        executor().listAgents()
-    }
-    public func queryAgent(id: Int64): Agent {
-        executor().findAgent(id)
-    }
-}
+public type ContextPrunerName = String
+/**
+ * 保留
+ */
+public const CONTEXT_PRUNER_RETAIN = "Retain"
+/**
+ * 保留最新
+ */
+public const CONTEXT_PRUNER_LAST_N = "LastN"
+/**
+ * 摘要
+ */
+public const CONTEXT_PRUNER_SUMMARY = "Summary"
+/**
+ * 提取关键词
+ */
+public const CONTEXT_PRUNER_KEYWORDS = "Keywords"
+/**
+ * system单独一个策略，assistant+user+tool另外一个策略
+ */
+public const CONTEXT_PRUNER_DRC = "DRC"
+/**
+ * 上下文饱和后执行一个指定策略
+ */
+public const CONTEXT_PRUNER_SATURATION = "Saturation"

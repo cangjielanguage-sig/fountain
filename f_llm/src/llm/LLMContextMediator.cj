@@ -51,8 +51,19 @@ public class LLMContextMediator {
             return contexts[key]
         }
     }
-    public func access(llmType: LLMType, params: LLMParams): LLMResp {
+    public func access(agentId: Int64, session: String, llmType: LLMType, params: LLMParams): LLMResp {
         let key = '${params.model}+${llmType}'
-        load(key).access(params)
+        load(key).access(agentId, session, params)
+    }
+    public func getTokenThreshold(llmType: LLMType, model: String): Int64 {
+        let key = '${model}+${llmType}'
+        load(key).threshold
+    }
+    public func tokenize(llmType: LLMType, model: String, messages: ArrayList<ChatMessage>): Int64 {
+        let key = '${model}+${llmType}'
+        load(key).tokenize(model, messages)
+    }
+    public func saturated(llmType: LLMType, model: String, messages: ArrayList<ChatMessage>): Bool {
+        tokenize(llmType, model, messages) >= getTokenThreshold(llmType, model)
     }
 }

@@ -41,7 +41,7 @@ public class SearchParams {
     @FieldAlias['request_id']
     private let requestId: String = UUID.random().toString()
     @FieldAlias['user_id']
-    private let userId: String = FCODER_USER
+    private let userId: String = FOUNTAIN_LLM_AGENT
 }
 
 public abstract class AbstractSearcher {

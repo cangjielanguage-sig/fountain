@@ -24,8 +24,14 @@ public interface AgentsDAO <: RootDAO {
     func listAgents(): ArrayList<Agent> {
         executor.setSql('''
         select a.*, f.category, f.tag 
-          from flow as f, agent as a 
+          from flows as f, agents as a 
          where f.agent_id = a.id
         ''').list<Agent>()
+    }
+    func findAgent(id: Int64): Agent {
+        executor.setSql('''
+        select * 
+          from agents 
+         where id = ${arg(id)}''').first<Agent>().getOrThrow()
     }
 }

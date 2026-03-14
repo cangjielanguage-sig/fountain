@@ -49,18 +49,16 @@ package fountain::f_llm.agents
  * 5. 用替换后的提示词+函数列表访问大模型
  * 6. 用大模型返回的结果访问函数
  * 7. 用函数返回的结果构造事件作为智能体的返回
- * todo 总结经验，增加经验Task；增加控制上下文长度的策略接口和若干实现
- *      #### 总结经验
- *      智能体增加是否总结经验的成员、数据表列
- *      记录需求、目的、调用的函数，函数执行结果到日志表
- *      相关性超过0.9的两次函数成功的日志总结为新的流程
- *      相关性超过0.9的两次函数失败日志总结为经验，以后每次任务都查询相关性超过0.8的经验加载为提示词
+ * 8. 控制上下文长度的策略接口和若干实现
  *      #### 上下文策略：
  *      智能体增加智能体上下文策略的成员、数据表列
- *      - 最后N轮ChatMessage
- *      - 总结全部上下文
- *      - 使用全部上下文直到上下文饱和才截取最后N轮ChatMessage
- *      - 使用全部上下文直到上下文饱和才总结上下文
+ *      - A：Retain
+ *      - B：LastN
+ *      - B：Summary
+ *      - D: Keywords
+ *      - E：DRC
+ *      - F：饱和上下文
+ *      - 使用全部上下文直到上下文饱和才执行上下文裁剪，具体裁剪策略由初始化参数决定ABC之一
  */
 public class AgentTask <: Task {
     public AgentTask(private let agent: Agent){}
@@ -248,10 +246,10 @@ ${auxiliaryMetadatas}
         }else{
             messages.add(SystemMessage(promptsTemplate))
         }
-        let params = LLMToolParams(agentId: agent.id, session: e.session, model: agent.llmName, messages: messages)
+        let params = LLMToolParams(model: agent.llmName, messages: messages)
         params.addFunctions(functions)
         FunctionMediator.getDefinitions(functionNames) |> params.addFunctions
-        let resp = LLMContextMediator.instance.access(agent.llmType, params)
+        let resp = LLMContextMediator.instance.access(agent.id, e.session, agent.llmType, params)
         let usage = resp.usage
         tokenUsageSaver.saveTokenUsage(usage)
         let eventData = AgentEventData(data: eData, messages: messages, functions: params.functions)

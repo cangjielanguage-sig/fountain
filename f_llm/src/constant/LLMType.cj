@@ -13,16 +13,16 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package fountain::fcoder.service.impl
+package fountain::f_llm.constant
 
-import fountain::f_bean.macros.*
-
-@Bean
-public class AgentsServiceImpl <: AgentsService {
-    public func listAgents(): ArrayList<Agent> {
-        executor().listAgents()
-    }
-    public func queryAgent(id: Int64): Agent {
-        executor().findAgent(id)
-    }
-}
+public type LLMType = String 
+//text embedding tokenizer rerank code video audio image
+public const LLM_TYPE_TEXT = 'text'
+public const LLM_TYPE_EMBEDDING = 'embedding'
+public const LLM_TYPE_TOKENIZER = 'tokenizer'
+public const LLM_TYPE_RERANK = 'rerank'
+public const LLM_TYPE_CODE = 'code'
+public const LLM_TYPE_VIDEO = 'video'
+public const LLM_TYPE_AUDIO = 'audio'
+public const LLM_TYPE_IMAGE = 'image'
+public const LLM_TYPE_SEARCH = 'search'

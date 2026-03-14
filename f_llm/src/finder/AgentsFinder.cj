@@ -17,4 +17,5 @@ package fountain::f_llm.finder
 
 public interface AgentsFinder {
     func listAgents(): ArrayList<Agent>
+    func queryAgent(id: Int64): Agent
 }

@@ -13,16 +13,9 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package fountain::fcoder.service.impl
+package fountain::f_llm.constant
 
-import fountain::f_bean.macros.*
-
-@Bean
-public class AgentsServiceImpl <: AgentsService {
-    public func listAgents(): ArrayList<Agent> {
-        executor().listAgents()
-    }
-    public func queryAgent(id: Int64): Agent {
-        executor().findAgent(id)
-    }
-}
+public type ToolType = String
+public const TOOL_TYPE_FUNCTION = "function"
+public const TOOL_TYPE_WEB_SEARCH = "web_search"
+public const TOOL_TYPE_RETRIEVAL = "retrieval"
