@@ -15,10 +15,9 @@ limitations under the License.
 */
 package fountain::fcoder.service.impl
 
-import fountain::f_aspect.macros.*
-import fountain::f_orm.macros.*
+import fountain::f_bean.macros.*
 
-@TransactionalService
+@Bean
 public class LLMServiceImpl <: LLMService {
     public func listConfs(llmTypes: Array<String>): ArrayList<LLMConf> {
         executor().listConfs(llmTypes)

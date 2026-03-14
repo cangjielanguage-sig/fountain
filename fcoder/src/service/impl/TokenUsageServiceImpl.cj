@@ -20,6 +20,7 @@ import fountain::f_orm.macros.*
 
 @TransactionalService
 public class TokenUsageServiceImpl <: TokenUsageService {
+    @Transactional
     public func saveTokenUsage(usage: TokenUsage): Unit {
         executor().saveTokenUsage(usage)
     }
