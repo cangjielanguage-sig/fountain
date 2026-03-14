@@ -249,6 +249,7 @@ ${auxiliaryMetadatas}
         let params = LLMToolParams(model: agent.llmName, messages: messages)
         params.addFunctions(functions)
         FunctionMediator.getDefinitions(functionNames) |> params.addFunctions
+        params.messages = ContextPrunerMediator.instance.prune(agent.pruner, agentId: agent.id, session: e.session, messages: params.messages)
         let resp = LLMContextMediator.instance.access(agent.id, e.session, agent.llmType, params)
         let usage = resp.usage
         tokenUsageSaver.saveTokenUsage(usage)

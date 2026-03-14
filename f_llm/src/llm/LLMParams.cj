@@ -21,7 +21,7 @@ import fountain::f_data.macros.*
 public open class LLMParams {
     public LLMParams(
         private let model!: String = '',
-        private let messages!: ArrayList<ChatMessage> = ArrayList<ChatMessage>()
+        private var messages!: ArrayList<ChatMessage> = ArrayList<ChatMessage>()
     ){}
     private let thinking: Thinking = Thinking()
     //不能用驼峰命名法再用@FieldAlias['do_sample']修饰，因为要用这个类的实例转换为JSON，这样命名会产生JSON字段冗余

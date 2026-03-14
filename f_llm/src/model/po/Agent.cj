@@ -39,6 +39,8 @@ public class Agent {
     private var llmType: String = ''
     @ORMField['llm_name']
     private var llmName: String = ''
+    @ORMField['pruner']
+    private var pruner: String = ''
 
     public prop acceptableEvents: Array<String> {
         get(){
