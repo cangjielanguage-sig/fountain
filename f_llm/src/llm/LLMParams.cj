@@ -20,23 +20,26 @@ import fountain::f_data.macros.*
 @DataAssist[props fields]
 public open class LLMParams {
     public LLMParams(
-        private var model!: String = '',
-        private var messages!: ArrayList<ChatMessage> = ArrayList<ChatMessage>()
+        private let agentId!: Int64 = 0,
+        private let session!: String = '',
+        private let model!: String = '',
+        private let messages!: ArrayList<ChatMessage> = ArrayList<ChatMessage>()
     ){}
-    private var agentId: Int64 = 0
     private let thinking: Thinking = Thinking()
     //不能用驼峰命名法再用@FieldAlias['do_sample']修饰，因为要用这个类的实例转换为JSON，这样命名会产生JSON字段冗余
-    private let temperature: Float64 = 1.0
-    private let max_tokens: Int64 = 65536
+    private var temperature: Float64 = 1.0
+    private var max_tokens: Int64 = 65536
 }
 
 @DataAssist[props fields]
 public open class LLMToolParams <: LLMParams {
     public init(
+        agentId!: Int64 = 0,
+        session!: String = '',
         model!: String = '',
         messages!: ArrayList<ChatMessage> = ArrayList<ChatMessage>()
     ){
-        super(model: model, messages: messages)
+        super(agentId: agentId, session: session, model: model, messages: messages)
     }
     protected let functions: ArrayList<FunctionCall> = ArrayList<FunctionCall>()
     

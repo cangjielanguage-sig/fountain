@@ -16,6 +16,7 @@ limitations under the License.
 package fountain::f_llm.llm
 
 internal import std.collection.*
+internal import std.collection.concurrent.ConcurrentHashMap
 internal import std.sync.Mutex
 internal import std.time.MonoTime
 

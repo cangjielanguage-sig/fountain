@@ -21,7 +21,8 @@ public open class Event <: ToString & Hashable & Equatable<Event> {
         public let eventType!: EventType,
         public let category!: String,
         public let tag!: String,
-        public let name!: String 
+        public let name!: String,
+        public let session!: String = UUID.random().toHexString()
     ){
         hash = HashBuilder().append(eventType).append(category).append(tag).append(name).build()
     }
@@ -43,40 +44,46 @@ public open class DataEvent <: Event {
         category!: String,
         tag!: String,
         name!: String,
+        session!: String = UUID.random().toHexString(),
         public let data!: Any
     ) {
-        super(eventType: eventType, category: category, tag: tag, name: name)
+        super(eventType: eventType, category: category, tag: tag, name: name, session: session)
     }
     public func tryGet<T>(): ?T {
         data as T
     }
 }
 public class StartEvent <: DataEvent {
-    public init(category!: String, tag!: String, name!: String, data!: Any){
-        super(eventType: Start, category: category, tag: tag, name: name, data: data)
+    public init(category!: String, tag!: String, name!: String, data!: Any, 
+                session!: String = UUID.random().toHexString()){
+        super(eventType: Start, category: category, tag: tag, name: name, data: data, session: session)
     }
 }
 public class EndEvent <: DataEvent {
-    public init(category!: String, tag!: String, data!: Any){
-        super(eventType: End, category: category, tag: tag, name: EventType.End.toString(), data: data)
+    public init(category!: String, tag!: String, data!: Any,
+                session!: String = UUID.random().toHexString()){
+        super(eventType: End, category: category, tag: tag, name: EventType.End.toString(), data: data, session: session)
     }
 }
 public class TaskEvent <: DataEvent {
-    public init(category!: String, tag!: String, name!: String, data!: Any){
-        super(eventType: EventType.Task, category: category, tag: tag, name: name, data: data)
+    public init(category!: String, tag!: String, name!: String, data!: Any,
+                session!: String = UUID.random().toHexString()){
+        super(eventType: EventType.Task, category: category, tag: tag, name: name, data: data, session: session)
     }
 }
 public class ErrorEvent <: DataEvent {
-    public init(category!: String, tag!: String, message!: String){
-        super(eventType: EventType.Error, category: category, tag: tag, name: EventType.Error.toString(), data: message)
+    public init(category!: String, tag!: String, message!: String,
+                session!: String = UUID.random().toHexString()){
+        super(eventType: EventType.Error, category: category, tag: tag, name: EventType.Error.toString(), data: message, session: session)
     }
-    public init(category!: String, tag!: String, error!: Exception){
-        super(eventType: EventType.Error, category: category, tag: tag, name: EventType.Error.toString(), data: error)
+    public init(category!: String, tag!: String, error!: Exception, 
+                session!: String = UUID.random().toHexString()){
+        super(eventType: EventType.Error, category: category, tag: tag, name: EventType.Error.toString(), data: error, session: session)
     }
 }
 public class DummyEvent <: Event {
     public static let instance = DummyEvent()
     private init(){
-        super(eventType: EventType.Dummy, category: '', tag: '', name: '')
+        super(eventType: EventType.Dummy, category: '', tag: '', name: '', session: '')
     }
 }

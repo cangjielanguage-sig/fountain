@@ -22,7 +22,7 @@ public class EmbeddingContextMediator {
         contextCreators['embedding-3+${LLM_TYPE_EMBEDDING}'] = {conf: LLMConf => GLMEmbeddingContext(conf)}
     }
 
-    private let contexts = HashMap<String, AbstractEmbeddingContext>()
+    private let contexts = ConcurrentHashMap<String, AbstractEmbeddingContext>()
     private init(){}
 
     private static let instance_ = EmbeddingContextMediator()

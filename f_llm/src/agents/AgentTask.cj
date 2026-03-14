@@ -61,8 +61,6 @@ package fountain::f_llm.agents
  *      - 总结全部上下文
  *      - 使用全部上下文直到上下文饱和才截取最后N轮ChatMessage
  *      - 使用全部上下文直到上下文饱和才总结上下文
- * todo 需要为AgentTask增加session的概念，并记录到token_usage
- *      - session用event传递
  */
 public class AgentTask <: Task {
     public AgentTask(private let agent: Agent){}
@@ -97,6 +95,18 @@ public class AgentTask <: Task {
                 let f = lookup<OrganizationFinder>()
                 orgFinder_ = f
                 f
+            }
+        }
+    }
+    private var tokenUsageSaver_: ?TokenUsageSaver = None
+    private prop tokenUsageSaver: TokenUsageSaver {
+        get(){
+            if(let Some(s) <- tokenUsageSaver_){
+                s
+            }else{
+                let s = lookup<TokenUsageSaver>()
+                tokenUsageSaver_ = s
+                s
             }
         }
     }
@@ -238,11 +248,12 @@ ${auxiliaryMetadatas}
         }else{
             messages.add(SystemMessage(promptsTemplate))
         }
-        let params = LLMToolParams(model: agent.llmName, messages: messages)
+        let params = LLMToolParams(agentId: agent.id, session: e.session, model: agent.llmName, messages: messages)
         params.addFunctions(functions)
         FunctionMediator.getDefinitions(functionNames) |> params.addFunctions
-        params.agentId = agent.id
         let resp = LLMContextMediator.instance.access(agent.llmType, params)
+        let usage = resp.usage
+        tokenUsageSaver.saveTokenUsage(usage)
         let eventData = AgentEventData(data: eData, messages: messages, functions: params.functions)
         var eventName = ''
         var eventType = EventType.Task
@@ -274,6 +285,6 @@ ${auxiliaryMetadatas}
                 messages.add(m)
             }
         }
-        DataEvent(eventType: eventType, name: eventName, data: eventData, category: e.category, tag: e.tag)
+        DataEvent(eventType: eventType, name: eventName, data: eventData, category: e.category, tag: e.tag, session: e.session)
     }
 }

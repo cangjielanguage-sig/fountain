@@ -25,4 +25,5 @@ internal import fountain::f_base.*
 internal import fountain::f_collection.*
 internal import fountain::f_concurrent.ConcurrentHashSet
 internal import fountain::f_log.*
+internal import fountain::f_util.*
 internal import fountain::f_egraph.exception.*

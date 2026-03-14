@@ -29,7 +29,7 @@ public class SearchMediator {
         contextCreators['glm-search_pro_quark+${LLM_TYPE_SEARCH}'] = {conf: LLMConf => GLMSearcher(conf)}
     }
 
-    private let contexts = HashMap<String, AbstractSearcher>()
+    private let contexts = ConcurrentHashMap<String, AbstractSearcher>()
     private init(){}
 
     private static let instance_ = SearchMediator()

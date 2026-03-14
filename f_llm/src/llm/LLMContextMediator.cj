@@ -24,7 +24,7 @@ public class LLMContextMediator {
         contextCreators['glm-5+${LLM_TYPE_CODE}'] = {conf: LLMConf => GLMContext(conf)}
     }
 
-    private let contexts = HashMap<String, AbstractLLMContext>()
+    private let contexts = ConcurrentHashMap<String, AbstractLLMContext>()
     private init(){}
 
     private static let instance_ = LLMContextMediator()

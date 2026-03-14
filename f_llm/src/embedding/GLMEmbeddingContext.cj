@@ -38,13 +38,14 @@ public class GLMEmbeddingContext <: AbstractEmbeddingContext {
                 let usage = resp.usage
                 usage.llmId = super.id
                 usage.agentId = param.agentId
+                usage.session = param.session
                 DataObject<TokenUsage>.populate(usageJson.toData(), usage)
                 resp
             }catch(e: Exception){
                 log.error(e){'embedding error ${params}'}
                 throw e
             }finally{
-                log.info{'embedding model: ${name}, agent: ${param.agentId}, elapsed: ${MonoTime.now() - start}'}
+                log.info{'embedding model: ${name}, agent: ${param.agentId}, session: ${param.session}, elapsed: ${MonoTime.now() - start}'}
             }
         }
     }

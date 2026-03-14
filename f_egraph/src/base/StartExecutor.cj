@@ -22,7 +22,7 @@ public class StartExecutor <: ImmediateExecutor {
 
     public func execute(event: Event) {
         if(let e: DataEvent <- event){
-            accepter.accept(TaskEvent(category: e.category, tag: e.tag, name: e.name, data: e.data))
+            accepter.accept(TaskEvent(category: e.category, tag: e.tag, name: e.name, data: e.data, session: e.session))
         }else{
             throw GraphException('event on executing must be DataEvent, but current is ${TypeInfo.of(event)}')
         }

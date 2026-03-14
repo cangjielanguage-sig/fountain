@@ -24,6 +24,7 @@ public class KnowledgeEntity {
     ){
         let embeddingResp = embeddingAccessor(MODEL_NAME_GLM_EMBEDDING3, EmbeddingParam(
             agentId: params.agentId,
+            session: params.session,
             input: params.keywords
         ))
         keywordsEmbedding = embeddingResp.embedding
@@ -61,6 +62,7 @@ public class KnowledgeEntity {
             '''
             let params = EmbeddingParam(
                 agentId: params.agentId,
+                session: params.session,
                 input: content
             )
             let resp = embeddingAccessor(MODEL_NAME_GLM_EMBEDDING3, params)
@@ -77,7 +79,6 @@ public class KnowledgeEntity {
                 embedding: resp.embedding
             )
             let usage = resp.usage
-            usage.agentId = params.agentId
             knowledgeSaver(knowledge)
             usageSaver(usage)
         }

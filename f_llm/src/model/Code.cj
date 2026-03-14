@@ -18,7 +18,7 @@ package fountain::f_llm.model
 public class Code {
     public Code(
         public let agentId!: Int64,
-        public let skillId!: Int64,
+        public let session!: String,
         public let projectId!: Int64,
         public let filePath!: String,
         public let moduleName!: String,

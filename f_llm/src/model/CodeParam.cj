@@ -17,8 +17,8 @@ package fountain::f_llm.model
 
 public class CodeParam {
     public CodeParam(
-        public let agentId!: Int64 = 0,
-        public let skillId!: Int64 = 0,
+        public let agentId!: Int64,
+        public let session!: String,
         public let projectId!: Int64 = 0,
         public let moduleName!: String = '',
         public let packageName!: String = '',

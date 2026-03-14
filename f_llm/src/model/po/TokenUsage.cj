@@ -38,6 +38,8 @@ public class TokenUsage {
     private var llmId: Int64 = 0
     @ORMField['agent_id']
     private var agentId: Int64 = 0
+    @ORMField['session']
+    private var session: String = ""
     @ORMField['prompt_tokens']
     private var prompt: Int64 = 0
     @ORMField['completion_tokens']

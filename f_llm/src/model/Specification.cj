@@ -18,7 +18,7 @@ package fountain::f_llm.model
 public class Specification {
     public Specification(
         public let agentId!: Int64,
-        public let skillId!: Int64,
+        public let session!: String,
         public let projectId!: Int64,
         public let codeLang!: String = '',
         public let kind!: SpecKind,

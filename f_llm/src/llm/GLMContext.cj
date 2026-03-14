@@ -33,10 +33,12 @@ public interface GLMSpeciallyParam <: ResponseFormat & DoSample {
 @DataAssist[fields]
 public open class GLMParams <: LLMParams & GLMSpeciallyParam {
     public init(
+        agentId!: Int64 = 0,
+        session!: String = '',
         model!: String = '',
         messages!: ArrayList<ChatMessage> = ArrayList<ChatMessage>()
     ){
-        super(model: model, messages: messages)
+        super(agentId: agentId, session: session, model: model, messages: messages)
     }
     public prop response_format: String {
         get(){
@@ -66,10 +68,12 @@ public open class GLMParams <: LLMParams & GLMSpeciallyParam {
 @DataAssist[props fields]
 public open class GLMToolParams <: GLMParams {
     public init(
+        agentId!: Int64 = 0,
+        session!: String = '',
         model!: String = '',
         messages!: ArrayList<ChatMessage> = ArrayList<ChatMessage>()
     ){
-        super(model: model, messages: messages)
+        super(agentId: agentId, session: session, model: model, messages: messages)
     }
     private let tools: ArrayList<FunctionCall> = ArrayList<FunctionCall>()
 }
@@ -101,17 +105,18 @@ public class GLMContext <: AbstractLLMContext {
                 let usage = llmResp.usage
                 usage.llmId = super.id
                 usage.agentId = params.agentId
+                usage.session = params.session
                 DataObject<TokenUsage>.populate(usageJson.toData(), usage)
                 usage.cached = usageJson.get('prompt_tokens_details')?.asObject().get('cached_tokens')?.asInt().getValue() ?? 0
                 llmResp
             }catch(e: Exception) {
                 let resp = json
                 let requestId = (params as GLMParams)?.request_id
-                log.error(e){"GLMContext.access error, requestId: ${requestId}, resp: ${resp}"}
+                log.error(e){"GLMContext.access error, requestId: ${requestId}, agentId: ${params.agentId}, session: ${params.session}, resp: ${resp}"}
                 throw e
             }finally{
                 let resp = json
-                log.info{'GLMContext.access end, requestId: ${(params as GLMParams)?.request_id}, agentId: ${params.agentId}, resp: ${resp}, elapsed: ${MonoTime.now() - start}'}
+                log.info{'GLMContext.access end, requestId: ${(params as GLMParams)?.request_id}, agentId: ${params.agentId}, session: ${params.session}, resp: ${resp}, elapsed: ${MonoTime.now() - start}'}
             }
         }
     }
