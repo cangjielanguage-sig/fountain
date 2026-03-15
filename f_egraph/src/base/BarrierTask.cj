@@ -38,25 +38,25 @@ public class BarrierKey <: Hashable & Equatable<BarrierKey> {
  */
 public class BarrierTask<G> <: Task where G <: EndExecutorGetter{
     private let name_: String
-    private let events_ = HashMap<String, String>()
+    private let events_ = HashMap<String, (String, Int64)>()
     private let datas = ConcurrentHashMap<BarrierKey, ArrayList<Any>>()
     private let acceptable: Array<String>
     var flow: ?Flow<G> = None
     /**
      * @param name 任务名
-     * @param events 可接收的和输出的事件，可接收的事件是元组的第一个元素，对应的发射事件是元组的第二个元素
-     * @param count 触发一次输出的累计事件数量
+     * @param events 可接收的和输出的事件，可接收的事件是元组的第一个元素，
+     *               对应的发射事件是元组的第二个元素，
+     *               第三个元素是同一事件的数量达到指定数后发送输出事件
      */
     public BarrierTask(
         name!: String,
-        events!: Array<(String, String)>,
-        private let count!: Int64
+        events!: Array<(String, String, Int64)>
     ){
         this.name_ = name
         acceptable = Array<String>(events.size, repeat: '')
         for(i in 0 .. events.size){
             let e = events[i]
-            this.events_[e[0]] = e[1]
+            this.events_[e[0]] = (e[1], e[2])
             acceptable[i] = e[0]
         }
     }
@@ -79,8 +79,8 @@ public class BarrierTask<G> <: Task where G <: EndExecutorGetter{
         }else{
             throw GraphException("BarrierTask accepts only instance of DataEvent")
         }
-        if(list.size >= count){
-            flow?.emit(eventType: EventType.Task, name: events_[e.name], data: list)
+        if(let (emitEvent, count) <- events_[e.name] && list.size >= count){
+            flow?.emit(eventType: EventType.Task, name: emitEvent, data: list)
             datas.remove(key)
         }
         DummyEvent.instance
