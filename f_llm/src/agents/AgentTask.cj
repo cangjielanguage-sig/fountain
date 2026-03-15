@@ -50,15 +50,19 @@ package fountain::f_llm.agents
  * 6. 用大模型返回的结果访问函数
  * 7. 用函数返回的结果构造事件作为智能体的返回
  * 8. 控制上下文长度的策略接口和若干实现
- *      #### 上下文策略：
- *      智能体增加智能体上下文策略的成员、数据表列
- *      - A：Retain
- *      - B：LastN
- *      - B：Summary
- *      - D: Keywords
- *      - E：DRC
- *      - F：饱和上下文
- *      - 使用全部上下文直到上下文饱和才执行上下文裁剪，具体裁剪策略由初始化参数决定ABC之一
+ *      #### 上下文策略（fountain::f_llm.llm.ContextPruner）：
+ *      - A：Retain：保留全部上下文
+ *      - B：LastN：用初始化参数指定N的具体数
+ *      - B：Summary：对全部上下文总结概要
+ *      - D: Keywords：对全部上下文提取关键词
+ *      - E：DRC：对system和其他消息执行不同的上下文策略
+ *      - F：饱和上下文：
+ *        - 上下文饱和时执行指定策略，
+ *        - 饱和词元数在大模型配置中指定，
+ *        - 可以用agentId查询到智能使用使用的大模型，进而确定大模型配置的饱和词元数
+ *          - 不同的大模型饱和词元数可能不同，
+ *            - 通常支持1M上下文的大模型在上下文达到10%~15%会产生严重幻觉，
+ *            - 支持200K上下文的大模型在上下文达到80K时会产生严重幻觉。
  */
 public class AgentTask <: Task {
     public AgentTask(private let agent: Agent){}
