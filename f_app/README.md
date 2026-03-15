@@ -1,3 +1,5 @@
+包括应用启动的子命令、加载应用的动态链接库、初始化应用的API等
+---
 ## 导入
 ```cj
 import fountain::f_app.*
@@ -35,3 +37,48 @@ main(args: Array<String>): Unit {
 
 ### version <x.y.z> <'message'> tag
 修改当前目录的cjpm.toml版本号，并创建git 版本，以message作为版本消息
+
+## 应用初始化
+```cj
+/**
+ * 应用初始化API。应用代码通常不需要实现本接口。
+ */
+public interface Initializer {
+    /**
+     * 待初始化的功能名称
+     * 有些功能只能显式地调用函数完成初始化，fountain::f_bean fountain::f_mvc fountain::f_orm fountain::f_ticktock都是这类
+     * @return
+     */
+    prop name: String
+    /**
+     * 依赖项，必须在这些功能初始化后才能初始化当前功能
+     * @return
+     */
+    prop dependencies: Array<String> {
+        get(){
+            []
+        }
+    }
+    /**
+     * 调用本函数实现完成初始化
+     */
+    func initialize(): Unit
+    /**
+     * 返回阻塞启动函数，调用此函数将阻塞，比如调用mvc的启动函数会启动http服务并一直阻塞。
+     */
+    func starter(): ?() -> Unit {
+        None
+    }
+}
+```
+
+## 应用初始化函数的集合
+```cj
+public struct InitializerCollection {
+    private static let dependencies = ConcurrentHashMap<String, ArrayList<String>>()//VALUE依赖KEY
+    /**
+     * 注册模块的初始化函数。通常应用APP不需要调用它。
+     */
+    public static func register(initializer: Initializer): Unit
+}
+```

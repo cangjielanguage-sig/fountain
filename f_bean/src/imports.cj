@@ -22,6 +22,7 @@ internal import std.env.*
 internal import std.process.Process
 internal import std.reflect.*
 internal import std.sync.{AtomicInt64, AtomicBool, AtomicOptionReference, Mutex}
+internal import fountain::f_app.{Initializer, InitializerCollection}
 internal import fountain::f_config.Config
 internal import fountain::f_data.*
 internal import fountain::f_regex.*

@@ -1,4 +1,5 @@
 [dependencies]
+  "fountain::f_app" = {path = "../f_app"}
   "fountain::f_base" = "1.1.0"
   "fountain::f_cmd" = "1.1.0"
   "fountain::f_collection" = "1.1.0"
