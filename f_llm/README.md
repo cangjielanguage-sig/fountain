@@ -761,7 +761,6 @@ public class SearchMediator {
 }
 ```
 
-
 ## 函数调用
 ### `fountain::f_llm.FunctionCalling`
 ```cj
@@ -882,7 +881,6 @@ public class SkillLoading {
     private var title: String = ''
 }
 
-
 @Bean
 public class SkillLoadingFunction <: FunctionCalling<SkillLoading> {
     private let skillsFinder = lookup<SkillsFinder>()
@@ -917,8 +915,9 @@ public class SkillLoadingFunction <: FunctionCalling<SkillLoading> {
 
 ## 智能体的定义
 1. 使用事件名+agent.id查询skill
+   - 一个智能体可以有若干主要技能和若干辅助技能，也可以没有
 2. 把agent.agent+skill.details组成完整的提示词模板
-   技能包含主技能和辅助技能，组织文化、智能体描述、主技能描述、辅助技能元数据拼在一起
+   技能包含主技能和辅助技能，组织文化、智能体描述、主技能描述、辅助技能元数据拼在一起作为一个system消息
    ```md
    组织文化
    ===
