@@ -70,6 +70,9 @@ public class BarrierTask<G> <: Task where G <: EndExecutorGetter{
             acceptable
         }
     }
+    /**
+     * 固定返回DummyEvent，同一事件的数据量达到指定数时，构造成新事件调用flow.emit一次发出
+     */
     public func exec(e: Event): Event {
         let key = BarrierKey(e.category, e.tag, e.name, e.session)
         let list = if(let de: DataEvent <- e){
