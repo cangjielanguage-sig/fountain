@@ -523,6 +523,7 @@ public interface Flow<G> <: Emitter & Hashable & Equatable<ImmediateFlow> & Equa
      * 将data包装成开始事件，开始执行一个流程
      */
     func start(data: Any): G
+    func emit(eventType!: EventType, name!: String, data!: Any): Unit
 }
 ```
 
@@ -545,6 +546,7 @@ public class ImmediateFlow <: Flow<EndExecutorGetter> & Hashable & Equatable<Imm
      * 将data与本实例的category和tag一起包装为开始事件，并开始执行一个流程
      */
     public func start(data: Any): EndExecutorGetter 
+    public func emit(eventType!: EventType, name!: String, data!: Any): Unit
 }
 ```
 
@@ -568,5 +570,6 @@ public class AsyncFlow <: Flow<AsyncEndExecutorGetter> {
      * 将data跟当前实例的category和tag一起构造开始事件并开始执行一个流程
      */
     public func start(data: Any): AsyncEndExecutorGetter 
+    public func emit(eventType!: EventType, name!: String, data!: Any): Unit
 }
 ```
