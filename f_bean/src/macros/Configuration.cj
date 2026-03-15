@@ -24,10 +24,10 @@ public macro Configuration(input: Tokens): Tokens {
     var staticTokens = quote()
     var instanceTokens = quote()
     for (d in klass.body.decls) {
-        func expandFuncTokens(f: FuncDecl, fnIdentifier: Tokens): Tokens {
+        func expandFuncTokens(f: FuncDecl, fnIdentifier: Tokens, fnPrefix: Tokens): Tokens {
             let fname = f.identifier.value
             quote(
-                BeanFactory.instance.$fnIdentifier<$identifier>($fname){$(identifier).$(f.identifier)()}$(`nl`)
+                BeanFactory.instance.$fnIdentifier<$identifier>($fname){$fnPrefix.$(f.identifier)()}$(`nl`)
             ) + `nl`
         }
         match (d) {
@@ -39,9 +39,9 @@ public macro Configuration(input: Tokens): Tokens {
                     md = d.macroInputDecl
                     match (md) {
                         case f: FuncDecl where isBeanInit && isStatic(f) && isPublic(f) && f.funcParams.isEmpty() =>
-                            staticTokens += expandFuncTokens(f, quote(registerByStaticFunction))
+                            staticTokens += expandFuncTokens(f, quote(registerByStaticFunction), quote($identifier))
                         case f: FuncDecl where isBeanInit && !isStatic(f) && isPublic(f) && f.funcParams.isEmpty() =>
-                            instanceTokens += expandFuncTokens(f, quote(registerByInstanceFunction))
+                            instanceTokens += expandFuncTokens(f, quote(registerByInstanceFunction), quote(configuration))
                         case f: MacroExpandDecl => continue
                         case _ => break
                     }
