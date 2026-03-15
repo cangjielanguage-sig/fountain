@@ -36,4 +36,3 @@ public class LLMConf {
     @ORMField['threshold']
     private var threshold: Int64 = 0
 }
-

@@ -16,7 +16,7 @@ limitations under the License.
 package fountain::f_llm.constant
 
 public type LLMType = String 
-//text embedding tokenizer rerank code video audio image
+//text embedding tokenizer rerank code video audio image prune
 public const LLM_TYPE_TEXT = 'text'
 public const LLM_TYPE_EMBEDDING = 'embedding'
 public const LLM_TYPE_TOKENIZER = 'tokenizer'

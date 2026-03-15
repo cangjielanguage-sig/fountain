@@ -71,6 +71,7 @@ package fountain::f_llm.agents
  *          - 不同的大模型饱和词元数可能不同，
  *            - 通常支持1M上下文的大模型在上下文达到10%~15%会产生严重幻觉，
  *            - 支持200K上下文的大模型在上下文达到80K时会产生严重幻觉。
+ *            - Keywords和Summary两个策略依赖大模型，要注意给执行策略的大模型发送的上下文不要超过它的饱和词元数
  */
 public class AgentTask <: Task {
     public AgentTask(private let agent: Agent){}

@@ -23,12 +23,15 @@ public class SearchMediator {
     private static let contextCreators = HashMap<String, (LLMConf) -> AbstractSearcher>()
     
     static init(){
-        contextCreators['glm-search_std+${LLM_TYPE_SEARCH}'] = {conf: LLMConf => GLMSearcher(conf)}
-        contextCreators['glm-search_pro+${LLM_TYPE_SEARCH}'] = {conf: LLMConf => GLMSearcher(conf)}
-        contextCreators['glm-search_pro_sogou+${LLM_TYPE_SEARCH}'] = {conf: LLMConf => GLMSearcher(conf)}
-        contextCreators['glm-search_pro_quark+${LLM_TYPE_SEARCH}'] = {conf: LLMConf => GLMSearcher(conf)}
+        let creator = {conf: LLMConf => GLMSearcher(conf)}
+        register('glm-search_std', creator)
+        register('glm-search_pro', creator)
+        register('glm-search_pro_sogou', creator)
+        register('glm-search_pro_quark', creator)
     }
-
+    public static func register(engine: String, creator: (LLMConf) -> AbstractSearcher){
+        contextCreators['${engine}+${LLM_TYPE_SEARCH}'] = creator
+    }
     private let contexts = ConcurrentHashMap<String, AbstractSearcher>()
     private init(){}
 

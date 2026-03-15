@@ -17,7 +17,7 @@ package fountain::f_llm.constant
 
 public type ContextPrunerName = String
 /**
- * 保留
+ * 保留全部
  */
 public const CONTEXT_PRUNER_RETAIN = "Retain"
 /**

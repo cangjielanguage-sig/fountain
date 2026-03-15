@@ -19,11 +19,14 @@ public class LLMContextMediator {
     private static let contextCreators = HashMap<String, (LLMConf) -> AbstractLLMContext>()
     
     static init(){
-        contextCreators['glm-4.7-flash+${LLM_TYPE_TEXT}'] = {conf: LLMConf => GLMContext(conf)}
-        contextCreators['glm-5+${LLM_TYPE_TEXT}'] = {conf: LLMConf => GLMContext(conf)}
-        contextCreators['glm-5+${LLM_TYPE_CODE}'] = {conf: LLMConf => GLMContext(conf)}
+        let closure = {conf: LLMConf => GLMContext(conf)}
+        register(LLM_TYPE_TEXT, 'glm-4.7-flash', closure)
+        register(LLM_TYPE_TEXT, 'glm-5', closure)
+        register(LLM_TYPE_CODE, 'glm-5', closure)
     }
-
+    public static func register(llmType: LLMType, model: String, creator: (LLMConf) -> AbstractLLMContext){
+        contextCreators['${model}+${llmType}'] = creator
+    }
     private let contexts = ConcurrentHashMap<String, AbstractLLMContext>()
     private init(){}
 

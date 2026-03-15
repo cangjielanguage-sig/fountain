@@ -256,6 +256,14 @@ crc16/密钥交换协议/命名风格转换/常用设计模式/geohash/snowflake
 
 **详情请见：**<https://pkg.cangjie-lang.cn/package/fountain::f_version/1.1.0/>
 
+### `fountain::f_egraph`
+事件驱动的流程库
+**详情请见：**<https://pkg.cangjie-lang.cn/package/fountain::f_egraph/1.1.0/>
+
+### `fountain::f_llm`
+基于`fountain::f_egraph`的大模型开发库
+**详情请见：**<https://pkg.cangjie-lang.cn/package/fountain::f_llm/1.1.0/>
+
 ### `fountain::fboot`
 依赖fountain的应用项目启动程序，应用项目只需要编译为动态链接库，fboot会调用`fountain::f_app`完成应用启动。
 

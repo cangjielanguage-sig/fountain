@@ -68,7 +68,7 @@ public abstract class ContextLLMPruner <: ContextPruner {
     }
 }
 public class ContextSummaryPruner <: ContextLLMPruner {
-    public ContextSummaryPruner(
+    public init(
         llmType!: LLMType = LLM_TYPE_TEXT,
         model!: ModelName = MODEL_NAME_GLM4_7_FLASH,
         promptsGenerator!: (ArrayList<ChatMessage>) -> String = {messages => '''

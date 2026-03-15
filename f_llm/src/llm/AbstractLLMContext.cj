@@ -15,7 +15,7 @@ limitations under the License.
 */
 package fountain::f_llm.llm
 
-public sealed abstract class AbstractLLMContext {
+public abstract class AbstractLLMContext {
     private AbstractLLMContext(
         protected let id: Int64,
         protected let name: String,

@@ -19,9 +19,12 @@ public class EmbeddingContextMediator {
     private static let contextCreators = HashMap<String, (LLMConf) -> AbstractEmbeddingContext>()
     
     static init(){
-        contextCreators['embedding-3+${LLM_TYPE_EMBEDDING}'] = {conf: LLMConf => GLMEmbeddingContext(conf)}
+        register('embedding-3'){conf: LLMConf => GLMEmbeddingContext(conf)}
     }
 
+    public static func register(model: String, creator: (LLMConf) -> AbstractEmbeddingContext){
+        contextCreators['${model}+${LLM_TYPE_EMBEDDING}'] = creator
+    }
     private let contexts = ConcurrentHashMap<String, AbstractEmbeddingContext>()
     private init(){}
 
