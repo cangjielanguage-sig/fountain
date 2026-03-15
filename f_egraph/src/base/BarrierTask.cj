@@ -71,11 +71,7 @@ public class BarrierTask<G> <: Task where G <: EndExecutorGetter{
         }
     }
     public func exec(e: Event): Event {
-        let category = e.category
-        let tag = e.tag
-        let eventName = e.name
-        let session = e.session
-        let key = BarrierKey(category, tag, eventName, session)
+        let key = BarrierKey(e.category, e.tag, e.name, e.session)
         let list = if(let de: DataEvent <- e){
             let list = datas.computeIfAbsent(key){ArrayList<Any>()}
             list.add(de.data)
@@ -84,16 +80,9 @@ public class BarrierTask<G> <: Task where G <: EndExecutorGetter{
             throw GraphException("BarrierTask accepts only instance of DataEvent")
         }
         if(list.size >= count){
-            flow?.emit(eventType: EventType.Task, name: events_[eventName], data: list)
+            flow?.emit(eventType: EventType.Task, name: events_[e.name], data: list)
             datas.remove(key)
         }
         DummyEvent.instance
     }
 }
-/*
-public interface Task{
-    prop name: String
-    prop acceptableEvents: Array<String>
-    func exec(e: Event): Event
-}
-*/
