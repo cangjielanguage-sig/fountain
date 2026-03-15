@@ -41,25 +41,30 @@ public class BloomFilter<T> where T <: Hashable {
         var h = value.hashCode()
         synchronized(wl) {
             bits[h] = true
-            for (hasher in hashers) {
-                h = hasher(value, h)
+        }
+        for (hasher in hashers) {
+            h = hasher(value, h)
+            synchronized(wl){
                 bits[h] = true
             }
         }
     }
     public func contains(value: T): Bool {
         var h = value.hashCode()
+        var result = true
         synchronized(rl) {
-            var result = bits[h]
-            if (result) {
-                var i = 0
-                while (result && i < hashers.size) {
-                    h = hashers[i](value, h)
-                    result &&= bits[h]
-                    i++
-                }
-            }
-            result
+            result = bits[h]
         }
+        if (result) {
+            var i = 0
+            while (result && i < hashers.size) {
+                h = hashers[i](value, h)
+                synchronized(mutex){
+                    result &&= bits[h]
+                }
+                i++
+            }
+        }
+        result
     }
 }
