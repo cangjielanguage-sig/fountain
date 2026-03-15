@@ -85,6 +85,7 @@ public class BarrierTask<G> <: Task where G <: EndExecutorGetter{
         }
         if(list.size >= count){
             flow?.emit(eventType: EventType.Task, name: events_[eventName], data: list)
+            datas.remove(key)
         }
         DummyEvent.instance
     }
