@@ -59,7 +59,7 @@ public class BloomFilter<T> where T <: Hashable {
             var i = 0
             while (result && i < hashers.size) {
                 h = hashers[i](value, h)
-                synchronized(mutex){
+                synchronized(rl){
                     result &&= bits[h]
                 }
                 i++
