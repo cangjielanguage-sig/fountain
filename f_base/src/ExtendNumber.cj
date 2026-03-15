@@ -42,6 +42,7 @@ public interface Integer<T> <: Number<T> & Modable<T> & BitAndable<T> & BitOrabl
     }
     prop isEven: Bool
     func to<T>(): T where T <: Integer<T> 
+    func flip(): T
 }
 
 public interface SignedInteger<S, T> <: Integer<S> where S <: SignedInteger<S, T>, T <: UnsignedInteger<T, S> {
@@ -129,6 +130,13 @@ extend Int8 <: ExtendInt8 {
         }
         (any as T).getOrThrow()
     }
+    public func flip(): Int8 {
+        var n = this
+        n = ((n & 0x55i8) << 1i8) | ((n & 0xAAu8.toInt()) >> 1i8) // 交换相邻1位 0X55 0101 0XAA 1010
+        n = ((n & 0x33i8) << 2i8) | ((n & 0xCCu8.toInt()) >> 2i8) // 交换相邻2位 0x33 0011 0xcc 1100
+        n = ((n & 0x0Fi8) << 4i8) | ((n & 0xF0u8.toInt()) >> 4i8) // 交换相邻4位
+        n
+    }
 }
 
 public interface ExtendInt16 <: SignedInteger<Int16, UInt16> {
@@ -209,6 +217,14 @@ extend Int16 <: ExtendInt16 {
             case _ => this
         }
         (any as T).getOrThrow()
+    }
+    public func flip(): Int16 {
+        var n = this
+        n = ((n & 0x5555i16) << 1i16) | ((n & 0xAAAAu16.toInt()) >> 1i16) // 交换相邻1位
+        n = ((n & 0x3333i16) << 2i16) | ((n & 0xCCCCu16.toInt()) >> 2i16) // 交换相邻2位
+        n = ((n & 0x0F0Fi16) << 4i16) | ((n & 0xF0F0u16.toInt()) >> 4i16) // 交换相邻4位
+        n = ((n & 0x00FFi16) << 8i16) | ((n & 0xFF00u16.toInt()) >> 8i16) // 交换相邻8位
+        n
     }
 }
 
@@ -295,6 +311,15 @@ extend Int32 <: ExtendInt32 {
             case _ => this
         }
         (any as T).getOrThrow()
+    }
+    public func flip(): Int32 {
+        var n = this
+        n = ((n & 0x55555555i32) << 1i32) | ((n & 0xAAAAAAAAu32.toInt()) >> 1i32) // 交换相邻1位
+        n = ((n & 0x33333333i32) << 2i32) | ((n & 0xCCCCCCCCu32.toInt()) >> 2i32) // 交换相邻2位
+        n = ((n & 0x0F0F0F0Fi32) << 4i32) | ((n & 0xF0F0F0F0u32.toInt()) >> 4i32) // 交换相邻4位
+        n = ((n & 0x00FF00FFi32) << 8i32) | ((n & 0xFF00FF00u32.toInt()) >> 8i32) // 交换相邻8位
+        n = (n << 16i32) | (n >> 16i32) // 交换相邻16位
+        n
     }
 }
 
@@ -386,6 +411,16 @@ extend Int64 <: ExtendInt64 {
         }
         (any as T).getOrThrow()
     }
+    public func flip(): Int64 {
+        var n = this
+        n = ((n >> 1) & 0x5555555555555555i64) | ((n & 0xAAAAAAAAAAAAAAAAu64.toInt()) << 1i64)
+        n = ((n >> 2) & 0x3333333333333333i64) | ((n & 0xCCCCCCCCCCCCCCCCu64.toInt()) << 2i64)
+        n = ((n >> 4) & 0x0F0F0F0F0F0F0F0Fi64) | ((n & 0x0F0F0F0F0F0F0F0Fu64.toInt()) << 4i64)
+        n = ((n >> 8) & 0x00FF00FF00FF00FFi64) | ((n & 0xFF00FF00FF00FF00u64.toInt()) << 8i64)
+        n = ((n >> 16) & 0x0000FFFF0000FFFFi64) | ((n & 0xFFFF0000FFFF0000u64.toInt()) << 16i64)
+        n = (n >> 32i64) | (n << 32i64)
+        n
+    }
 }
 
 public interface ExtendUInt8 <: UnsignedInteger<UInt8, Int8> {
@@ -461,6 +496,13 @@ extend UInt8 <: ExtendUInt8 {
             case _ => this
         }
         (any as T).getOrThrow()
+    }
+    public func flip(): UInt8 {
+        var n = this
+        n = ((n & 0x55u8) << 1u8) | ((n & 0xAAu8) >> 1u8) // 交换相邻1位
+        n = ((n & 0x33u8) << 2u8) | ((n & 0xCCu8) >> 2u8) // 交换相邻2位
+        n = ((n & 0x0Fu8) << 4u8) | ((n & 0xF0u8) >> 4u8) // 交换相邻4位
+        n
     }
 }
 
@@ -541,6 +583,14 @@ extend UInt16 <: ExtendUInt16 {
             case _ => this
         }
         (any as T).getOrThrow()
+    }
+    public func flip(): UInt16 {
+        var n = this
+        n = ((n & 0x5555u16) << 1u16) | ((n & 0xAAAAu16) >> 1u16) // 交换相邻1位
+        n = ((n & 0x3333u16) << 2u16) | ((n & 0xCCCCu16) >> 2u16) // 交换相邻2位
+        n = ((n & 0x0F0Fu16) << 4u16) | ((n & 0xF0F0u16) >> 4u16) // 交换相邻4位
+        n = ((n & 0x00FFu16) << 8u16) | ((n & 0xFF00u16) >> 8u16) // 交换相邻8位
+        n
     }
 }
 
@@ -625,6 +675,15 @@ extend UInt32 <: ExtendUInt32 {
             case _ => this
         }
         (any as T).getOrThrow()
+    }
+    public func flip(): UInt32 {
+        var n = this
+        n = ((n & 0x55555555u32) << 1) | ((n & 0xAAAAAAAAu32) >> 1u32) // 交换相邻1位
+        n = ((n & 0x33333333u32) << 2) | ((n & 0xCCCCCCCCu32) >> 2u32) // 交换相邻2位
+        n = ((n & 0x0F0F0F0Fu32) << 4) | ((n & 0xF0F0F0F0u32) >> 4u32) // 交换相邻4位
+        n = ((n & 0x00FF00FFu32) << 8) | ((n & 0xFF00FF00u32) >> 8u32) // 交换相邻8位
+        n = (n << 16u32) | (n >> 16u32) // 交换相邻16位
+        n
     }
 }
 
@@ -714,6 +773,16 @@ extend UInt64 <: ExtendUInt64 {
             case _ => this
         }
         (any as T).getOrThrow()
+    }
+    public func flip(): UInt64 {
+        var n = this
+        n = ((n >> 1) & 0x5555555555555555u64) | ((n & 0xAAAAAAAAAAAAAAAAu64) << 1u64)
+        n = ((n >> 2) & 0x3333333333333333u64) | ((n & 0xCCCCCCCCCCCCCCCCu64) << 2u64)
+        n = ((n >> 4) & 0x0F0F0F0F0F0F0F0Fu64) | ((n & 0xF0F0F0F0F0F0F0F0u64) << 4u64)
+        n = ((n >> 8) & 0x00FF00FF00FF00FFu64) | ((n & 0xFF00FF00FF00FF00u64) << 8u64)
+        n = ((n >> 16) & 0x0000FFFF0000FFFFu64) | ((n & 0xFFFF0000FFFF0000u64) << 16u64)
+        n = (n >> 32u64) | (n << 32u64)
+        n
     }
 }
 

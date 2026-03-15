@@ -21,22 +21,21 @@ public class BloomFilter<T> where T <: Hashable {
     private let rl = lock.readLock
     private let bits = BitSet()
     public BloomFilter(private let hashers: Array<(T, Int64) -> Int64>) {}
-    public init(iterate!: Int64 = 5) {
-        this(genHashers(iterate))
+    public init(){
+        this([{_: T, h: Int64 => 
+            h ^ ((h >> 32) | (h << 32))
+        }, {_: T, h: Int64 =>
+            (h >> 32) | (h << 32)
+        }, {_: T, h: Int64 =>
+            !h
+        }, {_: T, h: Int64 =>
+            h ^ h.flip()
+        }, {_: T, h: Int64 =>
+            h.flip()
+        }])
     }
-    public init(hashers: Array<(T) -> Int64>) {
-        this(Array<(T, Int64) -> Int64>(hashers.size) {
-            i => {
-                v: T, _: Int64 => hashers[i](v)
-            }
-        })
-    }
-    private static func genHashers(iterate: Int64): Array<(T, Int64) -> Int64> {
-        @OverflowWrapping
-        func hash(v: T, h: Int64) {
-            h * 131 + v.hashCode()
-        }
-        Array<(T, Int64) -> Int64>(iterate, repeat: hash)
+    public init(hashers: Array<(T) -> Int64>){
+        this(Array<(T, Int64) -> Int64>(hashers.size){i => {v: T, _: Int64 => hashers[i](v)}})
     }
     public func set(value: T): Unit {
         var h = value.hashCode()
