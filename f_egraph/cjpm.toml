@@ -24,6 +24,7 @@
   "fountain::f_concurrent" = {path = "../f_concurrent"}
   "fountain::f_data" = {path = "../f_data"}
   "fountain::f_log" = {path = "../f_log"}
+  "fountain::f_util" = {path = "../f_util"}
 
 [profile.build]
   incremental = true

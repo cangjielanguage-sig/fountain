@@ -16,7 +16,7 @@ limitations under the License.
 package fountain::f_egraph.base
 
 internal import std.collection.{HashMap, ArrayList}
-internal import std.collection.concurrent.LinkedBlockingQueue
+internal import std.collection.concurrent.{LinkedBlockingQueue, ConcurrentHashMap}
 internal import std.ref.*
 internal import std.reflect.TypeInfo
 internal import std.sync.{Mutex, Condition}

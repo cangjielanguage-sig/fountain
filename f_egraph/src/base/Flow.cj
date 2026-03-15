@@ -23,6 +23,11 @@ public interface Flow<G> <: Emitter & Hashable & Equatable<ImmediateFlow> & Equa
     func registerError(): Unit
     func registerTask(eventName: String, task: (Event) -> Event): Unit
     func registerTask(task: Task): Unit
+    func registerTask(task: BarrierTask<G>): Unit {
+        task.flow = this
+        let t: Task = task
+        registerTask(t)
+    }
     /**
      * 使用指定流程作为任务执行器的构造函数参数
      * @param flow 任务事件执行器的逻辑
@@ -48,4 +53,5 @@ public interface Flow<G> <: Emitter & Hashable & Equatable<ImmediateFlow> & Equa
         registerTaskByFlow<AsyncEndExecutorGetter, AsyncFlow>(eventName: eventName, flow: AsyncFlow(category: subCategory, tag: subTag))
     }
     func start(data: Any): G
+    func emit(eventType!: EventType, name!: String, data!: Any): Unit
 }
