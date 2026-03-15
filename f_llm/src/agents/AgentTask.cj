@@ -171,8 +171,7 @@ ___
     "title": "技能标题"
 }
 ```
-${auxiliaryMetadatas}
-'''
+${auxiliaryMetadatas}'''
     }
     private func populatePromptsParams(messages: ArrayList<ChatMessage>, promptsTemplate: String, data: SimpleDataObject){
         let msg = if(promptsTemplate.contains('{{')){
