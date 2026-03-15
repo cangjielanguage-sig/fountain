@@ -915,7 +915,6 @@ public class SkillLoadingFunction <: FunctionCalling<SkillLoading> {
 
 ## 搜索
 
-
 ## 智能体的定义
 1. 使用事件名+agent.id查询skill
 2. 把agent.agent+skill.details组成完整的提示词模板
