@@ -55,31 +55,32 @@ cd ../fdemo
 cangjie_env(){
   export CJPM_CONFIG=/mnt/d/docs/work/cangjie/repository
   export CJPM_INSTALL=/mnt/d/docs/work/cangjie/installed
-  export CANGJIE_STDX_PATH=/mnt/d/docs/work/cangjie/stdx/$2/linux_x86_64_cjnative
+  export CANGJIE_STDX_PATH=/mnt/d/docs/work/cangjie/cangjie-linux-bin/stdx/$2/linux_x86_64_cjnative
   export CANGJIE_STDX_DYNAMIC_PATH=$CANGJIE_STDX_PATH/dynamic/stdx
   export CANGJIE_STDX_STATIC_PATH=$CANGJIE_STDX_PATH/static/stdx
   export CANGJIE_FOUNTAIN_LIBS=$CJPM_INSTALL/libs/fboot
-  export CANGJIE_HOME=/mnt/d/docs/work/cangjie/cangjie-linux-bin/$1/cangjie
+  export CANGJIE_HOME=/mnt/d/docs/work/cangjie/cangjie-linux-bin/sdk/$1/cangjie
   export LD_LIBRARY_PATH=/usr/local/openssl-3.3.2/lib:$CANGJIE_FOUNTAIN_LIBS:$LD_LIBRARY_PATH
   export PATH=$PATH:$CJPM_INSTALL/bin:$CANGJIE_HOME/third_party/llvm/lldb/bin
   source $CANGJIE_HOME/envsetup.sh
-  rm -f /mnt/d/docs/work/cangjie/cangjie-linux-bin/current/$2
-  rm -f /mnt/d/docs/work/cangjie/cangjie-linux-bin/current
-  ln -s $CANGJIE_HOME /mnt/d/docs/work/cangjie/cangjie-linux-bin/current
-  rm -f /mnt/d/docs/work/cangjie/cangjie-linux-bin/current/$2
+  rm -f /mnt/d/docs/work/cangjie/cangjie-linux-bin/sdk/current/cangjie
+  rm -f /mnt/d/docs/work/cangjie/cangjie-linux-bin/sdk/current
+  ln -s $CANGJIE_HOME /mnt/d/docs/work/cangjie/cangjie-linux-bin/sdk/current
 }
 cjpub(){
   if [[ "$2" == "" ]]; then
-    sed -E -i.bak "$1" cjpm.toml
-    cjpm bundle --skip-test
+    sed -E -i "s/ version ?= ?\".+\"/ version = \"$1\"/g" cjpm.toml
+    sed -E -i.bak "s/\{path ?= ?\".+\"\}/\"$1\"/g" cjpm.toml
+    cjpm bundle --skip-test --skip-lint
     cjpm publish
     mv cjpm.toml.bak cjpm.toml
-    echo -e "\a"
+    echo ${PWD##*/}耗时：$SECONDS秒，完成于：$(date)
+    echo -e "\a" 
   else
     curdir=`pwd`
     echo $2
     cd $2
-    cjpub $1
+    cjpub $1 
     cd $curdir
   fi
 }
@@ -96,39 +97,39 @@ cj(){
     fboot cleanUpdate
     ;;
   install)
-    if [[ "$2" == "publish" ]]; then
-      cj install $3 $4 $5 $6
-      cj publish $3
-    else
-      fboot version $2 $3 $4 $5
-      cd fboot
-      cjpm install --root $CJPM_INSTALL
-      echo -e "\a"
-      cd ..
-    fi
+    fboot version $2 $3 $4 $5
+    cd fboot
+    cjpm install --root $CJPM_INSTALL
+    echo -e "\a"
+    cd ..
     ;;
   installed)
     cd $CJPM_INSTALL
     ;;
   publish)
-    pattern="s/\{path ?= ?\".+\"\}/\"$2\"/g"
-    cjpub $pattern
-    cjpub $pattern fboot
-    for d in ./*; do
-      if [[ -d "$d" && "$d" == ./f_* ]]; then
-        cjpub $pattern $d
-      fi
+    for d in `cat .modules`; do 
+        cd $d
+	echo $d
+	cj bundle $2
+	cd ..
+	sleep 120 
     done
+    sed -E -i "s|(/package/fountain::f_[a-z]+/)[0-9]+\.[0-9]+\.[0-9]+(/readme)|\1$2\2|g" README.md
+    cj bundle $2
+    echo $SECONDS
+    ;;
+  bundle)
+    cjpub $2
     ;;
   study)
     cd /mnt/d/docs/work/cangjie/study
     ;;
   fountain)
     cd $FOUNTAIN_HOME
-    if [[ "$2" == "install" ]]; then
+    if [[ "$2" == "install" ]]; then                                                                                 
         cj install
-    elif [ -n "$2" ]; then
-        cd $2
+    elif [ -n "$2" ]; then                                                                                           
+	cd $2
     fi
     ;;
   fboot)
