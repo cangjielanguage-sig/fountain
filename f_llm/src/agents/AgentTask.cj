@@ -168,7 +168,7 @@ ___
 ```json
 {
     "event": "${e.name}",
-    "title": "技能标题"
+    "title": "试图使用的技能的标题"
 }
 ```
 ${auxiliaryMetadatas}'''
