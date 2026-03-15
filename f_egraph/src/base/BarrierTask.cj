@@ -15,7 +15,7 @@ limitations under the License.
 */
 package fountain::f_egraph.base
 
-public struct BarrierKey <: Hashable & Equatable<BarrierKey> {
+public class BarrierKey <: Hashable & Equatable<BarrierKey> {
     private let h: Int64
     public BarrierKey(
         public let category: String,
