@@ -32,18 +32,6 @@ public class BloomFilter<T> where T <: Hashable {
             h ^ h.flip()
         }, {_: T, h: Int64 =>
             h.flip()
-        }, {_: T, h: Int64 =>
-            (!(h | 0xffff_ffff)) | (h & 0xffff_ffff)
-        }, {_: T, h: Int64 =>
-            ((!(h | 0xffff_ffff)) >> 32) | (h << 32)
-        }, {_: T, h: Int64 =>
-            h ^ (((!(h | 0xffff_ffff)) >> 32) | (h << 32))
-        }, {_: T, h: Int64 =>
-            (!h & 0xffff_ffff) | ((h >> 32) << 32)
-        }, {_: T, h: Int64 =>
-            ((!h & 0xffff_ffff) << 32) | (h >> 32)
-        }, {_: T, h: Int64 =>
-            h ^ (((!h & 0xffff_ffff) << 32) | (h >> 32))
         }])
     }
     public init(hashers: Array<(T) -> Int64>){
