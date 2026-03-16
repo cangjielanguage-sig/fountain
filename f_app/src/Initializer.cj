@@ -22,7 +22,7 @@ import std.sync.Mutex
 /**
  * 应用初始化API。应用代码通常不需要实现本接口。
  */
-public interface Initializer {
+public interface Initializer <: Resource {
     /**
      * 待初始化的功能名称
      * 有些功能只能显式地调用函数完成初始化，fountain::f_bean fountain::f_mvc fountain::f_orm fountain::f_ticktock都是这类
@@ -47,6 +47,13 @@ public interface Initializer {
      */
     func starter(): ?() -> Unit {
         None
+    }
+    /**
+     * 应当只关闭初始化器本身。不要把模块资源的释放放在这里。
+     */
+    func close(): Unit {}
+    func isClosed(): Bool {
+        false
     }
 }
 public struct InitializerCollection {
@@ -84,19 +91,16 @@ public struct InitializerCollection {
             var toInit = true
             for(dependency in initializer.dependencies where dependencies.contains(dependency)){
                 toInit = false
+                initializers.add(initializer)
                 break
             }
             if(toInit){
+                initializer.initialize()
                 if(let Some(starter) <- initializer.starter()){
                     starters.add(starter)
                 }
-                initializer.initialize()
                 dependencies.remove(initializer.name)
-                if(let r: Resource <- initializer){
-                    r.close()
-                }
-            }else{
-                initializers.add(initializer)
+                initializer.close()
             }
         }
         instance = unsafe{zeroValue<InitializerCollection>()}
