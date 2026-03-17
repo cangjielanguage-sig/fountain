@@ -1,3 +1,6 @@
+## STDX依赖
+配置环境变量：`export CANGJIE_STDX_DYNAMIC_PATH=/path/to/dynamic_stdx`
+
 ## 布隆过滤器
 ```cj
 public class BloomFilter<T> where T <: Hashable {

@@ -1,6 +1,9 @@
 本模块定义了media type 的类型，并提供了text/plain application/json multipart/form-data 的默认实现
 ---
 
+## STDX依赖
+配置环境变量：`export CANGJIE_STDX_DYNAMIC_PATH=/path/to/dynamic_stdx`
+
 ### 配置
 ```bash
 #multipart缓冲区的一半大小，默认是2048字节

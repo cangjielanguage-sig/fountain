@@ -1,6 +1,9 @@
 # 安全模块
 `fountain::f_security` 用来帮助维持登录状态
 
+## STDX依赖
+配置环境变量：`export CANGJIE_STDX_DYNAMIC_PATH=/path/to/dynamic_stdx`
+
 ## 基本类型
 ```cj
 public abstract class SecurityContext<ID, U, P, S> where ID <: Hashable & Equatable<ID>, U <: BaseUserData<U>, P <: Principal<ID, P> {

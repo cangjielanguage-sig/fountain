@@ -1,3 +1,6 @@
+## STDX依赖
+配置环境变量：`export CANGJIE_STDX_DYNAMIC_PATH=/path/to/dynamic_stdx`
+
 # 在命令行运行的人工智能编程工具
 ## 依赖
 - `>=glm-5` `>=glm-5-coder` `glm-4.7` 智谱搜索

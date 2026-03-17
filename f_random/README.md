@@ -1,3 +1,6 @@
+## STDX依赖
+配置环境变量：`export CANGJIE_STDX_DYNAMIC_PATH=/path/to/dynamic_stdx`
+
 ## 随机数扩展
 ```cj
 //std.random.Random和stdx.crypto.crypto.SecureRandom都实现此接口的扩展

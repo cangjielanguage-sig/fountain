@@ -46,6 +46,9 @@ Fountain 终于稳定运行在真实医疗环境中，成为仓颉语言应用�
 ## Stargazers over time
 ![Stargazers over time](https://gitcode.com/Cangjie-SIG/fountain/starcharts.svg?variant=adaptive)
 
+## STDX依赖
+配置环境变量：`export CANGJIE_STDX_DYNAMIC_PATH=/path/to/dynamic_stdx`
+
 ## 各模块详细文档
 ### `fountain::f_app`
 应用进程管理模块，可以用本模块加载使用fountain开发的应用项目动态链接库。

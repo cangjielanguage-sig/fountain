@@ -1,3 +1,7 @@
+## STDX依赖
+配置环境变量：`export CANGJIE_STDX_DYNAMIC_PATH=/path/to/dynamic_stdx`
+
+## 基本特性
 - 数据对象的公共成员变量和公共成员属性的复制
 - 可以随时获取指定名称的公共成员的值
 - 可以随时为指定名称的公共成员赋值

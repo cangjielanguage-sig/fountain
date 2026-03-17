@@ -1,3 +1,6 @@
+## STDX依赖
+配置环境变量：`export CANGJIE_STDX_DYNAMIC_PATH=/path/to/dynamic_stdx`
+
 ## 基本特性
 fountain项目的基本模块，建议开发时无脑导入本包。
 

@@ -1,3 +1,6 @@
+## STDX依赖
+配置环境变量：`export CANGJIE_STDX_DYNAMIC_PATH=/path/to/dynamic_stdx`
+
 ## 配置
 ```bash
     export mvc_port=8080 # 这一行可以没有，默认就是8080
