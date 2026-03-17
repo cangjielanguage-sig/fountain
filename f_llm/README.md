@@ -196,6 +196,7 @@ public class Skill {
 ```
 
 ## 数据查询接口：`fountain::f_llm.finder`
+所有finder接口的实现必须是类且被`fountain::f_bean.macros.Bean`修饰
 ### 查询智能体
 ```cj
 public interface AgentsFinder {
