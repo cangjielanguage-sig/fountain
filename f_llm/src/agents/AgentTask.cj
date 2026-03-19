@@ -258,10 +258,13 @@ ${auxiliaryMetadatas}
                 }
                 for(i in startMsgIdx .. msgs.size){
                     let msg = msgs[i]
-                    if(msg.role == ROLE_SYSTEM && msg.content.contains('## 技能标题：')){
-                        for(skill in skills where skill.skillType != SKILL_TYPE_PRIMARY && msg.contains.contains('## 技能标题：${skill.title}')){
-                            message.add(msg)
-                            break
+                    if(msg.role == ROLE_SYSTEM){
+                        for(skill in skills where skill.skillType != SKILL_TYPE_PRIMARY){
+                            let idx = msg.content.indexOf('## 技能标题：') ?? -1
+                            if(idx >= 0 && (msg.content.indexOf(skill.title, idx) ?? -1) == idx + '## 技能标题：'.size){
+                                message.add(msg)
+                                break
+                            }
                         }
                     }else{
                         messages.add(msg)
