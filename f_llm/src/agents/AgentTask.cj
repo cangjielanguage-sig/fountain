@@ -162,6 +162,7 @@ ___
 '''
 ${doGenCulture()}
 > **重要提示**：标注 ⚠️ 的内容为特别提醒，需要重点关注，请勿忽略。
+> ⚠️ 注意：如果需要直接输出回复，而不再依赖其它函数或工具的结果，务必使用answer函数传递回复
 
 智能体描述
 ===
@@ -185,7 +186,8 @@ ___
     "title": "试图使用的技能的标题"
 }
 ```
-${auxiliaryMetadatas}'''
+${auxiliaryMetadatas}
+'''
     }
     private func populatePromptsParams(messages: ArrayList<ChatMessage>, promptsTemplate: String, data: SimpleDataObject){
         let msg = if(promptsTemplate.contains('{{')){

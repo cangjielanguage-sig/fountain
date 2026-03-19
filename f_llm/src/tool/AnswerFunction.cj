@@ -22,7 +22,7 @@ import fountain::f_data.macros.*
 public class Answer {
     @JsonStringSchema[description:'流程下一步的事件名称']
     private var event: String = ''
-    @JsonStringSchema[description:'你的回复，将作为流程下一步事件的参数']
+    @JsonStringSchema[description:'你的回复，将作为流程下一步事件的数据']
     private var answer: String = ''
 }
 
@@ -41,7 +41,7 @@ public class AnswerFunction <: FunctionCalling<Answer> {
      */
     public prop description: String {
         get(){
-            '如果需要直接输出回复，而不依赖其它函数的结果，务必使用此函数传递回复'
+            '⚠️ 注意：如果需要直接输出回复，而不再依赖其它函数或工具的结果，务必使用此函数传递回复'
         }
     }
     /**
