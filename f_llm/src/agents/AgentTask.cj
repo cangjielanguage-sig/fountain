@@ -251,6 +251,22 @@ ${auxiliaryMetadatas}
                 }else{
                     msgs
                 })
+                let startMsgIdx = if(msgs.size > 0 && let msg <- msgs[0] && msg.role == ROLE_SYSTEM){
+                    1
+                }else{
+                    0
+                }
+                for(i in startMsgIdx .. msgs.size){
+                    let msg = msgs[i]
+                    if(msg.role == ROLE_SYSTEM && msg.content.contains('## 技能标题：')){
+                        for(skill in skills where skill.skillType != SKILL_TYPE_PRIMARY && msg.contains.contains('## 技能标题：${skill.title}')){
+                            message.add(msg)
+                            break
+                        }
+                    }else{
+                        messages.add(msg)
+                    }
+                }
                 eData = agentData
                 if(let content <- agentData.message && content.size > 0) {
                     messages.add(UserMessage(content))
