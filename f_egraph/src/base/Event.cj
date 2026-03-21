@@ -82,9 +82,9 @@ public class ErrorEvent <: DataEvent {
     }
 }
 public class MultiEvent <: DataEvent {
-    public init(category!: String, tag!: String, events!: Iterable<Event>, 
+    public init(category!: String, tag!: String, name!: String, events!: Iterable<Event>, 
                 session!: String = UUID.random().toHexString()){
-        super(eventType: EventType.Multi, category: category, tag: tag, name: EventType.Multi.toString(), data: events, session: session)
+        super(eventType: EventType.Multi, category: category, tag: tag, name: name, data: events, session: session)
     }
 }
 public class DummyEvent <: Event {

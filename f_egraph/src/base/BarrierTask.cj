@@ -50,7 +50,8 @@ public class BarrierTask<G> <: Task where G <: EndExecutorGetter{
      */
     public BarrierTask(
         name!: String,
-        events!: Array<(String, String, Int64)>
+        events!: Array<(String, String, Int64)>,
+        private let producing!: Array<String>
     ){
         this.name_ = name
         acceptable = Array<String>(events.size, repeat: '')
@@ -72,12 +73,7 @@ public class BarrierTask<G> <: Task where G <: EndExecutorGetter{
     }
     public prop producingEvents: Array<String> {
         get(){
-            let list = ArrayList<String>()
-            for(k in datas.keys()){
-                list.add(k.eventName)
-            }
-            list.add(EventType.Dummy.toString())
-            list.unsafeData()
+            producing
         }
     }
     /**

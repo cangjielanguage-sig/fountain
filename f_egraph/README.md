@@ -21,6 +21,10 @@ public enum EventType <: ToString & Hashable & Equatable<EventType> {
      */
     | Error
     /**
+     * 多事件，一个任务执行器可以发送多个事件，多个事件会合并成一个Multi事件，Multi事件会发送给下一个任务执行器
+     */
+    | Multi
+    /**
      * 哑事件，不做任何事，调度器会忽略这类事件
      */
     | Dummy
