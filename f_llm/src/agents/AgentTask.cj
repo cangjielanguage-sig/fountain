@@ -86,6 +86,11 @@ public class AgentTask <: Task {
             agent.acceptableEvents
         }
     }
+    public prop producingEvents: Array<String> {
+        get(){
+            agent.producingEvents
+        }
+    }
     private var skillsFinder_: ?SkillsFinder = None
     private prop skillsFinder: SkillsFinder {
         get(){
@@ -246,23 +251,17 @@ ${auxiliaryMetadatas}
                     populatePromptsParams(messages, auxiliarySkills, data)
                 }
                 let msgs = agentData.messages
-                messages.add(all: if(msgs.size > 0 && let msg <- msgs[0] && msg.role == ROLE_SYSTEM){
-                    msgs[1 ..]
-                }else{
-                    msgs
-                })
                 let startMsgIdx = if(msgs.size > 0 && let msg <- msgs[0] && msg.role == ROLE_SYSTEM){
                     1
                 }else{
                     0
                 }
-                for(i in startMsgIdx .. msgs.size){
-                    let msg = msgs[i]
+                for(msg in msgs[startMsgIdx .. msgs.size]){
                     if(msg.role == ROLE_SYSTEM){
                         for(skill in skills where skill.skillType != SKILL_TYPE_PRIMARY){
                             let idx = msg.content.indexOf('## 技能标题：') ?? -1
                             if(idx >= 0 && (msg.content.indexOf(skill.title, idx) ?? -1) == idx + '## 技能标题：'.size){
-                                message.add(msg)
+                                messages.add(msg)
                                 break
                             }
                         }

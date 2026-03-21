@@ -31,6 +31,8 @@ public class Agent {
     private var agent: String = ''
     @ORMField['acceptable']
     private var acceptable: String = ''
+    @ORMField['producings']
+    private var producings: String = ''
     @ORMField['category']
     private var category: String = ''
     @ORMField['tag']
@@ -45,6 +47,11 @@ public class Agent {
     public prop acceptableEvents: Array<String> {
         get(){
             acceptable.split(',')
+        }
+    }
+    public prop producingEvents: Array<String> {
+        get(){
+            producings.split(',')
         }
     }
 }
