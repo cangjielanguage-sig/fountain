@@ -1,4 +1,5 @@
 # `fountain::f_egraph`是一个事件驱动的流程工具库
+下面所有的顶级声明都是`fountain::f_egraph`的重导出
 ---
 
 ## 事件类型
@@ -611,5 +612,43 @@ public class AsyncFlow <: Flow<AsyncEndExecutorGetter> {
      */
     public func start(data: Any): AsyncEndExecutorGetter 
     public func emit(eventType!: EventType, name!: String, data!: Any): Unit
+}
+```
+
+### 流程DSL编译器
+```cj
+package fountain::f_egraph
+/**
+ * async 表示异步流程，immediate 表示同步流程，StartEvent是类型为Start的事件名
+ * async(category, tag): 'StartEvent' => {
+ *     task |> {
+ *         'out-event' => {
+ *              other_task |> {'other-out-event'}
+ *         }
+ *     }
+ *     task1 |> {
+ *         event => {task3 |> {END}}
+ *         event2 => task4 |> {'in-event'}
+ *     }
+ *     task2 |> {
+ *         END //END 要么是所在花括号的最后一个事件，要么当前花括号没有END
+ *     }
+ * }
+ */
+public struct FlowDSLCompiler {
+    /**
+     * 编译流程编排DSL，返回的是流程的(category, tag)
+     */
+    public static func compile(dsl: String): (String, String)
+}
+```
+
+### 流程加载器
+```cj
+/**
+ * load()函数返回的是流程DSL
+ */
+public interface FlowLoader {
+    func load(): ArrayList<String>
 }
 ```

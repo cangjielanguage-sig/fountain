@@ -17,7 +17,7 @@ package fountain::f_egraph.base
 
 import std.ast.*
 
- /**
+/**
  * async 表示异步流程，immediate 表示同步流程，StartEvent是类型为Start的事件名
  * async(category, tag): 'StartEvent' => {
  *     task |> {
