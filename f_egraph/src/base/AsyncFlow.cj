@@ -21,8 +21,8 @@ public class AsyncFlow <: Flow<AsyncEndExecutorGetter> {
         dispatcher = AsyncDispatcher(clearTimerDuration: clearTimerDuration, toThrowIfNoExecutor: toThrowIfNoExecutor)
     }
     private static let dependencied_ = ConcurrentHashMap<AsyncFlow, ConcurrentHashSet<String>>()
-    private static func checkFlow(flow: AsyncFlow): Unit {
-        if(let Some(x) <- dependencied_.get(flow)){
+    public func canBeRemoved(): Unit {
+        if(let Some(x) <- dependencied_.get(this)){
             if(x.size > 0){
                 let dependencied = StringGenerator()
                 for(d in x){
@@ -31,24 +31,24 @@ public class AsyncFlow <: Flow<AsyncEndExecutorGetter> {
                     }
                     dependencied.append(d)
                 }
-                throw GraphException('${flow} to be removed is dependencied by ${dependencied}')
+                throw GraphException('${this} to be removed is dependencied by ${dependencied}')
             }else{
-                dependencied_.remove(flow)
+                dependencied_.remove(this)
             }
         }
     }
-    public static func remove(category!: String, tag!: String): Unit {
-        remove(category, tag, false)
+    public func remove(): Unit {
+        doRemove(false)
     }
-    public static func removeExcept(category!: String, exceptTag!: String): Unit {
-        remove(category, exceptTag, true)
+    public func removeExceptCurrentTag(): Unit {
+        doRemove(true)
     }
-    private static func remove(category: String, tag: String, except: Bool){
-        let flow = AsyncFlow(category: category, tag: tag)
-        checkFlow(flow)
+    private func doRemove(except: Bool){
         dispatcher?.removeIf{e => 
             if(e.category == category && if(except){e.tag != tag}else{e.tag == tag}){
-                flows.remove(AsyncFlow(category: category, tag: e.tag))
+                let flow = AsyncFlow(category: category, tag: e.tag)
+                flow.canBeRemoved()
+                flows.remove(flow)
                 true
             }else{
                 false

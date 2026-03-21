@@ -15,15 +15,32 @@ limitations under the License.
 */
 package fountain::f_egraph.base
 
-public interface Flow<G> <: Emitter & Hashable & Equatable<ImmediateFlow> & Equatable<AsyncFlow> & ToString where G <: EndExecutorGetter {
-    static func remove(category!: String, tag!: String): Unit
-    static func removeExcept(category!: String, exceptTag!: String): Unit
+public interface BaseFlow <:Emitter {
+    func canBeRemoved(): Unit
+    func remove(): Unit
+    func removeExceptCurrentTag(): Unit
     prop dependencied: ConcurrentHashSet<String>
     func registerStart(eventName: String): Unit
     func registerEnd(): Unit
     func registerError(): Unit
     func registerTask(eventName: String, task: (Event) -> Event): Unit
     func registerTask(task: Task): Unit
+    func registerMultiEventTask(): Unit
+    /**
+     * 使用指定的同步流程作为任务执行器的构造函数参数
+     * @param subCategory 子流程的唯一标识
+     * @param subTag 子流程的版本
+     */
+    func registerTaskByImmediateFlow(eventName!: String, subCategory!: String, subTag!: String): Unit
+    /**
+     * 使用指定的异步流程作为任务执行器的构造函数参数
+     * @param subCategory 子流程的唯一标识
+     * @param subTag 子流程的版本
+     */
+    func registerTaskByAsyncFlow(eventName!: String, subCategory!: String, subTag!: String): Unit 
+    func emit(eventType!: EventType, name!: String, data!: Any): Unit
+}
+public interface Flow<G> <: BaseFlow & Hashable & Equatable<ImmediateFlow> & Equatable<AsyncFlow> & ToString where G <: EndExecutorGetter {
     func registerTask(task: BarrierTask<G>): Unit {
         task.flow = this
         let t: Task = task

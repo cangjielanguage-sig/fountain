@@ -485,12 +485,12 @@ public interface Emitter {
 
 ## 流程`Flow<G> where G <: EndExecutorGetter`
 ```cj
-/**
- * 创建一个流程，
- * category是流程唯一标识，tag是流程的版本标识，注册category相同，tag不同的流程以后，之前注册的相同category，不同tag的流程应当尽快删除
- * name是事件执行器所对应的事件名称
- */
-public interface Flow<G> <: Emitter & Hashable & Equatable<ImmediateFlow> & Equatable<AsyncFlow> & ToString where G <: EndExecutorGetter {
+public interface BaseFlow <:Emitter {
+    /**
+     * 如果当前流程不是其它流程的子流程就可以删除，返回()；否则会抛出异常
+     * @throws GraphException
+     */
+    func canBeRemoved(): Unit
     /**
      * 返回的是把当前流程当作子流程依赖的其它流程，集合保存的字符串是流程的'${category}-${tag}'
      */
@@ -498,11 +498,11 @@ public interface Flow<G> <: Emitter & Hashable & Equatable<ImmediateFlow> & Equa
     /**
      * 删除指定流程，如果有其它流程依赖这个流程作为子流程，会抛出异常
      */
-    static func remove(category!: String, tag!: String): Unit 
+    static func remove(): Unit 
     /**
-     * 删除category与指定值相同，但是tag不同的流程
+     * 删除category与指定值相同，但是与当前流程的tag不同的流程
      */
-    static func removeExcept(category!: String, exceptTag!: String): Unit
+    static func removeExceptCurrentTag(): Unit
     /**
      * 向流程注册开始事件执行器，name是开始事件名，必须与流程的第一个任务事件执行器对应的事件名称相同
      */
@@ -528,6 +528,32 @@ public interface Flow<G> <: Emitter & Hashable & Equatable<ImmediateFlow> & Equa
      */
     func registerMultiEventTask(): Unit
     /**
+     * 使用指定的同步流程作为任务执行器的构造函数参数
+     * @param subCategory 子流程的唯一标识
+     * @param subTag 子流程的版本
+     */
+    func registerTaskByImmediateFlow(eventName!: String, subCategory!: String, subTag!: String): Unit
+    /**
+     * 使用指定的异步流程作为任务执行器的构造函数参数
+     * @param subCategory 子流程的唯一标识
+     * @param subTag 子流程的版本
+     */
+    func registerTaskByAsyncFlow(eventName!: String, subCategory!: String, subTag!: String): Unit 
+    /**
+     * 向当前流程发射一个事件。
+     * @param eventType 事件类型
+     * @param name 事件名
+     * @param data 事件数据
+     */
+    func emit(eventType!: EventType, name!: String, data!: Any): Unit
+}
+/**
+ * 创建一个流程，
+ * category是流程唯一标识，tag是流程的版本标识，注册category相同，tag不同的流程以后，之前注册的相同category，不同tag的流程应当尽快删除
+ * name是事件执行器所对应的事件名称
+ */
+public interface Flow<G> <: BaseFlow & Hashable & Equatable<ImmediateFlow> & Equatable<AsyncFlow> & ToString where G <: EndExecutorGetter {
+    /**
      * 使用指定流程作为任务执行器的构造函数参数
      * @param flow 任务事件执行器的逻辑
      */
@@ -535,26 +561,9 @@ public interface Flow<G> <: Emitter & Hashable & Equatable<ImmediateFlow> & Equa
         registerTask(name){e => flow.start(((e as DataEvent).getOrThrow()).data).get().get()}
     }
     /**
-     * 使用指定的同步流程作为任务执行器的构造函数参数
-     * @param subCategory 子流程的唯一标识
-     * @param subTag 子流程的版本
-     */
-    func registerTaskByImmediateFlow(name!: String, subCategory!: String, subTag!: String): Unit {
-        registerTaskByFlow<EndExecutorGetter, ImmediateFlow>(name: name, flow: ImmediateFlow(category: subCategory, tag: subTag))
-    }
-    /**
-     * 使用指定的异步流程作为任务执行器的构造函数参数
-     * @param subCategory 子流程的唯一标识
-     * @param subTag 子流程的版本
-     */
-    func registerTaskByAsyncFlow(name!: String, subCategory!: String, subTag!: String): Unit {
-        registerTaskByFlow<AsyncEndExecutorGetter, AsyncFlow>(name: name, flow: AsyncFlow(category: subCategory, tag: subTag))
-    }
-    /**
      * 将data包装成开始事件，开始执行一个流程
      */
     func start(data: Any): G
-    func emit(eventType!: EventType, name!: String, data!: Any): Unit
 }
 ```
 

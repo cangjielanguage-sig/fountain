@@ -25,8 +25,8 @@ public class ImmediateFlow <: Flow<EndExecutorGetter> {
             registerMultiEventTask()
         }
     }
-    private static func checkFlow(flow: ImmediateFlow){
-        if(let Some(x) <- dependencied_.get(flow)){
+    public func canBeRemoved(): Unit {
+        if(let Some(x) <- dependencied_.get(this)){
             if(x.size > 0){
                 let dependencied = StringGenerator()
                 for(d in x){
@@ -35,21 +35,24 @@ public class ImmediateFlow <: Flow<EndExecutorGetter> {
                     }
                     dependencied.append(d)
                 }
-                throw GraphException('${flow} to be removed is dependencied by ${dependencied}')
+                throw GraphException('${this} to be removed is dependencied by ${dependencied}')
             }else{
-                dependencied_.remove(flow)
+                dependencied_.remove(this)
             }
         }
     }
-    public static func remove(category!: String, tag!: String): Unit {
-        let flow = ImmediateFlow(category: category, tag: tag)
-        checkFlow(flow)
-        dispatchers.remove(flow)
+    public func remove(): Unit {
+        canBeRemoved()
+        dispatchers.remove(this)
     }
-    public static func removeExcept(category!: String, exceptTag!: String): Unit {
-        let flow = ImmediateFlow(category: category, tag: exceptTag)
-        checkFlow(flow)
-        dispatchers.removeIf{f, _ => f.category == category && f.tag != exceptTag}
+    public func removeExceptCurrentTag(): Unit {
+        dispatchers.removeIf{f, _ => 
+            let matched = f.category == category && f.tag != tag
+            if(matched){
+                ImmediateFlow(category: category, tag: f.tag).canBeRemoved()
+            }
+            matched
+        }
     }
 
     public func hashCode(): Int64 {
