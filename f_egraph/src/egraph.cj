@@ -18,15 +18,18 @@ package fountain::f_egraph
 public import fountain::f_egraph.base.*
 public import fountain::f_egraph.loader.*
 
-public abstract class FlowInitializer <: Initializer {
-    protected init(){}
-    public prop name: String {
+public interface FlowInitializer <: Initializer {
+    prop name: String {
         get(){
             'fountain::f_egraph'
         }
     }
-    public prop dependencies: Array<String> 
-    public func initialize(): Unit {
+    prop dependencies: Array<String> {
+        get(){
+            ['fountain::f_bean']
+        }
+    }
+    func initialize(): Unit {
         for(flow in lookup<FlowLoader>().load()) {
             FlowDSLCompiler.compile(flow)
         }
