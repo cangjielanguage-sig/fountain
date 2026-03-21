@@ -487,7 +487,7 @@ public interface Emitter {
 ```cj
 /**
  * 创建一个流程，
- * category是流程唯一标识，tag是流程的版本标识
+ * category是流程唯一标识，tag是流程的版本标识，注册category相同，tag不同的流程以后，之前注册的相同category，不同tag的流程应当尽快删除
  * name是事件执行器所对应的事件名称
  */
 public interface Flow<G> <: Emitter & Hashable & Equatable<ImmediateFlow> & Equatable<AsyncFlow> & ToString where G <: EndExecutorGetter {
