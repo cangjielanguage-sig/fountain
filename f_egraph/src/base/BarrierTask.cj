@@ -70,6 +70,16 @@ public class BarrierTask<G> <: Task where G <: EndExecutorGetter{
             acceptable
         }
     }
+    public prop producingEvents: Array<String> {
+        get(){
+            let list = ArrayList<String>()
+            for(k in datas.keys()){
+                list.add(k.eventName)
+            }
+            list.add(EventType.Dummy.toString())
+            list.unsafeData()
+        }
+    }
     /**
      * 固定返回DummyEvent，同一事件的数据量达到指定数时，构造成新事件调用flow.emit一次发出
      */

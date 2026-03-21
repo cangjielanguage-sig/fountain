@@ -21,9 +21,11 @@ public class ImmediateFlow <: Flow<EndExecutorGetter> {
     let h: Int64
     public ImmediateFlow(let category!: String, let tag!: String){
         h = HashBuilder().append(category).append(tag).build()
+        if(!dispatchers.contains(this)){
+            registerMultiEventTask()
+        }
     }
-    public static func remove(category!: String, tag!: String): Unit {
-        let flow = ImmediateFlow(category: category, tag: tag)
+    private static func checkFlow(flow: ImmediateFlow){
         if(let Some(x) <- dependencied_.get(flow)){
             if(x.size > 0){
                 let dependencied = StringGenerator()
@@ -38,7 +40,16 @@ public class ImmediateFlow <: Flow<EndExecutorGetter> {
                 dependencied_.remove(flow)
             }
         }
-        dispatchers.remove(ImmediateFlow(category: category, tag: tag))
+    }
+    public static func remove(category!: String, tag!: String): Unit {
+        let flow = ImmediateFlow(category: category, tag: tag)
+        checkFlow(flow)
+        dispatchers.remove(flow)
+    }
+    public static func removeExcept(category!: String, exceptTag!: String): Unit {
+        let flow = ImmediateFlow(category: category, tag: exceptTag)
+        checkFlow(flow)
+        dispatchers.removeIf{f, _ => f.category == category && f.tag != exceptTag}
     }
 
     public func hashCode(): Int64 {

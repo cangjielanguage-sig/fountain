@@ -81,6 +81,12 @@ public class ErrorEvent <: DataEvent {
         super(eventType: EventType.Error, category: category, tag: tag, name: EventType.Error.toString(), data: error, session: session)
     }
 }
+public class MultiEvent <: DataEvent {
+    public init(category!: String, tag!: String, events!: Iterable<Event>, 
+                session!: String = UUID.random().toHexString()){
+        super(eventType: EventType.Multi, category: category, tag: tag, name: EventType.Multi.toString(), data: events, session: session)
+    }
+}
 public class DummyEvent <: Event {
     public static let instance = DummyEvent()
     private init(){

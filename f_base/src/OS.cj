@@ -20,10 +20,19 @@ public enum OS <: Equatable<OS> & ToString & Hashable {
     | Windows
     | macOS
     | HarmonyOS
+    | OpenHarmony
+    | Android
+    | iOS
 
     public operator func ==(other: OS): Bool {
         match ((this, other)) {
-            case (Linux, Linux) | (Windows, Windows) | (macOS, macOS) | (HarmonyOS, HarmonyOS) => true
+            case (Linux, Linux) | 
+                 (Windows, Windows) | 
+                 (macOS, macOS) | 
+                 (HarmonyOS, HarmonyOS) |
+                 (OpenHarmony, OpenHarmony) |
+                 (Android, Android) | 
+                 (iOS, iOS) => true
             case _ => false
         }
     }
@@ -47,12 +56,30 @@ public enum OS <: Equatable<OS> & ToString & Hashable {
             this == HarmonyOS
         }
     }
+    public prop isOpenHarmony: Bool {
+        get() {
+            this == OpenHarmony
+        }
+    }
+    public prop isAndroid: Bool {
+        get() {
+            this == Android
+        }
+    }
+    public prop isiOS: Bool {
+        get() {
+            this == iOS
+        }
+    }
     public func toString(): String {
         match (this) {
             case Linux => "Linux"
             case Windows => "Windows"
             case macOS => "macOS"
             case HarmonyOS => "HarmonyOS"
+            case OpenHarmony => "OpenHarmony"
+            case Android => "Android"
+            case iOS => "iOS"
         }
     }
     public static func valueOf(value: String): OS {
@@ -61,6 +88,9 @@ public enum OS <: Equatable<OS> & ToString & Hashable {
             case "windows" => Windows
             case "macos" => macOS
             case "harmonyos" => HarmonyOS
+            case "openharmony" => OpenHarmony
+            case "android" => Android
+            case "ios" => iOS
             case _ => throw IllegalArgumentException("unsupported os name: ${value}")
         }
     }
@@ -89,10 +119,28 @@ public enum OS <: Equatable<OS> & ToString & Hashable {
         }
     }
 
+    // @When[os == "Linux" && env == 'hos']
+    // public static prop current: OS {
+    //     get() {
+    //         HarmonyOS
+    //     }
+    // }
     @When[os == "Linux" && env == 'ohos']
     public static prop current: OS {
         get() {
-            HarmonyOS
+            OpenHarmony
+        }
+    }
+    @When[os == "Linux" && env == 'android']
+    public static prop current: OS {
+        get() {
+            Android
+        }
+    }
+    @When[os == "iOS"]
+    public static prop current: OS {
+        get() {
+            iOS
         }
     }
 

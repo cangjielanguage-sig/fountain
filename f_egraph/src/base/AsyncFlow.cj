@@ -21,8 +21,7 @@ public class AsyncFlow <: Flow<AsyncEndExecutorGetter> {
         dispatcher = AsyncDispatcher(clearTimerDuration: clearTimerDuration, toThrowIfNoExecutor: toThrowIfNoExecutor)
     }
     private static let dependencied_ = ConcurrentHashMap<AsyncFlow, ConcurrentHashSet<String>>()
-    public static func remove(category!: String, tag!: String): Unit {
-        let flow = AsyncFlow(category: category, tag: tag)
+    private static func checkFlow(flow: AsyncFlow): Unit {
         if(let Some(x) <- dependencied_.get(flow)){
             if(x.size > 0){
                 let dependencied = StringGenerator()
@@ -37,11 +36,21 @@ public class AsyncFlow <: Flow<AsyncEndExecutorGetter> {
                 dependencied_.remove(flow)
             }
         }
+    }
+    public static func remove(category!: String, tag!: String): Unit {
+        let flow = AsyncFlow(category: category, tag: tag)
+        checkFlow(flow)
         dispatcher?.removeIf{e => e.category == category && e.tag == tag}
+    }
+    public static func removeExcept(category!: String, exceptTag!: String): Unit {
+        let flow = AsyncFlow(category: category, tag: exceptTag)
+        checkFlow(flow)
+        dispatcher?.removeIf{e => e.category == category && e.tag != exceptTag}
     }
     let h: Int64
     public AsyncFlow(let category!: String, let tag!: String){
         h = HashBuilder().append(category).append(tag).build()
+        registerMultiEventTask()
     }
     
     public func hashCode(): Int64 {

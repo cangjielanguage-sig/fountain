@@ -16,7 +16,8 @@ limitations under the License.
 package fountain::f_egraph.base
 
 public interface Flow<G> <: Emitter & Hashable & Equatable<ImmediateFlow> & Equatable<AsyncFlow> & ToString where G <: EndExecutorGetter {
-    static func remove(category!: String, tag!: String): Unit 
+    static func remove(category!: String, tag!: String): Unit
+    static func removeExcept(category!: String, exceptTag!: String): Unit
     prop dependencied: ConcurrentHashSet<String>
     func registerStart(eventName: String): Unit
     func registerEnd(): Unit
@@ -27,6 +28,19 @@ public interface Flow<G> <: Emitter & Hashable & Equatable<ImmediateFlow> & Equa
         task.flow = this
         let t: Task = task
         registerTask(t)
+    }
+    func registerMultiEventTask(): Unit {
+        registerTask(EventType.Multi.toString()){e =>
+            if(let e: MultiEvent <- e && let me: MultiEvent <- e && let events: Iterable<Event> <- me.data){
+                for(event in events){
+                    let de = (event as DataEvent) ?? throw GraphException("event must be instance of DataEvent")
+                    emit(eventType: event.eventType, name: event.name, data: de.data)
+                }
+                DummyEvent.instance
+            }else{
+                throw GraphException("event must be instance of MultiEvent and with data which type is Iterable<Event>")
+            }
+        }
     }
     /**
      * 使用指定流程作为任务执行器的构造函数参数

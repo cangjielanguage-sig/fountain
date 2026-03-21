@@ -18,5 +18,6 @@ package fountain::f_egraph.base
 public interface Task{
     prop name: String
     prop acceptableEvents: Array<String>
+    prop producingEvents: Array<String>
     func exec(e: Event): Event
 }

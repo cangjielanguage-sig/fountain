@@ -20,6 +20,7 @@ public enum EventType <: ToString & Hashable & Equatable<EventType> {
     | Task
     | End
     | Error
+    | Multi
     | Dummy
 
     public func toString(): String {
@@ -28,6 +29,7 @@ public enum EventType <: ToString & Hashable & Equatable<EventType> {
             case Task => "Task"
             case End => "End"
             case Error => "Error"
+            case Multi => "Multi"
             case Dummy => "Dummy"
         }
     }
@@ -36,7 +38,7 @@ public enum EventType <: ToString & Hashable & Equatable<EventType> {
     }
     public operator func ==(other: EventType): Bool {
         match((this, other)){
-            case (Start, Start) | (Task, Task) | (End, End) | (Error, Error) | (Dummy, Dummy) => true
+            case (Start, Start) | (Task, Task) | (End, End) | (Error, Error) | (Multi, Multi) | (Dummy, Dummy) => true
             case _ => false
         }
     }

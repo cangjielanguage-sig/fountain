@@ -118,6 +118,17 @@ public class ErrorEvent <: DataEvent {
 }
 ```
 
+### 多事件`MultiEvent`
+
+```cj
+public class MultiEvent <: DataEvent {
+    public init(category!: String, tag!: String, events!: Iterable<Event>, 
+                session!: String = UUID.random().toHexString()){
+        super(eventType: EventType.Task, category: category, tag: tag, name: 'multi', data: events, session: session)
+    }
+}
+```
+
 ### 哑事件`DummyEvent`
 ```cj
 public class DummyEvent <: Event {
@@ -423,6 +434,14 @@ public interface Task{
      */
     prop name: String
     /**
+     * 可接收的事件，任意一个这些事件都可触发本任务
+     */
+    prop acceptableEvents: Array<String>
+    /**
+     * 本任务可能产生的事件，需要产生多个事件可以在exec函数内调用Flow的emit函数发送事件，也可以返回MultiEvent
+     */
+    prop producingEvents: Array<String>
+    /**
      * 任务执行逻辑，用来初始任务事件执行器的函数实参
      */
     func exec(e: Event): Event
@@ -477,6 +496,10 @@ public interface Flow<G> <: Emitter & Hashable & Equatable<ImmediateFlow> & Equa
      */
     static func remove(category!: String, tag!: String): Unit 
     /**
+     * 删除category与指定值相同，但是tag不同的流程
+     */
+    static func removeExcept(category!: String, exceptTag!: String): Unit
+    /**
      * 向流程注册开始事件执行器，name是开始事件名，必须与流程的第一个任务事件执行器对应的事件名称相同
      */
     func registerStart(name: String): Unit
@@ -496,6 +519,10 @@ public interface Flow<G> <: Emitter & Hashable & Equatable<ImmediateFlow> & Equa
      * 向流程注册任务事件执行器
      */
     func registerTask(task: Task): Unit
+    /**
+     * 由Flow实现实例化时自动调用，开发者不必关心
+     */
+    func registerMultiEventTask(): Unit
     /**
      * 使用指定流程作为任务执行器的构造函数参数
      * @param flow 任务事件执行器的逻辑
