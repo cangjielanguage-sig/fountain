@@ -15,29 +15,5 @@ limitations under the License.
 */
 package fountain::f_egraph
 
-import fountain::f_app.*
-import fountain::f_bean.lookup
 public import fountain::f_egraph.base.*
 public import fountain::f_egraph.loader.*
-
-public struct FlowInitializer <: Initializer {
-    static init(){
-        InitializerCollection.register(FlowInitializer())
-    }
-    private init(){}
-    public prop name: String {
-        get(){
-            'fountain::f_egraph'
-        }
-    }
-    public prop dependencies: Array<String> {
-        get(){
-            ['fountain::f_bean', 'fountain::f_orm']
-        }
-    }
-    public func initialize(): Unit {
-        for(flow in lookup<FlowLoader>().load()) {
-            FlowDSLCompiler.compile(flow)
-        }
-    }
-}
