@@ -32,7 +32,7 @@ public struct FlowInitializer <: Initializer {
     }
     public prop dependencies: Array<String> {
         get(){
-            ['fountain::f_bean', 'fountain:f_orm']
+            ['fountain::f_bean', 'fountain::f_orm']
         }
     }
     public func initialize(): Unit {
