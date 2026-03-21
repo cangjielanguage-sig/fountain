@@ -15,6 +15,9 @@ limitations under the License.
 */
 package fountain::f_egraph
 
+import fountain::f_app.*
+import fountain::f_bean.*
+
 public import fountain::f_egraph.base.*
 public import fountain::f_egraph.loader.*
 
