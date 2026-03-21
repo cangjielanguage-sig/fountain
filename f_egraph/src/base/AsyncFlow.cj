@@ -38,19 +38,30 @@ public class AsyncFlow <: Flow<AsyncEndExecutorGetter> {
         }
     }
     public static func remove(category!: String, tag!: String): Unit {
-        let flow = AsyncFlow(category: category, tag: tag)
-        checkFlow(flow)
-        dispatcher?.removeIf{e => e.category == category && e.tag == tag}
+        remove(category, tag, false)
     }
     public static func removeExcept(category!: String, exceptTag!: String): Unit {
-        let flow = AsyncFlow(category: category, tag: exceptTag)
-        checkFlow(flow)
-        dispatcher?.removeIf{e => e.category == category && e.tag != exceptTag}
+        remove(category, exceptTag, true)
     }
+    private static func remove(category: String, tag: String, except: Bool){
+        let flow = AsyncFlow(category: category, tag: tag)
+        checkFlow(flow)
+        dispatcher?.removeIf{e => 
+            if(e.category == category && if(except){e.tag != tag}else{e.tag == tag}){
+                flows.remove(AsyncFlow(category: category, tag: e.tag))
+                true
+            }else{
+                false
+            }
+        }
+    }
+    private static let flows = ConcurrentHashSet<AsyncFlow>()
     let h: Int64
     public AsyncFlow(let category!: String, let tag!: String){
         h = HashBuilder().append(category).append(tag).build()
-        registerMultiEventTask()
+        if(!flows.contains(this)){
+            registerMultiEventTask()
+        }
     }
     
     public func hashCode(): Int64 {
