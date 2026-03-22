@@ -23,9 +23,7 @@ struct OverallStopwatch{
         (log, start) = if(switch){
             (LoggerFactory.getLogger('MVC.overall'), ThreadLocal<(MonoTime, String)>())
         } else {
-            unsafe{
-                (zeroValue<AbstractLogger>(), zeroValue<ThreadLocal<(MonoTime, String)>>())
-            }
+            (unsafeZeroValue<AbstractLogger>(), unsafeZeroValue<ThreadLocal<(MonoTime, String)>>())
         }
     }
     static func doStart(path: String) {

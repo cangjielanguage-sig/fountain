@@ -16,14 +16,32 @@ limitations under the License.
 package fountain::f_llm.config
 
 import std.convert.*
+import std.env.*
+import std.fs.Path
 import fountain::f_config.*
 
 public struct LLMConfig {
     private init(){}
     public static const LLM = 'f_llm'
     public static const AUTO = LLM + '_auto'
+    public static const FILE_SANDBOX_PATH = LLM + '_file_sandbox_path'
+    public static const LLM_ACCESS_TRYING_COUNT = LLM + '_llm_access_trying_count'
+    public static const LLM_ACCESS_TRYING_ELAPSED = LLM + '_llm_access_trying_elapsed'
 
     public static func isAuto(): Bool {
         Config.getValue<Bool>(AUTO) ?? false
+    }
+    public static func getFileSandboxPath(): Path {
+        if(let Some(p) <- Config.getString(FILE_SANDBOX_PATH)){
+            Path(p)
+        }else{
+            getWorkingDirectory()
+        }
+    }
+    public static func getLLMAccessTryingCount(): Int64 {
+        Config.getValue<Int64>(LLM_ACCESS_TRYING_COUNT) ?? Int64.Max
+    }
+    public static func getLLMAccessTryingElapsed(): Duration {
+        Duration.second * (Config.getValue<Int64>(LLM_ACCESS_TRYING_ELAPSED) ?? Int64.Max)
     }
 }

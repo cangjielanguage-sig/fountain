@@ -86,7 +86,7 @@ extend<T> Array<T> <: CollectionData<Array<T>, T> where T <: DataFields<T> {
                         list.add(x)
                     }
                 }
-                unsafe { list.getRawArray() }
+                list.unsafeData()
             case _ =>
                 if (let Some(x) <- internal_f_data_tryFromData<T>(data, flag)) {
                     Array<T>(1, repeat: x)

@@ -75,6 +75,7 @@ package fountain::f_llm.agents
  *            - Keywords和Summary两个策略依赖大模型，要注意给执行策略的大模型发送的上下文不要超过它的饱和token数
  */
 public class AgentTask <: Task {
+    private static let log = LoggerFactory.getLogger<AgentTask>()
     public AgentTask(private let agent: Agent){}
     public prop name: String{
         get(){
@@ -284,10 +285,50 @@ ${auxiliaryMetadatas}
         params.addFunctions(functions)
         FunctionMediator.getDefinitions(functionNames) |> params.addFunctions
         params.messages = ContextPrunerMediator.instance.prune(agent.pruner, agentId: agent.id, session: e.session, messages: params.messages)
-        let resp = LLMContextMediator.instance.access(agent.id, e.session, agent.llmType, params)
+        func accessLLM(){
+            let maxCount = LLMConfig.getLLMAccessTryingCount()
+            let maxElapsed = LLMConfig.getLLMAccessTryingElapsed()
+            let start = MonoTime.now()
+            var count = 0
+            var elapsed = Duration.Zero
+            try{
+                var a = 0
+                var b = 1
+                var resp: LLMResp = unsafeZeroValue<LLMResp>()
+                while(count < maxCount && elapsed < maxElapsed){
+                    try{
+                        resp = LLMContextMediator.instance.access(agent.id, e.session, agent.llmType, params)
+                        break
+                    }catch(ex: Exception){
+                        elapsed = MonoTime.now() - start
+                        count++
+                        let sleepDuration = Duration.second * b
+                        log.warn{'''
+LLM agent: agent: ${agent.id}, session: ${e.session}, llmType: ${agent.llmType}
+exception occurred ${ex}, to retry after ${sleepDuration}'''}
+                        log.debug(ex){'LLM agent: agent: ${agent.id}, session: ${e.session}, llmType: ${agent.llmType}'}
+                        sleep(sleepDuration)
+                        let n = a + b
+                        a = b
+                        b = n
+                    }
+                }
+                if(count >= maxCount){
+                    throw LLMException('LLM access count exceeded ${count}, max: ${maxCount}')
+                }else if(elapsed >= maxElapsed){
+                    throw LLMException('LLM access elapsing exceeded ${elapsed}, max: ${maxElapsed}')
+                }else{
+                    return resp
+                }
+            }finally{
+                let c = count + 1
+                log.info{'LLM agent: agent: ${agent.id}, session: ${e.session}, llmType: ${agent.llmType}, tried: ${c}, elapsed: ${MonoTime.now() - start}'}
+            }
+        }
+        let resp = accessLLM()
         let usage = resp.usage
         tokenUsageSaver.saveTokenUsage(usage)
-        let eventData = AgentEventData(data: eData, messages: messages, functions: params.functions)
+        let eventData = AgentEventData(data: eData, messages: params.messages, functions: params.functions)
         var eventName = ''
         var eventType = EventType.Task
         for(msg in resp.messages){
@@ -298,20 +339,28 @@ ${auxiliaryMetadatas}
                     let name = function.name
                     let arguments = function.arguments
                     let json = JsonValue.fromStr(arguments).asObject()
-                    let fnResult = FunctionMediator.call(name, json)
-                    eventName = fnResult.event
-                    eventType = fnResult.eventType
-                    match(fnResult.resultType){
-                        case ResultType.Text => 
-                            let toolmsg = ToolMessage()
-                            toolmsg.tool_call_id = tool.id
-                            toolmsg.content = (fnResult.result as String).getOrThrow()
-                            messages.add(toolmsg)
-                        case ResultType.Skill => 
-                            let skill = (fnResult.result as Skill).getOrThrow()
-                            eventData.skillDetails.add(genSkillDetails(skill))
-                            let functions = FunctionMediator.getDefinitions(skill.functionNames)
-                            eventData.addFunctions(functions)
+                    try{
+                        let fnResult = FunctionMediator.call(name, json)
+                        eventName = fnResult.event
+                        eventType = fnResult.eventType
+                        match(fnResult.resultType){
+                            case ResultType.Text => 
+                                let toolmsg = ToolMessage()
+                                toolmsg.tool_call_id = tool.id
+                                toolmsg.content = (fnResult.result as String).getOrThrow()
+                                messages.add(toolmsg)
+                            case ResultType.Skill => 
+                                let skill = (fnResult.result as Skill).getOrThrow()
+                                eventData.skillDetails.add(genSkillDetails(skill))
+                                let functions = FunctionMediator.getDefinitions(skill.functionNames)
+                                eventData.addFunctions(functions)
+                        }
+                    }catch(e: Exception){
+                        log.warn(e){'function call ${name}(${arguments})'}
+                        let toolmsg = ToolMessage()
+                        toolmsg.tool_call_id = tool.id
+                        toolmsg.content = '调用函数时发生了异常： ${e}'
+                        messages.add(toolmsg)
                     }
                 }
             }else if(let m: AssistantMessage <- msg){

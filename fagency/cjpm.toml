@@ -1,23 +1,19 @@
 [package]
   cjc-version = "1.1.0"
-  name = "f_llm"
+  name = "fagency"
   organization = "fountain"
-  description = "大模型函数定义"
+  description = "nothing here"
+  version = "1.0.0"
   target-dir = ""
   script-dir = ""
-  output-type = "dynamic"
-  compile-option = "--dy-std"
-  override-compile-option = "--dy-std"
+  output-type = "executable"
+  compile-option = "-O2 --dy-std --enable-eh --experimental"
+  override-compile-option = "-O2 --dy-std"
   link-option = ""
   package-configuration = {}
-  version = "1.1.0"
-  category = ["Utility"]
-  license = ["Apache-2.0"]
-  include = ["src"]
-  exclude = ["cjpm.toml.bak", "cjpm.lock", "target"]
-  authors = ["吴京润"]
 
 [dependencies]
+#  opengauss = {git = "https://gitcode.com/runningW/opengauss-driver.git", branch="master"}
   "fountain::f_aspect" = {path = "../f_aspect"}
   "fountain::f_base" = {path = "../f_base"}
   "fountain::f_bean" = {path = "../f_bean"}
@@ -28,8 +24,8 @@
   "fountain::f_llm" = {path = "../f_llm"}
   "fountain::f_log" = {path = "../f_log"}
   "fountain::f_orm" = {path = "../f_orm"}
-  "fountain::f_regex" = {path = "../f_regex"}
   "fountain::f_util" = {path = "../f_util"}
+  "fountain::f_version" = {path = "../f_version"}
 
 [target]
 [target.x86_64-unknown-linux-gnu]

@@ -30,7 +30,7 @@ import fountain::f_io.exception.MMapException
  */
 @When[os == "Linux"]
 public class MMapFile <: Resource & IOStream {
-    private static let zeroFile = unsafe { zeroValue<File>() }
+    private static let zeroFile = unsafeZeroValue<File>()
     private static let ANONYMOUS_FD = IntNative(-1)
     private let fd: IntNative
     private var dirtyStart = 0i64 // 脏数据起始位置，相对于文件开头是offset + dirtyStart

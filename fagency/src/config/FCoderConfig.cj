@@ -13,21 +13,18 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package fountain::f_llm.agents
+package fountain::fagency.config
 
-internal import std.collection.*
-internal import std.time.*
+import fountain::f_config.*
+import fountain::f_llm.constant.*
 
-internal import fountain::f_base.*
-internal import fountain::f_bean.*
-internal import fountain::f_egraph.*
-internal import fountain::f_log.*
-internal import fountain::f_util.*
+public struct FCoderConfig {
+    private init(){}
+    public static const FCODER = 'fagency'
+    public static const FCODER_SEARCH_ENGINE = FCODER + '_searchEngine'
+    public static const FCODER_DEFAULT_SEARCH_ENGINE = MODEL_NAME_GLM_SEARCH_PRO
 
-internal import fountain::f_llm.config.*
-internal import fountain::f_llm.constant.*
-internal import fountain::f_llm.exception.*
-internal import fountain::f_llm.finder.*
-internal import fountain::f_llm.llm.*
-internal import fountain::f_llm.model.po.{Agent, Skill}
-internal import fountain::f_llm.tool.*
+    public static func getSearchEngine(){
+        Config.getString(FCODER_SEARCH_ENGINE) ?? FCODER_DEFAULT_SEARCH_ENGINE
+    }
+}

@@ -36,11 +36,11 @@ func toBase64(src: Array<Byte>): String {
 }
 
 func toBase64(src: String): String {
-    toBase64(unsafe { src.rawData() })
+    toBase64(src.unsafeBytes())
 }
 
 func bytesForSign(header: String, payload: String): Array<Byte> {
-    bytesForSign(unsafe { header.rawData() }, unsafe { payload.rawData() })
+    bytesForSign(header.unsafeBytes(), payload.unsafeBytes())
 }
 
 func bytesForSign(header: Array<Byte>, payload: Array<Byte>): Array<Byte> {

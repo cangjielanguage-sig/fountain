@@ -27,7 +27,7 @@ public let MEM_PAGE_SIZE: Int64 = unsafe { Int64(getpagesize()) }
 /**
  * null void*
  */
-public let nullptr: CPointer<Unit> = unsafe { zeroValue<CPointer<Unit>>() }
+public let nullptr: CPointer<Unit> = unsafeZeroValue<CPointer<Unit>>()
 
 /**
  * 简单调用memcpy

@@ -19,6 +19,8 @@ import std.collection.ArrayList
 import std.collection.concurrent.{ConcurrentHashMap, ConcurrentLinkedQueue}
 import std.sync.Mutex
 
+import fountain::f_base.*
+
 /**
  * 应用初始化API。应用代码通常不需要实现本接口。
  */
@@ -103,7 +105,7 @@ public struct InitializerCollection {
                 initializer.close()
             }
         }
-        instance = unsafe{zeroValue<InitializerCollection>()}
+        instance = unsafeZeroValue<InitializerCollection>()
         starters
     }
     /**

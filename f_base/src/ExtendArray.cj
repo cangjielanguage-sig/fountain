@@ -63,7 +63,7 @@ extend<T> Array<T> <: ExtendArray<T> {
         let newval = match(new){
             case First => this[0]
             case Last => this[this.size - 1]
-            case ZeroValue => unsafe{zeroValue<T>()}
+            case ZeroValue => unsafeZeroValue<T>()
             case Other(v) => v
             case Repeat => return if(s == 1){
                 let v = this[0]

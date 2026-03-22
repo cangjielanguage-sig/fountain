@@ -45,7 +45,7 @@ public class MultipartFormData {
 }
 public class MultipartFileBuilder {
     private let builder = ContentDispositionBuilder(ContentDisposition()).formData
-    private var content = unsafe{zeroValue<InputStream>()}
+    private var content = unsafeZeroValue<InputStream>()
     MultipartFileBuilder(private let data: MultipartFormData){}
     public func name(name: String): This {
         builder.name(name)

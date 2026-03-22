@@ -15,6 +15,8 @@ limitations under the License.
  */
 package fountain::f_pool
 
+import fountain::f_base.*
+
 public struct ArrayPool<T> {
     private let pool: Pool<Array<T>>
     public ArrayPool(
@@ -25,7 +27,7 @@ public struct ArrayPool<T> {
         checkInterval!: Duration = Duration.Zero,
         clearOnReturning!: Bool = false,
         private let arraySize!: Int64 = 128, 
-        private let creator!: () -> T = {=> unsafe { zeroValue<T>() }}) {
+        private let creator!: () -> T = {=> unsafeZeroValue<T>()}) {
         let initValue = creator()
         pool = Pool<Array<T>>(
             initSize: initSize,
