@@ -74,7 +74,7 @@ public class ContextSummaryPruner <: ContextLLMPruner {
         promptsGenerator!: (ArrayList<ChatMessage>) -> String = {messages => '''
 - 总结下面的JSON所描述的内容，从中提取内容**要点**、**关键**内容，并以MARKDOWN格式返回。
 ```json
-${JsonValue.tryFromData(messages.toData())}
+${(JsonValue.fromData(messages.toData()) as JsonValue).getOrThrow()}
 ```'''}
     ){
         super(llmType: llmType, model: model, promptsGenerator: promptsGenerator)
@@ -92,7 +92,7 @@ public class ContextKeywordsPruner <: ContextLLMPruner {
         promptsGenerator!: (ArrayList<ChatMessage>) -> String = {messages => '''
 - 从下面的JSON所描述的内容中提取**关键词**，关键词之间以逗号分隔。
 ```json
-${JsonValue.tryFromData(messages.toData())}
+${(JsonValue.fromData(messages.toData()) as JsonValue).getOrThrow()}
 ```'''}
     ){
         super(llmType: llmType, model: model, promptsGenerator: promptsGenerator)

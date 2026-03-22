@@ -24,7 +24,7 @@ public struct FunctionMeta {
         definition: FunctionCall,
         callee: (JsonObject) -> FunctionResult
     ){
-        this(JsonValue.tryFromData(definition.toData()).asObject(), callee)
+        this((JsonValue.fromData(definition.toData()) as JsonValue).getOrThrow().asObject(), callee)
     }
 }
 /**

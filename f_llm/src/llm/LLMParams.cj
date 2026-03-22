@@ -77,7 +77,7 @@ public class Parameters {
     public Parameters(
         private var `type`!: String = 'object'
     ){}
-    private var properties: JsonObject = JsonObject()
+    private var properties: JsonValue = JsonObject()
     private var required: ArrayList<String> = ArrayList<String>()
 
     public func addRequired(name: String) {
@@ -87,15 +87,15 @@ public class Parameters {
         let object = JsonObject()
         object.put('type', JsonString(`type`))
         object.put('description', JsonString(description))
-        this.properties.put(name, object)
+        this.properties.asObject().put(name, object)
     }
     public func addProperty(name!: String, propName!: String, propValue!: JsonValue): Unit{
-        if(let Some(json) <- properties.get(name)){
-            json.put(propName, propValue)
+        if(let Some(json) <- properties.asObject().get(name)){
+            json.asObject().put(propName, propValue)
         }else{
             let object = JsonObject()
             object.put(propName, propValue)
-            this.properties.put(name, object)
+            this.properties.asObject().put(name, object)
         }
     } 
 }
