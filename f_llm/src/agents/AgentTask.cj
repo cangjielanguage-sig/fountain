@@ -339,6 +339,7 @@ exception occurred ${ex}, to retry after ${sleepDuration}'''}
                     let name = function.name
                     let arguments = function.arguments
                     let json = JsonValue.fromStr(arguments).asObject()
+                    json.put('session', JsonString(e.session))
                     try{
                         let fnResult = FunctionMediator.call(name, json)
                         eventName = fnResult.event
