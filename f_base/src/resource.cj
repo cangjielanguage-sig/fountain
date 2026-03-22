@@ -22,3 +22,18 @@ public func resource<R, T>(res: R, fn: (R) -> T): T where R <: Resource {
         res.close()
     }
 }
+public struct ResourceManager<R> where R <: Resource {
+    private var resource = None<R>
+
+    public init(new: () -> R){
+        resource = new()
+    }
+    public func call<T>(fn: (R) -> T): T {
+        let res = resource.getOrThrow()
+        try{
+            fn(res)
+        }finally{
+            res.close()
+        }
+    }
+}

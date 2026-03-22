@@ -316,6 +316,18 @@ public enum OS <: Equatable<OS> & ToString & Hashable {
 public func resource<R, T>(res: R, fn: (R) -> T): T where R <: Resource
 ```
 
+## `ResourceManager<R> where R <: Resource`
+```cj
+/**
+ * 构造函数接收一个返回Resource实现的闭包，call函数执行fn，fn结束时关闭new闭包返回的实例
+ */
+public struct ResourceManager<R> where R <: Resource {
+    public init(new: () -> R)
+    public func call<T>(fn: (R) -> T): T 
+}
+
+```
+
 ## 单值迭代
 ```cj
 //用一个值初始化的迭代对象
