@@ -77,18 +77,27 @@ public class Parameters {
     public Parameters(
         private var `type`!: String = 'object'
     ){}
-    private var properties: HashMap<String, Property> = HashMap<String, Property>()
+    private var properties: JsonObject = JsonObject()
     private var required: ArrayList<String> = ArrayList<String>()
 
     public func addRequired(name: String) {
         this.required.add(name)
     }
-    public func addProperty(name!: String, `type`!: String, description!: String) {
-        this.properties.add(name, Property(`type`: `type`, description: description))
+    public func addProperty(name!: String, `type`!: String, description!: String): Unit {
+        let object = JsonObject()
+        object.put('type', JsonString(`type`))
+        object.put('description', JsonString(description))
+        this.properties.put(name, object)
     }
-    public func addProperty(name: String, property: Property){
-        this.properties.add(name, property)
-    }
+    public func addProperty(name!: String, propName!: String, propValue!: JsonValue): Unit{
+        if(let Some(json) <- properties.get(name)){
+            json.put(propName, propValue)
+        }else{
+            let object = JsonObject()
+            object.put(propName, propValue)
+            this.properties.put(name, object)
+        }
+    } 
 }
 
 @DataAssist[props fields]
