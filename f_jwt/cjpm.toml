@@ -1,4 +1,5 @@
 [dependencies]
+  "fountain::f_base" = {path = "../f_base"}
   "fountain::f_cache" = {path = "../f_cache"}
   "fountain::f_data" = {path = "../f_data"}
   "fountain::f_time" = {path = "../f_time"}

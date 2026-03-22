@@ -17,6 +17,7 @@ package fountain::f_jwt
 
 import stdx.encoding.base64.*
 import stdx.encoding.hex.*
+import fountain::f_base.unsafeBytes
 import fountain::f_jwt.exception.*
 
 func fromBase64(src: String): Array<Byte> {
