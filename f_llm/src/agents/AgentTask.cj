@@ -74,7 +74,7 @@ package fountain::f_llm.agents
  *            - 支持200K上下文的大模型在上下文超过80K时会产生严重幻觉。
  *            - Keywords和Summary两个策略依赖大模型，要注意给执行策略的大模型发送的上下文不要超过它的饱和token数
  */
-public class AgentTask <: Task {
+public open class AgentTask <: Task {
     private static let log = LoggerFactory.getLogger<AgentTask>()
     public AgentTask(private let agent: Agent){}
     public prop name: String{
@@ -222,7 +222,7 @@ ${auxiliaryMetadatas}
             messages.add(SystemMessage(auxiliarySkills))
         }
     }
-    public func exec(e: Event): Event {
+    public open func exec(e: Event): Event {
         let skills = skillsFinder.querySkills(agent.id, e.name)
         var auxiliaryMetadatas  = StringGenerator()
         var primarySkills = StringGenerator()
