@@ -83,7 +83,7 @@ public const CONTEXT_PRUNER_SATURATION = "Saturation"
 ```
 
 ## 数据定义：`fountain::f_llm.model.po`
-### 词元用量数据定义
+### token用量数据定义
 ```cj
 @DataAssist[fields]
 @QueryMappersGenerator[table: llm_token_usage]
@@ -237,7 +237,7 @@ public interface SkillsFinder {
 }
 ```
 
-### 词元数据保存接口
+### token数据保存接口
 ```cj
 public interface TokenUsageSaver {
     func saveTokenUsage(usage: TokenUsage): Unit
@@ -429,7 +429,7 @@ public class DRCContextPruner <: ContextPruner {
 ```cj
 public class SaturationContextPruner <: ContextPruner {
     /**
-     * @param pruner 词元饱和时执行的策略
+     * @param pruner token饱和时执行的策略
     public SaturationContextPruner(
         private let pruner!: ContextPruner
     ){}
@@ -439,7 +439,7 @@ public class SaturationContextPruner <: ContextPruner {
         }
     }
     /**
-     * 使用agentId查询智能体使用的大模型llmType和大模型名，进而找到大模型的饱和词元数
+     * 使用agentId查询智能体使用的大模型llmType和大模型名，进而找到大模型的饱和token数
      */
     public func prune(agentId: Int64, session: String, messages: ArrayList<ChatMessage>): ArrayList<ChatMessage>
 }
@@ -660,7 +660,7 @@ public sealed abstract class AbstractLLMContext {
      */
     public func access(agentId: Int64, session: String, params: LLMParams): LLMResp
     /**
-     * 获取大模型对接收到的messages产生的词元数
+     * 获取大模型对接收到的messages产生的token数
      */
     public func tokenize(model: String, messages: ArrayList<ChatMessage>): Int64
 }
@@ -685,11 +685,11 @@ public class LLMContextMediator {
      * @param params 访问大模型的参数
     public func access(agentId: Int64, session: String, llmType: LLMType, params: LLMParams): LLMResp 
     /**
-     * 获取指定大模型的饱和词元数
+     * 获取指定大模型的饱和token数
      */
     public func getTokenThreshold(llmType: LLMType, model: String): Int64 
     /**
-     * 获取指定大模型对于指定消息的词元数
+     * 获取指定大模型对于指定消息的token数
      */
     public func tokenize(llmType: LLMType, model: String, messages: ArrayList<ChatMessage>): Int64 
     /**
@@ -969,10 +969,10 @@ public class SkillLoadingFunction <: FunctionCalling<SkillLoading> {
      - F：饱和上下文（SaturationContextPruner）：
        - 这个策略的名称是'Saturation_${pruner.name}'
        - 上下文饱和时执行指定策略，
-       - 饱和词元数在大模型配置中指定，
-       - 可以用agentId查询到智能使用使用的大模型，进而确定大模型配置的饱和词元数
-         - 不同的大模型饱和词元数可能不同，
+       - 饱和token数在大模型配置中指定，
+       - 可以用agentId查询到智能体使用使用的大模型，进而确定大模型配置的饱和token数
+         - 不同的大模型饱和token数可能不同，
            - 通常支持1M上下文的大模型在上下文达到10%~15%会产生严重幻觉，
            - 支持200K上下文的大模型在上下文达到80K时会产生严重幻觉。
-           - Keywords和Summary两个策略依赖大模型，要注意给执行策略的大模型发送的上下文不要超过它的饱和词元数
+           - Keywords和Summary两个策略依赖大模型，要注意给执行策略的大模型发送的上下文不要超过它的饱和token数
  

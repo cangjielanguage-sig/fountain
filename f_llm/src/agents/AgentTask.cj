@@ -67,12 +67,12 @@ package fountain::f_llm.agents
  *      - F：饱和上下文（SaturationContextPruner）：
  *        - 这个策略的名称是'Saturation_${pruner.name}'
  *        - 上下文饱和时执行指定策略，
- *        - 饱和词元数在大模型配置中指定，
- *        - 可以用agentId查询到智能使用使用的大模型，进而确定大模型配置的饱和词元数
- *          - 不同的大模型饱和词元数可能不同，
+ *        - 饱和token数在大模型配置中指定，
+ *        - 可以用agentId查询到智能体使用使用的大模型，进而确定大模型配置的饱和token数
+ *          - 不同的大模型饱和token数可能不同，
  *            - 通常支持1M上下文的大模型在上下文达到10%~15%会产生严重幻觉，
- *            - 支持200K上下文的大模型在上下文达到80K时会产生严重幻觉。
- *            - Keywords和Summary两个策略依赖大模型，要注意给执行策略的大模型发送的上下文不要超过它的饱和词元数
+ *            - 支持200K上下文的大模型在上下文超过80K时会产生严重幻觉。
+ *            - Keywords和Summary两个策略依赖大模型，要注意给执行策略的大模型发送的上下文不要超过它的饱和token数
  */
 public class AgentTask <: Task {
     public AgentTask(private let agent: Agent){}
