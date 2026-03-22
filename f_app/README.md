@@ -64,7 +64,7 @@ public interface Initializer <: Resource {
      */
     func initialize(): Unit
     /**
-     * 返回阻塞启动函数，调用此函数将阻塞，比如调用mvc的启动函数会启动http服务并一直阻塞。
+     * 返回启动函数，调用返回的函数是否阻塞取决于具体实现，比如调用mvc的启动函数会启动http服务并一直阻塞。
      */
     func starter(): ?() -> Unit {
         None
