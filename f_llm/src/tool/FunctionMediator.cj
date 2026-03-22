@@ -38,22 +38,21 @@ public struct FunctionMediator {
 
     public static func getDefinitions<I>(funcNames: I): Iterator<FunctionCall> where I <: Iterable<String> {
         funcNames.iterator().map{f =>
-            let def = functions[f].definition.toData()
+            let def = getMeta(f).definition.toData()
             let fncall = FunctionCall()
-            DataObject<Function>.populate(def, fncall.function)
+            DataObject<FunctionCall>.populate(def, fncall)
             fncall
         }
     }
-
-    public static func call(function: String, args: JsonObject): FunctionResult {
+    private static func getMeta(function: String): FunctionMeta {
         if (let Some(meta) <- functions.get(function)){
-            return meta.callee(args)
+            return meta
         }else if(loaded.load()){
             throw FunctionNotFoundException(function)
         }
         synchronized(mutex){
             if (let Some(meta) <- functions.get(function)){
-                return meta.callee(args)
+                return meta
             }else if(loaded.load()){
                 throw FunctionNotFoundException(function)
             }
@@ -65,8 +64,11 @@ public struct FunctionMediator {
                 }
             }
             loaded.store(true)
-            return functions[function].callee(args)
+            return functions[function]
         }
+    }
+    public static func call(function: String, args: JsonObject): FunctionResult {
+        getMeta(function).callee(args)
     }
     private static func callee(bm: BeanManager): (JsonObject) -> FunctionResult {
         let prototype = bm.meta.scope.isPrototype
