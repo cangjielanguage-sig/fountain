@@ -54,6 +54,9 @@ public func convert<T>(data: Data, flag!: DataConversionFlag = DEFAULT_DATA_FLAG
         case _ => None<T>
     }
 }
+public func convert<T, R>(data: R, flag!: DataConversionFlag = DEFAULT_DATA_FLAG): ?T where T <: DataFields<T>, R <: ToData { 
+    convert<T>(data.toData(), flag: flag)
+}
 
 public func f_data_tryFromData<O>(data: Data, flag: DataConversionFlag): Any where O <: ObjectData<O> {
     match (DataObject<O>.populate(data, flag: flag)) {

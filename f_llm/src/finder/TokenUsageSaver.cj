@@ -18,3 +18,11 @@ package fountain::f_llm.finder
 public interface TokenUsageSaver {
     func saveTokenUsage(usage: TokenUsage): Unit
 }
+public struct DummyTokenUsageSaver <: TokenUsageSaver {
+    private static let log = LoggerFactory.getLogger<DummyTokenUsageSaver>()
+    public static let instance = DummyTokenUsageSaver()
+    private init(){}
+    public func saveTokenUsage(usage: TokenUsage): Unit {
+        log.info{'TokenUsage: ${JsonValue.from(usage)}'}
+    }
+}

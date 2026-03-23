@@ -43,6 +43,7 @@ public interface ExtendJsonValue {
         writer.flush()
         JsonValue.fromStr(String.fromUtf8(buffer.bytes()))
     }
+    static func from<T>(data: T): JsonValue where T <: ToData
 }
 
 public let JSON_NULL = JsonNull()
@@ -59,6 +60,9 @@ extend JsonValue <: ExtendJsonValue & DataFields<JsonValue> {
             case x: JsonObject => DataJsonObject(x)
             case _ => throw UnreachableException()
         }
+    }
+    public static func from<T>(data: T): JsonValue where T <: ToData{
+        tryFromData(data.toData(), DEFAULT_DATA_FLAG)
     }
     public static func tryFromData(data: Data, flag: DataConversionFlag): JsonValue {
         func from(data: Data) {

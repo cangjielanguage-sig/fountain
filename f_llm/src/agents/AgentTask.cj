@@ -122,15 +122,16 @@ public open class AgentTask <: Task {
             }
         }
     }
-    private var tokenUsageSaver_: ?TokenUsageSaver = None
+    private var tokenUsageSaver_: TokenUsageSaver = DummyTokenUsageSaver.instance
+    private var tokenUsageSaverLookuped = false
     private prop tokenUsageSaver: TokenUsageSaver {
         get(){
-            if(let Some(s) <- tokenUsageSaver_){
-                s
+            if(tokenUsageSaverLookuped){
+                tokenUsageSaver_
             }else{
-                let s = lookup<TokenUsageSaver>()
-                tokenUsageSaver_ = s
-                s
+                tokenUsageSaver_ = lookupOption<TokenUsageSaver>() ?? DummyTokenUsageSaver.instance
+                tokenUsageSaverLookuped = true
+                tokenUsageSaver_
             }
         }
     }

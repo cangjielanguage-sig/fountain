@@ -63,11 +63,11 @@ public abstract class ContextLLMPruner <: ContextPruner {
             messages: ArrayList<ChatMessage>([UserMessage(promptsGenerator(messages))])
         )
         let resp = LLMContextMediator.instance.access(agentId, session, llmType, params)
-        lookup<TokenUsageSaver>().saveTokenUsage(resp.usage)
+        lookupOption<TokenUsageSaver>()?.saveTokenUsage(resp.usage)
         let msgs = resp.messages
         let msg = msgs[msgs.size - 1]
         msg.role = ROLE_USER
-        return msg
+        return msgs
     }
 }
 public class ContextSummaryPruner <: ContextLLMPruner {

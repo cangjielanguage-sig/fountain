@@ -17,6 +17,7 @@ package fountain::f_llm.finder
 
 internal import std.collection.*
 
+internal import fountain::f_log.*
 internal import fountain::f_orm.*
 
 internal import fountain::f_llm.constant.*
