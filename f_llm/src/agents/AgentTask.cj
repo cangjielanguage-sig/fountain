@@ -295,12 +295,13 @@ ${auxiliaryMetadatas}
                 if(let Some(ne: JsonObject) <- props.get('nextEvent') && !ne.containsKey('enum')){
                     ne.put('enum', producingEventJsons)
                 }
-                if(let Some(ne: JsonObject) <- props.get('event')){
-                    ne.put('enum', JsonArray([JsonString(e.name)]))
+                func putEnum(propName: String, value: String){
+                    if(let Some(ne: JsonObject) <- props.get(propName)){
+                        ne.put('enum', JsonArray([JsonString(value)]))
+                    }    
                 }
-                if(let Some(ne: JsonObject) <- props.get('session')){
-                    ne.put('enum', JsonArray([JsonString(e.session)]))
-                }
+                putEnum('event', e.name)
+                putEnum('session', e.session)
                 params.addFunction(call)
             }
         }
