@@ -76,7 +76,13 @@ package fountain::f_llm.agents
  */
 public open class AgentTask <: Task {
     private static let log = LoggerFactory.getLogger<AgentTask>()
-    public AgentTask(private let agent: Agent){}
+    private let producingEventJsons: JsonArray
+    public AgentTask(private let agent: Agent){
+        producingEventJsons = JsonArray(Array<JsonValue>(agent.producingEvents.size){i =>
+           let v: JsonValue = JsonString(agent.acceptableEvents[i])
+           v
+        })
+    }
     public prop name: String{
         get(){
             agent.agent
@@ -283,7 +289,18 @@ ${auxiliaryMetadatas}
         }
         let params = LLMToolParams(model: agent.llmName, messages: messages)
         params.addFunctions(functions)
-        FunctionMediator.getDefinitions(functionNames) |> params.addFunctions
+        FunctionMediator.getDefinitions(functionNames).inspect{call: FunctionCall => 
+            let props = call.function.parameters.properties.asObject()
+            if(let Some(ne: JsonObject) <- props.get('nextEvent') && !ne.containsKey('enum')){
+                ne.put('enum', producingEventJsons)
+            }
+            if(let Some(ne: JsonObject) <- props.get('event')){
+                ne.put('enum', JsonArray([JsonString(e.name)]))
+            }
+            if(let Some(ne: JsonObject) <- props.get('session')){
+                ne.put('enum', JsonArray([JsonString(e.session)]))
+            }
+        } |> params.addFunctions
         params.messages = ContextPrunerMediator.instance.prune(agent.pruner, agentId: agent.id, session: e.session, messages: params.messages)
         func accessLLM(){
             let maxCount = LLMConfig.getLLMAccessTryingCount()

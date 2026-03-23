@@ -21,7 +21,7 @@ import fountain::f_data.macros.*
 @DataAssist[props fields]
 public class Answer {
     @JsonStringSchema[description:'流程下一步的事件名称']
-    private var event: String = ''
+    private var nextEvent: String = ''
     @JsonStringSchema[description:'你的回复，将作为流程下一步事件的数据']
     private var answer: String = ''
 }
@@ -50,6 +50,6 @@ public class AnswerFunction <: FunctionCalling<Answer> {
      * @return 函数调用结果
      */
     public func call(params: Answer): FunctionResult {
-        FunctionResult(event: params.event, result: params.answer)
+        FunctionResult(event: params.nextEvent, result: params.answer)
     }
 }
