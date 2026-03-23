@@ -108,6 +108,11 @@ public class DRCContextPruner <: ContextPruner {
         private let systemPruner!: ContextPruner,
         private let othersPruner!: ContextPruner
     ){}
+    public init(
+        exceptSystemPruner!: ContextPruner
+    ){
+        this(systemPruner: RetainContext(), othersPruner: exceptSystemPruner)
+    }
     public prop name: String{
         get(){
             '${CONTEXT_PRUNER_DRC}_${systemPruner.name}_${othersPruner.name}'
