@@ -37,15 +37,15 @@ public open class LLMToolParams <: LLMParams {
     ){
         super(model: model, messages: messages)
     }
-    protected let functions: ArrayList<FunctionCall> = ArrayList<FunctionCall>()
+    private let functions: HashSet<FunctionCall> = HashSet<FunctionCall>()
     
-    @DataExclude[prop field]
-    private let fnNames = HashSet<String>()
     public func addFunctions<I>(functions: I): Unit where I <: Iterable<FunctionCall> {
-        for (function in functions where !fnNames.contains(function.function.name)) {
+        for (function in functions) {
             this.functions.add(function)
-            fnNames.add(function.function.name)
         }
+    }
+    public func addFunction(function: FunctionCall): Unit {
+        this.functions.add(function)
     }
 }
 
@@ -58,9 +58,16 @@ public class Thinking {
 }
 
 @DataAssist[props fields]
-public class FunctionCall {
+public class FunctionCall <: Hashable & Equatable<FunctionCall>{
     public let `type`: String = 'function'
     public let function: Function = Function()
+
+    public func hashCode(): Int64 {
+        return function.name.hashCode()
+    }
+    public operator func ==(other: FunctionCall): Bool {
+        return function.name == other.function.name
+    }
 }
 
 @DataAssist[props fields]

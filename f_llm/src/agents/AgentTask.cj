@@ -247,7 +247,7 @@ ${auxiliaryMetadatas}
         let promptsTemplate = genPromptsTemplate(e, primarySkills, auxiliaryMetadatas)
         let messages = ArrayList<ChatMessage>()
         var eData = None<Any>
-        var functions = ArrayList<FunctionCall>()
+        var functions = HashSet<FunctionCall>()
         if(let e: DataEvent <- e && let any: ToData <- e.data && let data: SimpleDataObject <- any.toData()){
             eData = any
             populatePromptsParams(messages, promptsTemplate, data)
@@ -289,19 +289,23 @@ ${auxiliaryMetadatas}
             messages.add(SystemMessage(promptsTemplate))
         }
         let params = LLMToolParams(model: agent.llmName, messages: messages)
-        params.addFunctions(functions)
-        FunctionMediator.getDefinitions(functionNames).inspect{call: FunctionCall => 
-            let props = call.function.parameters.properties.asObject()
-            if(let Some(ne: JsonObject) <- props.get('nextEvent') && !ne.containsKey('enum')){
-                ne.put('enum', producingEventJsons)
+        func addFunctions<I>(functions: I): Unit where I <: Iterable<FunctionCall>{
+            for(call in functions){
+                let props = call.function.parameters.properties.asObject()
+                if(let Some(ne: JsonObject) <- props.get('nextEvent') && !ne.containsKey('enum')){
+                    ne.put('enum', producingEventJsons)
+                }
+                if(let Some(ne: JsonObject) <- props.get('event')){
+                    ne.put('enum', JsonArray([JsonString(e.name)]))
+                }
+                if(let Some(ne: JsonObject) <- props.get('session')){
+                    ne.put('enum', JsonArray([JsonString(e.session)]))
+                }
+                params.addFunction(call)
             }
-            if(let Some(ne: JsonObject) <- props.get('event')){
-                ne.put('enum', JsonArray([JsonString(e.name)]))
-            }
-            if(let Some(ne: JsonObject) <- props.get('session')){
-                ne.put('enum', JsonArray([JsonString(e.session)]))
-            }
-        } |> params.addFunctions
+        }
+        addFunctions(functions)
+        addFunctions(FunctionMediator.getDefinitions(functionNames))
         params.messages = ContextPrunerMediator.instance.prune(agent.pruner, agentId: agent.id, session: e.session, messages: params.messages)
         func accessLLM(){
             let maxCount = LLMConfig.getLLMAccessTryingCount()
