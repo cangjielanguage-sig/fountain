@@ -64,7 +64,10 @@ public abstract class ContextLLMPruner <: ContextPruner {
         )
         let resp = LLMContextMediator.instance.access(agentId, session, llmType, params)
         lookup<TokenUsageSaver>().saveTokenUsage(resp.usage)
-        return resp.messages
+        let msgs = resp.messages
+        let msg = msgs[msgs.size - 1]
+        msg.role = ROLE_USER
+        return msg
     }
 }
 public class ContextSummaryPruner <: ContextLLMPruner {
