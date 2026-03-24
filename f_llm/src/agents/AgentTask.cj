@@ -230,11 +230,15 @@ ${auxiliaryMetadatas}
         }
     }
     private func generateNextEvents(ne: JsonObject){
+        if(let Some(desc: JsonString) <- ne.get('description') && desc.getValue().contains('## 事件列表')){
+            return
+        }
         let eventFinder = lookup<EventFinder>()
-        if(let Some(events: JsonArray) <- ne.get('enum') && items <- events.getItems()){
+        if(let Some(events: JsonArray) <- ne.get('enum')){
             let eventDesc = StringGenerator('## 事件列表')
-            for(ens in items){
-                let desc = ens.asString().getValue() |> eventFinder.find(en)
+            for(ens in events.getItems()){
+                let en = ens.asString().getValue()
+                let desc = eventFinder.find(en)
                 eventDesc.append('''
 
 ### 事件名：${en}
