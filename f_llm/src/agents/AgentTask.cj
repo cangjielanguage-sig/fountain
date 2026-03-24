@@ -229,6 +229,28 @@ ${auxiliaryMetadatas}
             messages.add(SystemMessage(auxiliarySkills))
         }
     }
+    private func generateNextEvents(ne: JsonObject){
+        let eventFinder = lookup<EventFinder>()
+        if(let Some(events: JsonArray) <- ne.get('enum') && items <- events.getItems()){
+            let eventDesc = StringGenerator('## 事件列表')
+            for(ens in items){
+                let desc = ens.asString().getValue() |> eventFinder.find(en)
+                eventDesc.append('''
+
+### 事件名：${en}
+${desc}
+
+''')
+            }
+            if(let Some(desc: JsonString) <- ne.get('description')){
+                ne.put('description', JsonString('''
+${desc.getValue()}
+
+${eventDesc}
+'''))
+            }
+    }
+    }
     public open func exec(e: Event): Event {
         let skills = skillsFinder.querySkills(agent.id, e.name)
         var auxiliaryMetadatas  = StringGenerator()
@@ -292,8 +314,11 @@ ${auxiliaryMetadatas}
         func addFunctions<I>(functions: I): Unit where I <: Iterable<FunctionCall>{
             for(call in functions){
                 let props = call.function.parameters.properties.asObject()
-                if(let Some(ne: JsonObject) <- props.get('nextEvent') && !ne.containsKey('enum')){
-                    ne.put('enum', producingEventJsons)
+                if(let Some(ne: JsonObject) <- props.get('nextEvent')){
+                    if(!ne.containsKey('enum')){
+                        ne.put('enum', producingEventJsons)
+                    }
+                    generateNextEvents(ne)
                 }
                 func putEnum(propName: String, value: String){
                     if(let Some(ne: JsonObject) <- props.get(propName)){
