@@ -230,8 +230,14 @@ ${auxiliaryMetadatas}
         }
     }
     private func generateNextEvents(ne: JsonObject){
-        if(let Some(desc: JsonString) <- ne.get('description') && desc.getValue().contains('## 事件列表')){
-            return
+        let description = if(let Some(desc: JsonString) <- ne.get('description')){
+            if(let Some(idx) <- desc.getValue().indexOf('## 事件列表')){
+                desc.getValue()[0 .. idx]
+            }else{
+                desc.getValue()
+            }
+        }else{
+            ''
         }
         let eventFinder = lookup<EventFinder>()
         if(let Some(events: JsonArray) <- ne.get('enum')){
@@ -246,14 +252,12 @@ ${desc}
 
 ''')
             }
-            if(let Some(desc: JsonString) <- ne.get('description')){
-                ne.put('description', JsonString('''
-${desc.getValue()}
+            ne.put('description', JsonString('''
+${description}
 
 ${eventDesc}
 '''))
-            }
-    }
+        }
     }
     public open func exec(e: Event): Event {
         let skills = skillsFinder.querySkills(agent.id, e.name)
