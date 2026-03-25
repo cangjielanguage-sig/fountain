@@ -241,8 +241,12 @@ ${auxiliaryMetadatas}
         }
         let eventFinder = lookup<EventFinder>()
         if(let Some(events: JsonArray) <- ne.get('enum')){
+            let items = events.getItems()
+            if(items.size == 0){
+                return
+            }
             let eventDesc = StringGenerator('## 事件列表')
-            for(ens in events.getItems()){
+            for(ens in items){
                 let en = ens.asString().getValue()
                 let desc = eventFinder.find(en)
                 eventDesc.append('''
