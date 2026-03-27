@@ -1,0 +1,68 @@
+[package]
+  cjc-version = "1.1.0"
+  name = "fcoder"
+  organization = "fountain"
+  description = "nothing here"
+  version = "1.0.0"
+  target-dir = ""
+  script-dir = ""
+  output-type = "executable"
+  compile-option = "-O2 --dy-std --enable-eh --experimental"
+  override-compile-option = "-O2 --dy-std"
+  link-option = ""
+  package-configuration = {}
+
+[dependencies]
+#  opengauss = {git = "https://gitcode.com/runningW/opengauss-driver.git", branch="master"}
+  "fountain::f_aspect" = {path = "../f_aspect"}
+  "fountain::f_base" = {path = "../f_base"}
+  "fountain::f_bean" = {path = "../f_bean"}
+  "fountain::f_config" = {path = "../f_config"}
+  "fountain::f_data" = {path = "../f_data"}
+  "fountain::f_egraph" = {path = "../f_egraph"}
+  "fountain::f_httpclient" = {path = "../f_httpclient"}
+  "fountain::f_llm" = {path = "../f_llm"}
+  "fountain::f_log" = {path = "../f_log"}
+  "fountain::f_orm" = {path = "../f_orm"}
+  "fountain::f_util" = {path = "../f_util"}
+  "fountain::f_version" = {path = "../f_version"}
+
+[target]
+[target.x86_64-unknown-linux-gnu]
+  compile-option = "-O2 --dy-std -ldl"
+  override-compile-option = "-O2 --dy-std -ldl"
+[target.x86_64-unknown-linux-gnu.bin-dependencies]
+  path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]
+[target.aarch64-unknown-linux-gnu]
+  compile-option = "-O2 --dy-std -ldl"
+  override-compile-option = "-O2 --dy-std -ldl"
+[target.aarch64-unknown-linux-gnu.bin-dependencies]
+  path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]
+[target.x86_64-w64-mingw32]
+  compile-option = "-O2 --dy-std -lcrypt32"
+  override-compile-option = "-O2 --dy-std -lcrypt32"
+[target.x86_64-w64-mingw32.bin-dependencies]
+  path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]
+[target.x86_64-apple-darwin]
+  compile-option = "-O2 --dy-std"
+  override-compile-option = "-O2 --dy-std"
+[target.x86_64-apple-darwin.bin-dependencies]
+  path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]
+[target.aarch64-apple-darwin]
+  compile-option = "-O2 --dy-std"
+  override-compile-option = "-O2 --dy-std"
+[target.aarch64-apple-darwin.bin-dependencies]
+  path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]
+[target.aarch64-linux-ohos]
+  compile-option = "-O2 --dy-std -ldl"
+  override-compile-option = "-O2 --dy-std -ldl"
+[target.aarch64-linux-ohos.bin-dependencies]
+  path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]
+[target.x86_64-linux-ohos]
+  compile-option = "-O2 --dy-std -ldl"
+  override-compile-option = "-O2 --dy-std -ldl"
+[target.x86_64-linux-ohos.bin-dependencies]
+  path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]
+
+[profile.build]
+  incremental = true
