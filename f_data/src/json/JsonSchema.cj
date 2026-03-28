@@ -283,11 +283,3 @@ public class JsonObjectSchema <: JsonSchema {
         public let title!: ?String = None,
         public let description!: ?String = None){}
 }
-/**
-{"type":"boolean", "default":true}
-{"type":"integer", "enum":[...], "minimum":0, "maximum":100, "multipleOf":2, "exclusiveMinimum":0, "exclusiveMaximum": 100, "default":0}
-{"type":"number", "enum":[...], "minimum":0, "maximum":100, "multipleOf":2, "exclusiveMinimum":0, "exclusiveMaximum": 100, "default":0}
-{"type":"string", "enum":[...], "minLength":0, "maxLength":100, "pattern":"...", format:"date-time|url|email|uuid", "default":""}
-{"type":"array", "items":{"type":"string"}, "minItems":0, "maxItems":100", "uniqueItems":true}
-{"type":"object", "properties":{"name":{"type":"string"}, "age":{"type":"integer"}}, "required":["name", "age"], "additionalProperties": false}
-*/

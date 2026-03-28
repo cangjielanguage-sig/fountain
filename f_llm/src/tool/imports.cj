@@ -33,3 +33,5 @@ internal import fountain::f_llm.config.*
 internal import fountain::f_llm.exception.*
 internal import fountain::f_llm.finder.*
 internal import fountain::f_llm.llm.*
+
+public import fountain::f_bean.*

@@ -27,6 +27,7 @@
   "fountain::f_httpclient" = {path = "../f_httpclient"}
   "fountain::f_llm" = {path = "../f_llm"}
   "fountain::f_log" = {path = "../f_log"}
+  "fountain::f_macros" = {path = "../f_macros"}
   "fountain::f_orm" = {path = "../f_orm"}
   "fountain::f_regex" = {path = "../f_regex"}
   "fountain::f_util" = {path = "../f_util"}
