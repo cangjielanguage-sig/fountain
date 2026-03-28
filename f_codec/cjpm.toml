@@ -17,6 +17,9 @@
   exclude = ["cjpm.toml.bak", "cjpm.lock", "target"]
   authors = ["吴京润"]
 
+[profile.build]
+  incremental = true
+
 [dependencies]
   "fountain::f_base" = {path = "../f_base"}
   "fountain::f_collection" = {path = "../f_collection"}
