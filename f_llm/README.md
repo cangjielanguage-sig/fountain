@@ -233,7 +233,8 @@ public interface OrganizationFinder {
 ```cj
 public interface SkillsFinder {
     func querySkills(agentId: Int64, event: String): ArrayList<Skill>
-    func loadSkill(title: String): Skill
+    func loadSkills(title: ArrayList<String>): ArrayList<Skill>
+    func loadSkillReferences(references: ArrayList<SkillReferenceParam>): ArrayList<SkillReference>
 }
 ```
 
@@ -975,4 +976,126 @@ public class SkillLoadingFunction <: FunctionCalling<SkillLoading> {
            - 通常支持1M上下文的大模型在上下文达到10%~15%会产生严重幻觉，
            - 支持200K上下文的大模型在上下文达到80K时会产生严重幻觉。
            - Keywords和Summary两个策略依赖大模型，要注意给执行策略的大模型发送的上下文不要超过它的饱和token数
- 
+
+## todo
+```cj
+package fountain::f_llm.finder
+public interface TodoFinder {
+    /**
+     * 保存待办
+     * @param task 待办任务名称
+     * @param todos 当前task的待办列表
+     */
+    func save(task: String, todos: ArrayList<Todo>): Unit
+    /**
+     * 列出待办
+     * @param task 待办任务名称
+     * @return 待办列表
+     */
+    func list(task: String): ArrayList<Todo>
+    /**
+     * 更新待办状态
+     * @param task 待办任务名称
+     * @param id 待办ID
+     * @param status 待办状态
+     * @return 更新的待办数量，如果返回的值不是1表示参数错了，或者待办不存在
+     */
+    func updateStatus(task: String, id: Int64, status: String): Int64
+}
+```
+
+```cj
+package fountain::f_llm.tool
+@DataAssist[props fields]
+public class TodoSavingParam {
+    @JsonStringSchema[description:'流程下一步骤的事件名称']
+    private var nextEvent: String = ''
+    @JsonStringSchema[description:'任务名称']
+    private var task: String = ''
+    @JsonArraySchema[description:'待办列表']
+    private var todos: ArrayList<TodoSaving> = ArrayList<TodoSaving>()
+}
+@DataAssist[props fields]
+public class TodoSaving {
+    @JsonStringSchema[description:'待办标题']
+    private var title: String = ''
+    @JsonStringSchema[description:'待办详述']
+    private var content: String = ''
+    @JsonStringSchema[description:'待办状态']
+    private var status: String = TODO_STATUS_PENDING
+    @JsonArraySchema[description:'前置待办ID列表']
+    private var predecessor: ArrayList<Int64> = ArrayList<Int64>()
+}
+@DataAssist[props fields]
+public class TodoListParam{
+    @JsonStringSchema[description:'流程下一步骤的事件名称']
+    private var nextEvent: String = ''
+    @JsonStringSchema[description:'任务名称']
+    private var task: String = ''
+}
+@DataAssist[props fields]
+public class TodoStatusParam{
+    @JsonStringSchema[description:'流程下一步骤的事件名称']
+    private var nextEvent: String = ''
+    @JsonStringSchema[description:'任务名称']
+    private var task: String = ''
+    @JsonStringSchema[description:'待办ID']
+    private var id: Int64 = 0
+    @JsonStringSchema[description:'新的待办状态']
+    private var status: String = ''
+}
+```
+
+```cj
+package fountain::f_llm.tool
+@ToolCall
+public class TodoFunction {
+    @FunctionDefinition[
+        name: 'addTodo',
+        description: '添加待办'
+    ]
+    public func addTodo(param: TodoSavingParam): FunctionResult 
+
+    @FunctionDefinition[
+        name: 'todoList',
+        description: '查询全部待办'
+    ]
+    public func todoList(param: TodoListParam): FunctionResult 
+    @FunctionDefinition[
+        name: 'updateTodoStatus',
+        description: '更新待办状态'
+    ]
+    public func updateStatus(param: TodoStatusParam): FunctionResult 
+}
+```
+
+## tool call 函数定义
+可以在一个类定义多个tool call函数
+```cj
+/**
+ * 用来修饰类的公共实例函数，这个类必须被@ToolCall宏修饰
+ */
+@Annotation[target: [MemberFunction]]
+public class FunctionDefinition {
+    public const FunctionDefinition(
+        public let name!: String,
+        public let description!: String
+    ){}
+}
+```
+
+```cj
+macro package fountain::f_llm.macros
+/**
+ * 用来定义tool call函数的宏，这个宏用来修饰类，被它修饰的类将被注册到fountain::f_bean，
+ * 并且被它修饰的类的公共实例函数将被注册为tool call函数。
+ * 只有被@FunctionDefinition修饰的函数才会被注册为tool call函数，否则将抛出异常。
+ */
+public macro ToolCall(input: Tokens): Tokens 
+/**
+ * 用来修饰类，这个类将被注册到fountain::f_bean，并且被它修饰的类的公共实例函数将被注册为tool call函数。
+ * 只有被@FunctionDefinition修饰的函数才会被注册为tool call函数，否则将抛出异常。
+ * 所不同的是这个宏的公共实例函数交被织入符合条件的切面。
+ */
+public macro WeavedToolCall(input: Tokens): Tokens 
+```

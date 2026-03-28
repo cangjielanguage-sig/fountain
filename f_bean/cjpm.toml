@@ -1,14 +1,14 @@
 [dependencies]
   "fountain::f_app" = {path = "../f_app"}
-  "fountain::f_base" = "1.1.0"
-  "fountain::f_cmd" = "1.1.0"
-  "fountain::f_collection" = "1.1.0"
-  "fountain::f_config" = "1.1.0"
-  "fountain::f_data" = "1.1.0"
-  "fountain::f_log" = "1.1.0"
-  "fountain::f_macros" = "1.1.0"
-  "fountain::f_exception" = "1.1.0"
-  "fountain::f_regex" = "1.1.0"
+  "fountain::f_base" = {path = "../f_base"}
+  "fountain::f_cmd" = {path = "../f_cmd"}
+  "fountain::f_collection" = {path = "../f_collection"}
+  "fountain::f_config" = {path = "../f_config"}
+  "fountain::f_data" = {path = "../f_data"}
+  "fountain::f_log" = {path = "../f_log"}
+  "fountain::f_macros" = {path = "../f_macros"}
+  "fountain::f_exception" = {path = "../f_exception"}
+  "fountain::f_regex" = {path = "../f_regex"}
 [package]
   cjc-version = "1.1.0"
   compile-option = "--dy-std"
@@ -20,7 +20,7 @@
   output-type = "dynamic"
   src-dir = ""
   target-dir = ""
-  version = "1.1.0"
+  version = "1.1.1"
   package-configuration = {}
   category = ["Utility"]
   license = ["Apache-2.0"]

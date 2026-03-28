@@ -290,7 +290,16 @@ ${eventDesc}
         let messages = ArrayList<ChatMessage>()
         var eData = None<Any>
         var functions = HashSet<FunctionCall>()
-        if(let e: DataEvent <- e && let any: ToData <- e.data && let data: SimpleDataObject <- any.toData()){
+        if (let e: DataEvent <- e && let msg: String <- e.data){
+            messages.add(SystemMessage(promptsTemplate))
+            messages.add(UserMessage(msg))
+        }else if (let e: DataEvent <- e && let msg: ChatMessage <- e.data){
+            messages.add(SystemMessage(promptsTemplate))
+            messages.add(msg)
+        }else if (let e: DataEvent <- e && let msgs: ArrayList<ChatMessage> <- e.data){
+            messages.add(SystemMessage(promptsTemplate))
+            messages.add(all: msgs)
+        }else if(let e: DataEvent <- e && let any: ToData <- e.data && let data: SimpleDataObject <- any.toData()){
             eData = any
             populatePromptsParams(messages, promptsTemplate, data)
         }else if (let e: DataEvent <- e && let agentData: AgentEventData <- e.data) {

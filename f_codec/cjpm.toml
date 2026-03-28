@@ -3,7 +3,7 @@
   name = "f_codec"
   organization="fountain"
   description = "编解码器"
-  version = "1.1.0"
+  version = "1.1.1"
   target-dir = ""
   src-dir = ""
   output-type = "dynamic"
