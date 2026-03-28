@@ -96,8 +96,7 @@ ${todo.content}
         FunctionResult(event: param.nextEvent, result: todos.toString())
     }
     @FunctionDefinition[
-        name: 'updateTodoStatus',
-        description: '更新待办状态'
+        name: 'updateTodoStatus'
     ]
     public func updateStatus(param: TodoStatusParam): FunctionResult {
         let updated = lookup<TodoFinder>().updateStatus(param.task, param.id, param.status)
