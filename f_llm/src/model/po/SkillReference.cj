@@ -13,19 +13,20 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package fountain::fcoder.service.impl
+package fountain::f_llm.model.po
 
-import fountain::f_bean.macros.*
+import fountain::f_data.*
+import fountain::f_data.macros.*
+import fountain::f_orm.*
+import fountain::f_orm.macros.*
 
-@Bean
-public class SkillsServiceImpl <: SkillsService {
-    public func querySkills(agentId: Int64, event: String): ArrayList<Skill> {
-        executor().findSkills(agentId, event)
-    }
-    public func loadSkills(title: ArrayList<String>): ArrayList<Skill> {
-        executor().loadSkills(title)
-    }
-    public func loadSkillReferences(references: ArrayList<SkillReferenceParam>): ArrayList<SkillReference> {
-        executor().loadSkillReferences(references)
-    }
+@DataAssist[fields]
+@QueryMappersGenerator[table: skill_references]
+public class SkillReference {
+    @ORMField['skill_title']
+    private var skillTitle: String = ""
+    @ORMField['title']
+    private var title: String = ""
+    @ORMField['content']
+    private var content: String = ""
 }

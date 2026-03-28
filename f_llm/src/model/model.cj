@@ -15,4 +15,6 @@ limitations under the License.
 */
 package fountain::f_llm.model
 
+internal import std.collection.ArrayList
 internal import fountain::f_llm.constant.*
+internal import fountain::f_data.*

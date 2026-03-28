@@ -18,6 +18,7 @@ package fountain::f_llm.tool
 public enum ResultType {
     | Text
     | Skill
+    | SkillReference
 }
 /**
  * 函数调用结果，本模块是f_llm的辅助模块，而f_llm依赖f_egraph定义的事件和流程

@@ -36,7 +36,7 @@ public interface SkillsDAO <: RootDAO {
            and s.accepted_event = ${arg(event)}
         ''').list<Skill>()
     }
-    func loadSkill(title: String): Skill {
+    func loadSkills(title: ArrayList<String>): ArrayList<Skill> {
         executor.setSql('''
         select id,
                agent_id,
@@ -46,7 +46,32 @@ public interface SkillsDAO <: RootDAO {
                metadata,
                details
           from skills
-         where title = ${arg(title)}
-        ''').first<Skill>().getOrThrow()
+         where title ${IN(title)}
+        ''').list<Skill>()
+    }
+    func loadSkillReferences(references: ArrayList<SkillReferenceParam>): ArrayList<SkillReference> {
+        func addArgs(){
+            let args = StringBuilder()
+            for(r in references){
+                if(args.size > 0){
+                    args.append(',')
+                }
+                let title = r.skill
+                for(rr in r.reference){
+                    args.append('(${arg(title)}, ${arg(rr)})')
+                }
+            }
+            args.toString()
+        }
+        executor.setSql('''
+        select s.title as skill_title,
+               r.title,
+               r.content 
+          from skill as s 
+         inner 
+          join skill_references as r
+            on s.id = r.skill_id
+         where (s.title, r.title) in (${addArgs()})
+        ''').list<SkillReference>()
     }
 }

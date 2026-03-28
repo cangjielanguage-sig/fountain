@@ -29,5 +29,5 @@ internal import fountain::f_llm.constant.*
 internal import fountain::f_llm.exception.*
 internal import fountain::f_llm.finder.*
 internal import fountain::f_llm.llm.*
-internal import fountain::f_llm.model.po.{Agent, Skill}
+internal import fountain::f_llm.model.po.*
 internal import fountain::f_llm.tool.*

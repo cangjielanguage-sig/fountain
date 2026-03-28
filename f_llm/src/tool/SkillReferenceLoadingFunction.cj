@@ -17,25 +17,26 @@ package fountain::f_llm.tool
 
 import fountain::f_bean.macros.*
 import fountain::f_data.macros.*
+import fountain::f_llm.model.SkillReferenceParam
 
 @DataAssist[props fields]
-public class SkillLoading {
+public class SkillReferenceLoading {
     @JsonStringSchema[description:'流程当前步骤的事件名称']
     private var event: String = ''
     @JsonStringSchema[description:'待加载的技能标题列表，标题具备唯一性']
-    private var title: ArrayList<String> = ArrayList<String>()
+    private var references: ArrayList<SkillReferenceParam> = ArrayList<SkillReferenceParam>()
 }
 
 
 @Bean
-public class SkillLoadingFunction <: FunctionCalling<SkillLoading> {
+public class SkillReferenceLoadingFunction <: FunctionCalling<SkillReferenceLoading> {
     private let skillsFinder = lookup<SkillsFinder>()
     /**
      * 函数名称
      */
     public prop name: String {
         get(){
-            'loadSkills'
+            'loadSkillReferences'
         }
     }
     /**
@@ -51,7 +52,7 @@ public class SkillLoadingFunction <: FunctionCalling<SkillLoading> {
      * @param params 函数参数
      * @return 函数调用结果
      */
-    public func call(params: SkillLoading): FunctionResult {
-        FunctionResult(event: params.event, result: skillsFinder.loadSkills(params.title), resultType: ResultType.Skill)
+    public func call(params: SkillReferenceLoading): FunctionResult {
+        FunctionResult(event: params.event, result: skillsFinder.loadSkillReferences(params.references), resultType: ResultType.SkillReference)
     }
 }

@@ -214,8 +214,20 @@ ${auxiliaryMetadatas}
     private func assembleAuxiliarySkills(agentData: AgentEventData){
         if(agentData.skillDetails.size > 0){
             let auxiliarySkills = StringGenerator('## 辅助技能列表\n')
-            for(skill in agentData.skillDetails){
-                auxiliarySkills.append(skill).append('---\n\n')
+            for((title, skill) in agentData.skillDetails){
+                auxiliarySkills.append(skill)
+                auxiliarySkills.append('\n')
+                let references = agentData.getSkillReferences(title)
+                if(references.size > 0){
+                    auxiliarySkills.append('#### 技能引用列表\n')
+                    for(reference in references){
+                        auxiliarySkills.append('''
+##### ${reference.title}
+${reference.content}
+''')
+                    }
+                }
+                auxiliarySkills.append('---\n\n')
             }
             auxiliarySkills.toString()
         }else{
@@ -408,10 +420,15 @@ exception occurred ${ex}, to retry after ${sleepDuration}'''}
                                 toolmsg.content = (fnResult.result as String).getOrThrow()
                                 messages.add(toolmsg)
                             case ResultType.Skill => 
-                                let skill = (fnResult.result as Skill).getOrThrow()
-                                eventData.skillDetails.add(genSkillDetails(skill))
-                                let functions = FunctionMediator.getDefinitions(skill.functionNames)
-                                eventData.addFunctions(functions)
+                                let skills = (fnResult.result as ArrayList<Skill>).getOrThrow()
+                                for(skill in skills){
+                                    eventData.skillDetails.add((skill.title, genSkillDetails(skill)))
+                                    let functions = FunctionMediator.getDefinitions(skill.functionNames)
+                                    eventData.addFunctions(functions)
+                                }
+                            case ResultType.SkillReference =>
+                                let references = (fnResult.result as ArrayList<SkillReference>).getOrThrow()
+                                eventData.addSkillReferences(references)
                         }
                     }catch(e: Exception){
                         log.warn(e){'function call ${name}(${arguments})'}

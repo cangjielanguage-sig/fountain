@@ -13,19 +13,15 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package fountain::fcoder.service.impl
+package fountain::f_llm.model
 
 import fountain::f_bean.macros.*
+import fountain::f_data.macros.*
 
-@Bean
-public class SkillsServiceImpl <: SkillsService {
-    public func querySkills(agentId: Int64, event: String): ArrayList<Skill> {
-        executor().findSkills(agentId, event)
-    }
-    public func loadSkills(title: ArrayList<String>): ArrayList<Skill> {
-        executor().loadSkills(title)
-    }
-    public func loadSkillReferences(references: ArrayList<SkillReferenceParam>): ArrayList<SkillReference> {
-        executor().loadSkillReferences(references)
-    }
+@DataAssist[props fields]
+public class SkillReferenceParam {
+    @JsonStringSchema[description:'待加载reference的技能标题']
+    public var skill: String = ''
+    @JsonStringSchema[description:'待加载的reference，一次可加载多个reference']
+    public var reference: ArrayList<String> = ArrayList<String>()
 }

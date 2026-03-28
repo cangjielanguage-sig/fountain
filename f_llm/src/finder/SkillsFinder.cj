@@ -17,5 +17,6 @@ package fountain::f_llm.finder
 
 public interface SkillsFinder {
     func querySkills(agentId: Int64, event: String): ArrayList<Skill>
-    func loadSkill(title: String): Skill
+    func loadSkills(title: ArrayList<String>): ArrayList<Skill>
+    func loadSkillReferences(references: ArrayList<SkillReferenceParam>): ArrayList<SkillReference>
 }

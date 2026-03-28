@@ -17,12 +17,13 @@ package fountain::f_llm.agents
 
 public class AgentEventData {
     var skillIds = HashSet<String>()
+    private let skillReferences = HashMap<String, ArrayList<SkillReference>>()
     public AgentEventData(
         public let data!: ?Any = None,
         public let messages!: ArrayList<ChatMessage> = ArrayList<ChatMessage>(),
         public let message!: String = '',
         public let functions!: HashSet<FunctionCall> = HashSet<FunctionCall>(),
-        public let skillDetails!: ArrayList<String> = ArrayList<String>()
+        public let skillDetails!: ArrayList<(String, String)> = ArrayList<(String, String)>()
     ){
     }
 
@@ -30,5 +31,13 @@ public class AgentEventData {
         for (function in functions) {
             this.functions.add(function)
         }
+    }
+    func addSkillReferences(references: ArrayList<SkillReference>){
+        for (reference in references) {
+            this.skillReferences.computeIfAbsent(reference.skillTitle){ArrayList<SkillReference>()}.add(reference)
+        }
+    }
+    func getSkillReferences(title: String): List<SkillReference> {
+        return this.skillReferences.get(title) ?? EmptyList<SkillReference>.instance()
     }
 }
