@@ -21,7 +21,7 @@ import std.ast.*
 import fountain::f_macros.*
 import fountain::f_llm.exception.*
 
-public macro Tool(input: Tokens): Tokens {
+public macro ToolCall(input: Tokens): Tokens {
     match(parseDecl(input)){
         case x: ClassDecl => expand(x)
         case x: MacroExpandDecl =>
@@ -33,9 +33,9 @@ public macro Tool(input: Tokens): Tokens {
         case _ => throw FunctionCallingException('@Tool can only be applied to class')
     }
 }
-public macro WeavedTool(input: Tokens): Tokens {
+public macro WeavedToolCall(input: Tokens): Tokens {
     quote(
-        @Tool
+        @ToolCall
         @Pointcut
         $input
     )
@@ -43,19 +43,24 @@ public macro WeavedTool(input: Tokens): Tokens {
 private func expand(decl: ClassDecl): Tokens {
     var tokens = quote()
     for(d in decl.body.decls){
-        if(let f: FuncDecl <- d && f.isPublic() && !f.isStatic()){
-            let params = f.funcParams
-            if(params.size != 1){
-                throw FunctionCallingException('public func decl in @Tool class must have only one parameter and be modified with @FunctionDefinition')
-            }
-            let paramType = params[0].paramType
-            let name = f.identifier.value
-            tokens += quote(
-                let _ = FunctionDefinition.register<$(decl.identifier), $paramType>($name){p: $paramType => 
-                    lookup<$(decl.identifier)>().$(f.identifier)(p)
+        func expand(d: Decl): Unit {
+            if(let f: FuncDecl <- d && f.isPublic() && !f.isStatic()){
+                let params = f.funcParams
+                if(params.size != 1){
+                    throw FunctionCallingException('public func decl in @ToolCall class must have only one parameter and be modified with @FunctionDefinition')
                 }
-            ) + `nl`
+                let paramType = params[0].paramType
+                let name = f.identifier.value
+                tokens += quote(
+                    FunctionDefinition.register<$(decl.identifier), $paramType>($name){p: $paramType => 
+                        lookup<$(decl.identifier)>().$(f.identifier)(p)
+                    }
+                ) + `nl`
+            }else if(let m: MacroExpandDecl <- d){
+                expand(m.macroInputDecl)
+            }
         }
+        expand(d)
     }
     quote(
         @Bean
