@@ -15,6 +15,8 @@ limitations under the License.
  */
 package fountain::f_mvc
 
+import fountain::f_data
+
 public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMeta> {
     private static let log = LoggerFactory.getLogger<RequestMeta>()
     static let currentResponseStatus = ThreadLocal<UInt16>()
@@ -463,8 +465,8 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
                 case x: ToString => return x.toString()
                 case x: Array<Byte> => return toBase64String(x)
                 case x: MultipartFile => return JsonString(x.toString()).toString()
-                case x: ToData => return JsonValue.tryFromData(x.toData()).toString()
-                case x: Data => return JsonValue.tryFromData(x).toString()
+                case x: ToData => return f_data.convert<JsonValue>(x.toData()).getOrThrow().toString()//todo
+                case x: Data => return f_data.convert<JsonValue>(x).getOrThrow().toString()
                 case x => x
             }
             TypeInfo.of(arg).toString()

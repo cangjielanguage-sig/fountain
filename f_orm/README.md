@@ -44,6 +44,7 @@ export orm_transactionalFuncExecution="$orm_transactionalFuncExecution|*..*Servi
 export orm_transactionalFuncExecution="$orm_transactionalFuncExecution|*..*ServiceImpl.register*(**): *"
 export orm_transactionalFuncExecution="$orm_transactionalFuncExecution|*..*.userSession(**): *"
 export opengauss_orm_connectionUrl=$POSTGRES # postgres URL
+# export mysql_orm_indexStartsWithZero=false # orm_indexStartsWithZero的默认值是true
 ```
 
 ## 导入

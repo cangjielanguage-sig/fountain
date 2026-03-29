@@ -12,7 +12,7 @@
   src-dir = ""
   target-dir = ""
   organization = "fountain"
-  version = "1.1.0"
+  version = "1.1.1"
   package-configuration = {}
   category = ["Utility"]
   license = ["Apache-2.0"]

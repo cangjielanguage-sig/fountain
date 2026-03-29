@@ -10,7 +10,7 @@
   override-compile-option = "--dy-std"
   link-option = ""
   package-configuration = {}
-  version = "1.1.0"
+  version = "1.1.1"
   category = ["Utility"]
   license = ["Apache-2.0"]
   include = ["src"]
