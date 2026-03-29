@@ -272,6 +272,9 @@ ${eventDesc}
         }
     }
     public open func exec(e: Event): Event {
+        if(!(e is AgentEvent)){
+            throw LLMException("param must be AgentEvent")
+        }
         let skills = skillsFinder.querySkills(agent.id, e.name)
         var auxiliaryMetadatas  = StringGenerator()
         var primarySkills = StringGenerator()

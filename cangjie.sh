@@ -66,6 +66,7 @@ cangjie_env(){
   rm -f /mnt/d/docs/work/cangjie/cangjie-linux-bin/sdk/current/cangjie
   rm -f /mnt/d/docs/work/cangjie/cangjie-linux-bin/sdk/current
   ln -s $CANGJIE_HOME /mnt/d/docs/work/cangjie/cangjie-linux-bin/sdk/current
+  cjc -v
 }
 cjpub(){
   if [[ "$2" == "" ]]; then
@@ -83,6 +84,30 @@ cjpub(){
     cjpub $1 
     cd $curdir
   fi
+}
+cjsetup(){
+  declare -A map
+  map['sdk_x64-1.1.0-beta.23']='https://cangjie-lang.cn/v1/files/auth/downLoad?nsId=142267&fileName=cangjie-sdk-linux-x64-1.1.0-beta.23.tar.gz&objectKey=69b7a52a6e8ed61e6e07fd2c'
+  map['stdx_x64-1.1.0-beta.23.1']='https://gitcode.com/Cangjie/cangjie_stdx/releases/download/v1.1.0-beta.23.1/cangjie-stdx-linux-x64-1.1.0-beta.23.1.zip'
+  arch=$1
+  version=$2
+  url=map["sdk_$arch-$version"]
+  target=${CANGJIE_HOME:-"~/.cjpm/home"}
+  path=$target/sdk/$version
+  mkdir -p $path
+  cd $path
+  wget $url
+  tar zxf *.tar.gz
+  rm *.tar.gz
+  version=$3
+  path=$target/stdx/$version
+  mkdir -p $path
+  cd path
+  url=map["stdx_$arch-$version"]
+  wget $url
+  unzip *.zip
+  rm -f *.zip
+  cj env $2 $3
 }
 cj(){
   echo "cj $1 $2 $3 $4 $5"
@@ -108,11 +133,28 @@ cj(){
     ;;
   publish)
     for d in `cat .modules`; do 
+        echo $d
+        if [[ $d =~ ^#.* ]]; then
+            continue
+        fi
         cd $d
-	echo $d
 	cj bundle $2
 	cd ..
-	sleep 120 
+
+	url="https://pkg.cangjie-lang.cn/v1/artifact/getPackageMetadata?group=fountain&moduleName=$d&version=$2"
+	echo "check url $url"
+	a=0
+	b=1
+        sleep $b
+	until curl_output=$(curl $url) && echo $curl_output | jq -e '.code == 200 and .msg == "success"' &> /dev/null; do
+            # 计算下一次等待时间（斐波那契数列）
+            next_wait_time=$((a + b))
+            a=$b
+            b=$next_wait_time
+            echo "$(date '+%Y-%m-%d %H:%M:%S') - 检查制品 $d 失败或返回码不为 success，${next_wait_time} 秒后重试..."
+            echo "$(date '+%Y-%m-%d %H:%M:%S') - 服务器返回: $curl_output"
+            sleep $next_wait_time
+        done
     done
     sed -E -i "s|(/package/fountain::f_[a-z]+/)[0-9]+\.[0-9]+\.[0-9]+(/readme)|\1$2\2|g" README.md
     cj bundle $2
@@ -120,6 +162,9 @@ cj(){
     ;;
   bundle)
     cjpub $2
+    ;;
+  setup)
+    cjsetup $3 $4
     ;;
   study)
     cd /mnt/d/docs/work/cangjie/study
@@ -149,4 +194,4 @@ cj(){
   esac
 }
 
-cj env 1.0.5 1.0.5.1
+cj env 1.1.0 1.1.0

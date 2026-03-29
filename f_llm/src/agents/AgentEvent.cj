@@ -15,24 +15,24 @@ limitations under the License.
 */
 package fountain::f_llm.agents
 
-public class AgentEvent <: Event {
+public class AgentEvent <: TaskEvent {
     private init(category!: String, tag!: String, name!: String, data!: Any,
                 session!: String = UUID.random().toHexString()){
         super(category: category, tag: tag, name: name, data: data, session: session)
     }
-    public init(category!: String, tag!: String, name!: String, data: AgentEventData,
+    public init(category!: String, tag!: String, name!: String, data!: AgentEventData,
                 session!: String = UUID.random().toHexString()){
         this(category: category, tag: tag, name: name, data: (data as Any).getOrThrow(), session: session)
     }
-    public init(category!: String, tag!: String, name!: String, data: String,
+    public init(category!: String, tag!: String, name!: String, data!: String,
                 session!: String = UUID.random().toHexString()){
         this(category: category, tag: tag, name: name, data: (data as Any).getOrThrow(), session: session)
     }
-    public init(category!: String, tag!: String, name!: String, data: ChatMessage,
+    public init(category!: String, tag!: String, name!: String, data!: ChatMessage,
                 session!: String = UUID.random().toHexString()){
         this(category: category, tag: tag, name: name, data: (data as Any).getOrThrow(), session: session)
     }
-    public init(category!: String, tag!: String, name!: String, data: ArrayList<ChatMessage>,
+    public init(category!: String, tag!: String, name!: String, data!: ArrayList<ChatMessage>,
                 session!: String = UUID.random().toHexString()){
         this(category: category, tag: tag, name: name, data: (data as Any).getOrThrow(), session: session)
     }

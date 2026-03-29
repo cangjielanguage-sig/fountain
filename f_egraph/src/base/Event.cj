@@ -65,7 +65,7 @@ public class EndEvent <: DataEvent {
         super(eventType: End, category: category, tag: tag, name: EventType.End.toString(), data: data, session: session)
     }
 }
-public class TaskEvent <: DataEvent {
+public open class TaskEvent <: DataEvent {
     public init(category!: String, tag!: String, name!: String, data!: Any,
                 session!: String = UUID.random().toHexString()){
         super(eventType: EventType.Task, category: category, tag: tag, name: name, data: data, session: session)
