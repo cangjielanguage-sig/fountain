@@ -63,7 +63,7 @@ public struct ObjectFields <: Collection<ReadableField> {
             for (p in currentType.instanceProperties) {
                 populateFields(p.name, p.annotations)
             }
-            if (let Some(superClass) <- currentType.superClass && 
+            if (let Some(superClass) <- currentType.superClass && superClass != ClassTypeInfo.of<Object>() &&
                 superClass.isSubtypeOf(TypeInfo.get('f_data.ObjectData<${superClass.qualifiedName}>')) && 
                 let f <- superClass.getStaticFunction('dataFields', []) && 
                 let sdf: ObjectFields <- f.apply(superClass, [])) {
