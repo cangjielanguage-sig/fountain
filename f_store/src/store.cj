@@ -15,9 +15,11 @@ limitations under the License.
 */
 package fountain::f_store
 
+import std.collection.concurrent.ArrayBlockingQueue
 import std.env.{getWorkingDirectory, atExit}
 import std.fs.{Path, canonicalize}
 import std.sync.AtomicBool
+import std.core.Iterator as StdIterator
 import badgercj.db.*
 import badgercj.db.Iterator as BadgerIterator
 import fountain::f_base.*
@@ -25,7 +27,7 @@ import fountain::f_base.*
 /**
  * badger-cj 的薄封装
  */
-public struct Store <: Resource {
+public class Store <: Resource {
     private let closed = AtomicBool(false)
     private let db: Badger
     /**
@@ -166,5 +168,32 @@ public struct Store <: Resource {
             }
         }
         count.value
+    }
+    /**
+     * 迭代指定键前缀的键值对
+     * @param prefix 键前缀.
+     * @param reverse 是否倒序.
+     * @return 迭代器，迭代器的元素是(String, Array<Byte>)，元组的第一个值是键，第二个是值.
+     */
+    public func iterator(prefix!: String = '', reverse!: Bool = false): StdIterator<(String, Array<Byte>)> {
+        BadgerTupleIterator(this, prefix, reverse)
+    }
+}
+class BadgerTupleIterator <: StdIterator<(String, Array<Byte>)> {
+    private let q = ArrayBlockingQueue<(String, Array<Byte>)>(1)
+    public BadgerTupleIterator(
+        private let store: Store,
+        private let prefix: String,
+        private let reverse: Bool
+    ){
+        spawn {
+            db.readOnlyIterate(prefix: prefix, reverse: reverse){tx, key, value =>
+                q.add((key, value))
+            }
+            q.add(None)
+        }
+    }
+    public func next(): ?(String, Array<Byte>) {
+        q.remove()
     }
 }
