@@ -29,9 +29,15 @@ public struct Store <: Resource {
     private let closed = AtomicBool(false)
     private let db: Badger
     /**
+     * 使用当前路径初始化
+     */
+    public init(){
+        this(getWorkingDirectory())
+    }
+    /**
      * @param path 存储路径，默认是空串，表示保存在当前路径. 
      */
-    public init(path!: String = '') {
+    public init(path: String) {
         this(path: if (path.isEmpty()) {
             getWorkingDirectory()
         } else {
@@ -39,9 +45,9 @@ public struct Store <: Resource {
         })
     }
     /**
-     * @param path 存储路径，默认是当前路径.
+     * @param path 存储路径
      */
-    public init(path!: Path = getWorkingDirectory()) {
+    public init(path: Path) {
         db = Badger.open(Config(dir: canonicalize(path).toString()))
         atExit(this.close)
     }

@@ -7,13 +7,17 @@ badger-cj的薄封装
  */
 public struct Store <: Resource {
     /**
+     * 使用当前路径初始化
+     */
+    public init()
+    /**
      * @param path 存储路径，默认是空串，表示保存在当前路径. 
      */
-    public init(path!: String = '') 
+    public init(path: String) 
     /**
-     * @param path 存储路径，默认是当前路径.
+     * @param path 存储路径
      */
-    public init(path!: Path = getWorkingDirectory()) 
+    public init(path: Path)
     public func isClosed(): Bool 
     public func close(): Unit 
     /**
