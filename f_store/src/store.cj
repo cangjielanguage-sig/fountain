@@ -15,6 +15,7 @@ limitations under the License.
 */
 package fountain::f_store
 
+import std.collection.concurrent.ArrayBlockingQueue
 import std.env.{getWorkingDirectory, atExit}
 import std.fs.{Path, canonicalize}
 import std.sync.AtomicBool
@@ -26,6 +27,7 @@ import fountain::f_base.*
  * badger-cj 的薄封装
  */
 public struct Store <: Resource {
+    private let flushing = ArrayBlockingQueue<Unit>(1)
     private let closed = AtomicBool(false)
     private let db: Badger
     /**
@@ -50,6 +52,11 @@ public struct Store <: Resource {
     public init(path: Path) {
         db = Badger.open(Config(dir: canonicalize(path).toString()))
         atExit(this.close)
+        spawn{
+            while(let _ <- flushing.remove()){
+                db.flushMemTable()
+            }
+        }
     }
     public func isClosed(): Bool {
         closed.load()
@@ -77,7 +84,10 @@ public struct Store <: Resource {
      * @param fn 闭包，详细见badge-cj文档
      */
     public func update<T>(fn: (Transaction) -> T): T {
-        db.update<T>(fn)
+        db.update<T>{tx => 
+            fn(tx)
+            flushing.add(())
+        }
     }
     /**
      * 设置值.
