@@ -180,7 +180,7 @@ public class Store <: Resource {
     }
 }
 class BadgerTupleIterator <: StdIterator<(String, Array<Byte>)> {
-    private let q = ArrayBlockingQueue<(String, Array<Byte>)>(1)
+    private let q = ArrayBlockingQueue<?(String, Array<Byte>)>(1)
     public BadgerTupleIterator(
         private let store: Store,
         private let prefix: String,
