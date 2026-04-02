@@ -78,5 +78,12 @@ public struct Store <: Resource {
      * @param fn 删除闭包，Transaction是当前Transaction，String是当前键，Array<Byte>是当前值，返回true则删除.
      */
     public func deletePrefix(prefix!: String = '', fn!: (Transaction, String, Array<Byte>) -> Bool): Unit 
+    /**
+     * 迭代指定键前缀的键值对，内部维持一个长度是1024的ArrayBlockingQueue。
+     * @param prefix 键前缀.
+     * @param reverse 是否倒序.
+     * @return 迭代器，迭代器的元素是(String, Array<Byte>)，元组的第一个值是键，第二个是值.
+     */
+    public func iterator(prefix!: String = '', reverse!: Bool = false): StdIterator<(String, Array<Byte>)> 
 }
 ```
