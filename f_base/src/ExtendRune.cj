@@ -33,6 +33,7 @@ public interface ExtendRune {
     operator func -(n: Int64): Rune
     operator func +(n: UInt64): Rune
     operator func -(n: UInt64): Rune
+    operator func *(n: Int64): String
 }
 
 extend Rune <: ExtendRune {
@@ -118,5 +119,8 @@ extend Rune <: ExtendRune {
         } else {
             this + UInt32(-n)
         }
+    }
+    public operator func *(n: Int64): String {
+        this.toString() * n
     }
 }
