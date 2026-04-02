@@ -180,7 +180,7 @@ public class Store <: Resource {
     }
 }
 class BadgerTupleIterator <: StdIterator<(String, Array<Byte>)> {
-    private let q = ArrayBlockingQueue<?(String, Array<Byte>)>(1)
+    private let q = ArrayBlockingQueue<?(String, Array<Byte>)>(1024)
     public init(store: Store, prefix: String, reverse: Bool){
         spawn {
             store.readOnlyIterate(prefix: prefix, reverse: reverse){_, key, value =>
