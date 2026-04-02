@@ -17,6 +17,9 @@ package fountain::f_llm.tool
 
 public abstract class AbstractFileFunction<T> <: FunctionCalling<T> where T <: ObjectData<T> {
     protected func genPath(path: String): Path {
+        if(path.startsWith('../')){
+            throw IllegalPathException('path must not start with ../, but it is ${path}. The path as function calling param attempts to BREAK THROUGH the SAFETY SANDBOX')
+        }
         var p = Path(path)
         if(OS.current.isWindows){
             if(p.isAbsolute()){
@@ -25,6 +28,6 @@ public abstract class AbstractFileFunction<T> <: FunctionCalling<T> where T <: O
         }else if(p.isAbsolute()){
             p = Path(path[1 ..])
         }
-        p
+        LLMConfig.getFileSandboxPath().join(p)
     }
 }
