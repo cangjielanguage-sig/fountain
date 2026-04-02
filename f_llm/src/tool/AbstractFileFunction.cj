@@ -23,7 +23,7 @@ public abstract class AbstractFileFunction<T> <: FunctionCalling<T> where T <: O
         var p = Path(path)
         if(OS.current.isWindows){
             if(p.isAbsolute()){
-                p = Path(path[3 ..])
+                throw IllegalPathException('path must not be absolute, but it is ${path}. The path as function calling param attempts to BREAK THROUGH the SAFETY SANDBOX')
             }
         }else if(p.isAbsolute()){
             p = Path(path[1 ..])
