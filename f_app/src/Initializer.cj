@@ -46,6 +46,7 @@ public interface Initializer {
     func initialize(): Unit
     /**
      * 返回启动函数，调用返回的函数是否阻塞取决于具体实现，比如调用mvc的启动函数会启动http服务并一直阻塞。
+     * 因此不同模块或功能的启动函数不应有依赖关系，否则如果有两个start实现是阻塞的，就无法顺利完成初始化了。
      */
     func start(): Unit {}
 }
