@@ -175,21 +175,20 @@ public class Store <: Resource {
      * @param reverse 是否倒序.
      * @return 迭代器，迭代器的元素是(String, Array<Byte>)，元组的第一个值是键，第二个是值.
      */
-    public func iterator(prefix!: String = '', reverse!: Bool = false): StdIterator<(String, Array<Byte>)> {
-        BadgerTupleIterator(this, prefix, reverse)
+    public func scan(prefix!: String = '', reverse!: Bool = false): StdIterator<(String, Array<Byte>)> {
+        BadgerTupleIterator(db, prefix, reverse)
     }
 }
 class BadgerTupleIterator <: StdIterator<(String, Array<Byte>)> {
-    private let q = ArrayBlockingQueue<?(String, Array<Byte>)>(1024)
-    public init(store: Store, prefix: String, reverse: Bool){
-        spawn {
-            store.readOnlyIterate(prefix: prefix, reverse: reverse){_, key, value =>
-                q.add((key, value))
-            }
-            q.add(None)
-        }
+    private let itr: PrefixIterator
+    public init(db: Badger, prefix: String, reverse: Bool){
+        itr = db.scan(prefix.unsafeBytes(), reverse: reverse, allVersions: false).iterator()
     }
     public func next(): ?(String, Array<Byte>) {
-        q.remove()
+        if(let Some(x) <- itr.next()){
+            return (String.fromUtf8(x.key), x.value)
+        }else{
+            None
+        }
     }
 }

@@ -18,5 +18,5 @@
   authors = ["吴京润"]
 
 [dependencies]
-  "badgercj" = "1.4.1"
+  "badgercj" = "1.5.0"
   "fountain::f_base" = {path = "../f_base"}
