@@ -15,7 +15,6 @@ limitations under the License.
 */
 package fountain::f_store
 
-import std.collection.concurrent.ArrayBlockingQueue
 import std.env.{getWorkingDirectory, atExit}
 import std.fs.{Path, canonicalize}
 import std.sync.AtomicBool
