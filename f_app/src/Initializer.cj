@@ -79,7 +79,7 @@ public struct InitializerCollection {
         instance.doRegister(initializer)
     }
     private func doInit() {
-        let starters = ArrayList<Initializer>()
+        let starters = ArrayList<() -> Unit>()
         while(let Some(initializer) <- initializers.remove()){
             var toInit = true
             for(dependency in initializer.dependencies where dependencies.contains(dependency)){
@@ -89,7 +89,7 @@ public struct InitializerCollection {
             }
             if(toInit){
                 initializer.initialize()
-                starters.add(initializer)
+                starters.add(initializer.start)
                 dependencies.remove(initializer.name)
             }
         }
@@ -99,7 +99,7 @@ public struct InitializerCollection {
     /**
      * 给fountain::f_app.App调用的函数
      */
-    static func initialize(): ArrayList<Initializer> {
+    static func initialize(): ArrayList<() -> Unit> {
         instance.doInit()
     }
 }
