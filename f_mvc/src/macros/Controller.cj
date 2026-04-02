@@ -55,14 +55,16 @@ public macro WeavedController(attr: Tokens, input: Tokens): Tokens {
 }
 
 private func generate(input: Tokens): Tokens {
-    let decl = match(parseDecl(input)){
+    generate(parseDecl(input))
+}
+private func generate(d: Decl): Tokens {
+    let decl = match(d){
         case x: ClassDecl => x
         case x: MacroExpandDecl => 
-            let d = extract(x)
-            return generate(d.toTokens())
+            return x |> extract |> generate
         case _ => 
-            diagReport(ERROR, input, 'illegal decl', '')
-            return input
+            diagReport(ERROR, d.toTokens(), 'only class decl is allowed', '')
+            return d.toTokens()
     }
     var tokens = quote()
     let klass = decl.identifier
