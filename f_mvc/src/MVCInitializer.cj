@@ -36,7 +36,7 @@ public struct MVCInitializer <: Initializer {
     /**
      * 返回阻塞启动函数，调用此函数将阻塞，比如调用mvc的启动函数会启动http服务并一直阻塞。
      */
-    public func starter(): ?() -> Unit {
-        MVCStarter.start
+    public func start(): Unit {
+        MVCStarter.start()
     }
 }

@@ -149,7 +149,7 @@ public struct App {
             '${app}${appver} started by ${versionStr} in ${MonoTime.now() - AppStarts}')
         for(starter in starters){
             spawn{
-                starter()
+                starter.start()
             }
         }
         while(true){

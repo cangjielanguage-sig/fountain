@@ -24,7 +24,7 @@ import fountain::f_base.*
 /**
  * 应用初始化API。应用代码通常不需要实现本接口。
  */
-public interface Initializer <: Resource {
+public interface Initializer {
     /**
      * 待初始化的功能名称
      * 有些功能只能显式地调用函数完成初始化，fountain::f_bean fountain::f_mvc fountain::f_orm fountain::f_ticktock都是这类
@@ -47,16 +47,7 @@ public interface Initializer <: Resource {
     /**
      * 返回启动函数，调用返回的函数是否阻塞取决于具体实现，比如调用mvc的启动函数会启动http服务并一直阻塞。
      */
-    func starter(): ?() -> Unit {
-        None
-    }
-    /**
-     * 应当只关闭初始化器本身。不要把模块资源的释放放在这里。
-     */
-    func close(): Unit {}
-    func isClosed(): Bool {
-        false
-    }
+    func start(): Unit {}
 }
 public struct InitializerCollection {
     private static var instance = InitializerCollection()
@@ -88,7 +79,7 @@ public struct InitializerCollection {
         instance.doRegister(initializer)
     }
     private func doInit() {
-        let starters = ArrayList<() -> Unit>()
+        let starters = ArrayList<Initializer>()
         while(let Some(initializer) <- initializers.remove()){
             var toInit = true
             for(dependency in initializer.dependencies where dependencies.contains(dependency)){
@@ -98,11 +89,8 @@ public struct InitializerCollection {
             }
             if(toInit){
                 initializer.initialize()
-                if(let Some(starter) <- initializer.starter()){
-                    starters.add(starter)
-                }
+                starters.add(initializer)
                 dependencies.remove(initializer.name)
-                initializer.close()
             }
         }
         instance = unsafeZeroValue<InitializerCollection>()
@@ -111,7 +99,7 @@ public struct InitializerCollection {
     /**
      * 给fountain::f_app.App调用的函数
      */
-    static func initialize(): ArrayList<() -> Unit> {
+    static func initialize(): ArrayList<Initializer> {
         instance.doInit()
     }
 }
