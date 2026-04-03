@@ -40,3 +40,7 @@ public const CONTEXT_PRUNER_DRC = "DRC"
  * 上下文饱和后执行一个指定策略
  */
 public const CONTEXT_PRUNER_SATURATION = "Saturation"
+/**
+ * 压缩上下文后，保留最后一条用户消息
+ */
+public const CONTEXT_PRUNER_RETAIN_LAST_USER = "RetainLastUser"

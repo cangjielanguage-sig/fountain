@@ -445,6 +445,27 @@ public class SaturationContextPruner <: ContextPruner {
     public func prune(agentId: Int64, session: String, messages: ArrayList<ChatMessage>): ArrayList<ChatMessage>
 }
 ```
+### 保留最后的用户消息
+```cj
+public class RetainLastUserPruner <: ContextPruner {
+    public RetainLastUserPruner(
+        private let pruner!: ContextPruner
+    ){}
+    public prop name: String {
+        get(){
+            '${CONTEXT_PRUNER_RETAIN_LAST_USER}_${pruner.name}'
+        }
+    }
+    /**
+     * let msgs = this.pruner.prune(agentId, session, messages)
+     * 如果messages没有用户消息，则返回msgs
+     * 如果this.pruner.prune(agentId, session, messages)的返回包含的最后用户消息跟messages最后的用户消息一样也是返回msgs
+     * 否则把messages包含的最后用户消息添加到msgs尾再返回msgs。
+     */
+    public func prune(agentId: Int64, session: String, messages: ArrayList<ChatMessage>): ArrayList<ChatMessage>
+}
+```
+
 ## 大模型访问参数与响应
 ```cj
 @DataAssist[props fields]
