@@ -166,7 +166,7 @@ public class RetainLastUserPruner <: ContextPruner {
         }
     }
     public func prune(agentId: Int64, session: String, messages: ArrayList<ChatMessage>): ArrayList<ChatMessage>{
-        let lastUser = None<ChatMessage>
+        var lastUser = None<ChatMessage>
         for(i in messages.size - 1 ..= 0: -1){
             let m = messages[i]
             if(m.role == ROLE_USER){

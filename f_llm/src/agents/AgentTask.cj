@@ -415,6 +415,12 @@ exception occurred ${ex}, to retry after ${sleepDuration}'''}
             if(let m: ToolCallMessage <- msg){
                 messages.add(m)
                 for(tool in m.toolCalls){
+                    func addToolMsg(content: String){
+                        let toolmsg = ToolMessage()
+                        toolmsg.tool_call_id = tool.id
+                        toolmsg.content = content
+                        messages.add(toolmsg)
+                    }
                     let function = tool.function
                     let name = function.name
                     let arguments = function.arguments
@@ -427,10 +433,7 @@ exception occurred ${ex}, to retry after ${sleepDuration}'''}
                         eventType = fnResult.eventType
                         match(fnResult.resultType){
                             case ResultType.Text => 
-                                let toolmsg = ToolMessage()
-                                toolmsg.tool_call_id = tool.id
-                                toolmsg.content = (fnResult.result as String).getOrThrow()
-                                messages.add(toolmsg)
+                                addToolMsg((fnResult.result as String).getOrThrow())
                             case ResultType.Skill => 
                                 let skills = (fnResult.result as ArrayList<Skill>).getOrThrow()
                                 for(skill in skills){
@@ -438,16 +441,15 @@ exception occurred ${ex}, to retry after ${sleepDuration}'''}
                                     let functions = FunctionMediator.getDefinitions(skill.functionNames)
                                     eventData.addFunctions(functions)
                                 }
+                                addToolMsg('[技能已加载]')
                             case ResultType.SkillReference =>
                                 let references = (fnResult.result as ArrayList<SkillReference>).getOrThrow()
                                 eventData.addSkillReferences(references)
+                                addToolMsg('[技能参考已加载]')
                         }
                     }catch(e: Exception){
                         log.warn(e){'function call ${name}(${arguments})'}
-                        let toolmsg = ToolMessage()
-                        toolmsg.tool_call_id = tool.id
-                        toolmsg.content = '调用函数时发生了异常： ${e}'
-                        messages.add(toolmsg)
+                        addToolMsg('调用函数时发生了异常： ${e}')
                     }
                 }
             }else if(let m: AssistantMessage <- msg){
