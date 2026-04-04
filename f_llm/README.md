@@ -1014,6 +1014,45 @@ public class SkillReferenceLoadingFunction <: FunctionCalling<SkillReferenceLoad
 }
 ```
 
+### 经验加载函数
+```cj
+
+@DataAssist[props fields]
+public class ExperienceLoading {
+    @JsonStringSchema[description:'流程当前步骤的事件名称']
+    private var event: String = ''
+    @JsonStringSchema[description:'查询与本参数相关性最强的经验']
+    private var query: String = ''
+}
+
+@Bean
+public class ExperienceLoadingFunction <: FunctionCalling<ExperienceLoading> {
+    private let experiencesFinder = lookup<ExperiencesFinder>()
+    /**
+     * 函数名称
+     */
+    public prop name: String {
+        get(){
+            'loadExperiences'
+        }
+    }
+    /**
+     * 函数描述
+     */
+    public prop description: String {
+        get(){
+            '加载经验的详细内容'
+        }
+    }
+    /**
+     * 用来加载经验详细描述
+     * @param params 函数参数
+     * @return 函数调用结果
+     */
+    public func call(params: ExperienceLoading): FunctionResult 
+}
+```
+
 ### 命令行执行函数
 ```cj
 

@@ -27,7 +27,6 @@ public class ExperienceLoading {
     private var query: String = ''
 }
 
-
 @Bean
 public class ExperienceLoadingFunction <: FunctionCalling<ExperienceLoading> {
     private let experiencesFinder = lookup<ExperiencesFinder>()
