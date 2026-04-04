@@ -124,12 +124,12 @@ private func expandORMField(attrs: Tokens, input: Tokens): Tokens {
                             case "Camel" => name.value
                             case _ => x
                         }
-                        case _ => throw ORMException("unsupported TokenKind in attrs of @ORMFIld kind: ${attr.kind} value: ${attr.value}")
+                        case _ => throw ORMException("unsupported TokenKind in attrs of @ORMField kind: ${attr.kind} value: ${attr.value}")
                     }
                 case 'converter' =>
                     i += 2
                     converter = attrs[i].value
-                case _ => throw ORMException("unsupported TokenKind in attrs of @ORMFIld kind: ${attr.kind} value: ${attr.value}")
+                case _ => throw ORMException("unsupported TokenKind in attrs of @ORMField kind: ${attr.kind} value: ${attr.value}")
             }
             case _ => throw ORMException("unsupported TokenKind in attrs of @ORMFIeld kind: ${attr.kind} value: ${attr.value}")
         }

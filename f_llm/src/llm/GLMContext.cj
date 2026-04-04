@@ -17,7 +17,7 @@ package fountain::f_llm.llm
 
 import fountain::f_data.macros.*
 
-public interface GLMSpeciallyParam <: ResponseFormat & DoSample {
+public interface GLMSpeciallyParam <: DoSample {
     prop request_id: String {
         get(){
             UUID.random().toString()
@@ -38,11 +38,8 @@ public open class GLMParams <: LLMParams & GLMSpeciallyParam {
     ){
         super(model: model, messages: messages)
     }
-    public prop response_format: String {
-        get(){
-            'json_object'
-        }
-    }
+    
+    @DataExclude[prop]
     private var doSample: Bool = true
     public mut prop do_sample: Bool {
         get(){

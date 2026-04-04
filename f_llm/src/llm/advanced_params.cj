@@ -15,13 +15,6 @@ limitations under the License.
 */
 package fountain::f_llm.llm
 
-public interface ResponseFormat {
-    prop response_format: String {
-        get(){
-            'json_object'
-        }
-    }
-}
 public interface FrequencyPenalty{
     prop frequency_penalty: Float64 {
         get(){

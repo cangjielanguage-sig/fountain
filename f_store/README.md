@@ -35,6 +35,11 @@ public struct Store <: Resource {
      * @param key 键.
      */
     public func getData<T>(key: String): ?T where T <: DataFields<T>
+    /**
+     * 获取键对应的字符串.
+     * @param key 键.
+     */
+    public func getString(key: String): ?String
     /*
      * 更新
      * @param fn 闭包，详细见badge-cj文档
@@ -102,6 +107,16 @@ public struct Store <: Resource {
      * @param key 键.
      */
     public func delete(key: String): Unit 
+    /**
+     * 批量设置TTL.
+     * @param 迭代器返回的元组依次是键、值和生命周期。
+     */
+    public func ttl(iterable: Iterable<(String, Array<Byte>, Duration)>): Unit 
+    /**
+     * 批量设置TTL.
+     * @param 迭代器返回的元组依次是键、值和生命周期。
+     */
+    public func ttl<T>(iterable: Iterable<(String, T, Duration)>): Unit where T <: DataFields<T> 
     /**
      * 设置TTL.
      * @param key 键.
@@ -237,5 +252,12 @@ public struct Store <: Resource {
      * @return 迭代器，迭代器的元素是(String, T)，元组的第一个值是键，第二个是值.
      */
     public func scanData<T>(prefix!: String = '', reverse!: Bool = false): StdIterator<(String, T)> where T <: DataFields<T>
+    /**
+     * 迭代指定键前缀的键值对
+     * @param prefix 键前缀.
+     * @param reverse 是否倒序.
+     * @return 迭代器，迭代器的元素是(String, String)，元组的第一个值是键，第二个是值，值以UTF8解码.
+     */
+    public func scanString(prefix!: String = '', reverse!: Bool = false): StdIterator<(String, String)>
 }
 ```

@@ -30,6 +30,8 @@
   "fountain::f_macros" = {path = "../f_macros"}
   "fountain::f_orm" = {path = "../f_orm"}
   "fountain::f_regex" = {path = "../f_regex"}
+  "fountain::f_store" = {path = "../f_store"}
+  "fountain::f_time" = {path = "../f_time"}
   "fountain::f_util" = {path = "../f_util"}
 
 [target]

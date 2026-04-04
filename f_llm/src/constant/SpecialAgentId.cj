@@ -15,4 +15,5 @@ limitations under the License.
 */
 package fountain::f_llm.constant
 
-public const FOUNTAIN_LLM_AGENT = '喷泉工作室智能体'
+public type SpecialAgentId = Int64
+public const SummarisingAgentId = 10000_0000

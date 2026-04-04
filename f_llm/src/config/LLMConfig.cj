@@ -17,31 +17,53 @@ package fountain::f_llm.config
 
 import std.convert.*
 import std.env.*
-import std.fs.Path
+import std.fs.{Path, exists, Directory}
 import fountain::f_config.*
 
 public struct LLMConfig {
     private init(){}
-    public static const LLM = 'f_llm'
+    public static const LLM = 'llm'
     public static const AUTO = LLM + '_auto'
-    public static const FILE_SANDBOX_PATH = LLM + '_file_sandbox_path'
-    public static const LLM_ACCESS_TRYING_COUNT = LLM + '_llm_access_trying_count'
-    public static const LLM_ACCESS_TRYING_ELAPSED = LLM + '_llm_access_trying_elapsed'
+    public static const FILE_SANDBOX_PATH = LLM + '_fileSandboxPath'
+    public static const LLM_ACCESS_TRYING_COUNT = LLM + '_accessTryingCount'
+    public static const LLM_ACCESS_TRYING_ELAPSED = LLM + '_accessTryingElapsed'
+    public static const LLM_FAITHFUL_MEMORY_PATH = LLM + '_faithfulMemoryPath'
+    public static const LLM_MAKING_MEMORY = LLM + '_makingMemory'
+    public static const SUMMARISING_MODEL = LLM + '_summarisingModel'
 
     public static func isAuto(): Bool {
         Config.getValue<Bool>(AUTO) ?? false
     }
-    public static func getFileSandboxPath(): Path {
-        if(let Some(p) <- Config.getString(FILE_SANDBOX_PATH)){
+    private static func getPath(key: String, join!: String = ''){
+        var path =  if(let Some(p) <- Config.getString(key)){
             Path(p)
         }else{
             getWorkingDirectory()
         }
+        if(join.size > 0){
+            path = path.join(join)
+        }
+        if(!exists(path)){
+            Directory.create(path, recursive: true)
+        }
+        path
+    }
+    public static func getFileSandboxPath(): Path {
+        getPath(FILE_SANDBOX_PATH)
     }
     public static func getLLMAccessTryingCount(): Int64 {
         Config.getValue<Int64>(LLM_ACCESS_TRYING_COUNT) ?? Int64.Max
     }
     public static func getLLMAccessTryingElapsed(): Duration {
         Duration.second * (Config.getValue<Int64>(LLM_ACCESS_TRYING_ELAPSED) ?? Int64.Max)
+    }
+    public static func getFaithfulMemoryPath(): Path {
+        getPath(LLM_FAITHFUL_MEMORY_PATH, join: '.memory')
+    }
+    public static func getMakingMemory(): Bool {
+        Config.getValue<Bool>(LLM_MAKING_MEMORY) ?? false
+    }
+    public static func getSummarisingModel(): String {
+        Config.getString(SUMMARISING_MODEL) ?? 'glm-4.7-flash'
     }
 }

@@ -21,7 +21,6 @@ import std.io.ByteBuffer
 import std.sync.AtomicBool
 import std.core.Iterator as StdIterator
 import badgercj.db.*
-import badgercj.db.Iterator as BadgerIterator
 import fountain::f_base.*
 import fountain::f_codec.default.*
 import fountain::f_codec.exception.*
@@ -96,6 +95,18 @@ public class Store <: Resource {
     public func getData<T>(key: String): ?T where T <: DataFields<T> {
         if(let Some(x) <- get(key)){
             decode<T>(key, x)
+        }else{
+            None
+        }
+    }
+    /**
+     * 获取键对应的字符串.
+     * @param key 键
+     * @return 得到的值以UTF8解码
+     */
+    public func getString(key: String): ?String {
+        if(let Some(x) <- get(key)){
+            String.fromUtf8(x)
         }else{
             None
         }
@@ -239,6 +250,24 @@ public class Store <: Resource {
         update{tx => 
             tx.delete(key.unsafeBytes())
         }
+    }
+    /**
+     * 批量设置TTL.
+     * @param 迭代器返回的元组依次是键、值和生命周期。
+     */
+    public func ttl(iterable: Iterable<(String, Array<Byte>, Duration)>): Unit {
+        update{tx => 
+            for((k, v, life) in iterable){
+                Entry.new(k.unsafeBytes(), v).withTTL(life) |> tx.setEntry
+            }
+        }
+    }
+    /**
+     * 批量设置TTL.
+     * @param 迭代器返回的元组依次是键、值和生命周期。
+     */
+    public func ttl<T>(iterable: Iterable<(String, T, Duration)>): Unit where T <: DataFields<T> {
+        ttl(iterable.iterator().map{tuple => (tuple[0], encode<T>(tuple[1]), tuple[2])})
     }
     /**
      * 设置TTL.
@@ -492,6 +521,15 @@ public class Store <: Resource {
      */
     public func scanData<T>(prefix!: String = '', reverse!: Bool = false): StdIterator<(String, T)> where T <: DataFields<T> {
         BadgerTupleIterator(db, prefix, reverse).map{tuple => (tuple[0], decode<T>(tuple[0], tuple[1]))}
+    }
+    /**
+     * 迭代指定键前缀的键值对
+     * @param prefix 键前缀.
+     * @param reverse 是否倒序.
+     * @return 迭代器，迭代器的元素是(String, String)，元组的第一个值是键，第二个是值，值以UTF8解码.
+     */
+    public func scanString(prefix!: String = '', reverse!: Bool = false): StdIterator<(String, String)> {
+        BadgerTupleIterator(db, prefix, reverse).map{tuple => (tuple[0], String.fromUtf8(tuple[1]))}
     }
 }
 class BadgerTupleIterator <: StdIterator<(String, Array<Byte>)> {

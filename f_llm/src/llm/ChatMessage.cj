@@ -72,11 +72,10 @@ public class ToolCallFunction {
 
 @DataAssist[props fields]
 public class ToolCallMessage <: AssistantMessage {
-    @FieldAlias['tool_calls']
-    private let toolCalls: ArrayList<ToolCall> = ArrayList<ToolCall>()
+    private let tool_calls: ArrayList<ToolCall> = ArrayList<ToolCall>()
 
     public func addToolCall(call: ToolCall){
-        toolCalls.add(call)
+        tool_calls.add(call)
     }
     public func addFunctionCall(id!: String, toolType!: ToolType, name!: String, arguments!: String){
         addToolCall(ToolCall(id, toolType, ToolCallFunction(name, arguments)))
@@ -87,8 +86,7 @@ public class ToolCallMessage <: AssistantMessage {
 public class ToolCall {
     public ToolCall(
         private var id: String,
-        @FieldAlias['type']
-        private var toolType: ToolType,
+        private var `type`: ToolType,
         private var function: ToolCallFunction
     ){}
 

@@ -135,15 +135,38 @@ public open class AgentTask <: Task {
             }
         }
     }
-    private func genSkillDetails(skill: Skill){
+    private func genSkillDetails(skill: Skill, e: Event){
+        func genref(){
+            if(let de: DataEvent <- e && let agentData: AgentEventData <- de.data){
+                let sg = StringGenerator()
+                assembleSkillReference(skill.title, agentData, sg)
+                sg.toString()
+            }else{
+                ''
+            }
+        }
+        if(let de: DataEvent <- e && let agentData: AgentEventData <- de.data && 
+           let Some(any: ToData) <- agentData.data && let data: SimpleDataObject <- any.toData()){
+'''
+## 技能标题：${populatePromptsParams(skill.title, data)}
+
+### 技能描述
+${populatePromptsParams(skill.details, data)}
+${genref()}
+___
+
+'''
+        }else{
 '''
 ## 技能标题：${skill.title}
 
 ### 技能描述
 ${skill.details}
+${genref()}
 ___
 
 '''
+        }
     }
     private func genAuxiliarySkill(skill: Skill){
 '''
@@ -203,13 +226,27 @@ ___
 ${auxiliaryMetadatas}
 '''
     }
-    private func populatePromptsParams(messages: ArrayList<ChatMessage>, promptsTemplate: String, data: SimpleDataObject){
-        let msg = if(promptsTemplate.contains('{{')){
+    private func populatePromptsParams(promptsTemplate: String, data: SimpleDataObject){
+        if(promptsTemplate.contains('{{')){
             TextTemplate.compile(promptsTemplate, prefix: '{{', suffix: '}}').format(data)
         }else{
             promptsTemplate
         }
+    }
+    private func populatePromptsParams(messages: ArrayList<ChatMessage>, promptsTemplate: String, data: SimpleDataObject){
+        let msg = populatePromptsParams(promptsTemplate, data)
         messages.add(SystemMessage(msg))
+    }
+    private func assembleSkillReference(title: String, agentData: AgentEventData, generator: StringGenerator){
+        let references = agentData.getSkillReferences(title)
+        if(references.size > 0){
+            for(reference in references){
+                generator.append('''
+##### ${reference.title}
+${reference.content}
+''')
+            }
+        }
     }
     private func assembleAuxiliarySkills(agentData: AgentEventData){
         if(agentData.skillDetails.size > 0){
@@ -217,16 +254,7 @@ ${auxiliaryMetadatas}
             for((title, skill) in agentData.skillDetails){
                 auxiliarySkills.append(skill)
                 auxiliarySkills.append('\n')
-                let references = agentData.getSkillReferences(title)
-                if(references.size > 0){
-                    auxiliarySkills.append('#### 技能引用列表\n')
-                    for(reference in references){
-                        auxiliarySkills.append('''
-##### ${reference.title}
-${reference.content}
-''')
-                    }
-                }
+                assembleSkillReference(title, agentData, auxiliarySkills.append('#### 技能引用列表\n'))
                 auxiliarySkills.append('---\n\n')
             }
             auxiliarySkills.toString()
@@ -284,13 +312,13 @@ ${eventDesc}
                 for(n in skill.functionNames){
                     functionNames.add(n)
                 }
-                primarySkills.append(genSkillDetails(skill))
+                primarySkills.append(genSkillDetails(skill, e))
             }else{
                 auxiliaryMetadatas.append(genAuxiliarySkill(skill))
             }
         }
         let promptsTemplate = genPromptsTemplate(e, primarySkills, auxiliaryMetadatas)
-        let messages = ArrayList<ChatMessage>()
+        var messages = ArrayList<ChatMessage>()
         var eData = None<Any>
         var functions = HashSet<FunctionCall>()
         if (let e: DataEvent <- e && let msg: String <- e.data){
@@ -365,6 +393,7 @@ ${eventDesc}
         addFunctions(functions)
         addFunctions(FunctionMediator.getDefinitions(functionNames))
         params.messages = ContextPrunerMediator.instance.prune(agent.pruner, agentId: agent.id, session: e.session, messages: params.messages)
+        messages = params.messages
         func accessLLM(){
             let maxCount = LLMConfig.getLLMAccessTryingCount()
             let maxElapsed = LLMConfig.getLLMAccessTryingElapsed()
@@ -414,7 +443,7 @@ exception occurred ${ex}, to retry after ${sleepDuration}'''}
         for(msg in resp.messages){
             if(let m: ToolCallMessage <- msg){
                 messages.add(m)
-                for(tool in m.toolCalls){
+                for(tool in m.tool_calls){
                     func addToolMsg(content: String){
                         let toolmsg = ToolMessage()
                         toolmsg.tool_call_id = tool.id
@@ -437,7 +466,7 @@ exception occurred ${ex}, to retry after ${sleepDuration}'''}
                             case ResultType.Skill => 
                                 let skills = (fnResult.result as ArrayList<Skill>).getOrThrow()
                                 for(skill in skills){
-                                    eventData.skillDetails.add((skill.title, genSkillDetails(skill)))
+                                    eventData.skillDetails.add((skill.title, genSkillDetails(skill, e)))
                                     let functions = FunctionMediator.getDefinitions(skill.functionNames)
                                     eventData.addFunctions(functions)
                                 }
@@ -446,6 +475,10 @@ exception occurred ${ex}, to retry after ${sleepDuration}'''}
                                 let references = (fnResult.result as ArrayList<SkillReference>).getOrThrow()
                                 eventData.addSkillReferences(references)
                                 addToolMsg('[技能参考已加载]')
+                            case ResultType.Experience => 
+                                let experiences = (fnResult.result as ArrayList<Experience>).getOrThrow()
+                                eventData.addExperiences(experiences)
+                                addToolMsg('[经验已加载]')
                         }
                     }catch(e: Exception){
                         log.warn(e){'function call ${name}(${arguments})'}
@@ -456,6 +489,7 @@ exception occurred ${ex}, to retry after ${sleepDuration}'''}
                 messages.add(m)
             }
         }
+        Memory.add(e.session, all: messages)
         DataEvent(eventType: eventType, name: eventName, data: eventData, category: e.category, tag: e.tag, session: e.session)
     }
 }

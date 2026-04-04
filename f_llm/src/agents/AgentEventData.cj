@@ -23,7 +23,8 @@ public class AgentEventData {
         public let messages!: ArrayList<ChatMessage> = ArrayList<ChatMessage>(),
         public let message!: String = '',
         public let functions!: HashSet<FunctionCall> = HashSet<FunctionCall>(),
-        public let skillDetails!: ArrayList<(String, String)> = ArrayList<(String, String)>()
+        public let skillDetails!: ArrayList<(String, String)> = ArrayList<(String, String)>(),
+        public let experiences!: ArrayList<Experience> = ArrayList<Experience>()
     ){
     }
 
@@ -39,5 +40,8 @@ public class AgentEventData {
     }
     func getSkillReferences(title: String): List<SkillReference> {
         return this.skillReferences.get(title) ?? EmptyList<SkillReference>.instance()
+    }
+    func addExperiences(experiences: ArrayList<Experience>){
+        experiences.add(all: experiences)
     }
 }

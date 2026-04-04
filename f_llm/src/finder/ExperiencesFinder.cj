@@ -13,6 +13,11 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package fountain::f_llm.constant
+package fountain::f_llm.finder
 
-public const FOUNTAIN_LLM_AGENT = '喷泉工作室智能体'
+import fountain::f_llm.model.po.Experience
+
+public interface ExperiencesFinder {
+    func save(kind: String, content: String): Unit
+    func query(keywords: String): ArrayList<Experience>
+}

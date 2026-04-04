@@ -13,6 +13,20 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package fountain::f_llm.constant
+package fountain::f_llm.model.po
 
-public const FOUNTAIN_LLM_AGENT = '喷泉工作室智能体'
+import fountain::f_data.*
+import fountain::f_data.macros.*
+import fountain::f_orm.*
+import fountain::f_orm.macros.*
+
+@DataAssist[fields]
+@QueryMappersGenerator[table: agents]
+public class Experience {
+    @ORMField[id column: 'id']
+    private var id: Int64 = 0
+    @ORMField['kind']
+    private var kind: String = ''
+    @ORMField['content']
+    private var content: String = ''
+}

@@ -22,7 +22,7 @@ public class LLMContextMediator {
         let closure = {conf: LLMConf => GLMContext(conf)}
         register(LLM_TYPE_TEXT, 'glm-4.7-flash', closure)
         register(LLM_TYPE_TEXT, 'glm-5', closure)
-        register(LLM_TYPE_CODE, 'glm-5', closure)
+        register(LLM_TYPE_CODE, 'glm-5.1', closure)
     }
     public static func register(llmType: LLMType, model: String, creator: (LLMConf) -> AbstractLLMContext){
         contextCreators['${model}+${llmType}'] = creator

@@ -24,6 +24,7 @@ public open class LLMParams {
         private var messages!: ArrayList<ChatMessage> = ArrayList<ChatMessage>()
     ){}
     private let thinking: Thinking = Thinking()
+    private var response_format: ResponseFormat = ResponseFormat.json
     //不能用驼峰命名法再用@FieldAlias['do_sample']修饰，因为要用这个类的实例转换为JSON，这样命名会产生JSON字段冗余
     private var temperature: Float64 = 1.0
     private var max_tokens: Int64 = 65536
@@ -55,6 +56,16 @@ public class Thinking {
         private var `type`!: ThinkingSwitch = THINGKING_ENABLED,
         private var clear_thinking!: Bool = false
     ){}
+}
+@DataAssist[props fields]
+public class ResponseFormat {
+    public static let json: ResponseFormat = ResponseFormat('json_object')
+    public static let text: ResponseFormat = ResponseFormat('text')
+    public init(){}
+    public init(t: String){
+        this.`type` = t
+    }
+    private var `type`: String = 'json_object'
 }
 
 @DataAssist[props fields]
