@@ -323,7 +323,16 @@ public class EmbeddingContextMediator {
 在一个session内曾经失败过，后来大模型又成功的操作会被视为失败的教训
 ```cj
 public interface ExperiencesFinder {
-    func save(kind: String, content: String): Unit
+    /**
+     * 保存新的经验，删除旧的重复的经验
+     * @param kind experience 成功的经验，lesson 失败的教训，必须做相等性比较
+     * @param content 经验的描述，建议全文检索+向量索引查询，删除相关性最高的旧经验，保存新经验
+     */
+    func overwrite(kind: String, content: String): Unit
+    /**
+     * 查询经验
+     * @param keywords 查询的内容，建议全文检索+向量索引查询，返回相关性最高的经验集合，同时包含成功的经验和失败的教训
+     */
     func query(keywords: String): ArrayList<Experience>
 }
 ```

@@ -58,16 +58,19 @@ public macro QueryMappersGenerator(attr: Tokens, input: Tokens): Tokens {
     expandQueryMappers(attr, input)
 }
 private func expandQueryMappers(attr: Tokens, input: Tokens): Tokens {
-    let decl = match(parseDecl(input)){
+    expandQueryMappers(attr, parseDecl(input))
+}
+private func expandQueryMappers(attr: Tokens, declParam: Decl): Tokens {
+    let decl = match(declParam){
         case d: ClassDecl => d
         case d: MacroExpandDecl => 
             var decl = extract(d)
-            let tokens = expandQueryMappers(attr, decl.toTokens())
+            let tokens = expandQueryMappers(attr, decl)
             decl = parseDecl(tokens)
             decl = replaceMacroInputDecl(d, decl)
             return decl.toTokens()
-        case _ => 
-            diagReport(ERROR, input, 'QueryMappersGenerator supports a class', '')
+        case x => 
+            diagReport(ERROR, x.toTokens(), 'QueryMappersGenerator supports a class', '')
             throw ORMException("QueryMappersGenerator supports a class") 
     }
     let name = quote($(decl.identifier))
@@ -158,6 +161,10 @@ private func expandQueryMappers(attr: Tokens, input: Tokens): Tokens {
         }
     )))
     decl.toTokens()
+    quote(
+        $decl
+        private let _ = TableMetas.register<$(decl.identifier)>()
+    )
 }
 
 func generateMappers(name: Tokens, props: ArrayList<PropDecl>, dirty: Bool, mapperMetaFn: (String) -> (Bool, String, String)): Tokens {

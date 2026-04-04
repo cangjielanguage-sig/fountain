@@ -85,15 +85,16 @@ lessons是失败的教训，experiences是成功的经验
 ```
 '''
         let system = SystemMessage(prompts)
-        let content = StringGenerator('''
-从以下内容总结成功的经验和失败的教训
-## 上下文
-        ''')
+        let content = StringGenerator()
         for(m in messages){
             content.append(generateContent(m))
             content.append('---')
         }
-        let user = UserMessage(content.toString())
+        let user = UserMessage('''
+从以下内容总结成功的经验和失败的教训
+## 上下文
+${content}
+''')
         let summarising = ArrayList<ChatMessage>()
         summarising.add(system)
         summarising.add(user)
@@ -145,7 +146,7 @@ lessons是失败的教训，experiences是成功的经验
                             case _ => continue
                         }
                         let kind = key[0 .. key.size - 1]
-                        finder.save(kind, content)
+                        finder.overwrite(kind, content)
                     }
                 }
             }

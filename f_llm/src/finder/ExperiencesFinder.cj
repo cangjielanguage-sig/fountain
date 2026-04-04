@@ -18,6 +18,6 @@ package fountain::f_llm.finder
 import fountain::f_llm.model.po.Experience
 
 public interface ExperiencesFinder {
-    func save(kind: String, content: String): Unit
+    func overwrite(kind: String, content: String): Unit
     func query(keywords: String): ArrayList<Experience>
 }

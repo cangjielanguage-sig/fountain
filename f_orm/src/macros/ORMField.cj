@@ -84,10 +84,19 @@ private func expandORMField(attrs: Tokens, input: Tokens): Tokens {
         case d: MacroExpandDecl => 
             let tokens = expandORMField(attrs, extract(d).toTokens())
             let (varDecl, next) = parseDeclFragment(tokens, startFrom: 0)
-            return quote(
-                $(replaceMacroInputDecl(d, varDecl))
-                $(tokens[next .. ])
-            )
+            return if(let vd: VarDecl <- varDecl){
+                let pd = (parseDecl(d.toTokens()) as MacroExpandDecl).getOrThrow()
+                let (propDecl, _) = parseDeclFragment(tokens, startFrom: next)
+                quote(
+                    $(replaceMacroInputDecl(d, varDecl))
+                    $(replaceMacroInputDecl(pd, propDecl))
+                )
+            }else{
+                quote(
+                    $(replaceMacroInputDecl(d, varDecl))
+                    $(tokens[next .. ])
+                )
+            }
         case _ => 
             diagReport(ERROR, input, 'illegal decl', '')
             throw ORMException(

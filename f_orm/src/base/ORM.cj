@@ -47,6 +47,11 @@ public class ORM {
             datasources.keys().iterator()
         }
     }
+    static prop defaultDriver: String {
+        get(){
+            default
+        }
+    }
     public static func registerTransactionHooks<T>(): Unit where T <: TransactionHook {
         for (hook in lookupList<T>()) {
             registerTransactionHook<T>(hook)

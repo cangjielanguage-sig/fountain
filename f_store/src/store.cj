@@ -55,7 +55,7 @@ public class Store <: Resource {
         db = Badger.open(Config(dir: canonicalize(path).toString()))
         atExit(this.close)
     }
-    public func flush(){
+    public func flush(): Unit {
         db.flushMemTable()
     }
     public func isClosed(): Bool {
@@ -136,6 +136,12 @@ public class Store <: Resource {
         set(key, encode<T>(value))
     }
     /**
+     * 保存数据。保存value的UTF8字节
+     */
+    public func set(key: String, value: String): Unit {
+        set(key, value.unsafeBytes())
+    }
+    /**
      * 批量设置键值对.
      * @param key 键.
      * @param fn 闭包，返回键对应新值.
@@ -144,14 +150,25 @@ public class Store <: Resource {
         set(key, fn())
     }
     /**
+     * 批量设置键值对，保存fn函数返回字符串的UTF8字节
+     * @param key 键.
+     * @param fn 闭包，返回键对应新值.
+     */
+    public func set(key: String, fn: () -> String): Unit {
+        set(key, fn())
+    }
+    /**
      * 设置键值对，如果键不存在则设置，如果键存在则返回键对应的值.
      */
-    public func setIfAbsent(key: String, value: Array<Byte>): ?Array<Byte> {
-        if(let Some(x) <- get(key)){
-            x
-        }else{
-            set(key, value)
-            None
+    public func setIfAbsent(key: String, value: Array<Byte>): Array<Byte> {
+        update<Array<Byte>>{tx =>
+            let keyBytes = key.unsafeBytes()
+            if(let Some(x) <- tx.get(keyBytes)){
+                x
+            }else{
+                tx.set(keyBytes, value)
+                value
+            }
         }
     }
     /**
@@ -160,22 +177,33 @@ public class Store <: Resource {
      * @param value 值.
      * @return 
      */
-    public func setIfAbsent<T>(key: String, value: T): ?T where T <: DataFields<T> {
-        if(let Some(x) <- setIfAbsent(key, encode<T>(value))){
-            decode<T>(key, x)
-        }else{
-            None
-        }
+    public func setIfAbsent<T>(key: String, value: T): T where T <: DataFields<T> {
+        decode<T>(key, computeIfAbsent(key){
+            encode<T>(value)
+        })
+    }
+    /**
+     * 如果键不存在就设置新值并返回None，如果键存在则什么也不做并返回键对应的旧值。
+     * 以value的UTF8字节保存数据
+     * @param key 键值对.
+     * @param value 值.
+     * @return 
+     */
+    public func setIfAbsent(key: String, value: String): String {
+        computeIfAbsent(key){value.unsafeBytes()} |> String.fromUtf8
     }
     /**
      * 设置键值对，如果键存在则设置值并返回键对应的旧值，否则什么也不做并返回None。
      */
     public func setIfPresent(key: String, value: Array<Byte>): ?Array<Byte> {
-        if(let Some(x) <- get(key)){
-            set(key, value)
-            x
-        }else{
-            None
+        update<?Array<Byte>>{tx => 
+            let keyBytes = key.unsafeBytes()
+            if(let Some(x) <- tx.get(keyBytes)){
+                tx.set(keyBytes, value)
+                x
+            }else{
+                None
+            }
         }
     }
     /**
@@ -183,10 +211,22 @@ public class Store <: Resource {
      * @param key 键.
      * @param value 新值.
      */
-    public func sestIfPresent<T>(key: String, value: T): ?T where T <: DataFields<T> {
-        if(let Some(x) <- getData<T>(key)){
-            set(key, encode<T>(value))
-            x
+    public func setIfPresent<T>(key: String, value: T): ?T where T <: DataFields<T> {
+        if(let Some(bytes) <- computeIfPresent(key){encode<T>(value)}){
+            decode<T>(key, bytes)
+        }else{
+            None
+        }
+    }
+    /**
+     * 设置数据，如果键存在则设置新值并返回键对应的旧值，否则什么也不做并返回None。
+     * 保存value的UTF8字节
+     * @param key 键.
+     * @param value 新值.
+     */
+    public func setIfPresent(key: String, value: String): ?String {
+        if(let Some(bytes) <- computeIfPresent(key){value.unsafeBytes()}){
+            String.fromUtf8(bytes)
         }else{
             None
         }
@@ -195,12 +235,15 @@ public class Store <: Resource {
      * 计算键值对，如果键不存在则设置并返回键对应的新值，如果键存在则返回键对应的旧值。
      */
     public func computeIfAbsent(key: String, fn: () -> Array<Byte>): Array<Byte> {
-        if(let Some(x) <- get(key)){
-            x
-        }else{
-            let x = fn()
-            set(key, x)
-            x
+        update<Array<Byte>>{tx =>
+            let keyBytes = key.unsafeBytes()
+            if(let Some(x) <- tx.get(keyBytes)){
+                x
+            }else{
+                let x = fn()
+                tx.set(keyBytes, x)
+                x
+            }
         }
     }
     /**
@@ -209,12 +252,32 @@ public class Store <: Resource {
      * @param fn 闭包，返回键对应新值.
      */
     public func computeIfAbsent<T>(key: String, fn: () -> T): T where T <: DataFields<T> {
-        if(let Some(x) <- getData<T>(key)){
-            x
-        }else{
-            let x = fn()
-            set(key, x)
-            x
+        update<T>{tx =>
+            let keyBytes = key.unsafeBytes()
+            if(let Some(x) <- tx.get(keyBytes)){
+                decode<T>(key, x)
+            }else{
+                let x = fn()
+                tx.set(keyBytes, encode<T>(x))
+                x
+            }
+        }
+    }
+    /**
+     * 计算数据，如果键不存在则设置并返回键对应新值，如果键存在则返回键对应的旧值。
+     * @param key 键.
+     * @param fn 闭包，返回键对应新值.
+     */
+    public func computeIfAbsent(key: String, fn: () -> String): String {
+        update<String>{tx =>
+            let keyBytes = key.unsafeBytes()
+            if(let Some(x) <- tx.get(keyBytes)){
+                String.fromUtf8(x)
+            }else{
+                let x = fn()
+                tx.set(keyBytes, x.unsafeBytes())
+                x
+            }
         }
     }
     /**
@@ -223,10 +286,23 @@ public class Store <: Resource {
      * @param fn 闭包，返回键对应新值.
      */
     public func computeIfPresent(key: String, fn: () -> Array<Byte>): ?Array<Byte> {
-        if(let Some(x) <- get(key)){
-            let y = fn()
-            set(key, y)
-            x
+        update<?Array<Byte>>{tx =>
+            let keyBytes = key.unsafeBytes()
+            if(let Some(x) <- tx.get(keyBytes)){
+                let y = fn()
+                tx.set(keyBytes, y)
+                x
+            }else{
+                None
+            }
+        }
+    }
+    /**
+     * 计算键值对，如果键不存在则什么也不做并返回None，如果键存在则更新新值返回键对应的旧值。
+     */
+    public func computeIfPresent<T>(key: String, fn: () -> T): ?T where T <: DataFields<T> {
+        if(let Some(bytes) <- computeIfPresent(key){encode<T>(fn())}){
+            decode<T>(key, bytes)
         }else{
             None
         }
@@ -234,10 +310,9 @@ public class Store <: Resource {
     /**
      * 计算键值对，如果键不存在则什么也不做并返回None，如果键存在则更新新值返回键对应的旧值。
      */
-    public func computeIfPresent<T>(key: String, fn: () -> T): ? T where T <: DataFields<T> {
-        if(let Some(x) <- getData<T>(key)){
-            set<T>(key, fn)
-            x
+    public func computeIfPresent(key: String, fn: () -> String): ?String {
+        if(let Some(bytes) <- computeIfPresent(key){fn().unsafeBytes()}){
+            String.fromUtf8(bytes)
         }else{
             None
         }
@@ -270,13 +345,24 @@ public class Store <: Resource {
         ttl(iterable.iterator().map{tuple => (tuple[0], encode<T>(tuple[1]), tuple[2])})
     }
     /**
+     * 批量设置TTL.
+     * @param 迭代器返回的元组依次是键、值和生命周期。
+     */
+    public func ttl<T>(iterable: Iterable<(String, String, Duration)>): Unit {
+        ttl(iterable.iterator().map{tuple => (tuple[0], tuple[1].unsafeBytes(), tuple[2])})
+    }
+    
+    private func setEntry(tx: Transaction, key: Array<Byte>, value: Array<Byte>, life: Duration){
+        Entry.new(key, value).withTTL(life) |> tx.setEntry
+    }
+    /**
      * 设置TTL.
      * @param key 键.
      * @param value 值.
      * @param life 生命周期.
      */
     public func ttl(key: String, value: Array<Byte>, life: Duration): Unit {
-        update{tx => Entry.new(key.unsafeBytes(), value).withTTL(life) |> tx.setEntry}
+        update{tx => setEntry(tx, key.unsafeBytes(), value, life)}
     }
     /**
      * 获取TTL.
@@ -288,16 +374,28 @@ public class Store <: Resource {
         ttl(key, encode<T>(value), life)
     }
     /**
+     * 获取TTL.
+     * @param key 键.
+     * @param value 值.
+     * @param life 生命周期.
+     */
+    public func ttl(key: String, value: String, life: Duration): Unit {
+        ttl(key, value.unsafeBytes(), life)
+    }
+    /**
      * 设置TTL.
      * @param key 键.
      * @param life 生命周期.
      */
     public func ttl(key: String, life: Duration): ?Array<Byte> {
-        if(let Some(x) <- get(key)){
-            ttl(key, x, life)
-            x
-        }else{
-            None
+        update<?Array<Byte>>{tx =>
+            let keyBytes = key.unsafeBytes()
+            if(let Some(x) <- tx.get(keyBytes)){
+                setEntry(tx, keyBytes, x, life)
+                x
+            }else{
+                None
+            }
         }
     }
     /**
@@ -306,13 +404,16 @@ public class Store <: Resource {
      * @param value 值.
      * @param life 生命周期.
      */
-    public func ttlIfAbsent(key: String, value: Array<Byte>, life: Duration): ?Array<Byte> {
-        if(let Some(x) <- get(key)){
-            ttl(key, x, life)
-            x
-        }else{
-            ttl(key, value, life)
-            None
+    public func ttlIfAbsent(key: String, value: Array<Byte>, life: Duration): Array<Byte> {
+        update<Array<Byte>>{tx =>
+            let keyBytes = key.unsafeBytes()
+            if(let Some(x) <- tx.get(keyBytes)){
+                setEntry(tx, keyBytes, x, life)
+                x
+            }else{
+                setEntry(tx, keyBytes, value, life)
+                value
+            }
         }
     }
     /**
@@ -321,13 +422,34 @@ public class Store <: Resource {
      * @param value 值.
      * @param life 生命周期.
      */
-    public func ttlIfAbsent<T>(key: String, value: T, life: Duration): ?T where T <: DataFields<T> {
-        if(let Some(x) <- get(key)){
-            ttl(key, x, life)
-            decode<T>(key, x)
-        }else{
-            ttl(key, encode<T>(value), life)
-            None
+    public func ttlIfAbsent<T>(key: String, value: T, life: Duration): T where T <: DataFields<T> {
+        update<T>{tx =>
+            let keyBytes = key.unsafeBytes()
+            if(let Some(x) <- tx.get(keyBytes)){
+                setEntry(tx, keyBytes, x, life)
+                decode<T>(key, x)
+            }else{
+                setEntry(tx, keyBytes, encode<T>(value), life)
+                value
+            }
+        }
+    }
+    /**
+     * TTL设置，如果键不存在则设置并返回键对应新值，如果键存在则重新设置ttl并返回旧值。
+     * @param key 键.
+     * @param value 值.
+     * @param life 生命周期.
+     */
+    public func ttlIfAbsent(key: String, value: String, life: Duration): String {
+        update<String>{tx =>
+            let keyBytes = key.unsafeBytes()
+            if(let Some(x) <- tx.get(keyBytes)){
+                setEntry(tx, keyBytes, x, life)
+                String.fromUtf8(x)
+            }else{
+                setEntry(tx, keyBytes, value.unsafeBytes(), life)
+                value
+            }
         }
     }
     /**
@@ -337,9 +459,25 @@ public class Store <: Resource {
      * @param life 生命周期.
      */
     public func ttlIfPresent(key: String, value: Array<Byte>, life: Duration): ?Array<Byte> {
-        if(let Some(x) <- get(key)){
-            ttl(key, value, life)
-            x
+        update<?Array<Byte>>{tx =>
+            let keyBytes = key.unsafeBytes()
+            if(let Some(x) <- tx.get(keyBytes)){
+                setEntry(tx, keyBytes, value, life)
+                x
+            }else{
+                None
+            }
+        }
+    }
+    /**
+     * TTL设置，如果键不存在则什么也不做并返回None，如果键存在则重新设置ttl并返回旧值。
+     * @param key 键.
+     * @param value 值.
+     * @param life 生命周期.
+     */
+    public func ttlIfPresent<T>(key: String, value: T, life: Duration): ?T where T <: DataFields<T> {
+        if(let Some(x) <- computeIfPresent(key, life){encode<T>(value)}){
+            decode<T>(key, x)
         }else{
             None
         }
@@ -350,10 +488,9 @@ public class Store <: Resource {
      * @param value 值.
      * @param life 生命周期.
      */
-    public func ttlIfPresent<T>(key: String, value: T, life: Duration): ?T where T <: DataFields<T> {
-        if(let Some(x) <- getData<T>(key)){
-            ttl(key, encode<T>(value), life)
-            x
+    public func ttlIfPresent(key: String, value: String, life: Duration): ?String {
+        if(let Some(x) <- computeIfPresent(key, life){value.unsafeBytes()}){
+            String.fromUtf8(x)
         }else{
             None
         }
@@ -365,13 +502,16 @@ public class Store <: Resource {
      * @param fn 闭包，返回键对应新值.
      */
     public func computeIfAbsent(key: String, life: Duration, fn: () -> Array<Byte>): Array<Byte> {
-        if(let Some(x) <- get(key)){
-            ttl(key, x, life)
-            x
-        }else{
-            let x = fn()
-            ttl(key, x, life)
-            x
+        update<Array<Byte>>{tx =>
+            let keyBytes = key.unsafeBytes()
+            if(let Some(x) <- tx.get(keyBytes)){
+                setEntry(tx, keyBytes, x, life)
+                x
+            }else{
+                let x = fn()
+                setEntry(tx, keyBytes, x, life)
+                x
+            }
         }
     }
     /**
@@ -381,13 +521,35 @@ public class Store <: Resource {
      * @param fn 闭包，返回键对应新值.
      */
     public func computeIfAbsent<T>(key: String, life: Duration, fn: () -> T): T where T <: DataFields<T> {
-        if(let Some(x) <- get(key)){
-            ttl(key, x, life)
-            decode<T>(key, x)
-        }else{
-            let x = fn()
-            ttl(key, x, life)
-            x
+        update<T>{tx =>
+            let keyBytes = key.unsafeBytes()
+            if(let Some(x) <- tx.get(keyBytes)){
+                setEntry(tx, keyBytes, x, life)
+                decode<T>(key, x)
+            }else{
+                let x = fn()
+                setEntry(tx, keyBytes, encode<T>(x), life)
+                x
+            }
+        }
+    }
+    /**
+     * TTL设置，如果键不存在则设置并返回键对应新值，如果键存在则重新设置ttl并返回旧值。
+     * @param key 键.
+     * @param life 生命周期.
+     * @param fn 闭包，返回键对应新值.
+     */
+    public func computeIfAbsent(key: String, life: Duration, fn: () -> String): String {
+        update<String>{tx =>
+            let keyBytes = key.unsafeBytes()
+            if(let Some(x) <- tx.get(keyBytes)){
+                setEntry(tx, keyBytes, x, life)
+                String.fromUtf8(x)
+            }else{
+                let x = fn()
+                setEntry(tx, keyBytes, x.unsafeBytes(), life)
+                x
+            }
         }
     }
     /**
@@ -397,9 +559,25 @@ public class Store <: Resource {
      * @param fn 闭包，返回键对应新值.
      */
     public func computeIfPresent(key: String, life: Duration, fn: () -> Array<Byte>): ?Array<Byte> {
-        if(let Some(x) <- get(key)){
-            ttl(key, fn(), life)
-            x
+        update<?Array<Byte>>{tx =>
+            let keyBytes = key.unsafeBytes()
+            if(let Some(x) <- tx.get(keyBytes)){
+                setEntry(tx, keyBytes, fn(), life)
+                x
+            }else{
+                None
+            }
+        }
+    }
+    /**
+     * TTL设置，如果键不存在则什么也不做并返回None，如果键存在则重新设置ttl并返回旧值。
+     * @param key 键.
+     * @param life 生命周期.
+     * @param fn 闭包，返回键对应新值.
+     */
+    public func computeIfPresent<T>(key: String, life: Duration, fn: () -> T): ?T where T <: DataFields<T> {
+        if(let Some(x) <- computeIfPresent(key, life){encode<T>(fn())}){
+            decode<T>(key, x)
         }else{
             None
         }
@@ -410,10 +588,9 @@ public class Store <: Resource {
      * @param life 生命周期.
      * @param fn 闭包，返回键对应新值.
      */
-    public func computeIfPresent<T>(key: String, life: Duration, fn: () -> T): ?T where T <: DataFields<T> {
-        if(let Some(x) <- getData<T>(key)){
-            ttl(key, encode<T>(fn()), life)
-            x
+    public func computeIfPresent(key: String, life: Duration, fn: () -> String): ?String {
+        if(let Some(x) <- computeIfPresent(key, life){fn().unsafeBytes()}){
+            String.fromUtf8(x)
         }else{
             None
         }
@@ -442,6 +619,9 @@ public class Store <: Resource {
     private func convert<T>(fn: (Transaction, String, T) -> Unit): (Transaction, String, Array<Byte>) -> Unit where T <: DataFields<T> {
         {t, k, bytes => fn(t, k, decode<T>(k, bytes))}
     }
+    private func convert(fn: (Transaction, String, String) -> Unit): (Transaction, String, Array<Byte>) -> Unit  {
+        {t, k, bytes => fn(t, k, String.fromUtf8(bytes))}
+    }
     /**
      * 只读迭代.
      * @param prefix 键前缀.
@@ -450,6 +630,15 @@ public class Store <: Resource {
      */
     public func readOnlyIterate<T>(prefix!: String = '', reverse!: Bool = false, fn!: (Transaction, String, T) -> Unit): Unit where T <: DataFields<T> {
         readOnlyIterate(prefix: prefix, reverse: reverse, fn: convert<T>(fn))
+    }
+    /**
+     * 只读迭代.
+     * @param prefix 键前缀.
+     * @param reverse 是否倒序.
+     * @param fn 迭代闭包，Transaction是当前迭代的Transaction，String是当前迭代的键，T是当前迭代的值.
+     */
+    public func readOnlyIterate(prefix!: String = '', reverse!: Bool = false, fn!: (Transaction, String, String) -> Unit): Unit {
+        readOnlyIterate(prefix: prefix, reverse: reverse, fn: convert(fn))
     }
     /**
      * 可写迭代.
@@ -470,12 +659,21 @@ public class Store <: Resource {
         updateIterate(prefix: prefix, reverse: reverse, fn: convert<T>(fn))
     }
     /**
+     * 可写迭代.
+     * @param prefix 键前缀.
+     * @param reverse 是否倒序.
+     * @param fn 迭代闭包，Transaction是当前迭代的Transaction，String是当前迭代的键，T是当前迭代的值.
+     */
+    public func updateIterate(prefix!: String = '', reverse!: Bool = false, fn!: (Transaction, String, String) -> Unit): Unit {
+        updateIterate(prefix: prefix, reverse: reverse, fn: convert(fn))
+    }
+    /**
      * 删除指定前缀的键.
      * @param prefix 键前缀.
      */
     public func deletePrefix(prefix: String): Int64 {
         let count = Box<Int64>(0)
-        updateIterate(prefix: prefix){tx, key, _ =>
+        updateIterate(prefix: prefix){tx, key, _: Array<Byte> =>
             tx.delete(key.unsafeBytes())
             count.value++
         }
@@ -503,6 +701,14 @@ public class Store <: Resource {
      */
     public func deletePrefix<T>(prefix!: String = '', fn!: (Transaction, String, T) -> Bool): Unit where T <: DataFields<T> {
         deletePrefix(prefix: prefix){tx, key, bytes => fn(tx, key, decode<T>(key, bytes))}
+    }
+    /**
+     * 删除满足条件的键.
+     * @param prefix 键前缀.
+     * @param fn 删除闭包，Transaction是当前Transaction，String是当前键，T是当前值，返回true则删除.
+     */
+    public func deletePrefix(prefix!: String = '', fn!: (Transaction, String, String) -> Bool): Unit {
+        deletePrefix(prefix: prefix){tx, key, bytes => fn(tx, key, String.fromUtf8(bytes))}
     }
     /**
      * 迭代指定键前缀的键值对
