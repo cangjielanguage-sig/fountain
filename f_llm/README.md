@@ -195,6 +195,20 @@ public class Skill {
 }
 ```
 
+### 经验定义
+```cj
+@DataAssist[fields]
+@QueryMappersGenerator[table: agents]
+public class Experience {
+    @ORMField[id column: 'id']
+    private var id: Int64 = 0
+    @ORMField['kind']
+    private var kind: String = ''
+    @ORMField['content']
+    private var content: String = ''
+}
+```
+
 ## 数据查询接口：`fountain::f_llm.finder`
 所有finder接口的实现必须是类且被`fountain::f_bean.macros.Bean`修饰
 ### 查询智能体
@@ -300,6 +314,17 @@ public class EmbeddingContextMediator {
      * @param param 参数
      */
     public func access(model: String, param: EmbeddingParam): EmbeddingResp 
+}
+```
+
+### 经验查询/保存
+每一条会话上下文会忠实地保存到硬盘下来，每天零点以session为单位总结成功的经验和失败的教训
+得到用户认可的操作会被视为成功的经验。
+在一个session内曾经失败过，后来大模型又成功的操作会被视为失败的教训
+```cj
+public interface ExperiencesFinder {
+    func save(kind: String, content: String): Unit
+    func query(keywords: String): ArrayList<Experience>
 }
 ```
 
@@ -475,7 +500,8 @@ public open class LLMParams {
         private var messages!: ArrayList<ChatMessage> = ArrayList<ChatMessage>()
     ){}
     private let thinking: Thinking = Thinking()
-    //不能用驼峰命名法再用@FieldAlias['do_sample']修饰，因为要用这个类的实例转换为JSON，这样命名会产生JSON字段冗余
+    //不能用驼峰命名法再用@FieldAlias['response_format']修饰，因为要用这个类的实例转换为JSON，这样命名会产生JSON字段冗余
+    private var response_format: ResponseFormat = ResponseFormat.json
     private var temperature: Float64 = 1.0
     private var max_tokens: Int64 = 65536
 }
@@ -506,6 +532,17 @@ public class Thinking {
         private var `type`!: ThinkingSwitch = THINGKING_ENABLED,
         private var clear_thinking!: Bool = false
     ){}
+}
+
+@DataAssist[props fields]
+public class ResponseFormat {
+    public static let json: ResponseFormat = ResponseFormat('json_object')
+    public static let text: ResponseFormat = ResponseFormat('text')
+    public init(){}
+    public init(t: String){
+        this.`type` = t
+    }
+    private var `type`: String = 'json_object'
 }
 
 @DataAssist[props fields]
@@ -1376,4 +1413,41 @@ public macro ToolCall(input: Tokens): Tokens
  * 所不同的是这个宏的公共实例函数交被织入符合条件的切面。
  */
 public macro WeavedToolCall(input: Tokens): Tokens 
+```
+
+## 配置项
+所有配置项都是环境变量
+```cj
+public static const LLM = 'llm'
+/**
+ * 字符串
+ * 大模型可操作的路径，大模型只能操作这个路径下的文件
+ */
+public static const FILE_SANDBOX_PATH = LLM + '_fileSandboxPath'
+/**
+ * 正整数
+ * 访问大模型失败的重试次数，默认是Int64.Max
+ */
+public static const LLM_ACCESS_TRYING_COUNT = LLM + '_accessTryingCount'
+/**
+ * 正整数
+ * 访问大模型的重试时间，每次试图与大模型交互开始持续这么长时间内可以一直重试，直到访问成功或者超时
+ * 单位是秒，默认是Int64.Max
+ */
+public static const LLM_ACCESS_TRYING_ELAPSED = LLM + '_accessTryingElapsed'
+/**
+ * 字符串
+ * 忠实记忆存储路径
+ */
+public static const LLM_FAITHFUL_MEMORY_PATH = LLM + '_faithfulMemoryPath'
+/**
+ * Bool
+ * 是否保存记忆，只有保存记忆才能产生经验
+ */
+public static const LLM_MAKING_MEMORY = LLM + '_makingMemory'
+/**
+ * 字符串
+ * 用来总结经验的模型，默认是glm-4.7-flash
+ */
+public static const SUMMARISING_MODEL = LLM + '_summarisingModel'
 ```
