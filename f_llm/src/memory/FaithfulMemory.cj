@@ -26,7 +26,7 @@ struct DummyMemory <: FaithfulMemory {
     public func summarise(_: (String, ArrayList<ChatMessage>) -> Bool): Unit{}
     public func summarise(_: DateTime, _: (String, ArrayList<ChatMessage>) -> Bool): Unit{}
 }
-public struct FaithfulMemoryImpl <: FaithfulMemory {
+struct FaithfulMemoryImpl <: FaithfulMemory {
     private static let log = LoggerFactory.getLogger<FaithfulMemory>()
     private static const CONTENT_KEY_PREFIX = 'FaithfulMemory'
     private static const FULL_DATE_FORMAT = 'yyyyMMddHHmmssSSS'
