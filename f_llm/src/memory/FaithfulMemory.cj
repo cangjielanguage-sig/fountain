@@ -20,9 +20,8 @@ public interface FaithfulMemory {
     func summarise(fn: (String, ArrayList<ChatMessage>) -> Bool): Unit
     func summarise(earlierThan: DateTime, fn: (String, ArrayList<ChatMessage>) -> Bool): Unit
 }
-public struct DummyMemory <: FaithfulMemory {
-    private init(){}
-    public static let instance = DummyMemory()
+struct DummyMemory <: FaithfulMemory {
+    init(){}
     public func add(_: String, _: Role, _: String): Unit{}
     public func summarise(_: (String, ArrayList<ChatMessage>) -> Bool): Unit{}
     public func summarise(_: DateTime, _: (String, ArrayList<ChatMessage>) -> Bool): Unit{}

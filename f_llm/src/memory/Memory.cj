@@ -29,7 +29,7 @@ public struct Memory {
             }
             atExit(timer.cancel)
         }else{
-            faithful = DummyMemory.instance
+            faithful = DummyMemory()
             timer = ZERO_TIMER
         }
     }
