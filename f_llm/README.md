@@ -937,6 +937,263 @@ public class SkillLoadingFunction <: FunctionCalling<SkillLoading> {
 }
 ```
 
+### 技能引用加载函数
+```cj
+
+@DataAssist[props fields]
+public class SkillReferenceLoading {
+    @JsonStringSchema[description:'流程当前步骤的事件名称']
+    private var event: String = ''
+    @JsonStringSchema[description:'待加载的技能标题列表，标题具备唯一性']
+    private var references: ArrayList<SkillReferenceParam> = ArrayList<SkillReferenceParam>()
+}
+
+
+@Bean
+public class SkillReferenceLoadingFunction <: FunctionCalling<SkillReferenceLoading> {
+    private let skillsFinder = lookup<SkillsFinder>()
+    /**
+     * 函数名称
+     */
+    public prop name: String {
+        get(){
+            'loadSkillReferences'
+        }
+    }
+    /**
+     * 函数描述
+     */
+    public prop description: String {
+        get(){
+            '加载技能详细描述'
+        }
+    }
+    /**
+     * 用来加载技能详细描述
+     * @param params 函数参数
+     * @return 函数调用结果
+     */
+    public func call(params: SkillReferenceLoading): FunctionResult 
+}
+```
+
+### 命令行执行函数
+```cj
+
+@DataAssist[props fields]
+public class Command {
+    @JsonStringSchema[description:'流程下一步的事件名称']
+    private var nextEvent: String = ''
+    @JsonStringSchema[description:'完整的操作系统控制台命令']
+    private var command: String = ''
+}
+
+@Bean
+public class CommandFunction <: FunctionCalling<Command> {
+    /**
+     * 函数名称
+     */
+    public prop name: String {
+        get(){
+            'command'
+        }
+    }
+    /**
+     * 函数描述
+     */
+    public prop description: String {
+        get(){
+            '执行操作系统控制台命令'
+        }
+    }
+    /**
+     * @param params 命令参数
+     * @return 函数调用结果
+     */
+    public func call(params: Command): FunctionResult 
+}
+```
+
+### 控制台读写函数
+用户在Linux按下CTRL+D，或者在Windows按下CTRL+Z时表示结束输入。
+```cj
+@DataAssist[props fields]
+public class ConsoleOutput {
+    @JsonStringSchema[description:'流程下一步的事件名称']
+    private var nextEvent: String = ''
+    @JsonStringSchema[description:'大模型输出到控制台的内容']
+    private var content: String = ''
+}
+
+@Bean
+public class ConsoleFunction <: FunctionCalling<ConsoleOutput> {
+    private let writer = ConsoleWriter()
+    private let reader = ConsoleReader()
+    /**
+     * 函数名称
+     */
+    public prop name: String {
+        get(){
+            'console'
+        }
+    }
+    /**
+     * 函数描述
+     */
+    public prop description: String {
+        get(){
+            '控制台读写，大模型向控制台输出一段内容，用户通过控制台向大模型指示下一步行动'
+        }
+    }
+    /**
+     * 控制台读写，向控制台输出大模型需要用户看到的内容，等待用户回复或确认下一步行动。
+     */
+    public func call(params: ConsoleOutput): FunctionResult 
+}
+```
+
+### 文件读取函数
+```cj
+@DataAssist[props fields]
+public class FileReadingParams {
+    @JsonStringSchema[description:'流程下一步事件的名称']
+    private var event: String = ''
+    @JsonStringSchema[description:'''
+UNIX风格的文件路径，
+这个函数是一个应用程序的一部分，本路径会作为配置的可用路径的相对路径，即使大模型返回的参数使用了绝对路径也不会访问整个操作系统的文件系统。''']
+    private var path: String = ''
+    @JsonStringSchema[description:'与mode配合使用，符合条件的文本行才会返回']
+    private var condition: String = ''
+    @JsonStringSchema[description: '''
+读取文件的模式，与condition配合使用。
+### 可选值
+- entire: 默认值，返回整个文件，此时condition不生效
+- regex: 符合condition所表示的正则表达式的文本行才会返回
+- tail: 此时condition必须是整数，返回文件最后的指定行数，返回的行数是condition表示的整数
+- head: 此时condition必须是整数，返回文件开头的指定行数，返回的行数是condition表示的整数
+- random: 此时condition必须是整数，使用蓄水池算法从文件中随机选择指定行数，返回的行数是condition表示的整数
+''']
+    private var mode: String = 'entire'
+}
+
+@Bean
+public class FileReadingFunction <: AbstractFileFunction<FileReadingParams> {
+    /**
+     * 函数名称
+     */
+    public prop name: String {
+        get(){
+            'readFile'
+        }
+    }
+    /**
+     * 函数描述
+     */
+    public prop description: String {
+        get(){
+            '读文件'
+        }
+    }
+    /**
+     * 写文件的操作
+     * @param params 函数参数
+     * @return 函数调用结果
+     */
+    public func call(params: FileReadingParams): FunctionResult
+}
+```
+
+### 文件内容替换函数
+```cj
+
+@DataAssist[props fields]
+public class FileReplacingParams {
+    @JsonStringSchema[description:'流程下一步事件的名称']
+    private var event: String = ''
+    @JsonStringSchema[description:'''
+UNIX风格的文件路径。
+这个函数是一个应用程序的一部分，本路径会作为配置的可用路径的相对路径，即使大模型返回的参数使用了绝对路径也不会访问整个操作系统的文件系统。''']
+    private var path: String = ''
+    @JsonStringSchema[description:'待替换的内容']
+    private var replacement: String = ''
+    @JsonStringSchema[description: '符合这个正则表达式的文本行才会替换，如果是空串会返回错误']
+    private var regex: String = ''
+}
+
+@Bean
+public class FileReplacngFunction <: AbstractFileFunction<FileReplacingParams> {
+    /**
+     * 函数名称
+     */
+    public prop name: String {
+        get(){
+            'replaceFile'
+        }
+    }
+    /**
+     * 函数描述
+     */
+    public prop description: String {
+        get(){
+            '逐行替换文件内容，替换成功返回OK，否则返回错误原因，如果文件不存在会立即返回"文件不存在"'
+        }
+    }
+    /**
+     * 写文件的操作
+     * @param params 函数参数
+     * @return 函数调用结果
+     */
+    public func call(params: FileReplacingParams): FunctionResult 
+}
+```
+
+### 文件写写入函数
+```cj
+
+@DataAssist[props fields]
+public class FileWritingParams {
+    @JsonStringSchema[description:'流程下一步事件的名称']
+    private var event: String = ''
+    @JsonStringSchema[description:'''
+UNIX风格的文件路径。
+这个函数是一个应用程序的一部分，本路径会作为配置的可用路径的相对路径，即使大模型返回的参数使用了绝对路径也不会访问整个操作系统的文件系统。''']
+    private var path: String = ''
+    @JsonStringSchema[description:'待写入的文件内容']
+    private var content: String = ''
+    @JsonStringSchema[description: '''
+文件写入方式, 默认为 append, 可选值有 append, truncate。
+如果content是空串，而指定了truncate，则会把文件清空。
+如果文件不存在会自动创建新文件。''']
+    private var mode: String = 'append'
+}
+
+@Bean
+public class FileWritingFunction <: AbstractFileFunction<FileWritingParams> {
+    /**
+     * 函数名称
+     */
+    public prop name: String {
+        get(){
+            'writeFile'
+        }
+    }
+    /**
+     * 函数描述
+     */
+    public prop description: String {
+        get(){
+            '写文件，写成功返回OK，否则返回错误原因'
+        }
+    }
+    /**
+     * 写文件的操作
+     * @param params 函数参数
+     * @return 函数调用结果
+     */
+    public func call(params: FileWritingParams): FunctionResult 
+}
+```
+
 ## 搜索
 
 ## 智能体的定义
