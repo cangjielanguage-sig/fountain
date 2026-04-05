@@ -270,8 +270,7 @@ class ConcHashMap<V> <: Collection<(String, V)> {
      */
     func add(all!: Collection<(String, V)>): Unit {
         for ((key, val) in all) {
-            segment(key).add(key, val)
-            incrSize()
+            add(key, val)
         }
     }
     func computeIfAbsent(key: String, callable: () -> V): V {
@@ -307,7 +306,9 @@ class ConcHashMap<V> <: Collection<(String, V)> {
         for(segment in segments){
             segment.removeIf{k, v => 
                 let r = predicate(k, v)
-                decrSize()
+                if(r){
+                    decrSize()
+                }
                 r
             }
         }

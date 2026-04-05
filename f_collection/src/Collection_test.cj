@@ -135,6 +135,34 @@ public class Collection_test {
         }
     }
     @TestCase
+    public func testPriorityQueue(): Unit {
+        let array = createArray(16)
+        let shuffled = shuffleArray(array)
+        let queue = PriorityQueue<Int64>.create<Int64>()
+        for (v in shuffled) {
+            queue.add(v)
+        }
+        @Assert(array.size, queue.size)
+        println(queue.toArray())
+        var i = 0
+        while (!queue.isEmpty()) {
+            let val = queue.remove().getOrThrow()
+            @Assert(array[i], val)
+            i++
+        }
+    }
+    @TestCase
+    public func testPriorityQueueDiscard(): Unit {
+        let array = createArray(32)
+        let shuffled = shuffleArray(array)
+        let queue = PriorityQueue<Int64>.create<Int64>(growOnFull: false)
+        for (v in shuffled) {
+            queue.add(v)
+        }
+        @Assert(16, queue.size)
+        println(queue.toArray())
+    }
+    @TestCase
     public func testPriorityQueueGrowable(): Unit {
         let array = createArray(32)
         let shuffled = shuffleArray(array)

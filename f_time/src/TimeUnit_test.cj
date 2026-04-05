@@ -24,12 +24,12 @@ public class TimeUnitTest {
     public func test(): Unit {
         let fmt = 'yyyy-MM-dd HH:mm:ss.SSS'
         let date = DateTime.parse('2024-11-24 14:34:55.123456789', fmt)
-        @Assert('2024-11-24 14:34:55.000000000', TU.SECOND.trim(date).toString(fmt))
-        @Assert('2024-11-24 14:34:00.000000000', TU.MINUTE.trim(date).toString(fmt))
-        @Assert('2024-11-24 14:00:00.000000000', TU.HOUR.trim(date).toString(fmt))
-        @Assert('2024-11-24 00:00:00.000000000', TU.DAY.trim(date).toString(fmt))
-        @Assert('2024-11-01 00:00:00.000000000', TU.MONTH.trim(date).toString(fmt))
-        @Assert('2024-11-24 00:00:00.000000000', TU.WEEK.trim(date).toString(fmt))
-        @Assert('2024-01-01 00:00:00.000000000', TU.YEAR.trim(date).toString(fmt))
+        @Assert('2024-11-24 14:34:55.000000000', TU.SECOND.trim(date).format(fmt))
+        @Assert('2024-11-24 14:34:00.000000000', TU.MINUTE.trim(date).format(fmt))
+        @Assert('2024-11-24 14:00:00.000000000', TU.HOUR.trim(date).format(fmt))
+        @Assert('2024-11-24 00:00:00.000000000', TU.DAY.trim(date).format(fmt))
+        @Assert('2024-11-01 00:00:00.000000000', TU.MONTH.trim(date).format(fmt))
+        @Assert('2024-11-24 00:00:00.000000000', TU.WEEK.trim(date).format(fmt))
+        @Assert('2024-01-01 00:00:00.000000000', TU.YEAR.trim(date).format(fmt))
     }
 }

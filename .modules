@@ -33,5 +33,6 @@ f_orm
 f_security
 f_ticktock
 f_egraph
+f_store
 f_llm
 fboot

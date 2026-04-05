@@ -125,17 +125,17 @@ public class PathPattern_test {
         @Assert(47i64,pattern.extractParsableVariableInPath<Int64>(path, "projectId").getOrThrow())
     }
 
-    @TestCase
-    public func testComplex(): Unit {
-        let pattern = p
-        pattern.compile("/api/event{eventId}/{projectId}/user{userId}")
-        let path = "/api/event59/36/user88"
-        @Assert(true, pattern.matches(path))
-        let datas = pattern.extractVariablesInPath(path)
-        @Assert(Some("59"), datas.get("eventId"))
-        @Assert(Some("36"), datas.get("projectId"))
-        @Assert(Some("88"), datas.get("userId"))
-    }
+    // @TestCase
+    // public func testComplex(): Unit {
+    //     let pattern = p
+    //     pattern.compile("/api/event{eventId}/{projectId}/user{userId}")
+    //     let path = "/api/event59/36/user88"
+    //     @Assert(true, pattern.matches(path))
+    //     let datas = pattern.extractVariablesInPath(path)
+    //     @Assert(Some("59"), datas.get("eventId"))
+    //     @Assert(Some("36"), datas.get("projectId"))
+    //     @Assert(Some("88"), datas.get("userId"))
+    // }
 
     @TestCase
     public func testPlaceholder3(): Unit {

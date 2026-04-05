@@ -15,10 +15,12 @@ limitations under the License.
  */
 package fountain::f_log.base
 
+import std.io.ByteBuffer
 import std.time.DateTime
 import std.unittest.*
 import std.unittest.testmacro.*
 import stdx.log.LogLevel
+import fountain::f_log.output.*
 
 @Test
 public class LogPattern_test {
@@ -27,7 +29,10 @@ public class LogPattern_test {
         let pattern = LogPattern("[%level%-%name]% %d{yyyy/MM/dd,HH:mm:ss.SSS}|%%m%")
         let now = DateTime.now()
         let level = LogLevel.ERROR
-        let logmsg = pattern.generate("test", level, "test message", now)
+        let buffer = ByteBuffer()
+        pattern.generate("test", level, "test message", now, Thread.currentThread.id, LogWriterImpl(buffer))
+        let logmsg = String.fromUtf8(buffer.bytes())
+        //name: String, level: LogLevel, message: ToString, current: DateTime, tid: Int64, writer: LogWriter
         println(logmsg)
         let tpl = "[${level.text}%-test]% ${now.format("yyyy/MM/dd,HH:mm:ss.SSS")}|%test message%\n"
         @Assert(tpl, logmsg)

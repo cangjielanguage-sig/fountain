@@ -23,7 +23,7 @@ import std.process.Process
 
 public open class TestLogAppender <: AbstractLogger {
     init(name!: String, level!: LogLevel) {
-        super(name, level, LogPattern("[%level-%name] %d{yyyy/MM/dd,HH:mm:ss.SSS}|%m"), env.getStdOut())
+        super(name, level, LogPattern("[%level-%name] %d{yyyy/MM/dd,HH:mm:ss.SSS}|%m"), env.getStdOut(), 'test://')
     }
 }
 

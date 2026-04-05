@@ -66,13 +66,17 @@ cangjie_env(){
   rm -f /mnt/d/docs/work/cangjie/cangjie-linux-bin/sdk/current/cangjie
   rm -f /mnt/d/docs/work/cangjie/cangjie-linux-bin/sdk/current
   ln -s $CANGJIE_HOME /mnt/d/docs/work/cangjie/cangjie-linux-bin/sdk/current
+  cp ~/.cjpm/tools/config/*.json $CANGJIE_HOME/tools/config/
   cjc -v
 }
 cjpub(){
   if [[ "$2" == "" ]]; then
     sed -E -i "s/ version ?= ?\".+\"/ version = \"$1\"/g" cjpm.toml
     sed -E -i.bak "s/\{path ?= ?\".+\"\}/\"$1\"/g" cjpm.toml
-    cjpm bundle --skip-test --skip-lint
+    cjpm clean
+    rm cjpm.lock
+    cjpm update
+    cjpm bundle --skip-lint
     cjpm publish
     mv cjpm.toml.bak cjpm.toml
     echo ${PWD##*/}耗时：$SECONDS秒，完成于：$(date)
@@ -133,28 +137,32 @@ cj(){
     ;;
   publish)
     for d in `cat .modules`; do 
-        echo $d
-        if [[ $d =~ ^#.* ]]; then
+        echo "正在执行：$d"
+	url="https://pkg.cangjie-lang.cn/v1/artifact/getPackageMetadata?group=fountain&moduleName=$d&version=$2"
+	existed=$(curl_output=$(curl $url) && echo $curl_output | jq -e '.code == 200 and .msg == "success"')
+	if [[ "$existed" == "true" ]]; then
             continue
         fi
         cd $d
 	cj bundle $2
-	cd ..
-
-	url="https://pkg.cangjie-lang.cn/v1/artifact/getPackageMetadata?group=fountain&moduleName=$d&version=$2"
-	echo "check url $url"
-	a=0
-	b=1
+        echo "check url $url"
+        a=0
+        b=1
         sleep $b
-	until curl_output=$(curl $url) && echo $curl_output | jq -e '.code == 200 and .msg == "success"' &> /dev/null; do
-            # 计算下一次等待时间（斐波那契数列）
-            next_wait_time=$((a + b))
-            a=$b
-            b=$next_wait_time
-            echo "$(date '+%Y-%m-%d %H:%M:%S') - 检查制品 $d 失败或返回码不为 success，${next_wait_time} 秒后重试..."
-            echo "$(date '+%Y-%m-%d %H:%M:%S') - 服务器返回: $curl_output"
-            sleep $next_wait_time
+	sum=$b
+        until curl_output=$(curl $url) && echo $curl_output | jq -e '.code == 200 and .msg == "success"' &> /dev/null; do
+      	     # 计算下一次等待时间（斐波那契数列）
+             next_wait_time=$((a + b))
+             a=$b
+	     b=$next_wait_time
+	     echo "$(date '+%Y-%m-%d %H:%M:%S') - 检查制品 $d 失败或返回码不为 success，当前已等待${sum} 分，${next_wait_time} 秒后重试..."
+             echo "$(date '+%Y-%m-%d %H:%M:%S') - 服务器返回: $curl_output"
+             sleep $next_wait_time
+	     sum=$((sum + next_wait_time))
         done
+	min=$((sum/60))
+	echo "制品$d 一共等待$min 分"
+	cd ..
     done
     sed -E -i "s|(/package/fountain::f_[a-z]+/)[0-9]+\.[0-9]+\.[0-9]+(/readme)|\1$2\2|g" README.md
     cj bundle $2

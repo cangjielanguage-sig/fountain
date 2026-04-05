@@ -51,8 +51,8 @@ public class BitSet <: Iterable<Bool> {
     }
     private func growIfNeed(index: UInt64, grow!: Bool = true): Int64 {
         let idx = (index / 64u64).toInt()
-        if (grow && idx >= bits.capacity) {
-            bits.add(all: Array<UInt64>(idx - bits.capacity + 1, repeat: 0))
+        if (grow && idx >= bits.size) {
+            bits.add(all: Array<UInt64>(idx - bits.size + 1, repeat: 0))
         }
         idx
     }

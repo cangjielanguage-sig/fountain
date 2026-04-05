@@ -49,6 +49,7 @@ public class PriorityQueue<T> <: Queue<T> & Iterable<T> & Collection<T> & Growab
     public PriorityQueue(
         private let comparator: (T, T) -> Ordering,
         private var capacity!: Int64 = DEFAULT_CAPACITY,
+        private let growOnFull!: Bool = true,
         private let overSizePolicy!: OverSizePolicy<PriorityQueue<T>> = DiscardOverSizePolicy<PriorityQueue<T>>()
     ) {
         queue = Array<Option<T>>(capacity,repeat: None<T>)
@@ -56,28 +57,32 @@ public class PriorityQueue<T> <: Queue<T> & Iterable<T> & Collection<T> & Growab
     public init(
         comparator: Comparator<T>,
         capacity!: Int64 = DEFAULT_CAPACITY,
+        growOnFull!: Bool = true,
         overSizePolicy!: OverSizePolicy<PriorityQueue<T>> = DiscardOverSizePolicy<PriorityQueue<T>>()
     ) {
-        this(comparator.comparator, capacity: capacity, overSizePolicy: overSizePolicy)
+        this(comparator.comparator, capacity: capacity, growOnFull: growOnFull, overSizePolicy: overSizePolicy)
     }
     public static func create<T>(
         capacity!: Int64 = DEFAULT_CAPACITY,
+        growOnFull!: Bool = true,
         overSizePolicy!: OverSizePolicy<PriorityQueue<T>> = DiscardOverSizePolicy<PriorityQueue<T>>()
     ): PriorityQueue<T> where T <: Comparable<T> {
-        PriorityQueue<T>.create(Comparator<T>.create<T>(), capacity: capacity, overSizePolicy: overSizePolicy)
+        PriorityQueue<T>.create(Comparator<T>.create<T>(), capacity: capacity, growOnFull: growOnFull, overSizePolicy: overSizePolicy)
     }
     public static func createReverse<T>(
         capacity!: Int64 = DEFAULT_CAPACITY,
+        growOnFull!: Bool = true,
         overSizePolicy!: OverSizePolicy<PriorityQueue<T>> = DiscardOverSizePolicy<PriorityQueue<T>>()
     ): PriorityQueue<T> where T <: Comparable<T> {
-        PriorityQueue<T>.create(Comparator<T>.create<T>().reverse(), capacity: capacity, overSizePolicy: overSizePolicy)
+        PriorityQueue<T>.create(Comparator<T>.create<T>().reverse(), capacity: capacity, growOnFull: growOnFull, overSizePolicy: overSizePolicy)
     }
     public static func create(
         comparator: Comparator<T>,
         capacity!: Int64 = DEFAULT_CAPACITY,
+        growOnFull!: Bool = true,
         overSizePolicy!: OverSizePolicy<PriorityQueue<T>> = DiscardOverSizePolicy<PriorityQueue<T>>()
     ): PriorityQueue<T> {
-        PriorityQueue<T>(comparator.comparator, capacity: capacity, overSizePolicy: overSizePolicy)
+        PriorityQueue<T>(comparator.comparator, capacity: capacity, growOnFull: growOnFull, overSizePolicy: overSizePolicy)
     }
 
     /**
@@ -97,7 +102,11 @@ public class PriorityQueue<T> <: Queue<T> & Iterable<T> & Collection<T> & Growab
      */
     public func add(x: T): Unit {
         if (capacity > 0 && size >= capacity) {
-            overSizePolicy.reject(this) {doOffer(x)}
+            if(growOnFull){
+                doOffer(x)
+            }else{
+                overSizePolicy.reject(this) {doOffer(x)}
+            }
         } else {
             doOffer(x)
         }
@@ -111,7 +120,7 @@ public class PriorityQueue<T> <: Queue<T> & Iterable<T> & Collection<T> & Growab
             adjustUp(currentSize, x)
             currentSize++
             true
-        } else if (capacity <= 0) {
+        } else if (capacity <= 0 || growOnFull) {
             grow()
             doOffer(x)
         } else {
