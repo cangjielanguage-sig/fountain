@@ -970,3 +970,126 @@ public class SqlExecutor <: Resource & RootDAO {
     public func one<T>(mappers: QueryMappers<T>): Option<T>
 }
 ```
+
+## 数据库表变更
+现在为mysql mariadb postgres opengauss提供了自动生成变更sql的支持
+### 基础接口
+```cj
+/**
+ * 此接口的实现类要用fountain::f_bean.macros.Bean宏修饰
+ */
+public interface SchemaFinder {
+    /**
+     * 驱动名
+     */
+    prop driverName: String
+    /**
+     * 查询表结构数据
+     * @param database 数据库名
+     * @param tableName 表名
+     * @return 列元数据的迭代器
+     */
+    func findTableSchema(database: String, tableName: String): Iterator<ColumnMeta>
+    /**
+     * 返回索引元数据的迭代器
+     * @param database 数据库名
+     * @param tableName 表名
+     */
+    func findIndexes(database: String, tableName: String): Iterator<IndexMeta>
+    /**
+     * 使用指定的表名和列元数据构造create table sql
+     */
+    func generateCreateSql(tableName: String, columns: Iterator<ColumnMeta>): Iterator<String>
+    /**
+     * 使用指定的表名、新的列元数据，当前数据库的元数据构造alter table sql，包括修改列名、列类型、是否not null、列默认值、添加新列、删除列等
+     */
+    func generateAlterSql(tableName: String, new: Array<ColumnMeta>, current: Iterator<ColumnMeta>): Iterator<String>
+    /**
+     * 使用指定的表名和新旧索引元数据生成索引sql，包括添加、删除索引
+     */
+    func generateIndexSql(tableName: String, new: Array<IndexMeta>, current: Iterator<IndexMeta>): Iterator<String>
+}
+```
+
+### 表元数据
+```sql
+public class TableMeta{
+    private TableMeta(
+        public let driver: String,
+        public let database: String,
+        public let tableName: String,
+        public let columns: Array<ColumnMeta>,
+        public let indexes: Array<IndexMeta>
+    ){}
+}
+@DataAssist[fields]
+public class ColumnMeta <: Hashable & Equatable<ColumnMeta> {
+    public var columnName: String = ''
+    public var oldColumnName: String = ''
+    public var typeName: String = ''
+    public var nullable: Bool = false
+    public var default: ?String = None
+    public var extra: String = ''
+    public var comment: String = ''
+    public init(){}
+    public init(schema: ColumnSchema, columnName: String)
+}
+@DataAssist[fields]
+public class IndexMeta <: Hashable & Equatable<IndexMeta> {
+    public var name: String = ''
+    public var columns: String = ''
+    public var unique: Bool = false
+    public var def: String = ''
+    public init(){}
+    public init(name: String, columns: String, unique: Bool)
+    public init(schema: IndexSchema)
+}
+```
+
+### 表schema
+表元数据变量功能生效的前提是**必须**使用这些注解修饰映射类
+```cj
+@Annotation[target: [Type]]
+public class DatabaseSchema{
+    public const DatabaseSchema(
+        private let driver!: String = '',
+        public let database!: String
+    ){}
+    public prop driverName: String {
+        get(){
+            if(driver.isEmpty()){
+                ORM.defaultDriver
+            }else{
+                driver
+            }
+        }
+    }
+}
+
+@Annotation[target: [Type]]
+public class IndexSchema{
+    public const IndexSchema(
+        public let name!: String,
+        public let columns!: String,
+        public let unique!: Bool
+    ){}
+}
+
+@Annotation[target: [MemberProperty, MemberVariable]]
+public class ColumnSchema{
+    public const ColumnSchema(
+        /**
+         * 如果列名发生了变化，需要注明旧的列名，宏@ORMField['new_column_name']标注新的列名。
+         */
+        public let oldColumnName!: String = '',
+        public let typeName!: String,
+        public let nullable!: Bool = false,
+        public let default!: ?String = None,
+        public let extra!: String = '',
+        public let comment!: String = ''
+    ){}
+}
+```
+
+### 操作表数据变更
+执行命令fboot dbmigro --dylibPattern='需要加载的动态链接库文件名的正则表达式'

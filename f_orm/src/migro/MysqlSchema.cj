@@ -134,7 +134,11 @@ public abstract class AbstractMysqlSchemaFinder <: SchemaFinder {
         for(i in newIndexMap.values()){
             if(let Some(x) <- currentIndexes.get(i.name) && i != x){
                 sqls.add('alter table ${tableName} drop index ${i.name};')
-                sqls.add('alter table ${tableName} add ${if(i.unique){'unique'}else{'index'}} ${i.name} (${i.columns});')
+                if(i.name == 'primary' || i.name == 'PRIMARY'){
+                    sqls.add('ALTER TABLE ${tableName} ADD PRIMARY KEY (${i.columns});')
+                }else{
+                    sqls.add('alter table ${tableName} add ${if(i.unique){'unique'}else{'index'}} ${i.name} (${i.columns});')
+                }
             }else if(!currentIndexes.contains(i.name)){
                 sqls.add('alter table ${tableName} add ${if(i.unique){'unique'}else{'index'}} ${i.name} (${i.columns});')
             }
