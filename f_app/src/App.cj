@@ -94,7 +94,7 @@ public struct App {
         }
         canonicalize(path)
     }
-    private func run(args: Array<String>): Int64{
+    private func load(): (Path, ArrayList<() -> Unit>) {
         let path = confirmTargetPath(args)
         let (ext, libPathName, delim) = match (OS.current) {
             case Windows => (".dll", 'Path', ';')
@@ -135,6 +135,10 @@ public struct App {
             load(path, Regex('^lib.*(${extractPattern()}|.+${APP_STATIC_RESOURCE_SUFFIX}).*$'))
         }
         let starters = InitializerCollection.initialize()
+        (path, starters)
+    }
+    private func run(args: Array<String>): Int64{
+        let (path, starters) = load()
         //orm 会在初始化第一个DAO时初始化orm包，此时会从配置获得数据库连接配置从而完成orm初始化
         //执行load函数时一定会加载初始化orm的动态链接库从而完成初始化
         //其它模块是工具API没有专门的初始化API
@@ -693,8 +697,9 @@ private let _ = AppVersion.set(#'${banner()}'#, '${name}', '${version}')
             case 'count' => count()
             case 'version' => version()
             case 'help' => help()
-            case _ => throw BootException(
-                    'first command arg must be run|shutdow|restart|module|workspace|cleanUpdate|build|count|version, but current args are ${args}')
+            case x => 
+                load()
+                SubCommandMediator.exec(x, args[1..])
         }
     }
 }

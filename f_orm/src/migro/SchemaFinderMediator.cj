@@ -15,7 +15,7 @@ limitations under the License.
 */
 package fountain::f_orm.migro
 
-import std.env.{getStdOut, getStdIn, getCommandLine}
+import std.env.{getStdOut, getStdIn}
 import std.fs.*
 
 public struct SchemaFinderMediator {
@@ -25,7 +25,7 @@ public struct SchemaFinderMediator {
             finders[f.driverName] = f
         }
     }
-    public func generate(): Unit {
+    public func generate(cmdargs: Array<String>): Unit {
         let sqls = TableMetas.tableMetas().groupBy{m => m.driver}.iterator().flatMap{tuple: (String, ArrayList<TableMeta>) => 
             let (driver, metas) = tuple
             let first = Box<Bool>(true)
@@ -55,7 +55,6 @@ public struct SchemaFinderMediator {
             list.add(tuple)
             list
         }
-        let cmdargs = getCommandLine()[1 ..] 
         for(i in 0 .. cmdargs.size where cmdargs[i] == '-m' || cmdargs[i] == '--mode'){
             match(cmdargs[i + 1]){
                 case 'file' => 

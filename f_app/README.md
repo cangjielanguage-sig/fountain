@@ -81,3 +81,39 @@ public struct InitializerCollection {
     public static func register(initializer: Initializer): Unit
 }
 ```
+
+## 子命令
+如果需要为fboot实现新的子命令可以实现以下接口
+```cj
+package fountain::f_app.SubCommand
+public interface SubCommand{
+    /**
+     * 子命令名，即fboot <subcommand> 
+     */
+    prop command: String
+    /**
+     * 执行，args是去掉了首个参数的命令行实参。首个命令行参数就是子命令的名字
+     */
+    func exec(args: Array<String>): Int64
+}
+```
+
+### 参考实现
+```cj
+package org::module.pkg
+
+import fountain::f_app.{SubCommand, SubCommandMediator}
+public struct NewSubCommand <: SubCommand {
+    static init(){
+        SubCommandMediator.register(NewSubCommand())
+    }
+    public prop command: String{
+        get(){
+            newcmd
+        }
+    }
+    public func exec(args: Array<String>): Int64 {
+        //do something
+    }
+}
+```
