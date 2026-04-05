@@ -160,7 +160,6 @@ private func expandQueryMappers(attr: Tokens, declParam: Decl): Tokens {
             $queryMappersName
         }
     )))
-    decl.toTokens()
     quote(
         $decl
         private let _ = TableMetas.register<$(decl.identifier)>()

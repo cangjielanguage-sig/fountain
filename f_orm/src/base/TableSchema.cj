@@ -18,14 +18,15 @@ package fountain::f_orm.base
 @Annotation[target: [Type]]
 public class DatabaseSchema{
     public const DatabaseSchema(
-        private let db!: String = ''
+        private let driver!: String = '',
+        public let database!: String
     ){}
-    public prop database: String {
+    public prop driverName: String {
         get(){
-            if(db.isEmpty()){
+            if(driver.isEmpty()){
                 ORM.defaultDriver
             }else{
-                db
+                driver
             }
         }
     }
@@ -43,9 +44,11 @@ public class IndexSchema{
 @Annotation[target: [MemberProperty, MemberVariable]]
 public class ColumnSchema{
     public const ColumnSchema(
+        public let oldColumnName!: String = '',
         public let typeName!: String,
         public let nullable!: Bool = false,
         public let default!: ?String = None,
+        public let extra!: String = '',
         public let comment!: String = ''
     ){}
 }
