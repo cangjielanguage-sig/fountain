@@ -30,6 +30,7 @@ public struct LLMConfig {
     public static const LLM_FAITHFUL_MEMORY_PATH = LLM + '_faithfulMemoryPath'
     public static const LLM_MAKING_MEMORY = LLM + '_makingMemory'
     public static const SUMMARISING_MODEL = LLM + '_summarisingModel'
+    public static const SUMMARISING_ACTION_KIND = LLM + '_summarisingActionKind'
 
     public static func isAuto(): Bool {
         Config.getValue<Bool>(AUTO) ?? false
@@ -65,5 +66,8 @@ public struct LLMConfig {
     }
     public static func getSummarisingModel(): String {
         Config.getString(SUMMARISING_MODEL) ?? 'glm-4.7-flash'
+    }
+    public static func getSummarisingActionKind(): String {
+        Config.getString(SUMMARISING_ACTION_KIND) ?? ''
     }
 }

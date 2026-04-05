@@ -195,11 +195,11 @@ public class Skill {
 }
 ```
 
-### 经验定义
+### 记忆总结定义
 ```cj
 @DataAssist[fields]
-@QueryMappersGenerator[table: agents]
-public class Experience {
+@QueryMappersGenerator[table: memory_summaries]
+public class MemorySummary {
     @ORMField[id column: 'id']
     private var id: Int64 = 0
     @ORMField['kind']
@@ -207,6 +207,58 @@ public class Experience {
     @ORMField['content']
     private var content: String = ''
 }
+```
+
+## 提取记忆
+每一条会话上下文会忠实地保存到硬盘，每天零点以session为单上下文边界根据记忆和配置项总结记忆
+- 总结经验教训
+  - 配置项是export llm_summarisingActionKind=experience
+  - 得到用户认可的操作会被视为成功的经验。
+  - 在一个session内曾经失败过，后来大模型又成功的操作会被视为失败的教训
+- 总结用户个性
+  - 配置项是export llm_summarisingIndividualityKind=individuality
+  - 用户个性包含用户对某些事物、事情的偏好以及做事、措辞的习惯
+- 配置项export llm_summarisingActionKind的其它情况
+  - 是空串时不做任何总结
+  - 不是空串，以配置项的值作为fountain::f_bean管理的对象名称前缀分别获取fountain::f_llm.memory.MemoryExtractor和fountain::f_llm.finder.MemorySummaryFinder两个接口的实现，如果没有找到什么抛出异常
+```cj
+public abstract class MemoryExtractor {
+    /**
+     * json是大模型返回JSON的JSON对象
+     * json中的第一级key可选项为lesson experience individuality，开发者可以继承此类定义自己需要的key
+     * overiwter用来覆盖已保存的历史记忆提取结果，相似度高的记忆会被覆盖
+     */
+    public func extract(json: JsonObject, overwriter: (String, String) -> Unit): Unit
+    /**
+     * json是大模型返回json的第二级，key是当前json中的key。
+     * 本函数的具体实现按照JSON构造一个字符串作为记忆总结的结果，推荐使用markdown格式
+     */
+    public func extract(json: JsonObject, key: String): String
+    protected func extract(key: String, jsonobj: JsonObject, overwriter: (String, String) -> Unit): Unit
+    protected func extractString(jsonobj: JsonObject, key: String): String
+    protected func extractArray(jsonobj: JsonObject, key: String): String
+    /**
+     * 总结记忆的系统提示词，用来说明当前记忆提取器的用途
+     */
+    public prop systemPrompts: String
+    /**
+     * 总结记忆的用户提示词前缀，发送给大模型的具体内容如下：
+     * ${extractor.userPrompts}
+     * ## 上下文
+     * ${context}
+     * 
+     * context是用ArrayList<ChatMessage>构造的字符串
+     */
+    public prop userPrompts: String
+}
+/** 
+ * 经验教训提取器
+ */
+public class ExperienceExtractor <: MemoryExtractor
+/**
+ * 个性提取器
+ */
+public class IndividualityExtractor <: MemoryExecutor
 ```
 
 ## 数据查询接口：`fountain::f_llm.finder`
@@ -317,24 +369,15 @@ public class EmbeddingContextMediator {
 }
 ```
 
-### 经验查询/保存
-每一条会话上下文会忠实地保存到硬盘下来，每天零点以session为单位总结成功的经验和失败的教训
-得到用户认可的操作会被视为成功的经验。
-在一个session内曾经失败过，后来大模型又成功的操作会被视为失败的教训
+### 忘记查询/总结
 ```cj
-public interface ExperiencesFinder {
-    /**
-     * 保存新的经验，删除旧的重复的经验
-     * @param kind experience 成功的经验，lesson 失败的教训，必须做相等性比较
-     * @param content 经验的描述，建议全文检索+向量索引查询，删除相关性最高的旧经验，保存新经验
-     */
+public interface MemorySummaryFinder {
     func overwrite(kind: String, content: String): Unit
-    /**
-     * 查询经验
-     * @param keywords 查询的内容，建议全文检索+向量索引查询，返回相关性最高的经验集合，同时包含成功的经验和失败的教训
-     */
     func query(keywords: String): ArrayList<Experience>
 }
+public interface ExperienceFinder <: MemorySummaryFinder {}
+public interface IndividualityFinder <: MemorySummaryFinder {}
+
 ```
 
 ## 上下文策略：`fountain::f_llm.llm.ConsextPrunerName`
@@ -1023,11 +1066,10 @@ public class SkillReferenceLoadingFunction <: FunctionCalling<SkillReferenceLoad
 }
 ```
 
-### 经验加载函数
+### 经验、教训、用户个性等记忆加载函数
 ```cj
-
 @DataAssist[props fields]
-public class ExperienceLoading {
+public class MemoryLoading {
     @JsonStringSchema[description:'流程当前步骤的事件名称']
     private var event: String = ''
     @JsonStringSchema[description:'查询与本参数相关性最强的经验']
@@ -1035,14 +1077,14 @@ public class ExperienceLoading {
 }
 
 @Bean
-public class ExperienceLoadingFunction <: FunctionCalling<ExperienceLoading> {
-    private let experiencesFinder = lookup<ExperiencesFinder>()
+public class MemoriesLoadingFunction <: FunctionCalling<MemoryLoading> {
+    private let finder = lookup<MemorySummaryFinder>()
     /**
      * 函数名称
      */
     public prop name: String {
         get(){
-            'loadExperiences'
+            'loadMemories'
         }
     }
     /**
@@ -1050,7 +1092,7 @@ public class ExperienceLoadingFunction <: FunctionCalling<ExperienceLoading> {
      */
     public prop description: String {
         get(){
-            '加载经验的详细内容'
+            '加载经验、教训、用户个性等的详细内容，这些内容来自过往会话的记忆总结'
         }
     }
     /**
@@ -1058,7 +1100,7 @@ public class ExperienceLoadingFunction <: FunctionCalling<ExperienceLoading> {
      * @param params 函数参数
      * @return 函数调用结果
      */
-    public func call(params: ExperienceLoading): FunctionResult 
+    public func call(params: MemoryLoading): FunctionResult
 }
 ```
 

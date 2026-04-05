@@ -262,6 +262,21 @@ ${reference.content}
             ''
         }
     }
+    private func assembleMemories(messages: ArrayList<ChatMessage>, agentData: AgentEventData){
+        let memories = agentData.memorySummaries
+        if(memories.size > 0){
+            messages.add(SystemMessage('''
+## 过往记忆
+${memories.iterator().map{m => '''
+### 记忆类型
+${m.kind}
+### 内容
+${m.content}
+___
+'''}.fold(StringGenerator()){g, s => g.append(s)}}
+'''))
+        }
+    }
     private func assembleNoParamPrompts(messages: ArrayList<ChatMessage>, agentPrompts: String, agentData: AgentEventData){
         messages.add(SystemMessage(agentPrompts))
         let auxiliarySkills = assembleAuxiliarySkills(agentData)
@@ -334,6 +349,7 @@ ${eventDesc}
             eData = any
             populatePromptsParams(messages, promptsTemplate, data)
         }else if (let e: DataEvent <- e && let agentData: AgentEventData <- e.data) {
+            assembleMemories(messages, agentData)
             if(let Some(any: ToData) <- agentData.data && let data: SimpleDataObject <- any.toData()){
                 populatePromptsParams(messages, promptsTemplate, data)
                 let auxiliarySkills = assembleAuxiliarySkills(agentData)
@@ -368,7 +384,7 @@ ${eventDesc}
             }
             functions = agentData.functions
         }else{
-            messages.add(SystemMessage(promptsTemplate))
+            messages.add(UserMessage(promptsTemplate))
         }
         let params = LLMToolParams(model: agent.llmName, messages: messages)
         func addFunctions<I>(functions: I): Unit where I <: Iterable<FunctionCall>{
@@ -475,10 +491,10 @@ exception occurred ${ex}, to retry after ${sleepDuration}'''}
                                 let references = (fnResult.result as ArrayList<SkillReference>).getOrThrow()
                                 eventData.addSkillReferences(references)
                                 addToolMsg('[技能参考已加载]')
-                            case ResultType.Experience => 
-                                let experiences = (fnResult.result as ArrayList<Experience>).getOrThrow()
-                                eventData.addExperiences(experiences)
-                                addToolMsg('[经验已加载]')
+                            case ResultType.MemorySummary => 
+                                let summaries = (fnResult.result as ArrayList<MemorySummary>).getOrThrow()
+                                eventData.addMemorySummaries(summaries)
+                                addToolMsg('[记忆已加载]')
                         }
                     }catch(e: Exception){
                         log.warn(e){'function call ${name}(${arguments})'}

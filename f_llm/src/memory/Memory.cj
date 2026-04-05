@@ -37,53 +37,21 @@ public struct Memory {
     private static func nextSummarisingTime(){
         DateTime.tomorrow - DateTime.now()
     }
+    private static func extractor(): ?(MemoryExtractor, MemorySummaryFinder) {
+        match(LLMConfig.getSummarisingActionKind()){
+            case 'experience' => (lookup<ExperienceExtractor>(), lookup<ExperienceFinder>())
+            case 'individuality' => (lookup<IndividualityExtractor>(), lookup<IndividualityFinder>())
+            case '' => None<(MemoryExtractor, MemorySummaryFinder)>
+            case x => (lookup<MemoryExtractor>(Prefix(x)), lookup<MemorySummaryFinder>(Prefix(x)))
+        }
+    }
     private static func summarise(session: String, messages: ArrayList<ChatMessage>): Bool {
-        let finder = if(let Some(f) <- lookupOption<ExperiencesFinder>()){
-            f
+        let (extractor, finder) = if(let Some(x) <- Memory.extractor()){
+            x
         }else{
             return false
         }
-        let prompts = '''
-从用户提供的上下文内容总结成功经验和失败的教训
-- 如果上下文内容存在曾经失败的操作、曾经发生过错误的执行结果，同时又包含成功的执行过程，则总结为失败的教训，教训需要包含以下要点：
-  1. 陈述目的
-  2. 错误原因
-  3. 错误行为
-  4. 错误结果
-  5. 成功的解决方案及完整执行过程
-     - 解决方案的详细描述
-     - 完整执行过程的执行步骤
-- 如果上下文内容存在被用户认可的操作，则为成功的经验，经验要包含以下要点：
-  1. 陈述目的
-  2. 描述成功行为
-  3. 描述成功结果
-  4. 描述成功解决方案及完整执行过程
-- **注意**：严格按照以下JSON格式返回
-lessons是失败的教训，experiences是成功的经验
-```json
-{
-    "lessons": [{
-        "purpose": "目的陈述",
-        "reason": "错误原因",
-        "behavior": "错误行为",
-        "result": "错误结果",
-        "solution": "成功解决方案的详细描述",
-        "steps": [
-            "完整执行过程的执行步骤"
-        ]
-    }],
-    "experiences": [{
-        "purpose": "目的陈述",
-        "behavior": "描述成功行为",
-        "result": "描述成功结果",
-        "solution": "成功解决方案的详细描述",
-        "steps": [
-            "完整执行过程的执行步骤"
-        ]
-    }]
-}
-```
-'''
+        let prompts = extractor.systemPrompts
         let system = SystemMessage(prompts)
         let content = StringGenerator()
         for(m in messages){
@@ -91,7 +59,7 @@ lessons是失败的教训，experiences是成功的经验
             content.append('---')
         }
         let user = UserMessage('''
-从以下内容总结成功的经验和失败的教训
+${extractor.userPrompts}
 ## 上下文
 ${content}
 ''')
@@ -109,52 +77,11 @@ ${content}
                 sub
             }
             let jsonobj = JsonValue.fromStr(jsonstr).asObject()
-            func extract(key: String){
-                if(let Some(jsonarr: JsonArray) <- jsonobj.get(key)){
-                    for(json in jsonarr.getItems()){
-                        let jsonobj = json.asObject()
-                        func extractString(key: String){
-                            jsonobj.get(key)?.asString().getValue() ?? ''
-                        }
-                        func extractArray(key: String){
-                            jsonobj.get('steps')?.asArray()
-                                   .getItems()
-                                   .iterator()
-                                   .map{x => x.asString().getValue()}
-                                   .intersperse('\n  - ')
-                                   .fold(StringGenerator()){g, s => g.append(s)}
-                                   .toString() ?? ''
-                        }
-                        let content = match(key){
-                            case 'lessons' => '''
-- **目的**：${extractString('purpose')}
-- **错误原因**：${extractString('reason')}
-- **错误行为**：${extractString('behavior')}
-- **错误结果*：${extractString('result')}
-- **解决方案*：${extractString('solution')}
-- **完整执行过程**：
-  - ${extractArray('steps')}
-'''
-                            case 'experiences' => '''
-- **目的**：${extractString('purpose')}
-- **成功行为**：${extractString('behavior')}
-- **成功结果**：${extractString('result')}
-- **成功解决方案**：${extractString('solution')}
-- **完整执行过程**：
-  - ${extractArray('steps')}
-'''
-                            case _ => continue
-                        }
-                        let kind = key[0 .. key.size - 1]
-                        finder.overwrite(kind, content)
-                    }
-                }
-            }
-            extract('lessons')
-            extract('experiences')
+            extractor.extract(jsonobj, finder.overwrite)
         }
         true
     }
+    
     private static func generateContent(message: ChatMessage): String {
         match(message){
                 case x: ToolCallMessage => 

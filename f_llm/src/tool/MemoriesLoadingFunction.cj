@@ -20,7 +20,7 @@ import fountain::f_data.macros.*
 import fountain::f_llm.model.SkillReferenceParam
 
 @DataAssist[props fields]
-public class ExperienceLoading {
+public class MemoryLoading {
     @JsonStringSchema[description:'流程当前步骤的事件名称']
     private var event: String = ''
     @JsonStringSchema[description:'查询与本参数相关性最强的经验']
@@ -28,14 +28,14 @@ public class ExperienceLoading {
 }
 
 @Bean
-public class ExperienceLoadingFunction <: FunctionCalling<ExperienceLoading> {
-    private let experiencesFinder = lookup<ExperiencesFinder>()
+public class MemoriesLoadingFunction <: FunctionCalling<MemoryLoading> {
+    private let finder = lookup<MemorySummaryFinder>()
     /**
      * 函数名称
      */
     public prop name: String {
         get(){
-            'loadExperiences'
+            'loadMemories'
         }
     }
     /**
@@ -43,7 +43,7 @@ public class ExperienceLoadingFunction <: FunctionCalling<ExperienceLoading> {
      */
     public prop description: String {
         get(){
-            '加载经验的详细内容'
+            '加载经验、教训、用户个性等的详细内容，这些内容来自过往会话的记忆总结'
         }
     }
     /**
@@ -51,8 +51,8 @@ public class ExperienceLoadingFunction <: FunctionCalling<ExperienceLoading> {
      * @param params 函数参数
      * @return 函数调用结果
      */
-    public func call(params: ExperienceLoading): FunctionResult {
-        let list = experiencesFinder.query(params.query)
-        FunctionResult(event: params.event, result: list, resultType: ResultType.Experience)
+    public func call(params: MemoryLoading): FunctionResult {
+        let list = finder.query(params.query)
+        FunctionResult(event: params.event, result: list, resultType: ResultType.MemorySummary)
     }
 }

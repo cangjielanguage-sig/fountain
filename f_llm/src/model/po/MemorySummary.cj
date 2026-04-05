@@ -13,11 +13,20 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package fountain::f_llm.finder
+package fountain::f_llm.model.po
 
-import fountain::f_llm.model.po.Experience
+import fountain::f_data.*
+import fountain::f_data.macros.*
+import fountain::f_orm.*
+import fountain::f_orm.macros.*
 
-public interface ExperiencesFinder {
-    func overwrite(kind: String, content: String): Unit
-    func query(keywords: String): ArrayList<Experience>
+@DataAssist[fields]
+@QueryMappersGenerator[table: memory_summaries]
+public class MemorySummary {
+    @ORMField[id column: 'id']
+    private var id: Int64 = 0
+    @ORMField['kind']
+    private var kind: String = ''
+    @ORMField['content']
+    private var content: String = ''
 }
