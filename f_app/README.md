@@ -117,3 +117,6 @@ public struct NewSubCommand <: SubCommand {
     }
 }
 ```
+
+### 发布子命令
+fboot pub <x.y.z> [--skip-test] [--skip-lint]
