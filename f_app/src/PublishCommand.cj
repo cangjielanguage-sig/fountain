@@ -59,8 +59,16 @@ public class PublishCommand <: SubCommand {
             }else{
                 throw Exception('version must be specified and version must be like x.y.z, command line must be like fboot pub <x.y.z> [--skip-lint] [--skip-test]')
             }
-            if(args.size > 1 && args[1].startsWith('--')){
-                bundleArgs = args[1 ..]
+            bundleArgs = if(args.size > 1 && args[1].startsWith('--')){
+                Array<String>(args.size){i => 
+                    if(i == 0){
+                        'bundle'
+                    }else{
+                        args[i]
+                    }
+                }
+            }else{
+                ['bundle']
             }
         }else{
             throw Exception('version must be specified and command line must be like fboot pub <x.y.z> [--skip-lint] [--skip-test]')
@@ -277,7 +285,7 @@ public class PublishCommand <: SubCommand {
                     try{
                         var success = cjpm(path, 'cjpm bundle success', bundleArgs)
                         if(success){
-                            success = cjpm(path, 'cjpm publish success', [])
+                            success = cjpm(path, 'cjpm publish success', ['publish'])
                         }
                         if(!success){
                             throw Exception('to publish ${m} failed')
@@ -296,6 +304,7 @@ public class PublishCommand <: SubCommand {
                 if(!checkPublished(info.organization, m, true)){
                     pub()
                 }else{
+                    println('${info.organization}::${m} cjpm ${bundleArgs}')
                     println('${info.organization}::${m} has been published')
                     println('${info.organization}::${m} is dependenced by ${info.dependenced} module(s)')
                     println('${info.organization}::${m} depends on ${info.dependencing}')
