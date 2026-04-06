@@ -151,7 +151,10 @@ public class PublishCommand <: SubCommand {
                         moduleInfos[m] = info
                         info
                     }
-                    info.organization = line.split('=')[1].trimAscii().replace('"', '')
+                    info.organization = line.split('=')[1].trimAscii().replace('"', '').trimAscii()
+                    if(info.organization.isEmpty()){
+                        info.organization = 'default'
+                    }
                     println('organization: ${info.organization}')
                 }else if(line == '[dependencies]'){
                     afterPublishing = true
