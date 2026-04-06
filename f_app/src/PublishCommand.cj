@@ -42,7 +42,8 @@ public class PublishCommand <: SubCommand {
         }
     }
     private func lines(path: Path): Iterator<String> {
-        entireFile(path).lines().map{l => l.trimAscii()}
+        println('reading file ${path}...')
+        entireFile(path).lines().map{l => l.trimAscii()}.filter{l => l.size > 0 && !l.startsWith('#')}
     }
     private func lines(path: String): Iterator<String> {
         path |> canonicalize |> lines
@@ -64,7 +65,7 @@ public class PublishCommand <: SubCommand {
         }else{
             throw Exception('version must be specified and command line must be like fboot pub <x.y.z> [--skip-lint] [--skip-test]')
         }
-        let lines = this.lines('./modules')
+        let lines = this.lines('./.modules')
         let includes = HashSet<String>()
         let excludes = HashSet<String>()
         var including = false
@@ -72,13 +73,23 @@ public class PublishCommand <: SubCommand {
             if(line == '[include]'){
                 including = true
                 continue
+            }else if (line == '[exclude]'){
+                including = false
+                continue
+            }
+            let module = if(line == '.'){
+                canonicalize('./').fileName
+            }else{
+                line
             }
             if(including){
-                includes.add(line)
+                includes.add(module)
             }else{
-                excludes.add(line)
+                excludes.add(module)
             }
         }
+        println('including modules: ${includes}')
+        println('excluding modules: ${excludes}')
         if(includes.size > 0 && excludes.size > 0){
             throw Exception('[include] and [exclude] cannot be used at the same time')
         }else if(includes.size > 0){
@@ -93,7 +104,7 @@ public class PublishCommand <: SubCommand {
     private func allModules(path: Path, modules: HashMap<String, Path>): Unit{
         Directory.walk(path){fi => 
             if(fi.isDirectory()){
-                if(exists(fi.path.join('./cjpm.toml'))){
+                if(exists(fi.path.join('cjpm.toml'))){
                     modules[fi.path.fileName] = fi.path |> canonicalize
                 }
                 allModules(fi.path, modules)
@@ -103,7 +114,11 @@ public class PublishCommand <: SubCommand {
     }
     private func allModules(): HashMap<String, Path> {
         let modules = HashMap<String, Path>()
-        allModules(canonicalize('./'), modules)
+        let path = canonicalize('./')
+        if(exists(path.join('cjpm.toml'))){
+            modules[path.fileName] = path
+        }
+        allModules(path, modules)
         modules
     }
     private func check(modules: HashSet<String>, all: HashMap<String, Path>): Unit {
@@ -114,35 +129,34 @@ public class PublishCommand <: SubCommand {
     private func extractCjpm(includes: HashSet<String>, modules: HashMap<String, Path>): HashMap<String, ModuleInfo> {
         let moduleInfos = HashMap<String, ModuleInfo>()
         for(m in includes){
-            let currentModuleInfos = HashMap<String, ModuleInfo>()
             let cjpmLines = modules[m].join('cjpm.toml') |> this.lines
-            var afterDependency = false
+            var afterPublishing = false
             for(line in cjpmLines){
+                println('extracting ${line} ...')
                 if(line == '[workspace]'){
                     break
                 }else if(Regex(#'^\s*"?organization"?\s*=\s*".+"\s*$'#).matches(line)){
-                    let info = if(let Some(info) <- currentModuleInfos.get(m)){
+                    let info = if(let Some(info) <- moduleInfos.get(m)){
                         info
                     }else{
                         let info = ModuleInfo()
-                        currentModuleInfos[m] = info
+                        moduleInfos[m] = info
                         info
                     }
                     info.organization = line.split('=')[1].trimAscii().replace('"', '')
-                    getStdOut().writeln('organization: ${info.organization}')
+                    println('organization: ${info.organization}')
                 }else if(line == '[dependencies]'){
-                    afterDependency = true
-                    continue
-                }else if (line.startsWith('[')){
-                    break
-                }else if(afterDependency){
+                    afterPublishing = true
+                }else if (afterPublishing && line.startsWith('[')){
+                    afterPublishing = false
+                }else if(afterPublishing){
                     let kv = line.split('=')
                     var dep = kv[0].trimAscii()
                     if(dep.startsWith('"') && dep.endsWith('"')){
                         dep = dep[1 .. dep.size - 1]
                     }
                     if(let Some(index) <- dep.indexOf('::')){
-                        dep = dep[index ..]
+                        dep = dep[index + 2 ..]
                     }
                     if(!modules.contains(dep)){
                         continue
@@ -150,24 +164,23 @@ public class PublishCommand <: SubCommand {
                     if(!includes.contains(dep)){
                         throw Exception('module ${m} is to publish, but it dependences a module ${dep} which is not contained in [include]')
                     }
-                    if(let Some(info) <- currentModuleInfos.get(dep)){
+                    if(let Some(info) <- moduleInfos.get(dep)){
                         info.dependenced++
                     }else{
                         let info = ModuleInfo()
                         info.dependenced = 1
-                        currentModuleInfos[dep] = info
+                        moduleInfos[dep] = info
                     }//被依赖模块的依赖数+1
-                    if(let Some(info) <- currentModuleInfos.get(m)){//添加当前模块依赖的模块列表
+                    if(let Some(info) <- moduleInfos.get(m)){//添加当前模块依赖的模块列表
                         info
                     }else{
                         let info = ModuleInfo()
-                        currentModuleInfos[m] = info
+                        moduleInfos[m] = info
                         info
                     }.dependencing.add(dep)
-                    getStdOut().writeln('dependency: ${m} is dependencing ${dep}')
+                    println('dependency: ${m} is dependencing ${dep}')
                 }
             }
-            moduleInfos.add(all: currentModuleInfos)
         }
         moduleInfos
     }
@@ -179,9 +192,11 @@ public class PublishCommand <: SubCommand {
         q
     }
     
-    private func replaceDependencies(path: Path, organization: String, all: HashMap<String, Path>){
+    private func replaceDependencies(path: Path, organization: String, all: HashMap<String, Path>, dry: Bool){
         let cjpmPath = path.join('cjpm.toml')
-        copy(cjpmPath, to: path.join('cjpm.toml.bak'), overwrite: false)
+        if(!dry){
+            copy(cjpmPath, to: path.join('cjpm.toml.bak'), overwrite: false)
+        }
         let regexGen = StringGenerator()
         for(m in all.keys()){
             if(regexGen.size > 0){
@@ -189,22 +204,29 @@ public class PublishCommand <: SubCommand {
             }
             regexGen.append(m)
         }
-        let moduleRegex = Regex('(${organization}::)?(${regexGen})\\s*=\\s*\\{.*(path|git)\\s*=\\s*".+"\\.*\\}')
+        let moduleRegex = Regex('^"?(${organization}::)?(${regexGen})"?\\s*=\\s*\\{.*(path|git)\\s*=\\s*".+".*\\}$')
         let replaced = StringGenerator()
-        for(line in cjpmPath |> this.lines){
+        for(line in this.lines(cjpmPath)){
             let replacedLine = if(moduleRegex.matches(line)){
-                Regex('\\{.*(path|git)\\s*=\\s*".+"\\.*\\}').replaceAll(line, '"${version}"')
+                let depreg = Regex('\\{.*(path|git)\\s*=\\s*".+".*\\}')
+                depreg.replaceAll(line, '"${version}"')
             }else{
                 line
             }
-            getStdOut().writeln('dependencing_replaced: ${line} -> ${replacedLine}')
+            println('dependencing_replaced: ${line} -> ${replacedLine}')
             replaced.appendUnixNewLine(replacedLine)
         }
-        File.writeTo(cjpmPath, replaced.toString().unsafeBytes())
+        if(!dry){
+            File.writeTo(cjpmPath, replaced.toString().unsafeBytes())
+        }else{
+            println('dependencing_replaced: ${cjpmPath}')
+            println(replaced)
+            println('=============================================')
+        }
     }
     private func checkPublished(organization: String, module: String, once: Bool): Bool {
         let url = 'https://pkg.cangjie-lang.cn/v1/artifact/getPackageMetadata?group=${organization}&moduleName=${module}&version=${version}'
-        getStdOut().writeln('checking published ${organization}::${module} ...; url: ${url}; once: ${once}')
+        println('checking published ${organization}::${module} ...; url: ${url}; once: ${once}')
         var a = 0
         var b = 1
         var waited = 0
@@ -214,20 +236,16 @@ public class PublishCommand <: SubCommand {
             let tmp = a + b
             a = b
             b = tmp
-            let client = ClientBuilder().build()
+            var tls = TlsClientConfig()
+            tls.verifyMode = TrustAll
+            let client = ClientBuilder().tlsConfig(tls).build()
             try{
                 let resp = client.get(url)
-                let body = resp.body
-                let bodySize = resp.bodySize ?? 0
-                if(bodySize == 0){
-                    continue
-                }
-                let buf = Array<Byte>(bodySize, repeat: 0)
-                body.read(buf)
-                let json = (String.fromUtf8(buf) |> JsonValue.fromStr).asObject()
+                let body = StringReader(resp.body).readToEnd()
+                let json = JsonValue.fromStr(body).asObject()
                 let code = (json.get('code')?.asInt().getValue()) ?? 0
                 let msg = (json.get('msg')?.asString().getValue()) ?? ''
-                getStdOut().writeln('check url respse - code:${code}, msg:${msg}')
+                println('check url response - code: ${code}, msg: ${msg}')
                 if(code == 200 && msg == 'success'){
                     return true
                 }else if(once){
@@ -237,7 +255,7 @@ public class PublishCommand <: SubCommand {
             }finally{
                 client.close()
             }
-            getStdOut().writeln('waiting for ${module} to be published... waited ${Duration.second * waited}, to check again after ${Duration.second * b}')
+            println('waiting for ${module} to be published... waited ${Duration.second * waited}, to check again after ${Duration.second * b}')
         }
         false
     }
@@ -247,15 +265,15 @@ public class PublishCommand <: SubCommand {
         let q = populateQueue(includes)
         while(let Some(m) <- q.remove()){
             if(let Some(info) <- moduleInfos.get(m)) {
+                let path = all[m]
                 func pub(){
                     for(d in info.dependencing where moduleInfos.contains(d)){
-                        getStdOut().writeln('to publish ${info.organization}::${m} after ${d}')
+                        println('to publish ${info.organization}::${m} after ${d}')
                         q.add(m)
                         return
                     }
-                    getStdOut().writeln('publishing ${info.organization}::${m} ...')
-                    let path = all[m]
-                    replaceDependencies(path, info.organization, all)
+                    println('publishing ${info.organization}::${m} ...')
+                    replaceDependencies(path, info.organization, all, false)
                     try{
                         var success = cjpm(path, 'cjpm bundle success', bundleArgs)
                         if(success){
@@ -277,19 +295,27 @@ public class PublishCommand <: SubCommand {
                 }
                 if(!checkPublished(info.organization, m, true)){
                     pub()
+                }else{
+                    println('${info.organization}::${m} has been published')
+                    println('${info.organization}::${m} is dependenced by ${info.dependenced} module(s)')
+                    println('${info.organization}::${m} depends on ${info.dependencing}')
+                    for(d in info.dependencing where moduleInfos.contains(d)){
+                        println('DRYRUN: to publish ${info.organization}::${m} after ${d}')
+                    }
+                    replaceDependencies(path, info.organization, all, true)
                 }
             }else{
-                throw Exception('unreachable if no bug')
+                throw Exception('unreachable if no bug on module ${m}')
             }
         }
     }
     private func cjpm(path: Path, successLine: String, args: Array<String>): Bool {
-        getStdOut().writeln('running cjpm ${args.iterator().intersperse(' ').fold(StringGenerator()){g, s => g.append(s)}} in ${path} ...')
+        println('running cjpm ${args.iterator().intersperse(' ').fold(StringGenerator()){g, s => g.append(s)}} in ${path} ...')
         let p = launch('cjpm', args, workingDirectory: path, stdOut: Pipe)
         let cmdout = StringReader(p.stdOut)
         var success = false
         for(line in cmdout.lines()){
-            getStdOut().writeln(line)
+            println(line)
             if(line == successLine){
                 success = true
             }
