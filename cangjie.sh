@@ -27,7 +27,7 @@ cangjie_version(){
 ```bash
 git clone https://gitcode.com/Cangjie-SIG/fountain.git
 cd fountain'
-echo "git checkout -t origin/$1"
+echo "git checkout -t origin/issue/<CurrentIssueID>" \# '把<CurrentIssueID>换成当前issue的ID'
 echo 'cd fboot'
 echo "export CANGJIE_STDX_DYNAMIC_PATH=/path/of/stdx/$STDX_VERSION/linux_x86_64_llvm/dynamic/stdx"
 echo '
@@ -71,6 +71,7 @@ cangjie_env(){
 }
 cjpub(){
   if [[ "$2" == "" ]]; then
+    SECONDS=0
     sed -E -i "s/ version ?= ?\".+\"/ version = \"$1\"/g" cjpm.toml
     sed -E -i.bak "s/\{path ?= ?\".+\"\}/\"$1\"/g" cjpm.toml
     cjpm clean
@@ -136,6 +137,7 @@ cj(){
     cd $CJPM_INSTALL
     ;;
   publish)
+    curdir=$(pwd)
     for d in `cat .modules`; do 
         echo "正在执行：$d"
 	url="https://pkg.cangjie-lang.cn/v1/artifact/getPackageMetadata?group=fountain&moduleName=$d&version=$2"
@@ -145,6 +147,7 @@ cj(){
         fi
         cd $d
 	cj bundle $2
+	cd ..
         echo "check url $url"
         a=0
         b=1
@@ -162,7 +165,7 @@ cj(){
         done
 	min=$((sum/60))
 	echo "制品$d 一共等待$min 分"
-	cd ..
+	echo "$d	$sum" >> $curdir/.pub_latency
     done
     sed -E -i "s|(/package/fountain::f_[a-z]+/)[0-9]+\.[0-9]+\.[0-9]+(/readme)|\1$2\2|g" README.md
     cj bundle $2
