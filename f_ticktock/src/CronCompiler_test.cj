@@ -23,15 +23,20 @@ public class CronCompiler_test {
     @TestCase
     public func test(): Unit {
         let cron = "0/5-30 0-5 1/2 L * 1,3/2-5,7";
+        let unitValues = cron.split(' ');
         let cdc = CronCompiler.compile(cron);
         for (c in cdc) {
-            for (unit in TicktockUnit.values) {
+            for(i in 0 .. TicktockUnit.values.size){
+                let unit = TicktockUnit.values[i]
                 match (c.get(unit)) {
                     case Some(crons) => for (cron in crons) {
                         println(cron)
                     }
-                    case _ => throw Exception()
+                    case _ where i >= unitValues.size || unitValues[i] == '*' => println('unit: ${unit}, *')
+                    case _ => throw Exception('TimeUnit: ${unit}')
                 }
+            }
+            for (unit in TicktockUnit.values) {
             }
         }
     }

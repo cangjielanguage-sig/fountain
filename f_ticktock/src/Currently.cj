@@ -17,6 +17,6 @@ package fountain::f_ticktock
 
 import std.time.DateTime
 
-sealed interface Currently <: ToString {
+interface Currently <: ToString {
     func current(now: DateTime): Int64
 }

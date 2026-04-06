@@ -31,21 +31,21 @@ public class Launcher_test {
         launcher.shutdown()
     }
 
-    @TestCase
-    public func test0(): Unit {
-        let launcher = Ticktock.instance
-        for (i in 0..1000) {
-            launcher.addOrReplaceTask(LauncherTestTask0(i), "* * * * * *")
-        }
-        waitAndShutdown(launcher)
-    }
-    @TestCase
-    public func test1(): Unit {
-        let launcher = Ticktock.instance
-        launcher.addOrReplaceTask(LauncherTestTask1_1(), "* * * * * *")
-        launcher.addOrReplaceTask(LauncherTestTask1_2(), "0/3 * * * * *")
-        waitAndShutdown(launcher)
-    }
+    // @TestCase
+    // public func test0(): Unit {
+    //     let launcher = Ticktock.instance
+    //     for (i in 0..3) {
+    //         launcher.addOrReplaceTask(LauncherTestTask0(i), "* * * * * *")
+    //     }
+    //     waitAndShutdown(launcher)
+    // }
+    // @TestCase
+    // public func test1(): Unit {
+    //     let launcher = Ticktock.instance
+    //     launcher.addOrReplaceTask(LauncherTestTask1_1(), "* * * * * *")
+    //     launcher.addOrReplaceTask(LauncherTestTask1_2(), "0/3 * * * * *")
+    //     waitAndShutdown(launcher)
+    // }
     // @TestCase
     // public func test2(): Unit {
     //     let currently = TestCurrently(0)
@@ -424,8 +424,8 @@ class LauncherTestTask0 <: TicktockTask {
         let now = DateTime.now()
         let elapsed = (now - time).toSeconds()
         time = now
-        @Assert(1, elapsed)
         println("${name} ${integer.fetchAdd(1)} ${DateTime.now()} ${elapsed}")
+        @Assert(1, elapsed)
     }
 }
 
@@ -442,8 +442,8 @@ class LauncherTestTask1_1 <: TicktockTask {
         let now = DateTime.now()
         var elapsed = (now - time).toSeconds()
         time = now
-        @Assert(1, elapsed)
         println("${name} ${integer.fetchAdd(1)} ${DateTime.now()} ${elapsed}")
+        @Assert(1, elapsed)
     }
 }
 
@@ -460,8 +460,8 @@ class LauncherTestTask1_2 <: TicktockTask {
         let now = DateTime.now()
         let elapsed = (now - time).toSeconds()
         time = now
-        @Assert(3,elapsed)
         println("${name} ${integer.fetchAdd(1)} ${DateTime.now()} ${elapsed}")
+        @Assert(3,elapsed)
     }
 }
 

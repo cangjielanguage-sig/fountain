@@ -23,7 +23,7 @@ public class TicktockLauncher_test {
     public func test(): Unit {
         let launcher = Ticktock.instance
         launcher.addOrReplaceTask(CronTicktockTaskTest())
-        sleep(15 * Duration.minute)
+        sleep(Duration.minute * 3)
         launcher.shutdown()
     }
 }

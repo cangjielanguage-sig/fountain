@@ -3,7 +3,7 @@
   name = "f_store"
   organization = "fountain"
   description = "可持久化键值存储的薄封装，现在依赖的是badgercj"
-  version = "1.1.1"
+  version = "1.1.2"
   target-dir = ""
   script-dir = ""
   output-type = "dynamic"
