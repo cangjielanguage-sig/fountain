@@ -202,9 +202,9 @@ public class PublishCommand <: SubCommand {
         }
         File.writeTo(cjpmPath, replaced.toString().unsafeBytes())
     }
-    private func checkPublished(organization: String, module: String): Unit {
+    private func checkPublished(organization: String, module: String, once: Bool): Bool {
         let url = 'https://pkg.cangjie-lang.cn/v1/artifact/getPackageMetadata?group=${organization}&moduleName=${module}&version=${version}'
-        getStdOut().writeln('checking published ${organization}::${module} ...; url: ${url}')
+        getStdOut().writeln('checking published ${organization}::${module} ...; url: ${url}; once: ${once}')
         var a = 0
         var b = 1
         var waited = 0
@@ -229,27 +229,31 @@ public class PublishCommand <: SubCommand {
                 let msg = (json.get('msg')?.asString().getValue()) ?? ''
                 getStdOut().writeln('check url respse - code:${code}, msg:${msg}')
                 if(code == 200 && msg == 'success'){
-                    break
+                    return true
+                }else if(once){
+                    return false
                 }
             }catch(_){
             }finally{
                 client.close()
             }
-            getStdOut().writeln('waiting for ${module} to be published... waited ${waited}s, to check again after ${b}s')
+            getStdOut().writeln('waiting for ${module} to be published... waited ${Duration.second * waited}, to check again after ${Duration.second * b}')
         }
+        false
     }
     private func publish(includes: HashSet<String>, all: HashMap<String, Path>): Unit {
         let pout = getStdOut()
         let moduleInfos = extractCjpm(includes, all)
         let q = populateQueue(includes)
         while(let Some(m) <- q.remove()){
-            if(let Some(info) <- moduleInfos.get(m)){
+            if(let Some(info) <- moduleInfos.get(m)) {
                 func pub(){
                     for(d in info.dependencing where moduleInfos.contains(d)){
+                        getStdOut().writeln('to publish ${info.organization}::${m} after ${d}')
                         q.add(m)
                         return
                     }
-                    getStdOut().writeln('publishing ${m} ...')
+                    getStdOut().writeln('publishing ${info.organization}::${m} ...')
                     let path = all[m]
                     replaceDependencies(path, info.organization, all)
                     try{
@@ -267,11 +271,13 @@ public class PublishCommand <: SubCommand {
                         }
                     }
                     if(info.dependenced > 0){
-                        checkPublished(info.organization, m)
+                        checkPublished(info.organization, m, false)
                     }
                     moduleInfos.remove(m)
                 }
-                pub()
+                if(!checkPublished(info.organization, m, true)){
+                    pub()
+                }
             }else{
                 throw Exception('unreachable if no bug')
             }
