@@ -25,7 +25,7 @@ import stdx.encoding.hex.*
 import stdx.encoding.base64.*
 import stdx.crypto.common.*
 import stdx.crypto.keys.*
-import fountain::f_data.{ObjectData, DataObject}
+import fountain::f_data.{ObjectData, DataObject, DataParsable}
 import fountain::f_exception.UnreadableException
 import fountain::f_jwt.exception.JWTException
 
@@ -443,7 +443,7 @@ public class JWTVerifier <: JWT {
     public func getNotBeforeSeconds(): ?Int64 {
         getPayloadValue<Int64>("nbf")
     }
-    public func getPayloadValue<T>(name: String): ?T where T <: Parsable<T> {
+    public func getPayloadValue<T>(name: String): ?T where T <: DataParsable<T> {
         if (let Some(x) <- getPayload(name)) {
             match (x) {
                 case v: T => v
@@ -455,10 +455,10 @@ public class JWTVerifier <: JWT {
             None<T>
         }
     }
-    public func getHeaderValue<T>(name: String): ?T where T <: Parsable<T> {
+    public func getHeaderValue<T>(name: String): ?T where T <: DataParsable<T> {
         tryParse<T>(getHeader(name))
     }
-    private func tryParse<T>(value: ?String): ?T where T <: Parsable<T> {
+    private func tryParse<T>(value: ?String): ?T where T <: DataParsable<T> {
         if (let Some(x) <- value) {
             T.tryParse(x)
         } else {
@@ -486,7 +486,7 @@ public class JWTVerifier <: JWT {
         !isExpired(time: now) && isNotBefore(time: now) && verifySign()
     }
     public func verifyPayload<V>(name: String, value: V): Bool where V <: Equatable<V> {
-        if (let Some(o) <- getPayload(name) && let v: Equatable<V> <- o) {
+        if (let Some(v: Equatable<V>) <- getPayload(name)) {
             v == value
         } else {
             false

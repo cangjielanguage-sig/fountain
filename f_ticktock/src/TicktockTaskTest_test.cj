@@ -15,6 +15,8 @@ limitations under the License.
  */
 package fountain::f_ticktock
 
+import std.unittest.testmacro.*
+
 public class TicktockTaskTest <: TicktockTask {
     public prop name: String {
         get() {

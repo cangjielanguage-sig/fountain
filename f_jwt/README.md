@@ -434,11 +434,11 @@ public class JWTVerifier <: JWT {
     /**
      * 得到负载值，如果未指定则返回None
      */
-    public func getPayloadValue<T>(name: String): ?T where T <: Parsable<T> 
+    public func getPayloadValue<T>(name: String): ?T where T <: DataParsable<T> 
     /**
      * 得到JWT头值，如果未指定则返回None
      */
-    public func getHeaderValue<T>(name: String): ?T where T <: Parsable<T> 
+    public func getHeaderValue<T>(name: String): ?T where T <: DataParsable<T> 
     /**
      * 判定指定时间是否不晚于JWT指定的nbf
      */

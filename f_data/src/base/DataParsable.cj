@@ -92,3 +92,12 @@ extend Bool <: DataParsable<Bool> {}
 extend BigInt <: DataParsable<BigInt> {}
 
 extend Decimal <: DataParsable<Decimal> {}
+
+extend String <: DataParsable<String> {
+    public static func parse(s: String): String {
+        s
+    }
+    public static func tryParse(s: String): ?String {
+        s
+    }
+}

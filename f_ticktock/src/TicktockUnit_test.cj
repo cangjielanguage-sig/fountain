@@ -16,6 +16,7 @@ limitations under the License.
 package fountain::f_ticktock
 
 import std.collection.ArrayList
+import std.unittest.testmacro.*
 
 @Test
 public class TicktockUnitTest {

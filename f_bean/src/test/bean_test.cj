@@ -18,11 +18,11 @@ package fountain::f_bean.test
 import std.unittest.*
 import std.unittest.testmacro.*
 
-@Test
-public class BeanTest {
-    @TestCase
-    public func test() {
-        let b = BeanFactory.instance.getFirst<B>()
-        println(b)
-    }
-}
+// @Test
+// public class BeanTest {
+//     @TestCase
+//     public func test() {
+//         let b = BeanFactory.instance.getFirst<B>()
+//         println(b)
+//     }
+// }

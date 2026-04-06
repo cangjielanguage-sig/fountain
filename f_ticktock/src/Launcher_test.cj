@@ -15,7 +15,8 @@ limitations under the License.
  */
 package fountain::f_ticktock
 
-import std.sync.{Mutex, AtomicInt64}
+import std.sync.{Mutex, AtomicInt64, Condition}
+import std.unittest.testmacro.*
 
 @Test
 public class Launcher_test {
@@ -32,7 +33,7 @@ public class Launcher_test {
 
     @TestCase
     public func test0(): Unit {
-        let launcher = Ticktock()
+        let launcher = Ticktock.instance
         for (i in 0..1000) {
             launcher.addOrReplaceTask(LauncherTestTask0(i), "* * * * * *")
         }
@@ -40,7 +41,7 @@ public class Launcher_test {
     }
     @TestCase
     public func test1(): Unit {
-        let launcher = Ticktock()
+        let launcher = Ticktock.instance
         launcher.addOrReplaceTask(LauncherTestTask1_1(), "* * * * * *")
         launcher.addOrReplaceTask(LauncherTestTask1_2(), "0/3 * * * * *")
         waitAndShutdown(launcher)
@@ -48,7 +49,7 @@ public class Launcher_test {
     // @TestCase
     // public func test2(): Unit {
     //     let currently = TestCurrently(0)
-    //     let launcher = Ticktock()
+    //     let launcher = Ticktock.instance
     //     launcher.createYearlyWheel().createWeekDailyWheel().createMonthlyWheel().createMonthDailyWheel().
     //         createHourlyWheel().createMinutelyWheel().createSecondlyWheel(currently)
     //     launcher.addOrReplaceTask(LauncherTestTask2(lock), "3 * * * * *")
@@ -60,7 +61,7 @@ public class Launcher_test {
     // @TestCase
     // public func test3(): Unit {
     //     let currently = TestCurrently(0)
-    //     let launcher = Ticktock()
+    //     let launcher = Ticktock.instance
     //     launcher.createYearlyWheel().createWeekDailyWheel().createMonthlyWheel().createMonthDailyWheel().
     //         createHourlyWheel().createMinutelyWheel().createSecondlyWheel(currently)
     //     launcher.addOrReplaceTask(LauncherTestTask3(), "1-3 * * * * *")
@@ -78,7 +79,7 @@ public class Launcher_test {
     // @TestCase
     // public func test4(): Unit {
     //     let currently = TestCurrently(0)
-    //     let launcher = Ticktock()
+    //     let launcher = Ticktock.instance
     //     launcher.createYearlyWheel().createWeekDailyWheel().createMonthlyWheel().createMonthDailyWheel().
     //         createHourlyWheel().createMinutelyWheel().createSecondlyWheel(currently)
     //     launcher.addOrReplaceTask(LauncherTestTask4(), "1/1 * * * * *")
@@ -96,7 +97,7 @@ public class Launcher_test {
     // @TestCase
     // public func test5(): Unit {
     //     let currently = TestCurrently(0)
-    //     let launcher = Ticktock()
+    //     let launcher = Ticktock.instance
     //     launcher.createYearlyWheel().createWeekDailyWheel().createMonthlyWheel().createMonthDailyWheel().
     //         createHourlyWheel().createMinutelyWheel().createSecondlyWheel(currently)
     //     launcher.addOrReplaceTask(LauncherTestTask5(), "1/3 * * * * *")
@@ -114,7 +115,7 @@ public class Launcher_test {
     // @TestCase
     // public func test6(): Unit {
     //     let currently = TestCurrently(0)
-    //     let launcher = Ticktock()
+    //     let launcher = Ticktock.instance
     //     launcher.createYearlyWheel().createWeekDailyWheel().createMonthlyWheel().createMonthDailyWheel().
     //         createHourlyWheel().createMinutelyWheel().createSecondlyWheel(currently)
     //     launcher.addOrReplaceTask(LauncherTestTask6(), "*/3 * * * * *")
@@ -132,7 +133,7 @@ public class Launcher_test {
     // @TestCase
     // public func test7(): Unit {
     //     let currently = TestCurrently(0)
-    //     let launcher = Ticktock()
+    //     let launcher = Ticktock.instance
     //     launcher.createYearlyWheel().createWeekDailyWheel().createMonthlyWheel().createMonthDailyWheel().
     //         createHourlyWheel().createMinutelyWheel().createSecondlyWheel(currently)
     //     launcher.addOrReplaceTask(LauncherTestTask7(), "1/3-10 * * * * *")
@@ -156,7 +157,7 @@ public class Launcher_test {
     // @TestCase
     // public func test8(): Unit {
     //     let currently = TestCurrently(0)
-    //     let launcher = Ticktock()
+    //     let launcher = Ticktock.instance
     //     launcher.createYearlyWheel().createWeekDailyWheel().createMonthlyWheel().createMonthDailyWheel().
     //         createHourlyWheel().createMinutelyWheel().createSecondlyWheel(currently)
     //     launcher.addOrReplaceTask(LauncherTestTask8(), "*/3-10 * * * * *")
@@ -180,7 +181,7 @@ public class Launcher_test {
     // @TestCase
     // public func test9(): Unit {
     //     let currently = TestCurrently(0)
-    //     let launcher = Ticktock()
+    //     let launcher = Ticktock.instance
     //     launcher.createYearlyWheel().createWeekDailyWheel().createMonthlyWheel().createMonthDailyWheel().
     //         createHourlyWheel().createMinutelyWheel().createSecondlyWheel(currently)
     //     launcher.addOrReplaceTask(LauncherTestTask9(), "L * * * * *")
@@ -191,7 +192,7 @@ public class Launcher_test {
     // }
     @TestCase
     public func test10(): Unit {
-        let launcher = Ticktock()
+        let launcher = Ticktock.instance
         let task = LauncherTestTask10()
         try {
             launcher.addOrReplaceTask(task, "-1 * * * * *")
@@ -346,20 +347,20 @@ public class Launcher_test {
 
     @TestCase
     public func test11(): Unit {
-        let launcher = Ticktock()
+        let launcher = Ticktock.instance
         launcher.addOrReplaceTask(LauncherTestTask11(), "* * * * * *")
         sleep(Duration.second)
         launcher.shutdown()
     }
     @TestCase
     public func test12(): Unit {
-        let launcher = Ticktock()
+        let launcher = Ticktock.instance
         launcher.addOrReplaceTask(LauncherTestTask12(), "* * * * * *")
         waitAndShutdown(launcher)
     }
     @TestCase
     public func test13(): Unit {
-        let launcher = Ticktock()
+        let launcher = Ticktock.instance
         launcher.addOrReplaceTask(LauncherTestTask13(), "3,4,1,2,5 * * * * *")
         waitAndShutdown(launcher)
     }
@@ -371,7 +372,7 @@ public class Launcher_test {
     //     let day = TestCurrently(1)
     //     let month = TestCurrently(1)
     //     let weekday = TestCurrently(1)
-    //     let launcher = Ticktock()
+    //     let launcher = Ticktock.instance
     //     launcher.createYearlyWheel().createWeekDailyWheel(weekday).createMonthlyWheel(month).createMonthDailyWheel(day).
     //         createHourlyWheel(hour).createMinutelyWheel(min).createSecondlyWheel(sec)
     //     launcher.addOrReplaceTask(LauncherTestTask14(), "0/5-30 0-5 0/12 0/10 1/4 0")

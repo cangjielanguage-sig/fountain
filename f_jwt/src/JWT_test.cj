@@ -30,7 +30,7 @@ public class JWTTest {
      * 验证JWT的基本工作流程：创建、签名、验证
      */
     @TestCase
-    public func testBasicHmacSHA1() {
+    public func testBasicHmacSHA1(): Unit {
         let jwt = JWT.encoder().hmacSHA1('1234567890'.toArray())
         let sign = jwt.keyId('1234567890').expire(Duration.minute).addPayload('name', 'Bob').sign()
         println(sign)
@@ -42,7 +42,7 @@ public class JWTTest {
      * 验证使用十六进制密钥的MD5 HMAC签名功能
      */
     @TestCase
-    public func testHmacMD5ByHexKey() {
+    public func testHmacMD5ByHexKey(): Unit {
         let hexKey = "48656c6c6f576f726c64" // "HelloWorld" in hex
         let jwt = JWT.encoder().hmacMD5ByHexKey(hexKey)
         let token = jwt.addPayload("user", "testUser").sign()
@@ -55,7 +55,7 @@ public class JWTTest {
         @Expect(verifier.getHeader("alg"), Some("HM5"))
         
         // 验证payload中包含正确的数据
-        @Expect(verifier.getPayload("user"), Some("testUser"))
+        @Expect(verifier.getPayloadValue<String>("user"), Some("testUser"))
     }
 
     /**
@@ -63,7 +63,7 @@ public class JWTTest {
      * 验证空密钥和无效十六进制字符串的处理
      */
     @TestCase
-    public func testHmacMD5ByHexKeyEdgeCases() {
+    public func testHmacMD5ByHexKeyEdgeCases(): Unit {
         // 测试空十六进制字符串
         let jwt1 = JWT.encoder().hmacMD5ByHexKey("")
         let token1 = jwt1.addPayload("test", "value").sign()
@@ -86,7 +86,7 @@ public class JWTTest {
      * 验证使用Base64编码密钥的MD5 HMAC签名功能
      */
     @TestCase
-    public func testHmacMD5ByBase64Key() {
+    public func testHmacMD5ByBase64Key(): Unit {
         let base64Key = toBase64String("HelloWorld".toArray())
         let jwt = JWT.encoder().hmacMD5ByBase64Key(base64Key)
         let token = jwt.addPayload("user", "testUser").sign()
@@ -104,7 +104,7 @@ public class JWTTest {
      * 验证不同HMAC算法都能正确工作
      */
     @TestCase
-    public func testAllHmacAlgorithms() {
+    public func testAllHmacAlgorithms(): Unit {
         let key = "testKey123".toArray()
         let payload = HashMap<String, String>()
         payload["user"] = "testUser"
@@ -158,7 +158,7 @@ public class JWTTest {
      * 验证自定义头部字段的设置和获取
      */
     @TestCase
-    public func testHeaderFunctionality() {
+    public func testHeaderFunctionality(): Unit {
         let jwt = JWT.encoder().hmacSHA256("secret".toArray())
         jwt.header("typ", "JWT")
         jwt.header("custom", "value")
@@ -179,7 +179,7 @@ public class JWTTest {
      * 验证各种类型的载荷数据设置和获取
      */
     @TestCase
-    public func testPayloadFunctionality() {
+    public func testPayloadFunctionality(): Unit {
         let jwt = JWT.encoder().hmacSHA256("secret".toArray())
         
         // 测试标准声明
@@ -198,13 +198,13 @@ public class JWTTest {
         let token = jwt.sign()
         let verifier = JWT.verifier(token)
         
-        @Expect(verifier.getPayload("iss"), Some("testIssuer"))
-        @Expect(verifier.getPayload("sub"), Some("testSubject"))
-        @Expect(verifier.getPayload("aud"), Some("testAudience"))
-        @Expect(verifier.getPayload("stringValue"), Some("test"))
-        @Expect(verifier.getPayload("intValue"), Some(123))
-        @Expect(verifier.getPayload("boolValue"), Some(true))
-        @Expect(verifier.getPayload("nonexistent"), None<Any>)
+        @Expect(verifier.getPayloadValue<String>("iss"), Some("testIssuer"))
+        @Expect(verifier.getPayloadValue<String>("sub"), Some("testSubject"))
+        @Expect(verifier.getPayloadValue<String>("aud"), Some("testAudience"))
+        @Expect(verifier.getPayloadValue<String>("stringValue"), Some("test"))
+        @Expect(verifier.getPayloadValue<Int64>("intValue"), Some(123))
+        @Expect(verifier.getPayloadValue<Bool>("boolValue"), Some(true))
+        @Expect(verifier.getPayloadValue<String>("nonexistent"), None<String>)
     }
 
     /**
@@ -212,7 +212,7 @@ public class JWTTest {
      * 验证过期时间、生效时间等时间相关功能
      */
     @TestCase
-    public func testTimeFunctionality() {
+    public func testTimeFunctionality(): Unit {
         let jwt = JWT.encoder().hmacSHA256("secret".toArray())
         let now = DateTime.now()
         let futureTime = now + Duration.hour
@@ -244,7 +244,7 @@ public class JWTTest {
      * 验证各种验证场景，包括签名验证、载荷验证等
      */
     @TestCase
-    public func testVerificationFunctionality() {
+    public func testVerificationFunctionality(): Unit {
         let jwt = JWT.encoder().hmacSHA256("secret".toArray())
         jwt.issuer("testIssuer")
         jwt.subject("testSubject")
@@ -278,7 +278,7 @@ public class JWTTest {
      * 验证各种错误情况的处理，如无效token、错误密钥等
      */
     @TestCase
-    public func testErrorHandling() {
+    public func testErrorHandling(): Unit {
         let jwt = JWT.encoder().hmacSHA256("secret".toArray())
         let token = jwt.addPayload("test", "data").sign()
         
@@ -307,7 +307,7 @@ public class JWTTest {
      * 验证JWT构建器模式的链式调用
      */
     @TestCase
-    public func testChainedCalls() {
+    public func testChainedCalls(): Unit {
         let jwt = JWT.encoder()
             .hmacSHA256("secret".toArray())
             .header("typ", "JWT")
@@ -324,10 +324,10 @@ public class JWTTest {
         @Expect(verifier.verifySign(), true)
         @Expect(verifier.getHeader("typ"), Some("JWT"))
         @Expect(verifier.getHeader("kid"), Some("key123"))
-        @Expect(verifier.getPayload("iss"), Some("testIssuer"))
-        @Expect(verifier.getPayload("sub"), Some("testSubject"))
-        @Expect(verifier.getPayload("aud"), Some("testAudience"))
-        @Expect(verifier.getPayload("custom"), Some("value"))
+        @Expect(verifier.getPayloadValue<String>("iss"), Some("testIssuer"))
+        @Expect(verifier.getPayloadValue<String>("sub"), Some("testSubject"))
+        @Expect(verifier.getPayloadValue<String>("aud"), Some("testAudience"))
+        @Expect(verifier.getPayloadValue<String>("custom"), Some("value"))
     }
 
     /**
@@ -335,7 +335,7 @@ public class JWTTest {
      * 验证十六进制和Base64密钥格式的正确处理
      */
     @TestCase
-    public func testKeyFormatCompatibility() {
+    public func testKeyFormatCompatibility(): Unit {
         let originalKey = "HelloWorld123"
         let hexKey = toHexString(originalKey.toArray())
         let base64Key = toBase64String(originalKey.toArray())
@@ -371,7 +371,7 @@ public class JWTTest {
      * 验证JWT在处理大量载荷数据时的性能和正确性
      */
     @TestCase
-    public func testLargePayload() {
+    public func testLargePayload(): Unit {
         let jwt = JWT.encoder().hmacSHA256("secret".toArray())
         
         // 添加大量载荷数据
@@ -386,7 +386,7 @@ public class JWTTest {
         
         // 验证所有数据都正确存储
         for (i in 0..100) {
-            @Expect(verifier.getPayload("key${i}"), Some("value${i}"))
+            @Expect(verifier.getPayloadValue<String>("key${i}"), Some("value${i}"))
         }
     }
 
@@ -395,7 +395,7 @@ public class JWTTest {
      * 验证各种边界情况的处理
      */
     @TestCase
-    public func testBoundaryValues() {
+    public func testBoundaryValues(): Unit {
         let jwt = JWT.encoder().hmacSHA256("secret".toArray())
         
         // 测试空字符串
@@ -412,11 +412,11 @@ public class JWTTest {
         let verifier = JWT.verifier(token)
         
         @Expect(verifier.verifySign(), true)
-        @Expect(verifier.getPayload("empty"), Some(""))
-        @Expect(verifier.getPayload("space"), Some(" "))
-        @Expect(verifier.getPayload("newline"), Some("\n"))
-        @Expect(verifier.getPayload("tab"), Some("\t"))
-        @Expect(verifier.getPayload("special"), Some("!@#$%^&*()_+-=[]{}|;':\",./<>?"))
-        @Expect(verifier.getPayload("unicode"), Some("你好世界🌍"))
+        @Expect(verifier.getPayloadValue<String>("empty"), Some(""))
+        @Expect(verifier.getPayloadValue<String>("space"), Some(" "))
+        @Expect(verifier.getPayloadValue<String>("newline"), Some("\n"))
+        @Expect(verifier.getPayloadValue<String>("tab"), Some("\t"))
+        @Expect(verifier.getPayloadValue<String>("special"), Some("!@#$%^&*()_+-=[]{}|;':\",./<>?"))
+        @Expect(verifier.getPayloadValue<String>("unicode"), Some("你好世界🌍"))
     }
 }

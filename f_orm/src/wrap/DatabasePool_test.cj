@@ -20,7 +20,7 @@ import std.unittest.testmacro.*
 import std.database.sql.*
 import std.reflect.*
 import std.time.MonoTime
-import f_mockdb.*
+import fountain::f_mockdb.*
 
 @Test
 public class DatabasePoolTest {

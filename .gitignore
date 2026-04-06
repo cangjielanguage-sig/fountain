@@ -37,3 +37,4 @@ console.log
 *.cjo
 *.so
 *.dll
+.pub_latency
