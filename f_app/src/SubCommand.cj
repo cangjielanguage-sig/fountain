@@ -15,9 +15,6 @@ limitations under the License.
 */
 package fountain::f_app
 
-import std.collection.concurrent.ConcurrentHashMap
-import fountain::f_base.StringGenerator
-
 public interface SubCommand{
     /**
      * 子命令名，即fboot <subcommand> 
@@ -34,12 +31,19 @@ public struct SubCommandMediator {
     public static func register(command: SubCommand){
         commands[command.command] = command.exec
     }
-    public static func exec(command: String, args: Array<String>): Int64 {
-        commands[command](args)
+    private static func exec(command: String, args: Array<String>, recursive: Bool): Int64 {
         if(let Some(cmd) <- commands.get(command)){
             cmd(args)
         }else{
-            throw BootException('sub command must be count|run|workspace|cleanUpdate|build|count|version or ${commands.iterator().map{t => t[0]}.intersperse('|').fold(StringGenerator()){g, s=>g.append(s)}}, but current sub command is ${command} and args are ${args}')
+            load(args, true)
+            if(recursive){
+                throw BootException('sub command must be count|run|workspace|cleanUpdate|build|count|version or ${commands.iterator().map{t => t[0]}.intersperse('|').fold(StringGenerator()){g, s=>g.append(s)}}, but current sub command is ${command} and args are ${args}')
+            }else{
+                exec(command, args, true)
+            }
         }
+    }
+    public static func exec(command: String, args: Array<String>): Int64 {
+        exec(command, args, false)
     }
 }

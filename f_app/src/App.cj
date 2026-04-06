@@ -15,25 +15,10 @@ limitations under the License.
  */
 package fountain::f_app
 
-import fountain::f_version.*
-import std.ast.*
-import std.convert.*
-import std.env.{getWorkingDirectory, getCommand, atExit, getStdOut}
-import std.fs.*
-import std.io.{StringReader, ByteBuffer, InputStream}
-import std.process.*
-import std.reflect.*
-import std.regex.Regex
-import std.time.MonoTime
-import fountain::f_base.*
-import fountain::f_log.impl.*
-
 /**
  * App不会发生传参赋值，用命令行参数实例化后只调用boot函数。所以用struct比较合适，不会占用堆空间。
  */
 public struct App {
-    private static let log = LoggerFactory.getLogger<App>()
-    private static const APP_STATIC_RESOURCE_SUFFIX = '_stAtIc__'
     private static let stdOut = getStdOut()
     private static prop versionRegex: Regex {
         get(){
@@ -83,59 +68,9 @@ public struct App {
         }
         (idx, path)
     }
-    private func confirmTargetPath(args: Array<String>){
-        let path = if(args.size > 1){
-            Path(args[1])
-        }else{
-            getWorkingDirectory()
-        }
-        if(!exists(path)){
-            Directory.create(path)
-        }
-        canonicalize(path)
-    }
+    
     private func load(): (Path, ArrayList<() -> Unit>) {
-        let path = confirmTargetPath(args)
-        let (ext, libPathName, delim) = match (OS.current) {
-            case Windows => (".dll", 'Path', ';')
-            case macOS => (".dylib", 'DYLD_FALLBACK_LIBRARY_PATH', ':')
-            case _ => (".so", 'LD_LIBRARY_PATH', ':')
-        }
-        func extractPattern() {
-            var idx = 0
-            for (i in 1..args.size where !args[i].startsWith("--dylibPattern=")) {
-                idx = i
-                break
-            }
-            idx++
-            if (idx > 0) {
-                let p = args[idx]['--dylibPattern='.size..]
-                if ((p.startsWith("'") && p.endsWith("'")) || (p.startsWith('"') && p.endsWith('"'))) {
-                    return p[1..p.size - 1]
-                }
-                p
-            } else {
-                ''
-            }
-        }
-        func load(path: Path, pattern: Regex): Unit {
-            Directory.walk(path) {
-                fi =>
-                log.debug{'scanning: ${fi.path}'}
-                if (fi.isDirectory()) {
-                    load(fi.path, pattern)
-                } else if (fi.path.fileName.endsWith(ext) && pattern.matches(fi.path.fileNameWithoutExtension)) {
-                    log.debug{"loading: ${fi.path}"}
-                    PackageInfo.load(fi.path.toString().replace(ext, ''))
-                }
-                true
-            }
-        }
-        if(dynamic){
-            load(path, Regex('^lib.*(${extractPattern()}|.+${APP_STATIC_RESOURCE_SUFFIX}).*$'))
-        }
-        let starters = InitializerCollection.initialize()
-        (path, starters)
+        load(args, dynamic)
     }
     private func run(args: Array<String>): Int64{
         let (path, starters) = load()
@@ -698,7 +633,6 @@ private let _ = AppVersion.set(#'${banner()}'#, '${name}', '${version}')
             case 'version' => version()
             case 'help' => help()
             case x => 
-                load()
                 SubCommandMediator.exec(x, args[1..])
         }
     }

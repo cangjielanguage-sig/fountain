@@ -15,12 +15,6 @@ limitations under the License.
 */
 package fountain::f_app
 
-import std.collection.ArrayList
-import std.collection.concurrent.{ConcurrentHashMap, ConcurrentLinkedQueue}
-import std.sync.Mutex
-
-import fountain::f_base.*
-
 /**
  * 应用初始化API。应用代码通常不需要实现本接口。
  */
