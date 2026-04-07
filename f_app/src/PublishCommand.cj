@@ -182,6 +182,9 @@ public class PublishCommand <: SubCommand {
                         info.dependenced = 1
                         moduleInfos[dep] = info
                     }//被依赖模块的依赖数+1
+                    if(m == dep){
+                        throw Exception('module ${m} is to be published, but it depends on itself')
+                    }
                     if(let Some(info) <- moduleInfos.get(m)){//添加当前模块依赖的模块列表
                         info
                     }else{
@@ -189,7 +192,7 @@ public class PublishCommand <: SubCommand {
                         moduleInfos[m] = info
                         info
                     }.dependencing.add(dep)
-                    println('dependency: ${m} is dependencing ${dep}')
+                    println('dependency: ${m} depends on ${dep}')
                 }
             }
         }

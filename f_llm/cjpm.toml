@@ -25,7 +25,6 @@
   "fountain::f_data" = {path = "../f_data"}
   "fountain::f_egraph" = {path = "../f_egraph"}
   "fountain::f_httpclient" = {path = "../f_httpclient"}
-  "fountain::f_llm" = {path = "../f_llm"}
   "fountain::f_log" = {path = "../f_log"}
   "fountain::f_macros" = {path = "../f_macros"}
   "fountain::f_orm" = {path = "../f_orm"}

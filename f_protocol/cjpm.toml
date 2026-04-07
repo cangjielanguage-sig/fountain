@@ -22,5 +22,4 @@
   "fountain::f_codec" = {path = "../f_codec"}
   "fountain::f_data" = {path = "../f_data"}
   "fountain::f_exception" = {path = "../f_exception"}
-  "fountain::f_protocol" = {path = "../f_protocol"}
   "fountain::f_pool" = {path = "../f_pool"}
