@@ -317,7 +317,7 @@ public class PublishCommand <: SubCommand {
         }
     }
     private func cjpm(path: Path, successLine: String, args: Array<String>, dry: Bool): Bool {
-        println('running cjpm ${String.join(args, delimiter: ' ')} in ${path} ...')
+        println('running "cjpm ${String.join(args, delimiter: ' ')}" in ${path} ...')
         if(dry){
             return true
         }
