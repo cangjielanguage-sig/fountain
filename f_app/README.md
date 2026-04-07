@@ -109,7 +109,7 @@ public struct NewSubCommand <: SubCommand {
     }
     public prop command: String{
         get(){
-            newcmd
+            'newcmd'
         }
     }
     public func exec(args: Array<String>): Int64 {

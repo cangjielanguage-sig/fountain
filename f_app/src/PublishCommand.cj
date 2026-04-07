@@ -241,15 +241,15 @@ public class PublishCommand <: SubCommand {
     private func checkPublished(organization: String, module: String, once: Bool): Bool {
         let url = 'https://pkg.cangjie-lang.cn/v1/artifact/getPackageMetadata?group=${organization}&moduleName=${module}&version=${version}'
         println('checking published ${organization}::${module} ...; url: ${url}; once: ${once}')
-        var a = 0
+        // var a = 0
         var b = 1
         var waited = 0
         while(true){
             sleep(Duration.second * b)
             waited += b
-            let tmp = a + b
-            a = b
-            b = tmp
+            // let tmp = a + b
+            // a = b
+            // b = tmp
             var tls = TlsClientConfig()
             tls.verifyMode = TrustAll
             let client = ClientBuilder().tlsConfig(tls).build()

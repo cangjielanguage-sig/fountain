@@ -1092,4 +1092,10 @@ public class ColumnSchema{
 ```
 
 ### 操作表数据变更
-执行命令fboot dbmigro --dylibPattern='需要加载的动态链接库文件名的正则表达式'
+执行命令`fboot dbmigro --dylibPattern='需要加载的动态链接库文件名的正则表达式' [--mode|-m file|auto|dry|interactive]`
+命令会向控制台输出生成的DDL
+- file 会在工作路径生成.migro.sql文件保存生成的DDL。
+- auto 会自动执行生成的DDL
+- dry 仅向控制台输出生成的DDL
+- interactive 会在向控制台输出生成的全部DDL后询问用户是否执行
+- `--mode`参数没有默认值，如果不是以上四个值会抛出异常
