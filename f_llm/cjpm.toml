@@ -2,7 +2,7 @@
   cjc-version = "1.1.0"
   name = "f_llm"
   organization = "fountain"
-  description = "大模型函数定义"
+  description = "大模型驭缰工程，包含记忆保存与经验总结、函数、大模型访问、智能体定义，以及技能、智能体描述、经验查询"
   target-dir = ""
   script-dir = ""
   output-type = "dynamic"
