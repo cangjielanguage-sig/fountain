@@ -277,52 +277,47 @@ public class PublishCommand <: SubCommand {
         while(let Some(m) <- q.remove()){
             if(let Some(info) <- moduleInfos.get(m)) {
                 let path = all[m]
-                func pub(){
+                func pub(dry: Bool){
                     for(d in info.dependencing where moduleInfos.contains(d)){
                         println('to publish ${info.organization}::${m} after ${d}')
                         q.add(m)
                         return
                     }
                     println('publishing ${info.organization}::${m} ...')
-                    replaceDependencies(path, info.organization, all, false)
+                    replaceDependencies(path, info.organization, all, dry)
                     try{
-                        var success = cjpm(path, 'cjpm bundle success', bundleArgs)
+                        var success = cjpm(path, 'cjpm bundle success', bundleArgs, dry)
                         if(success){
-                            success = cjpm(path, 'cjpm publish success', ['publish'])
+                            success = cjpm(path, 'cjpm publish success', ['publish'], dry)
                         }
                         if(!success){
                             throw Exception('to publish ${m} failed')
                         }
                     }finally{
-                        let cjpmBakPath = path.join('cjpm.toml.bak')
-                        if(exists(cjpmBakPath)){
-                            rename(cjpmBakPath, to: path.join('cjpm.toml'), overwrite: true)
+                        if(!dry){
+                            let cjpmBakPath = path.join('cjpm.toml.bak')
+                            if(exists(cjpmBakPath)){
+                                rename(cjpmBakPath, to: path.join('cjpm.toml'), overwrite: true)
+                            }
                         }
                     }
                     if(info.dependenced > 0){
-                        checkPublished(info.organization, m, false)
+                        checkPublished(info.organization, m, dry)
                     }
                     moduleInfos.remove(m)
                 }
-                if(!checkPublished(info.organization, m, true)){
-                    pub()
-                }else{
-                    println('${info.organization}::${m} cjpm ${bundleArgs}')
-                    println('${info.organization}::${m} has been published')
-                    println('${info.organization}::${m} is dependenced by ${info.dependenced} module(s)')
-                    println('${info.organization}::${m} depends on ${info.dependencing}')
-                    for(d in info.dependencing where moduleInfos.contains(d)){
-                        println('DRYRUN: to publish ${info.organization}::${m} after ${d}')
-                    }
-                    replaceDependencies(path, info.organization, all, true)
-                }
+                let published = checkPublished(info.organization, m, true)
+                pub(published)
             }else{
                 throw Exception('unreachable if no bug on module ${m}')
             }
         }
     }
-    private func cjpm(path: Path, successLine: String, args: Array<String>): Bool {
+    private func cjpm(path: Path, successLine: String, args: Array<String>, dry: Bool): Bool {
         println('running cjpm ${args.iterator().intersperse(' ').fold(StringGenerator()){g, s => g.append(s)}} in ${path} ...')
+        if(dry){
+            return true
+        }
         let p = launch('cjpm', args, workingDirectory: path, stdOut: Pipe)
         let cmdout = StringReader(p.stdOut)
         var success = false
