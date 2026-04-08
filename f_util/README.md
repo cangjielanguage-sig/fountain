@@ -251,76 +251,24 @@ IsUUID注解是`fountain::f_data.validation`的子类。
 
 ## murmur hash
 ```cj
-/**
- * 计算给定字节数组的MurmurHash64哈希值
- * 
- * @param data 要计算哈希的字节数组
- * @param seed 哈希种子值，默认为0x1234567890ABCDEF
- * @return 计算得到的64位MurmurHash值
- * 
- * @note 此实现使用MurmurHash64算法，适用于非加密用途的哈希计算
- * @see 参考MurmurHash算法规范
- */
-public func murmurHash64(data: Array<Byte>, seed!: Int64 = 0x1234567890ABCDEF): Int64 
-/**
- * 计算给定字符串的MurmurHash64哈希值
- * 
- * @param data 要计算哈希的字节数组
- * @param seed 哈希种子值，默认为0x1234567890ABCDEF
- * @return 计算得到的64位MurmurHash值
- * 
- * @note 此实现使用MurmurHash64算法，适用于非加密用途的哈希计算
- * @see 参考MurmurHash算法规范
- */
-public func murmurHash64(data: String, seed!: Int64 = 0x1234567890ABCDEF): Int64
-/**
- * 128比特murmur hash
- */
-public struct MurmurHash128X64 <: Hashable & Comparable<MurmurHash128X64> & ToString {
-    /**
-     * 得到表示murmur hash的字节数组
-     */
-    public func toBytes(): Array<Byte>
-    /**
-     * 得到表示murmur hash的BigInt
-     */
-    public func toBigInt(): BigInt
+public struct MurmurHash3X128 <: ToString & Hashable & Comparable<MurmurHash3X128> & DataParsable<MurmurHash3X128> & Parsable<MurmurHash3X128>{
+    private MurmurHash3X128(
+        public let left: UInt64,
+        public let right: UInt64
+    ){}
+    public func toString(): String 
+    public static func tryParse(s: String): ?MurmurHash3X128 
+    public static func parse(s: String): MurmurHash3X128 
     public func hashCode(): Int64 
-    public func compare(other: MurmurHash128X64): Ordering
-    /**
-     * 把字节数组转成16进制字符串
-     */
-    public func toString(): String
-    /**
-     * 把字符串转成murmur hash实例
-     */
-    public static func parse(s: String): MurmurHash128X64 
-    /**
-     * 把字节数组转成murmur hash实例
-     */
-    public static func parse(bytes: Array<Byte>): MurmurHash128X64
+    public func compare(other: MurmurHash3X128): Ordering 
+    public func toBytes(): Array<Byte> 
+    public static func fromBytes(bytes: Array<Byte>): MurmurHash3X128
+    // 核心哈希函数：对字节数组进行哈希（静态方法）
+    @OverflowWrapping
+    public static func hashBytes(data: Array<Byte>, seed!: UInt64 = 0): MurmurHash3X128 
+    // 便捷函数：直接对字符串进行哈希（静态方法）
+    public static func hashString(text: String, seed!: UInt64 = 0): MurmurHash3X128 
 }
-/**
- * 计算给定字节数组的128位MurmurHash3哈希值(x64变体)
- * 
- * @param data 要计算哈希的字节数组
- * @param seed 可选的种子值，默认为0x1234567890ABCDEF
- * @return 包含两个64位哈希值的MurmurHash128X64结构体
- * 
- * 算法特点：
- * - 使用MurmurHash3算法的128位x64变体
- * - 处理输入数据为16字节的块
- * - 对剩余字节进行特殊处理
- * - 使用多个混合常量(C1, C2)和旋转操作(R1, R2, R3)
- * - 包含最终的混合步骤(fmix64)
- * 
- * 注意：
- * - 结果由两个64位整数组成，表示128位哈希值
- * - 默认种子为0x1234567890ABCDEF
- */
-@OverflowWrapping
-public func murmurHash128X64(data: Array<Byte>, seed!: Int64 = 0x1234567890ABCDEF): MurmurHash128X64
-public func murmurHash128X64(data: String, seed!: Int64 = 0x1234567890ABCDEF): MurmurHash128X64
 ```
 
 ## 路径匹配

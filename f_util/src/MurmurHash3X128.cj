@@ -57,6 +57,9 @@ public struct MurmurHash3X128 <: ToString & Hashable & Comparable<MurmurHash3X12
         }
     }
     public static func fromBytes(bytes: Array<Byte>): MurmurHash3X128{
+        if(bytes.size != 16){
+            MurmurHashException("Invalid bytes length, expected 16 bytes, but it is ${bytes} which size is ${bytes.size}")
+        }
         var left = 0u64
         var right = 0u64
         for(i in 0 .. bytes.size){
