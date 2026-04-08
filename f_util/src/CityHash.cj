@@ -24,6 +24,9 @@ private const k0: UInt64 = 0xc3a5c85c97cb3127
 private const k1: UInt64 = 0xb492b66fbe98f273
 public type CityHash128 = UInt128
 extend UInt128 {
+    public func cityHash(data: String): UInt128 {
+        cityHash(data.unsafeBytes())
+    }
     public func cityHash(data: Array<UInt8>): UInt128 {
         let len = data.size
         // 短字符串处理 (len < 128)
