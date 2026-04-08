@@ -20,61 +20,13 @@ import std.convert.*
 import stdx.encoding.hex.*
 import fountain::f_base.*
 import fountain::f_data.DataParsable
-import fountain::f_util.exception.MurmurHashException
+import fountain::f_util.exception.HashException
 
-public struct MurmurHash3X128 <: ToString & Hashable & Comparable<MurmurHash3X128> & DataParsable<MurmurHash3X128> & Parsable<MurmurHash3X128>{
-    private MurmurHash3X128(
-        public let left: UInt64,
-        public let right: UInt64
-    ){}
-    public func toString(): String {
-        toHexString(toBytes())
-    }
-    public static func tryParse(s: String): ?MurmurHash3X128 {
-        match(fromHexString(s)){
-            case Some(x) => fromBytes(x)
-            case _ => None
-        }
-    }
-    public static func parse(s: String): MurmurHash3X128 {
-        tryParse(s).getOrThrow()
-    }
-    public func hashCode(): Int64 {
-        (left ^ right).toInt()
-    }
-    public func compare(other: MurmurHash3X128): Ordering {
-        match(this.left.compare(other.left)){
-            case EQ => this.right.compare(other.right)
-            case x => x
-        }
-    }
-    public func toBytes(): Array<Byte> {
-        Array<Byte>(16){i => 
-            if(i < 8){
-                UInt8(left >> ((7 - i) * 8))
-            }else{
-                UInt8(right >> ((15 - i) * 8))
-            }
-        }
-    }
-    public static func fromBytes(bytes: Array<Byte>): MurmurHash3X128{
-        if(bytes.size != 16){
-            MurmurHashException("Invalid bytes length, expected 16 bytes, but it is ${bytes} which size is ${bytes.size}")
-        }
-        var left = 0u64
-        var right = 0u64
-        for(i in 0 .. bytes.size){
-            if(i < 8){
-                left |= UInt64(bytes[i]) << UInt64((7 - i) * 8)
-            }else{
-                right |= UInt64(bytes[i]) << UInt64((15 - i) * 8)
-            }
-        }
-        MurmurHash3X128(left, right)
-    }
+public type MurmutHash3X128 = UInt128
+extend UInt128 {
     // 核心哈希函数：对字节数组进行哈希（静态方法）
     @OverflowWrapping
-    public static func hashBytes(data: Array<Byte>, seed!: UInt64 = 0): MurmurHash3X128 {
+    public static func murmurHash(data: Array<Byte>, seed!: UInt64 = 0): UInt128 {
         let len = data.size
         let nblocks = len / 16
         
@@ -170,13 +122,13 @@ public struct MurmurHash3X128 <: ToString & Hashable & Comparable<MurmurHash3X12
         h1 += h2
         h2 += h1
 
-        return MurmurHash3X128(h1, h2)
+        return UInt128(h1, h2)
     }
 
     // 便捷函数：直接对字符串进行哈希（静态方法）
-    public static func hashString(text: String, seed!: UInt64 = 0): MurmurHash3X128 {
+    public static func murmurHash(text: String, seed!: UInt64 = 0): UInt128 {
         let bytes = text.unsafeBytes() 
-        return hashBytes(bytes, seed: seed)
+        return murmurHash(bytes, seed: seed)
     }
 
     // 64 位循环左移（私有静态辅助函数）
