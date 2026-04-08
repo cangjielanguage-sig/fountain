@@ -25,7 +25,14 @@ public macro Constructor(input: Tokens): Tokens {
     for(msg in getChildMessages('Value')){
         valueCond[msg.getString('name')] = msg.getTokens('cond')
     }
-    constructor(parseDecl(input), beanCond, valueCond)
+    let decl = try{
+        parseDecl(input)
+    }catch(_: ParseASTException){
+        parseDecl(input, astKind: 'PrimaryCtorDecl')
+    }catch(e: Exception){
+        throw e
+    }
+    constructor(decl, beanCond, valueCond)
     input
 }
 private func constructor(decl: Decl, beanCond: HashMap<String, Tokens>, valueCond: HashMap<String, Tokens>): Unit {

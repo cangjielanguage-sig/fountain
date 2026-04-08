@@ -15,21 +15,21 @@ limitations under the License.
  */
 package fountain::f_bean.test
 
-// public import fountain::f_bean.*
-// import fountain::f_bean.macros.*
+public import fountain::f_bean.*
+import fountain::f_bean.macros.*
 
-// @Bean
-// public class A <: ToString {
-//     public func toString() {
-//         'A'
-//     }
-// }
+@Bean
+public class A <: ToString {
+    public func toString() {
+        'A'
+    }
+}
 
-// @Bean
-// public class B <: ToString {
-//     @Constructor
-//     public B(public let a: A) {}
-//     public func toString() {
-//         'B(${a})'
-//     }
-// }
+@Bean
+public class B <: ToString {
+    @Constructor
+    public B(public let a: A) {}
+    public func toString() {
+        'B(${a})'
+    }
+}
