@@ -30,10 +30,13 @@ private const SECRET3 = 0x589965cc75374cc3u64
 
 @OverflowWrapping
 public func wyrand(seed: Int64): UInt64 {
-    let v: UInt64 = UInt64(seed) + SECRET0
+    return wyrand(seed.toUInt())
+}
+@OverflowWrapping
+public func wyrand(seed: UInt64): UInt64 {
+    let v: UInt64 = seed + SECRET0
     return mix(v, v ^ SECRET1)
 }
-
 @OverflowWrapping
 public func wyhash(arr: Array<UInt8>, start!: Int64 = 0, size!: Int64 = arr.size, see!: UInt64 = 0): UInt64 {
     var seed = see ^ mix(see ^ SECRET0, SECRET1)
