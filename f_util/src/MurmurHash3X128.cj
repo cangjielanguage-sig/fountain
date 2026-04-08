@@ -171,7 +171,7 @@ public struct MurmurHash3X128 <: ToString & Hashable & Comparable<MurmurHash3X12
 
     // 便捷函数：直接对字符串进行哈希（静态方法）
     public static func hashString(text: String, seed!: UInt64 = 0): MurmurHash3X128 {
-        let bytes = text.unsafeBytes() // 假设使用 UTF-8 编码
+        let bytes = text.unsafeBytes() 
         return hashBytes(bytes, seed: seed)
     }
 
