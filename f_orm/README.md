@@ -287,7 +287,7 @@ import fountain::f_orm.macros.*
 
 //下面这样就声明了一个名为UserDAO的DAO接口
 @DAO//这个宏不可省略，这个宏会把它修饰的接口扩展到SqlExecutor，
-    //同一个包可以导入多个DAO接口，这些接口的函数最好不要构成重载，否则可能导致函数重定义或才导致令人费解的状况
+    //同一个包可以导入多个DAO接口，这些接口的函数最好不要构成重载，否则可能导致函数重定义或者导致令人费解的状况
 public interface UserDAO <: RootDAO {//必须是RootDAO的子接口
     /**
      * arg 函数是RootDAO的成员，这个函数会把它的实参填充到SQL参数列表，并返回字符串'?'作为SQL参数占位符
