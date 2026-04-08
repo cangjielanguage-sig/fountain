@@ -35,7 +35,7 @@ public func wyrand(seed: Int64): UInt64 {
 }
 
 @OverflowWrapping
-public func wyhash(arr: Array<UInt8>, start: Int64, size: Int64, see: UInt64): UInt64 {
+public func wyhash(arr: Array<UInt8>, start!: Int64 = 0, size!: Int64 = arr.size, see!: UInt64 = 0): UInt64 {
     var seed = see ^ mix(see ^ SECRET0, SECRET1)
     if (size == 0) {
         return seed
