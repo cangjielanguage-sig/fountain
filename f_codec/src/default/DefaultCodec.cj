@@ -42,8 +42,8 @@ public class DefaultCodec <: Codec {
     private static let MIN_INT = BigInt(Int64.Min)
     private static let MAX_INT = BigInt(UInt64.Max)
     private static let TEN_POW_NINE = BigInt(10 ** 9)
-    private static let typeMurmurHashs = ConcurrentHashMap<TypeInfo, MurmurHash128X64>()
-    private static let typeMurmurCreators = ConcurrentHashMap<MurmurHash128X64, () -> SimpleDataObject>()
+    private static let typeMurmurHashs = ConcurrentHashMap<TypeInfo, MurmurHash3X128>()
+    private static let typeMurmurCreators = ConcurrentHashMap<MurmurHash3X128, () -> SimpleDataObject>()
     private static var byteListOutputBuilder = BytesListOutputStream.builder(initSize: 1024, minSize: 1024, maxSize: 1024)
     private static var fileThreshold = 4096
     private static var bytesPool = ArrayPool<Byte>(initSize: 0, minSize: 1, maxSize: 1024, arraySize: 4096)
@@ -61,9 +61,9 @@ public class DefaultCodec <: Codec {
         bytesPool = ArrayPool<Byte>(initSize: initSize, minSize: minSize, maxSize: maxSize, arraySize: arraySize)
         fileThreshold = arraySize
     }
-    public static func registerType<T>(): MurmurHash128X64 where T <: Object & ObjectData<T> & DataFields<T> {
+    public static func registerType<T>(): MurmurHash3X128 where T <: Object & ObjectData<T> & DataFields<T> {
         let typeInfo = ClassTypeInfo.of<T>()
-        let typeMurmur = typeMurmurHashs.computeIfAbsent(typeInfo) {murmurHash128X64(typeInfo.qualifiedName)}
+        let typeMurmur = typeMurmurHashs.computeIfAbsent(typeInfo) {MurmurHash3X128.hashString(typeInfo.qualifiedName)}
         let option = typeMurmurCreators.addIfAbsent(typeMurmur, {
             => if (let o: T <- T.dataFields().create() && let x: SimpleDataObject <- o.toData()) {
                 x
@@ -118,7 +118,7 @@ public class DefaultCodec <: Codec {
                 let buffer = lastBuffer()
                 let typeInfo = x.typeInfo
                 let typeMurmur = typeMurmurHashs.computeIfAbsent(typeInfo) {
-                    murmurHash128X64(typeInfo.qualifiedName)
+                    MurmurHash3X128.hashString(typeInfo.qualifiedName)
                 }
                 if (typeMurmurCreators.addIfAbsent(typeMurmur, x.dataCreator()).isSome()) {
                     throw CodecException('duplicate murmur hash ${typeMurmur} for ${typeInfo}')
@@ -818,7 +818,7 @@ public class DefaultCodec <: Codec {
             }
             tuples
         } else if (dataType == DataType.OBJECT.value) {
-            let murmur = MurmurHash128X64.parse(readBytes(head, input))
+            let murmur = MurmurHash3X128.fromBytes(readBytes(head, input))
             let object = typeMurmurCreators[murmur]()
             size = decodeSizeOfEncoded(input)
             for (_ in 0..size) {

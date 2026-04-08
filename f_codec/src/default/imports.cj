@@ -26,4 +26,4 @@ internal import fountain::f_codec.*
 internal import fountain::f_codec.exception.*
 internal import fountain::f_exception.UnreachableException
 internal import fountain::f_pool.*
-internal import fountain::f_util.{UUID, murmurHash128X64, MurmurHash128X64}
+internal import fountain::f_util.{UUID, MurmurHash3X128}
