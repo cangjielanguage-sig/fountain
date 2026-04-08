@@ -28,7 +28,6 @@ private const SECRET1 = 0xe7037ed1a0b428dbu64
 private const SECRET2 = 0x8ebc6af09c88c6e3u64
 private const SECRET3 = 0x589965cc75374cc3u64
 
-@OverflowWrapping
 public func wyrand(seed: Int64): UInt64 {
     return wyrand(seed.toUInt())
 }
@@ -36,6 +35,9 @@ public func wyrand(seed: Int64): UInt64 {
 public func wyrand(seed: UInt64): UInt64 {
     let v: UInt64 = seed + SECRET0
     return mix(v, v ^ SECRET1)
+}
+public func wyhash(s: String, start!: Int64 = 0, size!: Int64 = s.size, see!: UInt64 = 0): UInt64 {
+    return wyhash(arr.unsafeBytes(), start: start, size: size, see: see)
 }
 @OverflowWrapping
 public func wyhash(arr: Array<UInt8>, start!: Int64 = 0, size!: Int64 = arr.size, see!: UInt64 = 0): UInt64 {
