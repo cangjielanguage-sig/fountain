@@ -20,6 +20,7 @@ import std.convert.*
 import stdx.encoding.hex.*
 import fountain::f_base.*
 import fountain::f_data.DataParsable
+import fountain::f_util.exception.MurmurHashException
 
 public struct MurmurHash3X128 <: ToString & Hashable & Comparable<MurmurHash3X128> & DataParsable<MurmurHash3X128> & Parsable<MurmurHash3X128>{
     private MurmurHash3X128(

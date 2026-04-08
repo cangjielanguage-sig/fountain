@@ -23,22 +23,22 @@ import std.collection.concurrent.ConcurrentHashMap
    按照HashBuilder_test的简单性能测试。
  */
 public class HashBuilder {
-    private static const coefficient: Int64 = 131
-    private static const initHash = 71
-    private var hashed = initHash
+    private static const a: Int64 = -7046029254386353131 // 0x9e3779b97f4a7c15
+    private var hashed = 0
 
     /**
      * 调用一次，本类的实例回到初始状态
      */
     public func build(): Int64 {
         let h = hashed
-        hashed = initHash
+        hashed = 0
         h
     }
 
     @OverflowWrapping
     public func append(arg: Int64): This {
-        hashed = hashed * coefficient + arg
+        let seed = hashed
+        hashed = seed ^ (arg + a + (seed << 6) + (seed >> 2))
         this
     }
     public func append<T>(arg: T): This where T <: Hashable {
