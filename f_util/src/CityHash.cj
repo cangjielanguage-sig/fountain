@@ -12,7 +12,7 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
-*/
+ */
 package fountain::f_util
 
 import std.convert.*
@@ -22,7 +22,9 @@ import fountain::f_data.*
 // CityHash 常量
 private const k0: UInt64 = 0xc3a5c85c97cb3127
 private const k1: UInt64 = 0xb492b66fbe98f273
+
 public type CityHash128 = UInt128
+
 extend UInt128 {
     public func cityHash(data: String): UInt128 {
         cityHash(data.unsafeBytes())
@@ -33,20 +35,20 @@ extend UInt128 {
         if (len < 128) {
             return weakHashLen32WithSeeds(data, 0, len, k0, k1)
         }
-        
+
         // 长字符串处理 (len >= 128)
         var x = seedLow(data, len)
         var y = seedHigh(data, len)
         var z = len.toUInt() * k1
-        
+
         var low = rotate64(y ^ k1, 49) * k1 + fetch64(data, 0)
         var high = rotate64(low, 42) * k1 + fetch64(data, 8)
         var v = UInt128(high, low)
-        
+
         low = rotate64(y + z, 35) * k1 + x
         high = rotate64(x + fetch64(data, 88), 53) * k1
         var w = UInt128(high, low)
-        
+
         // 分块处理 (每块 128 字节)
         var pos: Int64 = 0
         let end = len - 128
@@ -56,25 +58,29 @@ extend UInt128 {
             x ^= w.left
             y ^= v.right
             z = rotate64(z + w.right, 33) * k1
-            
+
             // 交换并混合 v, w
             v = weakHashLen32WithSeeds(data, pos + 64, 32, v.left * k1, x + w.right)
             w = weakHashLen32WithSeeds(data, pos + 96, 32, z + w.left, y + fetch64(data, pos + 16))
             v = UInt128(x, z)
             x = v.right
-            
+
             pos += 128
         }
-        
+
         // 处理尾部数据 (最后 128 字节)
         x += rotate64(v.right + z, 49) * k0
         z += rotate64(w.right, 37) * k0
-        
+
         // 逐步处理剩余的字节块
         let remaining = len - pos
         var tailOffset = pos
         while (remaining > 0) {
-            let chunkSize = if (remaining >= 32){32} else{remaining}
+            let chunkSize = if (remaining >= 32) {
+                32
+            } else {
+                remaining
+            }
             let chunkSize32 = chunkSize
             y = rotate64(y + x, 42) * k0 + v.left
             let right = w.right + fetch64(data, tailOffset + chunkSize - 16)
@@ -84,7 +90,7 @@ extend UInt128 {
             (x, z) = (z, x)
             tailOffset += chunkSize
         }
-            // 最终混合
+        // 最终混合
         return finalMerge(x, v.right, y, w.right, len)
     }
     // 辅助函数：最终哈希值混合
@@ -145,14 +151,14 @@ extend UInt128 {
         var hVar = h
         let c1: UInt32 = 0xcc9e2d51
         let c2: UInt32 = 0x1b873593
-        
+
         aVar *= c1
         aVar = rotate32(aVar, 17)
         aVar *= c2
-        
+
         hVar ^= aVar
         hVar = rotate32(hVar, 19)
-        
+
         return hVar * 5 + 0xe6546b64
     }
 
@@ -163,12 +169,16 @@ extend UInt128 {
         var b = seedB
         var c: UInt64 = 0
         var d: UInt64 = 0
-        
+
         // 根据长度调整初始值
         if (len <= 16) {
             a = shiftMix(a * k1) * k1
             c = b * k1 + fetch64(bytes, offset + len - 8)
-            d = shiftMix(a + (if (len >= 8){fetch64(bytes, offset)} else{c}))
+            d = shiftMix(a + (if (len >= 8) {
+                fetch64(bytes, offset)
+            } else {
+                c
+            }))
         } else {
             // 处理 17-32 字节
             c = fetch64(bytes, offset + len - 8)
@@ -176,17 +186,17 @@ extend UInt128 {
             a += d
             d = shiftMix(a + b)
         }
-        
+
         // 主混合逻辑
         a = fetch64(bytes, offset)
         b = fetch64(bytes, offset + 8)
-        
+
         // 核心运算（模拟 C++ 中的位混合）
         a ^= k1
         b ^= a
         a = rotate64(a, 43) + rotate64(b, 30) + c
         b = shiftMix(a + b + d)
-        
+
         return UInt128(a, b)
     }
 

@@ -12,7 +12,7 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
-*/
+ */
 package fountain::f_util
 
 // this wyhash is copied from cangjie-runtime
@@ -44,9 +44,7 @@ public func wyhash(arr: Array<UInt8>, start!: Int64 = 0, size!: Int64 = arr.size
     var b: UInt64
     match {
         case size < 4 =>
-            a = (UInt64(arr[start]) << 16) |
-                (UInt64(arr[start + (size >> 1)]) << 8) |
-                (UInt64(arr[start + size - 1]))
+            a = (UInt64(arr[start]) << 16) | (UInt64(arr[start + (size >> 1)]) << 8) | (UInt64(arr[start + size - 1]))
             b = 0
         case size == 4 =>
             a = r4(arr, start)
@@ -115,20 +113,11 @@ private func mix(A: UInt64, B: UInt64): UInt64 {
 
 @OverflowWrapping
 private func r4(arr: Array<UInt8>, pos: Int64): UInt64 {
-    (UInt64(arr[pos]) << 24) |
-    (UInt64(arr[pos + 1]) << 16) |
-    (UInt64(arr[pos + 2]) << 8) |
-    UInt64(arr[pos + 3])
+    (UInt64(arr[pos]) << 24) | (UInt64(arr[pos + 1]) << 16) | (UInt64(arr[pos + 2]) << 8) | UInt64(arr[pos + 3])
 }
 
 @OverflowWrapping
 private func r8(arr: Array<UInt8>, pos: Int64): UInt64 {
-    (UInt64(arr[pos]) << 56) |
-    (UInt64(arr[pos + 1]) << 48) |
-    (UInt64(arr[pos + 2]) << 40) |
-    (UInt64(arr[pos + 3]) << 32) |
-    (UInt64(arr[pos + 4]) << 24) |
-    (UInt64(arr[pos + 5]) << 16) |
-    (UInt64(arr[pos + 6]) << 8) |
-        UInt64(arr[pos + 7])
+    (UInt64(arr[pos]) << 56) | (UInt64(arr[pos + 1]) << 48) | (UInt64(arr[pos + 2]) << 40) | (UInt64(arr[pos + 3]) << 32) |
+        (UInt64(arr[pos + 4]) << 24) | (UInt64(arr[pos + 5]) << 16) | (UInt64(arr[pos + 6]) << 8) | UInt64(arr[pos + 7])
 }

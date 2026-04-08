@@ -12,7 +12,7 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
-*/
+ */
 package fountain::f_util
 
 import std.binary.LittleEndianOrder
@@ -23,23 +23,24 @@ import fountain::f_data.DataParsable
 import fountain::f_util.exception.HashException
 
 public type MurmutHash3X128 = UInt128
+
 extend UInt128 {
     // 核心哈希函数：对字节数组进行哈希（静态方法）
     @OverflowWrapping
     public static func murmurHash(data: Array<Byte>, seed!: UInt64 = 0): UInt128 {
         let len = data.size
         let nblocks = len / 16
-        
+
         let c1: UInt64 = 0x87c37b91114253d5
         let c2: UInt64 = 0x4cf5ad432745937f
-        
+
         var h1: UInt64 = seed
         var h2: UInt64 = seed
 
         // 1. 处理完整的16字节块
-        for (offset in 0..nblocks:16) {
-            let blockSlice = data[offset..offset+16]
-            
+        for (offset in 0..nblocks : 16) {
+            let blockSlice = data[offset..offset + 16]
+
             let k1 = UInt64.readLittleEndian(blockSlice[0..8])
             let k2 = UInt64.readLittleEndian(blockSlice[8..16])
 
@@ -98,7 +99,7 @@ extend UInt128 {
             } else if (tailLen > 0) {
                 // 如果尾部长度在1-7之间，这部分数据属于k1的剩余字节
                 k1_tail = 0
-                for (i in (0..tailLen:1)) {
+                for (i in (0..tailLen : 1)) {
                     let shift = i * 8
                     k1_tail ^= (UInt64(tailSlice[i]) & 0xFF) << shift
                 }
@@ -127,7 +128,7 @@ extend UInt128 {
 
     // 便捷函数：直接对字符串进行哈希（静态方法）
     public static func murmurHash(text: String, seed!: UInt64 = 0): UInt128 {
-        let bytes = text.unsafeBytes() 
+        let bytes = text.unsafeBytes()
         return murmurHash(bytes, seed: seed)
     }
 
