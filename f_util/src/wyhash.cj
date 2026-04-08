@@ -15,6 +15,8 @@ limitations under the License.
  */
 package fountain::f_util
 
+import fountain::f_base.*
+
 // this wyhash is copied from cangjie-runtime
 /**
  * @brief cangjie version of wyRand & wyHash
@@ -37,7 +39,7 @@ public func wyrand(seed: UInt64): UInt64 {
     return mix(v, v ^ SECRET1)
 }
 public func wyhash(s: String, start!: Int64 = 0, size!: Int64 = s.size, see!: UInt64 = 0): UInt64 {
-    return wyhash(arr.unsafeBytes(), start: start, size: size, see: see)
+    return wyhash(s.unsafeBytes(), start: start, size: size, see: see)
 }
 @OverflowWrapping
 public func wyhash(arr: Array<UInt8>, start!: Int64 = 0, size!: Int64 = arr.size, see!: UInt64 = 0): UInt64 {

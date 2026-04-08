@@ -15,6 +15,8 @@ limitations under the License.
  */
 package fountain::f_util
 
+import fountain::f_base.*
+
 let CRC16_LOOKUP_TABLE: Array<UInt16> = [
     0x0000,
     0x1021,
@@ -284,4 +286,7 @@ func crc16(bytes: Array<Byte>, s: Int64, e: Int64) {
 
 public func crc16(bytes: Array<Byte>): UInt16 {
     return crc16(bytes, 0, bytes.size)
+}
+public func crc16(s: String): UInt16 {
+    crc16(s.unsafeBytes())
 }
