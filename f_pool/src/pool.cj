@@ -181,26 +181,19 @@ public class Pool<T> <: Resource {
             o
         }
         let start = MonoTime.now()
-        println('BBBBBBBBBBBBBBBBBBBBBB 0 ${running.load()} ${MonoTime.now() - start} < ${timeout}')
         while (running.load() && MonoTime.now() - start < timeout) {
-            println('BBBBBBBBBBBBBBBBBBBBBB 1')
             if (let Some((o, _)) <- queue.tryRemove()) {
-                println('BBBBBBBBBBBBBBBBBBBBBB 2')
                 if (let Some(x) <- doCheck(o)) {
-                    println('BBBBBBBBBBBBBBBBBBBBBB 3')
                     return x
                 }
             } else {
-                println('BBBBBBBBBBBBBBBBBBBBBB 4')
                 tasks.tryAdd(())
                 if (let consumed <- MonoTime.now() - start && consumed < timeout && let Some((o, _)) <- queue.remove(
                     timeout - consumed) && let Some(x) <- doCheck(o)) {
-                    println('BBBBBBBBBBBBBBBBBBBBBB 5')
                     return x
                 }
             }
         }
-        println('BBBBBBBBBBBBBBBBBBBBBB 6')
         None<T>
     }
     public func giveBack(object: T): Unit {
