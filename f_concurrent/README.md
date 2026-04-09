@@ -1,22 +1,6 @@
 ## STDX依赖
 配置环境变量：`export CANGJIE_STDX_DYNAMIC_PATH=/path/to/dynamic_stdx`
 
-## 布隆过滤器
-```cj
-public class BloomFilter<T> where T <: Hashable {
-    /**哈希函数数组*/
-    public BloomFilter(private let hashers: Array<(T, Int64) -> Int64>) {}
-    /**哈希次数*/
-    public init(iterate!: Int64 = 5) 
-    /**哈希函数数组*/
-    public init(hashers: Array<(T) -> Int64>) 
-    /**把值添加到布隆过滤器*/
-    public func set(value: T): Unit 
-    /**判断value是否在布隆过滤器当中*/
-    public func contains(value: T): Bool 
-}
-```
-
 ## 并发安全的字典
 未实现`Hashable & Equatable<K>` 也没有实现`Comparable<K>`，目前只提供了
 ```cj

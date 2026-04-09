@@ -290,3 +290,6 @@ public func crc16(bytes: Array<Byte>): UInt16 {
 public func crc16(s: String): UInt16 {
     crc16(s.unsafeBytes())
 }
+public func crc16<T>(s: T): UInt16 where T <: ToString {
+    crc16(s.toString().unsafeBytes())
+}

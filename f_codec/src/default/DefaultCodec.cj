@@ -63,7 +63,7 @@ public class DefaultCodec <: Codec {
     }
     public static func registerType<T>(): UInt128 where T <: Object & ObjectData<T> & DataFields<T> {
         let typeInfo = ClassTypeInfo.of<T>()
-        let typeMurmur = typeMurmurHashs.computeIfAbsent(typeInfo) {UInt128.murmurHash(typeInfo.qualifiedName)}
+        let typeMurmur = typeMurmurHashs.computeIfAbsent(typeInfo) {murmurHash(typeInfo.qualifiedName)}
         let option = typeMurmurCreators.addIfAbsent(typeMurmur, {
             => if (let o: T <- T.dataFields().create() && let x: SimpleDataObject <- o.toData()) {
                 x
@@ -118,7 +118,7 @@ public class DefaultCodec <: Codec {
                 let buffer = lastBuffer()
                 let typeInfo = x.typeInfo
                 let typeMurmur = typeMurmurHashs.computeIfAbsent(typeInfo) {
-                    UInt128.murmurHash(typeInfo.qualifiedName)
+                    murmurHash(typeInfo.qualifiedName)
                 }
                 if (typeMurmurCreators.addIfAbsent(typeMurmur, x.dataCreator()).isSome()) {
                     throw CodecException('duplicate murmur hash ${typeMurmur} for ${typeInfo}')

@@ -1,0 +1,18 @@
+[package]
+  cjc-version = "1.1.0"
+  name = "f_bloom"
+  organization = "fountain"
+  description = "布隆过滤器"
+  version = "1.0.0"
+  target-dir = ""
+  script-dir = ""
+  output-type = "dynamic"
+  compile-option = ""
+  override-compile-option = ""
+  link-option = ""
+  package-configuration = {}
+
+[dependencies]
+  "fountain::f_base" = {path = "../f_base"}
+  "fountain::f_random" = {path = "../f_random"}
+  "fountain::f_util" = {path = "../f_util"}

@@ -81,3 +81,6 @@ public func crc64(data: Array<Byte>): UInt64 {
 public func crc64(data: String): UInt64 {
     return crc64(data.unsafeBytes())
 }
+public func crc64<T>(s: T): UInt16 where T <: ToString {
+    crc16(s.toString().unsafeBytes())
+}
