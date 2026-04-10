@@ -44,7 +44,9 @@ public class LastNContext <: ContextPruner {
         }
     }
     public func prune(_: Int64, _: String, messages: ArrayList<ChatMessage>): ArrayList<ChatMessage>{
-        return if(messages.size > n * 2){
+        return if(n == 0){
+            ArrayList<ChatMessage>()
+        }else if(messages.size > n * 2){
             messages[messages.size - n * 2 ..]
         }else{
             messages
