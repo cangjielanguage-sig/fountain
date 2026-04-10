@@ -188,3 +188,29 @@ public class RetainLastUserPruner <: ContextPruner {
         return msgs
     }
 }
+
+public class RetainLastRoundPruner <: ContextPruner {
+    public RetainLastRoundPruner(
+        private let pruner!: ContextPruner
+    ){}
+    public prop name: String {
+        get(){
+            '${CONTEXT_PRUNER_RETAIN_LAST_ROUND}_${pruner.name}'
+        }
+    }
+    public func prune(agentId: Int64, session: String, messages: ArrayList<ChatMessage>): ArrayList<ChatMessage>{
+        let last = messages[messages.size - 2 ..]
+        let msgs = pruner.prune(agentId, session, messages)
+        if(lastUser.isNone()){
+            return msgs
+        }
+        for(i in msgs.size - 1 ..= 0: -1){
+            let m = msgs[i]
+            if(m.role == ROLE_USER && Some(m.content) == lastUser?.content){
+                return msgs
+            }
+        }
+        msgs.add(all: last)
+        return msgs
+    }
+}
