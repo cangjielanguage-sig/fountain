@@ -86,6 +86,9 @@ public abstract class AbstractMysqlSchemaFinder <: SchemaFinder {
         );
         ''').iterator()
     }
+    public func generateDroopTableSql(tableName: String): String {
+        'drop table ${tableName};'
+    }
     public func generateAlterSql(tableName: String, new: Array<ColumnMeta>, current: Iterator<ColumnMeta>): Iterator<String> {
         let currentColumnMap = current.iterator().fold(HashMap<String, ColumnMeta>()){m, c => 
             m[c.columnName] = c

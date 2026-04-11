@@ -23,7 +23,7 @@ public interface ContextPruner {
 }
 
 @Bean
-public class RetainContext <: ContextPruner {
+public class RetainContextPruner <: ContextPruner {
     public prop name: String{
         get(){
             CONTEXT_PRUNER_RETAIN
@@ -34,8 +34,8 @@ public class RetainContext <: ContextPruner {
     }
 }
 
-public class LastNContext <: ContextPruner {
-    public LastNContext(
+public class LastNContextPruner <: ContextPruner {
+    public LastNContextPruner(
         private let n!: Int64 = 1
     ){}
     public prop name: String{
@@ -116,7 +116,7 @@ public class DRCContextPruner <: ContextPruner {
     public init(
         exceptSystemPruner!: ContextPruner
     ){
-        this(systemPruner: RetainContext(), othersPruner: exceptSystemPruner)
+        this(systemPruner: RetainContextPruner(), othersPruner: exceptSystemPruner)
     }
     public prop name: String{
         get(){
@@ -191,9 +191,10 @@ public class RetainLastUserPruner <: ContextPruner {
     }
 }
 
-public class RetainLastRoundPruner <: ContextPruner {
-    public RetainLastRoundPruner(
-        private let pruner!: ContextPruner
+public class RetainLastNRoundPruner <: ContextPruner {
+    public RetainLastNRoundPruner(
+        private let pruner!: ContextPruner,
+        private let n!: Int64 = 1
     ){}
     public prop name: String {
         get(){
@@ -201,16 +202,10 @@ public class RetainLastRoundPruner <: ContextPruner {
         }
     }
     public func prune(agentId: Int64, session: String, messages: ArrayList<ChatMessage>): ArrayList<ChatMessage>{
-        let last = messages[messages.size - 2 ..]
+        let last = messages[messages.size - 2 * n ..]
         let msgs = pruner.prune(agentId, session, messages)
-        if(lastUser.isNone()){
+        if(last.isEmpty()){
             return msgs
-        }
-        for(i in msgs.size - 1 ..= 0: -1){
-            let m = msgs[i]
-            if(m.role == ROLE_USER && Some(m.content) == lastUser?.content){
-                return msgs
-            }
         }
         msgs.add(all: last)
         return msgs

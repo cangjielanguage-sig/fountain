@@ -31,7 +31,10 @@ struct FaithfulMemoryImpl <: FaithfulMemory {
     private static const CONTENT_KEY_PREFIX = 'FaithfulMemory'
     private static const FULL_DATE_FORMAT = 'yyyyMMddHHmmssSSS'
     private static const DUPLICATE_MEMORY = 'DuplicateMemory'
-    private let store = Store(LLMConfig.getFaithfulMemoryPath())
+    private let store = {=>
+        let config = BadgerConfig(dir: LLMConfig.getFaithfulMemoryPath().toString())
+        Badger.open(config)
+    }()
 
     private func current(now: DateTime): String {
         now.format(FULL_DATE_FORMAT)
@@ -67,7 +70,9 @@ struct FaithfulMemoryImpl <: FaithfulMemory {
         var lastSession = ''
         var currentSession = ''
         let messages = ArrayList<ChatMessage>()
-        for((k, v) in store.scanString(prefix: CONTENT_KEY_PREFIX)){
+        for(item in store.scan(CONTENT_KEY_PREFIX.unsafeBytes())){
+            let k = String.fromUtf8(item.key)
+            let v = String.fromUtf8(item.value)
             let keyParts = k.split(':')
             currentSession = keyParts[1]
             let timeStr = keyParts[2]
