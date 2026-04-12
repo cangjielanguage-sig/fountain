@@ -371,8 +371,7 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
 
     // 清空
     public func clear(): Unit {
-        headRef.store(Node<K, V>.createHead(MAX_LEVEL))
-        size_.store(0)   // 重置计数
+        removeIf{_, _ => true}
     }
 
     // ---------- 查找 ----------
