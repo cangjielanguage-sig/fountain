@@ -587,10 +587,321 @@ public class ConcurrentSkipListMap_test {
         sleep(Duration.millisecond * duration)
         stop.store(true)
         latch.waitUntilZero()
-        
+         
         // 最终无异常，size 合理
         @Assert(map.size >= 0)
         println("Stress test completed. final size = ${map.size}")
+    }
+
+    // ========== 6. 补充测试：未覆盖的 API ==========
+
+    @TestCase
+    public func test_addIfPresent(): Unit {
+        let map = ConcurrentSkipListMap<Int64, String>()
+        // 键不存在时，addIfAbsent 应返回 None 且不插入
+        let res1 = map.addIfPresent(1, "one")
+        @Assert(res1.isNone())
+        @Assert(map.size, 0)
+
+        // 先插入
+        map.add(1, "one")
+        // 键已存在时，addIfPresent 应替换并返回旧值
+        let res2 = map.addIfPresent(1, "uno")
+        @Assert(res2.isSome() && res2.getOrThrow() == "one")
+        @Assert(map.get(1).getOrThrow() == "uno")
+        @Assert(map.size, 1)
+
+        // 键不存在时仍不插入
+        let res3 = map.addIfPresent(2, "two")
+        @Assert(res3.isNone())
+        @Assert(!map.contains(2))
+    }
+
+    @TestCase
+    public func test_removeIf(): Unit {
+        let map = ConcurrentSkipListMap<Int64, Int64>()
+        for (i in 0..10) {
+            map.add(i, i)
+        }
+        // 删除所有偶数
+        map.removeIf{_, v => v % 2 == 0}
+        @Assert(map.size, 5)
+        for (i in 0..10) {
+            if (i % 2 == 0) {
+                @Assert(!map.contains(i))
+            } else {
+                @Assert(map.contains(i))
+            }
+        }
+    }
+
+    @TestCase
+    public func test_replace_with_predicate(): Unit {
+        let map = ConcurrentSkipListMap<Int64, Int64>()
+        map.add(1, 10)
+
+        // 满足条件时替换
+        let old = map.replace(1, { v => v > 5 }, { v => v * 2 })
+        @Assert(old.isSome() && old.getOrThrow() == 10)
+        @Assert(map.get(1).getOrThrow() == 20)
+
+        // 不满足条件时不替换
+        let old2 = map.replace(1, { v => v < 5 }, { v => v * 3 })
+        @Assert(old2.isNone())
+        @Assert(map.get(1).getOrThrow() == 20)
+
+        // 键不存在时返回 None
+        let old3 = map.replace(99, { _ => true }, { v => v })
+        @Assert(old3.isNone())
+    }
+
+    @TestCase
+    public func test_subscript_operators(): Unit {
+        let map = ConcurrentSkipListMap<Int64, String>()
+        // []= 设置
+        map[1] = "one"
+        map[2] = "two"
+        @Assert(map.size, 2)
+
+        // [] 获取
+        @Assert(map[1] == "one")
+        @Assert(map[2] == "two")
+
+        // []= 更新
+        map[1] = "ONE"
+        @Assert(map[1] == "ONE")
+    }
+
+    @TestCase
+    public func test_contains_all(): Unit {
+        let map = ConcurrentSkipListMap<Int64, String>()
+        map.add(1, "a")
+        map.add(2, "b")
+        map.add(3, "c")
+
+        @Assert(map.contains(all: [1, 2]))
+        @Assert(!map.contains(all: [1, 4]))
+    }
+
+    @TestCase
+    public func test_iterator_sorted_order(): Unit {
+        let map = ConcurrentSkipListMap<Int64, Int64>()
+        let keys = [5, 2, 9, 1, 7, 3, 8, 4, 6, 10]
+        for (k in keys) {
+            map.add(k, k * 10)
+        }
+
+        var prev: Int64 = -1
+        var count = 0
+        for ((k, v) in map.iterator()) {
+            @Assert(k > prev)
+            @Assert(v, k * 10)
+            prev = k
+            count += 1
+        }
+        @Assert(count, 10)
+    }
+
+    @TestCase
+    public func test_empty_map_operations(): Unit {
+        let map = ConcurrentSkipListMap<Int64, String>()
+        @Assert(map.size, 0)
+        @Assert(map.isEmpty())
+        @Assert(map.get(1).isNone())
+        @Assert(!map.contains(1))
+        @Assert(map.remove(1).isNone())
+        @Assert(map.replace(1, "x").isNone())
+        @Assert(map.addIfPresent(1, "a").isNone())
+        @Assert(map.addIfAbsent(1, "a").isNone())
+        // addIfAbsent 插入了键，需要移除以恢复空状态
+        map.remove(1)
+        // 迭代空 map
+        var count = 0
+        for ((_, _) in map.iterator()) {
+            count += 1
+        }
+        @Assert(count, 0)
+    }
+
+    @TestCase
+    public func test_clear_then_reuse(): Unit {
+        let map = ConcurrentSkipListMap<Int64, Int64>()
+        for (i in 0..50) {
+            map.add(i, i)
+        }
+        @Assert(map.size, 50)
+
+        map.clear()
+        @Assert(map.size, 0)
+        @Assert(map.isEmpty())
+
+        // clear 后重新添加
+        for (i in 100..110) {
+            map.add(i, i)
+        }
+        @Assert(map.size, 10)
+        for (i in 100..110) {
+            @Assert(map.get(i).getOrThrow() == i)
+        }
+        // 旧数据不应存在
+        @Assert(map.get(0).isNone())
+        @Assert(map.get(49).isNone())
+    }
+
+    @TestCase
+    public func test_single_key_add_remove_add(): Unit {
+        let map = ConcurrentSkipListMap<Int64, String>()
+        // add
+        let old1 = map.add(1, "first")
+        @Assert(old1.isNone())
+        @Assert(map.size, 1)
+
+        // remove
+        let removed = map.remove(1)
+        @Assert(removed.isSome() && removed.getOrThrow() == "first")
+        @Assert(map.size, 0)
+        @Assert(map.get(1).isNone())
+
+        // re-add same key
+        let old2 = map.add(1, "second")
+        @Assert(old2.isNone())
+        @Assert(map.size, 1)
+        @Assert(map.get(1).getOrThrow() == "second")
+    }
+
+    @TestCase
+    public func test_replace_nonexistent_key(): Unit {
+        let map = ConcurrentSkipListMap<Int64, Int64>()
+        @Assert(map.replace(1, 100).isNone())
+        @Assert(map.replace(1) { v => v + 1 }.isNone())
+        @Assert(map.size, 0)
+    }
+
+    @TestCase
+    public func test_put_and_putIfAbsent(): Unit {
+        let map = ConcurrentSkipListMap<Int64, String>()
+        // put 等同于 add
+        let old1 = map.put(1, "one")
+        @Assert(old1.isNone())
+        let old2 = map.put(1, "ONE")
+        @Assert(old2.isSome() && old2.getOrThrow() == "one")
+
+        // putIfAbsent 等同于 addIfAbsent
+        let res1 = map.putIfAbsent(2, "two")
+        @Assert(res1.isNone())
+        let res2 = map.putIfAbsent(2, "TWO")
+        @Assert(res2.isSome() && res2.getOrThrow() == "two")
+        @Assert(map.get(2).getOrThrow() == "two")
+    }
+
+    @TestCase
+    public func test_concurrent_addIfPresent(): Unit {
+        let map = ConcurrentSkipListMap<Int64, Int64>()
+        map.add(1, 0)
+        let threads = 20
+        let latch = SyncCounter(threads)
+        let successCount = AtomicInt64(0)
+
+        for (_ in 0..threads) {
+            spawn {
+                let res = map.addIfPresent(1, 1)
+                if (res.isSome()) {
+                    successCount.fetchAdd(1)
+                }
+                latch.dec()
+            }
+        }
+        latch.waitUntilZero()
+        // 所有线程都应成功替换（键已存在）
+        @Assert(successCount.load(), threads)
+        @Assert(map.get(1).getOrThrow() == 1)
+        @Assert(map.size, 1)
+    }
+
+    @TestCase
+    public func test_concurrent_removeIf(): Unit {
+        let map = ConcurrentSkipListMap<Int64, Int64>()
+        for (i in 0..100) {
+            map.add(i, i)
+        }
+        let latch = SyncCounter(5)
+        for (_ in 0..5) {
+            spawn {
+                map.removeIf{_, v => v % 2 == 0}
+                latch.dec()
+            }
+        }
+        latch.waitUntilZero()
+        // 所有偶数应被删除
+        for (i in 0..100) {
+            if (i % 2 == 0) {
+                @Assert(!map.contains(i))
+            }
+        }
+        @Assert(map.size >= 0)
+    }
+
+    @TestCase
+    public func test_float64_keys(): Unit {
+        let map = ConcurrentSkipListMap<Float64, String>()
+        map.add(1.5, "a")
+        map.add(0.1, "b")
+        map.add(3.14, "c")
+        map.add(-2.7, "d")
+
+        @Assert(map.size, 4)
+        @Assert(map.get(1.5).getOrThrow() == "a")
+        @Assert(map.get(-2.7).getOrThrow() == "d")
+
+        // 验证迭代顺序
+        var prev: Float64 = Float64.Min
+        for ((k, _) in map.iterator()) {
+            @Assert(k > prev)
+            prev = k
+        }
+    }
+
+    @TestCase
+    public func test_clear_single_threaded(): Unit {
+        let map = ConcurrentSkipListMap<Int64, Int64>()
+        @Assert(map.isEmpty())
+        // clear 空 map
+        map.clear()
+        @Assert(map.size, 0)
+        @Assert(map.isEmpty())
+
+        for (i in 0..100) {
+            map.add(i, i)
+        }
+        @Assert(map.size, 100)
+        map.clear()
+        @Assert(map.size, 0)
+        @Assert(map.isEmpty())
+        // 所有键都不应存在
+        for (i in 0..100) {
+            @Assert(!map.contains(i))
+        }
+    }
+
+    @TestCase
+    public func test_large_number_of_entries(): Unit {
+        let map = ConcurrentSkipListMap<Int64, Int64>()
+        let n = 5000
+        for (i in 0..n) {
+            map.add(i, i * i)
+        }
+        @Assert(map.size, n)
+        // 抽查
+        @Assert(map.get(0).getOrThrow() == 0)
+        @Assert(map.get(2500).getOrThrow() == 2500 * 2500)
+        @Assert(map.get(4999).getOrThrow() == 4999 * 4999)
+        // 删除一半
+        for (i in 0..n where i % 2 == 0) {
+            map.remove(i)
+        }
+        @Assert(map.size, n / 2)
+        @Assert(!map.contains(0))
+        @Assert(map.contains(1))
     }
 
 }

@@ -371,7 +371,8 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
 
     // 清空
     public func clear(): Unit {
-        removeIf{_, _ => true}
+        headRef.store(Node<K, V>.createHead(MAX_LEVEL))
+        size_.store(0)
     }
 
     // ---------- 查找 ----------
@@ -622,10 +623,13 @@ extend<K, V> ConcurrentSkipListMap<K, V> <: ConcurrentMap<K, V> where K <: Compa
                         helpPhysicallyRemove(node)
                         return None
                     }
-                    if (let Some(oldVal) <- currVal?.value && predicate(oldVal) && node
-                        .value
-                        .compareAndSwap(currVal, Box<V>(eval(oldVal)))) {
-                        return oldVal
+                    if (let Some(oldVal) <- currVal?.value) {
+                        if (!predicate(oldVal)) {
+                            return None
+                        }
+                        if (node.value.compareAndSwap(currVal, Box<V>(eval(oldVal)))) {
+                            return oldVal
+                        }
                     }
                 case None => return None
             }
