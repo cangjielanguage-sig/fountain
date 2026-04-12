@@ -161,7 +161,7 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
         var pred = head
         var curr = pred.next[level].load()
         while (let Some(node) <- curr) {
-            // 关键修复：使用 compare 函数比较 Option<K> 和 Some(key)
+            // 使用 compare 函数，避免直接比较 Option 与 K
             if (!isHead(node) && compare(node.key, Some(key)) == LT) {
                 pred = node
                 curr = node.next[level].load()
@@ -260,18 +260,20 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
         match (node.key) {
             case Some(k) =>
                 for (lvl in node.level..=0 : -1) {
-                    while (true) {
+                    var retries = 0
+                    while (retries < 3) {   // 最多重试 3 次，避免死循环
                         let pred = findPredecessorAtLevel(k, lvl)
                         let succ = pred.next[lvl].load()
                         match (succ) {
                             case Some(n) where refEq(n, node) =>
                                 let nodeNext = node.next[lvl].load()
                                 if (pred.next[lvl].compareAndSwap(succ, nodeNext)) {
-                                    break   // 该层摘除成功
+                                    break   // 摘除成功，进入下一层
                                 }
-                                // CAS 失败，继续循环（重新查找前驱）
+                                // CAS 失败，重试
+                                retries += 1
                             case _ =>
-                                // 该层后继不是目标节点（已被其他线程摘除），跳过此层
+                                // 该层后继不是目标节点，跳过此层
                                 break
                         }
                     }
@@ -299,7 +301,7 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
 
     // 帮助物理删除
     private func helpPhysicallyRemove(node: Node<K, V>): Unit {
-        physicallyRemove(node)   // 直接复用物理删除逻辑
+        physicallyRemove(node)
     }
 
     // 清空
@@ -351,14 +353,12 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
                                 return None
                             }
                             if (node.value.compareAndSwap(oldValOpt, None)) {
-                                physicallyRemove(node)   // 物理摘除各层指针
+                                physicallyRemove(node)
                                 size_.fetchSub(1)
                                 return Some(box.value)
                             }
-                            // CAS 失败，说明值被并发修改，重新尝试
-                            continue
+                            continue   // CAS 失败，重试
                         case None =>
-                            // 节点已被其他线程逻辑删除，帮助完成物理删除
                             physicallyRemove(node)
                             return None
                     }
@@ -373,18 +373,20 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
             let result = findNode(key)
             match (result.node) {
                 case Some(node) =>
-                    let oldVal = node.value.load()
-                    if (oldVal.isSome() && node.value.compareAndSwap(oldVal, None)) {
-                        physicallyRemove(node)      // 逻辑删除成功，物理摘除
-                        size_.fetchSub(1)
-                        return oldVal?.value
-                    } else if (oldVal.isNone()) {
-                        // 已被其他线程逻辑删除，帮助完成物理删除
+                    let oldValOpt = node.value.load()
+                    if (oldValOpt.isSome()) {
+                        if (node.value.compareAndSwap(oldValOpt, None)) {
+                            physicallyRemove(node)   // 逻辑删除成功，物理摘除
+                            size_.fetchSub(1)
+                            return oldValOpt?.value
+                        }
+                        // CAS 失败，继续重试（重新查找节点）
+                        continue
+                    } else {
+                        // 节点已被其他线程逻辑删除，帮助物理清理后返回 None
                         physicallyRemove(node)
                         return None
                     }
-                    // CAS 失败（值被并发修改），继续重试
-                    continue
                 case None => return None
             }
         }
@@ -423,7 +425,7 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
                             }
                         case None =>
                             helpPhysicallyRemove(curr)
-                            currOpt = curr.next[0].load()   // 修复：移动指针
+                            currOpt = curr.next[0].load()           // 修复：移动指针
                     }
                 case None => break
             }
