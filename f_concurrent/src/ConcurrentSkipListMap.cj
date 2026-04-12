@@ -573,7 +573,7 @@ private class EntryIterator<K, V> <: Iterator<(K, V)> where K <: Comparable<K> {
             current = node.next[0].load()
             if(let Some(v) <- node.value.load()){
                 match(node.key){
-                    case Some(k) => (k, v.value)
+                    case Some(k) => return (k, v.value)
                     case _ => continue
                 }
             }
