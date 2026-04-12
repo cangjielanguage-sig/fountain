@@ -230,11 +230,11 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
             let succ = pred.next[lvl].load()
             // 检查 pred 是否仍然有效（其后继未变且后继键仍大于等于待插入键）
             match (succ) {
-                case Some(n) =>
-                    if (!isHead(n) && compare(n.key, newNode.key) == LT) {
-                        return false  // pred 已过时
-                    }
-                case None => ()
+                    case Some(n) =>
+                        if (!isHead(n) && compare(n.key, newNode.key) != GT) {
+                            return false  // 发现重复键或前驱已过时
+                        }
+                    case None => ()
             }
             newNode.next[lvl].store(succ)
             if (pred.next[lvl].compareAndSwap(succ, Some(newNode))) {
@@ -291,7 +291,9 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
                     case None => return
                 }
                 doRemoveEachLevel(k, node, result)
-            case _ => tryRemoveNode(node)
+            case _ => 
+                // 不应删除头节点，直接返回
+                return
         }
     }
 
@@ -398,13 +400,17 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
                     let valOpt = curr.value.load()
                     match (valOpt) {
                         case Some(box) =>
-                            match(curr.key){
+                            match (curr.key) {
                                 case Some(k) =>
                                     if (predicate(k, box.value)) {
                                         if (tryRemoveNode(curr)) {
+                                            // 删除成功，pred 不变，继续从 pred 的下一个开始
                                             currOpt = pred.next[0].load()
                                             continue
                                         }
+                                        // 删除失败（被其他线程抢先），帮助物理删除并移动到下一个
+                                        helpPhysicallyRemove(curr)
+                                        currOpt = curr.next[0].load()   // 关键修改：移动到原 curr 的下一个
                                         continue
                                     } else {
                                         pred = curr
@@ -414,7 +420,8 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
                             }
                         case None =>
                             helpPhysicallyRemove(curr)
-                            pred = curr
+                            // 关键修改：pred 保持不变（因 curr 已被逻辑删除，不应将 pred 更新为无效节点），
+                            // 但 currOpt 必须移动到原 curr 的下一个，否则死循环
                             currOpt = curr.next[0].load()
                     }
                 case None =>
