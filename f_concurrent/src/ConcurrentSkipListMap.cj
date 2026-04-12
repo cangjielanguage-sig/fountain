@@ -219,17 +219,10 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
                             let pred = findPredecessorAtLevel(key, lvl)
                             // 快速检查：若后继存在同键节点且非自身，直接放弃本层及更高层
                             let succ = pred.next[lvl].load()
-                            match (succ) {
-                                case Some(n) where !isHead(n) && compare(n.key, newNode.key) == EQ && !refEq(n, newNode) =>
-                                    // 发现冲突，跳出当前层的重试循环
-                                    break
-                                case _ => ()
-                            }
                             // 若已因冲突跳出，则终止整个高层插入过程
-                            if (let Some(n) <- succ where !isHead(n) && compare(n.key, newNode.key) == EQ && !refEq(n, newNode)) {
+                            if (let Some(n) <- succ && !isHead(n) && compare(n.key, newNode.key) == EQ && !refEq(n, newNode)) {
                                 break
-                            }
-                            if (tryInsertAtLevel(newNode, lvl, pred)) {
+                            }else if (tryInsertAtLevel(newNode, lvl, pred)) {
                                 inserted = true
                             }
                             // 若 tryInsertAtLevel 返回 false，继续重试本层

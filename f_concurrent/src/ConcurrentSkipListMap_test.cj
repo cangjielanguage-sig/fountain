@@ -463,7 +463,7 @@ public class ConcurrentSkipListMap_test {
         @Assert(map.isEmpty())
     }
 
-    // ========== 4. 特定 Bug 暴露测试 ==========
+    // ========== 4. 特定 Bug 暴露测试，预期失败 ==========
     @TestCase
     public func test_no_duplicate_keys_under_high_concurrency(): Unit {
         // 暴露重复键 bug（用例42）
@@ -488,7 +488,7 @@ public class ConcurrentSkipListMap_test {
                 count += 1
             } 
         }
-        @Assert(count != 1)
+        @Expect(count, 1)
     }
 
     @TestCase
