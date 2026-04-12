@@ -161,12 +161,6 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
         var pred = head
         var curr = pred.next[level].load()
         while (let Some(node) <- curr) {
-            // 若当前节点已被逻辑删除，尝试物理摘除，并继续前进
-            if (node.value.load().isNone()) {
-                helpPhysicallyRemove(node)
-                curr = pred.next[level].load()   // 重新加载后继（可能已被改变）
-                continue
-            }
             if (!isHead(node) && node.key < key) {
                 pred = node
                 curr = node.next[level].load()
@@ -234,23 +228,21 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
     private func tryInsertAtLevel(newNode: Node<K, V>, lvl: Int64, pred: Node<K, V>): Bool {
         while (true) {
             let succ = pred.next[lvl].load()
+            // 检查 pred 是否仍然有效（其后继未变且后继键仍大于等于待插入键）
             match (succ) {
-                case Some(n) =>
-                    // 如果后继已被逻辑删除，返回 false 触发重试（帮助清理）
-                    if (n.value.load().isNone()) {
-                        helpPhysicallyRemove(n)
-                        return false
-                    }
-                    if (!isHead(n) && compare(n.key, newNode.key) != GT) {
-                        return false
-                    }
-                case None => ()
+                    case Some(n) =>
+                        if (!isHead(n) && compare(n.key, newNode.key) != GT) {
+                            return false  // 发现重复键或前驱已过时
+                        }
+                    case None => ()
             }
             newNode.next[lvl].store(succ)
             if (pred.next[lvl].compareAndSwap(succ, Some(newNode))) {
                 return true
             }
+            // CAS 失败，继续循环重试
         }
+        // 逻辑上永远不会执行到这里，但编译器需要一个返回值
         return false
     }
 
@@ -324,13 +316,8 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
 
     // 帮助物理删除
     private func helpPhysicallyRemove(node: Node<K, V>): Unit {
-        if (node.value.load().isNone() && !node.isHead) {
-            match (node.key) {
-                case Some(k) => 
-                    let result = findNode(k)
-                    doRemoveEachLevel(k, node, result)
-                case None => () // 头节点忽略
-            }
+        if (node.value.load().isNone()) {
+            physicallyRemove(node)
         }
     }
 
@@ -447,15 +434,18 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
     private func doRemoveEachLevel(key: K, node: Node<K, V>, result: FindResult<K, V>) {
         for (lvl in node.level..=0 : -1) {
             while (true) {
-                let pred = findPredecessorAtLevel(key, lvl)
+                let pred = result.preds[lvl].getOrThrow()
                 let succ = pred.next[lvl].load()
                 match (succ) {
                     case Some(n) where refEq(n, node) =>
+                        // 该层后继是目标节点，尝试摘除
                         let nodeNext = node.next[lvl].load()
                         if (pred.next[lvl].compareAndSwap(succ, nodeNext)) {
-                            break
+                            break   // 摘除成功，进入下一层
                         }
+                        // CAS 失败，说明 pred 或 succ 被其他线程修改，继续循环重试
                     case _ =>
+                        // 该层后继不是目标节点（可能已被其他线程摘除或从未插入），跳过此层
                         break
                 }
             }
