@@ -502,11 +502,14 @@ public class ConcurrentSkipListMap_test {
         for (_ in 0..threads) {
             spawn {
                 for (i in 0..iterations) {
-                    if (i % 2 == 0) {
-                        map.add(i, i)
-                    } else {
-                        map.remove(i - 1)
-                    }
+                    // if (i % 2 == 0) {
+                    //     map.add(i, i)
+                    // } else {
+                    //     map.remove(i - 1)
+                    // }
+
+                    map.add(i,i)
+                    map.remove(i)
                 }
                 latch.dec()
             }
