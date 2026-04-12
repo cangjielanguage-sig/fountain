@@ -28,6 +28,7 @@ class Node<K, V> where K <: Comparable<K> {
     public let value: AtomicOptionReference<Box<V>>
     public let next: Array<AtomicOptionReference<Node<K, V>>>
     public let level: Int64
+    public let isHead: Bool   // 是否为头哨兵节点
 
     init(key: K, value: ?V, level: Int64) {
         this.key = key
@@ -73,7 +74,7 @@ class FindResult<K, V> where K <: Comparable<K> {
 
 public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
     let MAX_LEVEL: Int64 = 16
-    var head: Node<K, V>
+    var headRef: AtomicReference<Node<K, V>>
     var size_: AtomicInt64
 
     private static func compare(a: ?K, b: ?K): Ordering {
@@ -87,10 +88,12 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
 
     public init() {
         // 创建头哨兵节点（键为占位值，比较时特殊处理）
-        this.head = Node<K, V>.createHead(MAX_LEVEL)
+        this.headRef = AtomicReference(Node<K, V>.createHead(MAX_LEVEL))
         this.size_ = AtomicInt64(0)
     }
-
+    prop head: Node<K, V> {
+        get() { headRef.load() }
+    }
     private func randomLevel(): Int64 {
         var level: Int64 = 0
         while (Random().nextFloat64() < 0.5 && level < MAX_LEVEL) {
@@ -141,51 +144,136 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
         }
         return FindResult(None, preds, succs)
     }
-
-    // ---------- 插入/更新 ----------
+// ---------- 插入/更新 ----------
     public func add(key: K, value: V): Option<V> {
         while (true) {
             let result = findNode(key)
             match (result.node) {
                 case Some(node) =>
                     let oldVal = node.value.load()
-                    if (node.value.compareAndSwap(oldVal, Some(Box<V>(value)))) {
+                    if (node.value.compareAndSwap(oldVal, Some(Box(value)))) {
                         return oldVal?.value
                     }
-                // CAS 失败，重试
                 case None =>
                     let level = randomLevel()
-                    let newNode = Node<K, V>(key, value, level)
-
+                    let newNode = Node(key, value, level)
+                    // 先链接底层（level 0）再向上链接，但必须保证所有层都成功
+                    var success = true
                     for (lvl in 0..=level) {
-                        while (true) {
-                            let pred = result.preds[lvl].getOrThrow()
-                            let succ = pred.next[lvl].load()
-
-                            // 验证 pred 是否仍然指向预期的后继
-                            if (let Some(node) <- succ && !isHead(node) && compare(node.key, key) == LT) {
-                                break // pred 已过期，重新查找外层
-                            }
-
-                            let currentSucc = pred.next[lvl].load()
-                            match((succ?.key, currentSucc?.key)){
-                                case (Some(x), Some(y)) where compare(x, y) != EQ => continue
-                                case (Some(_), None) | (None, Some(_)) => continue
-                                case _ => ()
-                            }
-
-                            newNode.next[lvl].store(succ)
-                            if (pred.next[lvl].compareAndSwap(succ, Some(newNode))) {
-                                break // 当前层插入成功
-                            }
+                        if (!tryInsertAtLevel(newNode, lvl, result.preds[lvl].getOrThrow())) {
+                            success = false
+                            break
                         }
                     }
-
-                    size_.fetchAdd(1)
-                    return None
+                    if (success) {
+                        size_.fetchAdd(1)
+                        return None
+                    }
+                    // 否则重试整个插入过程
             }
         }
         None<V>
+    }
+
+    private func tryInsertAtLevel(newNode: Node<K, V>, lvl: Int64, pred: Node<K, V>): Bool {
+        while (true) {
+            let succ = pred.next[lvl].load()
+            // 检查 pred 是否仍然有效（其后继未变且后继键仍大于等于待插入键）
+            match (succ) {
+                case Some(n) =>
+                    if (!isHead(n) && compare(n.key, newNode.key) == LT) {
+                        return false  // pred 已过时
+                    }
+                case None => ()
+            }
+            newNode.next[lvl].store(succ)
+            if (pred.next[lvl].compareAndSwap(succ, Some(newNode))) {
+                return true
+            }
+            // CAS 失败，继续循环重试
+        }
+        // 逻辑上永远不会执行到这里，但编译器需要一个返回值
+        return false
+    }
+
+    // ---------- 仅当键不存在时插入 ----------
+    public func addIfAbsent(key: K, value: V): Option<V> {
+        while (true) {
+            match (get(key)) {
+                case Some(v) => return Some(v)
+                case None =>
+                    let prev = add(key, value)
+                    if (prev.isNone()) {
+                        return None
+                    }
+                    // 插入失败说明键刚好被其他线程插入，返回现有值
+                    return get(key)
+            }
+        }
+        None<V>
+    }
+
+    // ---------- 删除 ----------
+    public func remove(key: K): Option<V> {
+        while (true) {
+            let result = findNode(key)
+            match (result.node) {
+                case Some(node) =>
+                    let oldVal = node.value.load()
+                    if (node.value.compareAndSwap(oldVal, None)) {
+                        // 物理删除
+                        physicallyRemove(node)
+                        size_.fetchSub(1)
+                        return oldVal?.value
+                    }
+                case None => return None
+            }
+        }
+        None<V>
+    }
+
+    // 物理删除（内部自动查找前驱）
+    private func physicallyRemove(node: Node<K, V>): Unit {
+        let key = node.key
+        let result = findNode(key)
+        match (result.node) {
+            case Some(n) =>
+                if (!refEq(n, node)) {
+                    return
+                }
+            case None => return
+        }
+        doRemoveEachLevel(key, node, result)
+    }
+
+    // 尝试删除节点
+    private func tryRemoveNode(node: Node<K, V>): Bool {
+        let oldValOpt = node.value.load()
+        match (oldValOpt) {
+            case Some(v) =>
+                if (!node.value.compareAndSwap(oldValOpt, Option.None)) {
+                    return false
+                }
+                physicallyRemove(node)
+                size_.fetchSub(1)
+                return true
+            case None =>
+                physicallyRemove(node)
+                return false
+        }
+    }
+
+    // 帮助物理删除
+    private func helpPhysicallyRemove(node: Node<K, V>): Unit {
+        if (node.value.load().isNone()) {
+            physicallyRemove(node)
+        }
+    }
+
+    // ---------- 清空 ----------
+    public func clear(): Unit {
+        headRef.store(Node<K, V>.createHead(MAX_LEVEL))
+        size_.store(0)
     }
 
     // ---------- 查找 ----------
@@ -219,43 +307,6 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
         return None
     }
 
-    // ---------- 删除 ----------
-    public func remove(key: K): Option<V> {
-        while (true) {
-            let result = findNode(key)
-            match (result.node) {
-                case Some(node) =>
-                    let oldVal = node.value.load()
-                    if (node.value.compareAndSwap(oldVal, None)) {
-                        // 物理删除：从各层链表中摘除
-                        for (lvl in node.level..=0 : -1) {
-                            while (true) {
-                                let pred = result.preds[lvl].getOrThrow()
-                                let succ = pred.next[lvl].load()
-
-                                match (succ) {
-                                    case Some(n) =>
-                                        if (!isHead(n) && n.key < key) {
-                                            break
-                                        }
-                                    case None => ()
-                                }
-
-                                let nodeNext = node.next[lvl].load()
-                                if (pred.next[lvl].compareAndSwap(succ, nodeNext)) {
-                                    break
-                                }
-                            }
-                        }
-                        size_.fetchSub(1)
-                        return oldVal?.value
-                    }
-                // CAS 失败，重试
-                case None => return None
-            }
-        }
-        None<V>
-    }
     public func remove(key: K, predicate: (V) -> Bool): Option<V> {
         while (true) {
             let result = findNode(key)
@@ -273,25 +324,7 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
                             // 满足谓词，尝试逻辑删除
                             if (node.value.compareAndSwap(oldValOpt, Option.None)) {
                                 // 物理删除：从各层链表中摘除
-                                for (lvl in (node.level)..=0) {
-                                    while (true) {
-                                        let pred = result.preds[lvl].getOrThrow()
-                                        let succ = pred.next[lvl].load()
-
-                                        match (succ) {
-                                            case Some(n) =>
-                                                if (!isHead(n) && n.key < key) {
-                                                    break
-                                                }
-                                            case None => ()
-                                        }
-
-                                        let nodeNext = node.next[lvl].load()
-                                        if (pred.next[lvl].compareAndSwap(succ, nodeNext)) {
-                                            break
-                                        }
-                                    }
-                                }
+                                doRemoveEachLevel(key, node, result)
                                 size_.fetchSub(1)
                                 return Option.Some(box.value)
                             }
@@ -327,7 +360,7 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
                         case Some(box) =>
                             if (predicate(curr.key, box.value)) {
                                 // 尝试删除当前节点
-                                if (tryRemoveNode(curr, pred)) {
+                                if (tryRemoveNode(curr)) {
                                     // 删除成功，curr 已从链表中摘除，currOpt 更新为 pred 的后继
                                     currOpt = pred.next[0].load()
                                     continue
@@ -342,7 +375,7 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
                             }
                         case None =>
                             // 节点已被其他线程逻辑删除，帮助其物理删除并跳过
-                            helpPhysicallyRemove(curr, pred)
+                            helpPhysicallyRemove(curr)
                             pred = curr
                             currOpt = curr.next[0].load()
                     }
@@ -353,52 +386,9 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
         }
     }
 
-    // 尝试删除指定节点（调用者保证该节点当前未被逻辑删除）
-    // 返回 true 表示删除成功，false 表示因并发冲突需要重试
-    private func tryRemoveNode(node: Node<K, V>, pred: Node<K, V>): Bool {
-        let oldValOpt = node.value.load()
-        match (oldValOpt) {
-            case Some(v) =>
-                // 尝试逻辑删除
-                if (!node.value.compareAndSwap(oldValOpt, Option.None)) {
-                    return false
-                }
-                // 逻辑删除成功，进行物理删除
-                physicallyRemove(node, pred)
-                size_.fetchSub(1)
-                return true
-            case None =>
-                // 节点已被逻辑删除（可能在我们检查后发生），帮助物理删除
-                physicallyRemove(node, pred)
-                return false
-        }
-    }
-
-    // 帮助完成物理删除（可由多个线程并发执行）
-    private func helpPhysicallyRemove(node: Node<K, V>, pred: Node<K, V>): Unit {
-        // 仅当节点值确实为 None 时才进行物理摘除
-        if (node.value.load().isNone()) {
-            physicallyRemove(node, pred)
-        }
-    }
-
-    // 物理删除：将节点从各层链表中摘除
-    // 为提高效率，这里重新调用 findNode 获取各层最新前驱，以确保彻底摘除
-    private func physicallyRemove(node: Node<K, V>, knownPred: Node<K, V>): Unit {
-        let key = node.key
-        // 重新查找以获取各层精确前驱（findNode 是 O(log N) 操作）
-        let result = findNode(key)
-        // 如果节点已不在链表中（findNode 返回的 node 不是它），说明已被其他线程摘除
-        match (result.node) {
-            case Some(n) =>
-                if (!refEq(n, node)) {
-                    return
-                }
-            case None => return
-        }
-
-        // 逐层摘除
-        for (lvl in (node.level)..=0) {
+    // 逐层摘除
+    private func doRemoveEachLevel(key: K, node: Node<K, V>, result: FindResult<K, V>){
+        for (lvl in node.level..=0: -1) {
             while (true) {
                 let pred = result.preds[lvl].getOrThrow()
                 let succ = pred.next[lvl].load()
@@ -418,9 +408,8 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
             }
         }
     }
-
     // ---------- 辅助方法 ----------
-    public func containsKey(key: K): Bool {
+    public func contains(key: K): Bool {
         return get(key).isSome()
     }
 
@@ -461,10 +450,8 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
 
 // Map 接口要求的方法
 extend<K, V> ConcurrentSkipListMap<K, V> <: ConcurrentMap<K, V> where K <: Comparable<K> {
-    public func clear(): Unit {
-        // 简单实现：重新初始化头节点
-        this.head = Node<K, V>(unsafeZeroValue<K>(), None<V>, MAX_LEVEL)
-        this.size_.store(0)
+    public func putIfAbsent(key: K, value: V): ?V {
+        addIfAbsent(key, value)
     }
     public func contains(all!: Collection<K>): Bool {
         for (k in all where !contains(k)) {
@@ -490,29 +477,6 @@ extend<K, V> ConcurrentSkipListMap<K, V> <: ConcurrentMap<K, V> where K <: Compa
         for ((k, v) in all) {
             add(k, v)
         }
-    }
-    // 仅当键不存在时插入
-    public func addIfAbsent(key: K, value: V): Option<V> {
-        while (true) {
-            let result = findNode(key)
-            match (result.node) {
-                case Some(node) => return node.value.load()?.value
-                case None =>
-                    let prev = add(key, value)
-                    if (prev.isNone()) {
-                        return None
-                    }
-                    // 插入失败（键刚好被其他线程插入），返回现有值
-                    return get(key)
-            }
-        }
-        None<V>
-    }
-    public func putIfAbsent(key: K, value: V): Option<V> {
-        addIfAbsent(key, value)
-    }
-    public func contains(key: K): Bool {
-        findNode(key).node.isSome()
     }
 
     // 无条件替换
