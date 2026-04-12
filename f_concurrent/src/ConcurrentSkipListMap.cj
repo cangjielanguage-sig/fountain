@@ -187,8 +187,12 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
                     match(mode){
                         case Anyway | IfPresent => 
                             if (node.value.compareAndSwap(oldVal, genbox())) {
+                                // 🔧 修复：如果旧值为 None，说明节点之前被逻辑删除，需补偿计数
+                                if (oldVal.isNone()) {
+                                    size_.fetchAdd(1)
+                                }
                                 return oldVal?.value
-                            }else if(mode == IfPresent){
+                            } else if(mode == IfPresent){
                                 continue
                             }
                         case IfAbsent => return oldVal?.value
@@ -227,23 +231,38 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
     }
 
     private func tryInsertAtLevel(newNode: Node<K, V>, lvl: Int64, pred: Node<K, V>): Bool {
+        var currentPred = pred   // 使用可变局部变量，以便在循环内推进
         while (true) {
-            let succ = pred.next[lvl].load()
-            // 检查 pred 是否仍然有效（其后继未变且后继键仍大于等于待插入键）
+            let succ = currentPred.next[lvl].load()
             match (succ) {
-                    case Some(n) =>
-                        if (!isHead(n) && compare(n.key, newNode.key) != GT) {
-                            return false  // 发现重复键或前驱已过时
+                case Some(n) =>
+                    if (!isHead(n)) {
+                        let cmp = compare(n.key, newNode.key)
+                        if (cmp == LT) {
+                            // 后继键严格小于新键，说明前驱已过时
+                            return false
+                        } else if (cmp == EQ) {
+                            // 发现相同键的节点
+                            if (refEq(n, newNode)) {
+                                // 已经插入过了
+                                return true
+                            } else {
+                                // 遇到其他同键节点（例如已逻辑删除的残留），跳过它继续尝试
+                                currentPred = n
+                                continue
+                            }
                         }
-                    case None => ()
+                        // cmp == GT：后继键大于新键，可以尝试插入
+                    }
+                case None => ()
             }
             newNode.next[lvl].store(succ)
-            if (pred.next[lvl].compareAndSwap(succ, Some(newNode))) {
+            if (currentPred.next[lvl].compareAndSwap(succ, Some(newNode))) {
                 return true
             }
-            // CAS 失败，继续循环重试
+            // CAS 失败，继续循环（succ 会被重新加载）
         }
-        // 逻辑上永远不会执行到这里，但编译器需要一个返回值
+        // 逻辑上不可达，但满足编译器要求
         return false
     }
 
