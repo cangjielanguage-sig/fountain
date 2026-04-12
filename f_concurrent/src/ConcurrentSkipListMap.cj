@@ -187,7 +187,7 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
                     match(mode){
                         case Anyway | IfPresent => 
                             if (node.value.compareAndSwap(oldVal, genbox())) {
-                                // 🔧 修复：如果旧值为 None，说明节点之前被逻辑删除，需补偿计数
+                                // 若旧值为 None，说明节点之前被逻辑删除，需补偿计数
                                 if (oldVal.isNone()) {
                                     size_.fetchAdd(1)
                                 }
@@ -217,7 +217,26 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
                         var inserted = false
                         while (!inserted) {
                             let pred = findPredecessorAtLevel(key, lvl)
-                            inserted = tryInsertAtLevel(newNode, lvl, pred)
+                            // 快速检查：若后继存在同键节点且非自身，直接放弃本层及更高层
+                            let succ = pred.next[lvl].load()
+                            match (succ) {
+                                case Some(n) where !isHead(n) && compare(n.key, newNode.key) == EQ && !refEq(n, newNode) =>
+                                    // 发现冲突，跳出当前层的重试循环
+                                    break
+                                case _ => ()
+                            }
+                            // 若已因冲突跳出，则终止整个高层插入过程
+                            if (let Some(n) <- succ where !isHead(n) && compare(n.key, newNode.key) == EQ && !refEq(n, newNode)) {
+                                break
+                            }
+                            if (tryInsertAtLevel(newNode, lvl, pred)) {
+                                inserted = true
+                            }
+                            // 若 tryInsertAtLevel 返回 false，继续重试本层
+                        }
+                        // 如果本层未插入成功（因冲突跳出），则停止继续插入更高层
+                        if (!inserted) {
+                            break
                         }
                     }
                     return None
@@ -231,7 +250,7 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
     }
 
     private func tryInsertAtLevel(newNode: Node<K, V>, lvl: Int64, pred: Node<K, V>): Bool {
-        var currentPred = pred   // 使用可变局部变量，以便在循环内推进
+        var currentPred = pred
         while (true) {
             let succ = currentPred.next[lvl].load()
             match (succ) {
@@ -239,20 +258,19 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
                     if (!isHead(n)) {
                         let cmp = compare(n.key, newNode.key)
                         if (cmp == LT) {
-                            // 后继键严格小于新键，说明前驱已过时
+                            // 后继键严格小于新键，前驱已过时，需重新查找
                             return false
                         } else if (cmp == EQ) {
                             // 发现相同键的节点
                             if (refEq(n, newNode)) {
-                                // 已经插入过了
+                                // 是当前节点本身，说明已插入成功
                                 return true
                             } else {
-                                // 遇到其他同键节点（例如已逻辑删除的残留），跳过它继续尝试
-                                currentPred = n
-                                continue
+                                // 冲突：存在另一个同键节点，插入失败
+                                return false
                             }
                         }
-                        // cmp == GT：后继键大于新键，可以尝试插入
+                        // cmp == GT，后继键大于新键，可以尝试插入
                     }
                 case None => ()
             }
@@ -262,7 +280,6 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
             }
             // CAS 失败，继续循环（succ 会被重新加载）
         }
-        // 逻辑上不可达，但满足编译器要求
         return false
     }
 
