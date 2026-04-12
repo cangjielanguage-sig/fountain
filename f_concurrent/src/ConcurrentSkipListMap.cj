@@ -254,46 +254,11 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
         add(IfPresent, key){value}
     }
 
-    // ---------- 删除 ----------
-    public func remove(key: K): Option<V> {
-        while (true) {
-            let result = findNode(key)
-            match (result.node) {
-                case Some(node) =>
-                    let oldVal = node.value.load()
-                    // 仅当值存在时才尝试删除，避免对已逻辑删除的节点重复操作
-                    if (oldVal.isSome() && node.value.compareAndSwap(oldVal, None)) {
-                        // 物理删除
-                        physicallyRemove(node)
-                        size_.fetchSub(1)
-                        return oldVal?.value
-                    } else if (oldVal.isNone()) {
-                        // 节点已被其他线程逻辑删除
-                        return None
-                    }
-                    // CAS 失败（值被并发修改），继续重试
-                case None => return None
-            }
-        }
-        None<V>
-    }
-
     // 物理删除（内部自动查找前驱）
     private func physicallyRemove(node: Node<K, V>): Unit {
-        match(node.key){
-            case Some(k) =>
-                let result = findNode(k)
-                match (result.node) {
-                    case Some(n) =>
-                        if (!refEq(n, node)) {
-                            return
-                        }
-                    case None => return
-                }
-                doRemoveEachLevel(k, node, result)
-            case _ => 
-                // 不应删除头节点，直接返回
-                return
+        match(node.key) {
+            case Some(k) => doRemoveEachLevel(k, node)
+            case _ => return
         }
     }
 
@@ -363,22 +328,50 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
             let result = findNode(key)
             match (result.node) {
                 case Some(node) =>
-                    let oldValOpt = node.value.load()
-                    match (oldValOpt) {
+                    let oldVal = node.value.load()
+                    match (oldVal) {
                         case Some(box) =>
                             if (!predicate(box.value)) {
                                 return Option.None
-                            }
-                            if (node.value.compareAndSwap(oldValOpt, Option.None)) {
-                                doRemoveEachLevel(key, node, result)
+                            } else if (node.value.compareAndSwap(oldVal, None)) {
+                                physicallyRemove(node)      // 逻辑删除成功，物理删除
                                 size_.fetchSub(1)
-                                return Option.Some(box.value)
+                                return box.value
                             }
+                            // CAS 失败，重新查找节点（可能已被其他线程修改）
+                            continue
                         case None =>
+                            // 节点已被逻辑删除，帮助完成物理删除
+                            physicallyRemove(node)
                             return Option.None
                     }
                 case None =>
                     return Option.None
+            }
+        }
+        None<V>
+    }
+        // ---------- 删除 ----------
+    public func remove(key: K): Option<V> {
+        while (true) {
+            let result = findNode(key)
+            match (result.node) {
+                case Some(node) =>
+                    let oldVal = node.value.load()
+                    if (oldVal.isSome()) {
+                        if (node.value.compareAndSwap(oldVal, None)) {
+                            physicallyRemove(node)      // 逻辑删除成功，物理删除
+                            size_.fetchSub(1)
+                            return oldVal?.value
+                        }
+                        // CAS 失败，重新查找节点（可能已被其他线程修改）
+                        continue
+                    } else {
+                        // 节点已被逻辑删除，帮助完成物理删除
+                        physicallyRemove(node)
+                        return None
+                    }
+                case None => return None
             }
         }
         None<V>
@@ -431,22 +424,21 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
     }
 
     // 物理删除（逐层摘除）
-    private func doRemoveEachLevel(key: K, node: Node<K, V>, result: FindResult<K, V>) {
+    private func doRemoveEachLevel(key: K, node: Node<K, V>) {
         for (lvl in node.level..=0 : -1) {
             while (true) {
-                let pred = result.preds[lvl].getOrThrow()
+                // 实时查找当前层的前驱节点
+                let pred = findPredecessorAtLevel(key, lvl)
                 let succ = pred.next[lvl].load()
                 match (succ) {
                     case Some(n) where refEq(n, node) =>
-                        // 该层后继是目标节点，尝试摘除
                         let nodeNext = node.next[lvl].load()
                         if (pred.next[lvl].compareAndSwap(succ, nodeNext)) {
-                            break   // 摘除成功，进入下一层
+                            break   // 该层摘除成功
                         }
-                        // CAS 失败，说明 pred 或 succ 被其他线程修改，继续循环重试
+                        // CAS 失败，继续循环，重新获取 pred
                     case _ =>
-                        // 该层后继不是目标节点（可能已被其他线程摘除或从未插入），跳过此层
-                        break
+                        break   // 该层后继不是目标节点，跳过此层
                 }
             }
         }
