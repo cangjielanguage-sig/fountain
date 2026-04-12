@@ -24,16 +24,16 @@ import fountain::f_base.*
 
 // 跳表节点：键值对 + 多层前向指针
 class Node<K, V> where K <: Comparable<K> {
-    public let key: K
+    public let key: ?K
     public let value: AtomicOptionReference<Box<V>>
     public let next: Array<AtomicOptionReference<Node<K, V>>>
     public let level: Int64
     public let isHead: Bool   // 是否为头哨兵节点
 
-    init(key: K, value: ?V, level: Int64) {
+    init(key: K, valbox: ?Box<V>, level: Int64) {
         this.key = key
-        this.value = AtomicOptionReference<Box<V>>(if (let Some(x) <- value) {
-            Box<V>(x)
+        this.value = AtomicOptionReference<Box<V>>(if (let Some(x) <- valbox) {
+            x
         } else {
             None
         })
@@ -41,24 +41,36 @@ class Node<K, V> where K <: Comparable<K> {
         this.next = Array<AtomicOptionReference<Node<K, V>>>(level + 1) {
             _ => AtomicOptionReference<Node<K, V>>()
         }
+        this.isHead = false
     }
 
     // 仅用于创建头节点的特殊构造器，key 为占位值
-    private init(headKey: K, level: Int64) {
-        this.key = headKey
+    private init(level: Int64) {
+        this.key = None<K>
         this.value = AtomicOptionReference<Box<V>>()
         this.level = level
         this.next = Array<AtomicOptionReference<Node<K, V>>>(level + 1) {
             _ => AtomicOptionReference<Node<K, V>>()
         }
+        this.isHead = true
     }
-
     public static func createHead(level: Int64): Node<K, V> {
-        // 使用全零值占位（实际比较逻辑会跳过对头节点的键比较）
-        return Node<K, V>(unsafeZeroValue<K>(), level)
+        // 使用全零值占位（实际比较逻辑会通过 isHead 跳过）
+        return Node<K, V>(level)
     }
 }
+enum AddMode{
+    | Anyway
+    | IfAbsent
+    | IfPresent
 
+    public operator func ==(mode: AddMode): Bool {
+        match((this, mode)){
+            case (Anyway, Anyway) | (IfAbsent, IfAbsent) | (IfPresent, IfPresent) => true
+            case _ => false
+        }
+    }
+}
 // 查找结果：包含找到的节点及每层前驱/后继
 class FindResult<K, V> where K <: Comparable<K> {
     public var node: Option<Node<K, V>>
@@ -73,15 +85,16 @@ class FindResult<K, V> where K <: Comparable<K> {
 }
 
 public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
+    private let zeroValue: K = unsafeZeroValue<K>()
     let MAX_LEVEL: Int64 = 16
     var headRef: AtomicReference<Node<K, V>>
     var size_: AtomicInt64
 
     private static func compare(a: ?K, b: ?K): Ordering {
         match((a, b)){
-            case (Some(x), Some(v)) => x.compare(v)
-            case (None, Some(_)) => LT
-            case (Some(_), None) => GT
+            case (Some(x), Some(y)) => x.compare(y)
+            case (None, Some(y)) => LT
+            case (Some(x), None) => GT
             case _ => EQ
         }
     }
@@ -89,7 +102,7 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
     public init() {
         // 创建头哨兵节点（键为占位值，比较时特殊处理）
         this.headRef = AtomicReference(Node<K, V>.createHead(MAX_LEVEL))
-        this.size_ = AtomicInt64(0)
+        this.size_ = AtomicInt64(0)   // 初始化计数器
     }
     prop head: Node<K, V> {
         get() { headRef.load() }
@@ -102,10 +115,9 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
         return level
     }
 
-    // 判断一个节点是否为头哨兵（头节点键视为 -∞）
+    // 判断一个节点是否为头哨兵
     private func isHead(node: Node<K, V>): Bool {
-        // 头节点是唯一的且 level == MAX_LEVEL
-        return node.level == MAX_LEVEL
+        node.isHead
     }
 
     // 核心查找：返回目标节点及其各层前驱/后继
@@ -144,35 +156,73 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
         }
         return FindResult(None, preds, succs)
     }
-// ---------- 插入/更新 ----------
-    public func add(key: K, value: V): Option<V> {
+    // 查找指定层的前驱节点（从 head 开始）
+    private func findPredecessorAtLevel(key: K, level: Int64): Node<K, V> {
+        var pred = head
+        var curr = pred.next[level].load()
+        while (let Some(node) <- curr) {
+            if (!isHead(node) && node.key < key) {
+                pred = node
+                curr = node.next[level].load()
+            } else {
+                break
+            }
+        }
+        return pred
+    }
+    private func add(mode: AddMode, key: K, valfn: () -> V): ?V {
+        var valbox = None<Box<V>>
+        func genbox(){
+            if(valbox.isNone()){
+                valbox = Box<V>(valfn())
+            }
+            valbox
+        }
         while (true) {
             let result = findNode(key)
             match (result.node) {
                 case Some(node) =>
                     let oldVal = node.value.load()
-                    if (node.value.compareAndSwap(oldVal, Some(Box(value)))) {
-                        return oldVal?.value
+                    match(mode){
+                        case Anyway | IfPresent => 
+                            if (node.value.compareAndSwap(oldVal, genbox())) {
+                                return oldVal?.value
+                            }else if(mode == IfPresent){
+                                continue
+                            }
+                        case IfAbsent => return oldVal?.value
                     }
+                case None where mode == IfPresent => return None
                 case None =>
                     let level = randomLevel()
-                    let newNode = Node(key, value, level)
-                    // 先链接底层（level 0）再向上链接，但必须保证所有层都成功
-                    var success = true
-                    for (lvl in 0..=level) {
-                        if (!tryInsertAtLevel(newNode, lvl, result.preds[lvl].getOrThrow())) {
-                            success = false
+                    let newNode = Node(key, genbox(), level)
+                    // 1) 先插入底层（level 0）
+                    if (!tryInsertAtLevel(newNode, 0, result.preds[0].getOrThrow())) {
+                        continue   // 底层插入失败，重试整个 add
+                    }
+                    // 底层插入成功，增加计数
+                    size_.fetchAdd(1)
+
+                    // 2) 插入更高层（尽力而为，失败则重试该层）
+                    for (lvl in 1..=level) {
+                        // 如果节点已被逻辑删除，则放弃高层插入
+                        if (newNode.value.load().isNone()) {
                             break
                         }
+                        var inserted = false
+                        while (!inserted) {
+                            let pred = findPredecessorAtLevel(key, lvl)
+                            inserted = tryInsertAtLevel(newNode, lvl, pred)
+                        }
                     }
-                    if (success) {
-                        size_.fetchAdd(1)
-                        return None
-                    }
-                    // 否则重试整个插入过程
+                    return None
             }
         }
         None<V>
+    }
+    // 插入/更新
+    public func add(key: K, value: V): Option<V> {
+        add(Anyway, key){value}
     }
 
     private func tryInsertAtLevel(newNode: Node<K, V>, lvl: Int64, pred: Node<K, V>): Bool {
@@ -198,19 +248,10 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
 
     // ---------- 仅当键不存在时插入 ----------
     public func addIfAbsent(key: K, value: V): Option<V> {
-        while (true) {
-            match (get(key)) {
-                case Some(v) => return Some(v)
-                case None =>
-                    let prev = add(key, value)
-                    if (prev.isNone()) {
-                        return None
-                    }
-                    // 插入失败说明键刚好被其他线程插入，返回现有值
-                    return get(key)
-            }
-        }
-        None<V>
+        add(IfAbsent, key){value}
+    }
+    public func addIfPresent(key: K, value: V): Option<V> {
+        add(IfPresent, key){value}
     }
 
     // ---------- 删除 ----------
@@ -234,16 +275,19 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
 
     // 物理删除（内部自动查找前驱）
     private func physicallyRemove(node: Node<K, V>): Unit {
-        let key = node.key
-        let result = findNode(key)
-        match (result.node) {
-            case Some(n) =>
-                if (!refEq(n, node)) {
-                    return
+        match(node.key){
+            case Some(k) =>
+                let result = findNode(k)
+                match (result.node) {
+                    case Some(n) =>
+                        if (!refEq(n, node)) {
+                            return
+                        }
+                    case None => return
                 }
-            case None => return
+                doRemoveEachLevel(k, node, result)
+            case _ => tryRemoveNode(node)
         }
-        doRemoveEachLevel(key, node, result)
     }
 
     // 尝试删除节点
@@ -270,10 +314,10 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
         }
     }
 
-    // ---------- 清空 ----------
+    // 清空
     public func clear(): Unit {
         headRef.store(Node<K, V>.createHead(MAX_LEVEL))
-        size_.store(0)
+        size_.store(0)   // 重置计数
     }
 
     // ---------- 查找 ----------
@@ -312,29 +356,21 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
             let result = findNode(key)
             match (result.node) {
                 case Some(node) =>
-                    // 读取当前值（Option<V>）
                     let oldValOpt = node.value.load()
                     match (oldValOpt) {
                         case Some(box) =>
-                            // 检查谓词是否满足
                             if (!predicate(box.value)) {
-                                // 不满足条件，放弃删除
                                 return Option.None
                             }
-                            // 满足谓词，尝试逻辑删除
                             if (node.value.compareAndSwap(oldValOpt, Option.None)) {
-                                // 物理删除：从各层链表中摘除
                                 doRemoveEachLevel(key, node, result)
                                 size_.fetchSub(1)
                                 return Option.Some(box.value)
                             }
-                        // CAS 失败，重试外层循环
                         case None =>
-                            // 节点已被逻辑删除
                             return Option.None
                     }
                 case None =>
-                    // 键不存在
                     return Option.None
             }
         }
@@ -348,7 +384,6 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
         while (true) {
             match (currOpt) {
                 case Some(curr) =>
-                    // 跳过哨兵节点（实际上底层链表不应出现，但安全处理）
                     if (isHead(curr)) {
                         pred = curr
                         currOpt = curr.next[0].load()
@@ -358,56 +393,53 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
                     let valOpt = curr.value.load()
                     match (valOpt) {
                         case Some(box) =>
-                            if (predicate(curr.key, box.value)) {
-                                // 尝试删除当前节点
-                                if (tryRemoveNode(curr)) {
-                                    // 删除成功，curr 已从链表中摘除，currOpt 更新为 pred 的后继
-                                    currOpt = pred.next[0].load()
-                                    continue
-                                }
-                                // 删除失败（并发竞争），重新尝试删除同一个节点
-                                // 注意：此时 pred 可能已失效，但 curr 仍为当前节点，继续尝试
-                                continue
-                            } else {
-                                // 不满足谓词，继续遍历
-                                pred = curr
-                                currOpt = curr.next[0].load()
+                            match(curr.key){
+                                case Some(k) =>
+                                    if (predicate(k, box.value)) {
+                                        if (tryRemoveNode(curr)) {
+                                            currOpt = pred.next[0].load()
+                                            continue
+                                        }
+                                        continue
+                                    } else {
+                                        pred = curr
+                                        currOpt = curr.next[0].load()
+                                    }
+                                case _ => tryRemoveNode(curr)
                             }
                         case None =>
-                            // 节点已被其他线程逻辑删除，帮助其物理删除并跳过
                             helpPhysicallyRemove(curr)
                             pred = curr
                             currOpt = curr.next[0].load()
                     }
                 case None =>
-                    // 遍历结束
                     break
             }
         }
     }
 
-    // 逐层摘除
-    private func doRemoveEachLevel(key: K, node: Node<K, V>, result: FindResult<K, V>){
-        for (lvl in node.level..=0: -1) {
+    // 物理删除（逐层摘除）
+    private func doRemoveEachLevel(key: K, node: Node<K, V>, result: FindResult<K, V>) {
+        for (lvl in node.level..=0 : -1) {
             while (true) {
                 let pred = result.preds[lvl].getOrThrow()
                 let succ = pred.next[lvl].load()
-
                 match (succ) {
-                    case Some(n) =>
-                        if (!isHead(n) && n.key < key) {
-                            break
+                    case Some(n) where refEq(n, node) =>
+                        // 该层后继是目标节点，尝试摘除
+                        let nodeNext = node.next[lvl].load()
+                        if (pred.next[lvl].compareAndSwap(succ, nodeNext)) {
+                            break   // 摘除成功，进入下一层
                         }
-                    case None => ()
-                }
-
-                let nodeNext = node.next[lvl].load()
-                if (pred.next[lvl].compareAndSwap(succ, nodeNext)) {
-                    break
+                        // CAS 失败，说明 pred 或 succ 被其他线程修改，继续循环重试
+                    case _ =>
+                        // 该层后继不是目标节点（可能已被其他线程摘除或从未插入），跳过此层
+                        break
                 }
             }
         }
     }
+
     // ---------- 辅助方法 ----------
     public func contains(key: K): Bool {
         return get(key).isSome()
@@ -415,7 +447,7 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
 
     public prop size: Int64 {
         get() {
-            return size_.load()
+            size_.load()
         }
     }
 
@@ -423,23 +455,15 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
         return size == 0
     }
     
-    public func entryView(key: K, fn: (MapEntryView<K, V>) -> ?V): ?V {
+    public func entryView(key: K, fn: (MapEntryView<K, V>) -> Unit): ?V {
         let view = ConcurrentSkipListEntryViewImpl(this, key)
-        let v = fn(view)
-        match(view.value){
+        fn(view)
+        let v = view.value
+        match(v){
             case Some(x) => add(key, x)
             case _ => remove(key)
         }
         v
-
-    }
-    public func entryView(key: K, fn: (MapEntryView<K, V>) -> Unit): ?V {
-        func viewfn(view: MapEntryView<K, V>): ?V {
-            let v = view.value
-            fn(view)
-            v
-        }
-        entryView(key, viewfn)
     }
     public func entryView(key: K, fn: (K, ?V) -> ?V): ?V {
         this.entryView(key) {
@@ -548,7 +572,10 @@ private class EntryIterator<K, V> <: Iterator<(K, V)> where K <: Comparable<K> {
         while(let Some(node) <- current){
             current = node.next[0].load()
             if(let Some(v) <- node.value.load()){
-                return (node.key, v.value)
+                match(node.key){
+                    case Some(k) => (k, v.value)
+                    case _ => continue
+                }
             }
         }
         None
