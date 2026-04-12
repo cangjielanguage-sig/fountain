@@ -261,12 +261,17 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
             match (result.node) {
                 case Some(node) =>
                     let oldVal = node.value.load()
-                    if (node.value.compareAndSwap(oldVal, None)) {
+                    // 仅当值存在时才尝试删除，避免对已逻辑删除的节点重复操作
+                    if (oldVal.isSome() && node.value.compareAndSwap(oldVal, None)) {
                         // 物理删除
                         physicallyRemove(node)
                         size_.fetchSub(1)
                         return oldVal?.value
+                    } else if (oldVal.isNone()) {
+                        // 节点已被其他线程逻辑删除
+                        return None
                     }
+                    // CAS 失败（值被并发修改），继续重试
                 case None => return None
             }
         }
@@ -569,11 +574,11 @@ private class EntryIterator<K, V> <: Iterator<(K, V)> where K <: Comparable<K> {
     }
 
     public func next(): Option<(K, V)> {
-        while(let Some(node) <- current){
+        while (let Some(node) <- current) {
             current = node.next[0].load()
-            if(let Some(v) <- node.value.load()){
-                match(node.key){
-                    case Some(k) => return (k, v.value)
+            if (let Some(v) <- node.value.load()) {
+                match (node.key) {
+                    case Some(k) => return Some((k, v.value))
                     case _ => continue
                 }
             }
