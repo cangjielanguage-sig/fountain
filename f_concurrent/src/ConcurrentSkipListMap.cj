@@ -135,17 +135,11 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
                 match (curr) {
                     case Some(node) =>
                         if (!isHead(node) && node.key < key) {
-                            // 仅在 level 0 清理逻辑删除节点（validateNode 依赖 preds[0] 正确性）
-                            // 高层跳过清理，减少 CAS 开销；高层指针由 physicallyRemove 维护
+                            // 遇到逻辑删除节点，主动清理并重新加载
                             if (node.value.load().isNone()) {
-                                if (level == 0) {
-                                    let nodeNext = node.next[level].load()
-                                    pred.next[level].compareAndSwap(curr, nodeNext)
-                                    curr = pred.next[level].load()
-                                } else {
-                                    // 高层：跳过已删除节点，不更新 pred
-                                    curr = node.next[level].load()
-                                }
+                                let nodeNext = node.next[level].load()
+                                pred.next[level].compareAndSwap(curr, nodeNext)
+                                curr = pred.next[level].load()
                                 continue
                             }
                             pred = node
