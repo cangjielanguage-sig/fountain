@@ -145,7 +145,7 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
         // 每次随机取 1 bit：如果为 0 则继续提升层级（约 50% 概率）
         while (level < effectiveMax) {
             let r = xorShift64()
-            // 检查最低位是否为 0（约 50% 概率）
+            // 检查最高位是否为 0（约 50% 概率）（最高位随机性更高）
             if ((r & (1 << 63)) == 0) {
                 level += 1
             } else {
