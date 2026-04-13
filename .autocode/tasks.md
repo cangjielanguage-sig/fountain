@@ -3,7 +3,7 @@
 + 如果需要修改.cj文件的代码
   - 确认当前上下文存在./.autocode/reference/cj_syntax.md的内容，如果不存在就加载它
     - 如果有语法错误务必查阅这个文档
-  - 为避免重复犯错提升开发效率可以考虑加载~/.autocode/experience.md
+  - 为避免重复犯错提升开发效率可以考虑加载~/.autocode/cj-experience.md，从中抽取与当前操作相匹配的经验
 + 如果需要元编程就加载./.autocode/reference/advanced_syntax.md
 + 查阅仓颉文档
   - 标准库std文档： /mnt/d/docs/work/cangjie/cangjie-doc/md/std
