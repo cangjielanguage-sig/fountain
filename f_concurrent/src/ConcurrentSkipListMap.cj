@@ -19,6 +19,7 @@ import std.sync.*
 import std.collection.*
 import std.core.*
 import std.collection.concurrent.ConcurrentMap
+import std.time.DateTime
 import fountain::f_base.*
 
 // 跳表节点：键值对 + 多层前向指针
@@ -104,7 +105,7 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
     var headRef: AtomicReference<Node<K, V>>
     var size_: AtomicInt64
     var epoch: AtomicInt64   // 代际计数器，clear() 时递增，用于检测并发修改
-    private static let seedGen = AtomicInt64(0)   // 全局种子生成器
+    private static let seedGen = AtomicInt64((DateTime.now() - DateTime.UnixEpoch).toNanoseconds())   // 全局种子生成器
     var seed: AtomicInt64   // 并发安全的随机种子，替代非线程安全的 Random
 
     private static func compare(a: ?K, b: ?K): Ordering {
