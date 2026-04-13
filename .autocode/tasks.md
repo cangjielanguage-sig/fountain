@@ -1,7 +1,9 @@
 + 执行pwd，本文的所有相对路径都是相对于pwd的执行结果
 + 把"---"下面的内容按顺序分解、规划任务
-+ 如果需要修改.cj文件的代码确认当前上下文存在./.autocode/reference/cj_syntax.md的内容，如果不存在就加载它
-  - 如果有语法错误务必查阅这个文档
++ 如果需要修改.cj文件的代码
+  - 确认当前上下文存在./.autocode/reference/cj_syntax.md的内容，如果不存在就加载它
+    - 如果有语法错误务必查阅这个文档
+  - 为避免重复犯错提升开发效率可以考虑加载~/.autocode/experience.md
 + 如果需要元编程就加载./.autocode/reference/advanced_syntax.md
 + 查阅仓颉文档
   - 标准库std文档： /mnt/d/docs/work/cangjie/cangjie-doc/md/std
@@ -27,3 +29,7 @@ cjpm test --filter ConcurrentSkipListMap_test.test_stress* >> ../.autocode/skip_
 )
 加载`$curdir/.autocode/skip_list_perf.txt`，根据这个文件生成性能测试报告，将性能测试报告保存在`$curdir/f_concurrent/doc/performance_report.md`中。
 如果智能没有在指定路径发现这个txt文件，务必告知用户，并立即停止任务。
+
+
+# 后置任务
+从当前session的会话记录和当前session涉及的git提交记录总结成功的经验和失败的教训，并输出为markdown格式。跟~/.autocode/experience.md的内容比较，删除文件中有相似之处的部分，把新的经验追加到这个文件。
