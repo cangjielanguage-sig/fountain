@@ -209,6 +209,20 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
         return false
     }
 
+    // 轻量可达性验证：检查 level 0 前驱的 next[0] 是否仍指向目标节点
+    // 替代 isReachable 的 O(log n) 全表遍历，降为 O(1)
+    private func validateNode(node: Node<K, V>, result: FindResult<K, V>): Bool {
+        match (result.preds[0]) {
+            case Some(pred) =>
+                let succ = pred.next[0].load()
+                match (succ) {
+                    case Some(n) => refEq(n, node)
+                    case None => false
+                }
+            case None => false
+        }
+    }
+
     private func add(mode: AddMode, key: K, valfn: () -> V): ?V {
         var valbox = None<Box<V>>
         func genbox(){
@@ -229,7 +243,7 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
                                 continue
                             }
                             // 验证节点仍可达（防止在已物理删除节点上 CAS 导致更新丢失）
-                            if (!isReachable(node)) {
+                            if (!validateNode(node, result)) {
                                 physicallyRemove(node)
                                 continue
                             }
@@ -241,7 +255,7 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
                                 physicallyRemove(node)
                                 return None
                             }
-                            if (!isReachable(node)) {
+                            if (!validateNode(node, result)) {
                                 physicallyRemove(node)
                                 return None
                             }
