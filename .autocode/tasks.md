@@ -18,18 +18,7 @@
 ---
 
 # 前置任务
-(
-这一段是给人读的，接下来要对ConcurrentSkipListMap生成性能测试报告。
-但是测试用例太耗时了，所以在给智能体布置任务前先运行测试用例。
-curdir=$(pwd)
 cd f_concurrent
-cjpm test --filter ConcurrentSkipListMap_test.test_perf* > ../.autocode/skip_list_perf.txt
-cjpm test --filter ConcurrentSkipListMap_test.test_concurrent* >> ../.autocode/skip_list_perf.txt
-cjpm test --filter ConcurrentSkipListMap_test.test_stress* >> ../.autocode/skip_list_perf.txt
-)
-加载`$curdir/.autocode/skip_list_perf.txt`，根据这个文件生成性能测试报告，将性能测试报告保存在`$curdir/f_concurrent/doc/performance_report.md`中。
-如果智能没有在指定路径发现这个txt文件，务必告知用户，并立即停止任务。
 
-
-# 后置任务
-从当前session的会话记录和当前session涉及的git提交记录总结成功的经验和失败的教训，并输出为markdown格式。跟~/.autocode/experience.md的内容比较，删除文件中有相似之处的部分，把新的经验追加到这个文件。
+# 任务
+为ConcurrentSkipListMap添加倒序迭代器
