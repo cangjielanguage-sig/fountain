@@ -146,7 +146,7 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
         while (level < effectiveMax) {
             let r = xorShift64()
             // 检查最低位是否为 0（约 50% 概率）
-            if ((r & 1) == 0) {
+            if ((r & (1 << 63)) == 0) {
                 level += 1
             } else {
                 break
