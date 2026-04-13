@@ -93,7 +93,7 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
     private let zeroValue: K = unsafeZeroValue<K>()
     let MAX_LEVEL: Int64 = 16
     // 线程局部缓存 findNode 所需的数组，避免每次分配（每个 map 实例一个）
-    private var findNodeCache = ThreadLocal<FindNodeCache<K, V>>()
+    private let findNodeCache: ThreadLocal<FindNodeCache<K, V>>
     // 根据 size 动态计算实际使用的最大层级（弱一致性，允许偶尔偏差）
     private func effectiveMaxLevel(): Int64 {
         let s = size_.load()
