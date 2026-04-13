@@ -91,7 +91,6 @@ class FindNodeCache<K, V> where K <: Comparable<K> {
 }
 
 public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
-    private let zeroValue: K = unsafeZeroValue<K>()
     let MAX_LEVEL: Int64 = 16
     // 线程局部缓存 findNode 所需的数组，避免每次分配（每个 map 实例一个）
     private let findNodeCache: ThreadLocal<FindNodeCache<K, V>>
