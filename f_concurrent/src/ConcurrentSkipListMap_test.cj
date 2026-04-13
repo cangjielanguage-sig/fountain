@@ -440,7 +440,7 @@ public class ConcurrentSkipListMap_test {
         for (i in 0..1000) {
             map.add(i, i)
         }
-        spawn {
+        let clearFuture = spawn {
             sleep(Duration.millisecond * 10)
             map.clear()
         }
@@ -457,7 +457,7 @@ public class ConcurrentSkipListMap_test {
             }
         }
         counter.waitUntilZero()
-        sleep(Duration.millisecond * 10)
+        clearFuture.get()  // 确保 clear 执行完成
         // clear 后 size 应为 0，且无异常
         @Assert(map.size, 0)
         @Assert(map.isEmpty())
@@ -528,7 +528,6 @@ public class ConcurrentSkipListMap_test {
 
     @TestCase
     public func test_entryView_atomicity(): Unit {
-        // 暴露 entryView 原子性 bug（用例48）
         let map = ConcurrentSkipListMap<Int64, Int64>()
         map.add(10, 100)
         let threads = 10
@@ -544,13 +543,9 @@ public class ConcurrentSkipListMap_test {
             }
         }
         latch.waitUntilZero()
-        // 预期最终值为 100 + threads = 110，但当前实现可能因竞态导致小于此值
+        // entryView 应该是原子的，最终值应为 100 + threads = 110
         let finalVal = map.get(10).getOrThrow()
-        // 如果 entryView 是原子的，应该等于 110；否则可能小于 110
-        // 这里标记为预期失败，实际会打印警告
-        if (finalVal != 100 + threads) {
-            println("WARNING: entryView is not atomic, got ${finalVal}, expected ${100 + threads}")
-        }
+        @Assert(finalVal, 100 + threads)
     }
 
     // ========== 5. 压力测试（可选，长时间运行） ==========

@@ -586,23 +586,23 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
                     let oldVal = node.value.load()
                     if (oldVal.isNone()) {
                         physicallyRemove(node)
-                        // 键不存在，执行 fn 后若 value 为 Some 则插入，否则视为无操作
-                        let view = ConcurrentSkipListEntryViewImpl(this, key)
+                        // 键不存在（逻辑删除），走插入路径
+                        let view = ConcurrentSkipListEntryViewImpl(key, None<V>)
                         fn(view)
                         let v = view.value
                         match (v) {
                             case Some(x) =>
                                 let res = addIfAbsent(key, x)
                                 if (res.isSome()) {
-                                    // 其他线程已插入，重试
                                     continue
                                 }
                                 return v
                             case _ => return v
                         }
                     }
-                    // 键存在，在 CAS 循环中原子地更新
-                    let view = ConcurrentSkipListEntryViewImpl(this, key)
+                    // 键存在：在 CAS 循环中原子地更新
+                    // 基于当前 load 到的值构建 view，确保 fn 看到的值和 CAS 期望值一致
+                    let view = ConcurrentSkipListEntryViewImpl(key, oldVal?.value)
                     fn(view)
                     let newVal = view.value
                     match (newVal) {
@@ -611,28 +611,24 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
                             if (node.value.compareAndSwap(oldVal, newBox)) {
                                 return oldVal?.value
                             }
-                            // CAS 失败，重试
                             continue
                         case None =>
-                            // 用户函数要求删除
                             if (node.value.compareAndSwap(oldVal, None)) {
                                 physicallyRemove(node)
                                 size_.fetchSub(1)
                                 return oldVal?.value
                             }
-                            // CAS 失败，重试
                             continue
                     }
                 case None =>
                     // 键不存在
-                    let view = ConcurrentSkipListEntryViewImpl(this, key)
+                    let view = ConcurrentSkipListEntryViewImpl(key, None<V>)
                     fn(view)
                     let v = view.value
                     match (v) {
                         case Some(x) =>
                             let res = addIfAbsent(key, x)
                             if (res.isSome()) {
-                                // 其他线程已插入，重试以获取正确值
                                 continue
                             }
                             return v
@@ -814,14 +810,12 @@ class SkipListValueCollection<K, V> <: Collection<V> where K <: Comparable<K> {
 }
 
 class ConcurrentSkipListEntryViewImpl<K, V> <: MapEntryView<K, V> where K <: Comparable<K> {
-    private let map: ConcurrentSkipListMap<K, V>
     private let k: K
     var v: ?V
 
-    init(map: ConcurrentSkipListMap<K, V>, key: K) {
-        this.map = map
+    init(key: K, initialValue: ?V) {
         this.k = key
-        this.v = map.get(key)
+        this.v = initialValue
     }
 
     public prop key: K {
