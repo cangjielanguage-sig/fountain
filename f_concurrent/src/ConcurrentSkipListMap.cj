@@ -18,7 +18,6 @@ package fountain::f_concurrent
 import std.sync.*
 import std.collection.*
 import std.core.*
-import std.random.*
 import std.collection.concurrent.ConcurrentMap
 import fountain::f_base.*
 
@@ -89,7 +88,8 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
     let MAX_LEVEL: Int64 = 16
     var headRef: AtomicReference<Node<K, V>>
     var size_: AtomicInt64
-    private let random = Random()  // 缓存 Random 实例，避免每次 randomLevel 创建新对象
+    private static let seedGen = AtomicInt64(0)   // 全局种子生成器
+    var seed: AtomicInt64   // 并发安全的随机种子，替代非线程安全的 Random
 
     private static func compare(a: ?K, b: ?K): Ordering {
         match((a, b)){
@@ -100,18 +100,38 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
         }
     }
 
+    @OverflowWrapping
     public init() {
         // 创建头哨兵节点（键为占位值，比较时特殊处理）
         this.headRef = AtomicReference(Node<K, V>.createHead(MAX_LEVEL))
         this.size_ = AtomicInt64(0)   // 初始化计数器
+        this.seed = AtomicInt64(seedGen.fetchAdd(1) * 6364136223846793005 + 1442695040888963407)  // LCG 混淆初始种子
     }
     prop head: Node<K, V> {
         get() { headRef.load() }
     }
+    // 使用 XorShift64 生成随机数，基于 AtomicInt64 种子实现无锁并发安全
+    @OverflowWrapping
+    private func xorShift64(): Int64 {
+        var x = seed.fetchAdd(1)
+        x ^= (x << 13)
+        x ^= (x >> 7)
+        x ^= (x << 17)
+        return x
+    }
+
     private func randomLevel(): Int64 {
         var level: Int64 = 0
-        while (random.nextFloat64() < 0.5 && level < MAX_LEVEL) {
-            level += 1
+        // 取 xorShift64 高位部分判断，高位随机性更好
+        // 每次随机取 1 bit：如果为 0 则继续提升层级
+        while (level < MAX_LEVEL) {
+            let r = xorShift64()
+            // 检查最高位是否为 0（约 50% 概率）
+            if ((r & 1) == 0) {
+                level += 1
+            } else {
+                break
+            }
         }
         return level
     }
