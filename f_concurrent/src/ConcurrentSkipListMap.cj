@@ -184,6 +184,30 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
         }
         return pred
     }
+    // 从 head 开始遍历，检查 target 是否在跳表中可达
+    private func isReachable(target: Node<K, V>): Bool {
+        var pred: Node<K, V> = head
+        for (level in MAX_LEVEL..=0 : -1) {
+            var curr = pred.next[level].load()
+            while (true) {
+                match (curr) {
+                    case Some(node) =>
+                        if (refEq(node, target)) {
+                            return true
+                        }
+                        if (!isHead(node) && compare(node.key, target.key) == LT) {
+                            pred = node
+                            curr = node.next[level].load()
+                        } else {
+                            break
+                        }
+                    case None => break
+                }
+            }
+        }
+        return false
+    }
+
     private func add(mode: AddMode, key: K, valfn: () -> V): ?V {
         var valbox = None<Box<V>>
         func genbox(){
@@ -198,16 +222,25 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
                 case Some(node) =>
                     let oldVal = node.value.load()
                     match(mode){
-                        case Anyway => 
+                        case Anyway =>
                             if (oldVal.isNone()) {
                                 physicallyRemove(node)   // 遇到逻辑删除节点，帮助清理后重试
+                                continue
+                            }
+                            // 验证节点仍可达（防止在已物理删除节点上 CAS 导致更新丢失）
+                            if (!isReachable(node)) {
+                                physicallyRemove(node)
                                 continue
                             }
                             if (node.value.compareAndSwap(oldVal, genbox())) {
                                 return oldVal?.value
                             }
-                        case IfPresent => 
+                        case IfPresent =>
                             if (oldVal.isNone()) {
+                                physicallyRemove(node)
+                                return None
+                            }
+                            if (!isReachable(node)) {
                                 physicallyRemove(node)
                                 return None
                             }
@@ -215,7 +248,7 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
                                 return oldVal?.value
                             }
                             continue
-                        case IfAbsent => 
+                        case IfAbsent =>
                             if (oldVal.isNone()) {
                                 physicallyRemove(node)
                                 continue
@@ -226,8 +259,22 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
                 case None =>
                     let level = randomLevel()
                     let newNode = Node(key, genbox(), level)
-                    if (!tryInsertAtLevel(newNode, 0, result.preds[0].getOrThrow())) {
+                    let pred0 = result.preds[0].getOrThrow()
+                    if (!tryInsertAtLevel(newNode, 0, pred0)) {
                         continue
+                    }
+                    // 插入成功后验证前驱是否可达，防止新节点悬挂在已物理删除节点上
+                    if (!isHead(pred0) && pred0.value.load().isNone()) {
+                        // 前驱已被逻辑删除，新节点可能不可达
+                        // 尝试逻辑删除新节点并补偿 size_
+                        if (newNode.value.compareAndSwap(genbox(), None)) {
+                            physicallyRemove(newNode)
+                            // size_ 尚未递增，无需补偿
+                            continue
+                        }
+                        // newNode 已被其他线程 remove（CAS 失败说明其他线程已逻辑删除），
+                        // 其他线程的 remove 会 fetchSub(1)，所以如果新节点不可达，
+                        // size_ 可能已多算。但 newNode 被其他线程找到说明它可达，无需补偿。
                     }
                     size_.fetchAdd(1)
                     // 限制高层插入重试次数
@@ -371,7 +418,10 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
 
     // 清空
     public func clear(): Unit {
+        // 先替换 head，断开旧链表，使后续 add 使用新 head
         headRef.store(Node<K, V>.createHead(MAX_LEVEL))
+        // 再重置 size_；并发 add/remove 可能操作旧链表导致 size_ 偏移，
+        // 但 clear 本身不保证与并发操作严格一致（与 Java ConcurrentSkipListMap 语义一致）
         size_.store(0)
     }
 
@@ -529,14 +579,68 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
     }
     
     public func entryView(key: K, fn: (MapEntryView<K, V>) -> Unit): ?V {
-        let view = ConcurrentSkipListEntryViewImpl(this, key)
-        fn(view)
-        let v = view.value
-        match(v){
-            case Some(x) => add(key, x)
-            case _ => remove(key)
+        while (true) {
+            let result = findNode(key)
+            match (result.node) {
+                case Some(node) =>
+                    let oldVal = node.value.load()
+                    if (oldVal.isNone()) {
+                        physicallyRemove(node)
+                        // 键不存在，执行 fn 后若 value 为 Some 则插入，否则视为无操作
+                        let view = ConcurrentSkipListEntryViewImpl(this, key)
+                        fn(view)
+                        let v = view.value
+                        match (v) {
+                            case Some(x) =>
+                                let res = addIfAbsent(key, x)
+                                if (res.isSome()) {
+                                    // 其他线程已插入，重试
+                                    continue
+                                }
+                                return v
+                            case _ => return v
+                        }
+                    }
+                    // 键存在，在 CAS 循环中原子地更新
+                    let view = ConcurrentSkipListEntryViewImpl(this, key)
+                    fn(view)
+                    let newVal = view.value
+                    match (newVal) {
+                        case Some(x) =>
+                            let newBox = Box<V>(x)
+                            if (node.value.compareAndSwap(oldVal, newBox)) {
+                                return oldVal?.value
+                            }
+                            // CAS 失败，重试
+                            continue
+                        case None =>
+                            // 用户函数要求删除
+                            if (node.value.compareAndSwap(oldVal, None)) {
+                                physicallyRemove(node)
+                                size_.fetchSub(1)
+                                return oldVal?.value
+                            }
+                            // CAS 失败，重试
+                            continue
+                    }
+                case None =>
+                    // 键不存在
+                    let view = ConcurrentSkipListEntryViewImpl(this, key)
+                    fn(view)
+                    let v = view.value
+                    match (v) {
+                        case Some(x) =>
+                            let res = addIfAbsent(key, x)
+                            if (res.isSome()) {
+                                // 其他线程已插入，重试以获取正确值
+                                continue
+                            }
+                            return v
+                        case _ => return v
+                    }
+            }
         }
-        v
+        None<V>
     }
     public func entryView(key: K, fn: (K, ?V) -> ?V): ?V {
         this.entryView(key) {
