@@ -86,6 +86,13 @@ class FindResult<K, V> where K <: Comparable<K> {
 public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
     private let zeroValue: K = unsafeZeroValue<K>()
     let MAX_LEVEL: Int64 = 16
+    // 根据 size 动态计算实际使用的最大层级（弱一致性，允许偶尔偏差）
+    private func effectiveMaxLevel(): Int64 {
+        let s = size_.load()
+        if (s < 100) { 8 }
+        else if (s < 1000) { 12 }
+        else { MAX_LEVEL }
+    }
     var headRef: AtomicReference<Node<K, V>>
     var size_: AtomicInt64
     var epoch: AtomicInt64   // 代际计数器，clear() 时递增，用于检测并发修改
@@ -124,8 +131,9 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
 
     private func randomLevel(): Int64 {
         var level: Int64 = 0
+        let effectiveMax = effectiveMaxLevel()
         // 每次随机取 1 bit：如果为 0 则继续提升层级（约 50% 概率）
-        while (level < MAX_LEVEL) {
+        while (level < effectiveMax) {
             let r = xorShift64()
             // 检查最低位是否为 0（约 50% 概率）
             if ((r & 1) == 0) {
