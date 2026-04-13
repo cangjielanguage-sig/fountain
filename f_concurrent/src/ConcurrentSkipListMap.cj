@@ -89,6 +89,7 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
     let MAX_LEVEL: Int64 = 16
     var headRef: AtomicReference<Node<K, V>>
     var size_: AtomicInt64
+    private let random = Random()  // 缓存 Random 实例，避免每次 randomLevel 创建新对象
 
     private static func compare(a: ?K, b: ?K): Ordering {
         match((a, b)){
@@ -109,7 +110,7 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
     }
     private func randomLevel(): Int64 {
         var level: Int64 = 0
-        while (Random().nextFloat64() < 0.5 && level < MAX_LEVEL) {
+        while (random.nextFloat64() < 0.5 && level < MAX_LEVEL) {
             level += 1
         }
         return level
@@ -536,32 +537,6 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
         }
     }
 
-    // 物理删除（逐层摘除）
-    private func doRemoveEachLevel(key: K, node: Node<K, V>) {
-        for (lvl in node.level..=0 : -1) {
-            var retries = 0
-            while (retries < 3) {
-                if (node.value.load().isSome()) {
-                    return
-                }
-                let pred = findPredecessorAtLevel(key, lvl)
-                if (!isHead(pred) && pred.value.load().isNone()) {
-                    break   // 前驱无效，放弃本层
-                }
-                let succ = pred.next[lvl].load()
-                match (succ) {
-                    case Some(n) where refEq(n, node) =>
-                        let nodeNext = node.next[lvl].load()
-                        if (pred.next[lvl].compareAndSwap(succ, nodeNext)) {
-                            break
-                        }
-                        retries += 1
-                    case _ =>
-                        break
-                }
-            }
-        }
-    }
 
     // ---------- 辅助方法 ----------
     public func contains(key: K): Bool {
