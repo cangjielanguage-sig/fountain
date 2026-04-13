@@ -124,11 +124,10 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
 
     private func randomLevel(): Int64 {
         var level: Int64 = 0
-        // 取 xorShift64 高位部分判断，高位随机性更好
-        // 每次随机取 1 bit：如果为 0 则继续提升层级
+        // 每次随机取 1 bit：如果为 0 则继续提升层级（约 50% 概率）
         while (level < MAX_LEVEL) {
             let r = xorShift64()
-            // 检查最高位是否为 0（约 50% 概率）
+            // 检查最低位是否为 0（约 50% 概率）
             if ((r & 1) == 0) {
                 level += 1
             } else {
