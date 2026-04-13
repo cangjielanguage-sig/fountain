@@ -147,10 +147,10 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
     func findNode(key: K): FindResult<K, V> {
         var preds = Array<Option<Node<K, V>>>(MAX_LEVEL + 1) {_ => None}
         var succs = Array<Option<Node<K, V>>>(MAX_LEVEL + 1) {_ => None}
- 
+
         var pred: Node<K, V> = head
         var curr: Option<Node<K, V>> = None
- 
+
         for (level in MAX_LEVEL..=0 : -1) {
             curr = pred.next[level].load()
             while (true) {
@@ -158,7 +158,8 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
                     case Some(node) =>
                         if (!isHead(node) && node.key < key) {
                             // 遇到逻辑删除节点，主动清理并重新加载
-                            if (node.value.load().isNone()) {
+                            let nodeVal = node.value.load()
+                            if (nodeVal.isNone()) {
                                 let nodeNext = node.next[level].load()
                                 pred.next[level].compareAndSwap(curr, nodeNext)
                                 curr = pred.next[level].load()
@@ -193,7 +194,8 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
         while (let Some(node) <- curr) {
             if (!isHead(node) && compare(node.key, Some(key)) == LT) {
                 // 遇到逻辑删除节点，主动清理并重新加载
-                if (node.value.load().isNone()) {
+                let nodeVal = node.value.load()
+                if (nodeVal.isNone()) {
                     let nodeNext = node.next[level].load()
                     pred.next[level].compareAndSwap(curr, nodeNext)
                     curr = pred.next[level].load()
