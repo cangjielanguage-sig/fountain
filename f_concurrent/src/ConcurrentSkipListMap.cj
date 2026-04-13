@@ -734,9 +734,6 @@ extend<K, V> ConcurrentSkipListMap<K, V> <: ConcurrentMap<K, V> where K <: Compa
         return EntryIterator<K, V>(head)
     }
 
-    public func reverseIterator(): Iterator<(K, V)> {
-        return ReverseEntryIterator<K, V>(head)
-    }
     public func put(key: K, value: V): ?V {
         add(key, value)
     }
@@ -835,39 +832,6 @@ private class EntryIterator<K, V> <: Iterator<(K, V)> where K <: Comparable<K> {
                     case _ => continue
                 }
             }
-        }
-        None
-    }
-}
-
-private class ReverseEntryIterator<K, V> <: Iterator<(K, V)> where K <: Comparable<K> {
-    private let entries: ArrayList<(K, V)>
-    private var index: Int64
-
-    public init(head: Node<K, V>) {
-        this.entries = ReverseEntryIterator.collectEntries(head)
-        this.index = entries.size
-    }
-
-    private static func collectEntries(head: Node<K, V>): ArrayList<(K, V)> {
-        let result = ArrayList<(K, V)>()
-        var current = head.next[0].load()
-        while (let Some(node) <- current) {
-            if (let Some(v) <- node.value.load()) {
-                match (node.key) {
-                    case Some(k) => result.add((k, v.value))
-                    case _ => ()
-                }
-            }
-            current = node.next[0].load()
-        }
-        result
-    }
-
-    public func next(): Option<(K, V)> {
-        if (index > 0) {
-            index -= 1
-            return Some(entries[index])
         }
         None
     }
