@@ -17,14 +17,10 @@
 # 前置任务
 cd f_concurrent
 
+每完成一个任务都要执行cjpm test --filter ConcurrentSkipListMap_test 确认修改正确且性能没有劣化
+
 # 任务1
-ConcurrentSkipListMap **分层索引优化**：当前 MAX_LEVEL=16，对于小规模数据可考虑动态调整。
-
-# 任务2
-ConcurrentSkipListMap **size_ 弱一致性**：每次 add/remove 的 fetchAdd/fetchSub 有开销，可改为惰性计算。
-
-# 任务3
 ConcurrentSkipListMap **findNode 数组分配优化**：每次分配两个大小 17 的 Array，可考虑线程局部缓存复用（已评估，复杂度较高）。
 
-# 任务4
+# 任务2
 ConcurrentSkipListMap **findNode 中 value.load() 合并**：当前遍历时每个节点都做 `node.value.load().isNone()` 检查，可考虑延迟检查。

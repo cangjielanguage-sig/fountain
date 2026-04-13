@@ -83,9 +83,17 @@ class FindResult<K, V> where K <: Comparable<K> {
     }
 }
 
+// findNode 线程局部缓存：预分配两个大小为 MAX_LEVEL+1 的数组
+class FindNodeCache<K, V> where K <: Comparable<K> {
+    public let preds: Array<Option<Node<K, V>>> = Array<Option<Node<K, V>>>(17) { _ => None }
+    public let succs: Array<Option<Node<K, V>>> = Array<Option<Node<K, V>>>(17) { _ => None }
+}
+
 public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
     private let zeroValue: K = unsafeZeroValue<K>()
     let MAX_LEVEL: Int64 = 16
+    // 线程局部缓存 findNode 所需的数组，避免每次分配（每个 map 实例一个）
+    private var findNodeCache = ThreadLocal<FindNodeCache<K, V>>()
     // 根据 size 动态计算实际使用的最大层级（弱一致性，允许偶尔偏差）
     private func effectiveMaxLevel(): Int64 {
         let s = size_.load()
@@ -115,6 +123,7 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
         this.size_ = AtomicInt64(0)   // 初始化计数器
         this.epoch = AtomicInt64(0)   // 初始化代际计数器
         this.seed = AtomicInt64(seedGen.fetchAdd(1) * 6364136223846793005 + 1442695040888963407)  // LCG 混淆初始种子
+        this.findNodeCache = ThreadLocal<FindNodeCache<K, V>>()
     }
     prop head: Node<K, V> {
         get() { headRef.load() }
@@ -152,8 +161,15 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
 
     // 核心查找：返回目标节点及其各层前驱/后继
     func findNode(key: K): FindResult<K, V> {
-        var preds = Array<Option<Node<K, V>>>(MAX_LEVEL + 1) {_ => None}
-        var succs = Array<Option<Node<K, V>>>(MAX_LEVEL + 1) {_ => None}
+        // 使用线程局部缓存的数组，避免每次分配
+        let cache = findNodeCache.getOrCompute { FindNodeCache<K, V>() }
+        // 清空数组（复用前必须清理）
+        for (i in 0..cache.preds.size) {
+            cache.preds[i] = None
+            cache.succs[i] = None
+        }
+        let preds = cache.preds
+        let succs = cache.succs
 
         var pred: Node<K, V> = head
         var curr: Option<Node<K, V>> = None
@@ -183,7 +199,7 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
             preds[level] = Some(pred)
             succs[level] = curr
         }
- 
+
         match (curr) {
             case Some(node) =>
                 if (!isHead(node) && node.key == key) {

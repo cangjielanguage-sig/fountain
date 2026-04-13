@@ -1187,6 +1187,11 @@ I/O 操作是指程序与外部设备进行数据交换的操作。仓颉提供�
  包提供了与时间相关的类型，包括日期时间，单调时间和时区等，并提供了计算和比较的功能。
 
 ## 单元测试
+cjpm test # 可以运行当前项目的单元测试
+cjpm test --filter UnitTestClass # 只执行指定的单元测试类
+cjpm test --filter UnitTestClass.TestCaseName # 只执行指定的单元测试函数
+cjpm test --filter Unit*Class.test_*xxxx # 可以使用通配符匹配，只执行满足通配符的测试用例
+
 详细内容参考：
 [单元测试文档目录](https://gitcode.com/Cangjie/cangjie_runtime/blob/main/stdlib/doc/libs/std/unittest_testmacro/unittest_testmacro_package_overview.md)
 [单元测试详细介绍](https://gitcode.com/Cangjie/cangjie_runtime/blob/main/stdlib/doc/libs/std/unittest_testmacro/unittest_testmacro_package_api/unittest_testmacro_package_macros.md)
@@ -1210,3 +1215,6 @@ public class TestClass{
     }
 }
 ```
+
+## 编译
+cjpm build
