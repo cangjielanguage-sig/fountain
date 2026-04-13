@@ -88,6 +88,7 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
     let MAX_LEVEL: Int64 = 16
     var headRef: AtomicReference<Node<K, V>>
     var size_: AtomicInt64
+    var epoch: AtomicInt64   // 代际计数器，clear() 时递增，用于检测并发修改
     private static let seedGen = AtomicInt64(0)   // 全局种子生成器
     var seed: AtomicInt64   // 并发安全的随机种子，替代非线程安全的 Random
 
@@ -105,6 +106,7 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
         // 创建头哨兵节点（键为占位值，比较时特殊处理）
         this.headRef = AtomicReference(Node<K, V>.createHead(MAX_LEVEL))
         this.size_ = AtomicInt64(0)   // 初始化计数器
+        this.epoch = AtomicInt64(0)   // 初始化代际计数器
         this.seed = AtomicInt64(seedGen.fetchAdd(1) * 6364136223846793005 + 1442695040888963407)  // LCG 混淆初始种子
     }
     prop head: Node<K, V> {
@@ -252,6 +254,7 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
             valbox
         }
         while (true) {
+            let curEpoch = epoch.load()   // 捕获当前代际
             let result = findNode(key)
             match (result.node) {
                 case Some(node) =>
@@ -312,6 +315,19 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
                         // size_ 可能已多算。但 newNode 被其他线程找到说明它可达，无需补偿。
                     }
                     size_.fetchAdd(1)
+                    // 检查代际是否变化（clear 可能已执行），若变化则补偿 size_ 并重试
+                    if (epoch.load() != curEpoch) {
+                        // 新节点可能挂在旧链表上（不可达），需回滚
+                        if (newNode.value.compareAndSwap(genbox(), None)) {
+                            physicallyRemove(newNode)
+                            size_.fetchSub(1)
+                            continue
+                        }
+                        // 其他线程已 remove 该节点，其 fetchSub 已执行
+                        // 但我们的 fetchAdd 需要补偿
+                        size_.fetchSub(1)
+                        continue
+                    }
                     // 限制高层插入重试次数
                     for (lvl in 1..=level) {
                         if (newNode.value.load().isNone()) {
@@ -430,13 +446,16 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
     }
 
     // 尝试删除节点
-    private func tryRemoveNode(node: Node<K, V>): Bool {
+    private func tryRemoveNode(node: Node<K, V>, curEpoch: Int64): Bool {
         let oldValOpt = node.value.load()
         match (oldValOpt) {
             case Some(v) =>
                 if (node.value.compareAndSwap(oldValOpt, None)) {
                     physicallyRemove(node)
-                    size_.fetchSub(1)
+                    // 检查代际是否变化，若变化则跳过 size_ 递减
+                    if (epoch.load() == curEpoch) {
+                        size_.fetchSub(1)
+                    }
                     return true
                 }
                 return false
@@ -451,12 +470,13 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
         physicallyRemove(node)
     }
 
-    // 清空
+    // 清空（原子操作）
     public func clear(): Unit {
-        // 先替换 head，断开旧链表，使后续 add 使用新 head
+        // 先递增 epoch，使并发 add/remove 检测到代际变化
+        let oldEpoch = epoch.fetchAdd(1)
+        // 替换 head，断开旧链表
         headRef.store(Node<K, V>.createHead(MAX_LEVEL))
-        // 再重置 size_；并发 add/remove 可能操作旧链表导致 size_ 偏移，
-        // 但 clear 本身不保证与并发操作严格一致（与 Java ConcurrentSkipListMap 语义一致）
+        // 重置 size_
         size_.store(0)
     }
 
@@ -493,6 +513,7 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
 
     public func remove(key: K, predicate: (V) -> Bool): Option<V> {
         while (true) {
+            let curEpoch = epoch.load()   // 捕获当前代际
             let result = findNode(key)
             match (result.node) {
                 case Some(node) =>
@@ -504,7 +525,10 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
                             }
                             if (node.value.compareAndSwap(oldValOpt, None)) {
                                 physicallyRemove(node)
-                                size_.fetchSub(1)
+                                // 检查代际是否变化，若变化则跳过 size_ 递减
+                                if (epoch.load() == curEpoch) {
+                                    size_.fetchSub(1)
+                                }
                                 return Some(box.value)
                             }
                             continue   // CAS 失败，重试
@@ -520,6 +544,7 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
     // ---------- 删除 ----------
     public func remove(key: K): Option<V> {
         while (true) {
+            let curEpoch = epoch.load()   // 捕获当前代际
             let result = findNode(key)
             match (result.node) {
                 case Some(node) =>
@@ -527,7 +552,10 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
                     if (oldValOpt.isSome()) {
                         if (node.value.compareAndSwap(oldValOpt, None)) {
                             physicallyRemove(node)   // 逻辑删除成功，物理摘除
-                            size_.fetchSub(1)
+                            // 检查代际是否变化，若变化则跳过 size_ 递减
+                            if (epoch.load() == curEpoch) {
+                                size_.fetchSub(1)
+                            }
                             return oldValOpt?.value
                         }
                         // CAS 失败，继续重试
@@ -543,6 +571,7 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
         None<V>
     }
     public func removeIf(predicate: (K, V) -> Bool): Unit {
+        let curEpoch = epoch.load()   // 捕获当前代际
         var currOpt = head.next[0].load()
         while (true) {
             match (currOpt) {
@@ -557,10 +586,10 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
                             match (curr.key) {
                                 case Some(k) =>
                                     if (predicate(k, box.value)) {
-                                        tryRemoveNode(curr)
+                                        tryRemoveNode(curr, curEpoch)
                                     }
                                 case None =>
-                                    tryRemoveNode(curr)
+                                    tryRemoveNode(curr, curEpoch)
                             }
                         case None =>
                             helpPhysicallyRemove(curr)
@@ -589,6 +618,7 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
     
     public func entryView(key: K, fn: (MapEntryView<K, V>) -> Unit): ?V {
         while (true) {
+            let curEpoch = epoch.load()   // 捕获当前代际
             let result = findNode(key)
             match (result.node) {
                 case Some(node) =>
@@ -624,7 +654,10 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
                         case None =>
                             if (node.value.compareAndSwap(oldVal, None)) {
                                 physicallyRemove(node)
-                                size_.fetchSub(1)
+                                // 检查代际是否变化，若变化则跳过 size_ 递减
+                                if (epoch.load() == curEpoch) {
+                                    size_.fetchSub(1)
+                                }
                                 return oldVal?.value
                             }
                             continue
