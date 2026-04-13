@@ -180,14 +180,7 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
                 match (curr) {
                     case Some(node) =>
                         if (!isHead(node) && node.key < key) {
-                            // 遇到逻辑删除节点，主动清理并重新加载
-                            let nodeVal = node.value.load()
-                            if (nodeVal.isNone()) {
-                                let nodeNext = node.next[level].load()
-                                pred.next[level].compareAndSwap(curr, nodeNext)
-                                curr = pred.next[level].load()
-                                continue
-                            }
+                            // 延迟检查：遍历时跳过 value.load()，仅在找到目标 key 时检查
                             pred = node
                             curr = node.next[level].load()
                         } else {
@@ -200,9 +193,15 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
             succs[level] = curr
         }
 
+        // 仅在找到目标 key 时检查 value 是否已被逻辑删除
         match (curr) {
             case Some(node) =>
                 if (!isHead(node) && node.key == key) {
+                    let nodeVal = node.value.load()
+                    if (nodeVal.isNone()) {
+                        // 节点已被逻辑删除，视为未找到
+                        return FindResult(None, preds, succs)
+                    }
                     return FindResult(Some(node), preds, succs)
                 }
             case None => ()
