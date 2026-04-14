@@ -730,17 +730,8 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
         // succs[0] 是第一个 key >= min 的节点
         var startNode = result.succs[0]
         // 如果 including=false 且找到的节点 key == min，需要跳过
-        if (!including) {
-            match (startNode) {
-                case Some(node) =>
-                    match (node.key) {
-                        case Some(k) where k == min =>
-                            // 跳过第一个等于 min 的节点
-                            startNode = node.next[0].load()
-                        case _ => ()
-                    }
-                case None => ()
-            }
+        if (!including && let Some(node) <- startNode && let Some(k) <- node.key && k == min) {
+            startNode = node.next[0].load()
         }
         TailEntryIterator<K, V>(startNode)
     }
