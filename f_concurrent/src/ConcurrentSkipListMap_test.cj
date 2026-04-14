@@ -1484,6 +1484,30 @@ public class ConcurrentSkipListMap_test {
     }
 
     @TestCase
+    public func test_tailer_key_not_exists_gap(): Unit {
+        let map = ConcurrentSkipListMap<Int64, String>()
+        map.add(10, "ten")
+        map.add(20, "twenty")
+        map.add(30, "thirty")
+
+        // 从不存在的键 15 开始，应该从 20 开始遍历
+        let iter = map.tailer(15, including: true)
+        var count = 0
+        var expectedKey: Int64 = 20
+        var expectedValue = "twenty"
+        while (let Some((k, v)) <- iter.next()) {
+            count += 1
+            @Assert(k, expectedKey)
+            @Assert(v, expectedValue)
+            if (expectedKey == 20) {
+                expectedKey = 30
+                expectedValue = "thirty"
+            }
+        }
+        @Assert(count, 2)  // 20, 30
+    }
+
+    @TestCase
     public func test_tailer_string_keys(): Unit {
         let map = ConcurrentSkipListMap<String, Int64>()
         map.add("apple", 1)
