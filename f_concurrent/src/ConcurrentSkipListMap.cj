@@ -709,6 +709,9 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
             entry => entry.value = fn(key, entry.value)
         }
     }
+    public func header(max: K, including!: Bool = false): Iterator<(K, V)>{
+        HeadEntryIterator<K, V>(head, max, including)
+    }
 }
 
 // Map 接口要求的方法
@@ -732,9 +735,6 @@ extend<K, V> ConcurrentSkipListMap<K, V> <: ConcurrentMap<K, V> where K <: Compa
 
     public func iterator(): Iterator<(K, V)> {
         return EntryIterator<K, V>(head)
-    }
-    public func header(max: K, including!: Bool = false): Iterator<(K, V)>{
-        HeadEntryIterator<K, V>(head, max, including)
     }
 
     public func put(key: K, value: V): ?V {
