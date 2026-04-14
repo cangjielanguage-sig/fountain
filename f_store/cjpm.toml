@@ -1,0 +1,25 @@
+[package]
+  cjc-version = "1.1.0"
+  compile-option = "--dy-std"
+  override-compile-option = "--dy-std"
+  description = "存储模块，包含依赖liburing的WAL和LSM-Tree"
+  link-option = ""
+  name = "f_store"
+  organization="fountain"
+  output-type = "dynamic"
+  src-dir = ""
+  target-dir = ""
+  version = "1.1.3"
+  package-configuration = {}
+  category = ["Utility"]
+  license = ["Apache-2.0"]
+  include = ["src", "doc"]
+  exclude = ["cjpm.toml.bak", "cjpm.lock", "target"]
+  authors = ["吴京润"]
+
+[profile.build]
+  incremental = true
+
+[dependencies]
+  "fountain::f_base" = {path = "../f_base"}
+  "fountain::f_io" = {path = "../f_io"}
