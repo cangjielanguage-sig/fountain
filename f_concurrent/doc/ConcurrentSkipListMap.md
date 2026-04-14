@@ -78,6 +78,15 @@ public func keys(): EquatableCollection<K>
 
 // 获取所有值
 public func values(): Collection<V>
+// 从最小的KEY开始遍历，到max结束，including决定是否包含max
+public func header(max: K, including!: Bool = false): Iterator<(K, V)>
+/**
+ * @param min: 迭代器的第一个key不小于min
+ * @param including: 迭代器的第一个key是否包含min，true为包含，false为不包含
+ */
+public func tailer(min: K, including!: Bool = true): Iterator<(K, V)> 
+// 返回指定区间的迭代器，从min开始到max结束，includingMax决定是否包含max，includingMin决定是否包含min
+public func sub(min: K, max: K, includingMin!: Bool = true, includingMax!: Bool = true): Iterator<(K, V)>
 ```
 
 #### 原子操作
