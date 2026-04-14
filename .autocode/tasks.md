@@ -3,7 +3,7 @@
 cd f_concurrent
 
 # 任务
-为ConcurrentSkipListMap 实现一个tailer迭代器，跟iterator()，要以O(log(n))的时间复杂度找到第一个符合条件的key。
+为ConcurrentSkipListMap 实现一个tailer迭代器，要以O(log(n))的时间复杂度找到第一个符合条件的key。
 函数声明如下：
 ```cj
 /**

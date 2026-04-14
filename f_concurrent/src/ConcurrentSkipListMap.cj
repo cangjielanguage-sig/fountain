@@ -712,6 +712,31 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
     public func header(max: K, including!: Bool = false): Iterator<(K, V)>{
         HeadEntryIterator<K, V>(head, max, including)
     }
+
+    /**
+     * @param min: 迭代器的第一个key不小于min
+     * @param including: 迭代器的第一个key是否包含min，true为包含，false为不包含
+     */
+    public func tailer(min: K, including!: Bool = true): Iterator<(K, V)> {
+        // 使用 O(log n) 查找找到第一个 >= min 的节点
+        let result = findNode(min)
+        // succs[0] 是第一个 key >= min 的节点
+        var startNode = result.succs[0]
+        // 如果 including=false 且找到的节点 key == min，需要跳过
+        if (!including) {
+            match (startNode) {
+                case Some(node) =>
+                    match (node.key) {
+                        case Some(k) where k == min =>
+                            // 跳过第一个等于 min 的节点
+                            startNode = node.next[0].load()
+                        case _ => ()
+                    }
+                case None => ()
+            }
+        }
+        TailEntryIterator<K, V>(startNode)
+    }
 }
 
 // Map 接口要求的方法
@@ -855,10 +880,31 @@ private class HeadEntryIterator<K, V> <: Iterator<(K, V)> where K <: Comparable<
         while (let Some(node) <- current) {
             if (let Some(v) <- node.value.load()) {
                 match (node.key) {
-                    case Some(k) where check(k) => 
+                    case Some(k) where check(k) =>
                         current = node.next[0].load()
                         return Some((k, v.value))
                     case Some(_) => return None
+                    case _ => continue
+                }
+            }
+        }
+        None
+    }
+}
+
+private class TailEntryIterator<K, V> <: Iterator<(K, V)> where K <: Comparable<K> {
+    private var current: Option<Node<K, V>>
+
+    public init(start: Option<Node<K, V>>) {
+        this.current = start
+    }
+
+    public func next(): Option<(K, V)> {
+        while (let Some(node) <- current) {
+            current = node.next[0].load()
+            if (let Some(v) <- node.value.load()) {
+                match (node.key) {
+                    case Some(k) => return Some((k, v.value))
                     case _ => continue
                 }
             }

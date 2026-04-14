@@ -1386,4 +1386,129 @@ public class ConcurrentSkipListMap_test {
         }
     }
 
+    // ========== 9. tailer 迭代器测试 ==========
+    @TestCase
+    public func test_tailer_basic(): Unit {
+        let map = ConcurrentSkipListMap<Int64, String>()
+        for (i in 0..10) {
+            map.add(i, "val_${i}")
+        }
+
+        // 从 5 开始迭代（包括 5）
+        let iter = map.tailer(5, including: true)
+        var count = 0
+        var expectedKey: Int64 = 5
+        while (let Some((k, v)) <- iter.next()) {
+            count += 1
+            @Assert(k, expectedKey)
+            @Assert(v, "val_${k}")
+            @Assert(k >= 5)
+            expectedKey += 1
+        }
+        @Assert(count, 5)  // 5,6,7,8,9
+    }
+
+    @TestCase
+    public func test_tailer_not_including(): Unit {
+        let map = ConcurrentSkipListMap<Int64, String>()
+        for (i in 0..10) {
+            map.add(i, "val_${i}")
+        }
+
+        // 从 5 开始迭代（不包括 5）
+        let iter = map.tailer(5, including: false)
+        var count = 0
+        var expectedKey: Int64 = 6
+        while (let Some((k, v)) <- iter.next()) {
+            count += 1
+            @Assert(k, expectedKey)
+            @Assert(v, "val_${k}")
+            @Assert(k > 5)
+            expectedKey += 1
+        }
+        @Assert(count, 4)  // 6,7,8,9
+    }
+
+    @TestCase
+    public func test_tailer_empty_map(): Unit {
+        let map = ConcurrentSkipListMap<Int64, String>()
+        let iter = map.tailer(5, including: true)
+        @Assert(iter.next().isNone())
+    }
+
+    @TestCase
+    public func test_tailer_from_min_key(): Unit {
+        let map = ConcurrentSkipListMap<Int64, String>()
+        for (i in 0..10) {
+            map.add(i, "val_${i}")
+        }
+
+        // 从最小键开始（包括）
+        let iter = map.tailer(0, including: true)
+        var count = 0
+        while (let Some(_) <- iter.next()) {
+            count += 1
+        }
+        @Assert(count, 10)
+    }
+
+    @TestCase
+    public func test_tailer_beyond_max_key(): Unit {
+        let map = ConcurrentSkipListMap<Int64, String>()
+        for (i in 0..10) {
+            map.add(i, "val_${i}")
+        }
+
+        // 从比最大键还大的值开始
+        let iter = map.tailer(100, including: true)
+        @Assert(iter.next().isNone())
+    }
+
+    @TestCase
+    public func test_tailer_key_not_exists(): Unit {
+        let map = ConcurrentSkipListMap<Int64, String>()
+        map.add(1, "one")
+        map.add(3, "three")
+        map.add(5, "five")
+
+        // 从不存在的键 2 开始
+        let iter = map.tailer(2, including: true)
+        var count = 0
+        var expectedKey: Int64 = 3
+        while (let Some((k, v)) <- iter.next()) {
+            count += 1
+            @Assert(k, expectedKey)
+            expectedKey += 2  // 3 -> 5
+        }
+        @Assert(count, 2)  // 3, 5
+    }
+
+    @TestCase
+    public func test_tailer_string_keys(): Unit {
+        let map = ConcurrentSkipListMap<String, Int64>()
+        map.add("apple", 1)
+        map.add("banana", 2)
+        map.add("cherry", 3)
+        map.add("date", 4)
+
+        // 从 "banana" 开始（包括）
+        let iter = map.tailer("banana", including: true)
+        var count = 0
+        var expectedKey = "banana"
+        var expectedValue = 2
+        while (let Some((k, v)) <- iter.next()) {
+            count += 1
+            @Assert(k, expectedKey)
+            @Assert(v, expectedValue)
+            if (expectedKey == "banana") {
+                expectedKey = "cherry"
+                expectedValue = 3
+            } else if (expectedKey == "cherry") {
+                expectedKey = "date"
+                expectedValue = 4
+            }
+        }
+        @Assert(count, 3)
+    }
+
 }
