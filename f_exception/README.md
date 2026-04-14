@@ -1,58 +1,83 @@
+# f_exception
+
+
 ## DuplicationInstanceException
-实例冲突异常
+
+- [DuplicationInstanceException](doc/DuplicationInstanceException.md)
 
 ## IllegalAccessException
-非法访问异常
+
+- [IllegalAccessException](doc/IllegalAccessException.md)
 
 ## IllegalArgException
-带causedBy的错误参数异常
+
+- [IllegalArgException](doc/IllegalArgException.md)
 
 ## IllegalSizeException
-错误大小异常
+
+- [IllegalSizeException](doc/IllegalSizeException.md)
 
 ## IllegalStateException
-错误状态异常
+
+- [IllegalStateException](doc/IllegalStateException.md)
 
 ## NoSuchElementException
-没有此类元素异常
+
+- [NoSuchElementException](doc/NoSuchElementException.md)
 
 ## NotConsideredException
 
+- [NotConsideredException](doc/NotConsideredException.md)
+
 ## NotInstantiatedException
-未实例化异常
+
+- [NotInstantiatedException](doc/NotInstantiatedException.md)
 
 ## NotSupportedTypeException
-不支持的类型异常
+
+- [NotSupportedTypeException](doc/NotSupportedTypeException.md)
 
 ## NumberFormatException
-数值格式异常
+
+- [NumberFormatException](doc/NumberFormatException.md)
 
 ## OutOfBoundsException
-带causedBy的索引越界异常
+
+- [OutOfBoundsException](doc/OutOfBoundsException.md)
 
 ## StatusException
-状态异常
+
+- [StatusException](doc/StatusException.md)
 
 ## TypeCastException
-类型转换异常
+
+- [TypeCastException](doc/TypeCastException.md)
 
 ## TypeNotMatchException
-类型不匹配异常
+
+- [TypeNotMatchException](doc/TypeNotMatchException.md)
 
 ## UnexpectedTokenException
-非预期的Token异常
+
+- [UnexpectedTokenException](doc/UnexpectedTokenException.md)
 
 ## UnreachableException
-代码不应可达的异常
+
+- [UnreachableException](doc/UnreachableException.md)
 
 ## UnreadableException
-不可读异常
+
+- [UnreadableException](doc/UnreadableException.md)
 
 ## UnsupportedAccessException
-不支持的访问异常
+
+- [UnsupportedAccessException](doc/UnsupportedAccessException.md)
 
 ## UnsupportedOperatorException
-不支持的操作异常
+
+- [UnsupportedOperatorException](doc/UnsupportedOperatorException.md)
 
 ## UnwritableException
-不可写异常
+
+- [UnwritableException](doc/UnwritableException.md)
+

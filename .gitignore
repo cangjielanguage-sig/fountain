@@ -38,3 +38,4 @@ console.log
 *.so
 *.dll
 .pub_latency
+CODEBUDDY.md
