@@ -709,8 +709,15 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
             entry => entry.value = fn(key, entry.value)
         }
     }
+    private func maxChecker(max: K, including: Bool){
+        if(including){
+            {key => key <= max}
+        }else{
+            {key => key < max}
+        }
+    }
     public func header(max: K, including!: Bool = false): Iterator<(K, V)>{
-        HeadEntryIterator<K, V>(head, max, including)
+        iterator().filter(maxChecker(max, including))
     }
 
     /**
@@ -736,6 +743,12 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
             }
         }
         TailEntryIterator<K, V>(startNode)
+    }
+    public func sub(min: K, max: K, includingMin!: Bool = true, includingMax!: Bool = true): Iterator<(K, V)> {
+        if(min > max){
+            throw IllegalArgumentException("min > max")
+        }
+        tailer(min, including: includingMin).filter(maxChecker(max, includingMax))
     }
 }
 
@@ -857,33 +870,6 @@ private class EntryIterator<K, V> <: Iterator<(K, V)> where K <: Comparable<K> {
             if (let Some(v) <- node.value.load()) {
                 match (node.key) {
                     case Some(k) => return Some((k, v.value))
-                    case _ => continue
-                }
-            }
-        }
-        None
-    }
-}
-private class HeadEntryIterator<K, V> <: Iterator<(K, V)> where K <: Comparable<K> {
-    private var current: Option<Node<K, V>>
-    private let check: (K) -> Bool
-    public init(head: Node<K, V>, max: K, including: Bool) {
-        this.current = head.next[0].load()
-        this.check = if (including) {
-            {k1 => k1 <= max}
-        } else {
-            {k1 => k1 < max}
-        }
-    }
-
-    public func next(): Option<(K, V)> {
-        while (let Some(node) <- current) {
-            if (let Some(v) <- node.value.load()) {
-                match (node.key) {
-                    case Some(k) where check(k) =>
-                        current = node.next[0].load()
-                        return Some((k, v.value))
-                    case Some(_) => return None
                     case _ => continue
                 }
             }
