@@ -90,7 +90,7 @@ class FindNodeCache<K, V> where K <: Comparable<K> {
     public let succs: Array<Option<Node<K, V>>> = Array<Option<Node<K, V>>>(17) { _ => None }
 }
 
-public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
+public class ConcurrentSkipListMap<K, V> <: ConcurrentMap<K, V> where K <: Comparable<K> {
     let MAX_LEVEL: Int64 = 16
     // 线程局部缓存 findNode 所需的数组，避免每次分配（每个 map 实例一个）
     private let findNodeCache: ThreadLocal<FindNodeCache<K, V>>
@@ -709,15 +709,19 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
             entry => entry.value = fn(key, entry.value)
         }
     }
-    private func maxChecker(max: K, including: Bool){
+    private func maxChecker(max: K, including: Bool): (K) -> Bool {
         if(including){
-            {key => key <= max}
+            {key: K => key <= max}
         }else{
-            {key => key < max}
+            {key: K => key < max}
         }
     }
+    private func filterIterator(itr: Iterator<(K, V)>, max: K, including: Bool): Iterator<(K, V)> {
+        let checker = maxChecker(max, including)
+        itr.filter{tpl => checker(tpl[0])}
+    }
     public func header(max: K, including!: Bool = false): Iterator<(K, V)>{
-        iterator().filter(maxChecker(max, including))
+        filterIterator(iterator(), max, including)
     }
 
     /**
@@ -739,12 +743,9 @@ public class ConcurrentSkipListMap<K, V> where K <: Comparable<K> {
         if(min > max){
             throw IllegalArgumentException("min > max")
         }
-        tailer(min, including: includingMin).filter(maxChecker(max, includingMax))
+        filterIterator(tailer(min, including: includingMin), max, includingMax)
     }
-}
 
-// Map 接口要求的方法
-extend<K, V> ConcurrentSkipListMap<K, V> <: ConcurrentMap<K, V> where K <: Comparable<K> {
     public func putIfAbsent(key: K, value: V): ?V {
         addIfAbsent(key, value)
     }
