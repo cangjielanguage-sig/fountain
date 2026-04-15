@@ -90,7 +90,7 @@ class FindNodeCache<K, V> where K <: Comparable<K> {
     public let succs: Array<Option<Node<K, V>>> = Array<Option<Node<K, V>>>(17) { _ => None }
 }
 
-public class ConcurrentSkipListMap<K, V> <: ConcurrentMap<K, V> where K <: Comparable<K> {
+public class ConcurrentSkipListMap<K, V> <: ConcurrentMap<K, V> & Collection<(K, V)> where K <: Comparable<K> {
     let MAX_LEVEL: Int64 = 16
     // 线程局部缓存 findNode 所需的数组，避免每次分配（每个 map 实例一个）
     private let findNodeCache: ThreadLocal<FindNodeCache<K, V>>
@@ -638,6 +638,11 @@ public class ConcurrentSkipListMap<K, V> <: ConcurrentMap<K, V> where K <: Compa
 
     public func isEmpty(): Bool {
         return size == 0
+    }
+
+    public func toArray(): Array<(K, V)>{
+        let itr = iterator()
+        Array<(K, V)>(size){_ => itr.next().getOrThrow()}
     }
     
     public func entryView(key: K, fn: (MapEntryView<K, V>) -> Unit): ?V {
