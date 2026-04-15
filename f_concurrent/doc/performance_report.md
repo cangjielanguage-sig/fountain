@@ -159,16 +159,6 @@
 | entryView | O(log n) | findNode + CAS 循环 |
 | clear | O(1) | 替换 head 引用 + epoch 递增 |
 
-## 潜在优化方向
-
-1. **分层索引优化**：当前 MAX_LEVEL=16，对于小规模数据可考虑动态调整。
-
-2. **size_ 弱一致性**：每次 add/remove 的 fetchAdd/fetchSub 有开销，可改为惰性计算。
-
-3. **findNode 数组分配优化**：每次分配两个大小 17 的 Array，可考虑线程局部缓存复用（已评估，复杂度较高）。
-
-4. **findNode 中 value.load() 合并**：当前遍历时每个节点都做 `node.value.load().isNone()` 检查，可考虑延迟检查。
-
 ## 测试用例说明
 
 | 用例名 | 场景 | 线程数 | 每线程操作数 |
