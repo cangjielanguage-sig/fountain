@@ -766,4 +766,20 @@ public class ConcurrentSkipListMap_conc_test {
             @Assert(map.get(2).getOrThrow() >= 20)
         }
     }
+    @TestCase
+    public func test_random_add_sequence_iterate(): Unit {
+        let map = ConcurrentSkipListMap<Int64, Int64>()
+        let rand = Random()
+        let keys = Array<Int64>(10000){_ => rand.nextInt64(Int64.Max)}
+        for (key in keys) {
+            spawn{
+                map.add(key, key)
+            }
+        }
+        var prev = -1
+        for((k, v) in map){
+            @Assert(k > prev)
+            prev = k
+        }
+    }
 }

@@ -5,7 +5,7 @@ cd f_concurrent
 按照以下方案优化ConcurrentSkipListMap
 ---
 
-# P2: randomLevel 随机数生成优化
+# randomLevel 随机数生成优化
 
 ## 问题定位
 - 位置：第 131-155 行

@@ -2,7 +2,7 @@
 cd f_concurrent
 
 # 任务
-按照以下方案优化ConcurrentSkipListMap
+按照以下方案优化ConcurrentSkipListMap.cj
 ---
 
 # P5: tryInsertAtLevel 重试策略优化
@@ -97,7 +97,7 @@ private func tryInsertAtLevel(newNode: Node<K, V>, lvl: Int64, pred: Node<K, V>)
 
 
 # 优化之后
-1. 针对本次修改分别在ConcurrentSkipListMap_test.cj 和ConcurrentSkipListMap_conc_test.cj 添加新的测试用例
+1. 如有必要，针对本次修改分别在ConcurrentSkipListMap_test.cj 和ConcurrentSkipListMap_conc_test.cj 添加新的测试用例
 2. 执行命令：cjpm test --filter ConcurrentSkipListMap_test --no-captcture-output --show-all-output 确认修改是否正确
-3. 运行命令：cjpm test --filter ConcurrentSkipListMap_conc_test --no-captcture-output --show-all-output 确认并发访问正确
+3. 逐个执行ConcurrentSkipListMap_conc_test的测试函数，运行命令：`cjpm test --filter ConcurrentSkipListMap_conc_test.<test_func_name> --no-captcture-output --show-all-output` 确认并发访问正确
 4. 运行命令：cjpm test --filter ConcurrentSkipListMap_perf_test --no-captcture-output --show-all-output|grep -P 'perf_.+:' 根据性能测试结果出性能测试报告跟f_concurrent/doc/performance_report.md 比较优化前后的差异，如果性能表现更优更新性能测试报告、本次修改内容，提交git；否则回退之前的版本
