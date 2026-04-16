@@ -595,9 +595,20 @@ public class ConcurrentSkipListMap<K, V> <: ConcurrentMap<K, V> & Collection<(K,
         None<V>
     }
     public func removeIf(predicate: (K, V) -> Bool): Unit {
-        let curEpoch = epoch.load()   // 捕获当前代际
+        let startEpoch = epoch.load()   // 捕获当前代际
         var currOpt = head.next[0].load()
+        var checkCounter: Int64 = 0
+
         while (true) {
+            // 每 64 个节点检查一次 epoch 变化
+            checkCounter += 1
+            if (checkCounter % 64 == 0) {
+                if (epoch.load() != startEpoch) {
+                    // clear() 已执行，终止遍历
+                    return
+                }
+            }
+
             match (currOpt) {
                 case Some(curr) =>
                     if (isHead(curr)) {
@@ -610,10 +621,10 @@ public class ConcurrentSkipListMap<K, V> <: ConcurrentMap<K, V> & Collection<(K,
                             match (curr.key) {
                                 case Some(k) =>
                                     if (predicate(k, box.value)) {
-                                        tryRemoveNode(curr, curEpoch)
+                                        tryRemoveNode(curr, startEpoch)
                                     }
                                 case None =>
-                                    tryRemoveNode(curr, curEpoch)
+                                    tryRemoveNode(curr, startEpoch)
                             }
                         case None =>
                             helpPhysicallyRemove(curr)
