@@ -219,14 +219,8 @@ public class ConcurrentSkipListMap<K, V> <: ConcurrentMap<K, V> & Collection<(K,
                 let nodeVal = node.value.load()
                 if (nodeVal.isNone()) {
                     let nodeNext = node.next[level].load()
-                    // CAS 成功后直接用 nodeNext，避免重新加载导致的环形链表问题
-                    if (pred.next[level].compareAndSwap(curr, nodeNext)) {
-                        // CAS 成功，使用已获取的 nodeNext
-                        curr = nodeNext
-                    } else {
-                        // CAS 失败，重新加载
-                        curr = pred.next[level].load()
-                    }
+                    pred.next[level].compareAndSwap(curr, nodeNext)
+                    curr = pred.next[level].load()
                     continue
                 }
                 pred = node
@@ -448,7 +442,7 @@ public class ConcurrentSkipListMap<K, V> <: ConcurrentMap<K, V> & Collection<(K,
             case Some(k) =>
                 for (lvl in node.level..=0 : -1) {
                     var retries = 0
-                    while (retries < 5) {
+                    while (retries < 3) {
                         // 节点已被复活，终止物理删除
                         if (node.value.load().isSome()) {
                             return
@@ -461,25 +455,12 @@ public class ConcurrentSkipListMap<K, V> <: ConcurrentMap<K, V> & Collection<(K,
                         let succ = pred.next[lvl].load()
                         match (succ) {
                             case Some(n) where refEq(n, node) =>
-                                // pred.next 仍指向 node，尝试 CAS 断开
                                 let nodeNext = node.next[lvl].load()
                                 if (pred.next[lvl].compareAndSwap(succ, nodeNext)) {
                                     break
                                 }
                                 retries += 1
-                            case Some(n) =>
-                                // pred.next 不再指向 node，可能已被其他线程删除
-                                // 检查 node 是否仍挂在链表中（通过比较 key）
-                                let cmp = compare(n.key, Some(k))
-                                if (cmp == GT || cmp == EQ) {
-                                    // n 的 key 大于等于 k，说明 node 已被其他线程从该位置移除
-                                    // 尝试从其他层级继续删除
-                                    break
-                                }
-                                // key 更小，可能被重新插入，继续重试
-                                retries += 1
-                            case None =>
-                                // pred.next 为 None，节点可能已被完全删除
+                            case _ =>
                                 break
                         }
                     }
@@ -614,20 +595,9 @@ public class ConcurrentSkipListMap<K, V> <: ConcurrentMap<K, V> & Collection<(K,
         None<V>
     }
     public func removeIf(predicate: (K, V) -> Bool): Unit {
-        let startEpoch = epoch.load()   // 捕获当前代际
+        let curEpoch = epoch.load()   // 捕获当前代际
         var currOpt = head.next[0].load()
-        var checkCounter: Int64 = 0
-
         while (true) {
-            // 每 64 个节点检查一次 epoch 变化
-            checkCounter += 1
-            if (checkCounter % 64 == 0) {
-                if (epoch.load() != startEpoch) {
-                    // clear() 已执行，终止遍历
-                    return
-                }
-            }
-
             match (currOpt) {
                 case Some(curr) =>
                     if (isHead(curr)) {
@@ -640,10 +610,10 @@ public class ConcurrentSkipListMap<K, V> <: ConcurrentMap<K, V> & Collection<(K,
                             match (curr.key) {
                                 case Some(k) =>
                                     if (predicate(k, box.value)) {
-                                        tryRemoveNode(curr, startEpoch)
+                                        tryRemoveNode(curr, curEpoch)
                                     }
                                 case None =>
-                                    tryRemoveNode(curr, startEpoch)
+                                    tryRemoveNode(curr, curEpoch)
                             }
                         case None =>
                             helpPhysicallyRemove(curr)
