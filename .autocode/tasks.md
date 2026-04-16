@@ -2,7 +2,7 @@
 cd f_concurrent
 
 # 任务
-cjpm test --filter ConcurrentSkipListMap_conc_test.test_concurrent_add_all_and_operations 这个测试用例会长时间不结束
+timeout 60 cjpm test --filter ConcurrentSkipListMap_conc_test.test_concurrent_add_all_and_operations 这个测试用例会长时间不结束
 
 ConcurrentSkipListMap_conc_test 下面的这三个测试用例也有概率发生同类问题，尤其是三个测试用例一起执行的时候，发生概率更高。一起执行这三个测试用例，运行五次这个问题至少发生一次。
 test_size_consistency_under_concurrent_modifications1
@@ -11,3 +11,5 @@ test_size_consistency_under_concurrent_modifications3
 
 这几个测试用例的共同点就是测试用例并发混合调用了add 和 remove 方法。检查这两个函数相关的代码，找到问题所在。
 应该是并发混合调用这两个函数的时候，发生了死循环。
+
+考虑到编译时间，超时时间不能太短，否则可能还没编译完就结束了。
