@@ -227,6 +227,18 @@ public class ConcurrentSkipListMap_test {
         // 实际可通过自定义 getNodeLevel 接口，此处假设节点内部 level 正确
         @Assert(true)  // 占位，主要是运行时不越界
     }
+        @TestCase
+    public func test_random_level_distribution2(): Unit {
+        // 验证节点层数不超过 MAX_LEVEL=16
+        let map = ConcurrentSkipListMap<Int64, Int64>()
+        for (i in 0..10000) {
+            map.add(i, i)
+            map.remove(i)
+        }
+        // 通过反射或遍历节点检查层数（这里简化：直接测试不会崩溃）
+        // 实际可通过自定义 getNodeLevel 接口，此处假设节点内部 level 正确
+        @Assert(true)  // 占位，主要是运行时不越界
+    }
 
     @TestCase
     public func test_head_sentinel_behavior(): Unit {

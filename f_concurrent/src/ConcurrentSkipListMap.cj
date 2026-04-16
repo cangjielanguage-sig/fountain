@@ -219,8 +219,14 @@ public class ConcurrentSkipListMap<K, V> <: ConcurrentMap<K, V> & Collection<(K,
                 let nodeVal = node.value.load()
                 if (nodeVal.isNone()) {
                     let nodeNext = node.next[level].load()
-                    pred.next[level].compareAndSwap(curr, nodeNext)
-                    curr = pred.next[level].load()
+                    // CAS 成功后直接用 nodeNext，避免重新加载导致的环形链表问题
+                    if (pred.next[level].compareAndSwap(curr, nodeNext)) {
+                        // CAS 成功，使用已获取的 nodeNext
+                        curr = nodeNext
+                    } else {
+                        // CAS 失败，重新加载
+                        curr = pred.next[level].load()
+                    }
                     continue
                 }
                 pred = node
@@ -442,7 +448,7 @@ public class ConcurrentSkipListMap<K, V> <: ConcurrentMap<K, V> & Collection<(K,
             case Some(k) =>
                 for (lvl in node.level..=0 : -1) {
                     var retries = 0
-                    while (retries < 3) {
+                    while (retries < 5) {
                         // 节点已被复活，终止物理删除
                         if (node.value.load().isSome()) {
                             return
@@ -455,12 +461,25 @@ public class ConcurrentSkipListMap<K, V> <: ConcurrentMap<K, V> & Collection<(K,
                         let succ = pred.next[lvl].load()
                         match (succ) {
                             case Some(n) where refEq(n, node) =>
+                                // pred.next 仍指向 node，尝试 CAS 断开
                                 let nodeNext = node.next[lvl].load()
                                 if (pred.next[lvl].compareAndSwap(succ, nodeNext)) {
                                     break
                                 }
                                 retries += 1
-                            case _ =>
+                            case Some(n) =>
+                                // pred.next 不再指向 node，可能已被其他线程删除
+                                // 检查 node 是否仍挂在链表中（通过比较 key）
+                                let cmp = compare(n.key, Some(k))
+                                if (cmp == GT || cmp == EQ) {
+                                    // n 的 key 大于等于 k，说明 node 已被其他线程从该位置移除
+                                    // 尝试从其他层级继续删除
+                                    break
+                                }
+                                // key 更小，可能被重新插入，继续重试
+                                retries += 1
+                            case None =>
+                                // pred.next 为 None，节点可能已被完全删除
                                 break
                         }
                     }

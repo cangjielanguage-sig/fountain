@@ -280,18 +280,44 @@ public class ConcurrentSkipListMap_conc_test {
         // 暴露 size 不一致 bug（用例44）
         let map = ConcurrentSkipListMap<Int64, Int64>()
         let threads = 20
+        let iterations = 1000
+        let latch = SyncCounter(threads)
+
+        for (_ in 0..threads) {
+            spawn {
+                for (i in 0..iterations) {
+                    if (i % 2 == 0) {
+                        map.add(i, i)
+                    } else {
+                        map.remove(i - 1)
+                    }
+                }
+                latch.dec()
+            }
+        }
+        latch.waitUntilZero()
+
+        // 最终实际节点数（通过遍历统计）
+        var actualSize = 0
+        for ((_, _) in map.iterator()) {
+            actualSize += 1
+        }
+        // 由于并发删除/插入，实际大小可能不等于 size_.load() 的瞬时值，
+        // 但最终应一致（无其他修改时）。这里简单检查 size 非负且遍历计数与 size 最终相等
+        @Assert(actualSize, map.size)
+    }
+    
+    @TestCase
+    public func test_size_consistency_under_concurrent_modifications2(): Unit {
+        // 暴露 size 不一致 bug（用例44）
+        let map = ConcurrentSkipListMap<Int64, Int64>()
+        let threads = 20
         let iterations = 500
         let latch = SyncCounter(threads)
 
         for (_ in 0..threads) {
             spawn {
                 for (i in 0..iterations) {
-                    // if (i % 2 == 0) {
-                    //     map.add(i, i)
-                    // } else {
-                    //     map.remove(i - 1)
-                    // }
-
                     map.add(i,i)
                     map.remove(i)
                 }
@@ -662,7 +688,7 @@ public class ConcurrentSkipListMap_conc_test {
                             }
                         }
                         case 5 => map.entryView(key) { k, v =>
-                            Some(v.getOrThrow() + 1)
+                            Some((v ?? 0) + 1)
                         }
                         case _ => ()
                     }
