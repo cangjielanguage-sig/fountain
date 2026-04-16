@@ -276,7 +276,7 @@ public class ConcurrentSkipListMap_conc_test {
     }
 
     @TestCase
-    public func test_size_consistency_under_concurrent_modifications(): Unit {
+    public func test_size_consistency_under_concurrent_modifications1(): Unit {
         // 暴露 size 不一致 bug（用例44）
         let map = ConcurrentSkipListMap<Int64, Int64>()
         let threads = 20
