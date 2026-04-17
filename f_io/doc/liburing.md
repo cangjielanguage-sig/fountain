@@ -1177,7 +1177,376 @@ public class IoUring <: Resource {
 
 ---
 
-## 8. 总结
+## 8. 并发安全设计
+
+### 8.1 io_uring 并发模型分析
+
+io_uring 的核心数据结构（SQ/CQ 环形队列）是**共享内存并发**模型，具有以下特性：
+
+| 操作 | 生产者 | 消费者 | 并发关系 |
+|------|--------|--------|----------|
+| SQ 提交 | 应用线程 | 内核 | SPSC (单生产者单消费者) |
+| CQ 收割 | 内核 | 应用线程 | SPSC |
+| SQ 队列索引 | 应用线程 | 应用线程 | 可能 MPSC |
+
+**关键结论**：
+- 默认模式：**单个 io_uring 实例仅支持单线程提交**（SQ 生产者）
+- 使用 `IORING_SETUP_SINGLE_ISSUER` 可获得更好性能（内核 5.19+）
+- 多线程场景需要**同步机制**或**多实例设计**
+
+### 8.2 内存序要求
+
+liburing 使用特定的内存序语义确保正确性：
+
+#### 8.2.1 Acquire-Release 语义
+
+```
+应用线程                内核
+    |                     |
+    | 写入 SQE 字段       |
+    | smp_store_release   |  ← 释放语义：确保 SQE 写入对内核可见
+    | 更新 SQ.tail        |
+    |-------- 接收 ------→|
+    |                     | smp_load_acquire  ← 获取语义
+    |                     | 读取 SQ.tail
+    |                     | 读取 SQE 字段
+```
+
+#### 8.2.2 仓颉侧实现
+
+仓颉标准库提供 `AtomicInt64`、`AtomicUInt32` 等原子类型，支持内存序：
+
+```cj
+import std.sync.{AtomicUInt32, MemoryOrder}
+
+// 读取 SQ tail (acquire 语义)
+public func ioUringSmpLoadAcquire(ptr: CPointer<UInt32>): UInt32 {
+    // 仓颉暂无直接 FFI 到 C 原子操作，需通过 volatile 语义或 inline 汇编
+    // 简化实现：使用编译器屏障
+    unsafe {
+        let value = ptr.read()
+        // 编译器屏障防止重排
+        __compiler_barrier()  // 假设存在此 intrinsic
+        value
+    }
+}
+
+// 写入 SQ head (release 语义)
+public func ioUringSmpStoreRelease(ptr: CPointer<UInt32>, value: UInt32): Unit {
+    unsafe {
+        __compiler_barrier()
+        ptr.write(value)
+    }
+}
+```
+
+**注意**：完整实现需要：
+1. 仓颉编译器提供 `volatile read/write` 支持
+2. 或通过 FFI 调用 C 的 `__atomic_load_n` / `__atomic_store_n`
+
+### 8.3 多线程访问模式
+
+#### 8.3.1 模式一：单实例 + 外部同步（简单）
+
+```cj
+@When[os == "Linux"]
+public class IoUring <: Resource {
+    private let ring: IOUring
+    private let mutex: Mutex = Mutex()  // 保护 SQ 操作
+    private var closed = false
+
+    // 线程安全的获取 SQE
+    public func getSqe(): ?CPointer<IOUringSQE> {
+        mutex.lock()
+        defer { mutex.unlock() }
+        
+        let sqe = ioUringGetSQE(CPointer<IOUring>(ring))
+        if (sqe.isNull()) {
+            None
+        } else {
+            Some(sqe)
+        }
+    }
+
+    // 线程安全的提交
+    public func submit(): Int32 {
+        mutex.lock()
+        defer { mutex.unlock() }
+        
+        unsafe { io_uring_submit(CPointer<IOUring>(ring)) }
+    }
+}
+```
+
+**优点**：实现简单
+**缺点**：锁竞争影响性能，不适合高并发
+
+#### 8.3.2 模式二：每线程独立实例（推荐）
+
+```cj
+@When[os == "Linux"]
+public class IoUringPool {
+    private let rings: Array<IoUring>
+    private let count: Int64
+
+    public init(entriesPerRing: UInt32, ringCount!: Int64 = 4, flags!: UInt32 = 0) {
+        rings = Array<IoUring>(ringCount) { _ =>
+            IoUring(entriesPerRing, flags: flags)
+        }
+        this.count = ringCount
+    }
+
+    // 获取当前线程的 ring（可基于 thread_id 或轮询）
+    public func getRing(): IoUring {
+        // 方案 A：基于 ThreadLocal
+        // 方案 B：基于轮询索引（配合原子计数器）
+        // 方案 C：由调用者显式传递 ring_id
+        ...
+    }
+
+    // 关闭所有 ring
+    public func close(): Unit {
+        for (ring in rings) {
+            ring.close()
+        }
+    }
+}
+```
+
+**优点**：无锁竞争，线性扩展
+**缺点**：内存占用较高
+
+#### 8.3.3 模式三：SQPOLL + 多线程提交
+
+使用 `IORING_SETUP_SQPOLL` 模式时，内核线程负责轮询 SQ：
+
+```cj
+public init(entries: UInt32) {
+    let params = IOUringParams()
+    params.flags = IORING_SETUP_SQPOLL | IORING_SETUP_SINGLE_ISSUER
+    params.sqThreadIdle = 2000  // ms
+    
+    // 初始化...
+}
+```
+
+**注意事项**：
+- `IORING_SETUP_SINGLE_ISSUER` 要求只有一个线程提交
+- 违反此约束会导致未定义行为
+- 需要在应用层确保提交线程唯一
+
+### 8.4 CQE 收割的并发安全
+
+#### 8.4.1 单线程收割
+
+默认模式：单个收割线程负责处理 CQE：
+
+```cj
+// 专用收割线程
+func completionThread(ring: IoUring): Unit {
+    while (!ring.isClosed()) {
+        if (let Some(cqe) <- ring.waitCQE()) {
+            processCompletion(cqe)
+            ring.cqeSeen(cqe)
+        }
+    }
+}
+```
+
+#### 8.4.2 多线程收割
+
+多线程收割 CQE 需要**原子更新 CQ head**：
+
+```cj
+@When[os == "Linux"]
+public class IoUring {
+    private let cqMutex: Mutex = Mutex()  // 保护 CQ 操作
+
+    // 线程安全的收割
+    public func waitCQESafe(): ?CPointer<IOUringCQE> {
+        cqMutex.lock()
+        defer { cqMutex.unlock() }
+        
+        var cqe: CPointer<IOUringCQE> = CPointer<IOUringCQE>()
+        let ret = unsafe { io_uring_wait_cqe(CPointer<IOUring>(ring), inout cqe) }
+        if (ret < 0 || cqe.isNull()) {
+            None
+        } else {
+            Some(cqe)
+        }
+    }
+
+    public func cqeSeenSafe(cqe: CPointer<IOUringCQE>): Unit {
+        cqMutex.lock()
+        defer { cqMutex.unlock() }
+        
+        ioUringCQESeen(CPointer<IOUring>(ring), cqe)
+    }
+}
+```
+
+#### 8.4.3 批量收割 + 原子推进（高性能）
+
+```cj
+// 使用 CAS 实现 CQ head 的原子推进
+@When[os == "Linux"]
+public func ioUringCQAdvanceAtomic(ring: CPointer<IOUring>, nr: UInt32): Unit {
+    if (nr == 0) { return }
+    
+    unsafe {
+        let khead = ring.read().cq.khead
+        var oldHead = khead.read()
+        var newHead = oldHead + nr
+        
+        // 简化：实际需要 CAS 循环
+        // while (!khead.compareExchange(oldHead, newHead, .AcquireRelease)) {
+        //     newHead = oldHead + nr
+        // }
+        khead.write(newHead)
+    }
+}
+```
+
+### 8.5 userData 与回调映射的并发安全
+
+#### 8.5.1 问题场景
+
+```
+线程A: 提交请求，设置 userData = 0x1234
+线程B: 收割完成，从 userData 获取回调
+问题: userData 到回调对象的映射表需并发安全
+```
+
+#### 8.5.2 解决方案：并发安全映射表
+
+```cj
+@When[os == "Linux"]
+public class CompletionRegistry {
+    private let map: ConcurrentSkipListMap<UInt64, CFunc<(CPointer<IOUringCQE>) -> Unit>>
+    
+    public func register(id: UInt64, callback: CFunc<(CPointer<IOUringCQE>) -> Unit>): Unit {
+        map.put(id, callback)
+    }
+
+    public func getAndRemove(id: UInt64): ?CFunc<(CPointer<IOUringCQE>) -> Unit> {
+        map.remove(id)
+    }
+
+    public func nextId(): UInt64 {
+        // 使用原子计数器生成唯一 ID
+        AtomicIdGenerator.next()
+    }
+}
+```
+
+#### 8.5.3 请求-回调绑定
+
+```cj
+@When[os == "Linux"]
+public class IoUring {
+    private let registry = CompletionRegistry()
+
+    public func submitRead(
+        fd: Int32,
+        buf: CPointer<Byte>,
+        len: UInt32,
+        offset: UInt64,
+        callback: CFunc<(CPointer<IOUringCQE>) -> Unit>
+    ): Int64 {
+        let id = registry.nextId()
+        
+        if (let Some(sqe) <- getSqe()) {
+            ioUringPrepRead(sqe, fd, CPointer<Unit>(buf), len, offset)
+            ioUringSQESetData64(sqe, id)
+            registry.register(id, callback)
+            
+            submit()
+            0  // 成功
+        } else {
+            -1  // SQE 不可用
+        }
+    }
+
+    public func processCompletion(cqe: CPointer<IOUringCQE>): Unit {
+        let id = ioUringCQEGetData64(cqe)
+        if (let Some(callback) <- registry.getAndRemove(id)) {
+            callback(cqe)
+        }
+    }
+}
+```
+
+### 8.6 关闭与资源清理的并发安全
+
+```cj
+@When[os == "Linux"]
+public class IoUring <: Resource {
+    private let ring: IOUring
+    private let closed: AtomicBool = AtomicBool(false)
+    private let mutex: Mutex = Mutex()
+
+    public func close(): Unit {
+        // 原子设置 closed 标志
+        if (closed.compareExchange(false, true)) {
+            mutex.lock()
+            defer { mutex.unlock() }
+            
+            // 1. 提交所有待处理请求（可选）
+            unsafe { io_uring_submit(CPointer<IOUring>(ring)) }
+            
+            // 2. 等待所有请求完成（可选，带超时）
+            // ...
+            
+            // 3. 清理注册的资源
+            // registry.clear()
+            
+            // 4. 关闭 ring
+            unsafe { io_uring_queue_exit(CPointer<IOUring>(ring)) }
+        }
+    }
+
+    public func isClosed(): Bool {
+        closed.load()
+    }
+
+    // 所有操作前检查 closed 状态
+    private func checkNotClosed(): Unit {
+        if (isClosed()) {
+            throw IoUringException("IoUring has been closed")
+        }
+    }
+}
+```
+
+### 8.7 fork() 安全
+
+io_uring 文件描述符在 fork 后的行为：
+
+1. **子进程继承 fd**：可能导致两个进程共享同一个 ring
+2. **解决方案**：fork 后调用 `io_uring_ring_dontfork()` 或重新创建
+
+```cj
+// fork 后立即调用
+if (isChildProcess) {
+    ioUring.close()  // 关闭继承的 ring
+    // 重新创建新 ring
+}
+```
+
+### 8.8 并发安全最佳实践总结
+
+| 场景 | 推荐方案 |
+|------|----------|
+| 单线程应用 | 无需同步，直接使用 |
+| 多线程提交 | 每线程独立 IoUring 实例 |
+| 多线程收割 | Mutex 保护 CQ 或单线程收割 |
+| 高吞吐场景 | IoUringPool + SQPOLL |
+| 请求-回调绑定 | ConcurrentSkipListMap + 原子 ID |
+| 资源清理 | AtomicBool + Mutex 双重保护 |
+
+---
+
+## 9. 总结
 
 | 特性 | 实现方案 |
 |------|----------|
@@ -1188,5 +1557,6 @@ public class IoUring <: Resource {
 | inline 函数 | 仓颉侧重新实现 |
 | 内存安全 | `unsafe` 块 + RAII 封装类 |
 | 类型安全 | 高级封装类提供类型安全 API |
+| 并发安全 | 多模式支持：互斥锁/每线程实例/原子操作 |
 
-通过以上方案，可以在仓颉中实现接近原生 C 性能的 io_uring 绑定。
+通过以上方案，可以在仓颉中实现接近原生 C 性能且并发安全的 io_uring 绑定。
