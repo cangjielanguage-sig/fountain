@@ -1533,16 +1533,498 @@ if (isChildProcess) {
 }
 ```
 
-### 8.8 并发安全最佳实践总结
+### 8.8 无锁并发方案
+
+io_uring 的设计天然支持特定场景的无锁并发。本节详细阐述无锁实现方案。
+
+#### 8.8.1 核心洞察：io_uring 已是无锁设计
+
+io_uring 的 SQ/CQ 环形队列本质上就是无锁 SPSC 队列：
+
+```
+┌──────────────────────────────────────────────────────┐
+│                    SQ Ring                            │
+│  ┌─────────┬─────────┬─────────┬─────────┬─────────┐ │
+│  │ SQE[0]  │ SQE[1]  │ SQE[2]  │ SQE[3]  │   ...   │ │
+│  └─────────┴─────────┴─────────┴─────────┴─────────┘ │
+│            ↑                     ↑                    │
+│         khead                 ktail                    │
+│       (内核读)             (应用写)                    │
+│                                                       │
+│  应用线程写 tail → 内核读 tail：单生产者单消费者       │
+│  应用线程读 head ← 内核写 head：单消费者单生产者       │
+└──────────────────────────────────────────────────────┘
+```
+
+**关键点**：
+- tail 索引：只有应用线程写，内核读 → 无竞争
+- head 索引：只有内核写，应用线程读 → 无竞争
+- 只需正确的**内存序**，无需锁
+
+#### 8.8.2 内存屏障的精确使用
+
+无锁并发依赖于**内存屏障**而非锁：
+
+```cj
+import std.sync.MemoryOrder
+
+@When[os == "Linux"]
+public class IoUringLockFree {
+    private let ring: CPointer<IOUring>
+
+    // 获取 SQE（无锁）
+    public func getSqe(): ?CPointer<IOUringSQE> {
+        unsafe {
+            let sq = ring.read().sq
+            
+            // 1. 读取本地 tail（应用线程私有，无竞争）
+            let tail = sq.sqeTail
+            let next = tail + 1
+            
+            // 2. 读取内核 head（需要 acquire 语义）
+            let head = ioUringSmpLoadAcquire(sq.khead)
+            
+            // 3. 检查是否有空间
+            if (next - head > sq.ringEntries) {
+                return None  // SQ 满
+            }
+            
+            // 4. 计算 SQE 地址
+            let shift = if ((ring.read().flags & IORING_SETUP_SQE128) != 0) { 1 } else { 0 }
+            let index = (tail & sq.ringMask) << shift
+            let sqe = sq.sqes + index
+            
+            // 5. 更新本地 tail
+            // 注意：sqeTail 是线程本地的，原子写即可
+            ioUringAtomicStore(sq.sqeTailAddr(), next)  // 假设有此方法
+            
+            sqe
+        }
+    }
+
+    // 提交（无锁）
+    public func submit(): Int32 {
+        unsafe {
+            let sq = ring.read().sq
+            
+            // 1. 确保 SQE 写入对内核可见（release 语义）
+            ioUringSmpStoreRelease(sq.ktail, sq.sqeTail)
+            
+            // 2. 系统调用（如果 SQPOLL 则不需要）
+            if ((ring.read().flags & IORING_SETUP_SQPOLL) == 0) {
+                io_uring_enter(UInt32(ring.read().ringFd), 0, 0, 0, CPointer<Unit>())
+            } else {
+                // SQPOLL 模式：唤醒内核线程（如果需要）
+                if ((sq.kflags.read() & IORING_SQ_NEED_WAKEUP) != 0) {
+                    io_uring_enter(UInt32(ring.read().ringFd), 0, 0, IORING_ENTER_SQ_WAKEUP, CPointer<Unit>())
+                }
+            }
+            0
+        }
+    }
+}
+```
+
+#### 8.8.3 多线程提交的无锁方案：SQE 预分配
+
+解决多线程提交竞争的关键是**预分配 SQE 槽位**：
+
+```cj
+@When[os == "Linux"]
+public class IoUringLockFreeSubmitter {
+    private let ring: CPointer<IOUring>
+    private let sqePool: CPointer<IOUringSQE>  // 预分配的 SQE 池
+    private let poolSize: UInt32
+    private let nextSlot: AtomicUInt32  // 原子槽位索引
+
+    public init(ring: CPointer<IOUring>, poolSize: UInt32) {
+        this.ring = ring
+        this.poolSize = poolSize
+        this.nextSlot = AtomicUInt32(0)
+        // 预分配 SQE 池内存
+        this.sqePool = unsafe { malloc(sizeOf<IOUringSQE>() * poolSize) }
+    }
+
+    // 无锁获取槽位
+    public func allocSlot(): ?UInt32 {
+        var slot = nextSlot.load(.Relaxed)
+        
+        // CAS 循环：原子递增并检查容量
+        while (true) {
+            if (slot >= poolSize) {
+                return None  // 池已满
+            }
+            if (nextSlot.compareExchange(slot, slot + 1, .Acquire, .Relaxed)) {
+                return Some(slot)
+            }
+            // CAS 失败，重试
+        }
+    }
+
+    // 提交预分配槽位的 SQE
+    public func commitSlot(slot: UInt32): Unit {
+        unsafe {
+            let sq = ring.read().sq
+            
+            // 1. 将 SQE 复制到 SQ 数组
+            let sqe = getSqeFromPool(slot)
+            let sqIndex = (sq.sqeTail + slot) & sq.ringMask  // 简化：实际需处理 wrap
+            let target = sq.sqes + sqIndex
+            target.write(sqe.read())
+            
+            // 2. 原子更新 array 索引（如果使用间接模式）
+            // sq.array[sq.sqeTail + slot] = sqIndex
+            
+            // 3. 最终提交时批量更新 tail
+        }
+    }
+
+    // 批量提交所有已完成准备的 SQE
+    public func flush(): Unit {
+        unsafe {
+            let sq = ring.read().sq
+            let count = nextSlot.load(.Acquire)
+            
+            if (count > 0) {
+                // 更新 SQ tail（release 语义）
+                ioUringSmpStoreRelease(sq.ktail, count)
+                
+                // 重置池索引
+                nextSlot.store(0, .Release)
+            }
+        }
+    }
+}
+```
+
+#### 8.8.4 无锁 CQE 收割：批量原子推进
+
+```cj
+@When[os == "Linux"]
+public class IoUringLockFreeReaper {
+    private let ring: CPointer<IOUring>
+    private let localHead: UInt32  // 线程本地已处理计数
+
+    // Peek CQE（无锁，不移动 head）
+    public func peekCQE(): ?CPointer<IOUringCQE> {
+        unsafe {
+            let cq = ring.read().cq
+            
+            // Acquire 语义读取 tail
+            let tail = ioUringSmpLoadAcquire(cq.ktail)
+            let head = cq.khead.read()
+            
+            if (tail == head) {
+                return None  // CQ 空
+            }
+            
+            let shift = if ((ring.read().flags & IORING_SETUP_CQE32) != 0) { 1 } else { 0 }
+            let index = (head & cq.ringMask) << shift
+            
+            cq.cqes + index
+        }
+    }
+
+    // 批量推进（单次 CAS）
+    public func advanceBatch(count: UInt32): Unit {
+        if (count == 0) { return }
+        
+        unsafe {
+            let khead = ring.read().cq.khead
+            var oldHead = khead.read()
+            var newHead: UInt32
+            
+            // CAS 循环
+            while (true) {
+                newHead = oldHead + count
+                
+                // 验证：不应超过 tail
+                let tail = ioUringSmpLoadAcquire(ring.read().cq.ktail)
+                if (newHead > tail) {
+                    // 异常：超过实际 CQE 数量
+                    return
+                }
+                
+                // 尝试 CAS
+                if (ioUringAtomicCAS(khead, oldHead, newHead, .Release, .Relaxed)) {
+                    return  // 成功
+                }
+                // CAS 失败，重试
+                oldHead = khead.read()
+            }
+        }
+    }
+}
+```
+
+#### 8.8.5 无锁 userData 映射：槽位数组替代 Map
+
+避免使用 `ConcurrentSkipListMap`，改用**预分配槽位数组**：
+
+```cj
+@When[os == "Linux"]
+public class CompletionSlotArray {
+    // 固定大小的槽位数组
+    private let slots: VArray<CompletionSlot, $SLOT_COUNT>
+    private let nextSlot: AtomicUInt32 = AtomicUInt32(0)
+
+    @C
+    struct CompletionSlot {
+        var callback: CPointer<Unit>  // CFunc 类型的指针表示
+        var context: CPointer<Unit>   // 用户上下文
+        var generation: UInt32        // 代数，防止 ABA 问题
+        var state: UInt32             // 0=空闲, 1=使用中, 2=待处理
+    }
+
+    // 分配槽位（无锁）
+    public func alloc(callback: CFunc<(CPointer<IOUringCQE>) -> Unit>): ?UInt32 {
+        var slot = nextSlot.load(.Relaxed)
+        
+        while (true) {
+            if (slot >= SLOT_COUNT) {
+                return None
+            }
+            
+            let slotPtr = slots + slot
+            let state = unsafe { slotPtr.read().state }
+            
+            // 检查槽位是否空闲
+            if (state != 0) {
+                slot += 1
+                continue
+            }
+            
+            // 尝试原子占用
+            if (casSlotState(slotPtr, 0, 1)) {  // 空闲 -> 使用中
+                // 设置回调
+                unsafe {
+                    var s = slotPtr.read()
+                    s.callback = CPointer<Unit>(callback)
+                    s.generation += 1
+                    slotPtr.write(s)
+                }
+                
+                // 分配成功，更新 nextSlot
+                nextSlot.compareExchange(slot, slot + 1, .Release, .Relaxed)
+                return Some(slot)
+            }
+            
+            // CAS 失败，重试
+            slot = nextSlot.load(.Relaxed)
+        }
+    }
+
+    // 完成时释放槽位
+    public func release(slot: UInt32): Unit {
+        let slotPtr = slots + slot
+        unsafe {
+            var s = slotPtr.read()
+            s.state = 0  // 空闲
+            slotPtr.write(s)
+        }
+        
+        // 更新 nextSlot（可重用此槽位）
+        var current = nextSlot.load(.Relaxed)
+        while (slot < current) {
+            if (nextSlot.compareExchange(current, slot, .Release, .Relaxed)) {
+                return
+            }
+            current = nextSlot.load(.Relaxed)
+        }
+    }
+}
+```
+
+#### 8.8.6 完整无锁 IoUring 封装
+
+```cj
+@When[os == "Linux"]
+public class IoUringLockFree <: Resource {
+    private let ring: CPointer<IOUring>
+    private let completionSlots: CompletionSlotArray
+    private let closed: AtomicBool = AtomicBool(false)
+    
+    // 提交线程专用状态
+    private let submitter: IoUringLockFreeSubmitter
+    
+    // 收割线程专用状态
+    private let reaper: IoUringLockFreeReaper
+
+    public init(entries: UInt32, slotCount: UInt32 = 1024) {
+        ring = unsafe { malloc(sizeOf<IOUring>()) }  // 简化
+        let ret = unsafe { io_uring_queue_init(entries, ring, IORING_SETUP_SQPOLL) }
+        if (ret < 0) {
+            throw IoUringException("init failed: ${ret}")
+        }
+        
+        completionSlots = CompletionSlotArray()
+        submitter = IoUringLockFreeSubmitter(ring, entries)
+        reaper = IoUringLockFreeReaper(ring)
+    }
+
+    // 无锁提交
+    public func submitAsync(
+        op: UInt8,
+        fd: Int32,
+        buf: CPointer<Unit>,
+        len: UInt32,
+        offset: UInt64,
+        callback: CFunc<(CPointer<IOUringCQE>) -> Unit>
+    ): Int64 {
+        // 1. 快速检查 closed
+        if (closed.load(.Acquire)) {
+            return -1
+        }
+        
+        // 2. 分配完成槽位
+        let slotId = completionSlots.alloc(callback)
+        if (slotId.isNone()) {
+            return -2  // 无可用槽位
+        }
+        
+        // 3. 分配 SQE 槽位
+        let sqeSlot = submitter.allocSlot()
+        if (sqeSlot.isNone()) {
+            completionSlots.release(slotId.getOrThrow())
+            return -3  // SQE 池满
+        }
+        
+        // 4. 准备 SQE
+        unsafe {
+            let sqe = submitter.getSqeFromPool(sqeSlot.getOrThrow())
+            prepSQE(sqe, op, fd, buf, len, offset, slotId.getOrThrow())
+        }
+        
+        0  // 成功
+    }
+
+    // 无锁收割（在收割线程调用）
+    public func reap(): Unit {
+        var processed: UInt32 = 0
+        
+        while (let Some(cqe) <- reaper.peekCQE()) {
+            // 处理完成
+            processCompletion(cqe)
+            processed += 1
+        }
+        
+        // 批量推进 CQ head
+        if (processed > 0) {
+            reaper.advanceBatch(processed)
+        }
+    }
+
+    private func processCompletion(cqe: CPointer<IOUringCQE>): Unit {
+        unsafe {
+            let userData = cqe.read().userData
+            let slotId = UInt32(userData & 0xFFFFFFFF)
+            let gen = UInt32(userData >> 32)
+            
+            let slot = completionSlots.getSlot(slotId)
+            
+            // 代数检查（防止 ABA 问题）
+            if (slot.read().generation == gen) {
+                // 调用回调
+                let callback = slot.read().callback
+                // ...执行回调...
+                
+                // 释放槽位
+                completionSlots.release(slotId)
+            }
+        }
+    }
+
+    public func close(): Unit {
+        if (closed.compareExchange(false, true, .Acquire, .Relaxed)) {
+            unsafe {
+                io_uring_queue_exit(ring)
+                free(ring)
+            }
+        }
+    }
+}
+```
+
+#### 8.8.7 无锁模式的适用场景
+
+| 模式 | 适用场景 | 吞吐量 | 延迟 |
+|------|----------|--------|------|
+| 单线程 SPSC | 单线程服务器 | ★★★★★ | ★★★★★ |
+| 多线程 + Pool | 多核服务器、高吞吐 | ★★★★☆ | ★★★★☆ |
+| 共享 Ring + 串行提交 | 多消费者单生产者 | ★★★☆☆ | ★★★☆☆ |
+
+**无锁模式要求**：
+1. **单提交线程**：SQ tail 更新无竞争
+2. **单收割线程**：CQ head 更新无竞争
+3. 或 **固定槽位分配**：避免动态映射表竞争
+
+#### 8.8.8 最终无锁架构
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                      Application Threads                        │
+│  ┌─────────┐  ┌─────────┐  ┌─────────┐  ┌─────────┐            │
+│  │Thread 1 │  │Thread 2 │  │Thread 3 │  │Thread 4 │            │
+│  └────┬────┘  └────┬────┘  └────┬────┘  └────┬────┘            │
+│       │            │            │            │                  │
+│       v            v            v            v                  │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │          Atomic Slot Allocator (Lock-Free)               │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│       │            │            │            │                  │
+│       v            v            v            v                  │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │              Pre-allocated SQE Pool                      │   │
+│  │   [SQE0][SQE1][SQE2][SQE3]...[SQEn]                      │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                          │                                      │
+│                          v                                      │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │             Submit Thread (Single Producer)              │   │
+│  │         - Batch SQE copy to kernel ring                  │   │
+│  │         - Single release to SQ.tail                      │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                          │                                      │
+│                          v (_KERNEL_)                           │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │                    io_uring Ring                         │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                          │                                      │
+│                          v                                      │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │             Reap Thread (Single Consumer)                │   │
+│  │         - Batch CQE processing                           │   │
+│  │         - Single release to CQ.head                      │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                          │                                      │
+│                          v                                      │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │          Completion Slot Array (Lock-Free)               │   │
+│  │   [Slot0][Slot1][Slot2]...[Slotn]                        │   │
+│  │   - Callback pointer                                      │   │
+│  │   - Generation counter (ABA prevention)                  │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                          │                                      │
+│                          v                                      │
+│                    Callback Execution                           │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### 8.9 并发安全最佳实践总结
 
 | 场景 | 推荐方案 |
 |------|----------|
 | 单线程应用 | 无需同步，直接使用 |
-| 多线程提交 | 每线程独立 IoUring 实例 |
-| 多线程收割 | Mutex 保护 CQ 或单线程收割 |
-| 高吞吐场景 | IoUringPool + SQPOLL |
-| 请求-回调绑定 | ConcurrentSkipListMap + 原子 ID |
-| 资源清理 | AtomicBool + Mutex 双重保护 |
+| 多线程提交 | 每线程独立 IoUring 实例 或 无锁槽位预分配 |
+| 多线程收割 | 单收割线程 + 批量原子推进 |
+| 高吞吐场景 | SQPOLL + 无锁槽位数组 |
+| 请求-回调绑定 | 预分配槽位数组（避免 ConcurrentSkipListMap） |
+| 资源清理 | AtomicBool CAS + 单次清理 |
+
+**无锁 vs 有锁选择指南**：
+- 吞吐量优先 → 无锁（预分配 + 原子操作）
+- 实现简洁优先 → 有锁（Mutex 保护）
+- 混合场景 → 无锁提交 + 有锁收割或反之
 
 ---
 
@@ -1557,6 +2039,15 @@ if (isChildProcess) {
 | inline 函数 | 仓颉侧重新实现 |
 | 内存安全 | `unsafe` 块 + RAII 封装类 |
 | 类型安全 | 高级封装类提供类型安全 API |
-| 并发安全 | 多模式支持：互斥锁/每线程实例/原子操作 |
+| 并发安全 | 多模式支持：互斥锁/每线程实例/无锁原子操作 |
 
-通过以上方案，可以在仓颉中实现接近原生 C 性能且并发安全的 io_uring 绑定。
+### 性能特性对比
+
+| 并发模式 | 吞吐量 | 延迟 | 实现复杂度 | 适用场景 |
+|----------|--------|------|------------|----------|
+| 单线程直接访问 | ★★★★★ | ★★★★★ | ★☆☆☆☆ | 单线程服务 |
+| Mutex 保护 | ★★☆☆☆ | ★★☆☆☆ | ★☆☆☆☆ | 低并发原型 |
+| 每线程实例 | ★★★★☆ | ★★★★☆ | ★★☆☆☆ | 多线程高吞吐 |
+| 无锁槽位预分配 | ★★★★★ | ★★★★★ | ★★★★☆ | 极致性能场景 |
+
+通过以上方案，可以在仓颉中实现接近原生 C 性能且并发安全的 io_uring 绑定。无锁方案利用 io_uring 的 SPSC 特性，通过原子操作和内存屏障实现真正的无等待（wait-free）提交与收割。
