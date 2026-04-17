@@ -22,55 +22,21 @@ package fountain::f_io.uring
  * 所有函数仅在 Linux 平台可用。
  */
 
-// ==================== UInt64 → CPointer<Unit> 辅助 ====================
-
-/**
- * 将 UInt64 值重新解释为 CPointer<Unit>
- * 
- * 用于从 io_uring SQE/CQE 的 userData 字段恢复指针值。
- * 通过 acquireArrayRawData 获取指针，写入 UInt64 值，再类型转换为 CPointer<Unit>。
- * 
- * @param val 64位整数值（存储的指针地址）
- * @return 对应的 CPointer<Unit>
- */
-@When[os == "Linux"]
-public func uint64ToCPointer(val: UInt64): CPointer<Unit> {
-    unsafe {
-        var array = Array<Byte>(8, repeat: 0)
-        var handler: ?CPointerHandle<Byte> = None
-        try {
-            let hdl = acquireArrayRawData<Byte>(array)
-            handler = hdl
-            let bytePtr = hdl.pointer
-            let uint64Ptr = CPointer<UInt64>(bytePtr)
-            uint64Ptr.write(val)
-            CPointer<Unit>(uint64Ptr)
-        } finally {
-            if (let Some(h) <- handler) {
-                releaseArrayRawData<Byte>(h)
-            }
-        }
-    }
-}
-
 // ==================== CQE 数据获取 ====================
 
 /**
- * 从 CQE 获取用户数据（指针形式）
+ * 从 CQE 获取用户数据（64位整数形式）
  * 
- * 返回提交 SQE 时设置的用户数据指针。
+ * 返回提交 SQE 时设置的用户数据。
+ * 常用于获取请求 ID 或槽位索引。
+ * 
+ * 注意：推荐使用此函数（整数形式）而非指针形式，
+ * 因为仓颉无法安全地将 UInt64 重新解释为 CPointer。
+ * 配合 ioUringSQESetData64 使用。
  * 
  * @param cqe CQE 指针
- * @return 用户数据指针
+ * @return 用户数据（64位整数）
  */
-@When[os == "Linux"]
-public func ioUringCQEGetData(cqe: CPointer<IOUringCQE>): CPointer<Unit> {
-    unsafe {
-        // userData 存储的是指针值，需要转换回来
-        let userData = cqe.read().userData
-        uint64ToCPointer(userData)
-    }
-}
 
 /**
  * 从 CQE 获取用户数据（64位整数形式）

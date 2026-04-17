@@ -98,27 +98,14 @@ public func ioUringGetSQEAndUpdate(ring: CPointer<IOUring>): ?CPointer<IOUringSQ
 // ==================== SQE 数据设置 ====================
 
 /**
- * 设置 SQE 的用户数据（指针形式）
- * 
- * 用户数据在请求完成时会原样返回到 CQE 中。
- * 
- * @param sqe SQE 指针
- * @param data 用户数据指针
- */
-@When[os == "Linux"]
-public func ioUringSQESetData(sqe: CPointer<IOUringSQE>, data: CPointer<Unit>): Unit {
-    unsafe {
-        var entry = sqe.read()
-        entry.userData = UInt64(data.toUIntNative())
-        sqe.write(entry)
-    }
-}
-
-/**
  * 设置 SQE 的用户数据（64位整数形式）
  * 
  * 用户数据在请求完成时会原样返回到 CQE 中。
  * 常用于存储请求 ID 或槽位索引。
+ * 
+ * 注意：推荐使用此函数（整数形式）而非指针形式，
+ * 因为仓颉无法安全地将 UInt64 重新解释为 CPointer。
+ * 配合 ioUringCQEGetData64 使用。
  * 
  * @param sqe SQE 指针
  * @param data 用户数据（64位整数）
