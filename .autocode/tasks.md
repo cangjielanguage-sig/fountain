@@ -1,12 +1,35 @@
 # IOUringStream 性能优化方案
 
-## 当前性能基线（双ring架构，ns精度）
+## 当前性能基线（双ring架构 + write零分配，ns精度）
 
-| 操作 | IOUringStream | std.fs.File | 差距 |
+| 操作 | IOUringStream | std.fs.File | 对比 |
 |------|--------------|-------------|------|
-| Write 1MB (256×4KB) | 381383ns | 398331ns | 持平（IOUring略快） |
-| Read 1MB | 439237ns | 96580ns | IOUring慢~340us |
-| Read 单次4KB | ~1.7us | ~0.4us | ~1.3us差距 |
+| Write 1MB (256×4KB) | 290us | 391us | IOUring快26% |
+| Read 1MB | 447us | 101us | IOUring慢4.4× |
+
+## Read性能差距根因分析
+
+微基准拆解（256次×4KB read，tmpfs）：
+
+| 操作 | 耗时/次 | 占比 |
+|------|--------|------|
+| getSQE | 60ns | 7% |
+| acquireBuf | 49ns | 6% |
+| prepRead+sqe | 85ns | 10% |
+| **submit (syscall)** | **467ns** | **58%** |
+| waitCQE | 64ns | 8% |
+| cqeSeen | 83ns | 10% |
+| Mutex | 23ns | 可忽略 |
+
+**根因**：tmpfs上read延迟极低（CQE在submit返回后几乎立即可用），io_uring的两次内核交互（submit+waitCQE=531ns）反而成为瓶颈。File.read只需1次syscall（365ns）。
+
+**已排除的优化方案**：
+- submitAndWait：实测934ns/iter，比submit+waitCQE(811ns)更慢
+- SQPOLL：tmpfs上submit开销已很小，SQPOLL无效
+- 移除readMutex：Mutex开销仅23ns/iter，可忽略
+- 注册缓冲区：额外memcpy反而更慢
+
+**结论**：io_uring在同步read+低延迟存储场景下天然比直接syscall慢，这是架构设计权衡。io_uring优势在异步+批量化I/O场景。
 
 **架构**：双ring（writeRing后台线程收割 + readRing同线程submit+waitCQE）
 - Write：已与File持平，甚至略快
