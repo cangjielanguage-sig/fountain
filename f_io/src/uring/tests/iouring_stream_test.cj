@@ -206,4 +206,55 @@ public class IOUringStreamTest {
         file.close()
         removeIfExists(Path(path))
     }
+
+    @TestCase
+    public func testFixedBufWriteAndRead(): Unit {
+        let (path, file) = createTempFile()
+        let fd = Int32(file.fileDescriptor.fileHandle)
+        try(stream = IOUringStream(fd, 64, fixedBufCount: 4, fixedBufSize: 4096)) {
+            stream.write("hello fixed buf".unsafeBytes())
+        }
+
+        let readFile = File(path, OpenMode.Read)
+        let readFd = Int32(readFile.fileDescriptor.fileHandle)
+        try(readStream = IOUringStream(readFd, 64, fixedBufCount: 4, fixedBufSize: 4096)) {
+            let buf = Array<Byte>(64, repeat: 0)
+            let n = readStream.read(buf)
+            @Expect(n > 0)
+            let content = String.fromUtf8(buf[0..Int64(n)])
+            @Expect(content == "hello fixed buf")
+        }
+        readFile.close()
+        file.close()
+        removeIfExists(Path(path))
+    }
+
+    @TestCase
+    public func testFixedBufLargeWriteAndRead(): Unit {
+        let (path, file) = createTempFile()
+        let fd = Int32(file.fileDescriptor.fileHandle)
+        try(stream = IOUringStream(fd, 64, fixedBufCount: 4, fixedBufSize: 4096)) {
+            let data = Array<Byte>(4096) { i => UInt8(i % 256) }
+            stream.write(data)
+        }
+
+        let readFile = File(path, OpenMode.Read)
+        let readFd = Int32(readFile.fileDescriptor.fileHandle)
+        try(readStream = IOUringStream(readFd, 64, fixedBufCount: 4, fixedBufSize: 4096)) {
+            let buf = Array<Byte>(8192, repeat: 0)
+            let n = readStream.read(buf)
+            @Expect(n == 4096)
+            var correct = true
+            for (i in 0..4096) {
+                if (buf[i] != UInt8(i % 256)) {
+                    correct = false
+                    break
+                }
+            }
+            @Expect(correct)
+        }
+        readFile.close()
+        file.close()
+        removeIfExists(Path(path))
+    }
 }

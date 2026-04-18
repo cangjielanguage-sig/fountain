@@ -25,7 +25,7 @@ import fountain::f_io.*
  * IOUringStream 与 File 的性能对比测试
  *
  * 对比相同负载下 IOUringStream 和 std.fs.File 的读写耗时。
- * IOUringStream 使用后台收割线程 + 无锁并发架构。
+ * 包含普通模式和注册缓冲区（Registered Buffers）模式。
  */
 @When[os == "Linux"]
 @Test
@@ -200,6 +200,91 @@ public class IOUringStreamPerfTest {
 
         let ns = elapsed.toNanoseconds()
         println("[File Read] ${TOTAL_BYTES}B, ${ns}ns")
+        @Expect(ns >= 0)
+
+        removeIfExists(Path(path))
+    }
+
+    /**
+     * 使用 IOUringStream 注册缓冲区模式写入并计时
+     */
+    @TestCase
+    public func benchmarkIOUringStreamFixedWrite(): Unit {
+        ensureTempDir()
+        let tempFile = File.createTemp(tempDir)
+        let path = tempFile.info.path.toString()
+        tempFile.close()
+
+        let rwFile = File(path, OpenMode.ReadWrite)
+        let fd = Int32(rwFile.fileDescriptor.fileHandle)
+
+        let block = Array<Byte>(Int64(BLOCK_SIZE), repeat: 0xAA)
+
+        // 预热
+        try(stream = IOUringStream(fd, 64, fixedBufCount: 4, fixedBufSize: UInt32(BLOCK_SIZE))) {
+            stream.write(block)
+            stream.flush()
+        }
+        rwFile.close()
+
+        // 正式测试
+        let rwFile2 = File(path, OpenMode.ReadWrite)
+        let fd2 = Int32(rwFile2.fileDescriptor.fileHandle)
+        let start = MonoTime.now()
+        try(stream = IOUringStream(fd2, 64, fixedBufCount: 4, fixedBufSize: UInt32(BLOCK_SIZE))) {
+            for (_ in 0..ITERATIONS) {
+                stream.write(block)
+            }
+        }
+        let elapsed = MonoTime.now() - start
+        rwFile2.close()
+
+        let ns = elapsed.toNanoseconds()
+        println("[IOUringStream FixedBuf Write] ${ITERATIONS} x ${BLOCK_SIZE}B = ${TOTAL_BYTES}B, ${ns}ns")
+        @Expect(ns >= 0)
+
+        removeIfExists(Path(path))
+    }
+
+    /**
+     * 使用 IOUringStream 注册缓冲区模式读取并计时
+     */
+    @TestCase
+    public func benchmarkIOUringStreamFixedRead(): Unit {
+        ensureTempDir()
+        let tempFile = File.createTemp(tempDir)
+        let path = tempFile.info.path.toString()
+        tempFile.close()
+
+        // 先写入测试数据
+        let block = Array<Byte>(Int64(BLOCK_SIZE), repeat: 0xBB)
+        let writeFile = File(path, OpenMode.Write)
+        for (_ in 0..ITERATIONS) {
+            writeFile.write(block)
+        }
+        writeFile.close()
+
+        // 正式读取测试
+        let readFile = File(path, OpenMode.Read)
+        let fd = Int32(readFile.fileDescriptor.fileHandle)
+        let buf = Array<Byte>(Int64(BLOCK_SIZE), repeat: 0)
+
+        let start = MonoTime.now()
+        try(stream = IOUringStream(fd, 64, fixedBufCount: 4, fixedBufSize: UInt32(BLOCK_SIZE))) {
+            var totalRead: Int64 = 0
+            while (true) {
+                let n = stream.read(buf)
+                if (n <= 0) {
+                    break
+                }
+                totalRead += n
+            }
+        }
+        let elapsed = MonoTime.now() - start
+        readFile.close()
+
+        let ns = elapsed.toNanoseconds()
+        println("[IOUringStream FixedBuf Read] ${TOTAL_BYTES}B, ${ns}ns")
         @Expect(ns >= 0)
 
         removeIfExists(Path(path))

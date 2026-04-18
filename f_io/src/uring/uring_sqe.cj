@@ -216,6 +216,86 @@ public func ioUringPrepWrite(
 }
 
 /**
+ * 准备读操作（固定缓冲区）
+ *
+ * 使用已注册的缓冲区进行读操作，内核跳过地址验证。
+ * 需要先通过 RegisteredBuffers 注册缓冲区。
+ *
+ * @param sqe SQE 指针
+ * @param fd 文件描述符
+ * @param buf 注册缓冲区地址（必须在注册缓冲区范围内）
+ * @param nbytes 读取字节数
+ * @param offset 文件偏移
+ * @param bufIndex 注册缓冲区索引
+ */
+@When[os == "Linux"]
+public func ioUringPrepReadFixed(
+    sqe: CPointer<IOUringSQE>,
+    fd: Int32,
+    buf: CPointer<Unit>,
+    nbytes: UInt32,
+    offset: UInt64,
+    bufIndex: UInt16
+): Unit {
+    unsafe {
+        var entry = sqe.read()
+        entry.opcode = IORING_OP_READ_FIXED
+        entry.flags = 0
+        entry.ioprio = 0
+        entry.fd = fd
+        entry.off = offset
+        entry.addr = UInt64(buf.toUIntNative())
+        entry.len = nbytes
+        entry.rwFlags = 0
+        entry.bufIndex = bufIndex
+        entry.personality = 0
+        entry.spliceFdIn = 0
+        entry.addr3 = 0
+        sqe.write(entry)
+    }
+}
+
+/**
+ * 准备写操作（固定缓冲区）
+ *
+ * 使用已注册的缓冲区进行写操作，内核跳过地址验证。
+ * 需要先通过 RegisteredBuffers 注册缓冲区。
+ *
+ * @param sqe SQE 指针
+ * @param fd 文件描述符
+ * @param buf 注册缓冲区地址（必须在注册缓冲区范围内）
+ * @param nbytes 写入字节数
+ * @param offset 文件偏移
+ * @param bufIndex 注册缓冲区索引
+ */
+@When[os == "Linux"]
+public func ioUringPrepWriteFixed(
+    sqe: CPointer<IOUringSQE>,
+    fd: Int32,
+    buf: CPointer<Unit>,
+    nbytes: UInt32,
+    offset: UInt64,
+    bufIndex: UInt16
+): Unit {
+    unsafe {
+        var entry = sqe.read()
+        entry.opcode = IORING_OP_WRITE_FIXED
+        entry.flags = 0
+        entry.ioprio = 0
+        entry.fd = fd
+        entry.off = offset
+        entry.addr = UInt64(buf.toUIntNative())
+        entry.len = nbytes
+        entry.rwFlags = 0
+        entry.bufIndex = bufIndex
+        entry.personality = 0
+        entry.spliceFdIn = 0
+        entry.addr3 = 0
+        sqe.write(entry)
+    }
+}
+
+/**
  * 准备向量读操作
  * 
  * @param sqe SQE 指针
