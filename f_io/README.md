@@ -14,7 +14,7 @@
 
 [doc/BytePointerStream.md](doc/BytePointerStream.md)
 
-基于原生内存指针的字节流，支持读写 CPointer<Byte> 和 Array<Byte>。
+基于原生内存指针的字节流，支持读写 `CPointer<Byte>` 和 `Array<Byte>`。
 
 ### DummyInputStream
 
