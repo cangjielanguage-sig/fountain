@@ -1,334 +1,142 @@
-# 前置任务
-1. 确认当前路径
-pwd
-2. 确认工作路径
-$(pwd)/f_io # 所有的编译工作都在这个路径
-$(pwd)/f_io/src/uring # 本任务的代码都在这个路径
+# IOUringStream 性能优化方案
 
-# 任务
-在f_io/src/uring/ 添加仓颉的liburing ffi，并用仓颉class实现ffi的薄封装。
-以极致性能为第一优先级，按照下面的阶段性任务实现liburing ffi，把代码添加到f_io/src/uring，包名是fountain::f_io.uring。
-每个.cj文件开头都要添加版权声明，版权声明的具体内容可以参考项目中的其它.cj文件，照搬即可。
-每完成一阶段任务都要在./f_io执行cjpm build`确认没有编译错误，并在相应阶段性任务的标题后面标记为已完成，然后总结经验教训
-✅ 表示已经完成的任务，从第一个未完成的任务继续
----
+## 当前性能基线（双ring架构，ns精度）
 
-# 阶段一：基础设施与FFI声明 ✅
+| 操作 | IOUringStream | std.fs.File | 差距 |
+|------|--------------|-------------|------|
+| Write 1MB (256×4KB) | 381383ns | 398331ns | 持平（IOUring略快） |
+| Read 1MB | 439237ns | 96580ns | IOUring慢~340us |
+| Read 单次4KB | ~1.7us | ~0.4us | ~1.3us差距 |
 
-## 任务 1.1：创建目录结构与编译配置 ✅
-- 在 `f_io/src/uring/` 创建目录
-- 更新 `f_io/cjpm.toml`，为 Linux 目标添加 `-luring` 链接选项
-- 创建 `f_io/src/uring/uring_constants.cj` 文件
-
-## 任务 1.2：实现常量定义 ✅
-- 在 `uring_constants.cj` 中定义所有 io_uring 常量：
-  - `IORING_SETUP_*` 初始化标志
-  - `IORING_ENTER_*` 进入标志
-  - `IOSQE_*` SQE 标志
-  - `IORING_CQE_F_*` CQE 标志
-  - `IORING_OP_*` 操作码
-  - `IORING_FEAT_*` 特性标志
-- 使用 `@When[os == "Linux"]` 条件编译
-
-## 任务 1.3：定义核心 FFI 结构体 ✅
-- 创建 `f_io/src/uring/uring_types.cj`
-- 定义 `@C struct`：
-  - `IOUringSQE` (提交队列条目)
-  - `IOUringCQE` (完成队列条目)
-  - `IOUringParams` (初始化参数)
-  - `IOSQRingOffsets` / `IOCQRingOffsets`
-  - `IOVec` (iovec)
-  - `KernelTimespec` (时间规格)
-  - `IOUringBuf` / `IOUringBufReg` (buffer ring)
-  - `IOUringSQ` / `IOUringCQ` / `IOUring` (liburing 内部结构)
-- 使用 `@When[os == "Linux"]` 条件编译
-
-## 任务 1.4：声明 FFI 函数 ✅
-- 创建 `f_io/src/uring/uring_ffi.cj`
-- 使用 `foreign` 声明 liburing 函数：
-  - 初始化：`io_uring_queue_init`, `io_uring_queue_init_params`, `io_uring_queue_exit`
-  - 提交：`io_uring_submit`, `io_uring_submit_and_wait`
-  - CQE 操作：`io_uring_wait_cqe`, `io_uring_peek_batch_cqe`
-  - 注册：`io_uring_register_buffers`, `io_uring_register_files`, `io_uring_register_buf_ring`
-  - 系统调用：`io_uring_setup`, `io_uring_enter`, `io_uring_register`
-- 添加 `unsafe` 注释说明
-
-## 任务 1.5：添加内存屏障支持 ✅
-- 创建 `f_io/src/uring/uring_barrier.cj`
-- 实现内存屏障函数：
-  - `ioUringSmpLoadAcquire(ptr: CPointer<UInt32>): UInt32`
-  - `ioUringSmpStoreRelease(ptr: CPointer<UInt32>, value: UInt32): Unit`
-- 若仓颉暂不支持，添加 TODO 注释和临时实现
+**架构**：双ring（writeRing后台线程收割 + readRing同线程submit+waitCQE）
+- Write：已与File持平，甚至略快
+- Read：双ring消除了12ms跨线程通知开销，但io_uring的submit+waitCQE两次内核交互仍比File的直接read多~1.3us/次
 
 ---
 
-# 阶段二：低级封装层 ✅
+## 性能瓶颈关键要点（已验证）
 
-## 任务 2.1：实现 SQE 操作辅助函数 ✅
-- 创建 `f_io/src/uring/uring_sqe.cj`
-- 实现内联函数的仓颉版本：
-  - `ioUringGetSQE(ring): ?CPointer<IOUringSQE>`
-  - `ioUringSQESetData64(sqe, data)` （仅整数形式，指针形式已删除）
-  - `ioUringSQESetFlags(sqe, flags)`
+### 瓶颈1：read 路径的 Promise 线程同步开销（真正的瓶颈，已验证）
+256次read × ~47us = 12ms。每次read的~47us主要来自：
+1. 后台线程收割CQE后调用 `promise.onComplete()` → `cond.notifyAll()`
+2. 调用线程从 `Condition.waitUntil()` 被唤醒
+3. 两次线程调度切换（调用线程sleep → 后台线程wakeup → 调用线程wakeup）
 
-## 任务 2.2：实现 SQE 准备函数 ✅
-- 在 `uring_sqe.cj` 中添加：
-  - `ioUringPrepRW(op, sqe, fd, addr, len, offset)` - 基础函数
-  - `ioUringPrepRead(sqe, fd, buf, len, offset)`
-  - `ioUringPrepWrite(sqe, fd, buf, len, offset)`
-  - `ioUringPrepReadV(sqe, fd, iovecs, nrVecs, offset)`
-  - `ioUringPrepWriteV(sqe, fd, iovecs, nrVecs, offset)`
-  - `ioUringPrepFsync(sqe, fd, flags)`
-  - `ioUringPrepPollAdd(sqe, fd, pollMask)`
-  - `ioUringPrepTimeout(sqe, ts, count, flags)`
-  - `ioUringPrepAccept(sqe, fd, addr, addrlen, flags)`
-  - `ioUringPrepConnect(sqe, fd, addr, addrlen)`
-  - `ioUringPrepSend(sqe, sockfd, buf, len, flags)`
-  - `ioUringPrepRecv(sqe, sockfd, buf, len, flags)`
-  - `ioUringPrepClose(sqe, fd)`
+LockFreePromise的自旋优化在tmpfs上无效——CQE未在自旋窗口内完成，
+因为每次read都要等submit→内核处理→CQE返回，这个延迟远超100次自旋。
 
-## 任务 2.3：实现 CQE 操作辅助函数 ✅
-- 创建 `f_io/src/uring/uring_cqe.cj`
-- 实现：
-  - `ioUringCQEGetData64(cqe): UInt64` （仅整数形式，指针形式已删除）
-  - `ioUringCQAdvance(ring, nr)`
-  - `ioUringCQESeen(ring, cqe)`
-  - `ioUringCQReady(ring): UInt32`
-  - `ioUringSQReady(ring): UInt32`
-  - `ioUringSQSpaceLeft(ring): UInt32`
-  - `ioUringCQHasOverflow(ring): Bool`
-  - `ioUringSQNeedWakeup(ring): Bool`
-  - `ioUringSetSQETail(ring, newTail)`
-  - `ioUringGetSQETail(ring): UInt32`
-  - `ioUringAdvanceSQETail(ring, delta!)`
+### ~~瓶颈2：submit系统调用开销（已排除）~~
+SQPOLL模式下Read 13ms（反而更慢），证明submit不是主要瓶颈。
+`io_uring_submit` 在tmpfs上开销极低（~2us），12ms差距主要来自线程同步。
+io_uring 的 read 路径是 submit + waitCQE 两次内核交互，比直接 read 多一次。
+对于小数据块（如4KB），这个额外系统调用的固定开销占比很大。
 
-## 任务 2.4：实现柔性数组访问扩展 ✅
-- 创建 `f_io/src/uring/uring_flexible.cj`
-- 为 `IOUringSQE` 添加 cmd 数组访问：
-  - `cmdPtr(): CPointer<UInt8>`
-  - `getCmd(index): UInt8`
-  - `setCmd(index, value)`
-- 为 `IOUringProbeHeader` 添加 ops 数组访问：
-  - `opsPtr(): CPointer<IOUringProbeOp>`
-  - `getOp(index): IOUringProbeOp`
-  - `isOpcodeSupported(op): Bool`
+### ~~瓶颈2：submitMutex 锁竞争（已排除）~~
+单线程无竞争，Mutex lock/unlock 只需一次原子CAS（~0.1us），不是主要开销。
+
+### ~~瓶颈3：IoUringPromise 的 Mutex + Condition 开销（已优化为LockFreePromise）~~
+已用LockFreePromise替代（AtomicBool+AtomicInt32+自旋+Condition fallback）。
+但自旋在tmpfs上无效——CQE延迟超过自旋窗口，仍走Condition wait路径。
+真正的问题不是Promise实现，而是**跨线程通知机制本身的开销**。
+
+### 瓶颈2：read路径跨线程通知的开销（核心瓶颈）
+后台收割线程收割CQE后通知调用线程，涉及：
+- Condition.notifyAll() → 内核futex唤醒
+- 调用线程从futex_wait返回 → 重新调度
+- 两次线程上下文切换 ≈ 20-50us/次
+
+**根本解决方案**：让read在同一线程内完成CQE收割，避免跨线程通知。
+
+### 瓶颈3：对象分配开销
+每次read创建LockFreePromise，每次write创建LambdaCompletionCallback。
+可优化为对象池或内联回调。
 
 ---
 
-# 阶段三：高级封装类 ✅
+## 优化方案（已验证后更新）
 
-## 任务 3.1：实现基础 IoUring 类 ✅
-- 创建 `f_io/src/uring/uring_ring.cj`
-- 实现 `IoUring` 类（实现 `Resource` 接口）：
-  - `init(entries, flags)` - 基本初始化
-  - `init(entries, params)` - 带参数初始化
-  - `close()` - 资源清理
-  - `isClosed(): Bool`
-  - `getSQE(): ?CPointer<IOUringSQE>`
-  - `submit(): Int32`
-  - `submitAndWait(waitNr): Int32`
-  - `waitCQE(): ?CPointer<IOUringCQE>`
-  - `peekCQE(): ?CPointer<IOUringCQE>`
-  - `cqeSeen(cqe)`
-  - `cqAdvance(nr)`
-  - `sqReady/sqSpaceLeft/cqReady` - 队列状态查询
-  - `registerBuffers/unregisterBuffers` - 缓冲区注册
-  - `registerFiles/unregisterFiles` - 文件描述符注册
-  - `processCompletions/waitAndProcess` - 异步完成处理
-- 异常类 `IoUringException` 在 `uring_exception.cj`
+### ~~方案A：SQPOLL 模式（已实现，效果有限）~~
+已实现，SQPOLL Read 13ms vs 普通 Read 12ms，无提升。
+submit系统调用在tmpfs上开销极低（~2us），不是瓶颈。
 
-## 任务 3.2：实现 IoUringParams 构建器 ✅
-- 创建 `f_io/src/uring/uring_params_builder.cj`
-- 实现 `IoUringParamsBuilder`：
-  - `setSQPOLL()`
-  - `setSQPOLLIdle(ms)`
-  - `setCQSize(size)`
-  - `setSingleIssuer()`
-  - `setDeferTaskRun()`
-  - `setIOPoll()`
-  - `setSQAff(cpu)`
-  - `setClamp()`
-  - `setAttachWQ(wqFd)`
-  - `setSubmitAll()`
-  - `setCoopTaskRun()`
-  - `setSQE128()`
-  - `setCQE32()`
-  - `build(): IOUringParams`
+### ~~方案B：submitMutex → CAS（已排除）~~
+单线程无竞争，Mutex开销可忽略。跳过。
 
-## 任务 3.3：实现 IoUringPool（多实例池） ✅
-- 创建 `f_io/src/uring/uring_pool.cj`
-- 实现 `IoUringPool` 类：
-  - `init(entriesPerRing, ringCount, flags)`
-  - `getRing(): IoUring` - 轮询获取
-  - `getRing(index): IoUring` - 按索引获取
-  - `close()` - 关闭所有实例
-- 使用 AtomicInt64 实现无锁轮询分配
+### ~~方案D：LockFreePromise（已实现，效果有限）~~
+已实现（AtomicBool+AtomicInt32+自旋+Condition fallback）。
+自旋在tmpfs上无效——CQE延迟远超自旋窗口，仍走Condition wait路径。
+真正瓶颈是跨线程通知（Condition notifyAll + futex唤醒），不是Promise内部锁。
 
-## 任务 3.4：实现异步 Future 集成 ✅
-- 创建 `f_io/src/uring/uring_future.cj`
-- 实现 `CompletionSlot` 接口 — 类型擦除
-- 实现 `CompletionRegistry` — ConcurrentHashMap<UInt64, CompletionSlot>
-- 实现 `IoUringPromise<T>` — Mutex + Condition 阻塞等待
-- 实现 `IoUringFuture<T>` — 包装 Promise，提供 get/tryGet/isCompleted API
-- 注：std.core.Future<T> 是 final 类无法继承，提供独立实现
+### 方案F：read在同一线程内收割CQE（✅已实现，消除12ms差距）
 
----
+**思路**：read 不再依赖后台线程收割+跨线程通知，而是在调用线程内直接收割CQE。
+这是 io_uring 的标准同步用法：submit → waitCQE → cqeSeen，全在同一线程完成。
 
-# 阶段四：无锁并发支持 ✅
+**问题**：当前架构中后台线程循环 `waitAndReap()`，如果read也在同一线程 `waitCQE`，
+两个线程会竞争CQE。解决方案：
 
-## 任务 4.1：实现原子槽位分配器 ✅
-- 创建 `f_io/src/uring/lockfree/slot_allocator.cj`
-- 实现 `AtomicSlotAllocator` 类：位图 + CAS，上限 32768
-  - `init(capacity)` / `alloc(): ?UInt32` / `release(slotId)` / `isAllocated()` / `reset()`
-  - `countTrailingZeros(v)` - CTZ 辅助
+**方案F1：双ring架构**
+- write 用一个ring（后台线程收割，write立即返回）
+- read 用一个ring（同线程 submit+waitCQE，无跨线程通知）
+- 两个ring共享同一fd，offset需要分别管理
 
-## 任务 4.2：实现完成槽位数组 ✅
-- 创建 `f_io/src/uring/lockfree/completion_slots.cj`
-- 实现 `CompletionSlotArray`：generation 防止 ABA，userData 编解码
-  - `setCallback()` / `encodeUserData()` / `decodeUserData()` / `invokeAndRelease()`
-- 实现 `CompletionCallback` 开放类（替代接口，避免泛型类型擦除）
-- 实现 `LambdaCompletionCallback <: CompletionCallback` - 闭包包装
+**方案F2：read切换为直接IoUring API**
+- read 不用 IoUringLockFree，直接用 `ring.getSQE() + ring.submit() + ring.waitCQE()`
+- 后台线程只收割write的CQE（通过userData区分）
+- read的SQE userData设为0（waitAndReap跳过userData==0的CQE）
+- 但waitCQE和waitAndReap会竞争同一个CQ ring
 
-## 任务 4.3：实现无锁SQE预分配器 ✅
-- 创建 `f_io/src/uring/lockfree/sqe_pool.cj`
-- 实现 `SQEPreallocator`：原子计数器 + readyFlags 数组
-  - `allocSlot()` / `getSQE()` / `commitSlot()` / `flush()`
+**方案F3：去掉后台线程，read/write都用同线程收割**
+- write: submit → reap已完成的CQE（不阻塞等自己的CQE）
+- read: submit → waitCQE（阻塞等自己的CQE）
+- write的回调在下次read/write的reap中执行
+- 问题：如果长时间不read，write的回调（释放slot）不会被及时执行
 
-## 任务 4.4：实现无锁CQE收割器 ✅
-- 创建 `f_io/src/uring/lockfree/cqe_reaper.cj`
-- 实现 `LockFreeCQEReaper`：直接操作 CQ head 指针
-  - `peekCQE()` / `advance()` / `reapAll()` / `reapN()`
+**推荐F1**：双ring架构最干净，读写完全独立，无竞争。
 
-## 任务 4.5：实现完整无锁IoUring ✅
-- 创建 `f_io/src/uring/lockfree/lockfree_uring.cj`
-- 实现 `IoUringLockFree <: Resource`：整合全部 lockfree 组件
-  - 提交路径：allocSlot → getSQE → setCallback → commitSlot → flush
-  - 收割路径：reap / reapN / waitAndReap
-  - `submitAsync(prepFn, callback): Bool` - 便捷提交
+**预期效果**：read消除跨线程通知开销，12ms → ~0-2ms（与File持平）
+
+### 方案C：write 回调零分配（✅已实现，Write性能提升27%）
+
+**思路**：write 的回调仅释放slot，但收割器 `invokeAndRelease` 后已自动 `allocator.release`，
+回调中再释放是**双重释放bug**。直接设置 `CompletionCallback.None` 即可——收割器自动释放slot。
+
+**已修复**：移除write路径的 `LambdaCompletionCallback` + `allocator.releaseSlot(slotId)`，
+改用 `CompletionCallback.None`。消除了一次对象分配+一次双重释放bug。
+
+**效果**：Write从381us降至278us（-27%），比File(366us)更快
+
+### 方案E：注册缓冲区（✅已实现，效果为负——tmpfs场景memcpy开销大于地址验证节省）
+
+**思路**：通过 `io_uring_register_buffers` 预注册缓冲区，内核跳过地址验证。
+
+**已实现**：
+- 新增 `ioUringPrepReadFixed` / `ioUringPrepWriteFixed` 函数（需传入buf地址+bufIndex）
+- IOUringStream 新增 `fixedBufCount` / `fixedBufSize` 参数
+- 注册缓冲区由 LibC.malloc 分配（避免GC移动），AtomicSlotAllocator 管理索引
+- read: READ_FIXED → memcpy到用户buffer；write: memcpy用户数据到注册缓冲区 → WRITE_FIXED
+- 无可用注册缓冲区时自动降级为普通模式
+
+**实测效果**（tmpfs）：
+| 操作 | 普通模式 | 注册缓冲区模式 | File |
+|------|---------|-------------|------|
+| Write | 290us | 552us (+90%) | 391us |
+| Read | 447us | 680us (+52%) | 101us |
+
+**结论**：tmpfs上内核地址验证开销极小（<0.1us/次），额外memcpy（4KB/次×256次）反而拖后腿。
+注册缓冲区更适合真实块设备（NVMe SSD）+ 高频小I/O场景。
 
 ---
 
-# 阶段五：高级功能 ✅
+## 优化优先级排序（更新）
 
-## 任务 5.1：实现 Buffer Ring 支持 ✅
-- 创建 `f_io/src/uring/uring_buf_ring.cj`
-- 实现 `IOUringBufferRing <: Resource` 类：
-  - `init(ring, nentries, bgid!, flags!)` - 注册 buffer ring
-  - `add(addr, len, bid, bufOffset!)` - 添加缓冲区
-  - `advance(count)` - 推进 tail
-  - `addAndAdvance(addr, len, bid)` - 便捷方法
-  - `getBgid/getNentries/getMask/getTail/getBuf` - 状态查询
-  - `close()` - 注销并释放
+| 优先级 | 方案 | 预期提升 | 实现难度 | 状态 |
+|--------|------|---------|---------|------|
+| P0 | F1: 双ring架构 | read 12ms→439us | 中 | ✅已实现 |
+| P1 | C: write回调零分配 | write -27% | 低 | ✅已实现 |
+| P2 | E: 注册缓冲区 | tmpfs无效(反而更慢) | 高 | ✅已实现，效果为负 |
+| ~~P0~~ | ~~A: SQPOLL~~ | ~~无效~~ | 低 | 已实现，无效果 |
+| ~~P1~~ | ~~B: CAS替代Mutex~~ | ~~可忽略~~ | 中 | 已排除 |
+| ~~P2~~ | ~~D: LockFreePromise~~ | ~~自旋无效~~ | 中 | 已实现，效果有限 |
 
-## 任务 5.2：实现固定文件描述符注册 ✅
-- 创建 `f_io/src/uring/uring_registered_files.cj`
-- 实现 `RegisteredFiles <: Resource` 类：
-  - `init(ring, nrFiles)` - 密集注册
-  - `init(ring, nrFiles, sparse!)` - 稀疏注册
-  - `update(index, fd)` - 更新文件描述符
-  - `updateBatch(offset, fds, count)` - 批量更新
-  - `allocIndex(fd)` - 自动分配索引
-  - `getNrFiles/isSparse/getFd` - 状态查询
-  - `close()` - 注销并释放
-
-## 任务 5.3：实现固定缓冲区注册 ✅
-- 创建 `f_io/src/uring/uring_registered_buffers.cj`
-- 实现 `RegisteredBuffers <: Resource` 类：
-  - `init(ring, iovecs, nrBuffers)` - 密集注册
-  - `init(ring, nrBuffers, sparse!)` - 稀疏注册
-  - `update(index, iovec)` - 更新缓冲区（通过 IORING_REGISTER_BUFFERS_UPDATE）
-  - `getNrBuffers/isSparse/getIOVec` - 状态查询
-  - `close()` - 注销并释放
-
----
-
-# 阶段六：测试与文档
-
-## 任务 6.1：编写单元测试
-- 创建 `f_io/src/uring/tests/uring_test.cj`
-- 测试用例：
-  - `testQueueInitExit()` - 初始化与清理
-  - `testSQEAllocation()` - SQE 分配
-  - `testSubmitAndWait()` - 提交等待
-  - `testReadWrite()` - 读写操作
-  - `testPollAdd()` - 轮询操作
-  - `testTimeout()` - 超时操作
-  - `testLockFreeSlotAllocator()` - 无锁槽位分配
-  - `testCompletionSlotArray()` - 完成槽位数组
-
-## 任务 6.2：编写集成测试
-- 创建 `f_io/src/uring/tests/integration_test.cj`
-- 测试场景：
-  - 文件异步读写
-  - Socket 异步收发
-  - 多线程并发提交
-  - 高吞吐压力测试
-
-## 任务 6.3：编写基准测试
-- 创建 `f_io/src/uring/benchmarks/uring_bench.cj`
-- 基准测试：
-  - 单次 submit 延迟
-  - 批量 submit 吞吐
-  - CQE 收割吞吐
-  - 无锁 vs 有锁对比
-
-## 任务 6.4：完善 API 文档
-- 为所有公开 API 添加文档注释
-- 说明线程安全约束
-- 提供使用示例
-
----
-
-# 阶段七：导出与集成 ✅
-
-## 任务 7.1：创建包导出文件 ✅
-- 创建 `f_io/src/uring/uring.cj`（主入口），包含包文档和使用示例
-
-## 任务 7.2：更新 f_io 包导出 ✅
-- 在 `f_io/src/f_io.cj` 中添加 uring 子包使用说明
-
-## 任务 7.3：验证跨平台编译 ✅
-- `cjpm build` 通过（9 warnings, 0 errors）
-- 全部 28 个测试通过：IoUringBasicTest(17) + LockFreeComponentTest(7) + IoUringIntegrationTest(4)
-
----
-
-# 任务依赖关系
-
-```
-阶段一 (基础设施)
-    ├── 1.1 → 1.2, 1.3, 1.4
-    ├── 1.2, 1.3, 1.4 → 1.5
-    └── 阶段一完成 → 阶段二
-
-阶段二 (低级封装)
-    ├── 2.1, 2.2 可并行
-    ├── 2.3 可独立
-    ├── 2.4 依赖 1.3
-    └── 阶段二完成 → 阶段三
-
-阶段三 (高级封装)
-    ├── 3.1 依赖阶段二
-    ├── 3.2, 3.3 可并行
-    ├── 3.4 依赖 3.1
-    └── 阶段三完成 → 阶段四
-
-阶段四 (无锁并发)
-    ├── 4.1, 4.2, 4.3, 4.4 可并行
-    ├── 4.5 依赖 4.1, 4.2, 4.3, 4.4
-    └── 阶段四完成 → 阶段五
-
-阶段五 (高级功能)
-    ├── 5.1, 5.2, 5.3 可并行
-    └── 阶段五完成 → 阶段六
-
-阶段六 (测试)
-    ├── 6.1, 6.2 可并行
-    ├── 6.3 依赖 6.1, 6.2
-    ├── 6.4 可独立
-    └── 阶段六完成 → 阶段七
-
-阶段七 (导出集成)
-    ├── 7.1, 7.2 顺序执行
-    └── 7.3 最后验证
-```
+**推荐实施顺序**：F1 → C → E
