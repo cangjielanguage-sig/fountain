@@ -96,6 +96,48 @@ foreign {
     func io_uring_ring_dontfork(ring: CPointer<IOUring>): Int32
 }
 
+// ==================== FFI 包装函数（供子包使用）====================
+
+/**
+ * io_uring_submit 的包装函数
+ *
+ * foreign 函数无法跨动态库子包边界直接访问，
+ * 提供此包装函数供 lockfree 子包使用。
+ *
+ * @param ring io_uring 结构体指针
+ * @return 提交的请求数量，负值表示错误
+ */
+@When[os == "Linux"]
+public func ioUringSubmitFFI(ring: CPointer<IOUring>): Int32 {
+    unsafe { io_uring_submit(ring) }
+}
+
+/**
+ * io_uring_get_sqe 的包装函数
+ *
+ * foreign 函数无法跨动态库子包边界直接访问，
+ * 提供此包装函数供 lockfree 子包使用。
+ *
+ * @param ring io_uring 结构体指针
+ * @return SQE 指针，SQ 满时返回 null
+ */
+@When[os == "Linux"]
+public func ioUringGetSQEFFI(ring: CPointer<IOUring>): CPointer<IOUringSQE> {
+    unsafe { io_uring_get_sqe(ring) }
+}
+
+// ==================== SQE 操作 ====================
+
+@When[os == "Linux"]
+foreign {
+    /**
+     * 获取一个空闲的 SQE
+     * @param ring io_uring 结构体指针
+     * @return SQE 指针，SQ 满时返回 null
+     */
+    func io_uring_get_sqe(ring: CPointer<IOUring>): CPointer<IOUringSQE>
+}
+
 // ==================== 提交与等待 ====================
 
 @When[os == "Linux"]
@@ -154,17 +196,6 @@ foreign {
 
 @When[os == "Linux"]
 foreign {
-    /**
-     * 等待单个 CQE
-     * @param ring io_uring 结构体指针
-     * @param cqePtr 输出 CQE 指针
-     * @return 0 成功，负值表示错误
-     */
-    func io_uring_wait_cqe(
-        ring: CPointer<IOUring>,
-        cqePtr: CPointer<CPointer<IOUringCQE>>
-    ): Int32
-
     /**
      * 等待多个 CQE
      * @param ring io_uring 结构体指针

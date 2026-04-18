@@ -15,6 +15,19 @@ limitations under the License.
  */
 package fountain::f_io
 
+/**
+ * f_io — I/O 工具库
+ *
+ * ## io_uring 支持（仅 Linux）
+ *
+ * ```cj
+ * import fountain::f_io.uring.*       // 核心绑定
+ * import fountain::f_io.uring.lockfree.* // 无锁并发
+ * ```
+ *
+ * 详见 fountain::f_io.uring 包文档。
+ */
+
 internal import std.io.{InputStream, OutputStream, ByteBuffer}
 internal import std.collection.concurrent.ArrayBlockingQueue
 import fountain::f_base.*

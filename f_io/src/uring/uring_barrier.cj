@@ -87,15 +87,12 @@ foreign {
 
     /**
      * 全内存屏障
+     * @param memorder 内存序（5=seq_cst）
      */
-    func __sync_synchronize(): Unit
+    func atomic_thread_fence(memorder: Int32): Unit
 }
 
 // ==================== 内存序常量 ====================
-
-/** relaxed 内存序 */
-@When[os == "Linux"]
-private const __ATOMIC_RELAXED: Int32 = 0
 
 /** acquire 内存序 */
 @When[os == "Linux"]
@@ -198,7 +195,7 @@ public func ioUringStoreRelease64(ptr: CPointer<UInt64>, value: UInt64): Unit {
  */
 @When[os == "Linux"]
 public func ioUringSmpMB(): Unit {
-    unsafe { __sync_synchronize() }
+    unsafe { atomic_thread_fence(__ATOMIC_SEQ_CST) }
 }
 
 /**

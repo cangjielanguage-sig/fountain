@@ -7,7 +7,7 @@
   compile-option = "--dy-std"
   override-compile-option = "--dy-std"
   description = "IO模块"
-  link-option = ""
+  link-option = "-latomic"
   name = "f_io"
   organization="fountain"
   output-type = "dynamic"
@@ -26,11 +26,11 @@
 
 [target]
 [target.x86_64-unknown-linux-gnu]
-  compile-option = "--dy-std -ldl -luring"
-  override-compile-option = "--dy-std -ldl -luring"
+compile-option = "--dy-std -ldl -luring -latomic"
+override-compile-option = "--dy-std -ldl -luring -latomic"
 [target.aarch64-unknown-linux-gnu]
-  compile-option = "--dy-std -ldl -luring"
-  override-compile-option = "--dy-std -ldl -luring"
+compile-option = "--dy-std -ldl -luring -latomic"
+override-compile-option = "--dy-std -ldl -luring -latomic"
 [target.x86_64-w64-mingw32]
   compile-option = "--dy-std -lcrypt32"
   override-compile-option = "--dy-std -lcrypt32"

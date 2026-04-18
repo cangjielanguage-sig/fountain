@@ -566,6 +566,10 @@ public const IO_URING_OP_SUPPORTED: UInt16 = 0x0001
 @When[os == "Linux"]
 public const IOU_PBUF_RING_MMAP: UInt32 = 0x00000001
 
+/** incremental buffer consumption (kernel 6.12+) */
+@When[os == "Linux"]
+public const IOU_PBUF_RING_INC: UInt32 = 0x00000002
+
 // ==================== magic constants ====================
 
 /** auto-allocate direct descriptor */

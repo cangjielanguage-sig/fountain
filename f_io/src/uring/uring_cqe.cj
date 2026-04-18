@@ -244,10 +244,10 @@ public func ioUringSQNeedWakeup(ring: CPointer<IOUring>): Bool {
 public func ioUringSetSQETail(ring: CPointer<IOUring>, newTail: UInt32): Unit {
     unsafe {
         // IOUringSQ 中 sqeTail 的偏移量
-        // 需要根据实际结构体布局计算
-        // sqeTail 在 IOUringSQ 中的偏移是 72 字节（8个指针 + 2个 UInt32）
+        // C 结构体布局：8个指针(64) + sqe_head(4) + sqe_tail(4) = 68
+        // io_uring.sq 偏移为 0，所以 sqe_tail 相对于 io_uring 也是 68
         let sqPtr = CPointer<Byte>(ring)
-        let sqeTailPtr = CPointer<UInt32>(sqPtr + 72)
+        let sqeTailPtr = CPointer<UInt32>(sqPtr + 68)
         sqeTailPtr.write(newTail)
     }
 }
