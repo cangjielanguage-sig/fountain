@@ -24,6 +24,7 @@ import fountain::f_io.*
  * IOUringStream 单元测试
  *
  * 使用临时文件验证基于 io_uring 的读写功能。
+ * IOUringStream 使用后台收割线程 + 无锁并发架构。
  */
 @When[os == "Linux"]
 @Test
@@ -146,13 +147,13 @@ public class IOUringStreamTest {
     public func testFullConstructor(): Unit {
         let (path, file) = createTempFile()
         let fd = Int32(file.fileDescriptor.fileHandle)
-        try(stream = IOUringStream(fd, 32, slotCount: 16)) {
+        try(stream = IOUringStream(fd, 32)) {
             stream.write("full constructor".unsafeBytes())
         }
 
         let readFile = File(path, OpenMode.Read)
         let readFd = Int32(readFile.fileDescriptor.fileHandle)
-        try(readStream = IOUringStream(readFd)) {
+        try(readStream = IOUringStream(readFd, 32)) {
             let buf = Array<Byte>(64, repeat: 0)
             let n = readStream.read(buf)
             @Expect(n > 0)

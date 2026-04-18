@@ -25,6 +25,7 @@ import fountain::f_io.*
  * IOUringStream 与 File 的性能对比测试
  *
  * 对比相同负载下 IOUringStream 和 std.fs.File 的读写耗时。
+ * IOUringStream 使用后台收割线程 + 无锁并发架构。
  */
 @When[os == "Linux"]
 @Test
@@ -46,7 +47,7 @@ public class IOUringStreamPerfTest {
     }
 
     /**
-     * 使用 IOUringStream 写入 TOTAL_BYTES 数据并计时
+     * 使用 IOUringStream 写入并计时
      */
     @TestCase
     public func benchmarkIOUringStreamWrite(): Unit {
@@ -67,7 +68,7 @@ public class IOUringStreamPerfTest {
         }
         rwFile.close()
 
-        // 正式测试：每次重新打开文件
+        // 正式测试
         let rwFile2 = File(path, OpenMode.ReadWrite)
         let fd2 = Int32(rwFile2.fileDescriptor.fileHandle)
         let start = MonoTime.now()
@@ -120,7 +121,7 @@ public class IOUringStreamPerfTest {
     }
 
     /**
-     * 使用 IOUringStream 读取 TOTAL_BYTES 数据并计时
+     * 使用 IOUringStream 读取并计时
      */
     @TestCase
     public func benchmarkIOUringStreamRead(): Unit {

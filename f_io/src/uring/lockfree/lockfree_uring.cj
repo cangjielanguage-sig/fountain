@@ -104,6 +104,18 @@ public class IoUringLockFree <: Resource {
     }
 
     /**
+     * 释放一个已分配的完成槽位
+     *
+     * 在提交失败等场景下手动释放槽位。
+     * 正常完成路径由收割器在 invokeAndRelease 后自动释放。
+     *
+     * @param slotIndex 槽位索引（由 allocSlot 返回）
+     */
+    public func releaseSlot(slotIndex: UInt32): Unit {
+        allocator.release(slotIndex)
+    }
+
+    /**
      * 获取指定索引的 SQE 指针
      *
      * @param slotIndex 槽位索引（由 allocSlot 返回）
