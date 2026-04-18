@@ -189,7 +189,6 @@ if (singleThreadRead) {
 | 2 | ringPtr.read() 冗余消除 | reap -30ns/次 ≈ -7.7us | 性能 | 低 |
 | 3 | read 路径跳过 userData | 0（已跳过） | — | 跳过 |
 | 4 | writeFixed 零分配回调 | writeFixed -50~100ns/次 | 性能 | 低 |
-| 5 | CQE ktail acquire 语义 | 0（x86），ARM修复正确性 | 正确性 | 低 |
-| 6 | readMutex 可选移除 | read -23ns/次 ≈ -5.9us | 性能 | 低 |
+| 5 | readMutex 可选移除 | read -23ns/次 ≈ -5.9us | 性能 | 低 |
 
 **注意**：submit syscall 占 read 路径 58%（467ns/次），是绝对瓶颈且无法通过代码优化消除。以上优化针对的是剩余 42% 中的冗余开销，综合收益有限（read 路径最多再降 ~15us）。
