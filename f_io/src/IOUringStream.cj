@@ -154,12 +154,6 @@ public class IOUringStream <: IOStream & Resource {
 
         let slotIdOpt = lf.allocSlot()
         if (let Some(slotId) <- slotIdOpt) {
-            // 写操作不需要阻塞等待，回调仅释放槽位
-            let allocator = lf
-            let callback = LambdaCompletionCallback({ _ =>
-                allocator.releaseSlot(slotId)
-            })
-
             synchronized(writeMutex) {
                 let sqeOpt = writeRing.getSQE()
                 if (let Some(sqe) <- sqeOpt) {
@@ -167,7 +161,8 @@ public class IOUringStream <: IOStream & Resource {
                         let bufPtr = acquireArrayRawData(buffer)
                         ioUringPrepWrite(sqe, fd, CPointer<Unit>(bufPtr.pointer), UInt32(bufSize), currentOffset)
                     }
-                    let gen = lf.setCallback(slotId, callback)
+                    // 设置 None 回调，收割器自动释放 slot，无需创建 LambdaCompletionCallback
+                    let gen = lf.setCallback(slotId, CompletionCallback.None)
                     let ud = lf.encodeUserData(slotId, gen)
                     ioUringSQESetData64(sqe, ud)
                     lf.commitSlot(slotId)
