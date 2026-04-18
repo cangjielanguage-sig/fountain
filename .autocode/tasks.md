@@ -2,7 +2,7 @@
 cd f_concurrent
 
 # 任务
-每改正一个问题都在相应的标题前面加上完成标记
+每完成一个任务都在相应的标题前面加上完成标记
 
 ## P0 - 活锁BUG
 cd f_concurrent && timeout 120 cjpm test --filter ConcurrentSkipListMap_conc_test --no-capture-output --show-all-output
