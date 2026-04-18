@@ -80,9 +80,9 @@ public class IOUringStreamPerfTest {
         let elapsed = MonoTime.now() - start
         rwFile2.close()
 
-        let ms = elapsed.toMilliseconds()
-        println("[IOUringStream Write] ${ITERATIONS} x ${BLOCK_SIZE}B = ${TOTAL_BYTES}B, ${ms}ms")
-        @Expect(ms >= 0)
+        let ns = elapsed.toNanoseconds()
+        println("[IOUringStream Write] ${ITERATIONS} x ${BLOCK_SIZE}B = ${TOTAL_BYTES}B, ${ns}ns")
+        @Expect(ns >= 0)
 
         removeIfExists(Path(path))
     }
@@ -113,9 +113,9 @@ public class IOUringStreamPerfTest {
         let elapsed = MonoTime.now() - start
         rwFile.close()
 
-        let ms = elapsed.toMilliseconds()
-        println("[File Write] ${ITERATIONS} x ${BLOCK_SIZE}B = ${TOTAL_BYTES}B, ${ms}ms")
-        @Expect(ms >= 0)
+        let ns = elapsed.toNanoseconds()
+        println("[File Write] ${ITERATIONS} x ${BLOCK_SIZE}B = ${TOTAL_BYTES}B, ${ns}ns")
+        @Expect(ns >= 0)
 
         removeIfExists(Path(path))
     }
@@ -138,7 +138,7 @@ public class IOUringStreamPerfTest {
         }
         writeFile.close()
 
-        // 正式读取测试
+        // 正式读取测试（双ring架构：read同线程submit+waitCQE）
         let readFile = File(path, OpenMode.Read)
         let fd = Int32(readFile.fileDescriptor.fileHandle)
         let buf = Array<Byte>(Int64(BLOCK_SIZE), repeat: 0)
@@ -157,9 +157,9 @@ public class IOUringStreamPerfTest {
         let elapsed = MonoTime.now() - start
         readFile.close()
 
-        let ms = elapsed.toMilliseconds()
-        println("[IOUringStream Read] ${TOTAL_BYTES}B, ${ms}ms")
-        @Expect(ms >= 0)
+        let ns = elapsed.toNanoseconds()
+        println("[IOUringStream Read] ${TOTAL_BYTES}B, ${ns}ns")
+        @Expect(ns >= 0)
 
         removeIfExists(Path(path))
     }
@@ -198,9 +198,9 @@ public class IOUringStreamPerfTest {
         let elapsed = MonoTime.now() - start
         readFile.close()
 
-        let ms = elapsed.toMilliseconds()
-        println("[File Read] ${TOTAL_BYTES}B, ${ms}ms")
-        @Expect(ms >= 0)
+        let ns = elapsed.toNanoseconds()
+        println("[File Read] ${TOTAL_BYTES}B, ${ns}ns")
+        @Expect(ns >= 0)
 
         removeIfExists(Path(path))
     }

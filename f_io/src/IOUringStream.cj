@@ -23,12 +23,14 @@ import fountain::f_io.uring.*
 import fountain::f_io.uring.lockfree.*
 
 /**
- * 基于 io_uring 的 IOStream 实现
+ * 基于 io_uring 的 IOStream 实现（双 ring 架构）
  *
- * 使用 IoUringLockFree 无锁组件 + 后台收割线程架构：
- * - 后台线程循环调用 waitAndReap 收割 CQE，触发回调完成 Promise
- * - read(): 提交读请求后阻塞等待 Promise 完成（无数据则一直阻塞）
- * - write(): 提交写请求后立即返回（不等待内核完成确认）
+ * 使用两个独立的 io_uring 实例分别处理读和写：
+ * - writeRing: 后台收割线程收割 CQE，write() 提交后立即返回
+ * - readRing: 调用线程内直接 submit + waitCQE，无跨线程通知开销
+ *
+ * 双 ring 架构消除了 read 路径的 Condition wait/notifyAll 线程同步开销，
+ * 使 read 性能接近直接系统调用。
  *
  * 使用示例：
  * ```cj
@@ -41,19 +43,25 @@ import fountain::f_io.uring.lockfree.*
  */
 @When[os == "Linux"]
 public class IOUringStream <: IOStream & Resource {
-    /** 底层无锁 IoUring 封装 */
+    /** 写 ring：无锁组件 + 后台收割线程 */
     private let lf: IoUringLockFree
-    /** 底层 IoUring 实例（用于 nop 唤醒和关闭） */
-    private let ring: IoUring
+    /** 写 ring 底层 IoUring 实例 */
+    private let writeRing: IoUring
+    /** 读 ring：调用线程直接 submit + waitCQE */
+    private let readRing: IoUring
     /** 目标文件描述符 */
     private let fd: Int32
-    /** 当前读写偏移量 */
-    private var offset: UInt64 = 0
-    /** 提交锁（保护 getSQE + submit 的原子性） */
-    private let submitMutex: Mutex = Mutex()
+    /** 写偏移量 */
+    private var writeOffset: UInt64 = 0
+    /** 读偏移量 */
+    private var readOffset: UInt64 = 0
+    /** 提交锁（保护 writeRing 的 getSQE + flush） */
+    private let writeMutex: Mutex = Mutex()
+    /** 读提交锁（保护 readRing 的 getSQE + submit） */
+    private let readMutex: Mutex = Mutex()
     /** 后台收割线程是否应该停止 */
     private let stopping: AtomicBool = AtomicBool(false)
-    /** 后台收割线程的 Future，用于 close 时等待线程退出 */
+    /** 后台收割线程的 Future */
     private var reaperFuture: ?Future<Unit> = None
 
     /**
@@ -65,8 +73,9 @@ public class IOUringStream <: IOStream & Resource {
      */
     public init(fd: Int32, entries: UInt32, flags!: UInt32 = 0) {
         this.fd = fd
-        this.ring = IoUring(entries, flags: flags)
-        this.lf = IoUringLockFree(ring)
+        this.writeRing = IoUring(entries, flags: flags)
+        this.lf = IoUringLockFree(writeRing)
+        this.readRing = IoUring(entries, flags: flags)
         startReaper()
     }
 
@@ -77,13 +86,14 @@ public class IOUringStream <: IOStream & Resource {
      */
     public init(fd: Int32) {
         this.fd = fd
-        this.ring = IoUring(64)
-        this.lf = IoUringLockFree(ring)
+        this.writeRing = IoUring(64)
+        this.lf = IoUringLockFree(writeRing)
+        this.readRing = IoUring(64)
         startReaper()
     }
 
     /**
-     * 启动后台收割线程
+     * 启动后台收割线程（仅收割 writeRing 的 CQE）
      */
     private func startReaper(): Unit {
         let reaperLf = lf
@@ -93,7 +103,6 @@ public class IOUringStream <: IOStream & Resource {
                 try {
                     reaperLf.waitAndReap()
                 } catch (_: Exception) {
-                    // ring 已关闭或出错，退出循环
                     break
                 }
             }
@@ -105,45 +114,33 @@ public class IOUringStream <: IOStream & Resource {
         if (bufSize == 0) {
             return 0
         }
-        let currentOffset = offset
-        offset += UInt64(bufSize)
+        let currentOffset = readOffset
 
-        let slotIdOpt = lf.allocSlot()
-        if (let Some(slotId) <- slotIdOpt) {
-            // 创建 Promise 用于阻塞等待
-            let promise = IoUringPromise<Int32>(UInt64(slotId), { cqe => ioUringCQEGetRes(cqe) })
-            let callback = LambdaCompletionCallback({ cqe =>
-                promise.complete(cqe)
-            })
-
-            synchronized(submitMutex) {
-                let sqeOpt = ring.getSQE()
-                if (let Some(sqe) <- sqeOpt) {
-                    unsafe {
-                        let bufPtr = acquireArrayRawData(buffer)
-                        ioUringPrepRead(sqe, fd, CPointer<Unit>(bufPtr.pointer), UInt32(bufSize), currentOffset)
-                    }
-                    let gen = lf.setCallback(slotId, callback)
-                    let ud = lf.encodeUserData(slotId, gen)
-                    ioUringSQESetData64(sqe, ud)
-                    lf.commitSlot(slotId)
-                    lf.flush()
-                } else {
-                    lf.releaseSlot(slotId)
-                    offset = currentOffset
-                    return -1
+        synchronized(readMutex) {
+            let sqeOpt = readRing.getSQE()
+            if (let Some(sqe) <- sqeOpt) {
+                unsafe {
+                    let bufPtr = acquireArrayRawData(buffer)
+                    ioUringPrepRead(sqe, fd, CPointer<Unit>(bufPtr.pointer), UInt32(bufSize), currentOffset)
                 }
+                ioUringSQESetData64(sqe, UInt64(1))  // userData != 0 标识这是read的SQE
+                readRing.submit()
+            } else {
+                return -1
             }
 
-            // 阻塞等待读完成
-            let result = promise.awaitResult()
-            if (result <= 0) {
-                offset = currentOffset
+            // 在同一线程内阻塞等待CQE（无跨线程通知开销）
+            let cqeOpt = readRing.waitCQE()
+            if (let Some(cqe) <- cqeOpt) {
+                let result = ioUringCQEGetRes(cqe)
+                readRing.cqeSeen(cqe)
+                if (result > 0) {
+                    readOffset += UInt64(result)
+                }
+                Int64(result)
+            } else {
+                -1
             }
-            Int64(result)
-        } else {
-            offset = currentOffset
-            -1
         }
     }
 
@@ -152,8 +149,8 @@ public class IOUringStream <: IOStream & Resource {
         if (bufSize == 0) {
             return
         }
-        let currentOffset = offset
-        offset += UInt64(bufSize)
+        let currentOffset = writeOffset
+        writeOffset += UInt64(bufSize)
 
         let slotIdOpt = lf.allocSlot()
         if (let Some(slotId) <- slotIdOpt) {
@@ -163,8 +160,8 @@ public class IOUringStream <: IOStream & Resource {
                 allocator.releaseSlot(slotId)
             })
 
-            synchronized(submitMutex) {
-                let sqeOpt = ring.getSQE()
+            synchronized(writeMutex) {
+                let sqeOpt = writeRing.getSQE()
                 if (let Some(sqe) <- sqeOpt) {
                     unsafe {
                         let bufPtr = acquireArrayRawData(buffer)
@@ -177,46 +174,43 @@ public class IOUringStream <: IOStream & Resource {
                     lf.flush()
                 } else {
                     lf.releaseSlot(slotId)
-                    offset = currentOffset
+                    writeOffset = currentOffset
                 }
             }
-            // 写操作立即返回，不等待内核完成
         } else {
-            offset = currentOffset
+            writeOffset = currentOffset
         }
     }
 
     public func flush(): Unit {
         // write 已经立即返回，flush 不需要额外操作
-        // 如果需要确保数据落盘，调用者应使用 fsync
     }
 
     public func isClosed(): Bool {
-        ring.isClosed()
+        writeRing.isClosed()
     }
 
     public func close(): Unit {
-        if (!ring.isClosed()) {
-            // 通知后台线程停止
+        if (!writeRing.isClosed()) {
+            // 停止后台收割线程
             stopping.store(true)
-            // 提交一个 nop 请求唤醒后台线程（它可能在 waitCQE 中阻塞）
-            synchronized(submitMutex) {
-                let sqeOpt = ring.getSQE()
+            synchronized(writeMutex) {
+                let sqeOpt = writeRing.getSQE()
                 if (let Some(sqe) <- sqeOpt) {
                     ioUringPrepNop(sqe)
                     ioUringSQESetData64(sqe, UInt64(0))
-                    ring.submit()
+                    writeRing.submit()
                 }
             }
-            // 等待后台线程退出
             if (let Some(f) <- reaperFuture) {
                 try {
                     f.get()
-                } catch (_: Exception) {
-                    // 后台线程异常退出，忽略
-                }
+                } catch (_: Exception) {}
             }
-            ring.close()
+            writeRing.close()
+        }
+        if (!readRing.isClosed()) {
+            readRing.close()
         }
     }
 }
