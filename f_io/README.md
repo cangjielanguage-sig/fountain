@@ -70,11 +70,17 @@ ByteBuffer 的类型化读写接口，支持大端/小端字节序。
 
 fountain::f_io.exception 包的异常类。
 
+### IOUringStream
+
+[doc/IOUringStream.md](doc/IOUringStream.md)
+
+基于 io_uring 的 IOStream 实现（双 ring 架构），Write 异步立即返回，Read 同线程阻塞等待。
+
 ### fountain::f_io.uring API 参考
 
 [doc/uring_api.md](doc/uring_api.md)
 
-fountain::f_io.uring 及 fountain::f_io.uring.lockfree 包的完整 API 文档，包括 IOUringStream、IoUring、IoUringLockFree、RegisteredBuffers 等所有类、函数、结构体和常量。
+fountain::f_io.uring 及 fountain::f_io.uring.lockfree 包的 API 文档，包括 IoUring、IoUringLockFree、RegisteredBuffers 等类、函数、结构体和常量。
 
 ### IOUringStream vs File 性能对比
 
