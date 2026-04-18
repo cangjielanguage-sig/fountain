@@ -3,6 +3,8 @@ cd f_concurrent
 
 # 任务
 每完成一个任务都在相应的标题前面加上完成标记
+编译时执行cd f_concurrent && cjpm build
+测试时执行cd f_concurrent && cjpm test --filter ConcurrentSkipListMap_test --no-capture-output --show-all-output，性能测试并发测试也仿照此命令
 
 ## P0 - 活锁BUG
 cd f_concurrent && timeout 120 cjpm test --filter ConcurrentSkipListMap_conc_test --no-capture-output --show-all-output
