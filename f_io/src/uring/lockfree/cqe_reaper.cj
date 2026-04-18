@@ -54,13 +54,14 @@ public class LockFreeCQEReaper {
      */
     public func peekCQE(): ?(CPointer<IOUringCQE>, UInt32) {
         unsafe {
-            let cq = ringPtr.read().cq
+            let ringVal = ringPtr.read()
+            let cq = ringVal.cq
             let head = ioUringSmpLoadAcquire(cq.khead)
-            let tail = cq.ktail.read()
+            let tail = ioUringSmpLoadAcquire(cq.ktail)
             if (head == tail) {
                 return None
             }
-            let shift = if ((ringPtr.read().flags & IORING_SETUP_CQE32) != 0) { 1 } else { 0 }
+            let shift = if ((ringVal.flags & IORING_SETUP_CQE32) != 0) { 1 } else { 0 }
             let index = (head & cq.ringMask) << shift
             let cqe = cq.cqes + Int64(index)
             if (cqe.isNull()) {
@@ -109,10 +110,11 @@ public class LockFreeCQEReaper {
     public func reapAll(handler: (CPointer<IOUringCQE>, UInt32) -> Unit): UInt32 {
         var count: UInt32 = 0
         unsafe {
-            let cq = ringPtr.read().cq
+            let ringVal = ringPtr.read()
+            let cq = ringVal.cq
             var head = ioUringSmpLoadAcquire(cq.khead)
-            let tail = cq.ktail.read()
-            let shift = if ((ringPtr.read().flags & IORING_SETUP_CQE32) != 0) { 1 } else { 0 }
+            let tail = ioUringSmpLoadAcquire(cq.ktail)
+            let shift = if ((ringVal.flags & IORING_SETUP_CQE32) != 0) { 1 } else { 0 }
 
             while (head != tail) {
                 let index = (head & cq.ringMask) << shift
@@ -142,10 +144,11 @@ public class LockFreeCQEReaper {
     public func reapN(maxCount: UInt32, handler: (CPointer<IOUringCQE>, UInt32) -> Unit): UInt32 {
         var count: UInt32 = 0
         unsafe {
-            let cq = ringPtr.read().cq
+            let ringVal = ringPtr.read()
+            let cq = ringVal.cq
             var head = ioUringSmpLoadAcquire(cq.khead)
-            let tail = cq.ktail.read()
-            let shift = if ((ringPtr.read().flags & IORING_SETUP_CQE32) != 0) { 1 } else { 0 }
+            let tail = ioUringSmpLoadAcquire(cq.ktail)
+            let shift = if ((ringVal.flags & IORING_SETUP_CQE32) != 0) { 1 } else { 0 }
 
             while (head != tail && count < maxCount) {
                 let index = (head & cq.ringMask) << shift

@@ -202,9 +202,10 @@ public class IoUring <: Resource {
             return None
         }
         unsafe {
-            let cq = ringPtr.read().cq
+            let ringVal = ringPtr.read()
+            let cq = ringVal.cq
             let head = cq.khead.read()
-            let shift = if ((ringPtr.read().flags & IORING_SETUP_CQE32) != 0) { 1 } else { 0 }
+            let shift = if ((ringVal.flags & IORING_SETUP_CQE32) != 0) { 1 } else { 0 }
             let index = (head & cq.ringMask) << shift
             let cqe = cq.cqes + Int64(index)
             if (cqe.isNull()) {

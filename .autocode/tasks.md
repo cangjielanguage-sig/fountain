@@ -1,165 +1,278 @@
-# IOUringStream 性能优化方案
+# 前置任务
+cd f_concurrent
 
-## 当前性能基线（双ring架构 + write零分配，ns精度）
+# 任务
+## 活锁BUG
+cd f_concurrent && timeout 120 cjpm test --filter ConcurrentSkipListMap_conc_test --no-capture-output --show-all-output
+这个测试类的每个用例都有概率会长时间不结束，每个用例单独执行，多执行几次就会发生，一起执行一定会发生。应该是并发调用发生了死循环。
+检查ConcurrentSkipListMap.cj，找到问题原因。尤其是add remove get 等函数的混合并发操作。
+在代码测试代码和被测代码添加sleep控制执行节奏，添加println输出运行过程中的变量，方便观察。
+考虑到编译时间，命令超时时间不能太短，否则可能还没编译完就结束了。
 
-| 操作 | IOUringStream | std.fs.File | 对比 |
-|------|--------------|-------------|------|
-| Write 1MB (256×4KB) | 290us | 391us | IOUring快26% |
-| Read 1MB | 447us | 101us | IOUring慢4.4× |
+##  randomLevel 随机数生成优化
 
-## Read性能差距根因分析
+### 问题定位
+- 位置：第 131-155 行
+- 当前使用 64 位 XorShift，但每次只检查最高位（bit 63）
+- 浪费 63 位的计算结果
+- 每次生成 64 位随机数，只用 1 位
 
-微基准拆解（256次×4KB read，tmpfs）：
+### 优化方案
 
-| 操作 | 耗时/次 | 占比 |
-|------|--------|------|
-| getSQE | 60ns | 7% |
-| acquireBuf | 49ns | 6% |
-| prepRead+sqe | 85ns | 10% |
-| **submit (syscall)** | **467ns** | **58%** |
-| waitCQE | 64ns | 8% |
-| cqeSeen | 83ns | 10% |
-| Mutex | 23ns | 可忽略 |
+#### 方案：预计算概率表
+  原理
 
-**根因**：tmpfs上read延迟极低（CQE在submit返回后几乎立即可用），io_uring的两次内核交互（submit+waitCQE=531ns）反而成为瓶颈。File.read只需1次syscall（365ns）。
+  跳表层级服从几何分布：层级 L 概率 P(L) = (1/2)^(L+1)
 
-**已排除的优化方案**：
-- submitAndWait：实测934ns/iter，比submit+waitCQE(811ns)更慢
-- SQPOLL：tmpfs上submit开销已很小，SQPOLL无效
-- 移除readMutex：Mutex开销仅23ns/iter，可忽略
-- 注册缓冲区：额外memcpy反而更慢
+  即：
+  - L=0: 50%
+  - L=1: 25%
+  - L=2: 12.5%
+  - ...
 
-**结论**：io_uring在同步read+低延迟存储场景下天然比直接syscall慢，这是架构设计权衡。io_uring优势在异步+批量化I/O场景。
+  传统方案问题
 
-**架构**：双ring（writeRing后台线程收割 + readRing同线程submit+waitCQE）
-- Write：已与File持平，甚至略快
-- Read：双ring消除了12ms跨线程通知开销，但io_uring的submit+waitCQE两次内核交互仍比File的直接read多~1.3us/次
+  当前代码：
+  while (level < effectiveMax) {
+      let r = xorShift64()
+      if ((r & (1 << 63)) == 0) {  // 检查最高位
+          level += 1
+      } else {
+          break
+      }
+  }
+
+  每次生成 64 位，只用 1 位，浪费 63 位。
+
+  概率表方案
+
+  // 预计算阈值：满足条件则 level++
+  // 阈值含义：r < threshold 则提升到下一层
+  private static let LEVEL_THRESHOLDS: Array<UInt64> = [
+      0xFFFFFFFFFFFFFFFFu64,  // L=0→1: 必然提升（100%）
+      0x8000000000000000u64,  // L=1→2: r < 2^63 (50%)
+      0x4000000000000000u64,  // L=2→3: r < 2^62 (25%)
+      0x2000000000000000u64,  // L=3→4: r < 2^61 (12.5%)
+      0x1000000000000000u64,  // L=4→5: 6.25%
+      0x0800000000000000u64,  // L=5→6: 3.125%
+      0x0400000000000000u64,  // L=6→7: 1.5625%
+      0x0200000000000000u64,  // L=7→8: 0.78%
+      // ... 继续衰减
+  ]
+
+  private func randomLevel(): Int64 {
+      var level: Int64 = 0
+      let effectiveMax = effectiveMaxLevel()
+      let r = xorShift64().toUInt()  // 转无符号比较
+
+      while (level < effectiveMax && level < 16) {
+          if (r < LEVEL_THRESHOLDS[level]) {
+              level += 1
+          } else {
+              break
+          }
+      }
+      return level
+  }
+
+  对比
+
+  ┌────────────┬────────────────┬────────────────────┐
+  │    维度    │    传统方案    │     概率表方案     │
+  ├────────────┼────────────────┼────────────────────┤
+  │ 随机数使用 │ 1 位/循环      │ 1 次生成，全用     │
+  ├────────────┼────────────────┼────────────────────┤
+  │ 分支预测   │ 难（0/1 随机） │ 易（阈值固定）     │
+  ├────────────┼────────────────┼────────────────────┤
+  │ 代码复杂度 │ 简单           │ 中等               │
+  ├────────────┼────────────────┼────────────────────┤
+  │ 性能       │ 一般           │ 优（减少分支失败） │
+  └────────────┴────────────────┴────────────────────┘
+
+  关键优势
+
+  1. 一次随机数生成：64 位全用，不逐层生成
+  2. 分支预测友好：阈值固定，CPU 易预测
+  3. 分布精确：严格遵循几何分布
+
+  风险
+
+  - 需验证 UInt64 比较正确性
+  - 阈值数组需与 MAX_LEVEL 匹配
+  - 仓颉 UInt64 字面量语法需确认
+
+### 预期收益
+- 减少 CPU 指令（32 位 vs 64 位操作）
+- 或通过概率表消除分支预测失败
+
+### 风险
+- 低：逻辑等效
+- 概率表需测试验证分布一致性
+
+### 优化之后
+1. 执行命令：cjpm test --filter ConcurrentSkipListMap_test --no-captcture-output --show-all-output 确认修改是否正确
+2. 运行命令：cjpm test --filter ConcurrentSkipListMap_conc_test --no-captcture-output --show-all-output 确认并发访问正确
+3. 运行命令：cjpm test --filter ConcurrentSkipListMap_perf_test --no-captcture-output --show-all-output|grep -P 'perf_.+:' 根据性能测试结果出性能测试报告跟f_concurrent/doc/performance_report.md 比较优化前后的差异，如果性能表现更优更新性能测试报告、本次修改内容，提交git；否则回退之前的版本
+
+## removeIf 遍历中缺时代际检查
+
+### 问题定位
+- 位置：第 597-625 行
+- `removeIf` 开始时捕获 `epoch`，但长遍历过程中不检查 `clear()` 干扰
+- 如果 `clear()` 在遍历期间执行，遍历可能访问已断开连接的节点
+- 当前实现无防护
+
+### 优化方案
+
+```cj
+public func removeIf(predicate: (K, V) -> Bool): Unit {
+    let startEpoch = epoch.load()
+    var currOpt = head.next[0].load()
+    var checkCounter: Int64 = 0
+
+    while (true) {
+        // 每 64 个节点检查一次 epoch 变化
+        checkCounter += 1
+        if (checkCounter % 64 == 0) {
+            if (epoch.load() != startEpoch) {
+                // clear() 已执行，终止遍历
+                return
+            }
+        }
+
+        match (currOpt) {
+            case Some(curr) =>
+                if (isHead(curr)) {
+                    currOpt = curr.next[0].load()
+                    continue
+                }
+                let valOpt = curr.value.load()
+                match (valOpt) {
+                    case Some(box) =>
+                        match (curr.key) {
+                            case Some(k) =>
+                                if (predicate(k, box.value)) {
+                                    tryRemoveNode(curr, startEpoch)
+                                }
+                            case None =>
+                                tryRemoveNode(curr, startEpoch)
+                        }
+                    case None =>
+                        helpPhysicallyRemove(curr)
+                }
+                currOpt = curr.next[0].load()
+            case None => break
+        }
+    }
+}
+```
+
+### 预期收益
+- 防止访问已断开的链表
+- 减少无效遍历
+
+### 风险
+- 低：增加检查开销极小
+- 需验证 epoch 比较逻辑正确性
+
+### 优化之后
+1. 针对本次修改分别在ConcurrentSkipListMap_test.cj 和ConcurrentSkipListMap_conc_test.cj 添加新的测试用例
+2. 执行命令：cjpm test --filter ConcurrentSkipListMap_test --no-captcture-output --show-all-output 确认修改是否正确
+3. 运行命令：cjpm test --filter ConcurrentSkipListMap_conc_test --no-captcture-output --show-all-output 确认并发访问正确
+4. 运行命令：cjpm test --filter ConcurrentSkipListMap_perf_test --no-captcture-output --show-all-output|grep -P 'perf_.+:' 根据性能测试结果出性能测试报告跟f_concurrent/doc/performance_report.md 比较优化前后的差异，如果性能表现更优更新性能测试报告、本次修改内容，提交git；否则回退之前的版本
+
+## tryInsertAtLevel 重试策略优化
+
+### 问题定位
+- 位置：第 391-429 行
+- 当前固定重试 3 次，无区分策略
+- CAS 失败可能是多种原因，但处理方式相同
 
 ---
 
-## 性能瓶颈关键要点（已验证）
+### 方案：智能冲突检测
 
-### 瓶颈1：read 路径的 Promise 线程同步开销（真正的瓶颈，已验证）
-256次read × ~47us = 12ms。每次read的~47us主要来自：
-1. 后台线程收割CQE后调用 `promise.onComplete()` → `cond.notifyAll()`
-2. 调用线程从 `Condition.waitUntil()` 被唤醒
-3. 两次线程调度切换（调用线程sleep → 后台线程wakeup → 调用线程wakeup）
+#### 核心思路
+- 区分冲突类型（删除/复活/真正冲突）
+- 放宽重试上限（8次）
+- 主动清理被删除节点
 
-LockFreePromise的自旋优化在tmpfs上无效——CQE未在自旋窗口内完成，
-因为每次read都要等submit→内核处理→CQE返回，这个延迟远超100次自旋。
+#### 代码
 
-### ~~瓶颈2：submit系统调用开销（已排除）~~
-SQPOLL模式下Read 13ms（反而更慢），证明submit不是主要瓶颈。
-`io_uring_submit` 在tmpfs上开销极低（~2us），12ms差距主要来自线程同步。
-io_uring 的 read 路径是 submit + waitCQE 两次内核交互，比直接 read 多一次。
-对于小数据块（如4KB），这个额外系统调用的固定开销占比很大。
+```cj
+private func tryInsertAtLevel(newNode: Node<K, V>, lvl: Int64, pred: Node<K, V>): Bool {
+    var currentPred = pred
+    var retries = 0
 
-### ~~瓶颈2：submitMutex 锁竞争（已排除）~~
-单线程无竞争，Mutex lock/unlock 只需一次原子CAS（~0.1us），不是主要开销。
+    while (retries < 8) {
+        let succ = currentPred.next[lvl].load()
 
-### ~~瓶颈3：IoUringPromise 的 Mutex + Condition 开销（已优化为LockFreePromise）~~
-已用LockFreePromise替代（AtomicBool+AtomicInt32+自旋+Condition fallback）。
-但自旋在tmpfs上无效——CQE延迟超过自旋窗口，仍走Condition wait路径。
-真正的问题不是Promise实现，而是**跨线程通知机制本身的开销**。
+        match (succ) {
+            case Some(n) if !isHead(n) =>
+                let cmp = compare(n.key, newNode.key)
+                if (cmp == LT) {
+                    currentPred = n
+                    retries += 1
+                    continue
+                } else if (cmp == EQ) {
+                    if (refEq(n, newNode)) {
+                        return true
+                    }
+                    // 检测是否是"复活"场景
+                    if (n.value.load().isNone()) {
+                        // 后继被逻辑删除，帮助清理后重试
+                        let nodeNext = n.next[lvl].load()
+                        currentPred.next[lvl].compareAndSwap(succ, nodeNext)
+                        retries += 1
+                        continue
+                    }
+                    return false  // 真实冲突
+                }
+                // cmp == GT，前驱位置正确
+            case _ => ()
+        }
 
-### 瓶颈2：read路径跨线程通知的开销（核心瓶颈）
-后台收割线程收割CQE后通知调用线程，涉及：
-- Condition.notifyAll() → 内核futex唤醒
-- 调用线程从futex_wait返回 → 重新调度
-- 两次线程上下文切换 ≈ 20-50us/次
+        // 检测前驱是否被删除
+        if (!isHead(currentPred) && currentPred.value.load().isNone()) {
+            currentPred = findPredecessorAtLevel(newNode.key, lvl)
+            retries += 1
+            continue
+        }
 
-**根本解决方案**：让read在同一线程内完成CQE收割，避免跨线程通知。
+        // 执行 CAS
+        newNode.next[lvl].store(succ)
+        if (currentPred.next[lvl].compareAndSwap(succ, Some(newNode))) {
+            return true
+        }
 
-### 瓶颈3：对象分配开销
-每次read创建LockFreePromise，每次write创建LambdaCompletionCallback。
-可优化为对象池或内联回调。
+        // CAS 失败，区分原因
+        let newSucc = currentPred.next[lvl].load()
+        match (newSucc) {
+            case Some(ns) =>
+                if (refEq(ns, newNode)) {
+                    return true  // CAS 失败但节点已在链中
+                }
+            case None => ()
+        }
+        retries += 1
+    }
+    return false
+}
+```
 
----
-
-## 优化方案（已验证后更新）
-
-### ~~方案A：SQPOLL 模式（已实现，效果有限）~~
-已实现，SQPOLL Read 13ms vs 普通 Read 12ms，无提升。
-submit系统调用在tmpfs上开销极低（~2us），不是瓶颈。
-
-### ~~方案B：submitMutex → CAS（已排除）~~
-单线程无竞争，Mutex开销可忽略。跳过。
-
-### ~~方案D：LockFreePromise（已实现，效果有限）~~
-已实现（AtomicBool+AtomicInt32+自旋+Condition fallback）。
-自旋在tmpfs上无效——CQE延迟远超自旋窗口，仍走Condition wait路径。
-真正瓶颈是跨线程通知（Condition notifyAll + futex唤醒），不是Promise内部锁。
-
-### 方案F：read在同一线程内收割CQE（✅已实现，消除12ms差距）
-
-**思路**：read 不再依赖后台线程收割+跨线程通知，而是在调用线程内直接收割CQE。
-这是 io_uring 的标准同步用法：submit → waitCQE → cqeSeen，全在同一线程完成。
-
-**问题**：当前架构中后台线程循环 `waitAndReap()`，如果read也在同一线程 `waitCQE`，
-两个线程会竞争CQE。解决方案：
-
-**方案F1：双ring架构**
-- write 用一个ring（后台线程收割，write立即返回）
-- read 用一个ring（同线程 submit+waitCQE，无跨线程通知）
-- 两个ring共享同一fd，offset需要分别管理
-
-**方案F2：read切换为直接IoUring API**
-- read 不用 IoUringLockFree，直接用 `ring.getSQE() + ring.submit() + ring.waitCQE()`
-- 后台线程只收割write的CQE（通过userData区分）
-- read的SQE userData设为0（waitAndReap跳过userData==0的CQE）
-- 但waitCQE和waitAndReap会竞争同一个CQ ring
-
-**方案F3：去掉后台线程，read/write都用同线程收割**
-- write: submit → reap已完成的CQE（不阻塞等自己的CQE）
-- read: submit → waitCQE（阻塞等自己的CQE）
-- write的回调在下次read/write的reap中执行
-- 问题：如果长时间不read，write的回调（释放slot）不会被及时执行
-
-**推荐F1**：双ring架构最干净，读写完全独立，无竞争。
-
-**预期效果**：read消除跨线程通知开销，12ms → ~0-2ms（与File持平）
-
-### 方案C：write 回调零分配（✅已实现，Write性能提升27%）
-
-**思路**：write 的回调仅释放slot，但收割器 `invokeAndRelease` 后已自动 `allocator.release`，
-回调中再释放是**双重释放bug**。直接设置 `CompletionCallback.None` 即可——收割器自动释放slot。
-
-**已修复**：移除write路径的 `LambdaCompletionCallback` + `allocator.releaseSlot(slotId)`，
-改用 `CompletionCallback.None`。消除了一次对象分配+一次双重释放bug。
-
-**效果**：Write从381us降至278us（-27%），比File(366us)更快
-
-### 方案E：注册缓冲区（✅已实现，效果为负——tmpfs场景memcpy开销大于地址验证节省）
-
-**思路**：通过 `io_uring_register_buffers` 预注册缓冲区，内核跳过地址验证。
-
-**已实现**：
-- 新增 `ioUringPrepReadFixed` / `ioUringPrepWriteFixed` 函数（需传入buf地址+bufIndex）
-- IOUringStream 新增 `fixedBufCount` / `fixedBufSize` 参数
-- 注册缓冲区由 LibC.malloc 分配（避免GC移动），AtomicSlotAllocator 管理索引
-- read: READ_FIXED → memcpy到用户buffer；write: memcpy用户数据到注册缓冲区 → WRITE_FIXED
-- 无可用注册缓冲区时自动降级为普通模式
-
-**实测效果**（tmpfs）：
-| 操作 | 普通模式 | 注册缓冲区模式 | File |
-|------|---------|-------------|------|
-| Write | 290us | 552us (+90%) | 391us |
-| Read | 447us | 680us (+52%) | 101us |
-
-**结论**：tmpfs上内核地址验证开销极小（<0.1us/次），额外memcpy（4KB/次×256次）反而拖后腿。
-注册缓冲区更适合真实块设备（NVMe SSD）+ 高频小I/O场景。
+#### 特点
+- 代码改动：大
+- 引入 bug 风险：高
+- 长期收益：有（自愈清理）
 
 ---
 
-## 优化优先级排序（更新）
+### 建议
 
-| 优先级 | 方案 | 预期提升 | 实现难度 | 状态 |
-|--------|------|---------|---------|------|
-| P0 | F1: 双ring架构 | read 12ms→439us | 中 | ✅已实现 |
-| P1 | C: write回调零分配 | write -27% | 低 | ✅已实现 |
-| P2 | E: 注册缓冲区 | tmpfs无效(反而更慢) | 高 | ✅已实现，效果为负 |
-| ~~P0~~ | ~~A: SQPOLL~~ | ~~无效~~ | 低 | 已实现，无效果 |
-| ~~P1~~ | ~~B: CAS替代Mutex~~ | ~~可忽略~~ | 中 | 已排除 |
-| ~~P2~~ | ~~D: LockFreePromise~~ | ~~自旋无效~~ | 中 | 已实现，效果有限 |
+- **追求极致性能**：需充分测试
 
-**推荐实施顺序**：F1 → C → E
+## 优化之后
+1. 如有必要，针对本次修改分别在ConcurrentSkipListMap_test.cj 和ConcurrentSkipListMap_conc_test.cj 添加新的测试用例
+2. 执行命令：cjpm test --filter ConcurrentSkipListMap_test --no-captcture-output --show-all-output 确认修改是否正确
+3. 逐个执行ConcurrentSkipListMap_conc_test的测试函数，运行命令：`cjpm test --filter ConcurrentSkipListMap_conc_test.<test_func_name> --no-captcture-output --show-all-output` 确认并发访问正确
+4. 运行命令：cjpm test --filter ConcurrentSkipListMap_perf_test --no-captcture-output --show-all-output|grep -P 'perf_.+:' 根据性能测试结果出性能测试报告跟f_concurrent/doc/performance_report.md 比较优化前后的差异，如果性能表现更优更新性能测试报告、本次修改内容，提交git；否则回退之前的版本
