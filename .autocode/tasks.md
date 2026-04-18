@@ -4,14 +4,19 @@ cd f_concurrent
 # 任务
 每改正一个问题都在相应的标题前面加上完成标记
 
-## 活锁BUG
+## P0 - 活锁BUG
 cd f_concurrent && timeout 120 cjpm test --filter ConcurrentSkipListMap_conc_test --no-capture-output --show-all-output
 这个测试类的每个用例都有概率会长时间不结束，每个用例单独执行，多执行几次就会发生，一起执行一定会发生。应该是并发调用发生了死循环。
 考虑到编译时间，命令超时时间不能太短，否则可能还没编译完就结束了。
 检查ConcurrentSkipListMap.cj，找到问题原因。尤其是add remove get 等函数的混合并发操作。
 在代码测试代码和被测代码添加sleep控制执行节奏，添加println输出运行过程中的变量，方便观察。
 
-##  randomLevel 随机数生成优化
+### 优化之后
+1. 执行命令：cjpm test --filter ConcurrentSkipListMap_test --no-captcture-output --show-all-output 确认修改是否正确
+2. 运行命令：cjpm test --filter ConcurrentSkipListMap_conc_test --no-captcture-output --show-all-output 确认并发访问正确
+3. 运行命令：cjpm test --filter ConcurrentSkipListMap_perf_test --no-captcture-output --show-all-output|grep -P 'perf_.+:' 根据性能测试结果出性能测试报告跟f_concurrent/doc/performance_report.md 比较优化前后的差异，如果性能表现更优更新性能测试报告、本次修改内容，提交git；否则回退之前的版本
+
+## P1 - randomLevel 随机数生成优化
 
 ### 问题定位
 - 位置：第 131-155 行
@@ -116,7 +121,7 @@ cd f_concurrent && timeout 120 cjpm test --filter ConcurrentSkipListMap_conc_tes
 2. 运行命令：cjpm test --filter ConcurrentSkipListMap_conc_test --no-captcture-output --show-all-output 确认并发访问正确
 3. 运行命令：cjpm test --filter ConcurrentSkipListMap_perf_test --no-captcture-output --show-all-output|grep -P 'perf_.+:' 根据性能测试结果出性能测试报告跟f_concurrent/doc/performance_report.md 比较优化前后的差异，如果性能表现更优更新性能测试报告、本次修改内容，提交git；否则回退之前的版本
 
-## removeIf 遍历中缺时代际检查
+## P3 - removeIf 遍历中缺时代际检查
 
 ### 问题定位
 - 位置：第 597-625 行
@@ -183,7 +188,7 @@ public func removeIf(predicate: (K, V) -> Bool): Unit {
 3. 运行命令：cjpm test --filter ConcurrentSkipListMap_conc_test --no-captcture-output --show-all-output 确认并发访问正确
 4. 运行命令：cjpm test --filter ConcurrentSkipListMap_perf_test --no-captcture-output --show-all-output|grep -P 'perf_.+:' 根据性能测试结果出性能测试报告跟f_concurrent/doc/performance_report.md 比较优化前后的差异，如果性能表现更优更新性能测试报告、本次修改内容，提交git；否则回退之前的版本
 
-## tryInsertAtLevel 重试策略优化
+## P4 - tryInsertAtLevel 重试策略优化
 
 ### 问题定位
 - 位置：第 391-429 行
@@ -273,7 +278,7 @@ private func tryInsertAtLevel(newNode: Node<K, V>, lvl: Int64, pred: Node<K, V>)
 
 - **追求极致性能**：需充分测试
 
-## 优化之后
+### 优化之后
 1. 如有必要，针对本次修改分别在ConcurrentSkipListMap_test.cj 和ConcurrentSkipListMap_conc_test.cj 添加新的测试用例
 2. 执行命令：cjpm test --filter ConcurrentSkipListMap_test --no-captcture-output --show-all-output 确认修改是否正确
 3. 逐个执行ConcurrentSkipListMap_conc_test的测试函数，运行命令：`cjpm test --filter ConcurrentSkipListMap_conc_test.<test_func_name> --no-captcture-output --show-all-output` 确认并发访问正确
