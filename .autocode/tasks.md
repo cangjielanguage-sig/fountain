@@ -2,12 +2,14 @@
 cd f_concurrent
 
 # 任务
+每改正一个问题都在相应的标题前面加上完成标记
+
 ## 活锁BUG
 cd f_concurrent && timeout 120 cjpm test --filter ConcurrentSkipListMap_conc_test --no-capture-output --show-all-output
 这个测试类的每个用例都有概率会长时间不结束，每个用例单独执行，多执行几次就会发生，一起执行一定会发生。应该是并发调用发生了死循环。
+考虑到编译时间，命令超时时间不能太短，否则可能还没编译完就结束了。
 检查ConcurrentSkipListMap.cj，找到问题原因。尤其是add remove get 等函数的混合并发操作。
 在代码测试代码和被测代码添加sleep控制执行节奏，添加println输出运行过程中的变量，方便观察。
-考虑到编译时间，命令超时时间不能太短，否则可能还没编译完就结束了。
 
 ##  randomLevel 随机数生成优化
 
