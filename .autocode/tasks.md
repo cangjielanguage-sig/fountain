@@ -37,7 +37,108 @@ cd f_store
 
 ---
 
-## Step 2: MemTable — 内存表
+## Step 2: StoreIOStream — IO 抽象层
+
+**文件**: `src/StoreIO.cj`
+**包**: `fountain::f_store`
+
+### 开发内容
+1. **StoreIOStream** — `interface StoreIOStream <: Resource`
+   - `func write(buffer: Array<Byte>): Unit`
+   - `func read(buffer: Array<Byte>): Int64`
+   - `func sync(): Unit`
+   - `func close(): Unit`
+   - `func isClosed(): Bool`
+
+2. **IOUringStoreIOStream** — `@When[os == "Linux"] class IOUringStoreIOStream <: StoreIOStream`
+   - `let file: File` — 保持 File 存活
+   - `let fd: Int32` — 文件描述符
+   - `let lf: IoUringLockFree` — 无锁并发提交
+   - `let ring: IoUring` — 底层 ring
+   - `let stopping: AtomicBool` — 控制收割线程停止
+   - `var reaperFuture: ?Future<Unit>` — 后台收割线程
+   - `var writeOffset: UInt64` — 写偏移量
+   - `var readOffset: UInt64` — 读偏移量
+
+   - `init(path: String, mode: OpenMode, entries!: UInt32 = 64)`
+     - 打开 File → 获取 fd (`file.fileDescriptor.fileHandle`)
+     - 创建 IoUring(entries) → 创建 IoUringLockFree(ring)
+     - 启动后台收割线程: `spawn { while(!stopping.load()) lf.waitAndReap() }`
+
+   - `func write(buffer: Array<Byte>): Unit`
+     - 通过 IoUringLockFree 无锁提交写 SQE：
+     ```
+     slotId = lf.allocSlot()
+     sqe = lf.getSQE(slotId)
+     ioUringPrepWrite(sqe, fd, bufPtr, len, writeOffset)
+     lf.setCallback(slotId, CompletionCallback.None)  // WAL/SSTable写不需要等完成
+     lf.encodeUserData(slotId, gen)
+     ioUringSQESetData64(sqe, ud)
+     lf.commitSlot(slotId)
+     lf.flush()
+     writeOffset += len
+     ```
+
+   - `func read(buffer: Array<Byte>): Int64`
+     - 同步读取：直接操作 ring
+     ```
+     sqe = ring.getSQE()
+     ioUringPrepRead(sqe, fd, bufPtr, len, readOffset)
+     ioUringSQESetData64(sqe, 1)
+     ring.submit()
+     cqe = ring.waitCQE()
+     result = ioUringCQEGetRes(cqe)
+     ring.cqeSeen(cqe)
+     readOffset += result
+     ```
+
+   - `func sync(): Unit`
+     - `ring.getSQE() → ioUringPrepFsync(sqe, fd, 0) → submit → waitCQE`
+
+   - `func close(): Unit`
+     - `stopping.store(true) → 提交 NOP 唤醒收割线程 → reaperFuture.get() → ring.close() → file.close()`
+
+3. **FileStoreIOStream** — `@When[os != "Linux"] class FileStoreIOStream <: StoreIOStream`
+   - `let file: File` — std.fs.File
+   - `init(path: String, mode: OpenMode)` — `File(path, mode)`
+   - `func write(buffer)` → `file.write(buffer)`
+   - `func read(buffer)` → `file.read(buffer)`
+   - `func sync()` → `file.flush()`
+   - `func close()` → `file.close()`
+   - `func isClosed()` → `file.isClosed()`
+
+4. **createStoreIOStream** — 工厂函数
+   ```cj
+   @When[os == "Linux"]
+   func createStoreIOStream(path: String, mode: OpenMode, entries!: UInt32 = 64): StoreIOStream {
+       IOUringStoreIOStream(path, mode, entries: entries)
+   }
+   @When[os != "Linux"]
+   func createStoreIOStream(path: String, mode: OpenMode, entries!: UInt32 = 64): StoreIOStream {
+       FileStoreIOStream(path, mode)
+   }
+   ```
+
+### 注意事项
+- **File 对象必须保持存活**，否则 fd 失效
+- **fd 获取**: `Int32(file.fileDescriptor.fileHandle)` — `fileHandle` 是 `IntNative`，需要转为 `Int32`
+- `IoUringLockFree` 构造: `IoUringLockFree(ring)` — 接管 ring 的所有权
+- 后台收割线程: `lf.waitAndReap()` 循环收割 CQE
+- `CompletionCallback.None` 是预定义的空回调，用于不需要等完成的写操作
+- **import (Linux)**: `fountain::f_io.uring.*`, `fountain::f_io.uring.lockfree.*`
+- **import (非Linux)**: `std.fs.*`, `std.io.*`
+
+### 测试
+- Linux: 创建 IOUringStoreIOStream → 写入数据 → 读取验证
+- Linux: write 后立即返回（不等 IO 完成）
+- 非 Linux: 创建 FileStoreIOStream → 写入 → 读取验证
+- sync 后数据可从磁盘恢复
+- close 后 isClosed 返回 true
+- **测试也需条件编译**: `@When[os == "Linux"]` 包裹 io_uring 相关测试
+
+---
+
+## Step 3: MemTable — 内存表
 
 **文件**: `src/LSM.cj`
 **包**: `fountain::f_store`
@@ -67,7 +168,7 @@ cd f_store
 
 ---
 
-## Step 3: MemTableManager — 双缓冲管理
+## Step 4: MemTableManager — 双缓冲管理
 
 **文件**: `src/LSM.cj`（追加到同文件）
 **包**: `fountain::f_store`
@@ -100,7 +201,7 @@ cd f_store
 
 ---
 
-## Step 4: WAL 记录编解码
+## Step 5: WAL 记录编解码
 
 **文件**: `src/WAL.cj`
 **包**: `fountain::f_store`
@@ -140,63 +241,99 @@ cd f_store
 
 ---
 
-## Step 5: WAL 写入实现
+## Step 6: WAL 写入实现
 
 **文件**: `src/WAL.cj`（追加）
 **包**: `fountain::f_store`
 
 ### 开发内容
-1. **WAL** — `class WAL <: Resource`
-   - `private let file: File` — 保持 File 存活（fd 依赖它）
-   - `private let fd: Int32` — 文件描述符
-   - `private let stream: IOUringStream` — io_uring 异步写入
+1. **WAL (Linux)** — `@When[os == "Linux"] class WAL <: Resource`
+   - `private let file: File` — 保持 File 存活
+   - `private let fd: Int32`
+   - `private let lf: IoUringLockFree` — 无锁并发提交（替代原 writeLock + IOUringStream）
+   - `private let ring: IoUring` — 底层 ring（用于 fsync 等直接操作）
+   - `private let stopping: AtomicBool` — 控制收割线程
+   - `private var reaperFuture: ?Future<Unit>` — 后台收割线程
    - `let sequence: AtomicInt64` — 当前序列号
-   - `let writeLock: Mutex` — 顺序写互斥
    - `let appendCount: AtomicInt64` — 追加计数（用于定期 fsync）
    - `let closed: AtomicBool`
    - `private let syncInterval: Int64` — 每 N 次 append 执行一次 fsync（默认 100）
+   - `private var writeOffset: UInt64` — 写偏移量
 
-   - `init(path: String, startSequence!: Int64 = 0)` — 打开/创建 WAL 文件，初始化 IOUringStream
-   - `func append(key: Array<Byte>, value: ?Array<Byte>): Int64` — 追加记录，返回序列号
-   - `func sync(): Unit` — 提交 fsync
-   - `func close(): Unit` — 关闭 stream 和 file
+   - `init(path: String, startSequence!: Int64 = 0)`
+     - 创建目录 → File(path, OpenMode.ReadWrite) → 获取 fd
+     - IoUring(64) → IoUringLockFree(ring)
+     - 启动收割线程: `spawn { while(!stopping) lf.waitAndReap() }`
+
+   - `func append(key: Array<Byte>, value: ?Array<Byte>): Int64`
+     ```
+     seq = sequence.incrFetch()
+     record = WALRecord(seq, key, value)
+     encoded = record.encode()
+     slotId = lf.allocSlot()
+     sqe = lf.getSQE(slotId)
+     ioUringPrepWrite(sqe, fd, bufPtr, encoded.size, writeOffset)
+     gen = lf.setCallback(slotId, CompletionCallback.None)  // ★ 不等完成
+     ud = lf.encodeUserData(slotId, gen)
+     ioUringSQESetData64(sqe, ud)
+     lf.commitSlot(slotId)
+     lf.flush()
+     writeOffset += UInt64(encoded.size)
+     appendCount.incrFetch()
+     if (appendCount % syncInterval == 0) { sync() }
+     return seq
+     ```
+
+   - `func sync(): Unit`
+     - `ring.getSQE() → ioUringPrepFsync(sqe, fd, 0) → ioUringSQESetData64(sqe, 0) → ring.submit() → ring.waitCQE() → ring.cqeSeen(cqe)`
+
+   - `func close(): Unit`
+     - `stopping.store(true) → NOP 唤醒收割线程 → reaperFuture.get() → ring.close() → file.close()`
+
    - `func isClosed(): Bool`
 
-2. **append 流程**:
-   ```
-   lock(writeLock) →
-     seq = sequence.incrFetch() →
-     record = WALRecord(seq, key, value) →
-     encoded = record.encode() →
-     stream.write(encoded) →
-     appendCount.incrFetch() →
-     if (appendCount % syncInterval == 0) { sync() }
-   → unlock → return seq
-   ```
+2. **WAL (非 Linux)** — `@When[os != "Linux"] class WAL <: Resource`
+   - `private let file: File`
+   - `let sequence: AtomicInt64`
+   - `let appendCount: AtomicInt64`
+   - `let closed: AtomicBool`
+   - `private let syncInterval: Int64`
+
+   - `init(path: String, startSequence!: Int64 = 0)`
+   - `func append(key, value): Int64` — 编码 → `file.write(encoded)` 同步写 → 定期 `file.flush()`
+   - `func sync(): Unit` — `file.flush()`
+   - `func close(): Unit` — `file.close()`
+   - `func isClosed(): Bool`
+
+### 关键改进（相比原方案）
+- **去掉了 writeLock**：原方案用 `Mutex writeLock` 保护 WAL 追加顺序，现通过 `IoUringLockFree` 无锁路径替代
+- `IoUringLockFree.allocSlot → getSQE → commitSlot → flush` 全程无锁
+- writeOffset 由 append 内部维护，flush 时批量提交保证顺序
+- ★ **append 提交 SQE 后立即返回**，不等 IO 落盘完成
 
 ### 注意事项
-- **File 对象必须保持存活**，否则 fd 失效。IOUringStream 只持有 fd (Int32)，不持有 File
-- IOUringStream 构造: `IOUringStream(fd, 64)` — 64 个 entries
-- stream.write 是异步的，立即返回。但 WAL 需要写入顺序，所以 writeLock 保护
-- **fsync 实现**: 需要直接使用底层 IoUring 的 `getSQE + ioUringPrepFsync + submit + waitCQE`，IOUringStream 未暴露 fsync 接口
-- **条件编译**: `@When[os == "Linux"]` 包裹整个 WAL 类
-- **import**: `fountain::f_io.IOUringStream`, `fountain::f_io.uring.*`（用于 fsync）
+- **File 对象必须保持存活**，否则 fd 失效
+- `CompletionCallback.None` 表示不需要回调通知（写完即可丢弃 CQE）
+- 收割线程通过 `lf.waitAndReap()` 处理 CQE 并释放 slot
+- **fsync 实现需直接操作 ring**（不用 lf，因为 fsync 需要同步等待）
+- **条件编译**: Linux 和非 Linux 两个版本
 
 ### 测试
-- 写入多条记录后读取文件验证内容正确
+- Linux: 写入多条记录 → 读取文件验证内容正确
+- 非 Linux: 同上
 - fsync 后文件大小不为 0
-- close 后 IOUringStream 和 File 都关闭
-- 写入后 WAL 文件名符合 `{path}/wal/{sequence_start}.wal`
+- close 后 WAL 资源释放
+- ★ 验证 append 立即返回（不等 IO 完成）
 
 ---
 
-## Step 6: WAL 读取与崩溃恢复
+## Step 7: WAL 读取与崩溃恢复
 
 **文件**: `src/WAL.cj`（追加）
 **包**: `fountain::f_store`
 
 ### 开发内容
-1. **WALReader** — `class WALReader`
+1. **WALReader** — `class WALReader`（无平台差异，全部使用 std.fs.File 同步读）
    - `static func readAll(path: String): ArrayList<WALRecord>` — 读取 WAL 文件所有完整记录
    - `static func recover(path: String): MemTable` — 从 WAL 恢复到 MemTable
    - 读取使用 `std.fs.File` 同步读取（不用 io_uring，恢复是启动时一次性操作）
@@ -233,7 +370,7 @@ cd f_store
 
 ---
 
-## Step 7: SSTable 文件格式 — 写入
+## Step 8: SSTable 文件格式 — 写入
 
 **文件**: `src/SSTable.cj`
 **包**: `fountain::f_store`
@@ -253,21 +390,19 @@ cd f_store
    - `let firstKey: ByteArray` — 该 Data Block 的最小 key
 
 3. **SSTableWriter** — `class SSTableWriter`
-   - `let file: File` — 保持存活
-   - `let fd: Int32`
-   - `let stream: IOUringStream`
+   - `let stream: StoreIOStream` — 平台适配 IO 流（替代原 IOUringStream）
    - `let bloomFilter: BloomFilter` — 刷盘时同步构建
    - `let indexEntries: ArrayList<IndexEntry>`
    - `var currentOffset: Int64`
    - `var entryCount: Int64`
    - `var fileSize: Int64`
-   - `var dataBlockSize: Int64` — 当前 Data Block 大小（用于按块切分）
+   - `var dataBlockSize: Int64` — 当前 Data Block 大小
    - `let dataBlockSizeThreshold: Int64` — 单个 Data Block 大小阈值（默认 4KB）
-   - `var firstKeyOfBlock: ?ByteArray` — 当前块首 key
+   - `var firstKeyOfBlock: ?ByteArray`
 
-   - `init(path: String, estimatedCount: Int64)` — 创建文件、IOUringStream、BloomFilter
+   - `init(path: String, estimatedCount: Int64)` — `createStoreIOStream(path, OpenMode.ReadWrite)` + BloomFilter
    - `func write(key: ByteArray, entry: EntryValue): Unit` — 写入一条记录
-   - `func finish(): SSTableMetadata` — 写 Index+Bloom+Footer，fsync，关闭
+   - `func finish(): SSTableMetadata` — 写 Index+Bloom+Footer，sync，关闭
    - `func isFull(): Bool` — fileSize >= 64MB
 
 4. **write 流程**:
@@ -276,30 +411,28 @@ cd f_store
      记录 IndexEntry(currentOffset, key)
    编码: key_len(8) + value_len(8) + sequence(8) + key_bytes + value_bytes
    bloomFilter.add(key.bytes)
-   stream.write(encoded)
+   stream.write(encoded)  // Linux: IoUringLockFree 异步写；非 Linux: File 同步写
    更新 currentOffset, fileSize, dataBlockSize, entryCount
-   如果 dataBlockSize >= threshold: dataBlockSize = 0（下条记录开新块）
+   如果 dataBlockSize >= threshold: dataBlockSize = 0
    ```
 
 5. **finish 流程**:
    ```
-   写 Index Block:
-     对每个 IndexEntry: offset(8) + key_len(8) + first_key_bytes
-   写 Bloom Filter Block（临时方案: 序列化 n, p, seeds；bitset 启动时重建）
-   写 Footer (固定 48 bytes):
-     index_offset(8) + index_size(8) + bloom_offset(8) + bloom_size(8)
-     + entry_count(8) + padding(8) + magic(8) = 0x4C534D54
-   fsync
-   关闭 stream
+   写 Index Block + Bloom Filter Block + Footer (固定 48 bytes)
+   stream.sync()  // Linux: ioUringPrepFsync; 非 Linux: file.flush()
+   stream.close()
    ```
+
+### 关键改进
+- **使用 StoreIOStream 抽象层**，不再直接使用 `IOUringStream`
+- SSTableWriter 不关心底层是 io_uring 还是 File，统一调用 `stream.write() / stream.sync() / stream.close()`
+- Linux 下通过 `IOUringStoreIOStream` 实现异步无锁写
 
 ### 注意事项
 - **64MB 上限**: `MAX_SSTABLE_SIZE = 64 * 1024 * 1024`
 - Data Block 按 4KB 切分，每个块对应一个 IndexEntry
-- **BloomFilter 临时方案**: finish 时只序列化 n/p/seeds 到 Bloom Filter Block，bitset 暂不持久化（启动时重建）
+- **BloomFilter 临时方案**: finish 时只序列化 n/p/seeds 到 Bloom Filter Block，bitset 启动时重建
 - value_len = 0 表示 tombstone，与 WAL 格式一致
-- **条件编译**: `@When[os == "Linux"]`
-- **import**: `fountain::f_bloom.BloomFilter`, `fountain::f_io.IOUringStream`, `fountain::f_io.uring.*`
 
 ### 测试
 - 写入若干条记录 → finish → 文件存在且大小合理
@@ -308,7 +441,7 @@ cd f_store
 
 ---
 
-## Step 8: SSTable 文件格式 — 读取
+## Step 9: SSTable 文件格式 — 读取
 
 **文件**: `src/SSTable.cj`（追加）
 **包**: `fountain::f_store`
@@ -318,9 +451,7 @@ cd f_store
    - `let metadata: SSTableMetadata`
    - `let bloomFilter: BloomFilter` — 从文件加载或重建
    - `let indexEntries: ArrayList<IndexEntry>` — Index Block 缓存在内存
-   - `let file: File` — 保持存活
-   - `let fd: Int32`
-   - `let stream: IOUringStream` — 用于按需读取 Data Block
+   - `let stream: StoreIOStream` — 平台适配 IO 流（替代原 IOUringStream）
 
    - `static func open(path: String): SSTableReader` — 打开文件，读取 Footer，加载 Index 和 BloomFilter
    - `func get(key: ByteArray): ?EntryValue` — 点查询
@@ -330,7 +461,7 @@ cd f_store
 
 2. **open 流程**:
    ```
-   打开 File → 获取 fd → 创建 IOUringStream(fd, 64)
+   stream = createStoreIOStream(path, OpenMode.Read)
    读取 Footer (最后 48 bytes):
      验证 magic → 解析 index_offset, index_size, bloom_offset, bloom_size, entry_count
    读取 Index Block → 解码为 ArrayList<IndexEntry>
@@ -342,32 +473,35 @@ cd f_store
 3. **get 流程**:
    ```
    bloomFilter.mightContain(key.bytes) → false → return None
-   二分查找 indexEntries 定位 Data Block（firstKey <= key 的最大块）
-   读取该 Data Block → 解码所有记录
+   二分查找 indexEntries 定位 Data Block
+   stream.read(buffer) 读取 Data Block
    在记录中查找 key → 返回 EntryValue 或 None
    ```
 
 4. **Data Block 读取**:
-   - 使用 `IOUringStream.read(buffer)` 同步读取
-   - 先 seek 到目标偏移（设置 `stream.readOffset`）
-   - 读取该块所有数据（根据 indexEntries 计算块大小）
+   - 通过 `stream.read(buffer)` 统一接口
+   - Linux: IOUringStoreIOStream 内部 submit + waitCQE（同步读）
+   - 非 Linux: FileStoreIOStream 内部 file.read（同步读）
+   - 需先 seek 到目标偏移（设置 `stream.readOffset`）
+
+### 关键改进
+- **使用 StoreIOStream 抽象层**，SSTableReader 不关心底层实现
+- 读取路径统一为同步语义（无论底层是 io_uring 还是 File）
 
 ### 注意事项
-- **IOUringStream 读取是同步的**（readRing + waitCQE），天然适合点查询
-- readOffset 设置: `stream.readOffset = blockOffset`（IOUringStream 有可变 readOffset 属性）
+- StoreIOStream 需暴露 `readOffset` 属性用于 seek
 - BloomFilter 重建的临时方案增加了启动时间，后续可优化
 - 二分查找 IndexEntry 时，`firstKey <= key` 用 `compare` 判断
-- **条件编译**: `@When[os == "Linux"]`
 
 ### 测试
 - 写入 SSTable → 读取 → get 验证每条记录
 - get 不存在的 key 返回 None
-- BloomFilter 排除不存在的 key（mayContain=false 时跳过 I/O）
+- BloomFilter 排除不存在的 key
 - tailer 从指定 key 开始遍历
 
 ---
 
-## Step 9: SSTableFile — SSTable 文件管理
+## Step 10: SSTableFile — SSTable 文件管理
 
 **文件**: `src/SSTable.cj`（追加）
 **包**: `fountain::f_store`
@@ -378,7 +512,7 @@ cd f_store
    - `let metadata: SSTableMetadata` — 便捷访问
    - `let bloomFilter: BloomFilter` — 便捷访问
    - `func get(key: ByteArray): ?EntryValue` — 委托 reader
-   - `func close(): Unit` — 委托 reader
+   - `func close(): Unit` — 委托 reader.stream.close()
    - `func isClosed(): Bool`
 
 2. **SSTableFile 命名规则**:
@@ -389,8 +523,8 @@ cd f_store
    - `static func loadAll(sstDir: String): ArrayList<SSTableFile>` — 扫描目录加载所有 SSTable
 
 ### 注意事项
-- SSTableFile 持有 File 对象和 IOUringStream，需在 close 时正确释放
-- 每个 SSTableFile 打开一个 IOUringStream 实例
+- SSTableFile 持有 StoreIOStream，需在 close 时正确释放
+- 每个 SSTableFile 打开一个 StoreIOStream 实例
 - 文件名解析需容错：不符合命名规则的文件跳过
 
 ### 测试
@@ -399,49 +533,41 @@ cd f_store
 
 ---
 
-## Step 10: LevelManager — 层级管理
+## Step 11: LevelManager — 层级管理
 
 **文件**: `src/LSM.cj`（追加）
 **包**: `fountain::f_store`
 
 ### 开发内容
 1. **LevelManager** — `class LevelManager`
-   - `let sstDir: String` — SSTable 目录路径
+   - `let sstDir: String`
    - `var levels: Array<ArrayList<SSTableFile>>` — levels[0]=L0, levels[1]=L1, ...
    - `let levelCount: Int64` — 层数（默认 7）
-   - `let levelLocks: Array<Mutex>` — 每层一个锁
+   - `let levelLocks: Array<Mutex>`
 
-   - `init(sstDir: String, levelCount!: Int64 = 7)` — 初始化空层级
-   - `func loadExisting(): Unit` — 扫描目录加载已有 SSTable 到对应层级
+   - `init(sstDir: String, levelCount!: Int64 = 7)`
+   - `func loadExisting(): Unit`
    - `func get(key: ByteArray): ?EntryValue` — 从 L0 到 Ln 逐层查找
-   - `func addSSTable(level: Int64, sst: SSTableFile): Unit` — 添加 SSTable 到指定层
-   - `func removeSSTables(level: Int64, toRemove: ArrayList<SSTableFile>): Unit` — 移除旧 SSTable
-   - `func getSSTablesForCompaction(level: Int64): ArrayList<SSTableFile>` — 获取指定层所有 SSTable
-   - `func getOverlappingSSTables(level: Int64, min: ByteArray, max: ByteArray): ArrayList<SSTableFile>` — 获取范围重叠的 SSTable
-   - `func shouldCompact(level: Int64): Bool` — 检查是否需要 Compaction
-   - `func closeAll(): Unit` — 关闭所有 SSTable
+   - `func addSSTable(level: Int64, sst: SSTableFile): Unit`
+   - `func removeSSTables(level: Int64, toRemove: ArrayList<SSTableFile>): Unit`
+   - `func getSSTablesForCompaction(level: Int64): ArrayList<SSTableFile>`
+   - `func getOverlappingSSTables(level: Int64, min: ByteArray, max: ByteArray): ArrayList<SSTableFile>`
+   - `func shouldCompact(level: Int64): Bool`
+   - `func closeAll(): Unit`
 
 2. **get 查询逻辑**:
    ```
    for level in 0..levelCount:
-     if level == 0:
-       遍历所有 L0 SSTable（范围可重叠），逐个 get
-     else:
-       二分查找范围匹配的 SSTable，get
-     如果找到且不是 tombstone → 返回
-     如果找到 tombstone → 返回 None（key 已删除）
-   返回 None（key 不存在）
+     if level == 0: 遍历所有 L0 SSTable
+     else: 二分查找范围匹配的 SSTable
+     找到 tombstone → 返回 None
+     找到正常值 → 返回
+   返回 None
    ```
 
 3. **Compaction 触发条件**:
    - L0: SSTable 数量 ≥ 4
    - Ln (n≥1): 总大小 ≥ 10^n MB
-
-### 注意事项
-- L0 的 SSTable 范围可重叠，查询时需遍历所有 L0 文件
-- L1+ 的 SSTable 范围不重叠，可按 minKey 二分定位
-- addSSTable/removeSSTables 需在对应 levelLock 保护下执行
-- levels 数组初始化需创建 levelCount 个空 ArrayList
 
 ### 测试
 - 加载多个 L0 SSTable → get 在所有 L0 文件中查找
@@ -450,7 +576,7 @@ cd f_store
 
 ---
 
-## Step 11: MemTable 刷盘 — Immutable MemTable → SSTable
+## Step 12: MemTable 刷盘 — Immutable MemTable → SSTable
 
 **文件**: `src/LSM.cj`（追加）
 **包**: `fountain::f_store`
@@ -468,9 +594,9 @@ cd f_store
 2. **刷盘流程**:
    ```
    遍历 memTable.iterator() →
-     writer.write(key, entry) →
+     writer.write(key, entry) →  // Linux: IoUringLockFree 异步写
      if writer.isFull():
-       metadata = writer.finish()
+       metadata = writer.finish()  // 内含 stream.sync()
        加入结果列表
        创建新 writer
    → 最后一个 writer.finish()
@@ -485,8 +611,7 @@ cd f_store
 ### 注意事项
 - MemTable 遍历期间可能有并发读取，但 MemTable 是 immutable（只读），无冲突
 - 超过 64MB 时需创建多个 SSTable 文件
-- **File 对象生命周期**: SSTableWriter 关闭后 File 才能关闭
-- 刷盘完成后 immutable 设为 None，允许下次 swap
+- **StoreIOStream 生命周期**: SSTableWriter 关闭时 stream 才关闭
 
 ### 测试
 - 小 MemTable（< 64MB）刷盘生成 1 个 SSTable → 内容正确
@@ -495,7 +620,7 @@ cd f_store
 
 ---
 
-## Step 12: Store 主类 — 初始化与 add/remove/get
+## Step 13: Store 主类 — 初始化与 add/remove/get
 
 **文件**: `src/Store.cj`（追加）
 **包**: `fountain::f_store`
@@ -516,7 +641,7 @@ cd f_store
      创建目录 {path}/wal/ 和 {path}/sst/
      从 WAL 恢复 MemTable → 设为 active
      加载已有 SSTable → LevelManager.loadExisting()
-     创建新 WAL 文件
+     创建新 WAL 文件（Linux: IoUringLockFree，非 Linux: File）
      atExit(this.close)
      ```
    - `public func add(key: Array<Byte>, value: Array<Byte>): ?Array<Byte>`
@@ -527,11 +652,12 @@ cd f_store
 2. **add 实现**:
    ```
    检查 closed →
-   seq = wal.append(key, value) →
+   seq = wal.append(key, value) →  // Linux: SQE提交后立即返回；非 Linux: 同步写完返回
    entry = EntryValue(value, seq) →
-   old = memTableManager.getActive().add(ByteArray(key), entry) →
+   old = memTableManager.getActive().add(ByteArray(key), entry) →  // CAS 无锁
    maybeFlush() →
    return old?.value
+   ★ add 在 WAL 写入 + MemTable 修改后即可返回
    ```
 
 3. **remove 实现**:
@@ -542,6 +668,7 @@ cd f_store
    old = memTableManager.getActive().add(ByteArray(key), entry) →
    maybeFlush() →
    return old?.value
+   ★ remove 在 WAL 写入 + MemTable 修改后即可返回
    ```
 
 4. **get 实现**:
@@ -559,16 +686,22 @@ cd f_store
    if active.approximateSize() >= memFlushThreshold:
      imm = memTableManager.swapActive()
      if (let Some(table) <- imm):
-       flushMemTable(table, sstDir, 0)  // 同步刷盘，刷到 L0
+       flushMemTable(table, sstDir, 0)
        memTableManager.immutable.store(None)
    ```
 
+### 关键改进
+- **add/remove 的关键路径完全无锁**：
+  - `wal.append`: IoUringLockFree 无锁提交（Linux），File 同步写（非 Linux）
+  - `memTableManager.getActive().add()`: ConcurrentSkipListMap CAS 无锁
+  - `maybeFlush`: 仅在 swap 时短暂持 flushLock
+- **add/remove 在 WAL 写入 + MemTable 修改后即可返回**，不等 IO 落盘完成
+
 ### 注意事项
-- **WAL 先于 MemTable**: wal.append 必须在 MemTable.add 之前成功，否则崩溃恢复时数据丢失
+- **WAL 先于 MemTable**: wal.append 必须在 MemTable.add 之前成功
 - maybeFlush 中 swapActive 可能返回 None（其他线程已 swap）
 - atExit 注册 close，确保进程退出时数据持久化
 - **Store 实现 Resource 接口**: 需实现 `func close(): Unit` 和 `func isClosed(): Bool`
-- **条件编译**: 整个 Store 类需 `@When[os == "Linux"]`
 
 ### 测试
 - 基本 add/get 往返
@@ -577,10 +710,11 @@ cd f_store
 - get 不存在的 key 返回 None
 - 超过 memFlushThreshold 后自动刷盘，get 仍能查到数据
 - 关闭后重新打开，数据仍可查到（WAL 恢复 + SSTable 加载）
+- Linux: 验证 add/remove 立即返回（不等 IO 完成）
 
 ---
 
-## Step 13: Store.close — 关闭与数据持久化
+## Step 14: Store.close — 关闭与数据持久化
 
 **文件**: `src/Store.cj`（追加）
 **包**: `fountain::f_store`
@@ -603,15 +737,13 @@ cd f_store
 
 2. **close 语义**:
    - 把尚未存储的数据写入磁盘
-   - 包括已写入跳表但未持久化的数据
-   - WAL 数据 flush
+   - WAL sync 确保所有异步写完成
    - 最后关闭所有打开的文件
 
 ### 注意事项
 - close 必须幂等（多次调用不报错）
 - compareAndSwap 保证只有一个线程执行 close
 - 关闭顺序：先刷 MemTable（产生 SSTable）→ 再关 WAL → 最后关 SSTable
-- **不可在 close 中停止 Compaction 线程**（Step 15 再实现）
 
 ### 测试
 - close 后 isClosed 返回 true
@@ -620,7 +752,7 @@ cd f_store
 
 ---
 
-## Step 14: PrefixIterator — 前缀遍历
+## Step 15: PrefixIterator — 前缀遍历
 
 **文件**: `src/PrefixIterator.cj`
 **包**: `fountain::f_store`
@@ -634,7 +766,7 @@ cd f_store
 
 2. **PrefixIterator** — `class PrefixIterator <: Iterator<(Array<Byte>, Array<Byte>)>`
    - `let prefix: ByteArray`
-   - `let sources: ArrayList<PeekableIterator>` — 多个有序源
+   - `let sources: ArrayList<PeekableIterator>`
    - `var initialized: Bool`
 
    - `init(prefix: ByteArray, sources: ArrayList<PeekableIterator>)`
@@ -643,7 +775,7 @@ cd f_store
 3. **next 流程**:
    ```
    从所有 sources 中取 peek 最小 key 的迭代器 →
-   如果该 key 不以 prefix 开头 → return None（遍历结束）→
+   如果该 key 不以 prefix 开头 → return None →
    收集所有 sources 中 peek == 当前 key 的条目 →
    取 sequence 最高的 EntryValue →
    如果是 tombstone → 跳过，继续取下一个最小 key →
@@ -671,10 +803,10 @@ cd f_store
    ```
 
 ### 注意事项
-- **prefixEnd 计算**: 将 prefix 的最后一个字节 +1，作为 tailer 的上限。如果 prefix 为空则遍历全部
+- **prefixEnd 计算**: 将 prefix 的最后一个字节 +1，作为 tailer 的上限
 - 多个源可能包含相同 key（active + SSTable），需按 sequence 去重
 - ConcurrentSkipListMap.tailer 返回弱一致性迭代器，遍历期间不阻塞写
-- SSTableReader.tailer 需在 Step 8 中实现
+- SSTableReader.tailer 需在 Step 9 中实现
 - **仓颉 lambda 不可捕获可变变量**: PeekableIterator 用 class 而非闭包实现
 
 ### 测试
@@ -686,7 +818,7 @@ cd f_store
 
 ---
 
-## Step 15: Compaction — 后台压实合并
+## Step 16: Compaction — 后台压实合并
 
 **文件**: `src/Compaction.cj`
 **包**: `fountain::f_store`
@@ -710,20 +842,18 @@ cd f_store
      for level in 0..maxLevel:
        if levelManager.shouldCompact(level):
          compact(level)
-     sleep(100ms)  // 避免忙等
+     sleep(100ms)
    ```
 
 3. **compact(level) 流程**:
    ```
    获取 level 层的 SSTable 列表（在 levelLock 保护下快照）→
-   如果 level == 0:
-     选择所有 L0 SSTable
-   否则:
-     选择部分 SSTable（大小优先策略）
+   如果 level == 0: 选择所有 L0 SSTable
+   否则: 选择部分 SSTable（大小优先策略）→
    获取 level+1 层范围重叠的 SSTable →
    多路归并（SSTableMerger）→
-   写入新 SSTable 文件（SSTableWriter）→
-   过滤 tombstone（保守策略：只在最底层或确认无更底层引用时移除）→
+   写入新 SSTable 文件（SSTableWriter，底层走 StoreIOStream）→
+   过滤 tombstone（保守策略）→
    finish 新 SSTable →
    levelManager.replace(level, oldSSTables, newSSTables) →
    删除旧 SSTable 文件
@@ -734,13 +864,17 @@ cd f_store
    - 使用最小堆合并，相同 key 取高 sequence
    - 输出有序的 (ByteArray, EntryValue) 流
 
+### 关键改进
+- Compaction 使用 `StoreIOStream` 抽象层
+- Linux 下通过 `IOUringStoreIOStream` 的 `IoUringLockFree` 无锁提交写入
+- 非 Linux 下通过 `FileStoreIOStream` 同步写入
+
 ### 注意事项
 - Compaction 不阻塞读写：旧 SSTable 在替换前仍可查询
 - **原子替换**: levelLock 保护下的 SSTable 列表更新
 - 新 SSTable 写完后才删除旧的，保证崩溃安全
-- **tombstone 保留策略**: 只有当 key 的序列号在下一层不存在更旧版本时才移除 tombstone。简化策略：只在最底层 Compaction 时移除 tombstone
+- **tombstone 保留策略**: 只在最底层 Compaction 时移除 tombstone
 - **64MB 限制**: Compaction 输出也受 64MB 限制
-- Compaction 后 L1+ 保证范围不重叠
 - 后台线程用 `spawn { compactor.runLoop() }` 创建
 
 ### 测试
@@ -751,7 +885,7 @@ cd f_store
 
 ---
 
-## Step 16: 集成测试与修复
+## Step 17: 集成测试与修复
 
 **文件**: `src/Store_test.cj`（测试文件）
 **包**: `fountain::f_store`
@@ -766,7 +900,7 @@ cd f_store
 
 2. **并发安全测试**:
    - 多线程并发 add 不同 key → 不丢数据
-   - 多线程并发 add 相同 key → 返回值正确（一个返回 None，其余返回旧值）
+   - 多线程并发 add 相同 key → 返回值正确
    - 并发 add + get → get 要么返回旧值要么返回新值，不崩溃
    - 并发 add + prefix → prefix 不崩溃
 
@@ -775,14 +909,18 @@ cd f_store
    - 写入大量数据（超过 memFlushThreshold）→ 自动刷盘 → close → open → 数据完整
    - 模拟 WAL 恢复：写入 → 不 close → 重新 open → 从 WAL 恢复
 
-4. **边界条件测试**:
+4. **平台适配测试**:
+   - Linux: 验证 add/remove 立即返回（异步 IO）
+   - 非 Linux: 验证基本功能正常（同步 IO）
+
+5. **边界条件测试**:
    - 空 key、空 value
    - 大 value（接近 64MB SSTable）
    - 大量 key 的 prefix 遍历
    - 连续 add 同一个 key
    - remove 不存在的 key 返回 None
 
-5. **Bug 修复**: 根据测试结果修复发现的问题
+6. **Bug 修复**: 根据测试结果修复发现的问题
 
 ### 注意事项
 - 仓颉测试使用 `@Test + @TestCase + @Assert/@Expect`
@@ -793,7 +931,7 @@ cd f_store
 
 ---
 
-## Step 17: BloomFilter 序列化扩展（可选优化）
+## Step 18: BloomFilter 序列化扩展（可选优化）
 
 **文件**: `f_bloom/src/BloomFilter.cj`（修改外部模块）
 **包**: `fountain::f_bloom`
@@ -806,7 +944,7 @@ cd f_store
 2. 修改 SSTableReader 的 open 流程，使用序列化后的 BloomFilter 而非重建
 
 ### 注意事项
-- 这是可选优化，Step 7/8 使用临时方案（启动时重建）也可工作
+- 这是可选优化，Step 8/9 使用临时方案（启动时重建）也可工作
 - 需修改 f_bloom 模块，确保不影响其他使用者
 - bitSet 是 `Array<AtomicUInt64>`，序列化时需原子读取每个元素
 
@@ -816,24 +954,36 @@ cd f_store
 
 ```
 Step 1 (ByteArray/EntryValue)
-  → Step 2 (MemTable)
-    → Step 3 (MemTableManager)
-  → Step 4 (WALRecord 编解码)
-    → Step 5 (WAL 写入)
-      → Step 6 (WAL 读取/恢复)
-  → Step 7 (SSTable 写入)
-    → Step 8 (SSTable 读取)
-      → Step 9 (SSTableFile)
-        → Step 10 (LevelManager)
-          → Step 11 (MemTable 刷盘)
-            → Step 12 (Store 初始化+add/remove/get)
-              → Step 13 (Store.close)
-              → Step 14 (PrefixIterator)
-          → Step 15 (Compaction)
-→ Step 16 (集成测试)
-→ Step 17 (BloomFilter 序列化优化，可选)
+  → Step 2 (StoreIOStream — IO抽象层) ★ 新增
+    → Step 3 (MemTable)
+      → Step 4 (MemTableManager)
+  → Step 5 (WALRecord 编解码)
+    → Step 6 (WAL 写入 — IoUringLockFree无锁版) ★ 重写
+      → Step 7 (WAL 读取/恢复)
+  → Step 8 (SSTable 写入 — StoreIOStream版) ★ 重写
+    → Step 9 (SSTable 读取 — StoreIOStream版) ★ 重写
+      → Step 10 (SSTableFile)
+        → Step 11 (LevelManager)
+          → Step 12 (MemTable 刷盘)
+            → Step 13 (Store 初始化+add/remove/get) ★ 重写：原子+无锁+即返回
+              → Step 14 (Store.close)
+              → Step 15 (PrefixIterator)
+          → Step 16 (Compaction)
+  → Step 17 (集成测试)
+  → Step 18 (BloomFilter 序列化优化，可选)
 ```
 
-**关键路径**: Step 1 → 2 → 3 → 11 → 12 → 13 → 16
-**可并行**: Step 4-6 (WAL) 与 Step 7-9 (SSTable) 可并行开发
-**最后集成**: Step 12-16 串行，每步依赖前一步完成
+**关键路径**: Step 1 → 2 → 3 → 4 → 12 → 13 → 14 → 17
+**可并行**: Step 5-7 (WAL) 与 Step 8-10 (SSTable) 可并行开发
+**最后集成**: Step 13-17 串行，每步依赖前一步完成
+
+### 与原方案的主要差异
+
+| 差异点 | 原方案 | 新方案 |
+|--------|--------|--------|
+| IO 层 | 直接使用 IOUringStream | StoreIOStream 抽象层 + IoUringLockFree |
+| WAL 写锁 | Mutex writeLock | IoUringLockFree 无锁提交（去除 writeLock） |
+| add/remove 返回 | 等 IO 完成 | WAL 写入 + MemTable 修改后即返回 |
+| 平台支持 | 仅 Linux | Linux (io_uring) + 非Linux (std.fs.File) |
+| CQE 收割 | IOUringStream 内部 | IOUringStoreIOStream 内部 lf.waitAndReap() |
+| SSTable IO | IOUringStream(fd) | StoreIOStream → IOUringStoreIOStream / FileStoreIOStream |
