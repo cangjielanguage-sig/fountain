@@ -49,40 +49,45 @@ public class ConcurrentSkipListMap_conc_test {
     public func test_concurrent_insert_same_key(): Unit {
         let map = ConcurrentSkipListMap<Int64, Int64>()
         let threads = 50
-        let key = 42
-        let latch = SyncCounter(threads)
+        let futures = ArrayList<Future<Unit>>(threads)
         let result = AtomicInt64(0)
-
+        let key = 1
         for (_ in 0..threads) {
-            spawn {
+            let fut = spawn {
                 let old = map.add(key, 1)
                 if (old.isNone()) {
                     result.store(1)   // 成功插入
                 }
-                latch.dec()
             }
+            futures.add(fut)
         }
-        latch.waitUntilZero()
+        for (fut in futures) {
+            fut.get()
+        }
         // 只有一个线程插入成功，其他返回旧值（None），最终值应为 1
         @Assert(map.get(key).getOrThrow(), 1)
         @Assert(map.size, 1)
+        @Assert(result.load(), 1)
     }
 
     @TestCase
     public func test_concurrent_insert_different_keys(): Unit {
         let map = ConcurrentSkipListMap<Int64, Int64>()
         let threads = 100
-        let latch = SyncCounter(threads)
+        let futures = ArrayList<Future<Unit>>(threads)
         let keyGen = AtomicInt64(0)
 
         for (_ in 0..threads) {
-            spawn {
+            let fut = spawn {
                 let k = keyGen.fetchAdd(1)
                 map.add(k, k)
-                latch.dec()
+                ()
             }
+            futures.add(fut)
         }
-        latch.waitUntilZero()
+        for (fut in futures) {
+            fut.get()
+        }
         @Assert(map.size, threads)
         // 验证所有键都存在
         for (i in 0..threads) {
@@ -101,11 +106,11 @@ public class ConcurrentSkipListMap_conc_test {
         let running = AtomicBool(true)
         let inserters = 5
         let removers = 5
-        let latch = SyncCounter(inserters + removers)
+        let futures = ArrayList<Future<Unit>>(inserters + removers)
 
         // 插入线程：不断插入新键（100~199）
         for (_ in 0..inserters) {
-            spawn {
+            let fut = spawn {
                 var i = 100
                 while (running.load()) {
                     map.add(i, i)
@@ -116,26 +121,29 @@ public class ConcurrentSkipListMap_conc_test {
                     // 稍微让步
                     sleep(Duration.Zero)
                 }
-                latch.dec()
             }
+            futures.add(fut)
         }
         // 删除线程：不断删除 0~99 中的随机键
         for (_ in 0..removers) {
-            spawn {
+            let fut = spawn {
                 let rand = Random()
                 while (running.load()) {
                     let key = rand.nextInt64(100)
                     map.remove(key)
                     sleep(Duration.Zero)
                 }
-                latch.dec()
             }
+            futures.add(fut)
         }
 
         // 运行 2 秒
         sleep(Duration.millisecond * 2000)
         running.store(false)
-        latch.waitUntilZero()
+        sleep(Duration.millisecond * 100)
+        for (fut in futures) {
+            fut.get()
+        }
 
         // 最终状态：size 可能变化，但不应为负数，且所有操作无异常
         @Assert(map.size >= 0)
@@ -152,15 +160,17 @@ public class ConcurrentSkipListMap_conc_test {
         let map = ConcurrentSkipListMap<Int64, Int64>()
         map.add(1, 100)
         let threads = 10
-        let latch = SyncCounter(threads)
+        let futures = ArrayList<Future<Unit>>(threads)
 
         for (_ in 0..threads) {
-            spawn {
+            let fut = spawn {
                 let old = map.replace(1) { v => v + 1 }
-                latch.dec()
             }
+            futures.add(fut)
         }
-        latch.waitUntilZero()
+        for (fut in futures) {
+            fut.get()
+        }
         // 最终值应为 100 + threads = 110
         let finalVal = map.get(1).getOrThrow()
         @Assert(finalVal, 100 + threads)
@@ -170,19 +180,21 @@ public class ConcurrentSkipListMap_conc_test {
     public func test_concurrent_addIfAbsent(): Unit {
         let map = ConcurrentSkipListMap<Int64, Int64>()
         let threads = 50
-        let latch = SyncCounter(threads)
+        let futures = ArrayList<Future<Unit>>(threads)
         let successCount = AtomicInt64(0)
 
         for (_ in 0..threads) {
-            spawn {
+            let fut = spawn {
                 let res = map.addIfAbsent(99, 999)
                 if (res.isNone()) {
                     successCount.fetchAdd(1)
                 }
-                latch.dec()
             }
+            futures.add(fut)
         }
-        latch.waitUntilZero()
+        for (fut in futures) {
+            fut.get()
+        }
         // 只有一个线程成功插入
         @Assert(successCount.load(), 1)
         @Assert(map.get(99).getOrThrow(), 999)
@@ -193,10 +205,10 @@ public class ConcurrentSkipListMap_conc_test {
         let map = ConcurrentSkipListMap<Int64, Int64>()
         map.add(5, 50)
         let threads = 20
-        let latch = SyncCounter(threads)
+        let futures = ArrayList<Future<Unit>>(threads)
 
         for (_ in 0..threads) {
-            spawn {
+            let fut = spawn {
                 for (_ in 0..100) {
                     let v = map.get(5)
                     if (v.isSome()) {
@@ -209,10 +221,12 @@ public class ConcurrentSkipListMap_conc_test {
                         map.add(5, 100)
                     }
                 }
-                latch.dec()
             }
+            futures.add(fut)
         }
-        latch.waitUntilZero()
+        for (fut in futures) {
+            fut.get()
+        }
         // 最终值可能是 50 或 100，无异常即可
         let finalVal = map.get(5).getOrThrow()
         @Assert(finalVal == 50 || finalVal == 100)
@@ -229,19 +243,21 @@ public class ConcurrentSkipListMap_conc_test {
             sleep(Duration.millisecond * 10)
             map.clear()
         }
-        let counter = SyncCounter(10)
+        let futures = ArrayList<Future<Unit>>(10)
         for (_ in 0..10) {
-            spawn {
+            let fut = spawn {
                 for (_ in 0..100) {
                     let key = Random().nextInt64(1000)
                     let _ = map.get(key)
                     let _ = map.contains(key)
                     sleep(Duration.Zero)
                 }
-                counter.dec()
             }
+            futures.add(fut)
         }
-        counter.waitUntilZero()
+        for (fut in futures) {
+            fut.get()
+        }
         clearFuture.get()  // 确保 clear 执行完成
         // clear 后 size 应为 0，且无异常
         @Assert(map.size, 0)
@@ -253,16 +269,19 @@ public class ConcurrentSkipListMap_conc_test {
         // 暴露重复键 bug（用例42）
         let map = ConcurrentSkipListMap<Int64, Int64>()
         let threads = 100
-        let latch = SyncCounter(threads)
+        let futures = ArrayList<Future<Unit>>(threads)
         let key = 1
 
         for (_ in 0..threads) {
-            spawn {
+            let fut = spawn {
                 map.add(key, 123)
-                latch.dec()
+                ()
             }
+            futures.add(fut)
         }
-        latch.waitUntilZero()
+        for (fut in futures) {
+            fut.get()
+        }
 
         // 遍历所有节点，确保只有一个键为 1 的节点
         var count = 0
@@ -281,10 +300,10 @@ public class ConcurrentSkipListMap_conc_test {
         let map = ConcurrentSkipListMap<Int64, Int64>()
         let threads = 20
         let iterations = 1000
-        let latch = SyncCounter(threads)
+        let futures = ArrayList<Future<Unit>>(threads)
 
         for (_ in 0..threads) {
-            spawn {
+            let fut = spawn {
                 for (i in 0..iterations) {
                     if (i % 2 == 0) {
                         map.add(i, i)
@@ -292,10 +311,12 @@ public class ConcurrentSkipListMap_conc_test {
                         map.remove(i - 1)
                     }
                 }
-                latch.dec()
             }
+            futures.add(fut)
         }
-        latch.waitUntilZero()
+        for (fut in futures) {
+            fut.get()
+        }
 
         // 最终实际节点数（通过遍历统计）
         var actualSize = 0
@@ -306,25 +327,27 @@ public class ConcurrentSkipListMap_conc_test {
         // 但最终应一致（无其他修改时）。这里简单检查 size 非负且遍历计数与 size 最终相等
         @Assert(actualSize, map.size)
     }
-    
+
     @TestCase
     public func test_size_consistency_under_concurrent_modifications2(): Unit {
         // 暴露 size 不一致 bug（用例44）
         let map = ConcurrentSkipListMap<Int64, Int64>()
         let threads = 20
         let iterations = 1000
-        let latch = SyncCounter(threads)
+        let futures = ArrayList<Future<Unit>>(threads)
 
         for (_ in 0..threads) {
-            spawn {
+            let fut = spawn {
                 for (i in 0..iterations) {
                     map.add(i,i)
                     map.remove(i - 1)
                 }
-                latch.dec()
             }
+            futures.add(fut)
         }
-        latch.waitUntilZero()
+        for (fut in futures) {
+            fut.get()
+        }
 
         // 最终实际节点数（通过遍历统计）
         var actualSize = 0
@@ -335,25 +358,27 @@ public class ConcurrentSkipListMap_conc_test {
         // 但最终应一致（无其他修改时）。这里简单检查 size 非负且遍历计数与 size 最终相等
         @Assert(actualSize, map.size)
     }
-    
+
     @TestCase
     public func test_size_consistency_under_concurrent_modifications3(): Unit {
         // 暴露 size 不一致 bug（用例44）
         let map = ConcurrentSkipListMap<Int64, Int64>()
         let threads = 20
         let iterations = 500
-        let latch = SyncCounter(threads)
+        let futures = ArrayList<Future<Unit>>(threads)
 
         for (_ in 0..threads) {
-            spawn {
+            let fut = spawn {
                 for (i in 0..iterations) {
                     map.add(i,i)
                     map.remove(i)
                 }
-                latch.dec()
             }
+            futures.add(fut)
         }
-        latch.waitUntilZero()
+        for (fut in futures) {
+            fut.get()
+        }
 
         // 最终实际节点数（通过遍历统计）
         var actualSize = 0
@@ -370,18 +395,21 @@ public class ConcurrentSkipListMap_conc_test {
         let map = ConcurrentSkipListMap<Int64, Int64>()
         map.add(10, 100)
         let threads = 10
-        let latch = SyncCounter(threads)
+        let futures = ArrayList<Future<Unit>>(threads)
 
         for (_ in 0..threads) {
-            spawn {
+            let fut = spawn {
                 map.entryView(10) { view =>
                     let cur = view.value.getOrThrow()
                     view.value = Some(cur + 1)
                 }
-                latch.dec()
+                ()
             }
+            futures.add(fut)
         }
-        latch.waitUntilZero()
+        for (fut in futures) {
+            fut.get()
+        }
         // entryView 应该是原子的，最终值应为 100 + threads = 110
         let finalVal = map.get(10).getOrThrow()
         @Assert(finalVal, 100 + threads)
@@ -393,10 +421,10 @@ public class ConcurrentSkipListMap_conc_test {
         let threads = 16
         let duration = 5000  // 毫秒
         let stop = AtomicBool(false)
-        let latch = SyncCounter(threads)
+        let futures = ArrayList<Future<Unit>>(threads)
 
         for (_ in 0..threads) {
-            spawn {
+            let fut = spawn {
                 let rand = Random()
                 while (!stop.load()) {
                     let op = rand.nextInt64(3)
@@ -413,13 +441,16 @@ public class ConcurrentSkipListMap_conc_test {
                     // 避免空转
                     sleep(Duration.Zero)
                 }
-                latch.dec()
             }
+            futures.add(fut)
         }
 
         sleep(Duration.millisecond * duration)
         stop.store(true)
-        latch.waitUntilZero()
+        sleep(Duration.millisecond * 100)
+        for (fut in futures) {
+            fut.get()
+        }
 
         // 最终无异常，size 合理
         @Assert(map.size >= 0)
@@ -431,19 +462,21 @@ public class ConcurrentSkipListMap_conc_test {
         let map = ConcurrentSkipListMap<Int64, Int64>()
         map.add(1, 0)
         let threads = 20
-        let latch = SyncCounter(threads)
+        let futures = ArrayList<Future<Unit>>(threads)
         let successCount = AtomicInt64(0)
 
         for (_ in 0..threads) {
-            spawn {
+            let fut = spawn {
                 let res = map.addIfPresent(1, 1)
                 if (res.isSome()) {
                     successCount.fetchAdd(1)
                 }
-                latch.dec()
             }
+            futures.add(fut)
         }
-        latch.waitUntilZero()
+        for (fut in futures) {
+            fut.get()
+        }
         // 所有线程都应成功替换（键已存在）
         @Assert(successCount.load(), threads)
         @Assert(map.get(1).getOrThrow() == 1)
@@ -456,14 +489,16 @@ public class ConcurrentSkipListMap_conc_test {
         for (i in 0..100) {
             map.add(i, i)
         }
-        let latch = SyncCounter(5)
+        let futures = ArrayList<Future<Unit>>(5)
         for (_ in 0..5) {
-            spawn {
+            let fut = spawn {
                 map.removeIf{_, v => v % 2 == 0}
-                latch.dec()
             }
+            futures.add(fut)
         }
-        latch.waitUntilZero()
+        for (fut in futures) {
+            fut.get()
+        }
         // 所有偶数应被删除
         for (i in 0..100) {
             if (i % 2 == 0) {
@@ -481,27 +516,29 @@ public class ConcurrentSkipListMap_conc_test {
             map.add(i, i)
         }
         let threads = 10
-        let latch = SyncCounter(threads * 2)
+        let futures = ArrayList<Future<Unit>>(threads * 2)
 
         // 线程1-10: 删除值大于50的节点
         for (_ in 0..threads) {
-            spawn {
+            let fut = spawn {
                 for (i in 0..100) {
                     map.remove(i) { v => v > 50 }
                 }
-                latch.dec()
             }
+            futures.add(fut)
         }
         // 线程11-20: 不断添加新键
         for (_ in 0..threads) {
-            spawn {
+            let fut = spawn {
                 for (i in 100..200) {
                     map.add(i, i)
                 }
-                latch.dec()
             }
+            futures.add(fut)
         }
-        latch.waitUntilZero()
+        for (fut in futures) {
+            fut.get()
+        }
         // 最终验证：size 应 >= 0
         @Assert(map.size >= 0)
         // 验证 0-99 中值<=50 的仍存在
@@ -526,29 +563,31 @@ public class ConcurrentSkipListMap_conc_test {
         let map = ConcurrentSkipListMap<Int64, Int64>()
         map.add(1, 0)
         let threads = 10
-        let latch = SyncCounter(threads * 2)
+        let futures = ArrayList<Future<Unit>>(threads * 2)
 
         // 线程使用 entryView (K, ?V) -> ?V 重载
         for (_ in 0..threads) {
-            spawn {
+            let fut = spawn {
                 for (_ in 0..100) {
                     map.entryView(1) { k, v =>
                         Some(v.getOrThrow() + 1)
                     }
                 }
-                latch.dec()
             }
+            futures.add(fut)
         }
         // 线程使用 add
         for (_ in 0..threads) {
-            spawn {
+            let fut = spawn {
                 for (i in 2..102) {
                     map.add(i, i)
                 }
-                latch.dec()
             }
+            futures.add(fut)
         }
-        latch.waitUntilZero()
+        for (fut in futures) {
+            fut.get()
+        }
         // 键1的值应 >= 0
         @Assert(map.get(1).getOrThrow() >= 0)
         // 2-101 应存在
@@ -565,27 +604,29 @@ public class ConcurrentSkipListMap_conc_test {
         let map = ConcurrentSkipListMap<Int64, Int64>()
         map.add(1, 0)
         let threads = 10
-        let latch = SyncCounter(threads * 2)
+        let futures = ArrayList<Future<Unit>>(threads * 2)
 
         // 线程使用 replace 累加
         for (_ in 0..threads) {
-            spawn {
+            let fut = spawn {
                 for (_ in 0..100) {
                     map.replace(1) { v => v + 1 }
                 }
-                latch.dec()
             }
+            futures.add(fut)
         }
         // 线程使用 add 更新
         for (_ in 0..threads) {
-            spawn {
+            let fut = spawn {
                 for (i in 2..102) {
                     map.add(i, i)
                 }
-                latch.dec()
             }
+            futures.add(fut)
         }
-        latch.waitUntilZero()
+        for (fut in futures) {
+            fut.get()
+        }
         // 键1的值应 >= 0 (最终值可能小于 threads*100 因为 replace 可能失败)
         let v1 = map.get(1).getOrThrow()
         @Assert(v1 >= 0)
@@ -600,25 +641,27 @@ public class ConcurrentSkipListMap_conc_test {
             map.add(i, i)
         }
         let threads = 10
-        let latch = SyncCounter(threads * 2)
+        let futures = ArrayList<Future<Unit>>(threads * 2)
 
         // 线程删除所有偶数
         for (_ in 0..threads) {
-            spawn {
+            let fut = spawn {
                 map.removeIf{_, v => v % 2 == 0}
-                latch.dec()
             }
+            futures.add(fut)
         }
         // 线程添加新键
         for (_ in 0..threads) {
-            spawn {
+            let fut = spawn {
                 for (i in 1000..1100) {
                     map.add(i, i)
                 }
-                latch.dec()
             }
+            futures.add(fut)
         }
-        latch.waitUntilZero()
+        for (fut in futures) {
+            fut.get()
+        }
         // 验证奇数键仍存在
         for (i in 0..100 where i % 2 == 1) {
             if (map.contains(i)) {
@@ -641,48 +684,51 @@ public class ConcurrentSkipListMap_conc_test {
             map.add(i, i)
         }
         let running = AtomicBool(true)
-        let latch = SyncCounter(4)
+        let futures = ArrayList<Future<Unit>>(4)
 
         // 线程1: 不断 clear
-        spawn {
+        let fut0 = spawn {
             while (running.load()) {
                 map.clear()
                 sleep(Duration.millisecond)
             }
-            latch.dec()
         }
+        futures.add(fut0)
         // 线程2: 不断 add
-        spawn {
+        let fut1 = spawn {
             var i = 1000
             while (running.load()) {
                 map.add(i, i)
                 i += 1
                 if (i > 2000) { i = 1000 }
             }
-            latch.dec()
         }
+        futures.add(fut1)
         // 线程3: 不断 get
-        spawn {
+        let fut2 = spawn {
             while (running.load()) {
                 for (j in 0..100) {
                     let _ = map.get(j)
                 }
             }
-            latch.dec()
         }
+        futures.add(fut2)
         // 线程4: 不断 contains
-        spawn {
+        let fut3 = spawn {
             while (running.load()) {
                 for (j in 0..100) {
                     let _ = map.contains(j)
                 }
             }
-            latch.dec()
         }
+        futures.add(fut3)
 
         sleep(Duration.second * 2)
         running.store(false)
-        latch.waitUntilZero()
+        sleep(Duration.millisecond * 100)
+        for (fut in futures) {
+            fut.get()
+        }
 
         // clear 后 size 应为 0
         @Assert(map.size == 0 || map.size > 0)  // 宽松检查
@@ -697,10 +743,10 @@ public class ConcurrentSkipListMap_conc_test {
         }
         let threads = 12
         let opsPerThread = 1000
-        let latch = SyncCounter(threads)
+        let futures = ArrayList<Future<Unit>>(threads)
 
         for (t in 0..threads) {
-            spawn {
+            let fut = spawn {
                 let rand = Random()
                 for (_ in 0..opsPerThread) {
                     let op = rand.nextInt64(6)
@@ -722,10 +768,12 @@ public class ConcurrentSkipListMap_conc_test {
                         case _ => ()
                     }
                 }
-                latch.dec()
             }
+            futures.add(fut)
         }
-        latch.waitUntilZero()
+        for (fut in futures) {
+            fut.get()
+        }
         // 验证无异常，且 size 合理
         @Assert(map.size >= 0)
         // 验证所有存在的键值对一致
@@ -739,10 +787,10 @@ public class ConcurrentSkipListMap_conc_test {
         // 测试 add(all) 与其他操作的并发
         let map = ConcurrentSkipListMap<Int64, Int64>()
         let threads = 10
-        let latch = SyncCounter(threads + 1)
+        let futures = ArrayList<Future<Unit>>(threads + 1)
 
         // 线程使用 add(all)
-        spawn {
+        let fut0 = spawn {
             for (t in 0..threads) {
                 let entries = ArrayList<(Int64, Int64)>()
                 for (i in t * 100 .. (t + 1) * 100) {
@@ -750,27 +798,30 @@ public class ConcurrentSkipListMap_conc_test {
                 }
                 map.add(all: entries)
             }
-            latch.dec()
         }
+        futures.add(fut0)
 
         // 其他线程同时进行单 add/get/remove
-        for (_ in 1..threads) {
-            spawn {
+        for (t in 1..threads) {
+            let fut = spawn {
                 let rand = Random()
                 for (_ in 0..500) {
                     let key = rand.nextInt64(10000)
-                    match (rand.nextInt64(3)) {
+                    let op = rand.nextInt64(3)
+                    match (op) {
                         case 0 => map.add(key, key)
                         case 1 => map.get(key)
                         case 2 => map.remove(key)
                         case _ => ()
                     }
                 }
-                latch.dec()
             }
+            futures.add(fut)
         }
 
-        latch.waitUntilZero()
+        for (fut in futures) {
+            fut.get()
+        }
         // 验证 add(all) 插入的数据存在
         for (i in 0..threads * 100) {
             if (map.contains(i)) {
@@ -786,33 +837,35 @@ public class ConcurrentSkipListMap_conc_test {
         map.add(1, 10)
         map.add(2, 20)
         let threads = 10
-        let latch = SyncCounter(threads * 2)
+        let futures = ArrayList<Future<Unit>>(threads * 2)
 
         // 线程使用 replace with predicate
         for (_ in 0..threads) {
-            spawn {
+            let fut = spawn {
                 for (_ in 0..100) {
                     // 只有值 > 5 时才替换
                     map.replace(1, { v => v > 5 }, { v => v + 1 })
                     map.replace(2, { v => v > 5 }, { v => v + 1 })
                 }
-                latch.dec()
             }
+            futures.add(fut)
         }
         // 线程使用 add/remove
         for (_ in 0..threads) {
-            spawn {
+            let fut = spawn {
                 for (i in 3..53) {
                     map.add(i, i * 10)
                 }
                 for (i in 3..53) {
                     map.remove(i)
                 }
-                latch.dec()
             }
+            futures.add(fut)
         }
 
-        latch.waitUntilZero()
+        for (fut in futures) {
+            fut.get()
+        }
         // 验证 1,2 的值 >= 10 (原始值)
         if (map.contains(1)) {
             @Assert(map.get(1).getOrThrow() >= 10)
@@ -821,15 +874,22 @@ public class ConcurrentSkipListMap_conc_test {
             @Assert(map.get(2).getOrThrow() >= 20)
         }
     }
+
     @TestCase
     public func test_concurrent_random_add_sequence_iterate(): Unit {
         let map = ConcurrentSkipListMap<Int64, Int64>()
         let rand = Random()
         let keys = Array<Int64>(10000){_ => rand.nextInt64(Int64.Max)}
+        let futures = ArrayList<Future<Unit>>(10000)
         for (key in keys) {
-            spawn{
+            let fut = spawn {
                 map.add(key, key)
+                ()
             }
+            futures.add(fut)
+        }
+        for (fut in futures) {
+            fut.get()
         }
         var prev = -1
         for((k, v) in map){

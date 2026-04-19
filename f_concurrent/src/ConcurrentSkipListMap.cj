@@ -90,10 +90,20 @@ class FindNodeCache<K, V> where K <: Comparable<K> {
     public let succs: Array<Option<Node<K, V>>> = Array<Option<Node<K, V>>>(17) { _ => None }
 }
 
+// XorShift64 线程局部状态
+class XorShiftState {
+    public var state: Int64
+    public init(s: Int64) {
+        this.state = s
+    }
+}
+
 public class ConcurrentSkipListMap<K, V> <: ConcurrentMap<K, V> & Collection<(K, V)> where K <: Comparable<K> {
     let MAX_LEVEL: Int64 = 16
     // 线程局部缓存 findNode 所需的数组，避免每次分配（每个 map 实例一个）
     private let findNodeCache: ThreadLocal<FindNodeCache<K, V>>
+    // 线程局部 XorShift 状态，确保随机数序列正确迭代
+    private let xorShiftState: ThreadLocal<XorShiftState>
     // 根据 size 动态计算实际使用的最大层级（弱一致性，允许偶尔偏差）
     private func effectiveMaxLevel(): Int64 {
         let s = size_.load()
@@ -105,7 +115,6 @@ public class ConcurrentSkipListMap<K, V> <: ConcurrentMap<K, V> & Collection<(K,
     var size_: AtomicInt64
     var epoch: AtomicInt64   // 代际计数器，clear() 时递增，用于检测并发修改
     private static let seedGen = AtomicInt64((DateTime.now() - DateTime.UnixEpoch).toNanoseconds())   // 全局种子生成器
-    var seed: AtomicInt64   // 并发安全的随机种子，替代非线程安全的 Random
 
     private static func compare(a: ?K, b: ?K): Ordering {
         match((a, b)){
@@ -122,31 +131,43 @@ public class ConcurrentSkipListMap<K, V> <: ConcurrentMap<K, V> & Collection<(K,
         this.headRef = AtomicReference(Node<K, V>.createHead(MAX_LEVEL))
         this.size_ = AtomicInt64(0)   // 初始化计数器
         this.epoch = AtomicInt64(0)   // 初始化代际计数器
-        this.seed = AtomicInt64(seedGen.fetchAdd(1) * 6364136223846793005 + 1442695040888963407)  // LCG 混淆初始种子
         this.findNodeCache = ThreadLocal<FindNodeCache<K, V>>()
+        this.xorShiftState = ThreadLocal<XorShiftState>()
     }
     prop head: Node<K, V> {
         get() { headRef.load() }
     }
-    // 使用 XorShift64 生成随机数，基于 AtomicInt64 种子实现无锁并发安全
+    // 使用 XorShift64 生成随机数，基于线程局部状态实现正确的伪随机序列
     @OverflowWrapping
     private func xorShift64(): Int64 {
-        var x = seed.fetchAdd(1)
+        let st = xorShiftState.getOrCompute {
+            // 每个线程用全局种子生成器初始化自己的 XorShift 状态
+            let s = seedGen.fetchAdd(1) * 6364136223846793005 + 1442695040888963407
+            XorShiftState(if (s == 0) { 1 } else { s })
+        }
+        var x = st.state
+        if (x == 0) {
+            x = 1  // XorShift 不允许0状态
+        }
         x ^= (x << 13)
         x ^= (x >> 7)
         x ^= (x << 17)
+        st.state = x
         return x
     }
 
+    @OverflowWrapping
     private func randomLevel(): Int64 {
         var level: Int64 = 0
         let effectiveMax = effectiveMaxLevel()
-        // 每次随机取 1 bit：如果为 0 则继续提升层级（约 50% 概率）
-        while (level < effectiveMax) {
-            let r = xorShift64()
-            // 检查最高位是否为 0（约 50% 概率）（最高位随机性更高）
-            if ((r & (1 << 63)) == 0) {
+        let r = xorShift64()
+        // 从bit 63开始向下检查连续的0位数，每位决定是否提升层级
+        // 等价于原逐次xorShift64+检查最高位，但只用一次随机数
+        var bit: Int64 = 63
+        while (level < effectiveMax && bit >= 0) {
+            if ((r & (1 << bit)) == 0) {
                 level += 1
+                bit -= 1
             } else {
                 break
             }
@@ -161,13 +182,8 @@ public class ConcurrentSkipListMap<K, V> <: ConcurrentMap<K, V> & Collection<(K,
 
     // 核心查找：返回目标节点及其各层前驱/后继
     func findNode(key: K): FindResult<K, V> {
-        // 使用线程局部缓存的数组，避免每次分配
         let cache = findNodeCache.getOrCompute { FindNodeCache<K, V>() }
-        // 清空数组（复用前必须清理）
-        for (i in 0..cache.preds.size) {
-            cache.preds[i] = None
-            cache.succs[i] = None
-        }
+        // 无需清空：for循环从MAX_LEVEL到0完整遍历，每层都会赋值preds/succs
         let preds = cache.preds
         let succs = cache.succs
 
@@ -180,7 +196,14 @@ public class ConcurrentSkipListMap<K, V> <: ConcurrentMap<K, V> & Collection<(K,
                 match (curr) {
                     case Some(node) =>
                         if (!isHead(node) && node.key < key) {
-                            // 延迟检查：遍历时跳过 value.load()，仅在找到目标 key 时检查
+                            // 遇到逻辑删除节点，主动清理并重新加载，防止活锁
+                            let nodeVal = node.value.load()
+                            if (nodeVal.isNone()) {
+                                let nodeNext = node.next[level].load()
+                                pred.next[level].compareAndSwap(curr, nodeNext)
+                                curr = pred.next[level].load()
+                                continue
+                            }
                             pred = node
                             curr = node.next[level].load()
                         } else {
@@ -209,24 +232,27 @@ public class ConcurrentSkipListMap<K, V> <: ConcurrentMap<K, V> & Collection<(K,
         return FindResult(None, preds, succs)
     }
  
-    // 查找指定层的前驱节点（从 head 开始）
+    // 查找指定层的前驱节点（利用高层索引加速）
     private func findPredecessorAtLevel(key: K, level: Int64): Node<K, V> {
         var pred = head
-        var curr = pred.next[level].load()
-        while (let Some(node) <- curr) {
-            if (!isHead(node) && compare(node.key, Some(key)) == LT) {
-                // 遇到逻辑删除节点，主动清理并重新加载
-                let nodeVal = node.value.load()
-                if (nodeVal.isNone()) {
-                    let nodeNext = node.next[level].load()
-                    pred.next[level].compareAndSwap(curr, nodeNext)
-                    curr = pred.next[level].load()
-                    continue
+        // 从最高层开始，利用索引加速定位到目标层的前驱
+        for (lvl in MAX_LEVEL ..= level : -1) {
+            var curr = pred.next[lvl].load()
+            while (let Some(node) <- curr) {
+                if (!isHead(node) && compare(node.key, Some(key)) == LT) {
+                    // 遇到逻辑删除节点，主动清理并重新加载
+                    let nodeVal = node.value.load()
+                    if (nodeVal.isNone()) {
+                        let nodeNext = node.next[lvl].load()
+                        pred.next[lvl].compareAndSwap(curr, nodeNext)
+                        curr = pred.next[lvl].load()
+                        continue
+                    }
+                    pred = node
+                    curr = node.next[lvl].load()
+                } else {
+                    break
                 }
-                pred = node
-                curr = node.next[level].load()
-            } else {
-                break
             }
         }
         return pred
@@ -278,7 +304,7 @@ public class ConcurrentSkipListMap<K, V> <: ConcurrentMap<K, V> & Collection<(K,
             valbox
         }
         while (true) {
-            let curEpoch = epoch.load()   // 捕获当前代际
+            let curEpoch = epoch.load()
             let result = findNode(key)
             match (result.node) {
                 case Some(node) =>
@@ -286,10 +312,9 @@ public class ConcurrentSkipListMap<K, V> <: ConcurrentMap<K, V> & Collection<(K,
                     match(mode){
                         case Anyway =>
                             if (oldVal.isNone()) {
-                                physicallyRemove(node)   // 遇到逻辑删除节点，帮助清理后重试
+                                physicallyRemove(node)
                                 continue
                             }
-                            // 验证节点仍可达（防止在已物理删除节点上 CAS 导致更新丢失）
                             if (!validateNode(node, result)) {
                                 physicallyRemove(node)
                                 continue
@@ -325,53 +350,50 @@ public class ConcurrentSkipListMap<K, V> <: ConcurrentMap<K, V> & Collection<(K,
                     if (!tryInsertAtLevel(newNode, 0, pred0)) {
                         continue
                     }
-                    // 插入成功后验证前驱是否可达，防止新节点悬挂在已物理删除节点上
                     if (!isHead(pred0) && pred0.value.load().isNone()) {
-                        // 前驱已被逻辑删除，新节点可能不可达
-                        // 尝试逻辑删除新节点并补偿 size_
                         if (newNode.value.compareAndSwap(genbox(), None)) {
                             physicallyRemove(newNode)
-                            // size_ 尚未递增，无需补偿
                             continue
                         }
-                        // newNode 已被其他线程 remove（CAS 失败说明其他线程已逻辑删除），
-                        // 其他线程的 remove 会 fetchSub(1)，所以如果新节点不可达，
-                        // size_ 可能已多算。但 newNode 被其他线程找到说明它可达，无需补偿。
                     }
                     size_.fetchAdd(1)
-                    // 检查代际是否变化（clear 可能已执行），若变化则补偿 size_ 并重试
                     if (epoch.load() != curEpoch) {
-                        // 新节点可能挂在旧链表上（不可达），需回滚
                         if (newNode.value.compareAndSwap(genbox(), None)) {
                             physicallyRemove(newNode)
                             size_.fetchSub(1)
                             continue
                         }
-                        // 其他线程已 remove 该节点，其 fetchSub 已执行
-                        // 但我们的 fetchAdd 需要补偿
                         size_.fetchSub(1)
                         continue
                     }
-                    // 限制高层插入重试次数
                     for (lvl in 1..=level) {
                         if (newNode.value.load().isNone()) {
                             break
                         }
                         var inserted = false
-                        var retries = 0
-                        while (!inserted && retries < 5) {
-                            let pred = findPredecessorAtLevel(key, lvl)
-                            if (!isHead(pred) && pred.value.load().isNone()) {
-                                retries += 1
-                                continue
+                        // 优先使用findNode已缓存的前驱，避免重新查找
+                        if (let Some(pred) <- result.preds[lvl]) {
+                            if (isHead(pred) || pred.value.load().isSome()) {
+                                inserted = tryInsertAtLevel(newNode, lvl, pred)
                             }
-                            let succ = pred.next[lvl].load()
-                            if (let Some(n) <- succ && !isHead(n) && compare(n.key, newNode.key) == EQ && !refEq(n, newNode)) {
-                                break
-                            } else if (tryInsertAtLevel(newNode, lvl, pred)) {
-                                inserted = true
-                            } else {
-                                retries += 1
+                        }
+                        // 缓存前驱不可用或CAS失败，重新查找
+                        if (!inserted) {
+                            var retries = 0
+                            while (!inserted && retries < 3) {
+                                let pred = findPredecessorAtLevel(key, lvl)
+                                if (!isHead(pred) && pred.value.load().isNone()) {
+                                    retries += 1
+                                    continue
+                                }
+                                let succ = pred.next[lvl].load()
+                                if (let Some(n) <- succ && !isHead(n) && compare(n.key, newNode.key) == EQ && !refEq(n, newNode)) {
+                                    break
+                                } else if (tryInsertAtLevel(newNode, lvl, pred)) {
+                                    inserted = true
+                                } else {
+                                    retries += 1
+                                }
                             }
                         }
                         if (!inserted) {
@@ -568,25 +590,21 @@ public class ConcurrentSkipListMap<K, V> <: ConcurrentMap<K, V> & Collection<(K,
     // ---------- 删除 ----------
     public func remove(key: K): Option<V> {
         while (true) {
-            let curEpoch = epoch.load()   // 捕获当前代际
+            let curEpoch = epoch.load()
             let result = findNode(key)
             match (result.node) {
                 case Some(node) =>
                     let oldValOpt = node.value.load()
                     if (oldValOpt.isSome()) {
                         if (node.value.compareAndSwap(oldValOpt, None)) {
-                            physicallyRemove(node)   // 逻辑删除成功，物理摘除
-                            // 检查代际是否变化，若变化则跳过 size_ 递减
+                            physicallyRemove(node)
                             if (epoch.load() == curEpoch) {
                                 size_.fetchSub(1)
                             }
                             return oldValOpt?.value
                         }
-                        // CAS 失败，继续重试
                         continue
                     } else {
-                        // 节点已被其他线程逻辑删除，无需显式调用 physicallyRemove
-                        // 直接 continue，findNode 会在下一次调用时自动清理该节点
                         continue
                     }
                 case None => return None
@@ -595,9 +613,14 @@ public class ConcurrentSkipListMap<K, V> <: ConcurrentMap<K, V> & Collection<(K,
         None<V>
     }
     public func removeIf(predicate: (K, V) -> Bool): Unit {
-        let curEpoch = epoch.load()   // 捕获当前代际
+        let startEpoch = epoch.load()
         var currOpt = head.next[0].load()
+        var checkCounter: Int64 = 0
         while (true) {
+            checkCounter += 1
+            if (checkCounter % 64 == 0 && epoch.load() != startEpoch) {
+                return  // clear()已执行，终止遍历
+            }
             match (currOpt) {
                 case Some(curr) =>
                     if (isHead(curr)) {
@@ -610,15 +633,15 @@ public class ConcurrentSkipListMap<K, V> <: ConcurrentMap<K, V> & Collection<(K,
                             match (curr.key) {
                                 case Some(k) =>
                                     if (predicate(k, box.value)) {
-                                        tryRemoveNode(curr, curEpoch)
+                                        tryRemoveNode(curr, startEpoch)
                                     }
                                 case None =>
-                                    tryRemoveNode(curr, curEpoch)
+                                    tryRemoveNode(curr, startEpoch)
                             }
                         case None =>
                             helpPhysicallyRemove(curr)
                     }
-                    currOpt = curr.next[0].load()   // 单向遍历，无需维护 pred
+                    currOpt = curr.next[0].load()
                 case None => break
             }
         }

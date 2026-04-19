@@ -73,17 +73,19 @@ public class ConcurrentSkipListMap_perf_test {
         let map = ConcurrentSkipListMap<Int64, Int64>()
         let threads = 8
         let opsPerThread = 10000
-        let latch = SyncCounter(threads)
+        let futures = ArrayList<Future<Unit>>(threads)
         let start = MonoTime.now()
         for (_ in 0..threads) {
-            spawn {
+            let fut = spawn {
                 for (j in 0..opsPerThread) {
                     map.add(j, j)
                 }
-                latch.dec()
             }
+            futures.add(fut)
         }
-        latch.waitUntilZero()
+        for (fut in futures) {
+            fut.get()
+        }
         let elapsed = (MonoTime.now() - start).toNanoseconds()
         let totalOps = threads * opsPerThread
         let opsPerSec = totalOps * 1000000000 / (elapsed + 1)
@@ -99,10 +101,10 @@ public class ConcurrentSkipListMap_perf_test {
         }
         let threads = 8
         let opsPerThread = 5000
-        let latch = SyncCounter(threads)
+        let futures = ArrayList<Future<Unit>>(threads)
         let start = MonoTime.now()
         for (t in 0..threads) {
-            spawn {
+            let fut = spawn {
                 let rand = Random()
                 for (_ in 0..opsPerThread) {
                     let op = rand.nextInt64(4)
@@ -121,10 +123,12 @@ public class ConcurrentSkipListMap_perf_test {
                         case _ => ()
                     }
                 }
-                latch.dec()
             }
+            futures.add(fut)
         }
-        latch.waitUntilZero()
+        for (fut in futures) {
+            fut.get()
+        }
         let elapsed = (MonoTime.now() - start).toNanoseconds()
         let totalOps = threads * opsPerThread
         let opsPerSec = totalOps * 1000000000 / (elapsed + 1)
@@ -137,20 +141,22 @@ public class ConcurrentSkipListMap_perf_test {
         map.add(1, 0)
         let threads = 8
         let opsPerThread = 10000
-        let latch = SyncCounter(threads)
+        let futures = ArrayList<Future<Unit>>(threads)
         let start = MonoTime.now()
         for (_ in 0..threads) {
-            spawn {
+            let fut = spawn {
                 for (_ in 0..opsPerThread) {
                     map.entryView(1) { view =>
                         let cur = view.value.getOrThrow()
                         view.value = Some(cur + 1)
                     }
                 }
-                latch.dec()
             }
+            futures.add(fut)
         }
-        latch.waitUntilZero()
+        for (fut in futures) {
+            fut.get()
+        }
         let elapsed = (MonoTime.now() - start).toNanoseconds()
         let totalOps = threads * opsPerThread
         let opsPerSec = totalOps * 1000000000 / (elapsed + 1)
