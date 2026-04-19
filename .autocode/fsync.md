@@ -2,7 +2,7 @@
 mkdir fsync && cd fsync && cjpm init --type=dynamic && mkdir doc
 
 ## 任务
-按照以下要求创建一个技术方案文档，保存在fsync/doc/sync.md并。
+按照以下要求创建一个技术方案文档，保存在fsync/doc/sync.md。
 按照sync.md拆分开发任务，制定开发计划，详细描述开发计划的每一步需要做什么，以及需要注意的要点、难点和需要注意的问题。
 
 1. mkdir -p fsync/src/config
