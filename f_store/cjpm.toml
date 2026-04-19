@@ -21,5 +21,7 @@
   incremental = true
 
 [dependencies]
-  "fountain::f_base" = {path = "../f_base"}
-  "fountain::f_io" = {path = "../f_io"}
+"fountain::f_base" = {path = "../f_base"}
+"fountain::f_io" = {path = "../f_io"}
+"fountain::f_concurrent" = {path = "../f_concurrent"}
+"fountain::f_bloom" = {path = "../f_bloom"}
