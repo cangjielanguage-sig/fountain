@@ -94,8 +94,8 @@ public struct Message <: Protocol<EncodedMessage, Message> {
     public static func ping<T>(data: T): EncodedMessage where T <: DataFields<T> {
         build<T>(PING(WITHNODE | ACK), data)
     }
-    public static func elect<T>(vote!: Bool, approve!: Bool, ack!: Bool, data!: T): EncodedMessage where T <: DataFields<T> {
-        build<T>(ELECT(to(vote, VOTE) | to(approve, APPROVE) | to(ack, ACK)), data)
+    public static func elect<T>(vote!: Bool, approve!: Bool, assume!: Bool, ack!: Bool, data!: T): EncodedMessage where T <: DataFields<T> {
+        build<T>(ELECT(to(vote, VOTE) | to(approve, APPROVE) | to(assume, ASSUME) | to(ack, ACK)), data)
     }
     public static func ack<T>(data!: T): EncodedMessage where T <: DataFields<T> {
         build<T>(Command.ACK, data)

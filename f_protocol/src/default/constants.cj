@@ -27,7 +27,7 @@ package fountain::f_protocol.default
 | CONSUME                 | ONCE      | QoS1      | QoS0      | 0         |
 | RESP                    | 0         | QoS1      | QoS0      | ACK       |
 | PING                    | WITHNODE  | 0         | 0         | ACK       |
-| ELECT                   | VOTE      | APPROVE   | 0         | ACK       |
+| ELECT                   | VOTE      | APPROVE   | ASSUME    | ACK       |
 | ACK                     | 0         | 0         | 0         | 0         |
 | DEREGISTER              | 0         | 0         | 0         | ACK       |
 */
@@ -41,6 +41,7 @@ public const AT_MOST_ONCE = 0u8
 public const AT_LEAST_ONCE = 2u8
 public const EXACTLY_ONCE = 4u8
 public const APPROVE = 4u8
+public const ASSUME = 2u8
 public const RETAIN = 1u8
 public const ACK = 1u8
 
