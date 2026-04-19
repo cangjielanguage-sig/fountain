@@ -45,8 +45,6 @@ public struct HostAndPort {
 5.7 f_codec f_protocol已经测试过了，f_net可能有BUG，正式开始之前先为f_net添加测试用例，确认f_net没有问题
 5.8 使用f_store 实现数据持久化
 5.9 使用f_protocol/doc/定义的协议实现选举和同步数据
-    - 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15
-    - 0 1 2 3 4 5 6 7 8 9  a  b  c  d  e  f
     - f_protocol的ELECT表示本次通讯为选举，VOTE表示本次通讯为发起投票，APPROVE表示本次通讯为同意位。
       - 0xd8 - 发起投票
       - 0xdd - 赞成发起方
