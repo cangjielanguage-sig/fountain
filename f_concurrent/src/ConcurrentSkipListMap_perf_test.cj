@@ -33,7 +33,7 @@ public class ConcurrentSkipListMap_perf_test {
         }
         let elapsed = (MonoTime.now() - start).toNanoseconds()
         let opsPerSec = n * 1000000000 / (elapsed + 1)
-        println("perf_single_thread_add: ${n} ops in ${elapsed}ns, ${opsPerSec} ops/s")
+        println("perf_single_thread_add: ${n} loops in ${elapsed}ns, ${opsPerSec} ops/s")
     }
 
     @TestCase
@@ -49,7 +49,7 @@ public class ConcurrentSkipListMap_perf_test {
         }
         let elapsed = (MonoTime.now() - start).toNanoseconds()
         let opsPerSec = n * 1000000000 / (elapsed + 1)
-        println("perf_single_thread_get: ${n} ops in ${elapsed}ns, ${opsPerSec} ops/s")
+        println("perf_single_thread_get: ${n} loops in ${elapsed}ns, ${opsPerSec} ops/s")
     }
 
     @TestCase
@@ -65,7 +65,7 @@ public class ConcurrentSkipListMap_perf_test {
         }
         let elapsed = (MonoTime.now() - start).toNanoseconds()
         let opsPerSec = n * 1000000000 / (elapsed + 1)
-        println("perf_single_thread_remove: ${n} ops in ${elapsed}ns, ${opsPerSec} ops/s")
+        println("perf_single_thread_remove: ${n} loops in ${elapsed}ns, ${opsPerSec} ops/s")
     }
 
     @TestCase
@@ -89,7 +89,7 @@ public class ConcurrentSkipListMap_perf_test {
         let elapsed = (MonoTime.now() - start).toNanoseconds()
         let totalOps = threads * opsPerThread
         let opsPerSec = totalOps * 1000000000 / (elapsed + 1)
-        println("perf_concurrent_add: ${totalOps} ops in ${elapsed}ns, ${opsPerSec} ops/s, threads=${threads}")
+        println("perf_concurrent_add: ${totalOps} loops in ${elapsed}ns, ${opsPerSec} ops/s, threads=${threads}")
     }
 
     @TestCase
@@ -132,7 +132,7 @@ public class ConcurrentSkipListMap_perf_test {
         let elapsed = (MonoTime.now() - start).toNanoseconds()
         let totalOps = threads * opsPerThread
         let opsPerSec = totalOps * 1000000000 / (elapsed + 1)
-        println("perf_concurrent_mixed: ${totalOps} ops in ${elapsed}ns, ${opsPerSec} ops/s, threads=${threads}")
+        println("perf_concurrent_mixed: ${totalOps} loops in ${elapsed}ns, ${opsPerSec} ops/s, threads=${threads}")
     }
 
     @TestCase
@@ -161,6 +161,6 @@ public class ConcurrentSkipListMap_perf_test {
         let totalOps = threads * opsPerThread
         let opsPerSec = totalOps * 1000000000 / (elapsed + 1)
         @Assert(map.get(1).getOrThrow(), threads * opsPerThread)
-        println("perf_concurrent_entryView: ${totalOps} ops in ${elapsed}ns, ${opsPerSec} ops/s, threads=${threads}")
+        println("perf_concurrent_entryView: ${totalOps} loops in ${elapsed}ns, ${opsPerSec} ops/s, threads=${threads}")
     }
 }
