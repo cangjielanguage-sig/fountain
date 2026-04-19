@@ -271,7 +271,7 @@ public class PublishCommand <: SubCommand {
             }finally{
                 client.close()
             }
-            println('waiting for ${module} to be published... waited ${Duration.second * waited}, to check again after ${Duration.second * b}')
+            println('waiting for ${module} to be published... waited ${Duration.second * waited}, to check again after ${Duration.second * next}')
         }
         false
     }
