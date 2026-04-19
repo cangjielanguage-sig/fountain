@@ -43,14 +43,14 @@
 public struct ByteArray <: Comparable<ByteArray> {
     public ByteArray(public let bytes: Array<Byte>){}
     public func compare(other: ByteArray): Ordering {
-        let minLen = if (bytes.size < other.bytes.size) { bytes.size } else { other.bytes.size }
+        let minLen = if (bytes.size <= other.bytes.size) { bytes.size } else { other.bytes.size }
         for (i in 0..minLen) {
-            if (bytes[i] < other.bytes[i]) { return Ordering.LT }
-            if (bytes[i] > other.bytes[i]) { return Ordering.GT }
+            match (bytes[i].compare(other.bytes[i])){
+                case EQ => continue
+                case x => return x
+            }
         }
-        if (bytes.size < other.bytes.size) { return Ordering.LT }
-        if (bytes.size > other.bytes.size) { return Ordering.GT }
-        return Ordering.EQ
+        bytes.size.compare(other.bytes.size)
     }
 }
 ```
