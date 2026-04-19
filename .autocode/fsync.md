@@ -32,6 +32,7 @@ public class SyncConfig {
     public static func getDataPath(): String {
         Config.getString(dataPath) ?? '/tmp/fsync'
     }
+    //需要其它配置就往后添加
 }
 public struct HostAndPort {
     public HostAndPort(
