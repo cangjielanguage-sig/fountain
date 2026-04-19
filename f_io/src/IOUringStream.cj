@@ -355,8 +355,41 @@ public class IOUringStream <: IOStream & Resource {
         }
     }
 
+    /**
+     * 刷新所有已写入数据到磁盘
+     *
+     * 提交 IORING_OP_FSYNC 并设置 IOSQE_IO_DRAIN 标志，
+     * 内核保证在所有之前提交的 write I/O 完成后才执行 fsync。
+     * 通过 LockFreePromise 等待后台收割线程收割 CQE 后返回。
+     *
+     * @throws IoUringException SQE 不足或槽位不足时抛出
+     */
     public func flush(): Unit {
-        // write 已经立即返回，flush 不需要额外操作
+        let slotIdOpt = lf.allocSlot()
+        if (let Some(slotId) <- slotIdOpt) {
+            let promise = LockFreePromise()
+            synchronized(writeMutex) {
+                let sqeOpt = writeRing.getSQE()
+                if (let Some(sqe) <- sqeOpt) {
+                    ioUringPrepFsync(sqe, fd, 0)
+                    ioUringSQESetFlags(sqe, IOSQE_IO_DRAIN)
+                    let gen = lf.setCallback(slotId, promise)
+                    let ud = lf.encodeUserData(slotId, gen)
+                    ioUringSQESetData64(sqe, ud)
+                    lf.commitSlot(slotId)
+                    lf.flush()
+                } else {
+                    lf.releaseSlot(slotId)
+                    throw IoUringException("flush: no SQE available")
+                }
+            }
+            let result = promise.awaitResult()
+            if (result < 0) {
+                throw IoUringException("flush: fsync failed with result ${result}")
+            }
+        } else {
+            throw IoUringException("flush: no completion slot available")
+        }
     }
 
     public func isClosed(): Bool {
