@@ -18,9 +18,19 @@ import fountain::f_config.*
 public class SyncConfig {
     public static const sync = 'sync'
     public static const hosts = sync + '_hosts'
+    public static const dataPath = sync + '_dataPath'
+    /**
+     * 集群内的节点列表，使用英文逗号分隔，同时包含ip1:port1,ip2:port2,ip3:port3...
+     */
     public static func getHosts(): Array<HostAndPort>{
         let hosts = Config.getString(hosts).split(',')
         Array<HostAndPort>(hosts.size){i => HostAndPort(hosts[i])}
+    }
+    /**
+     * 数据保存路径，默认为/tmp/fsync
+     */
+    public static func getDataPath(): String {
+        Config.getString(dataPath) ?? '/tmp/fsync'
     }
 }
 public struct HostAndPort {
