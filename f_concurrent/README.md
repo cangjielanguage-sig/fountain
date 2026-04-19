@@ -16,5 +16,5 @@
 ## 只计算一次
 - [只计算一次](./doc/只计算一次.md)
 
-## ConcurrentSkipListMap（并发操作有可能导致死循环，挂起）
+## ConcurrentSkipListMap
 - [ConcurrentSkipListMap](./doc/ConcurrentSkipListMap.md)
