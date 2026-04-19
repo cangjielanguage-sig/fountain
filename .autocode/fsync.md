@@ -8,7 +8,7 @@ mkdir fsync && cd fsync && cjpm init --type=dynamic && mkdir doc
 1. mkdir -p fsync/src/config
 2. touch fsync/src/config/SyncConfig.cj
 3. 在fsync/cjpm.toml添加fountain::f_config fountain::f_base fountain::f_codec fountain::f_net fountain::f_protocol的依赖
-3. 在SyncConfig.cj 添加以下代码
+4. 在SyncConfig.cj 添加以下代码
 ```cj
 package fountain::fsync.config
 
@@ -35,16 +35,16 @@ public struct HostAndPort {
 }
 ```
 
-3. 在fsync/src/实现raft协议。
-3.1 fsync/src/server实现raft服务端
-3.2 fsync/src/client实现raft客户端
-3.3 严格实现raft协议
-3.4 以极致性能为第一目标
-3.5 活跃节点数超过一半可以继续提供服务
-3.6 使用f_net 和f_protocol实现通讯协议，使用f_codec实现编解码
-3.7 f_codec f_protocol已经测试过了，f_net可能有BUG，正式开始之前先为f_net添加测试用例，确认f_net没有问题
-3.8 使用f_store 实现数据持久化
-3.9 使用f_protocol/doc/定义的协议实现选举和同步数据
+5. 在fsync/src/实现raft协议。
+5.1 fsync/src/server实现raft服务端
+5.2 fsync/src/client实现raft客户端
+5.3 严格实现raft协议
+5.4 以极致性能为第一目标
+5.5 活跃节点数超过一半可以继续提供服务
+5.6 使用f_net 和f_protocol实现通讯协议，使用f_codec实现编解码
+5.7 f_codec f_protocol已经测试过了，f_net可能有BUG，正式开始之前先为f_net添加测试用例，确认f_net没有问题
+5.8 使用f_store 实现数据持久化
+5.9 使用f_protocol/doc/定义的协议实现选举和同步数据
     - 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15
     - 0 1 2 3 4 5 6 7 8 9  a  b  c  d  e  f
     - f_protocol的ELECT表示本次通讯为选举，VOTE表示本次通讯为发起投票，APPROVE表示本次通讯为同意位。
@@ -63,9 +63,9 @@ public struct HostAndPort {
         - 数据KEY
         - 数据版本
         - 数据字节数组
-3.10 添加f_app依赖，实现fountain::f_app.SubCommand
+5.10 添加f_app依赖，实现fountain::f_app.SubCommand
      - 本项目不必实现main函数，
      - SubCommand实现以子命令“sync”将本项目注册到fountain::f_app。
      - 具体实现与注册方法参考fountain::f_app.PublishCommand
      - 本项目可以使用命令fboot sync --hosts=ip1:port,ip2:port,ip3:port启动
-3.11 为本项目添加测试用例
+5.11 为本项目添加测试用例
