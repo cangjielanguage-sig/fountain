@@ -53,6 +53,7 @@ public class PublishCommand <: SubCommand {
      * 执行
      */
     public func exec(args: Array<String>): Int64 {
+        let start = MonoTime.now()
         if(args.size >= 1){
             let reg = Regex(#'^\d+.\d+.\d+$'#)
             if(reg.matches(args[0])){
@@ -108,6 +109,7 @@ public class PublishCommand <: SubCommand {
         }else{
             publishAll()
         }
+        println('publish completed in ${MonoTime.now() - start}')
         0
     }
     private func allModules(path: Path, modules: HashMap<String, Path>): Unit{
