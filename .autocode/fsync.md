@@ -49,7 +49,13 @@ public struct HostAndPort {
 
 5. 在fsync/src/实现raft协议。
 5.1 fsync/src/server实现raft服务端
+    - 添加f_app依赖，实现fountain::f_app.SubCommand
+      - 本项目服务端不必实现main函数，
+      - SubCommand实现以子命令“sync”将本项目注册到fountain::f_app。
+      - 具体实现与注册方法参考fountain::f_app.PublishCommand
+      - 本项目可以使用命令fboot sync --hosts=ip1:port,ip2:port,ip3:port启动
 5.2 fsync/src/client实现raft客户端
+    - 客户端作为其它项目的依赖
 5.3 严格实现raft协议
 5.4 以极致性能为第一目标
 5.5 活跃节点数超过一半可以继续提供服务
@@ -73,9 +79,4 @@ public struct HostAndPort {
         - 数据KEY
         - 数据版本
         - 数据字节数组
-5.10 添加f_app依赖，实现fountain::f_app.SubCommand
-     - 本项目不必实现main函数，
-     - SubCommand实现以子命令“sync”将本项目注册到fountain::f_app。
-     - 具体实现与注册方法参考fountain::f_app.PublishCommand
-     - 本项目可以使用命令fboot sync --hosts=ip1:port,ip2:port,ip3:port启动
-5.11 为本项目添加测试用例
+5.10 为本项目添加测试用例
