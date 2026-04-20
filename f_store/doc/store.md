@@ -66,9 +66,11 @@ public struct ByteArray <: Comparable<ByteArray> {
 public class EntryValue {
     public let value: ?Array<Byte>   // None = tombstone（删除标记）
     public let sequence: Int64       // 单调递增序列号，用于多版本合并
-    public init(value: ?Array<Byte>, sequence: Int64) {
+    public let expireAt: ?Int64      // 过期时间戳（纳秒），None = 永不过期
+    public init(value: ?Array<Byte>, sequence: Int64, expireAt!: ?Int64 = None) {
         this.value = value
         this.sequence = sequence
+        this.expireAt = expireAt
     }
 }
 ```
@@ -76,7 +78,9 @@ public class EntryValue {
 **要点**：
 - `value == None` 表示 tombstone，`get` 遇到 tombstone 返回 `None`
 - `sequence` 保证并发写入的全局顺序，读操作优先取高序列号
+- `expireAt` 为 `None` 表示永不过期；非 `None` 时为纳秒级时间戳，`get` 时检查是否已过期
 - 不可变对象，一旦创建不再修改
+- `ttl` 操作通过写入新的 `EntryValue`（相同 value + 新 expireAt）实现过期时间更新
 
 ---
 
@@ -282,15 +286,16 @@ class MemTableManager {
 
 每个 WAL 记录：
 ```
-┌──────────┬──────────┬──────────┬─────────────┬────────────┬────────────┐
-│ checksum │ sequence │ key_len  │ value_len   │ key_bytes  │ value_bytes│
-│ 4 bytes  │ 8 bytes  │ 8 bytes  │ 8 bytes     │ var        │ var        │
-│ CRC32    │ Int64    │ Int64    │ Int64       │            │ 0=删除     │
-└──────────┴──────────┴──────────┴─────────────┴────────────┴────────────┘
+┌──────────┬──────────┬──────────┬─────────────┬────────────┬──────────┬────────────┬────────────┐
+│ checksum │ sequence │ key_len  │ value_len   │ expire_at  │ key_bytes │ value_bytes│
+│ 4 bytes  │ 8 bytes  │ 8 bytes  │ 8 bytes     │ 8 bytes    │ var       │ var        │
+│ CRC32    │ Int64    │ Int64    │ Int64       │ Int64      │           │ 0=删除     │
+└──────────┴──────────┴──────────┴─────────────┴────────────┴────────────┴────────────┘
 ```
 
 - `value_len = 0` 表示 tombstone（删除记录）
-- `checksum` 覆盖 sequence + key_len + value_len + key_bytes + value_bytes
+- `expire_at = 0` 表示永不过期，非零为纳秒级过期时间戳
+- `checksum` 覆盖 sequence + key_len + value_len + expire_at + key_bytes + value_bytes
 
 #### 实现架构（Linux）
 
@@ -308,9 +313,9 @@ class WAL <: Resource {
     let closed: AtomicBool
     let syncInterval: Int64              // 每 N 次 append 执行一次 fsync（默认 100）
 
-    func append(key: Array<Byte>, value: ?Array<Byte>): Int64 {
+    func append(key: Array<Byte>, value: ?Array<Byte>, expireAt!: ?Int64 = None): Int64 {
         // 1. sequence.incrFetch() 获取序列号
-        // 2. 编码记录（checksum + sequence + key_len + value_len + key + value）
+        // 2. 编码记录（checksum + sequence + key_len + value_len + expire_at + key + value）
         // 3. lf.allocSlot() → lf.getSQE() → ioUringPrepWrite → lf.setCallback(CompletionCallback.None) → lf.commitSlot() → lf.flush()
         // 4. appendCount.incrFetch()
         // 5. if (appendCount % syncInterval == 0) { sync() }
@@ -339,7 +344,7 @@ class WAL <: Resource {
     let closed: AtomicBool
     let syncInterval: Int64
 
-    func append(key: Array<Byte>, value: ?Array<Byte>): Int64 {
+    func append(key: Array<Byte>, value: ?Array<Byte>, expireAt!: ?Int64 = None): Int64 {
         // 1. sequence.incrFetch() 获取序列号
         // 2. 编码记录
         // 3. file.write(encoded) — 同步写
@@ -376,7 +381,7 @@ class WAL <: Resource {
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │ Data Block 1                                                    │
-│   key_len(8) + value_len(8) + sequence(8) + key + value/tomb   │
+│   key_len(8) + value_len(8) + sequence(8) + expire_at(8) + key + value/tomb   │
 │ Data Block 2                                                    │
 │   ...                                                           │
 │ Data Block N                                                    │
@@ -589,7 +594,93 @@ public func add(key: Array<Byte>, value: Array<Byte>): ?Array<Byte> {
 - `ConcurrentSkipListMap.add` 无锁 CAS
 - `maybeFlush` 检查是近似判断，多线程可能同时触发但 swap 有 flushLock 保护
 
-### 5.4 remove — 删除键
+public func add(key: Array<Byte>, value: Array<Byte>, expire: Duration): ?Array<Byte> {
+    if (closed.load()) { throw StoreClosedException() }
+    let keyBytes = ByteArray(key)
+    let expireAt = DateTime.now().toUnixTimestamp() + expire.toNanoseconds()
+    // 1. WAL 追加记录，获取序列号
+    let seq = wal.append(key, value, expireAt: expireAt)
+    // 2. 写入 MemTable
+    let entry = EntryValue(value, seq, expireAt: expireAt)
+    let old = memTableManager.active.load().add(keyBytes, entry)
+    // 3. 检查是否需要刷盘
+    maybeFlush()
+    // 4. 返回旧值（如果 key 已存在且未过期）
+    if (let Some(oldEntry) <- old) {
+        if (let Some(oldExpire) <- oldEntry.expireAt) {
+            if (oldExpire <= DateTime.now().toUnixTimestamp()) {
+                return None  // 旧值已过期，视为不存在
+            }
+        }
+        oldEntry.value
+    } else {
+        None
+    }
+}
+```
+
+**原子性保证**：
+- 与 `add(key, value)` 一致：WAL 先写 + MemTable CAS
+- 过期时间与 value 一同写入，保证原子性
+- ★ **add 在 WAL 写入 + MemTable 修改后即可返回**，不等 IO 落盘完成
+
+**并发安全**：
+- 与 `add(key, value)` 一致，关键路径完全无锁
+
+### 5.5 ttl — 设置/更新过期时间
+
+```cj
+public func ttl(key: Array<Byte>, expire: Duration): Unit {
+    if (closed.load()) { throw StoreClosedException() }
+    let keyBytes = ByteArray(key)
+    let expireAt = DateTime.now().toUnixTimestamp() + expire.toNanoseconds()
+    // 1. 查找当前值
+    let current = memTableManager.active.load().get(keyBytes)
+    // 也查 immutable
+    if (current.isNone()) {
+        if (let Some(imm) <- memTableManager.immutable.load()) {
+            let immEntry = imm.get(keyBytes)
+            if (let Some(e) <- immEntry) {
+                // 找到值，用其 value + 新 expireAt 重新写入
+                let seq = wal.append(key, e.value ?? Array<Byte>(), expireAt: expireAt)
+                let entry = EntryValue(e.value, seq, expireAt: expireAt)
+                memTableManager.active.load().add(keyBytes, entry)
+                return
+            }
+        }
+        // 也查 SSTable
+        let sstEntry = levelManager.get(keyBytes)
+        if (let Some(e) <- sstEntry) {
+            if (e.value.isSome()) {
+                let seq = wal.append(key, e.value ?? Array<Byte>(), expireAt: expireAt)
+                let entry = EntryValue(e.value, seq, expireAt: expireAt)
+                memTableManager.active.load().add(keyBytes, entry)
+                return
+            }
+        }
+        // key 不存在，ttl 无操作
+        return
+    }
+    // 2. 在 active MemTable 中找到值，用其 value + 新 expireAt 重新写入
+    if (let Some(e) <- current) {
+        if (e.value.isSome()) {
+            let seq = wal.append(key, e.value ?? Array<Byte>(), expireAt: expireAt)
+            let entry = EntryValue(e.value, seq, expireAt: expireAt)
+            memTableManager.active.load().add(keyBytes, entry)
+        }
+        // tombstone 或已过期，ttl 无操作
+    }
+}
+```
+
+**要点**：
+- `ttl` 查找 key 的当前值，以相同 value + 新 expireAt 重新写入
+- 新 EntryValue 的 sequence 高于旧值，查询时优先返回带过期时间的新版本
+- ★ **ttl 在 WAL 写入 + MemTable 修改后即可返回**
+- key 不存在或已删除（tombstone）时，`ttl` 为空操作
+- **并发安全**：与 add 一致，关键路径无锁。极端情况下并发 add 可能覆盖 ttl 写入的值，但符合 LSM 语义（后写入者胜）
+
+### 5.6 remove — 删除键
 
 ```cj
 public func remove(key: Array<Byte>): ?Array<Byte> {
@@ -611,7 +702,7 @@ public func remove(key: Array<Byte>): ?Array<Byte> {
 - 已持久化 SSTable 中的旧记录不会被修改，compaction 时清理
 - ★ **remove 在 WAL 写入 + MemTable 修改后即可返回**
 
-### 5.5 get — 查询键
+### 5.7 get — 查询键
 
 ```cj
 public func get(key: Array<Byte>): ?Array<Byte> {
@@ -621,19 +712,38 @@ public func get(key: Array<Byte>): ?Array<Byte> {
     // 1. 查 active MemTable
     let active = memTableManager.active.load()
     if (let Some(entry) <- active.get(keyBytes)) {
+        // 检查是否过期
+        if (let Some(expireAt) <- entry.expireAt) {
+            if (expireAt <= DateTime.now().toUnixTimestamp()) {
+                return None  // 已过期，视为不存在
+            }
+        }
         return entry.value  // None = tombstone，返回 None 表示 key 不存在
     }
 
     // 2. 查 immutable MemTable（可能正在刷盘）
     if (let Some(imm) <- memTableManager.immutable.load()) {
         if (let Some(entry) <- imm.get(keyBytes)) {
+            if (let Some(expireAt) <- entry.expireAt) {
+                if (expireAt <= DateTime.now().toUnixTimestamp()) {
+                    return None
+                }
+            }
             return entry.value
         }
     }
 
     // 3. 查 SSTable（从 L0 到 Ln，找到第一个即返回）
     let result = levelManager.get(keyBytes)
-    result?.value
+    if (let Some(entry) <- result) {
+        if (let Some(expireAt) <- entry.expireAt) {
+            if (expireAt <= DateTime.now().toUnixTimestamp()) {
+                return None
+            }
+        }
+        return entry.value
+    }
+    None
 }
 ```
 
@@ -641,10 +751,11 @@ public func get(key: Array<Byte>): ?Array<Byte> {
 
 **要点**：
 - 找到 tombstone（`entry.value == None`）立即返回 `None`，不需要继续查找更底层
+- 找到过期数据（`entry.expireAt <= now`）立即返回 `None`，视为不存在
 - `ConcurrentSkipListMap.get` 无锁，不影响并发写
 - SSTable 查询利用 BloomFilter 快速排除
 
-### 5.6 prefix — 前缀遍历
+### 5.8 prefix — 前缀遍历
 
 ```cj
 public func prefix(prefix: Array<Byte>): Iterator<(Array<Byte>, Array<Byte>)> {
@@ -671,7 +782,7 @@ class PrefixIterator <: Iterator<(Array<Byte>, Array<Byte>)> {
         // 1. 从堆顶取最小 key
         // 2. 如果 key 不以 prefix 开头，结束迭代
         // 3. 合并相同 key 的多个版本，取最高 sequence
-        // 4. 如果是 tombstone，跳过；否则返回 (key, value)
+        // 4. 如果是 tombstone，跳过；如果已过期，跳过；否则返回 (key, value)
         // 5. 推进对应迭代器，重新入堆
     }
 }
@@ -686,7 +797,7 @@ class PrefixIterator <: Iterator<(Array<Byte>, Array<Byte>)> {
 - `tailer(min)` 利用跳表索引，O(log n) 定位起始位置
 - 前缀遍历只需扫描 `[prefix, prefix+1)` 范围内的数据
 
-### 5.7 close — 关闭存储
+### 5.9 close — 关闭存储
 
 ```cj
 public func close(): Unit {
@@ -732,7 +843,7 @@ public func close(): Unit {
 ```
 1. 选择输入 SSTable（本层 + 下一层有范围重叠的 SSTable）
 2. 多路归并排序（按 key 合并，高 sequence 优先）
-3. 过滤 tombstone（被删除的 key 不写入新 SSTable）
+3. 过滤 tombstone 和已过期数据（被删除或已过期的 key 不写入新 SSTable）
 4. 写入新的 SSTable 文件（通过 IoUringLockFree 异步写，或 File 同步写）
 5. 原子替换：删除旧 SSTable，添加新 SSTable
 ```
@@ -752,7 +863,7 @@ class Compactor {
         // 3. 写入新 SSTable
         let writer = SSTableWriter(newFilePath, estimatedCount)
         while (let Some((key, entry)) <- merger.next()) {
-            if (entry.value.isSome()) {  // 跳过 tombstone
+            if (entry.value.isSome() && !isExpired(entry)) {  // 跳过 tombstone 和已过期
                 writer.write(key, entry)
             }
         }
@@ -766,7 +877,7 @@ class Compactor {
 
 **要点**：
 - Compaction 在后台线程执行，不阻塞读写
-- 合并时跳过 tombstone（除非该 key 可能在更底层存在，保守策略是只移除确定可清理的 tombstone）
+- 合并时跳过 tombstone 和已过期数据（除非该 key 可能在更底层存在，保守策略是只移除确定可清理的 tombstone；已过期数据可直接丢弃）
 - 新 SSTable 写完后再删除旧的，保证崩溃恢复后数据完整
 - Linux 下使用专属 `IoUringLockFree` 避免与 WAL/刷盘争抢 io_uring 资源
 - 非 Linux 下使用 `std.fs.File` 同步写入
@@ -803,7 +914,7 @@ func recoverWAL(path: Path): MemTable {
             // 逐条读取 WAL 记录（使用 std.fs.File 同步读，恢复是启动时一次性操作）
             while (let Some(record) <- readNextRecord(walFile)) {
                 if (verifyChecksum(record)) {
-                    let entry = EntryValue(record.value, record.sequence)
+                    let entry = EntryValue(record.value, record.sequence, expireAt: record.expireAt)
                     table.add(ByteArray(record.key), entry)
                 } else {
                     break  // checksum 失败，截断后续记录
@@ -836,13 +947,15 @@ func recoverWAL(path: Path): MemTable {
 
 ### 8.1 操作并发矩阵
 
-| 操作 | add | remove | get | prefix | compaction |
-|------|-----|--------|-----|--------|------------|
-| add | ✅无锁 | ✅无锁 | ✅无锁 | ✅无锁 | ✅ |
-| remove | | ✅无锁 | ✅无锁 | ✅无锁 | ✅ |
-| get | | | ✅无锁 | ✅无锁 | ✅ |
-| prefix | | | | ✅无锁 | ✅ |
-| compaction | | | | | 🔒后台 |
+| 操作 | add | add(expire) | ttl | remove | get | prefix | compaction |
+|------|-----|-------------|-----|--------|-----|--------|------------|
+| add | ✅无锁 | ✅无锁 | ✅无锁 | ✅无锁 | ✅无锁 | ✅无锁 | ✅ |
+| add(expire) | | ✅无锁 | ✅无锁 | ✅无锁 | ✅无锁 | ✅无锁 | ✅ |
+| ttl | | | ✅无锁 | ✅无锁 | ✅无锁 | ✅无锁 | ✅ |
+| remove | | | | ✅无锁 | ✅无锁 | ✅无锁 | ✅ |
+| get | | | | | ✅无锁 | ✅无锁 | ✅ |
+| prefix | | | | | | ✅无锁 | ✅ |
+| compaction | | | | | | | 🔒后台 |
 
 ### 8.2 锁使用
 
@@ -852,7 +965,7 @@ func recoverWAL(path: Path): MemTable {
 | LevelManager.levelLocks[n] | SSTable 列表变更 | 毫秒级（Compaction替换） | 不阻塞查询 |
 | ~~WAL.writeLock~~ | ~~WAL 追加顺序性~~ | ~~已去除~~ | `IoUringLockFree` 无锁提交替代 |
 
-**★ add/remove/get 的关键路径完全无锁**：
+**★ add/remove/get/ttl 的关键路径完全无锁**：
 - `ConcurrentSkipListMap` 提供无锁读写
 - `IoUringLockFree` 提供无锁 IO 提交
 - 原方案 WAL 的 `writeLock` 已被 `IoUringLockFree` 的无锁路径替代
@@ -860,8 +973,10 @@ func recoverWAL(path: Path): MemTable {
 ### 8.3 原子性保证
 
 - **add**：WAL append（SQE 提交） + MemTable add（CAS），WAL 先写保证崩溃可恢复
+- **add(expire)**：同 add，expireAt 与 value 原子写入
+- **ttl**：查找当前值 + WAL append + MemTable add，保证过期时间更新原子性
 - **remove**：同 add，写入 tombstone
-- **get**：单次跳表查找 + SSTable 查找，天然原子
+- **get**：单次跳表查找 + 过期检查 + SSTable 查找，天然原子
 
 ---
 
@@ -872,7 +987,8 @@ func recoverWAL(path: Path): MemTable {
 1. **序列号是核心**：所有操作依赖全局单调递增序列号决定数据新旧，`AtomicInt64` 分配
 2. **WAL 先于 MemTable**：保证崩溃恢复时 WAL 包含所有已确认写入
 3. **tombstone 不可丢弃**：除非 Compaction 确认更底层无此 key，否则保留 tombstone
-4. **SSTable 不可变**：一旦创建不再修改，删除靠 tombstone，物理删除靠 Compaction
+4. **过期检查在 get 时惰性执行**：不主动清理过期数据，get/prefix 遇到过期数据视为不存在，Compaction 时清理已过期记录
+5. **SSTable 不可变**：一旦创建不再修改，删除靠 tombstone，物理删除靠 Compaction
 5. **64MB 文件上限**：SSTableWriter 跟踪写入大小，达到 64MB 关闭当前文件
 6. **prefix 遍历范围**：利用 `tailer(minKey)` 定位起始点，遍历到 key 不以 prefix 开头为止
 7. **IoUringLockFree 无锁路径**：WAL 写入、SSTable 刷盘、Compaction 写入全部通过 `IoUringLockFree` 提交，消除 SQ 锁争用
@@ -882,6 +998,7 @@ func recoverWAL(path: Path): MemTable {
 
 | 问题 | 对策 |
 |------|------|
+| 过期数据占用存储空间 | 惰性过期 + Compaction 清理，过期数据在 Compaction 时丢弃 |
 | io_uring 异步写未落盘时崩溃 | WAL 定期 fsync，可配置同步策略 |
 | ConcurrentSkipListMap 弱一致 size | byteCount 是近似值，不影响正确性 |
 | L0 SSTable 范围重叠，查询慢 | L0 数量阈值触发 Compaction |
@@ -903,6 +1020,7 @@ func recoverWAL(path: Path): MemTable {
 5. **条件编译**：io_uring 相关代码需 `@When[os == "Linux"]`，非 Linux 代码需 `@When[os != "Linux"]`
 6. **泛型不可协变/逆变**：`ConcurrentSkipListMap<ByteArray, EntryValue>` 类型精确匹配
 7. **CompletionCallback 是 open class**：自定义 callback 需继承 `CompletionCallback` 并覆写 `onComplete`
+8. **Duration 转纳秒**：`expire.toNanoseconds()` 返回 Int64，需注意溢出；`DateTime.now().toUnixTimestamp()` 也为纳秒级 Int64
 
 ### 9.4 性能优化方向（后续迭代）
 
@@ -915,6 +1033,7 @@ func recoverWAL(path: Path): MemTable {
 7. **IoUringPool 多 ring**：为 SSTable 读取使用 IoUringPool 轮询多 ring 实例
 8. **Registered Buffers**：IOUringStoreIOStream 启用注册缓冲区模式，减少内核地址验证开销
 9. **IOUringBufferRing**：使用 Provided Buffer Ring 替代手动缓冲区管理
+10. **主动过期清理**：后台线程定期扫描 MemTable 和 SSTable 清理过期数据，减少存储占用
 
 ---
 

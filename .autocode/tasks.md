@@ -645,6 +645,8 @@ cd f_store
      atExit(this.close)
      ```
    - `public func add(key: Array<Byte>, value: Array<Byte>): ?Array<Byte>`
+   - `public func add(key: Array<Byte>, value: Array<Byte>, expire: Duration): ?Array<Byte>`
+   - `public func ttl(key: Array<Byte>, expire: Duration): Unit`
    - `public func remove(key: Array<Byte>): ?Array<Byte>`
    - `public func get(key: Array<Byte>): ?Array<Byte>`
    - `public func isClosed(): Bool`
@@ -925,7 +927,7 @@ cd f_store
 ### 注意事项
 - 仓颉测试使用 `@Test + @TestCase + @Assert/@Expect`
 - 测试必须在模块目录下执行: `cjpm test --no-capture-output --show-all-output`
-- 需指定 timeout: `cjpm test --timeout 300000`
+- 需指定 timeout: `timeout 180 cjpm test --no-capture-output --show-all-output`
 - io_uring 相关代码需在 Linux 上运行
 - 测试创建临时目录，结束后清理
 
