@@ -594,6 +594,7 @@ public func add(key: Array<Byte>, value: Array<Byte>): ?Array<Byte> {
 - `ConcurrentSkipListMap.add` 无锁 CAS
 - `maybeFlush` 检查是近似判断，多线程可能同时触发但 swap 有 flushLock 保护
 
+```cj
 public func add(key: Array<Byte>, value: Array<Byte>, expire: Duration): ?Array<Byte> {
     if (closed.load()) { throw StoreClosedException() }
     let keyBytes = ByteArray(key)
