@@ -144,22 +144,21 @@ public class IoUringPromise<T> <: CompletionSlot {
      * 由 CQE 收割线程调用。使用 resultExtractor 从 CQE 提取结果值。
      */
     public func complete(cqe: CPointer<IOUringCQE>): Unit {
-        mutex.lock()
-        if (completed || cancelled) {
-            mutex.unlock()
-            return
+        synchronized(mutex){
+            if (completed || cancelled) {
+                return
+            }
+            try {
+                let result = resultExtractor(cqe)
+                this.value = Some(result)
+                this.completed = true
+                cond.notifyAll()
+            } catch (e: Exception) {
+                this.error = Some(IoUringException("Result extraction failed", e))
+                this.completed = true
+                cond.notifyAll()
+            }
         }
-        try {
-            let result = resultExtractor(cqe)
-            this.value = Some(result)
-            this.completed = true
-            cond.notifyAll()
-        } catch (e: Exception) {
-            this.error = Some(IoUringException("Result extraction failed", e))
-            this.completed = true
-            cond.notifyAll()
-        }
-        mutex.unlock()
     }
 
     /**
@@ -168,29 +167,27 @@ public class IoUringPromise<T> <: CompletionSlot {
      * 当 CQE 的 res 为负值时调用。
      */
     public func completeWithError(err: IoUringException): Unit {
-        mutex.lock()
-        if (completed || cancelled) {
-            mutex.unlock()
-            return
+        synchronized(mutex){
+            if (completed || cancelled) {
+                return
+            }
+            this.error = Some(err)
+            this.completed = true
+            cond.notifyAll()
         }
-        this.error = Some(err)
-        this.completed = true
-        cond.notifyAll()
-        mutex.unlock()
     }
 
     /**
      * 取消此 Promise
      */
     public func cancel(): Unit {
-        mutex.lock()
-        if (completed) {
-            mutex.unlock()
-            return
+        synchronized(mutex){
+            if (completed) {
+                return
+            }
+            this.cancelled = true
+            cond.notifyAll()
         }
-        this.cancelled = true
-        cond.notifyAll()
-        mutex.unlock()
     }
 
     /**
@@ -199,9 +196,9 @@ public class IoUringPromise<T> <: CompletionSlot {
      * @throws IoUringException 如果操作被取消或失败
      */
     public func awaitResult(): T {
-        mutex.lock()
-        cond.waitUntil({ => completed || cancelled })
-        mutex.unlock()
+        synchronized(mutex){
+            cond.waitUntil({ => completed || cancelled })
+        }
 
         if (cancelled) {
             throw IoUringException("Operation cancelled (slotId=${slotId})")
@@ -219,9 +216,9 @@ public class IoUringPromise<T> <: CompletionSlot {
      * @throws IoUringException 如果操作被取消或失败
      */
     public func awaitResult(timeout!: Duration): ?T {
-        mutex.lock()
-        let timedOut = !cond.waitUntil({ => completed || cancelled }, timeout: timeout)
-        mutex.unlock()
+        let timedOut = synchronized(mutex){
+            !cond.waitUntil({ => completed || cancelled }, timeout: timeout)
+        }
 
         if (timedOut) {
             return None
@@ -240,30 +237,27 @@ public class IoUringPromise<T> <: CompletionSlot {
      * @return 如果已完成返回结果，否则返回 None
      */
     public func tryGetResult(): ?T {
-        mutex.lock()
-        let result = if (completed) { value } else { None<T> }
-        mutex.unlock()
-        result
+        synchronized(mutex){
+            if (completed) { value } else { None<T> }
+        }
     }
 
     /**
      * 是否已完成
      */
     public func isCompleted(): Bool {
-        mutex.lock()
-        let result = completed
-        mutex.unlock()
-        result
+        synchronized(mutex){
+            completed
+        }
     }
 
     /**
      * 是否已取消
      */
     public func isCancelled(): Bool {
-        mutex.lock()
-        let result = cancelled
-        mutex.unlock()
-        result
+        synchronized(mutex){
+            cancelled
+        }
     }
 }
 
