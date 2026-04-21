@@ -114,7 +114,7 @@ public class ConcurrentSkipListMap<K, V> <: ConcurrentMap<K, V> & Collection<(K,
     var headRef: AtomicReference<Node<K, V>>
     var size_: AtomicInt64
     var epoch: AtomicInt64   // 代际计数器，clear() 时递增，用于检测并发修改
-    private static let seedGen = AtomicInt64((DateTime.now() - DateTime.UnixEpoch).toNanoseconds())   // 全局种子生成器
+    private static let seedGen = AtomicInt64(DateTime.now().toUnixTimeStamp().toNanoseconds())   // 全局种子生成器
 
     private static func compare(a: ?K, b: ?K): Ordering {
         match((a, b)){
