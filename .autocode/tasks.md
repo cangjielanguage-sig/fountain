@@ -24,7 +24,8 @@ cd f_store
 2. **EntryValue** — `public class EntryValue`
    - `public let value: ?Array<Byte>` — None 表示 tombstone
    - `public let sequence: Int64` — 全局单调递增序列号
-   - `public init(value: ?Array<Byte>, sequence: Int64)`
+   - `public let expireAt: ?Int64` — 过期时间戳（纳秒），None = 永不过期
+   - `public init(value: ?Array<Byte>, sequence: Int64, expireAt!: ?Int64 = None)`
    - 不可变对象，所有字段 `let`
 
 3. **StoreClosedException** — `public class StoreClosedException <: Exception`
@@ -33,107 +34,53 @@ cd f_store
 ### 测试
 - ByteArray 比较逻辑：空数组、前缀关系、不等字节、相等
 - ByteArray 作为 ConcurrentSkipListMap key 的正确性
-- EntryValue 构造和字段访问
+- EntryValue 构造和字段访问（含 expireAt）
 
 ---
 
-## Step 2: StoreIOStream — IO 抽象层
+## Step 2: IO 工厂函数 — createStoreStream
 
-**文件**: `src/StoreIO.cj`
+**文件**: `src/Store.cj`（追加）
 **包**: `fountain::f_store`
 
 ### 开发内容
-1. **StoreIOStream** — `interface StoreIOStream <: Resource`
-   - `func write(buffer: Array<Byte>): Unit`
-   - `func read(buffer: Array<Byte>): Int64`
-   - `func sync(): Unit`
-   - `func close(): Unit`
-   - `func isClosed(): Bool`
-
-2. **IOUringStoreIOStream** — `@When[os == "Linux"] class IOUringStoreIOStream <: StoreIOStream`
-   - `let file: File` — 保持 File 存活
-   - `let fd: Int32` — 文件描述符
-   - `let lf: IoUringLockFree` — 无锁并发提交
-   - `let ring: IoUring` — 底层 ring
-   - `let stopping: AtomicBool` — 控制收割线程停止
-   - `var reaperFuture: ?Future<Unit>` — 后台收割线程
-   - `var writeOffset: UInt64` — 写偏移量
-   - `var readOffset: UInt64` — 读偏移量
-
-   - `init(path: String, mode: OpenMode, entries!: UInt32 = 64)`
-     - 打开 File → 获取 fd (`file.fileDescriptor.fileHandle`)
-     - 创建 IoUring(entries) → 创建 IoUringLockFree(ring)
-     - 启动后台收割线程: `spawn { while(!stopping.load()) lf.waitAndReap() }`
-
-   - `func write(buffer: Array<Byte>): Unit`
-     - 通过 IoUringLockFree 无锁提交写 SQE：
-     ```
-     slotId = lf.allocSlot()
-     sqe = lf.getSQE(slotId)
-     ioUringPrepWrite(sqe, fd, bufPtr, len, writeOffset)
-     lf.setCallback(slotId, CompletionCallback.None)  // WAL/SSTable写不需要等完成
-     lf.encodeUserData(slotId, gen)
-     ioUringSQESetData64(sqe, ud)
-     lf.commitSlot(slotId)
-     lf.flush()
-     writeOffset += len
-     ```
-
-   - `func read(buffer: Array<Byte>): Int64`
-     - 同步读取：直接操作 ring
-     ```
-     sqe = ring.getSQE()
-     ioUringPrepRead(sqe, fd, bufPtr, len, readOffset)
-     ioUringSQESetData64(sqe, 1)
-     ring.submit()
-     cqe = ring.waitCQE()
-     result = ioUringCQEGetRes(cqe)
-     ring.cqeSeen(cqe)
-     readOffset += result
-     ```
-
-   - `func sync(): Unit`
-     - `ring.getSQE() → ioUringPrepFsync(sqe, fd, 0) → submit → waitCQE`
-
-   - `func close(): Unit`
-     - `stopping.store(true) → 提交 NOP 唤醒收割线程 → reaperFuture.get() → ring.close() → file.close()`
-
-3. **FileStoreIOStream** — `@When[os != "Linux"] class FileStoreIOStream <: StoreIOStream`
-   - `let file: File` — std.fs.File
-   - `init(path: String, mode: OpenMode)` — `File(path, mode)`
-   - `func write(buffer)` → `file.write(buffer)`
-   - `func read(buffer)` → `file.read(buffer)`
-   - `func sync()` → `file.flush()`
-   - `func close()` → `file.close()`
-   - `func isClosed()` → `file.isClosed()`
-
-4. **createStoreIOStream** — 工厂函数
+1. **createStoreStream** — 工厂函数，返回 `IOStream`
    ```cj
    @When[os == "Linux"]
-   func createStoreIOStream(path: String, mode: OpenMode, entries!: UInt32 = 64): StoreIOStream {
-       IOUringStoreIOStream(path, mode, entries: entries)
+   public func createStoreStream(path: String, mode: OpenMode, entries!: UInt32 = 64): IOStream {
+       let file = File(path, mode)
+       IOUringStream(Int32(file.fileDescriptor.fileHandle), entries)
    }
    @When[os != "Linux"]
-   func createStoreIOStream(path: String, mode: OpenMode, entries!: UInt32 = 64): StoreIOStream {
-       FileStoreIOStream(path, mode)
+   public func createStoreStream(path: String, mode: OpenMode, entries!: UInt32 = 64): IOStream {
+       File(path, mode)  // File 本身实现 IOStream
    }
    ```
 
+### 设计说明
+- 直接使用 `fountain::f_io.IOUringStream`（双 ring 架构：写 ring 异步 + 读 ring 同步），不再自定义 IO 封装
+- `IOUringStream` 已实现 `IOStream & Resource`，提供 `write`/`read`/`flush`/`close`/`isClosed`
+- 非 Linux 下 `std.fs.File` 已实现 `IOStream & Seekable & Resource`，直接使用
+- 返回类型统一为 `IOStream`，调用方不关心底层实现
+
+### IOUringStream 能力映射
+| IOUringStream 方法 | f_store 用途 |
+|-------------------|-------------|
+| `write()` — 异步提交写 SQE，后台收割线程处理 CQE | WAL 追加、SSTable 刷盘、Compaction 写入 |
+| `read()` — 同步 submit + waitCQE | SSTable 点查询 |
+| `flush()` — `IOSQE_IO_DRAIN` + fsync + `LockFreePromise` 等待 | WAL 定期 fsync、SSTable 写完 fsync |
+| `close()` — 停止收割线程 + 关闭双 ring | 关闭 WAL/SSTable 文件 |
+
 ### 注意事项
-- **File 对象必须保持存活**，否则 fd 失效
-- **fd 获取**: `Int32(file.fileDescriptor.fileHandle)` — `fileHandle` 是 `IntNative`，需要转为 `Int32`
-- `IoUringLockFree` 构造: `IoUringLockFree(ring)` — 接管 ring 的所有权
-- 后台收割线程: `lf.waitAndReap()` 循环收割 CQE
-- `CompletionCallback.None` 是预定义的空回调，用于不需要等完成的写操作
-- **import (Linux)**: `fountain::f_io.uring.*`, `fountain::f_io.uring.lockfree.*`
+- **File 对象必须保持存活**，否则 fd 失效。Linux 下 `createStoreStream` 内部创建 File 后将其引用传递给 IOUringStream，但 **IOUringStream 只持有 fd 不持有 File**，调用方必须保持 File 存活
+- `flush()` 语义：Linux 下执行 fsync；非 Linux 下 `File.flush()` 为 no-op
+- **import (Linux)**: `fountain::f_io.IOUringStream`
 - **import (非Linux)**: `std.fs.*`, `std.io.*`
 
 ### 测试
-- Linux: 创建 IOUringStoreIOStream → 写入数据 → 读取验证
-- Linux: write 后立即返回（不等 IO 完成）
-- 非 Linux: 创建 FileStoreIOStream → 写入 → 读取验证
-- sync 后数据可从磁盘恢复
-- close 后 isClosed 返回 true
+- Linux: createStoreStream → write → read → flush → close，数据正确
+- 非 Linux: createStoreStream → write → read → flush → close，数据正确
+- 验证 flush 后数据持久化
 - **测试也需条件编译**: `@When[os == "Linux"]` 包裹 io_uring 相关测试
 
 ---
@@ -212,15 +159,17 @@ cd f_store
    - `let sequence: Int64` — 序列号
    - `let key: Array<Byte>` — 键
    - `let value: ?Array<Byte>` — 值，None 表示 tombstone
+   - `let expireAt: ?Int64` — 过期时间戳（纳秒），None = 永不过期
    - `func encode(): Array<Byte>` — 编码为字节数组
    - `static func decode(bytes: Array<Byte>): ?WALRecord` — 解码，checksum 不匹配返回 None
 
 2. **编码格式**（小端序）:
    ```
-   checksum(4) + sequence(8) + key_len(8) + value_len(8) + key_bytes(key_len) + value_bytes(value_len)
+   checksum(4) + sequence(8) + key_len(8) + value_len(8) + expire_at(8) + key_bytes(key_len) + value_bytes(value_len)
    ```
    - value_len = 0 表示 tombstone
-   - checksum 覆盖 sequence + key_len + value_len + key_bytes + value_bytes
+   - expire_at = 0 表示永不过期，非零为纳秒级过期时间戳
+   - checksum 覆盖 sequence + key_len + value_len + expire_at + key_bytes + value_bytes
 
 3. **WALRecordCodec** — 编解码工具类
    - `static func computeChecksum(data: Array<Byte>): UInt32` — CRC32
@@ -232,10 +181,13 @@ cd f_store
 - Int64 → 字节数组需手动移位拆分（仓颉无 ByteBuffer）
 - 解码时需校验 bytes 长度是否足够，不够则返回 None
 - `?Array<Byte>` 序列化时 value_len=0 表示 None
+- `?Int64` 序列化时 expire_at=0 表示 None
 
 ### 测试
 - 编码→解码往返一致性
 - tombstone（value=None）编解码
+- 含 expireAt 的编解码
+- expireAt=None 时 expire_at=0
 - 篡改 checksum 后解码返回 None
 - 边界：空 key、空 value（非 None）、大 key+大 value
 
@@ -248,47 +200,33 @@ cd f_store
 
 ### 开发内容
 1. **WAL (Linux)** — `@When[os == "Linux"] class WAL <: Resource`
-   - `private let file: File` — 保持 File 存活
-   - `private let fd: Int32`
-   - `private let lf: IoUringLockFree` — 无锁并发提交（替代原 writeLock + IOUringStream）
-   - `private let ring: IoUring` — 底层 ring（用于 fsync 等直接操作）
-   - `private let stopping: AtomicBool` — 控制收割线程
-   - `private var reaperFuture: ?Future<Unit>` — 后台收割线程
+   - `private let file: File` — 保持 File 存活（fd 依赖它）
+   - `private let stream: IOUringStream` — 双 ring：写 ring 异步 + 读 ring 同步
    - `let sequence: AtomicInt64` — 当前序列号
-   - `let appendCount: AtomicInt64` — 追加计数（用于定期 fsync）
+   - `let appendCount: AtomicInt64` — 追加计数（用于定期 flush）
    - `let closed: AtomicBool`
-   - `private let syncInterval: Int64` — 每 N 次 append 执行一次 fsync（默认 100）
-   - `private var writeOffset: UInt64` — 写偏移量
+   - `private let syncInterval: Int64` — 每 N 次 append 执行一次 flush（默认 100）
 
    - `init(path: String, startSequence!: Int64 = 0)`
-     - 创建目录 → File(path, OpenMode.ReadWrite) → 获取 fd
-     - IoUring(64) → IoUringLockFree(ring)
-     - 启动收割线程: `spawn { while(!stopping) lf.waitAndReap() }`
+     - 创建目录 → File(path, OpenMode.ReadWrite) → IOUringStream(Int32(file.fileDescriptor.fileHandle), 64)
 
-   - `func append(key: Array<Byte>, value: ?Array<Byte>): Int64`
+   - `func append(key: Array<Byte>, value: ?Array<Byte>, expireAt!: ?Int64 = None): Int64`
      ```
      seq = sequence.incrFetch()
-     record = WALRecord(seq, key, value)
+     record = WALRecord(seq, key, value, expireAt)
      encoded = record.encode()
-     slotId = lf.allocSlot()
-     sqe = lf.getSQE(slotId)
-     ioUringPrepWrite(sqe, fd, bufPtr, encoded.size, writeOffset)
-     gen = lf.setCallback(slotId, CompletionCallback.None)  // ★ 不等完成
-     ud = lf.encodeUserData(slotId, gen)
-     ioUringSQESetData64(sqe, ud)
-     lf.commitSlot(slotId)
-     lf.flush()
-     writeOffset += UInt64(encoded.size)
+     stream.write(encoded)  // ★ 异步提交写 SQE，立即返回
      appendCount.incrFetch()
      if (appendCount % syncInterval == 0) { sync() }
      return seq
      ```
 
    - `func sync(): Unit`
-     - `ring.getSQE() → ioUringPrepFsync(sqe, fd, 0) → ioUringSQESetData64(sqe, 0) → ring.submit() → ring.waitCQE() → ring.cqeSeen(cqe)`
+     - `stream.flush()`  // IOSQE_IO_DRAIN + fsync，等所有先前写完成
 
    - `func close(): Unit`
-     - `stopping.store(true) → NOP 唤醒收割线程 → reaperFuture.get() → ring.close() → file.close()`
+     - `stream.close()`  // 停止收割线程 + 关闭双 ring
+     - `file.close()`
 
    - `func isClosed(): Bool`
 
@@ -300,28 +238,27 @@ cd f_store
    - `private let syncInterval: Int64`
 
    - `init(path: String, startSequence!: Int64 = 0)`
-   - `func append(key, value): Int64` — 编码 → `file.write(encoded)` 同步写 → 定期 `file.flush()`
+   - `func append(key: Array<Byte>, value: ?Array<Byte>, expireAt!: ?Int64 = None): Int64` — 编码 → `file.write(encoded)` 同步写 → 定期 `file.flush()`
    - `func sync(): Unit` — `file.flush()`
    - `func close(): Unit` — `file.close()`
    - `func isClosed(): Bool`
 
-### 关键改进（相比原方案）
-- **去掉了 writeLock**：原方案用 `Mutex writeLock` 保护 WAL 追加顺序，现通过 `IoUringLockFree` 无锁路径替代
-- `IoUringLockFree.allocSlot → getSQE → commitSlot → flush` 全程无锁
-- writeOffset 由 append 内部维护，flush 时批量提交保证顺序
+### 关键设计
+- **直接使用 IOUringStream**，不再自定义 IoUringLockFree + IoUring + 收割线程
+- IOUringStream 内部 `writeMutex` 保证 SQE 提交顺序，WAL 无需额外锁
+- `stream.flush()` 执行 `IOSQE_IO_DRAIN` + fsync，语义正确（等所有先前写完成后再 fsync）
 - ★ **append 提交 SQE 后立即返回**，不等 IO 落盘完成
 
 ### 注意事项
 - **File 对象必须保持存活**，否则 fd 失效
-- `CompletionCallback.None` 表示不需要回调通知（写完即可丢弃 CQE）
-- 收割线程通过 `lf.waitAndReap()` 处理 CQE 并释放 slot
-- **fsync 实现需直接操作 ring**（不用 lf，因为 fsync 需要同步等待）
+- IOUringStream 构造只接收 fd，不持有 File 引用，WAL 类必须保持 file 字段
 - **条件编译**: Linux 和非 Linux 两个版本
+- **import (Linux)**: `fountain::f_io.IOUringStream`
 
 ### 测试
 - Linux: 写入多条记录 → 读取文件验证内容正确
 - 非 Linux: 同上
-- fsync 后文件大小不为 0
+- flush 后文件大小不为 0
 - close 后 WAL 资源释放
 - ★ 验证 append 立即返回（不等 IO 完成）
 
@@ -341,8 +278,8 @@ cd f_store
 2. **readAll 流程**:
    ```
    打开文件 → 循环:
-     读取 checksum(4) + sequence(8) + key_len(8) + value_len(8) = 28 bytes
-     如果读到 EOF 或不足 28 bytes → 停止
+     读取 checksum(4) + sequence(8) + key_len(8) + value_len(8) + expire_at(8) = 36 bytes
+     如果读到 EOF 或不足 36 bytes → 停止
      读取 key_bytes(key_len) + value_bytes(value_len)
      如果不足 → 停止（截断的记录）
      验证 checksum → 不匹配则停止（截断）
@@ -354,6 +291,7 @@ cd f_store
    ```
    扫描 {path}/wal/ 目录 → 按 sequence_start 排序
    对每个 WAL 文件: readAll → 写入 MemTable
+     EntryValue(record.value, record.sequence, expireAt: record.expireAt)
    返回 MemTable
    ```
 
@@ -367,6 +305,7 @@ cd f_store
 - 写入 N 条记录 → 模拟截断（删除文件末尾几个字节）→ 恢复得到前 M 条完整记录
 - 空 WAL 文件恢复得到空 MemTable
 - 多个 WAL 文件恢复顺序正确
+- 含 expireAt 的记录恢复正确
 
 ---
 
@@ -390,7 +329,8 @@ cd f_store
    - `let firstKey: ByteArray` — 该 Data Block 的最小 key
 
 3. **SSTableWriter** — `class SSTableWriter`
-   - `let stream: StoreIOStream` — 平台适配 IO 流（替代原 IOUringStream）
+   - `let file: File` — 保持 File 存活（Linux: fd 依赖它）
+   - `let stream: IOStream` — Linux: IOUringStream，非 Linux: File
    - `let bloomFilter: BloomFilter` — 刷盘时同步构建
    - `let indexEntries: ArrayList<IndexEntry>`
    - `var currentOffset: Int64`
@@ -400,18 +340,18 @@ cd f_store
    - `let dataBlockSizeThreshold: Int64` — 单个 Data Block 大小阈值（默认 4KB）
    - `var firstKeyOfBlock: ?ByteArray`
 
-   - `init(path: String, estimatedCount: Int64)` — `createStoreIOStream(path, OpenMode.ReadWrite)` + BloomFilter
+   - `init(path: String, estimatedCount: Int64)` — `createStoreStream(path, OpenMode.ReadWrite)` + BloomFilter
    - `func write(key: ByteArray, entry: EntryValue): Unit` — 写入一条记录
-   - `func finish(): SSTableMetadata` — 写 Index+Bloom+Footer，sync，关闭
+   - `func finish(): SSTableMetadata` — 写 Index+Bloom+Footer，flush，关闭
    - `func isFull(): Bool` — fileSize >= 64MB
 
 4. **write 流程**:
    ```
    如果 dataBlockSize == 0（新块开始）:
      记录 IndexEntry(currentOffset, key)
-   编码: key_len(8) + value_len(8) + sequence(8) + key_bytes + value_bytes
+   编码: key_len(8) + value_len(8) + sequence(8) + expire_at(8) + key_bytes + value_bytes
    bloomFilter.add(key.bytes)
-   stream.write(encoded)  // Linux: IoUringLockFree 异步写；非 Linux: File 同步写
+   stream.write(encoded)  // Linux: IOUringStream 异步写；非 Linux: File 同步写
    更新 currentOffset, fileSize, dataBlockSize, entryCount
    如果 dataBlockSize >= threshold: dataBlockSize = 0
    ```
@@ -419,20 +359,22 @@ cd f_store
 5. **finish 流程**:
    ```
    写 Index Block + Bloom Filter Block + Footer (固定 48 bytes)
-   stream.sync()  // Linux: ioUringPrepFsync; 非 Linux: file.flush()
+   stream.flush()  // Linux: IOSQE_IO_DRAIN + fsync; 非 Linux: file.flush()
    stream.close()
    ```
 
-### 关键改进
-- **使用 StoreIOStream 抽象层**，不再直接使用 `IOUringStream`
-- SSTableWriter 不关心底层是 io_uring 还是 File，统一调用 `stream.write() / stream.sync() / stream.close()`
-- Linux 下通过 `IOUringStoreIOStream` 实现异步无锁写
+### 设计说明
+- **直接使用 IOStream**（通过 `createStoreStream` 工厂创建），SSTableWriter 不关心底层是 IOUringStream 还是 File
+- Linux 下通过 IOUringStream 实现异步写（写 ring 异步提交 + 后台收割线程）
+- `stream.flush()` 替代原来的 `stream.sync()`，语义一致
 
 ### 注意事项
 - **64MB 上限**: `MAX_SSTABLE_SIZE = 64 * 1024 * 1024`
 - Data Block 按 4KB 切分，每个块对应一个 IndexEntry
 - **BloomFilter 临时方案**: finish 时只序列化 n/p/seeds 到 Bloom Filter Block，bitset 启动时重建
 - value_len = 0 表示 tombstone，与 WAL 格式一致
+- expire_at = 0 表示永不过期，与 WAL 格式一致
+- **File 对象必须保持存活**（Linux 下 fd 依赖它），SSTableWriter 持有 file 字段
 
 ### 测试
 - 写入若干条记录 → finish → 文件存在且大小合理
@@ -451,7 +393,7 @@ cd f_store
    - `let metadata: SSTableMetadata`
    - `let bloomFilter: BloomFilter` — 从文件加载或重建
    - `let indexEntries: ArrayList<IndexEntry>` — Index Block 缓存在内存
-   - `let stream: StoreIOStream` — 平台适配 IO 流（替代原 IOUringStream）
+   - `let stream: IOStream` — Linux: IOUringStream，非 Linux: File
 
    - `static func open(path: String): SSTableReader` — 打开文件，读取 Footer，加载 Index 和 BloomFilter
    - `func get(key: ByteArray): ?EntryValue` — 点查询
@@ -461,7 +403,7 @@ cd f_store
 
 2. **open 流程**:
    ```
-   stream = createStoreIOStream(path, OpenMode.Read)
+   stream = createStoreStream(path, OpenMode.Read)
    读取 Footer (最后 48 bytes):
      验证 magic → 解析 index_offset, index_size, bloom_offset, bloom_size, entry_count
    读取 Index Block → 解码为 ArrayList<IndexEntry>
@@ -480,16 +422,16 @@ cd f_store
 
 4. **Data Block 读取**:
    - 通过 `stream.read(buffer)` 统一接口
-   - Linux: IOUringStoreIOStream 内部 submit + waitCQE（同步读）
-   - 非 Linux: FileStoreIOStream 内部 file.read（同步读）
+   - Linux: IOUringStream 内部读 ring 的 submit + waitCQE（同步读）
+   - 非 Linux: File.read（同步读）
    - 需先 seek 到目标偏移（设置 `stream.readOffset`）
 
-### 关键改进
-- **使用 StoreIOStream 抽象层**，SSTableReader 不关心底层实现
-- 读取路径统一为同步语义（无论底层是 io_uring 还是 File）
+### 设计说明
+- **直接使用 IOStream**（通过 `createStoreStream` 工厂创建），SSTableReader 不关心底层实现
+- 读取路径统一为同步语义（无论底层是 IOUringStream 还是 File）
 
 ### 注意事项
-- StoreIOStream 需暴露 `readOffset` 属性用于 seek
+- IOUringStream 需暴露 `readOffset` 属性用于 seek（IOUringStream 已有此字段）
 - BloomFilter 重建的临时方案增加了启动时间，后续可优化
 - 二分查找 IndexEntry 时，`firstKey <= key` 用 `compare` 判断
 
@@ -523,8 +465,8 @@ cd f_store
    - `static func loadAll(sstDir: String): ArrayList<SSTableFile>` — 扫描目录加载所有 SSTable
 
 ### 注意事项
-- SSTableFile 持有 StoreIOStream，需在 close 时正确释放
-- 每个 SSTableFile 打开一个 StoreIOStream 实例
+- SSTableFile 持有 IOStream，需在 close 时正确释放
+- 每个 SSTableFile 打开一个 IOStream 实例
 - 文件名解析需容错：不符合命名规则的文件跳过
 
 ### 测试
@@ -555,13 +497,15 @@ cd f_store
    - `func shouldCompact(level: Int64): Bool`
    - `func closeAll(): Unit`
 
-2. **get 查询逻辑**:
+2. **get 查询逻辑**（含过期检查）:
    ```
    for level in 0..levelCount:
      if level == 0: 遍历所有 L0 SSTable
      else: 二分查找范围匹配的 SSTable
-     找到 tombstone → 返回 None
-     找到正常值 → 返回
+     找到 entry:
+       if entry.expireAt != None && entry.expireAt <= now: 返回 None（已过期）
+       if entry.value == None: 返回 None（tombstone）
+       else: 返回 entry.value
    返回 None
    ```
 
@@ -573,6 +517,7 @@ cd f_store
 - 加载多个 L0 SSTable → get 在所有 L0 文件中查找
 - addSSTable 后 shouldCompact 返回 true
 - get 的优先级：L0 > L1 > L2
+- 过期数据 get 返回 None
 
 ---
 
@@ -594,9 +539,9 @@ cd f_store
 2. **刷盘流程**:
    ```
    遍历 memTable.iterator() →
-     writer.write(key, entry) →  // Linux: IoUringLockFree 异步写
+     writer.write(key, entry) →  // Linux: IOUringStream 异步写
      if writer.isFull():
-       metadata = writer.finish()  // 内含 stream.sync()
+       metadata = writer.finish()  // 内含 stream.flush()
        加入结果列表
        创建新 writer
    → 最后一个 writer.finish()
@@ -611,7 +556,7 @@ cd f_store
 ### 注意事项
 - MemTable 遍历期间可能有并发读取，但 MemTable 是 immutable（只读），无冲突
 - 超过 64MB 时需创建多个 SSTable 文件
-- **StoreIOStream 生命周期**: SSTableWriter 关闭时 stream 才关闭
+- **IOStream 生命周期**: SSTableWriter 关闭时 stream 才关闭
 
 ### 测试
 - 小 MemTable（< 64MB）刷盘生成 1 个 SSTable → 内容正确
@@ -620,7 +565,7 @@ cd f_store
 
 ---
 
-## Step 13: Store 主类 — 初始化与 add/remove/get
+## Step 13: Store 主类 — 初始化 + add/remove/get/add(expire)/ttl
 
 **文件**: `src/Store.cj`（追加）
 **包**: `fountain::f_store`
@@ -641,7 +586,7 @@ cd f_store
      创建目录 {path}/wal/ 和 {path}/sst/
      从 WAL 恢复 MemTable → 设为 active
      加载已有 SSTable → LevelManager.loadExisting()
-     创建新 WAL 文件（Linux: IoUringLockFree，非 Linux: File）
+     创建新 WAL 文件（Linux: IOUringStream，非 Linux: File）
      atExit(this.close)
      ```
    - `public func add(key: Array<Byte>, value: Array<Byte>): ?Array<Byte>`
@@ -651,18 +596,46 @@ cd f_store
    - `public func get(key: Array<Byte>): ?Array<Byte>`
    - `public func isClosed(): Bool`
 
-2. **add 实现**:
+2. **add(key, value) 实现**:
    ```
    检查 closed →
-   seq = wal.append(key, value) →  // Linux: SQE提交后立即返回；非 Linux: 同步写完返回
+   seq = wal.append(key, value) →
    entry = EntryValue(value, seq) →
-   old = memTableManager.getActive().add(ByteArray(key), entry) →  // CAS 无锁
+   old = memTableManager.getActive().add(ByteArray(key), entry) →
    maybeFlush() →
    return old?.value
    ★ add 在 WAL 写入 + MemTable 修改后即可返回
    ```
 
-3. **remove 实现**:
+3. **add(key, value, expire) 实现**:
+   ```
+   检查 closed →
+   expireAt = DateTime.now().toUnixTimestamp() + expire.toNanoseconds()
+   seq = wal.append(key, value, expireAt: expireAt) →
+   entry = EntryValue(value, seq, expireAt: expireAt) →
+   old = memTableManager.getActive().add(ByteArray(key), entry) →
+   maybeFlush() →
+   if (let Some(oldEntry) <- old):
+     if (let Some(oldExpire) <- oldEntry.expireAt):
+       if (oldExpire <= DateTime.now().toUnixTimestamp()): return None  // 旧值已过期
+     return oldEntry.value
+   else: return None
+   ```
+
+4. **ttl(key, expire) 实现**:
+   ```
+   检查 closed →
+   expireAt = DateTime.now().toUnixTimestamp() + expire.toNanoseconds()
+   查找当前值（active → immutable → SSTable）→
+   如果 key 不存在或已删除: return
+   用当前 value + 新 expireAt 重新写入:
+     seq = wal.append(key, e.value, expireAt: expireAt)
+     entry = EntryValue(e.value, seq, expireAt: expireAt)
+     memTableManager.getActive().add(ByteArray(key), entry)
+   ★ ttl 在 WAL 写入 + MemTable 修改后即可返回
+   ```
+
+5. **remove 实现**:
    ```
    检查 closed →
    seq = wal.append(key, None) →
@@ -673,17 +646,20 @@ cd f_store
    ★ remove 在 WAL 写入 + MemTable 修改后即可返回
    ```
 
-4. **get 实现**:
+6. **get 实现**（含过期检查）:
    ```
    检查 closed →
    keyBytes = ByteArray(key) →
-   查 active MemTable → 有则返回 entry.value →
-   查 immutable MemTable → 有则返回 entry.value →
-   查 LevelManager.get → 返回 result?.value
+   查 active MemTable:
+     有值 → 检查 expireAt → 过期返回 None / tombstone 返回 None / 返回 entry.value
+   查 immutable MemTable:
+     同上
+   查 LevelManager.get:
+     同上
+   返回 None
    ```
-   （找到 tombstone 即 entry.value==None 时立即返回 None，不继续查找）
 
-5. **maybeFlush**:
+7. **maybeFlush**:
    ```
    if active.approximateSize() >= memFlushThreshold:
      imm = memTableManager.swapActive()
@@ -692,22 +668,28 @@ cd f_store
        memTableManager.immutable.store(None)
    ```
 
-### 关键改进
-- **add/remove 的关键路径完全无锁**：
-  - `wal.append`: IoUringLockFree 无锁提交（Linux），File 同步写（非 Linux）
+### 关键设计
+- **add/remove/get/ttl 的关键路径完全无锁**：
+  - `wal.append`: IOUringStream.write() 异步提交（Linux），File 同步写（非 Linux）
   - `memTableManager.getActive().add()`: ConcurrentSkipListMap CAS 无锁
   - `maybeFlush`: 仅在 swap 时短暂持 flushLock
-- **add/remove 在 WAL 写入 + MemTable 修改后即可返回**，不等 IO 落盘完成
+- **add/remove/ttl 在 WAL 写入 + MemTable 修改后即可返回**，不等 IO 落盘完成
+- **过期检查在 get 时惰性执行**：不主动清理过期数据，Compaction 时清理
 
 ### 注意事项
 - **WAL 先于 MemTable**: wal.append 必须在 MemTable.add 之前成功
 - maybeFlush 中 swapActive 可能返回 None（其他线程已 swap）
 - atExit 注册 close，确保进程退出时数据持久化
 - **Store 实现 Resource 接口**: 需实现 `func close(): Unit` 和 `func isClosed(): Bool`
+- `expire.toNanoseconds()` 返回 Int64，需注意溢出
+- `DateTime.now().toUnixTimestamp()` 为纳秒级 Int64
 
 ### 测试
 - 基本 add/get 往返
 - add 已有 key 返回旧值
+- add(key, value, expire) 带 TTL 的添加
+- ttl 更新已有 key 的过期时间
+- get 对过期 key 返回 None
 - remove 已有 key 返回旧值，之后 get 返回 None
 - get 不存在的 key 返回 None
 - 超过 memFlushThreshold 后自动刷盘，get 仍能查到数据
@@ -731,8 +713,8 @@ cd f_store
    if (let Some(table) <- imm):
      flushMemTable(table, sstDir, 0)
    // 3. 刷 WAL 并关闭
-   wal.sync()
-   wal.close()
+   wal.sync()   // Linux: stream.flush(); 非 Linux: file.flush()
+   wal.close()  // Linux: stream.close() + file.close(); 非 Linux: file.close()
    // 4. 关闭所有 SSTable
    levelManager.closeAll()
    ```
@@ -780,8 +762,9 @@ cd f_store
    如果该 key 不以 prefix 开头 → return None →
    收集所有 sources 中 peek == 当前 key 的条目 →
    取 sequence 最高的 EntryValue →
-   如果是 tombstone → 跳过，继续取下一个最小 key →
-   如果不是 tombstone → 推进所有匹配的迭代器 → return (key.bytes, entry.value.getOrThrow())
+   如果是 tombstone → 跳过 →
+   如果已过期（expireAt <= now）→ 跳过 →
+   否则 → 推进所有匹配的迭代器 → return (key.bytes, entry.value.getOrThrow())
    ```
 
 4. **前缀匹配判断**:
@@ -810,11 +793,13 @@ cd f_store
 - ConcurrentSkipListMap.tailer 返回弱一致性迭代器，遍历期间不阻塞写
 - SSTableReader.tailer 需在 Step 9 中实现
 - **仓颉 lambda 不可捕获可变变量**: PeekableIterator 用 class 而非闭包实现
+- **过期数据在遍历时跳过**（惰性过期）
 
 ### 测试
 - 单源前缀遍历
 - 多源同 key 合并（高 sequence 优先）
 - tombstone 过滤
+- 过期数据过滤
 - 前缀不匹配时正确终止
 - 并发写入期间前缀遍历不崩溃
 
@@ -854,8 +839,8 @@ cd f_store
    否则: 选择部分 SSTable（大小优先策略）→
    获取 level+1 层范围重叠的 SSTable →
    多路归并（SSTableMerger）→
-   写入新 SSTable 文件（SSTableWriter，底层走 StoreIOStream）→
-   过滤 tombstone（保守策略）→
+   写入新 SSTable 文件（SSTableWriter，底层走 IOStream → IOUringStream/File）→
+   过滤 tombstone 和已过期数据 →
    finish 新 SSTable →
    levelManager.replace(level, oldSSTables, newSSTables) →
    删除旧 SSTable 文件
@@ -866,16 +851,17 @@ cd f_store
    - 使用最小堆合并，相同 key 取高 sequence
    - 输出有序的 (ByteArray, EntryValue) 流
 
-### 关键改进
-- Compaction 使用 `StoreIOStream` 抽象层
-- Linux 下通过 `IOUringStoreIOStream` 的 `IoUringLockFree` 无锁提交写入
-- 非 Linux 下通过 `FileStoreIOStream` 同步写入
+### 设计说明
+- Compaction 使用 `IOStream`（通过 `createStoreStream` 创建）
+- Linux 下通过 `IOUringStream` 异步写 + 后台收割
+- 非 Linux 下通过 `File` 同步写
 
 ### 注意事项
 - Compaction 不阻塞读写：旧 SSTable 在替换前仍可查询
 - **原子替换**: levelLock 保护下的 SSTable 列表更新
 - 新 SSTable 写完后才删除旧的，保证崩溃安全
 - **tombstone 保留策略**: 只在最底层 Compaction 时移除 tombstone
+- **已过期数据在 Compaction 时直接丢弃**
 - **64MB 限制**: Compaction 输出也受 64MB 限制
 - 后台线程用 `spawn { compactor.runLoop() }` 创建
 
@@ -884,6 +870,7 @@ cd f_store
 - Compaction 后查询结果不变
 - Compaction 期间并发 add/get 不崩溃
 - tombstone 在最底层 Compaction 时被清除
+- 过期数据在 Compaction 时被清除
 
 ---
 
@@ -897,6 +884,8 @@ cd f_store
    - add → get 往返验证
    - remove → get 返回 None
    - add 已有 key → 返回旧值，get 返回新值
+   - add(key, value, expire) → get 在过期前返回值、过期后返回 None
+   - ttl → 更新过期时间 → get 验证
    - prefix 遍历正确性
    - 空数据库 get/prefix 返回 None/空
 
@@ -911,18 +900,25 @@ cd f_store
    - 写入大量数据（超过 memFlushThreshold）→ 自动刷盘 → close → open → 数据完整
    - 模拟 WAL 恢复：写入 → 不 close → 重新 open → 从 WAL 恢复
 
-4. **平台适配测试**:
+4. **TTL 功能测试**:
+   - add 带 expire → 等待过期 → get 返回 None
+   - ttl 更新过期时间 → 等待新过期时间 → get 返回 None
+   - ttl 对不存在的 key 无操作
+   - 过期数据在 prefix 遍历中被跳过
+
+5. **平台适配测试**:
    - Linux: 验证 add/remove 立即返回（异步 IO）
    - 非 Linux: 验证基本功能正常（同步 IO）
 
-5. **边界条件测试**:
+6. **边界条件测试**:
    - 空 key、空 value
    - 大 value（接近 64MB SSTable）
    - 大量 key 的 prefix 遍历
    - 连续 add 同一个 key
    - remove 不存在的 key 返回 None
+   - Duration 极值（极短、极长过期时间）
 
-6. **Bug 修复**: 根据测试结果修复发现的问题
+7. **Bug 修复**: 根据测试结果修复发现的问题
 
 ### 注意事项
 - 仓颉测试使用 `@Test + @TestCase + @Assert/@Expect`
@@ -956,21 +952,21 @@ cd f_store
 
 ```
 Step 1 (ByteArray/EntryValue)
-  → Step 2 (StoreIOStream — IO抽象层) ★ 新增
+  → Step 2 (createStoreStream — IO工厂函数) ★ 替代原StoreIOStream
     → Step 3 (MemTable)
       → Step 4 (MemTableManager)
-  → Step 5 (WALRecord 编解码)
-    → Step 6 (WAL 写入 — IoUringLockFree无锁版) ★ 重写
+  → Step 5 (WALRecord 编解码 — 含expire_at)
+    → Step 6 (WAL 写入 — IOUringStream版) ★ 重写：直接用IOUringStream
       → Step 7 (WAL 读取/恢复)
-  → Step 8 (SSTable 写入 — StoreIOStream版) ★ 重写
-    → Step 9 (SSTable 读取 — StoreIOStream版) ★ 重写
+  → Step 8 (SSTable 写入 — IOStream版) ★ 重写：用IOStream
+    → Step 9 (SSTable 读取 — IOStream版) ★ 重写：用IOStream
       → Step 10 (SSTableFile)
-        → Step 11 (LevelManager)
+        → Step 11 (LevelManager — 含过期检查)
           → Step 12 (MemTable 刷盘)
-            → Step 13 (Store 初始化+add/remove/get) ★ 重写：原子+无锁+即返回
+            → Step 13 (Store 初始化+add/remove/get/add(expire)/ttl) ★ 重写：TTL+过期+IOUringStream
               → Step 14 (Store.close)
-              → Step 15 (PrefixIterator)
-          → Step 16 (Compaction)
+              → Step 15 (PrefixIterator — 含过期过滤)
+          → Step 16 (Compaction — 含过期清理)
   → Step 17 (集成测试)
   → Step 18 (BloomFilter 序列化优化，可选)
 ```
@@ -983,9 +979,16 @@ Step 1 (ByteArray/EntryValue)
 
 | 差异点 | 原方案 | 新方案 |
 |--------|--------|--------|
-| IO 层 | 直接使用 IOUringStream | StoreIOStream 抽象层 + IoUringLockFree |
-| WAL 写锁 | Mutex writeLock | IoUringLockFree 无锁提交（去除 writeLock） |
+| IO 层 | StoreIOStream + IOUringStoreIOStream + FileStoreIOStream | 直接用 IOUringStream / File，统一为 IOStream |
+| WAL 写锁 | Mutex writeLock | IOUringStream 内部 writeMutex 保证顺序 |
+| WAL IO | IoUringLockFree + IoUring + 收割线程（手动管理） | IOUringStream（双 ring + 收割线程内置） |
+| TTL | 无 | add(key,value,expire) + ttl(key,expire) + 惰性过期 |
+| 过期检查 | 无 | get/prefix 检查 expireAt，Compaction 清理过期数据 |
+| EntryValue | value + sequence | value + sequence + expireAt |
+| WAL 格式 | 无 expire_at | 含 expire_at(8 bytes) |
+| SSTable 格式 | 无 expire_at | 含 expire_at(8 bytes) |
 | add/remove 返回 | 等 IO 完成 | WAL 写入 + MemTable 修改后即返回 |
-| 平台支持 | 仅 Linux | Linux (io_uring) + 非Linux (std.fs.File) |
-| CQE 收割 | IOUringStream 内部 | IOUringStoreIOStream 内部 lf.waitAndReap() |
-| SSTable IO | IOUringStream(fd) | StoreIOStream → IOUringStoreIOStream / FileStoreIOStream |
+| 平台支持 | 仅 Linux | Linux (IOUringStream) + 非Linux (std.fs.File) |
+| CQE 收割 | 自定义收割线程 | IOUringStream 内置收割线程 |
+| SSTable IO | 自定义 IOUringStoreIOStream | IOStream（IOUringStream / File） |
+| fsync | ring.getSQE + ioUringPrepFsync | stream.flush()（IOSQE_IO_DRAIN + fsync） |
