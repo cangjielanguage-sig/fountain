@@ -49,7 +49,8 @@ public struct HostAndPort {
 
 5. fsync各个节点绝对平等
 - 不需要主节点
-- 各节点之间互相同步数据
+- 各节点之间互相同步数据，
+- 对于任意节点只有KEY的一致性哈希落在当前节点的数据可改，其它数据在当前节点只可读
 5.1 fsync/src/server实现服务端
     - 添加f_app依赖，实现fountain::f_app.SubCommand
       - 本项目服务端不必实现main函数，
@@ -62,7 +63,7 @@ public struct HostAndPort {
     - f_protocol的REGISTER请求头表示向sync进程发送数据，sync进程需要存储发送过来的数据
       - 数据包含键和值，键必须是字符串，值必须是字节数组
         - 使用UNIX风格的路径作为KEY
-      - fsync客户端以fountain::f_util.murmurHash(String) 决定向哪个fsync服务端进程发送数据
+      - fsync客户端以fountain::f_util.murmurHash(String) + 一致性哈希决定向哪个fsync服务端进程发送数据
       - 以上都是消息头的解释，具体的发起选举、投票、同步数据、发送/接收数据都是消息体。
       - f_protocol详细定义了消息头、消息ID、消息体
       - 消息按照f_codec编码，按以下顺序发送：
