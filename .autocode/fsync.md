@@ -60,10 +60,9 @@ public struct HostAndPort {
     - 活跃节点数超过一半可以继续提供服务
     - 使用f_store 实现数据持久化
     - f_protocol的PUBLISH请求头表示sync服务进程向另一主机同步数据
-    - f_protocol的REGISTER请求头表示向sync进程发送数据，sync进程需要存储发送过来的数据
+    - f_protocol的REGISTER请求头表示向fsync服务端进程发送数据，fsync服务端进程需要存储发送过来的数据
       - 数据包含键和值，键必须是字符串，值必须是字节数组
         - 使用UNIX风格的路径作为KEY
-      - fsync客户端以fountain::f_util.murmurHash(String) + 一致性哈希决定向哪个fsync服务端进程发送数据
       - 以上都是消息头的解释，具体的发起选举、投票、同步数据、发送/接收数据都是消息体。
       - f_protocol详细定义了消息头、消息ID、消息体
       - 消息按照f_codec编码，按以下顺序发送：
@@ -84,6 +83,9 @@ public struct HostAndPort {
         - 值没有变化就阻塞直到超时，如果没有指定超时时间就一直阻塞
         - 值发生了变化，给客户端返回变化以后的值，如果是删除操作就返回f_codec定义的None
 5.2 fsync/src/client实现客户端
+    - fsync客户端以fountain::f_util.murmurHash(String) + 一致性哈希决定向哪个fsync服务端进程发送数据
+      - 如果试图向失效节点写，立即失败
+      - 如果试图向失效节点读，人失效节点的下一个节点读，如果下一个节点也失效了继续找下一个节点，直到遍历所有节点
     - 客户端作为其它项目的依赖
     - 提供一个开放以下公共实例成员函数的类，依赖客户端的项目调用这些函数访问服务端的服务
       - `get(key: String): ?Array<Byte>`
