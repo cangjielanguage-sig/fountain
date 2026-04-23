@@ -8,7 +8,7 @@ mkdir fsync && cd fsync && cjpm init --type=dynamic && mkdir doc
 
 1. mkdir -p fsync/src/config
 2. touch fsync/src/config/SyncConfig.cj
-3. 在fsync/cjpm.toml添加fountain::f_config fountain::f_base fountain::f_codec fountain::f_net fountain::f_protocol的依赖
+3. 在fsync/cjpm.toml添加fountain::f_app fountain::f_config fountain::f_base fountain::f_codec fountain::f_net fountain::f_protocol的依赖
 4. 在SyncConfig.cj 添加以下代码
 ```cj
 package fountain::fsync.config
@@ -47,8 +47,10 @@ public struct HostAndPort {
 }
 ```
 
-5. 在fsync/src/严格实现raft协议。
-5.1 fsync/src/server实现raft服务端
+5. fsync各个节点绝对平等
+- 不需要主节点
+- 各节点之间互相同步数据
+5.1 fsync/src/server实现服务端
     - 添加f_app依赖，实现fountain::f_app.SubCommand
       - 本项目服务端不必实现main函数，
       - SubCommand实现以子命令“sync”将本项目注册到fountain::f_app。
@@ -56,24 +58,19 @@ public struct HostAndPort {
       - 本项目可以使用命令fboot sync --hosts=ip1:port,ip2:port,ip3:port启动
     - 活跃节点数超过一半可以继续提供服务
     - 使用f_store 实现数据持久化
-    - 使用f_protocol/doc/定义的协议实现选举和同步数据
-      - f_protocol的ELECT请求头表示本次通讯为sync服务节点发起选举，VOTE表示本次通讯为选举投票，APPROVE表示本次通讯为选举同意位。
-        - 0xd8 - 发起选举
-        - 0xdd - 赞成发起方
-        - pxd9 - 拒绝发起方
-        - f_protocol的PUBLISH请求头表示sync服务进程向另一主机同步数据
-        - f_protocol的REGISTER请求头表示向sync进程发送数据，sync进程需要存储发送过来的数据
-        - 数据包含键和值，键必须是字符串，值必须是字节数组
-          - 使用UNIX风格的路径作为KEY
-        - fsync客户端以fountain::f_util.murmurHash(String) 决定向哪个fsync服务端进程发送数据
-        - 以上都是消息头的解释，具体的发起选举、投票、同步数据、发送/接收数据都是消息体。
-        - f_protocol详细定义了消息头、消息ID、消息体
-        - 消息按照f_codec编码，按以下顺序发送：
-          - 消息头
-          - 消息ID - f_protocol已定义
-          - 数据KEY
-          - 数据版本
-          - 数据字节数组
+    - f_protocol的PUBLISH请求头表示sync服务进程向另一主机同步数据
+    - f_protocol的REGISTER请求头表示向sync进程发送数据，sync进程需要存储发送过来的数据
+      - 数据包含键和值，键必须是字符串，值必须是字节数组
+        - 使用UNIX风格的路径作为KEY
+      - fsync客户端以fountain::f_util.murmurHash(String) 决定向哪个fsync服务端进程发送数据
+      - 以上都是消息头的解释，具体的发起选举、投票、同步数据、发送/接收数据都是消息体。
+      - f_protocol详细定义了消息头、消息ID、消息体
+      - 消息按照f_codec编码，按以下顺序发送：
+        - 消息头
+        - 消息ID - f_protocol已定义
+        - 数据KEY
+        - 数据版本
+        - 数据字节数组
     - 对外开放网络服务：
       - 添加键值对
       - 删除键值对
@@ -85,7 +82,7 @@ public struct HostAndPort {
         - 可以取消监听
         - 值没有变化就阻塞直到超时，如果没有指定超时时间就一直阻塞
         - 值发生了变化，给客户端返回变化以后的值，如果是删除操作就返回f_codec定义的None
-5.2 fsync/src/client实现raft客户端
+5.2 fsync/src/client实现客户端
     - 客户端作为其它项目的依赖
     - 提供一个开放以下公共实例成员函数的类，依赖客户端的项目调用这些函数访问服务端的服务
       - `get(key: String): ?Array<Byte>`
