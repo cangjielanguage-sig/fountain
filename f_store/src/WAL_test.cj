@@ -1,0 +1,202 @@
+/*
+Copyright (c) 2026 WuJingrun（吴京润）
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+package fountain::f_store
+
+import std.unittest.*
+import std.unittest.testmacro.*
+import std.fs.*
+import std.collection.ArrayList
+
+@Test
+public class WALTest {
+    /// 构造临时 WAL 文件路径
+    static func tempWALPath(testName: String): String {
+        "/tmp/f_store_test/WAL_${testName}.wal"
+    }
+
+    /// 确保临时目录存在
+    static func ensureDir(path: String): Unit {
+        let dir = Path(path).parent
+        if (!exists(dir)) {
+            Directory.create(dir, recursive: true)
+        }
+    }
+
+    /// 删除临时文件
+    static func cleanWAL(path: String): Unit {
+        if (exists(Path(path))) {
+            remove(path)
+        }
+    }
+
+    /// 读取 WAL 文件并解码所有记录
+    static func readRecords(path: String): ArrayList<WALRecord> {
+        let file = File(path, OpenMode.Read)
+        let fileSize = file.info.size
+        let bytes = Array<Byte>(fileSize, repeat: 0u8)
+        file.read(bytes)
+        file.close()
+
+        var records = ArrayList<WALRecord>()
+        var offset = 0
+        while (offset + 36 <= bytes.size) {
+            let chunk = bytes[offset..]
+            let decoded = WALRecord.decode(chunk)
+            if (decoded.isNone()) {
+                break
+            }
+            let record = decoded.getOrThrow()
+            records.add(record)
+            // 固定头 36 字节 + key + value
+            let keyLen = readInt64LE(bytes, offset + 12)
+            let valueLen = readInt64LE(bytes, offset + 20)
+            let totalLen = 36 + keyLen + (if (valueLen > 0) { valueLen } else { 0 })
+            offset += Int64(totalLen)
+        }
+        records
+    }
+
+    @TestCase
+    public func walAppendAndRecover(): Unit {
+        let path = tempWALPath("walAppendAndRecover")
+        cleanWAL(path)
+        ensureDir(path)
+
+        // 写入 3 条记录
+        let wal = WAL(path)
+        let seq1 = wal.append([0x01], Some([0x41u8]))
+        let seq2 = wal.append([0x02], Some([0x42u8]))
+        let seq3 = wal.append([0x03u8], None)  // tombstone
+        wal.close()
+
+        @Expect(seq1 == 1)
+        @Expect(seq2 == 2)
+        @Expect(seq3 == 3)
+
+        // 恢复读取
+        let records = readRecords(path)
+
+        @Expect(records.size == 3)
+        @Expect(records[0].sequence == 1)
+        @Expect(records[0].key == [0x01u8])
+        @Expect(records[0].value == Some([0x41u8]))
+        @Expect(records[1].sequence == 2)
+        @Expect(records[1].key == [0x02u8])
+        @Expect(records[1].value == Some([0x42u8]))
+        @Expect(records[2].sequence == 3)
+        @Expect(records[2].key == [0x03u8])
+        @Expect(records[2].value.isNone())
+
+        cleanWAL(path)
+    }
+
+    @TestCase
+    public func walAppendWithExpireAt(): Unit {
+        let path = tempWALPath("walAppendWithExpireAt")
+        cleanWAL(path)
+        ensureDir(path)
+
+        let wal = WAL(path)
+        let expireAt: Int64 = 9999999999
+        let seq = wal.append([0xAAu8], Some([0xBBu8]), expireAt: Some(expireAt))
+        wal.close()
+
+        @Expect(seq == 1)
+
+        let records = readRecords(path)
+        @Expect(records.size == 1)
+        @Expect(records[0].sequence == 1)
+        @Expect(records[0].key == [0xAAu8])
+        @Expect(records[0].value == Some([0xBBu8]))
+        @Expect(records[0].expireAt == Some(expireAt))
+
+        cleanWAL(path)
+    }
+
+    @TestCase
+    public func walTombstoneRecord(): Unit {
+        let path = tempWALPath("walTombstoneRecord")
+        cleanWAL(path)
+        ensureDir(path)
+
+        let wal = WAL(path)
+        let seq = wal.append([0x10u8], None)  // tombstone
+        wal.close()
+        @Expect(seq == 1)
+
+        let records = readRecords(path)
+        @Expect(records.size == 1)
+        @Expect(records[0].key == [0x10u8])
+        @Expect(records[0].value.isNone())
+        @Expect(records[0].expireAt.isNone())
+
+        cleanWAL(path)
+    }
+
+    @TestCase
+    public func walSequenceStartFromGiven(): Unit {
+        let path = tempWALPath("walSequenceStartFromGiven")
+        cleanWAL(path)
+        ensureDir(path)
+
+        // 从 100 开始序号
+        let wal = WAL(path, startSequence: 100)
+        let seq1 = wal.append([0x01], Some([0x41u8]))
+        let seq2 = wal.append([0x02], Some([0x42u8]))
+        wal.close()
+
+        @Expect(seq1 == 101)
+        @Expect(seq2 == 102)
+
+        cleanWAL(path)
+    }
+
+    @TestCase
+    public func walCloseIsIdempotent(): Unit {
+        let path = tempWALPath("walCloseIsIdempotent")
+        cleanWAL(path)
+        ensureDir(path)
+
+        let wal = WAL(path)
+        wal.append([0x01], Some([0x41u8]))
+        wal.close()
+        wal.close()  // 第二次 close，不应该抛异常
+        @Expect(wal.isClosed())
+
+        cleanWAL(path)
+    }
+
+    @TestCase
+    public func walAppendAfterCloseThrows(): Unit {
+        let path = tempWALPath("walAppendAfterCloseThrows")
+        cleanWAL(path)
+        ensureDir(path)
+
+        let wal = WAL(path)
+        wal.append([0x01], Some([0x41u8]))
+        wal.close()
+
+        var threw = false
+        try {
+            wal.append([0x02], Some([0x42u8]))
+        } catch (_: StoreClosedException) {
+            threw = true
+        }
+        @Expect(threw)
+
+        cleanWAL(path)
+    }
+}

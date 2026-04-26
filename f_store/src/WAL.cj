@@ -15,8 +15,13 @@ limitations under the License.
 */
 package fountain::f_store
 
+import std.sync.{AtomicBool, AtomicInt64}
+import std.fs.*
+import std.io.IOStream
 import fountain::f_util.crc32
 import fountain::f_base.*
+import fountain::f_io.IOUringStream
+import fountain::f_concurrent.ExtendAtomicInt64
 
 /** WAL 记录。不可变。
  *  编码格式（小端序）:
@@ -199,3 +204,74 @@ func readInt64LE(buf: Array<Byte>, offset: Int64): Int64 {
     (UInt64(buf[offset + 7]) << 56)
     v.toInt()
 }
+
+// ============================================================
+// WAL 写入实现（Linux 版 — IOUringStream 异步写入，非Linux 版 — File 同步写入）
+// ============================================================
+
+class WAL <: Resource {
+    private let file: File
+    private let stream: IOStream
+    let sequence: AtomicInt64
+    let appendCount: AtomicInt64
+    let closed: AtomicBool
+    private let syncInterval: Int64
+
+    init(path: String, startSequence!: Int64 = 0) {
+        // 确保目录存在
+        let parentDir = Path(path).parent
+        if (!exists(parentDir)) {
+            Directory.create(parentDir, recursive: true)
+        }
+        this.file = File(path, OpenMode.ReadWrite)
+        @When[os == "Linux"]
+        let stream = IOUringStream(Int32(file.fileDescriptor.fileHandle))
+        @When[os != "Linux"]
+        let stream = file
+        this.stream = stream
+        this.sequence = AtomicInt64(startSequence)
+        this.appendCount = AtomicInt64(0)
+        this.closed = AtomicBool(false)
+        this.syncInterval = 100
+    }
+
+    func append(key: Array<Byte>, value: ?Array<Byte>, expireAt!: ?Int64 = None): Int64 {
+        if (closed.load()) {
+            throw StoreClosedException()
+        }
+        let seq = sequence.incrFetch()
+        let record = WALRecord(seq, key, value, expireAt: expireAt)
+        let encoded = record.encode()
+        stream.write(encoded)
+        let count = appendCount.incrFetch()
+        if (count % syncInterval == 0) {
+            sync()
+        }
+        seq
+    }
+
+    func sync(): Unit {
+        if (!closed.load()) {
+            stream.flush()
+        }
+    }
+
+    public func close(): Unit {
+        if (!closed.compareAndSwap(false, true)) {
+            return
+        }
+        sync()
+        if (let r: Resource <- stream && !r.isClosed()) {
+            r.close()
+        }
+        if (let r: Resource <- file && !r.isClosed()) {
+            r.close()
+        }
+    }
+
+    public func isClosed(): Bool {
+        closed.load()
+    }
+}
+
+
