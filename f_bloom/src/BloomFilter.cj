@@ -27,6 +27,11 @@ public class BloomFilter {
     private let hashers: Array<(UInt64, (Array<Byte>) -> UInt64)>
     public let n: Int64
     public let p: Float64
+    public prop bitCount: Int64 {
+        get() {
+            size
+        }
+    }
     /**
      * 初始化过滤器
      * @param n 预期元素数量
@@ -80,7 +85,7 @@ public class BloomFilter {
      */
     public func add(element: Array<Byte>): Unit {
         for ((_, h) in hashers) {
-            let pos = h(element).toInt() % size
+            let pos = (h(element) % UInt64(size)).toInt()
             let arrayIndex = pos / 64
             let bitIndex = pos % 64
             let mask = 1 << bitIndex
@@ -105,7 +110,7 @@ public class BloomFilter {
      */
     public func mightContain(element: Array<Byte>): Bool {
         for ((_, h) in hashers) {
-            let pos = h(element).toInt() % size
+            let pos = (h(element) % UInt64(size)).toInt()
             let arrayIndex = pos / 64
             let bitIndex = pos % 64
             let mask = 1 << bitIndex
