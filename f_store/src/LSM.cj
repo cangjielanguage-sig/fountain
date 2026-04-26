@@ -16,7 +16,7 @@ limitations under the License.
 package fountain::f_store
 
 import fountain::f_concurrent.ConcurrentSkipListMap
-import std.sync.AtomicInt64
+import std.sync.{AtomicInt64, AtomicReference, AtomicOptionReference, Mutex}
 
 /** 内存表，基于 ConcurrentSkipListMap 实现无锁读写 */
 class MemTable {
@@ -49,5 +49,45 @@ class MemTable {
 
     func approximateSize(): Int64 {
         byteCount.load()
+    }
+}
+
+/** 双缓冲管理：active 可写，immutable 刷盘中（只读快照） */
+class MemTableManager {
+    let active: AtomicReference<MemTable>
+    let immutable: AtomicOptionReference<MemTable>
+    let flushLock: Mutex
+
+    init() {
+        active = AtomicReference<MemTable>(MemTable())
+        immutable = AtomicOptionReference<MemTable>()
+        flushLock = Mutex()
+    }
+
+    /** 将 active 设为 immutable，创建新 active，返回旧 active（可能为 None 如果已被其他线程 swap） */
+    func swapActive(): ?MemTable {
+        synchronized(flushLock) {
+            let old = active.load()
+            // 如果 immutable 非空（上次刷盘未完成），不 swap
+            if (immutable.load().isSome()) {
+                return None
+            }
+            immutable.store(Some(old))
+            active.store(MemTable())
+            Some(old)
+        }
+    }
+
+    func getActive(): MemTable {
+        active.load()
+    }
+
+    func getImmutable(): ?MemTable {
+        immutable.load()
+    }
+
+    /** 刷盘完成后清空 immutable 引用 */
+    func clearImmutable(): Unit {
+        immutable.store(None)
     }
 }

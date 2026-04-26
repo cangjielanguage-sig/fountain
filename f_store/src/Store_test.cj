@@ -19,6 +19,7 @@ import std.unittest.*
 import std.unittest.testmacro.*
 import std.fs.{File, OpenMode, Directory, remove}
 import std.collection.ArrayList
+import std.sync.AtomicInt64
 
 @Test
 public class StoreStep1Test {
@@ -255,5 +256,48 @@ public class StoreStep3Test {
         @Expect(mt.approximateSize() == 0)
         mt.add(ByteArray([0x01, 0x02]), EntryValue([0x0A, 0x0B], 1))
         @Expect(mt.approximateSize() > 0)
+    }
+}
+
+@Test
+public class StoreStep4Test {
+
+    @TestCase
+    public func memTableManagerSwap(): Unit {
+        let mgr = MemTableManager()
+        // 初始状态：active 非空，immutable 为 None
+        @Expect(mgr.getActive().approximateSize() == 0)
+        @Expect(mgr.getImmutable().isNone())
+
+        // 写入数据
+        mgr.getActive().add(ByteArray([0x01]), EntryValue([0x0A], 1))
+
+        // swap
+        let swapped = mgr.swapActive()
+        @Expect(swapped.isSome())
+        // swap 后 active 是新的空 MemTable
+        @Expect(mgr.getActive().approximateSize() == 0)
+        // immutable 是旧的
+        @Expect(mgr.getImmutable().isSome())
+    }
+
+    @TestCase
+    public func memTableManagerClearImmutable(): Unit {
+        let mgr = MemTableManager()
+        mgr.getActive().add(ByteArray([0x01]), EntryValue([0x0A], 1))
+        mgr.swapActive()
+        @Expect(mgr.getImmutable().isSome())
+        mgr.clearImmutable()
+        @Expect(mgr.getImmutable().isNone())
+    }
+
+    @TestCase
+    public func memTableManagerSwapWhileImmutableBusy(): Unit {
+        let mgr = MemTableManager()
+        mgr.getActive().add(ByteArray([0x01]), EntryValue([0x0A], 1))
+        mgr.swapActive()
+        // immutable 非空时再次 swap 应返回 None
+        let second = mgr.swapActive()
+        @Expect(second.isNone())
     }
 }
