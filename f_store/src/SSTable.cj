@@ -15,7 +15,7 @@ limitations under the License.
 */
 package fountain::f_store
 
-import std.io.IOStream
+import std.io.{IOStream, SeekPosition}
 import std.fs.{File, OpenMode, Path, Directory, exists}
 import std.sync.AtomicBool
 import std.collection.ArrayList
@@ -313,6 +313,318 @@ class SSTableWriter {
         stream.write(buf)
         currentOffset += FOOTER_SIZE
         fileSize += FOOTER_SIZE
+    }
+}
+
+// ==== SSTableReader =============================================================
+
+/** SSTable 读取器。
+ *  使用 std.fs.File 同步读取（seek + read）。
+ *  open 时加载 Footer → Index Block → Bloom Filter Block。
+ *  get 时先查 BloomFilter → 二分定位 Data Block → 读取扫描。
+ */
+class SSTableReader {
+    let metadata: SSTableMetadata
+    let bloomFilter: BloomFilter
+    let indexEntries: ArrayList<IndexEntry>
+    private let file: File
+    private let indexOffset: Int64 // Index Block 起始偏移（即 Data Block 终止边界）
+
+    private init(metadata: SSTableMetadata, bloomFilter: BloomFilter,
+                 indexEntries: ArrayList<IndexEntry>, file: File, indexOffset: Int64) {
+        this.metadata = metadata
+        this.bloomFilter = bloomFilter
+        this.indexEntries = indexEntries
+        this.file = file
+        this.indexOffset = indexOffset
+    }
+
+    /** 打开 SSTable 文件并加载元数据/索引/BloomFilter */
+    static func open(path: String): SSTableReader {
+        let file = File(path, OpenMode.Read)
+        return openFromFile(file, path)
+    }
+
+    static func openFromFile(file: File, path: String): SSTableReader {
+        let fileLen = file.length
+        if (fileLen < SSTableWriter.FOOTER_SIZE) {
+            throw Exception("SSTable file too small: " + path)
+        }
+        // 1. 读取 Footer (最后 48 bytes)
+        let footerBuf = Array<Byte>(SSTableWriter.FOOTER_SIZE, repeat: 0u8)
+        file.seek(SeekPosition.Begin(fileLen - SSTableWriter.FOOTER_SIZE))
+        file.read(footerBuf)
+        let idxOff = readInt64LE(footerBuf, 0)
+        let idxSz = readInt64LE(footerBuf, 8)
+        let bloomOff = readInt64LE(footerBuf, 16)
+        let bloomSz = readInt64LE(footerBuf, 24)
+        let eCount = readInt64LE(footerBuf, 32)
+        let magic = readUInt64LE(footerBuf, 40)
+        if (magic != SSTableWriter.MAGIC) {
+            throw Exception("SSTable magic mismatch: " + path)
+        }
+        // 2. 读取 Index Block
+        let indexBuf = Array<Byte>(idxSz, repeat: 0u8)
+        file.seek(SeekPosition.Begin(idxOff))
+        file.read(indexBuf)
+        let indexEntries = ArrayList<IndexEntry>()
+        var offset = 0
+        let count = readInt64LE(indexBuf, offset)
+        offset += 8
+        for (_ in 0..count) {
+            let entryOff = readInt64LE(indexBuf, offset)
+            offset += 8
+            let keyLen = readInt64LE(indexBuf, offset)
+            offset += 8
+            let keyBytes = Array<Byte>(keyLen, repeat: 0u8)
+            for (i in 0..keyLen) {
+                keyBytes[i] = indexBuf[offset]
+                offset++
+            }
+            indexEntries.add(IndexEntry(entryOff, ByteArray(keyBytes)))
+        }
+        // 3. 读取 Bloom Filter Block
+        let bloomBuf = Array<Byte>(bloomSz, repeat: 0u8)
+        file.seek(SeekPosition.Begin(bloomOff))
+        file.read(bloomBuf)
+        let n = readInt64LE(bloomBuf, 0)
+        // Float64 占据 bloomBuf[1..9] (8 bytes)，手动重建 Array<Byte>
+        let pBuf = Array<Byte>(8){i => bloomBuf[1+i]}
+        let p = Float64.readLittleEndian(pBuf)
+        let seedCount = readInt64LE(bloomBuf, 16)
+        let seeds = Array<UInt64>(seedCount, repeat: 0u64)
+        var boff = 24
+        for (i in 0..seedCount) {
+            seeds[i] = readUInt64LE(bloomBuf, boff)
+            boff += 8
+        }
+        let bitCount = readInt64LE(bloomBuf, boff)
+        boff += 8
+        // 重建 BloomFilter（seed 驱动，bitset 将以 0 初始化为 begin 状态）
+        let filter = BloomFilter.new(n, p, seeds.clone())
+        // 4. 重建 metadata（先用占位 min/max，后续可从第一个/最后一个 Data Block 修正）
+        let firstKey = if (indexEntries.size > 0) { indexEntries[0].firstKey } else { ByteArray([]) }
+        let lastIdx = indexEntries.size - 1
+        let lastKey = if (lastIdx >= 0) { indexEntries[lastIdx].firstKey } else { ByteArray([]) }
+        let metadata = SSTableMetadata(
+            firstKey, lastKey, eCount, 0, 0, Int64.Max, path
+        )
+        SSTableReader(metadata, filter, indexEntries, file, idxOff)
+    }
+
+    /** 点查询 */
+    func get(key: ByteArray): ?EntryValue {
+        let keyBytes = key.bytes
+        // Bloom 快速否定
+        if (!bloomFilter.mightContain(keyBytes)) {
+            return None
+        }
+        // 二分查找定位 Data Block
+        let idx = binarySearchIndex(key)
+        if (idx < 0) {
+            return None
+        }
+        // 读取 Data Block
+        let blockStart = indexEntries[idx].offset
+        let blockEnd = if (idx + 1 < indexEntries.size) {
+            indexEntries[idx + 1].offset
+        } else {
+            indexOffset
+        }
+        let blockSize = blockEnd - blockStart
+        return scanDataBlock(blockStart, blockSize, keyBytes)
+    }
+
+    /** 二分查找：返回 key 应落在的 Data Block 索引（-1 表示所有 key 都大于该 key） */
+    private func binarySearchIndex(key: ByteArray): Int64 {
+        let n = indexEntries.size
+        if (n == 0) {
+            return -1
+        }
+        // 如果 key < 第一个 Data Block 的 firstKey
+        if (key < indexEntries[0].firstKey) {
+            return -1
+        }
+        var lo = 0
+        var hi = n - 1
+        while (lo < hi) {
+            let mid = lo + (hi - lo + 1) / 2
+            if (indexEntries[mid].firstKey <= key) {
+                lo = mid
+            } else {
+                hi = mid - 1
+            }
+        }
+        lo
+    }
+
+    /** 在 Data Block 中扫描查找 key */
+    private func scanDataBlock(blockStart: Int64, blockSize: Int64, targetKey: Array<Byte>): ?EntryValue {
+        let buf = Array<Byte>(blockSize, repeat: 0u8)
+        file.seek(SeekPosition.Begin(blockStart))
+        file.read(buf)
+        var offset = 0
+        while (offset + 32 <= blockSize) {
+            let keyLen = readInt64LE(buf, offset)
+            let valueLen = readInt64LE(buf, offset + 8)
+            let seq = readInt64LE(buf, offset + 16)
+            let expireAt = readInt64LE(buf, offset + 24)
+            let actualValueLen = if (valueLen >= 0) { valueLen } else { 0 }
+            if (offset + 32 + keyLen + actualValueLen > blockSize) {
+                break
+            }
+            offset += 32
+            // 提取 key
+            let kBuf = Array<Byte>(keyLen, repeat: 0u8)
+            for (i in 0..keyLen) {
+                kBuf[i] = buf[offset]
+                offset++
+            }
+            // 提取 value
+            let val = if (valueLen < 0) {
+                None<Array<Byte>>
+            } else {
+                let vBuf = Array<Byte>(valueLen, repeat: 0u8)
+                for (i in 0..valueLen) {
+                    vBuf[i] = buf[offset]
+                    offset++
+                }
+                Some(vBuf)
+            }
+            let exp = if (expireAt == 0) { None<Int64> } else { Some(expireAt) }
+            if (kBuf == targetKey) {
+                return EntryValue(val, seq, expireAt: exp)
+            }
+        }
+        None
+    }
+
+    /** 全量有序遍历 */
+    func iterator(): Iterator<(ByteArray, EntryValue)> {
+        SSTableIterator(file, indexEntries, indexOffset, None)
+    }
+
+    /** 从 min key 开始遍历 */
+    func tailer(min: ByteArray): Iterator<(ByteArray, EntryValue)> {
+        SSTableIterator(file, indexEntries, indexOffset, min)
+    }
+
+    /** 关闭 */
+    func close(): Unit {
+        if (!file.isClosed()) {
+            file.close()
+        }
+    }
+}
+
+/** SSTable 全量/前缀遍历器 */
+class SSTableIterator <: Iterator<(ByteArray, EntryValue)> {
+    private let file: File
+    private let indexEntries: ArrayList<IndexEntry>
+    private let indexOffset: Int64
+    private var blockIdx: Int64
+    private var blockData: Array<Byte>
+    private var offsetInBlock: Int64
+    private var done: Bool
+
+    init(file: File, indexEntries: ArrayList<IndexEntry>, indexOffset: Int64, startKey: ?ByteArray) {
+        this.file = file
+        this.indexEntries = indexEntries
+        this.indexOffset = indexOffset
+        this.blockIdx = if (let Some(key) <- startKey) {
+            // 定位起始 Data Block
+            let n = indexEntries.size
+            var lo = 0
+            var hi = n - 1
+            var blocked = false
+            while (lo < hi) {
+                let mid = lo + (hi - lo + 1) / 2
+                if (indexEntries[mid].firstKey <= key) {
+                    lo = mid
+                } else {
+                    hi = mid - 1
+                }
+            }
+            // lo 是候选块，如果 key < firstKey 则从 0 开始
+            if (lo < n && indexEntries[lo].firstKey <= key) {
+                lo
+            } else {
+                0
+            }
+        } else {
+            0
+        }
+        this.blockData = Array<Byte>(0, repeat: 0u8)
+        this.offsetInBlock = 0
+        this.done = false
+        loadBlock()
+    }
+
+    public func next(): Option<(ByteArray, EntryValue)> {
+        if (done) {
+            return None
+        }
+        while (true) {
+            if (offsetInBlock + 32 > blockData.size) {
+                blockIdx++
+                if (blockIdx >= indexEntries.size) {
+                    done = true
+                    return None
+                }
+                loadBlock()
+                continue
+            }
+            let keyLen = readInt64LE(blockData, offsetInBlock)
+            let valueLen = readInt64LE(blockData, offsetInBlock + 8)
+            let seq = readInt64LE(blockData, offsetInBlock + 16)
+            let expireAt = readInt64LE(blockData, offsetInBlock + 24)
+            let actualValueLen = if (valueLen >= 0) { valueLen } else { 0 }
+            if (offsetInBlock + 32 + keyLen + actualValueLen > blockData.size) {
+                blockIdx++
+                if (blockIdx >= indexEntries.size) {
+                    done = true
+                    return None
+                }
+                loadBlock()
+                continue
+            }
+            var off = offsetInBlock + 32
+            let kBuf = Array<Byte>(keyLen, repeat: 0u8)
+            for (i in 0..keyLen) {
+                kBuf[i] = blockData[off]
+                off++
+            }
+            let val = if (valueLen < 0) {
+                None<Array<Byte>>
+            } else {
+                let vBuf = Array<Byte>(valueLen, repeat: 0u8)
+                for (i in 0..valueLen) {
+                    vBuf[i] = blockData[off]
+                    off++
+                }
+                Some(vBuf)
+            }
+            let exp = if (expireAt == 0) { None<Int64> } else { Some(expireAt) }
+            offsetInBlock = off
+            let entry = EntryValue(val, seq, expireAt: exp)
+            let pair: (ByteArray, EntryValue) = (ByteArray(kBuf), entry)
+            return Some(pair)
+        }
+        None
+    }
+
+    private func loadBlock(): Unit {
+        let blockStart = indexEntries[blockIdx].offset
+        let blockEnd = if (blockIdx + 1 < indexEntries.size) {
+            indexEntries[blockIdx + 1].offset
+        } else {
+            indexOffset
+        }
+        let blockSize = blockEnd - blockStart
+        blockData = Array<Byte>(blockSize, repeat: 0u8)
+        file.seek(SeekPosition.Begin(blockStart))
+        file.read(blockData)
+        offsetInBlock = 0
     }
 }
 
