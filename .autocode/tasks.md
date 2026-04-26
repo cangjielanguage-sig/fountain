@@ -264,7 +264,7 @@ cd f_store
 
 ---
 
-## Step 7: WAL 读取与崩溃恢复
+## ✅ Step 7: WAL 读取与崩溃恢复
 
 **文件**: `src/WAL.cj`（追加）
 **包**: `fountain::f_store`
@@ -309,7 +309,7 @@ cd f_store
 
 ---
 
-## Step 8: SSTable 文件格式 — 写入
+## ✅ Step 8: SSTable 文件格式 — 写入
 
 **文件**: `src/SSTable.cj`
 **包**: `fountain::f_store`
