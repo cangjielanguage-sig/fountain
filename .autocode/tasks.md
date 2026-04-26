@@ -193,7 +193,7 @@ cd f_store
 
 ---
 
-## Step 6: WAL 写入实现
+## ✅ Step 6: WAL 写入实现
 
 **文件**: `src/WAL.cj`（追加）
 **包**: `fountain::f_store`
