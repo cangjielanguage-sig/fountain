@@ -16,10 +16,12 @@ limitations under the License.
 package fountain::f_store
 
 import std.io.{IOStream, SeekPosition}
-import std.fs.{File, OpenMode, Path, Directory, exists}
+import std.fs.{File, OpenMode, Path, Directory, FileInfo, exists}
 import std.sync.AtomicBool
 import std.collection.ArrayList
 import std.binary.*
+import std.sort.*
+import std.convert.*
 import fountain::f_bloom.BloomFilter
 import fountain::f_base.*
 import fountain::f_io.IOUringStream
@@ -389,7 +391,7 @@ class SSTableReader {
         file.read(bloomBuf)
         let n = readInt64LE(bloomBuf, 0)
         // Float64 占据 bloomBuf[1..9] (8 bytes)，手动重建 Array<Byte>
-        let pBuf = Array<Byte>(8){i => bloomBuf[1+i]}
+        let pBuf = Array<Byte>(8){i => bloomBuf[8+i]}
         let p = Float64.readLittleEndian(pBuf)
         let seedCount = readInt64LE(bloomBuf, 16)
         let seeds = Array<UInt64>(seedCount, repeat: 0u64)
@@ -400,9 +402,35 @@ class SSTableReader {
         }
         let bitCount = readInt64LE(bloomBuf, boff)
         boff += 8
-        // 重建 BloomFilter（seed 驱动，bitset 将以 0 初始化为 begin 状态）
+        // 重建 BloomFilter（seed 驱动，bitset 以 0 初始化，需遍历 Data Block 重新填充）
         let filter = BloomFilter.new(n, p, seeds.clone())
-        // 4. 重建 metadata（先用占位 min/max，后续可从第一个/最后一个 Data Block 修正）
+        // 遍历所有 Data Block，将 key 重新 add 到 bloom filter
+        for (i in 0..indexEntries.size) {
+            let blockStart = indexEntries[i].offset
+            let blockEnd = if (i + 1 < indexEntries.size) {
+                indexEntries[i + 1].offset
+            } else {
+                idxOff
+            }
+            let blockSize = blockEnd - blockStart
+            let blockBuf = Array<Byte>(blockSize, repeat: 0u8)
+            file.seek(SeekPosition.Begin(blockStart))
+            file.read(blockBuf)
+            var off = 0
+            while (off + 32 <= blockSize) {
+                let keyLen = readInt64LE(blockBuf, off)
+                let valueLen = readInt64LE(blockBuf, off + 8)
+                let actualValueLen = if (valueLen >= 0) { valueLen } else { 0 }
+                if (off + 32 + keyLen + actualValueLen > blockSize) { break }
+                let kBuf = Array<Byte>(keyLen, repeat: 0u8)
+                for (i in 0..keyLen) {
+                    kBuf[i] = blockBuf[off + 32 + i]
+                }
+                filter.add(kBuf)
+                off += 32 + keyLen + actualValueLen
+            }
+        }
+        // 4. 重建 metadata
         let firstKey = if (indexEntries.size > 0) { indexEntries[0].firstKey } else { ByteArray([]) }
         let lastIdx = indexEntries.size - 1
         let lastKey = if (lastIdx >= 0) { indexEntries[lastIdx].firstKey } else { ByteArray([]) }
@@ -527,29 +555,34 @@ class SSTableIterator <: Iterator<(ByteArray, EntryValue)> {
     private var offsetInBlock: Int64
     private var done: Bool
 
+    let startKey: ?ByteArray
+
     init(file: File, indexEntries: ArrayList<IndexEntry>, indexOffset: Int64, startKey: ?ByteArray) {
         this.file = file
         this.indexEntries = indexEntries
         this.indexOffset = indexOffset
+        this.startKey = startKey
         this.blockIdx = if (let Some(key) <- startKey) {
             // 定位起始 Data Block
             let n = indexEntries.size
-            var lo = 0
-            var hi = n - 1
-            var blocked = false
-            while (lo < hi) {
-                let mid = lo + (hi - lo + 1) / 2
-                if (indexEntries[mid].firstKey <= key) {
-                    lo = mid
-                } else {
-                    hi = mid - 1
-                }
-            }
-            // lo 是候选块，如果 key < firstKey 则从 0 开始
-            if (lo < n && indexEntries[lo].firstKey <= key) {
-                lo
-            } else {
+            if (n == 0) {
                 0
+            } else {
+                var lo = 0
+                var hi = n - 1
+                while (lo < hi) {
+                    let mid = lo + (hi - lo + 1) / 2
+                    if (indexEntries[mid].firstKey <= key) {
+                        lo = mid
+                    } else {
+                        hi = mid - 1
+                    }
+                }
+                if (lo < n && indexEntries[lo].firstKey <= key) {
+                    lo
+                } else {
+                    0
+                }
             }
         } else {
             0
@@ -558,6 +591,51 @@ class SSTableIterator <: Iterator<(ByteArray, EntryValue)> {
         this.offsetInBlock = 0
         this.done = false
         loadBlock()
+        // 跳过 startKey 之前的条目
+        if (let Some(sk) <- startKey) {
+            skipBefore(sk)
+        }
+    }
+
+    /** 跳过所有 key < startKey 的条目 */
+    private func skipBefore(startKey: ByteArray): Unit {
+        while (true) {
+            if (done) { return }
+            if (offsetInBlock + 32 > blockData.size) {
+                blockIdx++
+                if (blockIdx >= indexEntries.size) {
+                    done = true
+                    return
+                }
+                loadBlock()
+                continue
+            }
+            let keyLen = readInt64LE(blockData, offsetInBlock)
+            let valueLen = readInt64LE(blockData, offsetInBlock + 8)
+            let actualValueLen = if (valueLen >= 0) { valueLen } else { 0 }
+            if (offsetInBlock + 32 + keyLen + actualValueLen > blockData.size) {
+                blockIdx++
+                if (blockIdx >= indexEntries.size) {
+                    done = true
+                    return
+                }
+                loadBlock()
+                continue
+            }
+            // 提取 key 比较
+            var off = offsetInBlock + 32
+            let kBuf = Array<Byte>(keyLen, repeat: 0u8)
+            for (i in 0..keyLen) {
+                kBuf[i] = blockData[off]
+                off++
+            }
+            let k = ByteArray(kBuf)
+            if (k >= startKey) {
+                return // 找到起始位置
+            }
+            // 跳过此条目
+            offsetInBlock = offsetInBlock + 32 + keyLen + actualValueLen
+        }
     }
 
     public func next(): Option<(ByteArray, EntryValue)> {
@@ -625,6 +703,115 @@ class SSTableIterator <: Iterator<(ByteArray, EntryValue)> {
         file.seek(SeekPosition.Begin(blockStart))
         file.read(blockData)
         offsetInBlock = 0
+    }
+}
+
+// ==== SSTableFile — SSTable 文件管理 ===========================================
+
+/** SSTable 文件句柄，持有 Reader + 元数据便捷访问。
+ *  文件命名规则: L{level}_{sequenceStart}_{sequenceEnd}.sst
+ */
+class SSTableFile <: Resource {
+    let reader: SSTableReader
+    let metadata: SSTableMetadata
+    let bloomFilter: BloomFilter
+    private let closed: AtomicBool
+
+    init(reader: SSTableReader) {
+        this.reader = reader
+        this.metadata = reader.metadata
+        this.bloomFilter = reader.bloomFilter
+        this.closed = AtomicBool(false)
+    }
+
+    /** 查询 key */
+    func get(key: ByteArray): ?EntryValue {
+        if (closed.load()) {
+            throw StoreClosedException()
+        }
+        reader.get(key)
+    }
+
+    /** 全量有序遍历 */
+    func iterator(): Iterator<(ByteArray, EntryValue)> {
+        reader.iterator()
+    }
+
+    /** 从 min key 开始遍历 */
+    func tailer(min: ByteArray): Iterator<(ByteArray, EntryValue)> {
+        reader.tailer(min)
+    }
+
+    /** 关闭 */
+    public func close(): Unit {
+        if (closed.compareAndSwap(false, true)) {
+            reader.close()
+        }
+    }
+
+    public func isClosed(): Bool {
+        closed.load()
+    }
+
+    /** 从文件路径打开 SSTableFile */
+    static func open(path: String): SSTableFile {
+        let reader = SSTableReader.open(path)
+        SSTableFile(reader)
+    }
+
+    /** 扫描目录，加载所有 .sst 文件 */
+    static func loadAll(sstDir: String): ArrayList<SSTableFile> {
+        let result = ArrayList<SSTableFile>()
+        if (!exists(sstDir)) {
+            return result
+        }
+        let sstFiles = ArrayList<String>()
+        Directory.walk(sstDir) { fi: FileInfo =>
+            if (fi.path.extensionName == "sst" && !fi.isDirectory()) {
+                sstFiles.add(fi.path.toString())
+            }
+            true
+        }
+        sort(sstFiles)
+        for (path in sstFiles) {
+            try {
+                result.add(open(path))
+            } catch (_: Exception) {
+                // 不符合命名规则或损坏的文件跳过
+            }
+        }
+        result
+    }
+
+    /** 解析文件名提取 level 和 sequence 范围。
+     *  文件名格式: L{level}_{seqStart}_{seqEnd}.sst
+     *  返回 (level, seqStart, seqEnd) 或 None
+     */
+    static func parseFileName(fileName: String): ?(Int64, Int64, Int64) {
+        // 去掉 .sst 后缀
+        let name = if (fileName.endsWith(".sst")) {
+            fileName[0 .. (fileName.size - 4)]
+        } else {
+            fileName
+        }
+        // 期望格式: L{level}_{seqStart}_{seqEnd}
+        if (!name.startsWith("L")) {
+            return None
+        }
+        let rest = name[1 .. name.size]
+        let parts = rest.split("_")
+        if (parts.size != 3) {
+            return None
+        }
+        try {
+            let level = Int64.parse(parts[0])
+            let seqStart = Int64.parse(parts[1])
+            let seqEnd = Int64.parse(parts[2])
+            let result: (Int64, Int64, Int64) = (level, seqStart, seqEnd)
+            return Some(result)
+        } catch (_: Exception) {
+            return None
+        }
     }
 }
 
