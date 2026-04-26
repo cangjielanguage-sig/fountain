@@ -18,6 +18,7 @@ package fountain::f_store
 import std.unittest.*
 import std.unittest.testmacro.*
 import std.fs.{File, OpenMode, Directory, remove}
+import std.collection.ArrayList
 
 @Test
 public class StoreStep1Test {
@@ -73,15 +74,15 @@ public class StoreStep1Test {
     @TestCase
     public func entryValueBasic(): Unit {
         let v = EntryValue([0x01, 0x02], 1)
-        @Expect(v.value != None)
+        @Expect(v.value.isSome())
         @Expect(v.sequence == 1)
-        @Expect(v.expireAt == None)
+        @Expect(v.expireAt.isNone())
     }
 
     @TestCase
     public func entryValueWithExpireAt(): Unit {
         let v = EntryValue([0x01], 2, expireAt: 1000000)
-        @Expect(v.value != None)
+        @Expect(v.value.isSome())
         @Expect(v.sequence == 2)
         if (let Some(ea) <- v.expireAt) {
             @Expect(ea == 1000000)
@@ -93,9 +94,9 @@ public class StoreStep1Test {
     @TestCase
     public func entryValueTombstone(): Unit {
         let v = EntryValue(None, 3)
-        @Expect(v.value == None)
+        @Expect(v.value.isNone())
         @Expect(v.sequence == 3)
-        @Expect(v.expireAt == None)
+        @Expect(v.expireAt.isNone())
     }
 
     @TestCase
@@ -170,5 +171,89 @@ public class StoreStep2Test {
     public func createStoreStreamWriteReadFlushClose(): Unit {
         doCreateStoreStreamLinux(testDir)
         doCreateStoreStreamNonLinux(testDir)
+    }
+}
+
+@Test
+public class StoreStep3Test {
+
+    @TestCase
+    public func memTableAddAndGet(): Unit {
+        let mt = MemTable()
+        mt.add(ByteArray([0x01]), EntryValue([0x0A], 1))
+        mt.add(ByteArray([0x02]), EntryValue([0x0B], 2))
+        let v1 = mt.get(ByteArray([0x01]))
+        let v2 = mt.get(ByteArray([0x02]))
+        let v3 = mt.get(ByteArray([0x03]))
+        @Expect(v1.isSome())
+        @Expect(v2.isSome())
+        @Expect(v3.isNone())
+        if (let Some(e) <- v1) {
+            @Expect(e.sequence == 1)
+        }
+        if (let Some(e) <- v2) {
+            @Expect(e.sequence == 2)
+        }
+    }
+
+    @TestCase
+    public func memTableAddOverwrite(): Unit {
+        let mt = MemTable()
+        mt.add(ByteArray([0x01]), EntryValue([0x0A], 1))
+        let old = mt.add(ByteArray([0x01]), EntryValue([0x0B], 2))
+        // 旧值应返回
+        if (let Some(e) <- old) {
+            @Expect(e.sequence == 1)
+        } else {
+            @Assert(false)
+        }
+        // get 返回新值
+        let cur = mt.get(ByteArray([0x01]))
+        if (let Some(e) <- cur) {
+            @Expect(e.sequence == 2)
+        }
+    }
+
+    @TestCase
+    public func memTableIteratorOrdered(): Unit {
+        let mt = MemTable()
+        mt.add(ByteArray([0x03]), EntryValue(None, 3))
+        mt.add(ByteArray([0x01]), EntryValue(None, 1))
+        mt.add(ByteArray([0x02]), EntryValue(None, 2))
+        let iter = mt.iterator()
+        let keys = ArrayList<ByteArray>()
+        while (let Some((k, _)) <- iter.next()) {
+            keys.add(k)
+        }
+        @Expect(keys.size == 3)
+        @Expect(keys[0] == ByteArray([0x01]))
+        @Expect(keys[1] == ByteArray([0x02]))
+        @Expect(keys[2] == ByteArray([0x03]))
+    }
+
+    @TestCase
+    public func memTableTailer(): Unit {
+        let mt = MemTable()
+        mt.add(ByteArray([0x01]), EntryValue(None, 1))
+        mt.add(ByteArray([0x02]), EntryValue(None, 2))
+        mt.add(ByteArray([0x03]), EntryValue(None, 3))
+        mt.add(ByteArray([0x04]), EntryValue(None, 4))
+        let iter = mt.tailer(ByteArray([0x02]))
+        let keys = ArrayList<ByteArray>()
+        while (let Some((k, _)) <- iter.next()) {
+            keys.add(k)
+        }
+        @Expect(keys.size == 3)
+        @Expect(keys[0] == ByteArray([0x02]))
+        @Expect(keys[1] == ByteArray([0x03]))
+        @Expect(keys[2] == ByteArray([0x04]))
+    }
+
+    @TestCase
+    public func memTableApproximateSize(): Unit {
+        let mt = MemTable()
+        @Expect(mt.approximateSize() == 0)
+        mt.add(ByteArray([0x01, 0x02]), EntryValue([0x0A, 0x0B], 1))
+        @Expect(mt.approximateSize() > 0)
     }
 }

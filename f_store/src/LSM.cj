@@ -14,3 +14,40 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 package fountain::f_store
+
+import fountain::f_concurrent.ConcurrentSkipListMap
+import std.sync.AtomicInt64
+
+/** 内存表，基于 ConcurrentSkipListMap 实现无锁读写 */
+class MemTable {
+    let table: ConcurrentSkipListMap<ByteArray, EntryValue>
+    let byteCount: AtomicInt64
+
+    init() {
+        table = ConcurrentSkipListMap<ByteArray, EntryValue>()
+        byteCount = AtomicInt64(0)
+    }
+
+    func add(key: ByteArray, entry: EntryValue): ?EntryValue {
+        let old = table.add(key, entry)
+        // 近似计算：key 字节数 + value 字节数 + 元数据开销
+        byteCount.fetchAdd(key.bytes.size + (if (let Some(v) <- entry.value) { v.size } else { 0 }) + 24)
+        old
+    }
+
+    func get(key: ByteArray): ?EntryValue {
+        table.get(key)
+    }
+
+    func iterator(): Iterator<(ByteArray, EntryValue)> {
+        table.iterator()
+    }
+
+    func tailer(min: ByteArray): Iterator<(ByteArray, EntryValue)> {
+        table.tailer(min)
+    }
+
+    func approximateSize(): Int64 {
+        byteCount.load()
+    }
+}
