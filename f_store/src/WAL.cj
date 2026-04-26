@@ -18,6 +18,8 @@ package fountain::f_store
 import std.sync.{AtomicBool, AtomicInt64}
 import std.fs.*
 import std.io.IOStream
+import std.collection.ArrayList
+import std.sort.*
 import fountain::f_util.crc32
 import fountain::f_base.*
 import fountain::f_io.IOUringStream
@@ -30,7 +32,7 @@ import fountain::f_concurrent.ExtendAtomicInt64
  *  expire_at = 0 表示永不过期
  *  checksum 覆盖 sequence + key_len + value_len + expire_at + key_bytes + value_bytes
  */
-struct WALRecord {
+class WALRecord {
     let checksum: UInt32
     let sequence: Int64
     let key: Array<Byte>
@@ -45,7 +47,7 @@ struct WALRecord {
         this.checksum = WALRecordCodec.computeChecksum(sequence, key, value, expireAt)
     }
 
-    private init(checksum: UInt32, sequence: Int64, key: Array<Byte>, value: ?Array<Byte>, expireAt: ?Int64) {
+    init(checksum: UInt32, sequence: Int64, key: Array<Byte>, value: ?Array<Byte>, expireAt!: ?Int64 = None) {
         this.checksum = checksum
         this.sequence = sequence
         this.key = key
@@ -128,7 +130,7 @@ struct WALRecord {
         if (checksum != expected) {
             return None
         }
-        WALRecord(checksum, sequence, keyBytes, value, expireAt)
+        WALRecord(checksum, sequence, keyBytes, value, expireAt: expireAt)
     }
 }
 
@@ -274,4 +276,103 @@ class WAL <: Resource {
     }
 }
 
+/** WAL 读取器，使用 std.fs.File 同步读取（恢复是启动时一次性操作，不需要 io_uring） */
+class WALReader {
+    /** 读取 WAL 文件所有完整记录，截断的记录被忽略 */
+    static func readAll(path: String): ArrayList<WALRecord> {
+        let result = ArrayList<WALRecord>()
+        if (!exists(path)) {
+            return result
+        }
+        let file = File(path, OpenMode.Read)
+        let fileSize = file.info.size
+        if (fileSize < 36) {
+            file.close()
+            return result
+        }
+        // 先把整个文件读入内存
+        let allBytes = Array<Byte>(Int64(fileSize), repeat: 0u8)
+        let bytesRead = file.read(allBytes)
+        file.close()
+        var offset = 0
+        while (offset + 36 <= bytesRead) {
+            let checksum = readUInt32LE(allBytes, offset)
+            offset += 4
+            let sequence = readInt64LE(allBytes, offset)
+            offset += 8
+            let keyLen = readInt64LE(allBytes, offset)
+            offset += 8
+            let valueLen = readInt64LE(allBytes, offset)
+            offset += 8
+            let expireAtVal = readInt64LE(allBytes, offset)
+            offset += 8
+            // valueLen < 0 表示 tombstone
+            let actualValueLen = if (valueLen >= 0) { valueLen } else { 0 }
+            // 检查剩余长度
+            if (offset + keyLen + actualValueLen > bytesRead) {
+                break // 截断的记录
+            }
+            if (keyLen < 0) {
+                break // 非法数据
+            }
+            let keyBytes = Array<Byte>(keyLen, repeat: 0u8)
+            for (i in 0..keyLen) {
+                keyBytes[i] = allBytes[offset]
+                offset++
+            }
+            let value: ?Array<Byte> = if (valueLen >= 0) {
+                let valueBytes = Array<Byte>(valueLen, repeat: 0u8)
+                for (i in 0..valueLen) {
+                    valueBytes[i] = allBytes[offset]
+                    offset++
+                }
+                Some(valueBytes)
+            } else {
+                None
+            }
+            let expireAt: ?Int64 = if (expireAtVal != 0) { Some(expireAtVal) } else { None }
+            // 验证 checksum
+            let expected = WALRecordCodec.computeChecksum(sequence, keyBytes, value, expireAt)
+            if (checksum != expected) {
+                break // checksum 不匹配，视为截断
+            }
+            result.add(WALRecord(checksum, sequence, keyBytes, value, expireAt: expireAt))
+        }
+        result
+    }
 
+    /** 从 WAL 文件恢复到 MemTable */
+    static func recover(path: String): MemTable {
+        let records = readAll(path)
+        let mt = MemTable()
+        for (record in records) {
+            mt.add(ByteArray(record.key), EntryValue(record.value, record.sequence, expireAt: record.expireAt))
+        }
+        mt
+    }
+
+    /** 从目录下所有 WAL 文件恢复（按文件名排序） */
+    static func recoverAll(walDir: String): MemTable {
+        let mt = MemTable()
+        if (!exists(walDir)) {
+            return mt
+        }
+        // 扫描目录，收集 .wal 文件
+        let walFiles = ArrayList<String>()
+        Directory.walk(walDir) { fi: FileInfo =>
+            if (fi.path.extensionName == "wal" && !fi.isDirectory()) {
+                walFiles.add(fi.path.toString())
+            }
+            true
+        }
+        // 按文件名排序（文件名包含 sequence_start，自然有序）
+        sort(walFiles)
+        for (walPath in walFiles) {
+            let records = readAll(walPath)
+            for (record in records) {
+                mt.add(ByteArray(record.key), EntryValue(record.value, record.sequence, expireAt: record.expireAt))
+            }
+        }
+        mt
+    }
+}

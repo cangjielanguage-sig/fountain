@@ -431,3 +431,92 @@ public class StoreStep5Test {
         }
     }
 }
+
+@Test
+public class StoreStep7Test {
+
+    let testDir = "/tmp/f_store_step7_test"
+
+    @TestCase
+    public func walReadAllAndRecover(): Unit {
+        Directory.create(testDir, recursive: true)
+        let walPath = "${testDir}/test.wal"
+        let wal = WAL(walPath)
+        wal.append([0x01, 0x02], [0x0A, 0x0B])
+        wal.append([0x03], [0x0C], expireAt: 1000000)
+        wal.append([0x04], None) // tombstone
+        wal.sync()
+        wal.close()
+        // 读取所有记录
+        let records = WALReader.readAll(walPath)
+        @Expect(records.size == 3)
+        @Expect(records[0].key == [0x01, 0x02])
+        @Expect(records[0].value.isSome())
+        @Expect(records[1].expireAt.isSome())
+        @Expect(records[2].value.isNone())
+        // 恢复到 MemTable
+        let mt = WALReader.recover(walPath)
+        let v1 = mt.get(ByteArray([0x01, 0x02]))
+        @Expect(v1.isSome())
+        let v3 = mt.get(ByteArray([0x04]))
+        @Expect(v3.isSome()) // tombstone 也存在 MemTable 中
+        if (let Some(e) <- v3) {
+            @Expect(e.value.isNone()) // 但 value 为 None
+        }
+        // 清理
+        remove(testDir, recursive: true)
+    }
+
+    @TestCase
+    public func walReadAllTruncatedRecord(): Unit {
+        Directory.create(testDir, recursive: true)
+        let walPath = "${testDir}/truncated.wal"
+        let wal = WAL(walPath)
+        wal.append([0x01], [0x0A])
+        wal.append([0x02], [0x0B])
+        wal.sync()
+        wal.close()
+        // 截断文件末尾几个字节模拟崩溃
+        let file = File(walPath, OpenMode.ReadWrite)
+        let size = file.info.size
+        file.setLength(size - 5)
+        file.close()
+        // 读取应只得到第一条完整记录
+        let records = WALReader.readAll(walPath)
+        @Expect(records.size >= 1) // 至少第一条
+        @Expect(records.size <= 2) // 第二条可能被截断
+        // 清理
+        remove(testDir, recursive: true)
+    }
+
+    @TestCase
+    public func walReadAllEmptyFile(): Unit {
+        Directory.create(testDir, recursive: true)
+        let walPath = "${testDir}/empty.wal"
+        let file = File(walPath, OpenMode.ReadWrite)
+        file.close()
+        let records = WALReader.readAll(walPath)
+        @Expect(records.size == 0)
+        remove(testDir, recursive: true)
+    }
+
+    @TestCase
+    public func walRecoverAll(): Unit {
+        let walDir = "${testDir}/wal"
+        Directory.create(walDir, recursive: true)
+        // 写入两个 WAL 文件
+        let wal1 = WAL("${walDir}/0001.wal")
+        wal1.append([0x01], [0x0A])
+        wal1.sync()
+        wal1.close()
+        let wal2 = WAL("${walDir}/0002.wal")
+        wal2.append([0x02], [0x0B])
+        wal2.sync()
+        wal2.close()
+        // 恢复
+        let mt = WALReader.recoverAll(walDir)
+        @Expect(mt.get(ByteArray([0x01])).isSome())
+        @Expect(mt.get(ByteArray([0x02])).isSome())
+        remove(testDir, recursive: true)
+    }
+}
