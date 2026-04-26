@@ -7,7 +7,7 @@ cd f_store
 
 ---
 
-## Step 1: 基础数据结构 — ByteArray + EntryValue + 异常类
+## ✅ Step 1: 基础数据结构 — ByteArray + EntryValue + 异常类
 
 **文件**: `src/Store.cj`
 **包**: `fountain::f_store`
@@ -38,7 +38,7 @@ cd f_store
 
 ---
 
-## Step 2: IO 工厂函数 — createStoreStream
+## ✅ Step 2: IO 工厂函数 — createStoreStream
 
 **文件**: `src/Store.cj`（追加）
 **包**: `fountain::f_store`
@@ -85,7 +85,7 @@ cd f_store
 
 ---
 
-## Step 3: MemTable — 内存表
+## ✅ Step 3: MemTable — 内存表
 
 **文件**: `src/LSM.cj`
 **包**: `fountain::f_store`
@@ -115,7 +115,7 @@ cd f_store
 
 ---
 
-## Step 4: MemTableManager — 双缓冲管理
+## ✅ Step 4: MemTableManager — 双缓冲管理
 
 **文件**: `src/LSM.cj`（追加到同文件）
 **包**: `fountain::f_store`
@@ -148,7 +148,7 @@ cd f_store
 
 ---
 
-## Step 5: WAL 记录编解码
+## ✅ Step 5: WAL 记录编解码
 
 **文件**: `src/WAL.cj`
 **包**: `fountain::f_store`

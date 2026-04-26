@@ -19,7 +19,6 @@ import std.unittest.*
 import std.unittest.testmacro.*
 import std.fs.{File, OpenMode, Directory, remove}
 import std.collection.ArrayList
-import std.sync.AtomicInt64
 
 @Test
 public class StoreStep1Test {
@@ -299,5 +298,136 @@ public class StoreStep4Test {
         // immutable 非空时再次 swap 应返回 None
         let second = mgr.swapActive()
         @Expect(second.isNone())
+    }
+}
+
+@Test
+public class StoreStep5Test {
+
+    @TestCase
+    public func walRecordEncodeDecodeRoundTrip(): Unit {
+        let key: Array<Byte> = [0x01, 0x02, 0x03]
+        let value: Array<Byte> = [0x0A, 0x0B]
+        let record = WALRecord(42, key, Some(value))
+        let encoded = record.encode()
+        let decoded = WALRecord.decode(encoded)
+        @Expect(decoded.isSome())
+        if (let Some(r) <- decoded) {
+            @Expect(r.sequence == 42)
+            @Expect(r.key == key)
+            @Expect(r.value.isSome())
+            if (let Some(v) <- r.value) {
+                @Expect(v == value)
+            }
+            @Expect(r.expireAt.isNone())
+        }
+    }
+
+    @TestCase
+    public func walRecordTombstone(): Unit {
+        let key: Array<Byte> = [0x01]
+        let record = WALRecord(1, key, None)
+        let encoded = record.encode()
+        let decoded = WALRecord.decode(encoded)
+        @Expect(decoded.isSome())
+        if (let Some(r) <- decoded) {
+            @Expect(r.sequence == 1)
+            @Expect(r.key == key)
+            @Expect(r.value.isNone())
+            @Expect(r.expireAt.isNone())
+        }
+    }
+
+    @TestCase
+    public func walRecordWithExpireAt(): Unit {
+        let key: Array<Byte> = [0x01]
+        let value: Array<Byte> = [0x0A]
+        let expireAt: Int64 = 1000000000
+        let record = WALRecord(2, key, Some(value), expireAt: expireAt)
+        let encoded = record.encode()
+        let decoded = WALRecord.decode(encoded)
+        @Expect(decoded.isSome())
+        if (let Some(r) <- decoded) {
+            @Expect(r.sequence == 2)
+            @Expect(r.expireAt.isSome())
+            if (let Some(ea) <- r.expireAt) {
+                @Expect(ea == expireAt)
+            }
+        }
+    }
+
+    @TestCase
+    public func walRecordExpireAtNoneEncodedAsZero(): Unit {
+        let record = WALRecord(3, [0x01], None)
+        let encoded = record.encode()
+        // expire_at 位于 offset 20 (checksum 4 + seq 8 + key_len 8 + value_len 8 = 28)
+        // 但在 value_len 后面 8 字节，即 offset 4+8+8+8+8=36... 重新算
+        // checksum(4) + sequence(8) + key_len(8) + value_len(8) + expire_at(8)
+        // 所以 expire_at 从 offset 28 开始
+        let expireAtBytes = Array<Byte>(8, repeat: 0u8)
+        for (i in 0..8) {
+            expireAtBytes[i] = encoded[28 + i]
+        }
+        // 所有字节应为 0（表示永不过期）
+        for (b in expireAtBytes) {
+            @Expect(b == 0u8)
+        }
+    }
+
+    @TestCase
+    public func walRecordCorruptedChecksumReturnsNone(): Unit {
+        let record = WALRecord(5, [0x01], Some([0x0Au8]))
+        let encoded = record.encode()
+        // 篡改第一个字节（checksum 的一部分）
+        encoded[0] = encoded[0] ^ 0xFFu8
+        let decoded = WALRecord.decode(encoded)
+        @Expect(decoded.isNone())
+    }
+
+    @TestCase
+    public func walRecordEmptyKey(): Unit {
+        let key: Array<Byte> = []
+        let value: Array<Byte> = [0x0A]
+        let record = WALRecord(6, key, Some(value))
+        let encoded = record.encode()
+        let decoded = WALRecord.decode(encoded)
+        @Expect(decoded.isSome())
+        if (let Some(r) <- decoded) {
+            @Expect(r.sequence == 6)
+            @Expect(r.key.size == 0)
+        }
+    }
+
+    @TestCase
+    public func walRecordEmptyValue(): Unit {
+        let val: Array<Byte> = []
+        let record = WALRecord(7, [0x01], Some(val))
+        let encoded = record.encode()
+        let decoded = WALRecord.decode(encoded)
+        @Expect(decoded.isSome())
+        if (let Some(r) <- decoded) {
+            @Expect(r.value.isSome())
+            if (let Some(v) <- r.value) {
+                @Expect(v.size == 0)
+            }
+        }
+    }
+
+    @TestCase
+    public func walRecordLargeKeyValue(): Unit {
+        let key = Array<Byte>(1000, repeat: 0xABu8)
+        let value = Array<Byte>(5000, repeat: 0xCDu8)
+        let record = WALRecord(8, key, Some(value))
+        let encoded = record.encode()
+        let decoded = WALRecord.decode(encoded)
+        @Expect(decoded.isSome())
+        if (let Some(r) <- decoded) {
+            @Expect(r.sequence == 8)
+            @Expect(r.key.size == 1000)
+            @Expect(r.value.isSome())
+            if (let Some(v) <- r.value) {
+                @Expect(v.size == 5000)
+            }
+        }
     }
 }
