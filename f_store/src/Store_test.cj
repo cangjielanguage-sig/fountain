@@ -520,3 +520,136 @@ public class StoreStep7Test {
         remove(testDir, recursive: true)
     }
 }
+
+@Test
+public class StoreStep11Test {
+
+    let testDir = "/tmp/f_store_step11_test"
+
+    @TestCase
+    public func levelManagerLoadMultipleL0AndGet(): Unit {
+        Directory.create(testDir, recursive: true)
+        // 写入 L0 文件 1
+        let writer1 = SSTableWriter("${testDir}/L0_100_200.sst", 2)
+        writer1.write(ByteArray([0x01, 0x0A]), EntryValue([0xAA], 100))
+        writer1.write(ByteArray([0x02, 0x0B]), EntryValue([0xBB], 101))
+        writer1.finish()
+        // 写入 L0 文件 2
+        let writer2 = SSTableWriter("${testDir}/L0_200_300.sst", 2)
+        writer2.write(ByteArray([0x03, 0x0C]), EntryValue([0xCC], 200))
+        writer2.write(ByteArray([0x04, 0x0D]), EntryValue([0xDD], 201))
+        writer2.finish()
+
+        let mgr = LevelManager(testDir)
+        mgr.loadExisting()
+        // 在 L0 的多个文件中查找
+        let v1 = mgr.get(ByteArray([0x01, 0x0A]))
+        @Expect(v1.isSome())
+        let v3 = mgr.get(ByteArray([0x03, 0x0C]))
+        @Expect(v3.isSome())
+        // 不存在的 key
+        let vNone = mgr.get(ByteArray([0xFF]))
+        @Expect(vNone.isNone())
+
+        mgr.closeAll()
+        remove(testDir, recursive: true)
+    }
+
+    @TestCase
+    public func levelManagerShouldCompact(): Unit {
+        Directory.create(testDir, recursive: true)
+        // 往 L0 添加 4 个 SSTableFile，shouldCompact 应返回 true
+        let writer = SSTableWriter("${testDir}/L0_1_10.sst", 1)
+        writer.write(ByteArray([0x01]), EntryValue([0x0A], 1))
+        writer.finish()
+        let sst1 = SSTableFile.open("${testDir}/L0_1_10.sst")
+
+        let writer2 = SSTableWriter("${testDir}/L0_2_10.sst", 1)
+        writer2.write(ByteArray([0x02]), EntryValue([0x0B], 2))
+        writer2.finish()
+        let sst2 = SSTableFile.open("${testDir}/L0_2_10.sst")
+
+        let writer3 = SSTableWriter("${testDir}/L0_3_10.sst", 1)
+        writer3.write(ByteArray([0x03]), EntryValue([0x0C], 3))
+        writer3.finish()
+        let sst3 = SSTableFile.open("${testDir}/L0_3_10.sst")
+
+        let writer4 = SSTableWriter("${testDir}/L0_4_10.sst", 1)
+        writer4.write(ByteArray([0x04]), EntryValue([0x0D], 4))
+        writer4.finish()
+        let sst4 = SSTableFile.open("${testDir}/L0_4_10.sst")
+
+        let mgr = LevelManager(testDir)
+        mgr.addSSTable(0, sst1)
+        mgr.addSSTable(0, sst2)
+        mgr.addSSTable(0, sst3)
+        // 只有 3 个，shouldCompact 应返回 false
+        @Expect(mgr.shouldCompact(0) == false)
+        mgr.addSSTable(0, sst4)
+        // 4 个，shouldCompact 应返回 true
+        @Expect(mgr.shouldCompact(0))
+
+        mgr.closeAll()
+        remove(testDir, recursive: true)
+    }
+
+    @TestCase
+    public func levelManagerGetPriority(): Unit {
+        Directory.create(testDir, recursive: true)
+        // L0 写入 (value = 0xAA)
+        let w0 = SSTableWriter("${testDir}/L0_100_100.sst", 1)
+        w0.write(ByteArray([0x10]), EntryValue([0xAA], 100))
+        w0.finish()
+        // L1 写入 (value = 0xBB, 同 key)
+        let w1 = SSTableWriter("${testDir}/L1_200_200.sst", 1)
+        w1.write(ByteArray([0x10]), EntryValue([0xBB], 200))
+        w1.finish()
+        // L2 写入 (value = 0xCC, 同 key)
+        let w2 = SSTableWriter("${testDir}/L2_300_300.sst", 1)
+        w2.write(ByteArray([0x10]), EntryValue([0xCC], 300))
+        w2.finish()
+
+        let sst0 = SSTableFile.open("${testDir}/L0_100_100.sst")
+        let sst1 = SSTableFile.open("${testDir}/L1_200_200.sst")
+        let sst2 = SSTableFile.open("${testDir}/L2_300_300.sst")
+
+        let mgr = LevelManager(testDir)
+        mgr.addSSTable(0, sst0)
+        mgr.addSSTable(1, sst1)
+        mgr.addSSTable(2, sst2)
+
+        // L0 高优先级，应返回 0xAA
+        let v = mgr.get(ByteArray([0x10]))
+        @Expect(v.isSome())
+        if (let Some(e) <- v) {
+            if (let Some(val) <- e.value) {
+                @Expect(val == [0xAA])
+            } else {
+                @Assert(false)
+            }
+        }
+
+        mgr.closeAll()
+        remove(testDir, recursive: true)
+    }
+
+    @TestCase
+    public func levelManagerExpiredGetReturnsNone(): Unit {
+        Directory.create(testDir, recursive: true)
+        // 写入一条过期数据 (expireAt 远在过去)
+        let expiredAt = Int64(1) // 1970-01-01 之后 1 纳秒，肯定过期
+        let writer = SSTableWriter("${testDir}/L0_1_1.sst", 1)
+        writer.write(ByteArray([0x20]), EntryValue([0xEE], 1, expireAt: expiredAt))
+        writer.finish()
+
+        let sst = SSTableFile.open("${testDir}/L0_1_1.sst")
+        let mgr = LevelManager(testDir)
+        mgr.addSSTable(0, sst)
+
+        let v = mgr.get(ByteArray([0x20]))
+        @Expect(v.isNone()) // 过期数据应返回 None
+
+        mgr.closeAll()
+        remove(testDir, recursive: true)
+    }
+}

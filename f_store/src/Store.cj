@@ -38,20 +38,14 @@ public struct ByteArray <: Comparable<ByteArray> & Hashable {
     public func compare(other: ByteArray): Ordering {
         let a = this.bytes
         let b = other.bytes
-        let minLen = if (a.size < b.size) { a.size } else { b.size }
+        let minLen = if (a.size <= b.size) { a.size } else { b.size }
         for (i in 0..minLen) {
             match (a[i].compare(b[i])) {
                 case EQ => continue
                 case x => return x
             }
         }
-        if (a.size < b.size) {
-            return LT
-        }
-        if (a.size > b.size) {
-            return GT
-        }
-        return EQ
+        a.size.compare(b.size)
     }
 
     public func hashCode(): Int64 {

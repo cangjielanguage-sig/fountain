@@ -205,20 +205,16 @@ class LevelManager {
             let newList = ArrayList<SSTableFile>()
             for (sst in levels[level]) {
                 var shouldKeep = true
-                for (rm in toRemove) {
-                    if (refEq(sst, rm)) {
-                        shouldKeep = false
-                        break
-                    }
+                for (rm in toRemove where refEq(sst, rm)) {
+                    shouldKeep = false
+                    break
                 }
                 if (shouldKeep) {
                     newList.add(sst)
                 }
             }
             levels[level].clear()
-            for (sst in newList) {
-                levels[level].add(sst)
-            }
+            levels[level].add(all: newList)
         }
     }
 

@@ -383,7 +383,7 @@ cd f_store
 
 ---
 
-## Step 9: SSTable 文件格式 — 读取
+## ✅ Step 9: SSTable 文件格式 — 读取
 
 **文件**: `src/SSTable.cj`（追加）
 **包**: `fountain::f_store`
@@ -443,7 +443,7 @@ cd f_store
 
 ---
 
-## Step 10: SSTableFile — SSTable 文件管理
+## ✅ Step 10: SSTableFile — SSTable 文件管理
 
 **文件**: `src/SSTable.cj`（追加）
 **包**: `fountain::f_store`
@@ -475,7 +475,7 @@ cd f_store
 
 ---
 
-## Step 11: LevelManager — 层级管理
+## ✅ Step 11: LevelManager — 层级管理
 
 **文件**: `src/LSM.cj`（追加）
 **包**: `fountain::f_store`
@@ -513,11 +513,11 @@ cd f_store
    - L0: SSTable 数量 ≥ 4
    - Ln (n≥1): 总大小 ≥ 10^n MB
 
-### 测试
-- 加载多个 L0 SSTable → get 在所有 L0 文件中查找
-- addSSTable 后 shouldCompact 返回 true
-- get 的优先级：L0 > L1 > L2
-- 过期数据 get 返回 None
+### 测试 ✅
+- ✅ 加载多个 L0 SSTable → get 在所有 L0 文件中查找
+- ✅ addSSTable 后 shouldCompact 返回 true
+- ✅ get 的优先级：L0 > L1 > L2
+- ✅ 过期数据 get 返回 None
 
 ---
 
