@@ -82,6 +82,7 @@ struct IndexEntry {
  *    magic = 0x53545354 ("STST" in ASCII)
  */
 class SSTableWriter {
+    private let path: String
     private let file: File
     private let stream: IOStream
     private let bloomFilter: BloomFilter
@@ -107,6 +108,7 @@ class SSTableWriter {
         if (!exists(parentDir)) {
             Directory.create(parentDir, recursive: true)
         }
+        this.path = path
         this.file = File(path, OpenMode.ReadWrite)
         @When[os == "Linux"]
         let s = IOUringStream(Int32(file.fileDescriptor.fileHandle))
@@ -222,7 +224,7 @@ class SSTableWriter {
         let actualMaxKey = maxKey ?? ByteArray([])
         SSTableMetadata(
             actualMinKey, actualMaxKey, entryCount, 0,
-            sequenceStart, sequenceEnd, ""
+            sequenceStart, sequenceEnd, path
         )
     }
 

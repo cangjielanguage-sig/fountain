@@ -17,6 +17,9 @@ package fountain::f_store
 
 import fountain::f_concurrent.ConcurrentSkipListMap
 import std.sync.{AtomicInt64, AtomicReference, AtomicOptionReference, Mutex}
+import std.collection.ArrayList
+import std.fs.{Directory, exists}
+import std.time.DateTime
 
 /** 内存表，基于 ConcurrentSkipListMap 实现无锁读写 */
 class MemTable {
@@ -89,5 +92,210 @@ class MemTableManager {
     /** 刷盘完成后清空 immutable 引用 */
     func clearImmutable(): Unit {
         immutable.store(None)
+    }
+}
+
+/** 层级管理：管理 L0~Ln 各层的 SSTableFile 列表，提供带过期检查的 get 查询 */
+class LevelManager {
+    let sstDir: String
+    let levels: Array<ArrayList<SSTableFile>>
+    let levelCount: Int64
+    let levelLocks: Array<Mutex>
+
+    init(sstDir: String, levelCount!: Int64 = 7) {
+        this.sstDir = sstDir
+        this.levelCount = levelCount
+        this.levels = Array<ArrayList<SSTableFile>>(levelCount, repeat: ArrayList<SSTableFile>())
+        this.levelLocks = Array<Mutex>(levelCount, repeat: Mutex())
+    }
+
+    /** 从 sstDir 加载已有 SSTable 文件 */
+    func loadExisting(): Unit {
+        if (!exists(sstDir)) {
+            return
+        }
+        let files = SSTableFile.loadAll(sstDir)
+        for (f in files) {
+            let level = f.metadata.level
+            if (level >= 0 && level < levelCount) {
+                levels[level].add(f)
+            } else {
+                f.close()
+            }
+        }
+    }
+
+    /** 从 L0 到 Ln 逐层查找 key，含过期检查 */
+    func get(key: ByteArray): ?EntryValue {
+        let now = DateTime.now().toUnixTimeStamp().toNanoseconds()
+        for (level in 0..levelCount) {
+            let result = getInLevel(level, key, now)
+            if (result.isSome()) {
+                return result
+            }
+        }
+        None
+    }
+
+    /** 在指定层查找 key */
+    private func getInLevel(level: Int64, key: ByteArray, now: Int64): ?EntryValue {
+        synchronized(levelLocks[level]) {
+            let sstList = levels[level]
+            if (level == 0) {
+                // L0: 遍历所有 SSTable（无序，可能有重叠）
+                for (i in 0..sstList.size) {
+                    let entry = sstList[i].get(key)
+                    if (entry.isSome()) {
+                        if (let Some(e) <- entry) {
+                            return checkExpiry(e, now)
+                        }
+                    }
+                }
+            } else {
+                // Ln (n≥1): 按 metadata min/max 筛选范围匹配的 SSTable
+                for (i in 0..sstList.size) {
+                    let sst = sstList[i]
+                    let meta = sst.metadata
+                    if (key < meta.minKey || key > meta.maxKey) {
+                        continue
+                    }
+                    let entry = sst.get(key)
+                    if (entry.isSome()) {
+                        if (let Some(e) <- entry) {
+                            return checkExpiry(e, now)
+                        }
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    /** 过期检查：tombstone 或已过期返回 None，否则返回 entry */
+    private func checkExpiry(entry: EntryValue, now: Int64): ?EntryValue {
+        // 已过期
+        if (let Some(ea) <- entry.expireAt) {
+            if (ea <= now) {
+                return None
+            }
+        }
+        // tombstone
+        if (entry.value.isNone()) {
+            return None
+        }
+        Some(entry)
+    }
+
+    /** 添加 SSTable 到指定层 */
+    func addSSTable(level: Int64, sst: SSTableFile): Unit {
+        if (level < 0 || level >= levelCount) {
+            return
+        }
+        synchronized(levelLocks[level]) {
+            levels[level].add(sst)
+        }
+    }
+
+    /** 从指定层移除一批 SSTable，通过对象引用匹配 */
+    func removeSSTables(level: Int64, toRemove: ArrayList<SSTableFile>): Unit {
+        if (level < 0 || level >= levelCount) {
+            return
+        }
+        synchronized(levelLocks[level]) {
+            let newList = ArrayList<SSTableFile>()
+            for (sst in levels[level]) {
+                var shouldKeep = true
+                for (rm in toRemove) {
+                    if (refEq(sst, rm)) {
+                        shouldKeep = false
+                        break
+                    }
+                }
+                if (shouldKeep) {
+                    newList.add(sst)
+                }
+            }
+            levels[level].clear()
+            for (sst in newList) {
+                levels[level].add(sst)
+            }
+        }
+    }
+
+    /** 获取指定层用于 Compaction 的 SSTable 快照 */
+    func getSSTablesForCompaction(level: Int64): ArrayList<SSTableFile> {
+        let result = ArrayList<SSTableFile>()
+        if (level < 0 || level >= levelCount) {
+            return result
+        }
+        synchronized(levelLocks[level]) {
+            for (sst in levels[level]) {
+                result.add(sst)
+            }
+        }
+        result
+    }
+
+    /** 获取指定层与 [min, max] 范围重叠的 SSTable */
+    func getOverlappingSSTables(level: Int64, min: ByteArray, max: ByteArray): ArrayList<SSTableFile> {
+        let result = ArrayList<SSTableFile>()
+        if (level < 0 || level >= levelCount) {
+            return result
+        }
+        synchronized(levelLocks[level]) {
+            for (sst in levels[level]) {
+                let meta = sst.metadata
+                // 重叠条件: sst.minKey <= max && sst.maxKey >= min
+                if (meta.minKey <= max && meta.maxKey >= min) {
+                    result.add(sst)
+                }
+            }
+        }
+        result
+    }
+
+    /** 判断指定层是否需要 Compaction */
+    func shouldCompact(level: Int64): Bool {
+        if (level < 0 || level >= levelCount) {
+            return false
+        }
+        synchronized(levelLocks[level]) {
+            let count = levels[level].size
+            if (level == 0) {
+                return count >= 4
+            }
+            // Ln (n≥1): 总大小 >= 10^n MB
+            let sizeLimitMB = pow10(level)
+            var totalSize: Int64 = 0
+            for (sst in levels[level]) {
+                // 用 entryCount 近似估算大小（无法直接获取文件大小，除非存储 filePath 后 stat）
+                totalSize += sst.metadata.entryCount * 100 // 粗略估算每条 100 字节
+            }
+            let totalMB = totalSize / (1024 * 1024)
+            totalMB >= sizeLimitMB
+        }
+    }
+
+    /** 关闭所有 SSTable */
+    func closeAll(): Unit {
+        for (level in 0..levelCount) {
+            synchronized(levelLocks[level]) {
+                for (sst in levels[level]) {
+                    try {
+                        sst.close()
+                    } catch (_: Exception) {}
+                }
+                levels[level].clear()
+            }
+        }
+    }
+
+    /** 计算 10^n（MB 单位阈值） */
+    private func pow10(n: Int64): Int64 {
+        var result: Int64 = 1
+        for (_ in 0..n) {
+            result *= 10
+        }
+        result
     }
 }
