@@ -34,6 +34,11 @@ public class Store <: Resource {
     private let memFlushThreshold: Int64
 
     /** 从路径打开或创建 Store */
+    public init(path: Path) {
+        this(path.toString())
+    }
+
+    /** 从路径打开或创建 Store */
     public init(path: String) {
         this.path = path
         this.walDir = "${path}/wal"
@@ -92,44 +97,24 @@ public class Store <: Resource {
         None
     }
 
-    /** 添加带 TTL 的键值对 */
-    public func add(key: Array<Byte>, value: Array<Byte>, expire: Duration): ?Array<Byte> {
-        guardOpen()
-        let expireAt = DateTime.now().toUnixTimeStamp().toNanoseconds() + expire.toNanoseconds()
-        let seq = wal.append(key, value, expireAt: expireAt)
-        let entry = EntryValue(value, seq, expireAt: expireAt)
-        let old = memTableManager.getActive().add(ByteArray(key), entry)
-        maybeFlush()
-        if (let Some(oldEntry) <- old) {
-            if (let Some(oldExpire) <- oldEntry.expireAt) {
-                if (oldExpire <= DateTime.now().toUnixTimeStamp().toNanoseconds()) {
-                    return None // 旧值已过期
-                }
-            }
-            return oldEntry.value
-        }
-        None
+    /** 添加带过期时间的键值对 */
+    public func add(key: Array<Byte>, value: Array<Byte>, expireAt: DateTime): ?Array<Byte> {
+        addWithExpire(key, value, expireAt.toUnixTimeStamp().toNanoseconds())
     }
 
-    /** 设置/更新已有 key 的过期时间 */
+    /** 添加带 TTL 的键值对 */
+    public func add(key: Array<Byte>, value: Array<Byte>, expire: Duration): ?Array<Byte> {
+        addWithExpire(key, value, DateTime.now().toUnixTimeStamp().toNanoseconds() + expire.toNanoseconds())
+    }
+
+    /** 设置/更新已有 key 的过期时间（指定绝对时间） */
+    public func ttl(key: Array<Byte>, expireAt: DateTime): Unit {
+        ttlInternal(key, expireAt.toUnixTimeStamp().toNanoseconds())
+    }
+
+    /** 设置/更新已有 key 的过期时间（指定相对时长） */
     public func ttl(key: Array<Byte>, expire: Duration): Unit {
-        guardOpen()
-        let expireAt = DateTime.now().toUnixTimeStamp().toNanoseconds() + expire.toNanoseconds()
-        let keyBytes = ByteArray(key)
-        // 查找当前值
-        let entry = lookupEntry(keyBytes)
-        if (entry.isNone()) {
-            return
-        }
-        if (let Some(e) <- entry) {
-            if (e.value.isNone()) {
-                return // tombstone
-            }
-            // 用当前 value + 新 expireAt 重新写入
-            let seq = wal.append(key, e.value ?? [], expireAt: expireAt)
-            let newEntry = EntryValue(e.value, seq, expireAt: expireAt)
-            memTableManager.getActive().add(keyBytes, newEntry)
-        }
+        ttlInternal(key, DateTime.now().toUnixTimeStamp().toNanoseconds() + expire.toNanoseconds())
     }
 
     /** 删除键，返回旧值 */
@@ -201,6 +186,44 @@ public class Store <: Resource {
     // ================================================================
     // 内部方法
     // ================================================================
+
+    /** 添加带过期时间的键值对（纳秒时间戳） */
+    private func addWithExpire(key: Array<Byte>, value: Array<Byte>, expireAt: Int64): ?Array<Byte> {
+        guardOpen()
+        let seq = wal.append(key, value, expireAt: expireAt)
+        let entry = EntryValue(value, seq, expireAt: expireAt)
+        let old = memTableManager.getActive().add(ByteArray(key), entry)
+        maybeFlush()
+        if (let Some(oldEntry) <- old) {
+            if (let Some(oldExpire) <- oldEntry.expireAt) {
+                if (oldExpire <= DateTime.now().toUnixTimeStamp().toNanoseconds()) {
+                    return None // 旧值已过期
+                }
+            }
+            return oldEntry.value
+        }
+        None
+    }
+
+    /** ttl 内部实现（纳秒时间戳） */
+    private func ttlInternal(key: Array<Byte>, expireAt: Int64): Unit {
+        guardOpen()
+        let keyBytes = ByteArray(key)
+        // 查找当前值
+        let entry = lookupEntry(keyBytes)
+        if (entry.isNone()) {
+            return
+        }
+        if (let Some(e) <- entry) {
+            if (e.value.isNone()) {
+                return // tombstone
+            }
+            // 用当前 value + 新 expireAt 重新写入
+            let seq = wal.append(key, e.value ?? [], expireAt: expireAt)
+            let newEntry = EntryValue(e.value, seq, expireAt: expireAt)
+            memTableManager.getActive().add(keyBytes, newEntry)
+        }
+    }
 
     /** 检查 Store 是否已关闭 */
     private func guardOpen(): Unit {
