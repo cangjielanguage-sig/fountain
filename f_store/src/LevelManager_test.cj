@@ -79,10 +79,10 @@ public class LevelManagerTest {
         mgr.addSSTable(0, sst2)
         mgr.addSSTable(0, sst3)
         // 只有 3 个时不应 compact
-        @Expect(!mgr.shouldCompact())
+        @Expect(!mgr.shouldCompact(0))
         mgr.addSSTable(0, sst4)
         // 达到 4 个时应 compact
-        @Expect(mgr.shouldCompact())
+        @Expect(mgr.shouldCompact(0))
 
         mgr.closeAll()
         remove(testDir, recursive: true)

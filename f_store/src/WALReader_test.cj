@@ -79,7 +79,7 @@ public class WALWALReaderTest {
         Directory.create(testDir, recursive: true)
         let walPath = "${testDir}/test_empty.wal"
         // 创建空文件
-        let file = File(walPath, OpenMode.Create)
+        let file = File(walPath, OpenMode.ReadWrite)
         file.close()
         let records = WALReader.readAll(walPath)
         @Expect(records.size == 0)

@@ -67,14 +67,14 @@ public class ByteArrayEntryValueTest {
     @TestCase
     public func byteArrayClone(): Unit {
         let a = ByteArray([0x01, 0x02, 0x03])
-        let b = a.clone()
+        let b = a  // ByteArray 是值类型 struct，赋值即拷贝
         @Expect(a == b)
     }
 
     @TestCase
     public func byteArrayToArray(): Unit {
         let a = ByteArray([0x01, 0x02, 0x03])
-        let arr = a.toArray()
+        let arr = a.bytes
         @Expect(arr == [0x01, 0x02, 0x03])
     }
 
