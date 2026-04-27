@@ -95,17 +95,17 @@ class MemTableManager {
     }
 }
 
-/** 层级管理：管理 L0~Ln 各层的 SSTableFile 列表，提供带过期检查的 get 查询 */
+/** 层级管理：管理 L0~Ln 各层的 SSTable 列表，提供带过期检查的 get 查询 */
 class LevelManager {
     let sstDir: String
-    let levels: Array<ArrayList<SSTableFile>>
+    let levels: Array<ArrayList<SSTable>>
     let levelCount: Int64
     let levelLocks: Array<Mutex>
 
     init(sstDir: String, levelCount!: Int64 = 7) {
         this.sstDir = sstDir
         this.levelCount = levelCount
-        this.levels = Array<ArrayList<SSTableFile>>(levelCount, repeat: ArrayList<SSTableFile>())
+        this.levels = Array<ArrayList<SSTable>>(levelCount, repeat: ArrayList<SSTable>())
         this.levelLocks = Array<Mutex>(levelCount, repeat: Mutex())
     }
 
@@ -114,9 +114,9 @@ class LevelManager {
         if (!exists(sstDir)) {
             return
         }
-        let files = SSTableFile.loadAll(sstDir)
+        let files = SSTable.loadAll(sstDir)
         for (f in files) {
-            let level = f.metadata.level
+            let level = f.getMetadata().level
             if (level >= 0 && level < levelCount) {
                 levels[level].add(f)
             } else {
@@ -155,7 +155,7 @@ class LevelManager {
                 // Ln (n≥1): 按 metadata min/max 筛选范围匹配的 SSTable
                 for (i in 0..sstList.size) {
                     let sst = sstList[i]
-                    let meta = sst.metadata
+                    let meta = sst.getMetadata()
                     if (key < meta.minKey || key > meta.maxKey) {
                         continue
                     }
@@ -187,7 +187,7 @@ class LevelManager {
     }
 
     /** 添加 SSTable 到指定层 */
-    func addSSTable(level: Int64, sst: SSTableFile): Unit {
+    func addSSTable(level: Int64, sst: SSTable): Unit {
         if (level < 0 || level >= levelCount) {
             return
         }
@@ -197,12 +197,12 @@ class LevelManager {
     }
 
     /** 从指定层移除一批 SSTable，通过对象引用匹配 */
-    func removeSSTables(level: Int64, toRemove: ArrayList<SSTableFile>): Unit {
+    func removeSSTables(level: Int64, toRemove: ArrayList<SSTable>): Unit {
         if (level < 0 || level >= levelCount) {
             return
         }
         synchronized(levelLocks[level]) {
-            let newList = ArrayList<SSTableFile>()
+            let newList = ArrayList<SSTable>()
             for (sst in levels[level]) {
                 var shouldKeep = true
                 for (rm in toRemove where refEq(sst, rm)) {
@@ -219,8 +219,8 @@ class LevelManager {
     }
 
     /** 获取指定层用于 Compaction 的 SSTable 快照 */
-    func getSSTablesForCompaction(level: Int64): ArrayList<SSTableFile> {
-        let result = ArrayList<SSTableFile>()
+    func getSSTablesForCompaction(level: Int64): ArrayList<SSTable> {
+        let result = ArrayList<SSTable>()
         if (level < 0 || level >= levelCount) {
             return result
         }
@@ -233,14 +233,14 @@ class LevelManager {
     }
 
     /** 获取指定层与 [min, max] 范围重叠的 SSTable */
-    func getOverlappingSSTables(level: Int64, min: ByteArray, max: ByteArray): ArrayList<SSTableFile> {
-        let result = ArrayList<SSTableFile>()
+    func getOverlappingSSTables(level: Int64, min: ByteArray, max: ByteArray): ArrayList<SSTable> {
+        let result = ArrayList<SSTable>()
         if (level < 0 || level >= levelCount) {
             return result
         }
         synchronized(levelLocks[level]) {
             for (sst in levels[level]) {
-                let meta = sst.metadata
+                let meta = sst.getMetadata()
                 // 重叠条件: sst.minKey <= max && sst.maxKey >= min
                 if (meta.minKey <= max && meta.maxKey >= min) {
                     result.add(sst)
@@ -264,8 +264,8 @@ class LevelManager {
             let sizeLimitMB = pow10(level)
             var totalSize: Int64 = 0
             for (sst in levels[level]) {
-                // 用 entryCount 近似估算大小（无法直接获取文件大小，除非存储 filePath 后 stat）
-                totalSize += sst.metadata.entryCount * 100 // 粗略估算每条 100 字节
+                // 用 entryCount 近似估算大小
+                totalSize += sst.getMetadata().entryCount * 100
             }
             let totalMB = totalSize / (1024 * 1024)
             totalMB >= sizeLimitMB

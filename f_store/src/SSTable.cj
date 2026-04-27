@@ -17,11 +17,12 @@ package fountain::f_store
 
 import std.io.{IOStream, SeekPosition}
 import std.fs.{File, OpenMode, Path, Directory, FileInfo, exists}
-import std.sync.AtomicBool
+import std.sync.{AtomicBool, AtomicInt64}
 import std.collection.ArrayList
 import std.binary.*
 import std.sort.*
 import std.convert.*
+import std.time.DateTime
 import fountain::f_bloom.BloomFilter
 import fountain::f_base.*
 import fountain::f_io.IOUringStream
@@ -59,50 +60,81 @@ struct IndexEntry {
     }
 }
 
-/** SSTable 写入器。
- *  文件格式:
- *  [Data Block 1][Data Block 2]...[Data Block N]
- *  [Index Block]
- *  [Bloom Filter Block]
- *  [Footer: 48 bytes]
+/** SSTable 状态 */
+enum SSTableState <: Equatable<SSTableState> {
+    | Writing   // 写入模式：可 write，不可 get/iterator/tailer
+    | Readable  // 读取模式：可 get/iterator/tailer，不可 write
+    | Closed    // 已关闭：任何操作抛 StoreClosedException
+
+    public operator func ==(other: SSTableState): Bool {
+        match ((this, other)) {
+            case (Writing, Writing) | (Readable, Readable) | (Closed, Closed) => true
+            case _ => false
+        }
+    }
+}
+
+/**
+ * SSTable — 合并了写入和读取功能的 SSTable 文件句柄。
  *
- *  Data Block 记录编码（小端序）:
- *    key_len(8) + value_len(8) + sequence(8) + expire_at(8) + key_bytes + value_bytes
- *    value_len = -1 表示 tombstone
- *    expire_at = 0 表示永不过期
+ * 文件格式:
+ * [Data Block 1][Data Block 2]...[Data Block N]
+ * [Index Block]
+ * [Bloom Filter Block]
+ * [Footer: 48 bytes]
  *
- *  Index Block:
- *    index_count(8) + [offset(8) + first_key_len(8) + first_key_bytes]...
+ * Data Block 记录编码（小端序）:
+ *   key_len(8) + value_len(8) + sequence(8) + expire_at(8) + key_bytes + value_bytes
+ *   value_len = -1 表示 tombstone
+ *   expire_at = 0 表示永不过期
  *
- *  Bloom Filter Block:
- *    n(8) + p(8 bytes float64) + seed_count(8) + [seed(8)]... + bit_count(8) + [bits(8)]...
+ * Index Block:
+ *   index_count(8) + [offset(8) + first_key_len(8) + first_key_bytes]...
  *
- *  Footer (48 bytes):
- *    index_offset(8) + index_size(8) + bloom_offset(8) + bloom_size(8) + entry_count(8) + magic(8)
- *    magic = 0x53545354 ("STST" in ASCII)
+ * Bloom Filter Block:
+ *   n(8) + p(8 bytes float64) + seed_count(8) + [seed(8)]... + bit_count(8) + [bits(8)]...
+ *
+ * Footer (48 bytes):
+ *   index_offset(8) + index_size(8) + bloom_offset(8) + bloom_size(8) + entry_count(8) + magic(8)
+ *   magic = 0x53545354 ("STST" in ASCII)
+ *
+ * 生命周期:
+ *   构造(Writing) → write → finishWrite(Readable) → get/iterator/tailer → close(Closed)
+ *   或
+ *   SSTable.open(path)(Readable) → get/iterator/tailer → close(Closed)
  */
-class SSTableWriter {
+class SSTable <: Resource {
     private let path: String
     private let file: File
     private let stream: IOStream
+
+    // === 写入模式字段 ===
     private let bloomFilter: BloomFilter
-    let indexEntries: ArrayList<IndexEntry>
-    var currentOffset: Int64
-    var entryCount: Int64
-    var fileSize: Int64
-    var dataBlockSize: Int64
-    let dataBlockSizeThreshold: Int64
-    var firstKeyOfBlock: ?ByteArray
-    var minKey: ?ByteArray
-    var maxKey: ?ByteArray
-    var sequenceStart: Int64
-    var sequenceEnd: Int64
-    let closed: AtomicBool
+    private let indexEntries: ArrayList<IndexEntry>
+    private var currentOffset: Int64
+    private var entryCount: Int64
+    private var fileSize: Int64
+    private var dataBlockSize: Int64
+    private let dataBlockSizeThreshold: Int64
+    private var firstKeyOfBlock: ?ByteArray
+    private var minKey: ?ByteArray
+    private var maxKey: ?ByteArray
+    private var sequenceStart: Int64
+    private var sequenceEnd: Int64
+
+    // === 读取模式字段 ===
+    private var metadata: ?SSTableMetadata
+    private var indexOffset: Int64  // Index Block 起始偏移（即 Data Block 终止边界）
+
+    // === 状态管理 ===
+    private var state: SSTableState
+    private let closed: AtomicBool
 
     static let MAX_SSTABLE_SIZE: Int64 = 64 * 1024 * 1024 // 64MB
     static let FOOTER_SIZE: Int64 = 48
     static let MAGIC: UInt64 = 0x53545354u64
 
+    /** 写入模式构造：创建新 SSTable 文件 */
     init(path: String, estimatedCount: Int64) {
         let parentDir = Path(path).parent
         if (!exists(parentDir)) {
@@ -127,14 +159,43 @@ class SSTableWriter {
         this.maxKey = None
         this.sequenceStart = Int64.Max
         this.sequenceEnd = Int64.Min
+        this.metadata = None
+        this.indexOffset = 0
+        this.state = SSTableState.Writing
         this.closed = AtomicBool(false)
     }
 
-    /** 写入一条记录 */
+    /** 读取模式构造：从已有文件打开（内部使用） */
+    private init(path: String, file: File, stream: IOStream, bloomFilter: BloomFilter,
+                 indexEntries: ArrayList<IndexEntry>, metadata: SSTableMetadata, indexOffset: Int64) {
+        this.path = path
+        this.file = file
+        this.stream = stream
+        this.bloomFilter = bloomFilter
+        this.indexEntries = indexEntries
+        this.currentOffset = 0
+        this.entryCount = metadata.entryCount
+        this.fileSize = 0
+        this.dataBlockSize = 0
+        this.dataBlockSizeThreshold = 4096
+        this.firstKeyOfBlock = None
+        this.minKey = Some(metadata.minKey)
+        this.maxKey = Some(metadata.maxKey)
+        this.sequenceStart = metadata.sequenceStart
+        this.sequenceEnd = metadata.sequenceEnd
+        this.metadata = Some(metadata)
+        this.indexOffset = indexOffset
+        this.state = SSTableState.Readable
+        this.closed = AtomicBool(false)
+    }
+
+    // ================================================================
+    // 写入模式 API
+    // ================================================================
+
+    /** 写入一条记录。仅在 Writing 状态下可用 */
     func write(key: ByteArray, entry: EntryValue): Unit {
-        if (closed.load()) {
-            throw StoreClosedException()
-        }
+        guardWriting()
         // 新 Data Block 开始，记录 IndexEntry
         if (dataBlockSize == 0) {
             indexEntries.add(IndexEntry(currentOffset, key))
@@ -196,11 +257,12 @@ class SSTableWriter {
         }
     }
 
-    /** 写完 Index + Bloom + Footer，flush，关闭 */
-    func finish(): SSTableMetadata {
-        if (closed.load()) {
-            throw StoreClosedException()
-        }
+    /** 写完 Index + Bloom + Footer，flush，切换到 Readable 状态。
+     *  不关闭 fd，保留读取能力。
+     *  返回 SSTableMetadata。
+     */
+    func finishWrite(): SSTableMetadata {
+        guardWriting()
         let indexOffset = currentOffset
         // 写 Index Block
         let indexSize = writeIndexBlock()
@@ -211,160 +273,104 @@ class SSTableWriter {
         writeFooter(indexOffset, indexSize, bloomOffset, bloomSize)
         // flush
         stream.flush()
-        // 关闭
-        closed.compareAndSwap(false, true)
-        if (let r: Resource <- stream && !r.isClosed()) {
-            r.close()
-        }
-        if (let r: Resource <- file && !r.isClosed()) {
-            r.close()
-        }
         // 构造 metadata
         let actualMinKey = minKey ?? ByteArray([])
         let actualMaxKey = maxKey ?? ByteArray([])
-        SSTableMetadata(
+        let meta = SSTableMetadata(
             actualMinKey, actualMaxKey, entryCount, 0,
             sequenceStart, sequenceEnd, path
         )
+        this.metadata = Some(meta)
+        this.indexOffset = indexOffset
+        // 切换到读取模式
+        state = SSTableState.Readable
+        meta
     }
 
-    /** SSTable 是否已满（64MB） */
+    /** SSTable 是否已满（64MB）。仅在 Writing 状态下可用 */
     func isFull(): Bool {
+        guardWriting()
         fileSize >= MAX_SSTABLE_SIZE
     }
 
-    /** 写 Index Block: index_count(8) + [offset(8) + first_key_len(8) + first_key_bytes]... */
-    private func writeIndexBlock(): Int64 {
-        let count = indexEntries.size
-        // 预估大小
-        var totalSize = 8 // count
-        for (entry in indexEntries) {
-            totalSize += 8 + 8 + entry.firstKey.bytes.size
-        }
-        let buf = Array<Byte>(totalSize, repeat: 0u8)
-        var offset = 0
-        offset = writeInt64LE(buf, offset, Int64(count))
-        for (entry in indexEntries) {
-            offset = writeInt64LE(buf, offset, entry.offset)
-            offset = writeInt64LE(buf, offset, Int64(entry.firstKey.bytes.size))
-            for (b in entry.firstKey.bytes) {
-                buf[offset] = b
-                offset++
-            }
-        }
-        stream.write(buf)
-        currentOffset += totalSize
-        fileSize += totalSize
-        Int64(totalSize)
+    // ================================================================
+    // 读取模式 API
+    // ================================================================
+
+    /** 获取元数据。Readable 状态下可用 */
+    func getMetadata(): SSTableMetadata {
+        guardReadable()
+        metadata ?? SSTableMetadata(ByteArray([]), ByteArray([]), 0, 0, 0, 0, path)
     }
 
-    /** 写 Bloom Filter Block:
-     *  n(8) + p(8 bytes float64) + seed_count(8) + [seed(8)]... + bit_count(8) + [bits(8)]...
-     */
-    private func writeBloomFilterBlock(): Int64 {
-        let n = bloomFilter.n
-        let p = bloomFilter.p
-        // 收集 seeds
-        let seeds = ArrayList<UInt64>()
-        for (seed in bloomFilter.seeds) {
-            seeds.add(seed)
-        }
-        let seedCount = seeds.size
-        // bitSet 大小
-        let bitCount = bloomFilter.bitCount
-        let bitSetWordCount = (bitCount + 63) / 64
-        // 总大小: n(8) + p(8) + seed_count(8) + seeds + bit_count(8) + bits
-        let totalSize = 8 + 8 + 8 + seedCount * 8 + 8 + bitSetWordCount * 8
-        let buf = Array<Byte>(Int64(totalSize), repeat: 0u8)
-        var offset = 0
-        // n
-        offset = writeInt64LE(buf, offset, n)
-        // p (Float64 as 8 bytes LE)
-        offset = writeFloat64LE(buf, offset, p)
-        // seed_count
-        offset = writeInt64LE(buf, offset, Int64(seedCount))
-        // seeds
-        for (seed in seeds) {
-            offset = writeUInt64LE(buf, offset, seed)
-        }
-        // bit_count
-        offset = writeInt64LE(buf, offset, bitCount)
-        // bits - 需要从 bloomFilter 内部读取 bitSet
-        // 使用反射方式读取 bitSet 不现实，改为遍历所有 Data Block 重建
-        // 临时方案：将 bitSet 的位置先写零，open 时从 n/p/seeds 重建 BloomFilter 再遍历 Data Block 填充
-        // 这里先写占位零
-        for (_ in 0..bitSetWordCount) {
-            offset = writeUInt64LE(buf, offset, 0u64)
-        }
-        stream.write(buf)
-        currentOffset += Int64(totalSize)
-        fileSize += Int64(totalSize)
-        Int64(totalSize)
+    /** 获取 BloomFilter。Readable 状态下可用 */
+    func getBloomFilter(): BloomFilter {
+        guardReadable()
+        bloomFilter
     }
 
-    /** 写 Footer (48 bytes):
-     *  index_offset(8) + index_size(8) + bloom_offset(8) + bloom_size(8) + entry_count(8) + magic(8)
-     */
-    private func writeFooter(indexOffset: Int64, indexSize: Int64, bloomOffset: Int64, bloomSize: Int64): Unit {
-        let buf = Array<Byte>(FOOTER_SIZE, repeat: 0u8)
-        var offset = 0
-        offset = writeInt64LE(buf, offset, indexOffset)
-        offset = writeInt64LE(buf, offset, indexSize)
-        offset = writeInt64LE(buf, offset, bloomOffset)
-        offset = writeInt64LE(buf, offset, bloomSize)
-        offset = writeInt64LE(buf, offset, entryCount)
-        offset = writeUInt64LE(buf, offset, MAGIC)
-        stream.write(buf)
-        currentOffset += FOOTER_SIZE
-        fileSize += FOOTER_SIZE
-    }
-}
-
-// ==== SSTableReader =============================================================
-
-/** SSTable 读取器。
- *  使用 std.fs.File 同步读取（seek + read）。
- *  open 时加载 Footer → Index Block → Bloom Filter Block。
- *  get 时先查 BloomFilter → 二分定位 Data Block → 读取扫描。
- */
-class SSTableReader {
-    let metadata: SSTableMetadata
-    let bloomFilter: BloomFilter
-    let indexEntries: ArrayList<IndexEntry>
-    private let file: File
-    private let indexOffset: Int64 // Index Block 起始偏移（即 Data Block 终止边界）
-
-    private init(metadata: SSTableMetadata, bloomFilter: BloomFilter,
-                 indexEntries: ArrayList<IndexEntry>, file: File, indexOffset: Int64) {
-        this.metadata = metadata
-        this.bloomFilter = bloomFilter
-        this.indexEntries = indexEntries
-        this.file = file
-        this.indexOffset = indexOffset
+    /** 点查询。Readable 状态下可用 */
+    func get(key: ByteArray): ?EntryValue {
+        guardReadable()
+        let keyBytes = key.bytes
+        // Bloom 快速否定
+        if (!bloomFilter.mightContain(keyBytes)) {
+            return None
+        }
+        // 二分查找定位 Data Block
+        let idx = binarySearchIndex(key)
+        if (idx < 0) {
+            return None
+        }
+        // 读取 Data Block
+        let blockStart = indexEntries[idx].offset
+        let blockEnd = if (idx + 1 < indexEntries.size) {
+            indexEntries[idx + 1].offset
+        } else {
+            indexOffset
+        }
+        let blockSize = blockEnd - blockStart
+        scanDataBlock(blockStart, blockSize, keyBytes)
     }
 
-    /** 打开 SSTable 文件并加载元数据/索引/BloomFilter */
-    static func open(path: String): SSTableReader {
+    /** 全量有序遍历。Readable 状态下可用 */
+    func iterator(): Iterator<(ByteArray, EntryValue)> {
+        guardReadable()
+        SSTableIterator(file, indexEntries, indexOffset, None)
+    }
+
+    /** 从 min key 开始遍历。Readable 状态下可用 */
+    func tailer(min: ByteArray): Iterator<(ByteArray, EntryValue)> {
+        guardReadable()
+        SSTableIterator(file, indexEntries, indexOffset, min)
+    }
+
+    // ================================================================
+    // 生命周期管理
+    // ================================================================
+
+    /** 从文件路径打开已有 SSTable，进入 Readable 状态 */
+    static func open(path: String): SSTable {
         let file = File(path, OpenMode.Read)
-        return openFromFile(file, path)
+        openFromFile(file, path)
     }
 
-    static func openFromFile(file: File, path: String): SSTableReader {
+    static func openFromFile(file: File, path: String): SSTable {
         let fileLen = file.length
-        if (fileLen < SSTableWriter.FOOTER_SIZE) {
+        if (fileLen < FOOTER_SIZE) {
             throw Exception("SSTable file too small: " + path)
         }
         // 1. 读取 Footer (最后 48 bytes)
-        let footerBuf = Array<Byte>(SSTableWriter.FOOTER_SIZE, repeat: 0u8)
-        file.seek(SeekPosition.Begin(fileLen - SSTableWriter.FOOTER_SIZE))
+        let footerBuf = Array<Byte>(FOOTER_SIZE, repeat: 0u8)
+        file.seek(SeekPosition.Begin(fileLen - FOOTER_SIZE))
         file.read(footerBuf)
         let idxOff = readInt64LE(footerBuf, 0)
         let idxSz = readInt64LE(footerBuf, 8)
         let bloomOff = readInt64LE(footerBuf, 16)
-        let bloomSz = readInt64LE(footerBuf, 24)
+        let _ = readInt64LE(footerBuf, 24) // bloomSz 暂不使用
         let eCount = readInt64LE(footerBuf, 32)
         let magic = readUInt64LE(footerBuf, 40)
-        if (magic != SSTableWriter.MAGIC) {
+        if (magic != MAGIC) {
             throw Exception("SSTable magic mismatch: " + path)
         }
         // 2. 读取 Index Block
@@ -388,81 +394,112 @@ class SSTableReader {
             indexEntries.add(IndexEntry(entryOff, ByteArray(keyBytes)))
         }
         // 3. 读取 Bloom Filter Block
-        let bloomBuf = Array<Byte>(bloomSz, repeat: 0u8)
-        file.seek(SeekPosition.Begin(bloomOff))
-        file.read(bloomBuf)
-        let n = readInt64LE(bloomBuf, 0)
-        // Float64 占据 bloomBuf[1..9] (8 bytes)，手动重建 Array<Byte>
-        let pBuf = Array<Byte>(8){i => bloomBuf[8+i]}
-        let p = Float64.readLittleEndian(pBuf)
-        let seedCount = readInt64LE(bloomBuf, 16)
-        let seeds = Array<UInt64>(seedCount, repeat: 0u64)
-        var boff = 24
-        for (i in 0..seedCount) {
-            seeds[i] = readUInt64LE(bloomBuf, boff)
-            boff += 8
+        let bloomBuf = Array<Byte>(readInt64LE(footerBuf, 24), repeat: 0u8)
+        if (bloomBuf.size > 0) {
+            file.seek(SeekPosition.Begin(bloomOff))
+            file.read(bloomBuf)
         }
-        let bitCount = readInt64LE(bloomBuf, boff)
-        boff += 8
-        // 重建 BloomFilter（seed 驱动，bitset 以 0 初始化，需遍历 Data Block 重新填充）
-        let filter = BloomFilter.new(n, p, seeds.clone())
-        // 遍历所有 Data Block，将 key 重新 add 到 bloom filter
-        for (i in 0..indexEntries.size) {
-            let blockStart = indexEntries[i].offset
-            let blockEnd = if (i + 1 < indexEntries.size) {
-                indexEntries[i + 1].offset
-            } else {
-                idxOff
-            }
-            let blockSize = blockEnd - blockStart
-            let blockBuf = Array<Byte>(blockSize, repeat: 0u8)
-            file.seek(SeekPosition.Begin(blockStart))
-            file.read(blockBuf)
-            var off = 0
-            while (off + 32 <= blockSize) {
-                let keyLen = readInt64LE(blockBuf, off)
-                let valueLen = readInt64LE(blockBuf, off + 8)
-                let actualValueLen = if (valueLen >= 0) { valueLen } else { 0 }
-                if (off + 32 + keyLen + actualValueLen > blockSize) { break }
-                let kBuf = Array<Byte>(keyLen, repeat: 0u8)
-                for (i in 0..keyLen) {
-                    kBuf[i] = blockBuf[off + 32 + i]
-                }
-                filter.add(kBuf)
-                off += 32 + keyLen + actualValueLen
-            }
-        }
+        let filter = parseBloomFilter(bloomBuf, file, indexEntries, idxOff)
         // 4. 重建 metadata
         let firstKey = if (indexEntries.size > 0) { indexEntries[0].firstKey } else { ByteArray([]) }
         let lastIdx = indexEntries.size - 1
         let lastKey = if (lastIdx >= 0) { indexEntries[lastIdx].firstKey } else { ByteArray([]) }
-        let metadata = SSTableMetadata(
+        let meta = SSTableMetadata(
             firstKey, lastKey, eCount, 0, 0, Int64.Max, path
         )
-        SSTableReader(metadata, filter, indexEntries, file, idxOff)
+        SSTable(path, file, file, filter, indexEntries, meta, idxOff)
     }
 
-    /** 点查询 */
-    func get(key: ByteArray): ?EntryValue {
-        let keyBytes = key.bytes
-        // Bloom 快速否定
-        if (!bloomFilter.mightContain(keyBytes)) {
-            return None
+    /** 扫描目录，加载所有 .sst 文件 */
+    static func loadAll(sstDir: String): ArrayList<SSTable> {
+        let result = ArrayList<SSTable>()
+        if (!exists(sstDir)) {
+            return result
         }
-        // 二分查找定位 Data Block
-        let idx = binarySearchIndex(key)
-        if (idx < 0) {
-            return None
+        let sstFiles = ArrayList<String>()
+        Directory.walk(sstDir) { fi: FileInfo =>
+            if (fi.path.extensionName == "sst" && !fi.isDirectory()) {
+                sstFiles.add(fi.path.toString())
+            }
+            true
         }
-        // 读取 Data Block
-        let blockStart = indexEntries[idx].offset
-        let blockEnd = if (idx + 1 < indexEntries.size) {
-            indexEntries[idx + 1].offset
+        sort(sstFiles)
+        for (path in sstFiles) {
+            try {
+                result.add(open(path))
+            } catch (_: Exception) {
+                // 不符合命名规则或损坏的文件跳过
+            }
+        }
+        result
+    }
+
+    /** 解析文件名提取 level 和 sequence 范围。
+     *  文件名格式: L{level}_{seqStart}_{seqEnd}.sst
+     *  返回 (level, seqStart, seqEnd) 或 None
+     */
+    static func parseFileName(fileName: String): ?(Int64, Int64, Int64) {
+        // 去掉 .sst 后缀
+        let name = if (fileName.endsWith(".sst")) {
+            fileName[0 .. (fileName.size - 4)]
         } else {
-            indexOffset
+            fileName
         }
-        let blockSize = blockEnd - blockStart
-        return scanDataBlock(blockStart, blockSize, keyBytes)
+        // 期望格式: L{level}_{seqStart}_{seqEnd}
+        if (!name.startsWith("L")) {
+            return None
+        }
+        let rest = name[1 .. name.size]
+        let parts = rest.split("_")
+        if (parts.size != 3) {
+            return None
+        }
+        try {
+            let level = Int64.parse(parts[0])
+            let seqStart = Int64.parse(parts[1])
+            let seqEnd = Int64.parse(parts[2])
+            let result: (Int64, Int64, Int64) = (level, seqStart, seqEnd)
+            return Some(result)
+        } catch (_: Exception) {
+            return None
+        }
+    }
+
+    /** 关闭 SSTable，释放所有资源 */
+    public func close(): Unit {
+        if (closed.compareAndSwap(false, true)) {
+            state = SSTableState.Closed
+            // 关闭 stream（IOUringStream.close 不关闭 fd）
+            if (let r: Resource <- stream && !r.isClosed()) {
+                r.close()
+            }
+            // 关闭 file（关闭 fd）
+            if (!file.isClosed()) {
+                file.close()
+            }
+        }
+    }
+
+    public func isClosed(): Bool {
+        closed.load()
+    }
+
+    // ================================================================
+    // 内部方法
+    // ================================================================
+
+    /** 检查 Writing 状态 */
+    private func guardWriting(): Unit {
+        if (state != SSTableState.Writing) {
+            throw StoreClosedException()
+        }
+    }
+
+    /** 检查 Readable 状态 */
+    private func guardReadable(): Unit {
+        if (state != SSTableState.Readable) {
+            throw StoreClosedException()
+        }
     }
 
     /** 二分查找：返回 key 应落在的 Data Block 索引（-1 表示所有 key 都大于该 key） */
@@ -529,21 +566,134 @@ class SSTableReader {
         None
     }
 
-    /** 全量有序遍历 */
-    func iterator(): Iterator<(ByteArray, EntryValue)> {
-        SSTableIterator(file, indexEntries, indexOffset, None)
-    }
-
-    /** 从 min key 开始遍历 */
-    func tailer(min: ByteArray): Iterator<(ByteArray, EntryValue)> {
-        SSTableIterator(file, indexEntries, indexOffset, min)
-    }
-
-    /** 关闭 */
-    func close(): Unit {
-        if (!file.isClosed()) {
-            file.close()
+    /** 写 Index Block: index_count(8) + [offset(8) + first_key_len(8) + first_key_bytes]... */
+    private func writeIndexBlock(): Int64 {
+        let count = indexEntries.size
+        // 预估大小
+        var totalSize = 8 // count
+        for (entry in indexEntries) {
+            totalSize += 8 + 8 + entry.firstKey.bytes.size
         }
+        let buf = Array<Byte>(totalSize, repeat: 0u8)
+        var offset = 0
+        offset = writeInt64LE(buf, offset, Int64(count))
+        for (entry in indexEntries) {
+            offset = writeInt64LE(buf, offset, entry.offset)
+            offset = writeInt64LE(buf, offset, Int64(entry.firstKey.bytes.size))
+            for (b in entry.firstKey.bytes) {
+                buf[offset] = b
+                offset++
+            }
+        }
+        stream.write(buf)
+        currentOffset += totalSize
+        fileSize += totalSize
+        Int64(totalSize)
+    }
+
+    /** 写 Bloom Filter Block:
+     *  n(8) + p(8 bytes float64) + seed_count(8) + [seed(8)]... + bit_count(8) + [bits(8)]...
+     */
+    private func writeBloomFilterBlock(): Int64 {
+        let n = bloomFilter.n
+        let p = bloomFilter.p
+        // 收集 seeds
+        let seeds = ArrayList<UInt64>()
+        for (seed in bloomFilter.seeds) {
+            seeds.add(seed)
+        }
+        let seedCount = seeds.size
+        // bitSet 大小
+        let bitCount = bloomFilter.bitCount
+        let bitSetWordCount = (bitCount + 63) / 64
+        // 总大小: n(8) + p(8) + seed_count(8) + seeds + bit_count(8) + bits
+        let totalSize = 8 + 8 + 8 + seedCount * 8 + 8 + bitSetWordCount * 8
+        let buf = Array<Byte>(Int64(totalSize), repeat: 0u8)
+        var offset = 0
+        // n
+        offset = writeInt64LE(buf, offset, n)
+        // p (Float64 as 8 bytes LE)
+        offset = writeFloat64LE(buf, offset, p)
+        // seed_count
+        offset = writeInt64LE(buf, offset, Int64(seedCount))
+        // seeds
+        for (seed in seeds) {
+            offset = writeUInt64LE(buf, offset, seed)
+        }
+        // bit_count
+        offset = writeInt64LE(buf, offset, bitCount)
+        // bits - 临时方案：写零占位，open 时从 n/p/seeds 重建
+        for (_ in 0..bitSetWordCount) {
+            offset = writeUInt64LE(buf, offset, 0u64)
+        }
+        stream.write(buf)
+        currentOffset += Int64(totalSize)
+        fileSize += Int64(totalSize)
+        Int64(totalSize)
+    }
+
+    /** 写 Footer (48 bytes):
+     *  index_offset(8) + index_size(8) + bloom_offset(8) + bloom_size(8) + entry_count(8) + magic(8)
+     */
+    private func writeFooter(indexOffset: Int64, indexSize: Int64, bloomOffset: Int64, bloomSize: Int64): Unit {
+        let buf = Array<Byte>(FOOTER_SIZE, repeat: 0u8)
+        var offset = 0
+        offset = writeInt64LE(buf, offset, indexOffset)
+        offset = writeInt64LE(buf, offset, indexSize)
+        offset = writeInt64LE(buf, offset, bloomOffset)
+        offset = writeInt64LE(buf, offset, bloomSize)
+        offset = writeInt64LE(buf, offset, entryCount)
+        offset = writeUInt64LE(buf, offset, MAGIC)
+        stream.write(buf)
+        currentOffset += FOOTER_SIZE
+        fileSize += FOOTER_SIZE
+    }
+
+    /** 解析 Bloom Filter Block 并重建 BloomFilter */
+    private static func parseBloomFilter(bloomBuf: Array<Byte>, file: File,
+                                          indexEntries: ArrayList<IndexEntry>, idxOff: Int64): BloomFilter {
+        if (bloomBuf.size < 24) {
+            return BloomFilter.new(1, 0.01) // 最小默认
+        }
+        let n = readInt64LE(bloomBuf, 0)
+        let pBuf = Array<Byte>(8){i => bloomBuf[8+i]}
+        let p = Float64.readLittleEndian(pBuf)
+        let seedCount = readInt64LE(bloomBuf, 16)
+        let seeds = Array<UInt64>(seedCount, repeat: 0u64)
+        var boff = 24
+        for (i in 0..seedCount) {
+            seeds[i] = readUInt64LE(bloomBuf, boff)
+            boff += 8
+        }
+        // 重建 BloomFilter（seed 驱动，bitset 以 0 初始化，需遍历 Data Block 重新填充）
+        let filter = BloomFilter.new(n, p, seeds.clone())
+        // 遍历所有 Data Block，将 key 重新 add 到 bloom filter
+        for (i in 0..indexEntries.size) {
+            let blockStart = indexEntries[i].offset
+            let blockEnd = if (i + 1 < indexEntries.size) {
+                indexEntries[i + 1].offset
+            } else {
+                idxOff
+            }
+            let blockSize = blockEnd - blockStart
+            let blockBuf = Array<Byte>(blockSize, repeat: 0u8)
+            file.seek(SeekPosition.Begin(blockStart))
+            file.read(blockBuf)
+            var off = 0
+            while (off + 32 <= blockSize) {
+                let keyLen = readInt64LE(blockBuf, off)
+                let valueLen = readInt64LE(blockBuf, off + 8)
+                let actualValueLen = if (valueLen >= 0) { valueLen } else { 0 }
+                if (off + 32 + keyLen + actualValueLen > blockSize) { break }
+                let kBuf = Array<Byte>(keyLen, repeat: 0u8)
+                for (i in 0..keyLen) {
+                    kBuf[i] = blockBuf[off + 32 + i]
+                }
+                filter.add(kBuf)
+                off += 32 + keyLen + actualValueLen
+            }
+        }
+        filter
     }
 }
 
@@ -705,115 +855,6 @@ class SSTableIterator <: Iterator<(ByteArray, EntryValue)> {
         file.seek(SeekPosition.Begin(blockStart))
         file.read(blockData)
         offsetInBlock = 0
-    }
-}
-
-// ==== SSTableFile — SSTable 文件管理 ===========================================
-
-/** SSTable 文件句柄，持有 Reader + 元数据便捷访问。
- *  文件命名规则: L{level}_{sequenceStart}_{sequenceEnd}.sst
- */
-class SSTableFile <: Resource {
-    let reader: SSTableReader
-    let metadata: SSTableMetadata
-    let bloomFilter: BloomFilter
-    private let closed: AtomicBool
-
-    init(reader: SSTableReader) {
-        this.reader = reader
-        this.metadata = reader.metadata
-        this.bloomFilter = reader.bloomFilter
-        this.closed = AtomicBool(false)
-    }
-
-    /** 查询 key */
-    func get(key: ByteArray): ?EntryValue {
-        if (closed.load()) {
-            throw StoreClosedException()
-        }
-        reader.get(key)
-    }
-
-    /** 全量有序遍历 */
-    func iterator(): Iterator<(ByteArray, EntryValue)> {
-        reader.iterator()
-    }
-
-    /** 从 min key 开始遍历 */
-    func tailer(min: ByteArray): Iterator<(ByteArray, EntryValue)> {
-        reader.tailer(min)
-    }
-
-    /** 关闭 */
-    public func close(): Unit {
-        if (closed.compareAndSwap(false, true)) {
-            reader.close()
-        }
-    }
-
-    public func isClosed(): Bool {
-        closed.load()
-    }
-
-    /** 从文件路径打开 SSTableFile */
-    static func open(path: String): SSTableFile {
-        let reader = SSTableReader.open(path)
-        SSTableFile(reader)
-    }
-
-    /** 扫描目录，加载所有 .sst 文件 */
-    static func loadAll(sstDir: String): ArrayList<SSTableFile> {
-        let result = ArrayList<SSTableFile>()
-        if (!exists(sstDir)) {
-            return result
-        }
-        let sstFiles = ArrayList<String>()
-        Directory.walk(sstDir) { fi: FileInfo =>
-            if (fi.path.extensionName == "sst" && !fi.isDirectory()) {
-                sstFiles.add(fi.path.toString())
-            }
-            true
-        }
-        sort(sstFiles)
-        for (path in sstFiles) {
-            try {
-                result.add(open(path))
-            } catch (_: Exception) {
-                // 不符合命名规则或损坏的文件跳过
-            }
-        }
-        result
-    }
-
-    /** 解析文件名提取 level 和 sequence 范围。
-     *  文件名格式: L{level}_{seqStart}_{seqEnd}.sst
-     *  返回 (level, seqStart, seqEnd) 或 None
-     */
-    static func parseFileName(fileName: String): ?(Int64, Int64, Int64) {
-        // 去掉 .sst 后缀
-        let name = if (fileName.endsWith(".sst")) {
-            fileName[0 .. (fileName.size - 4)]
-        } else {
-            fileName
-        }
-        // 期望格式: L{level}_{seqStart}_{seqEnd}
-        if (!name.startsWith("L")) {
-            return None
-        }
-        let rest = name[1 .. name.size]
-        let parts = rest.split("_")
-        if (parts.size != 3) {
-            return None
-        }
-        try {
-            let level = Int64.parse(parts[0])
-            let seqStart = Int64.parse(parts[1])
-            let seqEnd = Int64.parse(parts[2])
-            let result: (Int64, Int64, Int64) = (level, seqStart, seqEnd)
-            return Some(result)
-        } catch (_: Exception) {
-            return None
-        }
     }
 }
 

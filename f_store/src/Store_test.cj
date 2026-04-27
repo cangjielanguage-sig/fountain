@@ -530,15 +530,15 @@ public class StoreStep11Test {
     public func levelManagerLoadMultipleL0AndGet(): Unit {
         Directory.create(testDir, recursive: true)
         // 写入 L0 文件 1
-        let writer1 = SSTableWriter("${testDir}/L0_100_200.sst", 2)
-        writer1.write(ByteArray([0x01, 0x0A]), EntryValue([0xAA], 100))
-        writer1.write(ByteArray([0x02, 0x0B]), EntryValue([0xBB], 101))
-        writer1.finish()
+        let sst1 = SSTable("${testDir}/L0_100_200.sst", 2)
+        sst1.write(ByteArray([0x01, 0x0A]), EntryValue([0xAA], 100))
+        sst1.write(ByteArray([0x02, 0x0B]), EntryValue([0xBB], 101))
+        sst1.finishWrite()
         // 写入 L0 文件 2
-        let writer2 = SSTableWriter("${testDir}/L0_200_300.sst", 2)
-        writer2.write(ByteArray([0x03, 0x0C]), EntryValue([0xCC], 200))
-        writer2.write(ByteArray([0x04, 0x0D]), EntryValue([0xDD], 201))
-        writer2.finish()
+        let sst2 = SSTable("${testDir}/L0_200_300.sst", 2)
+        sst2.write(ByteArray([0x03, 0x0C]), EntryValue([0xCC], 200))
+        sst2.write(ByteArray([0x04, 0x0D]), EntryValue([0xDD], 201))
+        sst2.finishWrite()
 
         let mgr = LevelManager(testDir)
         mgr.loadExisting()
@@ -558,26 +558,22 @@ public class StoreStep11Test {
     @TestCase
     public func levelManagerShouldCompact(): Unit {
         Directory.create(testDir, recursive: true)
-        // 往 L0 添加 4 个 SSTableFile，shouldCompact 应返回 true
-        let writer = SSTableWriter("${testDir}/L0_1_10.sst", 1)
-        writer.write(ByteArray([0x01]), EntryValue([0x0A], 1))
-        writer.finish()
-        let sst1 = SSTableFile.open("${testDir}/L0_1_10.sst")
+        // 往 L0 添加 4 个 SSTable，shouldCompact 应返回 true
+        let sst1 = SSTable("${testDir}/L0_1_10.sst", 1)
+        sst1.write(ByteArray([0x01]), EntryValue([0x0A], 1))
+        sst1.finishWrite()
 
-        let writer2 = SSTableWriter("${testDir}/L0_2_10.sst", 1)
-        writer2.write(ByteArray([0x02]), EntryValue([0x0B], 2))
-        writer2.finish()
-        let sst2 = SSTableFile.open("${testDir}/L0_2_10.sst")
+        let sst2 = SSTable("${testDir}/L0_2_10.sst", 1)
+        sst2.write(ByteArray([0x02]), EntryValue([0x0B], 2))
+        sst2.finishWrite()
 
-        let writer3 = SSTableWriter("${testDir}/L0_3_10.sst", 1)
-        writer3.write(ByteArray([0x03]), EntryValue([0x0C], 3))
-        writer3.finish()
-        let sst3 = SSTableFile.open("${testDir}/L0_3_10.sst")
+        let sst3 = SSTable("${testDir}/L0_3_10.sst", 1)
+        sst3.write(ByteArray([0x03]), EntryValue([0x0C], 3))
+        sst3.finishWrite()
 
-        let writer4 = SSTableWriter("${testDir}/L0_4_10.sst", 1)
-        writer4.write(ByteArray([0x04]), EntryValue([0x0D], 4))
-        writer4.finish()
-        let sst4 = SSTableFile.open("${testDir}/L0_4_10.sst")
+        let sst4 = SSTable("${testDir}/L0_4_10.sst", 1)
+        sst4.write(ByteArray([0x04]), EntryValue([0x0D], 4))
+        sst4.finishWrite()
 
         let mgr = LevelManager(testDir)
         mgr.addSSTable(0, sst1)
@@ -597,21 +593,17 @@ public class StoreStep11Test {
     public func levelManagerGetPriority(): Unit {
         Directory.create(testDir, recursive: true)
         // L0 写入 (value = 0xAA)
-        let w0 = SSTableWriter("${testDir}/L0_100_100.sst", 1)
-        w0.write(ByteArray([0x10]), EntryValue([0xAA], 100))
-        w0.finish()
+        let sst0 = SSTable("${testDir}/L0_100_100.sst", 1)
+        sst0.write(ByteArray([0x10]), EntryValue([0xAA], 100))
+        sst0.finishWrite()
         // L1 写入 (value = 0xBB, 同 key)
-        let w1 = SSTableWriter("${testDir}/L1_200_200.sst", 1)
-        w1.write(ByteArray([0x10]), EntryValue([0xBB], 200))
-        w1.finish()
+        let sst1 = SSTable("${testDir}/L1_200_200.sst", 1)
+        sst1.write(ByteArray([0x10]), EntryValue([0xBB], 200))
+        sst1.finishWrite()
         // L2 写入 (value = 0xCC, 同 key)
-        let w2 = SSTableWriter("${testDir}/L2_300_300.sst", 1)
-        w2.write(ByteArray([0x10]), EntryValue([0xCC], 300))
-        w2.finish()
-
-        let sst0 = SSTableFile.open("${testDir}/L0_100_100.sst")
-        let sst1 = SSTableFile.open("${testDir}/L1_200_200.sst")
-        let sst2 = SSTableFile.open("${testDir}/L2_300_300.sst")
+        let sst2 = SSTable("${testDir}/L2_300_300.sst", 1)
+        sst2.write(ByteArray([0x10]), EntryValue([0xCC], 300))
+        sst2.finishWrite()
 
         let mgr = LevelManager(testDir)
         mgr.addSSTable(0, sst0)
@@ -638,11 +630,10 @@ public class StoreStep11Test {
         Directory.create(testDir, recursive: true)
         // 写入一条过期数据 (expireAt 远在过去)
         let expiredAt = Int64(1) // 1970-01-01 之后 1 纳秒，肯定过期
-        let writer = SSTableWriter("${testDir}/L0_1_1.sst", 1)
-        writer.write(ByteArray([0x20]), EntryValue([0xEE], 1, expireAt: expiredAt))
-        writer.finish()
+        let sst = SSTable("${testDir}/L0_1_1.sst", 1)
+        sst.write(ByteArray([0x20]), EntryValue([0xEE], 1, expireAt: expiredAt))
+        sst.finishWrite()
 
-        let sst = SSTableFile.open("${testDir}/L0_1_1.sst")
         let mgr = LevelManager(testDir)
         mgr.addSSTable(0, sst)
 
