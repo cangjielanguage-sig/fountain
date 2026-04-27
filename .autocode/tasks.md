@@ -309,7 +309,7 @@ cd f_store
 
 ---
 
-## ✅ Step 8: SSTable 文件格式 — 写入
+## ✅ Step 8: SSTable 文件格式 — 写入（已合并为 SSTable 类，见 SSTable.cj）
 
 **文件**: `src/SSTable.cj`
 **包**: `fountain::f_store`
@@ -383,7 +383,7 @@ cd f_store
 
 ---
 
-## ✅ Step 9: SSTable 文件格式 — 读取
+## ✅ Step 9: SSTable 文件格式 — 读取（已合并为 SSTable 类，见 SSTable.cj）
 
 **文件**: `src/SSTable.cj`（追加）
 **包**: `fountain::f_store`
@@ -443,7 +443,7 @@ cd f_store
 
 ---
 
-## ✅ Step 10: SSTableFile — SSTable 文件管理
+## ✅ Step 10: SSTableFile — SSTable 文件管理（已合并为 SSTable 类，见 SSTable.cj）
 
 **文件**: `src/SSTable.cj`（追加）
 **包**: `fountain::f_store`
@@ -475,7 +475,7 @@ cd f_store
 
 ---
 
-## ✅ Step 11: LevelManager — 层级管理
+## ✅ Step 11: LevelManager — 层级管理（已更新：SSTableFile → SSTable）
 
 **文件**: `src/LSM.cj`（追加）
 **包**: `fountain::f_store`

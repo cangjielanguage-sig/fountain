@@ -18,7 +18,7 @@ package fountain::f_store
 import fountain::f_concurrent.ConcurrentSkipListMap
 import std.sync.{AtomicInt64, AtomicReference, AtomicOptionReference, Mutex}
 import std.collection.ArrayList
-import std.fs.{Directory, exists}
+import std.fs.{Directory, exists, remove}
 import std.time.DateTime
 
 /** 内存表，基于 ConcurrentSkipListMap 实现无锁读写 */
@@ -93,6 +93,38 @@ class MemTableManager {
     func clearImmutable(): Unit {
         immutable.store(None)
     }
+}
+
+/** 将 immutable MemTable 刷盘为 SSTable 文件。
+ *  遍历 MemTable 的有序迭代器，逐条写入 SSTable。
+ *  超过 64MB 时自动创建新 SSTable。
+ *  返回所有生成的 SSTable 列表（已 finishWrite，处于 Readable 状态）。
+ */
+func flushMemTable(memTable: MemTable, sstDir: String, level: Int64): ArrayList<SSTable> {
+    let result = ArrayList<SSTable>()
+    if (!exists(sstDir)) {
+        Directory.create(sstDir, recursive: true)
+    }
+    var sstIndex: Int64 = 0
+    var writer = SSTable("${sstDir}/L${level}_${sstIndex}.sst", 64)
+    let iter = memTable.iterator()
+    while (let Some((key, entry)) <- iter.next()) {
+        writer.write(key, entry)
+        if (writer.isFull()) {
+            writer.finishWrite()
+            result.add(writer)
+            sstIndex++
+            writer = SSTable("${sstDir}/L${level}_${sstIndex}.sst", 64)
+        }
+    }
+    // 最后一个 writer（可能写了数据也可能为空）
+    if (writer.getEntryCount() > 0) {
+        writer.finishWrite()
+        result.add(writer)
+    } else {
+        writer.close()
+    }
+    result
 }
 
 /** 层级管理：管理 L0~Ln 各层的 SSTable 列表，提供带过期检查的 get 查询 */
