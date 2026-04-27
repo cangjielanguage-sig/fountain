@@ -24,7 +24,7 @@ func doCreateStoreStreamLinux(testDir: String): Unit {
     let path = "${testDir}/test_iouring_io.sst"
     Directory.create(testDir, recursive: true)
     let file = File(path, OpenMode.ReadWrite) // 保持 File 存活
-    let stream = createStoreStream(path, OpenMode.ReadWrite)
+    let stream = IOUringStream(Int32(file.fileDescriptor.fileHandle), 64)
     stream.write([0x01, 0x02, 0x03])
     stream.flush()
     (stream as Resource)?.close()
@@ -47,7 +47,7 @@ func doCreateStoreStreamLinux(testDir: String): Unit {
 func doCreateStoreStreamNonLinux(testDir: String): Unit {
     let path = "${testDir}/test_file_io.sst"
     Directory.create(testDir, recursive: true)
-    let stream = createStoreStream(path, OpenMode.ReadWrite)
+    let stream = File(path, OpenMode.ReadWrite)
     stream.write([0x01, 0x02, 0x03])
     stream.flush()
     (stream as Resource)?.close()

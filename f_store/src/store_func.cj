@@ -15,25 +15,6 @@ limitations under the License.
 */
 package fountain::f_store
 
-// === 创建存储 IO 流 ===
-
-/** 创建存储 IO 流的工厂函数。
- *  Linux: 使用 IOUringStream（双 ring 异步 IO）
- *  非 Linux: 使用 std.fs.File（同步 IO）
- *  统一返回 IOStream 接口。
- *  ★ 调用方必须保持 File 对象存活，否则 fd 失效（Linux 下 IOUringStream 只持有 fd 不持有 File）
- */
-@When[os == "Linux"]
-public func createStoreStream(path: String, mode: OpenMode, entries!: UInt32 = 64): IOStream {
-    let file = File(path, mode)
-    IOUringStream(Int32(file.fileDescriptor.fileHandle), entries)
-}
-
-@When[os != "Linux"]
-public func createStoreStream(path: String, mode: OpenMode, entries!: UInt32 = 64): IOStream {
-    File(path, mode)
-}
-
 // === 小端序读写工具（WAL 专用） ===
 
 func writeUInt32LE(buf: Array<Byte>, offset: Int64, value: UInt32): Int64 {
