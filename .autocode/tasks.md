@@ -565,7 +565,7 @@ cd f_store
 
 ---
 
-## Step 13: Store 主类 — 初始化 + add/remove/get/add(expire)/ttl
+## ✅ Step 13: Store 主类 — 初始化 + add/remove/get/add(expire)/ttl
 
 **文件**: `src/Store.cj`（追加）
 **包**: `fountain::f_store`

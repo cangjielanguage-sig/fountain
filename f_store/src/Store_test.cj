@@ -182,6 +182,46 @@ public class StoreTest {
         store.close()
     }
 
+    @TestCase
+    public func testCloseIdempotent(): Unit {
+        let dir = getTestDir("idempotent")
+        let store = Store(dir)
+        store.add("k".unsafeBytes(), "v".unsafeBytes())
+        store.close()
+        // 多次 close 不崩溃
+        store.close()
+        store.close()
+        @Expect(store.isClosed())
+    }
+
+    @TestCase
+    public func testOperationAfterClose(): Unit {
+        let dir = getTestDir("after_close")
+        let store = Store(dir)
+        store.close()
+        var threw = false
+        try {
+            store.add("k".unsafeBytes(), "v".unsafeBytes())
+        } catch (_: StoreClosedException) {
+            threw = true
+        }
+        @Expect(threw)
+        threw = false
+        try {
+            store.get("k".unsafeBytes())
+        } catch (_: StoreClosedException) {
+            threw = true
+        }
+        @Expect(threw)
+        threw = false
+        try {
+            store.remove("k".unsafeBytes())
+        } catch (_: StoreClosedException) {
+            threw = true
+        }
+        @Expect(threw)
+    }
+
     func getTestDir(name: String): String {
         let baseDir = "/tmp/f_store_test/Store_${name}"
         // 清理旧数据

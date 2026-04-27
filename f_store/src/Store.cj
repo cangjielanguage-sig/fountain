@@ -82,6 +82,9 @@ public class Store <: Resource {
 
         // 创建新 WAL
         this.wal = WAL("${walDir}/wal_${startSeq}.wal", startSequence: startSeq + 1)
+
+        // 进程退出时自动关闭
+        atExit { => close() }
     }
 
     /** 添加键值对 */
@@ -177,7 +180,8 @@ public class Store <: Resource {
                 levelManager.addSSTable(0, sst)
             }
         }
-        // 关闭 WAL
+        // 关闭 WAL（内部先 sync 再关流）
+        wal.sync()
         wal.close()
         // 关闭所有 SSTable
         levelManager.closeAll()

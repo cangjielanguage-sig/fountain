@@ -24,6 +24,7 @@ internal import std.io.{IOStream, SeekPosition}
 internal import std.sort.*
 internal import std.sync.{AtomicBool, AtomicInt64, AtomicReference, AtomicOptionReference, Mutex}
 internal import std.time.DateTime
+internal import std.env.atExit
 
 // === 项目依赖 ===
 internal import fountain::f_base.*
