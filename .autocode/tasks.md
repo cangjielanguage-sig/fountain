@@ -521,7 +521,7 @@ cd f_store
 
 ---
 
-## Step 12: MemTable 刷盘 — Immutable MemTable → SSTable
+## ✅ Step 12: MemTable 刷盘 — Immutable MemTable → SSTable
 
 **文件**: `src/LSM.cj`（追加）
 **包**: `fountain::f_store`
