@@ -929,7 +929,7 @@ cd f_store
 
 ---
 
-## Step 18: BloomFilter 序列化扩展（可选优化）
+## ✅ Step 18: BloomFilter 序列化扩展（可选优化）
 
 **文件**: `f_bloom/src/BloomFilter.cj`（修改外部模块）
 **包**: `fountain::f_bloom`
