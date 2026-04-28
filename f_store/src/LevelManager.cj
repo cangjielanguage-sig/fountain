@@ -156,7 +156,7 @@ class LevelManager {
     func getSSTablesInRange(min: ByteArray, max: ?ByteArray): ArrayList<SSTable> {
         let result = ArrayList<SSTable>()
         for (level in 0..levelCount) {
-            result.add(all!: getOverlappingSSTables(level, min, max))
+            result.add(all: getOverlappingSSTables(level, min, max))
         }
         result
     }

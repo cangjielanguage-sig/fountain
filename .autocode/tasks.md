@@ -736,7 +736,7 @@ cd f_store
 
 ---
 
-## Step 15: PrefixIterator — 前缀遍历
+## ✅ Step 15: PrefixIterator — 前缀遍历
 
 **文件**: `src/PrefixIterator.cj`
 **包**: `fountain::f_store`

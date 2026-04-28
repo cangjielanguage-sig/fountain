@@ -29,7 +29,7 @@ public class PrefixIteratorTest {
         @Expect(!startsWith(key, ByteArray("world".unsafeBytes())))
         @Expect(!startsWith(key, ByteArray("hello!".unsafeBytes())))
         // 空前缀匹配任意 key
-        @Expect(startsWith(key, ByteArray([].toVirtualArray())))
+        @Expect(startsWith(key, ByteArray(Array<Byte>())))
     }
 
     @TestCase

@@ -184,7 +184,7 @@ public class Store <: Resource {
         var i = bytes.size - 1
         while (i >= 0) {
             if (bytes[i] < 0xFF) {
-                let newBytes = Array<Byte>(i + 1, item: 0)
+                let newBytes = Array<Byte>(i + 1, repeat: 0u8)
                 for (j in 0..i) {
                     newBytes[j] = bytes[j]
                 }
