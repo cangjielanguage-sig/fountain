@@ -852,4 +852,101 @@ public class SSTableTest {
         sst2.close()
         remove(dir, recursive: true)
     }
+
+    /// Step 18+: BloomFilter FPR — 误判率在校验范围内（≤配置的 1%）
+    @TestCase
+    public func sstableBloomFilterFPR(): Unit {
+        let dir = "/tmp/f_store_test/SSTable_bloom_fpr"
+        if (exists(dir)) { remove(dir, recursive: true) }
+        Directory.create(dir, recursive: true)
+
+        let path = "${dir}/L0_1_1000.sst"
+        let totalKeys: Int64 = 500
+        let testMisses: Int64 = 500
+        let sst = SSTable(path, totalKeys + testMisses)
+        // 写入 known keys（使用固定前缀避免与测试 miss keys 冲突）
+        for (i in 1..=totalKeys) {
+            let key = makeKey(i, 0xAAu8)
+            sst.write(key, EntryValue(Some([0x01u8]), i))
+        }
+        sst.finishWrite()
+
+        let bf = sst.getBloomFilter()
+        @Expect(bf.n > 0)
+
+        // 测试未写入的 keys，统计误判数
+        var falsePositives: Int64 = 0
+        for (i in 1..=testMisses) {
+            let missKey = makeKey(i, 0xFFu8)
+            if (bf.mightContain(missKey.bytes)) {
+                falsePositives += 1
+            }
+        }
+
+        // 期望误判率 ≤ 5%（配置为 1%，宽松上限）
+        let fpr = Float64(falsePositives) / Float64(testMisses)
+        @Expect(fpr <= 0.05)
+
+        sst.close()
+        remove(dir, recursive: true)
+    }
+
+    /// Step 18+: BloomFilter 否定查询 — get() 对不存在 key 返回 None（走 BloomFilter 快速路径）
+    @TestCase
+    public func sstableBloomFilterNegativeQuery(): Unit {
+        let dir = "/tmp/f_store_test/SSTable_bloom_neg"
+        if (exists(dir)) { remove(dir, recursive: true) }
+        Directory.create(dir, recursive: true)
+
+        let path = "${dir}/L0_1_200.sst"
+        let sst = SSTable(path, 200)
+        // 写入 100 keys
+        for (i in 1..=100) {
+            let key = ByteArray([UInt8(i), 0x01u8])
+            sst.write(key, EntryValue(Some([0x01u8]), Int64(i)))
+        }
+        sst.finishWrite()
+
+        // 关闭后重新打开，验证 BloomFilter 反序列化后仍有效
+        sst.close()
+        let sst2 = SSTable.open(path)
+
+        // 查询 100 个不存在的 key，全部应返回 None
+        for (i in 1..=100) {
+            let missKey = ByteArray([UInt8(100 + i), 0x01u8])
+            let result = sst2.get(missKey)
+            @Expect(result.isNone())
+        }
+
+        sst2.close()
+        remove(dir, recursive: true)
+    }
+
+    /// 辅助：构造带前缀的 key（3 字节: prefix + index 高8位 + index 低8位）
+    private static func makeKey(index: Int64, prefix: UInt8): ByteArray {
+        ByteArray([prefix, UInt8(index / 256), UInt8(index % 256)])
+    }
+
+    /// Step 18+: BloomFilter 空表 — 0 条数据时行为正确
+    @TestCase
+    public func sstableBloomFilterEmpty(): Unit {
+        let dir = "/tmp/f_store_test/SSTable_bloom_empty"
+        if (exists(dir)) { remove(dir, recursive: true) }
+        Directory.create(dir, recursive: true)
+
+        let path = "${dir}/L0_0_0.sst"
+        let sst = SSTable(path, 10)
+        sst.finishWrite()
+
+        let bf = sst.getBloomFilter()
+        // 空表的 BloomFilter 对所有 key 都应返回 false
+        @Expect(!bf.mightContain(ByteArray([0x01u8]).bytes))
+        @Expect(!bf.mightContain(ByteArray([0xFFu8, 0xFFu8]).bytes))
+
+        // SSTable.get() 也应返回 None
+        @Expect(sst.get(ByteArray([0x01u8])).isNone())
+
+        sst.close()
+        remove(dir, recursive: true)
+    }
 }
