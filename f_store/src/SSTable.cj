@@ -345,7 +345,7 @@ class SSTable <: Resource {
             file.seek(SeekPosition.Begin(bloomOff))
             file.read(bloomBuf)
         }
-        let filter = parseBloomFilter(bloomBuf, file, indexEntries, idxOff)
+        let filter = parseBloomFilter(bloomBuf)
         // 4. 重建 metadata
         let firstKey = if (indexEntries.size > 0) { indexEntries[0].firstKey } else { ByteArray([]) }
         let lastIdx = indexEntries.size - 1
@@ -537,45 +537,14 @@ class SSTable <: Resource {
         Int64(totalSize)
     }
 
-    /** 写 Bloom Filter Block:
-     *  n(8) + p(8 bytes float64) + seed_count(8) + [seed(8)]... + bit_count(8) + [bits(8)]...
-     */
+    /** 写 Bloom Filter Block：使用 BloomFilter.serialize() 直接序列化 bitSet */
     private func writeBloomFilterBlock(): Int64 {
-        let n = bloomFilter.n
-        let p = bloomFilter.p
-        // 收集 seeds
-        let seeds = ArrayList<UInt64>()
-        for (seed in bloomFilter.seeds) {
-            seeds.add(seed)
-        }
-        let seedCount = seeds.size
-        // bitSet 大小
-        let bitCount = bloomFilter.bitCount
-        let bitSetWordCount = (bitCount + 63) / 64
-        // 总大小: n(8) + p(8) + seed_count(8) + seeds + bit_count(8) + bits
-        let totalSize = 8 + 8 + 8 + seedCount * 8 + 8 + bitSetWordCount * 8
-        let buf = Array<Byte>(Int64(totalSize), repeat: 0u8)
-        var offset = 0
-        // n
-        offset = writeInt64LE(buf, offset, n)
-        // p (Float64 as 8 bytes LE)
-        offset = writeFloat64LE(buf, offset, p)
-        // seed_count
-        offset = writeInt64LE(buf, offset, Int64(seedCount))
-        // seeds
-        for (seed in seeds) {
-            offset = writeUInt64LE(buf, offset, seed)
-        }
-        // bit_count
-        offset = writeInt64LE(buf, offset, bitCount)
-        // bits - 临时方案：写零占位，open 时从 n/p/seeds 重建
-        for (_ in 0..bitSetWordCount) {
-            offset = writeUInt64LE(buf, offset, 0u64)
-        }
+        let buf = bloomFilter.serialize()
         stream.write(buf)
-        currentOffset += Int64(totalSize)
-        fileSize += Int64(totalSize)
-        Int64(totalSize)
+        let totalSize = Int64(buf.size)
+        currentOffset += totalSize
+        fileSize += totalSize
+        totalSize
     }
 
     /** 写 Footer (48 bytes):
@@ -595,50 +564,8 @@ class SSTable <: Resource {
         fileSize += FOOTER_SIZE
     }
 
-    /** 解析 Bloom Filter Block 并重建 BloomFilter */
-    private static func parseBloomFilter(bloomBuf: Array<Byte>, file: File,
-                                          indexEntries: ArrayList<IndexEntry>, idxOff: Int64): BloomFilter {
-        if (bloomBuf.size < 24) {
-            return BloomFilter.new(1, 0.01) // 最小默认
-        }
-        let n = readInt64LE(bloomBuf, 0)
-        let pBuf = Array<Byte>(8){i => bloomBuf[8+i]}
-        let p = Float64.readLittleEndian(pBuf)
-        let seedCount = readInt64LE(bloomBuf, 16)
-        let seeds = Array<UInt64>(seedCount, repeat: 0u64)
-        var boff = 24
-        for (i in 0..seedCount) {
-            seeds[i] = readUInt64LE(bloomBuf, boff)
-            boff += 8
-        }
-        // 重建 BloomFilter（seed 驱动，bitset 以 0 初始化，需遍历 Data Block 重新填充）
-        let filter = BloomFilter.new(n, p, seeds.clone())
-        // 遍历所有 Data Block，将 key 重新 add 到 bloom filter
-        for (i in 0..indexEntries.size) {
-            let blockStart = indexEntries[i].offset
-            let blockEnd = if (i + 1 < indexEntries.size) {
-                indexEntries[i + 1].offset
-            } else {
-                idxOff
-            }
-            let blockSize = blockEnd - blockStart
-            let blockBuf = Array<Byte>(blockSize, repeat: 0u8)
-            file.seek(SeekPosition.Begin(blockStart))
-            file.read(blockBuf)
-            var off = 0
-            while (off + 32 <= blockSize) {
-                let keyLen = readInt64LE(blockBuf, off)
-                let valueLen = readInt64LE(blockBuf, off + 8)
-                let actualValueLen = if (valueLen >= 0) { valueLen } else { 0 }
-                if (off + 32 + keyLen + actualValueLen > blockSize) { break }
-                let kBuf = Array<Byte>(keyLen, repeat: 0u8)
-                for (i in 0..keyLen) {
-                    kBuf[i] = blockBuf[off + 32 + i]
-                }
-                filter.add(kBuf)
-                off += 32 + keyLen + actualValueLen
-            }
-        }
-        filter
+    /** 解析 Bloom Filter Block 并直接反序列化 bitSet */
+    private static func parseBloomFilter(bloomBuf: Array<Byte>): BloomFilter {
+        BloomFilter.deserialize(bloomBuf)
     }
 }

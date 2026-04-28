@@ -15,6 +15,7 @@ limitations under the License.
  */
 package fountain::f_bloom
 
+import std.binary.*
 import std.math
 import std.sync.AtomicUInt64
 import fountain::f_base.*
@@ -129,5 +130,141 @@ public class BloomFilter {
     }
     public func mightContain(element: ToString): Bool {
         return mightContain(element.toString().unsafeBytes())
+    }
+
+    /** 序列化为字节数组。
+     *  格式: n(8) + p(8) + seed_count(8) + [seed(8)]... + bit_count(8) + [bits(8)]...
+     *  所有整数小端序，Float64 小端序。
+     */
+    public func serialize(): Array<Byte> {
+        // 收集 seeds
+        let seedsArr = ArrayList<UInt64>()
+        for (seed in seeds) {
+            seedsArr.add(seed)
+        }
+        let seedCount = seedsArr.size
+        let bitCount = this.size
+        let wordCount = (bitCount + 63) / 64
+
+        // 总大小
+        let totalSize = 8 + 8 + 8 + seedCount * 8 + 8 + wordCount * 8
+        let buf = Array<Byte>(totalSize, repeat: 0u8)
+        var offset = 0
+
+        // n (Int64 LE)
+        offset = writeInt64LE(buf, offset, n)
+        // p (Float64 LE)
+        offset = writeFloat64LE(buf, offset, p)
+        // seed_count (Int64 LE)
+        offset = writeInt64LE(buf, offset, Int64(seedCount))
+        // seeds (UInt64 LE)
+        for (seed in seedsArr) {
+            offset = writeUInt64LE(buf, offset, seed)
+        }
+        // bit_count (Int64 LE)
+        offset = writeInt64LE(buf, offset, bitCount)
+        // bits — 原子读取每个 word
+        for (i in 0..wordCount) {
+            offset = writeUInt64LE(buf, offset, bitSet[i].load())
+        }
+        buf
+    }
+
+    /** 从字节数组反序列化。
+     *  格式同 serialize()：n(8) + p(8) + seed_count(8) + [seed(8)]... + bit_count(8) + [bits(8)]...
+     */
+    public static func deserialize(bytes: Array<Byte>): BloomFilter {
+        if (bytes.size < 24) {
+            return BloomFilter.new(1, 0.01) // 最小默认
+        }
+        let n = readInt64LE(bytes, 0)
+        let pBuf = Array<Byte>(8){i => bytes[8 + i]}
+        let p = Float64.readLittleEndian(pBuf)
+        let seedCount = readInt64LE(bytes, 16)
+        let seeds = Array<UInt64>(seedCount, repeat: 0u64)
+        var off = 24
+        for (i in 0..seedCount) {
+            seeds[i] = readUInt64LE(bytes, off)
+            off += 8
+        }
+        let bitCount = readInt64LE(bytes, off)
+        off += 8
+        let wordCount = (bitCount + 63) / 64
+
+        if (off + wordCount * 8 > bytes.size) {
+            return BloomFilter.new(1, 0.01) // 数据不完整
+        }
+
+        // 构造 BloomFilter 并直接填充 bitSet
+        let filter = BloomFilter.new(n, p, seeds)
+        for (i in 0..wordCount) {
+            let word = readUInt64LE(bytes, off)
+            off += 8
+            filter.bitSet[i].store(word)
+        }
+        filter
+    }
+
+    // === 小端序写工具（BloomFilter内部使用） ===
+
+    @OverflowWrapping
+    private static func writeInt64LE(buf: Array<Byte>, offset: Int64, value: Int64): Int64 {
+        let uv = value.toUInt()
+        buf[offset] = UInt8(uv & 0xFFu64)
+        buf[offset + 1] = UInt8((uv >> 8) & 0xFFu64)
+        buf[offset + 2] = UInt8((uv >> 16) & 0xFFu64)
+        buf[offset + 3] = UInt8((uv >> 24) & 0xFFu64)
+        buf[offset + 4] = UInt8((uv >> 32) & 0xFFu64)
+        buf[offset + 5] = UInt8((uv >> 40) & 0xFFu64)
+        buf[offset + 6] = UInt8((uv >> 48) & 0xFFu64)
+        buf[offset + 7] = UInt8((uv >> 56) & 0xFFu64)
+        offset + 8
+    }
+
+    @OverflowWrapping
+    private static func writeUInt64LE(buf: Array<Byte>, offset: Int64, value: UInt64): Int64 {
+        buf[offset] = UInt8(value & 0xFFu64)
+        buf[offset + 1] = UInt8((value >> 8) & 0xFFu64)
+        buf[offset + 2] = UInt8((value >> 16) & 0xFFu64)
+        buf[offset + 3] = UInt8((value >> 24) & 0xFFu64)
+        buf[offset + 4] = UInt8((value >> 32) & 0xFFu64)
+        buf[offset + 5] = UInt8((value >> 40) & 0xFFu64)
+        buf[offset + 6] = UInt8((value >> 48) & 0xFFu64)
+        buf[offset + 7] = UInt8((value >> 56) & 0xFFu64)
+        offset + 8
+    }
+
+    private static func writeFloat64LE(buf: Array<Byte>, offset: Int64, value: Float64): Int64 {
+        let tempBuf = Array<Byte>(8, repeat: 0u8)
+        value.writeLittleEndian(tempBuf)
+        for (i in 0..8) {
+            buf[offset + i] = tempBuf[i]
+        }
+        offset + 8
+    }
+
+    @OverflowWrapping
+    private static func readInt64LE(buf: Array<Byte>, offset: Int64): Int64 {
+        let v = (UInt64(buf[offset])) |
+        (UInt64(buf[offset + 1]) << 8) |
+        (UInt64(buf[offset + 2]) << 16) |
+        (UInt64(buf[offset + 3]) << 24) |
+        (UInt64(buf[offset + 4]) << 32) |
+        (UInt64(buf[offset + 5]) << 40) |
+        (UInt64(buf[offset + 6]) << 48) |
+        (UInt64(buf[offset + 7]) << 56)
+        v.toInt()
+    }
+
+    @OverflowWrapping
+    private static func readUInt64LE(buf: Array<Byte>, offset: Int64): UInt64 {
+        UInt64(buf[offset]) |
+        (UInt64(buf[offset + 1]) << 8) |
+        (UInt64(buf[offset + 2]) << 16) |
+        (UInt64(buf[offset + 3]) << 24) |
+        (UInt64(buf[offset + 4]) << 32) |
+        (UInt64(buf[offset + 5]) << 40) |
+        (UInt64(buf[offset + 6]) << 48) |
+        (UInt64(buf[offset + 7]) << 56)
     }
 }

@@ -785,4 +785,71 @@ public class SSTableTest {
         sst.close()
         remove(dir, recursive: true)
     }
+
+    /// Step 18: BloomFilter 序列化 — finishWrite 后 mightContain 正确
+    @TestCase
+    public func sstableBloomFilterAfterFinish(): Unit {
+        let path = tempPath("sstableBloomFilterAfterFinish")
+        cleanFile(path)
+        ensureDir(path)
+
+        let sst = SSTable(path, 100)
+        let k1 = ByteArray([0x01u8, 0x02u8])
+        let k2 = ByteArray([0x03u8, 0x04u8])
+        let k3 = ByteArray([0x05u8, 0x06u8])
+
+        sst.write(k1, EntryValue(Some([0x41u8]), 1))
+        sst.write(k2, EntryValue(Some([0x42u8]), 2))
+        sst.write(k3, EntryValue(Some([0x43u8]), 3))
+        sst.finishWrite()
+
+        let bf = sst.getBloomFilter()
+        @Expect(bf.n > 0)
+        // 写入的 key 应该被 BloomFilter 识别
+        @Expect(bf.mightContain(k1.bytes))
+        @Expect(bf.mightContain(k2.bytes))
+        @Expect(bf.mightContain(k3.bytes))
+
+        sst.close()
+        cleanFile(path)
+    }
+
+    /// Step 18: BloomFilter 序列化 — open 后反序列化正确
+    @TestCase
+    public func sstableBloomFilterAfterOpen(): Unit {
+        let dir = "/tmp/f_store_test/SSTable_bloom_open"
+        if (exists(dir)) { remove(dir, recursive: true) }
+        Directory.create(dir, recursive: true)
+
+        let path = "${dir}/L0_1_10.sst"
+        let sst = SSTable(path, 100)
+        let k1 = ByteArray([0x0Au8, 0x0Bu8])
+        let k2 = ByteArray([0x0Cu8, 0x0Du8])
+        let k3 = ByteArray([0x0Eu8, 0x0Fu8])
+
+        sst.write(k1, EntryValue(Some([0xA1u8]), 1))
+        sst.write(k2, EntryValue(Some([0xA2u8]), 2))
+        sst.write(k3, EntryValue(Some([0xA3u8]), 3))
+        sst.finishWrite()
+        sst.close()
+
+        // 重新打开，BloomFilter 需从序列化数据反序列化
+        let sst2 = SSTable.open(path)
+        let bf = sst2.getBloomFilter()
+        @Expect(bf.n > 0)
+        @Expect(bf.mightContain(k1.bytes))
+        @Expect(bf.mightContain(k2.bytes))
+        @Expect(bf.mightContain(k3.bytes))
+
+        // 未写入的 key 大概率不在（允许误判，但不应该有假阴性）
+        let missing = ByteArray([0xFFu8, 0xFFu8])
+        let r = sst2.get(missing)
+        if (r.isNone()) {
+            // 确实不存在时，BloomFilter 也大概率返回 false
+            // （这里不强制断言，因为 BloomFilter 有误判率）
+        }
+
+        sst2.close()
+        remove(dir, recursive: true)
+    }
 }
