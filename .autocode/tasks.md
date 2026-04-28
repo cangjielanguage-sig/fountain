@@ -698,7 +698,7 @@ cd f_store
 
 ---
 
-## Step 14: Store.close — 关闭与数据持久化
+## ✅ Step 14: Store.close — 关闭与数据持久化
 
 **文件**: `src/Store.cj`（追加）
 **包**: `fountain::f_store`
@@ -876,7 +876,7 @@ cd f_store
 
 ## Step 17: 集成测试与修复
 
-**文件**: `src/Store_test.cj`（测试文件）
+**文件**: `src/Store_itergration_test.cj`（测试文件）
 **包**: `fountain::f_store`
 
 ### 开发内容

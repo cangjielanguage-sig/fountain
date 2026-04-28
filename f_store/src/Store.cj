@@ -156,6 +156,46 @@ public class Store <: Resource {
         None
     }
 
+    /** 前缀遍历：返回所有以 prefix 开头的键值对（含过期过滤） */
+    public func prefix(prefix: Array<Byte>): PrefixIterator {
+        guardOpen()
+        let prefixBytes = ByteArray(prefix)
+        let prefixEnd = computePrefixEnd(prefixBytes)
+        let sources = ArrayList<PeekableIterator<(ByteArray, EntryValue)>>()
+
+        // 1. Active MemTable
+        sources.add(PeekableIterator(memTableManager.getActive().tailer(prefixBytes)))
+        // 2. Immutable MemTable
+        if (let Some(imm) <- memTableManager.getImmutable()) {
+            sources.add(PeekableIterator(imm.tailer(prefixBytes)))
+        }
+        // 3. SSTables: 范围内各 SSTable 用 tailer 从 prefix 开始遍历
+        let sstables = levelManager.getSSTablesInRange(prefixBytes, prefixEnd)
+        for (sst in sstables) {
+            sources.add(PeekableIterator(sst.tailer(prefixBytes)))
+        }
+
+        PrefixIterator(prefixBytes, sources)
+    }
+
+    /** 计算前缀上界：prefix 的"下一个"key，用于范围查询。全 0xFF 返回 None（无上界） */
+    private func computePrefixEnd(prefix: ByteArray): ?ByteArray {
+        let bytes = prefix.bytes
+        var i = bytes.size - 1
+        while (i >= 0) {
+            if (bytes[i] < 0xFF) {
+                let newBytes = Array<Byte>(i + 1, item: 0)
+                for (j in 0..i) {
+                    newBytes[j] = bytes[j]
+                }
+                newBytes[i] = bytes[i] + 1
+                return Some(ByteArray(newBytes))
+            }
+            i -= 1
+        }
+        None
+    }
+
     public func isClosed(): Bool {
         closed.load()
     }

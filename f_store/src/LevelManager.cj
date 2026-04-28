@@ -152,8 +152,17 @@ class LevelManager {
         result
     }
 
-    /** 获取指定层与 [min, max] 范围重叠的 SSTable */
-    func getOverlappingSSTables(level: Int64, min: ByteArray, max: ByteArray): ArrayList<SSTable> {
+    /** 获取所有层与 [min, max] 范围重叠的 SSTable。max 为 None 表示无上界 */
+    func getSSTablesInRange(min: ByteArray, max: ?ByteArray): ArrayList<SSTable> {
+        let result = ArrayList<SSTable>()
+        for (level in 0..levelCount) {
+            result.add(all!: getOverlappingSSTables(level, min, max))
+        }
+        result
+    }
+
+    /** 获取指定层与 [min, max] 范围重叠的 SSTable。max 为 None 表示无上界 */
+    func getOverlappingSSTables(level: Int64, min: ByteArray, max: ?ByteArray): ArrayList<SSTable> {
         let result = ArrayList<SSTable>()
         if (level < 0 || level >= levelCount) {
             return result
@@ -161,8 +170,9 @@ class LevelManager {
         synchronized(levelLocks[level]) {
             for (sst in levels[level]) {
                 let meta = sst.getMetadata()
-                // 重叠条件: sst.minKey <= max && sst.maxKey >= min
-                if (meta.minKey <= max && meta.maxKey >= min) {
+                // 重叠条件: (max 为 None 或 sst.minKey <= max) && sst.maxKey >= min
+                let withinMax = max.isNone() || meta.minKey <= max.getOrThrow()
+                if (withinMax && meta.maxKey >= min) {
                     result.add(sst)
                 }
             }
