@@ -874,7 +874,7 @@ cd f_store
 
 ---
 
-## Step 17: 集成测试与修复
+## ✅ Step 17: 集成测试与修复
 
 **文件**: `src/Store_itergration_test.cj`（测试文件）
 **包**: `fountain::f_store`
