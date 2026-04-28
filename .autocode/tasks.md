@@ -805,7 +805,7 @@ cd f_store
 
 ---
 
-## Step 16: Compaction — 后台压实合并
+## ✅ Step 16: Compaction — 后台压实合并
 
 **文件**: `src/Compaction.cj`
 **包**: `fountain::f_store`

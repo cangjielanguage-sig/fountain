@@ -32,6 +32,7 @@ public class Store <: Resource {
     private let sequence: AtomicInt64
     private let closed: AtomicBool
     private let memFlushThreshold: Int64
+    private let compactor: Compactor
 
     /** 从路径打开或创建 Store */
     public init(path: Path) {
@@ -82,6 +83,10 @@ public class Store <: Resource {
 
         // 创建新 WAL
         this.wal = WAL("${walDir}/wal_${startSeq}.wal", startSequence: startSeq + 1)
+
+        // 创建 Compactor 并启动
+        this.compactor = Compactor(levelManager, sstDir)
+        compactor.start()
 
         // 进程退出时自动关闭
         atExit { => close() }
@@ -204,6 +209,8 @@ public class Store <: Resource {
         if (!closed.compareAndSwap(false, true)) {
             return
         }
+        // 停止 Compactor
+        compactor.stop()
         // flush immutable MemTable（如果有）
         if (let Some(imm) <- memTableManager.getImmutable()) {
             let sstables = flushMemTable(imm, sstDir, 0)
