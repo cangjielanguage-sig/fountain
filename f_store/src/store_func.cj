@@ -104,6 +104,9 @@ func readFloat64LE(buf: Array<Byte>, offset: Int64): Float64 {
 
 // === MemTable 刷盘 ===
 
+/** 全局 SSTable 序列号，每次 flush 自增，确保文件名唯一 */
+let sstableFileSeq = AtomicInt64(0)
+
 /** 将 immutable MemTable 刷盘为 SSTable 文件。
  *  遍历 MemTable 的有序迭代器，逐条写入 SSTable。
  *  超过 64MB 时自动创建新 SSTable。
@@ -114,7 +117,7 @@ func flushMemTable(memTable: MemTable, sstDir: String, level: Int64): ArrayList<
     if (!exists(sstDir)) {
         Directory.create(sstDir, recursive: true)
     }
-    var sstIndex: Int64 = 0
+    var sstIndex: Int64 = sstableFileSeq.incrFetch()
     var writer = SSTable("${sstDir}/L${level}_${sstIndex}.sst", 64)
     let iter = memTable.iterator()
     while (let Some((key, entry)) <- iter.next()) {

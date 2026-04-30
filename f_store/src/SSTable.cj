@@ -83,11 +83,9 @@ class SSTable <: Resource {
         }
         this.path = path
         this.file = File(path, OpenMode.ReadWrite)
-        @When[os == "Linux"]
-        let s = IOUringStream(Int32(file.fileDescriptor.fileHandle))
-        @When[os != "Linux"]
-        let s: IOStream = file
-        this.stream = s
+        // 始终用 File 做 stream，确保 finishWrite 后新 File 句柄可读。
+        // 不使用 IOURingStream（其异步写入在某些平台上对新 File 句柄不可见）。
+        this.stream = file
         this.bloomFilter = BloomFilter.new(estimatedCount, 0.01)
         this.indexEntries = ArrayList<IndexEntry>()
         this.currentOffset = 0
@@ -199,7 +197,8 @@ class SSTable <: Resource {
     }
 
     /** 写完 Index + Bloom + Footer，flush，切换到 Readable 状态。
-     *  不关闭 fd，保留读取能力。
+     *  stream 始终为 File（写模式构造中固定 this.stream = file），
+     *  不涉及 IOURingStream，确保后续 iterator/get 的新 File 句柄可正确读取。
      *  返回 SSTableMetadata。
      */
     func finishWrite(): SSTableMetadata {
@@ -212,7 +211,7 @@ class SSTable <: Resource {
         let bloomSize = writeBloomFilterBlock()
         // 写 Footer
         writeFooter(indexOffset, indexSize, bloomOffset, bloomSize)
-        // flush
+        // flush（File.flush 为 no-op，数据已在 OS page cache 中）
         stream.flush()
         // 构造 metadata
         let actualMinKey = minKey ?? ByteArray([])

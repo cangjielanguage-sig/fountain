@@ -211,7 +211,9 @@ public static func open(path: String): SSTable {
 4. 再执行 WAL sync + close + levelManager.closeAll
 
 **验收标准**：并发 add + close 重复 100 次不丢数据  
-**Commit**: `d276a9a7` — StoreTest(11) + StoreIntegrationTest(22) 全部通过
+**Commits**: `d276a9a7` (fix) + `dd9c48d0` (test)  
+**测试验证**: StoreTest(11) + StoreIntegrationTest(22) + ConcurrencyTest.testCloseDuringConcurrentWrites(1) 全部通过  
+**压测结果**: 3 writer × 50ms = 1754 笔跨 close 边界的并发写入，reopen 后 100% 恢复
 
 ---
 
