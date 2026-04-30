@@ -217,7 +217,7 @@ public static func open(path: String): SSTable {
 
 ---
 
-#### 1.2 【P0 数据安全】WAL 恢复后清理旧 WAL 文件
+#### 1.2 【P0 数据安全】WAL 恢复后清理旧 WAL 文件 ✅
 
 **文件**: `Store.cj`（Store.init）  
 **类型**: 缺陷修复 | **预计**: 0.5 人天
@@ -232,44 +232,25 @@ public static func open(path: String): SSTable {
 
 ---
 
-#### 1.3 【P1 数据安全】Store.close byteCount 修复及时触发刷盘
+#### 1.3 【P1 数据安全】Store.close byteCount 修复及时触发刷盘 ✅ 无需修复
 
-**文件**: `MemTable.cj`、`Store.cj`  
-**类型**: 缺陷修复 | **预计**: 0.5 人天
+**问题（Q4）**：~~WAL 恢复的数据写入 MemTable 后 `byteCount` 为 0，直到新写入才累加。~~
 
-**问题（Q4）**：WAL 恢复的数据写入 MemTable 后 `byteCount` 为 0，直到新写入才累加。恢复后大量数据无法触发 `maybeFlush`。
-
-**修复方案**：
-1. `Store.init()` 中恢复数据时，同步累加 `byteCount`
-2. 或 WAL 恢复使用 `mt.add()` 自动更新 `byteCount`（当前恢复时直接调 `memTableManager.getActive().add()`，不会额外计数）
-
-**验收标准**：恢复 1MB 数据后 `approximateSize()` 正确反映占用
+**实际情况**：`Store.init()` 中恢复循环调用 `memTableManager.getActive().add(key, entry)`，最终走 `MemTable.add()`（`MemTable.cj:31`），该方法内部执行 `byteCount.fetchAdd(...)`。所以 **byteCount 在恢复后即正确反映数据量**，无需修复。
 
 ---
 
-#### 1.4 【P1 健壮性】并发读写测试
+#### 1.4 【P1 健壮性】并发读写测试 ✅
 
-**文件**: `f_store/src/`（新建 `Concurrency_test.cj`）  
+**文件**: `f_store/src/Concurrency_test.cj`  
 **类型**: 测试补全 | **预计**: 1.5~2 人天
 
-**目标**：验证 MemTable 和 Store 在并发场景下的正确性
-
-**实施步骤**：
-1. 新增 `ConcurrencyTest` 测试类
-2. **用例1：多写者并发 add**
-   - 启动 N 个线程（N=4~8），写入 M 条不重叠 key
-   - 验证所有 key 均可正确读出，sequence 单调递增无冲突
-3. **用例2：读写并发**
-   - 线程A：持续写入 key `"counter"`，value 为递增数字
-   - 线程B：持续读取，验证 value 单调不减（不出现损坏数据）
-4. **用例3：flush 与写入并发**
-   - 线程A：高速写入触发多次 swap+flush
-   - 线程B：随机读取已写入的 key，验证总能读到
-5. **用例4：compaction 与读取并发**
-   - 预先写入大量数据触发多层 compaction
-   - 线程A：执行 compaction；线程B：持续随机读取
-
-**验收标准**：全部并发用例重复运行 20 次以上无死锁、无数据竞争
+**状态**：`ConcurrencyTest` 已包含 5 个测试用例，全部通过：
+- ✅ testMultiWriterConcurrentAdd — 4线程×100条不重叠key
+- ✅ testReadWriteConcurrent — 读写并发，验证 value 单调不减
+- ✅ testFlushAndWriteConcurrent — 大 value 触发 flush 期间并发读取
+- ✅ testCompactionAndReadConcurrent — 多层 compaction 期间并发随机读
+- ✅ testCloseDuringConcurrentWrites — close 期间持续写入（新增）
 
 ---
 
@@ -475,9 +456,9 @@ public static func open(path: String): SSTable {
 | 阶段 | 优先级 | 任务 | 类型 | 预计人天 |
 |------|--------|------|------|----------|
 | 1 | P0 | Store.close 数据丢失窗口修复 ✅ | 缺陷 | 0.5 |
-| 1 | P0 | WAL 恢复后清理旧文件 | 缺陷 | 0.5 |
-| 1 | P1 | byteCount 恢复后重建 | 缺陷 | 0.5 |
-| 1 | 高 | 并发读写测试 | 测试 | 1.5~2 |
+| 1 | P0 | WAL 恢复后清理旧文件 ✅ | 缺陷 | 0.5 |
+| 1 | P1 | byteCount 恢复后重建 ✅（无需修复） | 缺陷 | — |
+| 1 | 高 | 并发读写测试 ✅ | 测试 | 1.5~2 |
 | 1 | 高 | WAL 损坏恢复测试 | 测试 | 1 |
 | 1 | 高 | Compaction 多文件合并测试 | 测试 | 1 |
 | 2 | P1 | WAL 单文件轮转 | 功能 | 1 |
