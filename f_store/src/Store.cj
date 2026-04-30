@@ -337,5 +337,19 @@ public class Store <: Resource {
             }
             memTableManager.clearImmutable()
         }
+        // 刷盘完成后清理已轮转的旧 WAL 文件（它们的数据已持久化到 SSTable）
+        cleanupRotatedWALFiles()
+    }
+
+    /** 清理 WAL 轮转产生的旧文件（数据已通过 flush 持久化到 SSTable） */
+    private func cleanupRotatedWALFiles(): Unit {
+        let oldFiles = wal.takeOldFiles()
+        for (p in oldFiles) {
+            try {
+                if (exists(p)) {
+                    remove(p)
+                }
+            } catch (_: Exception) {}
+        }
     }
 }
