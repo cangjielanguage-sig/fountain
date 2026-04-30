@@ -158,7 +158,6 @@ public class Store <: Resource {
         if (let Some(entry) <- levelManager.get(keyBytes)) {
             return checkExpiryAndGet(entry)
         }
-        println("[GET MISS] keySize=${key.size}  activeSize=${memTableManager.getActive().approximateSize()}  levels=${levelManager.levelSummary()}")
         None
     }
 
@@ -328,10 +327,8 @@ public class Store <: Resource {
         if (memTableManager.getActive().approximateSize() < memFlushThreshold) {
             return
         }
-        println("[FLUSH] activeSize=${memTableManager.getActive().approximateSize()}  threshold=${memFlushThreshold}")
         if (let Some(table) <- memTableManager.swapActive()) {
             let sstables = flushMemTable(table, sstDir, 0)
-            println("[FLUSH] wrote ${sstables.size} SSTables")
             for (sst in sstables) {
                 levelManager.addSSTable(0, sst)
             }

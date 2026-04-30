@@ -202,18 +202,14 @@ public class ConcurrencyTest {
         let prewriteCount: Int64 = 1200 // ~38MB，触发 4+ 次 flush
 
         // 预写入大量数据
-        println("[TEST] writing ${prewriteCount} entries...")
         for (i in 0..prewriteCount) {
             let key = "ck_${i}".unsafeBytes()
             store.add(key, largeValue)
         }
-        println("[TEST] done writing. sleeping 500ms...")
 
         // 此时 L0 应有多个 SSTable，compactor 应该在后台运行
         // 等待一小段时间让 compaction 有机会启动
         sleep(Duration.millisecond * 500)
-
-        println("[TEST] starting read loop. levels=${store.levelSummary()}")
 
         // Reader：随机读取，验证不报错且数据一致
         let readDone = AtomicBool(false)
@@ -225,13 +221,9 @@ public class ConcurrencyTest {
                     let result = store.get(key)
                     if (result.isNone()) {
                         errorCount++
-                        if (errorCount <= 10) {
-                            println("[TEST MISS] round=${round}  key=ck_${i}  errorCount=${errorCount}")
-                        }
                     }
                 }
                 if (errorCount > 0) {
-                    println("[TEST] round=${round}  errorCount=${errorCount}  levels=${store.levelSummary()}")
                     break
                 }
                 sleep(Duration.millisecond * 10)
@@ -240,8 +232,6 @@ public class ConcurrencyTest {
         }
 
         readerFut.get()
-
-        println("[TEST] reader done. checking all keys... levels=${store.levelSummary()}")
 
         // 验证所有预写入的 key 最终都可读
         var missingCount: Int64 = 0
@@ -301,7 +291,6 @@ public class ConcurrencyTest {
         sleep(Duration.millisecond * 50)
 
         // 4. close 而 writer 仍运行中
-        println("[TEST] closing store while ${writerCount} writers running...")
         store.close()
         shouldRun.store(false)
 
@@ -313,8 +302,6 @@ public class ConcurrencyTest {
                 acknowledgedKeys.add(k)
             }
         }
-        println("[TEST] writers acknowledged ${acknowledgedKeys.size} keys total")
-
         // 6. reopen 验证
         let reopened = Store(dir)
 
