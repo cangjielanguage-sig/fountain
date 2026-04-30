@@ -268,7 +268,7 @@ public static func open(path: String): SSTable {
 
 ---
 
-#### 1.6 【测试】Compaction 多文件合并（>2 源）
+#### 1.6 【测试】Compaction 多文件合并（>2 源） ✅
 
 **文件**: `Compaction_test.cj`、`SSTableMerger_test.cj`  
 **类型**: 测试补全 | **预计**: 1 人天
