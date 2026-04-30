@@ -46,6 +46,10 @@ public class WALTest {
     static func readRecords(path: String): ArrayList<WALRecord> {
         let file = File(path, OpenMode.Read)
         let fileSize = file.info.size
+        if (fileSize < 36) {
+            file.close()
+            return ArrayList<WALRecord>()
+        }
         let bytes = Array<Byte>(fileSize, repeat: 0u8)
         file.read(bytes)
         file.close()

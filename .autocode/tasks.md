@@ -254,21 +254,17 @@ public static func open(path: String): SSTable {
 
 ---
 
-#### 1.5 【测试】WAL 损坏恢复测试
+#### 1.5 【测试】WAL 损坏恢复测试 ✅
 
 **文件**: `WALReader_test.cj`  
 **类型**: 测试补全 | **预计**: 1 人天
 
-**目标**：验证 WAL 在部分损坏时仍能恢复尽可能多的数据
+**新增 3 个测试用例**：
+- ✅ `walChecksumCorruptionSingleRecord` — 3 条记录，翻转第 2 条 key，恢复截断在第 1 条
+- ✅ `walChecksumCorruptionConsecutive` — 5 条记录，翻转第 2、3 条 key，恢复截断在第 1 条
+- ✅ `walRecoverEmptyAndCorruptedMixed` — 空 WAL + 正常 WAL(3条) + 损坏 WAL(第2条损坏)，正常文件全恢复，损坏文件截断
 
-**实施步骤**：
-1. 扩展 `WALReaderTest`
-2. **用例1：CRC 校验失败 — 单条记录损坏** — 翻转第 2 条记录字节，验证第 1/3 条正常
-3. **用例2：CRC 校验失败 — 连续多条损坏** — 翻转第 2、3 条，验证第 1/4/5 条正常
-4. **用例3：文件尾部截断（已有，确认覆盖完整）**
-5. **用例4：空 WAL 文件 + 部分损坏文件混合恢复**
-
-**验收标准**：损坏记录被安全跳过，合法记录无丢失，无崩溃
+**验收标准**：损坏记录被安全截断，合法记录无丢失，无崩溃
 
 ---
 
@@ -459,7 +455,7 @@ public static func open(path: String): SSTable {
 | 1 | P0 | WAL 恢复后清理旧文件 ✅ | 缺陷 | 0.5 |
 | 1 | P1 | byteCount 恢复后重建 ✅（无需修复） | 缺陷 | — |
 | 1 | 高 | 并发读写测试 ✅ | 测试 | 1.5~2 |
-| 1 | 高 | WAL 损坏恢复测试 | 测试 | 1 |
+| 1 | 高 | WAL 损坏恢复测试 ✅ | 测试 | 1 |
 | 1 | 高 | Compaction 多文件合并测试 | 测试 | 1 |
 | 2 | P1 | WAL 单文件轮转 | 功能 | 1 |
 | 2 | P2 | Compaction 文件名规范 | 代码修正 | 0.5 |

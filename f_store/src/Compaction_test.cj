@@ -197,6 +197,120 @@ public class SSTableMergerTest {
         sst.finishWrite()
         sst
     }
+
+    /** 4 源归并：验证超过 2 个源的归并正确性，含去重和 tombstone */
+    @TestCase
+    public func mergerFourSourcesWithDedupAndTombstone(): Unit {
+        // 4 个 SSTable，各有部分重叠 key
+        let dir = "/tmp/f_store_merger_4src"
+        if (!exists(dir)) { Directory.create(dir, recursive: true) }
+
+        // 源 1: key 0x01,0x02,0x03 — 正常值
+        let sst1 = createSSTable("${dir}/s1.sst", [
+            (ByteArray([0x01]), EntryValue([0xA1], 1)),
+            (ByteArray([0x02]), EntryValue([0xA2], 2)),
+            (ByteArray([0x03]), EntryValue([0xA3], 3))
+        ])
+        // 源 2: key 0x02(高sequence),0x04 — 0x02 覆盖源 1
+        let sst2 = createSSTable("${dir}/s2.sst", [
+            (ByteArray([0x02]), EntryValue([0xB2], 20)),  // seq 更高 → 应胜出
+            (ByteArray([0x04]), EntryValue([0xB4], 4))
+        ])
+        // 源 3: key 0x03(tombstone),0x05 — 0x03 被删除
+        let sst3 = createSSTable("${dir}/s3.sst", [
+            (ByteArray([0x03]), EntryValue(None, 30)),    // tombstone
+            (ByteArray([0x05]), EntryValue([0xC5], 5))
+        ])
+        // 源 4: key 0x06,0x07 — 无重叠
+        let sst4 = createSSTable("${dir}/s4.sst", [
+            (ByteArray([0x06]), EntryValue([0xD6], 6)),
+            (ByteArray([0x07]), EntryValue([0xD7], 7))
+        ])
+
+        let sources = ArrayList<PeekableIterator<(ByteArray, EntryValue)>>()
+        sources.add(PeekableIterator(sst1.iterator()))
+        sources.add(PeekableIterator(sst2.iterator()))
+        sources.add(PeekableIterator(sst3.iterator()))
+        sources.add(PeekableIterator(sst4.iterator()))
+
+        // 非最底层，tombstone 保留
+        let merger = SSTableMerger(sources, isBottomLevel: false)
+        let keys = ArrayList<ByteArray>()
+        let vals = ArrayList<Array<Byte>>()
+        let seqs = ArrayList<Int64>()
+        while (let Some((key, entry)) <- merger.next()) {
+            keys.add(key)
+            seqs.add(entry.sequence)
+            if (let Some(v) <- entry.value) {
+                vals.add(v)
+            } else {
+                vals.add([]) // tombstone 标记
+            }
+        }
+
+        // 应输出 7 个 key（tombstone 未到最底层保留）
+        @Expect(keys.size == 7)
+        @Expect(keys[0] == ByteArray([0x01]))
+        @Expect(vals[0] == [0xA1])
+
+        // 0x02: 取源 2 的高 sequence(20)
+        @Expect(keys[1] == ByteArray([0x02]))
+        @Expect(seqs[1] == 20)
+        @Expect(vals[1] == [0xB2])
+
+        // 0x03: tombstone，非最底层保留
+        @Expect(keys[2] == ByteArray([0x03]))
+        @Expect(vals[2] == [])  // 空数组表示 tombstone
+
+        @Expect(keys[3] == ByteArray([0x04]))
+        @Expect(vals[3] == [0xB4])
+
+        @Expect(keys[4] == ByteArray([0x05]))
+        @Expect(vals[4] == [0xC5])
+
+        @Expect(keys[5] == ByteArray([0x06]))
+        @Expect(vals[5] == [0xD6])
+
+        @Expect(keys[6] == ByteArray([0x07]))
+        @Expect(vals[6] == [0xD7])
+
+        sst1.close(); sst2.close(); sst3.close(); sst4.close()
+        remove(dir, recursive: true)
+    }
+
+    /** 4 源归并（最底层）：tombstone 被移除 */
+    @TestCase
+    public func mergerFourSourcesBottomLevelTombstoneRemoved(): Unit {
+        let dir = "/tmp/f_store_merger_4src_bottom"
+        if (!exists(dir)) { Directory.create(dir, recursive: true) }
+
+        let sst1 = createSSTable("${dir}/b1.sst", [
+            (ByteArray([0x01]), EntryValue([0xA1], 1)),
+            (ByteArray([0x02]), EntryValue(None, 2))  // tombstone
+        ])
+        let sst2 = createSSTable("${dir}/b2.sst", [
+            (ByteArray([0x02]), EntryValue(None, 10)),  // 同 key tombstone
+            (ByteArray([0x03]), EntryValue([0xC3], 11))
+        ])
+
+        let sources = ArrayList<PeekableIterator<(ByteArray, EntryValue)>>()
+        sources.add(PeekableIterator(sst1.iterator()))
+        sources.add(PeekableIterator(sst2.iterator()))
+
+        // 最底层 → tombstone 移除
+        let merger = SSTableMerger(sources, isBottomLevel: true)
+        let keys = ArrayList<ByteArray>()
+        while (let Some((key, _)) <- merger.next()) {
+            keys.add(key)
+        }
+
+        @Expect(keys.size == 2)
+        @Expect(keys[0] == ByteArray([0x01]))
+        @Expect(keys[1] == ByteArray([0x03]))
+
+        sst1.close(); sst2.close()
+        remove(dir, recursive: true)
+    }
 }
 
 @Test
@@ -346,4 +460,113 @@ public class CompactionTest {
         mgr.closeAll()
         remove(dir, recursive: true)
     }
+
+    /** 4 源 L0 → L1：验证多文件 compaction 端到端正确性 */
+    @TestCase
+    public func compactorFourSourcesL0toL1(): Unit {
+        let dir = "${testDir}/four_src"
+        Directory.create(dir, recursive: true)
+
+        // L0: 4 个 SSTable，各有 2 个 key，范围递增
+        let sst0 = SSTable("${dir}/L0_0_10.sst", 2)
+        sst0.write(ByteArray([0x01]), EntryValue([0xA1], 1))
+        sst0.write(ByteArray([0x02]), EntryValue([0xA2], 2))
+        sst0.finishWrite()
+
+        let sst1 = SSTable("${dir}/L0_1_10.sst", 2)
+        sst1.write(ByteArray([0x03]), EntryValue([0xB3], 3))
+        sst1.write(ByteArray([0x04]), EntryValue([0xB4], 4))
+        sst1.finishWrite()
+
+        let sst2 = SSTable("${dir}/L0_2_10.sst", 2)
+        sst2.write(ByteArray([0x05]), EntryValue([0xC5], 5))
+        sst2.write(ByteArray([0x06]), EntryValue([0xC6], 6))
+        sst2.finishWrite()
+
+        let sst3 = SSTable("${dir}/L0_3_10.sst", 2)
+        sst3.write(ByteArray([0x07]), EntryValue([0xD7], 7))
+        sst3.write(ByteArray([0x08]), EntryValue([0xD8], 8))
+        sst3.finishWrite()
+
+        let mgr = LevelManager(dir)
+        mgr.addSSTable(0, sst0)
+        mgr.addSSTable(0, sst1)
+        mgr.addSSTable(0, sst2)
+        mgr.addSSTable(0, sst3)
+
+        // 执行 compact
+        let compactor = Compactor(mgr, dir, levelCount: 7)
+        compactor.compact(0)
+
+        // 验证全部 8 个 key 可读
+        for (i in 1..9) {
+            let key = ByteArray([UInt8(i)])
+            let v = mgr.get(key)
+            @Expect(v.isSome())
+        }
+        @Expect(mgr.get(ByteArray([0xFF])).isNone())
+
+        mgr.closeAll()
+        remove(dir, recursive: true)
+    }
+
+    /** 4 源 L0 → L1（L1 已有数据）：验证跨层重叠 key 正确处理 */
+    @TestCase
+    public func compactorFourSourcesWithExistingL1(): Unit {
+        let dir = "${testDir}/four_src_l1"
+        Directory.create(dir, recursive: true)
+
+        // L1 已有 key=0x02 的旧值
+        let sstL1 = SSTable("${dir}/L1_0_10.sst", 2)
+        sstL1.write(ByteArray([0x02]), EntryValue([0x22], 1))
+        sstL1.write(ByteArray([0x06]), EntryValue([0x66], 2))
+        sstL1.finishWrite()
+
+        // L0: 4 个 SSTable，含覆盖 L1 数据的 key
+        let sst0 = SSTable("${dir}/L0_0_10.sst", 2)
+        sst0.write(ByteArray([0x01]), EntryValue([0xA1], 10))
+        sst0.write(ByteArray([0x02]), EntryValue([0xA2], 20))  // 覆盖 L1 的 0x02
+        sst0.finishWrite()
+
+        let sst1 = SSTable("${dir}/L0_1_10.sst", 2)
+        sst1.write(ByteArray([0x03]), EntryValue([0xB3], 30))
+        sst1.write(ByteArray([0x04]), EntryValue([0xB4], 40))
+        sst1.finishWrite()
+
+        let sst2 = SSTable("${dir}/L0_2_10.sst", 2)
+        sst2.write(ByteArray([0x05]), EntryValue([0xC5], 50))
+        sst2.write(ByteArray([0x06]), EntryValue(None, 60))  // tombstone 覆盖 L1 的 0x06
+        sst2.finishWrite()
+
+        let sst3 = SSTable("${dir}/L0_3_10.sst", 2)
+        sst3.write(ByteArray([0x07]), EntryValue([0xD7], 70))
+        sst3.write(ByteArray([0x08]), EntryValue([0xD8], 80))
+        sst3.finishWrite()
+
+        let mgr = LevelManager(dir)
+        mgr.addSSTable(1, sstL1)
+        mgr.addSSTable(0, sst0)
+        mgr.addSSTable(0, sst1)
+        mgr.addSSTable(0, sst2)
+        mgr.addSSTable(0, sst3)
+
+        // 执行 compact
+        let compactor = Compactor(mgr, dir, levelCount: 7)
+        compactor.compact(0)
+
+        // 验证全部 8 个 key 中 7 个可读（0x06 tombstone 除外）
+        for (i in 1..9) {
+            let key = ByteArray([UInt8(i)])
+            let v = mgr.get(key)
+            if (i == 6) {
+                @Expect(v.isNone())
+            } else {
+                @Expect(v.isSome())
+            }
+        }
+
+        mgr.closeAll()
+        remove(dir, recursive: true)
+    }
+
 }
