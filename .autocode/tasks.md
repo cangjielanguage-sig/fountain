@@ -197,7 +197,7 @@ public static func open(path: String): SSTable {
 
 ### 第1阶段：关键缺陷修复（预计 3~4 人天）
 
-#### 1.1 【P0 正确性】修复 Store.close 数据丢失竞争窗口
+#### 1.1 【P0 正确性】修复 Store.close 数据丢失竞争窗口 ✅
 
 **文件**: `Store.cj`  
 **类型**: 缺陷修复 | **预计**: 0.5 人天
@@ -205,11 +205,13 @@ public static func open(path: String): SSTable {
 **问题（B8）**：`close()` 直接 flush active MemTable 而非先 swapActive。存在极窄竞争窗口——close 启动后仍有并发 add() 通过 `guardOpen()` 进入但在 flush 完成后才修改 MemTable，导致该数据未持久化。
 
 **修复方案**：
-1. `close()` 中先调用 `memTableManager.swapActive()` 将当前 active 切换为 immutable
-2. 刷 immutable MemTable → SSTable
-3. 再执行 WAL sync + close + levelManager.closeAll
+1. `close()` 中先 flush 已有的 immutable，腾出 immutable 槽位
+2. 再调用 `memTableManager.swapActive()` 将 current active 原子切换为 immutable（flushLock 保护）
+3. 刷 immutable MemTable → SSTable
+4. 再执行 WAL sync + close + levelManager.closeAll
 
-**验收标准**：并发 add + close 重复 100 次不丢数据
+**验收标准**：并发 add + close 重复 100 次不丢数据  
+**Commit**: `d276a9a7` — StoreTest(11) + StoreIntegrationTest(22) 全部通过
 
 ---
 
@@ -470,7 +472,7 @@ public static func open(path: String): SSTable {
 
 | 阶段 | 优先级 | 任务 | 类型 | 预计人天 |
 |------|--------|------|------|----------|
-| 1 | P0 | Store.close 数据丢失窗口修复 | 缺陷 | 0.5 |
+| 1 | P0 | Store.close 数据丢失窗口修复 ✅ | 缺陷 | 0.5 |
 | 1 | P0 | WAL 恢复后清理旧文件 | 缺陷 | 0.5 |
 | 1 | P1 | byteCount 恢复后重建 | 缺陷 | 0.5 |
 | 1 | 高 | 并发读写测试 | 测试 | 1.5~2 |

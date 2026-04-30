@@ -257,6 +257,89 @@ public class ConcurrencyTest {
         store.close()
     }
 
+    /** 用例5：close 与写入并发
+     *  持续写入的同时触发 close，然后 reopen 验证所有已确认写入的数据完整。
+     *  专门验证 close 时 swapActive + flush 的原子性修复。
+     */
+    @TestCase
+    public func testCloseDuringConcurrentWrites(): Unit {
+        let dir = getTestDir("close_during_write")
+        let store = Store(dir)
+        let baseCount: Int64 = 100
+
+        // 1. 写入基础数据（close 前一定已提交）
+        for (i in 0..baseCount) {
+            let key = "base_${i}".unsafeBytes()
+            store.add(key, "bv_${i}".unsafeBytes())
+        }
+
+        // 2. 启动多个 writer，持续写入直到 close
+        let shouldRun = AtomicBool(true)
+        let writerCount = 3
+        let writerFutures = ArrayList<Future<ArrayList<Array<Byte>>>>()
+
+        for (t in 0..writerCount) {
+            let fut = spawn {
+                let myKeys = ArrayList<Array<Byte>>()
+                var idx: Int64 = 0
+                while (shouldRun.load()) {
+                    let key = "cdw_${t}_${idx}".unsafeBytes()
+                    try {
+                        store.add(key, "cdw_v${t}_${idx}".unsafeBytes())
+                        myKeys.add(key)
+                        idx++
+                    } catch (_: StoreClosedException) {
+                        break
+                    }
+                }
+                myKeys
+            }
+            writerFutures.add(fut)
+        }
+
+        // 3. 给 writer 一点时间积累写入（~50ms）
+        sleep(Duration.millisecond * 50)
+
+        // 4. close 而 writer 仍运行中
+        println("[TEST] closing store while ${writerCount} writers running...")
+        store.close()
+        shouldRun.store(false)
+
+        // 5. 收集各 writer 已确认的 key
+        let acknowledgedKeys = ArrayList<Array<Byte>>()
+        for (fut in writerFutures) {
+            let keys = fut.get()
+            for (k in keys) {
+                acknowledgedKeys.add(k)
+            }
+        }
+        println("[TEST] writers acknowledged ${acknowledgedKeys.size} keys total")
+
+        // 6. reopen 验证
+        let reopened = Store(dir)
+
+        // 验证基础数据（100% 应存活）
+        var baseMissing: Int64 = 0
+        for (i in 0..baseCount) {
+            let key = "base_${i}".unsafeBytes()
+            if (reopened.get(key).isNone()) {
+                baseMissing++
+            }
+        }
+        @Expect(baseMissing == 0)
+
+        // 验证 close 期间已确认的写入（add() 返回了正常值，必须存活）
+        var ackMissing: Int64 = 0
+        for (ackKey in acknowledgedKeys) {
+            if (reopened.get(ackKey).isNone()) {
+                ackMissing++
+            }
+        }
+        @Expect(ackMissing == 0)
+
+        reopened.close()
+    }
+
     // ================================================================
     // 辅助方法
     // ================================================================
