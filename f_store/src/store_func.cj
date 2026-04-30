@@ -138,3 +138,22 @@ func flushMemTable(memTable: MemTable, sstDir: String, level: Int64): ArrayList<
     }
     result
 }
+
+// === WAL 清理 ===
+
+/** 清理指定 WAL 目录下所有已恢复的旧 .wal 文件。
+ *  在 Store.init 中创建新 WAL 前调用，此时旧 WAL 的数据已恢复到 MemTable。
+ */
+func cleanupOldWALFiles(walDir: String): Unit {
+    if (!exists(walDir)) {
+        return
+    }
+    Directory.walk(walDir) { fi: FileInfo =>
+        if (fi.path.extensionName == "wal" && !fi.isDirectory()) {
+            try {
+                remove(fi.path.toString())
+            } catch (_: Exception) {}
+        }
+        true
+    }
+}

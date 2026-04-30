@@ -81,6 +81,9 @@ public class Store <: Resource {
         this.sequence = AtomicInt64(startSeq)
         this.closed = AtomicBool(false)
 
+        // 清理已恢复的旧 WAL 文件（数据已在 MemTable 中）
+        cleanupOldWALFiles(walDir)
+
         // 创建新 WAL
         this.wal = WAL("${walDir}/wal_${startSeq}.wal", startSequence: startSeq + 1)
 
