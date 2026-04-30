@@ -26,7 +26,13 @@ class LevelManager {
         this.sstDir = sstDir
         this.levelCount = levelCount
         this.levels = Array<ArrayList<SSTable>>(levelCount, repeat: ArrayList<SSTable>())
+        for (i in 0..levelCount) {
+            levels[i] = ArrayList<SSTable>()
+        }
         this.levelLocks = Array<Mutex>(levelCount, repeat: Mutex())
+        for (i in 0..levelCount) {
+            levelLocks[i] = Mutex()
+        }
     }
 
     /** 从 sstDir 加载已有 SSTable 文件 */
@@ -191,7 +197,7 @@ class LevelManager {
                 return count >= 4
             }
             // Ln (n≥1): 总大小 >= 10^n MB
-            let sizeLimitMB = pow10(level)
+            let sizeLimitMB = 10 ** UInt64(level)
             var totalSize: Int64 = 0
             for (sst in levels[level]) {
                 // 用 entryCount 近似估算大小
@@ -216,12 +222,20 @@ class LevelManager {
         }
     }
 
-    /** 计算 10^n（MB 单位阈值） */
-    private func pow10(n: Int64): Int64 {
-        var result: Int64 = 1
-        for (_ in 0..n) {
-            result *= 10
+    /** 调试用：返回各层 SSTable 数量摘要 */
+    func levelSummary(): String {
+        var s = ""
+        for (level in 0..levelCount) {
+            synchronized(levelLocks[level]) {
+                let cnt = levels[level].size
+                if (cnt > 0) {
+                    if (s.size > 0) {
+                        s += ", "
+                    }
+                    s += "L${level}:${cnt}"
+                }
+            }
         }
-        result
+        s
     }
 }

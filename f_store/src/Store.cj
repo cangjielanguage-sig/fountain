@@ -158,6 +158,7 @@ public class Store <: Resource {
         if (let Some(entry) <- levelManager.get(keyBytes)) {
             return checkExpiryAndGet(entry)
         }
+        println("[GET MISS] keySize=${key.size}  activeSize=${memTableManager.getActive().approximateSize()}  levels=${levelManager.levelSummary()}")
         None
     }
 
@@ -205,13 +206,17 @@ public class Store <: Resource {
         closed.load()
     }
 
+    public func levelSummary(): String {
+        levelManager.levelSummary()
+    }
+
     public func close(): Unit {
         if (!closed.compareAndSwap(false, true)) {
             return
         }
         // 停止 Compactor
         compactor.stop()
-        // flush immutable MemTable（如果有）
+        // 1. flush 已有的 immutable MemTable（如果有），释放 immutable 槽位
         if (let Some(imm) <- memTableManager.getImmutable()) {
             let sstables = flushMemTable(imm, sstDir, 0)
             for (sst in sstables) {
@@ -219,18 +224,20 @@ public class Store <: Resource {
             }
             memTableManager.clearImmutable()
         }
-        // flush active MemTable
-        let active = memTableManager.getActive()
-        if (active.approximateSize() > 0) {
-            let sstables = flushMemTable(active, sstDir, 0)
+        // 2. swapActive → 将当前 active 原子切换为 immutable（flushLock 保护）
+        //    新 active 为空，任何已通过 guardOpen 的并发 add() 写入新 active
+        //    （数据在 WAL 中，恢复时可找回）
+        if (let Some(imm) <- memTableManager.swapActive()) {
+            let sstables = flushMemTable(imm, sstDir, 0)
             for (sst in sstables) {
                 levelManager.addSSTable(0, sst)
             }
+            memTableManager.clearImmutable()
         }
-        // 关闭 WAL（内部先 sync 再关流）
+        // 3. WAL sync + close
         wal.sync()
         wal.close()
-        // 关闭所有 SSTable
+        // 4. 关闭所有 SSTable
         levelManager.closeAll()
     }
 
@@ -321,8 +328,10 @@ public class Store <: Resource {
         if (memTableManager.getActive().approximateSize() < memFlushThreshold) {
             return
         }
+        println("[FLUSH] activeSize=${memTableManager.getActive().approximateSize()}  threshold=${memFlushThreshold}")
         if (let Some(table) <- memTableManager.swapActive()) {
             let sstables = flushMemTable(table, sstDir, 0)
+            println("[FLUSH] wrote ${sstables.size} SSTables")
             for (sst in sstables) {
                 levelManager.addSSTable(0, sst)
             }

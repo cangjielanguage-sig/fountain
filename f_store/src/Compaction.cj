@@ -129,9 +129,11 @@ class Compactor {
         // 4. 构建多路归并迭代器
         let sources = ArrayList<PeekableIterator<(ByteArray, EntryValue)>>()
         for (sst in selectedSSTables) {
+            println("[COMPACT-DBG] source L${level} entryCount=${sst.getMetadata().entryCount} min=${sst.getMetadata().minKey.bytes} max=${sst.getMetadata().maxKey.bytes}")
             sources.add(PeekableIterator(sst.iterator()))
         }
         for (sst in overlappingSSTables) {
+            println("[COMPACT-DBG] source L${nextLevel} entryCount=${sst.getMetadata().entryCount} min=${sst.getMetadata().minKey.bytes} max=${sst.getMetadata().maxKey.bytes}")
             sources.add(PeekableIterator(sst.iterator()))
         }
         let merger = SSTableMerger(sources, isBottomLevel: isBottomLevel)
@@ -143,8 +145,10 @@ class Compactor {
         let newSSTables = ArrayList<SSTable>()
         var sstIndex: Int64 = 0
         var writer = SSTable("${sstDir}/L${nextLevel}_compact_${sstIndex}.sst", 64)
+        var entryCount: Int64 = 0
         while (let Some((key, entry)) <- merger.next()) {
             writer.write(key, entry)
+            entryCount++
             if (writer.isFull()) {
                 writer.finishWrite()
                 newSSTables.add(writer)
@@ -158,6 +162,8 @@ class Compactor {
         } else {
             writer.close()
         }
+
+        println("[COMPACT] level=${level} -> L${nextLevel}  sources=${selectedSSTables.size}+${overlappingSSTables.size}  mergedEntries=${entryCount}  outputSSTs=${newSSTables.size}")
 
         if (newSSTables.size == 0) {
             return

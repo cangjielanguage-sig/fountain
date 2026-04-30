@@ -83,7 +83,20 @@ class SSTableIterator <: Iterator<(ByteArray, EntryValue)> {
             let keyLen = readInt64LE(blockData, offsetInBlock)
             let valueLen = readInt64LE(blockData, offsetInBlock + 8)
             let actualValueLen = if (valueLen >= 0) { valueLen } else { 0 }
-            if (offsetInBlock + 32 + keyLen + actualValueLen > blockData.size) {
+            let headerEnd2 = offsetInBlock + 32
+            var overflow = (headerEnd2 > blockData.size)
+            if (!overflow) {
+                var remaining = blockData.size - headerEnd2
+                if (keyLen > remaining) {
+                    overflow = true
+                } else {
+                    remaining -= keyLen
+                    if (actualValueLen > remaining) {
+                        overflow = true
+                    }
+                }
+            }
+            if (overflow) {
                 blockIdx++
                 if (blockIdx >= indexEntries.size) {
                     done = true
@@ -103,8 +116,10 @@ class SSTableIterator <: Iterator<(ByteArray, EntryValue)> {
             if (k >= startKey) {
                 return // 找到起始位置
             }
-            // 跳过此条目
-            offsetInBlock = offsetInBlock + 32 + keyLen + actualValueLen
+            // 跳过此条目 (已验证不溢出)
+            offsetInBlock += 32
+            offsetInBlock += keyLen
+            offsetInBlock += actualValueLen
         }
     }
 
@@ -127,7 +142,26 @@ class SSTableIterator <: Iterator<(ByteArray, EntryValue)> {
             let seq = readInt64LE(blockData, offsetInBlock + 16)
             let expireAt = readInt64LE(blockData, offsetInBlock + 24)
             let actualValueLen = if (valueLen >= 0) { valueLen } else { 0 }
-            if (offsetInBlock + 32 + keyLen + actualValueLen > blockData.size) {
+            if (offsetInBlock + 32 > blockData.size) {
+                blockIdx++
+                if (blockIdx >= indexEntries.size) {
+                    done = true
+                    return None
+                }
+                loadBlock()
+                continue
+            }
+            let remaining = blockData.size - offsetInBlock - 32
+            if (keyLen > remaining) {
+                blockIdx++
+                if (blockIdx >= indexEntries.size) {
+                    done = true
+                    return None
+                }
+                loadBlock()
+                continue
+            }
+            if (actualValueLen > remaining - keyLen) {
                 blockIdx++
                 if (blockIdx >= indexEntries.size) {
                     done = true

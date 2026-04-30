@@ -279,16 +279,16 @@ class SSTable <: Resource {
         scanDataBlock(blockStart, blockSize, keyBytes)
     }
 
-    /** 全量有序遍历。Readable 状态下可用 */
+    /** 全量有序遍历。Readable 状态下可用。每次调用打开独立的文件句柄以避免 seek/read 竞态。 */
     func iterator(): Iterator<(ByteArray, EntryValue)> {
         guardReadable()
-        SSTableIterator(file, indexEntries, indexOffset, None)
+        SSTableIterator(File(path, OpenMode.Read), indexEntries, indexOffset, None)
     }
 
-    /** 从 min key 开始遍历。Readable 状态下可用 */
+    /** 从 min key 开始遍历。Readable 状态下可用。每次调用打开独立的文件句柄以避免 seek/read 竞态。 */
     func tailer(min: ByteArray): Iterator<(ByteArray, EntryValue)> {
         guardReadable()
-        SSTableIterator(file, indexEntries, indexOffset, min)
+        SSTableIterator(File(path, OpenMode.Read), indexEntries, indexOffset, min)
     }
 
     // ================================================================
@@ -476,14 +476,23 @@ class SSTable <: Resource {
         let buf = Array<Byte>(blockSize, repeat: 0u8)
         file.seek(SeekPosition.Begin(blockStart))
         file.read(buf)
-        var offset = 0
+        var offset: Int64 = 0
         while (offset + 32 <= blockSize) {
             let keyLen = readInt64LE(buf, offset)
             let valueLen = readInt64LE(buf, offset + 8)
             let seq = readInt64LE(buf, offset + 16)
             let expireAt = readInt64LE(buf, offset + 24)
             let actualValueLen = if (valueLen >= 0) { valueLen } else { 0 }
-            if (offset + 32 + keyLen + actualValueLen > blockSize) {
+            let headerEnd = offset + 32
+            if (headerEnd > blockSize) {
+                break
+            }
+            var remaining = blockSize - headerEnd
+            if (keyLen > remaining) {
+                break
+            }
+            remaining -= keyLen
+            if (actualValueLen > remaining) {
                 break
             }
             offset += 32
