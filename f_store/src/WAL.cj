@@ -30,9 +30,12 @@ class WAL <: Resource {
             Directory.create(parentDir, recursive: true)
         }
         this.file = File(path, OpenMode.ReadWrite)
-        // 始终用 File 做 stream（IOUringStream 的异步写入在某些平台上
-        // 对新打开的 File 句柄不可见）
-        this.stream = file
+        // Linux: 用 IOURingStream 实现异步 IO；非 Linux: 用 File 同步 IO
+        @When[os == "Linux"]
+        let stream = IOUringStream(Int32(file.fileDescriptor.fileHandle))
+        @When[os != "Linux"]
+        let stream = file
+        this.stream = stream
         this.sequence = AtomicInt64(startSequence)
         this.appendCount = AtomicInt64(0)
         this.closed = AtomicBool(false)
