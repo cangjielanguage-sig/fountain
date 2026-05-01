@@ -208,19 +208,29 @@ class LevelManager {
         result
     }
 
-    /** 获取指定层与 [min, max] 范围重叠的 SSTable。max 为 None 表示无上界 */
+    /** 获取指定层与 [min, max] 范围重叠的 SSTable。max 为 None 表示无上界。
+     *  L0：key 范围全重叠，直接返回全部文件（跳过 metadata 读取）。
+     *  Ln (n≥1)：按 minKey/maxKey 做范围筛选。 */
     func getOverlappingSSTables(level: Int64, min: ByteArray, max: ?ByteArray): ArrayList<SSTable> {
         let result = ArrayList<SSTable>()
         if (level < 0 || level >= levelCount) {
             return result
         }
         let sstList = levels[level].load()
-        for (sst in sstList) {
-            let meta = sst.getMetadata()
-            // 重叠条件: (max 为 None 或 sst.minKey <= max) && sst.maxKey >= min
-            let withinMax = max.isNone() || meta.minKey <= max.getOrThrow()
-            if (withinMax && meta.maxKey >= min) {
+        if (level == 0) {
+            // L0: key 范围全重叠，全部返回
+            for (sst in sstList) {
                 result.add(sst)
+            }
+        } else {
+            // Ln (n≥1): 按 minKey/maxKey 做范围筛选
+            for (sst in sstList) {
+                let meta = sst.getMetadata()
+                // 重叠条件: (max 为 None 或 sst.minKey <= max) && sst.maxKey >= min
+                let withinMax = max.isNone() || meta.minKey <= max.getOrThrow()
+                if (withinMax && meta.maxKey >= min) {
+                    result.add(sst)
+                }
             }
         }
         result
