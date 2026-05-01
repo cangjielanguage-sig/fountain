@@ -30,7 +30,9 @@ class LevelManager {
     init(sstDir: String, levelCount!: Int64 = 7) {
         this.sstDir = sstDir
         this.levelCount = levelCount
-        this.levels = Array<AtomicReference<ArrayList<SSTable>>>(levelCount, repeat: AtomicReference<ArrayList<SSTable>>(ArrayList<SSTable>()))
+        this.levels = Array<AtomicReference<ArrayList<SSTable>>>(levelCount){_ => 
+            AtomicReference<ArrayList<SSTable>>(ArrayList<SSTable>())
+        }
     }
 
     /** 从 sstDir 加载已有 SSTable 文件 */
