@@ -68,14 +68,17 @@ class LevelManager {
         synchronized(levelLocks[level]) {
             let sstList = levels[level]
             if (level == 0) {
-                // L0: 遍历所有 SSTable（无序，可能有重叠）
-                for (i in 0..sstList.size) {
+                // L0: 从末尾开始反向遍历（最新文件最后添加，优先命中）
+                let count = sstList.size
+                var i = count - 1
+                while (i >= 0) {
                     let entry = sstList[i].get(key)
                     if (entry.isSome()) {
                         if (let Some(e) <- entry) {
                             return checkExpiry(e, now)
                         }
                     }
+                    i--
                 }
             } else {
                 // Ln (n≥1): 按 metadata min/max 筛选范围匹配的 SSTable

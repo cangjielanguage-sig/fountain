@@ -315,19 +315,15 @@ public static func open(path: String): SSTable {
 
 ---
 
-#### 2.3 【P2 边界】MemTable 容量边界 + 极端大小测试
+#### 2.3 【P2 边界】MemTable 容量边界 + 极端大小测试 ✅
 
-**文件**: `MemTableManager_test.cj`  
+**文件**: `MemTableManager_test.cj`、`SSTable_test.cj`、`Store_test.cj`  
 **类型**: 测试补全 | **预计**: 0.5 人天
 
-**目标**：覆盖 MemTable 满触发 flush 和极端输入
-
-**实施步骤**：
-1. MemTable 持续 add 直到近似大小超限，验证 swap 后可继续写入
-2. 空 key（0 字节）、空 value（0 字节）、大 value（64KB）的 add/get 正确性
-3. SSTable 0 条 entry finish 不崩溃
-
-**验收标准**：边界输入不崩溃、不产生损坏数据
+**新增测试**：
+- ✅ `memTableManagerCapacityBoundary` — 8KB value 填到 1MB 后 swap，验证新旧 active 数据完整
+- ✅ `sstableZeroEntriesFinishNoCrash` — 0 条 entry 后 `finishWrite()` 不崩溃，get/iterator 返回空
+- ✅ `testLargeValue64KB` — 64KB value 写入和读取（已有 `testEmptyKeyValue` 覆盖空 key/value）
 
 ---
 

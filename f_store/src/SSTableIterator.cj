@@ -59,8 +59,12 @@ class SSTableIterator <: Iterator<(ByteArray, EntryValue)> {
         }
         this.blockData = Array<Byte>(0, repeat: 0u8)
         this.offsetInBlock = 0
-        this.done = false
-        loadBlock()
+        if (indexEntries.size == 0) {
+            this.done = true
+        } else {
+            this.done = false
+            loadBlock()
+        }
         // 跳过 startKey 之前的条目
         if (let Some(sk) <- startKey) {
             skipBefore(sk)
