@@ -155,15 +155,6 @@ class SSTableIterator <: Iterator<(ByteArray, EntryValue)> & Resource {
             let seq = readInt64LE(blockData, offsetInBlock + 16)
             let expireAt = readInt64LE(blockData, offsetInBlock + 24)
             let actualValueLen = if (valueLen >= 0) { valueLen } else { 0 }
-            if (offsetInBlock + 32 > blockData.size) {
-                blockIdx++
-                if (blockIdx >= indexEntries.size) {
-                    setDone()
-                    return None
-                }
-                loadBlock()
-                continue
-            }
             let remaining = blockData.size - offsetInBlock - 32
             if (keyLen > remaining) {
                 blockIdx++

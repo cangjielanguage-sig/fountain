@@ -50,23 +50,26 @@
 
 ## P2 可选
 
-### WAL 恢复阶段大文件全量读入内存
+### WAL 恢复阶段大文件全量读入内存 ✅
 
 - **文件**: `f_store/src/WALReader.cj:21-22`
 - **问题**: readAll() 将整个 WAL 文件读到 Array<Byte>（最大 64MB），启动时一次性分配偏大。
-- **改进方案**: 改为流式读取：边读边解析边恢复，不需全量加载。或维持现状（一次性启动可接受）。
+- **改进方案**: 改为流式读取：边读边解析边恢复，不需全量加载。
+- **已修复**: 逐条读 header + data，边读边解析，避免全量加载。
 
-### flushMemTable 无 try-finally
+### flushMemTable 无 try-finally ✅
 
 - **文件**: `f_store/src/store_func.cj:136-152`
 - **问题**: 循环中 writer.write() 或 memTable.iterator() 异常时 writer 的 File 句柄不关闭。
-- **改进方案**: 在 if-entry-count=0 的 close 前加 try-finally 确保 writer 在异常时也关闭。
+- **改进方案**: 提取 writeStreamToSSTables 共用函数，内部 try-catch 保护。
+- **已修复**: 已通过 writeStreamToSSTables 共用函数覆盖。
 
-### PrefixIterator O(n) 扫描
+### PrefixIterator O(n) 扫描 ✅
 
 - **文件**: `f_store/src/PrefixIterator.cj:27-73`
 - **问题**: next() 每步 O(n) 扫描所有 sources 找 minKey 和匹配条目，而非 O(log n) 堆。
 - **改进方案**: 参考 SSTableMerger 用 PriorityQueue 替换线性扫描。
+- **已修复**: 改用 PriorityQueue 堆，从 O(n) 降至 O(log n)。
 
 ---
 
