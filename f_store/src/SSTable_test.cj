@@ -949,4 +949,27 @@ public class SSTableTest {
         sst.close()
         remove(dir, recursive: true)
     }
+
+    /** 0 条 entry 后 finishWrite 不崩溃 */
+    @TestCase
+    public func sstableZeroEntriesFinishNoCrash(): Unit {
+        let dir = "/tmp/f_store_sst_empty_finish"
+        if (!exists(dir)) { Directory.create(dir, recursive: true) }
+        let path = "${dir}/empty.sst"
+        let sst = SSTable(path, 1)
+        // 不写入任何 entry，直接 finishWrite
+        let meta = sst.finishWrite()
+        @Expect(meta.entryCount == 0)
+        // 对空 SSTable 做 get 应返回 None
+        @Expect(sst.get(ByteArray([0x01])).isNone())
+        // iterator 应返回 0 条
+        var iterCount: Int64 = 0
+        let iter = sst.iterator()
+        while (let Some(_) <- iter.next()) {
+            iterCount++
+        }
+        @Expect(iterCount == 0)
+        sst.close()
+        remove(dir, recursive: true)
+    }
 }

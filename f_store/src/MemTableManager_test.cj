@@ -61,4 +61,36 @@ public class MemTableManagerTest {
         let second = mgr.swapActive()
         @Expect(second.isNone())
     }
+
+    /** 持续 add 直到 byteCount 超限，验证 swap 后可继续写入 */
+    @TestCase
+    public func memTableManagerCapacityBoundary(): Unit {
+        let mgr = MemTableManager()
+        // 使用 8KB value 快速撑满 byteCount
+        let largeValue = Array<Byte>(8 * 1024, repeat: 66u8)
+        var addCount: Int64 = 0
+        // 持续写入直到 approximateSize 超过 1MB
+        while (mgr.getActive().approximateSize() < 1024 * 1024) {
+            let key = "cb_${addCount}".unsafeBytes()
+            mgr.getActive().add(ByteArray(key), EntryValue(largeValue, addCount))
+            addCount++
+        }
+        @Expect(addCount > 0)
+        // swap 后旧 active 成为 immutable
+        let swapped = mgr.swapActive()
+        @Expect(swapped.isSome())
+        @Expect(mgr.getImmutable().isSome())
+        // 新 active 可继续写入
+        let newKey = "cb_new".unsafeBytes()
+        mgr.getActive().add(ByteArray(newKey), EntryValue([0x01], 999))
+        @Expect(mgr.getActive().get(ByteArray(newKey)).isSome())
+        // 验证 swapped 中的数据完整
+        if (let Some(table) <- swapped) {
+            for (i in 0..addCount) {
+                let key = "cb_${i}".unsafeBytes()
+                let v = table.get(ByteArray(key))
+                @Expect(v.isSome())
+            }
+        }
+    }
 }

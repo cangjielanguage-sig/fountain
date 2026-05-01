@@ -222,6 +222,22 @@ public class StoreTest {
         @Expect(threw)
     }
 
+    /** 64KB 大 value 写入和读取 */
+    @TestCase
+    public func testLargeValue64KB(): Unit {
+        let dir = getTestDir("large_value_64kb")
+        let store = Store(dir)
+        let key = "large_k".unsafeBytes()
+        let largeValue = Array<Byte>(64 * 1024) { i => UInt8(i % 256) }
+        store.add(key, largeValue)
+        let result = store.get(key)
+        @Expect(result.isSome())
+        if (let Some(v) <- result) {
+            @Expect(v == largeValue)
+        }
+        store.close()
+    }
+
     func getTestDir(name: String): String {
         let baseDir = "/tmp/f_store_test/Store_${name}"
         // 清理旧数据
