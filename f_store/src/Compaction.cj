@@ -131,15 +131,16 @@ class Compactor {
         let overlappingSSTables = levelManager.getOverlappingSSTables(nextLevel, minKey.getOrThrow(), Some(maxKey.getOrThrow()))
 
         // 4. 构建多路归并迭代器
+        // try 块覆盖 sources 构建，确保异常时已创建的迭代器 FD 被 finally 关闭
         let sources = ArrayList<PeekableIterator<(ByteArray, EntryValue)>>()
-        for (sst in selectedSSTables) {
-            sources.add(PeekableIterator(sst.iterator()))
-        }
-        for (sst in overlappingSSTables) {
-            sources.add(PeekableIterator(sst.iterator()))
-        }
-
         try {
+            for (sst in selectedSSTables) {
+                sources.add(PeekableIterator(sst.iterator()))
+            }
+            for (sst in overlappingSSTables) {
+                sources.add(PeekableIterator(sst.iterator()))
+            }
+
             let merger = SSTableMerger(sources, isBottomLevel: isBottomLevel)
 
             // 5. 归并写入新 SSTable
