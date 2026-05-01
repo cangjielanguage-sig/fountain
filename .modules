@@ -36,6 +36,7 @@ f_ticktock
 f_egraph
 f_llm
 f_bloom
+f_store
 fboot
 .
 
