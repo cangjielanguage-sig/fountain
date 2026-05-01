@@ -19,11 +19,12 @@ import std.collection.ArrayList
 import std.time.DateTime
 
 /** 前缀遍历迭代器 — 从多个有序源中归并遍历指定前缀的键值对 */
-public class PrefixIterator <: Iterator<(Array<Byte>, Array<Byte>)> {
+public class PrefixIterator <: Iterator<(Array<Byte>, Array<Byte>)> & Resource {
     private let prefix: ByteArray
     private let sources: ArrayList<PeekableIterator<(ByteArray, EntryValue)>>
     /** 当前所有 sources 中最小的 peek key，初始化时计算，每次 next 后更新 */
     private var currentMinKey: ?ByteArray
+    private var drained: Bool = false
 
     init(prefix: ByteArray, sources: ArrayList<PeekableIterator<(ByteArray, EntryValue)>>) {
         this.prefix = prefix
@@ -53,6 +54,7 @@ public class PrefixIterator <: Iterator<(Array<Byte>, Array<Byte>)> {
         while (let Some(mk) <- currentMinKey) {
             // 不再以 prefix 开头 → 遍历结束
             if (!startsWith(mk, prefix)) {
+                close()
                 return None
             }
 
@@ -111,7 +113,24 @@ public class PrefixIterator <: Iterator<(Array<Byte>, Array<Byte>)> {
                 return Some((mk.bytes, entry.value.getOrThrow()))
             }
         }
+        close()
         None
+    }
+
+    /** 排空所有源，触发 SSTableIterator 自动关闭。实现 Resource 接口。
+     *  耗尽或提前退出时自动调用；外部也可用 try-with-resource 提前关闭。 */
+    public func close(): Unit {
+        if (drained) {
+            return
+        }
+        drained = true
+        for (src in sources) {
+            while (src.next().isSome()) {}
+        }
+    }
+
+    public func isClosed(): Bool {
+        drained
     }
 }
 

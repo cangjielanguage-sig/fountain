@@ -18,11 +18,12 @@
 
 ## P1 建议
 
-### SSTableIterator FD 泄漏
+### SSTableIterator FD 泄漏 ✅
 
 - **文件**: `f_store/src/SSTableIterator.cj:28-29`, 调用点在 `SSTable.cj:266-274`
 - **问题**: iterator()/tailer() 每次打开独立 File 句柄。调用者 break 提前退出循环时 FD 泄漏。高频前缀扫描场景（多 SSTable + 高 QPS）可能在数分钟内耗尽系统 FD 限制。
 - **改进方案**: (a) iterator/tailer 调用点全部改用 `try(iter = sst.iterator())` 确保退出时自动 close；(b) 或在 SSTableIterator 中加引用计数 / 注册到 SSTable 的生命周期管理。
+- **已修复**: PrefixIterator 实现 Resource，close() 排空源触发 SSTableIterator 自动关闭。next() 返回 None 时自动 close()。外部调用者可用 try-with-resource 提前终止。
 
 ### SSTable.close() 非 Linux 与 get() 竞争
 
