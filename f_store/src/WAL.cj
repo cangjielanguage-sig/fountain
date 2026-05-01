@@ -29,8 +29,8 @@ class WAL <: Resource {
     private let oldFiles: ArrayList<String>
     /** 保护 oldFiles 并发访问（rotate vs takeOldFiles） */
     private let oldFilesLock: Mutex
-    /** 轮转中标记，防止多线程同时 rotate */
-    private let rotating: AtomicBool
+    /** 保护 append 中 file.write + rotate 的原子性 */
+    private let appendLock: Mutex
 
     init(path: String, startSequence!: Int64 = 0, maxFileSize!: Int64 = 64 * 1024 * 1024) {
         // 确保目录存在
@@ -49,7 +49,7 @@ class WAL <: Resource {
         this.maxFileSize = maxFileSize
         this.oldFiles = ArrayList<String>()
         this.oldFilesLock = Mutex()
-        this.rotating = AtomicBool(false)
+        this.appendLock = Mutex()
     }
 
     func append(key: Array<Byte>, value: ?Array<Byte>, expireAt!: ?Int64 = None): Int64 {
@@ -59,17 +59,22 @@ class WAL <: Resource {
         let seq = sequence.incrFetch()
         let record = WALRecord(seq, key, value, expireAt: expireAt)
         let encoded = record.encode()
-        // 始终同步写入文件（数据到 OS page cache，进程崩溃可恢复）
-        file.write(encoded)
-        let prevSize = currentFileSize.fetchAdd(Int64(encoded.size))
+        // 用 Mutex 保护 file.write + rotate 的原子性，防止并发 rotate 写已关闭文件
+        synchronized (appendLock) {
+            // 获取锁后再次检查 closed（可能在等待锁时 close() 已执行）
+            if (closed.load()) {
+                throw StoreClosedException()
+            }
+            // 始终同步写入文件（数据到 OS page cache，进程崩溃可恢复）
+            file.write(encoded)
+            let prevSize = currentFileSize.fetchAdd(Int64(encoded.size))
+            if (prevSize >= maxFileSize) {
+                rotate()
+            }
+        }
         // fsync 每 syncInterval 次执行一次，降低 syscall 100 倍
         if (appendCount.incrFetch() % syncInterval == 0) {
             sync()
-        }
-        // 用 CAS 确保只有一个线程执行轮转
-        if (prevSize >= maxFileSize && rotating.compareAndSwap(false, true)) {
-            rotate()
-            rotating.store(false)
         }
         seq
     }
@@ -116,10 +121,13 @@ class WAL <: Resource {
         if (!closed.compareAndSwap(false, true)) {
             return
         }
-        // 强制 fsync 确保数据落盘（绕过 sync 的 closed 检查）
-        file.flush()
-        if (!file.isClosed()) {
-            file.close()
+        // 用 appendLock 确保在 append 中无正在进行的 file.write
+        synchronized (appendLock) {
+            // 强制 fsync 确保数据落盘（绕过 sync 的 closed 检查）
+            file.flush()
+            if (!file.isClosed()) {
+                file.close()
+            }
         }
     }
 

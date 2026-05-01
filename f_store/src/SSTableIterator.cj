@@ -23,7 +23,7 @@ class SSTableIterator <: Iterator<(ByteArray, EntryValue)> & Resource {
     private var blockIdx: Int64
     private var blockData: Array<Byte>
     private var offsetInBlock: Int64
-    private var done: Bool
+    private var done: Bool = true
 
     /** Linux: fd 用于 pread 定位读取（单 syscall，替代 seek+read） */
     @When[os == "Linux"]
@@ -64,7 +64,8 @@ class SSTableIterator <: Iterator<(ByteArray, EntryValue)> & Resource {
         this.blockData = Array<Byte>(0, repeat: 0u8)
         this.offsetInBlock = 0
         if (indexEntries.size == 0) {
-            setDone()
+            this.done = true
+            close()
         } else {
             this.done = false
             // Linux: 提取 fd 用于 pread
@@ -245,5 +246,9 @@ class SSTableIterator <: Iterator<(ByteArray, EntryValue)> & Resource {
         if (!file.isClosed()) {
             file.close()
         }
+    }
+
+    public func isClosed(): Bool {
+        file.isClosed()
     }
 }
