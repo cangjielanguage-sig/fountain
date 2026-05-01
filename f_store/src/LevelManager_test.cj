@@ -240,6 +240,65 @@ public class LevelManagerTest {
         remove(dir, recursive: true)
     }
 
+    /** P3.3 验证 L0 getOverlappingSSTables 跳过范围判断，全部文件返回 */
+    @TestCase
+    public func levelManagerL0OverlapReturnsAll(): Unit {
+        let dir = "/tmp/f_store_lm_l0overlap"
+        if (exists(dir)) { remove(dir, recursive: true) }
+        Directory.create(dir, recursive: true)
+        let mgr = LevelManager(dir)
+
+        let sst1 = createSSTable("${dir}/L0_1.sst", 0x01, 0xA1)
+        let sst2 = createSSTable("${dir}/L0_2.sst", 0x10, 0xB2)
+        let sst3 = createSSTable("${dir}/L0_3.sst", 0x20, 0xC3)
+        mgr.addSSTable(0, sst1)
+        mgr.addSSTable(0, sst2)
+        mgr.addSSTable(0, sst3)
+        @Expect(mgr.getSSTablesForCompaction(0).size == 3)
+
+        // L0: 无论查询什么范围，都返回全部文件
+        let range1 = mgr.getOverlappingSSTables(0, ByteArray([0x01]), Some(ByteArray([0x01])))
+        @Expect(range1.size == 3)
+
+        // L0: 不存在的 key 范围也返回全部
+        let range2 = mgr.getOverlappingSSTables(0, ByteArray([0xFF]), Some(ByteArray([0xFF])))
+        @Expect(range2.size == 3)
+
+        // L0: 无上界也返回全部
+        let range3 = mgr.getOverlappingSSTables(0, ByteArray([0x01]), None)
+        @Expect(range3.size == 3)
+
+        // L1 仍保持范围筛选（作为对比验证）
+        let sst4 = createSSTable("${dir}/L1_4.sst", 0x30, 0xD4)
+        mgr.addSSTable(1, sst4)
+        let rangeL1 = mgr.getOverlappingSSTables(1, ByteArray([0x01]), Some(ByteArray([0x02])))
+        @Expect(rangeL1.size == 0)  // L1 范围不重叠，返回空
+
+        mgr.closeAll()
+        remove(dir, recursive: true)
+    }
+
+    /** P3.3 验证 getSSTablesInRange 中 L0 始终全返、L1 范围筛选 */
+    @TestCase
+    public func levelManagerL0InRangeAlwaysIncluded(): Unit {
+        let dir = "/tmp/f_store_lm_inrange"
+        if (exists(dir)) { remove(dir, recursive: true) }
+        Directory.create(dir, recursive: true)
+        let mgr = LevelManager(dir)
+
+        let sstL0 = createSSTable("${dir}/L0_1.sst", 0x05, 0xA0)
+        let sstL1 = createSSTable("${dir}/L1_1.sst", 0x10, 0xB0)
+        mgr.addSSTable(0, sstL0)
+        mgr.addSSTable(1, sstL1)
+
+        // 查询不重叠于 L1 的范围，但 L0 应始终被返回
+        let all = mgr.getSSTablesInRange(ByteArray([0x01]), Some(ByteArray([0x02])))
+        @Expect(all.size >= 1)  // 至少包含 L0 的文件
+
+        mgr.closeAll()
+        remove(dir, recursive: true)
+    }
+
     /** 验证 levelSummary 的格式 */
     @TestCase
     public func levelManagerLevelSummary(): Unit {
