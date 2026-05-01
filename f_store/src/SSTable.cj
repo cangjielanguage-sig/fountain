@@ -293,12 +293,18 @@ class SSTable <: Resource {
         let result = {=>
             let buf = Array<Byte>(blockSize, repeat: 0u8)
             let bufHdl = unsafe { acquireArrayRawData<Byte>(buf) }
-            try {
+            let readOk = try {
                 positionedRead(fd, bufHdl.pointer, blockSize, blockStart)
             } finally {
                 unsafe { releaseArrayRawData(bufHdl) }
             }
-            scanBuffer(buf, blockSize, keyBytes)
+            let scanResult: ?EntryValue = if (readOk) {
+                scanBuffer(buf, blockSize, keyBytes)
+            } else {
+                guardNotClosed()
+                None
+            }
+            scanResult
         }()
         @When[os != "Linux"]
         let result = synchronized(getLock) {
@@ -474,6 +480,13 @@ class SSTable <: Resource {
     /** 检查 Readable 状态 */
     private func guardReadable(): Unit {
         if (state != SSTableState.Readable) {
+            throw StoreClosedException()
+        }
+    }
+
+    /** I/O 操作失败后检查是否已关闭（区分关闭竞争 vs 真正 I/O 错误） */
+    private func guardNotClosed(): Unit {
+        if (closed.load()) {
             throw StoreClosedException()
         }
     }
