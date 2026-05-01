@@ -30,53 +30,56 @@ class WALReader {
             file.close()
             return result
         }
-        // 流式读取：逐条读 header + data，边读边解析
-        let header = Array<Byte>(36, repeat: 0u8)
-        while (true) {
-            let headerRead = file.read(header)
-            if (headerRead < 36) {
-                break // 文件结尾或截断
-            }
-            let checksum = readUInt32LE(header, 0)
-            let sequence = readInt64LE(header, 4)
-            let keyLen = readInt64LE(header, 12)
-            let valueLen = readInt64LE(header, 20)
-            let expireAtVal = readInt64LE(header, 28)
-            if (keyLen < 0) {
-                break // 非法数据
-            }
-            let actualValueLen = if (valueLen >= 0) { valueLen } else { 0 }
-            let totalDataLen = keyLen + actualValueLen
-            // 读 key + value
-            let data = Array<Byte>(totalDataLen, repeat: 0u8)
-            if (totalDataLen > 0) {
-                let dataRead = file.read(data)
-                if (dataRead < totalDataLen) {
-                    break // 截断的记录
+        try {
+            // 流式读取：逐条读 header + data，边读边解析
+            let header = Array<Byte>(36, repeat: 0u8)
+            while (true) {
+                let headerRead = file.read(header)
+                if (headerRead < 36) {
+                    break // 文件结尾或截断
                 }
-            }
-            let keyBytes = Array<Byte>(keyLen, repeat: 0u8)
-            for (i in 0..keyLen) {
-                keyBytes[i] = data[i]
-            }
-            let value: ?Array<Byte> = if (valueLen >= 0) {
-                let valueBytes = Array<Byte>(valueLen, repeat: 0u8)
-                for (i in 0..valueLen) {
-                    valueBytes[i] = data[keyLen + i]
+                let checksum = readUInt32LE(header, 0)
+                let sequence = readInt64LE(header, 4)
+                let keyLen = readInt64LE(header, 12)
+                let valueLen = readInt64LE(header, 20)
+                let expireAtVal = readInt64LE(header, 28)
+                if (keyLen < 0) {
+                    break // 非法数据
                 }
-                Some(valueBytes)
-            } else {
-                None
+                let actualValueLen = if (valueLen >= 0) { valueLen } else { 0 }
+                let totalDataLen = keyLen + actualValueLen
+                // 读 key + value
+                let data = Array<Byte>(totalDataLen, repeat: 0u8)
+                if (totalDataLen > 0) {
+                    let dataRead = file.read(data)
+                    if (dataRead < totalDataLen) {
+                        break // 截断的记录
+                    }
+                }
+                let keyBytes = Array<Byte>(keyLen, repeat: 0u8)
+                for (i in 0..keyLen) {
+                    keyBytes[i] = data[i]
+                }
+                let value: ?Array<Byte> = if (valueLen >= 0) {
+                    let valueBytes = Array<Byte>(valueLen, repeat: 0u8)
+                    for (i in 0..valueLen) {
+                        valueBytes[i] = data[keyLen + i]
+                    }
+                    Some(valueBytes)
+                } else {
+                    None
+                }
+                let expireAt: ?Int64 = if (expireAtVal != 0) { Some(expireAtVal) } else { None }
+                // 验证 checksum
+                let expected = WALRecordCodec.computeChecksum(sequence, keyBytes, value, expireAt)
+                if (checksum != expected) {
+                    break // checksum 不匹配，视为截断
+                }
+                result.add(WALRecord(checksum, sequence, keyBytes, value, expireAt: expireAt))
             }
-            let expireAt: ?Int64 = if (expireAtVal != 0) { Some(expireAtVal) } else { None }
-            // 验证 checksum
-            let expected = WALRecordCodec.computeChecksum(sequence, keyBytes, value, expireAt)
-            if (checksum != expected) {
-                break // checksum 不匹配，视为截断
-            }
-            result.add(WALRecord(checksum, sequence, keyBytes, value, expireAt: expireAt))
+        } finally {
+            file.close()
         }
-        file.close()
         result
     }
 
