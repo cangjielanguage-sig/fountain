@@ -638,7 +638,7 @@ public class CompactionTest {
         // 用不可写的 sstDir 触发 writeStreamToSSTables 失败
         let badDir = "/tmp/f_store_compaction_bad_dir"
         try { remove(badDir) } catch (_: Exception) {}
-        let blocker = File(badDir, OpenMode.CreateWrite)
+        let blocker = File(badDir, OpenMode.Write)
         blocker.close()
         // 此时 badDir 是普通文件，writeStreamToSSTables 无法在其下创建目录/文件
 
