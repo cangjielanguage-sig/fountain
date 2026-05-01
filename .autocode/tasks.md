@@ -390,20 +390,15 @@ public static func open(path: String): SSTable {
 
 ---
 
-#### 3.5 【P3 文档】设计文档与实现同步
+#### 3.5 【P3 文档】设计文档与实现同步 ✅
 
 **文件**: `store.md`、`开发计划.md`  
 **类型**: 文档修正 | **预计**: 0.5 人天
 
-**需同步的偏差**：
-
-| 文档描述 | 实现现状 | 文档应改为 |
-|---------|---------|-----------|
-| value_len = 0 表示 tombstone | value_len = -1 表示 tombstone | value_len = -1 表示 tombstone（>=0 为正常值含空数组） |
-| createStoreStream 工厂函数 | 各构造器内联 @When | 移除createStoreStream描述，更新为内联模式 |
-| SSTable magic = 0x4C534D54 | 0x53545354 ("STST") | 更新为 0x53545354 |
-| WAL 多文件轮转 | 单文件（待实现B3后更新） | 按 B3 修复后同步 |
-| close 顺序：swap→flush→WAL→SSTable→Compaction | stop→flush→WAL→SSTable | 同步为正确实现 |
+**已同步**：
+- value_len = -1 (tombstone)、magic = 0x53545354、close 顺序
+- 移除 createStoreStream/IOUringStream 引用
+- 文件清单更新为 22 个文件，差异表同步
 
 ---
 
@@ -416,17 +411,17 @@ public static func open(path: String): SSTable {
 | 1 | P1 | byteCount 恢复后重建 ✅（无需修复） | 缺陷 | — |
 | 1 | 高 | 并发读写测试 ✅ | 测试 | 1.5~2 |
 | 1 | 高 | WAL 损坏恢复测试 ✅ | 测试 | 1 |
-| 1 | 高 | Compaction 多文件合并测试 | 测试 | 1 |
+| 1 | 高 | Compaction 多文件合并测试 ✅ | 测试 | 1 |
 | 2 | P1 | WAL 单文件轮转 ✅ | 功能 | 1 |
-| 2 | P2 | Compaction 文件名规范 | 代码修正 | 0.5 |
-| 2 | P2 | MemTable 容量边界 + 极端大小测试 | 测试 | 0.5 |
-| 2 | P2 | L0 遍历逆序优化 | 性能 | 0.5 |
-| 2 | P2 | shouldCompact 大小估算改用 fileSize | 代码修正 | 0.5 |
-| 3 | P2 | WAL 用户态缓冲写入 | 性能 | 1.5~2 |
-| 3 | P2 | ByteArray 比较开销优化 | 性能 | 1 |
-| 3 | P3 | finishWrite 排序断言 | 性能 | 0.5 |
-| 3 | P3 | Compaction 读写锁 | 性能 | 1~1.5 |
-| 3 | P3 | 设计文档同步 | 文档 | 0.5 |
+| 2 | P2 | Compaction level 元数据 ✅ | 代码修正 | 0.5 |
+| 2 | P2 | MemTable 边界 + 极端大小测试 ✅ | 测试 | 0.5 |
+| 2 | P2 | L0 反向遍历 + SSTableIterator 空保护 ✅ | 性能 | 0.5 |
+| 2 | P2 | shouldCompact fileSize ✅ | 代码修正 | 0.5 |
+| 3 | P2 | WAL 缓冲（已回退：不适合 WAL）✅ | 结论 | — |
+| 3 | P2 | ByteArray 比较优化 ✅ | 性能 | 1 |
+| 3 | P3 | finishWrite 有序断言 ✅ | 性能 | 0.5 |
+| 3 | P3 | LevelManager 无锁化 ✅ | 性能 | 1 |
+| 3 | P3 | 设计文档同步 ✅ | 文档 | 0.5 |
 
 **总计**：约 11~14 人天，分 3 个阶段迭代交付
 
