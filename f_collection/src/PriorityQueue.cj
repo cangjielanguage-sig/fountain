@@ -112,20 +112,20 @@ public class PriorityQueue<T> <: Queue<T> & Iterable<T> & Collection<T> & Growab
         }
     }
     private func doOffer(x: T): Bool {
-        if (currentSize == 0) {
-            queue[currentSize] = x
-            currentSize++
-            true
-        } else if (!isFull()) {
-            adjustUp(currentSize, x)
-            currentSize++
-            true
-        } else if (capacity <= 0 || growOnFull) {
+        // 内部数组满时扩容（递归改循环）
+        while (isFull()) {
+            if (capacity > 0 && !growOnFull) {
+                return false
+            }
             grow()
-            doOffer(x)
-        } else {
-            false
         }
+        if (currentSize == 0) {
+            queue[0] = x
+        } else {
+            adjustUp(currentSize, x)
+        }
+        currentSize++
+        true
     }
     public func grow(): Unit {
         let q = queue

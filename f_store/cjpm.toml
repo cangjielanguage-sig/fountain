@@ -25,3 +25,4 @@
 "fountain::f_concurrent" = {path = "../f_concurrent"}
 "fountain::f_bloom" = {path = "../f_bloom"}
 "fountain::f_util" = {path = "../f_util"}
+"fountain::f_collection" = {path = "../f_collection"}

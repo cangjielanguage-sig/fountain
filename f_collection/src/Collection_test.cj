@@ -236,4 +236,109 @@ public class Collection_test {
         let map = HashMap<Int64, Int64>([(1, 1), (2, 2), (3, 3)])
         @Assert(true, map.containsValue(3))
     }
+
+    // ================================================================
+    // PriorityQueue 补充测试（PERF-1 二叉堆改造验证）
+    // ================================================================
+
+    @TestCase
+    public func testPriorityQueueEmpty(): Unit {
+        let queue = PriorityQueue<Int64>.create<Int64>()
+        @Assert(queue.isEmpty())
+        @Assert(queue.size == 0)
+        @Assert(queue.peek().isNone())
+        @Assert(queue.remove().isNone())
+    }
+
+    @TestCase
+    public func testPriorityQueueSingleElement(): Unit {
+        let queue = PriorityQueue<Int64>.create<Int64>()
+        queue.add(42)
+        @Assert(queue.size == 1)
+        @Assert(!queue.isEmpty())
+        @Assert(queue.peek().getOrThrow() == 42)
+        @Assert(queue.size == 1)  // peek 不删除
+        @Assert(queue.remove().getOrThrow() == 42)
+        @Assert(queue.isEmpty())
+        @Assert(queue.remove().isNone())
+    }
+
+    @TestCase
+    public func testPriorityQueueCustomComparator(): Unit {
+        // 逆序比较器（大根堆）
+        let cmp = { a: Int64, b: Int64 =>
+            if (a > b) { LT }
+            else if (a < b) { GT }
+            else { EQ }
+        }
+        let queue = PriorityQueue<Int64>(cmp)
+        queue.add(3)
+        queue.add(1)
+        queue.add(2)
+        @Assert(queue.remove().getOrThrow() == 3)
+        @Assert(queue.remove().getOrThrow() == 2)
+        @Assert(queue.remove().getOrThrow() == 1)
+    }
+
+    @TestCase
+    public func testPriorityQueueDuplicates(): Unit {
+        let queue = PriorityQueue<Int64>.create<Int64>()
+        queue.add(5)
+        queue.add(3)
+        queue.add(5)
+        queue.add(3)
+        @Assert(queue.size == 4)
+        // 两次 3 先出，两次 5 后出
+        @Assert(queue.remove().getOrThrow() == 3)
+        @Assert(queue.remove().getOrThrow() == 3)
+        @Assert(queue.remove().getOrThrow() == 5)
+        @Assert(queue.remove().getOrThrow() == 5)
+    }
+
+    @TestCase
+    public func testPriorityQueuePeekNonDestructive(): Unit {
+        let queue = PriorityQueue<Int64>.create<Int64>()
+        queue.add(7)
+        queue.add(3)
+        queue.add(9)
+        // peek 不应影响后续 remove 顺序
+        @Assert(queue.peek().getOrThrow() == 3)
+        @Assert(queue.peek().getOrThrow() == 3)
+        @Assert(queue.remove().getOrThrow() == 3)
+        @Assert(queue.peek().getOrThrow() == 7)
+        @Assert(queue.remove().getOrThrow() == 7)
+        @Assert(queue.peek().getOrThrow() == 9)
+        @Assert(queue.remove().getOrThrow() == 9)
+        @Assert(queue.peek().isNone())
+    }
+
+    @TestCase
+    public func testPriorityQueueSequentialInsert(): Unit {
+        // 顺序插入（不 shuffle），仍应保持正确顺序
+        let queue = PriorityQueue<Int64>.create<Int64>()
+        for (i in 1..=100) {
+            queue.add(i)
+        }
+        @Assert(queue.size == 100)
+        for (i in 1..=100) {
+            @Assert(queue.remove().getOrThrow() == i)
+        }
+    }
+
+    @TestCase
+    public func testPriorityQueueStringComparator(): Unit {
+        // 字符串比较器（用于 ByteArray 类似场景验证）
+        let cmp = { a: String, b: String =>
+            if (a < b) { LT }
+            else if (a > b) { GT }
+            else { EQ }
+        }
+        let queue = PriorityQueue<String>(cmp)
+        queue.add("banana")
+        queue.add("apple")
+        queue.add("cherry")
+        @Assert(queue.remove().getOrThrow() == "apple")
+        @Assert(queue.remove().getOrThrow() == "banana")
+        @Assert(queue.remove().getOrThrow() == "cherry")
+    }
 }
