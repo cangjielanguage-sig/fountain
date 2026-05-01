@@ -15,9 +15,10 @@ limitations under the License.
 */
 package fountain::f_store
 
-/** WAL 读取器，使用 std.fs.File 同步读取（恢复是启动时一次性操作，不需要 io_uring） */
+/** WAL 读取器，使用 std.fs.File 同步读取（恢复是启动时一次性操作） */
 class WALReader {
-    /** 读取 WAL 文件所有完整记录，截断的记录被忽略 */
+    /** 读取 WAL 文件所有完整记录，截断的记录被忽略。
+     *  流式逐条读取，避免一次性加载整个文件到内存。 */
     static func readAll(path: String): ArrayList<WALRecord> {
         let result = ArrayList<WALRecord>()
         if (!exists(path)) {
@@ -29,41 +30,39 @@ class WALReader {
             file.close()
             return result
         }
-        // 先把整个文件读入内存
-        let allBytes = Array<Byte>(Int64(fileSize), repeat: 0u8)
-        let bytesRead = file.read(allBytes)
-        file.close()
-        var offset = 0
-        while (offset + 36 <= bytesRead) {
-            let checksum = readUInt32LE(allBytes, offset)
-            offset += 4
-            let sequence = readInt64LE(allBytes, offset)
-            offset += 8
-            let keyLen = readInt64LE(allBytes, offset)
-            offset += 8
-            let valueLen = readInt64LE(allBytes, offset)
-            offset += 8
-            let expireAtVal = readInt64LE(allBytes, offset)
-            offset += 8
-            // valueLen < 0 表示 tombstone
-            let actualValueLen = if (valueLen >= 0) { valueLen } else { 0 }
-            // 检查剩余长度
-            if (offset + keyLen + actualValueLen > bytesRead) {
-                break // 截断的记录
+        // 流式读取：逐条读 header + data，边读边解析
+        let header = Array<Byte>(36, repeat: 0u8)
+        while (true) {
+            let headerRead = file.read(header)
+            if (headerRead < 36) {
+                break // 文件结尾或截断
             }
+            let checksum = readUInt32LE(header, 0)
+            let sequence = readInt64LE(header, 4)
+            let keyLen = readInt64LE(header, 12)
+            let valueLen = readInt64LE(header, 20)
+            let expireAtVal = readInt64LE(header, 28)
             if (keyLen < 0) {
                 break // 非法数据
             }
+            let actualValueLen = if (valueLen >= 0) { valueLen } else { 0 }
+            let totalDataLen = keyLen + actualValueLen
+            // 读 key + value
+            let data = Array<Byte>(totalDataLen, repeat: 0u8)
+            if (totalDataLen > 0) {
+                let dataRead = file.read(data)
+                if (dataRead < totalDataLen) {
+                    break // 截断的记录
+                }
+            }
             let keyBytes = Array<Byte>(keyLen, repeat: 0u8)
             for (i in 0..keyLen) {
-                keyBytes[i] = allBytes[offset]
-                offset++
+                keyBytes[i] = data[i]
             }
             let value: ?Array<Byte> = if (valueLen >= 0) {
                 let valueBytes = Array<Byte>(valueLen, repeat: 0u8)
                 for (i in 0..valueLen) {
-                    valueBytes[i] = allBytes[offset]
-                    offset++
+                    valueBytes[i] = data[keyLen + i]
                 }
                 Some(valueBytes)
             } else {
@@ -77,6 +76,7 @@ class WALReader {
             }
             result.add(WALRecord(checksum, sequence, keyBytes, value, expireAt: expireAt))
         }
+        file.close()
         result
     }
 
