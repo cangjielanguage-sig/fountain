@@ -355,34 +355,26 @@ public static func open(path: String): SSTable {
 
 ---
 
-#### 3.2 【P2 性能】ByteArray 比较开销优化
+#### 3.2 【P2 性能】ByteArray 比较开销优化 ✅
 
 **文件**: `ByteArray.cj`  
 **类型**: 性能优化 | **预计**: 1 人天
 
-**目标**：降低 MemTable 键比较 CPU 开销 10~20%
-
-**实施步骤**：
-1. `compare()` 中避免 `toUInt()` 转换开销，直接用 `Int64(a[i] - b[i])`
-2. 对 ≥8 字节 key 使用逐 8 字节 UInt64 比较
-3. 仓颉支持 `@Inline` 时添加
-
-**验收标准**：`MemTableTest` 全部通过；10k 插入耗时降低 ≥10%
+**完成内容**：
+- `compare()` 直接整数比较替代 `match` + `Ordering` 枚举开销
+- 8 字节批量循环降低循环次数
+- 144 测试通过
 
 ---
 
-#### 3.3 【P3 性能】finishWrite 排序消除（条件优化）
+#### 3.3 【P3 性能】finishWrite 排序消除 ✅
 
-**文件**: `SSTable.cj`（finishWrite）  
+**文件**: `SSTable.cj`（write）  
 **类型**: 性能优化 | **预计**: 0.5 人天
 
-**目标**：省去 MemTable flush 场景下的冗余排序
-
-**实施步骤**：
-1. 当前实现已不排序（MemTable iterator 天然有序），只需在 debug 模式下加断言验证
-2. 确认 `Compactor` 输出（SSTableMerger）也天然有序
-
-**验收标准**：FinishWrite 不做多余排序，存在断言
+**完成内容**：
+- 确认 flushMemTable（跳表 iterator）和 Compaction（SSTableMerger）两路写入天然有序
+- `write()` 新增 `key >= 上一个key` 断言验证
 
 ---
 

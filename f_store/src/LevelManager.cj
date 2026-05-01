@@ -15,23 +15,24 @@ limitations under the License.
 */
 package fountain::f_store
 
-/** 层级管理：管理 L0~Ln 各层的 SSTable 列表，提供带过期检查的 get 查询 */
+/** 层级管理：管理 L0~Ln 各层的 SSTable 列表，提供带过期检查的 get 查询
+ *
+ *  无锁设计：用 AtomicReference 替代 Mutex 保护每层的 SSTable 列表。
+ *  - get/查询：原子加载列表快照，迭代无锁
+ *  - add/remove：copy + CAS 原子替换
+ *  - 写操作之间由调用方保证串行（flush/compaction 在单线程或互斥路径执行）
+ */
 class LevelManager {
     let sstDir: String
-    let levels: Array<ArrayList<SSTable>>
+    let levels: Array<AtomicReference<ArrayList<SSTable>>>
     let levelCount: Int64
-    let levelLocks: Array<Mutex>
 
     init(sstDir: String, levelCount!: Int64 = 7) {
         this.sstDir = sstDir
         this.levelCount = levelCount
-        this.levels = Array<ArrayList<SSTable>>(levelCount, repeat: ArrayList<SSTable>())
+        this.levels = Array<AtomicReference<ArrayList<SSTable>>>(levelCount, repeat: AtomicReference<ArrayList<SSTable>>(ArrayList<SSTable>()))
         for (i in 0..levelCount) {
-            levels[i] = ArrayList<SSTable>()
-        }
-        this.levelLocks = Array<Mutex>(levelCount, repeat: Mutex())
-        for (i in 0..levelCount) {
-            levelLocks[i] = Mutex()
+            levels[i] = AtomicReference<ArrayList<SSTable>>(ArrayList<SSTable>())
         }
     }
 
@@ -41,10 +42,11 @@ class LevelManager {
             return
         }
         let files = SSTable.loadAll(sstDir)
+        // 按 level 分组添加到各层（init 时无并发，直接 add）
         for (f in files) {
             let level = f.getMetadata().level
             if (level >= 0 && level < levelCount) {
-                levels[level].add(f)
+                levels[level].load().add(f)
             } else {
                 f.close()
             }
@@ -65,34 +67,32 @@ class LevelManager {
 
     /** 在指定层查找 key */
     private func getInLevel(level: Int64, key: ByteArray, now: Int64): ?EntryValue {
-        synchronized(levelLocks[level]) {
-            let sstList = levels[level]
-            if (level == 0) {
-                // L0: 从末尾开始反向遍历（最新文件最后添加，优先命中）
-                let count = sstList.size
-                var i = count - 1
-                while (i >= 0) {
-                    let entry = sstList[i].get(key)
-                    if (entry.isSome()) {
-                        if (let Some(e) <- entry) {
-                            return checkExpiry(e, now)
-                        }
+        let sstList = levels[level].load()
+        if (level == 0) {
+            // L0: 从末尾开始反向遍历（最新文件最后添加，优先命中）
+            let count = sstList.size
+            var i = count - 1
+            while (i >= 0) {
+                let entry = sstList[i].get(key)
+                if (entry.isSome()) {
+                    if (let Some(e) <- entry) {
+                        return checkExpiry(e, now)
                     }
-                    i--
                 }
-            } else {
-                // Ln (n≥1): 按 metadata min/max 筛选范围匹配的 SSTable
-                for (i in 0..sstList.size) {
-                    let sst = sstList[i]
-                    let meta = sst.getMetadata()
-                    if (key < meta.minKey || key > meta.maxKey) {
-                        continue
-                    }
-                    let entry = sst.get(key)
-                    if (entry.isSome()) {
-                        if (let Some(e) <- entry) {
-                            return checkExpiry(e, now)
-                        }
+                i--
+            }
+        } else {
+            // Ln (n≥1): 按 metadata min/max 筛选范围匹配的 SSTable
+            for (i in 0..sstList.size) {
+                let sst = sstList[i]
+                let meta = sst.getMetadata()
+                if (key < meta.minKey || key > meta.maxKey) {
+                    continue
+                }
+                let entry = sst.get(key)
+                if (entry.isSome()) {
+                    if (let Some(e) <- entry) {
+                        return checkExpiry(e, now)
                     }
                 }
             }
@@ -120,8 +120,15 @@ class LevelManager {
         if (level < 0 || level >= levelCount) {
             return
         }
-        synchronized(levelLocks[level]) {
-            levels[level].add(sst)
+        // copy + CAS 无锁添加
+        while (true) {
+            let oldList = levels[level].load()
+            let newList = ArrayList<SSTable>()
+            newList.add(all: oldList)
+            newList.add(sst)
+            if (levels[level].compareAndSwap(oldList, newList)) {
+                break
+            }
         }
     }
 
@@ -130,9 +137,11 @@ class LevelManager {
         if (level < 0 || level >= levelCount) {
             return
         }
-        synchronized(levelLocks[level]) {
+        // copy + CAS 无锁移除
+        while (true) {
+            let oldList = levels[level].load()
             let newList = ArrayList<SSTable>()
-            for (sst in levels[level]) {
+            for (sst in oldList) {
                 var shouldKeep = true
                 for (rm in toRemove where refEq(sst, rm)) {
                     shouldKeep = false
@@ -142,8 +151,9 @@ class LevelManager {
                     newList.add(sst)
                 }
             }
-            levels[level].clear()
-            levels[level].add(all: newList)
+            if (levels[level].compareAndSwap(oldList, newList)) {
+                break
+            }
         }
     }
 
@@ -153,10 +163,9 @@ class LevelManager {
         if (level < 0 || level >= levelCount) {
             return result
         }
-        synchronized(levelLocks[level]) {
-            for (sst in levels[level]) {
-                result.add(sst)
-            }
+        let sstList = levels[level].load()
+        for (sst in sstList) {
+            result.add(sst)
         }
         result
     }
@@ -176,14 +185,13 @@ class LevelManager {
         if (level < 0 || level >= levelCount) {
             return result
         }
-        synchronized(levelLocks[level]) {
-            for (sst in levels[level]) {
-                let meta = sst.getMetadata()
-                // 重叠条件: (max 为 None 或 sst.minKey <= max) && sst.maxKey >= min
-                let withinMax = max.isNone() || meta.minKey <= max.getOrThrow()
-                if (withinMax && meta.maxKey >= min) {
-                    result.add(sst)
-                }
+        let sstList = levels[level].load()
+        for (sst in sstList) {
+            let meta = sst.getMetadata()
+            // 重叠条件: (max 为 None 或 sst.minKey <= max) && sst.maxKey >= min
+            let withinMax = max.isNone() || meta.minKey <= max.getOrThrow()
+            if (withinMax && meta.maxKey >= min) {
+                result.add(sst)
             }
         }
         result
@@ -194,32 +202,29 @@ class LevelManager {
         if (level < 0 || level >= levelCount) {
             return false
         }
-        synchronized(levelLocks[level]) {
-            let count = levels[level].size
-            if (level == 0) {
-                return count >= 4
-            }
-            // Ln (n≥1): 总大小 >= 10^n MB
-            let sizeLimitMB = 10 ** UInt64(level)
-            var totalSize: Int64 = 0
-            for (sst in levels[level]) {
-                totalSize += sst.getMetadata().fileSize
-            }
-            let totalMB = totalSize / (1024 * 1024)
-            totalMB >= sizeLimitMB
+        let sstList = levels[level].load()
+        let count = sstList.size
+        if (level == 0) {
+            return count >= 4
         }
+        // Ln (n≥1): 总大小 >= 10^n MB
+        let sizeLimitMB = 10 ** UInt64(level)
+        var totalSize: Int64 = 0
+        for (sst in sstList) {
+            totalSize += sst.getMetadata().fileSize
+        }
+        let totalMB = totalSize / (1024 * 1024)
+        totalMB >= sizeLimitMB
     }
 
     /** 关闭所有 SSTable */
     func closeAll(): Unit {
         for (level in 0..levelCount) {
-            synchronized(levelLocks[level]) {
-                for (sst in levels[level]) {
-                    try {
-                        sst.close()
-                    } catch (_: Exception) {}
-                }
-                levels[level].clear()
+            let sstList = levels[level].load()
+            for (sst in sstList) {
+                try {
+                    sst.close()
+                } catch (_: Exception) {}
             }
         }
     }
@@ -228,14 +233,13 @@ class LevelManager {
     func levelSummary(): String {
         var s = ""
         for (level in 0..levelCount) {
-            synchronized(levelLocks[level]) {
-                let cnt = levels[level].size
-                if (cnt > 0) {
-                    if (s.size > 0) {
-                        s += ", "
-                    }
-                    s += "L${level}:${cnt}"
+            let sstList = levels[level].load()
+            let cnt = sstList.size
+            if (cnt > 0) {
+                if (s.size > 0) {
+                    s += ", "
                 }
+                s += "L${level}:${cnt}"
             }
         }
         s
