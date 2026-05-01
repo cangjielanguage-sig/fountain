@@ -54,30 +54,22 @@ public class Store <: Resource {
             Directory.create(sstDir, recursive: true)
         }
 
-        // 从 WAL 恢复 MemTable
+        // 从 WAL 恢复 MemTable，同时找出最大序列号
         let recovered = WALReader.recoverAll(walDir)
         this.memTableManager = MemTableManager()
-        // 将恢复的数据写入 active MemTable
+        var startSeq: Int64 = 0
         let iter = recovered.iterator()
         while (let Some((key, entry)) <- iter.next()) {
             memTableManager.getActive().add(key, entry)
+            if (entry.sequence > startSeq) {
+                startSeq = entry.sequence
+            }
         }
 
         // 加载已有 SSTable
         this.levelManager = LevelManager(sstDir)
         levelManager.loadExisting()
 
-        // 确定 WAL 起始序列号
-        var startSeq: Int64 = 0
-        if (recovered.approximateSize() > 0) {
-            // 从恢复的数据中获取最大序列号
-            let recoveryIter = recovered.iterator()
-            while (let Some((_, entry)) <- recoveryIter.next()) {
-                if (entry.sequence > startSeq) {
-                    startSeq = entry.sequence
-                }
-            }
-        }
         this.sequence = AtomicInt64(startSeq)
         this.closed = AtomicBool(false)
 

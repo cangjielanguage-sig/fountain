@@ -203,6 +203,18 @@ class SSTableIterator <: Iterator<(ByteArray, EntryValue)> & Resource {
         None
     }
 
+    /** 从磁盘加载当前 Data Block。
+     *
+     *  安全设计：
+     *  - 迭代器在 init 时打开独立 File 句柄（与 SSTable 共享的 file 无关），
+     *    因此 SSTable.close() 不影响此 fd 的有效性。
+     *  - Compaction 读取旧 SSTable 数据时，通过本迭代器先耗尽数据，
+     *    然后才 close/remove 旧文件，因此迭代器生命周期内文件始终可达。
+     *  - 即使文件已被 unlink（从目录删除），已打开的 fd 在内核中保持数据可达，
+     *    pread 仍能正常读取。
+     *  - 不需要显式的 isClosed() 检查，因为 fd 来源的 File 对象由本迭代器独占，
+     *    且仅在 close() / setDone() 中关闭。
+     */
     private func loadBlock(): Unit {
         let blockStart = indexEntries[blockIdx].offset
         let blockEnd = if (blockIdx + 1 < indexEntries.size) {

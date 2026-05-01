@@ -433,37 +433,6 @@ class SSTable <: Resource {
         result
     }
 
-    /** 解析文件名提取 level 和 sequence 范围。
-     *  文件名格式: L{level}_{seqStart}_{seqEnd}.sst
-     *  返回 (level, seqStart, seqEnd) 或 None
-     */
-    static func parseFileName(fileName: String): ?(Int64, Int64, Int64) {
-        // 去掉 .sst 后缀
-        let name = if (fileName.endsWith(".sst")) {
-            fileName[0 .. (fileName.size - 4)]
-        } else {
-            fileName
-        }
-        // 期望格式: L{level}_{seqStart}_{seqEnd}
-        if (!name.startsWith("L")) {
-            return None
-        }
-        let rest = name[1 .. name.size]
-        let parts = rest.split("_")
-        if (parts.size != 3) {
-            return None
-        }
-        try {
-            let level = Int64.parse(parts[0])
-            let seqStart = Int64.parse(parts[1])
-            let seqEnd = Int64.parse(parts[2])
-            let result: (Int64, Int64, Int64) = (level, seqStart, seqEnd)
-            return Some(result)
-        } catch (_: Exception) {
-            return None
-        }
-    }
-
     /** 关闭 SSTable，释放所有资源 */
     public func close(): Unit {
         if (closed.compareAndSwap(false, true)) {

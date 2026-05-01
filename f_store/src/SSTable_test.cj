@@ -651,63 +651,6 @@ public class SSTableTest {
         remove(dir, recursive: true)
     }
 
-    /// parseFileName 正常文件名
-    @TestCase
-    public func sstableParseFileName(): Unit {
-        let result = SSTable.parseFileName("L0_1_100.sst")
-        @Expect(result.isSome())
-        if (let Some((level, seqStart, seqEnd)) <- result) {
-            @Expect(level == 0)
-            @Expect(seqStart == 1)
-            @Expect(seqEnd == 100)
-        }
-    }
-
-    /// parseFileName 多层级
-    @TestCase
-    public func sstableParseFileNameLevel2(): Unit {
-        let result = SSTable.parseFileName("L2_500_999.sst")
-        @Expect(result.isSome())
-        if (let Some((level, seqStart, seqEnd)) <- result) {
-            @Expect(level == 2)
-            @Expect(seqStart == 500)
-            @Expect(seqEnd == 999)
-        }
-    }
-
-    /// parseFileName 不含 .sst 后缀
-    @TestCase
-    public func sstableParseFileNameNoSuffix(): Unit {
-        let result = SSTable.parseFileName("L0_1_100")
-        @Expect(result.isSome())
-        if (let Some((level, seqStart, seqEnd)) <- result) {
-            @Expect(level == 0)
-            @Expect(seqStart == 1)
-            @Expect(seqEnd == 100)
-        }
-    }
-
-    /// parseFileName 格式错误 — 不以 L 开头
-    @TestCase
-    public func sstableParseFileNameBadPrefix(): Unit {
-        let result = SSTable.parseFileName("X0_1_100.sst")
-        @Expect(result.isNone())
-    }
-
-    /// parseFileName 格式错误 — 部分 insufficient parts
-    @TestCase
-    public func sstableParseFileNameInsufficientParts(): Unit {
-        let result = SSTable.parseFileName("L0_1.sst")
-        @Expect(result.isNone())
-    }
-
-    /// parseFileName 格式错误 — 非数字
-    @TestCase
-    public func sstableParseFileNameNonNumeric(): Unit {
-        let result = SSTable.parseFileName("L0_abc_100.sst")
-        @Expect(result.isNone())
-    }
-
     /// iterator 遍历
     @TestCase
     public func sstableIteratorFromOpen(): Unit {
