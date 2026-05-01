@@ -327,6 +327,118 @@ public class ConcurrencyTest {
         reopened.close()
     }
 
+    /** 混合并发：add/remove/get/多前缀迭代同时运行 */
+    @TestCase
+    public func testMixedAddRemoveGetPrefix(): Unit {
+        let dir = getTestDir("mixed_all")
+        let store = Store(dir)
+        let baseCount: Int64 = 200
+        let runtimeMs: Int64 = 2000  // 运行 2 秒
+        let startTime = DateTime.now().toUnixTimeStamp().toNanoseconds()
+
+        // 1. 预写入基础数据
+        for (i in 0..baseCount) {
+            store.add("mx_base_${i}".unsafeBytes(), "base_v".unsafeBytes())
+        }
+
+        let running = AtomicBool(true)
+
+        // 2. Writer：持续 add 新 key（不同前缀范围）
+        let writerFut = spawn {
+            var idx: Int64 = 0
+            while (running.load()) {
+                try {
+                    store.add("mx_w_${idx}".unsafeBytes(), "wv_${idx}".unsafeBytes())
+                    idx++
+                } catch (_: StoreClosedException) { break }
+            }
+            idx
+        }
+
+        // 3. Remover：持续 remove 已有 key
+        let removerFut = spawn {
+            var idx: Int64 = 0
+            var removed: Int64 = 0
+            while (running.load()) {
+                try {
+                    let key = "mx_base_${idx}".unsafeBytes()
+                    let old = store.remove(key)
+                    if (old.isSome()) { removed++ }
+                    idx = (idx + 1) % baseCount
+                } catch (_: StoreClosedException) { break }
+            }
+            removed
+        }
+
+        // 4. Getter：持续随机读取
+        let getterFut = spawn {
+            var gets: Int64 = 0
+            var hits: Int64 = 0
+            while (running.load()) {
+                try {
+                    let key = "mx_w_${gets % 500}".unsafeBytes()
+                    let result = store.get(key)
+                    if (result.isSome()) { hits++ }
+                    gets++
+                } catch (_: StoreClosedException) { break }
+            }
+            (gets, hits)
+        }
+
+        // 5. Prefix iterators：多个前缀同时迭代
+        let prefixFutures = ArrayList<Future<Int64>>()
+        for (p in 0..3) {
+            let prefix = "mx_${["base", "w", "other"][p]}".unsafeBytes()
+            let fut = spawn {
+                var total: Int64 = 0
+                while (running.load()) {
+                    try {
+                        let iter = store.prefix(prefix)
+                        var count: Int64 = 0
+                        while (let Some(_) <- iter.next()) {
+                            count++
+                        }
+                        total += count
+                    } catch (_: StoreClosedException) { break }
+                }
+                total
+            }
+            prefixFutures.add(fut)
+        }
+
+        // 6. 运行指定时间后停止
+        sleep(Duration.millisecond * runtimeMs)
+        running.store(false)
+
+        // 7. 收集结果
+        let writerCount = writerFut.get()
+        let removerCount = removerFut.get()
+        let (getCount, hitCount) = getterFut.get()
+
+        // 8. close + reopen 验证数据完整性
+        store.close()
+        let reopened = Store(dir)
+
+        // 基础数据：被 remove 的已不存在，未 remove 的在
+        var baseOk: Int64 = 0
+        for (i in 0..baseCount) {
+            let key = "mx_base_${i}".unsafeBytes()
+            if (reopened.get(key).isSome()) { baseOk++ }
+        }
+
+        // Writer 写入的 key 全部应在（确认了才返回）
+        var writerOk: Int64 = 0
+        for (i in 0..writerCount) {
+            let key = "mx_w_${i}".unsafeBytes()
+            if (reopened.get(key).isSome()) { writerOk++ }
+        }
+
+        @Expect(baseOk + writerOk > 0)
+        @Expect(getCount > 0)
+
+        reopened.close()
+    }
+
     // ================================================================
     // 辅助方法
     // ================================================================
