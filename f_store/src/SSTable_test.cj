@@ -1175,7 +1175,7 @@ public class SSTableTest {
             entries.add(entry)
         }
         @Expect(entries.size == 0)  // 损坏数据被跳过
-        @Expect(iter.isClosed())     // 迭代器自动关闭
+        @Expect((iter as Resource)?.isClosed(), Some(true))
 
         reopened.close()
         remove(dir, recursive: true)
@@ -1203,7 +1203,7 @@ public class SSTableTest {
         let reopened = SSTable.open(path)
         let iter = reopened.iterator()
         @Expect(iter.next().isNone())
-        @Expect(iter.isClosed())
+        @Expect((iter as Resource)?.isClosed(), Some(true))
 
         reopened.close()
         remove(dir, recursive: true)
