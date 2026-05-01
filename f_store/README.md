@@ -353,7 +353,7 @@ Store 的所有操作均为无锁或原子操作：
 
 ## 性能
 
-### 基准测试（WSL, AMD Ryzen 7 5800H, 2026-04）
+### 基准测试（WSL, AMD Ryzen 7 5800H, cjHeapSize=8GB, 2026-04）
 
 1000 次操作/用例，`@Bench` 框架测量，数据为多次运行的中位数。
 
@@ -361,31 +361,31 @@ Store 的所有操作均为无锁或原子操作：
 
 | 操作 | 中位数 | 误差 | 说明 |
 |------|-------:|-----|------|
-| `add` | 32.6 ms | ±5.2% | 1000 次顺序写入（key + value 各约 10B） |
-| `get` | 49.2 ms | ±2.9% | 写入 1000 条后随机读取 |
-| `remove` | 65.9 ms | ±5.1% | 写入 1000 条后依次删除 |
-| `prefix` | 24.9 ms | ±6.0% | 500 条前缀 `px:user:` 全量遍历 |
-| `ttl` | 93.3 ms | ±5.5% | 写入 1000 条后更新 TTL |
-| `addWithExpire` | 46.3 ms | ±5.3% | 1000 次 `add(key, value, Duration)` |
+| `add` | 31.3 ms | ±4.6% | 1000 次顺序写入（key + value 各约 10B） |
+| `get` | 51.6 ms | ±4.7% | 写入 1000 条后随机读取 |
+| `remove` | 64.4 ms | ±4.1% | 写入 1000 条后依次删除 |
+| `prefix` | 25.0 ms | ±6.1% | 500 条前缀 `px:user:` 全量遍历 |
+| `ttl` | 93.7 ms | ±5.5% | 写入 1000 条后更新 TTL |
+| `addWithExpire` | 45.6 ms | ±4.0% | 1000 次 `add(key, value, Duration)` |
 
 #### 并发
 
 | 操作 | 中位数 | 误差 | 说明 |
 |------|-------:|-----|------|
-| `concurrentAdd` (4线程) | 22.1 ms | ±6.1% | 4 线程各写入 250 条（共 1000 条） |
-| `concurrentGet` (4线程) | 52.7 ms | ±7.9% | 写入 1000 条后 4 线程并发读取 |
-| `mixed` (5线程) | 0.61 s | ±1.4% | add/get/remove/prefix/ttl 混合运行 500ms |
+| `concurrentAdd` (4线程) | 22.1 ms | ±6.4% | 4 线程各写入 250 条（共 1000 条） |
+| `concurrentGet` (4线程) | 52.5 ms | ±5.3% | 写入 1000 条后 4 线程并发读取 |
+| `mixed` (5线程) | 0.62 s | ±2.0% | add/get/remove/prefix/ttl 混合运行 500ms |
+
+#### 稳定性
+
+同一 JVM 下 `-j 32` 并行运行结果与 `-j 1` 串行相比，各项差异 < 3.4%（最大为 TTL -3.4%）：
+- 串行与并行的中位数几乎一致，说明 Store 关键路径完全无锁
+- GC 警告仍然存在，但 `cjHeapSize=8GB` 已消除 OOM
 
 **命令**：
 ```bash
-cjpm bench              # 串行运行
-cjpm bench -j 8         # 8 路并行运行
-```
-并行运行 (`-j 8`) 结果与串行基本一致（差异 < 8%），说明 Store 关键路径无锁竞争。
-
-**注意**：基准测试受 GC 影响，建议增大堆后重跑：
-```bash
-cjHeapSize=4g cjpm bench
+cjHeapSize=8g cjpm bench          # 串行（推荐）
+cjHeapSize=8g cjpm bench -j 32    # 32 路并行
 ```
 
 ---
