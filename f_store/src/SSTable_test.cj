@@ -1208,4 +1208,53 @@ public class SSTableTest {
         reopened.close()
         remove(dir, recursive: true)
     }
+
+    /** 验证 Footer 持久化的 sequenceStart/End 在 open 后正确恢复（P3 修复验证） */
+    @TestCase
+    public func sstableSequenceRangePersistsAfterOpen(): Unit {
+        let dir = "/tmp/f_store_test/sst_seq_range"
+        if (exists(dir)) { remove(dir, recursive: true) }
+        Directory.create(dir, recursive: true)
+
+        let path = "${dir}/L0_1.sst"
+        let sst = SSTable(path, 10)
+        sst.write(ByteArray([0x01u8]), EntryValue(Some([0xA1u8]), 10))
+        sst.write(ByteArray([0x02u8]), EntryValue(Some([0xA2u8]), 20))
+        sst.write(ByteArray([0x03u8]), EntryValue(Some([0xA3u8]), 30))
+        let meta = sst.finishWrite()
+        @Expect(meta.sequenceStart == 10)
+        @Expect(meta.sequenceEnd == 30)
+        sst.close()
+
+        // 重新打开后验证 sequence 范围恢复
+        let sst2 = SSTable.open(path)
+        let meta2 = sst2.getMetadata()
+        @Expect(meta2.sequenceStart == 10)
+        @Expect(meta2.sequenceEnd == 30)
+
+        sst2.close()
+        remove(dir, recursive: true)
+    }
+
+    /** 验证 0 条 entry 的 SSTable 在 SSTable.open() 后不崩溃（P2 防御性守卫验证）。
+     *  finishWrite 后 close，再 SSTable.open() 应能正常读取空文件。 */
+    @TestCase
+    public func sstableOpenEmptyFileNoCrash(): Unit {
+        let dir = "/tmp/f_store_test/sst_open_empty"
+        if (exists(dir)) { remove(dir, recursive: true) }
+        Directory.create(dir, recursive: true)
+
+        let path = "${dir}/L0_0.sst"
+        let sst = SSTable(path, 1)
+        // 不写入任何 entry，直接 finishWrite
+        sst.finishWrite()
+        sst.close()
+
+        // SSTable.open() 应不崩溃，且返回的空 SSTable 可正常 get
+        let reopened = SSTable.open(path)
+        @Expect(reopened.getMetadata().entryCount == 0)
+        @Expect(reopened.get(ByteArray([0x01u8])).isNone())
+        reopened.close()
+        remove(dir, recursive: true)
+    }
 }

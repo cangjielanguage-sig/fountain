@@ -35,8 +35,9 @@ package fountain::f_store
  * Bloom Filter Block:
  *   n(8) + p(8 bytes float64) + seed_count(8) + [seed(8)]... + bit_count(8) + [bits(8)]...
  *
- * Footer (48 bytes):
- *   index_offset(8) + index_size(8) + bloom_offset(8) + bloom_size(8) + entry_count(8) + magic(8)
+ * Footer (64 bytes):
+ *   index_offset(8) + index_size(8) + bloom_offset(8) + bloom_size(8)
+ *   + entry_count(8) + magic(8) + sequence_start(8) + sequence_end(8)
  *   magic = 0x53545354 ("STST" in ASCII)
  *
  * 生命周期:
@@ -83,7 +84,9 @@ class SSTable <: Resource {
     private var fd: Int32 = 0
 
     static let MAX_SSTABLE_SIZE: Int64 = 64 * 1024 * 1024 // 64MB
-    static let FOOTER_SIZE: Int64 = 48
+    // Footer: index_offset(8) + index_size(8) + bloom_offset(8) + bloom_size(8)
+    //        + entry_count(8) + magic(8) + sequence_start(8) + sequence_end(8)
+    static let FOOTER_SIZE: Int64 = 64
     static let MAGIC: UInt64 = 0x53545354u64
 
     /** 写入模式构造：创建新 SSTable 文件 */
@@ -354,7 +357,7 @@ class SSTable <: Resource {
         if (fileLen < FOOTER_SIZE) {
             throw Exception("SSTable file too small: " + path)
         }
-        // 1. 读取 Footer (最后 48 bytes)
+        // 1. 读取 Footer (最后 64 bytes)
         let footerBuf = Array<Byte>(FOOTER_SIZE, repeat: 0u8)
         file.seek(SeekPosition.Begin(fileLen - FOOTER_SIZE))
         file.read(footerBuf)
@@ -367,6 +370,8 @@ class SSTable <: Resource {
         if (magic != MAGIC) {
             throw Exception("SSTable magic mismatch: " + path)
         }
+        let seqStart = readInt64LE(footerBuf, 48)
+        let seqEnd = readInt64LE(footerBuf, 56)
         // 2. 读取 Index Block
         let indexBuf = Array<Byte>(idxSz, repeat: 0u8)
         file.seek(SeekPosition.Begin(idxOff))
@@ -393,7 +398,11 @@ class SSTable <: Resource {
             file.seek(SeekPosition.Begin(bloomOff))
             file.read(bloomBuf)
         }
-        let filter = parseBloomFilter(bloomBuf)
+        let filter = if (bloomBuf.size > 0) {
+            parseBloomFilter(bloomBuf)
+        } else {
+            BloomFilter.new(0, 0.01)
+        }
         // 4. 重建 metadata
         let firstKey = if (indexEntries.size > 0) { indexEntries[0].firstKey } else { ByteArray([]) }
         let lastIdx = indexEntries.size - 1
@@ -401,7 +410,7 @@ class SSTable <: Resource {
         // 从文件名 L{level}_{sstIndex}.sst 解析 level
         let actualLevel = parseLevelFromSSTablePath(path)
         let meta = SSTableMetadata(
-            firstKey, lastKey, eCount, actualLevel, 0, Int64.Max, path, fileSize: fileLen
+            firstKey, lastKey, eCount, actualLevel, seqStart, seqEnd, path, fileSize: fileLen
         )
         SSTable(path, file, filter, indexEntries, meta, idxOff)
     }
@@ -619,8 +628,9 @@ class SSTable <: Resource {
         totalSize
     }
 
-    /** 写 Footer (48 bytes):
-     *  index_offset(8) + index_size(8) + bloom_offset(8) + bloom_size(8) + entry_count(8) + magic(8)
+    /** 写 Footer (64 bytes):
+     *  index_offset(8) + index_size(8) + bloom_offset(8) + bloom_size(8)
+     *  + entry_count(8) + magic(8) + sequence_start(8) + sequence_end(8)
      */
     private func writeFooter(indexOffset: Int64, indexSize: Int64, bloomOffset: Int64, bloomSize: Int64): Unit {
         let buf = Array<Byte>(FOOTER_SIZE, repeat: 0u8)
@@ -631,6 +641,8 @@ class SSTable <: Resource {
         offset = writeInt64LE(buf, offset, bloomSize)
         offset = writeInt64LE(buf, offset, entryCount)
         offset = writeUInt64LE(buf, offset, MAGIC)
+        offset = writeInt64LE(buf, offset, sequenceStart)
+        offset = writeInt64LE(buf, offset, sequenceEnd)
         file.write(buf)
         currentOffset += FOOTER_SIZE
         fileSize += FOOTER_SIZE

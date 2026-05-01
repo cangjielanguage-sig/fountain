@@ -65,6 +65,11 @@ class LevelManager {
     /** 从 L0 到 Ln 逐层查找 key，含过期检查 */
     func get(key: ByteArray): ?EntryValue {
         let now = DateTime.now().toUnixTimeStamp().toNanoseconds()
+        get(key, now)
+    }
+
+    /** 从 L0 到 Ln 逐层查找 key，含过期检查（使用调用方传入的 now） */
+    func get(key: ByteArray, now: Int64): ?EntryValue {
         for (level in 0..levelCount) {
             let result = getInLevel(level, key, now)
             if (result.isSome()) {

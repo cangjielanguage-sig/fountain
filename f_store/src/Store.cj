@@ -165,7 +165,7 @@ public class Store <: Resource {
             }
         }
         // 查 LevelManager
-        if (let Some(entry) <- levelManager.get(keyBytes)) {
+        if (let Some(entry) <- levelManager.get(keyBytes, now)) {
             return checkExpiryAndGet(entry, now)
         }
         None
