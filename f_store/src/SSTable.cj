@@ -67,8 +67,14 @@ class SSTable <: Resource {
     private var indexOffset: Int64  // Index Block 起始偏移（即 Data Block 终止边界）
 
     // === 状态管理 ===
-    private var state: SSTableState
+    private let state: AtomicInt64
     private let closed: AtomicBool
+
+    // 状态常量（AtomicInt64 替代 AtomicReference，因为 enum 是值类型）
+    static const STATE_WRITING: Int64 = 0
+    static const STATE_READABLE: Int64 = 1
+    static const STATE_CLOSED: Int64 = 2
+
     /** 非 Linux: 保护 seek+read 原子性 */
     @When[os != "Linux"]
     private let getLock: Mutex = Mutex()
@@ -102,7 +108,7 @@ class SSTable <: Resource {
         this.sequenceEnd = Int64.Min
         this.metadata = None
         this.indexOffset = 0
-        this.state = SSTableState.Writing
+        this.state = AtomicInt64(STATE_WRITING)
         this.closed = AtomicBool(false)
         @When[os == "Linux"]
         let _ = (this.fd = Int32(this.file.fileDescriptor.fileHandle))
@@ -127,7 +133,7 @@ class SSTable <: Resource {
         this.sequenceEnd = metadata.sequenceEnd
         this.metadata = Some(metadata)
         this.indexOffset = indexOffset
-        this.state = SSTableState.Readable
+        this.state = AtomicInt64(STATE_READABLE)
         this.closed = AtomicBool(false)
         @When[os == "Linux"]
         let _ = {=>
@@ -235,7 +241,7 @@ class SSTable <: Resource {
         this.metadata = Some(meta)
         this.indexOffset = indexOffset
         // 切换到读取模式
-        state = SSTableState.Readable
+        state.store(STATE_READABLE)
         meta
     }
 
@@ -451,7 +457,7 @@ class SSTable <: Resource {
     /** 关闭 SSTable，释放所有资源 */
     public func close(): Unit {
         if (closed.compareAndSwap(false, true)) {
-            state = SSTableState.Closed
+            state.store(STATE_CLOSED)
             // 非 Linux: 等待所有 in-progress get 完成后再关闭文件
             // synchronized 块为空，仅通过锁获取保证等锁
             @When[os != "Linux"]
@@ -472,14 +478,14 @@ class SSTable <: Resource {
 
     /** 检查 Writing 状态 */
     private func guardWriting(): Unit {
-        if (state != SSTableState.Writing) {
+        if (state.load() != STATE_WRITING) {
             throw StoreClosedException()
         }
     }
 
     /** 检查 Readable 状态 */
     private func guardReadable(): Unit {
-        if (state != SSTableState.Readable) {
+        if (state.load() != STATE_READABLE) {
             throw StoreClosedException()
         }
     }
