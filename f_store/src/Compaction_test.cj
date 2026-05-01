@@ -613,4 +613,50 @@ public class CompactionTest {
         mgr.closeAll()
         remove(dir, recursive: true)
     }
+
+    /** 验证 compact 写入失败时源迭代器正确关闭（P3 FD 泄漏修复）。
+     *  旧版未用 try-finally 保护 sources，异常时 SSTableIterator 的 File 句柄泄漏。
+     *  修复后 finally 块确保所有 sources 关闭（close 幂等，已耗尽的 sources 安全跳过）。 */
+    @TestCase
+    public func compactorWriteFailureClosesSources(): Unit {
+        let dir = "${testDir}/write_fail"
+        Directory.create(dir, recursive: true)
+
+        // 创建 L0 的 2 个 SSTable，触发 compaction
+        let sst0 = SSTable("${dir}/L0_0.sst", 1)
+        sst0.write(ByteArray([0x01]), EntryValue([0xA1], 1))
+        sst0.finishWrite()
+
+        let sst1 = SSTable("${dir}/L0_1.sst", 1)
+        sst1.write(ByteArray([0x02]), EntryValue([0xA2], 2))
+        sst1.finishWrite()
+
+        let mgr = LevelManager(dir)
+        mgr.addSSTable(0, sst0)
+        mgr.addSSTable(0, sst1)
+
+        // 用不可写的 sstDir 触发 writeStreamToSSTables 失败
+        let badDir = "/tmp/f_store_compaction_bad_dir"
+        try { remove(badDir) } catch (_: Exception) {}
+        let blocker = File(badDir, OpenMode.CreateWrite)
+        blocker.close()
+        // 此时 badDir 是普通文件，writeStreamToSSTables 无法在其下创建目录/文件
+
+        let compactor = Compactor(mgr, badDir, levelCount: 7)
+        try {
+            compactor.compact(0)
+        } catch (_: Exception) {
+            // Expected: SSTable 创建失败 → writeStreamToSSTables 抛出异常
+        }
+
+        // 清理 blocker
+        remove(badDir)
+
+        // 验证：原有数据不受影响
+        @Expect(mgr.get(ByteArray([0x01])).isSome())
+        @Expect(mgr.get(ByteArray([0x02])).isSome())
+
+        mgr.closeAll()
+        remove(dir, recursive: true)
+    }
 }

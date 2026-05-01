@@ -138,34 +138,45 @@ class Compactor {
         for (sst in overlappingSSTables) {
             sources.add(PeekableIterator(sst.iterator()))
         }
-        let merger = SSTableMerger(sources, isBottomLevel: isBottomLevel)
 
-        // 5. 归并写入新 SSTable
-        let newSSTables = writeStreamToSSTables(merger, sstDir, nextLevel)
+        try {
+            let merger = SSTableMerger(sources, isBottomLevel: isBottomLevel)
 
-        if (newSSTables.size == 0) {
-            return
-        }
+            // 5. 归并写入新 SSTable
+            let newSSTables = writeStreamToSSTables(merger, sstDir, nextLevel)
 
-        // 6. 原子替换：先加新 SSTable，再删旧的
-        for (sst in newSSTables) {
-            levelManager.addSSTable(nextLevel, sst)
-        }
-        levelManager.removeSSTables(level, selectedSSTables)
-        levelManager.removeSSTables(nextLevel, overlappingSSTables)
+            if (newSSTables.size == 0) {
+                return
+            }
 
-        // 7. 删除旧 SSTable 文件
-        for (sst in selectedSSTables) {
-            try {
-                sst.close()
-                remove(sst.getMetadata().filePath)
-            } catch (_: Exception) {}
-        }
-        for (sst in overlappingSSTables) {
-            try {
-                sst.close()
-                remove(sst.getMetadata().filePath)
-            } catch (_: Exception) {}
+            // 6. 原子替换：先加新 SSTable，再删旧的
+            for (sst in newSSTables) {
+                levelManager.addSSTable(nextLevel, sst)
+            }
+            levelManager.removeSSTables(level, selectedSSTables)
+            levelManager.removeSSTables(nextLevel, overlappingSSTables)
+
+            // 7. 删除旧 SSTable 文件
+            for (sst in selectedSSTables) {
+                try {
+                    sst.close()
+                    remove(sst.getMetadata().filePath)
+                } catch (_: Exception) {}
+            }
+            for (sst in overlappingSSTables) {
+                try {
+                    sst.close()
+                    remove(sst.getMetadata().filePath)
+                } catch (_: Exception) {}
+            }
+        } finally {
+            // 关闭所有源迭代器，防止异常时 FD 泄漏。
+            // 正常路径下迭代器已耗尽自动关闭（close 为幂等操作）。
+            for (src in sources) {
+                try {
+                    src.close()
+                } catch (_: Exception) {}
+            }
         }
     }
 }
