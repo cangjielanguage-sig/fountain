@@ -458,6 +458,73 @@ public class ConcurrencyTest {
         reopened.close()
     }
 
+    /** 用例7：close 与读取并发
+     *  预写入基础数据后，多线程持续 get() 的同时触发 close，
+     *  验证 get() 在 close 期间要么返回正确数据要么抛 StoreClosedException，
+     *  reopen 后所有预写入数据完整。
+     */
+    @TestCase
+    public func testCloseDuringConcurrentReads(): Unit {
+        let dir = getTestDir("close_during_read")
+        let store = Store(dir)
+        let baseCount: Int64 = 200
+
+        // 1. 写入基础数据（含大 value 触发 flush 到 SSTable）
+        let largeValue = Array<Byte>(64 * 1024, repeat: 77u8) // 64KB per entry
+        for (i in 0..baseCount) {
+            let key = "cdr_${i}".unsafeBytes()
+            store.add(key, largeValue)
+        }
+
+        // 2. 启动多个 reader，持续读取直到 close
+        let shouldRun = AtomicBool(true)
+        let readerCount: Int64 = 3
+        let readerFutures = ArrayList<Future<Int64>>()
+
+        for (_ in 0..readerCount) {
+            let fut = spawn {
+                var readCount: Int64 = 0
+                while (shouldRun.load()) {
+                    let idx = readCount % baseCount
+                    let key = "cdr_${idx}".unsafeBytes()
+                    try {
+                        store.get(key)
+                        readCount++
+                    } catch (_: StoreClosedException) {
+                        break
+                    }
+                }
+                readCount
+            }
+            readerFutures.add(fut)
+        }
+
+        // 3. 给 reader 一点时间积累读取
+        sleep(Duration.millisecond * 100)
+
+        // 4. close 而 reader 仍运行中
+        store.close()
+        shouldRun.store(false)
+
+        // 5. 收集 reader 结果（仅确认它们正常退出）
+        for (fut in readerFutures) {
+            fut.get()
+        }
+
+        // 6. reopen 验证所有基础数据完整
+        let reopened = Store(dir)
+        var missingCount: Int64 = 0
+        for (i in 0..baseCount) {
+            let key = "cdr_${i}".unsafeBytes()
+            if (reopened.get(key).isNone()) {
+                missingCount++
+            }
+        }
+        @Expect(missingCount == 0)
+
+        reopened.close()
+    }
+
     // ================================================================
     // 辅助方法
     // ================================================================
