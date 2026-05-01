@@ -18,102 +18,81 @@ package fountain::f_store
 import std.collection.ArrayList
 import std.time.DateTime
 
-/** 前缀遍历迭代器 — 从多个有序源中归并遍历指定前缀的键值对 */
+/** 前缀遍历迭代器 — 从多个有序源中归并遍历指定前缀的键值对。
+ *  用 PriorityQueue（二叉堆）替代线性扫描，从 O(n) 降至 O(log n)。 */
 public class PrefixIterator <: Iterator<(Array<Byte>, Array<Byte>)> & Resource {
     private let prefix: ByteArray
     private let sources: ArrayList<PeekableIterator<(ByteArray, EntryValue)>>
-    /** 当前所有 sources 中最小的 peek key，初始化时计算，每次 next 后更新 */
-    private var currentMinKey: ?ByteArray
+    private let heap: PriorityQueue<MergeHeapEntry>
     private var drained: Bool = false
 
     init(prefix: ByteArray, sources: ArrayList<PeekableIterator<(ByteArray, EntryValue)>>) {
         this.prefix = prefix
         this.sources = sources
-        this.currentMinKey = None
-        this.currentMinKey = findMinKey()
-    }
-
-    /** 扫描所有 sources，找到当前最小的 peek key */
-    private func findMinKey(): ?ByteArray {
-        var minKey: ?ByteArray = None
-        for (src in sources) {
-            if (let Some((k, _)) <- src.peek()) {
-                if (let Some(mk) <- minKey) {
-                    if (k < mk) {
-                        minKey = Some(k)
-                    }
-                } else {
-                    minKey = Some(k)
-                }
+        this.heap = PriorityQueue<MergeHeapEntry>(mergeHeapCmp)
+        for (i in 0..sources.size) {
+            if (let Some((key, _)) <- sources[i].peek()) {
+                heap.add(MergeHeapEntry(key, i))
             }
         }
-        minKey
     }
 
     public func next(): Option<(Array<Byte>, Array<Byte>)> {
-        while (let Some(mk) <- currentMinKey) {
-            // 不再以 prefix 开头 → 遍历结束
-            if (!startsWith(mk, prefix)) {
+        while (true) {
+            if (let Some(minEntry) <- heap.remove()) {
+                let currentKey = minEntry.key
+                let idx = minEntry.sourceIndex
+
+                // 不再以 prefix 开头 → 遍历结束
+                if (!startsWith(currentKey, prefix)) {
+                    close()
+                    return None
+                }
+
+                // 从该源取出当前条目
+                if (let Some((_, entry)) <- sources[idx].next()) {
+                    // 该源还有更多则重新入堆
+                    if (let Some((nextKey, _)) <- sources[idx].peek()) {
+                        heap.add(MergeHeapEntry(nextKey, idx))
+                    }
+
+                    // 收集所有同 key 的其他源，取最高 sequence
+                    var bestEntry = entry
+                    var bestSeq = entry.sequence
+                    while (let Some(nextEntry) <- heap.peek()) {
+                        if (nextEntry.key != currentKey) {
+                            break
+                        }
+                        heap.remove()
+                        let otherIdx = nextEntry.sourceIndex
+                        if (let Some((_, otherEntry)) <- sources[otherIdx].next()) {
+                            if (otherEntry.sequence > bestSeq) {
+                                bestSeq = otherEntry.sequence
+                                bestEntry = otherEntry
+                            }
+                        }
+                        if (let Some((nextKey, _)) <- sources[otherIdx].peek()) {
+                            heap.add(MergeHeapEntry(nextKey, otherIdx))
+                        }
+                    }
+
+                    // 跳过 tombstone / 过期数据
+                    if (bestEntry.value.isNone()) {
+                        continue
+                    }
+                    if (let Some(expireAt) <- bestEntry.expireAt) {
+                        if (expireAt <= DateTime.now().toUnixTimeStamp().toNanoseconds()) {
+                            continue
+                        }
+                    }
+                    return Some((currentKey.bytes, bestEntry.value.getOrThrow()))
+                }
+            } else {
+                // 堆已空，所有源耗尽
                 close()
                 return None
             }
-
-            // 收集所有 peek == mk 的条目，推进对应 source，同时计算下一个 minKey
-            var bestEntry: ?EntryValue = None
-            var nextMinKey: ?ByteArray = None
-            for (src in sources) {
-                if (let Some((k, entry)) <- src.peek()) {
-                    if (k == mk) {
-                        // 取 sequence 最高的
-                        if (let Some(be) <- bestEntry) {
-                            if (entry.sequence > be.sequence) {
-                                bestEntry = Some(entry)
-                            }
-                        } else {
-                            bestEntry = Some(entry)
-                        }
-                        // 推进此迭代器
-                        src.next()
-                        // 推进后新 peek 值作为下一个 minKey 候选
-                        if (let Some((nextK, _)) <- src.peek()) {
-                            if (let Some(nmk) <- nextMinKey) {
-                                if (nextK < nmk) {
-                                    nextMinKey = Some(nextK)
-                                }
-                            } else {
-                                nextMinKey = Some(nextK)
-                            }
-                        }
-                    } else {
-                        // k != mk，作为下一个 minKey 候选
-                        if (let Some(nmk) <- nextMinKey) {
-                            if (k < nmk) {
-                                nextMinKey = Some(k)
-                            }
-                        } else {
-                            nextMinKey = Some(k)
-                        }
-                    }
-                }
-            }
-
-            // 缓存下一个 minKey，下次调用直接使用
-            currentMinKey = nextMinKey
-
-            // 跳过 tombstone / 过期数据
-            if (let Some(entry) <- bestEntry) {
-                if (entry.value.isNone()) {
-                    continue
-                }
-                if (let Some(expireAt) <- entry.expireAt) {
-                    if (expireAt <= DateTime.now().toUnixTimeStamp().toNanoseconds()) {
-                        continue
-                    }
-                }
-                return Some((mk.bytes, entry.value.getOrThrow()))
-            }
         }
-        close()
         None
     }
 
