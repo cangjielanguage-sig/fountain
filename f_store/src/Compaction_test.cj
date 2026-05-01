@@ -569,4 +569,48 @@ public class CompactionTest {
         remove(dir, recursive: true)
     }
 
+    /** 验证 L0 有大量文件时 compaction 仅选最多 4 个（P2-2 修复验证）。
+     *  旧版 L0 全选所有文件，新版从末尾选最多 4 个。 */
+    @TestCase
+    public func compactorL0SelectsAtMostFour(): Unit {
+        let dir = "${testDir}/l0_limit"
+        Directory.create(dir, recursive: true)
+
+        // 创建 6 个 L0 SSTable
+        let ssts = ArrayList<SSTable>()
+        for (i in 0..6) {
+            let sst = SSTable("${dir}/L0_${i}.sst", 1)
+            sst.write(ByteArray([UInt8(i + 1)]), EntryValue([UInt8(0xA0 + i)], Int64(i + 1)))
+            sst.finishWrite()
+            ssts.add(sst)
+        }
+
+        let mgr = LevelManager(dir)
+        for (sst in ssts) {
+            mgr.addSSTable(0, sst)
+        }
+        @Expect(mgr.getSSTablesForCompaction(0).size == 6)
+
+        // compact L0 → compaction 只选 4 个，剩余 2 个仍在 L0
+        let compactor = Compactor(mgr, dir, levelCount: 7)
+        compactor.compact(0)
+
+        // L0 应剩余 2 个（未被选中的）
+        // 注意：compact(0) 会合并 selected 部分到 L1，原 selected 从 L0 移除
+        let remainingL0 = mgr.getSSTablesForCompaction(0)
+        @Expect(remainingL0.size == 2)
+
+        // L1 应有新合并的 SSTable
+        let l1Count = mgr.getSSTablesForCompaction(1).size
+        @Expect(l1Count > 0)
+
+        // 全部 6 个 key 仍可读（部分在 L0 剩余，部分在 L1 新文件）
+        for (i in 0..6) {
+            let v = mgr.get(ByteArray([UInt8(i + 1)]))
+            @Expect(v.isSome())
+        }
+
+        mgr.closeAll()
+        remove(dir, recursive: true)
+    }
 }

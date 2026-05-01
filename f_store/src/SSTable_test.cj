@@ -1081,4 +1081,68 @@ public class SSTableTest {
         @Expect(parseLevelFromSSTablePath("/tmp/compact_40.sst") == 0)
         @Expect(parseSSTIndexFromPath("/tmp/compact_40.sst") == 0)
     }
+
+    /** 验证 scanBuffer 帧校验检测损坏数据（P2-1 修复验证）。
+     *  创建 SSTable 后手动篡改文件内容，重开后 get() 应返回 None
+     *  而非扫描损坏数据返回错误结果。 */
+    @TestCase
+    public func sstableScanBufferDetectsCorruptedData(): Unit {
+        let dir = "/tmp/f_store_test/sst_corrupt"
+        if (exists(dir)) { remove(dir, recursive: true) }
+        Directory.create(dir, recursive: true)
+
+        // 创建 SSTable
+        let path = "${dir}/L0_1.sst"
+        let sst = SSTable(path, 10)
+        sst.write(ByteArray([0x01]), EntryValue([0xA1], 1))
+        sst.write(ByteArray([0x02]), EntryValue([0xB2], 2))
+        sst.write(ByteArray([0x03]), EntryValue([0xC3], 3))
+        sst.finishWrite()
+        @Expect(sst.get(ByteArray([0x01])).isSome())
+        @Expect(sst.get(ByteArray([0x02])).isSome())
+        @Expect(sst.get(ByteArray([0x03])).isSome())
+        sst.close()
+
+        // 在数据区域写入损坏数据（将第 5 个字节改为负值 → 帧校验应检测到）
+        let file = File(path, OpenMode.ReadWrite)
+        file.seek(SeekPosition.Begin(4))
+        file.write([0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF])  // 覆盖 key_len = -1
+        file.close()
+
+        // 重开 SSTable，损坏的数据块应被帧校验跳过
+        let reopened = SSTable.open(path)
+        @Expect(reopened.get(ByteArray([0x01])).isNone())
+
+        reopened.close()
+        remove(dir, recursive: true)
+    }
+
+    /** 验证 scanBuffer 帧校验跳过 value_len < -1 的损坏记录 */
+    @TestCase
+    public func sstableScanBufferRejectsInvalidValueLen(): Unit {
+        let dir = "/tmp/f_store_test/sst_invalid_vlen"
+        if (exists(dir)) { remove(dir, recursive: true) }
+        Directory.create(dir, recursive: true)
+
+        let path = "${dir}/L0_1.sst"
+        let sst = SSTable(path, 5)
+        sst.write(ByteArray([0x01]), EntryValue([0xA1], 1))
+        sst.finishWrite()
+        sst.close()
+
+        // 在数据块中设置 value_len = -2（非法值）
+        let file = File(path, OpenMode.ReadWrite)
+        file.seek(SeekPosition.Begin(8))  // key_len 之后即 value_len
+        file.write([0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF])  // value_len = -1 (tombstone 是合法的)
+        // 改为更负的值 -2：writeInt64LE 写入 -2
+        file.seek(SeekPosition.Begin(8))
+        file.write([0xFE, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF])
+        file.close()
+
+        let reopened = SSTable.open(path)
+        @Expect(reopened.get(ByteArray([0x01])).isNone())
+
+        reopened.close()
+        remove(dir, recursive: true)
+    }
 }

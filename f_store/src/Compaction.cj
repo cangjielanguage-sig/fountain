@@ -101,16 +101,11 @@ class Compactor {
         if (levelSSTables.size == 0) {
             return
         }
-        // L0: 全部选择；Ln(n≥1): 只选部分（此处简单选前 4 个）
-        let selectedSSTables: ArrayList<SSTable>
-        if (level == 0) {
-            selectedSSTables = levelSSTables
-        } else {
-            selectedSSTables = ArrayList<SSTable>()
-            let pickCount = if (levelSSTables.size > 4) { 4 } else { levelSSTables.size }
-            for (i in 0..pickCount) {
-                selectedSSTables.add(levelSSTables[i])
-            }
+        // 从末尾开始选（新文件在末尾，数据最新），最多 4 个
+        let selectedSSTables = ArrayList<SSTable>()
+        let pickCount = if (levelSSTables.size > 4) { 4 } else { levelSSTables.size }
+        for (i in (levelSSTables.size - pickCount)..levelSSTables.size) {
+            selectedSSTables.add(levelSSTables[i])
         }
         if (selectedSSTables.size == 0) {
             return

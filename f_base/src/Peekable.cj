@@ -15,11 +15,11 @@ limitations under the License.
 */
 package fountain::f_base
 
-public class PeekableIterator<T> <: Iterator<T> {
+public class PeekableIterator<T> <: Iterator<T> & Resource {
     private var peek_ = None<T>
     public PeekableIterator(private let itr: Iterator<T>){}
 
-    public func next(): ?T {
+    public func next(): Option<T> {
         if(peek_.isSome()){
             let p = peek_
             peek_ = None<T>
@@ -33,6 +33,21 @@ public class PeekableIterator<T> <: Iterator<T> {
             peek_ = itr.next()
         }
         peek_
+    }
+
+    /** 关闭底层迭代器（如果实现了 Resource 接口） */
+    public func close(): Unit {
+        match (itr) {
+            case r: Resource => r.close()
+            case _ => ()
+        }
+    }
+
+    public func isClosed(): Bool {
+        match (itr) {
+            case r: Resource => r.isClosed()
+            case _ => true
+        }
     }
 }
 public interface Peekable<T>{

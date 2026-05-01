@@ -535,6 +535,16 @@ class SSTable <: Resource {
             let valueLen = readInt64LE(buf, offset + 8)
             let seq = readInt64LE(buf, offset + 16)
             let expireAt = readInt64LE(buf, offset + 24)
+            // 帧校验：检测损坏/僵尸数据
+            if (keyLen < 0 || keyLen > 1024 * 1024) {
+                break
+            }
+            if (valueLen < -1) {
+                break
+            }
+            if (seq < 0) {
+                break
+            }
             let actualValueLen = if (valueLen >= 0) { valueLen } else { 0 }
             let headerEnd = offset + 32
             if (headerEnd > blockSize) {

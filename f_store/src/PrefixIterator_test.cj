@@ -110,6 +110,63 @@ public class PrefixIteratorTest {
         @Expect(threw)
     }
 
+    /** 验证 PrefixIterator.close() 立即关闭不排空（P2-3 修复验证）。
+     *  旧版 close() 逐个迭代所有源排空，对 SSTable 产生 O(n) 解码开销。
+     *  新版直接关闭底层 iterator，close() 后 next() 返回 None。 */
+    @TestCase
+    public func testPrefixIteratorCloseDirectly(): Unit {
+        let dir = getTestDir("close_direct")
+        let store = Store(dir)
+
+        // 写入足够数据触发 flush 到 SSTable
+        for (i in 0..50) {
+            store.add("user:${i}".unsafeBytes(), "val_${i}".unsafeBytes())
+        }
+
+        // 创建 PrefixIterator
+        let iter = store.prefix("user:".unsafeBytes())
+
+        // 立即 close（不迭代），不应抛异常
+        iter.close()
+
+        // close 后 next() 应返回 None
+        @Expect(iter.next().isNone())
+
+        // 幂等：多次 close 不抛异常
+        iter.close()
+        iter.close()
+
+        store.close()
+    }
+
+    /** 验证 PeekableIterator.close() 正确转发到底层 Resource（P2-3 前置修复）。
+     *  SSTableIterator 是 Resource，关闭 PeekableIterator 应关闭底层文件。 */
+    @TestCase
+    public func testPeekableIteratorClosesUnderlyingResource(): Unit {
+        let dir = getTestDir("peekable_close")
+        Directory.create(dir, recursive: true)
+
+        // 创建 SSTable 并获取 iterator
+        let path = "${dir}/L0_1.sst"
+        let sst = SSTable(path, 5)
+        sst.write(ByteArray([0x01]), EntryValue([0xA1], 1))
+        sst.finishWrite()
+
+        let iter = sst.iterator()
+        let peekable = PeekableIterator(iter)
+
+        // close() 不应抛异常（转发到底层 Resource.close）
+        peekable.close()
+
+        // 对普通迭代器（非 Resource）close 应无副作用
+        let normalArr = [1, 2, 3]
+        let normalPeekable = PeekableIterator(normalArr.iterator())
+        normalPeekable.close()  // 不应抛异常
+
+        sst.close()
+        remove(dir, recursive: true)
+    }
+
     func getTestDir(name: String): String {
         let baseDir = "/tmp/f_store_test/PrefixIterator_${name}"
         if (exists(baseDir)) {

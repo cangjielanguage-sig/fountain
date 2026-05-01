@@ -38,6 +38,9 @@ public class PrefixIterator <: Iterator<(Array<Byte>, Array<Byte>)> & Resource {
     }
 
     public func next(): Option<(Array<Byte>, Array<Byte>)> {
+        if (drained) {
+            return None
+        }
         while (true) {
             if (let Some(minEntry) <- heap.remove()) {
                 let currentKey = minEntry.key
@@ -96,15 +99,15 @@ public class PrefixIterator <: Iterator<(Array<Byte>, Array<Byte>)> & Resource {
         None
     }
 
-    /** 排空所有源，触发 SSTableIterator 自动关闭。实现 Resource 接口。
-     *  耗尽或提前退出时自动调用；外部也可用 try-with-resource 提前关闭。 */
+    /** 直接关闭所有源迭代器（避免逐个排空的 O(n) 解码开销）。
+     *  实现 Resource 接口。耗尽或提前退出时自动调用；外部也可用 try-with-resource 提前关闭。 */
     public func close(): Unit {
         if (drained) {
             return
         }
         drained = true
         for (src in sources) {
-            while (src.next().isSome()) {}
+            src.close()
         }
     }
 

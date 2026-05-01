@@ -42,17 +42,21 @@
 
 ## P2（中等 — 可选）
 
-### P2-1: Compaction 关闭/删除顺序风险
+### P2-1: Compaction 关闭/删除顺序风险 ✅
 - **文件**: Compaction.cj:146-165
 - **问题**: 新 SSTable 加入 LevelManager 后，并发 get() 的快照引用旧 SSTable 的同时文件被删除。pread 失败 → guardNotClosed() 抛异常 或 scanBuffer 无帧校验静默返回 None
-- **建议**: scanBuffer 增加帧校验（value_len/sequence 合理性检查）
+- **修复**: scanBuffer 增加帧校验（keyLen ≥0、valueLen ≥ -1、sequence ≥ 0）
+- **版本**: 此前 P1 已将 guardNotClosed() 改为返回 None，配合帧校验提供双重防御
+- **测试**: `SSTableTest.sstableScanBufferDetectsCorruptedData` / `SSTableTest.sstableScanBufferRejectsInvalidValueLen`
 
-### P2-2: Compaction L0 全选
+### P2-2: Compaction L0 全选 ✅
 - **文件**: Compaction.cj:97-98
 - **问题**: L0 compaction 选择全部文件。P0-1 触发后 L0 可能数十个文件，合并瞬时大量 FD 占用
-- **建议**: L0 也限制 select 数量（`max(4, size)`）
+- **修复**: L0/Ln 统一从末尾选最多 4 个（新文件优先合并）
+- **测试**: `CompactionTest.compactorL0SelectsAtMostFour`
 
-### P2-3: PrefixIterator.close() 排空开销
-- **文件**: PrefixIterator.cj:106-108
+### P2-3: PrefixIterator.close() 排空开销 ✅
+- **文件**: PrefixIterator.cj:106-108 + f_base/src/Peekable.cj
 - **问题**: close() 通过 `while (src.next().isSome()) {}` 排空所有源，对 64MB SSTable 产生 ~100ms 延迟
-- **建议**: PrefixIterator 直接持有 SSTableIterator 引用并调 close()，跳过排空
+- **修复**: PeekableIterator 实现 Resource，PrefixIterator.close() 直接调 src.close() 跳过排空
+- **测试**: `PrefixIteratorTest.testPrefixIteratorCloseDirectly` / `PrefixIteratorTest.testPeekableIteratorClosesUnderlyingResource`
