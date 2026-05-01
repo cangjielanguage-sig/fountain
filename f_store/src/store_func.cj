@@ -12,7 +12,7 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
-*/
+ */
 package fountain::f_store
 
 // === 小端序读写工具（WAL 专用） ===
@@ -40,22 +40,15 @@ func writeInt64LE(buf: Array<Byte>, offset: Int64, value: Int64): Int64 {
 }
 
 func readUInt32LE(buf: Array<Byte>, offset: Int64): UInt32 {
-    UInt32(buf[offset]) |
-    (UInt32(buf[offset + 1]) << 8) |
-    (UInt32(buf[offset + 2]) << 16) |
-    (UInt32(buf[offset + 3]) << 24)
+    UInt32(buf[offset]) | (UInt32(buf[offset + 1]) << 8) | (UInt32(buf[offset + 2]) << 16) | (UInt32(buf[offset + 3]) <<
+        24)
 }
 
 @OverflowWrapping
 func readInt64LE(buf: Array<Byte>, offset: Int64): Int64 {
-    let v = (UInt64(buf[offset])) |
-    (UInt64(buf[offset + 1]) << 8) |
-    (UInt64(buf[offset + 2]) << 16) |
-    (UInt64(buf[offset + 3]) << 24) |
-    (UInt64(buf[offset + 4]) << 32) |
-    (UInt64(buf[offset + 5]) << 40) |
-    (UInt64(buf[offset + 6]) << 48) |
-    (UInt64(buf[offset + 7]) << 56)
+    let v = (UInt64(buf[offset])) | (UInt64(buf[offset + 1]) << 8) | (UInt64(buf[offset + 2]) << 16) | (UInt64(buf[offset +
+            3]) << 24) | (UInt64(buf[offset + 4]) << 32) | (UInt64(buf[offset + 5]) << 40) | (UInt64(buf[offset + 6]) <<
+        48) | (UInt64(buf[offset + 7]) << 56)
     v.toInt()
 }
 
@@ -75,14 +68,9 @@ func writeUInt64LE(buf: Array<Byte>, offset: Int64, value: UInt64): Int64 {
 }
 
 func readUInt64LE(buf: Array<Byte>, offset: Int64): UInt64 {
-    UInt64(buf[offset]) |
-    (UInt64(buf[offset + 1]) << 8) |
-    (UInt64(buf[offset + 2]) << 16) |
-    (UInt64(buf[offset + 3]) << 24) |
-    (UInt64(buf[offset + 4]) << 32) |
-    (UInt64(buf[offset + 5]) << 40) |
-    (UInt64(buf[offset + 6]) << 48) |
-    (UInt64(buf[offset + 7]) << 56)
+    UInt64(buf[offset]) | (UInt64(buf[offset + 1]) << 8) | (UInt64(buf[offset + 2]) << 16) | (UInt64(buf[offset + 3]) <<
+        24) | (UInt64(buf[offset + 4]) << 32) | (UInt64(buf[offset + 5]) << 40) | (UInt64(buf[offset + 6]) << 48) | (UInt64(buf[offset +
+            7]) << 56)
 }
 
 // === 定位读取 ===
@@ -106,8 +94,61 @@ func positionedRead(file: File, buf: Array<Byte>, offset: Int64): Bool {
 
 // === MemTable 刷盘 ===
 
+/** 从迭代器写入 SSTable 过程中发生的异常 */
+class SSTableWritingException <: BaseException {
+    public init(caused: Exception) {
+        super(caused)
+    }
+}
+
 /** 全局 SSTable 序列号，每次 flush 自增，确保文件名唯一 */
 let sstableFileSeq = AtomicInt64(0)
+
+/** 将有序迭代器的数据逐条写入 SSTable，满 64MB 自动创建新 SSTable。
+ *  返回所有已 finishWrite 的 SSTable 列表（Readable 状态）。
+ *  异常时自动关闭当前 writer 并删除孤儿文件。
+ */
+func writeStreamToSSTables(iter: Iterator<(ByteArray, EntryValue)>, sstDir: String, level: Int64): ArrayList<SSTable> {
+    let result = ArrayList<SSTable>()
+    if (!exists(sstDir)) {
+        Directory.create(sstDir, recursive: true)
+    }
+    var sstIndex: Int64 = sstableFileSeq.incrFetch()
+    var writerPath = "${sstDir}/L${level}_${sstIndex}.sst"
+    var writer = SSTable(writerPath, 64)
+    try {
+        while (let Some((key, entry)) <- iter.next()) {
+            writer.write(key, entry)
+            if (writer.isFull()) {
+                writer.finishWrite(level: level)
+                result.add(writer)
+                sstIndex++
+                writerPath = "${sstDir}/L${level}_${sstIndex}.sst"
+                writer = SSTable(writerPath, 64)
+            }
+        }
+        if (writer.getEntryCount() > 0) {
+            writer.finishWrite(level: level)
+            result.add(writer)
+        } else {
+            writer.close()
+        }
+    } catch (e: Exception) {
+        writer.close()
+        // 删除可能部分写入的孤儿文件
+        try {
+            if (exists(writerPath)) {
+                remove(writerPath)
+            }
+        } catch (e2: Exception) {
+            let thrown = SSTableWritingException(e2)
+            thrown.addSuppressed(e)
+            throw thrown
+        }
+        throw e
+    }
+    result
+}
 
 /** 将 immutable MemTable 刷盘为 SSTable 文件。
  *  遍历 MemTable 的有序迭代器，逐条写入 SSTable。
@@ -115,30 +156,7 @@ let sstableFileSeq = AtomicInt64(0)
  *  返回所有生成的 SSTable 列表（已 finishWrite，处于 Readable 状态）。
  */
 func flushMemTable(memTable: MemTable, sstDir: String, level: Int64): ArrayList<SSTable> {
-    let result = ArrayList<SSTable>()
-    if (!exists(sstDir)) {
-        Directory.create(sstDir, recursive: true)
-    }
-    var sstIndex: Int64 = sstableFileSeq.incrFetch()
-    var writer = SSTable("${sstDir}/L${level}_${sstIndex}.sst", 64)
-    let iter = memTable.iterator()
-    while (let Some((key, entry)) <- iter.next()) {
-        writer.write(key, entry)
-        if (writer.isFull()) {
-            writer.finishWrite()
-            result.add(writer)
-            sstIndex++
-            writer = SSTable("${sstDir}/L${level}_${sstIndex}.sst", 64)
-        }
-    }
-    // 最后一个 writer（可能写了数据也可能为空）
-    if (writer.getEntryCount() > 0) {
-        writer.finishWrite()
-        result.add(writer)
-    } else {
-        writer.close()
-    }
-    result
+    writeStreamToSSTables(memTable.iterator(), sstDir, level)
 }
 
 // === WAL 清理 ===
@@ -150,12 +168,13 @@ func cleanupOldWALFiles(walDir: String): Unit {
     if (!exists(walDir)) {
         return
     }
-    Directory.walk(walDir) { fi: FileInfo =>
-        if (fi.path.extensionName == "wal" && !fi.isDirectory()) {
-            try {
-                remove(fi.path.toString())
-            } catch (_: Exception) {}
-        }
-        true
+    Directory.walk(walDir) {
+        fi: FileInfo =>
+            if (fi.path.extensionName == "wal" && !fi.isDirectory()) {
+                try {
+                    remove(fi.path.toString())
+                } catch (_: Exception) {}
+            }
+            true
     }
 }

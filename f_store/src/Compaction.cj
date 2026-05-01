@@ -137,27 +137,7 @@ class Compactor {
         let merger = SSTableMerger(sources, isBottomLevel: isBottomLevel)
 
         // 5. 归并写入新 SSTable
-        if (!exists(sstDir)) {
-            Directory.create(sstDir, recursive: true)
-        }
-        let newSSTables = ArrayList<SSTable>()
-        var sstIndex: Int64 = sstableFileSeq.incrFetch()
-        var writer = SSTable("${sstDir}/L${nextLevel}_${sstIndex}.sst", 64)
-        while (let Some((key, entry)) <- merger.next()) {
-            writer.write(key, entry)
-            if (writer.isFull()) {
-                writer.finishWrite(level: nextLevel)
-                newSSTables.add(writer)
-                sstIndex++
-                writer = SSTable("${sstDir}/L${nextLevel}_${sstIndex}.sst", 64)
-            }
-        }
-        if (writer.getEntryCount() > 0) {
-            writer.finishWrite(level: nextLevel)
-            newSSTables.add(writer)
-        } else {
-            writer.close()
-        }
+        let newSSTables = writeStreamToSSTables(merger, sstDir, nextLevel)
 
         if (newSSTables.size == 0) {
             return

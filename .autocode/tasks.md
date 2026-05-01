@@ -37,11 +37,12 @@
 - **改进方案**: 在 Store.get() 入口调用一次 DateTime.now()，将 now 作为参数沿调用链传递到 checkExpiryAndGet 和 LevelManager.get。
 - **已修复**: Store.get() 顶部计算一次 now，checkExpiryAndGet 接受 now 参数，3 次调用复用同一个 now。
 
-### Compaction 异常孤儿文件
+### Compaction 异常孤儿文件 ✅
 
-- **文件**: `f_store/src/Compaction.cj:117-131`
+- **文件**: `f_store/src/Compaction.cj:117-131`, `f_store/src/store_func.cj`
 - **问题**: compact() 中 writer.write 或 finishWrite 抛出异常时，当前 writer 的 File 句柄泄漏、已写入部分数据的 .sst 文件成为孤儿。
 - **改进方案**: 在 merge 循环外围加 try-finally，catch 时 close writer 并删除临时文件。
+- **已修复**: 提取共用函数 writeStreamToSSTables，内部用 try-catch 保护，异常时 close writer + 删除孤儿 .sst 文件。新增 SSTableWritingException 包装删除异常并用 addSuppressed 保留原始异常。flushMemTable 和 Compactor.compact 统一调用该函数。
 
 ---
 
