@@ -27,7 +27,30 @@ public class StoreStreamTest {
 
     @TestCase
     public func createStoreStreamWriteReadFlushClose(): Unit {
-        doCreateStoreStreamLinux(testDir)
-        doCreateStoreStreamNonLinux(testDir)
+        let dir = testDir
+        if (exists(dir)) {
+            remove(dir, recursive: true)
+        }
+        Directory.create(dir, recursive: true)
+        let path = "${dir}/test_io.sst"
+
+        // 通过 File 写入
+        let file = File(path, OpenMode.ReadWrite)
+        file.write([0x01, 0x02, 0x03])
+        file.flush()
+        file.close()
+
+        // 通过 File 读取验证
+        let readFile = File(path, OpenMode.Read)
+        let buf = Array<Byte>(3, repeat: 0u8)
+        let n = readFile.read(buf)
+        readFile.close()
+
+        @Expect(n == 3)
+        @Expect(buf[0] == 0x01)
+        @Expect(buf[1] == 0x02)
+        @Expect(buf[2] == 0x03)
+
+        remove(dir, recursive: true)
     }
 }

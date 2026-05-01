@@ -47,7 +47,6 @@ package fountain::f_store
 class SSTable <: Resource {
     private let path: String
     private let file: File
-    private let stream: IOStream
 
     // === 写入模式字段 ===
     private let bloomFilter: BloomFilter
@@ -83,12 +82,6 @@ class SSTable <: Resource {
         }
         this.path = path
         this.file = File(path, OpenMode.ReadWrite)
-        // Linux: 用 IOURingStream 实现异步 IO；非 Linux: 用 File 同步 IO
-        @When[os == "Linux"]
-        let s = IOUringStream(Int32(file.fileDescriptor.fileHandle))
-        @When[os != "Linux"]
-        let s: IOStream = file
-        this.stream = s
         this.bloomFilter = BloomFilter.new(estimatedCount, 0.01)
         this.indexEntries = ArrayList<IndexEntry>()
         this.currentOffset = 0
@@ -108,11 +101,10 @@ class SSTable <: Resource {
     }
 
     /** 读取模式构造：从已有文件打开（内部使用） */
-    private init(path: String, file: File, stream: IOStream, bloomFilter: BloomFilter,
+    private init(path: String, file: File, bloomFilter: BloomFilter,
                  indexEntries: ArrayList<IndexEntry>, metadata: SSTableMetadata, indexOffset: Int64) {
         this.path = path
         this.file = file
-        this.stream = stream
         this.bloomFilter = bloomFilter
         this.indexEntries = indexEntries
         this.currentOffset = 0
@@ -173,7 +165,7 @@ class SSTable <: Resource {
                 offset++
             }
         }
-        stream.write(buf)
+        file.write(buf)
         // bloom filter
         bloomFilter.add(keyBytes)
         // 更新统计
@@ -200,8 +192,7 @@ class SSTable <: Resource {
     }
 
     /** 写完 Index + Bloom + Footer，flush，切换到 Readable 状态。
-     *  IOURingStream（Linux）确保所有异步写入完成后 fsync，
-     *  flush 返回后数据已落盘，对新 File 句柄可见。
+     *  flush 后数据在 OS page cache 中，对新 File 句柄可见。
      *  返回 SSTableMetadata。
      */
     func finishWrite(): SSTableMetadata {
@@ -214,8 +205,8 @@ class SSTable <: Resource {
         let bloomSize = writeBloomFilterBlock()
         // 写 Footer
         writeFooter(indexOffset, indexSize, bloomOffset, bloomSize)
-        // flush: Linux 下 IOURingStream 执行 IOSQE_IO_DRAIN + fsync
-        stream.flush()
+        // flush（File.flush 确保数据落盘）
+        file.flush()
         // 构造 metadata
         let actualMinKey = minKey ?? ByteArray([])
         let actualMaxKey = maxKey ?? ByteArray([])
@@ -355,7 +346,7 @@ class SSTable <: Resource {
         let meta = SSTableMetadata(
             firstKey, lastKey, eCount, 0, 0, Int64.Max, path
         )
-        SSTable(path, file, file, filter, indexEntries, meta, idxOff)
+        SSTable(path, file, filter, indexEntries, meta, idxOff)
     }
 
     /** 扫描目录，加载所有 .sst 文件 */
@@ -417,11 +408,6 @@ class SSTable <: Resource {
     public func close(): Unit {
         if (closed.compareAndSwap(false, true)) {
             state = SSTableState.Closed
-            // 关闭 stream（IOUringStream.close 不关闭 fd）
-            if (let r: Resource <- stream && !r.isClosed()) {
-                r.close()
-            }
-            // 关闭 file（关闭 fd）
             if (!file.isClosed()) {
                 file.close()
             }
@@ -542,7 +528,7 @@ class SSTable <: Resource {
                 offset++
             }
         }
-        stream.write(buf)
+        file.write(buf)
         currentOffset += totalSize
         fileSize += totalSize
         Int64(totalSize)
@@ -551,7 +537,7 @@ class SSTable <: Resource {
     /** 写 Bloom Filter Block：使用 BloomFilter.serialize() 直接序列化 bitSet */
     private func writeBloomFilterBlock(): Int64 {
         let buf = bloomFilter.serialize()
-        stream.write(buf)
+        file.write(buf)
         let totalSize = Int64(buf.size)
         currentOffset += totalSize
         fileSize += totalSize
@@ -570,7 +556,7 @@ class SSTable <: Resource {
         offset = writeInt64LE(buf, offset, bloomSize)
         offset = writeInt64LE(buf, offset, entryCount)
         offset = writeUInt64LE(buf, offset, MAGIC)
-        stream.write(buf)
+        file.write(buf)
         currentOffset += FOOTER_SIZE
         fileSize += FOOTER_SIZE
     }

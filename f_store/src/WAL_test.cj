@@ -203,4 +203,62 @@ public class WALTest {
 
         cleanWAL(path)
     }
+
+    @TestCase
+    public func walRotationExceedsFileSize(): Unit {
+        let path = tempWALPath("walRotationExceedsFileSize")
+        cleanWAL(path)
+        ensureDir(path)
+
+        // 用极小 maxFileSize（1KB）强制频繁轮转
+        let wal = WAL(path, maxFileSize: 1024)
+        var writtenCount: Int64 = 0
+        // 写入 50 条 × ~38B = ~1900B，应触发至少 1 次轮转
+        for (i in 0..50) {
+            try {
+                wal.append([UInt8(i % 256)], [UInt8((i + 1) % 256)])
+                writtenCount++
+            } catch (_: Exception) {
+                break
+            }
+        }
+        @Expect(writtenCount == 50)
+
+        // 取出旧文件列表，应该至少有一个
+        let oldFiles = wal.takeOldFiles()
+        @Expect(oldFiles.size >= 1)
+
+        // 验证旧文件在磁盘上
+        for (p in oldFiles) {
+            @Expect(exists(p))
+            remove(p)
+        }
+
+        wal.close()
+        cleanWAL(path)
+    }
+
+    @TestCase
+    public func walRotationAfterCloseNoLeak(): Unit {
+        let path = tempWALPath("walRotationAfterCloseNoLeak")
+        cleanWAL(path)
+        ensureDir(path)
+
+        let wal = WAL(path, maxFileSize: 2048)
+        // 写入直到触发轮转
+        for (i in 0..100) {
+            wal.append([UInt8(i % 256)], [UInt8((i + 1) % 256)])
+        }
+
+        // 取出旧文件后关闭
+        let oldFiles = wal.takeOldFiles()
+        wal.close()
+
+        // 验证旧文件仍可正常读取
+        for (p in oldFiles) {
+            let records = WALReader.readAll(p)
+            @Expect(records.size > 0)
+            remove(p)
+        }
+    }
 }

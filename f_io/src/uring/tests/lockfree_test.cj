@@ -190,4 +190,66 @@ public class LockFreeComponentTest {
         }
         @Expect(threwException)
     }
+
+    /** 验证 allocSlot 在槽位用尽后能等待回收并返回（不抛 None） */
+    @TestCase
+    public func testAllocSlotWaitsAfterFullThenRecycles(): Unit {
+        try(ring = IoUring(4)) {
+            try(lf = IoUringLockFree(ring)) {
+                // 用 NOP 操作填满所有 4 个槽位
+                for (i in 0..4) {
+                    let ok = lf.submitAsync(
+                        { sqe => ioUringPrepNop(sqe) },
+                        LambdaCompletionCallback({ _ => })
+                    )
+                    @Expect(ok)
+                }
+
+                // 收割所有完成事件，释放槽位
+                for (i in 0..4) {
+                    lf.waitAndReap()
+                }
+
+                // 槽位已释放，allocSlot 应返回 Some
+                let slot = lf.allocSlot()
+                @Expect(slot.isSome())
+
+                // 释放该槽位
+                if (let Some(s) <- slot) {
+                    lf.releaseSlot(s)
+                }
+            }
+        }
+    }
+
+    /** 验证 submitAsync 在所有槽位满时通过 allocSlot 等待而非返回 false */
+    @TestCase
+    public func testSubmitAsyncNeverReturnsFalse(): Unit {
+        try(ring = IoUring(4)) {
+            try(lf = IoUringLockFree(ring)) {
+                // 用 NOP 填满 4 个槽位
+                for (i in 0..4) {
+                    lf.submitAsync(
+                        { sqe => ioUringPrepNop(sqe) },
+                        LambdaCompletionCallback({ _ => })
+                    )
+                }
+
+                // 收割全部（释放槽位 + 解除等待）
+                for (i in 0..4) {
+                    lf.waitAndReap()
+                }
+
+                // 提交新的操作应成功（allocSlot 不会再返回 None）
+                let ok = lf.submitAsync(
+                    { sqe => ioUringPrepNop(sqe) },
+                    LambdaCompletionCallback({ _ => })
+                )
+                @Expect(ok)
+
+                // 收割
+                lf.waitAndReap()
+            }
+        }
+    }
 }

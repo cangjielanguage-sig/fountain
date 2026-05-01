@@ -17,11 +17,10 @@ package fountain::f_store
 
 class WAL <: Resource {
     private var file: File
-    private var stream: IOStream
     let sequence: AtomicInt64
     let closed: AtomicBool
     private let syncInterval: Int64
-    private var appendCount: Int64
+    private let appendCount: AtomicInt64
     private var currentFileSize: Int64
     private let maxFileSize: Int64
     private var walPath: String
@@ -38,15 +37,10 @@ class WAL <: Resource {
         this.walPath = path
         this.walDir = parentDir.toString()
         this.file = File(path, OpenMode.ReadWrite)
-        @When[os == "Linux"]
-        let s = IOUringStream(Int32(file.fileDescriptor.fileHandle))
-        @When[os != "Linux"]
-        let s: IOStream = file
-        this.stream = s
         this.sequence = AtomicInt64(startSequence)
         this.closed = AtomicBool(false)
         this.syncInterval = 100
-        this.appendCount = 0
+        this.appendCount = AtomicInt64(0)
         this.currentFileSize = 0
         this.maxFileSize = maxFileSize
         this.oldFiles = ArrayList<String>()
@@ -59,10 +53,9 @@ class WAL <: Resource {
         let seq = sequence.incrFetch()
         let record = WALRecord(seq, key, value, expireAt: expireAt)
         let encoded = record.encode()
-        stream.write(encoded)
+        file.write(encoded)
         currentFileSize += Int64(encoded.size)
-        appendCount++
-        if (appendCount % syncInterval == 0) {
+        if (appendCount.incrFetch() % syncInterval == 0) {
             sync()
         }
         if (currentFileSize >= maxFileSize) {
@@ -73,7 +66,7 @@ class WAL <: Resource {
 
     func sync(): Unit {
         if (!closed.load()) {
-            stream.flush()
+            file.flush()
         }
     }
 
@@ -89,10 +82,7 @@ class WAL <: Resource {
 
     private func rotate(): Unit {
         // sync + close 当前文件
-        stream.flush()
-        if (let r: Resource <- stream && !r.isClosed()) {
-            r.close()
-        }
+        file.flush()
         if (!file.isClosed()) {
             file.close()
         }
@@ -101,16 +91,10 @@ class WAL <: Resource {
         // 用当前 sequence 创建新 WAL 文件
         let startSeq = sequence.load()
         let newPath = "${walDir}/wal_${startSeq}.wal"
-        let newFile = File(newPath, OpenMode.ReadWrite)
-        @When[os == "Linux"]
-        let newStream = IOUringStream(Int32(newFile.fileDescriptor.fileHandle))
-        @When[os != "Linux"]
-        let newStream: IOStream = newFile
-        this.file = newFile
-        this.stream = newStream
+        this.file = File(newPath, OpenMode.ReadWrite)
         this.walPath = newPath
         this.currentFileSize = 0
-        this.appendCount = 0
+        this.appendCount.store(0)
     }
 
     public func close(): Unit {
@@ -118,9 +102,6 @@ class WAL <: Resource {
             return
         }
         sync()
-        if (let r: Resource <- stream && !r.isClosed()) {
-            r.close()
-        }
         if (!file.isClosed()) {
             file.close()
         }

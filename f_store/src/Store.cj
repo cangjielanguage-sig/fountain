@@ -18,7 +18,7 @@ package fountain::f_store
 /** LSM-Tree 键值存储引擎。
  *
  * 关键路径无锁设计：
- * - add/remove/ttl: WAL.append（IOUringStream 异步写）+ ConcurrentSkipListMap.add（CAS）
+ * - add/remove/ttl: WAL.append（File 同步写）+ ConcurrentSkipListMap.add（CAS）
  * - get: ConcurrentSkipListMap.get（无锁读）+ SSTable 点查询
  * - maybeFlush: 仅 swap 时短暂持 flushLock
  */

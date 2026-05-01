@@ -94,13 +94,24 @@ public class IoUringLockFree <: Resource {
     /**
      * 分配一个完成槽位
      *
-     * 线程安全，内部使用 CAS 原子分配。
+     * 当所有槽位被占用时，先尝试收割已完成的 CQE 来释放槽位。
+     * 仍无可用槽位时短时等待后台收割线程处理，永不返回 None。
      *
-     * @return 槽位索引，所有槽位已满时返回 None
+     * @return 槽位索引
      */
     public func allocSlot(): ?UInt32 {
         checkNotClosed()
-        allocator.alloc()
+        var slotId = allocator.alloc()
+        while (slotId.isNone()) {
+            // 非阻塞收割已完成的 CQE 以释放槽位
+            reap()
+            slotId = allocator.alloc()
+            if (slotId.isNone()) {
+                // 让步给后台收割线程处理，避免忙等
+                sleep(Duration.microsecond * 10)
+            }
+        }
+        slotId
     }
 
     /**

@@ -94,10 +94,8 @@ public class StoreIntegrationTest {
         if (let Some(v) <- before) {
             @Expect(v == value)
         }
-        // 等待过期
-        sleep(Duration.second * 3)
-        // 过期后读不到
-        @Expect(store.get(key).isNone())
+        // 轮询等待过期（最长 5 秒）
+        waitForExpiry(store, key)
         store.close()
     }
 
@@ -112,9 +110,8 @@ public class StoreIntegrationTest {
         store.ttl(key, Duration.second * 2)
         // 还能读到
         @Expect(store.get(key).isSome())
-        // 等待过期
-        sleep(Duration.second * 3)
-        @Expect(store.get(key).isNone())
+        // 轮询等待过期（最长 5 秒）
+        waitForExpiry(store, key)
         store.close()
     }
 
@@ -339,8 +336,8 @@ public class StoreIntegrationTest {
         let store = Store(dir)
         store.add("ep:user:1".unsafeBytes(), "alice".unsafeBytes())
         store.add("ep:user:2".unsafeBytes(), "bob".unsafeBytes(), Duration.second * 1)
-        // 等待 ep:user:2 过期
-        sleep(Duration.second * 2)
+        // 轮询等待 ep:user:2 过期（最长 5 秒）
+        waitForExpiry(store, "ep:user:2".unsafeBytes())
         let iter = store.prefix("ep:user:".unsafeBytes())
         var count = 0
         while (let Some((k, v)) <- iter.next()) {
@@ -451,5 +448,16 @@ public class StoreIntegrationTest {
             remove(baseDir, recursive: true)
         }
         baseDir
+    }
+
+    /** 轮询等待指定 key 过期（每 100ms 检查，最长 5 秒） */
+    private func waitForExpiry(store: Store, key: Array<Byte>): Unit {
+        for (i in 0..50) {
+            if (store.get(key).isNone()) {
+                return
+            }
+            sleep(Duration.millisecond * 100)
+        }
+        @Expect(store.get(key).isNone())
     }
 }
