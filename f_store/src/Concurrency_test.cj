@@ -385,7 +385,25 @@ public class ConcurrencyTest {
             (gets, hits)
         }
 
-        // 5. Prefix iterators：多个前缀同时迭代
+        // 5. TTL updater：持续更新已有 key 的过期时间
+        let ttlFut = spawn {
+            var updates: Int64 = 0
+            while (running.load()) {
+                try {
+                    let key = "mx_base_${updates % baseCount}".unsafeBytes()
+                    // 交替设置 1s 和 10s TTL，同时测试 expireAt 和 Duration 两种重载
+                    if (updates % 2 == 0) {
+                        store.ttl(key, Duration.second * 10)
+                    } else {
+                        store.ttl(key, DateTime.now() + Duration.second * 10)
+                    }
+                    updates++
+                } catch (_: StoreClosedException) { break }
+            }
+            updates
+        }
+
+        // 6. Prefix iterators：多个前缀同时迭代
         let prefixFutures = ArrayList<Future<Int64>>()
         for (p in 0..3) {
             let prefix = "mx_${["base", "w", "other"][p]}".unsafeBytes()
@@ -406,16 +424,17 @@ public class ConcurrencyTest {
             prefixFutures.add(fut)
         }
 
-        // 6. 运行指定时间后停止
+        // 7. 运行指定时间后停止
         sleep(Duration.millisecond * runtimeMs)
         running.store(false)
 
-        // 7. 收集结果
+        // 8. 收集结果
         let writerCount = writerFut.get()
         let removerCount = removerFut.get()
         let (getCount, hitCount) = getterFut.get()
+        let ttlUpdates = ttlFut.get()
 
-        // 8. close + reopen 验证数据完整性
+        // 9. close + reopen 验证数据完整性
         store.close()
         let reopened = Store(dir)
 
