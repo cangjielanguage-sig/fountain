@@ -15,8 +15,8 @@ limitations under the License.
 */
 package fountain::f_store
 
-/** SSTable 全量/前缀遍历器 */
-class SSTableIterator <: Iterator<(ByteArray, EntryValue)> {
+/** SSTable 全量/前缀遍历器。耗尽时自动关闭独立 File 句柄。 */
+class SSTableIterator <: Iterator<(ByteArray, EntryValue)> & Resource {
     private let file: File
     private let indexEntries: ArrayList<IndexEntry>
     private let indexOffset: Int64
@@ -64,7 +64,7 @@ class SSTableIterator <: Iterator<(ByteArray, EntryValue)> {
         this.blockData = Array<Byte>(0, repeat: 0u8)
         this.offsetInBlock = 0
         if (indexEntries.size == 0) {
-            this.done = true
+            setDone()
         } else {
             this.done = false
             // Linux: 提取 fd 用于 pread
@@ -85,7 +85,7 @@ class SSTableIterator <: Iterator<(ByteArray, EntryValue)> {
             if (offsetInBlock + 32 > blockData.size) {
                 blockIdx++
                 if (blockIdx >= indexEntries.size) {
-                    done = true
+                    setDone()
                     return
                 }
                 loadBlock()
@@ -110,7 +110,7 @@ class SSTableIterator <: Iterator<(ByteArray, EntryValue)> {
             if (overflow) {
                 blockIdx++
                 if (blockIdx >= indexEntries.size) {
-                    done = true
+                    setDone()
                     return
                 }
                 loadBlock()
@@ -136,13 +136,14 @@ class SSTableIterator <: Iterator<(ByteArray, EntryValue)> {
 
     public func next(): Option<(ByteArray, EntryValue)> {
         if (done) {
+            close() // 已耗尽则确保 File 关闭
             return None
         }
         while (true) {
             if (offsetInBlock + 32 > blockData.size) {
                 blockIdx++
                 if (blockIdx >= indexEntries.size) {
-                    done = true
+                    setDone()
                     return None
                 }
                 loadBlock()
@@ -156,7 +157,7 @@ class SSTableIterator <: Iterator<(ByteArray, EntryValue)> {
             if (offsetInBlock + 32 > blockData.size) {
                 blockIdx++
                 if (blockIdx >= indexEntries.size) {
-                    done = true
+                    setDone()
                     return None
                 }
                 loadBlock()
@@ -166,7 +167,7 @@ class SSTableIterator <: Iterator<(ByteArray, EntryValue)> {
             if (keyLen > remaining) {
                 blockIdx++
                 if (blockIdx >= indexEntries.size) {
-                    done = true
+                    setDone()
                     return None
                 }
                 loadBlock()
@@ -175,7 +176,7 @@ class SSTableIterator <: Iterator<(ByteArray, EntryValue)> {
             if (actualValueLen > remaining - keyLen) {
                 blockIdx++
                 if (blockIdx >= indexEntries.size) {
-                    done = true
+                    setDone()
                     return None
                 }
                 loadBlock()
@@ -230,5 +231,19 @@ class SSTableIterator <: Iterator<(ByteArray, EntryValue)> {
             file.seek(SeekPosition.Begin(blockStart))
             file.read(blockData)
         }()
+    }
+
+    /** 标记迭代结束并关闭 File 句柄 */
+    private func setDone(): Unit {
+        done = true
+        close()
+    }
+
+    /** 关闭独立 File 句柄。实现 Resource 接口。
+     *  耗尽时自动调用；外部也可用 try-with-resource 提前关闭。 */
+    public func close(): Unit {
+        if (!file.isClosed()) {
+            file.close()
+        }
     }
 }
