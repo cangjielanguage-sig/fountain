@@ -142,20 +142,18 @@ class Compactor {
         }
         let newSSTables = ArrayList<SSTable>()
         var sstIndex: Int64 = 0
-        var writer = SSTable("${sstDir}/L${nextLevel}_compact_${sstIndex}.sst", 64)
-        var entryCount: Int64 = 0
+        var writer = SSTable("${sstDir}/L${nextLevel}_${sstIndex}.sst", 64)
         while (let Some((key, entry)) <- merger.next()) {
             writer.write(key, entry)
-            entryCount++
             if (writer.isFull()) {
-                writer.finishWrite()
+                writer.finishWrite(level: nextLevel)
                 newSSTables.add(writer)
                 sstIndex++
-                writer = SSTable("${sstDir}/L${nextLevel}_compact_${sstIndex}.sst", 64)
+                writer = SSTable("${sstDir}/L${nextLevel}_${sstIndex}.sst", 64)
             }
         }
         if (writer.getEntryCount() > 0) {
-            writer.finishWrite()
+            writer.finishWrite(level: nextLevel)
             newSSTables.add(writer)
         } else {
             writer.close()

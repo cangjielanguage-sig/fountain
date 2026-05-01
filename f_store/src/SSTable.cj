@@ -195,7 +195,7 @@ class SSTable <: Resource {
      *  flush 后数据在 OS page cache 中，对新 File 句柄可见。
      *  返回 SSTableMetadata。
      */
-    func finishWrite(): SSTableMetadata {
+    func finishWrite(level!: Int64 = 0): SSTableMetadata {
         guardWriting()
         let indexOffset = currentOffset
         // 写 Index Block
@@ -211,7 +211,7 @@ class SSTable <: Resource {
         let actualMinKey = minKey ?? ByteArray([])
         let actualMaxKey = maxKey ?? ByteArray([])
         let meta = SSTableMetadata(
-            actualMinKey, actualMaxKey, entryCount, 0,
+            actualMinKey, actualMaxKey, entryCount, level,
             sequenceStart, sequenceEnd, path
         )
         this.metadata = Some(meta)

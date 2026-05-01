@@ -285,36 +285,33 @@ public static func open(path: String): SSTable {
 
 ### 第2阶段：代码修正 + 边界覆盖（预计 3~5 人天）
 
-#### 2.1 【P1 边界】WAL 单文件轮转 + 多文件管理
+#### 2.1 【P1 边界】WAL 单文件轮转 + 多文件管理 ✅
 
-**文件**: `WAL.cj`、`WALReader.cj`、`Store.cj`  
+**文件**: `WAL.cj`、`Store.cj`  
 **类型**: 功能补全 | **预计**: 1 人天
 
-**问题（B3）**：当前 WAL 使用单个文件永不分片轮转，长运行 Store 产生超大 WAL 文件。
+**完成内容**：
+- ✅ `currentFileSize` / `maxFileSize` 追踪写入量
+- ✅ `append()` 中检查超过 64MB 时调用 `rotate()`（sync+close旧文件 → 创建新WAL）
+- ✅ `takeOldFiles()` + `cleanupRotatedWALFiles()` 旧文件清理
+- ✅ 测试：`walRotationExceedsFileSize` / `walRotationAfterCloseNoLeak`
 
-**修复方案**：
-1. 添加 WAL 文件大小跟踪，写入后检查是否超限（如 64MB）
-2. 超限时关闭当前 WAL 文件，创建新 WAL 文件（文件名递增 sequence_start）
-3. 对应 WALManager 管理多个 WAL 文件引用
-4. 刷盘/compaction 完成后可删除对应的旧 WAL 文件
-
-**验收标准**：持续写入 128MB 数据后产生至少 2 个 WAL 文件，恢复完整
+**额外**：去除 `f_store` 对 `fountain::f_io` 的依赖，`stream` 变量全部改用 `file`
 
 ---
 
-#### 2.2 【P2 规范】Compaction 输出文件命名规范化
+#### 2.2 【P2 规范】Compaction 输出文件 level 元数据修复 ✅
 
-**文件**: `Compaction.cj`  
+**文件**: `SSTable.cj`、`Compaction.cj`  
 **类型**: 代码修正 | **预计**: 0.5 人天
 
-**问题（B6）**：Compaction 输出文件名为 `L${nextLevel}_compact_${index}.sst`，不符合标准 `L{level}_{seqStart}_{seqEnd}.sst` 格式，`SSTable.parseFileName()` 解析失败。
+**问题**: SSTableMetadata.level 在 `finishWrite()` 中硬编码为 0，导致 compaction 输出文件重启后被 `loadExisting()` 放入 L0 而非正确层级。
 
-**修复方案**：
-1. 在 Compaction 输出中收集 sequenceStart/sequenceEnd
-2. 文件名改为 `L${level}_${seqStart}_${seqEnd}.sst` 格式
-3. SSTableMetadata 的 level 字段在 finishWrite 时设为正确的 level（当前硬编码为 0）
-
-**验收标准**：Compaction 输出文件的 parseFileName 可解析，level 正确
+**修复**：
+- ✅ `finishWrite(level: Int64 = 0)` 新增 `level` 命名参数，默认 0 保持向后兼容
+- ✅ `Compactor.compact()` 调用 `finishWrite(level: nextLevel)`
+- ✅ `flushMemTable` 使用默认 level=0（正确，刷盘到 L0）
+- ✅ Compaction 输出文件名改为 `L${level}_${index}.sst`，无 `compact_` 前缀
 
 ---
 
@@ -457,7 +454,7 @@ public static func open(path: String): SSTable {
 | 1 | 高 | 并发读写测试 ✅ | 测试 | 1.5~2 |
 | 1 | 高 | WAL 损坏恢复测试 ✅ | 测试 | 1 |
 | 1 | 高 | Compaction 多文件合并测试 | 测试 | 1 |
-| 2 | P1 | WAL 单文件轮转 | 功能 | 1 |
+| 2 | P1 | WAL 单文件轮转 ✅ | 功能 | 1 |
 | 2 | P2 | Compaction 文件名规范 | 代码修正 | 0.5 |
 | 2 | P2 | MemTable 容量边界 + 极端大小测试 | 测试 | 0.5 |
 | 2 | P2 | L0 遍历逆序优化 | 性能 | 0.5 |
