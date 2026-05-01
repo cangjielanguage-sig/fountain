@@ -141,7 +141,7 @@ class Compactor {
             Directory.create(sstDir, recursive: true)
         }
         let newSSTables = ArrayList<SSTable>()
-        var sstIndex: Int64 = 0
+        var sstIndex: Int64 = sstableFileSeq.incrFetch()
         var writer = SSTable("${sstDir}/L${nextLevel}_${sstIndex}.sst", 64)
         while (let Some((key, entry)) <- merger.next()) {
             writer.write(key, entry)

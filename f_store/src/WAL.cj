@@ -27,6 +27,8 @@ class WAL <: Resource {
     private let walDir: String
     /** 已关闭的旧 WAL 文件路径列表（等待清理） */
     private let oldFiles: ArrayList<String>
+    /** 保护 oldFiles 并发访问（rotate vs takeOldFiles） */
+    private let oldFilesLock: Mutex
     /** 轮转中标记，防止多线程同时 rotate */
     private let rotating: AtomicBool
 
@@ -46,6 +48,7 @@ class WAL <: Resource {
         this.currentFileSize = AtomicInt64(0)
         this.maxFileSize = maxFileSize
         this.oldFiles = ArrayList<String>()
+        this.oldFilesLock = Mutex()
         this.rotating = AtomicBool(false)
     }
 
@@ -77,14 +80,16 @@ class WAL <: Resource {
         }
     }
 
-    /** 返回已关闭的旧 WAL 文件列表（等待清理），并清空内部列表 */
+    /** 返回已关闭的旧 WAL 文件路径列表（等待清理），并清空内部列表 */
     func takeOldFiles(): ArrayList<String> {
-        let result = ArrayList<String>()
-        for (p in oldFiles) {
-            result.add(p)
+        synchronized (oldFilesLock) {
+            let result = ArrayList<String>()
+            for (p in oldFiles) {
+                result.add(p)
+            }
+            oldFiles.clear()
+            result
         }
-        oldFiles.clear()
-        result
     }
 
     private func rotate(): Unit {
@@ -93,7 +98,10 @@ class WAL <: Resource {
         if (!file.isClosed()) {
             file.close()
         }
-        oldFiles.add(walPath)
+        // 将旧路径加入待清理列表
+        synchronized (oldFilesLock) {
+            oldFiles.add(walPath)
+        }
 
         // 用当前 sequence 创建新 WAL 文件
         let startSeq = sequence.load()
