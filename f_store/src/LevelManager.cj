@@ -29,7 +29,7 @@ class LevelManager {
     /** 每层 SSTable 总大小缓存，避免 shouldCompact 遍历全量文件 */
     let levelSizes: Array<AtomicInt64>
 
-    init(sstDir: String, levelCount!: Int64 = 7) {
+    init(sstDir: String, levelCount!: Int64 = MAX_LEVEL) {
         this.sstDir = sstDir
         this.levelCount = levelCount
         this.levels = Array<AtomicReference<ArrayList<SSTable>>>(levelCount){_ => 

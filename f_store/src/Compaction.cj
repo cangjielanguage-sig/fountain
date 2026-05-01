@@ -24,7 +24,7 @@ class Compactor {
     let stopSignal: AtomicBool
     private var compactionThread: ?Future<Unit>
 
-    init(levelManager: LevelManager, sstDir: String, levelCount!: Int64 = 7) {
+    init(levelManager: LevelManager, sstDir: String, levelCount!: Int64 = MAX_LEVEL) {
         this.levelManager = levelManager
         this.sstDir = sstDir
         this.levelCount = levelCount
