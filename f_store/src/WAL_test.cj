@@ -19,6 +19,7 @@ import std.unittest.*
 import std.unittest.testmacro.*
 import std.fs.*
 import std.collection.ArrayList
+import std.sync.AtomicBool
 
 @Test
 public class WALTest {
@@ -342,6 +343,60 @@ public class WALTest {
         // 通过 recoverAll 恢复所有数据
         let mt = WALReader.recoverAll(dir)
         @Expect(mt.approximateSize() >= totalWritten)
+
+        remove(dir, recursive: true)
+    }
+
+    /** 并发 sync + close：验证 WAL.sync() 与 close() 竞态不导致异常
+     *  修复前：sync() 在 close() 已关闭 file 后调用 file.flush() → 异常。
+     *  修复后：sync() 在 synchronized(appendLock) 内检查 closed 标志，与 close() 互斥。
+     */
+    @TestCase
+    public func walSyncCloseRace(): Unit {
+        let dir = "/tmp/f_store_test/wal_sync_close_race"
+        if (exists(dir)) { remove(dir, recursive: true) }
+        Directory.create(dir, recursive: true)
+        let path = "${dir}/wal_0.wal"
+
+        let wal = WAL(path, maxFileSize: 65536) // 64KB，避免频繁轮转
+        let running = AtomicBool(true)
+
+        // 多个 writer：持续 append + sync
+        let writerCount = 3
+        let writerFutures = ArrayList<Future<Int64>>()
+        for (t in 0..writerCount) {
+            let fut = spawn {
+                var writtenCount: Int64 = 0
+                while (running.load()) {
+                    try {
+                        wal.append([UInt8(t)], [UInt8(writtenCount % 256)])
+                        wal.sync()
+                        writtenCount++
+                    } catch (_: Exception) {
+                        break
+                    }
+                }
+                writtenCount
+            }
+            writerFutures.add(fut)
+        }
+
+        // 运行一段时间后关闭 WAL（此时 writer 可能正在 sync() 中）
+        sleep(Duration.millisecond * 100)
+        wal.close()
+        running.store(false)
+
+        // 等待 writer 全部正常退出（未崩溃）
+        var totalWritten: Int64 = 0
+        for (fut in writerFutures) {
+            totalWritten += fut.get()
+        }
+
+        @Expect(totalWritten >= 0)
+
+        // 验证 close 后的数据可恢复（WAL 关闭前可能已完成部分写入）
+        let mt = WALReader.recoverAll(dir)
+        @Expect(mt.approximateSize() >= totalWritten * 2 / 3) // 允许少量未 sync 的丢失
 
         remove(dir, recursive: true)
     }

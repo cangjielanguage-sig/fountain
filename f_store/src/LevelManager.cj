@@ -101,10 +101,11 @@ class LevelManager {
                     i--
                     continue
                 }
-                let entry = sst.get(key)
-                if (let Some(e) <- entry) {
-                    return checkExpiry(e, now)
-                }
+                try {
+                    if (let Some(e) <- sst.get(key)) {
+                        return checkExpiry(e, now)
+                    }
+                } catch (_: StoreClosedException) {}
                 i--
             }
         } else {
@@ -118,12 +119,11 @@ class LevelManager {
                 if (key < meta.minKey || key > meta.maxKey) {
                     continue
                 }
-                let entry = sst.get(key)
-                if (entry.isSome()) {
-                    if (let Some(e) <- entry) {
+                try {
+                    if (let Some(e) <- sst.get(key)) {
                         return checkExpiry(e, now)
                     }
-                }
+                } catch (_: StoreClosedException) {}
             }
         }
         None

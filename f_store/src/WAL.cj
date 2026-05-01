@@ -81,8 +81,10 @@ class WAL <: Resource {
     }
 
     func sync(): Unit {
-        if (!closed.load()) {
-            file.flush()
+        synchronized (appendLock) {
+            if (!closed.load()) {
+                file.flush()
+            }
         }
     }
 

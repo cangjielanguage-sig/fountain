@@ -525,6 +525,76 @@ public class ConcurrencyTest {
         reopened.close()
     }
 
+    /** 用例8：Compaction 期间并发读取，验证 LevelManager 过期快照不抛异常
+     *  预写入触发多次 flush→compaction，然后读取线程在 compaction 活跃期间持续 get()。
+     *  修复前：LevelManager 持有过期 SSTable 快照，访问已关闭 SSTable 抛 StoreClosedException。
+     *  修复后：getInLevel() 捕获 StoreClosedException 跳过已关闭 SSTable。
+     */
+    @TestCase
+    public func testCompactionStaleSnapshotNoException(): Unit {
+        let dir = getTestDir("compact_stale")
+        let store = Store(dir)
+        let largeValue = Array<Byte>(64 * 1024, repeat: 88u8) // 64KB per entry
+        let prewriteCount: Int64 = 500 // ~32MB，触发 ~4 次 flush，触发 compaction
+
+        // 1. 预写入触发多次 flush，产生多个 L0 SSTable
+        for (i in 0..prewriteCount) {
+            let key = "cs_${i}".unsafeBytes()
+            store.add(key, largeValue)
+        }
+
+        // 2. 立即启动多线程并发读取——此时 compaction 应正活跃
+        let running = AtomicBool(true)
+        let readerCount: Int64 = 4
+        let readerFutures = ArrayList<Future<Int64>>()
+
+        for (_ in 0..readerCount) {
+            let fut = spawn {
+                var reads: Int64 = 0
+                while (running.load()) {
+                    let idx = reads % prewriteCount
+                    let key = "cs_${idx}".unsafeBytes()
+                    // 不应抛任何异常（fix 在内部 catch StoreClosedException）
+                    store.get(key)
+                    reads++
+                }
+                reads
+            }
+            readerFutures.add(fut)
+        }
+
+        // 3. 读取期间持续写入新数据，触发更多 flushes 和 compactions
+        let writerFut = spawn {
+            var writes: Int64 = 0
+            while (running.load()) {
+                let key = "cs_new_${writes}".unsafeBytes()
+                store.add(key, largeValue)
+                writes++
+            }
+            writes
+        }
+
+        // 4. 运行 2 秒，让 compaction 和读取充分并发
+        sleep(Duration.millisecond * 2000)
+        running.store(false)
+
+        // 5. 等待所有线程完成
+        for (fut in readerFutures) { fut.get() }
+        writerFut.get()
+
+        // 6. 验证所有预写入数据可读
+        var missingCount: Int64 = 0
+        for (i in 0..prewriteCount) {
+            let key = "cs_${i}".unsafeBytes()
+            if (store.get(key).isNone()) {
+                missingCount++
+            }
+        }
+        @Expect(missingCount == 0)
+
+        store.close()
+    }
+
     // ================================================================
     // 辅助方法
     // ================================================================
