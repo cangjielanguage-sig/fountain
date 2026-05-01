@@ -393,7 +393,7 @@ class SSTable <: Resource {
             file.read(bloomBuf)
         }
         let filter = if (bloomBuf.size > 0) {
-            parseBloomFilter(bloomBuf)
+            BloomFilter.deserialize(bloomBuf)
         } else {
             BloomFilter.new(0, 0.01)
         }
@@ -437,16 +437,7 @@ class SSTable <: Resource {
     public func close(): Unit {
         if (closed.compareAndSwap(false, true)) {
             state.store(STATE_CLOSED)
-            // 非 Linux: 锁内关闭文件，防止新 get 进入后 read 已关闭文件
-            @When[os != "Linux"]
-            let _ = synchronized(getLock) {
-                if (!file.isClosed()) {
-                    file.close()
-                }
-            }
-            // Linux: 锁内关闭文件，防止并发 get 使用已关闭的 fd
-            @When[os == "Linux"]
-            let _ = synchronized(getLock) {
+            synchronized (getLock) {
                 if (!file.isClosed()) {
                     file.close()
                 }
@@ -605,8 +596,4 @@ class SSTable <: Resource {
         fileSize += FOOTER_SIZE
     }
 
-    /** 解析 Bloom Filter Block 并直接反序列化 bitSet */
-    private static func parseBloomFilter(bloomBuf: Array<Byte>): BloomFilter {
-        BloomFilter.deserialize(bloomBuf)
-    }
 }
