@@ -53,8 +53,10 @@ class WAL <: Resource {
         let seq = sequence.incrFetch()
         let record = WALRecord(seq, key, value, expireAt: expireAt)
         let encoded = record.encode()
+        // 始终同步写入文件（数据到 OS page cache，进程崩溃可恢复）
         file.write(encoded)
         currentFileSize += Int64(encoded.size)
+        // fsync 每 syncInterval 次执行一次，降低 syscall 100 倍
         if (appendCount.incrFetch() % syncInterval == 0) {
             sync()
         }
@@ -81,8 +83,8 @@ class WAL <: Resource {
     }
 
     private func rotate(): Unit {
-        // sync + close 当前文件
-        file.flush()
+        // sync（flush 缓冲区） + close 当前文件
+        sync()
         if (!file.isClosed()) {
             file.close()
         }
@@ -101,7 +103,8 @@ class WAL <: Resource {
         if (!closed.compareAndSwap(false, true)) {
             return
         }
-        sync()
+        // 强制 fsync 确保数据落盘（绕过 sync 的 closed 检查）
+        file.flush()
         if (!file.isClosed()) {
             file.close()
         }

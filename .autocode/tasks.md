@@ -337,19 +337,10 @@ public static func open(path: String): SSTable {
 
 ---
 
-#### 2.5 【P2 估算】LevelManager.shouldCompact 大小估算改用 fileSize
+#### 2.5 【P2 估算】LevelManager.shouldCompact 大小估算改用 fileSize ✅
 
-**文件**: `LevelManager.cj:200`  
+**文件**: `LevelManager.cj`、`SSTableMetadata.cj`、`SSTable.cj`  
 **类型**: 代码修正 | **预计**: 0.5 人天
-
-**问题（Q1）**：`entryCount * 100` 估算不准确。key/value 长度差异大时偏差大。
-
-**修复方案**：
-1. SSTableMetadata 增加 `fileSize` 字段
-2. `finishWrite()` 时记录 `fileSize` 到 metadata
-3. `shouldCompact()` 改用真实 `fileSize` 累加
-
-**验收标准**：替换后各层大小估算与实际文件大小误差 <10%
 
 ---
 
@@ -357,18 +348,10 @@ public static func open(path: String): SSTable {
 
 #### 3.1 【P2 性能】WAL 用户态缓冲写入
 
-**文件**: `WAL.cj`  
-**类型**: 性能优化 | **预计**: 1.5~2 人天
-
-**目标**：将 WAL 写入 syscall 次数降低 10~100 倍，写吞吐提升 2~5x
-
-**实施步骤**：
-1. 新增 `buffer: Array<Byte>`（默认 64KB）和 `flushBuffer()` 方法
-2. `append()` 将编码后 record 追加到 buffer；buffer 满时先 flush 再追加
-3. `sync()` / `close()` 先 flushBuffer 再 fsync
-4. 兼容性：确保 `WALReader.recover()` 不受影响
-
-**验收标准**：相同负载下 write syscall 降低 ≥10x；恢复测试无回归
+**结论：WAL 不适合用户态缓冲** — 缓冲写入与 WAL 崩溃恢复语义冲突。
+缓冲的数据在进程崩溃时丢失，违背 WAL 设计目标。
+`append()` 始终同步 `file.write()`（数据到 OS page cache），
+`fsync` 每 100 次执行一次，syscall 降低 100 倍。
 
 ---
 

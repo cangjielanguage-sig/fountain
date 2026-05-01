@@ -118,6 +118,12 @@ public class Store <: Resource {
         addWithExpire(key, value, DateTime.now().toUnixTimeStamp().toNanoseconds() + expire.toNanoseconds())
     }
 
+    /** 强制将 WAL 缓冲区写入磁盘（确保崩溃时可恢复） */
+    public func syncWAL(): Unit {
+        guardOpen()
+        wal.sync()
+    }
+
     /** 设置/更新已有 key 的过期时间（指定绝对时间） */
     public func ttl(key: Array<Byte>, expireAt: DateTime): Unit {
         ttlInternal(key, expireAt.toUnixTimeStamp().toNanoseconds())

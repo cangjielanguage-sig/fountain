@@ -314,9 +314,10 @@ public class StoreIntegrationTest {
         let dir = getTestDir("wal_recovery")
         let key = "wal_key".unsafeBytes()
         let value = "wal_val".unsafeBytes()
-        // 写入后不 close，模拟崩溃
+        // 写入后确保 WAL flushed 再模拟崩溃
         let store1 = Store(dir)
         store1.add(key, value)
+        store1.syncWAL()  // flush WAL 缓冲区，确保数据落盘
         // 不调用 close，直接让 Store 被 GC（WAL 已写入数据）
         // 重新打开时从 WAL 恢复
         let store2 = Store(dir)

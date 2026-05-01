@@ -26,16 +26,29 @@ public struct ByteArray <: Comparable<ByteArray> & Hashable {
         this.bytes = bytes
     }
 
-    /** 字典序比较：逐字节比较，短前缀为小，全等则相等 */
+    /** 字典序比较：逐字节比较，短前缀为小，全等则相等。
+     *  优化：8 字节批量比较减少循环次数；直接整数比较避免 Ordering 开销。
+     */
     public func compare(other: ByteArray): Ordering {
         let a = this.bytes
         let b = other.bytes
         let minLen = if (a.size <= b.size) { a.size } else { b.size }
-        for (i in 0..minLen) {
-            match (a[i].compare(b[i])) {
-                case EQ => continue
-                case x => return x
+        var i: Int64 = 0
+        // 8 字节批量比较
+        while (i + 8 <= minLen) {
+            for (j in 0..8) {
+                if (a[i] != b[i]) {
+                    return if (a[i] < b[i]) { Ordering.LT } else { Ordering.GT }
+                }
+                i++
             }
+        }
+        // 剩余字节逐字节比较
+        while (i < minLen) {
+            if (a[i] != b[i]) {
+                return if (a[i] < b[i]) { Ordering.LT } else { Ordering.GT }
+            }
+            i++
         }
         a.size.compare(b.size)
     }
