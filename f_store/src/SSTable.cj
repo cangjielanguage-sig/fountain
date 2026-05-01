@@ -314,6 +314,7 @@ class SSTable <: Resource {
         }()
         @When[os != "Linux"]
         let result = synchronized(getLock) {
+            guardReadable()
             let buf = Array<Byte>(blockSize, repeat: 0u8)
             file.seek(SeekPosition.Begin(blockStart))
             file.read(buf)
@@ -458,13 +459,20 @@ class SSTable <: Resource {
     public func close(): Unit {
         if (closed.compareAndSwap(false, true)) {
             state.store(STATE_CLOSED)
-            // 非 Linux: 等待所有 in-progress get 完成后再关闭文件
-            // synchronized 块为空，仅通过锁获取保证等锁
+            // 非 Linux: 锁内关闭文件，防止新 get 进入后 read 已关闭文件
             @When[os != "Linux"]
-            let _ = synchronized(getLock) {}
-            if (!file.isClosed()) {
-                file.close()
+            let _ = synchronized(getLock) {
+                if (!file.isClosed()) {
+                    file.close()
+                }
             }
+            // Linux: pread 内核级原子，直接关闭即可
+            @When[os == "Linux"]
+            let _ = {=>
+                if (!file.isClosed()) {
+                    file.close()
+                }
+            }()
         }
     }
 

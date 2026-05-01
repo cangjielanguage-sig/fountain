@@ -25,11 +25,12 @@
 - **改进方案**: (a) iterator/tailer 调用点全部改用 `try(iter = sst.iterator())` 确保退出时自动 close；(b) 或在 SSTableIterator 中加引用计数 / 注册到 SSTable 的生命周期管理。
 - **已修复**: PrefixIterator 实现 Resource，close() 排空源触发 SSTableIterator 自动关闭。next() 返回 None 时自动 close()。外部调用者可用 try-with-resource 提前终止。
 
-### SSTable.close() 非 Linux 与 get() 竞争
+### SSTable.close() 非 Linux 与 get() 竞争 ✅
 
 - **文件**: `f_store/src/SSTable.cj`
 - **问题**: close() 用 `synchronized(getLock){}` 空等 pending reads，但释放锁后 file.close() 之前新 get() 可能获取锁开始 I/O，随后被突然关闭的文件打断。
-- **改进方案**: 将 `file.close()` 移入 `synchronized(getLock){}` 块内执行。注：Linux 用 pread 无此问题。
+- **改进方案**: 将 `file.close()` 移入 `synchronized(getLock){}` 块内执行。get() 锁内加 guardReadable() 二次检查。
+- **已修复**: close() 中 file.close() 在锁内执行；get() 非 Linux 路径锁内加 guardReadable() 双重检查。
 
 ### Store.get() 重复 DateTime.now() ✅
 
