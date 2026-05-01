@@ -109,4 +109,32 @@ public class WALRecordTest {
             }
         }
     }
+
+    /** decode 收到负 keyLen 应返回 None */
+    @TestCase
+    public func walRecordDecodeNegativeKeyLen(): Unit {
+        let bytes = Array<Byte>(36, repeat: 0u8)
+        let keyLenOff = 12  // 4(checksum) + 8(sequence)
+        // 设置 keyLen = -5 (LE Int64)
+        bytes[keyLenOff] = 0xFB; bytes[keyLenOff + 1] = 0xFF
+        bytes[keyLenOff + 2] = 0xFF; bytes[keyLenOff + 3] = 0xFF
+        bytes[keyLenOff + 4] = 0xFF; bytes[keyLenOff + 5] = 0xFF
+        bytes[keyLenOff + 6] = 0xFF; bytes[keyLenOff + 7] = 0xFF
+        let decoded = WALRecord.decode(bytes)
+        @Expect(decoded.isNone())
+    }
+
+    /** decode 收到 valueLen < -1 应返回 None */
+    @TestCase
+    public func walRecordDecodeNegativeValueLen(): Unit {
+        let bytes = Array<Byte>(36, repeat: 0u8)
+        let valLenOff = 20  // 4(checksum) + 8(sequence) + 8(keyLen)
+        // 设置 valueLen = -2 (LE Int64)
+        bytes[valLenOff] = 0xFE; bytes[valLenOff + 1] = 0xFF
+        bytes[valLenOff + 2] = 0xFF; bytes[valLenOff + 3] = 0xFF
+        bytes[valLenOff + 4] = 0xFF; bytes[valLenOff + 5] = 0xFF
+        bytes[valLenOff + 6] = 0xFF; bytes[valLenOff + 7] = 0xFF
+        let decoded = WALRecord.decode(bytes)
+        @Expect(decoded.isNone())
+    }
 }

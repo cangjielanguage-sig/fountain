@@ -1152,6 +1152,60 @@ public class SSTableTest {
         remove(dir, recursive: true)
     }
 
+    /** 验证 SSTableIterator 帧校验拒绝 keyLen > 1MB 的损坏记录 */
+    @TestCase
+    public func sstableIteratorRejectsHugeKeyLen(): Unit {
+        let dir = "/tmp/f_store_test/sst_iter_hugekey"
+        if (exists(dir)) { remove(dir, recursive: true) }
+        Directory.create(dir, recursive: true)
+
+        let path = "${dir}/L0_1.sst"
+        let sst = SSTable(path, 5)
+        sst.write(ByteArray([0x01]), EntryValue([0xA1], 1))
+        sst.finishWrite()
+        sst.close()
+
+        // 篡改 key_len 为 1048577 (> 1024*1024)
+        let file = File(path, OpenMode.ReadWrite)
+        file.seek(SeekPosition.Begin(0))
+        file.write([0x01, 0x00, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00])
+        file.close()
+
+        let reopened = SSTable.open(path)
+        let iter = reopened.iterator()
+        @Expect(iter.next().isNone())
+        @Expect((iter as Resource)?.isClosed(), Some(true))
+
+        reopened.close()
+        remove(dir, recursive: true)
+    }
+
+    /** 验证 SSTable.scanBuffer 帧校验拒绝 keyLen > 1MB 的损坏记录 */
+    @TestCase
+    public func sstableScanBufferRejectsHugeKeyLen(): Unit {
+        let dir = "/tmp/f_store_test/sst_scan_hugekey"
+        if (exists(dir)) { remove(dir, recursive: true) }
+        Directory.create(dir, recursive: true)
+
+        let path = "${dir}/L0_1.sst"
+        let sst = SSTable(path, 5)
+        sst.write(ByteArray([0x01]), EntryValue([0xA1], 1))
+        sst.finishWrite()
+        sst.close()
+
+        // 篡改 key_len 为 1048577 (> 1024*1024)
+        let file = File(path, OpenMode.ReadWrite)
+        file.seek(SeekPosition.Begin(0))
+        file.write([0x01, 0x00, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00])
+        file.close()
+
+        let reopened = SSTable.open(path)
+        @Expect(reopened.get(ByteArray([0x01])).isNone())
+
+        reopened.close()
+        remove(dir, recursive: true)
+    }
+
     /** 验证 Footer 持久化的 sequenceStart/End 在 open 后正确恢复（P3 修复验证） */
     @TestCase
     public func sstableSequenceRangePersistsAfterOpen(): Unit {
