@@ -91,6 +91,10 @@ class WALRecord {
         offset += 8
         let expireAtVal = readInt64LE(bytes, offset)
         offset += 8
+        // 校验 keyLen/valueLen 合法性
+        if (keyLen < 0 || valueLen < -1) {
+            return None
+        }
         // 检查剩余长度
         if (bytes.size < 36 + keyLen + valueLen) {
             return None

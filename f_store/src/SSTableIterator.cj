@@ -94,8 +94,9 @@ class SSTableIterator <: Iterator<(ByteArray, EntryValue)> & Resource {
             }
             let keyLen = readInt64LE(blockData, offsetInBlock)
             let valueLen = readInt64LE(blockData, offsetInBlock + 8)
+            let seq = readInt64LE(blockData, offsetInBlock + 16)
             // 帧校验
-            if (keyLen < 0 || valueLen < -1) {
+            if (keyLen < 0 || keyLen > 1024 * 1024 || valueLen < -1 || seq < 0) {
                 setDone()
                 return
             }
@@ -158,7 +159,7 @@ class SSTableIterator <: Iterator<(ByteArray, EntryValue)> & Resource {
             let seq = readInt64LE(blockData, offsetInBlock + 16)
             let expireAt = readInt64LE(blockData, offsetInBlock + 24)
             // 帧校验：检测损坏/僵尸数据（与 SSTable.scanBuffer 一致）
-            if (keyLen < 0 || valueLen < -1 || seq < 0) {
+            if (keyLen < 0 || keyLen > 1024 * 1024 || valueLen < -1 || seq < 0) {
                 setDone()
                 return None
             }

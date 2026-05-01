@@ -88,8 +88,7 @@ func positionedRead(fd: Int32, buf: CPointer<Byte>, bufSize: Int64, offset: Int6
 @When[os != "Linux"]
 func positionedRead(file: File, buf: Array<Byte>, offset: Int64): Bool {
     file.seek(SeekPosition.Begin(offset))
-    file.read(buf)
-    true
+    file.read(buf) == buf.size
 }
 
 // === MemTable 刷盘 ===
@@ -120,7 +119,7 @@ func writeStreamToSSTables(iter: Iterator<(ByteArray, EntryValue)>, sstDir: Stri
             if (writer.isFull()) {
                 writer.finishWrite(level: level)
                 result.add(writer)
-                sstIndex++
+                sstIndex = sstableFileSeq.incrFetch()
                 writerPath = "${sstDir}/L${level}_${sstIndex}.sst"
                 writer = SSTable(writerPath, 64)
             }
