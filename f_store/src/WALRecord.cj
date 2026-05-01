@@ -95,8 +95,13 @@ class WALRecord {
         if (keyLen < 0 || valueLen < -1) {
             return None
         }
-        // 检查剩余长度
-        if (bytes.size < 36 + keyLen + valueLen) {
+        // 逐项检查剩余长度（避免 36 + keyLen + valueLen 溢出 Int64）
+        if (bytes.size - 36 < keyLen) {
+            return None
+        }
+        let remaining = bytes.size - 36 - keyLen
+        let needValueLen = if (valueLen >= 0) { valueLen } else { 0 }
+        if (remaining < needValueLen) {
             return None
         }
         let keyBytes = Array<Byte>(Int64(keyLen), repeat: 0u8)

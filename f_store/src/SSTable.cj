@@ -526,19 +526,21 @@ class SSTable <: Resource {
             let kBuf = Array<Byte>(keyLen, repeat: 0u8)
             buf[offset .. offset + keyLen].copyTo(kBuf)
             offset += keyLen
-            // 提取 value
-            let val = if (valueLen < 0) {
-                None<Array<Byte>>
-            } else {
-                let vBuf = Array<Byte>(valueLen, repeat: 0u8)
-                buf[offset .. offset + valueLen].copyTo(vBuf)
-                offset += valueLen
-                Some(vBuf)
-            }
-            let exp = if (expireAt == 0) { None<Int64> } else { Some(expireAt) }
             if (kBuf == targetKey) {
+                // 命中目标 key，提取 value
+                let val = if (valueLen < 0) {
+                    None<Array<Byte>>
+                } else {
+                    let vBuf = Array<Byte>(valueLen, repeat: 0u8)
+                    buf[offset .. offset + valueLen].copyTo(vBuf)
+                    offset += valueLen
+                    Some(vBuf)
+                }
+                let exp = if (expireAt == 0) { None<Int64> } else { Some(expireAt) }
                 return EntryValue(val, seq, expireAt: exp)
             }
+            // key 不匹配，跳过 value 部分
+            offset += actualValueLen
         }
         None
     }

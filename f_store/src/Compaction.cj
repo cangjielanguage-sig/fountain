@@ -173,18 +173,9 @@ class Compactor {
             // 5. 归并写入新 SSTable
             let newSSTables = writeStreamToSSTables(merger, sstDir, nextLevel)
 
-            if (newSSTables.size == 0) {
-                return
-            }
-
-            // 6. 原子替换：先加新 SSTable，再删旧的
-            for (sst in newSSTables) {
-                levelManager.addSSTable(nextLevel, sst)
-            }
+            // 无论是否有新 SSTable，都要清理旧文件（全量过期时 newSSTables 为空，旧文件仍需删除）
             levelManager.removeSSTables(level, selectedSSTables)
             levelManager.removeSSTables(nextLevel, overlappingSSTables)
-
-            // 7. 删除旧 SSTable 文件
             for (sst in selectedSSTables) {
                 try {
                     sst.close()
@@ -196,6 +187,15 @@ class Compactor {
                     sst.close()
                     remove(sst.getMetadata().filePath)
                 } catch (_: Exception) {}
+            }
+
+            if (newSSTables.size == 0) {
+                return
+            }
+
+            // 6. 原子替换：添加新 SSTable
+            for (sst in newSSTables) {
+                levelManager.addSSTable(nextLevel, sst)
             }
         } finally {
             // 关闭所有源迭代器，防止异常时 FD 泄漏。
