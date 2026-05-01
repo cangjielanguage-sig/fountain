@@ -1023,4 +1023,62 @@ public class SSTableTest {
         sst.close()
         remove(dir, recursive: true)
     }
+
+    /** 验证 openFromFile 从文件名正确解析 level（P0-1 修复验证）。
+     *  旧版硬编码 level=0，修复后从 L{level}_{sstIndex}.sst 解析。 */
+    @TestCase
+    public func sstableOpenFromFileParsesLevelFromName(): Unit {
+        let dir = "/tmp/f_store_test/sst_level_parse"
+        if (exists(dir)) { remove(dir, recursive: true) }
+        Directory.create(dir, recursive: true)
+
+        // 创建不同层级的 SSTable 文件
+        let buildSST = { path: String, key: UInt8 =>
+            let s = SSTable(path, 1)
+            s.write(ByteArray([key]), EntryValue([key + 0x10], Int64(key)))
+            s.finishWrite()
+            s.close()
+        }
+        buildSST("${dir}/L0_10.sst", 0x01)
+        buildSST("${dir}/L1_20.sst", 0x10)
+        buildSST("${dir}/L3_30.sst", 0x20)
+        // 旧格式（无 L 前缀的兼容文件）
+        buildSST("${dir}/compact_40.sst", 0x30)
+
+        // 重新打开并检查 metadata level
+        let sst0 = SSTable.open("${dir}/L0_10.sst")
+        @Expect(sst0.getMetadata().level == 0)
+
+        let sst1 = SSTable.open("${dir}/L1_20.sst")
+        @Expect(sst1.getMetadata().level == 1)
+
+        let sst3 = SSTable.open("${dir}/L3_30.sst")
+        @Expect(sst3.getMetadata().level == 3)
+
+        // 旧格式文件名无 L 前缀，应兼容降级到 level=0
+        let old = SSTable.open("${dir}/compact_40.sst")
+        @Expect(old.getMetadata().level == 0)
+
+        sst0.close()
+        sst1.close()
+        sst3.close()
+        old.close()
+        remove(dir, recursive: true)
+    }
+
+    /** 验证 parseLevelFromSSTablePath 和 parseSSTIndexFromPath 辅助函数正确性 */
+    @TestCase
+    public func sstableParseHelpersWorkCorrectly(): Unit {
+        // 正常路径
+        @Expect(parseLevelFromSSTablePath("/tmp/L0_42.sst") == 0)
+        @Expect(parseLevelFromSSTablePath("/tmp/L1_100.sst") == 1)
+        @Expect(parseLevelFromSSTablePath("/tmp/L7_999.sst") == 7)
+        @Expect(parseSSTIndexFromPath("/tmp/L0_42.sst") == 42)
+        @Expect(parseSSTIndexFromPath("/tmp/L1_100.sst") == 100)
+        @Expect(parseSSTIndexFromPath("/tmp/L7_999.sst") == 999)
+
+        // 旧格式（无 L 前缀）降级
+        @Expect(parseLevelFromSSTablePath("/tmp/compact_40.sst") == 0)
+        @Expect(parseSSTIndexFromPath("/tmp/compact_40.sst") == 0)
+    }
 }

@@ -41,14 +41,24 @@ class LevelManager {
             return
         }
         let files = SSTable.loadAll(sstDir)
+        var maxSstIndex: Int64 = 0
         // 按 level 分组添加到各层（init 时无并发，直接 add）
         for (f in files) {
             let level = f.getMetadata().level
             if (level >= 0 && level < levelCount) {
                 levels[level].load().add(f)
+                // 更新最大 sstIndex，用于恢复 sstableFileSeq
+                let idx = parseSSTIndexFromPath(f.getMetadata().filePath)
+                if (idx > maxSstIndex) {
+                    maxSstIndex = idx
+                }
             } else {
                 f.close()
             }
+        }
+        // 恢复全局 SSTable 序号，防止重启后文件名冲突
+        if (maxSstIndex > 0) {
+            sstableFileSeq.store(maxSstIndex)
         }
     }
 

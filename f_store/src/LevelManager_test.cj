@@ -258,6 +258,105 @@ public class LevelManagerTest {
         remove(dir, recursive: true)
     }
 
+    /** 验证 loadExisting 从文件名正确恢复各层级的 SSTable（P0-1 修复验证）。
+     *  旧版 openFromFile 硬编码 level=0，所有文件落入 L0。
+     *  修复后从文件名 L{level}_{sstIndex}.sst 解析 level，正确分配到对应层级。 */
+    @TestCase
+    public func levelManagerLoadRestoresCorrectLevels(): Unit {
+        let dir = "/tmp/f_store_lm_level_reload"
+        if (exists(dir)) { remove(dir, recursive: true) }
+        Directory.create(dir, recursive: true)
+
+        // 创建分别属于 L0, L1, L2 的 SSTable 文件（文件名包含正确 level）
+        var seq: Int64 = 1
+        let sst0 = SSTable("${dir}/L0_10.sst", 1)
+        sst0.write(ByteArray([0x01]), EntryValue([0xA1], seq))
+        seq++
+        sst0.finishWrite()
+
+        let sst1 = SSTable("${dir}/L1_20.sst", 1)
+        sst1.write(ByteArray([0x10]), EntryValue([0xB1], seq))
+        seq++
+        sst1.finishWrite()
+
+        let sst2 = SSTable("${dir}/L2_30.sst", 1)
+        sst2.write(ByteArray([0x20]), EntryValue([0xC1], seq))
+        seq++
+        sst2.finishWrite()
+
+        // 通过文件系统重新加载
+        let mgr = LevelManager(dir)
+        mgr.loadExisting()
+
+        // 验证每层各有 1 个文件
+        @Expect(mgr.getSSTablesForCompaction(0).size == 1)
+        @Expect(mgr.getSSTablesForCompaction(1).size == 1)
+        @Expect(mgr.getSSTablesForCompaction(2).size == 1)
+
+        // 验证元数据中的 level 正确
+        let l1Files = mgr.getSSTablesForCompaction(1)
+        if (l1Files.size > 0) {
+            @Expect(l1Files[0].getMetadata().level == 1)
+        }
+        let l2Files = mgr.getSSTablesForCompaction(2)
+        if (l2Files.size > 0) {
+            @Expect(l2Files[0].getMetadata().level == 2)
+        }
+
+        mgr.closeAll()
+        remove(dir, recursive: true)
+    }
+
+    /** 验证 loadExisting 后 sstableFileSeq 正确恢复（P0-2 修复验证）。
+     *  旧版 sstableFileSeq 重启后从 0 开始，后续 flush 可能覆盖磁盘已有文件。
+     *  修复后 loadExisting 扫描所有文件最大 index，设置 sstableFileSeq = maxIndex。 */
+    @TestCase
+    public func levelManagerLoadUpdatesSSTableFileSeq(): Unit {
+        let dir = "/tmp/f_store_lm_seq_restore"
+        if (exists(dir)) { remove(dir, recursive: true) }
+        Directory.create(dir, recursive: true)
+
+        // 创建具有已知 index=42 的 SSTable 文件
+        let sst = SSTable("${dir}/L0_42.sst", 1)
+        sst.write(ByteArray([0x01]), EntryValue([0xA1], 1))
+        sst.finishWrite()
+
+        // 保存原值后，模拟重启后状态：重置 sstableFileSeq
+        let savedSeq = sstableFileSeq.load()
+        sstableFileSeq.store(0)
+
+        // 加载现有文件
+        let mgr = LevelManager(dir)
+        mgr.loadExisting()
+
+        // 验证 sstableFileSeq 已恢复为 maxIndex (42)
+        @Expect(sstableFileSeq.load() == 42)
+
+        // 恢复 sstableFileSeq
+        sstableFileSeq.store(savedSeq)
+        mgr.closeAll()
+        remove(dir, recursive: true)
+    }
+
+    // 测试恢复后清理 sstableFileSeq
+    @TestCase
+    public func levelManagerLoadEmptyDirDoesNotChangeSSTableFileSeq(): Unit {
+        let dir = "/tmp/f_store_lm_seq_empty"
+        if (exists(dir)) { remove(dir, recursive: true) }
+        Directory.create(dir, recursive: true)
+
+        let savedSeq = sstableFileSeq.load()
+
+        let mgr = LevelManager(dir)
+        mgr.loadExisting()
+
+        // 空目录不应修改 sstableFileSeq
+        @Expect(sstableFileSeq.load() == savedSeq)
+
+        mgr.closeAll()
+        remove(dir, recursive: true)
+    }
+
     // ================================================================
     // 辅助方法
     // ================================================================

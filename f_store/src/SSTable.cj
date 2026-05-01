@@ -394,8 +394,10 @@ class SSTable <: Resource {
         let firstKey = if (indexEntries.size > 0) { indexEntries[0].firstKey } else { ByteArray([]) }
         let lastIdx = indexEntries.size - 1
         let lastKey = if (lastIdx >= 0) { indexEntries[lastIdx].firstKey } else { ByteArray([]) }
+        // 从文件名 L{level}_{sstIndex}.sst 解析 level
+        let actualLevel = parseLevelFromSSTablePath(path)
         let meta = SSTableMetadata(
-            firstKey, lastKey, eCount, 0, 0, Int64.Max, path, fileSize: fileLen
+            firstKey, lastKey, eCount, actualLevel, 0, Int64.Max, path, fileSize: fileLen
         )
         SSTable(path, file, filter, indexEntries, meta, idxOff)
     }

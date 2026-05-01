@@ -159,6 +159,51 @@ func flushMemTable(memTable: MemTable, sstDir: String, level: Int64): ArrayList<
     writeStreamToSSTables(memTable.iterator(), sstDir, level)
 }
 
+// === SSTable 文件名解析 ===
+// 文件名格式: L{level}_{sstIndex}.sst
+
+/** 从 SSTable 文件路径解析 level。文件名格式: L{level}_{sstIndex}.sst */
+func parseLevelFromSSTablePath(path: String): Int64 {
+    let parts = path.split("/")
+    let fileName = parts[parts.size - 1]
+    let name = if (fileName.endsWith(".sst")) {
+        fileName[0 .. (fileName.size - 4)]
+    } else {
+        fileName
+    }
+    if (name.startsWith("L")) {
+        let rest = name[1 .. name.size]
+        let nameParts = rest.split("_")
+        if (nameParts.size >= 2) {
+            try {
+                return Int64.parse(nameParts[0])
+            } catch (_: Exception) { return 0 }
+        }
+    }
+    0
+}
+
+/** 从 SSTable 文件路径解析 sstIndex。用于重启后恢复 sstableFileSeq。 */
+func parseSSTIndexFromPath(path: String): Int64 {
+    let parts = path.split("/")
+    let fileName = parts[parts.size - 1]
+    let name = if (fileName.endsWith(".sst")) {
+        fileName[0 .. (fileName.size - 4)]
+    } else {
+        fileName
+    }
+    if (name.startsWith("L")) {
+        let rest = name[1 .. name.size]
+        let nameParts = rest.split("_")
+        if (nameParts.size >= 2) {
+            try {
+                return Int64.parse(nameParts[1])
+            } catch (_: Exception) { return 0 }
+        }
+    }
+    0
+}
+
 // === WAL 清理 ===
 
 /** 清理指定 WAL 目录下所有已恢复的旧 .wal 文件。
