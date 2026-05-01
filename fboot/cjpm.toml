@@ -3,14 +3,14 @@
 
 [package]
   cjc-version = "1.1.0"
-  compile-option = "--dy-std"
-  override-compile-option = "--dy-std"
   description = "依赖fountain的应用项目启动程序"
   link-option = ""
   name = "fboot"
   output-type = "executable"
   src-dir = ""
   target-dir = ""
+  compile-option = "--dy-std"
+  override-compile-option = "--dy-std"
   organization = "fountain"
   version = "1.1.3"
   package-configuration = {}

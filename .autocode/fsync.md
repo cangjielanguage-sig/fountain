@@ -1,8 +1,6 @@
-# 前置任务
-mkdir fsync && cd fsync && cjpm init --type=dynamic && mkdir doc
 
 ## 任务
-按照以下要求创建一个架构设计文档，保存在fsync/doc/sync.md。
+按照以下要求创建一个架构设计文档，保存在fsync/doc/架构设计文档.md。
 按照sync.md拆分开发任务，制定开发计划，详细描述开发计划的每一步需要做什么，以及需要注意的要点、难点和需要注意的问题。
 以下提到的依赖项如果不足以实现需求务必要提出不足之处，经用户确认之后再生成文档。
 
@@ -51,7 +49,7 @@ public struct HostAndPort {
 - 不需要主节点
 - 各节点之间互相同步数据，
 - 对于任意节点只有KEY的一致性哈希落在当前节点的数据可改，其它数据在当前节点只可读
-5.1 fsync/src/server实现服务端
+5.1 包fountain::fsync.server实现服务端
     - 添加f_app依赖，实现fountain::f_app.SubCommand
       - 本项目服务端不必实现main函数，
       - SubCommand实现以子命令“sync”将本项目注册到fountain::f_app。
@@ -63,7 +61,7 @@ public struct HostAndPort {
     - f_protocol的REGISTER请求头表示向fsync服务端进程发送数据，fsync服务端进程需要存储发送过来的数据
       - 数据包含键和值，键必须是字符串，值必须是字节数组
         - 使用UNIX风格的路径作为KEY
-      - 以上都是消息头的解释，具体的发起选举、投票、同步数据、发送/接收数据都是消息体。
+      - 以上都是消息头的解释，具体的发起同步数据、发送/接收数据都是消息体。
       - f_protocol详细定义了消息头、消息ID、消息体
       - 消息按照f_codec编码，按以下顺序发送：
         - 消息头
@@ -82,7 +80,7 @@ public struct HostAndPort {
         - 可以取消监听
         - 值没有变化就阻塞直到超时，如果没有指定超时时间就一直阻塞
         - 值发生了变化，给客户端返回变化以后的值，如果是删除操作就返回f_codec定义的None
-5.2 fsync/src/client实现客户端
+5.2 fountain::fsync.client 实现客户端
     - fsync客户端以fountain::f_util.murmurHash(String) + 一致性哈希决定向哪个fsync服务端进程发送数据
       - 如果试图向失效节点写，立即失败
       - 如果试图向失效节点读，人失效节点的下一个节点读，如果下一个节点也失效了继续找下一个节点，直到遍历所有节点
@@ -108,5 +106,5 @@ public enum WatchedValue{
 5.4 以极致性能为第一目标
 5.5 使用f_net 和f_protocol实现通讯协议，使用f_codec实现编解码
 5.6 f_codec f_protocol f_net已经测试过了
-5.7 网络通讯使用std.net.TcpSocket，文件存储使用本项目的f_store
+5.7 网络通讯使用std.net.TcpSocket，数据存储使用本项目的f_store
 5.8 为本项目添加测试用例
