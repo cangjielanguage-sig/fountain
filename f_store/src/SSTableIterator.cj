@@ -125,10 +125,8 @@ class SSTableIterator <: Iterator<(ByteArray, EntryValue)> & Resource {
             // 提取 key 比较
             var off = offsetInBlock + 32
             let kBuf = Array<Byte>(keyLen, repeat: 0u8)
-            for (i in 0..keyLen) {
-                kBuf[i] = blockData[off]
-                off++
-            }
+            blockData[off .. off + keyLen].copyTo(kBuf)
+            off += keyLen
             let k = ByteArray(kBuf)
             if (k >= startKey) {
                 return // 找到起始位置
@@ -186,18 +184,14 @@ class SSTableIterator <: Iterator<(ByteArray, EntryValue)> & Resource {
             }
             var off = offsetInBlock + 32
             let kBuf = Array<Byte>(keyLen, repeat: 0u8)
-            for (i in 0..keyLen) {
-                kBuf[i] = blockData[off]
-                off++
-            }
+            blockData[off .. off + keyLen].copyTo(kBuf)
+            off += keyLen
             let val = if (valueLen < 0) {
                 None<Array<Byte>>
             } else {
                 let vBuf = Array<Byte>(valueLen, repeat: 0u8)
-                for (i in 0..valueLen) {
-                    vBuf[i] = blockData[off]
-                    off++
-                }
+                blockData[off .. off + valueLen].copyTo(vBuf)
+                off += valueLen
                 Some(vBuf)
             }
             let exp = if (expireAt == 0) { None<Int64> } else { Some(expireAt) }

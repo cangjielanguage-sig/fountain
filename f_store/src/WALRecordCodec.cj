@@ -30,15 +30,11 @@ class WALRecordCodec {
         offset = writeInt64LE(data, offset, Int64(keyLen))
         offset = writeInt64LE(data, offset, Int64(valueLen))
         offset = writeInt64LE(data, offset, expireAtVal)
-        for (i in 0..keyLen) {
-            data[offset] = key[i]
-            offset++
-        }
+        key.copyTo(data[offset .. offset + keyLen])
+        offset += keyLen
         if (let Some(v) <- value) {
-            for (i in 0..valueLen) {
-                data[offset] = v[i]
-                offset++
-            }
+            v.copyTo(data[offset .. offset + valueLen])
+            offset += valueLen
         }
         crc32(data)
     }

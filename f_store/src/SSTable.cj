@@ -76,8 +76,7 @@ class SSTable <: Resource {
     static const STATE_READABLE: Int64 = 1
     static const STATE_CLOSED: Int64 = 2
 
-    /** 非 Linux: 保护 seek+read 原子性 */
-    @When[os != "Linux"]
+    /** 保护 get/close 互斥，防止并发 get 时 close 导致 fd 重用 */
     private let getLock: Mutex = Mutex()
     /** Linux: fd 用于 pread 定位读取 */
     @When[os == "Linux"]
@@ -175,16 +174,12 @@ class SSTable <: Resource {
         // expire_at (0 = never)
         offset = writeInt64LE(buf, offset, expireAtVal)
         // key_bytes
-        for (i in 0..keyLen) {
-            buf[offset] = keyBytes[i]
-            offset++
-        }
+        keyBytes.copyTo(buf[offset .. offset + keyLen])
+        offset += keyLen
         // value_bytes
         if (let Some(v) <- entry.value) {
-            for (i in 0..valueLen) {
-                buf[offset] = v[i]
-                offset++
-            }
+            v.copyTo(buf[offset .. offset + valueLen])
+            offset += valueLen
         }
         file.write(buf)
         // bloom filter
@@ -299,7 +294,8 @@ class SSTable <: Resource {
         }
         let blockSize = blockEnd - blockStart
         @When[os == "Linux"]
-        let result = {=>
+        let result = synchronized(getLock) {
+            guardReadable()
             let buf = Array<Byte>(blockSize, repeat: 0u8)
             let bufHdl = unsafe { acquireArrayRawData<Byte>(buf) }
             let readOk = try {
@@ -318,7 +314,7 @@ class SSTable <: Resource {
                 }
             }
             scanResult
-        }()
+        }
         @When[os != "Linux"]
         let result = synchronized(getLock) {
             guardReadable()
@@ -386,10 +382,8 @@ class SSTable <: Resource {
             let keyLen = readInt64LE(indexBuf, offset)
             offset += 8
             let keyBytes = Array<Byte>(keyLen, repeat: 0u8)
-            for (i in 0..keyLen) {
-                keyBytes[i] = indexBuf[offset]
-                offset++
-            }
+            indexBuf[offset .. offset + keyLen].copyTo(keyBytes)
+            offset += keyLen
             indexEntries.add(IndexEntry(entryOff, ByteArray(keyBytes)))
         }
         // 3. 读取 Bloom Filter Block
@@ -481,13 +475,13 @@ class SSTable <: Resource {
                     file.close()
                 }
             }
-            // Linux: pread 内核级原子，直接关闭即可
+            // Linux: 锁内关闭文件，防止并发 get 使用已关闭的 fd
             @When[os == "Linux"]
-            let _ = {=>
+            let _ = synchronized(getLock) {
                 if (!file.isClosed()) {
                     file.close()
                 }
-            }()
+            }
         }
     }
 
@@ -570,19 +564,15 @@ class SSTable <: Resource {
             offset += 32
             // 提取 key
             let kBuf = Array<Byte>(keyLen, repeat: 0u8)
-            for (i in 0..keyLen) {
-                kBuf[i] = buf[offset]
-                offset++
-            }
+            buf[offset .. offset + keyLen].copyTo(kBuf)
+            offset += keyLen
             // 提取 value
             let val = if (valueLen < 0) {
                 None<Array<Byte>>
             } else {
                 let vBuf = Array<Byte>(valueLen, repeat: 0u8)
-                for (i in 0..valueLen) {
-                    vBuf[i] = buf[offset]
-                    offset++
-                }
+                buf[offset .. offset + valueLen].copyTo(vBuf)
+                offset += valueLen
                 Some(vBuf)
             }
             let exp = if (expireAt == 0) { None<Int64> } else { Some(expireAt) }
@@ -607,10 +597,8 @@ class SSTable <: Resource {
         for (entry in indexEntries) {
             offset = writeInt64LE(buf, offset, entry.offset)
             offset = writeInt64LE(buf, offset, Int64(entry.firstKey.bytes.size))
-            for (b in entry.firstKey.bytes) {
-                buf[offset] = b
-                offset++
-            }
+            entry.firstKey.bytes.copyTo(buf[offset .. offset + entry.firstKey.bytes.size])
+            offset += entry.firstKey.bytes.size
         }
         file.write(buf)
         currentOffset += totalSize

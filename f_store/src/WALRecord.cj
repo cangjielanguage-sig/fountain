@@ -65,16 +65,12 @@ class WALRecord {
         // expire_at (0 = never)
         offset = writeInt64LE(buf, offset, expireAtVal)
         // key_bytes
-        for (i in 0..keyLen) {
-            buf[offset] = key[i]
-            offset++
-        }
+        key.copyTo(buf[offset .. offset + keyLen])
+        offset += keyLen
         // value_bytes
         if (let Some(v) <- value) {
-            for (i in 0..valueLen) {
-                buf[offset] = v[i]
-                offset++
-            }
+            v.copyTo(buf[offset .. offset + valueLen])
+            offset += valueLen
         }
         buf
     }
@@ -100,16 +96,12 @@ class WALRecord {
             return None
         }
         let keyBytes = Array<Byte>(Int64(keyLen), repeat: 0u8)
-        for (i in 0..Int64(keyLen)) {
-            keyBytes[i] = bytes[offset]
-            offset++
-        }
+        bytes[offset .. offset + Int64(keyLen)].copyTo(keyBytes)
+        offset += Int64(keyLen)
         let value: ?Array<Byte> = if (valueLen >= 0) {
             let valueBytes = Array<Byte>(Int64(valueLen), repeat: 0u8)
-            for (i in 0..Int64(valueLen)) {
-                valueBytes[i] = bytes[offset]
-                offset++
-            }
+            bytes[offset .. offset + Int64(valueLen)].copyTo(valueBytes)
+            offset += Int64(valueLen)
             Some(valueBytes)
         } else {
             None

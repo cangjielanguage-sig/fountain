@@ -57,14 +57,10 @@ class WALReader {
                     }
                 }
                 let keyBytes = Array<Byte>(keyLen, repeat: 0u8)
-                for (i in 0..keyLen) {
-                    keyBytes[i] = data[i]
-                }
+                data[0 .. keyLen].copyTo(keyBytes)
                 let value: ?Array<Byte> = if (valueLen >= 0) {
                     let valueBytes = Array<Byte>(valueLen, repeat: 0u8)
-                    for (i in 0..valueLen) {
-                        valueBytes[i] = data[keyLen + i]
-                    }
+                    data[keyLen .. keyLen + valueLen].copyTo(valueBytes)
                     Some(valueBytes)
                 } else {
                     None
