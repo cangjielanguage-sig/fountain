@@ -97,11 +97,11 @@ class LevelManager {
                     continue
                 }
                 // Bloom Filter 快速否定：key 肯定不在这个 SSTable 中则跳过
-                if (!sst.getBloomFilter().mightContain(key.bytes)) {
-                    i--
-                    continue
-                }
                 try {
+                    if (!sst.getBloomFilter().mightContain(key.bytes)) {
+                        i--
+                        continue
+                    }
                     if (let Some(e) <- sst.get(key)) {
                         return checkExpiry(e, now)
                     }
@@ -115,11 +115,11 @@ class LevelManager {
                 if (sst.isClosed()) {
                     continue
                 }
-                let meta = sst.getMetadata()
-                if (key < meta.minKey || key > meta.maxKey) {
-                    continue
-                }
                 try {
+                    let meta = sst.getMetadata()
+                    if (key < meta.minKey || key > meta.maxKey) {
+                        continue
+                    }
                     if (let Some(e) <- sst.get(key)) {
                         return checkExpiry(e, now)
                     }
