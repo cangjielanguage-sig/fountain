@@ -73,10 +73,13 @@ class LevelManager {
             let count = sstList.size
             var i = count - 1
             while (i >= 0) {
-                let entry = sstList[i].get(key)
-                if (entry.isSome()) {
-                    if (let Some(e) <- entry) {
-                        return checkExpiry(e, now)
+                let sst = sstList[i]
+                if (!sst.isClosed()) {
+                    let entry = sst.get(key)
+                    if (entry.isSome()) {
+                        if (let Some(e) <- entry) {
+                            return checkExpiry(e, now)
+                        }
                     }
                 }
                 i--
@@ -85,6 +88,9 @@ class LevelManager {
             // Ln (n≥1): 按 metadata min/max 筛选范围匹配的 SSTable
             for (i in 0..sstList.size) {
                 let sst = sstList[i]
+                if (sst.isClosed()) {
+                    continue
+                }
                 let meta = sst.getMetadata()
                 if (key < meta.minKey || key > meta.maxKey) {
                     continue
