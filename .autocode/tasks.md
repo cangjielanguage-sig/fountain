@@ -75,19 +75,21 @@
 
 ## P3 暂缓
 
-### ByteArray.compare 伪 8 字节批量优化
+### ByteArray.compare 伪 8 字节批量优化 ✅
 
 - **文件**: `f_store/src/ByteArray.cj:26-35`
 - **问题**: while(8)+for(0..8) 仍然是逐字节比较，外层的 "8 字节" 内层只是循环展开，无实际性能增益。代码具有误导性。
 - **改进方案**: 简化为一层 while 循环逐字节比较。或真正用 unsafe 指针转换为 UInt64 做 8 字节整数比较。
+- **已修复**: 简化为一层 for 循环，使用 if-let cmp <- compare() 替代手动 < / > 三元表达式。
 
-### SSTableIterator.skipBefore 冗余边界检查
+### SSTableIterator.skipBefore 冗余边界检查 ✅
 
 - **文件**: `f_store/src/SSTableIterator.cj:58-75`
 - **问题**: skipBefore() 和 next() 中有约 20 行重复的溢出检查代码模式。
 - **改进方案**: 提取公共的 readRecordLen/checkOverflow 辅助函数。
+- **已修复**: 移除 next() 中重复的 offsetInBlock + 32 > blockData.size 检查（死代码）。
 
-### WAL.rotate 中使用 var 而非 AtomicReference
+### WAL.rotate 中使用 var 而非 AtomicReference ✅
 
 - **文件**: `f_store/src/WAL.cj`
 - **问题**: `this.file` 是 var 而非 AtomicReference，append() 中读取 this.file 不保证可见性（但 P0 修完加 Mutex 后解决）。
