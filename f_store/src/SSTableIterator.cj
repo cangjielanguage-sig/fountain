@@ -94,6 +94,11 @@ class SSTableIterator <: Iterator<(ByteArray, EntryValue)> & Resource {
             }
             let keyLen = readInt64LE(blockData, offsetInBlock)
             let valueLen = readInt64LE(blockData, offsetInBlock + 8)
+            // 帧校验
+            if (keyLen < 0 || valueLen < -1) {
+                setDone()
+                return
+            }
             let actualValueLen = if (valueLen >= 0) { valueLen } else { 0 }
             let headerEnd2 = offsetInBlock + 32
             var overflow = (headerEnd2 > blockData.size)
@@ -154,6 +159,11 @@ class SSTableIterator <: Iterator<(ByteArray, EntryValue)> & Resource {
             let valueLen = readInt64LE(blockData, offsetInBlock + 8)
             let seq = readInt64LE(blockData, offsetInBlock + 16)
             let expireAt = readInt64LE(blockData, offsetInBlock + 24)
+            // 帧校验：检测损坏/僵尸数据（与 SSTable.scanBuffer 一致）
+            if (keyLen < 0 || valueLen < -1 || seq < 0) {
+                setDone()
+                return None
+            }
             let actualValueLen = if (valueLen >= 0) { valueLen } else { 0 }
             let remaining = blockData.size - offsetInBlock - 32
             if (keyLen > remaining) {
@@ -210,7 +220,7 @@ class SSTableIterator <: Iterator<(ByteArray, EntryValue)> & Resource {
         blockData = Array<Byte>(blockSize, repeat: 0u8)
         offsetInBlock = 0
         @When[os == "Linux"]
-        let _ = {=>
+        let readOk = {=>
             let bufHdl = unsafe { acquireArrayRawData<Byte>(blockData) }
             try {
                 positionedRead(fd, bufHdl.pointer, blockSize, blockStart)
@@ -219,10 +229,13 @@ class SSTableIterator <: Iterator<(ByteArray, EntryValue)> & Resource {
             }
         }()
         @When[os != "Linux"]
-        let _ = {=>
+        let readOk = {=>
             file.seek(SeekPosition.Begin(blockStart))
-            file.read(blockData)
+            file.read(blockData) == blockSize
         }()
+        if (!readOk) {
+            setDone()
+        }
     }
 
     /** 标记迭代结束并关闭 File 句柄 */

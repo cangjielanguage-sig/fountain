@@ -1145,4 +1145,67 @@ public class SSTableTest {
         reopened.close()
         remove(dir, recursive: true)
     }
+
+    /** 验证 SSTableIterator 在数据损坏时自动停止迭代（P2-4 修复验证）。
+     *  loadBlock() 检测到 pread 失败后调用 setDone()，后续 next() 返回 None。 */
+    @TestCase
+    public func sstableIteratorStopsOnCorruptedBlock(): Unit {
+        let dir = "/tmp/f_store_test/sst_iter_corrupt"
+        if (exists(dir)) { remove(dir, recursive: true) }
+        Directory.create(dir, recursive: true)
+
+        let path = "${dir}/L0_1.sst"
+        let sst = SSTable(path, 10)
+        sst.write(ByteArray([0x01]), EntryValue([0xA1], 1))
+        sst.write(ByteArray([0x02]), EntryValue([0xB2], 2))
+        sst.finishWrite()
+        sst.close()
+
+        // 篡改数据块（写入损坏数据）
+        let file = File(path, OpenMode.ReadWrite)
+        file.seek(SeekPosition.Begin(0))
+        file.write([0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF])
+        file.close()
+
+        // 重新打开并迭代，应因帧校验检测到损坏而停止
+        let reopened = SSTable.open(path)
+        let iter = reopened.iterator()
+        let entries = ArrayList<(ByteArray, EntryValue)>()
+        while (let Some(entry) <- iter.next()) {
+            entries.add(entry)
+        }
+        @Expect(entries.size == 0)  // 损坏数据被跳过
+        @Expect(iter.isClosed())     // 迭代器自动关闭
+
+        reopened.close()
+        remove(dir, recursive: true)
+    }
+
+    /** 验证 SSTableIterator 帧校验拒绝 valueLen < -1 的损坏记录 */
+    @TestCase
+    public func sstableIteratorRejectsInvalidValueLen(): Unit {
+        let dir = "/tmp/f_store_test/sst_iter_vlen"
+        if (exists(dir)) { remove(dir, recursive: true) }
+        Directory.create(dir, recursive: true)
+
+        let path = "${dir}/L0_1.sst"
+        let sst = SSTable(path, 5)
+        sst.write(ByteArray([0x01]), EntryValue([0xA1], 1))
+        sst.finishWrite()
+        sst.close()
+
+        // 篡改 value_len 为 -2
+        let file = File(path, OpenMode.ReadWrite)
+        file.seek(SeekPosition.Begin(8))
+        file.write([0xFE, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF])
+        file.close()
+
+        let reopened = SSTable.open(path)
+        let iter = reopened.iterator()
+        @Expect(iter.next().isNone())
+        @Expect(iter.isClosed())
+
+        reopened.close()
+        remove(dir, recursive: true)
+    }
 }
