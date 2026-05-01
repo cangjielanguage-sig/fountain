@@ -377,14 +377,19 @@ Store 的所有操作均为无锁或原子操作：
 | `mixed` (5线程) | 0.62 s | ±2.0% | add/get/remove/prefix/ttl 混合运行 500ms |
 
 #### 稳定性
-
-同一 JVM 下 `-j 32` 并行运行结果与 `-j 1` 串行相比，各项差异 < 3.4%（最大为 TTL -3.4%）：
+- 运行环境
+windows11 wsl2.0 ubuntu24.04
+Intel(R) Core(TM) Ultra 7 155H (3.80 GHz)
+RAM 32GB
+export cjHeapSize=8GB
+cjpm bench -j N
+`-j 32` 并行运行结果与 `-j 1` 串行相比，各项差异 < 3.4%（最大为 TTL -3.4%）：
 - 串行与并行的中位数几乎一致，说明 Store 关键路径完全无锁
 - GC 警告仍然存在，但 `cjHeapSize=8GB` 已消除 OOM
 
 **命令**：
 ```bash
-cjHeapSize=8g cjpm bench          # 串行（推荐）
+cjHeapSize=8g cjpm bench -j 1     # 串行（推荐）
 cjHeapSize=8g cjpm bench -j 32    # 32 路并行
 ```
 
