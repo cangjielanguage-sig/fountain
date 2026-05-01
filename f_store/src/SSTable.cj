@@ -360,7 +360,7 @@ class SSTable <: Resource {
         let idxOff = readInt64LE(footerBuf, 0)
         let idxSz = readInt64LE(footerBuf, 8)
         let bloomOff = readInt64LE(footerBuf, 16)
-        let _ = readInt64LE(footerBuf, 24) // bloomSz 暂不使用
+        let bloomSz = readInt64LE(footerBuf, 24)
         let eCount = readInt64LE(footerBuf, 32)
         let magic = readUInt64LE(footerBuf, 40)
         if (magic != MAGIC) {
@@ -387,7 +387,7 @@ class SSTable <: Resource {
             indexEntries.add(IndexEntry(entryOff, ByteArray(keyBytes)))
         }
         // 3. 读取 Bloom Filter Block
-        let bloomBuf = Array<Byte>(readInt64LE(footerBuf, 24), repeat: 0u8)
+        let bloomBuf = Array<Byte>(bloomSz, repeat: 0u8)
         if (bloomBuf.size > 0) {
             file.seek(SeekPosition.Begin(bloomOff))
             file.read(bloomBuf)
