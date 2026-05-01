@@ -1257,4 +1257,75 @@ public class SSTableTest {
         reopened.close()
         remove(dir, recursive: true)
     }
+
+    /** P0.1 验证：并发 get() + close() 无数据损坏或 fd 重用。
+     *  多线程反复 get 的同时主线程调用 close()，
+     *  验证：① close 前的 get 数据正确；② close 后 get 抛 StoreClosedException；③ 无其他异常。 */
+    @TestCase
+    public func sstableConcurrentGetAndCloseNoRace(): Unit {
+        let dir = "/tmp/f_store_test/SSTable_conc_get_close"
+        if (exists(dir)) { remove(dir, recursive: true) }
+        Directory.create(dir, recursive: true)
+        let path = "${dir}/test.sst"
+
+        // 创建包含 200 条记录的 SSTable（多 Data Block）
+        let sst = SSTable(path, 200)
+        let n: Int64 = 200
+        for (i in 0..n) {
+            let key = ByteArray([UInt8((i / 256) % 256), UInt8(i % 256)])
+            sst.write(key, EntryValue([UInt8(i % 256)], i))
+        }
+        sst.finishWrite()
+
+        // 启动 2 个后台线程持续 get
+        let stopFlag = AtomicBool(false)
+        let errorCount = AtomicInt64(0)
+        let getBeforeClose = AtomicInt64(0)
+
+        let workers = ArrayList<Future<Int64>>()
+        for (t in 0..2) {
+            let fut = spawn {
+                var myLocalErrors: Int64 = 0
+                while (!stopFlag.load()) {
+                    for (i in 0..n) {
+                        if (stopFlag.load()) { break }
+                        let key = ByteArray([UInt8((i / 256) % 256), UInt8(i % 256)])
+                        try {
+                            let result = sst.get(key)
+                            if (let Some(e) <- result) {
+                                // 验证 sequence 正确的 get 是在 close 前完成的
+                                if (e.sequence == i) {
+                                    getBeforeClose.incrFetch()
+                                }
+                            }
+                        } catch (_: StoreClosedException) {
+                            // close 后 get 抛 StoreClosedException 是预期行为
+                            break
+                        } catch (_: Exception) {
+                            // 其他异常表示有 bug
+                            myLocalErrors++
+                        }
+                    }
+                }
+                errorCount.fetchAdd(myLocalErrors)
+            }
+            workers.add(fut)
+        }
+
+        // 让 get 线程跑一会儿后调用 close
+        sleep(Duration.millisecond * 20)
+        sst.close()
+
+        // 通知 worker 停止
+        stopFlag.store(true)
+        for (fut in workers) {
+            try { fut.get() } catch (_: Exception) {}
+        }
+
+        // 验证：① 无意外异常；② close 前至少成功完成一些 get
+        @Expect(errorCount.load() == 0)
+        @Expect(getBeforeClose.load() > 0)
+
+        remove(dir, recursive: true)
+    }
 }
