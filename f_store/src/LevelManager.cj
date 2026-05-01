@@ -26,6 +26,8 @@ class LevelManager {
     let sstDir: String
     let levels: Array<AtomicReference<ArrayList<SSTable>>>
     let levelCount: Int64
+    /** 每层 SSTable 总大小缓存，避免 shouldCompact 遍历全量文件 */
+    let levelSizes: Array<AtomicInt64>
 
     init(sstDir: String, levelCount!: Int64 = 7) {
         this.sstDir = sstDir
@@ -33,6 +35,7 @@ class LevelManager {
         this.levels = Array<AtomicReference<ArrayList<SSTable>>>(levelCount){_ => 
             AtomicReference<ArrayList<SSTable>>(ArrayList<SSTable>())
         }
+        this.levelSizes = Array<AtomicInt64>(levelCount){_ => AtomicInt64(0)}
     }
 
     /** 从 sstDir 加载已有 SSTable 文件 */
@@ -47,6 +50,7 @@ class LevelManager {
             let level = f.getMetadata().level
             if (level >= 0 && level < levelCount) {
                 levels[level].load().add(f)
+                levelSizes[level].fetchAdd(f.getMetadata().fileSize)
                 // 更新最大 sstIndex，用于恢复 sstableFileSeq
                 let idx = parseSSTIndexFromPath(f.getMetadata().filePath)
                 if (idx > maxSstIndex) {
@@ -147,6 +151,7 @@ class LevelManager {
             newList.add(all: oldList)
             newList.add(sst)
             if (levels[level].compareAndSwap(oldList, newList)) {
+                levelSizes[level].fetchAdd(sst.getMetadata().fileSize)
                 break
             }
         }
@@ -172,6 +177,10 @@ class LevelManager {
                 }
             }
             if (levels[level].compareAndSwap(oldList, newList)) {
+                // 递减已移除文件的 size（CAS 成功后才扣减）
+                for (rm in toRemove) {
+                    levelSizes[level].fetchAdd(-rm.getMetadata().fileSize)
+                }
                 break
             }
         }
@@ -227,13 +236,9 @@ class LevelManager {
         if (level == 0) {
             return count >= 4
         }
-        // Ln (n≥1): 总大小 >= 10^n MB
+        // Ln (n≥1): 总大小 >= 10^n MB（使用缓存 levelSizes，免遍历）
         let sizeLimitMB = 10 ** UInt64(level)
-        var totalSize: Int64 = 0
-        for (sst in sstList) {
-            totalSize += sst.getMetadata().fileSize
-        }
-        let totalMB = totalSize / (1024 * 1024)
+        let totalMB = levelSizes[level].load() / (1024 * 1024)
         totalMB >= sizeLimitMB
     }
 
