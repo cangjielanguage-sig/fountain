@@ -972,4 +972,55 @@ public class SSTableTest {
         sst.close()
         remove(dir, recursive: true)
     }
+
+    /** 多线程并发 get 同一 SSTable，验证无竞争数据损坏 */
+    @TestCase
+    public func sstableConcurrentGetNoRace(): Unit {
+        let dir = "/tmp/f_store_test/SSTable_conc_get"
+        if (exists(dir)) { remove(dir, recursive: true) }
+        Directory.create(dir, recursive: true)
+        let path = "${dir}/test.sst"
+
+        // 创建包含 500 条记录的 SSTable（多 Data Block）
+        let sst = SSTable(path, 500)
+        let n: Int64 = 500
+        for (i in 0..n) {
+            let key = ByteArray([UInt8((i / 256) % 256), UInt8(i % 256)])
+            sst.write(key, EntryValue([UInt8(i % 256)], i))
+        }
+        sst.finishWrite()
+
+        // 4 线程并发 get，每个线程读取所有 key
+        let threadCount = 4
+        let futures = ArrayList<Future<Int64>>()
+        for (t in 0..threadCount) {
+            let fut = spawn {
+                var errors: Int64 = 0
+                for (i in 0..n) {
+                    let key = ByteArray([UInt8((i / 256) % 256), UInt8(i % 256)])
+                    let result = sst.get(key)
+                    if (result.isNone()) {
+                        errors++
+                    } else if (let Some(e) <- result) {
+                        // 验证 sequence 匹配
+                        if (e.sequence != i) {
+                            errors++
+                        }
+                    }
+                }
+                errors
+            }
+            futures.add(fut)
+        }
+
+        // 收集结果
+        var totalErrors: Int64 = 0
+        for (fut in futures) {
+            totalErrors += fut.get()
+        }
+        @Expect(totalErrors == 0)
+
+        sst.close()
+        remove(dir, recursive: true)
+    }
 }

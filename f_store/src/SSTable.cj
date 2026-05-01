@@ -69,6 +69,12 @@ class SSTable <: Resource {
     // === 状态管理 ===
     private var state: SSTableState
     private let closed: AtomicBool
+    /** 非 Linux: 保护 seek+read 原子性 */
+    @When[os != "Linux"]
+    private let getLock: Mutex = Mutex()
+    /** Linux: fd 用于 pread 定位读取 */
+    @When[os == "Linux"]
+    private var fd: Int32 = 0
 
     static let MAX_SSTABLE_SIZE: Int64 = 64 * 1024 * 1024 // 64MB
     static let FOOTER_SIZE: Int64 = 48
@@ -98,6 +104,8 @@ class SSTable <: Resource {
         this.indexOffset = 0
         this.state = SSTableState.Writing
         this.closed = AtomicBool(false)
+        @When[os == "Linux"]
+        let _ = (this.fd = Int32(this.file.fileDescriptor.fileHandle))
     }
 
     /** 读取模式构造：从已有文件打开（内部使用） */
@@ -121,6 +129,10 @@ class SSTable <: Resource {
         this.indexOffset = indexOffset
         this.state = SSTableState.Readable
         this.closed = AtomicBool(false)
+        @When[os == "Linux"]
+        let _ = {=>
+            this.fd = Int32(file.fileDescriptor.fileHandle)
+        }()
     }
 
     // ================================================================
@@ -254,7 +266,9 @@ class SSTable <: Resource {
         bloomFilter
     }
 
-    /** 点查询。Readable 状态下可用 */
+    /** 点查询。Readable 状态下可用。
+     *  Linux: 使用 pread（单 syscall 原子定位读取，无锁）
+     *  非 Linux: 使用 seek+read（Mutex 保护并发安全） */
     func get(key: ByteArray): ?EntryValue {
         guardReadable()
         let keyBytes = key.bytes
@@ -275,7 +289,25 @@ class SSTable <: Resource {
             indexOffset
         }
         let blockSize = blockEnd - blockStart
-        scanDataBlock(blockStart, blockSize, keyBytes)
+        @When[os == "Linux"]
+        let result = {=>
+            let buf = Array<Byte>(blockSize, repeat: 0u8)
+            let bufHdl = unsafe { acquireArrayRawData<Byte>(buf) }
+            try {
+                positionedRead(fd, bufHdl.pointer, blockSize, blockStart)
+            } finally {
+                unsafe { releaseArrayRawData(bufHdl) }
+            }
+            scanBuffer(buf, blockSize, keyBytes)
+        }()
+        @When[os != "Linux"]
+        let result = synchronized(getLock) {
+            let buf = Array<Byte>(blockSize, repeat: 0u8)
+            file.seek(SeekPosition.Begin(blockStart))
+            file.read(buf)
+            scanBuffer(buf, blockSize, keyBytes)
+        }
+        result
     }
 
     /** 全量有序遍历。Readable 状态下可用。每次调用打开独立的文件句柄以避免 seek/read 竞态。 */
@@ -414,6 +446,10 @@ class SSTable <: Resource {
     public func close(): Unit {
         if (closed.compareAndSwap(false, true)) {
             state = SSTableState.Closed
+            // 非 Linux: 等待所有 in-progress get 完成后再关闭文件
+            // synchronized 块为空，仅通过锁获取保证等锁
+            @When[os != "Linux"]
+            let _ = synchronized(getLock) {}
             if (!file.isClosed()) {
                 file.close()
             }
@@ -465,11 +501,8 @@ class SSTable <: Resource {
         lo
     }
 
-    /** 在 Data Block 中扫描查找 key */
-    private func scanDataBlock(blockStart: Int64, blockSize: Int64, targetKey: Array<Byte>): ?EntryValue {
-        let buf = Array<Byte>(blockSize, repeat: 0u8)
-        file.seek(SeekPosition.Begin(blockStart))
-        file.read(buf)
+    /** 在已读取的 Data Block 缓冲区中扫描查找 key */
+    private func scanBuffer(buf: Array<Byte>, blockSize: Int64, targetKey: Array<Byte>): ?EntryValue {
         var offset: Int64 = 0
         while (offset + 32 <= blockSize) {
             let keyLen = readInt64LE(buf, offset)

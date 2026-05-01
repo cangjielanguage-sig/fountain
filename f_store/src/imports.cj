@@ -22,7 +22,7 @@ internal import std.convert.*
 internal import std.fs.*
 internal import std.io.SeekPosition
 internal import std.sort.*
-internal import std.sync.{AtomicBool, AtomicInt64, AtomicReference}
+internal import std.sync.{AtomicBool, AtomicInt64, AtomicReference, Mutex}
 internal import std.time.DateTime
 
 internal import std.env.atExit

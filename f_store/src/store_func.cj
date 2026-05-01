@@ -85,6 +85,25 @@ func readUInt64LE(buf: Array<Byte>, offset: Int64): UInt64 {
     (UInt64(buf[offset + 7]) << 56)
 }
 
+// === 定位读取 ===
+// pread 避免 seek+read 的并发竞争，单 syscall 完成定位与读取
+
+@When[os == "Linux"]
+foreign func pread(fd: Int32, buf: CPointer<Byte>, count: Int64, offset: Int64): Int64
+
+@When[os == "Linux"]
+func positionedRead(fd: Int32, buf: CPointer<Byte>, bufSize: Int64, offset: Int64): Bool {
+    let n = unsafe { pread(fd, buf, bufSize, offset) }
+    n == bufSize
+}
+
+@When[os != "Linux"]
+func positionedRead(file: File, buf: Array<Byte>, offset: Int64): Bool {
+    file.seek(SeekPosition.Begin(offset))
+    file.read(buf)
+    true
+}
+
 // === MemTable 刷盘 ===
 
 /** 全局 SSTable 序列号，每次 flush 自增，确保文件名唯一 */
