@@ -30,11 +30,12 @@
 - **问题**: close() 用 `synchronized(getLock){}` 空等 pending reads，但释放锁后 file.close() 之前新 get() 可能获取锁开始 I/O，随后被突然关闭的文件打断。
 - **改进方案**: 将 `file.close()` 移入 `synchronized(getLock){}` 块内执行。注：Linux 用 pread 无此问题。
 
-### Store.get() 重复 DateTime.now()
+### Store.get() 重复 DateTime.now() ✅
 
 - **文件**: `f_store/src/Store.cj:114-128`, `f_store/src/LevelManager.cj:62`
 - **问题**: get() 走 MemTable → Immutable → LevelManager 三路径时每段都新调 DateTime.now()。同一请求中调用 2-3 次系统调用。
 - **改进方案**: 在 Store.get() 入口调用一次 DateTime.now()，将 now 作为参数沿调用链传递到 checkExpiryAndGet 和 LevelManager.get。
+- **已修复**: Store.get() 顶部计算一次 now，checkExpiryAndGet 接受 now 参数，3 次调用复用同一个 now。
 
 ### Compaction 异常孤儿文件
 

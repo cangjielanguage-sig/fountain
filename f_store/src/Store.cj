@@ -151,21 +151,22 @@ public class Store <: Resource {
     public func get(key: Array<Byte>): ?Array<Byte> {
         guardOpen()
         let keyBytes = ByteArray(key)
+        let now = DateTime.now().toUnixTimeStamp().toNanoseconds()
         // 查 active MemTable
         let activeResult = memTableManager.getActive().get(keyBytes)
         if (let Some(entry) <- activeResult) {
-            return checkExpiryAndGet(entry)
+            return checkExpiryAndGet(entry, now)
         }
         // 查 immutable MemTable
         if (let Some(imm) <- memTableManager.getImmutable()) {
             let immResult = imm.get(keyBytes)
             if (let Some(entry) <- immResult) {
-                return checkExpiryAndGet(entry)
+                return checkExpiryAndGet(entry, now)
             }
         }
         // 查 LevelManager
         if (let Some(entry) <- levelManager.get(keyBytes)) {
-            return checkExpiryAndGet(entry)
+            return checkExpiryAndGet(entry, now)
         }
         None
     }
@@ -317,14 +318,14 @@ public class Store <: Resource {
     }
 
     /** 过期检查：过期或 tombstone 返回 None，否则返回 value */
-    private func checkExpiryAndGet(entry: EntryValue): ?Array<Byte> {
+    private func checkExpiryAndGet(entry: EntryValue, now: Int64): ?Array<Byte> {
         // tombstone
         if (entry.value.isNone()) {
             return None
         }
         // 过期检查
         if (let Some(expireAt) <- entry.expireAt) {
-            if (expireAt <= DateTime.now().toUnixTimeStamp().toNanoseconds()) {
+            if (expireAt <= now) {
                 return None
             }
         }
