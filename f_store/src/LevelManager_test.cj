@@ -529,6 +529,39 @@ public class LevelManagerTest {
         remove(dir, recursive: true)
     }
 
+    /** P3.1 验证 L0 Bloom Filter 提前否定路径：多文件 L0 正确返回已存在的 key */
+    @TestCase
+    public func levelManagerL0BloomFilterGet(): Unit {
+        let dir = "/tmp/f_store_lm_bf"
+        if (exists(dir)) { remove(dir, recursive: true) }
+        Directory.create(dir, recursive: true)
+        let mgr = LevelManager(dir)
+
+        // 创建 6 个 L0 SSTable，每个包含一个 key，key 范围不重叠
+        let keys = [[0x01u8], [0x10u8], [0x20u8], [0x30u8], [0x40u8], [0x50u8]]
+        for (i in 0..6) {
+            let sst = createSSTable("${dir}/L0_${i}.sst", keys[i][0], UInt8(0xA0 + i))
+            mgr.addSSTable(0, sst)
+        }
+        @Expect(mgr.getSSTablesForCompaction(0).size == 6)
+
+        // 正向验证：每个 key 都能正确找到
+        for (i in 0..6) {
+            let v = mgr.get(ByteArray(keys[i]))
+            @Expect(v.isSome(), "should find key 0x${keys[i][0].toUInt32().toHexString()}")
+        }
+
+        // 反向验证：不存在的 key 返回 None（Bloom Filter 提前否定 + SSTable.get 双重过滤）
+        let absentKeys = [[0x00u8], [0x05u8], [0x15u8], [0x25u8], [0x35u8], [0x45u8], [0x55u8], [0xFFu8]]
+        for (k in absentKeys) {
+            let v = mgr.get(ByteArray(k))
+            @Expect(v.isNone(), "absent key 0x${k[0].toUInt32().toHexString()} should be None")
+        }
+
+        mgr.closeAll()
+        remove(dir, recursive: true)
+    }
+
     // ================================================================
     // 辅助方法
     // ================================================================

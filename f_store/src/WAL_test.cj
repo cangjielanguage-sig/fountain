@@ -262,6 +262,39 @@ public class WALTest {
         }
     }
 
+    /** P3.3 验证 WAL 文件严格不超过 maxFileSize：先检查再写入 */
+    @TestCase
+    public func walRotationStrictSizeLimit(): Unit {
+        let dir = "/tmp/f_store_test/wal_strict_size"
+        if (exists(dir)) { remove(dir, recursive: true) }
+        Directory.create(dir, recursive: true)
+        let path = "${dir}/wal_0.wal"
+
+        // maxFileSize = 512B，每条记录约 38~40B，写满后触发 rotate
+        let wal = WAL(path, maxFileSize: 512)
+        // 写入足够多的数据确保至少触发一次 rotate
+        for (i in 0..100) {
+            wal.append([UInt8(i % 256)], [UInt8((i + 1) % 256)])
+        }
+
+        wal.close()
+
+        // 扫描 WAL 目录下所有 .wal 文件，验证每个文件大小严格 ≤ maxFileSize
+        let walDir = Path(path).parent.toString()
+        if (exists(walDir)) {
+            Directory.walk(walDir) { fi: FileInfo =>
+                if (fi.path.extensionName == "wal" && !fi.isDirectory()) {
+                    let f = File(fi.path.toString(), OpenMode.Read)
+                    @Expect(f.info.size <= 512)
+                    f.close()
+                }
+                true
+            }
+        }
+
+        remove(dir, recursive: true)
+    }
+
     /** 并发轮转：多线程同时写入小阈值 WAL，验证不丢数据 */
     @TestCase
     public func walConcurrentRotation(): Unit {
