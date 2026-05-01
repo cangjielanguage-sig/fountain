@@ -65,8 +65,8 @@ class WAL <: Resource {
             if (closed.load()) {
                 throw StoreClosedException()
             }
-            // 先检查当前文件大小，超限则 rotate 后再写入（确保文件严格不超过 maxFileSize）
-            if (currentFileSize.load() >= maxFileSize) {
+            // 检查写入当前记录后的文件大小是否超限，超限则先 rotate 再写入新文件
+            if (currentFileSize.load() + Int64(encoded.size) > maxFileSize) {
                 rotate()
             }
             // 始终同步写入文件（数据到 OS page cache，进程崩溃可恢复）
