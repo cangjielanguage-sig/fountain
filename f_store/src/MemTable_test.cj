@@ -99,4 +99,40 @@ public class MemTableTest {
         mt.add(ByteArray([0x01]), EntryValue([0x0A], 1))
         @Expect(mt.approximateSize() > 0)
     }
+
+    /** 验证 tailer 从指定 key 开始遍历 */
+    @TestCase
+    public func memTableTailer(): Unit {
+        let mt = MemTable()
+        mt.add(ByteArray([0x01]), EntryValue([0x0A], 1))
+        mt.add(ByteArray([0x03]), EntryValue([0x0C], 3))
+        mt.add(ByteArray([0x05]), EntryValue([0x0E], 5))
+
+        // 从 key 0x02 开始（跳过 0x01）
+        let iter1 = mt.tailer(ByteArray([0x02]))
+        let keys1 = ArrayList<ByteArray>()
+        while (let Some((k, _)) <- iter1.next()) {
+            keys1.add(k)
+        }
+        @Expect(keys1.size == 2)
+        @Expect(keys1[0] == ByteArray([0x03]))
+        @Expect(keys1[1] == ByteArray([0x05]))
+
+        // 从已有 key 0x03 开始（包含该 key）
+        let iter2 = mt.tailer(ByteArray([0x03]))
+        let keys2 = ArrayList<ByteArray>()
+        while (let Some((k, _)) <- iter2.next()) {
+            keys2.add(k)
+        }
+        @Expect(keys2.size == 2)
+
+        // 从超出最大 key 的位置开始（空结果）
+        let iter3 = mt.tailer(ByteArray([0xFF]))
+        @Expect(iter3.next().isNone())
+
+        // 空 MemTable 的 tailer
+        let emptyMt = MemTable()
+        let iter4 = emptyMt.tailer(ByteArray([0x01]))
+        @Expect(iter4.next().isNone())
+    }
 }

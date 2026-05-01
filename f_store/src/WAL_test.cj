@@ -261,4 +261,55 @@ public class WALTest {
             remove(p)
         }
     }
+
+    /** 并发轮转：多线程同时写入小阈值 WAL，验证不丢数据 */
+    @TestCase
+    public func walConcurrentRotation(): Unit {
+        let dir = "/tmp/f_store_test/wal_concurrent_rot"
+        if (exists(dir)) { remove(dir, recursive: true) }
+        Directory.create(dir, recursive: true)
+        let path = "${dir}/wal_0.wal"
+
+        // 极小 maxFileSize（1KB）确保频繁轮转
+        let wal = WAL(path, maxFileSize: 1024)
+        let writerCount = 4
+        let writesPerThread: Int64 = 50
+
+        let futures = ArrayList<Future<Int64>>()
+        for (t in 0..writerCount) {
+            let fut = spawn {
+                var count: Int64 = 0
+                for (i in 0..writesPerThread) {
+                    try {
+                        wal.append([UInt8(t)], [UInt8(i % 256)])
+                        count++
+                    } catch (_: Exception) {
+                        break
+                    }
+                }
+                count
+            }
+            futures.add(fut)
+        }
+
+        // 等待全部写入完成
+        var totalWritten: Int64 = 0
+        for (fut in futures) {
+            totalWritten += fut.get()
+        }
+
+        // 收集旧文件并关闭
+        let oldFiles = wal.takeOldFiles()
+        wal.close()
+
+        // 当前 WAL 路径也在 oldFiles 中
+        // 验证至少产生了轮转文件
+        @Expect(oldFiles.size >= 1)
+
+        // 通过 recoverAll 恢复所有数据
+        let mt = WALReader.recoverAll(dir)
+        @Expect(mt.approximateSize() >= totalWritten)
+
+        remove(dir, recursive: true)
+    }
 }

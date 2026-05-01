@@ -21,12 +21,14 @@ class WAL <: Resource {
     let closed: AtomicBool
     private let syncInterval: Int64
     private let appendCount: AtomicInt64
-    private var currentFileSize: Int64
+    private let currentFileSize: AtomicInt64
     private let maxFileSize: Int64
     private var walPath: String
     private let walDir: String
     /** 已关闭的旧 WAL 文件路径列表（等待清理） */
     private let oldFiles: ArrayList<String>
+    /** 轮转中标记，防止多线程同时 rotate */
+    private let rotating: AtomicBool
 
     init(path: String, startSequence!: Int64 = 0, maxFileSize!: Int64 = 64 * 1024 * 1024) {
         // 确保目录存在
@@ -41,9 +43,10 @@ class WAL <: Resource {
         this.closed = AtomicBool(false)
         this.syncInterval = 100
         this.appendCount = AtomicInt64(0)
-        this.currentFileSize = 0
+        this.currentFileSize = AtomicInt64(0)
         this.maxFileSize = maxFileSize
         this.oldFiles = ArrayList<String>()
+        this.rotating = AtomicBool(false)
     }
 
     func append(key: Array<Byte>, value: ?Array<Byte>, expireAt!: ?Int64 = None): Int64 {
@@ -55,13 +58,15 @@ class WAL <: Resource {
         let encoded = record.encode()
         // 始终同步写入文件（数据到 OS page cache，进程崩溃可恢复）
         file.write(encoded)
-        currentFileSize += Int64(encoded.size)
+        let prevSize = currentFileSize.fetchAdd(Int64(encoded.size))
         // fsync 每 syncInterval 次执行一次，降低 syscall 100 倍
         if (appendCount.incrFetch() % syncInterval == 0) {
             sync()
         }
-        if (currentFileSize >= maxFileSize) {
+        // 用 CAS 确保只有一个线程执行轮转
+        if (prevSize >= maxFileSize && rotating.compareAndSwap(false, true)) {
             rotate()
+            rotating.store(false)
         }
         seq
     }
@@ -95,7 +100,7 @@ class WAL <: Resource {
         let newPath = "${walDir}/wal_${startSeq}.wal"
         this.file = File(newPath, OpenMode.ReadWrite)
         this.walPath = newPath
-        this.currentFileSize = 0
+        this.currentFileSize.store(0)
         this.appendCount.store(0)
     }
 

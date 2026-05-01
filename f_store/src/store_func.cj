@@ -74,15 +74,6 @@ func writeUInt64LE(buf: Array<Byte>, offset: Int64, value: UInt64): Int64 {
     offset + 8
 }
 
-func writeFloat64LE(buf: Array<Byte>, offset: Int64, value: Float64): Int64 {
-    let tempBuf = Array<Byte>(8, repeat: 0u8)
-    value.writeLittleEndian(tempBuf)
-    for (i in 0..8) {
-        buf[offset + i] = tempBuf[i]
-    }
-    offset + 8
-}
-
 func readUInt64LE(buf: Array<Byte>, offset: Int64): UInt64 {
     UInt64(buf[offset]) |
     (UInt64(buf[offset + 1]) << 8) |
@@ -92,14 +83,6 @@ func readUInt64LE(buf: Array<Byte>, offset: Int64): UInt64 {
     (UInt64(buf[offset + 5]) << 40) |
     (UInt64(buf[offset + 6]) << 48) |
     (UInt64(buf[offset + 7]) << 56)
-}
-
-func readFloat64LE(buf: Array<Byte>, offset: Int64): Float64 {
-    let tempBuf = Array<Byte>(8, repeat: 0u8)
-    for (i in 0..8) {
-        tempBuf[i] = buf[offset + i]
-    }
-    Float64.readLittleEndian(tempBuf)
 }
 
 // === MemTable 刷盘 ===

@@ -238,6 +238,69 @@ public class StoreTest {
         store.close()
     }
 
+    /** 验证 syncWAL 正常调用不抛异常 */
+    @TestCase
+    public func testSyncWAL(): Unit {
+        let dir = getTestDir("sync_wal")
+        let store = Store(dir)
+        store.add("k1".unsafeBytes(), "v1".unsafeBytes())
+        // syncWAL 在正常状态下应正常返回
+        store.syncWAL()
+        store.close()
+    }
+
+    /** 验证 syncWAL 在 close 后抛 StoreClosedException */
+    @TestCase
+    public func testSyncWALAfterCloseThrows(): Unit {
+        let dir = getTestDir("sync_wal_closed")
+        let store = Store(dir)
+        store.add("k1".unsafeBytes(), "v1".unsafeBytes())
+        store.close()
+        var threw = false
+        try {
+            store.syncWAL()
+        } catch (_: StoreClosedException) {
+            threw = true
+        }
+        @Expect(threw)
+    }
+
+    /** 验证 cleanupOldWALFiles 删除 .wal 文件但保留其他文件 */
+    @TestCase
+    public func testCleanupOldWALFiles(): Unit {
+        let dir = "/tmp/f_store_test/cleanup_wal"
+        if (exists(dir)) { remove(dir, recursive: true) }
+        Directory.create(dir, recursive: true)
+
+        // 创建 .wal 文件
+        let wal1 = File("${dir}/0001.wal", OpenMode.ReadWrite)
+        wal1.write([0x01])
+        wal1.close()
+        let wal2 = File("${dir}/0002.wal", OpenMode.ReadWrite)
+        wal2.write([0x02])
+        wal2.close()
+
+        // 创建非 .wal 文件（应保留）
+        let other = File("${dir}/keep_me.txt", OpenMode.ReadWrite)
+        other.write([0x41])
+        other.close()
+        let sst = File("${dir}/L0_1.sst", OpenMode.ReadWrite)
+        sst.write([0x42])
+        sst.close()
+
+        // 执行清理
+        cleanupOldWALFiles(dir)
+
+        // .wal 文件应被删除
+        @Expect(!exists(Path("${dir}/0001.wal")))
+        @Expect(!exists(Path("${dir}/0002.wal")))
+        // 其他文件应保留
+        @Expect(exists(Path("${dir}/keep_me.txt")))
+        @Expect(exists(Path("${dir}/L0_1.sst")))
+
+        remove(dir, recursive: true)
+    }
+
     func getTestDir(name: String): String {
         let baseDir = "/tmp/f_store_test/Store_${name}"
         // 清理旧数据
