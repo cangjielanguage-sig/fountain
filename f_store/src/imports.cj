@@ -20,9 +20,9 @@ internal import std.binary.*
 internal import std.collection.ArrayList
 internal import std.convert.*
 internal import std.fs.*
-internal import std.io.{IOStream, SeekPosition}
+internal import std.io.SeekPosition
 internal import std.sort.*
-internal import std.sync.{AtomicBool, AtomicInt64, AtomicReference, AtomicOptionReference, Mutex}
+internal import std.sync.{AtomicBool, AtomicInt64, AtomicReference}
 internal import std.time.DateTime
 
 internal import std.env.atExit
