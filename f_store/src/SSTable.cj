@@ -173,6 +173,12 @@ class SSTable <: Resource {
         fileSize += recordLen
         dataBlockSize += recordLen
         entryCount++
+        // 验证写入有序性（语法检查，开销可忽略）
+        if (let Some(lastKey) <- maxKey) {
+            if (key < lastKey) {
+                throw Exception("SSTable write out of order")
+            }
+        }
         // 更新 min/max key
         if (minKey.isNone()) {
             minKey = key
