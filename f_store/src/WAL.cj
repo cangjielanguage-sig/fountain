@@ -65,12 +65,13 @@ class WAL <: Resource {
             if (closed.load()) {
                 throw StoreClosedException()
             }
-            // 始终同步写入文件（数据到 OS page cache，进程崩溃可恢复）
-            file.write(encoded)
-            let prevSize = currentFileSize.fetchAdd(Int64(encoded.size))
-            if (prevSize >= maxFileSize) {
+            // 先检查当前文件大小，超限则 rotate 后再写入（确保文件严格不超过 maxFileSize）
+            if (currentFileSize.load() >= maxFileSize) {
                 rotate()
             }
+            // 始终同步写入文件（数据到 OS page cache，进程崩溃可恢复）
+            file.write(encoded)
+            currentFileSize.fetchAdd(Int64(encoded.size))
             // fsync 锁内执行，确保与 close 互斥
             if (appendCount.incrFetch() % syncInterval == 0) {
                 file.flush()

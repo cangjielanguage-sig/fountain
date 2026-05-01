@@ -92,13 +92,18 @@ class LevelManager {
             var i = count - 1
             while (i >= 0) {
                 let sst = sstList[i]
-                if (!sst.isClosed()) {
-                    let entry = sst.get(key)
-                    if (entry.isSome()) {
-                        if (let Some(e) <- entry) {
-                            return checkExpiry(e, now)
-                        }
-                    }
+                if (sst.isClosed()) {
+                    i--
+                    continue
+                }
+                // Bloom Filter 快速否定：key 肯定不在这个 SSTable 中则跳过
+                if (!sst.getBloomFilter().mightContain(key.bytes)) {
+                    i--
+                    continue
+                }
+                let entry = sst.get(key)
+                if (let Some(e) <- entry) {
+                    return checkExpiry(e, now)
                 }
                 i--
             }

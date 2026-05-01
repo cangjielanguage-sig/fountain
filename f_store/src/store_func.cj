@@ -110,9 +110,7 @@ let sstableFileSeq = AtomicInt64(0)
  */
 func writeStreamToSSTables(iter: Iterator<(ByteArray, EntryValue)>, sstDir: String, level: Int64): ArrayList<SSTable> {
     let result = ArrayList<SSTable>()
-    if (!exists(sstDir)) {
-        Directory.create(sstDir, recursive: true)
-    }
+    // sstDir 在 Store.init() 中已创建，此后不会消失，无需重复检查
     var sstIndex: Int64 = sstableFileSeq.incrFetch()
     var writerPath = "${sstDir}/L${level}_${sstIndex}.sst"
     var writer = SSTable(writerPath, 64)
