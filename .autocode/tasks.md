@@ -378,18 +378,15 @@ public static func open(path: String): SSTable {
 
 ---
 
-#### 3.4 【P3 性能】Compaction 读写锁
+#### 3.4 【P3 性能】LevelManager 无锁化 ✅
 
 **文件**: `LevelManager.cj`  
-**类型**: 性能优化 | **预计**: 1~1.5 人天
+**类型**: 性能优化 | **预计**: 1 人天
 
-**目标**：消除 Compaction 期间对同层级 get 操作的阻塞
-
-**实施步骤**：
-1. 当前 `synchronized(levelLocks[level])` 保护 get 操作，与 compaction 互斥
-2. 如果实测发现争用，改用读写锁
-
-**验收标准**：compaction 期间 get 延迟增加 ≤5%
+**方案**：`AtomicReference<ArrayList<SSTable>>` 替代 `Mutex` + `ArrayList`
+- `get`/`getOverlappingSSTables`/`shouldCompact`：原子 `load()` 快照，无锁并发读
+- `addSSTable`/`removeSSTables`：copy + CAS 原子替换
+- Compaction 期间的 `get` 操作不再阻塞
 
 ---
 

@@ -264,11 +264,11 @@ class MemTableManager {
 ┌──────────┬──────────┬──────────┬─────────────┬────────────┬──────────┬────────────┬────────────┐
 │ checksum │ sequence │ key_len  │ value_len   │ expire_at  │ key_bytes │ value_bytes│
 │ 4 bytes  │ 8 bytes  │ 8 bytes  │ 8 bytes     │ 8 bytes    │ var       │ var        │
-│ CRC32    │ Int64    │ Int64    │ Int64       │ Int64      │           │ 0=删除     │
+│ CRC32    │ Int64    │ Int64    │ Int64       │ Int64      │           │ -1=删除    │
 └──────────┴──────────┴──────────┴─────────────┴────────────┴────────────┴────────────┘
 ```
 
-- `value_len = 0` 表示 tombstone（删除记录）
+- `value_len < 0` 表示 tombstone（删除记录）；`value_len >= 0` 为正常 value（含空数组）
 - `expire_at = 0` 表示永不过期，非零为纳秒级过期时间戳
 - `checksum` 覆盖 sequence + key_len + value_len + expire_at + key_bytes + value_bytes
 
@@ -375,7 +375,7 @@ class WAL <: Resource {
 │   index_offset(8) + index_size(8)                               │
 │   bloom_offset(8) + bloom_size(8)                               │
 │   entry_count(8) + min_key_len(8) + min_key + padding          │
-│   magic_number(8) = 0x4C534D54 ("LSMT")                         │
+│   magic_number(8) = 0x53545354 ("STST")                         │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -783,23 +783,27 @@ public func close(): Unit {
         return  // 已关闭
     }
 
-    // 1. 将 active MemTable swap 为 immutable
-    let imm = memTableManager.swapActive()
+    // 1. 停止 Compactor
+    compactor.stop()
 
-    // 2. 刷 immutable MemTable 到 SSTable
-    if (let Some(table) <- imm) {
-        flushMemTable(table)
+    // 2. flush 已有的 immutable MemTable（如果有）
+    if (let Some(imm) <- memTableManager.getImmutable()) {
+        flushMemTable(imm, sstDir, 0)
+        memTableManager.clearImmutable()
     }
 
-    // 3. WAL sync + close
+    // 3. swapActive → 将当前 active 原子切换为 immutable，再 flush
+    if (let Some(imm) <- memTableManager.swapActive()) {
+        flushMemTable(imm, sstDir, 0)
+        memTableManager.clearImmutable()
+    }
+
+    // 4. WAL sync + close
     wal.sync()
     wal.close()
 
-    // 4. 关闭所有 SSTable 文件
+    // 5. 关闭所有 SSTable 文件
     levelManager.closeAll()
-
-    // 5. 停止 Compaction 线程
-    compactionThread.interrupt()
 }
 ```
 
@@ -1040,9 +1044,24 @@ f_store
 
 | 文件 | 包 | 内容 |
 |------|---|------|
-| `src/Store.cj` | `fountain::f_store` | Store 主类、ByteArray、EntryValue、StoreClosedException、createStoreStream 工厂函数 |
-| `src/LSM.cj` | `fountain::f_store` | MemTable、MemTableManager、LevelManager |
-| `src/WAL.cj` | `fountain::f_store` | WAL 实现（Linux/非Linux 双版本）、记录编解码、崩溃恢复 |
-| `src/SSTable.cj` | `fountain::f_store` | SSTable 读写、文件格式、BloomFilter 持久化 |
+| `src/Store.cj` | `fountain::f_store` | Store 主类、add/remove/get/ttl/prefix/close、ByteArray、EntryValue、StoreClosedException |
+| `src/LSM.cj` | — | MemTable、MemTableManager、LevelManager（已迁出到独立文件） |
+| `src/MemTable.cj` | `fountain::f_store` | MemTable 实现 |
+| `src/MemTableManager.cj` | `fountain::f_store` | 双缓冲 MemTable 管理 |
+| `src/LevelManager.cj` | `fountain::f_store` | 层级管理（无锁 AtomicReference） |
+| `src/WAL.cj` | `fountain::f_store` | WAL 实现（File 同步 IO）、自动轮转 |
+| `src/WALRecord.cj` | `fountain::f_store` | WAL 记录编解码 |
+| `src/WALRecordCodec.cj` | `fountain::f_store` | CRC32 校验工具 |
+| `src/WALReader.cj` | `fountain::f_store` | WAL 读取与崩溃恢复（std.fs.File 同步读） |
+| `src/SSTable.cj` | `fountain::f_store` | SSTable 读写合并（单类 Writing→Readable 状态机） |
+| `src/SSTableIterator.cj` | `fountain::f_store` | SSTable 全量/前缀遍历器 |
+| `src/SSTableMerger.cj` | `fountain::f_store` | 多路归并迭代器 |
+| `src/SSTableMetadata.cj` | `fountain::f_store` | SSTable 元数据（含 fileSize） |
+| `src/SSTableState.cj` | `fountain::f_store` | Writing/Readable/Closed 状态枚举 |
+| `src/IndexEntry.cj` | `fountain::f_store` | Data Block 索引条目 |
+| `src/ByteArray.cj` | `fountain::f_store` | 有序字节数组 key |
+| `src/EntryValue.cj` | `fountain::f_store` | 键值条目（含 expireAt） |
+| `src/StoreClosedException.cj` | `fountain::f_store` | Store 关闭异常 |
+| `src/store_func.cj` | `fountain::f_store` | 小端序工具、flushMemTable、cleanupOldWALFiles |
 | `src/Compaction.cj` | `fountain::f_store` | Compaction 策略与执行 |
 | `src/PrefixIterator.cj` | `fountain::f_store` | 前缀遍历迭代器、多路归并 |
