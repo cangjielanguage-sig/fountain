@@ -120,17 +120,18 @@ func writeStreamToSSTables(iter: Iterator<(ByteArray, EntryValue)>, sstDir: Stri
 
 ### P2 — 性能（1项）
 
-#### P2-1: Compaction 对所有 level 统一选 4 个文件
+#### ✅ P2-1: Compaction 对所有 level 统一选 4 个文件（已修复）
 
-**文件**: `Compaction.cj:106`
+**文件**: `Compaction.cj:104-137`
 
 **问题描述**: `compact(level)` 对 L0 和 Ln (n≥1) 统一使用"从末尾选最多 4 个文件"的策略。对 L0（key 范围完全重叠）这是合理的，但对 Ln 层（SSTable 之间 key 范围不重叠），"末尾 4 个"的 range 可能与 nextLevel 完全无重叠，导致无效 IO。
 
-**修复方向**: 对 Ln 层应基于 key 范围重叠筛选目标 SSTable，而非简单末尾 4 个。具体方案需设计：
-
-- 获取 nextLevel 中与 compaction 范围重叠的 SSTable
-- 基于重叠范围的 key range 选择当前层中与之重叠的文件（而非"末尾 4 个"）
-- 这可能涉及从一个边界 key 开始扫描
+**修复方案**: L0 保持"末尾最多 4 个"策略不变；Ln 改为按 key 范围重叠筛选：
+- 获取 nextLevel 的 SSTable 列表
+- 检查当前层每个 SSTable 是否与 nextLevel 有任何范围重叠
+- 有重叠的文件加入 selected 列表
+- 无重叠时选最后一个文件（1 个最小 compaction 单元）
+- 测试验证：`nonL0SelectsOverlappingOnly`、`nonL0NoOverlapSelectsLastOne`
 
 ---
 

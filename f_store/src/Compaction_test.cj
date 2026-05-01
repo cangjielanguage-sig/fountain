@@ -20,6 +20,46 @@ import std.unittest.testmacro.*
 import std.collection.ArrayList
 import std.fs.*
 
+/** 测试用迭代器：在产出 N 个元素后，下一次 next() 抛出异常 */
+class FailAfterIterator <: Iterator<(ByteArray, EntryValue)> {
+    let items: ArrayList<(ByteArray, EntryValue)>
+    let failAfter: Int64
+    var index: Int64 = 0
+
+    init(items: ArrayList<(ByteArray, EntryValue)>, failAfter: Int64) {
+        this.items = items
+        this.failAfter = failAfter
+    }
+
+    public func next(): Option<(ByteArray, EntryValue)> {
+        if (index >= failAfter) {
+            throw Exception("FailAfterIterator: simulated failure after ${failAfter} items")
+        }
+        if (index >= items.size) {
+            return None
+        }
+        let item = items[index]
+        index++
+        Some(item)
+    }
+}
+
+/** 辅助函数：创建 SSTable 并写入数据 */
+func createSSTable(path: String, entries: Array<(ByteArray, EntryValue)>): SSTable {
+    let idx = path.lastIndexOf('/').getOrThrow()
+    let dir = path[0 .. idx]
+    if (!exists(dir)) {
+        Directory.create(dir, recursive: true)
+    }
+    let capacity = if (entries.size > 0) { entries.size } else { 1 }
+    let sst = SSTable(path, capacity)
+    for ((key, entry) in entries) {
+        sst.write(key, entry)
+    }
+    sst.finishWrite()
+    sst
+}
+
 @Test
 public class SSTableMergerTest {
 
@@ -180,22 +220,6 @@ public class SSTableMergerTest {
         let merger = SSTableMerger(sources)
         let result = merger.next()
         @Expect(result.isNone())
-    }
-
-    /** 辅助函数：创建 SSTable 并写入数据 */
-    private func createSSTable(path: String, entries: Array<(ByteArray, EntryValue)>): SSTable {
-        let idx = path.lastIndexOf('/').getOrThrow()
-        let dir = path[0 .. idx]
-        if (!exists(dir)) {
-            Directory.create(dir, recursive: true)
-        }
-        let capacity = if (entries.size > 0) { entries.size } else { 1 }
-        let sst = SSTable(path, capacity)
-        for ((key, entry) in entries) {
-            sst.write(key, entry)
-        }
-        sst.finishWrite()
-        sst
     }
 
     /** 4 源归并：验证超过 2 个源的归并正确性，含去重和 tombstone */
@@ -655,6 +679,169 @@ public class CompactionTest {
         // 验证：原有数据不受影响
         @Expect(mgr.get(ByteArray([0x01])).isSome())
         @Expect(mgr.get(ByteArray([0x02])).isSome())
+
+        mgr.closeAll()
+        remove(dir, recursive: true)
+    }
+
+    /** 验证 writeStreamToSSTables 在迭代器抛异常时正确关闭当前 writer 并删除孤儿文件。
+     *  P0-2 修复：catch 块关闭 + 删除已 finishWrite 的 SSTable 后重新抛出异常。
+     *  此测试仅覆盖"当前 writer 清理"路径（未跨 64MB 阈值），验证 catch 块不崩溃、
+     *  不残留 .sst 文件。 */
+    @TestCase
+    public func writeStreamThrowsClosesWriterAndRemovesFile(): Unit {
+        let dir = "${testDir}/write_stream_throw"
+        Directory.create(dir, recursive: true)
+
+        // 自定义迭代器：产出 5 条记录后在第 3 次 next() 时抛出异常
+        let items = ArrayList<(ByteArray, EntryValue)>()
+        for (i in 0..5) {
+            items.add((ByteArray([UInt8(i)]), EntryValue([UInt8(0xA0 + i)], Int64(i))))
+        }
+        let iter = FailAfterIterator(items, 3)
+
+        try {
+            writeStreamToSSTables(iter, dir, 0)
+            @Expect(false) // 不应到达这里
+        } catch (_: Exception) {
+            // 预期异常
+        }
+
+        // 验证：目录下无残留 .sst 文件
+        let files = ArrayList<String>()
+        Directory.walk(dir) { fi =>
+            if (fi.path.extensionName == "sst") {
+                files.add(fi.path.toString())
+            }
+            true
+        }
+        @Expect(files.size == 0)
+
+        remove(dir, recursive: true)
+    }
+}
+
+@Test
+public class CompactionSelectionTest {
+
+    let testDir = "/tmp/f_store_compaction_selection_test"
+
+    /** 辅助函数：创建 SSTable 并写入数据 */
+    private func createSSTable(path: String, entries: Array<(ByteArray, EntryValue)>): SSTable {
+        let idx = path.lastIndexOf('/').getOrThrow()
+        let dir = path[0 .. idx]
+        if (!exists(dir)) {
+            Directory.create(dir, recursive: true)
+        }
+        let capacity = if (entries.size > 0) { entries.size } else { 1 }
+        let sst = SSTable(path, capacity)
+        for ((key, entry) in entries) {
+            sst.write(key, entry)
+        }
+        sst.finishWrite()
+        sst
+    }
+
+    /** 验证 Ln 层 compaction 只选择与 nextLevel 有范围重叠的 SSTable。
+     *  P2-1 修复：非 L0 层按 key 范围重叠筛选，避免无效 IO。 */
+    @TestCase
+    public func nonL0SelectsOverlappingOnly(): Unit {
+        let dir = "${testDir}/overlap"
+        Directory.create(dir, recursive: true)
+
+        // L1: 3 个 SSTable，key 范围不重叠
+        let l1_1 = createSSTable("${dir}/L1_0.sst", [
+            (ByteArray([UInt8(0x01), UInt8(0x00)]), EntryValue(Some([UInt8(0xAAu8)]), 1)),
+            (ByteArray([UInt8(0x01), UInt8(0x10)]), EntryValue(Some([UInt8(0xABu8)]), 2))
+        ])
+        let l1_2 = createSSTable("${dir}/L1_1.sst", [
+            (ByteArray([UInt8(0x02), UInt8(0x00)]), EntryValue(Some([UInt8(0xBBu8)]), 3)),
+            (ByteArray([UInt8(0x02), UInt8(0x10)]), EntryValue(Some([UInt8(0xBCu8)]), 4))
+        ])
+        let l1_3 = createSSTable("${dir}/L1_2.sst", [
+            (ByteArray([UInt8(0x03), UInt8(0x00)]), EntryValue(Some([UInt8(0xCCu8)]), 5)),
+            (ByteArray([UInt8(0x03), UInt8(0x10)]), EntryValue(Some([UInt8(0xCDu8)]), 6))
+        ])
+
+        // L2: 1 个 SSTable，只与 L1 的 [0x02xx] 范围重叠
+        let l2_1 = createSSTable("${dir}/L2_0.sst", [
+            (ByteArray([UInt8(0x02), UInt8(0x08)]), EntryValue(Some([UInt8(0xDDu8)]), 7)),
+            (ByteArray([UInt8(0x02), UInt8(0x18)]), EntryValue(Some([UInt8(0xDEu8)]), 8))
+        ])
+
+        let mgr = LevelManager(dir, levelCount: 7)
+        mgr.addSSTable(1, l1_1)
+        mgr.addSSTable(1, l1_2)
+        mgr.addSSTable(1, l1_3)
+        mgr.addSSTable(2, l2_1)
+
+        @Expect(mgr.getSSTablesForCompaction(1).size == 3)
+
+        let compactor = Compactor(mgr, dir, levelCount: 7)
+        compactor.compact(1)
+
+        // L1 应剩余 2 个文件（[0x01xx] 和 [0x03xx] 未与 L2 重叠）
+        let remainingL1 = mgr.getSSTablesForCompaction(1)
+        @Expect(remainingL1.size == 2)
+
+        // 全部 6 个 key 仍可读
+        for (i in 1..4) {
+            for (j in [UInt8(0x00), UInt8(0x10)]) {
+                let key = ByteArray([UInt8(i), j])
+                let v = mgr.get(key)
+                @Expect(v.isSome())
+            }
+        }
+
+        mgr.closeAll()
+        remove(dir, recursive: true)
+    }
+
+    /** 验证 Ln 层与 nextLevel 无重叠时只选最后一个文件。
+     *  P2-1 修复：无重叠时不选末尾 4 个，选 1 个避免无效 IO。 */
+    @TestCase
+    public func nonL0NoOverlapSelectsLastOne(): Unit {
+        let dir = "${testDir}/no_overlap"
+        Directory.create(dir, recursive: true)
+
+        // L1: 3 个 SSTable
+        let l1_1 = createSSTable("${dir}/L1_0.sst", [
+            (ByteArray([UInt8(0x01)]), EntryValue(Some([UInt8(0xAAu8)]), 1))
+        ])
+        let l1_2 = createSSTable("${dir}/L1_1.sst", [
+            (ByteArray([UInt8(0x02)]), EntryValue(Some([UInt8(0xBBu8)]), 2))
+        ])
+        let l1_3 = createSSTable("${dir}/L1_2.sst", [
+            (ByteArray([UInt8(0x03)]), EntryValue(Some([UInt8(0xCCu8)]), 3))
+        ])
+
+        // L2: 1 个 SSTable，与 L1 完全无重叠
+        let l2_1 = createSSTable("${dir}/L2_0.sst", [
+            (ByteArray([UInt8(0x05)]), EntryValue(Some([UInt8(0xDDu8)]), 4))
+        ])
+
+        let mgr = LevelManager(dir, levelCount: 7)
+        mgr.addSSTable(1, l1_1)
+        mgr.addSSTable(1, l1_2)
+        mgr.addSSTable(1, l1_3)
+        mgr.addSSTable(2, l2_1)
+
+        @Expect(mgr.getSSTablesForCompaction(1).size == 3)
+
+        let compactor = Compactor(mgr, dir, levelCount: 7)
+        compactor.compact(1)
+
+        // L1 应剩余 2 个文件（最后一个 [0x03] 被选中）
+        let remainingL1 = mgr.getSSTablesForCompaction(1)
+        @Expect(remainingL1.size == 2)
+
+        // 全部 4 个 key 仍可读
+        for (i in 1..4) {
+            let key = ByteArray([UInt8(i)])
+            let v = mgr.get(key)
+            @Expect(v.isSome())
+        }
+        @Expect(mgr.get(ByteArray([UInt8(0x05)])).isSome())
 
         mgr.closeAll()
         remove(dir, recursive: true)

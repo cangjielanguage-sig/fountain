@@ -103,9 +103,36 @@ class Compactor {
         }
         // 从末尾开始选（新文件在末尾，数据最新），最多 4 个
         let selectedSSTables = ArrayList<SSTable>()
-        let pickCount = if (levelSSTables.size > 4) { 4 } else { levelSSTables.size }
-        for (i in (levelSSTables.size - pickCount)..levelSSTables.size) {
-            selectedSSTables.add(levelSSTables[i])
+        if (level == 0) {
+            // L0: key 范围全重叠，从末尾选最多 4 个
+            let pickCount = if (levelSSTables.size > 4) { 4 } else { levelSSTables.size }
+            for (i in (levelSSTables.size - pickCount)..levelSSTables.size) {
+                selectedSSTables.add(levelSSTables[i])
+            }
+        } else {
+            // Ln (n≥1): SSTable 之间 key 范围不重叠
+            // 选择与 nextLevel 有范围重叠的文件，避免无效 IO
+            let nextLevelSSTables = levelManager.getSSTablesForCompaction(nextLevel)
+            if (nextLevelSSTables.size > 0) {
+                for (sst in levelSSTables) {
+                    let meta = sst.getMetadata()
+                    var overlaps = false
+                    for (ns in nextLevelSSTables) {
+                        let nm = ns.getMetadata()
+                        if (!(meta.maxKey < nm.minKey || meta.minKey > nm.maxKey)) {
+                            overlaps = true
+                            break
+                        }
+                    }
+                    if (overlaps) {
+                        selectedSSTables.add(sst)
+                    }
+                }
+            }
+            if (selectedSSTables.size == 0) {
+                // 无重叠：选一个文件（从末尾选，逐步推进 compaction 边界）
+                selectedSSTables.add(levelSSTables[levelSSTables.size - 1])
+            }
         }
         if (selectedSSTables.size == 0) {
             return
