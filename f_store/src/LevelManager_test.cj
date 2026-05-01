@@ -548,14 +548,14 @@ public class LevelManagerTest {
         // 正向验证：每个 key 都能正确找到
         for (i in 0..6) {
             let v = mgr.get(ByteArray(keys[i]))
-            @Expect(v.isSome(), "should find key 0x${keys[i][0].toUInt32().toHexString()}")
+            @Expect(v.isSome(), "should find key at index ${i}")
         }
 
         // 反向验证：不存在的 key 返回 None（Bloom Filter 提前否定 + SSTable.get 双重过滤）
         let absentKeys = [[0x00u8], [0x05u8], [0x15u8], [0x25u8], [0x35u8], [0x45u8], [0x55u8], [0xFFu8]]
-        for (k in absentKeys) {
-            let v = mgr.get(ByteArray(k))
-            @Expect(v.isNone(), "absent key 0x${k[0].toUInt32().toHexString()} should be None")
+        for (i in 0..absentKeys.size) {
+            let v = mgr.get(ByteArray(absentKeys[i]))
+            @Expect(v.isNone(), "absent key at index ${i} should be None")
         }
 
         mgr.closeAll()
