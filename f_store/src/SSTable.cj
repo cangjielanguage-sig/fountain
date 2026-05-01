@@ -212,7 +212,7 @@ class SSTable <: Resource {
         let actualMaxKey = maxKey ?? ByteArray([])
         let meta = SSTableMetadata(
             actualMinKey, actualMaxKey, entryCount, level,
-            sequenceStart, sequenceEnd, path
+            sequenceStart, sequenceEnd, path, fileSize: this.fileSize
         )
         this.metadata = Some(meta)
         this.indexOffset = indexOffset
@@ -344,7 +344,7 @@ class SSTable <: Resource {
         let lastIdx = indexEntries.size - 1
         let lastKey = if (lastIdx >= 0) { indexEntries[lastIdx].firstKey } else { ByteArray([]) }
         let meta = SSTableMetadata(
-            firstKey, lastKey, eCount, 0, 0, Int64.Max, path
+            firstKey, lastKey, eCount, 0, 0, Int64.Max, path, fileSize: fileLen
         )
         SSTable(path, file, filter, indexEntries, meta, idxOff)
     }

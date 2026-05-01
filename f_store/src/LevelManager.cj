@@ -203,8 +203,7 @@ class LevelManager {
             let sizeLimitMB = 10 ** UInt64(level)
             var totalSize: Int64 = 0
             for (sst in levels[level]) {
-                // 用 entryCount 近似估算大小
-                totalSize += sst.getMetadata().entryCount * 100
+                totalSize += sst.getMetadata().fileSize
             }
             let totalMB = totalSize / (1024 * 1024)
             totalMB >= sizeLimitMB

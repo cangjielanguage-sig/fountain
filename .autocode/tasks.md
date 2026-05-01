@@ -327,18 +327,13 @@ public static func open(path: String): SSTable {
 
 ---
 
-#### 2.4 【P2 正确性】LevelManager L0 遍历优先查最新文件
+#### 2.4 【P2 正确性】LevelManager L0 遍历优先查最新文件 ✅
 
-**文件**: `LevelManager.cj`  
+**文件**: `LevelManager.cj:70-79`  
 **类型**: 性能修复 | **预计**: 0.5 人天
 
-**问题（B5 + 优化点1）**：L1+ 查询是线性扫描非二分（性能问题），L0 遍历未按 sequence 倒序（最新文件 last 最可能命中）。
-
-**修复方案**：
-1. L0 遍历改为从末尾开始反向遍历（最新数据优先匹配）
-2. L1+ 保持线性扫描（文件数少时可接受）
-
-**验收标准**：L0 大量文件时 get 延迟降低（最新数据多数在前几个文件找到）
+**修复**：L0 遍历从末尾开始反向（新 flush 的 SSTable 添加在列表尾部，优先命中）
+**附带修复**：`SSTableIterator` 空 `indexEntries` 时跳过 `loadBlock` 避免越界
 
 ---
 

@@ -24,9 +24,11 @@ class SSTableMetadata {
     let sequenceStart: Int64
     let sequenceEnd: Int64
     let filePath: String
+    /** 文件实际大小（字节） */
+    let fileSize: Int64
 
     init(minKey: ByteArray, maxKey: ByteArray, entryCount: Int64, level: Int64,
-         sequenceStart: Int64, sequenceEnd: Int64, filePath: String) {
+         sequenceStart: Int64, sequenceEnd: Int64, filePath: String, fileSize!: Int64 = 0) {
         this.minKey = minKey
         this.maxKey = maxKey
         this.entryCount = entryCount
@@ -34,5 +36,6 @@ class SSTableMetadata {
         this.sequenceStart = sequenceStart
         this.sequenceEnd = sequenceEnd
         this.filePath = filePath
+        this.fileSize = fileSize
     }
 }
