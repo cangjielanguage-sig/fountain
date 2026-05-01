@@ -95,8 +95,8 @@ func positionedRead(file: File, buf: Array<Byte>, offset: Int64): Bool {
 // === MemTable 刷盘 ===
 
 /** 从迭代器写入 SSTable 过程中发生的异常 */
-class SSTableWritingException <: BaseException {
-    public init(caused: Exception) {
+public class SSTableWritingException <: BaseException {
+    init(caused: Exception) {
         super(caused)
     }
 }
