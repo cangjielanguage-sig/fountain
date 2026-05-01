@@ -132,8 +132,9 @@ func writeStreamToSSTables(iter: Iterator<(ByteArray, EntryValue)>, sstDir: Stri
             writer.close()
         }
     } catch (e: Exception) {
+        // 1. 关闭当前正在写入的 SSTable（Writing 状态，未 finishWrite）
         writer.close()
-        // 删除可能部分写入的孤儿文件
+        // 2. 删除当前正在写入的孤儿文件（未 finishWrite，内容不完整）
         try {
             if (exists(writerPath)) {
                 remove(writerPath)
@@ -142,6 +143,16 @@ func writeStreamToSSTables(iter: Iterator<(ByteArray, EntryValue)>, sstDir: Stri
             let thrown = SSTableWritingException(e2)
             thrown.addSuppressed(e)
             throw thrown
+        }
+        // 3. 关闭 + 删除 result 中已 finishWrite 的 SSTable
+        //    这些文件虽然格式完整，但 compaction 已中断，不应保留
+        for (sst in result) {
+            try {
+                sst.close()
+                if (exists(sst.getMetadata().filePath)) {
+                    remove(sst.getMetadata().filePath)
+                }
+            } catch (_: Exception) {}
         }
         throw e
     }
