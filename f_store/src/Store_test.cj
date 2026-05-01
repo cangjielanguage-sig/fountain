@@ -133,6 +133,41 @@ public class StoreTest {
         store.close()
     }
 
+    /** 验证覆盖已过期 key 时返回旧值（P1-3 修复验证）。
+     *  旧版 addWithExpire 在返回旧值前重新调 DateTime.now()，
+     *  若旧值在 add 完成时恰好过期则返回 None，违反"返回添加时的旧值"语义。 */
+    @TestCase
+    public func testAddOverwriteExpiredKeyReturnsOldValue(): Unit {
+        let dir = getTestDir("overwrite_expired")
+        let store = Store(dir)
+        let key = "expired_key".unsafeBytes()
+        let oldValue = "old_val".unsafeBytes()
+        let newValue = "new_val".unsafeBytes()
+
+        // 添加带 500ms TTL 的键
+        store.add(key, oldValue, Duration.millisecond * 500)
+        @Expect(store.get(key).isSome())
+
+        // 等待键过期
+        sleep(Duration.millisecond * 600)
+
+        // 添加新值，应返回旧值（即使旧值已过期）
+        let result = store.add(key, newValue)
+        @Expect(result.isSome())
+        if (let Some(v) <- result) {
+            @Expect(v == oldValue)
+        }
+
+        // 检查新值已写入
+        let getResult = store.get(key)
+        @Expect(getResult.isSome())
+        if (let Some(v) <- getResult) {
+            @Expect(v == newValue)
+        }
+
+        store.close()
+    }
+
     @TestCase
     public func testCloseAndReopen(): Unit {
         let dir = getTestDir("reopen")

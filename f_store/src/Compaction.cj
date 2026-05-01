@@ -22,6 +22,7 @@ class Compactor {
     let levelCount: Int64
     let running: AtomicBool
     let stopSignal: AtomicBool
+    private var compactionThread: ?Future<Unit>
 
     init(levelManager: LevelManager, sstDir: String, levelCount!: Int64 = 7) {
         this.levelManager = levelManager
@@ -29,6 +30,7 @@ class Compactor {
         this.levelCount = levelCount
         this.running = AtomicBool(false)
         this.stopSignal = AtomicBool(false)
+        this.compactionThread = None
     }
 
     /** 启动后台 compaction 线程 */
@@ -37,15 +39,22 @@ class Compactor {
             return
         }
         stopSignal.store(false)
-        spawn {
+        let fut = spawn {
             runLoop()
             running.store(false)
         }
+        compactionThread = Some(fut)
     }
 
-    /** 停止 compaction 线程 */
+    /** 停止 compaction 线程并等待结束 */
     func stop(): Unit {
         stopSignal.store(true)
+        if (let Some(f) <- compactionThread) {
+            try {
+                f.get()
+            } catch (_: Exception) {}
+            compactionThread = None
+        }
     }
 
     /** 是否正在运行 */

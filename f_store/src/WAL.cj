@@ -59,7 +59,7 @@ class WAL <: Resource {
         let seq = sequence.incrFetch()
         let record = WALRecord(seq, key, value, expireAt: expireAt)
         let encoded = record.encode()
-        // 用 Mutex 保护 file.write + rotate 的原子性，防止并发 rotate 写已关闭文件
+        // 用 Mutex 保护 file.write + rotate + sync 的原子性，防止与 close 竞态
         synchronized (appendLock) {
             // 获取锁后再次检查 closed（可能在等待锁时 close() 已执行）
             if (closed.load()) {
@@ -71,10 +71,10 @@ class WAL <: Resource {
             if (prevSize >= maxFileSize) {
                 rotate()
             }
-        }
-        // fsync 每 syncInterval 次执行一次，降低 syscall 100 倍
-        if (appendCount.incrFetch() % syncInterval == 0) {
-            sync()
+            // fsync 锁内执行，确保与 close 互斥
+            if (appendCount.incrFetch() % syncInterval == 0) {
+                file.flush()
+            }
         }
         seq
     }

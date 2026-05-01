@@ -262,11 +262,6 @@ public class Store <: Resource {
         let old = memTableManager.getActive().add(ByteArray(key), entry)
         maybeFlush()
         if (let Some(oldEntry) <- old) {
-            if (let Some(oldExpire) <- oldEntry.expireAt) {
-                if (oldExpire <= DateTime.now().toUnixTimeStamp().toNanoseconds()) {
-                    return None // 旧值已过期
-                }
-            }
             return oldEntry.value
         }
         None

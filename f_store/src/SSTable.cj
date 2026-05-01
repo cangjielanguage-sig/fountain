@@ -307,8 +307,12 @@ class SSTable <: Resource {
             let scanResult: ?EntryValue = if (readOk) {
                 scanBuffer(buf, blockSize, keyBytes)
             } else {
-                guardNotClosed()
-                None
+                // pread 失败：可能是 compaction 关闭本 SSTable 后另一线程持有旧快照
+                if (closed.load()) {
+                    None
+                } else {
+                    throw Exception("SSTable I/O error: positionedRead failed")
+                }
             }
             scanResult
         }()
@@ -496,13 +500,6 @@ class SSTable <: Resource {
     /** 检查 Readable 状态 */
     private func guardReadable(): Unit {
         if (state.load() != STATE_READABLE) {
-            throw StoreClosedException()
-        }
-    }
-
-    /** I/O 操作失败后检查是否已关闭（区分关闭竞争 vs 真正 I/O 错误） */
-    private func guardNotClosed(): Unit {
-        if (closed.load()) {
             throw StoreClosedException()
         }
     }

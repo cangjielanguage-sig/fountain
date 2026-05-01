@@ -21,23 +21,24 @@
 
 ## P1（重要缺陷 — 建议修复）
 
-### P1-1: Compactor 线程不可等待 — close 与 compaction 竞态
+### P1-1: Compactor 线程不可等待 — close 与 compaction 竞态 ✅
 - **文件**: Compaction.cj:40-43 + Store.cj:227
 - **问题**: spawn 返回值丢弃，`stop()` 仅设 stopSignal。`Store.close()` 中 `closeAll()` 执行后 compactor 仍可能向 LevelManager 添加 SSTable
 - **影响**: 新 SSTable File 句柄泄漏；并发访问可能 StoreClosedException
 - **修复**: 保存 Future，stop() 调用 future.get() 等待线程结束
 
-### P1-2: WAL.sync() 在 appendLock 外执行
+### P1-2: WAL.sync() 在 appendLock 外执行 ✅
 - **文件**: WAL.cj:76
 - **问题**: `append()` 退出 `synchronized(appendLock)` 后执行 `file.flush()`，不受 appendLock 保护。与 close() 间存在竞态窗口
 - **影响**: 极小概率对已关闭文件调用 flush() → 未捕获异常 → 线程崩溃
-- **修复**: sync() 移入 appendLock 内执行，或在 sync() 前置 closed 检查双重保护
+- **修复**: sync() 移入 appendLock 内执行，确保与 close 互斥
 
-### P1-3: addWithExpire 旧值过期检查使用 fresh now()
+### P1-3: addWithExpire 旧值过期检查使用 fresh now() ✅
 - **文件**: Store.cj:266
 - **问题**: `add()` 返回旧值时重新调用 `DateTime.now()`，语义上 `add()` 应返回添加时的旧值而非"添加完成时的旧值"
 - **影响**: 添加时旧值未过期，完成时已过期 → 返回 None，违反语义
 - **修复**: 删除此过期检查，直接返回 oldEntry.value
+- **测试**: `StoreTest.testAddOverwriteExpiredKeyReturnsOldValue`
 
 ## P2（中等 — 可选）
 
