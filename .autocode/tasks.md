@@ -17,7 +17,7 @@
 - **问题**: iterator()/tailer() 每次打开独立 File 句柄，SSTableIterator 无 close()，句柄永不释放
 - **修复**: SSTableIterator 实现 Resource + close()，调用方（SSTableMerger、PrefixIterator）负责关闭
 
-## P3 — 优化：PrefixIterator 频繁 DateTime.now()
+## P3 — 优化：PrefixIterator 频繁 DateTime.now() ❌ 不修复
 - **文件**: PrefixIterator.cj:107
-- **问题**: 每次 next() 都调 DateTime.now()，可缓存一次
-- **修复**: init() 时缓存 now
+- **问题**: 每次 next() 都调 DateTime.now()
+- **结论**: 必须实时获取当前时间，遍历期间可能发生过期，缓存 now 会返回过期 key
