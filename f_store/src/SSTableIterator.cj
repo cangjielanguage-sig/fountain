@@ -25,6 +25,10 @@ class SSTableIterator <: Iterator<(ByteArray, EntryValue)> {
     private var offsetInBlock: Int64
     private var done: Bool
 
+    /** Linux: fd 用于 pread 定位读取（单 syscall，替代 seek+read） */
+    @When[os == "Linux"]
+    private var fd: Int32 = 0
+
     let startKey: ?ByteArray
 
     init(file: File, indexEntries: ArrayList<IndexEntry>, indexOffset: Int64, startKey: ?ByteArray) {
@@ -63,6 +67,9 @@ class SSTableIterator <: Iterator<(ByteArray, EntryValue)> {
             this.done = true
         } else {
             this.done = false
+            // Linux: 提取 fd 用于 pread
+            @When[os == "Linux"]
+            let _ = (this.fd = Int32(this.file.fileDescriptor.fileHandle))
             loadBlock()
         }
         // 跳过 startKey 之前的条目
@@ -208,8 +215,20 @@ class SSTableIterator <: Iterator<(ByteArray, EntryValue)> {
         }
         let blockSize = blockEnd - blockStart
         blockData = Array<Byte>(blockSize, repeat: 0u8)
-        file.seek(SeekPosition.Begin(blockStart))
-        file.read(blockData)
         offsetInBlock = 0
+        @When[os == "Linux"]
+        let _ = {=>
+            let bufHdl = unsafe { acquireArrayRawData<Byte>(blockData) }
+            try {
+                positionedRead(fd, bufHdl.pointer, blockSize, blockStart)
+            } finally {
+                unsafe { releaseArrayRawData(bufHdl) }
+            }
+        }()
+        @When[os != "Linux"]
+        let _ = {=>
+            file.seek(SeekPosition.Begin(blockStart))
+            file.read(blockData)
+        }()
     }
 }

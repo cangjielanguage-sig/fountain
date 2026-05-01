@@ -13,25 +13,9 @@
 
 ## P2 — 健壮性/性能
 
-### 优化P2-1 Q-2: SSTable.state改用Atomic
-- **位置**: SSTable.cj L70
-- **问题**: state字段非Atomic且close()写入无内存序保证
-
-### 优化P2-2 PERF-2: SSTableIterator改为pread
-- **位置**: SSTableIterator.cj L211-213
-- **问题**: loadBlock()用seek+read 2 syscalls, Linux可简化为1个pread
-
-## P3 — 测试补充
-
-### 优化P3 TEST-1: close+read并发测试
-- **位置**: Concurrency_test.cj
-- **问题**: 未覆盖close()期间并发get()的测试
-
-## P2 — 健壮性/性能
-
-### 优化P2-1 Q-2: SSTable.state改用Atomic
-- **位置**: SSTable.cj L70
-- **问题**: state字段非Atomic且close()写入无内存序保证
+### ✅ 优化P2-1 Q-2: SSTable.state改用Atomic
+- **提交**: `120fc298`
+- **改法**: AtomicInt64 + static const 常量替代 var 字段
 
 ### 优化P2-2 PERF-2: SSTableIterator改为pread
 - **位置**: SSTableIterator.cj L211-213
