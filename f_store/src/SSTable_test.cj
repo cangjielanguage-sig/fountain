@@ -19,6 +19,7 @@ import std.unittest.*
 import std.unittest.testmacro.*
 import std.fs.*
 import fountain::f_base.*
+import fountain::f_concurrent.ExtendAtomicInt64
 
 @Test
 public class SSTableTest {

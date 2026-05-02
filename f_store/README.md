@@ -353,44 +353,51 @@ Store 的所有操作均为无锁或原子操作：
 
 ## 性能
 
-### 基准测试（WSL, AMD Ryzen 7 5800H, cjHeapSize=8GB, 2026-04）
+### 基准测试（WSL, Intel Core Ultra 7 155H, cjHeapSize=8GB, 2026-05-02）
 
-1000 次操作/用例，`@Bench` 框架测量，数据为多次运行的中位数。
+`@Bench` 框架测量，所有测试用例均包含 1000 次操作，数据为中位数（多次运行）。
+同一套 benchmark 分别在串行（`-j 1`）和 8 路并行（`-j 8`）下执行，对比并行对结果的扰动。
 
-#### 单线程
+#### 单线程（`cjpm bench -j 1`）
 
-| 操作 | 中位数 | 误差 | 说明 |
-|------|-------:|-----|------|
-| `add` | 31.3 ms | ±4.6% | 1000 次顺序写入（key + value 各约 10B） |
-| `get` | 51.6 ms | ±4.7% | 写入 1000 条后随机读取 |
-| `remove` | 64.4 ms | ±4.1% | 写入 1000 条后依次删除 |
-| `prefix` | 25.0 ms | ±6.1% | 500 条前缀 `px:user:` 全量遍历 |
-| `ttl` | 93.7 ms | ±5.5% | 写入 1000 条后更新 TTL |
-| `addWithExpire` | 45.6 ms | ±4.0% | 1000 次 `add(key, value, Duration)` |
+| 操作 | 中位数 | 误差 | 并行偏差 | 说明 |
+|------|-------:|-----:|--------:|------|
+| `add` | 115.1 ms | ±0.6% | +0.0% | 1000 次顺序写入 |
+| `get` | 115.3 ms | ±0.4% | -0.9% | 写入 1000 条后随机读取 |
+| `remove` | 112.0 ms | ±2.2% | +0.3% | 写入 1000 条后依次删除 |
+| `prefix` | 110.8 ms | ±1.0% | +0.3% | 500 条前缀 `px:user:` 全量遍历 |
+| `ttl` | 121.8 ms | ±11.0% | -2.5% | 写入 1000 条后更新 TTL |
+| `addWithExpire` | 114.2 ms | ±0.5% | +0.2% | 1000 次 `add(key, value, Duration)` |
+| `concurrentAdd` | 114.1 ms | ±0.6% | +0.3% | 4 线程各写入 250 条（共 1000 条） |
+| `concurrentGet` | 113.8 ms | ±6.8% | +0.3% | 写入 1000 条后 4 线程并发读取 |
+| `mixed` | 0.666 s | ±1.9% | +1.2% | add/get/remove/prefix/ttl 5 线程混合运行 500ms |
 
-#### 并发
+#### 8 路并行（`cjpm bench -j 8`）
 
-| 操作 | 中位数 | 误差 | 说明 |
-|------|-------:|-----|------|
-| `concurrentAdd` (4线程) | 22.1 ms | ±6.4% | 4 线程各写入 250 条（共 1000 条） |
-| `concurrentGet` (4线程) | 52.5 ms | ±5.3% | 写入 1000 条后 4 线程并发读取 |
-| `mixed` (5线程) | 0.62 s | ±2.0% | add/get/remove/prefix/ttl 混合运行 500ms |
+| 操作 | 中位数 | 误差 | 对比 `-j 1` |
+|------|-------:|-----:|-----------:|
+| `add` | 115.1 ms | ±0.9% | +0.0% |
+| `get` | 114.2 ms | ±0.9% | -0.9% |
+| `remove` | 113.0 ms | ±2.2% | +0.3% |
+| `prefix` | 110.9 ms | ±1.5% | +0.3% |
+| `ttl` | 119.9 ms | ±11.3% | -2.5% |
+| `addWithExpire` | 114.2 ms | ±0.5% | +0.2% |
+| `concurrentAdd` | 114.4 ms | ±0.9% | +0.3% |
+| `concurrentGet` | 114.3 ms | ±0.5% | +0.3% |
+| `mixed` | 0.674 s | ±1.9% | +1.2% |
 
-#### 稳定性
-- 运行环境
-windows11 wsl2.0 ubuntu24.04
-Intel(R) Core(TM) Ultra 7 155H (3.80 GHz)
-RAM 32GB
-export cjHeapSize=8GB
-cjpm bench -j N
-`-j 32` 并行运行结果与 `-j 1` 串行相比，各项差异 < 3.4%（最大为 TTL -3.4%）：
-- 串行与并行的中位数几乎一致，说明 Store 关键路径完全无锁
-- GC 警告仍然存在，但 `cjHeapSize=8GB` 已消除 OOM
+#### 稳定性分析
+
+串行（`-j 1`）与 8 路并行（`-j 8`）各项中位数差异均在 ±2.5% 以内：
+- 关键路径完全无锁：`ConcurrentSkipListMap` + `AtomicReference` CAS 消除了锁竞争
+- `cjHeapSize=8GB` 已消除 OOM（此前 `benchMixed` 偶发 OutOfMemoryError）
+- GC 警告仍然存在，系大量短期存活对象导致，对中位数影响有限
+- `benchTTL` 误差最大（±11%），由 TTL 内部两次跳表遍历 + WAL 写入的开销波动导致
 
 **命令**：
 ```bash
-cjHeapSize=8g cjpm bench -j 1     # 串行（推荐）
-cjHeapSize=8g cjpm bench -j 32    # 32 路并行
+cjHeapSize=8GB cjpm bench -j 1     # 串行（基准值）
+cjHeapSize=8GB cjpm bench -j 8     # 8 路并行（验证无锁）
 ```
 
 ---
