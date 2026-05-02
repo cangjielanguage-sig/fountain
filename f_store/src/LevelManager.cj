@@ -28,6 +28,8 @@ class LevelManager {
     let levelCount: Int64
     /** 每层 SSTable 总大小缓存，避免 shouldCompact 遍历全量文件 */
     let levelSizes: Array<AtomicInt64>
+    /** SSTable 总数缓存，0 = 无 SSTable → get() 可跳过全层循环 */
+    let totalSSTableCount: AtomicInt64
 
     init(sstDir: String, levelCount!: Int64 = MAX_LEVEL) {
         this.sstDir = sstDir
@@ -36,6 +38,7 @@ class LevelManager {
             AtomicReference<ArrayList<SSTable>>(ArrayList<SSTable>())
         }
         this.levelSizes = Array<AtomicInt64>(levelCount){_ => AtomicInt64(0)}
+        this.totalSSTableCount = AtomicInt64(0)
     }
 
     /** 从 sstDir 加载已有 SSTable 文件 */
@@ -51,6 +54,7 @@ class LevelManager {
             if (level >= 0 && level < levelCount) {
                 levels[level].load().add(f)
                 levelSizes[level].fetchAdd(f.getMetadata().fileSize)
+                totalSSTableCount.incrFetch()
                 // 更新最大 sstIndex，用于恢复 sstableFileSeq
                 let idx = parseSSTIndexFromPath(f.getMetadata().filePath)
                 if (idx > maxSstIndex) {
@@ -74,6 +78,10 @@ class LevelManager {
 
     /** 从 L0 到 Ln 逐层查找 key，含过期检查（使用调用方传入的 now） */
     func get(key: ByteArray, now: Int64): ?EntryValue {
+        // 无 SSTable 时跳过全层循环（benchmark/小数据场景常见）
+        if (totalSSTableCount.load() == 0) {
+            return None
+        }
         for (level in 0..levelCount) {
             let result = getInLevel(level, key, now)
             if (result.isSome()) {
@@ -157,6 +165,7 @@ class LevelManager {
             newList.add(sst)
             if (levels[level].compareAndSwap(oldList, newList)) {
                 levelSizes[level].fetchAdd(sst.getMetadata().fileSize)
+                totalSSTableCount.incrFetch()
                 break
             }
         }
@@ -182,9 +191,10 @@ class LevelManager {
                 }
             }
             if (levels[level].compareAndSwap(oldList, newList)) {
-                // 递减已移除文件的 size（CAS 成功后才扣减）
+                // 递减已移除文件的 size 和 count（CAS 成功后才扣减）
                 for (rm in toRemove) {
                     levelSizes[level].fetchAdd(-rm.getMetadata().fileSize)
+                    totalSSTableCount.decrFetch()
                 }
                 break
             }

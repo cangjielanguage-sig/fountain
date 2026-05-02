@@ -21,9 +21,12 @@ package fountain::f_store
  */
 public struct ByteArray <: Comparable<ByteArray> & Hashable {
     public let bytes: Array<Byte>
+    /** 预计算 hashCode，避免每次调用遍历全量字节。CSLM findNode 中需多次获取。 */
+    let hash: Int64
 
     public init(bytes: Array<Byte>) {
         this.bytes = bytes
+        this.hash = HashBuilder().append<Byte, Array<Byte>>(bytes).build()
     }
 
     /** 字典序比较：逐字节比较，短前缀为小，全等则相等。 */
@@ -40,6 +43,6 @@ public struct ByteArray <: Comparable<ByteArray> & Hashable {
     }
 
     public func hashCode(): Int64 {
-        HashBuilder().append<Byte, Array<Byte>>(bytes).build()
+        hash
     }
 }
