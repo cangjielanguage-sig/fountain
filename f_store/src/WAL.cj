@@ -19,6 +19,10 @@ class WAL <: Resource {
     /** 线程局部编码缓冲区（4KB 覆盖绝大多数小值记录） */
     private static let encodeBuf = ThreadLocal<Array<Byte>>()
 
+    /** mmap WAL 文件基址（Linux），零 syscall 写入 page cache */
+    @When[os == "Linux"]
+    private var mmapPtr: CPointer<Byte>
+
     private var file: File
     let sequence: AtomicInt64
     let closed: AtomicBool
@@ -53,6 +57,8 @@ class WAL <: Resource {
         this.oldFiles = ArrayList<String>()
         this.oldFilesLock = Mutex()
         this.appendLock = Mutex()
+        // Linux: ftruncate + fallocate + mmap（静态方法，不依赖 this 初始化完成）
+        this.mmapPtr = mmapFile(this.file, maxFileSize)
     }
 
     func append(key: Array<Byte>, value: ?Array<Byte>, expireAt!: ?Int64 = None): Int64 {
@@ -62,25 +68,47 @@ class WAL <: Resource {
         let seq = sequence.incrFetch()
         // 零分配编码（小值走线程局部 buffer，零拷贝切片）
         let encoded = encodeDirect(seq, key, value, expireAt)
-        // 用 Mutex 保护 file.write + rotate + sync 的原子性，防止与 close 竞态
+        let recordSize = Int64(encoded.size)
+        // 用 Mutex 保护 write + rotate + sync 的原子性，防止与 close 竞态
         synchronized (appendLock) {
             // 获取锁后再次检查 closed（可能在等待锁时 close() 已执行）
             if (closed.load()) {
                 throw StoreClosedException()
             }
             // 检查写入当前记录后的文件大小是否超限，超限则先 rotate 再写入新文件
-            if (currentFileSize.load() + Int64(encoded.size) > maxFileSize) {
+            if (currentFileSize.load() + recordSize > maxFileSize) {
                 rotate()
             }
-            // 始终同步写入文件（数据到 OS page cache，进程崩溃可恢复）
-            file.write(encoded)
-            currentFileSize.fetchAdd(Int64(encoded.size))
-            // fsync 锁内执行，确保与 close 互斥
+            // Linux: memcpy 到 mmap 区域（零 syscall）
+            // 非 Linux: file.write()
+            writeRecord(encoded)
+            currentFileSize.fetchAdd(recordSize)
+            // fsync / msync 锁内执行
             if (appendCount.incrFetch() % syncInterval == 0) {
-                file.flush()
+                syncRecords()
             }
         }
         seq
+    }
+
+    /** Linux: memcpy 到 mmap 写 page cache。非 Linux: file.write() */
+    @When[os == "Linux"]
+    private func writeRecord(encoded: Array<Byte>): Unit {
+        let writePos = currentFileSize.load()
+        unsafe {
+            let srcHdl = acquireArrayRawData<Byte>(encoded)
+            memcpy(mmapPtr + writePos, srcHdl.pointer, encoded.size)
+            releaseArrayRawData(srcHdl)
+        }
+    }
+    @When[os != "Linux"]
+    private func writeRecord(encoded: Array<Byte>): Unit {
+        file.write(encoded)
+    }
+
+    /** fsync 刷盘（统一路径，Linux 下同样 flush mmap 脏页） */
+    private func syncRecords(): Unit {
+        file.flush()
     }
 
     /** 将记录直接编码到线程局部缓冲区，返回零拷贝切片。小值路径零堆分配。
@@ -130,7 +158,7 @@ class WAL <: Resource {
     func sync(): Unit {
         synchronized (appendLock) {
             if (!closed.load()) {
-                file.flush()
+                syncRecords()
             }
         }
     }
@@ -148,8 +176,9 @@ class WAL <: Resource {
     }
 
     private func rotate(): Unit {
-        // sync（flush 缓冲区） + close 当前文件
+        // sync（flush 缓冲区）+ close 当前文件
         sync()
+        unmapFile(mmapPtr, maxFileSize)
         if (!file.isClosed()) {
             file.close()
         }
@@ -162,19 +191,42 @@ class WAL <: Resource {
         let startSeq = sequence.load()
         let newPath = "${walDir}/wal_${startSeq}.wal"
         this.file = File(newPath, OpenMode.ReadWrite)
+        this.mmapPtr = mmapFile(this.file, maxFileSize)
         this.walPath = newPath
         this.currentFileSize.store(0)
         this.appendCount.store(0)
+    }
+
+    /** Linux: munmap。非 Linux: 空操作 */
+    @When[os == "Linux"]
+    private static func unmapFile(ptr: CPointer<Byte>, size: Int64): Unit {
+        unsafe { munmap(ptr, size) }
+    }
+    @When[os != "Linux"]
+    private static func unmapFile(_: CPointer<Byte>, _: Int64): Unit {}
+
+    /** Linux: ftruncate + fallocate + mmap。非 Linux: 空操作 */
+    @When[os == "Linux"]
+    private static func mmapFile(file: File, size: Int64): CPointer<Byte> {
+        let fd = Int32(file.fileDescriptor.fileHandle)
+        unsafe { ftruncate(fd, size) }
+        unsafe { fallocate(fd, 0, 0, size) }
+        unsafe { mmap(CPointer<Byte>(), size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0) }
+    }
+    @When[os != "Linux"]
+    private static func mmapFile(_: File, _: Int64): CPointer<Byte> {
+        CPointer<Byte>()
     }
 
     public func close(): Unit {
         if (!closed.compareAndSwap(false, true)) {
             return
         }
-        // 用 appendLock 确保在 append 中无正在进行的 file.write
+        // 用 appendLock 确保在 append 中无正在进行的 write/memcpy
         synchronized (appendLock) {
-            // 强制 fsync 确保数据落盘（绕过 sync 的 closed 检查）
-            file.flush()
+            // 强制 sync 确保数据落盘
+            syncRecords()
+            unmapFile(mmapPtr, maxFileSize)
             if (!file.isClosed()) {
                 file.close()
             }

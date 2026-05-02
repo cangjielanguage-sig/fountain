@@ -1,34 +1,134 @@
 # 当前任务
 
-## ✅ 性能优化：WAL 编码零分配路径（已完成）
+## WAL mmap 改造（进行中）
 
-WAL.append() 热路径引入 ThreadLocal 编码缓冲区，每次 append 从 2 次堆分配降为 0 次。benchTTL -10.4%。
+### 方案简述
 
-## ✅ 性能优化：SSTable 读路径分配消除（已完成）
+将 WAL 写入从 `file.write()` (syscall) 改为 **mmap + memcpy** (零 syscall 写 page cache)，
+消除每次 append 的 write syscall 开销（~50-80µs → ~1-2µs）。
 
-### ✅ P1 — scanBuffer kBuf → 零拷贝切片比较
+### 文件变更
 
-`SSTable.scanBuffer()` 中 `Array<Byte>(keyLen)` 堆分配替换为 `buf[offset .. offset + keyLen]` 零拷贝切片直接与 `targetKey` 比较。消除每次记录扫描的 1 次分配 + 1 次拷贝。
+| 文件 | 变更 |
+|------|------|
+| `store_func.cj` | 新增 mmap/munmap/msync/fallocate/memcpy FFI 绑定（`@When[os == "Linux"]`） |
+| `WAL.cj` | mmap 字段 + init/append/sync/rotate/close 的 mmap 路径 |
 
-### ✅ P2.1 — Bloom Filter 双重检查消除
+### 架构设计
 
-- SSTable 新增 `getDirect(key: ByteArray): ?EntryValue`（跳过内部 bloom 检查，直接二分 → pread → scanBuffer）
-- `get()` 抽取公共部分为 `readBlockAndScan()`，保留 bloom 作为公共 API 保护
-- `LevelManager.getInLevel()` 两处 `sst.get(key)` 替换为 `sst.getDirect(key)`
+```
+现状（非 Linux 保持不变）:
+  append → encodeDirect → file.write(encoded)      [1 syscall]
+  sync   → file.flush()                              [1 syscall]
 
-### ✅ 统一性能测试（已完成）
+mmap 路径（Linux）:
+  append → encodeDirect → memcpy(mmapPtr + off, encoded)  [0 syscall]
+  sync   → msync(mmapPtr, size, MS_SYNC)                   [1 syscall/100次]
+```
 
-已执行 `-j1` + `-j8` benchmark，所有 case 无退化（±2% 噪声范围内）。SSTable 优化在 benchmark 中不体现（数据全在 MemTable）。
+### 步骤
 
----
+#### ☐ 1. `store_func.cj` — 新增 FFI 绑定
 
-## ✅ P2.2 — ByteArray hashCode 缓存（已完成）
+Linux 上声明：
 
-Constructor 中预计算 `hash` 字段，`hashCode()` 直接返回。替代原每次遍历全量字节的 `HashBuilder.append().build()`。
+```cj
+@When[os == "Linux"]
+foreign func mmap(addr: CPointer<Byte>, length: Int64, prot: Int32, flags: Int32, fd: Int32, offset: Int64): CPointer<Byte>
 
-**实际实现**：在构造函数中计算并保存 `hash: Int64`，避免 `mut func` 需要（Cangjie struct 的 `Hashable.hashCode()` 不可声明为 `mut`）。
+@When[os == "Linux"]
+foreign func munmap(addr: CPointer<Byte>, length: Int64): Int32
 
-## ✅ P3 — LevelManager.get() 早期退出（已完成）
+@When[os == "Linux"]
+foreign func msync(addr: CPointer<Byte>, length: Int64, flags: Int32): Int32
 
-新增 `totalSSTableCount: AtomicInt64`，在 `addSSTable()`/`removeSSTables()`/`loadExisting()` 时同步更新。
-`get()` 入口检查 `totalSSTableCount.load() == 0` 时直接返回 None，跳过 7 层循环。
+@When[os == "Linux"]
+foreign func ftruncate(fd: Int32, length: Int64): Int32
+
+@When[os == "Linux"]
+foreign func fallocate(fd: Int32, mode: Int32, offset: Int64, length: Int64): Int32
+
+@When[os == "Linux"]
+foreign func memcpy(dest: CPointer<Byte>, src: CPointer<Byte>, n: Int64): CPointer<Byte>
+```
+
+常量：
+```cj
+const PROT_READ: Int32 = 1
+const PROT_WRITE: Int32 = 2
+const MAP_SHARED: Int32 = 1
+const MS_SYNC: Int32 = 4
+const FALLOC_FL_KEEP_SIZE: Int32 = 0
+```
+
+#### ☐ 2. `WAL.cj` — 新增 mmap 字段
+
+```cj
+@When[os == "Linux"]
+private var mmapPtr: CPointer<Byte>
+
+@When[os == "Linux"]
+private var mmapSize: Int64 = 0  // 实际 mmap 的大小 = maxFileSize
+```
+
+#### ☐ 3. `WAL.cj` — init() mmap 初始化
+
+创建文件后，Linux 上执行：
+1. `ftruncate(fd, maxFileSize)` — 设置文件大小
+2. `fallocate(fd, 0, 0, maxFileSize)` — 预分配物理空间（防 SIGBUS）
+3. `mmap(NULL, maxFileSize, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0)`
+4. 保存 mmapPtr
+
+#### ☐ 4. `WAL.cj` — append() mmap 写
+
+```cj
+synchronized (appendLock) {
+    if (closed.load()) { throw StoreClosedException() }
+    let writePos = currentFileSize.load()
+    if (writePos + Int64(encoded.size) > maxFileSize) {
+        rotate()
+        writePos = 0
+    }
+    // mmap: 直接 memcpy 到 page cache（零 syscall）
+    unsafe {
+        let srcHdl = acquireArrayRawData<Byte>(encoded)
+        memcpy(mmapPtr + writePos, srcHdl.pointer, encoded.size)
+        releaseArrayRawData(srcHdl)
+    }
+    currentFileSize.fetchAdd(Int64(encoded.size))
+    // 每 syncInterval 次 msync（替代 file.flush）
+    if (appendCount.incrFetch() % syncInterval == 0) {
+        msync(mmapPtr, currentFileSize.load(), MS_SYNC)
+    }
+}
+```
+
+非 Linux 路径维持 `file.write(encoded)` + `file.flush()` 不变。
+
+#### ☐ 5. `WAL.cj` — sync() mmap 版
+
+```cj
+synchronized (appendLock) {
+    if (!closed.load()) {
+        @When[os == "Linux"]
+        msync(mmapPtr, currentFileSize.load(), MS_SYNC)
+        @When[os != "Linux"]
+        file.flush()
+    }
+}
+```
+
+#### ☐ 6. `WAL.cj` — rotate() + close() mmap 版
+
+rotate: `munmap` 旧文件 → `close()` 旧文件 → 创建新文件 → mmap 新文件
+close: `munmap` → `close()` 文件
+
+#### ☐ 7. 验证编译 + benchmark
+
+```bash
+cd f_store && cjpm build -i -j1
+cjHeapSize=8GB cjpm bench -j1
+cjHeapSize=8GB cjpm bench -j8
+```
+
+期望：add/remove/ttl 延迟显著降低（消除 file.write syscall）。

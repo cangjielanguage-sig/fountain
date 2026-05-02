@@ -91,6 +91,35 @@ func positionedRead(file: File, buf: Array<Byte>, offset: Int64): Bool {
     file.read(buf) == buf.size
 }
 
+// === mmap WAL 写（Linux 专用，消除 file.write syscall） ===
+
+@When[os == "Linux"]
+const PROT_READ: Int32 = 1
+@When[os == "Linux"]
+const PROT_WRITE: Int32 = 2
+@When[os == "Linux"]
+const MAP_SHARED: Int32 = 1
+@When[os == "Linux"]
+const MS_SYNC: Int32 = 4
+
+@When[os == "Linux"]
+foreign func mmap(addr: CPointer<Byte>, length: Int64, prot: Int32, flags: Int32, fd: Int32, offset: Int64): CPointer<Byte>
+
+@When[os == "Linux"]
+foreign func munmap(addr: CPointer<Byte>, length: Int64): Int32
+
+@When[os == "Linux"]
+foreign func msync(addr: CPointer<Byte>, length: Int64, flags: Int32): Int32
+
+@When[os == "Linux"]
+foreign func ftruncate(fd: Int32, length: Int64): Int32
+
+@When[os == "Linux"]
+foreign func fallocate(fd: Int32, mode: Int32, offset: Int64, length: Int64): Int32
+
+@When[os == "Linux"]
+foreign func memcpy(dest: CPointer<Byte>, src: CPointer<Byte>, n: Int64): CPointer<Byte>
+
 // === MemTable 刷盘 ===
 
 /** 从迭代器写入 SSTable 过程中发生的异常 */

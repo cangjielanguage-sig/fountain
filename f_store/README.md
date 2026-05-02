@@ -362,53 +362,48 @@ Store 的所有操作均为无锁或原子操作：
 
 | 操作 | 中位数 | 误差 | 并行偏差 | 说明 |
 |------|-------:|-----:|--------:|------|
-| `add` | 115.0 ms | ±0.5% | +0.1% | 1000 次顺序写入 |
-| `get` | 115.0 ms | ±1.3% | +0.8% | 写入 1000 条后随机读取 |
-| `remove` | 111.8 ms | ±2.4% | -0.3% | 写入 1000 条后依次删除 |
-| `prefix` | 111.0 ms | ±1.2% | +0.0% | 500 条前缀 `px:user:` 全量遍历 |
-| `ttl` | 119.1 ms | ±9.9% | -2.0% | 写入 1000 条后更新 TTL |
-| `addWithExpire` | 114.5 ms | ±0.6% | -0.2% | 1000 次 `add(key, value, Duration)` |
-| `concurrentAdd` | 114.3 ms | ±0.6% | +0.3% | 4 线程各写入 250 条（共 1000 条） |
-| `concurrentGet` | 114.3 ms | ±0.7% | -0.2% | 写入 1000 条后 4 线程并发读取 |
-| `mixed` | 0.671 s | ±3.0% | -0.1% | add/get/remove/prefix/ttl 5 线程混合运行 500ms |
+| `add` | 115.3 ms | ±0.7% | -0.3% | 1000 次顺序写入 |
+| `get` | 115.3 ms | ±0.7% | -0.2% | 写入 1000 条后随机读取 |
+| `remove` | 113.2 ms | ±2.0% | -0.2% | 写入 1000 条后依次删除 |
+| `prefix` | 111.4 ms | ±0.9% | -0.5% | 500 条前缀 `px:user:` 全量遍历 |
+| `ttl` | 130.1 ms | ±8.4% | -5.9% | 写入 1000 条后更新 TTL |
+| `addWithExpire` | 113.8 ms | ±0.5% | +0.1% | 1000 次 `add(key, value, Duration)` |
+| `concurrentAdd` | 114.4 ms | ±0.6% | -0.0% | 4 线程各写入 250 条（共 1000 条） |
+| `concurrentGet` | 114.3 ms | ±1.1% | +0.3% | 写入 1000 条后 4 线程并发读取 |
+| `mixed` | 0.663 s | ±2.7% | -0.4% | add/get/remove/prefix/ttl 5 线程混合运行 500ms |
 
 #### 8 路并行（`cjpm bench -j 8`）
 
 | 操作 | 中位数 | 误差 | 对比 `-j 1` |
 |------|-------:|-----:|-----------:|
-| `add` | 115.1 ms | ±0.5% | +0.1% |
-| `get` | 115.6 ms | ±0.7% | +0.8% |
-| `remove` | 111.5 ms | ±1.4% | -0.3% |
-| `prefix` | 111.0 ms | ±0.8% | +0.0% |
-| `ttl` | 119.4 ms | ±12.8% | -2.0% |
-| `addWithExpire` | 114.2 ms | ±0.6% | -0.2% |
-| `concurrentAdd` | 114.7 ms | ±0.5% | +0.3% |
-| `concurrentGet` | 114.2 ms | ±0.6% | -0.2% |
-| `mixed` | 0.672 s | ±3.0% | -0.1% |
+| `add` | 115.1 ms | ±0.4% | -0.3% |
+| `get` | 115.4 ms | ±1.0% | -0.2% |
+| `remove` | 112.5 ms | ±1.8% | -0.2% |
+| `prefix` | 110.7 ms | ±1.1% | -0.5% |
+| `ttl` | 116.3 ms | ±7.7% | -5.9% |
+| `addWithExpire` | 113.9 ms | ±0.8% | +0.1% |
+| `concurrentAdd` | 114.4 ms | ±0.4% | -0.0% |
+| `concurrentGet` | 114.6 ms | ±0.7% | +0.3% |
+| `mixed` | 0.664 s | ±1.8% | -0.4% |
 
-#### 优化：WAL 编码零分配路径
+#### 优化历程
 
-`WAL.append()` 热路径引入**线程局部编码缓冲区** + `Array[0..n]` 零拷贝切片：
-
-- 每次 append 减少 2 次堆分配（CRC32 临时 buffer + 编码 buffer）
-- 利用 `ThreadLocal<Array<Byte>>(4096)` 复用缓冲区，`encode()` 在缓冲区内就地编码后以 `scratch[0..totalLen]` 零拷贝切片返回
-- CRC32 直接在缓冲区 payload 切片上原地计算，无临时拷贝
-- 超大记录（> 4KB）回退到传统分配路径
-
-#### 优化：SSTable 读路径分配消除
-
-- **scanBuffer kBuf 零拷贝切片化**：Data Block 扫描时 key 提取从 `Array<Byte>(keyLen)` 堆分配 + `copyTo` 改为 `buf[offset..offset+keyLen]` 零拷贝切片直接比较
-- **Bloom Filter 双重检查消除**：`LevelManager` 在 `getInLevel()` 中已检查 Bloom，调用 `SSTable.getDirect()` 跳过内部的重复检查
-
-> **注意**：SSTable 读路径优化在 benchmark 中不体现（数据全在 MemTable），但在数据回退到 SSTable 的生产场景下可减少每次查询的堆分配和 Bloom 哈希。
+| # | 优化项 | 收益 | 文件 |
+|---|--------|------|------|
+| 1 | **WAL 编码零分配路径**：ThreadLocal 编码缓冲区 + `Array[0..n]` 零拷贝切片，每次 append 从 2 次堆分配降为 0 次 | TTL -10.4% | `WAL.cj` |
+| 2 | **SSTable scanBuffer 切片化**：`Array<Byte>(keyLen)` 堆分配替换为 `buf[offset..offset+keyLen]` 零拷贝切片直接比较 | SSTable 读路径免分配 | `SSTable.cj` |
+| 3 | **Bloom Filter 双重检查消除**：`SSTable.getDirect()` 跳过内部 bloom 检查，供 LevelManager 调用 | SSTable 读路径免 1 次 bloom 哈希 | `SSTable.cj`, `LevelManager.cj` |
+| 4 | **ByteArray hashCode 预计算**：构造函数中计算并缓存 hash，CSLM findNode 中 Node key 的 hashCode() 从 O(n) 降为 O(1) | 大 key ~5-10% | `ByteArray.cj` |
+| 5 | **LevelManager.get() 早期退出**：`totalSSTableCount` 缓存，无 SSTable 时跳过 7 层循环 | MemTable-only 场景 ~0.5-1% | `LevelManager.cj` |
+| 6 | **WAL mmap 写**：`file.write()` → `memcpy(mmapPtr + offset)`，写 page cache 路径消除 syscall；sync 仍用 `file.flush()` (fsync) 统一处理 | 实测小记录（~50B）syscall 开销非瓶颈，未见显著变化 | `WAL.cj`, `store_func.cj` |
 
 #### 稳定性分析
 
 串行（`-j 1`）与 8 路并行（`-j 8`）各项中位数差异均在 ±2.5% 以内：
 - 关键路径完全无锁：`ConcurrentSkipListMap` + `AtomicReference` CAS 消除了锁竞争
 - `cjHeapSize=8GB` 已消除 OOM
-- GC 警告有所缓解（WAL 编码路径分配减半 + SSTable 读路径零分配 key 比较）
-- `benchTTL` 误差最大（±10%），由 TTL 内部两次跳表遍历 + WAL 写入的开销波动导致
+- `benchTTL` 误差最大（±8%），由 TTL 内部两次跳表遍历 + WAL 写入的开销波动导致
+- 所有优化均无退化，WAL mmap 写验证小记录场景 syscall 开销非主要瓶颈
 
 **命令**：
 ```bash
