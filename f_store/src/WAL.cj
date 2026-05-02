@@ -16,6 +16,9 @@ limitations under the License.
 package fountain::f_store
 
 class WAL <: Resource {
+    /** 线程局部编码缓冲区（4KB 覆盖绝大多数小值记录） */
+    private static let encodeBuf = ThreadLocal<Array<Byte>>()
+
     private var file: File
     let sequence: AtomicInt64
     let closed: AtomicBool
@@ -57,8 +60,8 @@ class WAL <: Resource {
             throw StoreClosedException()
         }
         let seq = sequence.incrFetch()
-        let record = WALRecord(seq, key, value, expireAt: expireAt)
-        let encoded = record.encode()
+        // 零分配编码（小值走线程局部 buffer，零拷贝切片）
+        let encoded = encodeDirect(seq, key, value, expireAt)
         // 用 Mutex 保护 file.write + rotate + sync 的原子性，防止与 close 竞态
         synchronized (appendLock) {
             // 获取锁后再次检查 closed（可能在等待锁时 close() 已执行）
@@ -78,6 +81,50 @@ class WAL <: Resource {
             }
         }
         seq
+    }
+
+    /** 将记录直接编码到线程局部缓冲区，返回零拷贝切片。小值路径零堆分配。
+     *  超大记录（> 4KB）回退到 WALRecord.encode()。 */
+    private static func encodeDirect(
+        sequence: Int64,
+        key: Array<Byte>,
+        value: ?Array<Byte>,
+        expireAt: ?Int64
+    ): Array<Byte> {
+        let kLen = key.size
+        let vLen = if (let Some(v) <- value) { v.size } else { -1 }
+        let expireAtVal = if (let Some(ea) <- expireAt) { ea } else { 0 }
+        // checksum(4) + sequence(8) + key_len(8) + value_len(8) + expire_at(8) + key + value
+        let totalLen = 36 + kLen + (if (vLen > 0) { vLen } else { 0 })
+
+        // 超大记录回退到分配路径
+        let scratch = encodeBuf.getOrCompute { => Array<Byte>(4096, repeat: 0u8) }
+        if (scratch.size < totalLen) {
+            return WALRecord(sequence, key, value, expireAt: expireAt).encode()
+        }
+
+        // 1. 写入各字段到 scratch（跳过 checksum 4 字节槽位）
+        var off: Int64 = 4
+        off = writeInt64LE(scratch, off, sequence)
+        off = writeInt64LE(scratch, off, Int64(kLen))
+        off = writeInt64LE(scratch, off, Int64(vLen))
+        off = writeInt64LE(scratch, off, expireAtVal)
+        key.copyTo(scratch[off .. off + kLen])
+        off += kLen
+        if (let Some(v) <- value) {
+            v.copyTo(scratch[off .. off + vLen])
+            off += vLen
+        }
+
+        // 2. 计算 CRC32（零拷贝切片，只覆盖 payload，不含 checksum 自身）
+        let payload = scratch[4 .. totalLen]
+        let crc = crc32(payload)
+
+        // 3. checksum 写回 scratch[0..4]
+        writeUInt32LE(scratch, 0, crc)
+
+        // 4. 零拷贝切片返回
+        scratch[0 .. totalLen]
     }
 
     func sync(): Unit {

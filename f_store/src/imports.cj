@@ -29,6 +29,7 @@ internal import std.env.atExit
 
 // === 项目依赖 ===
 internal import fountain::f_base.*
+internal import fountain::f_base.ExtendThreadLocal
 internal import fountain::f_bloom.BloomFilter
 internal import fountain::f_concurrent.{ConcurrentSkipListMap, ExtendAtomicInt64}
 internal import fountain::f_collection.PriorityQueue
