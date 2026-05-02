@@ -24,7 +24,6 @@ import std.sync.{Timer, Mutex, AtomicOptionReference}
 import std.time.DateTime
 import stdx.compress.zlib.{WrapType, CompressLevel, CompressOutputStream}
 import fountain::f_base.*
-import fountain::f_io.*// 必须导入这个包mmap才生效
 import fountain::f_time.TimeUnit
 
 internal import fountain::f_log.exception.LogException
@@ -107,30 +106,8 @@ protected class RotatableFile <: OutputStream & Resource {
     public func isClosed(): Bool {
         file.load()?.isClosed() ?? true
     }
-    @When[os != "Linux"]
     public func close(): Unit {
         file.load()?.close()
-    }
-    @When[os == "Linux"]
-    public func close(): Unit {
-        if(let Some(mm) <- this.mmapf){
-            mm.setLength()
-            mm.close()
-        }else{
-            file.load()?.close()
-        }
-    }
-    @When[os == "Linux"]
-    private var mmapf = None<RotatableMMapFile>
-    @When[os == "Linux"]
-    protected func mmap() {
-        let file = this.file.load().getOrThrow()
-        let len = file.length
-        let mm = file.mmap(0, fileSize)
-        mm.writeOffset = len
-        let rmmf = RotatableMMapFile(this, mm)
-        this.mmapf = rmmf
-        rmmf
     }
     protected prop path: String {
         get() {
@@ -253,11 +230,6 @@ protected class RotatableFile <: OutputStream & Resource {
                 }
                 if (!exists(originPath)) {
                     this.file.store(File(originPath, Append))
-                    @When[os == "Linux"]
-                    let _ = if(let Some(mm) <- this.mmapf){
-                        mm.mmap = this.file.load().getOrThrow().mmap(0, this.fileSize)
-                        mm.mmap.writeOffset = 0
-                    }
                 }
             }
         }

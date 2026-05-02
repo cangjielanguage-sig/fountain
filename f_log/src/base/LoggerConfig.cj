@@ -86,9 +86,6 @@ public class LoggerConfig {
     public static func getLogFileCompressFormat(appender: String): String {
         getString(appenderKeyPart(appender), "compressFormat") ?? ""
     }
-    public static func getLogFileMMap(appender: String): Bool {
-        Bool.parse((getString(appenderKeyPart(appender), "mmap") ?? 'false').trimAscii().toAsciiLower())
-    }
     public static func getTcpHost(appender: String): String {
         getString(appenderKeyPart(appender), "host") ?? ""
     }

@@ -28,15 +28,6 @@ class FileLoggerAppender <: AsyncLogger {
     protected func new(name: String): AbstractLogger {
         FileLoggerAppender(name: name, pattern: super.pattern, level: super.level, file: super.actualOutput)
     }
-    @When[os == "Linux"]
-    private static func toPath(file: OutputStream) {
-        match(file){
-            case x: RotatableFile => x.path
-            case x: RotatableMMapFile => x.path
-            case _ => ''
-        }
-    }
-    @When[os != "Linux"]
     private static func toPath(file: OutputStream) {
         match(file){
             case x: RotatableFile => x.path
@@ -53,15 +44,14 @@ public class FileLoggerParams <: BaseLoggerParams<FileLoggerParams> {
         level: LogLevel,
         pattern: LogPattern,
         protected let url: String,
-        protected let params: RotatableFileParams,
-        protected let mmap: Bool
+        protected let params: RotatableFileParams
     ){
         super(level, pattern)
-        h = HashBuilder().append(level).append(pattern).append(url).append(params).append(mmap).build()
+        h = HashBuilder().append(level).append(pattern).append(url).append(params).build()
     }
     public operator func ==(that: FileLoggerParams): Bool {
         this.h == that.h && this.level == that.level && this.pattern == that.pattern && 
-        this.url == that.url && this.params == that.params && this.mmap == that.mmap
+        this.url == that.url && this.params == that.params
     }
     protected static func newParams(appender: String): FileLoggerParams {
         let params = RotatableFileParams()
@@ -83,9 +73,8 @@ public class FileLoggerParams <: BaseLoggerParams<FileLoggerParams> {
         if (let c <- LoggerConfig.getLogFileCompressFormat(appender) && !c.isEmpty()) {
             params.compress = RotatableFile.compressFormat(c)
         }
-        let mmap = LoggerConfig.getLogFileMMap(appender)
         FileLoggerParams(LoggerConfig.getLevelConf(appender), LoggerConfig.getPatternConf(appender),
-            url, params, mmap)
+            url, params)
     }
     protected func newAppender(name: String): AbstractLogger {
         let rf = if (url.isEmpty()) {
@@ -93,13 +82,6 @@ public class FileLoggerParams <: BaseLoggerParams<FileLoggerParams> {
         } else {
             RotatableFile(url, params)
         }
-        @When[os == "Linux"]
-        let output: OutputStream = if(mmap){
-            rf.mmap()
-        }else{
-            rf
-        }
-        @When[os != "Linux"]
         let output: OutputStream = rf
         FileLoggerAppender(
             name: name,
