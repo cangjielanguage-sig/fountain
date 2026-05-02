@@ -309,14 +309,8 @@ public class IoUringLockFree <: Resource {
      * 获取槽位分配器中已分配的槽位数量
      */
     public func allocatedSlotCount(): UInt32 {
-        // 遍历位图统计已分配位（非精确，并发场景下可能变化）
-        var count: UInt32 = 0
-        for (i in 0..Int64(allocator.getCapacity())) {
-            if (allocator.isAllocated(UInt32(i))) {
-                count += 1
-            }
-        }
-        count
+        // 使用 O(1) 缓存计数，免遍历位图
+        allocator.getAllocatedCount()
     }
 
     // ==================== Resource 接口 ====================

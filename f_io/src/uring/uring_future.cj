@@ -116,8 +116,9 @@ public class IoUringPromise<T> <: CompletionSlot {
     private let slotId: UInt64
     private let resultExtractor: (CPointer<IOUringCQE>) -> T
     private var value: ?T = None
-    private var completed: Bool = false
-    private var cancelled: Bool = false
+    /** AtomicBool 无锁读取，避免轮询时每次锁操作 */
+    private let completed: AtomicBool = AtomicBool(false)
+    private let cancelled: AtomicBool = AtomicBool(false)
     private var error: ?IoUringException = None
     private let mutex: Mutex = Mutex()
     private let cond: Condition
@@ -145,17 +146,17 @@ public class IoUringPromise<T> <: CompletionSlot {
      */
     public func complete(cqe: CPointer<IOUringCQE>): Unit {
         synchronized(mutex){
-            if (completed || cancelled) {
+            if (completed.load() || cancelled.load()) {
                 return
             }
             try {
                 let result = resultExtractor(cqe)
                 this.value = Some(result)
-                this.completed = true
+                completed.store(true)
                 cond.notifyAll()
             } catch (e: Exception) {
                 this.error = Some(IoUringException("Result extraction failed", e))
-                this.completed = true
+                completed.store(true)
                 cond.notifyAll()
             }
         }
@@ -168,11 +169,11 @@ public class IoUringPromise<T> <: CompletionSlot {
      */
     public func completeWithError(err: IoUringException): Unit {
         synchronized(mutex){
-            if (completed || cancelled) {
+            if (completed.load() || cancelled.load()) {
                 return
             }
             this.error = Some(err)
-            this.completed = true
+            completed.store(true)
             cond.notifyAll()
         }
     }
@@ -182,10 +183,10 @@ public class IoUringPromise<T> <: CompletionSlot {
      */
     public func cancel(): Unit {
         synchronized(mutex){
-            if (completed) {
+            if (completed.load()) {
                 return
             }
-            this.cancelled = true
+            cancelled.store(true)
             cond.notifyAll()
         }
     }
@@ -197,10 +198,10 @@ public class IoUringPromise<T> <: CompletionSlot {
      */
     public func awaitResult(): T {
         synchronized(mutex){
-            cond.waitUntil({ => completed || cancelled })
+            cond.waitUntil({ => completed.load() || cancelled.load() })
         }
 
-        if (cancelled) {
+        if (cancelled.load()) {
             throw IoUringException("Operation cancelled (slotId=${slotId})")
         }
         if (let Some(err) <- error) {
@@ -217,13 +218,13 @@ public class IoUringPromise<T> <: CompletionSlot {
      */
     public func awaitResult(timeout!: Duration): ?T {
         let timedOut = synchronized(mutex){
-            !cond.waitUntil({ => completed || cancelled }, timeout: timeout)
+            !cond.waitUntil({ => completed.load() || cancelled.load() }, timeout: timeout)
         }
 
         if (timedOut) {
             return None
         }
-        if (cancelled) {
+        if (cancelled.load()) {
             throw IoUringException("Operation cancelled (slotId=${slotId})")
         }
         if (let Some(err) <- error) {
@@ -237,27 +238,32 @@ public class IoUringPromise<T> <: CompletionSlot {
      * @return 如果已完成返回结果，否则返回 None
      */
     public func tryGetResult(): ?T {
+        // 先无锁快速路径检查 completed
+        if (!completed.load()) {
+            return None<T>
+        }
+        // 已完成但 value 须在锁内安全读取
         synchronized(mutex){
-            if (completed) { value } else { None<T> }
+            if (cancelled.load()) {
+                None<T>
+            } else {
+                value
+            }
         }
     }
 
     /**
-     * 是否已完成
+     * 是否已完成（无锁读取）
      */
     public func isCompleted(): Bool {
-        synchronized(mutex){
-            completed
-        }
+        completed.load()
     }
 
     /**
-     * 是否已取消
+     * 是否已取消（无锁读取）
      */
     public func isCancelled(): Bool {
-        synchronized(mutex){
-            cancelled
-        }
+        cancelled.load()
     }
 }
 

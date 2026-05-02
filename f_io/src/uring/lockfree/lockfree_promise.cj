@@ -63,7 +63,7 @@ public class LockFreePromise <: CompletionCallback {
         completed.store(true)
         // 唤醒等待线程
         synchronized(mutex) {
-            cond.notifyAll()
+            cond.notify()
         }
     }
 

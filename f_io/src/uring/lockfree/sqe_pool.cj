@@ -16,7 +16,7 @@ limitations under the License.
 package fountain::f_io.uring.lockfree
 
 import fountain::f_io.uring.*
-import std.sync.AtomicUInt32
+import std.sync.{AtomicUInt32, Mutex}
 
 /**
  * 无锁 SQE 预分配器
@@ -45,6 +45,12 @@ public class SQEPreallocator {
     private let prepared: AtomicUInt32 = AtomicUInt32(0)
     /** 已分配的 SQE 数量 */
     private let allocated: AtomicUInt32 = AtomicUInt32(0)
+    /**
+     * 保护 io_uring_get_sqe 的互斥锁。
+     * io_uring_get_sqe 内部修改 SQ ring tail 指针，不是线程安全的。
+     * 多线程并发调用 allocSlot 时必须互斥保护 get_sqe 调用。
+     */
+    private let sqeMutex: Mutex = Mutex()
 
     /**
      * 初始化预分配器
@@ -73,15 +79,18 @@ public class SQEPreallocator {
             allocated.fetchSub(1)
             return None
         }
-        // 使用 io_uring_get_sqe 获取 SQE（会正确推进 sqeTail）
+        // io_uring_get_sqe 修改 SQ ring tail 指针，不是线程安全的。
+        // 用 sqeMutex 串行化 get_sqe 调用（仅涵盖 unsafe 块，轻量且短）。
         unsafe {
-            let sqe = ioUringGetSQEFFI(ringPtr)
-            if (sqe.isNull()) {
-                // 无法获取 SQE，回滚
-                allocated.fetchSub(1)
-                return None
+            synchronized (sqeMutex) {
+                let sqe = ioUringGetSQEFFI(ringPtr)
+                if (sqe.isNull()) {
+                    // 无法获取 SQE，回滚
+                    allocated.fetchSub(1)
+                    return None
+                }
+                sqeSlots[Int64(idx)] = sqe
             }
-            sqeSlots[Int64(idx)] = sqe
         }
         Some(idx)
     }

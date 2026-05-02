@@ -16,6 +16,7 @@ limitations under the License.
 package fountain::f_io.uring.lockfree
 
 import fountain::f_io.uring.*
+import std.math.trailingZeros
 import std.sync.AtomicUInt32
 
 /**
@@ -46,6 +47,8 @@ public class AtomicSlotAllocator {
     private let bitmap: Array<AtomicUInt32>
     /** bitmap 数组长度 */
     private let wordCount: UInt32
+    /** 已分配槽位数量缓存（O(1) 查询替代 O(n) 遍历） */
+    private let allocatedCount: AtomicUInt32 = AtomicUInt32(0)
 
     /**
      * 初始化分配器
@@ -78,15 +81,16 @@ public class AtomicSlotAllocator {
             var word = atomicWord.load()
             // 该 word 还有空闲位（未满 0xFFFFFFFF）
             while (word != 0xFFFFFFFF) {
-                // 找到最低位的空闲 bit
+                // 找到最低位的空闲 bit（标准库硬件指令加速）
                 let invert = word ^ 0xFFFFFFFF
-                let bitIdx = countTrailingZeros(invert)
+                let bitIdx = UInt32(trailingZeros(invert))  // std.math.countTrailingZeros
                 let mask = UInt32(1) << bitIdx
                 let newWord = word | mask
                 if (atomicWord.compareAndSwap(word, newWord)) {
                     let slotId = wordIdx * 32 + bitIdx
                     // 超出容量的槽位不算
                     if (slotId < capacity) {
+                        allocatedCount.fetchAdd(1)
                         return Some(slotId)
                     } else {
                         // CAS 成功但超出容量，回滚
@@ -117,6 +121,14 @@ public class AtomicSlotAllocator {
         let invertMask = 0xFFFFFFFF ^ mask
         // 原子地清除该 bit
         bitmap[Int64(wordIdx)].fetchAnd(invertMask)
+        allocatedCount.fetchSub(1)
+    }
+
+    /**
+     * 获取当前已分配的槽位数（O(1) 查询）
+     */
+    public func getAllocatedCount(): UInt32 {
+        allocatedCount.load()
     }
 
     /**
@@ -150,39 +162,8 @@ public class AtomicSlotAllocator {
         for (i in 0..Int64(wordCount)) {
             bitmap[i].store(0)
         }
+        allocatedCount.store(0)
     }
 
     // ==================== 私有辅助 ====================
-
-    /**
-     * 计算一个 UInt32 值中最低位 1 的位置
-     * 即 count trailing zeros
-     */
-    private func countTrailingZeros(v: UInt32): UInt32 {
-        if (v == 0) {
-            return 32
-        }
-        var n: UInt32 = 0
-        var x = v
-        if ((x & 0xFFFF) == 0) {
-            n += 16
-            x >>= 16
-        }
-        if ((x & 0xFF) == 0) {
-            n += 8
-            x >>= 8
-        }
-        if ((x & 0xF) == 0) {
-            n += 4
-            x >>= 4
-        }
-        if ((x & 0x3) == 0) {
-            n += 2
-            x >>= 2
-        }
-        if ((x & 0x1) == 0) {
-            n += 1
-        }
-        n
-    }
 }
