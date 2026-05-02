@@ -106,8 +106,16 @@ public class PrefixIterator <: Iterator<(Array<Byte>, Array<Byte>)> & Resource {
             return
         }
         drained = true
+        var lastEx: ?Exception = None
         for (src in sources) {
-            src.close()
+            try {
+                src.close()
+            } catch (e: Exception) {// ⚠ 不能忽略异常，异常必须暴露出去
+                lastEx = Some(e)
+            }
+        }
+        if (let Some(ex) <- lastEx) {
+            throw ex
         }
     }
 

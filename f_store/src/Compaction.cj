@@ -66,7 +66,7 @@ class Compactor {
     func runLoop(): Unit {
         while (!stopSignal.load()) {
             var didWork = false
-            for (level in 0..levelCount) {
+            for (level in 0..(levelCount - 1)) {
                 if (stopSignal.load()) {
                     return
                 }

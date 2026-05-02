@@ -15,7 +15,9 @@ limitations under the License.
 */
 package fountain::f_store
 
-/** 堆条目：关联 key 与源迭代器索引 */
+import std.collection.ArrayList
+
+/** 优先级队列元素：记录 key 和来源索引 */
 class MergeHeapEntry {
     let key: ByteArray
     let sourceIndex: Int64
@@ -25,32 +27,31 @@ class MergeHeapEntry {
     }
 }
 
-/** 堆比较器：按 key 字典序 */
-let mergeHeapCmp = { a: MergeHeapEntry, b: MergeHeapEntry =>
+/** 合并比较器：key 小的优先 */
+let mergeHeapCmp = {a: MergeHeapEntry, b: MergeHeapEntry =>
     if (a.key < b.key) { LT }
     else if (a.key > b.key) { GT }
     else { EQ }
 }
 
-/** 多路归并迭代器：将多个有序迭代器合并为一个有序流。
- *  相同 key 取 sequence 最高的 EntryValue。
- *  过期数据在遍历时跳过（惰性过期）。
- *  tombstone 保留策略由 isBottomLevel 决定：最底层 Compaction 时移除 tombstone。
- *
- *  性能优化：用 PriorityQueue（二叉堆）替代线性扫描，从 O(n×m) 降至 O(n×log m)。
+/** 多路归并迭代器：合并多个有序源的 EntryValue
+ *  - 全局有序输出（按 key 字典序升序）
+ *  - 同 key 取最高 sequence
+ *  - 跳过过期数据
+ *  - 底层 compaction 移除 tombstone，非底层保留
  */
 class SSTableMerger <: Iterator<(ByteArray, EntryValue)> {
-    private let sources: ArrayList<PeekableIterator<(ByteArray, EntryValue)>>
-    private let isBottomLevel: Bool
-    private let now: Int64
-    private let heap: PriorityQueue<MergeHeapEntry>
+    let sources: ArrayList<PeekableIterator<(ByteArray, EntryValue)>>
+    let heap: PriorityQueue<MergeHeapEntry>
+    let isBottomLevel: Bool
+    let now: Int64
 
     init(sources: ArrayList<PeekableIterator<(ByteArray, EntryValue)>>, isBottomLevel!: Bool = false) {
         this.sources = sources
+        this.heap = PriorityQueue<MergeHeapEntry>(mergeHeapCmp)
         this.isBottomLevel = isBottomLevel
         this.now = DateTime.now().toUnixTimeStamp().toNanoseconds()
-        this.heap = PriorityQueue<MergeHeapEntry>(mergeHeapCmp)
-        // 初始将所有源的首个 key 入堆
+        // 初始化堆：每个源 peek 第一个 key
         for (i in 0..sources.size) {
             if (let Some((key, _)) <- sources[i].peek()) {
                 heap.add(MergeHeapEntry(key, i))
@@ -108,6 +109,8 @@ class SSTableMerger <: Iterator<(ByteArray, EntryValue)> {
                     }
                     return Some((currentKey, bestEntry))
                 }
+                // sources[idx].next() 返回 None（异常情况：源已耗尽但堆未清理），跳过该源继续
+                continue
             }
             return None  // 堆已空，所有源耗尽
         }

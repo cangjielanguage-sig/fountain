@@ -57,7 +57,6 @@ class SSTable <: Resource {
     private var fileSize: Int64
     private var dataBlockSize: Int64
     private let dataBlockSizeThreshold: Int64
-    private var firstKeyOfBlock: ?ByteArray
     private var minKey: ?ByteArray
     private var maxKey: ?ByteArray
     private var sequenceStart: Int64
@@ -103,7 +102,6 @@ class SSTable <: Resource {
         this.fileSize = 0
         this.dataBlockSize = 0
         this.dataBlockSizeThreshold = 4096 // 4KB
-        this.firstKeyOfBlock = None
         this.minKey = None
         this.maxKey = None
         this.sequenceStart = Int64.Max
@@ -128,7 +126,6 @@ class SSTable <: Resource {
         this.fileSize = 0
         this.dataBlockSize = 0
         this.dataBlockSizeThreshold = 4096
-        this.firstKeyOfBlock = None
         this.minKey = Some(metadata.minKey)
         this.maxKey = Some(metadata.maxKey)
         this.sequenceStart = metadata.sequenceStart
@@ -153,7 +150,6 @@ class SSTable <: Resource {
         // 新 Data Block 开始，记录 IndexEntry
         if (dataBlockSize == 0) {
             indexEntries.add(IndexEntry(currentOffset, key))
-            firstKeyOfBlock = key
         }
         // 编码记录: key_len(8) + value_len(8) + sequence(8) + expire_at(8) + key_bytes + value_bytes
         let keyBytes = key.bytes
