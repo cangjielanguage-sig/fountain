@@ -137,4 +137,15 @@ public class WALRecordTest {
         let decoded = WALRecord.decode(bytes)
         @Expect(decoded.isNone())
     }
+
+    /** decode 收到 keyLen > 剩余空间时应返回 None（P2 溢出保护验证） */
+    @TestCase
+    public func walRecordDecodeOverflowKeyLen(): Unit {
+        // 36 字节头部 + 0 字节数据，但 keyLen=1 → 无足够空间
+        let bytes = Array<Byte>(36, repeat: 0u8)
+        let keyLenOff = 12
+        bytes[keyLenOff] = 0x01  // keyLen = 1, 但 bytes.size - 36 = 0 < 1
+        let decoded = WALRecord.decode(bytes)
+        @Expect(decoded.isNone())
+    }
 }

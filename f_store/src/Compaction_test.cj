@@ -719,6 +719,42 @@ public class CompactionTest {
 
         remove(dir, recursive: true)
     }
+
+    /** 验证 writeStreamToSSTables 返回空结果时（如全量过期）Compaction 不会跳过清理旧文件。
+     *  P2 修复前：newSSTables.size==0 时直接 return，跳过 removeSSTables+close+delete。
+     *  P2 修复后：先清理旧文件再 return。此测试验证正常 compaction 后旧文件从 LevelManager 移除。 */
+    @TestCase
+    public func compactorRemovesOldFilesAfterMerge(): Unit {
+        let dir = "${testDir}/remove_old"
+        Directory.create(dir, recursive: true)
+
+        let sst1 = SSTable("${dir}/L0_0.sst", 1)
+        sst1.write(ByteArray([0x01]), EntryValue([0xA1], 1))
+        sst1.finishWrite()
+        sst1.close()
+
+        let sst2 = SSTable("${dir}/L0_1.sst", 1)
+        sst2.write(ByteArray([0x02]), EntryValue([0xA2], 2))
+        sst2.finishWrite()
+        sst2.close()
+
+        let mgr = LevelManager(dir)
+        mgr.addSSTable(0, SSTable.open("${dir}/L0_0.sst"))
+        mgr.addSSTable(0, SSTable.open("${dir}/L0_1.sst"))
+        @Expect(mgr.getSSTablesForCompaction(0).size == 2)
+
+        let compactor = Compactor(mgr, dir, levelCount: 7)
+        compactor.compact(0)
+
+        // 验证旧文件已从 LevelManager 移除
+        @Expect(mgr.getSSTablesForCompaction(0).size == 0)
+        // 新数据应读到（正常 compaction 合并到 L1）
+        @Expect(mgr.get(ByteArray([0x01])).isSome())
+        @Expect(mgr.get(ByteArray([0x02])).isSome())
+
+        mgr.closeAll()
+        remove(dir, recursive: true)
+    }
 }
 
 @Test
