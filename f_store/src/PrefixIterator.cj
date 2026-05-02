@@ -114,7 +114,7 @@ public class PrefixIterator <: Iterator<(Array<Byte>, Array<Byte>)> & Resource {
                 if(let Some(ex) <- baseEx){
                     ex.addSuppressed(e)
                 }else{
-                    ex = PrefixIteratorException(e)
+                    baseEx = PrefixIteratorException(e)
                 }
             }
         }
