@@ -288,7 +288,7 @@ public interface ToMMap {
 
 @When[os == "Linux"]
 extend File <: ToMMap {
-    public func mmap(offset: Int64, mapLength: Int64, flag!: MMapFlag = MMapFlag.Private): MMapFile {
+    public func mmap(offset: Int64, mapLength: Int64, flag!: MMapFlag = MMapFlag.Shared): MMapFile {
         let prots = if (this.canRead() && this.canWrite()) {
             [MMapProt.Read, MMapProt.Write]
         } else if (this.canRead()) {
