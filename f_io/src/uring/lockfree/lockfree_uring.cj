@@ -232,8 +232,17 @@ public class IoUringLockFree <: Resource {
      */
     public func waitAndReap(): UInt32 {
         checkNotClosed()
-        // 先尝试非阻塞收割
-        var count = reap()
+        // 先尝试非阻塞收割一个 CQE（避免一次处理所有，保证可被多次调用逐次收割）
+        var count = reaper.reapN(1, { cqe, _ =>
+            let userData = ioUringCQEGetData64(cqe)
+            if (userData != 0) {
+                let (slotIndex, generation) = slots.decodeUserData(userData)
+                let invoked = slots.invokeAndRelease(slotIndex, generation, cqe)
+                if (invoked) {
+                    allocator.release(slotIndex)
+                }
+            }
+        })
         if (count > 0) {
             return count
         }

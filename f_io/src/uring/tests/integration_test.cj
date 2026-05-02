@@ -89,10 +89,13 @@ public class IoUringIntegrationTest {
             let iterations: Int64 = 20
             let successCount = AtomicInt64(0)
 
+            // 每个线程固定分配一个 ring，避免 getSQE/submit 的并发竞争。
+            // IoUring 实例不是线程安全的，round-robin 分配可能让多线程共享同一 ring。
             let futures = Array<Future<Unit>>(2) { threadIdx =>
+                let ringIndex: Int64 = threadIdx  // 线程 0 → ring[0]，线程 1 → ring[1]
                 spawn {
                     for (j in 0..iterations) {
-                        let r = pool.getRing()
+                        let r = pool.getRing(ringIndex)
                         let sqeOpt = r.getSQE()
                         if (let Some(sqe) <- sqeOpt) {
                             ioUringPrepNop(sqe)
