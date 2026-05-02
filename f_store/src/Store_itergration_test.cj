@@ -22,7 +22,6 @@ import std.sync.AtomicInt64
 
 @Test
 public class StoreIntegrationTest {
-    var testDir: String = ""
 
     // ==================== 1. 基本功能测试 ====================
 
@@ -357,8 +356,6 @@ public class StoreIntegrationTest {
         let value = "short_val".unsafeBytes()
         // 极短过期时间
         store.add(key, value, Duration.millisecond * 100)
-        // 立即读，可能还在
-        let immediate = store.get(key)
         // 等过期能读到也算通过（实现可能检查时间戳）
         sleep(Duration.millisecond * 200)
         @Expect(store.get(key).isNone())

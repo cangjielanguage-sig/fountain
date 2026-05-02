@@ -31,7 +31,6 @@ internal import std.env.atExit
 internal import fountain::f_base.*
 internal import fountain::f_bloom.BloomFilter
 internal import fountain::f_concurrent.ConcurrentSkipListMap
-internal import fountain::f_concurrent.ExtendAtomicInt64
 internal import fountain::f_collection.PriorityQueue
 internal import fountain::f_util.crc32
 

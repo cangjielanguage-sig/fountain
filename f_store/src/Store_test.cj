@@ -20,7 +20,6 @@ import std.unittest.testmacro.*
 
 @Test
 public class StoreTest {
-    var testDir: String = ""
 
     @TestCase
     public func testAddGetBasic(): Unit {
