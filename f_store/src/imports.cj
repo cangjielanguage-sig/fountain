@@ -34,6 +34,7 @@ internal import fountain::f_bloom.BloomFilter
 internal import fountain::f_concurrent.{ConcurrentSkipListMap, ExtendAtomicInt64}
 internal import fountain::f_collection.PriorityQueue
 internal import fountain::f_util.crc32
+internal import fountain::f_io.{SegmentedLog, LogConfig}
 
 // === 全局常量 ===
 /** 最大层级数，L0 ~ L{MAX_LEVEL - 1}，最底层不可 compact */

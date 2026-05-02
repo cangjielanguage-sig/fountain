@@ -81,6 +81,7 @@ public class SegmentedLog <: Resource {
 
     // 当前文件
     private var file: File
+    private var curPath: String
     @When[os == "Linux"]
     private var mmapPtr: CPointer<Byte>
 
@@ -93,7 +94,7 @@ public class SegmentedLog <: Resource {
     private let oldFilesLock: Mutex
     private let appendLock: Mutex
 
-    init(config: LogConfig) {
+    public init(config: LogConfig) {
         this.config = config
         // 确保目录存在
         let dir = config.dir
@@ -103,6 +104,7 @@ public class SegmentedLog <: Resource {
         // 打开初始文件
         let path = "${dir}/${config.filePrefix}_${config.startSeq}${config.fileExt}"
         this.file = File(path, OpenMode.ReadWrite)
+        this.curPath = path
         this.seq = AtomicInt64(config.startSeq)
         this.closed = AtomicBool(false)
         this.currentSize = AtomicInt64(0)
@@ -111,6 +113,25 @@ public class SegmentedLog <: Resource {
         this.oldFilesLock = Mutex()
         this.appendLock = Mutex()
         // Linux: ftruncate + fallocate + mmap，非 Linux 返回 null
+        this.mmapPtr = initFileMapping(this.file, config.maxFileSize)
+    }
+    /** 从指定路径创建。rotate() 仍使用 config 生成新文件路径 */
+    public init(config: LogConfig, initPath: String) {
+        this.config = config
+        // 确保目录存在
+        let dir = config.dir
+        if (!exists(dir)) {
+            Directory.create(dir, recursive: true)
+        }
+        this.file = File(initPath, OpenMode.ReadWrite)
+        this.curPath = initPath
+        this.seq = AtomicInt64(config.startSeq)
+        this.closed = AtomicBool(false)
+        this.currentSize = AtomicInt64(0)
+        this.appendCount = AtomicInt64(0)
+        this.oldFiles = ArrayList<String>()
+        this.oldFilesLock = Mutex()
+        this.appendLock = Mutex()
         this.mmapPtr = initFileMapping(this.file, config.maxFileSize)
     }
 
@@ -199,14 +220,14 @@ public class SegmentedLog <: Resource {
             file.close()
         }
         // 将旧路径加入待清理列表
-        let oldPath = "${config.dir}/${config.filePrefix}_${seq.load()}${config.fileExt}"
         synchronized (oldFilesLock) {
-            oldFiles.add(oldPath)
+            oldFiles.add(curPath)
         }
         // 创建新文件
         let newSeq = seq.fetchAdd(1) + 1
         let newPath = "${config.dir}/${config.filePrefix}_${newSeq}${config.fileExt}"
         this.file = File(newPath, OpenMode.ReadWrite)
+        this.curPath = newPath
         this.mmapPtr = initFileMapping(this.file, config.maxFileSize)
         this.currentSize.store(0)
         this.appendCount.store(0)

@@ -15,50 +15,40 @@ limitations under the License.
 */
 package fountain::f_store
 
+/**
+ * WAL — Write-Ahead Log
+ *
+ * 基于 fountain::f_io.SegmentedLog 实现。
+ * 业务层：记录编码（encodeDirect）、序号管理、过期时间。
+ * I/O 层：固定大小分段、mmap（Linux）零 syscall 写入、自动轮转 — 全部委托给 SegmentedLog。
+ */
 class WAL <: Resource {
     /** 线程局部编码缓冲区（4KB 覆盖绝大多数小值记录） */
     private static let encodeBuf = ThreadLocal<Array<Byte>>()
 
-    /** mmap WAL 文件基址（Linux），零 syscall 写入 page cache */
-    @When[os == "Linux"]
-    private var mmapPtr: CPointer<Byte>
+    /** SegmentedLog 负责所有 I/O：mmap/file.write + 轮转 + 同步 */
+    private let segmentLog: SegmentedLog
 
-    private var file: File
+    /** f_store 业务序列号（独立于 SegmentedLog 的文件序列号） */
     let sequence: AtomicInt64
-    let closed: AtomicBool
-    private let syncInterval: Int64
-    private let appendCount: AtomicInt64
-    private let currentFileSize: AtomicInt64
-    private let maxFileSize: Int64
-    private var walPath: String
-    private let walDir: String
-    /** 已关闭的旧 WAL 文件路径列表（等待清理） */
-    private let oldFiles: ArrayList<String>
-    /** 保护 oldFiles 并发访问（rotate vs takeOldFiles） */
-    private let oldFilesLock: Mutex
-    /** 保护 append 中 file.write + rotate 的原子性 */
-    private let appendLock: Mutex
+    private let closed: AtomicBool
 
     init(path: String, startSequence!: Int64 = 0, maxFileSize!: Int64 = 64 * 1024 * 1024) {
-        // 确保目录存在
         let parentDir = Path(path).parent
         if (!exists(parentDir)) {
             Directory.create(parentDir, recursive: true)
         }
-        this.walPath = path
-        this.walDir = parentDir.toString()
-        this.file = File(path, OpenMode.ReadWrite)
         this.sequence = AtomicInt64(startSequence)
         this.closed = AtomicBool(false)
-        this.syncInterval = 100
-        this.appendCount = AtomicInt64(0)
-        this.currentFileSize = AtomicInt64(0)
-        this.maxFileSize = maxFileSize
-        this.oldFiles = ArrayList<String>()
-        this.oldFilesLock = Mutex()
-        this.appendLock = Mutex()
-        // Linux: ftruncate + fallocate + mmap（静态方法，不依赖 this 初始化完成）
-        this.mmapPtr = mmapFile(this.file, maxFileSize)
+        let config = LogConfig(
+            parentDir.toString(),
+            "wal",
+            maxFileSize,
+            100,
+            fileExt: ".wal"
+        )
+        // 使用 initPath 构造器保留传入的原始路径
+        this.segmentLog = SegmentedLog(config, path)
     }
 
     func append(key: Array<Byte>, value: ?Array<Byte>, expireAt!: ?Int64 = None): Int64 {
@@ -68,48 +58,33 @@ class WAL <: Resource {
         let seq = sequence.incrFetch()
         // 零分配编码（小值走线程局部 buffer，零拷贝切片）
         let encoded = encodeDirect(seq, key, value, expireAt)
-        let recordSize = Int64(encoded.size)
-        // 用 Mutex 保护 write + rotate + sync 的原子性，防止与 close 竞态
-        synchronized (appendLock) {
-            // 获取锁后再次检查 closed（可能在等待锁时 close() 已执行）
-            if (closed.load()) {
-                throw StoreClosedException()
-            }
-            // 检查写入当前记录后的文件大小是否超限，超限则先 rotate 再写入新文件
-            if (currentFileSize.load() + recordSize > maxFileSize) {
-                rotate()
-            }
-            // Linux: memcpy 到 mmap 区域（零 syscall）
-            // 非 Linux: file.write()
-            writeRecord(encoded)
-            currentFileSize.fetchAdd(recordSize)
-            // fsync / msync 锁内执行
-            if (appendCount.incrFetch() % syncInterval == 0) {
-                syncRecords()
-            }
-        }
+        // 委托给 SegmentedLog：写入 + 自动轮转 + 周期性 fsync
+        segmentLog.append(encoded)
         seq
     }
 
-    /** Linux: memcpy 到 mmap 写 page cache。非 Linux: file.write() */
-    @When[os == "Linux"]
-    private func writeRecord(encoded: Array<Byte>): Unit {
-        let writePos = currentFileSize.load()
-        unsafe {
-            let srcHdl = acquireArrayRawData<Byte>(encoded)
-            memcpy(mmapPtr + writePos, srcHdl.pointer, encoded.size)
-            releaseArrayRawData(srcHdl)
-        }
-    }
-    @When[os != "Linux"]
-    private func writeRecord(encoded: Array<Byte>): Unit {
-        file.write(encoded)
+    func sync(): Unit {
+        segmentLog.sync()
     }
 
-    /** fsync 刷盘（统一路径，Linux 下同样 flush mmap 脏页） */
-    private func syncRecords(): Unit {
-        file.flush()
+    /** 返回已关闭的旧 WAL 文件路径列表（等待清理），并清空内部列表 */
+    func takeOldFiles(): ArrayList<String> {
+        segmentLog.takeOldFiles()
     }
+
+    public func close(): Unit {
+        if (!closed.compareAndSwap(false, true)) {
+            return
+        }
+        // SegmentedLog 内部持有关闭保护（appendLock + CAS），直接委托
+        segmentLog.close()
+    }
+
+    public func isClosed(): Bool {
+        closed.load()
+    }
+
+    // ===== 编码逻辑（f_store 业务层，保持不变） =====
 
     /** 将记录直接编码到线程局部缓冲区，返回零拷贝切片。小值路径零堆分配。
      *  超大记录（> 4KB）回退到 WALRecord.encode()。 */
@@ -153,87 +128,5 @@ class WAL <: Resource {
 
         // 4. 零拷贝切片返回
         scratch[0 .. totalLen]
-    }
-
-    func sync(): Unit {
-        synchronized (appendLock) {
-            if (!closed.load()) {
-                syncRecords()
-            }
-        }
-    }
-
-    /** 返回已关闭的旧 WAL 文件路径列表（等待清理），并清空内部列表 */
-    func takeOldFiles(): ArrayList<String> {
-        synchronized (oldFilesLock) {
-            let result = ArrayList<String>()
-            for (p in oldFiles) {
-                result.add(p)
-            }
-            oldFiles.clear()
-            result
-        }
-    }
-
-    private func rotate(): Unit {
-        // sync（flush 缓冲区）+ close 当前文件
-        sync()
-        unmapFile(mmapPtr, maxFileSize)
-        if (!file.isClosed()) {
-            file.close()
-        }
-        // 将旧路径加入待清理列表
-        synchronized (oldFilesLock) {
-            oldFiles.add(walPath)
-        }
-
-        // 用当前 sequence 创建新 WAL 文件
-        let startSeq = sequence.load()
-        let newPath = "${walDir}/wal_${startSeq}.wal"
-        this.file = File(newPath, OpenMode.ReadWrite)
-        this.mmapPtr = mmapFile(this.file, maxFileSize)
-        this.walPath = newPath
-        this.currentFileSize.store(0)
-        this.appendCount.store(0)
-    }
-
-    /** Linux: munmap。非 Linux: 空操作 */
-    @When[os == "Linux"]
-    private static func unmapFile(ptr: CPointer<Byte>, size: Int64): Unit {
-        unsafe { munmap(ptr, size) }
-    }
-    @When[os != "Linux"]
-    private static func unmapFile(_: CPointer<Byte>, _: Int64): Unit {}
-
-    /** Linux: ftruncate + fallocate + mmap。非 Linux: 空操作 */
-    @When[os == "Linux"]
-    private static func mmapFile(file: File, size: Int64): CPointer<Byte> {
-        let fd = Int32(file.fileDescriptor.fileHandle)
-        unsafe { ftruncate(fd, size) }
-        unsafe { fallocate(fd, 0, 0, size) }
-        unsafe { mmap(CPointer<Byte>(), size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0) }
-    }
-    @When[os != "Linux"]
-    private static func mmapFile(_: File, _: Int64): CPointer<Byte> {
-        CPointer<Byte>()
-    }
-
-    public func close(): Unit {
-        if (!closed.compareAndSwap(false, true)) {
-            return
-        }
-        // 用 appendLock 确保在 append 中无正在进行的 write/memcpy
-        synchronized (appendLock) {
-            // 强制 sync 确保数据落盘
-            syncRecords()
-            unmapFile(mmapPtr, maxFileSize)
-            if (!file.isClosed()) {
-                file.close()
-            }
-        }
-    }
-
-    public func isClosed(): Bool {
-        closed.load()
     }
 }
