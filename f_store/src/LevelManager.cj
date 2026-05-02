@@ -102,7 +102,7 @@ class LevelManager {
                         i--
                         continue
                     }
-                    if (let Some(e) <- sst.get(key)) {
+                    if (let Some(e) <- sst.getDirect(key)) {
                         return checkExpiry(e, now)
                     }
                 } catch (_: StoreClosedException) {}
@@ -120,7 +120,7 @@ class LevelManager {
                     if (key < meta.minKey || key > meta.maxKey) {
                         continue
                     }
-                    if (let Some(e) <- sst.get(key)) {
+                    if (let Some(e) <- sst.getDirect(key)) {
                         return checkExpiry(e, now)
                     }
                 } catch (_: StoreClosedException) {}

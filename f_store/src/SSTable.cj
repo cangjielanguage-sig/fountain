@@ -266,17 +266,24 @@ class SSTable <: Resource {
         bloomFilter
     }
 
-    /** 点查询。Readable 状态下可用。
-     *  Linux: 使用 pread（单 syscall 原子定位读取，无锁）
-     *  非 Linux: 使用 seek+read（Mutex 保护并发安全） */
+    /** 点查询（带 Bloom 快速否定）。Readable 状态下可用。 */
     func get(key: ByteArray): ?EntryValue {
         guardReadable()
         let keyBytes = key.bytes
-        // Bloom 快速否定
         if (!bloomFilter.mightContain(keyBytes)) {
             return None
         }
-        // 二分查找定位 Data Block
+        readBlockAndScan(key, keyBytes)
+    }
+
+    /** 点查询（跳过 Bloom，供 LevelManager 使用——调用方已检查 Bloom）。Readable 状态下可用。 */
+    func getDirect(key: ByteArray): ?EntryValue {
+        guardReadable()
+        readBlockAndScan(key, key.bytes)
+    }
+
+    /** 二分定位 Data Block → pread → scanBuffer（无 Bloom 检查） */
+    private func readBlockAndScan(key: ByteArray, keyBytes: Array<Byte>): ?EntryValue {
         let idx = binarySearchIndex(key)
         if (idx < 0) {
             return None
@@ -518,11 +525,10 @@ class SSTable <: Resource {
                 break
             }
             offset += 32
-            // 提取 key
-            let kBuf = Array<Byte>(keyLen, repeat: 0u8)
-            buf[offset .. offset + keyLen].copyTo(kBuf)
+            // 直接用零拷贝切片与 targetKey 比较（免分配、免拷贝）
+            let keySlice = buf[offset .. offset + keyLen]
             offset += keyLen
-            if (kBuf == targetKey) {
+            if (keySlice == targetKey) {
                 // 命中目标 key，提取 value
                 let val = if (valueLen < 0) {
                     None<Array<Byte>>
