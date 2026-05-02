@@ -84,7 +84,11 @@ public class Store <: Resource {
         compactor.start()
 
         // 进程退出时自动关闭
-        atExit { => close() }
+        atExit { => 
+            if(!isClosed()){
+                close() 
+            }
+        }
     }
 
     /** 添加键值对 */

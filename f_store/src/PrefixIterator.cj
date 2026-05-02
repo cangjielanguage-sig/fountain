@@ -106,15 +106,19 @@ public class PrefixIterator <: Iterator<(Array<Byte>, Array<Byte>)> & Resource {
             return
         }
         drained = true
-        var lastEx: ?Exception = None
+        var baseEx: ?BaseException = None
         for (src in sources) {
             try {
                 src.close()
             } catch (e: Exception) {// ⚠ 不能忽略异常，异常必须暴露出去
-                lastEx = Some(e)
+                if(let Some(ex) <- baseEx){
+                    ex.addSuppressed(e)
+                }else{
+                    ex = PrefixIteratorException(e)
+                }
             }
         }
-        if (let Some(ex) <- lastEx) {
+        if (let Some(ex) <- baseEx) {
             throw ex
         }
     }
@@ -135,4 +139,9 @@ public func startsWith(key: ByteArray, prefix: ByteArray): Bool {
         }
     }
     true
+}
+public class PrefixIteratorException <: BaseException {
+    public init(caused: Exception){
+        super(caused)
+    }
 }
