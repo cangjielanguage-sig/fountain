@@ -82,6 +82,73 @@ class SyncHandlerStoreTest {
         cleanup(dir)
     }
 
+    @TestCase
+    func getKeyReturnsValueAfterRegister(): Unit {
+        let dir = '/tmp/fsync_test/get_after_register'
+        cleanup(dir)
+        let store = Store(dir)
+        let nm = NodeManager(ArrayList<HostAndPort>([HostAndPort('127.0.0.1:1203')]), 0)
+        let wm = WatchManager()
+        let handler = SyncHandler(store, nm, wm)
+        let key = '/app/config/db/host'
+        let value = [104u8, 101u8, 108u8, 108u8, 111u8]
+        // 先 REGISTER
+        let _ = handler.handle(Message(Command.REGISTER, SyncData(key, 0, value).toData()))
+        // 再 GET
+        let resp = handler.handle(Message(Command.ACK, KeyData(key).toData()))
+        if (let Some(vd) <- convert<ValueData>(resp.data)) {
+            if (let Some(v) <- vd.value) {
+                @Assert(v.size == value.size)
+            } else {
+                @Assert(false)
+            }
+        } else {
+            @Assert(false)
+        }
+        store.close()
+        cleanup(dir)
+    }
+
+    @TestCase
+    func getNonExistentKeyReturnsNone(): Unit {
+        let dir = '/tmp/fsync_test/get_nonexist'
+        cleanup(dir)
+        let store = Store(dir)
+        let nm = NodeManager(ArrayList<HostAndPort>([HostAndPort('127.0.0.1:1203')]), 0)
+        let wm = WatchManager()
+        let handler = SyncHandler(store, nm, wm)
+        let resp = handler.handle(Message(Command.ACK, KeyData('/app/nonexistent').toData()))
+        if (let Some(vd) <- convert<ValueData>(resp.data)) {
+            @Assert(vd.value.isNone())
+        } else {
+            @Assert(false)
+        }
+        store.close()
+        cleanup(dir)
+    }
+
+    @TestCase
+    func deregisterRemovesKey(): Unit {
+        let dir = '/tmp/fsync_test/deregister'
+        cleanup(dir)
+        let store = Store(dir)
+        let nm = NodeManager(ArrayList<HostAndPort>([HostAndPort('127.0.0.1:1203')]), 0)
+        let wm = WatchManager()
+        let handler = SyncHandler(store, nm, wm)
+        let key = '/app/config/db/host'
+        let value = [1u8, 2u8, 3u8]
+        // REGISTER
+        let _ = handler.handle(Message(Command.REGISTER, SyncData(key, 0, value).toData()))
+        // 验证已写入
+        @Assert(store.get(key.unsafeBytes()).isSome())
+        // DEREGISTER
+        let _ = handler.handle(Message(Command.DEREGISTER, KeyData(key).toData()))
+        // 验证已删除
+        @Assert(store.get(key.unsafeBytes()).isNone())
+        store.close()
+        cleanup(dir)
+    }
+
     private static func cleanup(dir: String): Unit {
         if (exists(dir)) {
             remove(dir, recursive: true)
