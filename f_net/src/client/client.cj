@@ -16,18 +16,20 @@ limitations under the License.
 package fountain::f_net.client
 
 import std.collection.concurrent.ConcurrentHashMap
-import std.sync.{Timer, CatchupStyle}
+import std.sync.{Timer, CatchupStyle, AtomicInt64}
 import fountain::f_data.*
 import fountain::f_log.*
 import fountain::f_protocol.*
 import fountain::f_random.*
 import fountain::f_net.*
 
-public struct Client<DE, EN, M, T, ID> where EN <: MessageCopier, M <: Protocol<EN, DE>, T <: DataFields<T>,
+public struct Client<DE, EN, M, T, ID> <: Resource where EN <: MessageCopier, M <: Protocol<EN, DE>, T <: DataFields<T>,
     ID <: Hashable & Equatable<ID> {
     private static let log = LoggerFactory.getLogger('fountain::f_net.Client')
     private let futures = ConcurrentHashMap<ID, MessageFuture<DE>>()
     private let buffers: Array<SocketBuffer>
+    private let checkTimer: Timer
+    private let closed = AtomicInt64(0)
 
     Client(queueSize: Int64, idGetter: (DE) -> ID, checkDuration: Duration, checker: (SocketBuffer) -> Bool,
         private let socketCreator: () -> TcpSocket, private let sockets: Array<TcpSocket>) {
@@ -53,7 +55,7 @@ public struct Client<DE, EN, M, T, ID> where EN <: MessageCopier, M <: Protocol<
                 buffer
         }
         this.buffers = buffers
-        Timer.repeat(checkDuration, checkDuration, {
+        checkTimer = Timer.repeat(checkDuration, checkDuration, {
             => for (i in 0..sockets.size) {
                 spawn {
                     func new() {
@@ -82,18 +84,19 @@ public struct Client<DE, EN, M, T, ID> where EN <: MessageCopier, M <: Protocol<
                         }
                     }
                     let buffer = buffers[i]
-                    let socket = buffer.socket
                     try {
                         if (!checker(buffer)) {
-                            if (!socket.isClosed()) {
-                                socket.close()
+                            if (!buffer.isClosed()) {
+                                buffer.close()
                             }
                             new()
                         }
                     } catch (e: Exception) {
                         log.error('TcpSocket.checker', e)
                         try {
-                            socket.close()
+                            if (!buffer.isClosed()) {
+                                buffer.close()
+                            }
                         } catch (e: Exception) {
                             log.error('TcpSocket.close', e)
                         }
@@ -102,6 +105,24 @@ public struct Client<DE, EN, M, T, ID> where EN <: MessageCopier, M <: Protocol<
                 }
             }
         }, style: Burst)
+    }
+
+    public func close(): Unit {
+        closed.store(1)
+        checkTimer.cancel()
+        for (buf in buffers) {
+            if (!buf.isClosed()) {
+                try {
+                    buf.close()
+                } catch (e: Exception) {
+                    log.error('SocketBuffer.close', e)
+                }
+            }
+        }
+    }
+
+    public func isClosed(): Bool {
+        closed.load() == 1
     }
     /**
      * @param queueSize 写数据任务队列大小
@@ -144,7 +165,11 @@ public struct Client<DE, EN, M, T, ID> where EN <: MessageCopier, M <: Protocol<
         future
     }
     private func transfer(buffer: SocketBuffer, id: ID, message: M, timeout: Duration): ?DE {
-        transfer(buffer, id, message).tryGet(timeout)
+        let result = transfer(buffer, id, message).tryGet(timeout)
+        if (result.isNone()) {
+            futures.remove(id)
+        }
+        result
     }
 }
 

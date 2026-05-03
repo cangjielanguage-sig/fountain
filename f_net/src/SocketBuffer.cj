@@ -17,12 +17,14 @@ package fountain::f_net
 
 import std.io.InputStream
 import std.sync.AtomicInt64
+import fountain::f_log.*
 
 internal class StopSignal {
     let stopped = AtomicInt64(0)
 }
 
 public struct SocketBuffer <: Resource {
+    private static let log = LoggerFactory.getLogger('fountain::f_net.SocketBuffer')
     let buffered: BufferedInputStream<TcpSocket>
     let queue: ArrayBlockingQueue<() -> Unit>
     let socket: TcpSocket
@@ -37,7 +39,11 @@ public struct SocketBuffer <: Resource {
         spawn {
             while (stop.stopped.load() == 0) {
                 if (let Some(fn) <- queue.remove(Duration.millisecond * 50)) {
-                    fn()
+                    try {
+                        fn()
+                    } catch (e: Exception) {
+                        log.warn('SocketBuffer write error', e)
+                    }
                 }
             }
         }

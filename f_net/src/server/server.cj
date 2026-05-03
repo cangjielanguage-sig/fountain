@@ -108,6 +108,7 @@ public struct Server<DE, EN, M, T> <: Resource where EN <: MessageCopier, M <: P
         server.isClosed()
     }
     public func close(): Unit {
+        server.close()
         checkTimer.cancel()
         for (i in 0..3) {
             while (buffers.size > 0) {
@@ -120,7 +121,6 @@ public struct Server<DE, EN, M, T> <: Resource where EN <: MessageCopier, M <: P
                 }
             }
         }
-        server.close()
     }
 }
 
