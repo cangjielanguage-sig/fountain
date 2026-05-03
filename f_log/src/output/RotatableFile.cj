@@ -24,14 +24,14 @@ import std.sync.{Timer, Mutex, AtomicOptionReference}
 import std.time.DateTime
 import stdx.compress.zlib.{WrapType, CompressLevel, CompressOutputStream}
 import fountain::f_base.*
-import fountain::f_time.TimeUnit
+import fountain::f_time
 
 internal import fountain::f_log.exception.LogException
 
 public class RotatableFileParams <: Hashable & Equatable<RotatableFileParams> {
     public var path = "${env.getWorkingDirectory()}/logs/${env.getCommand()}.log"
     public var fileSize = Int64.Max
-    public var timeunit = TimeUnit.DAY
+    public var timeunit = f_time.TimeUnit.DAY
     public var compress = LogFileCompressFormat.NonCompression
 
     public operator func ==(that: RotatableFileParams): Bool {
@@ -51,7 +51,7 @@ protected class RotatableFile <: OutputStream & Resource {
     private let queue = ArrayBlockingQueue<() -> Unit>(1)
     private var rotateTimer = ZERO_TIMER
     private let fileSize: Int64
-    private let timeunit: TimeUnit
+    private let timeunit: f_time.TimeUnit
     private let compress: LogFileCompressFormat
     private let directory: String
     private let file = AtomicOptionReference<File>()
@@ -75,7 +75,7 @@ protected class RotatableFile <: OutputStream & Resource {
             if (idx > 0) {
                 let end = fileInfo.indexOf("&", idx) ?? fileInfo.size
                 let duration = fileInfo[idx + "rotateDuration=".size..end]
-                timeunit = TimeUnit.tryParse(duration).getOrThrow {LogException("rotateDuration=${duration}")}
+                timeunit = f_time.TimeUnit.tryParse(duration).getOrThrow {LogException("rotateDuration=${duration}")}
             } else {
                 timeunit = params.timeunit
             }
@@ -192,7 +192,7 @@ protected class RotatableFile <: OutputStream & Resource {
         }
     }
 
-    private static func genTime(timeunit: TimeUnit, current: DateTime): String {
+    private static func genTime(timeunit: f_time.TimeUnit, current: DateTime): String {
         match (timeunit) {
             case DAY => current.addDays(-1).format("yyyyMMdd")
             case HOUR => current.addHours(-1).format("yyyyMMddHH")

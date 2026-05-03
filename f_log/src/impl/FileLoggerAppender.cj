@@ -15,6 +15,8 @@ limitations under the License.
  */
 package fountain::f_log.impl
 
+import fountain::f_time
+
 class FileLoggerAppender <: AsyncLogger {
     private static const LOGGER_NAME = 'file'
     public init(
@@ -64,7 +66,7 @@ public class FileLoggerParams <: BaseLoggerParams<FileLoggerParams> {
             params.path = p
         }
         if (let d <- LoggerConfig.getLogFileRotateDuration(appender) && 
-            let Some(u) <- TimeUnit.tryParse(d)) {
+            let Some(u) <- f_time.TimeUnit.tryParse(d)) {
             params.timeunit = u
         }
         if (let s <- LoggerConfig.getLogFileRotateSize(appender) && !s.isEmpty()) {
