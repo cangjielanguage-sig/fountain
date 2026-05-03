@@ -21,8 +21,7 @@ import fountain::f_data.*
 import fountain::f_log.*
 import fountain::f_net.client.*
 import fountain::f_protocol.default.*
-import fountain::fsync.config.HostAndPort
-import fountain::fsync.server.*
+import fountain::fsync.base.{HostAndPort, HashRing, SyncData, KeyData, ValueData}
 
 public class SyncClient {
     private static let log = LoggerFactory.getLogger('fountain::fsync.SyncClient')

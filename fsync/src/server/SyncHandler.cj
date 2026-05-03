@@ -20,6 +20,7 @@ import std.sync.AtomicInt64
 import fountain::f_data.*
 import fountain::f_protocol.default.*
 import fountain::f_store.Store
+import fountain::fsync.base.{SyncData, KeyData, ValueData, WatchData}
 
 private let VERSION_SUFFIX = '_version'.unsafeBytes()
 

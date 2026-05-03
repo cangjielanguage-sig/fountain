@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package fountain::fsync
+package fountain::fsync.server
 
 import std.collection.ArrayList
 import std.fs.{exists, remove}
@@ -22,8 +22,7 @@ import std.unittest.testmacro.*
 import fountain::f_data.*
 import fountain::f_protocol.default.*
 import fountain::f_store.Store
-import fountain::fsync.config.HostAndPort
-import fountain::fsync.server.*
+import fountain::fsync.base.{HostAndPort, SyncData, KeyData, ValueData}
 
 @Test
 class SyncHandlerStoreTest {

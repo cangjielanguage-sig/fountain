@@ -17,7 +17,7 @@ package fountain::fsync.server
 
 import std.collection.ArrayList
 import std.sync.AtomicInt64
-import fountain::fsync.config.HostAndPort
+import fountain::fsync.base.{HostAndPort, HashRing}
 
 public class NodeManager {
     private let nodes: ArrayList<HostAndPort>       // 所有节点

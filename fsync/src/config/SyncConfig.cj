@@ -17,6 +17,7 @@ package fountain::fsync.config
 
 import std.convert.*
 import fountain::f_config.Config
+import fountain::fsync.base.HostAndPort
 
 public class SyncConfig {
     public static const sync = 'sync'
@@ -34,20 +35,5 @@ public class SyncConfig {
 
     public static func getDataPath(): String {
         Config.getString(dataPath) ?? '/tmp/fsync'
-    }
-}
-
-public struct HostAndPort {
-    public let host: String
-    public let port: UInt16
-
-    public init(host: String) {
-        if (let Some(idx) <- host.indexOf(':')) {
-            this.host = host[0..idx]
-            this.port = UInt16.parse(host[idx + 1..])
-        } else {
-            this.host = host
-            this.port = 1203
-        }
     }
 }

@@ -13,32 +13,37 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package fountain::fsync
+package fountain::fsync.server
 
 import std.unittest.*
 import std.unittest.testmacro.*
-import fountain::fsync.config.HostAndPort
 
 @Test
-class HostAndPortTest {
+class SyncServerTest {
+    private static let testPort: UInt16 = 19876
+
     @TestCase
-    func parseHostPort(): Unit {
-        let hp = HostAndPort('10.0.0.1:1203')
-        @Assert(hp.host == '10.0.0.1')
-        @Assert(hp.port == 1203u16)
+    func constructAndClose(): Unit {
+        let server = SyncServer(testPort)
+        @Assert(!server.isClosed())
+        server.close()
+        @Assert(server.isClosed())
     }
 
     @TestCase
-    func defaultPort(): Unit {
-        let hp = HostAndPort('10.0.0.1')
-        @Assert(hp.host == '10.0.0.1')
-        @Assert(hp.port == 1203u16)
+    func closeIsIdempotent(): Unit {
+        let server = SyncServer(19877u16)
+        server.close()
+        server.close()
+        @Assert(server.isClosed())
     }
 
     @TestCase
-    func customPort(): Unit {
-        let hp = HostAndPort('node1:8080')
-        @Assert(hp.host == 'node1')
-        @Assert(hp.port == 8080u16)
+    func customQueueSize(): Unit {
+        let server = SyncServer(19878u16, queueSize: 2048,
+            checkDuration: Duration.second * 60)
+        @Assert(!server.isClosed())
+        server.close()
+        @Assert(server.isClosed())
     }
 }

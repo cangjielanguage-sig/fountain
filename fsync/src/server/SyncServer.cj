@@ -18,6 +18,7 @@ package fountain::fsync.server
 import fountain::f_net.*
 import fountain::f_net.server.*
 import fountain::f_protocol.default.*
+import fountain::fsync.base.SyncData
 
 public class SyncServer <: Resource {
     private let server: Server<Message, EncodedMessage, Message, SyncData>

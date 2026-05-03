@@ -13,11 +13,10 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package fountain::fsync.server
+package fountain::fsync.base
 
 import std.collection.{ArrayList, TreeMap, HashSet}
 import fountain::f_util.{UInt128, murmurHash}
-import fountain::fsync.config.HostAndPort
 
 public class HashRing {
     private let ring: TreeMap<UInt128, Int64>
@@ -36,7 +35,6 @@ public class HashRing {
         this.ring = ring
     }
 
-    /** 获取 KEY 的 Owner 节点 */
     public func getNode(key: String): ?HostAndPort {
         let hash = murmurHash(key)
         let entry = ring.forward(hash, inclusive: true).next()
@@ -49,18 +47,15 @@ public class HashRing {
         }
     }
 
-    /** 顺时针查找下一可用节点，跳过 exclude 索引 */
     public func getNextNode(key: String, exclude: Int64): ?HostAndPort {
         let hash = murmurHash(key)
         let visited = HashSet<Int64>()
-        // 从 hash 开始顺时针迭代
         let it = ring.forward(hash, inclusive: true)
         for ((_, idx) in it) {
             if (idx != exclude && visited.add(idx)) {
                 return nodes[idx]
             }
         }
-        // 回到环起点继续
         let it2 = ring.forward(ring.first.getOrThrow()[0], inclusive: true)
         for ((_, idx) in it2) {
             if (idx != exclude && visited.add(idx)) {
@@ -73,12 +68,10 @@ public class HashRing {
         None
     }
 
-    /** 节点总数 */
     public func nodeCount(): Int64 {
         nodes.size
     }
 
-    /** 检查本地节点是否为 KEY 的 Owner */
     public func isOwner(key: String, localIndex: Int64): Bool {
         if (let Some(node) <- getNode(key)) {
             node.host == nodes[localIndex].host && node.port == nodes[localIndex].port
