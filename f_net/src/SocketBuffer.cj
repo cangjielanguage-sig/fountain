@@ -16,9 +16,10 @@ limitations under the License.
 package fountain::f_net
 
 import std.io.InputStream
+import std.sync.AtomicInt64
 
 internal class StopSignal {
-    var stopped: Bool = false
+    let stopped = AtomicInt64(0)
 }
 
 public struct SocketBuffer <: Resource {
@@ -34,7 +35,7 @@ public struct SocketBuffer <: Resource {
         this.queue = queue
         let stop = this.stop
         spawn {
-            while (!stop.stopped) {
+            while (stop.stopped.load() == 0) {
                 if (let Some(fn) <- queue.remove(Duration.millisecond * 50)) {
                     fn()
                 }
@@ -43,7 +44,7 @@ public struct SocketBuffer <: Resource {
     }
 
     public func close(): Unit {
-        stop.stopped = true
+        stop.stopped.store(1)
         if (!socket.isClosed()) {
             socket.close()
         }
@@ -51,6 +52,6 @@ public struct SocketBuffer <: Resource {
     }
 
     public func isClosed(): Bool {
-        stop.stopped
+        stop.stopped.load() == 1
     }
 }
