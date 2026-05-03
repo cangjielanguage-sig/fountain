@@ -19,15 +19,13 @@ import std.collection.{ArrayList, HashMap}
 import std.sync.Mutex
 import std.time.DateTime
 
-/** DateTime.Max 替代：9999-12-31 23:59:59 */
-private let MAX_DATETIME = DateTime.parse('9999-12-31T23:59:59')
-
+/** 永不超时标记：DateTime.Max 不可用，用 None<DateTime> 表示永不超时 */
 internal struct WatchEntry {
     let pattern: String
-    let expiry: DateTime         // MAX_DATETIME 表示永不超时
+    let expiry: ?DateTime        // None 表示永不超时
     let notify: (Array<Byte>) -> Unit  // 通知回调
 
-    internal init(pattern: String, expiry: DateTime, notify: (Array<Byte>) -> Unit) {
+    internal init(pattern: String, expiry: ?DateTime, notify: (Array<Byte>) -> Unit) {
         this.pattern = pattern
         this.expiry = expiry
         this.notify = notify
@@ -137,7 +135,7 @@ public class WatchManager {
         }
         // 在锁外执行回调，防止死锁
         for (entry in matched) {
-            if (DateTime.now() < entry.expiry) {
+            if (entry.expiry.isNone() || DateTime.now() < entry.expiry.getOrThrow()) {
                 try { entry.notify(newValue) } catch (_: Exception) {}
             }
         }
@@ -157,7 +155,7 @@ public class WatchManager {
         for ((key, entries) in map) {
             var i = 0
             while (i < entries.size) {
-                if (entries[i].expiry <= now) {
+                if (let Some(expiry) <- entries[i].expiry && expiry <= now) {
                     entries.remove(at: i)
                 } else {
                     i++
@@ -172,9 +170,9 @@ public class WatchManager {
         }
     }
 
-    private static func calcExpiry(timeout: Duration): DateTime {
+    private static func calcExpiry(timeout: Duration): ?DateTime {
         if (timeout == Duration.Zero) {
-            MAX_DATETIME
+            None
         } else {
             DateTime.now() + timeout
         }

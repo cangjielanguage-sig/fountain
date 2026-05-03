@@ -19,7 +19,7 @@ import fountain::f_data.*
 import fountain::f_data.macros.*
 
 // REGISTER / PUBLISH 请求体
-@DataAssist[fields]
+@DataAssist[props fields]
 public class SyncData {
     private var key: String = ''
     private var version: Int64 = 0
@@ -34,7 +34,7 @@ public class SyncData {
 }
 
 // GET 响应体
-@DataAssist[fields]
+@DataAssist[props fields]
 public class ValueData {
     private var value: ?Array<Byte> = None
 
@@ -45,7 +45,7 @@ public class ValueData {
 }
 
 // Watch 注册
-@DataAssist[fields]
+@DataAssist[props fields]
 public class WatchData {
     private var key: String = ''
     private var timeout: Duration = Duration.Zero
@@ -58,7 +58,7 @@ public class WatchData {
 }
 
 // Watch 变更通知
-@DataAssist[fields]
+@DataAssist[props fields]
 public class WatchNotifyData {
     private var key: String = ''
     private var value: ?Array<Byte> = None
@@ -71,7 +71,7 @@ public class WatchNotifyData {
 }
 
 // PREFIX / GLOB 请求
-@DataAssist[fields]
+@DataAssist[props fields]
 public class PatternData {
     private var pattern: String = ''
 
@@ -82,7 +82,7 @@ public class PatternData {
 }
 
 // DEREGISTER / GET 请求
-@DataAssist[fields]
+@DataAssist[props fields]
 public class KeyData {
     private var key: String = ''
 
