@@ -57,6 +57,8 @@ public class SocketParamsTest {
     public func builderPatternChaining(): Unit {
         let _ = SocketParams()
             .bindToDevice(None)
-        @Assert(true)
+            .readTimeout(None)
+            .noDelay(true)
+            .linger(None)
     }
 }
