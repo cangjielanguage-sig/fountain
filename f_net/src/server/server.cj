@@ -109,12 +109,14 @@ public struct Server<DE, EN, M, T> <: Resource where EN <: MessageCopier, M <: P
     }
     public func close(): Unit {
         checkTimer.cancel()
-        while (buffers.size > 0) {
-            if (let Some(buffer) <- buffers.remove(Duration.millisecond)) {
-                try {
-                    buffer.close()
-                } catch (e: Exception) {
-                    log.warn('SocketBuffer.close', e)
+        for (i in 0..3) {
+            while (buffers.size > 0) {
+                if (let Some(buffer) <- buffers.remove(Duration.millisecond)) {
+                    try {
+                        buffer.close()
+                    } catch (e: Exception) {
+                        log.warn('SocketBuffer.close', e)
+                    }
                 }
             }
         }
@@ -131,7 +133,7 @@ public class ServerBuilder<DE, EN, M, T> where EN <: MessageCopier, M <: Protoco
     }
     public func build(): Server<DE, EN, M, T> {
         Server<DE, EN, M, T>(queueSize: queueSize, checkDuration: checkDuration, checker: checker, server: server,
-            params: params)
+            params: params.copy())
     }
     public func backlogSize(size: Int64): This {
         server.backlogSize = size

@@ -31,6 +31,23 @@ internal class SocketParams {
     private var socketOptionBool_ = ArrayList<(Int32, Int32, Bool)>()
     private var socketOptionIntNative_ = ArrayList<(Int32, Int32, IntNative)>()
 
+    internal func copy(): SocketParams {
+        let p = SocketParams()
+        p.bindToDevice_ = this.bindToDevice_
+        p.keepAlive_ = this.keepAlive_
+        p.linger_ = this.linger_
+        p.noDelay_ = this.noDelay_
+        p.quickAcknowledge_ = this.quickAcknowledge_
+        p.readTimeout_ = this.readTimeout_
+        p.receiveBufferSize_ = this.receiveBufferSize_
+        p.sendBufferSize_ = this.sendBufferSize_
+        p.writeTimeout_ = this.writeTimeout_
+        for (v in this.socketOption_) { p.socketOption_.add(v) }
+        for (v in this.socketOptionBool_) { p.socketOptionBool_.add(v) }
+        for (v in this.socketOptionIntNative_) { p.socketOptionIntNative_.add(v) }
+        p
+    }
+
     internal func populate(socket: TcpSocket): TcpSocket {
         socket.bindToDevice = bindToDevice_
         socket.keepAlive = keepAlive_
