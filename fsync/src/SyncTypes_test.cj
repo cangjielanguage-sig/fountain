@@ -16,9 +16,14 @@ limitations under the License.
 package fountain::fsync
 
 import std.collection.ArrayList
+import std.fs.{Directory, Path, exists, remove}
 import std.sync.{AtomicBool, AtomicInt64}
 import std.unittest.*
 import std.unittest.testmacro.*
+import fountain::f_codec.default.DefaultCodec
+import fountain::f_data.*
+import fountain::f_protocol.default.*
+import fountain::f_store.Store
 import fountain::fsync.config.HostAndPort
 import fountain::fsync.server.*
 
@@ -330,6 +335,110 @@ class NodeManagerTest {
         @Assert(others.size == 2)
         for (n in others) {
             @Assert(n.host != '10.0.0.1')
+        }
+    }
+}
+
+// ======================== 版本号编解码测试 ========================
+
+@Test
+class VersionCodecTest {
+    @TestCase
+    func zeroRoundtrips(): Unit {
+        let bytes = SyncHandler.encodeVersion(0)
+        @Assert(bytes.size == 8)
+        @Assert(SyncHandler.decodeVersion(bytes) == 0)
+    }
+
+    @TestCase
+    func positiveVersionRoundtrips(): Unit {
+        let v = 42
+        let bytes = SyncHandler.encodeVersion(v)
+        @Assert(bytes.size == 8)
+        @Assert(SyncHandler.decodeVersion(bytes) == v)
+    }
+
+    @TestCase
+    func largeVersionRoundtrips(): Unit {
+        let v = Int64.Max
+        let bytes = SyncHandler.encodeVersion(v)
+        @Assert(bytes.size == 8)
+        @Assert(SyncHandler.decodeVersion(bytes) == v)
+    }
+
+    @TestCase
+    func negativeVersionRoundtrips(): Unit {
+        let v = -1
+        let bytes = SyncHandler.encodeVersion(v)
+        @Assert(bytes.size == 8)
+        @Assert(SyncHandler.decodeVersion(bytes) == v)
+    }
+}
+
+// ======================== SyncHandler Store 集成测试 ========================
+
+@Test
+class SyncHandlerStoreTest {
+    @TestCase
+    func registerWritesToStore(): Unit {
+        let dir = '/tmp/fsync_test/register'
+        cleanup(dir)
+        let store = Store(dir)
+        let nm = NodeManager(ArrayList<HostAndPort>([HostAndPort('127.0.0.1:1203')]), 0)
+        let wm = WatchManager()
+        let handler = SyncHandler(store, nm, wm)
+        let key = '/app/config/db/host'
+        let value = [104u8, 101u8, 108u8, 108u8, 111u8]  // "hello"
+        let msg = Message(Command.REGISTER, SyncData(key, 0, value).toData())
+        let resp = handler.handle(msg)
+        let isResp = match (resp.command) { case RESP(_) => true case _ => false }
+        @Assert(isResp)
+        var stored = store.get(key.unsafeBytes())
+        if (let Some(s) <- stored) {
+            @Assert(s.size == value.size)
+        } else {
+            @Assert(false)
+        }
+        store.close()
+        cleanup(dir)
+    }
+
+    @TestCase
+    func pingReturnsPing(): Unit {
+        let dir = '/tmp/fsync_test/ping'
+        cleanup(dir)
+        let store = Store(dir)
+        let nm = NodeManager(ArrayList<HostAndPort>([HostAndPort('127.0.0.1:1203')]), 0)
+        let wm = WatchManager()
+        let handler = SyncHandler(store, nm, wm)
+        let msg = Message(Command.PING(1))
+        let resp = handler.handle(msg)
+        let isPing = match (resp.command) { case PING(_) => true case _ => false }
+        @Assert(isPing)
+        store.close()
+        cleanup(dir)
+    }
+
+    @TestCase
+    func invalidPayloadReturnsError(): Unit {
+        let dir = '/tmp/fsync_test/invalid'
+        cleanup(dir)
+        let store = Store(dir)
+        let nm = NodeManager(ArrayList<HostAndPort>([HostAndPort('127.0.0.1:1203')]), 0)
+        let wm = WatchManager()
+        let handler = SyncHandler(store, nm, wm)
+        // REGISTER 需要 SyncData 体，这里给空 Data → 应返回错误
+        let msg = Message(Command.REGISTER)
+        let resp = handler.handle(msg)
+        let isResp = match (resp.command) { case RESP(_) => true case _ => false }
+        @Assert(isResp)
+        store.close()
+        cleanup(dir)
+    }
+
+    private static func cleanup(dir: String): Unit {
+        if (exists(dir)) {
+            remove(dir, recursive: true)
         }
     }
 }

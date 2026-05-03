@@ -150,13 +150,13 @@ public class SyncHandler {
         }
     }
 
-    private static func encodeVersion(version: Int64): Array<Byte> {
+    public static func encodeVersion(version: Int64): Array<Byte> {
         let buf = Array<Byte>(8, repeat: 0u8)
         version.writeBigEndian(buf)
         buf
     }
 
-    private static func decodeVersion(bytes: Array<Byte>): Int64 {
+    public static func decodeVersion(bytes: Array<Byte>): Int64 {
         Int64.readBigEndian(bytes)
     }
 
