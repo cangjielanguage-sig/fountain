@@ -15,30 +15,21 @@ limitations under the License.
 */
 package fountain::fsync.client
 
-import std.collection.ArrayList
 import std.unittest.*
 import std.unittest.testmacro.*
-import fountain::fsync.base.HostAndPort
+import fountain::f_config.Config
 
 @Test
 class SyncClientTest {
-    private static func makeNode(host: String, port: UInt16): HostAndPort {
-        HostAndPort('${host}:${port}')
-    }
-
     @TestCase
     func constructWithSingleNode(): Unit {
-        let nodes = ArrayList<HostAndPort>()
-        nodes.add(makeNode('127.0.0.1', 1203))
-        let _ = SyncClient(nodes, 0)
+        Config.set([('sync_hosts', '127.0.0.1:1203')], ifAbsent: false)
+        let _ = SyncClient()
     }
 
     @TestCase
     func constructWithMultipleNodes(): Unit {
-        let nodes = ArrayList<HostAndPort>()
-        nodes.add(makeNode('10.0.0.1', 1203))
-        nodes.add(makeNode('10.0.0.2', 1203))
-        nodes.add(makeNode('10.0.0.3', 1203))
-        let _ = SyncClient(nodes, 0)
+        Config.set([('sync_hosts', '10.0.0.1:1203,10.0.0.2:1203,10.0.0.3:1203')], ifAbsent: false)
+        let _ = SyncClient()
     }
 }

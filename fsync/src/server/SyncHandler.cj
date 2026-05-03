@@ -29,12 +29,14 @@ public class SyncHandler {
     private let nodeManager: NodeManager
     private let watchManager: WatchManager
     private let sequence: AtomicInt64
+    private let configHosts: String
 
-    public init(store: Store, nodeManager: NodeManager, watchManager: WatchManager) {
+    public init(store: Store, nodeManager: NodeManager, watchManager: WatchManager, configHosts!: String = '') {
         this.store = store
         this.nodeManager = nodeManager
         this.watchManager = watchManager
         this.sequence = AtomicInt64(0)
+        this.configHosts = configHosts
     }
 
     public func handle(request: Message): Message {
@@ -137,6 +139,9 @@ public class SyncHandler {
 
     private func handleGet(req: Message): Message {
         if (let Some(d) <- convert<KeyData>(req.data)) {
+            if (d.key == '__config__') {
+                return Message(Command.RESP(0), req.id, ValueData(configHosts.unsafeBytes()).toData())
+            }
             let key = d.key.unsafeBytes()
             let value = store.get(key)
             Message(Command.RESP(0), req.id, ValueData(value).toData())

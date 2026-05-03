@@ -15,6 +15,7 @@ limitations under the License.
 */
 package fountain::fsync.client
 
+import std.collection.ArrayList
 import std.collection.concurrent.ConcurrentHashMap
 import std.sync.Mutex
 import fountain::f_data.*
@@ -22,6 +23,7 @@ import fountain::f_log.*
 import fountain::f_net.client.*
 import fountain::f_protocol.default.*
 import fountain::fsync.base.{HostAndPort, HashRing, SyncData, KeyData, ValueData}
+import fountain::fsync.config.SyncConfig
 
 public class SyncClient {
     private static let log = LoggerFactory.getLogger('fountain::fsync.SyncClient')
@@ -31,9 +33,10 @@ public class SyncClient {
     private let clientLock = Mutex()
     private let requestTimeout: Duration
 
-    public init(nodes: ArrayList<HostAndPort>, localIndex: Int64, requestTimeout!: Duration = Duration.second * 10) {
-        this.nodes = nodes
-        this.hashRing = HashRing(nodes)
+    public init(requestTimeout!: Duration = Duration.second * 10) {
+        let hostsArr = SyncConfig.getHosts()
+        this.nodes = ArrayList<HostAndPort>(hostsArr.size) { i => hostsArr[i] }
+        this.hashRing = HashRing(this.nodes)
         this.requestTimeout = requestTimeout
     }
 

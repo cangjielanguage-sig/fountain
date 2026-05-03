@@ -14,27 +14,41 @@
 |--------|------|--------|------|
 | `sync_hosts` | `String` | **必填** | 集群节点列表，逗号分隔，格式 `ip1:port1,ip2:port2` |
 | `sync_dataPath` | `String` | `/tmp/fsync` | 数据存储目录 |
-| `sync_localIndex` | `Int64` | `0` | 本地节点在节点列表中的索引（仅命令行参数） |
+
+本地节点索引由 `sync_hosts` 列表中 IP 与本地主机名或回环地址（`127.0.0.1`、`localhost`）的匹配位置决定。
 
 ### 启动方式
 
+所有节点的 `sync_hosts` 配置必须完全一致（IP、端口、顺序、数量都必须相同），否则启动后会自动检测并报错退出。
+
 ```bash
-# 单节点启动（默认索引 0）
+# 单节点启动
 fboot sync --sync_hosts=127.0.0.1:1203
 
-# 多节点集群（分别在不同机器启动）
-# 节点 0
-fboot sync --sync_hosts=10.0.0.1:1203,10.0.0.2:1203 --sync_dataPath=/data/fsync --sync_localIndex=0
+# 多节点集群（各节点使用完全相同的 sync_hosts）
+# 节点 0（绑定 1203 端口）
+fboot sync --sync_hosts=10.0.0.1:1203,10.0.0.2:1203 --sync_dataPath=/data/fsync
 
-# 节点 1
-fboot sync --sync_hosts=10.0.0.1:1203,10.0.0.2:1203 --sync_dataPath=/data/fsync --sync_localIndex=1
+# 节点 1（绑定 1204 端口，主机名匹配到列表中第二个位置）
+fboot sync --sync_hosts=10.0.0.1:1203,10.0.0.2:1204 --sync_dataPath=/data/fsync
 ```
 
-启动流程：
+### 启动流程
+
 1. `static init()` 自动注册到 `SubCommandMediator`（子命令名 `sync`）
 2. `exec()` 读取配置 → 初始化 `Store` / `NodeManager` / `WatchManager` / `SyncHandler` / `SyncServer`
 3. 在后台线程启动 TCP 服务，绑定端口取自节点列表中本地节点端口
-4. 主线程阻塞等待
+4. 后台线程启动后，连接各对端节点进行**配置一致性校验**：
+   - 读取对端 `__config__` 元键获取其 `sync_hosts` 配置
+   - 与本地的 `sync_hosts` 比较（必须完全一致）
+   - 不一致则输出错误信息、退出进程
+5. 主线程阻塞等待
+
+### 元键
+
+| 键 | 用途 |
+|----|------|
+| `__config__` | GET 该键返回本节点的 `host1:port1,host2:port2,...` 配置字符串 |
 
 ---
 
@@ -42,16 +56,15 @@ fboot sync --sync_hosts=10.0.0.1:1203,10.0.0.2:1203 --sync_dataPath=/data/fsync 
 
 ### 配置项
 
-客户端无独立配置文件，通过构造函数传入节点列表和参数。
+客户端构造时自动从 `sync_hosts` 配置项读取集群节点列表，无需额外参数。
 
 ### 公共 API
 
 ```cj
 // 构造客户端
-// nodes:     集群所有节点
-// localIndex: 本地节点索引（仅用于一致性哈希路由）
 // requestTimeout: 请求超时时间（默认 10s）
-public init(nodes: ArrayList<HostAndPort>, localIndex: Int64, requestTimeout!: Duration = Duration.second * 10)
+// 节点列表自动从 Config.getString('sync_hosts') 读取
+public init(requestTimeout!: Duration = Duration.second * 10)
 
 // 写入键值对（仅 Owner 节点可写）
 // key:   键，UNIX 风格路径（如 /app/config/db/host）
@@ -98,7 +111,8 @@ public func get(key: String): ?Array<Byte>
 │         fsync Server Node          │
 │  ┌──────────────────────────────┐  │
 │  │  SyncCommand (fboot sync)    │  │
-│  │  └─ Server Startup           │  │
+│  │  ├─ Server Startup           │  │
+│  │  └─ Config Validation        │  │
 │  ├──────────────────────────────┤  │
 │  │  f_net.Server                │  │
 │  │  └─ SyncHandler              │  │
@@ -135,5 +149,6 @@ fsync/
 │   │   └── WatchManager.cj     — Watch 管理
 │   └── client/
 │       └── SyncClient.cj       — 客户端 API
+├── README.md
 └── cjpm.toml
 ```

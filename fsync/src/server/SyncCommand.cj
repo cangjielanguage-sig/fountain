@@ -16,17 +16,20 @@ limitations under the License.
 package fountain::fsync.server
 
 import std.collection.ArrayList
-import std.convert.*
+import std.env.*
+import std.posix.gethostname
+import fountain::f_base.StringGenerator
 import fountain::f_app.{SubCommand, SubCommandMediator}
 import fountain::f_store.Store
 import fountain::fsync.base.HostAndPort
+import fountain::fsync.client.SyncClient
 import fountain::fsync.config.SyncConfig
 
 public class SyncCommand <: SubCommand {
     static init() {
         SubCommandMediator.register(SyncCommand())
     }
-    private init() {}
+    internal init() {}
 
     public prop command: String {
         get() { 'sync' }
@@ -40,9 +43,10 @@ public class SyncCommand <: SubCommand {
             return 1
         }
         let hosts = ArrayList<HostAndPort>(hostsArr.size) { i => hostsArr[i] }
+        let hostsStr = configString(hosts)
 
-        // 2. 解析本地节点索引（默认 0）
-        let localIndex = parseLocalIndex(args, hosts.size)
+        // 2. 确定本地节点索引
+        let localIndex = resolveLocalIndex(hosts)
 
         // 3. 初始化数据目录
         let dataPath = SyncConfig.getDataPath()
@@ -51,13 +55,19 @@ public class SyncCommand <: SubCommand {
         let store = Store(dataPath)
         let nodeManager = NodeManager(hosts, localIndex)
         let watchManager = WatchManager()
-        let handler = SyncHandler(store, nodeManager, watchManager)
+        let handler = SyncHandler(store, nodeManager, watchManager, configHosts: hostsStr)
         let server = SyncServer(hosts[localIndex].port, queueSize: 1024)
 
         // 5. 启动服务
         server.start(handler)
 
-        // 6. 阻塞主线程
+        // 6. 在后台校验集群配置一致性
+        let cfgHosts = hostsStr
+        spawn {
+            validateClusterConfig(cfgHosts)
+        }
+
+        // 7. 阻塞主线程
         while (true) {
             sleep(Duration.second * 60)
         }
@@ -65,12 +75,56 @@ public class SyncCommand <: SubCommand {
         return 0
     }
 
-    /** 从命令行参数解析本地节点索引 */
-    private static func parseLocalIndex(args: Array<String>, hostCount: Int64): Int64 {
-        for (arg in args) {
-            if (arg.startsWith('--sync_localIndex=')) {
-                let val = arg['--sync_localIndex='.size..]
-                return Int64.parse(val)
+    /** 校验集群各节点的 sync_hosts 配置是否一致 */
+    private static func validateClusterConfig(localConfig: String): Unit {
+        sleep(Duration.second)  // 等待其他节点启动
+        try {
+            let client = SyncClient()
+            // 获取所有节点列表
+            for (i in 1..10) {  // 最多尝试 10 次
+                if (let Some(configBytes) <- client.get('__config__')) {
+                    let peerConfig = String.fromUtf8(configBytes)
+                    if (peerConfig != localConfig) {
+                        eprintln('')
+                        eprintln('====================================================')
+                        eprintln('ERROR: Cluster configuration mismatch detected!')
+                        eprintln('Local hosts:  ${localConfig}')
+                        eprintln('Peer hosts:   ${peerConfig}')
+                        eprintln('All server nodes must have the same sync_hosts')
+                        eprintln('order. The current process will now exit.')
+                        eprintln('====================================================')
+                        eprintln('')
+                        exit(1)
+                    }
+                    return  // 验证通过
+                }
+                sleep(Duration.second * 3)
+            }
+        } catch (_: Exception) {
+            // 节点不可达，跳过验证
+        }
+    }
+
+    /** 将节点列表编码为配置比较字符串 */
+    private static func configString(hosts: ArrayList<HostAndPort>): String {
+        let sb = StringGenerator()
+        for (i in 0..hosts.size) {
+            if (i > 0) { sb.append(',') }
+            sb.append(hosts[i].host).append(':').append(hosts[i].port)
+        }
+        sb.toString()
+    }
+
+    /** 通过本地主机名匹配节点列表中的索引 */
+    internal static func resolveLocalIndex(hosts: ArrayList<HostAndPort>): Int64 {
+        let localName = try {
+            gethostname()
+        } catch (_: Exception) {
+            return 0
+        }
+        for (i in 0..hosts.size) {
+            if (hosts[i].host == localName || hosts[i].host == '127.0.0.1' || hosts[i].host == 'localhost') {
+                return i
             }
         }
         0

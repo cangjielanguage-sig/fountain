@@ -93,4 +93,26 @@ class WatchManagerTest {
         sleep(Duration.millisecond * 10)
         @Assert(c.load() == 2)
     }
+
+    @TestCase
+    func unwatchPrefixStopsNotification(): Unit {
+        let wm = WatchManager()
+        let flag = AtomicBool(false)
+        wm.registerPrefix('/app/config/', Duration.Zero, {_ => flag.store(true)})
+        wm.unwatchPrefix('/app/config/')
+        wm.notify('/app/config/db/host', [1u8])
+        sleep(Duration.millisecond * 10)
+        @Assert(!flag.load())
+    }
+
+    @TestCase
+    func unwatchGlobStopsNotification(): Unit {
+        let wm = WatchManager()
+        let flag = AtomicBool(false)
+        wm.registerGlob('/app/config/*', Duration.Zero, {_ => flag.store(true)})
+        wm.unwatchGlob('/app/config/*')
+        wm.notify('/app/config/db/host', [1u8])
+        sleep(Duration.millisecond * 10)
+        @Assert(!flag.load())
+    }
 }
