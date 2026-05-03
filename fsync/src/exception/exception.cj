@@ -30,3 +30,10 @@ public class WriteFailedException <: BaseException {
         super('write failed for key: ${key}')
     }
 }
+
+/** KEY 不是绝对路径格式 */
+public class InvalidKeyException <: BaseException {
+    public init(key: String) {
+        super('key must be an absolute path starting with /, but got: ${key}')
+    }
+}

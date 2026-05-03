@@ -25,7 +25,7 @@ import fountain::f_net.client.*
 import fountain::f_protocol.default.*
 import fountain::fsync.base.{HostAndPort, HashRing, SyncData, KeyData, ValueData, PatternData, ScanResult, WatchData}
 import fountain::fsync.config.SyncConfig
-import fountain::fsync.exception.WriteFailedException
+import fountain::fsync.exception.{WriteFailedException, InvalidKeyException}
 
 public class SyncClient {
     private static let log = LoggerFactory.getLogger('fountain::fsync.SyncClient')
@@ -44,6 +44,7 @@ public class SyncClient {
     }
 
     public func get<T>(key: String): ?T where T <: DataFields<T> {
+        requireAbsolutePath(key)
         if (let Some(bytes) <- getBytes(key)) {
             DefaultCodec().decode<T>(ByteBuffer(bytes))
         } else {
@@ -53,6 +54,7 @@ public class SyncClient {
 
     /** 获取原始字节值（非 Generic 版本） */
     public func getBytes(key: String): ?Array<Byte> {
+        requireAbsolutePath(key)
         if (let Some(owner) <- hashRing.getNode(key)) {
             let ownerNode = owner
             // 先试 Owner 节点
@@ -88,6 +90,7 @@ public class SyncClient {
     }
 
     public func add<T>(key: String, value: T): Unit where T <: DataFields<T> {
+        requireAbsolutePath(key)
         if (let Some(owner) <- hashRing.getNode(key)) {
             let client = getOrCreateClient(owner)
             let req = Message(Command.REGISTER, SyncData.encodeValue<T>(key, value).toData())
@@ -99,6 +102,7 @@ public class SyncClient {
     }
 
     public func delete(key: String): Unit {
+        requireAbsolutePath(key)
         if (let Some(owner) <- hashRing.getNode(key)) {
             let client = getOrCreateClient(owner)
             let req = Message(Command.DEREGISTER, KeyData(key).toData())
@@ -110,6 +114,7 @@ public class SyncClient {
     }
 
     public func prefix(pattern: String): ScanResult {
+        requireAbsolutePath(pattern)
         if (let Some(owner) <- hashRing.getNode(pattern)) {
             let client = getOrCreateClient(owner)
             let req = Message(Command.ACK, PatternData(pattern).toData())
@@ -128,6 +133,7 @@ public class SyncClient {
     }
 
     public func watch<T>(key: String, timeout!: Duration = Duration.Zero): ?T where T <: DataFields<T> {
+        requireAbsolutePath(key)
         let cancel = AtomicBool(false)
         watchCancelled[key] = cancel
         if (let Some(owner) <- hashRing.getNode(key)) {
@@ -157,6 +163,7 @@ public class SyncClient {
     }
 
     public func unwatch(key: String): Unit {
+        requireAbsolutePath(key)
         if (let Some(cancel) <- watchCancelled.get(key)) {
             cancel.store(true)
         }
@@ -164,6 +171,13 @@ public class SyncClient {
             let client = getOrCreateClient(owner)
             let req = Message(Command.UNSUBSCRIBE, KeyData(key).toData())
             let _ = client.transfer(req.id, req, requestTimeout)
+        }
+    }
+
+    /** 检查 KEY 是否为绝对路径形式 */
+    private static func requireAbsolutePath(key: String): Unit {
+        if (!key.startsWith('/')) {
+            throw InvalidKeyException(key)
         }
     }
 
