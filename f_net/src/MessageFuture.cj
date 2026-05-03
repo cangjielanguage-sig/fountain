@@ -16,6 +16,7 @@ limitations under the License.
 package fountain::f_net
 
 import std.sync.Mutex
+import std.time.DateTime
 
 public class MessageFuture<DE> {
     private let mutex = Mutex()
@@ -47,7 +48,10 @@ public class MessageFuture<DE> {
             if (let Some(d) <- ref) {
                 d
             } else {
-                condition.wait(timeout: timeout)
+                let deadline = DateTime.now() + timeout
+                while (ref.isNone() && DateTime.now() < deadline) {
+                    condition.wait(timeout: deadline - DateTime.now())
+                }
                 ref
             }
         }
