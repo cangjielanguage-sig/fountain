@@ -42,7 +42,7 @@ public struct Message <: Protocol<EncodedMessage, Message> {
 | CONSUME                 | ONCE      | QoS1      | QoS0      | 0         |
 | RESP                    | 0         | QoS1      | QoS0      | ACK       |
 | PING                    | 0         | 0         | 0         | ACK       |
-| ELECT                   | VOTE      | APPROVE   | 0         | ACK       |
+| ELECT                   | VOTE      | APPROVE   | ASSUME    | ACK       |
 | ACK                     | 0         | 0         | 0         | 0         |
 | DEREGISTER              | 0         | 0         | 0         | ACK       |
 */
@@ -95,9 +95,6 @@ public struct Message <: Protocol<EncodedMessage, Message> {
     public static func ping(): EncodedMessage {
         build(PING(1))
     }
-    public static func ping<T>(data: T): EncodedMessage where T <: DataFields<T> {
-        build<T>(PING(WITHNODE | ACK), data)
-    }
     public static func elect<T>(vote!: Bool, approve!: Bool, assume!: Bool, ack!: Bool, data!: T): EncodedMessage where T <: DataFields<T> {
         build<T>(ELECT(to(vote, VOTE) | to(approve, APPROVE) | to(assume, ASSUME) | to(ack, ACK)), data)
     }
@@ -137,7 +134,10 @@ public struct EncodedMessage <: MessageCopier {
     ) {}
     public func copy(to!: OutputStream, closeToOnEnd!: Bool = false): Unit {
         to.write([command])
-        bytes.copy(to: to, closeToOnEnd: closeToOnEnd, closeFromOnEnd: false)
+        bytes.copy(to: to, closeToOnEnd: false, closeFromOnEnd: false)
         to.flush()
+        if (closeToOnEnd && let r: Resource <- to && !r.isClosed()) {
+            r.close()
+        }
     }
 }

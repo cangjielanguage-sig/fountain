@@ -124,7 +124,7 @@ public enum Command {
     | ACK           //14
     | DEREGISTER    //15
 
-    private static func tag(x: Byte){
+    private static func tag(x: Byte): Byte {
         x & 0xf
     }
     public prop value: Byte {
@@ -145,7 +145,7 @@ public enum Command {
             }
         }
     }
-    public static func parse(value: Byte){
+    public static func parse(value: Byte): Command {
         func tag(){
             tag(value)
         }

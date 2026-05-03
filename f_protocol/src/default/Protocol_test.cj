@@ -244,16 +244,6 @@ public class ProtocolTest {
     }
 
     @TestCase
-    public func messageFactoryPingWithData(): Unit {
-        let encoded = Message.ping(DataAny(DataReal(3.14)))
-        let buf = ByteBuffer()
-        encoded.copy(to: buf, closeToOnEnd: false)
-        buf.seek(SeekPosition.Begin(0))
-        let decoded = Message.decode<ByteBuffer, DataAny>(BufferedInputStream(buf))
-        @Assert(decoded.command.value == Command.PING(WITHNODE | ACK).value)
-    }
-
-    @TestCase
     public func messageFactoryElectAllFlags(): Unit {
         let encoded = Message.elect(vote: true, approve: true, assume: true, ack: true,
             data: DataAny(DataString("elect-data")))
