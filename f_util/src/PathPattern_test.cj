@@ -125,17 +125,17 @@ public class PathPattern_test {
         @Assert(47i64,pattern.extractParsableVariableInPath<Int64>(path, "projectId").getOrThrow())
     }
 
-    // @TestCase
-    // public func testComplex(): Unit {
-    //     let pattern = p
-    //     pattern.compile("/api/event{eventId}/{projectId}/user{userId}")
-    //     let path = "/api/event59/36/user88"
-    //     @Assert(true, pattern.matches(path))
-    //     let datas = pattern.extractVariablesInPath(path)
-    //     @Assert(Some("59"), datas.get("eventId"))
-    //     @Assert(Some("36"), datas.get("projectId"))
-    //     @Assert(Some("88"), datas.get("userId"))
-    // }
+    @TestCase
+    public func testComplex(): Unit {
+        let pattern = p
+        pattern.compile("/api/event{eventId}/{projectId}/user{userId}")
+        let path = "/api/event59/36/user88"
+        @Assert(true, pattern.matches(path))
+        let datas = pattern.extractVariablesInPath(path)
+        @Assert(Some("59"), datas.get("eventId"))
+        @Assert(Some("36"), datas.get("projectId"))
+        @Assert(Some("88"), datas.get("userId"))
+    }
 
     @TestCase
     public func testPlaceholder3(): Unit {
@@ -144,5 +144,43 @@ public class PathPattern_test {
         pattern.compile("/api/profile/segmentation/{projectId}/{segmentationId}/{baseTime}/{version}/{page}/{pageSize}")
         let path = "/api/profile/segmentation/18/72/2021-10-18+00:00:00/0/1/15"
         @Assert(true, pattern.matches(path))
+    }
+
+    @TestCase
+    public func testGlobWildcard(): Unit {
+        let pattern = PathPattern()
+        pattern.compile("/app/**/*.yaml")
+        @Assert(true, pattern.matches("/app/config/db/host.yaml"))
+        @Assert(true, pattern.matches("/app/.yaml"))
+        @Assert(false, pattern.matches("/other/app/test.yaml"))
+    }
+
+    @TestCase
+    public func testSingleStar(): Unit {
+        let pattern = PathPattern()
+        pattern.compile("/app/config/*/host")
+        @Assert(true, pattern.matches("/app/config/db/host"))
+        @Assert(false, pattern.matches("/app/config/db/extra/host"))
+        @Assert(false, pattern.matches("/app/config/host"))
+    }
+
+    @TestCase
+    public func testComplexWildcard(): Unit {
+        let pattern = PathPattern()
+        pattern.compile("/*/config/**")
+        @Assert(true, pattern.matches("/app/config/db/host"))
+        @Assert(false, pattern.matches("/app/other/host"))
+    }
+
+    @TestCase
+    public func testComplexPathPrefix(): Unit {
+        let pattern = PathPattern()
+        pattern.compile("/api/event{eventId}/{projectId}/user{userId}")
+        var path = "/api/event59/36/user88"
+        @Assert(true, pattern.matches(path))
+        let datas = pattern.extractVariablesInPath(path)
+        @Assert(Some("59"), datas.get("eventId"))
+        @Assert(Some("36"), datas.get("projectId"))
+        @Assert(Some("88"), datas.get("userId"))
     }
 }

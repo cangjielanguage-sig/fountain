@@ -16,6 +16,7 @@ limitations under the License.
 package fountain::fsync.server
 
 import std.binary.*
+import std.collection.ArrayList
 import std.io.{ByteBuffer, SeekPosition}
 import std.sync.AtomicInt64
 import fountain::f_base.*
@@ -23,6 +24,7 @@ import fountain::f_codec.default.DefaultCodec
 import fountain::f_data.*
 import fountain::f_protocol.default.*
 import fountain::f_store.Store
+import fountain::f_util.PathPattern
 import fountain::fsync.base.{SyncData, KeyData, ValueData, WatchData, PatternData, ScanResult}
 
 private let VERSION_SUFFIX = '_version'.unsafeBytes()
@@ -167,17 +169,36 @@ public class SyncHandler {
         if (let Some(_) <- convert<KeyData>(req.data)) {
             handleGet(req)
         } else if (let Some(d) <- convert<PatternData>(req.data)) {
-            let prefix = d.pattern.unsafeBytes()
             let result = ScanResult()
-            let it = store.prefix(prefix)
-            for ((k, v) in it) {
-                let buf = ByteBuffer()
-                DefaultCodec().encode(v).finish().copy(to: buf, closeFromOnEnd: true, closeToOnEnd: false)
-                let size = buf.seek(SeekPosition.End(0))
-                buf.seek(SeekPosition.Begin(0))
-                let raw = Array<Byte>(size, repeat: 0u8)
-                buf.read(raw)
-                result.add(String.fromUtf8(k), raw)
+            let hasGlob = d.pattern.contains('*') || d.pattern.contains('?') || d.pattern.contains('{')
+            if (hasGlob) {
+                let pp = PathPattern()
+                pp.compile(d.pattern)
+                let all = store.prefix([])
+                for ((k, v) in all) {
+                    let keyStr = String.fromUtf8(k)
+                    if (pp.matches(keyStr)) {
+                        let buf = ByteBuffer()
+                        DefaultCodec().encode(v).finish().copy(to: buf, closeFromOnEnd: true, closeToOnEnd: false)
+                        let size = buf.seek(SeekPosition.End(0))
+                        buf.seek(SeekPosition.Begin(0))
+                        let raw = Array<Byte>(size, repeat: 0u8)
+                        buf.read(raw)
+                        result.add(keyStr, raw)
+                    }
+                }
+            } else {
+                let prefix = d.pattern.unsafeBytes()
+                let it = store.prefix(prefix)
+                for ((k, v) in it) {
+                    let buf = ByteBuffer()
+                    DefaultCodec().encode(v).finish().copy(to: buf, closeFromOnEnd: true, closeToOnEnd: false)
+                    let size = buf.seek(SeekPosition.End(0))
+                    buf.seek(SeekPosition.Begin(0))
+                    let raw = Array<Byte>(size, repeat: 0u8)
+                    buf.read(raw)
+                    result.add(String.fromUtf8(k), raw)
+                }
             }
             Message(Command.RESP(0), req.id, result.toData())
         } else {

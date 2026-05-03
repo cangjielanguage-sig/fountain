@@ -781,7 +781,7 @@ class DoubleStarPathNode <: PathNode {
     public init(prev: PathNode) {
         super("**", prev)
     }
-    protected operator func ==(o: Any) {
+    protected operator func ==(o: Any): Bool {
         match (o) {
             case x: Object => refEq(this, x)
             case _ => false
@@ -860,12 +860,25 @@ class ComplexPathNode <: PathNode {
     }
 
     protected func matches(value: String): Bool {
-        reg.matches(value)
+        if (parts.size < 2) { return false }
+        var pos = 0i64
+        for (i in 0..parts.size : 2) {
+            let staticPart = parts[i]
+            if (i == 0) {
+                if (!value.startsWith(staticPart)) { return false }
+                pos = staticPart.size
+            } else if (let Some(idx) <- value.indexOf(staticPart, pos)) {
+                pos = idx + staticPart.size
+            } else {
+                return false
+            }
+        }
+        true
     }
 
     func extract(value: String): Map<String, String> {
         let datas = HashMap<String, String>()
-        var start = 0
+        var start = 0i64
         for (i in 0..parts.size : 2) {
             let p = parts[i]
             if (start == 0) {
@@ -887,7 +900,9 @@ class ComplexPathNode <: PathNode {
                 value.size
             }
             datas[parts[i + 1]] = value[start..end]
-            start = end + parts[i + 2].size
+            if (i + 2 < parts.size) {
+                start = end + parts[i + 2].size
+            }
         }
         return datas
     }
@@ -898,7 +913,7 @@ enum Mode {
     | EXTRACTION
     | PREFIX
 
-    private operator func ==(mode: Mode) {
+    private operator func ==(mode: Mode): Bool {
         match ((this, mode)) {
             case (MATCHING, MATCHING) | (EXTRACTION, EXTRACTION) | (PREFIX, PREFIX) => true
             case _ => false
