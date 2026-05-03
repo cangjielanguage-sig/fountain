@@ -87,7 +87,7 @@ public struct Server<DE, EN, M, T, ID> <: Resource where EN <: MessageCopier, M 
             spawn {
                 let future = MessageFuture<M>()
                 while (!socket.isClosed()) {
-                    let req = M.decode<TcpSocket, T>(buffer.buffered, closeFromOnEnd: false)
+                    let req = M.decode<TcpSocket, T>(buffer.buffered)
                     let m = req |> executor
                     let id = idGetter(m)
                     transfer(buffer, m)

@@ -39,7 +39,7 @@ public struct Client<DE, EN, M, T, ID> where EN <: MessageCopier, M <: Protocol<
             i =>
                 let buffer = SocketBuffer(queueSize, sockets[i])
                 spawn {
-                    let de = M.decode<TcpSocket, T>(buffer.buffered, closeFromOnEnd: false)
+                    let de = M.decode<TcpSocket, T>(buffer.buffered)
                     let id = idGetter(de)
                     if (let Some(fut) <- futures.remove(id)) {
                         var f = fut

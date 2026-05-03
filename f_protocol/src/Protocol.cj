@@ -20,7 +20,7 @@ import fountain::f_data.DataFields
 
 public interface Protocol<EN, DE> where EN <: MessageCopier {
     func encode(): EN
-    static func decode<I, T>(input: BufferedInputStream<I>, closeFromOnEnd!: Bool): DE where I <: InputStream, T <: DataFields<T>
+    static func decode<I, T>(input: BufferedInputStream<I>): DE where I <: InputStream, T <: DataFields<T>
 }
 public interface MessageCopier {
     func copy(to!: OutputStream, closeToOnEnd!: Bool): Unit
