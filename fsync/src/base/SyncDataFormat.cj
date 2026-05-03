@@ -15,6 +15,8 @@ limitations under the License.
 */
 package fountain::fsync.base
 
+import std.io.InputStream
+import fountain::f_codec.{Encoder, Decoder}
 import fountain::f_data.*
 import fountain::f_data.macros.*
 
@@ -121,6 +123,29 @@ public class ScanResult {
     }
     public prop size: Int64 {
         get() { keys.size }
+    }
+
+    /** 使用 Codec Encoder 顺序编码所有条目 */
+    public func encode(encoder: Encoder): Encoder {
+        encoder.encode(keys.size)
+        for (i in 0..keys.size) {
+            encoder.encode(keys[i]).encode(values[i])
+        }
+        encoder
+    }
+
+    /** 使用 Codec Decoder 顺序解码所有条目 */
+    public static func decodeFrom(decoder: Decoder, input: InputStream): ScanResult {
+        let result = ScanResult()
+        let count = decoder.decode<Int64>(input) ?? 0
+        for (i in 0..count) {
+            if (let Some(k) <- decoder.decode<String>(input)) {
+                if (let Some(v) <- decoder.decode<Array<Byte>>(input)) {
+                    result.add(k, v)
+                }
+            }
+        }
+        result
     }
 }
 
