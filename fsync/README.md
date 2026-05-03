@@ -79,6 +79,20 @@ public func delete(key: String): Unit
 // 返回 None 表示键不存在
 // Owner 超时时自动故障转移到下一节点
 public func get(key: String): ?Array<Byte>
+
+// 前缀扫描（所有节点可读）
+// 返回匹配前缀的所有键值对条目
+public func prefix(pattern: String): ArrayList<ScanEntry>
+
+// 通配符扫描（委托前缀扫描实现）
+public func glob(pattern: String): ArrayList<ScanEntry>
+
+// 注册 Watch（监听指定 KEY 的变更）
+// timeout: Duration.Zero 表示永不超时
+public func watch(key: String, timeout!: Duration = Duration.Zero): Unit
+
+// 取消 Watch
+public func unwatch(key: String): Unit
 ```
 
 ### 通信协议
@@ -87,7 +101,11 @@ public func get(key: String): ?Array<Byte>
 |-----|----------------|--------|--------|
 | `add` | `REGISTER` | `SyncData(key, version, value)` | `KeyData(key)` |
 | `delete` | `DEREGISTER` | `KeyData(key)` | `KeyData(key)` |
-| `get` | `ACK` | `KeyData(key)` | `ValueData(?value)` |
+| `get` | `ACK` + `KeyData` | `KeyData(key)` | `ValueData(?value)` |
+| `prefix` | `ACK` + `PatternData` | `PatternData(pattern)` | `ArrayList<ScanEntry>` |
+| `glob` | `ACK` + `PatternData` | `PatternData(pattern)` | `ArrayList<ScanEntry>` |
+| `watch` | `SUBSCRIBE` | `WatchData(key, timeout)` | `KeyData(key)` |
+| `unwatch` | `UNSUBSCRIBE` | `KeyData(key)` | `KeyData(key)` |
 
 ### 数据体类型
 
@@ -96,11 +114,13 @@ public func get(key: String): ?Array<Byte>
 | 类型 | 字段 | 用途 |
 |------|------|------|
 | `SyncData` | key: String, version: Int64, value: Array<Byte> | REGISTER / PUBLISH 请求体 |
-| `KeyData` | key: String | DEREGISTER / GET 请求体 |
+| `KeyData` | key: String | DEREGISTER / GET / UNSUBSCRIBE 请求体 |
 | `ValueData` | value: ?Array<Byte> | GET 响应体（None 表示不存在/已删除） |
-| `WatchData` | key: String, timeout: Duration | WATCH 注册 |
+| `WatchData` | key: String, timeout: Duration | SUBSCRIBE 请求体 |
 | `WatchNotifyData` | key: String, value: ?Array<Byte> | Watch 变更通知 |
-| `PatternData` | pattern: String | PREFIX / GLOB 请求 |
+| `PatternData` | pattern: String | PREFIX / GLOB 请求体 |
+| `ScanEntry` | key: String, value: Array<Byte> | 扫描结果条目（PREFIX/GLOB 响应） |
+| `WatchedValue` | `Value(Array<Byte>)` / `Deleted` | Watch 通知值枚举 |
 
 ---
 
