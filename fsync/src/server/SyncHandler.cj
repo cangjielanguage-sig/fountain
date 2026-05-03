@@ -120,8 +120,17 @@ public class SyncHandler {
 
     private func handleSubscribe(req: Message): Message {
         if (let Some(d) <- convert<WatchData>(req.data)) {
-            watchManager.registerExact(d.key, d.timeout, {_ => })
-            Message(Command.RESP(0), req.id, KeyData(d.key).toData())
+            let future = watchManager.registerExact(d.key, d.timeout)
+            if (d.timeout > Duration.Zero) {
+                if (let Some(value) <- future.tryGet(d.timeout)) {
+                    Message(Command.RESP(0), req.id, ValueData(value).toData())
+                } else {
+                    Message(Command.RESP(0), req.id, ValueData(None).toData())
+                }
+            } else {
+                let value = future.get()
+                Message(Command.RESP(0), req.id, ValueData(value).toData())
+            }
         } else {
             errorResp(req.id, 'invalid SUBSCRIBE payload')
         }

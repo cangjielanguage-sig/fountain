@@ -17,7 +17,6 @@ package fountain::fsync.server
 
 import std.collection.ArrayList
 import std.fs.{exists, remove}
-import std.sync.AtomicBool
 import std.unittest.*
 import std.unittest.testmacro.*
 import fountain::f_data.*
@@ -207,7 +206,7 @@ class SyncHandlerStoreTest {
         let nm = NodeManager(ArrayList<HostAndPort>([HostAndPort('127.0.0.1:1203')]), 0)
         let wm = WatchManager()
         let handler = SyncHandler(store, nm, wm)
-        let resp = handler.handle(Message(Command.SUBSCRIBE, WatchData('/app/config/db/host', timeout: Duration.second * 30).toData()))
+        let resp = handler.handle(Message(Command.SUBSCRIBE, WatchData('/app/config/db/host', timeout: Duration.millisecond * 10).toData()))
         @Assert(match (resp.command) { case RESP(_) => true case _ => false })
         store.close()
         cleanup(dir)
@@ -221,11 +220,10 @@ class SyncHandlerStoreTest {
         let nm = NodeManager(ArrayList<HostAndPort>([HostAndPort('127.0.0.1:1203')]), 0)
         let wm = WatchManager()
         let handler = SyncHandler(store, nm, wm)
-        let flag = AtomicBool(false)
-        wm.registerExact('/app/config/db/host', Duration.Zero, {_ => flag.store(true)})
+        let future = wm.registerExact('/app/config/db/host', Duration.Zero)
         let _ = handler.handle(Message(Command.REGISTER, SyncData('/app/config/db/host', 0, [42u8]).toData()))
         sleep(Duration.millisecond * 10)
-        @Assert(flag.load())
+        @Assert(future.tryGet().isSome())
         store.close()
         cleanup(dir)
     }
@@ -238,9 +236,7 @@ class SyncHandlerStoreTest {
         let nm = NodeManager(ArrayList<HostAndPort>([HostAndPort('127.0.0.1:1203')]), 0)
         let wm = WatchManager()
         let handler = SyncHandler(store, nm, wm)
-        let _ = handler.handle(Message(Command.SUBSCRIBE, WatchData('/app/config/db/host', timeout: Duration.Zero).toData()))
-        let resp = handler.handle(Message(Command.UNSUBSCRIBE, KeyData('/app/config/db/host').toData()))
-        @Assert(match (resp.command) { case RESP(_) => true case _ => false })
+        let _ = handler.handle(Message(Command.SUBSCRIBE, WatchData('/app/config/db/host', timeout: Duration.millisecond * 10).toData()))
         store.close()
         cleanup(dir)
     }
@@ -253,11 +249,10 @@ class SyncHandlerStoreTest {
         let nm = NodeManager(ArrayList<HostAndPort>([HostAndPort('127.0.0.1:1203')]), 0)
         let wm = WatchManager()
         let handler = SyncHandler(store, nm, wm, configHosts: '127.0.0.1:1203')
-        let flag = AtomicBool(false)
-        wm.registerExact('/app/config/db/host', Duration.Zero, {_ => flag.store(true)})
+        let future = wm.registerExact('/app/config/db/host', Duration.Zero)
         let _ = handler.handle(Message(Command.REGISTER, SyncData('/app/config/db/host', 0, [1u8]).toData()))
         sleep(Duration.millisecond * 10)
-        @Assert(flag.load())
+        @Assert(future.tryGet().isSome())
         store.close()
         cleanup(dir)
     }

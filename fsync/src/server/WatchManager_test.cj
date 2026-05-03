@@ -15,7 +15,6 @@ limitations under the License.
 */
 package fountain::fsync.server
 
-import std.sync.{AtomicBool, AtomicInt64}
 import std.unittest.*
 import std.unittest.testmacro.*
 
@@ -24,95 +23,91 @@ class WatchManagerTest {
     @TestCase
     func registerAndNotifyExact(): Unit {
         let wm = WatchManager()
-        let flag = AtomicBool(false)
-        wm.registerExact('/app/config/db/host', Duration.Zero, {_ => flag.store(true)})
+        let future = wm.registerExact('/app/config/db/host', Duration.Zero)
         wm.notify('/app/config/db/host', [42u8])
         sleep(Duration.millisecond * 10)
-        @Assert(flag.load())
+        if (let Some(v) <- future.tryGet()) {
+            @Assert(v.size == 1 && v[0] == 42u8)
+        } else {
+            @Assert(false)
+        }
     }
 
     @TestCase
     func exactKeyNotNotifiedOnDifferentKey(): Unit {
         let wm = WatchManager()
-        let flag = AtomicBool(false)
-        wm.registerExact('/app/config/db/host', Duration.Zero, {_ => flag.store(true)})
+        let future = wm.registerExact('/app/config/db/host', Duration.Zero)
         wm.notify('/app/config/cache/size', [1u8])
         sleep(Duration.millisecond * 10)
-        @Assert(!flag.load())
+        @Assert(future.tryGet().isNone())
     }
 
     @TestCase
     func prefixMatchNotifies(): Unit {
         let wm = WatchManager()
-        let flag = AtomicBool(false)
-        wm.registerPrefix('/app/config/', Duration.Zero, {_ => flag.store(true)})
+        let future = wm.registerPrefix('/app/config/', Duration.Zero)
         wm.notify('/app/config/db/host', [1u8])
         sleep(Duration.millisecond * 10)
-        @Assert(flag.load())
+        @Assert(future.tryGet().isSome())
     }
 
     @TestCase
     func prefixNotMatchIfNotStartWith(): Unit {
         let wm = WatchManager()
-        let flag = AtomicBool(false)
-        wm.registerPrefix('/app/config/', Duration.Zero, {_ => flag.store(true)})
+        let future = wm.registerPrefix('/app/config/', Duration.Zero)
         wm.notify('/other/key', [1u8])
         sleep(Duration.millisecond * 10)
-        @Assert(!flag.load())
+        @Assert(future.tryGet().isNone())
     }
 
     @TestCase
     func unwatchRemovesExactWatcher(): Unit {
         let wm = WatchManager()
-        let flag = AtomicBool(false)
-        wm.registerExact('/app/config/db/host', Duration.Zero, {_ => flag.store(true)})
+        let future = wm.registerExact('/app/config/db/host', Duration.Zero)
         wm.unwatch('/app/config/db/host')
         wm.notify('/app/config/db/host', [1u8])
         sleep(Duration.millisecond * 10)
-        @Assert(!flag.load())
+        @Assert(future.tryGet().isNone())
     }
 
     @TestCase
     func timeoutExpiresWatcher(): Unit {
         let wm = WatchManager()
-        let flag = AtomicBool(false)
-        wm.registerExact('/app/config/db/host', Duration.millisecond * 10, {_ => flag.store(true)})
+        let future = wm.registerExact('/app/config/db/host', Duration.millisecond * 10)
         sleep(Duration.millisecond * 50)
         wm.notify('/app/config/db/host', [1u8])
         sleep(Duration.millisecond * 10)
-        @Assert(!flag.load())
+        @Assert(future.tryGet().isNone())
     }
 
     @TestCase
-    func multipleWatchersOnSameKeyAllNotified(): Unit {
+    func multipleWatchersOnSameKeyBothNotified(): Unit {
         let wm = WatchManager()
-        let c = AtomicInt64(0)
-        wm.registerExact('/app/config/db/host', Duration.Zero, {_ => c.fetchAdd(1)})
-        wm.registerExact('/app/config/db/host', Duration.Zero, {_ => c.fetchAdd(1)})
+        let f1 = wm.registerExact('/app/config/db/host', Duration.Zero)
+        let f2 = wm.registerExact('/app/config/db/host', Duration.Zero)
         wm.notify('/app/config/db/host', [1u8])
         sleep(Duration.millisecond * 10)
-        @Assert(c.load() == 2)
+        @Assert(f1.tryGet().isSome())
+        @Assert(f2.tryGet().isSome())
     }
 
     @TestCase
     func unwatchPrefixStopsNotification(): Unit {
         let wm = WatchManager()
-        let flag = AtomicBool(false)
-        wm.registerPrefix('/app/config/', Duration.Zero, {_ => flag.store(true)})
+        let future = wm.registerPrefix('/app/config/', Duration.Zero)
         wm.unwatchPrefix('/app/config/')
         wm.notify('/app/config/db/host', [1u8])
         sleep(Duration.millisecond * 10)
-        @Assert(!flag.load())
+        @Assert(future.tryGet().isNone())
     }
 
     @TestCase
     func unwatchGlobStopsNotification(): Unit {
         let wm = WatchManager()
-        let flag = AtomicBool(false)
-        wm.registerGlob('/app/config/*', Duration.Zero, {_ => flag.store(true)})
+        let future = wm.registerGlob('/app/config/*', Duration.Zero)
         wm.unwatchGlob('/app/config/*')
         wm.notify('/app/config/db/host', [1u8])
         sleep(Duration.millisecond * 10)
-        @Assert(!flag.load())
+        @Assert(future.tryGet().isNone())
     }
 }

@@ -16,8 +16,7 @@ limitations under the License.
 package fountain::fsync.client
 
 import std.collection.concurrent.ConcurrentHashMap
-import std.sync.{AtomicBool, Mutex}
-import std.time.DateTime
+import std.sync.Mutex
 import fountain::f_codec.default.DefaultCodec
 import fountain::f_data.*
 import fountain::f_log.*
@@ -34,7 +33,6 @@ public class SyncClient {
     private let clients = ConcurrentHashMap<String, Client<Message, EncodedMessage, Message, SyncData, MessageID>>()
     private let clientLock = Mutex()
     private let requestTimeout: Duration
-    private let watchCancelled = ConcurrentHashMap<String, AtomicBool>()
 
     public init(requestTimeout!: Duration = Duration.second * 10) {
         let hostsArr = SyncConfig.getHosts()
@@ -134,29 +132,16 @@ public class SyncClient {
 
     public func watch<T>(key: String, timeout!: Duration = Duration.Zero): ?T where T <: DataFields<T> {
         requireAbsolutePath(key)
-        let cancel = AtomicBool(false)
-        watchCancelled[key] = cancel
         if (let Some(owner) <- hashRing.getNode(key)) {
             let client = getOrCreateClient(owner)
             let req = Message(Command.SUBSCRIBE, WatchData(key, timeout: timeout).toData())
-            let _ = client.transfer(req.id, req, requestTimeout)
-        }
-        let startBytes = getBytes(key)
-        let deadline = if (timeout > Duration.Zero) { DateTime.now() + timeout } else { None<DateTime> }
-        while (true) {
-            if (cancel.load()) {
-                return None
-            }
-            if (let Some(d) <- deadline && DateTime.now() >= d) {
-                return None
-            }
-            sleep(Duration.millisecond * 50)
-            let current = getBytes(key)
-            if (!sameBytes(current, startBytes)) {
-                if (let Some(bytes) <- current) {
-                    return DefaultCodec().decode<T>(ByteBuffer(bytes))
+            let timeout = if (timeout > Duration.Zero) { timeout } else { requestTimeout }
+            if (let Some(resp) <- client.transfer(req.id, req, timeout)) {
+                if (let Some(vd) <- convert<ValueData>(resp.data)) {
+                    if (let Some(bytes) <- vd.value) {
+                        return DefaultCodec().decode<T>(ByteBuffer(bytes))
+                    }
                 }
-                return None
             }
         }
         None
@@ -164,9 +149,6 @@ public class SyncClient {
 
     public func unwatch(key: String): Unit {
         requireAbsolutePath(key)
-        if (let Some(cancel) <- watchCancelled.get(key)) {
-            cancel.store(true)
-        }
         if (let Some(owner) <- hashRing.getNode(key)) {
             let client = getOrCreateClient(owner)
             let req = Message(Command.UNSUBSCRIBE, KeyData(key).toData())
@@ -179,21 +161,6 @@ public class SyncClient {
         if (!key.startsWith('/')) {
             throw InvalidKeyException(key)
         }
-    }
-
-    /** 比较两个 ?Array<Byte> 是否相等 */
-    public static func sameBytes(a: ?Array<Byte>, b: ?Array<Byte>): Bool {
-        if (let Some(va) <- a) {
-            if (let Some(vb) <- b) {
-                if (va.size != vb.size) { return false }
-                for (i in 0..va.size) {
-                    if (va[i] != vb[i]) { return false }
-                }
-                return true
-            }
-            return false  // a is Some, b is None
-        }
-        b.isNone()  // a is None, return whether b is also None
     }
 
     private func getOrCreateClient(node: HostAndPort): Client<Message, EncodedMessage, Message, SyncData, MessageID> {

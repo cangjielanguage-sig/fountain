@@ -16,19 +16,65 @@ limitations under the License.
 package fountain::fsync.server
 
 import std.collection.{ArrayList, HashMap}
-import std.sync.Mutex
+import std.sync.{Mutex, Condition}
 import std.time.DateTime
 
-/** 永不超时标记：DateTime.Max 不可用，用 None<DateTime> 表示永不超时 */
+/** Watch 通知 Future：阻塞等待数据变化，可通过 set 从外部唤醒 */
+public class WatchFuture {
+    private let mutex = Mutex()
+    private let cond: Condition
+    private var value: ?Array<Byte> = None
+    private var done = false
+
+    internal init() {
+        cond = synchronized(mutex) { mutex.condition() }
+    }
+
+    /** 设置 Watch 结果（由 notify 调用） */
+    public func set(data: Array<Byte>): Unit {
+        synchronized(mutex) {
+            value = data
+            done = true
+            cond.notifyAll()
+        }
+    }
+
+    /** 阻塞等待结果 */
+    public func get(): Array<Byte> {
+        synchronized(mutex) {
+            while (!done) { cond.wait() }
+            value.getOrThrow()
+        }
+    }
+
+    /** 带超时等待 */
+    public func tryGet(timeout: Duration): ?Array<Byte> {
+        let deadline = DateTime.now() + timeout
+        synchronized(mutex) {
+            while (!done && DateTime.now() < deadline) {
+                cond.wait(timeout: deadline - DateTime.now())
+            }
+            value
+        }
+    }
+
+    /** 立即获取（非阻塞） */
+    public func tryGet(): ?Array<Byte> {
+        synchronized(mutex) {
+            value
+        }
+    }
+}
+
 internal struct WatchEntry {
     let pattern: String
     let expiry: ?DateTime        // None 表示永不超时
-    let notify: (Array<Byte>) -> Unit  // 通知回调
+    let future: WatchFuture
 
-    internal init(pattern: String, expiry: ?DateTime, notify: (Array<Byte>) -> Unit) {
+    internal init(pattern: String, expiry: ?DateTime, future: WatchFuture) {
         this.pattern = pattern
         this.expiry = expiry
-        this.notify = notify
+        this.future = future
     }
 }
 
@@ -39,7 +85,6 @@ public class WatchManager {
     private let mutex = Mutex()
 
     public init() {
-        // 后台线程每 1 秒清理过期 Watch
         let mgr = this
         spawn {
             while (true) {
@@ -49,7 +94,8 @@ public class WatchManager {
         }
     }
 
-    public func registerExact(key: String, timeout: Duration, callback: (Array<Byte>) -> Unit): Unit {
+    public func registerExact(key: String, timeout: Duration): WatchFuture {
+        let future = WatchFuture()
         synchronized(mutex) {
             let entries = if (let Some(entries) <- exactWatchers.get(key)) {
                 entries
@@ -58,11 +104,13 @@ public class WatchManager {
                 exactWatchers[key] = entries
                 entries
             }
-            entries.add(WatchEntry(key, calcExpiry(timeout), callback))
+            entries.add(WatchEntry(key, calcExpiry(timeout), future))
         }
+        future
     }
 
-    public func registerPrefix(prefix: String, timeout: Duration, callback: (Array<Byte>) -> Unit): Unit {
+    public func registerPrefix(prefix: String, timeout: Duration): WatchFuture {
+        let future = WatchFuture()
         synchronized(mutex) {
             let entries = if (let Some(entries) <- prefixWatchers.get(prefix)) {
                 entries
@@ -71,11 +119,13 @@ public class WatchManager {
                 prefixWatchers[prefix] = entries
                 entries
             }
-            entries.add(WatchEntry(prefix, calcExpiry(timeout), callback))
+            entries.add(WatchEntry(prefix, calcExpiry(timeout), future))
         }
+        future
     }
 
-    public func registerGlob(pattern: String, timeout: Duration, callback: (Array<Byte>) -> Unit): Unit {
+    public func registerGlob(pattern: String, timeout: Duration): WatchFuture {
+        let future = WatchFuture()
         synchronized(mutex) {
             let entries = if (let Some(entries) <- globWatchers.get(pattern)) {
                 entries
@@ -84,8 +134,9 @@ public class WatchManager {
                 globWatchers[pattern] = entries
                 entries
             }
-            entries.add(WatchEntry(pattern, calcExpiry(timeout), callback))
+            entries.add(WatchEntry(pattern, calcExpiry(timeout), future))
         }
+        future
     }
 
     public func unwatch(key: String): Unit {
@@ -106,17 +157,14 @@ public class WatchManager {
         }
     }
 
-    /** 数据变更时通知所有匹配的 Watcher */
     public func notify(key: String, newValue: Array<Byte>): Unit {
         let matched = ArrayList<WatchEntry>()
         synchronized(mutex) {
-            // 精确匹配
             if (let Some(entries) <- exactWatchers.get(key)) {
                 for (entry in entries) {
                     matched.add(entry)
                 }
             }
-            // 前缀匹配
             for ((prefix, entries) in prefixWatchers) {
                 if (key.startsWith(prefix)) {
                     for (entry in entries) {
@@ -124,7 +172,6 @@ public class WatchManager {
                     }
                 }
             }
-            // 通配符匹配
             for ((pattern, entries) in globWatchers) {
                 if (keyMatchesGlob(key, pattern)) {
                     for (entry in entries) {
@@ -133,10 +180,9 @@ public class WatchManager {
                 }
             }
         }
-        // 在锁外执行回调，防止死锁
         for (entry in matched) {
             if (entry.expiry.isNone() || DateTime.now() < entry.expiry.getOrThrow()) {
-                try { entry.notify(newValue) } catch (_: Exception) {}
+                entry.future.set(newValue)
             }
         }
     }
@@ -178,21 +224,14 @@ public class WatchManager {
         }
     }
 
-    /** 简易通配符匹配（仅支持 *） */
     private static func keyMatchesGlob(key: String, pattern: String): Bool {
-        if (pattern == '*') {
-            return true
-        }
+        if (pattern == '*') { return true }
         let parts = pattern.split('*')
-        if (parts.size == 1) {
-            return key == pattern
-        }
+        if (parts.size == 1) { return key == pattern }
         var pos = 0
         for (i in 0..parts.size) {
             let part = parts[i]
-            if (part.isEmpty()) {
-                continue
-            }
+            if (part.isEmpty()) { continue }
             if (i == 0) {
                 if (!key.startsWith(part)) { return false }
                 pos = part.size
