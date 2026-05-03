@@ -16,11 +16,10 @@ limitations under the License.
 package fountain::fsync
 
 import std.collection.ArrayList
-import std.fs.{Directory, Path, exists, remove}
+import std.fs.{exists, remove}
 import std.sync.{AtomicBool, AtomicInt64}
 import std.unittest.*
 import std.unittest.testmacro.*
-import fountain::f_codec.default.DefaultCodec
 import fountain::f_data.*
 import fountain::f_protocol.default.*
 import fountain::f_store.Store
@@ -440,5 +439,37 @@ class SyncHandlerStoreTest {
         if (exists(dir)) {
             remove(dir, recursive: true)
         }
+    }
+}
+
+// ======================== SyncServer 测试 ========================
+
+@Test
+class SyncServerTest {
+    private static let testPort: UInt16 = 19876
+
+    @TestCase
+    func constructAndClose(): Unit {
+        let server = SyncServer(testPort)
+        @Assert(!server.isClosed())
+        server.close()
+        @Assert(server.isClosed())
+    }
+
+    @TestCase
+    func closeIsIdempotent(): Unit {
+        let server = SyncServer(19877u16)
+        server.close()
+        server.close()  // 第二次调用不应抛异常
+        @Assert(server.isClosed())
+    }
+
+    @TestCase
+    func customQueueSize(): Unit {
+        let server = SyncServer(19878u16, queueSize: 2048,
+            checkDuration: Duration.second * 60)
+        @Assert(!server.isClosed())
+        server.close()
+        @Assert(server.isClosed())
     }
 }
