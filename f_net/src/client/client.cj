@@ -155,12 +155,18 @@ public struct Client<DE, EN, M, T, ID> <: Resource where EN <: MessageCopier, M 
         }
     }
     public func transfer(id: ID, message: M, timeout: Duration): ?DE {
+        let future: MessageFuture<DE>
         synchronized(closeLock) {
             if (isClosed()) {
                 return None
             }
-            transfer(index, id, message, timeout)
+            future = transfer(index, id, message)
         }
+        let result = future.tryGet(timeout)
+        if (result.isNone()) {
+            futures.remove(id)
+        }
+        result
     }
     private func transfer(index: Int64, id: ID, message: M): MessageFuture<DE> {
         transfer(buffers[index], id, message)

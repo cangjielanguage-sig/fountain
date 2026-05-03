@@ -60,6 +60,37 @@ public class MessageFutureTest {
         }
         @Assert(fut.get() == 42)
     }
+
+    @TestCase
+    public func setOverwritesPreviousValue(): Unit {
+        var fut = MessageFuture<Int64>()
+        fut.set(1)
+        fut.set(2)
+        @Assert(fut.get() == 2)
+    }
+
+    @TestCase
+    public func getIsIdempotent(): Unit {
+        var fut = MessageFuture<Int64>()
+        fut.set(77)
+        @Assert(fut.get() == 77)
+        @Assert(fut.get() == 77)
+    }
+
+    @TestCase
+    public func tryGetWithTimeoutReturnsValueWhenSetDuringWait(): Unit {
+        let fut = MessageFuture<Int64>()
+        spawn {
+            sleep(Duration.millisecond * 10)
+            var f = fut
+            f.set(123)
+        }
+        if (let Some(v) <- fut.tryGet(Duration.millisecond * 100)) {
+            @Assert(v == 123)
+        } else {
+            @Assert(false)
+        }
+    }
 }
 
 @Test
