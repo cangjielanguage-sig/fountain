@@ -15,30 +15,50 @@ limitations under the License.
 */
 package fountain::fsync.client
 
-import std.collection.concurrent.ConcurrentHashMap
-import std.sync.Mutex
+import std.io.ByteBuffer
 import fountain::f_codec.default.DefaultCodec
 import fountain::f_data.*
 import fountain::f_log.*
 import fountain::f_net.client.*
 import fountain::f_protocol.default.*
-import fountain::fsync.base.{HostAndPort, HashRing, SyncData, KeyData, ValueData, PatternData, ScanResult, WatchData}
+import fountain::fsync.base.{SyncData, KeyData, ValueData, PatternData, ScanResult, WatchData}
 import fountain::fsync.config.SyncConfig
 import fountain::fsync.exception.{WriteFailedException, InvalidKeyException}
 
 public class SyncClient {
     private static let log = LoggerFactory.getLogger('fountain::fsync.SyncClient')
-    private let hashRing: HashRing
-    private let nodes: ArrayList<HostAndPort>
-    private let clients = ConcurrentHashMap<String, Client<Message, EncodedMessage, Message, SyncData, MessageID>>()
-    private let clientLock = Mutex()
-    private let requestTimeout: Duration
+    private static var instance: ?SyncClient = None
 
-    public init(requestTimeout!: Duration = Duration.second * 10) {
-        let hostsArr = SyncConfig.getHosts()
-        this.nodes = ArrayList<HostAndPort>(hostsArr.size) { i => hostsArr[i] }
-        this.hashRing = HashRing(this.nodes)
+    private let requestTimeout: Duration
+    private let client: Client<Message, EncodedMessage, Message, SyncData, MessageID>
+
+    private init(client: Client<Message, EncodedMessage, Message, SyncData, MessageID>, requestTimeout: Duration) {
+        this.client = client
         this.requestTimeout = requestTimeout
+    }
+
+    /** 获取全局唯一的 SyncClient 实例（连接 sync_hosts 的第一个节点） */
+    public static func getInstance(requestTimeout!: Duration = Duration.second * 10): SyncClient {
+        if (let Some(inst) <- instance) {
+            return inst
+        }
+        let hostsArr = SyncConfig.getHosts()
+        if (hostsArr.size == 0) {
+            throw InvalidKeyException('sync_hosts is required')
+        }
+        let host = hostsArr[0]
+        let client = Client<Message, EncodedMessage, Message, SyncData, MessageID>.builder(
+            queueSize: 1024,
+            socketCount: 1,
+            host: host.host,
+            port: host.port,
+            idGetter: { msg => msg.id },
+            checkDuration: Duration.second * 30,
+            checker: { buffer => true }
+        ).noDelay(true).build()
+        let inst = SyncClient(client, requestTimeout)
+        instance = inst
+        inst
     }
 
     public func get<T>(key: String): ?T where T <: DataFields<T> {
@@ -50,31 +70,8 @@ public class SyncClient {
         }
     }
 
-    /** 获取原始字节值（非 Generic 版本） */
     public func getBytes(key: String): ?Array<Byte> {
         requireAbsolutePath(key)
-        if (let Some(owner) <- hashRing.getNode(key)) {
-            let ownerNode = owner
-            // 先试 Owner 节点
-            if (let Some(v) <- tryReadNode(key, ownerNode)) {
-                return v
-            }
-            // 故障转移：按 ring 顺序尝试其他节点
-            for (j in 1..nodes.size) {
-                if (let Some(n) <- hashRing.getNextNode(key, j)) {
-                    if (n.host != ownerNode.host || n.port != ownerNode.port) {
-                        if (let Some(v) <- tryReadNode(key, n)) {
-                            return v
-                        }
-                    }
-                }
-            }
-        }
-        None
-    }
-
-    private func tryReadNode(key: String, node: HostAndPort): ?Array<Byte> {
-        let client = getOrCreateClient(node)
         let req = Message(Command.ACK, KeyData(key).toData())
         if (let Some(resp) <- client.transfer(req.id, req, requestTimeout)) {
             let vd = convert<ValueData>(resp.data)
@@ -89,58 +86,46 @@ public class SyncClient {
 
     public func add<T>(key: String, value: T): Unit where T <: DataFields<T> {
         requireAbsolutePath(key)
-        if (let Some(owner) <- hashRing.getNode(key)) {
-            let client = getOrCreateClient(owner)
-            let req = Message(Command.REGISTER, SyncData.encodeValue<T>(key, value).toData())
-            if (let Some(resp) <- client.transfer(req.id, req, requestTimeout)) {
-                return
-            }
+        let encoded = SyncData.encodeValue<T>(key, value)
+        let req = Message(Command.REGISTER, encoded.toData())
+        if (let Some(resp) <- client.transfer(req.id, req, requestTimeout)) {
+            return
         }
         throw WriteFailedException(key)
     }
 
     public func delete(key: String): Unit {
         requireAbsolutePath(key)
-        if (let Some(owner) <- hashRing.getNode(key)) {
-            let client = getOrCreateClient(owner)
-            let req = Message(Command.DEREGISTER, KeyData(key).toData())
-            if (let Some(resp) <- client.transfer(req.id, req, requestTimeout)) {
-                return ()
-            }
+        let req = Message(Command.DEREGISTER, KeyData(key).toData())
+        if (let Some(resp) <- client.transfer(req.id, req, requestTimeout)) {
+            return
         }
         throw WriteFailedException(key)
     }
 
     public func prefix(pattern: String): ScanResult {
         requireAbsolutePath(pattern)
-        if (let Some(owner) <- hashRing.getNode(pattern)) {
-            let client = getOrCreateClient(owner)
-            let req = Message(Command.ACK, PatternData(pattern).toData())
-            if (let Some(resp) <- client.transfer(req.id, req, requestTimeout)) {
-                if (let Some(result) <- convert<ScanResult>(resp.data)) {
-                    return result
-                }
+        let req = Message(Command.ACK, PatternData(pattern).toData())
+        if (let Some(resp) <- client.transfer(req.id, req, requestTimeout)) {
+            if (let Some(result) <- convert<ScanResult>(resp.data)) {
+                return result
             }
         }
         ScanResult()
     }
 
     public func glob(pattern: String): ScanResult {
-        // GLOB 复用 PREFIX 扫描（由服务端做 * 通配符前缀截断）
         prefix(pattern)
     }
 
     public func watch<T>(key: String, timeout!: Duration = Duration.Zero): ?T where T <: DataFields<T> {
         requireAbsolutePath(key)
-        if (let Some(owner) <- hashRing.getNode(key)) {
-            let client = getOrCreateClient(owner)
-            let req = Message(Command.SUBSCRIBE, WatchData(key, timeout: timeout).toData())
-            let timeout = if (timeout > Duration.Zero) { timeout } else { requestTimeout }
-            if (let Some(resp) <- client.transfer(req.id, req, timeout)) {
-                if (let Some(vd) <- convert<ValueData>(resp.data)) {
-                    if (let Some(bytes) <- vd.value) {
-                        return DefaultCodec().decode<T>(ByteBuffer(bytes))
-                    }
+        let req = Message(Command.SUBSCRIBE, WatchData(key, timeout: timeout).toData())
+        let t = if (timeout > Duration.Zero) { timeout } else { requestTimeout }
+        if (let Some(resp) <- client.transfer(req.id, req, t)) {
+            if (let Some(vd) <- convert<ValueData>(resp.data)) {
+                if (let Some(bytes) <- vd.value) {
+                    return DefaultCodec().decode<T>(ByteBuffer(bytes))
                 }
             }
         }
@@ -149,40 +134,14 @@ public class SyncClient {
 
     public func unwatch(key: String): Unit {
         requireAbsolutePath(key)
-        if (let Some(owner) <- hashRing.getNode(key)) {
-            let client = getOrCreateClient(owner)
-            let req = Message(Command.UNSUBSCRIBE, KeyData(key).toData())
-            let _ = client.transfer(req.id, req, requestTimeout)
-        }
+        let req = Message(Command.UNSUBSCRIBE, KeyData(key).toData())
+        let _ = client.transfer(req.id, req, requestTimeout)
     }
 
     /** 检查 KEY 是否为绝对路径形式 */
-    private static func requireAbsolutePath(key: String): Unit {
+    internal static func requireAbsolutePath(key: String): Unit {
         if (!key.startsWith('/')) {
             throw InvalidKeyException(key)
-        }
-    }
-
-    private func getOrCreateClient(node: HostAndPort): Client<Message, EncodedMessage, Message, SyncData, MessageID> {
-        let key = '${node.host}:${node.port}'
-        if (clients.contains(key)) {
-            return clients.get(key).getOrThrow()
-        }
-        synchronized(clientLock) {
-            if (clients.contains(key)) {
-                return clients.get(key).getOrThrow()
-            }
-            let client = Client<Message, EncodedMessage, Message, SyncData, MessageID>.builder(
-                queueSize: 1024,
-                socketCount: 1,
-                host: node.host,
-                port: node.port,
-                idGetter: { msg => msg.id },
-                checkDuration: Duration.second * 30,
-                checker: { buffer => true }
-            ).noDelay(true).build()
-            clients[key] = client
-            client
         }
     }
 }

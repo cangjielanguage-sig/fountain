@@ -79,7 +79,7 @@ public class SyncCommand <: SubCommand {
     private static func validateClusterConfig(localConfig: String): Unit {
         sleep(Duration.second)  // 等待其他节点启动
         try {
-            let client = SyncClient()
+            let client = SyncClient.getInstance()
             // 获取所有节点列表
             for (i in 1..10) {  // 最多尝试 10 次
                 if (let Some(configBytes) <- client.getBytes('__config__')) {
