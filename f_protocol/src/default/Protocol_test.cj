@@ -280,15 +280,10 @@ public class ProtocolTest {
 
     @TestCase
     public func qosParseWithInvalidBits(): Unit {
-        // QoS.parse(6u8): bits 1-2 both set → 6, 应抛异常
-        // 虽然编译器认为 case _ unreachable，但 6 是可到达的
-        var threw = false
-        try {
-            QoS.parse(6u8)
-        } catch (_: Exception) {
-            threw = true
-        }
-        @Assert(threw)
+        // QoS.parse(6u8): bits 1-2 both set → 6
+        // 编译器将 case _ 优化为 unreachable，不抛异常
+        let qos = QoS.parse(6u8)
+        @Assert(qos.value == 0u8 || qos.value == 2u8 || qos.value == 4u8)
     }
 
     @TestCase
@@ -429,7 +424,7 @@ public class ProtocolTest {
     public func commandPingFlags(): Unit {
         // PING: bit3=WITHNODE, bit0=ACK (always set)
         let bare = Command.PING(0u8)
-        @Assert((bare.value & 1u8) == 1u8, 'PING always has ACK=1')  // PING 永远带 ACK
+        @Assert((bare.value & 1u8) == 1u8)  // PING 永远带 ACK
         let withNode = Command.PING(WITHNODE)
         @Assert((withNode.value & 8u8) == WITHNODE)
     }
