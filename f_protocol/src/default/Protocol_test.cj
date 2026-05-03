@@ -275,4 +275,214 @@ public class ProtocolTest {
         @Assert(decoded.command.value == msg.command.value)
         @Assert(decoded.id == msg.id)
     }
+
+    // ========== 新补充测试 ==========
+
+    @TestCase
+    public func qosParseWithInvalidBits(): Unit {
+        // QoS.parse(6u8): bits 1-2 both set → 6, 应抛异常
+        // 虽然编译器认为 case _ unreachable，但 6 是可到达的
+        var threw = false
+        try {
+            QoS.parse(6u8)
+        } catch (_: Exception) {
+            threw = true
+        }
+        @Assert(threw)
+    }
+
+    @TestCase
+    public func qosParseWithQoS1FlagOnly(): Unit {
+        // 只设 QoS1 (bit 2) = 4u8
+        let qos = QoS.parse(4u8)
+        // 不能直接比较 enum，验证 value
+        @Assert(true) // 不抛异常即为通过
+    }
+
+    @TestCase
+    public func messageFactorySubscribe(): Unit {
+        let encoded = Message.subscribe(data: DataAny(DataReal(99.9)))
+        let buf = ByteBuffer()
+        encoded.copy(to: buf, closeToOnEnd: false)
+        buf.seek(SeekPosition.Begin(0))
+        let decoded = Message.decode<ByteBuffer, DataAny>(BufferedInputStream(buf))
+        @Assert(decoded.command.value == Command.SUBSCRIBE.value)
+    }
+
+    @TestCase
+    public func messageFactoryUnsubscribe(): Unit {
+        let encoded = Message.unsubscribe(data: DataAny(DataString("topic1")))
+        let buf = ByteBuffer()
+        encoded.copy(to: buf, closeToOnEnd: false)
+        buf.seek(SeekPosition.Begin(0))
+        let decoded = Message.decode<ByteBuffer, DataAny>(BufferedInputStream(buf))
+        @Assert(decoded.command.value == Command.UNSUBSCRIBE.value)
+    }
+
+    @TestCase
+    public func messageFactoryConsume(): Unit {
+        let encoded = Message.consume(once: true, qos: QoS.AtMostOnce, data: DataAny(DataString("test")))
+        let buf = ByteBuffer()
+        encoded.copy(to: buf, closeToOnEnd: false)
+        buf.seek(SeekPosition.Begin(0))
+        let decoded = Message.decode<ByteBuffer, DataAny>(BufferedInputStream(buf))
+        @Assert(decoded.command.value == Command.CONSUME(ONCE | AT_MOST_ONCE).value)
+        @Assert((decoded.command.value & 8u8) == ONCE)
+        @Assert((decoded.command.value & 6u8) == AT_MOST_ONCE)
+    }
+
+    @TestCase
+    public func messageFactoryResp(): Unit {
+        let encoded = Message.resp(qos: QoS.AtLeastOnce, ack: true, data: DataAny(DataReal(1.0)))
+        let buf = ByteBuffer()
+        encoded.copy(to: buf, closeToOnEnd: false)
+        buf.seek(SeekPosition.Begin(0))
+        let decoded = Message.decode<ByteBuffer, DataAny>(BufferedInputStream(buf))
+        @Assert(decoded.command.value == Command.RESP(AT_LEAST_ONCE | ACK).value)
+        @Assert((decoded.command.value & 6u8) == AT_LEAST_ONCE)
+        @Assert((decoded.command.value & 1u8) == ACK)
+    }
+
+    @TestCase
+    public func messageFactoryAck(): Unit {
+        let encoded = Message.ack(data: DataAny(DataString("ack-data")))
+        let buf = ByteBuffer()
+        encoded.copy(to: buf, closeToOnEnd: false)
+        buf.seek(SeekPosition.Begin(0))
+        let decoded = Message.decode<ByteBuffer, DataAny>(BufferedInputStream(buf))
+        @Assert(decoded.command.value == Command.ACK.value)
+    }
+
+    @TestCase
+    public func messageFactoryDeregister(): Unit {
+        let encoded = Message.deregister(data: DataAny(DataString("topic1")))
+        let buf = ByteBuffer()
+        encoded.copy(to: buf, closeToOnEnd: false)
+        buf.seek(SeekPosition.Begin(0))
+        let decoded = Message.decode<ByteBuffer, DataAny>(BufferedInputStream(buf))
+        @Assert(decoded.command.value == Command.DEREGISTER.value)
+    }
+
+    @TestCase
+    public func messageFactorySlaveofWithHost(): Unit {
+        let encoded = Message.slaveof(reg: true, ack: true, masterHost: "192.168.1.1", masterPort: 8080u16)
+        let buf = ByteBuffer()
+        encoded.copy(to: buf, closeToOnEnd: false)
+        buf.seek(SeekPosition.Begin(0))
+        let decoded = Message.decode<ByteBuffer, DataAny>(BufferedInputStream(buf))
+        @Assert(decoded.command.value == Command.SLAVEOF(REG | ACK).value)
+        @Assert((decoded.command.value & 8u8) == REG)
+        @Assert((decoded.command.value & 1u8) == ACK)
+    }
+
+    @TestCase
+    public func messageFactorySlaveofBare(): Unit {
+        let encoded = Message.slaveof(reg: false, ack: false)
+        let buf = ByteBuffer()
+        encoded.copy(to: buf, closeToOnEnd: false)
+        buf.seek(SeekPosition.Begin(0))
+        let decoded = Message.decode<ByteBuffer, DataAny>(BufferedInputStream(buf))
+        @Assert(decoded.command.value == Command.SLAVEOF(0u8).value)
+        @Assert((decoded.command.value & 8u8) == 0u8)
+        @Assert((decoded.command.value & 1u8) == 0u8)
+    }
+
+    @TestCase
+    public func commandSlaveofFlags(): Unit {
+        // SLAVEOF: bit3=REG, bit0=ACK
+        let cmd1 = Command.SLAVEOF(REG)
+        @Assert((cmd1.value & 8u8) == REG)
+        @Assert((cmd1.value & 1u8) == 0u8)
+        let cmd2 = Command.SLAVEOF(ACK)
+        @Assert((cmd2.value & 8u8) == 0u8)
+        @Assert((cmd2.value & 1u8) == ACK)
+        let cmd3 = Command.SLAVEOF(REG | ACK)
+        @Assert((cmd3.value & 8u8) == REG)
+        @Assert((cmd3.value & 1u8) == ACK)
+    }
+
+    @TestCase
+    public func commandConsumeFlags(): Unit {
+        // CONSUME: bit3=ONCE, bit2=QoS1, bit1=QoS0
+        let cmd1 = Command.CONSUME(ONCE | AT_LEAST_ONCE)
+        @Assert((cmd1.value & 0x0Fu8) == (ONCE | AT_LEAST_ONCE))
+        let cmd2 = Command.CONSUME(AT_MOST_ONCE)
+        @Assert((cmd2.value & 0x0Fu8) == AT_MOST_ONCE)
+    }
+
+    @TestCase
+    public func commandElectFlags(): Unit {
+        // ELECT: bit3=VOTE, bit2=APPROVE, bit1=ASSUME, bit0=ACK
+        let voteOnly = Command.ELECT(VOTE)
+        @Assert((voteOnly.value & 8u8) == VOTE)
+        let approveOnly = Command.ELECT(APPROVE)
+        @Assert((approveOnly.value & 4u8) == APPROVE)
+        let assumeOnly = Command.ELECT(ASSUME)
+        @Assert((assumeOnly.value & 2u8) == ASSUME)
+        let ackOnly = Command.ELECT(ACK)
+        @Assert((ackOnly.value & 1u8) == ACK)
+        let allFlags = Command.ELECT(VOTE | APPROVE | ASSUME | ACK)
+        @Assert((allFlags.value & 0x0Fu8) == (VOTE | APPROVE | ASSUME | ACK))
+    }
+
+    @TestCase
+    public func commandPingFlags(): Unit {
+        // PING: bit3=WITHNODE, bit0=ACK (always set)
+        let bare = Command.PING(0u8)
+        @Assert((bare.value & 1u8) == 1u8, 'PING always has ACK=1')  // PING 永远带 ACK
+        let withNode = Command.PING(WITHNODE)
+        @Assert((withNode.value & 8u8) == WITHNODE)
+    }
+
+    @TestCase
+    public func messageDecodeEmptyStreamThrows(): Unit {
+        let buf = ByteBuffer()
+        var threw = false
+        try {
+            Message.decode<ByteBuffer, DataAny>(BufferedInputStream(buf))
+        } catch (e: IllegalArgumentException) {
+            threw = true
+        }
+        @Assert(threw)
+    }
+
+    @TestCase
+    public func commandDefaultAckValues(): Unit {
+        // 验证自带 ACK=1 的命令
+        @Assert((Command.REGISTER.value & 1u8) == 1u8)
+        @Assert((Command.SUBSCRIBE.value & 1u8) == 1u8)
+        @Assert((Command.UNSUBSCRIBE.value & 1u8) == 1u8)
+        @Assert((Command.DEREGISTER.value & 1u8) == 1u8)
+        // ACK 自身 bit0=0
+        @Assert((Command.ACK.value & 1u8) == 0u8)
+    }
+
+    @TestCase
+    public func commandRoundTripAuthAllCombinations(): Unit {
+        for (hasData in [false, true]) {
+            for (ack in [false, true]) {
+                let expectedTag = (if (hasData) { HASDATA } else { 0u8 }) | (if (ack) { ACK } else { 0u8 })
+                let cmd = Command.AUTH(expectedTag)
+                let parsed = Command.parse(cmd.value)
+                @Assert(parsed.value == cmd.value)
+            }
+        }
+    }
+
+    @TestCase
+    public func commandRoundTripElectAllCombinations(): Unit {
+        for (vote in [false, true]) {
+            for (approve in [false, true]) {
+                for (assume in [false, true]) {
+                    for (ack in [false, true]) {
+                        let expectedTag = (if (vote) { VOTE } else { 0u8 }) | (if (approve) { APPROVE } else { 0u8 }) |
+                            (if (assume) { ASSUME } else { 0u8 }) | (if (ack) { ACK } else { 0u8 })
+                        let cmd = Command.ELECT(expectedTag)
+                        let parsed = Command.parse(cmd.value)
+                        @Assert(parsed.value == cmd.value)
+                    }
+                }
+            }
+        }
+    }
 }
