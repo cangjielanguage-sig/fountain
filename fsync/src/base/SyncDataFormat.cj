@@ -105,6 +105,25 @@ public class ScanEntry {
     }
 }
 
+// 扫描结果列表（避免 ArrayList<ScanEntry> 泛型编解码问题）
+@DataAssist[props fields]
+public class ScanResult {
+    private var keys: ArrayList<String> = ArrayList<String>()
+    private var values: ArrayList<Array<Byte>> = ArrayList<Array<Byte>>()
+
+    public init() {}
+    public func add(key: String, value: Array<Byte>): Unit {
+        keys.add(key)
+        values.add(value)
+    }
+    public func get(i: Int64): (String, Array<Byte>) {
+        (keys[i], values[i])
+    }
+    public prop size: Int64 {
+        get() { keys.size }
+    }
+}
+
 // Watch 通知值
 public enum WatchedValue {
     | Value(Array<Byte>)

@@ -16,13 +16,12 @@ limitations under the License.
 package fountain::fsync.server
 
 import std.binary.*
-import std.collection.ArrayList
 import std.sync.AtomicInt64
 import fountain::f_base.*
 import fountain::f_data.*
 import fountain::f_protocol.default.*
 import fountain::f_store.Store
-import fountain::fsync.base.{SyncData, KeyData, ValueData, WatchData, PatternData, ScanEntry}
+import fountain::fsync.base.{SyncData, KeyData, ValueData, WatchData, PatternData, ScanResult}
 
 private let VERSION_SUFFIX = '_version'.unsafeBytes()
 
@@ -158,12 +157,12 @@ public class SyncHandler {
             handleGet(req)
         } else if (let Some(d) <- convert<PatternData>(req.data)) {
             let prefix = d.pattern.unsafeBytes()
-            let entries = ArrayList<ScanEntry>()
+            let result = ScanResult()
             let it = store.prefix(prefix)
             for ((k, v) in it) {
-                entries.add(ScanEntry(String.fromUtf8(k), v))
+                result.add(String.fromUtf8(k), v)
             }
-            Message(Command.RESP(0), req.id, entries.toData())
+            Message(Command.RESP(0), req.id, result.toData())
         } else {
             errorResp(req.id, 'invalid read payload')
         }

@@ -23,7 +23,7 @@ import std.unittest.testmacro.*
 import fountain::f_data.*
 import fountain::f_protocol.default.*
 import fountain::f_store.Store
-import fountain::fsync.base.{HostAndPort, SyncData, KeyData, ValueData, PatternData, ScanEntry, WatchData}
+import fountain::fsync.base.{HostAndPort, SyncData, KeyData, ValueData, PatternData, ScanResult, WatchData}
 
 @Test
 class SyncHandlerStoreTest {
