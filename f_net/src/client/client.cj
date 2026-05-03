@@ -16,7 +16,7 @@ limitations under the License.
 package fountain::f_net.client
 
 import std.collection.concurrent.ConcurrentHashMap
-import std.sync.{Timer, CatchupStyle, AtomicInt64}
+import std.sync.{Timer, CatchupStyle, AtomicInt64, Mutex}
 import fountain::f_data.*
 import fountain::f_log.*
 import fountain::f_protocol.*
@@ -30,6 +30,7 @@ public struct Client<DE, EN, M, T, ID> <: Resource where EN <: MessageCopier, M 
     private let buffers: Array<SocketBuffer>
     private let checkTimer: Timer
     private let closed = AtomicInt64(0)
+    private let closeLock = Mutex()
 
     Client(queueSize: Int64, idGetter: (DE) -> ID, checkDuration: Duration, checker: (SocketBuffer) -> Bool,
         private let socketCreator: () -> TcpSocket, private let sockets: Array<TcpSocket>) {
@@ -108,14 +109,16 @@ public struct Client<DE, EN, M, T, ID> <: Resource where EN <: MessageCopier, M 
     }
 
     public func close(): Unit {
-        closed.store(1)
-        checkTimer.cancel()
-        for (buf in buffers) {
-            if (!buf.isClosed()) {
-                try {
-                    buf.close()
-                } catch (e: Exception) {
-                    log.error('SocketBuffer.close', e)
+        synchronized(closeLock) {
+            closed.store(1)
+            checkTimer.cancel()
+            for (buf in buffers) {
+                if (!buf.isClosed()) {
+                    try {
+                        buf.close()
+                    } catch (e: Exception) {
+                        log.error('SocketBuffer.close', e)
+                    }
                 }
             }
         }
@@ -144,16 +147,20 @@ public struct Client<DE, EN, M, T, ID> <: Resource where EN <: MessageCopier, M 
         }
     }
     public func transfer(id: ID, message: M): MessageFuture<DE> {
-        if (isClosed()) {
-            throw Exception('Client is closed')
+        synchronized(closeLock) {
+            if (isClosed()) {
+                throw Exception('Client is closed')
+            }
+            transfer(index, id, message)
         }
-        transfer(index, id, message)
     }
     public func transfer(id: ID, message: M, timeout: Duration): ?DE {
-        if (isClosed()) {
-            return None
+        synchronized(closeLock) {
+            if (isClosed()) {
+                return None
+            }
+            transfer(index, id, message, timeout)
         }
-        transfer(index, id, message, timeout)
     }
     private func transfer(index: Int64, id: ID, message: M): MessageFuture<DE> {
         transfer(buffers[index], id, message)
