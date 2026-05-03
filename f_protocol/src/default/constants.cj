@@ -63,7 +63,7 @@ public enum QoS {
             case AT_MOST_ONCE => AtMostOnce
             case AT_LEAST_ONCE => AtLeastOnce
             case EXACTLY_ONCE => ExactlyOnce
-            case _ => throw UnreachableException()
+            case _ => throw CommandException("invalid QoS bits: ${value}")
         }
     }
 }

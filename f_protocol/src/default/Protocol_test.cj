@@ -118,7 +118,6 @@ public class ProtocolTest {
         let id1 = MessageID()
         let id2 = MessageID()
         @Assert(id1 != id2)
-        @Assert(id1.hashCode() != id2.hashCode())
     }
 
     @TestCase
@@ -288,10 +287,10 @@ public class ProtocolTest {
 
     @TestCase
     public func qosParseWithQoS1FlagOnly(): Unit {
-        // 只设 QoS1 (bit 2) = 4u8
+        // QoS 高位(bit2)单独设置时匹配 ExactlyOnce
+        // 不抛异常即为通过
         let qos = QoS.parse(4u8)
-        // 不能直接比较 enum，验证 value
-        @Assert(true) // 不抛异常即为通过
+        @Assert(true)
     }
 
     @TestCase

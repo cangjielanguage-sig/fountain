@@ -53,7 +53,11 @@ public struct Message <: Protocol<EncodedMessage, Message> {
         Message(command).encode()
     }
     public static func auth<T>(hasData!: Bool, ack!: Bool, authData!: T): EncodedMessage  where T <: DataFields<T> {
-        build<T>(AUTH(to(hasData, HASDATA) | to(ack, ACK)), authData)
+        if (hasData) {
+            build<T>(AUTH(HASDATA | to(ack, ACK)), authData)
+        } else {
+            build(AUTH(to(ack, ACK)))
+        }
     }
     public static func slaveof(reg!: Bool, ack!: Bool): EncodedMessage {
         build(SLAVEOF(to(reg, REG) | to(ack, ACK)))
@@ -103,12 +107,8 @@ public struct Message <: Protocol<EncodedMessage, Message> {
     public static func deregister<T>(data!: T): EncodedMessage where T <: DataFields<T> {
         build<T>(DEREGISTER, data)
     }
-    private static func to(bool: Bool, byte: Byte){
-        if(bool){
-            byte
-        }else{
-            0u8
-        }
+    private static func to(bool: Bool, byte: Byte): Byte {
+        if(bool) { byte } else { 0u8 }
     }
     public func encode(): EncodedMessage {
         let bytes = DefaultCodec().encode(id.pid).encode(id.tid).encode(id.time).encode(data).finish()
