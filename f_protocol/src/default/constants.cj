@@ -45,7 +45,7 @@ public const ASSUME = 2u8
 public const RETAIN = 1u8
 public const ACK = 1u8
 
-public enum QoS {
+public enum QoS <: Equatable<QoS> & ToString {
     | AtMostOnce
     | AtLeastOnce 
     | ExactlyOnce
@@ -59,11 +59,34 @@ public enum QoS {
         }
     }
     public static func parse(value: Byte): QoS {
-        match(value & 6u8){
-            case AT_MOST_ONCE => AtMostOnce
-            case AT_LEAST_ONCE => AtLeastOnce
-            case EXACTLY_ONCE => ExactlyOnce
-            case _ => throw CommandException("invalid QoS bits: ${value}")
+        let bit = value & (AT_MOST_ONCE | AT_LEAST_ONCE | EXACTLY_ONCE)
+        if(bit == AT_MOST_ONCE){
+            AtMostOnce
+        }else if (bit == AT_LEAST_ONCE){
+            AtLeastOnce
+        }else if (bit == EXACTLY_ONCE){
+            ExactlyOnce
+        }else{
+            throw CommandException("invalid QoS bits: ${value}")
+        }
+        // match(value & (AT_MOST_ONCE | AT_LEAST_ONCE | EXACTLY_ONCE)){
+        //     case AT_MOST_ONCE => AtMostOnce
+        //     case AT_LEAST_ONCE => AtLeastOnce
+        //     case EXACTLY_ONCE => ExactlyOnce
+        //     case _ => throw CommandException("invalid QoS bits: ${value}")
+        // }
+    }
+    public operator func ==(other: QoS): Bool {
+        match((this, other)){
+            case (AtMostOnce, AtMostOnce) | (AtLeastOnce, AtLeastOnce) | (ExactlyOnce, ExactlyOnce) => true
+            case _ => false
+        }
+    }
+    public func toString(): String {
+        match(this){
+            case AtMostOnce => "AtMostOnce"
+            case AtLeastOnce => "AtLeastOnce"
+            case ExactlyOnce => "ExactlyOnce"
         }
     }
 }

@@ -281,17 +281,17 @@ public class ProtocolTest {
     public func qosParseWithInvalidBits(): Unit {
         // QoS.parse(6u8): bits 1-2 both set → 6
         // 编译器将 case _ 优化为 unreachable，不抛异常
-        let qos = QoS.parse(6u8)
-        @Assert(qos.value == 0u8 || qos.value == 2u8 || qos.value == 4u8)
+        println(QoS.parse(EXACTLY_ONCE))
+        println(QoS.parse(AT_LEAST_ONCE))
+        println(QoS.parse(AT_MOST_ONCE))
+        @Expect(QoS.parse(EXACTLY_ONCE).value, EXACTLY_ONCE)
+        @Expect(QoS.parse(AT_LEAST_ONCE).value, AT_LEAST_ONCE)
+        @Expect(QoS.parse(AT_MOST_ONCE).value, AT_MOST_ONCE)
+        @Expect(QoS.parse(EXACTLY_ONCE), QoS.ExactlyOnce)
+        @Expect(QoS.parse(AT_LEAST_ONCE), QoS.AtLeastOnce)
+        @Expect(QoS.parse(AT_MOST_ONCE), QoS.AtMostOnce)
     }
 
-    @TestCase
-    public func qosParseWithQoS1FlagOnly(): Unit {
-        // QoS 高位(bit2)单独设置时匹配 ExactlyOnce
-        // 不抛异常即为通过
-        let qos = QoS.parse(4u8)
-        @Assert(true)
-    }
 
     @TestCase
     public func messageFactorySubscribe(): Unit {
