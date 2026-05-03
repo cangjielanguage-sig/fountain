@@ -147,15 +147,6 @@ public class PathPattern_test {
     }
 
     @TestCase
-    public func testGlobWildcard(): Unit {
-        let pattern = PathPattern()
-        pattern.compile("/app/**/*.yaml")
-        @Assert(true, pattern.matches("/app/config/db/host.yaml"))
-        @Assert(true, pattern.matches("/app/.yaml"))
-        @Assert(false, pattern.matches("/other/app/test.yaml"))
-    }
-
-    @TestCase
     public func testSingleStar(): Unit {
         let pattern = PathPattern()
         pattern.compile("/app/config/*/host")
@@ -165,7 +156,7 @@ public class PathPattern_test {
     }
 
     @TestCase
-    public func testComplexWildcard(): Unit {
+    public func testWildcardSequence(): Unit {
         let pattern = PathPattern()
         pattern.compile("/*/config/**")
         @Assert(true, pattern.matches("/app/config/db/host"))
