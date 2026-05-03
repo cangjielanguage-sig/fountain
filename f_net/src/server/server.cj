@@ -15,23 +15,23 @@ limitations under the License.
  */
 package fountain::f_net.server
 
-import std.collection.concurrent.{LinkedBlockingQueue, ConcurrentHashMap}
-import std.net.{TcpServerSocket, IPSocketAddress}
+import std.collection.concurrent.LinkedBlockingQueue
+import std.net.TcpServerSocket
 import std.sync.{Timer, CatchupStyle}
 import fountain::f_data.*
 import fountain::f_log.*
 import fountain::f_protocol.*
 import fountain::f_net.*
 
-public struct Server<DE, EN, M, T, ID> <: Resource where EN <: MessageCopier, M <: Protocol<EN, DE>, T <: DataFields<T>,
-    ID <: Hashable & Equatable<ID> {
+public struct Server<DE, EN, M, T> <: Resource where EN <: MessageCopier, M <: Protocol<EN, DE>, T <: DataFields<T> {
     private static let log = LoggerFactory.getLogger('fountain:net.Server')
     private let buffers = LinkedBlockingQueue<SocketBuffer>()
+    private let checkTimer: Timer
 
     internal Server(checkDuration!: Duration, checker!: (SocketBuffer) -> Bool, private let queueSize!: Int64 = 1024,
         private let server!: TcpServerSocket, private let params!: SocketParams) {
         let buffers = this.buffers
-        Timer.repeat(
+        checkTimer = Timer.repeat(
             checkDuration,
             checkDuration,
             {
@@ -76,20 +76,18 @@ public struct Server<DE, EN, M, T, ID> <: Resource where EN <: MessageCopier, M 
             server: TcpServerSocket(bindAt: bindAt), params: SocketParams())
     }
     public static func build(queueSize!: Int64 = 1024, checkDuration!: Duration, checker!: (SocketBuffer) -> Bool,
-        bindAt!: UInt16): ServerBuilder<DE, EN, M, T, ID> {
-        ServerBuilder<DE, EN, M, T, ID>(queueSize, checkDuration, checker, bindAt)
+        bindAt!: UInt16): ServerBuilder<DE, EN, M, T> {
+        ServerBuilder<DE, EN, M, T>(queueSize, checkDuration, checker, bindAt)
     }
-    public func start(executor: (DE) -> M, idGetter: (M) -> ID): Unit {
+    public func start(executor: (DE) -> M): Unit {
         while (let socket <- server.accept()) {
+            params.populate(socket)
             let buffer = SocketBuffer(queueSize, socket)
             this.buffers.add(buffer)
-            params.populate(socket)
             spawn {
-                let future = MessageFuture<M>()
                 while (!socket.isClosed()) {
                     let req = M.decode<TcpSocket, T>(buffer.buffered)
                     let m = req |> executor
-                    let id = idGetter(m)
                     transfer(buffer, m)
                 }
             }
@@ -105,20 +103,29 @@ public struct Server<DE, EN, M, T, ID> <: Resource where EN <: MessageCopier, M 
         server.isClosed()
     }
     public func close(): Unit {
+        checkTimer.cancel()
+        while (buffers.size > 0) {
+            if (let Some(buffer) <- buffers.remove(Duration.millisecond)) {
+                try {
+                    buffer.close()
+                } catch (e: Exception) {
+                    log.warn('SocketBuffer.close', e)
+                }
+            }
+        }
         server.close()
     }
 }
 
-public class ServerBuilder<DE, EN, M, T, ID> where EN <: MessageCopier, M <: Protocol<EN, DE>, T <: DataFields<T>,
-    ID <: Hashable & Equatable<ID> {
+public class ServerBuilder<DE, EN, M, T> where EN <: MessageCopier, M <: Protocol<EN, DE>, T <: DataFields<T> {
     private let server: TcpServerSocket
     private let params = SocketParams()
     ServerBuilder(private let queueSize: Int64, private let checkDuration: Duration,
         private let checker: (SocketBuffer) -> Bool, private let bindAt: UInt16) {
         server = TcpServerSocket(bindAt: bindAt)
     }
-    public func build(): Server<DE, EN, M, T, ID> {
-        Server<DE, EN, M, T, ID>(queueSize: queueSize, checkDuration: checkDuration, checker: checker, server: server,
+    public func build(): Server<DE, EN, M, T> {
+        Server<DE, EN, M, T>(queueSize: queueSize, checkDuration: checkDuration, checker: checker, server: server,
             params: params)
     }
     public func backlogSize(size: Int64): This {

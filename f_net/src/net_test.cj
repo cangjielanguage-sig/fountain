@@ -15,7 +15,6 @@ limitations under the License.
  */
 package fountain::f_net
 
-import std.time.DateTime
 import std.unittest.*
 import std.unittest.testmacro.*
 
@@ -56,7 +55,7 @@ public class MessageFutureTest {
 public class SocketParamsTest {
     @TestCase
     public func builderPatternChaining(): Unit {
-        let params = SocketParams()
+        let _ = SocketParams()
             .bindToDevice(None)
         @Assert(true)
     }

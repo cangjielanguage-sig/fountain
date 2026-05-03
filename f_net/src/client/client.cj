@@ -15,11 +15,8 @@ limitations under the License.
  */
 package fountain::f_net.client
 
-import std.io.OutputStream
-import std.collection.ArrayList
 import std.collection.concurrent.ConcurrentHashMap
 import std.sync.{Timer, CatchupStyle}
-import std.net.IPSocketAddress
 import fountain::f_data.*
 import fountain::f_log.*
 import fountain::f_protocol.*
@@ -55,6 +52,7 @@ public struct Client<DE, EN, M, T, ID> where EN <: MessageCopier, M <: Protocol<
                     func new() {
                         try {
                             sockets[i] = socketCreator()
+                            buffers[i] = SocketBuffer(queueSize, sockets[i])
                         } catch (e: Exception) {
                             log.error('TcpSocket.new', e)
                             throw e
@@ -93,12 +91,12 @@ public struct Client<DE, EN, M, T, ID> where EN <: MessageCopier, M <: Protocol<
      */
     public static func builder(queueSize!: Int64 = 1024, socketCount!: Int64 = 1, host!: String, port!: UInt16,
         idGetter!: (DE) -> ID, checkDuration!: Duration, checker!: (SocketBuffer) -> Bool): SocketBuilder<DE, EN, M, T, ID> {
-        SocketBuilder<DE, EN, M, T, ID>(socketCount: queueSize, host: host, port: port, idGetter: idGetter,
-            checkDuration: checkDuration, checker: checker)
+        SocketBuilder<DE, EN, M, T, ID>(queueSize: queueSize, socketCount: socketCount, host: host, port: port,
+            idGetter: idGetter, checkDuration: checkDuration, checker: checker)
     }
     private prop index: Int64 {
         get(){
-            ThreadLocalRandom.current.nextInt64(0, sockets.size, closed: true)
+            ThreadLocalRandom.current.nextInt64(0, sockets.size, closed: false)
         }
     }
     public func transfer(id: ID, message: M): MessageFuture<DE> {
@@ -114,9 +112,9 @@ public struct Client<DE, EN, M, T, ID> where EN <: MessageCopier, M <: Protocol<
         transfer(buffers[index], id, message, timeout)
     }
     private func transfer(buffer: SocketBuffer, id: ID, message: M): MessageFuture<DE> {
+        let en = message.encode()
         let future = MessageFuture<DE>()
         futures.add(id, future)
-        let en = message.encode()
         buffer.queue.add({
             => en.copy(to: buffer.socket, closeToOnEnd: false)
         })

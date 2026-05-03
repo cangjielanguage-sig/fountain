@@ -17,13 +17,13 @@ package fountain::f_net
 
 import std.sync.Mutex
 
-public struct MessageFuture<DE>{
+public class MessageFuture<DE> {
     private let mutex = Mutex()
     private var ref = None<DE>
     private let condition = synchronized(mutex){
         mutex.condition()
     }
-    mut func set(data: DE): Unit {
+    func set(data: DE): Unit {
         synchronized(mutex){
             ref = data
             condition.notify()
@@ -31,12 +31,10 @@ public struct MessageFuture<DE>{
     }
     public func get(): DE {
         synchronized(mutex){
-            if(let Some(d) <- ref){
-                d
-            }else{
+            while (ref.isNone()) {
                 condition.wait()
-                ref.getOrThrow()
             }
+            ref.getOrThrow()
         }
     }
     public func tryGet(): ?DE {
@@ -46,9 +44,9 @@ public struct MessageFuture<DE>{
     }
     public func tryGet(timeout: Duration): ?DE {
         synchronized(mutex){
-            if(let Some(d) <- ref){
+            if (let Some(d) <- ref) {
                 d
-            }else{
+            } else {
                 condition.wait(timeout: timeout)
                 ref
             }

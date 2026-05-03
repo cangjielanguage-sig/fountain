@@ -15,17 +15,42 @@ limitations under the License.
  */
 package fountain::f_net
 
-public struct SocketBuffer {
+import std.io.InputStream
+
+internal class StopSignal {
+    var stopped: Bool = false
+}
+
+public struct SocketBuffer <: Resource {
     let buffered: BufferedInputStream<TcpSocket>
     let queue: ArrayBlockingQueue<() -> Unit>
-    SocketBuffer(queueSize: Int64, let socket: TcpSocket) {
+    let socket: TcpSocket
+    private let stop = StopSignal()
+
+    SocketBuffer(queueSize: Int64, socket: TcpSocket) {
+        this.socket = socket
         buffered = BufferedInputStream<TcpSocket>(socket)
         let queue = ArrayBlockingQueue<() -> Unit>(queueSize)
         this.queue = queue
+        let stop = this.stop
         spawn {
-            while (let fn <- queue.remove()) {
-                fn()
+            while (!stop.stopped) {
+                if (let Some(fn) <- queue.remove(Duration.millisecond * 50)) {
+                    fn()
+                }
             }
         }
+    }
+
+    public func close(): Unit {
+        stop.stopped = true
+        if (!socket.isClosed()) {
+            socket.close()
+        }
+        buffered.close()
+    }
+
+    public func isClosed(): Bool {
+        stop.stopped
     }
 }
