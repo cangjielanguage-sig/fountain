@@ -10,7 +10,5 @@
 - ✅ Step 6: 服务端处理逻辑 (SyncHandler: Store操作/版本/适配器)
 - ✅ Step 7: 服务端网络层 (SyncServer: f_net.Server封装)
 - ✅ Step 8: 客户端实现 (SyncClient: API + 故障转移)
-- ✅ Step 10: 测试用例 (37个测试全部通过)
-
-待开发：
-- ⬜ Step 9: SyncCommand (SubCommand注册)
+- ✅ Step 9: SyncCommand (SubCommand注册)
+- ✅ Step 10: 测试用例 (42个测试全部通过)

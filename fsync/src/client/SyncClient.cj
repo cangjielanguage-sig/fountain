@@ -96,11 +96,11 @@ public class SyncClient {
 
     private func getOrCreateClient(node: HostAndPort): Client<Message, EncodedMessage, Message, SyncData, MessageID> {
         let key = '${node.host}:${node.port}'
-        if (clients.get(key).isSome()) {
+        if (clients.contains(key)) {
             return clients.get(key).getOrThrow()
         }
         synchronized(clientLock) {
-            if (clients.get(key).isSome()) {
+            if (clients.contains(key)) {
                 return clients.get(key).getOrThrow()
             }
             let client = Client<Message, EncodedMessage, Message, SyncData, MessageID>.builder(
