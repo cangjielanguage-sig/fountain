@@ -20,7 +20,6 @@ internal import fountain::f_codec.*
 internal import fountain::f_codec.default.DefaultCodec
 internal import fountain::f_config.Config
 internal import fountain::f_data.*
-internal import fountain::f_data.macros.*
 internal import fountain::f_net.*
 internal import fountain::f_protocol.*
 internal import fountain::f_protocol.default.*

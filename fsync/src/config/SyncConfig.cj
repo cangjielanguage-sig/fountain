@@ -15,6 +15,7 @@ limitations under the License.
 */
 package fountain::fsync.config
 
+import std.convert.*
 import fountain::f_config.Config
 
 public class SyncConfig {
