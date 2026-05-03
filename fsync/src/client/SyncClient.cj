@@ -154,7 +154,7 @@ public class SyncClient {
     }
 
     /** 比较两个 ?Array<Byte> 是否相等 */
-    private static func sameBytes(a: ?Array<Byte>, b: ?Array<Byte>): Bool {
+    public static func sameBytes(a: ?Array<Byte>, b: ?Array<Byte>): Bool {
         if (let Some(va) <- a) {
             if (let Some(vb) <- b) {
                 if (va.size != vb.size) { return false }

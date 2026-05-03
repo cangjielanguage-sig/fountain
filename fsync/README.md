@@ -82,16 +82,18 @@ public func get(key: String): ?Array<Byte>
 
 // 前缀扫描（所有节点可读）
 // 返回匹配前缀的所有键值对条目
-public func prefix(pattern: String): ArrayList<ScanEntry>
+public func prefix(pattern: String): ScanResult
 
 // 通配符扫描（委托前缀扫描实现）
-public func glob(pattern: String): ArrayList<ScanEntry>
+public func glob(pattern: String): ScanResult
 
-// 注册 Watch（监听指定 KEY 的变更）
+// 监听指定 KEY 的变更，阻塞直到值变化或超时
 // timeout: Duration.Zero 表示永不超时
-public func watch(key: String, timeout!: Duration = Duration.Zero): Unit
+// 值变化时返回 Some(newValue)，取消/超时时返回 None
+// unwatch(key) 可立即使当前阻塞的 watch 返回 None
+public func watch(key: String, timeout!: Duration = Duration.Zero): ?Array<Byte>
 
-// 取消 Watch
+// 取消 Watch，对应当前阻塞的 watch 调用立即返回 None
 public func unwatch(key: String): Unit
 ```
 
@@ -102,10 +104,10 @@ public func unwatch(key: String): Unit
 | `add` | `REGISTER` | `SyncData(key, version, value)` | `KeyData(key)` |
 | `delete` | `DEREGISTER` | `KeyData(key)` | `KeyData(key)` |
 | `get` | `ACK` + `KeyData` | `KeyData(key)` | `ValueData(?value)` |
-| `prefix` | `ACK` + `PatternData` | `PatternData(pattern)` | `ArrayList<ScanEntry>` |
-| `glob` | `ACK` + `PatternData` | `PatternData(pattern)` | `ArrayList<ScanEntry>` |
-| `watch` | `SUBSCRIBE` | `WatchData(key, timeout)` | `KeyData(key)` |
-| `unwatch` | `UNSUBSCRIBE` | `KeyData(key)` | `KeyData(key)` |
+| `prefix` | `ACK` + `PatternData` | `PatternData(pattern)` | `ScanResult`（keys + values） |
+| `glob` | `ACK` + `PatternData` | `PatternData(pattern)` | `ScanResult`（keys + values） |
+| `watch` | `SUBSCRIBE` | `WatchData(key, timeout)` | `?Array<Byte>`（阻塞等待变化） |
+| `unwatch` | `UNSUBSCRIBE` | `KeyData(key)` | 取消对应 watch，返回 `None` |
 
 ### 数据体类型
 
