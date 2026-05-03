@@ -15,8 +15,9 @@ limitations under the License.
 */
 package fountain::fsync.base
 
-import std.io.InputStream
-import fountain::f_codec.{Encoder, Decoder}
+import std.io.{ByteBuffer, InputStream, SeekPosition}
+import fountain::f_codec.{Decoder}
+import fountain::f_codec.default.DefaultCodec
 import fountain::f_data.*
 import fountain::f_data.macros.*
 
@@ -32,6 +33,25 @@ public class SyncData {
         this.key = key
         this.version = version
         this.value = value
+    }
+
+    /** 编码泛型值 T，返回编码后的字节（避免外部手动编码） */
+    public static func encodeValue<T>(key: String, version: Int64, value: T): SyncData where T <: DataFields<T> {
+        let buf = ByteBuffer()
+        DefaultCodec().encode(value).finish().copy(to: buf, closeFromOnEnd: true, closeToOnEnd: false)
+        let size = buf.seek(SeekPosition.End(0))
+        buf.seek(SeekPosition.Begin(0))
+        let raw = Array<Byte>(size, repeat: 0u8)
+        buf.read(raw)
+        SyncData(key, version, raw)
+    }
+    public static func encodeValue<T>(key: String, value: T): SyncData where T <: DataFields<T> {
+        SyncData.encodeValue<T>(key, 0, value)
+    }
+
+    /** 从字节解码泛型值 T */
+    public func decodeValue<T>(): ?T where T <: DataFields<T> {
+        DefaultCodec().decode<T>(ByteBuffer(value))
     }
 }
 
@@ -118,34 +138,20 @@ public class ScanResult {
         keys.add(key)
         values.add(value)
     }
-    public func get(i: Int64): (String, Array<Byte>) {
-        (keys[i], values[i])
-    }
     public prop size: Int64 {
         get() { keys.size }
     }
 
-    /** 使用 Codec Encoder 顺序编码所有条目 */
-    public func encode(encoder: Encoder): Encoder {
-        encoder.encode(keys.size)
-        for (i in 0..keys.size) {
-            encoder.encode(keys[i]).encode(values[i])
+    /** 将 values[index] 解码为类型 T，返回 (key, T) */
+    public func decode<T>(index: Int64): ?(String, T) where T <: DataFields<T> {
+        if (index < 0 || index >= keys.size) { return None }
+        let buf = ByteBuffer(values[index])
+        let decoder = DefaultCodec()
+        if (let Some(v) <- decoder.decode<T>(buf)) {
+            (keys[index], v)
+        } else {
+            None
         }
-        encoder
-    }
-
-    /** 使用 Codec Decoder 顺序解码所有条目 */
-    public static func decodeFrom(decoder: Decoder, input: InputStream): ScanResult {
-        let result = ScanResult()
-        let count = decoder.decode<Int64>(input) ?? 0
-        for (i in 0..count) {
-            if (let Some(k) <- decoder.decode<String>(input)) {
-                if (let Some(v) <- decoder.decode<Array<Byte>>(input)) {
-                    result.add(k, v)
-                }
-            }
-        }
-        result
     }
 }
 

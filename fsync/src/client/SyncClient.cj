@@ -18,6 +18,7 @@ package fountain::fsync.client
 import std.collection.concurrent.ConcurrentHashMap
 import std.sync.{AtomicBool, Mutex}
 import std.time.DateTime
+import fountain::f_codec.default.DefaultCodec
 import fountain::f_data.*
 import fountain::f_log.*
 import fountain::f_net.client.*
@@ -41,7 +42,16 @@ public class SyncClient {
         this.requestTimeout = requestTimeout
     }
 
-    public func get(key: String): ?Array<Byte> {
+    public func get<T>(key: String): ?T where T <: DataFields<T> {
+        if (let Some(bytes) <- getBytes(key)) {
+            DefaultCodec().decode<T>(ByteBuffer(bytes))
+        } else {
+            None
+        }
+    }
+
+    /** 获取原始字节值（非 Generic 版本） */
+    public func getBytes(key: String): ?Array<Byte> {
         if (let Some(owner) <- hashRing.getNode(key)) {
             let ownerNode = owner
             // 先试 Owner 节点
@@ -76,12 +86,12 @@ public class SyncClient {
         }
     }
 
-    public func add(key: String, value: Array<Byte>): Unit {
+    public func add<T>(key: String, value: T): Unit where T <: DataFields<T> {
         if (let Some(owner) <- hashRing.getNode(key)) {
             let client = getOrCreateClient(owner)
-            let req = Message(Command.REGISTER, SyncData(key, 0, value).toData())
+            let req = Message(Command.REGISTER, SyncData.encodeValue<T>(key, value).toData())
             if (let Some(resp) <- client.transfer(req.id, req, requestTimeout)) {
-                return ()
+                return
             }
         }
         throw Exception('add failed for key: ${key}')
@@ -116,7 +126,7 @@ public class SyncClient {
         prefix(pattern)
     }
 
-    public func watch(key: String, timeout!: Duration = Duration.Zero): ?Array<Byte> {
+    public func watch<T>(key: String, timeout!: Duration = Duration.Zero): ?T where T <: DataFields<T> {
         let cancel = AtomicBool(false)
         watchCancelled[key] = cancel
         if (let Some(owner) <- hashRing.getNode(key)) {
@@ -124,7 +134,7 @@ public class SyncClient {
             let req = Message(Command.SUBSCRIBE, WatchData(key, timeout: timeout).toData())
             let _ = client.transfer(req.id, req, requestTimeout)
         }
-        let startValue = get(key)
+        let startBytes = getBytes(key)
         let deadline = if (timeout > Duration.Zero) { DateTime.now() + timeout } else { None<DateTime> }
         while (true) {
             if (cancel.load()) {
@@ -134,9 +144,12 @@ public class SyncClient {
                 return None
             }
             sleep(Duration.millisecond * 50)
-            let current = get(key)
-            if (!sameBytes(current, startValue)) {
-                return current
+            let current = getBytes(key)
+            if (!sameBytes(current, startBytes)) {
+                if (let Some(bytes) <- current) {
+                    return DefaultCodec().decode<T>(ByteBuffer(bytes))
+                }
+                return None
             }
         }
         None

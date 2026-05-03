@@ -82,7 +82,7 @@ public class SyncCommand <: SubCommand {
             let client = SyncClient()
             // 获取所有节点列表
             for (i in 1..10) {  // 最多尝试 10 次
-                if (let Some(configBytes) <- client.get('__config__')) {
+                if (let Some(configBytes) <- client.getBytes('__config__')) {
                     let peerConfig = String.fromUtf8(configBytes)
                     if (peerConfig != localConfig) {
                         eprintln('')
