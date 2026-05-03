@@ -15,9 +15,9 @@ limitations under the License.
 */
 package fountain::fsync.client
 
-import std.collection.ArrayList
 import std.collection.concurrent.ConcurrentHashMap
-import std.sync.Mutex
+import std.sync.{AtomicBool, Mutex}
+import std.time.DateTime
 import fountain::f_data.*
 import fountain::f_log.*
 import fountain::f_net.client.*
@@ -32,6 +32,7 @@ public class SyncClient {
     private let clients = ConcurrentHashMap<String, Client<Message, EncodedMessage, Message, SyncData, MessageID>>()
     private let clientLock = Mutex()
     private let requestTimeout: Duration
+    private let watchCancelled = ConcurrentHashMap<String, AtomicBool>()
 
     public init(requestTimeout!: Duration = Duration.second * 10) {
         let hostsArr = SyncConfig.getHosts()
@@ -115,20 +116,56 @@ public class SyncClient {
         prefix(pattern)
     }
 
-    public func watch(key: String, timeout!: Duration = Duration.Zero): Unit {
+    public func watch(key: String, timeout!: Duration = Duration.Zero): ?Array<Byte> {
+        let cancel = AtomicBool(false)
+        watchCancelled[key] = cancel
         if (let Some(owner) <- hashRing.getNode(key)) {
             let client = getOrCreateClient(owner)
             let req = Message(Command.SUBSCRIBE, WatchData(key, timeout: timeout).toData())
             let _ = client.transfer(req.id, req, requestTimeout)
         }
+        let startValue = get(key)
+        let deadline = if (timeout > Duration.Zero) { DateTime.now() + timeout } else { None<DateTime> }
+        while (true) {
+            if (cancel.load()) {
+                return None
+            }
+            if (let Some(d) <- deadline && DateTime.now() >= d) {
+                return None
+            }
+            sleep(Duration.millisecond * 50)
+            let current = get(key)
+            if (!sameBytes(current, startValue)) {
+                return current
+            }
+        }
+        None
     }
 
     public func unwatch(key: String): Unit {
+        if (let Some(cancel) <- watchCancelled.get(key)) {
+            cancel.store(true)
+        }
         if (let Some(owner) <- hashRing.getNode(key)) {
             let client = getOrCreateClient(owner)
             let req = Message(Command.UNSUBSCRIBE, KeyData(key).toData())
             let _ = client.transfer(req.id, req, requestTimeout)
         }
+    }
+
+    /** 比较两个 ?Array<Byte> 是否相等 */
+    private static func sameBytes(a: ?Array<Byte>, b: ?Array<Byte>): Bool {
+        if (let Some(va) <- a) {
+            if (let Some(vb) <- b) {
+                if (va.size != vb.size) { return false }
+                for (i in 0..va.size) {
+                    if (va[i] != vb[i]) { return false }
+                }
+                return true
+            }
+            return false  // a is Some, b is None
+        }
+        b.isNone()  // a is None, return whether b is also None
     }
 
     private func getOrCreateClient(node: HostAndPort): Client<Message, EncodedMessage, Message, SyncData, MessageID> {
