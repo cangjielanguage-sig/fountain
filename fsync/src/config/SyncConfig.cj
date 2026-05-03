@@ -18,6 +18,7 @@ package fountain::fsync.config
 import std.convert.*
 import fountain::f_config.Config
 import fountain::fsync.base.HostAndPort
+import fountain::fsync.exception.InvalidConfigException
 
 public class SyncConfig {
     public static const sync = 'sync'
@@ -29,7 +30,7 @@ public class SyncConfig {
             let parts = hostsStr.split(',')
             Array<HostAndPort>(parts.size) { i => HostAndPort(parts[i]) }
         } else {
-            throw Exception('sync_hosts is required')
+            throw InvalidConfigException('sync_hosts is required')
         }
     }
 

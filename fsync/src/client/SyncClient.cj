@@ -25,6 +25,7 @@ import fountain::f_net.client.*
 import fountain::f_protocol.default.*
 import fountain::fsync.base.{HostAndPort, HashRing, SyncData, KeyData, ValueData, PatternData, ScanResult, WatchData}
 import fountain::fsync.config.SyncConfig
+import fountain::fsync.exception.WriteFailedException
 
 public class SyncClient {
     private static let log = LoggerFactory.getLogger('fountain::fsync.SyncClient')
@@ -94,7 +95,7 @@ public class SyncClient {
                 return
             }
         }
-        throw Exception('add failed for key: ${key}')
+        throw WriteFailedException(key)
     }
 
     public func delete(key: String): Unit {
@@ -105,7 +106,7 @@ public class SyncClient {
                 return ()
             }
         }
-        throw Exception('delete failed for key: ${key}')
+        throw WriteFailedException(key)
     }
 
     public func prefix(pattern: String): ScanResult {
