@@ -37,11 +37,16 @@ public struct Client<DE, EN, M, T, ID> where EN <: MessageCopier, M <: Protocol<
                 let buffer = SocketBuffer(queueSize, sockets[i])
                 spawn {
                     while (!buffer.socket.isClosed()) {
-                        let de = M.decode<TcpSocket, T>(buffer.buffered)
-                        let id = idGetter(de)
-                        if (let Some(fut) <- futures.remove(id)) {
-                            var f = fut
-                            f.set(de)
+                        try {
+                            let de = M.decode<TcpSocket, T>(buffer.buffered)
+                            let id = idGetter(de)
+                            if (let Some(fut) <- futures.remove(id)) {
+                                var f = fut
+                                f.set(de)
+                            }
+                        } catch (e: Exception) {
+                            log.error('Client reader error', e)
+                            break
                         }
                     }
                 }
@@ -58,11 +63,16 @@ public struct Client<DE, EN, M, T, ID> where EN <: MessageCopier, M <: Protocol<
                             let buffer = buffers[i]
                             spawn {
                                 while (!buffer.socket.isClosed()) {
-                                    let de = M.decode<TcpSocket, T>(buffer.buffered)
-                                    let id = idGetter(de)
-                                    if (let Some(fut) <- futures.remove(id)) {
-                                        var f = fut
-                                        f.set(de)
+                                    try {
+                                        let de = M.decode<TcpSocket, T>(buffer.buffered)
+                                        let id = idGetter(de)
+                                        if (let Some(fut) <- futures.remove(id)) {
+                                            var f = fut
+                                            f.set(de)
+                                        }
+                                    } catch (e: Exception) {
+                                        log.error('Client reader error', e)
+                                        break
                                     }
                                 }
                             }

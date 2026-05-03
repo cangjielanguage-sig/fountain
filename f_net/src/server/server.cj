@@ -86,9 +86,14 @@ public struct Server<DE, EN, M, T> <: Resource where EN <: MessageCopier, M <: P
             this.buffers.add(buffer)
             spawn {
                 while (!socket.isClosed()) {
-                    let req = M.decode<TcpSocket, T>(buffer.buffered)
-                    let m = req |> executor
-                    transfer(buffer, m)
+                    try {
+                        let req = M.decode<TcpSocket, T>(buffer.buffered)
+                        let m = req |> executor
+                        transfer(buffer, m)
+                    } catch (e: Exception) {
+                        log.warn('Server reader error', e)
+                        break
+                    }
                 }
             }
         }
