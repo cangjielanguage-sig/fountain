@@ -328,7 +328,7 @@
 
 ---
 
-## [P2] Server.start() 死变量 future 和 id
+## ~~[P2] Server.start() 死变量 future 和 id~~ ✅ 已修复
 
 - **问题等级**: P2
 - **问题描述**: `server.cj:88` `let future = MessageFuture<M>()` 和 `server.cj:92` `let id = idGetter(m)` 声明后从未使用。编译器可能产生 warning。
@@ -350,7 +350,7 @@
 
 ---
 
-## [P2] SocketBuffer 后台 writer 线程无关闭/停止机制
+## ~~[P2] SocketBuffer 后台 writer 线程无关闭/停止机制~~ ✅ 已修复
 
 - **问题等级**: P2
 - **问题描述**: `SocketBuffer.cj:25-29` 构造器中 `spawn` 的线程通过 `while (let fn <- queue.remove())` 循环消费写任务队列。`ArrayBlockingQueue.remove()` 是阻塞操作，当程序需要关闭时没有机制通知该线程退出。`SocketBuffer` 未实现 `Resource` 接口，无法通过 try-with-resource 自动清理。
@@ -392,7 +392,7 @@
 
 ---
 
-## [P2] Server.close() 只关闭 server，不清理活连接
+## ~~[P2] Server.close() 只关闭 server，不清理活连接~~ ✅ 已修复
 
 - **问题等级**: P2
 - **问题描述**: `server.cj:107-109` `close()` 仅调用 `server.close()` 关闭 `TcpServerSocket`，但不对已建立的连接（`buffers` 中的 `SocketBuffer`）做任何清理。后续 `server.accept()` 返回后 spawn 的 reader 线程仍在运行并尝试读取已关闭的 socket。
@@ -408,7 +408,7 @@
 
 ---
 
-## [P3] Client.spawn closure 中 sockets[i] 赋值与 checker 重连的时序问题
+## ~~[P3] Client.spawn closure 中 sockets[i] 赋值与 checker 重连的时序问题~~ ✅ 已修复 (随 P0#5)
 
 - **问题等级**: P3
 - **问题描述**: `client.cj:53-81` Timer 检查线程的 spawn 中 `sockets[i] = socketCreator()` 与主线程的 `transfer` 可能存在时序竞态——当 checker 正在重建 `sockets[i]` 时，`transfer` 通过 `index` 选择了另一个 socket（此 socket 是正常的），因此实际不影响主路径。但若 checker 和 transfer 选中同一 `i`，则 closed socket 可能被新创建的线程使用。
@@ -418,19 +418,15 @@
 
 ---
 
-## [P4] SocketBuffer 构造器中的冗余局部变量 queue
+## [P4] SocketBuffer 构造器中的冗余局部变量 queue（编译器限制，保持现状）
 
 - **问题等级**: P4
-- **问题描述**: `SocketBuffer.cj:23-24` `let queue = ArrayBlockingQueue<...>(queueSize)` 创建局部变量后赋值给 `this.queue = queue`，可以合并为一行：
-  ```cj
-  this.queue = ArrayBlockingQueue<...>(queueSize)
-  ```
-- **改进方案**: 合并为一行。
-- **实施难度**: 低
+- **问题描述**: `SocketBuffer.cj:23-24` `let queue = ArrayBlockingQueue<...>(queueSize)` 创建局部变量后赋值给 `this.queue = queue`，可以合并为一行。
+- **状态**: 保持现状。struct 构造器中 spawn 无法捕获 `this`，必须通过局部变量 `queue` 引入闭包作用域，因此冗余局部变量 `queue` 不可消除。
 
 ---
 
-## [P4] SocketParams.receiveBufferSize/sendBufferSize 默认值 0 总是被设置
+## ~~[P4] SocketParams.receiveBufferSize/sendBufferSize 默认值 0 总是被设置~~ ✅ 已修复
 
 - **问题等级**: P4
 - **问题描述**: `SocketParams.cj:44-45` `populate()` 无条件设置 `socket.receiveBufferSize = receiveBufferSize_`（默认 0）和 `socket.sendBufferSize = sendBufferSize_`（默认 0）。0 表示"使用系统默认"，与不设置效果相同。若用户未显式调用 setter，写入 0 是冗余操作。
@@ -446,11 +442,11 @@
 |------|------|----------|
 | P0   | 6    | 6    | 0      | `MessageFuture.cj`、`client.cj`、`server.cj` |
 | P1   | 1    | 1    | 0      | `MessageFuture.cj` |
-| P2   | 3    | 0    | 3      | `server.cj`、`SocketBuffer.cj` |
-| P3   | 1    | 0    | 1      | `client.cj` |
-| P4   | 2    | 0    | 2      | `SocketBuffer.cj`、`SocketParams.cj` |
+| P2   | 3    | 3    | 0      | `server.cj`、`SocketBuffer.cj` |
+| P3   | 1    | 1    | 0      | `client.cj`（P0#5 修复后不再构成竞态） |
+| P4   | 2    | 1    | 1(注)  | `SocketParams.cj` 已修复；`SocketBuffer.cj` 为编译器限制保留 |
 
-**修复进度**：P0×6 + P1×1 全部修复，P2×3 待处理（死变量 future/id 已在清理 warning 时顺便修复「死变量」P2 和「ID 类型参数」P1）
+**修复进度**：f_net 模块全部 P0-P3 以及 P4×1 已修复。剩余 1 项 P4（SocketBuffer 冗余局部变量）是因 struct 构造器限制无法消除。f_protocol 模块 P3 `@Assert(true)` 待编译器 BUG 修复后处理。
 
 **修复优先级建议**：
 1. P0 第 1 项（`MessageFuture` 改 `class`）是所有 Client 异步通信的前置修复，建议最先实施

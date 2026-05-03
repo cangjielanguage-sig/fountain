@@ -24,8 +24,8 @@ internal class SocketParams {
     private var noDelay_ = None<Bool>
     private var quickAcknowledge_ = None<Bool>
     private var readTimeout_ = None<Duration>
-    private var receiveBufferSize_ = 0
-    private var sendBufferSize_ = 0
+    private var receiveBufferSize_ = None<Int64>
+    private var sendBufferSize_ = None<Int64>
     private var writeTimeout_ = None<Duration>
     private var socketOption_ = ArrayList<(Int32, Int32, CPointer<Unit>, UIntNative)>()
     private var socketOptionBool_ = ArrayList<(Int32, Int32, Bool)>()
@@ -42,8 +42,12 @@ internal class SocketParams {
             socket.quickAcknowledge = quickAcknowledge
         }
         socket.readTimeout = readTimeout_
-        socket.receiveBufferSize = receiveBufferSize_
-        socket.sendBufferSize = sendBufferSize_
+        if (let Some(size) <- receiveBufferSize_) {
+            socket.receiveBufferSize = size
+        }
+        if (let Some(size) <- sendBufferSize_) {
+            socket.sendBufferSize = size
+        }
         for((level, option, value, length) in socketOption_){
             socket.setSocketOption(level, option, value, length)
         }
@@ -81,11 +85,11 @@ internal class SocketParams {
         this
     }
     public func receiveBufferSize(receiveBufferSize: Int64): This {
-        receiveBufferSize_ = receiveBufferSize
+        receiveBufferSize_ = Some(receiveBufferSize)
         this
     }
     public func sendBufferSize(sendBufferSize: Int64): This {
-        sendBufferSize_ = sendBufferSize
+        sendBufferSize_ = Some(sendBufferSize)
         this
     }
     public func writeTimeout(writeTimeout: ?Duration): This {
