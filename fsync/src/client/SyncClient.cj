@@ -1,0 +1,120 @@
+/*
+Copyright (c) 2026 WuJingrun（吴京润）
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+package fountain::fsync.client
+
+import std.collection.concurrent.ConcurrentHashMap
+import std.sync.Mutex
+import fountain::f_data.*
+import fountain::f_log.*
+import fountain::f_net.client.*
+import fountain::f_protocol.default.*
+import fountain::fsync.config.HostAndPort
+import fountain::fsync.server.*
+
+public class SyncClient {
+    private static let log = LoggerFactory.getLogger('fountain::fsync.SyncClient')
+    private let hashRing: HashRing
+    private let nodes: ArrayList<HostAndPort>
+    private let clients = ConcurrentHashMap<String, Client<Message, EncodedMessage, Message, SyncData, MessageID>>()
+    private let clientLock = Mutex()
+    private let requestTimeout: Duration
+
+    public init(nodes: ArrayList<HostAndPort>, localIndex: Int64, requestTimeout!: Duration = Duration.second * 10) {
+        this.nodes = nodes
+        this.hashRing = HashRing(nodes)
+        this.requestTimeout = requestTimeout
+    }
+
+    public func get(key: String): ?Array<Byte> {
+        if (let Some(owner) <- hashRing.getNode(key)) {
+            let ownerNode = owner
+            // 先试 Owner 节点
+            if (let Some(v) <- tryReadNode(key, ownerNode)) {
+                return v
+            }
+            // 故障转移：按 ring 顺序尝试其他节点
+            for (j in 1..nodes.size) {
+                if (let Some(n) <- hashRing.getNextNode(key, j)) {
+                    if (n.host != ownerNode.host || n.port != ownerNode.port) {
+                        if (let Some(v) <- tryReadNode(key, n)) {
+                            return v
+                        }
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    private func tryReadNode(key: String, node: HostAndPort): ?Array<Byte> {
+        let client = getOrCreateClient(node)
+        let req = Message(Command.ACK, KeyData(key).toData())
+        if (let Some(resp) <- client.transfer(req.id, req, requestTimeout)) {
+            let vd = convert<ValueData>(resp.data)
+            match (vd) {
+                case Some(v: ValueData) => v.value
+                case _ => None
+            }
+        } else {
+            None
+        }
+    }
+
+    public func add(key: String, value: Array<Byte>): Unit {
+        if (let Some(owner) <- hashRing.getNode(key)) {
+            let client = getOrCreateClient(owner)
+            let req = Message(Command.REGISTER, SyncData(key, 0, value).toData())
+            if (let Some(resp) <- client.transfer(req.id, req, requestTimeout)) {
+                return ()
+            }
+        }
+        throw Exception('add failed for key: ${key}')
+    }
+
+    public func delete(key: String): Unit {
+        if (let Some(owner) <- hashRing.getNode(key)) {
+            let client = getOrCreateClient(owner)
+            let req = Message(Command.DEREGISTER, KeyData(key).toData())
+            if (let Some(resp) <- client.transfer(req.id, req, requestTimeout)) {
+                return ()
+            }
+        }
+        throw Exception('delete failed for key: ${key}')
+    }
+
+    private func getOrCreateClient(node: HostAndPort): Client<Message, EncodedMessage, Message, SyncData, MessageID> {
+        let key = '${node.host}:${node.port}'
+        if (clients.get(key).isSome()) {
+            return clients.get(key).getOrThrow()
+        }
+        synchronized(clientLock) {
+            if (clients.get(key).isSome()) {
+                return clients.get(key).getOrThrow()
+            }
+            let client = Client<Message, EncodedMessage, Message, SyncData, MessageID>.builder(
+                queueSize: 1024,
+                socketCount: 1,
+                host: node.host,
+                port: node.port,
+                idGetter: { msg => msg.id },
+                checkDuration: Duration.second * 30,
+                checker: { buffer => true }
+            ).noDelay(true).build()
+            clients[key] = client
+            client
+        }
+    }
+}

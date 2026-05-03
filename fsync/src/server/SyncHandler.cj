@@ -44,56 +44,57 @@ public class SyncHandler {
             case SUBSCRIBE => handleSubscribe(request)
             case UNSUBSCRIBE => handleUnsubscribe(request)
             case PING(_) => handlePing(request)
-            case _ => errorResp('unknown command')
+            case ACK => handleGet(request)
+            case _ => errorResp(request.id, 'unknown command')
         }
     }
 
     private func handleRegister(req: Message): Message {
         if (!nodeManager.canServeWrites()) {
-            return errorResp('quorum not met')
+            return errorResp(req.id, 'quorum not met')
         }
         if (let Some(d) <- convert<SyncData>(req.data)) {
             if (!nodeManager.isOwner(d.key)) {
-                return errorResp('not the owner node for key: ${d.key}')
+                return errorResp(req.id, 'not the owner node for key: ${d.key}')
             }
-            doRegister(d)
+            doRegister(req.id, d)
         } else {
-            errorResp('invalid REGISTER payload')
+            errorResp(req.id, 'invalid REGISTER payload')
         }
     }
 
-    private func doRegister(d: SyncData): Message {
+    private func doRegister(id: MessageID, d: SyncData): Message {
         let key = d.key.unsafeBytes()
         let version = sequence.fetchAdd(1) + 1
         store.add(key, d.value)
         store.add(makeVersionKey(key), encodeVersion(version))
         asyncPublish(d.key, version, d.value)
         watchManager.notify(d.key, d.value)
-        Message(Command.RESP(0), KeyData(d.key).toData())
+        Message(Command.RESP(0), id, KeyData(d.key).toData())
     }
 
     private func handleDeregister(req: Message): Message {
         if (!nodeManager.canServeWrites()) {
-            return errorResp('quorum not met')
+            return errorResp(req.id, 'quorum not met')
         }
         if (let Some(d) <- convert<KeyData>(req.data)) {
             if (!nodeManager.isOwner(d.key)) {
-                return errorResp('not the owner node')
+                return errorResp(req.id, 'not the owner node')
             }
-            doDeregister(d)
+            doDeregister(req.id, d)
         } else {
-            errorResp('invalid DEREGISTER payload')
+            errorResp(req.id, 'invalid DEREGISTER payload')
         }
     }
 
-    private func doDeregister(d: KeyData): Message {
+    private func doDeregister(id: MessageID, d: KeyData): Message {
         let key = d.key.unsafeBytes()
         let version = sequence.fetchAdd(1) + 1
         store.remove(key)
         store.add(makeVersionKey(key), encodeVersion(version))
         asyncPublish(d.key, version, [])
         watchManager.notify(d.key, [])
-        Message(Command.RESP(0), KeyData(d.key).toData())
+        Message(Command.RESP(0), id, KeyData(d.key).toData())
     }
 
     private func handlePublish(req: Message): Message {
@@ -105,41 +106,50 @@ public class SyncHandler {
                 store.add(makeVersionKey(key), encodeVersion(d.version))
                 watchManager.notify(d.key, d.value)
             }
-            Message(Command.RESP(0), KeyData(d.key).toData())
+            Message(Command.RESP(0), req.id, KeyData(d.key).toData())
         } else {
-            errorResp('invalid PUBLISH payload')
+            errorResp(req.id, 'invalid PUBLISH payload')
         }
     }
 
     private func handleSubscribe(req: Message): Message {
         if (let Some(d) <- convert<WatchData>(req.data)) {
             watchManager.registerExact(d.key, d.timeout, {_ => })
-            Message(Command.RESP(0), KeyData(d.key).toData())
+            Message(Command.RESP(0), req.id, KeyData(d.key).toData())
         } else {
-            errorResp('invalid SUBSCRIBE payload')
+            errorResp(req.id, 'invalid SUBSCRIBE payload')
         }
     }
 
     private func handleUnsubscribe(req: Message): Message {
         if (let Some(d) <- convert<KeyData>(req.data)) {
             watchManager.unwatch(d.key)
-            Message(Command.RESP(0), KeyData(d.key).toData())
+            Message(Command.RESP(0), req.id, KeyData(d.key).toData())
         } else {
-            errorResp('invalid UNSUBSCRIBE payload')
+            errorResp(req.id, 'invalid UNSUBSCRIBE payload')
         }
     }
 
-    private func handlePing(_: Message): Message {
-        Message(Command.PING(1))
+    private func handlePing(req: Message): Message {
+        Message(Command.PING(1), req.id, DataNone.INSTANCE)
     }
 
-    private static func errorResp(msg: String): Message {
-        Message(Command.RESP(0), KeyData(msg).toData())
+    private func handleGet(req: Message): Message {
+        if (let Some(d) <- convert<KeyData>(req.data)) {
+            let key = d.key.unsafeBytes()
+            let value = store.get(key)
+            Message(Command.RESP(0), req.id, ValueData(value).toData())
+        } else {
+            errorResp(req.id, 'invalid GET payload')
+        }
+    }
+
+    private static func errorResp(id: MessageID, msg: String): Message {
+        Message(Command.RESP(0), id, KeyData(msg).toData())
     }
 
     private func asyncPublish(key: String, version: Int64, value: Array<Byte>): Unit {
         let _ = nodeManager.allOthers()
-        // TODO: 在 Step 8 (SyncClient) 中实现向对端 PUBLISH
     }
 
     private func readLocalVersion(key: Array<Byte>): Int64 {

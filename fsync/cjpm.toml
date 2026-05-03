@@ -7,6 +7,7 @@
   "fountain::f_protocol" = { path = "../f_protocol" }
   "fountain::f_store" = { path = "../f_store" }
   "fountain::f_data" = { path = "../f_data" }
+  "fountain::f_log" = { path = "../f_log" }
   "fountain::f_util" = { path = "../f_util" }
 
 [package]
