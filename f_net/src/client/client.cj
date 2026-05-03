@@ -144,9 +144,15 @@ public struct Client<DE, EN, M, T, ID> <: Resource where EN <: MessageCopier, M 
         }
     }
     public func transfer(id: ID, message: M): MessageFuture<DE> {
+        if (isClosed()) {
+            throw Exception('Client is closed')
+        }
         transfer(index, id, message)
     }
     public func transfer(id: ID, message: M, timeout: Duration): ?DE {
+        if (isClosed()) {
+            return None
+        }
         transfer(index, id, message, timeout)
     }
     private func transfer(index: Int64, id: ID, message: M): MessageFuture<DE> {
