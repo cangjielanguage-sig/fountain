@@ -22,7 +22,7 @@ import fountain::f_data.*
 import fountain::f_log.*
 import fountain::f_net.client.*
 import fountain::f_protocol.default.*
-import fountain::fsync.base.{HostAndPort, HashRing, SyncData, KeyData, ValueData}
+import fountain::fsync.base.{HostAndPort, HashRing, SyncData, KeyData, ValueData, PatternData, ScanEntry, WatchData}
 import fountain::fsync.config.SyncConfig
 
 public class SyncClient {
@@ -95,6 +95,40 @@ public class SyncClient {
             }
         }
         throw Exception('delete failed for key: ${key}')
+    }
+
+    public func prefix(pattern: String): ArrayList<ScanEntry> {
+        if (let Some(owner) <- hashRing.getNode(pattern)) {
+            let client = getOrCreateClient(owner)
+            let req = Message(Command.ACK, PatternData(pattern).toData())
+            if (let Some(resp) <- client.transfer(req.id, req, requestTimeout)) {
+                if (let Some(entries) <- convert<ArrayList<ScanEntry>>(resp.data)) {
+                    return entries
+                }
+            }
+        }
+        ArrayList<ScanEntry>()
+    }
+
+    public func glob(pattern: String): ArrayList<ScanEntry> {
+        // GLOB 复用 PREFIX 扫描（由服务端做 * 通配符前缀截断）
+        prefix(pattern)
+    }
+
+    public func watch(key: String, timeout!: Duration = Duration.Zero): Unit {
+        if (let Some(owner) <- hashRing.getNode(key)) {
+            let client = getOrCreateClient(owner)
+            let req = Message(Command.SUBSCRIBE, WatchData(key, timeout: timeout).toData())
+            let _ = client.transfer(req.id, req, requestTimeout)
+        }
+    }
+
+    public func unwatch(key: String): Unit {
+        if (let Some(owner) <- hashRing.getNode(key)) {
+            let client = getOrCreateClient(owner)
+            let req = Message(Command.UNSUBSCRIBE, KeyData(key).toData())
+            let _ = client.transfer(req.id, req, requestTimeout)
+        }
     }
 
     private func getOrCreateClient(node: HostAndPort): Client<Message, EncodedMessage, Message, SyncData, MessageID> {

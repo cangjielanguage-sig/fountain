@@ -91,3 +91,22 @@ public class KeyData {
         this.key = key
     }
 }
+
+// 扫描结果条目
+@DataAssist[props fields]
+public class ScanEntry {
+    private var key: String = ''
+    private var value: Array<Byte> = []
+
+    public init() {}
+    public init(key: String, value: Array<Byte>) {
+        this.key = key
+        this.value = value
+    }
+}
+
+// Watch 通知值
+public enum WatchedValue {
+    | Value(Array<Byte>)
+    | Deleted
+}

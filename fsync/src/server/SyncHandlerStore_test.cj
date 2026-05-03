@@ -22,7 +22,7 @@ import std.unittest.testmacro.*
 import fountain::f_data.*
 import fountain::f_protocol.default.*
 import fountain::f_store.Store
-import fountain::fsync.base.{HostAndPort, SyncData, KeyData, ValueData}
+import fountain::fsync.base.{HostAndPort, SyncData, KeyData, ValueData, PatternData, ScanEntry}
 
 @Test
 class SyncHandlerStoreTest {
@@ -145,6 +145,39 @@ class SyncHandlerStoreTest {
         let _ = handler.handle(Message(Command.DEREGISTER, KeyData(key).toData()))
         // 验证已删除
         @Assert(store.get(key.unsafeBytes()).isNone())
+        store.close()
+        cleanup(dir)
+    }
+
+    @TestCase
+    func prefixScanReturnsMatchingEntries(): Unit {
+        let dir = '/tmp/fsync_test/prefix_scan'
+        cleanup(dir)
+        let store = Store(dir)
+        let nm = NodeManager(ArrayList<HostAndPort>([HostAndPort('127.0.0.1:1203')]), 0)
+        let wm = WatchManager()
+        let handler = SyncHandler(store, nm, wm)
+        // 写入多个键
+        let _ = handler.handle(Message(Command.REGISTER, SyncData('/app/config/db/host', 0, [1u8]).toData()))
+        let _ = handler.handle(Message(Command.REGISTER, SyncData('/app/config/cache/size', 0, [2u8]).toData()))
+        let _ = handler.handle(Message(Command.REGISTER, SyncData('/other/key', 0, [3u8]).toData()))
+        // 前缀扫描
+        let resp = handler.handle(Message(Command.ACK, PatternData('/app/config/').toData()))
+        @Assert(match (resp.command) { case RESP(_) => true case _ => false })
+        store.close()
+        cleanup(dir)
+    }
+
+    @TestCase
+    func prefixScanNonExistentReturnsEmpty(): Unit {
+        let dir = '/tmp/fsync_test/prefix_empty'
+        cleanup(dir)
+        let store = Store(dir)
+        let nm = NodeManager(ArrayList<HostAndPort>([HostAndPort('127.0.0.1:1203')]), 0)
+        let wm = WatchManager()
+        let handler = SyncHandler(store, nm, wm)
+        let resp = handler.handle(Message(Command.ACK, PatternData('/nonexistent/').toData()))
+        @Assert(match (resp.command) { case RESP(_) => true case _ => false })
         store.close()
         cleanup(dir)
     }

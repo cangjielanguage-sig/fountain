@@ -16,11 +16,13 @@ limitations under the License.
 package fountain::fsync.server
 
 import std.binary.*
+import std.collection.ArrayList
 import std.sync.AtomicInt64
+import fountain::f_base.*
 import fountain::f_data.*
 import fountain::f_protocol.default.*
 import fountain::f_store.Store
-import fountain::fsync.base.{SyncData, KeyData, ValueData, WatchData}
+import fountain::fsync.base.{SyncData, KeyData, ValueData, WatchData, PatternData, ScanEntry}
 
 private let VERSION_SUFFIX = '_version'.unsafeBytes()
 
@@ -47,7 +49,7 @@ public class SyncHandler {
             case SUBSCRIBE => handleSubscribe(request)
             case UNSUBSCRIBE => handleUnsubscribe(request)
             case PING(_) => handlePing(request)
-            case ACK => handleGet(request)
+            case ACK => handleRead(request)
             case _ => errorResp(request.id, 'unknown command')
         }
     }
@@ -147,6 +149,23 @@ public class SyncHandler {
             Message(Command.RESP(0), req.id, ValueData(value).toData())
         } else {
             errorResp(req.id, 'invalid GET payload')
+        }
+    }
+
+    /** ACK 分发：KeyData → GET，PatternData → 扫描 */
+    private func handleRead(req: Message): Message {
+        if (let Some(_) <- convert<KeyData>(req.data)) {
+            handleGet(req)
+        } else if (let Some(d) <- convert<PatternData>(req.data)) {
+            let prefix = d.pattern.unsafeBytes()
+            let entries = ArrayList<ScanEntry>()
+            let it = store.prefix(prefix)
+            for ((k, v) in it) {
+                entries.add(ScanEntry(String.fromUtf8(k), v))
+            }
+            Message(Command.RESP(0), req.id, entries.toData())
+        } else {
+            errorResp(req.id, 'invalid read payload')
         }
     }
 
