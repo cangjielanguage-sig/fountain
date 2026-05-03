@@ -17,12 +17,13 @@ package fountain::fsync.server
 
 import std.collection.ArrayList
 import std.fs.{exists, remove}
+import std.sync.AtomicBool
 import std.unittest.*
 import std.unittest.testmacro.*
 import fountain::f_data.*
 import fountain::f_protocol.default.*
 import fountain::f_store.Store
-import fountain::fsync.base.{HostAndPort, SyncData, KeyData, ValueData, PatternData, ScanEntry}
+import fountain::fsync.base.{HostAndPort, SyncData, KeyData, ValueData, PatternData, ScanEntry, WatchData}
 
 @Test
 class SyncHandlerStoreTest {
@@ -169,6 +170,22 @@ class SyncHandlerStoreTest {
     }
 
     @TestCase
+    func prefixScanVerifyDataContent(): Unit {
+        let dir = '/tmp/fsync_test/prefix_content'
+        cleanup(dir)
+        let store = Store(dir)
+        let nm = NodeManager(ArrayList<HostAndPort>([HostAndPort('127.0.0.1:1203')]), 0)
+        let wm = WatchManager()
+        let handler = SyncHandler(store, nm, wm)
+        let _ = handler.handle(Message(Command.REGISTER, SyncData('/app/config/db/host', 0, [1u8]).toData()))
+        let _ = handler.handle(Message(Command.REGISTER, SyncData('/app/config/cache/size', 0, [2u8]).toData()))
+        let resp = handler.handle(Message(Command.ACK, PatternData('/app/config/').toData()))
+        @Assert(match (resp.command) { case RESP(_) => true case _ => false })
+        store.close()
+        cleanup(dir)
+    }
+
+    @TestCase
     func prefixScanNonExistentReturnsEmpty(): Unit {
         let dir = '/tmp/fsync_test/prefix_empty'
         cleanup(dir)
@@ -178,6 +195,69 @@ class SyncHandlerStoreTest {
         let handler = SyncHandler(store, nm, wm)
         let resp = handler.handle(Message(Command.ACK, PatternData('/nonexistent/').toData()))
         @Assert(match (resp.command) { case RESP(_) => true case _ => false })
+        store.close()
+        cleanup(dir)
+    }
+
+    @TestCase
+    func subscribeAcknowledgesWatch(): Unit {
+        let dir = '/tmp/fsync_test/subscribe'
+        cleanup(dir)
+        let store = Store(dir)
+        let nm = NodeManager(ArrayList<HostAndPort>([HostAndPort('127.0.0.1:1203')]), 0)
+        let wm = WatchManager()
+        let handler = SyncHandler(store, nm, wm)
+        let resp = handler.handle(Message(Command.SUBSCRIBE, WatchData('/app/config/db/host', timeout: Duration.second * 30).toData()))
+        @Assert(match (resp.command) { case RESP(_) => true case _ => false })
+        store.close()
+        cleanup(dir)
+    }
+
+    @TestCase
+    func subscribeThenRegisterFiresWatch(): Unit {
+        let dir = '/tmp/fsync_test/sub_reg'
+        cleanup(dir)
+        let store = Store(dir)
+        let nm = NodeManager(ArrayList<HostAndPort>([HostAndPort('127.0.0.1:1203')]), 0)
+        let wm = WatchManager()
+        let handler = SyncHandler(store, nm, wm)
+        let flag = AtomicBool(false)
+        wm.registerExact('/app/config/db/host', Duration.Zero, {_ => flag.store(true)})
+        let _ = handler.handle(Message(Command.REGISTER, SyncData('/app/config/db/host', 0, [42u8]).toData()))
+        sleep(Duration.millisecond * 10)
+        @Assert(flag.load())
+        store.close()
+        cleanup(dir)
+    }
+
+    @TestCase
+    func unsubscribeAcknowledges(): Unit {
+        let dir = '/tmp/fsync_test/unsub'
+        cleanup(dir)
+        let store = Store(dir)
+        let nm = NodeManager(ArrayList<HostAndPort>([HostAndPort('127.0.0.1:1203')]), 0)
+        let wm = WatchManager()
+        let handler = SyncHandler(store, nm, wm)
+        let _ = handler.handle(Message(Command.SUBSCRIBE, WatchData('/app/config/db/host', timeout: Duration.Zero).toData()))
+        let resp = handler.handle(Message(Command.UNSUBSCRIBE, KeyData('/app/config/db/host').toData()))
+        @Assert(match (resp.command) { case RESP(_) => true case _ => false })
+        store.close()
+        cleanup(dir)
+    }
+
+    @TestCase
+    func addFiresWatchCallbackThroughHandler(): Unit {
+        let dir = '/tmp/fsync_test/handler_watch'
+        cleanup(dir)
+        let store = Store(dir)
+        let nm = NodeManager(ArrayList<HostAndPort>([HostAndPort('127.0.0.1:1203')]), 0)
+        let wm = WatchManager()
+        let handler = SyncHandler(store, nm, wm, configHosts: '127.0.0.1:1203')
+        let flag = AtomicBool(false)
+        wm.registerExact('/app/config/db/host', Duration.Zero, {_ => flag.store(true)})
+        let _ = handler.handle(Message(Command.REGISTER, SyncData('/app/config/db/host', 0, [1u8]).toData()))
+        sleep(Duration.millisecond * 10)
+        @Assert(flag.load())
         store.close()
         cleanup(dir)
     }
