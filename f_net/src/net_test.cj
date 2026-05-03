@@ -49,6 +49,17 @@ public class MessageFutureTest {
         let fut = MessageFuture<Int64>()
         @Assert(fut.tryGet(Duration.millisecond).isNone())
     }
+
+    @TestCase
+    public func getWaitsForSetFromAnotherThread(): Unit {
+        let fut = MessageFuture<Int64>()
+        spawn {
+            sleep(Duration.millisecond * 10)
+            var f = fut
+            f.set(42)
+        }
+        @Assert(fut.get() == 42)
+    }
 }
 
 @Test
@@ -60,5 +71,16 @@ public class SocketParamsTest {
             .readTimeout(None)
             .noDelay(true)
             .linger(None)
+    }
+
+    @TestCase
+    public func copyProducesIndependentClone(): Unit {
+        let p1 = SocketParams()
+        let p2 = p1.copy()
+        p1.noDelay(true)
+        p2.noDelay(false)
+        p1.bindToDevice(None)
+        // 如果 copy 共享内部状态, 修改 p1 会影响 p2
+        p2.linger(None)
     }
 }
