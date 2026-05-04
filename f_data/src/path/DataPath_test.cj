@@ -523,6 +523,36 @@ public class DataPath_filter_test {
     }
 
     @TestCase
+    public func testFilterRegexFullMatch(): Unit {
+        let p1 = makePerson("Alice", 30)
+        let p2 = makePerson("Bob", 25)
+        let p3 = makePerson("Charlie", 35)
+        let list = DataList()
+        list.add(p1)
+        list.add(p2)
+        list.add(p3)
+        // A.+ fully matches "Alice" but not "Bob" or "Charlie"
+        let path = DataPath.cache("$[?(@.name =~ /A.+/)]")
+        let results = collect(path.get(list))
+        @Assert(1, results.size)
+    }
+
+    @TestCase
+    public func testFilterRegexSubstring(): Unit {
+        let p1 = makePerson("Alice", 30)
+        let p2 = makePerson("Bob", 25)
+        let p3 = makePerson("Charlie", 35)
+        let list = DataList()
+        list.add(p1)
+        list.add(p2)
+        list.add(p3)
+        // Cangjie Regex.matches does substring search, "lice" matches "Alice" but not "Bob"/"Charlie"
+        let path = DataPath.cache("$[?(@.name =~ /lice/)]")
+        let results = collect(path.get(list))
+        @Assert(1, results.size)
+    }
+
+    @TestCase
     public func testFilterSize(): Unit {
         let p1 = makePerson("Alice", 30)
         let p2 = makePerson("Bob", 25)
@@ -604,6 +634,35 @@ public class DataPath_filter_test {
         let path = DataPath.cache("$[?(@.name != null)]")
         let results = collect(path.get(list))
         @Assert(2, results.size)
+    }
+
+    @TestCase
+    public func testFilterMatch(): Unit {
+        let p1 = makePerson("Alice", 30)
+        let p2 = makePerson("Bob", 25)
+        let p3 = makePerson("Charlie", 35)
+        let list = DataList()
+        list.add(p1)
+        list.add(p2)
+        list.add(p3)
+        let path = DataPath.cache("$[?(match(@.name, 'Alice'))]")
+        let results = collect(path.get(list))
+        @Assert(1, results.size)
+    }
+
+    @TestCase
+    public func testFilterSearch(): Unit {
+        let p1 = makePerson("Alice", 30)
+        let p2 = makePerson("Bob", 25)
+        let p3 = makePerson("Charlie", 35)
+        let list = DataList()
+        list.add(p1)
+        list.add(p2)
+        list.add(p3)
+        // "lice" only matches "Alice", not "Bob" or "Charlie"
+        let path = DataPath.cache("$[?(search(@.name, 'lice'))]")
+        let results = collect(path.get(list))
+        @Assert(1, results.size)
     }
 }
 
@@ -693,6 +752,27 @@ public class DataPath_recursive_test {
         let results = collect(path.get(list))
         @Assert(1, results.size)
         @Assert("3", results[0].toString())
+    }
+
+    @TestCase
+    public func testFunctionCount(): Unit {
+        let list = DataList()
+        list.add(DataReal(10))
+        list.add(DataReal(20))
+        list.add(DataReal(30))
+        let path = DataPath.cache("$.count()")
+        let results = collect(path.get(list))
+        @Assert(1, results.size)
+        @Assert("3", results[0].toString())
+    }
+
+    @TestCase
+    public func testFunctionValue(): Unit {
+        let list = DataReal(42)
+        let path = DataPath.cache("$.value()")
+        let results = collect(path.get(list))
+        @Assert(1, results.size)
+        @Assert("42", results[0].toString())
     }
 
     @TestCase
