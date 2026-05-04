@@ -799,6 +799,76 @@ public class DataPath_filter_test {
         let results = collect(path.get(list))
         @Assert(1, results.size)
     }
+
+    @TestCase
+    public func testFilterEqFloat(): Unit {
+        let p1 = makePerson("Alice", 30)
+        p1.set("price", DataReal("3.14"))
+        let p2 = makePerson("Bob", 25)
+        p2.set("price", DataReal("2.71"))
+        let list = DataList()
+        list.add(p1)
+        list.add(p2)
+        let path = DataPath.cache("$[?(@.price == 3.14)]")
+        let results = collect(path.get(list))
+        @Assert(1, results.size)
+    }
+
+    @TestCase
+    public func testFilterEqBool(): Unit {
+        let p1 = makePerson("Alice", 30)
+        p1.set("active", DataBool.TRUE)
+        let p2 = makePerson("Bob", 25)
+        p2.set("active", DataBool.FALSE)
+        let list = DataList()
+        list.add(p1)
+        list.add(p2)
+        let path = DataPath.cache("$[?(@.active == true)]")
+        let results = collect(path.get(list))
+        @Assert(1, results.size)
+    }
+
+    @TestCase
+    public func testFilterAnyOf(): Unit {
+        let p1 = makePerson("Alice", 30)
+        let p2 = makePerson("Bob", 25)
+        let p3 = makePerson("Charlie", 35)
+        let list = DataList()
+        list.add(p1)
+        list.add(p2)
+        list.add(p3)
+        let path = DataPath.cache("$[?(@.age anyof [25, 35])]")
+        let results = collect(path.get(list))
+        @Assert(2, results.size)
+    }
+
+    @TestCase
+    public func testFilterSubSetOf(): Unit {
+        let p1 = makePerson("Alice", 30)
+        let p2 = makePerson("Bob", 25)
+        let p3 = makePerson("Charlie", 35)
+        let list = DataList()
+        list.add(p1)
+        list.add(p2)
+        list.add(p3)
+        let path = DataPath.cache("$[?(@.age subsetof [25, 30, 35])]")
+        let results = collect(path.get(list))
+        @Assert(3, results.size)
+    }
+
+    @TestCase
+    public func testFilterNoOneOf(): Unit {
+        let p1 = makePerson("Alice", 30)
+        let p2 = makePerson("Bob", 25)
+        let p3 = makePerson("Charlie", 35)
+        let list = DataList()
+        list.add(p1)
+        list.add(p2)
+        list.add(p3)
+        let path = DataPath.cache("$[?(@.age nooneof [40, 50])]")
+        let results = collect(path.get(list))
+        @Assert(3, results.size)
+    }
 }
 
 @Test
@@ -851,6 +921,20 @@ public class DataPath_recursive_test {
         list.add(p1)
         list.add(p2)
         let path = DataPath.cache("$..val")
+        let results = collect(path.get(list))
+        @Assert(2, results.size)
+    }
+
+    @TestCase
+    public func testRecursiveBracketName(): Unit {
+        let p1 = TestObj()
+        p1.set("val", DataReal(42))
+        let p2 = TestObj()
+        p2.set("val", DataReal(99))
+        let list = DataList()
+        list.add(p1)
+        list.add(p2)
+        let path = DataPath.cache("$..['val']")
         let results = collect(path.get(list))
         @Assert(2, results.size)
     }

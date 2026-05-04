@@ -40,7 +40,10 @@ internal abstract class Subset<T> where T <: ToString & DataFields<T> {
             case x: Iterable<(Data, Data)> => for ((k, _) in x where right.contains(k.toString())) {
                 subsetSize++
             }
-            case _ => ()
+            case _ =>
+                if (right.contains(d.toString())) {
+                    subsetSize = 1
+                }
         }
         subsetSize
     }

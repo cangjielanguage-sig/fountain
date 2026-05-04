@@ -31,7 +31,7 @@ internal class SubSetOfFilter<T> <: Subset<T> & DataFilter where T <: ToString &
             case x: Collection<Data> => x.size
             case x: Collection<(String, Data)> => x.size
             case x: Collection<(Data, Data)> => x.size
-            case _ => 0
+            case _ => 1  // scalar value counts as single-element set
         }
         subset(data) == size
     }
