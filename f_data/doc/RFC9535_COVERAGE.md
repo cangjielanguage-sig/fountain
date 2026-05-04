@@ -1,8 +1,8 @@
 # RFC 9535 覆盖清单
 
 > 实现 branch: `feature/datapath`
-> 测试: **75/75 通过** (21 basic + 35 filter + 9 recursive + 3 compile error + 5 object eq + 4 complex fn)
-> 文件: 23 个新文件 + 7 个修改文件
+> 测试: **81/81 通过** (21 basic + 41 filter + 10 recursive + 3 compile error + 5 object eq + 4 complex fn + 6 P3 gap)
+> 文件: 23 个新文件 + 8 个修改文件
 
 ---
 
@@ -148,7 +148,7 @@
 | 特性 | 说明 |
 |------|------|
 | 标准化路径 (Normalized Paths) §8 | 未实现。需要为匹配节点生成 `$['name'][0]` 形式路径 |
-| 复杂函数表达式 | 现在支持：`match(@.name, @.regex)` 路径参数、`count(match(...))` 嵌套、`search(@.name, @.pat)`、`value(search(...))`。不支持：深层嵌套（3+ 层）。 |
+| 复杂函数表达式深层嵌套（3+ 层） | 单层嵌套已验证 (`count(match(...))`)，深层未测试 |
 
 ---
 
@@ -205,14 +205,14 @@
 
 ### 测试文件
 
-| 文件 | 测试数 |
+| 数据 | 测试数 |
 |------|--------|
-| `DataPath_test.cj` | 75 |
+| `DataPath_test.cj` | 81 |
 
 ---
 
 ## git 分支
 
 ```
-feature/datapath — 22 commits, ~2600 lines changed
+feature/datapath — 24 commits, ~2700 lines changed
 ```
