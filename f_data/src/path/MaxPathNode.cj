@@ -32,7 +32,7 @@ internal class MaxPathNode <: DataPathNode {
                         case (x: DataDuration, y: DataDuration) where x > y => x
                         case (x: DataReal, y: DataReal) where x > y => x
                         case (x: DataString, y: DataString) where x > y => x
-                        case _ => return OptionIterator<Data>()
+                        case _ => continue
                     }
                 }
                 OptionIterator<Data>(r)
