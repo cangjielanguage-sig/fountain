@@ -242,6 +242,14 @@ abstract sealed class DataPath <: DataPathNode {
                             tokens += quote(NotEqFilter<Bool>($(sub[i .. e].toString()), $(sub[e + 1].value), 'false'))
                             i = e + 1
                             break
+                        case EQUAL where sub[e + 1].kind == IDENTIFIER && sub[e + 1].value == 'null' =>
+                            tokens += quote(NullFilter($(sub[i .. e].toString()), 'false', 'true'))
+                            i = e + 1
+                            break
+                        case NOTEQ where sub[e + 1].kind == IDENTIFIER && sub[e + 1].value == 'null' =>
+                            tokens += quote(NullFilter($(sub[i .. e].toString()), 'false', 'false'))
+                            i = e + 1
+                            break
                         case LT where sub[e + 1].kind == STRING_LITERAL || sub[e + 1].kind ==SINGLE_QUOTED_STRING_LITERAL =>
                             tokens += quote(CmpFilter<String>($(sub[i .. e].toString()), $(sub[e + 1].value), 'LT', 'false', 'false'))
                             i = e + 1
@@ -407,7 +415,7 @@ abstract sealed class DataPath <: DataPathNode {
                 let tokens = x.toTokens()
                 let filter = tokens[0].value
                 let generic = tokens[2].value
-                let args = tokens[if (filter == 'RegexFilter' || filter == 'SizeFilter' || filter == 'ExistsFilter') {
+                let args = tokens[if (filter == 'RegexFilter' || filter == 'SizeFilter' || filter == 'ExistsFilter' || filter == 'NullFilter') {
                         2
                     } else {
                         5
@@ -446,6 +454,7 @@ abstract sealed class DataPath <: DataPathNode {
                     case ('NoOneOfFilter', 'Float64') => NoOneOfFilter<Float64>(arg(args, 0), arg(args, 1), arg(args, 2))
                     case ('SizeFilter', _) => SizeFilter(arg(args, 0), arg(args, 1), arg(args, 2))
                     case ('ExistsFilter', _) => ExistsFilter(arg(args, 0), arg(args, 1))
+                    case ('NullFilter', _) => NullFilter(arg(args, 0), arg(args, 1), arg(args, 2))
                     case _ => throw DataException('unreachable ${tokens}')
                 }
             case x: ParenExpr => compileFilter(x.parenthesizedExpr)
