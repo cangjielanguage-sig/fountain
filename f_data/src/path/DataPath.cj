@@ -494,15 +494,25 @@ abstract sealed class DataPath <: DataPathNode {
                 i++
                 AnySubPathNode.instance
             } else if (path[i].kind == DOT && path[i + 1].kind == DOT) {
+                // Skip optional MUL after .. (..* means all descendants)
+                if (i + 2 < path.size && path[i + 2].kind == MUL) {
+                    i++
+                }
                 RecursiveDescentPathNode.instance
             } else if (path[i].kind == RANGEOP) {
+                // Skip optional MUL after .. (..* with RANGEOP token)
+                if (i + 1 < path.size && path[i + 1].kind == MUL) {
+                    i++
+                }
                 RecursiveDescentPathNode.instance
+            } else if (path[i].kind == IDENTIFIER && i > 0 && (path[i - 1].kind == RANGEOP || path[i - 1].kind == DOT)) {
+                SubPathNode(path[i].value)
             } else if (path[i].kind == DOT && path[i + 1].kind == LSQUARE && path[i - 1].kind == DOT) {
                 let (sub, index) = extractSubPathInSquares(path, i + 1)
                 i = index
                 compileInSquares(sub, solid)
             } else if (path[i].kind == LSQUARE && (path[i - 1].kind == IDENTIFIER || path[i - 1].kind == DOLLAR ||
-                path[i - 1].kind == AT || path[i - 1].kind == RSQUARE)) {
+                path[i - 1].kind == AT || path[i - 1].kind == RSQUARE || path[i - 1].kind == RANGEOP || path[i - 1].kind == DOT)) {
                 let (subPath, index) = extractSubPathInSquares(path, i)
                 i = index
                 compileInSquares(subPath, solid)

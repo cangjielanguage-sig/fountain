@@ -562,6 +562,34 @@ public class DataPath_recursive_test {
     }
 
     @TestCase
+    public func testRecursiveDescendStar(): Unit {
+        let inner = DataList()
+        inner.add(DataReal(1))
+        inner.add(DataReal(2))
+        let outer = DataList()
+        outer.add(DataReal(0))
+        outer.add(inner)
+        outer.add(DataReal(3))
+        let path = DataPath.cache("$..*")
+        let results = collect(path.get(outer))
+        @Assert(true, results.size > 0)
+    }
+
+    @TestCase
+    public func testRecursiveDescendSubPath(): Unit {
+        let p1 = TestObj()
+        p1.set("val", DataReal(42))
+        let p2 = TestObj()
+        p2.set("val", DataReal(99))
+        let list = DataList()
+        list.add(p1)
+        list.add(p2)
+        let path = DataPath.cache("$..val")
+        let results = collect(path.get(list))
+        @Assert(2, results.size)
+    }
+
+    @TestCase
     public func testFunctionMin(): Unit {
         let list = DataList()
         list.add(DataReal(10))

@@ -5,10 +5,11 @@
 
 ---
 
-### Step 1: 数组切片缺省值 + 负步长
-- **文件**: `DataPath.cj`, `RangePathNode.cj`
-- **内容**: 支持 `[:]`, `[:5]`, `[3:]`, `[::-1]`, `[5:2:-1]`
-- **方法**: `RangePathNode` 改为三个独立字段(start/end/step)，手动实现迭代
+### Step 1: 数组切片缺省值 + 负步长 ✅
+- **文件**: `DataPath.cj`, `RangePathNode.cj`, `DataPath_test.cj`
+- **结果**: 21/21 基本测试通过
+- **支持**: `[:]`, `[:5]`, `[3:]`, `[4:0:-1]`, `[0:3:0]`
+- **待完善**: `[::-1]` 缺省 start/end 负步长 (token 解析需要 `hasColon` 跨方法调用支持)
 
 ### Step 2: `..[*]` 完整语法
 - **文件**: `DataPath.cj`
@@ -27,6 +28,6 @@
 - **文件**: `DataPath.cj`, 新建 `CountFilter.cj` 等
 - **内容**: RFC 9535 标准函数扩展
 
-### Step 6: 测试用例
-- **文件**: `DataPath_test.cj`
-- **内容**: 以上所有新特性的测试
+### Step 6: `[::-1]` 缺省值支持 + 更多测试
+- **文件**: `DataPath.cj`, `DataPath_test.cj`
+- **内容**: 解决 `hasColon` 前向引用问题，添加 `[::-1]` 测试
