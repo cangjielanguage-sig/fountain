@@ -15,7 +15,7 @@ limitations under the License.
  */
 package fountain::f_data.path
 
-internal class NinFilter<T> <: DataFilter where T <: Hashable & Equatable<T> {
+internal class NinFilter<T> <: DataFilter where T <: Hashable & Equatable<T> & ToString {
     private let filter: InFilter<T>
     init(left: DataPath, right: HashSet<T>) {
         filter = InFilter<T>(left, right)

@@ -25,7 +25,7 @@ internal class RegexFilter <: DataFilter {
     init(left: String, regex: String, solid: String) {
         this(compilePath(left, solid), regex)
     }
-    private static func parseRegex(regex: String) {
+    private static func parseRegex(regex: String): Regex {
         if (!regex.startsWith('/')) {
             throw DataException('illegal regex ${regex}, regex must be format as /<REGEX>/ or /<REGEX>/i')
         }
@@ -37,7 +37,7 @@ internal class RegexFilter <: DataFilter {
             throw DataException('illegal regex ${regex}, regex must be format as /<REGEX>/ or /<REGEX>/i')
         }
     }
-    public func check(data: Data) {
+    public func check(data: Data): Bool {
         let d = match (left.get(data).next()) {
             case Some(x) => x
             case _ => return false

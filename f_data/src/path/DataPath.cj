@@ -198,7 +198,8 @@ abstract sealed class DataPath <: DataPathNode {
                     if (end <= i) {
                         throw DataException('illegal filter expression for data path, ${sub}')
                     }
-                    tokens += `lparen` + parseFilterTokens(sub[i..end], solid) + `rparen`
+                    tokens += `lparen` + parseFilterTokens(sub[i + 1..end], solid) + `rparen`
+                    i = end
                 case AT => for (e in i + 1..sub.size) {
                     let t = sub[e]
                     match (t.kind) {
@@ -292,7 +293,7 @@ abstract sealed class DataPath <: DataPathNode {
                             if (rs + 1 == re || sub[re].kind != DIV) {
                                 throw DataException('illegal regex in data path filter ${sub}')
                             }
-                            if (sub[re + 1].kind == IDENTIFIER && sub[re + 1].value == 'i') {
+                            if (re + 1 < sub.size && sub[re + 1].kind == IDENTIFIER && sub[re + 1].value == 'i') {
                                 re++
                             }
                             tokens += quote(RegexFilter($(sub[i .. e].toString()), $(sub[rs ..= re].toString()), 'false'))
@@ -302,22 +303,32 @@ abstract sealed class DataPath <: DataPathNode {
                             let (t, e) = parseSetOp(sub, i, e, quote(InFilter), solid)
                             tokens += t
                             i = e
+                            break
+                        case IDENTIFIER where t.value == 'in' && sub[e + 1].kind == LSQUARE =>
+                            let (t, e) = parseSetOp(sub, i, e, quote(InFilter), solid)
+                            tokens += t
+                            i = e
+                            break
                         case IDENTIFIER where t.value == 'nin' && sub[e + 1].kind == LSQUARE =>
                             let (t, e) = parseSetOp(sub, i, e, quote(NinFilter), solid)
                             tokens += t
                             i = e
+                            break
                         case IDENTIFIER where t.value == 'anyof' && sub[e + 1].kind == LSQUARE =>
                             let (t, e) = parseSetOp(sub, i, e, quote(AnyOfFilter), solid)
                             tokens += t
                             i = e
+                            break
                         case IDENTIFIER where t.value == 'subsetof' && sub[e + 1].kind == LSQUARE =>
                             let (t, e) = parseSetOp(sub, i, e, quote(SubSetOfFilter), solid)
                             tokens += t
                             i = e
+                            break
                         case IDENTIFIER where t.value == 'nooneof' && sub[e + 1].kind == LSQUARE =>
                             let (t, e) = parseSetOp(sub, i, e, quote(NoOneOfFilter), solid)
                             tokens += t
                             i = e
+                            break
                         case IDENTIFIER where t.value == 'size' && sub[e + 1].kind == INTEGER_LITERAL =>
                             tokens += quote(SizeFilter($(sub[i .. e].toString()), $(sub[e + 1].value), 'false'))
                             i = e + 1
@@ -326,8 +337,9 @@ abstract sealed class DataPath <: DataPathNode {
                         case _ => throw DataException('filter in data path ${sub} is illegal')
                     }
                 }
-                case BITAND where i > 0 => tokens += `bitand`
-                case BITOR where i > 0 => tokens += `bitor`
+                case NOT => tokens += quote(!)
+                case AND where i > 0 => tokens += quote(&&)
+                case OR where i > 0 => tokens += quote(||)
                 case _ => throw DataException('filter in data path ${sub} is illegal')
             }
             i++
@@ -341,13 +353,13 @@ abstract sealed class DataPath <: DataPathNode {
             arre = e
             break
         }
-        if (arrs + 1 == arre || sub[arre].kind == RSQUARE) {
-            throw DataException('illegal array in data path filter ${sub} for in expression')
+        if (arrs + 1 == arre) {
+            throw DataException('illegal empty array in data path filter ${sub} for in expression')
         }
-        let tokens = match (sub[arrs + 1].kind) {
-            case STRING_LITERAL | SINGLE_QUOTED_STRING_LITERAL => quote($(filter)<String>($(sub[i .. e].toString()), $(sub[arrs ..= arre].toString()), 'false'))
-            case INTEGER_LITERAL => quote($(filter)<Int64>($(sub[i .. e].toString()), $(sub[arrs ..= arre].toString()), 'false'))
-            case FLOAT_LITERAL => quote($(filter)<Float64>($(sub[i .. e].toString()), $(sub[arrs ..= arre].toString()), 'false'))
+            let tokens = match (sub[arrs + 1].kind) {
+            case STRING_LITERAL | SINGLE_QUOTED_STRING_LITERAL => quote($(filter)<String>($(sub[i .. e].toString()), $(sub[arrs + 1 .. arre].toString()), 'false'))
+            case INTEGER_LITERAL => quote($(filter)<Int64>($(sub[i .. e].toString()), $(sub[arrs + 1 .. arre].toString()), 'false'))
+            case FLOAT_LITERAL => quote($(filter)<Float64>($(sub[i .. e].toString()), $(sub[arrs + 1 .. arre].toString()), 'false'))
             case _ => throw DataException('illegal array element type in data path filter ${sub} for in expression')
         }
         (tokens, arre)
@@ -422,8 +434,8 @@ abstract sealed class DataPath <: DataPathNode {
                 }
             case x: ParenExpr => compileFilter(x.parenthesizedExpr)
             case x: UnaryExpr where x.op.kind == NOT => !compileFilter(x.expr)
-            case x: BinaryExpr where x.op.kind == BITAND => compileFilter(x.leftExpr) & compileFilter(x.rightExpr)
-            case x: BinaryExpr where x.op.kind == BITOR => compileFilter(x.leftExpr) | compileFilter(x.rightExpr)
+            case x: BinaryExpr where x.op.kind == AND => compileFilter(x.leftExpr) & compileFilter(x.rightExpr)
+            case x: BinaryExpr where x.op.kind == OR => compileFilter(x.leftExpr) | compileFilter(x.rightExpr)
             case _ => throw DataException('unreachable ${expr.toTokens()}')
         }
     }
@@ -451,6 +463,18 @@ abstract sealed class DataPath <: DataPathNode {
         while (i < path.size) {
             let node = if (i == 0 && path[i].kind == DOLLAR) {
                 RootPathNode.instance
+            } else if (path[i].kind == DOT && i + 3 < path.size && path[i + 1].kind == IDENTIFIER && path[i + 2].kind == LPAREN &&
+                path[i + 3].kind == RPAREN) {
+                let node: DataPathNode = match (path[i + 1].value) {
+                    case 'min' => MinPathNode.instance
+                    case 'max' => MaxPathNode.instance
+                    case 'avg' => AvgPathNode.instance
+                    case 'length' => LengthPathNode.instance
+                    case _ => throw DataException(
+                        'data path is illegal at index ${i}, path: ${path}, unsupported function call')
+                }
+                i += 3
+                node
             } else if (path[i].kind == DOT && path[i + 1].kind == IDENTIFIER) {
                 i++
                 SubPathNode(path[i].value)
@@ -472,18 +496,6 @@ abstract sealed class DataPath <: DataPathNode {
                 compileInSquares(subPath, solid)
             } else if (i == 0 && path[i].kind == AT) {
                 CurrentPathNode.instance
-            } else if (path[i].kind == DOT && path[i + 1].kind == IDENTIFIER && path[i + 2].kind == LPAREN &&
-                path[i + 3].kind == RPAREN) {
-                let node: DataPathNode = match (path[i + 1].value) {
-                    case 'min' => MinPathNode.instance
-                    case 'max' => MaxPathNode.instance
-                    case 'avg' => AvgPathNode.instance
-                    case 'length' => LengthPathNode.instance
-                    case _ => throw DataException(
-                        'data path is illegal at index ${i}, path: ${path}, unsupported function call')
-                }
-                i += 3
-                node
             } else {
                 throw DataException('data path is illegal at index ${i}, path: ${path}')
             }

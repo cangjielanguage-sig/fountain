@@ -15,7 +15,7 @@ limitations under the License.
  */
 package fountain::f_data.path
 
-internal class InFilter<T> <: DataFilter where T <: Hashable & Equatable<T> {
+internal class InFilter<T> <: DataFilter where T <: Hashable & Equatable<T> & ToString {
     InFilter(private let left: DataPath, private let right: HashSet<T>) {}
     init(left: String, right: String, solid: String) {
         this(compilePath(left, solid), parseHashSet<T>(right))
@@ -34,10 +34,13 @@ internal class InFilter<T> <: DataFilter where T <: Hashable & Equatable<T> {
                 case x: T => right.contains(x)
                 case _ => false
             }
-            case x: DataReal => match (x.data) {
-                case x: T => right.contains(x)
-                case _ => false
-            }
+            case x: DataReal =>
+                for (v in right) {
+                    if (x.data == Decimal.parse(v.toString())) {
+                        return true
+                    }
+                }
+                false
             case x: DataString => match (x.data) {
                 case x: T => right.contains(x)
                 case _ => false

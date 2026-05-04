@@ -29,7 +29,13 @@ internal class RecursiveDescentIterator <: Iterator<Data> {
     public func next(): ?Data {
         while (true) {
             if (let Some(x) <- itr.next()) {
-                append(x)
+                // Only descend into containers (lists, objects), not scalars
+                match (x) {
+                    case _: Iterable<Data> => append(x)
+                    case _: Iterable<(String, Data)> => append(x)
+                    case _: Iterable<(Data, Data)> => append(x)
+                    case _ => ()
+                }
                 return x
             } else if (let Some(i) <- list.removeFirst()) {
                 itr = i.iterator()

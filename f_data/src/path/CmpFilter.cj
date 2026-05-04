@@ -15,7 +15,7 @@ limitations under the License.
  */
 package fountain::f_data.path
 
-internal class CmpFilter<T> <: DataFilter where T <: Comparable<T> {
+internal class CmpFilter<T> <: DataFilter where T <: Comparable<T> & ToString {
     CmpFilter(private let left: DataPath, private let right: T, private let ordering: Ordering, private let eq: Bool) {}
     init(left: String, right: String, orderingStr: String, eqStr: String, solid: String) {
         this(compilePath(left, solid), parse<T>(right),
@@ -45,12 +45,10 @@ internal class CmpFilter<T> <: DataFilter where T <: Comparable<T> {
                     cmp == ordering || (eq && cmp == EQ)
                 case _ => false
             }
-            case x: DataReal => match (x.data) {
-                case x: T =>
-                    let cmp = x.compare(right)
-                    cmp == ordering || (eq && cmp == EQ)
-                case _ => false
-            }
+            case x: DataReal =>
+                let dRight = Decimal.parse(right.toString())
+                let cmp = x.data.compare(dRight)
+                cmp == ordering || (eq && cmp == EQ)
             case x: DataString => match (x.data) {
                 case x: T =>
                     let cmp = x.compare(right)
