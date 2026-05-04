@@ -152,7 +152,19 @@ class NodeManagerTest {
         nodes.add(makeNode('10.0.0.1', 1203))
         nodes.add(makeNode('10.0.0.2', 1203))
         let nm = NodeManager(nodes, 0)
-        // alive=nodeCount=2, quorum = 2 > 2/2 = 1 => true
+        // alive 初始值为 nodes.size=2, quorum=2 > 1 => true
+        @Assert(nm.canServeWrites())
+    }
+
+    @TestCase
+    func singleNodeDoesNotSpawnHealthCheck(): Unit {
+        // 单节点：allOthers() 为空，不 spawn 健康检查线程
+        let nodes = ArrayList<HostAndPort>()
+        nodes.add(makeNode('10.0.0.1', 1203))
+        let nm = NodeManager(nodes, 0)
+        @Assert(nm.canServeWrites())
+        // 没有其他节点可 ping，alive 保持初始值
+        sleep(Duration.millisecond * 100)
         @Assert(nm.canServeWrites())
     }
 }
