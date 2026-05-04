@@ -108,17 +108,15 @@ public class SyncClient {
     }
 
     public func prefix(pattern: String): ScanResult {
-        requireAbsolutePath(pattern)
-        let req = Message(Command.ACK, PatternData(pattern).toData())
-        if (let Some(resp) <- client.transfer(req.id, req, requestTimeout) &&
-            let Some(vd) <- convert<ValueData>(resp.data) &&
-            let Some(blob) <- vd.value) {
-            return ScanResult.decodeFromBytes(blob)
-        }
-        ScanResult()
+        scan(pattern)
     }
 
     public func glob(pattern: String): ScanResult {
+        scan(pattern)
+    }
+
+    /** prefix 和 glob 的底层实现：发送 PatternData，解码 ValueData blob */
+    private func scan(pattern: String): ScanResult {
         requireAbsolutePath(pattern)
         let req = Message(Command.ACK, PatternData(pattern).toData())
         if (let Some(resp) <- client.transfer(req.id, req, requestTimeout) &&

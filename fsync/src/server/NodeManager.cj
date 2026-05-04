@@ -41,14 +41,18 @@ public class NodeManager {
             let aliveRef = this.alive
             spawn {
                 while (true) {
-                    sleep(Duration.second * 5)
-                    var count = 1i64  // 自己总是存活
-                    for (node in others) {
-                        if (pingNode(node.host, node.port)) {
-                            count++
+                    try {
+                        sleep(Duration.second * 5)
+                        var count = 1i64  // 自己总是存活
+                        for (node in others) {
+                            if (pingNode(node.host, node.port)) {
+                                count++
+                            }
                         }
+                        aliveRef.store(count)
+                    } catch (_: Exception) {
+                        // 异常不中断健康检查线程
                     }
-                    aliveRef.store(count)
                 }
             }
         }
