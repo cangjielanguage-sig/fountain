@@ -6,28 +6,32 @@
 ---
 
 ### Step 1: 数组切片缺省值 + 负步长 ✅
-- 21/21 基本测试通过
 - RangePathNode 改为三个字段 (start/end/step)
-- 支持 [n:m], [:n], [n:], [:], [n:m:step], [4:0:-1], [0:3:0]
+- 支持 [n:m], [:n], [n:], [:], [n:m:step], [4:0:-1], [::-1], [0:3:0]
 
 ### Step 2: `..[*]` 完整语法 ✅
-- `..*`: 自动消费后续 MUL 标记
-- `..name`: IDENTIFIER 紧跟 RANGEOP 时转为 SubPathNode
-- `..[selectors]`: RANGEOP/DOT 作为 LSQUARE 的前驱标记
+- `..*`: 自动消费后续 MUL
+- `..name`: IDENTIFIER 紧跟 RANGEOP → SubPathNode
+- `..[selectors]`: RANGEOP/DOT 作为 LSQUARE 前驱
 
 ### Step 3: 存在性测试 ✅
-- 新建 `ExistsFilter`
-- `?(@.name)` 作为布尔测试（路径返回非空=true）
+- ExistsFilter: `?(@.name)` 路径返回非空=true
 
 ### Step 4: `null` 字面量过滤 ✅
-- 新建 `NullFilter`
-- 支持 `?(@.name == null)`, `?(@.name != null)`
+- NullFilter: `?(@.name == null)`, `?(@.name != null)`
 
-### 全部测试结果：51/51 通过 ✅
+### Step 5: 函数扩展 count/match/search/value ✅
+- CountPathNode, ValuePathNode 路径函数
+- MatchFilter, SearchFilter filter 函数
 
-| 套件 | 通过 |
-|------|------|
-| DataPath_basic_test | 21 |
-| DataPath_filter_test | 19 |
-| DataPath_recursive_test | 7 |
-| DataPath_compile_error_test | 3 |
+### 全部测试：56/56 通过 ✅
+
+---
+
+### 未覆盖的 RFC 9535 特性
+
+参见 `f_data/doc/RFC9535_GAPS.md`
+
+**P1**: 标准化路径 (Normalized Paths)
+**P2**: filter 内 count/value 比较、null 集合运算
+**P3**: I-JSON 范围校验、结构相等、复杂函数表达式、length() 函数语法
