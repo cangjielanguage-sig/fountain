@@ -48,6 +48,7 @@ public class HashRing {
     }
 
     public func getNextNode(key: String, exclude: Int64): ?HostAndPort {
+        if (ring.size == 0) { return None }
         let hash = murmurHash(key)
         let visited = HashSet<Int64>()
         let it = ring.forward(hash, inclusive: true)
@@ -56,13 +57,15 @@ public class HashRing {
                 return nodes[idx]
             }
         }
-        let it2 = ring.forward(ring.first.getOrThrow()[0], inclusive: true)
-        for ((_, idx) in it2) {
-            if (idx != exclude && visited.add(idx)) {
-                return nodes[idx]
-            }
-            if (visited.size >= nodes.size) {
-                break
+        if (let Some((firstKey, _)) <- ring.first) {
+            let it2 = ring.forward(firstKey, inclusive: true)
+            for ((_, idx) in it2) {
+                if (idx != exclude && visited.add(idx)) {
+                    return nodes[idx]
+                }
+                if (visited.size >= nodes.size) {
+                    break
+                }
             }
         }
         None

@@ -16,6 +16,7 @@ limitations under the License.
 package fountain::fsync.client
 
 import std.io.ByteBuffer
+import std.sync.Mutex
 import fountain::f_codec.default.DefaultCodec
 import fountain::f_data.*
 import fountain::f_log.*
@@ -28,6 +29,7 @@ import fountain::fsync.exception.{WriteFailedException, InvalidKeyException}
 public class SyncClient {
     private static let log = LoggerFactory.getLogger('fountain::fsync.SyncClient')
     private static var instance: ?SyncClient = None
+    private static let instanceLock = Mutex()
 
     private let requestTimeout: Duration
     private let client: Client<Message, EncodedMessage, Message, SyncData, MessageID>
@@ -39,26 +41,28 @@ public class SyncClient {
 
     /** 获取全局唯一的 SyncClient 实例（连接 sync_hosts 的第一个节点） */
     public static func getInstance(requestTimeout!: Duration = Duration.second * 10): SyncClient {
-        if (let Some(inst) <- instance) {
-            return inst
+        synchronized(instanceLock) {
+            if (let Some(inst) <- instance) {
+                return inst
+            }
+            let hostsArr = SyncConfig.getHosts()
+            if (hostsArr.size == 0) {
+                throw InvalidKeyException('sync_hosts is required')
+            }
+            let host = hostsArr[0]
+            let client = Client<Message, EncodedMessage, Message, SyncData, MessageID>.builder(
+                queueSize: 1024,
+                socketCount: 1,
+                host: host.host,
+                port: host.port,
+                idGetter: { msg => msg.id },
+                checkDuration: Duration.second * 30,
+                checker: { buffer => true }
+            ).noDelay(true).build()
+            let inst = SyncClient(client, requestTimeout)
+            instance = inst
+            inst
         }
-        let hostsArr = SyncConfig.getHosts()
-        if (hostsArr.size == 0) {
-            throw InvalidKeyException('sync_hosts is required')
-        }
-        let host = hostsArr[0]
-        let client = Client<Message, EncodedMessage, Message, SyncData, MessageID>.builder(
-            queueSize: 1024,
-            socketCount: 1,
-            host: host.host,
-            port: host.port,
-            idGetter: { msg => msg.id },
-            checkDuration: Duration.second * 30,
-            checker: { buffer => true }
-        ).noDelay(true).build()
-        let inst = SyncClient(client, requestTimeout)
-        instance = inst
-        inst
     }
 
     public func get<T>(key: String): ?T where T <: DataFields<T> {

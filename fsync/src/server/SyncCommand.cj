@@ -64,7 +64,7 @@ public class SyncCommand <: SubCommand {
         // 6. 在后台校验集群配置一致性
         let cfgHosts = hostsStr
         spawn {
-            validateClusterConfig(cfgHosts)
+            validateClusterConfig(cfgHosts, store, server, watchManager)
         }
 
         // 7. 阻塞主线程
@@ -76,7 +76,7 @@ public class SyncCommand <: SubCommand {
     }
 
     /** 校验集群各节点的 sync_hosts 配置是否一致 */
-    private static func validateClusterConfig(localConfig: String): Unit {
+    private static func validateClusterConfig(localConfig: String, store: Store, server: SyncServer, watchManager: WatchManager): Unit {
         sleep(Duration.second)  // 等待其他节点启动
         try {
             let client = SyncClient.getInstance()
@@ -94,6 +94,9 @@ public class SyncCommand <: SubCommand {
                         eprintln('order. The current process will now exit.')
                         eprintln('====================================================')
                         eprintln('')
+                        try { store.close() } catch (_: Exception) {}
+                        try { server.close() } catch (_: Exception) {}
+                        try { watchManager.close() } catch (_: Exception) {}
                         exit(1)
                     }
                     return  // 验证通过

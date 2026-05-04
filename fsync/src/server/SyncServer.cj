@@ -15,12 +15,14 @@ limitations under the License.
 */
 package fountain::fsync.server
 
+import fountain::f_log.*
 import fountain::f_net.*
 import fountain::f_net.server.*
 import fountain::f_protocol.default.*
 import fountain::fsync.base.SyncData
 
 public class SyncServer <: Resource {
+    private static let log = LoggerFactory.getLogger('fountain::fsync.SyncServer')
     private let server: Server<Message, EncodedMessage, Message, SyncData>
 
     public init(bindPort: UInt16, queueSize!: Int64 = 1024,
@@ -36,7 +38,11 @@ public class SyncServer <: Resource {
 
     public func start(handler: SyncHandler): Future<Unit> {
         spawn {
-            server.start({ msg => handler.handle(msg) })
+            try {
+                server.start({ msg => handler.handle(msg) })
+            } catch (e: Exception) {
+                log.error('server start failed: ${e.message}')
+            }
         }
     }
 
