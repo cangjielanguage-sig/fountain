@@ -1,8 +1,8 @@
 # RFC 9535 覆盖清单
 
 > 实现 branch: `feature/datapath`
-> 测试: **63/63 通过** (21 basic + 30 filter + 9 recursive + 3 compile error)
-> 文件: 18 个新文件 + 7 个修改文件
+> 测试: **71/71 通过** (21 basic + 35 filter + 9 recursive + 3 compile error + 5 object eq)
+> 文件: 19 个新文件 + 7 个修改文件
 
 ---
 
@@ -115,6 +115,18 @@
 | `size` | `SizeFilter` | `testFilterSize` |
 | `min()` / `max()` / `avg()` | 路径函数 | `testFunctionMin/Max/Avg` |
 
+### 11. 结构相等 (Structural Equality)
+
+| 语法 | 实现 | 测试 |
+|------|------|------|
+| `@.* == [1, 2, 3]` 数组字面量 | `StructEqFilter` | `testFilterArrayEq` |
+| `@.* != [1, 2, 3]` 数组不等 | `StructEqFilter` | `testFilterArrayNotEq` |
+| `@ == {"a": 1}` 对象字面量 | `ObjectEqFilter` | `testFilterObjectEq` |
+| `@ != {"a": 1}` 对象不等 | `ObjectEqFilter` | `testFilterObjectNotEq` |
+| 对象含嵌套数组值 | `ObjectEqFilter` | `testFilterObjectEqNestedArray` |
+| 对象含嵌套对象值 | `ObjectEqFilter` | `testFilterObjectEqNestedObject` |
+| 对象含 bool/null 值 | `ObjectEqFilter` | `testFilterObjectEqBoolAndNull` |
+
 ### 11. 边界行为 (Edge Cases)
 
 | 行为 | RFC | 实现 |
@@ -133,7 +145,6 @@
 | 特性 | 说明 |
 |------|------|
 | 标准化路径 (Normalized Paths) §8 | 未实现。需要为匹配节点生成 `$['name'][0]` 形式路径 |
-| 对象/数组结构相等 | 未实现。需要 parser 支持数组/对象字面量 |
 | 复杂函数表达式 | 仅单层函数调用，不支持嵌套 `match(x, search(...))` |
 
 ---
@@ -183,17 +194,18 @@
 | `ValuePathNode.cj` | `$.value()` 路径函数 | ~30 |
 | `MatchFilter.cj` | `match()` 函数 | ~42 |
 | `SearchFilter.cj` | `search()` 函数 | ~42 |
+| `ObjectEqFilter.cj` | `{"k": v}` 对象结构相等 | ~202 |
 
 ### 测试文件
 
 | 文件 | 测试数 |
 |------|--------|
-| `DataPath_test.cj` | 63 |
+| `DataPath_test.cj` | 71 |
 
 ---
 
 ## git 分支
 
 ```
-feature/datapath — 17 commits, ±2000 lines changed
+feature/datapath — 19 commits, ~2200 lines changed
 ```
