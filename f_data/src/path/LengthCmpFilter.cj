@@ -50,6 +50,10 @@ internal class LengthCmpFilter <: DataFilter {
         let len = computeLen(d)
         if (len < 0) { return false }
         let cmp = if (len < right) { Ordering.LT } else if (len > right) { Ordering.GT } else { Ordering.EQ }
-        cmp == ordering || (eq && cmp == Ordering.EQ)
+        if (ordering == Ordering.EQ && !eq) {
+            cmp != Ordering.EQ
+        } else {
+            cmp == ordering || (eq && cmp == Ordering.EQ)
+        }
     }
 }

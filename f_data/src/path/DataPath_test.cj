@@ -712,6 +712,37 @@ public class DataPath_filter_test {
     }
 
     @TestCase
+    public func testFilterCountNotEq(): Unit {
+        let p1 = makePerson("Alice", 30)
+        let p2 = makePerson("Bob", 25)
+        let l3 = DataList()
+        l3.add(p1); l3.add(p2); l3.add(TestObj())
+        let l1 = DataList()
+        l1.add(p1)
+        let outer = DataList()
+        outer.add(l1)
+        outer.add(l3)
+        let path = DataPath.cache("$[?(count(@.*) != 3)]")
+        let results = collect(path.get(outer))
+        @Assert(1, results.size)  // l1 has 1 element, not 3
+    }
+
+    @TestCase
+    public func testFilterMatchOrCmp(): Unit {
+        let p1 = makePerson("Alice", 30)
+        let p2 = makePerson("Bob", 25)
+        let p3 = makePerson("Charlie", 35)
+        let list = DataList()
+        list.add(p1)
+        list.add(p2)
+        list.add(p3)
+        // match(@.name, "Alice") || @.age > 30 → Alice matches, Charlie has age=35
+        let path = DataPath.cache("$[?(match(@.name, 'Alice') || @.age > 30)]")
+        let results = collect(path.get(list))
+        @Assert(2, results.size)
+    }
+
+    @TestCase
     public func testFilterInNull(): Unit {
         let p1 = makePerson("Alice", 30)
         let p2 = makePerson("Bob", 25)

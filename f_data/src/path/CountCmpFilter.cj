@@ -38,6 +38,11 @@ internal class CountCmpFilter <: DataFilter {
             count++
         }
         let cmp = if (count < right) { Ordering.LT } else if (count > right) { Ordering.GT } else { Ordering.EQ }
-        cmp == ordering || (eq && cmp == Ordering.EQ)
+        // NOTEQ: ordering=EQ, eq=false → return cmp != EQ
+        if (ordering == Ordering.EQ && !eq) {
+            cmp != Ordering.EQ
+        } else {
+            cmp == ordering || (eq && cmp == Ordering.EQ)
+        }
     }
 }
