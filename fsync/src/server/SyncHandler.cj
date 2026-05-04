@@ -20,6 +20,8 @@ import std.collection.ArrayList
 import std.sync.AtomicInt64
 import fountain::f_base.*
 import fountain::f_data.*
+import fountain::f_log.*
+import fountain::f_net.client.*
 import fountain::f_protocol.default.*
 import fountain::f_store.Store
 import fountain::f_util.PathPattern
@@ -28,6 +30,7 @@ import fountain::fsync.base.{SyncData, KeyData, ValueData, WatchData, PatternDat
 private let VERSION_SUFFIX = '_version'.unsafeBytes()
 
 public class SyncHandler {
+    private static let log = LoggerFactory.getLogger('fountain::fsync.SyncHandler')
     private let store: Store
     private let nodeManager: NodeManager
     private let watchManager: WatchManager
@@ -197,7 +200,33 @@ public class SyncHandler {
     }
 
     private func asyncPublish(key: String, version: Int64, value: Array<Byte>): Unit {
-        let _ = nodeManager.allOthers()
+        let others = nodeManager.allOthers()
+        if (others.size == 0) { return }
+        for (node in others) {
+            let peerKey = key
+            let peerVersion = version
+            let peerValue = value
+            spawn {
+                try {
+                    let c = Client<Message, EncodedMessage, Message, SyncData, MessageID>.builder(
+                        queueSize: 64,
+                        socketCount: 1,
+                        host: node.host,
+                        port: node.port,
+                        idGetter: { msg => msg.id },
+                        checkDuration: Duration.second * 10,
+                        checker: { buf => true }
+                    ).noDelay(true).build()
+                    let msg = Message(Command.PUBLISH(0), SyncData(peerKey, peerVersion, peerValue).toData())
+                    if (c.transfer(msg.id, msg, Duration.second * 3).isNone()) {
+                        log.warn('publish to ${node.host}:${node.port} timed out')
+                    }
+                    c.close()
+                } catch (e: Exception) {
+                    log.warn('publish to ${node.host}:${node.port} failed: ${e.message}')
+                }
+            }
+        }
     }
 
     private func readLocalVersion(key: Array<Byte>): Int64 {

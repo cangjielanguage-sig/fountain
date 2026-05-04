@@ -217,6 +217,17 @@ class ClientOperationsTest {
     }
 
     @TestCase
+    func testRegisterTriggersAsyncPublish(): Unit {
+        let (store, handler) = setup('/tmp/fsync_op/publish_trigger')
+        // 单节点配置：allOthers() 为空，asyncPublish 直接返回，
+        // 验证 REGISTER 流程中 asyncPublish 不会崩溃
+        let resp = handler.handle(Message(Command.REGISTER, SyncData('/app/key', 0, [1u8]).toData()))
+        @Assert(match (resp.command) { case RESP(_) => true case _ => false })
+        store.close()
+        cleanup('/tmp/fsync_op/publish_trigger')
+    }
+
+    @TestCase
     func testPrefixScanEmptyReturnsEmptyResult(): Unit {
         let (store, handler) = setup('/tmp/fsync_op/prefix_empty')
         let _ = handler.handle(Message(Command.REGISTER, SyncData('/app/a', 0, [1u8]).toData()))
