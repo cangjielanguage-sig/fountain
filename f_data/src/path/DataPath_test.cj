@@ -533,6 +533,48 @@ public class DataPath_filter_test {
         let results = collect(path.get(list))
         @Assert(1, results.size)
     }
+
+    @TestCase
+    public func testFilterExists(): Unit {
+        let p1 = makePerson("Alice", 30)
+        let p2 = makePerson("Bob", 25)
+        let p3 = TestObj()
+        let list = DataList()
+        list.add(p1)
+        list.add(p2)
+        list.add(p3)  // p3 has no name set
+        let path = DataPath.cache("$[?(@.name)]")
+        let results = collect(path.get(list))
+        @Assert(2, results.size)
+    }
+
+    @TestCase
+    public func testFilterExistsAnd(): Unit {
+        let p1 = makePerson("Alice", 30)
+        let p2 = makePerson("Bob", 25)
+        let p3 = TestObj()
+        let list = DataList()
+        list.add(p1)
+        list.add(p2)
+        list.add(p3)
+        let path = DataPath.cache("$[?(@.name && @.age)]")
+        let results = collect(path.get(list))
+        @Assert(2, results.size)
+    }
+
+    @TestCase
+    public func testFilterNotExists(): Unit {
+        let p1 = makePerson("Alice", 30)
+        let p2 = makePerson("Bob", 25)
+        let p3 = TestObj()
+        let list = DataList()
+        list.add(p1)
+        list.add(p2)
+        list.add(p3)
+        let path = DataPath.cache("$[?(!(@.name))]")
+        let results = collect(path.get(list))
+        @Assert(1, results.size)
+    }
 }
 
 @Test

@@ -204,9 +204,12 @@ abstract sealed class DataPath <: DataPathNode {
                     }
                     tokens += `lparen` + parseFilterTokens(sub[i + 1..end], solid) + `rparen`
                     i = end
-                case AT => for (e in i + 1..sub.size) {
-                    let t = sub[e]
-                    match (t.kind) {
+                case AT =>
+                    let savedI = i
+                    var pathEnd = sub.size
+                    for (e in i + 1..sub.size) {
+                        let t = sub[e]
+                        match (t.kind) {
                         case EQUAL where sub[e + 1].kind == STRING_LITERAL || sub[e + 1].kind == SINGLE_QUOTED_STRING_LITERAL =>
                             tokens += quote(EqFilter<String>($(sub[i .. e].toString()), $(sub[e + 1].value), $(if (solid) { "true" } else { "false" })))
                             i = e + 1
@@ -339,8 +342,15 @@ abstract sealed class DataPath <: DataPathNode {
                             i = e + 1
                             break
                         case DOT | IDENTIFIER => continue
-                        case _ => throw DataException('filter in data path ${sub} is illegal')
+                        case _ =>
+                            pathEnd = e
+                            break
                     }
+                }
+                if (i == savedI) {
+                    // RFC 9535 existence test: @.path without operator
+                    tokens += quote(ExistsFilter($(concatTokenValues(sub[i .. pathEnd])), 'false'))
+                    i = pathEnd - 1
                 }
                 case NOT => tokens += quote(!)
                 case AND where i > 0 => tokens += quote(&&)
@@ -397,7 +407,7 @@ abstract sealed class DataPath <: DataPathNode {
                 let tokens = x.toTokens()
                 let filter = tokens[0].value
                 let generic = tokens[2].value
-                let args = tokens[if (filter == 'RegexFilter' || filter == 'SizeFilter') {
+                let args = tokens[if (filter == 'RegexFilter' || filter == 'SizeFilter' || filter == 'ExistsFilter') {
                         2
                     } else {
                         5
@@ -435,6 +445,7 @@ abstract sealed class DataPath <: DataPathNode {
                     case ('NoOneOfFilter', 'Int64') => NoOneOfFilter<Int64>(arg(args, 0), arg(args, 1), arg(args, 2))
                     case ('NoOneOfFilter', 'Float64') => NoOneOfFilter<Float64>(arg(args, 0), arg(args, 1), arg(args, 2))
                     case ('SizeFilter', _) => SizeFilter(arg(args, 0), arg(args, 1), arg(args, 2))
+                    case ('ExistsFilter', _) => ExistsFilter(arg(args, 0), arg(args, 1))
                     case _ => throw DataException('unreachable ${tokens}')
                 }
             case x: ParenExpr => compileFilter(x.parenthesizedExpr)
