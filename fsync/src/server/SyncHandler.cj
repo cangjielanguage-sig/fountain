@@ -27,10 +27,9 @@ import fountain::f_store.Store
 import fountain::f_util.PathPattern
 import fountain::fsync.base.{SyncData, KeyData, ValueData, WatchData, PatternData, ScanResult}
 
-private let VERSION_SUFFIX = '_version'.unsafeBytes()
-
 public class SyncHandler {
     private static let log = LoggerFactory.getLogger('fountain::fsync.SyncHandler')
+    private static let VERSION_SUFFIX = '_version'.unsafeBytes()
     private let store: Store
     private let nodeManager: NodeManager
     private let watchManager: WatchManager
@@ -59,14 +58,8 @@ public class SyncHandler {
     }
 
     private func handleRegister(req: Message): Message {
-        if (!nodeManager.canServeWrites()) {
-            return errorResp(req.id, 'quorum not met')
-        }
         if (let Some(d) <- convert<SyncData>(req.data)) {
-            if (!nodeManager.isOwner(d.key)) {
-                return errorResp(req.id, 'not the owner node for key: ${d.key}')
-            }
-            doRegister(req.id, d)
+            checkWriteAccess(req, d.key) ?? doRegister(req.id, d)
         } else {
             errorResp(req.id, 'invalid REGISTER payload')
         }
@@ -83,17 +76,22 @@ public class SyncHandler {
     }
 
     private func handleDeregister(req: Message): Message {
-        if (!nodeManager.canServeWrites()) {
-            return errorResp(req.id, 'quorum not met')
-        }
         if (let Some(d) <- convert<KeyData>(req.data)) {
-            if (!nodeManager.isOwner(d.key)) {
-                return errorResp(req.id, 'not the owner node')
-            }
-            doDeregister(req.id, d)
+            checkWriteAccess(req, d.key) ?? doDeregister(req.id, d)
         } else {
             errorResp(req.id, 'invalid DEREGISTER payload')
         }
+    }
+
+    /** 检查写入权限：仲裁 + Owner。返回 None 表示通过，Some(msg) 表示拒绝原因 */
+    private func checkWriteAccess(req: Message, key: String): ?Message {
+        if (!nodeManager.canServeWrites()) {
+            return errorResp(req.id, 'quorum not met')
+        }
+        if (!nodeManager.isOwner(key)) {
+            return errorResp(req.id, 'not the owner node for key: ${key}')
+        }
+        None
     }
 
     private func doDeregister(id: MessageID, d: KeyData): Message {

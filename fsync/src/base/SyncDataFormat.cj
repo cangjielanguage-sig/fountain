@@ -114,19 +114,6 @@ public class KeyData {
     }
 }
 
-// 扫描结果条目
-@DataAssist[props fields]
-public class ScanEntry {
-    private var key: String = ''
-    private var value: Array<Byte> = []
-
-    public init() {}
-    public init(key: String, value: Array<Byte>) {
-        this.key = key
-        this.value = value
-    }
-}
-
 // 扫描结果列表（避免 ArrayList<ScanEntry> 泛型编解码问题）
 @DataAssist[props fields]
 public class ScanResult {
