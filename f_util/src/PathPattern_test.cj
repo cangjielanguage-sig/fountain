@@ -183,4 +183,98 @@ public class PathPattern_test {
         @Assert(true, pattern.matches("/app/.yaml"))
         @Assert(false, pattern.matches("/other/app/test.yaml"))
     }
+
+    @TestCase
+    public func testStarMatchesZeroChars(): Unit {
+        let pattern = PathPattern()
+        pattern.compile("/app/config/*/host")
+        @Assert(true, pattern.matches("/app/config/db/host"))
+        @Assert(false, pattern.matches("/app/config/host"))
+        @Assert(false, pattern.matches("/app/config/db/extra/host"))
+    }
+
+    @TestCase
+    public func testSingleCharWildcard(): Unit {
+        let pattern = PathPattern()
+        pattern.compile("/app/?onfig/*")
+        @Assert(true, pattern.matches("/app/config/db"))
+        @Assert(true, pattern.matches("/app/aonfig/host"))
+        let pattern2 = PathPattern()
+        pattern2.compile("/app/?/?")
+        @Assert(true, pattern2.matches("/app/a/b"))
+        @Assert(false, pattern2.matches("/app/ab/c"))
+        @Assert(false, pattern2.matches("/app/a//"))
+    }
+
+    @TestCase
+    public func testDoubleStarAtStart(): Unit {
+        let pattern = PathPattern()
+        pattern.compile("/**/host.yaml")
+        @Assert(true, pattern.matches("/host.yaml"))
+        @Assert(true, pattern.matches("/app/host.yaml"))
+        @Assert(true, pattern.matches("/app/config/db/host.yaml"))
+        @Assert(false, pattern.matches("/app/config/db/host.txt"))
+    }
+
+    @TestCase
+    public func testDoubleStarInMiddleOnly(): Unit {
+        let pattern = PathPattern()
+        pattern.compile("/data/**/summary")
+        @Assert(true, pattern.matches("/data/summary"))
+        @Assert(true, pattern.matches("/data/a/b/summary"))
+        @Assert(true, pattern.matches("/data/x/y/z/summary"))
+        @Assert(false, pattern.matches("/data/summary/extra"))
+        @Assert(false, pattern.matches("/other/data/summary"))
+    }
+
+    @TestCase
+    public func testMultipleStarsInSegment(): Unit {
+        let pattern = PathPattern()
+        pattern.compile("/app/*-*.yaml")
+        @Assert(true, pattern.matches("/app/config-db.yaml"))
+        @Assert(true, pattern.matches("/app/-.yaml"))
+        @Assert(false, pattern.matches("/app/.yaml"))
+        @Assert(false, pattern.matches("/app/config/db/config-db.yaml"))
+    }
+
+    @TestCase
+    public func testQuestionWithStar(): Unit {
+        let pattern = PathPattern()
+        pattern.compile("/app/??-*.yaml")
+        @Assert(true, pattern.matches("/app/ab-config.yaml"))
+        @Assert(true, pattern.matches("/app/xy-1.yaml"))
+        @Assert(false, pattern.matches("/app/a-config.yaml"))
+        @Assert(false, pattern.matches("/app/abc-config.yaml"))
+    }
+
+    @TestCase
+    public func testDoubleStarStarJava(): Unit {
+        let pattern = PathPattern()
+        pattern.compile("/src/**/*.java")
+        @Assert(true, pattern.matches("/src/Main.java"))
+        @Assert(true, pattern.matches("/src/main/Util.java"))
+        @Assert(true, pattern.matches("/src/a/b/c/Test.java"))
+        @Assert(false, pattern.matches("/src/Main.kt"))
+        @Assert(false, pattern.matches("/other/src/Main.java"))
+    }
+
+    @TestCase
+    public func testStarAtEnd(): Unit {
+        let pattern = PathPattern()
+        pattern.compile("/app/config/*")
+        @Assert(true, pattern.matches("/app/config/db"))
+        @Assert(true, pattern.matches("/app/config/host.yaml"))
+        @Assert(true, pattern.matches("/app/config/123"))
+        @Assert(false, pattern.matches("/app/config/db/host"))
+        @Assert(false, pattern.matches("/other/config/db"))
+    }
+
+    @TestCase
+    public func testExactMatchNoWildcards(): Unit {
+        let pattern = PathPattern()
+        pattern.compile("/app/config/db/host")
+        @Assert(true, pattern.matches("/app/config/db/host"))
+        @Assert(false, pattern.matches("/app/config/db/host/extra"))
+        @Assert(false, pattern.matches("/app/config/db"))
+    }
 }

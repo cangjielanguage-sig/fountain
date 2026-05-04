@@ -343,6 +343,94 @@ class SyncHandlerStoreTest {
         cleanup(dir)
     }
 
+    @TestCase
+    func globStarAtEnd(): Unit {
+        let dir = '/tmp/fsync_test/glob_star_end'
+        cleanup(dir)
+        let store = Store(dir)
+        let nm = NodeManager(ArrayList<HostAndPort>([HostAndPort('127.0.0.1:1203')]), 0)
+        let wm = WatchManager()
+        let handler = SyncHandler(store, nm, wm)
+        let _ = handler.handle(Message(Command.REGISTER, SyncData('/app/config/db', 0, [1u8]).toData()))
+        let _ = handler.handle(Message(Command.REGISTER, SyncData('/app/config/host.yaml', 0, [2u8]).toData()))
+        let pp = PathPattern()
+        pp.compile('/app/config/*.yaml')
+        var matched = 0i64
+        for ((k, _) in store.prefix([])) {
+            if (pp.matches(String.fromUtf8(k))) { matched++ }
+        }
+        @Assert(matched == 1)
+        store.close()
+        cleanup(dir)
+    }
+
+    @TestCase
+    func globDoubleStarAtStart(): Unit {
+        let dir = '/tmp/fsync_test/glob_ds_start'
+        cleanup(dir)
+        let store = Store(dir)
+        let nm = NodeManager(ArrayList<HostAndPort>([HostAndPort('127.0.0.1:1203')]), 0)
+        let wm = WatchManager()
+        let handler = SyncHandler(store, nm, wm)
+        let _ = handler.handle(Message(Command.REGISTER, SyncData('/host.yaml', 0, [1u8]).toData()))
+        let _ = handler.handle(Message(Command.REGISTER, SyncData('/app/host.yaml', 0, [2u8]).toData()))
+        let _ = handler.handle(Message(Command.REGISTER, SyncData('/app/config/db/host.yaml', 0, [3u8]).toData()))
+        let pp = PathPattern()
+        pp.compile('/**/host.yaml')
+        var matched = 0i64
+        for ((k, _) in store.prefix([])) {
+            if (pp.matches(String.fromUtf8(k))) { matched++ }
+        }
+        @Assert(matched == 3)
+        store.close()
+        cleanup(dir)
+    }
+
+    @TestCase
+    func globQuestionMark(): Unit {
+        let dir = '/tmp/fsync_test/glob_qmark'
+        cleanup(dir)
+        let store = Store(dir)
+        let nm = NodeManager(ArrayList<HostAndPort>([HostAndPort('127.0.0.1:1203')]), 0)
+        let wm = WatchManager()
+        let handler = SyncHandler(store, nm, wm)
+        let _ = handler.handle(Message(Command.REGISTER, SyncData('/app/config/db.yaml', 0, [1u8]).toData()))
+        let _ = handler.handle(Message(Command.REGISTER, SyncData('/app/aonfig/db.yaml', 0, [2u8]).toData()))
+        let _ = handler.handle(Message(Command.REGISTER, SyncData('/app/onfig/db.yaml', 0, [3u8]).toData()))
+        let pp = PathPattern()
+        pp.compile('/app/?onfig/*.yaml')
+        var matched = 0i64
+        for ((k, _) in store.prefix([])) {
+            if (pp.matches(String.fromUtf8(k))) { matched++ }
+        }
+        @Assert(matched == 2)
+        store.close()
+        cleanup(dir)
+    }
+
+    @TestCase
+    func globJavaSource(): Unit {
+        let dir = '/tmp/fsync_test/glob_java'
+        cleanup(dir)
+        let store = Store(dir)
+        let nm = NodeManager(ArrayList<HostAndPort>([HostAndPort('127.0.0.1:1203')]), 0)
+        let wm = WatchManager()
+        let handler = SyncHandler(store, nm, wm)
+        let _ = handler.handle(Message(Command.REGISTER, SyncData('/src/Main.java', 0, [1u8]).toData()))
+        let _ = handler.handle(Message(Command.REGISTER, SyncData('/src/main/Util.java', 0, [2u8]).toData()))
+        let _ = handler.handle(Message(Command.REGISTER, SyncData('/src/a/b/c/Test.java', 0, [3u8]).toData()))
+        let _ = handler.handle(Message(Command.REGISTER, SyncData('/src/Main.kt', 0, [4u8]).toData()))
+        let pp = PathPattern()
+        pp.compile('/src/**/*.java')
+        var matched = 0i64
+        for ((k, _) in store.prefix([])) {
+            if (pp.matches(String.fromUtf8(k))) { matched++ }
+        }
+        @Assert(matched == 3)
+        store.close()
+        cleanup(dir)
+    }
+
     private static func cleanup(dir: String): Unit {
         if (exists(dir)) {
             remove(dir, recursive: true)
