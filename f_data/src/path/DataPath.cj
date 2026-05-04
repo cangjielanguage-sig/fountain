@@ -598,8 +598,8 @@ abstract sealed class DataPath <: DataPathNode {
                     } else if (t.value == 'count') {
                         let rp = findFuncRParen()
                         let innerArgs = sub[i + 2 .. rp]
-                        // Check if argument is a function call (starts with IDENTIFIER)
-                        if (innerArgs.size > 0 && innerArgs[0].kind == IDENTIFIER) {
+                        // Check if argument is a function call (starts with IDENTIFIER or MATCH keyword)
+                        if (innerArgs.size > 0 && (innerArgs[0].kind == IDENTIFIER || innerArgs[0].kind == MATCH)) {
                             let filterIdx = compileSubFilter(innerArgs)
                             let idx = rp + 1
                             if (idx < sub.size) {
@@ -625,7 +625,7 @@ abstract sealed class DataPath <: DataPathNode {
                     } else if (t.value == 'value') {
                         let rp = findFuncRParen()
                         let innerArgs = sub[i + 2 .. rp]
-                        if (innerArgs.size > 0 && innerArgs[0].kind == IDENTIFIER) {
+                        if (innerArgs.size > 0 && (innerArgs[0].kind == IDENTIFIER || innerArgs[0].kind == MATCH)) {
                             let filterIdx = compileSubFilter(innerArgs)
                             let idx = rp + 1
                             if (idx < sub.size) {
