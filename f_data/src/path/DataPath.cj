@@ -251,6 +251,20 @@ abstract sealed class DataPath <: DataPathNode {
             }
             throw DataException('unclosed bracket in array literal')
         }
+        // Helper: find RCURL matching LCURL at startIdx
+        func findMatchingRCURL(startIdx: Int64): Int64 {
+            var depth = 0
+            for (e in startIdx..sub.size) {
+                match (sub[e].kind) {
+                    case LCURL => depth++
+                    case RCURL =>
+                        depth--
+                        if (depth == 0) { return e }
+                    case _ => continue
+                }
+            }
+            throw DataException('unclosed brace in object literal')
+        }
         // Helper: emit a comparison filter for count()/value() + OP + value
         func emitCmpFilter(path: String, startIdx: Int64, fnType: String): (Tokens, Int64) {
             let opToken = sub[startIdx]
@@ -384,6 +398,19 @@ abstract sealed class DataPath <: DataPathNode {
                             let arrContent = concatTokenValues(sub[e + 1 .. arrEnd + 1])
                             tokens += quote(StructEqFilter($(sub[i .. e].toString()), $(Token(STRING_LITERAL, arrContent)), 'false', 'false'))
                             i = arrEnd
+                            break
+                        case EQUAL where sub[e + 1].kind == LCURL =>
+                            // Object literal comparison: @.obj == {"key": "val"}
+                            let objEnd = findMatchingRCURL(e + 1)
+                            let objContent = concatTokenValues(sub[e + 1 .. objEnd + 1])
+                            tokens += quote(ObjectEqFilter($(sub[i .. e].toString()), $(Token(STRING_LITERAL, objContent)), 'false', 'true'))
+                            i = objEnd
+                            break
+                        case NOTEQ where sub[e + 1].kind == LCURL =>
+                            let objEnd = findMatchingRCURL(e + 1)
+                            let objContent = concatTokenValues(sub[e + 1 .. objEnd + 1])
+                            tokens += quote(ObjectEqFilter($(sub[i .. e].toString()), $(Token(STRING_LITERAL, objContent)), 'false', 'false'))
+                            i = objEnd
                             break
                         case LT where sub[e + 1].kind == STRING_LITERAL || sub[e + 1].kind ==SINGLE_QUOTED_STRING_LITERAL =>
                             tokens += quote(CmpFilter<String>($(sub[i .. e].toString()), $(sub[e + 1].value), 'LT', 'false', 'false'))
@@ -613,7 +640,7 @@ abstract sealed class DataPath <: DataPathNode {
                 let tokens = x.toTokens()
                 let filter = tokens[0].value
                 let generic = tokens[2].value
-                let args = tokens[if (filter == 'RegexFilter' || filter == 'SizeFilter' || filter == 'ExistsFilter' || filter == 'NullFilter' || filter == 'MatchFilter' || filter == 'SearchFilter' || filter == 'CountCmpFilter' || filter == 'ValueCmpFilter' || filter == 'LengthCmpFilter' || filter == 'StructEqFilter') {
+                let args = tokens[if (filter == 'RegexFilter' || filter == 'SizeFilter' || filter == 'ExistsFilter' || filter == 'NullFilter' || filter == 'MatchFilter' || filter == 'SearchFilter' || filter == 'CountCmpFilter' || filter == 'ValueCmpFilter' || filter == 'LengthCmpFilter' || filter == 'StructEqFilter' || filter == 'ObjectEqFilter') {
                         2
                     } else {
                         5
@@ -659,6 +686,7 @@ abstract sealed class DataPath <: DataPathNode {
                     case ('ValueCmpFilter', _) => ValueCmpFilter(arg(args, 0), arg(args, 1), arg(args, 2))
                     case ('LengthCmpFilter', _) => LengthCmpFilter(arg(args, 0), arg(args, 1), arg(args, 2), arg(args, 3), arg(args, 4))
                     case ('StructEqFilter', _) => StructEqFilter(arg(args, 0), arg(args, 1), arg(args, 2), arg(args, 3))
+                    case ('ObjectEqFilter', _) => ObjectEqFilter(arg(args, 0), arg(args, 1), arg(args, 2), arg(args, 3))
                     case _ => throw DataException('unreachable ${tokens}')
                 }
             case x: ParenExpr => compileFilter(x.parenthesizedExpr)
