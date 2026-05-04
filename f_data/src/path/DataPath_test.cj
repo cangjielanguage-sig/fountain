@@ -665,6 +665,39 @@ public class DataPath_filter_test {
         let results = collect(path.get(list))
         @Assert(1, results.size)
     }
+
+    @TestCase
+    public func testFilterCountEq(): Unit {
+        // Test: count(@.*) == 3 on a list with 3 elements
+        let p1 = makePerson("Alice", 30)
+        let p2 = makePerson("Bob", 25)
+        let p3 = TestObj()
+        // Wrap them in sub-lists with different sizes
+        let l3 = DataList()  // 3 elements
+        l3.add(p1); l3.add(p2); l3.add(p3)
+        let l1 = DataList()  // 1 element
+        l1.add(p1)
+        let outer = DataList()
+        outer.add(l1)
+        outer.add(l3)
+        let path = DataPath.cache("$[?(count(@.*) == 3)]")
+        let results = collect(path.get(outer))
+        @Assert(1, results.size)
+    }
+
+    @TestCase
+    public func testFilterValueEq(): Unit {
+        let p1 = makePerson("Alice", 30)
+        let p2 = makePerson("Bob", 25)
+        let list = DataList()
+        list.add(p1)
+        list.add(p2)
+        // value(@.name) extracts the first matching node's value as string
+        // We use @.name which returns the "name" field
+        let path = DataPath.cache("$[?(value(@.name) == 'Alice')]")
+        let results = collect(path.get(list))
+        @Assert(1, results.size)
+    }
 }
 
 @Test

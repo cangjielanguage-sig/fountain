@@ -185,6 +185,77 @@ abstract sealed class DataPath <: DataPathNode {
     private func parseFilterTokens(sub: Tokens, solid: Bool): Tokens {
         var tokens = quote()
         var i = 0
+        
+        // Helper: find RPAREN matching LPAREN at i+1
+        func findFuncRParen(): Int64 {
+            var parens = 0
+            var rparenIdx = -1
+            for (e in i + 1..sub.size) {
+                match (sub[e].kind) {
+                    case LPAREN => parens++
+                    case RPAREN =>
+                        parens--
+                        if (parens == 0) { rparenIdx = e; break }
+                    case _ => continue
+                }
+            }
+            if (rparenIdx < 0) { throw DataException('unclosed paren in function call ${sub}') }
+            rparenIdx
+        }
+        // Helper: extract the single path argument from function call
+        func extractOneArg(rparenIdx: Int64): String {
+            concatTokenValues(sub[i + 2 .. rparenIdx])
+        }
+        // Helper: extract two arguments (path, regex) separated by COMMA
+        func extractTwoArgs(rparenIdx: Int64): (String, String) {
+            let args = sub[i + 2 .. rparenIdx]
+            var commaIdx = -1
+            for (e in 0..args.size) {
+                if (args[e].kind == COMMA) { commaIdx = e; break }
+            }
+            if (commaIdx < 0) { throw DataException('function call requires 2 arguments') }
+            let path = concatTokenValues(sub[i + 2 .. i + 2 + commaIdx])
+            let rawRegex = concatTokenValues(sub[i + 2 + commaIdx + 1 .. rparenIdx])
+            let regex = if (rawRegex.size >= 2 && (rawRegex[0] == 0x27u8 || rawRegex[0] == 0x22u8)) {
+                rawRegex[1..rawRegex.size - 1]
+            } else { rawRegex }
+            (path, regex)
+        }
+        // Helper: emit a comparison filter for count()/value() + OP + value
+        func emitCmpFilter(path: String, startIdx: Int64, fnType: String): (Tokens, Int64) {
+            let opToken = sub[startIdx]
+            let opKind = opToken.kind
+            let valueIdx = startIdx + 1
+            if (valueIdx >= sub.size) { throw DataException('missing value after comparison operator') }
+            let valueToken = sub[valueIdx]
+            let valueStr = valueToken.value
+            let (result, nextIdx) = if (fnType == 'count') {
+                let r = if (opKind == TokenKind.GT) {
+                    quote(CountCmpFilter($(path), $(valueStr), "GT", "false", "false"))
+                } else if (opKind == TokenKind.LT) {
+                    quote(CountCmpFilter($(path), $(valueStr), "LT", "false", "false"))
+                } else if (opKind == TokenKind.GE) {
+                    quote(CountCmpFilter($(path), $(valueStr), "GT", "true", "false"))
+                } else if (opKind == TokenKind.LE) {
+                    quote(CountCmpFilter($(path), $(valueStr), "LT", "true", "false"))
+                } else if (opKind == TokenKind.EQUAL) {
+                    quote(CountCmpFilter($(path), $(valueStr), "EQ", "true", "false"))
+                } else if (opKind == TokenKind.NOTEQ) {
+                    quote(CountCmpFilter($(path), $(valueStr), "EQ", "false", "false"))
+                } else {
+                    throw DataException('unsupported operator for count/value comparison')
+                }
+                (r, valueIdx)
+            } else {
+                if (opKind != TokenKind.EQUAL && opKind != TokenKind.NOTEQ) {
+                    throw DataException('value() only supports == and != comparisons')
+                }
+                let r = quote(ValueCmpFilter($(path), $(valueStr), "false"))
+                (r, valueIdx)
+            }
+            (result, nextIdx)
+        }
+        
         while (i < sub.size) {
             let t = sub[i]
             match (t.kind) {
@@ -368,66 +439,43 @@ abstract sealed class DataPath <: DataPathNode {
                 case AND where i > 0 => tokens += quote(&&)
                 case OR where i > 0 => tokens += quote(||)
                 case IDENTIFIER =>
-                    if (t.value != 'search') {
+                    if (t.value == 'search') {
+                        let rp = findFuncRParen()
+                        let (path, regex) = extractTwoArgs(rp)
+                        tokens += quote(SearchFilter($(path), $(regex), 'false'))
+                        i = rp
+                    } else if (t.value == 'count') {
+                        let rp = findFuncRParen()
+                        let path = extractOneArg(rp)
+                        let idx = rp + 1
+                        if (idx < sub.size) {
+                            let cmpResult = emitCmpFilter(path, idx, 'count')
+                            tokens += cmpResult[0]
+                            i = cmpResult[1]
+                        } else {
+                            tokens += quote(CountCmpFilter($(path), '0', 'GT', 'false', 'false'))
+                            i = rp
+                        }
+                    } else if (t.value == 'value') {
+                        let rp = findFuncRParen()
+                        let path = extractOneArg(rp)
+                        let idx = rp + 1
+                        if (idx < sub.size) {
+                            let cmpResult = emitCmpFilter(path, idx, 'value')
+                            tokens += cmpResult[0]
+                            i = cmpResult[1]
+                        } else {
+                            tokens += quote(ValueCmpFilter($(path), 'true', 'false'))
+                            i = rp
+                        }
+                    } else {
                         throw DataException('filter in data path ${sub} is illegal')
                     }
-                    // Find matching RPAREN (for search)
-                    var parens = 0
-                    var rparenIdx = -1
-                    for (e in i + 1..sub.size) {
-                        match (sub[e].kind) {
-                            case LPAREN => parens++
-                            case RPAREN =>
-                                parens--
-                                if (parens == 0) { rparenIdx = e; break }
-                            case _ => continue
-                        }
-                    }
-                    if (rparenIdx < 0) { throw DataException('unclosed paren in function call ${sub}') }
-                    let args = sub[i + 2 .. rparenIdx]
-                    var commaIdx = -1
-                    for (e in 0..args.size) {
-                        if (args[e].kind == COMMA) { commaIdx = e; break }
-                    }
-                    if (commaIdx < 0) { throw DataException('function call search requires 2 arguments') }
-                    let pathTokens = sub[i + 2 .. i + 2 + commaIdx]
-                    let regexTokens = sub[i + 2 + commaIdx + 1 .. rparenIdx]
-                    let path = concatTokenValues(pathTokens)
-                    let rawRegex = concatTokenValues(regexTokens)
-                    let regex = if (rawRegex.size >= 2 && (rawRegex[0] == 0x27u8 || rawRegex[0] == 0x22u8)) {
-                        rawRegex[1..rawRegex.size - 1]
-                    } else { rawRegex }
-                    tokens += quote(SearchFilter($(path), $(regex), 'false'))
-                    i = rparenIdx
                 case MATCH =>
-                    // Find matching RPAREN (for match)
-                    var parens2 = 0
-                    var rparenIdx2 = -1
-                    for (e in i + 1..sub.size) {
-                        match (sub[e].kind) {
-                            case LPAREN => parens2++
-                            case RPAREN =>
-                                parens2--
-                                if (parens2 == 0) { rparenIdx2 = e; break }
-                            case _ => continue
-                        }
-                    }
-                    if (rparenIdx2 < 0) { throw DataException('unclosed paren in function call ${sub}') }
-                    let args2 = sub[i + 2 .. rparenIdx2]
-                    var commaIdx2 = -1
-                    for (e in 0..args2.size) {
-                        if (args2[e].kind == COMMA) { commaIdx2 = e; break }
-                    }
-                    if (commaIdx2 < 0) { throw DataException('function call match requires 2 arguments') }
-                    let pathTokens2 = sub[i + 2 .. i + 2 + commaIdx2]
-                    let regexTokens2 = sub[i + 2 + commaIdx2 + 1 .. rparenIdx2]
-                    let path2 = concatTokenValues(pathTokens2)
-                    let rawRegex2 = concatTokenValues(regexTokens2)
-                    let regex2 = if (rawRegex2.size >= 2 && (rawRegex2[0] == 0x27u8 || rawRegex2[0] == 0x22u8)) {
-                        rawRegex2[1..rawRegex2.size - 1]
-                    } else { rawRegex2 }
-                    tokens += quote(MatchFilter($(path2), $(regex2), 'false'))
-                    i = rparenIdx2
+                    let rp = findFuncRParen()
+                    let (path, regex) = extractTwoArgs(rp)
+                    tokens += quote(MatchFilter($(path), $(regex), 'false'))
+                    i = rp
                 case _ => throw DataException('filter in data path ${sub} is illegal')
             }
             i++
@@ -480,7 +528,7 @@ abstract sealed class DataPath <: DataPathNode {
                 let tokens = x.toTokens()
                 let filter = tokens[0].value
                 let generic = tokens[2].value
-                let args = tokens[if (filter == 'RegexFilter' || filter == 'SizeFilter' || filter == 'ExistsFilter' || filter == 'NullFilter' || filter == 'MatchFilter' || filter == 'SearchFilter') {
+                let args = tokens[if (filter == 'RegexFilter' || filter == 'SizeFilter' || filter == 'ExistsFilter' || filter == 'NullFilter' || filter == 'MatchFilter' || filter == 'SearchFilter' || filter == 'CountCmpFilter' || filter == 'ValueCmpFilter') {
                         2
                     } else {
                         5
@@ -522,6 +570,8 @@ abstract sealed class DataPath <: DataPathNode {
                     case ('NullFilter', _) => NullFilter(arg(args, 0), arg(args, 1), arg(args, 2))
                     case ('MatchFilter', _) => MatchFilter(arg(args, 0), arg(args, 1), arg(args, 2))
                     case ('SearchFilter', _) => SearchFilter(arg(args, 0), arg(args, 1), arg(args, 2))
+                    case ('CountCmpFilter', _) => CountCmpFilter(arg(args, 0), arg(args, 1), arg(args, 2), arg(args, 3), arg(args, 4))
+                    case ('ValueCmpFilter', _) => ValueCmpFilter(arg(args, 0), arg(args, 1), arg(args, 2))
                     case _ => throw DataException('unreachable ${tokens}')
                 }
             case x: ParenExpr => compileFilter(x.parenthesizedExpr)
