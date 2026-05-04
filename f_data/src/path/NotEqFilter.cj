@@ -15,7 +15,7 @@ limitations under the License.
  */
 package fountain::f_data.path
 
-internal class NotEqFilter<T> <: DataFilter where T <: Equatable<T> {
+internal class NotEqFilter<T> <: DataFilter where T <: Equatable<T> & ToString {
     private let eqFilter: EqFilter<T>
     init(left: DataPath, right: T) {
         eqFilter = EqFilter<T>(left, right)

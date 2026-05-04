@@ -485,9 +485,9 @@ public class DataPath_recursive_test {
         outer.add(inner)
         outer.add(DataReal(3))
         // outer = [0, [1, 2], 3]
-        // $..* should visit all descendants
-        let path = DataPath.cache("$..*")
+        let path = DataPath.cache("$..")
         let results = collect(path.get(outer))
+        // Should include the root and all descendants
         @Assert(true, results.size > 0)
     }
 

@@ -202,7 +202,6 @@ abstract sealed class DataPath <: DataPathNode {
                 case AT => for (e in i + 1..sub.size) {
                     let t = sub[e]
                     match (t.kind) {
-                        case DOT | IDENTIFIER => continue
                         case EQUAL where sub[e + 1].kind == STRING_LITERAL || sub[e + 1].kind == SINGLE_QUOTED_STRING_LITERAL =>
                             tokens += quote(EqFilter<String>($(sub[i .. e].toString()), $(sub[e + 1].value), $(if (solid) { "true" } else { "false" })))
                             i = e + 1
@@ -323,6 +322,7 @@ abstract sealed class DataPath <: DataPathNode {
                             tokens += quote(SizeFilter($(sub[i .. e].toString()), $(sub[e + 1].value), 'false'))
                             i = e + 1
                             break
+                        case DOT | IDENTIFIER => continue
                         case _ => throw DataException('filter in data path ${sub} is illegal')
                     }
                 }
@@ -458,6 +458,8 @@ abstract sealed class DataPath <: DataPathNode {
                 i++
                 AnySubPathNode.instance
             } else if (path[i].kind == DOT && path[i + 1].kind == DOT) {
+                RecursiveDescentPathNode.instance
+            } else if (path[i].kind == RANGEOP) {
                 RecursiveDescentPathNode.instance
             } else if (path[i].kind == DOT && path[i + 1].kind == LSQUARE && path[i - 1].kind == DOT) {
                 let (sub, index) = extractSubPathInSquares(path, i + 1)
