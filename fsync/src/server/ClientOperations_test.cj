@@ -188,6 +188,164 @@ class ClientOperationsTest {
         cleanup('/tmp/fsync_op/config')
     }
 
+    @TestCase
+    func testDeleteNonExistentKeySucceeds(): Unit {
+        let (store, handler) = setup('/tmp/fsync_op/delete_none')
+        // DEREGISTER 一个不存在的 key 不应该抛异常
+        let resp = handler.handle(Message(Command.DEREGISTER, KeyData('/app/nonexistent').toData()))
+        @Assert(match (resp.command) { case RESP(_) => true case _ => false })
+        store.close()
+        cleanup('/tmp/fsync_op/delete_none')
+    }
+
+    @TestCase
+    func testRegisterOverwritesExistingValue(): Unit {
+        let (store, handler) = setup('/tmp/fsync_op/overwrite')
+        let key = '/app/key'
+        // 第一次写入
+        let _ = handler.handle(Message(Command.REGISTER, SyncData(key, 0, [1u8]).toData()))
+        @Assert(store.get(key.unsafeBytes()).isSome())
+        // 第二次覆盖写入
+        let _ = handler.handle(Message(Command.REGISTER, SyncData(key, 0, [99u8, 100u8]).toData()))
+        if (let Some(v) <- store.get(key.unsafeBytes())) {
+            @Assert(v.size == 2)
+            @Assert(v[0] == 99u8)
+            @Assert(v[1] == 100u8)
+        } else { @Assert(false) }
+        store.close()
+        cleanup('/tmp/fsync_op/overwrite')
+    }
+
+    @TestCase
+    func testPrefixScanEmptyReturnsEmptyResult(): Unit {
+        let (store, handler) = setup('/tmp/fsync_op/prefix_empty')
+        let _ = handler.handle(Message(Command.REGISTER, SyncData('/app/a', 0, [1u8]).toData()))
+        let resp = handler.handle(Message(Command.ACK, PatternData('/nonexistent/').toData()))
+        @Assert(match (resp.command) { case RESP(_) => true case _ => false })
+        let pp = PathPattern()
+        pp.compile('/nonexistent/*')
+        var matched = 0i64
+        for ((k, _) in store.prefix([])) {
+            if (pp.matches(String.fromUtf8(k))) { matched++ }
+        }
+        @Assert(matched == 0)
+        store.close()
+        cleanup('/tmp/fsync_op/prefix_empty')
+    }
+
+    @TestCase
+    func testGetFullByteContentMatchesWritten(): Unit {
+        let (store, handler) = setup('/tmp/fsync_op/get_full')
+        let value = [0x01u8, 0x02u8, 0xFFu8, 0x00u8, 0xABu8]
+        let _ = handler.handle(Message(Command.REGISTER, SyncData('/app/key', 0, value).toData()))
+        let resp = handler.handle(Message(Command.ACK, KeyData('/app/key').toData()))
+        if (let Some(vd) <- convert<ValueData>(resp.data)) {
+            if (let Some(v) <- vd.value) {
+                @Assert(v.size == value.size)
+                for (i in 0..value.size) {
+                    @Assert(v[i] == value[i])
+                }
+            } else { @Assert(false) }
+        } else { @Assert(false) }
+        store.close()
+        cleanup('/tmp/fsync_op/get_full')
+    }
+
+    @TestCase
+    func testMultipleKeysCRUD(): Unit {
+        let (store, handler) = setup('/tmp/fsync_op/multi')
+        // REGISTER 3 个 key
+        let _ = handler.handle(Message(Command.REGISTER, SyncData('/app/a', 0, [1u8]).toData()))
+        let _ = handler.handle(Message(Command.REGISTER, SyncData('/app/b', 0, [2u8]).toData()))
+        let _ = handler.handle(Message(Command.REGISTER, SyncData('/app/c', 0, [3u8]).toData()))
+        // GET 每个 key 验证存在
+        for (k in ['/app/a', '/app/b', '/app/c']) {
+            let resp = handler.handle(Message(Command.ACK, KeyData(k).toData()))
+            if (let Some(vd) <- convert<ValueData>(resp.data)) {
+                @Assert(vd.value.isSome())
+            } else { @Assert(false) }
+        }
+        // 删除一个 key
+        let _ = handler.handle(Message(Command.DEREGISTER, KeyData('/app/b').toData()))
+        @Assert(store.get('/app/b'.unsafeBytes()).isNone())
+        // 验证另外两个 key 仍在
+        @Assert(store.get('/app/a'.unsafeBytes()).isSome())
+        @Assert(store.get('/app/c'.unsafeBytes()).isSome())
+        store.close()
+        cleanup('/tmp/fsync_op/multi')
+    }
+
+    @TestCase
+    func testGlobSingleStarWildcard(): Unit {
+        let (store, handler) = setup('/tmp/fsync_op/glob_star')
+        let _ = handler.handle(Message(Command.REGISTER, SyncData('/app/config/db/host', 0, [1u8]).toData()))
+        let _ = handler.handle(Message(Command.REGISTER, SyncData('/app/config/cache/host', 0, [2u8]).toData()))
+        let _ = handler.handle(Message(Command.REGISTER, SyncData('/app/config/db/extra', 0, [3u8]).toData()))
+        let resp = handler.handle(Message(Command.ACK, PatternData('/app/config/*/host').toData()))
+        @Assert(match (resp.command) { case RESP(_) => true case _ => false })
+        let pp = PathPattern()
+        pp.compile('/app/config/*/host')
+        var matched = 0i64
+        for ((k, _) in store.prefix([])) {
+            if (pp.matches(String.fromUtf8(k))) { matched++ }
+        }
+        @Assert(matched == 2)
+        store.close()
+        cleanup('/tmp/fsync_op/glob_star')
+    }
+
+    @TestCase
+    func testGlobQuestionMarkWildcard(): Unit {
+        let (store, handler) = setup('/tmp/fsync_op/glob_qmark')
+        let _ = handler.handle(Message(Command.REGISTER, SyncData('/app/config/db.yaml', 0, [1u8]).toData()))
+        let _ = handler.handle(Message(Command.REGISTER, SyncData('/app/aonfig/db.yaml', 0, [2u8]).toData()))
+        let _ = handler.handle(Message(Command.REGISTER, SyncData('/app/onfig/db.yaml', 0, [3u8]).toData()))
+        let resp = handler.handle(Message(Command.ACK, PatternData('/app/?onfig/*.yaml').toData()))
+        @Assert(match (resp.command) { case RESP(_) => true case _ => false })
+        let pp = PathPattern()
+        pp.compile('/app/?onfig/*.yaml')
+        var matched = 0i64
+        for ((k, _) in store.prefix([])) {
+            if (pp.matches(String.fromUtf8(k))) { matched++ }
+        }
+        @Assert(matched == 2)
+        store.close()
+        cleanup('/tmp/fsync_op/glob_qmark')
+    }
+
+    @TestCase
+    func testPublishUpdatesLocalStore(): Unit {
+        let (store, handler) = setup('/tmp/fsync_op/publish')
+        let key = '/app/key'
+        let value = [42u8, 43u8]
+        // PUBLISH 模拟远端同步
+        let resp = handler.handle(Message(Command.PUBLISH(0), SyncData(key, 100, value).toData()))
+        @Assert(match (resp.command) { case RESP(_) => true case _ => false })
+        // 验证写入
+        if (let Some(v) <- store.get(key.unsafeBytes())) {
+            @Assert(v.size == value.size)
+            @Assert(v[0] == 42u8)
+        } else { @Assert(false) }
+        store.close()
+        cleanup('/tmp/fsync_op/publish')
+    }
+
+    @TestCase
+    func testPublishLowerVersionIgnored(): Unit {
+        let (store, handler) = setup('/tmp/fsync_op/publish_ignore')
+        let key = '/app/key'
+        // 先写入本地版本 2
+        let _ = handler.handle(Message(Command.REGISTER, SyncData(key, 0, [1u8]).toData()))
+        // 尝试用更低版本覆盖
+        let _ = handler.handle(Message(Command.PUBLISH(0), SyncData(key, 0, [99u8]).toData()))
+        // 验证本地值未被覆盖
+        if (let Some(v) <- store.get(key.unsafeBytes())) {
+            @Assert(v[0] == 1u8)  // 仍为原值
+        } else { @Assert(false) }
+        store.close()
+        cleanup('/tmp/fsync_op/publish_ignore')
+    }
+
     private static func cleanup(dir: String): Unit {
         if (exists(dir)) {
             remove(dir, recursive: true)
