@@ -57,6 +57,9 @@ internal interface DataFilter {
             match (t.kind) {
                 case COMMA => continue
                 case STRING_LITERAL | SINGLE_QUOTED_STRING_LITERAL | INTEGER_LITERAL | FLOAT_LITERAL | BOOL_LITERAL => list.add(parse<T>(t.value))
+                case IDENTIFIER where t.value == 'null' =>
+                    // null is handled specially in InFilter.check() via DataNone
+                    ()
                 case _ => throw DataException('illegal token for set filter ${value}')
             }
         }
@@ -68,9 +71,13 @@ internal interface DataFilter {
             match (t.kind) {
                 case COMMA => continue
                 case STRING_LITERAL | SINGLE_QUOTED_STRING_LITERAL | INTEGER_LITERAL | FLOAT_LITERAL | BOOL_LITERAL => set.add(parse<T>(t.value))
+                case IDENTIFIER where t.value == 'null' => ()  // null is tracked via hasNullCheck
                 case _ => throw DataException('illegal token for set filter ${value}')
             }
         }
         set
+    }
+    static func containsNull(setStr: String): Bool {
+        setStr.contains("null")
     }
 }

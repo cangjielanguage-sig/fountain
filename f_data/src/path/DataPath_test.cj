@@ -698,6 +698,36 @@ public class DataPath_filter_test {
         let results = collect(path.get(list))
         @Assert(1, results.size)
     }
+
+    @TestCase
+    public func testFilterInNull(): Unit {
+        let p1 = makePerson("Alice", 30)
+        let p2 = makePerson("Bob", 25)
+        let p3 = makePerson("Charlie", 35)
+        p3.set("name", DataNone.INSTANCE)  // Charlie's name is null
+        let list = DataList()
+        list.add(p1)
+        list.add(p2)
+        list.add(p3)
+        let path = DataPath.cache("$[?(@.name in [null, 'Bob'])]")
+        let results = collect(path.get(list))
+        @Assert(2, results.size)
+    }
+
+    @TestCase
+    public func testFilterNinNull(): Unit {
+        let p1 = makePerson("Alice", 30)
+        let p2 = makePerson("Bob", 25)
+        let p3 = makePerson("Charlie", 35)
+        p3.set("name", DataNone.INSTANCE)  // Charlie's name is null
+        let list = DataList()
+        list.add(p1)
+        list.add(p2)
+        list.add(p3)
+        let path = DataPath.cache("$[?(@.name nin [null, 'Bob'])]")
+        let results = collect(path.get(list))
+        @Assert(1, results.size)
+    }
 }
 
 @Test

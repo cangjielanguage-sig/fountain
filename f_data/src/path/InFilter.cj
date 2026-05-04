@@ -16,9 +16,9 @@ limitations under the License.
 package fountain::f_data.path
 
 internal class InFilter<T> <: DataFilter where T <: Hashable & Equatable<T> & ToString {
-    InFilter(private let left: DataPath, private let right: HashSet<T>) {}
+    InFilter(private let left: DataPath, private let right: HashSet<T>, private let hasNull: Bool) {}
     init(left: String, right: String, solid: String) {
-        this(compilePath(left, solid), parseHashSet<T>(right))
+        this(compilePath(left, solid), parseHashSet<T>(right), DataFilter.containsNull(right))
     }
     public func check(data: Data): Bool {
         let d = match (left.get(data).next()) {
@@ -26,6 +26,9 @@ internal class InFilter<T> <: DataFilter where T <: Hashable & Equatable<T> & To
             case _ => return false
         }
         match (d) {
+            case _: DataNone =>
+                // null match depends on whether null was in the set
+                hasNull
             case x: DataDateTime => match (x.data) {
                 case x: T => right.contains(x)
                 case _ => false

@@ -496,6 +496,19 @@ abstract sealed class DataPath <: DataPathNode {
             case STRING_LITERAL | SINGLE_QUOTED_STRING_LITERAL => quote($(filter)<String>($(sub[i .. e].toString()), $(sub[arrs + 1 .. arre].toString()), 'false'))
             case INTEGER_LITERAL => quote($(filter)<Int64>($(sub[i .. e].toString()), $(sub[arrs + 1 .. arre].toString()), 'false'))
             case FLOAT_LITERAL => quote($(filter)<Float64>($(sub[i .. e].toString()), $(sub[arrs + 1 .. arre].toString()), 'false'))
+            case IDENTIFIER where sub[arrs + 1].value == 'null' =>
+                // null element: scan for first non-null element to infer type, default to String
+                var inferredType = "String"
+                for (scanIdx in arrs + 2..arre) {
+                    if (sub[scanIdx].kind == INTEGER_LITERAL) { inferredType = "Int64"; break }
+                    else if (sub[scanIdx].kind == FLOAT_LITERAL) { inferredType = "Float64"; break }
+                    else if (sub[scanIdx].kind == STRING_LITERAL || sub[scanIdx].kind == SINGLE_QUOTED_STRING_LITERAL) { inferredType = "String"; break }
+                }
+                match (inferredType) {
+                    case "Int64" => quote($(filter)<Int64>($(sub[i .. e].toString()), $(sub[arrs + 1 .. arre].toString()), 'false'))
+                    case "Float64" => quote($(filter)<Float64>($(sub[i .. e].toString()), $(sub[arrs + 1 .. arre].toString()), 'false'))
+                    case _ => quote($(filter)<String>($(sub[i .. e].toString()), $(sub[arrs + 1 .. arre].toString()), 'false'))
+                }
             case _ => throw DataException('illegal array element type in data path filter ${sub} for in expression')
         }
         (tokens, arre)
