@@ -38,6 +38,7 @@ f_llm
 f_bloom
 f_store
 fboot
+fsync
 .
 
 [exclude]
