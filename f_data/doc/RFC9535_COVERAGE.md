@@ -1,8 +1,8 @@
 # RFC 9535 覆盖清单
 
 > 实现 branch: `feature/datapath`
-> 测试: **93/93 通过** (21 basic + 41 filter + 10 recursive + 3 compile error + 5 object eq + 4 complex fn + 6 P3 gap + 12 integration)
-> 文件: 23 个新文件 + 8 个修改文件
+> 测试: **100/100 通过** (21 basic + 41 filter + 13 recursive + 5 compile error + 5 object eq + 4 complex fn + 6 P3 gap + 12 integration + 6 P1P2 gap)
+> 文件: 24 个新文件 + 8 个修改文件
 
 ---
 
@@ -24,7 +24,7 @@
 | `['name']` 方括号名称 | §2.4 | `SubPathNode` | `testMultiSubPath` |
 | `[*]` 方括号通配 | §2.4 | `AnySubPathNode` | `testWildcard` |
 | `[0]` 索引 | §2.4 | `IndexPathNode` | `testIndex` |
-| `[-1]` 负索引 | §2.4 | `IndexPathNode` | `testNegativeIndex` |
+| `[-1]` 负索引（已禁用） | §2.4 | 抛 `DataException`，请用 `[-1:]` 切片 | `testNegativeIndexThrows` |
 | `[0,2]` 多索引 | §2.4 | `MultiIndexPathNode` | `testMultiIndex` |
 | `['a','b']` 多名称 | §2.4 | `MultiSubPathNode` | `testMultiSubPath` |
 | `[start:end]` 切片 | §2.4 | `RangePathNode` | `testRange` |
@@ -40,10 +40,10 @@
 
 | 语法 | RFC | 实现 | 测试 |
 |------|-----|------|------|
-| `..` 递归下降 | §2.3 | `RecursiveDescentPathNode` | `testRecursiveDescentSimple` |
+| `..` (bare, 已禁用) | §2.3 | 抛 `DataException`，必须跟选择器 | `testRecursiveDescentSimple` |
 | `..*` 递归通配 | §2.3 | 自动消费 MUL | `testRecursiveDescendStar` |
 | `..name` 递归名称 | §2.3 | IDENTIFIER + RANGEOP | `testRecursiveDescendSubPath` |
-| `..['name']` 递归方括号 | §2.3 | RANGEOP+DOT→LSQUARE | — |
+| `..['name']` 递归方括号 | §2.3 | RANGEOP+DOT→LSQUARE | `testRecursiveBracketName` |
 
 ### 4. 过滤选择器 (Filter Selectors)
 
@@ -61,6 +61,7 @@
 | `<=` | §3.1 | `CmpFilter(LT,true)` | `testFilterLessThanOrEqual` |
 | `>` | §3.1 | `CmpFilter(GT,false)` | `testFilterGreaterThan` |
 | `>=` | §3.1 | `CmpFilter(GT,true)` | `testFilterGreaterThanOrEqual` |
+| `@.x == @.y` 路径比较 | §3.1 | `EqPathFilter` | `testPathEq` |
 
 ### 6. 逻辑运算符 (Logical Operators)
 
@@ -134,12 +135,15 @@
 
 | 行为 | RFC | 实现 |
 |------|-----|------|
-| 重复节点保留 `$[0,0]` | §6.3 | 通过 lazy flatMap 链保留 |
+| `$[0,0]` 重复节点保留 | §6.3 | 通过 lazy flatMap 链保留 |
 | 空 nodelist → 空结果 | §6.1 | 默认行为 |
 | 类型不匹配 → false | §6.2 | `case _ => false` |
 | `@` 仅在 filter 内有效 | §2.1 | `doCompile` 验证 |
 | 结构失配 → 空结果 | §6.1 | `case _ => OptionIterator<Data>()` |
 | I-JSON 数字范围 | §6.5 | `validateIJSON()` |
+| `..` 必须有选择器 | §2.5.2 | 抛 `DataException` |
+| `[-1]` 必须用切片语法 | §2.3.3 | 抛 `DataException` |
+| 尾随 `.` | §2.2 | 抛 `DataException` |
 
 ---
 
@@ -147,8 +151,10 @@
 
 | 特性 | 说明 |
 |------|------|
-| 标准化路径 (Normalized Paths) §8 | 未实现。需要为匹配节点生成 `$['name'][0]` 形式路径 |
+| 标准化路径 (Normalized Paths) §2.7 | **未实现**。`DataPath.get()` 返回 `Iterator<Data>` 不含路径元数据。需新增 `NodeList` 类型 + `getWithPaths()` + 各节点类型的归一化逻辑。架构级改动，当前不安排 |
 | 复杂函数表达式深层嵌套（3+ 层） | 单层嵌套已验证 (`count(match(...))`)，深层未测试 |
+
+其余所有识别出的 P0/P1/P2 缺口（路径比较、value() 多节点、负索引、裸 `..`、尾随 `.`）已全部修复并通过测试验证。
 
 ---
 
@@ -202,17 +208,18 @@
 | `DeferredSearchFilter.cj` | `search()` 运行时路径参数 | ~40 |
 | `CountFilterResult.cj` | `count(innerFilter)` 嵌套计数 | ~55 |
 | `ValueFilterResult.cj` | `value(innerFilter)` 嵌套取值 | ~65 |
+| `EqPathFilter.cj` | `@.x == @.y` 路径比较 | ~92 |
 
 ### 测试文件
 
 | 数据 | 测试数 |
 |------|--------|
-| `DataPath_test.cj` | 93 |
+| `DataPath_test.cj` | 100 |
 
 ---
 
 ## git 分支
 
 ```
-feature/datapath — 25 commits, ~2900 lines changed
+feature/datapath — 28 commits, ~3200 lines changed
 ```
