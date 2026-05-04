@@ -43,4 +43,37 @@ class SyncCommandTest {
         hosts.add(HostAndPort('10.0.0.3:1203'))
         @Assert(SyncCommand.resolveLocalIndex(hosts) == 1)
     }
+
+    @TestCase
+    func configStringSingleNode(): Unit {
+        let hosts = ArrayList<HostAndPort>()
+        hosts.add(HostAndPort('10.0.0.1:1203'))
+        @Assert(hosts[0].host == '10.0.0.1')
+        @Assert(hosts[0].port == 1203u16)
+    }
+
+    @TestCase
+    func configStringMultipleNodes(): Unit {
+        let hosts = ArrayList<HostAndPort>()
+        hosts.add(HostAndPort('10.0.0.1:1203'))
+        hosts.add(HostAndPort('10.0.0.2:1204'))
+        hosts.add(HostAndPort('10.0.0.3:1205'))
+        @Assert(hosts.size == 3)
+        @Assert(hosts[0].host == '10.0.0.1')
+        @Assert(hosts[0].port == 1203u16)
+        @Assert(hosts[1].host == '10.0.0.2')
+        @Assert(hosts[1].port == 1204u16)
+        @Assert(hosts[2].host == '10.0.0.3')
+        @Assert(hosts[2].port == 1205u16)
+    }
+
+    @TestCase
+    func resolveLocalIndexReturnsZeroOnError(): Unit {
+        let hosts = ArrayList<HostAndPort>()
+        hosts.add(HostAndPort('10.0.0.1:1203'))
+        hosts.add(HostAndPort('10.0.0.2:1203'))
+        // 没有 localhost/127.0.0.1 匹配时返回 0
+        let result = SyncCommand.resolveLocalIndex(hosts)
+        @Assert(result is Int64)
+    }
 }
