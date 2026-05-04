@@ -290,6 +290,7 @@ abstract sealed class DataPath <: DataPathNode {
                         case ASSIGN where sub[e + 1].kind == BITNOT && sub[e + 2].kind == DIV =>
                             let rs = e + 2
                             var re = rs + 1
+                            let pathPrefixEnd = e
                             for (e in re..sub.size where sub[e].kind == DIV) {
                                 re = e
                                 break
@@ -300,7 +301,7 @@ abstract sealed class DataPath <: DataPathNode {
                             if (re + 1 < sub.size && sub[re + 1].kind == IDENTIFIER && sub[re + 1].value == 'i') {
                                 re++
                             }
-                            tokens += quote(RegexFilter($(sub[i .. e].toString()), $(sub[rs ..= re].toString()), 'false'))
+                            tokens += quote(RegexFilter($(sub[i .. pathPrefixEnd].toString()), $(concatTokenValues(sub[rs ..= re])), 'false'))
                             i = re
                             break
                         case IN where sub[e + 1].kind == LSQUARE =>
@@ -450,6 +451,13 @@ abstract sealed class DataPath <: DataPathNode {
             }
         }
         false
+    }
+    private static func concatTokenValues(toks: Tokens): String {
+        let s = StringGenerator()
+        for (t in toks) {
+            s.append(t.value)
+        }
+        s.toString()
     }
     private func compileInSquares(sub: Tokens, solid: Bool): DataPathNode {
         if (sub.size == 1 && (sub[0].kind == STRING_LITERAL || sub[0].kind == SINGLE_QUOTED_STRING_LITERAL)) {

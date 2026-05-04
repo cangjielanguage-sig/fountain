@@ -29,10 +29,10 @@ internal class RegexFilter <: DataFilter {
         if (!regex.startsWith('/')) {
             throw DataException('illegal regex ${regex}, regex must be format as /<REGEX>/ or /<REGEX>/i')
         }
-        if (regex.endsWith('/')) {
+        if (regex.endsWith('/i')) {
+            regex[1..regex.size - 2].regex(flags: [IgnoreCase])
+        } else if (regex.endsWith('/')) {
             regex[1..regex.size - 1].regex()
-        } else if (regex.endsWith('/i')) {
-            regex[1..regex.size - 1].regex(flags: [IgnoreCase])
         } else {
             throw DataException('illegal regex ${regex}, regex must be format as /<REGEX>/ or /<REGEX>/i')
         }
