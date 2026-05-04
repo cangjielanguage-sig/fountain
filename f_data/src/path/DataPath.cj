@@ -70,8 +70,8 @@ abstract sealed class DataPath <: DataPathNode {
         CacheDataPath.compile(path)
     }
     func doCompile(path: String, solid: Bool): DataPath {
-        if (!(path.startsWith('$.') || path.startsWith('$['))) {
-            throw DataException('data path must be starts with \"$.\" or \"$[\", but it is ${path}')
+        if (!(path == '$' || path == '@' || path.startsWith('$.') || path.startsWith('$[') || path.startsWith('@.') || path.startsWith('@['))) {
+            throw DataException('data path must be "$" or starts with "$." or "$[", but it is ${path}')
         }
         doCompile(cangjieLex(path, true), solid)
     }
@@ -103,10 +103,7 @@ abstract sealed class DataPath <: DataPathNode {
         }
     }
     private func compileIndexInSquares(sub: Tokens) {
-        let idx = Int64.parse(sub[0].value)
-        if (idx < 0) {
-            throw DataException('sub expression as an index must greater than or equals to zero')
-        }
+        let idx = parseIndexToken(sub[0], sub, 0)
         IndexPathNode(idx)
     }
     private func compileSubsInSquares(sub: Tokens) {
@@ -122,19 +119,26 @@ abstract sealed class DataPath <: DataPathNode {
         }
         MultiSubPathNode(names.unsafeData())
     }
+    private func parseIndexToken(t: Token, sub: Tokens, i: Int64): Int64 {
+        match (t.kind) {
+            case INTEGER_LITERAL => Int64.parse(t.value)
+            case SUB where i + 1 < sub.size && sub[i + 1].kind == INTEGER_LITERAL => -Int64.parse(sub[i + 1].value)
+            case _ => throw DataException('sub expression as an index must be an integer')
+        }
+    }
     private func compileIndexesInSquares(sub: Tokens): DataPathNode {
         let list = ArrayList<Int64>()
         var range = 0
         var comma = 0
-        for (i in 0..sub.size) {
+        var i = 0
+        while (i < sub.size) {
             let t = sub[i]
             match (t.kind) {
-                case INT64 =>
-                    let idx = Int64.parse(t.value)
-                    if (idx < 0) {
-                        throw DataException('sub expression as an index must greater than or equals to zero')
-                    }
-                    list.add(idx)
+                case INTEGER_LITERAL =>
+                    list.add(Int64.parse(t.value))
+                case SUB where i + 1 < sub.size && sub[i + 1].kind == INTEGER_LITERAL =>
+                    list.add(-Int64.parse(sub[i + 1].value))
+                    i++
                 case COLON =>
                     range++
                     if (range > 2) {
@@ -151,20 +155,22 @@ abstract sealed class DataPath <: DataPathNode {
                 case _ => throw DataException(
                     'sub expression in squares must be all strings or int64 or int1:int2:int3 or int1:int2')
             }
+            i++
         }
         match (range) {
             case 0 => MultiIndexPathNode(list.toArray())
             case 1 =>
                 if (list[0] >= list[1]) {
-                    throw DataException('sub expression as an int range, range start must be greater than end')
+                    RangePathNode(0..0)
+                } else {
+                    RangePathNode(list[0]..list[1])
                 }
-                RangePathNode(list[0]..list[1])
             case 2 =>
-                if (list[0] >= list[1] || list[2] <= 0) {
-                    throw DataException(
-                        'sub expression as an int range, range start must be greater than end and step must be greater than zero')
+                if (list[2] <= 0 || list[0] >= list[1]) {
+                    RangePathNode(0..0)
+                } else {
+                    RangePathNode(list[0]..list[1] : list[2])
                 }
-                RangePathNode(list[0]..list[1] : list[2])
             case _ => throw UnreachableException()
         }
     }
@@ -193,87 +199,88 @@ abstract sealed class DataPath <: DataPathNode {
                         throw DataException('illegal filter expression for data path, ${sub}')
                     }
                     tokens += `lparen` + parseFilterTokens(sub[i..end], solid) + `rparen`
-                case AT => for (e in i..sub.size) {
+                case AT => for (e in i + 1..sub.size) {
                     let t = sub[e]
                     match (t.kind) {
+                        case DOT | IDENTIFIER => continue
                         case EQUAL where sub[e + 1].kind == STRING_LITERAL || sub[e + 1].kind == SINGLE_QUOTED_STRING_LITERAL =>
-                            tokens += quote(EqFilter<String>($(sub[i .. e].toString()), $(sub[e + 1].value), $(solid.toString())))
+                            tokens += quote(EqFilter<String>($(sub[i .. e].toString()), $(sub[e + 1].value), $(if (solid) { "true" } else { "false" })))
                             i = e + 1
                             break
-                        case EQUAL where sub[e + 1].kind == INT64 =>
-                            tokens += quote(EqFilter<Int64>($(sub[i .. e].toString()), $(sub[e + 1].value), $(solid.toString())))
+                        case EQUAL where sub[e + 1].kind == INTEGER_LITERAL =>
+                            tokens += quote(EqFilter<Int64>($(sub[i .. e].toString()), $(sub[e + 1].value), $(if (solid) { "true" } else { "false" })))
                             i = e + 1
                             break
-                        case EQUAL where sub[e + 1].kind == FLOAT64 =>
-                            tokens += quote(EqFilter<Float64>($(sub[i .. e].toString()), $(sub[e + 1].value), $(solid.toString())))
+                        case EQUAL where sub[e + 1].kind == FLOAT_LITERAL =>
+                            tokens += quote(EqFilter<Float64>($(sub[i .. e].toString()), $(sub[e + 1].value), 'false'))
                             i = e + 1
                             break
                         case EQUAL where sub[e + 1].kind == BOOL_LITERAL =>
-                            tokens += quote(EqFilter<Bool>($(sub[i .. e].toString()), $(sub[e + 1].value), $(solid.toString())))
+                            tokens += quote(EqFilter<Bool>($(sub[i .. e].toString()), $(sub[e + 1].value), 'false'))
                             i = e + 1
                             break
                         case NOTEQ where sub[e + 1].kind == STRING_LITERAL || sub[e + 1].kind == SINGLE_QUOTED_STRING_LITERAL =>
-                            tokens += quote(NotEqFilter<String>($(sub[i .. e].toString()), $(sub[e + 1].value), $(solid.toString())))
+                            tokens += quote(NotEqFilter<String>($(sub[i .. e].toString()), $(sub[e + 1].value), 'false'))
                             i = e + 1
                             break
-                        case NOTEQ where sub[e + 1].kind == INT64 =>
-                            tokens += quote(NotEqFilter<Int64>($(sub[i .. e].toString()), $(sub[e + 1].value), $(solid.toString())))
+                        case NOTEQ where sub[e + 1].kind == INTEGER_LITERAL =>
+                            tokens += quote(NotEqFilter<Int64>($(sub[i .. e].toString()), $(sub[e + 1].value), 'false'))
                             i = e + 1
                             break
-                        case NOTEQ where sub[e + 1].kind == FLOAT64 =>
-                            tokens += quote(NotEqFilter<Float64>($(sub[i .. e].toString()), $(sub[e + 1].value), $(solid.toString())))
+                        case NOTEQ where sub[e + 1].kind == FLOAT_LITERAL =>
+                            tokens += quote(NotEqFilter<Float64>($(sub[i .. e].toString()), $(sub[e + 1].value), 'false'))
                             i = e + 1
                             break
                         case NOTEQ where sub[e + 1].kind == BOOL_LITERAL =>
-                            tokens += quote(NotEqFilter<Bool>($(sub[i .. e].toString()), $(sub[e + 1].value), $(solid.toString())))
+                            tokens += quote(NotEqFilter<Bool>($(sub[i .. e].toString()), $(sub[e + 1].value), 'false'))
                             i = e + 1
                             break
                         case LT where sub[e + 1].kind == STRING_LITERAL || sub[e + 1].kind ==SINGLE_QUOTED_STRING_LITERAL =>
-                            tokens += quote(CmpFilter<String>($(sub[i .. e].toString()), $(sub[e + 1].value), 'LT', 'false', $(solid.toString())))
+                            tokens += quote(CmpFilter<String>($(sub[i .. e].toString()), $(sub[e + 1].value), 'LT', 'false', 'false'))
                             i = e + 1
                             break
-                        case LT where sub[e + 1].kind == INT64 =>
-                            tokens += quote(CmpFilter<Int64>($(sub[i .. e].toString()), $(sub[e + 1].value), 'LT', 'false', $(solid.toString())))
+                        case LT where sub[e + 1].kind == INTEGER_LITERAL =>
+                            tokens += quote(CmpFilter<Int64>($(sub[i .. e].toString()), $(sub[e + 1].value), 'LT', 'false', 'false'))
                             i = e + 1
                             break
-                        case LT where sub[e + 1].kind == FLOAT64 =>
-                            tokens += quote(CmpFilter<Float64>($(sub[i .. e].toString()), $(sub[e + 1].value), 'LT', 'false', $(solid.toString())))
+                        case LT where sub[e + 1].kind == FLOAT_LITERAL =>
+                            tokens += quote(CmpFilter<Float64>($(sub[i .. e].toString()), $(sub[e + 1].value), 'LT', 'false', 'false'))
                             i = e + 1
                             break
                         case GT where sub[e + 1].kind == STRING_LITERAL || sub[e + 1].kind == SINGLE_QUOTED_STRING_LITERAL =>
-                            tokens += quote(CmpFilter<String>($(sub[i .. e].toString()), $(sub[e + 1].value), 'GT', 'false', $(solid.toString())))
+                            tokens += quote(CmpFilter<String>($(sub[i .. e].toString()), $(sub[e + 1].value), 'GT', 'false', 'false'))
                             i = e + 1
                             break
-                        case GT where sub[e + 1].kind == INT64 =>
-                            tokens += quote(CmpFilter<Int64>($(sub[i .. e].toString()), $(sub[e + 1].value), 'GT', 'false', $(solid.toString())))
+                        case GT where sub[e + 1].kind == INTEGER_LITERAL =>
+                            tokens += quote(CmpFilter<Int64>($(sub[i .. e].toString()), $(sub[e + 1].value), 'GT', 'false', 'false'))
                             i = e + 1
                             break
-                        case GT where sub[e + 1].kind == FLOAT64 =>
-                            tokens += quote(CmpFilter<Float64>($(sub[i .. e].toString()), $(sub[e + 1].value), 'GT', 'false', $(solid.toString())))
+                        case GT where sub[e + 1].kind == FLOAT_LITERAL =>
+                            tokens += quote(CmpFilter<Float64>($(sub[i .. e].toString()), $(sub[e + 1].value), 'GT', 'false', 'false'))
                             i = e + 1
                             break
                         case LE where sub[e + 1].kind == STRING_LITERAL || sub[e + 1].kind == SINGLE_QUOTED_STRING_LITERAL =>
-                            tokens += quote(CmpFilter<String>($(sub[i .. e].toString()), $(sub[e + 1].value), 'LT', 'false', $(solid.toString())))
+                            tokens += quote(CmpFilter<String>($(sub[i .. e].toString()), $(sub[e + 1].value), 'LT', 'true', 'false'))
                             i = e + 1
                             break
-                        case LE where sub[e + 1].kind == INT64 =>
-                            tokens += quote(CmpFilter<Int64>($(sub[i .. e].toString()), $(sub[e + 1].value), 'LT', 'false', $(solid.toString())))
+                        case LE where sub[e + 1].kind == INTEGER_LITERAL =>
+                            tokens += quote(CmpFilter<Int64>($(sub[i .. e].toString()), $(sub[e + 1].value), 'LT', 'true', 'false'))
                             i = e + 1
                             break
-                        case LE where sub[e + 1].kind == FLOAT64 =>
-                            tokens += quote(CmpFilter<Float64>($(sub[i .. e].toString()), $(sub[e + 1].value), 'LT', 'false', $(solid.toString())))
+                        case LE where sub[e + 1].kind == FLOAT_LITERAL =>
+                            tokens += quote(CmpFilter<Float64>($(sub[i .. e].toString()), $(sub[e + 1].value), 'LT', 'true', 'false'))
                             i = e + 1
                             break
                         case GE where sub[e + 1].kind == STRING_LITERAL || sub[e + 1].kind == SINGLE_QUOTED_STRING_LITERAL =>
-                            tokens += quote(CmpFilter<String>($(sub[i .. e].toString()), $(sub[e + 1].value), 'GT', 'false', $(solid.toString())))
+                            tokens += quote(CmpFilter<String>($(sub[i .. e].toString()), $(sub[e + 1].value), 'GT', 'true', 'false'))
                             i = e + 1
                             break
-                        case GE where sub[e + 1].kind == INT64 =>
-                            tokens += quote(CmpFilter<Int64>($(sub[i .. e].toString()), $(sub[e + 1].value), 'GT', 'false', $(solid.toString())))
+                        case GE where sub[e + 1].kind == INTEGER_LITERAL =>
+                            tokens += quote(CmpFilter<Int64>($(sub[i .. e].toString()), $(sub[e + 1].value), 'GT', 'true', 'false'))
                             i = e + 1
                             break
-                        case GE where sub[e + 1].kind == FLOAT64 =>
-                            tokens += quote(CmpFilter<Float64>($(sub[i .. e].toString()), $(sub[e + 1].value), 'GT', 'false', $(solid.toString())))
+                        case GE where sub[e + 1].kind == FLOAT_LITERAL =>
+                            tokens += quote(CmpFilter<Float64>($(sub[i .. e].toString()), $(sub[e + 1].value), 'GT', 'true', 'false'))
                             i = e + 1
                             break
                         case ASSIGN where sub[e + 1].kind == BITNOT && sub[e + 2].kind == DIV =>
@@ -289,7 +296,7 @@ abstract sealed class DataPath <: DataPathNode {
                             if (sub[re + 1].kind == IDENTIFIER && sub[re + 1].value == 'i') {
                                 re++
                             }
-                            tokens += quote(RegexFilter($(sub[i .. e].toString()), $(sub[rs ..= re].toString()), $(solid.toString())))
+                            tokens += quote(RegexFilter($(sub[i .. e].toString()), $(sub[rs ..= re].toString()), 'false'))
                             i = re
                             break
                         case IN where sub[e + 1].kind == LSQUARE =>
@@ -312,8 +319,8 @@ abstract sealed class DataPath <: DataPathNode {
                             let (t, e) = parseSetOp(sub, i, e, quote(NoOneOfFilter), solid)
                             tokens += t
                             i = e
-                        case IDENTIFIER where t.value == 'size' && sub[e + 1].kind == INT64 =>
-                            tokens += quote(SizeFilter($(sub[i .. e].toString()), $(sub[e + 1].value), $(solid.toString())))
+                        case IDENTIFIER where t.value == 'size' && sub[e + 1].kind == INTEGER_LITERAL =>
+                            tokens += quote(SizeFilter($(sub[i .. e].toString()), $(sub[e + 1].value), 'false'))
                             i = e + 1
                             break
                         case _ => throw DataException('filter in data path ${sub} is illegal')
@@ -338,9 +345,9 @@ abstract sealed class DataPath <: DataPathNode {
             throw DataException('illegal array in data path filter ${sub} for in expression')
         }
         let tokens = match (sub[arrs + 1].kind) {
-            case STRING_LITERAL | SINGLE_QUOTED_STRING_LITERAL => quote($(filter)<String>($(sub[i .. e].toString()), $(sub[arrs ..= arre].toString()), $(solid.toString())))
-            case INT64 => quote($(filter)<Int64>($(sub[i .. e].toString()), $(sub[arrs ..= arre].toString()), $(solid.toString())))
-            case FLOAT64 => quote($(filter)<Float64>($(sub[i .. e].toString()), $(sub[arrs ..= arre].toString()), $(solid.toString())))
+            case STRING_LITERAL | SINGLE_QUOTED_STRING_LITERAL => quote($(filter)<String>($(sub[i .. e].toString()), $(sub[arrs ..= arre].toString()), 'false'))
+            case INTEGER_LITERAL => quote($(filter)<Int64>($(sub[i .. e].toString()), $(sub[arrs ..= arre].toString()), 'false'))
+            case FLOAT_LITERAL => quote($(filter)<Float64>($(sub[i .. e].toString()), $(sub[arrs ..= arre].toString()), 'false'))
             case _ => throw DataException('illegal array element type in data path filter ${sub} for in expression')
         }
         (tokens, arre)
@@ -356,7 +363,17 @@ abstract sealed class DataPath <: DataPathNode {
         //SizeFilter
         //CallExpr ParenExpr BinaryExpr UnaryExpr
         func arg(args: Tokens, index: Int64) {
-            args[index].value
+            // Args include COMMA tokens between values, skip them
+            let actualIndex = index * 2
+            if (actualIndex >= args.size) {
+                throw DataException('missing argument at index ${index} in filter ${args}')
+            }
+            let v = args[actualIndex].value
+            if (v.size >= 2 && (v[0] == 0x27u8 || v[0] == 0x22u8)) {
+                v[1..v.size - 1]
+            } else {
+                v
+            }
         }
         match (expr) {
             case x: CallExpr =>
@@ -413,11 +430,15 @@ abstract sealed class DataPath <: DataPathNode {
     private func compileInSquares(sub: Tokens, solid: Bool) {
         if (sub.size == 1 && (sub[0].kind == STRING_LITERAL || sub[0].kind == SINGLE_QUOTED_STRING_LITERAL)) {
             compileSubInSquares(sub)
-        } else if (sub.size == 1 && sub[0].kind == INT64) {
+        } else if (sub.size == 1 && sub[0].kind == INTEGER_LITERAL) {
+            compileIndexInSquares(sub)
+        } else if (sub.size == 1 && sub[0].kind == MUL) {
+            AnySubPathNode.instance
+        } else if (sub.size == 2 && sub[0].kind == SUB && sub[1].kind == INTEGER_LITERAL) {
             compileIndexInSquares(sub)
         } else if (sub.size > 1 && (sub[0].kind == STRING_LITERAL || sub[0].kind == SINGLE_QUOTED_STRING_LITERAL)) {
             compileSubsInSquares(sub)
-        } else if (sub.size > 1 && sub[0].kind == INT64) {
+        } else if (sub.size > 1 && (sub[0].kind == INTEGER_LITERAL || (sub[0].kind == SUB && sub[1].kind == INTEGER_LITERAL))) {
             compileIndexesInSquares(sub)
         } else if (sub.size > 1 && sub[0].kind == QUEST && sub[1].kind == LPAREN && sub[sub.size - 1].kind == RPAREN) {
             compileFilter(sub[2..sub.size - 1], solid)
@@ -446,7 +467,7 @@ abstract sealed class DataPath <: DataPathNode {
                 path[i - 1].kind == AT || path[i - 1].kind == RSQUARE)) {
                 let (subPath, index) = extractSubPathInSquares(path, i)
                 i = index
-                compileInSquares(sub, solid)
+                compileInSquares(subPath, solid)
             } else if (i == 0 && path[i].kind == AT) {
                 CurrentPathNode.instance
             } else if (path[i].kind == DOT && path[i + 1].kind == IDENTIFIER && path[i + 2].kind == LPAREN &&

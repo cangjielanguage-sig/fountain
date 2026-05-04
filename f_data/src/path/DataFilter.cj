@@ -30,7 +30,7 @@ internal interface DataFilter {
         NotFilter(this)
     }
     static func compilePath(path: String, solid: String) {
-        if (Bool.parse(solid)) {
+        if (solid == "true") {
             DataPath.solid(path)
         } else {
             DataPath.cache(path)

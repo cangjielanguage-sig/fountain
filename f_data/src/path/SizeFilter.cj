@@ -15,6 +15,8 @@ limitations under the License.
  */
 package fountain::f_data.path
 
+import std.reflect.*
+
 internal class SizeFilter <: DataFilter {
     SizeFilter(private let left: DataPath, private let right: Int64) {}
     init(left: String, right: String, solid: String) {
@@ -37,9 +39,9 @@ internal class SizeFilter <: DataFilter {
                 s
             case _ =>
                 var size = -1
-                let info = ClassTypeInfo.of(left)
+                let info = TypeInfo.of(d)
                 if (info.qualifiedName.startsWith('f_data.DataObject') && let Some(fn) <- TypeMemberInfos
-                    .instanceFunction(info, 'fields') && let fields: Iterator<ReadableField> <- fn.apply(left)) {
+                    .instanceFunction(info, 'fields') && let fields: Iterator<ReadableField> <- fn.apply(d)) {
                     size = 0
                     for (_ in fields) {
                         size++

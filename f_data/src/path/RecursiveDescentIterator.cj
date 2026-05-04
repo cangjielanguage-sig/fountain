@@ -18,23 +18,25 @@ package fountain::f_data.path
 internal class RecursiveDescentIterator <: Iterator<Data> {
     private let list = LinkedList<Iterator<Data>>()
     private var itr: Iterator<Data> = EmptyIterator<Data>.instance()
+    private let rootData: Data
     init(data: Data) {
+        rootData = data
         append(data)
     }
     private func append(data: Data) {
-        list.addLast(AnySubPathNode.instance.get(data))
+        list.addFirst(AnySubPathNode.instance.get(data))
     }
     public func next(): ?Data {
-        if (let Some(x) <- itr.next()) {
-            if (!(itr is SingleIterable<Data>)) {
+        while (true) {
+            if (let Some(x) <- itr.next()) {
                 append(x)
+                return x
+            } else if (let Some(i) <- list.removeFirst()) {
+                itr = i.iterator()
+            } else {
+                return None<Data>
             }
-            x
-        } else if (let Some(i) <- list.removeFirst()) {
-            itr = i.iterator()
-            next()
-        } else {
-            None<Data>
         }
+        None<Data>
     }
 }

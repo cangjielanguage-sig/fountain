@@ -34,10 +34,7 @@ internal class EqFilter<T> <: DataFilter where T <: Equatable<T> {
                 case x: T => x == right
                 case _ => false
             }
-            case x: DataReal => match (x.data) {
-                case x: T => x == right
-                case _ => false
-            }
+            case x: DataReal => x.data == Decimal.parse(right.toString())
             case x: DataString => match (x.data) {
                 case x: T => x == right
                 case _ => false
