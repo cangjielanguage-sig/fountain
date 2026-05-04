@@ -47,10 +47,13 @@ internal class RangePathNode <: DataPathNode {
                 } else {
                     end
                 }
+                // RFC 9535 normalization: negative values are relative to length
+                let finalStart = if (actualStart < 0) { len + actualStart } else { actualStart }
+                let finalEnd = if (actualEnd < 0) { len + actualEnd } else { actualEnd }
                 if (step == 0) {
                     OptionIterator<Data>()
                 } else {
-                    buildIndices(actualStart, actualEnd, step).iterator()
+                    buildIndices(finalStart, finalEnd, step).iterator()
                         .map {idx => IndexPathNode(idx)}
                         .flatMap {n => n.get(data).iterator()}
                 }

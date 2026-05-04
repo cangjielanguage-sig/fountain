@@ -172,7 +172,11 @@ abstract sealed class DataPath <: DataPathNode {
                     } else { step = val }
                     i++
                 case COLON => phase++
-                case _ => throw DataException('illegal slice expression ${sub}')
+                case DOUBLE_COLON =>
+                    // :: is two colons: skip start and end phases, go to step
+                    if (phase < 2) { phase = 2 }
+                case SUB => throw DataException('illegal SUB token in slice: i=${i} i+1=${i+1} sub.size=${sub.size} next=${if (i+1<sub.size) { sub[i+1].kind.toString() } else { "N/A" }}')
+                case _ => throw DataException('illegal slice expression ${sub}: unexpected token kind=${t.kind} at i=${i}')
             }
             i++
         }

@@ -265,13 +265,14 @@ public class DataPath_basic_test {
         list.add(DataReal(30))
         list.add(DataReal(40))
         list.add(DataReal(50))
-        let path = DataPath.cache("$[4:0:-1]")
+        let path = DataPath.cache("$[::-1]")
         let results = collect(path.get(list))
-        @Assert(4, results.size)
+        @Assert(5, results.size)
         @Assert("50", results[0].toString())
         @Assert("40", results[1].toString())
         @Assert("30", results[2].toString())
         @Assert("20", results[3].toString())
+        @Assert("10", results[4].toString())
     }
 
     @TestCase
