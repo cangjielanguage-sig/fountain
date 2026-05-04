@@ -107,8 +107,10 @@ public class SyncClient {
         requireAbsolutePath(pattern)
         let req = Message(Command.ACK, PatternData(pattern).toData())
         if (let Some(resp) <- client.transfer(req.id, req, requestTimeout)) {
-            if (let Some(result) <- convert<ScanResult>(resp.data)) {
-                return result
+            if (let Some(vd) <- convert<ValueData>(resp.data)) {
+                if (let Some(blob) <- vd.value) {
+                    return ScanResult.decodeFromBytes(blob)
+                }
             }
         }
         ScanResult()

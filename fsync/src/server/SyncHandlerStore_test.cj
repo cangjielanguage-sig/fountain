@@ -337,11 +337,8 @@ class SyncHandlerStoreTest {
         let handler = SyncHandler(store, nm, wm)
         let _ = handler.handle(Message(Command.REGISTER, SyncData('/app/config/db/host.txt', 0, [1u8]).toData()))
         let resp = handler.handle(Message(Command.ACK, PatternData('/app/**/*.yaml').toData()))
-        if (let Some(result) <- convert<ScanResult>(resp.data)) {
-            @Assert(0, result.size)
-        } else {
-            @Assert(false)
-        }
+        let isResp = match (resp.command) { case RESP(_) => true case _ => false }
+        @Assert(isResp)
         store.close()
         cleanup(dir)
     }

@@ -153,6 +153,40 @@ public class ScanResult {
             None
         }
     }
+
+    /** 将所有条目编码为单字节流，用 DefaultCodec 逐对编码 key→Array<Byte> + value→Array<Byte> */
+    public func encodeToBytes(): Array<Byte> {
+        if (keys.size == 0) { return [] }
+        let buf = ByteBuffer()
+        for (i in 0..keys.size) {
+            DefaultCodec()
+                .encode(keys[i].unsafeBytes())
+                .encode(values[i])
+                .finish()
+                .copy(to: buf, closeFromOnEnd: true, closeToOnEnd: false)
+        }
+        let size = buf.seek(SeekPosition.End(0))
+        buf.seek(SeekPosition.Begin(0))
+        let raw = Array<Byte>(size, repeat: 0u8)
+        buf.read(raw)
+        raw
+    }
+
+    /** 从 encodeToBytes 的字节流解码重建 ScanResult */
+    public static func decodeFromBytes(blob: Array<Byte>): ScanResult {
+        let result = ScanResult()
+        if (blob.size == 0) { return result }
+        let buf = ByteBuffer(blob)
+        let codec = DefaultCodec()
+        while (true) {
+            if (let Some(kb) <- codec.decode<Array<Byte>>(buf)) {
+                if (let Some(v) <- codec.decode<Array<Byte>>(buf)) {
+                    result.add(String.fromUtf8(kb), v)
+                } else { break }
+            } else { break }
+        }
+        result
+    }
 }
 
 // Watch 通知值

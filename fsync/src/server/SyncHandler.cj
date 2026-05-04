@@ -17,10 +17,8 @@ package fountain::fsync.server
 
 import std.binary.*
 import std.collection.ArrayList
-import std.io.{ByteBuffer, SeekPosition}
 import std.sync.AtomicInt64
 import fountain::f_base.*
-import fountain::f_codec.default.DefaultCodec
 import fountain::f_data.*
 import fountain::f_protocol.default.*
 import fountain::f_store.Store
@@ -178,29 +176,17 @@ public class SyncHandler {
                 for ((k, v) in all) {
                     let keyStr = String.fromUtf8(k)
                     if (pp.matches(keyStr)) {
-                        let buf = ByteBuffer()
-                        DefaultCodec().encode(v).finish().copy(to: buf, closeFromOnEnd: true, closeToOnEnd: false)
-                        let size = buf.seek(SeekPosition.End(0))
-                        buf.seek(SeekPosition.Begin(0))
-                        let raw = Array<Byte>(size, repeat: 0u8)
-                        buf.read(raw)
-                        result.add(keyStr, raw)
+                        result.add(keyStr, v)
                     }
                 }
             } else {
                 let prefix = d.pattern.unsafeBytes()
                 let it = store.prefix(prefix)
                 for ((k, v) in it) {
-                    let buf = ByteBuffer()
-                    DefaultCodec().encode(v).finish().copy(to: buf, closeFromOnEnd: true, closeToOnEnd: false)
-                    let size = buf.seek(SeekPosition.End(0))
-                    buf.seek(SeekPosition.Begin(0))
-                    let raw = Array<Byte>(size, repeat: 0u8)
-                    buf.read(raw)
-                    result.add(String.fromUtf8(k), raw)
+                    result.add(String.fromUtf8(k), v)
                 }
             }
-            Message(Command.RESP(0), req.id, result.toData())
+            Message(Command.RESP(0), req.id, ValueData(result.encodeToBytes()).toData())
         } else {
             errorResp(req.id, 'invalid read payload')
         }
