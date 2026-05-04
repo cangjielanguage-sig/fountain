@@ -307,6 +307,27 @@ class SyncHandlerStoreTest {
     }
 
     @TestCase
+    func globDoubleStarMatchesMultipleLevels(): Unit {
+        let dir = '/tmp/fsync_test/glob_multi_level'
+        cleanup(dir)
+        let store = Store(dir)
+        let nm = NodeManager(ArrayList<HostAndPort>([HostAndPort('127.0.0.1:1203')]), 0)
+        let wm = WatchManager()
+        let handler = SyncHandler(store, nm, wm)
+        let _ = handler.handle(Message(Command.REGISTER, SyncData('/app/a/b/c/d/host.yaml', 0, [1u8]).toData()))
+        let pp = PathPattern()
+        pp.compile('/app/**/*.yaml')
+        let all = store.prefix([])
+        var matched = 0i64
+        for ((k, _) in all) {
+            if (pp.matches(String.fromUtf8(k))) { matched++ }
+        }
+        @Assert(matched == 1)
+        store.close()
+        cleanup(dir)
+    }
+
+    @TestCase
     func globNonMatchingPatternReturnsEmpty(): Unit {
         let dir = '/tmp/fsync_test/glob_empty'
         cleanup(dir)
