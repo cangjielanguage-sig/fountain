@@ -154,9 +154,13 @@ abstract sealed class DataPath <: DataPathNode {
             let t = sub[i]
             match (t.kind) {
                 case INTEGER_LITERAL =>
-                    list.add(Int64.parse(t.value))
+                    let val = Int64.parse(t.value)
+                    validateIJSON(val)
+                    list.add(val)
                 case SUB where i + 1 < sub.size && sub[i + 1].kind == INTEGER_LITERAL =>
-                    list.add(-Int64.parse(sub[i + 1].value))
+                    let val = -Int64.parse(sub[i + 1].value)
+                    validateIJSON(val)
+                    list.add(val)
                     i++
                 case COMMA => ()
                 case _ => throw DataException(
@@ -404,6 +408,7 @@ abstract sealed class DataPath <: DataPathNode {
                             i = e + 1
                             break
                         case EQUAL where sub[e + 1].kind == INTEGER_LITERAL =>
+                            validateIJSON(Int64.parse(sub[e + 1].value))
                             tokens += quote(EqFilter<Int64>($(sub[i .. e].toString()), $(sub[e + 1].value), $(if (solid) { "true" } else { "false" })))
                             i = e + 1
                             break
@@ -420,6 +425,7 @@ abstract sealed class DataPath <: DataPathNode {
                             i = e + 1
                             break
                         case NOTEQ where sub[e + 1].kind == INTEGER_LITERAL =>
+                            validateIJSON(Int64.parse(sub[e + 1].value))
                             tokens += quote(NotEqFilter<Int64>($(sub[i .. e].toString()), $(sub[e + 1].value), 'false'))
                             i = e + 1
                             break
@@ -470,6 +476,7 @@ abstract sealed class DataPath <: DataPathNode {
                             i = e + 1
                             break
                         case LT where sub[e + 1].kind == INTEGER_LITERAL =>
+                            validateIJSON(Int64.parse(sub[e + 1].value))
                             tokens += quote(CmpFilter<Int64>($(sub[i .. e].toString()), $(sub[e + 1].value), 'LT', 'false', 'false'))
                             i = e + 1
                             break
@@ -482,6 +489,7 @@ abstract sealed class DataPath <: DataPathNode {
                             i = e + 1
                             break
                         case GT where sub[e + 1].kind == INTEGER_LITERAL =>
+                            validateIJSON(Int64.parse(sub[e + 1].value))
                             tokens += quote(CmpFilter<Int64>($(sub[i .. e].toString()), $(sub[e + 1].value), 'GT', 'false', 'false'))
                             i = e + 1
                             break
@@ -494,6 +502,7 @@ abstract sealed class DataPath <: DataPathNode {
                             i = e + 1
                             break
                         case LE where sub[e + 1].kind == INTEGER_LITERAL =>
+                            validateIJSON(Int64.parse(sub[e + 1].value))
                             tokens += quote(CmpFilter<Int64>($(sub[i .. e].toString()), $(sub[e + 1].value), 'LT', 'true', 'false'))
                             i = e + 1
                             break
@@ -506,6 +515,7 @@ abstract sealed class DataPath <: DataPathNode {
                             i = e + 1
                             break
                         case GE where sub[e + 1].kind == INTEGER_LITERAL =>
+                            validateIJSON(Int64.parse(sub[e + 1].value))
                             tokens += quote(CmpFilter<Int64>($(sub[i .. e].toString()), $(sub[e + 1].value), 'GT', 'true', 'false'))
                             i = e + 1
                             break
@@ -561,6 +571,7 @@ abstract sealed class DataPath <: DataPathNode {
                             i = e
                             break
                         case IDENTIFIER where t.value == 'size' && sub[e + 1].kind == INTEGER_LITERAL =>
+                            validateIJSON(Int64.parse(sub[e + 1].value))
                             tokens += quote(SizeFilter($(sub[i .. e].toString()), $(sub[e + 1].value), 'false'))
                             i = e + 1
                             break
