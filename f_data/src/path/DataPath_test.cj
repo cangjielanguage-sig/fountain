@@ -216,6 +216,76 @@ public class DataPath_basic_test {
     }
 
     @TestCase
+    public func testSliceDefaultStart(): Unit {
+        let list = DataList()
+        list.add(DataReal(10))
+        list.add(DataReal(20))
+        list.add(DataReal(30))
+        list.add(DataReal(40))
+        list.add(DataReal(50))
+        let path = DataPath.cache("$[:3]")
+        let results = collect(path.get(list))
+        @Assert(3, results.size)
+        @Assert("10", results[0].toString())
+        @Assert("20", results[1].toString())
+        @Assert("30", results[2].toString())
+    }
+
+    @TestCase
+    public func testSliceDefaultEnd(): Unit {
+        let list = DataList()
+        list.add(DataReal(10))
+        list.add(DataReal(20))
+        list.add(DataReal(30))
+        list.add(DataReal(40))
+        list.add(DataReal(50))
+        let path = DataPath.cache("$[3:]")
+        let results = collect(path.get(list))
+        @Assert(2, results.size)
+        @Assert("40", results[0].toString())
+        @Assert("50", results[1].toString())
+    }
+
+    @TestCase
+    public func testSliceDefaultAll(): Unit {
+        let list = DataList()
+        list.add(DataReal(10))
+        list.add(DataReal(20))
+        list.add(DataReal(30))
+        let path = DataPath.cache("$[:]")
+        let results = collect(path.get(list))
+        @Assert(3, results.size)
+    }
+
+    @TestCase
+    public func testSliceReverse(): Unit {
+        let list = DataList()
+        list.add(DataReal(10))
+        list.add(DataReal(20))
+        list.add(DataReal(30))
+        list.add(DataReal(40))
+        list.add(DataReal(50))
+        let path = DataPath.cache("$[4:0:-1]")
+        let results = collect(path.get(list))
+        @Assert(4, results.size)
+        @Assert("50", results[0].toString())
+        @Assert("40", results[1].toString())
+        @Assert("30", results[2].toString())
+        @Assert("20", results[3].toString())
+    }
+
+    @TestCase
+    public func testSliceStepZero(): Unit {
+        let list = DataList()
+        list.add(DataReal(10))
+        list.add(DataReal(20))
+        list.add(DataReal(30))
+        let path = DataPath.cache("$[0:3:0]")
+        let results = collect(path.get(list))
+        @Assert(0, results.size)
+    }
+
+    @TestCase
     public func testWildcard(): Unit {
         let list = DataList()
         list.add(DataReal(10))

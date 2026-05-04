@@ -15,9 +15,63 @@ limitations under the License.
  */
 package fountain::f_data.path
 
+import std.collection.ArrayList
+
 internal class RangePathNode <: DataPathNode {
-    RangePathNode(private let range: Range<Int64>) {}
+    private static let UNSET: Int64 = Int64.Max
+    RangePathNode(private let start: Int64, private let end: Int64, private let step: Int64) {}
+    init(start: Int64, end: Int64) {
+        this(start, end, 1)
+    }
+    init(end: Int64) {
+        this(UNSET, end, 1)
+    }
+    init() {
+        this(UNSET, UNSET, 1)
+    }
     public func get(data: Data): Iterator<Data> {
-        range.iterator().map {i => IndexPathNode(i)}.flatMap {n => n.get(data).iterator()}
+        match (data) {
+            case x: Collection<Data> =>
+                let len = x.size
+                let actualStart = if (start == UNSET) {
+                    if (step >= 0) { 0 } else { len - 1 }
+                } else if (start < 0) {
+                    len + start
+                } else {
+                    start
+                }
+                let actualEnd = if (end == UNSET) {
+                    if (step >= 0) { len } else { -len - 1 }
+                } else if (end < 0) {
+                    len + end
+                } else {
+                    end
+                }
+                if (step == 0) {
+                    OptionIterator<Data>()
+                } else {
+                    buildIndices(actualStart, actualEnd, step).iterator()
+                        .map {idx => IndexPathNode(idx)}
+                        .flatMap {n => n.get(data).iterator()}
+                }
+            case _ => OptionIterator<Data>()
+        }
+    }
+    private static func buildIndices(start: Int64, end: Int64, step: Int64): ArrayList<Int64> {
+        let indices = ArrayList<Int64>()
+        if (step > 0) {
+            var i = start
+            while (i < end) {
+                indices.add(i)
+                i += step
+            }
+        } else {
+            var i = start
+            while (i > end) {
+                indices.add(i)
+                i += step
+            }
+        }
+        indices
     }
 }

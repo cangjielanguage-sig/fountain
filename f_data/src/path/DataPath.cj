@@ -127,9 +127,13 @@ abstract sealed class DataPath <: DataPathNode {
         }
     }
     private func compileIndexesInSquares(sub: Tokens): DataPathNode {
+        // Check if this is a slice (contains colon)
+        for (t in sub) {
+            if (t.kind == COLON) {
+                return compileSliceInSquares(sub)
+            }
+        }
         let list = ArrayList<Int64>()
-        var range = 0
-        var comma = 0
         var i = 0
         while (i < sub.size) {
             let t = sub[i]
@@ -139,40 +143,40 @@ abstract sealed class DataPath <: DataPathNode {
                 case SUB where i + 1 < sub.size && sub[i + 1].kind == INTEGER_LITERAL =>
                     list.add(-Int64.parse(sub[i + 1].value))
                     i++
-                case COLON =>
-                    range++
-                    if (range > 2) {
-                        throw DataException(
-                            'sub expression in squares as a int range must be int1:int2:int3 or int1:int2')
-                    } else if (comma > 0) {
-                        throw DataException('sub expression in squares cannot be with comma and colon at the same time')
-                    }
-                case COMMA =>
-                    comma++
-                    if (range > 0) {
-                        throw DataException('sub expression in squares cannot be with comma and colon at the same time')
-                    }
+                case COMMA => ()
                 case _ => throw DataException(
                     'sub expression in squares must be all strings or int64 or int1:int2:int3 or int1:int2')
             }
             i++
         }
-        match (range) {
-            case 0 => MultiIndexPathNode(list.toArray())
-            case 1 =>
-                if (list[0] >= list[1]) {
-                    RangePathNode(0..0)
-                } else {
-                    RangePathNode(list[0]..list[1])
-                }
-            case 2 =>
-                if (list[2] <= 0 || list[0] >= list[1]) {
-                    RangePathNode(0..0)
-                } else {
-                    RangePathNode(list[0]..list[1] : list[2])
-                }
-            case _ => throw UnreachableException()
+        MultiIndexPathNode(list.toArray())
+    }
+    private func compileSliceInSquares(sub: Tokens): RangePathNode {
+        // Parse [start:end:step] with all parts optional
+        var start = Int64.Max  // UNSET sentinel
+        var end = Int64.Max
+        var step = 1i64
+        var phase = 0  // 0=start, 1=end, 2=step
+        var i = 0
+        while (i < sub.size) {
+            let t = sub[i]
+            match (t.kind) {
+                case INTEGER_LITERAL =>
+                    if (phase == 0) { start = Int64.parse(t.value)
+                    } else if (phase == 1) { end = Int64.parse(t.value)
+                    } else { step = Int64.parse(t.value) }
+                case SUB where i + 1 < sub.size && sub[i + 1].kind == INTEGER_LITERAL =>
+                    let val = -Int64.parse(sub[i + 1].value)
+                    if (phase == 0) { start = val
+                    } else if (phase == 1) { end = val
+                    } else { step = val }
+                    i++
+                case COLON => phase++
+                case _ => throw DataException('illegal slice expression ${sub}')
+            }
+            i++
         }
+        RangePathNode(start, end, step)
     }
     private func parseFilterTokens(sub: Tokens, solid: Bool): Tokens {
         var tokens = quote()
@@ -439,7 +443,15 @@ abstract sealed class DataPath <: DataPathNode {
             case _ => throw DataException('unreachable ${expr.toTokens()}')
         }
     }
-    private func compileInSquares(sub: Tokens, solid: Bool) {
+    private func hasColon(sub: Tokens): Bool {
+        for (t in sub) {
+            if (t.kind == COLON) {
+                return true
+            }
+        }
+        false
+    }
+    private func compileInSquares(sub: Tokens, solid: Bool): DataPathNode {
         if (sub.size == 1 && (sub[0].kind == STRING_LITERAL || sub[0].kind == SINGLE_QUOTED_STRING_LITERAL)) {
             compileSubInSquares(sub)
         } else if (sub.size == 1 && sub[0].kind == INTEGER_LITERAL) {
@@ -455,7 +467,7 @@ abstract sealed class DataPath <: DataPathNode {
         } else if (sub.size > 1 && sub[0].kind == QUEST && sub[1].kind == LPAREN && sub[sub.size - 1].kind == RPAREN) {
             compileFilter(sub[2..sub.size - 1], solid)
         } else {
-            throw DataException('sub path ${sub} is illegal')
+            compileSliceInSquares(sub)
         }
     }
     private func doCompile(path: Tokens, solid: Bool): DataPath {
