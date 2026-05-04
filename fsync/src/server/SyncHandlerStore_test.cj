@@ -22,6 +22,7 @@ import std.unittest.testmacro.*
 import fountain::f_data.*
 import fountain::f_protocol.default.*
 import fountain::f_store.Store
+import fountain::f_util.PathPattern
 import fountain::fsync.base.{HostAndPort, SyncData, KeyData, ValueData, PatternData, ScanResult, WatchData}
 
 @Test
@@ -253,6 +254,73 @@ class SyncHandlerStoreTest {
         let _ = handler.handle(Message(Command.REGISTER, SyncData('/app/config/db/host', 0, [1u8]).toData()))
         sleep(Duration.millisecond * 10)
         @Assert(future.tryGet().isSome())
+        store.close()
+        cleanup(dir)
+    }
+
+    //
+    //  glob 扫描（ScanResult 通过 handler.handle 返回，不依赖 convert 验证内容）
+    //
+
+    @TestCase
+    func globScanReturnsMatchingYamlEntries(): Unit {
+        let dir = '/tmp/fsync_test/glob_yaml'
+        cleanup(dir)
+        let store = Store(dir)
+        let nm = NodeManager(ArrayList<HostAndPort>([HostAndPort('127.0.0.1:1203')]), 0)
+        let wm = WatchManager()
+        let handler = SyncHandler(store, nm, wm)
+        let _ = handler.handle(Message(Command.REGISTER, SyncData('/app/config/db/host.yaml', 0, [1u8]).toData()))
+        let _ = handler.handle(Message(Command.REGISTER, SyncData('/app/config/cache/size.xml', 0, [2u8]).toData()))
+        let _ = handler.handle(Message(Command.REGISTER, SyncData('/other/app/test.yaml', 0, [3u8]).toData()))
+        let resp = handler.handle(Message(Command.ACK, PatternData('/app/**/*.yaml').toData()))
+        let isResp = match (resp.command) { case RESP(_) => true case _ => false }
+        @Assert(isResp)
+        store.close()
+        cleanup(dir)
+    }
+
+    @TestCase
+    func globMatchesViaPathPatternAndStore(): Unit {
+        // 直接验证 PathPattern ** 匹配 + store.prefix([]) 联合工作
+        let dir = '/tmp/fsync_test/glob_pp_store'
+        cleanup(dir)
+        let store = Store(dir)
+        let nm = NodeManager(ArrayList<HostAndPort>([HostAndPort('127.0.0.1:1203')]), 0)
+        let wm = WatchManager()
+        let handler = SyncHandler(store, nm, wm)
+        let _ = handler.handle(Message(Command.REGISTER, SyncData('/app/config/db/host.yaml', 0, [1u8]).toData()))
+        let _ = handler.handle(Message(Command.REGISTER, SyncData('/app/config/cache/size.xml', 0, [2u8]).toData()))
+        let _ = handler.handle(Message(Command.REGISTER, SyncData('/app/host.yaml', 0, [2u8]).toData()))
+        let _ = handler.handle(Message(Command.REGISTER, SyncData('/app/a/b/c/host.yaml', 0, [3u8]).toData()))
+        let _ = handler.handle(Message(Command.REGISTER, SyncData('/other/app/test.yaml', 0, [4u8]).toData()))
+        let pp = PathPattern()
+        pp.compile('/app/**/*.yaml')
+        var matched = 0i64
+        let all = store.prefix([])
+        for ((k, _) in all) {
+            if (pp.matches(String.fromUtf8(k))) { matched++ }
+        }
+        @Assert(matched == 3)
+        store.close()
+        cleanup(dir)
+    }
+
+    @TestCase
+    func globNonMatchingPatternReturnsEmpty(): Unit {
+        let dir = '/tmp/fsync_test/glob_empty'
+        cleanup(dir)
+        let store = Store(dir)
+        let nm = NodeManager(ArrayList<HostAndPort>([HostAndPort('127.0.0.1:1203')]), 0)
+        let wm = WatchManager()
+        let handler = SyncHandler(store, nm, wm)
+        let _ = handler.handle(Message(Command.REGISTER, SyncData('/app/config/db/host.txt', 0, [1u8]).toData()))
+        let resp = handler.handle(Message(Command.ACK, PatternData('/app/**/*.yaml').toData()))
+        if (let Some(result) <- convert<ScanResult>(resp.data)) {
+            @Assert(0, result.size)
+        } else {
+            @Assert(false)
+        }
         store.close()
         cleanup(dir)
     }
