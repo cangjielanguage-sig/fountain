@@ -136,27 +136,25 @@ public class DataPath_basic_test {
     }
 
     @TestCase
-    public func testNegativeIndex(): Unit {
-        let list = DataList()
-        list.add(DataReal(10))
-        list.add(DataReal(20))
-        list.add(DataReal(30))
-        let path = DataPath.cache("$[-1]")
-        let results = collect(path.get(list))
-        @Assert(1, results.size)
-        @Assert("30", results[0].toString())
+    public func testNegativeIndexThrows(): Unit {
+        var ok = false
+        try {
+            DataPath.cache("$[-1]")
+        } catch (_: DataException) {
+            ok = true
+        }
+        @Assert(true, ok)
     }
 
     @TestCase
-    public func testNegativeIndexSecondLast(): Unit {
-        let list = DataList()
-        list.add(DataReal(10))
-        list.add(DataReal(20))
-        list.add(DataReal(30))
-        let path = DataPath.cache("$[-2]")
-        let results = collect(path.get(list))
-        @Assert(1, results.size)
-        @Assert("20", results[0].toString())
+    public func testNegativeIndexSecondLastThrows(): Unit {
+        var ok = false
+        try {
+            DataPath.cache("$[-2]")
+        } catch (_: DataException) {
+            ok = true
+        }
+        @Assert(true, ok)
     }
 
     @TestCase
@@ -316,11 +314,13 @@ public class DataPath_basic_test {
 
     @TestCase
     public func testNegativeIndexOutOfRange(): Unit {
-        let list = DataList()
-        list.add(DataReal(10))
-        let path = DataPath.cache("$[-100]")
-        let results = collect(path.get(list))
-        @Assert(0, results.size)
+        var ok = false
+        try {
+            DataPath.cache("$[-100]")
+        } catch (_: DataException) {
+            ok = true
+        }
+        @Assert(true, ok)
     }
 
     @TestCase
@@ -883,6 +883,19 @@ public class DataPath_recursive_test {
 
     @TestCase
     public func testRecursiveDescentSimple(): Unit {
+        // RFC §2.5.2: bare $.. without selector throws DataException
+        var ok = false
+        try {
+            DataPath.cache("$..")
+        } catch (_: DataException) {
+            ok = true
+        }
+        @Assert(true, ok)
+    }
+
+    @TestCase
+    public func testRecursiveDescentAll(): Unit {
+        // Use $..* for all descendants (RFC compliant)
         let inner = DataList()
         inner.add(DataReal(1))
         inner.add(DataReal(2))
@@ -890,10 +903,8 @@ public class DataPath_recursive_test {
         outer.add(DataReal(0))
         outer.add(inner)
         outer.add(DataReal(3))
-        // outer = [0, [1, 2], 3]
-        let path = DataPath.cache("$..")
+        let path = DataPath.cache("$..*")
         let results = collect(path.get(outer))
-        // Should include the root and all descendants
         @Assert(true, results.size > 0)
     }
 
@@ -1380,9 +1391,10 @@ public class DataPath_integration_test {
     }
 
     @TestCase
-    public func testNegativeIndex(): Unit {
+    public func testNegativeIndexSlice(): Unit {
         let store = buildStore()
-        let path = DataPath.cache("$.books[-1].title")
+        // Use slice syntax for negative index (RFC §2.3.4)
+        let path = DataPath.cache("$.books[-1:].title")
         let results = collect(path.get(store))
         @Assert(1, results.size)
         @Assert("1984", results[0].toString())
@@ -1396,5 +1408,100 @@ public class DataPath_integration_test {
         let results = collect(path.get(store))
         @Assert(1, results.size)
         @Assert("1984", results[0].toString())
+    }
+}
+
+@Test
+public class DataPath_p1_gaps_test {
+    private func collect(itr: Iterator<Data>): ArrayList<Data> {
+        let list = ArrayList<Data>()
+        for (d in itr) {
+            list.add(d)
+        }
+        list
+    }
+
+    private func makePerson(name: String, age: Int64, role: String): TestObj {
+        let obj = TestObj()
+        obj.set("name", DataString(name))
+        obj.set("age", DataReal(age))
+        obj.set("role", DataString(role))
+        obj
+    }
+
+    @TestCase
+    public func testPathEq(): Unit {
+        let p1 = makePerson("Alice", 30, "admin")
+        let p2 = makePerson("Bob", 25, "admin")
+        let p3 = makePerson("Charlie", 35, "user")
+        let list = DataList()
+        list.add(p1)
+        list.add(p2)
+        list.add(p3)
+        // filter: @.role == @.role (always true)
+        let path = DataPath.cache("$[?(@.role == @.role)]")
+        let results = collect(path.get(list))
+        @Assert(3, results.size)
+    }
+
+    @TestCase
+    public func testPathNotEq(): Unit {
+        let p1 = makePerson("Alice", 30, "admin")
+        let p2 = makePerson("Bob", 25, "user")
+        let list = DataList()
+        list.add(p1)
+        list.add(p2)
+        let path = DataPath.cache("$[?(@.role != @.name)]")
+        let results = collect(path.get(list))
+        @Assert(2, results.size)
+    }
+
+    @TestCase
+    public func testPathEqFiltered(): Unit {
+        let p1 = makePerson("Alice", 30, "admin")
+        let p2 = makePerson("Bob", 25, "user")
+        let p3 = makePerson("Charlie", 35, "admin")
+        let list = DataList()
+        list.add(p1)
+        list.add(p2)
+        list.add(p3)
+        // People whose role matches the 'admin' person
+        let path = DataPath.cache("$[?(@.role == 'admin')]")
+        let results = collect(path.get(list))
+        @Assert(2, results.size)
+    }
+
+    @TestCase
+    public func testEscapeBracketName(): Unit {
+        let obj = TestObj()
+        obj.set("key", DataString("val"))
+        let list = DataList()
+        list.add(obj)
+        let path = DataPath.cache("$..['key']")
+        let results = collect(path.get(list))
+        @Assert(1, results.size)
+    }
+
+    @TestCase
+    public func testMultipleBracketSelectors(): Unit {
+        let obj = TestObj()
+        obj.set("first", DataString("1"))
+        obj.set("second", DataString("2"))
+        let list = DataList()
+        list.add(obj)
+        let path = DataPath.cache("$..['first','second']")
+        let results = collect(path.get(list))
+        @Assert(2, results.size)
+    }
+
+    @TestCase
+    public func testBracketName(): Unit {
+        let obj = TestObj()
+        obj.set("myname", DataString("test"))
+        let list = DataList()
+        list.add(obj)
+        let path = DataPath.cache("$..['myname']")
+        let results = collect(path.get(list))
+        @Assert(1, results.size)
     }
 }

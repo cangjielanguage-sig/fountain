@@ -102,36 +102,9 @@ abstract sealed class DataPath <: DataPathNode {
     }
     private func compileSubInSquares(sub: Tokens) {
         match (sub[0].kind) {
-            case STRING_LITERAL | SINGLE_QUOTED_STRING_LITERAL =>
-                SubPathNode(unescapeJsonPathName(sub[0].value))
-            case IDENTIFIER => SubPathNode(sub[0].value)
+            case STRING_LITERAL | SINGLE_QUOTED_STRING_LITERAL | IDENTIFIER => SubPathNode(sub[0].value)
             case _ => throw DataException('sub expression in squares can only be string literal or identifier')
         }
-    }
-    private static func unescapeJsonPathName(raw: String): String {
-        // Strip surrounding quotes if present
-        let inner = if (raw.size >= 2 && (raw[0] == 0x27u8 || raw[0] == 0x22u8)) {
-            raw[1..raw.size - 1]
-        } else { raw }
-        // Process escape sequences: \n, \\, \", \uXXXX
-        let s = StringGenerator()
-        var i = 0
-        while (i < inner.size) {
-            if (inner[i] == 0x5Cu8 && i + 1 < inner.size) {
-                let next = inner[i + 1]
-                if (next == 0x6Eu8) { s.append(r'\n'); i += 2 }          // \n
-                else if (next == 0x5Cu8) { s.append(r'\\'); i += 2 }     // \\
-                else if (next == 0x22u8) { s.append(r'\"'); i += 2 }     // \"
-                else if (next == 0x27u8) { s.append(r'\''); i += 2 }     // \'
-                else if (next == 0x75u8 && i + 5 < inner.size) {          // \uXXXX
-                    let hexStr = inner[i + 2..i + 6]
-                    let codePoint = Int64.parse(hexStr, radix: 16)
-                    s.append(Rune(codePoint))
-                    i += 6
-                } else { s.append(Rune(inner[i])); i++ }
-            } else { s.append(Rune(inner[i])); i++ }
-        }
-        s.toString()
     }
     private func compileIndexInSquares(sub: Tokens) {
         let idx = parseIndexToken(sub[0], sub, 0)
@@ -141,9 +114,7 @@ abstract sealed class DataPath <: DataPathNode {
         let names = ArrayList<String>()
         for (t in sub) {
             let n = match (t.kind) {
-                case STRING_LITERAL | SINGLE_QUOTED_STRING_LITERAL =>
-                    unescapeJsonPathName(t.value)
-                case IDENTIFIER => t.value
+                case STRING_LITERAL | SINGLE_QUOTED_STRING_LITERAL | IDENTIFIER => t.value
                 case COMMA => continue
                 case _ => throw DataException(
                     'sub expression in squares as multi-names can only be string literal, identifier and comma, but current are ${sub}')
@@ -159,9 +130,7 @@ abstract sealed class DataPath <: DataPathNode {
                 validateIJSON(val)
                 val
             case SUB where i + 1 < sub.size && sub[i + 1].kind == INTEGER_LITERAL =>
-                let val = -Int64.parse(sub[i + 1].value)
-                validateIJSON(val)
-                val
+                throw DataException('negative indices in index selectors are not allowed; use slice syntax e.g., $[-1:]')
             case _ => throw DataException('sub expression as an index must be an integer')
         }
     }
@@ -187,9 +156,7 @@ abstract sealed class DataPath <: DataPathNode {
                     validateIJSON(val)
                     list.add(val)
                 case SUB where i + 1 < sub.size && sub[i + 1].kind == INTEGER_LITERAL =>
-                    let val = -Int64.parse(sub[i + 1].value)
-                    validateIJSON(val)
-                    list.add(val)
+                    throw DataException('negative indices in multi-index selectors are not allowed')
                     i++
                 case COMMA => ()
                 case _ => throw DataException(
@@ -812,11 +779,11 @@ abstract sealed class DataPath <: DataPathNode {
                 let tokens = x.toTokens()
                 let filter = tokens[0].value
                 let generic = tokens[2].value
-                let args = tokens[if (filter == 'RegexFilter' || filter == 'SizeFilter' || filter == 'ExistsFilter' || filter == 'NullFilter' || filter == 'MatchFilter' || filter == 'SearchFilter' || filter == 'CountCmpFilter' || filter == 'ValueCmpFilter' || filter == 'LengthCmpFilter' || filter == 'StructEqFilter' || filter == 'ObjectEqFilter' || filter == 'EqPathFilter' || filter == 'DeferredMatchFilter' || filter == 'DeferredSearchFilter' || filter == 'ValueFilterResult' || filter == 'CountFilterResult') {
-                        2
-                    } else {
-                        5
-                    }..tokens.size - 1]
+                let index = match (filter) {
+                    case 'RegexFilter' | 'SizeFilter' | 'ExistsFilter' | 'NullFilter' | 'MatchFilter' | 'SearchFilter' | 'CountCmpFilter' | 'ValueCmpFilter' | 'LengthCmpFilter' | 'StructEqFilter' | 'ObjectEqFilter' | 'EqPathFilter' | 'DeferredMatchFilter' | 'DeferredSearchFilter' | 'ValueFilterResult' | 'CountFilterResult' => 2
+                    case _ => 5
+                }
+                let args = tokens[index..tokens.size - 1]
                 match ((filter, generic)) {
                     case ('EqFilter', 'String') => EqFilter<String>(arg(args, 0), arg(args, 1), arg(args, 2))
                     case ('EqFilter', 'Int64') => EqFilter<Int64>(arg(args, 0), arg(args, 1), arg(args, 2))
@@ -930,27 +897,33 @@ abstract sealed class DataPath <: DataPathNode {
                 }
                 i += 3
                 node
-            } else if (path[i].kind == DOT && path[i + 1].kind == IDENTIFIER) {
+            } else if (path[i].kind == DOT && i + 1 < path.size && path[i + 1].kind == IDENTIFIER) {
                 i++
                 SubPathNode(path[i].value)
-            } else if (path[i].kind == DOT && path[i + 1].kind == MUL) {
+            } else if (path[i].kind == DOT && i + 1 < path.size && path[i + 1].kind == MUL) {
                 i++
                 AnySubPathNode.instance
-            } else if (path[i].kind == DOT && path[i + 1].kind == DOT) {
-                // Skip optional MUL after .. (..* means all descendants)
+            } else if (path[i].kind == DOT && i + 1 < path.size && path[i + 1].kind == DOT) {
+                // RFC §2.5.2: .. must be followed by a selector (name, *, index, slice, or filter)
                 if (i + 2 < path.size && path[i + 2].kind == MUL) {
+                    // MUL (*) is a valid selector (..*)
                     i++
+                } else if (i + 2 >= path.size || (path[i + 2].kind != IDENTIFIER && path[i + 2].kind != LSQUARE)) {
+                    throw DataException('invalid syntax: ".." must be followed by a selector (name, *, index, slice, or filter)')
                 }
                 RecursiveDescentPathNode.instance
             } else if (path[i].kind == RANGEOP) {
-                // Skip optional MUL after .. (..* with RANGEOP token)
+                // RFC §2.5.2: .. must be followed by a selector (name, *, index, slice, or filter)
                 if (i + 1 < path.size && path[i + 1].kind == MUL) {
+                    // MUL (*) is a valid selector (..*)
                     i++
+                } else if (i + 1 >= path.size || (path[i + 1].kind != IDENTIFIER && path[i + 1].kind != LSQUARE)) {
+                    throw DataException('invalid syntax: ".." must be followed by a selector (name, *, index, slice, or filter)')
                 }
                 RecursiveDescentPathNode.instance
             } else if (path[i].kind == IDENTIFIER && i > 0 && (path[i - 1].kind == RANGEOP || path[i - 1].kind == DOT)) {
                 SubPathNode(path[i].value)
-            } else if (path[i].kind == DOT && path[i + 1].kind == LSQUARE && path[i - 1].kind == DOT) {
+            } else if (path[i].kind == DOT && i + 1 < path.size && path[i + 1].kind == LSQUARE && path[i - 1].kind == DOT) {
                 let (sub, index) = extractSubPathInSquares(path, i + 1)
                 i = index
                 compileInSquares(sub, solid)
@@ -961,6 +934,8 @@ abstract sealed class DataPath <: DataPathNode {
                 compileInSquares(subPath, solid)
             } else if (i == 0 && path[i].kind == AT) {
                 CurrentPathNode.instance
+            } else if (path[i].kind == DOT && i + 1 >= path.size) {
+                throw DataException('trailing "." without member name after index ${i}')
             } else {
                 throw DataException('data path is illegal at index ${i}, path: ${path}')
             }
