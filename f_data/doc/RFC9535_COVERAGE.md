@@ -1,8 +1,8 @@
 # RFC 9535 覆盖清单
 
 > 实现 branch: `feature/datapath`
-> 测试: **71/71 通过** (21 basic + 35 filter + 9 recursive + 3 compile error + 5 object eq)
-> 文件: 19 个新文件 + 7 个修改文件
+> 测试: **75/75 通过** (21 basic + 35 filter + 9 recursive + 3 compile error + 5 object eq + 4 complex fn)
+> 文件: 23 个新文件 + 7 个修改文件
 
 ---
 
@@ -94,10 +94,13 @@
 |------|-----|------|------|------|
 | `count()` 路径级 | §4.3 | `CountPathNode` | `$.count()` | `testFunctionCount` |
 | `count()` filter 比较 | §4.3 | `CountCmpFilter` | `count(@.*) OP N` | `testFilterCountEq` |
+| `count()` 嵌套表达式 | §4.3 | `CountFilterResult` | `count(match(@.name, "pat")) > N` | `testCountMatch` |
 | `match()` | §4.4 | `MatchFilter` | `match(@.name, "pat")` | `testFilterMatch` |
+| `match()` 路径参数 | §4.4 | `DeferredMatchFilter` | `match(@.name, @.pattern)` | `testDeferredMatchField` |
 | `search()` | §4.5 | `SearchFilter` | `search(@.name, "pat")` | `testFilterSearch` |
+| `search()` 路径参数 | §4.5 | `DeferredSearchFilter` | `search(@.name, @.pattern)` | `testDeferredSearchField` |
 | `value()` 路径级 | §4.6 | `ValuePathNode` | `$.value()` | `testFunctionValue` |
-| `value()` filter 比较 | §4.6 | `ValueCmpFilter` | `value(@.name) == X` | `testFilterValueEq` |
+| `value()` filter 比较 | §4.6 | `ValueCmpFilter` / `ValueFilterResult` | `value(@.name) == X` | `testFilterValueEq` |
 | `length()` 路径级 | §4.2 | `LengthPathNode` | `$.length()` | `testFunctionLength` |
 | `length()` filter 比较 | §4.2 | `LengthCmpFilter` | `length(@.name) OP N` | `testFilterLengthGt` |
 
@@ -145,7 +148,7 @@
 | 特性 | 说明 |
 |------|------|
 | 标准化路径 (Normalized Paths) §8 | 未实现。需要为匹配节点生成 `$['name'][0]` 形式路径 |
-| 复杂函数表达式 | 仅单层函数调用，不支持嵌套 `match(x, search(...))` |
+| 复杂函数表达式 | 现在支持：`match(@.name, @.regex)` 路径参数、`count(match(...))` 嵌套、`search(@.name, @.pat)`、`value(search(...))`。不支持：深层嵌套（3+ 层）。 |
 
 ---
 
@@ -195,17 +198,21 @@
 | `MatchFilter.cj` | `match()` 函数 | ~42 |
 | `SearchFilter.cj` | `search()` 函数 | ~42 |
 | `ObjectEqFilter.cj` | `{"k": v}` 对象结构相等 | ~202 |
+| `DeferredMatchFilter.cj` | `match()` 运行时路径参数 | ~40 |
+| `DeferredSearchFilter.cj` | `search()` 运行时路径参数 | ~40 |
+| `CountFilterResult.cj` | `count(innerFilter)` 嵌套计数 | ~55 |
+| `ValueFilterResult.cj` | `value(innerFilter)` 嵌套取值 | ~65 |
 
 ### 测试文件
 
 | 文件 | 测试数 |
 |------|--------|
-| `DataPath_test.cj` | 71 |
+| `DataPath_test.cj` | 75 |
 
 ---
 
 ## git 分支
 
 ```
-feature/datapath — 19 commits, ~2200 lines changed
+feature/datapath — 22 commits, ~2600 lines changed
 ```
