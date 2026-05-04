@@ -25,10 +25,13 @@ internal class ValueCmpFilter <: DataFilter {
         this(compilePath(left, solid), rightLiteral)
     }
     public func check(data: Data): Bool {
-        let d = match (left.get(data).next()) {
+        let itr = left.get(data)
+        let d = match (itr.next()) {
             case Some(x) => x
             case _ => return false
         }
+        // RFC §2.4.8: value() returns Nothing for multi-node nodelists
+        if (itr.next().isSome()) { return false }
         d.toString() == rightLiteral
     }
 }

@@ -102,9 +102,36 @@ abstract sealed class DataPath <: DataPathNode {
     }
     private func compileSubInSquares(sub: Tokens) {
         match (sub[0].kind) {
-            case STRING_LITERAL | SINGLE_QUOTED_STRING_LITERAL | IDENTIFIER => SubPathNode(sub[0].value)
+            case STRING_LITERAL | SINGLE_QUOTED_STRING_LITERAL =>
+                SubPathNode(unescapeJsonPathName(sub[0].value))
+            case IDENTIFIER => SubPathNode(sub[0].value)
             case _ => throw DataException('sub expression in squares can only be string literal or identifier')
         }
+    }
+    private static func unescapeJsonPathName(raw: String): String {
+        // Strip surrounding quotes if present
+        let inner = if (raw.size >= 2 && (raw[0] == 0x27u8 || raw[0] == 0x22u8)) {
+            raw[1..raw.size - 1]
+        } else { raw }
+        // Process escape sequences: \n, \\, \", \uXXXX
+        let s = StringGenerator()
+        var i = 0
+        while (i < inner.size) {
+            if (inner[i] == 0x5Cu8 && i + 1 < inner.size) {
+                let next = inner[i + 1]
+                if (next == 0x6Eu8) { s.append(r'\n'); i += 2 }          // \n
+                else if (next == 0x5Cu8) { s.append(r'\\'); i += 2 }     // \\
+                else if (next == 0x22u8) { s.append(r'\"'); i += 2 }     // \"
+                else if (next == 0x27u8) { s.append(r'\''); i += 2 }     // \'
+                else if (next == 0x75u8 && i + 5 < inner.size) {          // \uXXXX
+                    let hexStr = inner[i + 2..i + 6]
+                    let codePoint = Int64.parse(hexStr, radix: 16)
+                    s.append(Rune(codePoint))
+                    i += 6
+                } else { s.append(Rune(inner[i])); i++ }
+            } else { s.append(Rune(inner[i])); i++ }
+        }
+        s.toString()
     }
     private func compileIndexInSquares(sub: Tokens) {
         let idx = parseIndexToken(sub[0], sub, 0)
@@ -114,7 +141,9 @@ abstract sealed class DataPath <: DataPathNode {
         let names = ArrayList<String>()
         for (t in sub) {
             let n = match (t.kind) {
-                case STRING_LITERAL | SINGLE_QUOTED_STRING_LITERAL | IDENTIFIER => t.value
+                case STRING_LITERAL | SINGLE_QUOTED_STRING_LITERAL =>
+                    unescapeJsonPathName(t.value)
+                case IDENTIFIER => t.value
                 case COMMA => continue
                 case _ => throw DataException(
                     'sub expression in squares as multi-names can only be string literal, identifier and comma, but current are ${sub}')
@@ -297,6 +326,17 @@ abstract sealed class DataPath <: DataPathNode {
             }
             throw DataException('unclosed brace in object literal')
         }
+        // Helper: find the end of a path expression starting at startIdx.
+        // Scans forward until it hits an operator token (AND, OR, RPAREN) or end.
+        func findPathEnd(startIdx: Int64): Int64 {
+            for (e in startIdx..sub.size) {
+                match (sub[e].kind) {
+                    case AND | OR | RPAREN => return e
+                    case _ => continue
+                }
+            }
+            sub.size
+        }
         // Helper: emit a comparison filter for count()/value() + OP + value
         func emitCmpFilter(path: String, startIdx: Int64, fnType: String): (Tokens, Int64) {
             let opToken = sub[startIdx]
@@ -470,6 +510,21 @@ abstract sealed class DataPath <: DataPathNode {
                             let objContent = concatTokenValues(sub[e + 1 .. objEnd + 1])
                             tokens += quote(ObjectEqFilter($(sub[i .. e].toString()), $(Token(STRING_LITERAL, objContent)), 'false', 'false'))
                             i = objEnd
+                            break
+                        case EQUAL where sub[e + 1].kind == AT || sub[e + 1].kind == DOLLAR =>
+                            // Path comparison: @.x == @.y or @.x == $.y
+                            let rightEnd = findPathEnd(e + 1)
+                            let leftStr = concatTokenValues(sub[i .. e])
+                            let rightStr = concatTokenValues(sub[e + 1 .. rightEnd])
+                            tokens += quote(EqPathFilter($(leftStr), $(rightStr), 'false', 'true'))
+                            i = rightEnd
+                            break
+                        case NOTEQ where sub[e + 1].kind == AT || sub[e + 1].kind == DOLLAR =>
+                            let rightEnd = findPathEnd(e + 1)
+                            let leftStr = concatTokenValues(sub[i .. e])
+                            let rightStr = concatTokenValues(sub[e + 1 .. rightEnd])
+                            tokens += quote(EqPathFilter($(leftStr), $(rightStr), 'false', 'false'))
+                            i = rightEnd
                             break
                         case LT where sub[e + 1].kind == STRING_LITERAL || sub[e + 1].kind ==SINGLE_QUOTED_STRING_LITERAL =>
                             tokens += quote(CmpFilter<String>($(sub[i .. e].toString()), $(sub[e + 1].value), 'LT', 'false', 'false'))
@@ -757,7 +812,7 @@ abstract sealed class DataPath <: DataPathNode {
                 let tokens = x.toTokens()
                 let filter = tokens[0].value
                 let generic = tokens[2].value
-                let args = tokens[if (filter == 'RegexFilter' || filter == 'SizeFilter' || filter == 'ExistsFilter' || filter == 'NullFilter' || filter == 'MatchFilter' || filter == 'SearchFilter' || filter == 'CountCmpFilter' || filter == 'ValueCmpFilter' || filter == 'LengthCmpFilter' || filter == 'StructEqFilter' || filter == 'ObjectEqFilter' || filter == 'DeferredMatchFilter' || filter == 'DeferredSearchFilter' || filter == 'ValueFilterResult' || filter == 'CountFilterResult') {
+                let args = tokens[if (filter == 'RegexFilter' || filter == 'SizeFilter' || filter == 'ExistsFilter' || filter == 'NullFilter' || filter == 'MatchFilter' || filter == 'SearchFilter' || filter == 'CountCmpFilter' || filter == 'ValueCmpFilter' || filter == 'LengthCmpFilter' || filter == 'StructEqFilter' || filter == 'ObjectEqFilter' || filter == 'EqPathFilter' || filter == 'DeferredMatchFilter' || filter == 'DeferredSearchFilter' || filter == 'ValueFilterResult' || filter == 'CountFilterResult') {
                         2
                     } else {
                         5
@@ -804,6 +859,7 @@ abstract sealed class DataPath <: DataPathNode {
                     case ('LengthCmpFilter', _) => LengthCmpFilter(arg(args, 0), arg(args, 1), arg(args, 2), arg(args, 3), arg(args, 4))
                     case ('StructEqFilter', _) => StructEqFilter(arg(args, 0), arg(args, 1), arg(args, 2), arg(args, 3))
                     case ('ObjectEqFilter', _) => ObjectEqFilter(arg(args, 0), arg(args, 1), arg(args, 2), arg(args, 3))
+                    case ('EqPathFilter', _) => EqPathFilter(arg(args, 0), arg(args, 1), arg(args, 2), arg(args, 3))
                     case ('DeferredMatchFilter', _) => DeferredMatchFilter(arg(args, 0), arg(args, 1), arg(args, 2))
                     case ('DeferredSearchFilter', _) => DeferredSearchFilter(arg(args, 0), arg(args, 1), arg(args, 2))
                     case ('CountFilterResult', _) =>
