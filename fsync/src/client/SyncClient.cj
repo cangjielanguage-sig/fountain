@@ -117,7 +117,16 @@ public class SyncClient {
     }
 
     public func glob(pattern: String): ScanResult {
-        prefix(pattern)
+        requireAbsolutePath(pattern)
+        let req = Message(Command.ACK, PatternData(pattern).toData())
+        if (let Some(resp) <- client.transfer(req.id, req, requestTimeout)) {
+            if (let Some(vd) <- convert<ValueData>(resp.data)) {
+                if (let Some(blob) <- vd.value) {
+                    return ScanResult.decodeFromBytes(blob)
+                }
+            }
+        }
+        ScanResult()
     }
 
     public func watch<T>(key: String, timeout!: Duration = Duration.Zero): ?T where T <: DataFields<T> {
