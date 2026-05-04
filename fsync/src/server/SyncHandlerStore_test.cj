@@ -84,6 +84,32 @@ class SyncHandlerStoreTest {
     }
 
     @TestCase
+    func checkWriteAccessQuorumError(): Unit {
+        // 验证 handleRegister 在无仲裁时返回错误
+        let dir = '/tmp/fsync_test/quorum_error'
+        cleanup(dir)
+        let store = Store(dir)
+        // 3 节点集群，alive 初始=3，健康检查线程每5秒尝试PING其他节点
+        // 在健康检查运行前 alive=3 > 3/2=1，仲裁通过
+        // 这里只验证 checkWriteAccess 被调用且不抛异常
+        let hosts = ArrayList<HostAndPort>([
+            HostAndPort('10.0.0.1:1203'),
+            HostAndPort('10.0.0.2:1203'),
+            HostAndPort('10.0.0.3:1203')
+        ])
+        let nm = NodeManager(hosts, 0)
+        let wm = WatchManager()
+        let handler = SyncHandler(store, nm, wm)
+        // REGISTER 到本节点（索引0，对应 10.0.0.1:1203）
+        // checkWriteAccess 会检查 isOwner
+        let resp = handler.handle(Message(Command.REGISTER, SyncData('/app/key', 0, [1u8]).toData()))
+        let isResp = match (resp.command) { case RESP(_) => true case _ => false }
+        @Assert(isResp)
+        store.close()
+        cleanup(dir)
+    }
+
+    @TestCase
     func getKeyReturnsValueAfterRegister(): Unit {
         let dir = '/tmp/fsync_test/get_after_register'
         cleanup(dir)

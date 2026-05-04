@@ -36,6 +36,7 @@ public class HashRing {
     }
 
     public func getNode(key: String): ?HostAndPort {
+        if (ring.size == 0) { return None }
         let hash = murmurHash(key)
         let entry = ring.forward(hash, inclusive: true).next()
         if (let Some((_, idx)) <- entry) {

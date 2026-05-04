@@ -107,4 +107,33 @@ class HashRingTest {
         let ring = HashRing(nodes)
         @Assert(ring.nodeCount() == 3)
     }
+
+    @TestCase
+    func emptyRingReturnsNoneForGetNode(): Unit {
+        let nodes = ArrayList<HostAndPort>()
+        let ring = HashRing(nodes)
+        @Assert(ring.getNode('/app/key').isNone())
+        @Assert(ring.nodeCount() == 0)
+    }
+
+    @TestCase
+    func emptyRingReturnsNoneForGetNextNode(): Unit {
+        let nodes = ArrayList<HostAndPort>()
+        let ring = HashRing(nodes)
+        // getNextNode 在空环时不应抛异常
+        try {
+            let result = ring.getNextNode('/app/key', 0)
+            @Assert(result.isNone())
+        } catch (e: Exception) {
+            @Assert(false)  // 不应抛异常
+        }
+    }
+
+    @TestCase
+    func emptyRingIsOwnerReturnsFalse(): Unit {
+        let nodes = ArrayList<HostAndPort>()
+        let ring = HashRing(nodes)
+        let notOwner = !ring.isOwner('/app/key', 0)
+        @Assert(notOwner)
+    }
 }
