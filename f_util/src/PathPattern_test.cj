@@ -174,4 +174,13 @@ public class PathPattern_test {
         @Assert(Some("36"), datas.get("projectId"))
         @Assert(Some("88"), datas.get("userId"))
     }
+
+    @TestCase
+    public func testGlobWildcard(): Unit {
+        let pattern = PathPattern()
+        pattern.compile("/app/**/*.yaml")
+        @Assert(true, pattern.matches("/app/config/db/host.yaml"))
+        @Assert(true, pattern.matches("/app/.yaml"))
+        @Assert(false, pattern.matches("/other/app/test.yaml"))
+    }
 }

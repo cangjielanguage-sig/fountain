@@ -323,6 +323,31 @@ public class PathPattern {
             }
             tmp = node.getDoubleStarNode()
             if (let Some(n) <- tmp) {
+                // ** matches zero segments first: try n's children at current part
+                var res: Option<PathNode> = n.getSub(part)
+                if (res.isNone()) { res = n.getRegexPlaceholderNode(part, NonePathNode.INSTANCE) }
+                if (res.isNone()) { res = n.getPlaceholderNode(NonePathNode.INSTANCE) }
+                if (res.isNone()) { res = n.getRegexNode(part) }
+                if (res.isNone()) { res = n.getComplexNode(part, NonePathNode.INSTANCE) }
+                if (res.isNone()) { res = n.getStarNode() }
+                if (let Some(child) <- res) {
+                    node = child
+                    prevDoubleStar = n
+                    prevPlaceholder = NonePathNode.INSTANCE
+                    prevComplex = NonePathNode.INSTANCE
+                    prevRegexPlaceholder = NonePathNode.INSTANCE
+                    if (mode.extraction()) {
+                        match (child) {
+                            case cpn: ComplexPathNode => variables.add(i, cpn)
+                            case pn: PlaceholderPathNode => variables.add(i, pn.name)
+                            case prn: PlaceholderRegexPathNode => variables.add(i, prn.name)
+                            case _ => ()
+                        }
+                    }
+                    i++
+                    continue
+                }
+                // ** matches 1+ segments (consume current part, stay at **)
                 node = n
                 prevDoubleStar = node
                 prevPlaceholder = NonePathNode.INSTANCE
@@ -412,7 +437,7 @@ public class PathPattern {
      * @return
      */
     public func matches(path: String): Bool {
-        return matches(path, false)
+        return matches(path, true)
     }
     public func matches(path: String, withExtName: Bool): Bool {
         let node = get(path, Mode.MATCHING, withExtName)
@@ -813,6 +838,18 @@ open class RegexPathNode <: PathNode {
                 match (c) {
                     case r'?' => reg.append(r'.')
                     case r'*' => reg.append(".*")
+                    case r'.' => reg.append("\\.")
+                    case r'\\' => reg.append("\\\\")
+                    case r'^' => reg.append("\\^")
+                    case r'$' => reg.append("\\$")
+                    case r'|' => reg.append("\\|")
+                    case r'+' => reg.append("\\+")
+                    case r'(' => reg.append("\\(")
+                    case r')' => reg.append("\\)")
+                    case r'[' => reg.append("\\[")
+                    case r']' => reg.append("\\]")
+                    case r'{' => reg.append("\\{")
+                    case r'}' => reg.append("\\}")
                     case c => reg.append(c)
                 }
             }
