@@ -237,6 +237,20 @@ abstract sealed class DataPath <: DataPathNode {
             } else { rawRegex }
             (path, regex)
         }
+        // Helper: find RSQUARE matching LSQUARE at startIdx
+        func findMatchingRSQUARE(startIdx: Int64): Int64 {
+            var depth = 0
+            for (e in startIdx..sub.size) {
+                match (sub[e].kind) {
+                    case LSQUARE => depth++
+                    case RSQUARE =>
+                        depth--
+                        if (depth == 0) { return e }
+                    case _ => continue
+                }
+            }
+            throw DataException('unclosed bracket in array literal')
+        }
         // Helper: emit a comparison filter for count()/value() + OP + value
         func emitCmpFilter(path: String, startIdx: Int64, fnType: String): (Tokens, Int64) {
             let opToken = sub[startIdx]
@@ -358,6 +372,19 @@ abstract sealed class DataPath <: DataPathNode {
                             tokens += quote(NullFilter($(sub[i .. e].toString()), 'false', 'false'))
                             i = e + 1
                             break
+                        case EQUAL where sub[e + 1].kind == LSQUARE =>
+                            // Array literal comparison: @.items == [1, 2, 3]
+                            let arrEnd = findMatchingRSQUARE(e + 1)
+                            let arrContent = concatTokenValues(sub[e + 1 .. arrEnd + 1])
+                            tokens += quote(StructEqFilter($(sub[i .. e].toString()), $(Token(STRING_LITERAL, arrContent)), 'false', 'true'))
+                            i = arrEnd
+                            break
+                        case NOTEQ where sub[e + 1].kind == LSQUARE =>
+                            let arrEnd = findMatchingRSQUARE(e + 1)
+                            let arrContent = concatTokenValues(sub[e + 1 .. arrEnd + 1])
+                            tokens += quote(StructEqFilter($(sub[i .. e].toString()), $(Token(STRING_LITERAL, arrContent)), 'false', 'false'))
+                            i = arrEnd
+                            break
                         case LT where sub[e + 1].kind == STRING_LITERAL || sub[e + 1].kind ==SINGLE_QUOTED_STRING_LITERAL =>
                             tokens += quote(CmpFilter<String>($(sub[i .. e].toString()), $(sub[e + 1].value), 'LT', 'false', 'false'))
                             i = e + 1
@@ -457,7 +484,7 @@ abstract sealed class DataPath <: DataPathNode {
                             tokens += quote(SizeFilter($(sub[i .. e].toString()), $(sub[e + 1].value), 'false'))
                             i = e + 1
                             break
-                        case DOT | IDENTIFIER => continue
+                        case DOT | IDENTIFIER | MUL => continue
                         case _ =>
                             pathEnd = e
                             break
@@ -586,7 +613,7 @@ abstract sealed class DataPath <: DataPathNode {
                 let tokens = x.toTokens()
                 let filter = tokens[0].value
                 let generic = tokens[2].value
-                let args = tokens[if (filter == 'RegexFilter' || filter == 'SizeFilter' || filter == 'ExistsFilter' || filter == 'NullFilter' || filter == 'MatchFilter' || filter == 'SearchFilter' || filter == 'CountCmpFilter' || filter == 'ValueCmpFilter' || filter == 'LengthCmpFilter') {
+                let args = tokens[if (filter == 'RegexFilter' || filter == 'SizeFilter' || filter == 'ExistsFilter' || filter == 'NullFilter' || filter == 'MatchFilter' || filter == 'SearchFilter' || filter == 'CountCmpFilter' || filter == 'ValueCmpFilter' || filter == 'LengthCmpFilter' || filter == 'StructEqFilter') {
                         2
                     } else {
                         5
@@ -631,6 +658,7 @@ abstract sealed class DataPath <: DataPathNode {
                     case ('CountCmpFilter', _) => CountCmpFilter(arg(args, 0), arg(args, 1), arg(args, 2), arg(args, 3), arg(args, 4))
                     case ('ValueCmpFilter', _) => ValueCmpFilter(arg(args, 0), arg(args, 1), arg(args, 2))
                     case ('LengthCmpFilter', _) => LengthCmpFilter(arg(args, 0), arg(args, 1), arg(args, 2), arg(args, 3), arg(args, 4))
+                    case ('StructEqFilter', _) => StructEqFilter(arg(args, 0), arg(args, 1), arg(args, 2), arg(args, 3))
                     case _ => throw DataException('unreachable ${tokens}')
                 }
             case x: ParenExpr => compileFilter(x.parenthesizedExpr)

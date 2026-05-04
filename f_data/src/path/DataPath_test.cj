@@ -712,6 +712,34 @@ public class DataPath_filter_test {
     }
 
     @TestCase
+    public func testFilterArrayEq(): Unit {
+        let l1 = DataList()
+        l1.add(DataReal(1)); l1.add(DataReal(2)); l1.add(DataReal(3))
+        let l2 = DataList()
+        l2.add(DataReal(4)); l2.add(DataReal(5))
+        let outer = DataList()
+        outer.add(l1)
+        outer.add(l2)
+        let path = DataPath.cache("$[?(@.* == [1, 2, 3])]")
+        let results = collect(path.get(outer))
+        @Assert(1, results.size)
+    }
+
+    @TestCase
+    public func testFilterArrayNotEq(): Unit {
+        let l1 = DataList()
+        l1.add(DataReal(1)); l1.add(DataReal(2)); l1.add(DataReal(3))
+        let l2 = DataList()
+        l2.add(DataReal(4)); l2.add(DataReal(5))
+        let outer = DataList()
+        outer.add(l1)
+        outer.add(l2)
+        let path = DataPath.cache("$[?(@.* != [1, 2, 3])]")
+        let results = collect(path.get(outer))
+        @Assert(1, results.size)
+    }
+
+    @TestCase
     public func testFilterCountNotEq(): Unit {
         let p1 = makePerson("Alice", 30)
         let p2 = makePerson("Bob", 25)
