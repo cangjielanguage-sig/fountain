@@ -11,24 +11,23 @@
 - 支持 [n:m], [:n], [n:], [:], [n:m:step], [4:0:-1], [0:3:0]
 
 ### Step 2: `..[*]` 完整语法 ✅
-- 44/44 全部测试通过
 - `..*`: 自动消费后续 MUL 标记
 - `..name`: IDENTIFIER 紧跟 RANGEOP 时转为 SubPathNode
 - `..[selectors]`: RANGEOP/DOT 作为 LSQUARE 的前驱标记
 
-### Step 3: 存在性测试
-- 新建 `ExistsFilter.cj`
-- `parseFilterTokens` AT 分支：无操作符时生成存在性测试
-- `compileFilter` 添加 ExistsFilter 分支
+### Step 3: 存在性测试 ✅
+- 新建 `ExistsFilter`
+- `?(@.name)` 作为布尔测试（路径返回非空=true）
 
-### Step 4: `null` 字面量过滤
-- 新建 `NullFilter.cj`
+### Step 4: `null` 字面量过滤 ✅
+- 新建 `NullFilter`
 - 支持 `?(@.name == null)`, `?(@.name != null)`
 
-### Step 5: 函数扩展 `count()`, `match()`, `search()`, `value()`
-- 新建 filter 类
-- `parseFilterTokens` 和 `compileFilter` 添加函数名分支
+### 全部测试结果：51/51 通过 ✅
 
-### Step 6: 遗留问题
-- `[::-1]` 缺省值支持
-- RegexFilter 修复（std.regex.matches 行为）
+| 套件 | 通过 |
+|------|------|
+| DataPath_basic_test | 21 |
+| DataPath_filter_test | 19 |
+| DataPath_recursive_test | 7 |
+| DataPath_compile_error_test | 3 |
