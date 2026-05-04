@@ -700,6 +700,18 @@ public class DataPath_filter_test {
     }
 
     @TestCase
+    public func testFilterLengthGt(): Unit {
+        let p1 = makePerson("Alice", 30)  // name length = 5
+        let p2 = makePerson("Bob", 25)    // name length = 3
+        let list = DataList()
+        list.add(p1)
+        list.add(p2)
+        let path = DataPath.cache("$[?(length(@.name) > 3)]")
+        let results = collect(path.get(list))
+        @Assert(1, results.size)
+    }
+
+    @TestCase
     public func testFilterInNull(): Unit {
         let p1 = makePerson("Alice", 30)
         let p2 = makePerson("Bob", 25)

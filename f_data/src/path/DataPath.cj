@@ -60,6 +60,8 @@ internal import fountain::f_data.base.*
  * [?(@.age =~ /\d+/)]
  */
 abstract sealed class DataPath <: DataPathNode {
+    private static let IJSON_MIN: Int64 = -9007199254740991
+    private static let IJSON_MAX: Int64 = 9007199254740991
     private let nodes = ArrayList<DataPathNode>()
 
     init() {}
@@ -121,9 +123,20 @@ abstract sealed class DataPath <: DataPathNode {
     }
     private func parseIndexToken(t: Token, sub: Tokens, i: Int64): Int64 {
         match (t.kind) {
-            case INTEGER_LITERAL => Int64.parse(t.value)
-            case SUB where i + 1 < sub.size && sub[i + 1].kind == INTEGER_LITERAL => -Int64.parse(sub[i + 1].value)
+            case INTEGER_LITERAL =>
+                let val = Int64.parse(t.value)
+                validateIJSON(val)
+                val
+            case SUB where i + 1 < sub.size && sub[i + 1].kind == INTEGER_LITERAL =>
+                let val = -Int64.parse(sub[i + 1].value)
+                validateIJSON(val)
+                val
             case _ => throw DataException('sub expression as an index must be an integer')
+        }
+    }
+    private static func validateIJSON(val: Int64) {
+        if (val < IJSON_MIN || val > IJSON_MAX) {
+            throw DataException('integer ${val} is outside I-JSON range [-(2^53)+1, (2^53)-1]')
         }
     }
     private func compileIndexesInSquares(sub: Tokens): DataPathNode {
@@ -162,11 +175,14 @@ abstract sealed class DataPath <: DataPathNode {
             let t = sub[i]
             match (t.kind) {
                 case INTEGER_LITERAL =>
-                    if (phase == 0) { start = Int64.parse(t.value)
-                    } else if (phase == 1) { end = Int64.parse(t.value)
-                    } else { step = Int64.parse(t.value) }
+                    let raw = Int64.parse(t.value)
+                    validateIJSON(raw)
+                    if (phase == 0) { start = raw
+                    } else if (phase == 1) { end = raw
+                    } else { step = raw }
                 case SUB where i + 1 < sub.size && sub[i + 1].kind == INTEGER_LITERAL =>
                     let val = -Int64.parse(sub[i + 1].value)
+                    validateIJSON(val)
                     if (phase == 0) { start = val
                     } else if (phase == 1) { end = val
                     } else { step = val }
@@ -244,6 +260,23 @@ abstract sealed class DataPath <: DataPathNode {
                     quote(CountCmpFilter($(path), $(valueStr), "EQ", "false", "false"))
                 } else {
                     throw DataException('unsupported operator for count/value comparison')
+                }
+                (r, valueIdx)
+            } else if (fnType == 'length') {
+                let r = if (opKind == TokenKind.GT) {
+                    quote(LengthCmpFilter($(path), $(valueStr), "GT", "false", "false"))
+                } else if (opKind == TokenKind.LT) {
+                    quote(LengthCmpFilter($(path), $(valueStr), "LT", "false", "false"))
+                } else if (opKind == TokenKind.GE) {
+                    quote(LengthCmpFilter($(path), $(valueStr), "GT", "true", "false"))
+                } else if (opKind == TokenKind.LE) {
+                    quote(LengthCmpFilter($(path), $(valueStr), "LT", "true", "false"))
+                } else if (opKind == TokenKind.EQUAL) {
+                    quote(LengthCmpFilter($(path), $(valueStr), "EQ", "true", "false"))
+                } else if (opKind == TokenKind.NOTEQ) {
+                    quote(LengthCmpFilter($(path), $(valueStr), "EQ", "false", "false"))
+                } else {
+                    throw DataException('unsupported operator for length comparison')
                 }
                 (r, valueIdx)
             } else {
@@ -468,6 +501,18 @@ abstract sealed class DataPath <: DataPathNode {
                             tokens += quote(ValueCmpFilter($(path), 'true', 'false'))
                             i = rp
                         }
+                    } else if (t.value == 'length') {
+                        let rp = findFuncRParen()
+                        let path = extractOneArg(rp)
+                        let idx = rp + 1
+                        if (idx < sub.size) {
+                            let cmpResult = emitCmpFilter(path, idx, 'length')
+                            tokens += cmpResult[0]
+                            i = cmpResult[1]
+                        } else {
+                            tokens += quote(LengthCmpFilter($(path), '0', 'GT', 'false', 'false'))
+                            i = rp
+                        }
                     } else {
                         throw DataException('filter in data path ${sub} is illegal')
                     }
@@ -541,7 +586,7 @@ abstract sealed class DataPath <: DataPathNode {
                 let tokens = x.toTokens()
                 let filter = tokens[0].value
                 let generic = tokens[2].value
-                let args = tokens[if (filter == 'RegexFilter' || filter == 'SizeFilter' || filter == 'ExistsFilter' || filter == 'NullFilter' || filter == 'MatchFilter' || filter == 'SearchFilter' || filter == 'CountCmpFilter' || filter == 'ValueCmpFilter') {
+                let args = tokens[if (filter == 'RegexFilter' || filter == 'SizeFilter' || filter == 'ExistsFilter' || filter == 'NullFilter' || filter == 'MatchFilter' || filter == 'SearchFilter' || filter == 'CountCmpFilter' || filter == 'ValueCmpFilter' || filter == 'LengthCmpFilter') {
                         2
                     } else {
                         5
@@ -585,6 +630,7 @@ abstract sealed class DataPath <: DataPathNode {
                     case ('SearchFilter', _) => SearchFilter(arg(args, 0), arg(args, 1), arg(args, 2))
                     case ('CountCmpFilter', _) => CountCmpFilter(arg(args, 0), arg(args, 1), arg(args, 2), arg(args, 3), arg(args, 4))
                     case ('ValueCmpFilter', _) => ValueCmpFilter(arg(args, 0), arg(args, 1), arg(args, 2))
+                    case ('LengthCmpFilter', _) => LengthCmpFilter(arg(args, 0), arg(args, 1), arg(args, 2), arg(args, 3), arg(args, 4))
                     case _ => throw DataException('unreachable ${tokens}')
                 }
             case x: ParenExpr => compileFilter(x.parenthesizedExpr)
