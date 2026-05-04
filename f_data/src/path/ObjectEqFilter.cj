@@ -43,8 +43,8 @@ internal class ObjectEqFilter <: DataFilter {
             if (p.size == 0) { continue }
             let colonIdx = findColon(p)
             if (colonIdx < 0) { continue }
-            let keyStr = p[0..colonIdx].trim()
-            let valStr = p[colonIdx + 1..p.size].trim()
+            let keyStr = p[0..colonIdx].trimAscii()
+            let valStr = p[colonIdx + 1..p.size].trimAscii()
             // Strip quotes from key
             let key = if (keyStr.size >= 2 && (keyStr[0] == 0x22u8 || keyStr[0] == 0x27u8)) {
                 keyStr[1..keyStr.size - 1]
@@ -67,13 +67,11 @@ internal class ObjectEqFilter <: DataFilter {
     }
 
     // Parse a single value from string into Data
+    // Note: STRING_LITERAL.value from cangjieLex does NOT include surrounding quotes.
     private static func parseValue(s: String): Data {
-        let val = s.trim()
+        let val = s.trimAscii()
         if (val.toAsciiLower() == "null") {
             return DataNone.INSTANCE
-        }
-        if (val.size >= 2 && (val[0] == 0x27u8 || val[0] == 0x22u8)) {
-            return DataString(val[1..val.size - 1])
         }
         if (val == "true") { return DataBool.TRUE }
         if (val == "false") { return DataBool.FALSE }
@@ -95,11 +93,15 @@ internal class ObjectEqFilter <: DataFilter {
             }
             return list
         }
-        // Number
-        if (val.contains(".") || val.contains("e") || val.contains("E")) {
-            return DataReal(Float64.parse(val))
+        // Number: starts with digit, -, or +
+        if (val.size > 0 && ((val[0] >= 0x30u8 && val[0] <= 0x39u8) || val[0] == 0x2Du8 || val[0] == 0x2Bu8)) {
+            if (val.contains(".") || val.contains("e") || val.contains("E")) {
+                return DataReal(Float64.parse(val))
+            }
+            return DataReal(Int64.parse(val))
         }
-        DataReal(Int64.parse(val))
+        // Default: string value
+        DataString(val)
     }
 
     // Parse array literal from string into ArrayList<Data>
