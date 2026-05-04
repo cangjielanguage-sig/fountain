@@ -142,6 +142,18 @@ public class ScanResult {
         get() { keys.size }
     }
 
+    /** 返回第 index 个 key */
+    public func getKey(index: Int64): ?String {
+        if (index < 0 || index >= keys.size) { return None }
+        keys[index]
+    }
+
+    /** 返回第 index 个 value 的原始字节 */
+    public func getValue(index: Int64): ?Array<Byte> {
+        if (index < 0 || index >= values.size) { return None }
+        values[index]
+    }
+
     /** 将 values[index] 解码为类型 T，返回 (key, T) */
     public func decode<T>(index: Int64): ?(String, T) where T <: DataFields<T> {
         if (index < 0 || index >= keys.size) { return None }
@@ -154,13 +166,16 @@ public class ScanResult {
         }
     }
 
-    /** 将所有条目编码为单字节流，用 DefaultCodec 逐对编码 key→Array<Byte> + value→Array<Byte> */
+    /** 将所有条目编码为单字节流，每对 key+value 分别编码后追加到同一 ByteBuffer */
     public func encodeToBytes(): Array<Byte> {
         if (keys.size == 0) { return [] }
         let buf = ByteBuffer()
         for (i in 0..keys.size) {
             DefaultCodec()
                 .encode(keys[i].unsafeBytes())
+                .finish()
+                .copy(to: buf, closeFromOnEnd: true, closeToOnEnd: false)
+            DefaultCodec()
                 .encode(values[i])
                 .finish()
                 .copy(to: buf, closeFromOnEnd: true, closeToOnEnd: false)
@@ -178,10 +193,13 @@ public class ScanResult {
         if (blob.size == 0) { return result }
         let buf = ByteBuffer(blob)
         let codec = DefaultCodec()
-        while (true) {
+        // 安全解码：最多读取 blob.size 对，防止编解码器不前进导致死循环
+        var maxPairs = blob.size  // 安全上限
+        while (maxPairs > 0) {
             if (let Some(kb) <- codec.decode<Array<Byte>>(buf)) {
                 if (let Some(v) <- codec.decode<Array<Byte>>(buf)) {
                     result.add(String.fromUtf8(kb), v)
+                    maxPairs--
                 } else { break }
             } else { break }
         }
