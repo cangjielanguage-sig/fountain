@@ -16,7 +16,7 @@ limitations under the License.
 package fountain::fsync.server
 
 import std.collection.{ArrayList, HashMap}
-import std.sync.{Mutex, Condition}
+import std.sync.{Mutex, Condition, AtomicBool}
 import std.time.DateTime
 
 /** Watch 通知 Future：阻塞等待数据变化，可通过 set 从外部唤醒 */
@@ -78,20 +78,33 @@ internal struct WatchEntry {
     }
 }
 
-public class WatchManager {
+public class WatchManager <: Resource {
     private let exactWatchers = HashMap<String, ArrayList<WatchEntry>>()
     private let prefixWatchers = HashMap<String, ArrayList<WatchEntry>>()
     private let globWatchers = HashMap<String, ArrayList<WatchEntry>>()
     private let mutex = Mutex()
+    private let running = AtomicBool(true)
 
     public init() {
-        let mgr = this
+        let runningRef = this.running
         spawn {
-            while (true) {
+            while (runningRef.load()) {
                 sleep(Duration.second)
-                mgr.cleanupExpired()
+                try {
+                    cleanupExpired()
+                } catch (_: Exception) {
+                    // 清理异常不中断线程
+                }
             }
         }
+    }
+
+    public func close(): Unit {
+        running.store(false)
+    }
+
+    public func isClosed(): Bool {
+        !running.load()
     }
 
     public func registerExact(key: String, timeout: Duration): WatchFuture {

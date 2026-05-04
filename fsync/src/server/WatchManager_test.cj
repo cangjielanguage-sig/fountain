@@ -110,4 +110,21 @@ class WatchManagerTest {
         sleep(Duration.millisecond * 10)
         @Assert(future.tryGet().isNone())
     }
+
+    @TestCase
+    func closeStopsCleanupThread(): Unit {
+        let wm = WatchManager()
+        @Assert(!wm.isClosed())
+        wm.close()
+        @Assert(wm.isClosed())
+        // close 后注册新的 watcher 仍可工作（线程退出不影响业务逻辑）
+        let future = wm.registerExact('/app/key', Duration.millisecond * 10)
+        sleep(Duration.millisecond * 20)
+        @Assert(future.tryGet().isNone())  // 超时返回 None
+        // close 后 notify 仍能通知到已注册的 watcher
+        let future2 = wm.registerExact('/app/key2', Duration.Zero)
+        wm.notify('/app/key2', [42u8])
+        sleep(Duration.millisecond * 10)
+        @Assert(future2.tryGet().isSome())
+    }
 }
