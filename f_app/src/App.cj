@@ -613,7 +613,8 @@ private let _ = AppVersion.set(#'${banner()}'#, '${name}', '${version}')
     - fboot version x.y.z '提交的内容' tag
     - fboot version x.y.z '提交的内容' tag '版本消息'
 13. fboot version 显示当前fountain版本号
-14. fboot help 显示命令列表
+14. fboot pub <version> 发布当前路径下的仓颉模块
+15. fboot help 显示命令列表
 '''
         stdOut.writeln(content)
         0
