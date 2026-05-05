@@ -616,11 +616,23 @@ abstract sealed class DataPath <: DataPathNode {
                         let rp = findFuncRParen()
                         let args = splitArgsDepthAware(sub[i + 2 .. rp])
                         if (args.size < 2) { throw DataException('search() requires 2 arguments') }
-                        let pathStr = concatTokenValues(args[0])
-                        if (args[1].size > 0 && (args[1][0].kind == AT || args[1][0].kind == DOLLAR)) {
+                        if (args[0].size > 0 && (args[0][0].kind == IDENTIFIER || args[0][0].kind == MATCH)) {
+                            let fnIdx = compileSubFilter(args[0])
+                            let rawRegex = concatTokenValues(args[1])
+                            let regex = if (rawRegex.size >= 2 && (rawRegex[0] == 0x27u8 || rawRegex[0] == 0x22u8)) {
+                                rawRegex[1..rawRegex.size - 1]
+                            } else { rawRegex }
+                            tokens += quote(FnSearchFilter($(fnIdx), $(regex), 'false'))
+                        } else if (args[1].size > 0 && (args[1][0].kind == IDENTIFIER || args[1][0].kind == MATCH)) {
+                            let pathStr = concatTokenValues(args[0])
+                            let fnIdx = compileSubFilter(args[1])
+                            tokens += quote(FnDeferredSearchFilter($(pathStr), $(fnIdx), 'false'))
+                        } else if (args[1].size > 0 && (args[1][0].kind == AT || args[1][0].kind == DOLLAR)) {
+                            let pathStr = concatTokenValues(args[0])
                             let regexPath = concatTokenValues(args[1])
                             tokens += quote(DeferredSearchFilter($(pathStr), $(regexPath), 'false'))
                         } else {
+                            let pathStr = concatTokenValues(args[0])
                             let rawRegex = concatTokenValues(args[1])
                             let regex = if (rawRegex.size >= 2 && (rawRegex[0] == 0x27u8 || rawRegex[0] == 0x22u8)) {
                                 rawRegex[1..rawRegex.size - 1]
@@ -700,12 +712,25 @@ abstract sealed class DataPath <: DataPathNode {
                     let rp = findFuncRParen()
                     let args = splitArgsDepthAware(sub[i + 2 .. rp])
                     if (args.size < 2) { throw DataException('match() requires 2 arguments') }
-                    let pathStr = concatTokenValues(args[0])
-                    // Detect if second argument is a path expression (starts with @/$)
-                    if (args[1].size > 0 && (args[1][0].kind == AT || args[1][0].kind == DOLLAR)) {
+                    // Check if first argument is a function call
+                    if (args[0].size > 0 && (args[0][0].kind == IDENTIFIER || args[0][0].kind == MATCH)) {
+                        let fnIdx = compileSubFilter(args[0])
+                        let rawRegex = concatTokenValues(args[1])
+                        let regex = if (rawRegex.size >= 2 && (rawRegex[0] == 0x27u8 || rawRegex[0] == 0x22u8)) {
+                            rawRegex[1..rawRegex.size - 1]
+                        } else { rawRegex }
+                        tokens += quote(FnMatchFilter($(fnIdx), $(regex), 'false'))
+                    } else if (args[1].size > 0 && (args[1][0].kind == IDENTIFIER || args[1][0].kind == MATCH)) {
+                        // Second argument is a function call → regex from expression
+                        let pathStr = concatTokenValues(args[0])
+                        let fnIdx = compileSubFilter(args[1])
+                        tokens += quote(FnDeferredMatchFilter($(pathStr), $(fnIdx), 'false'))
+                    } else if (args[1].size > 0 && (args[1][0].kind == AT || args[1][0].kind == DOLLAR)) {
+                        let pathStr = concatTokenValues(args[0])
                         let regexPath = concatTokenValues(args[1])
                         tokens += quote(DeferredMatchFilter($(pathStr), $(regexPath), 'false'))
                     } else {
+                        let pathStr = concatTokenValues(args[0])
                         let rawRegex = concatTokenValues(args[1])
                         let regex = if (rawRegex.size >= 2 && (rawRegex[0] == 0x27u8 || rawRegex[0] == 0x22u8)) {
                             rawRegex[1..rawRegex.size - 1]
@@ -780,7 +805,7 @@ abstract sealed class DataPath <: DataPathNode {
                 let filter = tokens[0].value
                 let generic = tokens[2].value
                 let index = match (filter) {
-                    case 'RegexFilter' | 'SizeFilter' | 'ExistsFilter' | 'NullFilter' | 'MatchFilter' | 'SearchFilter' | 'CountCmpFilter' | 'ValueCmpFilter' | 'LengthCmpFilter' | 'StructEqFilter' | 'ObjectEqFilter' | 'EqPathFilter' | 'DeferredMatchFilter' | 'DeferredSearchFilter' | 'ValueFilterResult' | 'CountFilterResult' => 2
+                    case 'RegexFilter' | 'SizeFilter' | 'ExistsFilter' | 'NullFilter' | 'MatchFilter' | 'SearchFilter' | 'CountCmpFilter' | 'ValueCmpFilter' | 'LengthCmpFilter' | 'StructEqFilter' | 'ObjectEqFilter' | 'EqPathFilter' | 'DeferredMatchFilter' | 'DeferredSearchFilter' | 'ValueFilterResult' | 'CountFilterResult' | 'FnMatchFilter' | 'FnSearchFilter' | 'FnDeferredMatchFilter' | 'FnDeferredSearchFilter' => 2
                     case _ => 5
                 }
                 let args = tokens[index..tokens.size - 1]
@@ -835,6 +860,18 @@ abstract sealed class DataPath <: DataPathNode {
                     case ('ValueFilterResult', _) =>
                         let idx = Int64.parse(arg(args, 0))
                         ValueFilterResult(subFilters[idx], arg(args, 1), arg(args, 2))
+                    case ('FnMatchFilter', _) =>
+                        let idx = Int64.parse(arg(args, 0))
+                        FnMatchFilter(subFilters[idx], arg(args, 1), arg(args, 2))
+                    case ('FnSearchFilter', _) =>
+                        let idx = Int64.parse(arg(args, 0))
+                        FnSearchFilter(subFilters[idx], arg(args, 1), arg(args, 2))
+                    case ('FnDeferredMatchFilter', _) =>
+                        let fnIdx = Int64.parse(arg(args, 1))
+                        FnDeferredMatchFilter(arg(args, 0), subFilters[fnIdx], arg(args, 2))
+                    case ('FnDeferredSearchFilter', _) =>
+                        let fnIdx = Int64.parse(arg(args, 1))
+                        FnDeferredSearchFilter(arg(args, 0), subFilters[fnIdx], arg(args, 2))
                     case _ => throw DataException('unreachable ${tokens}')
                 }
             case x: ParenExpr => compileFilter(x.parenthesizedExpr)
