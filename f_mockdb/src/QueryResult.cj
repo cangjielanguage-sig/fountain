@@ -38,10 +38,16 @@ public class MockQueryResult <: QueryResult {
         getOrNull<T>(index).getOrThrow()
     }
     public func getOrNull<T>(index: Int): ?T {
-        match(rowData[index]){
+        if(rowIndex < 0 || rowIndex >= rowData.size){
+            return None
+        }
+        let row = rowData[rowIndex]
+        if(index < 0 || index >= row.size){
+            return None
+        }
+        match(row[index]){
             case x: T => x
-            case x: ?T => x
-            case x => throw MockDbException('target: ${TypeInfo.of<T>()}')
+            case _ => None
         }
     }
     public func isClosed(): Bool {

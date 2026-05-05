@@ -69,7 +69,7 @@ public class MockTransaction <: Transaction {
     }
     public func rollback(savePointName: String): Unit {
         output.writeln('Transaction rollbacking, threadID: ${MOCKDB.currentThreadId}; savePoint: ${savePointName}')
-        if(MOCKDB.toThrowOnRollbacingSavePoint(savePointName)){
+        if(MOCKDB.toThrowOnRollbackingSavePoint(savePointName)){
             throw MockDbException()
         }
     }

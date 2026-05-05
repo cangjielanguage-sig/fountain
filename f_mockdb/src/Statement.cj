@@ -42,6 +42,9 @@ public class MockStatement <: Statement {
         for(_ in args.size ..= index) {
             args.add(None<Any>)
         }
+        if(index < args.size) {
+            args[index] = None<Any>
+        }
     }
     public func update(): UpdateResult {
         MOCKDB.execution(sql, args)

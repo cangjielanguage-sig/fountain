@@ -160,7 +160,7 @@ public class MOCKDB {
                 m[savepoint] = toThrow
         }
     }
-    public static func toThrowOnReleasing(savepoint: String){
+    public static func toThrowOnReleasing(savepoint: String): Bool {
         if(let Some(m) <- toThrowOnReleasing_.get()){
             m.get(savepoint) ?? false
         }else{
@@ -175,7 +175,7 @@ public class MOCKDB {
             toThrowOnRollbacking_.set(value)
         }
     }
-    public static func toThrowOnRollbacingSavePoint(savepoint: String, toThrow: Bool): Unit {
+    public static func toThrowOnRollbackingSavePoint(savepoint: String, toThrow: Bool): Unit {
         match(toThrowOnRollbackingSavePoint_.get()){
             case Some(m) => m[savepoint] = toThrow
             case _ =>
@@ -184,7 +184,7 @@ public class MOCKDB {
                 m[savepoint] = toThrow
         }
     }
-    public static func toThrowOnRollbacingSavePoint(savepoint: String){
+    public static func toThrowOnRollbackingSavePoint(savepoint: String): Bool {
         if(let Some(m) <- toThrowOnRollbackingSavePoint_.get()){
             m.get(savepoint) ?? false
         }else{
@@ -201,7 +201,7 @@ public class MOCKDB {
                 m[savepoint] = toThrow
         }
     }
-    public static func toThrowOnSavingSavePoint(savepoint: String){
+    public static func toThrowOnSavingSavePoint(savepoint: String): Bool {
         if(let Some(m) <- toThrowOnSavingSavePoint_.get()){
             m.get(savepoint) ?? false
         }else{
