@@ -192,6 +192,16 @@ public class MigroDDLTest {
         @Assert(true, sqls[0].contains(newIdx.def))
     }
 
+    // Postgres DROP INDEX uses correct syntax
+    @TestCase
+    public func testPostgresDropIndex(): Unit {
+        let finder = PostgresSchemaFinder()
+        let currentIdx = [idx("old_idx", "obsolete", false)]
+        let sqls = collect(finder.generateIndexSql("users", ArrayList<IndexMeta>().toArray(), currentIdx.iterator()))
+        @Assert(1, sqls.size)
+        @Assert(true, sqls[0].startsWith("drop index"))
+    }
+
     // MariaDB driverName is 'mariadb' not 'mysql'
     @TestCase
     public func testMariaDBDriverName(): Unit {

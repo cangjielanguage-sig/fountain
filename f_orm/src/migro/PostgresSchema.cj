@@ -183,7 +183,7 @@ public abstract class AbstractPostgresSchemaFinder <: SchemaFinder {
                     }else{
                         sqls.add("alter table ${tableName} alter ${c.columnName} drop default;")
                     }
-                    if(c.nullable){
+                    if(column.nullable){
                         sqls.add('alter table ${tableName} alter column ${c.columnName} drop not null;')
                     }else{
                         sqls.add('alter table ${tableName} alter column ${c.columnName} set not null;')
@@ -206,11 +206,11 @@ public abstract class AbstractPostgresSchemaFinder <: SchemaFinder {
         let newIndexMap = indexIndexes(new.iterator())
         let sqls = ArrayList<String>()
         for(i in currentIndexes.values() where !newIndexMap.contains(i.name)){
-            sqls.add('alter table ${tableName} drop index ${i.name};')
+            sqls.add('drop index ${i.name};')
         }
         for(i in newIndexMap.values()){
             if(let Some(x) <- currentIndexes.get(i.name) && i != x){
-                sqls.add('alter table ${tableName} drop index ${i.name};')
+                sqls.add('drop index ${i.name};')
                 sqls.add('${i.def};')
             }else if(!currentIndexes.contains(i.name)){
                 sqls.add('${i.def};')
