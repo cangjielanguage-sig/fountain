@@ -65,38 +65,38 @@ struct FaithfulMemoryImpl <: FaithfulMemory {
         var lastSession = ''
         var currentSession = ''
         let messages = ArrayList<ChatMessage>()
-        for(item in store.prefix(CONTENT_KEY_PREFIX.unsafeBytes())){
-            let k = String.fromUtf8(item.key)
-            let v = String.fromUtf8(item.value)
-            let keyParts = k.split(':')
-            currentSession = keyParts[1]
-            let timeStr = keyParts[2]
-            let time = DateTime.parse(timeStr, FULL_DATE_FORMAT)
-            let role = keyParts[3]
-            if(time >= earlierThan){
-                break
-            }
-            let message = ChatMessage(role, v)
-            if(lastSession.isEmpty()){
-                lastSession = currentSession
-            }
-            if(lastSession == currentSession){
-                messages.add(message)
-            }else if(fn(lastSession, messages)){
-                for(m in messages){
-                    let session = lastSession
-                    store.update<Unit>{tx => 
-                        tx.delete(duplicateKey(md5, session, m.role, m.content))
-                        tx.delete(contentKey(timeStr, session, m.role))
-                    }
-                    md5.reset()
+        try(itr = store.prefix(CONTENT_KEY_PREFIX.unsafeBytes())){
+            for((key, val) in itr){
+                let k = String.fromUtf8(key)
+                let v = String.fromUtf8(val)
+                let keyParts = k.split(':')
+                currentSession = keyParts[1]
+                let timeStr = keyParts[2]
+                let time = DateTime.parse(timeStr, FULL_DATE_FORMAT)
+                let role = keyParts[3]
+                if(time >= earlierThan){
+                    break
                 }
-                messages.clear()
-                lastSession = currentSession
-                messages.add(message)
-            }else{
-                log.warn('summarise failed, or ExperienceFinder instance not found, current session: ${currentSession}')
-                break
+                let message = ChatMessage(role, v)
+                if(lastSession.isEmpty()){
+                    lastSession = currentSession
+                }
+                if(lastSession == currentSession){
+                    messages.add(message)
+                }else if(fn(lastSession, messages)){
+                    for(m in messages){
+                        let session = lastSession
+                        store.remove(duplicateKey(md5, session, m.role, m.content))
+                        store.remove(contentKey(timeStr, session, m.role))
+                        md5.reset()
+                    }
+                    messages.clear()
+                    lastSession = currentSession
+                    messages.add(message)
+                }else{
+                    log.warn('summarise failed, or ExperienceFinder instance not found, current session: ${currentSession}')
+                    break
+                }
             }
         }
     }
