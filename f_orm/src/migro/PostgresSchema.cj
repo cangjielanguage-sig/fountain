@@ -67,6 +67,12 @@ public class PostgresIndexSchemaPO {
     }
 }
 public abstract class AbstractPostgresSchemaFinder <: SchemaFinder {
+    private static func indexColumns(itr: Iterator<ColumnMeta>): HashMap<String, ColumnMeta> {
+        itr.fold(HashMap<String, ColumnMeta>()){m, c => m[c.columnName] = c; m}
+    }
+    private static func indexIndexes(itr: Iterator<IndexMeta>): HashMap<String, IndexMeta> {
+        itr.fold(HashMap<String, IndexMeta>()){m, i => m[i.name] = i; m}
+    }
     public func listTables(database: String): Iterator<String> {
         resource(ORM.executor(driverName)){exe =>
             exe.setSql('''
@@ -115,6 +121,9 @@ public abstract class AbstractPostgresSchemaFinder <: SchemaFinder {
             }
         }
     }
+    private static func esc(val: String): String {
+        val.replace("'", "''")
+    }
     private func generateColumn(column: ColumnMeta): String {
         '${column.columnName} ${column.typeName} ${if(column.nullable){''}else{'not null'}} ${column.extra}'
     }
@@ -128,17 +137,14 @@ public abstract class AbstractPostgresSchemaFinder <: SchemaFinder {
             ${list.iterator().map{column => generateColumn(column)}.intersperse(',\n').fold(StringGenerator()){g, s => g.append(s)}}
         );
         '''].iterator().concat(
-            list.iterator().filter{m => m.default.isSome()}.map{m => "ALTER TABLE ${tableName} ALTER ${m.columnName} SET DEFAULT '${m.default}';"}
+            list.iterator().filter{m => m.default.isSome()}.map{m => "ALTER TABLE ${tableName} ALTER ${m.columnName} SET DEFAULT '${esc(m.default.getOrThrow())}';"}
         )
     }
     public func generateDropTableSql(tableName: String): String {
         'drop table ${tableName};'
     }
     public func generateAlterSql(tableName: String, new: Array<ColumnMeta>, current: Iterator<ColumnMeta>): Iterator<String> {
-        let currentColumnMap = current.iterator().fold(HashMap<String, ColumnMeta>()){m, c => 
-            m[c.columnName] = c
-            m
-        }
+        let currentColumnMap = indexColumns(current)
         let newColumnMap = HashMap<String, ColumnMeta>()
         let oldColumnMap = HashMap<String, ColumnMeta>()
         for(c in new){
@@ -153,7 +159,7 @@ public abstract class AbstractPostgresSchemaFinder <: SchemaFinder {
                 sqls.add('alter table ${tableName} rename column ${c.oldColumnName} to ${c.columnName};')
                 sqls.add('alter table ${tableName} alter column ${c.columnName} type ${c.typeName};')
                 if(c.default.isSome()){
-                    sqls.add("alter table ${tableName} alter ${c.columnName} set default '${c.default.getOrThrow()}';")
+                    sqls.add("alter table ${tableName} alter ${c.columnName} set default '${esc(c.default.getOrThrow())}';")
                 }else{
                     sqls.add("alter table ${tableName} alter ${c.columnName} drop default;")
                 }
@@ -173,7 +179,7 @@ public abstract class AbstractPostgresSchemaFinder <: SchemaFinder {
                         sqls.add('alter table ${tableName} alter column ${column.columnName} type ${column.typeName};')
                     }
                     if(c.default.isSome()){
-                        sqls.add("alter table ${tableName} alter ${c.columnName} set default '${c.default.getOrThrow()}';")
+                        sqls.add("alter table ${tableName} alter ${c.columnName} set default '${esc(column.default.getOrThrow())}';")
                     }else{
                         sqls.add("alter table ${tableName} alter ${c.columnName} drop default;")
                     }
@@ -186,7 +192,7 @@ public abstract class AbstractPostgresSchemaFinder <: SchemaFinder {
             }else{
                 sqls.add('alter table ${tableName} add column ${generateColumn(column)};')
                 if(column.default.isSome()){
-                    sqls.add("alter table ${tableName} alter ${column.columnName} set default '${column.default.getOrThrow()}';")
+                    sqls.add("alter table ${tableName} alter ${column.columnName} set default '${esc(column.default.getOrThrow())}';")
                 }
                 if(!column.nullable){
                     sqls.add('alter table ${tableName} alter column ${column.columnName} set not null;')
@@ -196,14 +202,8 @@ public abstract class AbstractPostgresSchemaFinder <: SchemaFinder {
         sqls.iterator()
     }
     public func generateIndexSql(tableName: String, new: Array<IndexMeta>, current: Iterator<IndexMeta>): Iterator<String> {
-        let currentIndexes = current.iterator().fold(HashMap<String, IndexMeta>()){m, i => 
-            m[i.name] = i
-            m
-        }
-        let newIndexMap = new.iterator().fold(HashMap<String, IndexMeta>()){m, i => 
-            m[i.name] = i
-            m
-        }
+        let currentIndexes = indexIndexes(current)
+        let newIndexMap = indexIndexes(new.iterator())
         let sqls = ArrayList<String>()
         for(i in currentIndexes.values() where !newIndexMap.contains(i.name)){
             sqls.add('alter table ${tableName} drop index ${i.name};')

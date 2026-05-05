@@ -50,6 +50,12 @@ public class MysqlIndexSchemaPO {
 }
 
 public abstract class AbstractMysqlSchemaFinder <: SchemaFinder {
+    private static func indexColumns(itr: Iterator<ColumnMeta>): HashMap<String, ColumnMeta> {
+        itr.fold(HashMap<String, ColumnMeta>()){m, c => m[c.columnName] = c; m}
+    }
+    private static func indexIndexes(itr: Iterator<IndexMeta>): HashMap<String, IndexMeta> {
+        itr.fold(HashMap<String, IndexMeta>()){m, i => m[i.name] = i; m}
+    }
     public func listTables(database: String): Iterator<String> {
         resource(ORM.executor(driverName)){exe =>
             exe.setSql('''
@@ -88,8 +94,11 @@ public abstract class AbstractMysqlSchemaFinder <: SchemaFinder {
             }
         }
     }
+    private static func esc(val: String): String {
+        val.replace("'", "''")
+    }
     private func generateColumn(column: ColumnMeta): String {
-        '${column.columnName} ${column.typeName} ${if(column.nullable){''}else{'not null'}} ${if(let Some(d) <- column.default){"default '${d}'"}else{''}} ${column.extra}'
+        '${column.columnName} ${column.typeName} ${if(column.nullable){''}else{'not null'}} ${if(let Some(d) <- column.default){"default '${esc(d)}'"}else{''}} ${column.extra}'
     }
     public func generateCreateSql(tableName: String, columns: Iterator<ColumnMeta>): Iterator<String> {
         Some('''
@@ -102,10 +111,7 @@ public abstract class AbstractMysqlSchemaFinder <: SchemaFinder {
         'drop table ${tableName};'
     }
     public func generateAlterSql(tableName: String, new: Array<ColumnMeta>, current: Iterator<ColumnMeta>): Iterator<String> {
-        let currentColumnMap = current.iterator().fold(HashMap<String, ColumnMeta>()){m, c => 
-            m[c.columnName] = c
-            m
-        }
+        let currentColumnMap = indexColumns(current)
         let newColumnMap = HashMap<String, ColumnMeta>()
         let oldColumnMap = HashMap<String, ColumnMeta>()
         for(c in new){
@@ -117,7 +123,7 @@ public abstract class AbstractMysqlSchemaFinder <: SchemaFinder {
         let sqls = ArrayList<String>()
         for(column in currentColumnMap.values()){
             if(let Some(c) <- oldColumnMap.get(column.columnName)){
-                sqls.add('alter table ${tableName} change ${c.oldColumnName} ${c.columnName} ${c.typeName} ${if(c.nullable){''}else{'not null'}} ${if(let Some(d) <- column.default){"default '${d}'"}else{''}} ${column.extra};')
+                sqls.add('alter table ${tableName} change ${c.oldColumnName} ${c.columnName} ${c.typeName} ${if(c.nullable){''}else{'not null'}} ${if(let Some(d) <- c.default){"default '${esc(d)}'"}else{''}} ${c.extra};')
             }else if(!newColumnMap.contains(column.columnName)){
                 sqls.add('alter table ${tableName} drop column ${column.columnName};')
             }
@@ -125,7 +131,7 @@ public abstract class AbstractMysqlSchemaFinder <: SchemaFinder {
         for(column in new){
             if(let Some(c) <- currentColumnMap.get(column.columnName)){
                 if(column != c){
-                    sqls.add('alter table ${tableName} change ${column.columnName} ${column.columnName} ${column.typeName} ${if(column.nullable){''}else{'not null'}} ${if(let Some(d) <- column.default){"default '${d}'"}else{''}} ${column.extra};')
+                    sqls.add('alter table ${tableName} change ${column.columnName} ${column.columnName} ${column.typeName} ${if(column.nullable){''}else{'not null'}} ${if(let Some(d) <- column.default){"default '${esc(d)}'"}else{''}} ${column.extra};')
                 }
             }else{
                 sqls.add('alter table ${tableName} add column ${generateColumn(column)};')
@@ -134,14 +140,8 @@ public abstract class AbstractMysqlSchemaFinder <: SchemaFinder {
         sqls.iterator()
     }
     public func generateIndexSql(tableName: String, new: Array<IndexMeta>, current: Iterator<IndexMeta>): Iterator<String> {
-        let currentIndexes = current.iterator().fold(HashMap<String, IndexMeta>()){m, i => 
-            m[i.name] = i
-            m
-        }
-        let newIndexMap = new.iterator().fold(HashMap<String, IndexMeta>()){m, i => 
-            m[i.name] = i
-            m
-        }
+        let currentIndexes = indexIndexes(current)
+        let newIndexMap = indexIndexes(new.iterator())
         let sqls = ArrayList<String>()
         for(i in currentIndexes.values() where !newIndexMap.contains(i.name)){
             sqls.add('alter table ${tableName} drop index ${i.name};')
