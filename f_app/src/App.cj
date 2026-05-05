@@ -604,16 +604,16 @@ private let _ = AppVersion.set(#'${banner()}'#, '${name}', '${version}')
 9.  fboot module <module_name> 在当前目录创建名为<module_name>的子目录，并初始化为仓颉dynamic模块，并把模块加入当前目录的cjpm.toml
 10. fboot build 编译使用fountain开发的应用项目
 11. fboot count 数当前目录的仓颉代码模块数、包数、文件数、行数、计数耗时
+12. fboot pub <version> 发布当前路径下的仓颉模块
 ==============下面的命令用来管理fountain本身===================
-12. fboot version x.y.z 用指定版本号替换cjpm.toml和App.cj的版本号，并提交且推送当前全部修改
+13. fboot version x.y.z 用指定版本号替换cjpm.toml和App.cj的版本号，并提交且推送当前全部修改
     - fboot version x.y.z
     - fboot version x.y.z '提交的内容'，以指定内容执行git commit
     - fboot version x.y.z tag，除了替换版本号，还会用指定的版本号创建tag：release-x.y.z
     - fboot version x.y.z tag '版本消息'，除了替换版本号，还会以'版本消息'创建附注tag
     - fboot version x.y.z '提交的内容' tag
     - fboot version x.y.z '提交的内容' tag '版本消息'
-13. fboot version 显示当前fountain版本号
-14. fboot pub <version> 发布当前路径下的仓颉模块
+14. fboot version 显示当前fountain版本号
 15. fboot help 显示命令列表
 '''
         stdOut.writeln(content)
