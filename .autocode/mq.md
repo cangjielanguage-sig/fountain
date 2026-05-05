@@ -15,7 +15,18 @@
      - 字符串数组
      - 可以是0个label
    - 消息数据
-7. 功能点：
+7. 元数据
+   元数据都保存在fsync服务端
+   - MQ主题
+     - 主题在fsync的KEY是`/mq/topic/<主题>`
+       - eg. 假设有一个订单主题是`/order`, 这个主题在fsync的KEY是`/mq/topic/order`
+       - 对应的元数据包含
+         - `queueCount: Int64`
+           - 默认值为1
+           - 队列数不能小于1
+           - 队列数不能超过mq主节点数
+         - `consumerGroups: Array<String>`
+8. 功能点：
    1. 使用环境变量完成配置，以下配置项都是环境变量
       - mq_hosts 英文逗号分割的节点IP:PORT
         - 主节点涉及到排列顺序的情况由mq_hosts配置决定，
