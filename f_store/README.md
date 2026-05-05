@@ -235,8 +235,11 @@ store.ttl("k1".unsafeBytes(), Duration.hour * 1)  // 1小时后过期
 
 **返回值**：`PrefixIterator` — 实现 `Iterator<(Array<Byte>, Array<Byte>)>` 的迭代器。
 
-**迭代器生命周期**：迭代器在创建时从 MemTable 和 SSTable 获取快照，不受后续写入影响。
-使用完后不需要显式关闭（不持有文件句柄）。
+**迭代器生命周期**：
+- `PrefixIterator` 不持有 `Store` 引用，**关闭 PrefixIterator 不影响 Store 的后续使用**（add/get/remove/ttl/prefix 等操作不受影响）
+- SSTable 遍历使用**独立**的 `File` 句柄（SSTable.tailer() 内新建 File(path, OpenMode.Read) 传入 SSTableIterator），关闭迭代器只关闭该独立句柄，不影响 Store 管理的 SSTable 本身
+- MemTable tailer（ConcurrentSkipListMap 迭代器）为纯内存操作，不持有任何资源
+- 迭代器在创建时从 MemTable 和 SSTable 获取快照，不受后续写入影响
 
 **示例**：
 

@@ -52,12 +52,9 @@ struct FaithfulMemoryImpl <: FaithfulMemory {
         let duplicateKey = this.duplicateKey(md5, session, role, content)
         let contentKey = this.contentKey(DateTime.now(), session, role)
         let bytes = content.unsafeBytes()
-        store.add(duplicateKey, bytes)
-        store.update<Unit>{tx => 
-            if(tx.get(duplicateKey).isNone()){
-                tx.set(contentKey, bytes)
-                tx.set(duplicateKey, [])
-            }
+        if(!store.contains(duplicateKey)){
+            store.add(containsKey, bytes)
+            store.add(duplicateKey, [])
         }
     }
     public func summarise(fn: (String, ArrayList<ChatMessage>) -> Bool): Unit {
@@ -68,7 +65,7 @@ struct FaithfulMemoryImpl <: FaithfulMemory {
         var lastSession = ''
         var currentSession = ''
         let messages = ArrayList<ChatMessage>()
-        for(item in store.scan(CONTENT_KEY_PREFIX.unsafeBytes())){
+        for(item in store.prefix(CONTENT_KEY_PREFIX.unsafeBytes())){
             let k = String.fromUtf8(item.key)
             let v = String.fromUtf8(item.value)
             let keyParts = k.split(':')
