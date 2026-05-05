@@ -1,37 +1,26 @@
-# DataPath RFC 9535 改进计划
+# migro 模块静态诊断报告
 
-## 执行顺序
-每完成一步执行收尾仪式：加测试 → ✅标记 → /exp → 提交
-
----
-
-### Step 1: 数组切片缺省值 + 负步长 ✅
-- RangePathNode 改为三个字段 (start/end/step)
-- 支持 [n:m], [:n], [n:], [:], [n:m:step], [4:0:-1], [::-1], [0:3:0]
-
-### Step 2: `..[*]` 完整语法 ✅
-- `..*`: 自动消费后续 MUL
-- `..name`: IDENTIFIER 紧跟 RANGEOP → SubPathNode
-- `..[selectors]`: RANGEOP/DOT 作为 LSQUARE 前驱
-
-### Step 3: 存在性测试 ✅
-- ExistsFilter: `?(@.name)` 路径返回非空=true
-
-### Step 4: `null` 字面量过滤 ✅
-- NullFilter: `?(@.name == null)`, `?(@.name != null)`
-
-### Step 5: 函数扩展 count/match/search/value ✅
-- CountPathNode, ValuePathNode 路径函数
-- MatchFilter, SearchFilter filter 函数
-
-### 全部测试：56/56 通过 ✅
+> 审查日期: 2026-05-05
+> 审查范围: `./f_orm/src/migro/` (6 个源文件, 584 行)
+> 状态: 所有 P0-P3 问题全部修复
 
 ---
 
-### 未覆盖的 RFC 9535 特性
+## 已修复的问题
 
-参见 `f_data/doc/RFC9535_GAPS.md`
+| 等级 | 问题 | 修复内容 |
+|------|------|---------|
+| P1 | MariaDBSchemaFinder.driverName 冲突 | 改为 `'mariadb'` |
+| P1 | generateDropTableSql 从未被调用 | 新增 `listTables()` + 实现 + mediator 调用 |
+| P1 | Postgres ALTER COLUMN 缺列名 | 4 处补 `alter column ${name}` |
+| P1 | Postgres 缺失 TYPE 变更 | 增加 `ALTER COLUMN ... TYPE` |
+| P2 | 重复 HashMap fold 模式 | 提取 `indexColumns()` / `indexIndexes()` 辅助方法 |
+| P3 | 重命名 default/extra 用旧列值 | MysqlSchema.cj:120 改为用新列 |
+| P3 | 默认值引号未转义 | 添加 `esc()` 函数，修复 MySQL+Postgres 共 10 处 |
+| P4 | SchemaFinder.cj 残留注释 | 待清理 |
+| P4 | listTables PO 膨胀 | 待优化 |
+| P4 | MigroCommand struct 注册 | 待评估 |
 
-**P1**: 标准化路径 (Normalized Paths)
-**P2**: filter 内 count/value 比较、null 集合运算
-**P3**: I-JSON 范围校验、结构相等、复杂函数表达式、length() 函数语法
+## 测试
+
+- **migro_test.cj**: 12 个 DDL 生成测试用例（CREATE/DROP/ALTER/INDEX MySQL + Postgres）
