@@ -212,7 +212,7 @@ public class PublishCommand <: SubCommand {
     private func replaceDependencies(path: Path, organization: String, all: HashMap<String, Path>, dry: Bool){
         let cjpmPath = path.join('cjpm.toml')
         var cjpmContent = String.fromUtf8(File.readFrom(cjpmPath))
-        cjpmContent = Regex(#'^\s*version\s*=\s*"(.+)"\s*$'#).replace(cjpmContent, '  version = "${version}"')
+        cjpmContent = Regex(#'\s* version\s*=\s*"(.+)"\s*'#).replace(cjpmContent, '  version = "${version}"')
         println('cjpm.toml: ${cjpmPath}')
         println(cjpmContent)
         println('========================================')
