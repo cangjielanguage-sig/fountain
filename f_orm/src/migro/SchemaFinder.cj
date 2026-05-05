@@ -42,7 +42,7 @@ public interface SchemaFinder {
     func findTableSchema(database: String, tableName: String): Iterator<ColumnMeta>
     func findIndexes(database: String, tableName: String): Iterator<IndexMeta>
     func generateCreateSql(tableName: String, columns: Iterator<ColumnMeta>): Iterator<String>
-    func generateDroopTableSql(tableName: String): String
+    func generateDropTableSql(tableName: String): String
     func generateAlterSql(tableName: String, new: Array<ColumnMeta>, current: Iterator<ColumnMeta>): Iterator<String>
     func generateIndexSql(tableName: String, new: Array<IndexMeta>, current: Iterator<IndexMeta>): Iterator<String>
 }

@@ -86,7 +86,7 @@ public abstract class AbstractMysqlSchemaFinder <: SchemaFinder {
         );
         ''').iterator()
     }
-    public func generateDroopTableSql(tableName: String): String {
+    public func generateDropTableSql(tableName: String): String {
         'drop table ${tableName};'
     }
     public func generateAlterSql(tableName: String, new: Array<ColumnMeta>, current: Iterator<ColumnMeta>): Iterator<String> {

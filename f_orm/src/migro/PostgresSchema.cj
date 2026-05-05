@@ -117,7 +117,7 @@ public abstract class AbstractPostgresSchemaFinder <: SchemaFinder {
             list.iterator().filter{m => m.default.isSome()}.map{m => "ALTER TABLE ${tableName} ALTER ${m.columnName} SET DEFAULT '${m.default}';"}
         )
     }
-    public func generateDroopTableSql(tableName: String): String {
+    public func generateDropTableSql(tableName: String): String {
         'drop table ${tableName};'
     }
     public func generateAlterSql(tableName: String, new: Array<ColumnMeta>, current: Iterator<ColumnMeta>): Iterator<String> {
