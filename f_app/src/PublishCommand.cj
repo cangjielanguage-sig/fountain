@@ -213,13 +213,12 @@ public class PublishCommand <: SubCommand {
         let cjpmPath = path.join('cjpm.toml')
         var cjpmContent = String.fromUtf8(File.readFrom(cjpmPath))
         cjpmContent = Regex(#'^\s*version\s*=\s*"(.+)"\s*$'#).replace(cjpmContent, '  version = "${version}"')
+        println('cjpm.toml: ${cjpmPath}')
+        println(cjpmContent)
+        println('========================================')
         if(!dry){
             File.writeTo(cjpmPath, cjpmContent.unsafeBytes())
             copy(cjpmPath, to: path.join('cjpm.toml.bak'), overwrite: false)
-        }else{
-            println('cjpm.toml: ${cjpmPath}')
-            println(cjpmContent)
-            println('========================================')
         }
         let regexGen = StringGenerator()
         for(m in all.keys()){
@@ -240,12 +239,11 @@ public class PublishCommand <: SubCommand {
             println('dependencing_replaced: ${line} -> ${replacedLine}')
             replaced.appendUnixNewLine(replacedLine)
         }
+        println('dependencing_replaced: ${cjpmPath}')
+        println(replaced)
+        println('=============================================')
         if(!dry){
             File.writeTo(cjpmPath, replaced.toString().unsafeBytes())
-        }else{
-            println('dependencing_replaced: ${cjpmPath}')
-            println(replaced)
-            println('=============================================')
         }
     }
     private func checkPublished(organization: String, module: String, once: Bool): Bool {
