@@ -1,10 +1,12 @@
 [dependencies]
   "fountain::f_base" = {path = "../f_base"}
   "fountain::f_codec" = {path = "../f_codec"}
-  "fountain::f_protocol" = {path = "../f_protocol"}
-  "fountain::f_net" = {path = "../f_net"}
-  "fountain::f_util" = {path = "../f_util"}
+  "fountain::f_config" = {path = "../f_config"}
+  "fountain::f_data" = {path = "../f_data"}
   "fountain::f_io" = {path = "../f_io"}
+  "fountain::f_net" = {path = "../f_net"}
+  "fountain::f_protocol" = {path = "../f_protocol"}
+  "fountain::f_util" = {path = "../f_util"}
   "fountain::fsync" = {path = "../fsync"}
 
 [package]
