@@ -212,7 +212,7 @@ public class PublishCommand <: SubCommand {
     private func replaceDependencies(path: Path, organization: String, all: HashMap<String, Path>, dry: Bool){
         let cjpmPath = path.join('cjpm.toml')
         var cjpmContent = String.fromUtf8(File.readFrom(cjpmPath))
-        cjpmContent = Regex(#'\s* version\s*=\s*"(.+)"\s*'#).replace(cjpmContent, '  version = "${version}"')
+        cjpmContent = Regex(#'\s+version\s*=\s*"(.+)"'#).replace(cjpmContent, '\n  version = "${version}"')
         println('cjpm.toml: ${cjpmPath}')
         println(cjpmContent)
         println('========================================')
@@ -254,6 +254,7 @@ public class PublishCommand <: SubCommand {
         var waited = 0
         while(true){
             let next = Random().nextInt64(b) + 1
+            println('waiting for ${module} to be published... waited ${Duration.second * waited}, to check again after ${Duration.second * next}')
             sleep(Duration.second * next)
             waited += next
             let tmp = a + b
@@ -278,7 +279,6 @@ public class PublishCommand <: SubCommand {
             }finally{
                 client.close()
             }
-            println('waiting for ${module} to be published... waited ${Duration.second * waited}, to check again after ${Duration.second * next}')
         }
         false
     }
