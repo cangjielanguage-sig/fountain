@@ -178,7 +178,7 @@ public abstract class AbstractPostgresSchemaFinder <: SchemaFinder {
                     if(column.typeName != c.typeName || column.oldColumnName != ''){
                         sqls.add('alter table ${tableName} alter column ${column.columnName} type ${column.typeName};')
                     }
-                    if(c.default.isSome()){
+                    if(column.default.isSome()){
                         sqls.add("alter table ${tableName} alter ${c.columnName} set default '${esc(column.default.getOrThrow())}';")
                     }else{
                         sqls.add("alter table ${tableName} alter ${c.columnName} drop default;")
