@@ -212,6 +212,9 @@ public class PublishCommand <: SubCommand {
     private func replaceDependencies(path: Path, organization: String, all: HashMap<String, Path>, dry: Bool){
         let cjpmPath = path.join('cjpm.toml')
         if(!dry){
+            var cjpmContent = String.fromUtf8(File.readFrom(cjpmPath))
+            cjpmContent = Regex('^\s+version\\s*=\\s*"(.+)"\\s*$').replaceFirst(cjpmContent, '  version = "${version}"')
+            File.writeTo(cjpmPath, cjpmContent.unsafeBytes())
             copy(cjpmPath, to: path.join('cjpm.toml.bak'), overwrite: false)
         }
         let regexGen = StringGenerator()
