@@ -167,6 +167,30 @@ public class Store <: Resource {
         None
     }
 
+    /** 检查键是否存在（已考虑过期和 tombstone） */
+    public func contains(key: Array<Byte>): Bool {
+        guardOpen()
+        let keyBytes = ByteArray(key)
+        let now = DateTime.now().toUnixTimeStamp().toNanoseconds()
+        // 查 active MemTable
+        let activeResult = memTableManager.getActive().get(keyBytes)
+        if (let Some(entry) <- activeResult) {
+            return entryIsAlive(entry, now)
+        }
+        // 查 immutable MemTable
+        if (let Some(imm) <- memTableManager.getImmutable()) {
+            let immResult = imm.get(keyBytes)
+            if (let Some(entry) <- immResult) {
+                return entryIsAlive(entry, now)
+            }
+        }
+        // 查 LevelManager
+        if (let Some(entry) <- levelManager.get(keyBytes, now)) {
+            return entryIsAlive(entry, now)
+        }
+        false
+    }
+
     /** 前缀遍历：返回所有以 prefix 开头的键值对（含过期过滤） */
     public func prefix(prefix: Array<Byte>): PrefixIterator {
         guardOpen()
@@ -306,6 +330,19 @@ public class Store <: Resource {
         }
         // 查 LevelManager
         levelManager.get(key)
+    }
+
+    /** 过期检查：过期或 tombstone 返回 false，否则返回 true */
+    private func entryIsAlive(entry: EntryValue, now: Int64): Bool {
+        if (entry.value.isNone()) {
+            return false
+        }
+        if (let Some(expireAt) <- entry.expireAt) {
+            if (expireAt <= now) {
+                return false
+            }
+        }
+        true
     }
 
     /** 过期检查：过期或 tombstone 返回 None，否则返回 value */

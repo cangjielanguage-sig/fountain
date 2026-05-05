@@ -18,7 +18,6 @@
   authors = ["吴京润"]
 
 [dependencies]
-  "badgercj" = "1.6.0"
   "fountain::f_aspect" = {path = "../f_aspect"}
   "fountain::f_base" = {path = "../f_base"}
   "fountain::f_bean" = {path = "../f_bean"}
@@ -30,6 +29,7 @@
   "fountain::f_macros" = {path = "../f_macros"}
   "fountain::f_orm" = {path = "../f_orm"}
   "fountain::f_regex" = {path = "../f_regex"}
+  "fountain::f_store" = {path = "../f_store"}
   "fountain::f_time" = {path = "../f_time"}
   "fountain::f_util" = {path = "../f_util"}
 

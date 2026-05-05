@@ -31,10 +31,7 @@ struct FaithfulMemoryImpl <: FaithfulMemory {
     private static const CONTENT_KEY_PREFIX = 'FaithfulMemory'
     private static const FULL_DATE_FORMAT = 'yyyyMMddHHmmssSSS'
     private static const DUPLICATE_MEMORY = 'DuplicateMemory'
-    private let store = {=>
-        let config = BadgerConfig(dir: LLMConfig.getFaithfulMemoryPath().toString())
-        Badger.open(config)
-    }()
+    private let store = Store(LLMConfig.getFaithfulMemoryPath().toString())
 
     private func current(now: DateTime): String {
         now.format(FULL_DATE_FORMAT)
@@ -55,6 +52,7 @@ struct FaithfulMemoryImpl <: FaithfulMemory {
         let duplicateKey = this.duplicateKey(md5, session, role, content)
         let contentKey = this.contentKey(DateTime.now(), session, role)
         let bytes = content.unsafeBytes()
+        store.add(duplicateKey, bytes)
         store.update<Unit>{tx => 
             if(tx.get(duplicateKey).isNone()){
                 tx.set(contentKey, bytes)

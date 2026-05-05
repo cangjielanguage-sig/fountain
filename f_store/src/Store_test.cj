@@ -335,6 +335,64 @@ public class StoreTest {
         remove(dir, recursive: true)
     }
 
+    @TestCase
+    public func testContainsBasic(): Unit {
+        let dir = getTestDir("contains_basic")
+        let store = Store(dir)
+        let key = "exists".unsafeBytes()
+        let value = "val".unsafeBytes()
+        @Expect(!store.contains(key))
+        store.add(key, value)
+        @Expect(store.contains(key))
+        store.close()
+    }
+
+    @TestCase
+    public func testContainsNonExistent(): Unit {
+        let dir = getTestDir("contains_nonexist")
+        let store = Store(dir)
+        @Expect(!store.contains("no_such_key".unsafeBytes()))
+        store.close()
+    }
+
+    @TestCase
+    public func testContainsAfterRemove(): Unit {
+        let dir = getTestDir("contains_remove")
+        let store = Store(dir)
+        let key = "rm_key".unsafeBytes()
+        store.add(key, "val".unsafeBytes())
+        @Expect(store.contains(key))
+        store.remove(key)
+        @Expect(!store.contains(key))
+        store.close()
+    }
+
+    @TestCase
+    public func testContainsWithTTL(): Unit {
+        let dir = getTestDir("contains_ttl")
+        let store = Store(dir)
+        let key = "ttl_key".unsafeBytes()
+        store.add(key, "val".unsafeBytes(), Duration.millisecond * 200)
+        @Expect(store.contains(key))
+        sleep(Duration.millisecond * 300)
+        @Expect(!store.contains(key))
+        store.close()
+    }
+
+    @TestCase
+    public func testContainsAfterCloseThrows(): Unit {
+        let dir = getTestDir("contains_closed")
+        let store = Store(dir)
+        store.close()
+        var threw = false
+        try {
+            store.contains("k".unsafeBytes())
+        } catch (_: StoreClosedException) {
+            threw = true
+        }
+        @Expect(threw)
+    }
+
     func getTestDir(name: String): String {
         let baseDir = "/tmp/f_store_test/Store_${name}"
         // 清理旧数据
