@@ -26,9 +26,14 @@ public struct SchemaFinderMediator {
         }
     }
     public func generate(cmdargs: Array<String>): Unit {
-        let sqls = TableMetas.tableMetas().groupBy{m => m.driver}.iterator().flatMap{tuple: (String, ArrayList<TableMeta>) => 
+        let metasByDriver = TableMetas.tableMetas().groupBy{m => m.driver}
+        let sqls = metasByDriver.iterator().flatMap{tuple: (String, ArrayList<TableMeta>) => 
             let (driver, metas) = tuple
             let first = Box<Bool>(true)
+            let existingTableNames = HashSet<String>()
+            for(t in metas){
+                existingTableNames.add(t.tableName.toAsciiLower())
+            }
             metas.iterator().flatMap{m: TableMeta => 
                 let finder = finders[driver]
                 let columns = finder.findTableSchema(m.database, m.tableName)
@@ -55,21 +60,41 @@ public struct SchemaFinderMediator {
             list.add(tuple)
             list
         }
+        // Generate DROP TABLE for orphaned tables (exist in DB but not in user definitions)
+        let dropSqls = metasByDriver.iterator().flatMap{tuple: (String, ArrayList<TableMeta>) =>
+            let (driver, metas) = tuple
+            let finder = finders[driver]
+            let knownNames = HashSet<String>()
+            for(t in metas){
+                knownNames.add(t.tableName.toAsciiLower())
+            }
+            if (metas.size > 0) {
+                let database = metas[0].database
+                finder.listTables(database).filter{t => !knownNames.contains(t.toAsciiLower())}
+                    .map{t => (driver, finder.generateDropTableSql(t))}
+            } else { ArrayList<(String, String)>().iterator() }
+        }.fold(ArrayList<(String, String)>()){list, tuple =>
+            list.add(tuple)
+            list
+        }
+        let allSqls = ArrayList<(String, String)>()
+        for (s in sqls) { allSqls.add(s) }
+        for (s in dropSqls) { allSqls.add(s) }
         for(i in 0 .. cmdargs.size where cmdargs[i] == '-m' || cmdargs[i] == '--mode'){
             match(cmdargs[i + 1]){
                 case 'file' => 
                     try(sqlfile = File('./migro.sql', Write)){
-                        for((_, sql) in sqls){
+                        for((_, sql) in allSqls){
                             sqlfile.write('${sql}\n'.unsafeBytes())
                         }
                     }
-                case 'auto' => execute(sqls)
+                case 'auto' => execute(allSqls)
                 case 'dry' => break
                 case 'interactive' =>
                     getStdOut().write('> 是否立即执行生成的SQL? [y/N]：')
                     while(let Some(r) <- getStdIn().read()){
                         match(r){
-                            case 'y' | 'Y' => execute(sqls)
+                            case 'y' | 'Y' => execute(allSqls)
                             case 'n' | 'N' => break
                             case _ => continue
                         }

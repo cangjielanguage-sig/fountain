@@ -35,6 +35,8 @@ public class MysqlTableSchemaPO {
     private var extra: String = ''
     @ORMField['column_default']
     private var default: ?String = None
+    @ORMField['table_name']
+    private var tableNameFromDb: String = ''
 }
 @DataAssist[fields]
 @QueryMappersGenerator[table: 'indexes']
@@ -48,6 +50,16 @@ public class MysqlIndexSchemaPO {
 }
 
 public abstract class AbstractMysqlSchemaFinder <: SchemaFinder {
+    public func listTables(database: String): Iterator<String> {
+        resource(ORM.executor(driverName)){exe =>
+            exe.setSql('''
+            select table_name
+              from information_schema.tables
+             where table_schema = ${exe.arg(database)}''')
+            .iterator<MysqlTableSchemaPO>()
+            .map{po => po.tableNameFromDb}
+        }
+    }
     public func findTableSchema(database: String, tableName: String): Iterator<ColumnMeta> {
         resource(ORM.executor(driverName)){exe =>
             exe.setSql('''
@@ -161,7 +173,7 @@ public class MysqlSchemaFinder <: AbstractMysqlSchemaFinder {
 public class MariaDBSchemaFinder <: AbstractMysqlSchemaFinder {
     public prop driverName: String {
         get(){
-            'mysql'
+            'mariadb'
         }
     }
 }

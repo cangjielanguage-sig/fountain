@@ -39,6 +39,7 @@ public let unique!: Bool
 
 public interface SchemaFinder { 
     prop driverName: String
+    func listTables(database: String): Iterator<String>
     func findTableSchema(database: String, tableName: String): Iterator<ColumnMeta>
     func findIndexes(database: String, tableName: String): Iterator<IndexMeta>
     func generateCreateSql(tableName: String, columns: Iterator<ColumnMeta>): Iterator<String>

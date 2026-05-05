@@ -36,6 +36,9 @@ public class PostgresTableSchemaPO {
     @ORMField['column_default']
     private var default: ?String = None
 
+    @ORMField['table_name']
+    private var tableNameFromDb: String = ''
+
     public prop extra: String{
         get(){
             'generated always (${generationExpression}) STORED'
@@ -64,6 +67,17 @@ public class PostgresIndexSchemaPO {
     }
 }
 public abstract class AbstractPostgresSchemaFinder <: SchemaFinder {
+    public func listTables(database: String): Iterator<String> {
+        resource(ORM.executor(driverName)){exe =>
+            exe.setSql('''
+            select table_name
+              from information_schema.tables
+             where table_catalog = ${exe.arg(database)}
+               and table_schema = 'public' ''')
+            .iterator<PostgresTableSchemaPO>()
+            .map{po => po.tableNameFromDb}
+        }
+    }
     public func findTableSchema(database: String, tableName: String): Iterator<ColumnMeta> {
         resource(ORM.executor(driverName)){exe =>
             exe.setSql("""
@@ -144,9 +158,9 @@ public abstract class AbstractPostgresSchemaFinder <: SchemaFinder {
                     sqls.add("alter table ${tableName} alter ${c.columnName} drop default;")
                 }
                 if(c.nullable){
-                    sqls.add('alter table ${tableName} drop not null;')
+                    sqls.add('alter table ${tableName} alter column ${c.columnName} drop not null;')
                 }else{
-                    sqls.add('alter table ${tableName} set not null;')
+                    sqls.add('alter table ${tableName} alter column ${c.columnName} set not null;')
                 }
             }else if(!newColumnMap.contains(column.columnName)){
                 sqls.add('alter table ${tableName} drop column ${column.columnName};')
@@ -155,15 +169,18 @@ public abstract class AbstractPostgresSchemaFinder <: SchemaFinder {
         for(column in new){
             if(let Some(c) <- currentColumnMap.get(column.columnName)){
                 if(column != c){
+                    if(column.typeName != c.typeName || column.oldColumnName != ''){
+                        sqls.add('alter table ${tableName} alter column ${column.columnName} type ${column.typeName};')
+                    }
                     if(c.default.isSome()){
                         sqls.add("alter table ${tableName} alter ${c.columnName} set default '${c.default.getOrThrow()}';")
                     }else{
                         sqls.add("alter table ${tableName} alter ${c.columnName} drop default;")
                     }
                     if(c.nullable){
-                        sqls.add('alter table ${tableName} drop not null;')
+                        sqls.add('alter table ${tableName} alter column ${c.columnName} drop not null;')
                     }else{
-                        sqls.add('alter table ${tableName} set not null;')
+                        sqls.add('alter table ${tableName} alter column ${c.columnName} set not null;')
                     }
                 }
             }else{
@@ -172,7 +189,7 @@ public abstract class AbstractPostgresSchemaFinder <: SchemaFinder {
                     sqls.add("alter table ${tableName} alter ${column.columnName} set default '${column.default.getOrThrow()}';")
                 }
                 if(!column.nullable){
-                    sqls.add('alter table ${tableName} set not null;')
+                    sqls.add('alter table ${tableName} alter column ${column.columnName} set not null;')
                 }
             }
         }
