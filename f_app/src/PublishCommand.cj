@@ -213,7 +213,7 @@ public class PublishCommand <: SubCommand {
         let cjpmPath = path.join('cjpm.toml')
         if(!dry){
             var cjpmContent = String.fromUtf8(File.readFrom(cjpmPath))
-            cjpmContent = Regex(#'^\s*version\s*=\s*"(.+)"\s*$'#).replaceFirst(cjpmContent, '  version = "${version}"')
+            cjpmContent = Regex(#'^\s*version\s*=\s*"(.+)"\s*$'#).replace(cjpmContent, '  version = "${version}"')
             File.writeTo(cjpmPath, cjpmContent.unsafeBytes())
             copy(cjpmPath, to: path.join('cjpm.toml.bak'), overwrite: false)
         }
