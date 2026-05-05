@@ -18,25 +18,6 @@ package fountain::f_orm.migro
 import fountain::f_data.macros.*
 import fountain::f_orm.macros.*
 
-/*
-public let database: String,
-public let tableName: String,
-public let columns: Array<ColumnMeta>,
-public let indexes: Array<IndexSchema>
-*/
-/*
-public let columnName: String,
-public let typeName: String,
-public let nullable: Bool,
-public let default: ?String,
-public let comment: String
-*/
-/*
-public let name!: String,
-public let columns!: String,
-public let unique!: Bool
-*/
-
 public interface SchemaFinder { 
     prop driverName: String
     func listTables(database: String): Iterator<String>
