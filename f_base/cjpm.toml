@@ -1,5 +1,3 @@
-[dependencies]
-  "cangjie_tpc::charset4cj" = "1.0.5"
 [package]
   cjc-version = "1.1.0"
   compile-option = "--dy-std"
@@ -18,6 +16,12 @@
   include = ["src", "doc"]
   exclude = ["cjpm.toml.bak", "cjpm.lock", "target"]
   authors = ["吴京润"]
+
+[dependencies]
+  "cangjie_tpc::charset4cj" = "1.0.5"
+
+[profile.build]
+  incremental = true
 
 [target]
 [target.x86_64-unknown-linux-gnu]
@@ -55,6 +59,3 @@
   override-compile-option = "--dy-std -ldl"
 [target.x86_64-linux-ohos.bin-dependencies]
   path-option = ["${CANGJIE_STDX_DYNAMIC_PATH}"]
-
-[profile.build]
-  incremental = true
