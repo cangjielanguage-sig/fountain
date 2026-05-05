@@ -53,7 +53,7 @@ struct FaithfulMemoryImpl <: FaithfulMemory {
         let contentKey = this.contentKey(DateTime.now(), session, role)
         let bytes = content.unsafeBytes()
         if(!store.contains(duplicateKey)){
-            store.add(containsKey, bytes)
+            store.add(contentKey, bytes)
             store.add(duplicateKey, [])
         }
     }
