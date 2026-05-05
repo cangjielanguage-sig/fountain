@@ -218,7 +218,15 @@
 
 | 数据 | 测试数 |
 |------|--------|
-| `DataPath_test.cj` | 104 |
+| `basic_test.cj` | 21 |
+| `filter_test.cj` | 37 |
+| `recursive_test.cj` | 11 |
+| `compile_error_test.cj` | 3 |
+| `object_eq_test.cj` | 5 |
+| `complex_fn_test.cj` | 4 |
+| `integration_test.cj` | 12 |
+| `p1_gaps_test.cj` | 10 |
+| **合计** | **104** |
 
 ---
 
