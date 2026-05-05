@@ -1,8 +1,8 @@
 # RFC 9535 覆盖清单
 
 > 实现 branch: `feature/datapath`
-> 测试: **100/100 通过** (21 basic + 41 filter + 13 recursive + 5 compile error + 5 object eq + 4 complex fn + 6 P3 gap + 12 integration + 6 P1P2 gap)
-> 文件: 24 个新文件 + 8 个修改文件
+> 测试: **104/104 通过** (21 basic + 41 filter + 13 recursive + 5 compile error + 5 object eq + 4 complex fn + 6 P3 gap + 12 integration + 6 P1P2 gap + 4 deep nesting)
+> 文件: 29 个新文件 + 8 个修改文件
 
 ---
 
@@ -152,9 +152,8 @@
 | 特性 | 说明 |
 |------|------|
 | 标准化路径 (Normalized Paths) §2.7 | **未实现**。`DataPath.get()` 返回 `Iterator<Data>` 不含路径元数据。需新增 `NodeList` 类型 + `getWithPaths()` + 各节点类型的归一化逻辑。架构级改动，当前不安排 |
-| 复杂函数表达式深层嵌套（3+ 层） | 单层嵌套已验证 (`count(match(...))`)，深层未测试 |
 
-其余所有识别出的 P0/P1/P2 缺口（路径比较、value() 多节点、负索引、裸 `..`、尾随 `.`）已全部修复并通过测试验证。
+所有已识别的 P0/P1/P2 缺口及深层嵌套均已修复并通过测试验证。\
 
 ---
 
@@ -209,17 +208,22 @@
 | `CountFilterResult.cj` | `count(innerFilter)` 嵌套计数 | ~55 |
 | `ValueFilterResult.cj` | `value(innerFilter)` 嵌套取值 | ~65 |
 | `EqPathFilter.cj` | `@.x == @.y` 路径比较 | ~92 |
+| `FnMatchFilter.cj` | 嵌套 match() 首参数 | ~60 |
+| `FnSearchFilter.cj` | 嵌套 search() 首参数 | ~60 |
+| `FnDeferredMatchFilter.cj` | 嵌套 match() 正则参数 | ~40 |
+| `FnDeferredSearchFilter.cj` | 嵌套 search() 正则参数 | ~40 |
+| `FilterUtils.cj` | filterToFirstValue 工具 | ~40 |
 
 ### 测试文件
 
 | 数据 | 测试数 |
 |------|--------|
-| `DataPath_test.cj` | 100 |
+| `DataPath_test.cj` | 104 |
 
 ---
 
 ## git 分支
 
 ```
-feature/datapath — 28 commits, ~3200 lines changed
+feature/datapath — 29 commits, ~3600 lines changed
 ```
