@@ -1,5 +1,3 @@
-
-按照以下要求生成开发计划：并保存到.autocode/tasks.md
-
-./f_mockdb 是一个数据库mock工具库，使用技能 /cjDiagnosis 审查f_mockdb，为这个模块添加测试用例，确认没有问题。
-然后使用f_mockdb 为f_orm/src/migro编写新的测试用例。
+现在我们要实现一个mq项目。
+架构设计文档在./fmq/doc/架构设计文档.md，需求文档在./fmq/doc/需求文档.md。
+开发计划是./fmq/doc/开发计划.md。
