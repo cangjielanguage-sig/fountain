@@ -237,7 +237,7 @@ store.ttl("k1".unsafeBytes(), Duration.hour * 1)  // 1小时后过期
 
 **迭代器生命周期**：
 - `PrefixIterator` 不持有 `Store` 引用，**关闭 PrefixIterator 不影响 Store 的后续使用**（add/get/remove/ttl/prefix 等操作不受影响）
-- SSTable 遍历使用**独立**的 `File` 句柄（SSTable.tailer() 内新建 File(path, OpenMode.Read) 传入 SSTableIterator），关闭迭代器只关闭该独立句柄，不影响 Store 管理的 SSTable 本身
+- SSTable 遍历使用**独立**的 `File` 句柄（[SSTable.tailer() 内新建 File 传入 SSTableIterator](#sstable-迭代器独立-file-句柄设计)），关闭迭代器只关闭该独立句柄，不影响 Store 管理的 SSTable 本身
 - MemTable tailer（ConcurrentSkipListMap 迭代器）为纯内存操作，不持有任何资源
 - 迭代器在创建时从 MemTable 和 SSTable 获取快照，不受后续写入影响
 
@@ -251,7 +251,7 @@ while (let Some((k, v)) <- iter.next()) {
 ```
 
 **性能**：利用 `ConcurrentSkipListMap.tailer()` 的 O(log n) 索引定位起始位置，
-SSTable 遍历使用独立的 `File` 句柄，不会与点查询竞争。
+SSTable 遍历使用[独立的 `File` 句柄](#sstable-迭代器独立-file-句柄设计)，不会与点查询竞争。
 
 ---
 
@@ -349,6 +349,40 @@ Store 的所有操作均为无锁或原子操作：
 | `ttl` | ✅ 无锁 | 查找 + CAS 写入 |
 | `prefix` | ✅ 无锁 | 弱一致性迭代器，不阻塞写 |
 | `close` | ✅ 原子 | CAS double-check |
+
+---
+
+## SSTable 迭代器独立 File 句柄设计
+
+`SSTable.iterator()` 和 `SSTable.tailer()` 每次调用都创建新的 `File(path, OpenMode.Read)` 传入 `SSTableIterator`，而非复用 `SSTable` 自身的 `file` 字段。这是为了**生命周期解耦**。
+
+### 动机：Compaction 场景
+
+Compaction 的典型流程依赖迭代器超越父 SSTable 的寿命：
+
+1. `let iter = oldSSTable.iterator()` — 创建独立 File 句柄
+2. 通过 `iter` 耗尽旧 SSTable 的所有数据（写入新 SSTable）
+3. `oldSSTable.close()` — 父 SSTable 关闭，其内部 `file` 被释放
+4. 删除旧 `.sst` 文件 — `unlink` 仅移除目录项，已打开 fd 仍可读
+
+如果迭代器共享 `SSTable.file`，步骤 3 会导致迭代器不可用——但 compaction 需要在 close 之后才能安全删除文件，顺序不可颠倒。
+
+### 为什么点查询可以共享，迭代器不行
+
+`SSTable.get()` 点查询通过 `getLock + pread(fd)` 共享了 fd。但迭代器不能采用相同方案：
+
+| 场景 | `get()` 点查询 | 迭代器 |
+|------|----------------|--------|
+| 生命周期 | SSTable 范围内 | **可能超越** SSTable |
+| 并发迭代器数 | 1（Mutex 串行） | 可多个同时存在 |
+| 共享 fd 风险 | 低（SSTable 活着时用） | 高（SSTable close 后 fd 回收 → 静默读错） |
+| 非 Linux 平台 | — | seek+read 需独占 File 对象 |
+
+### 安全性保障
+
+- 即使文件被 `unlink`，已打开的 fd 在内核中保持数据可达，`pread` 可正常读取
+- 迭代器 `close()` / 耗尽时自动关闭自己的 File 句柄，无泄漏
+- Compaction 先耗尽迭代器再关闭 SSTable，迭代器生命周期内文件始终可达
 
 ---
 

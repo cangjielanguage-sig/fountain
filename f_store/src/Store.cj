@@ -191,7 +191,9 @@ public class Store <: Resource {
         false
     }
 
-    /** 前缀遍历：返回所有以 prefix 开头的键值对（含过期过滤） */
+    /** 前缀遍历：返回所有以 prefix 开头的键值对（含过期过滤）。
+     *  SSTable 遍历使用独立 File 句柄，详见 README.md 「SSTable 迭代器独立 File 句柄设计」。
+     */
     public func prefix(prefix: Array<Byte>): PrefixIterator {
         guardOpen()
         let prefixBytes = ByteArray(prefix)

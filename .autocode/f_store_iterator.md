@@ -1,1 +1,1 @@
-为什么fountain::f_store.SSTable 的iterator和table两个函数要创建新的File实例，而不是使用共享的File实例+pread或mmap读文件？
+为什么./f_store/src/SSTable 的iterator和prefix两个函数要创建新的File实例，而不是跟SSTable共享File实例并用pread或mmap读文件？

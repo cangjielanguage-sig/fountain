@@ -329,13 +329,17 @@ class SSTable <: Resource {
         result
     }
 
-    /** 全量有序遍历。Readable 状态下可用。每次调用打开独立的文件句柄以避免 seek/read 竞态。 */
+    /** 全量有序遍历。Readable 状态下可用。每次调用打开独立的文件句柄（生命周期解耦，
+     *  详见 README.md 「SSTable 迭代器独立 File 句柄设计」）。
+     */
     func iterator(): Iterator<(ByteArray, EntryValue)> {
         guardReadable()
         SSTableIterator(File(path, OpenMode.Read), indexEntries, indexOffset, None)
     }
 
-    /** 从 min key 开始遍历。Readable 状态下可用。每次调用打开独立的文件句柄以避免 seek/read 竞态。 */
+    /** 从 min key 开始遍历。Readable 状态下可用。每次调用打开独立的文件句柄（生命周期解耦，
+     *  详见 README.md 「SSTable 迭代器独立 File 句柄设计」）。
+     */
     func tailer(min: ByteArray): Iterator<(ByteArray, EntryValue)> {
         guardReadable()
         SSTableIterator(File(path, OpenMode.Read), indexEntries, indexOffset, min)
