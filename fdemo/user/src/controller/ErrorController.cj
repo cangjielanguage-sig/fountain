@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package user.controller
+package fountain::user.controller
 
 import fountain::fountain.mvc.*
 import fountain::fountain.mvc.macros.*

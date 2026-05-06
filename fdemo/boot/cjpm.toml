@@ -1,6 +1,7 @@
 [package]
   cjc-version = "1.1.0"
   name = "boot"
+  organization = "fountain"
   description = "nothing here"
   version = "1.1.0"
   target-dir = ""
@@ -12,3 +13,4 @@
   #override-compile-option = "-g -O0 --dy-std"
   link-option = ""
   package-configuration = {}
+  

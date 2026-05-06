@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package user.model.po
+package fountain::user.model.po
 
 import fountain::fountain.data.*
 import fountain::fountain.data.macros.*
