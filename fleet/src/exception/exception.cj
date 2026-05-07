@@ -17,7 +17,7 @@ package fountain::fleet.exception
 
 import fountain::f_base.BaseException
 
-/** sync_hosts 配置缺失 */
+/** fleet_hosts 配置缺失 */
 public class InvalidConfigException <: BaseException {
     public init(msg: String) {
         super(msg)

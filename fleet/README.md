@@ -12,26 +12,26 @@
 
 | 配置键 | 类型 | 默认值 | 说明 |
 |--------|------|--------|------|
-| `sync_hosts` | `String` | **必填** | 集群节点列表，逗号分隔，格式 `host1:port1,host2:port2` |
-| `sync_dataPath` | `String` | `/tmp/fleet` | 数据存储目录 |
+| `fleet_hosts` | `String` | **必填** | 集群节点列表，逗号分隔，格式 `host1:port1,host2:port2` |
+| `fleet_dataPath` | `String` | `/tmp/fleet` | 数据存储目录 |
 
-> **重要**：所有节点的 `sync_hosts` 配置必须完全一致（host、端口、顺序、数量都必须相同），否则启动后自动检测到不一致会退出进程。
+> **重要**：所有节点的 `fleet_hosts` 配置必须完全一致（host、端口、顺序、数量都必须相同），否则启动后自动检测到不一致会退出进程。
 
 ### 启动方式
 
 ```bash
 # 单节点启动
-fboot fleet --sync_hosts=127.0.0.1:1203
+fboot fleet --fleet_hosts=127.0.0.1:1203
 
-# 多节点集群（各节点使用完全相同的 sync_hosts）
-# 节点 0（自动匹配到 sync_hosts 第一个位置，绑定 1203 端口）
-fboot fleet --sync_hosts=10.0.0.1:1203,10.0.0.2:1204 --sync_dataPath=/data/fleet
+# 多节点集群（各节点使用完全相同的 fleet_hosts）
+# 节点 0（自动匹配到 fleet_hosts 第一个位置，绑定 1203 端口）
+fboot fleet --fleet_hosts=10.0.0.1:1203,10.0.0.2:1204 --fleet_dataPath=/data/fleet
 
-# 节点 1（主机名匹配到 sync_hosts 第二个位置，绑定 1204 端口）
-fboot fleet --sync_hosts=10.0.0.1:1203,10.0.0.2:1204 --sync_dataPath=/data/fleet
+# 节点 1（主机名匹配到 fleet_hosts 第二个位置，绑定 1204 端口）
+fboot fleet --fleet_hosts=10.0.0.1:1203,10.0.0.2:1204 --fleet_dataPath=/data/fleet
 ```
 
-本地节点索引由 `sync_hosts` 列表中 host 与本地主机名或回环地址（`127.0.0.1`、`localhost`）的匹配位置决定。
+本地节点索引由 `fleet_hosts` 列表中 host 与本地主机名或回环地址（`127.0.0.1`、`localhost`）的匹配位置决定。
 
 ### 启动流程
 
@@ -39,8 +39,8 @@ fboot fleet --sync_hosts=10.0.0.1:1203,10.0.0.2:1204 --sync_dataPath=/data/fleet
 2. `exec()` 读取配置 → 初始化 `Store` / `NodeManager` / `WatchManager` / `SyncHandler` / `SyncServer`
 3. 后台线程启动 TCP 服务，绑定端口取自节点列表中本地节点端口
 4. 后台线程启动后，连接各对端节点进行**配置一致性校验**：
-   - 读取对端 `__config__` 元键获取其 `sync_hosts` 配置
-   - 与本地的 `sync_hosts` 比较（必须完全一致）
+   - 读取对端 `__config__` 元键获取其 `fleet_hosts` 配置
+   - 与本地的 `fleet_hosts` 比较（必须完全一致）
    - 不一致则输出错误信息、退出进程
 5. 主线程阻塞等待
 
@@ -56,13 +56,13 @@ fboot fleet --sync_hosts=10.0.0.1:1203,10.0.0.2:1204 --sync_dataPath=/data/fleet
 
 ### 使用方式
 
-客户端通过单例模式获取全局唯一实例，自动连接 `sync_hosts` 配置的第一个节点：
+客户端通过单例模式获取全局唯一实例，自动连接 `fleet_hosts` 配置的第一个节点：
 
 ```cj
 let client = SyncClient.getInstance(requestTimeout: Duration.second * 5)
 ```
 
-> `getInstance()` 第一次调用时连接 `sync_hosts` 第一个节点并缓存实例，后续调用返回同一实例。
+> `getInstance()` 第一次调用时连接 `fleet_hosts` 第一个节点并缓存实例，后续调用返回同一实例。
 
 ### 公共 API
 

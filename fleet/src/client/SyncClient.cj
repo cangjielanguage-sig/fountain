@@ -39,7 +39,7 @@ public class SyncClient {
         this.requestTimeout = requestTimeout
     }
 
-    /** 获取全局唯一的 SyncClient 实例（连接 sync_hosts 的第一个节点） */
+    /** 获取全局唯一的 SyncClient 实例（连接 fleet_hosts 的第一个节点） */
     public static func getInstance(requestTimeout!: Duration = Duration.second * 10): SyncClient {
         synchronized(instanceLock) {
             if (let Some(inst) <- instance) {
@@ -47,7 +47,7 @@ public class SyncClient {
             }
             let hostsArr = SyncConfig.getHosts()
             if (hostsArr.size == 0) {
-                throw InvalidKeyException('sync_hosts is required')
+                throw InvalidKeyException('fleet_hosts is required')
             }
             let host = hostsArr[0]
             let client = Client<Message, EncodedMessage, Message, SyncData, MessageID>.builder(

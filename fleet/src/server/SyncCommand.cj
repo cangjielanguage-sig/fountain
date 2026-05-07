@@ -39,7 +39,7 @@ public class SyncCommand <: SubCommand {
         // 1. 读取节点列表
         let hostsArr = SyncConfig.getHosts()
         if (hostsArr.size == 0) {
-            eprintln('sync_hosts is required')
+            eprintln('fleet_hosts is required')
             return 1
         }
         let hosts = ArrayList<HostAndPort>(hostsArr.size) { i => hostsArr[i] }
@@ -75,7 +75,7 @@ public class SyncCommand <: SubCommand {
         return 0
     }
 
-    /** 校验集群各节点的 sync_hosts 配置是否一致 */
+    /** 校验集群各节点的 fleet_hosts 配置是否一致 */
     private static func validateClusterConfig(localConfig: String, store: Store, server: SyncServer, watchManager: WatchManager): Unit {
         sleep(Duration.second)  // 等待其他节点启动
         try {
@@ -90,7 +90,7 @@ public class SyncCommand <: SubCommand {
                         eprintln('ERROR: Cluster configuration mismatch detected!')
                         eprintln('Local hosts:  ${localConfig}')
                         eprintln('Peer hosts:   ${peerConfig}')
-                        eprintln('All server nodes must have the same sync_hosts')
+                        eprintln('All server nodes must have the same fleet_hosts')
                         eprintln('order. The current process will now exit.')
                         eprintln('====================================================')
                         eprintln('')

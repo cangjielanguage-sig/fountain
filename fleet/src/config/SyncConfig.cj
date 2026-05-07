@@ -21,7 +21,7 @@ import fountain::fleet.base.HostAndPort
 import fountain::fleet.exception.InvalidConfigException
 
 public class SyncConfig {
-    public static const sync: String = 'sync'
+    public static const sync: String = 'fleet'
     public static const hosts: String = sync + '_hosts'
     public static const dataPath: String = sync + '_dataPath'
 
@@ -30,7 +30,7 @@ public class SyncConfig {
             let parts = hostsStr.split(',')
             Array<HostAndPort>(parts.size) { i => HostAndPort(parts[i]) }
         } else {
-            throw InvalidConfigException('sync_hosts is required')
+            throw InvalidConfigException('fleet_hosts is required')
         }
     }
 
