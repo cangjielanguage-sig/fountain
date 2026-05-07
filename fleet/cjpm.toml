@@ -1,26 +1,28 @@
 [dependencies]
-  "fountain::f_base" = {path = "../f_base"}
-  "fountain::f_codec" = {path = "../f_codec"}
-  "fountain::f_config" = {path = "../f_config"}
-  "fountain::f_data" = {path = "../f_data"}
-  "fountain::f_io" = {path = "../f_io"}
-  "fountain::f_net" = {path = "../f_net"}
-  "fountain::f_protocol" = {path = "../f_protocol"}
-  "fountain::f_util" = {path = "../f_util"}
-  "fountain::fleet" = {path = "../fleet"}
+  "fountain::f_app" = { path = "../f_app" }
+  "fountain::f_config" = { path = "../f_config" }
+  "fountain::f_base" = { path = "../f_base" }
+  "fountain::f_codec" = { path = "../f_codec" }
+  "fountain::f_net" = { path = "../f_net" }
+  "fountain::f_protocol" = { path = "../f_protocol" }
+  "fountain::f_store" = { path = "../f_store" }
+  "fountain::f_data" = { path = "../f_data" }
+  "fountain::f_exception" = { path = "../f_exception" }
+  "fountain::f_log" = { path = "../f_log" }
+  "fountain::f_util" = { path = "../f_util" }
 
 [package]
   cjc-version = "1.1.0"
-  compile-option = "--dy-std"
-  override-compile-option = "--dy-std"
-  description = "消息队列"
+  description = "数据同步模块，可以用于配置、元数据注册等"
   link-option = ""
-  name = "fmq"
-  organization="fountain"
+  name = "fleet"
   output-type = "dynamic"
   src-dir = ""
   target-dir = ""
-  version = "1.1.3"
+  compile-option = "--dy-std"
+  override-compile-option = "--dy-std"
+  organization = "fountain"
+  version = "1.1.4"
   package-configuration = {}
   category = ["Utility"]
   license = ["Apache-2.0"]
@@ -34,11 +36,11 @@
 
 [target]
 [target.x86_64-unknown-linux-gnu]
-  compile-option = "--lto=full --dy-std -ldl"
-  override-compile-option = "--lto=full --dy-std -ldl"
+  compile-option = "--lto=full --dy-std -ldl -O2"
+  override-compile-option = "--lto=full --dy-std -ldl -O2"
 [target.aarch64-unknown-linux-gnu]
-  compile-option = "--dy-std -ldl"
-  override-compile-option = "--dy-std -ldl"
+  compile-option = "--lto=full --dy-std -ldl -O2"
+  override-compile-option = "--lto=full --dy-std -ldl -O2"
 [target.x86_64-w64-mingw32]
   compile-option = "--dy-std -lcrypt32"
   override-compile-option = "--dy-std -lcrypt32"

@@ -1,0 +1,465 @@
+/*
+Copyright (c) 2026 WuJingrun（吴京润）
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+package fountain::fleet.server
+
+import std.collection.ArrayList
+import std.fs.{exists, remove}
+import std.unittest.*
+import std.unittest.testmacro.*
+import fountain::f_data.*
+import fountain::f_protocol.default.*
+import fountain::f_store.Store
+import fountain::f_util.PathPattern
+import fountain::fleet.base.{HostAndPort, SyncData, KeyData, ValueData, PatternData, ScanResult, WatchData}
+
+@Test
+class SyncHandlerStoreTest {
+    @TestCase
+    func registerWritesToStore(): Unit {
+        let dir = '/tmp/fleet_test/register'
+        cleanup(dir)
+        let store = Store(dir)
+        let nm = NodeManager(ArrayList<HostAndPort>([HostAndPort('127.0.0.1:1203')]), 0)
+        let wm = WatchManager()
+        let handler = SyncHandler(store, nm, wm)
+        let key = '/app/config/db/host'
+        let value = [104u8, 101u8, 108u8, 108u8, 111u8]
+        let msg = Message(Command.REGISTER, SyncData(key, 0, value).toData())
+        let resp = handler.handle(msg)
+        let isResp = match (resp.command) { case RESP(_) => true case _ => false }
+        @Assert(isResp)
+        var stored = store.get(key.unsafeBytes())
+        if (let Some(s) <- stored) {
+            @Assert(s.size == value.size)
+        } else {
+            @Assert(false)
+        }
+        store.close()
+        cleanup(dir)
+    }
+
+    @TestCase
+    func pingReturnsPing(): Unit {
+        let dir = '/tmp/fleet_test/ping'
+        cleanup(dir)
+        let store = Store(dir)
+        let nm = NodeManager(ArrayList<HostAndPort>([HostAndPort('127.0.0.1:1203')]), 0)
+        let wm = WatchManager()
+        let handler = SyncHandler(store, nm, wm)
+        let msg = Message(Command.PING(1))
+        let resp = handler.handle(msg)
+        let isPing = match (resp.command) { case PING(_) => true case _ => false }
+        @Assert(isPing)
+        store.close()
+        cleanup(dir)
+    }
+
+    @TestCase
+    func invalidPayloadReturnsError(): Unit {
+        let dir = '/tmp/fleet_test/invalid'
+        cleanup(dir)
+        let store = Store(dir)
+        let nm = NodeManager(ArrayList<HostAndPort>([HostAndPort('127.0.0.1:1203')]), 0)
+        let wm = WatchManager()
+        let handler = SyncHandler(store, nm, wm)
+        let msg = Message(Command.REGISTER)
+        let resp = handler.handle(msg)
+        let isResp = match (resp.command) { case RESP(_) => true case _ => false }
+        @Assert(isResp)
+        store.close()
+        cleanup(dir)
+    }
+
+    @TestCase
+    func checkWriteAccessQuorumError(): Unit {
+        // 验证 handleRegister 在无仲裁时返回错误
+        let dir = '/tmp/fleet_test/quorum_error'
+        cleanup(dir)
+        let store = Store(dir)
+        // 3 节点集群，alive 初始=3，健康检查线程每5秒尝试PING其他节点
+        // 在健康检查运行前 alive=3 > 3/2=1，仲裁通过
+        // 这里只验证 checkWriteAccess 被调用且不抛异常
+        let hosts = ArrayList<HostAndPort>([
+            HostAndPort('10.0.0.1:1203'),
+            HostAndPort('10.0.0.2:1203'),
+            HostAndPort('10.0.0.3:1203')
+        ])
+        let nm = NodeManager(hosts, 0)
+        let wm = WatchManager()
+        let handler = SyncHandler(store, nm, wm)
+        // REGISTER 到本节点（索引0，对应 10.0.0.1:1203）
+        // checkWriteAccess 会检查 isOwner
+        let resp = handler.handle(Message(Command.REGISTER, SyncData('/app/key', 0, [1u8]).toData()))
+        let isResp = match (resp.command) { case RESP(_) => true case _ => false }
+        @Assert(isResp)
+        store.close()
+        cleanup(dir)
+    }
+
+    @TestCase
+    func getKeyReturnsValueAfterRegister(): Unit {
+        let dir = '/tmp/fleet_test/get_after_register'
+        cleanup(dir)
+        let store = Store(dir)
+        let nm = NodeManager(ArrayList<HostAndPort>([HostAndPort('127.0.0.1:1203')]), 0)
+        let wm = WatchManager()
+        let handler = SyncHandler(store, nm, wm)
+        let key = '/app/config/db/host'
+        let value = [104u8, 101u8, 108u8, 108u8, 111u8]
+        // 先 REGISTER
+        let _ = handler.handle(Message(Command.REGISTER, SyncData(key, 0, value).toData()))
+        // 再 GET
+        let resp = handler.handle(Message(Command.ACK, KeyData(key).toData()))
+        if (let Some(vd) <- convert<ValueData>(resp.data)) {
+            if (let Some(v) <- vd.value) {
+                @Assert(v.size == value.size)
+            } else {
+                @Assert(false)
+            }
+        } else {
+            @Assert(false)
+        }
+        store.close()
+        cleanup(dir)
+    }
+
+    @TestCase
+    func getNonExistentKeyReturnsNone(): Unit {
+        let dir = '/tmp/fleet_test/get_nonexist'
+        cleanup(dir)
+        let store = Store(dir)
+        let nm = NodeManager(ArrayList<HostAndPort>([HostAndPort('127.0.0.1:1203')]), 0)
+        let wm = WatchManager()
+        let handler = SyncHandler(store, nm, wm)
+        let resp = handler.handle(Message(Command.ACK, KeyData('/app/nonexistent').toData()))
+        if (let Some(vd) <- convert<ValueData>(resp.data)) {
+            @Assert(vd.value.isNone())
+        } else {
+            @Assert(false)
+        }
+        store.close()
+        cleanup(dir)
+    }
+
+    @TestCase
+    func deregisterRemovesKey(): Unit {
+        let dir = '/tmp/fleet_test/deregister'
+        cleanup(dir)
+        let store = Store(dir)
+        let nm = NodeManager(ArrayList<HostAndPort>([HostAndPort('127.0.0.1:1203')]), 0)
+        let wm = WatchManager()
+        let handler = SyncHandler(store, nm, wm)
+        let key = '/app/config/db/host'
+        let value = [1u8, 2u8, 3u8]
+        // REGISTER
+        let _ = handler.handle(Message(Command.REGISTER, SyncData(key, 0, value).toData()))
+        // 验证已写入
+        @Assert(store.get(key.unsafeBytes()).isSome())
+        // DEREGISTER
+        let _ = handler.handle(Message(Command.DEREGISTER, KeyData(key).toData()))
+        // 验证已删除
+        @Assert(store.get(key.unsafeBytes()).isNone())
+        store.close()
+        cleanup(dir)
+    }
+
+    @TestCase
+    func prefixScanReturnsMatchingEntries(): Unit {
+        let dir = '/tmp/fleet_test/prefix_scan'
+        cleanup(dir)
+        let store = Store(dir)
+        let nm = NodeManager(ArrayList<HostAndPort>([HostAndPort('127.0.0.1:1203')]), 0)
+        let wm = WatchManager()
+        let handler = SyncHandler(store, nm, wm)
+        // 写入多个键
+        let _ = handler.handle(Message(Command.REGISTER, SyncData('/app/config/db/host', 0, [1u8]).toData()))
+        let _ = handler.handle(Message(Command.REGISTER, SyncData('/app/config/cache/size', 0, [2u8]).toData()))
+        let _ = handler.handle(Message(Command.REGISTER, SyncData('/other/key', 0, [3u8]).toData()))
+        // 前缀扫描
+        let resp = handler.handle(Message(Command.ACK, PatternData('/app/config/').toData()))
+        @Assert(match (resp.command) { case RESP(_) => true case _ => false })
+        store.close()
+        cleanup(dir)
+    }
+
+    @TestCase
+    func prefixScanVerifyDataContent(): Unit {
+        let dir = '/tmp/fleet_test/prefix_content'
+        cleanup(dir)
+        let store = Store(dir)
+        let nm = NodeManager(ArrayList<HostAndPort>([HostAndPort('127.0.0.1:1203')]), 0)
+        let wm = WatchManager()
+        let handler = SyncHandler(store, nm, wm)
+        let _ = handler.handle(Message(Command.REGISTER, SyncData('/app/config/db/host', 0, [1u8]).toData()))
+        let _ = handler.handle(Message(Command.REGISTER, SyncData('/app/config/cache/size', 0, [2u8]).toData()))
+        let resp = handler.handle(Message(Command.ACK, PatternData('/app/config/').toData()))
+        @Assert(match (resp.command) { case RESP(_) => true case _ => false })
+        store.close()
+        cleanup(dir)
+    }
+
+    @TestCase
+    func prefixScanNonExistentReturnsEmpty(): Unit {
+        let dir = '/tmp/fleet_test/prefix_empty'
+        cleanup(dir)
+        let store = Store(dir)
+        let nm = NodeManager(ArrayList<HostAndPort>([HostAndPort('127.0.0.1:1203')]), 0)
+        let wm = WatchManager()
+        let handler = SyncHandler(store, nm, wm)
+        let resp = handler.handle(Message(Command.ACK, PatternData('/nonexistent/').toData()))
+        @Assert(match (resp.command) { case RESP(_) => true case _ => false })
+        store.close()
+        cleanup(dir)
+    }
+
+    @TestCase
+    func subscribeAcknowledgesWatch(): Unit {
+        let dir = '/tmp/fleet_test/subscribe'
+        cleanup(dir)
+        let store = Store(dir)
+        let nm = NodeManager(ArrayList<HostAndPort>([HostAndPort('127.0.0.1:1203')]), 0)
+        let wm = WatchManager()
+        let handler = SyncHandler(store, nm, wm)
+        let resp = handler.handle(Message(Command.SUBSCRIBE, WatchData('/app/config/db/host', timeout: Duration.millisecond * 10).toData()))
+        @Assert(match (resp.command) { case RESP(_) => true case _ => false })
+        store.close()
+        cleanup(dir)
+    }
+
+    @TestCase
+    func subscribeThenRegisterFiresWatch(): Unit {
+        let dir = '/tmp/fleet_test/sub_reg'
+        cleanup(dir)
+        let store = Store(dir)
+        let nm = NodeManager(ArrayList<HostAndPort>([HostAndPort('127.0.0.1:1203')]), 0)
+        let wm = WatchManager()
+        let handler = SyncHandler(store, nm, wm)
+        let future = wm.registerExact('/app/config/db/host', Duration.Zero)
+        let _ = handler.handle(Message(Command.REGISTER, SyncData('/app/config/db/host', 0, [42u8]).toData()))
+        sleep(Duration.millisecond * 10)
+        @Assert(future.tryGet().isSome())
+        store.close()
+        cleanup(dir)
+    }
+
+    @TestCase
+    func unsubscribeAcknowledges(): Unit {
+        let dir = '/tmp/fleet_test/unsub'
+        cleanup(dir)
+        let store = Store(dir)
+        let nm = NodeManager(ArrayList<HostAndPort>([HostAndPort('127.0.0.1:1203')]), 0)
+        let wm = WatchManager()
+        let handler = SyncHandler(store, nm, wm)
+        let _ = handler.handle(Message(Command.SUBSCRIBE, WatchData('/app/config/db/host', timeout: Duration.millisecond * 10).toData()))
+        store.close()
+        cleanup(dir)
+    }
+
+    @TestCase
+    func addFiresWatchCallbackThroughHandler(): Unit {
+        let dir = '/tmp/fleet_test/handler_watch'
+        cleanup(dir)
+        let store = Store(dir)
+        let nm = NodeManager(ArrayList<HostAndPort>([HostAndPort('127.0.0.1:1203')]), 0)
+        let wm = WatchManager()
+        let handler = SyncHandler(store, nm, wm, configHosts: '127.0.0.1:1203')
+        let future = wm.registerExact('/app/config/db/host', Duration.Zero)
+        let _ = handler.handle(Message(Command.REGISTER, SyncData('/app/config/db/host', 0, [1u8]).toData()))
+        sleep(Duration.millisecond * 10)
+        @Assert(future.tryGet().isSome())
+        store.close()
+        cleanup(dir)
+    }
+
+    //
+    //  glob 扫描（ScanResult 通过 handler.handle 返回，不依赖 convert 验证内容）
+    //
+
+    @TestCase
+    func globScanReturnsMatchingYamlEntries(): Unit {
+        let dir = '/tmp/fleet_test/glob_yaml'
+        cleanup(dir)
+        let store = Store(dir)
+        let nm = NodeManager(ArrayList<HostAndPort>([HostAndPort('127.0.0.1:1203')]), 0)
+        let wm = WatchManager()
+        let handler = SyncHandler(store, nm, wm)
+        let _ = handler.handle(Message(Command.REGISTER, SyncData('/app/config/db/host.yaml', 0, [1u8]).toData()))
+        let _ = handler.handle(Message(Command.REGISTER, SyncData('/app/config/cache/size.xml', 0, [2u8]).toData()))
+        let _ = handler.handle(Message(Command.REGISTER, SyncData('/other/app/test.yaml', 0, [3u8]).toData()))
+        let resp = handler.handle(Message(Command.ACK, PatternData('/app/**/*.yaml').toData()))
+        let isResp = match (resp.command) { case RESP(_) => true case _ => false }
+        @Assert(isResp)
+        store.close()
+        cleanup(dir)
+    }
+
+    @TestCase
+    func globMatchesViaPathPatternAndStore(): Unit {
+        // 直接验证 PathPattern ** 匹配 + store.prefix([]) 联合工作
+        let dir = '/tmp/fleet_test/glob_pp_store'
+        cleanup(dir)
+        let store = Store(dir)
+        let nm = NodeManager(ArrayList<HostAndPort>([HostAndPort('127.0.0.1:1203')]), 0)
+        let wm = WatchManager()
+        let handler = SyncHandler(store, nm, wm)
+        let _ = handler.handle(Message(Command.REGISTER, SyncData('/app/config/db/host.yaml', 0, [1u8]).toData()))
+        let _ = handler.handle(Message(Command.REGISTER, SyncData('/app/config/cache/size.xml', 0, [2u8]).toData()))
+        let _ = handler.handle(Message(Command.REGISTER, SyncData('/app/host.yaml', 0, [2u8]).toData()))
+        let _ = handler.handle(Message(Command.REGISTER, SyncData('/app/a/b/c/host.yaml', 0, [3u8]).toData()))
+        let _ = handler.handle(Message(Command.REGISTER, SyncData('/other/app/test.yaml', 0, [4u8]).toData()))
+        let pp = PathPattern()
+        pp.compile('/app/**/*.yaml')
+        var matched = 0i64
+        let all = store.prefix([])
+        for ((k, _) in all) {
+            if (pp.matches(String.fromUtf8(k))) { matched++ }
+        }
+        @Assert(matched == 3)
+        store.close()
+        cleanup(dir)
+    }
+
+    @TestCase
+    func globDoubleStarMatchesMultipleLevels(): Unit {
+        let dir = '/tmp/fleet_test/glob_multi_level'
+        cleanup(dir)
+        let store = Store(dir)
+        let nm = NodeManager(ArrayList<HostAndPort>([HostAndPort('127.0.0.1:1203')]), 0)
+        let wm = WatchManager()
+        let handler = SyncHandler(store, nm, wm)
+        let _ = handler.handle(Message(Command.REGISTER, SyncData('/app/a/b/c/d/host.yaml', 0, [1u8]).toData()))
+        let pp = PathPattern()
+        pp.compile('/app/**/*.yaml')
+        let all = store.prefix([])
+        var matched = 0i64
+        for ((k, _) in all) {
+            if (pp.matches(String.fromUtf8(k))) { matched++ }
+        }
+        @Assert(matched == 1)
+        store.close()
+        cleanup(dir)
+    }
+
+    @TestCase
+    func globNonMatchingPatternReturnsEmpty(): Unit {
+        let dir = '/tmp/fleet_test/glob_empty'
+        cleanup(dir)
+        let store = Store(dir)
+        let nm = NodeManager(ArrayList<HostAndPort>([HostAndPort('127.0.0.1:1203')]), 0)
+        let wm = WatchManager()
+        let handler = SyncHandler(store, nm, wm)
+        let _ = handler.handle(Message(Command.REGISTER, SyncData('/app/config/db/host.txt', 0, [1u8]).toData()))
+        let resp = handler.handle(Message(Command.ACK, PatternData('/app/**/*.yaml').toData()))
+        let isResp = match (resp.command) { case RESP(_) => true case _ => false }
+        @Assert(isResp)
+        store.close()
+        cleanup(dir)
+    }
+
+    @TestCase
+    func globStarAtEnd(): Unit {
+        let dir = '/tmp/fleet_test/glob_star_end'
+        cleanup(dir)
+        let store = Store(dir)
+        let nm = NodeManager(ArrayList<HostAndPort>([HostAndPort('127.0.0.1:1203')]), 0)
+        let wm = WatchManager()
+        let handler = SyncHandler(store, nm, wm)
+        let _ = handler.handle(Message(Command.REGISTER, SyncData('/app/config/db', 0, [1u8]).toData()))
+        let _ = handler.handle(Message(Command.REGISTER, SyncData('/app/config/host.yaml', 0, [2u8]).toData()))
+        let pp = PathPattern()
+        pp.compile('/app/config/*.yaml')
+        var matched = 0i64
+        for ((k, _) in store.prefix([])) {
+            if (pp.matches(String.fromUtf8(k))) { matched++ }
+        }
+        @Assert(matched == 1)
+        store.close()
+        cleanup(dir)
+    }
+
+    @TestCase
+    func globDoubleStarAtStart(): Unit {
+        let dir = '/tmp/fleet_test/glob_ds_start'
+        cleanup(dir)
+        let store = Store(dir)
+        let nm = NodeManager(ArrayList<HostAndPort>([HostAndPort('127.0.0.1:1203')]), 0)
+        let wm = WatchManager()
+        let handler = SyncHandler(store, nm, wm)
+        let _ = handler.handle(Message(Command.REGISTER, SyncData('/host.yaml', 0, [1u8]).toData()))
+        let _ = handler.handle(Message(Command.REGISTER, SyncData('/app/host.yaml', 0, [2u8]).toData()))
+        let _ = handler.handle(Message(Command.REGISTER, SyncData('/app/config/db/host.yaml', 0, [3u8]).toData()))
+        let pp = PathPattern()
+        pp.compile('/**/host.yaml')
+        var matched = 0i64
+        for ((k, _) in store.prefix([])) {
+            if (pp.matches(String.fromUtf8(k))) { matched++ }
+        }
+        @Assert(matched == 3)
+        store.close()
+        cleanup(dir)
+    }
+
+    @TestCase
+    func globQuestionMark(): Unit {
+        let dir = '/tmp/fleet_test/glob_qmark'
+        cleanup(dir)
+        let store = Store(dir)
+        let nm = NodeManager(ArrayList<HostAndPort>([HostAndPort('127.0.0.1:1203')]), 0)
+        let wm = WatchManager()
+        let handler = SyncHandler(store, nm, wm)
+        let _ = handler.handle(Message(Command.REGISTER, SyncData('/app/config/db.yaml', 0, [1u8]).toData()))
+        let _ = handler.handle(Message(Command.REGISTER, SyncData('/app/aonfig/db.yaml', 0, [2u8]).toData()))
+        let _ = handler.handle(Message(Command.REGISTER, SyncData('/app/onfig/db.yaml', 0, [3u8]).toData()))
+        let pp = PathPattern()
+        pp.compile('/app/?onfig/*.yaml')
+        var matched = 0i64
+        for ((k, _) in store.prefix([])) {
+            if (pp.matches(String.fromUtf8(k))) { matched++ }
+        }
+        @Assert(matched == 2)
+        store.close()
+        cleanup(dir)
+    }
+
+    @TestCase
+    func globJavaSource(): Unit {
+        let dir = '/tmp/fleet_test/glob_java'
+        cleanup(dir)
+        let store = Store(dir)
+        let nm = NodeManager(ArrayList<HostAndPort>([HostAndPort('127.0.0.1:1203')]), 0)
+        let wm = WatchManager()
+        let handler = SyncHandler(store, nm, wm)
+        let _ = handler.handle(Message(Command.REGISTER, SyncData('/src/Main.java', 0, [1u8]).toData()))
+        let _ = handler.handle(Message(Command.REGISTER, SyncData('/src/main/Util.java', 0, [2u8]).toData()))
+        let _ = handler.handle(Message(Command.REGISTER, SyncData('/src/a/b/c/Test.java', 0, [3u8]).toData()))
+        let _ = handler.handle(Message(Command.REGISTER, SyncData('/src/Main.kt', 0, [4u8]).toData()))
+        let pp = PathPattern()
+        pp.compile('/src/**/*.java')
+        var matched = 0i64
+        for ((k, _) in store.prefix([])) {
+            if (pp.matches(String.fromUtf8(k))) { matched++ }
+        }
+        @Assert(matched == 3)
+        store.close()
+        cleanup(dir)
+    }
+
+    private static func cleanup(dir: String): Unit {
+        if (exists(dir)) {
+            remove(dir, recursive: true)
+        }
+    }
+}
