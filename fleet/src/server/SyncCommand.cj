@@ -35,7 +35,7 @@ public class SyncCommand <: SubCommand {
         get() { 'fleet' }
     }
 
-    public func exec(args: Array<String>): Int64 {
+    public func exec(_: Array<String>): Int64 {
         // 1. 读取节点列表
         let hostsArr = SyncConfig.getHosts()
         if (hostsArr.size == 0) {

@@ -21,9 +21,9 @@ import fountain::fleet.base.HostAndPort
 import fountain::fleet.exception.InvalidConfigException
 
 public class SyncConfig {
-    public static const sync = 'sync'
-    public static const hosts = sync + '_hosts'
-    public static const dataPath = sync + '_dataPath'
+    public static const sync: String = 'sync'
+    public static const hosts: String = sync + '_hosts'
+    public static const dataPath: String = sync + '_dataPath'
 
     public static func getHosts(): Array<HostAndPort> {
         if (let Some(hostsStr) <- Config.getString(hosts)) {
