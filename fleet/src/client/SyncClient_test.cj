@@ -56,7 +56,7 @@ class SyncClientKeyValidationTest {
 class SyncClientInstanceTest {
     @TestCase
     func getInstanceReturnsSingleton(): Unit {
-        Config.set([('fleet_hosts', '127.0.0.1:1203')], ifAbsent: false)
+        Config.set([(SyncConfig.hosts, '127.0.0.1:1203')], ifAbsent: false)
         // 仅验证构造不抛异常（连接失败是另一回事）
         try {
             let _ = SyncClient.getInstance()

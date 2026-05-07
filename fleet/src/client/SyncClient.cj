@@ -47,7 +47,7 @@ public class SyncClient {
             }
             let hostsArr = SyncConfig.getHosts()
             if (hostsArr.size == 0) {
-                throw InvalidKeyException('fleet_hosts is required')
+                throw InvalidKeyException('${SyncConfig.hosts} is required')
             }
             let host = hostsArr[0]
             let client = Client<Message, EncodedMessage, Message, SyncData, MessageID>.builder(

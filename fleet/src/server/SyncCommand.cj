@@ -39,7 +39,7 @@ public class SyncCommand <: SubCommand {
         // 1. 读取节点列表
         let hostsArr = SyncConfig.getHosts()
         if (hostsArr.size == 0) {
-            eprintln('fleet_hosts is required')
+            eprintln('${SyncConfig.hosts} is required')
             return 1
         }
         let hosts = ArrayList<HostAndPort>(hostsArr.size) { i => hostsArr[i] }
@@ -90,7 +90,7 @@ public class SyncCommand <: SubCommand {
                         eprintln('ERROR: Cluster configuration mismatch detected!')
                         eprintln('Local hosts:  ${localConfig}')
                         eprintln('Peer hosts:   ${peerConfig}')
-                        eprintln('All server nodes must have the same fleet_hosts')
+                        eprintln('All server nodes must have the same ${SyncConfig.hosts}')
                         eprintln('order. The current process will now exit.')
                         eprintln('====================================================')
                         eprintln('')

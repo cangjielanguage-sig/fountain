@@ -30,7 +30,7 @@ public class SyncConfig {
             let parts = hostsStr.split(',')
             Array<HostAndPort>(parts.size) { i => HostAndPort(parts[i]) }
         } else {
-            throw InvalidConfigException('fleet_hosts is required')
+            throw InvalidConfigException('${hosts} is required')
         }
     }
 
