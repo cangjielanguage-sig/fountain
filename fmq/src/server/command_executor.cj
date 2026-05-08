@@ -57,6 +57,9 @@ public class CommandExecutor {
             case DEREGISTER => handleDeregister(request)
             case SLAVEOF(_) => handleSlaveOf(request)
             case ELECT(_) => handleElection(request)
+            case DLQ_LIST => handleDlqList(request)
+            case DLQ_REDELIVER => handleDlqRedeliver(request)
+            case DLQ_REDELIVER_ALL => handleDlqRedeliverAll(request)
             case _ => errorResp(request.id, "unknown command")
         }
     }
@@ -240,6 +243,92 @@ public class CommandExecutor {
         }
     }
 
+    // ───── 死信队列 ─────
+
+    /**
+     * 列出死信。
+     * 请求体：topic + queueIndex（DefaultCodec 编码）。
+     * 响应：消息体列表编码为 MqBody("dlq_list", encodeMessageList)。
+     */
+    private func handleDlqList(request: ProtocolMessage): ProtocolMessage {
+        if (let Some(body) <- convert<MqBody>(request.data)) {
+            let buf = ByteBuffer(body.payload)
+            let dec = DefaultCodec()
+            if (let Some(topic) <- dec.decode<String>(buf)
+                && let Some(queueIdx) <- dec.decode<Int64>(buf)) {
+                if (let Some(q) <- queueManager.getQueue(topic, queueIdx)) {
+                    let entries = q.deadLetter.list(topic, queueIdx)
+                    // 编码返回 (messageId, data) 列表
+                    let result = encodeDeadLetterList(entries)
+                    ProtocolMessage(Command.RESP(0), request.id,
+                        MqBody("dlq_list", result).toData())
+                } else {
+                    errorResp(request.id, "no queue ${topic}[${queueIdx}]")
+                }
+            } else {
+                errorResp(request.id, "failed to decode dlq list request")
+            }
+        } else {
+            errorResp(request.id, "no body in dlq list request")
+        }
+    }
+
+    /**
+     * 重投单条死信。
+     * 请求体：topic + queueIndex + messageId（DefaultCodec 编码）。
+     */
+    private func handleDlqRedeliver(request: ProtocolMessage): ProtocolMessage {
+        if (let Some(body) <- convert<MqBody>(request.data)) {
+            let buf = ByteBuffer(body.payload)
+            let dec = DefaultCodec()
+            if (let Some(topic) <- dec.decode<String>(buf)
+                && let Some(queueIdx) <- dec.decode<Int64>(buf)
+                && let Some(msgId) <- dec.decode<String>(buf)) {
+                if (let Some(q) <- queueManager.getQueue(topic, queueIdx)) {
+                    if (let Some(data) <- q.deadLetter.redeliver(topic, queueIdx, msgId)) {
+                        log.info{"redelivered DLQ ${msgId}"}
+                        ProtocolMessage(Command.RESP(0), request.id,
+                            MqBody("dlq_ok", data).toData())
+                    } else {
+                        errorResp(request.id, "DLQ entry not found: ${msgId}")
+                    }
+                } else {
+                    errorResp(request.id, "no queue ${topic}[${queueIdx}]")
+                }
+            } else {
+                errorResp(request.id, "failed to decode dlq redeliver request")
+            }
+        } else {
+            errorResp(request.id, "no body in dlq redeliver request")
+        }
+    }
+
+    /**
+     * 重投所有死信。
+     * 请求体：topic + queueIndex（DefaultCodec 编码）。
+     */
+    private func handleDlqRedeliverAll(request: ProtocolMessage): ProtocolMessage {
+        if (let Some(body) <- convert<MqBody>(request.data)) {
+            let buf = ByteBuffer(body.payload)
+            let dec = DefaultCodec()
+            if (let Some(topic) <- dec.decode<String>(buf)
+                && let Some(queueIdx) <- dec.decode<Int64>(buf)) {
+                if (let Some(q) <- queueManager.getQueue(topic, queueIdx)) {
+                    q.deadLetter.redeliverAll(topic, queueIdx)
+                    log.info{"redelivered all DLQ from ${topic}[${queueIdx}]"}
+                    ProtocolMessage(Command.RESP(0), request.id,
+                        MqBody("dlq_ok", []).toData())
+                } else {
+                    errorResp(request.id, "no queue ${topic}[${queueIdx}]")
+                }
+            } else {
+                errorResp(request.id, "failed to decode dlq redeliver all request")
+            }
+        } else {
+            errorResp(request.id, "no body in dlq redeliver all request")
+        }
+    }
+
     // ───── SLAVEOF ─────
 
     private func handleSlaveOf(request: ProtocolMessage): ProtocolMessage {
@@ -297,6 +386,25 @@ public class CommandExecutor {
             enc.encode(m)
         }
         enc.finish().copy(to: buf, closeFromOnEnd: true, closeToOnEnd: false)
+        extractBytes(buf)
+    }
+
+    /**
+     * 编码死信列表为 Array<Byte>。
+     * 格式：count + (msgId + data)*N（DefaultCodec 顺序）。
+     */
+    private static func encodeDeadLetterList(entries: ArrayList<(String, Array<Byte>)>): Array<Byte> {
+        let buf = ByteBuffer()
+        let enc = DefaultCodec()
+            .encode(entries.size)
+        for ((msgId, data) in entries) {
+            enc.encode(msgId).encode(data)
+        }
+        enc.finish().copy(to: buf, closeFromOnEnd: true, closeToOnEnd: false)
+        extractBytes(buf)
+    }
+
+    private static func extractBytes(buf: ByteBuffer): Array<Byte> {
         let size = buf.seek(SeekPosition.End(0))
         buf.seek(SeekPosition.Begin(0))
         let raw = Array<Byte>(Int64(size), repeat: 0u8)

@@ -147,7 +147,17 @@ public class CommandRunner {
         let topic = getArg(args, "--topic")
         let queue = getArg(args, "--queue")
         if (let Some(t) <- topic && let Some(q) <- queue) {
-            println("dead letters for ${t}[${q}]: (placeholder)")
+            let qi = Int64.parse(q)
+            let client = getClient()
+            let entries = client.listDeadLetters(t, qi)
+            if (entries.size == 0) {
+                println("no dead letters for ${t}[${q}]")
+            } else {
+                println("dead letters for ${t}[${q}]:")
+                for ((msgId, data) in entries) {
+                    println("  ${msgId} (${data.size} bytes)")
+                }
+            }
         } else {
             println("error: --topic and --queue are required")
         }
@@ -158,7 +168,13 @@ public class CommandRunner {
         let queue = getArg(args, "--queue")
         let msgId = getArg(args, "--messageId")
         if (let Some(t) <- topic && let Some(q) <- queue && let Some(m) <- msgId) {
-            println("redeliver ${m} from ${t}[${q}]: (placeholder)")
+            let qi = Int64.parse(q)
+            let client = getClient()
+            if (client.redeliverDeadLetter(t, qi, m)) {
+                println("redelivered ${m} from ${t}[${q}]")
+            } else {
+                println("failed to redeliver ${m}")
+            }
         } else {
             println("error: --topic, --queue, --messageId are required")
         }
@@ -168,9 +184,23 @@ public class CommandRunner {
         let topic = getArg(args, "--topic")
         let queue = getArg(args, "--queue")
         if (let Some(t) <- topic && let Some(q) <- queue) {
-            println("redeliver all from ${t}[${q}]: (placeholder)")
+            let qi = Int64.parse(q)
+            let client = getClient()
+            if (client.redeliverAllDeadLetters(t, qi)) {
+                println("redelivered all from ${t}[${q}]")
+            } else {
+                println("failed to redeliver all from ${t}[${q}]")
+            }
         } else {
             println("error: --topic and --queue are required")
         }
+    }
+
+    /**
+     * 获取 MQ 客户端连接。
+     */
+    private static func getClient(): MqClient {
+        let config = loadConfig()
+        MqClient.getInstance(config)
     }
 }

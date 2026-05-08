@@ -69,6 +69,20 @@ public class QueueManager {
     }
 
     /**
+     * 获取指定 topic + index 的队列。
+     */
+    public func getQueue(topic: String, index: Int64): ?Queue {
+        if (let Some(qs) <- queues.get(topic)) {
+            for (q in qs) {
+                if (q.index == index) {
+                    return Some(q)
+                }
+            }
+        }
+        None
+    }
+
+    /**
      * 分布算法：hashCode 取模。
      */
     public func distribute(topic: String, queueIndex: Int64, nodeCount: Int64): Int64 {

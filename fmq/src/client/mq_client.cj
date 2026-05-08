@@ -16,6 +16,8 @@ limitations under the License.
 package fountain::fmq.client
 
 import fountain::f_protocol.default.{Message as ProtocolMessage, EncodedMessage}
+import fountain::f_codec.default.DefaultCodec
+import std.io.{ByteBuffer, SeekPosition}
 
 /**
  * MQ 客户端单例。
@@ -106,6 +108,46 @@ public class MqClient <: Resource {
         consumer.ack(messageId)
     }
 
+    // ───── 死信队列 API ─────
+
+    /**
+     * 列出死信。
+     */
+    public func listDeadLetters(topic: String, queueIndex: Int64): ArrayList<(String, Array<Byte>)> {
+        let payload = encodeDlqPayload(topic, queueIndex)
+        let req = ProtocolMessage(Command.DLQ_LIST, MessageID(),
+            MqBody("dlq_list", payload).toData())
+        let resp = mqConn.transfer(req.id, req, Duration.second * 10)
+        if (let Some(r) <- resp) {
+            if (let Some(body) <- convert<MqBody>(r.data)) {
+                return decodeDeadLetterList(body.payload)
+            }
+        }
+        ArrayList()
+    }
+
+    /**
+     * 重投单条死信。
+     */
+    public func redeliverDeadLetter(topic: String, queueIndex: Int64, messageId: String): Bool {
+        let payload = encodeDlqRedeliverPayload(topic, queueIndex, messageId)
+        let req = ProtocolMessage(Command.DLQ_REDELIVER, MessageID(),
+            MqBody("dlq_redeliver", payload).toData())
+        let resp = mqConn.transfer(req.id, req, Duration.second * 10)
+        resp.isSome()
+    }
+
+    /**
+     * 重投所有死信。
+     */
+    public func redeliverAllDeadLetters(topic: String, queueIndex: Int64): Bool {
+        let payload = encodeDlqPayload(topic, queueIndex)
+        let req = ProtocolMessage(Command.DLQ_REDELIVER_ALL, MessageID(),
+            MqBody("dlq_redeliver_all", payload).toData())
+        let resp = mqConn.transfer(req.id, req, Duration.second * 10)
+        resp.isSome()
+    }
+
     // ───── 生命周期 ─────
 
     public func close(): Unit {
@@ -115,4 +157,47 @@ public class MqClient <: Resource {
     }
 
     public func isClosed(): Bool { closed }
+
+    // ───── 协议编解码 ─────
+
+    private static func encodeDlqPayload(topic: String, queueIndex: Int64): Array<Byte> {
+        let buf = ByteBuffer()
+        DefaultCodec()
+            .encode(topic).encode(queueIndex)
+            .finish().copy(to: buf, closeFromOnEnd: true, closeToOnEnd: false)
+        extractBytes(buf)
+    }
+
+    private static func encodeDlqRedeliverPayload(topic: String, queueIndex: Int64, msgId: String): Array<Byte> {
+        let buf = ByteBuffer()
+        DefaultCodec()
+            .encode(topic).encode(queueIndex).encode(msgId)
+            .finish().copy(to: buf, closeFromOnEnd: true, closeToOnEnd: false)
+        extractBytes(buf)
+    }
+
+    private static func decodeDeadLetterList(data: Array<Byte>): ArrayList<(String, Array<Byte>)> {
+        let result = ArrayList<(String, Array<Byte>)>()
+        try {
+            let buf = ByteBuffer(data)
+            let dec = DefaultCodec()
+            if (let Some(count) <- dec.decode<Int64>(buf)) {
+                for (_ in 0..count) {
+                    if (let Some(msgId) <- dec.decode<String>(buf)
+                        && let Some(msgData) <- dec.decode<Array<Byte>>(buf)) {
+                        result.add((msgId, msgData))
+                    }
+                }
+            }
+        } catch (_: Exception) {}
+        result
+    }
+
+    private static func extractBytes(buf: ByteBuffer): Array<Byte> {
+        let size = buf.seek(SeekPosition.End(0))
+        buf.seek(SeekPosition.Begin(0))
+        let raw = Array<Byte>(Int64(size), repeat: 0u8)
+        buf.read(raw)
+        raw
+    }
 }

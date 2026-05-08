@@ -20,3 +20,4 @@ internal import fountain::f_app.SubCommandMediator
 internal import fountain::f_base.*
 internal import fountain::f_log.*
 internal import fountain::fmq.common.*
+internal import fountain::fmq.client.MqClient

@@ -97,9 +97,9 @@ public enum QoS <: Equatable<QoS> & ToString {
 | SLAVEOF     | 1         | Slave to Master                      |                                          |
 | REGISTER    | 2         | Client to Server                     | Register new topic                       |
 | PUBLISH     | 3         | Client to Server or Server to Client | Publish message                          |
-| RESERVED    | 4         |                                      |                                          |
-| RESERVED    | 5         |                                      |                                          |
-| RESERVED    | 6         |                                      |                                          |
+| DLQ_LIST    | 4         | Client to Server                     | List dead letters                        |
+| DLQ_REDELIVER | 5       | Client to Server                     | Redeliver dead letter                    |
+| DLQ_REDELIVER_ALL | 6   | Client to Server                     | Redeliver all dead letters               |
 | RESERVED    | 7         |                                      |                                          |
 | SUBSCRIBE   | 8         | Client to Server                     | Subscribe request                        |
 | UNSUBSCRIBE | 9         | Client to Server                     | Unsubscribe request                      |
@@ -115,6 +115,9 @@ public enum Command {
     | SLAVEOF(Byte) //1
     | REGISTER      //2
     | PUBLISH(Byte) //3
+    | DLQ_LIST      //4
+    | DLQ_REDELIVER //5
+    | DLQ_REDELIVER_ALL //6
     | SUBSCRIBE     //8
     | UNSUBSCRIBE   //9
     | CONSUME(Byte) //10
@@ -134,6 +137,9 @@ public enum Command {
                 case SLAVEOF(x)  => ( 1 << 4) | tag(x)
                 case REGISTER    => ( 2 << 4) | 1
                 case PUBLISH(x)  => ( 3 << 4) | tag(x)
+                case DLQ_LIST    => ( 4 << 4) | 1
+                case DLQ_REDELIVER => ( 5 << 4) | 1
+                case DLQ_REDELIVER_ALL => ( 6 << 4) | 1
                 case SUBSCRIBE   => ( 8 << 4) | 1
                 case UNSUBSCRIBE => ( 9 << 4) | 1
                 case CONSUME(x)  => (10 << 4) | tag(x)
@@ -154,6 +160,9 @@ public enum Command {
             case  1 => SLAVEOF(tag())
             case  2 => REGISTER
             case  3 => PUBLISH(tag())
+            case  4 => DLQ_LIST
+            case  5 => DLQ_REDELIVER
+            case  6 => DLQ_REDELIVER_ALL
             case  8 => SUBSCRIBE
             case  9 => UNSUBSCRIBE
             case 10 => CONSUME(tag())
