@@ -18,15 +18,15 @@ package fountain::fmq.client
 import fountain::f_protocol.default.{Message as ProtocolMessage, EncodedMessage}
 
 /**
- * fsync 心跳注册管理器。
- * 定期更新生产者/消费者在 fsync 中的注册信息。
- *
- * Phase 7 为骨架占位。
+ * 心跳注册管理器。
+ * 通过周期性 PING 保持 MQ 服务端连接活跃。
+ * 使用 Timer.repeat 驱动心跳间隔。
  */
 public class SyncRegistry {
     private let config: MqConfig
     private let client: Client<ProtocolMessage, EncodedMessage, ProtocolMessage, MqBody, MessageID>
     private let log = LoggerFactory.getLogger('fountain::fmq.SyncRegistry')
+    private var heartbeatTimer: ?Timer = None
 
     public init(config: MqConfig,
                 client: Client<ProtocolMessage, EncodedMessage, ProtocolMessage, MqBody, MessageID>) {
@@ -35,9 +35,55 @@ public class SyncRegistry {
     }
 
     /**
-     * 启动注册心跳（Phase 7 占位）。
+     * 启动心跳定时器。
+     * 按 heartbeatIntervalSec 间隔发送 PING。
      */
     public func startHeartbeat(): Unit {
-        log.debug{"SyncRegistry startHeartbeat (placeholder)"}
+        if (heartbeatTimer != None) {
+            log.debug{"heartbeat already running"}
+            return
+        }
+        let interval = Duration.second * config.heartbeatIntervalSec
+        let selfRef = this
+        heartbeatTimer = Timer.repeat(interval, interval, {
+            => selfRef.sendHeartbeat()
+        })
+        log.info{"SyncRegistry heartbeat started (interval=${config.heartbeatIntervalSec}s)"}
+    }
+
+    /**
+     * 停止心跳。
+     */
+    public func stopHeartbeat(): Unit {
+        if (let Some(t) <- heartbeatTimer) {
+            t.cancel()
+            heartbeatTimer = None
+            log.info{"SyncRegistry heartbeat stopped"}
+        }
+    }
+
+    /**
+     * 发送单次心跳。
+     */
+    private func sendHeartbeat(): Unit {
+        try {
+            let req = ProtocolMessage(Command.PING(0), MessageID(),
+                MqBody("ping", []).toData())
+            let resp = client.transfer(req.id, req, Duration.second * 5)
+            if (resp.isSome()) {
+                log.debug{"heartbeat OK"}
+            } else {
+                log.warn{"heartbeat: no response"}
+            }
+        } catch (e: Exception) {
+            log.warn{"heartbeat error: ${e.message}"}
+        }
+    }
+
+    /**
+     * 是否在运行。
+     */
+    public func isRunning(): Bool {
+        heartbeatTimer != None
     }
 }
