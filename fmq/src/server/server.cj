@@ -82,10 +82,17 @@ public class MqCommand <: SubCommand {
         let port = resolvePort(config.mqHosts)
         log.info{"starting MQ server on port ${port}"}
 
-        // 创建服务端 + 简单 handler
+        // 创建各管理器 + CommandExecutor
         let server = MqServer(bindPort: UInt16(port))
-        let handler = MqHandler(config)
-        server.start({ msg => handler.handle(msg) })
+        let topicManager = TopicManager(config)
+        let queueManager = QueueManager(config)
+        let deliveryManager = DeliveryManager(config)
+        let consumerMatcher = ConsumerMatcher()
+        let replicationManager = ReplicationManager(config)
+        let executor = CommandExecutor(
+            topicManager, queueManager, deliveryManager,
+            consumerMatcher, replicationManager)
+        server.start({ msg => executor.execute(msg) })
         let brokerManager = BrokerManager(config)
         brokerManager.startHeartbeat()
 
@@ -108,31 +115,5 @@ public class MqCommand <: SubCommand {
             }
         }
         7201
-    }
-}
-
-/**
- * 简单的 MQ 请求 handler（Phase 2 占位）。
- */
-public class MqHandler {
-    private let config: MqConfig
-
-    public init(config: MqConfig) {
-        this.config = config
-    }
-
-    /**
-     * 处理请求，返回响应 Message。
-     * Phase 2 只处理 PING，其余命令返回空 RESP。
-     */
-    public func handle(request: ProtocolMessage): ProtocolMessage {
-        match (request.command) {
-            case PING(_) => handlePing(request)
-            case _ => ProtocolMessage(Command.RESP(0), request.id, DataNone.INSTANCE)
-        }
-    }
-
-    private func handlePing(request: ProtocolMessage): ProtocolMessage {
-        ProtocolMessage(Command.PING(1), request.id, DataNone.INSTANCE)
     }
 }
