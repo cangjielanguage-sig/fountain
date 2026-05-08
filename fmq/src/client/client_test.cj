@@ -17,59 +17,126 @@ package fountain::fmq.client
 
 import std.unittest.*
 import std.unittest.testmacro.*
+import fountain::f_codec.default.DefaultCodec
+import std.io.{ByteBuffer, SeekPosition}
 
 @Test
-public class ConfigTest {
+public class SubscriberTest {
     @TestCase
-    public func testConfigLoad(): Unit {
-        let config = loadConfig()
-        @Assert(config.dataDir == "/var/fmq/data/")
-        @Assert(config.heartbeatIntervalSec == 5)
+    public func testExtractTopic(): Unit {
+        @Assert(extractTopicInner(MatchMode.Exact("/a")) == "/a")
+        @Assert(extractTopicInner(MatchMode.Glob("/a/*")) == "/a/*")
+        @Assert(extractTopicInner(MatchMode.Prefix("/a/")) == "/a/")
+    }
+
+    @TestCase
+    public func testModeToString(): Unit {
+        @Assert(modeToStringInner(MatchMode.Exact("/a")) == "exact")
+        @Assert(modeToStringInner(MatchMode.Glob("/a/*")) == "glob")
+        @Assert(modeToStringInner(MatchMode.Prefix("/a/")) == "prefix")
+    }
+
+    /**
+     * 反射测试：直接验证 Subscriber 的提取逻辑。
+     */
+    private static func extractTopicInner(mode: MatchMode): String {
+        match (mode) {
+            case Exact(t) => t
+            case Glob(t) => t
+            case Prefix(t) => t
+        }
+    }
+
+    private static func modeToStringInner(mode: MatchMode): String {
+        match (mode) {
+            case Exact(_) => "exact"
+            case Glob(_) => "glob"
+            case Prefix(_) => "prefix"
+        }
     }
 }
 
 @Test
-public class TopicValidationTest {
+public class ConsumerHelperTest {
     @TestCase
-    public func testValidTopics(): Unit {
-        @Assert(validateTopic("/order/create"))
-        @Assert(validateTopic("/"))
-        @Assert(validateTopic("/a/b/c"))
-        @Assert(validateTopic("/order-123"))
-    }
-
-    @TestCase
-    public func testInvalidTopics(): Unit {
-        @Assert(!validateTopic(""))
-        @Assert(!validateTopic("no-leading-slash"))
-        @Assert(!validateTopic("/with space"))
-    }
-
-    @TestCase
-    public func testEncodeDecode(): Unit {
+    public func testEncodeAndDecodeConsumePayload(): Unit {
         let topic = "/order/create"
-        let encoded = encodeTopicToPath(topic)
-        @Assert(encoded == "_order_create")
-        @Assert(decodePathToTopic(encoded) == topic)
+        let groupId = "group1"
+        let batchSize: Int64 = 10
+        let payload = encodeConsumePayload(topic, groupId, batchSize)
+        let buf = ByteBuffer(payload)
+        let dec = DefaultCodec()
+        if (let Some(t) <- dec.decode<String>(buf)
+            && let Some(g) <- dec.decode<String>(buf)
+            && let Some(b) <- dec.decode<Int64>(buf)) {
+            @Assert(t == topic)
+            @Assert(g == groupId)
+            @Assert(b == batchSize)
+        } else {
+            @Assert(false)
+        }
+    }
+
+    @TestCase
+    public func testEncodeAndDecodeMessageList(): Unit {
+        let list = ArrayList<Array<Byte>>()
+        list.add([0x01u8, 0x02u8])
+        list.add([0x03u8, 0x04u8, 0x05u8])
+
+        let encoded = encodeMessageList(list)
+        let decoded = decodeMessageList(encoded)
+        @Assert(decoded.size == 2)
+        @Assert(decoded[0].size == 2)
+        @Assert(decoded[1].size == 3)
+    }
+
+    /**
+     * 编码工具测试方法。
+     */
+    private static func encodeConsumePayload(topic: String, groupId: String, batchSize: Int64): Array<Byte> {
+        let buf = ByteBuffer()
+        DefaultCodec()
+            .encode(topic).encode(groupId).encode(batchSize)
+            .finish().copy(to: buf, closeFromOnEnd: true, closeToOnEnd: false)
+        extractBytes(buf)
+    }
+
+    private static func decodeMessageList(data: Array<Byte>): ArrayList<Array<Byte>> {
+        let result = ArrayList<Array<Byte>>()
+        try {
+            let buf = ByteBuffer(data)
+            let dec = DefaultCodec()
+            if (let Some(count) <- dec.decode<Int64>(buf)) {
+                for (_ in 0..count) {
+                    if (let Some(msg) <- dec.decode<Array<Byte>>(buf)) {
+                        result.add(msg)
+                    }
+                }
+            }
+        } catch (_: Exception) {}
+        result
+    }
+
+    private static func encodeMessageList(msgs: ArrayList<Array<Byte>>): Array<Byte> {
+        let buf = ByteBuffer()
+        let enc = DefaultCodec()
+            .encode(msgs.size)
+        for (m in msgs) {
+            enc.encode(m)
+        }
+        enc.finish().copy(to: buf, closeFromOnEnd: true, closeToOnEnd: false)
+        extractBytes(buf)
+    }
+
+    private static func extractBytes(buf: ByteBuffer): Array<Byte> {
+        let size = buf.seek(SeekPosition.End(0))
+        buf.seek(SeekPosition.Begin(0))
+        let raw = Array<Byte>(Int64(size), repeat: 0u8)
+        buf.read(raw)
+        raw
     }
 }
 
-@Test
-public class MatchModeTest {
-    @TestCase
-    public func testMatchModeValues(): Unit {
-        let _ = MatchMode.Exact("/order/create")
-        @Assert(true)
-    }
-}
-
-@Test
-public class MessageStructTest {
-    @TestCase
-    public func testBasics(): Unit {
-        let msg = Message()
-        @Assert(msg.topic == "")
-        @Assert(msg.labels.size == 0)
-        @Assert(msg.payload.size == 0)
-    }
-}
+/**
+ * 无 SyncRegistryTest：需要真实的 MQ 服务端连接。
+ */

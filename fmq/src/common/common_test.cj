@@ -60,3 +60,19 @@ public class TopicTest {
         @Assert(true)
     }
 }
+
+@Test
+public class MqBodyTest {
+    @TestCase
+    public func testRoundtrip(): Unit {
+        let body = MqBody("test-type", [0x01u8, 0x02u8, 0x03u8])
+        let data = body.toData()
+        if (let Some(decoded) <- convert<MqBody>(data)) {
+            @Assert(decoded.bodyType == "test-type")
+            @Assert(decoded.payload.size == 3)
+            @Assert(decoded.payload[0] == 0x01u8)
+        } else {
+            @Assert(false)
+        }
+    }
+}
