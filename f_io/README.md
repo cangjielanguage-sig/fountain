@@ -69,3 +69,9 @@ ByteBuffer 的类型化读写接口，支持大端/小端字节序。
 [doc/BytePointerException_MMapException.md](doc/BytePointerException_MMapException.md)
 
 fountain::f_io.exception 包的异常类。
+
+### SegmentedLog
+
+[doc/SegmentedLog.md](doc/SegmentedLog.md)
+
+固定大小分段、纯顺序追加的写日志。Linux 使用 mmap 零 syscall 写入，非 Linux 回退 file.write()。供 WAL 等模块复用。

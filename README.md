@@ -267,6 +267,17 @@ crc16/密钥交换协议/命名风格转换/常用设计模式/geohash/snowflake
 基于`fountain::f_egraph`的大模型开发库
 **详情请见：**<https://pkg.cangjie-lang.cn/package/fountain::f_llm/1.1.2/readme>
 
+### `fountain::f_store`
+基于`fountain::f_collection.ConcurrentSkipListMap`和`fountain::f_io.SegmentedLog`的LSM-TREE键值存储。
+确保增删改查每一个操作都是原子的。还支持KEY前缀遍历的迭代器。
+**详情请见：**<https://pkg.cangjie-lang.cn/package/fountain::f_store/1.1.2/readme>
+
+### `fountain::fleet`
+基于`fountain::f_store`、`fountain::f_codec`、`fountain::f_net`、`fountain::f_protocol`的数据同步服务。
+可以用于服务注册、配置中心、元数据注册等。
+**详情请见：**<https://pkg.cangjie-lang.cn/package/fountain::f_store/1.1.2/readme>
+
+
 ### `fountain::fboot`
 依赖fountain的应用项目启动程序，应用项目只需要编译为动态链接库，fboot会调用`fountain::f_app`完成应用启动。
 
