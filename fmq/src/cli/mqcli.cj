@@ -1,0 +1,99 @@
+/*
+Copyright (c) 2026 WuJingrun（吴京润）
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+ */
+package fountain::fmq.cli
+
+/**
+ * MQ CLI：SubCommand 'mqcli' 入口。
+ * 交互模式：直接运行 `fboot mqcli`
+ * 非交互模式：`fboot mqcli <command> [args...]`
+ */
+public class MqCliCommand <: SubCommand {
+    private static let log = LoggerFactory.getLogger('fountain::fmq.MqCliCommand')
+
+    static init() {
+        SubCommandMediator.register(MqCliCommand())
+    }
+
+    private init() {}
+
+    public prop command: String {
+        get() { 'mqcli' }
+    }
+
+    public func exec(args: Array<String>): Int64 {
+        if (args.size == 0) {
+            runInteractive()
+        } else {
+            runCommand(args)
+        }
+        0
+    }
+
+    /**
+     * 交互模式：打印提示信息（Phase 8 占位）。
+     */
+    private func runInteractive(): Unit {
+        println("MQ CLI (type 'help' for commands, 'exit' to quit)")
+    }
+
+    /**
+     * 单次执行命令。
+     */
+    private static func runCommand(args: Array<String>): Unit {
+        if (args.size == 0) { return }
+        let cmd = args[0]
+        let cmdArgs = args[1..]
+        match (cmd) {
+            case "help" => printHelp()
+            case "createTopic" => CommandRunner.createTopic(cmdArgs)
+            case "deleteTopic" => CommandRunner.deleteTopic(cmdArgs)
+            case "createConsumerGroup" => CommandRunner.createConsumerGroup(cmdArgs)
+            case "deleteConsumerGroup" => CommandRunner.deleteConsumerGroup(cmdArgs)
+            case "listTopics" => CommandRunner.listTopics(cmdArgs)
+            case "listConsumerGroups" => CommandRunner.listConsumerGroups(cmdArgs)
+            case "listGroups" => CommandRunner.listGroups(cmdArgs)
+            case "listConsumers" => CommandRunner.listConsumers(cmdArgs)
+            case "resetOffset" => CommandRunner.resetOffset(cmdArgs)
+            case "showTopic" => CommandRunner.showTopic(cmdArgs)
+            case "showBrokers" => CommandRunner.showBrokers(cmdArgs)
+            case "listDeadLetters" => CommandRunner.listDeadLetters(cmdArgs)
+            case "redeliverDeadLetter" => CommandRunner.redeliverDeadLetter(cmdArgs)
+            case "redeliverAllDeadLetters" => CommandRunner.redeliverAllDeadLetters(cmdArgs)
+            case _ => println("unknown command: ${cmd}")
+        }
+    }
+
+    /**
+     * 打印帮助信息。
+     */
+    private static func printHelp(): Unit {
+        println("MQ CLI commands:")
+        println("  createTopic --name <topic> --queues <N>")
+        println("  deleteTopic --name <topic>")
+        println("  createConsumerGroup --name <group> --topic <topic>")
+        println("  deleteConsumerGroup --name <group> --topic <topic>")
+        println("  listTopics")
+        println("  listConsumerGroups")
+        println("  listGroups --topic <topic>")
+        println("  listConsumers --topic <topic>")
+        println("  resetOffset --topic <t> --group <g> --offset <N>")
+        println("  showTopic --name <topic>")
+        println("  showBrokers")
+        println("  listDeadLetters --topic <t> --queue <q>")
+        println("  redeliverDeadLetter --topic <t> --queue <q> --messageId <id>")
+        println("  redeliverAllDeadLetters --topic <t> --queue <q>")
+    }
+}
