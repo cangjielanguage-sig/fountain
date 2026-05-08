@@ -15,25 +15,52 @@ limitations under the License.
  */
 package fountain::fmq.common
 
+import std.env
+
 /**
  * MQ 配置，所有字段从环境变量加载。
  */
-public struct MqConfig {
-    mqHosts: ArrayList<String>
-    syncHosts: ArrayList<String>
-    heartbeatIntervalSec: Int64
-    healthcheckMaxRetry: Int64
-    idleTimeoutMinutes: Int64
-    ackTimeoutMs: Int64
-    dataDir: String
-    segmentMaxSize: Int64
-    retentionHours: Int64
-    maxRetryCount: Int64
-    retryIntervalMs: Int64
-    dlqRetentionHours: Int64
-    maxMessageSize: Int64
-    maxLabelsPerMessage: Int64
-    syncQuorum: Int64
+public class MqConfig {
+    let mqHosts: ArrayList<String>
+    let syncHosts: ArrayList<String>
+    let heartbeatIntervalSec: Int64
+    let healthcheckMaxRetry: Int64
+    let idleTimeoutMinutes: Int64
+    let ackTimeoutMs: Int64
+    let dataDir: String
+    let segmentMaxSize: Int64
+    let retentionHours: Int64
+    let maxRetryCount: Int64
+    let retryIntervalMs: Int64
+    let dlqRetentionHours: Int64
+    let maxMessageSize: Int64
+    let maxLabelsPerMessage: Int64
+    let syncQuorum: Int64
+
+    public init(mqHosts!: ArrayList<String>, syncHosts!: ArrayList<String>,
+                dataDir!: String, segmentMaxSize!: Int64,
+                heartbeatIntervalSec!: Int64, healthcheckMaxRetry!: Int64,
+                idleTimeoutMinutes!: Int64, ackTimeoutMs!: Int64,
+                maxRetryCount!: Int64, retryIntervalMs!: Int64,
+                dlqRetentionHours!: Int64, maxMessageSize!: Int64,
+                maxLabelsPerMessage!: Int64, retentionHours!: Int64,
+                syncQuorum!: Int64) {
+        this.mqHosts = mqHosts
+        this.syncHosts = syncHosts
+        this.dataDir = dataDir
+        this.segmentMaxSize = segmentMaxSize
+        this.heartbeatIntervalSec = heartbeatIntervalSec
+        this.healthcheckMaxRetry = healthcheckMaxRetry
+        this.idleTimeoutMinutes = idleTimeoutMinutes
+        this.ackTimeoutMs = ackTimeoutMs
+        this.maxRetryCount = maxRetryCount
+        this.retryIntervalMs = retryIntervalMs
+        this.dlqRetentionHours = dlqRetentionHours
+        this.maxMessageSize = maxMessageSize
+        this.maxLabelsPerMessage = maxLabelsPerMessage
+        this.retentionHours = retentionHours
+        this.syncQuorum = syncQuorum
+    }
 }
 
 /**
@@ -64,8 +91,12 @@ public func loadConfig(): MqConfig {
  */
 public func readEnv(key: String): ?String {
     try {
-        let v = std.env.getEnv(key)
-        if (v.isEmpty()) { None } else { Some(v) }
+        let v = env.getVariable(key)
+        if (let Some(s) <- v) {
+            if (s.isEmpty()) { None } else { Some(s) }
+        } else {
+            None
+        }
     } catch (_: Exception) {
         None
     }
@@ -81,7 +112,7 @@ public func readEnvList(key: String): ArrayList<String> {
         let parts = v.split(',')
         let result = ArrayList<String>()
         for (p in parts) {
-            let trimmed = p.trim()
+            let trimmed = p.trimAscii()
             if (!trimmed.isEmpty()) {
                 result.add(trimmed)
             }
@@ -99,7 +130,7 @@ public func readEnvInt(key: String): ?Int64 {
     let raw = readEnv(key)
     if (let Some(v) <- raw) {
         try {
-            Some(Int64(v))
+            Some(Int64.parse(v))
         } catch (_: Exception) {
             None
         }
