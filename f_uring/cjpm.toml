@@ -1,0 +1,47 @@
+[package]
+  cjc-version = "1.1.0"
+  name = "f_uring"
+  description = "liburing ffi"
+  organization="fountain"
+  output-type = "dynamic"
+  src-dir = ""
+  target-dir = ""
+  version = "1.1.4"
+  package-configuration = {}
+  compile-option = "--dy-std"
+  override-compile-option = "--dy-std"
+  category = ["Utility"]
+  license = ["Apache-2.0"]
+  include = ["src", "doc"]
+  exclude = ["cjpm.toml.bak", "cjpm.lock", "target"]
+  authors = ["吴京润"]
+
+[dependencies]
+  "fountain::f_base" = {path = "../f_base"}
+  "fountain::f_exception" = {path = "../f_exception"}
+
+[profile.build]
+  incremental = true
+
+[target]
+[target.x86_64-unknown-linux-gnu]
+compile-option = "--dy-std -ldl -luring -latomic"
+override-compile-option = "--dy-std -ldl -luring -latomic"
+[target.aarch64-unknown-linux-gnu]
+compile-option = "--dy-std -ldl -luring -latomic"
+override-compile-option = "--dy-std -ldl -luring -latomic"
+[target.x86_64-w64-mingw32]
+  compile-option = "--dy-std -lcrypt32"
+  override-compile-option = "--dy-std -lcrypt32"
+[target.x86_64-apple-darwin]
+  compile-option = "--dy-std"
+  override-compile-option = "--dy-std"
+[target.aarch64-apple-darwin]
+  compile-option = "--dy-std"
+  override-compile-option = "--dy-std"
+[target.aarch64-linux-ohos]
+  compile-option = "--dy-std -ldl"
+  override-compile-option = "--dy-std -ldl"
+[target.x86_64-linux-ohos]
+  compile-option = "--dy-std -ldl"
+  override-compile-option = "--dy-std -ldl"
