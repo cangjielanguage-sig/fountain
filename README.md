@@ -285,4 +285,4 @@ crc16/密钥交换协议/命名风格转换/常用设计模式/geohash/snowflake
 ### `fountain::fboot`
 依赖fountain的应用项目启动程序，应用项目只需要编译为动态链接库，fboot会调用`fountain::f_app`完成应用启动。
 
-**详情请见：**<https://pkg.cangjie-lang.cn/package/fountain::f_fboot/1.1.2/readme>
+**详情请见：**<https://pkg.cangjie-lang.cn/package/fountain::fboot/1.1.2/readme>
