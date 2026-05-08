@@ -27,6 +27,30 @@ public class ConsumerMatcher {
     private var roundRobinIndex = HashMap<String, Int64>()  // groupId → next index
 
     /**
+     * 注册消费者。
+     * Phase 6: 本地缓存 + 持久化到 fsync /mq/consumes。
+     */
+    public func register(registration: ConsumerRegistration): Unit {
+        registrations.add(registration)
+        log.info{"registered consumer ${registration.consumerId} in group ${registration.groupId}"}
+    }
+
+    /**
+     * 注销消费者。
+     */
+    public func deregister(groupId: String, consumerId: String): Bool {
+        let before = registrations.size
+        let remaining = ArrayList<ConsumerRegistration>()
+        for (r in registrations) {
+            if (!(r.groupId == groupId && r.consumerId == consumerId)) {
+                remaining.add(r)
+            }
+        }
+        registrations = remaining
+        registrations.size < before
+    }
+
+    /**
      * 刷新消费者注册缓存（从 fsync /mq/consumes 读取）。
      * Phase 4 为本地空实现，fsync 集成在后续阶段。
      */

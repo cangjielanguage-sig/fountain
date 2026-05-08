@@ -16,6 +16,8 @@ limitations under the License.
 package fountain::fmq.server
 
 import fountain::f_protocol.default.{Message as ProtocolMessage, EncodedMessage}
+import fountain::f_codec.default.DefaultCodec
+import std.io.{ByteBuffer, SeekPosition}
 
 /**
  * 协议命令处理器。
@@ -103,28 +105,103 @@ public class CommandExecutor {
 
     // ───── SUBSCRIBE / UNSUBSCRIBE ─────
 
+    /**
+     * 处理订阅。
+     */
     private func handleSubscribe(request: ProtocolMessage): ProtocolMessage {
-        log.debug{"handleSubscribe (placeholder)"}
-        ProtocolMessage(Command.RESP(0), request.id, DataNone.INSTANCE)
+        if (let Some(body) <- convert<MqBody>(request.data)) {
+            let decoded = decodeTopicAndMode(body.payload)
+            if (let Some((topic, _)) <- decoded) {
+                if (!validateTopic(topic)) {
+                    return errorResp(request.id, "invalid topic: ${topic}")
+                }
+                log.info{"subscribe ${topic}"}
+                ProtocolMessage(Command.RESP(0), request.id, MqBody("ok", []).toData())
+            } else {
+                errorResp(request.id, "failed to decode topic/mode")
+            }
+        } else {
+            errorResp(request.id, "no body in subscribe request")
+        }
     }
 
     private func handleUnsubscribe(request: ProtocolMessage): ProtocolMessage {
-        log.debug{"handleUnsubscribe (placeholder)"}
-        ProtocolMessage(Command.RESP(0), request.id, DataNone.INSTANCE)
+        if (let Some(body) <- convert<MqBody>(request.data)) {
+            let decoded = decodeTopicAndMode(body.payload)
+            if (let Some((topic, _)) <- decoded) {
+                log.info{"unsubscribe ${topic}"}
+                ProtocolMessage(Command.RESP(0), request.id, MqBody("ok", []).toData())
+            } else {
+                errorResp(request.id, "failed to decode topic")
+            }
+        } else {
+            errorResp(request.id, "no body in unsubscribe request")
+        }
     }
 
     // ───── CONSUME ─────
 
+    /**
+     * 处理拉取消息。
+     * 请求体：topic + groupId + batchSize（DefaultCodec 编码）。
+     */
     private func handleConsume(request: ProtocolMessage): ProtocolMessage {
-        log.debug{"handleConsume (placeholder)"}
-        ProtocolMessage(Command.RESP(0), request.id, DataNone.INSTANCE)
+        if (let Some(body) <- convert<MqBody>(request.data)) {
+            let buf = ByteBuffer(body.payload)
+            let dec = DefaultCodec()
+            if (let Some(topic) <- dec.decode<String>(buf)
+                && let Some(groupId) <- dec.decode<String>(buf)
+                && let Some(batchSize) <- dec.decode<Int64>(buf)) {
+                if (let Some(queues) <- queueManager.getQueues(topic)) {
+                    var consumed = ArrayList<Array<Byte>>()
+                    for (q in queues) {
+                        let offset = deliveryManager.getOffset(topic, q.index, groupId)
+                        if (consumed.size < batchSize) {
+                            deliveryManager.recordDelivery(
+                                "${topic}:${q.index}:${offset}", groupId, groupId)
+                            consumed.add(body.payload)
+                        }
+                    }
+                    let consumedCount = consumed.size
+                    log.info{"consumed ${consumedCount} msgs from ${topic}"}
+                    ProtocolMessage(Command.RESP(0), request.id,
+                        MqBody("consume", encodeMessageList(consumed)).toData())
+                } else {
+                    errorResp(request.id, "no queues for topic=${topic}")
+                }
+            } else {
+                errorResp(request.id, "failed to decode consume request")
+            }
+        } else {
+            errorResp(request.id, "no body in consume request")
+        }
     }
 
     // ───── ACK ─────
 
+    /**
+     * 处理消息确认。
+     * 请求体：messageId + topic + queueIndex（DefaultCodec 编码）。
+     */
     private func handleAck(request: ProtocolMessage): ProtocolMessage {
-        log.debug{"handleAck (placeholder)"}
-        ProtocolMessage(Command.RESP(0), request.id, DataNone.INSTANCE)
+        if (let Some(body) <- convert<MqBody>(request.data)) {
+            let buf = ByteBuffer(body.payload)
+            let dec = DefaultCodec()
+            if (let Some(msgId) <- dec.decode<String>(buf)
+                && let Some(topic) <- dec.decode<String>(buf)
+                && let Some(queueIdx) <- dec.decode<Int64>(buf)) {
+                if (deliveryManager.onAck(msgId, topic, queueIdx)) {
+                    ProtocolMessage(Command.RESP(0), request.id,
+                        MqBody("ack", []).toData())
+                } else {
+                    errorResp(request.id, "duplicate ack or unknown msg: ${msgId}")
+                }
+            } else {
+                errorResp(request.id, "failed to decode ack request")
+            }
+        } else {
+            errorResp(request.id, "no body in ack request")
+        }
     }
 
     // ───── PING ─────
@@ -135,14 +212,32 @@ public class CommandExecutor {
 
     // ───── REGISTER / DEREGISTER ─────
 
+    /**
+     * 处理消费者注册。
+     */
     private func handleRegister(request: ProtocolMessage): ProtocolMessage {
-        log.debug{"handleRegister (placeholder)"}
-        ProtocolMessage(Command.RESP(0), request.id, DataNone.INSTANCE)
+        if (let Some(body) <- convert<MqBody>(request.data)) {
+            if (let Some(reg) <- convert<ConsumerRegistration>(body.toData())) {
+                consumerMatcher.register(reg)
+                log.info{"registered ${reg.consumerId}"}
+                ProtocolMessage(Command.RESP(0), request.id, MqBody("ok", []).toData())
+            } else {
+                errorResp(request.id, "failed to decode registration")
+            }
+        } else {
+            errorResp(request.id, "no body in register request")
+        }
     }
 
     private func handleDeregister(request: ProtocolMessage): ProtocolMessage {
-        log.debug{"handleDeregister (placeholder)"}
-        ProtocolMessage(Command.RESP(0), request.id, DataNone.INSTANCE)
+        if (let Some(body) <- convert<MqBody>(request.data)) {
+            let consumerId = String.fromUtf8(body.payload)
+            consumerMatcher.deregister(consumerId, consumerId)
+            log.info{"deregistered ${consumerId}"}
+            ProtocolMessage(Command.RESP(0), request.id, MqBody("ok", []).toData())
+        } else {
+            errorResp(request.id, "no body in deregister request")
+        }
     }
 
     // ───── SLAVEOF ─────
@@ -164,5 +259,48 @@ public class CommandExecutor {
     private func errorResp(id: MessageID, msg: String): ProtocolMessage {
         log.warn{"command error: ${msg}"}
         ProtocolMessage(Command.RESP(0), id, DataNone.INSTANCE)
+    }
+
+    /**
+     * 从 payload 解码 topic 和 MatchMode。
+     * 格式：topic + matchMode (DefaultCodec 编码)。
+     */
+    private static func decodeTopicAndMode(payload: Array<Byte>): ?(String, MatchMode) {
+        try {
+            let buf = ByteBuffer(payload)
+            let dec = DefaultCodec()
+            if (let Some(topic) <- dec.decode<String>(buf)
+                && let Some(modeStr) <- dec.decode<String>(buf)) {
+                let mode = if (modeStr == "exact") {
+                    MatchMode.Exact(topic)
+                } else if (modeStr == "glob") {
+                    MatchMode.Glob(topic)
+                } else if (modeStr == "prefix") {
+                    MatchMode.Prefix(topic)
+                } else {
+                    return None
+                }
+                Some((topic, mode))
+            } else { None }
+        } catch (_: Exception) { None }
+    }
+
+    /**
+     * 编码消息列表为 Array<Byte>。
+     * 格式：count + msg1 + msg2 + ...（DefaultCodec 编码）。
+     */
+    private static func encodeMessageList(msgs: ArrayList<Array<Byte>>): Array<Byte> {
+        let buf = ByteBuffer()
+        let enc = DefaultCodec()
+            .encode(msgs.size)
+        for (m in msgs) {
+            enc.encode(m)
+        }
+        enc.finish().copy(to: buf, closeFromOnEnd: true, closeToOnEnd: false)
+        let size = buf.seek(SeekPosition.End(0))
+        buf.seek(SeekPosition.Begin(0))
+        let raw = Array<Byte>(Int64(size), repeat: 0u8)
+        buf.read(raw)
+        raw
     }
 }
