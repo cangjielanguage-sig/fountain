@@ -98,7 +98,7 @@ public class CommandExecutor {
     // ───── PING ─────
 
     private func handlePing(request: ProtocolMessage): ProtocolMessage {
-        ProtocolMessage(Command.PING(1), request.id, DataNone.INSTANCE)
+        ProtocolMessage(Command.PING(1), request.id, MqBody("pong", []).toData())
     }
 
     // ───── REGISTER / DEREGISTER ─────

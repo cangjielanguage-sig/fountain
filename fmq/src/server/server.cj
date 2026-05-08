@@ -24,12 +24,12 @@ import fountain::f_protocol.default.{Message as ProtocolMessage, EncodedMessage}
  * T = DataAny 作为通用数据载荷类型。
  */
 public class MqServer <: Resource {
-    private let server: Server<ProtocolMessage, EncodedMessage, ProtocolMessage, DataAny>
+    private let server: Server<ProtocolMessage, EncodedMessage, ProtocolMessage, MqBody>
 
     public init(bindPort!: UInt16, queueSize!: Int64 = 1024,
                 checkDuration!: Duration = Duration.second * 30,
                 checker!: (SocketBuffer) -> Bool = { _ => true }) {
-        this.server = Server<ProtocolMessage, EncodedMessage, ProtocolMessage, DataAny>(
+        this.server = Server<ProtocolMessage, EncodedMessage, ProtocolMessage, MqBody>(
             queueSize: queueSize, bindAt: bindPort,
             checkDuration: checkDuration, checker: checker
         )

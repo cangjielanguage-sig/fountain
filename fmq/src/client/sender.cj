@@ -23,9 +23,9 @@ import fountain::f_protocol.default.{Message as ProtocolMessage, EncodedMessage}
  */
 public class Sender {
     private let log = LoggerFactory.getLogger('fountain::fmq.Sender')
-    private let client: Client<ProtocolMessage, EncodedMessage, ProtocolMessage, DataAny, MessageID>
+    private let client: Client<ProtocolMessage, EncodedMessage, ProtocolMessage, MqBody, MessageID>
 
-    public init(client: Client<ProtocolMessage, EncodedMessage, ProtocolMessage, DataAny, MessageID>) {
+    public init(client: Client<ProtocolMessage, EncodedMessage, ProtocolMessage, MqBody, MessageID>) {
         this.client = client
     }
 

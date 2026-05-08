@@ -25,11 +25,11 @@ import fountain::f_protocol.default.{Message as ProtocolMessage, EncodedMessage}
  */
 public class SyncRegistry {
     private let config: MqConfig
-    private let client: Client<ProtocolMessage, EncodedMessage, ProtocolMessage, DataAny, MessageID>
+    private let client: Client<ProtocolMessage, EncodedMessage, ProtocolMessage, MqBody, MessageID>
     private let log = LoggerFactory.getLogger('fountain::fmq.SyncRegistry')
 
     public init(config: MqConfig,
-                client: Client<ProtocolMessage, EncodedMessage, ProtocolMessage, DataAny, MessageID>) {
+                client: Client<ProtocolMessage, EncodedMessage, ProtocolMessage, MqBody, MessageID>) {
         this.config = config
         this.client = client
     }

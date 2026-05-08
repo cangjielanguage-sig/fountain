@@ -26,7 +26,7 @@ public class MqClient <: Resource {
     private let log = LoggerFactory.getLogger('fountain::fmq.MqClient')
 
     // MQ 服务端连接
-    let mqConn: Client<ProtocolMessage, EncodedMessage, ProtocolMessage, DataAny, MessageID>
+    let mqConn: Client<ProtocolMessage, EncodedMessage, ProtocolMessage, MqBody, MessageID>
     // 订阅/消费管理器
     let sender: Sender
     let subscriber: Subscriber
@@ -36,7 +36,7 @@ public class MqClient <: Resource {
     private let config: MqConfig
     private var closed: Bool = false
 
-    private init(config: MqConfig, mqConn: Client<ProtocolMessage, EncodedMessage, ProtocolMessage, DataAny, MessageID>) {
+    private init(config: MqConfig, mqConn: Client<ProtocolMessage, EncodedMessage, ProtocolMessage, MqBody, MessageID>) {
         this.config = config
         this.mqConn = mqConn
         this.sender = Sender(mqConn)
@@ -57,7 +57,7 @@ public class MqClient <: Resource {
             throw MqException("invalid mq_hosts: ${config.mqHosts}")
         }
 
-        let conn = Client<ProtocolMessage, EncodedMessage, ProtocolMessage, DataAny, MessageID>.builder(
+        let conn = Client<ProtocolMessage, EncodedMessage, ProtocolMessage, MqBody, MessageID>.builder(
             queueSize: 1024,
             socketCount: 1,
             host: parts[0],
