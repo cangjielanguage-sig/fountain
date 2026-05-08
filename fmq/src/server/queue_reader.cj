@@ -35,13 +35,13 @@ public class QueueReader {
      * 读线程主循环（Phase 3 占位）。
      */
     public func run(): Unit {
-        log.info("QueueReader started for ${queue}")
+        log.info{"QueueReader started for ${queue}"}
         while (!closed) {
             try {
                 // Phase 4: 读取消息 → ConsumerMatcher.match() → 投递 → ACK/重试
                 sleep(Duration.millisecond * 100)
             } catch (e: Exception) {
-                log.error("QueueReader error: ${e.message}")
+                log.error{"QueueReader error: ${e.message}"}
             }
         }
     }

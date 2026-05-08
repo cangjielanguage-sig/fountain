@@ -34,10 +34,10 @@ public class BrokerManager {
      * 启动后台心跳线程（Phase 2 占位，仅输出日志）。
      */
     public func startHeartbeat(): Unit {
-        log.info("BrokerManager heartbeat started (placeholder)")
+        log.info{"BrokerManager heartbeat started (placeholder)"}
         spawn {
             while (!closed) {
-                log.debug("BrokerManager heartbeat tick")
+                log.debug{"BrokerManager heartbeat tick"}
                 sleep(Duration.second * config.heartbeatIntervalSec)
             }
         }

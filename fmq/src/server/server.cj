@@ -75,12 +75,12 @@ public class MqCommand <: SubCommand {
     public func exec(args: Array<String>): Int64 {
         let config = loadConfig()
         if (config.mqHosts.isEmpty()) {
-            log.error("mq_hosts not configured")
+            log.error{"mq_hosts not configured"}
             return 1
         }
 
         let port = resolvePort(config.mqHosts)
-        log.info("starting MQ server on port ${port}")
+        log.info{"starting MQ server on port ${port}"}
 
         // 创建服务端 + 简单 handler
         let server = MqServer(bindPort: UInt16(port))

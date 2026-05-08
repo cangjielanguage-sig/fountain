@@ -53,7 +53,7 @@ public class QueueWriter {
                     sleep(Duration.millisecond * 10)
                 }
             } catch (e: Exception) {
-                log.error("QueueWriter error: ${e.message}")
+                log.error{"QueueWriter error: ${e.message}"}
             }
         }
     }

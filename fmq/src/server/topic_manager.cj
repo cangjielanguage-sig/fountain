@@ -33,7 +33,7 @@ public class TopicManager {
      * 创建主题（Phase 3 占位）。
      */
     public func createTopic(name: String, queueCount!: Int64 = 1): MqErrorCode {
-        log.info("createTopic(${name}, queues=${queueCount}) - placeholder")
+        log.info{"createTopic(${name}, queues=${queueCount}) - placeholder"}
         MqErrorCode.SUCCESS
     }
 
@@ -41,7 +41,7 @@ public class TopicManager {
      * 删除主题（Phase 3 占位）。
      */
     public func deleteTopic(name: String): MqErrorCode {
-        log.info("deleteTopic(${name}) - placeholder")
+        log.info{"deleteTopic(${name}) - placeholder"}
         MqErrorCode.SUCCESS
     }
 

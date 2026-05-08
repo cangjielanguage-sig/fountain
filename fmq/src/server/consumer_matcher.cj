@@ -33,7 +33,7 @@ public class ConsumerMatcher {
     public func refresh(): Unit {
         // Phase 4: 从 fsync 读取 /mq/consumes 并反序列化为 registrations
         // this.registrations = loadFromFsync()
-        log.debug("ConsumerMatcher refresh (placeholder)")
+        log.debug{"ConsumerMatcher refresh (placeholder)"}
     }
 
     /**

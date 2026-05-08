@@ -34,7 +34,7 @@ public class DeadLetterStore {
      */
     public func append(data: Array<Byte>): Unit {
         // Phase 3: 暂不持久化，仅打日志
-        log.warn("dead letter entry (not yet persisted), size=${data.size}")
+        log.warn{"dead letter entry (not yet persisted), size=${data.size}"}
     }
 
     /**
@@ -46,6 +46,6 @@ public class DeadLetterStore {
      * 重新投递死信消息（Phase 3 占位）。
      */
     public func redeliver(data: Array<Byte>): Unit {
-        log.info("redeliver dead letter (placeholder)")
+        log.info{"redeliver dead letter (placeholder)"}
     }
 }

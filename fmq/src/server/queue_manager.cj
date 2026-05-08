@@ -45,7 +45,7 @@ public class QueueManager {
             }
         }
         queues[topic] = topicQueues
-        log.info("created ${topicQueues.size} queues for topic ${topic}")
+        log.info{"created ${topicQueues.size} queues for topic ${topic}"}
         topicQueues
     }
 

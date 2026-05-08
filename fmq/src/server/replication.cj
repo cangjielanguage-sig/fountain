@@ -61,7 +61,7 @@ public class ReplicationManager {
     public func promoteToMaster(): Unit {
         isMaster = true
         masterNodeId = ""
-        log.info("promoted to master")
+        log.info{"promoted to master"}
     }
 
     /**
@@ -70,7 +70,7 @@ public class ReplicationManager {
     public func demoteToSlave(masterId: String): Unit {
         isMaster = false
         masterNodeId = masterId
-        log.info("demoted to slave of ${masterId}")
+        log.info{"demoted to slave of ${masterId}"}
     }
 
     /**
@@ -78,12 +78,12 @@ public class ReplicationManager {
      */
     public func onSlaveOf(nodeId: String): Bool {
         if (!isMaster) {
-            log.warn("reject SLAVEOF from ${nodeId}: not master")
+            log.warn{"reject SLAVEOF from ${nodeId}: not master"}
             return false
         }
         if (!slaves.contains(nodeId)) {
             slaves[nodeId] = SlaveProgress(nodeId)
-            log.info("slave ${nodeId} registered")
+            log.info{"slave ${nodeId} registered"}
         }
         true
     }
@@ -107,7 +107,7 @@ public class ReplicationManager {
     public func connectToMaster(masterId: String): Bool {
         this.masterNodeId = masterId
         this.isSyncing = true
-        log.info("connecting to master ${masterId} (placeholder)")
+        log.info{"connecting to master ${masterId} (placeholder)"}
         true
     }
 
@@ -117,7 +117,7 @@ public class ReplicationManager {
     public func onIncrementalSync(data: Array<Byte>, seq: Int64): Unit {
         if (!isSyncing) { return }
         lastMasterSeq = seq
-        log.debug("incremental sync: seq=${seq}")
+        log.debug{"incremental sync: seq=${seq}"}
     }
 
     // ───── 故障切换 ─────
@@ -136,7 +136,7 @@ public class ReplicationManager {
      */
     public func failoverToMaster(): Bool {
         if (isMaster) { return true }
-        log.warn("failover: promoting to master")
+        log.warn{"failover: promoting to master"}
         // Phase 5: 获取多数派确认，更新 fsync
         promoteToMaster()
         true
@@ -147,7 +147,7 @@ public class ReplicationManager {
      */
     public func switchbackToMaster(originalMasterId: String): Bool {
         if (!isMaster) { return false }
-        log.info("switchback: preparing to return master to ${originalMasterId}")
+        log.info{"switchback: preparing to return master to ${originalMasterId}"}
         // Phase 5: 确认数据一致，通知原始 Master 接管
         isMaster = false
         masterNodeId = originalMasterId

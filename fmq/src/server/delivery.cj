@@ -109,10 +109,10 @@ public class DeliveryManager {
     public func retry(record: DeliveryRecord, consumerMatcher: ConsumerMatcher): Bool {
         record.retryCount += 1
         if (record.retryCount >= config.maxRetryCount) {
-            log.warn("max retry reached for ${record.messageId}, move to DLQ")
+            log.warn{"max retry reached for ${record.messageId}, move to DLQ"}
             false
         } else {
-            log.info("retry ${record.retryCount}/${config.maxRetryCount} for ${record.messageId}")
+            log.info{"retry ${record.retryCount}/${config.maxRetryCount} for ${record.messageId}"}
             // Phase 4: 重新投递逻辑（查找在线消费者，重新发送）
             record.deliverTime = DateTime.now()  // 重置计时
             true
@@ -131,7 +131,7 @@ public class DeliveryManager {
      */
     private func persistOffset(offsetKey: String, offset: Int64): Unit {
         // Phase 4: 写入 fsync /mq/offset/<key>
-        log.debug("persist offset ${offsetKey} = ${offset} (placeholder)")
+        log.debug{"persist offset ${offsetKey} = ${offset} (placeholder)"}
     }
 
     private static func offsetKeyFor(topic: String, queueIndex: Int64, groupId: String): String {
