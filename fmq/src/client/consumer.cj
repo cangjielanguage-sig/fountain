@@ -16,10 +16,12 @@ limitations under the License.
 package fountain::fmq.client
 
 import fountain::f_protocol.default.{Message as ProtocolMessage, EncodedMessage}
+import fountain::f_codec.default.DefaultCodec
+import std.io.{ByteBuffer, SeekPosition}
 
 /**
  * 消费者。
- * 提供 poll 拉取和 ACK 确认。
+ * 通过 CONSUME / ACK 命令与 MQ 服务端交互。
  */
 public class Consumer {
     private let log = LoggerFactory.getLogger('fountain::fmq.Consumer')
@@ -34,12 +36,32 @@ public class Consumer {
 
     /**
      * 拉取消息。
-     * T 为消息数据解码类型，用于 dataFilter 过滤。
+     * 遍历活跃订阅，发送 CONSUME 命令。
      */
     public func poll<T>(timeout: Duration): ?Message where T <: DataFields<T> {
-        log.debug{"poll (placeholder)"}
-        // Phase 7: 发送 CONSUME 命令，等待响应
-        // 响应消息后，用 dataFilterMatch<T> 过滤
+        let subs = subscriber.getSubscriptions()
+        if (subs.size == 0) {
+            return None
+        }
+        for ((groupId, topic) in subs) {
+            let payload = encodeConsumePayload(topic, groupId, 1)
+            let req = ProtocolMessage(Command.CONSUME(0), MessageID(),
+                MqBody("consume", payload).toData())
+            let resp = client.transfer(req.id, req, timeout)
+            if (let Some(r) <- resp) {
+                if (let Some(body) <- convert<MqBody>(r.data)) {
+                    if (body.bodyType == "consume") {
+                        let msgs = decodeMessageList(body.payload)
+                        if (msgs.size > 0) {
+                            let msgData = msgs[0]
+                            return Some(Message(
+                                topic: topic, id: MessageID(),
+                                payload: msgData, labels: ArrayList()))
+                        }
+                    }
+                }
+            }
+        }
         None
     }
 
@@ -47,8 +69,63 @@ public class Consumer {
      * 确认消息。
      */
     public func ack(messageId: MessageID): Bool {
-        log.debug{"ack (placeholder)"}
-        // Phase 7: 发送 ACK 命令
-        true
+        let idStr = messageIdToStr(messageId)
+        let payload = encodeAckPayload(idStr, "unknown", 0)
+        let req = ProtocolMessage(Command.ACK, MessageID(),
+            MqBody("ack", payload).toData())
+        let resp = client.transfer(req.id, req, Duration.second * 10)
+        if (resp.isSome()) {
+            log.debug{"acked ${idStr}"}
+            true
+        } else {
+            log.warn{"ack failed for ${idStr}"}
+            false
+        }
+    }
+
+    // ───── 编码工具 ─────
+
+    private static func encodeConsumePayload(topic: String, groupId: String, batchSize: Int64): Array<Byte> {
+        let buf = ByteBuffer()
+        DefaultCodec()
+            .encode(topic).encode(groupId).encode(batchSize)
+            .finish().copy(to: buf, closeFromOnEnd: true, closeToOnEnd: false)
+        extractBytes(buf)
+    }
+
+    private static func encodeAckPayload(msgId: String, topic: String, queueIndex: Int64): Array<Byte> {
+        let buf = ByteBuffer()
+        DefaultCodec()
+            .encode(msgId).encode(topic).encode(queueIndex)
+            .finish().copy(to: buf, closeFromOnEnd: true, closeToOnEnd: false)
+        extractBytes(buf)
+    }
+
+    private static func decodeMessageList(data: Array<Byte>): ArrayList<Array<Byte>> {
+        let result = ArrayList<Array<Byte>>()
+        try {
+            let buf = ByteBuffer(data)
+            let dec = DefaultCodec()
+            if (let Some(count) <- dec.decode<Int64>(buf)) {
+                for (_ in 0..count) {
+                    if (let Some(msg) <- dec.decode<Array<Byte>>(buf)) {
+                        result.add(msg)
+                    }
+                }
+            }
+        } catch (_: Exception) {}
+        result
+    }
+
+    private static func messageIdToStr(id: MessageID): String {
+        "${id.pid}:${id.tid}"
+    }
+
+    private static func extractBytes(buf: ByteBuffer): Array<Byte> {
+        let size = buf.seek(SeekPosition.End(0))
+        buf.seek(SeekPosition.Begin(0))
+        let raw = Array<Byte>(Int64(size), repeat: 0u8)
+        buf.read(raw)
+        raw
     }
 }

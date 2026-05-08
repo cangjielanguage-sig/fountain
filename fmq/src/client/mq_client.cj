@@ -40,7 +40,7 @@ public class MqClient <: Resource {
         this.config = config
         this.mqConn = mqConn
         this.sender = Sender(mqConn)
-        this.subscriber = Subscriber(config)
+        this.subscriber = Subscriber(config, mqConn)
         this.consumer = Consumer(mqConn, subscriber)
         this.syncRegistry = SyncRegistry(config, mqConn)
     }
