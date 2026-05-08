@@ -123,11 +123,6 @@ IOC
 
 **详情请见：**<https://pkg.cangjie-lang.cn/package/fountain::f_data/1.1.2/readme>
 
-### `fountain::f_egraph`
-一个事件驱动的业务流程执行器
-
-**详情请见：**<https://pkg.cangjie-lang.cn/package/fountain::f_egraph/1.1.2/readme>
-
 ### `fountain::f_exception`
 异常模块
 也可以使用`fountain::fountain.exception`包使用本模块的同名API。
