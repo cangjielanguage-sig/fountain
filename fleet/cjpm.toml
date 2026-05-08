@@ -1,15 +1,15 @@
 [dependencies]
-  "fountain::f_app" = "1.1.4"
-  "fountain::f_config" = "1.1.4"
-  "fountain::f_base" = "1.1.4"
-  "fountain::f_codec" = "1.1.4"
-  "fountain::f_net" = "1.1.4"
-  "fountain::f_protocol" = "1.1.4"
-  "fountain::f_store" = "1.1.4"
-  "fountain::f_data" = "1.1.4"
-  "fountain::f_exception" = "1.1.4"
-  "fountain::f_log" = "1.1.4"
-  "fountain::f_util" = "1.1.4"
+  "fountain::f_app" = {path = "../f_app"}
+  "fountain::f_base" = {path = "../f_base"}
+  "fountain::f_codec" = {path = "../f_codec"}
+  "fountain::f_config" = {path = "../f_config"}
+  "fountain::f_data" = {path = "../f_data"}
+  "fountain::f_exception" = {path = "../f_exception"}
+  "fountain::f_log" = {path = "../f_log"}
+  "fountain::f_net" = {path = "../f_net"}
+  "fountain::f_protocol" = {path = "../f_protocol"}
+  "fountain::f_store" = {path = "../f_store"}
+  "fountain::f_util" = {path = "../f_util"}
 
 [package]
   cjc-version = "1.1.0"
