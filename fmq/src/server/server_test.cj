@@ -98,7 +98,7 @@ public class ReplicationRoleTest {
 public class DeliverySimpleTest {
     @TestCase
     public func testRecordAndAck(): Unit {
-        let config = testConfig()
+        let config = deliveryTestConfig()
         let dm = DeliveryManager(config)
         let record = dm.recordDelivery("msg1", "consumer1", "group1")
         @Assert(record.messageId == "msg1")
@@ -108,7 +108,7 @@ public class DeliverySimpleTest {
 
     @TestCase
     public func testDoubleAckReturnsFalse(): Unit {
-        let config = testConfig()
+        let config = deliveryTestConfig()
         let dm = DeliveryManager(config)
         dm.recordDelivery("msg1", "consumer1", "group1")
         dm.onAck("msg1", "/test", 0)
@@ -116,7 +116,7 @@ public class DeliverySimpleTest {
         @Assert(!second)
     }
 
-    private static func testConfig(): MqConfig {
+    private static func deliveryTestConfig(): MqConfig {
         MqConfig(
             mqHosts: ArrayList(), syncHosts: ArrayList(),
             dataDir: "/tmp", segmentMaxSize: 1024,
@@ -127,5 +127,60 @@ public class DeliverySimpleTest {
             maxLabelsPerMessage: 64, retentionHours: 72,
             syncQuorum: 1
         )
+    }
+}
+
+@Test
+public class DeadLetterStoreTest {
+    @TestCase
+    public func testAppendAndList(): Unit {
+        let ds = DeadLetterStore("/tmp/fmq_dlq_test", retentionHours: 168)
+        ds.append([0x01u8, 0x02u8, 0x03u8], "/test", 0, "msg-001")
+
+        let list1 = ds.list("/test", 0)
+        @Assert(list1.size == 1)
+        if (list1.size > 0) {
+            @Assert(list1[0][0] == "msg-001")
+            @Assert(list1[0][1].size == 3)
+        }
+
+        let list2 = ds.list("/other", 0)
+        @Assert(list2.size == 0)
+    }
+
+    @TestCase
+    public func testRedeliver(): Unit {
+        let ds = DeadLetterStore("/tmp/fmq_dlq_test2", retentionHours: 168)
+        ds.append([0xAu8, 0xBu8], "/test", 1, "msg-002")
+
+        let r = ds.redeliver("/test", 1, "msg-002")
+        @Assert(r != None)
+        if (let Some(data) <- r) {
+            @Assert(data.size == 2)
+            @Assert(data[0] == 0xAu8)
+        }
+
+        let list = ds.list("/test", 1)
+        @Assert(list.size == 0)
+    }
+
+    @TestCase
+    public func testRedeliverNonExistent(): Unit {
+        let ds = DeadLetterStore("/tmp/fmq_dlq_test3", retentionHours: 168)
+        @Assert(ds.redeliver("/test", 0, "nonexistent").isNone())
+    }
+
+    @TestCase
+    public func testRedeliverAll(): Unit {
+        let ds = DeadLetterStore("/tmp/fmq_dlq_test4", retentionHours: 168)
+        ds.append([0x01u8], "/test", 0, "msg-a")
+        ds.append([0x02u8], "/test", 0, "msg-b")
+        ds.append([0x03u8], "/other", 0, "msg-c")
+
+        let all = ds.redeliverAll("/test", 0)
+        @Assert(all.size == 2)
+
+        let after = ds.list("/test", 0)
+        @Assert(after.size == 0)
     }
 }

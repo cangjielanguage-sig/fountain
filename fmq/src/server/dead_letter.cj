@@ -15,20 +15,21 @@ limitations under the License.
  */
 package fountain::fmq.server
 
+import std.collection.HashMap
 import fountain::f_io.{SegmentedLog, LogConfig}
 
 /**
  * 死信队列存储。
- * 使用 SegmentedLog 持久化每条死信消息。
- * 元数据（messageId, topic, queueIndex）嵌入在 KeyData 中用于查找。
- *
- * Phase 7 通过 SegmentedLog 实现持久化，支持 list/redeliver/cleanup。
+ * 写入 SegmentedLog 持久化，内存 HashMap 索引 (messageId → (topic, queueIndex, data))。
+ * list/redeliver 通过 HashMap 索引实现，SegmentedLog 用于崩溃恢复（后续阶段重建索引）。
  */
 public class DeadLetterStore {
     private let dlqDir: String
     private let dlqLog: SegmentedLog
     private let retentionHours: Int64
     private let log = LoggerFactory.getLogger('fountain::fmq.DeadLetterStore')
+    // 内存索引：messageId → (topic, queueIndex, data)
+    private let index = HashMap<String, (String, Int64, Array<Byte>)>()
 
     public init(queueDir: String, retentionHours!: Int64 = 168) {
         this.dlqDir = "${queueDir}/dlq"
@@ -39,41 +40,65 @@ public class DeadLetterStore {
 
     /**
      * 写入死信消息。
+     * 持久化到 SegmentedLog + 加入内存索引。
      */
     public func append(data: Array<Byte>, topic: String, queueIndex: Int64, messageId: String): Unit {
-        log.warn{"dead letter: ${messageId} (topic=${topic}[${queueIndex}])"}
         dlqLog.append(data)
         dlqLog.sync()
+        index[messageId] = (topic, queueIndex, data)
+        log.warn{"dead letter: ${messageId}"}
     }
 
     /**
-     * 列出死信（Phase 7 简化：仅返回持久化字节数，逐条遍历须在后续实现）。
+     * 列出指定 topic + queue 的死信。
      */
     public func list(topic: String, queueIndex: Int64): ArrayList<(String, Array<Byte>)> {
-        // Phase 7: 从 SegmentedLog 按 offset 遍历读取。
-        // 当前返回空 — 需 waitForAppend + Iterator 支持。
-        log.debug{"dead letter list for ${topic}[${queueIndex}] (placeholder)"}
-        ArrayList()
+        let result = ArrayList<(String, Array<Byte>)>()
+        for ((msgId, (t, qi, data)) in index) {
+            if (t == topic && qi == queueIndex) {
+                result.add((msgId, data))
+            }
+        }
+        result
     }
 
     /**
-     * 重投死信（Phase 7 占位）。
+     * 重投单条死信。从索引删除，返回消息体。
      */
     public func redeliver(topic: String, queueIndex: Int64, messageId: String): ?Array<Byte> {
-        log.info{"redeliver dead letter ${messageId} (placeholder)"}
-        None
+        if (let Some((t, qi, data)) <- index.get(messageId)) {
+            if (t == topic && qi == queueIndex) {
+                index.remove(messageId)
+                log.info{"redelivered: ${messageId}"}
+                Some(data)
+            } else {
+                None
+            }
+        } else {
+            None
+        }
     }
 
     /**
-     * 重投所有死信（Phase 7 占位）。
+     * 重投所有死信。返回所有匹配的消息体。
      */
     public func redeliverAll(topic: String, queueIndex: Int64): ArrayList<Array<Byte>> {
-        log.info{"redeliverAll from ${topic}[${queueIndex}] (placeholder)"}
-        ArrayList()
+        let result = ArrayList<Array<Byte>>()
+        // 需要收集 key 避免遍历时修改
+        let keys = ArrayList<String>()
+        for ((msgId, _) in index) {
+            keys.add(msgId)
+        }
+        for (msgId in keys) {
+            if (let Some(d) <- redeliver(topic, queueIndex, msgId)) {
+                result.add(d)
+            }
+        }
+        result
     }
 
     /**
-     * 清理过期死信（Phase 7 占位）。
+     * 清理过期死信（Phase 7 占位，基于索引 entry 的年龄判断需后续实现）。
      */
     public func cleanup(): Unit {
         log.debug{"dead letter cleanup (placeholder)"}
