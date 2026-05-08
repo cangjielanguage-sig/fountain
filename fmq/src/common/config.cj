@@ -21,21 +21,21 @@ import std.env
  * MQ 配置，所有字段从环境变量加载。
  */
 public class MqConfig {
-    let mqHosts: ArrayList<String>
-    let syncHosts: ArrayList<String>
-    let heartbeatIntervalSec: Int64
-    let healthcheckMaxRetry: Int64
-    let idleTimeoutMinutes: Int64
-    let ackTimeoutMs: Int64
-    let dataDir: String
-    let segmentMaxSize: Int64
-    let retentionHours: Int64
-    let maxRetryCount: Int64
-    let retryIntervalMs: Int64
-    let dlqRetentionHours: Int64
-    let maxMessageSize: Int64
-    let maxLabelsPerMessage: Int64
-    let syncQuorum: Int64
+    public let mqHosts: ArrayList<String>
+    public let syncHosts: ArrayList<String>
+    public let heartbeatIntervalSec: Int64
+    public let healthcheckMaxRetry: Int64
+    public let idleTimeoutMinutes: Int64
+    public let ackTimeoutMs: Int64
+    public let dataDir: String
+    public let segmentMaxSize: Int64
+    public let retentionHours: Int64
+    public let maxRetryCount: Int64
+    public let retryIntervalMs: Int64
+    public let dlqRetentionHours: Int64
+    public let maxMessageSize: Int64
+    public let maxLabelsPerMessage: Int64
+    public let syncQuorum: Int64
 
     public init(mqHosts!: ArrayList<String>, syncHosts!: ArrayList<String>,
                 dataDir!: String, segmentMaxSize!: Int64,

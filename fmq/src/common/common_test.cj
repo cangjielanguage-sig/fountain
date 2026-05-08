@@ -57,8 +57,8 @@ public class TopicTest {
         let exact = MatchMode.Exact("/order/create")
         let glob = MatchMode.Glob("/order/*")
         let prefix = MatchMode.Prefix("/order/")
-        @Assert(TypeInfo.of(exact).toString().contains("Exact"))
-        @Assert(TypeInfo.of(glob).toString().contains("Glob"))
-        @Assert(TypeInfo.of(prefix).toString().contains("Prefix"))
+        @Assert(MatchMode.Exact("/a") != MatchMode.Exact("/b"))
+        @Assert(MatchMode.Glob("/a/*") != MatchMode.Glob("/b/*"))
+        @Assert(MatchMode.Prefix("/a/") != MatchMode.Prefix("/b/"))
     }
 }

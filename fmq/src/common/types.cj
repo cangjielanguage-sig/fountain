@@ -26,12 +26,6 @@ public class TopicMeta {
     private var consumerGroups: ArrayList<String> = ArrayList()
     private var createTime: DateTime = DateTime.now()
     public init() {}
-    public init(queueCount!: Int64 = 1, consumerGroups!: ArrayList<String> = ArrayList(),
-                createTime!: DateTime = DateTime.now()) {
-        this.queueCount = queueCount
-        this.consumerGroups = consumerGroups
-        this.createTime = createTime
-    }
 }
 
 /**
@@ -41,23 +35,12 @@ public class TopicMeta {
 public class ConsumerRegistration {
     private var consumerId: String = ""
     private var groupId: String = ""
+    // matchMode 作为 String 存储（编码为 "Exact:/order/create" 格式）
     private var matchModeStr: String = ""
     private var labels: ?ArrayList<String> = None
     private var dataFilter: ?String = None
     private var lastHeartbeat: DateTime = DateTime.now()
     public init() {}
-    public init(consumerId!: String = "", groupId!: String = "",
-                matchModeStr!: String = "",
-                labels!: ?ArrayList<String> = None,
-                dataFilter!: ?String = None,
-                lastHeartbeat!: DateTime = DateTime.now()) {
-        this.consumerId = consumerId
-        this.groupId = groupId
-        this.matchModeStr = matchModeStr
-        this.labels = labels
-        this.dataFilter = dataFilter
-        this.lastHeartbeat = lastHeartbeat
-    }
 
     public func getMatchMode(): MatchMode {
         decodeMatchMode(matchModeStr)
@@ -91,36 +74,29 @@ public class BrokerMeta {
     private var queues: ArrayList<String> = ArrayList()
     private var lastSeen: DateTime = DateTime.now()
     public init() {}
-    public init(nodeId!: String = "", host!: String = "", port!: Int64 = 0,
-                isMaster!: Bool = false,
-                queues!: ArrayList<String> = ArrayList(),
-                lastSeen!: DateTime = DateTime.now()) {
-        this.nodeId = nodeId
-        this.host = host
-        this.port = port
-        this.isMaster = isMaster
-        this.queues = queues
-        this.lastSeen = lastSeen
-    }
 }
 
 /**
  * MQ 消息（内部表示，非 fsync 存储）。
  */
 public struct Message {
-    id: MessageID = MessageID()
-    topic: String = ""
-    labels: ArrayList<String> = []
-    payload: Array<Byte> = []
-    producerId: String = ""
-    timestamp: DateTime = DateTime.now()
-    expireAt: ?DateTime = None
-    qos: QoS = QoS.AtMostOnce
+    public Message(
+        public let id!: MessageID = MessageID(),
+        public let topic!: String = "",
+        public let labels!: ArrayList<String> = ArrayList(),
+        public let payload!: Array<Byte> = [],
+        public let producerId!: String = "",
+        public let timestamp!: DateTime = DateTime.now(),
+        public let expireAt!: ?DateTime = None,
+        public let qos!: QoS = QoS.AtMostOnce
+    ) {}
 }
 
 /**
  * 生产结果。
  */
 public struct ProduceResult {
-    messageId: MessageID = MessageID()
+    public ProduceResult(
+        public let messageId!: MessageID = MessageID()
+    ) {}
 }

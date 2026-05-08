@@ -24,7 +24,7 @@ package fountain::fmq.common
  */
 public func validateTopic(topic: String): Bool {
     if (topic.isEmpty()) { return false }
-    if (topic[0] != r'/') { return false }
+    if (!topic.startsWith("/")) { return false }
     for (ch in topic.toRuneArray()) {
         if (ch == r'/' || ch == r'_' || ch == r'-' || ch == r'.') { continue }
         if ((ch >= r'0' && ch <= r'9') || (ch >= r'a' && ch <= r'z') || (ch >= r'A' && ch <= r'Z')) { continue }

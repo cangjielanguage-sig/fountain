@@ -15,72 +15,11 @@ limitations under the License.
  */
 package fountain::fmq.common
 
-/**
- * 编码生产消息。
- */
-public func encodeProduce(msg: Message): EncodedMessage {
-    Message.publish(dup: false, qos: msg.qos, retain: false, data: msg)
-}
-
-/**
- * 编码 ACK 确认。
- */
-public func encodeAck(msgId: MessageID): EncodedMessage {
-    Message.ack(data: msgId)
-}
+import fountain::f_protocol.default.Message as ProtocolMessage
 
 /**
  * 编码心跳 PING。
  */
 public func encodePing(): EncodedMessage {
-    Message.ping()
-}
-
-/**
- * 编码 CONSUME 请求。
- */
-public func encodeConsume(consumerId: String): EncodedMessage {
-    Message.consume(once: false, qos: QoS.AtLeastOnce, data: consumerId)
-}
-
-/**
- * 编码 SUBSCRIBE 请求。
- */
-public func encodeSubscribe(reg: ConsumerRegistration): EncodedMessage {
-    Message.subscribe(data: reg)
-}
-
-/**
- * 编码 UNSUBSCRIBE 请求。
- */
-public func encodeUnsubscribe(consumerId: String): EncodedMessage {
-    Message.unsubscribe(data: consumerId)
-}
-
-/**
- * 编码 REGISTER 请求。
- */
-public func encodeRegister(producerId: String): EncodedMessage {
-    Message.register(data: producerId)
-}
-
-/**
- * 编码 DEREGISTER 请求。
- */
-public func encodeDeregister(producerId: String): EncodedMessage {
-    Message.deregister(data: producerId)
-}
-
-/**
- * 编码 SLAVEOF 请求。
- */
-public func encodeSlaveOf(nodeId: String): EncodedMessage {
-    Message.slaveof(reg: true, ack: false, data: nodeId)
-}
-
-/**
- * 编码 ELECT 消息。
- */
-public func encodeElect(vote!: Bool, approve!: Bool, assume!: Bool, ack!: Bool, nodeId: String): EncodedMessage {
-    Message.elect(vote: vote, approve: approve, assume: assume, ack: ack, data: nodeId)
+    ProtocolMessage.ping()
 }

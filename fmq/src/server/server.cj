@@ -1,0 +1,138 @@
+/*
+Copyright (c) 2026 WuJingrun（吴京润）
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+ */
+package fountain::fmq.server
+
+// 使用别名避免与 fountain::fmq.common.Message 冲突
+import fountain::f_protocol.default.{Message as ProtocolMessage, EncodedMessage}
+
+/**
+ * MQ 服务端。
+ * 封装 f_net::Server，管理连接生命周期。
+ * T = DataAny 作为通用数据载荷类型。
+ */
+public class MqServer <: Resource {
+    private let server: Server<ProtocolMessage, EncodedMessage, ProtocolMessage, DataAny>
+
+    public init(bindPort!: UInt16, queueSize!: Int64 = 1024,
+                checkDuration!: Duration = Duration.second * 30,
+                checker!: (SocketBuffer) -> Bool = { _ => true }) {
+        this.server = Server<ProtocolMessage, EncodedMessage, ProtocolMessage, DataAny>(
+            queueSize: queueSize, bindAt: bindPort,
+            checkDuration: checkDuration, checker: checker
+        )
+    }
+
+    /**
+     * 启动服务端，使用 handler 处理请求。
+     */
+    public func start(handler: (ProtocolMessage) -> ProtocolMessage): Future<Unit> {
+        spawn {
+            try {
+                server.start(handler)
+            } catch (e: Exception) {
+                println("MqServer start failed: ${e.message}")
+            }
+        }
+    }
+
+    public func close(): Unit {
+        if (!server.isClosed()) { server.close() }
+    }
+
+    public func isClosed(): Bool { server.isClosed() }
+}
+
+/**
+ * MqCommand：SubCommand 'mq' 入口。
+ * `fboot mq` 启动 MQ 服务端。
+ */
+public class MqCommand <: SubCommand {
+    private static let log = LoggerFactory.getLogger('fountain::fmq.MqCommand')
+
+    static init() {
+        SubCommandMediator.register(MqCommand())
+    }
+
+    private init() {}
+
+    public prop command: String {
+        get() { 'mq' }
+    }
+
+    public func exec(args: Array<String>): Int64 {
+        let config = loadConfig()
+        if (config.mqHosts.isEmpty()) {
+            log.error("mq_hosts not configured")
+            return 1
+        }
+
+        let port = resolvePort(config.mqHosts)
+        log.info("starting MQ server on port ${port}")
+
+        // 创建服务端 + 简单 handler
+        let server = MqServer(bindPort: UInt16(port))
+        let handler = MqHandler(config)
+        server.start({ msg => handler.handle(msg) })
+        let brokerManager = BrokerManager(config)
+        brokerManager.startHeartbeat()
+
+        // 保持主线程运行
+        while (true) {
+            sleep(Duration.second * 60)
+        }
+        0
+    }
+
+    /**
+     * 从 mq_hosts 列表中解析本机端口。
+     * 默认取第一个 host:port 的 port。
+     */
+    private static func resolvePort(hosts: ArrayList<String>): Int64 {
+        if (hosts.size > 0) {
+            let parts = hosts[0].split(':')
+            if (parts.size == 2) {
+                return Int64.parse(parts[1])
+            }
+        }
+        7201
+    }
+}
+
+/**
+ * 简单的 MQ 请求 handler（Phase 2 占位）。
+ */
+public class MqHandler {
+    private let config: MqConfig
+
+    public init(config: MqConfig) {
+        this.config = config
+    }
+
+    /**
+     * 处理请求，返回响应 Message。
+     * Phase 2 只处理 PING，其余命令返回空 RESP。
+     */
+    public func handle(request: ProtocolMessage): ProtocolMessage {
+        match (request.command) {
+            case PING(_) => handlePing(request)
+            case _ => ProtocolMessage(Command.RESP(0), request.id, DataNone.INSTANCE)
+        }
+    }
+
+    private func handlePing(request: ProtocolMessage): ProtocolMessage {
+        ProtocolMessage(Command.PING(1), request.id, DataNone.INSTANCE)
+    }
+}

@@ -8,6 +8,8 @@
   "fountain::f_protocol" = {path = "../f_protocol"}
   "fountain::f_util" = {path = "../f_util"}
   "fountain::fleet" = {path = "../fleet"}
+  "fountain::f_log" = {path = "../f_log"}
+  "fountain::f_app" = {path = "../f_app"}
 
 [package]
   cjc-version = "1.1.0"
