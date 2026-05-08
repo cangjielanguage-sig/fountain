@@ -26,4 +26,6 @@ internal import fountain::f_net.server.*
 internal import fountain::f_protocol.*
 internal import fountain::f_protocol.default.*
 internal import fountain::f_log.*
+internal import fountain::f_io.{SegmentedLog, LogConfig, LogPosition}
+internal import fountain::f_util.*
 internal import fountain::fmq.common.*
