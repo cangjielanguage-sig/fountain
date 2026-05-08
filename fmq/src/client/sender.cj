@@ -31,10 +31,18 @@ public class Sender {
 
     /**
      * 生产单条消息。
-     * Phase 7 为骨架占位。
+     * 编码 topic + labels + payload，封装为 PUBLISH 命令发送给服务端。
      */
     public func produce(topic: String, labels: ArrayList<String>, data: Array<Byte>): ProduceResult {
-        log.debug{"produce topic=${topic} (placeholder)"}
-        ProduceResult()
+        let bodyBytes = ProduceCodec.encode(topic, labels, data)
+        let body = MqBody("produce", bodyBytes)
+        let req = ProtocolMessage(Command.PUBLISH(0), MessageID(), body.toData())
+
+        let resp = client.transfer(req.id, req, Duration.second * 10)
+        if (let Some(_) <- resp) {
+            ProduceResult(messageId: req.id)
+        } else {
+            ProduceResult()
+        }
     }
 }

@@ -63,10 +63,42 @@ public class CommandExecutor {
 
     /**
      * 处理生产消息。
+     * 1. 从请求体解码 topic / labels / payload
+     * 2. 校验 topic
+     * 3. 路由到队列并写入 SegmentedLog
+     * 4. 返回 RESP
      */
     private func handleProduce(request: ProtocolMessage): ProtocolMessage {
-        log.debug{"handleProduce (placeholder)"}
-        ProtocolMessage(Command.RESP(0), request.id, DataNone.INSTANCE)
+        // 1. 解码请求体
+        if (let Some(body) <- convert<MqBody>(request.data)) {
+            if (body.bodyType != "produce") {
+                return errorResp(request.id, "unexpected body type: ${body.bodyType}")
+            }
+            if (let Some((topic, labels, msgData)) <- ProduceCodec.decode(body.payload)) {
+                // 2. 校验 topic
+                if (!validateTopic(topic)) {
+                    return errorResp(request.id, "invalid topic: ${topic}")
+                }
+
+                // 3. 路由到队列
+                let queues = queueManager.createQueues(topic, 1)
+                if (queues.size == 0) {
+                    return errorResp(request.id, "no queue available for topic=${topic}")
+                }
+                let queue = queues[0]
+
+                // 4. 写入 SegmentedLog
+                queue.append(msgData)
+                queue.sync()
+
+                log.debug{"produced to ${topic}, size=${msgData.size}"}
+                ProtocolMessage(Command.RESP(0), request.id, MqBody("ack", []).toData())
+            } else {
+                errorResp(request.id, "failed to decode produce payload")
+            }
+        } else {
+            errorResp(request.id, "failed to decode request body")
+        }
     }
 
     // ───── SUBSCRIBE / UNSUBSCRIBE ─────
