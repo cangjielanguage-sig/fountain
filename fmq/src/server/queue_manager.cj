@@ -134,25 +134,19 @@ public class QueueManager {
     }
 
     /**
-     * 恢复节点后的队列回退。
-     * 将故障恢复节点名下、当前由本节点暂管的队列关闭并移除。
-     * 恢复节点启动时会通过 CRC64 检测到队列归属，自动在本地创建。
+     * 恢复节点后的队列排空。
+     * 将应属恢复节点的队列标记为 draining，仍留在 topicQueues 中继续分发
+     * 剩余消息给消费者。当 deliveryBuffer 为空后自动关闭并移除。
      */
     public func unreassign(restoredNode: Int64): ArrayList<(String, Int64)> {
         let returned = ArrayList<(String, Int64)>()
         for ((topic, topicQueues) in queues) {
-            var i: Int64 = 0
-            while (i < topicQueues.size) {
-                let q = topicQueues[i]
+            for (q in topicQueues) {
                 let owner = distribute(topic, q.index, config.mqHosts.size)
-                if (owner == restoredNode) {
-                    // 关闭并移除（数据由恢复节点重新创建 SegmentedLog 时同步）
-                    if (!q.isClosed()) { q.close() }
-                    topicQueues.remove(at: i)
+                if (owner == restoredNode && !q.draining) {
+                    q.draining = true
                     returned.add((topic, q.index))
-                    log.info{"unreassign ${topic}[${q.index}] returned to node ${restoredNode}"}
-                } else {
-                    i += 1
+                    log.info{"unreassign ${topic}[${q.index}]: drain mode (${deliveryCount(q)} pending)"}
                 }
             }
         }
@@ -161,6 +155,30 @@ public class QueueManager {
         }
         returned
     }
+
+    /**
+     * 检查所有排空队列是否已完成，完成则移除。
+     * 由外部定时器或 CONSUME 后调用。
+     */
+    public func drainCompleteCheck(): Unit {
+        for ((topic, topicQueues) in queues) {
+            var i: Int64 = 0
+            while (i < topicQueues.size) {
+                let q = topicQueues[i]
+                if (q.draining && q.tryFinishDrain()) {
+                    log.info{"drain complete: ${topic}[${q.index}], removed from node ${nodeIndex}"}
+                    topicQueues.remove(at: i)
+                } else {
+                    i += 1
+                }
+            }
+        }
+    }
+
+    /**
+     * 估算排空队列的待交付数。仅用于日志。
+     */
+    private static func deliveryCount(q: Queue): Int64 { q.deliveryBuffer.size }
 
     /**
      * 为本节点的全部队列启动 writer/reader 线程。

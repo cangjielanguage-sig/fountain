@@ -31,6 +31,7 @@ public class Queue <: Resource & ToString {
     let deliveryBuffer: LinkedBlockingQueue<Array<Byte>>  // Writer → Reader 管道
     private let logPath: String
     private var closed: Bool = false
+    var draining: Bool = false         // 排空中：排完剩余消息后归还节点
 
     public init(topic: String, index: Int64, dataDir: String, segmentSize: Int64) {
         this.topic = topic
@@ -50,10 +51,10 @@ public class Queue <: Resource & ToString {
     }
 
     /**
-     * 追加消息到队列。
-     * 返回写入位置，用于追踪 offset。
+     * 追加消息到队列。排空中拒绝追加。
      */
     public func append(data: Array<Byte>): LogPosition {
+        if (draining) { throw MqException("queue is draining") }
         if (closed) { throw MqException("queue is closed") }
         log.append(data)
     }
@@ -63,10 +64,23 @@ public class Queue <: Resource & ToString {
     public func close(): Unit {
         if (closed) { return }
         closed = true
+        draining = false
         log.close()
     }
 
     public func isClosed(): Bool { closed }
+
+    /**
+     * 排空检查：如果排空且缓冲区已空，关闭并返回 true。
+     */
+    public func tryFinishDrain(): Bool {
+        if (!draining) { return true }
+        if (deliveryBuffer.size == 0) {
+            close()
+            return true
+        }
+        false
+    }
 
     public func toString(): String { "Queue(${topic}[${index}])" }
 }

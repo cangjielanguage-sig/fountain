@@ -85,7 +85,7 @@ public class ReassignTest {
     }
 
     @TestCase
-    public func testUnreassignReturnsQueues(): Unit {
+    public func testUnreassignDrainsThenRemoves(): Unit {
         let hosts = ArrayList<String>()
         hosts.add("node1:7201")
         hosts.add("node2:7201")
@@ -99,7 +99,6 @@ public class ReassignTest {
             maxLabelsPerMessage: 64, retentionHours: 72,
             syncQuorum: 1
         )
-        // nodeIndex=0: createQueues + reassign=1 → 接管, unreassign=1 → 归还
         let qm = QueueManager(config, nodeIndex: 0)
         qm.createQueues("/test", 2)
         qm.reassign(1)
@@ -107,12 +106,21 @@ public class ReassignTest {
         if (let Some(qs) <- afterReassign) {
             @Assert(qs.size == 2)
         }
-        let returned = qm.unreassign(1)
-        @Assert(returned.size > 0)
-        let afterReturn = qm.getQueues("/test")
-        if (let Some(qs) <- afterReturn) {
-            @Assert(qs.size == 1)  // 只留下 nodeIndex=0 自己的队列
+        // 标记排空：draining=true，仍在队列列表中
+        qm.unreassign(1)
+        let q1 = qm.getQueue("/test", 1)
+        @Assert(q1.isSome())
+        if (let Some(q) <- q1) {
+            @Assert(q.draining)
+            @Assert(!q.isClosed())
         }
+        // 排空完成检查：deliveryBuffer 空应自动移除
+        qm.drainCompleteCheck()
+        let afterDrain = qm.getQueue("/test", 1)
+        @Assert(afterDrain.isNone())  // 已移除
+        // 自己的队列不受影响
+        let q0 = qm.getQueue("/test", 0)
+        @Assert(q0.isSome())
     }
 }
 
