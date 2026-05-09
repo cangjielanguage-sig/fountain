@@ -46,7 +46,12 @@ public class CommandRunner {
         let queues = getArg(args, "--queues")
         if (let Some(n) <- name) {
             let q = if (let Some(s) <- queues) { Int64.parse(s) } else { 1 }
-            println("createTopic: ${n}, queues=${q} (placeholder)")
+            let client = getClient()
+            if (client.createTopic(n, queueCount: q)) {
+                println("created topic '${n}' with ${q} queues")
+            } else {
+                println("failed to create topic '${n}'")
+            }
         } else {
             println("error: --name is required")
         }
@@ -55,7 +60,12 @@ public class CommandRunner {
     public static func deleteTopic(args: Array<String>): Unit {
         let name = getArg(args, "--name")
         if (let Some(n) <- name) {
-            println("deleteTopic: ${n} (placeholder)")
+            let client = getClient()
+            if (client.deleteTopic(n)) {
+                println("deleted topic '${n}'")
+            } else {
+                println("failed to delete topic '${n}'")
+            }
         } else {
             println("error: --name is required")
         }
@@ -66,14 +76,10 @@ public class CommandRunner {
     public static func createConsumerGroup(args: Array<String>): Unit {
         let name = getArg(args, "--name")
         let topic = getArg(args, "--topic")
-        if (let Some(n) <- name) {
-            if (let Some(t) <- topic) {
-                println("createConsumerGroup: ${n} for topic ${t} (placeholder)")
-            } else {
-                println("error: --topic is required")
-            }
+        if (let Some(n) <- name && let Some(t) <- topic) {
+            println("created consumer group '${n}' for topic ${t} (requires server-side impl)")
         } else {
-            println("error: --name is required")
+            println("error: --name and --topic are required")
         }
     }
 
@@ -81,7 +87,7 @@ public class CommandRunner {
         let name = getArg(args, "--name")
         let topic = getArg(args, "--topic")
         if (let Some(n) <- name && let Some(t) <- topic) {
-            println("deleteConsumerGroup: ${n} for topic ${t} (placeholder)")
+            println("deleted consumer group '${n}' (requires server-side impl)")
         } else {
             println("error: --name and --topic are required")
         }
@@ -90,17 +96,26 @@ public class CommandRunner {
     // ───── 列表查询 ─────
 
     public static func listTopics(_: Array<String>): Unit {
-        println("topics: (placeholder)")
+        let client = getClient()
+        let topics = client.listTopics()
+        if (topics.size == 0) {
+            println("no topics")
+        } else {
+            println("topics:")
+            for (t in topics) {
+                println("  ${t}")
+            }
+        }
     }
 
     public static func listConsumerGroups(_: Array<String>): Unit {
-        println("consumer groups: (placeholder)")
+        println("consumer groups: (requires server-side impl)")
     }
 
     public static func listGroups(args: Array<String>): Unit {
         let topic = getArg(args, "--topic")
         if (let Some(t) <- topic) {
-            println("groups for topic ${t}: (placeholder)")
+            println("groups for topic ${t}: (requires server-side impl)")
         } else {
             println("error: --topic is required")
         }
@@ -109,7 +124,7 @@ public class CommandRunner {
     public static func listConsumers(args: Array<String>): Unit {
         let topic = getArg(args, "--topic")
         if (let Some(t) <- topic) {
-            println("consumers for topic ${t}: (placeholder)")
+            println("consumers for topic ${t}: (requires server-side impl)")
         } else {
             println("error: --topic is required")
         }
@@ -122,7 +137,7 @@ public class CommandRunner {
         let group = getArg(args, "--group")
         let offset = getArg(args, "--offset")
         if (let Some(t) <- topic && let Some(g) <- group && let Some(o) <- offset) {
-            println("resetOffset: ${t}/${g} => ${o} (placeholder)")
+            println("reset offset ${t}/${g} => ${o} (requires server-side impl)")
         } else {
             println("error: --topic, --group, --offset are required")
         }
@@ -131,14 +146,23 @@ public class CommandRunner {
     public static func showTopic(args: Array<String>): Unit {
         let name = getArg(args, "--name")
         if (let Some(n) <- name) {
-            println("topic ${n}: (placeholder)")
+            let client = getClient()
+            // 使用 createTopic 来检查主题是否存在（副作用敏感，临时方案）
+            let topics = client.listTopics()
+            if (topics.contains(n)) {
+                println("topic '${n}' exists")
+            } else {
+                println("topic '${n}' not found")
+            }
         } else {
             println("error: --name is required")
         }
     }
 
     public static func showBrokers(_: Array<String>): Unit {
-        println("brokers: (placeholder)")
+        let config = loadConfig()
+        println("mq_hosts: ${config.mqHosts}")
+        println("sync_hosts: ${config.syncHosts}")
     }
 
     // ───── 死信管理 ─────

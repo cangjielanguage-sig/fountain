@@ -60,6 +60,7 @@ public class CommandExecutor {
             case DLQ_LIST => handleDlqList(request)
             case DLQ_REDELIVER => handleDlqRedeliver(request)
             case DLQ_REDELIVER_ALL => handleDlqRedeliverAll(request)
+            case TOPIC_OP => handleTopicOp(request)
             case _ => errorResp(request.id, "unknown command")
         }
     }
@@ -333,6 +334,56 @@ public class CommandExecutor {
         }
     }
 
+    // ───── 主题管理 ─────
+
+    /**
+     * 处理主题操作（create / delete / list）。
+     * 请求体：operation + name + queueCount（DefaultCodec 编码）。
+     */
+    private func handleTopicOp(request: ProtocolMessage): ProtocolMessage {
+        if (let Some(body) <- convert<MqBody>(request.data)) {
+            let buf = ByteBuffer(body.payload)
+            let dec = DefaultCodec()
+            if (let Some(op) <- dec.decode<String>(buf)
+                && let Some(name) <- dec.decode<String>(buf)) {
+                if (op == "create") {
+                    let qc = if (let Some(q) <- dec.decode<Int64>(buf)) { q } else { 1 }
+                    if (!validateTopic(name)) {
+                        return errorResp(request.id, "invalid topic: '${name}'")
+                    }
+                    let code = topicManager.createTopic(name, queueCount: qc)
+                    if (code == MqErrorCode.SUCCESS) {
+                        queueManager.createQueues(name, qc)
+                        ProtocolMessage(Command.RESP(0), request.id,
+                            MqBody("ok", []).toData())
+                    } else {
+                        errorResp(request.id, "create topic failed: ${code}")
+                    }
+                } else if (op == "delete") {
+                    let code = topicManager.deleteTopic(name)
+                    if (code == MqErrorCode.SUCCESS) {
+                        queueManager.destroyQueues(name)
+                        ProtocolMessage(Command.RESP(0), request.id,
+                            MqBody("ok", []).toData())
+                    } else {
+                        errorResp(request.id, "delete topic failed: ${code}")
+                    }
+                } else if (op == "list") {
+                    let topics = topicManager.listTopics()
+                    let encoded = encodeTopicNameList(topics)
+                    ProtocolMessage(Command.RESP(0), request.id,
+                        MqBody("topic_list", encoded).toData())
+                } else {
+                    errorResp(request.id, "unknown topic op: ${op}")
+                }
+            } else {
+                errorResp(request.id, "failed to decode topic op request")
+            }
+        } else {
+            errorResp(request.id, "no body in topic op request")
+        }
+    }
+
     // ───── SLAVEOF ─────
 
     private func handleSlaveOf(request: ProtocolMessage): ProtocolMessage {
@@ -403,6 +454,17 @@ public class CommandExecutor {
             .encode(entries.size)
         for ((msgId, data) in entries) {
             enc.encode(msgId).encode(data)
+        }
+        enc.finish().copy(to: buf, closeFromOnEnd: true, closeToOnEnd: false)
+        extractBytes(buf)
+    }
+
+    private static func encodeTopicNameList(names: ArrayList<String>): Array<Byte> {
+        let buf = ByteBuffer()
+        let enc = DefaultCodec()
+            .encode(names.size)
+        for (n in names) {
+            enc.encode(n)
         }
         enc.finish().copy(to: buf, closeFromOnEnd: true, closeToOnEnd: false)
         extractBytes(buf)

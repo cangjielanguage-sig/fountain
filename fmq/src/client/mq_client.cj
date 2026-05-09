@@ -148,6 +148,35 @@ public class MqClient <: Resource {
         resp.isSome()
     }
 
+    // ───── 主题管理 API ─────
+
+    public func createTopic(name: String, queueCount!: Int64 = 1): Bool {
+        let payload = encodeTopicOpPayload("create", name, queueCount)
+        let req = ProtocolMessage(Command.TOPIC_OP, MessageID(),
+            MqBody("topic_op", payload).toData())
+        mqConn.transfer(req.id, req, Duration.second * 10).isSome()
+    }
+
+    public func deleteTopic(name: String): Bool {
+        let payload = encodeTopicOpPayload("delete", name, 0)
+        let req = ProtocolMessage(Command.TOPIC_OP, MessageID(),
+            MqBody("topic_op", payload).toData())
+        mqConn.transfer(req.id, req, Duration.second * 10).isSome()
+    }
+
+    public func listTopics(): ArrayList<String> {
+        let payload = encodeTopicOpPayload("list", "", 0)
+        let req = ProtocolMessage(Command.TOPIC_OP, MessageID(),
+            MqBody("topic_op", payload).toData())
+        let resp = mqConn.transfer(req.id, req, Duration.second * 10)
+        if (let Some(r) <- resp) {
+            if (let Some(body) <- convert<MqBody>(r.data)) {
+                return decodeTopicList(body.payload)
+            }
+        }
+        ArrayList()
+    }
+
     // ───── 生命周期 ─────
 
     public func close(): Unit {
@@ -164,6 +193,14 @@ public class MqClient <: Resource {
         let buf = ByteBuffer()
         DefaultCodec()
             .encode(topic).encode(queueIndex)
+            .finish().copy(to: buf, closeFromOnEnd: true, closeToOnEnd: false)
+        extractBytes(buf)
+    }
+
+    private static func encodeTopicOpPayload(op: String, name: String, queueCount: Int64): Array<Byte> {
+        let buf = ByteBuffer()
+        DefaultCodec()
+            .encode(op).encode(name).encode(queueCount)
             .finish().copy(to: buf, closeFromOnEnd: true, closeToOnEnd: false)
         extractBytes(buf)
     }
@@ -186,6 +223,22 @@ public class MqClient <: Resource {
                     if (let Some(msgId) <- dec.decode<String>(buf)
                         && let Some(msgData) <- dec.decode<Array<Byte>>(buf)) {
                         result.add((msgId, msgData))
+                    }
+                }
+            }
+        } catch (_: Exception) {}
+        result
+    }
+
+    private static func decodeTopicList(data: Array<Byte>): ArrayList<String> {
+        let result = ArrayList<String>()
+        try {
+            let buf = ByteBuffer(data)
+            let dec = DefaultCodec()
+            if (let Some(count) <- dec.decode<Int64>(buf)) {
+                for (_ in 0..count) {
+                    if (let Some(t) <- dec.decode<String>(buf)) {
+                        result.add(t)
                     }
                 }
             }

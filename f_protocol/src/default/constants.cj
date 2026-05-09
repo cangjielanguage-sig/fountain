@@ -100,7 +100,7 @@ public enum QoS <: Equatable<QoS> & ToString {
 | DLQ_LIST    | 4         | Client to Server                     | List dead letters                        |
 | DLQ_REDELIVER | 5       | Client to Server                     | Redeliver dead letter                    |
 | DLQ_REDELIVER_ALL | 6   | Client to Server                     | Redeliver all dead letters               |
-| RESERVED    | 7         |                                      |                                          |
+| TOPIC_OP   | 7         | Client to Server                     | Topic operation (body: operation + data) |
 | SUBSCRIBE   | 8         | Client to Server                     | Subscribe request                        |
 | UNSUBSCRIBE | 9         | Client to Server                     | Unsubscribe request                      |
 | CONSUME     | 10        | Client to Server                     | consume messages                         |
@@ -118,6 +118,7 @@ public enum Command {
     | DLQ_LIST      //4
     | DLQ_REDELIVER //5
     | DLQ_REDELIVER_ALL //6
+    | TOPIC_OP      //7
     | SUBSCRIBE     //8
     | UNSUBSCRIBE   //9
     | CONSUME(Byte) //10
@@ -140,6 +141,7 @@ public enum Command {
                 case DLQ_LIST    => ( 4 << 4) | 1
                 case DLQ_REDELIVER => ( 5 << 4) | 1
                 case DLQ_REDELIVER_ALL => ( 6 << 4) | 1
+                case TOPIC_OP    => ( 7 << 4) | 1
                 case SUBSCRIBE   => ( 8 << 4) | 1
                 case UNSUBSCRIBE => ( 9 << 4) | 1
                 case CONSUME(x)  => (10 << 4) | tag(x)
@@ -163,6 +165,7 @@ public enum Command {
             case  4 => DLQ_LIST
             case  5 => DLQ_REDELIVER
             case  6 => DLQ_REDELIVER_ALL
+            case  7 => TOPIC_OP
             case  8 => SUBSCRIBE
             case  9 => UNSUBSCRIBE
             case 10 => CONSUME(tag())
