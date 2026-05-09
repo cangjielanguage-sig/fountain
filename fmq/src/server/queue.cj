@@ -16,6 +16,7 @@ limitations under the License.
 package fountain::fmq.server
 
 import fountain::f_io.{SegmentedLog, LogConfig, LogPosition}
+import std.collection.concurrent.LinkedBlockingQueue
 
 /**
  * 单个消息队列。
@@ -27,6 +28,7 @@ public class Queue <: Resource & ToString {
     let log: SegmentedLog
     let retryBuffer: ArrayList<RetryEntry> = ArrayList()
     let deadLetter: DeadLetterStore
+    let deliveryBuffer: LinkedBlockingQueue<Array<Byte>>  // Writer → Reader 管道
     private let logPath: String
     private var closed: Bool = false
 
@@ -44,6 +46,7 @@ public class Queue <: Resource & ToString {
         )
         this.log = SegmentedLog(config)
         this.deadLetter = DeadLetterStore(this.logPath)
+        this.deliveryBuffer = LinkedBlockingQueue<Array<Byte>>(1024)
     }
 
     /**

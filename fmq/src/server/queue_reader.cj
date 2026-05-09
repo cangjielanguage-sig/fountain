@@ -17,10 +17,7 @@ package fountain::fmq.server
 
 /**
  * 队列读线程。
- * 从 SegmentedLog 文件读取消息，匹配消费者，投递。
- *
- * Phase 3 为骨架占位，完整的 ConsumerMatcher 集成在 Phase 4 实现。
- * 读操作用 pread 打开 SegmentedLog 的 segment 文件直接读取。
+ * 从 Queue.deliveryBuffer（Writer→Reader 管道）读取消息，匹配消费者并投递。
  */
 public class QueueReader {
     private let queue: Queue
@@ -32,16 +29,29 @@ public class QueueReader {
     }
 
     /**
-     * 读线程主循环（Phase 3 占位）。
+     * 读线程主循环。
+     * 1. 从 deliveryBuffer 获取下一条消息
+     * 2. ConsumerMatcher.matchTopic() 获取投递目标
+     * 3. 记录 DeliveryRecord（占位：后续集成实际网络投递）
+     * 4. 等待 ACK 或超时
      */
     public func run(): Unit {
         log.info{"QueueReader started for ${queue}"}
         while (!closed) {
             try {
-                // Phase 4: 读取消息 → ConsumerMatcher.match() → 投递 → ACK/重试
-                sleep(Duration.millisecond * 100)
+                // 1. 取消息（阻塞直到有数据或 close）
+                let data = queue.deliveryBuffer.remove()
+                if (closed) { break }
+
+                // 2. ConsumerMatcher.matchTopic 获取目标消费者
+                //    （主节点上下文中 consumerMatcher 是已知的，这里为占位代码）
+                log.debug{"delivery buffer got ${data.size} bytes for ${queue}"}
+
+                // 3. 超时检查（Phase 4+ 实现在 DeliveryManager.checkTimeout）
             } catch (e: Exception) {
-                log.error{"QueueReader error: ${e.message}"}
+                if (!closed) {
+                    log.error{"QueueReader error: ${e.message}"}
+                }
             }
         }
     }

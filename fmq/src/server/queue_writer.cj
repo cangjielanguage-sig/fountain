@@ -49,6 +49,8 @@ public class QueueWriter {
             try {
                 if (let Some(data) <- inboundQueue.remove()) {
                     queue.append(data)
+                    // 通知 QueueReader 有消息可投递
+                    queue.deliveryBuffer.add(data)
                 } else {
                     sleep(Duration.millisecond * 10)
                 }
