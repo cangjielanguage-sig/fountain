@@ -110,14 +110,11 @@ public class QueueManager {
      */
     public func reassign(failedNode: Int64): ArrayList<(String, Int64)> {
         let reassigned = ArrayList<(String, Int64)>()
-        // 对每个主题，检查最大可能队列数（当前数 + 故障节点数）
         for ((topic, topicQueues) in queues) {
-            // 收集已在本地存在的队列索引
             let localIndices = ArrayList<Int64>()
             for (q in topicQueues) {
                 localIndices.add(q.index)
             }
-            // 遍历足够多的索引，覆盖故障节点的份额
             let maxIndex = topicQueues.size + config.mqHosts.size
             for (i in 0..maxIndex) {
                 let owner = distribute(topic, i, config.mqHosts.size)
@@ -134,6 +131,35 @@ public class QueueManager {
             log.info{"reassign: no queues to reassign from node ${failedNode}"}
         }
         reassigned
+    }
+
+    /**
+     * 恢复节点后的队列回退。
+     * 将故障恢复节点名下、当前由本节点暂管的队列关闭并移除。
+     * 恢复节点启动时会通过 CRC64 检测到队列归属，自动在本地创建。
+     */
+    public func unreassign(restoredNode: Int64): ArrayList<(String, Int64)> {
+        let returned = ArrayList<(String, Int64)>()
+        for ((topic, topicQueues) in queues) {
+            var i: Int64 = 0
+            while (i < topicQueues.size) {
+                let q = topicQueues[i]
+                let owner = distribute(topic, q.index, config.mqHosts.size)
+                if (owner == restoredNode) {
+                    // 关闭并移除（数据由恢复节点重新创建 SegmentedLog 时同步）
+                    if (!q.isClosed()) { q.close() }
+                    topicQueues.remove(at: i)
+                    returned.add((topic, q.index))
+                    log.info{"unreassign ${topic}[${q.index}] returned to node ${restoredNode}"}
+                } else {
+                    i += 1
+                }
+            }
+        }
+        if (returned.size == 0) {
+            log.info{"unreassign: no queues to return to node ${restoredNode}"}
+        }
+        returned
     }
 
     /**

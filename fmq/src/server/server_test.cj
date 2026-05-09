@@ -83,6 +83,37 @@ public class ReassignTest {
             @Assert(qs.size == 2)  // 接管后 2 个队列都在本地
         }
     }
+
+    @TestCase
+    public func testUnreassignReturnsQueues(): Unit {
+        let hosts = ArrayList<String>()
+        hosts.add("node1:7201")
+        hosts.add("node2:7201")
+        let config = MqConfig(
+            mqHosts: hosts, syncHosts: ArrayList(),
+            dataDir: "/tmp/fmq_unreassign_test", segmentMaxSize: 1024,
+            heartbeatIntervalSec: 5, healthcheckMaxRetry: 3,
+            idleTimeoutMinutes: 30, ackTimeoutMs: 30000,
+            maxRetryCount: 3, retryIntervalMs: 1000,
+            dlqRetentionHours: 168, maxMessageSize: 4096,
+            maxLabelsPerMessage: 64, retentionHours: 72,
+            syncQuorum: 1
+        )
+        // nodeIndex=0: createQueues + reassign=1 → 接管, unreassign=1 → 归还
+        let qm = QueueManager(config, nodeIndex: 0)
+        qm.createQueues("/test", 2)
+        qm.reassign(1)
+        let afterReassign = qm.getQueues("/test")
+        if (let Some(qs) <- afterReassign) {
+            @Assert(qs.size == 2)
+        }
+        let returned = qm.unreassign(1)
+        @Assert(returned.size > 0)
+        let afterReturn = qm.getQueues("/test")
+        if (let Some(qs) <- afterReturn) {
+            @Assert(qs.size == 1)  // 只留下 nodeIndex=0 自己的队列
+        }
+    }
 }
 
 @Test
