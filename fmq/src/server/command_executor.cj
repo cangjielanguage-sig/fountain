@@ -119,10 +119,17 @@ public class CommandExecutor {
     private func handleSubscribe(request: ProtocolMessage): ProtocolMessage {
         if (let Some(body) <- convert<MqBody>(request.data)) {
             let decoded = decodeTopicAndMode(body.payload)
-            if (let Some((topic, _)) <- decoded) {
+            if (let Some((topic, mode)) <- decoded) {
                 if (!validateTopic(topic)) {
                     return errorResp(request.id, "invalid topic: ${topic}")
                 }
+                // 注册消费者（使用 groupId 从 body 额外解码，当前复用 topic 作为 groupId）
+                let reg = ConsumerRegistration(
+                    consumerId: topic, groupId: topic,
+                    matchModeStr: modeToEncodedString(mode),
+                    labels: None, dataFilter: None,
+                    lastHeartbeat: DateTime.now())
+                consumerMatcher.register(reg)
                 log.info{"subscribe ${topic}"}
                 ProtocolMessage(Command.RESP(0), request.id, MqBody("ok", []).toData())
             } else {
@@ -164,10 +171,14 @@ public class CommandExecutor {
                     var consumed = ArrayList<Array<Byte>>()
                     for (q in queues) {
                         let offset = deliveryManager.getOffset(topic, q.index, groupId)
+                        // 尝试从 deliveryBuffer 取消息（非阻塞）
                         if (consumed.size < batchSize) {
-                            deliveryManager.recordDelivery(
-                                "${topic}:${q.index}:${offset}", groupId, groupId)
-                            consumed.add(body.payload)
+                            let msg = q.deliveryBuffer.tryRemove()
+                            if (let Some(data) <- msg) {
+                                deliveryManager.recordDelivery(
+                                    "${topic}:${q.index}:${offset}", groupId, groupId)
+                                consumed.add(data)
+                            }
                         }
                     }
                     let consumedCount = consumed.size
@@ -439,7 +450,15 @@ public class CommandExecutor {
 
     private func errorResp(id: MessageID, msg: String): ProtocolMessage {
         log.warn{"command error: ${msg}"}
-        ProtocolMessage(Command.RESP(0), id, DataNone.INSTANCE)
+        let encoded = DefaultCodec().encode(msg).finish()
+        let buf = ByteBuffer()
+        encoded.copy(to: buf, closeFromOnEnd: true, closeToOnEnd: false)
+        let size = buf.seek(SeekPosition.End(0))
+        buf.seek(SeekPosition.Begin(0))
+        let raw = Array<Byte>(Int64(size), repeat: 0u8)
+        buf.read(raw)
+        ProtocolMessage(Command.RESP(0), id,
+            MqBody("error", raw).toData())
     }
 
     /**
@@ -513,6 +532,14 @@ public class CommandExecutor {
             let dec = DefaultCodec()
             dec.decode<String>(buf)
         } catch (_: Exception) { None }
+    }
+
+    private static func modeToEncodedString(mode: MatchMode): String {
+        match (mode) {
+            case Exact(p) => "Exact:${p}"
+            case Glob(p) => "Glob:${p}"
+            case Prefix(p) => "Prefix:${p}"
+        }
     }
 
     private static func extractBytes(buf: ByteBuffer): Array<Byte> {

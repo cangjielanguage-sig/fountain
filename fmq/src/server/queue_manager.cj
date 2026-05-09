@@ -16,6 +16,7 @@ limitations under the License.
 package fountain::fmq.server
 
 import std.collection.HashMap
+import fountain::f_util.crc64
 
 /**
  * 队列管理器。
@@ -91,16 +92,32 @@ public class QueueManager {
     }
 
     /**
-     * 分布算法：hashCode 取模。
+     * 分布算法：CRC64 取模。
+     * 计算 (topic:queueIndex) 的 CRC64，取模得到目标节点索引。
      */
     public func distribute(topic: String, queueIndex: Int64, nodeCount: Int64): Int64 {
         let key = "${topic}:${queueIndex}"
-        let absHash = abs(key.hashCode())
-        absHash % nodeCount
+        let hash64 = crc64(key)
+        Int64(hash64 % UInt64(nodeCount))
     }
 
-    private static func abs(x: Int64): Int64 {
-        if (x < 0) { -x } else { x }
+    /**
+     * 重新分配故障节点的队列到健康节点。
+     * 遍历所有队列，找到 ownerIndex == failedNode 的，标记待接管。
+     * 调用方负责在健康节点上实际重建队列。
+     */
+    public func reassign(failedNode: Int64): ArrayList<(String, Int64)> {
+        let reassigned = ArrayList<(String, Int64)>()
+        for ((topic, topicQueues) in queues) {
+            for (q in topicQueues) {
+                let owner = distribute(topic, q.index, config.mqHosts.size)
+                if (owner == failedNode) {
+                    reassigned.add((topic, q.index))
+                    log.warn{"reassign ${topic}[${q.index}] from node ${failedNode}"}
+                }
+            }
+        }
+        reassigned
     }
 
     /**
