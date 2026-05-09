@@ -654,7 +654,7 @@ public class DefaultCodec <: Codec {
         }
         v
     }
-    private func decodeData(input: InputStream): Data {
+    public func decodeData(input: InputStream): Data {
         // decodeSizeOfEncoded(input)
         var bytes = [0u8]
         var size = input.read(bytes)

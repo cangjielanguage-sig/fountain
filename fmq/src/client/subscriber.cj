@@ -30,7 +30,7 @@ public class Subscriber {
     private let config: MqConfig
     private let client: Client<ProtocolMessage, EncodedMessage, ProtocolMessage, MqBody, MessageID>
     private let log = LoggerFactory.getLogger('fountain::fmq.Subscriber')
-    private let subscriptions = ArrayList<(String, String)>()  // (groupId, topic)
+    private let subscriptions = ArrayList<(String, String, String)>()  // (groupId, topic, dataFilter)
 
     public init(config: MqConfig,
                 client: Client<ProtocolMessage, EncodedMessage, ProtocolMessage, MqBody, MessageID>) {
@@ -61,8 +61,9 @@ public class Subscriber {
         let subReq = ProtocolMessage(Command.SUBSCRIBE, MessageID(),
             MqBody("subscribe", subBody).toData())
         let subResp = client.transfer(subReq.id, subReq, Duration.second * 10)
+        let dataFilterVal = dataFilter
         if (subResp.isSome()) {
-            subscriptions.add((groupId, extractTopic(matchMode)))
+            subscriptions.add((groupId, extractTopic(matchMode), dataFilterVal))
             log.info{"subscribed group=${groupId} to ${modeToString(matchMode)}"}
             true
         } else {
@@ -84,7 +85,7 @@ public class Subscriber {
             // 从本地列表移除
             var i = 0
             while (i < subscriptions.size) {
-                let (g, t) = subscriptions[i]
+                let (g, t, _) = subscriptions[i]
                 if (g == groupId && t == topic) {
                     subscriptions.remove(at: i)
                 } else {
@@ -102,8 +103,8 @@ public class Subscriber {
     /**
      * 获取活跃订阅列表。
      */
-    public func getSubscriptions(): ArrayList<(String, String)> {
-        let copy = ArrayList<(String, String)>()
+    public func getSubscriptions(): ArrayList<(String, String, String)> {
+        let copy = ArrayList<(String, String, String)>()
         for (s in subscriptions) {
             copy.add(s)
         }

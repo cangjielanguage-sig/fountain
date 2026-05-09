@@ -17,6 +17,8 @@ package fountain::fmq.client
 
 import fountain::f_protocol.default.{Message as ProtocolMessage, EncodedMessage}
 import fountain::f_codec.default.DefaultCodec
+import fountain::f_data.path.DataPath
+import fountain::f_data.{DataList, Data}
 import std.io.{ByteBuffer, SeekPosition}
 
 /**
@@ -43,7 +45,7 @@ public class Consumer {
         if (subs.size == 0) {
             return None
         }
-        for ((groupId, topic) in subs) {
+        for ((groupId, topic, dataFilter) in subs) {
             let payload = encodeConsumePayload(topic, groupId, 1)
             let req = ProtocolMessage(Command.CONSUME(0), MessageID(),
                 MqBody("consume", payload).toData())
@@ -54,6 +56,11 @@ public class Consumer {
                         let msgs = decodeMessageList(body.payload)
                         if (msgs.size > 0) {
                             let msgData = msgs[0]
+                            // dataFilter 过滤
+                            if (dataFilter != "" && !dataFilterMatch(dataFilter, msgData)) {
+                                // 不匹配则跳过（自动 ACK 已由服务端处理）
+                                continue
+                            }
                             return Some(Message(
                                 topic: topic, id: MessageID(),
                                 queueIndex: 0,
@@ -64,6 +71,24 @@ public class Consumer {
             }
         }
         None
+    }
+
+    /**
+     * 应用 DataPath 过滤器。
+     * 将消息体解码为通用 Data 树，执行 DataPath 表达式匹配。
+     */
+    private static func dataFilterMatch(filter: String, payload: Array<Byte>): Bool {
+        try {
+            let buf = ByteBuffer(payload)
+            let codec = DefaultCodec()
+            let dataTree = codec.decodeData(buf)
+            let path = DataPath.cache(filter)
+            let wrapper = DataList()
+            wrapper.add(dataTree)
+            path.get(wrapper).next().isSome()
+        } catch (_: Exception) {
+            true  // 解码失败时不过滤（保留消息）
+        }
     }
 
     /**
