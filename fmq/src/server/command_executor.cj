@@ -85,8 +85,12 @@ public class CommandExecutor {
                     return errorResp(request.id, "invalid topic: ${topic}")
                 }
 
-                // 3. 路由到队列
-                let queues = queueManager.createQueues(topic, 1)
+                // 3. 路由到队列（复用已有的或创建新的）
+                let queues = if (let Some(qs) <- queueManager.getQueues(topic)) {
+                    qs
+                } else {
+                    queueManager.createQueues(topic, 1)
+                }
                 if (queues.size == 0) {
                     return errorResp(request.id, "no queue available for topic=${topic}")
                 }
