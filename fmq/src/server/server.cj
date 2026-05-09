@@ -93,7 +93,8 @@ public class MqCommand <: SubCommand {
             topicManager, queueManager, deliveryManager,
             consumerMatcher, replicationManager)
 
-        // 启动队列 Writer/Reader 线程
+        // 设置 QueueManager 的 ReplicationManager（用于同步）
+        queueManager.setReplicationManager(replicationManager)
         queueManager.startAll()
 
         server.start({ msg => executor.execute(msg) })

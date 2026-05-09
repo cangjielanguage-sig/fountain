@@ -25,9 +25,17 @@ public class QueueManager {
     private let config: MqConfig
     private let log = LoggerFactory.getLogger('fountain::fmq.QueueManager')
     private let queues = HashMap<String, ArrayList<Queue>>()  // topic → [Queue]
+    private var replicationManager: Option<ReplicationManager> = None
 
     public init(config: MqConfig) {
         this.config = config
+    }
+
+    /**
+     * 设置 ReplicationManager（用于 QueueWriter 同步）。
+     */
+    public func setReplicationManager(rm: ReplicationManager): Unit {
+        this.replicationManager = rm
     }
 
     /**
@@ -99,9 +107,10 @@ public class QueueManager {
      * 为本节点的全部队列启动 writer/reader 线程。
      */
     public func startAll(): Unit {
+        let rm = if (let Some(ref) <- replicationManager) { ref } else { return }
         for ((_, topicQueues) in queues) {
             for (q in topicQueues) {
-                let writer = QueueWriter(q, queueSize: 1024)
+                let writer = QueueWriter(q, replicationManager: rm, queueSize: 1024)
                 let reader = QueueReader(q)
                 spawn { writer.run() }
                 spawn { reader.run() }
