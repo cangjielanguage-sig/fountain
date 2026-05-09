@@ -386,16 +386,53 @@ public class CommandExecutor {
 
     // ───── SLAVEOF ─────
 
+    /**
+     * 处理 SLAVEOF 命令。
+     * 从 MqBody.payload 解码 nodeId，注册到 ReplicationManager。
+     */
     private func handleSlaveOf(request: ProtocolMessage): ProtocolMessage {
-        log.debug{"handleSlaveOf (placeholder)"}
-        ProtocolMessage(Command.RESP(0), request.id, DataNone.INSTANCE)
+        if (let Some(body) <- convert<MqBody>(request.data)) {
+            let decoded = decodeNodeId(body.payload)
+            if (let Some(nodeId) <- decoded) {
+                if (replicationManager.onSlaveOf(nodeId)) {
+                    log.info{"slave ${nodeId} connected"}
+                    ProtocolMessage(Command.RESP(0), request.id,
+                        MqBody("ok", []).toData())
+                } else {
+                    errorResp(request.id, "SLAVEOF rejected (not master)")
+                }
+            } else {
+                errorResp(request.id, "failed to decode SLAVEOF nodeId")
+            }
+        } else {
+            errorResp(request.id, "no body in SLAVEOF request")
+        }
     }
 
     // ───── ELECTION ─────
 
+    /**
+     * 处理选举命令。
+     * VOTE→ACK/APPROVE→升 Master/ASSUME→确认。
+     */
     private func handleElection(request: ProtocolMessage): ProtocolMessage {
-        log.debug{"handleElection (placeholder)"}
-        ProtocolMessage(Command.RESP(0), request.id, DataNone.INSTANCE)
+        let b = request.command.value
+        let vote = b & VOTE
+        let approve = b & APPROVE
+        if (vote != 0u8) {
+            // 请求投票 → ACK
+            ProtocolMessage(Command.ELECT(APPROVE), request.id,
+                MqBody("elect_ack", []).toData())
+        } else if (approve != 0u8) {
+            // 收到批准 → 升 Master
+            replicationManager.promoteToMaster()
+            ProtocolMessage(Command.ELECT(ASSUME), request.id,
+                MqBody("ok", []).toData())
+        } else {
+            // ASSUME 确认
+            ProtocolMessage(Command.RESP(0), request.id,
+                MqBody("ok", []).toData())
+        }
     }
 
     // ───── 工具方法 ─────
@@ -468,6 +505,14 @@ public class CommandExecutor {
         }
         enc.finish().copy(to: buf, closeFromOnEnd: true, closeToOnEnd: false)
         extractBytes(buf)
+    }
+
+    private static func decodeNodeId(payload: Array<Byte>): ?String {
+        try {
+            let buf = ByteBuffer(payload)
+            let dec = DefaultCodec()
+            dec.decode<String>(buf)
+        } catch (_: Exception) { None }
     }
 
     private static func extractBytes(buf: ByteBuffer): Array<Byte> {
