@@ -111,6 +111,19 @@ public class Consumer {
         }
     }
 
+    /**
+     * 批量确认消息。
+     */
+    public func ackBatch(acks: ArrayList<(MessageID, String, Int64)>): Bool {
+        var allOk = true
+        for ((msgId, topic, queueIndex) in acks) {
+            if (!ack(msgId, topic, queueIndex)) {
+                allOk = false
+            }
+        }
+        allOk
+    }
+
     // ───── 编码工具 ─────
 
     internal static func encodeConsumePayload(topic: String, groupId: String, batchSize: Int64): Array<Byte> {

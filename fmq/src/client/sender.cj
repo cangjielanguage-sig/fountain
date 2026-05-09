@@ -45,4 +45,16 @@ public class Sender {
             ProduceResult()
         }
     }
+
+    /**
+     * 批量生产消息。
+     * 依次编码并发送每条消息，收集所有结果后返回。
+     */
+    public func produceBatch(topic: String, messages: ArrayList<(ArrayList<String>, Array<Byte>)>): ArrayList<ProduceResult> {
+        let results = ArrayList<ProduceResult>()
+        for ((labels, data) in messages) {
+            results.add(produce(topic, labels, data))
+        }
+        results
+    }
 }

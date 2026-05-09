@@ -80,6 +80,13 @@ public class MqClient <: Resource {
         sender.produce(topic, labels, data)
     }
 
+    /**
+     * 批量生产消息。
+     */
+    public func produceBatch(topic: String, messages: ArrayList<(ArrayList<String>, Array<Byte>)>): ArrayList<ProduceResult> {
+        sender.produceBatch(topic, messages)
+    }
+
     // ───── 订阅 API ─────
 
     public func subscribe(groupId: String, matchMode: MatchMode): Bool {
@@ -106,6 +113,10 @@ public class MqClient <: Resource {
 
     public func ack(messageId: MessageID, topic: String, queueIndex: Int64): Bool {
         consumer.ack(messageId, topic, queueIndex)
+    }
+
+    public func ackBatch(acks: ArrayList<(MessageID, String, Int64)>): Bool {
+        consumer.ackBatch(acks)
     }
 
     // ───── 死信队列 API ─────
