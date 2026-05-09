@@ -26,6 +26,12 @@ public class TopicMeta {
     private var consumerGroups: ArrayList<String> = ArrayList()
     private var createTime: DateTime = DateTime.now()
     public init() {}
+
+    public init(queueCount!: Int64, consumerGroups!: ArrayList<String>, createTime!: DateTime) {
+        this.queueCount = queueCount
+        this.consumerGroups = consumerGroups
+        this.createTime = createTime
+    }
 }
 
 /**
