@@ -16,6 +16,8 @@ limitations under the License.
 package fountain::fmq.server
 
 import std.collection.HashMap
+import std.io.{ByteBuffer, SeekPosition}
+import fountain::f_codec.default.DefaultCodec
 import fountain::f_io.{SegmentedLog, LogConfig}
 
 /**
@@ -40,10 +42,13 @@ public class DeadLetterStore {
 
     /**
      * 写入死信消息。
-     * 持久化到 SegmentedLog + 加入内存索引。
+     * 写入 SegmentedLog + 加入内存索引。
+     * 日志条目编码：messageId(String) + topic(String) + queueIndex(Int64) + data(Array<Byte>)。
      */
     public func append(data: Array<Byte>, topic: String, queueIndex: Int64, messageId: String): Unit {
-        dlqLog.append(data)
+        // 编码 metadata + data 到单条 entry
+        let entry = encodeDlqEntry(messageId, topic, queueIndex, data)
+        dlqLog.append(entry)
         dlqLog.sync()
         index[messageId] = (topic, queueIndex, data)
         log.warn{"dead letter: ${messageId}"}
@@ -102,5 +107,48 @@ public class DeadLetterStore {
      */
     public func cleanup(): Unit {
         log.debug{"dead letter cleanup (placeholder)"}
+    }
+
+    /**
+     * 从 SegmentedLog 重建内存索引。
+     * 通过 openEntryStream() 流式读取所有 entry，无需全量加载。
+     */
+    public func rebuildIndex(): Unit {
+        let stream = dlqLog.openEntryStream()
+        let dec = DefaultCodec()
+        var count: Int64 = 0
+        while (true) {
+            if (let Some(msgId) <- dec.decode<String>(stream)
+                && let Some(topic) <- dec.decode<String>(stream)
+                && let Some(qi) <- dec.decode<Int64>(stream)
+                && let Some(data) <- dec.decode<Array<Byte>>(stream)) {
+                index[msgId] = (topic, qi, data)
+                count += 1
+            } else {
+                break
+            }
+        }
+        if (let r: Resource <- stream) {
+            r.close()
+        }
+        if (count > 0) {
+            let restored = count
+            log.info{"rebuildIndex: restored ${restored} dead letters"}
+        }
+    }
+
+    // ───── 编解码 ─────
+
+    private static func encodeDlqEntry(msgId: String, topic: String, queueIndex: Int64,
+                                        data: Array<Byte>): Array<Byte> {
+        let buf = ByteBuffer()
+        DefaultCodec()
+            .encode(msgId).encode(topic).encode(queueIndex).encode(data)
+            .finish().copy(to: buf, closeFromOnEnd: true, closeToOnEnd: false)
+        let size = buf.seek(SeekPosition.End(0))
+        buf.seek(SeekPosition.Begin(0))
+        let raw = Array<Byte>(Int64(size), repeat: 0u8)
+        buf.read(raw)
+        raw
     }
 }

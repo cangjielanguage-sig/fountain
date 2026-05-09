@@ -18,6 +18,7 @@ package fountain::f_io
 import std.fs.*
 import std.sync.*
 import std.collection.ArrayList
+import std.io.{InputStream, SeekPosition}
 import fountain::f_base.{mcopy, nullptr}
 
 /**
@@ -192,6 +193,23 @@ public class SegmentedLog <: Resource {
         }
     }
 
+    /**
+     * 返回一个 InputStream，依次读取所有 segment 中已写入的数据。
+     * 读完后自动关闭。调用方可用 DefaultCodec 流式解码每条 entry。
+     */
+    public func openEntryStream(): InputStream {
+        // 收集旧 segment 路径
+        let paths = ArrayList<String>()
+        synchronized (oldFilesLock) {
+            for (p in oldFiles) {
+                paths.add(p)
+            }
+        }
+        ChainedSegmentStream(paths, readCurrentData())
+    }
+
+    // ===== 内部实现 =====
+
     public func isClosed(): Bool {
         closed.load()
     }
@@ -231,6 +249,30 @@ public class SegmentedLog <: Resource {
         this.mmapPtr = initFileMapping(this.file, config.maxFileSize)
         this.currentSize.store(0)
         this.appendCount.store(0)
+    }
+
+    /** 读当前 segment 已写入的数据。Linux 从 mmap 读，非 Linux 从文件读 */
+    @When[os == "Linux"]
+    private func readCurrentData(): Array<Byte> {
+        let size = currentSize.load()
+        if (size <= 0) { return [] }
+        let result = Array<Byte>(size, repeat: 0u8)
+        unsafe {
+            let dstHdl = acquireArrayRawData<Byte>(result)
+            mcopy(CPointer<Unit>(dstHdl.pointer), CPointer<Unit>(mmapPtr), UIntNative(size))
+            releaseArrayRawData(dstHdl)
+        }
+        result
+    }
+    @When[os != "Linux"]
+    private func readCurrentData(): Array<Byte> {
+        let size = currentSize.load()
+        if (size <= 0) { return [] }
+        let pos = file.seek(SeekPosition.Current(0))
+        if (pos > size) { file.seek(SeekPosition.Begin(0)) }
+        let result = Array<Byte>(size, repeat: 0u8)
+        file.read(result)
+        result
     }
 
     // ---- @When[os] 双版本方法 ----
@@ -277,5 +319,87 @@ public class SegmentedLog <: Resource {
     /** fsync 刷盘（统一路径，Linux 下同样 flush mmap 脏页） */
     private func syncImpl(): Unit {
         file.flush()
+    }
+}
+
+/**
+ * 链式 segment 输入流：依次读取多个旧 segment 文件，然后读取当前 segment 的内存数据。
+ * 实现 InputStream 接口，可作为 DefaultCodec.decode 的参数逐条解码 entry。
+ */
+public class ChainedSegmentStream <: InputStream & Resource {
+    private let filePaths: ArrayList<String>
+    private let currentData: Array<Byte>
+    private var fileIndex: Int64 = 0
+    private var currentFile: ?File = None
+    private var filePos: Int64 = 0
+    private let currentTotal: Int64
+    private var currentPos: Int64 = 0
+    private var closed: Bool = false
+
+    public init(filePaths: ArrayList<String>, currentData: Array<Byte>) {
+        this.filePaths = filePaths
+        this.currentData = currentData
+        this.currentTotal = currentData.size
+        openNextFile()
+    }
+
+    public func read(buffer: Array<Byte>): Int64 {
+        if (closed || buffer.size == 0) { return 0 }
+        var written: Int64 = 0
+        while (written < buffer.size) {
+            if (let Some(f) <- currentFile) {
+                let n = f.read(buffer)
+                if (n > 0) {
+                    written += n
+                    filePos += n
+                }
+                if (n < buffer.size - written) {
+                    advanceFile()
+                }
+            } else {
+                let avail = currentTotal - currentPos
+                if (avail <= 0) { break }
+                let want = buffer.size - written
+                let take = if (want < avail) { want } else { avail }
+                for (i in 0..take) {
+                    buffer[written + i] = currentData[currentPos + i]
+                }
+                written += take
+                currentPos += take
+                if (currentPos >= currentTotal) { break }
+            }
+        }
+        written
+    }
+
+    public func isClosed(): Bool { closed }
+
+    public func close(): Unit {
+        if (closed) { return }
+        closed = true
+        if (let Some(f) <- currentFile) {
+            if (!f.isClosed()) { f.close() }
+        }
+    }
+
+    private func openNextFile(): Unit {
+        while (fileIndex < filePaths.size) {
+            let path = filePaths[fileIndex]
+            fileIndex += 1
+            try {
+                let f = File(path, OpenMode.Read)
+                currentFile = f
+                filePos = 0
+                return
+            } catch (_: Exception) { continue }
+        }
+        currentFile = None
+    }
+
+    private func advanceFile(): Unit {
+        if (let Some(f) <- currentFile) {
+            if (!f.isClosed()) { f.close() }
+        }
+        openNextFile()
     }
 }
