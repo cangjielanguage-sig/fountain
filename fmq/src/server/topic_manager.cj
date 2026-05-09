@@ -83,4 +83,70 @@ public class TopicManager {
     public func getTopicMeta(name: String): ?TopicMeta {
         topics.get(name)
     }
+
+    /**
+     * 添加消费者组到主题。
+     */
+    public func addConsumerGroup(topic: String, group: String): MqErrorCode {
+        if (let Some(meta) <- topics.get(topic)) {
+            // TopicMeta 的字段是 private var，通过构造器创建副本
+            let groups = ArrayList<String>()
+            for (g in meta.getConsumerGroups()) {
+                if (g == group) { return MqErrorCode.GROUP_EXISTS }
+                groups.add(g)
+            }
+            groups.add(group)
+            // 重建 meta（不可变风格）
+            let newMeta = TopicMeta(
+                queueCount: meta.getQueueCount(),
+                consumerGroups: groups,
+                createTime: meta.getCreateTime()
+            )
+            topics[topic] = newMeta
+            log.info{"added group '${group}' to topic '${topic}'"}
+            MqErrorCode.SUCCESS
+        } else {
+            MqErrorCode.TOPIC_NOT_FOUND
+        }
+    }
+
+    /**
+     * 从主题移除消费者组。
+     */
+    public func removeConsumerGroup(topic: String, group: String): MqErrorCode {
+        if (let Some(meta) <- topics.get(topic)) {
+            let groups = ArrayList<String>()
+            var found = false
+            for (g in meta.getConsumerGroups()) {
+                if (g == group) { found = true }
+                else { groups.add(g) }
+            }
+            if (!found) { return MqErrorCode.GROUP_NOT_FOUND }
+            let newMeta = TopicMeta(
+                queueCount: meta.getQueueCount(),
+                consumerGroups: groups,
+                createTime: meta.getCreateTime()
+            )
+            topics[topic] = newMeta
+            log.info{"removed group '${group}' from topic '${topic}'"}
+            MqErrorCode.SUCCESS
+        } else {
+            MqErrorCode.TOPIC_NOT_FOUND
+        }
+    }
+
+    /**
+     * 获取指定主题的所有消费者组。
+     */
+    public func getConsumerGroups(topic: String): ArrayList<String> {
+        if (let Some(meta) <- topics.get(topic)) {
+            let result = ArrayList<String>()
+            for (g in meta.getConsumerGroups()) {
+                result.add(g)
+            }
+            result
+        } else {
+            ArrayList()
+        }
+    }
 }

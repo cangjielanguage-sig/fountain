@@ -177,6 +177,68 @@ public class MqClient <: Resource {
         ArrayList()
     }
 
+    /**
+     * 添加消费者组到主题。
+     */
+    public func addConsumerGroup(topic: String, group: String): Bool {
+        let payload = encodeGroupOpPayload("addGroup", topic, group, 0)
+        let req = ProtocolMessage(Command.TOPIC_OP, MessageID(),
+            MqBody("topic_op", payload).toData())
+        mqConn.transfer(req.id, req, Duration.second * 10).isSome()
+    }
+
+    /**
+     * 从主题移除消费者组。
+     */
+    public func removeConsumerGroup(topic: String, group: String): Bool {
+        let payload = encodeGroupOpPayload("removeGroup", topic, group, 0)
+        let req = ProtocolMessage(Command.TOPIC_OP, MessageID(),
+            MqBody("topic_op", payload).toData())
+        mqConn.transfer(req.id, req, Duration.second * 10).isSome()
+    }
+
+    /**
+     * 查看主题详情。
+     */
+    public func showTopic(name: String): ?String {
+        let payload = encodeTopicOpPayload("showTopic", name, 0)
+        let req = ProtocolMessage(Command.TOPIC_OP, MessageID(),
+            MqBody("topic_op", payload).toData())
+        let resp = mqConn.transfer(req.id, req, Duration.second * 10)
+        if (let Some(r) <- resp) {
+            if (let Some(body) <- convert<MqBody>(r.data) && body.bodyType == "topic_info") {
+                return Some(String.fromUtf8(body.payload))
+            }
+        }
+        None
+    }
+
+    /**
+     * 重置消费者组 offset。
+     */
+    public func resetOffset(topic: String, group: String, offset: Int64): Bool {
+        let payload = encodeGroupOpPayload("resetOffset", topic, group, offset)
+        let req = ProtocolMessage(Command.TOPIC_OP, MessageID(),
+            MqBody("topic_op", payload).toData())
+        mqConn.transfer(req.id, req, Duration.second * 10).isSome()
+    }
+
+    /**
+     * 列出指定主题的消费者组。
+     */
+    public func listGroups(topic: String): ArrayList<String> {
+        let payload = encodeTopicOpPayload("listGroups", topic, 0)
+        let req = ProtocolMessage(Command.TOPIC_OP, MessageID(),
+            MqBody("topic_op", payload).toData())
+        let resp = mqConn.transfer(req.id, req, Duration.second * 10)
+        if (let Some(r) <- resp) {
+            if (let Some(body) <- convert<MqBody>(r.data)) {
+                return decodeTopicList(body.payload)
+            }
+        }
+        ArrayList()
+    }
+
     // ───── 生命周期 ─────
 
     public func close(): Unit {
@@ -201,6 +263,14 @@ public class MqClient <: Resource {
         let buf = ByteBuffer()
         DefaultCodec()
             .encode(op).encode(name).encode(queueCount)
+            .finish().copy(to: buf, closeFromOnEnd: true, closeToOnEnd: false)
+        extractBytes(buf)
+    }
+
+    private static func encodeGroupOpPayload(op: String, topic: String, group: String, offset: Int64): Array<Byte> {
+        let buf = ByteBuffer()
+        DefaultCodec()
+            .encode(op).encode(topic).encode(group).encode(offset)
             .finish().copy(to: buf, closeFromOnEnd: true, closeToOnEnd: false)
         extractBytes(buf)
     }

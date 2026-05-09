@@ -133,6 +133,15 @@ public class DeliveryManager {
     }
 
     /**
+     * 设置消费者组 offset（用于 resetOffset）。
+     */
+    public func setOffset(topic: String, queueIndex: Int64, groupId: String, offset: Int64): Unit {
+        let key = offsetKeyFor(topic, queueIndex, groupId)
+        offsets[key] = offset
+        log.info{"set offset ${key} = ${offset}"}
+    }
+
+    /**
      * 持久化 offset。当前通过 HashMap 维护，已持久化到内存。
      * Phase 8 可写入 fsync /mq/offset/<key>。
      */

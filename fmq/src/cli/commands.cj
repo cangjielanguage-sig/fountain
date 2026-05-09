@@ -77,7 +77,12 @@ public class CommandRunner {
         let name = getArg(args, "--name")
         let topic = getArg(args, "--topic")
         if (let Some(n) <- name && let Some(t) <- topic) {
-            println("created consumer group '${n}' for topic ${t} (requires server-side impl)")
+            let client = getClient()
+            if (client.addConsumerGroup(t, n)) {
+                println("created consumer group '${n}' for topic ${t}")
+            } else {
+                println("failed to create consumer group '${n}'")
+            }
         } else {
             println("error: --name and --topic are required")
         }
@@ -87,7 +92,12 @@ public class CommandRunner {
         let name = getArg(args, "--name")
         let topic = getArg(args, "--topic")
         if (let Some(n) <- name && let Some(t) <- topic) {
-            println("deleted consumer group '${n}' (requires server-side impl)")
+            let client = getClient()
+            if (client.removeConsumerGroup(t, n)) {
+                println("deleted consumer group '${n}' from topic ${t}")
+            } else {
+                println("failed to delete consumer group '${n}'")
+            }
         } else {
             println("error: --name and --topic are required")
         }
@@ -109,13 +119,38 @@ public class CommandRunner {
     }
 
     public static func listConsumerGroups(_: Array<String>): Unit {
-        println("consumer groups: (requires server-side impl)")
+        // 列出所有主题的消费者组
+        let client = getClient()
+        let topics = client.listTopics()
+        var anyGroups = false
+        for (t in topics) {
+            let groups = client.listGroups(t)
+            if (groups.size > 0) {
+                println("  ${t}:")
+                for (g in groups) {
+                    println("    ${g}")
+                    anyGroups = true
+                }
+            }
+        }
+        if (!anyGroups) {
+            println("no consumer groups")
+        }
     }
 
     public static func listGroups(args: Array<String>): Unit {
         let topic = getArg(args, "--topic")
         if (let Some(t) <- topic) {
-            println("groups for topic ${t}: (requires server-side impl)")
+            let client = getClient()
+            let groups = client.listGroups(t)
+            if (groups.size == 0) {
+                println("no groups for topic ${t}")
+            } else {
+                println("groups for topic ${t}:")
+                for (g in groups) {
+                    println("  ${g}")
+                }
+            }
         } else {
             println("error: --topic is required")
         }
@@ -124,7 +159,7 @@ public class CommandRunner {
     public static func listConsumers(args: Array<String>): Unit {
         let topic = getArg(args, "--topic")
         if (let Some(t) <- topic) {
-            println("consumers for topic ${t}: (requires server-side impl)")
+            println("consumers for topic ${t}: (requires ConsumerMatcher integration)")
         } else {
             println("error: --topic is required")
         }
@@ -137,7 +172,12 @@ public class CommandRunner {
         let group = getArg(args, "--group")
         let offset = getArg(args, "--offset")
         if (let Some(t) <- topic && let Some(g) <- group && let Some(o) <- offset) {
-            println("reset offset ${t}/${g} => ${o} (requires server-side impl)")
+            let client = getClient()
+            if (client.resetOffset(t, g, Int64.parse(o))) {
+                println("reset offset ${t}/${g} => ${o}")
+            } else {
+                println("failed to reset offset")
+            }
         } else {
             println("error: --topic, --group, --offset are required")
         }
@@ -147,10 +187,9 @@ public class CommandRunner {
         let name = getArg(args, "--name")
         if (let Some(n) <- name) {
             let client = getClient()
-            // 使用 createTopic 来检查主题是否存在（副作用敏感，临时方案）
-            let topics = client.listTopics()
-            if (topics.contains(n)) {
-                println("topic '${n}' exists")
+            if (let Some(info) <- client.showTopic(n)) {
+                println("topic '${n}':")
+                println("  ${info}")
             } else {
                 println("topic '${n}' not found")
             }

@@ -32,6 +32,15 @@ public class TopicMeta {
         this.consumerGroups = consumerGroups
         this.createTime = createTime
     }
+
+    // 字段访问器（private var 需公开 getter）
+    public func getQueueCount(): Int64 { queueCount }
+    public func getConsumerGroups(): ArrayList<String> {
+        let result = ArrayList<String>()
+        for (g in consumerGroups) { result.add(g) }
+        result
+    }
+    public func getCreateTime(): DateTime { createTime }
 }
 
 /**

@@ -384,6 +384,48 @@ public class CommandExecutor {
                     let encoded = encodeTopicNameList(topics)
                     ProtocolMessage(Command.RESP(0), request.id,
                         MqBody("topic_list", encoded).toData())
+                } else if (op == "addGroup") {
+                    let group = if (let Some(g) <- dec.decode<String>(buf)) { g } else {
+                        return errorResp(request.id, "missing group name")
+                    }
+                    let code = topicManager.addConsumerGroup(name, group)
+                    if (code == MqErrorCode.SUCCESS) {
+                        ProtocolMessage(Command.RESP(0), request.id, MqBody("ok", []).toData())
+                    } else {
+                        errorResp(request.id, "add group failed: ${code}")
+                    }
+                } else if (op == "removeGroup") {
+                    let group = if (let Some(g) <- dec.decode<String>(buf)) { g } else {
+                        return errorResp(request.id, "missing group name")
+                    }
+                    let code = topicManager.removeConsumerGroup(name, group)
+                    if (code == MqErrorCode.SUCCESS) {
+                        ProtocolMessage(Command.RESP(0), request.id, MqBody("ok", []).toData())
+                    } else {
+                        errorResp(request.id, "remove group failed: ${code}")
+                    }
+                } else if (op == "showTopic") {
+                    if (let Some(meta) <- topicManager.getTopicMeta(name)) {
+                        let info = encodeTopicInfo(name, meta)
+                        ProtocolMessage(Command.RESP(0), request.id,
+                            MqBody("topic_info", info).toData())
+                    } else {
+                        errorResp(request.id, "topic not found: ${name}")
+                    }
+                } else if (op == "resetOffset") {
+                    let group = if (let Some(g) <- dec.decode<String>(buf)) { g } else {
+                        return errorResp(request.id, "missing group name")
+                    }
+                    let offsetVal = if (let Some(o) <- dec.decode<Int64>(buf)) { o } else {
+                        return errorResp(request.id, "missing offset value")
+                    }
+                    deliveryManager.setOffset(name, 0, group, offsetVal)
+                    ProtocolMessage(Command.RESP(0), request.id, MqBody("ok", []).toData())
+                } else if (op == "listGroups") {
+                    let groups = topicManager.getConsumerGroups(name)
+                    let encoded = encodeTopicNameList(groups)
+                    ProtocolMessage(Command.RESP(0), request.id,
+                        MqBody("group_list", encoded).toData())
                 } else {
                     errorResp(request.id, "unknown topic op: ${op}")
                 }
@@ -523,6 +565,21 @@ public class CommandExecutor {
             enc.encode(n)
         }
         enc.finish().copy(to: buf, closeFromOnEnd: true, closeToOnEnd: false)
+        extractBytes(buf)
+    }
+
+    private static func encodeTopicInfo(name: String, meta: TopicMeta): Array<Byte> {
+        let groups = meta.getConsumerGroups()
+        let buf = ByteBuffer()
+        let enc = DefaultCodec()
+            .encode(name)
+            .encode(meta.getQueueCount())
+            .encode(groups.size)
+        for (g in groups) {
+            enc.encode(g)
+        }
+        enc.encode(meta.getCreateTime().toString())
+            .finish().copy(to: buf, closeFromOnEnd: true, closeToOnEnd: false)
         extractBytes(buf)
     }
 
