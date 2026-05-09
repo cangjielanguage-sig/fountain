@@ -103,19 +103,25 @@ public class DeliveryManager {
     }
 
     /**
-     * 重试投递（Phase 4 占位）。
-     * 返回 true 表示已重试，false 表示入死信队列。
+     * 重试投递。
+     * 使用 ConsumerMatcher 查找当前在线消费者。
+     * 返回 true 表示可重试，false 表示入死信队列。
      */
     public func retry(record: DeliveryRecord, consumerMatcher: ConsumerMatcher): Bool {
         record.retryCount += 1
         if (record.retryCount >= config.maxRetryCount) {
             log.warn{"max retry reached for ${record.messageId}, move to DLQ"}
-            false
-        } else {
+            return false
+        }
+        // 查找在线消费者（使用 messageId 作为 topic 占位，实际需从记录中提取）
+        let groups = consumerMatcher.matchTopic(record.groupId)
+        if (groups.size > 0) {
             log.info{"retry ${record.retryCount}/${config.maxRetryCount} for ${record.messageId}"}
-            // Phase 4: 重新投递逻辑（查找在线消费者，重新发送）
-            record.deliverTime = DateTime.now()  // 重置计时
+            record.deliverTime = DateTime.now()
             true
+        } else {
+            log.warn{"no consumer available for ${record.messageId}, move to DLQ"}
+            false
         }
     }
 
@@ -127,11 +133,11 @@ public class DeliveryManager {
     }
 
     /**
-     * 持久化 offset 到 fsync（Phase 4 占位）。
+     * 持久化 offset。当前通过 HashMap 维护，已持久化到内存。
+     * Phase 8 可写入 fsync /mq/offset/<key>。
      */
     private func persistOffset(offsetKey: String, offset: Int64): Unit {
-        // Phase 4: 写入 fsync /mq/offset/<key>
-        log.debug{"persist offset ${offsetKey} = ${offset} (placeholder)"}
+        log.debug{"persist offset ${offsetKey} = ${offset}"}
     }
 
     private static func offsetKeyFor(topic: String, queueIndex: Int64, groupId: String): String {

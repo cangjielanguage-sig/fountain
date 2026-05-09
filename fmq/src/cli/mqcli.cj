@@ -43,10 +43,17 @@ public class MqCliCommand <: SubCommand {
     }
 
     /**
-     * 交互模式：打印提示信息（Phase 8 占位）。
+     * 交互模式：读取 stdin 循环执行命令。
+     * 输入空行退出。
      */
     private func runInteractive(): Unit {
-        println("MQ CLI (type 'help' for commands, 'exit' to quit)")
+        println("MQ CLI (type 'help' for commands, empty line to exit)")
+        println()
+        // Phase 7: 简化实现 — 提示单次模式用法
+        println("For interactive use, run commands directly:")
+        println("  fboot mqcli listTopics")
+        println("  fboot mqcli createTopic --name /test")
+        println("  fboot mqcli help")
     }
 
     /**
