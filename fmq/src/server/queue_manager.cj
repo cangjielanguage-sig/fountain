@@ -27,9 +27,11 @@ public class QueueManager {
     private let log = LoggerFactory.getLogger('fountain::fmq.QueueManager')
     private let queues = HashMap<String, ArrayList<Queue>>()  // topic → [Queue]
     private var replicationManager: Option<ReplicationManager> = None
+    private let nodeIndex: Int64
 
-    public init(config: MqConfig) {
+    public init(config: MqConfig, nodeIndex!: Int64 = 0) {
         this.config = config
+        this.nodeIndex = nodeIndex
     }
 
     /**
@@ -48,13 +50,13 @@ public class QueueManager {
         let topicQueues = ArrayList<Queue>()
         for (i in 0..queueCount) {
             let ownerIndex = distribute(topic, i, config.mqHosts.size)
-            if (ownerIndex == 0) {   // 本节点（简化为第一个节点）
+            if (ownerIndex == nodeIndex) {   // 本节点
                 let q = Queue(topic, i, config.dataDir, config.segmentMaxSize)
                 topicQueues.add(q)
             }
         }
         queues[topic] = topicQueues
-        log.info{"created ${topicQueues.size} queues for topic ${topic}"}
+        log.info{"created ${topicQueues.size} queues for topic ${topic} (node ${nodeIndex})"}
         topicQueues
     }
 
@@ -102,20 +104,34 @@ public class QueueManager {
     }
 
     /**
-     * 重新分配故障节点的队列到健康节点。
-     * 遍历所有队列，找到 ownerIndex == failedNode 的，标记待接管。
-     * 调用方负责在健康节点上实际重建队列。
+     * 重新分配故障节点的队列到本节点。
+     * 1. 遍历该主题的最大可能队列数
+     * 2. 如果队列应属故障节点且尚未在本节点上创建，则在本地创建
      */
     public func reassign(failedNode: Int64): ArrayList<(String, Int64)> {
         let reassigned = ArrayList<(String, Int64)>()
+        // 对每个主题，检查最大可能队列数（当前数 + 故障节点数）
         for ((topic, topicQueues) in queues) {
+            // 收集已在本地存在的队列索引
+            let localIndices = ArrayList<Int64>()
             for (q in topicQueues) {
-                let owner = distribute(topic, q.index, config.mqHosts.size)
-                if (owner == failedNode) {
-                    reassigned.add((topic, q.index))
-                    log.warn{"reassign ${topic}[${q.index}] from node ${failedNode}"}
+                localIndices.add(q.index)
+            }
+            // 遍历足够多的索引，覆盖故障节点的份额
+            let maxIndex = topicQueues.size + config.mqHosts.size
+            for (i in 0..maxIndex) {
+                let owner = distribute(topic, i, config.mqHosts.size)
+                if (owner == failedNode && !localIndices.contains(i)) {
+                    let q = Queue(topic, i, config.dataDir, config.segmentMaxSize)
+                    topicQueues.add(q)
+                    localIndices.add(i)
+                    reassigned.add((topic, i))
+                    log.warn{"reassign ${topic}[${i}] from node ${failedNode} to node ${nodeIndex}"}
                 }
             }
+        }
+        if (reassigned.size == 0) {
+            log.info{"reassign: no queues to reassign from node ${failedNode}"}
         }
         reassigned
     }

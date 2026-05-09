@@ -51,6 +51,41 @@ public class QueueDistributionTest {
 }
 
 @Test
+public class ReassignTest {
+    @TestCase
+    public func testReassignCreatesQueuesLocally(): Unit {
+        let hosts = ArrayList<String>()
+        hosts.add("node1:7201")
+        hosts.add("node2:7201")
+        let config = MqConfig(
+            mqHosts: hosts, syncHosts: ArrayList(),
+            dataDir: "/tmp/fmq_reassign_test", segmentMaxSize: 1024,
+            heartbeatIntervalSec: 5, healthcheckMaxRetry: 3,
+            idleTimeoutMinutes: 30, ackTimeoutMs: 30000,
+            maxRetryCount: 3, retryIntervalMs: 1000,
+            dlqRetentionHours: 168, maxMessageSize: 4096,
+            maxLabelsPerMessage: 64, retentionHours: 72,
+            syncQuorum: 1
+        )
+        // nodeIndex=0 创建队列，nodeIndex=1 故障后接管
+        let qm = QueueManager(config, nodeIndex: 0)
+        qm.createQueues("/test", 2)
+        let before = qm.getQueues("/test")
+        @Assert(before.isSome())
+        if (let Some(qs) <- before) {
+            @Assert(qs.size == 1)  // nodeIndex=0 只创建归属于节点 0 的队列
+        }
+        // 节点 1 故障，节点 0 接管
+        let reassigned = qm.reassign(1)
+        @Assert(reassigned.size > 0)
+        let after = qm.getQueues("/test")
+        if (let Some(qs) <- after) {
+            @Assert(qs.size == 2)  // 接管后 2 个队列都在本地
+        }
+    }
+}
+
+@Test
 public class ReplicationRoleTest {
     @TestCase
     public func testPromoteAndDemote(): Unit {

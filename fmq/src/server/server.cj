@@ -80,12 +80,13 @@ public class MqCommand <: SubCommand {
         }
 
         let port = resolvePort(config.mqHosts)
-        log.info{"starting MQ server on port ${port}"}
+        let nodeIndex = resolveNodeIndex(config.mqHosts, port)
+        log.info{"starting MQ server on port ${port}, nodeIndex=${nodeIndex}"}
 
         // 创建各管理器 + CommandExecutor
         let server = MqServer(bindPort: UInt16(port))
         let topicManager = TopicManager(config)
-        let queueManager = QueueManager(config)
+        let queueManager = QueueManager(config, nodeIndex: nodeIndex)
         let deliveryManager = DeliveryManager(config)
         let consumerMatcher = ConsumerMatcher()
         let replicationManager = ReplicationManager(config)
@@ -123,5 +124,22 @@ public class MqCommand <: SubCommand {
             }
         }
         7201
+    }
+
+    /**
+     * 从 mq_hosts 中查找本节点端口对应的索引。
+     * 用于 QueueManager 分布算法中的 nodeIndex。
+     */
+    private static func resolveNodeIndex(hosts: ArrayList<String>, port: Int64): Int64 {
+        for (i in 0..hosts.size) {
+            let parts = hosts[i].split(':')
+            if (parts.size == 2) {
+                let p = Int64.parse(parts[1])
+                if (p == port) {
+                    return i
+                }
+            }
+        }
+        0
     }
 }
