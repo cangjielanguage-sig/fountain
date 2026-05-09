@@ -29,6 +29,7 @@ public class Queue <: Resource & ToString {
     let retryBuffer: ArrayList<RetryEntry> = ArrayList()
     let deadLetter: DeadLetterStore
     let deliveryBuffer: LinkedBlockingQueue<Array<Byte>>  // Writer → Reader 管道
+    var onServers: ArrayList<String> = ArrayList()  // 所在主节点列表（host:port）
     private let logPath: String
     private var closed: Bool = false
     var draining: Bool = false         // 排空中：排完剩余消息后归还节点

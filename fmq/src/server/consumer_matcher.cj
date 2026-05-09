@@ -51,13 +51,22 @@ public class ConsumerMatcher {
     }
 
     /**
-     * 刷新消费者注册缓存（从 fsync /mq/consumes 读取）。
-     * Phase 4 为本地空实现，fsync 集成在后续阶段。
+     * 刷新消费者注册缓存。
+     * Phase 7: 清理心跳超时的消费者（超时 = heartbeatIntervalSec × healthcheckMaxRetry）。
+     * Phase 8: 从 fsync /mq/consumes 加载。
      */
     public func refresh(): Unit {
-        // Phase 4: 从 fsync 读取 /mq/consumes 并反序列化为 registrations
-        // this.registrations = loadFromFsync()
-        log.debug{"ConsumerMatcher refresh (placeholder)"}
+        let timeoutDuration = Duration.second * 5 * 3  // 5s × 3 = 15s 超时
+        let now = DateTime.now()
+        let remaining = ArrayList<ConsumerRegistration>()
+        for (r in registrations) {
+            if (now - r.lastHeartbeat < timeoutDuration) {
+                remaining.add(r)
+            } else {
+                log.debug{"removed stale registration: ${r.consumerId}"}
+            }
+        }
+        registrations = remaining
     }
 
     /**

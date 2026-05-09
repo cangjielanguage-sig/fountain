@@ -63,6 +63,12 @@ public class ConsumerRegistration {
         decodeMatchMode(matchModeStr)
     }
 
+    public func getLastHeartbeat(): DateTime { lastHeartbeat }
+
+    public func getConsumerId(): String { consumerId }
+
+    public func getGroupId(): String { groupId }
+
     private static func encodeMatchMode(mode: MatchMode): String {
         match (mode) {
             case Exact(p) => "Exact:${p}"
@@ -94,6 +100,14 @@ public class BrokerMeta {
 }
 
 /**
+ * 压缩类型。v1 恒为 None，为未来扩展预留。
+ */
+public enum CompressionType {
+    | NoCompression
+    | Zstd
+}
+
+/**
  * MQ 消息（内部表示，非 fsync 存储）。
  */
 public struct Message {
@@ -106,7 +120,8 @@ public struct Message {
         public let producerId!: String = "",
         public let timestamp!: DateTime = DateTime.now(),
         public let expireAt!: ?DateTime = None,
-        public let qos!: QoS = QoS.AtMostOnce
+        public let qos!: QoS = QoS.AtMostOnce,
+        public let compression!: CompressionType = CompressionType.NoCompression
     ) {}
 }
 
