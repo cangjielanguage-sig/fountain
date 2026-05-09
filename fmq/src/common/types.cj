@@ -48,6 +48,17 @@ public class ConsumerRegistration {
     private var lastHeartbeat: DateTime = DateTime.now()
     public init() {}
 
+    public init(consumerId!: String, groupId!: String, matchModeStr!: String,
+                labels!: ?ArrayList<String>, dataFilter!: ?String,
+                lastHeartbeat!: DateTime) {
+        this.consumerId = consumerId
+        this.groupId = groupId
+        this.matchModeStr = matchModeStr
+        this.labels = labels
+        this.dataFilter = dataFilter
+        this.lastHeartbeat = lastHeartbeat
+    }
+
     public func getMatchMode(): MatchMode {
         decodeMatchMode(matchModeStr)
     }
@@ -89,6 +100,7 @@ public struct Message {
     public Message(
         public let id!: MessageID = MessageID(),
         public let topic!: String = "",
+        public let queueIndex!: Int64 = 0,
         public let labels!: ArrayList<String> = ArrayList(),
         public let payload!: Array<Byte> = [],
         public let producerId!: String = "",

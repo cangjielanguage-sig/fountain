@@ -56,6 +56,7 @@ public class Consumer {
                             let msgData = msgs[0]
                             return Some(Message(
                                 topic: topic, id: MessageID(),
+                                queueIndex: 0,
                                 payload: msgData, labels: ArrayList()))
                         }
                     }
@@ -67,10 +68,12 @@ public class Consumer {
 
     /**
      * 确认消息。
+     * @param topic 所属 topic
+     * @param queueIndex 所属队列索引
      */
-    public func ack(messageId: MessageID): Bool {
+    public func ack(messageId: MessageID, topic: String, queueIndex: Int64): Bool {
         let idStr = messageIdToStr(messageId)
-        let payload = encodeAckPayload(idStr, "unknown", 0)
+        let payload = encodeAckPayload(idStr, topic, queueIndex)
         let req = ProtocolMessage(Command.ACK, MessageID(),
             MqBody("ack", payload).toData())
         let resp = client.transfer(req.id, req, Duration.second * 10)

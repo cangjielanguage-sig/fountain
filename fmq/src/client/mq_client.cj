@@ -104,8 +104,8 @@ public class MqClient <: Resource {
         consumer.poll<T>(timeout)
     }
 
-    public func ack(messageId: MessageID): Bool {
-        consumer.ack(messageId)
+    public func ack(messageId: MessageID, topic: String, queueIndex: Int64): Bool {
+        consumer.ack(messageId, topic, queueIndex)
     }
 
     // ───── 死信队列 API ─────
