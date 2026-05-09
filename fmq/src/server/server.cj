@@ -92,6 +92,10 @@ public class MqCommand <: SubCommand {
         let executor = CommandExecutor(
             topicManager, queueManager, deliveryManager,
             consumerMatcher, replicationManager)
+
+        // 启动队列 Writer/Reader 线程
+        queueManager.startAll()
+
         server.start({ msg => executor.execute(msg) })
         let brokerManager = BrokerManager(config)
         brokerManager.startHeartbeat()
@@ -100,6 +104,9 @@ public class MqCommand <: SubCommand {
         while (true) {
             sleep(Duration.second * 60)
         }
+        brokerManager.close()
+        queueManager.close()
+        server.close()
         0
     }
 
