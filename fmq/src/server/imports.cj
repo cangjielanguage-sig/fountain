@@ -23,6 +23,7 @@ internal import fountain::f_data.*
 internal import fountain::f_data.base.*
 internal import fountain::f_net.*
 internal import fountain::f_net.server.*
+internal import fountain::f_net.client.*
 internal import fountain::f_protocol.*
 internal import fountain::f_protocol.default.*
 internal import fountain::f_log.*
