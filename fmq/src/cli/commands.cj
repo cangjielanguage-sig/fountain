@@ -30,7 +30,7 @@ public class CommandRunner {
     /**
      * 从参数数组中提取 --name <value> 格式的值。
      */
-    private static func getArg(args: Array<String>, flag: String): ?String {
+    internal static func getArg(args: Array<String>, flag: String): ?String {
         for (i in 0..args.size) {
             if (args[i] == flag && i + 1 < args.size) {
                 return Some(args[i + 1])
