@@ -193,6 +193,27 @@ public class DeliverySimpleTest {
         @Assert(!second)
     }
 
+    @TestCase
+    public func testConcurrentAckSingleSuccess(): Unit {
+        let config = deliveryTestConfig()
+        let dm = DeliveryManager(config)
+        dm.recordDelivery("concurrent-msg", "consumer-c", "group-c")
+
+        // 并发启动多个线程同时 ACK
+        let futures = ArrayList<Future<Bool>>()
+        for (_ in 0..10) {
+            futures.add(spawn {
+                dm.onAck("concurrent-msg", "/test", 0)
+            })
+        }
+        var okCount = 0
+        for (f in futures) {
+            if (f.get()) { okCount += 1 }
+        }
+        // 只有 1 个线程应返回 true，其余返回 false
+        @Assert(okCount == 1)
+    }
+
     private static func deliveryTestConfig(): MqConfig {
         MqConfig(
             mqHosts: ArrayList(), syncHosts: ArrayList(),

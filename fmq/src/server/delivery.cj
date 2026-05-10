@@ -16,6 +16,7 @@ limitations under the License.
 package fountain::fmq.server
 
 import std.collection.concurrent.ConcurrentHashMap
+import std.sync.Mutex
 import fountain::f_codec.default.DefaultCodec
 import std.io.ByteBuffer
 import fountain::fleet.client.SyncClient
@@ -54,6 +55,7 @@ public class DeliveryManager {
     private let offsets = ConcurrentHashMap<String, Int64>()
     private let syncClient: ?SyncClient
     private let serverId: String  // "host:port" 用于 offset key
+    private let onAckLock = Mutex()  // 保护 onAck check-then-act
 
     public init(config: MqConfig, serverId!: String = "") {
         this.config = config
@@ -99,21 +101,23 @@ public class DeliveryManager {
 
     /**
      * ACK 处理。
-     * 按 (topic, queueIndex, groupId) 查找最早未确认的投递记录。
-     * 返回 true 表示已确认。
+     * 返回 true 表示已确认（存在且未之前确认过）。
+     * synchronized 防止并发 ACK 的 check-then-act 竞态。
      */
     public func onAck(messageId: String, topic: String, queueIndex: Int64): Bool {
-        if (let Some(record) <- records.get(messageId)) {
-            if (record.acked) { return false }
-            record.acked = true
-            records.remove(messageId)
-            let offsetKey = offsetKeyFor(topic, queueIndex, serverId, record.groupId)
-            let current = offsets.get(offsetKey) ?? 0
-            offsets[offsetKey] = current + 1
-            persistOffset(offsetKey, current + 1)
-            true
-        } else {
-            false
+        synchronized(onAckLock) {
+            if (let Some(record) <- records.get(messageId)) {
+                if (record.acked) { return false }
+                record.acked = true
+                records.remove(messageId)
+                let offsetKey = offsetKeyFor(topic, queueIndex, serverId, record.groupId)
+                let current = offsets.get(offsetKey) ?? 0
+                offsets[offsetKey] = current + 1
+                persistOffset(offsetKey, current + 1)
+                true
+            } else {
+                false
+            }
         }
     }
 
