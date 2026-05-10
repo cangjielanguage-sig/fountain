@@ -322,6 +322,17 @@ public class DeadLetterStoreTest {
         let after = ds.list("/test", 0)
         @Assert(after.size == 0)
     }
+
+    @TestCase
+    public func testRebuildIndexWorkWithDeletions(): Unit {
+        let ds = DeadLetterStore("/tmp/fmq_dlq_rebuild", retentionHours: 168)
+        ds.append([0x01u8], "/a", 0, "msg-1")
+        ds.append([0x02u8], "/b", 0, "msg-2")
+        // redeliver 会从索引删除
+        ds.redeliver("/a", 0, "msg-1")
+        @Assert(ds.list("/a", 0).size == 0)
+        @Assert(ds.list("/b", 0).size == 1)
+    }
 }
 
 @Test

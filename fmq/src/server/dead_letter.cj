@@ -123,27 +123,30 @@ public class DeadLetterStore {
      */
     public func rebuildIndex(): Unit {
         let stream = dlqLog.openEntryStream()
-        let dec = DefaultCodec()
-        var count: Int64 = 0
-        while (true) {
-            if (let Some(msgId) <- dec.decode<String>(stream)
-                && let Some(topic) <- dec.decode<String>(stream)
-                && let Some(qi) <- dec.decode<Int64>(stream)
-                && let Some(data) <- dec.decode<Array<Byte>>(stream)) {
-                synchronized(mutex) {
-                    index[msgId] = (topic, qi, data)
+        try {
+            let dec = DefaultCodec()
+            var count: Int64 = 0
+            while (true) {
+                if (let Some(msgId) <- dec.decode<String>(stream)
+                    && let Some(topic) <- dec.decode<String>(stream)
+                    && let Some(qi) <- dec.decode<Int64>(stream)
+                    && let Some(data) <- dec.decode<Array<Byte>>(stream)) {
+                    synchronized(mutex) {
+                        index[msgId] = (topic, qi, data)
+                    }
+                    count += 1
+                } else {
+                    break
                 }
-                count += 1
-            } else {
-                break
             }
-        }
-        if (let r: Resource <- stream) {
-            r.close()
-        }
-        if (count > 0) {
-            let restored = count
-            log.info{"rebuildIndex: restored ${restored} dead letters"}
+            if (count > 0) {
+                let restored = count
+                log.info{"rebuildIndex: restored ${restored} dead letters"}
+            }
+        } finally {
+            if (let r: Resource <- stream) {
+                r.close()
+            }
         }
     }
 
