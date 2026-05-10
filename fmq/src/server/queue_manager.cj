@@ -26,7 +26,7 @@ import fountain::f_util.crc64
 public class QueueManager {
     private let config: MqConfig
     private let log = LoggerFactory.getLogger('fountain::fmq.QueueManager')
-    private let queues = ConcurrentHashMap<String, ArrayList<Queue>>()  // topic → [Queue]
+    private let queues = ConcurrentHashMap<String, ArrayList<MqQueue>>()  // topic → [MqQueue]
     private var replicationManager: Option<ReplicationManager> = None
     private let nodeIndex: Int64
     private let lock = Mutex()
@@ -50,12 +50,12 @@ public class QueueManager {
      * 队列均匀分布在 mqHosts 节点上（CRC64 取模决定起始节点）。
      * 当前节点承担本节点所分配的队列。
      */
-    public func createQueues(topic: String, queueCount: Int64): ArrayList<Queue> {
-        let topicQueues = ArrayList<Queue>()
+    public func createQueues(topic: String, queueCount: Int64): ArrayList<MqQueue> {
+        let topicQueues = ArrayList<MqQueue>()
         for (i in 0..queueCount) {
             let ownerIndex = distribute(topic, i, config.mqHosts.size)
             if (ownerIndex == nodeIndex) {   // 本节点
-                let q = Queue(topic, i, config.dataDir, config.segmentMaxSize)
+                let q = MqQueue(topic, i, config.dataDir, config.segmentMaxSize)
                 topicQueues.add(q)
             }
         }
@@ -70,7 +70,7 @@ public class QueueManager {
      * 销毁主题的所有队列。
      */
     public func destroyQueues(topic: String): Unit {
-        let topicQueues: ?ArrayList<Queue>
+        let topicQueues: ?ArrayList<MqQueue>
         synchronized(lock) {
             topicQueues = queues.get(topic)
             queues.remove(topic)
@@ -85,10 +85,10 @@ public class QueueManager {
     /**
      * 获取指定主题的队列列表（防御性拷贝，多线程安全）。
      */
-    public func getQueues(topic: String): ?ArrayList<Queue> {
+    public func getQueues(topic: String): ?ArrayList<MqQueue> {
         synchronized(lock) {
             if (let Some(qs) <- queues.get(topic)) {
-                let copy = ArrayList<Queue>()
+                let copy = ArrayList<MqQueue>()
                 for (q in qs) { copy.add(q) }
                 Some(copy)
             } else { None }
@@ -111,7 +111,7 @@ public class QueueManager {
     /**
      * 获取指定 topic + index 的队列。
      */
-    public func getQueue(topic: String, index: Int64): ?Queue {
+    public func getQueue(topic: String, index: Int64): ?MqQueue {
         synchronized(lock) {
             if (let Some(qs) <- queues.get(topic)) {
                 for (q in qs) {
@@ -151,7 +151,7 @@ public class QueueManager {
                 for (i in 0..maxIndex) {
                     let owner = distribute(topic, i, config.mqHosts.size)
                     if (owner == failedNode && !localIndices.contains(i)) {
-                        let q = Queue(topic, i, config.dataDir, config.segmentMaxSize)
+                        let q = MqQueue(topic, i, config.dataDir, config.segmentMaxSize)
                         topicQueues.add(q)
                         localIndices.add(i)
                         reassigned.add((topic, i))
@@ -221,9 +221,9 @@ public class QueueManager {
      */
     public func startAll(): Unit {
         let rm = if (let Some(ref) <- replicationManager) { ref } else { return }
-        let snapshot: ArrayList<(String, ArrayList<Queue>)>
+        let snapshot: ArrayList<(String, ArrayList<MqQueue>)>
         synchronized(lock) {
-            snapshot = ArrayList<(String, ArrayList<Queue>)>()
+            snapshot = ArrayList<(String, ArrayList<MqQueue>)>()
             for ((topic, topicQueues) in queues) {
                 snapshot.add((topic, topicQueues))
             }
@@ -246,9 +246,9 @@ public class QueueManager {
         for (w in writers) { w.close() }
         for (r in readers) { r.close() }
         // 再关闭队列（SegmentedLog）
-        let allQueues: ArrayList<Queue>
+        let allQueues: ArrayList<MqQueue>
         synchronized(lock) {
-            allQueues = ArrayList<Queue>()
+            allQueues = ArrayList<MqQueue>()
             for ((_, topicQueues) in queues) {
                 for (q in topicQueues) { allQueues.add(q) }
             }

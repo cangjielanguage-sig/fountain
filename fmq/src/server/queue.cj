@@ -25,7 +25,7 @@ import std.sync.Mutex
  * 封装 SegmentedLog（写）和文件读取（读）。
  * 消费直接从 SegmentedLog 流式读取，无内存缓冲，内存 O(1)。
  */
-public class Queue <: Resource & ToString {
+public class MqQueue <: Resource & ToString {
     let topic: String
     let index: Int64
     let log: SegmentedLog
@@ -134,5 +134,5 @@ public class Queue <: Resource & ToString {
         false
     }
 
-    public func toString(): String { "Queue(${topic}[${index}])" }
+    public func toString(): String { "MqQueue(${topic}[${index}])" }
 }

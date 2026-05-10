@@ -23,13 +23,13 @@ import std.sync.AtomicBool
  * 从 inboundQueue 接收消息，写入 SegmentedLog，同步到从节点。
  */
 public class QueueWriter {
-    private let queue: Queue
+    private let queue: MqQueue
     private let replicationManager: ReplicationManager
     private let log = LoggerFactory.getLogger('fountain::fmq.QueueWriter')
     private let closed = AtomicBool(false)
     private let inboundQueue: ConcurrentLinkedQueue<Array<Byte>>
 
-    public init(queue: Queue, replicationManager!: ReplicationManager, queueSize!: Int64 = 1024) {
+    public init(queue: MqQueue, replicationManager!: ReplicationManager, queueSize!: Int64 = 1024) {
         this.queue = queue
         this.replicationManager = replicationManager
         this.inboundQueue = ConcurrentLinkedQueue<Array<Byte>>()

@@ -23,12 +23,12 @@ import std.sync.AtomicBool
  * 不缓冲，内存 O(1)。
  */
 public class QueueReader {
-    private let queue: Queue
+    private let queue: MqQueue
     private let log = LoggerFactory.getLogger('fountain::fmq.QueueReader')
     private let closed = AtomicBool(false)
     private var msgCount: Int64 = 0  // 已读取消息计数，用于首次读取时跳过历史消息
 
-    public init(queue: Queue) {
+    public init(queue: MqQueue) {
         this.queue = queue
     }
 
