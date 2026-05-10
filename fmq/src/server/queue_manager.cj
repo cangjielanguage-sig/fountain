@@ -30,6 +30,8 @@ public class QueueManager {
     private var replicationManager: Option<ReplicationManager> = None
     private let nodeIndex: Int64
     private let lock = Mutex()
+    private let writers = ArrayList<QueueWriter>()  // 跟踪 writer 线程
+    private let readers = ArrayList<QueueReader>()  // 跟踪 reader 线程
 
     public init(config: MqConfig, nodeIndex!: Int64 = 0) {
         this.config = config
@@ -230,13 +232,20 @@ public class QueueManager {
             for (q in topicQueues) {
                 let writer = QueueWriter(q, replicationManager: rm, queueSize: 1024)
                 let reader = QueueReader(q)
+                writers.add(writer)
+                readers.add(reader)
                 spawn { writer.run() }
                 spawn { reader.run() }
             }
         }
+        log.info{"startAll: ${writers.size} writers, ${readers.size} readers started"}
     }
 
     public func close(): Unit {
+        // 先关闭 writer 和 reader 线程（让它们退出循环）
+        for (w in writers) { w.close() }
+        for (r in readers) { r.close() }
+        // 再关闭队列（SegmentedLog）
         let allQueues: ArrayList<Queue>
         synchronized(lock) {
             allQueues = ArrayList<Queue>()
@@ -247,5 +256,6 @@ public class QueueManager {
         for (q in allQueues) {
             if (!q.isClosed()) { q.close() }
         }
+        log.info{"closed: stopped ${writers.size} writers, ${readers.size} readers"}
     }
 }

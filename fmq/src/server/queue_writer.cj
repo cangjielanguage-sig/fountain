@@ -16,6 +16,7 @@ limitations under the License.
 package fountain::fmq.server
 
 import std.collection.concurrent.ConcurrentLinkedQueue
+import std.sync.AtomicBool
 
 /**
  * 队列写线程。
@@ -25,7 +26,7 @@ public class QueueWriter {
     private let queue: Queue
     private let replicationManager: ReplicationManager
     private let log = LoggerFactory.getLogger('fountain::fmq.QueueWriter')
-    private var closed: Bool = false
+    private let closed = AtomicBool(false)
     private let inboundQueue: ConcurrentLinkedQueue<Array<Byte>>
 
     public init(queue: Queue, replicationManager!: ReplicationManager, queueSize!: Int64 = 1024) {
@@ -45,7 +46,7 @@ public class QueueWriter {
      * 写线程主循环。
      */
     public func run(): Unit {
-        while (!closed) {
+        while (!closed.load()) {
             try {
                 if (let Some(data) <- inboundQueue.remove()) {
                     queue.append(data)
@@ -61,7 +62,7 @@ public class QueueWriter {
         }
     }
 
-    public func close(): Unit { closed = true }
+    public func close(): Unit { closed.store(true) }
 
     /**
      * 同步 message 到所有已注册的从节点。

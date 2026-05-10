@@ -15,6 +15,8 @@ limitations under the License.
  */
 package fountain::fmq.server
 
+import std.sync.AtomicBool
+
 /**
  * 队列读线程。
  * 从 SegmentedLog 流式读取消息，匹配消费者并投递。
@@ -23,7 +25,7 @@ package fountain::fmq.server
 public class QueueReader {
     private let queue: Queue
     private let log = LoggerFactory.getLogger('fountain::fmq.QueueReader')
-    private var closed: Bool = false
+    private let closed = AtomicBool(false)
 
     public init(queue: Queue) {
         this.queue = queue
@@ -38,7 +40,7 @@ public class QueueReader {
      */
     public func run(): Unit {
         log.info{"QueueReader started for ${queue}"}
-        while (!closed) {
+        while (!closed.load()) {
             try {
                 // 1. 从 SegmentedLog 流式读取（O(1) 内存）
                 if (let Some(data) <- queue.tryReadFromLog(0)) {
@@ -50,12 +52,12 @@ public class QueueReader {
                 }
                 // 3. 超时检查（Phase 4+ 实现在 DeliveryManager.checkTimeout）
             } catch (e: Exception) {
-                if (!closed) {
+                if (!closed.load()) {
                     log.error{"QueueReader error: ${e.message}"}
                 }
             }
         }
     }
 
-    public func close(): Unit { closed = true }
+    public func close(): Unit { closed.store(true) }
 }
