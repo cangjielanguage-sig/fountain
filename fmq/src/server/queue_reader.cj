@@ -26,6 +26,7 @@ public class QueueReader {
     private let queue: Queue
     private let log = LoggerFactory.getLogger('fountain::fmq.QueueReader')
     private let closed = AtomicBool(false)
+    private var msgCount: Int64 = 0  // 已读取消息计数，用于首次读取时跳过历史消息
 
     public init(queue: Queue) {
         this.queue = queue
@@ -33,7 +34,7 @@ public class QueueReader {
 
     /**
      * 读线程主循环。
-     * 1. 从 SegmentedLog 逐条读取消息
+     * 1. 从 SegmentedLog 流式读取消息，首次读取时跳过已有偏移
      * 2. ConsumerMatcher.matchTopic() 获取投递目标
      * 3. 记录 DeliveryRecord（占位：后续集成实际网络投递）
      * 4. 等待 ACK 或超时
@@ -43,14 +44,13 @@ public class QueueReader {
         while (!closed.load()) {
             try {
                 // 1. 从 SegmentedLog 流式读取（O(1) 内存）
-                if (let Some(data) <- queue.tryReadFromLog(0)) {
-                    // 2. ConsumerMatcher.matchTopic 获取目标消费者（占位）
+                let skip = msgCount
+                if (let Some(data) <- queue.tryReadFromLog(skip)) {
+                    msgCount += 1
                     log.debug{"read ${data.size} bytes from log for ${queue}"}
                 } else {
-                    // 无消息时短暂等待
                     sleep(Duration.millisecond * 100)
                 }
-                // 3. 超时检查（Phase 4+ 实现在 DeliveryManager.checkTimeout）
             } catch (e: Exception) {
                 if (!closed.load()) {
                     log.error{"QueueReader error: ${e.message}"}

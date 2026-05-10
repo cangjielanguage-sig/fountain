@@ -211,6 +211,7 @@ public class ReplicationManager {
                 log.warn{"master ${masterId} did not respond to SLAVEOF"}
                 closeConn(conn)
                 this.masterConn = None
+                this.isSyncing = false
                 false
             }
         } catch (e: Exception) {
@@ -219,6 +220,7 @@ public class ReplicationManager {
                 if (!c.isClosed()) { c.close() }
             }
             this.masterConn = None
+            this.isSyncing = false
             false
         }
     }

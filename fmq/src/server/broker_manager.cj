@@ -16,7 +16,8 @@ limitations under the License.
 package fountain::fmq.server
 
 import fountain::f_protocol.default.{Message as ProtocolMessage, EncodedMessage}
-import std.collection.HashMap
+import std.collection.concurrent.ConcurrentHashMap
+import std.sync.AtomicBool
 
 /**
  * 节点健康信息。
@@ -44,8 +45,8 @@ public class NodeHealth {
 public class BrokerManager {
     private let config: MqConfig
     private let log = LoggerFactory.getLogger('fountain::fmq.BrokerManager')
-    private var closed: Bool = false
-    private let nodes = HashMap<String, NodeHealth>()  // "host:port" → NodeHealth
+    private let closed = AtomicBool(false)
+    private let nodes = ConcurrentHashMap<String, NodeHealth>()  // "host:port" → NodeHealth
     private var heartbeatThread: ?Future<Unit> = None
 
     public init(config: MqConfig) {
@@ -68,7 +69,7 @@ public class BrokerManager {
         if (heartbeatThread.isSome()) { return }
         let selfRef = this
         heartbeatThread = spawn {
-            while (!selfRef.closed) {
+            while (!selfRef.closed.load()) {
                 for ((key, nh) in selfRef.nodes) {
                     selfRef.pingNode(nh)
                 }
@@ -111,7 +112,7 @@ public class BrokerManager {
     }
 
     public func close(): Unit {
-        closed = true
+        closed.store(true)
         if (let Some(f) <- heartbeatThread) {
             f.get()
         }
@@ -121,7 +122,7 @@ public class BrokerManager {
      * ping 单个节点。连接并发送 PING，超时 3 秒。
      */
     private func pingNode(nh: NodeHealth): Unit {
-        if (closed) { return }
+        if (closed.load()) { return }
         var conn: ?Client<ProtocolMessage, EncodedMessage, ProtocolMessage, MqBody, MessageID> = None
         try {
             let c = Client<ProtocolMessage, EncodedMessage, ProtocolMessage, MqBody, MessageID>.builder(
