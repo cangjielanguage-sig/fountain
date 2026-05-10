@@ -131,8 +131,7 @@ public class DeliveryManager {
         let expired = ArrayList<DeliveryRecord>()
         for ((_, record) in records) {
             if (record.acked) { continue }
-            let elapsed = DateTime.now() - record.deliverTime
-            // Duration 通过对比实现超时检查
+            let elapsed = now - record.deliverTime
             if (elapsed > Duration.millisecond * timeoutMs) {
                 expired.add(record)
             }
