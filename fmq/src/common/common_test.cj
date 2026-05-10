@@ -62,6 +62,17 @@ public class TopicTest {
 }
 
 @Test
+public class ProtocolHelperTest {
+    @TestCase
+    public func testEncodePublish(): Unit {
+        let labels = ArrayList<String>()
+        labels.add("urgent")
+        let msg = encodePublish("/test", labels, [0x01u8, 0x02u8])
+        @Assert(msg.command.value >> 4 == 3)  // PUBLISH
+    }
+}
+
+@Test
 public class MqBodyTest {
     @TestCase
     public func testRoundtrip(): Unit {

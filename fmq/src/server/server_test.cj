@@ -17,6 +17,9 @@ package fountain::fmq.server
 
 import std.unittest.*
 import std.unittest.testmacro.*
+import fountain::f_codec.default.DefaultCodec
+import fountain::f_data.base.*
+import std.io.{InputStream, SeekPosition}
 
 @Test
 public class QueueDistributionTest {
@@ -258,3 +261,53 @@ public class DeadLetterStoreTest {
         @Assert(after.size == 0)
     }
 }
+
+@Test
+public class TopicManagerTest {
+    @TestCase
+    public func testCreateAndDelete(): Unit {
+        let config = configWithHosts()
+        let tm = TopicManager(config)
+        @Assert(tm.createTopic("/test", queueCount: 2) == MqErrorCode.SUCCESS)
+        @Assert(tm.createTopic("/test") == MqErrorCode.TOPIC_EXISTS)
+        @Assert(tm.deleteTopic("/test") == MqErrorCode.SUCCESS)
+        @Assert(tm.deleteTopic("/test") == MqErrorCode.TOPIC_NOT_FOUND)
+    }
+
+    @TestCase
+    public func testListTopics(): Unit {
+        let tm = TopicManager(configWithHosts())
+        tm.createTopic("/a")
+        tm.createTopic("/b")
+        let list = tm.listTopics()
+        @Assert(list.size == 2)
+    }
+
+    @TestCase
+    public func testAddAndRemoveConsumerGroup(): Unit {
+        let tm = TopicManager(configWithHosts())
+        tm.createTopic("/test")
+        @Assert(tm.addConsumerGroup("/test", "group1") == MqErrorCode.SUCCESS)
+        let meta = tm.getTopicMeta("/test")
+        if (let Some(m) <- meta) {
+            @Assert(m.getConsumerGroups().size == 1)
+        }
+        @Assert(tm.removeConsumerGroup("/test", "group1") == MqErrorCode.SUCCESS)
+    }
+
+    private static func configWithHosts(): MqConfig {
+        let hosts = ArrayList<String>()
+        hosts.add("node1:7201")
+        MqConfig(
+            mqHosts: hosts, syncHosts: ArrayList(),
+            dataDir: "/tmp/fmq_tm_test", segmentMaxSize: 1024,
+            heartbeatIntervalSec: 5, healthcheckMaxRetry: 3,
+            idleTimeoutMinutes: 30, ackTimeoutMs: 30000,
+            maxRetryCount: 3, retryIntervalMs: 1000,
+            dlqRetentionHours: 168, maxMessageSize: 4096,
+            maxLabelsPerMessage: 64, retentionHours: 72,
+            syncQuorum: 1
+        )
+    }
+}
+

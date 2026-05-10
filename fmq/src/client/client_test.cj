@@ -137,6 +137,33 @@ public class ConsumerHelperTest {
     }
 }
 
+@Test
+public class ProduceBatchTest {
+    @TestCase
+    public func testEncodeRoundtrip(): Unit {
+        let topic = "/batch-test"
+        let messages = ArrayList<(ArrayList<String>, Array<Byte>)>()
+        let labels1 = ArrayList<String>()
+        labels1.add("a")
+        messages.add((labels1, [0x01u8]))
+        let labels2 = ArrayList<String>()
+        labels2.add("b")
+        messages.add((labels2, [0x02u8, 0x03u8]))
+
+        let encoded = ProduceCodec.encode(topic, messages[0][0], messages[0][1])
+        if (let Some((t, ls, data)) <- ProduceCodec.decode(encoded)) {
+            @Assert(t == topic)
+            @Assert(ls.size == 1)
+            @Assert(ls[0] == "a")
+            @Assert(data.size == 1)
+        }
+    }
+}
+
+/**
+ * 无 Server 连接测试：验证编码/解码逻辑，不实际发送。
+ */
+
 /**
  * 无 SyncRegistryTest：需要真实的 MQ 服务端连接。
  */
