@@ -97,9 +97,10 @@ public class CommandExecutor {
                 }
                 let queue = queues[0]
 
-                // 4. 写入 SegmentedLog
+                // 4. 写入 SegmentedLog + 推入读管道
                 queue.append(msgData)
                 queue.sync()
+                queue.deliveryBuffer.add(msgData)
 
                 log.debug{"produced to ${topic}, size=${msgData.size}"}
                 ProtocolMessage(Command.RESP(0), request.id, MqBody("ack", []).toData())
