@@ -215,10 +215,11 @@ public class CommandExecutor {
                         if (consumed.size < batchSize) {
                             if (let Some(framed) <- q.tryReadFromLog(offset)) {
                                 // 解码 framed entry，提取 labels 和 payload
-                                let labels = if (let Some((_, ls, _)) <- ProduceCodec.decode(framed)) { ls }
-                                    else { ArrayList<String>() }
-                                let payload = if (let Some((_, _, p)) <- ProduceCodec.decode(framed)) { p }
-                                    else { framed }
+                                let (labels, payload) = if (let Some((_, ls, p)) <- ProduceCodec.decode(framed)) {
+                                    (ls, p)
+                                } else {
+                                    (ArrayList<String>(), framed)
+                                }
                                 let deliveryId = "${topic}:${q.index}:${groupId}:${offset}"
                                 deliveryManager.recordDelivery(deliveryId, groupId, groupId)
                                 consumed.add((deliveryId, labels, payload))

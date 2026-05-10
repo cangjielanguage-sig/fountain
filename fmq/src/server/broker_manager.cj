@@ -136,8 +136,11 @@ public class BrokerManager {
             let req = ProtocolMessage(Command.PING(0), MessageID(),
                 MqBody("ping", []).toData())
             let resp = c.transfer(req.id, req, Duration.second * 3)
-            c.close()
-            conn = None
+            try {
+                c.close()
+            } finally {
+                conn = None
+            }
             if (resp.isSome()) {
                 nh.lastSeen = DateTime.now()
                 if (!nh.isAlive) {

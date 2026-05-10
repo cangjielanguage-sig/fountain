@@ -18,7 +18,7 @@ package fountain::fmq.server
 import fountain::f_io.{SegmentedLog, LogConfig, LogPosition}
 import fountain::f_codec.default.DefaultCodec
 import std.io.{ByteBuffer, SeekPosition}
-import std.sync.Mutex
+import std.sync.{Mutex, AtomicBool}
 
 /**
  * 单个消息队列。
@@ -31,10 +31,10 @@ public class MqQueue <: Resource & ToString {
     let log: SegmentedLog
     let deadLetter: DeadLetterStore
     private let logPath: String
-    private var closed: Bool = false
+    private let closed = AtomicBool(false)
     var draining: Bool = false
     private var logStream: ?InputStream = None  // SegmentedLog 流式游标
-    private let streamLock = Mutex()  // 保护 logStream 延迟初始化和关闭
+    private let streamLock = Mutex()  // 保护 logStream 延迟初始化和关闭、log.close()
 
     public init(topic: String, index: Int64, dataDir: String, segmentSize: Int64) {
         this.topic = topic
@@ -58,14 +58,11 @@ public class MqQueue <: Resource & ToString {
      */
     public func append(data: Array<Byte>): LogPosition {
         if (draining) { throw MqException("queue is draining") }
-        if (closed) { throw MqException("queue is closed") }
+        if (closed.load()) { throw MqException("queue is closed") }
         let buf = ByteBuffer()
         DefaultCodec().encode(data)
             .finish().copy(to: buf, closeFromOnEnd: true, closeToOnEnd: false)
-        let size = buf.seek(SeekPosition.End(0))
-        buf.seek(SeekPosition.Begin(0))
-        let framed = Array<Byte>(Int64(size), repeat: 0u8)
-        buf.read(framed)
+        let framed = extractBytes(buf)
         log.append(framed)
     }
 
@@ -76,7 +73,7 @@ public class MqQueue <: Resource & ToString {
      * @param skip 跳过的已消费消息数（offset），首次读取时用于跳过历史消息
      */
     public func tryReadFromLog(skip: Int64): ?Array<Byte> {
-        if (closed) { return None }
+        if (closed.load()) { return None }
         try {
             let dec = DefaultCodec()
             let stream: InputStream
@@ -103,23 +100,32 @@ public class MqQueue <: Resource & ToString {
                 }
                 None
             }
-        } catch (_: Exception) { None }
+        } catch (_: Exception) {
+            // P1-8: 异常时清理损坏的流，防止无限重试循环
+            synchronized(streamLock) {
+                if (let Some(s) <- logStream) {
+                    if (let r: Resource <- s) { r.close() }
+                    logStream = None
+                }
+            }
+            None
+        }
     }
 
     public func close(): Unit {
-        if (closed) { return }
-        closed = true
+        if (closed.load()) { return }
+        closed.store(true)
         draining = false
         synchronized(streamLock) {
             if (let Some(s) <- logStream) {
                 if (let r: Resource <- s) { r.close() }
                 logStream = None
             }
+            log.close()  // 在 streamLock 内关闭，防止 use-after-close 竞争
         }
-        log.close()
     }
 
-    public func isClosed(): Bool { closed }
+    public func isClosed(): Bool { closed.load() }
 
     public func tryFinishDrain(): Bool {
         if (!draining) { return true }
