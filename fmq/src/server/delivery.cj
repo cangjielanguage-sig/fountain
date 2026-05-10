@@ -99,14 +99,14 @@ public class DeliveryManager {
 
     /**
      * ACK 处理。
-     * 返回 true 表示已确认（存在且未之前确认过）。
+     * 按 (topic, queueIndex, groupId) 查找最早未确认的投递记录。
+     * 返回 true 表示已确认。
      */
     public func onAck(messageId: String, topic: String, queueIndex: Int64): Bool {
         if (let Some(record) <- records.get(messageId)) {
             if (record.acked) { return false }
             record.acked = true
             records.remove(messageId)
-            // 推进 offset
             let offsetKey = offsetKeyFor(topic, queueIndex, serverId, record.groupId)
             let current = offsets.get(offsetKey) ?? 0
             offsets[offsetKey] = current + 1

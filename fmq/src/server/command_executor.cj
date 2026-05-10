@@ -207,22 +207,21 @@ public class CommandExecutor {
                 && let Some(groupId) <- dec.decode<String>(buf)
                 && let Some(batchSize) <- dec.decode<Int64>(buf)) {
                 if (let Some(queues) <- queueManager.getQueues(topic)) {
-                    var consumed = ArrayList<Array<Byte>>()
+                    var consumed = ArrayList<(String, Array<Byte>)>()  // (deliveryId, data)
                     for (q in queues) {
                         let offset = deliveryManager.getOffset(topic, q.index, groupId)
                         if (consumed.size < batchSize) {
-                            // 从 SegmentedLog 流式读取，跳过 offset 条已消费消息
                             if (let Some(data) <- q.tryReadFromLog(offset)) {
-                                deliveryManager.recordDelivery(
-                                    "${topic}:${q.index}:${offset}", groupId, groupId)
-                                consumed.add(data)
+                                let deliveryId = "${topic}:${q.index}:${groupId}:${offset}"
+                                deliveryManager.recordDelivery(deliveryId, groupId, groupId)
+                                consumed.add((deliveryId, data))
                             }
                         }
                     }
                     let consumedCount = consumed.size
                     log.info{"consumed ${consumedCount} msgs from ${topic}"}
                     ProtocolMessage(Command.RESP(0), request.id,
-                        MqBody("consume", encodeMessageList(consumed)).toData())
+                        MqBody("consume", encodeMessageListWithIds(consumed)).toData())
                 } else {
                     errorResp(request.id, "no queues for topic=${topic}")
                 }
@@ -616,6 +615,20 @@ public class CommandExecutor {
             .encode(msgs.size)
         for (m in msgs) {
             enc.encode(m)
+        }
+        enc.finish().copy(to: buf, closeFromOnEnd: true, closeToOnEnd: false)
+        extractBytes(buf)
+    }
+
+    /**
+     * 编码带 ID 的消息列表。格式：count + (deliveryId + data)*N
+     */
+    private static func encodeMessageListWithIds(msgs: ArrayList<(String, Array<Byte>)>): Array<Byte> {
+        let buf = ByteBuffer()
+        let enc = DefaultCodec()
+            .encode(msgs.size)
+        for ((id, data) in msgs) {
+            enc.encode(id).encode(data)
         }
         enc.finish().copy(to: buf, closeFromOnEnd: true, closeToOnEnd: false)
         extractBytes(buf)

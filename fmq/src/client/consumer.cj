@@ -96,17 +96,16 @@ public class Consumer {
      * @param topic 所属 topic
      * @param queueIndex 所属队列索引
      */
-    public func ack(messageId: MessageID, topic: String, queueIndex: Int64): Bool {
-        let idStr = messageIdToStr(messageId)
-        let payload = encodeAckPayload(idStr, topic, queueIndex)
+    public func ack(msgId: String, topic: String, queueIndex: Int64): Bool {
+        let payload = encodeAckPayload(msgId, topic, queueIndex)
         let req = ProtocolMessage(Command.ACK, MessageID(),
             MqBody("ack", payload).toData())
         let resp = client.transfer(req.id, req, Duration.second * 10)
         if (resp.isSome()) {
-            log.debug{"acked ${idStr}"}
+            log.debug{"acked ${msgId}"}
             true
         } else {
-            log.warn{"ack failed for ${idStr}"}
+            log.warn{"ack failed for ${msgId}"}
             false
         }
     }
@@ -115,13 +114,13 @@ public class Consumer {
      * 批量确认消息。
      * 合并为单次 ACK 命令，bodyType="batch_ack"。
      */
-    public func ackBatch(acks: ArrayList<(MessageID, String, Int64)>): Bool {
+    public func ackBatch(acks: ArrayList<(String, String, Int64)>): Bool {
         // 编码批量 ACK
         let buf = ByteBuffer()
         let enc = DefaultCodec()
             .encode(acks.size)
         for ((msgId, topic, queueIndex) in acks) {
-            enc.encode(messageIdToStr(msgId)).encode(topic).encode(queueIndex)
+            enc.encode(msgId).encode(topic).encode(queueIndex)
         }
         enc.finish().copy(to: buf, closeFromOnEnd: true, closeToOnEnd: false)
         let raw = extractBytes(buf)
@@ -165,9 +164,6 @@ public class Consumer {
         result
     }
 
-    private static func messageIdToStr(id: MessageID): String {
-        "${id.pid}:${id.tid}"
-    }
 
 }
 

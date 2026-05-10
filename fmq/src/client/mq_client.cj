@@ -111,11 +111,11 @@ public class MqClient <: Resource {
         consumer.poll<T>(timeout)
     }
 
-    public func ack(messageId: MessageID, topic: String, queueIndex: Int64): Bool {
-        consumer.ack(messageId, topic, queueIndex)
+    public func ack(msgId: String, topic: String, queueIndex: Int64): Bool {
+        consumer.ack(msgId, topic, queueIndex)
     }
 
-    public func ackBatch(acks: ArrayList<(MessageID, String, Int64)>): Bool {
+    public func ackBatch(acks: ArrayList<(String, String, Int64)>): Bool {
         consumer.ackBatch(acks)
     }
 
