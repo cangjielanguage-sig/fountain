@@ -54,6 +54,47 @@ public class QueueDistributionTest {
 }
 
 @Test
+public class QueueManagerConcurrencyTest {
+    @TestCase
+    public func testConcurrentCreateAndListTopics(): Unit {
+        let config = concurrentTestConfig()
+        let qm = QueueManager(config, nodeIndex: 0)
+
+        let futures = ArrayList<Future<Unit>>()
+        for (i in 0..10) {
+            let topic = "/concurrent-topic-${i}"
+            futures.add(spawn {
+                qm.createQueues(topic, 3)
+                let qs = qm.getQueues(topic)
+                qm.listTopics()
+            })
+        }
+        for (f in futures) { f.get() }
+
+        for (i in 0..10) {
+            let topic = "/concurrent-topic-${i}"
+            @Assert(qm.getQueues(topic).isSome())
+        }
+    }
+
+    private static func concurrentTestConfig(): MqConfig {
+        let hosts = ArrayList<String>()
+        hosts.add("node1:7201")
+        hosts.add("node2:7201")
+        MqConfig(
+            mqHosts: hosts, syncHosts: ArrayList(),
+            dataDir: "/tmp/fmq_test", segmentMaxSize: 1024,
+            heartbeatIntervalSec: 5, healthcheckMaxRetry: 3,
+            idleTimeoutMinutes: 30, ackTimeoutMs: 30000,
+            maxRetryCount: 3, retryIntervalMs: 1000,
+            dlqRetentionHours: 168, maxMessageSize: 4096,
+            maxLabelsPerMessage: 64, retentionHours: 72,
+            syncQuorum: 1
+        )
+    }
+}
+
+@Test
 public class ReassignTest {
     @TestCase
     public func testReassignCreatesQueuesLocally(): Unit {

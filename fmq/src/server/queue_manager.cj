@@ -15,7 +15,8 @@ limitations under the License.
  */
 package fountain::fmq.server
 
-import std.collection.HashMap
+import std.collection.concurrent.ConcurrentHashMap
+import std.sync.Mutex
 import fountain::f_util.crc64
 
 /**
@@ -25,9 +26,10 @@ import fountain::f_util.crc64
 public class QueueManager {
     private let config: MqConfig
     private let log = LoggerFactory.getLogger('fountain::fmq.QueueManager')
-    private let queues = HashMap<String, ArrayList<Queue>>()  // topic → [Queue]
+    private let queues = ConcurrentHashMap<String, ArrayList<Queue>>()  // topic → [Queue]
     private var replicationManager: Option<ReplicationManager> = None
     private let nodeIndex: Int64
+    private let lock = Mutex()
 
     public init(config: MqConfig, nodeIndex!: Int64 = 0) {
         this.config = config
@@ -55,7 +57,9 @@ public class QueueManager {
                 topicQueues.add(q)
             }
         }
-        queues[topic] = topicQueues
+        synchronized(lock) {
+            queues[topic] = topicQueues
+        }
         log.info{"created ${topicQueues.size} queues for topic ${topic} (node ${nodeIndex})"}
         topicQueues
     }
@@ -64,19 +68,29 @@ public class QueueManager {
      * 销毁主题的所有队列。
      */
     public func destroyQueues(topic: String): Unit {
-        if (let Some(topicQueues) <- queues.get(topic)) {
-            for (q in topicQueues) {
+        let topicQueues: ?ArrayList<Queue>
+        synchronized(lock) {
+            topicQueues = queues.get(topic)
+            queues.remove(topic)
+        }
+        if (let Some(qs) <- topicQueues) {
+            for (q in qs) {
                 if (!q.isClosed()) { q.close() }
             }
-            queues.remove(topic)
         }
     }
 
     /**
-     * 获取指定主题的队列列表。
+     * 获取指定主题的队列列表（防御性拷贝，多线程安全）。
      */
     public func getQueues(topic: String): ?ArrayList<Queue> {
-        queues.get(topic)
+        synchronized(lock) {
+            if (let Some(qs) <- queues.get(topic)) {
+                let copy = ArrayList<Queue>()
+                for (q in qs) { copy.add(q) }
+                Some(copy)
+            } else { None }
+        }
     }
 
     /**
@@ -84,8 +98,10 @@ public class QueueManager {
      */
     public func listTopics(): ArrayList<String> {
         let result = ArrayList<String>()
-        for ((topic, _) in queues) {
-            result.add(topic)
+        synchronized(lock) {
+            for ((topic, _) in queues) {
+                result.add(topic)
+            }
         }
         result
     }
@@ -94,10 +110,12 @@ public class QueueManager {
      * 获取指定 topic + index 的队列。
      */
     public func getQueue(topic: String, index: Int64): ?Queue {
-        if (let Some(qs) <- queues.get(topic)) {
-            for (q in qs) {
-                if (q.index == index) {
-                    return Some(q)
+        synchronized(lock) {
+            if (let Some(qs) <- queues.get(topic)) {
+                for (q in qs) {
+                    if (q.index == index) {
+                        return Some(q)
+                    }
                 }
             }
         }
@@ -121,20 +139,22 @@ public class QueueManager {
      */
     public func reassign(failedNode: Int64): ArrayList<(String, Int64)> {
         let reassigned = ArrayList<(String, Int64)>()
-        for ((topic, topicQueues) in queues) {
-            let localIndices = ArrayList<Int64>()
-            for (q in topicQueues) {
-                localIndices.add(q.index)
-            }
-            let maxIndex = topicQueues.size + config.mqHosts.size
-            for (i in 0..maxIndex) {
-                let owner = distribute(topic, i, config.mqHosts.size)
-                if (owner == failedNode && !localIndices.contains(i)) {
-                    let q = Queue(topic, i, config.dataDir, config.segmentMaxSize)
-                    topicQueues.add(q)
-                    localIndices.add(i)
-                    reassigned.add((topic, i))
-                    log.warn{"reassign ${topic}[${i}] from node ${failedNode} to node ${nodeIndex}"}
+        synchronized(lock) {
+            for ((topic, topicQueues) in queues) {
+                let localIndices = ArrayList<Int64>()
+                for (q in topicQueues) {
+                    localIndices.add(q.index)
+                }
+                let maxIndex = topicQueues.size + config.mqHosts.size
+                for (i in 0..maxIndex) {
+                    let owner = distribute(topic, i, config.mqHosts.size)
+                    if (owner == failedNode && !localIndices.contains(i)) {
+                        let q = Queue(topic, i, config.dataDir, config.segmentMaxSize)
+                        topicQueues.add(q)
+                        localIndices.add(i)
+                        reassigned.add((topic, i))
+                        log.warn{"reassign ${topic}[${i}] from node ${failedNode} to node ${nodeIndex}"}
+                    }
                 }
             }
         }
@@ -151,13 +171,15 @@ public class QueueManager {
      */
     public func unreassign(restoredNode: Int64): ArrayList<(String, Int64)> {
         let returned = ArrayList<(String, Int64)>()
-        for ((topic, topicQueues) in queues) {
-            for (q in topicQueues) {
-                let owner = distribute(topic, q.index, config.mqHosts.size)
-                if (owner == restoredNode && !q.draining) {
-                    q.draining = true
-                    returned.add((topic, q.index))
-                    log.info{"unreassign ${topic}[${q.index}]: drain mode"}
+        synchronized(lock) {
+            for ((topic, topicQueues) in queues) {
+                for (q in topicQueues) {
+                    let owner = distribute(topic, q.index, config.mqHosts.size)
+                    if (owner == restoredNode && !q.draining) {
+                        q.draining = true
+                        returned.add((topic, q.index))
+                        log.info{"unreassign ${topic}[${q.index}]: drain mode"}
+                    }
                 }
             }
         }
@@ -172,15 +194,17 @@ public class QueueManager {
      * 由外部定时器或 CONSUME 后调用。
      */
     public func drainCompleteCheck(): Unit {
-        for ((topic, topicQueues) in queues) {
-            var i: Int64 = 0
-            while (i < topicQueues.size) {
-                let q = topicQueues[i]
-                if (q.draining && q.tryFinishDrain()) {
-                    log.info{"drain complete: ${topic}[${q.index}], removed from node ${nodeIndex}"}
-                    topicQueues.remove(at: i)
-                } else {
-                    i += 1
+        synchronized(lock) {
+            for ((topic, topicQueues) in queues) {
+                var i: Int64 = 0
+                while (i < topicQueues.size) {
+                    let q = topicQueues[i]
+                    if (q.draining && q.tryFinishDrain()) {
+                        log.info{"drain complete: ${topic}[${q.index}], removed from node ${nodeIndex}"}
+                        topicQueues.remove(at: i)
+                    } else {
+                        i += 1
+                    }
                 }
             }
         }
@@ -195,7 +219,14 @@ public class QueueManager {
      */
     public func startAll(): Unit {
         let rm = if (let Some(ref) <- replicationManager) { ref } else { return }
-        for ((_, topicQueues) in queues) {
+        let snapshot: ArrayList<(String, ArrayList<Queue>)>
+        synchronized(lock) {
+            snapshot = ArrayList<(String, ArrayList<Queue>)>()
+            for ((topic, topicQueues) in queues) {
+                snapshot.add((topic, topicQueues))
+            }
+        }
+        for ((_, topicQueues) in snapshot) {
             for (q in topicQueues) {
                 let writer = QueueWriter(q, replicationManager: rm, queueSize: 1024)
                 let reader = QueueReader(q)
@@ -206,10 +237,15 @@ public class QueueManager {
     }
 
     public func close(): Unit {
-        for ((_, topicQueues) in queues) {
-            for (q in topicQueues) {
-                if (!q.isClosed()) { q.close() }
+        let allQueues: ArrayList<Queue>
+        synchronized(lock) {
+            allQueues = ArrayList<Queue>()
+            for ((_, topicQueues) in queues) {
+                for (q in topicQueues) { allQueues.add(q) }
             }
+        }
+        for (q in allQueues) {
+            if (!q.isClosed()) { q.close() }
         }
     }
 }
