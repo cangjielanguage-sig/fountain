@@ -31,6 +31,21 @@ public class ConsumerMatcher {
 
     public func register(registration: ConsumerRegistration): Unit {
         synchronized(mutex) {
+            // 查找是否已存在相同 consumerId 的注册
+            for (i in 0..registrations.size) {
+                if (registrations[i].consumerId == registration.consumerId) {
+                    // 更新已有注册（保留其 consumerId/groupId，刷新其他字段）
+                    let existing = registrations[i]
+                    registrations[i] = ConsumerRegistration(
+                        consumerId: existing.consumerId,
+                        groupId: existing.groupId,
+                        matchModeStr: registration.matchModeStr,
+                        labels: registration.labels,
+                        dataFilter: registration.dataFilter,
+                        lastHeartbeat: registration.lastHeartbeat)
+                    return
+                }
+            }
             registrations.add(registration)
         }
     }
@@ -86,7 +101,7 @@ public class ConsumerMatcher {
             }
         }
         for ((groupId, consumers) in groups) {
-            let index = rrSnapshot.get(groupId) ?? 0
+            let index = (rrSnapshot.get(groupId) ?? 0) % consumers.size
             let selected = consumers[index]
             result[groupId] = selected.consumerId
             rrSnapshot[groupId] = (index + 1) % consumers.size

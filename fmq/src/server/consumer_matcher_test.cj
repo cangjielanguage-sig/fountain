@@ -98,4 +98,57 @@ public class ConsumerMatcherUnsubscribeTest {
         @Assert(!ok)
         @Assert(matcher.matchTopic("/b/1").size == 1)
     }
+
+    @TestCase
+    public func testDuplicateRegisterNoDuplicates(): Unit {
+        let matcher = ConsumerMatcher()
+        let reg1 = ConsumerRegistration(
+            consumerId: "dup-consumer", groupId: "dup-group",
+            matchModeStr: "Exact:/dup",
+            labels: None, dataFilter: None,
+            lastHeartbeat: DateTime.now())
+        matcher.register(reg1)
+
+        // 相同 consumerId 再次注册
+        let reg2 = ConsumerRegistration(
+            consumerId: "dup-consumer", groupId: "dup-group",
+            matchModeStr: "Exact:/dup",
+            labels: None, dataFilter: None,
+            lastHeartbeat: DateTime.now())
+        matcher.register(reg2)
+
+        // matchTopic 应只匹配到一个消费者
+        @Assert(matcher.matchTopic("/dup").size == 1)
+
+        // deregister 一次后应完全清空
+        matcher.deregister("dup-group", "dup-consumer")
+        @Assert(matcher.matchTopic("/dup").size == 0)
+    }
+
+    @TestCase
+    public func testDuplicateRegisterDifferentConsumerId(): Unit {
+        let matcher = ConsumerMatcher()
+        let reg1 = ConsumerRegistration(
+            consumerId: "consumer-X", groupId: "same-group",
+            matchModeStr: "Exact:/multi",
+            labels: None, dataFilter: None,
+            lastHeartbeat: DateTime.now())
+        matcher.register(reg1)
+
+        let reg2 = ConsumerRegistration(
+            consumerId: "consumer-Y", groupId: "same-group",
+            matchModeStr: "Exact:/multi",
+            labels: None, dataFilter: None,
+            lastHeartbeat: DateTime.now())
+        matcher.register(reg2)
+
+        // 同一组不同 consumerId → matchTopic 按 group 去重，size=1
+        @Assert(matcher.matchTopic("/multi").size == 1)
+
+        // 分别注销
+        matcher.deregister("same-group", "consumer-X")
+        @Assert(matcher.matchTopic("/multi").size == 1)
+        matcher.deregister("same-group", "consumer-Y")
+        @Assert(matcher.matchTopic("/multi").size == 0)
+    }
 }
