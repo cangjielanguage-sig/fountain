@@ -18,7 +18,7 @@ package fountain::fmq.common
 import fountain::f_data.macros.*
 
 /**
- * 主题元数据，存储在 fsync /mq/topic/<topic>。
+ * 主题元数据，存储在 fleet /mq/topic/<topic>。
  */
 @DataAssist[props fields]
 public class TopicMeta {
@@ -44,7 +44,7 @@ public class TopicMeta {
 }
 
 /**
- * 消费者注册信息，存储在 fsync /mq/consumes。
+ * 消费者注册信息，存储在 fleet /mq/consumes。
  */
 @DataAssist[props fields]
 public class ConsumerRegistration {
@@ -95,7 +95,7 @@ public class ConsumerRegistration {
 }
 
 /**
- * Broker 节点信息，存储在 fsync /mq/brokers/<nodeId>。
+ * Broker 节点信息，存储在 fleet /mq/brokers/<nodeId>。
  */
 @DataAssist[props fields]
 public class BrokerMeta {
@@ -117,7 +117,7 @@ public enum CompressionType {
 }
 
 /**
- * MQ 消息（内部表示，非 fsync 存储）。
+ * MQ 消息（内部表示，非 fleet 存储）。
  */
 public struct Message {
     public Message(

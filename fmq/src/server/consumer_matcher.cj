@@ -53,7 +53,7 @@ public class ConsumerMatcher {
     /**
      * 刷新消费者注册缓存。
      * Phase 7: 清理心跳超时的消费者（超时 = heartbeatIntervalSec × healthcheckMaxRetry）。
-     * Phase 8: 从 fsync /mq/consumes 加载。
+     * Phase 8: 从 fleet /mq/consumes 加载。
      */
     public func refresh(): Unit {
         let timeoutDuration = Duration.second * 5 * 3  // 5s × 3 = 15s 超时
