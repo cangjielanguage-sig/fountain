@@ -686,11 +686,4 @@ public class CommandExecutor {
         }
     }
 
-    private static func extractBytes(buf: ByteBuffer): Array<Byte> {
-        let size = buf.seek(SeekPosition.End(0))
-        buf.seek(SeekPosition.Begin(0))
-        let raw = Array<Byte>(Int64(size), repeat: 0u8)
-        buf.read(raw)
-        raw
-    }
 }

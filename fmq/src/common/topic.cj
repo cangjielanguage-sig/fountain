@@ -25,9 +25,12 @@ package fountain::fmq.common
 public func validateTopic(topic: String): Bool {
     if (topic.isEmpty()) { return false }
     if (!topic.startsWith("/")) { return false }
-    for (ch in topic.toRuneArray()) {
-        if (ch == r'/' || ch == r'_' || ch == r'-' || ch == r'.') { continue }
-        if ((ch >= r'0' && ch <= r'9') || (ch >= r'a' && ch <= r'z') || (ch >= r'A' && ch <= r'Z')) { continue }
+    for (i in 0..topic.size) {
+        let ch = topic[i]
+        if (ch >= 0x30u8 && ch <= 0x39u8) { continue }  // 0-9
+        if (ch >= 0x41u8 && ch <= 0x5Au8) { continue }  // A-Z
+        if (ch >= 0x61u8 && ch <= 0x7Au8) { continue }  // a-z
+        if (ch == 0x2Fu8 || ch == 0x5Fu8 || ch == 0x2Du8 || ch == 0x2Eu8) { continue }  // / _ - .
         return false
     }
     true

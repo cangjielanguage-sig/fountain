@@ -78,6 +78,17 @@ public func encodeAck(msgId: String, topic: String, queueIndex: Int64): Protocol
 
 // ───── 内部工具 ─────
 
+/**
+ * 从 ByteBuffer 提取全部字节。公共工具函数，消除各模块重复定义。
+ */
+public func extractBytes(buf: ByteBuffer): Array<Byte> {
+    let size = buf.seek(SeekPosition.End(0))
+    buf.seek(SeekPosition.Begin(0))
+    let raw = Array<Byte>(Int64(size), repeat: 0u8)
+    buf.read(raw)
+    raw
+}
+
 private func encodeProduceBytes(topic: String, labels: ArrayList<String>, payload: Array<Byte>): Array<Byte> {
     let buf = ByteBuffer()
     let enc = DefaultCodec()
@@ -107,10 +118,3 @@ private func matchModeTopic(mode: MatchMode): String {
     }
 }
 
-private func extractBytes(buf: ByteBuffer): Array<Byte> {
-    let size = buf.seek(SeekPosition.End(0))
-    buf.seek(SeekPosition.Begin(0))
-    let raw = Array<Byte>(Int64(size), repeat: 0u8)
-    buf.read(raw)
-    raw
-}
