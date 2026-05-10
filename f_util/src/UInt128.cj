@@ -50,9 +50,9 @@ public struct UInt128 <: ToString & Hashable & Comparable<UInt128> & DataParsabl
     public func toBytes(): Array<Byte> {
         Array<Byte>(16) {
             i => if (i < 8) {
-                UInt8(left >> ((7 - i) * 8))
+                UInt8((left >> ((7 - i) * 8)) & 0xFFu64)
             } else {
-                UInt8(right >> ((15 - i) * 8))
+                UInt8((right >> ((15 - i) * 8)) & 0xFFu64)
             }
         }
     }

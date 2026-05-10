@@ -17,7 +17,6 @@ package fountain::fmq.server
 
 import std.unittest.*
 import std.unittest.testmacro.*
-import fountain::f_protocol.default.{Message as ProtocolMessage, EncodedMessage}
 
 /**
  * 冒烟测试：验证服务端能正常启动和停止。
@@ -26,7 +25,7 @@ import fountain::f_protocol.default.{Message as ProtocolMessage, EncodedMessage}
 public class SmokeTest {
     @TestCase
     public func testServerStarts(): Unit {
-        let port: UInt16 = 18001u16
+        let port: UInt16 = 18302u16
         let server = MqServer(bindPort: port)
         let executor = CommandExecutor(
             TopicManager(testConfig()), QueueManager(testConfig()),
