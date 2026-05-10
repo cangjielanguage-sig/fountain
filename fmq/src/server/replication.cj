@@ -17,6 +17,7 @@ package fountain::fmq.server
 
 import std.collection.HashMap
 import std.io.{ByteBuffer, SeekPosition}
+import std.sync.Mutex
 import fountain::f_codec.default.DefaultCodec
 import fountain::f_protocol.default.{Message as ProtocolMessage, EncodedMessage}
 
@@ -52,6 +53,7 @@ public class ReplicationManager {
 
     // Master 侧管理的 Slave
     private let slaves = HashMap<String, SlaveProgress>()
+    private let slavesMutex = Mutex()
 
     // Slave 侧到 Master 的连接
     private var masterConn: ?Client<ProtocolMessage, EncodedMessage, ProtocolMessage, MqBody, MessageID> = None
@@ -79,17 +81,21 @@ public class ReplicationManager {
             log.warn{"reject SLAVEOF from ${nodeId}: not master"}
             return false
         }
-        if (!slaves.contains(nodeId)) {
-            slaves[nodeId] = SlaveProgress(nodeId)
-            log.info{"slave ${nodeId} registered"}
+        synchronized(slavesMutex) {
+            if (!slaves.contains(nodeId)) {
+                slaves[nodeId] = SlaveProgress(nodeId)
+                log.info{"slave ${nodeId} registered"}
+            }
         }
         true
     }
 
     public func getSlaves(): ArrayList<SlaveProgress> {
         let result = ArrayList<SlaveProgress>()
-        for ((_, slave) in slaves) {
-            result.add(slave)
+        synchronized(slavesMutex) {
+            for ((_, slave) in slaves) {
+                result.add(slave)
+            }
         }
         result
     }

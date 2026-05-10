@@ -16,95 +16,87 @@ limitations under the License.
 package fountain::fmq.server
 
 import std.collection.HashMap
+import std.sync.Mutex
 
 /**
  * 消费者匹配器。
  * 从本地缓存获取消费者注册信息，按 topic 模式匹配，同组 Round-Robin 选择。
+ * 所有公共方法通过 Mutex 保证并发安全。
  */
 public class ConsumerMatcher {
     private let log = LoggerFactory.getLogger('fountain::fmq.ConsumerMatcher')
     private var registrations = ArrayList<ConsumerRegistration>()
     private var roundRobinIndex = HashMap<String, Int64>()  // groupId → next index
+    private let mutex = Mutex()
 
-    /**
-     * 注册消费者。
-     * Phase 6: 本地缓存 + 持久化到 fleet /mq/consumes。
-     */
     public func register(registration: ConsumerRegistration): Unit {
-        registrations.add(registration)
-        log.info{"registered consumer ${registration.consumerId} in group ${registration.groupId}"}
+        synchronized(mutex) {
+            registrations.add(registration)
+        }
     }
 
-    /**
-     * 注销消费者。
-     */
     public func deregister(groupId: String, consumerId: String): Bool {
-        let before = registrations.size
-        let remaining = ArrayList<ConsumerRegistration>()
-        for (r in registrations) {
-            if (!(r.groupId == groupId && r.consumerId == consumerId)) {
-                remaining.add(r)
-            }
-        }
-        registrations = remaining
-        registrations.size < before
-    }
-
-    /**
-     * 刷新消费者注册缓存。
-     * Phase 7: 清理心跳超时的消费者（超时 = heartbeatIntervalSec × healthcheckMaxRetry）。
-     * Phase 8: 从 fleet /mq/consumes 加载。
-     */
-    public func refresh(): Unit {
-        let timeoutDuration = Duration.second * 5 * 3  // 5s × 3 = 15s 超时
-        let now = DateTime.now()
-        let remaining = ArrayList<ConsumerRegistration>()
-        for (r in registrations) {
-            if (now - r.lastHeartbeat < timeoutDuration) {
-                remaining.add(r)
-            } else {
-                log.debug{"removed stale registration: ${r.consumerId}"}
-            }
-        }
-        registrations = remaining
-    }
-
-    /**
-     * 匹配消费者。
-     * 输入：消息 topic
-     * 输出：map[groupId → consumerId]
-     */
-    public func matchTopic(topic: String): HashMap<String, String> {
-        let result = HashMap<String, String>()
-
-        // 按消费者组分组
-        let groups = HashMap<String, ArrayList<ConsumerRegistration>>()
-        for (reg in registrations) {
-            if (matchesTopic(reg.getMatchMode(), topic)) {
-                let list = if (let Some(g) <- groups.get(reg.groupId)) {
-                    g
-                } else {
-                    let g = ArrayList<ConsumerRegistration>()
-                    groups[reg.groupId] = g
-                    g
+        let result: Bool
+        synchronized(mutex) {
+            let remaining = ArrayList<ConsumerRegistration>()
+            for (r in registrations) {
+                if (!(r.groupId == groupId && r.consumerId == consumerId)) {
+                    remaining.add(r)
                 }
-                list.add(reg)
             }
-        }
-
-        // 每组 Round-Robin 选一个
-        for ((groupId, consumers) in groups) {
-            let index = roundRobinIndex.get(groupId) ?? 0
-            let selected = consumers[index]
-            result[groupId] = selected.consumerId
-            roundRobinIndex[groupId] = (index + 1) % consumers.size
+            result = remaining.size < registrations.size
+            registrations = remaining
         }
         result
     }
 
+    public func refresh(): Unit {
+        let timeoutDuration = Duration.second * 5 * 3
+        let now = DateTime.now()
+        synchronized(mutex) {
+            let remaining = ArrayList<ConsumerRegistration>()
+            for (r in registrations) {
+                if (now - r.lastHeartbeat < timeoutDuration) {
+                    remaining.add(r)
+                }
+            }
+            registrations = remaining
+        }
+    }
+
     /**
-     * 匹配 topic 与 MatchMode。
+     * 匹配消费者。通过快照方式读取，减少锁持有时间。
      */
+    public func matchTopic(topic: String): HashMap<String, String> {
+        let snapshot: ArrayList<ConsumerRegistration>
+        let rrSnapshot: HashMap<String, Int64>
+        synchronized(mutex) {
+            snapshot = ArrayList<ConsumerRegistration>()
+            for (r in registrations) { snapshot.add(r) }
+            rrSnapshot = HashMap<String, Int64>()
+            for ((k, v) in roundRobinIndex) { rrSnapshot[k] = v }
+        }
+        let result = HashMap<String, String>()
+        let groups = HashMap<String, ArrayList<ConsumerRegistration>>()
+        for (reg in snapshot) {
+            if (matchesTopic(reg.getMatchMode(), topic)) {
+                let list = if (let Some(g) <- groups.get(reg.groupId)) { g }
+                    else { let g = ArrayList<ConsumerRegistration>(); groups[reg.groupId] = g; g }
+                list.add(reg)
+            }
+        }
+        for ((groupId, consumers) in groups) {
+            let index = rrSnapshot.get(groupId) ?? 0
+            let selected = consumers[index]
+            result[groupId] = selected.consumerId
+            rrSnapshot[groupId] = (index + 1) % consumers.size
+        }
+        synchronized(mutex) {
+            for ((k, v) in rrSnapshot) { roundRobinIndex[k] = v }
+        }
+        result
+    }
+
     private func matchesTopic(mode: MatchMode, topic: String): Bool {
         match (mode) {
             case Exact(pattern) => pattern == topic
@@ -113,9 +105,6 @@ public class ConsumerMatcher {
         }
     }
 
-    /**
-     * PathPattern glob 匹配。
-     */
     private func globMatches(pattern: String, topic: String): Bool {
         let pp = PathPattern()
         pp.compile(pattern)

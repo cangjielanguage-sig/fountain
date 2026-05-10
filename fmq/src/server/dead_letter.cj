@@ -17,6 +17,7 @@ package fountain::fmq.server
 
 import std.collection.HashMap
 import std.io.{ByteBuffer, SeekPosition}
+import std.sync.Mutex
 import fountain::f_codec.default.DefaultCodec
 import fountain::f_io.{SegmentedLog, LogConfig}
 
@@ -32,6 +33,7 @@ public class DeadLetterStore {
     private let log = LoggerFactory.getLogger('fountain::fmq.DeadLetterStore')
     // 内存索引：messageId → (topic, queueIndex, data)
     private let index = HashMap<String, (String, Int64, Array<Byte>)>()
+    private let mutex = Mutex()
 
     public init(queueDir: String, retentionHours!: Int64 = 168) {
         this.dlqDir = "${queueDir}/dlq"
@@ -50,7 +52,7 @@ public class DeadLetterStore {
         let entry = encodeDlqEntry(messageId, topic, queueIndex, data)
         dlqLog.append(entry)
         dlqLog.sync()
-        index[messageId] = (topic, queueIndex, data)
+        synchronized(mutex) { index[messageId] = (topic, queueIndex, data) }
         log.warn{"dead letter: ${messageId}"}
     }
 
@@ -59,9 +61,11 @@ public class DeadLetterStore {
      */
     public func list(topic: String, queueIndex: Int64): ArrayList<(String, Array<Byte>)> {
         let result = ArrayList<(String, Array<Byte>)>()
-        for ((msgId, (t, qi, data)) in index) {
-            if (t == topic && qi == queueIndex) {
-                result.add((msgId, data))
+        synchronized(mutex) {
+            for ((msgId, (t, qi, data)) in index) {
+                if (t == topic && qi == queueIndex) {
+                    result.add((msgId, data))
+                }
             }
         }
         result
@@ -71,17 +75,15 @@ public class DeadLetterStore {
      * 重投单条死信。从索引删除，返回消息体。
      */
     public func redeliver(topic: String, queueIndex: Int64, messageId: String): ?Array<Byte> {
-        if (let Some((t, qi, data)) <- index.get(messageId)) {
-            if (t == topic && qi == queueIndex) {
-                index.remove(messageId)
-                log.info{"redelivered: ${messageId}"}
-                Some(data)
-            } else {
-                None
+        synchronized(mutex) {
+            if (let Some((t, qi, data)) <- index.get(messageId)) {
+                if (t == topic && qi == queueIndex) {
+                    index.remove(messageId)
+                    return Some(data)
+                }
             }
-        } else {
-            None
         }
+        None
     }
 
     /**
@@ -89,14 +91,20 @@ public class DeadLetterStore {
      */
     public func redeliverAll(topic: String, queueIndex: Int64): ArrayList<Array<Byte>> {
         let result = ArrayList<Array<Byte>>()
-        // 需要收集 key 避免遍历时修改
         let keys = ArrayList<String>()
-        for ((msgId, _) in index) {
-            keys.add(msgId)
-        }
-        for (msgId in keys) {
-            if (let Some(d) <- redeliver(topic, queueIndex, msgId)) {
-                result.add(d)
+        synchronized(mutex) {
+            for ((msgId, (t, qi, _)) in index) {
+                if (t == topic && qi == queueIndex) {
+                    keys.add(msgId)
+                }
+            }
+            for (msgId in keys) {
+                if (let Some((t, qi, data)) <- index.get(msgId)) {
+                    if (t == topic && qi == queueIndex) {
+                        index.remove(msgId)
+                        result.add(data)
+                    }
+                }
             }
         }
         result
@@ -122,7 +130,9 @@ public class DeadLetterStore {
                 && let Some(topic) <- dec.decode<String>(stream)
                 && let Some(qi) <- dec.decode<Int64>(stream)
                 && let Some(data) <- dec.decode<Array<Byte>>(stream)) {
-                index[msgId] = (topic, qi, data)
+                synchronized(mutex) {
+                    index[msgId] = (topic, qi, data)
+                }
                 count += 1
             } else {
                 break
