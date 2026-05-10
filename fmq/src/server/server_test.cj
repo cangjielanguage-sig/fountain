@@ -270,6 +270,35 @@ public class DeliverySimpleTest {
 }
 
 @Test
+public class DeliveryRecordOverwriteTest {
+    @TestCase
+    public func testRecordDeliveryNoOverwrite(): Unit {
+        let config = deliveryTestConfig()
+        let dm = DeliveryManager(config)
+
+        let first = dm.recordDelivery("msg1", "consumer-A", "group-A")
+        @Assert(first.groupId == "group-A")
+
+        let second = dm.recordDelivery("msg1", "consumer-B", "group-B")
+        @Assert(second.groupId == "group-A")
+        @Assert(second.consumerId == "consumer-A")
+    }
+
+    private static func deliveryTestConfig(): MqConfig {
+        MqConfig(
+            mqHosts: ArrayList(), syncHosts: ArrayList(),
+            dataDir: "/tmp", segmentMaxSize: 1024,
+            heartbeatIntervalSec: 5, healthcheckMaxRetry: 3,
+            idleTimeoutMinutes: 30, ackTimeoutMs: 30000,
+            maxRetryCount: 3, retryIntervalMs: 1000,
+            dlqRetentionHours: 168, maxMessageSize: 4096,
+            maxLabelsPerMessage: 64, retentionHours: 72,
+            syncQuorum: 1
+        )
+    }
+}
+
+@Test
 public class DeadLetterStoreTest {
     @TestCase
     public func testAppendAndList(): Unit {

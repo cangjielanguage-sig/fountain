@@ -91,12 +91,16 @@ public class DeliveryManager {
     }
 
     /**
-     * 记录投递。
+     * 记录投递。若 messageId 已存在则不覆盖（防止丢失 ACK 状态）。
      */
     public func recordDelivery(messageId: String, consumerId: String, groupId: String): DeliveryRecord {
-        let record = DeliveryRecord(messageId, consumerId, groupId, DateTime.now())
-        records[messageId] = record
-        record
+        if (let Some(existing) <- records.get(messageId)) {
+            existing
+        } else {
+            let record = DeliveryRecord(messageId, consumerId, groupId, DateTime.now())
+            records[messageId] = record
+            record
+        }
     }
 
     /**
