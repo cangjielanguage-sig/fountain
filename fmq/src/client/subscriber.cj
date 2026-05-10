@@ -17,7 +17,7 @@ package fountain::fmq.client
 
 import fountain::f_protocol.default.{Message as ProtocolMessage, EncodedMessage}
 import fountain::f_codec.default.DefaultCodec
-import std.io.{ByteBuffer, SeekPosition}
+import std.io.ByteBuffer
 
 /**
  * 订阅管理器。
@@ -120,10 +120,7 @@ public class Subscriber {
             .encode(consumerId)
             .finish()
         enc.copy(to: buf, closeFromOnEnd: true, closeToOnEnd: false)
-        let size = buf.seek(SeekPosition.End(0))
-        buf.seek(SeekPosition.Begin(0))
-        let raw = Array<Byte>(Int64(size), repeat: 0u8)
-        buf.read(raw)
+        let raw = extractBytes(buf)
 
         let req = ProtocolMessage(Command.DEREGISTER, MessageID(),
             MqBody("deregister", raw).toData())
@@ -147,10 +144,7 @@ public class Subscriber {
             .encode(modeToString(mode))
             .finish()
         enc.copy(to: buf, closeFromOnEnd: true, closeToOnEnd: false)
-        let size = buf.seek(SeekPosition.End(0))
-        buf.seek(SeekPosition.Begin(0))
-        let raw = Array<Byte>(Int64(size), repeat: 0u8)
-        buf.read(raw)
+        let raw = extractBytes(buf)
         raw
     }
 
@@ -161,10 +155,7 @@ public class Subscriber {
             .encode(mode)
             .finish()
         enc.copy(to: buf, closeFromOnEnd: true, closeToOnEnd: false)
-        let size = buf.seek(SeekPosition.End(0))
-        buf.seek(SeekPosition.Begin(0))
-        let raw = Array<Byte>(Int64(size), repeat: 0u8)
-        buf.read(raw)
+        let raw = extractBytes(buf)
         raw
     }
 

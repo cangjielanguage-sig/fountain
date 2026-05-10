@@ -78,14 +78,6 @@ public class ConsumerRegistration {
 
     public func getGroupId(): String { groupId }
 
-    private static func encodeMatchMode(mode: MatchMode): String {
-        match (mode) {
-            case Exact(p) => "Exact:${p}"
-            case Glob(p) => "Glob:${p}"
-            case Prefix(p) => "Prefix:${p}"
-        }
-    }
-
     private static func decodeMatchMode(s: String): MatchMode {
         if (s.startsWith("Exact:")) { MatchMode.Exact(s[6..]) }
         else if (s.startsWith("Glob:")) { MatchMode.Glob(s[5..]) }

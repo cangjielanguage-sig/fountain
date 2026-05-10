@@ -17,7 +17,7 @@ package fountain::fmq.client
 
 import fountain::f_protocol.default.{Message as ProtocolMessage, EncodedMessage}
 import fountain::f_codec.default.DefaultCodec
-import std.io.{ByteBuffer, SeekPosition}
+import std.io.ByteBuffer
 
 /**
  * 消息发送器。
@@ -63,10 +63,7 @@ public class Sender {
             enc.encode(data)
         }
         enc.finish().copy(to: buf, closeFromOnEnd: true, closeToOnEnd: false)
-        let size = buf.seek(SeekPosition.End(0))
-        buf.seek(SeekPosition.Begin(0))
-        let raw = Array<Byte>(Int64(size), repeat: 0u8)
-        buf.read(raw)
+        let raw = extractBytes(buf)
 
         let body = MqBody("batch_produce", raw)
         let req = ProtocolMessage(Command.PUBLISH(0), MessageID(), body.toData())
