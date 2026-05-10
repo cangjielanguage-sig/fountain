@@ -162,7 +162,39 @@ public class ProduceBatchTest {
 
 /**
  * 无 Server 连接测试：验证编码/解码逻辑，不实际发送。
+ * 验证 deregister 请求的 DefaultCodec 编码与服务器 handleDeregister 解码匹配。
  */
+@Test
+public class DeregisterPayloadTest {
+    @TestCase
+    public func testDeregisterPayloadRoundtrip(): Unit {
+        let groupId = "my-group"
+        let consumerId = "consumer-123"
+
+        // 客户端编码（与 Subscriber.deregister 的编码方式一致）
+        let buf = ByteBuffer()
+        let enc = DefaultCodec()
+            .encode(groupId)
+            .encode(consumerId)
+            .finish()
+        enc.copy(to: buf, closeFromOnEnd: true, closeToOnEnd: false)
+        let size = buf.seek(SeekPosition.End(0))
+        buf.seek(SeekPosition.Begin(0))
+        let raw = Array<Byte>(Int64(size), repeat: 0u8)
+        buf.read(raw)
+
+        // 服务端解码（与 CommandExecutor.handleDeregister 的解码方式一致）
+        let dec = DefaultCodec()
+        let decBuf = ByteBuffer(raw)
+        if (let Some(g) <- dec.decode<String>(decBuf)
+            && let Some(c) <- dec.decode<String>(decBuf)) {
+            @Assert(g == groupId)
+            @Assert(c == consumerId)
+        } else {
+            @Assert(false)
+        }
+    }
+}
 
 /**
  * 无 SyncRegistryTest：需要真实的 MQ 服务端连接。

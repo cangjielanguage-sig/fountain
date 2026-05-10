@@ -19,12 +19,9 @@ import fountain::f_protocol.default.{Message as ProtocolMessage, EncodedMessage}
 import fountain::f_codec.default.DefaultCodec
 import std.io.{ByteBuffer, SeekPosition}
 
-import fountain::f_protocol.default.{Message as ProtocolMessage, EncodedMessage}
-import std.io.{ByteBuffer, SeekPosition}
-
 /**
  * 订阅管理器。
- * 向 MQ 服务端发送 REGISTER / SUBSCRIBE / UNSUBSCRIBE 命令。
+ * 向 MQ 服务端发送 REGISTER / SUBSCRIBE / UNSUBSCRIBE / DEREGISTER 命令。
  */
 public class Subscriber {
     private let config: MqConfig
@@ -109,6 +106,35 @@ public class Subscriber {
             copy.add(s)
         }
         copy
+    }
+
+    /**
+     * 注销消费者身份。
+     * 发送 DEREGISTER 命令移除指定 groupId 下的 consumerId。
+     * 与 REGISTER 配套使用，UNSUBSCRIBE 不能替代 DEREGISTER。
+     */
+    public func deregister(groupId: String, consumerId: String): Bool {
+        let buf = ByteBuffer()
+        let enc = DefaultCodec()
+            .encode(groupId)
+            .encode(consumerId)
+            .finish()
+        enc.copy(to: buf, closeFromOnEnd: true, closeToOnEnd: false)
+        let size = buf.seek(SeekPosition.End(0))
+        buf.seek(SeekPosition.Begin(0))
+        let raw = Array<Byte>(Int64(size), repeat: 0u8)
+        buf.read(raw)
+
+        let req = ProtocolMessage(Command.DEREGISTER, MessageID(),
+            MqBody("deregister", raw).toData())
+        let resp = client.transfer(req.id, req, Duration.second * 10)
+        if (resp.isSome()) {
+            log.info{"deregistered group=${groupId} consumer=${consumerId}"}
+            true
+        } else {
+            log.warn{"deregister failed for group=${groupId}"}
+            false
+        }
     }
 
     // ───── 编码工具 ─────

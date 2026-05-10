@@ -105,6 +105,10 @@ public class MqClient <: Resource {
         subscriber.unsubscribe(groupId, matchMode)
     }
 
+    public func deregister(groupId: String, consumerId: String): Bool {
+        subscriber.deregister(groupId, consumerId)
+    }
+
     // ───── 消费 API ─────
 
     public func poll<T>(timeout: Duration): ?Message where T <: DataFields<T> {
