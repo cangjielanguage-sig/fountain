@@ -111,6 +111,9 @@ public class MqCommand <: SubCommand {
         queueManager.startAll()
 
         server.start({ msg => executor.execute(msg) })
+        // 启动消息过期清理线程
+        let cleaner = QueueCleaner(config, queueManager)
+        spawn { cleaner.run() }
         let brokerManager = BrokerManager(config)
         brokerManager.startHeartbeat()
 
@@ -118,6 +121,7 @@ public class MqCommand <: SubCommand {
         while (true) {
             sleep(Duration.second * 60)
         }
+        cleaner.close()
         brokerManager.close()
         queueManager.close()
         server.close()

@@ -80,6 +80,17 @@ public class QueueManager {
     }
 
     /**
+     * 列出所有主题名。
+     */
+    public func listTopics(): ArrayList<String> {
+        let result = ArrayList<String>()
+        for ((topic, _) in queues) {
+            result.add(topic)
+        }
+        result
+    }
+
+    /**
      * 获取指定 topic + index 的队列。
      */
     public func getQueue(topic: String, index: Int64): ?Queue {
