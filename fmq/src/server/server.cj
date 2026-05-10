@@ -94,6 +94,8 @@ public class MqCommand <: SubCommand {
         // 从 fleet 恢复持久化状态
         topicManager.restore()
         deliveryManager.restoreOffsets()
+        // 消费者组管理器
+        let groupManager = ConsumerGroupManager(topicManager, consumerMatcher, deliveryManager)
 
         // 为主题创建队列
         for (name in topicManager.listTopics()) {
