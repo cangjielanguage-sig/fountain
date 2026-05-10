@@ -80,6 +80,7 @@ public struct Server<DE, EN, M, T> <: Resource where EN <: MessageCopier, M <: P
         ServerBuilder<DE, EN, M, T>(queueSize, checkDuration, checker, bindAt)
     }
     public func start(executor: (DE) -> M): Unit {
+        server.bind()
         while (let socket <- server.accept()) {
             params.populate(socket)
             let buffer = SocketBuffer(queueSize, socket)
