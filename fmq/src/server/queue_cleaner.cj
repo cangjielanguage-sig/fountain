@@ -97,7 +97,7 @@ public class QueueCleaner {
      * 检查文件是否超过保留期。
      * metadata() 不存在的文件视为过期（可删除）。
      */
-    private static func isFileExpired(path: String, threshold: DateTime): Bool {
+    internal static func isFileExpired(path: String, threshold: DateTime): Bool {
         try {
             let info = FileInfo(path)
             info.lastModificationTime < threshold
