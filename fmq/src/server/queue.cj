@@ -29,9 +29,7 @@ public class Queue <: Resource & ToString {
     let topic: String
     let index: Int64
     let log: SegmentedLog
-    let retryBuffer: ArrayList<RetryEntry> = ArrayList()
     let deadLetter: DeadLetterStore
-    var onServers: ArrayList<String> = ArrayList()
     private let logPath: String
     private var closed: Bool = false
     var draining: Bool = false
@@ -137,16 +135,4 @@ public class Queue <: Resource & ToString {
     }
 
     public func toString(): String { "Queue(${topic}[${index}])" }
-}
-
-public class RetryEntry {
-    let logPosition: LogPosition
-    let data: Array<Byte>
-    var retryCount: Int64
-
-    public init(logPosition: LogPosition, data: Array<Byte>, retryCount!: Int64 = 0) {
-        this.logPosition = logPosition
-        this.data = data
-        this.retryCount = retryCount
-    }
 }
