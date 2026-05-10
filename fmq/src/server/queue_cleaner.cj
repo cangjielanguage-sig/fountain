@@ -15,7 +15,7 @@ limitations under the License.
  */
 package fountain::fmq.server
 
-import std.fs.{File, OpenMode, remove}
+import std.fs.{File, OpenMode, remove, FileInfo}
 import std.sync.AtomicBool
 
 /**
@@ -24,8 +24,8 @@ import std.sync.AtomicBool
  * 每个队列至少保留最后 1 个文件。当前活跃文件不删。
  *
  * 清理间隔：每 5 分钟。
- * 保留策略：删除已轮转的旧文件，保留最后 1 个。
- * 未来可按 mq_retention_hours 基于文件 mtime 过滤。
+ * 保留策略：按 config.retentionHours 基于文件 mtime 过滤，
+ * 至少保留 1 个已轮转文件防止重复创建。
  */
 public class QueueCleaner {
     private let config: MqConfig
@@ -53,24 +53,35 @@ public class QueueCleaner {
     }
 
     /**
-     * 单次清理：遍历所有队列，删除已轮转的旧文件（保留最后 1 个）。
+     * 单次清理：遍历所有队列，删除超过保留期的已轮转文件（保留最后 1 个）。
+     * retentionHours=0 时跳过所有文件（不清理）。
      */
     public func cleanup(): Unit {
+        let retentionThreshold = if (config.retentionHours > 0) {
+            DateTime.now() - Duration.hour * config.retentionHours
+        } else {
+            // retentionHours=0 无限保留
+            return
+        }
         var deletedCount: Int64 = 0
         for (topic in queueManager.listTopics()) {
             if (let Some(queues) <- queueManager.getQueues(topic)) {
                 for (q in queues) {
                     if (q.isClosed()) { continue }
                     let oldFiles = q.log.takeOldFiles()
-                    // 至少保留最后 1 个文件
-                    if (oldFiles.size > 1) {
-                        for (i in 0..oldFiles.size - 1) {
-                            try {
-                                remove(oldFiles[i])
+                    var remaining = 1  // 至少保留最后 1 个文件
+                    for (f in oldFiles) {
+                        if (remaining > 0) {
+                            remaining -= 1
+                            continue
+                        }
+                        try {
+                            if (isFileExpired(f, retentionThreshold)) {
+                                remove(f)
                                 deletedCount += 1
-                            } catch (e: Exception) {
-                                log.warn{"delete ${oldFiles[i]} failed: ${e.message}"}
                             }
+                        } catch (e: Exception) {
+                            log.warn{"check/delete ${f} failed: ${e.message}"}
                         }
                     }
                 }
@@ -78,7 +89,18 @@ public class QueueCleaner {
         }
         if (deletedCount > 0) {
             let count = deletedCount
-            log.info{"cleanup: deleted ${count} rotated segment files"}
+            log.info{"cleanup: deleted ${count} expired segment files"}
         }
+    }
+
+    /**
+     * 检查文件是否超过保留期。
+     * metadata() 不存在的文件视为过期（可删除）。
+     */
+    private static func isFileExpired(path: String, threshold: DateTime): Bool {
+        try {
+            let info = FileInfo(path)
+            info.lastModificationTime < threshold
+        } catch (_: Exception) { true }
     }
 }
