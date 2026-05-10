@@ -252,6 +252,9 @@ public class SocketBuilder<DE, EN, M, T, ID> where EN <: MessageCopier, M <: Pro
             Array<TcpSocket>(socketCount) {_ => newSocket()})
     }
     func newSocket() {
-        TcpSocket(host, port) |> params.populate
+        let s = TcpSocket(host, port)
+        params.populate(s)
+        s.connect()
+        s
     }
 }

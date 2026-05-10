@@ -79,6 +79,7 @@ public class MqIntegrationTest {
             // 尝试连接，连接成功即表示服务端已就绪
             try {
                 let testSock = TcpSocket(TEST_HOST, port)
+                testSock.connect(timeout: Duration.second * 1)
                 testSock.close()
                 return (server, port)
             } catch (_: Exception) {
