@@ -64,16 +64,13 @@ public class DefaultCodec <: Codec {
     public static func registerType<T>(): UInt128 where T <: Object & ObjectData<T> & DataFields<T> {
         let typeInfo = ClassTypeInfo.of<T>()
         let typeMurmur = typeMurmurHashs.computeIfAbsent(typeInfo) {murmurHash(typeInfo.qualifiedName)}
-        let option = typeMurmurCreators.addIfAbsent(typeMurmur, {
+        typeMurmurCreators.addIfAbsent(typeMurmur, {
             => if (let o: T <- T.dataFields().create() && let x: SimpleDataObject <- o.toData()) {
                 x
             } else {
                 throw UnreachableException()
             }
         })
-        if (option.isSome()) {
-            throw CodecException('duplicate murmur hash ${typeMurmur} for ${typeInfo}')
-        }
         typeMurmur
     }
 
@@ -120,9 +117,10 @@ public class DefaultCodec <: Codec {
                 let typeMurmur = typeMurmurHashs.computeIfAbsent(typeInfo) {
                     murmurHash(typeInfo.qualifiedName)
                 }
-                if (typeMurmurCreators.addIfAbsent(typeMurmur, x.dataCreator()).isSome()) {
-                    throw CodecException('duplicate murmur hash ${typeMurmur} for ${typeInfo}')
-                }
+                // 注册创建者（同一个类型反复编码是正常的，addIfAbsent 不会覆盖）
+                typeMurmurCreators.addIfAbsent(typeMurmur, x.dataCreator())
+                // 注：真正的 murmur 哈希碰撞（两个不同类型相同 128b 哈希）理论上
+                // 会使用先注册的类型创建者，概率极低，暂不处理
                 encodeBytes(OBJECT, typeMurmur.toBytes(), buffer)
                 let sizeBuf = encodeSizeOfEncoded(x.size)
                 buffer.write(sizeBuf)

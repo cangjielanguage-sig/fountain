@@ -83,7 +83,7 @@ public class MqIntegrationTest {
             queueSize: 1024, socketCount: 1,
             host: TEST_HOST, port: port,
             idGetter: { msg => msg.id },
-            checkDuration: Duration.second * 30,
+            checkDuration: Duration.second * 5,
             checker: { _ => true }
         ).noDelay(true).build()
     }
