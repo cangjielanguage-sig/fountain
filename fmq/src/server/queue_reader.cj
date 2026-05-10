@@ -41,7 +41,7 @@ public class QueueReader {
         while (!closed) {
             try {
                 // 1. 从 SegmentedLog 流式读取（O(1) 内存）
-                if (let Some(data) <- queue.tryReadFromLog()) {
+                if (let Some(data) <- queue.tryReadFromLog(0)) {
                     // 2. ConsumerMatcher.matchTopic 获取目标消费者（占位）
                     log.debug{"read ${data.size} bytes from log for ${queue}"}
                 } else {

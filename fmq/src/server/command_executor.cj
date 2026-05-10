@@ -172,8 +172,8 @@ public class CommandExecutor {
                     for (q in queues) {
                         let offset = deliveryManager.getOffset(topic, q.index, groupId)
                         if (consumed.size < batchSize) {
-                            // 从 SegmentedLog 流式读取（O(1) 内存，不缓冲）
-                            if (let Some(data) <- q.tryReadFromLog()) {
+                            // 从 SegmentedLog 流式读取，跳过 offset 条已消费消息
+                            if (let Some(data) <- q.tryReadFromLog(offset)) {
                                 deliveryManager.recordDelivery(
                                     "${topic}:${q.index}:${offset}", groupId, groupId)
                                 consumed.add(data)

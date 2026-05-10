@@ -73,17 +73,23 @@ public class Queue <: Resource & ToString {
 
     /**
      * 从 SegmentedLog 流式读取下一条消息。
-     * 使用游标逐条读取，不缓冲，内存 O(1)。
+     * @param skip 跳过的已消费消息数（offset），首次读取时用于跳过历史消息
      */
-    public func tryReadFromLog(): ?Array<Byte> {
+    public func tryReadFromLog(skip: Int64): ?Array<Byte> {
         if (closed) { return None }
         try {
+            let dec = DefaultCodec()
             let stream = if (let Some(s) <- logStream) { s } else {
                 let s = log.openEntryStream()
+                // 首次打开流时，跳过历史消息
+                var remaining = skip
+                while (remaining > 0) {
+                    if (dec.decode<Array<Byte>>(s).isNone()) { break }
+                    remaining -= 1
+                }
                 logStream = s
                 s
             }
-            let dec = DefaultCodec()
             if (let Some(entry) <- dec.decode<Array<Byte>>(stream)) {
                 Some(entry)
             } else {
