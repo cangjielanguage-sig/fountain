@@ -35,17 +35,53 @@ public func validateTopic(topic: String): Bool {
 
 /**
  * 将 topic 路径编码为文件系统安全名称。
- * '/' → '_'，其余字符不变。
- * 如 "/order/create" → "_order_create"
+ * 使用转义编码避免 _ 歧义：
+ *   '/' → '_'（单个下划线）
+ *   '_' → '__'（双下划线）
+ *
+ * 示例：
+ *   "/order/create" → "_order_create"
+ *   "/a_b"         → "_a__b"
  */
 public func encodeTopicToPath(topic: String): String {
-    topic.replace("/", "_")
+    var result = ""
+    for (ch in topic.toRuneArray()) {
+        if (ch == r'_') {
+            result += "__"
+        } else if (ch == r'/') {
+            result += "_"
+        } else {
+            result += ch.toString()
+        }
+    }
+    result
 }
 
 /**
  * 将编码后的路径名解码为 topic。
- * '_' → '/'，其余字符不变。
+ * 解码顺序：先 '__' → '_'，再单 '_' → '/'。
+ *
+ * 示例：
+ *   "_order_create" → "/order/create"
+ *   "_a__b"        → "/a_b"
  */
 public func decodePathToTopic(path: String): String {
-    path.replace("_", "/")
+    var result = ""
+    var i = 0
+    while (i < path.size) {
+        let ch = path[i]
+        if (ch == 0x5Fu8) {  // '_'
+            if (i + 1 < path.size && path[i + 1] == 0x5Fu8) {
+                result += "_"
+                i += 2
+            } else {
+                result += "/"
+                i += 1
+            }
+        } else {
+            result += Rune(ch).toString()
+            i += 1
+        }
+    }
+    result
 }

@@ -45,6 +45,22 @@ public class TopicTest {
     }
 
     @TestCase
+    public func testEncodeDecodeWithUnderscore(): Unit {
+        let topic = "/a_b/c_d"
+        let encoded = encodeTopicToPath(topic)
+        @Assert(encoded == "_a__b_c__d")  // _ in topic becomes __
+        @Assert(decodePathToTopic(encoded) == topic)
+    }
+
+    @TestCase
+    public func testEncodeDecodeDoubleUnderscore(): Unit {
+        let topic = "/a__b"
+        let encoded = encodeTopicToPath(topic)
+        @Assert(encoded == "_a____b")  // __ becomes ____
+        @Assert(decodePathToTopic(encoded) == topic)
+    }
+
+    @TestCase
     public func testConfigLoad(): Unit {
         let config = loadConfig()
         @Assert(config.dataDir == "/var/fmq/data/")
