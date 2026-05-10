@@ -16,6 +16,8 @@ limitations under the License.
 package fountain::fmq.client
 
 import fountain::f_protocol.default.{Message as ProtocolMessage, EncodedMessage}
+import fountain::f_codec.default.DefaultCodec
+import std.io.{ByteBuffer, SeekPosition}
 
 /**
  * 消息发送器。
@@ -48,12 +50,38 @@ public class Sender {
 
     /**
      * 批量生产消息。
-     * 依次编码并发送每条消息，收集所有结果后返回。
+     * 合并为单次 PUBLISH 命令，bodyType="batch_produce"。
      */
     public func produceBatch(topic: String, messages: ArrayList<(ArrayList<String>, Array<Byte>)>): ArrayList<ProduceResult> {
-        let results = ArrayList<ProduceResult>()
+        // 编码所有消息
+        let buf = ByteBuffer()
+        let enc = DefaultCodec()
+            .encode(messages.size)
         for ((labels, data) in messages) {
-            results.add(produce(topic, labels, data))
+            enc.encode(topic).encode(labels.size)
+            for (l in labels) { enc.encode(l) }
+            enc.encode(data)
+        }
+        enc.finish().copy(to: buf, closeFromOnEnd: true, closeToOnEnd: false)
+        let size = buf.seek(SeekPosition.End(0))
+        buf.seek(SeekPosition.Begin(0))
+        let raw = Array<Byte>(Int64(size), repeat: 0u8)
+        buf.read(raw)
+
+        let body = MqBody("batch_produce", raw)
+        let req = ProtocolMessage(Command.PUBLISH(0), MessageID(), body.toData())
+        let resp = client.transfer(req.id, req, Duration.second * 30)
+
+        // 为每个消息生成 ProduceResult（简化：全部成功或全部失败）
+        let results = ArrayList<ProduceResult>()
+        if (resp.isSome()) {
+            for (_ in 0..messages.size) {
+                results.add(ProduceResult(messageId: req.id))
+            }
+        } else {
+            for (_ in 0..messages.size) {
+                results.add(ProduceResult())
+            }
         }
         results
     }

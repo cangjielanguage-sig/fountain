@@ -75,39 +75,78 @@ public class CommandExecutor {
      * 4. 返回 RESP
      */
     private func handleProduce(request: ProtocolMessage): ProtocolMessage {
-        // 1. 解码请求体
         if (let Some(body) <- convert<MqBody>(request.data)) {
-            if (body.bodyType != "produce") {
-                return errorResp(request.id, "unexpected body type: ${body.bodyType}")
-            }
-            if (let Some((topic, labels, msgData)) <- ProduceCodec.decode(body.payload)) {
-                // 2. 校验 topic
-                if (!validateTopic(topic)) {
-                    return errorResp(request.id, "invalid topic: ${topic}")
-                }
-
-                // 3. 路由到队列（复用已有的或创建新的）
-                let queues = if (let Some(qs) <- queueManager.getQueues(topic)) {
-                    qs
-                } else {
-                    queueManager.createQueues(topic, 1)
-                }
-                if (queues.size == 0) {
-                    return errorResp(request.id, "no queue available for topic=${topic}")
-                }
-                let queue = queues[0]
-
-                // 4. 写入 SegmentedLog（持久化）
-                queue.append(msgData)
-                queue.sync()
-
-                log.debug{"produced to ${topic}, size=${msgData.size}"}
-                ProtocolMessage(Command.RESP(0), request.id, MqBody("ack", []).toData())
+            if (body.bodyType == "produce") {
+                return handleSingleProduce(request, body)
+            } else if (body.bodyType == "batch_produce") {
+                return handleBatchProduce(request, body)
             } else {
-                errorResp(request.id, "failed to decode produce payload")
+                return errorResp(request.id, "unexpected body type: ${body.bodyType}")
             }
         } else {
             errorResp(request.id, "failed to decode request body")
+        }
+    }
+
+    /**
+     * 处理单条消息生产。
+     */
+    private func handleSingleProduce(request: ProtocolMessage, body: MqBody): ProtocolMessage {
+        if (let Some((topic, labels, msgData)) <- ProduceCodec.decode(body.payload)) {
+            if (!validateTopic(topic)) {
+                return errorResp(request.id, "invalid topic: ${topic}")
+            }
+            let queues = if (let Some(qs) <- queueManager.getQueues(topic)) { qs }
+                else { queueManager.createQueues(topic, 1) }
+            if (queues.size == 0) {
+                return errorResp(request.id, "no queue available for topic=${topic}")
+            }
+            queues[0].append(msgData)
+            queues[0].sync()
+            log.debug{"produced to ${topic}, size=${msgData.size}"}
+            ProtocolMessage(Command.RESP(0), request.id, MqBody("ack", []).toData())
+        } else {
+            errorResp(request.id, "failed to decode produce payload")
+        }
+    }
+
+    /**
+     * 处理批量消息生产。
+     * body payload 格式：count + (topic + labelsCount + label*N + data)*N
+     */
+    private func handleBatchProduce(request: ProtocolMessage, body: MqBody): ProtocolMessage {
+        let buf = ByteBuffer(body.payload)
+        let dec = DefaultCodec()
+        if (let Some(count) <- dec.decode<Int64>(buf)) {
+            var ok: Int64 = 0
+            var fail: Int64 = 0
+            for (_ in 0..count) {
+                if (let Some(topic) <- dec.decode<String>(buf)
+                    && let Some(lc) <- dec.decode<Int64>(buf)) {
+                    let labels = ArrayList<String>()
+                    for (_ in 0..lc) {
+                        if (let Some(l) <- dec.decode<String>(buf)) { labels.add(l) }
+                    }
+                    if (let Some(data) <- dec.decode<Array<Byte>>(buf)) {
+                        if (validateTopic(topic)) {
+                            let queues = if (let Some(qs) <- queueManager.getQueues(topic)) { qs }
+                                else { queueManager.createQueues(topic, 1) }
+                            if (queues.size > 0) {
+                                queues[0].append(data)
+                                queues[0].sync()
+                                ok += 1
+                            } else { fail += 1 }
+                        } else { fail += 1 }
+                    } else { fail += 1 }
+                } else { fail += 1 }
+            }
+            let okCount = ok
+            let failCount = fail
+            log.info{"batch produced: ${okCount} ok, ${failCount} fail"}
+            ProtocolMessage(Command.RESP(0), request.id,
+                MqBody("batch_ack", encodeBatchResult(ok, fail)).toData())
+        } else {
+            errorResp(request.id, "failed to decode batch produce body")
         }
     }
 
@@ -203,22 +242,63 @@ public class CommandExecutor {
      */
     private func handleAck(request: ProtocolMessage): ProtocolMessage {
         if (let Some(body) <- convert<MqBody>(request.data)) {
-            let buf = ByteBuffer(body.payload)
-            let dec = DefaultCodec()
-            if (let Some(msgId) <- dec.decode<String>(buf)
-                && let Some(topic) <- dec.decode<String>(buf)
-                && let Some(queueIdx) <- dec.decode<Int64>(buf)) {
-                if (deliveryManager.onAck(msgId, topic, queueIdx)) {
-                    ProtocolMessage(Command.RESP(0), request.id,
-                        MqBody("ack", []).toData())
-                } else {
-                    errorResp(request.id, "duplicate ack or unknown msg: ${msgId}")
-                }
+            if (body.bodyType == "ack") {
+                singleAck(request, body)
+            } else if (body.bodyType == "batch_ack") {
+                batchAck(request, body)
             } else {
-                errorResp(request.id, "failed to decode ack request")
+                errorResp(request.id, "unexpected ack body type: ${body.bodyType}")
             }
         } else {
             errorResp(request.id, "no body in ack request")
+        }
+    }
+
+    /**
+     * 单条 ACK。
+     */
+    private func singleAck(request: ProtocolMessage, body: MqBody): ProtocolMessage {
+        let buf = ByteBuffer(body.payload)
+        let dec = DefaultCodec()
+        if (let Some(msgId) <- dec.decode<String>(buf)
+            && let Some(topic) <- dec.decode<String>(buf)
+            && let Some(queueIdx) <- dec.decode<Int64>(buf)) {
+            if (deliveryManager.onAck(msgId, topic, queueIdx)) {
+                ProtocolMessage(Command.RESP(0), request.id, MqBody("ack", []).toData())
+            } else {
+                errorResp(request.id, "duplicate ack or unknown msg: ${msgId}")
+            }
+        } else {
+            errorResp(request.id, "failed to decode ack request")
+        }
+    }
+
+    /**
+     * 批量 ACK。
+     * body payload 格式：count + (msgId + topic + queueIndex)*N
+     */
+    private func batchAck(request: ProtocolMessage, body: MqBody): ProtocolMessage {
+        let buf = ByteBuffer(body.payload)
+        let dec = DefaultCodec()
+        if (let Some(count) <- dec.decode<Int64>(buf)) {
+            var ok: Int64 = 0
+            var fail: Int64 = 0
+            for (_ in 0..count) {
+                if (let Some(msgId) <- dec.decode<String>(buf)
+                    && let Some(topic) <- dec.decode<String>(buf)
+                    && let Some(queueIdx) <- dec.decode<Int64>(buf)) {
+                    if (deliveryManager.onAck(msgId, topic, queueIdx)) {
+                        ok += 1
+                    } else { fail += 1 }
+                } else { fail += 1 }
+            }
+            let okCount = ok
+            let failCount = fail
+            log.info{"batch ack: ${okCount} ok, ${failCount} fail"}
+            ProtocolMessage(Command.RESP(0), request.id,
+                MqBody("batch_ack", encodeBatchResult(ok, fail)).toData())
+        } else {
+            errorResp(request.id, "failed to decode batch ack body")
         }
     }
 
@@ -578,6 +658,14 @@ public class CommandExecutor {
             enc.encode(g)
         }
         enc.encode(meta.getCreateTime().toString())
+            .finish().copy(to: buf, closeFromOnEnd: true, closeToOnEnd: false)
+        extractBytes(buf)
+    }
+
+    private static func encodeBatchResult(ok: Int64, fail: Int64): Array<Byte> {
+        let buf = ByteBuffer()
+        DefaultCodec()
+            .encode(ok).encode(fail)
             .finish().copy(to: buf, closeFromOnEnd: true, closeToOnEnd: false)
         extractBytes(buf)
     }

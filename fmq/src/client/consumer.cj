@@ -113,15 +113,22 @@ public class Consumer {
 
     /**
      * 批量确认消息。
+     * 合并为单次 ACK 命令，bodyType="batch_ack"。
      */
     public func ackBatch(acks: ArrayList<(MessageID, String, Int64)>): Bool {
-        var allOk = true
+        // 编码批量 ACK
+        let buf = ByteBuffer()
+        let enc = DefaultCodec()
+            .encode(acks.size)
         for ((msgId, topic, queueIndex) in acks) {
-            if (!ack(msgId, topic, queueIndex)) {
-                allOk = false
-            }
+            enc.encode(messageIdToStr(msgId)).encode(topic).encode(queueIndex)
         }
-        allOk
+        enc.finish().copy(to: buf, closeFromOnEnd: true, closeToOnEnd: false)
+        let raw = extractBytes(buf)
+
+        let req = ProtocolMessage(Command.ACK, MessageID(),
+            MqBody("batch_ack", raw).toData())
+        client.transfer(req.id, req, Duration.second * 10).isSome()
     }
 
     // ───── 编码工具 ─────
