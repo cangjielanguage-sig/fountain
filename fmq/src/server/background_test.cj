@@ -22,15 +22,18 @@ import std.fs.{Directory, remove}
 /**
  * 后台线程组件单元测试。
  * 验证 QueueWriter、QueueCleaner 的核心同步逻辑。
- * 线程生命周期测试需隔离运行（见 ci/smoke）。
+ *
+ * 线程生命周期（spawn → run() → close 停止）需要 SegmentedLog，
+ * 在 WSL 上 mmap init ~110ms，全量套件中超时。
+ * 隔离运行：cjpm test --filter BackgroundThreadLifecycleTest
  */
 @Test
 public class BackgroundThreadTest {
-    // ──────────────── QueueWriter 同步逻辑测试 ────────────────
+    private static let TEST_DIR = "/tmp/fmq_bg_test"
 
     @TestCase
     public func testQueueWriterSubmitAndClose(): Unit {
-        let q = MqQueue("/test-bgw", 0, "/tmp/fmq_bgw", 4096)
+        let q = createQueue("w-sc")
         let rm = ReplicationManager(testConfig())
         let writer = QueueWriter(q, replicationManager: rm, queueSize: 16)
 
@@ -40,15 +43,12 @@ public class BackgroundThreadTest {
         @Assert(true)
 
         q.close()
-        cleanupDir()
+        cleanupTopic("w-sc")
     }
-
-    // ──────────────── QueueCleaner 同步逻辑测试 ────────────────
 
     @TestCase
     public func testIsFileExpiredNonExistentReturnsTrue(): Unit {
-        let expired = QueueCleaner.isFileExpired("/nonexistent/test.log", DateTime.now())
-        @Assert(expired)
+        @Assert(QueueCleaner.isFileExpired("/nonexistent/test.log", DateTime.now()))
     }
 
     @TestCase
@@ -61,14 +61,12 @@ public class BackgroundThreadTest {
         }
     }
 
-    // ── 辅助 ──
-
     private static func testConfig(): MqConfig {
         let hosts = ArrayList<String>()
         hosts.add("node1:7201")
         MqConfig(
             mqHosts: hosts, syncHosts: ArrayList(),
-            dataDir: "/tmp/fmq_bg_test", segmentMaxSize: 16384,
+            dataDir: TEST_DIR, segmentMaxSize: 16384,
             heartbeatIntervalSec: 5, healthcheckMaxRetry: 3,
             idleTimeoutMinutes: 30, ackTimeoutMs: 30000,
             maxRetryCount: 3, retryIntervalMs: 1000,
@@ -78,12 +76,92 @@ public class BackgroundThreadTest {
         )
     }
 
-    private static func cleanupDir(): Unit {
+    private static func createQueue(name: String): MqQueue {
+        MqQueue("/${name}", 0, TEST_DIR, 16384)
+    }
+
+    private static func cleanupTopic(name: String): Unit {
+        let path = "${TEST_DIR}/${name}/0"
         try {
-            for (entry in Directory.readFrom("/tmp/fmq_bgw")) {
+            for (entry in Directory.readFrom(path)) {
                 try { remove(entry.path.toString()) } catch (_: Exception) {}
             }
-            remove("/tmp/fmq_bgw")
+            remove(path)
+        } catch (_: Exception) {}
+    }
+}
+
+/**
+ * QueueWriter/QueueReader 线程生命周期测试（需隔离运行）。
+ * 单独运行：cjpm test --filter BackgroundThreadLifecycleTest
+ *
+ * 这些测试需要创建 SegmentedLog 并启动后台线程，
+ * 在全量测试套件中可能因文件系统竞争超时。
+ */
+@Test
+public class BackgroundThreadLifecycleTest {
+    private static let TEST_DIR = "/tmp/fmq_bg_lifecycle"
+
+    @TestCase
+    public func testQueueWriterRunClosesOnFlag(): Unit {
+        let q = createQueue("wr-flag")
+        let rm = ReplicationManager(testConfig())
+        let writer = QueueWriter(q, replicationManager: rm, queueSize: 16)
+
+        writer.submit([0x10u8])
+
+        let future = spawn { writer.run() }
+        sleep(Duration.millisecond * 100)
+        writer.close()
+        future.get()
+
+        @Assert(q.tryReadFromLog(0).isSome())
+        q.close()
+        clearTopic("wr-flag")
+    }
+
+    @TestCase
+    public func testQueueWriterCloseStopsIdleRun(): Unit {
+        let q = createQueue("wr-idle")
+        let rm = ReplicationManager(testConfig())
+        let writer = QueueWriter(q, replicationManager: rm, queueSize: 16)
+
+        let future = spawn { writer.run() }
+        sleep(Duration.millisecond * 100)
+        writer.close()
+        future.get()
+        @Assert(true)
+
+        q.close()
+        clearTopic("wr-idle")
+    }
+
+    private static func testConfig(): MqConfig {
+        let hosts = ArrayList<String>()
+        hosts.add("node1:7201")
+        MqConfig(
+            mqHosts: hosts, syncHosts: ArrayList(),
+            dataDir: TEST_DIR, segmentMaxSize: 16384,
+            heartbeatIntervalSec: 5, healthcheckMaxRetry: 3,
+            idleTimeoutMinutes: 30, ackTimeoutMs: 30000,
+            maxRetryCount: 3, retryIntervalMs: 1000,
+            dlqRetentionHours: 168, maxMessageSize: 4096,
+            maxLabelsPerMessage: 64, retentionHours: 72,
+            syncQuorum: 1
+        )
+    }
+
+    private static func createQueue(name: String): MqQueue {
+        MqQueue("/${name}", 0, TEST_DIR, 16384)
+    }
+
+    private static func clearTopic(name: String): Unit {
+        let path = "${TEST_DIR}/${name}/0"
+        try {
+            for (entry in Directory.readFrom(path)) {
+                try { remove(entry.path.toString()) } catch (_: Exception) {}
+            }
+            remove(path)
         } catch (_: Exception) {}
     }
 }
