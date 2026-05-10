@@ -183,7 +183,9 @@ public class CommandExecutor {
         if (let Some(body) <- convert<MqBody>(request.data)) {
             let decoded = decodeTopicAndMode(body.payload)
             if (let Some((topic, _)) <- decoded) {
-                log.info{"unsubscribe ${topic}"}
+                // SUBSCRIBE 以 consumerId=topic, groupId=topic 注册，因此也用 (topic, topic) 注销
+                consumerMatcher.deregister(topic, topic)
+                log.info{"unsubscribed ${topic}"}
                 ProtocolMessage(Command.RESP(0), request.id, MqBody("ok", []).toData())
             } else {
                 errorResp(request.id, "failed to decode topic")
