@@ -122,18 +122,21 @@ public class BrokerManager {
      */
     private func pingNode(nh: NodeHealth): Unit {
         if (closed) { return }
+        var conn: ?Client<ProtocolMessage, EncodedMessage, ProtocolMessage, MqBody, MessageID> = None
         try {
-            let conn = Client<ProtocolMessage, EncodedMessage, ProtocolMessage, MqBody, MessageID>.builder(
+            let c = Client<ProtocolMessage, EncodedMessage, ProtocolMessage, MqBody, MessageID>.builder(
                 queueSize: 16, socketCount: 1,
                 host: nh.host, port: nh.port,
                 idGetter: { msg => msg.id },
                 checkDuration: Duration.second * 30,
                 checker: { _ => true }
             ).noDelay(true).build()
+            conn = c
             let req = ProtocolMessage(Command.PING(0), MessageID(),
                 MqBody("ping", []).toData())
-            let resp = conn.transfer(req.id, req, Duration.second * 3)
-            conn.close()
+            let resp = c.transfer(req.id, req, Duration.second * 3)
+            c.close()
+            conn = None
             if (resp.isSome()) {
                 nh.lastSeen = DateTime.now()
                 if (!nh.isAlive) {
@@ -145,6 +148,9 @@ public class BrokerManager {
                 recordFailure(nh)
             }
         } catch (_: Exception) {
+            if (let Some(c) <- conn) {
+                if (!c.isClosed()) { c.close() }
+            }
             recordFailure(nh)
         }
     }

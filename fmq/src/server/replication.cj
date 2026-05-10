@@ -180,6 +180,7 @@ public class ReplicationManager {
             log.error{"invalid master address: ${addr}"}
             return false
         }
+        var localConn: ?Client<ProtocolMessage, EncodedMessage, ProtocolMessage, MqBody, MessageID> = None
         try {
             let host = parts[0]
             let port = UInt16(Int64.parse(parts[1]))
@@ -189,16 +190,11 @@ public class ReplicationManager {
                 checkDuration: Duration.second * 30,
                 checker: { _ => true }
             ).noDelay(true).build()
+            localConn = conn
+            this.masterConn = conn
             this.masterNodeId = masterId
             this.isSyncing = true
-            this.masterConn = conn
 
-            // 发送 SLAVEOF 命令
-            let payload = DefaultCodec()
-                .encode(masterId)
-                .finish()
-            // ProtocolMessage 需要 body 编码为 MqBody
-            // SLAVEOF 命令的 body 携带 nodeId
             let req = ProtocolMessage(Command.SLAVEOF(1), MessageID(),
                 MqBody("slaveof", encodeNodeId(masterId)).toData())
             let resp = conn.transfer(req.id, req, Duration.second * 10)
@@ -207,12 +203,16 @@ public class ReplicationManager {
                 true
             } else {
                 log.warn{"master ${masterId} did not respond to SLAVEOF"}
-                closeMasterConn()
+                closeConn(conn)
+                this.masterConn = None
                 false
             }
         } catch (e: Exception) {
             log.error{"connect to master ${masterId} failed: ${e.message}"}
-            closeMasterConn()
+            if (let Some(c) <- localConn) {
+                if (!c.isClosed()) { c.close() }
+            }
+            this.masterConn = None
             false
         }
     }
@@ -239,5 +239,9 @@ public class ReplicationManager {
         let raw = Array<Byte>(Int64(size), repeat: 0u8)
         buf.read(raw)
         raw
+    }
+
+    private static func closeConn(conn: Client<ProtocolMessage, EncodedMessage, ProtocolMessage, MqBody, MessageID>): Unit {
+        if (!conn.isClosed()) { conn.close() }
     }
 }
