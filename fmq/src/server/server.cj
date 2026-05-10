@@ -17,6 +17,8 @@ package fountain::fmq.server
 
 // 使用别名避免与 fountain::fmq.common.Message 冲突
 import fountain::f_protocol.default.{Message as ProtocolMessage, EncodedMessage}
+import std.sync.{Mutex, AtomicBool}
+import std.env.atExit
 
 /**
  * MQ 服务端。
@@ -119,9 +121,21 @@ public class MqCommand <: SubCommand {
         let brokerManager = BrokerManager(config)
         brokerManager.startHeartbeat()
 
-        // 保持主线程运行
-        while (true) {
-            sleep(Duration.second * 60)
+        // 保持主线程运行（等待关闭信号）
+        let shutdownMutex = Mutex()
+        let shutdownCond = synchronized(shutdownMutex) { shutdownMutex.condition() }
+        let shuttingDown = AtomicBool(false)
+        // 注册关闭信号处理器
+        atExit {
+            synchronized(shutdownMutex) {
+                shuttingDown.store(true)
+                shutdownCond.notify()
+            }
+        }
+        synchronized(shutdownMutex) {
+            while (!shuttingDown.load()) {
+                shutdownCond.wait(timeout: Duration.second * 60)
+            }
         }
         cleaner.close()
         brokerManager.close()
