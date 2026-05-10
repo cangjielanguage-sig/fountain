@@ -80,34 +80,25 @@ public class ConsumerMatcher {
     }
 
     /**
-     * 匹配消费者。通过快照方式读取，减少锁持有时间。
+     * 匹配消费者。全程持锁确保 Round-Robin 索引原子更新。
      */
     public func matchTopic(topic: String): HashMap<String, String> {
-        let snapshot: ArrayList<ConsumerRegistration>
-        let rrSnapshot: HashMap<String, Int64>
-        synchronized(mutex) {
-            snapshot = ArrayList<ConsumerRegistration>()
-            for (r in registrations) { snapshot.add(r) }
-            rrSnapshot = HashMap<String, Int64>()
-            for ((k, v) in roundRobinIndex) { rrSnapshot[k] = v }
-        }
         let result = HashMap<String, String>()
-        let groups = HashMap<String, ArrayList<ConsumerRegistration>>()
-        for (reg in snapshot) {
-            if (matchesTopic(reg.getMatchMode(), topic)) {
-                let list = if (let Some(g) <- groups.get(reg.groupId)) { g }
-                    else { let g = ArrayList<ConsumerRegistration>(); groups[reg.groupId] = g; g }
-                list.add(reg)
-            }
-        }
-        for ((groupId, consumers) in groups) {
-            let index = (rrSnapshot.get(groupId) ?? 0) % consumers.size
-            let selected = consumers[index]
-            result[groupId] = selected.consumerId
-            rrSnapshot[groupId] = (index + 1) % consumers.size
-        }
         synchronized(mutex) {
-            for ((k, v) in rrSnapshot) { roundRobinIndex[k] = v }
+            let groups = HashMap<String, ArrayList<ConsumerRegistration>>()
+            for (reg in registrations) {
+                if (matchesTopic(reg.getMatchMode(), topic)) {
+                    let list = if (let Some(g) <- groups.get(reg.groupId)) { g }
+                        else { let g = ArrayList<ConsumerRegistration>(); groups[reg.groupId] = g; g }
+                    list.add(reg)
+                }
+            }
+            for ((groupId, consumers) in groups) {
+                let index = (roundRobinIndex.get(groupId) ?? 0) % consumers.size
+                let selected = consumers[index]
+                result[groupId] = selected.consumerId
+                roundRobinIndex[groupId] = (index + 1) % consumers.size
+            }
         }
         result
     }

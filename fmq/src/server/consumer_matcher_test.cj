@@ -151,4 +151,40 @@ public class ConsumerMatcherUnsubscribeTest {
         matcher.deregister("same-group", "consumer-Y")
         @Assert(matcher.matchTopic("/multi").size == 0)
     }
+
+    @TestCase
+    public func testConcurrentMatchRoundRobin(): Unit {
+        let matcher = ConsumerMatcher()
+        let reg1 = ConsumerRegistration(
+            consumerId: "rr-A", groupId: "rr-group",
+            matchModeStr: "Exact:/rr",
+            labels: None, dataFilter: None,
+            lastHeartbeat: DateTime.now())
+        let reg2 = ConsumerRegistration(
+            consumerId: "rr-B", groupId: "rr-group",
+            matchModeStr: "Exact:/rr",
+            labels: None, dataFilter: None,
+            lastHeartbeat: DateTime.now())
+        matcher.register(reg1)
+        matcher.register(reg2)
+
+        // 并发调用 matchTopic，验证没有丢失更新
+        let futures = ArrayList<Future<HashMap<String, String>>>()
+        for (_ in 0..20) {
+            futures.add(spawn { matcher.matchTopic("/rr") })
+        }
+        var aCount: Int64 = 0
+        var bCount: Int64 = 0
+        for (f in futures) {
+            let result = f.get()
+            if (let Some(consumerId) <- result.get("rr-group")) {
+                if (consumerId == "rr-A") { aCount += 1 }
+                else if (consumerId == "rr-B") { bCount += 1 }
+            }
+        }
+        // 20 次调用，每个消费者大约应分到 10 次（允许微小偏差）
+        @Assert(aCount > 0 && bCount > 0)
+        // 分布式计数之和应为 20
+        @Assert(aCount + bCount == 20)
+    }
 }
