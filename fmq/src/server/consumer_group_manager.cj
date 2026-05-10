@@ -86,13 +86,21 @@ public class ConsumerGroupManager {
 
     /**
      * 注册消费者到组。
+     * @param topic 所属主题（用于验证）
+     * @param groupId 消费者组 ID
+     * @param consumerId 消费者实例 ID
+     * @param matchMode 匹配模式
+     * @param labels 可选的标签过滤
+     * @param dataFilter 可选的 DataPath 表达式过滤
      */
     public func registerConsumer(topic: String, groupId: String, consumerId: String,
-                                  matchMode: MatchMode): Unit {
+                                  matchMode: MatchMode,
+                                  labels!: ?ArrayList<String> = None,
+                                  dataFilter!: ?String = None): Unit {
         let reg = ConsumerRegistration(
             consumerId: consumerId, groupId: groupId,
             matchModeStr: encodeMatchMode(matchMode),
-            labels: None, dataFilter: None,
+            labels: labels, dataFilter: dataFilter,
             lastHeartbeat: DateTime.now())
         consumerMatcher.register(reg)
     }
