@@ -18,6 +18,7 @@ package fountain::fmq.server
 import std.unittest.*
 import std.unittest.testmacro.*
 import std.sync.Mutex
+import std.net.TcpSocket
 import fountain::f_protocol.default.{Message as ProtocolMessage, EncodedMessage, MessageID, Command}
 import fountain::f_codec.default.DefaultCodec
 import std.io.{ByteBuffer, SeekPosition}
@@ -73,8 +74,17 @@ public class MqIntegrationTest {
 
         let server = MqServer(bindPort: port, queueSize: 1024)
         server.start({ msg => executor.execute(msg) })
-        // 等待 f_net::Server 完成 TCP 绑定
-        sleep(Duration.second * 3)
+        // 轮询等待服务端就绪（最多 8 秒）
+        for (_ in 0..80) {
+            // 尝试连接，连接成功即表示服务端已就绪
+            try {
+                let testSock = TcpSocket(TEST_HOST, port)
+                testSock.close()
+                return (server, port)
+            } catch (_: Exception) {
+                sleep(Duration.millisecond * 100)
+            }
+        }
         (server, port)
     }
 
@@ -94,6 +104,26 @@ public class MqIntegrationTest {
         let raw = Array<Byte>(Int64(size), repeat: 0u8)
         buf.read(raw)
         raw
+    }
+
+    // ──────────────── 基础：PING ↔ PONG ────────────────
+
+    @TestCase
+    public func testPingViaTcp(): Unit {
+        let (server, port) = startServer()
+        let client = makeClient(port)
+        // 发送 PING（带空 MqBody），期望回复 PING(1)
+        let req = ProtocolMessage(Command.PING(0), MessageID(),
+            MqBody("ping", []).toData())
+        try {
+            let resp = client.transfer(req.id, req, Duration.second * 5)
+            @Assert(resp.isSome())
+        } catch (e: Exception) {
+            println("testPingViaTcp transfer threw: ${e.message}")
+            @Assert(false)
+        }
+        client.close()
+        server.close()
     }
 
     // ──────────────── 测试 1: 管理端 ↔ 服务端 ────────────────
