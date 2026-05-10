@@ -18,6 +18,7 @@ package fountain::fmq.server
 import fountain::f_io.{SegmentedLog, LogConfig, LogPosition}
 import fountain::f_codec.default.DefaultCodec
 import std.io.{ByteBuffer, SeekPosition}
+import std.sync.Mutex
 
 /**
  * 单个消息队列。
@@ -35,6 +36,7 @@ public class Queue <: Resource & ToString {
     private var closed: Bool = false
     var draining: Bool = false
     private var logStream: ?InputStream = None  // SegmentedLog 流式游标
+    private let streamLock = Mutex()  // 保护 logStream 延迟初始化和关闭
 
     public init(topic: String, index: Int64, dataDir: String, segmentSize: Int64) {
         this.topic = topic
@@ -79,22 +81,28 @@ public class Queue <: Resource & ToString {
         if (closed) { return None }
         try {
             let dec = DefaultCodec()
-            let stream = if (let Some(s) <- logStream) { s } else {
-                let s = log.openEntryStream()
-                // 首次打开流时，跳过历史消息
-                var remaining = skip
-                while (remaining > 0) {
-                    if (dec.decode<Array<Byte>>(s).isNone()) { break }
-                    remaining -= 1
+            let stream: InputStream
+            synchronized(streamLock) {
+                if (let Some(s) <- logStream) {
+                    stream = s
+                } else {
+                    let s = log.openEntryStream()
+                    var remaining = skip
+                    while (remaining > 0) {
+                        if (dec.decode<Array<Byte>>(s).isNone()) { break }
+                        remaining -= 1
+                    }
+                    logStream = s
+                    stream = s
                 }
-                logStream = s
-                s
             }
             if (let Some(entry) <- dec.decode<Array<Byte>>(stream)) {
                 Some(entry)
             } else {
-                if (let r: Resource <- stream) { r.close() }
-                logStream = None
+                synchronized(streamLock) {
+                    if (let r: Resource <- stream) { r.close() }
+                    logStream = None
+                }
                 None
             }
         } catch (_: Exception) { None }
@@ -104,9 +112,11 @@ public class Queue <: Resource & ToString {
         if (closed) { return }
         closed = true
         draining = false
-        if (let Some(s) <- logStream) {
-            if (let r: Resource <- s) { r.close() }
-            logStream = None
+        synchronized(streamLock) {
+            if (let Some(s) <- logStream) {
+                if (let r: Resource <- s) { r.close() }
+                logStream = None
+            }
         }
         log.close()
     }
@@ -115,7 +125,11 @@ public class Queue <: Resource & ToString {
 
     public func tryFinishDrain(): Bool {
         if (!draining) { return true }
-        if (logStream.isNone()) {
+        let streamAlive: Bool
+        synchronized(streamLock) {
+            streamAlive = logStream.isSome()
+        }
+        if (!streamAlive) {
             close()
             return true
         }
