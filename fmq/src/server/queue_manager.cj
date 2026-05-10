@@ -136,7 +136,7 @@ public class QueueManager {
     /**
      * 恢复节点后的队列排空。
      * 将应属恢复节点的队列标记为 draining，仍留在 topicQueues 中继续分发
-     * 剩余消息给消费者。当 deliveryBuffer 为空后自动关闭并移除。
+     * 剩余消息给消费者。当 log stream 读空后自动关闭并移除。
      */
     public func unreassign(restoredNode: Int64): ArrayList<(String, Int64)> {
         let returned = ArrayList<(String, Int64)>()
@@ -146,7 +146,7 @@ public class QueueManager {
                 if (owner == restoredNode && !q.draining) {
                     q.draining = true
                     returned.add((topic, q.index))
-                    log.info{"unreassign ${topic}[${q.index}]: drain mode (${deliveryCount(q)} pending)"}
+                    log.info{"unreassign ${topic}[${q.index}]: drain mode"}
                 }
             }
         }
@@ -176,9 +176,9 @@ public class QueueManager {
     }
 
     /**
-     * 估算排空队列的待交付数。仅用于日志。
+     * 标记为排空队列。
      */
-    private static func deliveryCount(q: Queue): Int64 { q.deliveryBuffer.size }
+    private static func markDraining(q: Queue): Unit { q.draining = true }
 
     /**
      * 为本节点的全部队列启动 writer/reader 线程。

@@ -50,8 +50,6 @@ public class QueueWriter {
                 if (let Some(data) <- inboundQueue.remove()) {
                     queue.append(data)
                     queue.sync()
-                    // 通知 QueueReader 有消息可投递
-                    queue.deliveryBuffer.add(data)
                     // 同步到从节点
                     syncToSlaves(data)
                 } else {

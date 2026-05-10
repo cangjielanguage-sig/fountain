@@ -97,10 +97,9 @@ public class CommandExecutor {
                 }
                 let queue = queues[0]
 
-                // 4. 写入 SegmentedLog + 推入读管道
+                // 4. 写入 SegmentedLog（持久化）
                 queue.append(msgData)
                 queue.sync()
-                queue.deliveryBuffer.add(msgData)
 
                 log.debug{"produced to ${topic}, size=${msgData.size}"}
                 ProtocolMessage(Command.RESP(0), request.id, MqBody("ack", []).toData())
@@ -172,10 +171,9 @@ public class CommandExecutor {
                     var consumed = ArrayList<Array<Byte>>()
                     for (q in queues) {
                         let offset = deliveryManager.getOffset(topic, q.index, groupId)
-                        // 尝试从 deliveryBuffer 取消息（非阻塞）
                         if (consumed.size < batchSize) {
-                            let msg = q.deliveryBuffer.tryRemove()
-                            if (let Some(data) <- msg) {
+                            // 从 SegmentedLog 流式读取（O(1) 内存，不缓冲）
+                            if (let Some(data) <- q.tryReadFromLog()) {
                                 deliveryManager.recordDelivery(
                                     "${topic}:${q.index}:${offset}", groupId, groupId)
                                 consumed.add(data)

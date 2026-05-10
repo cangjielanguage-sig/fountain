@@ -17,7 +17,8 @@ package fountain::fmq.server
 
 /**
  * 队列读线程。
- * 从 Queue.deliveryBuffer（Writer→Reader 管道）读取消息，匹配消费者并投递。
+ * 从 SegmentedLog 流式读取消息，匹配消费者并投递。
+ * 不缓冲，内存 O(1)。
  */
 public class QueueReader {
     private let queue: Queue
@@ -30,7 +31,7 @@ public class QueueReader {
 
     /**
      * 读线程主循环。
-     * 1. 从 deliveryBuffer 获取下一条消息
+     * 1. 从 SegmentedLog 逐条读取消息
      * 2. ConsumerMatcher.matchTopic() 获取投递目标
      * 3. 记录 DeliveryRecord（占位：后续集成实际网络投递）
      * 4. 等待 ACK 或超时
@@ -39,14 +40,14 @@ public class QueueReader {
         log.info{"QueueReader started for ${queue}"}
         while (!closed) {
             try {
-                // 1. 取消息（阻塞直到有数据或 close）
-                let data = queue.deliveryBuffer.remove()
-                if (closed) { break }
-
-                // 2. ConsumerMatcher.matchTopic 获取目标消费者
-                //    （主节点上下文中 consumerMatcher 是已知的，这里为占位代码）
-                log.debug{"delivery buffer got ${data.size} bytes for ${queue}"}
-
+                // 1. 从 SegmentedLog 流式读取（O(1) 内存）
+                if (let Some(data) <- queue.tryReadFromLog()) {
+                    // 2. ConsumerMatcher.matchTopic 获取目标消费者（占位）
+                    log.debug{"read ${data.size} bytes from log for ${queue}"}
+                } else {
+                    // 无消息时短暂等待
+                    sleep(Duration.millisecond * 100)
+                }
                 // 3. 超时检查（Phase 4+ 实现在 DeliveryManager.checkTimeout）
             } catch (e: Exception) {
                 if (!closed) {
