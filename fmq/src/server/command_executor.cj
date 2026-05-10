@@ -316,12 +316,21 @@ public class CommandExecutor {
      */
     private func handleRegister(request: ProtocolMessage): ProtocolMessage {
         if (let Some(body) <- convert<MqBody>(request.data)) {
-            if (let Some(reg) <- convert<ConsumerRegistration>(body.toData())) {
+            let buf = ByteBuffer(body.payload)
+            let dec = DefaultCodec()
+            if (let Some(groupId) <- dec.decode<String>(buf)
+                && let Some(consumerId) <- dec.decode<String>(buf)
+                && let Some(matchModeStr) <- dec.decode<String>(buf)) {
+                let reg = ConsumerRegistration(
+                    consumerId: consumerId, groupId: groupId,
+                    matchModeStr: matchModeStr,
+                    labels: None, dataFilter: None,
+                    lastHeartbeat: DateTime.now())
                 consumerMatcher.register(reg)
-                log.info{"registered ${reg.consumerId}"}
+                log.info{"registered group=${groupId} consumer=${consumerId} mode=${matchModeStr}"}
                 ProtocolMessage(Command.RESP(0), request.id, MqBody("ok", []).toData())
             } else {
-                errorResp(request.id, "failed to decode registration")
+                errorResp(request.id, "failed to decode register payload (need groupId + consumerId + matchModeStr)")
             }
         } else {
             errorResp(request.id, "no body in register request")
@@ -330,10 +339,19 @@ public class CommandExecutor {
 
     private func handleDeregister(request: ProtocolMessage): ProtocolMessage {
         if (let Some(body) <- convert<MqBody>(request.data)) {
-            let consumerId = String.fromUtf8(body.payload)
-            consumerMatcher.deregister(consumerId, consumerId)
-            log.info{"deregistered ${consumerId}"}
-            ProtocolMessage(Command.RESP(0), request.id, MqBody("ok", []).toData())
+            let buf = ByteBuffer(body.payload)
+            let dec = DefaultCodec()
+            if (let Some(groupId) <- dec.decode<String>(buf)
+                && let Some(consumerId) <- dec.decode<String>(buf)) {
+                if (consumerMatcher.deregister(groupId, consumerId)) {
+                    log.info{"deregistered group=${groupId} consumer=${consumerId}"}
+                    ProtocolMessage(Command.RESP(0), request.id, MqBody("ok", []).toData())
+                } else {
+                    errorResp(request.id, "deregister failed: group=${groupId} consumer=${consumerId} not found")
+                }
+            } else {
+                errorResp(request.id, "failed to decode deregister payload (need groupId + consumerId)")
+            }
         } else {
             errorResp(request.id, "no body in deregister request")
         }

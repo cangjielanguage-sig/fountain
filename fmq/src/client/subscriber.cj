@@ -117,6 +117,7 @@ public class Subscriber {
         let buf = ByteBuffer()
         let enc = DefaultCodec()
             .encode(groupId)
+            .encode(groupId)  // consumerId = groupId
             .encode(modeToString(mode))
             .finish()
         enc.copy(to: buf, closeFromOnEnd: true, closeToOnEnd: false)

@@ -62,4 +62,40 @@ public class ConsumerMatcherUnsubscribeTest {
         let result2 = matcher.matchTopic("/orders/create")
         @Assert(result2.size == 0)
     }
+
+    @TestCase
+    public func testDeregisterWithSeparateGroupAndConsumer(): Unit {
+        let matcher = ConsumerMatcher()
+        let reg = ConsumerRegistration(
+            consumerId: "consumer-A", groupId: "my-group",
+            matchModeStr: "Exact:/test",
+            labels: None, dataFilter: None,
+            lastHeartbeat: DateTime.now())
+        matcher.register(reg)
+
+        // 验证注册成功
+        @Assert(matcher.matchTopic("/test").size == 1)
+
+        // 用正确的 groupId + consumerId 注销 — 应该成功
+        let ok = matcher.deregister("my-group", "consumer-A")
+        @Assert(ok)
+        @Assert(matcher.matchTopic("/test").size == 0)
+    }
+
+    @TestCase
+    public func testDeregisterWrongGroupIdReturnsFalse(): Unit {
+        let matcher = ConsumerMatcher()
+        let reg = ConsumerRegistration(
+            consumerId: "consumer-B", groupId: "group-B",
+            matchModeStr: "Prefix:/b",
+            labels: None, dataFilter: None,
+            lastHeartbeat: DateTime.now())
+        matcher.register(reg)
+        @Assert(matcher.matchTopic("/b/1").size == 1)
+
+        // 用错误的 groupId 注销 — 应返回 false，注册应保持不变
+        let ok = matcher.deregister("wrong-group", "consumer-B")
+        @Assert(!ok)
+        @Assert(matcher.matchTopic("/b/1").size == 1)
+    }
 }
