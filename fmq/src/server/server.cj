@@ -90,6 +90,18 @@ public class MqCommand <: SubCommand {
         let deliveryManager = DeliveryManager(config)
         let consumerMatcher = ConsumerMatcher()
         let replicationManager = ReplicationManager(config)
+
+        // 从 fsync 恢复持久化状态
+        topicManager.restore()
+        deliveryManager.restoreOffsets()
+
+        // 为主题创建队列
+        for (name in topicManager.listTopics()) {
+            let meta = topicManager.getTopicMeta(name)
+            if (let Some(m) <- meta) {
+                queueManager.createQueues(name, m.getQueueCount())
+            }
+        }
         let executor = CommandExecutor(
             topicManager, queueManager, deliveryManager,
             consumerMatcher, replicationManager)

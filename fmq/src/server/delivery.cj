@@ -16,6 +16,9 @@ limitations under the License.
 package fountain::fmq.server
 
 import std.collection.concurrent.ConcurrentHashMap
+import fountain::f_codec.default.DefaultCodec
+import std.io.ByteBuffer
+import fountain::fleet.client.SyncClient
 
 /**
  * 投递记录。
@@ -49,9 +52,35 @@ public class DeliveryManager {
     private let records = ConcurrentHashMap<String, DeliveryRecord>()  // messageId → record
     // offset: topic:queue:groupId → Int64
     private let offsets = ConcurrentHashMap<String, Int64>()
+    private let syncClient: ?SyncClient
 
     public init(config: MqConfig) {
         this.config = config
+        this.syncClient = tryCreateSyncClient()
+    }
+
+    /**
+     * 从 fsync 恢复所有 offset。
+     * 启动时调用，在 QueueManager.createQueues 之前。
+     */
+    public func restoreOffsets(): Unit {
+        if (let Some(fsync) <- syncClient) {
+            try {
+                let result = fsync.prefix("/mq/offset/")
+                for (i in 0..result.size) {
+                    if (let Some(key) <- result.getKey(i)
+                        && let Some(bytes) <- result.getValue(i)) {
+                        let offsetKey = key[11..]  // 去掉 "/mq/offset/"
+                        if (let Some(offset) <- DefaultCodec().decode<Int64>(ByteBuffer(bytes))) {
+                            offsets[offsetKey] = offset
+                        }
+                    }
+                }
+                log.info{"restore: loaded ${offsets.size} offsets from fsync"}
+            } catch (e: Exception) {
+                log.warn{"restore offsets from fsync failed: ${e.message}"}
+            }
+        }
     }
 
     /**
@@ -147,6 +176,17 @@ public class DeliveryManager {
      */
     private func persistOffset(offsetKey: String, offset: Int64): Unit {
         log.debug{"persist offset ${offsetKey} = ${offset}"}
+        if (let Some(fsync) <- syncClient) {
+            try {
+                fsync.add<Int64>("/mq/offset/" + offsetKey, offset)
+            } catch (e: Exception) {
+                log.warn{"persist offset ${offsetKey}=${offset} to fsync failed: ${e.message}"}
+            }
+        }
+    }
+
+    private static func tryCreateSyncClient(): ?SyncClient {
+        try { SyncClient.getInstance() } catch (_: Exception) { None }
     }
 
     private static func offsetKeyFor(topic: String, queueIndex: Int64, groupId: String): String {

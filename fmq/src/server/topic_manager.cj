@@ -16,24 +16,51 @@ limitations under the License.
 package fountain::fmq.server
 
 import std.collection.HashMap
+import fountain::f_codec.default.DefaultCodec
+import std.io.ByteBuffer
+import fountain::fleet.client.SyncClient
 
 /**
  * 主题管理器。
- * 维护主题元数据的本地 HashMap 缓存。
- * Phase 7 可接入 fsync 实现跨节点一致。
+ * 维护主题元数据的本地缓存 + fsync 持久化。
+ * 启动时从 fsync 恢复主题列表，运行时同步写入 fsync。
  */
 public class TopicManager {
     private let config: MqConfig
     private let log = LoggerFactory.getLogger('fountain::fmq.TopicManager')
     private let topics = HashMap<String, TopicMeta>()
+    private let syncClient: ?SyncClient
 
     public init(config: MqConfig) {
         this.config = config
+        this.syncClient = tryCreateSyncClient()
     }
 
     /**
-     * 创建主题。校验 topic 格式、重名后写入 HashMap。
+     * 从 fsync 恢复所有主题。
+     * 启动时调用。
      */
+    public func restore(): Unit {
+        if (let Some(fsync) <- syncClient) {
+            try {
+                let result = fsync.prefix("/mq/topics/")
+                for (i in 0..result.size) {
+                    if (let Some(key) <- result.getKey(i)
+                        && let Some(bytes) <- result.getValue(i)) {
+                        let name = key[11..]  // 去掉 "/mq/topics/"
+                        if (let Some(meta) <- DefaultCodec().decode<TopicMeta>(ByteBuffer(bytes))) {
+                            topics[name] = meta
+                            log.info{"restored topic '${name}' from fsync"}
+                        }
+                    }
+                }
+                log.info{"restore: loaded ${topics.size} topics from fsync"}
+            } catch (e: Exception) {
+                log.warn{"restore from fsync failed: ${e.message}"}
+            }
+        }
+    }
+
     public func createTopic(name: String, queueCount!: Int64 = 1): MqErrorCode {
         if (!validateTopic(name)) {
             log.warn{"createTopic: invalid topic name '${name}'"}
@@ -49,15 +76,14 @@ public class TopicManager {
             createTime: DateTime.now()
         )
         topics[name] = meta
+        persistToFsync(name, meta)
         log.info{"created topic '${name}' with ${queueCount} queues"}
         MqErrorCode.SUCCESS
     }
 
-    /**
-     * 删除主题。移除 HashMap 中的记录。
-     */
     public func deleteTopic(name: String): MqErrorCode {
         if (topics.remove(name).isSome()) {
+            deleteFromFsync(name)
             log.info{"deleted topic '${name}'"}
             MqErrorCode.SUCCESS
         } else {
@@ -66,9 +92,6 @@ public class TopicManager {
         }
     }
 
-    /**
-     * 列出所有主题名。
-     */
     public func listTopics(): ArrayList<String> {
         let result = ArrayList<String>()
         for ((name, _) in topics) {
@@ -77,32 +100,25 @@ public class TopicManager {
         result
     }
 
-    /**
-     * 获取主题元数据。
-     */
     public func getTopicMeta(name: String): ?TopicMeta {
         topics.get(name)
     }
 
-    /**
-     * 添加消费者组到主题。
-     */
     public func addConsumerGroup(topic: String, group: String): MqErrorCode {
         if (let Some(meta) <- topics.get(topic)) {
-            // TopicMeta 的字段是 private var，通过构造器创建副本
             let groups = ArrayList<String>()
             for (g in meta.getConsumerGroups()) {
                 if (g == group) { return MqErrorCode.GROUP_EXISTS }
                 groups.add(g)
             }
             groups.add(group)
-            // 重建 meta（不可变风格）
             let newMeta = TopicMeta(
                 queueCount: meta.getQueueCount(),
                 consumerGroups: groups,
                 createTime: meta.getCreateTime()
             )
             topics[topic] = newMeta
+            persistToFsync(topic, newMeta)
             log.info{"added group '${group}' to topic '${topic}'"}
             MqErrorCode.SUCCESS
         } else {
@@ -110,9 +126,6 @@ public class TopicManager {
         }
     }
 
-    /**
-     * 从主题移除消费者组。
-     */
     public func removeConsumerGroup(topic: String, group: String): MqErrorCode {
         if (let Some(meta) <- topics.get(topic)) {
             let groups = ArrayList<String>()
@@ -128,6 +141,7 @@ public class TopicManager {
                 createTime: meta.getCreateTime()
             )
             topics[topic] = newMeta
+            persistToFsync(topic, newMeta)
             log.info{"removed group '${group}' from topic '${topic}'"}
             MqErrorCode.SUCCESS
         } else {
@@ -135,9 +149,6 @@ public class TopicManager {
         }
     }
 
-    /**
-     * 获取指定主题的所有消费者组。
-     */
     public func getConsumerGroups(topic: String): ArrayList<String> {
         if (let Some(meta) <- topics.get(topic)) {
             let result = ArrayList<String>()
@@ -148,5 +159,31 @@ public class TopicManager {
         } else {
             ArrayList()
         }
+    }
+
+    // ───── fsync 持久化 ─────
+
+    private func persistToFsync(name: String, meta: TopicMeta): Unit {
+        if (let Some(fsync) <- syncClient) {
+            try {
+                fsync.add<TopicMeta>("/mq/topics/" + name, meta)
+            } catch (e: Exception) {
+                log.warn{"persist topic '${name}' to fsync failed: ${e.message}"}
+            }
+        }
+    }
+
+    private func deleteFromFsync(name: String): Unit {
+        if (let Some(fsync) <- syncClient) {
+            try {
+                fsync.delete("/mq/topics/" + name)
+            } catch (e: Exception) {
+                log.warn{"delete topic '${name}' from fsync failed: ${e.message}"}
+            }
+        }
+    }
+
+    private static func tryCreateSyncClient(): ?SyncClient {
+        try { SyncClient.getInstance() } catch (_: Exception) { None }
     }
 }
