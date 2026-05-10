@@ -16,6 +16,7 @@ limitations under the License.
 package fountain::fmq.server
 
 import std.fs.{File, OpenMode, remove}
+import std.sync.AtomicBool
 
 /**
  * 消息过期清理后台线程。
@@ -30,23 +31,23 @@ public class QueueCleaner {
     private let config: MqConfig
     private let queueManager: QueueManager
     private let log = LoggerFactory.getLogger('fountain::fmq.QueueCleaner')
-    private var closed: Bool = false
+    private let closed = AtomicBool(false)
 
     public init(config: MqConfig, queueManager: QueueManager) {
         this.config = config
         this.queueManager = queueManager
     }
 
-    public func close(): Unit { closed = true }
+    public func close(): Unit { closed.store(true) }
 
     /**
      * 后台线程主循环。
      */
     public func run(): Unit {
         log.info{"QueueCleaner started (interval=5min, retention=${config.retentionHours}h)"}
-        while (!closed) {
+        while (!closed.load()) {
             sleep(Duration.minute * 5)
-            if (closed) { break }
+            if (closed.load()) { break }
             cleanup()
         }
     }
