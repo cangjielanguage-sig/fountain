@@ -16,7 +16,7 @@ limitations under the License.
 package fountain::fmq.server
 
 import std.collection.HashMap
-import std.io.{ByteBuffer, SeekPosition}
+import std.io.ByteBuffer
 import std.sync.Mutex
 import fountain::f_codec.default.DefaultCodec
 import fountain::f_protocol.default.{Message as ProtocolMessage, EncodedMessage}
@@ -242,11 +242,7 @@ public class ReplicationManager {
         DefaultCodec()
             .encode(nodeId)
             .finish().copy(to: buf, closeFromOnEnd: true, closeToOnEnd: false)
-        let size = buf.seek(SeekPosition.End(0))
-        buf.seek(SeekPosition.Begin(0))
-        let raw = Array<Byte>(Int64(size), repeat: 0u8)
-        buf.read(raw)
-        raw
+        extractBytes(buf)
     }
 
     private static func closeConn(conn: Client<ProtocolMessage, EncodedMessage, ProtocolMessage, MqBody, MessageID>): Unit {

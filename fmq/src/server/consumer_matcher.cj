@@ -28,6 +28,8 @@ public class ConsumerMatcher {
     private var registrations = ArrayList<ConsumerRegistration>()
     private var roundRobinIndex = HashMap<String, Int64>()  // groupId → next index
     private let mutex = Mutex()
+    // P3-4: 缓存编译后的 PathPattern，避免每次匹配重新 compile
+    private var compiledPatterns = HashMap<String, PathPattern>()
 
     public func register(registration: ConsumerRegistration): Unit {
         synchronized(mutex) {
@@ -48,6 +50,8 @@ public class ConsumerMatcher {
             }
             registrations.add(registration)
         }
+        // 注册变更时清除缓存
+        compiledPatterns = HashMap<String, PathPattern>()
     }
 
     public func deregister(groupId: String, consumerId: String): Bool {
@@ -61,6 +65,9 @@ public class ConsumerMatcher {
             }
             result = remaining.size < registrations.size
             registrations = remaining
+        }
+        if (result) {
+            compiledPatterns = HashMap<String, PathPattern>()  // 清除缓存
         }
         result
     }
@@ -76,6 +83,8 @@ public class ConsumerMatcher {
                 }
             }
             registrations = remaining
+            // 清除缓存（消费者列表变更）
+            compiledPatterns = HashMap<String, PathPattern>()
         }
     }
 
@@ -112,8 +121,13 @@ public class ConsumerMatcher {
     }
 
     private func globMatches(pattern: String, topic: String): Bool {
-        let pp = PathPattern()
-        pp.compile(pattern)
+        let pp = if (let Some(cached) <- compiledPatterns.get(pattern)) { cached }
+            else {
+                let p = PathPattern()
+                p.compile(pattern)
+                compiledPatterns[pattern] = p
+                p
+            }
         pp.matches(topic)
     }
 }

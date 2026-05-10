@@ -15,7 +15,7 @@ limitations under the License.
  */
 package fountain::fmq.client
 
-import fountain::f_protocol.default.{Message as ProtocolMessage, EncodedMessage}
+import fountain::f_protocol.default.{Message as ProtocolMessage}
 
 /**
  * 心跳注册管理器。

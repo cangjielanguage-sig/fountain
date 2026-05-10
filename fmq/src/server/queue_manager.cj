@@ -212,9 +212,7 @@ public class QueueManager {
         }
     }
 
-    /**
-     * 标记为排空队列。
-     */
+
 
     /**
      * 为本节点的全部队列启动 writer/reader 线程。

@@ -15,7 +15,7 @@ limitations under the License.
  */
 package fountain::fmq.common
 
-import std.io.{ByteBuffer, SeekPosition}
+import std.io.ByteBuffer
 
 /**
  * 生产请求编解码工具。
@@ -39,11 +39,7 @@ public class ProduceCodec {
             .finish()
             .copy(to: buf, closeFromOnEnd: true, closeToOnEnd: false)
 
-        let size = buf.seek(SeekPosition.End(0))
-        buf.seek(SeekPosition.Begin(0))
-        let raw = Array<Byte>(Int64(size), repeat: 0u8)
-        buf.read(raw)
-        raw
+        extractBytes(buf)
     }
 
     /**

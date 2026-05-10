@@ -30,15 +30,26 @@ public class CommandExecutor {
     let deliveryManager: DeliveryManager
     let consumerMatcher: ConsumerMatcher
     let replicationManager: ReplicationManager
+    private let config: MqConfig
 
     public init(topicManager: TopicManager, queueManager: QueueManager,
                 deliveryManager: DeliveryManager, consumerMatcher: ConsumerMatcher,
-                replicationManager: ReplicationManager) {
+                replicationManager: ReplicationManager,
+                config!: MqConfig = MqConfig(
+                    mqHosts: ArrayList(), syncHosts: ArrayList(),
+                    dataDir: "/tmp", segmentMaxSize: 1024,
+                    heartbeatIntervalSec: 5, healthcheckMaxRetry: 3,
+                    idleTimeoutMinutes: 30, ackTimeoutMs: 30000,
+                    maxRetryCount: 3, retryIntervalMs: 1000,
+                    dlqRetentionHours: 168, maxMessageSize: 4096,
+                    maxLabelsPerMessage: 64, retentionHours: 72,
+                    syncQuorum: 1)) {
         this.topicManager = topicManager
         this.queueManager = queueManager
         this.deliveryManager = deliveryManager
         this.consumerMatcher = consumerMatcher
         this.replicationManager = replicationManager
+        this.config = config
     }
 
     /**
@@ -96,6 +107,13 @@ public class CommandExecutor {
             if (!validateTopic(topic)) {
                 return errorResp(request.id, "invalid topic: ${topic}")
             }
+            // 检查消息大小和标签数
+            if (msgData.size > config.maxMessageSize) {
+                return errorResp(request.id, "message too large: ${msgData.size} > ${config.maxMessageSize}")
+            }
+            if (labels.size > config.maxLabelsPerMessage) {
+                return errorResp(request.id, "too many labels: ${labels.size} > ${config.maxLabelsPerMessage}")
+            }
             let queues = if (let Some(qs) <- queueManager.getQueues(topic)) { qs }
                 else { queueManager.createQueues(topic, 1) }
             if (queues.size == 0) {
@@ -129,13 +147,17 @@ public class CommandExecutor {
                     }
                     if (let Some(data) <- dec.decode<Array<Byte>>(buf)) {
                         if (validateTopic(topic)) {
-                            let queues = if (let Some(qs) <- queueManager.getQueues(topic)) { qs }
-                                else { queueManager.createQueues(topic, 1) }
-                            if (queues.size > 0) {
-                                queues[0].append(data)
-                                queues[0].sync()
-                                ok += 1
-                            } else { fail += 1 }
+                            if (data.size > config.maxMessageSize) { fail += 1 }
+                            else if (labels.size > config.maxLabelsPerMessage) { fail += 1 }
+                            else {
+                                let queues = if (let Some(qs) <- queueManager.getQueues(topic)) { qs }
+                                    else { queueManager.createQueues(topic, 1) }
+                                if (queues.size > 0) {
+                                    queues[0].append(data)
+                                    queues[0].sync()
+                                    ok += 1
+                                } else { fail += 1 }
+                            }
                         } else { fail += 1 }
                     } else { fail += 1 }
                 } else { fail += 1 }
@@ -599,10 +621,7 @@ public class CommandExecutor {
         let encoded = DefaultCodec().encode(msg).finish()
         let buf = ByteBuffer()
         encoded.copy(to: buf, closeFromOnEnd: true, closeToOnEnd: false)
-        let size = buf.seek(SeekPosition.End(0))
-        buf.seek(SeekPosition.Begin(0))
-        let raw = Array<Byte>(Int64(size), repeat: 0u8)
-        buf.read(raw)
+        let raw = extractBytes(buf)
         ProtocolMessage(Command.RESP(0), id,
             MqBody("error", raw).toData())
     }
