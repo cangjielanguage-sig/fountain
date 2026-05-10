@@ -69,11 +69,11 @@ public class Sender {
         let req = ProtocolMessage(Command.PUBLISH(0), MessageID(), body.toData())
         let resp = client.transfer(req.id, req, Duration.second * 30)
 
-        // 为每个消息生成 ProduceResult（简化：全部成功或全部失败）
+        // 为每个消息生成唯一 ProduceResult
         let results = ArrayList<ProduceResult>()
         if (resp.isSome()) {
             for (_ in 0..messages.size) {
-                results.add(ProduceResult(messageId: req.id))
+                results.add(ProduceResult(messageId: MessageID()))
             }
         } else {
             for (_ in 0..messages.size) {

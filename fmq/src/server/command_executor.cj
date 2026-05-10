@@ -209,14 +209,19 @@ public class CommandExecutor {
                 && let Some(groupId) <- dec.decode<String>(buf)
                 && let Some(batchSize) <- dec.decode<Int64>(buf)) {
                 if (let Some(queues) <- queueManager.getQueues(topic)) {
-                    var consumed = ArrayList<(String, Array<Byte>)>()  // (deliveryId, data)
+                    var consumed = ArrayList<(String, ArrayList<String>, Array<Byte>)>()  // (deliveryId, labels, data)
                     for (q in queues) {
                         let offset = deliveryManager.getOffset(topic, q.index, groupId)
                         if (consumed.size < batchSize) {
-                            if (let Some(data) <- q.tryReadFromLog(offset)) {
+                            if (let Some(framed) <- q.tryReadFromLog(offset)) {
+                                // 解码 framed entry，提取 labels 和 payload
+                                let labels = if (let Some((_, ls, _)) <- ProduceCodec.decode(framed)) { ls }
+                                    else { ArrayList<String>() }
+                                let payload = if (let Some((_, _, p)) <- ProduceCodec.decode(framed)) { p }
+                                    else { framed }
                                 let deliveryId = "${topic}:${q.index}:${groupId}:${offset}"
                                 deliveryManager.recordDelivery(deliveryId, groupId, groupId)
-                                consumed.add((deliveryId, data))
+                                consumed.add((deliveryId, labels, payload))
                             }
                         }
                     }
@@ -641,14 +646,16 @@ public class CommandExecutor {
     }
 
     /**
-     * 编码带 ID 的消息列表。格式：count + (deliveryId + data)*N
+     * 编码带 ID 和 labels 的消息列表。格式：count + (deliveryId + labelCount + labels*N + data)*N
      */
-    private static func encodeMessageListWithIds(msgs: ArrayList<(String, Array<Byte>)>): Array<Byte> {
+    private static func encodeMessageListWithIds(msgs: ArrayList<(String, ArrayList<String>, Array<Byte>)>): Array<Byte> {
         let buf = ByteBuffer()
         let enc = DefaultCodec()
             .encode(msgs.size)
-        for ((id, data) in msgs) {
-            enc.encode(id).encode(data)
+        for ((id, labels, data) in msgs) {
+            enc.encode(id).encode(labels.size)
+            for (l in labels) { enc.encode(l) }
+            enc.encode(data)
         }
         enc.finish().copy(to: buf, closeFromOnEnd: true, closeToOnEnd: false)
         extractBytes(buf)

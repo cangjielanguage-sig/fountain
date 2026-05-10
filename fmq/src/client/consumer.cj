@@ -53,18 +53,19 @@ public class Consumer {
             if (let Some(r) <- resp) {
                 if (let Some(body) <- convert<MqBody>(r.data)) {
                     if (body.bodyType == "consume") {
-                        let msgs = decodeMessageList(body.payload)
+                        // 解码带 deliveryId 和 labels 的消息列表
+                        let msgs = decodeMessageListWithLabels(body.payload)
                         if (msgs.size > 0) {
-                            let msgData = msgs[0]
+                            let (deliveryId, labels, payload) = msgs[0]
                             // dataFilter 过滤
-                            if (dataFilter != "" && !dataFilterMatch(dataFilter, msgData)) {
-                                // 不匹配则跳过（自动 ACK 已由服务端处理）
+                            if (dataFilter != "" && !dataFilterMatch(dataFilter, payload)) {
                                 continue
                             }
                             return Some(Message(
                                 topic: topic, id: MessageID(),
                                 queueIndex: 0,
-                                payload: msgData, labels: ArrayList()))
+                                payload: payload, labels: labels,
+                                producerId: deliveryId))  // producerId 暂存 deliveryId
                         }
                     }
                 }
@@ -157,6 +158,35 @@ public class Consumer {
                 for (_ in 0..count) {
                     if (let Some(msg) <- dec.decode<Array<Byte>>(buf)) {
                         result.add(msg)
+                    }
+                }
+            }
+        } catch (_: Exception) {}
+        result
+    }
+
+    /**
+     * 解码带 deliveryId 和 labels 的消息列表。
+     * 格式：count + (deliveryId + labelCount + labels*N + data)*N
+     */
+    internal static func decodeMessageListWithLabels(data: Array<Byte>): ArrayList<(String, ArrayList<String>, Array<Byte>)> {
+        let result = ArrayList<(String, ArrayList<String>, Array<Byte>)>()
+        try {
+            let buf = ByteBuffer(data)
+            let dec = DefaultCodec()
+            if (let Some(count) <- dec.decode<Int64>(buf)) {
+                for (_ in 0..count) {
+                    if (let Some(deliveryId) <- dec.decode<String>(buf)
+                        && let Some(labelCount) <- dec.decode<Int64>(buf)) {
+                        let labels = ArrayList<String>()
+                        for (_ in 0..labelCount) {
+                            if (let Some(l) <- dec.decode<String>(buf)) {
+                                labels.add(l)
+                            } else { break }
+                        }
+                        if (let Some(payload) <- dec.decode<Array<Byte>>(buf)) {
+                            result.add((deliveryId, labels, payload))
+                        }
                     }
                 }
             }
