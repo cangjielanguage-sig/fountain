@@ -50,23 +50,28 @@ public class DeliveryManager {
     private let config: MqConfig
     private let log = LoggerFactory.getLogger('fountain::fmq.DeliveryManager')
     private let records = ConcurrentHashMap<String, DeliveryRecord>()  // messageId → record
-    // offset: topic:queue:groupId → Int64
+    // offset: topic:queueIndex:server:groupId → Int64
     private let offsets = ConcurrentHashMap<String, Int64>()
     private let syncClient: ?SyncClient
+    private let serverId: String  // "host:port" 用于 offset key
 
-    public init(config: MqConfig) {
+    public init(config: MqConfig, serverId!: String = "") {
         this.config = config
         this.syncClient = tryCreateSyncClient()
+        // 从 mqHosts 取第一个作为 serverId
+        this.serverId = if (serverId != "") { serverId } else {
+            if (config.mqHosts.size > 0) { config.mqHosts[0] } else { "unknown" }
+        }
     }
 
     /**
-     * 从 fsync 恢复所有 offset。
+     * 从 fleet 恢复所有 offset。
      * 启动时调用，在 QueueManager.createQueues 之前。
      */
     public func restoreOffsets(): Unit {
-        if (let Some(fsync) <- syncClient) {
+        if (let Some(fleet) <- syncClient) {
             try {
-                let result = fsync.prefix("/mq/offset/")
+                let result = fleet.prefix("/mq/offset/")
                 for (i in 0..result.size) {
                     if (let Some(key) <- result.getKey(i)
                         && let Some(bytes) <- result.getValue(i)) {
@@ -76,9 +81,9 @@ public class DeliveryManager {
                         }
                     }
                 }
-                log.info{"restore: loaded ${offsets.size} offsets from fsync"}
+                log.info{"restore: loaded ${offsets.size} offsets from fleet"}
             } catch (e: Exception) {
-                log.warn{"restore offsets from fsync failed: ${e.message}"}
+                log.warn{"restore offsets from fleet failed: ${e.message}"}
             }
         }
     }
@@ -102,7 +107,7 @@ public class DeliveryManager {
             record.acked = true
             records.remove(messageId)
             // 推进 offset
-            let offsetKey = offsetKeyFor(topic, queueIndex, record.groupId)
+            let offsetKey = offsetKeyFor(topic, queueIndex, serverId, record.groupId)
             let current = offsets.get(offsetKey) ?? 0
             offsets[offsetKey] = current + 1
             persistOffset(offsetKey, current + 1)
@@ -158,29 +163,29 @@ public class DeliveryManager {
      * 获取消费者组 offset。
      */
     public func getOffset(topic: String, queueIndex: Int64, groupId: String): Int64 {
-        offsets.get(offsetKeyFor(topic, queueIndex, groupId)) ?? 0
+        offsets.get(offsetKeyFor(topic, queueIndex, serverId, groupId)) ?? 0
     }
 
     /**
      * 设置消费者组 offset（用于 resetOffset）。
      */
     public func setOffset(topic: String, queueIndex: Int64, groupId: String, offset: Int64): Unit {
-        let key = offsetKeyFor(topic, queueIndex, groupId)
+        let key = offsetKeyFor(topic, queueIndex, serverId, groupId)
         offsets[key] = offset
         log.info{"set offset ${key} = ${offset}"}
     }
 
     /**
      * 持久化 offset。当前通过 HashMap 维护，已持久化到内存。
-     * Phase 8 可写入 fsync /mq/offset/<key>。
+     * Phase 8 可写入 fleet /mq/offset/<key>。
      */
     private func persistOffset(offsetKey: String, offset: Int64): Unit {
         log.debug{"persist offset ${offsetKey} = ${offset}"}
-        if (let Some(fsync) <- syncClient) {
+        if (let Some(fleet) <- syncClient) {
             try {
-                fsync.add<Int64>("/mq/offset/" + offsetKey, offset)
+                fleet.add<Int64>("/mq/offset/" + offsetKey, offset)
             } catch (e: Exception) {
-                log.warn{"persist offset ${offsetKey}=${offset} to fsync failed: ${e.message}"}
+                log.warn{"persist offset ${offsetKey}=${offset} to fleet failed: ${e.message}"}
             }
         }
     }
@@ -189,7 +194,7 @@ public class DeliveryManager {
         try { SyncClient.getInstance() } catch (_: Exception) { None }
     }
 
-    private static func offsetKeyFor(topic: String, queueIndex: Int64, groupId: String): String {
-        "${topic}:${queueIndex}:${groupId}"
+    private static func offsetKeyFor(topic: String, queueIndex: Int64, server: String, groupId: String): String {
+        "${topic}:${queueIndex}:${server}:${groupId}"
     }
 }

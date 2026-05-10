@@ -22,8 +22,8 @@ import fountain::fleet.client.SyncClient
 
 /**
  * 主题管理器。
- * 维护主题元数据的本地缓存 + fsync 持久化。
- * 启动时从 fsync 恢复主题列表，运行时同步写入 fsync。
+ * 维护主题元数据的本地缓存 + fleet 持久化。
+ * 启动时从 fleet 恢复主题列表，运行时同步写入 fleet。
  */
 public class TopicManager {
     private let config: MqConfig
@@ -37,26 +37,26 @@ public class TopicManager {
     }
 
     /**
-     * 从 fsync 恢复所有主题。
+     * 从 fleet 恢复所有主题。
      * 启动时调用。
      */
     public func restore(): Unit {
-        if (let Some(fsync) <- syncClient) {
+        if (let Some(fleet) <- syncClient) {
             try {
-                let result = fsync.prefix("/mq/topics/")
+                let result = fleet.prefix("/mq/topics/")
                 for (i in 0..result.size) {
                     if (let Some(key) <- result.getKey(i)
                         && let Some(bytes) <- result.getValue(i)) {
                         let name = key[11..]  // 去掉 "/mq/topics/"
                         if (let Some(meta) <- DefaultCodec().decode<TopicMeta>(ByteBuffer(bytes))) {
                             topics[name] = meta
-                            log.info{"restored topic '${name}' from fsync"}
+                            log.info{"restored topic '${name}' from fleet"}
                         }
                     }
                 }
-                log.info{"restore: loaded ${topics.size} topics from fsync"}
+                log.info{"restore: loaded ${topics.size} topics from fleet"}
             } catch (e: Exception) {
-                log.warn{"restore from fsync failed: ${e.message}"}
+                log.warn{"restore from fleet failed: ${e.message}"}
             }
         }
     }
@@ -161,24 +161,24 @@ public class TopicManager {
         }
     }
 
-    // ───── fsync 持久化 ─────
+    // ───── fleet 持久化 ─────
 
     private func persistToFsync(name: String, meta: TopicMeta): Unit {
-        if (let Some(fsync) <- syncClient) {
+        if (let Some(fleet) <- syncClient) {
             try {
-                fsync.add<TopicMeta>("/mq/topics/" + name, meta)
+                fleet.add<TopicMeta>("/mq/topics/" + name, meta)
             } catch (e: Exception) {
-                log.warn{"persist topic '${name}' to fsync failed: ${e.message}"}
+                log.warn{"persist topic '${name}' to fleet failed: ${e.message}"}
             }
         }
     }
 
     private func deleteFromFsync(name: String): Unit {
-        if (let Some(fsync) <- syncClient) {
+        if (let Some(fleet) <- syncClient) {
             try {
-                fsync.delete("/mq/topics/" + name)
+                fleet.delete("/mq/topics/" + name)
             } catch (e: Exception) {
-                log.warn{"delete topic '${name}' from fsync failed: ${e.message}"}
+                log.warn{"delete topic '${name}' from fleet failed: ${e.message}"}
             }
         }
     }

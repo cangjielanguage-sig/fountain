@@ -28,7 +28,7 @@ public class ConsumerMatcher {
 
     /**
      * 注册消费者。
-     * Phase 6: 本地缓存 + 持久化到 fsync /mq/consumes。
+     * Phase 6: 本地缓存 + 持久化到 fleet /mq/consumes。
      */
     public func register(registration: ConsumerRegistration): Unit {
         registrations.add(registration)

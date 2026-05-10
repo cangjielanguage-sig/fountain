@@ -91,7 +91,7 @@ public class MqCommand <: SubCommand {
         let consumerMatcher = ConsumerMatcher()
         let replicationManager = ReplicationManager(config)
 
-        // 从 fsync 恢复持久化状态
+        // 从 fleet 恢复持久化状态
         topicManager.restore()
         deliveryManager.restoreOffsets()
 
