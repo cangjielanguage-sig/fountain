@@ -73,7 +73,7 @@ public struct Server<DE, EN, M, T> <: Resource where EN <: MessageCopier, M <: P
      */
     public init(queueSize!: Int64 = 1024, bindAt!: UInt16, checkDuration!: Duration, checker!: (SocketBuffer) -> Bool) {
         this(queueSize: queueSize, checkDuration: checkDuration, checker: checker,
-            server: TcpServerSocket(bindAt: bindAt), params: SocketParams())
+            server: newServerSocket(bindAt), params: SocketParams())
     }
     public static func build(queueSize!: Int64 = 1024, checkDuration!: Duration, checker!: (SocketBuffer) -> Bool,
         bindAt!: UInt16): ServerBuilder<DE, EN, M, T> {
@@ -129,7 +129,7 @@ public class ServerBuilder<DE, EN, M, T> where EN <: MessageCopier, M <: Protoco
     private let params = SocketParams()
     ServerBuilder(private let queueSize: Int64, private let checkDuration: Duration,
         private let checker: (SocketBuffer) -> Bool, private let bindAt: UInt16) {
-        server = TcpServerSocket(bindAt: bindAt)
+        server = newServerSocket(bindAt)
     }
     public func build(): Server<DE, EN, M, T> {
         Server<DE, EN, M, T>(queueSize: queueSize, checkDuration: checkDuration, checker: checker, server: server,
@@ -204,4 +204,15 @@ public class ServerBuilder<DE, EN, M, T> where EN <: MessageCopier, M <: Protoco
         params.writeTimeout(writeTimeout)
         this
     }
+}
+func newServerSocket(bindAt: UInt16){
+    let s: TcpServerSocket
+    try{
+        s = TcpServerSocket(bindAt: bindAt)
+        s.bind()
+    }catch(e: Exception){
+        s.close()
+        throw e
+    }
+    s
 }
