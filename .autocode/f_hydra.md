@@ -1,4 +1,3 @@
-架构设计文档：Cangjie-HybridSearch 混合检索库
 1. 概述
 1.1 项目背景
 f_hydra 是一个基于仓颉编程语言（Cangjie）实现的本地化混合检索引擎库，内嵌 BAAI/BGE-M3 多语言嵌入模型。BGE-M3 是目前业界领先的多功能嵌入模型，同时支持稠密向量检索（Dense Retrieval）、稀疏向量检索（Sparse/Lexical Retrieval）和多向量检索（Multi-Vector/ColBERT Retrieval）三种检索模式，支持超过 100 种语言，能够处理最大长度为 8192 个 token 的输入文本。
@@ -75,8 +74,9 @@ BGE-M3 模型推理	ONNX Runtime C API (libonnxruntime)	仓颉 FFI → C 动态�
 3.3 安全封装设计
 仓颉侧对外暴露安全的、符合仓颉语法的接口，内部通过 FFI 调用 C 库。以 HNSW 索引为例：
 
-text
+
 # 仓颉侧安全封装接口
+```cj
 class HnswDenseIndex {
     private let handle: CPointer<FaissIndex>  // 指向 C 侧 HNSW 索引的指针
 
@@ -89,9 +89,10 @@ class HnswDenseIndex {
     # KNN 搜索
     func search(query: Array<Float32>, k: Int64): Array<(Int64, Float32)> { ... }
 }
+```
 底层 C 函数声明示例（仓颉侧）：
 
-text
+```cj
 @C
 foreign func hnsw_create(dim: Int64, M: Int64, efCons: Int64): CPointer<FaissIndex>
 @C
@@ -101,6 +102,7 @@ foreign func hnsw_search(handle: CPointer<FaissIndex>, query: CPointer<Float32>,
                          outIds: CPointer<Int64>, outDist: CPointer<Float32>): Int64
 @C
 foreign func hnsw_destroy(handle: CPointer<FaissIndex>)
+```
 内存管理方面，通过仓颉的 RAII 机制自动调用析构函数释放 C 侧资源，避免内存泄漏。
 
 3.4 BGE-M3 模型部署方案
@@ -124,12 +126,13 @@ BGE-M3 模型需先转换为 ONNX 格式，通过 ONNX Runtime C API 加载和�
 
 返回结构化的 BGEOutput 对象，包含三种向量
 
-text
+```cj
 struct BGEOutput {
     denseVec: ?Array<Float32>         # 稠密向量 [1024]（可选）
     sparseVec: ?HashMap<Int64, Float32>  # 稀疏向量 {词ID: 权重}（可选）
     colbertVecs: ?Array<Array<Float32>>  # 多向量 [numTokens × dim]（可选）
 }
+```
 4. 稠密向量索引
 4.1 算法选型：HNSW
 稠密向量采用 HNSW（Hierarchical Navigable Small World）图索引算法。
@@ -154,11 +157,13 @@ HNSW 构建了一个多层导航图结构：
 搜索从顶层开始，贪婪地向查询点靠拢，每下降一层进行更精细的搜索，最终在底层找到精确结果
 
 4.3 关键参数配置
-参数	含义	推荐值	调优方向
-M	每个节点最大连接数	48~64	越大精度越高、内存越大
-efConstruction	构建时搜索范围	200~400	越大图质量越高、构建越慢
-efSearch	查询时搜索范围	100~200	越大召回越高、延迟越大
-metric	距离度量	COSINE	与 BGE-M3 训练时一致
+| 参数 | 含义 | 推荐值 | 调优方向 |
+|:---|:---|:---|:---|
+| M | 每个节点最大连接数 | 48~64 | 越大精度越高、内存越大 |
+| efConstruction | 构建时搜索范围 | 200~400 | 越大图质量越高、构建越慢 |
+| efSearch | 查询时搜索范围 | 100~200 | 越大召回越高、延迟越大 |
+| metric | 距离度量 | COSINE | 与 BGE-M3 训练时一致 |
+
 4.4 内存与存储
 HNSW 是内存密集型索引，经验规则是需要至少比向量本身多 30% 的内存。对于大规模数据集，可通过以下方式优化：
 
@@ -171,7 +176,7 @@ HNSW 是内存密集型索引，经验规则是需要至少比向量本身多 30
 4.5 实现方案
 仓颉侧通过 FFI 调用 Faiss C API 构建 HNSW 索引：
 
-text
+```cj
 class DenseIndexer {
     func buildIndex(embeddings: Array<DenseVector>, config: HnswConfig): DenseIndex
     func save(path: String)
@@ -181,6 +186,7 @@ class DenseIndexer {
 class DenseRetriever {
     func search(query: DenseVector, k: Int64): Array<ScoredDocument>
 }
+```
 5. 稀疏向量索引
 5.1 算法选型：倒排索引（仓颉原生实现）
 稀疏向量采用经典的倒排索引（Inverted Index）结构。
@@ -198,8 +204,8 @@ BGE-M3 稀疏向量本质上是学到的词汇权重（类似增强版 TF-IDF）
 5.2 倒排索引设计
 数据结构：
 
-text
-# 倒排索引的核心数据结构
+```cj
+//# 倒排索引的核心数据结构
 class InvertedIndex {
     # 词ID → 投递列表的映射
     private let postingLists: HashMap<Int64, PostingList>
@@ -213,6 +219,7 @@ class PostingList {
     # 跳跃指针（加速 AND/OR 操作）
     let skipPointers: Array<Int64>
 }
+```
 索引构建：
 
 遍历所有文档的稀疏向量（{词ID: 权重}）
@@ -237,15 +244,17 @@ class PostingList {
 
 工程优化：
 
-优化项	实现方式
-投递列表压缩	使用 VarInt 编码压缩 docId 和权重，减少内存占用
-跳跃指针	在长投递列表中插入跳跃指针，加速多词合并
-WAND 剪枝	使用 WAND (Weak AND) 算法提前终止低分文档的评分计算
-阈值过滤	过滤权重低于阈值的词，减少查询时需处理的词数
+| 优化项 | 实现方式 |
+|:---|:---|
+| 投递列表压缩 | 使用 VarInt 编码压缩 docId 和权重，减少内存占用 |
+| 跳跃指针 | 在长投递列表中插入跳跃指针，加速多词合并 |
+| WAND 剪枝 | 使用 WAND (Weak AND) 算法提前终止低分文档的评分计算 |
+| 阈值过滤 | 过滤权重低于阈值的词，减少查询时需处理的词数 |
+
 5.3 实现方案
 稀疏向量索引完全使用仓颉原生实现，不依赖外部 C 库：
 
-text
+```cj
 class SparseIndexer {
     func buildIndex(sparseVecs: Array<SparseVector>): SparseIndex
     func save(path: String)
@@ -256,6 +265,7 @@ class SparseRetriever {
     func search(query: SparseVector, k: Int64): Array<ScoredDocument>
     func computeLexicalScore(queryWts: SparseVector, docWts: SparseVector): Float32
 }
+```
 这样的设计在确保高性能（纯仓颉代码可直接编译器优化）的同时，也便于后续优化（如引入 SIMD 加速列表合并）。
 
 6. 多向量（ColBERT）索引
@@ -316,16 +326,18 @@ text
 步骤 4: 排序输出
    按 MaxSim 分数降序排列，返回 TopK
 6.4 关键参数配置
-参数	含义	推荐值	调优方向
-K (质心数)	Token 聚类中心数	100,000~200,000	越大越精确，内存越高
-M (PQ 子空间)	残差向量切分段数	48	越大压缩比越高，精度越低
-K' (子码本大小)	每个子空间的聚类数	256（8-bit）	越大精度越高
-c (近邻质心数)	每个查询 Token 搜索的质心数	8~32	越大召回越高，延迟越大
-centroid_prune	质心交互剪枝阈值	当 q_i 与质心的相似度 < 0.5 时跳过	跳过低分质心，加速检索
+| 参数 | 含义 | 推荐值 | 调优方向 |
+|:---|:---|:---|:---|
+| K (质心数) | Token 聚类中心数 | 100,000~200,000 | 越大越精确，内存越高 |
+| M (PQ 子空间) | 残差向量切分段数 | 48 | 越大压缩比越高，精度越低 |
+| K' (子码本大小) | 每个子空间的聚类数 | 256（8-bit） | 越大精度越高 |
+| c (近邻质心数) | 每个查询 Token 搜索的质心数 | 8~32 | 越大召回越高，延迟越大 |
+| centroid_prune | 质心交互剪枝阈值 | 当 q_i 与质心的相似度 < 0.5 时跳过 | 跳过低分质心，加速检索 |
+
 6.5 实现方案
 多向量索引通过仓颉 FFI 调用 Faiss C API 实现 IVF + PQ：
 
-text
+```cj
 class ColBERTIndexer {
     # 训练质心
     func trainCentroids(tokenPool: Array<Array<Float32>>, K: Int64): Array<Array<Float32>>
@@ -348,6 +360,7 @@ class ColBERTRetriever {
     func computeMaxSim(queryTokens: Array<Array<Float32>>,
                        docTokens: Array<Array<Float32>>): Float32
 }
+```
 7. 混合检索融合层
 7.1 融合策略
 
@@ -383,7 +396,7 @@ $$
 │          │    │  召回 Top-100  │    │ 对Top-100重排序 │    │ 输出Top-K │
 └──────────┘    └───────────────┘    └───────────────┘    └──────────┘
 ```
-为平衡召回率与延迟，融合采用“粗排→精排→融合”的多阶段漏斗调度。ColBERT 计算成本高，不在全库执行，仅参与最终精排和融合。
+为平衡召回率与延迟，融合采用"粗排→精排→融合"的多阶段漏斗调度。ColBERT 计算成本高，不在全库执行，仅参与最终精排和融合。
 
 **并行粗排召回**：稀疏检索引擎和稠密检索引擎（HNSW） 并行执行。两者各自在全库中完成检索，独立返回各自的 Top-K 候选集（K 可配置，如 100）。合并这两个候选集，作为精排候选池。
 
@@ -394,26 +407,27 @@ $$
 这种设计确保了三路检索的评分优势均被考虑，同时通过前置的粗排大幅降低了 ColBERT 的计算开销，实现了精度与性能的平衡。
 
 7.3 实现方案
-text
+```cj
+//# 融合策略枚举
+enum FusionStrategy {
+    RRF         # 倒数排名融合（默认）
+    WEIGHTED    # 归一化加权得分融合
+    LINEAR      # 线性加权（需外部校准）
+}
 class FusionLayer {
-    # 融合策略枚举
-    enum FusionStrategy {
-        RRF         # 倒数排名融合（默认）
-        WEIGHTED    # 归一化加权得分融合
-        LINEAR      # 线性加权（需外部校准）
-    }
 
-    # RRF 融合
+    //# RRF 融合
     func rrfFusion(resultsList: Array<Array<ScoredDocument>>,
                    k: Float64 = 60.0): Array<ScoredDocument>
 
-    # 加权融合（需预先归一化）
+    //# 加权融合（需预先归一化）
     func weightedFusion(resultsList: Array<Array<ScoredDocument>>,
                         weights: Array<Float64>): Array<ScoredDocument>
 }
+```
 8. 核心数据结构与接口设计
 8.1 统一数据类型
-text
+```
 # 向量类型
 struct DenseVector {
     let values: Array<Float32>      # 稠密向量 [dim]
@@ -456,8 +470,9 @@ struct RecallStats {
     let colbertCount: Int64
     let fusedCount: Int64
 }
+```
 8.2 核心公共 API
-text
+```
 # 顶层引擎
 class HybridSearchEngine {
     # 构造函数
@@ -520,8 +535,9 @@ struct SearchConfig {
     let rerankDepth: Int64                # 精排候选集大小
     let useColBERTRerank: Bool            # 是否使用 ColBERT 重排
 }
+```
 8.3 使用示例
-text
+```
 # 作为其他仓颉项目的库依赖
 
 # 1. 初始化引擎
@@ -555,6 +571,7 @@ let result = engine.search(
 for doc in result.results {
     print("文档ID: ${doc.docId}, 得分: ${doc.score}, 来源: ${doc.source}")
 }
+```
 9. 关键技术要点与难点
 9.1 模型推理集成
 难点：BGE-M3 原生为 PyTorch 模型，需转换为 ONNX 格式才能在本地高效推理。仓颉生态中没有直接可用的 ONNX Runtime 绑定。
@@ -645,20 +662,24 @@ C 侧分配的内存通过 RAII 包装类（实现 Drop 接口）自动释放
 
 10. 总结与展望
 10.1 核心设计决策总结
-设计维度	选择	理由
-稠密向量索引	HNSW	高维空间精度高，无需离线聚类训练
-稀疏向量索引	倒排索引（仓颉原生）	天然适配，无额外依赖
-多向量索引	IVF+PQ 质心倒排	兼顾检索速度与存储效率
-融合策略	RRF（默认）	免校准，鲁棒性好
-BGE-M3 推理	ONNX Runtime（FFI）	跨平台，推理性能好
-实现语言	仓颉 + C FFI	复用成熟 C 生态
+| 设计维度 | 选择 | 理由 |
+|:---|:---|:---|
+| 稠密向量索引 | HNSW | 高维空间精度高，无需离线聚类训练 |
+| 稀疏向量索引 | 倒排索引（仓颉原生） | 天然适配，无额外依赖 |
+| 多向量索引 | IVF+PQ 质心倒排 | 兼顾检索速度与存储效率 |
+| 融合策略 | RRF（默认） | 免校准，鲁棒性好 |
+| BGE-M3 推理 | ONNX Runtime（FFI） | 跨平台，推理性能好 |
+| 实现语言 | 仓颉 + C FFI | 复用成熟 C 生态 |
+
 10.2 性能预估
-操作	预估延迟（单机，CPU）	说明
-文本编码（BGE-M3）	20~50 ms	受文本长度和硬件影响
-稀疏检索	1~5 ms	倒排索引，极快
-稠密检索（HNSW）	5~20 ms	受数据集大小和 efSearch 影响
-多向量检索	50~200 ms	取决于质心搜索宽度 c
-混合检索（端到端）	50~250 ms	并行三路检索 + 融合
+| 操作 | 预估延迟（单机，CPU） | 说明 |
+|:---|:---|:---|
+| 文本编码（BGE-M3） | 20~50 ms | 受文本长度和硬件影响 |
+| 稀疏检索 | 1~5 ms | 倒排索引，极快 |
+| 稠密检索（HNSW） | 5~20 ms | 受数据集大小和 efSearch 影响 |
+| 多向量检索 | 50~200 ms | 取决于质心搜索宽度 c |
+| 混合检索（端到端） | 50~250 ms | 并行三路检索 + 融合 |
+
 10.3 未来优化方向
 模型量化：对 BGE-M3 进行 INT8/INT4 量化，降低推理延迟和内存占用
 
@@ -671,7 +692,7 @@ GPU 加速：通过 CUDA 版本的 ONNX Runtime 进行 GPU 推理，显著提升
 多模态扩展：将架构扩展至支持图文混合检索等更丰富的应用场景
 
 HNSW为什么不使用仓颉实现
-我们需要回答用户的问题：“HNSW为什么不使用仓颉实现”。这个问题是在我们之前关于用仓颉实现混合检索库的架构设计讨论中提出的。我们之前在设计文档中建议稠密向量索引使用HNSW，并通过FFI调用C库（如Faiss或hnswlib）。现在用户直接问为什么不直接用仓颉实现HNSW。
+我们需要回答用户的问题："HNSW为什么不使用仓颉实现"。这个问题是在我们之前关于用仓颉实现混合检索库的架构设计讨论中提出的。我们之前在设计文档中建议稠密向量索引使用HNSW，并通过FFI调用C库（如Faiss或hnswlib）。现在用户直接问为什么不直接用仓颉实现HNSW。
 
 我们需要从仓颉语言的特点、性能、生态和实现复杂度等方面给出合理解释。同时，要注意语气，解释为什么选择FFI而不是原生实现是更优的工程决策。
 
@@ -685,7 +706,7 @@ HNSW为什么不使用仓颉实现
 
 强调仓颉FFI的低开销特性使得调用C库几乎无性能损失，这样没有动力重写。
 
-最终回答应清晰、有说服力，并呼应之前的设计文档。因为用户问的是“为什么不使用仓颉实现”，我们需要直接针对这个问题回答。
+最终回答应清晰、有说服力，并呼应之前的设计文档。因为用户问的是"为什么不使用仓颉实现"，我们需要直接针对这个问题回答。
 
 注意：在回答中要自然融入仓颉语言的特点，以及之前设计中仓颉原生实现倒排索引的例子，进行对比。
 
@@ -701,11 +722,11 @@ HNSW为什么不使用仓颉实现
 
 对比：稀疏索引用仓颉原生实现是因为数据结构简单、与语言特性契合且无现成库依赖，而HNSW复杂、现成库优秀。
 
-总结：工程决策是“站在巨人肩膀上”，优先复用成熟组件。
+总结：工程决策是"站在巨人肩膀上"，优先复用成熟组件。
 
 这样回答会满足用户疑问，并强化架构设计的合理性。
 
-这个问题的核心在于：仓颉完全有能力实现 HNSW，但从工程回报率来看，这并不是最优解。 设计文档中选择用 FFI 调用成熟的 C 库，本质上是“站在巨人肩膀上”的理性权衡。
+这个问题的核心在于：仓颉完全有能力实现 HNSW，但从工程回报率来看，这并不是最优解。 设计文档中选择用 FFI 调用成熟的 C 库，本质上是"站在巨人肩膀上"的理性权衡。
 
 具体原因可以拆解为以下四点：
 
@@ -736,7 +757,7 @@ Faiss（Meta 出品）和 hnswlib 在业界已被成千上万的生产环境验�
 索引类型	实现方式	决策理由
 稀疏倒排索引	仓颉原生	数据结构简单（HashMap + 数组）；算法逻辑主要是列表合并、跳跃指针，容易用高级语言实现且性能可接受；没有成熟的 C 库可直接复用（或库过于通用、沉重），用仓颉实现反而能更灵活地对接仓颉类型系统，且无外部依赖。
 稠密 HNSW 索引	C 库 (FFI)	计算密集型，SIMD 优化门槛高；已有极致优化的成熟库；数据结构复杂；用仓颉重写的投入产出比极低。
-总结来说，不用仓颉实现 HNSW 并非语言能力受限，而是尊重工程经济学：在性能关键且已有顶尖轮子的地方，通过 FFI 快速集成是最明智的选择。 我们会将精力集中在仓颉擅长的领域——比如构建类型安全的公共 API、实现融合策略和混合检索编排逻辑，以及原生实现稀疏索引这类更“轻量”但灵活的部分。
+总结来说，不用仓颉实现 HNSW 并非语言能力受限，而是尊重工程经济学：在性能关键且已有顶尖轮子的地方，通过 FFI 快速集成是最明智的选择。 我们会将精力集中在仓颉擅长的领域——比如构建类型安全的公共 API、实现融合策略和混合检索编排逻辑，以及原生实现稀疏索引这类更"轻量"但灵活的部分。
 
 # 5. 存储
 使用fountain::f_store存储实际数据。
@@ -1696,3 +1717,539 @@ class HttpBgeBackend: BgeBackend {
                   └─ 否 → 使用 ONNX Runtime CPU（FFI方式，兼容性最广）
 ```
 对于 f_mix 模块的默认构建配置，建议优先支持 ONNX Runtime 作为统一后端（通过Execution Provider切换CPU/GPU），OpenVINO 作为Intel CPU的可选加速后端，TEI HTTP 作为生产环境高性能部署的可选后端。
+
+---
+
+## 跨平台统一推理接口设计
+
+1. 设计目标
+f_hydra 作为仓颉语言实现的混合检索引擎，需要在 Linux、HarmonyOS、Windows、macOS 等多种操作系统上，统一访问 BGE-M3 嵌入模型，并充分利用各类硬件加速器（CPU、NVIDIA/AMD/Intel GPU、NPU、TPU 等）。本文档定义一套平台无关的仓颉接口（BgeBackend），并重点给出 HarmonyOS（基于 MindSpore Lite） 与 Linux（基于 ONNX Runtime） 的完整技术方案。Windows 与 macOS 可依相同模式扩展。
+
+核心原则：
+
+接口统一：上层混合检索逻辑仅依赖 BgeBackend 接口，不感知具体后端。
+
+后端可替换：通过工厂模式根据平台与硬件配置自动选择最优实现。
+
+最小依赖：每个平台仅引入必需的推理库，通过仓颉 FFI 与 Native 动态库交互。
+
+2. 统一仓颉接口定义
+所有后端必须实现以下接口：
+
+```cj
+// f_hydra/src/bge_backend.cj
+
+// 嵌入输出结构体
+struct BgeOutput {
+    denseVec: Array<Float32>            // 稠密向量 [dim]
+    sparseVec: HashMap<Int64, Float32>  // 稀疏向量 {tokenID: weight}
+    colbertVecs: Array<Array<Float32>>  // 多向量 [numTokens × dim]
+}
+
+// 推理后端统一接口
+interface BgeBackend {
+    // 对单条文本编码，返回三种向量
+    func encode(text: String): BgeOutput
+
+    // 释放后端占用的资源
+    func close()
+}
+```
+工厂函数 根据平台和配置创建实例：
+
+```cj
+// f_hydra/src/bge_factory.cj
+
+enum BackendType {
+    MINDSPORE_LITE   // HarmonyOS
+    ONNX_RUNTIME     // Linux/Windows/macOS 通用
+    COREML           // macOS 专用（可选）
+}
+
+struct BgeConfig {
+    let modelPath: String          // 模型文件路径
+    let backend: BackendType       // 后端类型
+    let device: String             // "cpu", "cuda", "npu", "auto"
+    let numThreads: Int64
+    // 各后端特有配置可在此扩展
+}
+
+func createBgeBackend(config: BgeConfig): BgeBackend {
+    match (config.backend) {
+        case BackendType.MINDSPORE_LITE => MindSporeBgeBackend(config)
+        case BackendType.ONNX_RUNTIME  => OnnxRuntimeBgeBackend(config)
+        case BackendType.COREML        => CoreMlBgeBackend(config)
+        // ... 可继续扩展
+    }
+}
+```
+上层调用示例：
+
+```cj
+let backend = createBgeBackend(BgeConfig(
+    modelPath = "./models/bge_m3_npu.ms",
+    backend = BackendType.MINDSPORE_LITE,
+    device = "npu",
+    numThreads = 4
+))
+let output = backend.encode("什么是 BGE-M3？")
+// 使用 output.denseVec, output.sparseVec, output.colbertVecs 构建索引
+backend.close()
+```
+3. 平台后端实现概览
+| 平台 | 推荐后端 | 加速硬件 | 模型格式 | 仓颉集成方式 |
+|:---|:---|:---|:---|:---|
+| HarmonyOS | MindSpore Lite | 麒麟 NPU、CPU | .ms | 仓颉 FFI → NAPI 动态库 → libmindspore-lite.so |
+| Linux | ONNX Runtime | CPU, NVIDIA GPU (CUDA/TensorRT), AMD GPU (ROCm), Intel GPU (OpenVINO), Google TPU (需额外适配) | .onnx | 仓颉 FFI → ONNX Runtime C API 动态库 (libonnxruntime.so) |
+| Windows | ONNX Runtime | CPU, DirectML, CUDA | .onnx | 同上 |
+| macOS | ONNX Runtime 或 Core ML | CPU, Apple Neural Engine (通过 CoreML EP) | .onnx / .mlmodel | ONNX Runtime C API 或 Core ML C API |
+
+HarmonyOS 与 Linux 是本文重点，下面详细展开。
+
+4. HarmonyOS 实现方案（MindSpore Lite）
+4.1 整体架构
+```text
+┌─────────────────────────────────────────┐
+│ f_hydra (仓颉)                           │
+│  MindSporeBgeBackend : BgeBackend        │
+│    ↕ FFI (@C foreign)                    │
+│ libbge_mindspore.so (NAPI 动态库)        │
+│    ↕ C 函数调用                          │
+│ libmindspore-lite.so (MindSpore Lite)    │
+│    ↕                                    │
+│ 麒麟 NPU / CPU                           │
+└─────────────────────────────────────────┘
+```
+4.2 模型转换：PyTorch → ONNX → .ms
+导出 ONNX：`optimum-cli export onnx --model BAAI/bge-m3 --task feature-extraction --opset 17 --optimize O2 --device cpu --output ./bge-m3-onnx/`
+
+使用 MindSpore Lite Converter 转换为 .ms，开启 FP16 量化并针对 NPU 优化：
+
+```bash
+./converter_lite --fmk=ONNX --modelFile=model.onnx --outputFile=bge_m3_npu --optimize=general --quantType=FP16
+```
+产出 bge_m3_npu.ms 文件。
+
+4.3 NAPI 适配层封装
+创建 HarmonyOS Native 模块 bge_infer，在 bridge.cpp 中提供纯 C 接口：
+
+```cpp
+// bge_infer/src/main/cpp/bridge.cpp
+#include <mindspore/model.h>
+#include <mindspore/context.h>
+#include <mindspore/device.h>
+#include <vector>
+#include <cstring>
+
+extern "C" {
+
+typedef void* InferHandle;
+
+InferHandle BgeCreate(const char* model_path, int num_threads, bool use_npu) {
+    auto ctx = MSContextCreate();
+    if (use_npu) {
+        auto npu_info = MSDeviceInfoCreate(kMSDeviceTypeNPU);
+        MSContextAddDeviceInfo(ctx, npu_info);
+    }
+    auto cpu_info = MSDeviceInfoCreate(kMSDeviceTypeCPU);
+    MSContextAddDeviceInfo(ctx, cpu_info);
+    MSContextSetThreadNum(ctx, num_threads);
+
+    auto model = MSModelCreate();
+    if (MSModelBuildFromFile(model, model_path, kMSModelTypeMindIR, ctx) != kMSStatusSuccess) {
+        MSContextDestroy(&ctx);
+        return nullptr;
+    }
+    struct HandleImpl { MSModelHandle model; MSContextHandle context; };
+    return new HandleImpl{model, ctx};
+}
+
+int BgeInfer(InferHandle handle,
+             const int64_t* input_ids, int64_t seq_len,
+             const int64_t* attn_mask,
+             float* dense_out,      // [dim]
+             float* sparse_out,     // [seq_len]
+             float* colbert_out,    // [seq_len * dim]
+             int64_t dim) {
+    auto* h = static_cast<HandleImpl*>(handle);
+    // ... 构造输入张量，执行推理，拷贝输出 ... (详见前文)
+    return 0;
+}
+
+void BgeDestroy(InferHandle handle) {
+    auto* h = static_cast<HandleImpl*>(handle);
+    MSModelDestroy(&h->model);
+    MSContextDestroy(&h->context);
+    delete h;
+}
+
+} // extern "C"
+```
+编译产出 libbge_mindspore.so，依赖 libmindspore-lite.so。
+
+4.4 仓颉侧实现 MindSporeBgeBackend
+```cj
+// f_hydra/src/harmonyos/mindspore_backend.cj
+import std.ffi.CPointer
+import f_hydra.bge_backend
+
+// 不透明句柄
+@C struct InferHandle {}
+
+@C foreign func BgeCreate(modelPath: CString, numThreads: Int32, useNpu: Bool): CPointer<InferHandle>
+@C foreign func BgeInfer(handle: CPointer<InferHandle>, inputIds: CPointer<Int64>, seqLen: Int64,
+                         attnMask: CPointer<Int64>, denseOut: CPointer<Float32>,
+                         sparseOut: CPointer<Float32>, colbertOut: CPointer<Float32>,
+                         dim: Int64): Int32
+@C foreign func BgeDestroy(handle: CPointer<InferHandle>)
+
+class MindSporeBgeBackend: BgeBackend {
+    private let handle: CPointer<InferHandle>
+    private let dim: Int64 = 1024
+    private let tokenizer: Tokenizer  // 自行实现或 FFI 调用 SentencePiece
+
+    init(config: BgeConfig) {
+        this.handle = unsafe { BgeCreate(config.modelPath.toCString(), config.numThreads, config.device == "npu") }
+        this.tokenizer = Tokenizer(config.modelPath) // 加载词表
+    }
+
+    func encode(text: String): BgeOutput {
+        let tokens = tokenizer.tokenize(text)  // 产出 inputIds, attnMask
+        let dense = Array<Float32>(dim, 0.0)
+        let sparse = Array<Float32>(tokens.seqLen, 0.0)
+        let colbert = Array<Float32>(tokens.seqLen * dim, 0.0)
+
+        unsafe {
+            BgeInfer(handle, tokens.inputIds.toCPointer(), tokens.seqLen,
+                     tokens.attnMask.toCPointer(), dense.toCPointer(),
+                     sparse.toCPointer(), colbert.toCPointer(), dim)
+        }
+        // 解析 sparse 输出为 HashMap，过滤特殊 token
+        return BgeOutput(dense, parseSparse(sparse, tokens.inputIds), reshapeColbert(colbert, tokens.seqLen))
+    }
+
+    func close() {
+        unsafe { BgeDestroy(handle) }
+    }
+}
+```
+这样，HarmonyOS 上即可通过 NPU 高效运行 BGE-M3，且对 f_hydra 其他模块完全透明。
+
+5. Linux 实现方案（ONNX Runtime 统一后端）
+5.1 为何选择 ONNX Runtime
+跨硬件 Execution Provider (EP)：同一套代码，通过切换 EP 即可支持 CPU、CUDA、TensorRT、ROCm、OpenVINO、DirectML 等。
+
+成熟的 C API：仓颉 FFI 可直接调用，无需额外 NAPI 桥接。
+
+模型格式统一：全部使用 ONNX 模型，避免多平台格式碎片化。
+
+5.2 整体架构
+```text
+┌──────────────────────────────────────────────┐
+│ f_hydra (仓颉)                                │
+│  OnnxRuntimeBgeBackend : BgeBackend           │
+│    ↕ FFI (@C foreign)                         │
+│ libonnxruntime.so (ONNX Runtime C API)         │
+│    ↕ EP 选择                                   │
+│ CPU / CUDA / ROCm / OpenVINO / TensorRT ...    │
+└──────────────────────────────────────────────┘
+```
+5.3 模型准备
+导出 BGE-M3 ONNX 模型（与 4.2 相同），得到 model.onnx。无需额外转换。
+
+5.4 仓颉 FFI 声明 ONNX Runtime C API
+关键函数声明（完整声明参见前文 BGE-M3 部署指南）：
+
+```cj
+// f_hydra/src/linux/onnx_bridge.cj
+@C foreign func OrtCreateEnv(logLevel: UInt32, logId: CString, out: CPointer<CPointer<OrtEnv>>): CPointer<OrtStatus>
+@C foreign func OrtCreateSession(env: CPointer<OrtEnv>, modelPath: CString,
+                                 options: CPointer<OrtSessionOptions>,
+                                 out: CPointer<CPointer<OrtSession>>): CPointer<OrtStatus>
+@C foreign func OrtSessionOptionsAppendExecutionProvider_CUDA(options: CPointer<OrtSessionOptions>, deviceId: Int32): CPointer<OrtStatus>
+@C foreign func OrtSessionOptionsAppendExecutionProvider_ROCm(options: CPointer<OrtSessionOptions>, deviceId: Int32): CPointer<OrtStatus>
+@C foreign func OrtSessionOptionsAppendExecutionProvider_OpenVINO(options: CPointer<OrtSessionOptions>, device: CString): CPointer<OrtStatus>
+@C foreign func OrtCreateTensorWithDataAsOrtValue(...): CPointer<OrtStatus>
+@C foreign func OrtRun(session: CPointer<OrtSession>, ...): CPointer<OrtStatus>
+// ... 资源释放函数
+```
+5.5 实现 OnnxRuntimeBgeBackend
+```cj
+// f_hydra/src/linux/onnx_backend.cj
+class OnnxRuntimeBgeBackend: BgeBackend {
+    private let session: CPointer<OrtSession>
+    private let env: CPointer<OrtEnv>
+    private let dim: Int64 = 1024
+    private let tokenizer: Tokenizer
+
+    init(config: BgeConfig) {
+        // 1. 创建环境
+        this.env = createEnv()
+        // 2. 创建会话选项，根据 device 添加对应 EP
+        let opts = createSessionOptions()
+        match (config.device) {
+            case "cuda"  => appendCUDA(opts, 0)
+            case "rocm"  => appendROCm(opts, 0)
+            case "openvino" => appendOpenVINO(opts, "CPU")
+            case "tensorrt" => appendTensorRT(opts, 0)
+            default          => { /* 仅 CPU */ }
+        }
+        this.session = createSession(env, config.modelPath, opts)
+        this.tokenizer = Tokenizer(config.modelPath)
+    }
+
+    func encode(text: String): BgeOutput {
+        let tokens = tokenizer.tokenize(text)
+        // 创建输入 OrtValue
+        let inputIdsValue = createTensor(tokens.inputIds, [1, tokens.seqLen])
+        let attnMaskValue = createTensor(tokens.attnMask, [1, tokens.seqLen])
+        // 运行推理
+        let outputs = runSession(session, ["input_ids", "attention_mask"],
+                                 [inputIdsValue, attnMaskValue], 3)
+        // 解析输出张量 (dense, sparse, colbert)
+        return parseOutputs(outputs, tokens)
+    }
+
+    func close() {
+        unsafe {
+            OrtReleaseSession(session)
+            OrtReleaseEnv(env)
+        }
+    }
+}
+```
+5.6 支持多种硬件的关键
+ONNX Runtime 通过动态加载 EP 库实现硬件切换。运行时只要环境中有对应的 EP 共享库（如 libonnxruntime_providers_cuda.so），并在 SessionOptions 中注册即可。用户只需在 BgeConfig 中指定 device，工厂方法即可创建正确的后端实例，无需修改任何上层代码。
+
+对于 Google TPU 等更特殊的硬件，ONNX Runtime 目前没有官方 TPU EP，但可通过实现一个自定义 TpuBgeBackend（例如内部调用 TensorFlow Lite）来满足接口，同样纳入工厂管理，保持架构一致。
+
+6. 其他平台简要说明
+Windows：与 Linux 完全相同，使用 ONNX Runtime，device 可指定 cuda、dml（DirectML）或 cpu，FFI 调用 onnxruntime.dll。
+
+macOS：可使用 ONNX Runtime + CoreML EP（appendCoreML），或单独实现 CoreMlBgeBackend 通过 Core ML C API 调用 .mlmodel，充分利用 Apple Neural Engine。
+
+7. 与 f_hydra 混合检索引擎集成
+在 f_hydra 的引擎初始化阶段，根据配置文件或运行时环境自动选择后端：
+
+```cj
+// f_hydra/src/engine.cj
+class HybridSearchEngine {
+    private let embedder: BgeBackend
+    private let denseIndexer: DenseIndexer
+    private let sparseIndexer: SparseIndexer
+    private let colbertIndexer: ColBERTIndexer
+    private let fusion: FusionLayer
+
+    init(config: EngineConfig) {
+        // 根据平台与硬件自动决策后端类型与参数
+        let bgeConfig = detectBgeConfig(config)
+        this.embedder = createBgeBackend(bgeConfig)
+        // 构建索引时使用 embedder
+        this.denseIndexer = DenseIndexer(...)
+        // ...
+    }
+
+    func search(query: String, topK: Int64): HybridSearchResult {
+        let queryVec = embedder.encode(query)
+        let denseResults = denseIndexer.search(queryVec.denseVec, topK)
+        let sparseResults = sparseIndexer.search(queryVec.sparseVec, topK)
+        let colbertResults = colbertIndexer.search(queryVec.colbertVecs, topK)
+        return fusion.fuse(denseResults, sparseResults, colbertResults, topK)
+    }
+}
+```
+detectBgeConfig 可根据操作系统、环境变量、硬件探测（如检查 NPU 驱动、CUDA 可用性）自动填充 BackendType 和 device。
+
+8. 总结
+通过定义统一的 BgeBackend 接口，f_hydra 成功将 BGE-M3 的推理细节与硬件加速彻底解耦。本文重点给出了：
+
+HarmonyOS：基于 MindSpore Lite，通过 NAPI + 仓颉 FFI 接入麒麟 NPU，充分发挥端侧 AI 算力。
+
+Linux：基于 ONNX Runtime，凭借丰富的 Execution Provider 生态，一套代码覆盖 CPU 到各类 GPU/NPU 的广泛硬件。
+
+Windows、macOS 等其他平台依循相同模式即可平滑接入。这种设计让 f_hydra 能够在任何主流环境中本地部署混合检索能力，而无需改动核心检索逻辑，为跨平台 AI 应用提供了坚实底座。
+
+---
+
+### 统一融合排序详解
+
+#### 概述
+
+"统一融合排序"是混合检索流水线的最后一环。它要解决的问题是：**稀疏、稠密、ColBERT 三种检索方式产生的得分量纲完全不同，如何公平地把它们融合成一个最终的全局排序。**
+
+进入融合阶段时，我们手上有经过精排的候选文档池（例如 200 篇），每篇文档同时拥有三个得分：
+
+- **稀疏得分**（词汇权重累加，范围不定）
+- **稠密得分**（余弦相似度，通常在 [-1, 1] 或 [0, 1]）
+- **ColBERT 得分**（MaxSim 总和，范围 [0, 序列长度]）
+
+统一融合排序的任务就是利用这三个得分，输出一份融合后的 Top‑K 排序结果。
+
+---
+
+#### 两种融合策略
+
+根据架构设计文档 7.1 节，`f_hydra` 支持两种可切换的融合策略：
+
+| 策略 | 核心思想 | 优点 | 适用场景 |
+| :--- | :--- | :--- | :--- |
+| **RRF (Reciprocal Rank Fusion)** | 只使用排名，不看原始分数 | 免校准，完全免疫量纲问题 | 默认策略，绝大多数场景 |
+| **归一化加权融合** | 先归一化再加权求和 | 可对三路检索赋予不同重要性 | 有明确先验权重的场景 |
+
+---
+
+#### 策略一：倒数排名融合 (RRF)
+
+##### 原理
+
+RRF 不关心分数的绝对大小，只关心在一路检索中，文档的相对排名。其公式为：
+
+$$
+\text{RRF\_Score}(d) = \frac{1}{k + \text{rank}_{\text{sparse}}(d)} + \frac{1}{k + \text{rank}_{\text{dense}}(d)} + \frac{1}{k + \text{rank}_{\text{colbert}}(d)}
+$$
+
+- `rank_x(d)`：文档 d 在 x 检索路中的排名（1 为最高）。
+- `k`：平滑参数，默认 **60**。k 越大，排名差异的影响越小。
+
+##### 实现步骤
+
+1. **路内排名**：在精排候选池内，分别按稀疏、稠密、ColBERT 得分降序排列，得到每篇文档的三个独立排名。
+2. **RRF 计算**：对池内每篇文档，代入公式计算 RRF 总分。
+3. **全局排序**：按 RRF 总分从高到低排序，取前 `topK` 个文档输出。
+
+##### 示例
+
+假设精排池有 3 篇文档，k = 60：
+
+| 文档 | 稀疏排名 | 稠密排名 | ColBERT排名 | RRF 总分 | 最终排名 |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| Doc_A | 1 | 3 | 2 | 1/61 + 1/63 + 1/62 = 0.0484 | 2 |
+| Doc_B | 3 | 1 | 1 | 1/63 + 1/61 + 1/61 = 0.0492 | **1** |
+| Doc_C | 2 | 2 | 3 | 1/62 + 1/62 + 1/63 = 0.0481 | 3 |
+
+> 说明：所有排名和计算都在精排候选池内部完成，与全库排名无关。
+
+---
+
+#### 策略二：归一化加权融合
+
+##### 原理
+
+当用户清楚每一路检索的重要程度时，可以将原始得分归一化到同一尺度，再按权重组合。公式为：
+
+$$
+\text{Weighted\_Score}(d) = \alpha \cdot \text{norm}(S_{\text{dense}}) + \beta \cdot \text{norm}(S_{\text{sparse}}) + \gamma \cdot \text{norm}(S_{\text{colbert}})
+$$
+
+- `norm(S)` 为 **Min‑Max 归一化**，将分数映射至 [0, 1] 区间。
+- 权重 `α, β, γ` 由用户配置，默认均为 `1/3`。
+
+##### 实现步骤
+
+1. **路内归一化**：分别对稀疏、稠密、ColBERT 三路得分执行 Min‑Max 归一化：
+`norm(S) = (S - min) / (max - min)`
+
+其中 `min` 和 `max` 从当前精排候选池内统计。
+2. **加权求和**：按配置的权重计算每篇文档的加权总分。
+3. **全局排序**：按加权总分从高到低排序，取前 `topK` 篇文档。
+
+##### 示例
+
+假设稠密得分范围为 [0.65, 0.92]，稀疏范围为 [8.2, 15.0]，ColBERT 范围为 [19.5, 25.8]，权重均为 1/3：
+
+| 文档 | 稠密(原始→归一化) | 稀疏(原始→归一化) | ColBERT(原始→归一化) | 加权总分 | 排名 |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| Doc_A | 0.87 → 0.815 | 12.5 → 0.632 | 22.1 → 0.413 | 0.620 | 2 |
+| Doc_B | 0.92 → 1.000 | 8.2 → 0.000 | 19.5 → 0.000 | 0.333 | 3 |
+| Doc_C | 0.65 → 0.000 | 15.0 → 1.000 | 25.8 → 1.000 | **0.667** | **1** |
+
+> 注意：因样本量小，Doc_B 的稀疏和 ColBERT 得分恰好是最小值，归一化后为 0，这是极端的简化示意。
+
+---
+
+#### 精排候选池内的分数对齐
+
+一个关键设计点是：**融合层的所有排名和归一化计算均在精排候选池内部完成，不会回到全库尺度。**
+
+- **RRF 模式**：排名是基于候选池内文档的相对比较，而非全库排名。
+- **加权模式**：Min‑Max 归一化的最小/最大值也从候选池内统计。
+
+这样既保证了三路得分的公平比较，也避免了全库排名带来的额外开销，逻辑自洽。
+
+---
+
+#### 与多阶段流程的关系
+
+统一融合排序是 `7.2 融合执行流程` 的最后阶段，前面还有：
+
+1. **并行粗排召回**：稀疏和稠密检索引擎在全库并行检索，各自返回 Top‑K（如 100），合并为粗排候选池。
+2. **漏斗式精排**：ColBERT 在粗排候选池上执行精细 MaxSim 计算，得到各文档的 ColBERT 得分。
+
+融合层在拿到三路得分后，才执行上述 RRF 或加权融合，输出最终的 Top‑K。
+
+> 为什么不提前融合？  
+> 因为 ColBERT 计算成本高，不能在全库执行；如果先融合稀疏和稠密再送 ColBERT，可能会导致稠密高分但稀疏低分的文档被过早剪枝，ColBERT 失去看到它们的机会。因此让 ColBERT 最后参与，再统一融合，是最合理的编排。
+
+---
+
+#### 仓颉实现概览
+
+```cj
+enum FusionStrategy { RRF, WEIGHTED }
+class FusionLayer {
+
+ func fuse(
+     candidates: Array<ScoredDoc>,   // 必须包含 denseScore, sparseScore, colbertScore
+     strategy: FusionStrategy,
+     weights: ?Array<Float64>,
+     topK: Int64
+ ): Array<ScoredDoc> {
+     match (strategy) {
+         case FusionStrategy.RRF      => fuseRRF(candidates, topK)
+         case FusionStrategy.WEIGHTED => fuseWeighted(candidates, weights, topK)
+     }
+ }
+
+ private func fuseRRF(candidates: Array<ScoredDoc>, topK: Int64): Array<ScoredDoc> {
+     // 1. 计算三个维度的排名
+     let rankSparse = computeRanks(candidates, doc => doc.sparseScore)
+     let rankDense  = computeRanks(candidates, doc => doc.denseScore)
+     let rankColbert = computeRanks(candidates, doc => doc.colbertScore)
+     // 2. 计算 RRF 得分 (k = 60)
+     for doc in candidates {
+         doc.finalScore = 1.0/(60.0 + rankSparse[doc.id]) 
+                        + 1.0/(60.0 + rankDense[doc.id]) 
+                        + 1.0/(60.0 + rankColbert[doc.id])
+     }
+     // 3. 按 finalScore 降序排序，取前 topK
+     return candidates.sortDescendingBy(doc => doc.finalScore).take(topK)
+ }
+
+ private func fuseWeighted(candidates: Array<ScoredDoc>, 
+                           weights: Array<Float64>, 
+                           topK: Int64): Array<ScoredDoc> {
+     // 1. 对三路得分 Min-Max 归一化
+     let normDense  = minMaxNorm(candidates, doc => doc.denseScore)
+     let normSparse = minMaxNorm(candidates, doc => doc.sparseScore)
+     let normColbert = minMaxNorm(candidates, doc => doc.colbertScore)
+     // 2. 加权求和
+     let (alpha, beta, gamma) = (weights[0], weights[1], weights[2])
+     for doc in candidates {
+         doc.finalScore = alpha * normDense[doc.id] 
+                        + beta  * normSparse[doc.id] 
+                        + gamma * normColbert[doc.id]
+     }
+     // 3. 按 finalScore 降序排序，取前 topK
+     return candidates.sortDescendingBy(doc => doc.finalScore).take(topK)
+ }
+}
+```
+
+#### 总结
+RRF：推荐默认使用，无需调参，仅依赖排名，能自动平衡三路信号。
+
+归一化加权：在有明确先验（如"稀疏检索最重要"）时使用，需要提供验证过的权重。
+
+计算边界：所有融合计算都限制在精排候选池内，既不增加全库开销，又保证三路公平。
+
+统一融合排序使 f_hydra 能够真正融合"关键词匹配、语义理解、精细交互"三种检索方式的长处，输出兼具高召回和高精度的最终结果。
