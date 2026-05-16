@@ -49,7 +49,9 @@ internal class SocketParams {
     }
 
     internal func populate(socket: TcpSocket): TcpSocket {
-        socket.bindToDevice = bindToDevice_
+        if (let Some(_) <- bindToDevice_) {
+            socket.bindToDevice = bindToDevice_
+        }
         socket.keepAlive = keepAlive_
         socket.linger = linger_
         if(let Some(noDelay) <- noDelay_){

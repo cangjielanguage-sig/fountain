@@ -47,7 +47,9 @@ public class FNetTcpTest {
             checkDuration: Duration.second * 60,
             checker: { _ => true })
 
-        server.start({ msg => msg })
+        spawn {
+            server.start({ msg => msg })
+        }
         sleep(Duration.millisecond * 800)
 
         // 验证端口可达
@@ -75,8 +77,9 @@ public class FNetTcpTest {
             queueSize: 64, bindAt: PORT2,
             checkDuration: Duration.second * 60,
             checker: { _ => true })
-        server.start({ req => Message(Command.PING(1), req.id, "pong".toData()) })
-
+        spawn {
+            server.start({ req => Message(Command.PING(1), req.id, "pong".toData()) })
+        }
         sleep(Duration.millisecond * 800)
 
         let client = Client<Message, EncodedMessage, Message, String, MessageID>.builder(
