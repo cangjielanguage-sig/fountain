@@ -6,6 +6,7 @@
   "fountain::f_io" = {path = "../f_io"}
   "fountain::f_net" = {path = "../f_net"}
   "fountain::f_protocol" = {path = "../f_protocol"}
+  "fountain::f_store" = {path = "../f_store"}
   "fountain::f_util" = {path = "../f_util"}
   "fountain::fleet" = {path = "../fleet"}
   "fountain::f_log" = {path = "../f_log"}
