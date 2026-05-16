@@ -206,13 +206,14 @@ public class ServerBuilder<DE, EN, M, T> where EN <: MessageCopier, M <: Protoco
     }
 }
 func newServerSocket(bindAt: UInt16){
-    let s: TcpServerSocket
+    let sopt = None<TcpServerSocket>
     try{
-        s = TcpServerSocket(bindAt: bindAt)
+        let s = TcpServerSocket(bindAt: bindAt)
         s.bind()
+        sopt = s 
     }catch(e: Exception){
-        s.close()
+        s?.close()
         throw e
     }
-    s
+    s.getOrThrow()
 }
