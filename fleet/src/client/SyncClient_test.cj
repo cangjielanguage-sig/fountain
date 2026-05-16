@@ -18,6 +18,7 @@ package fountain::fleet.client
 import std.unittest.*
 import std.unittest.testmacro.*
 import fountain::f_config.Config
+import fountain::fleet.config.SyncConfig
 import fountain::fleet.exception.InvalidKeyException
 
 @Test
