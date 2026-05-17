@@ -31,6 +31,7 @@ public class CommandExecutor {
     let deliveryManager: DeliveryManager
     let consumerMatcher: ConsumerMatcher
     let replicationManager: ReplicationManager
+    private let consumerGroupManager: ConsumerGroupManager
     private let config: MqConfig
 
     public init(topicManager: TopicManager, queueManager: QueueManager,
@@ -51,6 +52,7 @@ public class CommandExecutor {
         this.consumerMatcher = consumerMatcher
         this.replicationManager = replicationManager
         this.config = config
+        this.consumerGroupManager = ConsumerGroupManager(topicManager, consumerMatcher, deliveryManager)
     }
 
     /**
@@ -302,7 +304,7 @@ public class CommandExecutor {
     private func handleBatchConsume(buf: ByteBuffer, dec: DefaultCodec, request: ProtocolMessage): ProtocolMessage {
         let allResults = HashMap<String, (String, ArrayList<(String, ArrayList<String>, Array<Byte>)>)>()  // topic → (groupId, msgs)
         if (let Some(topicCount) <- dec.decode<Int64>(buf)) {
-            for (_ in 0..topicCount) {
+            for (ti in 0..topicCount) {
                 if (let Some(topic) <- dec.decode<String>(buf)
                     && let Some(groupId) <- dec.decode<String>(buf)
                     && let Some(batchSize) <- dec.decode<Int64>(buf)) {
@@ -327,6 +329,8 @@ public class CommandExecutor {
                         }
                     }
                     allResults[topic] = (groupId, consumed)
+                } else {
+                    log.warn{"handleBatchConsume: decode failure at topic index ${ti}"}
                 }
             }
         }
@@ -597,7 +601,7 @@ public class CommandExecutor {
                     let group = if (let Some(g) <- dec.decode<String>(buf)) { g } else {
                         return errorResp(request.id, "missing group name")
                     }
-                    let code = topicManager.addConsumerGroup(name, group)
+                    let code = consumerGroupManager.createGroup(name, group)
                     if (code == MqErrorCode.SUCCESS) {
                         ProtocolMessage(Command.RESP(0), request.id, MqBody("ok", []).toData())
                     } else {
@@ -607,7 +611,7 @@ public class CommandExecutor {
                     let group = if (let Some(g) <- dec.decode<String>(buf)) { g } else {
                         return errorResp(request.id, "missing group name")
                     }
-                    let code = topicManager.removeConsumerGroup(name, group)
+                    let code = consumerGroupManager.deleteGroup(name, group)
                     if (code == MqErrorCode.SUCCESS) {
                         ProtocolMessage(Command.RESP(0), request.id, MqBody("ok", []).toData())
                     } else {

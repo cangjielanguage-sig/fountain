@@ -26,6 +26,7 @@ import std.io.{ByteBuffer, SeekPosition}
 
 /**
  * 编码心跳 PING。
+ * 公共 API 方法，各模块按需使用。
  */
 public func encodePing(): EncodedMessage {
     ProtocolMessage.ping()

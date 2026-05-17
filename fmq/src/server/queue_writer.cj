@@ -61,6 +61,10 @@ public class QueueWriter {
         }
     }
 
+    /**
+     * 关闭 Writer。设置 closed 标志让 run() 循环退出。
+     * 注意：不排空 inboundQueue 中的待处理消息。关闭前需确认无新提交。
+     */
     public func close(): Unit { closed.store(true) }
 
     /**

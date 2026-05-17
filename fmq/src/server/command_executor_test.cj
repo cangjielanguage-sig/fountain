@@ -469,6 +469,21 @@ public class CommandExecutorTest {
         }
     }
 
+    @TestCase
+    public func testAddGroupViaHandlerInitializesOffsets(): Unit {
+        let ex = makeExecutor()
+        // 创建多队列主题 (queueCount=3)
+        ex.execute(ProtocolMessage(Command.TOPIC_OP, MessageID(),
+            MqBody("topic_op", enc(["create", "/multi-q-grp"])).toData()))
+        // 通过 handler 添加消费者组 → 应该经过 ConsumerGroupManager
+        ex.execute(ProtocolMessage(Command.TOPIC_OP, MessageID(),
+            MqBody("topic_op", enc(["addGroup", "/multi-q-grp", "test-grp"])).toData()))
+        // 验证所有队列 offset 被初始化（P3-3: ConsumerGroupManager 不再是死代码）
+        @Assert(ex.deliveryManager.getOffset("/multi-q-grp", 0, "test-grp") == 0)
+        @Assert(ex.deliveryManager.getOffset("/multi-q-grp", 1, "test-grp") == 0)
+        @Assert(ex.deliveryManager.getOffset("/multi-q-grp", 2, "test-grp") == 0)
+    }
+
     // ── 批量 CONSUME ──
 
     @TestCase
