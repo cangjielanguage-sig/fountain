@@ -16,6 +16,7 @@ limitations under the License.
 package fountain::fmq.server
 
 import std.collection.HashMap
+import std.sync.Mutex
 import fountain::f_codec.default.DefaultCodec
 import std.io.ByteBuffer
 import fountain::fleet.client.SyncClient
@@ -30,6 +31,7 @@ public class TopicManager {
     private let log = LoggerFactory.getLogger('fountain::fmq.TopicManager')
     private let topics = HashMap<String, TopicMeta>()
     private let syncClient: ?SyncClient
+    private let lock = Mutex()  // 保护 topics HashMap 并发访问
 
     public init(config: MqConfig) {
         this.config = config
@@ -62,33 +64,37 @@ public class TopicManager {
     }
 
     public func createTopic(name: String, queueCount!: Int64 = 1): MqErrorCode {
-        if (!validateTopic(name)) {
-            log.warn{"createTopic: invalid topic name '${name}'"}
-            return MqErrorCode.INVALID_TOPIC_FORMAT
+        synchronized(lock) {
+            if (!validateTopic(name)) {
+                log.warn{"createTopic: invalid topic name '${name}'"}
+                return MqErrorCode.INVALID_TOPIC_FORMAT
+            }
+            if (topics.get(name).isSome()) {
+                log.warn{"createTopic: topic '${name}' already exists"}
+                return MqErrorCode.TOPIC_EXISTS
+            }
+            let meta = TopicMeta(
+                queueCount: queueCount,
+                consumerGroups: ArrayList(),
+                createTime: DateTime.now()
+            )
+            topics[name] = meta
+            persistToFsync(name, meta)
         }
-        if (topics.get(name).isSome()) {
-            log.warn{"createTopic: topic '${name}' already exists"}
-            return MqErrorCode.TOPIC_EXISTS
-        }
-        let meta = TopicMeta(
-            queueCount: queueCount,
-            consumerGroups: ArrayList(),
-            createTime: DateTime.now()
-        )
-        topics[name] = meta
-        persistToFsync(name, meta)
         log.info{"created topic '${name}' with ${queueCount} queues"}
         MqErrorCode.SUCCESS
     }
 
     public func deleteTopic(name: String): MqErrorCode {
-        if (topics.remove(name).isSome()) {
-            deleteFromFsync(name)
-            log.info{"deleted topic '${name}'"}
-            MqErrorCode.SUCCESS
-        } else {
-            log.warn{"deleteTopic: topic '${name}' not found"}
-            MqErrorCode.TOPIC_NOT_FOUND
+        synchronized(lock) {
+            if (topics.remove(name).isSome()) {
+                deleteFromFsync(name)
+                log.info{"deleted topic '${name}'"}
+                MqErrorCode.SUCCESS
+            } else {
+                log.warn{"deleteTopic: topic '${name}' not found"}
+                MqErrorCode.TOPIC_NOT_FOUND
+            }
         }
     }
 
@@ -105,47 +111,51 @@ public class TopicManager {
     }
 
     public func addConsumerGroup(topic: String, group: String): MqErrorCode {
-        if (let Some(meta) <- topics.get(topic)) {
-            let groups = ArrayList<String>()
-            for (g in meta.getConsumerGroups()) {
-                if (g == group) { return MqErrorCode.GROUP_EXISTS }
-                groups.add(g)
+        synchronized(lock) {
+            if (let Some(meta) <- topics.get(topic)) {
+                let groups = ArrayList<String>()
+                for (g in meta.getConsumerGroups()) {
+                    if (g == group) { return MqErrorCode.GROUP_EXISTS }
+                    groups.add(g)
+                }
+                groups.add(group)
+                let newMeta = TopicMeta(
+                    queueCount: meta.getQueueCount(),
+                    consumerGroups: groups,
+                    createTime: meta.getCreateTime()
+                )
+                topics[topic] = newMeta
+                persistToFsync(topic, newMeta)
+                log.info{"added group '${group}' to topic '${topic}'"}
+                MqErrorCode.SUCCESS
+            } else {
+                MqErrorCode.TOPIC_NOT_FOUND
             }
-            groups.add(group)
-            let newMeta = TopicMeta(
-                queueCount: meta.getQueueCount(),
-                consumerGroups: groups,
-                createTime: meta.getCreateTime()
-            )
-            topics[topic] = newMeta
-            persistToFsync(topic, newMeta)
-            log.info{"added group '${group}' to topic '${topic}'"}
-            MqErrorCode.SUCCESS
-        } else {
-            MqErrorCode.TOPIC_NOT_FOUND
         }
     }
 
     public func removeConsumerGroup(topic: String, group: String): MqErrorCode {
-        if (let Some(meta) <- topics.get(topic)) {
-            let groups = ArrayList<String>()
-            var found = false
-            for (g in meta.getConsumerGroups()) {
-                if (g == group) { found = true }
-                else { groups.add(g) }
+        synchronized(lock) {
+            if (let Some(meta) <- topics.get(topic)) {
+                let groups = ArrayList<String>()
+                var found = false
+                for (g in meta.getConsumerGroups()) {
+                    if (g == group) { found = true }
+                    else { groups.add(g) }
+                }
+                if (!found) { return MqErrorCode.GROUP_NOT_FOUND }
+                let newMeta = TopicMeta(
+                    queueCount: meta.getQueueCount(),
+                    consumerGroups: groups,
+                    createTime: meta.getCreateTime()
+                )
+                topics[topic] = newMeta
+                persistToFsync(topic, newMeta)
+                log.info{"removed group '${group}' from topic '${topic}'"}
+                MqErrorCode.SUCCESS
+            } else {
+                MqErrorCode.TOPIC_NOT_FOUND
             }
-            if (!found) { return MqErrorCode.GROUP_NOT_FOUND }
-            let newMeta = TopicMeta(
-                queueCount: meta.getQueueCount(),
-                consumerGroups: groups,
-                createTime: meta.getCreateTime()
-            )
-            topics[topic] = newMeta
-            persistToFsync(topic, newMeta)
-            log.info{"removed group '${group}' from topic '${topic}'"}
-            MqErrorCode.SUCCESS
-        } else {
-            MqErrorCode.TOPIC_NOT_FOUND
         }
     }
 

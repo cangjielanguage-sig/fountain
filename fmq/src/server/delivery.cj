@@ -16,7 +16,7 @@ limitations under the License.
 package fountain::fmq.server
 
 import std.collection.concurrent.ConcurrentHashMap
-import std.sync.Mutex
+import std.sync.{Mutex, AtomicBool}
 import fountain::f_codec.default.DefaultCodec
 import std.io.ByteBuffer
 import fountain::fleet.client.SyncClient
@@ -30,10 +30,10 @@ public class DeliveryRecord {
     let groupId: String
     var deliverTime: DateTime
     var retryCount: Int64
-    var acked: Bool
+    var acked: AtomicBool
 
     public init(messageId: String, consumerId: String, groupId: String,
-                deliverTime: DateTime, retryCount!: Int64 = 0, acked!: Bool = false) {
+                deliverTime: DateTime, retryCount!: Int64 = 0, acked!: AtomicBool = AtomicBool(false)) {
         this.messageId = messageId
         this.consumerId = consumerId
         this.groupId = groupId
@@ -111,8 +111,8 @@ public class DeliveryManager {
     public func onAck(messageId: String, topic: String, queueIndex: Int64): Bool {
         synchronized(onAckLock) {
             if (let Some(record) <- records.get(messageId)) {
-                if (record.acked) { return false }
-                record.acked = true
+                if (record.acked.load()) { return false }
+                record.acked.store(true)
                 records.remove(messageId)
                 let offsetKey = offsetKeyFor(topic, queueIndex, serverId, record.groupId)
                 let current = offsets.get(offsetKey) ?? 0
@@ -134,7 +134,7 @@ public class DeliveryManager {
         let timeoutMs = config.ackTimeoutMs
         let expired = ArrayList<DeliveryRecord>()
         for ((_, record) in records) {
-            if (record.acked) { continue }
+            if (record.acked.load()) { continue }
             let elapsed = now - record.deliverTime
             if (elapsed > Duration.millisecond * timeoutMs) {
                 expired.add(record)

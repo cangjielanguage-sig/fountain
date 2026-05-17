@@ -39,10 +39,13 @@ public class ConsumerGroupManager {
      */
     public func createGroup(topic: String, groupId: String): MqErrorCode {
         let code = topicManager.addConsumerGroup(topic, groupId)
-        if (code == MqErrorCode.SUCCESS || code == MqErrorCode.GROUP_EXISTS) {
+        if (code == MqErrorCode.SUCCESS) {
             // 初始化该组的 offset
             deliveryManager.setOffset(topic, 0, groupId, 0)
             log.info{"created consumer group '${groupId}' for topic '${topic}'"}
+            MqErrorCode.SUCCESS
+        } else if (code == MqErrorCode.GROUP_EXISTS) {
+            log.info{"consumer group '${groupId}' already exists for topic '${topic}'"}
             MqErrorCode.SUCCESS
         } else {
             code
