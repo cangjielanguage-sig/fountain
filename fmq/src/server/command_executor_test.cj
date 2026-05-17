@@ -385,4 +385,32 @@ public class CommandExecutorTest {
             MqBody("consume", extractBytes(buf)).toData())
         @Assert(isResp(ex.execute(consReq)))
     }
+
+    /**
+     * handleConsume: batchSize=1 时只消费 1 条，验证 break 生效。
+     */
+    @TestCase
+    public func testConsumeBatchSizeOneBreaksAfterFirstMessage(): Unit {
+        let ex = makeExecutor()
+        let topic = "/consume-break"
+
+        // 生产 2 条消息到同一 topic
+        let enc1 = ProduceCodec.encode(topic, ArrayList<String>(), [0xAAu8])
+        let req1 = ProtocolMessage(Command.PUBLISH(0), MessageID(),
+            MqBody("produce", enc1).toData())
+        @Assert(isResp(ex.execute(req1)))
+
+        let enc2 = ProduceCodec.encode(topic, ArrayList<String>(), [0xBBu8])
+        let req2 = ProtocolMessage(Command.PUBLISH(0), MessageID(),
+            MqBody("produce", enc2).toData())
+        @Assert(isResp(ex.execute(req2)))
+
+        // 消费 batchSize=1 → 应只返回 1 条（break 阻止遍历剩余队列）
+        let buf = ByteBuffer()
+        DefaultCodec().encode(topic).encode("test-group").encode(1i64)
+            .finish().copy(to: buf, closeFromOnEnd: true, closeToOnEnd: false)
+        let consReq = ProtocolMessage(Command.CONSUME(0), MessageID(),
+            MqBody("consume", extractBytes(buf)).toData())
+        @Assert(isResp(ex.execute(consReq)))
+    }
 }

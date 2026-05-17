@@ -111,6 +111,25 @@ public class MqQueueReadTest {
         cleanupDir("/tmp/fmqq_f")
     }
 
+    @TestCase
+    public func testDrainingBlocksAppend(): Unit {
+        let q = MqQueue("/test-g", 0, "/tmp/fmqq_g", 4096)
+        @Assert(!q.draining.load())
+
+        q.draining.store(true)
+        @Assert(q.draining.load())
+
+        // 排空中 append 应抛异常
+        var threw: Bool = false
+        try {
+            q.append([0x01u8])
+        } catch (_: MqException) { threw = true }
+        @Assert(threw)
+
+        q.close()
+        cleanupDir("/tmp/fmqq_g")
+    }
+
     private static func cleanupDir(path: String): Unit {
         try {
             for (entry in Directory.readFrom(path)) {
