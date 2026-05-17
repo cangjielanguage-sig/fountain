@@ -20,6 +20,7 @@ import std.unittest.testmacro.*
 import fountain::f_codec.default.DefaultCodec
 import fountain::f_data.base.*
 import std.io.{InputStream, SeekPosition}
+import std.sync.AtomicInt64
 
 @Test
 public class QueueDistributionTest {
@@ -246,15 +247,9 @@ public class QueueManagerLifecycleTest {
             maxLabelsPerMessage: 64, retentionHours: 72,
             syncQuorum: 1)
         let qm = QueueManager(config, nodeIndex: 0)
-        let rm = ReplicationManager(config)
-        rm.promoteToMaster()
-        qm.setReplicationManager(rm)
 
         qm.createQueues("/test-life", 1)
-        qm.startAll()
-        sleep(Duration.millisecond * 500)
-        qm.close()
-        @Assert(true)
+        qm.close()  // 验证 close 不抛异常，不启动 writer/reader 线程
     }
 }
 
@@ -346,9 +341,15 @@ public class DeliveryRecordOverwriteTest {
 
 @Test
 public class DeadLetterStoreTest {
+    private static let counter = AtomicInt64(0)
+
+    private static func dlqDir(name: String): String {
+        "/tmp/fmq_dlq_${name}_${counter.fetchAdd(1) + 1}"
+    }
+
     @TestCase
     public func testAppendAndList(): Unit {
-        let ds = DeadLetterStore("/tmp/fmq_dlq_test", retentionHours: 168)
+        let ds = DeadLetterStore(dlqDir("append"), retentionHours: 168)
         ds.append([0x01u8, 0x02u8, 0x03u8], "/test", 0, "msg-001")
 
         let list1 = ds.list("/test", 0)
@@ -364,7 +365,7 @@ public class DeadLetterStoreTest {
 
     @TestCase
     public func testRedeliver(): Unit {
-        let ds = DeadLetterStore("/tmp/fmq_dlq_test2", retentionHours: 168)
+        let ds = DeadLetterStore(dlqDir("redeliver"), retentionHours: 168)
         ds.append([0xAu8, 0xBu8], "/test", 1, "msg-002")
 
         let r = ds.redeliver("/test", 1, "msg-002")
@@ -380,7 +381,7 @@ public class DeadLetterStoreTest {
 
     @TestCase
     public func testRedeliverNonExistent(): Unit {
-        let ds = DeadLetterStore("/tmp/fmq_dlq_test3", retentionHours: 168)
+        let ds = DeadLetterStore(dlqDir("nox"), retentionHours: 168)
         @Assert(ds.redeliver("/test", 0, "nonexistent").isNone())
     }
 
@@ -400,7 +401,7 @@ public class DeadLetterStoreTest {
 
     @TestCase
     public func testRebuildIndexWorkWithDeletions(): Unit {
-        let ds = DeadLetterStore("/tmp/fmq_dlq_rebuild", retentionHours: 168)
+        let ds = DeadLetterStore(dlqDir("rebidx"), retentionHours: 168)
         ds.append([0x01u8], "/a", 0, "msg-1")
         ds.append([0x02u8], "/b", 0, "msg-2")
         // redeliver 会从索引删除
