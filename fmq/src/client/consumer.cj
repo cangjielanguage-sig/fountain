@@ -304,9 +304,11 @@ public class ConsumerLoop {
      */
     internal static func extractQueueIndex(deliveryId: String): Int64 {
         let parts = deliveryId.split(':')
-        if (parts.size >= 2) {
-            try { Int64.parse(parts[1]) } catch (_: Exception) { 0 }
-        } else { 0 }
+        if (parts.size >= 2 && let Some(idx) <- Int64.tryParse(parts[1])) {
+            idx
+        } else {
+            0
+        }
     }
 
     /** 与 Consumer.dataFilterMatch 逻辑一致（解码失败时过滤） */
