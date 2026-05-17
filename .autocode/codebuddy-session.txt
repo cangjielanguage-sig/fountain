@@ -1,1 +1,0 @@
-codebuddy --resume=57a16080-876f-45a4-8faf-a4c81205016f  # fmq
