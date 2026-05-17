@@ -28,15 +28,17 @@ public class DeliveryRecord {
     let messageId: String
     let consumerId: String
     let groupId: String
+    let topic: String
     var deliverTime: DateTime
     var retryCount: Int64
     var acked: AtomicBool
 
-    public init(messageId: String, consumerId: String, groupId: String,
+    public init(messageId: String, consumerId: String, groupId: String, topic: String,
                 deliverTime: DateTime, retryCount!: Int64 = 0, acked!: AtomicBool = AtomicBool(false)) {
         this.messageId = messageId
         this.consumerId = consumerId
         this.groupId = groupId
+        this.topic = topic
         this.deliverTime = deliverTime
         this.retryCount = retryCount
         this.acked = acked
@@ -93,11 +95,11 @@ public class DeliveryManager {
     /**
      * 记录投递。若 messageId 已存在则不覆盖（防止丢失 ACK 状态）。
      */
-    public func recordDelivery(messageId: String, consumerId: String, groupId: String): DeliveryRecord {
+    public func recordDelivery(messageId: String, consumerId: String, groupId: String, topic: String): DeliveryRecord {
         if (let Some(existing) <- records.get(messageId)) {
             existing
         } else {
-            let record = DeliveryRecord(messageId, consumerId, groupId, DateTime.now())
+            let record = DeliveryRecord(messageId, consumerId, groupId, topic, DateTime.now())
             records[messageId] = record
             record
         }
@@ -154,8 +156,8 @@ public class DeliveryManager {
             log.warn{"max retry reached for ${record.messageId}, move to DLQ"}
             return false
         }
-        // 查找在线消费者（使用 messageId 作为 topic 占位，实际需从记录中提取）
-        let groups = consumerMatcher.matchTopic(record.groupId)
+        // 查找在线消费者（使用记录中的 topic 字段）
+        let groups = consumerMatcher.matchTopic(record.topic)
         if (groups.size > 0) {
             log.info{"retry ${record.retryCount}/${config.maxRetryCount} for ${record.messageId}"}
             record.deliverTime = DateTime.now()

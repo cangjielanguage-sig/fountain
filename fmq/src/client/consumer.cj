@@ -60,7 +60,8 @@ public class Consumer {
                         if (let Some(msgs) <- perTopic.get(topic)) {
                             for ((deliveryId, labels, payload) in msgs) {
                                 if (dataFilter != "" && !Consumer.dataFilterMatch(dataFilter, payload)) {
-                                    let ackPayload = Consumer.encodeAckPayload(deliveryId, topic, 0)
+                                    let ackQi = ConsumerLoop.extractQueueIndex(deliveryId)
+                                    let ackPayload = Consumer.encodeAckPayload(deliveryId, topic, ackQi)
                                     let ackReq = ProtocolMessage(Command.ACK, MessageID(),
                                         MqBody("ack", ackPayload).toData())
                                     client.transfer(ackReq.id, ackReq, Duration.second * 5)
@@ -339,7 +340,8 @@ public class ConsumerLoop {
                         // dataFilter 过滤（基于 payload）
                         if (dataFilter != "" && !Consumer.dataFilterMatch(dataFilter, msgData)) {
                             // 过滤不匹配，仍然要 ACK 避免重复投递
-                            let ackPayload = Consumer.encodeAckPayload(deliveryId, topic, 0)
+                            let ackQi = extractQueueIndex(deliveryId)
+                            let ackPayload = Consumer.encodeAckPayload(deliveryId, topic, ackQi)
                             let ackReq = ProtocolMessage(Command.ACK, MessageID(),
                                 MqBody("ack", ackPayload).toData())
                             client.transfer(ackReq.id, ackReq, Duration.second * 5)

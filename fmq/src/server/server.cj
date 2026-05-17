@@ -151,7 +151,9 @@ public class MqCommand <: SubCommand {
         if (hosts.size > 0) {
             let parts = hosts[0].split(':')
             if (parts.size == 2) {
-                return Int64.parse(parts[1])
+                try { return Int64.parse(parts[1]) } catch (_: Exception) {
+                    log.warn{"invalid port in mq_hosts '${hosts[0]}', using default 7201"}
+                }
             }
         }
         7201
@@ -165,10 +167,12 @@ public class MqCommand <: SubCommand {
         for (i in 0..hosts.size) {
             let parts = hosts[i].split(':')
             if (parts.size == 2) {
-                let p = Int64.parse(parts[1])
-                if (p == port) {
-                    return i
-                }
+                try {
+                    let p = Int64.parse(parts[1])
+                    if (p == port) {
+                        return i
+                    }
+                } catch (_: Exception) {}
             }
         }
         0

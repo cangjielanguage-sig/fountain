@@ -55,6 +55,9 @@ public class ReplicationManager {
     private let slaves = HashMap<String, SlaveProgress>()
     private let slavesMutex = Mutex()
 
+    // 保护跨线程字段（masterNodeId, lastMasterSeq, masterConn）
+    private let stateLock = Mutex()
+
     // Slave 侧到 Master 的连接
     private var masterConn: ?Client<ProtocolMessage, EncodedMessage, ProtocolMessage, MqBody, MessageID> = None
 
@@ -66,13 +69,13 @@ public class ReplicationManager {
 
     public func promoteToMaster(): Unit {
         isMaster.store(true)
-        masterNodeId = ""
+        synchronized(stateLock) { masterNodeId = "" }
         log.info{"promoted to master"}
     }
 
     public func demoteToSlave(masterId: String): Unit {
         isMaster.store(false)
-        masterNodeId = masterId
+        synchronized(stateLock) { masterNodeId = masterId }
         log.info{"demoted to slave of ${masterId}"}
     }
 
@@ -123,7 +126,7 @@ public class ReplicationManager {
      */
     public func onIncrementalSync(data: Array<Byte>, seq: Int64): Unit {
         if (!isSyncing.load()) { return }
-        lastMasterSeq = seq
+        synchronized(stateLock) { lastMasterSeq = seq }
         log.debug{"incremental sync: seq=${seq}, ${data.size} bytes"}
     }
 
@@ -133,18 +136,20 @@ public class ReplicationManager {
      * 检测 Master 是否存活。通过连接发送 PING 验证。
      */
     public func isMasterAlive(): Bool {
-        if (let Some(conn) <- masterConn) {
+        let conn = synchronized(stateLock) { masterConn }
+        if (let Some(c) <- conn) {
             try {
                 let req = ProtocolMessage(Command.PING(0), MessageID(),
                     MqBody("ping", []).toData())
-                let resp = conn.transfer(req.id, req, Duration.second * 3)
+                let resp = c.transfer(req.id, req, Duration.second * 3)
                 resp.isSome()
             } catch (_: Exception) {
                 false
             }
         } else {
             // 无连接时尝试连接一次
-            if (masterNodeId.isEmpty() || config.mqHosts.size == 0) {
+            let nodeId = synchronized(stateLock) { masterNodeId }
+            if (nodeId.isEmpty() || config.mqHosts.size == 0) {
                 return true
             }
             tryConnect()
@@ -170,12 +175,15 @@ public class ReplicationManager {
         log.info{"switchback: returning master to ${originalMasterId}"}
         // Phase 7 简化：直接降级，原 Master 需自己提升
         isMaster.store(false)
-        masterNodeId = originalMasterId
+        synchronized(stateLock) { masterNodeId = originalMasterId }
         true
     }
 
     public func role(): String {
-        if (isMaster.load()) { "master" } else { "slave(${masterNodeId})" }
+        if (isMaster.load()) { "master" } else {
+            let id = synchronized(stateLock) { masterNodeId }
+            "slave(${id})"
+        }
     }
 
     // ───── 私有方法 ─────
@@ -197,8 +205,10 @@ public class ReplicationManager {
                 checker: { _ => true }
             ).noDelay(true).build()
             localConn = conn
-            this.masterConn = conn
-            this.masterNodeId = masterId
+            synchronized(stateLock) {
+                this.masterConn = conn
+                this.masterNodeId = masterId
+            }
             this.isSyncing.store(true)
 
             let req = ProtocolMessage(Command.SLAVEOF(1), MessageID(),
@@ -210,7 +220,7 @@ public class ReplicationManager {
             } else {
                 log.warn{"master ${masterId} did not respond to SLAVEOF"}
                 closeConn(conn)
-                this.masterConn = None
+                synchronized(stateLock) { this.masterConn = None }
                 this.isSyncing.store(false)
                 false
             }
@@ -219,7 +229,7 @@ public class ReplicationManager {
             if (let Some(c) <- localConn) {
                 if (!c.isClosed()) { c.close() }
             }
-            this.masterConn = None
+            synchronized(stateLock) { this.masterConn = None }
             this.isSyncing.store(false)
             false
         }
@@ -227,13 +237,18 @@ public class ReplicationManager {
 
     private func tryConnect(): Bool {
         if (config.mqHosts.size == 0) { return false }
-        connectByAddress(masterNodeId, config.mqHosts[0])
+        let nodeId = synchronized(stateLock) { masterNodeId }
+        connectByAddress(nodeId, config.mqHosts[0])
     }
 
     private func closeMasterConn(): Unit {
-        if (let Some(conn) <- masterConn) {
-            if (!conn.isClosed()) { conn.close() }
+        let conn = synchronized(stateLock) {
+            let c = masterConn
             masterConn = None
+            c
+        }
+        if (let Some(cc) <- conn) {
+            if (!cc.isClosed()) { cc.close() }
         }
     }
 

@@ -18,5 +18,4 @@ package fountain::fmq.cli
 internal import fountain::f_app.SubCommand
 internal import fountain::f_app.SubCommandMediator
 internal import fountain::fmq.common.*
-internal import fountain::fmq.common.*
 internal import fountain::fmq.client.MqClient

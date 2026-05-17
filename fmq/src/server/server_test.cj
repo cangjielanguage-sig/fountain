@@ -327,7 +327,7 @@ public class DeliverySimpleTest {
     public func testRecordAndAck(): Unit {
         let config = deliveryTestConfig()
         let dm = DeliveryManager(config)
-        let record = dm.recordDelivery("msg1", "consumer1", "group1")
+        let record = dm.recordDelivery("msg1", "consumer1", "group1", "/test")
         @Assert(record.messageId == "msg1")
         let ok = dm.onAck("msg1", "/test", 0)
         @Assert(ok)
@@ -337,7 +337,7 @@ public class DeliverySimpleTest {
     public func testDoubleAckReturnsFalse(): Unit {
         let config = deliveryTestConfig()
         let dm = DeliveryManager(config)
-        dm.recordDelivery("msg1", "consumer1", "group1")
+        dm.recordDelivery("msg1", "consumer1", "group1", "/test")
         dm.onAck("msg1", "/test", 0)
         let second = dm.onAck("msg1", "/test", 0)
         @Assert(!second)
@@ -347,7 +347,7 @@ public class DeliverySimpleTest {
     public func testConcurrentAckSingleSuccess(): Unit {
         let config = deliveryTestConfig()
         let dm = DeliveryManager(config)
-        dm.recordDelivery("concurrent-msg", "consumer-c", "group-c")
+        dm.recordDelivery("concurrent-msg", "consumer-c", "group-c", "/test")
 
         // 并发启动多个线程同时 ACK
         let futures = ArrayList<Future<Bool>>()
@@ -441,10 +441,10 @@ public class DeliveryRecordOverwriteTest {
         let config = deliveryTestConfig()
         let dm = DeliveryManager(config)
 
-        let first = dm.recordDelivery("msg1", "consumer-A", "group-A")
+        let first = dm.recordDelivery("msg1", "consumer-A", "group-A", "/test")
         @Assert(first.groupId == "group-A")
 
-        let second = dm.recordDelivery("msg1", "consumer-B", "group-B")
+        let second = dm.recordDelivery("msg1", "consumer-B", "group-B", "/test")
         @Assert(second.groupId == "group-A")
         @Assert(second.consumerId == "consumer-A")
     }

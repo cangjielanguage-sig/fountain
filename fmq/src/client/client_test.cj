@@ -446,3 +446,63 @@ public class MqClientSingletonTest {
 /**
  * 无 SyncRegistryTest：需要真实的 MQ 服务端连接。
  */
+
+/**
+ * Consumer.poll() dataFilter ACK queueIndex 测试。
+ * P2-1: 验证 ACK payload 使用 deliveryId 中的真实 queueIndex。
+ */
+@Test
+public class AckQueueIndexTest {
+    @TestCase
+    public func testAckPayloadWithDeliveryIdQueueIndex(): Unit {
+        // deliveryId 格式: "topic:queueIndex:groupId:offset"
+        let deliveryId = "/order:3:groupA:42"
+
+        // encodeAckPayload 编码 (msgId, topic, queueIndex)
+        let payload = Consumer.encodeAckPayload(deliveryId, "/order", 3)
+
+        // 解码验证 queueIndex 正确
+        let buf = ByteBuffer(payload)
+        let dec = DefaultCodec()
+        if (let Some(id) <- dec.decode<String>(buf)
+            && let Some(tp) <- dec.decode<String>(buf)
+            && let Some(qi) <- dec.decode<Int64>(buf)) {
+            @Assert(id == deliveryId)
+            @Assert(tp == "/order")
+            @Assert(qi == 3)
+        } else {
+            @Assert(false)
+        }
+    }
+
+    @TestCase
+    public func testExtractQueueIndexFromDeliveryId(): Unit {
+        @Assert(ConsumerLoop.extractQueueIndex("/a:0:g:0") == 0)
+        @Assert(ConsumerLoop.extractQueueIndex("/b:5:g:10") == 5)
+        @Assert(ConsumerLoop.extractQueueIndex("/c/d:7:x:3") == 7)
+    }
+
+    @TestCase
+    public func testDataFilterAckUsesDeliveryIdQueueIndex(): Unit {
+        // 模拟 ConsumerLoop dataFilter 不匹配时 ACK: deliveryId="/topic:3:g:5"
+        // 验证 encodeAckPayload 使用 queueIndex=3（提取自 deliveryId）而非 0
+        let deliveryId = "/topic:3:g:5"
+        let queueIndex = ConsumerLoop.extractQueueIndex(deliveryId)
+        @Assert(queueIndex == 3)
+
+        // 使用提取的 queueIndex 编码 ACK
+        let payload = Consumer.encodeAckPayload(deliveryId, "/topic", queueIndex)
+
+        // 解码验证
+        let buf = ByteBuffer(payload)
+        let dec = DefaultCodec()
+        if (let Some(id) <- dec.decode<String>(buf)
+            && let Some(tp) <- dec.decode<String>(buf)
+            && let Some(qi) <- dec.decode<Int64>(buf)) {
+            @Assert(qi == 3)
+            @Assert(qi != 0)  // 确保不是硬编码的 0
+        } else {
+            @Assert(false)
+        }
+    }
+}

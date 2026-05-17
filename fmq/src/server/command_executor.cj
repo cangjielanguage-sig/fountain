@@ -272,7 +272,7 @@ public class CommandExecutor {
                                     (ArrayList<String>(), framed)
                                 }
                                 let deliveryId = "${topic}:${q.index}:${groupId}:${offset}"
-                                deliveryManager.recordDelivery(deliveryId, groupId, groupId)
+                                deliveryManager.recordDelivery(deliveryId, groupId, groupId, topic)
                                 consumed.add((deliveryId, labels, payload))
                             }
                         } else {
@@ -318,7 +318,7 @@ public class CommandExecutor {
                                         (ArrayList<String>(), framed)
                                     }
                                     let deliveryId = "${topic}:${q.index}:${groupId}:${offset}"
-                                    deliveryManager.recordDelivery(deliveryId, groupId, groupId)
+                                    deliveryManager.recordDelivery(deliveryId, groupId, groupId, topic)
                                     consumed.add((deliveryId, labels, payload))
                                 }
                             } else {

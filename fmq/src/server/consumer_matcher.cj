@@ -65,9 +65,9 @@ public class ConsumerMatcher {
             }
             result = remaining.size < registrations.size
             registrations = remaining
-        }
-        if (result) {
-            compiledPatterns = HashMap<String, PathPattern>()  // 清除缓存
+            if (result) {
+                compiledPatterns = HashMap<String, PathPattern>()  // 清除缓存
+            }
         }
         result
     }

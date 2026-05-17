@@ -40,9 +40,14 @@ public class ConsumerGroupManager {
     public func createGroup(topic: String, groupId: String): MqErrorCode {
         let code = topicManager.addConsumerGroup(topic, groupId)
         if (code == MqErrorCode.SUCCESS) {
-            // 初始化该组的 offset
-            deliveryManager.setOffset(topic, 0, groupId, 0)
-            log.info{"created consumer group '${groupId}' for topic '${topic}'"}
+            // 初始化该组在所有队列上的 offset（从 TopicMeta 获取 queueCount）
+            let queueCount = if (let Some(meta) <- topicManager.getTopicMeta(topic)) {
+                meta.getQueueCount()
+            } else { 1 }
+            for (i in 0..queueCount) {
+                deliveryManager.setOffset(topic, i, groupId, 0)
+            }
+            log.info{"created consumer group '${groupId}' for topic '${topic}' with ${queueCount} queues"}
             MqErrorCode.SUCCESS
         } else if (code == MqErrorCode.GROUP_EXISTS) {
             log.info{"consumer group '${groupId}' already exists for topic '${topic}'"}
