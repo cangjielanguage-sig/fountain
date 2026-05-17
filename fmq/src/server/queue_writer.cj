@@ -51,7 +51,6 @@ public class QueueWriter {
                 if (let Some(data) <- inboundQueue.remove()) {
                     queue.append(data)
                     queue.sync()
-                    // 同步到从节点
                     syncToSlaves(data)
                 } else {
                     sleep(Duration.millisecond * 10)
@@ -60,6 +59,7 @@ public class QueueWriter {
                 log.error{"QueueWriter error: ${e.message}"}
             }
         }
+        eprintln("[QW run] exit")
     }
 
     public func close(): Unit { closed.store(true) }

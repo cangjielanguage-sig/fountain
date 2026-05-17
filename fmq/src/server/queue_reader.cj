@@ -43,7 +43,6 @@ public class QueueReader {
         log.info{"QueueReader started for ${queue}"}
         while (!closed.load()) {
             try {
-                // 1. 从 SegmentedLog 流式读取（O(1) 内存）
                 let skip = msgCount
                 if (let Some(data) <- queue.tryReadFromLog(skip)) {
                     msgCount += 1

@@ -252,9 +252,9 @@ public class QueueManagerLifecycleTest {
 
         qm.createQueues("/test-life", 1)
         qm.startAll()
-        sleep(Duration.millisecond * 100)
+        sleep(Duration.millisecond * 500)
         qm.close()
-        @Assert(true)  // 无异常即通过
+        @Assert(true)
     }
 }
 
