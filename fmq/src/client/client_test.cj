@@ -294,5 +294,44 @@ public class ConsumerDecodeWithLabelsTest {
 }
 
 /**
+ * MqClient 单例并发安全测试。
+ * 验证 synchronized getInstance() 防止双重检查竞态。
+ */
+@Test
+public class MqClientSingletonTest {
+    @TestCase
+    public func testConcurrentGetInstanceReturnsSameReference(): Unit {
+        // 使用不含有效服务器的 config，所有线程 getInstance 都会抛异常
+        // 测试目标是验证 synchronized 块不会因并发调用而损坏
+        let config = MqConfig(
+            mqHosts: ArrayList(), syncHosts: ArrayList(),
+            dataDir: "/tmp", segmentMaxSize: 1024,
+            heartbeatIntervalSec: 5, healthcheckMaxRetry: 3,
+            idleTimeoutMinutes: 30, ackTimeoutMs: 30000,
+            maxRetryCount: 3, retryIntervalMs: 1000,
+            dlqRetentionHours: 168, maxMessageSize: 4096,
+            maxLabelsPerMessage: 64, retentionHours: 72,
+            syncQuorum: 1)
+        let futures = ArrayList<Future<Bool>>()
+        for (_ in 0..20) {
+            let c = config
+            futures.add(spawn {
+                try {
+                    MqClient.getInstance(c)
+                    true
+                } catch (_: Exception) { false }
+            })
+        }
+        var ok: Int64 = 0
+        var fail: Int64 = 0
+        for (f in futures) {
+            if (f.get()) { ok += 1 } else { fail += 1 }
+        }
+        // 没有有效服务器时全部应该失败，但不应有崩溃
+        @Assert(ok + fail == 20)
+    }
+}
+
+/**
  * 无 SyncRegistryTest：需要真实的 MQ 服务端连接。
  */

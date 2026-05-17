@@ -18,6 +18,7 @@ package fountain::fmq.client
 import fountain::f_protocol.default.{Message as ProtocolMessage, EncodedMessage}
 import fountain::f_codec.default.DefaultCodec
 import std.io.{ByteBuffer, SeekPosition}
+import std.sync.Mutex
 
 /**
  * MQ 客户端单例。
@@ -25,6 +26,7 @@ import std.io.{ByteBuffer, SeekPosition}
  */
 public class MqClient <: Resource {
     private static var instance: ?MqClient = None
+    private static let instanceLock = Mutex()  // 保护 getInstance() 双重检查竞态
     private let log = LoggerFactory.getLogger('fountain::fmq.MqClient')
 
     // MQ 服务端连接
@@ -48,30 +50,32 @@ public class MqClient <: Resource {
     }
 
     /**
-     * 获取单例实例。
+     * 获取单例实例，synchronized 防止并发创建竞态。
      */
     public static func getInstance(config: MqConfig): MqClient {
-        if (let Some(inst) <- instance) { return inst }
+        synchronized(instanceLock) {
+            if (let Some(inst) <- instance) { return inst }
 
-        let hostPort = if (config.mqHosts.size > 0) { config.mqHosts[0] } else { "" }
-        let parts = hostPort.split(':')
-        if (parts.size != 2) {
-            throw MqException("invalid mq_hosts: ${config.mqHosts}")
+            let hostPort = if (config.mqHosts.size > 0) { config.mqHosts[0] } else { "" }
+            let parts = hostPort.split(':')
+            if (parts.size != 2) {
+                throw MqException("invalid mq_hosts: ${config.mqHosts}")
+            }
+
+            let conn = Client<ProtocolMessage, EncodedMessage, ProtocolMessage, MqBody, MessageID>.builder(
+                queueSize: 1024,
+                socketCount: 1,
+                host: parts[0],
+                port: UInt16(Int64.parse(parts[1])),
+                idGetter: { msg => msg.id },
+                checkDuration: Duration.second * 30,
+                checker: { buffer => true }
+            ).noDelay(true).build()
+
+            let inst = MqClient(config, conn)
+            instance = inst
+            inst
         }
-
-        let conn = Client<ProtocolMessage, EncodedMessage, ProtocolMessage, MqBody, MessageID>.builder(
-            queueSize: 1024,
-            socketCount: 1,
-            host: parts[0],
-            port: UInt16(Int64.parse(parts[1])),
-            idGetter: { msg => msg.id },
-            checkDuration: Duration.second * 30,
-            checker: { buffer => true }
-        ).noDelay(true).build()
-
-        let inst = MqClient(config, conn)
-        instance = inst
-        inst
     }
 
     // ───── 生产 API ─────
