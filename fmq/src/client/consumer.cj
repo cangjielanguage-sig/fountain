@@ -20,6 +20,7 @@ import fountain::f_codec.default.DefaultCodec
 import fountain::f_data.path.DataPath
 import fountain::f_data.{DataList, Data}
 import std.io.{ByteBuffer, SeekPosition}
+import std.convert.*
 
 /**
  * 消费者。
