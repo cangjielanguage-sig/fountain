@@ -18,7 +18,7 @@ package fountain::fmq.client
 import fountain::f_protocol.default.{Message as ProtocolMessage, EncodedMessage}
 import fountain::f_codec.default.DefaultCodec
 import std.io.{ByteBuffer, SeekPosition}
-import std.sync.Mutex
+import std.sync.{Mutex, AtomicBool}
 
 /**
  * MQ 客户端单例。
@@ -38,7 +38,7 @@ public class MqClient <: Resource {
     let syncRegistry: SyncRegistry
 
     private let config: MqConfig
-    private var closed: Bool = false
+    private let closed = AtomicBool(false)
 
     private init(config: MqConfig, mqConn: Client<ProtocolMessage, EncodedMessage, ProtocolMessage, MqBody, MessageID>) {
         this.config = config
@@ -262,12 +262,13 @@ public class MqClient <: Resource {
     // ───── 生命周期 ─────
 
     public func close(): Unit {
-        if (closed) { return }
-        closed = true
+        if (closed.load()) { return }
+        closed.store(true)
+        syncRegistry.stopHeartbeat()
         mqConn.close()
     }
 
-    public func isClosed(): Bool { closed }
+    public func isClosed(): Bool { closed.load() }
 
     // ───── 协议编解码 ─────
 
