@@ -18,6 +18,7 @@ package fountain::fmq.client
 import fountain::f_protocol.default.{Message as ProtocolMessage, EncodedMessage}
 import fountain::f_codec.default.DefaultCodec
 import std.io.ByteBuffer
+import std.sync.Mutex
 
 /**
  * 订阅管理器。
@@ -28,6 +29,7 @@ public class Subscriber {
     private let client: Client<ProtocolMessage, EncodedMessage, ProtocolMessage, MqBody, MessageID>
     private let log = LoggerFactory.getLogger('fountain::fmq.Subscriber')
     private let subscriptions = ArrayList<(String, String, String)>()  // (groupId, topic, dataFilter)
+    private let subLock = Mutex()  // 保护 subscriptions 并发读写
 
     public init(config: MqConfig,
                 client: Client<ProtocolMessage, EncodedMessage, ProtocolMessage, MqBody, MessageID>) {
@@ -60,7 +62,9 @@ public class Subscriber {
         let subResp = client.transfer(subReq.id, subReq, Duration.second * 10)
         let dataFilterVal = dataFilter
         if (subResp.isSome()) {
-            subscriptions.add((groupId, extractTopic(matchMode), dataFilterVal))
+            synchronized(subLock) {
+                subscriptions.add((groupId, extractTopic(matchMode), dataFilterVal))
+            }
             log.info{"subscribed group=${groupId} to ${modeToString(matchMode)}"}
             true
         } else {
@@ -79,14 +83,16 @@ public class Subscriber {
             MqBody("unsubscribe", subBody).toData())
         let resp = client.transfer(req.id, req, Duration.second * 10)
         if (resp.isSome()) {
-            // 从本地列表移除
-            var i = 0
-            while (i < subscriptions.size) {
-                let (g, t, _) = subscriptions[i]
-                if (g == groupId && t == topic) {
-                    subscriptions.remove(at: i)
-                } else {
-                    i += 1
+            // 从本地列表移除（加锁与 poll/getSubscriptions 互斥）
+            synchronized(subLock) {
+                var i = 0
+                while (i < subscriptions.size) {
+                    let (g, t, _) = subscriptions[i]
+                    if (g == groupId && t == topic) {
+                        subscriptions.remove(at: i)
+                    } else {
+                        i += 1
+                    }
                 }
             }
             log.info{"unsubscribed group=${groupId} from ${topic}"}
@@ -101,11 +107,13 @@ public class Subscriber {
      * 获取活跃订阅列表。
      */
     public func getSubscriptions(): ArrayList<(String, String, String)> {
-        let copy = ArrayList<(String, String, String)>()
-        for (s in subscriptions) {
-            copy.add(s)
+        synchronized(subLock) {
+            let copy = ArrayList<(String, String, String)>()
+            for (s in subscriptions) {
+                copy.add(s)
+            }
+            copy
         }
-        copy
     }
 
     /**
