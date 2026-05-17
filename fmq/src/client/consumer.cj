@@ -233,7 +233,7 @@ public class ConsumerLoop {
         closed = false
         let selfRef = this
         spawn {
-            while (!selfRef.closed) {
+            while (!selfRef.closed && !selfRef.client.isClosed()) {
                 try {
                     selfRef.pollOnce()
                 } catch (e: Exception) {

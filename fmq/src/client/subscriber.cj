@@ -68,6 +68,8 @@ public class Subscriber {
             log.info{"subscribed group=${groupId} to ${modeToString(matchMode)}"}
             true
         } else {
+            // SUBSCRIBE 失败：清理已成功的 REGISTER 避免遗留注册
+            deregister(groupId, groupId)
             log.warn{"subscribe failed for group=${groupId}"}
             false
         }
