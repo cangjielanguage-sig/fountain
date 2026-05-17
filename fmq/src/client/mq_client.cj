@@ -266,6 +266,9 @@ public class MqClient <: Resource {
         closed.store(true)
         syncRegistry.stopHeartbeat()
         mqConn.close()
+        synchronized(instanceLock) {
+            instance = None
+        }
     }
 
     public func isClosed(): Bool { closed.load() }

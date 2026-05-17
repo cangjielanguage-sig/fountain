@@ -32,6 +32,7 @@ public class QueueManager {
     private let lock = Mutex()
     private let writers = ArrayList<QueueWriter>()  // 跟踪 writer 线程
     private let readers = ArrayList<QueueReader>()  // 跟踪 reader 线程
+    private let threadFutures = ArrayList<Future<Unit>>()  // 跟踪 spawn 线程 Future
 
     public init(config: MqConfig, nodeIndex!: Int64 = 0) {
         this.config = config
@@ -232,8 +233,8 @@ public class QueueManager {
                 let reader = QueueReader(q)
                 writers.add(writer)
                 readers.add(reader)
-                spawn { writer.run() }
-                spawn { reader.run() }
+                threadFutures.add(spawn { writer.run() })
+                threadFutures.add(spawn { reader.run() })
             }
         }
         log.info{"startAll: ${writers.size} writers, ${readers.size} readers started"}
@@ -243,6 +244,8 @@ public class QueueManager {
         // 先关闭 writer 和 reader 线程（让它们退出循环）
         for (w in writers) { w.close() }
         for (r in readers) { r.close() }
+        // 等待所有线程退出
+        for (f in threadFutures) { f.get() }
         // 再关闭队列（SegmentedLog）
         let allQueues: ArrayList<MqQueue>
         synchronized(lock) {

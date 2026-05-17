@@ -47,16 +47,18 @@ public func validateTopic(topic: String): Bool {
  *   "/a_b"         → "_a__b"
  */
 public func encodeTopicToPath(topic: String): String {
-    var result = ""
+    let parts = ArrayList<String>()
     for (ch in topic.toRuneArray()) {
         if (ch == r'_') {
-            result += "__"
+            parts.add("__")
         } else if (ch == r'/') {
-            result += "_"
+            parts.add("_")
         } else {
-            result += ch.toString()
+            parts.add(ch.toString())
         }
     }
+    var result = ""
+    for (p in parts) { result += p }
     result
 }
 

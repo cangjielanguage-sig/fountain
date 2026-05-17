@@ -45,11 +45,14 @@ public class CommandRunner {
         let name = getArg(args, "--name")
         let queues = getArg(args, "--queues")
         if (let Some(n) <- name) {
-            let q = if (let Some(s) <- queues) {
-                if (let Some(v) <- Int64.tryParse(s)) { v }
+            var q: Int64 = 1
+            var usingDefault = false
+            if (let Some(s) <- queues) {
+                if (let Some(v) <- Int64.tryParse(s)) { q = v }
                 else { println("error: --queues must be a number, got '${s}'"); return }
-            } else { 1 }
+            } else { usingDefault = true }
             let client = if (let Some(c) <- getClient()) { c } else { return }
+            if (usingDefault) { println("using default queue count: 1") }
             if (client.createTopic(n, queueCount: q)) {
                 println("created topic '${n}' with ${q} queues")
             } else {
@@ -162,7 +165,7 @@ public class CommandRunner {
     public static func listConsumers(args: Array<String>): Unit {
         let topic = getArg(args, "--topic")
         if (let Some(t) <- topic) {
-            println("consumers for topic ${t}: (requires ConsumerMatcher integration)")
+            println("not yet implemented: consumer listing requires server introspection")
         } else {
             println("error: --topic is required")
         }
