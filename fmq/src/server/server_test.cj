@@ -24,6 +24,12 @@ import std.sync.AtomicInt64
 
 @Test
 public class QueueDistributionTest {
+    private static let dirCounter = AtomicInt64(0)
+
+    private static func makeQueue(topic: String, index: Int64): MqQueue {
+        MqQueue(topic, index, "/tmp/fmq_qdist_${dirCounter.fetchAdd(1) + 1}", 1024)
+    }
+
     @TestCase
     public func testDistributeReturnsValidIndex(): Unit {
         let config = testConfig()
@@ -34,6 +40,68 @@ public class QueueDistributionTest {
         @Assert(n1 >= 0 && n1 < 3)
         let n2 = qm.distribute("/test", 2, 3)
         @Assert(n2 >= 0 && n2 < 3)
+    }
+
+    @TestCase
+    public func testRouteToQueueSingleQueueReturnsFirst(): Unit {
+        let config = testConfig()
+        let qm = QueueManager(config, nodeIndex: 0)
+        let q0 = makeQueue("/test", 0)
+        let queues = ArrayList<MqQueue>()
+        queues.add(q0)
+        // 单队列 → 始终返回 queues[0]
+        let result = qm.routeToQueue("/test", queues)
+        @Assert(result.topic == "/test")
+        @Assert(result.index == 0)
+        q0.close()
+    }
+
+    @TestCase
+    public func testRouteToQueueSameTopicConsistentRouting(): Unit {
+        let config = testConfig()
+        let qm = QueueManager(config, nodeIndex: 0)
+        let q0 = makeQueue("/test", 0)
+        let q1 = makeQueue("/test", 1)
+        let q2 = makeQueue("/test", 2)
+        let queues = ArrayList<MqQueue>()
+        queues.add(q0); queues.add(q1); queues.add(q2)
+        // 相同 topic 多次调用 → CRC64 一致，路由到相同队列
+        let r1 = qm.routeToQueue("/test", queues)
+        let r2 = qm.routeToQueue("/test", queues)
+        @Assert(r1.index == r2.index)
+        q0.close(); q1.close(); q2.close()
+    }
+
+    @TestCase
+    public func testRouteToQueueDifferentTopicsMayDiverge(): Unit {
+        let config = testConfig()
+        let qm = QueueManager(config, nodeIndex: 0)
+        let q0 = makeQueue("/a", 0)
+        let q1 = makeQueue("/a", 1)
+        let q2 = makeQueue("/a", 2)
+        let queues = ArrayList<MqQueue>()
+        queues.add(q0); queues.add(q1); queues.add(q2)
+        let rA = qm.routeToQueue("/a", queues)
+        let rB = qm.routeToQueue("/b", queues)
+        // 不同 topic → CRC64 不同，可能路由到不同队列；无论如何每个都应有效
+        @Assert(rA.index >= 0 && rA.index < 3)
+        @Assert(rB.index >= 0 && rB.index < 3)
+        q0.close(); q1.close(); q2.close()
+    }
+
+    @TestCase
+    public func testRouteToQueueIndexInRange(): Unit {
+        let config = testConfig()
+        let qm = QueueManager(config, nodeIndex: 0)
+        let queues = ArrayList<MqQueue>()
+        for (i in 0..5) {
+            queues.add(makeQueue("/rng", i))
+        }
+        for (_ in 0..50) {
+            let q = qm.routeToQueue("/rng-${dirCounter.fetchAdd(1)}", queues)
+            @Assert(q.index >= 0 && q.index < 5)
+        }
+        for (q in queues) { q.close() }
     }
 
     private static func testConfig(): MqConfig {
