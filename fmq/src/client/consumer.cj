@@ -59,8 +59,12 @@ public class Consumer {
                         let msgs = decodeMessageListWithLabels(body.payload)
                         if (msgs.size > 0) {
                             let (deliveryId, labels, payload) = msgs[0]
-                            // dataFilter 过滤
+                            // dataFilter 过滤 — 直接 ACK 避免服务端重复投递/入 DLQ
                             if (dataFilter != "" && !Consumer.dataFilterMatch(dataFilter, payload)) {
+                                let ackPayload = Consumer.encodeAckPayload(deliveryId, topic, 0)
+                                let ackReq = ProtocolMessage(Command.ACK, MessageID(),
+                                    MqBody("ack", ackPayload).toData())
+                                client.transfer(ackReq.id, ackReq, Duration.second * 5)
                                 continue
                             }
                             let qi = ConsumerLoop.extractQueueIndex(deliveryId)

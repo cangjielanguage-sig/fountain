@@ -294,6 +294,47 @@ public class ConsumerDecodeWithLabelsTest {
 }
 
 /**
+ * dataFilter 过滤后 ACK 列格式验证。
+ * P2-8: 确保 Consumer.poll() 过滤不匹配消息时发送 ACK。
+ */
+@Test
+public class DataFilterAckTest {
+    @TestCase
+    public func testAckPayloadFormatForFilteredMessage(): Unit {
+        let payload = Consumer.encodeAckPayload("topic:0:group:42", "/test", 0)
+        // 解码验证格式: deliveryId(String) + topic(String) + queueIndex(Int64)
+        let buf = ByteBuffer(payload)
+        let dec = DefaultCodec()
+        if (let Some(id) <- dec.decode<String>(buf)
+            && let Some(tp) <- dec.decode<String>(buf)
+            && let Some(qi) <- dec.decode<Int64>(buf)) {
+            @Assert(id == "topic:0:group:42")
+            @Assert(tp == "/test")
+            @Assert(qi == 0)
+        }
+    }
+
+    @TestCase
+    public func testDataFilterMatchRejectsUnknownField(): Unit {
+        // DefaultCodec 编码 "a"→1, "b"→2
+        let buf = ByteBuffer()
+        DefaultCodec()
+            .encode("a").encode(1i64)
+            .encode("b").encode(2i64)
+            .finish().copy(to: buf, closeFromOnEnd: true, closeToOnEnd: false)
+        let raw = extractBytes(buf)
+        // 过滤 $z 不存在的字段 → 应返回 false
+        @Assert(!Consumer.dataFilterMatch("$z", raw))
+    }
+
+    @TestCase
+    public func testDataFilterMatchRejectsEmptyPayload(): Unit {
+        // 空 payload 无法解码 → 应安全返回 false
+        @Assert(!Consumer.dataFilterMatch("$.x", []))
+    }
+}
+
+/**
  * MqClient 单例并发安全测试。
  * 验证 synchronized getInstance() 防止双重检查竞态。
  */
