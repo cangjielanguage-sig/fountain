@@ -88,7 +88,7 @@ public class MqQueueReadTest {
         @Assert(q.tryFinishDrain())
 
         // 排空中且无 stream → close 并返回 true
-        q.draining = true
+        q.draining.store(true)
         @Assert(q.tryFinishDrain())
         @Assert(q.isClosed())
 

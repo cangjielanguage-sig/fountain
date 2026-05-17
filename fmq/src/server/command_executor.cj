@@ -258,6 +258,8 @@ public class CommandExecutor {
                                 deliveryManager.recordDelivery(deliveryId, groupId, groupId)
                                 consumed.add((deliveryId, labels, payload))
                             }
+                        } else {
+                            break
                         }
                     }
                     let consumedCount = consumed.size

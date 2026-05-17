@@ -21,6 +21,7 @@ import fountain::f_data.path.DataPath
 import fountain::f_data.{DataList, Data}
 import std.io.{ByteBuffer, SeekPosition}
 import std.convert.*
+import std.sync.AtomicBool
 
 /**
  * 消费者。
@@ -215,8 +216,9 @@ public class ConsumerLoop {
     private let topic: String
     private let dataFilter: String
     private let callback: (Message) -> Unit
-    private var running: Bool = false
-    private var closed: Bool = false
+    private let running = AtomicBool(false)
+    private let closed = AtomicBool(false)
+    private var threadFuture: ?Future<Unit> = None
 
     public init(client: Client<ProtocolMessage, EncodedMessage, ProtocolMessage, MqBody, MessageID>,
                 subscriber: Subscriber, groupId: String, topic: String,
@@ -234,12 +236,12 @@ public class ConsumerLoop {
      * 启动后台消费线程。
      */
     public func start(): Unit {
-        if (running) { return }
-        running = true
-        closed = false
+        if (running.load()) { return }
+        running.store(true)
+        closed.store(false)
         let selfRef = this
-        spawn {
-            while (!selfRef.closed && !selfRef.client.isClosed()) {
+        threadFuture = spawn {
+            while (!selfRef.closed.load() && !selfRef.client.isClosed()) {
                 try {
                     selfRef.pollOnce()
                 } catch (e: Exception) {
@@ -247,7 +249,7 @@ public class ConsumerLoop {
                     sleep(Duration.millisecond * 100)
                 }
             }
-            selfRef.running = false
+            selfRef.running.store(false)
         }
         log.info{"ConsumerLoop started: ${groupId}/${topic}"}
     }
@@ -256,11 +258,14 @@ public class ConsumerLoop {
      * 停止消费循环。
      */
     public func close(): Unit {
-        closed = true
+        closed.store(true)
+        if (let Some(f) <- threadFuture) {
+            f.get()
+        }
         log.info{"ConsumerLoop closed: ${groupId}/${topic}"}
     }
 
-    public func isRunning(): Bool { running }
+    public func isRunning(): Bool { running.load() }
 
     /**
      * 单次拉取：CONSUME → dataFilter → callback → ACK。

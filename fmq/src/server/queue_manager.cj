@@ -177,8 +177,8 @@ public class QueueManager {
             for ((topic, topicQueues) in queues) {
                 for (q in topicQueues) {
                     let owner = distribute(topic, q.index, config.mqHosts.size)
-                    if (owner == restoredNode && !q.draining) {
-                        q.draining = true
+                    if (owner == restoredNode && !q.draining.load()) {
+                        q.draining.store(true)
                         returned.add((topic, q.index))
                         log.info{"unreassign ${topic}[${q.index}]: drain mode"}
                     }
@@ -201,7 +201,7 @@ public class QueueManager {
                 var i: Int64 = 0
                 while (i < topicQueues.size) {
                     let q = topicQueues[i]
-                    if (q.draining && q.tryFinishDrain()) {
+                    if (q.draining.load() && q.tryFinishDrain()) {
                         log.info{"drain complete: ${topic}[${q.index}], removed from node ${nodeIndex}"}
                         topicQueues.remove(at: i)
                     } else {

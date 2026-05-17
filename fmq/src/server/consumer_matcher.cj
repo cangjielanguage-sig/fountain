@@ -49,9 +49,9 @@ public class ConsumerMatcher {
                 }
             }
             registrations.add(registration)
+            // 注册变更时清除缓存（在同步块内，与 matchTopic 互斥）
+            compiledPatterns = HashMap<String, PathPattern>()
         }
-        // 注册变更时清除缓存
-        compiledPatterns = HashMap<String, PathPattern>()
     }
 
     public func deregister(groupId: String, consumerId: String): Bool {

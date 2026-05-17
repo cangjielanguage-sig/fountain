@@ -136,6 +136,16 @@ public class Subscriber {
             MqBody("deregister", raw).toData())
         let resp = client.transfer(req.id, req, Duration.second * 10)
         if (resp.isSome()) {
+            // 从本地订阅列表移除匹配条目
+            synchronized(subLock) {
+                var i = 0
+                while (i < subscriptions.size) {
+                    let (g, _, _) = subscriptions[i]
+                    if (g == groupId) {
+                        subscriptions.remove(at: i)
+                    } else { i += 1 }
+                }
+            }
             log.info{"deregistered group=${groupId} consumer=${consumerId}"}
             true
         } else {

@@ -32,7 +32,7 @@ public class MqQueue <: Resource & ToString {
     let deadLetter: DeadLetterStore
     private let logPath: String
     private let closed = AtomicBool(false)
-    var draining: Bool = false
+    var draining = AtomicBool(false)
     private var logStream: ?InputStream = None  // SegmentedLog 流式游标
     private let streamLock = Mutex()  // 保护 logStream 延迟初始化和关闭、log.close()
 
@@ -57,7 +57,7 @@ public class MqQueue <: Resource & ToString {
      * 用 DefaultCodec 编码写入 SegmentedLog，确保帧边界。
      */
     public func append(data: Array<Byte>): LogPosition {
-        if (draining) { throw MqException("queue is draining") }
+        if (draining.load()) { throw MqException("queue is draining") }
         if (closed.load()) { throw MqException("queue is closed") }
         let buf = ByteBuffer()
         DefaultCodec().encode(data)
@@ -115,7 +115,7 @@ public class MqQueue <: Resource & ToString {
     public func close(): Unit {
         if (closed.load()) { return }
         closed.store(true)
-        draining = false
+        draining.store(false)
         synchronized(streamLock) {
             if (let Some(s) <- logStream) {
                 if (let r: Resource <- s) { r.close() }
@@ -128,7 +128,7 @@ public class MqQueue <: Resource & ToString {
     public func isClosed(): Bool { closed.load() }
 
     public func tryFinishDrain(): Bool {
-        if (!draining) { return true }
+        if (!draining.load()) { return true }
         let streamAlive: Bool
         synchronized(streamLock) {
             streamAlive = logStream.isSome()

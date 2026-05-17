@@ -155,7 +155,7 @@ public class ReassignTest {
         let q1 = qm.getQueue("/test", 1)
         @Assert(q1.isSome())
         if (let Some(q) <- q1) {
-            @Assert(q.draining)
+            @Assert(q.draining.load())
             @Assert(!q.isClosed())
         }
         // 排空完成检查：deliveryBuffer 空应自动移除
