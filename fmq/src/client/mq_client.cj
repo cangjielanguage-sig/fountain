@@ -53,6 +53,7 @@ public class MqClient <: Resource {
      * 获取单例实例，synchronized 防止并发创建竞态。
      */
     public static func getInstance(config: MqConfig): MqClient {
+        if (let Some(inst) <- instance) { return inst }
         synchronized(instanceLock) {
             if (let Some(inst) <- instance) { return inst }
 
