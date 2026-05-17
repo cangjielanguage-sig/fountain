@@ -240,6 +240,10 @@ public class CommandExecutor {
         if (let Some(body) <- convert<MqBody>(request.data)) {
             let buf = ByteBuffer(body.payload)
             let dec = DefaultCodec()
+            if (body.bodyType == "batch_consume") {
+                return handleBatchConsume(buf, dec, request)
+            }
+            // 单 topic CONSUME (兼容旧客户端)
             if (let Some(topic) <- dec.decode<String>(buf)
                 && let Some(groupId) <- dec.decode<String>(buf)
                 && let Some(batchSize) <- dec.decode<Int64>(buf)) {
@@ -276,6 +280,58 @@ public class CommandExecutor {
         } else {
             errorResp(request.id, "no body in consume request")
         }
+    }
+
+    /**
+     * 批量 CONSUME: 单次请求拉取多个 topic 的消息。
+     * 请求格式: topicCount(Int64) × [topic(String) + groupId(String) + batchSize(Int64)]
+     * 响应格式: topicCount(Int64) × [topic + groupId + msgCount × [deliveryId + labelCount + labels + data]]
+     */
+    private func handleBatchConsume(buf: ByteBuffer, dec: DefaultCodec, request: ProtocolMessage): ProtocolMessage {
+        let allResults = HashMap<String, (String, ArrayList<(String, ArrayList<String>, Array<Byte>)>)>()  // topic → (groupId, msgs)
+        if (let Some(topicCount) <- dec.decode<Int64>(buf)) {
+            for (_ in 0..topicCount) {
+                if (let Some(topic) <- dec.decode<String>(buf)
+                    && let Some(groupId) <- dec.decode<String>(buf)
+                    && let Some(batchSize) <- dec.decode<Int64>(buf)) {
+                    var consumed = ArrayList<(String, ArrayList<String>, Array<Byte>)>()
+                    if (let Some(queues) <- queueManager.getQueues(topic)) {
+                        for (q in queues) {
+                            let offset = deliveryManager.getOffset(topic, q.index, groupId)
+                            if (consumed.size < batchSize) {
+                                if (let Some(framed) <- q.tryReadFromLog(offset)) {
+                                    let (labels, payload) = if (let Some((_, ls, p)) <- ProduceCodec.decode(framed)) {
+                                        (ls, p)
+                                    } else {
+                                        (ArrayList<String>(), framed)
+                                    }
+                                    let deliveryId = "${topic}:${q.index}:${groupId}:${offset}"
+                                    deliveryManager.recordDelivery(deliveryId, groupId, groupId)
+                                    consumed.add((deliveryId, labels, payload))
+                                }
+                            } else {
+                                break
+                            }
+                        }
+                    }
+                    allResults[topic] = (groupId, consumed)
+                }
+            }
+        }
+        // 编码响应
+        let respBuf = ByteBuffer()
+        let enc = DefaultCodec().encode(allResults.size)
+        for ((topic, (groupId, msgs)) in allResults) {
+            enc.encode(topic).encode(groupId).encode(msgs.size)
+            for ((id, labels, data) in msgs) {
+                enc.encode(id).encode(labels.size)
+                for (l in labels) { enc.encode(l) }
+                enc.encode(data)
+            }
+        }
+        enc.finish().copy(to: respBuf, closeFromOnEnd: true, closeToOnEnd: false)
+        ProtocolMessage(Command.RESP(0), request.id,
+            MqBody("batch_consume", extractBytes(respBuf)).toData())
     }
 
     // ───── ACK ─────

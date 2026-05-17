@@ -19,6 +19,7 @@ import fountain::f_protocol.default.{Message as ProtocolMessage, EncodedMessage}
 import fountain::f_codec.default.DefaultCodec
 import fountain::f_data.path.DataPath
 import fountain::f_data.{DataList, Data}
+import std.collection.HashMap
 import std.io.{ByteBuffer, SeekPosition}
 import std.convert.*
 import std.sync.AtomicBool
@@ -47,32 +48,31 @@ public class Consumer {
         if (subs.size == 0) {
             return None
         }
-        for ((groupId, topic, dataFilter) in subs) {
-            let payload = encodeConsumePayload(topic, groupId, 1)
-            let req = ProtocolMessage(Command.CONSUME(0), MessageID(),
-                MqBody("consume", payload).toData())
-            let resp = client.transfer(req.id, req, timeout)
-            if (let Some(r) <- resp) {
-                if (let Some(body) <- convert<MqBody>(r.data)) {
-                    if (body.bodyType == "consume") {
-                        // 解码带 deliveryId 和 labels 的消息列表
-                        let msgs = decodeMessageListWithLabels(body.payload)
-                        if (msgs.size > 0) {
-                            let (deliveryId, labels, payload) = msgs[0]
-                            // dataFilter 过滤 — 直接 ACK 避免服务端重复投递/入 DLQ
-                            if (dataFilter != "" && !Consumer.dataFilterMatch(dataFilter, payload)) {
-                                let ackPayload = Consumer.encodeAckPayload(deliveryId, topic, 0)
-                                let ackReq = ProtocolMessage(Command.ACK, MessageID(),
-                                    MqBody("ack", ackPayload).toData())
-                                client.transfer(ackReq.id, ackReq, Duration.second * 5)
-                                continue
+        // 批量 CONSUME: 单次 RPC 拉取所有订阅的消息
+        let batchPayload = Consumer.encodeBatchConsumePayload(subs)
+        let req = ProtocolMessage(Command.CONSUME(0), MessageID(),
+            MqBody("batch_consume", batchPayload).toData())
+        if (let Some(r) <- client.transfer(req.id, req, timeout)) {
+            if (let Some(body) <- convert<MqBody>(r.data)) {
+                if (body.bodyType == "batch_consume") {
+                    let perTopic = Consumer.decodeBatchConsumeResponse(body.payload)
+                    for ((groupId, topic, dataFilter) in subs) {
+                        if (let Some(msgs) <- perTopic.get(topic)) {
+                            for ((deliveryId, labels, payload) in msgs) {
+                                if (dataFilter != "" && !Consumer.dataFilterMatch(dataFilter, payload)) {
+                                    let ackPayload = Consumer.encodeAckPayload(deliveryId, topic, 0)
+                                    let ackReq = ProtocolMessage(Command.ACK, MessageID(),
+                                        MqBody("ack", ackPayload).toData())
+                                    client.transfer(ackReq.id, ackReq, Duration.second * 5)
+                                    continue
+                                }
+                                let qi = ConsumerLoop.extractQueueIndex(deliveryId)
+                                return Some(Message(
+                                    topic: topic, id: MessageID(),
+                                    queueIndex: qi,
+                                    payload: payload, labels: labels,
+                                    producerId: deliveryId))
                             }
-                            let qi = ConsumerLoop.extractQueueIndex(deliveryId)
-                            return Some(Message(
-                                topic: topic, id: MessageID(),
-                                queueIndex: qi,
-                                payload: payload, labels: labels,
-                                producerId: deliveryId))  // producerId 暂存 deliveryId
                         }
                     }
                 }
@@ -149,6 +149,16 @@ public class Consumer {
         extractBytes(buf)
     }
 
+    internal static func encodeBatchConsumePayload(subs: ArrayList<(String, String, String)>): Array<Byte> {
+        let buf = ByteBuffer()
+        let enc = DefaultCodec().encode(subs.size)
+        for ((groupId, topic, _) in subs) {
+            enc.encode(topic).encode(groupId).encode(1i64)  // batchSize=1 per topic
+        }
+        enc.finish().copy(to: buf, closeFromOnEnd: true, closeToOnEnd: false)
+        extractBytes(buf)
+    }
+
     internal static func encodeAckPayload(msgId: String, topic: String, queueIndex: Int64): Array<Byte> {
         let buf = ByteBuffer()
         DefaultCodec()
@@ -202,6 +212,44 @@ public class Consumer {
             }
         } catch (e: Exception) {
             log.warn{"decodeMessageListWithLabels failed: ${e.message}"}
+        }
+        result
+    }
+
+    /**
+     * 解码批量 CONSUME 响应。
+     * 格式: topicCount × [topic + groupId + msgCount × [deliveryId + labelCount + labels + data]]
+     */
+    internal static func decodeBatchConsumeResponse(data: Array<Byte>):
+            HashMap<String, ArrayList<(String, ArrayList<String>, Array<Byte>)>> {
+        let result = HashMap<String, ArrayList<(String, ArrayList<String>, Array<Byte>)>>()
+        try {
+            let buf = ByteBuffer(data)
+            let dec = DefaultCodec()
+            if (let Some(topicCount) <- dec.decode<Int64>(buf)) {
+                for (_ in 0..topicCount) {
+                    if (let Some(topic) <- dec.decode<String>(buf)
+                        && let Some(groupId) <- dec.decode<String>(buf)
+                        && let Some(msgCount) <- dec.decode<Int64>(buf)) {
+                        let msgs = ArrayList<(String, ArrayList<String>, Array<Byte>)>()
+                        for (_ in 0..msgCount) {
+                            if (let Some(deliveryId) <- dec.decode<String>(buf)
+                                && let Some(labelCount) <- dec.decode<Int64>(buf)) {
+                                let labels = ArrayList<String>()
+                                for (_ in 0..labelCount) {
+                                    if (let Some(l) <- dec.decode<String>(buf)) { labels.add(l) }
+                                }
+                                if (let Some(payload) <- dec.decode<Array<Byte>>(buf)) {
+                                    msgs.add((deliveryId, labels, payload))
+                                }
+                            }
+                        }
+                        result[topic] = msgs
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            log.warn{"decodeBatchConsumeResponse failed: ${e.message}"}
         }
         result
     }

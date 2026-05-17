@@ -469,6 +469,60 @@ public class CommandExecutorTest {
         }
     }
 
+    // ── 批量 CONSUME ──
+
+    @TestCase
+    public func testBatchConsumeEmptyReturnsResp(): Unit {
+        let ex = makeExecutor()
+        // 编码批量 consume: topicCount=1, topic="/no", groupId="g", batchSize=1
+        let buf = ByteBuffer()
+        DefaultCodec()
+            .encode(1i64).encode("/no").encode("g").encode(1i64)
+            .finish().copy(to: buf, closeFromOnEnd: true, closeToOnEnd: false)
+        let req = ProtocolMessage(Command.CONSUME(0), MessageID(),
+            MqBody("batch_consume", extractBytes(buf)).toData())
+        let resp = ex.execute(req)
+        @Assert(isResp(resp))
+        if (let Some(body) <- convert<MqBody>(resp.data)) {
+            @Assert(body.bodyType == "batch_consume")
+        }
+    }
+
+    @TestCase
+    public func testBatchConsumeWithTopicReturnsMsg(): Unit {
+        let ex = makeExecutor()
+        // 1. 创建 topic 并生产消息
+        ex.execute(ProtocolMessage(Command.TOPIC_OP, MessageID(),
+            MqBody("topic_op", enc(["create", "/bt"])).toData()))
+        let encoded = ProduceCodec.encode("/bt", ArrayList<String>(), [0x01u8, 0x02u8])
+        ex.execute(ProtocolMessage(Command.PUBLISH(0), MessageID(),
+            MqBody("produce", encoded).toData()))
+
+        // 2. 批量 consume
+        let reqBuf = ByteBuffer()
+        DefaultCodec()
+            .encode(1i64).encode("/bt").encode("g").encode(1i64)
+            .finish().copy(to: reqBuf, closeFromOnEnd: true, closeToOnEnd: false)
+        let req = ProtocolMessage(Command.CONSUME(0), MessageID(),
+            MqBody("batch_consume", extractBytes(reqBuf)).toData())
+        let resp = ex.execute(req)
+        @Assert(isResp(resp))
+        if (let Some(body) <- convert<MqBody>(resp.data)) {
+            @Assert(body.bodyType == "batch_consume")
+            let buf = ByteBuffer(body.payload)
+            let dec = DefaultCodec()
+            // 应返回 1 topic
+            if (let Some(tc) <- dec.decode<Int64>(buf)
+                && let Some(topic) <- dec.decode<String>(buf)
+                && let Some(gi) <- dec.decode<String>(buf)
+                && let Some(mc) <- dec.decode<Int64>(buf)) {
+                @Assert(tc == 1)
+                @Assert(topic == "/bt")
+                @Assert(mc == 1)
+            }
+        }
+    }
+
     // ── 死信 ──
 
     @TestCase

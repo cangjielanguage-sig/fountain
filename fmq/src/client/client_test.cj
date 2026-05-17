@@ -335,6 +335,76 @@ public class DataFilterAckTest {
 }
 
 /**
+ * 批量 CONSUME 协议编码测试。
+ * P2-7: 验证 encodeBatchConsumePayload 和 decodeBatchConsumeResponse 格式。
+ */
+@Test
+public class BatchConsumeProtocolTest {
+    @TestCase
+    public func testEncodeBatchConsumePayload(): Unit {
+        let subs = ArrayList<(String, String, String)>()
+        subs.add(("g1", "/topic/a", ""))
+        subs.add(("g2", "/topic/b", ""))
+        let payload = Consumer.encodeBatchConsumePayload(subs)
+        // 解码验证: topicCount=2, topic="/topic/a", groupId="g1", batchSize=1, ...
+        let buf = ByteBuffer(payload)
+        let dec = DefaultCodec()
+        if (let Some(count) <- dec.decode<Int64>(buf)
+            && let Some(t1) <- dec.decode<String>(buf)
+            && let Some(g1) <- dec.decode<String>(buf)
+            && let Some(bs1) <- dec.decode<Int64>(buf)
+            && let Some(t2) <- dec.decode<String>(buf)
+            && let Some(g2) <- dec.decode<String>(buf)
+            && let Some(bs2) <- dec.decode<Int64>(buf)) {
+            @Assert(count == 2)
+            @Assert(t1 == "/topic/a")
+            @Assert(g1 == "g1")
+            @Assert(bs1 == 1)
+            @Assert(t2 == "/topic/b")
+            @Assert(g2 == "g2")
+            @Assert(bs2 == 1)
+        }
+    }
+
+    @TestCase
+    public func testDecodeBatchConsumeResponseEmpty(): Unit {
+        let encBuf = ByteBuffer()
+        DefaultCodec().encode(0i64)
+            .finish().copy(to: encBuf, closeFromOnEnd: true, closeToOnEnd: false)
+        let raw = extractBytes(encBuf)
+        let result = Consumer.decodeBatchConsumeResponse(raw)
+        @Assert(result.size == 0)
+    }
+
+    @TestCase
+    public func testBatchConsumeRoundtrip(): Unit {
+        // 构造响应: 1 topic "/a", group "g1", 1 msg
+        let encBuf = ByteBuffer()
+        DefaultCodec()
+            .encode(1i64)              // topicCount
+            .encode("/a")              // topic
+            .encode("g1")              // groupId
+            .encode(1i64)              // msgCount
+            .encode("id:a:0:g1:0")     // deliveryId
+            .encode(1i64)              // labelCount
+            .encode("k=v")             // label
+            .encode([0x01u8, 0x02u8])  // payload
+            .finish().copy(to: encBuf, closeFromOnEnd: true, closeToOnEnd: false)
+        let raw = extractBytes(encBuf)
+        let result = Consumer.decodeBatchConsumeResponse(raw)
+        @Assert(result.size == 1)
+        if (let Some(msgs) <- result.get("/a")) {
+            @Assert(msgs.size == 1)
+            let (id, labels, payload) = msgs[0]
+            @Assert(id == "id:a:0:g1:0")
+            @Assert(labels.size == 1)
+            @Assert(labels[0] == "k=v")
+            @Assert(payload.size == 2)
+        }
+    }
+}
+
+/**
  * MqClient 单例并发安全测试。
  * 验证 synchronized getInstance() 防止双重检查竞态。
  */
