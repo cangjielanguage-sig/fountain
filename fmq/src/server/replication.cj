@@ -17,7 +17,7 @@ package fountain::fmq.server
 
 import std.collection.HashMap
 import std.io.ByteBuffer
-import std.sync.Mutex
+import std.sync.{Mutex, AtomicBool}
 import fountain::f_codec.default.DefaultCodec
 import fountain::f_protocol.default.{Message as ProtocolMessage, EncodedMessage}
 
@@ -45,10 +45,10 @@ public class ReplicationManager {
     private let config: MqConfig
     private let log = LoggerFactory.getLogger('fountain::fmq.ReplicationManager')
 
-    // 角色状态
-    private var isMaster: Bool = false
+    // 角色状态（AtomicBool 保证跨线程可见性）
+    private let isMaster = AtomicBool(false)
     private var masterNodeId: String = ""
-    private var isSyncing: Bool = false
+    private let isSyncing = AtomicBool(false)
     private var lastMasterSeq: Int64 = 0
 
     // Master 侧管理的 Slave
@@ -65,19 +65,19 @@ public class ReplicationManager {
     // ───── Master 侧 API ─────
 
     public func promoteToMaster(): Unit {
-        isMaster = true
+        isMaster.store(true)
         masterNodeId = ""
         log.info{"promoted to master"}
     }
 
     public func demoteToSlave(masterId: String): Unit {
-        isMaster = false
+        isMaster.store(false)
         masterNodeId = masterId
         log.info{"demoted to slave of ${masterId}"}
     }
 
     public func onSlaveOf(nodeId: String): Bool {
-        if (!isMaster) {
+        if (!isMaster.load()) {
             log.warn{"reject SLAVEOF from ${nodeId}: not master"}
             return false
         }
@@ -122,7 +122,7 @@ public class ReplicationManager {
      * 接收增量同步数据。
      */
     public func onIncrementalSync(data: Array<Byte>, seq: Int64): Unit {
-        if (!isSyncing) { return }
+        if (!isSyncing.load()) { return }
         lastMasterSeq = seq
         log.debug{"incremental sync: seq=${seq}, ${data.size} bytes"}
     }
@@ -155,7 +155,7 @@ public class ReplicationManager {
      * 故障切换：提升本节点为 Master。
      */
     public func failoverToMaster(): Bool {
-        if (isMaster) { return true }
+        if (isMaster.load()) { return true }
         log.warn{"failover: promoting to master"}
         promoteToMaster()
         closeMasterConn()
@@ -166,16 +166,16 @@ public class ReplicationManager {
      * 切回：当前 Master 准备将角色交还原 Master。
      */
     public func switchbackToMaster(originalMasterId: String): Bool {
-        if (!isMaster) { return false }
+        if (!isMaster.load()) { return false }
         log.info{"switchback: returning master to ${originalMasterId}"}
         // Phase 7 简化：直接降级，原 Master 需自己提升
-        isMaster = false
+        isMaster.store(false)
         masterNodeId = originalMasterId
         true
     }
 
     public func role(): String {
-        if (isMaster) { "master" } else { "slave(${masterNodeId})" }
+        if (isMaster.load()) { "master" } else { "slave(${masterNodeId})" }
     }
 
     // ───── 私有方法 ─────
@@ -199,7 +199,7 @@ public class ReplicationManager {
             localConn = conn
             this.masterConn = conn
             this.masterNodeId = masterId
-            this.isSyncing = true
+            this.isSyncing.store(true)
 
             let req = ProtocolMessage(Command.SLAVEOF(1), MessageID(),
                 MqBody("slaveof", encodeNodeId(masterId)).toData())
@@ -211,7 +211,7 @@ public class ReplicationManager {
                 log.warn{"master ${masterId} did not respond to SLAVEOF"}
                 closeConn(conn)
                 this.masterConn = None
-                this.isSyncing = false
+                this.isSyncing.store(false)
                 false
             }
         } catch (e: Exception) {
@@ -220,7 +220,7 @@ public class ReplicationManager {
                 if (!c.isClosed()) { c.close() }
             }
             this.masterConn = None
-            this.isSyncing = false
+            this.isSyncing.store(false)
             false
         }
     }

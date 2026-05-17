@@ -138,7 +138,8 @@ public class CommandExecutor {
         if (let Some(count) <- dec.decode<Int64>(buf)) {
             var ok: Int64 = 0
             var fail: Int64 = 0
-            for (_ in 0..count) {
+            var i: Int64 = 0
+            while (i < count) {
                 if (let Some(topic) <- dec.decode<String>(buf)
                     && let Some(lc) <- dec.decode<Int64>(buf)) {
                     let labels = ArrayList<String>()
@@ -159,8 +160,17 @@ public class CommandExecutor {
                                 } else { fail += 1 }
                             }
                         } else { fail += 1 }
-                    } else { fail += 1 }
-                } else { fail += 1 }
+                    } else {
+                        // 数据解码失败：buffer 位已偏移，终止批量处理
+                        fail += (count - i)
+                        break
+                    }
+                } else {
+                    // 字段解码失败：buffer 位已偏移，终止批量处理
+                    fail += (count - i)
+                    break
+                }
+                i += 1
             }
             let okCount = ok
             let failCount = fail
@@ -184,9 +194,10 @@ public class CommandExecutor {
                 if (!validateTopic(topic)) {
                     return errorResp(request.id, "invalid topic: ${topic}")
                 }
-                // 注册消费者（使用 groupId 从 body 额外解码，当前复用 topic 作为 groupId）
+                // 注册消费者：用 topic + pid 组合作为唯一 consumerId，支持同组多消费者
+                let consumerId = "sub@${request.id.pid}:${topic}"
                 let reg = ConsumerRegistration(
-                    consumerId: topic, groupId: topic,
+                    consumerId: consumerId, groupId: topic,
                     matchModeStr: modeToEncodedString(mode),
                     labels: None, dataFilter: None,
                     lastHeartbeat: DateTime.now())
@@ -205,8 +216,9 @@ public class CommandExecutor {
         if (let Some(body) <- convert<MqBody>(request.data)) {
             let decoded = decodeTopicAndMode(body.payload)
             if (let Some((topic, _)) <- decoded) {
-                // SUBSCRIBE 以 consumerId=topic, groupId=topic 注册，因此也用 (topic, topic) 注销
-                consumerMatcher.deregister(topic, topic)
+                // 注销时使用与 SUBSCRIBE 一致的 consumerId = "sub@${pid}:${topic}"
+                let consumerId = "sub@${request.id.pid}:${topic}"
+                consumerMatcher.deregister(topic, consumerId)
                 log.info{"unsubscribed ${topic}"}
                 ProtocolMessage(Command.RESP(0), request.id, MqBody("ok", []).toData())
             } else {
