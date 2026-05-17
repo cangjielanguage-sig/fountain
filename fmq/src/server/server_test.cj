@@ -226,6 +226,38 @@ public class ReplicationRoleTest {
     }
 }
 
+/**
+ * QueueManager 线程生命周期测试。
+ * 验证 startAll 启动线程 + close 等待 join 不抛异常。
+ */
+@Test
+public class QueueManagerLifecycleTest {
+    @TestCase
+    public func testStartAllAndCloseJoinsThreads(): Unit {
+        let hosts = ArrayList<String>()
+        hosts.add("node1:7201")
+        let config = MqConfig(
+            mqHosts: hosts, syncHosts: ArrayList(),
+            dataDir: "/tmp/fmq_qm_lifecycle", segmentMaxSize: 16384,
+            heartbeatIntervalSec: 5, healthcheckMaxRetry: 3,
+            idleTimeoutMinutes: 30, ackTimeoutMs: 30000,
+            maxRetryCount: 3, retryIntervalMs: 1000,
+            dlqRetentionHours: 168, maxMessageSize: 4096,
+            maxLabelsPerMessage: 64, retentionHours: 72,
+            syncQuorum: 1)
+        let qm = QueueManager(config, nodeIndex: 0)
+        let rm = ReplicationManager(config)
+        rm.promoteToMaster()
+        qm.setReplicationManager(rm)
+
+        qm.createQueues("/test-life", 1)
+        qm.startAll()
+        sleep(Duration.millisecond * 100)
+        qm.close()
+        @Assert(true)  // 无异常即通过
+    }
+}
+
 @Test
 public class DeliverySimpleTest {
     @TestCase

@@ -63,6 +63,15 @@ public class TopicTest {
     }
 
     @TestCase
+    public func testEncodeDecodeLongPath(): Unit {
+        // 长路径压力测试：验证 O(n) 字符串拼接正确性
+        let parts = Array<String>(50, repeat: 'segment')
+        let topic = "/" + String.join(parts, delimiter: "_")
+        let encoded = encodeTopicToPath(topic)
+        @Assert(decodePathToTopic(encoded) == topic)
+    }
+
+    @TestCase
     public func testConfigLoad(): Unit {
         let config = loadConfig()
         @Assert(config.dataDir == "/var/fmq/data/")
