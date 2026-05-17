@@ -56,16 +56,16 @@ public class Subscriber {
         }
 
         // 2. 订阅 topic
-        let subBody = encodeTopicAndMode(extractTopic(matchMode), modeToString(matchMode))
+        let subBody = encodeTopicAndMode(matchModeTopic(matchMode), matchModeToString(matchMode))
         let subReq = ProtocolMessage(Command.SUBSCRIBE, MessageID(),
             MqBody("subscribe", subBody).toData())
         let subResp = client.transfer(subReq.id, subReq, Duration.second * 10)
         let dataFilterVal = dataFilter
         if (subResp.isSome()) {
             synchronized(subLock) {
-                subscriptions.add((groupId, extractTopic(matchMode), dataFilterVal))
+                subscriptions.add((groupId, matchModeTopic(matchMode), dataFilterVal))
             }
-            log.info{"subscribed group=${groupId} to ${modeToString(matchMode)}"}
+            log.info{"subscribed group=${groupId} to ${matchModeToString(matchMode)}"}
             true
         } else {
             // SUBSCRIBE 失败：清理已成功的 REGISTER 避免遗留注册
@@ -79,8 +79,8 @@ public class Subscriber {
      * 取消订阅。
      */
     public func unsubscribe(groupId: String, matchMode: MatchMode): Bool {
-        let topic = extractTopic(matchMode)
-        let subBody = encodeTopicAndMode(topic, modeToString(matchMode))
+        let topic = matchModeTopic(matchMode)
+        let subBody = encodeTopicAndMode(topic, matchModeToString(matchMode))
         let req = ProtocolMessage(Command.UNSUBSCRIBE, MessageID(),
             MqBody("unsubscribe", subBody).toData())
         let resp = client.transfer(req.id, req, Duration.second * 10)
@@ -161,7 +161,7 @@ public class Subscriber {
         let enc = DefaultCodec()
             .encode(groupId)
             .encode(groupId)  // consumerId = groupId
-            .encode(modeToString(mode))
+            .encode(matchModeToString(mode))
             .finish()
         enc.copy(to: buf, closeFromOnEnd: true, closeToOnEnd: false)
         let raw = extractBytes(buf)
@@ -177,21 +177,5 @@ public class Subscriber {
         enc.copy(to: buf, closeFromOnEnd: true, closeToOnEnd: false)
         let raw = extractBytes(buf)
         raw
-    }
-
-    private static func extractTopic(mode: MatchMode): String {
-        match (mode) {
-            case Exact(t) => t
-            case Glob(t) => t
-            case Prefix(t) => t
-        }
-    }
-
-    private static func modeToString(mode: MatchMode): String {
-        match (mode) {
-            case Exact(_) => "exact"
-            case Glob(_) => "glob"
-            case Prefix(_) => "prefix"
-        }
     }
 }

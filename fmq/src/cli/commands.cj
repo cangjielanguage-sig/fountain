@@ -25,7 +25,6 @@ import std.convert.*
  * Phase 8 为骨架占位，真实操作将在后续阶段对接 MQ 节点。
  */
 public class CommandRunner {
-    private static let log = LoggerFactory.getLogger('fountain::fmq.CommandRunner')
 
     /**
      * 从参数数组中提取 --name <value> 格式的值。
@@ -208,6 +207,10 @@ public class CommandRunner {
         }
     }
 
+    /**
+     * 显示当前 MQ 集群节点信息。
+     * @return Unit
+     */
     public static func showBrokers(_: Array<String>): Unit {
         let config = loadConfig()
         println("mq_hosts: ${config.mqHosts}")

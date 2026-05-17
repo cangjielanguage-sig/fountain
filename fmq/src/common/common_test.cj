@@ -81,10 +81,21 @@ public class TopicTest {
 
     @TestCase
     public func testMatchMode(): Unit {
-        let _ = MatchMode.Exact("/order/create")
-        let _ = MatchMode.Glob("/order/*")
-        let _ = MatchMode.Prefix("/order/")
-        @Assert(true)
+        let exact = MatchMode.Exact("/order/create")
+        let glob = MatchMode.Glob("/order/*")
+        let prefix = MatchMode.Prefix("/order/")
+        match (exact) {
+            case MatchMode.Exact(t) => @Assert(t == "/order/create")
+            case _ => @Assert(false)
+        }
+        match (glob) {
+            case MatchMode.Glob(p) => @Assert(p == "/order/*")
+            case _ => @Assert(false)
+        }
+        match (prefix) {
+            case MatchMode.Prefix(p) => @Assert(p == "/order/")
+            case _ => @Assert(false)
+        }
     }
 }
 

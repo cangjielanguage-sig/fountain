@@ -21,7 +21,6 @@ package fountain::fmq.cli
  * 非交互模式：`fboot mqcli <command> [args...]`
  */
 public class MqCliCommand <: SubCommand {
-    private static let log = LoggerFactory.getLogger('fountain::fmq.MqCliCommand')
 
     static init() {
         SubCommandMediator.register(MqCliCommand())
@@ -60,7 +59,6 @@ public class MqCliCommand <: SubCommand {
      * 单次执行命令。
      */
     private static func runCommand(args: Array<String>): Unit {
-        if (args.size == 0) { return }
         let cmd = args[0]
         let cmdArgs = args[1..]
         match (cmd) {

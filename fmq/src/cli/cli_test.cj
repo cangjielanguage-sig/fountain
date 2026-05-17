@@ -102,7 +102,7 @@ public class CliCommandTest {
 
     /**
      * 调用 getArg 方法。
-     * CommandRunner.getArg 是 private static，通过同包内调用访问。
+     * CommandRunner.getArg 是 internal static，通过同包内调用访问。
      */
     private static func getArg(args: Array<String>, flag: String): ?String {
         CommandRunner.getArg(args, flag)

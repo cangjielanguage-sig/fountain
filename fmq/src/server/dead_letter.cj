@@ -98,13 +98,11 @@ public class DeadLetterStore {
                     keys.add(msgId)
                 }
             }
-            for (msgId in keys) {
-                if (let Some((t, qi, data)) <- index.get(msgId)) {
-                    if (t == topic && qi == queueIndex) {
-                        index.remove(msgId)
-                        result.add(data)
-                    }
-                }
+        for (msgId in keys) {
+            if (let Some((_, _, data)) <- index.get(msgId)) {
+                index.remove(msgId)
+                result.add(data)
+            }
             }
         }
         result

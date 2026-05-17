@@ -60,7 +60,7 @@ public class Consumer {
                         if (msgs.size > 0) {
                             let (deliveryId, labels, payload) = msgs[0]
                             // dataFilter 过滤
-                            if (dataFilter != "" && !dataFilterMatch(dataFilter, payload)) {
+                            if (dataFilter != "" && !Consumer.dataFilterMatch(dataFilter, payload)) {
                                 continue
                             }
                             return Some(Message(
@@ -80,7 +80,7 @@ public class Consumer {
      * 应用 DataPath 过滤器。
      * 将消息体解码为通用 Data 树，执行 DataPath 表达式匹配。
      */
-    private func dataFilterMatch(filter: String, payload: Array<Byte>): Bool {
+    internal static func dataFilterMatch(filter: String, payload: Array<Byte>): Bool {
         try {
             let buf = ByteBuffer(payload)
             let codec = DefaultCodec()
@@ -284,7 +284,7 @@ public class ConsumerLoop {
                     if (msgs.size > 0) {
                         let (deliveryId, labels, msgData) = msgs[0]
                         // dataFilter 过滤（基于 payload）
-                        if (dataFilter != "" && !dataFilterMatchImpl(dataFilter, msgData)) {
+                        if (dataFilter != "" && !Consumer.dataFilterMatch(dataFilter, msgData)) {
                             // 过滤不匹配，仍然要 ACK 避免重复投递
                             let ackPayload = Consumer.encodeAckPayload(deliveryId, topic, 0)
                             let ackReq = ProtocolMessage(Command.ACK, MessageID(),
@@ -321,19 +321,4 @@ public class ConsumerLoop {
         }
     }
 
-    /** 与 Consumer.dataFilterMatch 逻辑一致（解码失败时过滤） */
-    private static func dataFilterMatchImpl(filter: String, payload: Array<Byte>): Bool {
-        try {
-            let buf = ByteBuffer(payload)
-            let codec = DefaultCodec()
-            let dataTree = codec.decodeData(buf)
-            let path = DataPath.cache(filter)
-            let wrapper = DataList()
-            wrapper.add(dataTree)
-            path.get(wrapper).next().isSome()
-        } catch (e: Exception) {
-            log.warn{"dataFilterMatchImpl decode failed: ${e.message}"}
-            false
-        }
-    }
 }

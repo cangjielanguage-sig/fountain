@@ -39,7 +39,7 @@ public func encodePublish(topic: String, labels: ArrayList<String>, payload: Arr
     let enc = DefaultCodec().encode(topic).encode(labels.size)
     for (l in labels) { enc.encode(l) }
     enc.encode(payload).finish().copy(to: buf, closeFromOnEnd: true, closeToOnEnd: false)
-    ProtocolMessage(Command.PUBLISH(0), MessageID(),
+    ProtocolMessage(Command.PUBLISH(0), MessageID(),  // 0: sequence number, reserved for pipeline support
         MqBody("produce", extractBytes(buf)).toData())
 }
 
@@ -64,7 +64,7 @@ public func encodeConsume(topic: String, groupId: String, batchSize: Int64): Pro
     let body = ByteBuffer()
     DefaultCodec().encode(topic).encode(groupId).encode(batchSize)
         .finish().copy(to: body, closeFromOnEnd: true, closeToOnEnd: false)
-    ProtocolMessage(Command.CONSUME(0), MessageID(),
+    ProtocolMessage(Command.CONSUME(0), MessageID(),  // 0: sequence number, reserved for pipeline support
         MqBody("consume", extractBytes(body)).toData())
 }
 
@@ -92,7 +92,7 @@ public func extractBytes(buf: ByteBuffer): Array<Byte> {
     raw
 }
 
-private func matchModeToString(mode: MatchMode): String {
+public func matchModeToString(mode: MatchMode): String {
     match (mode) {
         case Exact(_) => "exact"
         case Glob(_) => "glob"
@@ -100,7 +100,7 @@ private func matchModeToString(mode: MatchMode): String {
     }
 }
 
-private func matchModeTopic(mode: MatchMode): String {
+public func matchModeTopic(mode: MatchMode): String {
     match (mode) {
         case Exact(t) => t
         case Glob(t) => t
