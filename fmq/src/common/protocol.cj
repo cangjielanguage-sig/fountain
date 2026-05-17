@@ -35,9 +35,12 @@ public func encodePing(): EncodedMessage {
  * 编码 PUBLISH 消息。
  */
 public func encodePublish(topic: String, labels: ArrayList<String>, payload: Array<Byte>): ProtocolMessage {
-    let bodyBytes = encodeProduceBytes(topic, labels, payload)
+    let buf = ByteBuffer()
+    let enc = DefaultCodec().encode(topic).encode(labels.size)
+    for (l in labels) { enc.encode(l) }
+    enc.encode(payload).finish().copy(to: buf, closeFromOnEnd: true, closeToOnEnd: false)
     ProtocolMessage(Command.PUBLISH(0), MessageID(),
-        MqBody("produce", bodyBytes).toData())
+        MqBody("produce", extractBytes(buf)).toData())
 }
 
 /**

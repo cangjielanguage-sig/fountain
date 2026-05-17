@@ -68,7 +68,13 @@ public class QueueCleaner {
             if (let Some(queues) <- queueManager.getQueues(topic)) {
                 for (q in queues) {
                     if (q.isClosed()) { continue }
-                    let oldFiles = q.log.takeOldFiles()
+                    let oldFiles: ArrayList<String>
+                    try {
+                        oldFiles = q.log.takeOldFiles()
+                    } catch (e: Exception) {
+                        log.warn{"takeOldFiles ${q} failed: ${e.message}"}
+                        continue
+                    }
                     var remaining = 1  // 至少保留最后 1 个文件
                     for (f in oldFiles) {
                         if (remaining > 0) {

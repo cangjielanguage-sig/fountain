@@ -27,6 +27,7 @@ import std.env.atExit
  */
 public class MqServer <: Resource {
     private let server: Server<ProtocolMessage, EncodedMessage, ProtocolMessage, MqBody>
+    private let log = LoggerFactory.getLogger<MqServer>()
 
     public init(bindPort!: UInt16, queueSize!: Int64 = 1024,
                 checkDuration!: Duration = Duration.second * 30,
@@ -45,7 +46,7 @@ public class MqServer <: Resource {
             try {
                 server.start(handler)
             } catch (e: Exception) {
-                println("MqServer start failed: ${e.message}")
+                log.error{"MqServer start failed: ${e.message}"}
             }
         }
     }
