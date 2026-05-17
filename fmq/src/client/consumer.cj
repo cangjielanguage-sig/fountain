@@ -63,9 +63,10 @@ public class Consumer {
                             if (dataFilter != "" && !Consumer.dataFilterMatch(dataFilter, payload)) {
                                 continue
                             }
+                            let qi = ConsumerLoop.extractQueueIndex(deliveryId)
                             return Some(Message(
                                 topic: topic, id: MessageID(),
-                                queueIndex: 0,
+                                queueIndex: qi,
                                 payload: payload, labels: labels,
                                 producerId: deliveryId))  // producerId 暂存 deliveryId
                         }

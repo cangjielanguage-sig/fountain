@@ -559,7 +559,9 @@ public class CommandExecutor {
                     let offsetVal = if (let Some(o) <- dec.decode<Int64>(buf)) { o } else {
                         return errorResp(request.id, "missing offset value")
                     }
-                    deliveryManager.setOffset(name, 0, group, offsetVal)
+                    var queueIdx: Int64 = 0
+                    if (let Some(qi) <- dec.decode<Int64>(buf)) { queueIdx = qi }
+                    deliveryManager.setOffset(name, queueIdx, group, offsetVal)
                     ProtocolMessage(Command.RESP(0), request.id, MqBody("ok", []).toData())
                 } else if (op == "listGroups") {
                     let groups = topicManager.getConsumerGroups(name)

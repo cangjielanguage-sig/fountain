@@ -236,8 +236,8 @@ public class MqClient <: Resource {
     /**
      * 重置消费者组 offset。
      */
-    public func resetOffset(topic: String, group: String, offset: Int64): Bool {
-        let payload = encodeGroupOpPayload("resetOffset", topic, group, offset)
+    public func resetOffset(topic: String, group: String, offset: Int64, queueIndex!: Int64 = 0): Bool {
+        let payload = encodeGroupOpPayload("resetOffset", topic, group, offset, queueIndex: queueIndex)
         let req = ProtocolMessage(Command.TOPIC_OP, MessageID(),
             MqBody("topic_op", payload).toData())
         mqConn.transfer(req.id, req, Duration.second * 10).isSome()
@@ -291,10 +291,10 @@ public class MqClient <: Resource {
         extractBytes(buf)
     }
 
-    private static func encodeGroupOpPayload(op: String, topic: String, group: String, offset: Int64): Array<Byte> {
+    private static func encodeGroupOpPayload(op: String, topic: String, group: String, offset: Int64, queueIndex!: Int64 = 0): Array<Byte> {
         let buf = ByteBuffer()
         DefaultCodec()
-            .encode(op).encode(topic).encode(group).encode(offset)
+            .encode(op).encode(topic).encode(group).encode(offset).encode(queueIndex)
             .finish().copy(to: buf, closeFromOnEnd: true, closeToOnEnd: false)
         extractBytes(buf)
     }

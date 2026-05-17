@@ -176,11 +176,17 @@ public class CommandRunner {
         let topic = getArg(args, "--topic")
         let group = getArg(args, "--group")
         let offset = getArg(args, "--offset")
+        let queue = getArg(args, "--queue")
         if (let Some(t) <- topic && let Some(g) <- group && let Some(o) <- offset) {
             let client = if (let Some(c) <- getClient()) { c } else { return }
             if (let Some(v) <- Int64.tryParse(o)) {
-                if (client.resetOffset(t, g, v)) {
-                    println("reset offset ${t}/${g} => ${v}")
+                var qi: Int64 = 0
+                if (let Some(qs) <- queue) {
+                    if (let Some(qv) <- Int64.tryParse(qs)) { qi = qv }
+                    else { println("error: --queue must be a number, got '${qs}'"); return }
+                }
+                if (client.resetOffset(t, g, v, queueIndex: qi)) {
+                    println("reset offset ${t}/${g} => ${v} (queue=${qi})")
                 } else {
                     println("failed to reset offset")
                 }
