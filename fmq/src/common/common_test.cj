@@ -91,12 +91,12 @@ public class TopicTest {
 @Test
 public class ProtocolHelperTest {
     @TestCase
-    public func testEncodePublish(): Unit {
+    public func testEncodePublishWithLabels(): Unit {
         let labels = ArrayList<String>()
-        labels.add("urgent")
-        let msg = encodePublish("/test", labels, [0x01u8, 0x02u8])
-        // encodePublish 返回 ProtocolMessage（有 .command）
-        @Assert((msg.command.value >> 4) == 3u8)  // PUBLISH tag
+        labels.add("key1")
+        labels.add("key2")
+        let msg = encodePublish("/orders", labels, [0xAAu8, 0xBBu8])
+        @Assert((msg.command.value >> 4) == 3u8)
     }
 }
 

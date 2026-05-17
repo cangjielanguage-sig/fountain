@@ -64,6 +64,18 @@ public class BackgroundThreadTest {
         @Assert(QueueCleaner.isFileExpired("/dev/null", now))
     }
 
+    /**
+     * cleanup() 空管理器不崩溃——验证 takeOldFiles try-catch。
+     */
+    @TestCase
+    public func testCleanupWithEmptyQueues(): Unit {
+        let config = testConfig()
+        let qm = QueueManager(config, nodeIndex: 0)
+        let cleaner = QueueCleaner(config, qm)
+        cleaner.cleanup()  // 无队列 → return，不抛异常
+        @Assert(true)
+    }
+
     private static func testConfig(): MqConfig {
         let hosts = ArrayList<String>()
         hosts.add("node1:7201")

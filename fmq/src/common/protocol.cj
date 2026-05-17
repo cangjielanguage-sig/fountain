@@ -92,19 +92,6 @@ public func extractBytes(buf: ByteBuffer): Array<Byte> {
     raw
 }
 
-private func encodeProduceBytes(topic: String, labels: ArrayList<String>, payload: Array<Byte>): Array<Byte> {
-    let buf = ByteBuffer()
-    let enc = DefaultCodec()
-        .encode(topic)
-        .encode(labels.size)
-    for (l in labels) {
-        enc.encode(l)
-    }
-    enc.encode(payload)
-        .finish().copy(to: buf, closeFromOnEnd: true, closeToOnEnd: false)
-    extractBytes(buf)
-}
-
 private func matchModeToString(mode: MatchMode): String {
     match (mode) {
         case Exact(_) => "exact"
