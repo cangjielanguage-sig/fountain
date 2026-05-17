@@ -120,12 +120,13 @@ public class CommandExecutor {
             if (queues.size == 0) {
                 return errorResp(request.id, "no queue available for topic=${topic}")
             }
+            let q = queueManager.routeToQueue(topic, queues)
             // 通过 QueueWriter 提交消息（若 writer 已启动则走复制链，否则直接写）
-            if (let Some(writer) <- queueManager.getWriterForQueue(queues[0])) {
+            if (let Some(writer) <- queueManager.getWriterForQueue(q)) {
                 writer.submit(msgData)
             } else {
-                queues[0].append(msgData)
-                queues[0].sync()
+                q.append(msgData)
+                q.sync()
             }
             log.debug{"produced to ${topic}, size=${msgData.size}"}
             ProtocolMessage(Command.RESP(0), request.id, MqBody("ack", []).toData())
@@ -160,12 +161,13 @@ public class CommandExecutor {
                                 let queues = if (let Some(qs) <- queueManager.getQueues(topic)) { qs }
                                     else { queueManager.createQueues(topic, 1) }
                                 if (queues.size > 0) {
+                                    let q = queueManager.routeToQueue(topic, queues)
                                     // 通过 QueueWriter 提交（优先走复制链），无 writer 时直接写
-                                    if (let Some(writer) <- queueManager.getWriterForQueue(queues[0])) {
+                                    if (let Some(writer) <- queueManager.getWriterForQueue(q)) {
                                         writer.submit(data)
                                     } else {
-                                        queues[0].append(data)
-                                        queues[0].sync()
+                                        q.append(data)
+                                        q.sync()
                                     }
                                     ok += 1
                                 } else { fail += 1 }

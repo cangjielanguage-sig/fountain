@@ -137,6 +137,17 @@ public class QueueManager {
     }
 
     /**
+     * 路由消息到目标队列（CRC64 一致性哈希）。
+     * 单队列时跳过哈希直接返回 queues[0]。
+     */
+    public func routeToQueue(topic: String, queues: ArrayList<MqQueue>): MqQueue {
+        if (queues.size == 1) { return queues[0] }
+        let hash64 = crc64(topic)
+        let idx = Int64(hash64 % UInt64(queues.size))
+        queues[idx]
+    }
+
+    /**
      * 重新分配故障节点的队列到本节点。
      * 1. 遍历该主题的最大可能队列数
      * 2. 如果队列应属故障节点且尚未在本节点上创建，则在本地创建
