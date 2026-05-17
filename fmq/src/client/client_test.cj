@@ -233,5 +233,66 @@ public class DeregisterPayloadTest {
 }
 
 /**
+ * ConsumerLoop deliveryId 提取测试。
+ * 验证 extractQueueIndex 正确解析 deliveryId。
+ */
+@Test
+public class ConsumerLoopDeliveryIdTest {
+    @TestCase
+    public func testExtractQueueIndexFromDeliveryId(): Unit {
+        // deliveryId 格式: "topic:queueIndex:groupId:offset"
+        @Assert(ConsumerLoop.extractQueueIndex("/order/create:0:group1:10") == 0)
+        @Assert(ConsumerLoop.extractQueueIndex("/order/create:3:groupA:0") == 3)
+        @Assert(ConsumerLoop.extractQueueIndex("/a/b/c:7:myGroup:5") == 7)
+    }
+
+    @TestCase
+    public func testExtractQueueIndexWithInvalidFormatReturns0(): Unit {
+        @Assert(ConsumerLoop.extractQueueIndex("noColons") == 0)
+        @Assert(ConsumerLoop.extractQueueIndex("one:paren") == 0)
+    }
+}
+
+/**
+ * decodeMessageListWithLabels 格式验证。
+ * 验证服务端响应（含 deliveryId + labels）能被正确解码。
+ */
+@Test
+public class ConsumerDecodeWithLabelsTest {
+    @TestCase
+    public func testDecodeMessageListWithLabelsRoundtrip(): Unit {
+        // 模拟服务端 encodeMessageListWithIds 的输出
+        let buf = ByteBuffer()
+        let enc = DefaultCodec()
+            .encode(2)  // count = 2
+        // msg 1
+        enc.encode("/topic/a:0:groupA:0")  // deliveryId
+            .encode(1)  // labelCount = 1
+            .encode("key=val")  // label
+            .encode(Array<Byte>(3, repeat: 1u8))  // data
+        // msg 2
+        enc.encode("/topic/a:1:groupA:1")  // deliveryId
+            .encode(0)  // labelCount = 0
+            .encode(Array<Byte>(3, repeat: 2u8))  // data
+        enc.finish().copy(to: buf, closeFromOnEnd: true, closeToOnEnd: false)
+        let raw = extractBytes(buf)
+
+        let decoded = Consumer.decodeMessageListWithLabels(raw)
+        @Assert(decoded.size == 2)
+
+        let (d0, l0, p0) = decoded[0]
+        @Assert(d0 == "/topic/a:0:groupA:0")
+        @Assert(l0.size == 1)
+        @Assert(l0[0] == "key=val")
+        @Assert(p0.size == 3)
+
+        let (d1, l1, p1) = decoded[1]
+        @Assert(d1 == "/topic/a:1:groupA:1")
+        @Assert(l1.size == 0)
+        @Assert(p1.size == 3)
+    }
+}
+
+/**
  * 无 SyncRegistryTest：需要真实的 MQ 服务端连接。
  */

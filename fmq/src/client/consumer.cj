@@ -258,6 +258,7 @@ public class ConsumerLoop {
 
     /**
      * 单次拉取：CONSUME → dataFilter → callback → ACK。
+     * 使用 decodeMessageListWithLabels 获取服务端 deliveryId 和 labels。
      */
     private func pollOnce(): Unit {
         let payload = Consumer.encodeConsumePayload(topic, groupId, 1)
@@ -267,19 +268,27 @@ public class ConsumerLoop {
         if (let Some(r) <- resp) {
             if (let Some(body) <- convert<MqBody>(r.data)) {
                 if (body.bodyType == "consume") {
-                    let msgs = Consumer.decodeMessageList(body.payload)
+                    // 解码带 deliveryId 和 labels 的消息列表
+                    let msgs = Consumer.decodeMessageListWithLabels(body.payload)
                     if (msgs.size > 0) {
-                        let msgData = msgs[0]
-                        // dataFilter 过滤
+                        let (deliveryId, labels, msgData) = msgs[0]
+                        // dataFilter 过滤（基于 payload）
                         if (dataFilter != "" && !dataFilterMatchImpl(dataFilter, msgData)) {
-                            return  // 不匹配，跳过
+                            // 过滤不匹配，仍然要 ACK 避免重复投递
+                            let ackPayload = Consumer.encodeAckPayload(deliveryId, topic, 0)
+                            let ackReq = ProtocolMessage(Command.ACK, MessageID(),
+                                MqBody("ack", ackPayload).toData())
+                            client.transfer(ackReq.id, ackReq, Duration.second * 5)
+                            return
                         }
+                        // 从 deliveryId 提取 queueIndex: "topic:queueIndex:groupId:offset"
+                        let queueIndex = extractQueueIndex(deliveryId)
                         let msg = Message(topic: topic, id: MessageID(),
-                            queueIndex: 0, payload: msgData, labels: ArrayList())
+                            queueIndex: queueIndex, payload: msgData, labels: labels,
+                            producerId: deliveryId)
                         callback(msg)
-                        // ACK
-                        let ackPayload = Consumer.encodeAckPayload(
-                            "${msg.id.pid}:${msg.id.tid}", topic, 0)
+                        // ACK 使用服务端 deliveryId
+                        let ackPayload = Consumer.encodeAckPayload(deliveryId, topic, queueIndex)
                         let ackReq = ProtocolMessage(Command.ACK, MessageID(),
                             MqBody("ack", ackPayload).toData())
                         client.transfer(ackReq.id, ackReq, Duration.second * 5)
@@ -287,6 +296,16 @@ public class ConsumerLoop {
                 }
             }
         }
+    }
+
+    /**
+     * 从 deliveryId "topic:queueIndex:groupId:offset" 提取 queueIndex。
+     */
+    internal static func extractQueueIndex(deliveryId: String): Int64 {
+        let parts = deliveryId.split(':')
+        if (parts.size >= 2) {
+            try { Int64.parse(parts[1]) } catch (_: Exception) { 0 }
+        } else { 0 }
     }
 
     /** 复制 Consumer.dataFilterMatch 的逻辑用于 ConsumerLoop */
