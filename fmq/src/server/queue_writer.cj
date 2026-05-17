@@ -59,7 +59,6 @@ public class QueueWriter {
                 log.error{"QueueWriter error: ${e.message}"}
             }
         }
-        eprintln("[QW run] exit")
     }
 
     public func close(): Unit { closed.store(true) }
