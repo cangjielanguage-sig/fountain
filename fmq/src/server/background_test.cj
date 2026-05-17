@@ -39,9 +39,15 @@ public class BackgroundThreadTest {
 
         writer.submit([0x01u8])
         writer.submit([0x02u8])
-        writer.close()
-        @Assert(true)
 
+        // 启动 writer 线程处理提交，然后关闭
+        let future = spawn { writer.run() }
+        sleep(Duration.millisecond * 100)
+        writer.close()
+        future.get()
+
+        // 验证写入的数据可从队列读取
+        @Assert(q.tryReadFromLog(0).isSome())
         q.close()
         cleanupTopic("w-sc")
     }
@@ -53,12 +59,9 @@ public class BackgroundThreadTest {
 
     @TestCase
     public func testIsFileExpiredExistingFileExecutes(): Unit {
-        try {
-            let _ = QueueCleaner.isFileExpired("/dev/null", DateTime.now())
-            @Assert(true)
-        } catch (_: Exception) {
-            @Assert(true)
-        }
+        // /dev/null mtime 应远小于当前时间，isFileExpired 应返回 true（已过期）
+        let now = DateTime.now()
+        @Assert(QueueCleaner.isFileExpired("/dev/null", now))
     }
 
     private static func testConfig(): MqConfig {
@@ -130,7 +133,7 @@ public class BackgroundThreadLifecycleTest {
         sleep(Duration.millisecond * 100)
         writer.close()
         future.get()
-        @Assert(true)
+        @Assert(!q.isClosed())
 
         q.close()
         clearTopic("wr-idle")

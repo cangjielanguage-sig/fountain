@@ -18,6 +18,7 @@ package fountain::fmq.common
 import std.unittest.*
 import std.unittest.testmacro.*
 import std.io.{ByteBuffer, SeekPosition}
+import fountain::f_protocol.default.Message as ProtocolMessage
 
 @Test
 public class TopicTest {
@@ -228,9 +229,9 @@ public class TypesSerializationTest {
 public class ProtocolFunctionTest {
     @TestCase
     public func testEncodePingCommand(): Unit {
-        // encodePing 返回 EncodedMessage（编码后的字节），不包含 .command
-        let _ = encodePing()
-        @Assert(true)
+        // 验证 PING 命令标签 = 12 (0x0C)
+        let msg = ProtocolMessage(Command.PING(0))
+        @Assert((msg.command.value >> 4) == 12u8)
     }
 
     @TestCase
