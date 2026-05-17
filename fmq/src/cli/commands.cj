@@ -16,7 +16,7 @@ limitations under the License.
 package fountain::fmq.cli
 
 import std.collection.ArrayList
-import std.convert.Parsable
+import std.convert.*
 
 /**
  * 命令运行器。
@@ -45,8 +45,11 @@ public class CommandRunner {
         let name = getArg(args, "--name")
         let queues = getArg(args, "--queues")
         if (let Some(n) <- name) {
-            let q = if (let Some(s) <- queues) { Int64.parse(s) } else { 1 }
-            let client = getClient()
+            let q = if (let Some(s) <- queues) {
+                if (let Some(v) <- Int64.tryParse(s)) { v }
+                else { println("error: --queues must be a number, got '${s}'"); return }
+            } else { 1 }
+            let client = if (let Some(c) <- getClient()) { c } else { return }
             if (client.createTopic(n, queueCount: q)) {
                 println("created topic '${n}' with ${q} queues")
             } else {
@@ -60,7 +63,7 @@ public class CommandRunner {
     public static func deleteTopic(args: Array<String>): Unit {
         let name = getArg(args, "--name")
         if (let Some(n) <- name) {
-            let client = getClient()
+            let client = if (let Some(c) <- getClient()) { c } else { return }
             if (client.deleteTopic(n)) {
                 println("deleted topic '${n}'")
             } else {
@@ -77,7 +80,7 @@ public class CommandRunner {
         let name = getArg(args, "--name")
         let topic = getArg(args, "--topic")
         if (let Some(n) <- name && let Some(t) <- topic) {
-            let client = getClient()
+            let client = if (let Some(c) <- getClient()) { c } else { return }
             if (client.addConsumerGroup(t, n)) {
                 println("created consumer group '${n}' for topic ${t}")
             } else {
@@ -92,7 +95,7 @@ public class CommandRunner {
         let name = getArg(args, "--name")
         let topic = getArg(args, "--topic")
         if (let Some(n) <- name && let Some(t) <- topic) {
-            let client = getClient()
+            let client = if (let Some(c) <- getClient()) { c } else { return }
             if (client.removeConsumerGroup(t, n)) {
                 println("deleted consumer group '${n}' from topic ${t}")
             } else {
@@ -106,7 +109,7 @@ public class CommandRunner {
     // ───── 列表查询 ─────
 
     public static func listTopics(_: Array<String>): Unit {
-        let client = getClient()
+        let client = if (let Some(c) <- getClient()) { c } else { return }
         let topics = client.listTopics()
         if (topics.size == 0) {
             println("no topics")
@@ -120,7 +123,7 @@ public class CommandRunner {
 
     public static func listConsumerGroups(_: Array<String>): Unit {
         // 列出所有主题的消费者组
-        let client = getClient()
+        let client = if (let Some(c) <- getClient()) { c } else { return }
         let topics = client.listTopics()
         var anyGroups = false
         for (t in topics) {
@@ -141,7 +144,7 @@ public class CommandRunner {
     public static func listGroups(args: Array<String>): Unit {
         let topic = getArg(args, "--topic")
         if (let Some(t) <- topic) {
-            let client = getClient()
+            let client = if (let Some(c) <- getClient()) { c } else { return }
             let groups = client.listGroups(t)
             if (groups.size == 0) {
                 println("no groups for topic ${t}")
@@ -172,11 +175,15 @@ public class CommandRunner {
         let group = getArg(args, "--group")
         let offset = getArg(args, "--offset")
         if (let Some(t) <- topic && let Some(g) <- group && let Some(o) <- offset) {
-            let client = getClient()
-            if (client.resetOffset(t, g, Int64.parse(o))) {
-                println("reset offset ${t}/${g} => ${o}")
+            let client = if (let Some(c) <- getClient()) { c } else { return }
+            if (let Some(v) <- Int64.tryParse(o)) {
+                if (client.resetOffset(t, g, v)) {
+                    println("reset offset ${t}/${g} => ${v}")
+                } else {
+                    println("failed to reset offset")
+                }
             } else {
-                println("failed to reset offset")
+                println("error: --offset must be a number, got '${o}'")
             }
         } else {
             println("error: --topic, --group, --offset are required")
@@ -186,7 +193,7 @@ public class CommandRunner {
     public static func showTopic(args: Array<String>): Unit {
         let name = getArg(args, "--name")
         if (let Some(n) <- name) {
-            let client = getClient()
+            let client = if (let Some(c) <- getClient()) { c } else { return }
             if (let Some(info) <- client.showTopic(n)) {
                 println("topic '${n}':")
                 println("  ${info}")
@@ -210,8 +217,9 @@ public class CommandRunner {
         let topic = getArg(args, "--topic")
         let queue = getArg(args, "--queue")
         if (let Some(t) <- topic && let Some(q) <- queue) {
-            let qi = Int64.parse(q)
-            let client = getClient()
+            let qi = if (let Some(v) <- Int64.tryParse(q)) { v }
+                else { println("error: --queue must be a number, got '${q}'"); return }
+            let client = if (let Some(c) <- getClient()) { c } else { return }
             let entries = client.listDeadLetters(t, qi)
             if (entries.size == 0) {
                 println("no dead letters for ${t}[${q}]")
@@ -231,8 +239,9 @@ public class CommandRunner {
         let queue = getArg(args, "--queue")
         let msgId = getArg(args, "--messageId")
         if (let Some(t) <- topic && let Some(q) <- queue && let Some(m) <- msgId) {
-            let qi = Int64.parse(q)
-            let client = getClient()
+            let qi = if (let Some(v) <- Int64.tryParse(q)) { v }
+                else { println("error: --queue must be a number, got '${q}'"); return }
+            let client = if (let Some(c) <- getClient()) { c } else { return }
             if (client.redeliverDeadLetter(t, qi, m)) {
                 println("redelivered ${m} from ${t}[${q}]")
             } else {
@@ -247,8 +256,9 @@ public class CommandRunner {
         let topic = getArg(args, "--topic")
         let queue = getArg(args, "--queue")
         if (let Some(t) <- topic && let Some(q) <- queue) {
-            let qi = Int64.parse(q)
-            let client = getClient()
+            let qi = if (let Some(v) <- Int64.tryParse(q)) { v }
+                else { println("error: --queue must be a number, got '${q}'"); return }
+            let client = if (let Some(c) <- getClient()) { c } else { return }
             if (client.redeliverAllDeadLetters(t, qi)) {
                 println("redelivered all from ${t}[${q}]")
             } else {
@@ -260,10 +270,15 @@ public class CommandRunner {
     }
 
     /**
-     * 获取 MQ 客户端连接。
+     * 获取 MQ 客户端连接。异常时打印错误并返回 None。
      */
-    private static func getClient(): MqClient {
+    private static func getClient(): ?MqClient {
         let config = loadConfig()
-        MqClient.getInstance(config)
+        try {
+            Some(MqClient.getInstance(config))
+        } catch (e: Exception) {
+            println("error: failed to connect: ${e.message}")
+            None
+        }
     }
 }
