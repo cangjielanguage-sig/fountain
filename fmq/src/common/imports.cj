@@ -21,4 +21,5 @@ internal import fountain::f_codec.default.*
 internal import fountain::f_data.*
 internal import fountain::f_protocol.*
 internal import fountain::f_protocol.default.*
+internal import fountain::f_log.*
 internal import fountain::f_util.*

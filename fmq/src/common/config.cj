@@ -17,6 +17,8 @@ package fountain::fmq.common
 
 import std.env
 
+let log = LoggerFactory.getLogger<MqConfig>()
+
 /**
  * MQ 配置，所有字段从环境变量加载。
  */
@@ -97,7 +99,8 @@ public func readEnv(key: String): ?String {
         } else {
             None
         }
-    } catch (_: Exception) {
+    } catch (e: Exception) {
+        log.warn{"readEnv(${key}) unexpected error: ${e.message}"}
         None
     }
 }

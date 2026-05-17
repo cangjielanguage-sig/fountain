@@ -88,8 +88,12 @@ public func extractBytes(buf: ByteBuffer): Array<Byte> {
     let size = buf.seek(SeekPosition.End(0))
     buf.seek(SeekPosition.Begin(0))
     let raw = Array<Byte>(Int64(size), repeat: 0u8)
-    buf.read(raw)
-    raw
+    let bytesRead = buf.read(raw)
+    if (bytesRead == size) {
+        raw
+    } else {
+        raw[0..Int64(bytesRead)]
+    }
 }
 
 public func matchModeToString(mode: MatchMode): String {

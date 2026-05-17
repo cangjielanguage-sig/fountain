@@ -48,6 +48,7 @@ public class TopicMeta {
  */
 @DataAssist[props fields]
 public class ConsumerRegistration {
+    private static let log = LoggerFactory.getLogger<ConsumerRegistration>()
     private var consumerId: String = ""
     private var groupId: String = ""
     // matchMode 作为 String 存储（编码为 "Exact:/order/create" 格式）
@@ -82,7 +83,10 @@ public class ConsumerRegistration {
         if (s.startsWith("Exact:")) { MatchMode.Exact(s[6..]) }
         else if (s.startsWith("Glob:")) { MatchMode.Glob(s[5..]) }
         else if (s.startsWith("Prefix:")) { MatchMode.Prefix(s[7..]) }
-        else { MatchMode.Exact(s) }
+        else {
+            log.warn{"decodeMatchMode: unknown prefix, treating as Exact: ${s}"}
+            MatchMode.Exact(s)
+        }
     }
 }
 

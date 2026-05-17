@@ -18,6 +18,7 @@ package fountain::fmq.server
 import fountain::f_protocol.default.{Message as ProtocolMessage, EncodedMessage}
 import std.collection.concurrent.ConcurrentHashMap
 import std.sync.AtomicBool
+import std.sync.AtomicInt64
 
 /**
  * 节点健康信息。
@@ -26,15 +27,15 @@ public class NodeHealth {
     let host: String
     let port: UInt16
     var lastSeen: DateTime
-    var isAlive: Bool
-    var failedCount: Int64
+    var isAlive: AtomicBool
+    var failedCount: AtomicInt64
 
     public init(host: String, port: UInt16) {
         this.host = host
         this.port = port
         this.lastSeen = DateTime.now()
-        this.isAlive = true
-        this.failedCount = 0
+        this.isAlive = AtomicBool(true)
+        this.failedCount = AtomicInt64(0)
     }
 }
 
@@ -84,7 +85,7 @@ public class BrokerManager {
      */
     public func checkConsistency(): Bool {
         for ((_, nh) in nodes) {
-            if (!nh.isAlive) { return false }
+            if (!nh.isAlive.load()) { return false }
         }
         true
     }
@@ -95,7 +96,7 @@ public class BrokerManager {
     public func aliveCount(): Int64 {
         var count: Int64 = 0
         for ((_, nh) in nodes) {
-            if (nh.isAlive) { count += 1 }
+            if (nh.isAlive.load()) { count += 1 }
         }
         count
     }
@@ -120,6 +121,7 @@ public class BrokerManager {
 
     /**
      * ping 单个节点。连接并发送 PING，超时 3 秒。
+     * TODO: connection pooling to avoid per-ping TCP connect/disconnect overhead
      */
     private func pingNode(nh: NodeHealth): Unit {
         if (closed.load()) { return }
@@ -143,9 +145,9 @@ public class BrokerManager {
             }
             if (resp.isSome()) {
                 nh.lastSeen = DateTime.now()
-                if (!nh.isAlive) {
-                    nh.isAlive = true
-                    nh.failedCount = 0
+                if (!nh.isAlive.load()) {
+                    nh.isAlive.store(true)
+                    nh.failedCount.store(0)
                     log.info{"node ${nh.host}:${nh.port} back online"}
                 }
             } else {
@@ -160,11 +162,11 @@ public class BrokerManager {
     }
 
     private func recordFailure(nh: NodeHealth): Unit {
-        nh.failedCount += 1
-        if (nh.failedCount >= config.healthcheckMaxRetry) {
-            if (nh.isAlive) {
-                nh.isAlive = false
-                log.warn{"node ${nh.host}:${nh.port} marked offline after ${nh.failedCount} failures"}
+        let count = nh.failedCount.fetchAdd(1) + 1
+        if (count >= config.healthcheckMaxRetry) {
+            if (nh.isAlive.load()) {
+                nh.isAlive.store(false)
+                log.warn{"node ${nh.host}:${nh.port} marked offline after ${count} failures"}
             }
         }
     }
