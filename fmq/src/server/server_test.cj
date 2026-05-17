@@ -311,6 +311,62 @@ public class DeliverySimpleTest {
 }
 
 @Test
+public class QueueWriterDispatchTest {
+    @TestCase
+    public func testGetWriterForQueueReturnsNoneBeforeStart(): Unit {
+        let hosts = ArrayList<String>()
+        hosts.add("node1:7201")
+        let config = MqConfig(
+            mqHosts: hosts, syncHosts: ArrayList(),
+            dataDir: "/tmp/fmq_qw", segmentMaxSize: 1024,
+            heartbeatIntervalSec: 5, healthcheckMaxRetry: 3,
+            idleTimeoutMinutes: 30, ackTimeoutMs: 30000,
+            maxRetryCount: 3, retryIntervalMs: 1000,
+            dlqRetentionHours: 168, maxMessageSize: 4096,
+            maxLabelsPerMessage: 64, retentionHours: 72,
+            syncQuorum: 1
+        )
+        let qm = QueueManager(config, nodeIndex: 0)
+        let queues = qm.createQueues("/test", 1)
+        @Assert(queues.size == 1)
+        let q = queues[0]
+        // startAll() 未调用，writer 不应存在
+        @Assert(qm.getWriterForQueue(q).isNone())
+        q.close()
+    }
+
+    @TestCase
+    public func testGetWriterForQueueReturnsSomeAfterStartAll(): Unit {
+        let hosts = ArrayList<String>()
+        hosts.add("node1:7201")
+        let config = MqConfig(
+            mqHosts: hosts, syncHosts: ArrayList(),
+            dataDir: "/tmp/fmq_qw2", segmentMaxSize: 1024,
+            heartbeatIntervalSec: 5, healthcheckMaxRetry: 3,
+            idleTimeoutMinutes: 30, ackTimeoutMs: 30000,
+            maxRetryCount: 3, retryIntervalMs: 1000,
+            dlqRetentionHours: 168, maxMessageSize: 4096,
+            maxLabelsPerMessage: 64, retentionHours: 72,
+            syncQuorum: 1
+        )
+        let qm = QueueManager(config, nodeIndex: 0)
+        qm.setReplicationManager(ReplicationManager(config))
+        let queues = qm.createQueues("/test", 1)
+        @Assert(queues.size == 1)
+        let q = queues[0]
+        qm.startAll()
+        // startAll() 后 writer 应存在
+        if (let Some(writer) <- qm.getWriterForQueue(q)) {
+            writer.close()
+            @Assert(true)
+        } else {
+            @Assert(false)
+        }
+        q.close()
+    }
+}
+
+@Test
 public class DeliveryRecordOverwriteTest {
     @TestCase
     public func testRecordDeliveryNoOverwrite(): Unit {

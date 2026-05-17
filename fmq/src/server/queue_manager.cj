@@ -16,6 +16,7 @@ limitations under the License.
 package fountain::fmq.server
 
 import std.collection.concurrent.ConcurrentHashMap
+import std.collection.HashMap
 import std.sync.Mutex
 import fountain::f_util.crc64
 
@@ -32,6 +33,7 @@ public class QueueManager {
     private let lock = Mutex()
     private let writers = ArrayList<QueueWriter>()  // 跟踪 writer 线程
     private let readers = ArrayList<QueueReader>()  // 跟踪 reader 线程
+    private let writerMap = HashMap<String, QueueWriter>()  // "topic:index" → writer 快速查找
 
     public init(config: MqConfig, nodeIndex!: Int64 = 0) {
         this.config = config
@@ -232,11 +234,20 @@ public class QueueManager {
                 let reader = QueueReader(q)
                 writers.add(writer)
                 readers.add(reader)
+                writerMap["${q.topic}:${q.index}"] = writer
                 spawn { writer.run() }
                 spawn { reader.run() }
             }
         }
         log.info{"startAll: ${writers.size} writers, ${readers.size} readers started"}
+    }
+
+    /**
+     * 获取指定队列的 QueueWriter（用于 submit 消息进入复制链）。
+     * 返回 None 表示队列还未启动 writer（如运行时创建的队列）。
+     */
+    public func getWriterForQueue(queue: MqQueue): ?QueueWriter {
+        writerMap.get("${queue.topic}:${queue.index}")
     }
 
     public func close(): Unit {
