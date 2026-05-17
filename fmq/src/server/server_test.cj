@@ -198,6 +198,20 @@ public class ReplicationRoleTest {
         @Assert(rm.role() == "master")
     }
 
+    @TestCase
+    public func testPromoteDemoteCycle(): Unit {
+        let config = testConfig()
+        let rm = ReplicationManager(config)
+        @Assert(rm.role() != "master")
+        rm.promoteToMaster()
+        @Assert(rm.role() == "master")
+        rm.demoteToSlave("node2")
+        @Assert(rm.role().contains("slave"))
+        // 二次 promote 应生效
+        rm.promoteToMaster()
+        @Assert(rm.role() == "master")
+    }
+
     private static func testConfig(): MqConfig {
         MqConfig(
             mqHosts: ArrayList(), syncHosts: ArrayList(),

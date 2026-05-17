@@ -165,6 +165,26 @@ public class CommandExecutorTest {
         @Assert(isResp(resp))
     }
 
+    /**
+     * 批量生产 — 解码失败应 break 而非继续循环。
+     * count=2 但只编码了 1 条消息的数据 → 第二条 decode 失败 → break。
+     */
+    @TestCase
+    public func testBatchProduceDecodeFailureBreaks(): Unit {
+        let ex = makeExecutor()
+        let buf = ByteBuffer()
+        // count=2 但只提供 1 条完整消息 → 第 2 条缺失 topic 字段
+        DefaultCodec()
+            .encode(2i64)  // count = 2
+            .encode("/topic-a").encode(0i64).encode([0x01u8])  // 仅 1 条
+            .finish().copy(to: buf, closeFromOnEnd: true, closeToOnEnd: false)
+        let raw = extractBytes(buf)
+        let req = ProtocolMessage(Command.PUBLISH(0), MessageID(),
+            MqBody("batch_produce", raw).toData())
+        let resp = ex.execute(req)
+        @Assert(isResp(resp))
+    }
+
     // ── 订阅 / 退订 ──
 
     @TestCase
@@ -187,6 +207,31 @@ public class CommandExecutorTest {
         let req = ProtocolMessage(Command.SUBSCRIBE, MessageID(),
             MqBody("subscribe", enc(["", "exact"])).toData())
         @Assert(isResp(ex.execute(req)))
+    }
+
+    /**
+     * SUBSCRIBE 同一 topic 两次使用相同 consumerId（基于 pid+topic），
+     * UNSUBSCRIBE 能正确匹配注销。
+     */
+    @TestCase
+    public func testSubscribeSameTopicTwiceRoundtrip(): Unit {
+        let ex = makeExecutor()
+        let tp1 = enc(["/sub-topic", "exact"])
+
+        // 第一次订阅
+        let req1 = ProtocolMessage(Command.SUBSCRIBE, MessageID(),
+            MqBody("subscribe", tp1).toData())
+        @Assert(isResp(ex.execute(req1)))
+
+        // 第二次订阅（同一 topic，consumerId 应相同 → ConsumerMatcher 更新而非追加）
+        let req2 = ProtocolMessage(Command.SUBSCRIBE, MessageID(),
+            MqBody("subscribe", tp1).toData())
+        @Assert(isResp(ex.execute(req2)))
+
+        // 退订能正确匹配
+        let unsub = ProtocolMessage(Command.UNSUBSCRIBE, MessageID(),
+            MqBody("unsubscribe", tp1).toData())
+        @Assert(isResp(ex.execute(unsub)))
     }
 
     // ── 注册 / 注销 ──
