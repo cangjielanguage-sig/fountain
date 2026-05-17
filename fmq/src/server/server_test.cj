@@ -480,3 +480,42 @@ public class TopicManagerTest {
     }
 }
 
+@Test
+public class ConsumerMatcherTest {
+    @TestCase
+    public func testGetRegistrationsEmpty(): Unit {
+        let cm = ConsumerMatcher()
+        let regs = cm.getRegistrations()
+        @Assert(regs.size == 0)
+    }
+
+    @TestCase
+    public func testGetRegistrationsAfterRegister(): Unit {
+        let cm = ConsumerMatcher()
+        let reg = ConsumerRegistration(
+            consumerId: "c1", groupId: "g1",
+            matchModeStr: "Exact:/test",
+            labels: None, dataFilter: None,
+            lastHeartbeat: DateTime.now())
+        cm.register(reg)
+        let regs = cm.getRegistrations()
+        @Assert(regs.size == 1)
+        @Assert(regs[0].getConsumerId() == "c1")
+        @Assert(regs[0].getGroupId() == "g1")
+    }
+
+    @TestCase
+    public func testGetRegistrationsAfterDeregister(): Unit {
+        let cm = ConsumerMatcher()
+        let reg = ConsumerRegistration(
+            consumerId: "c1", groupId: "g1",
+            matchModeStr: "Exact:/test",
+            labels: None, dataFilter: None,
+            lastHeartbeat: DateTime.now())
+        cm.register(reg)
+        cm.deregister("g1", "c1")
+        let regs = cm.getRegistrations()
+        @Assert(regs.size == 0)
+    }
+}
+

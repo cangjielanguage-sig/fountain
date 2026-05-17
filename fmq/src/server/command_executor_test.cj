@@ -331,9 +331,96 @@ public class CommandExecutorTest {
             MqBody("topic_op", enc(["listConsumers", "/no-consumers"])).toData())
         let resp = ex.execute(req)
         @Assert(isResp(resp))
-        // 验证返回 consumer_list 类型
+        // 验证返回 consumer_list 类型且 size=0
         if (let Some(body) <- convert<MqBody>(resp.data)) {
             @Assert(body.bodyType == "consumer_list")
+            let buf = ByteBuffer(body.payload)
+            let dec = DefaultCodec()
+            if (let Some(count) <- dec.decode<Int64>(buf)) {
+                @Assert(count == 0)
+            }
+        }
+    }
+
+    @TestCase
+    public func testListConsumersReturnsRegisteredConsumer(): Unit {
+        let ex = makeExecutor()
+        // 1. 注册两个消费者
+        let reg1 = ProtocolMessage(Command.REGISTER, MessageID(),
+            MqBody("register", enc(["group-a", "consumer-1", "Exact:/test"])).toData())
+        @Assert(isResp(ex.execute(reg1)))
+        let reg2 = ProtocolMessage(Command.REGISTER, MessageID(),
+            MqBody("register", enc(["group-b", "consumer-2", "Exact:/test"])).toData())
+        @Assert(isResp(ex.execute(reg2)))
+
+        // 2. 列出 /test 的消费者
+        let req = ProtocolMessage(Command.TOPIC_OP, MessageID(),
+            MqBody("topic_op", enc(["listConsumers", "/test"])).toData())
+        let resp = ex.execute(req)
+        @Assert(isResp(resp))
+
+        // 3. 验证响应包含两个消费者
+        if (let Some(body) <- convert<MqBody>(resp.data)) {
+            @Assert(body.bodyType == "consumer_list")
+            let buf = ByteBuffer(body.payload)
+            let dec = DefaultCodec()
+            if (let Some(count) <- dec.decode<Int64>(buf)) {
+                @Assert(count == 2)
+                for (i in 0..count) {
+                    let cid = dec.decode<String>(buf)
+                    let gid = dec.decode<String>(buf)
+                    let mode = dec.decode<String>(buf)
+                    @Assert(cid.isSome())
+                    @Assert(gid.isSome())
+                    @Assert(mode.isSome())
+                }
+            }
+        }
+    }
+
+    @TestCase
+    public func testListConsumersFiltersByTopic(): Unit {
+        let ex = makeExecutor()
+        // 注册消费者：一个匹配 /a，一个匹配 /b
+        ex.execute(ProtocolMessage(Command.REGISTER, MessageID(),
+            MqBody("register", enc(["g1", "c1", "Exact:/a"])).toData()))
+        ex.execute(ProtocolMessage(Command.REGISTER, MessageID(),
+            MqBody("register", enc(["g2", "c2", "Exact:/b"])).toData()))
+
+        // 列出匹配 /a 的消费者 — 应只有 1 个
+        let req = ProtocolMessage(Command.TOPIC_OP, MessageID(),
+            MqBody("topic_op", enc(["listConsumers", "/a"])).toData())
+        let resp = ex.execute(req)
+        @Assert(isResp(resp))
+        if (let Some(body) <- convert<MqBody>(resp.data)) {
+            let buf = ByteBuffer(body.payload)
+            let dec = DefaultCodec()
+            if (let Some(count) <- dec.decode<Int64>(buf)) {
+                @Assert(count == 1)
+            }
+        }
+    }
+
+    @TestCase
+    public func testListConsumersDeregisterRemovesConsumer(): Unit {
+        let ex = makeExecutor()
+        // 注册消费者
+        ex.execute(ProtocolMessage(Command.REGISTER, MessageID(),
+            MqBody("register", enc(["g", "c1", "Exact:/x"])).toData()))
+        ex.execute(ProtocolMessage(Command.DEREGISTER, MessageID(),
+            MqBody("deregister", enc(["g", "c1"])).toData()))
+
+        // 列出 — 应空
+        let req = ProtocolMessage(Command.TOPIC_OP, MessageID(),
+            MqBody("topic_op", enc(["listConsumers", "/x"])).toData())
+        let resp = ex.execute(req)
+        @Assert(isResp(resp))
+        if (let Some(body) <- convert<MqBody>(resp.data)) {
+            let buf = ByteBuffer(body.payload)
+            let dec = DefaultCodec()
+            if (let Some(count) <- dec.decode<Int64>(buf)) {
+                @Assert(count == 0)
+            }
         }
     }
 
