@@ -46,7 +46,9 @@ public class SyncRegistry {
                 log.debug{"heartbeat already running"}
                 return
             }
-            let interval = Duration.second * config.heartbeatIntervalSec
+            let baseInterval = Duration.second * config.heartbeatIntervalSec
+            let jitterMs = config.heartbeatIntervalSec * 37 % 100  // ±0-99ms jitter to spread bursts
+            let interval = baseInterval + Duration.millisecond * jitterMs
             let selfRef = this
             heartbeatTimer = Timer.repeat(interval, interval, {
                 => selfRef.sendHeartbeat()

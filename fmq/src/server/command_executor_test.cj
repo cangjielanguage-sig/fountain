@@ -92,6 +92,8 @@ public class CommandExecutorTest {
             MqBody("ping", []).toData())
         let resp = ex.execute(req)
         @Assert(isPing(resp))
+        // 验证 PING 响应的 tag 为 1 (ping 子类型)
+        @Assert((resp.command.value & 0x0Fu8) == 1u8)
     }
 
     /**
@@ -128,6 +130,10 @@ public class CommandExecutorTest {
             MqBody("produce", encoded).toData())
         let resp = ex.execute(req)
         @Assert(isResp(resp))
+        // 验证成功的生产返回 MqBody("ack", ...) 
+        if (let Some(body) <- convert<MqBody>(resp.data)) {
+            @Assert(body.bodyType == "ack")
+        }
     }
 
     @TestCase
