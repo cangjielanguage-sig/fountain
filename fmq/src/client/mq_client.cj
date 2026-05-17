@@ -198,6 +198,23 @@ public class MqClient <: Resource {
     }
 
     /**
+     * 列出指定主题的在线消费者。
+     * @return ArrayList<(consumerId, groupId, matchMode)>
+     */
+    public func listConsumers(topic: String): ArrayList<(String, String, String)> {
+        let payload = encodeTopicOpPayload("listConsumers", topic, 0)
+        let req = ProtocolMessage(Command.TOPIC_OP, MessageID(),
+            MqBody("topic_op", payload).toData())
+        let resp = mqConn.transfer(req.id, req, Duration.second * 10)
+        if (let Some(r) <- resp) {
+            if (let Some(body) <- convert<MqBody>(r.data)) {
+                return decodeConsumerList(body.payload)
+            }
+        }
+        ArrayList()
+    }
+
+    /**
      * 添加消费者组到主题。
      */
     public func addConsumerGroup(topic: String, group: String): Bool {
@@ -340,6 +357,26 @@ public class MqClient <: Resource {
             }
         } catch (e: Exception) {
             log.warn{"decodeTopicList failed: ${e.message}"}
+        }
+        result
+    }
+
+    private func decodeConsumerList(data: Array<Byte>): ArrayList<(String, String, String)> {
+        let result = ArrayList<(String, String, String)>()
+        try {
+            let buf = ByteBuffer(data)
+            let dec = DefaultCodec()
+            if (let Some(count) <- dec.decode<Int64>(buf)) {
+                for (_ in 0..count) {
+                    if (let Some(consumerId) <- dec.decode<String>(buf)
+                        && let Some(groupId) <- dec.decode<String>(buf)
+                        && let Some(matchMode) <- dec.decode<String>(buf)) {
+                        result.add((consumerId, groupId, matchMode))
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            log.warn{"decodeConsumerList failed: ${e.message}"}
         }
         result
     }

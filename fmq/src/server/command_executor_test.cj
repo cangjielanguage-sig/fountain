@@ -324,6 +324,19 @@ public class CommandExecutorTest {
         @Assert(isResp(ex.execute(req)))
     }
 
+    @TestCase
+    public func testListConsumersEmptyReturnsResp(): Unit {
+        let ex = makeExecutor()
+        let req = ProtocolMessage(Command.TOPIC_OP, MessageID(),
+            MqBody("topic_op", enc(["listConsumers", "/no-consumers"])).toData())
+        let resp = ex.execute(req)
+        @Assert(isResp(resp))
+        // 验证返回 consumer_list 类型
+        if (let Some(body) <- convert<MqBody>(resp.data)) {
+            @Assert(body.bodyType == "consumer_list")
+        }
+    }
+
     // ── 死信 ──
 
     @TestCase

@@ -164,7 +164,16 @@ public class CommandRunner {
     public static func listConsumers(args: Array<String>): Unit {
         let topic = getArg(args, "--topic")
         if (let Some(t) <- topic) {
-            println("not yet implemented: consumer listing requires server introspection")
+            let client = if (let Some(c) <- getClient()) { c } else { return }
+            let consumers = client.listConsumers(t)
+            if (consumers.size == 0) {
+                println("no online consumers for topic '${t}'")
+            } else {
+                println("online consumers (${consumers.size}) for topic '${t}':")
+                for ((cid, gid, mode) in consumers) {
+                    println("  ${cid}  group=${gid}  match=${mode}")
+                }
+            }
         } else {
             println("error: --topic is required")
         }

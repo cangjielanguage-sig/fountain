@@ -112,6 +112,19 @@ public class ConsumerMatcher {
         result
     }
 
+    /**
+     * 获取所有在线消费者注册的快照。
+     */
+    public func getRegistrations(): ArrayList<ConsumerRegistration> {
+        let result = ArrayList<ConsumerRegistration>()
+        synchronized(mutex) {
+            for (r in registrations) {
+                result.add(r)
+            }
+        }
+        result
+    }
+
     private func matchesTopic(mode: MatchMode, topic: String): Bool {
         match (mode) {
             case Exact(pattern) => pattern == topic

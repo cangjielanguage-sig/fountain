@@ -568,6 +568,11 @@ public class CommandExecutor {
                     let encoded = encodeTopicNameList(groups)
                     ProtocolMessage(Command.RESP(0), request.id,
                         MqBody("group_list", encoded).toData())
+                } else if (op == "listConsumers") {
+                    let regs = consumerMatcher.getRegistrations()
+                    let encoded = encodeConsumerList(regs, name)
+                    ProtocolMessage(Command.RESP(0), request.id,
+                        MqBody("consumer_list", encoded).toData())
                 } else {
                     errorResp(request.id, "unknown topic op: ${op}")
                 }
@@ -721,6 +726,41 @@ public class CommandExecutor {
         }
         enc.finish().copy(to: buf, closeFromOnEnd: true, closeToOnEnd: false)
         extractBytes(buf)
+    }
+
+    /**
+     * 编码消费者列表：size + per-entry (consumerId, groupId, matchModeStr, lastHeartbeatMs)
+     */
+    private static func encodeConsumerList(regs: ArrayList<ConsumerRegistration>, filterTopic: String): Array<Byte> {
+        // 按 topic 过滤：匹配 topic 或 topic 在 matchMode 中
+        let matched = ArrayList<ConsumerRegistration>()
+        for (r in regs) {
+            let mode = r.getMatchMode()
+            if (matchesTopicForList(mode, filterTopic)) {
+                matched.add(r)
+            }
+        }
+        let buf = ByteBuffer()
+        let enc = DefaultCodec().encode(matched.size)
+        for (r in matched) {
+            enc.encode(r.getConsumerId())
+                .encode(r.getGroupId())
+                .encode(matchModeToString(r.getMatchMode()))
+        }
+        enc.finish().copy(to: buf, closeFromOnEnd: true, closeToOnEnd: false)
+        extractBytes(buf)
+    }
+
+    private static func matchesTopicForList(mode: MatchMode, topic: String): Bool {
+        if (topic.isEmpty()) { return true }  // 空 topic = 返回全部
+        match (mode) {
+            case Exact(pattern) => pattern == topic
+            case Glob(pattern) =>
+                let pp = PathPattern()
+                pp.compile(pattern)
+                pp.matches(topic)
+            case Prefix(pattern) => topic.startsWith(pattern)
+        }
     }
 
     private static func encodeTopicInfo(name: String, meta: TopicMeta): Array<Byte> {
