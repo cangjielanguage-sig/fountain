@@ -842,6 +842,9 @@ public class DefaultCodec <: Codec {
             }
             size = parseInt64(head, true, bytes)
             if (size <= fileThreshold) {
+                if (size == 0) {
+                    return (Array<Byte>()).toData()
+                }
                 let array = Array<Byte>(size, repeat: 0)
                 size = input.read(array)
                 if (size < s) {
