@@ -18,6 +18,7 @@ package fountain::fmq.server
 import std.collection.HashMap
 import std.io.ByteBuffer
 import std.sync.Mutex
+import std.time.DateTime
 import fountain::f_codec.default.DefaultCodec
 import fountain::f_io.{SegmentedLog, LogConfig}
 
@@ -31,8 +32,8 @@ public class DeadLetterStore {
     private let dlqLog: SegmentedLog
     private let retentionHours: Int64
     private let log = LoggerFactory.getLogger('fountain::fmq.DeadLetterStore')
-    // 内存索引：messageId → (topic, queueIndex, data)
-    private let index = HashMap<String, (String, Int64, Array<Byte>)>()
+    // 内存索引：messageId → (topic, queueIndex, data, insertedAt)
+    private let index = HashMap<String, (String, Int64, Array<Byte>, DateTime)>()
     private let mutex = Mutex()
 
     public init(queueDir: String, retentionHours!: Int64 = 168) {
@@ -52,7 +53,7 @@ public class DeadLetterStore {
         let entry = encodeDlqEntry(messageId, topic, queueIndex, data)
         dlqLog.append(entry)
         dlqLog.sync()
-        synchronized(mutex) { index[messageId] = (topic, queueIndex, data) }
+        synchronized(mutex) { index[messageId] = (topic, queueIndex, data, DateTime.now()) }
         log.warn{"dead letter: ${messageId}"}
     }
 
@@ -62,7 +63,7 @@ public class DeadLetterStore {
     public func list(topic: String, queueIndex: Int64): ArrayList<(String, Array<Byte>)> {
         let result = ArrayList<(String, Array<Byte>)>()
         synchronized(mutex) {
-            for ((msgId, (t, qi, data)) in index) {
+            for ((msgId, (t, qi, data, _)) in index) {
                 if (t == topic && qi == queueIndex) {
                     result.add((msgId, data))
                 }
@@ -76,7 +77,7 @@ public class DeadLetterStore {
      */
     public func redeliver(topic: String, queueIndex: Int64, messageId: String): ?Array<Byte> {
         synchronized(mutex) {
-            if (let Some((t, qi, data)) <- index.get(messageId)) {
+            if (let Some((t, qi, data, _)) <- index.get(messageId)) {
                 if (t == topic && qi == queueIndex) {
                     index.remove(messageId)
                     return Some(data)
@@ -93,13 +94,13 @@ public class DeadLetterStore {
         let result = ArrayList<Array<Byte>>()
         let keys = ArrayList<String>()
         synchronized(mutex) {
-            for ((msgId, (t, qi, _)) in index) {
+            for ((msgId, (t, qi, _, _)) in index) {
                 if (t == topic && qi == queueIndex) {
                     keys.add(msgId)
                 }
             }
         for (msgId in keys) {
-            if (let Some((_, _, data)) <- index.get(msgId)) {
+            if (let Some((_, _, data, _)) <- index.get(msgId)) {
                 index.remove(msgId)
                 result.add(data)
             }
@@ -109,10 +110,30 @@ public class DeadLetterStore {
     }
 
     /**
-     * 清理过期死信（Phase 7 占位，基于索引 entry 的年龄判断需后续实现）。
+     * 清理过期死信。基于 retentionHours 移除超过保留时间的条目。
+     * retentionHours=0 表示无限保留，跳过清理。
      */
     public func cleanup(): Unit {
-        log.debug{"dead letter cleanup (placeholder)"}
+        if (retentionHours <= 0) { return }
+        let cutoff = DateTime.now() - Duration.hour * retentionHours
+        var removed: Int64 = 0
+        synchronized(mutex) {
+            let expired = ArrayList<String>()
+            for ((msgId, (_, _, _, at)) in index) {
+                if (at < cutoff) {
+                    expired.add(msgId)
+                }
+            }
+            for (msgId in expired) {
+                index.remove(msgId)
+                removed += 1
+            }
+        }
+        let rh = retentionHours  // capture let for log lambda
+        if (removed > 0) {
+            let rm = removed
+            log.info{"cleanup: removed ${rm} expired dead letters (retention=${rh}h)"}
+        }
     }
 
     /**
@@ -130,7 +151,7 @@ public class DeadLetterStore {
                     && let Some(qi) <- dec.decode<Int64>(stream)
                     && let Some(data) <- dec.decode<Array<Byte>>(stream)) {
                     synchronized(mutex) {
-                        index[msgId] = (topic, qi, data)
+                        index[msgId] = (topic, qi, data, DateTime.now())
                     }
                     count += 1
                 } else {

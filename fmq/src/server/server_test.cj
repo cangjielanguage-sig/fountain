@@ -409,6 +409,26 @@ public class DeadLetterStoreTest {
         @Assert(ds.list("/a", 0).size == 0)
         @Assert(ds.list("/b", 0).size == 1)
     }
+
+    @TestCase
+    public func testCleanupPreservesFreshEntries(): Unit {
+        let ds = DeadLetterStore(dlqDir("cleanup"), retentionHours: 168)
+        ds.append([0x01u8], "/a", 0, "msg-1")
+        ds.append([0x02u8], "/b", 0, "msg-2")
+        ds.cleanup()
+        // retentionHours=168, all entries are fresh, nothing should be removed
+        @Assert(ds.list("/a", 0).size == 1)
+        @Assert(ds.list("/b", 0).size == 1)
+    }
+
+    @TestCase
+    public func testCleanupRetentionZeroSkips(): Unit {
+        let ds = DeadLetterStore(dlqDir("cleanup0"), retentionHours: 0)
+        ds.append([0x01u8], "/a", 0, "msg-1")
+        ds.cleanup()
+        // retentionHours=0 means unlimited, nothing should be removed
+        @Assert(ds.list("/a", 0).size == 1)
+    }
 }
 
 @Test
