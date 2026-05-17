@@ -16,6 +16,7 @@ limitations under the License.
 package fountain::fmq.client
 
 import fountain::f_protocol.default.{Message as ProtocolMessage}
+import std.sync.Mutex
 
 /**
  * 心跳注册管理器。
@@ -27,6 +28,7 @@ public class SyncRegistry {
     private let client: Client<ProtocolMessage, EncodedMessage, ProtocolMessage, MqBody, MessageID>
     private let log = LoggerFactory.getLogger('fountain::fmq.SyncRegistry')
     private var heartbeatTimer: ?Timer = None
+    private let timerLock = Mutex()  // 保护 heartbeatTimer check-then-create/stop/isRunning
 
     public init(config: MqConfig,
                 client: Client<ProtocolMessage, EncodedMessage, ProtocolMessage, MqBody, MessageID>) {
@@ -39,15 +41,17 @@ public class SyncRegistry {
      * 按 heartbeatIntervalSec 间隔发送 PING。
      */
     public func startHeartbeat(): Unit {
-        if (heartbeatTimer != None) {
-            log.debug{"heartbeat already running"}
-            return
+        synchronized(timerLock) {
+            if (heartbeatTimer != None) {
+                log.debug{"heartbeat already running"}
+                return
+            }
+            let interval = Duration.second * config.heartbeatIntervalSec
+            let selfRef = this
+            heartbeatTimer = Timer.repeat(interval, interval, {
+                => selfRef.sendHeartbeat()
+            })
         }
-        let interval = Duration.second * config.heartbeatIntervalSec
-        let selfRef = this
-        heartbeatTimer = Timer.repeat(interval, interval, {
-            => selfRef.sendHeartbeat()
-        })
         log.info{"SyncRegistry heartbeat started (interval=${config.heartbeatIntervalSec}s)"}
     }
 
@@ -55,11 +59,13 @@ public class SyncRegistry {
      * 停止心跳。
      */
     public func stopHeartbeat(): Unit {
-        if (let Some(t) <- heartbeatTimer) {
-            t.cancel()
-            heartbeatTimer = None
-            log.info{"SyncRegistry heartbeat stopped"}
+        synchronized(timerLock) {
+            if (let Some(t) <- heartbeatTimer) {
+                t.cancel()
+                heartbeatTimer = None
+            }
         }
+        log.info{"SyncRegistry heartbeat stopped"}
     }
 
     /**
@@ -84,6 +90,8 @@ public class SyncRegistry {
      * 是否在运行。
      */
     public func isRunning(): Bool {
-        heartbeatTimer != None
+        synchronized(timerLock) {
+            heartbeatTimer != None
+        }
     }
 }
