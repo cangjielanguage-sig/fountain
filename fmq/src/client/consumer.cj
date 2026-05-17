@@ -88,7 +88,7 @@ public class Consumer {
             wrapper.add(dataTree)
             path.get(wrapper).next().isSome()
         } catch (_: Exception) {
-            true  // 解码失败时不过滤（保留消息）
+            false  // 解码失败时过滤掉，避免传递损坏数据
         }
     }
 
@@ -308,7 +308,7 @@ public class ConsumerLoop {
         } else { 0 }
     }
 
-    /** 复制 Consumer.dataFilterMatch 的逻辑用于 ConsumerLoop */
+    /** 与 Consumer.dataFilterMatch 逻辑一致（解码失败时过滤） */
     private static func dataFilterMatchImpl(filter: String, payload: Array<Byte>): Bool {
         try {
             let buf = ByteBuffer(payload)
@@ -319,7 +319,7 @@ public class ConsumerLoop {
             wrapper.add(dataTree)
             path.get(wrapper).next().isSome()
         } catch (_: Exception) {
-            true
+            false
         }
     }
 }

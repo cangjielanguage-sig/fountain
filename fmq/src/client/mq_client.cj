@@ -304,7 +304,7 @@ public class MqClient <: Resource {
         extractBytes(buf)
     }
 
-    private static func decodeDeadLetterList(data: Array<Byte>): ArrayList<(String, Array<Byte>)> {
+    private func decodeDeadLetterList(data: Array<Byte>): ArrayList<(String, Array<Byte>)> {
         let result = ArrayList<(String, Array<Byte>)>()
         try {
             let buf = ByteBuffer(data)
@@ -317,11 +317,13 @@ public class MqClient <: Resource {
                     }
                 }
             }
-        } catch (_: Exception) {}
+        } catch (e: Exception) {
+            log.warn{"decodeDeadLetterList failed: ${e.message}"}
+        }
         result
     }
 
-    private static func decodeTopicList(data: Array<Byte>): ArrayList<String> {
+    private func decodeTopicList(data: Array<Byte>): ArrayList<String> {
         let result = ArrayList<String>()
         try {
             let buf = ByteBuffer(data)
@@ -333,7 +335,9 @@ public class MqClient <: Resource {
                     }
                 }
             }
-        } catch (_: Exception) {}
+        } catch (e: Exception) {
+            log.warn{"decodeTopicList failed: ${e.message}"}
+        }
         result
     }
 
