@@ -78,7 +78,7 @@ public class Consumer {
      * 应用 DataPath 过滤器。
      * 将消息体解码为通用 Data 树，执行 DataPath 表达式匹配。
      */
-    private static func dataFilterMatch(filter: String, payload: Array<Byte>): Bool {
+    private func dataFilterMatch(filter: String, payload: Array<Byte>): Bool {
         try {
             let buf = ByteBuffer(payload)
             let codec = DefaultCodec()
@@ -87,8 +87,9 @@ public class Consumer {
             let wrapper = DataList()
             wrapper.add(dataTree)
             path.get(wrapper).next().isSome()
-        } catch (_: Exception) {
-            false  // 解码失败时过滤掉，避免传递损坏数据
+        } catch (e: Exception) {
+            log.warn{"dataFilterMatch decode failed: ${e.message}"}
+            false
         }
     }
 
@@ -202,7 +203,7 @@ public class Consumer {
  * 后台线程持续拉取消息，通过回调派发给业务层。
  */
 public class ConsumerLoop {
-    private let log = LoggerFactory.getLogger('fountain::fmq.ConsumerLoop')
+    private static let log = LoggerFactory.getLogger<ConsumerLoop>()
     private let client: Client<ProtocolMessage, EncodedMessage, ProtocolMessage, MqBody, MessageID>
     private let subscriber: Subscriber
     private let groupId: String
@@ -237,7 +238,7 @@ public class ConsumerLoop {
                 try {
                     selfRef.pollOnce()
                 } catch (e: Exception) {
-                    selfRef.log.error{"ConsumerLoop error: ${e.message}"}
+                    log.error{"ConsumerLoop error: ${e.message}"}
                     sleep(Duration.millisecond * 100)
                 }
             }
@@ -318,7 +319,8 @@ public class ConsumerLoop {
             let wrapper = DataList()
             wrapper.add(dataTree)
             path.get(wrapper).next().isSome()
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            log.warn{"dataFilterMatchImpl decode failed: ${e.message}"}
             false
         }
     }
