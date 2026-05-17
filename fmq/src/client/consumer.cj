@@ -27,7 +27,7 @@ import std.convert.*
  * 通过 CONSUME / ACK 命令与 MQ 服务端交互。
  */
 public class Consumer {
-    private let log = LoggerFactory.getLogger('fountain::fmq.Consumer')
+    private static let log = LoggerFactory.getLogger<Consumer>()
     private let client: Client<ProtocolMessage, EncodedMessage, ProtocolMessage, MqBody, MessageID>
     private let subscriber: Subscriber
 
@@ -163,7 +163,9 @@ public class Consumer {
                     }
                 }
             }
-        } catch (_: Exception) {}
+        } catch (e: Exception) {
+            log.warn{"decodeMessageListWithLabels failed: ${e.message}"}
+        }
         result
     }
 
@@ -192,7 +194,9 @@ public class Consumer {
                     }
                 }
             }
-        } catch (_: Exception) {}
+        } catch (e: Exception) {
+            log.warn{"decodeMessageListWithLabels failed: ${e.message}"}
+        }
         result
     }
 
