@@ -464,6 +464,44 @@ public class TopicManagerTest {
         @Assert(tm.removeConsumerGroup("/test", "group1") == MqErrorCode.SUCCESS)
     }
 
+    @TestCase
+    public func testListAllConsumerGroupsEmpty(): Unit {
+        let tm = TopicManager(configWithHosts())
+        let all = tm.listAllConsumerGroups()
+        @Assert(all.size == 0)
+    }
+
+    @TestCase
+    public func testListAllConsumerGroupsWithTopics(): Unit {
+        let tm = TopicManager(configWithHosts())
+        tm.createTopic("/a")
+        tm.createTopic("/b")
+        tm.addConsumerGroup("/a", "g1")
+        tm.addConsumerGroup("/a", "g2")
+        tm.addConsumerGroup("/b", "g3")
+        let all = tm.listAllConsumerGroups()
+        @Assert(all.size == 2)
+        if (let Some(groups) <- all.get("/a")) {
+            @Assert(groups.size == 2)
+        }
+        if (let Some(groups) <- all.get("/b")) {
+            @Assert(groups.size == 1)
+        }
+    }
+
+    @TestCase
+    public func testListAllConsumerGroupsSkipEmpty(): Unit {
+        let tm = TopicManager(configWithHosts())
+        tm.createTopic("/x")
+        tm.createTopic("/y")
+        tm.addConsumerGroup("/y", "g")
+        let all = tm.listAllConsumerGroups()
+        // /x 无 consumerGroup 不应出现
+        @Assert(all.size == 1)
+        @Assert(all.get("/x").isNone())
+        @Assert(all.get("/y").isSome())
+    }
+
     private static func configWithHosts(): MqConfig {
         let hosts = ArrayList<String>()
         hosts.add("node1:7201")

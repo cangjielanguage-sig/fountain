@@ -424,6 +424,51 @@ public class CommandExecutorTest {
         }
     }
 
+    // ── 批量 group 查询 ──
+
+    @TestCase
+    public func testListAllGroupsEmptyReturnsResp(): Unit {
+        let ex = makeExecutor()
+        let req = ProtocolMessage(Command.TOPIC_OP, MessageID(),
+            MqBody("topic_op", enc(["listAllGroups", ""])).toData())
+        let resp = ex.execute(req)
+        @Assert(isResp(resp))
+        if (let Some(body) <- convert<MqBody>(resp.data)) {
+            @Assert(body.bodyType == "all_group_list")
+        }
+    }
+
+    @TestCase
+    public func testListAllGroupsWithGroups(): Unit {
+        let ex = makeExecutor()
+        // 创建 topic 并添加 consumer groups
+        ex.execute(ProtocolMessage(Command.TOPIC_OP, MessageID(),
+            MqBody("topic_op", enc(["create", "/tg1"])).toData()))
+        ex.execute(ProtocolMessage(Command.TOPIC_OP, MessageID(),
+            MqBody("topic_op", enc(["addGroup", "/tg1", "grp-a"])).toData()))
+        ex.execute(ProtocolMessage(Command.TOPIC_OP, MessageID(),
+            MqBody("topic_op", enc(["addGroup", "/tg1", "grp-b"])).toData()))
+
+        let req = ProtocolMessage(Command.TOPIC_OP, MessageID(),
+            MqBody("topic_op", enc(["listAllGroups", ""])).toData())
+        let resp = ex.execute(req)
+        @Assert(isResp(resp))
+        if (let Some(body) <- convert<MqBody>(resp.data)) {
+            @Assert(body.bodyType == "all_group_list")
+            let buf = ByteBuffer(body.payload)
+            let dec = DefaultCodec()
+            if (let Some(tc) <- dec.decode<Int64>(buf)) {
+                // 应有 1 个 topic（/tg1）
+                @Assert(tc == 1)
+                if (let Some(topic) <- dec.decode<String>(buf)
+                    && let Some(gc) <- dec.decode<Int64>(buf)) {
+                    @Assert(topic == "/tg1")
+                    @Assert(gc == 2)
+                }
+            }
+        }
+    }
+
     // ── 死信 ──
 
     @TestCase

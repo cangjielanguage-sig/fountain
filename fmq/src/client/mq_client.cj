@@ -276,6 +276,23 @@ public class MqClient <: Resource {
         ArrayList()
     }
 
+    /**
+     * 列出所有 topic 的消费者组（单次 RPC 批量查询）。
+     * @return ArrayList<(topic, groupName)>
+     */
+    public func listAllConsumerGroups(): ArrayList<(String, String)> {
+        let payload = encodeTopicOpPayload("listAllGroups", "", 0)
+        let req = ProtocolMessage(Command.TOPIC_OP, MessageID(),
+            MqBody("topic_op", payload).toData())
+        let resp = mqConn.transfer(req.id, req, Duration.second * 10)
+        if (let Some(r) <- resp) {
+            if (let Some(body) <- convert<MqBody>(r.data)) {
+                return decodeAllGroupList(body.payload)
+            }
+        }
+        ArrayList()
+    }
+
     // ───── 生命周期 ─────
 
     public func close(): Unit {
@@ -377,6 +394,29 @@ public class MqClient <: Resource {
             }
         } catch (e: Exception) {
             log.warn{"decodeConsumerList failed: ${e.message}"}
+        }
+        result
+    }
+
+    private func decodeAllGroupList(data: Array<Byte>): ArrayList<(String, String)> {
+        let result = ArrayList<(String, String)>()
+        try {
+            let buf = ByteBuffer(data)
+            let dec = DefaultCodec()
+            if (let Some(topicCount) <- dec.decode<Int64>(buf)) {
+                for (_ in 0..topicCount) {
+                    if (let Some(topic) <- dec.decode<String>(buf)
+                        && let Some(groupCount) <- dec.decode<Int64>(buf)) {
+                        for (_ in 0..groupCount) {
+                            if (let Some(group) <- dec.decode<String>(buf)) {
+                                result.add((topic, group))
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            log.warn{"decodeAllGroupList failed: ${e.message}"}
         }
         result
     }

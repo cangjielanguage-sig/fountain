@@ -17,6 +17,7 @@ package fountain::fmq.server
 
 import fountain::f_protocol.default.{Message as ProtocolMessage, EncodedMessage}
 import fountain::f_codec.default.DefaultCodec
+import std.collection.HashMap
 import std.io.{ByteBuffer, SeekPosition}
 
 /**
@@ -573,6 +574,11 @@ public class CommandExecutor {
                     let encoded = encodeConsumerList(regs, name)
                     ProtocolMessage(Command.RESP(0), request.id,
                         MqBody("consumer_list", encoded).toData())
+                } else if (op == "listAllGroups") {
+                    let allGroups = topicManager.listAllConsumerGroups()
+                    let encoded = encodeGroupListByTopic(allGroups)
+                    ProtocolMessage(Command.RESP(0), request.id,
+                        MqBody("all_group_list", encoded).toData())
                 } else {
                     errorResp(request.id, "unknown topic op: ${op}")
                 }
@@ -761,6 +767,17 @@ public class CommandExecutor {
                 pp.matches(topic)
             case Prefix(pattern) => topic.startsWith(pattern)
         }
+    }
+
+    private static func encodeGroupListByTopic(all: HashMap<String, ArrayList<String>>): Array<Byte> {
+        let buf = ByteBuffer()
+        let enc = DefaultCodec().encode(all.size)
+        for ((topic, groups) in all) {
+            enc.encode(topic).encode(groups.size)
+            for (g in groups) { enc.encode(g) }
+        }
+        enc.finish().copy(to: buf, closeFromOnEnd: true, closeToOnEnd: false)
+        extractBytes(buf)
     }
 
     private static func encodeTopicInfo(name: String, meta: TopicMeta): Array<Byte> {

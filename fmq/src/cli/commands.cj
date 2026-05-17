@@ -124,22 +124,20 @@ public class CommandRunner {
     }
 
     public static func listConsumerGroups(_: Array<String>): Unit {
-        // 列出所有主题的消费者组
         let client = if (let Some(c) <- getClient()) { c } else { return }
-        let topics = client.listTopics()
-        var anyGroups = false
-        for (t in topics) {
-            let groups = client.listGroups(t)
-            if (groups.size > 0) {
-                println("  ${t}:")
-                for (g in groups) {
-                    println("    ${g}")
-                    anyGroups = true
-                }
-            }
-        }
-        if (!anyGroups) {
+        let all = client.listAllConsumerGroups()
+        if (all.size == 0) {
             println("no consumer groups")
+            return
+        }
+        // 按 topic 分组输出
+        var currentTopic: String = ""
+        for ((topic, group) in all) {
+            if (topic != currentTopic) {
+                currentTopic = topic
+                println("  ${topic}:")
+            }
+            println("    ${group}")
         }
     }
 
