@@ -86,6 +86,8 @@ public class CommandExecutor {
                 return handleSingleProduce(request, body)
             } else if (body.bodyType == "batch_produce") {
                 return handleBatchProduce(request, body)
+            } else if (body.bodyType == "sync") {
+                return handleSyncProduce(request, body)
             } else {
                 return errorResp(request.id, "unexpected body type: ${body.bodyType}")
             }
@@ -188,6 +190,44 @@ public class CommandExecutor {
                 MqBody("batch_ack", encodeBatchResult(ok, fail)).toData())
         } else {
             errorResp(request.id, "failed to decode batch produce body")
+        }
+    }
+
+    // ───── SYNC (主从复制) ─────
+
+    /**
+     * 处理从主节点同步的 PUBLISH bodyType="sync" 命令。
+     * Payload 格式为 DefaultCodec 编码的 (topic, queueIndex, rawProduceData)。
+     * 直接追加到对应队列的 SegmentedLog，不经过常规生产流程。
+     */
+    private func handleSyncProduce(request: ProtocolMessage, body: MqBody): ProtocolMessage {
+        try {
+            let dec = DefaultCodec()
+            let stream = ByteBuffer(body.payload)
+            if (let Some(topic) <- dec.decode<String>(stream)
+                && let Some(queueIndex) <- dec.decode<Int64>(stream)
+                && let Some(data) <- dec.decode<Array<Byte>>(stream)) {
+                if (let Some(queue) <- queueManager.getQueue(topic, queueIndex)) {
+                    if (!queue.isClosed()) {
+                        queue.append(data)
+                        queue.sync()
+                        return ProtocolMessage(Command.RESP(0), request.id,
+                            MqBody("sync_ack", []).toData())
+                    } else {
+                        log.warn{"handleSync: queue ${topic}[${queueIndex}] is closed"}
+                        return errorResp(request.id, "queue closed")
+                    }
+                } else {
+                    log.warn{"handleSync: queue ${topic}[${queueIndex}] not found"}
+                    return errorResp(request.id, "queue not found")
+                }
+            } else {
+                log.warn{"handleSync: failed to decode sync payload"}
+                return errorResp(request.id, "decode failed")
+            }
+        } catch (e: Exception) {
+            log.warn{"handleSync error: ${e.message}"}
+            errorResp(request.id, "sync error")
         }
     }
 

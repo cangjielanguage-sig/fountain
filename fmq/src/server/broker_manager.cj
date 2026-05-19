@@ -15,7 +15,8 @@ limitations under the License.
  */
 package fountain::fmq.server
 
-import fountain::f_protocol.default.{Message as ProtocolMessage, EncodedMessage}
+import fountain::f_protocol.default.{Message as ProtocolMessage, EncodedMessage, Command, MessageID}
+import fountain::fmq.common.{MqBody}
 import std.collection.concurrent.ConcurrentHashMap
 import std.sync.AtomicBool
 import std.sync.AtomicInt64
@@ -48,6 +49,7 @@ public class BrokerManager {
     private let log = LoggerFactory.getLogger('fountain::fmq.BrokerManager')
     private let closed = AtomicBool(false)
     private let nodes = ConcurrentHashMap<String, NodeHealth>()  // "host:port" → NodeHealth
+    private let connectionPool = ConcurrentHashMap<String, Client<ProtocolMessage, EncodedMessage, ProtocolMessage, MqBody, MessageID>>()  // 连接池：复用以减少 TCP 握手
     private var heartbeatThread: ?Future<Unit> = None
 
     public init(config: MqConfig) {
@@ -117,44 +119,72 @@ public class BrokerManager {
         if (let Some(f) <- heartbeatThread) {
             f.get()
         }
+        // 关闭连接池中所有连接
+        for ((key, c) in connectionPool) {
+            if (!c.isClosed()) { c.close() }
+        }
     }
 
     /**
-     * ping 单个节点。连接并发送 PING，超时 3 秒。
-     * TODO: connection pooling to avoid per-ping TCP connect/disconnect overhead
+     * ping 单个节点。复用连接池中的长连接，避免每次心跳建立新 TCP 连接。
+     * 连接失败时销毁并重建。
      */
     private func pingNode(nh: NodeHealth): Unit {
         if (closed.load()) { return }
-        var conn: ?Client<ProtocolMessage, EncodedMessage, ProtocolMessage, MqBody, MessageID> = None
+        let key = "${nh.host}:${nh.port}"
+        var c = connectionPool.get(key)
+        if (let Some(conn) <- c) {
+            if (conn.isClosed()) {
+                // 连接已关闭，从池中移除
+                connectionPool.remove(key)
+                c = None
+            }
+        }
+        var conn: ?Client<ProtocolMessage, EncodedMessage, ProtocolMessage, MqBody, MessageID> = c
+        if (conn.isNone()) {
+            // 创建新连接
+            var newConn: ?Client<ProtocolMessage, EncodedMessage, ProtocolMessage, MqBody, MessageID> = None
+            try {
+                let nc = Client<ProtocolMessage, EncodedMessage, ProtocolMessage, MqBody, MessageID>.builder(
+                    queueSize: 16, socketCount: 1,
+                    host: nh.host, port: nh.port,
+                    idGetter: { msg => msg.id },
+                    checkDuration: Duration.second * 30,
+                    checker: { _ => true }
+                ).noDelay(true).build()
+                connectionPool[key] = nc
+                newConn = Some(nc)
+                conn = newConn
+            } catch (e: Exception) {
+                log.warn{"create connection to ${nh.host}:${nh.port} failed: ${e.message}"}
+                recordFailure(nh)
+                return
+            }
+        }
+        var localConn = conn  // capture let for catch
         try {
-            let c = Client<ProtocolMessage, EncodedMessage, ProtocolMessage, MqBody, MessageID>.builder(
-                queueSize: 16, socketCount: 1,
-                host: nh.host, port: nh.port,
-                idGetter: { msg => msg.id },
-                checkDuration: Duration.second * 30,
-                checker: { _ => true }
-            ).noDelay(true).build()
-            conn = c
             let req = ProtocolMessage(Command.PING(0), MessageID(),
                 MqBody("ping", []).toData())
-            let resp = c.transfer(req.id, req, Duration.second * 3)
-            c.close()
-            conn = None  // close 成功后才置空，防止 catch 中重复关闭
-            if (resp.isSome()) {
-                nh.lastSeen = DateTime.now()
-                if (!nh.isAlive.load()) {
-                    nh.isAlive.store(true)
-                    nh.failedCount.store(0)
-                    log.info{"node ${nh.host}:${nh.port} back online"}
+            if (let Some(c) <- localConn) {
+                let resp = c.transfer(req.id, req, Duration.second * 3)
+                if (resp.isSome()) {
+                    nh.lastSeen = DateTime.now()
+                    if (!nh.isAlive.load()) {
+                        nh.isAlive.store(true)
+                        nh.failedCount.store(0)
+                        log.info{"node ${nh.host}:${nh.port} back online"}
+                    }
+                } else {
+                    recordFailure(nh)
                 }
-            } else {
-                recordFailure(nh)
             }
         } catch (e: Exception) {
             log.warn{"pingNode ${nh.host}:${nh.port} failed: ${e.message}"}
-            if (let Some(c) <- conn) {
+            // 连接异常，销毁并移出池
+            if (let Some(c) <- localConn) {
                 if (!c.isClosed()) { c.close() }
             }
+            connectionPool.remove(key)
             recordFailure(nh)
         }
     }

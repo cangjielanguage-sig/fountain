@@ -31,14 +31,17 @@ public class DeadLetterStore {
     private let dlqDir: String
     private let dlqLog: SegmentedLog
     private let retentionHours: Int64
+    private let syncBatchSize: Int64
     private let log = LoggerFactory.getLogger('fountain::fmq.DeadLetterStore')
     // 内存索引：messageId → (topic, queueIndex, data, insertedAt)
     private let index = HashMap<String, (String, Int64, Array<Byte>, DateTime)>()
     private let mutex = Mutex()
+    private var unsyncedCount: Int64 = 0
 
-    public init(queueDir: String, retentionHours!: Int64 = 168) {
+    public init(queueDir: String, retentionHours!: Int64 = 168, syncBatchSize!: Int64 = 10) {
         this.dlqDir = "${queueDir}/dlq"
         this.retentionHours = retentionHours
+        this.syncBatchSize = syncBatchSize
         let config = LogConfig(this.dlqDir, "dlq", 1048576, 100, fileExt: ".dlq")
         this.dlqLog = SegmentedLog(config)
     }
@@ -48,17 +51,29 @@ public class DeadLetterStore {
      * 写入 SegmentedLog + 加入内存索引。
      * 日志条目编码：messageId(String) + topic(String) + queueIndex(Int64) + data(Array<Byte>)。
      *
-     * ⚠️ 性能说明：每次 append 调用 dlqLog.sync() 触发 fsync。
-     * 死信频率通常极低（仅超时重试耗尽后），影响可忽略。
-     * TODO(v2): 可改为批量 sync 或异步 sync 模式降低 I/O。
+     * 性能：按 syncBatchSize 批量 sync 降低 fsync 频率。close() 时强制最终 sync。
      */
     public func append(data: Array<Byte>, topic: String, queueIndex: Int64, messageId: String): Unit {
         // 编码 metadata + data 到单条 entry
         let entry = encodeDlqEntry(messageId, topic, queueIndex, data)
         dlqLog.append(entry)
-        dlqLog.sync()
+        unsyncedCount += 1
+        if (unsyncedCount >= syncBatchSize) {
+            dlqLog.sync()
+            unsyncedCount = 0
+        }
         synchronized(mutex) { index[messageId] = (topic, queueIndex, data, DateTime.now()) }
         log.warn{"dead letter: ${messageId}"}
+    }
+
+    /**
+     * 强制同步。在关闭前调用确保数据落盘。
+     */
+    public func sync(): Unit {
+        if (unsyncedCount > 0) {
+            dlqLog.sync()
+            unsyncedCount = 0
+        }
     }
 
     /**

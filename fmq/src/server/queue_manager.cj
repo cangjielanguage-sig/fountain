@@ -241,7 +241,7 @@ public class QueueManager {
         }
         for ((_, topicQueues) in snapshot) {
             for (q in topicQueues) {
-                let writer = QueueWriter(q, replicationManager: rm, queueSize: 1024)
+                let writer = QueueWriter(q, config, replicationManager: rm, queueSize: 1024)
                 let reader = QueueReader(q)
                 writers.add(writer)
                 readers.add(reader)

@@ -35,7 +35,7 @@ public class BackgroundThreadTest {
     public func testQueueWriterSubmitAndClose(): Unit {
         let q = createQueue("w-sc")
         let rm = ReplicationManager(testConfig())
-        let writer = QueueWriter(q, replicationManager: rm, queueSize: 16)
+        let writer = QueueWriter(q, testConfig(), replicationManager: rm, queueSize: 16)
 
         writer.submit([0x01u8])
         writer.submit([0x02u8])
@@ -121,7 +121,7 @@ public class BackgroundThreadLifecycleTest {
     public func testQueueWriterRunClosesOnFlag(): Unit {
         let q = createQueue("wr-flag")
         let rm = ReplicationManager(testConfig())
-        let writer = QueueWriter(q, replicationManager: rm, queueSize: 16)
+        let writer = QueueWriter(q, testConfig(), replicationManager: rm, queueSize: 16)
 
         writer.submit([0x10u8])
 
@@ -139,7 +139,7 @@ public class BackgroundThreadLifecycleTest {
     public func testQueueWriterCloseStopsIdleRun(): Unit {
         let q = createQueue("wr-idle")
         let rm = ReplicationManager(testConfig())
-        let writer = QueueWriter(q, replicationManager: rm, queueSize: 16)
+        let writer = QueueWriter(q, testConfig(), replicationManager: rm, queueSize: 16)
 
         let future = spawn { writer.run() }
         sleep(Duration.millisecond * 100)

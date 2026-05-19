@@ -450,7 +450,7 @@ public class QueueWriterDispatchTest {
         let rm = ReplicationManager(config)
         rm.promoteToMaster()
         rm.onSlaveOf("slave1")  // 注册一个从节点
-        let writer = QueueWriter(q, replicationManager: rm, queueSize: 16)
+        let writer = QueueWriter(q, config, replicationManager: rm, queueSize: 16)
         // 提交数据并通过 writer 写入
         writer.submit([0x10u8, 0x20u8, 0x30u8])
         let future = spawn { writer.run() }

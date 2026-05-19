@@ -32,6 +32,8 @@ public class QueueCleaner {
     private let queueManager: QueueManager
     private let log = LoggerFactory.getLogger('fountain::fmq.QueueCleaner')
     private let closed = AtomicBool(false)
+    private var topicCursor: Int64 = 0
+    private var queueCursor: Int64 = 0
 
     public init(config: MqConfig, queueManager: QueueManager) {
         this.config = config
@@ -54,11 +56,11 @@ public class QueueCleaner {
 
     /**
      * 单次清理：遍历所有队列，删除超过保留期的已轮转文件（保留最后 1 个）。
+     * 为减少单次清理对正常业务的干扰，支持按 batchSize 分批执行，
+     * 本周期未完成的队列由下一周期继续。
      * retentionHours=0 时跳过所有文件（不清理）。
      *
-     * ⚠️ 性能说明：每 5 分钟执行一次，遍历所有 topic×queue。
-     * 数百队列时持锁遍历可能较久，但清理操作为低频后台任务可接受。
-     * TODO(v2): 可改为分批处理或异步队列遍历。
+     * 性能：每 5 分钟执行一次，分批处理分散负载。
      */
     public func cleanup(): Unit {
         let retentionThreshold = if (config.retentionHours > 0) {
@@ -68,35 +70,63 @@ public class QueueCleaner {
             return
         }
         var deletedCount: Int64 = 0
-        for (topic in queueManager.listTopics()) {
+        var processed: Int64 = 0
+        let batchSize = config.cleanupBatchSize
+        let topics = queueManager.listTopics()
+        var ti = topicCursor
+
+        while (ti < topics.size) {
+            let topic = topics[ti]
             if (let Some(queues) <- queueManager.getQueues(topic)) {
-                for (q in queues) {
-                    if (q.isClosed()) { continue }
-                    let oldFiles: ArrayList<String>
-                    try {
-                        oldFiles = q.log.takeOldFiles()
-                    } catch (e: Exception) {
-                        log.warn{"takeOldFiles ${q} failed: ${e.message}"}
-                        continue
+                var qi = if (ti == topicCursor) { queueCursor } else { 0 }
+                while (qi < queues.size) {
+                    if (batchSize > 0 && processed >= batchSize) {
+                        // 达到批次上限，保存游标并返回
+                        topicCursor = ti
+                        queueCursor = qi
+                        if (deletedCount > 0) {
+                            let count = deletedCount
+                            log.info{"cleanup: deleted ${count} files (partial)"}
+                        }
+                        return
                     }
-                    var remaining = 1  // 至少保留最后 1 个文件
-                    for (f in oldFiles) {
-                        if (remaining > 0) {
-                            remaining -= 1
+                    let q = queues[qi]
+                    if (!q.isClosed()) {
+                        let oldFiles: ArrayList<String>
+                        try {
+                            oldFiles = q.log.takeOldFiles()
+                        } catch (e: Exception) {
+                            log.warn{"takeOldFiles ${q} failed: ${e.message}"}
+                            qi += 1
+                            processed += 1
                             continue
                         }
-                        try {
-                            if (isFileExpired(f, retentionThreshold)) {
-                                remove(f)
-                                deletedCount += 1
+                        var remaining = 1  // 至少保留最后 1 个文件
+                        for (f in oldFiles) {
+                            if (remaining > 0) {
+                                remaining -= 1
+                                continue
                             }
-                        } catch (e: Exception) {
-                            log.warn{"check/delete ${f} failed: ${e.message}"}
+                            try {
+                                if (isFileExpired(f, retentionThreshold)) {
+                                    remove(f)
+                                    deletedCount += 1
+                                }
+                            } catch (e: Exception) {
+                                log.warn{"check/delete ${f} failed: ${e.message}"}
+                            }
                         }
                     }
+                    qi += 1
+                    processed += 1
                 }
             }
+            ti += 1
         }
+
+        // 全部遍历完成，重置游标
+        topicCursor = 0
+        queueCursor = 0
         if (deletedCount > 0) {
             let count = deletedCount
             log.info{"cleanup: deleted ${count} expired segment files"}

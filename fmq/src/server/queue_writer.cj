@@ -15,8 +15,12 @@ limitations under the License.
  */
 package fountain::fmq.server
 
-import std.collection.concurrent.ConcurrentLinkedQueue
+import std.collection.concurrent.{ConcurrentHashMap, ConcurrentLinkedQueue}
+import std.io.ByteBuffer
 import std.sync.AtomicBool
+import fountain::f_codec.default.DefaultCodec
+import fountain::f_protocol.default.{Message as ProtocolMessage, EncodedMessage, Command, MessageID}
+import fountain::fmq.common.{MqBody, MqConfig, extractBytes}
 
 /**
  * 队列写线程。
@@ -25,12 +29,16 @@ import std.sync.AtomicBool
 public class QueueWriter {
     private let queue: MqQueue
     private let replicationManager: ReplicationManager
+    private let config: MqConfig
     private let log = LoggerFactory.getLogger('fountain::fmq.QueueWriter')
     private let closed = AtomicBool(false)
     private let inboundQueue: ConcurrentLinkedQueue<Array<Byte>>
+    /** 从节点连接池：nodeId → Client，复用长连接减少 TCP 握手。 */
+    private let slaveConns = ConcurrentHashMap<String, Client<ProtocolMessage, EncodedMessage, ProtocolMessage, MqBody, MessageID>>()
 
-    public init(queue: MqQueue, replicationManager!: ReplicationManager, queueSize!: Int64 = 1024) {
+    public init(queue: MqQueue, config: MqConfig, replicationManager!: ReplicationManager, queueSize!: Int64 = 1024) {
         this.queue = queue
+        this.config = config
         this.replicationManager = replicationManager
         this.inboundQueue = ConcurrentLinkedQueue<Array<Byte>>()
     }
@@ -63,21 +71,35 @@ public class QueueWriter {
 
     /**
      * 关闭 Writer。设置 closed 标志让 run() 循环退出。
+     * 关闭所有从节点长连接。
      * 注意：不排空 inboundQueue 中的待处理消息。关闭前需确认无新提交。
      */
-    public func close(): Unit { closed.store(true) }
+    public func close(): Unit {
+        closed.store(true)
+        for ((_, c) in slaveConns) {
+            if (!c.isClosed()) { c.close() }
+        }
+    }
 
     /**
      * 同步 message 到所有已注册的从节点。
+     * 编码 queueIndex + data 以便从节点正确写入对应队列。
      */
     private func syncToSlaves(data: Array<Byte>): Unit {
         let slaves = replicationManager.getSlaves()
         if (slaves.size == 0) { return }
 
+        // 编码 topic + queueIndex + data 到单个 sync entry
+        let buf = ByteBuffer()
+        DefaultCodec()
+            .encode(queue.topic).encode(queue.index).encode(data)
+            .finish().copy(to: buf, closeFromOnEnd: true, closeToOnEnd: false)
+        let syncEntry = extractBytes(buf)
+
         // 并行同步到每个从节点
         let futures = ArrayList<Future<Bool>>()
         for (slave in slaves) {
-            futures.add(spawn { syncToSlave(slave.nodeId, data) })
+            futures.add(spawn { syncToSlave(slave.nodeId, syncEntry) })
         }
 
         // 等待至少一个从节点确认
@@ -95,18 +117,70 @@ public class QueueWriter {
 
     /**
      * 向单个从节点发送同步数据。
-     * ⚠️ 已知限制：当前版本未实现真正的网络同步。
-     * syncToSlave 仅记录日志并返回 true，主从数据复制待后续版本实现。
-     * TODO(v2): 通过 f_net::Client 向 slave 发送 MqBody("sync", data) 并等待确认。
+     * 通过 f_net::Client 的长连接发送 MqBody("sync", data) 并等待确认。
+     * 连接失败时自动重建。
      */
     private func syncToSlave(nodeId: String, data: Array<Byte>): Bool {
-        try {
-            // TODO: 实现真实网络同步 — 从 mqHosts 查询对端地址建立连接
-            log.debug{"sync to slave ${nodeId}: ${data.size} bytes (stub: network sync not implemented)"}
-            true
-        } catch (e: Exception) {
-            log.warn{"sync to slave ${nodeId} unexpected error: ${e.message}"}
-            false
+        // 从 mqHosts 中查找 nodeId 对应的地址
+        var addr: ?String = None
+        for (hostPort in config.mqHosts) {
+            if (hostPort.startsWith(nodeId) || hostPort == nodeId) {
+                addr = Some(hostPort)
+                break
+            }
         }
+        if (let Some(target) <- addr) {
+            let parts = target.split(':')
+            if (parts.size != 2) {
+                log.warn{"syncToSlave: invalid addr ${target} for node ${nodeId}"}
+                return false
+            }
+            let host = parts[0]
+            let port = UInt16(Int64.parse(parts[1]))
+            var conn = slaveConns.get(nodeId)
+            if (let Some(c) <- conn) {
+                if (c.isClosed()) {
+                    slaveConns.remove(nodeId)
+                    conn = None
+                }
+            }
+            if (conn.isNone()) {
+                try {
+                    let c = Client<ProtocolMessage, EncodedMessage, ProtocolMessage, MqBody, MessageID>.builder(
+                        queueSize: 16, socketCount: 1, host: host, port: port,
+                        idGetter: { msg => msg.id },
+                        checkDuration: Duration.second * 30,
+                        checker: { _ => true }
+                    ).noDelay(true).build()
+                    slaveConns[nodeId] = c
+                    conn = Some(c)
+                } catch (e: Exception) {
+                    log.warn{"syncToSlave: connect to ${nodeId}(${target}) failed: ${e.message}"}
+                    return false
+                }
+            }
+            if (let Some(c) <- conn) {
+                try {
+                    let req = ProtocolMessage(Command.PUBLISH(0), MessageID(),
+                        MqBody("sync", data).toData())
+                    let resp = c.transfer(req.id, req, Duration.second * 5)
+                    if (resp.isSome()) {
+                        return true
+                    } else {
+                        log.warn{"syncToSlave: ${nodeId} no response"}
+                        return false
+                    }
+                } catch (e: Exception) {
+                    log.warn{"syncToSlave: send to ${nodeId} failed: ${e.message}"}
+                    // 连接异常，销毁并移出池
+                    if (!c.isClosed()) { c.close() }
+                    slaveConns.remove(nodeId)
+                    return false
+                }
+            }
+        } else {
+            log.warn{"syncToSlave: no address found for node ${nodeId} in mqHosts"}
+        }
+        false
     }
 }

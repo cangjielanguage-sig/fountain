@@ -38,6 +38,7 @@ public class MqConfig {
     public let maxMessageSize: Int64
     public let maxLabelsPerMessage: Int64
     public let syncQuorum: Int64
+    public let cleanupBatchSize: Int64
 
     public init(mqHosts!: ArrayList<String>, syncHosts!: ArrayList<String>,
                 dataDir!: String, segmentMaxSize!: Int64,
@@ -46,7 +47,7 @@ public class MqConfig {
                 maxRetryCount!: Int64, retryIntervalMs!: Int64,
                 dlqRetentionHours!: Int64, maxMessageSize!: Int64,
                 maxLabelsPerMessage!: Int64, retentionHours!: Int64,
-                syncQuorum!: Int64) {
+                syncQuorum!: Int64, cleanupBatchSize!: Int64 = 10) {
         this.mqHosts = mqHosts
         this.syncHosts = syncHosts
         this.dataDir = dataDir
@@ -62,10 +63,11 @@ public class MqConfig {
         this.maxLabelsPerMessage = maxLabelsPerMessage
         this.retentionHours = retentionHours
         this.syncQuorum = syncQuorum
+        this.cleanupBatchSize = cleanupBatchSize
     }
 
     /**
-     * 测试用工厂方法。使用合理默认值，减少测试代码中的重复构造。
+     * 测试用工厂方法。
      */
     public static func forTest(dataDir!: String = "/tmp/fmq_test",
                                mqHosts!: ArrayList<String> = ArrayList<String>()): MqConfig {
@@ -77,7 +79,7 @@ public class MqConfig {
             maxRetryCount: 3, retryIntervalMs: 1000,
             dlqRetentionHours: 168, maxMessageSize: 4 * 1024 * 1024,
             maxLabelsPerMessage: 64, retentionHours: 72,
-            syncQuorum: 1
+            syncQuorum: 1, cleanupBatchSize: 10
         )
     }
 }
@@ -101,7 +103,8 @@ public func loadConfig(): MqConfig {
         maxMessageSize: readEnvInt("mq_max_message_size") ?? 4 * 1024 * 1024,
         maxLabelsPerMessage: readEnvInt("mq_max_labels_per_message") ?? 64,
         retentionHours: readEnvInt("mq_retention_hours") ?? 72,
-        syncQuorum: readEnvInt("mq_sync_quorum") ?? 1
+        syncQuorum: readEnvInt("mq_sync_quorum") ?? 1,
+        cleanupBatchSize: readEnvInt("mq_cleanup_batch_size") ?? 10
     )
 }
 
