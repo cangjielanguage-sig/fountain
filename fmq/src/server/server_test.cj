@@ -432,6 +432,35 @@ public class QueueWriterDispatchTest {
         }
         q.close()
     }
+
+    @TestCase
+    public func testWriterSyncToSlavesDoesNotFailWithSlavesRegistered(): Unit {
+        // 验证 syncToSlaves 在有 slave 注册时不抛异常，数据正常写入
+        let config = MqConfig(
+            mqHosts: ArrayList<String>(), syncHosts: ArrayList<String>(),
+            dataDir: "/tmp/fmq_qw3", segmentMaxSize: 1024,
+            heartbeatIntervalSec: 5, healthcheckMaxRetry: 3,
+            idleTimeoutMinutes: 30, ackTimeoutMs: 30000,
+            maxRetryCount: 3, retryIntervalMs: 1000,
+            dlqRetentionHours: 168, maxMessageSize: 4096,
+            maxLabelsPerMessage: 64, retentionHours: 72,
+            syncQuorum: 1
+        )
+        let q = MqQueue("/test_sync", 0, "/tmp/fmq_qw3", 1024)
+        let rm = ReplicationManager(config)
+        rm.promoteToMaster()
+        rm.onSlaveOf("slave1")  // 注册一个从节点
+        let writer = QueueWriter(q, replicationManager: rm, queueSize: 16)
+        // 提交数据并通过 writer 写入
+        writer.submit([0x10u8, 0x20u8, 0x30u8])
+        let future = spawn { writer.run() }
+        sleep(Duration.millisecond * 100)
+        writer.close()
+        future.get()
+        // 验证数据已写入
+        @Assert(q.tryReadFromLog(0).isSome())
+        q.close()
+    }
 }
 
 @Test

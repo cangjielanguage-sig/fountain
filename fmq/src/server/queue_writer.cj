@@ -95,15 +95,17 @@ public class QueueWriter {
 
     /**
      * 向单个从节点发送同步数据。
-     * Phase 7 简化：通过建立临时连接发送数据。
+     * ⚠️ 已知限制：当前版本未实现真正的网络同步。
+     * syncToSlave 仅记录日志并返回 true，主从数据复制待后续版本实现。
+     * TODO(v2): 通过 f_net::Client 向 slave 发送 MqBody("sync", data) 并等待确认。
      */
     private func syncToSlave(nodeId: String, data: Array<Byte>): Bool {
         try {
-            // 从 mqHosts 查询对端地址
-            // Phase 7 简化：跳过实际网络同步，仅打日志
-            log.debug{"sync to slave ${nodeId}: ${data.size} bytes"}
+            // TODO: 实现真实网络同步 — 从 mqHosts 查询对端地址建立连接
+            log.debug{"sync to slave ${nodeId}: ${data.size} bytes (stub: network sync not implemented)"}
             true
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            log.warn{"sync to slave ${nodeId} unexpected error: ${e.message}"}
             false
         }
     }
