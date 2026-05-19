@@ -47,6 +47,10 @@ public class DeadLetterStore {
      * 写入死信消息。
      * 写入 SegmentedLog + 加入内存索引。
      * 日志条目编码：messageId(String) + topic(String) + queueIndex(Int64) + data(Array<Byte>)。
+     *
+     * ⚠️ 性能说明：每次 append 调用 dlqLog.sync() 触发 fsync。
+     * 死信频率通常极低（仅超时重试耗尽后），影响可忽略。
+     * TODO(v2): 可改为批量 sync 或异步 sync 模式降低 I/O。
      */
     public func append(data: Array<Byte>, topic: String, queueIndex: Int64, messageId: String): Unit {
         // 编码 metadata + data 到单条 entry

@@ -30,6 +30,12 @@ public class ConsumerMatcher {
     private let mutex = Mutex()
     // P3-4: 缓存编译后的 PathPattern，避免每次匹配重新 compile
     private var compiledPatterns = HashMap<String, PathPattern>()
+    private let timeoutDuration: Duration  // 消费者心跳超时阈值
+
+    public init(heartbeatIntervalSec!: Int64 = 5) {
+        // 超时 = 心跳间隔 × 3（允许丢失 2 次心跳）
+        this.timeoutDuration = Duration.second * heartbeatIntervalSec * 3
+    }
 
     public func register(registration: ConsumerRegistration): Unit {
         synchronized(mutex) {
@@ -73,12 +79,12 @@ public class ConsumerMatcher {
     }
 
     public func refresh(): Unit {
-        let timeoutDuration = Duration.second * 5 * 3
         let now = DateTime.now()
+        let td = timeoutDuration  // capture for lambda
         synchronized(mutex) {
             let remaining = ArrayList<ConsumerRegistration>()
             for (r in registrations) {
-                if (now - r.lastHeartbeat < timeoutDuration) {
+                if (now - r.lastHeartbeat < td) {
                     remaining.add(r)
                 }
             }

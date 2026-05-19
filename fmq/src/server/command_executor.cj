@@ -37,15 +37,7 @@ public class CommandExecutor {
     public init(topicManager: TopicManager, queueManager: QueueManager,
                 deliveryManager: DeliveryManager, consumerMatcher: ConsumerMatcher,
                 replicationManager: ReplicationManager,
-                config!: MqConfig = MqConfig(
-                    mqHosts: ArrayList(), syncHosts: ArrayList(),
-                    dataDir: "/tmp", segmentMaxSize: 1024,
-                    heartbeatIntervalSec: 5, healthcheckMaxRetry: 3,
-                    idleTimeoutMinutes: 30, ackTimeoutMs: 30000,
-                    maxRetryCount: 3, retryIntervalMs: 1000,
-                    dlqRetentionHours: 168, maxMessageSize: 4096,
-                    maxLabelsPerMessage: 64, retentionHours: 72,
-                    syncQuorum: 1)) {
+                config!: MqConfig = MqConfig.forTest()) {
         this.topicManager = topicManager
         this.queueManager = queueManager
         this.deliveryManager = deliveryManager
@@ -187,6 +179,8 @@ public class CommandExecutor {
                 }
                 i += 1
             }
+            // Cangjie lambda 不能捕获可变变量（var），
+            // 将 var 值复制到 let 变量供闭包使用。
             let okCount = ok
             let failCount = fail
             log.info{"batch produced: ${okCount} ok, ${failCount} fail"}
@@ -408,6 +402,8 @@ public class CommandExecutor {
                     } else { fail += 1 }
                 } else { fail += 1 }
             }
+            // Cangjie lambda 不能捕获可变变量（var），
+            // 将 var 值复制到 let 变量供闭包使用。
             let okCount = ok
             let failCount = fail
             log.info{"batch ack: ${okCount} ok, ${failCount} fail"}

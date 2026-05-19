@@ -69,7 +69,10 @@ public class Subscriber {
             true
         } else {
             // SUBSCRIBE 失败：清理已成功的 REGISTER 避免遗留注册
-            deregister(groupId, groupId)
+            if (!deregister(groupId, groupId)) {
+                // deregister 回滚也失败：警告，心跳超时会自动清理
+                log.warn{"subscribe rollback failed: deregister(${groupId}) unsuccessful, registration may linger until heartbeat timeout"}
+            }
             log.warn{"subscribe failed for group=${groupId}"}
             false
         }

@@ -28,6 +28,7 @@ import std.env.atExit
 public class MqServer <: Resource {
     private let server: Server<ProtocolMessage, EncodedMessage, ProtocolMessage, MqBody>
     private let log = LoggerFactory.getLogger<MqServer>()
+    private let startFailed = AtomicBool(false)  // 启动失败标志
 
     public init(bindPort!: UInt16, queueSize!: Int64 = 1024,
                 checkDuration!: Duration = Duration.second * 30,
@@ -40,6 +41,7 @@ public class MqServer <: Resource {
 
     /**
      * 启动服务端，使用 handler 处理请求。
+     * 返回 Future<Unit>，调用方可通过 isStartFailed() 检查启动状态。
      */
     public func start(handler: (ProtocolMessage) -> ProtocolMessage): Future<Unit> {
         spawn {
@@ -47,9 +49,15 @@ public class MqServer <: Resource {
                 server.start(handler)
             } catch (e: Exception) {
                 log.error{"MqServer start failed: ${e.message}"}
+                startFailed.store(true)
             }
         }
     }
+
+    /**
+     * 检查服务端启动是否失败。
+     */
+    public func isStartFailed(): Bool { startFailed.load() }
 
     public func close(): Unit {
         if (!server.isClosed()) { server.close() }

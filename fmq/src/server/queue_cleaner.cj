@@ -55,6 +55,10 @@ public class QueueCleaner {
     /**
      * 单次清理：遍历所有队列，删除超过保留期的已轮转文件（保留最后 1 个）。
      * retentionHours=0 时跳过所有文件（不清理）。
+     *
+     * ⚠️ 性能说明：每 5 分钟执行一次，遍历所有 topic×queue。
+     * 数百队列时持锁遍历可能较久，但清理操作为低频后台任务可接受。
+     * TODO(v2): 可改为分批处理或异步队列遍历。
      */
     public func cleanup(): Unit {
         let retentionThreshold = if (config.retentionHours > 0) {

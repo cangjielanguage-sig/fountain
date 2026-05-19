@@ -63,6 +63,23 @@ public class MqConfig {
         this.retentionHours = retentionHours
         this.syncQuorum = syncQuorum
     }
+
+    /**
+     * 测试用工厂方法。使用合理默认值，减少测试代码中的重复构造。
+     */
+    public static func forTest(dataDir!: String = "/tmp/fmq_test",
+                               mqHosts!: ArrayList<String> = ArrayList<String>()): MqConfig {
+        MqConfig(
+            mqHosts: mqHosts, syncHosts: ArrayList<String>(),
+            dataDir: dataDir, segmentMaxSize: 1024 * 1024,
+            heartbeatIntervalSec: 5, healthcheckMaxRetry: 3,
+            idleTimeoutMinutes: 30, ackTimeoutMs: 30000,
+            maxRetryCount: 3, retryIntervalMs: 1000,
+            dlqRetentionHours: 168, maxMessageSize: 4 * 1024 * 1024,
+            maxLabelsPerMessage: 64, retentionHours: 72,
+            syncQuorum: 1
+        )
+    }
 }
 
 /**
