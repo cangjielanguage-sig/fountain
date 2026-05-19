@@ -138,11 +138,8 @@ public class BrokerManager {
             let req = ProtocolMessage(Command.PING(0), MessageID(),
                 MqBody("ping", []).toData())
             let resp = c.transfer(req.id, req, Duration.second * 3)
-            try {
-                c.close()
-            } finally {
-                conn = None
-            }
+            c.close()
+            conn = None  // close 成功后才置空，防止 catch 中重复关闭
             if (resp.isSome()) {
                 nh.lastSeen = DateTime.now()
                 if (!nh.isAlive.load()) {
@@ -153,7 +150,8 @@ public class BrokerManager {
             } else {
                 recordFailure(nh)
             }
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            log.warn{"pingNode ${nh.host}:${nh.port} failed: ${e.message}"}
             if (let Some(c) <- conn) {
                 if (!c.isClosed()) { c.close() }
             }

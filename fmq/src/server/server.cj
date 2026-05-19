@@ -172,7 +172,9 @@ public class MqCommand <: SubCommand {
                     if (p == port) {
                         return i
                     }
-                } catch (_: Exception) {}
+                } catch (e: Exception) {
+                    log.warn{"resolveNodeIndex: invalid port in mq_hosts '${hosts[i]}': ${e.message}"}
+                }
             }
         }
         0

@@ -801,3 +801,45 @@ public class DeliveryManagerTest {
     }
 }
 
+@Test
+public class BrokerManagerTest {
+    @TestCase
+    public func testInitFromMqHosts(): Unit {
+        let hosts = ArrayList<String>()
+        hosts.add("node1:7201")
+        hosts.add("node2:7201")
+        let config = MqConfig(
+            mqHosts: hosts, syncHosts: ArrayList(),
+            dataDir: "/tmp", segmentMaxSize: 1024,
+            heartbeatIntervalSec: 5, healthcheckMaxRetry: 3,
+            idleTimeoutMinutes: 30, ackTimeoutMs: 30000,
+            maxRetryCount: 3, retryIntervalMs: 1000,
+            dlqRetentionHours: 168, maxMessageSize: 4096,
+            maxLabelsPerMessage: 64, retentionHours: 72,
+            syncQuorum: 1
+        )
+        let bm = BrokerManager(config)
+        @Assert(bm.aliveCount() == 2)
+        @Assert(bm.checkConsistency())
+        bm.close()
+    }
+
+    @TestCase
+    public func testInitEmptyHosts(): Unit {
+        let config = MqConfig(
+            mqHosts: ArrayList<String>(), syncHosts: ArrayList<String>(),
+            dataDir: "/tmp", segmentMaxSize: 1024,
+            heartbeatIntervalSec: 5, healthcheckMaxRetry: 3,
+            idleTimeoutMinutes: 30, ackTimeoutMs: 30000,
+            maxRetryCount: 3, retryIntervalMs: 1000,
+            dlqRetentionHours: 168, maxMessageSize: 4096,
+            maxLabelsPerMessage: 64, retentionHours: 72,
+            syncQuorum: 1
+        )
+        let bm = BrokerManager(config)
+        @Assert(bm.aliveCount() == 0)
+        @Assert(bm.checkConsistency())
+        bm.close()
+    }
+}
+

@@ -143,7 +143,8 @@ public class ReplicationManager {
                     MqBody("ping", []).toData())
                 let resp = c.transfer(req.id, req, Duration.second * 3)
                 resp.isSome()
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                log.warn{"isMasterAlive ping failed: ${e.message}"}
                 false
             }
         } else {
