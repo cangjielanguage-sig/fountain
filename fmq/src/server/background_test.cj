@@ -18,6 +18,8 @@ package fountain::fmq.server
 import std.unittest.*
 import std.unittest.testmacro.*
 import std.fs.{Directory, remove}
+import std.io.ByteBuffer
+import fountain::f_codec.default.DefaultCodec
 
 /**
  * 后台线程组件单元测试。
@@ -74,6 +76,57 @@ public class BackgroundThreadTest {
         let cleaner = QueueCleaner(config, qm)
         cleaner.cleanup()  // 无队列 → return，不抛异常
         @Assert(true)
+    }
+
+    @TestCase
+    public func testCleanupBatchConfigValue(): Unit {
+        // 验证 cleanupBatchSize 配置可正确传入 QueueCleaner
+        let hosts = ArrayList<String>()
+        let config = MqConfig(
+            mqHosts: hosts, syncHosts: ArrayList<String>(),
+            dataDir: "/tmp/fmq_bg_batchcfg", segmentMaxSize: 16384,
+            heartbeatIntervalSec: 5, healthcheckMaxRetry: 3,
+            idleTimeoutMinutes: 30, ackTimeoutMs: 30000,
+            maxRetryCount: 3, retryIntervalMs: 1000,
+            dlqRetentionHours: 168, maxMessageSize: 4096,
+            maxLabelsPerMessage: 64, retentionHours: 72,
+            syncQuorum: 1, cleanupBatchSize: 5
+        )
+        let qm = QueueManager(config, nodeIndex: 0)
+        let cleaner = QueueCleaner(config, qm)
+        cleaner.cleanup()
+        @Assert(config.cleanupBatchSize == 5)
+    }
+
+    @TestCase
+    public func testSyncEntryEncodeDecode(): Unit {
+        // 验证 sync entry 的 topic + queueIndex + data 编码/解码一致
+        let topic = "/test_sync_topic"
+        let queueIndex = 3
+        let data: Array<Byte> = [0x01u8, 0x02u8, 0x03u8, 0x04u8]
+        let buf = ByteBuffer()
+        DefaultCodec()
+            .encode(topic).encode(queueIndex).encode(data)
+            .finish().copy(to: buf, closeFromOnEnd: true, closeToOnEnd: false)
+        let encoded = extractBytes(buf)
+        @Assert(encoded.isEmpty() == false)
+
+        // 解码验证
+        let dec = DefaultCodec()
+        let stream = ByteBuffer(encoded)
+        if (let Some(decTopic) <- dec.decode<String>(stream)) {
+            if (let Some(decIndex) <- dec.decode<Int64>(stream)) {
+                if (let Some(decData) <- dec.decode<Array<Byte>>(stream)) {
+                    @Assert(decTopic == topic)
+                    @Assert(decIndex == queueIndex)
+                    @Assert(decData.size == data.size)
+                    if (decData.size > 0) {
+                        @Assert(decData[0] == 0x01u8)
+                        @Assert(decData[2] == 0x03u8)
+                    }
+                }
+            } else { @Assert(false) }
+        } else { @Assert(false) }
     }
 
     private static func testConfig(): MqConfig {

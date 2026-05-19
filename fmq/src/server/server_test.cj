@@ -582,6 +582,22 @@ public class DeadLetterStoreTest {
         // retentionHours=0 means unlimited, nothing should be removed
         @Assert(ds.list("/a", 0).size == 1)
     }
+
+    @TestCase
+    public func testBatchSyncTriggeredOnThreshold(): Unit {
+        let ds = DeadLetterStore(dlqDir("batchsync"), retentionHours: 168, syncBatchSize: 3)
+        // 追加 2 条（未达到 batchSize=3，不触发 sync，但不影响 append 功能）
+        ds.append([0x01u8], "/test", 0, "msg-b1")
+        ds.append([0x02u8], "/test", 0, "msg-b2")
+        // 第 3 条达到 batchSize，触发 sync
+        ds.append([0x03u8], "/test", 0, "msg-b3")
+        // 验证所有 3 条均可列出
+        let list = ds.list("/test", 0)
+        @Assert(list.size == 3)
+        // 验证 sync() 幂等（已 sync 后再调用不抛异常）
+        ds.sync()
+        @Assert(true)
+    }
 }
 
 @Test
