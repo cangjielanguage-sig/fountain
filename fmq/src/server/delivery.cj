@@ -94,14 +94,17 @@ public class DeliveryManager {
 
     /**
      * 记录投递。若 messageId 已存在则不覆盖（防止丢失 ACK 状态）。
+     * synchronized 防止 check-then-act 竞态：两个线程同时 recordDelivery 相同 messageId。
      */
     public func recordDelivery(messageId: String, consumerId: String, groupId: String, topic: String): DeliveryRecord {
-        if (let Some(existing) <- records.get(messageId)) {
-            existing
-        } else {
-            let record = DeliveryRecord(messageId, consumerId, groupId, topic, DateTime.now())
-            records[messageId] = record
-            record
+        synchronized(onAckLock) {
+            if (let Some(existing) <- records.get(messageId)) {
+                existing
+            } else {
+                let record = DeliveryRecord(messageId, consumerId, groupId, topic, DateTime.now())
+                records[messageId] = record
+                record
+            }
         }
     }
 
