@@ -127,6 +127,13 @@ public class MqQueue <: Resource & ToString {
 
     public func isClosed(): Bool { closed.load() }
 
+    /**
+     * 检查排空是否完成。排空模式下，若 logStream 已耗尽则关闭队列。
+     * ⚠️ 已知限制：SegmentedLog 的 openEntryStream() 在空日志上行为不确定，
+     * 因此不在 tryFinishDrain 中尝试重新打开流检查残留数据。
+     * 排空期间如有新数据追加到 SegmentedLog，日志将在下次 consume 周期
+     * 通过 tryReadFromLog 重新打开流时被读取。
+     */
     public func tryFinishDrain(): Bool {
         if (!draining.load()) { return true }
         let streamAlive: Bool
