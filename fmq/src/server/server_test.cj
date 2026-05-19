@@ -20,7 +20,7 @@ import std.unittest.testmacro.*
 import fountain::f_codec.default.DefaultCodec
 import fountain::f_data.base.*
 import std.io.{InputStream, SeekPosition}
-import std.sync.AtomicInt64
+import std.sync.{AtomicInt64, AtomicBool}
 
 @Test
 public class QueueDistributionTest {
@@ -624,6 +624,49 @@ public class TopicManagerTest {
         @Assert(all.size == 1)
         @Assert(all.get("/x").isNone())
         @Assert(all.get("/y").isSome())
+    }
+
+    @TestCase
+    public func testConcurrentReadWrite(): Unit {
+        let tm = TopicManager(configWithHosts())
+        tm.createTopic("/base")
+        // 并发读写：写入线程创建 topic，读取线程同时 list/get
+        let done = AtomicBool(false)
+        let writeCount = AtomicInt64(0)
+        let readCount = AtomicInt64(0)
+        var writers = ArrayList<Future<Unit>>()
+        var readers = ArrayList<Future<Unit>>()
+        // 5 个写入线程
+        for (i in 0..5) {
+            writers.add(spawn {
+                let idx = i
+                while (!done.load()) {
+                    let name = "/topic_${idx}_${writeCount.fetchAdd(1)}"
+                    try { tm.createTopic(name) } catch (_: Exception) {}
+                }
+            })
+        }
+        // 5 个读取线程
+        for (_ in 0..5) {
+            readers.add(spawn {
+                while (!done.load()) {
+                    let _ = tm.listTopics()
+                    let _ = tm.getTopicMeta("/base")
+                    let _ = tm.listAllConsumerGroups()
+                    let _ = tm.getConsumerGroups("/base")
+                    readCount.fetchAdd(1)
+                }
+            })
+        }
+        sleep(Duration.millisecond * 300)
+        done.store(true)
+        for (w in writers) { w.get() }
+        for (r in readers) { r.get() }
+        let reads = readCount.load()
+        @Assert(reads > 0)
+        // 验证基础操作仍正常
+        let topics = tm.listTopics()
+        @Assert(topics.size > 0)
     }
 
     private static func configWithHosts(): MqConfig {

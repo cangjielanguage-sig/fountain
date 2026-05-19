@@ -99,15 +99,17 @@ public class TopicManager {
     }
 
     public func listTopics(): ArrayList<String> {
-        let result = ArrayList<String>()
-        for ((name, _) in topics) {
-            result.add(name)
+        synchronized(lock) {
+            let result = ArrayList<String>()
+            for ((name, _) in topics) {
+                result.add(name)
+            }
+            result
         }
-        result
     }
 
     public func getTopicMeta(name: String): ?TopicMeta {
-        topics.get(name)
+        synchronized(lock) { topics.get(name) }
     }
 
     public func addConsumerGroup(topic: String, group: String): MqErrorCode {
@@ -160,14 +162,16 @@ public class TopicManager {
     }
 
     public func getConsumerGroups(topic: String): ArrayList<String> {
-        if (let Some(meta) <- topics.get(topic)) {
-            let result = ArrayList<String>()
-            for (g in meta.getConsumerGroups()) {
-                result.add(g)
+        synchronized(lock) {
+            if (let Some(meta) <- topics.get(topic)) {
+                let result = ArrayList<String>()
+                for (g in meta.getConsumerGroups()) {
+                    result.add(g)
+                }
+                result
+            } else {
+                ArrayList()
             }
-            result
-        } else {
-            ArrayList()
         }
     }
 
@@ -175,17 +179,19 @@ public class TopicManager {
      * 列出所有 topic → consumerGroups 映射（批量查询，单次锁内完成）。
      */
     public func listAllConsumerGroups(): HashMap<String, ArrayList<String>> {
-        let result = HashMap<String, ArrayList<String>>()
-        for ((name, meta) in topics) {
-            let groups = ArrayList<String>()
-            for (g in meta.getConsumerGroups()) {
-                groups.add(g)
+        synchronized(lock) {
+            let result = HashMap<String, ArrayList<String>>()
+            for ((name, meta) in topics) {
+                let groups = ArrayList<String>()
+                for (g in meta.getConsumerGroups()) {
+                    groups.add(g)
+                }
+                if (groups.size > 0) {
+                    result[name] = groups
+                }
             }
-            if (groups.size > 0) {
-                result[name] = groups
-            }
+            result
         }
-        result
     }
 
     // ───── fleet 持久化 ─────
