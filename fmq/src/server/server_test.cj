@@ -432,6 +432,7 @@ public class QueueWriterDispatchTest {
         } else {
             @Assert(false)
         }
+        qm.close()
         q.close()
     }
 
@@ -462,6 +463,7 @@ public class QueueWriterDispatchTest {
         } else {
             @Assert(false)
         }
+        qm.close()
         q.close()
     }
 
