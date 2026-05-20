@@ -96,22 +96,10 @@ public class QueueWriter {
             .finish().copy(to: buf, closeFromOnEnd: true, closeToOnEnd: false)
         let syncEntry = extractBytes(buf)
 
-        // 并行同步到每个从节点
-        let futures = ArrayList<Future<Bool>>()
+        // 异步同步到每个从节点 — 不阻塞主写循环
+        // 同步失败只记录日志，不影响消息写入
         for (slave in slaves) {
-            futures.add(spawn { syncToSlave(slave.nodeId, syncEntry) })
-        }
-
-        // 等待至少一个从节点确认
-        var confirmed: Int64 = 0
-        for (f in futures) {
-            if (f.get()) {
-                confirmed += 1
-                if (confirmed >= 1) { break }
-            }
-        }
-        if (confirmed == 0) {
-            log.warn{"sync: no slave confirmed"}
+            spawn { syncToSlave(slave.nodeId, syncEntry) }
         }
     }
 
