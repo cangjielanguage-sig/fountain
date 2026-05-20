@@ -17,6 +17,7 @@ package fountain::fmq.client
 
 import std.unittest.*
 import std.unittest.testmacro.*
+import std.random.*
 import fountain::f_codec.default.DefaultCodec
 import std.io.{ByteBuffer, SeekPosition}
 
@@ -63,7 +64,7 @@ public class ConsumerHelperTest {
         let topic = "/order/create"
         let groupId = "group1"
         let batchSize: Int64 = 10
-        let payload = encodeConsumePayload(topic, groupId, batchSize)
+        let payload = Consumer.encodeConsumePayload(topic, groupId, batchSize)
         let buf = ByteBuffer(payload)
         let dec = DefaultCodec()
         if (let Some(t) <- dec.decode<String>(buf)
@@ -84,39 +85,17 @@ public class ConsumerHelperTest {
         list.add([0x03u8, 0x04u8, 0x05u8])
 
         let encoded = encodeMessageList(list)
-        let decoded = decodeMessageList(encoded)
+        let decoded = Consumer.decodeMessageList(encoded)
         @Assert(decoded.size == 2)
         @Assert(decoded[0].size == 2)
         @Assert(decoded[1].size == 3)
     }
 
     /**
-     * 编码工具测试方法。
+     * 编码消息列表用于测试（保留：CommandExecutor.encodeMessageList 为 private 不可访问）。
+     * 生产函数 Consumer.encodeConsumePayload / Consumer.decodeMessageList / extractBytes
+     * 已在测试中替代。
      */
-    private static func encodeConsumePayload(topic: String, groupId: String, batchSize: Int64): Array<Byte> {
-        let buf = ByteBuffer()
-        DefaultCodec()
-            .encode(topic).encode(groupId).encode(batchSize)
-            .finish().copy(to: buf, closeFromOnEnd: true, closeToOnEnd: false)
-        extractBytes(buf)
-    }
-
-    private static func decodeMessageList(data: Array<Byte>): ArrayList<Array<Byte>> {
-        let result = ArrayList<Array<Byte>>()
-        try {
-            let buf = ByteBuffer(data)
-            let dec = DefaultCodec()
-            if (let Some(count) <- dec.decode<Int64>(buf)) {
-                for (_ in 0..count) {
-                    if (let Some(msg) <- dec.decode<Array<Byte>>(buf)) {
-                        result.add(msg)
-                    }
-                }
-            }
-        } catch (_: Exception) {}
-        result
-    }
-
     private static func encodeMessageList(msgs: ArrayList<Array<Byte>>): Array<Byte> {
         let buf = ByteBuffer()
         let enc = DefaultCodec()
@@ -126,14 +105,6 @@ public class ConsumerHelperTest {
         }
         enc.finish().copy(to: buf, closeFromOnEnd: true, closeToOnEnd: false)
         extractBytes(buf)
-    }
-
-    private static func extractBytes(buf: ByteBuffer): Array<Byte> {
-        let size = buf.seek(SeekPosition.End(0))
-        buf.seek(SeekPosition.Begin(0))
-        let raw = Array<Byte>(Int64(size), repeat: 0u8)
-        buf.read(raw)
-        raw
     }
 }
 
@@ -440,6 +411,36 @@ public class MqClientSingletonTest {
         }
         // 没有有效服务器时全部应该失败，但不应有崩溃
         @Assert(ok + fail == 20)
+    }
+}
+
+/**
+ * SyncRegistry 心跳 jitter 随机源验证。
+ * P2: 验证 Random().nextInt64(100) 各实例独立随机，范围 [0, 100)。
+ */
+@Test
+public class SyncRegistryJitterTest {
+    @TestCase
+    public func testRandomJitterInRange(): Unit {
+        for (_ in 0..100) {
+            let jitter = Random().nextInt64(100)
+            @Assert(jitter >= 0)
+            @Assert(jitter < 100)
+        }
+    }
+
+    @TestCase
+    public func testRandomJitterProducesVaryingValues(): Unit {
+        // 多次调用应有不同值（概率验证，失败概率极低）
+        let first = Random().nextInt64(100)
+        var allSame = true
+        for (_ in 0..20) {
+            if (Random().nextInt64(100) != first) {
+                allSame = false
+                break
+            }
+        }
+        @Assert(!allSame)
     }
 }
 

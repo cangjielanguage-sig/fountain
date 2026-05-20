@@ -65,8 +65,14 @@ public class ConsumerGroupManager {
     public func deleteGroup(topic: String, groupId: String): MqErrorCode {
         let code = topicManager.removeConsumerGroup(topic, groupId)
         if (code == MqErrorCode.SUCCESS) {
-            deliveryManager.setOffset(topic, 0, groupId, 0)
-            log.info{"deleted consumer group '${groupId}' from topic '${topic}'"}
+            // 循环所有队列重置 offset=0，与 createGroup 的初始化模式一致
+            let queueCount = if (let Some(meta) <- topicManager.getTopicMeta(topic)) {
+                meta.getQueueCount()
+            } else { 1 }
+            for (i in 0..queueCount) {
+                deliveryManager.setOffset(topic, i, groupId, 0)
+            }
+            log.info{"deleted consumer group '${groupId}' from topic '${topic}' with ${queueCount} queues"}
         }
         code
     }

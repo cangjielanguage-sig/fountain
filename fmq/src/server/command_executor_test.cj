@@ -772,6 +772,88 @@ public class CreateGroupMultiQueueTest {
 }
 
 /**
+ * ConsumerGroupManager deleteGroup 多队列 offset 重置测试。
+ * P1-1: 验证 deleteGroup 重置所有队列的 offset=0，而非仅 queue 0。
+ */
+@Test
+public class DeleteGroupMultiQueueTest {
+    private static func testConfig(): MqConfig {
+        let hosts = ArrayList<String>()
+        hosts.add("node1:7201")
+        MqConfig(
+            mqHosts: hosts, syncHosts: ArrayList(),
+            dataDir: "/tmp/fmq_dg_test", segmentMaxSize: 16384,
+            heartbeatIntervalSec: 5, healthcheckMaxRetry: 3,
+            idleTimeoutMinutes: 30, ackTimeoutMs: 30000,
+            maxRetryCount: 3, retryIntervalMs: 1000,
+            dlqRetentionHours: 168, maxMessageSize: 4096,
+            maxLabelsPerMessage: 64, retentionHours: 72,
+            syncQuorum: 1)
+    }
+
+    @TestCase
+    public func testDeleteGroupResetsAllQueueOffsets(): Unit {
+        let config = testConfig()
+        let tm = TopicManager(config)
+        let cm = ConsumerMatcher()
+        let dm = DeliveryManager(config)
+        let cgm = ConsumerGroupManager(tm, cm, dm)
+
+        // 创建多队列主题 (queueCount=3)
+        tm.createTopic("/multi-delete", queueCount: 3)
+
+        // 创建消费者组（初始化所有 offset=0）
+        @Assert(cgm.createGroup("/multi-delete", "del-group") == MqErrorCode.SUCCESS)
+
+        // 在不同队列上设置不同 offset
+        cgm.setOffset("/multi-delete", 0, "del-group", 10)
+        cgm.setOffset("/multi-delete", 1, "del-group", 20)
+        cgm.setOffset("/multi-delete", 2, "del-group", 30)
+        @Assert(cgm.getOffset("/multi-delete", 0, "del-group") == 10)
+        @Assert(cgm.getOffset("/multi-delete", 1, "del-group") == 20)
+        @Assert(cgm.getOffset("/multi-delete", 2, "del-group") == 30)
+
+        // 删除消费者组 — 应重置所有队列 offset=0
+        @Assert(cgm.deleteGroup("/multi-delete", "del-group") == MqErrorCode.SUCCESS)
+        @Assert(cgm.getOffset("/multi-delete", 0, "del-group") == 0)
+        @Assert(cgm.getOffset("/multi-delete", 1, "del-group") == 0)
+        @Assert(cgm.getOffset("/multi-delete", 2, "del-group") == 0)
+    }
+
+    @TestCase
+    public func testDeleteGroupSingleQueue(): Unit {
+        let config = testConfig()
+        let tm = TopicManager(config)
+        let cm = ConsumerMatcher()
+        let dm = DeliveryManager(config)
+        let cgm = ConsumerGroupManager(tm, cm, dm)
+
+        // 创建单队列主题
+        tm.createTopic("/single-delete", queueCount: 1)
+        @Assert(cgm.createGroup("/single-delete", "sg") == MqErrorCode.SUCCESS)
+        cgm.setOffset("/single-delete", 0, "sg", 99)
+        @Assert(cgm.getOffset("/single-delete", 0, "sg") == 99)
+
+        // 删除组并验证 offset 重置
+        @Assert(cgm.deleteGroup("/single-delete", "sg") == MqErrorCode.SUCCESS)
+        @Assert(cgm.getOffset("/single-delete", 0, "sg") == 0)
+    }
+
+    @TestCase
+    public func testDeleteGroupNonExistentReturnsError(): Unit {
+        let config = testConfig()
+        let tm = TopicManager(config)
+        let cm = ConsumerMatcher()
+        let dm = DeliveryManager(config)
+        let cgm = ConsumerGroupManager(tm, cm, dm)
+
+        // 删除不存在的组应返回错误
+        let code = cgm.deleteGroup("/no-topic", "no-group")
+        @Assert(code != MqErrorCode.SUCCESS)
+    }
+}
+
+/**
  * ConsumerMatcher deregister 并发缓存测试。
  * P2-2: 验证 deregister 后 compiledPatterns 清空在同步块内。
  */

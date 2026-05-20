@@ -17,6 +17,7 @@ package fountain::fmq.client
 
 import fountain::f_protocol.default.{Message as ProtocolMessage}
 import std.sync.Mutex
+import std.random.*
 
 /**
  * 心跳注册管理器。
@@ -47,7 +48,8 @@ public class SyncRegistry {
                 return
             }
             let baseInterval = Duration.second * config.heartbeatIntervalSec
-            let jitterMs = config.heartbeatIntervalSec * 37 % 100  // ±0-99ms jitter to spread bursts
+            // 随机 jitter ±0-99ms 防止 thundering herd（各实例独立随机）
+            let jitterMs = Random().nextInt64(100)
             let interval = baseInterval + Duration.millisecond * jitterMs
             let selfRef = this
             heartbeatTimer = Timer.repeat(interval, interval, {

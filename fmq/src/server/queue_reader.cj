@@ -38,6 +38,10 @@ public class QueueReader {
      * 2. ConsumerMatcher.matchTopic() 获取投递目标
      * 3. 记录 DeliveryRecord（占位：后续集成实际网络投递）
      * 4. 等待 ACK 或超时
+     *
+     * TODO(P2-2): 当前实现仅读取数据并递增 msgCount，未执行消费者匹配/投递/ACK 跟踪。
+     * 需要注入 ConsumerMatcher / DeliveryManager 引用，补充完整投递链路。
+     * 当前状态：功能性死代码，读取的数据被丢弃。
      */
     public func run(): Unit {
         log.info{"QueueReader started for ${queue}"}
@@ -47,6 +51,7 @@ public class QueueReader {
                 if (let Some(data) <- queue.tryReadFromLog(skip)) {
                     msgCount += 1
                     log.debug{"read ${data.size} bytes from log for ${queue}"}
+                    // TODO: 此处应调用 ConsumerMatcher.matchTopic() 匹配消费者并投递
                 } else {
                     sleep(Duration.millisecond * 100)
                 }
