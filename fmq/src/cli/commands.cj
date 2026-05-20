@@ -25,6 +25,7 @@ import std.convert.*
  * Phase 8 为骨架占位，真实操作将在后续阶段对接 MQ 节点。
  */
 public class CommandRunner {
+    private static var cachedConfig: Option<MqConfig> = None
 
     /**
      * 从参数数组中提取 --name <value> 格式的值。
@@ -225,7 +226,7 @@ public class CommandRunner {
      * @return Unit
      */
     public static func showBrokers(_: Array<String>): Unit {
-        let config = loadConfig()
+        let config = getOrLoadConfig()
         println("mq_hosts: ${config.mqHosts}")
         println("sync_hosts: ${config.syncHosts}")
     }
@@ -289,10 +290,20 @@ public class CommandRunner {
     }
 
     /**
+     * 获取或加载配置（缓存，避免重复解析环境变量）。
+     */
+    internal static func getOrLoadConfig(): MqConfig {
+        if (let Some(c) <- cachedConfig) { return c }
+        let config = loadConfig()
+        cachedConfig = Some(config)
+        config
+    }
+
+    /**
      * 获取 MQ 客户端连接。异常时打印错误并返回 None。
      */
     private static func getClient(): ?MqClient {
-        let config = loadConfig()
+        let config = getOrLoadConfig()
         try {
             Some(MqClient.getInstance(config))
         } catch (e: Exception) {

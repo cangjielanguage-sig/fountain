@@ -16,6 +16,8 @@ limitations under the License.
 package fountain::fmq.server
 
 import std.collection.concurrent.ConcurrentHashMap
+import std.collection.ArrayList
+import std.convert.*
 import std.sync.{Mutex, AtomicBool}
 import fountain::f_codec.default.DefaultCodec
 import std.io.ByteBuffer
@@ -58,6 +60,11 @@ public class DeliveryManager {
     private let syncClient: ?SyncClient
     private let serverId: String  // "host:port" 用于 offset key
     private let onAckLock = Mutex()  // 保护 onAck check-then-act
+    private var consumerMatcher: Option<ConsumerMatcher> = None
+    private var queueManager: Option<QueueManager> = None
+    private var deadLetterStore: Option<DeadLetterStore> = None
+    private let checkerClosed = AtomicBool(false)
+    private var checkerFuture: Option<Future<Unit>> = None
 
     public init(config: MqConfig, serverId!: String = "") {
         this.config = config
@@ -149,8 +156,91 @@ public class DeliveryManager {
     }
 
     /**
+     * 设置 ConsumerMatcher 引用（超时重试需要）。
+     */
+    public func setConsumerMatcher(cm: ConsumerMatcher): Unit {
+        this.consumerMatcher = Some(cm)
+    }
+
+    /**
+     * 设置 QueueManager 引用（retry 从 SegmentedLog 读取消息需要）。
+     */
+    public func setQueueManager(qm: QueueManager): Unit {
+        this.queueManager = Some(qm)
+    }
+
+    /**
+     * 设置 DeadLetterStore 引用（重试超限时入 DLQ）。
+     */
+    public func setDeadLetterStore(dls: DeadLetterStore): Unit {
+        this.deadLetterStore = Some(dls)
+    }
+
+    /**
+     * 启动超时检查后台线程。
+     * 周期性（ackTimeoutMs/2 间隔）遍历 records 检查超时记录并调用 retry。
+     * retry 返回 false 且配置了 DeadLetterStore 时写入 DLQ。
+     */
+    public func startTimeoutChecker(): Unit {
+        if (checkerFuture.isSome()) {
+            log.warn{"timeout checker already started"}
+            return
+        }
+        let intervalMs = if (config.ackTimeoutMs / 2 < 100) { 100 } else { config.ackTimeoutMs / 2 }
+        log.info{"starting timeout checker (interval=${intervalMs}ms)"}
+        checkerFuture = Some(spawn {
+            while (!checkerClosed.load()) {
+                sleep(Duration.millisecond * intervalMs)
+                if (checkerClosed.load()) { break }
+                doTimeoutCheck()
+            }
+        })
+    }
+
+    /**
+     * 单次超时检查：扫描超时记录并处理重试。
+     */
+    private func doTimeoutCheck(): Unit {
+        let cm = if (let Some(ref) <- consumerMatcher) { ref } else { return }
+        let qm = if (let Some(ref) <- queueManager) { ref } else { return }
+        let expired = checkTimeout()
+        for (exp in expired) {
+            try {
+                if (retry(exp, cm)) {
+                    // retry 成功：记录已更新 deliverTime
+                } else {
+                    // 重试超限或无消费者 → 入 DLQ
+                    if (let Some(dls) <- deadLetterStore) {
+                        moveToDLQ(dls, exp)
+                    }
+                }
+            } catch (e: Exception) {
+                log.warn{"doTimeoutCheck: retry ${exp.messageId} failed: ${e.message}"}
+            }
+        }
+    }
+
+    /**
+     * 将投递记录移入死信队列。
+     * 从 messageId 解析 topic:queueIndex 信息，写入 DeadLetterStore。
+     */
+    private func moveToDLQ(dls: DeadLetterStore, record: DeliveryRecord): Unit {
+        let parts = record.messageId.split(':')
+        if (parts.size >= 2) {
+            let topic = parts[0]
+            let queueIdx = if (let Some(idx) <- Int64.tryParse(parts[1])) { idx } else { 0 }
+            dls.append([], topic, queueIdx, record.messageId)
+        }
+        synchronized(onAckLock) {
+            records.remove(record.messageId)
+        }
+        log.warn{"moved ${record.messageId} to DLQ (retry exhausted)"}
+    }
+
+    /**
      * 重试投递。
      * 使用 ConsumerMatcher 查找当前在线消费者。
+     * 从 SegmentedLog 读取原始数据用于重试投递（v2 实际发送）。
      * 返回 true 表示可重试，false 表示入死信队列。
      */
     public func retry(record: DeliveryRecord, consumerMatcher: ConsumerMatcher): Bool {
@@ -163,6 +253,28 @@ public class DeliveryManager {
         let groups = consumerMatcher.matchTopic(record.topic)
         if (groups.size > 0) {
             log.info{"retry ${record.retryCount}/${config.maxRetryCount} for ${record.messageId}"}
+            // 从 SegmentedLog 读取原始数据（为未来推模式投递准备）
+            let qm = if (let Some(ref) <- this.queueManager) { ref } else {
+                record.deliverTime = DateTime.now()
+                return true
+            }
+            let parts = record.messageId.split(':')
+            if (parts.size >= 4) {
+                let topic = parts[0]
+                let queueIdx = if (let Some(idx) <- Int64.tryParse(parts[1])) { idx } else { 0 }
+                let offset = if (let Some(ofs) <- Int64.tryParse(parts[3])) { ofs } else { 0 }
+                if (let Some(qs) <- qm.getQueues(topic)) {
+                    for (q in qs) {
+                        if (q.index == queueIdx) {
+                            if (let Some(data) <- q.tryReadFromLog(offset)) {
+                                // TODO(v2): 实际发送数据到消费者（当前架构无推模式投递）
+                                log.info{"retry read ${data.size} bytes for ${record.messageId}"}
+                            }
+                            break
+                        }
+                    }
+                }
+            }
             record.deliverTime = DateTime.now()
             true
         } else {
@@ -199,6 +311,16 @@ public class DeliveryManager {
             } catch (e: Exception) {
                 log.warn{"persist offset ${offsetKey}=${offset} to fleet failed: ${e.message}"}
             }
+        }
+    }
+
+    /**
+     * 关闭超时检查线程，等待线程退出。
+     */
+    public func close(): Unit {
+        checkerClosed.store(true)
+        if (let Some(f) <- checkerFuture) {
+            try { f.get() } catch (_: Exception) {}
         }
     }
 

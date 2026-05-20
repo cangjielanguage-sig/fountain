@@ -61,28 +61,29 @@ public func encodeTopicToPath(topic: String): String {
 /**
  * 将编码后的路径名解码为 topic。
  * 解码顺序：先 '__' → '_'，再单 '_' → '/'。
+ * 使用 ArrayList<UInt8> 避免 O(n²) 字符串拼接。
  *
  * 示例：
  *   "_order_create" → "/order/create"
  *   "_a__b"        → "/a_b"
  */
 public func decodePathToTopic(path: String): String {
-    var result = ""
+    let parts = ArrayList<UInt8>()
     var i = 0
     while (i < path.size) {
         let ch = path[i]
         if (ch == 0x5Fu8) {  // '_'
             if (i + 1 < path.size && path[i + 1] == 0x5Fu8) {
-                result += "_"
+                parts.add(b'_')  // '__' → '_'
                 i += 2
             } else {
-                result += "/"
+                parts.add(b'/')  // '_' → '/'
                 i += 1
             }
         } else {
-            result += Rune(ch).toString()
+            parts.add(ch)
             i += 1
         }
     }
-    result
+    String.fromUtf8(parts.unsafeData())
 }

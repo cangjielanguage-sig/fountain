@@ -117,9 +117,12 @@ public class MqCommand <: SubCommand {
             topicManager, queueManager, deliveryManager,
             consumerMatcher, replicationManager)
 
-        // 设置 QueueManager 的 ReplicationManager（用于同步）
+        // 设置依赖注入
         queueManager.setReplicationManager(replicationManager)
         queueManager.startAll()
+        deliveryManager.setConsumerMatcher(consumerMatcher)
+        deliveryManager.setQueueManager(queueManager)
+        deliveryManager.startTimeoutChecker()
 
         server.start({ msg => executor.execute(msg) })
         // 启动消息过期清理线程
@@ -146,6 +149,7 @@ public class MqCommand <: SubCommand {
         }
         cleaner.close()
         brokerManager.close()
+        deliveryManager.close()
         queueManager.close()
         server.close()
         0

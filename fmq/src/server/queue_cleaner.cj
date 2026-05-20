@@ -49,7 +49,6 @@ public class QueueCleaner {
         log.info{"QueueCleaner started (interval=5min, retention=${config.retentionHours}h)"}
         while (!closed.load()) {
             sleep(Duration.minute * 5)
-            if (closed.load()) { break }
             cleanup()
         }
     }

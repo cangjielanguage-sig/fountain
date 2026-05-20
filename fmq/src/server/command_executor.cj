@@ -614,6 +614,7 @@ public class CommandExecutor {
                     let code = topicManager.createTopic(name, queueCount: qc)
                     if (code == MqErrorCode.SUCCESS) {
                         queueManager.createQueues(name, qc)
+                        queueManager.startWritersForTopic(name)
                         ProtocolMessage(Command.RESP(0), request.id,
                             MqBody("ok", []).toData())
                     } else {

@@ -241,16 +241,49 @@ public class QueueManager {
         }
         for ((_, topicQueues) in snapshot) {
             for (q in topicQueues) {
-                let writer = QueueWriter(q, config, replicationManager: rm, queueSize: 1024)
-                let reader = QueueReader(q)
-                writers.add(writer)
-                readers.add(reader)
-                writerMap["${q.topic}:${q.index}"] = writer
-                spawn { writer.run() }
-                spawn { reader.run() }
+                startWriterAndReader(q, rm)
             }
         }
         log.info{"startAll: ${writers.size} writers, ${readers.size} readers started"}
+    }
+
+    /**
+     * 为指定主题的所有队列启动 writer/reader 线程。
+     * 用于运行时通过 CLI createTopic 创建的主题。
+     */
+    public func startWritersForTopic(topic: String): Unit {
+        let rm = if (let Some(ref) <- replicationManager) { ref } else { return }
+        let topicQueues: ?ArrayList<MqQueue>
+        synchronized(lock) {
+            topicQueues = queues.get(topic)
+        }
+        if (let Some(qs) <- topicQueues) {
+            var started: Int64 = 0
+            for (q in qs) {
+                let key = "${q.topic}:${q.index}"
+                if (writerMap.get(key).isNone()) {
+                    startWriterAndReader(q, rm)
+                    started += 1
+                }
+            }
+            if (started > 0) {
+                let s = started
+                log.info{"startWritersForTopic: started ${s} writers/readers for ${topic}"}
+            }
+        }
+    }
+
+    /**
+     * 为单个队列创建并启动 writer/reader 线程。
+     */
+    private func startWriterAndReader(q: MqQueue, rm: ReplicationManager): Unit {
+        let writer = QueueWriter(q, config, replicationManager: rm, queueSize: 1024)
+        let reader = QueueReader(q)
+        writers.add(writer)
+        readers.add(reader)
+        writerMap["${q.topic}:${q.index}"] = writer
+        spawn { writer.run() }
+        spawn { reader.run() }
     }
 
     /**

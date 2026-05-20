@@ -139,9 +139,16 @@ public class ConsumerMatcher {
         }
     }
 
+    private static let MAX_COMPILED_PATTERNS: Int64 = 1000
+
     private func globMatches(pattern: String, topic: String): Bool {
         let pp = if (let Some(cached) <- compiledPatterns.get(pattern)) { cached }
             else {
+                // 缓存超限时整体清空（简单策略，避免 LRU 复杂度）
+                if (compiledPatterns.size >= MAX_COMPILED_PATTERNS) {
+                    compiledPatterns = HashMap<String, PathPattern>()
+                    log.warn{"compiledPatterns cache full (${MAX_COMPILED_PATTERNS}), cleared"}
+                }
                 let p = PathPattern()
                 p.compile(pattern)
                 compiledPatterns[pattern] = p

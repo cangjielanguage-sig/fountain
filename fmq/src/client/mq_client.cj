@@ -17,6 +17,7 @@ package fountain::fmq.client
 
 import fountain::f_protocol.default.{Message as ProtocolMessage, EncodedMessage}
 import fountain::f_codec.default.DefaultCodec
+import std.collection.ArrayList
 import std.io.{ByteBuffer, SeekPosition}
 import std.sync.{Mutex, AtomicBool}
 
@@ -236,6 +237,7 @@ public class MqClient <: Resource {
 
     /**
      * 查看主题详情。
+     * 服务端返回的 topic_info 是二进制编码数据，以 hex 格式显示。
      */
     public func showTopic(name: String): ?String {
         let payload = encodeTopicOpPayload("showTopic", name, 0)
@@ -244,10 +246,24 @@ public class MqClient <: Resource {
         let resp = mqConn.transfer(req.id, req, Duration.second * 10)
         if (let Some(r) <- resp) {
             if (let Some(body) <- convert<MqBody>(r.data) && body.bodyType == "topic_info") {
-                return Some(String.fromUtf8(body.payload))
+                return Some(toHexString(body.payload))
             }
         }
         None
+    }
+
+    /**
+     * 将二进制数据转为 hex 格式字符串。
+     */
+    private static func toHexString(data: Array<Byte>): String {
+        let result = ArrayList<UInt8>()
+        for (b in data) {
+            let hi = b >> 4 & 0x0Fu8
+            let lo = b & 0x0Fu8
+            result.add(if (hi < 10u8) { hi + 0x30u8 } else { hi - 10u8 + 0x61u8 })
+            result.add(if (lo < 10u8) { lo + 0x30u8 } else { lo - 10u8 + 0x61u8 })
+        }
+        String.fromUtf8(result.unsafeData())
     }
 
     /**

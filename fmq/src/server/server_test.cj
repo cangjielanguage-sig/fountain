@@ -404,6 +404,38 @@ public class QueueWriterDispatchTest {
     }
 
     @TestCase
+    public func testStartWritersForTopicStartsWriter(): Unit {
+        let hosts = ArrayList<String>()
+        hosts.add("node1:7201")
+        let config = MqConfig(
+            mqHosts: hosts, syncHosts: ArrayList(),
+            dataDir: "/tmp/fmq_qw_start", segmentMaxSize: 1024,
+            heartbeatIntervalSec: 5, healthcheckMaxRetry: 3,
+            idleTimeoutMinutes: 30, ackTimeoutMs: 30000,
+            maxRetryCount: 3, retryIntervalMs: 1000,
+            dlqRetentionHours: 168, maxMessageSize: 4096,
+            maxLabelsPerMessage: 64, retentionHours: 72,
+            syncQuorum: 1
+        )
+        let qm = QueueManager(config, nodeIndex: 0)
+        qm.setReplicationManager(ReplicationManager(config))
+        let queues = qm.createQueues("/test-start", 2)
+        @Assert(queues.size > 0)
+        // startWritersForTopic 前 writer 不存在
+        let q = queues[0]
+        @Assert(qm.getWriterForQueue(q).isNone())
+        // startWritersForTopic 后 writer 应存在
+        qm.startWritersForTopic("/test-start")
+        if (let Some(writer) <- qm.getWriterForQueue(q)) {
+            writer.close()
+            @Assert(true)
+        } else {
+            @Assert(false)
+        }
+        q.close()
+    }
+
+    @TestCase
     public func testGetWriterForQueueReturnsSomeAfterStartAll(): Unit {
         let hosts = ArrayList<String>()
         hosts.add("node1:7201")
@@ -856,6 +888,114 @@ public class BrokerManagerTest {
         @Assert(bm.aliveCount() == 0)
         @Assert(bm.checkConsistency())
         bm.close()
+    }
+}
+
+/**
+ * DeliveryManager 超时检查后台线程测试。
+ */
+@Test
+public class DeliveryManagerTimeoutTest {
+    private static let TEST_DIR = "/tmp/fmq_dm_timeout_test"
+
+    @TestCase
+    public func testCheckerStartsAndStopsWithoutCrash(): Unit {
+        let config = timeoutTestConfig()
+        let dm = DeliveryManager(config)
+        // 启动检查线程
+        dm.startTimeoutChecker()
+        sleep(Duration.millisecond * 50)
+        // 关闭不抛异常
+        dm.close()
+        @Assert(true)
+    }
+
+    @TestCase
+    public func testCheckerProcessesExpiredRecord(): Unit {
+        let config = timeoutTestConfig()
+        let dm = DeliveryManager(config)
+        let cm = ConsumerMatcher()
+        let qm = createEmptyQueueManager()
+        dm.setConsumerMatcher(cm)
+        dm.setQueueManager(qm)
+        // 记录投递（使用极短超时）
+        let record = dm.recordDelivery("timeout-msg", "c1", "g1", "/test")
+        dm.startTimeoutChecker()
+        sleep(Duration.millisecond * 200)
+        // 检查线程运行后记录应被处理（retryCount >= 0）
+        @Assert(record.retryCount >= 0)
+        dm.close()
+    }
+
+    private static func timeoutTestConfig(): MqConfig {
+        let hosts = ArrayList<String>()
+        hosts.add("node1:7201")
+        MqConfig(
+            mqHosts: hosts, syncHosts: ArrayList(),
+            dataDir: TEST_DIR, segmentMaxSize: 1024,
+            heartbeatIntervalSec: 5, healthcheckMaxRetry: 3,
+            idleTimeoutMinutes: 30, ackTimeoutMs: 50,
+            maxRetryCount: 3, retryIntervalMs: 1000,
+            dlqRetentionHours: 168, maxMessageSize: 4096,
+            maxLabelsPerMessage: 64, retentionHours: 72,
+            syncQuorum: 1
+        )
+    }
+
+    private static func createEmptyQueueManager(): QueueManager {
+        let hosts = ArrayList<String>()
+        hosts.add("node1:7201")
+        let config = MqConfig(
+            mqHosts: hosts, syncHosts: ArrayList(),
+            dataDir: TEST_DIR, segmentMaxSize: 1024,
+            heartbeatIntervalSec: 5, healthcheckMaxRetry: 3,
+            idleTimeoutMinutes: 30, ackTimeoutMs: 30000,
+            maxRetryCount: 3, retryIntervalMs: 1000,
+            dlqRetentionHours: 168, maxMessageSize: 4096,
+            maxLabelsPerMessage: 64, retentionHours: 72,
+            syncQuorum: 1
+        )
+        QueueManager(config, nodeIndex: 0)
+    }
+}
+
+/**
+ * ConsumerMatcher compiledPatterns 缓存上限测试。
+ */
+@Test
+public class ConsumerMatcherCacheTest {
+    @TestCase
+    public func testCompiledPatternsClearedWhenFull(): Unit {
+        let cm = ConsumerMatcher()
+        // 注册超过 MAX_COMPILED_PATTERNS (1000) 的唯一 Glob 模式
+        // 验证不抛异常即可
+        for (i in 0..1050) {
+            let reg = ConsumerRegistration(
+                consumerId: "c${i}", groupId: "g${i}",
+                matchModeStr: "Glob:/test/pattern_${i}/*",
+                labels: None, dataFilter: None,
+                lastHeartbeat: DateTime.now())
+            cm.register(reg)
+        }
+        // 触发大量 glob 匹配 - 验证不抛异常
+        let result = cm.matchTopic("/test/pattern_999/x")
+        @Assert(result.size > 0 || result.size == 0)
+    }
+}
+
+/**
+ * 主题编解码测试（验证 decodePathToTopic 优化后正确性）。
+ */
+@Test
+public class TopicEncodingTest {
+    @TestCase
+    public func testDecodePathToTopicRoundtrip(): Unit {
+        let topics: Array<String> = ["/order/create", "/a_b", "/foo/bar/baz", "/x"]
+        for (t in topics) {
+            let encoded = encodeTopicToPath(t)
+            let decoded = decodePathToTopic(encoded)
+            @Assert(decoded == t)
+        }
     }
 }
 

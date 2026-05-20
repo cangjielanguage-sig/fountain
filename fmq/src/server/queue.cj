@@ -55,6 +55,7 @@ public class MqQueue <: Resource & ToString {
     /**
      * 追加消息到队列。排空中拒绝追加。
      * 用 DefaultCodec 编码写入 SegmentedLog，确保帧边界。
+     * @return LogPosition 写入位置（当前调用方均丢弃此值，保留用于未来精确 offset 跟踪）
      */
     public func append(data: Array<Byte>): LogPosition {
         if (draining.load()) { throw MqException("queue is draining") }
