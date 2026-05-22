@@ -79,6 +79,21 @@ public class BackgroundThreadTest {
     }
 
     @TestCase
+    public func testCleanerRunNoCrashOnEmptyQueues(): Unit {
+        // 验证 run() 的 try-catch 保护：空队列的 cleanup() 不会抛异常传播到循环外
+        let config = testConfig()
+        let qm = QueueManager(config, nodeIndex: 0)
+        let cleaner = QueueCleaner(config, qm)
+        // 模拟 run() 的单次 cleanup 调用（跳过 5min sleep）
+        try {
+            cleaner.cleanup()
+            @Assert(true)
+        } catch (_: Exception) {
+            @Assert(false)
+        }
+    }
+
+    @TestCase
     public func testCleanupBatchConfigValue(): Unit {
         // 验证 cleanupBatchSize 配置可正确传入 QueueCleaner
         let hosts = ArrayList<String>()

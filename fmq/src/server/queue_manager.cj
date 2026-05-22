@@ -16,7 +16,6 @@ limitations under the License.
 package fountain::fmq.server
 
 import std.collection.concurrent.ConcurrentHashMap
-import std.collection.HashMap
 import std.sync.Mutex
 import fountain::f_util.crc64
 
@@ -33,7 +32,7 @@ public class QueueManager {
     private let lock = Mutex()
     private let writers = ArrayList<QueueWriter>()  // 跟踪 writer 线程
     private let readers = ArrayList<QueueReader>()  // 跟踪 reader 线程
-    private let writerMap = HashMap<String, QueueWriter>()  // "topic:index" → writer 快速查找
+    private let writerMap = ConcurrentHashMap<String, QueueWriter>()  // "topic:index" → writer 快速查找
 
     public init(config: MqConfig, nodeIndex!: Int64 = 0) {
         this.config = config

@@ -49,7 +49,11 @@ public class QueueCleaner {
         log.info{"QueueCleaner started (interval=5min, retention=${config.retentionHours}h)"}
         while (!closed.load()) {
             sleep(Duration.minute * 5)
-            cleanup()
+            try {
+                cleanup()
+            } catch (e: Exception) {
+                log.error{"QueueCleaner.run cleanup failed: ${e.message}"}
+            }
         }
     }
 

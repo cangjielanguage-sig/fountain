@@ -64,7 +64,10 @@ public class Consumer {
                                     let ackPayload = Consumer.encodeAckPayload(deliveryId, topic, ackQi)
                                     let ackReq = ProtocolMessage(Command.ACK, MessageID(),
                                         MqBody("ack", ackPayload).toData())
-                                    client.transfer(ackReq.id, ackReq, Duration.second * 5)
+                                    let ackResp = client.transfer(ackReq.id, ackReq, Duration.second * 5)
+                                    if (ackResp.isNone()) {
+                                        log.warn{"dataFilter ACK failed for deliveryId=${deliveryId}"}
+                                    }
                                     continue
                                 }
                                 let qi = ConsumerLoop.extractQueueIndex(deliveryId)
