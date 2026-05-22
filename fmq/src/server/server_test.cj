@@ -380,13 +380,19 @@ public class DeliverySimpleTest {
 
 @Test
 public class QueueWriterDispatchTest {
+    private static let qwDirCounter = AtomicInt64(0)
+
+    private static func qwDir(base: String): String {
+        "/tmp/fmq_qw_${base}_${qwDirCounter.fetchAdd(1) + 1}"
+    }
+
     @TestCase
     public func testGetWriterForQueueReturnsNoneBeforeStart(): Unit {
         let hosts = ArrayList<String>()
         hosts.add("node1:7201")
         let config = MqConfig(
             mqHosts: hosts, syncHosts: ArrayList(),
-            dataDir: "/tmp/fmq_qw", segmentMaxSize: 1024,
+            dataDir: qwDir("none"), segmentMaxSize: 1024,
             heartbeatIntervalSec: 5, healthcheckMaxRetry: 3,
             idleTimeoutMinutes: 30, ackTimeoutMs: 30000,
             maxRetryCount: 3, retryIntervalMs: 1000,
@@ -409,7 +415,7 @@ public class QueueWriterDispatchTest {
         hosts.add("node1:7201")
         let config = MqConfig(
             mqHosts: hosts, syncHosts: ArrayList(),
-            dataDir: "/tmp/fmq_qw_start", segmentMaxSize: 1024,
+            dataDir: qwDir("start"), segmentMaxSize: 1024,
             heartbeatIntervalSec: 5, healthcheckMaxRetry: 3,
             idleTimeoutMinutes: 30, ackTimeoutMs: 30000,
             maxRetryCount: 3, retryIntervalMs: 1000,
@@ -442,7 +448,7 @@ public class QueueWriterDispatchTest {
         hosts.add("node1:7201")
         let config = MqConfig(
             mqHosts: hosts, syncHosts: ArrayList(),
-            dataDir: "/tmp/fmq_qw2", segmentMaxSize: 1024,
+            dataDir: qwDir("all"), segmentMaxSize: 1024,
             heartbeatIntervalSec: 5, healthcheckMaxRetry: 3,
             idleTimeoutMinutes: 30, ackTimeoutMs: 30000,
             maxRetryCount: 3, retryIntervalMs: 1000,
@@ -472,7 +478,7 @@ public class QueueWriterDispatchTest {
         // 验证 syncToSlaves 在有 slave 注册时不抛异常，数据正常写入
         let config = MqConfig(
             mqHosts: ArrayList<String>(), syncHosts: ArrayList<String>(),
-            dataDir: "/tmp/fmq_qw3", segmentMaxSize: 1024,
+            dataDir: qwDir("slave"), segmentMaxSize: 1024,
             heartbeatIntervalSec: 5, healthcheckMaxRetry: 3,
             idleTimeoutMinutes: 30, ackTimeoutMs: 30000,
             maxRetryCount: 3, retryIntervalMs: 1000,
@@ -480,10 +486,10 @@ public class QueueWriterDispatchTest {
             maxLabelsPerMessage: 64, retentionHours: 72,
             syncQuorum: 1
         )
-        let q = MqQueue("/test_sync", 0, "/tmp/fmq_qw3", 1024)
+        let q = MqQueue("/test_sync", 0, qwDir("slave"), 1024)
         let rm = ReplicationManager(config)
         rm.promoteToMaster()
-        rm.onSlaveOf("slave1")  // 注册一个从节点
+        rm.onSlaveOf("slave1")
         let writer = QueueWriter(q, config, replicationManager: rm, queueSize: 16)
         // 提交数据并通过 writer 写入
         writer.submit([0x10u8, 0x20u8, 0x30u8])
