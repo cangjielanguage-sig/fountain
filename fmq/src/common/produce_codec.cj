@@ -23,6 +23,7 @@ import std.io.ByteBuffer
  *   topic(Int64) + labelsCount(Int64) + label1(String) + label2(String) + ... + payload(Array<Byte>)
  */
 public class ProduceCodec {
+    private static let log = LoggerFactory.getLogger<ProduceCodec>()
 
     /**
      * 编码生产消息为 Array<Byte>。
@@ -65,7 +66,8 @@ public class ProduceCodec {
                     } else { None }
                 } else { None }
             } else { None }
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            log.warn{"ProduceCodec.decode failed: ${e.message}"}
             None
         }
     }

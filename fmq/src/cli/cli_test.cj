@@ -116,9 +116,8 @@ public class CliCommandTest {
 public class CliConfigCacheTest {
     @TestCase
     public func testGetOrLoadConfigReturnsSameInstance(): Unit {
-        // 验证缓存配置：第一次调用返回的 config 与第二次相同实例
         let c1 = CommandRunner.getOrLoadConfig()
         let c2 = CommandRunner.getOrLoadConfig()
-        @Assert(c1.mqHosts.size == c2.mqHosts.size)
+        @Assert(c1 === c2)  // 引用同一性验证缓存，非值比较
     }
 }

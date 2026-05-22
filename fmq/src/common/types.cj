@@ -102,6 +102,17 @@ public class BrokerMeta {
     private var queues: ArrayList<String> = ArrayList()
     private var lastSeen: DateTime = DateTime.now()
     public init() {}
+
+    public func getNodeId(): String { nodeId }
+    public func getHost(): String { host }
+    public func getPort(): Int64 { port }
+    public func isMasterNode(): Bool { isMaster }
+    public func getQueues(): ArrayList<String> {
+        let result = ArrayList<String>()
+        for (q in queues) { result.add(q) }
+        result
+    }
+    public func getLastSeen(): DateTime { lastSeen }
 }
 
 /**

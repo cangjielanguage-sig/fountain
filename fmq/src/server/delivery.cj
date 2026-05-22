@@ -320,7 +320,9 @@ public class DeliveryManager {
     public func close(): Unit {
         checkerClosed.store(true)
         if (let Some(f) <- checkerFuture) {
-            try { f.get() } catch (_: Exception) {}
+            try { f.get() } catch (e: Exception) {
+                log.warn{"DeliveryManager.close: checker thread error: ${e.message}"}
+            }
         }
     }
 

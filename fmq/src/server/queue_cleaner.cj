@@ -51,7 +51,9 @@ public class QueueCleaner {
     public func close(): Unit {
         closed.store(true)
         if (let Some(f) <- runFuture) {
-            try { f.get() } catch (_: Exception) {}
+            try { f.get() } catch (e: Exception) {
+                log.warn{"QueueCleaner.close: ${e.message}"}
+            }
         }
     }
 
@@ -151,12 +153,12 @@ public class QueueCleaner {
 
     /**
      * 检查文件是否超过保留期。
-     * metadata() 不存在的文件视为过期（可删除）。
+     * 文件不存在返回 false（无物可删），权限错误日志告警并返回 false。
      */
     internal static func isFileExpired(path: String, threshold: DateTime): Bool {
         try {
             let info = FileInfo(path)
             info.lastModificationTime < threshold
-        } catch (_: Exception) { true }
+        } catch (_: Exception) { false }
     }
 }
