@@ -110,6 +110,26 @@ public class CliCommandTest {
 }
 
 /**
+ * MqCliCommand exec 行为测试。
+ * P4-1: 未知命令返回 exit code 1
+ * P4-2: 空参数（交互模式）返回 exit code 0
+ */
+@Test
+public class MqCliExecTest {
+    @TestCase
+    public func testUnknownCommandReturnsExitCode1(): Unit {
+        let exitCode = SubCommandMediator.exec("mqcli", ["badcommand"])
+        @Assert(exitCode == 1)
+    }
+
+    @TestCase
+    public func testEmptyArgsReturnsExitCode0(): Unit {
+        let exitCode = SubCommandMediator.exec("mqcli", [])
+        @Assert(exitCode == 0)
+    }
+}
+
+/**
  * CLI 缓存配置测试。
  */
 @Test

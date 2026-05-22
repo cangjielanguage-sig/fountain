@@ -376,3 +376,25 @@ public class BrokerMetaGettersTest {
         @Assert(bm.getQueues().size == 0)
     }
 }
+
+// ── encodePublish 与 ProduceCodec.encode 一致性测试（P4-5）──
+
+@Test
+public class EncodePublishConsistencyTest {
+    @TestCase
+    public func testEncodePublishMatchesProduceCodec(): Unit {
+        let topic = "/test-consistency"
+        let labels = ArrayList<String>()
+        labels.add("k1")
+        labels.add("k2")
+        let payload: Array<Byte> = [0xABu8, 0xCDu8]
+        let msg = encodePublish(topic, labels, payload)
+        let raw = ProduceCodec.encode(topic, labels, payload)
+        if (let Some(body) <- convert<MqBody>(msg.data)) {
+            @Assert(body.bodyType == "produce")
+            @Assert(body.payload == raw)
+        } else {
+            @Assert(false)
+        }
+    }
+}
