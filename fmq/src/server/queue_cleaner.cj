@@ -34,28 +34,46 @@ public class QueueCleaner {
     private let closed = AtomicBool(false)
     private var topicCursor: Int64 = 0
     private var queueCursor: Int64 = 0
+    private var runFuture: ?Future<Unit> = None
 
     public init(config: MqConfig, queueManager: QueueManager) {
         this.config = config
         this.queueManager = queueManager
     }
 
+    /**
+     * 记录 spawn Future，供 close() 中 join 等待线程退出。
+     */
+    public func setRunFuture(f: Future<Unit>): Unit {
+        runFuture = Some(f)
+    }
+
     public func close(): Unit {
         closed.store(true)
+        if (let Some(f) <- runFuture) {
+            try { f.get() } catch (_: Exception) {}
+        }
     }
 
     /**
-     * 后台线程主循环。
+     * 后台线程主循环。每 100ms 检查退出标志，累计 5 分钟执行一次 cleanup。
+     * 短间隔 + closed 检查确保 close() 中 join 可快速返回。
      */
     public func run(): Unit {
         log.info{"QueueCleaner started (interval=5min, retention=${config.retentionHours}h)"}
+        let intervalMs: Int64 = 300000  // 5 分钟 = 300000ms
+        var elapsedMs: Int64 = 0
         while (!closed.load()) {
-            sleep(Duration.minute * 5)
-            try {
-                cleanup()
-            } catch (e: Exception) {
-                log.error{"QueueCleaner.run cleanup failed: ${e.message}"}
+            if (elapsedMs >= intervalMs) {
+                try {
+                    cleanup()
+                } catch (e: Exception) {
+                    log.error{"QueueCleaner.run cleanup failed: ${e.message}"}
+                }
+                elapsedMs = 0
             }
+            sleep(Duration.millisecond * 100)
+            elapsedMs += 100
         }
     }
 

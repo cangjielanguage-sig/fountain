@@ -130,7 +130,8 @@ public class MqCommand <: SubCommand {
         server.start({ msg => executor.execute(msg) })
         // 启动消息过期清理线程
         let cleaner = QueueCleaner(config, queueManager)
-        spawn { cleaner.run() }
+        let cleanerFuture = spawn { cleaner.run() }
+        cleaner.setRunFuture(cleanerFuture)
         let brokerManager = BrokerManager(config)
         brokerManager.startHeartbeat()
         // 定期清理过期消费者注册

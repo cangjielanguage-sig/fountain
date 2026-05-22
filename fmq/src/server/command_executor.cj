@@ -729,22 +729,25 @@ public class CommandExecutor {
     /**
      * 处理选举命令。
      * VOTE→ACK/APPROVE→升 Master/ASSUME→确认。
+     * Master 节点不接受 VOTE 请求避免 split-brain。
      */
     private func handleElection(request: ProtocolMessage): ProtocolMessage {
         let b = request.command.value
         let vote = b & VOTE
         let approve = b & APPROVE
         if (vote != 0u8) {
-            // 请求投票 → ACK
-            ProtocolMessage(Command.ELECT(APPROVE), request.id,
-                MqBody("elect_ack", []).toData())
+            // Master 不参与投票，阻止 split-brain
+            if (replicationManager.isMasterRole()) {
+                errorResp(request.id, "master does not vote")
+            } else {
+                ProtocolMessage(Command.ELECT(APPROVE), request.id,
+                    MqBody("elect_ack", []).toData())
+            }
         } else if (approve != 0u8) {
-            // 收到批准 → 升 Master
             replicationManager.promoteToMaster()
             ProtocolMessage(Command.ELECT(ASSUME), request.id,
                 MqBody("ok", []).toData())
         } else {
-            // ASSUME 确认
             ProtocolMessage(Command.RESP(0), request.id,
                 MqBody("ok", []).toData())
         }

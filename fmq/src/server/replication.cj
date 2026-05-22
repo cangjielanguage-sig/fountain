@@ -103,6 +103,9 @@ public class ReplicationManager {
         result
     }
 
+    /** 返回当前节点是否为 Master。 */
+    public func isMasterRole(): Bool { isMaster.load() }
+
     // ───── Slave 侧 API ─────
 
     /**
