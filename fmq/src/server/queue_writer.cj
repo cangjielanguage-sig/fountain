@@ -35,6 +35,10 @@ public class QueueWriter {
     private let inboundQueue: ConcurrentLinkedQueue<Array<Byte>>
     /** 从节点连接池：nodeId → Client，复用长连接减少 TCP 握手。 */
     private let slaveConns = ConcurrentHashMap<String, Client<ProtocolMessage, EncodedMessage, ProtocolMessage, MqBody, MessageID>>()
+    /** 同步队列：写线程入队，专用 sync 线程出队并发同步到所有从节点。*/
+    private let syncQueue = ConcurrentLinkedQueue<Array<Byte>>()
+    private let syncClosed = AtomicBool(false)
+    private var syncThread: ?Future<Unit> = None
 
     public init(queue: MqQueue, config: MqConfig, replicationManager!: ReplicationManager, queueSize!: Int64 = 1024) {
         this.queue = queue
@@ -70,12 +74,18 @@ public class QueueWriter {
     }
 
     /**
-     * 关闭 Writer。设置 closed 标志让 run() 循环退出。
-     * 关闭所有从节点长连接。
-     * 注意：不排空 inboundQueue 中的待处理消息。关闭前需确认无新提交。
+     * 关闭 Writer。幂等，可多次安全调用。
+     * 设置 closed 标志让 run() 循环退出，等待同步线程结束，关闭从节点连接。
+     * 注意：不排空 inboundQueue/syncQueue 中的待处理消息。关闭前需确认无新提交。
      */
     public func close(): Unit {
+        if (closed.load()) { return }
         closed.store(true)
+        syncClosed.store(true)
+        if (let Some(f) <- syncThread) {
+            try { f.get() } catch (_: Exception) {}
+            syncThread = None
+        }
         for ((_, c) in slaveConns) {
             if (!c.isClosed()) { c.close() }
         }
@@ -83,7 +93,7 @@ public class QueueWriter {
 
     /**
      * 同步 message 到所有已注册的从节点。
-     * 编码 queueIndex + data 以便从节点正确写入对应队列。
+     * 将 sync entry 入队，由专用 sync 线程异步处理，不阻塞主写循环。
      */
     private func syncToSlaves(data: Array<Byte>): Unit {
         let slaves = replicationManager.getSlaves()
@@ -96,10 +106,29 @@ public class QueueWriter {
             .finish().copy(to: buf, closeFromOnEnd: true, closeToOnEnd: false)
         let syncEntry = extractBytes(buf)
 
-        // 异步同步到每个从节点 — 不阻塞主写循环
-        // 同步失败只记录日志，不影响消息写入
-        for (slave in slaves) {
-            spawn { syncToSlave(slave.nodeId, syncEntry) }
+        // 入队，由 sync 线程异步处理
+        syncQueue.add(syncEntry)
+    }
+
+    /**
+     * 启动后台同步线程。单线程依次取出 syncQueue 中的条目，
+     * 为每个从节点 spawn 并行同步（spawn 发生在此线程，不阻塞主写循环）。
+     */
+    public func startSyncThread(): Unit {
+        let selfRef = this
+        syncThread = spawn {
+            while (!selfRef.syncClosed.load()) {
+                if (let Some(entry) <- selfRef.syncQueue.remove()) {
+                    let slaves = selfRef.replicationManager.getSlaves()
+                    for (slave in slaves) {
+                        let nodeId = slave.nodeId
+                        let data = entry
+                        spawn { selfRef.syncToSlave(nodeId, data) }
+                    }
+                } else {
+                    sleep(Duration.millisecond * 10)
+                }
+            }
         }
     }
 

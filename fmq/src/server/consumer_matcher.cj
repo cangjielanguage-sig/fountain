@@ -55,8 +55,9 @@ public class ConsumerMatcher {
                 }
             }
             registrations.add(registration)
-            // 注册变更时清除缓存（在同步块内，与 matchTopic 互斥）
-            compiledPatterns = HashMap<String, PathPattern>()
+            // 注意：不清除 compiledPatterns 缓存。
+            // 缓存有 MAX_COMPILED_PATTERNS 上限，超限时整体清空。
+            // 保留缓存可避免注册变更导致所有 Glob 匹配重新 compile。
         }
     }
 
@@ -71,9 +72,9 @@ public class ConsumerMatcher {
             }
             result = remaining.size < registrations.size
             registrations = remaining
-            if (result) {
-                compiledPatterns = HashMap<String, PathPattern>()  // 清除缓存
-            }
+            // 注意：不清除 compiledPatterns 缓存。
+            // 被移除消费者的 Glob pattern 可能仍被活跃消费者使用，保留缓存利大于弊。
+            // 缓存由 MAX_COMPILED_PATTERNS 上限和 globMatches 内的超限清理管理。
         }
         result
     }
@@ -89,8 +90,7 @@ public class ConsumerMatcher {
                 }
             }
             registrations = remaining
-            // 清除缓存（消费者列表变更）
-            compiledPatterns = HashMap<String, PathPattern>()
+            // 注意：不清除 compiledPatterns 缓存。理由同 deregister。
         }
     }
 

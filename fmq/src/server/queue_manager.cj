@@ -282,6 +282,7 @@ public class QueueManager {
         readers.add(reader)
         writerMap["${q.topic}:${q.index}"] = writer
         spawn { writer.run() }
+        writer.startSyncThread()
         spawn { reader.run() }
     }
 
