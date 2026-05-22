@@ -1,2 +1,1 @@
-不稳定的测试 testConcurrentReadAndClose
-把fmq 所有用Int64.parse Int64.tryParse 转换port的代码都改成用UInt16.parse
+详细解释 不稳定的测试 testConcurrentReadAndClose 是什么情况，并提出解决方案，然后修改

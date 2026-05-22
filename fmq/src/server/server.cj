@@ -95,7 +95,7 @@ public class MqCommand <: SubCommand {
         log.info{"starting MQ server on port ${port}, nodeIndex=${nodeIndex}"}
 
         // 创建各管理器 + CommandExecutor
-        let server = MqServer(bindPort: UInt16(port))
+        let server = MqServer(bindPort: port)
         let topicManager = TopicManager(config)
         let queueManager = QueueManager(config, nodeIndex: nodeIndex)
         let deliveryManager = DeliveryManager(config)
@@ -169,28 +169,28 @@ public class MqCommand <: SubCommand {
      * 从 mq_hosts 列表中解析本机端口。
      * 默认取第一个 host:port 的 port。
      */
-    private static func resolvePort(hosts: ArrayList<String>): Int64 {
+    private static func resolvePort(hosts: ArrayList<String>): UInt16 {
         if (hosts.size > 0) {
             let parts = hosts[0].split(':')
             if (parts.size == 2) {
-                try { return Int64.parse(parts[1]) } catch (_: Exception) {
+                try { return UInt16.parse(parts[1]) } catch (_: Exception) {
                     log.warn{"invalid port in mq_hosts '${hosts[0]}', using default 7201"}
                 }
             }
         }
-        7201
+        7201u16
     }
 
     /**
      * 从 mq_hosts 中查找本节点端口对应的索引。
      * 用于 QueueManager 分布算法中的 nodeIndex。
      */
-    private static func resolveNodeIndex(hosts: ArrayList<String>, port: Int64): Int64 {
+    private static func resolveNodeIndex(hosts: ArrayList<String>, port: UInt16): Int64 {
         for (i in 0..hosts.size) {
             let parts = hosts[i].split(':')
             if (parts.size == 2) {
                 try {
-                    let p = Int64.parse(parts[1])
+                    let p = UInt16.parse(parts[1])
                     if (p == port) {
                         return i
                     }

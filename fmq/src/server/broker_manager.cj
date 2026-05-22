@@ -58,9 +58,9 @@ public class BrokerManager {
         for (hostPort in config.mqHosts) {
             let parts = hostPort.split(':')
             if (parts.size == 2) {
-                if (let Some(port) <- Int64.tryParse(parts[1])) {
+                if (let Some(port) <- UInt16.tryParse(parts[1])) {
                     let host = parts[0]
-                    nodes[hostPort] = NodeHealth(host, UInt16(port))
+                    nodes[hostPort] = NodeHealth(host, port)
                 } else {
                     log.warn{"BrokerManager.init: invalid port in mqHosts entry '${hostPort}'"}
                 }
