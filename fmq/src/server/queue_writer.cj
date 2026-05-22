@@ -124,7 +124,12 @@ public class QueueWriter {
                 return false
             }
             let host = parts[0]
-            let port = UInt16(Int64.parse(parts[1]))
+            let port = if (let Some(p) <- Int64.tryParse(parts[1])) {
+                UInt16(p)
+            } else {
+                log.warn{"syncToSlave: invalid port '${parts[1]}' for node ${nodeId}"}
+                return false
+            }
             var conn = slaveConns.get(nodeId)
             if (let Some(c) <- conn) {
                 if (c.isClosed()) {

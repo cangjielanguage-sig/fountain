@@ -44,6 +44,8 @@ public class DeadLetterStore {
         this.syncBatchSize = syncBatchSize
         let config = LogConfig(this.dlqDir, "dlq", 1048576, 100, fileExt: ".dlq")
         this.dlqLog = SegmentedLog(config)
+        // 从 SegmentedLog 重建内存索引（崩溃恢复）
+        rebuildIndex()
     }
 
     /**

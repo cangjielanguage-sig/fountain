@@ -160,11 +160,12 @@ public class Subscriber {
     // ───── 编码工具 ─────
 
     private static func encodeRegistrationPayload(groupId: String, mode: MatchMode): Array<Byte> {
+        let modeStr = encodeMatchMode(mode)
         let buf = ByteBuffer()
         let enc = DefaultCodec()
             .encode(groupId)
             .encode(groupId)  // consumerId = groupId
-            .encode(matchModeToString(mode))
+            .encode(modeStr)
             .finish()
         enc.copy(to: buf, closeFromOnEnd: true, closeToOnEnd: false)
         let raw = extractBytes(buf)

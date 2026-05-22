@@ -68,7 +68,7 @@ public class MqClient <: Resource {
                 queueSize: 1024,
                 socketCount: 1,
                 host: parts[0],
-                port: UInt16(Int64.parse(parts[1])),
+                port: UInt16.parse(parts[1]),
                 idGetter: { msg => msg.id },
                 checkDuration: Duration.second * 30,
                 checker: { buffer => true }

@@ -289,3 +289,54 @@ public class ProtocolFunctionTest {
         @Assert(raw[2] == 0x03u8)
     }
 }
+
+// ── encodeMatchMode ↔ decodeMatchMode 兼容性测试 ──
+
+@Test
+public class MatchModeEncodingTest {
+    @TestCase
+    public func testEncodeMatchModeExactRoundtrip(): Unit {
+        let mode = MatchMode.Exact("/order/create")
+        let encoded = encodeMatchMode(mode)
+        @Assert(encoded == "Exact:/order/create")
+        // 验证 encodeMatchMode 输出与 decodeMatchMode 兼容
+        let reg = ConsumerRegistration(
+            consumerId: "c1", groupId: "g1",
+            matchModeStr: encoded,
+            labels: None, dataFilter: None,
+            lastHeartbeat: DateTime.now())
+        let decoded = reg.getMatchMode()
+        if (let MatchMode.Exact(t) <- decoded) { @Assert(t == "/order/create") }
+        else { @Assert(false) }
+    }
+
+    @TestCase
+    public func testEncodeMatchModeGlobRoundtrip(): Unit {
+        let mode = MatchMode.Glob("/order/*")
+        let encoded = encodeMatchMode(mode)
+        @Assert(encoded == "Glob:/order/*")
+        let reg = ConsumerRegistration(
+            consumerId: "c2", groupId: "g2",
+            matchModeStr: encoded,
+            labels: None, dataFilter: None,
+            lastHeartbeat: DateTime.now())
+        let decoded = reg.getMatchMode()
+        if (let MatchMode.Glob(p) <- decoded) { @Assert(p == "/order/*") }
+        else { @Assert(false) }
+    }
+
+    @TestCase
+    public func testEncodeMatchModePrefixRoundtrip(): Unit {
+        let mode = MatchMode.Prefix("/order/")
+        let encoded = encodeMatchMode(mode)
+        @Assert(encoded == "Prefix:/order/")
+        let reg = ConsumerRegistration(
+            consumerId: "c3", groupId: "g3",
+            matchModeStr: encoded,
+            labels: None, dataFilter: None,
+            lastHeartbeat: DateTime.now())
+        let decoded = reg.getMatchMode()
+        if (let MatchMode.Prefix(p) <- decoded) { @Assert(p == "/order/") }
+        else { @Assert(false) }
+    }
+}

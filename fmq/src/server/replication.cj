@@ -198,7 +198,12 @@ public class ReplicationManager {
         var localConn: ?Client<ProtocolMessage, EncodedMessage, ProtocolMessage, MqBody, MessageID> = None
         try {
             let host = parts[0]
-            let port = UInt16(Int64.parse(parts[1]))
+            let port = if (let Some(p) <- Int64.tryParse(parts[1])) {
+                UInt16(p)
+            } else {
+                log.error{"connectToMaster: invalid port in '${addr}'"}
+                return false
+            }
             let conn = Client<ProtocolMessage, EncodedMessage, ProtocolMessage, MqBody, MessageID>.builder(
                 queueSize: 16, socketCount: 1, host: host, port: port,
                 idGetter: { msg => msg.id },

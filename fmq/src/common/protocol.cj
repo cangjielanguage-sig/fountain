@@ -105,6 +105,18 @@ public func matchModeToString(mode: MatchMode): String {
     }
 }
 
+/**
+ * Encode MatchMode as ConsumerRegistration.matchModeStr format.
+ * Compatible with types.cj::decodeMatchMode().
+ */
+public func encodeMatchMode(mode: MatchMode): String {
+    match (mode) {
+        case Exact(p) => "Exact:${p}"
+        case Glob(p) => "Glob:${p}"
+        case Prefix(p) => "Prefix:${p}"
+    }
+}
+
 public func matchModeTopic(mode: MatchMode): String {
     match (mode) {
         case Exact(t) => t

@@ -1,2 +1,2 @@
-1. 为./fmq 添加测试用例，确认服务端关闭再启动后，能够继续消费关闭前尚未消费的数据。
-2. /cjDiagnosis ./fmq 
+不稳定的测试 testConcurrentReadAndClose
+把fmq 所有用Int64.parse Int64.tryParse 转换port的代码都改成用UInt16.parse

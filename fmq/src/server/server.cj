@@ -118,6 +118,8 @@ public class MqCommand <: SubCommand {
             consumerMatcher, replicationManager)
 
         // 设置依赖注入
+        let deadLetterStore = DeadLetterStore(config.dataDir)
+        deliveryManager.setDeadLetterStore(deadLetterStore)
         queueManager.setReplicationManager(replicationManager)
         queueManager.startAll()
         deliveryManager.setConsumerMatcher(consumerMatcher)
@@ -130,6 +132,14 @@ public class MqCommand <: SubCommand {
         spawn { cleaner.run() }
         let brokerManager = BrokerManager(config)
         brokerManager.startHeartbeat()
+        // 定期清理过期消费者注册
+        let consumerRefreshInterval = config.heartbeatIntervalSec
+        spawn {
+            while (true) {
+                sleep(Duration.second * consumerRefreshInterval)
+                consumerMatcher.refresh()
+            }
+        }
 
         // 保持主线程运行（等待关闭信号）
         let shutdownMutex = Mutex()
