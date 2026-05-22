@@ -1116,3 +1116,24 @@ public class DeadLetterStoreCloseTest {
     }
 }
 
+// ───── 共享测试工具函数 ─────
+
+/**
+ * 创建测试用 MqConfig，仅需要指定 dataDir。
+ * 所有测试类统一使用此函数，避免构造代码重复。
+ */
+public func testConfig(dataDir: String): MqConfig {
+    let hosts = ArrayList<String>()
+    hosts.add("node1:7201")
+    MqConfig(
+        mqHosts: hosts, syncHosts: ArrayList(),
+        dataDir: dataDir, segmentMaxSize: 1024,
+        heartbeatIntervalSec: 5, healthcheckMaxRetry: 3,
+        idleTimeoutMinutes: 30, ackTimeoutMs: 30000,
+        maxRetryCount: 3, retryIntervalMs: 1000,
+        dlqRetentionHours: 168, maxMessageSize: 4096,
+        maxLabelsPerMessage: 64, retentionHours: 72,
+        syncQuorum: 1
+    )
+}
+
