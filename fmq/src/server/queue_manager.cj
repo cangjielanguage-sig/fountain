@@ -266,6 +266,13 @@ public class QueueManager {
                 }
             }
             if (started > 0) {
+                // 启动新创建队列的后台同步线程
+                for (q in qs) {
+                    let key = "${q.topic}:${q.index}"
+                    if (let Some(w) <- writerMap.get(key)) {
+                        w.startSyncThread()
+                    }
+                }
                 let s = started
                 log.info{"startWritersForTopic: started ${s} writers/readers for ${topic}"}
             }
@@ -282,8 +289,17 @@ public class QueueManager {
         readers.add(reader)
         writerMap["${q.topic}:${q.index}"] = writer
         spawn { writer.run() }
-        writer.startSyncThread()
         spawn { reader.run() }
+    }
+
+    /**
+     * 为本节点全部 writer 启动后台同步线程。
+     * 与 startAll() 分离，确保生产路径启动同步线程，测试路径可跳过。
+     */
+    public func startAllSyncThreads(): Unit {
+        for (w in writers) {
+            w.startSyncThread()
+        }
     }
 
     /**

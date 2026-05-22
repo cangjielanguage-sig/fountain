@@ -122,6 +122,7 @@ public class MqCommand <: SubCommand {
         deliveryManager.setDeadLetterStore(deadLetterStore)
         queueManager.setReplicationManager(replicationManager)
         queueManager.startAll()
+        queueManager.startAllSyncThreads()
         deliveryManager.setConsumerMatcher(consumerMatcher)
         deliveryManager.setQueueManager(queueManager)
         deliveryManager.startTimeoutChecker()
