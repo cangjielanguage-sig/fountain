@@ -35,10 +35,10 @@ public class MqCliCommand <: SubCommand {
     public func exec(args: Array<String>): Int64 {
         if (args.size == 0) {
             runInteractive()
+            0
         } else {
-            runCommand(args)
+            if (runCommand(args)) { 0 } else { 1 }
         }
-        0
     }
 
     /**
@@ -56,13 +56,13 @@ public class MqCliCommand <: SubCommand {
     }
 
     /**
-     * 单次执行命令。
+     * 单次执行命令。返回 true 表示命令执行成功，false 表示失败。
      */
-    private static func runCommand(args: Array<String>): Unit {
+    private static func runCommand(args: Array<String>): Bool {
         let cmd = args[0]
         let cmdArgs = args[1..]
         match (cmd) {
-            case "help" => printHelp()
+            case "help" => printHelp(); true
             case "createTopic" => CommandRunner.createTopic(cmdArgs)
             case "deleteTopic" => CommandRunner.deleteTopic(cmdArgs)
             case "createConsumerGroup" => CommandRunner.createConsumerGroup(cmdArgs)
@@ -77,7 +77,7 @@ public class MqCliCommand <: SubCommand {
             case "listDeadLetters" => CommandRunner.listDeadLetters(cmdArgs)
             case "redeliverDeadLetter" => CommandRunner.redeliverDeadLetter(cmdArgs)
             case "redeliverAllDeadLetters" => CommandRunner.redeliverAllDeadLetters(cmdArgs)
-            case _ => println("unknown command: ${cmd}")
+            case _ => println("unknown command: ${cmd}"); false
         }
     }
 

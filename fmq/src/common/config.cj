@@ -152,9 +152,10 @@ public func readEnvList(key: String): ArrayList<String> {
 public func readEnvInt(key: String): ?Int64 {
     let raw = readEnv(key)
     if (let Some(v) <- raw) {
-        try {
-            Some(Int64.parse(v))
-        } catch (_: Exception) {
+        if (let Some(val) <- Int64.tryParse(v)) {
+            Some(val)
+        } else {
+            log.warn{"readEnvInt(${key}) parse failed for value '${v}'"}
             None
         }
     } else {

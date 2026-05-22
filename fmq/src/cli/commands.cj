@@ -21,8 +21,7 @@ import std.convert.*
 /**
  * 命令运行器。
  * 每个命令对应一个 static 方法，解析参数并输出结果。
- *
- * Phase 8 为骨架占位，真实操作将在后续阶段对接 MQ 节点。
+ * 所有命令返回 Bool 表示成功/失败。
  */
 public class CommandRunner {
     private static var cachedConfig: Option<MqConfig> = None
@@ -41,7 +40,7 @@ public class CommandRunner {
 
     // ───── 主题管理 ─────
 
-    public static func createTopic(args: Array<String>): Unit {
+    public static func createTopic(args: Array<String>): Bool {
         let name = getArg(args, "--name")
         let queues = getArg(args, "--queues")
         if (let Some(n) <- name) {
@@ -49,70 +48,82 @@ public class CommandRunner {
             var usingDefault = false
             if (let Some(s) <- queues) {
                 if (let Some(v) <- Int64.tryParse(s)) { q = v }
-                else { println("error: --queues must be a number, got '${s}'"); return }
+                else { println("error: --queues must be a number, got '${s}'"); return false }
             } else { usingDefault = true }
-            let client = if (let Some(c) <- getClient()) { c } else { return }
+            let client = if (let Some(c) <- getClient()) { c } else { return false }
             if (usingDefault) { println("using default queue count: 1") }
             if (client.createTopic(n, queueCount: q)) {
                 println("created topic '${n}' with ${q} queues")
+                true
             } else {
                 println("failed to create topic '${n}'")
+                false
             }
         } else {
             println("error: --name is required")
+            false
         }
     }
 
-    public static func deleteTopic(args: Array<String>): Unit {
+    public static func deleteTopic(args: Array<String>): Bool {
         let name = getArg(args, "--name")
         if (let Some(n) <- name) {
-            let client = if (let Some(c) <- getClient()) { c } else { return }
+            let client = if (let Some(c) <- getClient()) { c } else { return false }
             if (client.deleteTopic(n)) {
                 println("deleted topic '${n}'")
+                true
             } else {
                 println("failed to delete topic '${n}'")
+                false
             }
         } else {
             println("error: --name is required")
+            false
         }
     }
 
     // ───── 消费者组管理 ─────
 
-    public static func createConsumerGroup(args: Array<String>): Unit {
+    public static func createConsumerGroup(args: Array<String>): Bool {
         let name = getArg(args, "--name")
         let topic = getArg(args, "--topic")
         if (let Some(n) <- name && let Some(t) <- topic) {
-            let client = if (let Some(c) <- getClient()) { c } else { return }
+            let client = if (let Some(c) <- getClient()) { c } else { return false }
             if (client.addConsumerGroup(t, n)) {
                 println("created consumer group '${n}' for topic ${t}")
+                true
             } else {
                 println("failed to create consumer group '${n}'")
+                false
             }
         } else {
             println("error: --name and --topic are required")
+            false
         }
     }
 
-    public static func deleteConsumerGroup(args: Array<String>): Unit {
+    public static func deleteConsumerGroup(args: Array<String>): Bool {
         let name = getArg(args, "--name")
         let topic = getArg(args, "--topic")
         if (let Some(n) <- name && let Some(t) <- topic) {
-            let client = if (let Some(c) <- getClient()) { c } else { return }
+            let client = if (let Some(c) <- getClient()) { c } else { return false }
             if (client.removeConsumerGroup(t, n)) {
                 println("deleted consumer group '${n}' from topic ${t}")
+                true
             } else {
                 println("failed to delete consumer group '${n}'")
+                false
             }
         } else {
             println("error: --name and --topic are required")
+            false
         }
     }
 
     // ───── 列表查询 ─────
 
-    public static func listTopics(_: Array<String>): Unit {
-        let client = if (let Some(c) <- getClient()) { c } else { return }
+    public static func listTopics(_: Array<String>): Bool {
+        let client = if (let Some(c) <- getClient()) { c } else { return false }
         let topics = client.listTopics()
         if (topics.size == 0) {
             println("no topics")
@@ -122,14 +133,15 @@ public class CommandRunner {
                 println("  ${t}")
             }
         }
+        true
     }
 
-    public static func listConsumerGroups(_: Array<String>): Unit {
-        let client = if (let Some(c) <- getClient()) { c } else { return }
+    public static func listConsumerGroups(_: Array<String>): Bool {
+        let client = if (let Some(c) <- getClient()) { c } else { return false }
         let all = client.listAllConsumerGroups()
         if (all.size == 0) {
             println("no consumer groups")
-            return
+            return true
         }
         // 按 topic 分组输出
         var currentTopic: String = ""
@@ -140,12 +152,13 @@ public class CommandRunner {
             }
             println("    ${group}")
         }
+        true
     }
 
-    public static func listGroups(args: Array<String>): Unit {
+    public static func listGroups(args: Array<String>): Bool {
         let topic = getArg(args, "--topic")
         if (let Some(t) <- topic) {
-            let client = if (let Some(c) <- getClient()) { c } else { return }
+            let client = if (let Some(c) <- getClient()) { c } else { return false }
             let groups = client.listGroups(t)
             if (groups.size == 0) {
                 println("no groups for topic ${t}")
@@ -155,15 +168,17 @@ public class CommandRunner {
                     println("  ${g}")
                 }
             }
+            true
         } else {
             println("error: --topic is required")
+            false
         }
     }
 
-    public static func listConsumers(args: Array<String>): Unit {
+    public static func listConsumers(args: Array<String>): Bool {
         let topic = getArg(args, "--topic")
         if (let Some(t) <- topic) {
-            let client = if (let Some(c) <- getClient()) { c } else { return }
+            let client = if (let Some(c) <- getClient()) { c } else { return false }
             let consumers = client.listConsumers(t)
             if (consumers.size == 0) {
                 println("no online consumers for topic '${t}'")
@@ -173,73 +188,82 @@ public class CommandRunner {
                     println("  ${cid}  group=${gid}  match=${mode}")
                 }
             }
+            true
         } else {
             println("error: --topic is required")
+            false
         }
     }
 
     // ───── 运维操作 ─────
 
-    public static func resetOffset(args: Array<String>): Unit {
+    public static func resetOffset(args: Array<String>): Bool {
         let topic = getArg(args, "--topic")
         let group = getArg(args, "--group")
         let offset = getArg(args, "--offset")
         let queue = getArg(args, "--queue")
         if (let Some(t) <- topic && let Some(g) <- group && let Some(o) <- offset) {
-            let client = if (let Some(c) <- getClient()) { c } else { return }
+            let client = if (let Some(c) <- getClient()) { c } else { return false }
             if (let Some(v) <- Int64.tryParse(o)) {
                 var qi: Int64 = 0
                 if (let Some(qs) <- queue) {
                     if (let Some(qv) <- Int64.tryParse(qs)) { qi = qv }
-                    else { println("error: --queue must be a number, got '${qs}'"); return }
+                    else { println("error: --queue must be a number, got '${qs}'"); return false }
                 }
                 if (client.resetOffset(t, g, v, queueIndex: qi)) {
                     println("reset offset ${t}/${g} => ${v} (queue=${qi})")
+                    true
                 } else {
                     println("failed to reset offset")
+                    false
                 }
             } else {
                 println("error: --offset must be a number, got '${o}'")
+                false
             }
         } else {
             println("error: --topic, --group, --offset are required")
+            false
         }
     }
 
-    public static func showTopic(args: Array<String>): Unit {
+    public static func showTopic(args: Array<String>): Bool {
         let name = getArg(args, "--name")
         if (let Some(n) <- name) {
-            let client = if (let Some(c) <- getClient()) { c } else { return }
+            let client = if (let Some(c) <- getClient()) { c } else { return false }
             if (let Some(info) <- client.showTopic(n)) {
                 println("topic '${n}':")
                 println("  ${info}")
+                true
             } else {
                 println("topic '${n}' not found")
+                false
             }
         } else {
             println("error: --name is required")
+            false
         }
     }
 
     /**
      * 显示当前 MQ 集群节点信息。
-     * @return Unit
      */
-    public static func showBrokers(_: Array<String>): Unit {
+    public static func showBrokers(_: Array<String>): Bool {
         let config = getOrLoadConfig()
         println("mq_hosts: ${config.mqHosts}")
         println("sync_hosts: ${config.syncHosts}")
+        true
     }
 
     // ───── 死信管理 ─────
 
-    public static func listDeadLetters(args: Array<String>): Unit {
+    public static func listDeadLetters(args: Array<String>): Bool {
         let topic = getArg(args, "--topic")
         let queue = getArg(args, "--queue")
         if (let Some(t) <- topic && let Some(q) <- queue) {
             let qi = if (let Some(v) <- Int64.tryParse(q)) { v }
-                else { println("error: --queue must be a number, got '${q}'"); return }
-            let client = if (let Some(c) <- getClient()) { c } else { return }
+                else { println("error: --queue must be a number, got '${q}'"); return false }
+            let client = if (let Some(c) <- getClient()) { c } else { return false }
             let entries = client.listDeadLetters(t, qi)
             if (entries.size == 0) {
                 println("no dead letters for ${t}[${q}]")
@@ -249,43 +273,51 @@ public class CommandRunner {
                     println("  ${msgId} (${data.size} bytes)")
                 }
             }
+            true
         } else {
             println("error: --topic and --queue are required")
+            false
         }
     }
 
-    public static func redeliverDeadLetter(args: Array<String>): Unit {
+    public static func redeliverDeadLetter(args: Array<String>): Bool {
         let topic = getArg(args, "--topic")
         let queue = getArg(args, "--queue")
         let msgId = getArg(args, "--messageId")
         if (let Some(t) <- topic && let Some(q) <- queue && let Some(m) <- msgId) {
             let qi = if (let Some(v) <- Int64.tryParse(q)) { v }
-                else { println("error: --queue must be a number, got '${q}'"); return }
-            let client = if (let Some(c) <- getClient()) { c } else { return }
+                else { println("error: --queue must be a number, got '${q}'"); return false }
+            let client = if (let Some(c) <- getClient()) { c } else { return false }
             if (client.redeliverDeadLetter(t, qi, m)) {
                 println("redelivered ${m} from ${t}[${q}]")
+                true
             } else {
                 println("failed to redeliver ${m}")
+                false
             }
         } else {
             println("error: --topic, --queue, --messageId are required")
+            false
         }
     }
 
-    public static func redeliverAllDeadLetters(args: Array<String>): Unit {
+    public static func redeliverAllDeadLetters(args: Array<String>): Bool {
         let topic = getArg(args, "--topic")
         let queue = getArg(args, "--queue")
         if (let Some(t) <- topic && let Some(q) <- queue) {
             let qi = if (let Some(v) <- Int64.tryParse(q)) { v }
-                else { println("error: --queue must be a number, got '${q}'"); return }
-            let client = if (let Some(c) <- getClient()) { c } else { return }
+                else { println("error: --queue must be a number, got '${q}'"); return false }
+            let client = if (let Some(c) <- getClient()) { c } else { return false }
             if (client.redeliverAllDeadLetters(t, qi)) {
                 println("redelivered all from ${t}[${q}]")
+                true
             } else {
                 println("failed to redeliver all from ${t}[${q}]")
+                false
             }
         } else {
             println("error: --topic and --queue are required")
+            false
         }
     }
 

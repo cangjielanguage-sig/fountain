@@ -34,13 +34,26 @@ public class QueueCleaner {
     private let closed = AtomicBool(false)
     private var topicCursor: Int64 = 0
     private var queueCursor: Int64 = 0
+    private var runFuture: ?Future<Unit> = None
 
     public init(config: MqConfig, queueManager: QueueManager) {
         this.config = config
         this.queueManager = queueManager
     }
 
-    public func close(): Unit { closed.store(true) }
+    /**
+     * 记录 spawn Future，供 close() 中 join 等待线程退出。
+     */
+    public func setRunFuture(f: Future<Unit>): Unit {
+        runFuture = Some(f)
+    }
+
+    public func close(): Unit {
+        closed.store(true)
+        if (let Some(f) <- runFuture) {
+            try { f.get() } catch (_: Exception) {}
+        }
+    }
 
     /**
      * 后台线程主循环。

@@ -200,4 +200,11 @@ public class DeadLetterStore {
             .finish().copy(to: buf, closeFromOnEnd: true, closeToOnEnd: false)
         extractBytes(buf)
     }
+
+    /**
+     * 关闭 SegmentedLog，释放文件描述符。
+     */
+    public func close(): Unit {
+        dlqLog.close()
+    }
 }

@@ -122,6 +122,7 @@ public class MqQueue <: Resource & ToString {
             }
             log.close()  // 在 streamLock 内关闭，防止 use-after-close 竞争
         }
+        deadLetter.close()
     }
 
     public func isClosed(): Bool { closed.load() }
