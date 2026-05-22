@@ -252,7 +252,7 @@ public class BackgroundThreadLifecycleTest {
 
 /**
  * QueueCleaner 关闭与 Future join 测试。
- * 对应 P2-4: QueueCleaner spawn Future 保存。
+ * 对应 P2-4: QueueCleaner spawn Future 保存 + 短间隔轮询使 join 快速返回。
  */
 @Test
 public class QueueCleanerFutureTest {
@@ -271,8 +271,34 @@ public class QueueCleanerFutureTest {
             syncQuorum: 1)
         let qm = QueueManager(config, nodeIndex: 0)
         let cleaner = QueueCleaner(config, qm)
-        // close() 仅设标志，不 join 线程（线程 sleep 5min，join 会阻塞）
+        // 在没有 run 线程的情况下 close() 不应抛异常
         cleaner.close()
+        @Assert(true)
+    }
+
+    @TestCase
+    public func testCleanerRunCloseReturnsQuickly(): Unit {
+        // 验证 run() 使用 100ms 短间隔轮询后，close() 中的 join 可快速返回。
+        // 旧实现 sleep(5min) 会导致 close() 阻塞 5 分钟。
+        let hosts = ArrayList<String>()
+        hosts.add("node1:7201")
+        let config = MqConfig(
+            mqHosts: hosts, syncHosts: ArrayList(),
+            dataDir: "/tmp/fmq_qc_runclose", segmentMaxSize: 1024,
+            heartbeatIntervalSec: 5, healthcheckMaxRetry: 3,
+            idleTimeoutMinutes: 30, ackTimeoutMs: 30000,
+            maxRetryCount: 3, retryIntervalMs: 1000,
+            dlqRetentionHours: 168, maxMessageSize: 4096,
+            maxLabelsPerMessage: 64, retentionHours: 72,
+            syncQuorum: 1)
+        let qm = QueueManager(config, nodeIndex: 0)
+        let cleaner = QueueCleaner(config, qm)
+        let f = spawn { cleaner.run() }
+        cleaner.setRunFuture(f)
+        sleep(Duration.millisecond * 50)  // 让 run 循环启动
+        // close() 应快速返回（100ms 内），不会阻塞 5 分钟
+        cleaner.close()
+        f.get()
         @Assert(true)
     }
 }

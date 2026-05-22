@@ -17,7 +17,7 @@ package fountain::fmq.server
 
 import std.unittest.*
 import std.unittest.testmacro.*
-import fountain::f_protocol.default.{Message as ProtocolMessage, MessageID, Command}
+import fountain::f_protocol.default.{Message as ProtocolMessage, MessageID, Command, VOTE, APPROVE}
 import fountain::f_codec.default.DefaultCodec
 import std.io.{ByteBuffer, SeekPosition}
 
@@ -581,6 +581,34 @@ public class CommandExecutorTest {
         let req = ProtocolMessage(Command.SLAVEOF(1), MessageID(),
             MqBody("slaveof", enc(["node2:7201"])).toData())
         @Assert(isResp(ex.execute(req)))
+    }
+
+    // ── 选举 ──
+
+    @TestCase
+    public func testElectionMasterRejectsVote(): Unit {
+        // P3-6: Master 节点收到 VOTE 请求返回 error，阻止 split-brain
+        let ex = makeExecutor()
+        ex.replicationManager.promoteToMaster()
+        let req = ProtocolMessage(Command.ELECT(VOTE), MessageID(),
+            DataNone.INSTANCE.toData())
+        let resp = ex.execute(req)
+        @Assert(isResp(resp))
+        if (let Some(body) <- convert<MqBody>(resp.data)) {
+            @Assert(body.bodyType == "error")
+        }
+    }
+
+    @TestCase
+    public func testElectionSlaveAcceptsVote(): Unit {
+        // P3-6: Slave 节点收到 VOTE 请求应 approve（在位选上设置 APPROVE 位）
+        let ex = makeExecutor()
+        // ReplicationManager 默认为 slave
+        let req = ProtocolMessage(Command.ELECT(VOTE), MessageID(),
+            DataNone.INSTANCE.toData())
+        let resp = ex.execute(req)
+        // Slave 的 VOTE 响应应包含 APPROVE 位（0x04），非 error RESP
+        @Assert((resp.command.value & APPROVE) != 0u8)
     }
 
     // ── 生产+消费集成 ──
