@@ -55,8 +55,9 @@ public class BackgroundThreadTest {
     }
 
     @TestCase
-    public func testIsFileExpiredNonExistentReturnsTrue(): Unit {
-        @Assert(QueueCleaner.isFileExpired("/nonexistent/test.log", DateTime.now()))
+    public func testIsFileExpiredNonExistentReturnsFalse(): Unit {
+        // 文件不存在时返回 false（无物可删，P3-7 安全回退）
+        @Assert(!QueueCleaner.isFileExpired("/nonexistent/test.log", DateTime.now()))
     }
 
     @TestCase

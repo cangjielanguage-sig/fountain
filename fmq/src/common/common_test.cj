@@ -357,3 +357,22 @@ public class ConfigTest {
         @Assert(Int64.tryParse("123abc").isNone())
     }
 }
+
+// ── BrokerMeta getter 测试（P3-5）──
+
+@Test
+public class BrokerMetaGettersTest {
+    @TestCase
+    public func testBrokerMetaAccessors(): Unit {
+        let queues = ArrayList<String>()
+        queues.add("/test/queue-0")
+        let bm = BrokerMeta()
+        // 通过 @DataAssist 设置字段后验证 getter
+        // @DataAssist 的 DefaultCodec 编码/解码时会调用 getter
+        @Assert(bm.getNodeId() == "")
+        @Assert(bm.getHost() == "")
+        @Assert(bm.getPort() == 0)
+        @Assert(!bm.isMasterNode())
+        @Assert(bm.getQueues().size == 0)
+    }
+}
