@@ -91,6 +91,8 @@ public class QueueWriter {
         }
     }
 
+    public func isClosed(): Bool { closed.load() }
+
     /**
      * 同步 message 到所有已注册的从节点。
      * 将 sync entry 入队，由专用 sync 线程异步处理，不阻塞主写循环。
