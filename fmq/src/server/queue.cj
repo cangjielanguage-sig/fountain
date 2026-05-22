@@ -74,13 +74,18 @@ public class MqQueue <: Resource & ToString {
      * @param skip 跳过的已消费消息数（offset），首次读取时用于跳过历史消息
      */
     public func tryReadFromLog(skip: Int64): ?Array<Byte> {
-        if (closed.load()) { return None }
-        try {
-            let dec = DefaultCodec()
-            let stream: InputStream
-            synchronized(streamLock) {
+        synchronized(streamLock) {
+            if (closed.load()) { return None }
+            try {
+                let dec = DefaultCodec()
                 if (let Some(s) <- logStream) {
-                    stream = s
+                    if (let Some(entry) <- dec.decode<Array<Byte>>(s)) {
+                        Some(entry)
+                    } else {
+                        if (let r: Resource <- s) { r.close() }
+                        logStream = None
+                        None
+                    }
                 } else {
                     let s = log.openEntryStream()
                     var remaining = skip
@@ -88,28 +93,21 @@ public class MqQueue <: Resource & ToString {
                         if (dec.decode<Array<Byte>>(s).isNone()) { break }
                         remaining -= 1
                     }
-                    logStream = s
-                    stream = s
+                    if (let Some(entry) <- dec.decode<Array<Byte>>(s)) {
+                        logStream = s
+                        Some(entry)
+                    } else {
+                        if (let r: Resource <- s) { r.close() }
+                        None
+                    }
                 }
-            }
-            if (let Some(entry) <- dec.decode<Array<Byte>>(stream)) {
-                Some(entry)
-            } else {
-                synchronized(streamLock) {
-                    if (let r: Resource <- stream) { r.close() }
-                    logStream = None
-                }
-                None
-            }
-        } catch (_: Exception) {
-            // P1-8: 异常时清理损坏的流，防止无限重试循环
-            synchronized(streamLock) {
+            } catch (_: Exception) {
                 if (let Some(s) <- logStream) {
                     if (let r: Resource <- s) { r.close() }
                     logStream = None
                 }
+                None
             }
-            None
         }
     }
 
