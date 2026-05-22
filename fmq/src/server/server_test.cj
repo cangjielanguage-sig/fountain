@@ -1101,3 +1101,18 @@ public class ConsumerMatcherRefreshTest {
     }
 }
 
+/**
+ * DeadLetterStore close 测试。
+ * 对应 P2-3: SegmentedLog FD 泄漏修复。
+ */
+@Test
+public class DeadLetterStoreCloseTest {
+    @TestCase
+    public func testCloseTwiceDoesNotThrow(): Unit {
+        let ds = DeadLetterStore("/tmp/fmq_dlq_close_test")
+        ds.close()
+        ds.close()
+        @Assert(true)
+    }
+}
+

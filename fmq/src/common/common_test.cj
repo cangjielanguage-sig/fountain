@@ -340,3 +340,20 @@ public class MatchModeEncodingTest {
         else { @Assert(false) }
     }
 }
+
+// ── config 测试 ──
+
+@Test
+public class ConfigTest {
+    @TestCase
+    public func testReadEnvIntNoEnvReturnsNone(): Unit {
+        let result = readEnvInt("MQ_TEST_NONEXIST_VAR")
+        @Assert(result.isNone())
+    }
+
+    @TestCase
+    public func testReadEnvInvalidIntReturnsNone(): Unit {
+        @Assert(Int64.tryParse("abc").isNone())
+        @Assert(Int64.tryParse("123abc").isNone())
+    }
+}

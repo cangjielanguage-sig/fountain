@@ -248,3 +248,31 @@ public class BackgroundThreadLifecycleTest {
         } catch (_: Exception) {}
     }
 }
+
+/**
+ * QueueCleaner 关闭与 Future join 测试。
+ * 对应 P2-4: QueueCleaner spawn Future 保存。
+ */
+@Test
+public class QueueCleanerFutureTest {
+    @TestCase
+    public func testCloseWithSetFutureDoesNotBlock(): Unit {
+        let hosts = ArrayList<String>()
+        hosts.add("node1:7201")
+        let config = MqConfig(
+            mqHosts: hosts, syncHosts: ArrayList(),
+            dataDir: "/tmp/fmq_qc_future", segmentMaxSize: 1024,
+            heartbeatIntervalSec: 5, healthcheckMaxRetry: 3,
+            idleTimeoutMinutes: 30, ackTimeoutMs: 30000,
+            maxRetryCount: 3, retryIntervalMs: 1000,
+            dlqRetentionHours: 168, maxMessageSize: 4096,
+            maxLabelsPerMessage: 64, retentionHours: 72,
+            syncQuorum: 1)
+        let qm = QueueManager(config, nodeIndex: 0)
+        let cleaner = QueueCleaner(config, qm)
+        let f = spawn { cleaner.run() }
+        cleaner.setRunFuture(f)
+        cleaner.close()
+        @Assert(true)
+    }
+}
