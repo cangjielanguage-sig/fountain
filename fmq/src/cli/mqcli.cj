@@ -48,11 +48,7 @@ public class MqCliCommand <: SubCommand {
     private func runInteractive(): Unit {
         println("MQ CLI (type 'help' for commands, empty line to exit)")
         println()
-        // Phase 7: 简化实现 — 提示单次模式用法
-        println("For interactive use, run commands directly:")
-        println("  fboot mqcli listTopics")
-        println("  fboot mqcli createTopic --name /test")
-        println("  fboot mqcli help")
+        printHelp()
     }
 
     /**
@@ -77,7 +73,7 @@ public class MqCliCommand <: SubCommand {
             case "listDeadLetters" => CommandRunner.listDeadLetters(cmdArgs)
             case "redeliverDeadLetter" => CommandRunner.redeliverDeadLetter(cmdArgs)
             case "redeliverAllDeadLetters" => CommandRunner.redeliverAllDeadLetters(cmdArgs)
-            case _ => println("unknown command: ${cmd}"); false
+            case _ => println("unknown command: ${cmd}. Try 'fboot mqcli help'"); false
         }
     }
 
@@ -94,7 +90,7 @@ public class MqCliCommand <: SubCommand {
         println("  listConsumerGroups")
         println("  listGroups --topic <topic>")
         println("  listConsumers --topic <topic>")
-        println("  resetOffset --topic <t> --group <g> --offset <N>")
+        println("  resetOffset --topic <t> --group <g> --offset <N> [--queue <N>]")
         println("  showTopic --name <topic>")
         println("  showBrokers")
         println("  listDeadLetters --topic <t> --queue <q>")

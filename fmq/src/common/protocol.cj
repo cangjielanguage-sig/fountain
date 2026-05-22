@@ -34,14 +34,12 @@ public func encodePing(): EncodedMessage {
 
 /**
  * 编码 PUBLISH 消息。
+ * 复用 ProduceCodec.encode() 避免编码逻辑重复。
  */
 public func encodePublish(topic: String, labels: ArrayList<String>, payload: Array<Byte>): ProtocolMessage {
-    let buf = ByteBuffer()
-    let enc = DefaultCodec().encode(topic).encode(labels.size)
-    for (l in labels) { enc.encode(l) }
-    enc.encode(payload).finish().copy(to: buf, closeFromOnEnd: true, closeToOnEnd: false)
+    let raw = ProduceCodec.encode(topic, labels, payload)
     ProtocolMessage(Command.PUBLISH(0), MessageID(),  // 0: sequence number, reserved for pipeline support
-        MqBody("produce", extractBytes(buf)).toData())
+        MqBody("produce", raw).toData())
 }
 
 /**

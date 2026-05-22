@@ -15,7 +15,6 @@ limitations under the License.
  */
 package fountain::fmq.cli
 
-import std.collection.ArrayList
 import std.convert.*
 
 /**
