@@ -115,13 +115,10 @@ public class MqQueue <: Resource & ToString {
         if (closed.load()) { return }
         closed.store(true)
         draining.store(false)
-        synchronized(streamLock) {
-            if (let Some(s) <- logStream) {
-                if (let r: Resource <- s) { r.close() }
-                logStream = None
-            }
-            log.close()  // 在 streamLock 内关闭，防止 use-after-close 竞争
-        }
+        // 直接关闭 SegmentedLog 和 DeadLetterStore，不尝试获取 streamLock。
+        // 如果 reader 线程正阻塞在 openEntryStream()/decode() 中并持有 streamLock，
+        // close 必须先设置 closed 标志并关闭底层资源，让 reader 线程在 I/O 失败后自行释放锁并退出。
+        log.close()
         deadLetter.close()
     }
 
