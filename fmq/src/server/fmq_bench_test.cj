@@ -95,7 +95,9 @@ public class MatchBench {
             }
             let reg = ConsumerRegistration(
                 consumerId: "bench-${i}", groupId: "group-${i % 10}",
-                matchModeStr: modeStr)
+                matchModeStr: modeStr,
+                labels: None, dataFilter: None,
+                lastHeartbeat: DateTime.now())
             matcher.register(reg)
         }
     }
