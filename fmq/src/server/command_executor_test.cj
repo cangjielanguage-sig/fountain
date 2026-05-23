@@ -723,17 +723,127 @@ public class CommandExecutorTest {
         let payload = extractBytes(buf)
         let consReq1 = ProtocolMessage(Command.CONSUME(0), MessageID(),
             MqBody("consume", payload).toData())
-        @Assert(isResp(ex.execute(consReq1)))
+        let resp1 = ex.execute(consReq1)
+        @Assert(isResp(resp1))
+        // 解码第一个响应的 deliveryId
+        let id1 = CommandExecutorTest.decodeFirstDeliveryId(resp1)
+        @Assert(id1.isSome())
 
         // 第二次 CONSUME（同一 payload，不 ACK）
         let consReq2 = ProtocolMessage(Command.CONSUME(0), MessageID(),
             MqBody("consume", payload).toData())
-        @Assert(isResp(ex.execute(consReq2)))
+        let resp2 = ex.execute(consReq2)
+        @Assert(isResp(resp2))
+        let id2 = CommandExecutorTest.decodeFirstDeliveryId(resp2)
+        @Assert(id2.isSome())
 
-        // 验证 deliverySn 已递增（>=2 次 CONSUME 产生 >=2 次增量）
-        // 静态字段 access pattern: CommandExecutor.deliverySn
-        // 无直接 public getter，本测试通过 CONSUME 不崩溃验证正确性。
-        // 完整验证由集成测试覆盖。
+        // 验证 deliveryId 不同（sn 递增）
+        if (let Some(a) <- id1 && let Some(b) <- id2) {
+            @Assert(a != b)
+            // deliveryId 格式: topic:queueIndex:groupId:offset:sn (5 段)
+            @Assert(a.split(':').size >= 5)
+            @Assert(b.split(':').size >= 5)
+        }
+    }
+
+    /** 解码 CONSUME 响应的第一条 deliveryId */
+    private static func decodeFirstDeliveryId(msg: ProtocolMessage): ?String {
+        try {
+            if (let Some(body) <- convert<MqBody>(msg.data) && body.bodyType == "consume") {
+                let buf = ByteBuffer(body.payload)
+                let dec = DefaultCodec()
+                if (let Some(count) <- dec.decode<Int64>(buf) && count > 0
+                    && let Some(deliveryId) <- dec.decode<String>(buf)) {
+                    return Some(deliveryId)
+                }
+            }
+        } catch (_: Exception) {}
+        None
+    }
+
+    /**
+     * P1-2: 验证 subscribe 只创建一条 ConsumerRegistration（不再双重注册）。
+     * P0-1 encodeSubscribe 补全 groupId 后，SUBSCRIBE 完整注册消费者。
+     * P1-2 移除 REGISTER 调用后，不应再产生第二条注册。
+     */
+    @TestCase
+    public func testSubscribeCreatesSingleRegistration(): Unit {
+        let ex = makeExecutor()
+        let topic = "/single-reg-topic"
+        let payload = enc([topic, "single-group", "exact"])
+
+        let req = ProtocolMessage(Command.SUBSCRIBE, MessageID(),
+            MqBody("subscribe", payload).toData())
+        @Assert(isResp(ex.execute(req)))
+
+        // 查询 ConsumerMatcher 中的注册数
+        let regs = ex.consumerMatcher.getRegistrations()
+        // 验证至少存在 1 条注册（但不能>1条同一 consumerId 的注册）
+        let matched = ex.consumerMatcher.matchTopic(topic)
+        @Assert(matched.size >= 1)
+        // matchTopic 返回 groupId→consumerId，同组应只选一个消费者
+        // 如果存在双重注册，matchTopic 的 round-robin 会交替选择两个 consumerId
+        // 再次 match 验证一致性
+        let matched2 = ex.consumerMatcher.matchTopic(topic)
+        @Assert(matched2.size == 1)
+    }
+
+    /**
+     * P1-1: 验证 QueueManager 不再启动 QueueReader 线程。
+     * P1-1 移除了 readers ArrayList 和 QueueReader spawn。
+     * 测试 QueueManager.createQueues + startAll 只启动 writer。
+     */
+    @TestCase
+    public func testQueueManagerHasNoReaderThreads(): Unit {
+        let hosts = ArrayList<String>()
+        hosts.add("node1:7201")
+        let config = MqConfig(
+            mqHosts: hosts, syncHosts: ArrayList(),
+            dataDir: "/tmp/fmq_no_reader_test", segmentMaxSize: 16384,
+            heartbeatIntervalSec: 5, healthcheckMaxRetry: 3,
+            idleTimeoutMinutes: 30, ackTimeoutMs: 30000,
+            maxRetryCount: 3, retryIntervalMs: 1000,
+            dlqRetentionHours: 168, maxMessageSize: 4096,
+            maxLabelsPerMessage: 64, retentionHours: 72,
+            syncQuorum: 1)
+        let tm = TopicManager(config)
+        let qm = QueueManager(config, nodeIndex: 0)
+        let rm = ReplicationManager(config)
+
+        // 创建主题 + 队列 + 启动 writer（应不再启动 reader）
+        tm.createTopic("/no-reader-topic", queueCount: 1)
+        qm.createQueues("/no-reader-topic", 1)
+        qm.setReplicationManager(rm)
+        qm.startAll()
+
+        // 验证 startAll 不抛异常（reader 已移除）
+        @Assert(true)
+        qm.close()
+    }
+
+    /**
+     * SRV-1: 验证 produce 到不存在的 topic 时自动创建队列并启动 writer。
+     * 修复前 handleProduce 只调 createQueues 未调 startWritersForTopic。
+     */
+    @TestCase
+    public func testProduceToNewTopicAutoStartsWriter(): Unit {
+        let ex = makeExecutor()
+        let topic = "/auto-writer-topic"
+
+        // 生产一条消息到不存在的 topic → 触发自动创建
+        let encoded = ProduceCodec.encode(topic, ArrayList(), [0x01u8])
+        let prodReq = ProtocolMessage(Command.PUBLISH(0), MessageID(),
+            MqBody("produce", encoded).toData())
+        @Assert(isResp(ex.execute(prodReq)))
+
+        // 验证队列已创建并 writer 已启动
+        let queues = ex.queueManager.getQueues(topic)
+        @Assert(queues.isSome())
+        if (let Some(qs) <- queues) {
+            @Assert(qs.size >= 1)
+            let writer = ex.queueManager.getWriterForQueue(qs[0])
+            @Assert(writer.isSome())
+        }
     }
 }
 

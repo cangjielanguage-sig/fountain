@@ -59,7 +59,7 @@ public class DeadLetterStore {
         // 编码 metadata + data 到单条 entry
         let entry = encodeDlqEntry(messageId, topic, queueIndex, data)
         dlqLog.append(entry)
-        let count = unsyncedCount.addGet(1)
+        let count = unsyncedCount.fetchAdd(1) + 1
         if (count >= syncBatchSize) {
             dlqLog.sync()
             unsyncedCount.store(0)
