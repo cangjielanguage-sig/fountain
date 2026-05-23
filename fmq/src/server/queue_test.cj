@@ -101,7 +101,7 @@ public class MqQueueReadTest {
         q.append([0x01u8])
         q.sync()
 
-        // 并发读写
+        // 并发读写：验证 close 不导致 SIGSEGV
         let f1 = spawn { q.tryReadFromLog(0) }
         let f2 = spawn { q.close() }
         f1.get()
@@ -109,6 +109,23 @@ public class MqQueueReadTest {
         // 不抛异常就算通过
         @Assert(q.isClosed())
         cleanupDir("/tmp/fmqq_f")
+    }
+
+    @TestCase
+    public func testConcurrentReadAndCloseStress(): Unit {
+        // 压力测试：20轮并发读写+关闭，验证修复后无竞态崩溃
+        for (i in 0..20) {
+            let dir = "/tmp/fmqq_stress_${i}"
+            let q = MqQueue("/stress", 0, dir, 4096)
+            q.append([0x01u8])
+            q.sync()
+            let f1 = spawn { q.tryReadFromLog(0) }
+            let f2 = spawn { q.close() }
+            f1.get()
+            f2.get()
+            @Assert(q.isClosed())
+            cleanupDir(dir)
+        }
     }
 
     @TestCase
