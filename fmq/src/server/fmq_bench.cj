@@ -86,15 +86,22 @@ public class MatchBench {
     private let matcher = ConsumerMatcher()
 
     public init() {
-        // 注册 50 个消费者
+        // 注册 50 个不同消费者，交替使用 Exact/Glob/Prefix 模式
         for (i in 0..50) {
-            let reg = ConsumerRegistration()
+            let modeStr = match (i % 3) {
+                case 0 => "Exact:/api/v${i}"
+                case 1 => "Glob:/api/*"
+                case _ => "Prefix:/order/"
+            }
+            let reg = ConsumerRegistration(
+                consumerId: "bench-${i}", groupId: "group-${i % 10}",
+                matchModeStr: modeStr)
             matcher.register(reg)
         }
     }
 
     @Bench
     public func benchMatch(): Unit {
-        let _ = matcher.matchTopic("/bench/topic")
+        let _ = matcher.matchTopic("/api/v1")
     }
 }
