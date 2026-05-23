@@ -21,6 +21,7 @@ package fountain::fmq.common
  * - 以 '/' 开头
  * - 非空
  * - 不含除字母、数字、'_'、'/'、'-'、'.' 之外的字符
+ * 注意：连续斜线（如 '//'）是允许的，仅作分层分隔。
  */
 public func validateTopic(topic: String): Bool {
     if (topic.isEmpty()) { return false }

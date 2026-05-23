@@ -86,12 +86,12 @@ public func encodeAck(msgId: String, topic: String, queueIndex: Int64): Protocol
 public func extractBytes(buf: ByteBuffer): Array<Byte> {
     let size = buf.seek(SeekPosition.End(0))
     buf.seek(SeekPosition.Begin(0))
-    let raw = Array<Byte>(Int64(size), repeat: 0u8)
+    let raw = Array<Byte>(size, repeat: 0u8)
     let bytesRead = buf.read(raw)
     if (bytesRead == size) {
         raw
     } else {
-        raw[0..Int64(bytesRead)]
+        raw[0..bytesRead]
     }
 }
 

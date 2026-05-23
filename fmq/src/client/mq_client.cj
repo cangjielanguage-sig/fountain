@@ -19,6 +19,7 @@ import fountain::f_protocol.default.{Message as ProtocolMessage, EncodedMessage}
 import fountain::f_codec.default.DefaultCodec
 import std.collection.ArrayList
 import std.io.{ByteBuffer, SeekPosition}
+import std.convert.*
 import std.sync.{Mutex, AtomicBool}
 
 /**
@@ -68,7 +69,9 @@ public class MqClient <: Resource {
                 queueSize: 1024,
                 socketCount: 1,
                 host: parts[0],
-                port: UInt16.parse(parts[1]),
+                port: if (let Some(p) <- UInt16.tryParse(parts[1])) { p } else {
+                    throw MqException("invalid port: ${parts[1]}")
+                },
                 idGetter: { msg => msg.id },
                 checkDuration: Duration.second * 30,
                 checker: { buffer => true }

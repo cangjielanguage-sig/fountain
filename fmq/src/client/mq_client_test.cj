@@ -45,7 +45,7 @@ public class MqClientProtocolTest {
 
     private static func encodeGroupOpPayload(op: String, topic: String, group: String, off: Int64): Array<Byte> {
         let buf = ByteBuffer()
-        DefaultCodec().encode(op).encode(topic).encode(group).encode(off)
+        DefaultCodec().encode(op).encode(topic).encode(group).encode(off).encode(0i64)
             .finish().copy(to: buf, closeFromOnEnd: true, closeToOnEnd: false)
         extractBytes(buf)
     }

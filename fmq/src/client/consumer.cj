@@ -56,7 +56,7 @@ public class Consumer {
             if (let Some(body) <- convert<MqBody>(r.data)) {
                 if (body.bodyType == "batch_consume") {
                     let perTopic = Consumer.decodeBatchConsumeResponse(body.payload)
-                    for ((groupId, topic, dataFilter) in subs) {
+                    for ((groupId, topic, dataFilter, _) in subs) {
                         if (let Some(msgs) <- perTopic.get(topic)) {
                             for ((deliveryId, labels, payload) in msgs) {
                                 if (dataFilter != "" && !Consumer.dataFilterMatch(dataFilter, payload)) {
@@ -153,10 +153,10 @@ public class Consumer {
         extractBytes(buf)
     }
 
-    internal static func encodeBatchConsumePayload(subs: ArrayList<(String, String, String)>): Array<Byte> {
+    internal static func encodeBatchConsumePayload(subs: ArrayList<(String, String, String, String)>): Array<Byte> {
         let buf = ByteBuffer()
         let enc = DefaultCodec().encode(subs.size)
-        for ((groupId, topic, _) in subs) {
+        for ((groupId, topic, _, _) in subs) {
             enc.encode(topic).encode(groupId).encode(1i64)  // batchSize=1 per topic
         }
         enc.finish().copy(to: buf, closeFromOnEnd: true, closeToOnEnd: false)
@@ -203,12 +203,16 @@ public class Consumer {
                     if (let Some(deliveryId) <- dec.decode<String>(buf)
                         && let Some(labelCount) <- dec.decode<Int64>(buf)) {
                         let labels = ArrayList<String>()
+                        var corrupted = false
                         for (_ in 0..labelCount) {
                             if (let Some(l) <- dec.decode<String>(buf)) {
                                 labels.add(l)
-                            } else { break }
+                            } else {
+                                corrupted = true
+                                break
+                            }
                         }
-                        if (let Some(payload) <- dec.decode<Array<Byte>>(buf)) {
+                        if (!corrupted && let Some(payload) <- dec.decode<Array<Byte>>(buf)) {
                             result.add((deliveryId, labels, payload))
                         }
                     }
@@ -240,10 +244,15 @@ public class Consumer {
                             if (let Some(deliveryId) <- dec.decode<String>(buf)
                                 && let Some(labelCount) <- dec.decode<Int64>(buf)) {
                                 let labels = ArrayList<String>()
+                                var corrupted = false
                                 for (_ in 0..labelCount) {
                                     if (let Some(l) <- dec.decode<String>(buf)) { labels.add(l) }
+                                    else {
+                                        corrupted = true
+                                        break
+                                    }
                                 }
-                                if (let Some(payload) <- dec.decode<Array<Byte>>(buf)) {
+                                if (!corrupted && let Some(payload) <- dec.decode<Array<Byte>>(buf)) {
                                     msgs.add((deliveryId, labels, payload))
                                 }
                             }

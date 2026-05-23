@@ -15,6 +15,7 @@ limitations under the License.
  */
 package fountain::fmq.cli
 
+import std.collection.*
 import std.convert.*
 
 /**
@@ -33,6 +34,10 @@ public class CommandRunner {
             if (args[i] == flag && i + 1 < args.size) {
                 return Some(args[i + 1])
             }
+            let prefix = flag + "="
+            if (args[i].startsWith(prefix)) {
+                return Some(args[i][prefix.size..])
+            }
         }
         None
     }
@@ -43,6 +48,14 @@ public class CommandRunner {
         let name = getArg(args, "--name")
         let queues = getArg(args, "--queues")
         if (let Some(n) <- name) {
+            if (n.isEmpty()) {
+                println("error: --name must not be empty")
+                return false
+            }
+            if (!n.startsWith("/")) {
+                println("error: --name must start with '/'")
+                return false
+            }
             var q: Int64 = 1
             var usingDefault = false
             if (let Some(s) <- queues) {
@@ -142,14 +155,19 @@ public class CommandRunner {
             println("no consumer groups")
             return true
         }
-        // 按 topic 分组输出
-        var currentTopic: String = ""
+        // 按 topic 分组输出（使用 HashMap 确保不依赖迭代顺序）
+        var groupsByTopic = HashMap<String, ArrayList<String>>()
         for ((topic, group) in all) {
-            if (topic != currentTopic) {
-                currentTopic = topic
-                println("  ${topic}:")
+            if (!groupsByTopic.contains(topic)) {
+                groupsByTopic[topic] = ArrayList<String>()
             }
-            println("    ${group}")
+            groupsByTopic[topic].add(group)
+        }
+        for ((topic, groups) in groupsByTopic) {
+            println("  ${topic}:")
+            for (g in groups) {
+                println("    ${g}")
+            }
         }
         true
     }
@@ -248,6 +266,8 @@ public class CommandRunner {
      * 显示当前 MQ 集群节点信息。
      */
     public static func showBrokers(_: Array<String>): Bool {
+        // 通过 getClient() 验证连接可用性
+        if (getClient().isNone()) { return false }
         let config = getOrLoadConfig()
         println("mq_hosts: ${config.mqHosts}")
         println("sync_hosts: ${config.syncHosts}")

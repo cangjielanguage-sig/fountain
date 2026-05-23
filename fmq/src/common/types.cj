@@ -79,6 +79,14 @@ public class ConsumerRegistration {
 
     public func getGroupId(): String { groupId }
 
+    public func getLabels(): ?ArrayList<String> {
+        if (let Some(ls) <- this.labels) {
+            let copy = ArrayList<String>()
+            for (l in ls) { copy.add(l) }
+            Some(copy)
+        } else { None }
+    }
+
     private static func decodeMatchMode(s: String): MatchMode {
         if (s.startsWith("Exact:")) { MatchMode.Exact(s[6..]) }
         else if (s.startsWith("Glob:")) { MatchMode.Glob(s[5..]) }
@@ -97,7 +105,7 @@ public class ConsumerRegistration {
 public class BrokerMeta {
     private var nodeId: String = ""
     private var host: String = ""
-    private var port: Int64 = 0
+    private var port: UInt16 = 0u16
     private var isMaster: Bool = false
     private var queues: ArrayList<String> = ArrayList()
     private var lastSeen: DateTime = DateTime.now()
@@ -105,7 +113,7 @@ public class BrokerMeta {
 
     public func getNodeId(): String { nodeId }
     public func getHost(): String { host }
-    public func getPort(): Int64 { port }
+    public func getPort(): UInt16 { port }
     public func isMasterNode(): Bool { isMaster }
     public func getQueues(): ArrayList<String> {
         let result = ArrayList<String>()

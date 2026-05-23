@@ -371,7 +371,7 @@ public class BrokerMetaGettersTest {
         // @DataAssist 的 DefaultCodec 编码/解码时会调用 getter
         @Assert(bm.getNodeId() == "")
         @Assert(bm.getHost() == "")
-        @Assert(bm.getPort() == 0)
+        @Assert(bm.getPort() == 0u16)
         @Assert(!bm.isMasterNode())
         @Assert(bm.getQueues().size == 0)
     }

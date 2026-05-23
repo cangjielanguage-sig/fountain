@@ -28,7 +28,7 @@ public class Subscriber {
     private let config: MqConfig
     private let client: Client<ProtocolMessage, EncodedMessage, ProtocolMessage, MqBody, MessageID>
     private let log = LoggerFactory.getLogger('fountain::fmq.Subscriber')
-    private let subscriptions = ArrayList<(String, String, String)>()  // (groupId, topic, dataFilter)
+    private let subscriptions = ArrayList<(String, String, String, String)>()  // (groupId, topic, dataFilter, matchModeStr)
     private let subLock = Mutex()  // 保护 subscriptions 并发读写
 
     public init(config: MqConfig,
@@ -63,7 +63,14 @@ public class Subscriber {
         let dataFilterVal = dataFilter
         if (subResp.isSome()) {
             synchronized(subLock) {
-                subscriptions.add((groupId, matchModeTopic(matchMode), dataFilterVal))
+                // 检查是否已存在相同 groupId+topic+dataFilter 的订阅，避免重复
+                for ((g, t, _, m) in subscriptions) {
+                    if (g == groupId && t == matchModeTopic(matchMode) && m == matchModeToString(matchMode)) {
+                        log.info{"already subscribed group=${groupId} to ${matchModeTopic(matchMode)}, skipping duplicate"}
+                        return true
+                    }
+                }
+                subscriptions.add((groupId, matchModeTopic(matchMode), dataFilterVal, matchModeToString(matchMode)))
             }
             log.info{"subscribed group=${groupId} to ${matchModeToString(matchMode)}"}
             true
@@ -92,8 +99,8 @@ public class Subscriber {
             synchronized(subLock) {
                 var i = 0
                 while (i < subscriptions.size) {
-                    let (g, t, _) = subscriptions[i]
-                    if (g == groupId && t == topic) {
+                    let (g, t, _, m) = subscriptions[i]
+                    if (g == groupId && t == topic && m == matchModeToString(matchMode)) {
                         subscriptions.remove(at: i)
                     } else {
                         i += 1
@@ -111,9 +118,9 @@ public class Subscriber {
     /**
      * 获取活跃订阅列表。
      */
-    public func getSubscriptions(): ArrayList<(String, String, String)> {
+    public func getSubscriptions(): ArrayList<(String, String, String, String)> {
         synchronized(subLock) {
-            let copy = ArrayList<(String, String, String)>()
+            let copy = ArrayList<(String, String, String, String)>()
             for (s in subscriptions) {
                 copy.add(s)
             }
@@ -143,7 +150,7 @@ public class Subscriber {
             synchronized(subLock) {
                 var i = 0
                 while (i < subscriptions.size) {
-                    let (g, _, _) = subscriptions[i]
+                    let (g, _, _, _) = subscriptions[i]
                     if (g == groupId) {
                         subscriptions.remove(at: i)
                     } else { i += 1 }

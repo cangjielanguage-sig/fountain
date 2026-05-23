@@ -128,6 +128,7 @@ public func readEnv(key: String): ?String {
 /**
  * 读取环境变量，按英文逗号分割为 ArrayList<String>。
  * 空变量返回空列表。
+ * No direct unit test; indirectly covered by loadConfig tests.
  */
 public func readEnvList(key: String): ArrayList<String> {
     let raw = readEnv(key)

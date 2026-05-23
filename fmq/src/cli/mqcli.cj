@@ -48,7 +48,16 @@ public class MqCliCommand <: SubCommand {
     private func runInteractive(): Unit {
         println("MQ CLI (type 'help' for commands, empty line to exit)")
         println()
-        printHelp()
+        while (true) {
+            let line = readln()
+            if (line == "") { break }
+            let trimmed = line.trimAscii()
+            if (trimmed == "") { continue }
+            let args = trimmed.split(' ')
+            if (!runCommand(args)) {
+                println("command failed")
+            }
+        }
     }
 
     /**
@@ -73,7 +82,7 @@ public class MqCliCommand <: SubCommand {
             case "listDeadLetters" => CommandRunner.listDeadLetters(cmdArgs)
             case "redeliverDeadLetter" => CommandRunner.redeliverDeadLetter(cmdArgs)
             case "redeliverAllDeadLetters" => CommandRunner.redeliverAllDeadLetters(cmdArgs)
-            case _ => println("unknown command: ${cmd}. Try 'fboot mqcli help'"); false
+            case _ => println("unknown command: ${cmd}. Try 'help'"); false
         }
     }
 
@@ -96,5 +105,6 @@ public class MqCliCommand <: SubCommand {
         println("  listDeadLetters --topic <t> --queue <q>")
         println("  redeliverDeadLetter --topic <t> --queue <q> --messageId <id>")
         println("  redeliverAllDeadLetters --topic <t> --queue <q>")
+        println("Try 'help'")
     }
 }

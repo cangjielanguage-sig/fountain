@@ -313,9 +313,9 @@ public class DataFilterAckTest {
 public class BatchConsumeProtocolTest {
     @TestCase
     public func testEncodeBatchConsumePayload(): Unit {
-        let subs = ArrayList<(String, String, String)>()
-        subs.add(("g1", "/topic/a", ""))
-        subs.add(("g2", "/topic/b", ""))
+        let subs = ArrayList<(String, String, String, String)>()
+        subs.add(("g1", "/topic/a", "", "exact"))
+        subs.add(("g2", "/topic/b", "", "prefix"))
         let payload = Consumer.encodeBatchConsumePayload(subs)
         // 解码验证: topicCount=2, topic="/topic/a", groupId="g1", batchSize=1, ...
         let buf = ByteBuffer(payload)

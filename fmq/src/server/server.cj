@@ -175,8 +175,8 @@ public class MqCommand <: SubCommand {
         if (hosts.size > 0) {
             let parts = hosts[0].split(':')
             if (parts.size == 2) {
-                try { return UInt16.parse(parts[1]) } catch (_: Exception) {
-                    log.warn{"invalid port in mq_hosts '${hosts[0]}', using default 7201"}
+                try { return UInt16.parse(parts[1]) } catch (e: Exception) {
+                    log.warn{"invalid port in mq_hosts '${hosts[0]}': ${e.message}, using default 7201"}
                 }
             }
         }
