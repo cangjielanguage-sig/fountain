@@ -113,17 +113,17 @@ public class CliCommandTest {
      */
     @TestCase
     public func testValidTopicNameRejectsEmpty(): Unit {
-        @Assert(!CommandRunner.validTopicName("", "test"))
+        @Assert(!CommandRunner.validTopicName(""))
     }
 
     @TestCase
     public func testValidTopicNameRejectsNoSlash(): Unit {
-        @Assert(!CommandRunner.validTopicName("no-slash", "test"))
+        @Assert(!CommandRunner.validTopicName("no-slash"))
     }
 
     @TestCase
     public func testValidTopicNameAcceptsValid(): Unit {
-        @Assert(CommandRunner.validTopicName("/valid/topic", "test"))
+        @Assert(CommandRunner.validTopicName("/valid/topic"))
     }
 }
 

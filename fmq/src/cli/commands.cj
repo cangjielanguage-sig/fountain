@@ -48,7 +48,7 @@ public class CommandRunner {
     /**
      * 校验 topic --name 参数。CLI-5: 统一校验，避免空/无效名发送到服务端。
      */
-    internal static func validTopicName(name: String, cmd: String): Bool {
+    internal static func validTopicName(name: String): Bool {
         if (name.isEmpty()) {
             println("error: --name must not be empty")
             return false
@@ -66,7 +66,7 @@ public class CommandRunner {
         let name = getArg(args, "--name")
         let queues = getArg(args, "--queues")
         if (let Some(n) <- name) {
-            if (!validTopicName(n, "createTopic")) { return false }
+            if (!validTopicName(n)) { return false }
             var q: Int64 = 1
             var usingDefault = false
             if (let Some(s) <- queues) {
@@ -91,7 +91,7 @@ public class CommandRunner {
     public static func deleteTopic(args: Array<String>): Bool {
         let name = getArg(args, "--name")
         if (let Some(n) <- name) {
-            if (!validTopicName(n, "deleteTopic")) { return false }
+            if (!validTopicName(n)) { return false }
             let client = if (let Some(c) <- getClient()) { c } else { return false }
             if (client.deleteTopic(n)) {
                 println("deleted topic '${n}'")
@@ -268,7 +268,7 @@ public class CommandRunner {
     public static func showTopic(args: Array<String>): Bool {
         let name = getArg(args, "--name")
         if (let Some(n) <- name) {
-            if (!validTopicName(n, "showTopic")) { return false }
+            if (!validTopicName(n)) { return false }
             let client = if (let Some(c) <- getClient()) { c } else { return false }
             if (let Some(info) <- client.showTopic(n)) {
                 println("topic '${n}':")
