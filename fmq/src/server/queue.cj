@@ -116,7 +116,8 @@ public class MqQueue <: Resource & ToString {
         synchronized(streamLock) {
             if (closed.load()) { return }
             closed.store(true)
-            draining.store(false)
+            // 不在 close() 中重置 draining——closed=true 已足够阻止所有操作。
+            // 若 close 由 tryFinishDrain() 触发，draining 状态应保持供外部检查。
             // 在锁内关闭 logStream，阻止 reader 线程继续使用流
             if (let Some(s) <- logStream) {
                 if (let r: Resource <- s) { r.close() }

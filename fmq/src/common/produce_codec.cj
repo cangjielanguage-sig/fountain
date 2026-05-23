@@ -53,6 +53,11 @@ public class ProduceCodec {
             let dec = DefaultCodec()
             if (let Some(topic) <- dec.decode<String>(buf)) {
                 if (let Some(count) <- dec.decode<Int64>(buf)) {
+                    // P2: 限制 labels 数量防止恶意/损坏消息导致 OOM
+                    if (count < 0 || count > 256) {
+                        log.warn{"ProduceCodec.decode: label count ${count} out of range"}
+                        return None
+                    }
                     let labels = ArrayList<String>()
                     for (_ in 0..count) {
                         if (let Some(l) <- dec.decode<String>(buf)) {

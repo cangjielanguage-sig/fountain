@@ -17,6 +17,7 @@ package fountain::fmq.cli
 
 import std.collection.*
 import std.convert.*
+import std.sync.Mutex
 
 /**
  * 命令运行器。
@@ -25,6 +26,7 @@ import std.convert.*
  */
 public class CommandRunner {
     private static var cachedConfig: Option<MqConfig> = None
+    private static let configLock = Mutex()
 
     /**
      * 从参数数组中提取 --name <value> 格式的值。
@@ -345,10 +347,12 @@ public class CommandRunner {
      * 获取或加载配置（缓存，避免重复解析环境变量）。
      */
     internal static func getOrLoadConfig(): MqConfig {
-        if (let Some(c) <- cachedConfig) { return c }
-        let config = loadConfig()
-        cachedConfig = Some(config)
-        config
+        synchronized(configLock) {
+            if (let Some(c) <- cachedConfig) { return c }
+            let config = loadConfig()
+            cachedConfig = Some(config)
+            config
+        }
     }
 
     /**

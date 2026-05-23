@@ -316,7 +316,7 @@ public class CommandExecutor {
                                 }
                                 let sn = CommandExecutor.deliverySn.fetchAdd(1) + 1
                                 let deliveryId = "${topic}:${q.index}:${groupId}:${offset}:${sn}"
-                                deliveryManager.recordDelivery(deliveryId, groupId, groupId, topic)
+                                deliveryManager.recordDelivery(deliveryId, groupId, groupId, topic, payload: payload)
                                 consumed.add((deliveryId, labels, payload))
                             }
                         } else {
@@ -363,7 +363,7 @@ public class CommandExecutor {
                                     }
                                     let sn = CommandExecutor.deliverySn.fetchAdd(1) + 1
                                 let deliveryId = "${topic}:${q.index}:${groupId}:${offset}:${sn}"
-                                    deliveryManager.recordDelivery(deliveryId, groupId, groupId, topic)
+                                    deliveryManager.recordDelivery(deliveryId, groupId, groupId, topic, payload: payload)
                                     consumed.add((deliveryId, labels, payload))
                                 }
                             } else {

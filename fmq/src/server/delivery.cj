@@ -31,16 +31,20 @@ public class DeliveryRecord {
     let consumerId: String
     let groupId: String
     let topic: String
+    var payload: Array<Byte>  // 原始消息体，用于 DLQ 重投
     var deliverTime: DateTime
     var retryCount: Int64
     var acked: AtomicBool
 
     public init(messageId: String, consumerId: String, groupId: String, topic: String,
-                deliverTime: DateTime, retryCount!: Int64 = 0, acked!: AtomicBool = AtomicBool(false)) {
+                deliverTime: DateTime, retryCount!: Int64 = 0,
+                acked!: AtomicBool = AtomicBool(false),
+                payload!: Array<Byte> = []) {
         this.messageId = messageId
         this.consumerId = consumerId
         this.groupId = groupId
         this.topic = topic
+        this.payload = payload
         this.deliverTime = deliverTime
         this.retryCount = retryCount
         this.acked = acked
@@ -103,12 +107,14 @@ public class DeliveryManager {
      * 记录投递。若 messageId 已存在则不覆盖（防止丢失 ACK 状态）。
      * synchronized 防止 check-then-act 竞态：两个线程同时 recordDelivery 相同 messageId。
      */
-    public func recordDelivery(messageId: String, consumerId: String, groupId: String, topic: String): DeliveryRecord {
+    public func recordDelivery(messageId: String, consumerId: String, groupId: String, topic: String,
+                                payload!: Array<Byte> = []): DeliveryRecord {
         synchronized(onAckLock) {
             if (let Some(existing) <- records.get(messageId)) {
                 existing
             } else {
-                let record = DeliveryRecord(messageId, consumerId, groupId, topic, DateTime.now())
+                let record = DeliveryRecord(messageId, consumerId, groupId, topic, DateTime.now(),
+                    payload: payload)
                 records[messageId] = record
                 record
             }
@@ -229,7 +235,7 @@ public class DeliveryManager {
         if (parts.size >= 2) {
             let topic = parts[0]
             let queueIdx = if (let Some(idx) <- Int64.tryParse(parts[1])) { idx } else { 0 }
-            dls.append([], topic, queueIdx, record.messageId)
+            dls.append(record.payload, topic, queueIdx, record.messageId)
         }
         synchronized(onAckLock) {
             records.remove(record.messageId)
@@ -278,8 +284,11 @@ public class DeliveryManager {
             record.deliverTime = DateTime.now()
             true
         } else {
-            log.warn{"no consumer available for ${record.messageId}, move to DLQ"}
-            false
+            // P2-3: 无消费者时不入 DLQ，维持 retryCount 不变，等待消费者上线后重试
+            log.warn{"no consumer available for ${record.messageId}, waiting for consumer"}
+            record.retryCount -= 1  // 撤销 retryCount 递增
+            record.deliverTime = DateTime.now()
+            true
         }
     }
 
