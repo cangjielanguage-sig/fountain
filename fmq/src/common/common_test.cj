@@ -350,6 +350,41 @@ public class MatchModeEncodingTest {
     }
 }
 
+// ── COM-3: decodeMatchMode 空模式测试 ──
+
+@Test
+public class DecodeMatchModeEdgeTest {
+    @TestCase
+    public func testDecodeMatchModeEmptyExact(): Unit {
+        let reg = ConsumerRegistration(
+            consumerId: "empty", groupId: "empty",
+            matchModeStr: "Exact:",
+            labels: None, dataFilter: None,
+            lastHeartbeat: DateTime.now())
+        let mode = reg.getMatchMode()
+        // 空 Exact("") 不应崩溃，返回 Exact("")
+        match (mode) {
+            case Exact(t) => @Assert(t == "")
+            case _ => @Assert(false)
+        }
+    }
+
+    @TestCase
+    public func testDecodeMatchModeUnknownPrefix(): Unit {
+        let reg = ConsumerRegistration(
+            consumerId: "unknown", groupId: "unknown",
+            matchModeStr: "WTF:pattern",
+            labels: None, dataFilter: None,
+            lastHeartbeat: DateTime.now())
+        let mode = reg.getMatchMode()
+        // 未知前缀降级为 Exact("WTF:pattern")，不应崩溃
+        match (mode) {
+            case Exact(t) => @Assert(t == "WTF:pattern")
+            case _ => @Assert(false)
+        }
+    }
+}
+
 // ── config 测试 ──
 
 @Test

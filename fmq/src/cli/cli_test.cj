@@ -107,6 +107,24 @@ public class CliCommandTest {
     private static func getArg(args: Array<String>, flag: String): ?String {
         CommandRunner.getArg(args, flag)
     }
+
+    /**
+     * CLI-5: 验证 validTopicName 校验逻辑。
+     */
+    @TestCase
+    public func testValidTopicNameRejectsEmpty(): Unit {
+        @Assert(!CommandRunner.validTopicName("", "test"))
+    }
+
+    @TestCase
+    public func testValidTopicNameRejectsNoSlash(): Unit {
+        @Assert(!CommandRunner.validTopicName("no-slash", "test"))
+    }
+
+    @TestCase
+    public func testValidTopicNameAcceptsValid(): Unit {
+        @Assert(CommandRunner.validTopicName("/valid/topic", "test"))
+    }
 }
 
 /**
