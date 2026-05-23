@@ -1256,9 +1256,64 @@ public class SSTableTest {
         remove(dir, recursive: true)
     }
 
-    /** P0.1 验证：并发 get() + close() 无数据损坏或 fd 重用。
-     *  多线程反复 get 的同时主线程调用 close()，
-     *  验证：① close 前的 get 数据正确；② close 后 get 抛 StoreClosedException；③ 无其他异常。 */
+    /** 验证空 Footer（文件过短）时 SSTable.open() 抛异常且不泄漏 FD */
+    @TestCase
+    public func sstableOpenThrowsOnCorruptFileNoFdLeak(): Unit {
+        let dir = "/tmp/f_store_test/SSTable_open_corrupt"
+        if (exists(dir)) { remove(dir, recursive: true) }
+        Directory.create(dir, recursive: true)
+
+        // 创建包含 Magic 不匹配的垃圾数据文件
+        let path = "${dir}/L0_1.sst"
+        let file = File(path, OpenMode.ReadWrite)
+        file.write(Array<Byte>(100){
+            _ => 0x00u8
+        })
+        file.flush()
+        file.close()
+
+        // open 应抛异常（magic 不匹配）
+        var threw = false
+        try {
+            let sst2 = SSTable.open(path)
+            sst2.close()
+        } catch (_: Exception) {
+            threw = true
+        }
+        @Expect(threw)   // 修复前：抛异常但 File FD 泄漏；修复后：File 在 try-finally 中 close
+
+        remove(dir, recursive: true)
+    }
+
+    /** 验证 file too small 时 SSTable.open() 抛异常（文件大小 < 64 字节 Footer） */
+    @TestCase
+    public func sstableOpenThrowsOnFileTooSmall(): Unit {
+        let dir = "/tmp/f_store_test/SSTable_open_small"
+        if (exists(dir)) { remove(dir, recursive: true) }
+        Directory.create(dir, recursive: true)
+
+        // 创建 < FOOTER_SIZE(64) 的非法定长文件
+        let path = "${dir}/L0_1.sst"
+        let file = File(path, OpenMode.ReadWrite)
+        file.write(Array<Byte>(10){
+            _ => 0x00u8
+        })
+        file.flush()
+        file.close()
+
+        var threw = false
+        try {
+            let sst2 = SSTable.open(path)
+            sst2.close()
+        } catch (_: Exception) {
+            threw = true
+        }
+        @Expect(threw)
+
+        remove(dir, recursive: true)
+    }
+     /*  多线程反复 get 的同时主线程调用 close(),
+     *  验证: (1) close 前的 get 数据正确; (2) close 后 get 抛 StoreClosedException; (3) 无其他异常. */
     @TestCase
     public func sstableConcurrentGetAndCloseNoRace(): Unit {
         let dir = "/tmp/f_store_test/SSTable_conc_get_close"

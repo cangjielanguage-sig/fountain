@@ -361,7 +361,12 @@ class SSTable <: Resource {
     /** 从文件路径打开已有 SSTable，进入 Readable 状态 */
     static func open(path: String): SSTable {
         let file = File(path, OpenMode.Read)
-        openFromFile(file, path)
+        try {
+            openFromFile(file, path)
+        } catch (e: Exception) {
+            file.close()
+            throw e
+        }
     }
 
     static func openFromFile(file: File, path: String): SSTable {

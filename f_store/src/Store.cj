@@ -79,9 +79,8 @@ public class Store <: Resource {
         // 创建新 WAL
         this.wal = WAL("${walDir}/wal_${startSeq}.wal", startSequence: startSeq + 1)
 
-        // 创建 Compactor 并启动
+        // 创建 Compactor
         this.compactor = Compactor(levelManager, sstDir)
-        compactor.start()
 
         // 进程退出时自动关闭
         atExit { => 
@@ -89,6 +88,9 @@ public class Store <: Resource {
                 close() 
             }
         }
+
+        // 启动 Compaction（放在 init 最后，确保所有状态就绪）
+        compactor.start()
     }
 
     /** 添加键值对 */
