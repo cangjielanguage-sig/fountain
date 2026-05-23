@@ -39,12 +39,20 @@ public class QueueWriter {
     private let syncQueue = ConcurrentLinkedQueue<Array<Byte>>()
     private let syncClosed = AtomicBool(false)
     private var syncThread: ?Future<Unit> = None
+    /** 缓存 (topic+queueIndex) 编码前缀，避免每次 syncToSlaves 重编码 */
+    private let syncPrefix: Array<Byte>
 
     public init(queue: MqQueue, config: MqConfig, replicationManager!: ReplicationManager, queueSize!: Int64 = 1024) {
         this.queue = queue
         this.config = config
         this.replicationManager = replicationManager
         this.inboundQueue = ConcurrentLinkedQueue<Array<Byte>>()
+        // 预计算同步前缀（topic + queueIndex 编码），SRV-5
+        let prefixBuf = ByteBuffer()
+        DefaultCodec()
+            .encode(queue.topic).encode(queue.index)
+            .finish().copy(to: prefixBuf, closeFromOnEnd: true, closeToOnEnd: false)
+        this.syncPrefix = extractBytes(prefixBuf)
     }
 
     /**
@@ -101,20 +109,21 @@ public class QueueWriter {
         let slaves = replicationManager.getSlaves()
         if (slaves.size == 0) { return }
 
-        // 编码 topic + queueIndex + data 到单个 sync entry
-        let buf = ByteBuffer()
-        DefaultCodec()
-            .encode(queue.topic).encode(queue.index).encode(data)
-            .finish().copy(to: buf, closeFromOnEnd: true, closeToOnEnd: false)
-        let syncEntry = extractBytes(buf)
-
-        // 入队，由 sync 线程异步处理
-        syncQueue.add(syncEntry)
+        // 编码 topic + queueIndex + data 到单个 sync entry（前缀已缓存，SRV-5）
+        let dataBuf = ByteBuffer()
+        DefaultCodec().encode(data)
+            .finish().copy(to: dataBuf, closeFromOnEnd: true, closeToOnEnd: false)
+        let encodedData = extractBytes(dataBuf)
+        let total = Array<Byte>(syncPrefix.size + encodedData.size, repeat: 0u8)
+        for (i in 0..syncPrefix.size) { total[i] = syncPrefix[i] }
+        for (i in 0..encodedData.size) { total[syncPrefix.size + i] = encodedData[i] }
+        syncQueue.add(total)
     }
 
     /**
      * 启动后台同步线程。单线程依次取出 syncQueue 中的条目，
-     * 为每个从节点 spawn 并行同步（spawn 发生在此线程，不阻塞主写循环）。
+     * 按顺序同步到每个从节点（串行发送，避免每消息每从节点 spawn）。
+     * P2-2: 移除了内层 spawn，改为串行 syncToSlave 调用。
      */
     public func startSyncThread(): Unit {
         if (syncThread.isSome()) { return }
@@ -124,9 +133,8 @@ public class QueueWriter {
                 if (let Some(entry) <- selfRef.syncQueue.remove()) {
                     let slaves = selfRef.replicationManager.getSlaves()
                     for (slave in slaves) {
-                        let nodeId = slave.nodeId
                         let data = entry
-                        spawn { selfRef.syncToSlave(nodeId, data) }
+                        selfRef.syncToSlave(slave.nodeId, data)
                     }
                 } else {
                     sleep(Duration.millisecond * 10)

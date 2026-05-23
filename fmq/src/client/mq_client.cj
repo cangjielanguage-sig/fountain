@@ -196,7 +196,11 @@ public class MqClient <: Resource {
         if (let Some(r) <- resp) {
             if (let Some(body) <- convert<MqBody>(r.data)) {
                 return decodeTopicList(body.payload)
+            } else {
+                log.warn{"listTopics: failed to decode response"}
             }
+        } else {
+            log.warn{"listTopics: no response from server"}
         }
         ArrayList()
     }
@@ -213,7 +217,11 @@ public class MqClient <: Resource {
         if (let Some(r) <- resp) {
             if (let Some(body) <- convert<MqBody>(r.data)) {
                 return decodeConsumerList(body.payload)
+            } else {
+                log.warn{"listConsumers: failed to decode response"}
             }
+        } else {
+            log.warn{"listConsumers: no response from server"}
         }
         ArrayList()
     }
@@ -290,7 +298,11 @@ public class MqClient <: Resource {
         if (let Some(r) <- resp) {
             if (let Some(body) <- convert<MqBody>(r.data)) {
                 return decodeTopicList(body.payload)
+            } else {
+                log.warn{"listGroups: failed to decode response body"}
             }
+        } else {
+            log.warn{"listGroups: no response from server"}
         }
         ArrayList()
     }

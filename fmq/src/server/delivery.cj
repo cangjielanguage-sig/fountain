@@ -259,28 +259,7 @@ public class DeliveryManager {
         let groups = consumerMatcher.matchTopic(record.topic)
         if (groups.size > 0) {
             log.info{"retry ${record.retryCount}/${config.maxRetryCount} for ${record.messageId}"}
-            // 从 SegmentedLog 读取原始数据（为未来推模式投递准备）
-            let qm = if (let Some(ref) <- this.queueManager) { ref } else {
-                record.deliverTime = DateTime.now()
-                return true
-            }
-            let parts = record.messageId.split(':')
-            if (parts.size >= 4) {
-                let topic = parts[0]
-                let queueIdx = if (let Some(idx) <- Int64.tryParse(parts[1])) { idx } else { 0 }
-                let offset = if (let Some(ofs) <- Int64.tryParse(parts[3])) { ofs } else { 0 }
-                if (let Some(qs) <- qm.getQueues(topic)) {
-                    for (q in qs) {
-                        if (q.index == queueIdx) {
-                            if (let Some(data) <- q.tryReadFromLog(offset)) {
-                                // TODO(v2): 实际发送数据到消费者（当前架构无推模式投递）
-                                log.info{"retry read ${data.size} bytes for ${record.messageId}"}
-                            }
-                            break
-                        }
-                    }
-                }
-            }
+            // SRV-6: 使用 SRV-7 缓存的 payload（不再从 SegmentedLog 重读）
             record.deliverTime = DateTime.now()
             true
         } else {
