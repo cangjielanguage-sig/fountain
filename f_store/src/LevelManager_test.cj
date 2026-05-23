@@ -578,6 +578,37 @@ public class LevelManagerTest {
         sst
     }
 
+    /** P1: 验证 Ln getOverlappingSSTables 对已关闭 SSTable 不抛异常（try-catch 保护） */
+    @TestCase
+    public func levelManagerGetOverlappingSkipsClosedSSTable(): Unit {
+        let dir = "/tmp/f_store_lm_closed_overlap"
+        if (exists(dir)) { remove(dir, recursive: true) }
+        Directory.create(dir, recursive: true)
+        let mgr = LevelManager(dir)
+
+        let sst1 = createSSTable("${dir}/L1_1.sst", 0x10, 0xA1)
+        let sst2 = createSSTable("${dir}/L1_2.sst", 0x20, 0xB2)
+        mgr.addSSTable(1, sst1)
+        mgr.addSSTable(1, sst2)
+
+        // 关闭 sst1，模拟 compaction 关闭后的快照残留
+        sst1.close()
+
+        // getOverlappingSSTables 应跳过已关闭的 SSTable 不抛异常
+        let result = mgr.getOverlappingSSTables(1, ByteArray([0x10]), Some(ByteArray([0x30])))
+        @Expect(result.size == 1)  // 只返回 sst2，sst1 被跳过
+
+        // 再次 close sst2 后应返回空
+        sst2.close()
+        let result2 = mgr.getOverlappingSSTables(1, ByteArray([0x10]), Some(ByteArray([0x30])))
+        @Expect(result2.size == 0)
+
+        // 清理：再次 close 已关闭的 SSTable 不抛异常（幂等）
+        sst1.close()
+        sst2.close()
+        remove(dir, recursive: true)
+    }
+
     private func createSSTableRange(path: String, start: UInt8, end: UInt8, values: Array<UInt8>): SSTable {
         let idx = path.lastIndexOf('/').getOrThrow()
         let dir = path[0 .. idx]

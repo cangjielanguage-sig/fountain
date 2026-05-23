@@ -23,7 +23,7 @@ class SSTableIterator <: Iterator<(ByteArray, EntryValue)> & Resource {
     private var blockIdx: Int64
     private var blockData: Array<Byte>
     private var offsetInBlock: Int64
-    private var done: Bool = true
+    private var done: AtomicBool = AtomicBool(true)
 
     /** Linux: fd 用于 pread 定位读取（单 syscall，替代 seek+read） */
     @When[os == "Linux"]
@@ -64,10 +64,10 @@ class SSTableIterator <: Iterator<(ByteArray, EntryValue)> & Resource {
         this.blockData = Array<Byte>(0, repeat: 0u8)
         this.offsetInBlock = 0
         if (indexEntries.size == 0) {
-            this.done = true
+            done.store(true)
             close()
         } else {
-            this.done = false
+            done.store(false)
             // Linux: 提取 fd 用于 pread
             @When[os == "Linux"]
             let _ = (this.fd = Int32(this.file.fileDescriptor.fileHandle))
@@ -82,7 +82,7 @@ class SSTableIterator <: Iterator<(ByteArray, EntryValue)> & Resource {
     /** 跳过所有 key < startKey 的条目 */
     private func skipBefore(startKey: ByteArray): Unit {
         while (true) {
-            if (done) { return }
+            if (done.load()) { return }
             if (offsetInBlock + 32 > blockData.size) {
                 blockIdx++
                 if (blockIdx >= indexEntries.size) {
@@ -158,7 +158,7 @@ class SSTableIterator <: Iterator<(ByteArray, EntryValue)> & Resource {
     }
 
     public func next(): Option<(ByteArray, EntryValue)> {
-        if (done) {
+        if (done.load()) {
             close() // 已耗尽则确保 File 关闭
             return None
         }
@@ -269,7 +269,7 @@ class SSTableIterator <: Iterator<(ByteArray, EntryValue)> & Resource {
 
     /** 标记迭代结束并关闭 File 句柄 */
     private func setDone(): Unit {
-        done = true
+        done.store(true)
         close()
     }
 

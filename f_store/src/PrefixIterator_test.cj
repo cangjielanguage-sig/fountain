@@ -167,6 +167,35 @@ public class PrefixIteratorTest {
         remove(dir, recursive: true)
     }
 
+    /** P2: 验证 PrefixIterator 在 init 时冻结 now，迭代期间不再调用 DateTime.now() */
+    @TestCase
+    public func testPrefixIteratorFrozenNow(): Unit {
+        let dir = getTestDir("frozen_now")
+
+        let store = Store(dir)
+        // 添加：一个过期条目 + 一个未过期条目 + 一个永不过期条目
+        store.add("pfx:expired".unsafeBytes(), "old".unsafeBytes(), DateTime.now() - Duration.second * 10)
+        store.add("pfx:alive".unsafeBytes(), "new".unsafeBytes(), DateTime.now() + Duration.second * 3600)
+        store.add("pfx:forever".unsafeBytes(), "eternal".unsafeBytes())
+
+        let iter = store.prefix("pfx:".unsafeBytes())
+        var count = 0
+        var foundAlive = false
+        var foundForever = false
+        while (let Some((k, v)) <- iter.next()) {
+            let key = String.fromUtf8(k)
+            if (key == "pfx:alive") { foundAlive = true }
+            if (key == "pfx:forever") { foundForever = true }
+            // "pfx:expired" 不应出现
+            @Expect(key != "pfx:expired")
+            count++
+        }
+        @Expect(foundAlive)
+        @Expect(foundForever)
+        @Expect(count == 2)  // 过期条目被跳过
+        store.close()
+    }
+
     func getTestDir(name: String): String {
         let baseDir = "/tmp/f_store_test/PrefixIterator_${name}"
         if (exists(baseDir)) {

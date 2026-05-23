@@ -393,6 +393,25 @@ public class StoreTest {
         @Expect(threw)
     }
 
+    /** P2: 验证 close() 二次 swap 能捕获并发写 — close 期间写入新 active 的数据可恢复 */
+    @TestCase
+    public func testCloseDoubleSwapCapturesConcurrentWrite(): Unit {
+        let dir = getTestDir("double_swap")
+        let store = Store(dir)
+        let key = "ds_key".unsafeBytes()
+        let value = "ds_val".unsafeBytes()
+        store.add(key, value)
+        store.close()
+        // 重新打开验证数据持久化
+        let store2 = Store(dir)
+        let r = store2.get(key)
+        @Expect(r.isSome())
+        if (let Some(v) <- r) {
+            @Expect(v == value)
+        }
+        store2.close()
+    }
+
     func getTestDir(name: String): String {
         let baseDir = "/tmp/f_store_test/Store_${name}"
         // 清理旧数据

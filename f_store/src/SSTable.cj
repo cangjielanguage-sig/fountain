@@ -149,10 +149,6 @@ class SSTable <: Resource {
     /** 写入一条记录。仅在 Writing 状态下可用 */
     func write(key: ByteArray, entry: EntryValue): Unit {
         guardWriting()
-        // 新 Data Block 开始，记录 IndexEntry
-        if (dataBlockSize == 0) {
-            indexEntries.add(IndexEntry(currentOffset, key))
-        }
         // 编码记录: key_len(8) + value_len(8) + sequence(8) + expire_at(8) + key_bytes + value_bytes
         let keyBytes = key.bytes
         let keyLen = keyBytes.size
@@ -179,7 +175,12 @@ class SSTable <: Resource {
             v.copyTo(buf[offset .. offset + valueLen])
             offset += valueLen
         }
+        let isNewBlock = dataBlockSize == 0
         file.write(buf)
+        // IndexEntry 在 file.write 成功后添加，防止 I/O 异常产生 orphan index
+        if (isNewBlock) {
+            indexEntries.add(IndexEntry(currentOffset, key))
+        }
         // bloom filter
         bloomFilter.add(keyBytes)
         // 更新统计
