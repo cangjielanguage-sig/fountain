@@ -71,12 +71,8 @@ class Compactor {
                     return
                 }
                 if (levelManager.shouldCompact(level)) {
-                    try {
-                        compact(level)
-                        didWork = true
-                    } catch (_: Exception) {
-                        // Compaction 失败不影响正常读写，继续下一轮
-                    }
+                    compact(level)
+                    didWork = true
                 }
             }
             if (!didWork) {
