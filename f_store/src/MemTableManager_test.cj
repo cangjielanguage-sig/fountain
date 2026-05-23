@@ -62,6 +62,36 @@ public class MemTableManagerTest {
         @Expect(second.isNone())
     }
 
+    /** P3: 验证 clearImmutable() 在 immutable 已为 None 时不抛异常（前置检查） */
+    @TestCase
+    public func memTableManagerClearImmutableWhenAlreadyNone(): Unit {
+        let mgr = MemTableManager()
+        @Expect(mgr.getImmutable().isNone())
+        // clearImmutable 在 immutable 已为 None 时直接 break，不分配不 CAS
+        mgr.clearImmutable()
+        @Expect(mgr.getImmutable().isNone())
+        // 再次调用不抛异常（幂等）
+        mgr.clearImmutable()
+        @Expect(mgr.getActive().approximateSize() == 0)
+    }
+
+    /** P3: 验证 clearImmutable 后 slot 释放，后续 swap 可正常执行 */
+    @TestCase
+    public func memTableManagerClearImmutableReleasesSlot(): Unit {
+        let mgr = MemTableManager()
+        mgr.getActive().add(ByteArray([0x01]), EntryValue([0x0A], 1))
+        mgr.swapActive()
+        @Expect(mgr.getImmutable().isSome())
+        mgr.clearImmutable()
+        @Expect(mgr.getImmutable().isNone())
+        // slot 释放后，再 swap 应成功
+        let swapped = mgr.swapActive()
+        @Expect(swapped.isSome())
+        if (let Some(t) <- swapped) {
+            @Expect(t.approximateSize() == 0)  // 新的 active 为空
+        }
+    }
+
     /** 持续 add 直到 byteCount 超限，验证 swap 后可继续写入 */
     @TestCase
     public func memTableManagerCapacityBoundary(): Unit {

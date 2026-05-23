@@ -121,6 +121,21 @@ public class MemTableTest {
         @Expect(size3 == size2 - 2048) // -3072 + 1024 = -2048
     }
 
+    /** P4: 验证 byteCount 正确包含 ENTRY_OVERHEAD (sequence + value ref + expireAt = 24) */
+    @TestCase
+    public func memTableEntryOverhead(): Unit {
+        let mt = MemTable()
+        // 添加 1 条记录：key=1B + value=1B + overhead=24 = 26
+        mt.add(ByteArray([0x01]), EntryValue([0x0A], 1))
+        @Expect(mt.approximateSize() == 26)  // 1 + 1 + 24
+        // 添加第二条记录（不同 key）：26 + 26 = 52
+        mt.add(ByteArray([0x02]), EntryValue([0x0B], 2))
+        @Expect(mt.approximateSize() == 52)
+        // 覆盖写第二条（value 从 1B 变为 3B）：52 - 26 + (1 + 3 + 24) = 52 - 26 + 28 = 54
+        mt.add(ByteArray([0x02]), EntryValue([0xBB, 0xBB, 0xBB], 3))
+        @Expect(mt.approximateSize() == 54)
+    }
+
     /** 验证 tailer 从指定 key 开始遍历 */
     @TestCase
     public func memTableTailer(): Unit {
