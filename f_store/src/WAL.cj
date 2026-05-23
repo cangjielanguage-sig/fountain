@@ -100,9 +100,10 @@ class WAL <: Resource {
         // checksum(4) + sequence(8) + key_len(8) + value_len(8) + expire_at(8) + key + value
         let totalLen = 36 + kLen + (if (vLen > 0) { vLen } else { 0 })
 
+        // 溢出检测: totalLen < header(36) 表示 Int64 加法溢出
         // 超大记录回退到分配路径
         let scratch = encodeBuf.getOrCompute { => Array<Byte>(4096, repeat: 0u8) }
-        if (scratch.size < totalLen) {
+        if (totalLen < 36 || totalLen > scratch.size) {
             return WALRecord(sequence, key, value, expireAt: expireAt).encode()
         }
 

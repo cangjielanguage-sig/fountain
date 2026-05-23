@@ -265,6 +265,15 @@ public class Store <: Resource {
             }
             memTableManager.clearImmutable()
         }
+        // 2a. 二次 swap：flush 期间并发 add() 可能写入新 active
+        //     此操作非阻塞——无并发写则 swapActive() 返回 None 直接跳过
+        if (let Some(imm2) <- memTableManager.swapActive()) {
+            let sstables2 = flushMemTable(imm2, sstDir, 0)
+            for (sst in sstables2) {
+                levelManager.addSSTable(0, sst)
+            }
+            memTableManager.clearImmutable()
+        }
         // 3. WAL sync + close
         wal.sync()
         wal.close()

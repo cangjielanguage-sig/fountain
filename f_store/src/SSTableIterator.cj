@@ -242,6 +242,10 @@ class SSTableIterator <: Iterator<(ByteArray, EntryValue)> & Resource {
             indexOffset
         }
         let blockSize = blockEnd - blockStart
+        if (blockSize <= 0) {
+            setDone()
+            return
+        }
         blockData = Array<Byte>(blockSize, repeat: 0u8)
         offsetInBlock = 0
         @When[os == "Linux"]

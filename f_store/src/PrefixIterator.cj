@@ -24,11 +24,13 @@ public class PrefixIterator <: Iterator<(Array<Byte>, Array<Byte>)> & Resource {
     private let prefix: ByteArray
     private let sources: ArrayList<PeekableIterator<(ByteArray, EntryValue)>>
     private let heap: PriorityQueue<MergeHeapEntry>
+    private let now: Int64
     private var drained: Bool = false
 
     init(prefix: ByteArray, sources: ArrayList<PeekableIterator<(ByteArray, EntryValue)>>) {
         this.prefix = prefix
         this.sources = sources
+        this.now = DateTime.now().toUnixTimeStamp().toNanoseconds()
         this.heap = PriorityQueue<MergeHeapEntry>(mergeHeapCmp)
         for (i in 0..sources.size) {
             if (let Some((key, _)) <- sources[i].peek()) {
@@ -84,7 +86,7 @@ public class PrefixIterator <: Iterator<(Array<Byte>, Array<Byte>)> & Resource {
                         continue
                     }
                     if (let Some(expireAt) <- bestEntry.expireAt) {
-                        if (expireAt <= DateTime.now().toUnixTimeStamp().toNanoseconds()) {
+                        if (expireAt <= this.now) {
                             continue
                         }
                     }
