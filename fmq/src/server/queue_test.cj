@@ -147,6 +147,24 @@ public class MqQueueReadTest {
         cleanupDir("/tmp/fmqq_g")
     }
 
+    /**
+     * P2-4: 验证 close() 不会重置 draining 标志。
+     * 修复前 close() 执行 draining.store(false)，导致 tryFinishDrain()
+     * 检查 draining 时误判队列已退出排空模式。
+     */
+    @TestCase
+    public func testClosePreservesDrainingFlag(): Unit {
+        let q = MqQueue("/test-drain", 0, "/tmp/fmqq_drain", 4096)
+        q.draining.store(true)
+        @Assert(q.draining.load())  // draining 已设置
+
+        q.close()
+        @Assert(q.isClosed())       // 队列已关闭
+        @Assert(q.draining.load())  // draining 应仍为 true
+
+        cleanupDir("/tmp/fmqq_drain")
+    }
+
     private static func cleanupDir(path: String): Unit {
         try {
             for (entry in Directory.readFrom(path)) {

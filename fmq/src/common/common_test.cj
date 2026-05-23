@@ -419,3 +419,37 @@ public class EncodePublishConsistencyTest {
         }
     }
 }
+
+// ── COM-1: ProduceCodec.decode label count bounds check ──
+
+@Test
+public class ProduceCodecBoundsTest {
+    @TestCase
+    public func testDecodeRejectsNegativeLabelCount(): Unit {
+        let buf = ByteBuffer()
+        DefaultCodec().encode("/test").encode(-1i64).encode([0x01u8])
+            .finish().copy(to: buf, closeFromOnEnd: true, closeToOnEnd: false)
+        let raw = extractBytes(buf)
+        @Assert(ProduceCodec.decode(raw).isNone())
+    }
+
+    @TestCase
+    public func testDecodeRejectsExcessiveLabelCount(): Unit {
+        let buf = ByteBuffer()
+        DefaultCodec().encode("/test").encode(257i64).encode([0x01u8])
+            .finish().copy(to: buf, closeFromOnEnd: true, closeToOnEnd: false)
+        let raw = extractBytes(buf)
+        @Assert(ProduceCodec.decode(raw).isNone())
+    }
+
+    @TestCase
+    public func testDecodeAcceptsValidLabelCount(): Unit {
+        let buf = ByteBuffer()
+        let enc = DefaultCodec().encode("/test").encode(64i64)
+        for (_ in 0..64) { enc.encode("l") }
+        enc.encode([0x01u8])
+            .finish().copy(to: buf, closeFromOnEnd: true, closeToOnEnd: false)
+        let raw = extractBytes(buf)
+        @Assert(ProduceCodec.decode(raw).isSome())
+    }
+}

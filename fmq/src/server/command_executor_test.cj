@@ -883,10 +883,10 @@ public class DeliveryRetryTopicTest {
     }
 
     @TestCase
-    public func testRetryWrongTopicReturnsFalse(): Unit {
+    public func testRetryWrongTopicReturnsTrue(): Unit {
         let dm = DeliveryManager(DeliveryRetryTopicTest.testConfig(), serverId: "test:7201")
         let cm = ConsumerMatcher()
-        let dmL = dm  // capture let for lambda
+        let dmL = dm
 
         // 注册消费者匹配 /other-topic
         let reg = ConsumerRegistration(
@@ -896,21 +896,44 @@ public class DeliveryRetryTopicTest {
             lastHeartbeat: DateTime.now())
         cm.register(reg)
 
-        // 记录 topic=/wrong-topic 与消费者注册的 /other-topic 不匹配
+        // 记录 topic=/wrong-topic 无匹配消费者
         let record = DeliveryRecord(
-            "/wrong-topic:0:other-group:0",         // messageId
-            "other-consumer",                        // consumerId
-            "other-group",                           // groupId
-            "/wrong-topic",                          // topic
-            DateTime.now() - Duration.second * 60,   // deliverTime
+            "/wrong-topic:0:other-group:0",
+            "other-consumer", "other-group", "/wrong-topic",
+            DateTime.now() - Duration.second * 60,
             retryCount: 0)
 
-        // 无匹配消费者 → retry 返回 false
-        @Assert(!dmL.retry(record, cm))
+        // P2-3: 无消费者时不入 DLQ，返回 true 等待消费者上线
+        @Assert(dmL.retry(record, cm))
+        // retryCount 应保持不变（撤销递增）
+        @Assert(record.retryCount == 0)
     }
 
     /**
-     * P0-3: 验证 retryCount > maxRetryCount fencepost
+     * P2-3: 验证有匹配消费者时 retry 正常返回 true，count 递增。
+     */
+    @TestCase
+    public func testRetryWithConsumerReturnsTrue(): Unit {
+        let dm = DeliveryManager(DeliveryRetryTopicTest.testConfig(), serverId: "test:7201")
+        let cm = ConsumerMatcher()
+        let dmL = dm
+
+        let reg = ConsumerRegistration(
+            consumerId: "match-cons", groupId: "match-group",
+            matchModeStr: "Exact:/match-topic",
+            labels: None, dataFilter: None,
+            lastHeartbeat: DateTime.now())
+        cm.register(reg)
+
+        let record = DeliveryRecord(
+            "/match-topic:0:match-group:0", "match-cons", "match-group", "/match-topic",
+            DateTime.now() - Duration.second * 60,
+            retryCount: 0)
+
+        @Assert(dmL.retry(record, cm))
+        // 有消费者时 retryCount 递增
+        @Assert(record.retryCount == 1)
+    }
      * maxRetryCount=3 应允许 3 次重试，第 4 次触发 DLQ。
      * 修复前用 >= 导致实际只重试 2 次。
      */

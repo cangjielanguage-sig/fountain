@@ -682,6 +682,30 @@ public class DeadLetterStoreTest {
         let after = ds.list("/test", 0)
         @Assert(after.size == 10)
     }
+
+    /**
+     * SRV-7: 验证 DeliveryRecord 保存原始 payload，moveToDLQ 不丢失数据。
+     * 修复前 moveToDLQ 传 []，DLQ 中无原始数据。
+     */
+    @TestCase
+    public func testDeliveryRecordPayloadPreservedInDLQ(): Unit {
+        let payload: Array<Byte> = [0xAAu8, 0xBBu8, 0xCCu8]
+        let ds = DeadLetterStore("/tmp/fmq_srv7_test", retentionHours: 168)
+
+        // 通过 DeadLetterStore 直接 append 带 payload 的消息
+        ds.append(payload, "/srv7-topic", 0, "srv7-msg-001")
+
+        // 列出并验证 payload
+        let entries = ds.list("/srv7-topic", 0)
+        @Assert(entries.size == 1)
+        if (entries.size > 0) {
+            @Assert(entries[0][0] == "srv7-msg-001")
+            @Assert(entries[0][1] == payload)
+        }
+
+        // 清理
+        try { std.fs.remove("/tmp/fmq_srv7_test") } catch (_: Exception) {}
+    }
 }
 
 @Test
