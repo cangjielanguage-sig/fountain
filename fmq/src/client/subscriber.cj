@@ -55,8 +55,8 @@ public class Subscriber {
             return false
         }
 
-        // 2. 订阅 topic
-        let subBody = encodeTopicAndMode(matchModeTopic(matchMode), matchModeToString(matchMode))
+        // 2. 订阅 topic (topic + groupId + modeStr)
+        let subBody = encodeSubscribePayload(matchModeTopic(matchMode), groupId, matchModeToString(matchMode))
         let subReq = ProtocolMessage(Command.SUBSCRIBE, MessageID(),
             MqBody("subscribe", subBody).toData())
         let subResp = client.transfer(subReq.id, subReq, Duration.second * 10)
@@ -90,7 +90,7 @@ public class Subscriber {
      */
     public func unsubscribe(groupId: String, matchMode: MatchMode): Bool {
         let topic = matchModeTopic(matchMode)
-        let subBody = encodeTopicAndMode(topic, matchModeToString(matchMode))
+        let subBody = encodeSubscribePayload(topic, groupId, matchModeToString(matchMode))
         let req = ProtocolMessage(Command.UNSUBSCRIBE, MessageID(),
             MqBody("unsubscribe", subBody).toData())
         let resp = client.transfer(req.id, req, Duration.second * 10)
@@ -183,6 +183,21 @@ public class Subscriber {
         let buf = ByteBuffer()
         let enc = DefaultCodec()
             .encode(topic)
+            .encode(mode)
+            .finish()
+        enc.copy(to: buf, closeFromOnEnd: true, closeToOnEnd: false)
+        let raw = extractBytes(buf)
+        raw
+    }
+
+    /**
+     * 编码订阅 payload: topic + groupId + modeStr
+     */
+    private static func encodeSubscribePayload(topic: String, groupId: String, mode: String): Array<Byte> {
+        let buf = ByteBuffer()
+        let enc = DefaultCodec()
+            .encode(topic)
+            .encode(groupId)
             .encode(mode)
             .finish()
         enc.copy(to: buf, closeFromOnEnd: true, closeToOnEnd: false)

@@ -49,7 +49,7 @@ public func encodeSubscribe(groupId: String, matchMode: MatchMode): ProtocolMess
     let modeStr = matchModeToString(matchMode)
     let topic = matchModeTopic(matchMode)
     let body = ByteBuffer()
-    DefaultCodec().encode(topic).encode(modeStr)
+    DefaultCodec().encode(topic).encode(groupId).encode(modeStr)
         .finish().copy(to: body, closeFromOnEnd: true, closeToOnEnd: false)
     let raw = extractBytes(body)
     ProtocolMessage(Command.SUBSCRIBE, MessageID(),

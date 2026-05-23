@@ -245,7 +245,7 @@ public class DeliveryManager {
      */
     public func retry(record: DeliveryRecord, consumerMatcher: ConsumerMatcher): Bool {
         record.retryCount += 1
-        if (record.retryCount >= config.maxRetryCount) {
+        if (record.retryCount > config.maxRetryCount) {
             log.warn{"max retry reached for ${record.messageId}, move to DLQ"}
             return false
         }

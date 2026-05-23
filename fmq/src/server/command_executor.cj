@@ -19,6 +19,7 @@ import fountain::f_protocol.default.{Message as ProtocolMessage, EncodedMessage}
 import fountain::f_codec.default.DefaultCodec
 import std.collection.HashMap
 import std.io.{ByteBuffer, SeekPosition}
+import std.sync.AtomicInt64
 
 /**
  * 协议命令处理器。
@@ -33,6 +34,8 @@ public class CommandExecutor {
     let replicationManager: ReplicationManager
     private let consumerGroupManager: ConsumerGroupManager
     private let config: MqConfig
+    /** 全局投递序号，确保 deliveryId 唯一性 */
+    private static let deliverySn = AtomicInt64(0)
 
     public init(topicManager: TopicManager, queueManager: QueueManager,
                 deliveryManager: DeliveryManager, consumerMatcher: ConsumerMatcher,
@@ -238,23 +241,23 @@ public class CommandExecutor {
      */
     private func handleSubscribe(request: ProtocolMessage): ProtocolMessage {
         if (let Some(body) <- convert<MqBody>(request.data)) {
-            let decoded = decodeTopicAndMode(body.payload)
-            if (let Some((topic, mode)) <- decoded) {
+            let decoded = decodeSubscribePayload(body.payload)
+            if (let Some((topic, groupId, mode)) <- decoded) {
                 if (!validateTopic(topic)) {
                     return errorResp(request.id, "invalid topic: ${topic}")
                 }
-                // 注册消费者：用 topic + pid 组合作为唯一 consumerId，支持同组多消费者
-                let consumerId = "sub@${request.id.pid}:${topic}"
+                // 注册消费者：groupId + pid 组合作为唯一 consumerId，支持同组多消费者
+                let consumerId = "${groupId}@${request.id.pid}:${topic}"
                 let reg = ConsumerRegistration(
-                    consumerId: consumerId, groupId: topic,
+                    consumerId: consumerId, groupId: groupId,
                     matchModeStr: modeToEncodedString(mode),
                     labels: None, dataFilter: None,
                     lastHeartbeat: DateTime.now())
                 consumerMatcher.register(reg)
-                log.info{"subscribe ${topic}"}
+                log.info{"subscribe ${topic} group=${groupId}"}
                 ProtocolMessage(Command.RESP(0), request.id, MqBody("ok", []).toData())
             } else {
-                errorResp(request.id, "failed to decode topic/mode")
+                errorResp(request.id, "failed to decode topic/groupId/mode")
             }
         } else {
             errorResp(request.id, "no body in subscribe request")
@@ -263,12 +266,12 @@ public class CommandExecutor {
 
     private func handleUnsubscribe(request: ProtocolMessage): ProtocolMessage {
         if (let Some(body) <- convert<MqBody>(request.data)) {
-            let decoded = decodeTopicAndMode(body.payload)
-            if (let Some((topic, _)) <- decoded) {
-                // 注销时使用与 SUBSCRIBE 一致的 consumerId = "sub@${pid}:${topic}"
-                let consumerId = "sub@${request.id.pid}:${topic}"
-                consumerMatcher.deregister(topic, consumerId)
-                log.info{"unsubscribed ${topic}"}
+            let decoded = decodeSubscribePayload(body.payload)
+            if (let Some((topic, groupId, _)) <- decoded) {
+                // 注销时使用与 SUBSCRIBE 一致的 consumerId = "${groupId}@${pid}:${topic}"
+                let consumerId = "${groupId}@${request.id.pid}:${topic}"
+                consumerMatcher.deregister(groupId, consumerId)
+                log.info{"unsubscribed group=${groupId} from ${topic}"}
                 ProtocolMessage(Command.RESP(0), request.id, MqBody("ok", []).toData())
             } else {
                 errorResp(request.id, "failed to decode topic")
@@ -307,7 +310,8 @@ public class CommandExecutor {
                                 } else {
                                     (ArrayList<String>(), framed)
                                 }
-                                let deliveryId = "${topic}:${q.index}:${groupId}:${offset}"
+                                let sn = CommandExecutor.deliverySn.fetchAdd(1) + 1
+                                let deliveryId = "${topic}:${q.index}:${groupId}:${offset}:${sn}"
                                 deliveryManager.recordDelivery(deliveryId, groupId, groupId, topic)
                                 consumed.add((deliveryId, labels, payload))
                             }
@@ -353,7 +357,8 @@ public class CommandExecutor {
                                     } else {
                                         (ArrayList<String>(), framed)
                                     }
-                                    let deliveryId = "${topic}:${q.index}:${groupId}:${offset}"
+                                    let sn = CommandExecutor.deliverySn.fetchAdd(1) + 1
+                                let deliveryId = "${topic}:${q.index}:${groupId}:${offset}:${sn}"
                                     deliveryManager.recordDelivery(deliveryId, groupId, groupId, topic)
                                     consumed.add((deliveryId, labels, payload))
                                 }
@@ -777,16 +782,17 @@ public class CommandExecutor {
 
     /**
      * 从 payload 解码 topic 和 MatchMode。
-     * 格式：topic + matchMode (DefaultCodec 编码)。
+     * 格式：topic + groupId + matchModeStr (DefaultCodec 编码)。
      */
-    private static func decodeTopicAndMode(payload: Array<Byte>): ?(String, MatchMode) {
+    private static func decodeSubscribePayload(payload: Array<Byte>): ?(String, String, MatchMode) {
         try {
             let buf = ByteBuffer(payload)
             let dec = DefaultCodec()
             if (let Some(topic) <- dec.decode<String>(buf)
+                && let Some(groupId) <- dec.decode<String>(buf)
                 && let Some(modeStr) <- dec.decode<String>(buf)) {
                 let mode = if (modeStr == "exact") {
-                    MatchMode.Exact(topic)
+                    MatchMode.Exact(if (groupId.isEmpty()) { topic } else { topic })
                 } else if (modeStr == "glob") {
                     MatchMode.Glob(topic)
                 } else if (modeStr == "prefix") {
@@ -794,7 +800,7 @@ public class CommandExecutor {
                 } else {
                     return None
                 }
-                Some((topic, mode))
+                Some((topic, groupId, mode))
             } else { None }
         } catch (_: Exception) { None }
     }
