@@ -73,6 +73,7 @@ public class TopicTest {
 
     @TestCase
     public func testConfigLoad(): Unit {
+        // NOTE: this test assumes clean environment (no mq_hosts/fleet_hosts env vars set)
         let config = loadConfig()
         @Assert(config.dataDir == "/var/fmq/data/")
         @Assert(config.heartbeatIntervalSec == 5)

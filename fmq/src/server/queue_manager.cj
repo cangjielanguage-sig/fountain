@@ -152,6 +152,10 @@ public class QueueManager {
      * 2. 如果队列应属故障节点且尚未在本节点上创建，则在本地创建
      */
     public func reassign(failedNode: Int64): ArrayList<(String, Int64)> {
+        let rm = if (let Some(ref) <- replicationManager) { ref } else {
+            log.warn{"reassign: replicationManager not set, cannot start writer/reader threads"}
+            return ArrayList<(String, Int64)>()
+        }
         let reassigned = ArrayList<(String, Int64)>()
         synchronized(lock) {
             for ((topic, topicQueues) in queues) {
@@ -167,6 +171,7 @@ public class QueueManager {
                         topicQueues.add(q)
                         localIndices.add(i)
                         reassigned.add((topic, i))
+                        startWriterAndReader(q, rm)
                         log.warn{"reassign ${topic}[${i}] from node ${failedNode} to node ${nodeIndex}"}
                     }
                 }

@@ -336,7 +336,7 @@ public class CommandExecutor {
      * 响应格式: topicCount(Int64) × [topic + groupId + msgCount × [deliveryId + labelCount + labels + data]]
      */
     private func handleBatchConsume(buf: ByteBuffer, dec: DefaultCodec, request: ProtocolMessage): ProtocolMessage {
-        let allResults = HashMap<String, (String, ArrayList<(String, ArrayList<String>, Array<Byte>)>)>()  // topic → (groupId, msgs)
+        let allResults = HashMap<String, HashMap<String, ArrayList<(String, ArrayList<String>, Array<Byte>)>>>()  // topic → groupId → msgs
         if (let Some(topicCount) <- dec.decode<Int64>(buf)) {
             for (ti in 0..topicCount) {
                 if (let Some(topic) <- dec.decode<String>(buf)
@@ -362,7 +362,13 @@ public class CommandExecutor {
                             }
                         }
                     }
-                    allResults[topic] = (groupId, consumed)
+                    if (let Some(groupMap) <- allResults.get(topic)) {
+                        groupMap[groupId] = consumed
+                    } else {
+                        let groupMap = HashMap<String, ArrayList<(String, ArrayList<String>, Array<Byte>)>>()
+                        groupMap[groupId] = consumed
+                        allResults[topic] = groupMap
+                    }
                 } else {
                     log.warn{"handleBatchConsume: decode failure at topic index ${ti}"}
                 }
@@ -370,13 +376,17 @@ public class CommandExecutor {
         }
         // 编码响应
         let respBuf = ByteBuffer()
-        let enc = DefaultCodec().encode(allResults.size)
-        for ((topic, (groupId, msgs)) in allResults) {
-            enc.encode(topic).encode(groupId).encode(msgs.size)
-            for ((id, labels, data) in msgs) {
-                enc.encode(id).encode(labels.size)
-                for (l in labels) { enc.encode(l) }
-                enc.encode(data)
+        var pairCount = 0i64
+        for ((_, groupMap) in allResults) { pairCount += groupMap.size }
+        let enc = DefaultCodec().encode(pairCount)
+        for ((topic, groupMap) in allResults) {
+            for ((groupId, msgs) in groupMap) {
+                enc.encode(topic).encode(groupId).encode(msgs.size)
+                for ((id, labels, data) in msgs) {
+                    enc.encode(id).encode(labels.size)
+                    for (l in labels) { enc.encode(l) }
+                    enc.encode(data)
+                }
             }
         }
         enc.finish().copy(to: respBuf, closeFromOnEnd: true, closeToOnEnd: false)

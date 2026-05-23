@@ -88,10 +88,12 @@ public func extractBytes(buf: ByteBuffer): Array<Byte> {
     buf.seek(SeekPosition.Begin(0))
     let raw = Array<Byte>(size, repeat: 0u8)
     let bytesRead = buf.read(raw)
-    if (bytesRead == size) {
+    if (bytesRead >= 0 && bytesRead == size) {
         raw
+    } else if (bytesRead > 0) {
+        raw[0..Int64(bytesRead)]
     } else {
-        raw[0..bytesRead]
+        []
     }
 }
 

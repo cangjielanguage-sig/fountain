@@ -24,7 +24,6 @@ import std.io.ByteBuffer
  * 封装生产消息的协议细节。
  */
 public class Sender {
-    private let log = LoggerFactory.getLogger('fountain::fmq.Sender')
     private let client: Client<ProtocolMessage, EncodedMessage, ProtocolMessage, MqBody, MessageID>
 
     public init(client: Client<ProtocolMessage, EncodedMessage, ProtocolMessage, MqBody, MessageID>) {

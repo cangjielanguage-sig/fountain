@@ -92,19 +92,19 @@ public func loadConfig(): MqConfig {
         mqHosts: readEnvList("mq_hosts"),
         syncHosts: readEnvList("sync_hosts"),
         dataDir: readEnv("mq_data_dir") ?? "/var/fmq/data/",
-        segmentMaxSize: readEnvInt("mq_segment_max_size") ?? 512 * 1024 * 1024,
-        heartbeatIntervalSec: readEnvInt("mq_heartbeat_interval_sec") ?? 5,
-        healthcheckMaxRetry: readEnvInt("mq_healthcheck_max_retry") ?? 3,
-        idleTimeoutMinutes: readEnvInt("mq_idle_timeout_minutes") ?? 30,
-        ackTimeoutMs: readEnvInt("mq_ack_timeout_ms") ?? 30000,
-        maxRetryCount: readEnvInt("mq_max_retry_count") ?? 3,
-        retryIntervalMs: readEnvInt("mq_retry_interval_ms") ?? 1000,
-        dlqRetentionHours: readEnvInt("mq_dlq_retention_hours") ?? 168,
-        maxMessageSize: readEnvInt("mq_max_message_size") ?? 4 * 1024 * 1024,
-        maxLabelsPerMessage: readEnvInt("mq_max_labels_per_message") ?? 64,
-        retentionHours: readEnvInt("mq_retention_hours") ?? 72,
-        syncQuorum: readEnvInt("mq_sync_quorum") ?? 1,
-        cleanupBatchSize: readEnvInt("mq_cleanup_batch_size") ?? 10
+        segmentMaxSize: clampPositive(readEnvInt("mq_segment_max_size"), 512 * 1024 * 1024, "segmentMaxSize"),
+        heartbeatIntervalSec: clampPositive(readEnvInt("mq_heartbeat_interval_sec"), 5, "heartbeatIntervalSec"),
+        healthcheckMaxRetry: clampPositive(readEnvInt("mq_healthcheck_max_retry"), 3, "healthcheckMaxRetry"),
+        idleTimeoutMinutes: clampPositive(readEnvInt("mq_idle_timeout_minutes"), 30, "idleTimeoutMinutes"),
+        ackTimeoutMs: clampPositive(readEnvInt("mq_ack_timeout_ms"), 30000, "ackTimeoutMs"),
+        maxRetryCount: clampPositive(readEnvInt("mq_max_retry_count"), 3, "maxRetryCount"),
+        retryIntervalMs: clampPositive(readEnvInt("mq_retry_interval_ms"), 1000, "retryIntervalMs"),
+        dlqRetentionHours: clampPositive(readEnvInt("mq_dlq_retention_hours"), 168, "dlqRetentionHours"),
+        maxMessageSize: clampPositive(readEnvInt("mq_max_message_size"), 4 * 1024 * 1024, "maxMessageSize"),
+        maxLabelsPerMessage: clampPositive(readEnvInt("mq_max_labels_per_message"), 64, "maxLabelsPerMessage"),
+        retentionHours: clampPositive(readEnvInt("mq_retention_hours"), 72, "retentionHours"),
+        syncQuorum: clampPositive(readEnvInt("mq_sync_quorum"), 1, "syncQuorum"),
+        cleanupBatchSize: clampPositive(readEnvInt("mq_cleanup_batch_size"), 10, "cleanupBatchSize")
     )
 }
 
@@ -145,6 +145,17 @@ public func readEnvList(key: String): ArrayList<String> {
     } else {
         ArrayList()
     }
+}
+
+/**
+ * 范围校验辅助函数，确保整型配置值为正数。
+ */
+internal func clampPositive(raw: ?Int64, defaultVal: Int64, paramName: String): Int64 {
+    let v = raw ?? defaultVal
+    if (v <= 0) {
+        log.warn{"${paramName} must be positive, got ${v}, using default ${defaultVal}"}
+        defaultVal
+    } else { v }
 }
 
 /**

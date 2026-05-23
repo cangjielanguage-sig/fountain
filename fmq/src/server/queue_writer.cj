@@ -117,6 +117,7 @@ public class QueueWriter {
      * 为每个从节点 spawn 并行同步（spawn 发生在此线程，不阻塞主写循环）。
      */
     public func startSyncThread(): Unit {
+        if (syncThread.isSome()) { return }
         let selfRef = this
         syncThread = spawn {
             while (!selfRef.syncClosed.load()) {

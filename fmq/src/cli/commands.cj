@@ -30,11 +30,11 @@ public class CommandRunner {
      * 从参数数组中提取 --name <value> 格式的值。
      */
     internal static func getArg(args: Array<String>, flag: String): ?String {
+        let prefix = flag + "="
         for (i in 0..args.size) {
             if (args[i] == flag && i + 1 < args.size) {
                 return Some(args[i + 1])
             }
-            let prefix = flag + "="
             if (args[i].startsWith(prefix)) {
                 return Some(args[i][prefix.size..])
             }
@@ -62,8 +62,8 @@ public class CommandRunner {
                 if (let Some(v) <- Int64.tryParse(s)) { q = v }
                 else { println("error: --queues must be a number, got '${s}'"); return false }
             } else { usingDefault = true }
-            let client = if (let Some(c) <- getClient()) { c } else { return false }
             if (usingDefault) { println("using default queue count: 1") }
+            let client = if (let Some(c) <- getClient()) { c } else { return false }
             if (client.createTopic(n, queueCount: q)) {
                 println("created topic '${n}' with ${q} queues")
                 true
@@ -158,10 +158,13 @@ public class CommandRunner {
         // 按 topic 分组输出（使用 HashMap 确保不依赖迭代顺序）
         var groupsByTopic = HashMap<String, ArrayList<String>>()
         for ((topic, group) in all) {
-            if (!groupsByTopic.contains(topic)) {
-                groupsByTopic[topic] = ArrayList<String>()
+            if (let Some(groups) <- groupsByTopic.get(topic)) {
+                groups.add(group)
+            } else {
+                let groups = ArrayList<String>()
+                groups.add(group)
+                groupsByTopic[topic] = groups
             }
-            groupsByTopic[topic].add(group)
         }
         for ((topic, groups) in groupsByTopic) {
             println("  ${topic}:")
@@ -266,8 +269,6 @@ public class CommandRunner {
      * 显示当前 MQ 集群节点信息。
      */
     public static func showBrokers(_: Array<String>): Bool {
-        // 通过 getClient() 验证连接可用性
-        if (getClient().isNone()) { return false }
         let config = getOrLoadConfig()
         println("mq_hosts: ${config.mqHosts}")
         println("sync_hosts: ${config.syncHosts}")

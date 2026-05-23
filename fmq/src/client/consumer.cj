@@ -57,7 +57,7 @@ public class Consumer {
                 if (body.bodyType == "batch_consume") {
                     let perTopic = Consumer.decodeBatchConsumeResponse(body.payload)
                     for ((groupId, topic, dataFilter, _) in subs) {
-                        if (let Some(msgs) <- perTopic.get(topic)) {
+                        if (let Some(groupMap) <- perTopic.get(topic) && let Some(msgs) <- groupMap.get(groupId)) {
                             for ((deliveryId, labels, payload) in msgs) {
                                 if (dataFilter != "" && !Consumer.dataFilterMatch(dataFilter, payload)) {
                                     let ackQi = ConsumerLoop.extractQueueIndex(deliveryId)
@@ -80,6 +80,7 @@ public class Consumer {
                         }
                     }
                 }
+                // TODO(P2-2): remaining messages in perTopic are lost on return, causing server retry.
             }
         }
         None
@@ -229,8 +230,8 @@ public class Consumer {
      * 格式: topicCount × [topic + groupId + msgCount × [deliveryId + labelCount + labels + data]]
      */
     internal static func decodeBatchConsumeResponse(data: Array<Byte>):
-            HashMap<String, ArrayList<(String, ArrayList<String>, Array<Byte>)>> {
-        let result = HashMap<String, ArrayList<(String, ArrayList<String>, Array<Byte>)>>()
+            HashMap<String, HashMap<String, ArrayList<(String, ArrayList<String>, Array<Byte>)>>> {
+        let result = HashMap<String, HashMap<String, ArrayList<(String, ArrayList<String>, Array<Byte>)>>>()
         try {
             let buf = ByteBuffer(data)
             let dec = DefaultCodec()
@@ -257,7 +258,13 @@ public class Consumer {
                                 }
                             }
                         }
-                        result[topic] = msgs
+                        if (let Some(groupMap) <- result.get(topic)) {
+                            groupMap[groupId] = msgs
+                        } else {
+                            let groupMap = HashMap<String, ArrayList<(String, ArrayList<String>, Array<Byte>)>>()
+                            groupMap[groupId] = msgs
+                            result[topic] = groupMap
+                        }
                     }
                 }
             }
@@ -387,7 +394,7 @@ public class ConsumerLoop {
      */
     internal static func extractQueueIndex(deliveryId: String): Int64 {
         let parts = deliveryId.split(':')
-        if (parts.size >= 2 && let Some(idx) <- Int64.tryParse(parts[1])) {
+        if (parts.size >= 4 && let Some(idx) <- Int64.tryParse(parts[parts.size - 3])) {
             idx
         } else {
             0

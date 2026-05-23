@@ -248,11 +248,13 @@ public class MqClientProtocolTest {
         if (let Some(o) <- dec.decode<String>(buf)
             && let Some(t) <- dec.decode<String>(buf)
             && let Some(g) <- dec.decode<String>(buf)
-            && let Some(of) <- dec.decode<Int64>(buf)) {
+            && let Some(of) <- dec.decode<Int64>(buf)
+            && let Some(queueIdx) <- dec.decode<Int64>(buf)) {
             @Assert(o == op)
             @Assert(t == topic)
             @Assert(g == group)
             @Assert(of == off)
+            @Assert(queueIdx == 0)
         } else { @Assert(false) }
     }
 

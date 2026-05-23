@@ -121,6 +121,7 @@ public class BrokerMeta {
         result
     }
     public func getLastSeen(): DateTime { lastSeen }
+    public func setLastSeen(ts: DateTime): Unit { this.lastSeen = ts }
 }
 
 /**

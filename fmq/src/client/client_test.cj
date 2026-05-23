@@ -364,13 +364,16 @@ public class BatchConsumeProtocolTest {
         let raw = extractBytes(encBuf)
         let result = Consumer.decodeBatchConsumeResponse(raw)
         @Assert(result.size == 1)
-        if (let Some(msgs) <- result.get("/a")) {
-            @Assert(msgs.size == 1)
-            let (id, labels, payload) = msgs[0]
-            @Assert(id == "id:a:0:g1:0")
-            @Assert(labels.size == 1)
-            @Assert(labels[0] == "k=v")
-            @Assert(payload.size == 2)
+        if (let Some(groupMap) <- result.get("/a")) {
+            @Assert(groupMap.size == 1)
+            if (let Some(msgs) <- groupMap.get("g1")) {
+                @Assert(msgs.size == 1)
+                let (id, labels, payload) = msgs[0]
+                @Assert(id == "id:a:0:g1:0")
+                @Assert(labels.size == 1)
+                @Assert(labels[0] == "k=v")
+                @Assert(payload.size == 2)
+            }
         }
     }
 }

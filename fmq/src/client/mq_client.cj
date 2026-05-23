@@ -18,7 +18,7 @@ package fountain::fmq.client
 import fountain::f_protocol.default.{Message as ProtocolMessage, EncodedMessage}
 import fountain::f_codec.default.DefaultCodec
 import std.collection.ArrayList
-import std.io.{ByteBuffer, SeekPosition}
+import std.io.ByteBuffer
 import std.convert.*
 import std.sync.{Mutex, AtomicBool}
 

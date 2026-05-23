@@ -56,7 +56,7 @@ public func encodeTopicToPath(topic: String): String {
             case _ => parts.add(b)
         }
     }
-    String.fromUtf8(parts.unsafeData())
+    String.fromUtf8(parts.toArray())
 }
 
 /**
@@ -86,5 +86,5 @@ public func decodePathToTopic(path: String): String {
             i += 1
         }
     }
-    String.fromUtf8(parts.unsafeData())
+    String.fromUtf8(parts.toArray())
 }
