@@ -141,14 +141,14 @@ public class QueueWriter {
             if (syncThreads.get(nodeId).isSome()) { continue }
             // 为每个 slave 创建专用队列
             slaveSyncQueues[nodeId] = ConcurrentLinkedQueue<Array<Byte>>()
-            syncThreads[nodeId] = spawn {
-                let q = selfRef.slaveSyncQueues[nodeId]
+            let slaveId = nodeId
+            syncThreads[slaveId] = spawn {
                 while (!selfRef.syncClosed.load()) {
-                    if (let Some(qRef) <- q && let Some(entry) <- qRef.remove()) {
-                        selfRef.syncToSlave(nodeId, entry)
-                    } else {
-                        sleep(Duration.millisecond * 10)
-                    }
+                    if (let Some(q) <- selfRef.slaveSyncQueues.get(slaveId)) {
+                        if (let Some(entry) <- q.remove()) {
+                            selfRef.syncToSlave(slaveId, entry)
+                        } else { sleep(Duration.millisecond * 10) }
+                    } else { sleep(Duration.millisecond * 10) }
                 }
             }
         }

@@ -61,7 +61,7 @@ public class Consumer {
                             for ((deliveryId, labels, payload) in msgs) {
                                 if (dataFilter != "" && !Consumer.dataFilterMatch(dataFilter, payload)) {
                                     let ackQi = ConsumerLoop.extractQueueIndex(deliveryId)
-                                    sendAck(deliveryId, topic, ackQi, "dataFilter")
+                                    Consumer.sendAck(client, deliveryId, topic, ackQi, "dataFilter")
                                     continue
                                 }
                                 let qi = ConsumerLoop.extractQueueIndex(deliveryId)
@@ -166,14 +166,16 @@ public class Consumer {
         extractBytes(buf)
     }
 
-    /** P4-3: 发送 ACK，提取公共模式减少重复。 */
-    private func sendAck(deliveryId: String, topic: String, queueIndex: Int64, logLabel: String): Unit {
+    /** P4-3: 发送 ACK（static 以便 ConsumerLoop 复用）。 */
+    internal static func sendAck(client: Client<ProtocolMessage, EncodedMessage, ProtocolMessage, MqBody, MessageID>,
+                                 deliveryId: String, topic: String, queueIndex: Int64, logLabel: String): Unit {
         let ackPayload = Consumer.encodeAckPayload(deliveryId, topic, queueIndex)
         let ackReq = ProtocolMessage(Command.ACK, MessageID(),
             MqBody("ack", ackPayload).toData())
         let ackResp = client.transfer(ackReq.id, ackReq, Duration.second * 5)
         if (ackResp.isNone()) {
-            log.warn{"${logLabel} ACK failed for deliveryId=${deliveryId}"}
+            let label = logLabel
+            log.warn{"${label} ACK failed for deliveryId=${deliveryId}"}
         }
     }
 
@@ -364,16 +366,16 @@ public class ConsumerLoop {
                         let (deliveryId, labels, msgData) = msgs[0]
                         if (dataFilter != "" && !Consumer.dataFilterMatch(dataFilter, msgData)) {
                             let ackQi = extractQueueIndex(deliveryId)
-                            sendAck(deliveryId, topic, ackQi, "dataFilter")
-                            return true  // 有消息但被过滤，已 ACK
+                            Consumer.sendAck(client, deliveryId, topic, ackQi, "dataFilter")
+                            return true
                         }
                         let queueIndex = extractQueueIndex(deliveryId)
                         let msg = Message(topic: topic, id: MessageID(),
                             queueIndex: queueIndex, payload: msgData, labels: labels,
                             producerId: deliveryId)
                         callback(msg)
-                        sendAck(deliveryId, topic, queueIndex, "callback")
-                        return true  // 消息已处理
+                        Consumer.sendAck(client, deliveryId, topic, queueIndex, "callback")
+                        return true
                     }
                 }
             }

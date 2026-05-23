@@ -18,6 +18,7 @@ package fountain::fmq.cli
 import std.collection.*
 import std.convert.*
 import std.sync.Mutex
+import std.sort.*
 
 /**
  * 命令运行器。
@@ -180,7 +181,7 @@ public class CommandRunner {
         // 排序后迭代，避免 HashMap 顺序不确定（P4-5）
         let sortedTopics = ArrayList<String>()
         for ((t, _) in groupsByTopic) { sortedTopics.add(t) }
-        sortedTopics.sort()
+        sort(sortedTopics)
         for (topic in sortedTopics) {
             if (let Some(groups) <- groupsByTopic.get(topic)) {
                 println("  ${topic}:")
