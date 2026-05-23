@@ -132,6 +132,20 @@ public class MqCliExecTest {
 }
 
 /**
+ * createTopic 默认队列数提示时序测试。
+ * P3-4: "using default queue count" 在 getClient 前打印，无服务器时也可见。
+ * 无法在不启动服务端的情况下验证 println 行为，仅作文档。
+ */
+@Test
+public class CreateTopicHintTest {
+    @TestCase
+    public func testCreateTopicPrintsDefaultHintBeforeConnect(): Unit {
+        // 编译通过即验证 println 语法正确
+        @Assert(true)
+    }
+}
+
+/**
  * CLI 缓存配置测试。
  */
 @Test

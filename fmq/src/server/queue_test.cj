@@ -156,3 +156,35 @@ public class MqQueueReadTest {
         } catch (_: Exception) {}
     }
 }
+
+/**
+ * QueueWriter 线程生命周期测试。
+ * P2: startSyncThread 幂等性，两次调用不应崩溃。
+ */
+@Test
+public class QueueWriterTest {
+    @TestCase
+    public func testStartSyncThreadDoubleCallNoCrash(): Unit {
+        let q = MqQueue("/test-sync2", 0, "/tmp/fmqq_sync2", 4096)
+        let hosts = ArrayList<String>()
+        hosts.add("localhost:7201")
+        let config = MqConfig.forTest(dataDir: "/tmp/fmqq_sync2", mqHosts: hosts)
+        let rm = ReplicationManager(config)
+        let writer = QueueWriter(q, config, replicationManager: rm)
+        // 两次调用 startSyncThread 不应崩溃或报错
+        writer.startSyncThread()
+        writer.startSyncThread()
+        @Assert(true)
+        q.close()
+        cleanupDir("/tmp/fmqq_sync2")
+    }
+
+    private static func cleanupDir(path: String): Unit {
+        try {
+            for (entry in Directory.readFrom(path)) {
+                try { remove(entry.path.toString()) } catch (_: Exception) {}
+            }
+            remove(path)
+        } catch (_: Exception) {}
+    }
+}

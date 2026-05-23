@@ -289,6 +289,14 @@ public class ProtocolFunctionTest {
         @Assert(raw[0] == 0x01u8)
         @Assert(raw[2] == 0x03u8)
     }
+
+    @TestCase
+    public func testExtractBytesNegativeGuard(): Unit {
+        let buf = ByteBuffer()
+        // 空 buffer 的 seek=0, read=0, bytesRead=0 >= 0 → 返回 []
+        let result = extractBytes(buf)
+        @Assert(result.size == 0)
+    }
 }
 
 // ── encodeMatchMode ↔ decodeMatchMode 兼容性测试 ──
@@ -356,6 +364,18 @@ public class ConfigTest {
     public func testReadEnvInvalidIntReturnsNone(): Unit {
         @Assert(Int64.tryParse("abc").isNone())
         @Assert(Int64.tryParse("123abc").isNone())
+    }
+
+    @TestCase
+    public func testClampPositiveRejectsInvalid(): Unit {
+        // 零值 → 返回默认值
+        @Assert(clampPositive(Some(0i64), 10, "test") == 10)
+        // 负值 → 返回默认值
+        @Assert(clampPositive(Some(-5i64), 10, "test") == 10)
+        // 正值 → 返回原值
+        @Assert(clampPositive(Some(5i64), 10, "test") == 5)
+        // None → 返回默认值
+        @Assert(clampPositive(None, 10, "test") == 10)
     }
 }
 
