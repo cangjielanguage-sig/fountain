@@ -38,24 +38,14 @@ public class Subscriber {
     }
 
     /**
-     * 注册消费者身份并订阅主题。
-     * 1. 发送 REGISTER 命令注册 consumerId
-     * 2. 发送 SUBSCRIBE 命令订阅 topic
+     * 订阅主题（通过 SUBSCRIBE 命令完成消费者注册）。
+     * P1-2: 移除 REGISTER 步骤避免双重注册。
+     * SUBSCRIBE 已完整编码 groupId（P0-1 修复），服务端 handleSubscribe 创建 ConsumerRegistration。
      */
     public func subscribe(groupId: String, matchMode: MatchMode,
                           labels!: ArrayList<String> = ArrayList(),
                           dataFilter!: String = ""): Bool {
-        // 1. 注册消费者身份
-        let regBody = encodeRegistrationPayload(groupId, matchMode)
-        let regReq = ProtocolMessage(Command.REGISTER, MessageID(),
-            MqBody("register", regBody).toData())
-        let regResp = client.transfer(regReq.id, regReq, Duration.second * 10)
-        if (regResp.isNone()) {
-            log.warn{"register failed for group=${groupId}"}
-            return false
-        }
-
-        // 2. 订阅 topic (topic + groupId + modeStr)
+        // 发送 SUBSCRIBE 命令（内含 topic + groupId + modeStr）
         let subBody = encodeSubscribePayload(matchModeTopic(matchMode), groupId, matchModeToString(matchMode))
         let subReq = ProtocolMessage(Command.SUBSCRIBE, MessageID(),
             MqBody("subscribe", subBody).toData())
@@ -63,7 +53,6 @@ public class Subscriber {
         let dataFilterVal = dataFilter
         if (subResp.isSome()) {
             synchronized(subLock) {
-                // 检查是否已存在相同 groupId+topic+dataFilter 的订阅，避免重复
                 for ((g, t, _, m) in subscriptions) {
                     if (g == groupId && t == matchModeTopic(matchMode) && m == matchModeToString(matchMode)) {
                         log.info{"already subscribed group=${groupId} to ${matchModeTopic(matchMode)}, skipping duplicate"}
@@ -75,11 +64,6 @@ public class Subscriber {
             log.info{"subscribed group=${groupId} to ${matchModeToString(matchMode)}"}
             true
         } else {
-            // SUBSCRIBE 失败：清理已成功的 REGISTER 避免遗留注册
-            if (!deregister(groupId, groupId)) {
-                // deregister 回滚也失败：警告，心跳超时会自动清理
-                log.warn{"subscribe rollback failed: deregister(${groupId}) unsuccessful, registration may linger until heartbeat timeout"}
-            }
             log.warn{"subscribe failed for group=${groupId}"}
             false
         }
@@ -165,19 +149,6 @@ public class Subscriber {
     }
 
     // ───── 编码工具 ─────
-
-    private static func encodeRegistrationPayload(groupId: String, mode: MatchMode): Array<Byte> {
-        let modeStr = encodeMatchMode(mode)
-        let buf = ByteBuffer()
-        let enc = DefaultCodec()
-            .encode(groupId)
-            .encode(groupId)  // consumerId = groupId
-            .encode(modeStr)
-            .finish()
-        enc.copy(to: buf, closeFromOnEnd: true, closeToOnEnd: false)
-        let raw = extractBytes(buf)
-        raw
-    }
 
     private static func encodeTopicAndMode(topic: String, mode: String): Array<Byte> {
         let buf = ByteBuffer()

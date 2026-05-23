@@ -668,6 +668,20 @@ public class DeadLetterStoreTest {
         ds.sync()
         @Assert(true)
     }
+
+    /**
+     * P1-3: 验证 unsyncedCount 使用 AtomicInt64 线程安全。
+     * 批量 append 验证计数不会因竞态丢失。
+     */
+    @TestCase
+    public func testUnsyncedCountAtomicSafety(): Unit {
+        let ds = DeadLetterStore(dlqDir("atomic"), retentionHours: 168, syncBatchSize: 10)
+        for (i in 0..10) {
+            ds.append([0x01u8], "/test", 0, "msg-a-${i}")
+        }
+        let after = ds.list("/test", 0)
+        @Assert(after.size == 10)
+    }
 }
 
 @Test

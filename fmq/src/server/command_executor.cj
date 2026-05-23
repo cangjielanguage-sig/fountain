@@ -115,7 +115,11 @@ public class CommandExecutor {
                 return errorResp(request.id, "too many labels: ${labels.size} > ${config.maxLabelsPerMessage}")
             }
             let queues = if (let Some(qs) <- queueManager.getQueues(topic)) { qs }
-                else { queueManager.createQueues(topic, 1) }
+                else {
+                    let newQs = queueManager.createQueues(topic, 1)
+                    queueManager.startWritersForTopic(topic)
+                    newQs
+                }
             if (queues.size == 0) {
                 return errorResp(request.id, "no queue available for topic=${topic}")
             }

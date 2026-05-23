@@ -26,6 +26,7 @@ import std.sync.Mutex
 public class ConsumerMatcher {
     private let log = LoggerFactory.getLogger('fountain::fmq.ConsumerMatcher')
     private var registrations = ArrayList<ConsumerRegistration>()
+    private var consumerIdIndex = HashMap<String, Int64>()  // consumerId → position for O(1) lookup
     private var roundRobinIndex = HashMap<String, Int64>()  // groupId → next index
     private let mutex = Mutex()
     // P3-4: 缓存编译后的 PathPattern，避免每次匹配重新 compile
@@ -39,58 +40,58 @@ public class ConsumerMatcher {
 
     public func register(registration: ConsumerRegistration): Unit {
         synchronized(mutex) {
-            // 查找是否已存在相同 consumerId 的注册
-            for (i in 0..registrations.size) {
-                if (registrations[i].consumerId == registration.consumerId) {
-                    // 更新已有注册（保留其 consumerId/groupId，刷新其他字段）
-                    let existing = registrations[i]
-                    registrations[i] = ConsumerRegistration(
-                        consumerId: existing.consumerId,
-                        groupId: existing.groupId,
-                        matchModeStr: registration.matchModeStr,
-                        labels: registration.labels,
-                        dataFilter: registration.dataFilter,
-                        lastHeartbeat: registration.lastHeartbeat)
-                    return
-                }
+            // O(1) lookup using consumerIdIndex
+            if (let Some(existingPos) <- consumerIdIndex.get(registration.consumerId)) {
+                let existing = registrations[existingPos]
+                registrations[existingPos] = ConsumerRegistration(
+                    consumerId: existing.consumerId,
+                    groupId: existing.groupId,
+                    matchModeStr: registration.matchModeStr,
+                    labels: registration.labels,
+                    dataFilter: registration.dataFilter,
+                    lastHeartbeat: registration.lastHeartbeat)
+                return
             }
+            let pos = registrations.size
             registrations.add(registration)
-            // 注意：不清除 compiledPatterns 缓存。
-            // 缓存有 MAX_COMPILED_PATTERNS 上限，超限时整体清空。
-            // 保留缓存可避免注册变更导致所有 Glob 匹配重新 compile。
+            consumerIdIndex[registration.consumerId] = pos
         }
     }
 
     public func deregister(groupId: String, consumerId: String): Bool {
         let result: Bool
         synchronized(mutex) {
-            let remaining = ArrayList<ConsumerRegistration>()
-            for (r in registrations) {
-                if (!(r.groupId == groupId && r.consumerId == consumerId)) {
-                    remaining.add(r)
-                }
-            }
-            result = remaining.size < registrations.size
-            registrations = remaining
-            // 注意：不清除 compiledPatterns 缓存。
-            // 被移除消费者的 Glob pattern 可能仍被活跃消费者使用，保留缓存利大于弊。
-            // 缓存由 MAX_COMPILED_PATTERNS 上限和 globMatches 内的超限清理管理。
+            // O(1) lookup
+            if (let Some(pos) <- consumerIdIndex.get(consumerId)) {
+                let r = registrations[pos]
+                if (r.groupId == groupId) {
+                    registrations.remove(at: pos)
+                    consumerIdIndex.remove(consumerId)
+                    // 修正移除位置之后所有条目的索引
+                    for (i in pos..registrations.size) {
+                        consumerIdIndex[registrations[i].consumerId] = i
+                    }
+                    result = true
+                } else { result = false }
+            } else { result = false }
         }
         result
     }
 
     public func refresh(): Unit {
         let now = DateTime.now()
-        let td = timeoutDuration  // capture for lambda
+        let td = timeoutDuration
         synchronized(mutex) {
             let remaining = ArrayList<ConsumerRegistration>()
+            let newIndex = HashMap<String, Int64>()
             for (r in registrations) {
                 if (now - r.lastHeartbeat < td) {
+                    newIndex[r.consumerId] = remaining.size
                     remaining.add(r)
                 }
             }
             registrations = remaining
-            // 注意：不清除 compiledPatterns 缓存。理由同 deregister。
+            consumerIdIndex = newIndex
         }
     }
 

@@ -31,7 +31,6 @@ public class QueueManager {
     private let nodeIndex: Int64
     private let lock = Mutex()
     private let writers = ArrayList<QueueWriter>()  // 跟踪 writer 线程
-    private let readers = ArrayList<QueueReader>()  // 跟踪 reader 线程
     private let writerMap = ConcurrentHashMap<String, QueueWriter>()  // "topic:index" → writer 快速查找
 
     public init(config: MqConfig, nodeIndex!: Int64 = 0) {
@@ -252,7 +251,7 @@ public class QueueManager {
                 startWriterAndReader(q, rm)
             }
         }
-        log.info{"startAll: ${writers.size} writers, ${readers.size} readers started"}
+        log.info{"startAll: ${writers.size} writers started"}
     }
 
     /**
@@ -283,22 +282,19 @@ public class QueueManager {
                     }
                 }
                 let s = started
-                log.info{"startWritersForTopic: started ${s} writers/readers for ${topic}"}
+                log.info{"startWritersForTopic: started ${s} writers for ${topic}"}
             }
         }
     }
 
     /**
-     * 为单个队列创建并启动 writer/reader 线程。
+     * 为单个队列创建并启动 writer 线程。
      */
     private func startWriterAndReader(q: MqQueue, rm: ReplicationManager): Unit {
         let writer = QueueWriter(q, config, replicationManager: rm, queueSize: 1024)
-        let reader = QueueReader(q)
         writers.add(writer)
-        readers.add(reader)
         writerMap["${q.topic}:${q.index}"] = writer
         spawn { writer.run() }
-        spawn { reader.run() }
     }
 
     /**
@@ -320,8 +316,6 @@ public class QueueManager {
     }
 
     public func close(): Unit {
-        // 先关闭队列（含 SegmentedLog），中断 reader 线程中任何阻塞的 I/O（openEntryStream/decode）。
-        // reader 线程解除阻塞后检查 closed.load() 并退出，不再持有 streamLock。
         let allQueues: ArrayList<MqQueue>
         synchronized(lock) {
             allQueues = ArrayList<MqQueue>()
@@ -332,10 +326,7 @@ public class QueueManager {
         for (q in allQueues) {
             if (!q.isClosed()) { q.close() }
         }
-        // 队列关闭后，writer 的 run() 循环中 closed.load() 为 true 会退出；
-        // reader 的 I/O 已被中断，catch 块处理后退出。
         for (w in writers) { w.close() }
-        for (r in readers) { r.close() }
-        log.info{"closed: stopped ${writers.size} writers, ${readers.size} readers"}
+        log.info{"closed: stopped ${writers.size} writers"}
     }
 }

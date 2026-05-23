@@ -46,17 +46,20 @@ public class TopicManager {
         if (let Some(fleet) <- syncClient) {
             try {
                 let result = fleet.prefix("/mq/topics/")
-                for (i in 0..result.size) {
-                    if (let Some(key) <- result.getKey(i)
-                        && let Some(bytes) <- result.getValue(i)) {
-                        let name = key[11..]  // 去掉 "/mq/topics/"
-                        if (let Some(meta) <- DefaultCodec().decode<TopicMeta>(ByteBuffer(bytes))) {
-                            topics[name] = meta
-                            log.info{"restored topic '${name}' from fleet"}
+                synchronized(lock) {
+                    for (i in 0..result.size) {
+                        if (let Some(key) <- result.getKey(i)
+                            && let Some(bytes) <- result.getValue(i)) {
+                            let name = key[11..]  // 去掉 "/mq/topics/"
+                            if (let Some(meta) <- DefaultCodec().decode<TopicMeta>(ByteBuffer(bytes))) {
+                                topics[name] = meta
+                                log.info{"restored topic '${name}' from fleet"}
+                            }
                         }
                     }
                 }
-                log.info{"restore: loaded ${topics.size} topics from fleet"}
+                let count = topics.size
+                log.info{"restore: loaded ${count} topics from fleet"}
             } catch (e: Exception) {
                 log.warn{"restore from fleet failed: ${e.message}"}
             }

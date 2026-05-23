@@ -17,7 +17,7 @@ package fountain::fmq.server
 
 import std.collection.HashMap
 import std.io.ByteBuffer
-import std.sync.Mutex
+import std.sync.{Mutex, AtomicInt64}
 import std.time.DateTime
 import fountain::f_codec.default.DefaultCodec
 import fountain::f_io.{SegmentedLog, LogConfig}
@@ -36,7 +36,7 @@ public class DeadLetterStore {
     // 内存索引：messageId → (topic, queueIndex, data, insertedAt)
     private let index = HashMap<String, (String, Int64, Array<Byte>, DateTime)>()
     private let mutex = Mutex()
-    private var unsyncedCount: Int64 = 0
+    private let unsyncedCount = AtomicInt64(0)
 
     public init(queueDir: String, retentionHours!: Int64 = 168, syncBatchSize!: Int64 = 10) {
         this.dlqDir = "${queueDir}/dlq"
@@ -59,10 +59,10 @@ public class DeadLetterStore {
         // 编码 metadata + data 到单条 entry
         let entry = encodeDlqEntry(messageId, topic, queueIndex, data)
         dlqLog.append(entry)
-        unsyncedCount += 1
-        if (unsyncedCount >= syncBatchSize) {
+        let count = unsyncedCount.addGet(1)
+        if (count >= syncBatchSize) {
             dlqLog.sync()
-            unsyncedCount = 0
+            unsyncedCount.store(0)
         }
         synchronized(mutex) { index[messageId] = (topic, queueIndex, data, DateTime.now()) }
         log.warn{"dead letter: ${messageId}"}
@@ -72,9 +72,9 @@ public class DeadLetterStore {
      * 强制同步。在关闭前调用确保数据落盘。
      */
     public func sync(): Unit {
-        if (unsyncedCount > 0) {
+        if (unsyncedCount.load() > 0) {
             dlqLog.sync()
-            unsyncedCount = 0
+            unsyncedCount.store(0)
         }
     }
 

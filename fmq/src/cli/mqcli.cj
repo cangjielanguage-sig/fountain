@@ -49,14 +49,22 @@ public class MqCliCommand <: SubCommand {
         println("MQ CLI (type 'help' for commands, empty line to exit)")
         println()
         while (true) {
-            let line = readln()
-            if (line == "") { break }
-            let trimmed = line.trimAscii()
-            if (trimmed == "") { continue }
-            let args = trimmed.split(' ')
-            if (!runCommand(args)) {
-                println("command failed")
+            let line: ?String
+            try {
+                line = Some(readln())
+            } catch (_: Exception) {
+                println()
+                break
             }
+            if (let Some(l) <- line) {
+                if (l == "") { break }
+                let trimmed = l.trimAscii()
+                if (trimmed == "") { continue }
+                let args = trimmed.split(' ')
+                if (!runCommand(args)) {
+                    println("command failed")
+                }
+            } else { break }
         }
     }
 
