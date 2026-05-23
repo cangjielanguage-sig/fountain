@@ -35,10 +35,10 @@ public class QueueWriter {
     private let inboundQueue: ConcurrentLinkedQueue<Array<Byte>>
     /** 从节点连接池：nodeId → Client，复用长连接减少 TCP 握手。 */
     private let slaveConns = ConcurrentHashMap<String, Client<ProtocolMessage, EncodedMessage, ProtocolMessage, MqBody, MessageID>>()
-    /** 同步队列：写线程入队，专用 sync 线程出队并发同步到所有从节点。*/
-    private let syncQueue = ConcurrentLinkedQueue<Array<Byte>>()
+    /** 同步队列（写线程入队，各 slave 专用线程并行出队）。P2-2: per-slave queue。*/
+    private let slaveSyncQueues = ConcurrentHashMap<String, ConcurrentLinkedQueue<Array<Byte>>>()
     private let syncClosed = AtomicBool(false)
-    private var syncThread: ?Future<Unit> = None
+    private var syncThreads = ConcurrentHashMap<String, Future<Unit>>()
     /** 缓存 (topic+queueIndex) 编码前缀，避免每次 syncToSlaves 重编码 */
     private let syncPrefix: Array<Byte>
 
@@ -90,10 +90,10 @@ public class QueueWriter {
         if (closed.load()) { return }
         closed.store(true)
         syncClosed.store(true)
-        if (let Some(f) <- syncThread) {
+        for ((_, f) in syncThreads) {
             try { f.get() } catch (_: Exception) {}
-            syncThread = None
         }
+        syncThreads = ConcurrentHashMap<String, Future<Unit>>()
         for ((_, c) in slaveConns) {
             if (!c.isClosed()) { c.close() }
         }
@@ -103,7 +103,8 @@ public class QueueWriter {
 
     /**
      * 同步 message 到所有已注册的从节点。
-     * 将 sync entry 入队，由专用 sync 线程异步处理，不阻塞主写循环。
+     * 将 sync entry 入队到各 slave 专用队列，由各 slave 线程异步处理。
+     * P2-2: 每个 slave 有自己的队列和线程，不互相阻塞。
      */
     private func syncToSlaves(data: Array<Byte>): Unit {
         let slaves = replicationManager.getSlaves()
@@ -117,30 +118,41 @@ public class QueueWriter {
         let total = Array<Byte>(syncPrefix.size + encodedData.size, repeat: 0u8)
         for (i in 0..syncPrefix.size) { total[i] = syncPrefix[i] }
         for (i in 0..encodedData.size) { total[syncPrefix.size + i] = encodedData[i] }
-        syncQueue.add(total)
+        // 写入每个 slave 的专用队列
+        for (slave in slaves) {
+            let key = slave.nodeId
+            if (let Some(q) <- slaveSyncQueues.get(key)) {
+                q.add(total)
+            }
+        }
     }
 
     /**
-     * 启动后台同步线程。单线程依次取出 syncQueue 中的条目，
-     * 按顺序同步到每个从节点（串行发送，避免每消息每从节点 spawn）。
-     * P2-2: 移除了内层 spawn，改为串行 syncToSlave 调用。
+     * 启动后台同步线程（每个 slave 一个专用线程）。
+     * 各 slave 线程独立从自己的队列消费，互不阻塞。
+     * P2-2: 用 per-slave 线程替代每消息内层 spawn。
      */
     public func startSyncThread(): Unit {
-        if (syncThread.isSome()) { return }
+        let slaves = replicationManager.getSlaves()
+        if (slaves.size == 0) { return }
         let selfRef = this
-        syncThread = spawn {
-            while (!selfRef.syncClosed.load()) {
-                if (let Some(entry) <- selfRef.syncQueue.remove()) {
-                    let slaves = selfRef.replicationManager.getSlaves()
-                    for (slave in slaves) {
-                        let data = entry
-                        selfRef.syncToSlave(slave.nodeId, data)
+        for (slave in slaves) {
+            let nodeId = slave.nodeId
+            if (syncThreads.get(nodeId).isSome()) { continue }
+            // 为每个 slave 创建专用队列
+            slaveSyncQueues[nodeId] = ConcurrentLinkedQueue<Array<Byte>>()
+            syncThreads[nodeId] = spawn {
+                let q = selfRef.slaveSyncQueues[nodeId]
+                while (!selfRef.syncClosed.load()) {
+                    if (let Some(qRef) <- q && let Some(entry) <- qRef.remove()) {
+                        selfRef.syncToSlave(nodeId, entry)
+                    } else {
+                        sleep(Duration.millisecond * 10)
                     }
-                } else {
-                    sleep(Duration.millisecond * 10)
                 }
             }
         }
+        log.info{"startSyncThread: ${slaves.size} slave sync threads started"}
     }
 
     /**

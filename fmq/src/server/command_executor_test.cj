@@ -970,6 +970,36 @@ public class DeliveryRetryTopicTest {
         @Assert(record.retryCount == 4)
     }
 
+    /**
+     * SRV-6: 验证 retry 不依赖 queueManager 引用（使用 cached payload）。
+     * 修复前 retry 从 SegmentedLog 重读数据（需 queueManager），
+     * 修复后使用 DeliveryRecord.payload 缓存。
+     */
+    @TestCase
+    public func testRetryWithoutQueueManagerSucceeds(): Unit {
+        let dm = DeliveryManager(DeliveryRetryTopicTest.testConfig(), serverId: "test:7201")
+        let cm = ConsumerMatcher()
+        let dmL = dm
+
+        // 不设置 queueManager（None）
+
+        let reg = ConsumerRegistration(
+            consumerId: "sr6-cons", groupId: "sr6-group",
+            matchModeStr: "Exact:/sr6-topic",
+            labels: None, dataFilter: None,
+            lastHeartbeat: DateTime.now())
+        cm.register(reg)
+
+        let record = DeliveryRecord(
+            "/sr6-topic:0:sr6-group:0", "sr6-cons", "sr6-group", "/sr6-topic",
+            DateTime.now() - Duration.second * 60,
+            retryCount: 0, payload: [0x01u8, 0x02u8])
+
+        // 即使 queueManager=None，retry 也应成功（使用 payload 缓存）
+        @Assert(dmL.retry(record, cm))
+        @Assert(record.retryCount == 1)
+    }
+
     private static func testConfig(): MqConfig {
         let hosts = ArrayList<String>()
         hosts.add("node1:7201")
