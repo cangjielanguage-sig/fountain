@@ -100,6 +100,27 @@ public class MemTableTest {
         @Expect(mt.approximateSize() > 0)
     }
 
+    /** 验证覆盖写不会导致 byteCount 持续漂移 */
+    @TestCase
+    public func memTableByteCountOnOverwrite(): Unit {
+        let mt = MemTable()
+        // 1KB key + 2KB value
+        let key1KB = Array<Byte>(1024){i => 0u8}
+        let val2KB = Array<Byte>(2048){i => 1u8}
+        let val3KB = Array<Byte>(3072){i => 2u8}
+        mt.add(ByteArray(key1KB), EntryValue(val2KB, 1))
+        let size1 = mt.approximateSize()
+        // 覆盖写，旧 value 2KB 被替换为新 value 3KB，增量应为 1KB
+        mt.add(ByteArray(key1KB), EntryValue(val3KB, 2))
+        let size2 = mt.approximateSize()
+        @Expect(size2 == size1 + 1024) // 仅 net 增量（-2048 + 3072 = +1024）
+        // 再次覆盖写，替换为更小的 value
+        let val1KB = Array<Byte>(1024){i => 3u8}
+        mt.add(ByteArray(key1KB), EntryValue(val1KB, 3))
+        let size3 = mt.approximateSize()
+        @Expect(size3 == size2 - 2048) // -3072 + 1024 = -2048
+    }
+
     /** 验证 tailer 从指定 key 开始遍历 */
     @TestCase
     public func memTableTailer(): Unit {

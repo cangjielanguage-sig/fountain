@@ -115,18 +115,23 @@ class Compactor {
             let nextLevelSSTables = levelManager.getSSTablesForCompaction(nextLevel)
             if (nextLevelSSTables.size > 0) {
                 for (sst in levelSSTables) {
-                    let meta = sst.getMetadata()
-                    var overlaps = false
-                    for (ns in nextLevelSSTables) {
-                        let nm = ns.getMetadata()
-                        if (!(meta.maxKey < nm.minKey || meta.minKey > nm.maxKey)) {
-                            overlaps = true
-                            break
+                    if (sst.isClosed()) {
+                        continue
+                    }
+                    try {
+                        let meta = sst.getMetadata()
+                        var overlaps = false
+                        for (ns in nextLevelSSTables) {
+                            let nm = ns.getMetadata()
+                            if (!(meta.maxKey < nm.minKey || meta.minKey > nm.maxKey)) {
+                                overlaps = true
+                                break
+                            }
                         }
-                    }
-                    if (overlaps) {
-                        selectedSSTables.add(sst)
-                    }
+                        if (overlaps) {
+                            selectedSSTables.add(sst)
+                        }
+                    } catch (_: StoreClosedException) {}
                 }
             }
             if (selectedSSTables.size == 0) {

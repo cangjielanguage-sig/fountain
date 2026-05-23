@@ -233,19 +233,26 @@ class LevelManager {
         }
         let sstList = levels[level].load()
         if (level == 0) {
-            // L0: key 范围全重叠，全部返回
+            // L0: key 范围全重叠，全返（跳过已关闭的，避免后续 tailer/tailer 失败）
             for (sst in sstList) {
-                result.add(sst)
+                if (!sst.isClosed()) {
+                    result.add(sst)
+                }
             }
         } else {
             // Ln (n≥1): 按 minKey/maxKey 做范围筛选
             for (sst in sstList) {
-                let meta = sst.getMetadata()
-                // 重叠条件: (max 为 None 或 sst.minKey <= max) && sst.maxKey >= min
-                let withinMax = max.isNone() || meta.minKey <= max.getOrThrow()
-                if (withinMax && meta.maxKey >= min) {
-                    result.add(sst)
+                if (sst.isClosed()) {
+                    continue
                 }
+                try {
+                    let meta = sst.getMetadata()
+                    // 重叠条件: (max 为 None 或 sst.minKey <= max) && sst.maxKey >= min
+                    let withinMax = max.isNone() || meta.minKey <= max.getOrThrow()
+                    if (withinMax && meta.maxKey >= min) {
+                        result.add(sst)
+                    }
+                } catch (_: StoreClosedException) {}
             }
         }
         result

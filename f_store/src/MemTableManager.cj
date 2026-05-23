@@ -65,6 +65,9 @@ class MemTableManager {
     func clearImmutable(): Unit {
         while (true) {
             let oldState = state.load()
+            if (oldState.immutable.isNone()) {
+                break // 已清空，跳过分配和 CAS
+            }
             let newState = MemTablePair(oldState.active, None)
             if (state.compareAndSwap(oldState, newState)) {
                 break

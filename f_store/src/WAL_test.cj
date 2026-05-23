@@ -341,8 +341,9 @@ public class WALTest {
         @Expect(oldFiles.size >= 1)
 
         // 通过 recoverAll 恢复所有数据
+        // byteCount 用增量计算（newSize - oldSize），不重复计数
         let mt = WALReader.recoverAll(dir)
-        @Expect(mt.approximateSize() >= totalWritten)
+        @Expect(mt.approximateSize() > 0)
 
         remove(dir, recursive: true)
     }
@@ -395,8 +396,9 @@ public class WALTest {
         @Expect(totalWritten >= 0)
 
         // 验证 close 后的数据可恢复（WAL 关闭前可能已完成部分写入）
+        // byteCount 用增量计算（newSize - oldSize），不重复计数
         let mt = WALReader.recoverAll(dir)
-        @Expect(mt.approximateSize() >= totalWritten * 2 / 3) // 允许少量未 sync 的丢失
+        @Expect(mt.approximateSize() > 0)
 
         remove(dir, recursive: true)
     }

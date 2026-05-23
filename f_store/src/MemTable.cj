@@ -20,6 +20,9 @@ class MemTable {
     let table: ConcurrentSkipListMap<ByteArray, EntryValue>
     let byteCount: AtomicInt64
 
+    // EntryValue 结构开销: sequence(8) + value 引用(8) + expireAt(8) = 24
+    static const ENTRY_OVERHEAD: Int64 = 24
+
     init() {
         table = ConcurrentSkipListMap<ByteArray, EntryValue>()
         byteCount = AtomicInt64(0)
@@ -27,8 +30,14 @@ class MemTable {
 
     func add(key: ByteArray, entry: EntryValue): ?EntryValue {
         let old = table.add(key, entry)
-        // 近似计算：key 字节数 + value 字节数 + 元数据开销
-        byteCount.fetchAdd(key.bytes.size + (if (let Some(v) <- entry.value) { v.size } else { 0 }) + 24)
+        // 增量计算：newSize - oldSize，避免覆盖写导致 byteCount 持续漂移
+        let newSize = key.bytes.size + valueSize(entry) + ENTRY_OVERHEAD
+        let oldSize = if (let Some(oldEntry) <- old) {
+            key.bytes.size + valueSize(oldEntry) + ENTRY_OVERHEAD
+        } else {
+            0
+        }
+        byteCount.fetchAdd(newSize - oldSize)
         old
     }
 
@@ -46,5 +55,14 @@ class MemTable {
 
     func approximateSize(): Int64 {
         byteCount.load()
+    }
+}
+
+/** 获取 EntryValue 中 value 的字节数（None = 0） */
+func valueSize(entry: EntryValue): Int64 {
+    if (let Some(v) <- entry.value) {
+        v.size
+    } else {
+        0
     }
 }

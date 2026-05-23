@@ -123,16 +123,34 @@ class SSTableIterator <: Iterator<(ByteArray, EntryValue)> & Resource {
                 loadBlock()
                 continue
             }
-            // 提取 key 比较
+            // 零拷贝比较 key 与 startKey，避免每次跳过时分配 Array<Byte>
             var off = offsetInBlock + 32
-            let kBuf = Array<Byte>(keyLen, repeat: 0u8)
-            blockData[off .. off + keyLen].copyTo(kBuf)
+            let kSlice = blockData[off .. off + keyLen]
             off += keyLen
-            let k = ByteArray(kBuf)
-            if (k >= startKey) {
+            let skBytes = startKey.bytes
+            let minLen = if (keyLen < skBytes.size) { keyLen } else { skBytes.size }
+            var cmp = 0
+            for (j in 0..minLen) {
+                if (kSlice[j] > skBytes[j]) {
+                    cmp = 1
+                    break
+                }
+                if (kSlice[j] < skBytes[j]) {
+                    cmp = -1
+                    break
+                }
+            }
+            if (cmp == 0) {
+                if (keyLen >= skBytes.size) {
+                    cmp = 1  // k == startKey 或 k 以 startKey 开头
+                } else {
+                    cmp = -1  // k 是 startKey 的前缀
+                }
+            }
+            if (cmp >= 0) {
                 return // 找到起始位置
             }
-            // 跳过此条目 (已验证不溢出)
+            // k < startKey，跳过此条目 (已验证不溢出)
             offsetInBlock += 32
             offsetInBlock += keyLen
             offsetInBlock += actualValueLen

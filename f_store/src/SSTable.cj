@@ -22,7 +22,7 @@ package fountain::f_store
  * [Data Block 1][Data Block 2]...[Data Block N]
  * [Index Block]
  * [Bloom Filter Block]
- * [Footer: 48 bytes]
+ * [Footer: 64 bytes]
  *
  * Data Block 记录编码（小端序）:
  *   key_len(8) + value_len(8) + sequence(8) + expire_at(8) + key_bytes + value_bytes
@@ -82,6 +82,8 @@ class SSTable <: Resource {
     private var fd: Int32 = 0
 
     static let MAX_SSTABLE_SIZE: Int64 = 64 * 1024 * 1024 // 64MB
+    /** 平均记录大小估计值（用于 BloomFilter 预估），小记录场景（~512B avg key+value+header） */
+    static let AVG_RECORD_ESTIMATE: Int64 = 512
     // Footer: index_offset(8) + index_size(8) + bloom_offset(8) + bloom_size(8)
     //        + entry_count(8) + magic(8) + sequence_start(8) + sequence_end(8)
     static let FOOTER_SIZE: Int64 = 64
@@ -296,6 +298,9 @@ class SSTable <: Resource {
             indexOffset
         }
         let blockSize = blockEnd - blockStart
+        if (blockSize <= 0 || blockSize > MAX_SSTABLE_SIZE) {
+            return None
+        }
         @When[os == "Linux"]
         let result = synchronized(getLock) {
             guardReadable()
@@ -323,7 +328,10 @@ class SSTable <: Resource {
             guardReadable()
             let buf = Array<Byte>(blockSize, repeat: 0u8)
             file.seek(SeekPosition.Begin(blockStart))
-            file.read(buf)
+            let n = file.read(buf)
+            if (n != blockSize) {
+                return None
+            }
             scanBuffer(buf, blockSize, keyBytes)
         }
         result
@@ -388,12 +396,18 @@ class SSTable <: Resource {
             offset += 8
             let keyLen = readInt64LE(indexBuf, offset)
             offset += 8
+            if (keyLen < 0 || keyLen > 1024 * 1024) {
+                throw Exception("SSTable index corrupted: invalid keyLen=" + keyLen.toString() + " in " + path)
+            }
             let keyBytes = Array<Byte>(keyLen, repeat: 0u8)
             indexBuf[offset .. offset + keyLen].copyTo(keyBytes)
             offset += keyLen
             indexEntries.add(IndexEntry(entryOff, ByteArray(keyBytes)))
         }
         // 3. 读取 Bloom Filter Block
+        if (bloomSz < 0 || bloomSz > MAX_SSTABLE_SIZE) {
+            throw Exception("SSTable bloom filter size corrupted: " + path)
+        }
         let bloomBuf = Array<Byte>(bloomSz, repeat: 0u8)
         if (bloomBuf.size > 0) {
             file.seek(SeekPosition.Begin(bloomOff))

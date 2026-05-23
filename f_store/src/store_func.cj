@@ -112,7 +112,7 @@ func writeStreamToSSTables(iter: Iterator<(ByteArray, EntryValue)>, sstDir: Stri
     // sstDir 在 Store.init() 中已创建，此后不会消失，无需重复检查
     var sstIndex: Int64 = sstableFileSeq.incrFetch()
     var writerPath = "${sstDir}/L${level}_${sstIndex}.sst"
-    var writer = SSTable(writerPath, 64)
+    var writer = SSTable(writerPath, SSTable.MAX_SSTABLE_SIZE / SSTable.AVG_RECORD_ESTIMATE)
     try {
         while (let Some((key, entry)) <- iter.next()) {
             writer.write(key, entry)
@@ -121,7 +121,7 @@ func writeStreamToSSTables(iter: Iterator<(ByteArray, EntryValue)>, sstDir: Stri
                 result.add(writer)
                 sstIndex = sstableFileSeq.incrFetch()
                 writerPath = "${sstDir}/L${level}_${sstIndex}.sst"
-                writer = SSTable(writerPath, 64)
+                writer = SSTable(writerPath, SSTable.MAX_SSTABLE_SIZE / SSTable.AVG_RECORD_ESTIMATE)
             }
         }
         if (writer.getEntryCount() > 0) {
@@ -132,17 +132,19 @@ func writeStreamToSSTables(iter: Iterator<(ByteArray, EntryValue)>, sstDir: Stri
         }
     } catch (e: Exception) {
         let ex = SSTableWritingException(e)
-        // 1. 关闭当前正在写入的 SSTable（Writing 状态，未 finishWrite）
-        writer.close()
-        // 2. 删除当前正在写入的孤儿文件（未 finishWrite，内容不完整）
+        // 1. 关闭当前正在写入的 SSTable（Writing 状态，未 finishWrite）。异常不中断后续清理。
+        try {
+            writer.close()
+        } catch (eClose: Exception) {
+            ex.addSuppressed(eClose)
+        }
+        // 2. 删除当前正在写入的孤儿文件（未 finishWrite，内容不完整）。失败不中断后续清理。
         try {
             if (exists(writerPath)) {
                 remove(writerPath)
             }
         } catch (e2: Exception) {
-            let thrown = SSTableWritingException(e2)
-            thrown.addSuppressed(e)
-            throw thrown
+            ex.addSuppressed(e2)
         }
         // 3. 关闭 + 删除 result 中已 finishWrite 的 SSTable
         //    这些文件虽然格式完整，但 compaction 已中断，不应保留

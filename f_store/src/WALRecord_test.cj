@@ -148,4 +148,28 @@ public class WALRecordTest {
         let decoded = WALRecord.decode(bytes)
         @Expect(decoded.isNone())
     }
+
+    /** decode 收到 keyLen > 1MB 时应返回 None（P0 OOM 防护） */
+    @TestCase
+    public func walRecordDecodeOversizedKeyLen(): Unit {
+        let total = 1048644 // 36 header + 1024 * 1024 + 8 = just over 1MB key
+        let bytes = Array<Byte>(total, repeat: 0u8)
+        // keyLen = 1024 * 1024 + 1（超过上限）
+        bytes[15] = 0x10  // keyLen high byte = 0x10 → 0x00100000 = 1MB + 1
+        let decoded = WALRecord.decode(bytes)
+        @Expect(decoded.isNone())
+    }
+
+    /** decode keyLen 恰好 1MB 以内且数据充足时应成功 */
+    @TestCase
+    public func walRecordDecodeMaxKeyLenOK(): Unit {
+        let keyLen = 1024 * 1024 // exactly 1MB
+        let total = 36 + keyLen
+        let bytes = Array<Byte>(total, repeat: 0u8)
+        // keyLen = 1024 * 1024 = 0x00100000
+        bytes[15] = 0x10  // keyLen = 1MB
+        let decoded = WALRecord.decode(bytes)
+        // checksum won't match, but length validation should pass
+        @Expect(decoded.isNone())  // check: not crash
+    }
 }

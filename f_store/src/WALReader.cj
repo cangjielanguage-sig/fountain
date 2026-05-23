@@ -43,7 +43,7 @@ class WALReader {
                 let keyLen = readInt64LE(header, 12)
                 let valueLen = readInt64LE(header, 20)
                 let expireAtVal = readInt64LE(header, 28)
-                if (keyLen < 0) {
+                if (keyLen < 0 || keyLen > 1024 * 1024) {
                     break // 非法数据
                 }
                 let actualValueLen = if (valueLen >= 0) { valueLen } else { 0 }
