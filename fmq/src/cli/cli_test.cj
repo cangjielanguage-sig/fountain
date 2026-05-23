@@ -112,7 +112,9 @@ public class CliCommandTest {
 /**
  * MqCliCommand exec 行为测试。
  * P4-1: 未知命令返回 exit code 1
- * P4-2: 空参数（交互模式）返回 exit code 0
+ * 注意：'fboot mqcli'（空参数）现为真正的交互模式（readln 循环），
+ * 不在测试环境中执行（stdin 不可用会阻塞）。
+ * 此处仅验证非空命令路径。
  */
 @Test
 public class MqCliExecTest {
@@ -123,8 +125,8 @@ public class MqCliExecTest {
     }
 
     @TestCase
-    public func testEmptyArgsReturnsExitCode0(): Unit {
-        let exitCode = SubCommandMediator.exec("mqcli", [])
+    public func testHelpCommandReturnsExitCode0(): Unit {
+        let exitCode = SubCommandMediator.exec("mqcli", ["help"])
         @Assert(exitCode == 0)
     }
 }
