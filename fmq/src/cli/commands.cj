@@ -44,20 +44,28 @@ public class CommandRunner {
         None
     }
 
+    /**
+     * 校验 topic --name 参数。CLI-5: 统一校验，避免空/无效名发送到服务端。
+     */
+    internal static func validTopicName(name: String, cmd: String): Bool {
+        if (name.isEmpty()) {
+            println("error: --name must not be empty")
+            return false
+        }
+        if (!name.startsWith("/")) {
+            println("error: --name must start with '/'")
+            return false
+        }
+        true
+    }
+
     // ───── 主题管理 ─────
 
     public static func createTopic(args: Array<String>): Bool {
         let name = getArg(args, "--name")
         let queues = getArg(args, "--queues")
         if (let Some(n) <- name) {
-            if (n.isEmpty()) {
-                println("error: --name must not be empty")
-                return false
-            }
-            if (!n.startsWith("/")) {
-                println("error: --name must start with '/'")
-                return false
-            }
+            if (!validTopicName(n, "createTopic")) { return false }
             var q: Int64 = 1
             var usingDefault = false
             if (let Some(s) <- queues) {
@@ -82,6 +90,7 @@ public class CommandRunner {
     public static func deleteTopic(args: Array<String>): Bool {
         let name = getArg(args, "--name")
         if (let Some(n) <- name) {
+            if (!validTopicName(n, "deleteTopic")) { return false }
             let client = if (let Some(c) <- getClient()) { c } else { return false }
             if (client.deleteTopic(n)) {
                 println("deleted topic '${n}'")
@@ -252,6 +261,7 @@ public class CommandRunner {
     public static func showTopic(args: Array<String>): Bool {
         let name = getArg(args, "--name")
         if (let Some(n) <- name) {
+            if (!validTopicName(n, "showTopic")) { return false }
             let client = if (let Some(c) <- getClient()) { c } else { return false }
             if (let Some(info) <- client.showTopic(n)) {
                 println("topic '${n}':")

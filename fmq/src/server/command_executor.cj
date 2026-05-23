@@ -810,21 +810,6 @@ public class CommandExecutor {
     }
 
     /**
-     * 编码消息列表为 Array<Byte>。
-     * 格式：count + msg1 + msg2 + ...（DefaultCodec 编码）。
-     */
-    private static func encodeMessageList(msgs: ArrayList<Array<Byte>>): Array<Byte> {
-        let buf = ByteBuffer()
-        let enc = DefaultCodec()
-            .encode(msgs.size)
-        for (m in msgs) {
-            enc.encode(m)
-        }
-        enc.finish().copy(to: buf, closeFromOnEnd: true, closeToOnEnd: false)
-        extractBytes(buf)
-    }
-
-    /**
      * 编码带 ID 和 labels 的消息列表。格式：count + (deliveryId + labelCount + labels*N + data)*N
      */
     private static func encodeMessageListWithIds(msgs: ArrayList<(String, ArrayList<String>, Array<Byte>)>): Array<Byte> {

@@ -134,10 +134,11 @@ public class MqCommand <: SubCommand {
         cleaner.setRunFuture(cleanerFuture)
         let brokerManager = BrokerManager(config)
         brokerManager.startHeartbeat()
-        // 定期清理过期消费者注册
+        // 定期清理过期消费者注册（P3-1: 添加关闭检查）
         let consumerRefreshInterval = config.heartbeatIntervalSec
+        let refreshClosed = AtomicBool(false)
         spawn {
-            while (true) {
+            while (!refreshClosed.load()) {
                 sleep(Duration.second * consumerRefreshInterval)
                 consumerMatcher.refresh()
             }
@@ -151,6 +152,7 @@ public class MqCommand <: SubCommand {
         atExit {
             synchronized(shutdownMutex) {
                 shuttingDown.store(true)
+                refreshClosed.store(true)
                 shutdownCond.notify()
             }
         }

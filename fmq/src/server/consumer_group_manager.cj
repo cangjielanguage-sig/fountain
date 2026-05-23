@@ -33,6 +33,18 @@ public class ConsumerGroupManager {
     }
 
     /**
+     * 遍历主题的所有队列执行操作（SRV-10: 消除 createGroup/deleteGroup 重复）。
+     */
+    private func forEachQueue(topic: String, block: (Int64) -> Unit): Unit {
+        let queueCount = if (let Some(meta) <- topicManager.getTopicMeta(topic)) {
+            meta.getQueueCount()
+        } else { 1 }
+        for (i in 0..queueCount) {
+            block(i)
+        }
+    }
+
+    /**
      * 创建消费者组。
      * 1. 写入 TopicMeta.consumerGroups
      * 2. 初始化 offset = 0
@@ -40,14 +52,9 @@ public class ConsumerGroupManager {
     public func createGroup(topic: String, groupId: String): MqErrorCode {
         let code = topicManager.addConsumerGroup(topic, groupId)
         if (code == MqErrorCode.SUCCESS) {
-            // 初始化该组在所有队列上的 offset（从 TopicMeta 获取 queueCount）
-            let queueCount = if (let Some(meta) <- topicManager.getTopicMeta(topic)) {
-                meta.getQueueCount()
-            } else { 1 }
-            for (i in 0..queueCount) {
-                deliveryManager.setOffset(topic, i, groupId, 0)
-            }
-            log.info{"created consumer group '${groupId}' for topic '${topic}' with ${queueCount} queues"}
+            forEachQueue(topic) { i => deliveryManager.setOffset(topic, i, groupId, 0) }
+            let qc = if (let Some(meta) <- topicManager.getTopicMeta(topic)) { meta.getQueueCount() } else { 1 }
+            log.info{"created consumer group '${groupId}' for topic '${topic}' with ${qc} queues"}
             MqErrorCode.SUCCESS
         } else if (code == MqErrorCode.GROUP_EXISTS) {
             log.info{"consumer group '${groupId}' already exists for topic '${topic}'"}
@@ -59,20 +66,11 @@ public class ConsumerGroupManager {
 
     /**
      * 删除消费者组。
-     * 1. 从 TopicMeta.consumerGroups 移除
-     * 2. 清理 offset
      */
     public func deleteGroup(topic: String, groupId: String): MqErrorCode {
         let code = topicManager.removeConsumerGroup(topic, groupId)
         if (code == MqErrorCode.SUCCESS) {
-            // 循环所有队列重置 offset=0，与 createGroup 的初始化模式一致
-            let queueCount = if (let Some(meta) <- topicManager.getTopicMeta(topic)) {
-                meta.getQueueCount()
-            } else { 1 }
-            for (i in 0..queueCount) {
-                deliveryManager.setOffset(topic, i, groupId, 0)
-            }
-            log.info{"deleted consumer group '${groupId}' from topic '${topic}' with ${queueCount} queues"}
+            forEachQueue(topic) { i => deliveryManager.setOffset(topic, i, groupId, 0) }
         }
         code
     }

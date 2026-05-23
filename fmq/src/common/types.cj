@@ -88,7 +88,10 @@ public class ConsumerRegistration {
     }
 
     private static func decodeMatchMode(s: String): MatchMode {
-        if (s.startsWith("Exact:")) { MatchMode.Exact(s[6..]) }
+        if (s.size <= 6) {  // "Exact:" + empty
+            log.warn{"decodeMatchMode: empty pattern '${s}'"}
+            MatchMode.Exact("")  // 不会匹配任何合法 topic（topic 以 / 开头）
+        } else if (s.startsWith("Exact:")) { MatchMode.Exact(s[6..]) }
         else if (s.startsWith("Glob:")) { MatchMode.Glob(s[5..]) }
         else if (s.startsWith("Prefix:")) { MatchMode.Prefix(s[7..]) }
         else {

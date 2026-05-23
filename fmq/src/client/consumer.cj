@@ -316,7 +316,9 @@ public class ConsumerLoop {
         threadFuture = spawn {
             while (!selfRef.closed.load() && !selfRef.client.isClosed()) {
                 try {
-                    selfRef.pollOnce()
+                    if (!selfRef.pollOnce()) {
+                        sleep(Duration.millisecond * 100)  // P3-2: 无消息时退避
+                    }
                 } catch (e: Exception) {
                     log.error{"ConsumerLoop error: ${e.message}"}
                     sleep(Duration.millisecond * 100)
@@ -344,7 +346,7 @@ public class ConsumerLoop {
      * 单次拉取：CONSUME → dataFilter → callback → ACK。
      * 使用 decodeMessageListWithLabels 获取服务端 deliveryId 和 labels。
      */
-    private func pollOnce(): Unit {
+    private func pollOnce(): Bool {
         let payload = Consumer.encodeConsumePayload(topic, groupId, 1)
         let req = ProtocolMessage(Command.CONSUME(0), MessageID(),
             MqBody("consume", payload).toData())
@@ -352,13 +354,10 @@ public class ConsumerLoop {
         if (let Some(r) <- resp) {
             if (let Some(body) <- convert<MqBody>(r.data)) {
                 if (body.bodyType == "consume") {
-                    // 解码带 deliveryId 和 labels 的消息列表
                     let msgs = Consumer.decodeMessageListWithLabels(body.payload)
                     if (msgs.size > 0) {
                         let (deliveryId, labels, msgData) = msgs[0]
-                        // dataFilter 过滤（基于 payload）
                         if (dataFilter != "" && !Consumer.dataFilterMatch(dataFilter, msgData)) {
-                            // 过滤不匹配，仍然要 ACK 避免重复投递
                             let ackQi = extractQueueIndex(deliveryId)
                             let ackPayload = Consumer.encodeAckPayload(deliveryId, topic, ackQi)
                             let ackReq = ProtocolMessage(Command.ACK, MessageID(),
@@ -367,15 +366,13 @@ public class ConsumerLoop {
                             if (ackResp.isNone()) {
                                 log.warn{"dataFilter ACK failed for deliveryId=${deliveryId}"}
                             }
-                            return
+                            return true  // 有消息但被过滤，已 ACK
                         }
-                        // 从 deliveryId 提取 queueIndex: "topic:queueIndex:groupId:offset"
                         let queueIndex = extractQueueIndex(deliveryId)
                         let msg = Message(topic: topic, id: MessageID(),
                             queueIndex: queueIndex, payload: msgData, labels: labels,
                             producerId: deliveryId)
                         callback(msg)
-                        // ACK 使用服务端 deliveryId
                         let ackPayload = Consumer.encodeAckPayload(deliveryId, topic, queueIndex)
                         let ackReq = ProtocolMessage(Command.ACK, MessageID(),
                             MqBody("ack", ackPayload).toData())
@@ -383,10 +380,12 @@ public class ConsumerLoop {
                         if (ackResp.isNone()) {
                             log.warn{"callback ACK failed for deliveryId=${deliveryId}"}
                         }
+                        return true  // 消息已处理
                     }
                 }
             }
         }
+        false  // 无消息
     }
 
     /**

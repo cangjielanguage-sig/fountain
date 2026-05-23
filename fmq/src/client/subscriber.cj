@@ -53,8 +53,8 @@ public class Subscriber {
         let dataFilterVal = dataFilter
         if (subResp.isSome()) {
             synchronized(subLock) {
-                for ((g, t, _, m) in subscriptions) {
-                    if (g == groupId && t == matchModeTopic(matchMode) && m == matchModeToString(matchMode)) {
+                    for ((g, t, d, m) in subscriptions) {
+                    if (g == groupId && t == matchModeTopic(matchMode) && m == matchModeToString(matchMode) && d == dataFilterVal) {
                         log.info{"already subscribed group=${groupId} to ${matchModeTopic(matchMode)}, skipping duplicate"}
                         return true
                     }

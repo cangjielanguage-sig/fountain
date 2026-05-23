@@ -62,7 +62,7 @@ public class MqCliCommand <: SubCommand {
                 if (trimmed == "") { continue }
                 let args = trimmed.split(' ')
                 if (!runCommand(args)) {
-                    println("command failed")
+                    // 命令已输出具体错误信息
                 }
             } else { break }
         }
