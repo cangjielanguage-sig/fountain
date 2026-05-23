@@ -15,7 +15,7 @@ limitations under the License.
  */
 package fountain::fmq.server
 
-import std.fs.{File, OpenMode, remove, FileInfo}
+import std.fs.{remove, FileInfo}
 import std.sync.AtomicBool
 
 /**

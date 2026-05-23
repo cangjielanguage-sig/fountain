@@ -20,7 +20,7 @@ import std.io.ByteBuffer
 /**
  * 生产请求编解码工具。
  * 消息体格式（DefaultCodec 顺序编码）：
- *   topic(Int64) + labelsCount(Int64) + label1(String) + label2(String) + ... + payload(Array<Byte>)
+ *   topic(String) + labelsCount(Int64) + label1(String) + ... + payload(Array<Byte>)
  */
 public class ProduceCodec {
     private static let log = LoggerFactory.getLogger<ProduceCodec>()

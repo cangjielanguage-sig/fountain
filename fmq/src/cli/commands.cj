@@ -177,10 +177,16 @@ public class CommandRunner {
                 groupsByTopic[topic] = groups
             }
         }
-        for ((topic, groups) in groupsByTopic) {
-            println("  ${topic}:")
-            for (g in groups) {
-                println("    ${g}")
+        // 排序后迭代，避免 HashMap 顺序不确定（P4-5）
+        let sortedTopics = ArrayList<String>()
+        for ((t, _) in groupsByTopic) { sortedTopics.add(t) }
+        sortedTopics.sort()
+        for (topic in sortedTopics) {
+            if (let Some(groups) <- groupsByTopic.get(topic)) {
+                println("  ${topic}:")
+                for (g in groups) {
+                    println("    ${g}")
+                }
             }
         }
         true

@@ -61,13 +61,7 @@ public class Consumer {
                             for ((deliveryId, labels, payload) in msgs) {
                                 if (dataFilter != "" && !Consumer.dataFilterMatch(dataFilter, payload)) {
                                     let ackQi = ConsumerLoop.extractQueueIndex(deliveryId)
-                                    let ackPayload = Consumer.encodeAckPayload(deliveryId, topic, ackQi)
-                                    let ackReq = ProtocolMessage(Command.ACK, MessageID(),
-                                        MqBody("ack", ackPayload).toData())
-                                    let ackResp = client.transfer(ackReq.id, ackReq, Duration.second * 5)
-                                    if (ackResp.isNone()) {
-                                        log.warn{"dataFilter ACK failed for deliveryId=${deliveryId}"}
-                                    }
+                                    sendAck(deliveryId, topic, ackQi, "dataFilter")
                                     continue
                                 }
                                 let qi = ConsumerLoop.extractQueueIndex(deliveryId)
@@ -170,6 +164,17 @@ public class Consumer {
             .encode(msgId).encode(topic).encode(queueIndex)
             .finish().copy(to: buf, closeFromOnEnd: true, closeToOnEnd: false)
         extractBytes(buf)
+    }
+
+    /** P4-3: 发送 ACK，提取公共模式减少重复。 */
+    private func sendAck(deliveryId: String, topic: String, queueIndex: Int64, logLabel: String): Unit {
+        let ackPayload = Consumer.encodeAckPayload(deliveryId, topic, queueIndex)
+        let ackReq = ProtocolMessage(Command.ACK, MessageID(),
+            MqBody("ack", ackPayload).toData())
+        let ackResp = client.transfer(ackReq.id, ackReq, Duration.second * 5)
+        if (ackResp.isNone()) {
+            log.warn{"${logLabel} ACK failed for deliveryId=${deliveryId}"}
+        }
     }
 
     internal static func decodeMessageList(data: Array<Byte>): ArrayList<Array<Byte>> {
@@ -359,13 +364,7 @@ public class ConsumerLoop {
                         let (deliveryId, labels, msgData) = msgs[0]
                         if (dataFilter != "" && !Consumer.dataFilterMatch(dataFilter, msgData)) {
                             let ackQi = extractQueueIndex(deliveryId)
-                            let ackPayload = Consumer.encodeAckPayload(deliveryId, topic, ackQi)
-                            let ackReq = ProtocolMessage(Command.ACK, MessageID(),
-                                MqBody("ack", ackPayload).toData())
-                            let ackResp = client.transfer(ackReq.id, ackReq, Duration.second * 5)
-                            if (ackResp.isNone()) {
-                                log.warn{"dataFilter ACK failed for deliveryId=${deliveryId}"}
-                            }
+                            sendAck(deliveryId, topic, ackQi, "dataFilter")
                             return true  // 有消息但被过滤，已 ACK
                         }
                         let queueIndex = extractQueueIndex(deliveryId)
@@ -373,13 +372,7 @@ public class ConsumerLoop {
                             queueIndex: queueIndex, payload: msgData, labels: labels,
                             producerId: deliveryId)
                         callback(msg)
-                        let ackPayload = Consumer.encodeAckPayload(deliveryId, topic, queueIndex)
-                        let ackReq = ProtocolMessage(Command.ACK, MessageID(),
-                            MqBody("ack", ackPayload).toData())
-                        let ackResp = client.transfer(ackReq.id, ackReq, Duration.second * 5)
-                        if (ackResp.isNone()) {
-                            log.warn{"callback ACK failed for deliveryId=${deliveryId}"}
-                        }
+                        sendAck(deliveryId, topic, queueIndex, "callback")
                         return true  // 消息已处理
                     }
                 }
