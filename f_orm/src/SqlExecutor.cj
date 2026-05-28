@@ -153,6 +153,26 @@ public class SqlExecutor <: Resource & RootDAO {
             DirtyTag.clearAll()
         }
     }
+    private func discardConnection(): Unit {
+        current.set(None)
+        currents.get()?.remove(driverName)
+        cache.clear()
+        if (let connection: DiscardableConnection <- _connection_) {
+            try{
+                connection.discard()
+            }catch(e: Exception){
+                logger.warn(e)
+            }
+        } else {
+            try{
+                _connection_.close()
+            }catch(e: Exception){
+                logger.warn(e)
+            }
+        }
+        _connection_ = NoneConnection.instance
+        DirtyTag.clearAll()
+    }
 
     private func createTransaction(
         propagation!: Propagation = ORMConfig.getTransactionPropagation(driverName: driverName),
@@ -895,23 +915,36 @@ public class SqlExecutor <: Resource & RootDAO {
             }
             let stmt = statement
             var r = None<QueryResultWrap>
+            var closeFailed = false
+            var executionFailed = false
             try{
                 activeQueryResult = true
                 r = Some((stmt.query() as QueryResultWrap).getOrThrow())
                 extract(r.getOrThrow())
+            } catch (e: Exception) {
+                executionFailed = true
+                throw e
             } finally {
                 try{
                     r?.close()
                 }catch(e: Exception){
+                    closeFailed = true
                     logger.warn(e)
                 }
                 activeQueryResult = false
                 try{
                     stmt.close()
                 }catch(e: Exception){
+                    closeFailed = true
                     logger.warn(e)
                 }
                 this.stmt = None<Statement>
+                if (closeFailed) {
+                    discardConnection()
+                    if (!executionFailed) {
+                        throw ORMException("failed to close query result or statement; database connection has been discarded")
+                    }
+                }
             }
         }
     }

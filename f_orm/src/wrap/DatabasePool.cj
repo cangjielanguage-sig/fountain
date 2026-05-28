@@ -22,6 +22,10 @@ import std.unicode.UnicodeStringExtension
 import f_log.impl.LoggerFactory
 import f_pool.Pool
 
+public interface DiscardableConnection {
+    func discard(): Unit
+}
+
 public class DatabasePool <: Resource & Datasource {
     private static let logger = LoggerFactory.getLogger<DatabasePool>()
 
@@ -172,7 +176,7 @@ public class DatabasePool <: Resource & Datasource {
     }
 }
 
-class PooledConnection <: Connection {
+class PooledConnection <: Connection & DiscardableConnection {
     private static let logger = LoggerFactory.getLogger<PooledConnection>()
     private static let serialGen = AtomicUInt64(1)
     private let serial = serialGen.fetchAdd(1)
@@ -191,6 +195,18 @@ class PooledConnection <: Connection {
         logger.debug {"database Connection ${serial} is returning"}
         returnFn(this)
         logger.debug {"database Connection ${serial} is returned"}
+    }
+    public func discard(): Unit {
+        assigned = false
+        logger.debug {"database Connection ${serial} is discarding"}
+        try {
+            if (!connection.isClosed()) {
+                connection.close()
+            }
+        } finally {
+            returnFn(this)
+        }
+        logger.debug {"database Connection ${serial} is discarded"}
     }
     func activate(returnFn: (PooledConnection) -> Unit): Connection {
         assigned = true
