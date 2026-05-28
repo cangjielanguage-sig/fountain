@@ -892,39 +892,32 @@ public class SqlExecutor <: Resource & RootDAO {
             if (activeQueryResult) {
                 throw ORMException("cannot execute SQL while a previous query result is still active")
             }
-            let stmt = statement
-            var r = None<QueryResultWrap>
-            var closeError = None<Exception>
-            var executionFailed = false
-            try{
-                activeQueryResult = true
-                r = Some((stmt.query() as QueryResultWrap).getOrThrow())
-                extract(r.getOrThrow())
-            } catch (e: Exception) {
-                executionFailed = true
-                throw e
-            } finally {
+            execute<T> {stmt: Statement =>
+                var r = None<QueryResultWrap>
+                var ex = None<Exception>
                 try{
-                    r?.close()
-                }catch(e: Exception){
-                    if (closeError.isNone()) {
-                        closeError = Some(e)
-                    }
-                    logger.error(e)
-                }
-                activeQueryResult = false
-                try{
-                    stmt.close()
-                }catch(e: Exception){
-                    if (closeError.isNone()) {
-                        closeError = Some(e)
-                    }
-                    logger.error(e)
-                }
-                this.stmt = None<Statement>
-                if (let Some(error) <- closeError) {
-                    if (!executionFailed) {
-                        throw error
+                    activeQueryResult = true
+                    r = Some((stmt.query() as QueryResultWrap).getOrThrow())
+                    extract(r.getOrThrow())
+                } catch (e: Exception) {
+                    ex = Some(e)
+                    throw e
+                } finally {
+                    try{
+                        r?.close()
+                    }catch(e: Exception){
+                        logger.error(e)
+                        if (let ei: BaseException <- e && let Some(eo) <- ex) {
+                            ei.addSuppressed(eo)
+                            throw ei
+                        } else if (let Some(eo) <- ex) {
+                            let ei = ORMException(e)
+                            ei.addSuppressed(eo)
+                            throw ei
+                        }
+                        throw e
+                    } finally {
+                        activeQueryResult = false
                     }
                 }
             }
