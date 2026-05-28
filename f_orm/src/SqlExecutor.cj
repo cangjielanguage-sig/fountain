@@ -153,27 +153,6 @@ public class SqlExecutor <: Resource & RootDAO {
             DirtyTag.clearAll()
         }
     }
-    private func discardConnection(): Unit {
-        current.set(None)
-        currents.get()?.remove(driverName)
-        cache.clear()
-        if (let connection: DiscardableConnection <- _connection_) {
-            try{
-                connection.discard()
-            }catch(e: Exception){
-                logger.warn(e)
-            }
-        } else {
-            try{
-                _connection_.close()
-            }catch(e: Exception){
-                logger.warn(e)
-            }
-        }
-        _connection_ = NoneConnection.instance
-        DirtyTag.clearAll()
-    }
-
     private func createTransaction(
         propagation!: Propagation = ORMConfig.getTransactionPropagation(driverName: driverName),
         isoLevel!: ?TransactionIsoLevel = ORMConfig.getTransactionLevel(driverName: driverName),
@@ -944,7 +923,6 @@ public class SqlExecutor <: Resource & RootDAO {
                 }
                 this.stmt = None<Statement>
                 if (let Some(error) <- closeError) {
-                    discardConnection()
                     if (!executionFailed) {
                         throw error
                     }
