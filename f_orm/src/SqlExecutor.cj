@@ -50,6 +50,7 @@ public class SqlExecutor <: Resource & RootDAO {
     private var _connection_: Connection
     private var stmt = None<Statement>
     private var tx = None<TransactionWrap>
+    private var activeQueryResult = false
     private let cache: Map<SqlCacheKey, Any>
     private var clearCache = false
     private let useCache: Bool
@@ -420,14 +421,6 @@ public class SqlExecutor <: Resource & RootDAO {
     public prop insert: Int64 {
         get() {
             execute<Int64> {r: UpdateResult => r.lastInsertId}
-        }
-    }
-
-    private prop query: QueryResultWrap {
-        get() {
-            execute<QueryResultWrap> {stmt =>
-                (stmt.query() as QueryResultWrap).getOrThrow()
-            }
         }
     }
 
@@ -897,9 +890,14 @@ public class SqlExecutor <: Resource & RootDAO {
     }
     private func execute<T>(extract: (QueryResultWrap) -> T): T {
         execute<T> {
+            if (activeQueryResult) {
+                throw ORMException("cannot execute SQL while a previous query result is still active")
+            }
+            let stmt = statement
             var r = None<QueryResultWrap>
             try{
-                r = query
+                activeQueryResult = true
+                r = Some((stmt.query() as QueryResultWrap).getOrThrow())
                 extract(r.getOrThrow())
             } finally {
                 try{
@@ -907,6 +905,13 @@ public class SqlExecutor <: Resource & RootDAO {
                 }catch(e: Exception){
                     logger.warn(e)
                 }
+                activeQueryResult = false
+                try{
+                    stmt.close()
+                }catch(e: Exception){
+                    logger.warn(e)
+                }
+                this.stmt = None<Statement>
             }
         }
     }
