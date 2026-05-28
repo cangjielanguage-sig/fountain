@@ -915,7 +915,7 @@ public class SqlExecutor <: Resource & RootDAO {
             }
             let stmt = statement
             var r = None<QueryResultWrap>
-            var closeFailed = false
+            var closeError = None<Exception>
             var executionFailed = false
             try{
                 activeQueryResult = true
@@ -928,21 +928,25 @@ public class SqlExecutor <: Resource & RootDAO {
                 try{
                     r?.close()
                 }catch(e: Exception){
-                    closeFailed = true
-                    logger.warn(e)
+                    if (closeError.isNone()) {
+                        closeError = Some(e)
+                    }
+                    logger.error(e)
                 }
                 activeQueryResult = false
                 try{
                     stmt.close()
                 }catch(e: Exception){
-                    closeFailed = true
-                    logger.warn(e)
+                    if (closeError.isNone()) {
+                        closeError = Some(e)
+                    }
+                    logger.error(e)
                 }
                 this.stmt = None<Statement>
-                if (closeFailed) {
+                if (let Some(error) <- closeError) {
                     discardConnection()
                     if (!executionFailed) {
-                        throw ORMException("failed to close query result or statement; database connection has been discarded")
+                        throw error
                     }
                 }
             }
