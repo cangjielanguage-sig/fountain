@@ -888,37 +888,35 @@ public class SqlExecutor <: Resource & RootDAO {
         }
     }
     private func execute<T>(extract: (QueryResultWrap) -> T): T {
-        execute<T> {
-            if (activeQueryResult) {
-                throw ORMException("cannot execute SQL while a previous query result is still active")
-            }
-            execute<T> {stmt: Statement =>
-                var r = None<QueryResultWrap>
-                var ex = None<Exception>
+        if (activeQueryResult) {
+            throw ORMException("cannot execute SQL while a previous query result is still active")
+        }
+        execute<T> {stmt: Statement =>
+            var r = None<QueryResultWrap>
+            var ex = None<Exception>
+            try{
+                activeQueryResult = true
+                r = Some((stmt.query() as QueryResultWrap).getOrThrow())
+                extract(r.getOrThrow())
+            } catch (e: Exception) {
+                ex = Some(e)
+                throw e
+            } finally {
                 try{
-                    activeQueryResult = true
-                    r = Some((stmt.query() as QueryResultWrap).getOrThrow())
-                    extract(r.getOrThrow())
-                } catch (e: Exception) {
-                    ex = Some(e)
+                    r?.close()
+                }catch(e: Exception){
+                    logger.error(e)
+                    if (let ei: BaseException <- e && let Some(eo) <- ex) {
+                        ei.addSuppressed(eo)
+                        throw ei
+                    } else if (let Some(eo) <- ex) {
+                        let ei = ORMException(e)
+                        ei.addSuppressed(eo)
+                        throw ei
+                    }
                     throw e
                 } finally {
-                    try{
-                        r?.close()
-                    }catch(e: Exception){
-                        logger.error(e)
-                        if (let ei: BaseException <- e && let Some(eo) <- ex) {
-                            ei.addSuppressed(eo)
-                            throw ei
-                        } else if (let Some(eo) <- ex) {
-                            let ei = ORMException(e)
-                            ei.addSuppressed(eo)
-                            throw ei
-                        }
-                        throw e
-                    } finally {
-                        activeQueryResult = false
-                    }
+                    activeQueryResult = false
                 }
             }
         }
