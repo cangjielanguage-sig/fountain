@@ -47,10 +47,12 @@ public class CommandExecutorTest {
     }
 
     private static func makeExecutor(): CommandExecutor {
+        let rm = ReplicationManager(testConfig())
+        let qm = QueueManager(testConfig(), nodeIndex: 0, replicationManager: rm)
         CommandExecutor(
-            TopicManager(testConfig()), QueueManager(testConfig(), nodeIndex: 0),
+            TopicManager(testConfig()), qm,
             DeliveryManager(testConfig()), ConsumerMatcher(),
-            ReplicationManager(testConfig()))
+            rm)
     }
 
     /** 检查响应的 command tag 是否为 RESP (tag=11) */
@@ -934,6 +936,8 @@ public class DeliveryRetryTopicTest {
         // 有消费者时 retryCount 递增
         @Assert(record.retryCount == 1)
     }
+    /**
+     * P0-3: 验证 retryCount > maxRetryCount fencepost
      * maxRetryCount=3 应允许 3 次重试，第 4 次触发 DLQ。
      * 修复前用 >= 导致实际只重试 2 次。
      */

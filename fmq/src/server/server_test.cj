@@ -21,6 +21,7 @@ import fountain::f_codec.default.DefaultCodec
 import fountain::f_data.base.*
 import std.io.{InputStream, SeekPosition}
 import std.sync.{AtomicInt64, AtomicBool}
+import std.fs.*
 
 @Test
 public class QueueDistributionTest {
@@ -704,8 +705,17 @@ public class DeadLetterStoreTest {
         }
 
         // 清理
-        try { std.fs.remove("/tmp/fmq_srv7_test") } catch (_: Exception) {}
+        try { removeDir("/tmp/fmq_srv7_test") } catch (_: Exception) {}
     }
+}
+
+func removeDir(path: String): Unit {
+    try {
+        for (entry in Directory.readFrom(path)) {
+            try { remove(entry.path.toString()) } catch (_: Exception) {}
+        }
+        remove(path)
+    } catch (_: Exception) {}
 }
 
 @Test

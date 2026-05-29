@@ -385,11 +385,11 @@ public class ConsumerLoop {
 
     /**
      * 从 deliveryId "topic:queueIndex:groupId:offset:sn" 提取 queueIndex。
-     * queueIndex 始终是第 2 个字段 (索引 1)。
+     * 从末尾第 3 个字段提取（兼容 topic 含 : 的场景）。
      */
     internal static func extractQueueIndex(deliveryId: String): Int64 {
         let parts = deliveryId.split(':')
-        if (parts.size >= 2 && let Some(idx) <- Int64.tryParse(parts[1])) {
+        if (parts.size >= 3 && let Some(idx) <- Int64.tryParse(parts[parts.size - 3])) {
             idx
         } else {
             0
