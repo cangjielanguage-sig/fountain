@@ -40,7 +40,7 @@ public class CommandExecutor {
     public init(topicManager: TopicManager, queueManager: QueueManager,
                 deliveryManager: DeliveryManager, consumerMatcher: ConsumerMatcher,
                 replicationManager: ReplicationManager,
-                config!: MqConfig = MqConfig.forTest()) {
+                config!: MqConfig = MqConfig.forTest(mqHosts: CommandExecutor.defaultMqHosts())) {
         this.topicManager = topicManager
         this.queueManager = queueManager
         this.deliveryManager = deliveryManager
@@ -48,6 +48,13 @@ public class CommandExecutor {
         this.replicationManager = replicationManager
         this.config = config
         this.consumerGroupManager = ConsumerGroupManager(topicManager, consumerMatcher, deliveryManager)
+    }
+
+    /** P3-5: 默认测试 mqHosts。 */
+    private static func defaultMqHosts(): ArrayList<String> {
+        let hosts = ArrayList<String>()
+        hosts.add("node1:7201")
+        hosts
     }
 
     /**

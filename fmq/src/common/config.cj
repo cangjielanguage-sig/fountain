@@ -71,7 +71,7 @@ public class MqConfig {
      * COM-5: 不再硬编码所有字段，默认值集中到 init 参数。
      */
     public static func forTest(dataDir!: String = "/tmp/fmq_test",
-                               mqHosts!: ArrayList<String> = ArrayList<String>(),
+                               mqHosts!: ArrayList<String>,
                                segmentMaxSize!: Int64 = 1024 * 1024): MqConfig {
         MqConfig(mqHosts: mqHosts, dataDir: dataDir, segmentMaxSize: segmentMaxSize)
     }

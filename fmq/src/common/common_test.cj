@@ -418,15 +418,21 @@ public class ConfigTest {
 
 @Test
 public class ForTestDefaultsTest {
+    private static func hosts(): ArrayList<String> {
+        let h = ArrayList<String>()
+        h.add("h:1")
+        h
+    }
+
     @TestCase
     public func testForTestUsesTestDataDir(): Unit {
-        let cfg = MqConfig.forTest(dataDir: "/tmp/my-test")
+        let cfg = MqConfig.forTest(dataDir: "/tmp/my-test", mqHosts: hosts())
         @Assert(cfg.dataDir == "/tmp/my-test")
     }
 
     @TestCase
     public func testForTestDefaultsMatchConstructorDefaults(): Unit {
-        let hosts = ArrayList<String>()
+        let hosts = hosts()
         hosts.add("host1:7201")
         let cfg = MqConfig.forTest(mqHosts: hosts)
         // forTest 与构造函数默认值一致的关键字段
