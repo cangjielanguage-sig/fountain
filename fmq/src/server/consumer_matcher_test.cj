@@ -227,4 +227,71 @@ public class ConsumerMatcherUnsubscribeTest {
         // 分布式计数之和应为 20
         @Assert(aCount + bCount == 20)
     }
+
+    /**
+     * P2-2: deregister 修正 roundRobinIndex 应使用组内消费者数，而非全局 registrations.size。
+     * 场景：group-A 有 2 消费者，group-B 有 3 消费者（共 5）。matchTopic 推进 group-A 的
+     * roundRobinIndex 后 deregister 一个 group-A 消费者，roundRobinIndex 应以 group-A 剩余 1 为模，
+     * 而非全局剩余 4 为模。用 groupCount=4 会导致 idx % 4 ≈ idx % 1（因为 idx < 4 且 idx % 4
+     * 仍然合法），但语义错误在更复杂场景下会暴露（如 groupCount=1 且 idx > 1 时 idx % 错误基数
+     * 导致非 0 结果，下一轮 matchTopic 使用错误索引）。
+     *
+     * 本测试用 group-A:2 消费者 + group-B:3 消费者验证 deregister 后不被 OutOfBounds 干扰。
+     */
+    @TestCase
+    public func testDeregisterRRWithMultipleGroups(): Unit {
+        let matcher = ConsumerMatcher()
+        // group-A: 2 consumers
+        let ra1 = ConsumerRegistration(
+            consumerId: "a1", groupId: "group-A",
+            matchModeStr: "Exact:/topic-a",
+            labels: None, dataFilter: None,
+            lastHeartbeat: DateTime.now())
+        let ra2 = ConsumerRegistration(
+            consumerId: "a2", groupId: "group-A",
+            matchModeStr: "Exact:/topic-a",
+            labels: None, dataFilter: None,
+            lastHeartbeat: DateTime.now())
+        // group-B: 3 consumers (dilute registrations.size)
+        let rb1 = ConsumerRegistration(
+            consumerId: "b1", groupId: "group-B",
+            matchModeStr: "Exact:/topic-b",
+            labels: None, dataFilter: None,
+            lastHeartbeat: DateTime.now())
+        let rb2 = ConsumerRegistration(
+            consumerId: "b2", groupId: "group-B",
+            matchModeStr: "Exact:/topic-b",
+            labels: None, dataFilter: None,
+            lastHeartbeat: DateTime.now())
+        let rb3 = ConsumerRegistration(
+            consumerId: "b3", groupId: "group-B",
+            matchModeStr: "Exact:/topic-b",
+            labels: None, dataFilter: None,
+            lastHeartbeat: DateTime.now())
+        matcher.register(ra1)
+        matcher.register(ra2)
+        matcher.register(rb1)
+        matcher.register(rb2)
+        matcher.register(rb3)
+
+        // 多次 matchTopic 推进 group-A 的 RR 索引
+        for (_ in 0..10) {
+            let result = matcher.matchTopic("/topic-a")
+            @Assert(result.size == 1)
+        }
+
+        // deregister a1 → 旧代码用 registrations.size=5，
+        // 新代码用 group-A count=2；用旧模数 5 会把 idx 缩减到 [0,4]，
+        // 而新的 idx % 1 = 0，结果不同但都合法。
+        // 关键验证：deregister 后 matchTopic 不崩溃。
+        matcher.deregister("group-A", "a1")
+
+        for (_ in 0..5) {
+            let result = matcher.matchTopic("/topic-a")
+            @Assert(result.size == 1)
+            if (let Some(consumerId) <- result.get("group-A")) {
+                @Assert(consumerId == "a2")
+            }
+        }
+    }
 }
