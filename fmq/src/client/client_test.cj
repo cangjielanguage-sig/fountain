@@ -532,4 +532,14 @@ public class ConsumerPendingCacheTest {
         let payload = Consumer.encodeBatchConsumePayload(subs)
         @Assert(payload.size > 0)
     }
+
+    @TestCase
+    public func testEncodeBatchConsumeWithSubscriptionsRoundtrip(): Unit {
+        let subs = ArrayList<(String, String, String, String)>()
+        subs.add(("g1", "/a", "color:red", "Exact:/a"))
+        subs.add(("g2", "/b", "", "Prefix:/b"))
+        subs.add(("g3", "/c", "size:large", "Glob:/c/*"))
+        let payload = Consumer.encodeBatchConsumePayload(subs)
+        @Assert(payload.size > 0)
+    }
 }
