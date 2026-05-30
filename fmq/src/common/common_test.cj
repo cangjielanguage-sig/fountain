@@ -414,6 +414,45 @@ public class ConfigTest {
     }
 }
 
+// ── COM-5: MqConfig.forTest 与构造函数默认值一致性 ──
+
+@Test
+public class ForTestDefaultsTest {
+    @TestCase
+    public func testForTestUsesTestDataDir(): Unit {
+        let cfg = MqConfig.forTest(dataDir: "/tmp/my-test")
+        @Assert(cfg.dataDir == "/tmp/my-test")
+    }
+
+    @TestCase
+    public func testForTestDefaultsMatchConstructorDefaults(): Unit {
+        let hosts = ArrayList<String>()
+        hosts.add("host1:7201")
+        let cfg = MqConfig.forTest(mqHosts: hosts)
+        // forTest 与构造函数默认值一致的关键字段
+        @Assert(cfg.heartbeatIntervalSec == 5)
+        @Assert(cfg.healthcheckMaxRetry == 3)
+        @Assert(cfg.idleTimeoutMinutes == 30)
+        @Assert(cfg.ackTimeoutMs == 30000)
+        @Assert(cfg.maxRetryCount == 3)
+        @Assert(cfg.retryIntervalMs == 1000)
+        @Assert(cfg.dlqRetentionHours == 168)
+        @Assert(cfg.maxLabelsPerMessage == 64)
+        @Assert(cfg.retentionHours == 72)
+        @Assert(cfg.syncQuorum == 1)
+        @Assert(cfg.cleanupBatchSize == 10)
+    }
+
+    @TestCase
+    public func testForTestSegmentMaxSizeSmaller(): Unit {
+        let hosts = ArrayList<String>()
+        hosts.add("h:1")
+        let cfg = MqConfig.forTest(mqHosts: hosts)
+        // 测试用 segment 大小 1MB，不同于生产环境 512MB
+        @Assert(cfg.segmentMaxSize == 1024 * 1024)
+    }
+}
+
 // ── BrokerMeta getter 测试（P3-5）──
 
 @Test

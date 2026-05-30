@@ -40,14 +40,14 @@ public class MqConfig {
     public let syncQuorum: Int64
     public let cleanupBatchSize: Int64
 
-    public init(mqHosts!: ArrayList<String>, syncHosts!: ArrayList<String>,
-                dataDir!: String, segmentMaxSize!: Int64,
-                heartbeatIntervalSec!: Int64, healthcheckMaxRetry!: Int64,
-                idleTimeoutMinutes!: Int64, ackTimeoutMs!: Int64,
-                maxRetryCount!: Int64, retryIntervalMs!: Int64,
-                dlqRetentionHours!: Int64, maxMessageSize!: Int64,
-                maxLabelsPerMessage!: Int64, retentionHours!: Int64,
-                syncQuorum!: Int64, cleanupBatchSize!: Int64 = 10) {
+    public init(mqHosts!: ArrayList<String>, syncHosts!: ArrayList<String> = ArrayList<String>(),
+                dataDir!: String = "/var/fmq/data/", segmentMaxSize!: Int64 = 512 * 1024 * 1024,
+                heartbeatIntervalSec!: Int64 = 5, healthcheckMaxRetry!: Int64 = 3,
+                idleTimeoutMinutes!: Int64 = 30, ackTimeoutMs!: Int64 = 30000,
+                maxRetryCount!: Int64 = 3, retryIntervalMs!: Int64 = 1000,
+                dlqRetentionHours!: Int64 = 168, maxMessageSize!: Int64 = 4 * 1024 * 1024,
+                maxLabelsPerMessage!: Int64 = 64, retentionHours!: Int64 = 72,
+                syncQuorum!: Int64 = 1, cleanupBatchSize!: Int64 = 10) {
         this.mqHosts = mqHosts
         this.syncHosts = syncHosts
         this.dataDir = dataDir
@@ -67,20 +67,13 @@ public class MqConfig {
     }
 
     /**
-     * 测试用工厂方法。
+     * 测试用工厂方法。仅设置测试必需字段，其余使用 MqConfig 默认值。
+     * COM-5: 不再硬编码所有字段，默认值集中到 init 参数。
      */
     public static func forTest(dataDir!: String = "/tmp/fmq_test",
-                               mqHosts!: ArrayList<String> = ArrayList<String>()): MqConfig {
-        MqConfig(
-            mqHosts: mqHosts, syncHosts: ArrayList<String>(),
-            dataDir: dataDir, segmentMaxSize: 1024 * 1024,
-            heartbeatIntervalSec: 5, healthcheckMaxRetry: 3,
-            idleTimeoutMinutes: 30, ackTimeoutMs: 30000,
-            maxRetryCount: 3, retryIntervalMs: 1000,
-            dlqRetentionHours: 168, maxMessageSize: 4 * 1024 * 1024,
-            maxLabelsPerMessage: 64, retentionHours: 72,
-            syncQuorum: 1, cleanupBatchSize: 10
-        )
+                               mqHosts!: ArrayList<String> = ArrayList<String>(),
+                               segmentMaxSize!: Int64 = 1024 * 1024): MqConfig {
+        MqConfig(mqHosts: mqHosts, dataDir: dataDir, segmentMaxSize: segmentMaxSize)
     }
 }
 
