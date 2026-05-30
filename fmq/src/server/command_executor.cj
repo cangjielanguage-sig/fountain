@@ -369,7 +369,7 @@ public class CommandExecutor {
                                         (ArrayList<String>(), framed)
                                     }
                                     let sn = CommandExecutor.deliverySn.fetchAdd(1) + 1
-                                let deliveryId = "${topic}:${q.index}:${groupId}:${offset}:${sn}"
+                                    let deliveryId = "${topic}:${q.index}:${groupId}:${offset}:${sn}"
                                     deliveryManager.recordDelivery(deliveryId, groupId, groupId, topic, payload: payload)
                                     consumed.add((deliveryId, labels, payload))
                                 }
