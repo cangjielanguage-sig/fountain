@@ -110,11 +110,6 @@ public class MqClient <: Resource {
         subscriber.subscribe(groupId, matchMode)
     }
 
-    public func subscribe(groupId: String, matchMode: MatchMode, labels!: ArrayList<String> = ArrayList()): Bool {
-        if (!ensureOpen()) { return false }
-        subscriber.subscribe(groupId, matchMode)
-    }
-
     public func subscribe(groupId: String, matchMode: MatchMode, dataFilter!: String = ""): Bool {
         if (!ensureOpen()) { return false }
         subscriber.subscribe(groupId, matchMode, dataFilter: dataFilter)
@@ -153,6 +148,7 @@ public class MqClient <: Resource {
      * 列出死信。
      */
     public func listDeadLetters(topic: String, queueIndex: Int64): ArrayList<(String, Array<Byte>)> {
+        if (!ensureOpen()) { return ArrayList() }
         let payload = encodeDlqPayload(topic, queueIndex)
         let req = ProtocolMessage(Command.DLQ_LIST, MessageID(),
             MqBody("dlq_list", payload).toData())
@@ -172,6 +168,7 @@ public class MqClient <: Resource {
      * 重投单条死信。
      */
     public func redeliverDeadLetter(topic: String, queueIndex: Int64, messageId: String): Bool {
+        if (!ensureOpen()) { return false }
         let payload = encodeDlqRedeliverPayload(topic, queueIndex, messageId)
         let req = ProtocolMessage(Command.DLQ_REDELIVER, MessageID(),
             MqBody("dlq_redeliver", payload).toData())
@@ -183,6 +180,7 @@ public class MqClient <: Resource {
      * 重投所有死信。
      */
     public func redeliverAllDeadLetters(topic: String, queueIndex: Int64): Bool {
+        if (!ensureOpen()) { return false }
         let payload = encodeDlqPayload(topic, queueIndex)
         let req = ProtocolMessage(Command.DLQ_REDELIVER_ALL, MessageID(),
             MqBody("dlq_redeliver_all", payload).toData())
@@ -201,6 +199,7 @@ public class MqClient <: Resource {
     }
 
     public func deleteTopic(name: String): Bool {
+        if (!ensureOpen()) { return false }
         let payload = encodeTopicOpPayload("delete", name, 0)
         let req = ProtocolMessage(Command.TOPIC_OP, MessageID(),
             MqBody("topic_op", payload).toData())
@@ -208,6 +207,7 @@ public class MqClient <: Resource {
     }
 
     public func listTopics(): ArrayList<String> {
+        if (!ensureOpen()) { return ArrayList() }
         let payload = encodeTopicOpPayload("list", "", 0)
         let req = ProtocolMessage(Command.TOPIC_OP, MessageID(),
             MqBody("topic_op", payload).toData())
@@ -229,6 +229,7 @@ public class MqClient <: Resource {
      * @return ArrayList<(consumerId, groupId, matchMode)>
      */
     public func listConsumers(topic: String): ArrayList<(String, String, String)> {
+        if (!ensureOpen()) { return ArrayList() }
         let payload = encodeTopicOpPayload("listConsumers", topic, 0)
         let req = ProtocolMessage(Command.TOPIC_OP, MessageID(),
             MqBody("topic_op", payload).toData())
@@ -249,6 +250,7 @@ public class MqClient <: Resource {
      * 添加消费者组到主题。
      */
     public func addConsumerGroup(topic: String, group: String): Bool {
+        if (!ensureOpen()) { return false }
         let payload = encodeGroupOpPayload("addGroup", topic, group, 0)
         let req = ProtocolMessage(Command.TOPIC_OP, MessageID(),
             MqBody("topic_op", payload).toData())
@@ -259,6 +261,7 @@ public class MqClient <: Resource {
      * 从主题移除消费者组。
      */
     public func removeConsumerGroup(topic: String, group: String): Bool {
+        if (!ensureOpen()) { return false }
         let payload = encodeGroupOpPayload("removeGroup", topic, group, 0)
         let req = ProtocolMessage(Command.TOPIC_OP, MessageID(),
             MqBody("topic_op", payload).toData())
@@ -270,6 +273,7 @@ public class MqClient <: Resource {
      * 服务端返回的 topic_info 是二进制编码数据，以 hex 格式显示。
      */
     public func showTopic(name: String): ?String {
+        if (!ensureOpen()) { return None }
         let payload = encodeTopicOpPayload("showTopic", name, 0)
         let req = ProtocolMessage(Command.TOPIC_OP, MessageID(),
             MqBody("topic_op", payload).toData())
@@ -300,6 +304,7 @@ public class MqClient <: Resource {
      * 重置消费者组 offset。
      */
     public func resetOffset(topic: String, group: String, offset: Int64, queueIndex!: Int64 = 0): Bool {
+        if (!ensureOpen()) { return false }
         let payload = encodeGroupOpPayload("resetOffset", topic, group, offset, queueIndex: queueIndex)
         let req = ProtocolMessage(Command.TOPIC_OP, MessageID(),
             MqBody("topic_op", payload).toData())
@@ -310,6 +315,7 @@ public class MqClient <: Resource {
      * 列出指定主题的消费者组。
      */
     public func listGroups(topic: String): ArrayList<String> {
+        if (!ensureOpen()) { return ArrayList() }
         let payload = encodeTopicOpPayload("listGroups", topic, 0)
         let req = ProtocolMessage(Command.TOPIC_OP, MessageID(),
             MqBody("topic_op", payload).toData())
@@ -331,6 +337,7 @@ public class MqClient <: Resource {
      * @return ArrayList<(topic, groupName)>
      */
     public func listAllConsumerGroups(): ArrayList<(String, String)> {
+        if (!ensureOpen()) { return ArrayList() }
         let payload = encodeTopicOpPayload("listAllGroups", "", 0)
         let req = ProtocolMessage(Command.TOPIC_OP, MessageID(),
             MqBody("topic_op", payload).toData())

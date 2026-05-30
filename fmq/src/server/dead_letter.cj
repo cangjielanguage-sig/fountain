@@ -120,11 +120,11 @@ public class DeadLetterStore {
                     keys.add(msgId)
                 }
             }
-        for (msgId in keys) {
-            if (let Some((_, _, data, _)) <- index.get(msgId)) {
-                index.remove(msgId)
-                result.add(data)
-            }
+            for (msgId in keys) {
+                if (let Some((_, _, data, _)) <- index.get(msgId)) {
+                    index.remove(msgId)
+                    result.add(data)
+                }
             }
         }
         result

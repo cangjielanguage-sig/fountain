@@ -251,7 +251,9 @@ public class QueueManager {
                 startWriterAndReader(q, rm)
             }
         }
-        log.info{"startAll: ${writers.size} writers started"}
+        let writerCount: Int64
+        synchronized(lock) { writerCount = writers.size }
+        log.info{"startAll: ${writerCount} writers started"}
     }
 
     /**
@@ -302,7 +304,12 @@ public class QueueManager {
      * 与 startAll() 分离，确保生产路径启动同步线程，测试路径可跳过。
      */
     public func startAllSyncThreads(): Unit {
-        for (w in writers) {
+        let snapshot: ArrayList<QueueWriter>
+        synchronized(lock) {
+            snapshot = ArrayList<QueueWriter>()
+            for (w in writers) { snapshot.add(w) }
+        }
+        for (w in snapshot) {
             w.startSyncThread()
         }
     }

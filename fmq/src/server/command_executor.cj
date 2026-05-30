@@ -110,7 +110,7 @@ public class CommandExecutor {
      * 处理单条消息生产。
      */
     private func handleSingleProduce(request: ProtocolMessage, body: MqBody): ProtocolMessage {
-        if (let Some((topic, labels, msgData)) <- ProduceCodec.decode(body.payload)) {
+        if (let Some((topic, labels, msgData)) <- ProduceCodec.decode(body.payload, maxLabels: config.maxLabelsPerMessage)) {
             if (!validateTopic(topic)) {
                 return errorResp(request.id, "invalid topic: ${topic}")
             }
@@ -316,7 +316,7 @@ public class CommandExecutor {
                         if (consumed.size < batchSize) {
                             if (let Some(framed) <- q.tryReadFromLog(offset)) {
                                 // 解码 framed entry，提取 labels 和 payload
-                                let (labels, payload) = if (let Some((_, ls, p)) <- ProduceCodec.decode(framed)) {
+                                let (labels, payload) = if (let Some((_, ls, p)) <- ProduceCodec.decode(framed, maxLabels: config.maxLabelsPerMessage)) {
                                     (ls, p)
                                 } else {
                                     (ArrayList<String>(), framed)
@@ -363,7 +363,7 @@ public class CommandExecutor {
                             let offset = deliveryManager.getOffset(topic, q.index, groupId)
                             if (consumed.size < batchSize) {
                                 if (let Some(framed) <- q.tryReadFromLog(offset)) {
-                                    let (labels, payload) = if (let Some((_, ls, p)) <- ProduceCodec.decode(framed)) {
+                                    let (labels, payload) = if (let Some((_, ls, p)) <- ProduceCodec.decode(framed, maxLabels: config.maxLabelsPerMessage)) {
                                         (ls, p)
                                     } else {
                                         (ArrayList<String>(), framed)

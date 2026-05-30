@@ -22,7 +22,7 @@ import fountain::f_data.{DataList, Data}
 import std.collection.HashMap
 import std.io.{ByteBuffer, SeekPosition}
 import std.convert.*
-import std.sync.AtomicBool
+import std.sync.{AtomicBool, Mutex}
 
 /**
  * 消费者。
@@ -34,6 +34,7 @@ public class Consumer {
     private let subscriber: Subscriber
     /** P2-2: 批量 CONSUME 缓存的剩余消息，避免丢弃后服务端重试。 */
     private var pendingMessages = ArrayList<(String, String, String, ArrayList<String>, Array<Byte>)>()
+    private let msgLock = Mutex()
 
     public init(client: Client<ProtocolMessage, EncodedMessage, ProtocolMessage, MqBody, MessageID>,
                 subscriber: Subscriber) {
@@ -47,8 +48,10 @@ public class Consumer {
      */
     public func poll<T>(timeout: Duration): ?Message where T <: DataFields<T> {
         // P2-2: 优先从缓存返回消息，减少 RPC
-        if (pendingMessages.size > 0) {
-            return dequeuePending()
+        synchronized(msgLock) {
+            if (pendingMessages.size > 0) {
+                return dequeuePending()
+            }
         }
         let subs = subscriber.getSubscriptions()
         if (subs.size == 0) {
@@ -70,13 +73,17 @@ public class Consumer {
                                     let ackQi = ConsumerLoop.extractQueueIndex(deliveryId)
                                     Consumer.sendAck(client, deliveryId, topic, ackQi, "dataFilter")
                                 } else {
-                                    pendingMessages.add((topic, deliveryId, groupId, labels, payload))
+                                    synchronized(msgLock) {
+                                        pendingMessages.add((topic, deliveryId, groupId, labels, payload))
+                                    }
                                 }
                             }
                         }
                     }
-                    if (pendingMessages.size > 0) {
-                        return dequeuePending()
+                    synchronized(msgLock) {
+                        if (pendingMessages.size > 0) {
+                            return dequeuePending()
+                        }
                     }
                 }
             }
@@ -86,13 +93,15 @@ public class Consumer {
 
     /** P2-2: 从缓存取出一条消息，提取 queueIndex 并构建 Message。 */
     private func dequeuePending(): ?Message {
-        if (pendingMessages.size == 0) { return None }
-        let (topic, deliveryId, _, labels, payload) = pendingMessages[0]
-        pendingMessages.remove(at: 0)
-        let qi = ConsumerLoop.extractQueueIndex(deliveryId)
-        Some(Message(topic: topic, id: MessageID(),
-            queueIndex: qi, payload: payload, labels: labels,
-            producerId: deliveryId))
+        synchronized(msgLock) {
+            if (pendingMessages.size == 0) { return None }
+            let (topic, deliveryId, _, labels, payload) = pendingMessages[0]
+            pendingMessages.remove(at: 0)
+            let qi = ConsumerLoop.extractQueueIndex(deliveryId)
+            Some(Message(topic: topic, id: MessageID(),
+                queueIndex: qi, payload: payload, labels: labels,
+                producerId: deliveryId))
+        }
     }
 
     /**

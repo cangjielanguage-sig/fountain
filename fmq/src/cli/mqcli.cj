@@ -68,6 +68,7 @@ public class MqCliCommand <: SubCommand {
                 for (a in args) {
                     if (!a.isEmpty()) { filtered.add(a) }
                 }
+                if (filtered.size == 0) { continue }
                 let finalArgs = Array<String>(filtered.size, repeat: "")
                 for (i in 0..filtered.size) { finalArgs[i] = filtered[i] }
                 if (!runCommand(finalArgs)) {
