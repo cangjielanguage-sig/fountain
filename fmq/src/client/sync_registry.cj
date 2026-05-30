@@ -25,6 +25,8 @@ import std.random.*
  * 使用 Timer.repeat 驱动心跳间隔。
  */
 public class SyncRegistry {
+    // P3-4: 复用 Random 实例，避免每次 start 创建新对象
+    private static let random = Random()
     private let config: MqConfig
     private let client: Client<ProtocolMessage, EncodedMessage, ProtocolMessage, MqBody, MessageID>
     private let log = LoggerFactory.getLogger('fountain::fmq.SyncRegistry')

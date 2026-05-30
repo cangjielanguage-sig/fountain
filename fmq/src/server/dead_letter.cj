@@ -56,8 +56,8 @@ public class DeadLetterStore {
      * 性能：按 syncBatchSize 批量 sync 降低 fsync 频率。close() 时强制最终 sync。
      */
     public func append(data: Array<Byte>, topic: String, queueIndex: Int64, messageId: String): Unit {
-        // 编码 metadata + data 到单条 entry
-        let entry = encodeDlqEntry(messageId, topic, queueIndex, data)
+        // 编码 metadata + timestamp + data 到单条 entry
+        let entry = encodeDlqEntry(messageId, topic, queueIndex, DateTime.now(), data)
         dlqLog.append(entry)
         let count = unsyncedCount.fetchAdd(1) + 1
         if (count >= syncBatchSize) {
@@ -170,9 +170,11 @@ public class DeadLetterStore {
                 if (let Some(msgId) <- dec.decode<String>(stream)
                     && let Some(topic) <- dec.decode<String>(stream)
                     && let Some(qi) <- dec.decode<Int64>(stream)
+                    && let Some(timestamp) <- dec.decode<Int64>(stream)
                     && let Some(data) <- dec.decode<Array<Byte>>(stream)) {
+                    let insertedAt = DateTime.fromUnixTimeStamp(Duration.millisecond * timestamp)
                     synchronized(mutex) {
-                        index[msgId] = (topic, qi, data, DateTime.now())
+                        index[msgId] = (topic, qi, data, insertedAt)
                     }
                     count += 1
                 } else {
@@ -193,10 +195,11 @@ public class DeadLetterStore {
     // ───── 编解码 ─────
 
     private static func encodeDlqEntry(msgId: String, topic: String, queueIndex: Int64,
-                                        data: Array<Byte>): Array<Byte> {
+                                        timestamp: DateTime, data: Array<Byte>): Array<Byte> {
         let buf = ByteBuffer()
         DefaultCodec()
-            .encode(msgId).encode(topic).encode(queueIndex).encode(data)
+            .encode(msgId).encode(topic).encode(queueIndex)
+            .encode(timestamp.toUnixTimeStamp().toMilliseconds()).encode(data)
             .finish().copy(to: buf, closeFromOnEnd: true, closeToOnEnd: false)
         extractBytes(buf)
     }

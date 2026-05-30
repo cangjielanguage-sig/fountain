@@ -104,7 +104,9 @@ public class MqCommand <: SubCommand {
 
         // 从 fleet 恢复持久化状态
         topicManager.restore()
+        deliveryManager.setTopicManager(topicManager)
         deliveryManager.restoreOffsets()
+        deliveryManager.cleanupOrphanOffsets()  // P2-5: 清理已删除 topic 的孤儿 offset
 
         // 为主题创建队列
         for (name in topicManager.listTopics()) {

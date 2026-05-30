@@ -69,6 +69,7 @@ public class MqCliCommand <: SubCommand {
                     if (!a.isEmpty()) { filtered.add(a) }
                 }
                 if (filtered.size == 0) { continue }
+                // P3-6: single O(n) pass from ArrayList to Array
                 let finalArgs = Array<String>(filtered.size, repeat: "")
                 for (i in 0..filtered.size) { finalArgs[i] = filtered[i] }
                 runCommand(finalArgs)

@@ -143,6 +143,8 @@ public class MqQueue <: Resource & ToString {
         if (!draining.load()) { return true }
         let streamAlive: Bool
         synchronized(streamLock) {
+            // P3-2: 锁内重新检查 closed，防止 draining 检查后 close() 已被另一线程调用
+            if (closed.load()) { return true }
             streamAlive = logStream.isSome()
         }
         if (!streamAlive) {

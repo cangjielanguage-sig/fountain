@@ -66,6 +66,7 @@ public class DeliveryManager {
     private let onAckLock = Mutex()  // 保护 onAck check-then-act
     private var consumerMatcher: Option<ConsumerMatcher> = None
     private var queueManager: Option<QueueManager> = None
+    private var topicManager: Option<TopicManager> = None
     private let checkerClosed = AtomicBool(false)
     private var checkerFuture: Option<Future<Unit>> = None
 
@@ -185,6 +186,41 @@ public class DeliveryManager {
      */
     public func setQueueManager(qm: QueueManager): Unit {
         this.queueManager = Some(qm)
+    }
+
+    /**
+     * 设置 TopicManager 引用（清理孤儿 offset 需要）。
+     * P2-5: 非必需，仅在清理 offset 时使用。
+     */
+    public func setTopicManager(tm: TopicManager): Unit {
+        this.topicManager = Some(tm)
+    }
+
+    /**
+     * 清理已删除 topic 的孤儿 offset。
+     * P2-5: 在 restoreOffsets 后调用，删除内存中已不存在 topic 的 offset 条目。
+     */
+    public func cleanupOrphanOffsets(): Unit {
+        if (let Some(ref) <- topicManager) {
+            var orphanKeys = ArrayList<String>()
+            for ((key, _) in offsets) {
+                // key format: topic:queueIndex:server:groupId
+                let parts = key.split(':')
+                if (parts.size >= 1) {
+                    let topic = parts[0]
+                    if (ref.getTopicMeta(topic).isNone()) {
+                        orphanKeys.add(key)
+                    }
+                }
+            }
+            for (k in orphanKeys) {
+                offsets.remove(k)
+            }
+            if (orphanKeys.size > 0) {
+                let count = orphanKeys.size
+                log.info{"cleanupOrphanOffsets: removed ${count} orphan offsets"}
+            }
+        }
     }
 
     /**
