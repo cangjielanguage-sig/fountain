@@ -386,6 +386,51 @@ public class DecodeMatchModeEdgeTest {
     }
 
     @TestCase
+    public func testDecodeMatchModeEmptyString(): Unit {
+        // P2-1 边界: 空字符串 < 5 字节，返回 Exact("")
+        let reg = ConsumerRegistration(
+            consumerId: "e1", groupId: "e1",
+            matchModeStr: "",
+            labels: None, dataFilter: None,
+            lastHeartbeat: DateTime.now())
+        let mode = reg.getMatchMode()
+        match (mode) {
+            case Exact(t) => @Assert(t == "")
+            case _ => @Assert(false)
+        }
+    }
+
+    @TestCase
+    public func testDecodeMatchModeGlobEmptyPattern(): Unit {
+        // P2-1 边界: "Glob:" (5 bytes) — 最短合法前缀，空 pattern
+        let reg = ConsumerRegistration(
+            consumerId: "g2", groupId: "g2",
+            matchModeStr: "Glob:",
+            labels: None, dataFilter: None,
+            lastHeartbeat: DateTime.now())
+        let mode = reg.getMatchMode()
+        match (mode) {
+            case Glob(p) => @Assert(p == "")
+            case _ => @Assert(false)
+        }
+    }
+
+    @TestCase
+    public func testDecodeMatchModeGlobSingleCharX(): Unit {
+        // P2-1 边界: "Glob:x" (6 bytes) — 单字符 pattern，之前 ≤6 被误判
+        let reg = ConsumerRegistration(
+            consumerId: "g3", groupId: "g3",
+            matchModeStr: "Glob:x",
+            labels: None, dataFilter: None,
+            lastHeartbeat: DateTime.now())
+        let mode = reg.getMatchMode()
+        match (mode) {
+            case Glob(p) => @Assert(p == "x")
+            case _ => @Assert(false)
+        }
+    }
+
+    @TestCase
     public func testDecodeMatchModeUnknownPrefix(): Unit {
         let reg = ConsumerRegistration(
             consumerId: "unknown", groupId: "unknown",
