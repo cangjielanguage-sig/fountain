@@ -371,6 +371,21 @@ public class DecodeMatchModeEdgeTest {
     }
 
     @TestCase
+    public func testDecodeMatchModeSingleCharGlob(): Unit {
+        // P2-1: "Glob:*" (6 bytes) 之前被 s.size <= 6 误判为空 Exact
+        let reg = ConsumerRegistration(
+            consumerId: "g1", groupId: "g1",
+            matchModeStr: "Glob:*",
+            labels: None, dataFilter: None,
+            lastHeartbeat: DateTime.now())
+        let mode = reg.getMatchMode()
+        match (mode) {
+            case Glob(p) => @Assert(p == "*")
+            case _ => @Assert(false)
+        }
+    }
+
+    @TestCase
     public func testDecodeMatchModeUnknownPrefix(): Unit {
         let reg = ConsumerRegistration(
             consumerId: "unknown", groupId: "unknown",

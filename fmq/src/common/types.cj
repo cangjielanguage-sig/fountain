@@ -88,7 +88,7 @@ public class ConsumerRegistration {
     }
 
     private static func decodeMatchMode(s: String): MatchMode {
-        if (s.size <= 6) {  // "Exact:" + empty
+        if (s.size < 5) {  // shortest prefix is "Glob:" (5 bytes), shorter strings have no valid prefix
             log.warn{"decodeMatchMode: empty pattern '${s}'"}
             MatchMode.Exact("")  // 不会匹配任何合法 topic（topic 以 / 开头）
         } else if (s.startsWith("Exact:")) { MatchMode.Exact(s[6..]) }
