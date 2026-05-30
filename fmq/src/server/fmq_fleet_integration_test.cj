@@ -96,8 +96,8 @@ public class FmqFleetIntegrationTest {
 
     @TestCase
     public func testFmqServerRegisterTopicToFleet(): Unit {
-        let fleetDir = '/tmp/fmq_fleet_int/topic'
-        let hosts = ArrayList<HostAndPort>([HostAndPort('127.0.0.1:${FLEET_PORT_TOPIC}')])
+        let fleetDir = "/tmp/fmq_fleet_int/topic"
+        let hosts = ArrayList<HostAndPort>([HostAndPort("127.0.0.1:${FLEET_PORT_TOPIC}")])
         let (fleetServer, store, handler) = startFleet(FLEET_PORT_TOPIC, fleetDir, hosts, 0)
         sleep(Duration.second * 3)
 
@@ -142,8 +142,8 @@ public class FmqFleetIntegrationTest {
 
     @TestCase
     public func testFmqServerKeepAliveToFleet(): Unit {
-        let fleetDir = '/tmp/fmq_fleet_int/keepalive'
-        let hosts = ArrayList<HostAndPort>([HostAndPort('127.0.0.1:${FLEET_PORT_KEEPALIVE}')])
+        let fleetDir = "/tmp/fmq_fleet_int/keepalive"
+        let hosts = ArrayList<HostAndPort>([HostAndPort("127.0.0.1:${FLEET_PORT_KEEPALIVE}")])
         let (fleetServer, store, handler) = startFleet(FLEET_PORT_KEEPALIVE, fleetDir, hosts, 0)
         sleep(Duration.second * 3)
 
@@ -162,8 +162,8 @@ public class FmqFleetIntegrationTest {
 
     @TestCase
     public func testFmqClientRegisterConsumerToFleet(): Unit {
-        let fleetDir = '/tmp/fmq_fleet_int/consumer'
-        let hosts = ArrayList<HostAndPort>([HostAndPort('127.0.0.1:${FLEET_PORT_CONSUMER}')])
+        let fleetDir = "/tmp/fmq_fleet_int/consumer"
+        let hosts = ArrayList<HostAndPort>([HostAndPort("127.0.0.1:${FLEET_PORT_CONSUMER}")])
         let (fleetServer, store, handler) = startFleet(FLEET_PORT_CONSUMER, fleetDir, hosts, 0)
         sleep(Duration.second * 3)
 
@@ -205,8 +205,8 @@ public class FmqFleetIntegrationTest {
 
     @TestCase
     public func testFmqClientKeepAliveToFleet(): Unit {
-        let fleetDir = '/tmp/fmq_fleet_int/clientkp'
-        let hosts = ArrayList<HostAndPort>([HostAndPort('127.0.0.1:${FLEET_PORT_CONSUMER}')])
+        let fleetDir = "/tmp/fmq_fleet_int/clientkp"
+        let hosts = ArrayList<HostAndPort>([HostAndPort("127.0.0.1:${FLEET_PORT_CONSUMER}")])
         let (fleetServer, store, handler) = startFleet(FLEET_PORT_CONSUMER, fleetDir, hosts, 0)
         sleep(Duration.second * 3)
 
@@ -225,12 +225,12 @@ public class FmqFleetIntegrationTest {
 
     @TestCase
     public func testClientProduceSubscribeConsumeViaFmq(): Unit {
-        let fleetDir = '/tmp/fmq_fleet_int/e2e'
-        let hosts = ArrayList<HostAndPort>([HostAndPort('127.0.0.1:${FLEET_PORT_KEEPALIVE}')])
+        let fleetDir = "/tmp/fmq_fleet_int/e2e"
+        let hosts = ArrayList<HostAndPort>([HostAndPort("127.0.0.1:${FLEET_PORT_KEEPALIVE}")])
         let (fleetServer, store, handler) = startFleet(FLEET_PORT_KEEPALIVE, fleetDir, hosts, 0)
         sleep(Duration.second * 3)
 
-        let mqDir = '/tmp/fmq_fleet_int/mq_data'
+        let mqDir = "/tmp/fmq_fleet_int/mq_data"
         cleanupDir(mqDir)
         let config = mqConfigWithFleet(FLEET_PORT_KEEPALIVE, MQ_PORT_PRODUCE, mqDir)
         let topicManager = TopicManager(config)
