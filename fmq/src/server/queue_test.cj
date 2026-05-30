@@ -219,6 +219,35 @@ public class QueueWriterTest {
     }
 
     /**
+     * P2-3: 验证 close() 清理 syncThreads 不遗漏 future。
+     * synchronized(syncLock) 确保 startSyncThread 的 put 与 close 的快照不竞态。
+     */
+    @TestCase
+    public func testCloseWithSyncThreadsNoLeak(): Unit {
+        let q = MqQueue("/test-p2-3", 0, "/tmp/fmqq_p23_close", 4096)
+        let hosts = ArrayList<String>()
+        hosts.add("slave1:7201")
+        let config = MqConfig.forTest(dataDir: "/tmp/fmqq_p23_close", mqHosts: hosts)
+        let rm = ReplicationManager(config)
+        rm.promoteToMaster()
+        rm.onSlaveOf("slave1")
+        let writer = QueueWriter(q, config, replicationManager: rm)
+
+        // 启动同步线程
+        writer.startSyncThread()
+        // close 应清理 syncThreads，不抛异常
+        writer.close()
+        @Assert(writer.isClosed())
+        q.close()
+        try {
+            for (entry in Directory.readFrom("/tmp/fmqq_p23_close")) {
+                try { remove(entry.path.toString()) } catch (_: Exception) {}
+            }
+            remove("/tmp/fmqq_p23_close")
+        } catch (_: Exception) {}
+    }
+
+    /**
      * SRV-5: 验证 QueueWriter 构造缓存 syncPrefix 不抛异常。
      */
     @TestCase
@@ -305,6 +334,34 @@ public class TryFinishDrainConcurrentCloseTest {
                 try { remove(entry.path.toString()) } catch (_: Exception) {}
             }
             remove("/tmp/fmqq_p32")
+        } catch (_: Exception) {}
+    }
+}
+
+// ──── P2-3: QueueWriter close with syncThreads (round 25) ────
+
+@Test
+public class QueueWriterCloseSyncTest {
+    @TestCase
+    public func testCloseWithSyncThreadsNoLeak(): Unit {
+        let q = MqQueue("/test-p2-3c", 0, "/tmp/fmqq_p23c", 4096)
+        let hosts = ArrayList<String>()
+        hosts.add("s1:7201")
+        let config = MqConfig.forTest(dataDir: "/tmp/fmqq_p23c", mqHosts: hosts)
+        let rm = ReplicationManager(config)
+        rm.promoteToMaster()
+        rm.onSlaveOf("s1")
+        let writer = QueueWriter(q, config, replicationManager: rm)
+        writer.startSyncThread()
+        // close 应 join sync 线程
+        writer.close()
+        @Assert(writer.isClosed())
+        q.close()
+        try {
+            for (entry in Directory.readFrom("/tmp/fmqq_p23c")) {
+                try { remove(entry.path.toString()) } catch (_: Exception) {}
+            }
+            remove("/tmp/fmqq_p23c")
         } catch (_: Exception) {}
     }
 }

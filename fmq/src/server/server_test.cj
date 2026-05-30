@@ -123,6 +123,33 @@ public class QueueDistributionTest {
 
 @Test
 public class QueueManagerConcurrencyTest {
+    /**
+     * P1-1: 验证并发调用 getOrCreateQueues 时 writers ArrayList 不崩溃。
+     * startWriterAndReader 内部通过 synchronized(lock) 保护 writers.add()。
+     */
+    @TestCase
+    public func testConcurrentGetOrCreateWithWritersSync(): Unit {
+        let hosts = ArrayList<String>()
+        hosts.add("node1:7201")
+        hosts.add("node2:7201")
+        let config = concurrentTestConfig()
+        let qm = QueueManager(config, nodeIndex: 0)
+        qm.setReplicationManager(ReplicationManager(config))
+
+        // 并发创建不同 topic，每个都通过 getOrCreateQueues 触发 startWriterAndReader
+        let futures = ArrayList<Future<ArrayList<MqQueue>>>()
+        for (i in 0..10) {
+            let topic = "/p1-1-topic-${i}"
+            futures.add(spawn { qm.getOrCreateQueues(topic, 2) })
+        }
+        for (f in futures) {
+            let queues = f.get()
+            @Assert(queues.size > 0)
+        }
+        // 验证 writers 快照正常（close 时遍历 writers 不崩溃）
+        qm.close()
+    }
+
     @TestCase
     public func testConcurrentCreateAndListTopics(): Unit {
         let config = concurrentTestConfig()
@@ -311,6 +338,19 @@ public class ReplicationRoleTest {
     }
 
     /**
+     * P1-2: 验证 isMasterAlive 在没有 master 连接时不崩溃并返回 true。
+     * masterConn 为 None 且 masterNodeId 为空或 mqHosts 为空时返回 true。
+     */
+    @TestCase
+    public func testIsMasterAliveNoMasterReturnsTrue(): Unit {
+        let config = testConfig()
+        let rm = ReplicationManager(config)
+        // 从未调用 connectToMaster/promoteToMaster → masterConn 为 None
+        // masterNodeId 为空 → 返回 true
+        @Assert(rm.isMasterAlive())
+    }
+
+    /**
      * P1-1: 验证 connectToMaster 失败后 isSyncing 为 false。
      * 连接不可达的 master 时 error path 正确设置同步状态。
      */
@@ -387,6 +427,36 @@ public class QueueManagerLifecycleTest {
         @Assert(!q.isClosed())
         qm.close()  // 验证 close 不抛异常，不启动 writer/reader 线程
         @Assert(q.isClosed())
+    }
+
+    /**
+     * P2-2: 验证 close() 设置 closed 标志后阻止新 writer 启动。
+     * startWriterAndReader 检查 closed.load()，为 true 时跳过 writer 创建。
+     */
+    @TestCase
+    public func testClosePreventsNewWriters(): Unit {
+        let hosts = ArrayList<String>()
+        hosts.add("node1:7201")
+        let config = MqConfig(
+            mqHosts: hosts, syncHosts: ArrayList(),
+            dataDir: "/tmp/fmq_qm_closed_writer", segmentMaxSize: 1024,
+            heartbeatIntervalSec: 5, healthcheckMaxRetry: 3,
+            idleTimeoutMinutes: 30, ackTimeoutMs: 30000,
+            maxRetryCount: 3, retryIntervalMs: 1000,
+            dlqRetentionHours: 168, maxMessageSize: 4096,
+            maxLabelsPerMessage: 64, retentionHours: 72,
+            syncQuorum: 1)
+        let qm = QueueManager(config, nodeIndex: 0)
+        qm.setReplicationManager(ReplicationManager(config))
+
+        // close 后再创建队列 — 不应崩溃
+        qm.close()
+        let queues = qm.createQueues("/p2-2-closed", 1)
+        @Assert(queues.size > 0)
+        // getOrCreateQueues 应不崩溃，但不启动新 writer
+        let existing = qm.getOrCreateQueues("/p2-2-closed", 1)
+        @Assert(existing.size > 0)
+        for (q in existing) { q.close() }
     }
 }
 
@@ -1603,6 +1673,88 @@ public class CleanupOrphanOffsetsTest {
 
         // /deleted 的 offset 应被移除（getOffset 返回 0 表示 key 不存在）
         @Assert(dm.getOffset("/deleted", 0, "g2") == 0)
+    }
+}
+
+// ──── P1-1/P2-2: QueueManager writers 并发安全 + closed 标记 (round 25) ────
+
+@Test
+public class QueueManagerWritersConcurrentTest {
+    @TestCase
+    public func testStartAllWritersAndCloseNoCrash(): Unit {
+        let hosts = ArrayList<String>()
+        hosts.add("n1:1")
+        let config = MqConfig(mqHosts: hosts, dataDir: "/tmp/fmqq_p11", segmentMaxSize: 4096)
+        let qm = QueueManager(config, nodeIndex: 0)
+        // createQueues → 内部调 startWriterAndReader
+        qm.createQueues("/p1-1", 2)
+        // close 应完整停止所有 writer 线程
+        qm.close()
+        @Assert(true)  // 无崩溃即通过
+        cleanupDir("/tmp/fmqq_p11")
+    }
+
+    @TestCase
+    public func testClosePreventsNewWriter(): Unit {
+        let hosts = ArrayList<String>()
+        hosts.add("n1:1")
+        let config = MqConfig(mqHosts: hosts, dataDir: "/tmp/fmqq_p22", segmentMaxSize: 4096)
+        let qm = QueueManager(config, nodeIndex: 0)
+        qm.createQueues("/p2-2", 1)
+        qm.close()
+        // close 之后 startWritersForTopic 应通过 closed 检查跳过新 writer
+        qm.startWritersForTopic("/p2-2")
+        @Assert(true)  // 不抛异常即通过
+        cleanupDir("/tmp/fmqq_p22")
+    }
+
+    private static func cleanupDir(path: String): Unit {
+        try {
+            for (entry in Directory.readFrom(path)) {
+                try { remove(entry.path.toString()) } catch (_: Exception) {}
+            }
+            remove(path)
+        } catch (_: Exception) {}
+    }
+}
+
+// ──── P1-2: ReplicationManager isMasterAlive (round 25) ────
+
+@Test
+public class IsMasterAliveTest {
+    @TestCase
+    public func testIsMasterAliveWithNoConnection(): Unit {
+        let config = MqConfig(mqHosts: ArrayList(), syncHosts: ArrayList(), dataDir: "/tmp")
+        let rm = ReplicationManager(config)
+        rm.demoteToSlave("nonexistent")
+        // 无可达 master 时 isMasterAlive 应返回 true（不抛异常）
+        @Assert(rm.isMasterAlive())
+    }
+}
+
+// ──── P2-4: ConsumerMatcher deregister roundRobin 索引 (round 25) ────
+
+@Test
+public class ConsumerMatcherDeregisterRRTest {
+    @TestCase
+    public func testDeregisterMaintainsRRIndex(): Unit {
+        let cm = ConsumerMatcher()
+        // 注册两个消费者到同一 group
+        cm.register(ConsumerRegistration(
+            consumerId: "c1", groupId: "g1",
+            matchModeStr: "Exact:/t", labels: None, dataFilter: None,
+            lastHeartbeat: DateTime.now()))
+        cm.register(ConsumerRegistration(
+            consumerId: "c2", groupId: "g1",
+            matchModeStr: "Exact:/t", labels: None, dataFilter: None,
+            lastHeartbeat: DateTime.now()))
+        // deregister 一个
+        @Assert(cm.deregister("g1", "c1"))
+        // matchTopic 应返回有效消费者（不会 OOB）
+        let result = cm.matchTopic("/t")
+        if (let Some(cid) <- result.get("g1")) {
+            @Assert(cid == "c2")
+        } else { @Assert(false) }
     }
 }
 

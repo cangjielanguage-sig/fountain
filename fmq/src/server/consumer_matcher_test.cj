@@ -125,6 +125,46 @@ public class ConsumerMatcherUnsubscribeTest {
         @Assert(matcher.matchTopic("/dup").size == 0)
     }
 
+    /**
+     * P2-4: 验证 deregister 后 roundRobinIndex 被修正，不导致 out-of-bounds 崩溃。
+     * 注册两个同组消费者，matchTopic 推进 roundRobinIndex，deregister 一个后
+     * roundRobinIndex 应修正为有效索引，再次 matchTopic 不崩溃。
+     */
+    @TestCase
+    public func testDeregisterRoundRobinIndexFixed(): Unit {
+        let matcher = ConsumerMatcher()
+        let reg1 = ConsumerRegistration(
+            consumerId: "rr-c1", groupId: "rr-group",
+            matchModeStr: "Exact:/rr-fix",
+            labels: None, dataFilter: None,
+            lastHeartbeat: DateTime.now())
+        let reg2 = ConsumerRegistration(
+            consumerId: "rr-c2", groupId: "rr-group",
+            matchModeStr: "Exact:/rr-fix",
+            labels: None, dataFilter: None,
+            lastHeartbeat: DateTime.now())
+        matcher.register(reg1)
+        matcher.register(reg2)
+
+        // 调用多次 matchTopic 推进 roundRobinIndex
+        for (_ in 0..10) {
+            let result = matcher.matchTopic("/rr-fix")
+            @Assert(result.size == 1)
+        }
+
+        // deregister 一个消费者 → roundRobinIndex 应被修正
+        matcher.deregister("rr-group", "rr-c1")
+
+        // 再次 matchTopic 不应 out-of-bounds
+        for (_ in 0..10) {
+            let result = matcher.matchTopic("/rr-fix")
+            @Assert(result.size == 1)
+            if (let Some(consumerId) <- result.get("rr-group")) {
+                @Assert(consumerId == "rr-c2")
+            }
+        }
+    }
+
     @TestCase
     public func testDuplicateRegisterDifferentConsumerId(): Unit {
         let matcher = ConsumerMatcher()
