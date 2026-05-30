@@ -156,6 +156,15 @@ public class MqCliExecTest {
         let exitCode = SubCommandMediator.exec("mqcli", ["help"])
         @Assert(exitCode == 0)
     }
+
+    /**
+     * P4: 验证空参数不崩溃（CLI 交互模式过滤后可能产生空 Array）。
+     */
+    @TestCase
+    public func testRunCommandEmptyArgs(): Unit {
+        let result = MqCliCommand.runCommand([])
+        @Assert(!result)
+    }
 }
 
 /**

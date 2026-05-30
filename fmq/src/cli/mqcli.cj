@@ -81,7 +81,8 @@ public class MqCliCommand <: SubCommand {
     /**
      * 单次执行命令。返回 true 表示命令执行成功，false 表示失败。
      */
-    private static func runCommand(args: Array<String>): Bool {
+    internal static func runCommand(args: Array<String>): Bool {
+        if (args.size == 0) { return false }
         let cmd = args[0]
         let cmdArgs = args[1..]
         match (cmd) {
