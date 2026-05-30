@@ -593,4 +593,30 @@ public class ProduceCodecBoundsTest {
         let raw = extractBytes(buf)
         @Assert(ProduceCodec.decode(raw).isSome())
     }
+
+    // ── P2-4: 自定义 maxLabels ──
+
+    @TestCase
+    public func testDecodeAcceptsMaxLabelsParam(): Unit {
+        // encode 3 labels, maxLabels=5 should accept
+        let buf = ByteBuffer()
+        let enc = DefaultCodec().encode("/p2-4").encode(3i64)
+        for (_ in 0..3) { enc.encode("x") }
+        enc.encode([0x01u8])
+            .finish().copy(to: buf, closeFromOnEnd: true, closeToOnEnd: false)
+        let raw = extractBytes(buf)
+        @Assert(ProduceCodec.decode(raw, maxLabels: 5).isSome())
+    }
+
+    @TestCase
+    public func testDecodeRejectsLabelsOverMaxLabelsParam(): Unit {
+        // encode 3 labels, maxLabels=2 should reject
+        let buf = ByteBuffer()
+        let enc = DefaultCodec().encode("/p2-4b").encode(3i64)
+        for (_ in 0..3) { enc.encode("y") }
+        enc.encode([0x01u8])
+            .finish().copy(to: buf, closeFromOnEnd: true, closeToOnEnd: false)
+        let raw = extractBytes(buf)
+        @Assert(ProduceCodec.decode(raw, maxLabels: 2).isNone())
+    }
 }

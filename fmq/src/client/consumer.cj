@@ -394,6 +394,7 @@ public class ConsumerLoop {
         if (parts.size >= 3 && let Some(idx) <- Int64.tryParse(parts[parts.size - 3])) {
             idx
         } else {
+            log.warn{"extractQueueIndex: malformed deliveryId '${deliveryId}', returning 0"}
             0
         }
     }

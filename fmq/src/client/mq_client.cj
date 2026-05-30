@@ -85,50 +85,65 @@ public class MqClient <: Resource {
 
     // ───── 生产 API ─────
 
+    /** P2-3: 检查客户端未关闭。 */
+    private func ensureOpen(): Bool {
+        if (closed.load()) {
+            log.warn{"MqClient operation on closed client"}
+            false
+        } else { true }
+    }
+
     public func produce(topic: String, labels: ArrayList<String>, data: Array<Byte>): ProduceResult {
+        if (!ensureOpen()) { return ProduceResult() }
         sender.produce(topic, labels, data)
     }
 
-    /**
-     * 批量生产消息。
-     */
     public func produceBatch(topic: String, messages: ArrayList<(ArrayList<String>, Array<Byte>)>): ArrayList<ProduceResult> {
+        if (!ensureOpen()) { return ArrayList() }
         sender.produceBatch(topic, messages)
     }
 
     // ───── 订阅 API ─────
 
     public func subscribe(groupId: String, matchMode: MatchMode): Bool {
+        if (!ensureOpen()) { return false }
         subscriber.subscribe(groupId, matchMode, labels: ArrayList())
     }
 
     public func subscribe(groupId: String, matchMode: MatchMode, labels!: ArrayList<String> = ArrayList()): Bool {
+        if (!ensureOpen()) { return false }
         subscriber.subscribe(groupId, matchMode, labels: labels)
     }
 
     public func subscribe(groupId: String, matchMode: MatchMode, dataFilter!: String = ""): Bool {
+        if (!ensureOpen()) { return false }
         subscriber.subscribe(groupId, matchMode, dataFilter: dataFilter)
     }
 
     public func unsubscribe(groupId: String, matchMode: MatchMode): Bool {
+        if (!ensureOpen()) { return false }
         subscriber.unsubscribe(groupId, matchMode)
     }
 
     public func deregister(groupId: String, consumerId: String): Bool {
+        if (!ensureOpen()) { return false }
         subscriber.deregister(groupId, consumerId)
     }
 
     // ───── 消费 API ─────
 
     public func poll<T>(timeout: Duration): ?Message where T <: DataFields<T> {
+        if (!ensureOpen()) { return None }
         consumer.poll<T>(timeout)
     }
 
     public func ack(msgId: String, topic: String, queueIndex: Int64): Bool {
+        if (!ensureOpen()) { return false }
         consumer.ack(msgId, topic, queueIndex)
     }
 
     public func ackBatch(acks: ArrayList<(String, String, Int64)>): Bool {
+        if (!ensureOpen()) { return false }
         consumer.ackBatch(acks)
     }
 
@@ -175,6 +190,7 @@ public class MqClient <: Resource {
     // ───── 主题管理 API ─────
 
     public func createTopic(name: String, queueCount!: Int64 = 1): Bool {
+        if (!ensureOpen()) { return false }
         let payload = encodeTopicOpPayload("create", name, queueCount)
         let req = ProtocolMessage(Command.TOPIC_OP, MessageID(),
             MqBody("topic_op", payload).toData())

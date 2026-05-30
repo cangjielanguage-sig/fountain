@@ -47,14 +47,14 @@ public class ProduceCodec {
      * 解码生产消息。
      * 返回 (topic, labels, payload) 元组。
      */
-    public static func decode(data: Array<Byte>): ?(String, ArrayList<String>, Array<Byte>) {
+    public static func decode(data: Array<Byte>, maxLabels!: Int64 = 64): ?(String, ArrayList<String>, Array<Byte>) {
         try {
             let buf = ByteBuffer(data)
             let dec = DefaultCodec()
             if (let Some(topic) <- dec.decode<String>(buf)) {
                 if (let Some(count) <- dec.decode<Int64>(buf)) {
                     // P2: 限制 labels 数量防止恶意/损坏消息导致 OOM
-                    if (count < 0 || count > 256) {
+                    if (count < 0 || count > maxLabels) {
                         log.warn{"ProduceCodec.decode: label count ${count} out of range"}
                         return None
                     }

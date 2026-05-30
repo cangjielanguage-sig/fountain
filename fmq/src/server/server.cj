@@ -137,7 +137,8 @@ public class MqCommand <: SubCommand {
         // 定期清理过期消费者注册（P3-1: 添加关闭检查）
         let consumerRefreshInterval = config.heartbeatIntervalSec
         let refreshClosed = AtomicBool(false)
-        spawn {
+        // P2-1: 保存 Future 用于关闭时 join
+        let refreshFuture = spawn {
             while (!refreshClosed.load()) {
                 sleep(Duration.second * consumerRefreshInterval)
                 consumerMatcher.refresh()
@@ -162,6 +163,7 @@ public class MqCommand <: SubCommand {
             }
         }
         cleaner.close()
+        try { refreshFuture.get() } catch (_: Exception) {}
         brokerManager.close()
         deliveryManager.close()
         queueManager.close()
