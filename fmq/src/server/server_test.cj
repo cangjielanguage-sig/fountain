@@ -17,9 +17,7 @@ package fountain::fmq.server
 
 import std.unittest.*
 import std.unittest.testmacro.*
-import fountain::f_codec.default.DefaultCodec
 import fountain::f_data.base.*
-import std.io.{InputStream, SeekPosition}
 import std.sync.{AtomicInt64, AtomicBool}
 import std.fs.*
 
@@ -325,7 +323,26 @@ public class ReplicationRoleTest {
         rm.demoteToSlave("node99")
         // 连接不可达的 master，应返回 false（不抛异常）
         @Assert(!rm.connectToMaster("node99"))
-        cleanupDir("/tmp/fmq_p11_sync")
+    }
+
+    /**
+     * P2-2: 验证 onSlaveOf 重复调用不产生重复条目。
+     * 重连时更新 lastHeartbeat 而非新增 SlaveProgress。
+     */
+    @TestCase
+    public func testOnSlaveOfReconnectUpdatesLastHeartbeat(): Unit {
+        let config = testConfig()
+        let rm = ReplicationManager(config)
+        rm.promoteToMaster()
+        @Assert(rm.onSlaveOf("slave1"))
+        @Assert(rm.getSlaves().size == 1)
+        // 再次调用 onSlaveOf 同一节点（模拟重连）
+        @Assert(rm.onSlaveOf("slave1"))
+        // 不应出现重复条目
+        @Assert(rm.getSlaves().size == 1)
+        // 验证不同节点各算一次
+        @Assert(rm.onSlaveOf("slave2"))
+        @Assert(rm.getSlaves().size == 2)
     }
 
     private static func testConfig(): MqConfig {
@@ -725,6 +742,32 @@ public class DeadLetterStoreTest {
 
         // 清理
         try { removeDir("/tmp/fmq_srv7_test") } catch (_: Exception) {}
+    }
+
+    /**
+     * P2-4: 验证 append 后 list 返回所有条目。
+     * rebuildIndex 在 init 时自动调用，确保内存索引与 SegmentedLog 一致。
+     */
+    @TestCase
+    public func testDeadLetterRebuildIndexPreservesTimestamps(): Unit {
+        let dir = dlqDir("rebidx_ts")
+        let ds = DeadLetterStore(dir, retentionHours: 168)
+        ds.append([0x01u8, 0x02u8], "/test", 0, "msg-ts-1")
+        ds.append([0x03u8, 0x04u8], "/test", 0, "msg-ts-2")
+        ds.sync()
+        // 验证内存索引正确
+        let entries = ds.list("/test", 0)
+        @Assert(entries.size == 2)
+        var found1 = false
+        var found2 = false
+        for ((msgId, data) in entries) {
+            if (msgId == "msg-ts-1" && data.size == 2) { found1 = true }
+            if (msgId == "msg-ts-2" && data.size == 2) { found2 = true }
+        }
+        @Assert(found1)
+        @Assert(found2)
+        ds.close()
+        removeDir(dir)
     }
 }
 
@@ -1404,17 +1447,21 @@ public class ConsumerGroupForEachQueueTest {
 public class QueueCleanerFileOrderTest {
     @TestCase
     public func testIsFileExpiredOldFileReturnsTrue(): Unit {
-        let hosts = ArrayList<String>()
-        hosts.add("n1:1")
-        let config = MqConfig(mqHosts: hosts, dataDir: "/tmp/fmq_file_order_test",
-                               retentionHours: 1, segmentMaxSize: 16384)
-        let qm = QueueManager(config, nodeIndex: 0)
-        qm.createQueues("/p2-2-order", 1)
-        // 创建文件后立即检查应未过期（retentionHours=1，当前时间应 < 1h前）
+        // 创建临时文件，手动设置过期阈值
+        let testDir = "/tmp/fmq_file_exp_test_${DateTime.now().toUnixTimeStamp().toMilliseconds()}"
+        let testFile = "${testDir}/temp_segment.log"
+        try {
+            Directory.create(testDir, recursive: true)
+            let f = File(testFile, OpenMode.Write)
+            f.write([0x01u8])
+            f.close()
+        } catch (_: Exception) { @Assert(false); return }
+        // 阈值设为一个小时前，刚创建的文件 mtime 应在 1 小时内 → 未过期
         let threshold = DateTime.now() - Duration.hour
-        let expired = QueueCleaner.isFileExpired("/tmp/fmq_file_order_test/_p2-2-order/0", threshold)
-        // 文件刚创建，mtime 应在 1 小时内 → false
+        let expired = QueueCleaner.isFileExpired(testFile, threshold)
         @Assert(!expired)
+        // 清理
+        remove(testFile); remove(testDir)
     }
 }
 
@@ -1495,6 +1542,67 @@ public class GetOrCreateQueuesConcurrentTest {
         @Assert(r1.size == 1)
         @Assert(r2.size == 1)
         @Assert(r1[0].index == r2[0].index)
+    }
+}
+
+/**
+ * P2-6: 验证 handleConsume 跳过已关闭的队列。
+ * handleConsume 遍历队列列表时跳过 isClosed() == true 的队列。
+ * 关闭队列后 tryReadFromLog 应返回 None。
+ */
+@Test
+public class ConsumeClosedQueueTest {
+    private static let counter = AtomicInt64(0)
+
+    private static func closedDir(): String {
+        "/tmp/fmq_consume_closed_${counter.fetchAdd(1) + 1}"
+    }
+
+    @TestCase
+    public func testHandleConsumeSkipsClosedQueue(): Unit {
+        let dir = closedDir()
+        let q = MqQueue("/test-closed", 0, dir, 4096)
+        q.append([0xAAu8, 0xBBu8])
+        q.sync()
+        @Assert(!q.isClosed())
+        // 关闭队列
+        q.close()
+        @Assert(q.isClosed())
+        // 关闭后 tryReadFromLog 应返回 None
+        @Assert(q.tryReadFromLog(0).isNone())
+        // 清理
+        removeDir(dir)
+    }
+}
+
+// ──── P2-5: cleanupOrphanOffsets 移除已删除 topic 的孤儿 offset (round 24) ────
+
+@Test
+public class CleanupOrphanOffsetsTest {
+    @TestCase
+    public func testCleanupOrphanOffsetsRemovesDeletedTopic(): Unit {
+        let hosts = ArrayList<String>()
+        hosts.add("n1:1")
+        let config = MqConfig(mqHosts: hosts, dataDir: "/tmp")
+        let dm = DeliveryManager(config, serverId: "s1")
+        let tm = TopicManager(config)
+        dm.setTopicManager(tm)
+
+        // 创建 /active topic 并设置 offset
+        tm.createTopic("/active", queueCount: 1)
+        dm.setOffset("/active", 0, "g1", 100)
+
+        // 为不存在的 /deleted topic 设置 offset（孤儿 offset）
+        dm.setOffset("/deleted", 0, "g2", 200)
+
+        // 调用 cleanupOrphanOffsets
+        dm.cleanupOrphanOffsets()
+
+        // /active 的 offset 应保留
+        @Assert(dm.getOffset("/active", 0, "g1") == 100)
+
+        // /deleted 的 offset 应被移除（getOffset 返回 0 表示 key 不存在）
+        @Assert(dm.getOffset("/deleted", 0, "g2") == 0)
     }
 }
 

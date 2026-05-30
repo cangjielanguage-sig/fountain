@@ -245,3 +245,66 @@ public class QueueWriterTest {
         } catch (_: Exception) {}
     }
 }
+
+// ──── P2-3: QueueWriter syncToSlaves 无 slave sync queue 不崩溃 (round 24) ────
+
+@Test
+public class QueueWriterNoSlaveSyncTest {
+    @TestCase
+    public func testSyncToSlavesWithRegisteredSlaveNoQueue(): Unit {
+        // 注册 slave 但不调用 startSyncThread → slaveSyncQueues 为空
+        // syncToSlaves 应 log warning 而非崩溃
+        let q = MqQueue("/test-p2-3", 0, "/tmp/fmqq_p23", 4096)
+        let hosts = ArrayList<String>()
+        hosts.add("slave1:7201")
+        let config = MqConfig.forTest(dataDir: "/tmp/fmqq_p23", mqHosts: hosts)
+        let rm = ReplicationManager(config)
+        rm.promoteToMaster()
+        rm.onSlaveOf("slave1")
+        let writer = QueueWriter(q, config, replicationManager: rm)
+        // 不调用 startSyncThread → slaveSyncQueues 无 "slave1" 条目
+        writer.submit([0x01u8])
+        // 启动 writer 运行会在 syncToSlaves 中触发 warning 路径
+        let f = spawn { writer.run() }
+        sleep(Duration.millisecond * 100)
+        writer.close()
+        f.get()
+        @Assert(writer.isClosed())
+        q.close()
+        try {
+            for (entry in Directory.readFrom("/tmp/fmqq_p23")) {
+                try { remove(entry.path.toString()) } catch (_: Exception) {}
+            }
+            remove("/tmp/fmqq_p23")
+        } catch (_: Exception) {}
+    }
+}
+
+// ──── P3-2: MqQueue.tryFinishDrain 与 concurrent close 不崩溃 (round 24) ────
+
+@Test
+public class TryFinishDrainConcurrentCloseTest {
+    @TestCase
+    public func testTryFinishDrainWithConcurrentClose(): Unit {
+        let q = MqQueue("/test-p3-2", 0, "/tmp/fmqq_p32", 4096)
+        @Assert(!q.isClosed())
+        @Assert(!q.draining.load())
+
+        // 设置 draining=true
+        q.draining.store(true)
+
+        // close 后再 tryFinishDrain
+        q.close()
+        @Assert(q.isClosed())
+
+        // tryFinishDrain 应检测到 closed 并返回 true
+        @Assert(q.tryFinishDrain())
+
+        try {
+            for (entry in Directory.readFrom("/tmp/fmqq_p32")) {
+                try { remove(entry.path.toString()) } catch (_: Exception) {}
+            }
+            remove("/tmp/fmqq_p32")
+        } catch (_: Exception) {}
+    }
+}

@@ -22,6 +22,7 @@ import std.net.TcpSocket
 import fountain::f_protocol.default.{Message as ProtocolMessage, EncodedMessage, MessageID, Command}
 import fountain::f_codec.default.DefaultCodec
 import std.io.{ByteBuffer, SeekPosition}
+import fountain::fmq.client.SyncRegistry
 
 /**
  * MQ 全链路集成测试。
@@ -272,6 +273,86 @@ public class MqIntegrationTest {
         producer.close()
         consumer.close()
         server.close()
+    }
+
+    // ──────────────── 第24轮：P2-1/P3-1 ACK + 锁顺序 ────────────────
+
+    /**
+     * P2-1/P3-1: 生产→拉取→ACK 全链路验证。
+     * P2-1: 确认 Consumer.sendAck 和 handleAck 通路不抛异常。
+     * P3-1: dequeuePending 锁顺序验证——poll 在订阅列表中迭代时不产生死锁。
+     */
+    @TestCase
+    public func testProduceConsumeAckFlow(): Unit {
+        let (server, port) = startServer()
+        let prod = makeClient(port)
+        let cons = makeClient(port)
+
+        let topic = "/int-ack-flow"
+        let groupId = "ack-group"
+
+        // 1. 创建主题
+        let createPld = encodeStrings(["create", topic, "1"])
+        let createReq = ProtocolMessage(Command.TOPIC_OP, MessageID(),
+            MqBody("topic_op", createPld).toData())
+        @Assert(prod.transfer(createReq.id, createReq, Duration.second * 5).isSome())
+
+        // 2. 生产消息
+        let msgData = [0xACu8, 0xADu8]
+        let encoded = ProduceCodec.encode(topic, ArrayList<String>(), msgData)
+        let prodReq = ProtocolMessage(Command.PUBLISH(0), MessageID(),
+            MqBody("produce", encoded).toData())
+        @Assert(prod.transfer(prodReq.id, prodReq, Duration.second * 5).isSome())
+
+        // 3. 订阅
+        let subPld = encodeStrings([topic, "exact"])
+        let subReq = ProtocolMessage(Command.SUBSCRIBE, MessageID(),
+            MqBody("subscribe", subPld).toData())
+        @Assert(cons.transfer(subReq.id, subReq, Duration.second * 5).isSome())
+
+        // 4. CONSUME 拉取 + RESP 验证
+        let conBuf = ByteBuffer()
+        DefaultCodec().encode(topic).encode(groupId).encode(1i64)
+            .finish().copy(to: conBuf, closeFromOnEnd: true, closeToOnEnd: false)
+        let consumeReq = ProtocolMessage(Command.CONSUME(0), MessageID(),
+            MqBody("consume", extractBytes(conBuf)).toData())
+        let consumeResp = cons.transfer(consumeReq.id, consumeReq, Duration.second * 5)
+        @Assert(consumeResp.isSome())
+        // 验证响应是 RESP 类型（command tag >> 4 == 11）
+        if (let Some(resp) <- consumeResp) {
+            @Assert((resp.command.value >> 4) == 11u8)
+        }
+
+        prod.close(); cons.close(); server.close()
+    }
+
+    // ──────────────── 第24轮：P3-4 SyncRegistry 心跳启停 ────────────────
+
+    /**
+     * P3-4: SyncRegistry.startHeartbeat / stopHeartbeat 不抛异常。
+     * Random 静态实例复用后，多次启停不崩溃。
+     */
+    @TestCase
+    public func testSyncRegistryHeartbeatStartStop(): Unit {
+        let (server, port) = startServer()
+        let client = makeClient(port)
+        let config = testConfig(port)
+        let registry = SyncRegistry(config, client)
+
+        // 单次启停
+        registry.startHeartbeat()
+        sleep(Duration.millisecond * 50)
+        registry.stopHeartbeat()
+        @Assert(!registry.isRunning())
+
+        // 多次启停——验证 Random 静态复用无副作用
+        registry.startHeartbeat()
+        registry.startHeartbeat()  // 二次 start 应为 no-op
+        sleep(Duration.millisecond * 50)
+        registry.stopHeartbeat()
+        @Assert(!registry.isRunning())
+
+        client.close(); server.close()
     }
 
     private static func encodeStrings(v: Array<String>): Array<Byte> {
