@@ -15,7 +15,6 @@ limitations under the License.
  */
 package fountain::fmq.client
 
-internal import fountain::f_base.*
 internal import fountain::f_codec.*
 internal import fountain::f_data.*
 internal import fountain::f_data.base.*

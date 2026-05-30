@@ -777,11 +777,12 @@ public class DeadLetterStoreTest {
     }
 
     /**
-     * P1-3: 验证 unsyncedCount 使用 AtomicInt64 线程安全。
-     * 批量 append 验证计数不会因竞态丢失。
+     * P1-3: 验证 unsyncedCount 串行正确性。
+     * 串行批量 append 验证计数准确。
+     * ⚠️ 该测试是串行的而非并发测试，函数名明确反映其范围。
      */
     @TestCase
-    public func testUnsyncedCountAtomicSafety(): Unit {
+    public func testUnsyncedCountSerial(): Unit {
         let ds = DeadLetterStore(dlqDir("atomic"), retentionHours: 168, syncBatchSize: 10)
         for (i in 0..10) {
             ds.append([0x01u8], "/test", 0, "msg-a-${i}")
@@ -1197,7 +1198,7 @@ public class ConsumerMatcherCacheTest {
         }
         // 触发大量 glob 匹配 - 验证不抛异常
         let result = cm.matchTopic("/test/pattern_999/x")
-        @Assert(result.size > 0 || result.size == 0)
+        @Assert(result.size == 1)
     }
 }
 

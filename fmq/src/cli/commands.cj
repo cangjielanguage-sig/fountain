@@ -168,7 +168,7 @@ public class CommandRunner {
             return true
         }
         // 按 topic 分组输出（使用 HashMap 确保不依赖迭代顺序）
-        var groupsByTopic = HashMap<String, ArrayList<String>>()
+        let groupsByTopic = HashMap<String, ArrayList<String>>()
         for ((topic, group) in all) {
             if (let Some(groups) <- groupsByTopic.get(topic)) {
                 groups.add(group)

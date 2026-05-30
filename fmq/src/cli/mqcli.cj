@@ -109,6 +109,7 @@ public class MqCliCommand <: SubCommand {
      */
     private static func printHelp(): Unit {
         println("MQ CLI commands:")
+        println("  help — print this help")
         println("  createTopic --name <topic> --queues <N>")
         println("  deleteTopic --name <topic>")
         println("  createConsumerGroup --name <group> --topic <topic>")

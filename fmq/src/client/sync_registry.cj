@@ -78,6 +78,7 @@ public class SyncRegistry {
      * 发送单次心跳。
      */
     private func sendHeartbeat(): Unit {
+        if (client.isClosed()) { return }
         try {
             let req = ProtocolMessage(Command.PING(0), MessageID(),
                 MqBody("ping", []).toData())

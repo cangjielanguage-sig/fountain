@@ -187,7 +187,7 @@ public class CliConfigCacheTest {
     public func testGetOrLoadConfigReturnsSameInstance(): Unit {
         let c1 = CommandRunner.getOrLoadConfig()
         let c2 = CommandRunner.getOrLoadConfig()
-        // 验证两次返回相同的 MqConfig 实例（dataDir 等值相同）
-        @Assert(c1.dataDir == c2.dataDir)
+        // 验证两次返回同一个 MqConfig 实例（引用相等）
+        @Assert(refEq(c1, c2))
     }
 }

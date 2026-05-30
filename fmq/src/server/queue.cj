@@ -101,7 +101,8 @@ public class MqQueue <: Resource & ToString {
                         None
                     }
                 }
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                LoggerFactory.getLogger('fountain::fmq.MqQueue').warn{"tryReadFromLog failed: ${e.message}"}
                 if (let Some(s) <- logStream) {
                     if (let r: Resource <- s) { r.close() }
                     logStream = None

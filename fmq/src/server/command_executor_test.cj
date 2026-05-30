@@ -186,6 +186,15 @@ public class CommandExecutorTest {
             MqBody("batch_produce", raw).toData())
         let resp = ex.execute(req)
         @Assert(isResp(resp))
+        // P3-6: 验证失败计数 (count=2, 仅1条完整 → fail=1)
+        if (let Some(body) <- convert<MqBody>(resp.data)) {
+            let buf2 = ByteBuffer(body.payload)
+            let dec = DefaultCodec()
+            if (let Some(ok) <- dec.decode<Int64>(buf2) && let Some(fail) <- dec.decode<Int64>(buf2)) {
+                @Assert(ok == 1)
+                @Assert(fail == 1)
+            }
+        }
     }
 
     // ── 订阅 / 退订 ──

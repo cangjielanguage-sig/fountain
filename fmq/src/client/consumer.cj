@@ -46,7 +46,7 @@ public class Consumer {
      * 拉取消息。
      * 遍历活跃订阅，发送 CONSUME 命令。
      */
-    public func poll<T>(timeout: Duration): ?Message where T <: DataFields<T> {
+    public func poll(timeout: Duration): ?Message {
         // P2-2: 优先从缓存返回消息，减少 RPC (dequeuePending 内部已加锁)
         if (let Some(msg) <- dequeuePending()) { return Some(msg) }
         let subs = subscriber.getSubscriptions()
@@ -353,6 +353,12 @@ public class ConsumerLoop {
         if (running.load()) { return }
         running.store(true)
         closed.store(false)
+        synchronized(threadLock) {
+            if (!threadFinished.load()) {
+                log.warn{"ConsumerLoop re-start while old thread still running, skipping"}
+                return
+            }
+        }
         let selfRef = this
         synchronized(threadLock) {
             threadFuture = spawn {
@@ -389,7 +395,7 @@ public class ConsumerLoop {
                 if (!threadFinished.load()) {
                     log.warn{"ConsumerLoop thread did not exit in time"}
                 }
-                try { f.get() } catch (_: Exception) {}
+                try { f.get() } catch (e: Exception) { log.warn{"ConsumerLoop future get: ${e.message}"} }
                 threadFuture = None
             }
         }

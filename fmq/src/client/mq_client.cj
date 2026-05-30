@@ -122,9 +122,9 @@ public class MqClient <: Resource {
 
     // ───── 消费 API ─────
 
-    public func poll<T>(timeout: Duration): ?Message where T <: DataFields<T> {
+    public func poll(timeout: Duration): ?Message {
         if (!ensureOpen()) { return None }
-        consumer.poll<T>(timeout)
+        consumer.poll(timeout)
     }
 
     public func ack(msgId: String, topic: String, queueIndex: Int64): Bool {
@@ -352,8 +352,8 @@ public class MqClient <: Resource {
             if (closed.load()) { return }
             closed.store(true)
             instance = None
+            syncRegistry.stopHeartbeat()
         }
-        syncRegistry.stopHeartbeat()
         mqConn.close()
     }
 

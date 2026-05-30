@@ -77,6 +77,8 @@ public class TopicTest {
     public func testConfigLoad(): Unit {
         let config = MqConfig(mqHosts: ArrayList())
         @Assert(config.dataDir == "/var/fmq/data/")
+        @Assert(config.heartbeatIntervalSec == 5)
+        @Assert(config.healthcheckMaxRetry == 3)
     }
 
     @TestCase
