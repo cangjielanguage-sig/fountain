@@ -32,6 +32,8 @@ public class Consumer {
     private static let log = LoggerFactory.getLogger<Consumer>()
     private let client: Client<ProtocolMessage, EncodedMessage, ProtocolMessage, MqBody, MessageID>
     private let subscriber: Subscriber
+    /** P2-2: 批量 CONSUME 缓存的剩余消息，避免丢弃后服务端重试。 */
+    private var pendingMessages = ArrayList<(String, String, String, ArrayList<String>, Array<Byte>)>()
 
     public init(client: Client<ProtocolMessage, EncodedMessage, ProtocolMessage, MqBody, MessageID>,
                 subscriber: Subscriber) {
@@ -44,6 +46,10 @@ public class Consumer {
      * 遍历活跃订阅，发送 CONSUME 命令。
      */
     public func poll<T>(timeout: Duration): ?Message where T <: DataFields<T> {
+        // P2-2: 优先从缓存返回消息，减少 RPC
+        if (pendingMessages.size > 0) {
+            return dequeuePending()
+        }
         let subs = subscriber.getSubscriptions()
         if (subs.size == 0) {
             return None
@@ -56,28 +62,37 @@ public class Consumer {
             if (let Some(body) <- convert<MqBody>(r.data)) {
                 if (body.bodyType == "batch_consume") {
                     let perTopic = Consumer.decodeBatchConsumeResponse(body.payload)
+                    // 缓存所有消息，稍后返回第一个
                     for ((groupId, topic, dataFilter, _) in subs) {
                         if (let Some(groupMap) <- perTopic.get(topic) && let Some(msgs) <- groupMap.get(groupId)) {
                             for ((deliveryId, labels, payload) in msgs) {
                                 if (dataFilter != "" && !Consumer.dataFilterMatch(dataFilter, payload)) {
                                     let ackQi = ConsumerLoop.extractQueueIndex(deliveryId)
                                     Consumer.sendAck(client, deliveryId, topic, ackQi, "dataFilter")
-                                    continue
+                                } else {
+                                    pendingMessages.add((topic, deliveryId, groupId, labels, payload))
                                 }
-                                let qi = ConsumerLoop.extractQueueIndex(deliveryId)
-                                return Some(Message(
-                                    topic: topic, id: MessageID(),
-                                    queueIndex: qi,
-                                    payload: payload, labels: labels,
-                                    producerId: deliveryId))
                             }
                         }
                     }
+                    if (pendingMessages.size > 0) {
+                        return dequeuePending()
+                    }
                 }
-                // TODO(P2-2): remaining messages in perTopic are lost on return, causing server retry.
             }
         }
         None
+    }
+
+    /** P2-2: 从缓存取出一条消息，提取 queueIndex 并构建 Message。 */
+    private func dequeuePending(): ?Message {
+        if (pendingMessages.size == 0) { return None }
+        let (topic, deliveryId, _, labels, payload) = pendingMessages[0]
+        pendingMessages.remove(at: 0)
+        let qi = ConsumerLoop.extractQueueIndex(deliveryId)
+        Some(Message(topic: topic, id: MessageID(),
+            queueIndex: qi, payload: payload, labels: labels,
+            producerId: deliveryId))
     }
 
     /**

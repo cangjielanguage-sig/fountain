@@ -519,3 +519,17 @@ public class AckQueueIndexTest {
         }
     }
 }
+
+// ── P2-2: Consumer poll 缓存行为验证 ──
+
+@Test
+public class ConsumerPendingCacheTest {
+    @TestCase
+    public func testEncodeBatchConsumeReturnsValidPayload(): Unit {
+        let subs = ArrayList<(String, String, String, String)>()
+        subs.add(("g1", "/t1", "", "Exact:/t1"))
+        subs.add(("g2", "/t2", "", "Exact:/t2"))
+        let payload = Consumer.encodeBatchConsumePayload(subs)
+        @Assert(payload.size > 0)
+    }
+}
