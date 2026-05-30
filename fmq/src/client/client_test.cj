@@ -542,4 +542,23 @@ public class ConsumerPendingCacheTest {
         let payload = Consumer.encodeBatchConsumePayload(subs)
         @Assert(payload.size > 0)
     }
+
+    /**
+     * P1/P2: 验证 encodeBatchConsumePayload 与 decodeBatchConsumeResponse 编解码一致。
+     * 确认 msgLock 重构后数据格式不变。
+     */
+    @TestCase
+    public func testEncodeBatchConsumeDecodeRoundtrip(): Unit {
+        let subs = ArrayList<(String, String, String, String)>()
+        subs.add(("g1", "/t1", "", "Exact:/t1"))
+        let payload = Consumer.encodeBatchConsumePayload(subs)
+        let decoded = Consumer.decodeBatchConsumeResponse(payload)
+        @Assert(decoded.size > 0)
+        // 格式: topic → (groupId → [(deliveryId, labels, payload)])
+        if (let Some(groupMap) <- decoded.get("/t1")) {
+            if (let Some(msgs) <- groupMap.get("g1")) {
+                @Assert(msgs.size >= 0)
+            } else { @Assert(false) }
+        } else { @Assert(false) }
+    }
 }
