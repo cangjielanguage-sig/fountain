@@ -48,7 +48,8 @@ public class CommandExecutorTest {
 
     private static func makeExecutor(): CommandExecutor {
         let rm = ReplicationManager(testConfig())
-        let qm = QueueManager(testConfig(), nodeIndex: 0, replicationManager: rm)
+        let qm = QueueManager(testConfig(), nodeIndex: 0)
+        qm.setReplicationManager(rm)
         CommandExecutor(
             TopicManager(testConfig()), qm,
             DeliveryManager(testConfig()), ConsumerMatcher(),
