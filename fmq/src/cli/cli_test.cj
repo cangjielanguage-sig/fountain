@@ -168,11 +168,10 @@ public class MqCliExecTest {
 }
 
 /**
- * createTopic 默认队列数提示时序测试。
- * P3-4: "using default queue count" 在 getClient 前打印，无服务器时也可见。
+ * validTopicName 测试。
  */
 @Test
-public class CreateTopicHintTest {
+public class ValidTopicNameTest {
     @TestCase
     public func testValidTopicNameReturnsTrueForValid(): Unit {
         @Assert(CommandRunner.validTopicName("/valid/path"))

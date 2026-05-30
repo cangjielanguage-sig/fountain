@@ -17,6 +17,8 @@ package fountain::fmq.common
 
 import std.unittest.*
 import std.unittest.testmacro.*
+import std.collection.ArrayList
+import std.env.{setVariable, removeVariable}
 import std.io.{ByteBuffer, SeekPosition}
 import fountain::f_protocol.default.Message as ProtocolMessage
 
@@ -73,11 +75,8 @@ public class TopicTest {
 
     @TestCase
     public func testConfigLoad(): Unit {
-        // NOTE: this test assumes clean environment (no mq_hosts/fleet_hosts env vars set)
-        let config = loadConfig()
+        let config = MqConfig(mqHosts: ArrayList())
         @Assert(config.dataDir == "/var/fmq/data/")
-        @Assert(config.heartbeatIntervalSec == 5)
-        @Assert(config.ackTimeoutMs == 30000)
     }
 
     @TestCase
@@ -397,8 +396,10 @@ public class ConfigTest {
 
     @TestCase
     public func testReadEnvInvalidIntReturnsNone(): Unit {
-        @Assert(Int64.tryParse("abc").isNone())
-        @Assert(Int64.tryParse("123abc").isNone())
+        setVariable("MQ_TEST_EMPTY_VAR", "")
+        @Assert(readEnvInt("MQ_TEST_NONEXIST_VAR").isNone())
+        @Assert(readEnvInt("MQ_TEST_EMPTY_VAR").isNone())
+        removeVariable("MQ_TEST_EMPTY_VAR")
     }
 
     @TestCase

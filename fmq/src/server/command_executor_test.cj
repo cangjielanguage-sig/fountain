@@ -21,6 +21,7 @@ import fountain::f_protocol.default.{Message as ProtocolMessage, MessageID, Comm
 import fountain::f_codec.default.DefaultCodec
 import std.io.{ByteBuffer, SeekPosition}
 import std.sync.AtomicInt64
+import fountain::fmq.common.extractBytes
 
 /**
  * CommandExecutor 单元测试。
@@ -65,14 +66,6 @@ public class CommandExecutorTest {
     /** 检查响应的 command tag 是否为 PING (tag=12) */
     private static func isPing(msg: ProtocolMessage): Bool {
         (msg.command.value >> 4) == 12u8
-    }
-
-    private static func extractBytes(buf: ByteBuffer): Array<Byte> {
-        let size = buf.seek(SeekPosition.End(0))
-        buf.seek(SeekPosition.Begin(0))
-        let raw = Array<Byte>(Int64(size), repeat: 0u8)
-        buf.read(raw)
-        raw
     }
 
     /** 编码字符串列表为 DefaultCodec 格式 */

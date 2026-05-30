@@ -23,6 +23,7 @@ import fountain::f_protocol.default.{Message as ProtocolMessage, EncodedMessage,
 import fountain::f_codec.default.DefaultCodec
 import std.io.{ByteBuffer, SeekPosition}
 import fountain::fmq.client.SyncRegistry
+import fountain::fmq.common.extractBytes
 
 /**
  * MQ 全链路集成测试。
@@ -98,14 +99,6 @@ public class MqIntegrationTest {
             checkDuration: Duration.second * 5,
             checker: { _ => true }
         ).noDelay(true).build()
-    }
-
-    private static func extractBytes(buf: ByteBuffer): Array<Byte> {
-        let size = buf.seek(SeekPosition.End(0))
-        buf.seek(SeekPosition.Begin(0))
-        let raw = Array<Byte>(Int64(size), repeat: 0u8)
-        buf.read(raw)
-        raw
     }
 
     // ──────────────── 基础：PING ↔ PONG ────────────────

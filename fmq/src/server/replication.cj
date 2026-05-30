@@ -152,7 +152,14 @@ public class ReplicationManager {
                 resp.isSome()
             } catch (e: Exception) {
                 log.warn{"isMasterAlive ping failed: ${e.message}"}
-                false
+                // P1-2: 连接可能被 closeMasterConn 并发关闭，检查 masterConn 是否已清空
+                let current = synchronized(stateLock) { masterConn }
+                if (current.isNone()) {
+                    // masterConn 已被 closeMasterConn 清空 → 连接关闭非 master 下线
+                    true
+                } else {
+                    false
+                }
             }
         } else {
             // 无连接时尝试连接一次

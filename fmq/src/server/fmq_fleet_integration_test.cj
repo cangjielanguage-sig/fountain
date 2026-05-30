@@ -42,6 +42,7 @@ import fountain::f_codec.default.DefaultCodec
 import fountain::fleet.base.{HostAndPort, SyncData, KeyData, ValueData}
 import fountain::fleet.server.{SyncServer, SyncHandler, NodeManager, WatchManager}
 import fountain::f_store.Store
+import fountain::fmq.common.extractBytes
 
 @Test
 public class FmqFleetIntegrationTest {
@@ -70,15 +71,6 @@ public class FmqFleetIntegrationTest {
         server.start(handler)
         sleep(Duration.millisecond * 800)
         (server, store, handler)
-    }
-
-    /** 提取 ByteBuffer 的内容为 Array<Byte> */
-    private static func extractBytes(buf: ByteBuffer): Array<Byte> {
-        let size = buf.seek(SeekPosition.End(0))
-        buf.seek(SeekPosition.Begin(0))
-        let raw = Array<Byte>(Int64(size), repeat: 0u8)
-        buf.read(raw)
-        raw
     }
 
     /** 编码字符串数组 */

@@ -91,7 +91,13 @@ public class QueueWriter {
         if (closed.load()) { return }
         closed.store(true)
         syncClosed.store(true)
-        for ((_, f) in syncThreads) {
+        // P2-3: synchronized 确保 startSyncThread 的 put 不遗漏
+        let snapshot: ArrayList<Future<Unit>>
+        synchronized(syncLock) {
+            snapshot = ArrayList<Future<Unit>>()
+            for ((_, f) in syncThreads) { snapshot.add(f) }
+        }
+        for (f in snapshot) {
             try { f.get() } catch (_: Exception) {}
         }
         syncThreads = ConcurrentHashMap<String, Future<Unit>>()

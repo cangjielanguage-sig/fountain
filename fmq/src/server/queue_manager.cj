@@ -16,7 +16,7 @@ limitations under the License.
 package fountain::fmq.server
 
 import std.collection.concurrent.ConcurrentHashMap
-import std.sync.Mutex
+import std.sync.{Mutex, AtomicBool}
 import fountain::f_util.crc64
 
 /**
@@ -30,7 +30,8 @@ public class QueueManager {
     private var replicationManager: Option<ReplicationManager> = None
     private let nodeIndex: Int64
     private let lock = Mutex()
-    private let writers = ArrayList<QueueWriter>()  // 跟踪 writer 线程
+    private let closed = AtomicBool(false)  // P2-2: close 时阻止新 writer 启动
+    private let writers = ArrayList<QueueWriter>()  // P1-1: 通过 synchronized(lock) 保护
     private let writerMap = ConcurrentHashMap<String, QueueWriter>()  // "topic:index" → writer 快速查找
 
     public init(config: MqConfig, nodeIndex!: Int64 = 0) {
@@ -341,8 +342,13 @@ public class QueueManager {
      * 为单个队列创建并启动 writer 线程。
      */
     private func startWriterAndReader(q: MqQueue, rm: ReplicationManager): Unit {
+        // P2-2: close 进行中时跳过新 writer 启动
+        if (closed.load()) { log.warn{"skip startWriterAndReader for ${q}: queue manager is closed"}; return }
         let writer = QueueWriter(q, config, replicationManager: rm, queueSize: 1024)
-        writers.add(writer)
+        // P1-1: synchronized 保护 writers ArrayList 并发写入
+        synchronized(lock) {
+            writers.add(writer)
+        }
         writerMap["${q.topic}:${q.index}"] = writer
         spawn { writer.run() }
     }
@@ -371,6 +377,8 @@ public class QueueManager {
     }
 
     public func close(): Unit {
+        // P2-2: 先设 closed 标记阻止新 writer 启动，再生成 writers 快照
+        closed.store(true)
         let allQueues: ArrayList<MqQueue>
         let snapshotWriters: ArrayList<QueueWriter>
         synchronized(lock) {

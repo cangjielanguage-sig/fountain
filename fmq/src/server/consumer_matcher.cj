@@ -71,6 +71,15 @@ public class ConsumerMatcher {
                     for (i in pos..registrations.size) {
                         consumerIdIndex[registrations[i].consumerId] = i
                     }
+                    // P2-4: 修正 roundRobinIndex，防止指向数组中已移除的位置
+                    if (let Some(idx) <- roundRobinIndex.get(groupId)) {
+                        let groupCount = registrations.size
+                        if (groupCount > 0) {
+                            roundRobinIndex[groupId] = idx % groupCount
+                        } else {
+                            roundRobinIndex.remove(groupId)
+                        }
+                    }
                     result = true
                 } else { result = false }
             } else { result = false }
