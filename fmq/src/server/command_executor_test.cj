@@ -1122,11 +1122,12 @@ public class DeleteGroupMultiQueueTest {
         @Assert(cgm.getOffset("/multi-delete", 1, "del-group") == 20)
         @Assert(cgm.getOffset("/multi-delete", 2, "del-group") == 30)
 
-        // 删除消费者组 — 应重置所有队列 offset=0
+        // 删除消费者组 — 不重置 offset（P2-3: 组删除后 offset 管理无意义）
         @Assert(cgm.deleteGroup("/multi-delete", "del-group") == MqErrorCode.SUCCESS)
-        @Assert(cgm.getOffset("/multi-delete", 0, "del-group") == 0)
-        @Assert(cgm.getOffset("/multi-delete", 1, "del-group") == 0)
-        @Assert(cgm.getOffset("/multi-delete", 2, "del-group") == 0)
+        // offset 保留删除前的值（组已不存在，但 deliveryManager 仍持有该组 offset）
+        @Assert(cgm.getOffset("/multi-delete", 0, "del-group") == 10)
+        @Assert(cgm.getOffset("/multi-delete", 1, "del-group") == 20)
+        @Assert(cgm.getOffset("/multi-delete", 2, "del-group") == 30)
     }
 
     @TestCase
@@ -1143,9 +1144,9 @@ public class DeleteGroupMultiQueueTest {
         cgm.setOffset("/single-delete", 0, "sg", 99)
         @Assert(cgm.getOffset("/single-delete", 0, "sg") == 99)
 
-        // 删除组并验证 offset 重置
+        // 删除组 — offset 不重置（P2-3）
         @Assert(cgm.deleteGroup("/single-delete", "sg") == MqErrorCode.SUCCESS)
-        @Assert(cgm.getOffset("/single-delete", 0, "sg") == 0)
+        @Assert(cgm.getOffset("/single-delete", 0, "sg") == 99)
     }
 
     @TestCase

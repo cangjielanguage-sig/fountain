@@ -16,7 +16,7 @@ limitations under the License.
 package fountain::fmq.client
 
 import fountain::f_protocol.default.{Message as ProtocolMessage}
-import std.sync.Mutex
+import std.sync.{Mutex, AtomicBool}
 import std.random.*
 
 /**
@@ -30,6 +30,7 @@ public class SyncRegistry {
     private let log = LoggerFactory.getLogger('fountain::fmq.SyncRegistry')
     private var heartbeatTimer: ?Timer = None
     private let timerLock = Mutex()  // 保护 heartbeatTimer check-then-create/stop/isRunning
+    private let stopped = AtomicBool(false)
 
     public init(config: MqConfig,
                 client: Client<ProtocolMessage, EncodedMessage, ProtocolMessage, MqBody, MessageID>) {
@@ -47,6 +48,7 @@ public class SyncRegistry {
                 log.debug{"heartbeat already running"}
                 return
             }
+            stopped.store(false)
             let baseInterval = Duration.second * config.heartbeatIntervalSec
             // 随机 jitter ±0-99ms 防止 thundering herd（各实例独立随机）
             let jitterMs = Random().nextInt64(100)
@@ -64,6 +66,7 @@ public class SyncRegistry {
      */
     public func stopHeartbeat(): Unit {
         synchronized(timerLock) {
+            stopped.store(true)
             if (let Some(t) <- heartbeatTimer) {
                 t.cancel()
                 heartbeatTimer = None
@@ -94,8 +97,10 @@ public class SyncRegistry {
      * 是否在运行。
      */
     public func isRunning(): Bool {
+        var running = false
         synchronized(timerLock) {
-            heartbeatTimer != None
+            running = heartbeatTimer != None
         }
+        running
     }
 }

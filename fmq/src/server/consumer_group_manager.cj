@@ -35,13 +35,14 @@ public class ConsumerGroupManager {
     /**
      * 遍历主题的所有队列执行操作（SRV-10: 消除 createGroup/deleteGroup 重复）。
      */
-    private func forEachQueue(topic: String, block: (Int64) -> Unit): Unit {
+    private func forEachQueue(topic: String, block: (Int64) -> Unit): Int64 {
         let queueCount = if (let Some(meta) <- topicManager.getTopicMeta(topic)) {
             meta.getQueueCount()
         } else { 1 }
         for (i in 0..queueCount) {
             block(i)
         }
+        queueCount
     }
 
     /**
@@ -52,8 +53,7 @@ public class ConsumerGroupManager {
     public func createGroup(topic: String, groupId: String): MqErrorCode {
         let code = topicManager.addConsumerGroup(topic, groupId)
         if (code == MqErrorCode.SUCCESS) {
-            forEachQueue(topic) { i => deliveryManager.setOffset(topic, i, groupId, 0) }
-            let qc = if (let Some(meta) <- topicManager.getTopicMeta(topic)) { meta.getQueueCount() } else { 1 }
+            let qc = forEachQueue(topic) { i => deliveryManager.setOffset(topic, i, groupId, 0) }
             log.info{"created consumer group '${groupId}' for topic '${topic}' with ${qc} queues"}
             MqErrorCode.SUCCESS
         } else if (code == MqErrorCode.GROUP_EXISTS) {
@@ -68,11 +68,7 @@ public class ConsumerGroupManager {
      * 删除消费者组。
      */
     public func deleteGroup(topic: String, groupId: String): MqErrorCode {
-        let code = topicManager.removeConsumerGroup(topic, groupId)
-        if (code == MqErrorCode.SUCCESS) {
-            forEachQueue(topic) { i => deliveryManager.setOffset(topic, i, groupId, 0) }
-        }
-        code
+        topicManager.removeConsumerGroup(topic, groupId)
     }
 
     /**

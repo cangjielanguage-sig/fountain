@@ -85,15 +85,31 @@ public class QueueManager {
     /**
      * 获取或创建主题的队列列表（原子操作，防止并发 produce TOCTOU）。
      * 有则返回已有队列，无则创建并写入 queues。
+     * 注意：不调用 createQueues（后者会重新获取同一锁导致死锁 P0-round23）。
      */
     public func getOrCreateQueues(topic: String, queueCount: Int64): ArrayList<MqQueue> {
         synchronized(lock) {
-            if (let Some(qs) <- queues.get(topic)) { qs }
-            else {
-                let qs = createQueues(topic, queueCount)
-                queues[topic] = qs
-                qs
+            if (let Some(qs) <- queues.get(topic)) { return qs }
+            let topicQueues = ArrayList<MqQueue>()
+            for (i in 0..queueCount) {
+                let ownerIndex = distribute(topic, i, config.mqHosts.size)
+                if (ownerIndex == nodeIndex) {
+                    let q = MqQueue(topic, i, config.dataDir, config.segmentMaxSize)
+                    topicQueues.add(q)
+                }
             }
+            queues[topic] = topicQueues
+            // 新 topic 的队列创建后才启动 writer（锁内 check-then-act 避免 TOCTOU）
+            for (q in topicQueues) {
+                let key = "${q.topic}:${q.index}"
+                if (writerMap.get(key).isNone()) {
+                    if (let Some(rm) <- replicationManager) {
+                        startWriterAndReader(q, rm)
+                    }
+                }
+            }
+            log.info{"created ${topicQueues.size} queues for topic ${topic} (node ${nodeIndex})"}
+            topicQueues
         }
     }
 

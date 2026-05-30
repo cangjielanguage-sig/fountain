@@ -93,16 +93,22 @@ public class TopicManager {
     }
 
     public func deleteTopic(name: String): MqErrorCode {
+        var deletedName: String = ""
+        var result: MqErrorCode
         synchronized(lock) {
             if (topics.remove(name).isSome()) {
-                deleteFromFsync(name)
-                log.info{"deleted topic '${name}'"}
-                MqErrorCode.SUCCESS
+                deletedName = name
+                result = MqErrorCode.SUCCESS
             } else {
                 log.warn{"deleteTopic: topic '${name}' not found"}
-                MqErrorCode.TOPIC_NOT_FOUND
+                result = MqErrorCode.TOPIC_NOT_FOUND
             }
         }
+        if (result == MqErrorCode.SUCCESS) {
+            deleteFromFsync(deletedName)
+            log.info{"deleted topic '${name}'"}
+        }
+        result
     }
 
     public func listTopics(): ArrayList<String> {
@@ -120,30 +126,42 @@ public class TopicManager {
     }
 
     public func addConsumerGroup(topic: String, group: String): MqErrorCode {
+        var newMeta: ?TopicMeta = None
+        var result: MqErrorCode
         synchronized(lock) {
             if (let Some(meta) <- topics.get(topic)) {
                 let groups = ArrayList<String>()
+                var exists = false
                 for (g in meta.getConsumerGroups()) {
-                    if (g == group) { return MqErrorCode.GROUP_EXISTS }
+                    if (g == group) { exists = true; break }
                     groups.add(g)
                 }
-                groups.add(group)
-                let newMeta = TopicMeta(
-                    queueCount: meta.getQueueCount(),
-                    consumerGroups: groups,
-                    createTime: meta.getCreateTime()
-                )
-                topics[topic] = newMeta
-                persistToFsync(topic, newMeta)
-                log.info{"added group '${group}' to topic '${topic}'"}
-                MqErrorCode.SUCCESS
+                if (exists) { result = MqErrorCode.GROUP_EXISTS }
+                else {
+                    groups.add(group)
+                    let m = TopicMeta(
+                        queueCount: meta.getQueueCount(),
+                        consumerGroups: groups,
+                        createTime: meta.getCreateTime()
+                    )
+                    topics[topic] = m
+                    newMeta = Some(m)
+                    result = MqErrorCode.SUCCESS
+                }
             } else {
-                MqErrorCode.TOPIC_NOT_FOUND
+                result = MqErrorCode.TOPIC_NOT_FOUND
             }
         }
+        if (let Some(m) <- newMeta) {
+            persistToFsync(topic, m)
+            log.info{"added group '${group}' to topic '${topic}'"}
+        }
+        result
     }
 
     public func removeConsumerGroup(topic: String, group: String): MqErrorCode {
+        var newMeta: ?TopicMeta = None
+        var result: MqErrorCode
         synchronized(lock) {
             if (let Some(meta) <- topics.get(topic)) {
                 let groups = ArrayList<String>()
@@ -152,20 +170,26 @@ public class TopicManager {
                     if (g == group) { found = true }
                     else { groups.add(g) }
                 }
-                if (!found) { return MqErrorCode.GROUP_NOT_FOUND }
-                let newMeta = TopicMeta(
-                    queueCount: meta.getQueueCount(),
-                    consumerGroups: groups,
-                    createTime: meta.getCreateTime()
-                )
-                topics[topic] = newMeta
-                persistToFsync(topic, newMeta)
-                log.info{"removed group '${group}' from topic '${topic}'"}
-                MqErrorCode.SUCCESS
+                if (!found) { result = MqErrorCode.GROUP_NOT_FOUND }
+                else {
+                    let m = TopicMeta(
+                        queueCount: meta.getQueueCount(),
+                        consumerGroups: groups,
+                        createTime: meta.getCreateTime()
+                    )
+                    topics[topic] = m
+                    newMeta = Some(m)
+                    result = MqErrorCode.SUCCESS
+                }
             } else {
-                MqErrorCode.TOPIC_NOT_FOUND
+                result = MqErrorCode.TOPIC_NOT_FOUND
             }
         }
+        if (let Some(m) <- newMeta) {
+            persistToFsync(topic, m)
+            log.info{"removed group '${group}' from topic '${topic}'"}
+        }
+        result
     }
 
     public func getConsumerGroups(topic: String): ArrayList<String> {

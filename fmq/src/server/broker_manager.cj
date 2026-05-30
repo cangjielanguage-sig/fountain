@@ -18,8 +18,7 @@ package fountain::fmq.server
 import fountain::f_protocol.default.{Message as ProtocolMessage, EncodedMessage, Command, MessageID}
 import fountain::fmq.common.{MqBody}
 import std.collection.concurrent.ConcurrentHashMap
-import std.sync.AtomicBool
-import std.sync.AtomicInt64
+import std.sync.{AtomicBool, AtomicInt64, Mutex}
 
 /**
  * 节点健康信息。
@@ -51,6 +50,8 @@ public class BrokerManager {
     private let nodes = ConcurrentHashMap<String, NodeHealth>()  // "host:port" → NodeHealth
     private let connectionPool = ConcurrentHashMap<String, Client<ProtocolMessage, EncodedMessage, ProtocolMessage, MqBody, MessageID>>()  // 连接池：复用以减少 TCP 握手
     private var heartbeatThread: ?Future<Unit> = None
+    private let heartbeatStarted = AtomicBool(false)
+    private let heartbeatLock = Mutex()
 
     public init(config: MqConfig) {
         this.config = config
@@ -72,14 +73,18 @@ public class BrokerManager {
      * 启动心跳线程。按 heartbeatIntervalSec 间隔 ping 所有节点。
      */
     public func startHeartbeat(): Unit {
-        if (heartbeatThread.isSome()) { return }
-        let selfRef = this
-        heartbeatThread = spawn {
-            while (!selfRef.closed.load()) {
-                for ((key, nh) in selfRef.nodes) {
-                    selfRef.pingNode(nh)
+        if (heartbeatStarted.load()) { return }
+        synchronized(heartbeatLock) {
+            if (heartbeatStarted.load()) { return }
+            heartbeatStarted.store(true)
+            let selfRef = this
+            heartbeatThread = spawn {
+                while (!selfRef.closed.load()) {
+                    for ((key, nh) in selfRef.nodes) {
+                        selfRef.pingNode(nh)
+                    }
+                    sleep(Duration.second * selfRef.config.heartbeatIntervalSec)
                 }
-                sleep(Duration.second * selfRef.config.heartbeatIntervalSec)
             }
         }
         log.info{"BrokerManager heartbeat started (${nodes.size} nodes)"}
