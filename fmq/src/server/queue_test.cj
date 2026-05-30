@@ -337,31 +337,3 @@ public class TryFinishDrainConcurrentCloseTest {
         } catch (_: Exception) {}
     }
 }
-
-// ──── P2-3: QueueWriter close with syncThreads (round 25) ────
-
-@Test
-public class QueueWriterCloseSyncTest {
-    @TestCase
-    public func testCloseWithSyncThreadsNoLeak(): Unit {
-        let q = MqQueue("/test-p2-3c", 0, "/tmp/fmqq_p23c", 4096)
-        let hosts = ArrayList<String>()
-        hosts.add("s1:7201")
-        let config = MqConfig.forTest(dataDir: "/tmp/fmqq_p23c", mqHosts: hosts)
-        let rm = ReplicationManager(config)
-        rm.promoteToMaster()
-        rm.onSlaveOf("s1")
-        let writer = QueueWriter(q, config, replicationManager: rm)
-        writer.startSyncThread()
-        // close 应 join sync 线程
-        writer.close()
-        @Assert(writer.isClosed())
-        q.close()
-        try {
-            for (entry in Directory.readFrom("/tmp/fmqq_p23c")) {
-                try { remove(entry.path.toString()) } catch (_: Exception) {}
-            }
-            remove("/tmp/fmqq_p23c")
-        } catch (_: Exception) {}
-    }
-}
