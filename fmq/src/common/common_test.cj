@@ -453,6 +453,73 @@ public class ForTestDefaultsTest {
     }
 }
 
+// ── COM-6: parseEnvList 直接单元测试 ──
+
+@Test
+public class ParseEnvListTest {
+    @TestCase
+    public func testEmptyStringReturnsEmpty(): Unit {
+        let r = parseEnvList("")
+        @Assert(r.size == 0)
+    }
+
+    @TestCase
+    public func testSingleValue(): Unit {
+        let r = parseEnvList("node1:7201")
+        @Assert(r.size == 1)
+        @Assert(r[0] == "node1:7201")
+    }
+
+    @TestCase
+    public func testMultipleValues(): Unit {
+        let r = parseEnvList("a:1,b:2,c:3")
+        @Assert(r.size == 3)
+        @Assert(r[0] == "a:1")
+        @Assert(r[1] == "b:2")
+        @Assert(r[2] == "c:3")
+    }
+
+    @TestCase
+    public func testTrimsWhitespace(): Unit {
+        let r = parseEnvList(" a , b , c ")
+        @Assert(r.size == 3)
+        @Assert(r[0] == "a")
+        @Assert(r[1] == "b")
+        @Assert(r[2] == "c")
+    }
+
+    @TestCase
+    public func testFiltersEmptyItems(): Unit {
+        let r = parseEnvList("a,,b, ,c,")
+        @Assert(r.size == 3)
+        @Assert(r[0] == "a")
+        @Assert(r[1] == "b")
+        @Assert(r[2] == "c")
+    }
+
+    @TestCase
+    public func testCommaAtStart(): Unit {
+        @Assert(parseEnvList(",a,b").size == 2)
+    }
+
+    @TestCase
+    public func testCommaAtEnd(): Unit {
+        @Assert(parseEnvList("a,b,").size == 2)
+    }
+
+    @TestCase
+    public func testConsecutiveCommas(): Unit {
+        @Assert(parseEnvList(",,a,,b,,").size == 2)
+    }
+
+    @TestCase
+    public func testNoCommaReturnsSingle(): Unit {
+        let r = parseEnvList("   spaced  ")
+        @Assert(r.size == 1)
+        @Assert(r[0] == "spaced")
+    }
+}
+
 // ── BrokerMeta getter 测试（P3-5）──
 
 @Test

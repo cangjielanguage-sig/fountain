@@ -119,22 +119,28 @@ public func readEnv(key: String): ?String {
 }
 
 /**
+ * 按英文逗号分割字符串，trim 空项过滤。COM-6: 提取为 public 以支持单元测试。
+ */
+public func parseEnvList(raw: String): ArrayList<String> {
+    let parts = raw.split(',')
+    let result = ArrayList<String>()
+    for (p in parts) {
+        let trimmed = p.trimAscii()
+        if (!trimmed.isEmpty()) {
+            result.add(trimmed)
+        }
+    }
+    result
+}
+
+/**
  * 读取环境变量，按英文逗号分割为 ArrayList<String>。
  * 空变量返回空列表。
- * No direct unit test; indirectly covered by loadConfig tests.
  */
 public func readEnvList(key: String): ArrayList<String> {
     let raw = readEnv(key)
     if (let Some(v) <- raw) {
-        let parts = v.split(',')
-        let result = ArrayList<String>()
-        for (p in parts) {
-            let trimmed = p.trimAscii()
-            if (!trimmed.isEmpty()) {
-                result.add(trimmed)
-            }
-        }
-        result
+        parseEnvList(v)
     } else {
         ArrayList()
     }
