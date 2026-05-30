@@ -1221,3 +1221,22 @@ public func testConfig(dataDir: String): MqConfig {
     )
 }
 
+// ──── P1-2: 超时检查不返回已 ACK 记录 ────
+
+@Test
+public class CheckTimeoutAckedTest {
+    @TestCase
+    public func testCheckTimeoutSkipsAcked(): Unit {
+        let hosts = ArrayList<String>()
+        hosts.add("n:1")
+        let config = MqConfig(mqHosts: hosts, dataDir: "/tmp")
+        let dm = DeliveryManager(config, serverId: "t:1")
+        let record = dm.recordDelivery("p1-2-a", "c1", "g1", "/p1-2")
+        dm.onAck("p1-2-a", "c1", 0)
+        let expired = dm.checkTimeout()
+        for (r in expired) {
+            @Assert(r.messageId != "p1-2-a")
+        }
+    }
+}
+

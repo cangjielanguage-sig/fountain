@@ -317,16 +317,20 @@ public class QueueManager {
 
     public func close(): Unit {
         let allQueues: ArrayList<MqQueue>
+        let snapshotWriters: ArrayList<QueueWriter>
         synchronized(lock) {
             allQueues = ArrayList<MqQueue>()
             for ((_, topicQueues) in queues) {
                 for (q in topicQueues) { allQueues.add(q) }
             }
+            // P1-1: 在锁内创建 writers 快照，避免与 startWriterAndReader 竞态
+            snapshotWriters = ArrayList<QueueWriter>()
+            for (w in writers) { snapshotWriters.add(w) }
         }
         for (q in allQueues) {
             if (!q.isClosed()) { q.close() }
         }
-        for (w in writers) { w.close() }
-        log.info{"closed: stopped ${writers.size} writers"}
+        for (w in snapshotWriters) { w.close() }
+        log.info{"closed: stopped ${snapshotWriters.size} writers"}
     }
 }

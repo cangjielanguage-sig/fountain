@@ -342,7 +342,9 @@ public class ConsumerLoop {
     public func close(): Unit {
         closed.store(true)
         if (let Some(f) <- threadFuture) {
-            f.get()
+            // P1-3: transfer 自带 5s 超时，f.get 最多阻塞 5s
+            try { f.get() } catch (_: Exception) {}
+            threadFuture = None
         }
         log.info{"ConsumerLoop closed: ${groupId}/${topic}"}
     }

@@ -151,7 +151,13 @@ public class DeliveryManager {
         let now = DateTime.now()
         let timeoutMs = config.ackTimeoutMs
         let expired = ArrayList<DeliveryRecord>()
-        for ((_, record) in records) {
+        // P1-2: 在锁内创建 records 快照，避免已 ACK 记录被误判超时
+        let snapshot: ArrayList<DeliveryRecord>
+        synchronized(onAckLock) {
+            snapshot = ArrayList<DeliveryRecord>()
+            for ((_, record) in records) { snapshot.add(record) }
+        }
+        for (record in snapshot) {
             if (record.acked.load()) { continue }
             let elapsed = now - record.deliverTime
             if (elapsed > Duration.millisecond * timeoutMs) {
