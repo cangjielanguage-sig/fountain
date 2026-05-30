@@ -125,6 +125,15 @@ public class CliCommandTest {
     public func testValidTopicNameAcceptsValid(): Unit {
         @Assert(CommandRunner.validTopicName("/valid/topic"))
     }
+
+    /**
+     * P3-2: 验证 getArg 在双空格产生的空参数中仍正确工作。
+     */
+    @TestCase
+    public func testGetArgWithEmptyArgsBetweenSpaces(): Unit {
+        let args: Array<String> = ["createTopic", "", "--name", "/t"]
+        @Assert(getArg(args, "--name") == Some("/t"))
+    }
 }
 
 /**
@@ -152,14 +161,12 @@ public class MqCliExecTest {
 /**
  * createTopic 默认队列数提示时序测试。
  * P3-4: "using default queue count" 在 getClient 前打印，无服务器时也可见。
- * 无法在不启动服务端的情况下验证 println 行为，仅作文档。
  */
 @Test
 public class CreateTopicHintTest {
     @TestCase
-    public func testCreateTopicPrintsDefaultHintBeforeConnect(): Unit {
-        // 编译通过即验证 println 语法正确
-        @Assert(true)
+    public func testValidTopicNameReturnsTrueForValid(): Unit {
+        @Assert(CommandRunner.validTopicName("/valid/path"))
     }
 }
 

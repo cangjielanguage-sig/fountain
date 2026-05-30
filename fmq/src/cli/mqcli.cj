@@ -15,6 +15,8 @@ limitations under the License.
  */
 package fountain::fmq.cli
 
+import std.collection.*
+
 /**
  * MQ CLI：SubCommand 'mqcli' 入口。
  * 交互模式：直接运行 `fboot mqcli`
@@ -61,7 +63,14 @@ public class MqCliCommand <: SubCommand {
                 let trimmed = l.trimAscii()
                 if (trimmed == "") { continue }
                 let args = trimmed.split(' ')
-                if (!runCommand(args)) {
+                // P3-2: 跳过空参数
+                var filtered = ArrayList<String>()
+                for (a in args) {
+                    if (!a.isEmpty()) { filtered.add(a) }
+                }
+                let finalArgs = Array<String>(filtered.size, repeat: "")
+                for (i in 0..filtered.size) { finalArgs[i] = filtered[i] }
+                if (!runCommand(finalArgs)) {
                     // 命令已输出具体错误信息
                 }
             } else { break }

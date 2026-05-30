@@ -43,7 +43,6 @@ public class Subscriber {
      * SUBSCRIBE 已完整编码 groupId（P0-1 修复），服务端 handleSubscribe 创建 ConsumerRegistration。
      */
     public func subscribe(groupId: String, matchMode: MatchMode,
-                          labels!: ArrayList<String> = ArrayList(),
                           dataFilter!: String = ""): Bool {
         // 发送 SUBSCRIBE 命令（内含 topic + groupId + modeStr）
         let subBody = encodeSubscribePayload(matchModeTopic(matchMode), groupId, matchModeToString(matchMode))

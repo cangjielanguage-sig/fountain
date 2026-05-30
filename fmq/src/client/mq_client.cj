@@ -107,12 +107,12 @@ public class MqClient <: Resource {
 
     public func subscribe(groupId: String, matchMode: MatchMode): Bool {
         if (!ensureOpen()) { return false }
-        subscriber.subscribe(groupId, matchMode, labels: ArrayList())
+        subscriber.subscribe(groupId, matchMode)
     }
 
     public func subscribe(groupId: String, matchMode: MatchMode, labels!: ArrayList<String> = ArrayList()): Bool {
         if (!ensureOpen()) { return false }
-        subscriber.subscribe(groupId, matchMode, labels: labels)
+        subscriber.subscribe(groupId, matchMode)
     }
 
     public func subscribe(groupId: String, matchMode: MatchMode, dataFilter!: String = ""): Bool {
@@ -161,6 +161,9 @@ public class MqClient <: Resource {
             if (let Some(body) <- convert<MqBody>(r.data)) {
                 return decodeDeadLetterList(body.payload)
             }
+            log.warn{"listDeadLetters: failed to decode response"}
+        } else {
+            log.warn{"listDeadLetters: no response from server (possible timeout)"}
         }
         ArrayList()
     }
