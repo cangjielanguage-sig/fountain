@@ -47,12 +47,8 @@ public class Consumer {
      * 遍历活跃订阅，发送 CONSUME 命令。
      */
     public func poll<T>(timeout: Duration): ?Message where T <: DataFields<T> {
-        // P2-2: 优先从缓存返回消息，减少 RPC
-        synchronized(msgLock) {
-            if (pendingMessages.size > 0) {
-                return dequeuePending()
-            }
-        }
+        // P2-2: 优先从缓存返回消息，减少 RPC (dequeuePending 内部已加锁)
+        if (let Some(msg) <- dequeuePending()) { return Some(msg) }
         let subs = subscriber.getSubscriptions()
         if (subs.size == 0) {
             return None
@@ -80,11 +76,8 @@ public class Consumer {
                             }
                         }
                     }
-                    synchronized(msgLock) {
-                        if (pendingMessages.size > 0) {
-                            return dequeuePending()
-                        }
-                    }
+                    // dequeuePending 内部已加锁
+                    if (let Some(msg) <- dequeuePending()) { return Some(msg) }
                 }
             }
         }

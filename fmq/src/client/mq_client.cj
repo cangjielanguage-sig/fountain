@@ -105,11 +105,6 @@ public class MqClient <: Resource {
 
     // ───── 订阅 API ─────
 
-    public func subscribe(groupId: String, matchMode: MatchMode): Bool {
-        if (!ensureOpen()) { return false }
-        subscriber.subscribe(groupId, matchMode)
-    }
-
     public func subscribe(groupId: String, matchMode: MatchMode, dataFilter!: String = ""): Bool {
         if (!ensureOpen()) { return false }
         subscriber.subscribe(groupId, matchMode, dataFilter: dataFilter)
