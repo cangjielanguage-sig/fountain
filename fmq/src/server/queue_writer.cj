@@ -124,6 +124,8 @@ public class QueueWriter {
             let key = slave.nodeId
             if (let Some(q) <- slaveSyncQueues.get(key)) {
                 q.add(total)
+            } else {
+                log.warn{"sync queue not ready for slave ${key}, sync data discarded"}
             }
         }
     }

@@ -129,6 +129,7 @@ public class MqCommand <: SubCommand {
         server.start({ msg => executor.execute(msg) })
         // 启动消息过期清理线程
         let cleaner = QueueCleaner(config, queueManager)
+        // P3-3: spawn 后立即设置 runFuture，避免窗口期 cleaner 线程已运行但 future 未设置
         let cleanerFuture = spawn { cleaner.run() }
         cleaner.setRunFuture(cleanerFuture)
         let brokerManager = BrokerManager(config)

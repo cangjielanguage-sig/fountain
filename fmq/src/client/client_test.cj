@@ -20,6 +20,7 @@ import std.unittest.testmacro.*
 import std.random.*
 import fountain::f_codec.default.DefaultCodec
 import std.io.{ByteBuffer, SeekPosition}
+import fountain::f_protocol.default.{Message as ProtocolMessage, EncodedMessage, MessageID}
 
 @Test
 public class SubscriberTest {
@@ -421,8 +422,9 @@ public class MqClientSingletonTest {
         for (f in futures) {
             if (f.get()) { ok += 1 } else { fail += 1 }
         }
-        // 没有有效服务器时全部应该失败，但不应有崩溃
-        @Assert(ok + fail == 20)
+        // 空 mqHosts 时全部应失败，验证并发 synchronized 不损坏内部状态
+        @Assert(ok == 0)
+        @Assert(fail == 20)
     }
 }
 
@@ -560,5 +562,25 @@ public class ConsumerPendingCacheTest {
                 @Assert(msgs.size >= 0)
             } else { @Assert(false) }
         } else { @Assert(false) }
+    }
+}
+
+// ── P2-1: Consumer.sendAck 重试行为验证 ──
+
+@Test
+public class ConsumerSendAckRetryTest {
+    @TestCase
+    public func testSendAckReturnsFalseOnClosedClient(): Unit {
+        // sendAck 是静态方法，要求 Client 参数。使用已关闭的 client 验证返回 false。
+        let client = Client<ProtocolMessage, EncodedMessage, ProtocolMessage, MqBody, MessageID>.builder(
+            queueSize: 64, socketCount: 1, host: "127.0.0.1",
+            port: 19999u16,
+            idGetter: { msg => msg.id },
+            checkDuration: Duration.second * 1,
+            checker: { _ => false }
+        ).noDelay(true).build()
+        client.close()
+        let result = Consumer.sendAck(client, "t:0:g:0", "/t", 0, "test")
+        @Assert(!result)
     }
 }

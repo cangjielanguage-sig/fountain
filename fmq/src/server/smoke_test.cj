@@ -32,8 +32,16 @@ public class SmokeTest {
             DeliveryManager(testConfig()), ConsumerMatcher(),
             ReplicationManager(testConfig()))
         let future = server.start({ msg => executor.execute(msg) })
-        sleep(Duration.second)
+        // 轮询等待服务端启动（最多 3 秒）
+        var started = false
+        for (_ in 0..30) {
+            if (server.isStartFailed()) { break }
+            if (!server.isClosed()) { started = true; break }
+            sleep(Duration.millisecond * 100)
+        }
+        @Assert(started)
         @Assert(!server.isClosed())
+        @Assert(!server.isStartFailed())
         server.close()
         @Assert(server.isClosed())
     }

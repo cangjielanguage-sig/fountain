@@ -76,7 +76,7 @@ public class BackgroundThreadTest {
         let qm = QueueManager(config, nodeIndex: 0)
         let cleaner = QueueCleaner(config, qm)
         cleaner.cleanup()  // 无队列 → return，不抛异常
-        @Assert(true)
+ 
     }
 
     @TestCase
@@ -88,7 +88,6 @@ public class BackgroundThreadTest {
         // 模拟 run() 的单次 cleanup 调用（跳过 5min sleep）
         try {
             cleaner.cleanup()
-            @Assert(true)
         } catch (_: Exception) {
             @Assert(false)
         }
@@ -273,7 +272,7 @@ public class QueueCleanerFutureTest {
         let cleaner = QueueCleaner(config, qm)
         // 在没有 run 线程的情况下 close() 不应抛异常
         cleaner.close()
-        @Assert(true)
+ 
     }
 
     @TestCase
@@ -297,8 +296,10 @@ public class QueueCleanerFutureTest {
         cleaner.setRunFuture(f)
         sleep(Duration.millisecond * 50)  // 让 run 循环启动
         // close() 应快速返回（100ms 内），不会阻塞 5 分钟
+        let start = DateTime.now()
         cleaner.close()
         f.get()
-        @Assert(true)
+        let elapsed = DateTime.now() - start
+        @Assert(elapsed < Duration.second)  // 关闭应在 1 秒内完成
     }
 }

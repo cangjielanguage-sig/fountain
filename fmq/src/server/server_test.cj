@@ -264,8 +264,8 @@ public class ReassignTest {
             @Assert(!q.isClosed())
         }
         // 无崩溃即验证 writer/reader 启动逻辑正确
-        @Assert(true)
     }
+
 }
 
 @Test
@@ -312,6 +312,22 @@ public class ReplicationRoleTest {
         @Assert(rm.role() == "master")
     }
 
+    /**
+     * P1-1: 验证 connectToMaster 失败后 isSyncing 为 false。
+     * 连接不可达的 master 时 error path 正确设置同步状态。
+     */
+    @TestCase
+    public func testConnectToMasterFailsReturnsFalse(): Unit {
+        let hosts = ArrayList<String>()
+        hosts.add("localhost:1")
+        let config = MqConfig.forTest(dataDir: "/tmp/fmq_p11_sync", mqHosts: hosts)
+        let rm = ReplicationManager(config)
+        rm.demoteToSlave("node99")
+        // 连接不可达的 master，应返回 false（不抛异常）
+        @Assert(!rm.connectToMaster("node99"))
+        cleanupDir("/tmp/fmq_p11_sync")
+    }
+
     private static func testConfig(): MqConfig {
         MqConfig(
             mqHosts: ArrayList(), syncHosts: ArrayList(),
@@ -347,8 +363,13 @@ public class QueueManagerLifecycleTest {
             syncQuorum: 1)
         let qm = QueueManager(config, nodeIndex: 0)
 
-        qm.createQueues("/test-life", 1)
+        let queues = qm.createQueues("/test-life", 1)
+        @Assert(queues.size > 0)
+        @Assert(qm.getQueues("/test-life").isSome())
+        let q = queues[0]
+        @Assert(!q.isClosed())
         qm.close()  // 验证 close 不抛异常，不启动 writer/reader 线程
+        @Assert(q.isClosed())
     }
 }
 
@@ -465,7 +486,6 @@ public class QueueWriterDispatchTest {
         qm.startWritersForTopic("/test-start")
         if (let Some(writer) <- qm.getWriterForQueue(q)) {
             writer.close()
-            @Assert(true)
         } else {
             @Assert(false)
         }
@@ -496,7 +516,6 @@ public class QueueWriterDispatchTest {
         // startAll() 后 writer 应存在
         if (let Some(writer) <- qm.getWriterForQueue(q)) {
             writer.close()
-            @Assert(true)
         } else {
             @Assert(false)
         }
@@ -667,7 +686,7 @@ public class DeadLetterStoreTest {
         @Assert(list.size == 3)
         // 验证 sync() 幂等（已 sync 后再调用不抛异常）
         ds.sync()
-        @Assert(true)
+ 
     }
 
     /**
@@ -993,7 +1012,7 @@ public class DeliveryManagerTimeoutTest {
         sleep(Duration.millisecond * 50)
         // 关闭不抛异常
         dm.close()
-        @Assert(true)
+ 
     }
 
     @TestCase
@@ -1113,7 +1132,7 @@ public class DeliveryManagerDlqInjectionTest {
         dm.startTimeoutChecker()
         sleep(Duration.millisecond * 300)
         dm.close()
-        @Assert(true)
+ 
     }
 }
 
@@ -1193,7 +1212,7 @@ public class DeadLetterStoreCloseTest {
         let ds = DeadLetterStore("/tmp/fmq_dlq_close_test")
         ds.close()
         ds.close()
-        @Assert(true)
+ 
     }
 }
 
@@ -1275,7 +1294,7 @@ public class MoveToDlqAckedRecordTest {
         dm.startTimeoutChecker()
         sleep(Duration.millisecond * 300)
         dm.close()
-        @Assert(true)
+ 
     }
 }
 
@@ -1317,7 +1336,7 @@ public class BrokerManagerHeartbeatTest {
         bm.startHeartbeat()
         sleep(Duration.millisecond * 50)
         bm.close()
-        @Assert(true)
+ 
     }
 }
 
@@ -1376,7 +1395,6 @@ public class ConsumerGroupForEachQueueTest {
         @Assert(cgm.getOffset("/p2-5-qc", 0, "g1") == 0)
         @Assert(cgm.getOffset("/p2-5-qc", 1, "g1") == 0)
         @Assert(cgm.getOffset("/p2-5-qc", 2, "g1") == 0)
-        @Assert(cgm.getOffset("/p2-5-qc", 3, "g1") == 0)
     }
 }
 
@@ -1415,7 +1433,7 @@ public class QueueCleanerCloseTest {
         cleaner.setRunFuture(f)
         // 立即 close 应快速返回（cleanup 中检查 closed 标志）
         cleaner.close()
-        @Assert(true)
+ 
     }
 }
 

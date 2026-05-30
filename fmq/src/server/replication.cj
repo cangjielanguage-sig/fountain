@@ -88,6 +88,10 @@ public class ReplicationManager {
             if (!slaves.contains(nodeId)) {
                 slaves[nodeId] = SlaveProgress(nodeId)
                 log.info{"slave ${nodeId} registered"}
+            } else {
+                // P2-2: 重连时更新 lastHeartbeat，避免 syncedSeq 残留旧值
+                slaves[nodeId].lastHeartbeat = DateTime.now()
+                log.info{"slave ${nodeId} reconnected, heartbeat updated"}
             }
         }
         true
@@ -217,8 +221,8 @@ public class ReplicationManager {
             synchronized(stateLock) {
                 this.masterConn = conn
                 this.masterNodeId = masterId
+                this.isSyncing.store(true)
             }
-            this.isSyncing.store(true)
 
             let req = ProtocolMessage(Command.SLAVEOF(1), MessageID(),
                 MqBody("slaveof", encodeNodeId(masterId)).toData())
@@ -229,8 +233,10 @@ public class ReplicationManager {
             } else {
                 log.warn{"master ${masterId} did not respond to SLAVEOF"}
                 closeConn(conn)
-                synchronized(stateLock) { this.masterConn = None }
-                this.isSyncing.store(false)
+                synchronized(stateLock) {
+                    this.masterConn = None
+                    this.isSyncing.store(false)
+                }
                 false
             }
         } catch (e: Exception) {
@@ -238,8 +244,10 @@ public class ReplicationManager {
             if (let Some(c) <- localConn) {
                 if (!c.isClosed()) { c.close() }
             }
-            synchronized(stateLock) { this.masterConn = None }
-            this.isSyncing.store(false)
+            synchronized(stateLock) {
+                this.masterConn = None
+                this.isSyncing.store(false)
+            }
             false
         }
     }

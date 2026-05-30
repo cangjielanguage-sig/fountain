@@ -133,7 +133,6 @@ public class MqIntegrationTest {
     public func testCliCreateTopicAndList(): Unit {
         let (server, port) = startServer()
         let client = makeClient(port)
-        sleep(Duration.millisecond * 200)
 
         // 1. 创建主题
         let topic = "/int-test-cli"
@@ -160,7 +159,6 @@ public class MqIntegrationTest {
     public func testProduceMessageViaTcp(): Unit {
         let (server, port) = startServer()
         let client = makeClient(port)
-        sleep(Duration.millisecond * 200)
 
         // 生产一条消息（先创建主题）
         let topic = "/int-test-produce"
@@ -187,7 +185,6 @@ public class MqIntegrationTest {
     public func testConsumeMessageViaTcp(): Unit {
         let (server, port) = startServer()
         let client = makeClient(port)
-        sleep(Duration.millisecond * 200)
 
         let topic = "/int-test-consume"
 
@@ -232,7 +229,6 @@ public class MqIntegrationTest {
         let (server, port) = startServer()
         let producer = makeClient(port)
         let consumer = makeClient(port)
-        sleep(Duration.millisecond * 200)
 
         let topic = "/int-test-e2e"
         let groupId = "e2e-group"

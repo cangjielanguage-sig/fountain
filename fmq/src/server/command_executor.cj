@@ -306,6 +306,7 @@ public class CommandExecutor {
                 if (let Some(queues) <- queueManager.getQueues(topic)) {
                     var consumed = ArrayList<(String, ArrayList<String>, Array<Byte>)>()  // (deliveryId, labels, data)
                     for (q in queues) {
+                        if (q.isClosed()) { continue }  // P2-6: 跳过已关闭的排空队列
                         let offset = deliveryManager.getOffset(topic, q.index, groupId)
                         if (consumed.size < batchSize) {
                             if (let Some(framed) <- q.tryReadFromLog(offset)) {
@@ -354,6 +355,7 @@ public class CommandExecutor {
                     var consumed = ArrayList<(String, ArrayList<String>, Array<Byte>)>()
                     if (let Some(queues) <- queueManager.getQueues(topic)) {
                         for (q in queues) {
+                            if (q.isClosed()) { continue }  // P2-6: 跳过已关闭的排空队列
                             let offset = deliveryManager.getOffset(topic, q.index, groupId)
                             if (consumed.size < batchSize) {
                                 if (let Some(framed) <- q.tryReadFromLog(offset)) {

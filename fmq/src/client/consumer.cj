@@ -88,12 +88,13 @@ public class Consumer {
     }
 
     /** P2-2: 从缓存取出一条消息，提取 queueIndex 并构建 Message。 */
+    /** P3-1: lock 外快照订阅列表，避免 msgLock 内获取 subLock 的锁顺序气味。 */
     private func dequeuePending(): ?Message {
+        let subs = subscriber.getSubscriptions()
         synchronized(msgLock) {
             while (pendingMessages.size > 0) {
                 let (topic, deliveryId, groupId, labels, payload) = pendingMessages[0]
                 pendingMessages.remove(at: 0)
-                let subs = subscriber.getSubscriptions()
                 var active = false
                 for ((g, t, _, _) in subs) {
                     if (g == groupId && t == topic) { active = true; break }
@@ -414,7 +415,9 @@ public class ConsumerLoop {
                         let (deliveryId, labels, msgData) = msgs[0]
                         if (dataFilter != "" && !Consumer.dataFilterMatch(dataFilter, msgData)) {
                             let ackQi = extractQueueIndex(deliveryId)
-                            Consumer.sendAck(client, deliveryId, topic, ackQi, "dataFilter")
+                            for (_ in 0..3) {
+                                if (Consumer.sendAck(client, deliveryId, topic, ackQi, "dataFilter")) { break }
+                            }
                             return true
                         }
                         let queueIndex = extractQueueIndex(deliveryId)
@@ -422,7 +425,9 @@ public class ConsumerLoop {
                             queueIndex: queueIndex, payload: msgData, labels: labels,
                             producerId: deliveryId)
                         callback(msg)
-                        Consumer.sendAck(client, deliveryId, topic, queueIndex, "callback")
+                        for (_ in 0..3) {
+                            if (Consumer.sendAck(client, deliveryId, topic, queueIndex, "callback")) { break }
+                        }
                         return true
                     }
                 }

@@ -192,7 +192,7 @@ public class QueueWriterTest {
         // 两次调用 startSyncThread 不应崩溃或报错
         writer.startSyncThread()
         writer.startSyncThread()
-        @Assert(true)
+        @Assert(!q.isClosed())
         q.close()
         cleanupDir("/tmp/fmqq_sync2")
     }
@@ -213,7 +213,7 @@ public class QueueWriterTest {
         // 提交 sync 条目（需 slave 连接才真正发送，但不会因 spawn 爆炸）
         writer.submit([0x01u8])
         sleep(Duration.millisecond * 50)
-        @Assert(true)  // 无 spawn 爆炸即通过
+        @Assert(!q.isClosed())  // 无 spawn 爆炸即通过
         q.close()
         cleanupDir("/tmp/fmqq_p22")
     }
@@ -231,7 +231,7 @@ public class QueueWriterTest {
         let writer = QueueWriter(q, config, replicationManager: rm)
         // 构造完成后 syncPrefix 已缓存（构造函数内完成编码）
         writer.startSyncThread()
-        @Assert(true)  // 缓存初始化正常
+        @Assert(!q.isClosed())  // 构造 + startSyncThread 不损坏队列状态
         q.close()
         cleanupDir("/tmp/fmqq_srv5")
     }

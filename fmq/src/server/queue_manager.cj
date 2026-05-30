@@ -189,6 +189,8 @@ public class QueueManager {
             None
         }
         let reassigned = ArrayList<(String, Int64)>()
+        // P1-2: 锁内只记录需要启动 writer 的队列，spawn 移出锁外避免死锁
+        let pendingWriters = ArrayList<QueueWriter>()
         synchronized(lock) {
             for ((topic, topicQueues) in queues) {
                 let localIndices = ArrayList<Int64>()
@@ -211,13 +213,20 @@ public class QueueManager {
                             localIndices.add(i)
                             reassigned.add((topic, i))
                             if (let Some(ref) <- rm) {
-                                startWriterAndReader(q, ref)
+                                let writer = QueueWriter(q, config, replicationManager: ref, queueSize: 1024)
+                                writers.add(writer)
+                                writerMap["${q.topic}:${q.index}"] = writer
+                                pendingWriters.add(writer)
                             }
                             log.warn{"reassign ${topic}[${i}] from node ${failedNode} to node ${nodeIndex}"}
                         }
                     }
                 }
             }
+        }
+        // 锁外启动 writer 线程
+        for (w in pendingWriters) {
+            spawn { w.run() }
         }
         if (reassigned.size == 0) {
             log.info{"reassign: no queues to reassign from node ${failedNode}"}

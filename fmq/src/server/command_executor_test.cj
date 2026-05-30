@@ -820,8 +820,8 @@ public class CommandExecutorTest {
         qm.setReplicationManager(rm)
         qm.startAll()
 
-        // 验证 startAll 不抛异常（reader 已移除）
-        @Assert(true)
+        // 验证 startAll 不抛异常且队列存活（reader 已移除）
+        @Assert(qm.getQueue("/no-reader-topic", 0).isSome())
         qm.close()
     }
 
