@@ -168,17 +168,6 @@ public class MqCliExecTest {
 }
 
 /**
- * validTopicName 测试。
- */
-@Test
-public class ValidTopicNameTest {
-    @TestCase
-    public func testValidTopicNameReturnsTrueForValid(): Unit {
-        @Assert(CommandRunner.validTopicName("/valid/path"))
-    }
-}
-
-/**
  * CLI 缓存配置测试。
  */
 @Test

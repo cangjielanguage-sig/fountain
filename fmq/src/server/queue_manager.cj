@@ -199,6 +199,8 @@ public class QueueManager {
                     localIndices.add(q.index)
                 }
                 // P2-7: 使用 topicQueues.size * mqHosts.size 作为上界，覆盖所有可能队列
+                // P29-2: 当队列分布不均匀（如 7 队列/3 节点）时此项可能遗漏。
+                // 正确修复需注入 TopicManager 获取实际 queueCount，留待后续。
                 let maxIndex = topicQueues.size * config.mqHosts.size
                 for (i in 0..maxIndex) {
                     let owner = distribute(topic, i, config.mqHosts.size)
@@ -345,11 +347,11 @@ public class QueueManager {
         // P2-2: close 进行中时跳过新 writer 启动
         if (closed.load()) { log.warn{"skip startWriterAndReader for ${q}: queue manager is closed"}; return }
         let writer = QueueWriter(q, config, replicationManager: rm, queueSize: 1024)
-        // P1-1: synchronized 保护 writers ArrayList 并发写入
+        // P29-1: synchronized 保护 writers 和 writerMap 的原子更新
         synchronized(lock) {
             writers.add(writer)
+            writerMap["${q.topic}:${q.index}"] = writer
         }
-        writerMap["${q.topic}:${q.index}"] = writer
         spawn { writer.run() }
     }
 

@@ -178,6 +178,8 @@ public class DeadLetterStore {
                     }
                     count += 1
                 } else {
+                    let restoredCount = count  // capture let for log lambda
+                    log.warn{"rebuildIndex: decode failed at entry ${restoredCount}, stopping rebuild"}
                     break
                 }
             }

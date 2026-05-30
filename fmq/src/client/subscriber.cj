@@ -44,8 +44,11 @@ public class Subscriber {
      */
     public func subscribe(groupId: String, matchMode: MatchMode,
                           dataFilter!: String = ""): Bool {
+        // P29-2: 缓存纯函数结果避免锁内重复计算
+        let topicStr = matchModeTopic(matchMode)
+        let modeStr = matchModeToString(matchMode)
         // 发送 SUBSCRIBE 命令（内含 topic + groupId + modeStr）
-        let subBody = encodeSubscribePayload(matchModeTopic(matchMode), groupId, matchModeToString(matchMode))
+        let subBody = encodeSubscribePayload(topicStr, groupId, modeStr)
         let subReq = ProtocolMessage(Command.SUBSCRIBE, MessageID(),
             MqBody("subscribe", subBody).toData())
         let subResp = client.transfer(subReq.id, subReq, Duration.second * 10)
@@ -53,14 +56,14 @@ public class Subscriber {
         if (subResp.isSome()) {
             synchronized(subLock) {
                 for ((g, t, d, m) in subscriptions) {
-                    if (g == groupId && t == matchModeTopic(matchMode) && m == matchModeToString(matchMode) && d == dataFilterVal) {
-                        log.info{"already subscribed group=${groupId} to ${matchModeTopic(matchMode)}, skipping duplicate"}
+                    if (g == groupId && t == topicStr && m == modeStr && d == dataFilterVal) {
+                        log.info{"already subscribed group=${groupId} to ${topicStr}, skipping duplicate"}
                         return true
                     }
                 }
-                subscriptions.add((groupId, matchModeTopic(matchMode), dataFilterVal, matchModeToString(matchMode)))
+                subscriptions.add((groupId, topicStr, dataFilterVal, modeStr))
             }
-            log.info{"subscribed group=${groupId} to ${matchModeToString(matchMode)}"}
+            log.info{"subscribed group=${groupId} to ${modeStr}"}
             true
         } else {
             log.warn{"subscribe failed for group=${groupId}"}

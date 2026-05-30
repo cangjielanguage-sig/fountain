@@ -317,6 +317,7 @@ public class MqClient <: Resource {
         let resp = mqConn.transfer(req.id, req, Duration.second * 10)
         if (let Some(r) <- resp) {
             if (let Some(body) <- convert<MqBody>(r.data)) {
+                // P29-4: decodeTopicList 解码 count+String×N，可复用为通用 String 列表解码
                 return decodeTopicList(body.payload)
             } else {
                 log.warn{"listGroups: failed to decode response body"}

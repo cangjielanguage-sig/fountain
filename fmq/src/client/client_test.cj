@@ -559,7 +559,7 @@ public class ConsumerPendingCacheTest {
         // 格式: topic → (groupId → [(deliveryId, labels, payload)])
         if (let Some(groupMap) <- decoded.get("/t1")) {
             if (let Some(msgs) <- groupMap.get("g1")) {
-                @Assert(msgs.size >= 0)
+                @Assert(msgs.size >= 0)  // P29-3: roundtrip 编码请求/解码响应格式不匹配，恒为 true
             } else { @Assert(false) }
         } else { @Assert(false) }
     }

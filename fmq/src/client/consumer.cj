@@ -348,19 +348,19 @@ public class ConsumerLoop {
 
     /**
      * 启动后台消费线程。
+     * P29-1: 整体 synchronized 消除 TOCTOU 竞态。
      */
     public func start(): Unit {
-        if (running.load()) { return }
-        running.store(true)
-        closed.store(false)
         synchronized(threadLock) {
+            if (running.load()) { return }
             if (!threadFinished.load()) {
                 log.warn{"ConsumerLoop re-start while old thread still running, skipping"}
                 return
             }
-        }
-        let selfRef = this
-        synchronized(threadLock) {
+            running.store(true)
+            closed.store(false)
+            threadFinished.store(false)  // P29-1: 重置标记，确保新线程的 finished 信号独立
+            let selfRef = this
             threadFuture = spawn {
                 while (!selfRef.closed.load() && !selfRef.client.isClosed()) {
                     try {
@@ -393,9 +393,12 @@ public class ConsumerLoop {
                     waited += 1
                 }
                 if (!threadFinished.load()) {
-                    log.warn{"ConsumerLoop thread did not exit in time"}
+                    log.warn{"ConsumerLoop thread did not exit within 5s, abandoning future"}
                 }
-                try { f.get() } catch (e: Exception) { log.warn{"ConsumerLoop future get: ${e.message}"} }
+                // P29-2: Future.tryGet() 非阻塞检查是否已完成，避免永久阻塞
+                if (f.tryGet().isSome()) {
+                    try { f.get() } catch (e: Exception) { log.warn{"ConsumerLoop future get: ${e.message}"} }
+                }
                 threadFuture = None
             }
         }

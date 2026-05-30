@@ -43,9 +43,9 @@ public class MqClientProtocolTest {
         extractBytes(buf)
     }
 
-    private static func encodeGroupOpPayload(op: String, topic: String, group: String, off: Int64): Array<Byte> {
+    private static func encodeGroupOpPayload(op: String, topic: String, group: String, off: Int64, queueIndex!: Int64 = 0): Array<Byte> {
         let buf = ByteBuffer()
-        DefaultCodec().encode(op).encode(topic).encode(group).encode(off).encode(0i64)
+        DefaultCodec().encode(op).encode(topic).encode(group).encode(off).encode(queueIndex)
             .finish().copy(to: buf, closeFromOnEnd: true, closeToOnEnd: false)
         extractBytes(buf)
     }
@@ -276,6 +276,31 @@ public class MqClientProtocolTest {
             @Assert(t == topic)
             @Assert(g == group)
             @Assert(of == off)
+        } else { @Assert(false) }
+    }
+
+    /** P29-4: 验证非默认 queueIndex 的编码与解码一致。 */
+    @TestCase
+    public func testGroupOpWithCustomQueueIndexRoundtrip(): Unit {
+        let op = "resetOffset"
+        let topic = "/multi-queue-topic"
+        let group = "g1"
+        let off: Int64 = 99
+        let qi: Int64 = 3
+        let encoded = encodeGroupOpPayload(op, topic, group, off, queueIndex: qi)
+
+        let dec = DefaultCodec()
+        let buf = ByteBuffer(encoded)
+        if (let Some(o) <- dec.decode<String>(buf)
+            && let Some(t) <- dec.decode<String>(buf)
+            && let Some(g) <- dec.decode<String>(buf)
+            && let Some(of) <- dec.decode<Int64>(buf)
+            && let Some(q) <- dec.decode<Int64>(buf)) {
+            @Assert(o == op)
+            @Assert(t == topic)
+            @Assert(g == group)
+            @Assert(of == off)
+            @Assert(q == qi)
         } else { @Assert(false) }
     }
 
