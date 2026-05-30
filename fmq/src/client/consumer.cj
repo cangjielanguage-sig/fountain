@@ -94,13 +94,22 @@ public class Consumer {
     /** P2-2: 从缓存取出一条消息，提取 queueIndex 并构建 Message。 */
     private func dequeuePending(): ?Message {
         synchronized(msgLock) {
-            if (pendingMessages.size == 0) { return None }
-            let (topic, deliveryId, _, labels, payload) = pendingMessages[0]
-            pendingMessages.remove(at: 0)
-            let qi = ConsumerLoop.extractQueueIndex(deliveryId)
-            Some(Message(topic: topic, id: MessageID(),
-                queueIndex: qi, payload: payload, labels: labels,
-                producerId: deliveryId))
+            while (pendingMessages.size > 0) {
+                let (topic, deliveryId, groupId, labels, payload) = pendingMessages[0]
+                pendingMessages.remove(at: 0)
+                let subs = subscriber.getSubscriptions()
+                var active = false
+                for ((g, t, _, _) in subs) {
+                    if (g == groupId && t == topic) { active = true; break }
+                }
+                if (active) {
+                    let qi = ConsumerLoop.extractQueueIndex(deliveryId)
+                    return Some(Message(topic: topic, id: MessageID(),
+                        queueIndex: qi, payload: payload, labels: labels,
+                        producerId: deliveryId))
+                }  // else: 跳过已取消订阅的消息，继续下一条
+            }
+            None
         }
     }
 
@@ -323,6 +332,7 @@ public class ConsumerLoop {
     private let running = AtomicBool(false)
     private let closed = AtomicBool(false)
     private var threadFuture: ?Future<Unit> = None
+    private let threadLock = Mutex()
 
     public init(client: Client<ProtocolMessage, EncodedMessage, ProtocolMessage, MqBody, MessageID>,
                 subscriber: Subscriber, groupId: String, topic: String,
@@ -344,18 +354,20 @@ public class ConsumerLoop {
         running.store(true)
         closed.store(false)
         let selfRef = this
-        threadFuture = spawn {
-            while (!selfRef.closed.load() && !selfRef.client.isClosed()) {
-                try {
-                    if (!selfRef.pollOnce()) {
-                        sleep(Duration.millisecond * 100)  // P3-2: 无消息时退避
+        synchronized(threadLock) {
+            threadFuture = spawn {
+                while (!selfRef.closed.load() && !selfRef.client.isClosed()) {
+                    try {
+                        if (!selfRef.pollOnce()) {
+                            sleep(Duration.millisecond * 100)
+                        }
+                    } catch (e: Exception) {
+                        log.error{"ConsumerLoop error: ${e.message}"}
+                        sleep(Duration.millisecond * 100)
                     }
-                } catch (e: Exception) {
-                    log.error{"ConsumerLoop error: ${e.message}"}
-                    sleep(Duration.millisecond * 100)
                 }
+                selfRef.running.store(false)
             }
-            selfRef.running.store(false)
         }
         log.info{"ConsumerLoop started: ${groupId}/${topic}"}
     }
@@ -365,10 +377,11 @@ public class ConsumerLoop {
      */
     public func close(): Unit {
         closed.store(true)
-        if (let Some(f) <- threadFuture) {
-            // P1-3: transfer 自带 5s 超时，f.get 最多阻塞 5s
-            try { f.get() } catch (_: Exception) {}
-            threadFuture = None
+        synchronized(threadLock) {
+            if (let Some(f) <- threadFuture) {
+                try { f.get() } catch (_: Exception) {}
+                threadFuture = None
+            }
         }
         log.info{"ConsumerLoop closed: ${groupId}/${topic}"}
     }

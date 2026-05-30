@@ -961,18 +961,19 @@ public class DeliveryRetryTopicTest {
             DateTime.now() - Duration.second * 60,
             retryCount: 0)
 
-        // retry 1: count 0→1, 1>3 false
+        // P3: pre-increment check → 3 retries before DLQ at count=3
+        // retry 1: 0>=3? no → count=1
         @Assert(dmL.retry(record, cm))
         @Assert(record.retryCount == 1)
-        // retry 2: count 1→2, 2>3 false
+        // retry 2: 1>=3? no → count=2
         @Assert(dmL.retry(record, cm))
         @Assert(record.retryCount == 2)
-        // retry 3: count 2→3, 3>3 false
+        // retry 3: 2>=3? no → count=3
         @Assert(dmL.retry(record, cm))
         @Assert(record.retryCount == 3)
-        // retry 4: count 3→4, 4>3 true → DLQ
+        // retry 4: 3>=3? yes → DLQ, count unchanged
         @Assert(!dmL.retry(record, cm))
-        @Assert(record.retryCount == 4)
+        @Assert(record.retryCount == 3)
     }
 
     /**

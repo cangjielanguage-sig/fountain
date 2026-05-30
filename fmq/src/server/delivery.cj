@@ -256,22 +256,19 @@ public class DeliveryManager {
      * 返回 true 表示可重试，false 表示入死信队列。
      */
     public func retry(record: DeliveryRecord, consumerMatcher: ConsumerMatcher): Bool {
-        record.retryCount += 1
-        if (record.retryCount > config.maxRetryCount) {
+        if (record.retryCount >= config.maxRetryCount) {
             log.warn{"max retry reached for ${record.messageId}, move to DLQ"}
             return false
         }
-        // 查找在线消费者（使用记录中的 topic 字段）
+        // 先查找消费者（P3: 有消费者再递增 retryCount，避免无消费者时非原子回退）
         let groups = consumerMatcher.matchTopic(record.topic)
         if (groups.size > 0) {
+            record.retryCount += 1
             log.info{"retry ${record.retryCount}/${config.maxRetryCount} for ${record.messageId}"}
-            // SRV-6: 使用 SRV-7 缓存的 payload（不再从 SegmentedLog 重读）
             record.deliverTime = DateTime.now()
             true
         } else {
-            // P2-3: 无消费者时不入 DLQ，维持 retryCount 不变，等待消费者上线后重试
             log.warn{"no consumer available for ${record.messageId}, waiting for consumer"}
-            record.retryCount -= 1  // 撤销 retryCount 递增
             record.deliverTime = DateTime.now()
             true
         }
