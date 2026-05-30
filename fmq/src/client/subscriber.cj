@@ -52,7 +52,7 @@ public class Subscriber {
         let dataFilterVal = dataFilter
         if (subResp.isSome()) {
             synchronized(subLock) {
-                    for ((g, t, d, m) in subscriptions) {
+                for ((g, t, d, m) in subscriptions) {
                     if (g == groupId && t == matchModeTopic(matchMode) && m == matchModeToString(matchMode) && d == dataFilterVal) {
                         log.info{"already subscribed group=${groupId} to ${matchModeTopic(matchMode)}, skipping duplicate"}
                         return true
@@ -148,17 +148,6 @@ public class Subscriber {
     }
 
     // ───── 编码工具 ─────
-
-    private static func encodeTopicAndMode(topic: String, mode: String): Array<Byte> {
-        let buf = ByteBuffer()
-        let enc = DefaultCodec()
-            .encode(topic)
-            .encode(mode)
-            .finish()
-        enc.copy(to: buf, closeFromOnEnd: true, closeToOnEnd: false)
-        let raw = extractBytes(buf)
-        raw
-    }
 
     /**
      * 编码订阅 payload: topic + groupId + modeStr
