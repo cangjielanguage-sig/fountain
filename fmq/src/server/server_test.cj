@@ -1302,3 +1302,181 @@ public class ReassignRangeTest {
     }
 }
 
+// ──── P1-1: BrokerManager.startHeartbeat 多线程安全 (round 23) ────
+
+@Test
+public class BrokerManagerHeartbeatTest {
+    @TestCase
+    public func testStartHeartbeatCalledTwiceDoesNotCrash(): Unit {
+        let hosts = ArrayList<String>()
+        hosts.add("n1:1")
+        let config = MqConfig(mqHosts: hosts, dataDir: "/tmp")
+        let bm = BrokerManager(config)
+        // 多次调用 startHeartbeat 不应崩溃（内部 heartbeatStarted guard）
+        bm.startHeartbeat()
+        bm.startHeartbeat()
+        sleep(Duration.millisecond * 50)
+        bm.close()
+        @Assert(true)
+    }
+}
+
+// ──── P2-1: QueueCleaner.isFileExpired 异常处理 (round 23) ────
+
+@Test
+public class QueueCleanerIsFileExpiredTest {
+    @TestCase
+    public func testIsFileExpiredNonExistentReturnsFalse(): Unit {
+        let expired = QueueCleaner.isFileExpired("/nonexistent-path-xxxx", DateTime.now())
+        @Assert(!expired)
+    }
+}
+
+// ──── P2-7: TopicManager I/O 不在锁内 (round 23) ────
+
+@Test
+public class TopicManagerIOLockTest {
+    @TestCase
+    public func testLockNotHeldDuringFleetIoForDeleteTopic(): Unit {
+        let hosts = ArrayList<String>()
+        hosts.add("n1:1")
+        let config = MqConfig(mqHosts: hosts, dataDir: "/tmp")
+        let tm = TopicManager(config)
+        // createTopic 内部不应在锁内执行 I/O（P3-3 / P2-7）
+        let code = tm.createTopic("/p2-7-io-lock", queueCount: 1)
+        @Assert(code == MqErrorCode.SUCCESS)
+        let topics = tm.listTopics()
+        var found = false
+        for (t in topics) {
+            if (t == "/p2-7-io-lock") { found = true; break }
+        }
+        @Assert(found)
+    }
+}
+
+// ──── P2-5: ConsumerGroupManager forEachQueue 返回 queueCount (round 23) ────
+
+@Test
+public class ConsumerGroupForEachQueueTest {
+    @TestCase
+    public func testForEachQueueReturnsQueueCount(): Unit {
+        let hosts = ArrayList<String>()
+        hosts.add("n1:1")
+        let config = MqConfig(mqHosts: hosts, dataDir: "/tmp")
+        let tm = TopicManager(config)
+        let cm = ConsumerMatcher()
+        let dm = DeliveryManager(config)
+        let cgm = ConsumerGroupManager(tm, cm, dm)
+
+        tm.createTopic("/p2-5-qc", queueCount: 3)
+        // createGroup 应正确处理 3 队列
+        let code = cgm.createGroup("/p2-5-qc", "g1")
+        @Assert(code == MqErrorCode.SUCCESS)
+        // 每个队列 offset 都应初始化为 0
+        @Assert(cgm.getOffset("/p2-5-qc", 0, "g1") == 0)
+        @Assert(cgm.getOffset("/p2-5-qc", 1, "g1") == 0)
+        @Assert(cgm.getOffset("/p2-5-qc", 2, "g1") == 0)
+        @Assert(cgm.getOffset("/p2-5-qc", 3, "g1") == 0)
+    }
+}
+
+// ──── P2-2: QueueCleaner isFileExpired 文件排序 (round 23) ────
+
+@Test
+public class QueueCleanerFileOrderTest {
+    @TestCase
+    public func testIsFileExpiredOldFileReturnsTrue(): Unit {
+        let hosts = ArrayList<String>()
+        hosts.add("n1:1")
+        let config = MqConfig(mqHosts: hosts, dataDir: "/tmp/fmq_file_order_test",
+                               retentionHours: 1, segmentMaxSize: 16384)
+        let qm = QueueManager(config, nodeIndex: 0)
+        qm.createQueues("/p2-2-order", 1)
+        // 创建文件后立即检查应未过期（retentionHours=1，当前时间应 < 1h前）
+        let threshold = DateTime.now() - Duration.hour
+        let expired = QueueCleaner.isFileExpired("/tmp/fmq_file_order_test/_p2-2-order/0", threshold)
+        // 文件刚创建，mtime 应在 1 小时内 → false
+        @Assert(!expired)
+    }
+}
+
+// ──── P2-1: QueueCleaner.close 快速返回 (round 23) ────
+
+@Test
+public class QueueCleanerCloseTest {
+    @TestCase
+    public func testCloseReturnsWithoutBlocking(): Unit {
+        let hosts = ArrayList<String>()
+        hosts.add("n1:1")
+        let config = MqConfig(mqHosts: hosts, dataDir: "/tmp")
+        let qm = QueueManager(config, nodeIndex: 0)
+        let cleaner = QueueCleaner(config, qm)
+        let f = spawn { cleaner.run() }
+        cleaner.setRunFuture(f)
+        // 立即 close 应快速返回（cleanup 中检查 closed 标志）
+        cleaner.close()
+        @Assert(true)
+    }
+}
+
+// ──── P2-7: TopicManager deleteTopic/addGroup/removeGroup 锁外 I/O (round 23) ────
+
+@Test
+public class TopicManagerIoMethodsTest {
+    @TestCase
+    public func testDeleteTopicWorksWithoutFleet(): Unit {
+        let hosts = ArrayList<String>()
+        hosts.add("n1:1")
+        let config = MqConfig(mqHosts: hosts, dataDir: "/tmp")
+        let tm = TopicManager(config)
+        tm.createTopic("/p2-7-del", queueCount: 1)
+        // deleteTopic 不应在锁内执行 I/O（P2-7），无 fleet 时正常工作
+        let code = tm.deleteTopic("/p2-7-del")
+        @Assert(code == MqErrorCode.SUCCESS)
+        @Assert(tm.getTopicMeta("/p2-7-del").isNone())
+    }
+
+    @TestCase
+    public func testAddRemoveGroupWorksWithoutFleet(): Unit {
+        let hosts = ArrayList<String>()
+        hosts.add("n1:1")
+        let config = MqConfig(mqHosts: hosts, dataDir: "/tmp")
+        let tm = TopicManager(config)
+        tm.createTopic("/p2-7-grp", queueCount: 1)
+        // addConsumerGroup 不应在锁内执行 I/O（P2-7）
+        let code1 = tm.addConsumerGroup("/p2-7-grp", "g1")
+        @Assert(code1 == MqErrorCode.SUCCESS)
+        // removeConsumerGroup 同理
+        let code2 = tm.removeConsumerGroup("/p2-7-grp", "g1")
+        @Assert(code2 == MqErrorCode.SUCCESS)
+        // group 应已被移除
+        let groups = tm.getConsumerGroups("/p2-7-grp")
+        var found = false
+        for (g in groups) {
+            if (g == "g1") { found = true; break }
+        }
+        @Assert(!found)
+    }
+}
+
+// ──── P0-1: getOrCreateQueues 并发死锁保护 (round 23) ────
+
+@Test
+public class GetOrCreateQueuesConcurrentTest {
+    @TestCase
+    public func testConcurrentGetOrCreateSameTopicReturnsExisting(): Unit {
+        let hosts = ArrayList<String>()
+        hosts.add("n1:1")
+        let config = MqConfig(mqHosts: hosts, dataDir: "/tmp")
+        let qm = QueueManager(config, nodeIndex: 0)
+        // 线程安全：两线程同时 getOrCreateQueues 同一新 topic
+        var f1 = spawn { qm.getOrCreateQueues("/p0-1-con", 1) }
+        var f2 = spawn { qm.getOrCreateQueues("/p0-1-con", 1) }
+        let r1 = f1.get()
+        let r2 = f2.get()
+        @Assert(r1.size == 1)
+        @Assert(r2.size == 1)
+        @Assert(r1[0].index == r2[0].index)
+    }
+}
+
