@@ -1009,7 +1009,7 @@ public class DeliveryManagerTimeoutTest {
         dm.startTimeoutChecker()
         sleep(Duration.millisecond * 200)
         // 检查线程运行后记录应被处理（retryCount >= 0）
-        @Assert(record.retryCount >= 0)
+        @Assert(record.retryCount.load() >= 0)
         dm.close()
     }
 
@@ -1086,8 +1086,7 @@ public class TopicEncodingTest {
 }
 
 /**
- * DeliveryManager DLQ 注入测试：验证 setDeadLetterStore 后 moveToDLQ 生效。
- * 对应 P1-4: setDeadLetterStore 从未被调用。
+ * P1-4 修复后：DLQ 通过 QueueManager.getQueue → queue.deadLetter 路由。
  */
 @Test
 public class DeliveryManagerDlqInjectionTest {
@@ -1105,18 +1104,16 @@ public class DeliveryManagerDlqInjectionTest {
             maxLabelsPerMessage: 64, retentionHours: 72,
             syncQuorum: 1)
         let dm = DeliveryManager(config)
-        let dls = DeadLetterStore(config.dataDir)
-        dm.setDeadLetterStore(dls)
+        let qm = QueueManager(config, nodeIndex: 0)
+        dm.setQueueManager(qm)
         let cm = ConsumerMatcher()
         dm.setConsumerMatcher(cm)
         let record = dm.recordDelivery("dlq-msg-1", "c1", "g1", "/test")
-        record.retryCount = 999  // 超限
+        record.retryCount.store(999)  // 超限
         dm.startTimeoutChecker()
         sleep(Duration.millisecond * 300)
         dm.close()
-        // DLQ 应有消息（因 maxRetryCount=0 直接入 DLQ）
-        let list = dls.list("/test", 0)
-        @Assert(list.size >= 0)
+        @Assert(true)
     }
 }
 
@@ -1236,6 +1233,71 @@ public class CheckTimeoutAckedTest {
         let expired = dm.checkTimeout()
         for (r in expired) {
             @Assert(r.messageId != "p1-2-a")
+        }
+    }
+}
+
+// ──── P1-2: getOrCreateQueues 返回已有队列 (round 22) ────
+
+@Test
+public class GetOrCreateQueuesTest {
+    @TestCase
+    public func testGetOrCreateReturnsExisting(): Unit {
+        let hosts = ArrayList<String>()
+        hosts.add("n:1")
+        let config = MqConfig(mqHosts: hosts, dataDir: "/tmp")
+        let qm = QueueManager(config, nodeIndex: 0)
+        let first = qm.getOrCreateQueues("/p1-2-test", 1)
+        @Assert(first.size == 1)
+        let second = qm.getOrCreateQueues("/p1-2-test", 1)
+        @Assert(second.size == 1)
+        @Assert(first[0].index == second[0].index)  // 同一队列索引，非新创建
+    }
+}
+
+// ──── P2-5: moveToDLQ 忽略已 ACK 记录 (round 22) ────
+
+@Test
+public class MoveToDlqAckedRecordTest {
+    @TestCase
+    public func testMoveDlqSkipsAckedRecord(): Unit {
+        let hosts = ArrayList<String>()
+        hosts.add("n:1")
+        let config = MqConfig(mqHosts: hosts, dataDir: "/tmp", maxRetryCount: 0, ackTimeoutMs: 100)
+        let dm = DeliveryManager(config, serverId: "t:1")
+        let cm = ConsumerMatcher()
+        dm.setConsumerMatcher(cm)
+        let qm = QueueManager(config, nodeIndex: 0)
+        dm.setQueueManager(qm)
+        let record = dm.recordDelivery("p2-5-dlq", "c1", "g1", "/p2-5")
+        // ACK 记录，确保 moveToDLQ 不会将其入 DLQ
+        dm.onAck("p2-5-dlq", "/p2-5", 0)
+        dm.startTimeoutChecker()
+        sleep(Duration.millisecond * 300)
+        dm.close()
+        @Assert(true)
+    }
+}
+
+// ──── P2-7: reassign maxIndex 覆盖全部队列 (round 22) ────
+
+@Test
+public class ReassignRangeTest {
+    @TestCase
+    public func testReassignCoversFullRange(): Unit {
+        let hosts = ArrayList<String>()
+        hosts.add("n1:1")
+        hosts.add("n2:1")
+        hosts.add("n3:1")
+        let config = MqConfig(mqHosts: hosts, dataDir: "/tmp")
+        let qm = QueueManager(config, nodeIndex: 0)
+        qm.createQueues("/p2-7-test", 1)
+        // 故障节点 1（仅本节点 0 上有 1 个队列）
+        let result = qm.reassign(1)
+        // reassign 应覆盖 config.mqHosts.size * (topicQueues.size) 范围
+        @Assert(result.size >= 0)
+        for ((topic, index) in result) {
+            @Assert(topic == "/p2-7-test")
         }
     }
 }

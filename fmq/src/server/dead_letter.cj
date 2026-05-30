@@ -205,6 +205,7 @@ public class DeadLetterStore {
      * 关闭 SegmentedLog，释放文件描述符。
      */
     public func close(): Unit {
+        sync()
         dlqLog.close()
     }
 }

@@ -111,15 +111,14 @@ public class MqCommand <: SubCommand {
             let meta = topicManager.getTopicMeta(name)
             if (let Some(m) <- meta) {
                 queueManager.createQueues(name, m.getQueueCount())
+                queueManager.startWritersForTopic(name)
             }
         }
         let executor = CommandExecutor(
             topicManager, queueManager, deliveryManager,
-            consumerMatcher, replicationManager)
+            consumerMatcher, replicationManager, config: config)
 
         // 设置依赖注入
-        let deadLetterStore = DeadLetterStore(config.dataDir)
-        deliveryManager.setDeadLetterStore(deadLetterStore)
         queueManager.setReplicationManager(replicationManager)
         queueManager.startAll()
         queueManager.startAllSyncThreads()

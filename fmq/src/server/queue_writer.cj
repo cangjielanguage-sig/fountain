@@ -17,7 +17,7 @@ package fountain::fmq.server
 
 import std.collection.concurrent.{ConcurrentHashMap, ConcurrentLinkedQueue}
 import std.io.ByteBuffer
-import std.sync.AtomicBool
+import std.sync.{AtomicBool, Mutex}
 import fountain::f_codec.default.DefaultCodec
 import fountain::f_protocol.default.{Message as ProtocolMessage, EncodedMessage, Command, MessageID}
 import fountain::fmq.common.{MqBody, MqConfig, extractBytes}
@@ -39,6 +39,7 @@ public class QueueWriter {
     private let slaveSyncQueues = ConcurrentHashMap<String, ConcurrentLinkedQueue<Array<Byte>>>()
     private let syncClosed = AtomicBool(false)
     private var syncThreads = ConcurrentHashMap<String, Future<Unit>>()
+    private let syncLock = Mutex()  // 保护 syncThreads check-then-act
     /** 缓存 (topic+queueIndex) 编码前缀，避免每次 syncToSlaves 重编码 */
     private let syncPrefix: Array<Byte>
 
@@ -138,17 +139,19 @@ public class QueueWriter {
         let selfRef = this
         for (slave in slaves) {
             let nodeId = slave.nodeId
-            if (syncThreads.get(nodeId).isSome()) { continue }
-            // 为每个 slave 创建专用队列
-            slaveSyncQueues[nodeId] = ConcurrentLinkedQueue<Array<Byte>>()
-            let slaveId = nodeId
-            syncThreads[slaveId] = spawn {
-                while (!selfRef.syncClosed.load()) {
-                    if (let Some(q) <- selfRef.slaveSyncQueues.get(slaveId)) {
-                        if (let Some(entry) <- q.remove()) {
-                            selfRef.syncToSlave(slaveId, entry)
+            synchronized(syncLock) {
+                if (syncThreads.get(nodeId).isSome()) { continue }
+                // 为每个 slave 创建专用队列
+                slaveSyncQueues[nodeId] = ConcurrentLinkedQueue<Array<Byte>>()
+                let slaveId = nodeId
+                syncThreads[slaveId] = spawn {
+                    while (!selfRef.syncClosed.load()) {
+                        if (let Some(q) <- selfRef.slaveSyncQueues.get(slaveId)) {
+                            if (let Some(entry) <- q.remove()) {
+                                selfRef.syncToSlave(slaveId, entry)
+                            } else { sleep(Duration.millisecond * 10) }
                         } else { sleep(Duration.millisecond * 10) }
-                    } else { sleep(Duration.millisecond * 10) }
+                    }
                 }
             }
         }

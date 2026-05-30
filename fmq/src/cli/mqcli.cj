@@ -31,7 +31,7 @@ public class MqCliCommand <: SubCommand {
     private init() {}
 
     public prop command: String {
-        get() { 'mqcli' }
+        get() { "mqcli" }
     }
 
     public func exec(args: Array<String>): Int64 {
@@ -71,9 +71,7 @@ public class MqCliCommand <: SubCommand {
                 if (filtered.size == 0) { continue }
                 let finalArgs = Array<String>(filtered.size, repeat: "")
                 for (i in 0..filtered.size) { finalArgs[i] = filtered[i] }
-                if (!runCommand(finalArgs)) {
-                    // 命令已输出具体错误信息
-                }
+                runCommand(finalArgs)
             } else { break }
         }
     }

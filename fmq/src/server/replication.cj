@@ -156,7 +156,7 @@ public class ReplicationManager {
             if (nodeId.isEmpty() || config.mqHosts.size == 0) {
                 return true
             }
-            tryConnect()
+            return tryConnect()
         }
     }
 

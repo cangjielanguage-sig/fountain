@@ -67,7 +67,10 @@ public class Consumer {
                             for ((deliveryId, labels, payload) in msgs) {
                                 if (dataFilter != "" && !Consumer.dataFilterMatch(dataFilter, payload)) {
                                     let ackQi = ConsumerLoop.extractQueueIndex(deliveryId)
-                                    Consumer.sendAck(client, deliveryId, topic, ackQi, "dataFilter")
+                                    // P2-8: 重试 3 次确保 ACK 送达，防止无限重投循环
+                                    for (_ in 0..3) {
+                                        if (Consumer.sendAck(client, deliveryId, topic, ackQi, "dataFilter")) { break }
+                                    }
                                 } else {
                                     synchronized(msgLock) {
                                         pendingMessages.add((topic, deliveryId, groupId, labels, payload))
@@ -193,8 +196,9 @@ public class Consumer {
     }
 
     /** P4-3: 发送 ACK（static 以便 ConsumerLoop 复用）。 */
+    /** P2-8: 返回Bool支持调用方重试。 */
     internal static func sendAck(client: Client<ProtocolMessage, EncodedMessage, ProtocolMessage, MqBody, MessageID>,
-                                 deliveryId: String, topic: String, queueIndex: Int64, logLabel: String): Unit {
+                                 deliveryId: String, topic: String, queueIndex: Int64, logLabel: String): Bool {
         let ackPayload = Consumer.encodeAckPayload(deliveryId, topic, queueIndex)
         let ackReq = ProtocolMessage(Command.ACK, MessageID(),
             MqBody("ack", ackPayload).toData())
@@ -202,7 +206,8 @@ public class Consumer {
         if (ackResp.isNone()) {
             let label = logLabel
             log.warn{"${label} ACK failed for deliveryId=${deliveryId}"}
-        }
+            false
+        } else { true }
     }
 
     internal static func decodeMessageList(data: Array<Byte>): ArrayList<Array<Byte>> {
@@ -326,6 +331,7 @@ public class ConsumerLoop {
     private let closed = AtomicBool(false)
     private var threadFuture: ?Future<Unit> = None
     private let threadLock = Mutex()
+    private let threadFinished = AtomicBool(false)
 
     public init(client: Client<ProtocolMessage, EncodedMessage, ProtocolMessage, MqBody, MessageID>,
                 subscriber: Subscriber, groupId: String, topic: String,
@@ -360,6 +366,7 @@ public class ConsumerLoop {
                     }
                 }
                 selfRef.running.store(false)
+                selfRef.threadFinished.store(true)
             }
         }
         log.info{"ConsumerLoop started: ${groupId}/${topic}"}
@@ -372,6 +379,15 @@ public class ConsumerLoop {
         closed.store(true)
         synchronized(threadLock) {
             if (let Some(f) <- threadFuture) {
+                // P2-9: Future.get() 无 timeout，用 AtomicBool 轮询替代
+                var waited: Int64 = 0
+                while (waited < 50 && !threadFinished.load()) {  // 5s 上限
+                    sleep(Duration.millisecond * 100)
+                    waited += 1
+                }
+                if (!threadFinished.load()) {
+                    log.warn{"ConsumerLoop thread did not exit in time"}
+                }
                 try { f.get() } catch (_: Exception) {}
                 threadFuture = None
             }

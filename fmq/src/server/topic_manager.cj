@@ -67,6 +67,7 @@ public class TopicManager {
     }
 
     public func createTopic(name: String, queueCount!: Int64 = 1): MqErrorCode {
+        var meta: ?TopicMeta = None
         synchronized(lock) {
             if (!validateTopic(name)) {
                 log.warn{"createTopic: invalid topic name '${name}'"}
@@ -76,13 +77,16 @@ public class TopicManager {
                 log.warn{"createTopic: topic '${name}' already exists"}
                 return MqErrorCode.TOPIC_EXISTS
             }
-            let meta = TopicMeta(
+            let m = TopicMeta(
                 queueCount: queueCount,
                 consumerGroups: ArrayList(),
                 createTime: DateTime.now()
             )
-            topics[name] = meta
-            persistToFsync(name, meta)
+            topics[name] = m
+            meta = Some(m)
+        }
+        if (let Some(m) <- meta) {
+            persistToFsync(name, m)  // P3-3: I/O 移到锁外
         }
         log.info{"created topic '${name}' with ${queueCount} queues"}
         MqErrorCode.SUCCESS

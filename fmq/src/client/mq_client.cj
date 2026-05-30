@@ -285,7 +285,7 @@ public class MqClient <: Resource {
      * 将二进制数据转为 hex 格式字符串。
      */
     private static func toHexString(data: Array<Byte>): String {
-        let result = ArrayList<UInt8>()
+        let result = ArrayList<UInt8>(data.size * 2)
         for (b in data) {
             let hi = b >> 4 & 0x0Fu8
             let lo = b & 0x0Fu8
@@ -348,13 +348,13 @@ public class MqClient <: Resource {
     // ───── 生命周期 ─────
 
     public func close(): Unit {
-        if (closed.load()) { return }
-        closed.store(true)
-        syncRegistry.stopHeartbeat()
-        mqConn.close()
         synchronized(instanceLock) {
+            if (closed.load()) { return }
+            closed.store(true)
             instance = None
         }
+        syncRegistry.stopHeartbeat()
+        mqConn.close()
     }
 
     public func isClosed(): Bool { closed.load() }

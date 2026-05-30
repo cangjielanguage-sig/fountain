@@ -20,6 +20,7 @@ import std.unittest.testmacro.*
 import fountain::f_protocol.default.{Message as ProtocolMessage, MessageID, Command, VOTE, APPROVE}
 import fountain::f_codec.default.DefaultCodec
 import std.io.{ByteBuffer, SeekPosition}
+import std.sync.AtomicInt64
 
 /**
  * CommandExecutor 单元测试。
@@ -877,12 +878,12 @@ public class DeliveryRetryTopicTest {
             "retry-group",                          // groupId
             "/test-retry-topic",                    // topic
             DateTime.now() - Duration.second * 60,  // deliverTime (超时)
-            retryCount: 0)
+            retryCount: AtomicInt64(0))
 
         // retry 应使用 record.topic 找到消费者，返回 true
         @Assert(dmL.retry(record, cm))
         // retryCount 应递增为 1
-        @Assert(record.retryCount == 1)
+        @Assert(record.retryCount.load() == 1)
     }
 
     @TestCase
@@ -904,12 +905,11 @@ public class DeliveryRetryTopicTest {
             "/wrong-topic:0:other-group:0",
             "other-consumer", "other-group", "/wrong-topic",
             DateTime.now() - Duration.second * 60,
-            retryCount: 0)
+            retryCount: AtomicInt64(0))
 
-        // P2-3: 无消费者时不入 DLQ，返回 true 等待消费者上线
+        // P3-4: 无消费者时递增 retryCount 防止消息永久驻留，返回 true 等待消费者上线
         @Assert(dmL.retry(record, cm))
-        // retryCount 应保持不变（撤销递增）
-        @Assert(record.retryCount == 0)
+        @Assert(record.retryCount.load() == 1)
     }
 
     /**
@@ -931,11 +931,11 @@ public class DeliveryRetryTopicTest {
         let record = DeliveryRecord(
             "/match-topic:0:match-group:0", "match-cons", "match-group", "/match-topic",
             DateTime.now() - Duration.second * 60,
-            retryCount: 0)
+            retryCount: AtomicInt64(0))
 
         @Assert(dmL.retry(record, cm))
         // 有消费者时 retryCount 递增
-        @Assert(record.retryCount == 1)
+        @Assert(record.retryCount.load() == 1)
     }
     /**
      * P0-3: 验证 retryCount > maxRetryCount fencepost
@@ -959,21 +959,21 @@ public class DeliveryRetryTopicTest {
             "/retry-fence:0:rf-group:0",
             "rf-consumer", "rf-group", "/retry-fence",
             DateTime.now() - Duration.second * 60,
-            retryCount: 0)
+            retryCount: AtomicInt64(0))
 
         // P3: pre-increment check → 3 retries before DLQ at count=3
         // retry 1: 0>=3? no → count=1
         @Assert(dmL.retry(record, cm))
-        @Assert(record.retryCount == 1)
+        @Assert(record.retryCount.load() == 1)
         // retry 2: 1>=3? no → count=2
         @Assert(dmL.retry(record, cm))
-        @Assert(record.retryCount == 2)
+        @Assert(record.retryCount.load() == 2)
         // retry 3: 2>=3? no → count=3
         @Assert(dmL.retry(record, cm))
-        @Assert(record.retryCount == 3)
+        @Assert(record.retryCount.load() == 3)
         // retry 4: 3>=3? yes → DLQ, count unchanged
         @Assert(!dmL.retry(record, cm))
-        @Assert(record.retryCount == 3)
+        @Assert(record.retryCount.load() == 3)
     }
 
     /**
@@ -999,11 +999,11 @@ public class DeliveryRetryTopicTest {
         let record = DeliveryRecord(
             "/sr6-topic:0:sr6-group:0", "sr6-cons", "sr6-group", "/sr6-topic",
             DateTime.now() - Duration.second * 60,
-            retryCount: 0, payload: [0x01u8, 0x02u8])
+            retryCount: AtomicInt64(0), payload: [0x01u8, 0x02u8])
 
         // 即使 queueManager=None，retry 也应成功（使用 payload 缓存）
         @Assert(dmL.retry(record, cm))
-        @Assert(record.retryCount == 1)
+        @Assert(record.retryCount.load() == 1)
     }
 
     private static func testConfig(): MqConfig {

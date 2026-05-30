@@ -121,12 +121,8 @@ public class CommandExecutor {
             if (labels.size > config.maxLabelsPerMessage) {
                 return errorResp(request.id, "too many labels: ${labels.size} > ${config.maxLabelsPerMessage}")
             }
-            let queues = if (let Some(qs) <- queueManager.getQueues(topic)) { qs }
-                else {
-                    let newQs = queueManager.createQueues(topic, 1)
-                    queueManager.startWritersForTopic(topic)
-                    newQs
-                }
+            let queues = queueManager.getOrCreateQueues(topic, 1)
+            queueManager.startWritersForTopic(topic)
             if (queues.size == 0) {
                 return errorResp(request.id, "no queue available for topic=${topic}")
             }
@@ -168,10 +164,9 @@ public class CommandExecutor {
                             if (data.size > config.maxMessageSize) { fail += 1 }
                             else if (labels.size > config.maxLabelsPerMessage) { fail += 1 }
                             else {
-                                let queues = if (let Some(qs) <- queueManager.getQueues(topic)) { qs }
-                                    else { queueManager.createQueues(topic, 1) }
-                                if (queues.size > 0) {
-                                    let q = queueManager.routeToQueue(topic, queues)
+                                let qs = queueManager.getOrCreateQueues(topic, 1)
+                                if (qs.size > 0) {
+                                    let q = queueManager.routeToQueue(topic, qs)
                                     // 通过 QueueWriter 提交（优先走复制链），无 writer 时直接写
                                     if (let Some(writer) <- queueManager.getWriterForQueue(q)) {
                                         writer.submit(data)

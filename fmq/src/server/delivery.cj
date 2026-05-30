@@ -18,7 +18,7 @@ package fountain::fmq.server
 import std.collection.concurrent.ConcurrentHashMap
 import std.collection.ArrayList
 import std.convert.*
-import std.sync.{Mutex, AtomicBool}
+import std.sync.{Mutex, AtomicBool, AtomicInt64}
 import fountain::f_codec.default.DefaultCodec
 import std.io.ByteBuffer
 import fountain::fleet.client.SyncClient
@@ -33,11 +33,11 @@ public class DeliveryRecord {
     let topic: String
     var payload: Array<Byte>  // 原始消息体，用于 DLQ 重投
     var deliverTime: DateTime
-    var retryCount: Int64
+    let retryCount: AtomicInt64
     var acked: AtomicBool
 
     public init(messageId: String, consumerId: String, groupId: String, topic: String,
-                deliverTime: DateTime, retryCount!: Int64 = 0,
+                deliverTime: DateTime, retryCount!: AtomicInt64 = AtomicInt64(0),
                 acked!: AtomicBool = AtomicBool(false),
                 payload!: Array<Byte> = []) {
         this.messageId = messageId
@@ -66,7 +66,6 @@ public class DeliveryManager {
     private let onAckLock = Mutex()  // 保护 onAck check-then-act
     private var consumerMatcher: Option<ConsumerMatcher> = None
     private var queueManager: Option<QueueManager> = None
-    private var deadLetterStore: Option<DeadLetterStore> = None
     private let checkerClosed = AtomicBool(false)
     private var checkerFuture: Option<Future<Unit>> = None
 
@@ -127,20 +126,27 @@ public class DeliveryManager {
      * synchronized 防止并发 ACK 的 check-then-act 竞态。
      */
     public func onAck(messageId: String, topic: String, queueIndex: Int64): Bool {
+        var result = false
+        var offsetKey = ""
+        var offsetVal: Int64 = 0
         synchronized(onAckLock) {
             if (let Some(record) <- records.get(messageId)) {
-                if (record.acked.load()) { return false }
-                record.acked.store(true)
-                records.remove(messageId)
-                let offsetKey = offsetKeyFor(topic, queueIndex, serverId, record.groupId)
-                let current = offsets.get(offsetKey) ?? 0
-                offsets[offsetKey] = current + 1
-                persistOffset(offsetKey, current + 1)
-                true
-            } else {
-                false
+                if (!record.acked.load()) {
+                    record.acked.store(true)
+                    records.remove(messageId)
+                    let key = offsetKeyFor(topic, queueIndex, serverId, record.groupId)
+                    let current = offsets.get(key) ?? 0
+                    offsets[key] = current + 1
+                    result = true
+                    offsetKey = key
+                    offsetVal = current + 1
+                }
             }
         }
+        if (result && offsetKey != "") {
+            persistOffset(offsetKey, offsetVal)
+        }
+        result
     }
 
     /**
@@ -182,13 +188,6 @@ public class DeliveryManager {
     }
 
     /**
-     * 设置 DeadLetterStore 引用（重试超限时入 DLQ）。
-     */
-    public func setDeadLetterStore(dls: DeadLetterStore): Unit {
-        this.deadLetterStore = Some(dls)
-    }
-
-    /**
      * 启动超时检查后台线程。
      * 周期性（ackTimeoutMs/2 间隔）遍历 records 检查超时记录并调用 retry。
      * retry 返回 false 且配置了 DeadLetterStore 时写入 DLQ。
@@ -222,9 +221,7 @@ public class DeliveryManager {
                     // retry 成功：记录已更新 deliverTime
                 } else {
                     // 重试超限或无消费者 → 入 DLQ
-                    if (let Some(dls) <- deadLetterStore) {
-                        moveToDLQ(dls, exp)
-                    }
+                    moveToDLQ(exp)
                 }
             } catch (e: Exception) {
                 log.warn{"doTimeoutCheck: retry ${exp.messageId} failed: ${e.message}"}
@@ -236,15 +233,20 @@ public class DeliveryManager {
      * 将投递记录移入死信队列。
      * 从 messageId 解析 topic:queueIndex 信息，写入 DeadLetterStore。
      */
-    private func moveToDLQ(dls: DeadLetterStore, record: DeliveryRecord): Unit {
+    private func moveToDLQ(record: DeliveryRecord): Unit {
+        // P2-5: 锁内双重检查 record.acked，防止 checkTimeout 快照后 consumer 已 ACK
+        synchronized(onAckLock) {
+            if (record.acked.load()) { return }
+            records.remove(record.messageId)
+        }
+        let qm = if (let Some(ref) <- queueManager) { ref } else { return }
         let parts = record.messageId.split(':')
         if (parts.size >= 2) {
             let topic = parts[0]
             let queueIdx = if (let Some(idx) <- Int64.tryParse(parts[1])) { idx } else { 0 }
-            dls.append(record.payload, topic, queueIdx, record.messageId)
-        }
-        synchronized(onAckLock) {
-            records.remove(record.messageId)
+            if (let Some(q) <- qm.getQueue(topic, queueIdx)) {
+                q.deadLetter.append(record.payload, topic, queueIdx, record.messageId)
+            }
         }
         log.warn{"moved ${record.messageId} to DLQ (retry exhausted)"}
     }
@@ -256,19 +258,21 @@ public class DeliveryManager {
      * 返回 true 表示可重试，false 表示入死信队列。
      */
     public func retry(record: DeliveryRecord, consumerMatcher: ConsumerMatcher): Bool {
-        if (record.retryCount >= config.maxRetryCount) {
+        if (record.retryCount.load() >= config.maxRetryCount) {
             log.warn{"max retry reached for ${record.messageId}, move to DLQ"}
             return false
         }
         // 先查找消费者（P3: 有消费者再递增 retryCount，避免无消费者时非原子回退）
         let groups = consumerMatcher.matchTopic(record.topic)
         if (groups.size > 0) {
-            record.retryCount += 1
-            log.info{"retry ${record.retryCount}/${config.maxRetryCount} for ${record.messageId}"}
+            let rc = record.retryCount.fetchAdd(1) + 1
+            log.info{"retry ${rc}/${config.maxRetryCount} for ${record.messageId}"}
             record.deliverTime = DateTime.now()
             true
         } else {
-            log.warn{"no consumer available for ${record.messageId}, waiting for consumer"}
+            // P3-4: 无消费者时递增 retryCount，防止消息永久驻留
+            let rc = record.retryCount.fetchAdd(1) + 1
+            log.warn{"no consumer for ${record.messageId}, retry ${rc}/${config.maxRetryCount}"}
             record.deliverTime = DateTime.now()
             true
         }

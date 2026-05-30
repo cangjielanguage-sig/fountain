@@ -83,6 +83,21 @@ public class QueueManager {
     }
 
     /**
+     * 获取或创建主题的队列列表（原子操作，防止并发 produce TOCTOU）。
+     * 有则返回已有队列，无则创建并写入 queues。
+     */
+    public func getOrCreateQueues(topic: String, queueCount: Int64): ArrayList<MqQueue> {
+        synchronized(lock) {
+            if (let Some(qs) <- queues.get(topic)) { qs }
+            else {
+                let qs = createQueues(topic, queueCount)
+                queues[topic] = qs
+                qs
+            }
+        }
+    }
+
+    /**
      * 获取指定主题的队列列表（防御性拷贝，多线程安全）。
      */
     public func getQueues(topic: String): ?ArrayList<MqQueue> {
@@ -164,18 +179,26 @@ public class QueueManager {
                 for (q in topicQueues) {
                     localIndices.add(q.index)
                 }
-                let maxIndex = topicQueues.size + config.mqHosts.size
+                // P2-7: 使用 topicQueues.size * mqHosts.size 作为上界，覆盖所有可能队列
+                let maxIndex = topicQueues.size * config.mqHosts.size
                 for (i in 0..maxIndex) {
                     let owner = distribute(topic, i, config.mqHosts.size)
-                    if (owner == failedNode && !localIndices.contains(i)) {
-                        let q = MqQueue(topic, i, config.dataDir, config.segmentMaxSize)
-                        topicQueues.add(q)
-                        localIndices.add(i)
-                        reassigned.add((topic, i))
-                        if (let Some(ref) <- rm) {
-                            startWriterAndReader(q, ref)
+                    if (owner == failedNode) {
+                        // 手动检查局部索引（ArrayList 无 contains 方法）
+                        var found = false
+                        for (li in localIndices) {
+                            if (li == i) { found = true; break }
                         }
-                        log.warn{"reassign ${topic}[${i}] from node ${failedNode} to node ${nodeIndex}"}
+                        if (!found) {
+                            let q = MqQueue(topic, i, config.dataDir, config.segmentMaxSize)
+                            topicQueues.add(q)
+                            localIndices.add(i)
+                            reassigned.add((topic, i))
+                            if (let Some(ref) <- rm) {
+                                startWriterAndReader(q, ref)
+                            }
+                            log.warn{"reassign ${topic}[${i}] from node ${failedNode} to node ${nodeIndex}"}
+                        }
                     }
                 }
             }
@@ -334,10 +357,10 @@ public class QueueManager {
             snapshotWriters = ArrayList<QueueWriter>()
             for (w in writers) { snapshotWriters.add(w) }
         }
+        for (w in snapshotWriters) { w.close() }
         for (q in allQueues) {
             if (!q.isClosed()) { q.close() }
         }
-        for (w in snapshotWriters) { w.close() }
         log.info{"closed: stopped ${snapshotWriters.size} writers"}
     }
 }
