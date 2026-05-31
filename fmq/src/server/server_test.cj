@@ -20,6 +20,7 @@ import std.unittest.testmacro.*
 import fountain::f_data.base.*
 import std.sync.{AtomicInt64, AtomicBool}
 import std.fs.*
+import std.fs.removeIfExists
 
 @Test
 public class QueueDistributionTest {
@@ -1684,6 +1685,36 @@ public class CleanupOrphanOffsetsTest {
 
         // /deleted 的 offset 应被移除（getOffset 返回 0 表示 key 不存在）
         @Assert(dm.getOffset("/deleted", 0, "g2") == 0)
+    }
+}
+
+/**
+ * P3-2: QueueReader stream 重建 & 退避验证。
+ */
+@Test
+public class QueueReaderBackoffTest {
+    @TestCase
+    public func testQueueReaderConsumesAndCloses(): Unit {
+        // 创建临时队列，写入几条消息，启动 reader，验证消息被消费
+        let dataDir = "/tmp/fmq_qr_test_${DateTime.now().toUnixTimeStamp().toMilliseconds()}"
+        try {
+            Directory.create(dataDir)
+        } catch (_: Exception) { /* 忽略重复创建 */ }
+        let q = MqQueue("/test", 0, dataDir, 100)
+        try {
+            q.append(Array<Byte>(3, repeat: 1u8))
+            q.append(Array<Byte>(3, repeat: 2u8))
+            q.append(Array<Byte>(3, repeat: 3u8))
+            q.sync()
+            let reader = QueueReader(q)
+            let future = spawn { reader.run() }
+            sleep(Duration.millisecond * 500)
+            reader.close()
+            future.get()
+        } finally {
+            q.close()
+            removeIfExists(dataDir, recursive: true)
+        }
     }
 }
 

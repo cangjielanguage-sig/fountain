@@ -27,6 +27,9 @@ public class QueueReader {
     private let log = LoggerFactory.getLogger('fountain::fmq.QueueReader')
     private let closed = AtomicBool(false)
     private var msgCount: Int64 = 0  // 已读取消息计数，用于首次读取时跳过历史消息
+    // P3-2: 跟踪 stream 状态以避免每次 poll 都重建 stream 并重新解码 skip 条记录
+    private var streamActive = false
+    private var exhaustedCount: Int64 = 0
 
     public init(queue: MqQueue) {
         this.queue = queue
@@ -47,13 +50,21 @@ public class QueueReader {
         log.info{"QueueReader started for ${queue}"}
         while (!closed.load()) {
             try {
-                let skip = msgCount
+                // P3-2: streamActive 时 skip=0（复用缓存 stream），避免 O(msgCount) 重建
+                let skip = if (streamActive) { 0 } else { msgCount }
                 if (let Some(data) <- queue.tryReadFromLog(skip)) {
+                    streamActive = true
+                    exhaustedCount = 0
                     msgCount += 1
                     log.debug{"read ${data.size} bytes from log for ${queue}"}
                     // TODO: 此处应调用 ConsumerMatcher.matchTopic() 匹配消费者并投递
                 } else {
-                    sleep(Duration.millisecond * 100)
+                    streamActive = false
+                    exhaustedCount += 1
+                    // P3-2: 指数退避减少 O(msgCount) stream 重建频率，避免空闲时 100ms 密集重扫
+                    let shift = if (exhaustedCount > 4) { 4 } else { exhaustedCount }
+                    let waitMs = 100i64 << shift
+                    sleep(Duration.millisecond * waitMs)
                 }
             } catch (e: Exception) {
                 if (!closed.load()) {
