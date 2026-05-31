@@ -24,6 +24,7 @@ import std.io.ByteBuffer
  * 封装生产消息的协议细节。
  */
 public class Sender {
+    private static let log = LoggerFactory.getLogger('fountain::fmq.Sender')
     private let client: Client<ProtocolMessage, EncodedMessage, ProtocolMessage, MqBody, MessageID>
 
     public init(client: Client<ProtocolMessage, EncodedMessage, ProtocolMessage, MqBody, MessageID>) {
@@ -43,6 +44,7 @@ public class Sender {
         if (let Some(_) <- resp) {
             ProduceResult(messageId: req.id)
         } else {
+            log.warn{"produce failed for topic=${topic}"}
             ProduceResult()
         }
     }
@@ -75,6 +77,7 @@ public class Sender {
                 results.add(ProduceResult(messageId: req.id))
             }
         } else {
+            log.warn{"produceBatch failed for topic=${topic} (${messages.size} messages)"}
             for (_ in 0..messages.size) {
                 results.add(ProduceResult())
             }
