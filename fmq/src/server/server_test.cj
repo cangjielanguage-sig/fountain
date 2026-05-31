@@ -103,6 +103,16 @@ public class QueueDistributionTest {
         for (q in queues) { q.close() }
     }
 
+    @TestCase
+    public func testDistributeWithZeroNodeCountReturnsZero(): Unit {
+        // P3-1: nodeCount=0 防御返回 0，不崩溃
+        let config = testConfig()
+        let qm = QueueManager(config)
+        @Assert(qm.distribute("/test", 0, 0) == 0)
+        @Assert(qm.distribute("/test", 42, 0) == 0)
+        @Assert(qm.distribute("/test", 0, -1) == 0)
+    }
+
     private static func testConfig(): MqConfig {
         let hosts = ArrayList<String>()
         hosts.add("node1:7201")

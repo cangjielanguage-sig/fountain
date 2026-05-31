@@ -161,6 +161,7 @@ public class QueueManager {
      * 计算 (topic:queueIndex) 的 CRC64，取模得到目标节点索引。
      */
     public func distribute(topic: String, queueIndex: Int64, nodeCount: Int64): Int64 {
+        if (nodeCount <= 0) { return 0 }  // P3-1: 防御零值模运算
         let key = "${topic}:${queueIndex}"
         let hash64 = crc64(key)
         Int64(hash64 % UInt64(nodeCount))
