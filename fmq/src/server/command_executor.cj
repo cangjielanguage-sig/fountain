@@ -327,6 +327,8 @@ public class CommandExecutor {
                     }
                     let consumedCount = consumed.size
                     log.info{"consumed ${consumedCount} msgs from ${topic}"}
+                    // P3-5: CONSUME 周期触发排空完成检查，清理已排空队列
+                    queueManager.drainCompleteCheck()
                     ProtocolMessage(Command.RESP(0), request.id,
                         MqBody("consume", encodeMessageListWithIds(consumed)).toData())
                 } else {
@@ -386,6 +388,8 @@ public class CommandExecutor {
                 }
             }
         }
+        // P3-5: 批量 CONSUME 周期也触发排空检查
+        queueManager.drainCompleteCheck()
         // 编码响应
         let respBuf = ByteBuffer()
         var pairCount = 0i64
