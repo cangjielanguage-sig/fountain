@@ -57,8 +57,8 @@ public class SyncRegistry {
             heartbeatTimer = Timer.repeat(interval, interval, {
                 => selfRef.sendHeartbeat()
             })
+            log.info{"SyncRegistry heartbeat started (interval=${config.heartbeatIntervalSec}s)"}
         }
-        log.info{"SyncRegistry heartbeat started (interval=${config.heartbeatIntervalSec}s)"}
     }
 
     /**
