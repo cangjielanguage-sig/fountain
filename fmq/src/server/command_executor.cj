@@ -732,6 +732,8 @@ public class CommandExecutor {
             let decoded = decodeNodeId(body.payload)
             if (let Some(nodeId) <- decoded) {
                 if (replicationManager.onSlaveOf(nodeId)) {
+                    // P2-3: 为新 slave 创建 sync 队列，防止复制数据静默丢失
+                    queueManager.startAllSyncThreads()
                     log.info{"slave ${nodeId} connected"}
                     ProtocolMessage(Command.RESP(0), request.id,
                         MqBody("ok", []).toData())

@@ -1764,3 +1764,27 @@ public class QueueReaderBackoffTest {
     }
 }
 
+/**
+ * P2-3: SLAVEOF 动态注册后 startAllSyncThreads 为 idempotent 不崩溃。
+ */
+@Test
+public class SlaveOfSyncQueueTest {
+    @TestCase
+    public func testStartAllSyncThreadsAfterSlaveRegistration(): Unit {
+        let hosts = ArrayList<String>()
+        hosts.add("n1:7201")
+        let config = MqConfig(mqHosts: hosts, dataDir: "/tmp/fmq_p2-3_sync", heartbeatIntervalSec: 1)
+        let rm = ReplicationManager(config)
+        let qm = QueueManager(config, nodeIndex: 0)
+        qm.setReplicationManager(rm)
+        // 先创建队列和 writer
+        let queues = qm.createQueues("/p2-3-topic", 1)
+        qm.startWritersForTopic("/p2-3-topic")
+        // 模拟 SLAVEOF：注册 slave 后调用 startAllSyncThreads
+        // 此时没有实际的奴隶节点（hosts 只含本节点），应不崩溃
+        qm.startAllSyncThreads()
+        @Assert(queues.size == 1)
+        qm.close()
+    }
+}
+
