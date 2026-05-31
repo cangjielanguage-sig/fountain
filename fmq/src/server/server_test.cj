@@ -1628,6 +1628,52 @@ public class GetOrCreateQueuesConcurrentTest {
 }
 
 /**
+ * P2-2: getOrCreateQueues 已修复锁重入 — 验证有 ReplicationManager 时不死锁。
+ */
+@Test
+public class GetOrCreateQueuesNoDeadlockTest {
+    @TestCase
+    public func testGetOrCreateQueuesWithReplicationManagerDoesNotDeadlock(): Unit {
+        let hosts = ArrayList<String>()
+        hosts.add("n1:1")
+        let config = MqConfig(mqHosts: hosts, dataDir: "/tmp", heartbeatIntervalSec: 1)
+        let rm = ReplicationManager(config)
+        let qm = QueueManager(config, nodeIndex: 0)
+        qm.setReplicationManager(rm)
+        // P2-2: 若 startWriterAndReader 在锁内重入 synchronized(lock)，此处会死锁
+        let result = qm.getOrCreateQueues("/p2-2-nodl", 1)
+        @Assert(result.size == 1)
+        qm.close()
+    }
+}
+
+/**
+ * P2-2: startWriterAndReader 重复调用防御 — 第二次 startWritersForTopic 不崩溃。
+ */
+@Test
+public class StartWriterAndReaderDedupTest {
+    @TestCase
+    public func testSecondStartWritersForTopicDoesNotCrash(): Unit {
+        let hosts = ArrayList<String>()
+        hosts.add("n1:1")
+        let config = MqConfig(mqHosts: hosts, dataDir: "/tmp/fmq_p2-2-dup", heartbeatIntervalSec: 1)
+        let rm = ReplicationManager(config)
+        let qm = QueueManager(config, nodeIndex: 0)
+        qm.setReplicationManager(rm)
+        // 创建队列
+        let queues = qm.createQueues("/p2-2-dup", 1)
+        @Assert(queues.size == 1)
+        // 启动 writers
+        qm.startWritersForTopic("/p2-2-dup")
+        let writer = qm.getWriterForQueue(queues[0])
+        @Assert(writer.isSome())
+        // P2-2: 第二次 startWritersForTopic — 应跳过已存在的 writer（不崩溃）
+        qm.startWritersForTopic("/p2-2-dup")
+        qm.close()
+    }
+}
+
+/**
  * P2-6: 验证 handleConsume 跳过已关闭的队列。
  * handleConsume 遍历队列列表时跳过 isClosed() == true 的队列。
  * 关闭队列后 tryReadFromLog 应返回 None。

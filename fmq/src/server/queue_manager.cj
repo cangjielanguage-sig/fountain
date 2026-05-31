@@ -89,6 +89,7 @@ public class QueueManager {
      * 注意：不调用 createQueues（后者会重新获取同一锁导致死锁 P0-round23）。
      */
     public func getOrCreateQueues(topic: String, queueCount: Int64): ArrayList<MqQueue> {
+        var result = ArrayList<MqQueue>()
         synchronized(lock) {
             if (let Some(qs) <- queues.get(topic)) { return qs }
             let topicQueues = ArrayList<MqQueue>()
@@ -100,18 +101,17 @@ public class QueueManager {
                 }
             }
             queues[topic] = topicQueues
-            // 新 topic 的队列创建后才启动 writer（锁内 check-then-act 避免 TOCTOU）
-            for (q in topicQueues) {
-                let key = "${q.topic}:${q.index}"
-                if (writerMap.get(key).isNone()) {
-                    if (let Some(rm) <- replicationManager) {
-                        startWriterAndReader(q, rm)
-                    }
+            result = topicQueues  // 保存引用供锁外使用
+        }
+        // P2-2: 锁外启动 writers，避免与 startWriterAndReader 的 synchronized(lock) 重入
+            if (let Some(rm) <- replicationManager) {
+                for (q in result) {
+                    startWriterAndReader(q, rm)
                 }
             }
-            log.info{"created ${topicQueues.size} queues for topic ${topic} (node ${nodeIndex})"}
-            topicQueues
-        }
+            let count = result.size
+            log.info{"created ${count} queues for topic ${topic} (node ${nodeIndex})"}
+            result
     }
 
     /**
@@ -347,11 +347,16 @@ public class QueueManager {
     private func startWriterAndReader(q: MqQueue, rm: ReplicationManager): Unit {
         // P2-2: close 进行中时跳过新 writer 启动
         if (closed.load()) { log.warn{"skip startWriterAndReader for ${q}: queue manager is closed"}; return }
+        let key = "${q.topic}:${q.index}"
         let writer = QueueWriter(q, config, replicationManager: rm, queueSize: 1024)
-        // P29-1: synchronized 保护 writers 和 writerMap 的原子更新
-        synchronized(lock) {
+        // P2-2: 锁内检查是否已存在（防御 getOrCreateQueues 锁外调用导致的竞态），原子更新
+            synchronized(lock) {
+            if (writerMap.get(key).isSome()) {
+                // 另一个线程已经在当前 lock 持有期间创建了 writer，丢弃本 writer
+                return
+            }
             writers.add(writer)
-            writerMap["${q.topic}:${q.index}"] = writer
+            writerMap[key] = writer
         }
         spawn { writer.run() }
     }
