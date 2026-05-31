@@ -225,10 +225,10 @@ public class ConsumerLoopDeliveryIdTest {
     }
 
     @TestCase
-    public func testExtractQueueIndexWithColonInTopic(): Unit {
-        // topic 含 ':' 时，deliveryId 格式为 "topic:qIdx:groupId:offset"
-        // parts.size >= 4 时从倒数第3位取 queueIndex
-        @Assert(ConsumerLoop.extractQueueIndex("/a:b/c:3:g:5") == 3)
+    public func testExtractQueueIndexWithMultiSegmentTopic(): Unit {
+        // topic 多段路径不含 ':'（validateTopic 禁止），queueIndex 始终在 parts[1]
+        // deliveryId 格式: topic:queueIndex:groupId:offset[:sn]
+        @Assert(ConsumerLoop.extractQueueIndex("/a/b/c:3:g:5") == 3)
         @Assert(ConsumerLoop.extractQueueIndex("/:1:x:2") == 1)
         @Assert(ConsumerLoop.extractQueueIndex("normal:0:g:0") == 0)
     }
