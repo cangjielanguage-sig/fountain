@@ -396,8 +396,8 @@ public class ConsumerLoop {
      * 停止消费循环。
      */
     public func close(): Unit {
-        closed.store(true)
         synchronized(threadLock) {
+            closed.store(true)  // P2-1: 移入锁内，防止 start() 在 close() 未完成时覆盖 close 信号
             if (let Some(f) <- threadFuture) {
                 // P2-9: Future.get() 无 timeout，用 AtomicBool 轮询替代
                 var waited: Int64 = 0
