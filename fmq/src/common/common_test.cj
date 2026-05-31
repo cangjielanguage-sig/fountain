@@ -520,6 +520,17 @@ public class ForTestDefaultsTest {
         // 测试用 segment 大小 1MB，不同于生产环境 512MB
         @Assert(cfg.segmentMaxSize == 1024 * 1024)
     }
+
+    /**
+     * P4-1: heartbeatIntervalSec=0 的 MqConfig 仍然可正常构造，
+     * 刷新线程跳过由 MqCommand.exec 中的 guard 处理。
+     */
+    @TestCase
+    public func testConstructorAllowsZeroHeartbeatInterval(): Unit {
+        let hosts = hosts()
+        let cfg = MqConfig(mqHosts: hosts, heartbeatIntervalSec: 0)
+        @Assert(cfg.heartbeatIntervalSec == 0)
+    }
 }
 
 // ── COM-6: parseEnvList 直接单元测试 ──
