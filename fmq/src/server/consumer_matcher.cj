@@ -104,6 +104,16 @@ public class ConsumerMatcher {
             }
             registrations = remaining
             consumerIdIndex = newIndex
+            // P3-1: 清理已过期 group 的 roundRobinIndex，防止 unbounded 增长
+            let activeGroups = HashMap<String, Bool>()
+            for (r in registrations) {
+                activeGroups[r.groupId] = true
+            }
+            let staleGroups = ArrayList<String>()
+            for ((g, _) in roundRobinIndex) {
+                if (activeGroups.get(g).isNone()) { staleGroups.add(g) }
+            }
+            for (g in staleGroups) { roundRobinIndex.remove(g) }
         }
     }
 
