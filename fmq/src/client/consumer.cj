@@ -444,7 +444,7 @@ public class ConsumerLoop {
                                     sleep(Duration.millisecond * 100)
                                 }
                             }
-                            return true
+                            return false  // P3-4: 返回 false 让外层循环 sleep，避免紧密循环
                         }
                         let queueIndex = extractQueueIndex(deliveryId) ?? 0
                         let msg = Message(topic: topic, id: MessageID(),
