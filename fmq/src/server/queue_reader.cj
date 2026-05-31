@@ -30,6 +30,7 @@ public class QueueReader {
     // P3-2: 跟踪 stream 状态以避免每次 poll 都重建 stream 并重新解码 skip 条记录
     private var streamActive = false
     private var exhaustedCount: Int64 = 0
+    private var consecutiveZeroB: Int64 = 0  // 连续 0B entry，检测 mmap tail
 
     public init(queue: MqQueue) {
         this.queue = queue
@@ -53,15 +54,26 @@ public class QueueReader {
                 // P3-2: streamActive 时 skip=0（复用缓存 stream），避免 O(msgCount) 重建
                 let skip = if (streamActive) { 0 } else { msgCount }
                 if (let Some(data) <- queue.tryReadFromLog(skip)) {
-                    streamActive = true
-                    exhaustedCount = 0
-                    msgCount += 1
-                    log.debug{"read ${data.size} bytes from log for ${queue}"}
-                    // TODO: 此处应调用 ConsumerMatcher.matchTopic() 匹配消费者并投递
-                } else {
-                    streamActive = false
+                    if (data.size == 0) {
+                        // mmap tail: DefaultCodec 将零填充区解码为 0 字节数组
+                        consecutiveZeroB += 1
+                        if (consecutiveZeroB >= 3) {
+                            consecutiveZeroB = 0
+                            msgCount += 1  // 推进位置
+                        }
+                        streamActive = false  // 强制进入退避
+                    } else {
+                        consecutiveZeroB = 0
+                        streamActive = true
+                        exhaustedCount = 0
+                        msgCount += 1
+                        log.debug{"read ${data.size} bytes from log for ${queue}"}
+                    }
+                }
+                if (!streamActive) {
+                    consecutiveZeroB = 0
                     exhaustedCount += 1
-                    // P3-2: 指数退避减少 O(msgCount) stream 重建频率，避免空闲时 100ms 密集重扫
+                    // P3-2: 指数退避减少 O(msgCount) stream 重建频率
                     // 分段 sleep（每 100ms 检查 closed），确保 close() 可及时唤醒
                     let shift = if (exhaustedCount > 4) { 4 } else { exhaustedCount }
                     let totalWaitMs = 100i64 << shift
