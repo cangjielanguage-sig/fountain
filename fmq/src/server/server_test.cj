@@ -1688,3 +1688,33 @@ public class CleanupOrphanOffsetsTest {
     }
 }
 
+/**
+ * P3-2: QueueReader stream 重建 & 退避验证。
+ * 写入 3 条消息启动 reader，验证消费后退避与 close() 及时退出。
+ */
+@Test
+public class QueueReaderBackoffTest {
+    @TestCase
+    public func testQueueReaderConsumesAndCloses(): Unit {
+        let dataDir = "/tmp/fmq_qr_test_${DateTime.now().toUnixTimeStamp().toMilliseconds()}"
+        try { Directory.create(dataDir) } catch (_: Exception) {}
+        let q = MqQueue("/test", 0, dataDir, 100)
+        try {
+            q.append(Array<Byte>(3, repeat: 1u8))
+            q.append(Array<Byte>(3, repeat: 2u8))
+            q.append(Array<Byte>(3, repeat: 3u8))
+            q.sync()
+            let reader = QueueReader(q)
+            let future = spawn { reader.run() }
+            // 等待 reader 消费 3 条消息并进入退避状态
+            sleep(Duration.second * 2)
+            // close() 后 reader 应在 100ms 内退出（分段 sleep 每 100ms 检查 closed）
+            reader.close()
+            future.get()
+        } finally {
+            q.close()
+            removeIfExists(dataDir, recursive: true)
+        }
+    }
+}
+

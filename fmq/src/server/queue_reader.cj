@@ -62,9 +62,14 @@ public class QueueReader {
                     streamActive = false
                     exhaustedCount += 1
                     // P3-2: 指数退避减少 O(msgCount) stream 重建频率，避免空闲时 100ms 密集重扫
+                    // 分段 sleep（每 100ms 检查 closed），确保 close() 可及时唤醒
                     let shift = if (exhaustedCount > 4) { 4 } else { exhaustedCount }
-                    let waitMs = 100i64 << shift
-                    sleep(Duration.millisecond * waitMs)
+                    let totalWaitMs = 100i64 << shift
+                    var waitedMs: Int64 = 0
+                    while (waitedMs < totalWaitMs && !closed.load()) {
+                        sleep(Duration.millisecond * 100)
+                        waitedMs += 100
+                    }
                 }
             } catch (e: Exception) {
                 if (!closed.load()) {
