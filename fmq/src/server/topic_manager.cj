@@ -50,6 +50,11 @@ public class TopicManager {
                     for (i in 0..result.size) {
                         if (let Some(key) <- result.getKey(i)
                             && let Some(bytes) <- result.getValue(i)) {
+                            // P3-5: 防御异常短 key（prefix 结果为 /mq/topics/ 自身或损坏数据）
+                            if (key.size <= 11) {
+                                log.warn{"restore: skipping short key '${key}'"}
+                                continue
+                            }
                             let name = key[11..]  // 去掉 "/mq/topics/"
                             if (let Some(meta) <- DefaultCodec().decode<TopicMeta>(ByteBuffer(bytes))) {
                                 topics[name] = meta
