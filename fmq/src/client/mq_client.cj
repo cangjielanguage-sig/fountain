@@ -341,7 +341,11 @@ public class MqClient <: Resource {
         if (let Some(r) <- resp) {
             if (let Some(body) <- convert<MqBody>(r.data)) {
                 return decodeAllGroupList(body.payload)
+            } else {
+                log.warn{"listAllConsumerGroups: failed to decode response body"}
             }
+        } else {
+            log.warn{"listAllConsumerGroups: no response from server"}
         }
         ArrayList()
     }
