@@ -124,6 +124,5 @@ public class MqCliCommand <: SubCommand {
         println("  listDeadLetters --topic <t> --queue <q>")
         println("  redeliverDeadLetter --topic <t> --queue <q> --messageId <id>")
         println("  redeliverAllDeadLetters --topic <t> --queue <q>")
-        println("Try 'help'")
     }
 }
