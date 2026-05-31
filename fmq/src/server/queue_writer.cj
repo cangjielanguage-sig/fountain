@@ -40,6 +40,7 @@ public class QueueWriter {
     private let syncClosed = AtomicBool(false)
     private var syncThreads = ConcurrentHashMap<String, Future<Unit>>()
     private let syncLock = Mutex()  // 保护 syncThreads check-then-act
+    private let slaveConnLock = Mutex()  // P3-2: 保护 slaveConns check-and-create 原子性
     /** 缓存 (topic+queueIndex) 编码前缀，避免每次 syncToSlaves 重编码 */
     private let syncPrefix: Array<Byte>
 
@@ -201,18 +202,25 @@ public class QueueWriter {
                 }
             }
             if (conn.isNone()) {
-                try {
-                    let c = Client<ProtocolMessage, EncodedMessage, ProtocolMessage, MqBody, MessageID>.builder(
-                        queueSize: 16, socketCount: 1, host: host, port: port,
-                        idGetter: { msg => msg.id },
-                        checkDuration: Duration.second * 30,
-                        checker: { _ => true }
-                    ).noDelay(true).build()
-                    slaveConns[nodeId] = c
-                    conn = Some(c)
-                } catch (e: Exception) {
-                    log.warn{"syncToSlave: connect to ${nodeId}(${target}) failed: ${e.message}"}
-                    return false
+                // P3-2: synchronized 防止两线程同时创建连接 → 旧连接被覆盖且泄漏
+                synchronized(slaveConnLock) {
+                    if (let Some(existing) <- slaveConns.get(nodeId)) {
+                        conn = Some(existing)
+                    } else {
+                        try {
+                            let c = Client<ProtocolMessage, EncodedMessage, ProtocolMessage, MqBody, MessageID>.builder(
+                                queueSize: 16, socketCount: 1, host: host, port: port,
+                                idGetter: { msg => msg.id },
+                                checkDuration: Duration.second * 30,
+                                checker: { _ => true }
+                            ).noDelay(true).build()
+                            slaveConns[nodeId] = c
+                            conn = Some(c)
+                        } catch (e: Exception) {
+                            log.warn{"syncToSlave: connect to ${nodeId}(${target}) failed: ${e.message}"}
+                            return false
+                        }
+                    }
                 }
             }
             if (let Some(c) <- conn) {

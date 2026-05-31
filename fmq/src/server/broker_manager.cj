@@ -48,7 +48,8 @@ public class BrokerManager {
     private let log = LoggerFactory.getLogger('fountain::fmq.BrokerManager')
     private let closed = AtomicBool(false)
     private let nodes = ConcurrentHashMap<String, NodeHealth>()  // "host:port" → NodeHealth
-    private let connectionPool = ConcurrentHashMap<String, Client<ProtocolMessage, EncodedMessage, ProtocolMessage, MqBody, MessageID>>()  // 连接池：复用以减少 TCP 握手
+    private let connectionPool = ConcurrentHashMap<String, Client<ProtocolMessage, EncodedMessage, ProtocolMessage, MqBody, MessageID>>()
+    private let connectLock = Mutex()  // P3-2: 保护 connectionPool 的 check-and-create 原子性，防止 TOCTOU 孤儿连接
     private var heartbeatThread: ?Future<Unit> = None
     private let heartbeatStarted = AtomicBool(false)
     private let heartbeatLock = Mutex()
@@ -150,23 +151,27 @@ public class BrokerManager {
         }
         var conn: ?Client<ProtocolMessage, EncodedMessage, ProtocolMessage, MqBody, MessageID> = c
         if (conn.isNone()) {
-            // 创建新连接
-            var newConn: ?Client<ProtocolMessage, EncodedMessage, ProtocolMessage, MqBody, MessageID> = None
-            try {
-                let nc = Client<ProtocolMessage, EncodedMessage, ProtocolMessage, MqBody, MessageID>.builder(
-                    queueSize: 16, socketCount: 1,
-                    host: nh.host, port: nh.port,
-                    idGetter: { msg => msg.id },
-                    checkDuration: Duration.second * 30,
-                    checker: { _ => true }
-                ).noDelay(true).build()
-                connectionPool[key] = nc
-                newConn = Some(nc)
-                conn = newConn
-            } catch (e: Exception) {
-                log.warn{"create connection to ${nh.host}:${nh.port} failed: ${e.message}"}
-                recordFailure(nh)
-                return
+            // P3-2: synchronized 保护 check-and-create，防止两线程同时 create → 一份被覆盖/泄漏
+            synchronized(connectLock) {
+                if (let Some(existing) <- connectionPool.get(key)) {
+                    conn = Some(existing)
+                } else {
+                    try {
+                        let nc = Client<ProtocolMessage, EncodedMessage, ProtocolMessage, MqBody, MessageID>.builder(
+                            queueSize: 16, socketCount: 1,
+                            host: nh.host, port: nh.port,
+                            idGetter: { msg => msg.id },
+                            checkDuration: Duration.second * 30,
+                            checker: { _ => true }
+                        ).noDelay(true).build()
+                        connectionPool[key] = nc
+                        conn = Some(nc)
+                    } catch (e: Exception) {
+                        log.warn{"create connection to ${nh.host}:${nh.port} failed: ${e.message}"}
+                        recordFailure(nh)
+                        return
+                    }
+                }
             }
         }
         var localConn = conn  // capture let for catch

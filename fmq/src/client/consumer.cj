@@ -67,9 +67,10 @@ public class Consumer {
                             for ((deliveryId, labels, payload) in msgs) {
                                 if (dataFilter != "" && !Consumer.dataFilterMatch(dataFilter, payload)) {
                                     if (let Some(ackQi) <- ConsumerLoop.extractQueueIndex(deliveryId)) {
-                                        // P2-8: 重试 3 次确保 ACK 送达，防止无限重投循环
+                                        // P3-3: 重试 3 次 + 100ms 退避，确保 ACK 送达
                                         for (_ in 0..3) {
                                             if (Consumer.sendAck(client, deliveryId, topic, ackQi, "dataFilter")) { break }
+                                            sleep(Duration.millisecond * 100)
                                         }
                                     }
                                 } else {
@@ -118,6 +119,7 @@ public class Consumer {
         for ((deliveryId, topic, qi) in toAck) {
             for (_ in 0..3) {
                 if (Consumer.sendAck(client, deliveryId, topic, qi, "unsubscribed")) { break }
+                sleep(Duration.millisecond * 100)
             }
         }
         result
@@ -439,6 +441,7 @@ public class ConsumerLoop {
                             if (let Some(ackQi) <- extractQueueIndex(deliveryId)) {
                                 for (_ in 0..3) {
                                     if (Consumer.sendAck(client, deliveryId, topic, ackQi, "dataFilter")) { break }
+                                    sleep(Duration.millisecond * 100)
                                 }
                             }
                             return true
@@ -450,6 +453,7 @@ public class ConsumerLoop {
                         callback(msg)
                         for (_ in 0..3) {
                             if (Consumer.sendAck(client, deliveryId, topic, queueIndex, "callback")) { break }
+                            sleep(Duration.millisecond * 100)
                         }
                         return true
                     }
