@@ -17,42 +17,38 @@ package fountain::fmq.server
 
 import std.unittest.*
 import std.unittest.testmacro.*
+import fountain::f_data.base.*
+import std.sync.{AtomicInt64, AtomicBool}
+import std.fs.*
+import std.fs.removeIfExists
+
 
 @Test
-public class ConsumerMatcherTest {
+public class ConsumerMatcherRefreshTest {
     @TestCase
-    public func testGetRegistrationsEmpty(): Unit {
-        let cm = ConsumerMatcher()
-        let regs = cm.getRegistrations()
-        @Assert(regs.size == 0)
+    public func testRefreshRemovesStaleRegistrations(): Unit {
+        let cm = ConsumerMatcher(heartbeatIntervalSec: 1)  // 超时 = 3s
+        let reg = ConsumerRegistration(
+            consumerId: "stale-consumer", groupId: "stale-group",
+            matchModeStr: "Exact:/test",
+            labels: None, dataFilter: None,
+            lastHeartbeat: DateTime.now() - Duration.second * 10)  // 10s 前 → 过期
+        cm.register(reg)
+        @Assert(cm.matchTopic("/test").size == 1)
+        cm.refresh()
+        @Assert(cm.matchTopic("/test").size == 0)
     }
 
     @TestCase
-    public func testGetRegistrationsAfterRegister(): Unit {
-        let cm = ConsumerMatcher()
+    public func testRefreshKeepsActiveRegistrations(): Unit {
+        let cm = ConsumerMatcher(heartbeatIntervalSec: 5)  // 超时 = 15s
         let reg = ConsumerRegistration(
-            consumerId: "c1", groupId: "g1",
+            consumerId: "active-consumer", groupId: "active-group",
             matchModeStr: "Exact:/test",
             labels: None, dataFilter: None,
-            lastHeartbeat: DateTime.now())
+            lastHeartbeat: DateTime.now())  // 刚心跳
         cm.register(reg)
-        let regs = cm.getRegistrations()
-        @Assert(regs.size == 1)
-        @Assert(regs[0].getConsumerId() == "c1")
-        @Assert(regs[0].getGroupId() == "g1")
-    }
-
-    @TestCase
-    public func testGetRegistrationsAfterDeregister(): Unit {
-        let cm = ConsumerMatcher()
-        let reg = ConsumerRegistration(
-            consumerId: "c1", groupId: "g1",
-            matchModeStr: "Exact:/test",
-            labels: None, dataFilter: None,
-            lastHeartbeat: DateTime.now())
-        cm.register(reg)
-        cm.deregister("g1", "c1")
-        let regs = cm.getRegistrations()
-        @Assert(regs.size == 0)
+        cm.refresh()
+        @Assert(cm.matchTopic("/test").size == 1)
     }
 }

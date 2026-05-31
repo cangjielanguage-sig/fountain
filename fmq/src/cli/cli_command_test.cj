@@ -1,0 +1,138 @@
+/*
+Copyright (c) 2026 WuJingrun（吴京润）
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+ */
+package fountain::fmq.cli
+
+import std.unittest.*
+import std.unittest.testmacro.*
+
+/**
+ * CLI 命令单元测试。
+ * 测试 getArg 参数解析和 runCommand 命令分发逻辑。
+ * 不依赖 MQ 服务端连接。
+ */
+
+@Test
+public class CliCommandTest {
+    // ──────────────── getArg 测试 ────────────────
+
+    @TestCase
+    public func testGetArgReturnsValue(): Unit {
+        let args: Array<String> = ["--name", "/my-topic", "--queues", "3"]
+        @Assert(getArg(args, "--name") == Some("/my-topic"))
+    }
+
+    @TestCase
+    public func testGetArgReturnsValueForSecondFlag(): Unit {
+        let args: Array<String> = ["--name", "/my-topic", "--queues", "3"]
+        @Assert(getArg(args, "--queues") == Some("3"))
+    }
+
+    @TestCase
+    public func testGetArgReturnsNoneForMissingFlag(): Unit {
+        let args: Array<String> = ["--name", "/my-topic"]
+        @Assert(getArg(args, "--topic").isNone())
+    }
+
+    @TestCase
+    public func testGetArgFlagAtEndWithoutValue(): Unit {
+        let args: Array<String> = ["--name", "/t", "--queues"]
+        @Assert(getArg(args, "--queues").isNone())
+    }
+
+    @TestCase
+    public func testGetArgEmptyArgsReturnsNone(): Unit {
+        let args: Array<String> = []
+        @Assert(getArg(args, "--name").isNone())
+    }
+
+    @TestCase
+    public func testGetArgFlagIsValueOfPreviousFlag(): Unit {
+        let args: Array<String> = ["--name", "--topic", "/t"]
+        @Assert(getArg(args, "--name") == Some("--topic"))
+        @Assert(getArg(args, "--topic") == Some("/t"))
+    }
+
+    @TestCase
+    public func testGetArgMultipleSameFlagsReturnsFirst(): Unit {
+        let args: Array<String> = ["--name", "/a", "--name", "/b"]
+        @Assert(getArg(args, "--name") == Some("/a"))
+    }
+
+    @TestCase
+    public func testGetArgWithNumericArg(): Unit {
+        let args: Array<String> = ["--offset", "42"]
+        @Assert(getArg(args, "--offset") == Some("42"))
+    }
+
+    @TestCase
+    public func testGetArgWithDashPrefix(): Unit {
+        let args: Array<String> = ["--group", "my-group"]
+        @Assert(getArg(args, "--group") == Some("my-group"))
+    }
+
+    @TestCase
+    public func testGetArgTopicWithSpecialChars(): Unit {
+        let args: Array<String> = ["--topic", "/test/order/create"]
+        @Assert(getArg(args, "--topic") == Some("/test/order/create"))
+    }
+
+    @TestCase
+    public func testGetArgMessageId(): Unit {
+        let args: Array<String> = ["--messageId", "msg-001:abc"]
+        @Assert(getArg(args, "--messageId") == Some("msg-001:abc"))
+    }
+
+    @TestCase
+    public func testGetArgIgnoresNonMatchingFlags(): Unit {
+        let args: Array<String> = ["--other", "val", "--name", "topic"]
+        @Assert(getArg(args, "--name") == Some("topic"))
+    }
+
+    /**
+     * 调用 getArg 方法。
+     * CommandRunner.getArg 是 internal static，通过同包内调用访问。
+     */
+    private static func getArg(args: Array<String>, flag: String): ?String {
+        CommandRunner.getArg(args, flag)
+    }
+
+    /**
+     * CLI-5: 验证 validTopicName 校验逻辑。
+     */
+    @TestCase
+    public func testValidTopicNameRejectsEmpty(): Unit {
+        @Assert(!CommandRunner.validTopicName(""))
+    }
+
+    @TestCase
+    public func testValidTopicNameRejectsNoSlash(): Unit {
+        @Assert(!CommandRunner.validTopicName("no-slash"))
+    }
+
+    @TestCase
+    public func testValidTopicNameAcceptsValid(): Unit {
+        @Assert(CommandRunner.validTopicName("/valid/topic"))
+    }
+
+    /**
+     * P3-2: 验证 getArg 在双空格产生的空参数中仍正确工作。
+     */
+    @TestCase
+    public func testGetArgWithEmptyArgsBetweenSpaces(): Unit {
+        let args: Array<String> = ["createTopic", "", "--name", "/t"]
+        @Assert(getArg(args, "--name") == Some("/t"))
+    }
+}
