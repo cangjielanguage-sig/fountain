@@ -169,7 +169,9 @@ public class MqCommand <: SubCommand {
         }
         cleaner.close()
         if (let Some(f) <- refreshFuture) {
-            try { f.get() } catch (_: Exception) {}
+            try { f.get() } catch (e: Exception) {
+                log.warn{"consumer refresh thread exited with error: ${e.message}"}
+            }
         }
         brokerManager.close()
         deliveryManager.close()
