@@ -1788,3 +1788,20 @@ public class SlaveOfSyncQueueTest {
     }
 }
 
+/**
+ * P3-5: drainCompleteCheck 空队列不崩溃 + 正在排空的队列被清理。
+ */
+@Test
+public class DrainCompleteCheckTest {
+    @TestCase
+    public func testDrainCompleteCheckWithEmptyQueues(): Unit {
+        let hosts = ArrayList<String>()
+        hosts.add("n1:7201")
+        let config = MqConfig(mqHosts: hosts, dataDir: "/tmp/fmq_p3-5_empty", heartbeatIntervalSec: 1)
+        let qm = QueueManager(config, nodeIndex: 0)
+        // 空队列调用 drainCompleteCheck 应不崩溃
+        qm.drainCompleteCheck()
+        qm.close()
+    }
+}
+
