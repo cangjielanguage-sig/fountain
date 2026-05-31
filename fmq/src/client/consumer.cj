@@ -91,6 +91,8 @@ public class Consumer {
     /** P3-1: lock 外快照订阅列表，避免 msgLock 内获取 subLock 的锁顺序气味。 */
     private func dequeuePending(): ?Message {
         let subs = subscriber.getSubscriptions()
+        var toAck = ArrayList<(String, String, Int64)>()
+        var result: ?Message = None
         synchronized(msgLock) {
             while (pendingMessages.size > 0) {
                 let (topic, deliveryId, groupId, labels, payload) = pendingMessages[0]
@@ -101,13 +103,22 @@ public class Consumer {
                 }
                 if (active) {
                     let qi = ConsumerLoop.extractQueueIndex(deliveryId)
-                    return Some(Message(topic: topic, id: MessageID(),
+                    result = Some(Message(topic: topic, id: MessageID(),
                         queueIndex: qi, payload: payload, labels: labels,
                         producerId: deliveryId))
-                }  // else: 跳过已取消订阅的消息，继续下一条
+                    break
+                }
+                // P2-3: 已取消订阅的消息发送 ACK，防止服务端无限重试
+                let qi = ConsumerLoop.extractQueueIndex(deliveryId)
+                toAck.add((deliveryId, topic, qi))
             }
-            None
         }
+        for ((deliveryId, topic, qi) in toAck) {
+            for (_ in 0..3) {
+                if (Consumer.sendAck(client, deliveryId, topic, qi, "unsubscribed")) { break }
+            }
+        }
+        result
     }
 
     /**
@@ -451,7 +462,7 @@ public class ConsumerLoop {
      */
     internal static func extractQueueIndex(deliveryId: String): Int64 {
         let parts = deliveryId.split(':')
-        if (parts.size >= 3 && let Some(idx) <- Int64.tryParse(parts[parts.size - 3])) {
+        if (parts.size >= 2 && let Some(idx) <- Int64.tryParse(parts[1])) {
             idx
         } else {
             log.warn{"extractQueueIndex: malformed deliveryId '${deliveryId}', returning 0"}

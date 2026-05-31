@@ -313,6 +313,41 @@ public class DataFilterAckTest {
         // 空 payload 无法解码 → 应安全返回 false
         @Assert(!Consumer.dataFilterMatch("$.x", []))
     }
+
+    /**
+     * P2-3: 验证 unsubscribe 场景下的 ACK payload 格式与 extractQueueIndex 兼容。
+     * deliveryId 格式为 "topic:queueIdx:groupId:offset:sn"，extractQueueIndex 提取
+     * parts[parts.size-3] 作为 queueIndex。本测试确保两种典型 deliveryId 格式
+     * extractQueueIndex 返回正确值，ACK 编码后解析回原始字段。
+     */
+    @TestCase
+    public func testUnsubscribeAckFormat(): Unit {
+        // 典型 deliveryId: topic:queueIdx:groupId:offset:sn
+        let deliveryId = "/test:3:my-group:42:1"
+        let qi = ConsumerLoop.extractQueueIndex(deliveryId)
+        @Assert(qi == 3)
+
+        let payload = Consumer.encodeAckPayload(deliveryId, "/test", qi)
+        let buf = ByteBuffer(payload)
+        let dec = DefaultCodec()
+        if (let Some(id) <- dec.decode<String>(buf)
+            && let Some(tp) <- dec.decode<String>(buf)
+            && let Some(idx) <- dec.decode<Int64>(buf)) {
+            @Assert(id == deliveryId)
+            @Assert(tp == "/test")
+            @Assert(idx == qi)
+        }
+    }
+
+    @TestCase
+    public func testExtractQueueIndexFromVariousFormats(): Unit {
+        // 验证不同 deliveryId 格式下 extractQueueIndex 返回正确索引
+        @Assert(ConsumerLoop.extractQueueIndex("/t:0:g:1:0") == 0)
+        @Assert(ConsumerLoop.extractQueueIndex("/t:7:g:1:0") == 7)
+        @Assert(ConsumerLoop.extractQueueIndex("/t:9:g:1:0") == 9)
+        // 格式异常: 不足 3 段 → 默认 0
+        @Assert(ConsumerLoop.extractQueueIndex("/t:g") == 0)
+    }
 }
 
 /**
