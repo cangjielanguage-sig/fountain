@@ -119,13 +119,4 @@ public class ConsumerGroupManager {
     public func deregisterConsumer(groupId: String, consumerId: String): Unit {
         consumerMatcher.deregister(groupId, consumerId)
     }
-
-    /** 编码 MatchMode 为 ConsumerRegistration.matchModeStr 格式 */
-    private static func encodeMatchMode(mode: MatchMode): String {
-        match (mode) {
-            case Exact(p) => "Exact:${p}"
-            case Glob(p) => "Glob:${p}"
-            case Prefix(p) => "Prefix:${p}"
-        }
-    }
 }

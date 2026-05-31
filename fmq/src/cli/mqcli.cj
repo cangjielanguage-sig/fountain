@@ -62,16 +62,8 @@ public class MqCliCommand <: SubCommand {
                 if (l == "") { break }
                 let trimmed = l.trimAscii()
                 if (trimmed == "") { continue }
-                let args = trimmed.split(' ')
-                // P3-2: 跳过空参数
-                var filtered = ArrayList<String>()
-                for (a in args) {
-                    if (!a.isEmpty()) { filtered.add(a) }
-                }
-                if (filtered.size == 0) { continue }
-                // P3-6: single O(n) pass from ArrayList to Array
-                let finalArgs = Array<String>(filtered.size, repeat: "")
-                for (i in 0..filtered.size) { finalArgs[i] = filtered[i] }
+                let finalArgs = MqCliCommand.parseArgs(trimmed)
+                if (finalArgs.size == 0) { continue }
                 runCommand(finalArgs)
             } else { break }
         }
@@ -125,4 +117,39 @@ public class MqCliCommand <: SubCommand {
         println("  redeliverDeadLetter --topic <t> --queue <q> --messageId <id>")
         println("  redeliverAllDeadLetters --topic <t> --queue <q>")
     }
+
+    /**
+     * 引号感知的命令行参数解析。
+     * 支持双引号包裹含空格的参数，如 `createTopic --name "/topic with spaces"`。
+     * 单引号同理。
+     */
+    internal static func parseArgs(line: String): Array<String> {
+        let result = ArrayList<String>()
+        var chars = line.toRuneArray()
+        var i: Int64 = 0
+        while (i < chars.size) {
+            // 跳过空白
+            while (i < chars.size && (chars[i] == r' ' || chars[i] == r'\t')) { i += 1 }
+            if (i >= chars.size) { break }
+            var buf = StringBuilder()
+            if (chars[i] == r'"' || chars[i] == r'\'') {
+                let q = chars[i]
+                i += 1
+                while (i < chars.size && chars[i] != q) {
+                    buf.append(chars[i])
+                    i += 1
+                }
+                if (i < chars.size) { i += 1 }  // skip closing quote
+            } else {
+                while (i < chars.size && chars[i] != r' ' && chars[i] != r'\t') {
+                    buf.append(chars[i])
+                    i += 1
+                }
+            }
+            let arg = buf.toString()
+            if (!arg.isEmpty()) { result.add(arg) }
+        }
+        result.toArray()
+    }
+
 }

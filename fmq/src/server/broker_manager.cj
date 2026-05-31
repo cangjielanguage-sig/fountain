@@ -141,36 +141,41 @@ public class BrokerManager {
     private func pingNode(nh: NodeHealth): Unit {
         if (closed.load()) { return }
         let key = "${nh.host}:${nh.port}"
-        var c = connectionPool.get(key)
-        if (let Some(conn) <- c) {
-            if (conn.isClosed()) {
-                // 连接已关闭，从池中移除
-                connectionPool.remove(key)
-                c = None
+        // P3-8: get/check/remove/create 全路径包裹在 connectLock 中，
+        // 避免 remove 和 put 的交错导致删除另一线程刚创建的连接。
+        var conn: ?Client<ProtocolMessage, EncodedMessage, ProtocolMessage, MqBody, MessageID>
+        synchronized(connectLock) {
+            conn = connectionPool.get(key)
+            if (let Some(c) <- conn) {
+                if (c.isClosed()) {
+                    connectionPool.remove(key)
+                    conn = None
+                }
             }
+            // check-and-create 逻辑已在 connectLock 保护下
+            if (conn.isSome()) { return }  // 健康连接直接返回
+            // conn 为 None 表示无连接或连接已关闭，尝试创建
         }
-        var conn: ?Client<ProtocolMessage, EncodedMessage, ProtocolMessage, MqBody, MessageID> = c
-        if (conn.isNone()) {
-            // P3-2: synchronized 保护 check-and-create，防止两线程同时 create → 一份被覆盖/泄漏
-            synchronized(connectLock) {
-                if (let Some(existing) <- connectionPool.get(key)) {
-                    conn = Some(existing)
-                } else {
-                    try {
-                        let nc = Client<ProtocolMessage, EncodedMessage, ProtocolMessage, MqBody, MessageID>.builder(
-                            queueSize: 16, socketCount: 1,
-                            host: nh.host, port: nh.port,
-                            idGetter: { msg => msg.id },
-                            checkDuration: Duration.second * 30,
-                            checker: { _ => true }
-                        ).noDelay(true).build()
-                        connectionPool[key] = nc
-                        conn = Some(nc)
-                    } catch (e: Exception) {
-                        log.warn{"create connection to ${nh.host}:${nh.port} failed: ${e.message}"}
-                        recordFailure(nh)
-                        return
-                    }
+        // 锁外创建连接（网络 I/O 不持锁）
+        // 注意：释放 lock 后其他线程可能已创建连接，故创建前双重检查
+        synchronized(connectLock) {
+            if (let Some(existing) <- connectionPool.get(key)) {
+                conn = Some(existing)
+            } else {
+                try {
+                    let nc = Client<ProtocolMessage, EncodedMessage, ProtocolMessage, MqBody, MessageID>.builder(
+                        queueSize: 16, socketCount: 1,
+                        host: nh.host, port: nh.port,
+                        idGetter: { msg => msg.id },
+                        checkDuration: Duration.second * 30,
+                        checker: { _ => true }
+                    ).noDelay(true).build()
+                    connectionPool[key] = nc
+                    conn = Some(nc)
+                } catch (e: Exception) {
+                    log.warn{"create connection to ${nh.host}:${nh.port} failed: ${e.message}"}
+                    recordFailure(nh)
+                    return
                 }
             }
         }

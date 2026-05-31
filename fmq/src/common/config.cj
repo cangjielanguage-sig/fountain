@@ -108,6 +108,7 @@ public func readEnv(key: String): ?String {
     try {
         let v = env.getVariable(key)
         if (let Some(s) <- v) {
+            // 空字符串视为未设置（等价于未定义环境变量）
             if (s.isEmpty()) { None } else { Some(s) }
         } else {
             None

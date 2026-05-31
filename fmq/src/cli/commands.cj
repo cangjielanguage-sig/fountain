@@ -70,7 +70,10 @@ public class CommandRunner {
             var q: Int64 = 1
             var usingDefault = false
             if (let Some(s) <- queues) {
-                if (let Some(v) <- Int64.tryParse(s)) { q = v }
+                if (let Some(v) <- Int64.tryParse(s)) {
+                    if (v <= 0) { println("error: --queues must be positive, got ${v}"); return false }
+                    q = v
+                }
                 else { println("error: --queues must be a number, got '${s}'"); return false }
             } else { usingDefault = true }
             if (usingDefault) { println("using default queue count: 1") }
@@ -243,9 +246,13 @@ public class CommandRunner {
         if (let Some(t) <- topic && let Some(g) <- group && let Some(o) <- offset) {
             let client = if (let Some(c) <- getClient()) { c } else { return false }
             if (let Some(v) <- Int64.tryParse(o)) {
+                if (v < 0) { println("error: --offset must be non-negative, got ${v}"); return false }
                 var qi: Int64 = 0
                 if (let Some(qs) <- queue) {
-                    if (let Some(qv) <- Int64.tryParse(qs)) { qi = qv }
+                    if (let Some(qv) <- Int64.tryParse(qs)) {
+                        if (qv < 0) { println("error: --queue must be non-negative, got ${qv}"); return false }
+                        qi = qv
+                    }
                     else { println("error: --queue must be a number, got '${qs}'"); return false }
                 }
                 if (client.resetOffset(t, g, v, queueIndex: qi)) {

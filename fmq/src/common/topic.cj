@@ -28,10 +28,10 @@ public func validateTopic(topic: String): Bool {
     if (!topic.startsWith("/")) { return false }
     for (i in 0..topic.size) {
         let ch = topic[i]
-        if (ch >= 0x30u8 && ch <= 0x39u8) { continue }  // 0-9
-        if (ch >= 0x41u8 && ch <= 0x5Au8) { continue }  // A-Z
-        if (ch >= 0x61u8 && ch <= 0x7Au8) { continue }  // a-z
-        if (ch == 0x2Fu8 || ch == 0x5Fu8 || ch == 0x2Du8 || ch == 0x2Eu8) { continue }  // / _ - .
+        if (ch >= b'0' && ch <= b'9') { continue }  // 0-9
+        if (ch >= b'A' && ch <= b'Z') { continue }  // A-Z
+        if (ch >= b'a' && ch <= b'z') { continue }  // a-z
+        if (ch == b'/' || ch == b'_' || ch == b'-' || ch == b'.') { continue }  // / _ - .
         return false
     }
     true
@@ -73,8 +73,8 @@ public func decodePathToTopic(path: String): String {
     var i = 0
     while (i < path.size) {
         let ch = path[i]
-        if (ch == 0x5Fu8) {  // '_'
-            if (i + 1 < path.size && path[i + 1] == 0x5Fu8) {
+        if (ch == b'_') {  // '_'
+            if (i + 1 < path.size && path[i + 1] == b'_') {
                 parts.add(b'_')  // '__' → '_'
                 i += 2
             } else {

@@ -255,7 +255,7 @@ public class CommandExecutor {
                 let consumerId = "${groupId}@${request.id.pid}:${topic}"
                 let reg = ConsumerRegistration(
                     consumerId: consumerId, groupId: groupId,
-                    matchModeStr: modeToEncodedString(mode),
+                    matchModeStr: encodeMatchMode(mode),
                     labels: None, dataFilter: None,
                     lastHeartbeat: DateTime.now())
                 consumerMatcher.register(reg)
@@ -935,14 +935,6 @@ public class CommandExecutor {
             let dec = DefaultCodec()
             dec.decode<String>(buf)
         } catch (_: Exception) { None }
-    }
-
-    private static func modeToEncodedString(mode: MatchMode): String {
-        match (mode) {
-            case Exact(p) => "Exact:${p}"
-            case Glob(p) => "Glob:${p}"
-            case Prefix(p) => "Prefix:${p}"
-        }
     }
 
 }

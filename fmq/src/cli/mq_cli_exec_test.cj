@@ -46,4 +46,63 @@ public class MqCliExecTest {
         let result = MqCliCommand.runCommand([])
         @Assert(!result)
     }
+
+    /**
+     * P2-1: 引号感知参数解析 — 简单空格分隔。
+     */
+    @TestCase
+    public func testParseArgsSimple(): Unit {
+        let result = MqCliCommand.parseArgs("createTopic --name /test --queues 4")
+        @Assert(result.size == 6)
+        @Assert(result[0] == "createTopic")
+        @Assert(result[1] == "--name")
+        @Assert(result[2] == "/test")
+        @Assert(result[3] == "--queues")
+        @Assert(result[4] == "4")
+    }
+
+    /**
+     * P2-1: 引号感知参数解析 — 双引号内含空格。
+     */
+    @TestCase
+    public func testParseArgsDoubleQuoted(): Unit {
+        let result = MqCliCommand.parseArgs("createTopic --name \"/topic with spaces\"")
+        @Assert(result.size == 4)
+        @Assert(result[2] == "/topic with spaces")
+    }
+
+    /**
+     * P2-1: 引号感知参数解析 — 单引号内含空格。
+     */
+    @TestCase
+    public func testParseArgsSingleQuoted(): Unit {
+        let result = MqCliCommand.parseArgs("createTopic --name '/topic with spaces'")
+        @Assert(result.size == 4)
+        @Assert(result[2] == "/topic with spaces")
+    }
+
+    /**
+     * P2-1: 引号感知参数解析 — 连续空格和只有空格的输入。
+     */
+    @TestCase
+    public func testParseArgsWhitespace(): Unit {
+        let result = MqCliCommand.parseArgs("  createTopic   --name  /test  ")
+        @Assert(result.size == 4)
+        @Assert(result[0] == "createTopic")
+        @Assert(result[1] == "--name")
+        @Assert(result[2] == "/test")
+        @Assert(MqCliCommand.parseArgs("   ").size == 0)
+    }
+
+    /**
+     * P2-1: 引号感知参数解析 — 混合引号和非引号参数。
+     */
+    @TestCase
+    public func testParseArgsMixedQuoted(): Unit {
+        let result = MqCliCommand.parseArgs("resetOffset --topic \"/order/test\" --group mygroup --offset 100")
+        @Assert(result.size == 8)
+        @Assert(result[2] == "/order/test")
+        @Assert(result[4] == "mygroup")
+        @Assert(result[6] == "100")
+    }
 }

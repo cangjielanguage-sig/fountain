@@ -47,9 +47,9 @@ public class Consumer {
      * 遍历活跃订阅，发送 CONSUME 命令。
      */
     public func poll(timeout: Duration): ?Message {
-        // P2-2: 优先从缓存返回消息，减少 RPC (dequeuePending 内部已加锁)
-        if (let Some(msg) <- dequeuePending()) { return Some(msg) }
         let subs = subscriber.getSubscriptions()
+        // P2-2: 优先从缓存返回消息，减少 RPC (dequeuePending 内部已加锁)
+        if (let Some(msg) <- dequeuePending(subs)) { return Some(msg) }
         if (subs.size == 0) {
             return None
         }
@@ -67,11 +67,7 @@ public class Consumer {
                             for ((deliveryId, labels, payload) in msgs) {
                                 if (dataFilter != "" && !Consumer.dataFilterMatch(dataFilter, payload)) {
                                     if (let Some(ackQi) <- ConsumerLoop.extractQueueIndex(deliveryId)) {
-                                        // P3-3: 重试 3 次 + 100ms 退避，确保 ACK 送达
-                                        for (_ in 0..3) {
-                                            if (Consumer.sendAck(client, deliveryId, topic, ackQi, "dataFilter")) { break }
-                                            sleep(Duration.millisecond * 100)
-                                        }
+                                        Consumer.retryAck(client, deliveryId, topic, ackQi, "dataFilter")
                                     }
                                 } else {
                                     synchronized(msgLock) {
@@ -82,7 +78,7 @@ public class Consumer {
                         }
                     }
                     // dequeuePending 内部已加锁
-                    if (let Some(msg) <- dequeuePending()) { return Some(msg) }
+                    if (let Some(msg) <- dequeuePending(subs)) { return Some(msg) }
                 }
             }
         }
@@ -90,9 +86,8 @@ public class Consumer {
     }
 
     /** P2-2: 从缓存取出一条消息，提取 queueIndex 并构建 Message。 */
-    /** P3-1: lock 外快照订阅列表，避免 msgLock 内获取 subLock 的锁顺序气味。 */
-    private func dequeuePending(): ?Message {
-        let subs = subscriber.getSubscriptions()
+    /** P3-5: subs 由调用方传入，避免 poll() 内重复调用 getSubscriptions()。 */
+    private func dequeuePending(subs: ArrayList<(String, String, String, String)>): ?Message {
         var toAck = ArrayList<(String, String, Int64)>()
         var result: ?Message = None
         synchronized(msgLock) {
@@ -117,10 +112,7 @@ public class Consumer {
             }
         }
         for ((deliveryId, topic, qi) in toAck) {
-            for (_ in 0..3) {
-                if (Consumer.sendAck(client, deliveryId, topic, qi, "unsubscribed")) { break }
-                sleep(Duration.millisecond * 100)
-            }
+            Consumer.retryAck(client, deliveryId, topic, qi, "unsubscribed")
         }
         result
     }
@@ -139,8 +131,10 @@ public class Consumer {
             wrapper.add(dataTree)
             path.get(wrapper).next().isSome()
         } catch (e: Exception) {
-            log.warn{"dataFilterMatch decode failed: ${e.message}"}
-            false
+            // P3-1: 异常不按"过滤不匹配"处理——返回 true 递送消息到回调，
+            // 避免因解码器 BUG 或格式异常导致消息被静默丢弃。
+            log.error{"dataFilterMatch error, treating as match and delivering to callback: ${e.message}"}
+            true
         }
     }
 
@@ -181,6 +175,19 @@ public class Consumer {
         let req = ProtocolMessage(Command.ACK, MessageID(),
             MqBody("batch_ack", raw).toData())
         client.transfer(req.id, req, Duration.second * 10).isSome()
+    }
+
+    /**
+     * 带重试的 ACK 发送，最多 3 次 + 100ms 退避。
+     * 全部失败记录 warn 日志。
+     */
+    internal static func retryAck(client: Client<ProtocolMessage, EncodedMessage, ProtocolMessage, MqBody, MessageID>,
+                                  deliveryId: String, topic: String, queueIndex: Int64, reason: String): Unit {
+        for (_ in 0..3) {
+            if (Consumer.sendAck(client, deliveryId, topic, queueIndex, reason)) { return }
+            sleep(Duration.millisecond * 100)
+        }
+        Consumer.log.warn{"ACK failed after 3 retries (reason=${reason}), msg may be redelivered"}
     }
 
     // ───── 编码工具 ─────
@@ -410,9 +417,9 @@ public class ConsumerLoop {
                 if (!threadFinished.load()) {
                     log.warn{"ConsumerLoop thread did not exit within 5s, abandoning future"}
                 }
-                // P29-2: Future.tryGet() 非阻塞检查是否已完成，避免永久阻塞
-                if (f.tryGet().isSome()) {
-                    try { f.get() } catch (e: Exception) { log.warn{"ConsumerLoop future get: ${e.message}"} }
+                // P2-2: tryGet() 已消费 Future 值，不再调用 get() 避免双消费
+                if (f.tryGet().isNone() && !threadFinished.load()) {
+                    log.warn{"ConsumerLoop thread future not ready after wait"}
                 }
                 threadFuture = None
             }
@@ -451,10 +458,7 @@ public class ConsumerLoop {
                             queueIndex: queueIndex, payload: msgData, labels: labels,
                             producerId: deliveryId)
                         callback(msg)
-                        for (_ in 0..3) {
-                            if (Consumer.sendAck(client, deliveryId, topic, queueIndex, "callback")) { break }
-                            sleep(Duration.millisecond * 100)
-                        }
+                        Consumer.retryAck(client, deliveryId, topic, queueIndex, "callback")
                         return true
                     }
                 }
@@ -465,7 +469,7 @@ public class ConsumerLoop {
 
     /**
      * 从 deliveryId "topic:queueIndex:groupId:offset:sn" 提取 queueIndex。
-     * 从末尾第 3 个字段提取（兼容 topic 含 : 的场景）。
+     * queueIndex 固定为 parts[1]（topic 后的第二个字段），不用末尾反算。
      */
     internal static func extractQueueIndex(deliveryId: String): ?Int64 {
         let parts = deliveryId.split(':')
