@@ -206,31 +206,32 @@ public class DeregisterPayloadTest {
 
 /**
  * ConsumerLoop deliveryId 提取测试。
- * 验证 extractQueueIndex 正确解析 deliveryId。
+ * 验证 extractQueueIndex 正确解析 deliveryId，异常时返回 None。
  */
 @Test
 public class ConsumerLoopDeliveryIdTest {
     @TestCase
     public func testExtractQueueIndexFromDeliveryId(): Unit {
         // deliveryId 格式: "topic:queueIndex:groupId:offset"
-        @Assert(ConsumerLoop.extractQueueIndex("/order/create:0:group1:10") == 0)
-        @Assert(ConsumerLoop.extractQueueIndex("/order/create:3:groupA:0") == 3)
-        @Assert(ConsumerLoop.extractQueueIndex("/a/b/c:7:myGroup:5") == 7)
+        @Assert(ConsumerLoop.extractQueueIndex("/order/create:0:group1:10") == Some(0))
+        @Assert(ConsumerLoop.extractQueueIndex("/order/create:3:groupA:0") == Some(3))
+        @Assert(ConsumerLoop.extractQueueIndex("/a/b/c:7:myGroup:5") == Some(7))
     }
 
     @TestCase
-    public func testExtractQueueIndexWithInvalidFormatReturns0(): Unit {
-        @Assert(ConsumerLoop.extractQueueIndex("noColons") == 0)
-        @Assert(ConsumerLoop.extractQueueIndex("one:paren") == 0)
+    public func testExtractQueueIndexWithInvalidFormatReturnsNone(): Unit {
+        // P3-4: 格式异常 → 返回 None 而非合法值 0
+        @Assert(ConsumerLoop.extractQueueIndex("noColons").isNone())
+        @Assert(ConsumerLoop.extractQueueIndex("one:paren").isNone())
     }
 
     @TestCase
     public func testExtractQueueIndexWithMultiSegmentTopic(): Unit {
         // topic 多段路径不含 ':'（validateTopic 禁止），queueIndex 始终在 parts[1]
         // deliveryId 格式: topic:queueIndex:groupId:offset[:sn]
-        @Assert(ConsumerLoop.extractQueueIndex("/a/b/c:3:g:5") == 3)
-        @Assert(ConsumerLoop.extractQueueIndex("/:1:x:2") == 1)
-        @Assert(ConsumerLoop.extractQueueIndex("normal:0:g:0") == 0)
+        @Assert(ConsumerLoop.extractQueueIndex("/a/b/c:3:g:5") == Some(3))
+        @Assert(ConsumerLoop.extractQueueIndex("/:1:x:2") == Some(1))
+        @Assert(ConsumerLoop.extractQueueIndex("normal:0:g:0") == Some(0))
     }
 }
 
@@ -324,29 +325,30 @@ public class DataFilterAckTest {
     public func testUnsubscribeAckFormat(): Unit {
         // 典型 deliveryId: topic:queueIdx:groupId:offset:sn
         let deliveryId = "/test:3:my-group:42:1"
-        let qi = ConsumerLoop.extractQueueIndex(deliveryId)
-        @Assert(qi == 3)
-
-        let payload = Consumer.encodeAckPayload(deliveryId, "/test", qi)
-        let buf = ByteBuffer(payload)
-        let dec = DefaultCodec()
-        if (let Some(id) <- dec.decode<String>(buf)
-            && let Some(tp) <- dec.decode<String>(buf)
-            && let Some(idx) <- dec.decode<Int64>(buf)) {
-            @Assert(id == deliveryId)
-            @Assert(tp == "/test")
-            @Assert(idx == qi)
+        if (let Some(qi) <- ConsumerLoop.extractQueueIndex(deliveryId)) {
+            let payload = Consumer.encodeAckPayload(deliveryId, "/test", qi)
+            let buf = ByteBuffer(payload)
+            let dec = DefaultCodec()
+            if (let Some(id) <- dec.decode<String>(buf)
+                && let Some(tp) <- dec.decode<String>(buf)
+                && let Some(idx) <- dec.decode<Int64>(buf)) {
+                @Assert(id == deliveryId)
+                @Assert(tp == "/test")
+                @Assert(idx == qi)
+            }
+        } else {
+            @Assert(false)
         }
     }
 
     @TestCase
     public func testExtractQueueIndexFromVariousFormats(): Unit {
         // 验证不同 deliveryId 格式下 extractQueueIndex 返回正确索引
-        @Assert(ConsumerLoop.extractQueueIndex("/t:0:g:1:0") == 0)
-        @Assert(ConsumerLoop.extractQueueIndex("/t:7:g:1:0") == 7)
-        @Assert(ConsumerLoop.extractQueueIndex("/t:9:g:1:0") == 9)
-        // 格式异常: 不足 3 段 → 默认 0
-        @Assert(ConsumerLoop.extractQueueIndex("/t:g") == 0)
+        @Assert(ConsumerLoop.extractQueueIndex("/t:0:g:1:0") == Some(0))
+        @Assert(ConsumerLoop.extractQueueIndex("/t:7:g:1:0") == Some(7))
+        @Assert(ConsumerLoop.extractQueueIndex("/t:9:g:1:0") == Some(9))
+        // 格式异常: 不足 2 段 → None
+        @Assert(ConsumerLoop.extractQueueIndex("/t:g").isNone())
     }
 }
 
@@ -527,9 +529,9 @@ public class AckQueueIndexTest {
 
     @TestCase
     public func testExtractQueueIndexFromDeliveryId(): Unit {
-        @Assert(ConsumerLoop.extractQueueIndex("/a:0:g:0") == 0)
-        @Assert(ConsumerLoop.extractQueueIndex("/b:5:g:10") == 5)
-        @Assert(ConsumerLoop.extractQueueIndex("/c/d:7:x:3") == 7)
+        @Assert(ConsumerLoop.extractQueueIndex("/a:0:g:0") == Some(0))
+        @Assert(ConsumerLoop.extractQueueIndex("/b:5:g:10") == Some(5))
+        @Assert(ConsumerLoop.extractQueueIndex("/c/d:7:x:3") == Some(7))
     }
 
     @TestCase
@@ -537,20 +539,23 @@ public class AckQueueIndexTest {
         // 模拟 ConsumerLoop dataFilter 不匹配时 ACK: deliveryId="/topic:3:g:5"
         // 验证 encodeAckPayload 使用 queueIndex=3（提取自 deliveryId）而非 0
         let deliveryId = "/topic:3:g:5"
-        let queueIndex = ConsumerLoop.extractQueueIndex(deliveryId)
-        @Assert(queueIndex == 3)
+        if (let Some(queueIndex) <- ConsumerLoop.extractQueueIndex(deliveryId)) {
+            @Assert(queueIndex == 3)
 
-        // 使用提取的 queueIndex 编码 ACK
-        let payload = Consumer.encodeAckPayload(deliveryId, "/topic", queueIndex)
+            // 使用提取的 queueIndex 编码 ACK
+            let payload = Consumer.encodeAckPayload(deliveryId, "/topic", queueIndex)
 
-        // 解码验证
-        let buf = ByteBuffer(payload)
-        let dec = DefaultCodec()
-        if (let Some(id) <- dec.decode<String>(buf)
-            && let Some(tp) <- dec.decode<String>(buf)
-            && let Some(qi) <- dec.decode<Int64>(buf)) {
-            @Assert(qi == 3)
-            @Assert(qi != 0)  // 确保不是硬编码的 0
+            // 解码验证
+            let buf = ByteBuffer(payload)
+            let dec = DefaultCodec()
+            if (let Some(id) <- dec.decode<String>(buf)
+                && let Some(tp) <- dec.decode<String>(buf)
+                && let Some(qi) <- dec.decode<Int64>(buf)) {
+                @Assert(qi == 3)
+                @Assert(qi != 0)  // 确保不是硬编码的 0
+            } else {
+                @Assert(false)
+            }
         } else {
             @Assert(false)
         }

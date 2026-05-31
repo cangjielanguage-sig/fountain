@@ -66,10 +66,11 @@ public class Consumer {
                         if (let Some(groupMap) <- perTopic.get(topic) && let Some(msgs) <- groupMap.get(groupId)) {
                             for ((deliveryId, labels, payload) in msgs) {
                                 if (dataFilter != "" && !Consumer.dataFilterMatch(dataFilter, payload)) {
-                                    let ackQi = ConsumerLoop.extractQueueIndex(deliveryId)
-                                    // P2-8: 重试 3 次确保 ACK 送达，防止无限重投循环
-                                    for (_ in 0..3) {
-                                        if (Consumer.sendAck(client, deliveryId, topic, ackQi, "dataFilter")) { break }
+                                    if (let Some(ackQi) <- ConsumerLoop.extractQueueIndex(deliveryId)) {
+                                        // P2-8: 重试 3 次确保 ACK 送达，防止无限重投循环
+                                        for (_ in 0..3) {
+                                            if (Consumer.sendAck(client, deliveryId, topic, ackQi, "dataFilter")) { break }
+                                        }
                                     }
                                 } else {
                                     synchronized(msgLock) {
@@ -102,15 +103,16 @@ public class Consumer {
                     if (g == groupId && t == topic) { active = true; break }
                 }
                 if (active) {
-                    let qi = ConsumerLoop.extractQueueIndex(deliveryId)
+                    let qi = ConsumerLoop.extractQueueIndex(deliveryId) ?? 0
                     result = Some(Message(topic: topic, id: MessageID(),
                         queueIndex: qi, payload: payload, labels: labels,
                         producerId: deliveryId))
                     break
                 }
                 // P2-3: 已取消订阅的消息发送 ACK，防止服务端无限重试
-                let qi = ConsumerLoop.extractQueueIndex(deliveryId)
-                toAck.add((deliveryId, topic, qi))
+                if (let Some(qi) <- ConsumerLoop.extractQueueIndex(deliveryId)) {
+                    toAck.add((deliveryId, topic, qi))
+                }
             }
         }
         for ((deliveryId, topic, qi) in toAck) {
@@ -434,13 +436,14 @@ public class ConsumerLoop {
                     if (msgs.size > 0) {
                         let (deliveryId, labels, msgData) = msgs[0]
                         if (dataFilter != "" && !Consumer.dataFilterMatch(dataFilter, msgData)) {
-                            let ackQi = extractQueueIndex(deliveryId)
-                            for (_ in 0..3) {
-                                if (Consumer.sendAck(client, deliveryId, topic, ackQi, "dataFilter")) { break }
+                            if (let Some(ackQi) <- extractQueueIndex(deliveryId)) {
+                                for (_ in 0..3) {
+                                    if (Consumer.sendAck(client, deliveryId, topic, ackQi, "dataFilter")) { break }
+                                }
                             }
                             return true
                         }
-                        let queueIndex = extractQueueIndex(deliveryId)
+                        let queueIndex = extractQueueIndex(deliveryId) ?? 0
                         let msg = Message(topic: topic, id: MessageID(),
                             queueIndex: queueIndex, payload: msgData, labels: labels,
                             producerId: deliveryId)
@@ -460,13 +463,13 @@ public class ConsumerLoop {
      * 从 deliveryId "topic:queueIndex:groupId:offset:sn" 提取 queueIndex。
      * 从末尾第 3 个字段提取（兼容 topic 含 : 的场景）。
      */
-    internal static func extractQueueIndex(deliveryId: String): Int64 {
+    internal static func extractQueueIndex(deliveryId: String): ?Int64 {
         let parts = deliveryId.split(':')
         if (parts.size >= 2 && let Some(idx) <- Int64.tryParse(parts[1])) {
-            idx
+            Some(idx)
         } else {
-            log.warn{"extractQueueIndex: malformed deliveryId '${deliveryId}', returning 0"}
-            0
+            log.warn{"extractQueueIndex: malformed deliveryId '${deliveryId}', returning None"}
+            None
         }
     }
 
