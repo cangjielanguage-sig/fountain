@@ -6,8 +6,8 @@
 [workspace]
   version = "1.0.45"
   members=["./boot", "./user"]
-  compile-option = "-O2 --lto=full --dy-std -Woff unused"
-  override-compile-option = "-O2 --lto=full --dy-std -Woff unused"
+  compile-option = "-O2 --dy-std -Woff unused"
+  override-compile-option = "-O2 --dy-std -Woff unused"
 
 [profile.build]
   incremental = true
