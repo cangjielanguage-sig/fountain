@@ -8,8 +8,8 @@
   organization = "fountain"
   description = "demo for how to develop by fountain "
   members=["./boot", "./user"]
-  compile-option = "-O2 --lto=full --dy-std -Woff unused"
-  override-compile-option = "-O2 --lto=full --dy-std -Woff unused"
+  compile-option = "-O2 --dy-std -Woff unused"
+  override-compile-option = "-O2 --dy-std -Woff unused"
 
 [profile.build]
   incremental = true
