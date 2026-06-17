@@ -18,12 +18,16 @@ package fountain::f_base
 foreign {
     func memcpy(dest: CPointer<Unit>, src: CPointer<Unit>, n: UIntNative): CPointer<Unit>
 
+    @When[os == "Linux"]
     func getpagesize(): IntNative
 }
 /**
  * 当前系统内存页大小
  */
+@When[os == "Linux"]
 public let MEM_PAGE_SIZE: Int64 = unsafe { Int64(getpagesize()) }
+@When[os != "Linux"]
+public let MEM_PAGE_SIZE: Int64 = 4096
 /**
  * null void*
  */
