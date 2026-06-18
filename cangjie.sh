@@ -69,27 +69,7 @@ cangjie_env(){
   cp ~/.cjpm/tools/config/*.json $CANGJIE_HOME/tools/config/
   cjc -v
 }
-cjpub(){
-  if [[ "$2" == "" ]]; then
-    SECONDS=0
-    sed -E -i "s/ version ?= ?\".+\"/ version = \"$1\"/g" cjpm.toml
-    sed -E -i.bak "s/\{path ?= ?\".+\"\}/\"$1\"/g" cjpm.toml
-    cjpm clean
-    rm cjpm.lock
-    cjpm update
-    cjpm bundle --skip-lint
-    cjpm publish
-    mv cjpm.toml.bak cjpm.toml
-    echo ${PWD##*/}耗时：$SECONDS秒，完成于：$(date)
-    echo -e "\a" 
-  else
-    curdir=`pwd`
-    echo $2
-    cd $2
-    cjpub $1 
-    cd $curdir
-  fi
-}
+
 cjsetup(){
   declare -A map
   map['sdk_x64-1.1.0-beta.23']='https://cangjie-lang.cn/v1/files/auth/downLoad?nsId=142267&fileName=cangjie-sdk-linux-x64-1.1.0-beta.23.tar.gz&objectKey=69b7a52a6e8ed61e6e07fd2c'
@@ -137,42 +117,10 @@ cj(){
     cd $CJPM_INSTALL
     ;;
   publish)
-    curdir=$(pwd)
-    for d in `cat .modules`; do 
-        echo "正在执行：$d"
-	url="https://pkg.cangjie-lang.cn/v1/artifact/getPackageMetadata?group=fountain&moduleName=$d&version=$2"
-	existed=$(curl_output=$(curl $url) && echo $curl_output | jq -e '.code == 200 and .msg == "success"')
-	if [[ "$existed" == "true" ]]; then
-            continue
-        fi
-        cd $d
-	cj bundle $2
-	cd ..
-        echo "check url $url"
-        a=0
-        b=1
-        sleep $b
-	sum=$b
-        until curl_output=$(curl $url) && echo $curl_output | jq -e '.code == 200 and .msg == "success"' &> /dev/null; do
-      	     # 计算下一次等待时间（斐波那契数列）
-             next_wait_time=$((a + b))
-             a=$b
-	     b=$next_wait_time
-	     echo "$(date '+%Y-%m-%d %H:%M:%S') - 检查制品 $d 失败或返回码不为 success，当前已等待${sum} 分，${next_wait_time} 秒后重试..."
-             echo "$(date '+%Y-%m-%d %H:%M:%S') - 服务器返回: $curl_output"
-             sleep $next_wait_time
-	     sum=$((sum + next_wait_time))
-        done
-	min=$((sum/60))
-	echo "制品$d 一共等待$min 分"
-	echo "$d	$sum" >> $curdir/.pub_latency
-    done
-    sed -E -i "s|(/package/fountain::f_[a-z]+/)[0-9]+\.[0-9]+\.[0-9]+(/readme)|\1$2\2|g" README.md
-    cj bundle $2
-    echo $SECONDS
-    ;;
-  bundle)
-    cjpub $2
+    sed -E "s/fountain\([0-9]+\.[0-9]+\.[0-9]+\)/fountain($1)/g" ./f_version/src/FountainVersion.cj
+    fboot pub $1
+    git add .
+    git commit -m"升级版本：$1"
     ;;
   setup)
     cjsetup $3 $4
