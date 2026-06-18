@@ -9,8 +9,12 @@
   output-type = "executable"
   src-dir = ""
   target-dir = ""
-  compile-option = "--static --static-std"
+#  compile-option = "--static --static-std"
 #  override-compile-option = "--dy-std"
+
+  compile-option = "--dy-std"
+  override-compile-option = "--dy-std"
+
   organization = "fountain"
   version = "1.1.4"
   package-configuration = {}
@@ -25,11 +29,11 @@
 
 [target]
 [target.x86_64-unknown-linux-gnu]
-  compile-option = "--lto=full -ldl -O2"
-  override-compile-option = "--lto=full -ldl -O2"
+  compile-option = "--lto=full --dy-std -ldl -O2"
+  override-compile-option = "--lto=full --dy-std -ldl -O2"
 [target.aarch64-unknown-linux-gnu]
-  compile-option = "--lto=full -ldl -O2"
-  override-compile-option = "--lto=full -ldl -O2"
+  compile-option = "--lto=full --dy-std -ldl -O2"
+  override-compile-option = "--lto=full --dy-std -ldl -O2"
 [target.x86_64-w64-mingw32]
   compile-option = "--dy-std -lcrypt32"
   override-compile-option = "--dy-std -lcrypt32"
