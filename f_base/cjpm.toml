@@ -1,5 +1,5 @@
 [package]
-  cjc-version = "1.1.0"
+  cjc-version = "1.2.0"
   compile-option = "--dy-std"
   override-compile-option = "--dy-std"
   description = "一些Iterator扩展，enum OS, 不需要使用unsafe就能获得字符串原始字节数组的字符串扩展, 不需要使用unsafe就能得到ArrayList原始数组的ArrayList扩展, extend Option, extend Array, extend Range, extend Number, extend String, extend ThreadLocal, HashBuilder, StringGenerator，etc."
@@ -9,7 +9,7 @@
   output-type = "dynamic"
   src-dir = ""
   target-dir = ""
-  version = "1.1.4"
+  version = "1.2.0"
   package-configuration = {}
   category = ["Utility"]
   license = ["Apache-2.0"]

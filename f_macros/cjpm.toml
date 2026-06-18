@@ -2,7 +2,7 @@
   "fountain::f_base" = {path = "../f_base"}
   "fountain::f_exception" = {path = "../f_exception"}
 [package]
-  cjc-version = "1.1.0"
+  cjc-version = "1.2.0"
   compile-option = "--dy-std"
   override-compile-option = "--dy-std"
   description = "宏工具API"
@@ -12,7 +12,7 @@
   output-type = "dynamic"
   src-dir = ""
   target-dir = ""
-  version = "1.1.4"
+  version = "1.2.0"
   package-configuration = {}
   category = ["Utility"]
   license = ["Apache-2.0"]

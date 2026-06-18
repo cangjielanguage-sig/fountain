@@ -2,7 +2,7 @@
   "fountain::f_app" = {path = "../f_app"}
 
 [package]
-  cjc-version = "1.1.0"
+  cjc-version = "1.2.0"
   description = "依赖fountain的应用项目启动程序"
   link-option = ""
   name = "fboot"
@@ -16,7 +16,7 @@
   override-compile-option = "--dy-std"
 
   organization = "fountain"
-  version = "1.1.4"
+  version = "1.2.0"
   package-configuration = {}
   category = ["Utility"]
   license = ["Apache-2.0"]

@@ -9,7 +9,7 @@
   "fountain::f_regex" = {path = "../f_regex"}
   "fountain::f_time" = {path = "../f_time"}
 [package]
-  cjc-version = "1.1.0"
+  cjc-version = "1.2.0"
   compile-option = "--dy-std"
   override-compile-option = "--dy-std"
   description = "数据复制、数据验证"
@@ -19,7 +19,7 @@
   output-type = "dynamic"
   src-dir = ""
   target-dir = ""
-  version = "1.1.4"
+  version = "1.2.0"
   package-configuration = {}
   category = ["Utility"]
   license = ["Apache-2.0"]

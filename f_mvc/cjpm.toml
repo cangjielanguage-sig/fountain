@@ -18,7 +18,7 @@
   "fountain::f_regex" = {path = "../f_regex"}
   "fountain::f_util" = {path = "../f_util"}
 [package]
-  cjc-version = "1.1.0"
+  cjc-version = "1.2.0"
   compile-option = "--dy-std --enable-eh --experimental"
   override-compile-option = "--dy-std"
   description = "MVC"
@@ -28,7 +28,7 @@
   output-type = "dynamic"
   src-dir = ""
   target-dir = ""
-  version = "1.1.4"
+  version = "1.2.0"
   package-configuration = {}
   category = ["Utility"]
   license = ["Apache-2.0"]

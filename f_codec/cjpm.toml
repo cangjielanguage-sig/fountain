@@ -1,9 +1,9 @@
 [package]
-  cjc-version = "1.1.0"
+  cjc-version = "1.2.0"
   name = "f_codec"
   organization="fountain"
   description = "编解码器"
-  version = "1.1.4"
+  version = "1.2.0"
   target-dir = ""
   src-dir = ""
   output-type = "dynamic"

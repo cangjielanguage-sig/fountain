@@ -6,7 +6,7 @@
   "fountain::f_protocol" = {path = "../f_protocol"}
 
 [package]
-  cjc-version = "1.1.0"
+  cjc-version = "1.2.0"
   compile-option = "--dy-std"
   override-compile-option = "--dy-std"
   description = "事件驱动的网络通讯模块"
@@ -16,7 +16,7 @@
   output-type = "dynamic"
   src-dir = ""
   target-dir = ""
-  version = "1.1.4"
+  version = "1.2.0"
   package-configuration = {}
   category = ["Utility"]
   license = ["Apache-2.0"]

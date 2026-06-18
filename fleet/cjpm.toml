@@ -12,7 +12,7 @@
   "fountain::f_util" = {path = "../f_util"}
 
 [package]
-  cjc-version = "1.1.0"
+  cjc-version = "1.2.0"
   description = "数据同步模块，可以用于配置、元数据注册等"
   link-option = ""
   name = "fleet"
@@ -22,7 +22,7 @@
   compile-option = "--dy-std"
   override-compile-option = "--dy-std"
   organization = "fountain"
-  version = "1.1.4"
+  version = "1.2.0"
   package-configuration = {}
   category = ["Utility"]
   license = ["Apache-2.0"]

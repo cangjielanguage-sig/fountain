@@ -5,7 +5,7 @@
   "fountain::f_random" = {path = "../f_random"}
 
 [package]
-  cjc-version = "1.1.0"
+  cjc-version = "1.2.0"
   compile-option = "--dy-std"
   override-compile-option = "--dy-std"
   description = "负载均衡、限流算法、标准库尚不支持的并发集合和标准库并发集合扩展"
@@ -15,7 +15,7 @@
   output-type = "dynamic"
   src-dir = ""
   target-dir = ""
-  version = "1.1.4"
+  version = "1.2.0"
   package-configuration = {}
   category = ["Utility"]
   license = ["Apache-2.0"]

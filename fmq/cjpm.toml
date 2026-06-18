@@ -13,7 +13,7 @@
   "fountain::f_app" = {path = "../f_app"}
 
 [package]
-  cjc-version = "1.1.0"
+  cjc-version = "1.2.0"
   compile-option = "--dy-std"
   override-compile-option = "--dy-std"
   description = "消息队列"

@@ -1,9 +1,9 @@
 [package]
-  cjc-version = "1.1.0"
+  cjc-version = "1.2.0"
   name = "f_rx"
   organization = "fountain"
   description = "反应式编程API"
-  version = "1.1.4"
+  version = "1.2.0"
   target-dir = ""
   src-dir = ""
   output-type = "dynamic"
