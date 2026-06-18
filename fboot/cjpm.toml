@@ -9,8 +9,7 @@
   output-type = "executable"
   src-dir = ""
   target-dir = ""
-#  compile-option = "--static --static-std"
-#  override-compile-option = "--dy-std"
+  # compile-option = "--static --static-std"
 
   compile-option = "--dy-std"
   override-compile-option = "--dy-std"
@@ -31,6 +30,9 @@
 [target.x86_64-unknown-linux-gnu]
   compile-option = "--lto=full --dy-std -ldl -O2"
   override-compile-option = "--lto=full --dy-std -ldl -O2"
+  
+  # compile-option = "--lto=full -ldl -O2"
+  # override-compile-option = "--lto=full -ldl -O2"
 [target.aarch64-unknown-linux-gnu]
   compile-option = "--lto=full --dy-std -ldl -O2"
   override-compile-option = "--lto=full --dy-std -ldl -O2"
