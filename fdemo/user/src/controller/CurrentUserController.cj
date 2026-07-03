@@ -16,11 +16,11 @@ limitations under the License.
 package fountain::user.controller
 
 import std.reflect.*
-import stdx.encoding.json.*
 // import fountain::fountain.aspect.*
 // import fountain::fountain.aspect.macros.*
 // import fountain::fountain.bean.*
 // import fountain::fountain.bean.macros.*
+import fountain::fountain.data.*
 import fountain::fountain.mvc.*
 import fountain::fountain.mvc.macros.*
 import user.service.UserService

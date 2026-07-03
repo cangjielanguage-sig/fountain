@@ -16,9 +16,9 @@ limitations under the License.
 package fountain::user.util.auth
 
 import std.convert.*
-import stdx.encoding.json.*
 import fountain::fountain.bean.*
 import fountain::fountain.bean.macros.*
+import fountain::fountain.data.*
 import fountain::fountain.mvc.*
 import user.util.*
 

@@ -12,22 +12,19 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
- */
-package fountain::fmq.server
+*/
+package fountain::f_data.exception
 
-import std.unittest.*
-import std.unittest.testmacro.*
-import fountain::f_data.base.*
-import std.sync.{AtomicInt64, AtomicBool}
-import std.fs.*
-import std.fs.removeIfExists
+public class JsonException <: BaseException {
+    public init() {}
 
-
-@Test
-public class QueueCleanerIsFileExpiredTest {
-    @TestCase
-    public func testIsFileExpiredNonExistentReturnsFalse(): Unit {
-        let expired = QueueCleaner.isFileExpired("/nonexistent-path-xxxx", DateTime.now())
-        @Assert(!expired)
+    public init(message: String) {
+        super(message)
+    }
+    public init(caused: Exception) {
+        super(caused)
+    }
+    public init(message: String, caused: Exception) {
+        super(message, caused)
     }
 }

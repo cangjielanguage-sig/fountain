@@ -15,7 +15,6 @@ limitations under the License.
 */
 package fountain::boot
 
-import stdx.encoding.json.*
 import fountain::fountain.mvc.MediaType
 import fountain::fountain.base.*
 import fountain::fountain.bean.*

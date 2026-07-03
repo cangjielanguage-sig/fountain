@@ -20,19 +20,19 @@ import std.sync.{Timer, CatchupStyle, AtomicInt64, Mutex}
 import fountain::f_data.*
 import fountain::f_log.*
 import fountain::f_protocol.*
+import fountain::f_protocol.default.*
 import fountain::f_random.*
 import fountain::f_net.*
 
-public struct Client<DE, EN, M, T, ID> <: Resource where EN <: MessageCopier, M <: Protocol<EN, DE>, T <: DataFields<T>,
-    ID <: Hashable & Equatable<ID> {
-    private static let log = LoggerFactory.getLogger('fountain::f_net.Client')
-    private let futures = ConcurrentHashMap<ID, MessageFuture<DE>>()
+public class Client<T> <: Resource where T <: DataFields<T> {
+    private static let log = LoggerFactory.getLogger('fountain::f_net.client.Client')
+    private let futures = ConcurrentHashMap<MessageID, MessageFuture<Message>>()
     private let buffers: Array<SocketBuffer>
-    private let checkTimer: Timer
+    private var checkTimer: Timer = unsafe{zeroValue<Timer>()}
     private let closed = AtomicInt64(0)
     private let closeLock = Mutex()
 
-    Client(queueSize: Int64, idGetter: (DE) -> ID, checkDuration: Duration, checker: (SocketBuffer) -> Bool,
+    Client(queueSize: Int64, checkDuration: Duration, checker: () -> ?Message,
         private let socketCreator: () -> TcpSocket, private let sockets: Array<TcpSocket>) {
         let futures = this.futures
         let buffers = Array<SocketBuffer>(sockets.size) {
@@ -41,11 +41,11 @@ public struct Client<DE, EN, M, T, ID> <: Resource where EN <: MessageCopier, M 
                 spawn {
                     while (!buffer.socket.isClosed()) {
                         try {
-                            let de = M.decode<TcpSocket, T>(buffer.buffered)
-                            let id = idGetter(de)
+                            let message = Message.decode<TcpSocket, T>(buffer.buffered)
+                            let id = message.id
                             if (let Some(fut) <- futures.remove(id)) {
                                 var f = fut
-                                f.set(de)
+                                f.set(message)
                             }
                         } catch (e: Exception) {
                             log.error('Client reader error', e)
@@ -67,11 +67,11 @@ public struct Client<DE, EN, M, T, ID> <: Resource where EN <: MessageCopier, M 
                             spawn {
                                 while (!buffer.socket.isClosed()) {
                                     try {
-                                        let de = M.decode<TcpSocket, T>(buffer.buffered)
-                                        let id = idGetter(de)
+                                        let message = Message.decode<TcpSocket, T>(buffer.buffered)
+                                        let id = message.id
                                         if (let Some(fut) <- futures.remove(id)) {
                                             var f = fut
-                                            f.set(de)
+                                            f.set(message)
                                         }
                                     } catch (e: Exception) {
                                         log.error('Client reader error', e)
@@ -86,10 +86,10 @@ public struct Client<DE, EN, M, T, ID> <: Resource where EN <: MessageCopier, M 
                     }
                     let buffer = buffers[i]
                     try {
-                        if (!checker(buffer)) {
-                            if (!buffer.isClosed()) {
-                                buffer.close()
-                            }
+                        if (let Some(m) <- checker() && let Some(res) <- transfer(m, Duration.millisecond * 10)) {
+                            //todo
+                        }else{
+                            buffer.close()
                             new()
                         }
                     } catch (e: Exception) {
@@ -137,66 +137,65 @@ public struct Client<DE, EN, M, T, ID> <: Resource where EN <: MessageCopier, M 
      * @param checker   连接有效性检查函数，务必使用client.transfer(socketBuffer, id, message, timeout)传检查包
      */
     public static func builder(queueSize!: Int64 = 1024, socketCount!: Int64 = 1, host!: String, port!: UInt16,
-        idGetter!: (DE) -> ID, checkDuration!: Duration, checker!: (SocketBuffer) -> Bool): SocketBuilder<DE, EN, M, T, ID> {
-        SocketBuilder<DE, EN, M, T, ID>(queueSize: queueSize, socketCount: socketCount, host: host, port: port,
-            idGetter: idGetter, checkDuration: checkDuration, checker: checker)
+        checkDuration!: Duration, checker!: () -> ?Message): SocketBuilder<T> {
+        SocketBuilder<T>(queueSize: queueSize, socketCount: socketCount, host: host, port: port,
+            checkDuration: checkDuration, checker: checker)
     }
     private prop index: Int64 {
         get(){
             ThreadLocalRandom.current.nextInt64(0, sockets.size, closed: false)
         }
     }
-    public func transfer(id: ID, message: M): MessageFuture<DE> {
+    public func transfer(message: Message): MessageFuture<Message> {
         synchronized(closeLock) {
             if (isClosed()) {
                 throw Exception('Client is closed')
             }
-            transfer(index, id, message)
+            transfer(index, message)
         }
     }
-    public func transfer(id: ID, message: M, timeout: Duration): ?DE {
-        let future: MessageFuture<DE>
+    public func transfer(message: Message, timeout: Duration): ?Message {
+        let future: MessageFuture<Message>
         synchronized(closeLock) {
             if (isClosed()) {
                 return None
             }
-            future = transfer(index, id, message)
+            future = transfer(index, message)
         }
         let result = future.tryGet(timeout)
         if (result.isNone()) {
-            futures.remove(id)
+            futures.remove(message.id)
         }
         result
     }
-    private func transfer(index: Int64, id: ID, message: M): MessageFuture<DE> {
-        transfer(buffers[index], id, message)
+    private func transfer(index: Int64, message: Message): MessageFuture<Message> {
+        transfer(buffers[index], message)
     }
-    private func transfer(index: Int64, id: ID, message: M, timeout: Duration): ?DE {
-        transfer(buffers[index], id, message, timeout)
+    private func transfer(index: Int64, message: Message, timeout: Duration): ?Message {
+        transfer(buffers[index], message, timeout)
     }
-    private func transfer(buffer: SocketBuffer, id: ID, message: M): MessageFuture<DE> {
+    private func transfer(buffer: SocketBuffer, message: Message): MessageFuture<Message> {
         let en = message.encode()
-        let future = MessageFuture<DE>()
-        futures.add(id, future)
+        let future = MessageFuture<Message>()
+        futures.add(message.id, future)
         buffer.queue.add({
             => en.copy(to: buffer.socket, closeToOnEnd: false)
         })
         future
     }
-    private func transfer(buffer: SocketBuffer, id: ID, message: M, timeout: Duration): ?DE {
-        let result = transfer(buffer, id, message).tryGet(timeout)
+    private func transfer(buffer: SocketBuffer, message: Message, timeout: Duration): ?Message {
+        let result = transfer(buffer, message).tryGet(timeout)
         if (result.isNone()) {
-            futures.remove(id)
+            futures.remove(message.id)
         }
         result
     }
 }
 
-public class SocketBuilder<DE, EN, M, T, ID> where EN <: MessageCopier, M <: Protocol<EN, DE>, T <: DataFields<T>,
-    ID <: Hashable & Equatable<ID> {
+public class SocketBuilder<T> where T <: DataFields<T> {
     SocketBuilder(let queueSize!: Int64 = 1024, private let socketCount!: Int64 = 1, private let host!: String,
-        private let port!: UInt16, private let idGetter!: (DE) -> ID, private let checkDuration!: Duration,
-        private let checker!: (SocketBuffer) -> Bool) {}
+        private let port!: UInt16, private let checkDuration!: Duration,
+        private let checker!: () -> ?Message) {}
     private let params = SocketParams()
 
     public func bindToDevice(bindToDevice: ?String): This {
@@ -247,8 +246,8 @@ public class SocketBuilder<DE, EN, M, T, ID> where EN <: MessageCopier, M <: Pro
         params.socketOptionIntNative(level, option, value)
         this
     }
-    public func build(): Client<DE, EN, M, T, ID> {
-        Client<DE, EN, M, T, ID>(queueSize, idGetter, checkDuration, checker, this.newSocket,
+    public func build(): Client<T> {
+        Client<T>(queueSize, checkDuration, checker, this.newSocket,
             Array<TcpSocket>(socketCount) {_ => newSocket()})
     }
     func newSocket() {

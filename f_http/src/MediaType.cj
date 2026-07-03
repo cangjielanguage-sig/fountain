@@ -22,7 +22,6 @@ internal import std.fs.*
 internal import std.io.{InputStream, ByteBuffer, OutputStream, copy}
 internal import stdx.encoding.base64.*
 internal import stdx.encoding.hex.*
-internal import stdx.encoding.json.*
 internal import stdx.encoding.url.*
 internal import stdx.net.http.*
 internal import cangjie_tpc::charset4cj.charset.encoding.Charset
@@ -77,7 +76,7 @@ public abstract class MediaType <: ToString & Hashable & Equatable<MediaType> {
     public func toDataFields<T>(data: Array<Byte>): T where T <: DataFields<T> {
         toDataFields<T>(toData(data))
     }
-    public func toDataFields<T>(input: InputStream): T where T <: DataFields<T> {
+    public open func toDataFields<T>(input: InputStream): T where T <: DataFields<T> {
         toDataFields<T>(toData(input))
     }
     public func toDataFields<T>(data: String): T where T <: DataFields<T> {

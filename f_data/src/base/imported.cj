@@ -25,7 +25,6 @@ public import std.reflect.TypeInfo
 public import std.sync.AtomicReference
 public import std.time.{DateTime, MonoTime}
 public import stdx.encoding.base64.*
-public import stdx.encoding.json.*
 public import fountain::f_collection.*
 public import fountain::f_concurrent.ConcurrentHashSet
 public import fountain::f_exception.UnreachableException

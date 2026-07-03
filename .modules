@@ -39,8 +39,6 @@ f_store
 f_llm
 f_uring
 fboot
-fsync
-fmq
 .
 
 [exclude]

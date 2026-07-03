@@ -21,14 +21,16 @@ import std.sync.{Timer, CatchupStyle}
 import fountain::f_data.*
 import fountain::f_log.*
 import fountain::f_protocol.*
+import fountain::f_protocol.default.*
 import fountain::f_net.*
 
-public struct Server<DE, EN, M, T> <: Resource where EN <: MessageCopier, M <: Protocol<EN, DE>, T <: DataFields<T> {
-    private static let log = LoggerFactory.getLogger('fountain:net.Server')
+
+public struct Server<T> <: Resource where T <: DataFields<T> {
+    private static let log = LoggerFactory.getLogger('fountain::f_net.server.Server')
     private let buffers = LinkedBlockingQueue<SocketBuffer>()
     private let checkTimer: Timer
 
-    internal Server(checkDuration!: Duration, checker!: (SocketBuffer) -> Bool, private let queueSize!: Int64 = 1024,
+    internal Server(checkDuration!: Duration, checker!: () -> ?Message, private let queueSize!: Int64 = 1024,
         private let server!: TcpServerSocket, private let params!: SocketParams) {
         let buffers = this.buffers
         checkTimer = Timer.repeat(
@@ -41,7 +43,12 @@ public struct Server<DE, EN, M, T> <: Resource where EN <: MessageCopier, M <: P
                     while (i < size && let buffer <- buffers.remove()) {
                         spawn {
                             let available = try {
-                                checker(buffer)
+                                if(let Some(m) <- checker()){
+                                    transfer(buffer, m)
+                                    true
+                                }else{
+                                    false
+                                }
                             } catch (e: Exception) {
                                 log.warn('TcpSocket.check', e)
                                 false
@@ -50,9 +57,8 @@ public struct Server<DE, EN, M, T> <: Resource where EN <: MessageCopier, M <: P
                                 buffers.add(buffer)
                             } else {
                                 try {
-                                    let socket = buffer.socket
-                                    if (!socket.isClosed()) {
-                                        socket.close()
+                                    if(!buffer.isClosed()){
+                                        buffer.close()
                                     }
                                 } catch (e: Exception) {
                                     log.warn('TcpSocket.close', e)
@@ -71,15 +77,14 @@ public struct Server<DE, EN, M, T> <: Resource where EN <: MessageCopier, M <: P
      * @param checkDuration tcp连接有效性检查周期
      * @param checker   tcp连接有效性检查函数，务必使用server.transfer(socketBuffer, id, message, timeout)
      */
-    public init(queueSize!: Int64 = 1024, bindAt!: UInt16, checkDuration!: Duration, checker!: (SocketBuffer) -> Bool) {
+    public init(queueSize!: Int64 = 1024, bindAt!: UInt16, checkDuration!: Duration, checker!: () -> ?Message) {
         this(queueSize: queueSize, checkDuration: checkDuration, checker: checker,
             server: newServerSocket(bindAt), params: SocketParams())
     }
-    public static func build(queueSize!: Int64 = 1024, checkDuration!: Duration, checker!: (SocketBuffer) -> Bool,
-        bindAt!: UInt16): ServerBuilder<DE, EN, M, T> {
-        ServerBuilder<DE, EN, M, T>(queueSize, checkDuration, checker, bindAt)
+    public static func build(queueSize!: Int64 = 1024, checkDuration!: Duration, checker!: () -> ?Message, bindAt!: UInt16): ServerBuilder<T> {
+        ServerBuilder<T>(queueSize, checkDuration, checker, bindAt)
     }
-    public func start(executor: (DE) -> M): Unit {
+    public func start(executor: (Message) -> Message): Unit {
         while (let socket <- server.accept()) {
             params.populate(socket)
             let buffer = SocketBuffer(queueSize, socket)
@@ -87,7 +92,7 @@ public struct Server<DE, EN, M, T> <: Resource where EN <: MessageCopier, M <: P
             spawn {
                 while (!socket.isClosed()) {
                     try {
-                        let req = M.decode<TcpSocket, T>(buffer.buffered)
+                        let req = Message.decode<TcpSocket, T>(buffer.buffered)
                         let m = req |> executor
                         transfer(buffer, m)
                     } catch (e: Exception) {
@@ -98,7 +103,7 @@ public struct Server<DE, EN, M, T> <: Resource where EN <: MessageCopier, M <: P
             }
         }
     }
-    private func transfer(buffer: SocketBuffer, message: M): Unit {
+    private static func transfer(buffer: SocketBuffer, message: Message): Unit {
         let en = message.encode()
         buffer.queue.add({
             => en.copy(to: buffer.socket, closeToOnEnd: false)
@@ -124,16 +129,15 @@ public struct Server<DE, EN, M, T> <: Resource where EN <: MessageCopier, M <: P
     }
 }
 
-public class ServerBuilder<DE, EN, M, T> where EN <: MessageCopier, M <: Protocol<EN, DE>, T <: DataFields<T> {
+public class ServerBuilder<T> where T <: DataFields<T> {
     private let server: TcpServerSocket
     private let params = SocketParams()
     ServerBuilder(private let queueSize: Int64, private let checkDuration: Duration,
-        private let checker: (SocketBuffer) -> Bool, private let bindAt: UInt16) {
+        private let checker: () -> ?Message, private let bindAt: UInt16) {
         server = newServerSocket(bindAt)
     }
-    public func build(): Server<DE, EN, M, T> {
-        Server<DE, EN, M, T>(queueSize: queueSize, checkDuration: checkDuration, checker: checker, server: server,
-            params: params.copy())
+    public func build(): Server<T> {
+        Server<T>(queueSize: queueSize, checkDuration: checkDuration, checker: checker, server: server, params: params.copy())
     }
     public func backlogSize(size: Int64): This {
         server.backlogSize = size
@@ -149,10 +153,6 @@ public class ServerBuilder<DE, EN, M, T> where EN <: MessageCopier, M <: Protoco
     }
     public func reuseAddress(reuse: Bool): This {
         server.reuseAddress = reuse
-        this
-    }
-    public func reusePort(reuse: Bool): This {
-        server.reusePort = reuse
         this
     }
     public func sendBufferSize(size: Int64): This {

@@ -16,7 +16,6 @@ limitations under the License.
 package fountain::user.controller
 
 import std.reflect.*
-import stdx.encoding.json.*
 import fountain::fountain.data.*
 import fountain::fountain.mvc.*
 import fountain::fountain.mvc.macros.*

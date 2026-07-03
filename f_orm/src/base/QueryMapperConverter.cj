@@ -18,7 +18,6 @@ package fountain::f_orm.base
 import std.collection.concurrent.ConcurrentHashMap
 import std.io.*
 import std.reflect.*
-import stdx.encoding.json.*
 import fountain::f_bean.lookupOption
 import fountain::f_collection.*
 import fountain::f_data.*

@@ -23,16 +23,16 @@ extend JsonObject <: ToJsonSchema {
     private static func toJsonSchema(fieldType: TypeInfo, schema: ?JsonSchema): JsonObject {
         let property = JsonObject()
         if(fieldType == TypeInfo.of<Bool>()){
-            property.put("type", JsonString("boolean"))
+            property.add("type", JsonString("boolean"))
             if(let Some(s: JsonBoolSchema) <- schema){
                 if(let Some(default) <- s.default){
-                    property.put("default", JsonBool(default))
+                    property.add("default", JsonBool(default))
                 }
                 if(let Some(title) <- s.title){
-                    property.put("title", JsonString(title))
+                    property.add("title", JsonString(title))
                 }
                 if(let Some(description) <- s.description){
-                    property.put("description", JsonString(description))
+                    property.add("description", JsonString(description))
                 }
             }
         }else if(fieldType == TypeInfo.of<Int8>() ||
@@ -44,97 +44,97 @@ extend JsonObject <: ToJsonSchema {
                 fieldType == TypeInfo.of<UInt32>() ||
                 fieldType == TypeInfo.of<UInt64>()
         ) {
-            property.put("type", JsonString("integer"))
+            property.add("type", JsonString("integer"))
             if(let Some(s: JsonIntSchema) <- schema){
                 if(let Some(minimum) <- s.minimum){
                     if(s.exclusiveMinimum){
-                        property.put("exclusiveMinimum", JsonInt(minimum))
+                        property.add("exclusiveMinimum", JsonInt(minimum))
                     }else{
-                        property.put("minimum", JsonInt(minimum))
+                        property.add("minimum", JsonInt(minimum))
                     }
                 }
                 if(let Some(maximum) <- s.maximum){
                     if(s.exclusiveMaximum){
-                        property.put("exclusiveMaximum", JsonInt(maximum))
+                        property.add("exclusiveMaximum", JsonInt(maximum))
                     }else{
-                        property.put("maximum", JsonInt(maximum))
+                        property.add("maximum", JsonInt(maximum))
                     }
                 }
                 if(let Some(multipleOf) <- s.multipleOf){
-                    property.put("multipleOf", JsonInt(multipleOf))
+                    property.add("multipleOf", JsonInt(multipleOf))
                 }
                 if(let Some(enumeration) <- s.enumeration){
-                    property.put("enum", JsonValue.fromStr(enumeration).asArray())
+                    property.add("enum", JsonValue.fromStr(enumeration).asArray())
                 }
                 if(let Some(title) <- s.title){
-                    property.put("title", JsonString(title))
+                    property.add("title", JsonString(title))
                 }
                 if(let Some(description) <- s.description){
-                    property.put("description", JsonString(description))
+                    property.add("description", JsonString(description))
                 }
                 if(let Some(default) <- s.default){
-                    property.put("default", JsonInt(default))
+                    property.add("default", JsonInt(default))
                 }
             }
         }else if(fieldType == TypeInfo.of<Float32>() ||
                 fieldType == TypeInfo.of<Float64>() ||
                 fieldType == TypeInfo.of<Float16>()
         ) {
-            property.put("type", JsonString("number"))
+            property.add("type", JsonString("number"))
             if(let Some(s: JsonFloatSchema) <- schema){
                 if(let Some(minimum) <- s.minimum){
                     if(s.exclusiveMinimum){
-                        property.put("exclusiveMinimum", JsonFloat(minimum))
+                        property.add("exclusiveMinimum", JsonDecimal(minimum))
                     }else{
-                        property.put("minimum", JsonFloat(minimum))
+                        property.add("minimum", JsonDecimal(minimum))
                     }
                 }
                 if(let Some(maximum) <- s.maximum){
                     if(s.exclusiveMaximum){
-                        property.put("exclusiveMaximum", JsonFloat(maximum))
+                        property.add("exclusiveMaximum", JsonDecimal(maximum))
                     }else{
-                        property.put("maximum", JsonFloat(maximum))
+                        property.add("maximum", JsonDecimal(maximum))
                     }
                 }
                 if(let Some(multipleOf) <- s.multipleOf){
-                    property.put("multipleOf", JsonFloat(multipleOf))
+                    property.add("multipleOf", JsonDecimal(multipleOf))
                 }
                 if(let Some(enumeration) <- s.enumeration){
-                    property.put("enum", JsonValue.fromStr(enumeration).asArray())
+                    property.add("enum", JsonValue.fromStr(enumeration).asArray())
                 }
                 if(let Some(title) <- s.title){
-                    property.put("title", JsonString(title))
+                    property.add("title", JsonString(title))
                 }
                 if(let Some(description) <- s.description){
-                    property.put("description", JsonString(description))
+                    property.add("description", JsonString(description))
                 }
                 if(let Some(default) <- s.default){
-                    property.put("default", JsonFloat(default))
+                    property.add("default", JsonDecimal(default))
                 }
             }
         }else if(fieldType == TypeInfo.of<String>()){
-            property.put("type", JsonString("string"))
+            property.add("type", JsonString("string"))
             if(let Some(s: JsonStringSchema) <- schema){
                 if(let Some(minLength) <- s.minLength){
-                    property.put("minLength", JsonInt(minLength))
+                    property.add("minLength", JsonInt(minLength))
                 }
                 if(let Some(maxLength) <- s.maxLength){
-                    property.put("maxLength", JsonInt(maxLength))
+                    property.add("maxLength", JsonInt(maxLength))
                 }
                 if(let Some(pattern) <- s.pattern){
-                    property.put("pattern", JsonString(pattern))
+                    property.add("pattern", JsonString(pattern))
                 }
                 if(let Some(enumeration) <- s.enumeration){
-                    property.put("enum", JsonValue.fromStr(enumeration).asArray())
+                    property.add("enum", JsonValue.fromStr(enumeration).asArray())
                 }
                 if(let Some(title) <- s.title){
-                    property.put("title", JsonString(title))
+                    property.add("title", JsonString(title))
                 }
                 if(let Some(description) <- s.description){
-                    property.put("description", JsonString(description))
+                    property.add("description", JsonString(description))
                 }
                 if(let Some(default) <- s.default){
-                    property.put("default", JsonString(default))
+                    property.add("default", JsonString(default))
                 }
             }
         }else if (fieldType.qualifiedName.startsWith('Option<') || fieldType.qualifiedName.startsWith('std.core.Option<')){
@@ -142,7 +142,7 @@ extend JsonObject <: ToJsonSchema {
             let start = qualifiedName.indexOf('<').getOrThrow() + 1
             let generic = qualifiedName[start .. qualifiedName.size - 1] |> TypeInfo.get
             let property = toJsonSchema(generic, schema)
-            property.put("nullable", JsonBool(true))
+            property.add("nullable", JsonBool(true))
             return property
         }else if(fieldType.qualifiedName.startsWith('Array<') || 
                 fieldType.qualifiedName.startsWith('std.core.Array<') || 
@@ -151,30 +151,30 @@ extend JsonObject <: ToJsonSchema {
                 fieldType.qualifiedName.startsWith('std.collection.Set<') ||
                 fieldType.qualifiedName.startsWith('std.collection.HashSet<') ||
                 fieldType.qualifiedName.startsWith('std.collection.TreeSet<')){
-            property.put("type", JsonString("array"))
+            property.add("type", JsonString("array"))
             if(let Some(s: JsonArraySchema) <- schema){
                 if(let Some(minItems) <- s.minItems){
-                    property.put("minItems", JsonInt(minItems))
+                    property.add("minItems", JsonInt(minItems))
                 }
                 if(let Some(maxItems) <- s.maxItems){
-                    property.put("maxItems", JsonInt(maxItems))
+                    property.add("maxItems", JsonInt(maxItems))
                 }
                 if(let Some(uniqueItems) <- s.uniqueItems){
-                    property.put("uniqueItems", JsonBool(uniqueItems))
+                    property.add("uniqueItems", JsonBool(uniqueItems))
                 }
                 if(let Some(title) <- s.title){
-                    property.put("title", JsonString(title))
+                    property.add("title", JsonString(title))
                 }
                 if(let Some(description) <- s.description){
-                    property.put("description", JsonString(description))
+                    property.add("description", JsonString(description))
                 }
                 if(let Some(items) <- s.items){
                     let qualifiedName = fieldType.qualifiedName
                     let start = qualifiedName.indexOf('<').getOrThrow() + 1
                     let genericType = qualifiedName[start .. qualifiedName.size - 1] |> TypeInfo.get
-                    property.put("items", toJsonSchema(genericType, items))
+                    property.add("items", toJsonSchema(genericType, items))
                 }else if(fieldType is ClassTypeInfo){
-                    property.put('items', toJsonSchema(fieldType))
+                    property.add('items', toJsonSchema(fieldType))
                 }
             }
         }else {
@@ -184,27 +184,27 @@ extend JsonObject <: ToJsonSchema {
     }
     private static func toJsonSchema(typeInfo: TypeInfo): JsonObject {
         let schema = JsonObject()
-        schema.put("type", JsonString("object"))
+        schema.add("type", JsonString("object"))
         if(let Some(s) <- typeInfo.findAnnotation<JsonObjectSchema>()) {
             if(let Some(required) <- s.required){
-                schema.put("required", JsonValue.fromStr(required).asArray())
+                schema.add("required", JsonValue.fromStr(required).asArray())
             }
             if(let Some(additionalProperties) <- s.additionalProperties){
-                schema.put("additionalProperties", JsonBool(additionalProperties))
+                schema.add("additionalProperties", JsonBool(additionalProperties))
             }
             if(let Some(title) <- s.title){
-                schema.put("title", JsonString(title))
+                schema.add("title", JsonString(title))
             }
             if(let Some(description) <- s.description){
-                schema.put("description", JsonString(description))
+                schema.add("description", JsonString(description))
             }
         }
         let properties = JsonObject()
-        schema.put("properties", properties)
+        schema.add("properties", properties)
         if(let fields: Iterator<MutableField> <- typeInfo.getStaticFunction('mutableFields').apply(typeInfo)){
             for(f in fields){
                 let fieldType = f.fieldTypeInfo
-                properties.put(f.name, toJsonSchema(fieldType, f.tryFindAnnotation<JsonSchema>()))
+                properties.add(f.name, toJsonSchema(fieldType, f.tryFindAnnotation<JsonSchema>()))
             }
         }
         schema

@@ -16,7 +16,8 @@ limitations under the License.
 package fountain::f_data.json
 
 internal import std.reflect.*
+internal import stdx.encoding.json.stream.*
 internal import fountain::f_exception.UnreadableException
 
-public import stdx.encoding.json.*
 public import fountain::f_data.base.*
+public import fountain::f_data.exception.JsonException

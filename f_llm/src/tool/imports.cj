@@ -22,7 +22,6 @@ internal import std.io.*
 internal import std.reflect.*
 internal import std.sync.{Mutex, AtomicBool, AtomicInt64}
 internal import stdx.crypto.crypto.SecureRandom
-internal import stdx.encoding.json.*
 internal import fountain::f_base.*
 internal import fountain::f_egraph.*
 internal import fountain::f_bean.*

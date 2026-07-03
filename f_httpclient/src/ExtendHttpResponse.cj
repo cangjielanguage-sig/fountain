@@ -18,8 +18,6 @@ package fountain::f_httpclient
 import std.collection.ArrayList
 import std.io.{InputStream, StringReader}
 
-public import stdx.encoding.json.*
-
 public import cangjie_tpc::charset4cj.charset.encoding.Charset
 public import cangjie_tpc::charset4cj.charset.{Charsets, TextReader}
 

@@ -56,12 +56,8 @@ public class FileDownload {
         }
         func write() {
             let buf = Array<Byte>(MVCConfig.downloadBufferSize, repeat: 0)
-            while (let len <- input.read(buf)) {
-                if (len > 0) {
-                    writer.write(buf[0..len])
-                } else {
-                    break
-                }
+            while (let len <- input.read(buf) && len > 0) {
+                writer.write(buf[0..len])
             }
         }
 
