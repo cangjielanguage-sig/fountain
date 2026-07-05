@@ -15,10 +15,10 @@ limitations under the License.
 */
 package fountain::user.service
 
-import fountain::fountain.orm.RootService
-internal import user.model.po.*
-internal import user.model.mvc.*
 internal import std.collection.*
+import fountain::fountain.orm.RootService
+internal import fountain::user.model.po.*
+internal import fountain::user.model.mvc.*
 
 public interface UserService <: RootService {
     func register(username: String, password: String): Int64

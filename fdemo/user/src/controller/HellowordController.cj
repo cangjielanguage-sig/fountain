@@ -18,8 +18,8 @@ package fountain::user.controller
 import std.collection.ArrayList
 import fountain::fountain.mvc.*
 import fountain::fountain.mvc.macros.*
-import user.model.po.*
-import user.model.mvc.*
+import fountain::user.model.po.*
+import fountain::user.model.mvc.*
 
 @Controller
 public class HellowordController {

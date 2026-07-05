@@ -323,29 +323,30 @@ public class JWTEncoder <: JWT {
     public func sign(): String {
         var json = JsonObject()
         for ((k, v) in headers) {
-            json.put(k, JsonString(v))
+            json.add(k, JsonString(v))
         }
         let headerJson = json.toString()
         let headerBase64 = toBase64(headerJson)
         json = JsonObject()
         for ((k, v) in payload) {
             match (v) {
-                case x: Bool => json.put(k, JsonBool(x))
-                case x: Int64 => json.put(k, JsonInt(x))
-                case x: UInt64 => json.put(k, JsonInt(Int64(x)))
-                case x: Int32 => json.put(k, JsonInt(Int64(x)))
-                case x: UInt32 => json.put(k, JsonInt(Int64(x)))
-                case x: Int16 => json.put(k, JsonInt(Int64(x)))
-                case x: UInt16 => json.put(k, JsonInt(Int64(x)))
-                case x: Int8 => json.put(k, JsonInt(Int64(x)))
-                case x: UInt8 => json.put(k, JsonInt(Int64(x)))
-                case x: Float64 => json.put(k, JsonFloat(x))
-                case x: Float32 => json.put(k, JsonFloat(Float64(x)))
-                case x: Float16 => json.put(k, JsonFloat(Float64(x)))
-                case x: String => json.put(k, JsonString(x))
-                case x: Rune => json.put(k, JsonString(x.toString()))
-                case x: JsonValue => json.put(k, x)
-                case x: ToString => json.put(k, JsonString(x.toString()))
+                case x: Bool => json.add(k, JsonBool(x))
+                case x: Int64 => json.add(k, JsonInt(x))
+                case x: UInt64 => json.add(k, JsonInt(Int64(x)))
+                case x: Int32 => json.add(k, JsonInt(Int64(x)))
+                case x: UInt32 => json.add(k, JsonInt(Int64(x)))
+                case x: Int16 => json.add(k, JsonInt(Int64(x)))
+                case x: UInt16 => json.add(k, JsonInt(Int64(x)))
+                case x: Int8 => json.add(k, JsonInt(Int64(x)))
+                case x: UInt8 => json.add(k, JsonInt(Int64(x)))
+                case x: Float64 => json.add(k, JsonDecimal(x))
+                case x: Float32 => json.add(k, JsonDecimal(Float64(x)))
+                case x: Float16 => json.add(k, JsonDecimal(Float64(x)))
+                case x: Decimal => json.add(k, JsonDecimal(x))
+                case x: String => json.add(k, JsonString(x))
+                case x: Rune => json.add(k, JsonString(x.toString()))
+                case x: JsonValue => json.add(k, x)
+                case x: ToString => json.add(k, JsonString(x.toString()))
                 case _ => throw JWTException("current value of key as ${k} does not support for payload")
             }
         }
@@ -380,16 +381,12 @@ public class JWTVerifier <: JWT {
     }
     private static func getJsonValue<T>(v: JsonValue): T {
         let r: Any = match (v) {
-            case x: JsonBool => x.getValue()
-            case x: JsonInt => x.getValue()
-            case x: JsonString => x.getValue()
-            case x: JsonFloat => x.getValue()
-            case x: JsonArray => Array<Any>(x.size()) {
-                i => if (let Some(jv) <- x.get(i)) {
-                    getJsonValue<T>(jv)
-                } else {
-                    None<Any>
-                }
+            case x: JsonBool => x.value
+            case x: JsonInt => x.value
+            case x: JsonString => x.value
+            case x: JsonDecimal => x.value
+            case x: JsonArray => Array<Any>(x.size) {
+                i => getJsonValue<T>(x.getItem(i))
             }
             case x: JsonObject =>
                 let vm = HashMap<String, T>()

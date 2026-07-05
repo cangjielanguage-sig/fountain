@@ -267,8 +267,8 @@ public class PublishCommand <: SubCommand {
                 let resp = client.get(url)
                 let body = StringReader(resp.body).readToEnd()
                 let json = JsonValue.fromStr(body).asObject()
-                let code = (json.get('code')?.asInt().getValue()) ?? 0
-                let msg = (json.get('msg')?.asString().getValue()) ?? ''
+                let code = (json.get('code')?.asInt().value.toInt64()) ?? 0
+                let msg = (json.get('msg')?.asString().value) ?? ''
                 println('check url response - code: ${code}, msg: ${msg}')
                 if(code == 200 && msg == 'success'){
                     return true

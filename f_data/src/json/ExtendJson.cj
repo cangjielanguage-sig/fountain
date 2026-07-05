@@ -43,10 +43,16 @@ public interface ExtendJsonValue {
         writer.flush()
         JsonValue.fromBytes(buffer.bytes())
     }
-    static func from<T>(data: T): JsonValue where T <: ToData
+    static func from<T>(data: T): JsonValue where T <: ToData {
+        from(data.toData())
+    }
+    static func from(data: Data, flag: DataConversionFlag): JsonValue
+    static func from(data: Data){
+        from(data, DEFAULT_DATA_FLAG)
+    }
 }
 
-public let JSON_NULL = JsonNull()
+public let JSON_NULL = JsonNull.instance
 
 extend JsonValue <: ExtendJsonValue & DataFields<JsonValue> {
     public func toData(): Data {
@@ -61,10 +67,18 @@ extend JsonValue <: ExtendJsonValue & DataFields<JsonValue> {
             case _ => throw UnreachableException()
         }
     }
-    public static func from<T>(data: T): JsonValue where T <: ToData{
-        tryFromData(data.toData(), DEFAULT_DATA_FLAG)
+    public static func from(data: Data, flag: DataConversionFlag): JsonValue {
+        let any = tryFromData(data.toData(), flag)
+        match(any){
+            case x: JsonValue => x
+            case x: ?JsonValue => match(x){
+                case Some(x) => x
+                case _ => throw DataException("can not convert data type to JsonValue")
+            }
+            case _ => throw UnreachableException()
+        }
     }
-    public static func tryFromData(data: Data, flag: DataConversionFlag): JsonValue {
+    public static func tryFromData(data: Data, flag: DataConversionFlag): Any {
         func from(data: Data) {
             match (tryFromData(data, flag)) {
                 case x: JsonValue => x

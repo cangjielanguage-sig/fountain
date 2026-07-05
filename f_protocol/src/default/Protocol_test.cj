@@ -172,7 +172,7 @@ public class ProtocolTest {
         let decoded = Message.decode<ByteBuffer, DataAny>(BufferedInputStream(buf))
         @Assert(decoded.command.value == msg.command.value)
         let decodedData = decoded.tryFromData<DataAny>()
-        if (let d: DataAny <- decodedData) {
+        if (let Some(d: DataAny) <- decodedData) {
             @Assert(d.data.toString() == data.toString())
         }
     }

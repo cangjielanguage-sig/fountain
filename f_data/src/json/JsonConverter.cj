@@ -16,7 +16,7 @@ limitations under the License.
 package fountain::f_data.json
 
 public func toJson<T>(d: T, flag!: DataConversionFlag = DEFAULT_DATA_FLAG): String where T <: ToData {
-    JsonValue.tryFromData(d.toData(), flag).toString()
+    JsonValue.from(d.toData(), flag).toString()
 }
 public func fromJson<T>(s: String, flag!: DataConversionFlag = DEFAULT_DATA_FLAG): ?T where T <: FromData {
     match(T.tryFromData(JsonValue.fromStr(s).toData(), flag)){

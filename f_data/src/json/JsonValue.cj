@@ -49,6 +49,13 @@ public sealed abstract class JsonValue <: ToString & JsonSerializable & JsonDese
             throw JsonException('current is ${TypeInfo.of(this)}')
         }
     }
+    public func asString(): JsonString{
+        if(let x: JsonString <- this){
+            x
+        }else{
+            throw JsonException('current is ${TypeInfo.of(this)}')
+        }
+    }
     public func asArray(): JsonArray{
         if(let x: JsonArray <- this){
             x

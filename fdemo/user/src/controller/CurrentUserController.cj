@@ -23,9 +23,9 @@ import std.reflect.*
 import fountain::fountain.data.*
 import fountain::fountain.mvc.*
 import fountain::fountain.mvc.macros.*
-import user.service.UserService
-import user.model.po.*
-import user.model.mvc.*
+import fountain::user.service.UserService
+import fountain::user.model.po.*
+import fountain::user.model.mvc.*
 
 /**
  * 把UserController CurrentUserController合并成一个，加载时会抛出异常。

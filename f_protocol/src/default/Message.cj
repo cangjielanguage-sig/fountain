@@ -27,8 +27,12 @@ public struct Message <: Protocol<EncodedMessage, Message> {
     public init(command: Command){
         this(command, DataNone.INSTANCE)
     }
-    public func tryFromData<T>() where T <: DataFields<T> {
-        T.tryFromData(data)
+    public func tryFromData<T>(): ?T where T <: DataFields<T> {
+        match(T.tryFromData(data)){
+            case x: ?T => x
+            case x: T => x
+            case _ => throw DataException('data ${data} cannot be converted to ${TypeInfo.of<T>()}')
+        }
     }
 /*
 | **  Control Packet   ** | **Bit 3** | **Bit 2** | **Bit 1** | **Bit 0** |

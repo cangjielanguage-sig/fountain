@@ -20,7 +20,7 @@ import std.collection.*
 import fountain::fountain.orm.*
 import fountain::fountain.orm.macros.*
 
-import user.model.po.*
+import fountain::user.model.po.*
 
 @DAO
 public interface UserDAO <: RootDAO {

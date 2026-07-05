@@ -1,13 +1,15 @@
 [dependencies]
   "fountain::fountain" = {path = "../"}
-  opengauss = {git = "https://gitcode.com/runningW/opengauss-driver.git", branch="master"}
+  "fountain::f_version" = {path = "../f_version"}
+  # opengauss = {git = "https://gitcode.com/runningW/opengauss-driver.git", branch="master"}
 #  opengauss = {path = "../../opengauss-driver"}
+  pgsql = { git = "https://gitcode.com/aibrary/pgsql-driver.git", branch = "main" }
 
 [workspace]
   version = "1.1.0"
   organization = "fountain"
   description = "demo for how to develop by fountain "
-  members=["./boot", "./user"]
+  members=["./boot", "./user", "./fdemo_stAtIc__"]
   compile-option = "-O2 --dy-std -Woff unused"
   override-compile-option = "-O2 --dy-std -Woff unused"
 

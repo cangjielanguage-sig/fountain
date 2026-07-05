@@ -17,7 +17,7 @@ package fountain::user.controller
 
 import fountain::fountain.mvc.*
 import fountain::fountain.mvc.macros.*
-import user.model.mvc.UploadRequest
+import fountain::user.model.mvc.UploadRequest
 
 @Controller
 public class UploadController {

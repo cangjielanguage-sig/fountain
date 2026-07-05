@@ -50,7 +50,7 @@ public class LogTextMediaType <: MediaType {
         hash
     }
     public func fromData(data: Data): Array<Byte> {
-        fromData((JsonValue.tryFromData(data) as JsonValue).getOrThrow())
+        fromData(JsonValue.from(data))
     }
     public func fromData(data: JsonValue): Array<Byte> {
         let json = data.toString()

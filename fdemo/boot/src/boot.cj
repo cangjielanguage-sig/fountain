@@ -32,14 +32,14 @@ private let _ = {=>
         // let logger = LoggerFactory.getLogger("opengauss")
         // slog.setDefault(logger)//必须初始化opengauss，否则无法启动，因为配置项orm_drivers指定了opengauss
         // let url = env.getVariable('POSTGRES') ?? ''
-        let driverName = 'mockdb'
-        let driver = ORM.getDriver(driverName)
+        // let driverName = 'postgres'
+        // let driver = ORM.getDriver(driverName)
         // ORM.register(driver)
         // ORM.register('opengauss')
         //下面的代码不用池，启用下面的代码boot.sh的池配置环境变量会被忽略。代码初始化数据库的优先级高于环境变量
-        let ds = driver.open('mockdb://')
-        ORM.register(NamedDatasource(false, driverName, ds))
-        lookup<MockdbDialect>().mock = 'opengauss'
+        // let ds = driver.open('mockdb://')
+        // ORM.register(NamedDatasource(false, driverName, ds))
+        // lookup<MockdbDialect>().mock = 'opengauss'
         println(lookup<OpenGaussDialect>().dialect)
     }catch(e: Exception){
         e.printStackTrace()
@@ -94,7 +94,7 @@ private let _ = {=>
         println('AAAAAAAAAAAAAAAAAAAAAAAAAAAAA ${data2}')
         println('BBBBBBBBBBBBBBBBBBBBBBBBBBBBB ${data3}')
         let dobj = DataObject<TestData2>(data2)
-        let json = JsonValue.tryFromData(dobj)
+        let json = JsonValue.from(dobj)
         println('CCCCCCCCCCCCCCCCCCCCCCCCCCCCC ${json}')
         let data = json.toData()
         data3 = DataObject<TestData3>.populate(data2).getOrThrow()
@@ -107,7 +107,7 @@ private let _ = {=>
         map['1'] = 1
         map['2'] = 2
         let data4 = map.toData()
-        println('FFFFFFFFFFFFFFFFFFFFFFFFFFFFF ${JsonValue.tryFromData(data4)}')
+        println('FFFFFFFFFFFFFFFFFFFFFFFFFFFFF ${JsonValue.from(data4)}')
         let s = toJson(data2)//把仓颉对象转成JSON串
         let d = fromJson<TestData2>(s)//把JSON串转成仓颉类对象
         println('GGGGGGGGGGGGGGGGGGGGGGGGGGGGG ${s}')

@@ -25,11 +25,11 @@ import fountain::fountain.orm.macros.*
 import fountain::fountain.orm.*
 import fountain::fountain.log.*
 
-import user.service.UserService
-import user.dao.UserDAO
-import user.model.entity.*
-import user.model.po.*
-import user.model.mvc.*
+import fountain::user.service.UserService
+import fountain::user.dao.UserDAO
+import fountain::user.model.entity.*
+import fountain::user.model.po.*
+import fountain::user.model.mvc.*
 
 // @Bean
 // @BeanMeta

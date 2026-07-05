@@ -17,7 +17,7 @@ package fountain::user.model.entity
 
 import fountain::fountain.jwt.*
 
-import user.util.*
+import fountain::user.util.*
 
 public class UserEntity {
     public UserEntity(private let username: String, private let password: String) {}

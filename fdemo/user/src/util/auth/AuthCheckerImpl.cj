@@ -20,7 +20,7 @@ import fountain::fountain.bean.*
 import fountain::fountain.bean.macros.*
 import fountain::fountain.data.*
 import fountain::fountain.mvc.*
-import user.util.*
+import fountain::user.util.*
 
 @Bean
 public class AuthCheckerImpl <: AuthHandler {
