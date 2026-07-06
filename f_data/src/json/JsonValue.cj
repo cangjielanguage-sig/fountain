@@ -85,7 +85,7 @@ public sealed abstract class JsonValue <: ToString & JsonSerializable & JsonDese
         }
     }
     public func toJsonString(): String {
-        toJsonString(false)
+        toJsonString(true)
     }
     public func toJsonString(pretty: Bool): String{
         toJsonString(if(pretty){
@@ -114,16 +114,18 @@ public sealed abstract class JsonValue <: ToString & JsonSerializable & JsonDese
         writer.writeConfig = config
         toJson(writer)
     }
-    public open func write(writer: JsonWriter): Unit {
+    public func write(writer: JsonWriter): Unit {
         toJson(writer)
     }
-    public func toJson(writer: JsonWriter): Unit {
+    public open func toJson(writer: JsonWriter): Unit {
         match(this){
             case x: JsonNull => writer.writeNullValue()
-            case x: JsonInt => x.value.toJson(writer)
-            case x: JsonDecimal => x.value.toJson(writer)
-            case x: JsonBool => x.value.toJson(writer)
-            case x: JsonString => x.value.toJson(writer)
+            case x: JsonInt => writer.writeValue<BigInt>(x.value)
+            case x: JsonDecimal => writer.writeValue<Decimal>(x.value)
+            case x: JsonBool => writer.writeValue<Bool>(x.value)
+            case x: JsonString => writer.writeValue<String>(x.value)
+            case x: JsonArray => x.toJson(writer)
+            case x: JsonObject => x.toJson(writer)
             case _ => throw JsonException("Unsupported JsonValue type: ${TypeInfo.of(this)}" )
         }
     }
@@ -308,7 +310,7 @@ public class JsonString <: JsonValue {
 }
 public class JsonArray <: JsonValue & Collection<JsonValue> {
     public JsonArray(private let list!: ArrayList<JsonValue> = ArrayList<JsonValue>()){}
-    public func write(writer: JsonWriter): Unit {
+    public func toJson(writer: JsonWriter): Unit {
         writer.startArray()
         for(v in list){
             v.toJson(writer)
@@ -395,7 +397,7 @@ public class JsonArray <: JsonValue & Collection<JsonValue> {
 }
 public class JsonObject <: JsonValue & Collection<(String, JsonValue)> {
     public JsonObject(private let map!: HashMap<String, JsonValue> = HashMap<String, JsonValue>()){}
-    public func write(writer: JsonWriter): Unit {
+    public func toJson(writer: JsonWriter): Unit {
         writer.startObject()
         for((k, v) in map){
             writer.writeName(k)
