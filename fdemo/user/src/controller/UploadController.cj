@@ -15,8 +15,8 @@ limitations under the License.
 */
 package fountain::user.controller
 
-import fountain::fountain.mvc.*
-import fountain::fountain.mvc.macros.*
+import fountain::f_mvc.*
+import fountain::f_mvc.macros.*
 import fountain::user.model.mvc.UploadRequest
 
 @Controller

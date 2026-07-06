@@ -1,6 +1,16 @@
 [dependencies]
-  "fountain::fountain" = {path = "../"}
+  "fountain::f_aspect" = {path = "../f_aspect"}
+  "fountain::f_base" = {path = "../f_base"}
+  "fountain::f_bean" = {path = "../f_bean"}
+  "fountain::f_data" = {path = "../f_data"}
+  "fountain::f_jwt" = {path = "../f_jwt"}
+  "fountain::f_log" = {path = "../f_log"}
+  "fountain::f_mvc" = {path = "../f_mvc"}
+  "fountain::f_orm" = {path = "../f_orm"}
+  "fountain::f_security" = {path = "../f_security"}
+  "fountain::f_ticktock" = {path = "../f_ticktock"}
   "fountain::f_version" = {path = "../f_version"}
+  "fountain::f_util" = {path = "../f_util"}
   # opengauss = {git = "https://gitcode.com/runningW/opengauss-driver.git", branch="master"}
 #  opengauss = {path = "../../opengauss-driver"}
   pgsql = { git = "https://gitcode.com/aibrary/pgsql-driver.git", branch = "main" }

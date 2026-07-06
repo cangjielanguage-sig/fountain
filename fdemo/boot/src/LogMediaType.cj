@@ -15,12 +15,12 @@ limitations under the License.
 */
 package fountain::boot
 
-import fountain::fountain.mvc.MediaType
-import fountain::fountain.base.*
-import fountain::fountain.bean.*
-import fountain::fountain.bean.macros.*
-import fountain::fountain.data.*
-import fountain::fountain.log.*
+import fountain::f_mvc.MediaType
+import fountain::f_base.*
+import fountain::f_bean.*
+import fountain::f_bean.macros.*
+import fountain::f_data.*
+import fountain::f_log.*
 
 @Bean
 public class LogTextMediaType <: MediaType {

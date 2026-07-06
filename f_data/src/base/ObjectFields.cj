@@ -64,7 +64,7 @@ public struct ObjectFields <: Collection<ReadableField> {
                 populateFields(p.name, p.annotations)
             }
             if (let Some(superClass) <- currentType.superClass && superClass != ClassTypeInfo.of<Object>() &&
-                superClass.isSubtypeOf(TypeInfo.get('f_data.ObjectData<${superClass.qualifiedName}>')) && 
+                superClass.isSubtypeOf(TypeInfo.get('fountain::f_data.base.ObjectData<${superClass.qualifiedName}>')) && 
                 let f <- superClass.getStaticFunction('dataFields', []) && 
                 let sdf: ObjectFields <- f.apply(superClass, [])) {
                 populateFields(sdf.readables.values(), throwIfDuplicate: false)                    

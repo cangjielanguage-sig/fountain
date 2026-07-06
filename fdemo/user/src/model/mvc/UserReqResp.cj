@@ -15,9 +15,9 @@ limitations under the License.
 */
 package fountain::user.model.mvc
 
-import fountain::fountain.data.*
-import fountain::fountain.data.macros.*
-import fountain::fountain.orm.Pagination
+import fountain::f_data.*
+import fountain::f_data.macros.*
+import fountain::f_orm.Pagination
 import fountain::user.model.po.UserPO
 
 @DataAssist[props fields]

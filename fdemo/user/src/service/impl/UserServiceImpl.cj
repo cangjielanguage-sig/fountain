@@ -18,12 +18,12 @@ package fountain::user.service.impl
 import std.collection.Map
 import std.reflect.*
 
-import fountain::fountain.aspect.macros.*
-import fountain::fountain.bean.*
-import fountain::fountain.bean.macros.*
-import fountain::fountain.orm.macros.*
-import fountain::fountain.orm.*
-import fountain::fountain.log.*
+import fountain::f_aspect.macros.*
+import fountain::f_bean.*
+import fountain::f_bean.macros.*
+import fountain::f_orm.macros.*
+import fountain::f_orm.*
+import fountain::f_log.*
 
 import fountain::user.service.UserService
 import fountain::user.dao.UserDAO

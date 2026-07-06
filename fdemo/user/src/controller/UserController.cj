@@ -16,9 +16,9 @@ limitations under the License.
 package fountain::user.controller
 
 import std.reflect.*
-import fountain::fountain.data.*
-import fountain::fountain.mvc.*
-import fountain::fountain.mvc.macros.*
+import fountain::f_data.*
+import fountain::f_mvc.*
+import fountain::f_mvc.macros.*
 import fountain::user.service.UserService
 import fountain::user.model.po.*
 import fountain::user.model.mvc.*

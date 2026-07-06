@@ -16,10 +16,10 @@ limitations under the License.
 package fountain::user.util.cron
 
 import std.time.*
-import fountain::fountain.ticktock.*
-import fountain::fountain.bean.*
-import fountain::fountain.bean.macros.*
-import fountain::fountain.log.LoggerFactory
+import fountain::f_ticktock.*
+import fountain::f_bean.*
+import fountain::f_bean.macros.*
+import fountain::f_log.LoggerFactory
 
 @Bean
 public class TickTockTaskImpl <: CronTicktockTask {
