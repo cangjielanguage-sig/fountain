@@ -17,12 +17,18 @@ package fountain::f_orm.base
 
 import std.collection.concurrent.ConcurrentHashMap
 import std.reflect.*
+import fountain::f_log.*
 
 public struct TableMetas{
+    private static let log = LoggerFactory.getLogger<TableMetas>()
     private static var schemas = ConcurrentHashMap<TypeInfo, TableMeta>()
 
     public static func register<T>(): Unit where T <: QueryMappersInit<T> {
-        schemas[TypeInfo.of<T>()] = TableMeta.new<T>()
+        try{
+            schemas[TypeInfo.of<T>()] = TableMeta.new<T>()
+        }catch(e: Exception){
+            log.warn("register table meta error: ", e)
+        }
     }
     public static func tableMetas(): Iterator<TableMeta> {
         schemas.iterator().map{tuple => tuple[1]}

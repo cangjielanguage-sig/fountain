@@ -393,13 +393,14 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
         for (param in function.parameters) {
             let pname = param.name
             var toThrow = true
+            log.debug{'controller function param ${pname} annotations: ${param.annotations.size}'}
             for (annotation in param.annotations) {
+                log.debug{'controller function param ${pname} annotation: ${TypeInfo.of(annotation)}'}
                 match (annotation) {
                     case x: ControllerFuncParam => match (args.get(pname)) {
                         case Some((p, v, c)) where refEq(p, zero) =>
                             args[pname] = (x, v, c)
                             toThrow = false
-                            break
                         case None =>
                             args[pname] = (x, DummyValidator.instance, None<AbstractDateTimeConverter>)
                             toThrow = false
@@ -408,16 +409,12 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
                     case x: Validator => match (args.get(pname)) {
                         case Some((p, v, c)) where v is DummyValidator =>
                             args[pname] = (p, x, c)
-                            toThrow = false
-                            break
                         case None => args[pname] = (zero, x, None<AbstractDateTimeConverter>)
                         case _ => throw UnreachableException()
                     }
                     case x: AbstractDateTimeConverter => match (args.get(pname)) {
                         case Some((p, v, c)) where c.isNone() =>
                             args[pname] = (p, v, x)
-                            toThrow = false
-                            break
                         case None => args[pname] = (zero, DummyValidator.instance, x)
                         case _ => throw UnreachableException()
                     }
@@ -425,6 +422,7 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
                 }
             }
             if (toThrow) {
+                log.warn{'controller function param ${pname}'}
                 throw MVCException(
                     'parameter of controller function must be with one and only one Annotation as @RequestBody or @RequestParam or @RequestHeader or @PathVariable or @MultipartFormData')
             }
