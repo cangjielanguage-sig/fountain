@@ -282,13 +282,13 @@ ${content}
 
 [target]
 [target.x86_64-unknown-linux-gnu]
-  compile-option = "--lto=full --dy-std -Woff all -ldl"
-  override-compile-option = "--lto=full --dy-std -Woff all -ldl"
+  compile-option = "--dy-std -Woff all -ldl"
+  override-compile-option = "--dy-std -Woff all -ldl"
 [target.x86_64-unknown-linux-gnu.bin-dependencies]
   path-option = ["\${CANGJIE_STDX_DYNAMIC_PATH}", "\${CANGJIE_FOUNTAIN_LIBS}"]
 [target.aarch64-unknown-linux-gnu]
-  compile-option = "--lto=full --dy-std -Woff all -ldl"
-  override-compile-option = "--lto=full --dy-std -Woff all -ldl"
+  compile-option = "--dy-std -Woff all -ldl"
+  override-compile-option = "--dy-std -Woff all -ldl"
 [target.aarch64-unknown-linux-gnu.bin-dependencies]
   path-option = ["\${CANGJIE_STDX_DYNAMIC_PATH}", "\${CANGJIE_FOUNTAIN_LIBS}"]
 [target.x86_64-w64-mingw32]
