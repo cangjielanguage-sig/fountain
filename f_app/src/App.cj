@@ -263,7 +263,7 @@ public struct App {
             throw BootException('fountain version must be specified for fboot workspace. The correct command line is fboot workspace /path/of/workspace x.y.z or fboot workspace workspace_name x.y.z, x.y.z is fountain version')
         }
         let tomlPath = dir.join('cjpm.toml')
-        var content = entireFileText(tomlPath).replace('[workspace]', '''
+        let content = entireFileText(tomlPath).replace('[workspace]', '''
 [workspace]
   version = "1.0.0"'''
 )
@@ -273,9 +273,7 @@ public struct App {
 [dependencies]
   "fountain::f_base" = "${version}"
   "fountain::f_version" = "${version}"'''
-)
-        content = '''
-${content}
+) + '''
 
 [profile.build]
   incremental = true
