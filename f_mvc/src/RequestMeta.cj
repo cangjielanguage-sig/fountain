@@ -418,7 +418,7 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
                         case None => args[pname] = (zero, DummyValidator.instance, x)
                         case _ => throw UnreachableException()
                     }
-                    case _ => continue
+                    case _ => throw UnreachableException('unexpected annotation ${TypeInfo.of(annotation)}')
                 }
             }
             if (toThrow) {
