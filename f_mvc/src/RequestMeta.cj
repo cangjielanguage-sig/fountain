@@ -418,7 +418,7 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
                         case None => args[pname] = (zero, DummyValidator.instance, x)
                         case _ => throw UnreachableException()
                     }
-                    case _ => throw UnreachableException('unexpected annotation ${TypeInfo.of(annotation)}')
+                    case _ => continue // 可能存在与f_mvc 无关的注解，所以这里必须使用continue
                 }
             }
             if (toThrow) {
