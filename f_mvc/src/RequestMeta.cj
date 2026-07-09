@@ -404,19 +404,19 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
                         case None =>
                             args[pname] = (x, DummyValidator.instance, None<AbstractDateTimeConverter>)
                             toThrow = false
-                        case _ => throw UnreachableException()
+                        case _ => throw MVCException('Mapping annotation for controller func param ${pname} is duplicated')
                     }
                     case x: Validator => match (args.get(pname)) {
                         case Some((p, v, c)) where v is DummyValidator =>
                             args[pname] = (p, x, c)
                         case None => args[pname] = (zero, x, None<AbstractDateTimeConverter>)
-                        case _ => throw UnreachableException()
+                        case _ => throw MVCException('Validator annotaton for controller func param ${pname} is duplicated')
                     }
                     case x: AbstractDateTimeConverter => match (args.get(pname)) {
                         case Some((p, v, c)) where c.isNone() =>
                             args[pname] = (p, v, x)
                         case None => args[pname] = (zero, DummyValidator.instance, x)
-                        case _ => throw UnreachableException()
+                        case _ => throw MVCException('DateTimeConverter annotaton for controller func param ${pname} is duplicated')
                     }
                     case _ => continue // 可能存在与f_mvc 无关的注解，所以这里必须使用continue
                 }
