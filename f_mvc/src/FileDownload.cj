@@ -57,7 +57,9 @@ public class FileDownload {
                 write("--${boundary}\r\n")
             } else {
                 responseBuilder.header("Content-Disposition", attachment(filename))
-                responseBuilder.header("Content-Type", contentType)
+                if(contentType.size > 0){
+                    responseBuilder.header("Content-Type", contentType)
+                }
                 if (length >= 0) {
                     responseBuilder.header("Content-Length", length.toString())
                 }
@@ -66,17 +68,19 @@ public class FileDownload {
             built.store(true)
         }
         if(multi){
-            next(filename, length: length)
+            next(filename, contentType, length: length)
         }
         this
     }
-    public func next(filename: String, length!: Int64 = -1){
+    public func next(filename: String, contentType: String, length!: Int64 = -1){
         if(multi){
             write("Content-Disposition: ${attachment(filename)}\r\n")
             if (length >= 0) {
                 write("Content-Length: ${length}\r\n")
             }
-            write("Content-Type: ${contentType}\r\n\r\n")
+            if(contentType.size > 0) {
+                write("Content-Type: ${contentType}\r\n\r\n")
+            }
         }else{
             throw MVCException('current function only supports to download multi file, so param multi of FileDownload constructor must be true to invoke this function.')
         }
