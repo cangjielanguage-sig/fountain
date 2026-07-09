@@ -11,7 +11,7 @@
   link-option = ""
   package-configuration = {}
   version = "1.2.0"
-  category = ["Utility"]
+  category = ["Utility", "Developer Tools", "Programming Framework"]
   license = ["Apache-2.0"]
   include = ["src", "doc"]
   exclude = ["cjpm.toml.bak", "cjpm.lock", "target"]

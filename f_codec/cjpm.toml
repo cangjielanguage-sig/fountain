@@ -11,7 +11,7 @@
   override-compile-option = "--dy-std"
   link-option = ""
   package-configuration = {}
-  category = ["Utility"]
+  category = ["Utility", "Data Encapsulation and Transfer", "Developer Tools"]
   license = ["Apache-2.0"]
   include = ["src", "doc"]
   exclude = ["cjpm.toml.bak", "cjpm.lock", "target"]

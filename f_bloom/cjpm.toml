@@ -11,6 +11,7 @@
   override-compile-option = ""
   link-option = ""
   package-configuration = {}
+  category = ["Utility", "Developer Tools"]
 
 [dependencies]
   "fountain::f_base" = {path = "../f_base"}

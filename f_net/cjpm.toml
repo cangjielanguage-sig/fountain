@@ -18,7 +18,7 @@
   target-dir = ""
   version = "1.2.0"
   package-configuration = {}
-  category = ["Utility"]
+  category = ["Utility", "Developer Tools", "Network"]
   license = ["Apache-2.0"]
   include = ["src", "doc"]
   exclude = ["cjpm.toml.bak", "cjpm.lock", "target"]

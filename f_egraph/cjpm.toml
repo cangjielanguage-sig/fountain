@@ -11,7 +11,7 @@
   output-type = "dynamic"
   link-option = ""
   package-configuration = {}
-  category = ["Utility"]
+  category = ["Utility", "Programming Framework", "Developer Tools"]
   license = ["Apache-2.0"]
   include = ["src", "doc"]
   exclude = ["cjpm.toml.bak", "cjpm.lock", "target"]
