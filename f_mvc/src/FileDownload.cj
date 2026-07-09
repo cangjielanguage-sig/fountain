@@ -39,6 +39,17 @@ public class FileDownload {
         }
     }
     public func write(filename: String, input: InputStream, length!: Int64 = -1) {
+        start(filename, length: length)
+        let buf = Array<Byte>(MVCConfig.downloadBufferSize, repeat: 0)
+        while (let len <- input.read(buf) && len > 0) {
+            write(buf[0..len])
+        }
+        end()
+    }
+    private func write(header: String) {
+        writer.write(header.unsafeBytes())
+    }
+    public func start(filename: String, length!: Int64 = -1): FileDownload {
         if (!built.load()) {
             if (multi) {
                 responseBuilder.header("Content-Type", "multipart/x-mixed-replace; boundary=${boundary}")
@@ -54,35 +65,31 @@ public class FileDownload {
             }
             built.store(true)
         }
-        func write() {
-            let buf = Array<Byte>(MVCConfig.downloadBufferSize, repeat: 0)
-            while (let len <- input.read(buf) && len > 0) {
-                writer.write(buf[0..len])
-            }
+        if(multi){
+            next(filename, length: length)
         }
-
-        if (multi) {
+        this
+    }
+    public func next(filename: String, length!: Int64 = -1){
+        if(multi){
             write("Content-Disposition: ${attachment(filename)}\r\n")
             if (length >= 0) {
                 write("Content-Length: ${length}\r\n")
             }
             write("Content-Type: ${contentType}\r\n\r\n")
-            write()
-            write("\r\n--${boundary}\r\n")
-        } else {
-            write()
-            end()
+        }else{
+            throw MVCException('current function only supports to download multi file, so param multi of FileDownload constructor must be true to invoke this function.')
         }
+    }
+    public func write(bytes: Array<Byte>): Unit {
+        writer.write(bytes)
     }
     public func end() {
         if (multi) {
-            write("--${boundary}--")
+            write("\r\n--${boundary}\r\n")
         }
     }
     private func attachment(filename: String) {
         "attachment, filename=\"${filename}\""
-    }
-    private func write(header: String) {
-        writer.write(header.unsafeBytes())
     }
 }
