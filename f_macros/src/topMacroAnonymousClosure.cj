@@ -23,8 +23,7 @@ public func topMacroAnonymousClosure(tokens: Tokens): Tokens {
             try {
                 $tokens
             }catch(e: Exception){
-                println($(tokens.toString()))
-                e.printStackTrace()
+                Exception($(tokens.toString()), e).printStackTrace()
                 throw e
             }
         }()
