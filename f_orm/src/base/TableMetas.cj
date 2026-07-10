@@ -27,7 +27,7 @@ public struct TableMetas{
         try{
             schemas[TypeInfo.of<T>()] = TableMeta.new<T>()
         }catch(e: Exception){
-            log.warn("register table meta error: ", e)
+            log.warn{"register table meta error: ${e}"}
         }
     }
     public static func tableMetas(): Iterator<TableMeta> {
