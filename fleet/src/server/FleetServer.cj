@@ -26,38 +26,18 @@ internal struct FleetServer {
     private static func checker(): ?Message {
         Message.ping()
     }
-    private static func executor(message: Message): Message {
+    private static func executor(buffer: SocketBuffer, message: Message): Message {
         let cmd = message.command
         match(message.command){
-            case Command.REGISTER => register(message.id, message.data)
-            case Command.DEREGISTER => deregister(message.id, message.data)
-            case Command.SUBSCRIBE => subscribe(message.id, message.data)
-            case Command.UNSUBSCRIBE => unsubscribe(message.id, message.data)
-            case Command.CONSUME(tag) => consume(message.id, message.data, tag)
-            case _ => error(message.id)
+            case Command.REGISTER => FleetServerRegister(message.id, message.data).exec()
+            case Command.DEREGISTER => FleetServerDeregister(message.id, message.data).exec()
+            case Command.SUBSCRIBE => FleetServerSubscribe(buffer, message.id, message.data).exec()
+            case Command.UNSUBSCRIBE => FleetServerUnsubscribe(message.id, message.data).exec()
+            case Command.CONSUME(tag) => FleetServerConsume(buffer, message.id, message.data, tag).exec()
+            case _ => error(message.id, 'UNSUPPORTED Command')
         }
     }
-    private static func register(id: MessageID, data: Data): Message {
-        // 注册数据
-        unsafeZeroValue<Message>()
-    }
-    private static func deregister(id: MessageID, data: Data): Message {
-        // 注销数据
-        unsafeZeroValue<Message>()
-    }
-    private static func subscribe(id: MessageID, data: Data): Message {
-        // 订阅数据 数据有变化时主动发送消息，订阅时返回ACK，数据变化时返回RESP
-        unsafeZeroValue<Message>()
-    }
-    private static func unsubscribe(id: MessageID, data: Data): Message {
-        // 取消订阅
-        unsafeZeroValue<Message>()
-    }
-    private static func consume(id: MessageID, data: Data, tag: Byte): Message {
-        // TODO 应当返回RESP
-        unsafeZeroValue<Message>()
-    }
-    private static func error(id: MessageID): Message {
-        Message.error(id)
+    private static func error(id: MessageID, message: String): Message {
+        Message.error(id, data: message)
     }
 }

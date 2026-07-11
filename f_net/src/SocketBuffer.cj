@@ -18,6 +18,7 @@ package fountain::f_net
 import std.io.InputStream
 import std.sync.AtomicInt64
 import fountain::f_log.*
+import fountain::f_protocol.default.*
 
 internal class StopSignal {
     let stopped = AtomicInt64(0)
@@ -46,7 +47,11 @@ public struct SocketBuffer <: Resource {
             }
         }
     }
-
+    public func transfer(message: Message): Unit {
+        queue.add({
+            => message.encode().copy(to: socket, closeToOnEnd: false)
+        })
+    }
     public func close(): Unit {
         stop.stopped.store(1)
         if (!socket.isClosed()) {

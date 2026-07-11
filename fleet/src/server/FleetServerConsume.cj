@@ -15,16 +15,13 @@ limitations under the License.
 */
 package fountain::fleet.server
 
-internal import std.fs.Path
-internal import fountain::f_base.*
-internal import fountain::f_log.*
-internal import fountain::f_net.SocketBuffer
-internal import fountain::f_net.server.*
-internal import fountain::f_codec.*
-internal import fountain::f_data.*
-internal import fountain::f_protocol.*
-internal import fountain::f_protocol.default.*
+internal struct FleetServerConsume {
+    FleetServerConsume(private let buffer: SocketBuffer, 
+                       private let id: MessageID, 
+                       private let data: Data,
+                       private let tag: Byte){}
 
-import fountain::f_store.Store
-
-internal let store = Store(FleetServerConfig.storePath)
+    func exec(): Message {
+        unsafeZeroValue<Message>()
+    }
+}

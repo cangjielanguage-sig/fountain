@@ -175,12 +175,9 @@ public class Client<T> <: Resource where T <: DataFields<T> {
         transfer(buffers[index], message, timeout)
     }
     private func transfer(buffer: SocketBuffer, message: Message): MessageFuture<Message> {
-        let en = message.encode()
         let future = MessageFuture<Message>()
         futures.add(message.id, future)
-        buffer.queue.add({
-            => en.copy(to: buffer.socket, closeToOnEnd: false)
-        })
+        buffer.transfer(message)
         future
     }
     private func transfer(buffer: SocketBuffer, message: Message, timeout: Duration): ?Message {

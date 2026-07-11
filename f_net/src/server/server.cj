@@ -20,7 +20,6 @@ import std.net.TcpServerSocket
 import std.sync.{Timer, CatchupStyle}
 import fountain::f_data.*
 import fountain::f_log.*
-import fountain::f_protocol.*
 import fountain::f_protocol.default.*
 import fountain::f_net.*
 
@@ -44,7 +43,7 @@ public struct Server<T> <: Resource where T <: DataFields<T> {
                         spawn {
                             let available = try {
                                 if(let Some(m) <- checker()){
-                                    transfer(buffer, m)
+                                    buffer.transfer(m)
                                     true
                                 }else{
                                     false
@@ -84,30 +83,30 @@ public struct Server<T> <: Resource where T <: DataFields<T> {
     public static func build(queueSize!: Int64 = 1024, checkDuration!: Duration, checker!: () -> ?Message, bindAt!: UInt16): ServerBuilder<T> {
         ServerBuilder<T>(queueSize, checkDuration, checker, bindAt)
     }
-    public func start(executor: (Message) -> Message): Unit {
+    public func start(executor: (SocketBuffer, Message) -> Message): Unit {
         while (let socket <- server.accept()) {
             params.populate(socket)
             let buffer = SocketBuffer(queueSize, socket)
             this.buffers.add(buffer)
             spawn {
                 while (!socket.isClosed()) {
-                    try {
-                        let req = Message.decode<TcpSocket, T>(buffer.buffered)
-                        let m = req |> executor
-                        transfer(buffer, m)
-                    } catch (e: Exception) {
-                        log.warn('Server reader error', e)
-                        break
+                    try{
+                        let m = try {
+                            let req = Message.decode<TcpSocket, T>(buffer.buffered)
+                            executor(buffer, req)
+                        } catch (e: Exception) {
+                            log.warn('error occurred on reading or executing', e)
+                            continue
+                        }
+                        buffer.transfer(m)
+                    }catch(e: Exception){
+                        log.warn('error occurred on responding', e)
+                    }finally{
+                        socket.close()
                     }
                 }
             }
         }
-    }
-    private static func transfer(buffer: SocketBuffer, message: Message): Unit {
-        let en = message.encode()
-        buffer.queue.add({
-            => en.copy(to: buffer.socket, closeToOnEnd: false)
-        })
     }
     public func isClosed(): Bool {
         server.isClosed()
