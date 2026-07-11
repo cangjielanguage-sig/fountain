@@ -20,7 +20,7 @@ internal struct FleetServerRegister {
     
     func exec(): Message {
         let msg = DataObject<FleetDataMessage>.populate(data).getOrThrow()
-        FleetStore.instance.add(msg.path, msg.data, msg.expireAt)
+        FleetStore.add(msg.path, msg.data, msg.expireAt)
         Message.ack(id)
     }
 }

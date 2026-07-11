@@ -20,7 +20,7 @@ internal struct FleetServerDeregister {
     
     func exec(): Message {
         (data as DataString).getOrThrow().data |>
-        FleetStore.instance.remove
+        FleetStore.remove
         Message.ack(id)
     }
 }

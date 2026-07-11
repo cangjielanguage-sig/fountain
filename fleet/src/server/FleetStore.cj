@@ -21,8 +21,8 @@ import std.sync.{Timer, CatchupStyle, Mutex}
 internal struct FleetStore {
     private static let mutex = Mutex()
     private static let store = Store(FleetServerConfig.storePath)
-    private let timer: Timer
-    private init(){
+    private static let timer: Timer
+    static init(){
         let prefix = 'T#'.unsafeBytes()
         timer = Timer.repeat(Duration.second, Duration.second, {=>
             try(itr = store.prefix(prefix)){
@@ -41,15 +41,15 @@ internal struct FleetStore {
             }
         }, style: Delay)
     }
-    static let instance = FleetStore()
+    private init(){}
 
-    func add(path: String, data: Array<Byte>, expireAt: DateTime){
+    static func add(path: String, data: Array<Byte>, expireAt: DateTime){
         synchronized(mutex){
             store.add('D#${path}'.unsafeBytes(), data, expireAt)
             store.add('T#${path}'.unsafeBytes(), expireAt.toString().unsafeBytes())
         }
     }
-    func remove(path: String) {
+    static func remove(path: String) {
         store.remove(path.unsafeBytes())
     }
 }
