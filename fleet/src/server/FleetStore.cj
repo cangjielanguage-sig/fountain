@@ -15,12 +15,15 @@ limitations under the License.
 */
 package fountain::fleet.server
 
-internal struct FleetServerRegister {
-    FleetServerRegister(private let id: MessageID, private let data: Data){}
-    
-    func exec(): Message {
-        let msg = DataObject<FleetDataMessage>.populate(data).getOrThrow()
-        FleetStore.instance.add(msg.path, msg.data, msg.expire)
-        Message.ack(id)
+internal struct FleetStore {
+    private let store = Store(FleetServerConfig.storePath)
+    private init(){}
+    static let instance = FleetStore()
+
+    func add(path: String, data: Array<Byte>, expire: Duration){
+        store.add(path.unsafeBytes(), data, expire)
+    }
+    func remove(path: String) {
+        store.remove(path.unsafeBytes())
     }
 }

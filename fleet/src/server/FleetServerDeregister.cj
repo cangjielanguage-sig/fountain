@@ -19,6 +19,8 @@ internal struct FleetServerDeregister {
     FleetServerDeregister(private let id: MessageID, private let data: Data){}
     
     func exec(): Message {
-        unsafeZeroValue<Message>()
+        (data as DataString).getOrThrow().data |>
+        FleetStore.instance.remove
+        Message.ack(id)
     }
 }

@@ -60,6 +60,12 @@ public struct Message <: Protocol<EncodedMessage, Message> {
     private static func build(command: Command): Message {
         Message(command)
     }
+    private static func build(command: Command, id: MessageID): Message {
+        Message(command, id)
+    }
+    public static func build<T>(command: Command, id: MessageID, data: T): Message where T <: DataFields<T>{
+        Message(command, id, data.toData())
+    }
     public static func auth<T>(hasData!: Bool, ack!: Bool, authData!: T): Message  where T <: DataFields<T> {
         if (hasData) {
             build<T>(AUTH(HASDATA | to(ack, ACK)), authData)
@@ -97,8 +103,8 @@ public struct Message <: Protocol<EncodedMessage, Message> {
     public static func consume<T>(once!: Bool, qos!: QoS, data!: T): Message where T <: DataFields<T> {
         build<T>(CONSUME(to(once, ONCE) | qos.value), data)
     }
-    public static func resp<T>(qos!: QoS, ack!: Bool, data!: T): Message where T <: DataFields<T> {
-        build<T>(RESP(qos.value | to(ack, ACK)), data)
+    public static func resp<T>(id: MessageID, qos!: QoS, ack!: Bool, data!: T): Message where T <: DataFields<T> {
+        build<T>(RESP(qos.value | to(ack, ACK)), id, data)
     }
     public static func ping(): Message {
         build(PING(1))
@@ -106,17 +112,17 @@ public struct Message <: Protocol<EncodedMessage, Message> {
     public static func elect<T>(vote!: Bool, approve!: Bool, assume!: Bool, ack!: Bool, data!: T): Message where T <: DataFields<T> {
         build<T>(ELECT(to(vote, VOTE) | to(approve, APPROVE) | to(assume, ASSUME) | to(ack, ACK)), data)
     }
-    public static func ack<T>(data!: T): Message where T <: DataFields<T> {
-        build<T>(Command.ACK, data)
+    public static func ack(id: MessageID): Message {
+        build(Command.ACK, id)
     }
-    public static func ack(): Message {
-        build(Command.ACK)
+    public static func ack<T>(id: MessageID, data!: T): Message where T <: DataFields<T> {
+        build<T>(Command.ACK, id, data)
     }
     public static func error<T>(id: MessageID, data!: T): Message where T <: DataFields<T> {
-        Message(Command.ERROR, id, data.toData())
+        build<T>(Command.ERROR, id, data)
     }
     public static func error(id: MessageID): Message {
-        Message(Command.ERROR, id)
+        build(Command.ERROR, id)
     }
     public static func deregister<T>(data!: T): Message where T <: DataFields<T> {
         build<T>(DEREGISTER, data)
