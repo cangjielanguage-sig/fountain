@@ -15,13 +15,39 @@ limitations under the License.
 */
 package fountain::fleet.server
 
+import std.collection.ArrayList
+import std.sync.{Timer, CatchupStyle, Mutex}
+
 internal struct FleetStore {
-    private let store = Store(FleetServerConfig.storePath)
-    private init(){}
+    private static let mutex = Mutex()
+    private static let store = Store(FleetServerConfig.storePath)
+    private let timer: Timer
+    private init(){
+        let prefix = 'T#'.unsafeBytes()
+        timer = Timer.repeat(Duration.second, Duration.second, {=>
+            try(itr = store.prefix(prefix)){
+                let removed = ArrayList<Array<Byte>>()
+                for((k, v) in itr where DateTime.parse(String.fromUtf8(v)) <= DateTime.now()){
+                    removed.add(k)
+                }
+                for(k in removed){
+                    synchronized(mutex){
+                        if(let Some(v) <- store.get(k) && DateTime.parse(String.fromUtf8(v)) <= DateTime.now()){
+                            store.remove(k)
+                            //todo 向订阅当前path变化的客户端发送通知
+                        }
+                    }
+                }
+            }
+        }, style: Delay)
+    }
     static let instance = FleetStore()
 
-    func add(path: String, data: Array<Byte>, expire: Duration){
-        store.add(path.unsafeBytes(), data, expire)
+    func add(path: String, data: Array<Byte>, expireAt: DateTime){
+        synchronized(mutex){
+            store.add('D#${path}'.unsafeBytes(), data, expireAt)
+            store.add('T#${path}'.unsafeBytes(), expireAt.toString().unsafeBytes())
+        }
     }
     func remove(path: String) {
         store.remove(path.unsafeBytes())

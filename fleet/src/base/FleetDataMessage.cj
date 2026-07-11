@@ -21,7 +21,7 @@ import fountain::f_data.macros.*
 public class FleetDataMessage {
     public var path: String
     public var data: Array<Byte>
-    public var expire: Duration
+    public var expireAt: DateTime
 
     public init(){
         this('')
@@ -30,12 +30,12 @@ public class FleetDataMessage {
         this(path, [])
     }
     public init(path: String, data: Array<Byte>, expire!: Duration = Duration.Zero){
-        this.path = path
-        this.data = data
-        this.expire = expire
+        this(path, data, DateTime.now() + expire)
     }
     public init(path: String, data: Array<Byte>, expireAt: DateTime){
-        this(path, data, expire: expireAt - DateTime.now())
+        this.path = path
+        this.data = data
+        this.expireAt = expireAt
     }
     public init(path: String, data: Data, expire!: Duration = Duration.Zero){
         this(path, encode(data), expire: expire)
