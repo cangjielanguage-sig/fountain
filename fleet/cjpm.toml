@@ -1,0 +1,27 @@
+[package]
+  cjc-version = "1.2.0"
+  name = "fleet"
+  organization = "fountain"
+  description = "数据同步工具，可用于做配置中心"
+  version = "1.0.0"
+  target-dir = ""
+  script-dir = ""
+  output-type = "dynamic"
+  compile-option = ""
+  override-compile-option = ""
+  link-option = ""
+  package-configuration = {}
+  category = ["Utility", "Developer Tools", "Distributed", "Infrastructure"]
+
+[dependencies]
+  "fountain::f_app" = {path = "../f_app"}
+  "fountain::f_base" = {path = "../f_base"}
+  "fountain::f_codec" = {path = "../f_codec"}
+  "fountain::f_data" = {path = "../f_data"}
+  "fountain::f_config" = {path = "../f_config"}
+  "fountain::f_log" = {path = "../f_log"}
+  "fountain::f_net" = {path = "../f_net"}
+  "fountain::f_process" = {path = "../f_process"}
+  "fountain::f_protocol" = {path = "../f_protocol"}
+  "fountain::f_store" = {path = "../f_store"}
+  "fountain::f_util" = {path = "../f_util"}

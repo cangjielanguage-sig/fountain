@@ -157,8 +157,7 @@ public class MVCConfig {
     }
     public static prop port: UInt16 {
         get() {
-            let port = Config.getValue<Int>(PORT) ?? 8080
-            UInt16(port)
+            Config.getValue<UInt16>(PORT) ?? 8080
         }
     }
     private static func duration(key: String) {

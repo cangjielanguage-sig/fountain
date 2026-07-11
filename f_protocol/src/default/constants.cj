@@ -100,7 +100,7 @@ public enum QoS <: Equatable<QoS> & ToString {
 | DLQ_LIST    | 4         | Client to Server                     | List dead letters                        |
 | DLQ_REDELIVER | 5       | Client to Server                     | Redeliver dead letter                    |
 | DLQ_REDELIVER_ALL | 6   | Client to Server                     | Redeliver all dead letters               |
-| TOPIC_OP   | 7         | Client to Server                     | Topic operation (body: operation + data) |
+| ERROR       | 7         | Client to Server or Server to Client | Topic operation (body: operation + data) |
 | SUBSCRIBE   | 8         | Client to Server                     | Subscribe request                        |
 | UNSUBSCRIBE | 9         | Client to Server                     | Unsubscribe request                      |
 | CONSUME     | 10        | Client to Server                     | consume messages                         |
@@ -110,7 +110,7 @@ public enum QoS <: Equatable<QoS> & ToString {
 | ACK         | 14        | Client to Server or Server to Client |                                          |
 | DEREGISTER  | 15        | Deregister a topic                   | Deregister a topic                       |
 */
-public enum Command {
+public enum Command <: Hashable & Equatable<Command> & ToString{
     | AUTH(Byte)    //0
     | SLAVEOF(Byte) //1
     | REGISTER      //2
@@ -118,7 +118,7 @@ public enum Command {
     | DLQ_LIST      //4
     | DLQ_REDELIVER //5
     | DLQ_REDELIVER_ALL //6
-    | TOPIC_OP      //7
+    | ERROR      //7
     | SUBSCRIBE     //8
     | UNSUBSCRIBE   //9
     | CONSUME(Byte) //10
@@ -141,7 +141,7 @@ public enum Command {
                 case DLQ_LIST    => ( 4 << 4) | 1
                 case DLQ_REDELIVER => ( 5 << 4) | 1
                 case DLQ_REDELIVER_ALL => ( 6 << 4) | 1
-                case TOPIC_OP    => ( 7 << 4) | 1
+                case ERROR    => ( 7 << 4) | 1
                 case SUBSCRIBE   => ( 8 << 4) | 1
                 case UNSUBSCRIBE => ( 9 << 4) | 1
                 case CONSUME(x)  => (10 << 4) | tag(x)
@@ -151,6 +151,50 @@ public enum Command {
                 case ACK         => (14 << 4) | 0
                 case DEREGISTER  => (15 << 4) | 1
             }
+        }
+    }
+    public func hashCode(): Int64 {
+        value.hashCode()
+    }
+    public operator func ==(other: Command): Bool {
+        match((this, other)){
+            case (AUTH(x), AUTH(y)) => x == y
+            case (SLAVEOF(x), SLAVEOF(y)) => x == y
+            case (REGISTER, REGISTER) => true
+            case (PUBLISH(x), PUBLISH(y)) => x == y
+            case (DLQ_LIST, DLQ_LIST) => true
+            case (DLQ_REDELIVER, DLQ_REDELIVER) => true
+            case (DLQ_REDELIVER_ALL, DLQ_REDELIVER_ALL) => true
+            case (ERROR, ERROR) => true
+            case (SUBSCRIBE, SUBSCRIBE) => true
+            case (UNSUBSCRIBE, UNSUBSCRIBE) => true
+            case (CONSUME(x), CONSUME(y)) => x == y
+            case (RESP(x), RESP(y)) => x == y
+            case (PING(x), PING(y)) => x == y
+            case (ELECT(x), ELECT(y)) => x == y
+            case (ACK, ACK) => true
+            case (DEREGISTER, DEREGISTER) => true
+            case _ => false
+        }
+    }
+    public func toString(): String {
+        match(this){
+            case AUTH(x)     => 'AUTH(${x})'
+            case SLAVEOF(x)  => 'SLAVEOF(${x})'
+            case REGISTER    => 'REGISTER'
+            case PUBLISH(x)  => 'PUBLISH(${x})'
+            case DLQ_LIST    => 'DLQ_LIST'
+            case DLQ_REDELIVER => 'DLQ_REDELIVER'
+            case DLQ_REDELIVER_ALL => 'DLQ_REDELIVER_ALL'
+            case ERROR    => 'ERROR'
+            case SUBSCRIBE   => 'SUBSCRIBE'
+            case UNSUBSCRIBE => 'UNSUBSCRIBE'
+            case CONSUME(x)  => 'CONSUME(${x})'
+            case RESP(x)     => 'RESP(${x})'
+            case PING(x)     => 'PING(${x})'
+            case ELECT(x)    => 'ELECT(${x})'
+            case ACK         => 'ACK'
+            case DEREGISTER  => 'DEREGISTER'
         }
     }
     public static func parse(value: Byte): Command {
@@ -165,7 +209,7 @@ public enum Command {
             case  4 => DLQ_LIST
             case  5 => DLQ_REDELIVER
             case  6 => DLQ_REDELIVER_ALL
-            case  7 => TOPIC_OP
+            case  7 => ERROR
             case  8 => SUBSCRIBE
             case  9 => UNSUBSCRIBE
             case 10 => CONSUME(tag())

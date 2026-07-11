@@ -11,6 +11,7 @@
   override-compile-option = "-O2 --dy-std"
   link-option = ""
   package-configuration = {}
+  category = ["Utility", "Developer Tools"]
 
 [dependencies]
 #  opengauss = {git = "https://gitcode.com/runningW/opengauss-driver.git", branch="master"}

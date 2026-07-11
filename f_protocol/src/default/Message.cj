@@ -27,6 +27,9 @@ public struct Message <: Protocol<EncodedMessage, Message> {
     public init(command: Command){
         this(command, DataNone.INSTANCE)
     }
+    public init(command: Command, id: MessageID){
+        this(command, id, DataNone.INSTANCE)
+    }
     public func tryFromData<T>(): ?T where T <: DataFields<T> {
         match(T.tryFromData(data)){
             case x: ?T => x
@@ -48,64 +51,74 @@ public struct Message <: Protocol<EncodedMessage, Message> {
 | PING                    | 0         | 0         | 0         | ACK       |
 | ELECT                   | VOTE      | APPROVE   | ASSUME    | ACK       |
 | ACK                     | 0         | 0         | 0         | 0         |
+| ERROR                   | 0         | 0         | 0         | 0         |
 | DEREGISTER              | 0         | 0         | 0         | ACK       |
 */
-    private static func build<T>(command: Command, data: T): EncodedMessage where T <: DataFields<T> {
-        Message(command, data.toData()).encode()
+    private static func build<T>(command: Command, data: T): Message where T <: DataFields<T> {
+        Message(command, data.toData())
     }
-    private static func build(command: Command): EncodedMessage {
-        Message(command).encode()
+    private static func build(command: Command): Message {
+        Message(command)
     }
-    public static func auth<T>(hasData!: Bool, ack!: Bool, authData!: T): EncodedMessage  where T <: DataFields<T> {
+    public static func auth<T>(hasData!: Bool, ack!: Bool, authData!: T): Message  where T <: DataFields<T> {
         if (hasData) {
             build<T>(AUTH(HASDATA | to(ack, ACK)), authData)
         } else {
             build(AUTH(to(ack, ACK)))
         }
     }
-    public static func slaveof(reg!: Bool, ack!: Bool): EncodedMessage {
+    public static func slaveof(reg!: Bool, ack!: Bool): Message {
         build(SLAVEOF(to(reg, REG) | to(ack, ACK)))
     }
-    public static func slaveof(reg!: Bool, ack!: Bool, masterHost!: String, masterPort!: UInt16): EncodedMessage {
+    public static func slaveof(reg!: Bool, ack!: Bool, masterHost!: String, masterPort!: UInt16): Message {
         build<String>(SLAVEOF(to(reg, REG) | to(ack, ACK)), '${masterHost}:${masterPort}')
     }
-    public static func slaveof(reg!: Bool, ack!: Bool, masterHost!: IPAddress, masterPort!: UInt16): EncodedMessage {
+    public static func slaveof(reg!: Bool, ack!: Bool, masterHost!: IPAddress, masterPort!: UInt16): Message {
         slaveof(reg: reg, ack: ack, masterHost: masterHost.toString(), masterPort: masterPort)
     }
-    public static func slaveof(reg!: Bool, ack!: Bool, masterAddress!: IPSocketAddress): EncodedMessage {
+    public static func slaveof(reg!: Bool, ack!: Bool, masterAddress!: IPSocketAddress): Message {
         slaveof(reg: reg, ack: ack, masterHost: masterAddress.address, masterPort: masterAddress.port)
     }
-    public static func slaveof(reg!: Bool, ack!: Bool, masterSocket!: TcpSocket): EncodedMessage {
+    public static func slaveof(reg!: Bool, ack!: Bool, masterSocket!: TcpSocket): Message {
         slaveof(reg: reg, ack: ack, masterAddress: (masterSocket.remoteAddress as IPSocketAddress).getOrThrow())
     }
-    public static func register<T>(data!: T): EncodedMessage  where T <: DataFields<T> {
+    public static func register<T>(data!: T): Message  where T <: DataFields<T> {
         build<T>(REGISTER, data)
     }
-    public static func publish<T>(dup!: Bool, qos!: QoS, retain!: Bool, data!: T): EncodedMessage where T <: DataFields<T> {
+    public static func publish<T>(dup!: Bool, qos!: QoS, retain!: Bool, data!: T): Message where T <: DataFields<T> {
         build<T>(PUBLISH(to(dup, DUP) | qos.value | to(retain, RETAIN)), data)
     }
-    public static func subscribe<T>(data!: T): EncodedMessage where T <: DataFields<T> {
+    public static func subscribe<T>(data!: T): Message where T <: DataFields<T> {
         build<T>(SUBSCRIBE, data)
     }
-    public static func unsubscribe<T>(data!: T): EncodedMessage where T <: DataFields<T> {
+    public static func unsubscribe<T>(data!: T): Message where T <: DataFields<T> {
         build<T>(UNSUBSCRIBE, data)
     }
-    public static func consume<T>(once!: Bool, qos!: QoS, data!: T): EncodedMessage where T <: DataFields<T> {
+    public static func consume<T>(once!: Bool, qos!: QoS, data!: T): Message where T <: DataFields<T> {
         build<T>(CONSUME(to(once, ONCE) | qos.value), data)
     }
-    public static func resp<T>(qos!: QoS, ack!: Bool, data!: T): EncodedMessage where T <: DataFields<T> {
+    public static func resp<T>(qos!: QoS, ack!: Bool, data!: T): Message where T <: DataFields<T> {
         build<T>(RESP(qos.value | to(ack, ACK)), data)
     }
-    public static func ping(): EncodedMessage {
+    public static func ping(): Message {
         build(PING(1))
     }
-    public static func elect<T>(vote!: Bool, approve!: Bool, assume!: Bool, ack!: Bool, data!: T): EncodedMessage where T <: DataFields<T> {
+    public static func elect<T>(vote!: Bool, approve!: Bool, assume!: Bool, ack!: Bool, data!: T): Message where T <: DataFields<T> {
         build<T>(ELECT(to(vote, VOTE) | to(approve, APPROVE) | to(assume, ASSUME) | to(ack, ACK)), data)
     }
-    public static func ack<T>(data!: T): EncodedMessage where T <: DataFields<T> {
+    public static func ack<T>(data!: T): Message where T <: DataFields<T> {
         build<T>(Command.ACK, data)
     }
-    public static func deregister<T>(data!: T): EncodedMessage where T <: DataFields<T> {
+    public static func ack(): Message {
+        build(Command.ACK)
+    }
+    public static func error<T>(id: MessageID, data!: T): Message where T <: DataFields<T> {
+        Message(Command.ERROR, id, data.toData())
+    }
+    public static func error(id: MessageID): Message {
+        Message(Command.ERROR, id)
+    }
+    public static func deregister<T>(data!: T): Message where T <: DataFields<T> {
         build<T>(DEREGISTER, data)
     }
     private static func to(bool: Bool, byte: Byte): Byte {
