@@ -80,4 +80,13 @@ internal struct FleetStore {
     static func get(path: String): ?Array<Byte> {
         store.get('D#${path}'.unsafeBytes())
     }
+    static func filter(pattern: String): Iterator<Array<Byte>> {
+        let pp = PathPattern()
+        pp.compile(pattern, ())
+        let prefix = 'D#'.unsafeBytes()
+        store.prefix(prefix).filter{tpl =>
+            String.fromUtf8(tpl[0][2 .. ]) |>
+            pp.matches
+        }.map{tpl => tpl[1]}
+    }
 }

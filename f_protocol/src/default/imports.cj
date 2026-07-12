@@ -15,9 +15,8 @@ limitations under the License.
 */
 package fountain::f_protocol.default
 
-internal import std.collection.ArrayList
 internal import std.env.getProcessId
-internal import std.io.{InputStream, OutputStream, BufferedInputStream}
+internal import std.io.{InputStream, OutputStream}
 internal import std.net.{IPAddress, TcpSocket, IPSocketAddress}
 internal import std.reflect.*
 internal import std.time.DateTime
@@ -25,7 +24,6 @@ internal import fountain::f_base.*
 internal import fountain::f_codec.*
 internal import fountain::f_codec.default.*
 internal import fountain::f_data.*
-internal import fountain::f_exception.UnreachableException
 internal import fountain::f_pool.BytesCopyTo
 internal import fountain::f_protocol.exception.*
 internal import fountain::f_protocol.*

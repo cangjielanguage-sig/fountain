@@ -912,7 +912,7 @@ public class DefaultCodec <: Codec {
             throw UnreachableException()
         }
     }
-    public func decode<T>(input: InputStream): ?T where T <: DataFields<T> {
+    public func decode<T>(input: InputStream): ?T where T <: FromData {
         let d = T.tryFromData(decodeData(input))
         match (d) {
             case x: T => x
