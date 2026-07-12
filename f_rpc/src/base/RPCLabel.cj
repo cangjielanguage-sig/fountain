@@ -18,4 +18,11 @@ package fountain::f_rpc.base
 public enum RPCLabel <: Equatable<RPCLabel> {
     | Stub
     | Skeleton
+    
+    public operator func ==(other: RPCLabel): Bool {
+        match((this, other)){
+            case (Stub, Stub) | (Skeleton, Skeleton) => true
+            case _ => false
+        }
+    }
 }
