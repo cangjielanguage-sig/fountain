@@ -35,37 +35,36 @@ public struct Server<T> <: Resource where T <: DataFields<T> {
         checkTimer = Timer.repeat(
             checkDuration,
             checkDuration,
-            {
-                =>
-                    let size = buffers.size
-                    var i = 0
-                    while (i < size && let buffer <- buffers.remove()) {
-                        spawn {
-                            let available = try {
-                                if(let Some(m) <- checker()){
-                                    buffer.transfer(m)
-                                    true
-                                }else{
-                                    false
-                                }
-                            } catch (e: Exception) {
-                                log.warn('TcpSocket.check', e)
+            {=>
+                let size = buffers.size
+                var i = 0
+                while (i < size && let buffer <- buffers.remove()) {
+                    spawn {
+                        let available = try {
+                            if(let Some(m) <- checker()){
+                                buffer.transfer(m)
+                                true
+                            }else{
                                 false
                             }
-                            if (available) {
-                                buffers.add(buffer)
-                            } else {
-                                try {
-                                    if(!buffer.isClosed()){
-                                        buffer.close()
-                                    }
-                                } catch (e: Exception) {
-                                    log.warn('TcpSocket.close', e)
+                        } catch (e: Exception) {
+                            log.warn('TcpSocket.check', e)
+                            false
+                        }
+                        if (available) {
+                            buffers.add(buffer)
+                        } else {
+                            try {
+                                if(!buffer.isClosed()){
+                                    buffer.close()
                                 }
+                            } catch (e: Exception) {
+                                log.warn('TcpSocket.close', e)
                             }
                         }
-                        i++
                     }
+                    i++
+                }
             },
             style: Burst
         )
@@ -92,7 +91,7 @@ public struct Server<T> <: Resource where T <: DataFields<T> {
                 while (!socket.isClosed()) {
                     try{
                         let m = try {
-                            let req = Message.decode<TcpSocket, T>(buffer.buffered)
+                            let req = Message.decode<T>(buffer)
                             executor(buffer, req)
                         } catch (e: Exception) {
                             log.warn('error occurred on reading or executing', e)

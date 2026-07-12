@@ -15,7 +15,7 @@ limitations under the License.
  */
 package fountain::f_net
 
-import std.io.InputStream
+import std.io.{IOStream, BufferedInputStream}
 import std.sync.AtomicInt64
 import fountain::f_log.*
 import fountain::f_protocol.default.*
@@ -24,16 +24,14 @@ internal class StopSignal {
     let stopped = AtomicInt64(0)
 }
 
-public struct SocketBuffer <: Resource {
+public class SocketBuffer <: IOStream & Resource {
     private static let log = LoggerFactory.getLogger('fountain::f_net.SocketBuffer')
-    let buffered: BufferedInputStream<TcpSocket>
-    let queue: ArrayBlockingQueue<() -> Unit>
-    let socket: TcpSocket
+    private let queue: ArrayBlockingQueue<() -> Unit>
+    private let socket: TcpSocket
     private let stop = StopSignal()
 
     SocketBuffer(queueSize: Int64, socket: TcpSocket) {
         this.socket = socket
-        buffered = BufferedInputStream<TcpSocket>(socket)
         let queue = ArrayBlockingQueue<() -> Unit>(queueSize)
         this.queue = queue
         let stop = this.stop
@@ -48,19 +46,38 @@ public struct SocketBuffer <: Resource {
         }
     }
     public func transfer(message: Message): Unit {
-        queue.add({
-            => message.encode().copy(to: socket, closeToOnEnd: false)
+        queue.add({=> 
+            message.encode().copy(to: this, closeToOnEnd: false)
+            flush()
         })
+    }
+    public func read(bytes: Array<Byte>): Int64 {
+        return socket.read(bytes)
+    }
+    public func write(bytes: Array<Byte>): Unit {
+        socket.write(bytes)
+    }
+    public func flush(): Unit {
+        socket.flush()
     }
     public func close(): Unit {
         stop.stopped.store(1)
-        if (!socket.isClosed()) {
+        if(!socket.isClosed()){
             socket.close()
         }
-        buffered.close()
     }
-
-    public func isClosed(): Bool {
+    private func isStopped(): Bool {
         stop.stopped.load() == 1
+    }
+    public func isClosed(): Bool {
+        if(isStopped() && !socket.isClosed()){
+            socket.close()
+            true
+        }else if(!isStopped() && socket.isClosed()){
+            stop.stopped.store(1)
+            true
+        }else{
+            isStopped() && socket.isClosed()
+        }
     }
 }

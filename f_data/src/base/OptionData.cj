@@ -15,7 +15,7 @@ limitations under the License.
  */
 package fountain::f_data.base
 
-extend<T> Option<T> <: DataFields<T> where T <: DataFields<T> {
+extend<T> Option<T> <: DataFields<Option<T>> where T <: DataFields<T> {
     public func toData(): Data {
         match (this) {
             case Some(x) => x.toData()
@@ -27,5 +27,8 @@ extend<T> Option<T> <: DataFields<T> where T <: DataFields<T> {
             case x: DataNone => None<T>
             case x => T.tryFromData(x, flag)
         }
+    }
+    public static func isSimple(): Bool {
+        T.isSimple()
     }
 }

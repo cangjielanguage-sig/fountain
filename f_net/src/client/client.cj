@@ -39,9 +39,9 @@ public class Client<T> <: Resource where T <: DataFields<T> {
             i =>
                 let buffer = SocketBuffer(queueSize, sockets[i])
                 spawn {
-                    while (!buffer.socket.isClosed()) {
+                    while (!buffer.isClosed()) {
                         try {
-                            let message = Message.decode<TcpSocket, T>(buffer.buffered)
+                            let message = Message.decode<T>(buffer)
                             let id = message.id
                             if (let Some(fut) <- futures.remove(id)) {
                                 var f = fut
@@ -65,9 +65,9 @@ public class Client<T> <: Resource where T <: DataFields<T> {
                             buffers[i] = SocketBuffer(queueSize, sockets[i])
                             let buffer = buffers[i]
                             spawn {
-                                while (!buffer.socket.isClosed()) {
+                                while (!buffer.isClosed()) {
                                     try {
-                                        let message = Message.decode<TcpSocket, T>(buffer.buffered)
+                                        let message = Message.decode<T>(buffer)
                                         let id = message.id
                                         if (let Some(fut) <- futures.remove(id)) {
                                             var f = fut

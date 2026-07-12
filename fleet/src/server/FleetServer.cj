@@ -32,7 +32,7 @@ internal struct FleetServer {
             case Command.REGISTER => FleetServerRegister(message.id, message.data).exec()
             case Command.DEREGISTER => FleetServerDeregister(message.id, message.data).exec()
             case Command.SUBSCRIBE => FleetServerSubscribe(buffer, message.id, message.data).exec()
-            case Command.UNSUBSCRIBE => FleetServerUnsubscribe(message.id, message.data).exec()
+            case Command.UNSUBSCRIBE => FleetServerUnsubscribe(message.id).exec()
             case Command.CONSUME(tag) => FleetServerConsume(buffer, message.id, message.data, tag).exec()
             case _ => error(message.id, 'UNSUPPORTED Command')
         }

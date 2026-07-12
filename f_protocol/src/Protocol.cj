@@ -15,12 +15,12 @@ limitations under the License.
 */
 package fountain::f_protocol
 
-import std.io.{BufferedInputStream, InputStream, OutputStream}
+import std.io.{InputStream, OutputStream}
 import fountain::f_data.DataFields
 
 public interface Protocol<EN, DE> where EN <: MessageCopier {
     func encode(): EN
-    static func decode<I, T>(input: BufferedInputStream<I>): DE where I <: InputStream, T <: DataFields<T>
+    static func decode<T>(input: InputStream): DE where T <: DataFields<T>
 }
 public interface MessageCopier {
     func copy(to!: OutputStream, closeToOnEnd!: Bool): Unit

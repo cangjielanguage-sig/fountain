@@ -25,10 +25,8 @@ public interface ToDataFields <: ToData {
 }
 
 public interface ObjectData<T> <: ToDataFields & DataFields<T> where T <: ObjectData<T> & DataFields<T> {
-    static prop isSimple: Bool {
-        get() {
-            false
-        }
+    static func isSimple(): Bool {
+        false
     }
     static func tryFromData(data: Data, flag: DataConversionFlag): Any
 }

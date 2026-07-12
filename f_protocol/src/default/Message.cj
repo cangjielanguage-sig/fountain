@@ -134,7 +134,7 @@ public struct Message <: Protocol<EncodedMessage, Message> {
         let bytes = DefaultCodec().encode(id.pid).encode(id.tid).encode(id.time).encode(data).finish()
         EncodedMessage(command.value, bytes)
     }
-    public static func decode<I, T>(input: BufferedInputStream<I>): Message where I <: InputStream, T <: DataFields<T> {
+    public static func decode<T>(input: InputStream): Message where T <: DataFields<T> {
         let b = [0u8]
         let l = input.read(b)
         if (l == 0) {

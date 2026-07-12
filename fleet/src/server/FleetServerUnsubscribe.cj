@@ -16,9 +16,10 @@ limitations under the License.
 package fountain::fleet.server
 
 internal struct FleetServerUnsubscribe {
-    FleetServerUnsubscribe(private let id: MessageID, private let data: Data){}
+    FleetServerUnsubscribe(private let id: MessageID){}
     
     func exec(): Message {
-        unsafeZeroValue<Message>()
+        FleetStore.unsubscribe(id)
+        Message.ack(id)
     }
 }

@@ -19,6 +19,8 @@ internal struct FleetServerSubscribe {
     FleetServerSubscribe(private let buffer: SocketBuffer, private let id: MessageID, private let data: Data){}
     
     func exec(): Message {
-        unsafeZeroValue<Message>()
+        let pattern = (data as DataString).getOrThrow().data
+        FleetStore.subscribe(pattern, id, buffer)
+        Message.ack(id)
     }
 }

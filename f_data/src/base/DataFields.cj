@@ -30,10 +30,8 @@ public interface FromData {
 }
 public interface FromToData <: FromData & ToData {}
 public interface DataFields<T> <: FromToData where T <: DataFields<T> {
-    static prop isSimple: Bool {
-        get() {
-            true
-        }
+    static func isSimple(): Bool {
+        true
     }
     //这里不能有返回T或?T的函数，因为DataFields的实现会有子类，子类也会被DataAssist修饰，从而实现tryFromData，由于不同的泛型实参导致覆盖错误
     static func fromData(data: Data, flag: DataConversionFlag): Any {

@@ -16,7 +16,11 @@ limitations under the License.
 package fountain::fleet.server
 
 import std.collection.ArrayList
+import std.collection.concurrent.ConcurrentHashMap
 import std.sync.{Timer, CatchupStyle, Mutex}
+
+import fountain::f_collection.*
+import fountain::f_util.PathPattern
 
 internal struct FleetStore {
     private static let mutex = Mutex()
@@ -34,7 +38,9 @@ internal struct FleetStore {
                     synchronized(mutex){
                         if(let Some(v) <- store.get(k) && DateTime.parse(String.fromUtf8(v)) <= DateTime.now()){
                             store.remove(k)
-                            //todo 向订阅当前path变化的客户端发送通知
+                            let path = String.fromUtf8(k[2 .. ])
+                            store.remove('D#${path}'.unsafeBytes())
+                            notify(path, None)
                         }
                     }
                 }
@@ -43,13 +49,32 @@ internal struct FleetStore {
     }
     private init(){}
 
-    static func add(path: String, data: Array<Byte>, expireAt: DateTime){
+    static func add(path: String, data: Array<Byte>, expireAt: DateTime): Unit {
         synchronized(mutex){
             store.add('D#${path}'.unsafeBytes(), data, expireAt)
             store.add('T#${path}'.unsafeBytes(), expireAt.toString().unsafeBytes())
+            notify(path, data)
         }
     }
-    static func remove(path: String) {
+    static func remove(path: String): Unit {
         store.remove(path.unsafeBytes())
+        notify(path, None)
+    }
+    private static func notify(path: String, data: ?Array<Byte>): Unit {
+        for((id, pattern) in patterns){
+            if(let Some(buffer) <- pattern.data<SocketBuffer>(path)){
+                Message.resp(id, qos: QoS.AtMostOnce, ack: false, data: data) |>
+                buffer.transfer
+            }
+        }
+    }
+    private static let patterns = ConcurrentHashMap<MessageID, PathPattern>()
+    static func subscribe(pattern: String, id: MessageID, buffer: SocketBuffer): Unit {
+        patterns.computeIfAbsent(id){
+            PathPattern()
+        }.compile(pattern, buffer)
+    }
+    static func unsubscribe(id: MessageID): Unit {
+        patterns.remove(id)
     }
 }
