@@ -16,8 +16,9 @@ limitations under the License.
 package fountain::f_rpc.base
 
 /**
- * Stub的参数是服务版本号，编译时@RPCClient宏从cjpm build的工作路径下的cjpm.toml找到被编译项目的版本号作为Stub的构造参数。
+ * Stub的参数是服务版本号，编译时@RPCStub宏从cjpm build的工作路径下的cjpm.toml找到被编译项目的版本号作为Stub的构造参数。
  * 如果两个版本号的前两位一样，认为两个版本是兼容的，则两个Stub被判定为相等。
+ * eg. a.b.c 与x.y.z，如果a == x && b == y，则认为两个版本兼容。
  */
 public enum RPCLabel <: Equatable<RPCLabel> {
     | Stub(String)
