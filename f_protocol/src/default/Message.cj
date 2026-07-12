@@ -97,9 +97,13 @@ public struct Message <: Protocol<EncodedMessage, Message> {
     public static func subscribe<T>(data!: T): Message where T <: DataFields<T> {
         build<T>(SUBSCRIBE, data)
     }
-    public static func unsubscribe<T>(data!: T): Message where T <: DataFields<T> {
-        build<T>(UNSUBSCRIBE, data)
+    public static func unsubscribe<T>(id: MessageID, data!: T): Message where T <: DataFields<T> {
+        build<T>(UNSUBSCRIBE, id, data)
     }
+    public static func unsubscribe(id: MessageID): Message {
+        build(UNSUBSCRIBE, id)
+    }
+    
     public static func consume<T>(once!: Bool, qos!: QoS, data!: T): Message where T <: DataFields<T> {
         build<T>(CONSUME(to(once, ONCE) | qos.value), data)
     }
