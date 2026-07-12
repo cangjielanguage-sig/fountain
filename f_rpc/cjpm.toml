@@ -1,0 +1,30 @@
+[package]
+  cjc-version = "1.2.0"
+  name = "f_rpc"
+  organization = "fountain"
+  description = "远程过程调用"
+  version = "1.0.0"
+  target-dir = ""
+  script-dir = ""
+  output-type = "dynamic"
+  compile-option = ""
+  override-compile-option = ""
+  link-option = ""
+  package-configuration = {}
+  category = ["Utility", "Developer Tools", "Distributed", "Infrastructure", "Programming Framework"]
+
+[dependencies]
+  "fountain::f_app" = {path = "../f_app"}
+  "fountain::f_base" = {path = "../f_base"}
+  "fountain::f_codec" = {path = "../f_codec"}
+  "fountain::f_collection" = {path = "../f_collection"}
+  "fountain::f_config" = {path = "../f_config"}
+  "fountain::f_data" = {path = "../f_data"}
+  "fountain::f_log" = {path = "../f_log"}
+  "fountain::f_macros" = {path = "../f_macros"}
+  "fountain::f_net" = {path = "../f_net"}
+  "fountain::f_process" = {path = "../f_process"}
+  "fountain::f_protocol" = {path = "../f_protocol"}
+  "fountain::f_store" = {path = "../f_store"}
+  "fountain::f_util" = {path = "../f_util"}
+  "fountain::fleet" = {path = "../fleet"}
