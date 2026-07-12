@@ -22,6 +22,14 @@ internal struct FleetServerConsume {
                        private let tag: Byte){}
 
     func exec(): Message {
-        unsafeZeroValue<Message>()
+        let path = (data as DataString).getOrThrow().data
+        try{
+            let data = FleetStore.get(path)
+            Message.resp(id, qos: QoS.AtMostOnce, ack: false, data: data)
+        }finally{
+            if((tag | ONCE) != 0){
+                FleetStore.subscribe(path, id, buffer)
+            } 
+        }
     }
 }

@@ -77,4 +77,7 @@ internal struct FleetStore {
     static func unsubscribe(id: MessageID): Unit {
         patterns.remove(id)
     }
+    static func get(path: String): ?Array<Byte> {
+        store.get('D#${path}'.unsafeBytes())
+    }
 }
