@@ -25,6 +25,7 @@ import fountain::f_util.PathPattern
 internal struct FleetStore {
     private static let mutex = Mutex()
     private static let store = Store(FleetServerConfig.storePath)
+    private static let hosts = FleetServerConfig.hosts
     private static let timer: Timer
     static init(){
         let prefix = 'T#'.unsafeBytes()
@@ -73,9 +74,12 @@ internal struct FleetStore {
         }
         notify(path, None)
     }
+    static func checkHost(buffer: SocketBuffer, path: String){
+        hosts[path.hashCode() % hosts.size] == buffer.localAddress.toString()
+    }
     private static func notify(path: String, data: ?Array<Byte>): Unit {
         for((id, pattern) in patterns){
-            if(let Some(buffer) <- pattern.data<SocketBuffer>(path)){
+            if(let Some(buffer) <- pattern.data<SocketBuffer>(path) && checkHost(buffer, path)){
                 Message.resp(id, qos: QoS.AtMostOnce, ack: false, data: FleetDataMessage(path, data)) |>
                 buffer.transfer
             }

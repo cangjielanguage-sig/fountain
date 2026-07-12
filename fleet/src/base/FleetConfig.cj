@@ -13,17 +13,15 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package fountain::fleet.server
+package fountain::fleet.base
 
-internal struct FleetServerDeregister {
-    FleetServerDeregister(private let buffer: SocketBuffer, private let id: MessageID, private let data: Data){}
-    
-    func exec(): Message {
-        let path = (data as DataString).getOrThrow().data
-        if(!FleetStore.checkHost(buffer, path)){
-            return Message.error(id, data: ERROR_HOST_FOR_PATH)
+public struct FleetConfig {
+    protected static const CONF_PREFIX = 'fleet'
+    public static const FLEET_SERVER_HOSTS = CONF_PREFIX + '_hosts'
+
+    public static prop hosts: Array<String> {
+        get() {
+            Config.getStringArray(FLEET_SERVER_HOSTS)
         }
-        FleetStore.remove(path)
-        Message.ack(id)
     }
 }

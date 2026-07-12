@@ -16,11 +16,15 @@ limitations under the License.
 package fountain::fleet.server
 
 internal struct FleetServerRegister {
-    FleetServerRegister(private let id: MessageID, private let data: Data){}
+    FleetServerRegister(private let buffer: SocketBuffer, private let id: MessageID, private let data: Data){}
     
     func exec(): Message {
         let msg = DataObject<FleetDataMessage>.populate(data).getOrThrow()
-        FleetStore.add(msg.path, msg.data, msg.expireAt)
+        let path = msg.path
+        if(!FleetStore.checkHost(buffer, path)){
+            return Message.error(id, data: ERROR_HOST_FOR_PATH)
+        }
+        FleetStore.add(path, msg.data, msg.expireAt)
         Message.ack(id)
     }
 }

@@ -45,6 +45,11 @@ public class SocketBuffer <: IOStream & Resource {
             }
         }
     }
+    public prop localAddress: SocketAddress{
+        get(){
+            socket.localAddress
+        }
+    }
     public func transfer(message: Message): Unit {
         queue.add({=> 
             message.encode().copy(to: this, closeToOnEnd: false)

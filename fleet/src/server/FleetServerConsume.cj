@@ -27,7 +27,7 @@ internal struct FleetServerConsume {
             if(let Some(data) <- FleetStore.get(path)){
                 Message.resp(id, qos: QoS.AtMostOnce, ack: false, data: data)
             }else if(path.contains("*")){
-                for(data in FleetStore.filter(path)){
+                for(data in FleetStore.filter(path).filter{m => FleetStore.checkHost(buffer, m.path)}){
                     buffer.transfer(Message.resp(id, qos: QoS.AtMostOnce, ack: false, data: data))
                 }
             }

@@ -19,12 +19,12 @@ import fountain::f_config.*
 import fountain::f_process.getAbsoluteCommandDir
 
 internal struct FleetServerConfig {
-    private static const CONF_PREFIX = 'fleet'
+    private static const CONF_PREFIX = FleetConfig.CONF_PREFIX
     public static const FLEET_SERVER_PORT = CONF_PREFIX + '_port'
     public static const FLEET_SERVER_STORE_PATH = CONF_PREFIX + '_storePath'
     public static const FLEET_SERVER_BUFFER_QUEUE_SIZE = CONF_PREFIX + '_bufferQueueSize'
     public static const FLEET_SERVER_CONNECTION_CHECK_DURATION = CONF_PREFIX + '_connectionCheckDuration'
-    public static const FLEET_SERVER_HOSTS = CONF_PREFIX + '_hosts'
+    
     private init(){}
 
     /**
@@ -76,7 +76,7 @@ internal struct FleetServerConfig {
     }
     public static prop hosts: Array<String> {
         get() {
-            Config.getStringArray(FLEET_SERVER_HOSTS)
+            FleetConfig.hosts
         }
     }
 }

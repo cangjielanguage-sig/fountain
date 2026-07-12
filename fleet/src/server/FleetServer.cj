@@ -29,8 +29,8 @@ internal struct FleetServer {
     private static func executor(buffer: SocketBuffer, message: Message): Message {
         let cmd = message.command
         match(message.command){
-            case Command.REGISTER => FleetServerRegister(message.id, message.data).exec()
-            case Command.DEREGISTER => FleetServerDeregister(message.id, message.data).exec()
+            case Command.REGISTER => FleetServerRegister(buffer, message.id, message.data).exec()
+            case Command.DEREGISTER => FleetServerDeregister(buffer, message.id, message.data).exec()
             case Command.SUBSCRIBE => FleetServerSubscribe(buffer, message.id, message.data).exec()
             case Command.UNSUBSCRIBE => FleetServerUnsubscribe(message.id).exec()
             case Command.CONSUME(tag) => FleetServerConsume(buffer, message.id, message.data, tag).exec()

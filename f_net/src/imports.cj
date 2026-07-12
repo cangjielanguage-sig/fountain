@@ -17,4 +17,4 @@ package fountain::f_net
 
 internal import std.collection.concurrent.ArrayBlockingQueue
 internal import std.io.BufferedInputStream
-internal import std.net.{TcpSocket, SocketKeepAliveConfig}
+internal import std.net.{TcpSocket, SocketKeepAliveConfig, SocketAddress}
