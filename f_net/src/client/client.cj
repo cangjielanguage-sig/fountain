@@ -16,13 +16,13 @@ limitations under the License.
 package fountain::f_net.client
 
 import std.collection.concurrent.ConcurrentHashMap
-import std.sync.{Timer, CatchupStyle, AtomicInt64, Mutex}
-import fountain::f_data.*
-import fountain::f_log.*
-import fountain::f_protocol.*
-import fountain::f_protocol.default.*
-import fountain::f_random.*
-import fountain::f_net.*
+internal import std.sync.{Timer, CatchupStyle, AtomicInt64, Mutex, AtomicReference}
+internal import fountain::f_data.*
+internal import fountain::f_log.*
+internal import fountain::f_protocol.*
+internal import fountain::f_protocol.default.*
+internal import fountain::f_random.*
+internal import fountain::f_net.*
 
 public class Client<T> <: Resource where T <: DataFields<T> {
     private static let log = LoggerFactory.getLogger('fountain::f_net.client.Client')
@@ -32,8 +32,11 @@ public class Client<T> <: Resource where T <: DataFields<T> {
     private let closed = AtomicInt64(0)
     private let closeLock = Mutex()
 
-    Client(queueSize: Int64, checkDuration: Duration, checker: () -> ?Message,
-        private let socketCreator: () -> TcpSocket, private let sockets: Array<TcpSocket>) {
+    Client(queueSize: Int64, 
+        let checkDuration: Duration, 
+        let checker: () -> ?Message,
+        private let socketCreator: () -> TcpSocket, 
+        private let sockets: Array<TcpSocket>) {
         let futures = this.futures
         let buffers = Array<SocketBuffer>(sockets.size) {
             i =>
@@ -174,9 +177,11 @@ public class Client<T> <: Resource where T <: DataFields<T> {
     private func transfer(index: Int64, message: Message, timeout: Duration): ?Message {
         transfer(buffers[index], message, timeout)
     }
-    private func transfer(buffer: SocketBuffer, message: Message): MessageFuture<Message> {
+    internal func transfer(buffer: SocketBuffer, message: Message, once!: Bool = true): MessageFuture<Message> {
         let future = MessageFuture<Message>()
-        futures.add(message.id, future)
+        if(once){
+            futures.add(message.id, future)
+        }
         buffer.transfer(message)
         future
     }
@@ -186,6 +191,9 @@ public class Client<T> <: Resource where T <: DataFields<T> {
             futures.remove(message.id)
         }
         result
+    }
+    public func transfer(message: Message, executor: (Message) -> Unit): ListeningClient<T> {
+        ListeningClient<T>(buffers[0].clone(), this, message, executor)
     }
 }
 

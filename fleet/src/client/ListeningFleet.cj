@@ -15,15 +15,18 @@ limitations under the License.
 */
 package fountain::fleet.client
 
-internal import std.convert.*
-internal import std.io.ByteBuffer
-internal import fountain::f_base.*
-internal import fountain::f_log.*
-internal import fountain::f_net.client.*
-internal import fountain::f_codec.*
-internal import fountain::f_codec.default.*
-internal import fountain::f_data.*
-internal import fountain::f_protocol.*
-internal import fountain::f_protocol.default.*
+public struct ListeningFleet <: Resource {
+    ListeningFleet(
+        private let path: String,
+        private let id: MessageID,
+        private let listening: ListeningClient<FleetDataMessage>
+    ){}
 
-internal import fountain::fleet.base.*
+    public func isClosed(): Bool {
+        listening.isClosed()
+    }
+    public func close(): Unit {
+        Fleet.cancel(path, id)
+        listening.close()
+    }
+}

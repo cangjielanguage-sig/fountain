@@ -21,6 +21,7 @@ import std.time.DateTime
 public class MessageFuture<DE> {
     private let mutex = Mutex()
     private var ref = None<DE>
+    
     private let condition = synchronized(mutex){
         mutex.condition()
     }

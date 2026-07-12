@@ -26,11 +26,13 @@ internal class StopSignal {
 
 public class SocketBuffer <: IOStream & Resource {
     private static let log = LoggerFactory.getLogger('fountain::f_net.SocketBuffer')
+    private let queueSize: Int64
     private let queue: ArrayBlockingQueue<() -> Unit>
     private let socket: TcpSocket
     private let stop = StopSignal()
 
     SocketBuffer(queueSize: Int64, socket: TcpSocket) {
+        this.queueSize = queueSize
         this.socket = socket
         let queue = ArrayBlockingQueue<() -> Unit>(queueSize)
         this.queue = queue
@@ -44,6 +46,11 @@ public class SocketBuffer <: IOStream & Resource {
                 }
             }
         }
+    }
+    func clone(): SocketBuffer{
+        let socket = TcpSocket(socket.remoteAddress)
+        socket.connect()
+        SocketBuffer(queueSize, socket)
     }
     public prop localAddress: SocketAddress{
         get(){
