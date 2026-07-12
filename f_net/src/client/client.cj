@@ -87,7 +87,7 @@ public class Client<T> <: Resource where T <: DataFields<T> {
                     let buffer = buffers[i]
                     try {
                         if (let Some(m) <- checker() && let Some(res) <- transfer(m, Duration.millisecond * 10)) {
-                            //todo
+                            //do nothing
                         }else{
                             buffer.close()
                             new()

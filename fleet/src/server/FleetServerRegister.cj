@@ -25,6 +25,6 @@ internal struct FleetServerRegister {
             return Message.error(id, data: ERROR_HOST_FOR_PATH)
         }
         FleetStore.add(path, msg.data, msg.expireAt)
-        Message.ack(id)
+        Message.ack(id, data: DataNone.INSTANCE)
     }
 }

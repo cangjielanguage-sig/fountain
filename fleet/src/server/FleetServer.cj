@@ -26,7 +26,7 @@ internal struct FleetServer {
     private static func checker(): ?Message {
         Message.ping()
     }
-    private static func executor(buffer: SocketBuffer, message: Message): Message {
+    private static func executor(buffer: SocketBuffer, message: Message): ?Message {
         let cmd = message.command
         match(message.command){
             case Command.REGISTER => FleetServerRegister(buffer, message.id, message.data).exec()
@@ -34,7 +34,9 @@ internal struct FleetServer {
             case Command.SUBSCRIBE => FleetServerSubscribe(buffer, message.id, message.data).exec()
             case Command.UNSUBSCRIBE => FleetServerUnsubscribe(message.id).exec()
             case Command.CONSUME(tag) => FleetServerConsume(buffer, message.id, message.data, tag).exec()
-            case _ => error(message.id, 'UNSUPPORTED Command')
+            case Command.PING(_) => Message.ack(message.id)
+            case Command.ACK => None<Message>
+            case _ => error(message.id, UNSUPPORTED_COMMAND)
         }
     }
     private static func error(id: MessageID, message: String): Message {

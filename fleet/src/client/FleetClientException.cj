@@ -13,13 +13,18 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package fountain::fleet.server
+package fountain::fleet.client
 
-internal struct FleetServerUnsubscribe {
-    FleetServerUnsubscribe(private let id: MessageID){}
-    
-    func exec(): Message {
-        FleetStore.unsubscribe(id)
-        Message.ack(id, data: DataNone.INSTANCE)
+public class FleetClientException <: BaseException {
+    public init() {}
+
+    public init(message: String) {
+        super(message)
+    }
+    public init(caused: Exception) {
+        super(caused)
+    }
+    public init(message: String, caused: Exception) {
+        super(message, caused)
     }
 }

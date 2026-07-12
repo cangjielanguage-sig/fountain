@@ -13,13 +13,18 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package fountain::fleet.server
+package fountain::fleet.client
 
-internal struct FleetServerUnsubscribe {
-    FleetServerUnsubscribe(private let id: MessageID){}
+public struct Fleet {
+    private static let clients = {=>
+        let hosts = FleetConfig.hosts
+        Array<Client<FleetDataMessage>>(hosts.size){i => 
+            let host = hosts[i]
+            let colon = host.indexOf(':').getOrThrow{FleetClientException("illegal host: ${host}")}
+            let ip = host[0 .. colon]
+            let port = UInt16.parse(host[colon + 1 ..])
+            Client<FleetDataMessage>.builder(host: ip, port: port, checkDuration: Duration.second, checker: {=> Message.ping()}).build()
+        }
+    }()
     
-    func exec(): Message {
-        FleetStore.unsubscribe(id)
-        Message.ack(id, data: DataNone.INSTANCE)
-    }
 }

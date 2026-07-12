@@ -82,7 +82,7 @@ public struct Server<T> <: Resource where T <: DataFields<T> {
     public static func build(queueSize!: Int64 = 1024, checkDuration!: Duration, checker!: () -> ?Message, bindAt!: UInt16): ServerBuilder<T> {
         ServerBuilder<T>(queueSize, checkDuration, checker, bindAt)
     }
-    public func start(executor: (SocketBuffer, Message) -> Message): Unit {
+    public func start(executor: (SocketBuffer, Message) -> ?Message): Unit {
         while (let socket <- server.accept()) {
             params.populate(socket)
             let buffer = SocketBuffer(queueSize, socket)
@@ -92,7 +92,12 @@ public struct Server<T> <: Resource where T <: DataFields<T> {
                     try{
                         let m = try {
                             let req = Message.decode<T>(buffer)
-                            executor(buffer, req)
+                            let msg = executor(buffer, req)
+                            if(let Some(m) <- msg){
+                                m
+                            }else{
+                                continue
+                            }
                         } catch (e: Exception) {
                             log.warn('error occurred on reading or executing', e)
                             continue

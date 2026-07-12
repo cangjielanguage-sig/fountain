@@ -24,6 +24,6 @@ internal struct FleetServerDeregister {
             return Message.error(id, data: ERROR_HOST_FOR_PATH)
         }
         FleetStore.remove(path)
-        Message.ack(id)
+        Message.ack(id, data: DataNone.INSTANCE)
     }
 }

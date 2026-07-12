@@ -16,3 +16,4 @@ limitations under the License.
 package fountain::fleet.base
 
 public const ERROR_HOST_FOR_PATH = 'ErrorHost'
+public const UNSUPPORTED_COMMAND = 'UnsupportedCommand'

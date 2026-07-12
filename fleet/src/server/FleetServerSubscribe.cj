@@ -21,6 +21,6 @@ internal struct FleetServerSubscribe {
     func exec(): Message {
         let pattern = (data as DataString).getOrThrow().data
         FleetStore.subscribe(pattern, id, buffer)
-        Message.ack(id)
+        Message.ack(id, data: DataNone.INSTANCE)
     }
 }
