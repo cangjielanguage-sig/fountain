@@ -64,7 +64,7 @@ public struct Fleet {
             DateTime.now() + expire
         })
     }
-    public static func remove(path: String) {
+    public static func remove(path: String): Unit {
         confirmClient(path).transfer(Message.deregister(data: path))
     }
     public static func listen(path: String, executor: (Message) -> Unit): ListeningFleet {

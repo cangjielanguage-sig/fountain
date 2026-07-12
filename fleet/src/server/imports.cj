@@ -15,7 +15,7 @@ limitations under the License.
 */
 package fountain::fleet.server
 
-internal import std.fs.Path
+internal import std.fs.{Path, Directory}
 
 internal import fountain::f_base.*
 internal import fountain::f_codec.*

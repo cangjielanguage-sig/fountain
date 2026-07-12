@@ -40,7 +40,7 @@ internal struct FleetServerConfig {
      */
     public static prop storePath: Path {
         get() {
-            if(let Some(p) <- Config.getString(FLEET_SERVER_STORE_PATH)){
+            let p = if(let Some(p) <- Config.getString(FLEET_SERVER_STORE_PATH)){
                 Path(p)
             } else {
                 let p = getAbsoluteCommandDir()
@@ -56,6 +56,8 @@ internal struct FleetServerConfig {
                     p
                 }.join('fleet/store')
             }
+            Director.create(p, recursive: true)
+            p
         }
     }
     /**
