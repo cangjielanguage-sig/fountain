@@ -12,7 +12,7 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
-*/
+ */
 package fountain::fleet.base
 
 import fountain::f_data.macros.*
@@ -20,27 +20,31 @@ import fountain::f_data.macros.*
 @DataAssist[fields]
 public class FleetDataMessage {
     public var path: String
-    public var data: Array<Byte>
-    public var expireAt: DateTime
+    public var data: ?Array<Byte>
+    public var expireAt: ?DateTime
 
-    public init(){
+    public init() {
         this('')
     }
-    public init(path: String){
-        this(path, [])
+    public init(path: String) {
+        this(path, None)
     }
-    public init(path: String, data: Array<Byte>, expire!: Duration = Duration.Zero){
-        this(path, data, DateTime.now() + expire)
+    public init(path: String, data: ?Array<Byte>, expire!: Duration = Duration.Zero) {
+        this(path, data, if (expire <= Duration.Zero) {
+            None
+        } else {
+            DateTime.now() + expire
+        })
     }
-    public init(path: String, data: Array<Byte>, expireAt: DateTime){
+    public init(path: String, data: ?Array<Byte>, expireAt: ?DateTime) {
         this.path = path
         this.data = data
         this.expireAt = expireAt
     }
-    public init(path: String, data: Data, expire!: Duration = Duration.Zero){
+    public init(path: String, data: Data, expire!: Duration = Duration.Zero) {
         this(path, encode(data), expire: expire)
     }
-    public init(path: String, data: Data, expireAt: DateTime){
+    public init(path: String, data: Data, expireAt: DateTime) {
         this(path, encode(data), expireAt)
     }
 

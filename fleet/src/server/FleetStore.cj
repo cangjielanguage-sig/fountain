@@ -49,21 +49,34 @@ internal struct FleetStore {
     }
     private init(){}
 
-    static func add(path: String, data: Array<Byte>, expireAt: DateTime): Unit {
-        synchronized(mutex){
-            store.add('D#${path}'.unsafeBytes(), data, expireAt)
-            store.add('T#${path}'.unsafeBytes(), expireAt.toString().unsafeBytes())
-            notify(path, data)
+    static func add(path: String, data: ?Array<Byte>, expireAt: ?DateTime): Unit {
+        if(let Some(d) <- data){
+            if(let Some(ex) <- expireAt){
+                synchronized(mutex){
+                    store.add('D#${path}'.unsafeBytes(), d, ex)
+                    store.add('T#${path}'.unsafeBytes(), ex.toString().unsafeBytes())
+                }
+            }else{
+                synchronized(mutex){
+                    store.add('D#${path}'.unsafeBytes(), d)
+                }
+            }
+        }else{
+            remove(path)
         }
+        notify(path, data)
     }
     static func remove(path: String): Unit {
-        store.remove(path.unsafeBytes())
+        synchronized(mutex){
+            store.remove('D#${path}'.unsafeBytes())
+            store.remove('T#${path}'.unsafeBytes())
+        }
         notify(path, None)
     }
     private static func notify(path: String, data: ?Array<Byte>): Unit {
         for((id, pattern) in patterns){
             if(let Some(buffer) <- pattern.data<SocketBuffer>(path)){
-                Message.resp(id, qos: QoS.AtMostOnce, ack: false, data: data) |>
+                Message.resp(id, qos: QoS.AtMostOnce, ack: false, data: FleetDataMessage(path, data)) |>
                 buffer.transfer
             }
         }
@@ -80,13 +93,13 @@ internal struct FleetStore {
     static func get(path: String): ?Array<Byte> {
         store.get('D#${path}'.unsafeBytes())
     }
-    static func filter(pattern: String): Iterator<Array<Byte>> {
+    static func filter(pattern: String): Iterator<FleetDataMessage> {
         let pp = PathPattern()
         pp.compile(pattern, ())
         let prefix = 'D#'.unsafeBytes()
         store.prefix(prefix).filter{tpl =>
             String.fromUtf8(tpl[0][2 .. ]) |>
             pp.matches
-        }.map{tpl => tpl[1]}
+        }.map{tpl => FleetDataMessage(String.fromUtf8(tpl[0][2..]), tpl[1])}
     }
 }
