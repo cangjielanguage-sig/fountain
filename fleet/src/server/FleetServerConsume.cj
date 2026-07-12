@@ -30,10 +30,8 @@ internal struct FleetServerConsume {
                 for(data in FleetStore.filter(path)){
                     buffer.transfer(Message.resp(id, qos: QoS.AtMostOnce, ack: false, data: data))
                 }
-                Message.resp(id, qos: QoS.AtMostOnce, ack: false, data: ())
-            }else{
-                Message.resp(id, qos: QoS.AtMostOnce, ack: false, data: DataNone.INSTANCE)
             }
+            Message.resp(id, qos: QoS.AtMostOnce, ack: false, data: DataNone.INSTANCE)
         }finally{
             if((tag & ONCE) == 0){
                 FleetStore.subscribe(path, id, buffer)
