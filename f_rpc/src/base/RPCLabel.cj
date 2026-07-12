@@ -16,12 +16,16 @@ limitations under the License.
 package fountain::f_rpc.base
 
 public enum RPCLabel <: Equatable<RPCLabel> {
-    | Stub
+    | Stub(String)
     | Skeleton
-    
+
     public operator func ==(other: RPCLabel): Bool {
         match((this, other)){
-            case (Stub, Stub) | (Skeleton, Skeleton) => true
+            case (Stub(x), Stub(y)) => 
+                let v1 = x.split('.')
+                let v2 = y.split('.')
+                v1[0] == v2[0] && v1[1] == v2[1]
+            case (Skeleton, Skeleton) => true
             case _ => false
         }
     }
