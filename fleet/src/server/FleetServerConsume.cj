@@ -27,7 +27,7 @@ internal struct FleetServerConsume {
             let data = FleetStore.get(path)
             Message.resp(id, qos: QoS.AtMostOnce, ack: false, data: data)
         }finally{
-            if((tag | ONCE) != 0){
+            if((tag & ONCE) == 0){
                 FleetStore.subscribe(path, id, buffer)
             } 
         }
