@@ -19,19 +19,25 @@ package fountain::f_rpc.base
  * Stub的参数是服务版本号，编译时@RPCStub宏从cjpm build的工作路径下的cjpm.toml找到被编译项目的版本号作为Stub的构造参数。
  * 如果两个版本号的前两位一样，认为两个版本是兼容的，则两个Stub被判定为相等。
  * eg. a.b.c 与x.y.z，如果a == x && b == y，则认为两个版本兼容。
+ * 没有参数的Stub跟任意Stub匹配，表示当前Stub可以使用任意版本的的服务。
+ * Stub('*') Stub('') 意义与Stub相同
  */
 public enum RPCLabel <: Equatable<RPCLabel> {
+    | Stub
     | Stub(String)
     | Skeleton
 
     public operator func ==(other: RPCLabel): Bool {
         match((this, other)){
-            case (Stub(x), Stub(y)) => 
-                let v1 = x.split('.')
-                let v2 = y.split('.')
-                v1[0] == v2[0] && v1[1] == v2[1]
-            case (Skeleton, Skeleton) => true
+            case (Stub, Stub(_)) | (Stub(_), Stub) => true
+            case (Stub(x), Stub(y)) => x == '' || y == '' || x == '*' || y == '*' || compareVersion(x, y)
+            case (Stub, Stub) | (Skeleton, Skeleton) => true
             case _ => false
         }
+    }
+    private func compareVersion(v1: String, v2: String): Bool {
+        let v1arr = v1.split('.')
+        let v2arr = v2.split('.')
+        v1arr[0] == v2arr[0] && v1arr[1] == v2arr[1]
     }
 }
