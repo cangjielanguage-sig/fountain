@@ -28,7 +28,7 @@ public class Client<T> <: Resource where T <: DataFields<T> {
     private static let log = LoggerFactory.getLogger('fountain::f_net.client.Client')
     private let futures = ConcurrentHashMap<MessageID, MessageFuture<Message>>()
     private let buffers: Array<SocketBuffer>
-    private var checkTimer: Timer = unsafe{zeroValue<Timer>()}
+    private var checkTimer: Timer = unsafeZeroValue<Timer>()
     private let closed = AtomicInt64(0)
     private let closeLock = Mutex()
 
