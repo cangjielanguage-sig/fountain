@@ -29,9 +29,8 @@ public enum RPCLabel <: Equatable<RPCLabel> {
 
     public operator func ==(other: RPCLabel): Bool {
         match((this, other)){
-            case (Stub, Stub(_)) | (Stub(_), Stub) => true
             case (Stub(x), Stub(y)) => x == '' || y == '' || x == '*' || y == '*' || compareVersion(x, y)
-            case (Stub, Stub) | (Skeleton, Skeleton) => true
+            case (Stub, Stub(_)) | (Stub(_), Stub) | (Stub, Stub) | (Skeleton, Skeleton) => true
             case _ => false
         }
     }
