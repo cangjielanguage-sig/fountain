@@ -17,12 +17,18 @@ package fountain::f_base
 
 public interface UnsafeBytes {
     func unsafeBytes(): Array<Byte>
+    func unsafeUtf8(utf8: Array<Byte>): String
 }
 
 extend String <: UnsafeBytes {
     public func unsafeBytes(): Array<Byte> {
         unsafe {
             this.rawData()
+        }
+    }
+    public func unsafeUtf8(utf8: Array<Byte>): String {
+        unsafe{
+            String.withRawData(utf8)
         }
     }
 }
