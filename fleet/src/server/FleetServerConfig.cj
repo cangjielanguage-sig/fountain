@@ -56,7 +56,9 @@ internal struct FleetServerConfig {
                     p
                 }.join('fleet/store')
             }
-            Director.create(p, recursive: true)
+            if(!exists(p)){
+                Directory.create(p, recursive: true)
+            }
             p
         }
     }
