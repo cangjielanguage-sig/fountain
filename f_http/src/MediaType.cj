@@ -53,7 +53,13 @@ public abstract class MediaType <: ToString & Hashable & Equatable<MediaType> {
     public func fromDataFields<T>(data: T): Array<Byte> where T <: DataFields<T> {
         fromData(data.toData())
     }
+    public func fromDataFields<T>(data: T, output: OutputStream): Unit where T <: DataFields<T> {
+        fromData(data.toData(), output)
+    }
     public open func fromData(data: Data): Array<Byte>
+    public open func fromData(data: Data, output: OutputStream): Unit {
+        output.write(fromData(data))
+    }
     public open func toData(data: Array<Byte>): Data
     public open func toData(input: InputStream): Data {
         let list = ArrayList<Byte>()
