@@ -366,8 +366,8 @@ public class JWTVerifier <: JWT {
         headerBytes = fromBase64(data[0 .. firstDot])
         payloadBytes = fromBase64(data[firstDot + 1 .. lastDot])
         signBytes = fromBase64(data[lastDot + 1 ..])
-        let headerJson = JsonValue.fromStr(unsafe{String.withRawData(headerBytes)})
-        let payloadJson = JsonValue.fromStr(unsafe{String.withRawData(payloadBytes)})
+        let headerJson = JsonValue.fromStr(String.unsafeUtf8(headerBytes))
+        let payloadJson = JsonValue.fromStr(String.unsafeUtf8(payloadBytes))
         populate<String>(headerJson, headers)
         populate<Any>(payloadJson, payload)
     }

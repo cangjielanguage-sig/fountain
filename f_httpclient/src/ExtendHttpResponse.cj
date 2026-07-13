@@ -64,8 +64,7 @@ extend HttpResponse <: ExtendHttpResponse {
         TextReader(this.body, charset: charset)
     }
     public func readEntire(): String {
-        let bytes = readToEnd()
-        unsafe{String.withRawData(bytes)}
+        readToEnd() |> String.unsafeUtf8
     }
     public func readEntire(charset: Charset): String {
         let bytes = readToEnd()

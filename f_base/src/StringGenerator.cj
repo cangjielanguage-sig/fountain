@@ -103,7 +103,7 @@ public class StringGenerator <: ToString {
         (utf8.size >= content.size && utf8.unsafeData()[size - content.size..] == content.unsafeBytes())
     }
     public func substring(start: Int64, end: Int64): String {
-        unsafe{String.withRawData(utf8[start .. end].unsafeData())}
+        String.unsafeUtf8(utf8[start .. end].unsafeData())
     }
     public func clear(): This {
         utf8.clear()
@@ -233,7 +233,7 @@ public class StringGenerator <: ToString {
         this
     }
     public func toString(): String {
-        unsafe{String.withRawData(unsafeBytes())}
+        String.unsafeUtf8(unsafeBytes())
     }
     public func unsafeBytes(): Array<Byte> {
         utf8.unsafeData()

@@ -25,7 +25,7 @@ func fromBase64(src: String): Array<Byte> {
 }
 
 func fromBase64ToString(src: String) {
-    unsafe{String.withRawData(fromBase64(src))}
+    String.unsafeUtf8(fromBase64(src))
 }
 
 func fromHex(src: String): Array<Byte> {

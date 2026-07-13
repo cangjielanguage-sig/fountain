@@ -76,8 +76,8 @@ public class MVCConfig {
         get() {
             if (let Some(path) <- Config.getString(TLS_PATH) && path.size > 0 && let paths <- path.split('|') &&
                 paths.size == 2) {
-                let pem = unsafe{String.withRawData(File.readFrom(paths[0]))}
-                let privateKeyPem = unsafe{String.withRawData(File.readFrom(paths[1]))}
+                let pem = String.unsafeUtf8(File.readFrom(paths[0]))
+                let privateKeyPem = String.unsafeUtf8(File.readFrom(paths[1]))
                 let x509 = X509Certificate.decodeFromPem(pem)
                 let privateKey = GeneralPrivateKey.decodeFromPem(privateKeyPem)
                 var tls = TlsServerConfig(x509, privateKey)

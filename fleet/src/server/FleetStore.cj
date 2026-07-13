@@ -32,14 +32,14 @@ internal struct FleetStore {
         timer = Timer.repeat(Duration.second, Duration.second, {=>
             try(itr = store.prefix(prefix)){
                 let removed = ArrayList<Array<Byte>>()
-                for((k, v) in itr where DateTime.parse(unsafeUtf8(v)) <= DateTime.now()){
+                for((k, v) in itr where DateTime.parse(String.unsafeUtf8(v)) <= DateTime.now()){
                     removed.add(k)
                 }
                 for(k in removed){
                     synchronized(mutex){
-                        if(let Some(v) <- store.get(k) && DateTime.parse(unsafeUtf8(v)) <= DateTime.now()){
+                        if(let Some(v) <- store.get(k) && DateTime.parse(String.unsafeUtf8(v)) <= DateTime.now()){
                             store.remove(k)
-                            let path = unsafeUtf8(k[2 .. ])
+                            let path = String.unsafeUtf8(k[2 .. ])
                             store.remove('D#${path}'.unsafeBytes())
                             notify(path, None)
                         }
@@ -47,11 +47,6 @@ internal struct FleetStore {
                 }
             }
         }, style: Delay)
-    }
-    private static func unsafeUtf8(utf8: Array<Byte>){
-        unsafe{
-            String.withRawData(utf8)
-        }
     }
     private init(){}
 
@@ -107,8 +102,8 @@ internal struct FleetStore {
         pp.compile(pattern, ())
         let prefix = 'D#'.unsafeBytes()
         store.prefix(prefix).filter{tpl =>
-            unsafeUtf8(tpl[0][2 .. ]) |>
+            String.unsafeUtf8(tpl[0][2 .. ]) |>
             pp.matches
-        }.map{tpl => FleetDataMessage(unsafeUtf8(tpl[0][2..]), tpl[1])}
+        }.map{tpl => FleetDataMessage(String.unsafeUtf8(tpl[0][2..]), tpl[1])}
     }
 }

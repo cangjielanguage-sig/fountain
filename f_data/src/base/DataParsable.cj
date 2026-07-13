@@ -58,7 +58,7 @@ extend Duration <: DataParsable<Duration> {
                 case _ => throw DataParsableException('${s} cannot be parsed to Duration')
             } *
                 Int64
-                .tryParse(unsafe{String.withRawData(bytes.unsafeData())})
+                .tryParse(String.unsafeUtf8(bytes.unsafeData()))
                 .getOrThrow {DataParsableException('${s} cannot be parsed to Duration')}
         }
         duration

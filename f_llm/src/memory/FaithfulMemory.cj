@@ -67,8 +67,8 @@ struct FaithfulMemoryImpl <: FaithfulMemory {
         let messages = ArrayList<ChatMessage>()
         try(itr = store.prefix(CONTENT_KEY_PREFIX.unsafeBytes())){
             for((key, val) in itr){
-                let k = unsafe{String.withRawData(key)}
-                let v = unsafe{String.withRawData(val)}
+                let k = String.unsafeUtf8(key)
+                let v = String.unsafeUtf8(val)
                 let keyParts = k.split(':')
                 currentSession = keyParts[1]
                 let timeStr = keyParts[2]

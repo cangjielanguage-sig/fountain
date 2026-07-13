@@ -679,9 +679,7 @@ public class DefaultCodec <: Codec {
             if (size < bytes.size) {
                 throw CodecException('size of string is less than encoded ${size}')
             }
-            unsafe{
-                String.withRawData(bytes).toData()
-            }
+            String.unsafeUtf8(bytes).toData()
         } else if (dataType == DataType.BOOL.value) {
             match (head & 0xf) {
                 case 0x01 => DataBool.TRUE
@@ -862,7 +860,7 @@ public class DefaultCodec <: Codec {
                         throw CodecException(
                             'current data head is ${toHex(head)}, file name need ${fileNameSize} bytes, but read ${size}')
                     }
-                    let fileName = unsafe{String.withRawData(bytes)}
+                    let fileName = String.unsafeUtf8(bytes)
                     let dir = '/tmp/tmpFile${UUID.random()}'
                     if(!exists(dir)){
                         Directory.create(dir)
@@ -902,7 +900,7 @@ public class DefaultCodec <: Codec {
                     throw CodecException(
                         'current data head is ${toHex(head)}, file name need ${fileNameSize} bytes, but read ${size}')
                 }
-                let fileName = unsafe{String.withRawData(bytes)}
+                let fileName = String.unsafeUtf8(bytes)
                 let path = '${dir}/${fileName}'
                 let srcPath = file.info.path
                 file.close()
