@@ -8,14 +8,31 @@ export fleet_bufferQueueSize=1024 # 数据缓冲队列大小，默认1024
 export fleet_connectionCheckDuration=1000 # 连接健康检查周期，默认1000ms
 export fleet_hosts=ip1:port1,ip2:port2..... # fleet服务端连接的ip和端口，多个ip用逗号隔开
 ```
-### 部署&启动
+### 部署
 ```bash
 cjpm install fountain::fboot-<a.b.c> # 使用跟fleet一样的版本
 cjpm install fountain::fleet-<a.b.c> # 去安装路径找到下载的包，复制到指定路径然后执行以下路径
+cp /path/of/fleet/installed /path/of/fleet/copied
 cd /path/of/fleet/copied
 cjpm build 
+```
+也可以从git下载源码
+```bash
+git clone https://gitcode.com/Cangjie-SIG/fountain.git
+git checkout -b release-<a.b.c> # <a.b.c> 改成最新版本
+cd /path/of/fountain/cloned
+cd fboot
+cjpm intall --root /path/of/fboot/installed
+cd ../fleet
+cjpm build
+```
+
+### 启动
+```bash
+cd /path/of/fleet/compiled-or-installed
 fboot fleet --dylibPattern='fountain|f_.*|fleet'
 ```
+
 
 ## 客户端
 客户的配置只有fleet_hosts
