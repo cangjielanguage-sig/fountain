@@ -54,11 +54,13 @@ public class CommandFunction <: FunctionCalling<Command> {
         let (code, stdout, stderr) = executeWithOutput(cmd[0], cmd[1..], 
             workingDirectory: LLMConfig.getFileSandboxPath(),
             stdOut: Inherit, stdErr: Inherit)
-        let output = String.fromUtf8(if(code == 0){
-            stdout
-        }else{
-            stderr
-        })
+        let output = unsafe{
+            String.withRawData(if(code == 0){
+                stdout
+            }else{
+                stderr
+            })
+        }
         let content = '''
 命令执行结果
 ===

@@ -51,7 +51,7 @@ public class LogPattern <: LogPart & Hashable & Equatable<LogPattern> {
         let origin = ArrayList<Byte>()
         func appendOrigin() {
             if (origin.size > 0) {
-                patterns.add(OriginLogPart(String.fromUtf8(origin.toArray())))
+                patterns.add(OriginLogPart(unsafe{String.withRawData(origin.toArray())}))
                 origin.clear()
             }
         }

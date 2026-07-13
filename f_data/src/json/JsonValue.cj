@@ -107,7 +107,9 @@ public sealed abstract class JsonValue <: ToString & JsonSerializable & JsonDese
     public func toJsonString(config: WriteConfig): String {
         let buf = ByteBuffer()
         write(buf, config)
-        String.fromUtf8(buf.bytes())
+        unsafe{
+            String.withRawData(buf.bytes())
+        }
     }
     public func write(output: OutputStream, config: WriteConfig): Unit{
         let writer = JsonWriter(output)

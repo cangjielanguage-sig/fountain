@@ -70,7 +70,7 @@ public class FileReadingFunction <: AbstractFileFunction<FileReadingParams> {
         }
         let content = 
         match(params.mode){
-            case 'entire' => String.fromUtf8(File.readFrom(path))
+            case 'entire' => unsafe{String.withRawData(File.readFrom(path))}
             case 'regex' => 
                 let regex = params.condition.regex()
                 read(path){line, end => 

@@ -102,7 +102,7 @@ public class MultipartFormDataParser {
                     var end = stream.indexOf(DOUBLE_CRLF, from: start)
                     var buf = Array<Byte>(end - start + DOUBLE_CRLF.size, repeat: 0)
                     stream.read(buf)
-                    let partHeader = String.fromUtf8(buf).split('\r\n')
+                    let partHeader = unsafe{String.withRawData(buf).split('\r\n')}
                     let contentDisposition = ContentDisposition.parse(partHeader[0]['Content-Disposition: '.size ..])
                     let filename = contentDisposition.getFilename()
                     end = stream.indexOf(seperatorBoundaryBytes)
@@ -113,7 +113,7 @@ public class MultipartFormDataParser {
                             let value = if(let Some(charset) <- contentDisposition.getCharset()){
                                 charset.newDecoder().decode(buf)
                             }else{
-                                String.fromUtf8(buf)
+                                unsafe{String.withRawData(buf)}
                             }
                             let name = contentDisposition.getName()
                             if(let mediaType <- partHeader[1].replace('Content-Type:', '').trimAscii() && mediaType.size > 0){
@@ -150,7 +150,7 @@ public class MultipartFormDataParser {
                         let value = if(let Some(charset) <- contentDisposition.getCharset()){
                             charset.newDecoder().decode(bytes)
                         }else{
-                            String.fromUtf8(bytes)
+                            unsafe{String.withRawData(bytes)}
                         }
                         let name = contentDisposition.getName()
                         if(let mediaType <- partHeader[1].replace('Content-Type:', '').trimAscii() && mediaType.size > 0){

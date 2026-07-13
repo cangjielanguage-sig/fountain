@@ -315,7 +315,7 @@ public class ContentDisposition <: Equatable<ContentDisposition> & Equatable<Any
                             case Some(m) =>
                                 let _ = m.matchString(1) //charset
                                 let matched = m.matchString(2)
-                                filename = String.fromUtf8(fromBase64String(matched) ?? [])
+                                filename = unsafe{String.withRawData(fromBase64String(matched) ?? [])}
                             case _ => filename = value
                         }
                     } else {
