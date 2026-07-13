@@ -34,13 +34,11 @@ public struct SubCommandMediator {
     private static func exec(command: String, args: Array<String>, recursive: Bool): Int64 {
         if(let Some(cmd) <- commands.get(command)){
             cmd(args)
+        }else if (recursive){
+            throw BootException('sub command must be count|run|workspace|cleanUpdate|build|count|version or ${commands.iterator().map{t => t[0]}.intersperse('|').fold(StringGenerator()){g, s=>g.append(s)}}, but current sub command is ${command} and args are ${args}')
         }else{
             load(args, true)
-            if(recursive){
-                throw BootException('sub command must be count|run|workspace|cleanUpdate|build|count|version or ${commands.iterator().map{t => t[0]}.intersperse('|').fold(StringGenerator()){g, s=>g.append(s)}}, but current sub command is ${command} and args are ${args}')
-            }else{
-                exec(command, args, true)
-            }
+            exec(command, args, true)
         }
     }
     public static func exec(command: String, args: Array<String>): Int64 {
