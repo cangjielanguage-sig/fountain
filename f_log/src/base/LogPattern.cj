@@ -19,7 +19,7 @@ import std.collection.ArrayList
 import std.env
 import std.time.DateTime
 import stdx.log.{LogLevel, LogWriter}
-import fountain::f_base.OS
+import fountain::f_base.*
 import fountain::f_version.*
 
 public class LogPattern <: LogPart & Hashable & Equatable<LogPattern> {
