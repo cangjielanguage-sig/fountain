@@ -114,10 +114,12 @@ public class PrefixIterator <: Iterator<(Array<Byte>, Array<Byte>)> & Resource {
                 src.close()
             } catch (e: Exception) {// ⚠ 不能忽略异常，异常必须暴露出去
                 if(let Some(ex) <- baseEx){
-                    ex.addSuppressed(e)
+                    ex
                 }else{
-                    baseEx = PrefixIteratorException(e)
-                }
+                    let ex = PrefixIteratorException()
+                    baseEx = ex
+                    ex
+                }.addSuppressed(e)
             }
         }
         if (let Some(ex) <- baseEx) {
@@ -142,8 +144,4 @@ public func startsWith(key: ByteArray, prefix: ByteArray): Bool {
     }
     true
 }
-public class PrefixIteratorException <: BaseException {
-    public init(caused: Exception){
-        super(caused)
-    }
-}
+public class PrefixIteratorException <: BaseException {}
