@@ -20,6 +20,7 @@ import std.collection.concurrent.ConcurrentHashMap
 import std.sync.{Timer, CatchupStyle, Mutex}
 
 import fountain::f_collection.*
+import fountain::f_store.{Store, PrefixIterator}
 import fountain::f_util.PathPattern
 
 internal struct FleetStore {
@@ -97,13 +98,30 @@ internal struct FleetStore {
     static func get(path: String): ?Array<Byte> {
         store.get('D#${path}'.unsafeBytes())
     }
-    static func filter(pattern: String): Iterator<FleetDataMessage> {
-        let pp = PathPattern()
-        pp.compile(pattern, ())
+    static func filter(pattern: String): FleetStoreFilteredIterator {
         let prefix = 'D#'.unsafeBytes()
-        store.prefix(prefix).filter{tpl =>
-            String.unsafeUtf8(tpl[0][2 .. ]) |>
-            pp.matches
-        }.map{tpl => FleetDataMessage(String.unsafeUtf8(tpl[0][2..]), tpl[1])}
+        FleetStoreFilteredIterator(pattern, store.prefix(prefix))
+    }
+}
+class FleetStoreFilteredIterator <: Iterator<FleetDataMessage> & Resource {
+    private let pattern: PathPattern
+    FleetStoreFilteredIterator(
+        pattern: String,
+        private let filtered: PrefixIterator
+    ){
+        this.pattern = PathPattern()
+        this.pattern.compile(pattern, ())
+    }
+    public func isClosed(): Bool {
+        filtered.isClosed()
+    }
+    public func close(): Unit {
+        filtered.close()
+    }
+    public func next(): ?FleetDataMessage {
+        while(let Some(tpl) <- filtered.next() && String.unsafeUtf8(tpl[0][2 .. ]) |> pp.matches){
+            return FleetDataMessage(String.unsafeUtf8(tpl[0][2..]), tpl[1])
+        }
+        None
     }
 }

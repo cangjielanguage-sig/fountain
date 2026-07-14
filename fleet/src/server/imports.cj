@@ -25,7 +25,6 @@ internal import fountain::f_net.SocketBuffer
 internal import fountain::f_net.server.*
 internal import fountain::f_protocol.*
 internal import fountain::f_protocol.default.*
-internal import fountain::f_store.Store
 
 internal import fountain::fleet.base.*
 
