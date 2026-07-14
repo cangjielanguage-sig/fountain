@@ -25,12 +25,12 @@ package fountain::f_rpc.base
 public enum RPCLabel <: Equatable<RPCLabel> {
     | Stub
     | Stub(String)
-    | Skeleton
+    | Skeleton(String)
 
     public operator func ==(other: RPCLabel): Bool {
         match((this, other)){
-            case (Stub(x), Stub(y)) => x == '' || y == '' || x == '*' || y == '*' || compareVersion(x, y)
-            case (Stub, Stub(_)) | (Stub(_), Stub) | (Stub, Stub) | (Skeleton, Skeleton) => true
+            case (Stub(x), Stub(y)) | (Skeleton(x), Skeleton(y)) => x == '' || y == '' || x == '*' || y == '*' || compareVersion(x, y)
+            case (Stub, Stub(_)) | (Stub(_), Stub) | (Stub, Stub) => true
             case _ => false
         }
     }
