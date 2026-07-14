@@ -119,7 +119,9 @@ class FleetStoreFilteredIterator <: Iterator<FleetDataMessage> & Resource {
         filtered.close()
     }
     public func next(): ?FleetDataMessage {
-        while(let Some(tpl) <- filtered.next() && String.unsafeUtf8(tpl[0][2 .. ]) |> pp.matches){
+        while(let Some(tpl) <- filtered.next() && (
+              String.unsafeUtf8(tpl[0][2 .. ]) |> 
+              pattern.matches)){
             return FleetDataMessage(String.unsafeUtf8(tpl[0][2..]), tpl[1])
         }
         None
