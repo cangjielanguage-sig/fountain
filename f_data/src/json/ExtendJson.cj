@@ -116,7 +116,7 @@ extend JsonValue <: ExtendJsonValue & DataFields<JsonValue> {
         match (data) {
             case x: DataJsonArray => x.json
             case x: DataJsonObject => x.json
-            case x: DataNone => JsonNull()
+            case x: DataNone => JsonNull.instance
             case x: DataBool => JsonBool(x.data)
             case x: DataReal => if(x.data.isInteger()){
                 JsonInt(x.data.toBigInt())
