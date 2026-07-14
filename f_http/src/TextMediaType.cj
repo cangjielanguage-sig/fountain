@@ -91,7 +91,11 @@ public class JsonMediaType <: TextMediaType {
         (JsonValue.tryFromData(data) as JsonValue).getOrThrow()
     }
     public func fromData(data: Data): Array<Byte> {
-        fromData(data2json(data))
+        if(charset == Charsets.UTF8){
+            data2json(data).toString().unsafeBytes()
+        }else{
+            fromData(data2json(data))
+        }
     }
     public func fromData(data: Data, output: OutputStream): Unit {
         if(charset == Charsets.UTF8){
