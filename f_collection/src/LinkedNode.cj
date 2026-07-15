@@ -83,11 +83,8 @@ public interface Node<T> {
     }
 }
 
-public class NoneNode<T> <: Node<T> {
-    static const func instance(): NoneNode<T> {
-        NoneNode<T>()
-    }
-    private const init() {}
+public struct NoneNode<T> <: Node<T> {
+    init() {}
 }
 
 public class HeadNode<T> <: Node<T> & Iterable<T> {
@@ -117,7 +114,7 @@ public class HeadNode<T> <: Node<T> & Iterable<T> {
 }
 
 public class TailNode<T> <: Node<T> & Iterable<T> {
-    TailNode(var prev!: Node<T> = NoneNode<T>.instance()) {}
+    TailNode(var prev!: Node<T> = NoneNode<T>()) {}
     public func insertPrev(value: T): ValueNode<T> {
         ValueNode<T>(value, this)
     }
