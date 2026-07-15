@@ -80,6 +80,16 @@ public class Pool<T> <: Resource {
         if (checkInterval <= Duration.Zero) {
             return
         }
+        func doDestroy(o: T){
+            try{
+                destroy(o, true)
+                if (this.size.load() < minSize) {
+                    tasks.tryAdd(())
+                }
+            }catch(e: Exception){
+                log.warn('Pool destroying on checking schedule', e)
+            }
+        }
         spawn {
             while (running.load()) {
                 var i = 0
@@ -87,15 +97,13 @@ public class Pool<T> <: Resource {
                     i++
                     try {
                         if ((idleTimeout > Duration.Zero && MonoTime.now() - t >= idleTimeout) || !checker(o)) {
-                            destroy(o, true)
-                            if (this.size.load() < minSize) {
-                                tasks.tryAdd(())
-                            }
+                            doDestroy(o)
                         } else {
                             queue.add((o, t))
                         }
                     } catch (e: Exception) {
                         log.warn('Pool checking schedule', e)
+                        doDestroy(o)
                     }
                     sleep(Duration.Zero)
                 }
