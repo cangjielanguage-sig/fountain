@@ -19,13 +19,13 @@ import std.collection.concurrent.ArrayBlockingQueue
 import std.env
 import std.sync.{AtomicInt64, AtomicBool}
 import std.time.MonoTime
-import fountain::f_log.impl.LoggerFactory
+import fountain::f_log.LoggerFactory
 
 public interface PooledManager<T> {
     func create(): T
     func check(object: T): Bool
     func destroy(object: T): Unit
-    func clear(object: T): Unit
+    func clear(object: T): Unit{}
 }
 /**
  * 本类型无法分辨返还的实例是不是从Pool借出去的，也无法分辨借出实例的Pool跟返回实例的Pool是不是同一个，因此调用giveBack返还实例的时候，如果返回时检查失败了一定会销毁返还的实例，池维护的实例数随之减1。
@@ -39,7 +39,7 @@ public class Pool<T> <: Resource {
     public Pool(
         private let initSize!: Int64 = 0,
         private let minSize!: Int64 = 0,
-        private let maxSize!: Int64 = Int64.Max,
+        private let maxSize!: Int64 = 10,
         private let idleTimeout!: Duration = Duration.hour,
         private let checkOnCreation!: Bool = false,
         private let checkOnBorrowing!: Bool = true,
@@ -63,7 +63,7 @@ public class Pool<T> <: Resource {
     public init(
         initSize!: Int64 = 0,
         minSize!: Int64 = 0,
-        maxSize!: Int64 = Int64.Max,
+        maxSize!: Int64 = 10,
         idleTimeout!: Duration = Duration.hour,
         checkOnCreation!: Bool = false,
         checkOnBorrowing!: Bool = true,
@@ -75,6 +75,9 @@ public class Pool<T> <: Resource {
             checkOnCreation: checkOnCreation, checkOnBorrowing: checkOnBorrowing, checkOnReturning: checkOnReturning,
             checkInterval: checkInterval, creator: manager.create, checker: manager.check, destroier: manager.destroy,
             clear: manager.clear)
+    }
+    public static func builder(): PoolBuilder<T> {
+        PoolBuilder<T>()
     }
     private func startCheckingSchedule() {
         if (checkInterval <= Duration.Zero) {
@@ -222,5 +225,100 @@ public class Pool<T> <: Resource {
         } else {
             doAdd()
         }
+    }
+}
+
+public class PoolBuilder<T> {
+    private var initSize: Int64 = 0
+    private var minSize: Int64 = 0
+    private var maxSize: Int64 = 10
+    private var idleTimeout: Duration = Duration.hour
+    private var checkOnCreation: Bool = false
+    private var checkOnBorrowing: Bool = true
+    private var checkOnReturning: Bool = true
+    private var clearOnReturning: Bool = false
+    private var checkInterval: Duration = Duration.minute
+    private var creator: ?() -> T = None
+    private var checker: ?(T) -> Bool = None
+    private var destroier: ?(T) -> Unit = None
+    private var clear: (T) -> Unit = {_ =>}
+
+    init(){}
+    public func setInitSize(initSize: Int64): This {
+        this.initSize = initSize
+        this
+    }
+    public func setMinSize(minSize: Int64): This {
+        this.minSize = minSize
+        this
+    }
+    public func setMaxSize(maxSize: Int64): This {
+        this.maxSize = maxSize
+        this
+    }
+    public func setIdleTimeout(idleTimeout: Duration): This {
+        this.idleTimeout = idleTimeout
+        this
+    }
+    public func setCheckOnCreation(checkOnCreation: Bool): This {
+        this.checkOnCreation = checkOnCreation
+        this
+    }
+    public func setCheckOnBorrowing(checkOnBorrowing: Bool): This {
+        this.checkOnBorrowing = checkOnBorrowing
+        this
+    }
+    public func setCheckOnReturning(checkOnReturning: Bool): This {
+        this.checkOnReturning = checkOnReturning
+        this
+    }
+    public func setClearOnReturning(clearOnReturning: Bool): This {
+        this.clearOnReturning = clearOnReturning
+        this
+    }
+    public func setCheckInterval(checkInterval: Duration): This {
+        this.checkInterval = checkInterval
+        this
+    }
+    public func setCreator(creator: () -> T): This {
+        this.creator = creator
+        this
+    }
+    public func setChecker(checker: (T) -> Bool): This {
+        this.checker = checker
+        this
+    }
+    public func setDestroier(destroier: (T) -> Unit): This {
+        this.destroier = destroier
+        this
+    }
+    public func setClear(clear: (T) -> Unit): This {
+        this.clear = clear
+        this
+    }
+    public func setManager(manager: PooledManager<T>): This {
+        setCreator(manager.create)
+        setChecker(manager.check)
+        setDestroier(manager.destroy)
+        setClear(manager.clear)
+        this
+    }
+    public func build(): Pool<T> {
+        func toThrow(){
+            throw PoolException('creator, checker and destroier must be set.')
+        }
+        Pool<T>(
+            initSize: initSize,
+            minSize: minSize,
+            maxSize: maxSize,
+            idleTimeout: idleTimeout,
+            checkOnCreation: checkOnCreation,
+            checkOnBorrowing: checkOnBorrowing,
+            checkOnReturning: clearOnReturning,
+            checkInterval: checkInterval,
+            creator: creator ?? toThrow(),
+            checker: checker ?? toThrow(),
+            destroier: destroier ?? toThrow(),
+            clear: clear)
     }
 }
