@@ -109,7 +109,8 @@ public class BeanFactory {
                         AnnotationType(typeInfo)
                     }
                 }
-                for (superInterface in klass.superInterfaces where superInterface != any && superInterface != klass) {
+                for (superInterface in klass.superInterfaces where superInterface != any) {
+                    println('++++++++++++++++++ ${superInterface} ${klass}')
                     typeQueue.addLast(beanType(superInterface))
                 }
                 if (let s: ClassTypeInfo <- klass && let Some(sc) <- s.superClass && sc != object) {
