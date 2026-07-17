@@ -17,8 +17,7 @@ package fountain::boot
 
 import std.collection.*
 import std.env
-// import opengauss.driver.*
-// import opengauss.slog
+import pgsql.*
 import fountain::f_bean.*
 import fountain::f_bean.macros.*
 import fountain::f_data.*

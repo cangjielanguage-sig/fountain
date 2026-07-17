@@ -69,7 +69,7 @@ exports(){
     export orm_transactionalFuncExecution="$orm_transactionalFuncExecution|*..*ServiceImpl.change*(**): *"
     export orm_transactionalFuncExecution="$orm_transactionalFuncExecution|*..*ServiceImpl.register*(**): *"
     export orm_transactionalFuncExecution="$orm_transactionalFuncExecution|*..*.userSession(**): *"
-    export opengauss_orm_connectionUrl=$POSTGRES
+    export postgres_orm_connectionUrl=$POSTGRES
     export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:`find ./fdemo/release/* -type d|grep -a -v -P '\.build-logs|bin|_stAtIc__|boot'|tr '\n' ':'`
     echo "LD_LIBRARY_PATH=$LD_LIBRARY_PATH"
 }
