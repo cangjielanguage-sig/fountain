@@ -63,8 +63,7 @@ public class BeanFactory {
             typeQueue.addLast(ClassType(any))
             typeQueue.addLast(ClassType(object))
             while (let Some(bt) <- typeQueue.removeFirst()) {
-                let (klass, map, isClass) =
-                match(bt){
+                let (klass, map, isClass) = match(bt){
                     case ClassType(klass) => (klass, beanTypeMap, true)
                     case AnnotationType(klass) => (klass, annotationMap, false)
                 }
@@ -110,7 +109,7 @@ public class BeanFactory {
                         AnnotationType(typeInfo)
                     }
                 }
-                for (superInterface in klass.superInterfaces where superInterface != any) {
+                for (superInterface in klass.superInterfaces where superInterface != any && superInterface != klass) {
                     typeQueue.addLast(beanType(superInterface))
                 }
                 if (let s: ClassTypeInfo <- klass && let Some(sc) <- s.superClass && sc != object) {
