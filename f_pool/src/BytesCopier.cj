@@ -44,7 +44,7 @@ public struct PooledBufferBytesCopyTo <: BytesCopyTo {
                 }
             }
         }
-        if(let Some(buf) <- pool.borrow()){
+        if(let Some(buf) <- pool.get()){
             try{
                 copyTo(buf)
             }finally{
@@ -75,7 +75,7 @@ public struct PooledBufferedBytesCopyFrom <: BytesCopyFrom {
                 }
             }
         }
-        if(let Some(buf) <- pool.borrow()){
+        if(let Some(buf) <- pool.get()){
             try{
                 copyTo(buf)
             }finally{

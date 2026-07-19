@@ -42,8 +42,8 @@ public struct ArrayListPool<T> {
             destroier: {_ =>}
         )
     }
-    public func borrow(timeout!: Duration = Duration.Max): ?ArrayList<T> {
-        pool.borrow(timeout: timeout)
+    public func get(timeout!: Duration = Duration.Max): ?ArrayList<T> {
+        pool.get(timeout: timeout)
     }
     public func giveBack(list: ArrayList<T>): Unit {
         pool.giveBack(list)

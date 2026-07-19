@@ -164,7 +164,7 @@ public class DatabasePool <: Resource & Datasource {
         if (isClosed()) {
             throw ConnectionException('database pool is closed')
         }
-        pool.borrow(timeout: timeout)?.activate(pool.giveBack)
+        pool.get(timeout: timeout)?.activate(pool.giveBack)
     }
     public func setOption(key: String, value: String): Unit {}
     public func connect(): Connection {

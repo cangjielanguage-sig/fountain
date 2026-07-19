@@ -51,8 +51,8 @@ public struct ArrayPool<T> {
             }
         )
     }
-    public func borrow(timeout!: Duration = Duration.Max): ?Array<T> {
-        pool.borrow(timeout: timeout)
+    public func get(timeout!: Duration = Duration.Max): ?Array<T> {
+        pool.get(timeout: timeout)
     }
     public func giveBack(array: Array<T>): Bool {
         if (array.size == arraySize) {

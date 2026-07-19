@@ -876,7 +876,7 @@ public class DefaultCodec <: Codec {
                 Directory.create(dir)
             }
             let file = File.createTemp(dir)
-            if(let Some(buffer) <- bytesPool.borrow()){
+            if(let Some(buffer) <- bytesPool.get()){
                 try{
                     while (true) {
                         let readSize = input.read(buffer)

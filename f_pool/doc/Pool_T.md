@@ -35,7 +35,7 @@ public class Pool<T> <: Resource {
     /**
      * 获取对象
      */
-    public func borrow(timeout!: Duration = Duration.Max): ?T
+    public func get(timeout!: Duration = Duration.Max): ?T
     /**
      * 返还对象
      */

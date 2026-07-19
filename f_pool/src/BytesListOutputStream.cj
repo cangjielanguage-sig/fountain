@@ -61,7 +61,7 @@ public class BytesListOutputStreamBuilder {
             clearOnReturning: clearOnReturning)
     }
     public func build(timeout!: Duration = Duration.Max): ?BytesListOutputStream {
-        if(let Some(l) <- pool.borrow(timeout: timeout)){
+        if(let Some(l) <- pool.get(timeout: timeout)){
             BytesListOutputStream(l, pool)
         }else{
             None<BytesListOutputStream>
