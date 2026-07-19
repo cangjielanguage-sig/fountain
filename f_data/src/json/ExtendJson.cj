@@ -79,6 +79,7 @@ extend JsonValue <: ExtendJsonValue & DataFields<JsonValue> {
         }
     }
     public static func tryFromData(data: Data, flag: DataConversionFlag): Any {
+        println('5555555555555555555')
         func from(data: Data) {
             match (tryFromData(data, flag)) {
                 case x: JsonValue => x
@@ -113,6 +114,7 @@ extend JsonValue <: ExtendJsonValue & DataFields<JsonValue> {
                 case _ => JSON_NULL
             }
         }
+        println('!!!!!!!!!!!!!!!!!! ${TypeInfo.of(data)}#${(data as DataString)?.data}#')
         match (data) {
             case x: DataJsonArray => x.json
             case x: DataJsonObject => x.json
@@ -123,7 +125,9 @@ extend JsonValue <: ExtendJsonValue & DataFields<JsonValue> {
             }else{
                 JsonDecimal(x.data)
             }
-            case x: DataString => JsonString(x.data)
+            case x: DataString => 
+                println('@@@@@@@@@@@@@@@@@@@@@ ${x.data} ${JsonString(x.data)}')
+                JsonString(x.data)
             case x: DataDateTime => JsonString(x.data.toString())
             case x: DataDuration => JsonString(x.data.toString())
             case x: Iterable<Data> =>
@@ -133,9 +137,11 @@ extend JsonValue <: ExtendJsonValue & DataFields<JsonValue> {
                 }
                 arr
             case x: Iterable<(String, Data)> =>
+                println('$$$$$$$$$$$$$$$$$$$$')
                 let obj = JsonObject()
                 for ((k, v) in x) {
-                    obj.add(k, from(v))
+                    println('================= ${k} ${TypeInfo.of(v)} ${from(v)}')
+                    obj.add(k, from(v, flag))
                 }
                 obj
             case x: Iterable<(Data, Data)> =>

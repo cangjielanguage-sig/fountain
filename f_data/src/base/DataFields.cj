@@ -25,6 +25,7 @@ public interface FromData {
     }
     static func tryFromData(data: Data, flag: DataConversionFlag): Any
     static func tryFromData(data: Data){
+        println('44444444444444444444')
         tryFromData(data, DEFAULT_DATA_FLAG)
     }
 }

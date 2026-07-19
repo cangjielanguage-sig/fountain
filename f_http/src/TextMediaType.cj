@@ -88,10 +88,13 @@ public class JsonMediaType <: TextMediaType {
         super.doMake(mediaType){cs => JsonMediaType(charset: cs)}
     }
     private func data2json(data: Data){
+        println('3333333333333333')
         (JsonValue.tryFromData(data) as JsonValue).getOrThrow()
     }
     public func fromData(data: Data): Array<Byte> {
+        println('11111111111111111111111')
         if(charset == Charsets.UTF8){
+            println('2222222222222222222')
             data2json(data).toString().unsafeBytes()
         }else{
             fromData(data2json(data))

@@ -107,6 +107,7 @@ public sealed abstract class JsonValue <: ToString & JsonSerializable & JsonDese
     public func toJsonString(config: WriteConfig): String {
         let buf = ByteBuffer()
         write(buf, config)
+        println('&&&&&&&&&&&&&&&&&&&&&&&&&&&& ${buf.bytes()}')
         String.unsafeUtf8(buf.bytes())
     }
     public func write(output: OutputStream, config: WriteConfig): Unit{
@@ -123,7 +124,9 @@ public sealed abstract class JsonValue <: ToString & JsonSerializable & JsonDese
             case x: JsonInt => writer.writeValue<BigInt>(x.value)
             case x: JsonDecimal => writer.writeValue<Decimal>(x.value)
             case x: JsonBool => writer.writeValue<Bool>(x.value)
-            case x: JsonString => writer.writeValue<String>(x.value)
+            case x: JsonString => 
+                println('$$$$$$$$$$$$$$$$$$$$$$ ${x.value}')
+                writer.writeValue<String>(x.value)
             case x: JsonArray => x.toJson(writer)
             case x: JsonObject => x.toJson(writer)
             case _ => throw JsonException("Unsupported JsonValue type: ${TypeInfo.of(this)}" )
@@ -400,6 +403,7 @@ public class JsonObject <: JsonValue & Collection<(String, JsonValue)> {
     public func toJson(writer: JsonWriter): Unit {
         writer.startObject()
         for((k, v) in map){
+            println('#################### ${k} ${TypeInfo.of(v)}')
             writer.writeName(k)
             v.toJson(writer)
         }
