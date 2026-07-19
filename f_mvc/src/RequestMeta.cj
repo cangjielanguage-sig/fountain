@@ -239,10 +239,10 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
                     false
                 }
                 let accepted = if(accept.indexOf(',').isSome()){
-                    (AcceptQueue(accept).first() ?? '*/*') |> genBody
+                    AcceptQueue(accept).first() ?? '*/*'
                 } else {
-                    genBody(accept)
-                }
+                    accept
+                } |> genBody
                 if (let r: Resource <- result) {
                     try {
                         r.close()
