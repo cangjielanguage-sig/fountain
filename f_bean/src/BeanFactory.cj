@@ -46,10 +46,14 @@ public class BeanFactory {
             throw BeanException('To register bean to a registered BeanFactory is forbidden')
         }
         var beanType = TypeInfo.of<T>()
-        if(let Some(p) <- TypeMemberInfos.staticProperty(beanType, 'typeInfo') && 
-            let t: TypeInfo <- p.getValue() && beanType.isSubtypeOf(TypeInfo.of<FactoryBean>())){
+        if(beanType.isSubtypeOf(TypeInfo.of<FactoryBean>()) && 
+           let Some(p) <- TypeMemberInfos.staticProperty(beanType, 'typeInfo') && 
+           let t: TypeInfo <- p.getValue()){
             beanType = t
-        }//todo 这里有个反射BUG，调用isSubtypeOf会导致得不到类实现的直接接口，所以把isSubtypeOf放到if条件最后面
+        }//这里曾有个反射BUG，调用isSubtypeOf会导致得不到类实现的直接接口，
+         //由于FactoryBean这个特性所用不多，又不希望失去这个功能，把isSubtypeOf放到if条件最后面，
+         //可以在不使用FactoryBean的时候可以正常运行，同时确保代码逻辑上正确。
+         //如今这个BUG没有了，为了效率可以把这个isSubtypeOf放到最前面。
         let manager = BeanManager(meta, beanType, creator)
         synchronized(mutex) {
             if (let Some(existed) <- beans.addIfAbsent(manager.name, manager)) {
