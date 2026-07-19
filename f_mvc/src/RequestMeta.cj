@@ -176,7 +176,7 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
         setResponseStatus(status)
         let accept = ctx.request.headers.getFirst('Accept') ?? '*/*'
         let firstAccept = if (accept.contains(',')){
-            AcceptQueue(accept).first() ?? 'application/sjon'
+            AcceptQueue(accept).first() ?? 'application/json'
         }else{
             accept
         }
@@ -243,14 +243,16 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
                 } else {
                     genBody(accept)
                 }
-                if (!accepted && let r: Resource <- result) {
+                if (let r: Resource <- result) {
                     try {
                         r.close()
                     } catch (e: Exception) {
                         log.warn(e){'Error occurred on closing ${TypeInfo.of(result)}; path: ${path}; accept: ${accept}'}
                     }
                 }
-                MultiRequestMethodHandler.NOT_ACCEPTABLE.`handle`(ctx)
+                if(!accepted){
+                    MultiRequestMethodHandler.NOT_ACCEPTABLE.`handle`(ctx)
+                }
             } else if (emptyResult && let Some(accept) <- accept && accept.contains('*/*')) {
                 ctx.responseBuilder.status(status.value).header('Content-Type', accept).body('')
             } else if (emptyResult && accept.isNone()) {
