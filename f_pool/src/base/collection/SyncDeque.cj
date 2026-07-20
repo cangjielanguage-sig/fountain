@@ -86,9 +86,12 @@ protected class SyncDeque<T> <: Deque<T> {
     }
 }
 protected struct WeakSyncDeque<T> <: Deque<T> {
-    private let q = SyncDeque<WeakRef<Box<T>>>()
-    private func ref(value: T): WeakRef<Box<T>>{
-        WeakRef<Box<T>>(Box<T>(value), DEFERRED)
+    private let q = SyncDeque<WeakRef<Object>>()
+    private func ref(value: T): WeakRef<Object>{
+        match(value){
+            case x: Object => WeakRef<Object>(x, DEFERRED)
+            case x => WeakRef<Object>(Box<T>(x), DEFERRED)
+        }
     }
     public func insertHead(value: T): Unit {
         q.insertHead(ref(value))
@@ -97,19 +100,21 @@ protected struct WeakSyncDeque<T> <: Deque<T> {
         q.insertTail(ref(value))
     }
     private func refChecker(checker: (T) -> Bool){
-        {ref: WeakRef<Box<T>> => 
-            if(let Some(x) <- ref.value){
-                checker(x.value)
-            }else{
-                false
-            }
+        {ref: WeakRef<Object> => 
+            match(ref.value){
+                case Some(x: T) => x
+                case Some(x: Box<T>) => x.value
+                case _ => return false
+            } |> checker
         }
     }
     private func refDestroier(destroier: (T) -> Unit){
-        {ref: WeakRef<Box<T>> => 
-            if(let Some(x) <- ref.value){
-                destroier(x.value)
-            }
+        {ref: WeakRef<Object> => 
+            match(ref.value){
+                case Some(x: T) => x
+                case Some(x: Box<T>) => x.value
+                case _ => return 
+            } |> destroier
         }
     }
     public func prepend(value: T, checker: (T) -> Bool, destroier: (T) -> Unit): Unit {
@@ -125,13 +130,7 @@ protected struct WeakSyncDeque<T> <: Deque<T> {
         return None
     }
     public func check(running: () -> Bool, checker: (T) -> Bool, taskPusher: () -> Unit): Int64 {
-        q.check(running, {ref => 
-            if (let Some(value) <- ref.value) {
-                checker(value.value)
-            }else{
-                false
-            }
-        }, taskPusher)
+        q.check(running, refChecker(checker), taskPusher)
     }
     public prop size: Int64 {
         get(){
