@@ -56,14 +56,20 @@ public class KeyPoolBuilder<K, V> where K <: Hashable & Equatable<K> {
         setInitKeys(initKeys.iterator().next)
     }
     public func setInitKeys(keys: Iterable<K>, initSizePerKey!: Int64 = 1){
-        let box = Box<Int64>(0)
+        let idx = Box<Int64>(0)
+        let key = Box<?K>(None)
+        let itr = keys.iterator()
         setInitKeys{
-            for(k in keys){
-                while(box.value < initSizePerKey){
-                    box.value++
+            while(true){
+                if (let Some(k) <- key.value && idx.value < initSizePerKey) {
+                    idx.value++
                     return k
+                } else if (let Some(k) <- itr.next()) {
+                    idx.value = 0
+                    key.value = k
+                } else {
+                    return None
                 }
-                box.value = 0
             }
             None
         }
