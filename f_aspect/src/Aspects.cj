@@ -24,39 +24,34 @@ import fountain::f_macros.*
 
 public class Aspects {
     private static let aspects = ConcurrentHashMap<QualifiedFuncInfo, (Array<Any>) -> Any>()
-    private static let mutex = Mutex()
     private static func doProceed<T>(funcInfo: InvocationFuncInfo, fn: (Array<Any>) -> T): T {
-        let r = if (let Some(f) <- aspects.get(funcInfo.qualifiedFuncInfo)) {
-            f
-        } else {
-            synchronized(mutex) {
-                if (let Some(f) <- aspects.get(funcInfo.qualifiedFuncInfo)) {
-                    f
-                } else {
-                    let list = ArrayList<String>()
-                    for (m in BeanFactory.instance.iterator<Aspect>() where m
-                        .beanType
-                        .findAnnotation<AspectRoute>()?
-                        .matches(funcInfo) ?? false) {
-                        list.add(m.name)
-                    }
-                    var f: (Array<Any>) -> Any = {args => fn(args)}
-                    for (i in list.size - 1..=0 : -1) {
-                        let aspected = f
-                        let aspectName = list[i]
-                        f = {
-                            args =>
-                            funcInfo.setArgs(args)
-                            BeanFactory.instance.get<Aspect>(aspectName).getOrThrow().proceed(funcInfo, aspected)
-                        }
-                    }
-                    aspects[funcInfo.qualifiedFuncInfo] = f
-                    f
+        let r = aspects.entryView(funcInfo.qualifiedFuncInfo){view => 
+            if(let Some(fn) <- view.value){
+                fn
+            }else{
+                let list = ArrayList<String>()
+                for (m in BeanFactory.instance.iterator<Aspect>() where m
+                    .beanType
+                    .findAnnotation<AspectRoute>()?
+                    .matches(funcInfo) ?? false) {
+                    list.add(m.name)
                 }
+                var f: (Array<Any>) -> Any = {args => fn(args)}
+                for (i in list.size - 1..=0 : -1) {
+                    let aspected = f
+                    let aspectName = list[i]
+                    f = {
+                        args =>
+                        funcInfo.setArgs(args)
+                        BeanFactory.instance.get<Aspect>(aspectName).getOrThrow().proceed(funcInfo, aspected)
+                    }
+                }
+                aspects[funcInfo.qualifiedFuncInfo] = f
+                f
             }
-        }(funcInfo.args)
+        }?(funcInfo.args)
         match (r) {
-            case x: T => x
+            case Some(x: T) => x
             case _ => throw TypeCastException('Type of ${TypeInfo.of(r)} does not match ${TypeInfo.of<T>()}')
         }
     }
