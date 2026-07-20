@@ -1,8 +1,5 @@
 # f_pool
 
-
-## `Pool<T>`
-
 ## 池的模式
 ```cj
 package pool4cj
@@ -14,7 +11,9 @@ public enum Mode{
 }
 ```
 
-### 池
+
+## `Pool<T>`
+
 ```cj
 //池对象管理器
 public interface ObjectManager<V> {
@@ -97,7 +96,7 @@ public struct Pool<V> <: Resource {
 }
 ```
 
-### 键池
+## `KeyPool<K, V> where K <: Hashable & Equatable<K>`
 每个键对应一个池，只有池对象需要销毁，键不需要销毁
 ```cj
 // 键池对象管理器
