@@ -4,10 +4,15 @@
 ## `Pool<T>`
 
 ## 池的模式
-- Fifo: 先进先出，默认
-- Lifo: 后进先出
-- WeakFifo: 弱引用先进先出，池化对象以DEFERRED 策略的弱引用维持
-- WeakLifo: 弱引用后进先出，池化对象以DEFERRED 策略的弱引用维持
+```cj
+package pool4cj
+public enum Mode{
+  | Fifo     // 先进先出，默认
+  | Lifo     // 后进先出
+  | WeakFifo // 弱引用先进先出，池对象以DEFERRED策略的弱引用维持
+  | WeakLifo // 弱引用后进先出，池对象以DEFERRED策略的弱引用维持
+}
+```
 
 ### 池
 ```cj
