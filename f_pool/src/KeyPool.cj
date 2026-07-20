@@ -26,7 +26,6 @@ public interface KeyedObjectManager<K, V> {
     func destroy(key: K, value: V): Unit
     func clear(key: K, value: V): Unit {}
 }
-
 public class KeyPoolBuilder<K, V> where K <: Hashable & Equatable<K> {
     private var mode: Mode = Mode.Fifo
     private var initKeys: () -> ?K = {=> None}
@@ -55,6 +54,19 @@ public class KeyPoolBuilder<K, V> where K <: Hashable & Equatable<K> {
     }
     public func setinitKeys(initKeys: Iterable<K>): This{
         setInitKeys(initKeys.iterator().next)
+    }
+    public func setInitKeys(keys: Iterable<K>, initSizePerKey!: Int64 = 1){
+        let box = Box<Int64>(0)
+        setInitKeys{
+            for(k in keys){
+                while(box.value < initSizePerKey){
+                    box.value++
+                    return k
+                }
+                box.value = 0
+            }
+            None
+        }
     }
     public func setMinSize(minSize: Int64): This {
         this.minSize = minSize
