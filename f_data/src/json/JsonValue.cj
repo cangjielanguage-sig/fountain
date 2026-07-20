@@ -106,27 +106,44 @@ public sealed abstract class JsonValue <: ToString & JsonSerializable & JsonDese
     }
     public func toJsonString(config: WriteConfig): String {
         let buf = ByteBuffer()
-        write(buf, config)
+        write(buf, config, flush: true)
         String.unsafeUtf8(buf.bytes())
     }
-    public func write(output: OutputStream, config: WriteConfig): Unit{
+    public func write(output: OutputStream, config: WriteConfig, flush!: Bool = true): Unit{
         let writer = JsonWriter(output)
         writer.writeConfig = config
-        toJson(writer)
+        toJson(writer, flush)
     }
-    public func write(writer: JsonWriter): Unit {
-        toJson(writer)
+    public func write(writer: JsonWriter, flush!: Bool = true): Unit {
+        toJson(writer, flush)
     }
-    public open func toJson(writer: JsonWriter): Unit {
+    public func toJson(writer: JsonWriter): Unit {
+        toJson(writer, false)
+    }
+    public func toJson(writer: JsonWriter, flush: Bool): Unit {
         match(this){
             case x: JsonNull => writer.writeNullValue()
             case x: JsonInt => writer.writeValue<BigInt>(x.value)
             case x: JsonDecimal => writer.writeValue<Decimal>(x.value)
             case x: JsonBool => writer.writeValue<Bool>(x.value)
             case x: JsonString => writer.writeValue<String>(x.value)
-            case x: JsonArray => x.toJson(writer)
-            case x: JsonObject => x.toJson(writer)
+            case x: JsonArray => 
+                writer.startArray()
+                for(v in x){
+                    v.toJson(writer, false)
+                }
+                writer.endArray()
+            case x: JsonObject => 
+                writer.startObject()
+                for((k, v) in x){
+                    writer.writeName(k)
+                    v.toJson(writer, false)
+                }
+                writer.endObject()
             case _ => throw JsonException("Unsupported JsonValue type: ${TypeInfo.of(this)}" )
+        }
+        if(flush){
+            writer.flush()
         }
     }
     public func toString(): String {
@@ -158,11 +175,13 @@ public sealed abstract class JsonValue <: ToString & JsonSerializable & JsonDese
                     let array = JsonArray()
                     while(let Some(token) <- reader.peek()){
                         match(token) {
-                            case EndArray => return array
-                            case x => array.add(fromJson(reader))
+                            case EndArray => 
+                                reader.endArray()
+                                return array
+                            case _ => array.add(fromJson(reader))
                         }
                     }
-                    throw JsonException("Unexception end of reader")
+                    throw JsonException("Unexpected end of reader")
                 case BeginObject =>
                     reader.startObject()
                     let object = JsonObject()
@@ -172,7 +191,9 @@ public sealed abstract class JsonValue <: ToString & JsonSerializable & JsonDese
                                 let name = reader.readName()
                                 let value = fromJson(reader)
                                 object.add(name, value)
-                            case EndObject => return object
+                            case EndObject => 
+                                reader.endObject()
+                                return object
                             case _ => throw JsonException("Expected name or end of object")
                         }
                     }
@@ -310,13 +331,7 @@ public class JsonString <: JsonValue {
 }
 public class JsonArray <: JsonValue & Collection<JsonValue> {
     public JsonArray(private let list!: ArrayList<JsonValue> = ArrayList<JsonValue>()){}
-    public func toJson(writer: JsonWriter): Unit {
-        writer.startArray()
-        for(v in list){
-            v.toJson(writer)
-        }
-        writer.endArray()
-    }
+    
     public prop size: Int64 {
         get(){
             list.size
@@ -397,14 +412,7 @@ public class JsonArray <: JsonValue & Collection<JsonValue> {
 }
 public class JsonObject <: JsonValue & Collection<(String, JsonValue)> {
     public JsonObject(private let map!: HashMap<String, JsonValue> = HashMap<String, JsonValue>()){}
-    public func toJson(writer: JsonWriter): Unit {
-        writer.startObject()
-        for((k, v) in map){
-            writer.writeName(k)
-            v.toJson(writer)
-        }
-        writer.endObject()
-    }
+    
     public prop size: Int64 {
         get(){
             map.size

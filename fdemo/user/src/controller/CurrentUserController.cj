@@ -105,6 +105,13 @@ public class CurrentUserController {
         user.password = password
         user
     }
+    @PostMapping[path:'/api/user/echo3', 
+                consumes:'application/json', 
+                produces:'application/json',
+                ignoreAuth: true]
+    public func echo3(@RequestBody user: UserRequest): UserRequest {
+        user
+    }
     
     @DeleteMapping[path:'/api/user/session', 
                 consumes:'application/x-www-form-urlencoded', 
