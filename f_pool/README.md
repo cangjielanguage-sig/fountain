@@ -115,6 +115,8 @@ public class KeyPoolBuilder<K, V> where K <: Hashable & Equatable<K> {
     public func setInitKeys(initKeys: () -> ?K): This 
     // 设置添加初始对象
     public func setinitKeys(initKeys: Iterable<K>): This
+    // 每个从keys返回的K值将创建initSizePerKey个池对象，如果keys返回的K值有重复的，则这个K值对应的池对象初始化数就是重复次数*initSizePerKey
+    public func setInitKeys(keys: Iterable<K>, initSizePerKey!: Int64 = 1)
     // 设置每个键的池对象最小数量
     public func setMinSize(minSize: Int64): This 
     // 设置每个键的池对象最大数量
