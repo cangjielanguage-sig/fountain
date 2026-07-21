@@ -45,7 +45,7 @@ public class ConfigExecutionRouteRule <: ConfigRouteRule {
                 let lparen = qualified
                     .indexOf('(')
                     .getOrThrow {AspectException('${qualified} does not contain argTypes')}
-                let rparen = colon - 1
+                let rparen = qualified[0 .. colon].lastIndexOf(')').getOrThrow {AspectException("'${qualified}' does not contain rparen")}
                 let lastDot = qualified[0 .. lparen]
                     .lastIndexOf('.')
                     .getOrThrow {AspectException('${qualified} does not contain qualifiedName or funcName')}

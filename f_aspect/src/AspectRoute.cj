@@ -129,10 +129,11 @@ public class ArgsRouteRule <: RouteRule {
 public class ReturnTypeRouteRule <: RouteRule {
     public const ReturnTypeRouteRule(public let returnType: String) {}
     public func matches(funcInfo: InvocationFuncInfo): Bool {
-        returnType == '*' || 
+        let matched = returnType == '*' || 
         ((returnType.contains('*') || returnType.contains('?')) && 
           Regex.wildcard(returnType).matches(funcInfo.funcInfo.returnType.qualifiedName)) || 
         TypeInfos.get(returnType).isSubtypeOf(funcInfo.funcInfo.returnType)
+        matched
     }
 }
 /**

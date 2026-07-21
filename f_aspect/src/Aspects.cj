@@ -16,7 +16,6 @@ limitations under the License.
 package fountain::f_aspect
 
 import std.collection.concurrent.ConcurrentHashMap
-import std.sync.Mutex
 import fountain::f_base.*
 import fountain::f_bean.{BeanFactory, BeanManager}
 import fountain::f_collection.*
@@ -25,10 +24,7 @@ import fountain::f_macros.*
 public class Aspects {
     private static let aspects = ConcurrentHashMap<QualifiedFuncInfo, (Array<Any>) -> Any>()
     private static func doProceed<T>(funcInfo: InvocationFuncInfo, fn: (Array<Any>) -> T): T {
-        let r = aspects.entryView(funcInfo.qualifiedFuncInfo){view => 
-            if(let Some(fn) <- view.value){
-                fn
-            }else{
+        let f = aspects.computeIfAbsent(funcInfo.qualifiedFuncInfo){
                 let list = ArrayList<String>()
                 for (m in BeanFactory.instance.iterator<Aspect>() where m
                     .beanType
@@ -46,13 +42,11 @@ public class Aspects {
                         BeanFactory.instance.get<Aspect>(aspectName).getOrThrow().proceed(funcInfo, aspected)
                     }
                 }
-                aspects[funcInfo.qualifiedFuncInfo] = f
                 f
-            }
-        }?(funcInfo.args)
-        match (r) {
-            case Some(x: T) => x
-            case _ => throw TypeCastException('Type of ${TypeInfo.of(r)} does not match ${TypeInfo.of<T>()}')
+        }
+        match (f(funcInfo.args)) {
+            case x: T => x
+            case r => throw TypeCastException('Type of ${TypeInfo.of(r)} does not match ${TypeInfo.of<T>()}')
         }
     }
     private static let recursiveInvocationFlag = ThreadLocal<Bool>()
