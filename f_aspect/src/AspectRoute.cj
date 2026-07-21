@@ -77,6 +77,11 @@ public class ExecutionRouteRule <: AndRouteRule {
 public class WithinRouteRule <: RouteRule {
     public const WithinRouteRule(public let qualifiedName: String) {}
     public func matches(funcInfo: InvocationFuncInfo): Bool {
+        let qualifiedName = if(Regex('^.+::').matches(this.qualifiedName)){
+            this.qualifiedName
+        }else{
+            '*::${this.qualifiedName}'
+        }
         Regex.wildcard(qualifiedName).matches(funcInfo.typeInfo.qualifiedName)
     }
 }
