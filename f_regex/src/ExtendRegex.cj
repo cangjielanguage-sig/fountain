@@ -20,8 +20,6 @@ import std.collection.ArrayList
 import std.convert.Parsable
 import fountain::f_base.*
 import fountain::f_exception.UnreachableException
-import fountain::f_cache.HeapCache
-import fountain::f_regex.exception.RegexBuilderException
 
 public interface ExtendRegex {
     static prop INTEGER: Regex
