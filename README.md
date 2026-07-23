@@ -9,7 +9,7 @@ _/ ____\____  __ __  _____/  |______  |__| ____
  |__|  \____/|____/|___|  /__| (____  /__|___|  /
                         \/          \/        \/
 ```
-
+[![AtomGit G-Star](您的AtomGit项目链接/star/new_badge.svg)]()https://atomgit.com/Cangjie-SIG/fountain)
 ![fountain](.assets/README/fountain.jpg)
 
 # fountain
