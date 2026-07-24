@@ -19,6 +19,7 @@ import std.collection.*
 import std.env
 // import opengauss.driver.*
 // import opengauss.slog
+import pgsql.*
 import fountain.bean.*
 import fountain.bean.macros.*
 import fountain.data.*

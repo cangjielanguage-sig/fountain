@@ -1,7 +1,8 @@
 [dependencies]
   fountain = {path = "../"}
-  opengauss = {git = "https://gitcode.com/runningW/opengauss-driver.git", branch="master"}
+  # opengauss = {git = "https://gitcode.com/runningW/opengauss-driver.git", branch="master"}
 #  opengauss = {path = "../../opengauss-driver"}
+  pgsql = { git = "https://gitcode.com/aibrary/pgsql-driver.git", branch = "main", output-type = "dynamic"}
 
 [workspace]
   version = "1.0.45"
