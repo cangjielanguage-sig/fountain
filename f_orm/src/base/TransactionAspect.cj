@@ -22,7 +22,7 @@ import fountain::f_bean.{BeanFactory, BeanMeta}
 import fountain::f_orm.wrap.ORMConfig
 public import fountain::f_aspect.*
 
-@AspectRoute[FuncAnnotationRouteRule("f_orm.Transactional") | ConfigExecutionRouteRule(ORMConfig.transactionalFuncExecution)]
+@AspectRoute[FuncAnnotationRouteRule("fountain::f_orm.Transactional") | ConfigExecutionRouteRule(ORMConfig.transactionalFuncExecution)]
 @BeanMeta
 public class TransactionAspect <: Aspect {
     static init() {
