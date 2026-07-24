@@ -59,8 +59,9 @@ exports(){
     export orm_stdPoolConnectionTimeout=86400 # 连接获取超时时间，默认30分钟
     export orm_stdPoolKeepaliveTime=86400 # 连接保活检查周期，默认1分钟
     # orm_transactionalFuncExecution 和@Transactional注解只要有一个生效就会将事务切面织入到函数
-    export orm_transactionalFuncExecution='*::*..*ServiceImpl.delete*(**): *'
+    export orm_transactionalFuncExecution='*::*..*ServiceImpl.del*(**): *'
     export orm_transactionalFuncExecution="$orm_transactionalFuncExecution|*::*..*ServiceImpl.remove*(**): *"
+    export orm_transactionalFuncExecution="$orm_transactionalFuncExecution|*::*..*ServiceImpl.insert*(**): *"
     export orm_transactionalFuncExecution="$orm_transactionalFuncExecution|*::*..*ServiceImpl.save*(**): *"
     export orm_transactionalFuncExecution="$orm_transactionalFuncExecution|*::*..*ServiceImpl.add*(**): *"
     export orm_transactionalFuncExecution="$orm_transactionalFuncExecution|*::*..*ServiceImpl.new*(**): *"
@@ -69,6 +70,7 @@ exports(){
     export orm_transactionalFuncExecution="$orm_transactionalFuncExecution|*::*..*ServiceImpl.change*(**): *"
     export orm_transactionalFuncExecution="$orm_transactionalFuncExecution|*::*..*ServiceImpl.register*(**): *"
     export orm_transactionalFuncExecution="$orm_transactionalFuncExecution|*::*..*.userSession(**): *"
+    # export orm_transactionalFuncExecution="$orm_transactionalFuncExecution|*::*..*.sayHello(**): *"
     export postgres_orm_connectionUrl=$POSTGRES
     export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:`find ./fdemo/release/* -type d|grep -a -v -P '\.build-logs|bin|_stAtIc__|boot'|tr '\n' ':'`
     echo "LD_LIBRARY_PATH=$LD_LIBRARY_PATH"

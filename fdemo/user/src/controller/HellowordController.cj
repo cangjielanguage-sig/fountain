@@ -20,12 +20,16 @@ import fountain::f_mvc.*
 import fountain::f_mvc.macros.*
 import fountain::user.model.po.*
 import fountain::user.model.mvc.*
+import fountain::user.service.HelloworldService
 
 @Controller
 public class HellowordController {
+    private let helloworldService = lookup<HelloworldService>()
+    
     @GetMapping[path:"/helloworld", produces:'text/plain', consumes:'application/x-www-form-urlencoded']
     @IgnoreSecurity
     public func helloworld(): String {
+        helloworldService.sayHello('haha')
         return "helloworld"
     }
     @GetMapping[path:"/redirect/helloworld", produces:'text/plain', consumes:'application/x-www-form-urlencoded']

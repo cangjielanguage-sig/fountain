@@ -192,7 +192,7 @@ private func contains(annotations: Collection<Annotation>, annotationNames: Arra
             list.add(ClassTypeInfo.of(annotation))
         }
         for (name in annotationNames) {
-            supers.add(TypeInfos.get(name.trimAscii()))
+            supers.add(TypeInfo.get(name.trimAscii()))
         }
         for (superType in supers) {
             var matched = false
