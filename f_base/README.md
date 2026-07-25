@@ -105,3 +105,7 @@
 
 - [基础运算符接口](doc/基础运算符接口.md)
 
+## `FutureTask<T>`
+1. 父任务结束时可以选择是否结束子任务
+2. 支持InheritedTaskLocal，类似ThreadLocal，不过有继承关系，如果当然FutureTask未找到值，则从父任务中获取
+- [FutureTask](doc/FutureTask.md)
