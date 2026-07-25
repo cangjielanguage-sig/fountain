@@ -19,7 +19,11 @@ import fountain::f_data
 
 public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMeta> {
     private static let log = LoggerFactory.getLogger<RequestMeta>()
+    private static let NOT_FOUND = NotFoundHandler()
+    private static let STATIC_RESOURCE_ROOT = MVCConfig.mvcStaticResourceRoot
+    private static let staticResourceBytes = ConcurrentHashMap<String, ?Array<Byte>>()
     static let currentResponseStatus = ThreadLocal<UInt16>()
+    
     static func setResponseStatus(status: HttpStatus) {
         currentResponseStatus.set(status.value)
     }
@@ -44,7 +48,27 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
         public let method: RequestMethod,
         private let params!: RequestCondition = DummyRequestCondition.instance,
         private let headers!: RequestCondition = DummyRequestCondition.instance
-    ) {}
+    ) {
+        this.handle_ = {ctx => 
+            if(ctx.request.method == method.toString() && 
+                let Some(dotIdx) <- path.lastIndexOf('.') && 
+                let Some(bytes) <- loadStaticResource(path)){
+                let ext = path[dotIdx + 1 ..]
+                ctx.responseBuilder.status(HttpStatus.OK.value).header('Content-Type', match(ext){
+                    case 'html' | 'css' | 'xml' | 'txt' => 'text/${ext}'
+                    case 'json' => 'application/json'
+                    case 'js' => 'application/javascript'
+                    case 'htm' => 'text/html'
+                    case 'jpg' | 'jpeg' | 'png' | 'gif' | 'bmp' | 'ico' | 'webp' | 'tif' | 'tiff' => 'image/${ext}'
+                    case 'svg' => 'image/svg+xml'
+                    case 'ttf' | 'otf' | 'woff' | 'woff2' => 'font/${ext}'
+                    case _ => 'application/${ext}'
+                }).body(bytes)
+                return
+            }
+            NOT_FOUND.`handle`(ctx)
+        }
+    }
 
     public func compare(other: RequestMeta): Ordering {
         var cmp = path.compare(other.path)
@@ -66,10 +90,21 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
     public func toString(): String {
         'path: ${path}; method: ${method}; consumes: ${consumes}; consumesSize: ${consumes.size}'
     }
-
-    private var handle_: (HttpContext) -> Unit = {
-        ctx: HttpContext => throw MVCException('Request was not handled')
+    private static func loadStaticResource(path: String): ?Array<Byte> {
+        staticResourceBytes.computeIfAbsent(path) {
+            let p = if(path.startsWith('/')){
+                path[1..]
+            }else{
+                path
+            } |> STATIC_RESOURCE_ROOT.join
+            if(exists(p)){
+                File.readFrom(p)
+            }else{
+                None<Array<Byte>>
+            }
+        }
     }
+    private var handle_: (HttpContext) -> Unit
 
     public func `handle`(ctx: HttpContext): Unit {
         handle_(ctx)

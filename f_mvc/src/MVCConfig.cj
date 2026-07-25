@@ -63,6 +63,8 @@ public class MVCConfig {
 
     public static let MVC_OVERALL_ELAPSED_SWITCH = "${confPrefix}_overallElapsedSwitch"
 
+    public static let MVC_STATIC_RESOURCE_ROOT = "${confPrefix}_staticResourceRoot"
+
     static init(){
         lookupOption<GlobalCryptoKit>()
     }
@@ -276,6 +278,15 @@ public class MVCConfig {
     public static prop mvcOverallElapsedSwitch: Bool {
         get(){
             Config.getValue<Bool>(MVC_OVERALL_ELAPSED_SWITCH) ?? false
+        }
+    }
+    public static prop mvcStaticResourceRoot: Path {
+        get(){
+            if(let Some(p) <- Config.getString(MVC_STATIC_RESOURCE_ROOT)){
+                canonicalize(p)
+            } else {
+                getWorkingDirectory()
+            }
         }
     }
 }
