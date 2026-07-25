@@ -126,13 +126,11 @@ public class FutureTask<T> <: AbstractFutureTask {
     public init(fn: () -> T){
         this(true, fn)
     }
-    public static prop current: FutureTask<T> {
-        get(){
-            if(let Some(t: FutureTask<T>) <- taskMap.get(Thread.currentThread.id)){
-                t
-            }else{
-                throw FutureTaskException("No task found in current thread")
-            }
+    public static func current(): FutureTask<T> {
+        if(let Some(t: FutureTask<T>) <- taskMap.get(Thread.currentThread.id)){
+            t
+        }else{
+            throw FutureTaskException("No task found in current thread")
         }
     }
     public func get(): T {
@@ -177,16 +175,16 @@ public class InheritedTaskLocal<T> <: AbstractInheritedTaskLocal {
     }
 
     public func get(): ?T {
-        local.getLocal<T>(task)
+        task.getLocal<T>(this)
     }
 
     public func remove(): Unit {
-        local.removeLocal<T>(task)
+        task.removeLocal<T>(this)
     }
     public func getOrSet(value: T): T {
-        local.getOrSetLocal<T>(task, value)
+        task.getOrSetLocal<T>(this, value)
     }
     public func getOrCompute(fn: () -> T): T {
-        local.getOrComputeLocal<T>(task, fn)
+        task.getOrComputeLocal<T>(this, fn)
     }
 }
