@@ -3,8 +3,8 @@
 
 [package]
   cjc-version = "1.0.4"
-  compile-option = "-O2 --lto=full --dy-std"
-  override-compile-option = "-O2 --lto=full --dy-std"
+  compile-option = "-O2 --dy-std"
+  override-compile-option = "-O2 --dy-std"
   description = "fountain boot program"
   link-option = ""
   name = "fboot"
@@ -19,7 +19,6 @@
   authors = ["吴京润"]
 
 [profile.build]
-  lto = "full"
   incremental = true
 
 [target]
