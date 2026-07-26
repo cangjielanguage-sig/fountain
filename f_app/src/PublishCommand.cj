@@ -250,20 +250,27 @@ public class PublishCommand <: SubCommand {
             File.writeTo(cjpmPath, replaced.toString().unsafeBytes())
         }
     }
-    private func checkPublished(organization: String, module: String, once: Bool): Bool {
-        let url = 'https://pkg.cangjie-lang.cn/v1/artifact/getPackageMetadata?group=${organization}&moduleName=${module}&version=${version}'
-        println('checking published ${organization}::${module} ...; url: ${url}; once: ${once}')
+    private func checkLoop<T>(action: String, fn: () -> ?T): T {
         var a = 0
         var b = 1
         var waited = 0
-        while(true){
+        var result = None<T>
+        while(result.isNone()){
             let next = Random().nextInt64(b) + 1
-            println('waiting for ${module} to be published... waited ${Duration.second * waited}, to check again after ${Duration.second * next}')
+            println('waiting for ${action} waited ${Duration.second * waited}, to check again after ${Duration.second * next} from ${DateTime.now()}')
             sleep(Duration.second * next)
             waited += next
             let tmp = a + b
             a = b
             b = tmp
+            result = fn()
+        }
+        result.getOrThrow()
+    }
+    private func checkPublished(organization: String, module: String, once: Bool): Bool {
+        let url = 'https://pkg.cangjie-lang.cn/v1/artifact/getPackageMetadata?group=${organization}&moduleName=${module}&version=${version}'
+        println('checking published ${organization}::${module} ...; url: ${url}; once: ${once}')
+        checkLoop<Bool>('${module} to be published...'){
             var tls = TlsClientConfig()
             tls.verifyMode = TrustAll
             let client = ClientBuilder().tlsConfig(tls).build()
@@ -284,8 +291,8 @@ public class PublishCommand <: SubCommand {
             }finally{
                 client.close()
             }
+            None<Bool>
         }
-        false
     }
     private func publish(includes: HashSet<String>, all: HashMap<String, Path>): Unit {
         let pout = getStdOut()
@@ -303,6 +310,8 @@ public class PublishCommand <: SubCommand {
                     println('publishing ${info.organization}::${m} ...')
                     replaceDependencies(path, info.organization, all, dry)
                     try{
+                        cjpm(path, 'cjpm clean success', ['clean'], dry)
+                        removeIfExists(path.join('cjpm.lock'))
                         var success = cjpm(path, 'cjpm bundle success', bundleArgs, dry)
                         if(success){
                             success = cjpm(path, 'cjpm publish success', ['publish'], dry)
@@ -324,7 +333,15 @@ public class PublishCommand <: SubCommand {
                     moduleInfos.remove(m)
                 }
                 let published = checkPublished(info.organization, m, true)
-                pub(published)
+                checkLoop<Unit>('doing pub...'){
+                    try{
+                        pub(published)
+                        return ()
+                    }catch(e: Exception){
+                        e.printStackTrace()
+                        return None<Unit>
+                    }
+                }
             }else{
                 throw Exception('unreachable if no bug on module ${m}')
             }
