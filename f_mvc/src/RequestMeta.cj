@@ -50,18 +50,22 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
         private let headers!: RequestCondition = DummyRequestCondition.instance
     ) {
         this.handle_ = {ctx => 
-            if(let Some(dotIdx) <- path.lastIndexOf('.') && let Some(bytes) <- loadStaticResource(path)){
-                let ext = path[dotIdx + 1 ..]
-                ctx.responseBuilder.status(HttpStatus.OK.value).header('Content-Type', match(ext){
-                    case 'html' | 'css' | 'xml' | 'txt' => 'text/${ext}'
-                    case 'json' => 'application/json'
-                    case 'js' => 'application/javascript'
-                    case 'htm' => 'text/html'
-                    case 'jpg' | 'jpeg' | 'png' | 'gif' | 'bmp' | 'ico' | 'webp' | 'tif' | 'tiff' | 'avif' | 'ico' => 'image/${ext}'
-                    case 'svg' => 'image/svg+xml'
-                    case 'ttf' | 'otf' | 'woff' | 'woff2' => 'font/${ext}'
-                    case _ => 'application/${ext}'
-                }).body(bytes)
+            if(let Some(bytes) <- loadStaticResource(path)){
+                let builder = ctx.responseBuilder.status(HttpStatus.OK.value)
+                if(let Some(dotIdx) <- path.lastIndexOf('.')){
+                    let ext = path[dotIdx + 1 ..]
+                    builder.header('Content-Type', match(ext){
+                        case 'html' | 'css' | 'xml' | 'txt' => 'text/${ext}'
+                        case 'json' => 'application/json'
+                        case 'js' => 'application/javascript'
+                        case 'htm' => 'text/html'
+                        case 'jpg' | 'jpeg' | 'png' | 'gif' | 'bmp' | 'ico' | 'webp' | 'tif' | 'tiff' | 'avif' | 'ico' => 'image/${ext}'
+                        case 'svg' => 'image/svg+xml'
+                        case 'ttf' | 'otf' | 'woff' | 'woff2' => 'font/${ext}'
+                        case _ => 'application/${ext}'
+                    })
+                }
+                builder.body(bytes)
                 return
             }
             log.warn('RequestMeta.handle.Not Found:${path} ${ctx.request.headers.getFirst('Accept')}')

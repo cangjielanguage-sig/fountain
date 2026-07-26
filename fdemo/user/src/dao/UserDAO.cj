@@ -60,7 +60,16 @@ public interface UserDAO <: RootDAO {
     func listUsers(): Pagination<UserPO> {
         executor.FROM<UserPO>().page(10, page: 1)
     }
-
+    func listUsers(userLike: String): Pagination<UserPO> {
+        let page = executor.FROM<UserPO>()
+                        .WHERE{'''
+                                ${meet(userLike.size > 0, ' username like '){
+                                    '%${userLike}%'
+                                }} order by id'''
+                        }.page<UserPO>(100, page: 1)
+        println('QQQQQQQQQQQQQQQQQ ${page.list.size}')
+        page
+    }
     func deleteUser(id: Int64): Int64 {
         executor.setSql('''
             delete 
@@ -80,26 +89,26 @@ public interface UserDAO <: RootDAO {
         //  limit 1 offset 0 
         // ''').first<MedAllocationPO>()
         // println('MMMMMMMMMMMMMMM ${med?.preAmount}')
-        let page = executor.FROM<UserPO>()
-                        .WHERE{'''
-                                ${meet(username.size > 0, ' username like '){
-                                    '%${username}%'
-                                }}
-                                ${meet(password.size > 0, ' and "password" like '){
-                                    '%${password}%'
-                                }} order by id'''
-                        }.page<UserPO>(100, page: 1)
-        println('QQQQQQQQQQQQQQQQQ ${page.list.size}')
-        let page2 = executor.FROM<UserPO>()
-                           .WHERE{
-                                meet(username.size > 0, ' username like '){
-                                    '%${username}%'
-                                }
-                                meet(password.size > 0, ' and "password" like '){
-                                    '%${password}%'
-                                }
-                           }.page<UserPO>(100, page: 1)
-        println('QQQQQQQQQQQQQQQQQ ${page2.list.size}')
+        // let page = executor.FROM<UserPO>()
+        //                 .WHERE{'''
+        //                         ${meet(username.size > 0, ' username like '){
+        //                             '%${username}%'
+        //                         }}
+        //                         ${meet(password.size > 0, ' and "password" like '){
+        //                             '%${password}%'
+        //                         }} order by id'''
+        //                 }.page<UserPO>(100, page: 1)
+        // println('QQQQQQQQQQQQQQQQQ ${page.list.size}')
+        // let page2 = executor.FROM<UserPO>()
+        //                    .WHERE{
+        //                         meet(username.size > 0, ' username like '){
+        //                             '%${username}%'
+        //                         }
+        //                         meet(password.size > 0, ' and "password" like '){
+        //                             '%${password}%'
+        //                         }
+        //                    }.page<UserPO>(100, page: 1)
+        // println('QQQQQQQQQQQQQQQQQ ${page2.list.size}')
         // let user = executor.FROM<UserPO>()
         //         .WHERE{
         //             meet(username.size > 0){

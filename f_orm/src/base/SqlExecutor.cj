@@ -79,9 +79,9 @@ public class SqlExecutor <: Resource & RootDAO {
             }
         }
     }
-    protected func clearSql(){
+    protected func clearSql(clearArgsAfterExec!: Bool = clearArgsAfterExec_){
         sql_ = ''
-        if(clearArgsAfterExec_){
+        if(clearArgsAfterExec){
             args.clear()
         }
     }

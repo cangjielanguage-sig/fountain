@@ -1,5 +1,7 @@
 ## 声明DAO接口
 使用本ORM的全部代码都在DAO接口函数，不必声明DAO接口的实现
+**注意**：每个DAO接口函数必须最多只能执行一条SQL。
+
 ```cj
 import fountain::f_orm.*
 import fountain::f_orm.macros.*
