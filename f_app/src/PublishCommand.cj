@@ -44,7 +44,11 @@ public class PublishCommand <: SubCommand {
     }
     private func lines(path: Path): Iterator<String> {
         println('reading file ${path}...')
-        entireFile(path).lines().map{l => l.trimAscii()}.filter{l => l.size > 0 && !l.startsWith('#')}
+        entireFile(path).lines().filter{line => if(let l <- line.trimAscii()){
+            l.size > 0 && !l.startsWith('#')
+        }else{
+            false
+        }}
     }
     private func lines(path: String): Iterator<String> {
         path |> canonicalize |> lines
@@ -227,7 +231,7 @@ public class PublishCommand <: SubCommand {
             }
             regexGen.append(m)
         }
-        let moduleRegex = Regex('^"?(${organization}::)?(${regexGen})"?\\s*=\\s*\\{.*(path|git)\\s*=\\s*".+".*\\}$')
+        let moduleRegex = Regex('^\\s*"?(${organization}::)?(${regexGen})"?\\s*=\\s*\\{.*(path|git)\\s*=\\s*".+".*\\}\\s*$')
         let replaced = StringGenerator()
         for(line in this.lines(cjpmPath)){
             let replacedLine = if(moduleRegex.matches(line)){
