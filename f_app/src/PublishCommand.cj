@@ -267,7 +267,7 @@ public class PublishCommand <: SubCommand {
                 let resp = client.get(url)
                 let body = StringReader(resp.body).readToEnd()
                 let json = JsonValue.fromStr(body).asObject()
-                let code = (json.get('code')?.asInt().value.toInt64()) ?? 0
+                let code = (json.get('code')?.toInt64()) ?? 0
                 let msg = (json.get('msg')?.asString().value) ?? ''
                 println('check url response - code: ${code}, msg: ${msg}')
                 if(code == 200 && msg == 'success'){
@@ -275,7 +275,8 @@ public class PublishCommand <: SubCommand {
                 }else if(once){
                     return false
                 }
-            }catch(_){
+            }catch(e: Exception){
+                e.printStackTrace()
             }finally{
                 client.close()
             }
@@ -327,6 +328,7 @@ public class PublishCommand <: SubCommand {
     }
     private func cjpm(path: Path, successLine: String, args: Array<String>, dry: Bool): Bool {
         println('running "cjpm ${String.join(args, delimiter: ' ')}" in ${path} ...')
+        println('')
         if(dry){
             return true
         }

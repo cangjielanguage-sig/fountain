@@ -31,14 +31,18 @@ public sealed abstract class JsonValue <: ToString & JsonSerializable & JsonDese
     public func asInt(): JsonInt{
         if(let x: JsonInt <- this){
             x
-        }else{
+        } else if (let x: JsonDecimal <- this) {
+            JsonInt(x.value)
+        } else {
             throw JsonException('current is ${TypeInfo.of(this)}')
         }
     }
     public func asDecimal(): JsonDecimal{
         if(let x: JsonDecimal <- this){
             x
-        }else{
+        } else if (let x: JsonInt <- this) {
+            JsonDecimal(x.value)
+        } else{
             throw JsonException('current is ${TypeInfo.of(this)}')
         }
     }
@@ -267,6 +271,9 @@ public class JsonInt <: JsonValue {
     public func toBigInt(): BigInt {
         value
     }
+    public func toDecimal(): Decimal {
+        Decimal(value)
+    }
 }
 public class JsonDecimal <: JsonValue {
     public JsonDecimal(public let value: Decimal){}
@@ -320,6 +327,33 @@ public class JsonDecimal <: JsonValue {
     }
     public func toFloat64(): Float64 {
         value.toFloat64()
+    }
+    public func toInt8(): Int8 {
+        value.toInt8()
+    }
+    public func toInt16(): Int16 {
+        value.toInt16()
+    }
+    public func toInt32(): Int32 {
+        value.toInt32()
+    }
+    public func toInt64(): Int64 {
+        value.toInt64()
+    }
+    public func toUInt8(): UInt8 {
+        value.toUInt8()
+    }
+    public func toUInt16(): UInt16 {
+        value.toUInt16()
+    }
+    public func toUInt32(): UInt32 {
+        value.toUInt32()
+    }
+    public func toUInt64(): UInt64 {
+        value.toUInt64()
+    }
+    public func toBigInt(): BigInt {
+        value.toBigInt()
     }
 }
 public class JsonBool <: JsonValue {
