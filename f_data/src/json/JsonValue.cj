@@ -32,7 +32,7 @@ public sealed abstract class JsonValue <: ToString & JsonSerializable & JsonDese
         if(let x: JsonInt <- this){
             x
         } else if (let x: JsonDecimal <- this) {
-            JsonInt(x.value)
+            JsonInt(x.toBigInt())
         } else {
             throw JsonException('current is ${TypeInfo.of(this)}')
         }
