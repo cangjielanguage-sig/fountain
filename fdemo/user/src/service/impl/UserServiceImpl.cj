@@ -69,7 +69,8 @@ public class UserServiceImpl <: UserService {
     @Transactional//仅做演示，此函数只有查询，不需要事务控制，如果事务生效，控制台会输出日志
     public func userSession(username: String, password: String): ?(Int64, String, Bool) {
         let exe = executor()
-        exe.listUsers(username)
+        let page = exe.listUsers(username)
+        println('AAAAAAAAAAAAAAAAA ${page.list.size} ${page.list[0].username}')
         UserEntity(username, password).makeSession(exe.findUserId)
     }
     public func userSessionLog(username: String, password: String): ?(Int64, String, Bool){
