@@ -21,7 +21,7 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
     private static let log = LoggerFactory.getLogger<RequestMeta>()
     private static let NOT_FOUND = NotFoundHandler()
     private static let STATIC_RESOURCE_ROOT = MVCConfig.mvcStaticResourceRoot
-    private static let staticResourceBytes = ConcurrentHashMap<String, ?Array<Byte>>()
+    private static let staticResourceBytes = ConcurrentHashMap<String, (DateTime, Array<Byte>)>()
     static let currentResponseStatus = ThreadLocal<UInt16>()
     
     static func setResponseStatus(status: HttpStatus) {
@@ -50,22 +50,21 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
         private let headers!: RequestCondition = DummyRequestCondition.instance
     ) {
         this.handle_ = {ctx => 
-            if(ctx.request.method == method.toString() && 
-                let Some(dotIdx) <- path.lastIndexOf('.') && 
-                let Some(bytes) <- loadStaticResource(path)){
+            if(let Some(dotIdx) <- path.lastIndexOf('.') && let Some(bytes) <- loadStaticResource(path)){
                 let ext = path[dotIdx + 1 ..]
                 ctx.responseBuilder.status(HttpStatus.OK.value).header('Content-Type', match(ext){
                     case 'html' | 'css' | 'xml' | 'txt' => 'text/${ext}'
                     case 'json' => 'application/json'
                     case 'js' => 'application/javascript'
                     case 'htm' => 'text/html'
-                    case 'jpg' | 'jpeg' | 'png' | 'gif' | 'bmp' | 'ico' | 'webp' | 'tif' | 'tiff' => 'image/${ext}'
+                    case 'jpg' | 'jpeg' | 'png' | 'gif' | 'bmp' | 'ico' | 'webp' | 'tif' | 'tiff' | 'avif' | 'ico' => 'image/${ext}'
                     case 'svg' => 'image/svg+xml'
                     case 'ttf' | 'otf' | 'woff' | 'woff2' => 'font/${ext}'
                     case _ => 'application/${ext}'
                 }).body(bytes)
                 return
             }
+            log.warn('RequestMeta.handle.Not Found:${path} ${ctx.request.headers.getFirst('Accept')}')
             NOT_FOUND.`handle`(ctx)
         }
     }
@@ -91,18 +90,27 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
         'path: ${path}; method: ${method}; consumes: ${consumes}; consumesSize: ${consumes.size}'
     }
     private static func loadStaticResource(path: String): ?Array<Byte> {
-        staticResourceBytes.computeIfAbsent(path) {
+        staticResourceBytes.entryView(path){view => 
             let p = if(path.startsWith('/')){
                 path[1..]
             }else{
                 path
             } |> STATIC_RESOURCE_ROOT.join
             if(exists(p)){
-                File.readFrom(p)
+                try(file = File(p, Read)){
+                    let lastModified = file.info.lastModificationTime
+                    view.value = if(let Some((last, _)) <- view.value && last < lastModified){
+                        (lastModified, File.readFrom(p))
+                    }else if(view.value.isNone()){
+                        (lastModified, File.readFrom(p))
+                    }else{
+                        return
+                    }
+                }
             }else{
-                None<Array<Byte>>
+                view.value = None
             }
-        }
+        }?[1]
     }
     private var handle_: (HttpContext) -> Unit
 
