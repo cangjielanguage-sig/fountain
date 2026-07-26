@@ -1,5 +1,5 @@
 [dependencies]
-  "fountain::f_base" = {path = "../f_base"}
+  "fountain::f_base" = "1.2.0"
 [package]
   cjc-version = "1.2.0"
   compile-option = "--dy-std"
