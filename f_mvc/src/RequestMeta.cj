@@ -512,7 +512,7 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
                 case x: ToString => return x.toString()
                 case x: Array<Byte> => return toBase64String(x)
                 case x: MultipartFile => return JsonString(x.toString()).toString()
-                case x: ToData => return f_data.convert<JsonValue>(x.toData()).getOrThrow().toString()//todo
+                case x: ToData => return f_data.convert<JsonValue>(x.toData()).getOrThrow().toString()
                 case x: Data => return f_data.convert<JsonValue>(x).getOrThrow().toString()
                 case x => x
             }
