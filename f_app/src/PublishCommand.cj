@@ -82,15 +82,19 @@ public class PublishCommand <: SubCommand {
         let lines = this.lines('./.modules')
         let includes = HashSet<String>()
         let excludes = HashSet<String>()
-        var including = false
+        const INCLUDING = 1
+        const EXCLUDING = 2
+        const DETENTION = 3
+        var section = 0
         for (line in lines where line != '') {
             if (line == '[include]') {
-                including = true
+                section = INCLUDING
                 continue
             } else if (line == '[exclude]') {
-                including = false
+                section = EXCLUDING
                 continue
             } else if (line == '[detention]') {
+                section = DETENTION
                 continue
             }
             let module = if(line == '.'){
@@ -98,9 +102,9 @@ public class PublishCommand <: SubCommand {
             }else{
                 line
             }
-            if(including){
+            if(section == INCLUDING){
                 includes.add(module)
-            }else{
+            }else if (section == EXCLUDING) {
                 excludes.add(module)
             }
         }
