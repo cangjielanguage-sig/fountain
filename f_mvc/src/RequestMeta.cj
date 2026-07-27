@@ -100,9 +100,13 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
             }else{
                 path
             } |> STATIC_RESOURCE_ROOT.join
-            if(exists(p) && let fi <- FileInfo(p) && !fi.isDirectory()){
+            if(exists(p) && let fi <- FileInfo(p)){
                 if(fi.isSymbolicLink()){
                     p = SymbolicLink.readFrom(p, recursive: true)
+                }
+                if(fi.isDirectory()){
+                    view.value = None
+                    return
                 }
                 try(file = File(p, Read)){
                     let lastModified = file.info.lastModificationTime
