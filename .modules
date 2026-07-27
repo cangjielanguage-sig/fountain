@@ -36,10 +36,13 @@ f_ticktock
 f_egraph
 f_bloom
 f_store
-f_llm
 f_uring
 fboot
 fleet
 .
 
 [exclude]
+
+[detention]
+f_rpc
+f_llm

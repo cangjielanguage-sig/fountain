@@ -83,12 +83,14 @@ public class PublishCommand <: SubCommand {
         let includes = HashSet<String>()
         let excludes = HashSet<String>()
         var including = false
-        for(line in lines where line != ''){
-            if(line == '[include]'){
+        for (line in lines where line != '') {
+            if (line == '[include]') {
                 including = true
                 continue
-            }else if (line == '[exclude]'){
+            } else if (line == '[exclude]') {
                 including = false
+                continue
+            } else if (line == '[detention]') {
                 continue
             }
             let module = if(line == '.'){
