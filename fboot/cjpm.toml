@@ -1,5 +1,5 @@
 [dependencies]
-  "fountain::f_app" = {path = "../f_app"}
+  "fountain::f_app" = "1.2.1"
 
 [package]
   cjc-version = "1.2.0"
@@ -15,7 +15,7 @@
   override-compile-option = "--dy-std"
 
   organization = "fountain"
-  version = "1.2.0"
+  version = "1.2.1"
   package-configuration = {}
   category = ["Utility"]
   license = ["Apache-2.0"]

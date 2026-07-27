@@ -28,7 +28,7 @@
   output-type = "dynamic"
   src-dir = ""
   target-dir = ""
-  version = "1.2.0"
+  version = "1.2.1"
   package-configuration = {}
   category = ["Utility", "Developer Tools", "Programming Framework"]
   license = ["Apache-2.0"]

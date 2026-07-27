@@ -15,32 +15,55 @@ limitations under the License.
  */
 package fountain::f_mvc
 
-public func download(ctx: HttpContext, data: File): Unit {
-    let fd = FileDownload(ctx, multi: false)
+public func download(data: File): Unit {
+    let fd = FileDownload(multi: false)
     fd.write(data)
 }
 
-public func download(ctx: HttpContext, data: InputStream, filename: String, length!: Int64 = -1): Unit {
-    let fd = FileDownload(ctx, multi: false)
+public func download(data: InputStream, filename: String, length!: Int64 = -1): Unit {
+    let fd = FileDownload(multi: false)
     fd.write(filename, data, length: length)
 }
 
-public func download(ctx: HttpContext, data: Array<Byte>, filename: String): Unit {
+public func download(data: Array<Byte>, filename: String): Unit {
     let stream = ByteBuffer()
     stream.write(data)
-    download(ctx, stream, filename, length: data.size)
+    download(stream, filename, length: data.size)
 }
 
-public func download<C>(ctx: HttpContext, data: C): Unit where C <: Iterable<(InputStream, String)> {
-    let fd = FileDownload(ctx, multi: true)
-    for (d in data) {
-        fd.write(d[1], d[0])
+public func download<C>(data: C): Unit where C <: Iterable<(InputStream, String)> {
+    let started = Box<Bool>(false)
+    FileDownload(multi: true).write{fd => 
+        for (d in data) {
+            if(started.value){
+                fd.next(d[1], '')
+            }else{
+                fd.start(d[1])
+                started.value = true
+            }
+            let buf = Array<Byte>(1024, repeat: 0)
+            while(let bytes <- d[0].read(buf) && bytes > 0){
+                fd.write(buf)
+            }
+        }
+        fd.end()
     }
 }
 
-public func download(ctx: HttpContext, data: Array<File>): Unit {
-    let fd = FileDownload(ctx, multi: true)
-    for (d in data) {
-        fd.write(d)
+public func download(data: Array<File>): Unit {
+    FileDownload(multi: true).write{fd => 
+        for(i in 0 .. data.size){
+            let f = data[i]
+            if(i == 0){
+                fd.start(f.info.name, length: f.info.size)
+            }else{
+                fd.next(f.info.name, '', length: f.info.size)
+            }
+            let buf = Array<Byte>(1024, repeat: 0)
+            while(let bytes <- f.read(buf) && bytes > 0){
+                fd.write(buf)
+            }
+        }
+        fd.end()
     }
 }

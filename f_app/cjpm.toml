@@ -3,7 +3,7 @@
   name = "f_app"
   organization="fountain"
   description = "依赖fountain开发的应用进程启动模块"
-  version = "1.2.0"
+  version = "1.2.1"
   target-dir = ""
   src-dir = ""
   output-type = "dynamic"

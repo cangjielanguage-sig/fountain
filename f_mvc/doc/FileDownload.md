@@ -48,7 +48,7 @@ public class FileDownload {
      */
     public func start(filename: String, length!: Int64 = -1): FileDownload 
     /**
-     * 下一个待下载文件的元数据，调用start后再调用本函数，或者需要写下一个文件内容之前调用本函数。
+     * 下一个待下载文件的元数据，写入第二个及以后的文件时再调用本函数，或者需要写下一个文件内容之前调用本函数。
      * @param filename: 待下载的文件名
      * @param contentType: 待下载文件的Content-Type
      * @param length: 待下载文件的长度，默认值 -1，表示未知长度
@@ -60,5 +60,17 @@ public class FileDownload {
      */
     public func end() 
 }
+```
 
+#### 快捷函数
+```cj
+public func download(data: File): Unit 
+
+public func download(data: InputStream, filename: String, length!: Int64 = -1): Unit 
+
+public func download(data: Array<Byte>, filename: String): Unit 
+
+public func download<C>(data: C): Unit where C <: Iterable<(InputStream, String)> 
+
+public func download(data: Array<File>): Unit
 ```
