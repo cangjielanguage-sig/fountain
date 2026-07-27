@@ -40,7 +40,6 @@ f_llm
 f_uring
 fboot
 fleet
-f_rpc
 .
 
 [exclude]
