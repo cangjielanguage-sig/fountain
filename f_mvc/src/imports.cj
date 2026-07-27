@@ -20,6 +20,7 @@ internal import std.collection.concurrent.ConcurrentHashMap
 internal import std.convert.*
 internal import std.env.{atExit, getWorkingDirectory}
 internal import std.fs.*
+internal import std.io.{ByteBuffer, IOStream}
 internal import std.math.numeric.{BigInt, Decimal}
 internal import std.reflect.*
 internal import std.regex.*

@@ -15,16 +15,51 @@ limitations under the License.
  */
 package fountain::f_mvc
 
+public class SyncPipeStream <: IOStream {
+    private let mutex = Mutex()
+    private let condition = synchronized(mutex){mutex.condition()}
+    private let buffer = ByteBuffer()
+    private let end_ = AtomicBool(false)
+
+    public func read(buf: Array<Byte>): Int64 {
+        synchronized (mutex) {
+            while (let bytes <- buffer.read(buf)) {
+                if (bytes < buf.size) {
+                    buffer.clear()
+                }
+                if (bytes > 0) {
+                    return bytes
+                } else if (!end_.load()) {
+                    condition.wait()
+                } else {
+                    return 0
+                }
+            }
+            0
+        }
+    }
+    public func write(bytes: Array<Byte>): Unit {
+        synchronized(mutex){ 
+            buffer.write(bytes)
+            condition.notify()
+        }
+    }
+    public func flush(): Unit {}
+    func end() {
+        end_.store(true)
+    }
+}
+
 public class FileDownload {
     private static let random = RandomString()
     private let responseBuilder: HttpResponseBuilder
-    private let writer: HttpResponseWriter
     private let built = AtomicBool(false)
+    private let pipe = SyncPipeStream()
     private let boundary = "----${random.randomLettersNumbers(32)}"
-    public FileDownload(private let ctx: HttpContext, private let multi!: Bool = false,
+    private let ctx = CurrentHttpContext.instance
+    public FileDownload(private let multi!: Bool = false,
         private let contentType!: String = "application/octet-stream") {
         responseBuilder = ctx.responseBuilder
-        writer = HttpResponseWriter(ctx)
     }
     public func noContent(): Unit {
         let status = HttpStatus.NO_CONTENT
@@ -47,7 +82,18 @@ public class FileDownload {
         end()
     }
     private func write(header: String) {
-        writer.write(header.unsafeBytes())
+        write(header.unsafeBytes())
+    }
+    public func write(bytes: Array<Byte>): Unit {
+        pipe.write(bytes)
+    }
+    /**
+     * 务必在本函数实参内部调用其它函数
+     */
+    public func write(fn: (FileDownload) -> Unit){
+        spawn{
+            fn(this)
+        }
     }
     public func start(filename: String, length!: Int64 = -1): FileDownload {
         if (!built.load()) {
@@ -72,7 +118,7 @@ public class FileDownload {
         }
         this
     }
-    public func next(filename: String, contentType: String, length!: Int64 = -1){
+    public func next(filename: String, contentType: String, length!: Int64 = -1): Unit {
         if(multi){
             write("Content-Disposition: ${attachment(filename)}\r\n")
             if (length >= 0) {
@@ -85,12 +131,11 @@ public class FileDownload {
             throw MVCException('current function only supports to download multi file, so param multi of FileDownload constructor must be true to invoke this function.')
         }
     }
-    public func write(bytes: Array<Byte>): Unit {
-        writer.write(bytes)
-    }
+    
     public func end() {
         if (multi) {
             write("\r\n--${boundary}\r\n")
+            pipe.end()
         }
     }
     private func attachment(filename: String) {
