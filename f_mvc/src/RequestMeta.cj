@@ -95,12 +95,15 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
     }
     private static func loadStaticResource(path: String): ?Array<Byte> {
         staticResourceBytes.entryView(path){view => 
-            let p = if(path.startsWith('/')){
+            var p = if(path.startsWith('/')){
                 path[1..]
             }else{
                 path
             } |> STATIC_RESOURCE_ROOT.join
-            if(exists(p)){
+            if(exists(p) && let fi <- FileInfo(p) && !fi.isDirectory()){
+                if(fi.isSymbolicLink()){
+                    p = SymbolicLink.readFrom(p, recursive: true)
+                }
                 try(file = File(p, Read)){
                     let lastModified = file.info.lastModificationTime
                     view.value = if(let Some((last, _)) <- view.value && last < lastModified){
