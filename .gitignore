@@ -18,7 +18,6 @@ fountain.iml
 .rules/
 .codebuddy/
 build-script-cache/
-build.cj
 log.txt
 
 fdemo/fdemo/
