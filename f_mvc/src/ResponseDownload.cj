@@ -33,7 +33,7 @@ public func download(data: Array<Byte>, filename: String): Unit {
 
 public func download<C>(data: C): Unit where C <: Iterable<(InputStream, String)> {
     let started = Box<Bool>(false)
-    FileDownload(multi: true).write{fd => 
+    FileDownload(multi: true).exec{fd => 
         for (d in data) {
             if(started.value){
                 fd.next(d[1], '')
@@ -51,7 +51,7 @@ public func download<C>(data: C): Unit where C <: Iterable<(InputStream, String)
 }
 
 public func download(data: Array<File>): Unit {
-    FileDownload(multi: true).write{fd => 
+    FileDownload(multi: true).exec{fd => 
         for(i in 0 .. data.size){
             let f = data[i]
             if(i == 0){

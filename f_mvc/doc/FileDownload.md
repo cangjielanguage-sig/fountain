@@ -37,7 +37,7 @@ public class FileDownload {
     /**
      * 务必在本函数实参内部调用其它函数
      */
-    public func write(fn: (FileDownload) -> Unit)
+    public func exec(fn: (FileDownload) -> Unit): Unit
     /**
      * 创建一个文件下载对象，当需要下载多个文件时，请调用此函数表示开始下载。
      * 如果只下载一个文件，且文件特别大，请调用此函数表示开始下载。

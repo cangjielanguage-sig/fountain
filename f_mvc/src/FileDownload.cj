@@ -90,7 +90,7 @@ public class FileDownload {
     /**
      * 务必在本函数实参内部调用其它函数
      */
-    public func write(fn: (FileDownload) -> Unit){
+    public func exec(fn: (FileDownload) -> Unit): Unit {
         spawn{
             fn(this)
         }
