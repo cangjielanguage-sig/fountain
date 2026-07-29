@@ -30,6 +30,7 @@ public class SyncPipeStream <: IOStream {
                 if (bytes > 0) {
                     return bytes
                 } else if (!end_.load()) {
+                    readingThreadIsWaiting.store(true)
                     condition.wait()
                 } else {
                     return 0
@@ -111,6 +112,7 @@ public class FileDownload {
                 }
                 responseBuilder.build()
             }
+            responseBuilder.body(pipe)
             built.store(true)
         }
         if(multi){
