@@ -27,9 +27,9 @@ public class GLMEmbeddingContext <: AbstractEmbeddingContext {
             let start = MonoTime.now()
             let params = JsonObject()
             try{
-                params.put('model', JsonString(name))
-                params.put('input', JsonString(param.input))
-                params.put('dimensions', JsonInt(param.dimension))
+                params.add('model', JsonString(name))
+                params.add('input', JsonString(param.input))
+                params.add('dimensions', JsonInt(param.dimension))
                 let respJson = http.post(params.toString()).readJson().asObject()
                 let embeddingJson = respJson.get('data')?.asArray()[0].asObject().get('embedding')?.asArray() ?? JsonArray()
                 let usageJson = respJson.get('usage').getOrThrow().asObject()

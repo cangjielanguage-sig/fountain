@@ -105,9 +105,9 @@ public class GLMContext <: AbstractLLMContext {
                 let jsonObj = json.getOrThrow().asObject()
                 let choices = jsonObj.get('choices').getOrThrow().asArray()
                 let llmResp = LLMResp()
-                for(i in 0 .. choices.size()){
+                for(i in 0 .. choices.size){
                     let message = choices[i].asObject().get('message').getOrThrow{LLMException(jsonObj.toString())}.asObject()
-                    if(message.containsKey('tool_calls')){
+                    if(message.contains('tool_calls')){
                         llmResp.messages.add(DataObject<ToolCallMessage>.populate(message.toData()).getOrThrow())
                     }else{
                         llmResp.messages.add(DataObject<AssistantMessage>.populate(message.toData()).getOrThrow())
@@ -119,7 +119,7 @@ public class GLMContext <: AbstractLLMContext {
                 usage.agentId = agentId
                 usage.session = session
                 DataObject<TokenUsage>.populate(usageJson.toData(), usage)
-                usage.cached = usageJson.get('prompt_tokens_details')?.asObject().get('cached_tokens')?.asInt().getValue() ?? 0
+                usage.cached = usageJson.get('prompt_tokens_details')?.asObject().get('cached_tokens')?.asInt().toInt64() ?? 0
                 llmResp
             }catch(e: Exception) {
                 let resp = json
@@ -137,7 +137,7 @@ public class GLMContext <: AbstractLLMContext {
         http('https://open.bigmodel.cn/api/paas/v4/tokenizer', conf){http =>
             let json = http.post('application/json', params).readJson()
             let jsonObj = json.asObject()
-            jsonObj.get('total_tokens').getOrThrow().asInt().getValue()
+            jsonObj.get('total_tokens').getOrThrow().asInt().toInt64()
         }
     }
 }

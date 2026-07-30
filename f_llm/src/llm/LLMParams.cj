@@ -103,17 +103,17 @@ public class Parameters {
     }
     public func addProperty(name!: String, `type`!: String, description!: String): Unit {
         let object = JsonObject()
-        object.put('type', JsonString(`type`))
-        object.put('description', JsonString(description))
-        this.properties.asObject().put(name, object)
+        object.add('type', JsonString(`type`))
+        object.add('description', JsonString(description))
+        this.properties.asObject().add(name, object)
     }
     public func addProperty(name!: String, propName!: String, propValue!: JsonValue): Unit{
         if(let Some(json) <- properties.asObject().get(name)){
-            json.asObject().put(propName, propValue)
+            json.asObject().add(propName, propValue)
         }else{
             let object = JsonObject()
-            object.put(propName, propValue)
-            this.properties.asObject().put(name, object)
+            object.add(propName, propValue)
+            this.properties.asObject().add(name, object)
         }
     } 
 }

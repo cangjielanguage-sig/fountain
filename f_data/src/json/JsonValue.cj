@@ -386,6 +386,15 @@ public class JsonArray <: JsonValue & Collection<JsonValue> {
     public func getItem(index: Int64): JsonValue {
         list[index]
     }
+    public operator func [](index: Int64): JsonValue {
+        list[index]
+    }
+    public func setItem(index: Int64, value: JsonValue): Unit {
+        list[index] = value
+    }
+    public operator func [](index: Int64, value!: JsonValue): Unit {
+        list[index] = value
+    }
     public func remove(index: Int64): Unit {
         list.remove(at: index)
     }
@@ -467,8 +476,17 @@ public class JsonObject <: JsonValue & Collection<(String, JsonValue)> {
     public func getFields(): HashMap<String, JsonValue> {
         map
     }
+    public func contains(name: String): Bool {
+        return map.contains(name)
+    }
     public func get(name: String): ?JsonValue {
         return map.get(name)
+    }
+    public operator func [](name: String): JsonValue {
+        map[name]
+    }
+    public operator func [](name: String, value!: JsonValue): Unit {
+        map[name] = value
     }
     public func add(name: String, value: JsonValue): Unit {
         map.add(name, value)

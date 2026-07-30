@@ -48,12 +48,12 @@ public interface FunctionCalling<T> <: CommonFunctionCalling where T <: ObjectDa
     prop definition: JsonObject {
         get() {
             let def = JsonObject()
-            def.put("type", JsonString('function'))
+            def.add("type", JsonString('function'))
             let function = JsonObject()
-            def.put("function", function)
-            function.put("name", JsonString(name))
-            function.put("description", JsonString(description))
-            function.put("parameters", JsonObject.toJsonSchema<T>())
+            def.add("function", function)
+            function.add("name", JsonString(name))
+            function.add("description", JsonString(description))
+            function.add("parameters", JsonObject.toJsonSchema<T>())
             def
         }
     }

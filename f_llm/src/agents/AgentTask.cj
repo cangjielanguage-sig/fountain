@@ -307,7 +307,7 @@ ${desc}
 
 ''')
             }
-            ne.put('description', JsonString('''
+            ne.add('description', JsonString('''
 ${description}
 
 ${eventDesc}
@@ -392,13 +392,13 @@ ${eventDesc}
                 let props = call.function.parameters.properties.asObject()
                 if(let Some(ne: JsonObject) <- props.get('nextEvent')){
                     if(!ne.containsKey('enum')){
-                        ne.put('enum', producingEventJsons)
+                        ne.add('enum', producingEventJsons)
                     }
                     generateNextEvents(ne)
                 }
                 func putEnum(propName: String, value: String){
                     if(let Some(ne: JsonObject) <- props.get(propName)){
-                        ne.put('enum', JsonArray([JsonString(value)]))
+                        ne.add('enum', JsonArray([JsonString(value)]))
                     }    
                 }
                 putEnum('event', e.name)
@@ -470,8 +470,8 @@ exception occurred ${ex}, to retry after ${sleepDuration}'''}
                     let name = function.name
                     let arguments = function.arguments
                     let json = JsonValue.fromStr(arguments).asObject()
-                    json.put('session', JsonString(e.session))
-                    json.put('event', JsonString(e.name))
+                    json.add('session', JsonString(e.session))
+                    json.add('event', JsonString(e.name))
                     try{
                         let fnResult = FunctionMediator.call(name, json)
                         eventName = fnResult.event
