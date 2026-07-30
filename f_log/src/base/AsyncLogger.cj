@@ -15,7 +15,7 @@ limitations under the License.
  */
 package fountain::f_log.base
 
-import std.collection.ArrayList
+import std.collection.ArrayDeque
 import std.collection.concurrent.{ArrayBlockingQueue, ConcurrentHashMap}
 import std.env
 import std.io.OutputStream
@@ -138,18 +138,18 @@ public abstract class AsyncLogger <: AbstractLogger {
     }
 }
 public struct SyncQueueOutputStream <: OutputStream {
-    private static let pool: ArrayBlockingQueue<ArrayList<Array<Byte>>>
+    private static let pool: ArrayBlockingQueue<ArrayDeque<Array<Byte>>>
     static init() {
         let size = LoggerConfig.getAsyncBufSize()
-        pool = ArrayBlockingQueue<ArrayList<Array<Byte>>>(size)
+        pool = ArrayBlockingQueue<ArrayDeque<Array<Byte>>>(size)
         for(i in 0 .. size){
-            pool.add(ArrayList<Array<Byte>>())
+            pool.add(ArrayDeque<Array<Byte>>())
         }
     }
-    private let queue: ArrayBlockingQueue<ArrayList<Array<Byte>>>
-    private let buffer = ThreadLocal<ArrayList<Array<Byte>>>()
+    private let queue: ArrayBlockingQueue<ArrayDeque<Array<Byte>>>
+    private let buffer = ThreadLocal<ArrayDeque<Array<Byte>>>()
     init(bufSize: Int64){
-        queue = ArrayBlockingQueue<ArrayList<Array<Byte>>>(bufSize)
+        queue = ArrayBlockingQueue<ArrayDeque<Array<Byte>>>(bufSize)
     }
     public func write(bytes: Array<Byte>): Unit {
         let buf = if(let Some(buf) <- buffer.get()){
@@ -173,7 +173,7 @@ public struct SyncQueueOutputStream <: OutputStream {
             queue.add(buf)
             buffer.set(None)
         }else{
-            buf.add(bytes)
+            buf.addLast(bytes)
         }
     }
     prop size: Int64 {
@@ -185,8 +185,10 @@ public struct SyncQueueOutputStream <: OutputStream {
         while (let Some(buf) <- queue.peek()){
             try{
                 if(buf.size > 0){
-                    for(bytes in buf where bytes.size > 0) {
-                        output.write(bytes)
+                    while(let Some(bytes) <- buf.removeFirst()){
+                        if(bytes.size > 0){
+                            output.write(bytes)
+                        }
                     }
                 }
             } finally {
@@ -195,8 +197,7 @@ public struct SyncQueueOutputStream <: OutputStream {
             }
         }
     }
-    private func returnBuffer(buf: ArrayList<Array<Byte>>){
-        buf.clear()
+    private func returnBuffer(buf: ArrayDeque<Array<Byte>>){
         pool.add(buf)
     }
 }
