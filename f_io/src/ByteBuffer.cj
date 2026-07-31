@@ -115,6 +115,7 @@ public class ByteBuffer <: IOStream {
             roffset ++
             b
         }else{
+            clear()
             None<Byte>
         }
     }
