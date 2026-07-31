@@ -15,7 +15,7 @@ limitations under the License.
  */
 package fountain::f_http
 
-import std.io.*
+import std.io.SeekPosition
 import fountain::f_collection.*
 import fountain::f_data.*
 import fountain::f_io.RotatableBuffer

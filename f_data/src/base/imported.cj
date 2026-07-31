@@ -18,7 +18,7 @@ package fountain::f_data.base
 public import std.collection.{ArrayList, HashSet, HashMap, TreeMap, TreeSet}
 public import std.collection.concurrent.ConcurrentHashMap
 public import std.fs.File
-public import std.io.{InputStream, ByteBuffer, ChainedInputStream, BufferedInputStream}
+public import std.io.{InputStream, ChainedInputStream, BufferedInputStream}
 public import std.net.{TcpSocket, UnixSocket}
 public import std.math.numeric.{Decimal, BigInt, OverflowStrategy}
 public import std.reflect.TypeInfo
@@ -32,3 +32,5 @@ public import fountain::f_regex.*
 public import fountain::f_time.ExtendDateTime
 public import fountain::f_base.*
 public import fountain::f_data.exception.*
+
+internal import std.io.ByteBuffer

@@ -47,7 +47,7 @@ internal import fountain::f_random.RandomString
 internal import fountain::f_regex.*
 
 public import std.collection.{ArrayList, HashMap, HashSet, TreeMap}
-public import std.io.{InputStream, OutputStream, ByteBuffer, copy}
+public import std.io.{InputStream, OutputStream, copy}
 public import std.time.{DateTime, MonoTime}
 public import stdx.encoding.url.*
 public import stdx.net.http.*

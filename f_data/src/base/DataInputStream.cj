@@ -15,6 +15,8 @@ limitations under the License.
 */
 package fountain::f_data.base
 
+import fountain::f_io
+
 public class DataInputStream <: Data {
     public DataInputStream(public let data: InputStream){}
 
@@ -81,6 +83,34 @@ extend ByteBuffer <: DataFields<ByteBuffer> {
             throw DataException('current data does not match to ByteBuffer')
         } else {
             None<ByteBuffer>
+        }
+    }
+}
+extend f_io.ByteBuffer <: DataFields<f_io.ByteBuffer> {
+    public func toData(): Data {
+        DataInputStream(this)
+    }
+    public static func tryFromData(data: Data, flag: DataConversionFlag): Any {
+        if (let d: DataInputStream <- data && let f: f_io.ByteBuffer <- d.data) {
+            f
+        } else if ((flag & IGNORE_FIELD_TYPE_NOT_MATCH) == 0){
+            throw DataException('current data does not match to fountain::f_io.ByteBuffer')
+        } else {
+            None<f_io.ByteBuffer>
+        }
+    }
+}
+extend f_io.SyncByteBuffer <: DataFields<f_io.SyncByteBuffer> {
+    public func toData(): Data {
+        DataInputStream(this)
+    }
+    public static func tryFromData(data: Data, flag: DataConversionFlag): Any {
+        if (let d: DataInputStream <- data && let f: f_io.SyncByteBuffer <- d.data) {
+            f
+        } else if ((flag & IGNORE_FIELD_TYPE_NOT_MATCH) == 0){
+            throw DataException('current data does not match to fountain::f_io.SyncByteBuffer')
+        } else {
+            None<f_io.SyncByteBuffer>
         }
     }
 }

@@ -19,7 +19,7 @@ internal import std.collection.ArrayList
 internal import std.collection.concurrent.ConcurrentHashMap
 internal import std.convert.*
 internal import std.fs.*
-internal import std.io.{InputStream, ByteBuffer, OutputStream, copy}
+internal import std.io.{InputStream, OutputStream, copy}
 internal import stdx.encoding.base64.*
 internal import stdx.encoding.hex.*
 internal import stdx.encoding.url.*

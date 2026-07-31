@@ -15,7 +15,6 @@ limitations under the License.
  */
 package fountain::f_http
 
-import std.reflect.ClassTypeInfo
 import std.sync.{AtomicInt8, Mutex}
 import fountain::f_log.*
 

@@ -15,40 +15,7 @@ limitations under the License.
  */
 package fountain::f_mvc
 
-public class SyncPipeStream <: IOStream {
-    private let mutex = Mutex()
-    private let condition = synchronized(mutex){mutex.condition()}
-    private let buffer = ByteBuffer()
-    private let end_ = AtomicBool(false)
-
-    public func read(buf: Array<Byte>): Int64 {
-        synchronized (mutex) {
-            while (let bytes <- buffer.read(buf)) {
-                if (bytes < buf.size) {
-                    buffer.clear()
-                }
-                if (bytes > 0) {
-                    return bytes
-                } else if (!end_.load()) {
-                    condition.wait()
-                } else {
-                    return 0
-                }
-            }
-            0
-        }
-    }
-    public func write(bytes: Array<Byte>): Unit {
-        synchronized(mutex){ 
-            buffer.write(bytes)
-            condition.notify()
-        }
-    }
-    public func flush(): Unit {}
-    func end() {
-        end_.store(true)
-    }
-}
+import fountain::f_io.SyncByteBuffer
 
 public struct FileDownloadMeta {
     public FileDownloadMeta(
@@ -65,7 +32,7 @@ public class FileDownload {
     private static let random = RandomString()
     private let responseBuilder: HttpResponseBuilder
     private let built = AtomicBool(false)
-    private let pipe = SyncPipeStream()
+    private let pipe = SyncByteBuffer()
     private let boundary = "----${random.randomLettersNumbers(32)}"
     private let ctx = CurrentHttpContext.instance
     public FileDownload(private let multi!: Bool = false,

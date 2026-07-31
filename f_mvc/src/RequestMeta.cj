@@ -195,7 +195,7 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
                         case x: Array<Byte> => respond(x, ctx)
                         case _: Unit => ()
                         case x: ToData => respond(x, ctx)
-                        case x: Redirect => respond(x, ctx)\
+                        case x: Redirect => respond(x, ctx)
                         case x: FileDownloadMeta => respond(x, ctx)
                         case _ =>
                             let request = ctx.request

@@ -28,7 +28,7 @@ package fountain::f_io
  * 详见 fountain::f_io.uring 包文档。
  */
 
-internal import std.io.{InputStream, OutputStream, ByteBuffer}
+internal import std.io.{InputStream, OutputStream}
 internal import std.collection.concurrent.ArrayBlockingQueue
 import fountain::f_base.*
 import fountain::f_exception.IllegalSizeException

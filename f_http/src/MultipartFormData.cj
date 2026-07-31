@@ -16,7 +16,6 @@ limitations under the License.
 package fountain::f_http
 
 import std.collection.ArrayList
-import std.io.{InputStream, OutputStream, ByteBuffer, copy}
 import std.fs.File
 import std.time.DateTime
 import fountain::f_base.*

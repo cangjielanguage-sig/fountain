@@ -5,6 +5,7 @@
   "fountain::f_collection" = {path = "../f_collection"}
   "fountain::f_concurrent" = {path = "../f_concurrent"}
   "fountain::f_exception" = {path = "../f_exception"}
+  "fountain::f_io" = {path = "../f_io"}
   "fountain::f_macros" = {path = "../f_macros"}
   "fountain::f_regex" = {path = "../f_regex"}
   "fountain::f_time" = {path = "../f_time"}
