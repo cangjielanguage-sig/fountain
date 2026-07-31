@@ -62,6 +62,24 @@ public class FileDownload {
 }
 ```
 
+### FileDownloadMeta 
+作为controller函数的返回类型
+multi 表示本次下载是否下载多个文件，默认是false
+
+contentType表示下载的第一个文件的响应头ContentType，默认是application/octet-stream。
+如果下载多个文件contentType将作为响应体Content-Disposition的Content-Type，而响应头Content-Type是multipart/x-mixed-replace; boundary=${boundary}
+
+exec将作为FileDownload的exec函数实参
+```cj
+public struct FileDownloadMeta {
+    public FileDownloadMeta(
+        let multi!: Bool = false,
+        let contentType!: String = "application/octet-stream",
+        let exec!: (FileDownload) -> Unit
+    ){}
+}
+```
+
 #### 快捷函数
 ```cj
 public func download(data: File): Unit 

@@ -195,7 +195,8 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
                         case x: Array<Byte> => respond(x, ctx)
                         case _: Unit => ()
                         case x: ToData => respond(x, ctx)
-                        case x: Redirect => respond(x, ctx)
+                        case x: Redirect => respond(x, ctx)\
+                        case x: FileDownloadMeta => respond(x, ctx)
                         case _ =>
                             let request = ctx.request
                             log.warn {'fountain::f_mvc.`handle` ${request.method}:${request.url};${TypeInfo.of(result)}'}
@@ -364,6 +365,11 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
         respond(ctx.request.method) {
             populateResponseContentType(ctx)
             ctx.responseBuilder.body(response.unsafeBytes())
+        }
+    }
+    private func respond(meta: FileDownloadMeta, ctx: HttpContext): Unit {
+        respond(ctx.request.method) {
+            meta.execute()
         }
     }
     

@@ -30,7 +30,6 @@ public class SyncPipeStream <: IOStream {
                 if (bytes > 0) {
                     return bytes
                 } else if (!end_.load()) {
-                    readingThreadIsWaiting.store(true)
                     condition.wait()
                 } else {
                     return 0
@@ -48,6 +47,17 @@ public class SyncPipeStream <: IOStream {
     public func flush(): Unit {}
     func end() {
         end_.store(true)
+    }
+}
+
+public struct FileDownloadMeta {
+    public FileDownloadMeta(
+        let multi!: Bool = false,
+        let contentType!: String = "application/octet-stream",
+        let exec!: (FileDownload) -> Unit
+    ){}
+    func execute(): Unit {
+        FileDownload(multi: multi, contentType: contentType).exec(exec)
     }
 }
 
