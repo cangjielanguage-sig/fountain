@@ -20,6 +20,7 @@
   "fountain::f_collection" = {path = "../f_collection"}
   "fountain::f_config" = {path = "../f_config"}
   "fountain::f_data" = {path = "../f_data"}
+  "fountain::f_io" = {path = "../f_io"}
   "fountain::f_log" = {path = "../f_log"}
   "fountain::f_net" = {path = "../f_net"}
   "fountain::f_process" = {path = "../f_process"}

@@ -19,3 +19,4 @@ internal import std.time.DateTime
 internal import fountain::f_codec.default.DefaultCodec
 internal import fountain::f_data.*
 internal import fountain::f_config.*
+internal import fountain::f_io.ByteBuffer

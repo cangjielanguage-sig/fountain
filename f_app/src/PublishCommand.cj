@@ -228,7 +228,9 @@ public class PublishCommand <: SubCommand {
         println('========================================')
         if(!dry){
             File.writeTo(cjpmPath, cjpmContent.unsafeBytes())
-            copy(cjpmPath, to: path.join('cjpm.toml.bak'), overwrite: false)
+            if(let cjpmBak <- path.join('cjpm.toml.bak') && !exists(cjpmBak)){
+                copy(cjpmPath, to: cjpmBak, overwrite: false)
+            }
         }
         let regexGen = StringGenerator()
         for(m in all.keys()){
@@ -276,7 +278,7 @@ public class PublishCommand <: SubCommand {
     private func checkPublished(organization: String, module: String, once: Bool): Bool {
         let url = 'https://pkg.cangjie-lang.cn/v1/artifact/getPackageMetadata?group=${organization}&moduleName=${module}&version=${version}'
         println('checking published ${organization}::${module} ...; url: ${url}; once: ${once}')
-        checkLoop<Bool>('${module} to be published...'){
+        checkLoop<Bool>('${organization}::${module} to be published...'){
             var tls = TlsClientConfig()
             tls.verifyMode = TrustAll
             let client = ClientBuilder().tlsConfig(tls).build()
@@ -339,7 +341,7 @@ public class PublishCommand <: SubCommand {
                     moduleInfos.remove(m)
                 }
                 let published = checkPublished(info.organization, m, true)
-                checkLoop<Unit>('doing pub...'){
+                checkLoop<Unit>('doing pub ${info.organization}::${m} ...'){
                     try{
                         pub(published)
                         return ()
