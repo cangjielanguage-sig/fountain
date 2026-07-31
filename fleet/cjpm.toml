@@ -3,7 +3,7 @@
   name = "fleet"
   organization = "fountain"
   description = "数据同步工具，可用于做配置中心"
-  version = "1.2.0"
+  version = "1.2.2"
   target-dir = ""
   script-dir = ""
   output-type = "dynamic"

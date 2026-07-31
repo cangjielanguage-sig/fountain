@@ -15,7 +15,7 @@
   override-compile-option = "--dy-std"
 
   organization = "fountain"
-  version = "1.2.1"
+  version = "1.2.2"
   package-configuration = {}
   category = ["Utility"]
   license = ["Apache-2.0"]

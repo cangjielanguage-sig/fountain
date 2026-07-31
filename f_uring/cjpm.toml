@@ -6,7 +6,7 @@
   output-type = "dynamic"
   src-dir = ""
   target-dir = ""
-  version = "1.2.0"
+  version = "1.2.2"
   package-configuration = {}
   compile-option = "--dy-std"
   override-compile-option = "--dy-std"
