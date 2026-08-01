@@ -23,6 +23,7 @@ import fountain::f_base.ExtendThreadLocal
 public class ThreadLocalRandom {
     private static let rand = ThreadLocal<SecureRandom>()
     private init() {}
+    @Frozen
     public static prop current: SecureRandom {
         get() {
             rand.getOrCompute {SecureRandom()}

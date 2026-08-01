@@ -22,13 +22,15 @@ import fountain::f_data.*
 // CityHash 常量
 private const k0: UInt64 = 0xc3a5c85c97cb3127
 private const k1: UInt64 = 0xb492b66fbe98f273
-
+@Frozen
 public func cityHash(data: String): UInt128 {
     cityHash(data.unsafeBytes())
 }
+@Frozen
 public func cityHash<T>(data: T): UInt128 where T <: ToString {
     return cityHash(data.toString().unsafeBytes())
 }
+@Frozen
 public func cityHash(data: Array<UInt8>): UInt128 {
     let len = data.size
     // 短字符串处理 (len < 128)
@@ -93,23 +95,25 @@ public func cityHash(data: Array<UInt8>): UInt128 {
     // 最终混合
     return finalMerge(x, v.right, y, w.right, len)
 }
+@Frozen
 // 辅助函数：最终哈希值混合
 private func finalMerge(a: UInt64, b: UInt64, c: UInt64, d: UInt64, len: Int64): UInt128 {
     let low = hashLen16(a, c, len)
     let high = hashLen16(b, d, len + 8)
     return UInt128(high, low)
 }
-
 // 辅助函数：计算种子值
+@Frozen
 private func seedLow(data: Array<UInt8>, len: Int64): UInt64 {
     return fetch64(data, len - 64) ^ k1
 }
-
+@Frozen
 private func seedHigh(data: Array<UInt8>, len: Int64): UInt64 {
     return fetch64(data, len - 56) ^ k0
 }
 
 // 辅助函数：16字节哈希
+@Frozen
 private func hashLen16(u: UInt64, v: UInt64, len: Int64): UInt64 {
     let xorResult = u ^ v
     let mix = shiftMix(xorResult * k1) * k1
@@ -117,12 +121,14 @@ private func hashLen16(u: UInt64, v: UInt64, len: Int64): UInt64 {
 }
 
 // 辅助函数：基础16字节哈希
+@Frozen
 private func hashLen16Minimal(u: UInt64, v: UInt64): UInt64 {
     let xorResult = u ^ v
     return shiftMix(xorResult * k1) * k1
 }
 
 // 辅助函数：以小端序从字节数组中读取 UInt64
+@Frozen
 private func fetch64(bytes: Array<UInt8>, offset: Int64): UInt64 {
     var result: UInt64 = 0
     // 小端序：最低有效字节在前
@@ -133,6 +139,7 @@ private func fetch64(bytes: Array<UInt8>, offset: Int64): UInt64 {
 }
 
 // 辅助函数：64 位循环右移
+@Frozen
 private func rotate64(val: UInt64, shift: Int32): UInt64 {
     // 避免未定义行为：取模 64
     let s = shift & 63
@@ -140,12 +147,14 @@ private func rotate64(val: UInt64, shift: Int32): UInt64 {
 }
 
 // 辅助函数：32 位循环右移（用于 Mur 混合）
+@Frozen
 private func rotate32(val: UInt32, shift: Int32): UInt32 {
     let s = shift & 31
     return (val >> s) | (val << (32 - s))
 }
 
 // 核心混合函数（源自 MurmurHash3 的逻辑）
+@Frozen
 private func mur(a: UInt32, h: UInt32): UInt32 {
     var aVar = a
     var hVar = h
@@ -163,6 +172,7 @@ private func mur(a: UInt32, h: UInt32): UInt32 {
 }
 
 // 弱哈希函数：对约 32 字节数据进行哈希混合
+@Frozen
 private func weakHashLen32WithSeeds(bytes: Array<UInt8>, offset: Int64, len: Int64, seedA: UInt64, seedB: UInt64): UInt128 {
     // 组合种子
     var a = seedA
@@ -201,6 +211,7 @@ private func weakHashLen32WithSeeds(bytes: Array<UInt8>, offset: Int64, len: Int
 }
 
 // 辅助函数：位混合
+@Frozen
 private func shiftMix(value: UInt64): UInt64 {
     return value ^ (value >> 47)
 }

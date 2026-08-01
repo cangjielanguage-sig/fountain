@@ -29,22 +29,26 @@ private const SECRET0 = 0xa0761d6478bd642fu64
 private const SECRET1 = 0xe7037ed1a0b428dbu64
 private const SECRET2 = 0x8ebc6af09c88c6e3u64
 private const SECRET3 = 0x589965cc75374cc3u64
-
+@Frozen
 public func wyrand(seed: Int64): UInt64 {
     return wyrand(seed.toUInt())
 }
+@Frozen
 @OverflowWrapping
 public func wyrand(seed: UInt64): UInt64 {
     let v: UInt64 = seed + SECRET0
     return mix(v, v ^ SECRET1)
 }
+@Frozen
 public func wyhash(s: String, start!: Int64 = 0, size!: Int64 = s.size, see!: UInt64 = 0): UInt64 {
     return wyhash(s.unsafeBytes(), start: start, size: size, see: see)
 }
+@Frozen
 public func wyhash<T>(s: T, start!: Int64 = 0, see!: UInt64 = 0): UInt64 where T <: ToString {
     let bytes = s.toString().unsafeBytes()
     return wyhash(bytes, start: start, size: bytes.size, see: see)
 }
+@Frozen
 @OverflowWrapping
 public func wyhash(arr: Array<UInt8>, start!: Int64 = 0, size!: Int64 = arr.size, see!: UInt64 = 0): UInt64 {
     var seed = see ^ mix(see ^ SECRET0, SECRET1)
@@ -95,7 +99,7 @@ public func wyhash(arr: Array<UInt8>, start!: Int64 = 0, size!: Int64 = arr.size
     b ^= seed
     return mix(a ^ SECRET0 ^ UInt64(size), b ^ SECRET1)
 }
-
+@Frozen
 @OverflowWrapping
 private func mix(A: UInt64, B: UInt64): UInt64 {
     let ha: UInt64 = A >> 32
@@ -121,12 +125,12 @@ private func mix(A: UInt64, B: UInt64): UInt64 {
     let hi = rh + (rm0 >> 32) + (rm1 >> 32) + c
     return lo ^ hi
 }
-
+@Frozen
 @OverflowWrapping
 private func r4(arr: Array<UInt8>, pos: Int64): UInt64 {
     (UInt64(arr[pos]) << 24) | (UInt64(arr[pos + 1]) << 16) | (UInt64(arr[pos + 2]) << 8) | UInt64(arr[pos + 3])
 }
-
+@Frozen
 @OverflowWrapping
 private func r8(arr: Array<UInt8>, pos: Int64): UInt64 {
     (UInt64(arr[pos]) << 56) | (UInt64(arr[pos + 1]) << 48) | (UInt64(arr[pos + 2]) << 40) | (UInt64(arr[pos + 3]) << 32) |

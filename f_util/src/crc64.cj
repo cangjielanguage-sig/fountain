@@ -58,6 +58,7 @@ private let table: Array<UInt64> = {
 // 功能：计算字节数组的 CRC64 值
 // 参数 data：需要计算校验和的字节数组
 // 返回值：计算得到的 64 位 CRC 校验值
+@Frozen
 public func crc64(data: Array<Byte>): UInt64 {
     var crc: UInt64 = INIT_VALUE
 
@@ -77,10 +78,11 @@ public func crc64(data: Array<Byte>): UInt64 {
     // 最终结果与 FINAL_XOR_VALUE 进行异或
     return crc ^ FINAL_XOR_VALUE
 }
-
+@Frozen
 public func crc64(data: String): UInt64 {
     return crc64(data.unsafeBytes())
 }
+@Frozen
 public func crc64<T>(s: T): UInt16 where T <: ToString {
     crc16(s.toString().unsafeBytes())
 }

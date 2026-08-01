@@ -275,7 +275,7 @@ let CRC16_LOOKUP_TABLE: Array<UInt16> = [
     0x0ED1,
     0x1EF0
 ]
-
+@Frozen
 func crc16(bytes: Array<Byte>, s: Int64, e: Int64) {
     var crc: UInt16 = 0x0000
     for (i in s..e) {
@@ -283,13 +283,15 @@ func crc16(bytes: Array<Byte>, s: Int64, e: Int64) {
     }
     return crc & 0xFFFF;
 }
-
+@Frozen
 public func crc16(bytes: Array<Byte>): UInt16 {
     return crc16(bytes, 0, bytes.size)
 }
+@Frozen
 public func crc16(s: String): UInt16 {
     crc16(s.unsafeBytes())
 }
+@Frozen
 public func crc16<T>(s: T): UInt16 where T <: ToString {
     crc16(s.toString().unsafeBytes())
 }

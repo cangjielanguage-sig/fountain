@@ -56,6 +56,7 @@ private let table: Array<UInt32> = {
 // 2.4 核心计算函数：计算字节数组的CRC32值
 // 参数 data: 需要计算校验和的字节数组
 // 返回值: 计算得到的32位CRC校验值（UInt32类型）
+@Frozen
 public func crc32(data: Array<Byte>): UInt32 {
     // 初始化CRC寄存器
     var crc: UInt32 = INIT_VALUE
@@ -77,10 +78,11 @@ public func crc32(data: Array<Byte>): UInt32 {
     // 最终结果与FINAL_XOR_VALUE进行异或，完成计算
     return crc ^ FINAL_XOR_VALUE
 }
-
+@Frozen
 public func crc32(data: String): UInt32 {
     return crc32(data.unsafeBytes())
 }
+@Frozen
 public func crc32<T>(s: T): UInt16 where T <: ToString {
     crc16(s.toString().unsafeBytes())
 }

@@ -23,6 +23,7 @@ import fountain::f_data.DataParsable
 import fountain::f_util.exception.HashException
 
 // 核心哈希函数：对字节数组进行哈希（静态方法）
+@Frozen
 @OverflowWrapping
 public func murmurHash(data: Array<Byte>, seed!: UInt64 = 0): UInt128 {
     let len = data.size
@@ -124,20 +125,24 @@ public func murmurHash(data: Array<Byte>, seed!: UInt64 = 0): UInt128 {
 }
 
 // 便捷函数：直接对字符串进行哈希（静态方法）
+@Frozen
 public func murmurHash(text: String, seed!: UInt64 = 0): UInt128 {
     let bytes = text.unsafeBytes()
     return murmurHash(bytes, seed: seed)
 }
+@Frozen
 public func murmurHash<T>(text: T, seed!: UInt64 = 0): UInt128 where T <: ToString {
     return murmurHash(text.toString(), seed: seed)
 }
 // 64 位循环左移（私有静态辅助函数）
+@Frozen
 @OverflowWrapping
 private func rotl64(x: UInt64, r: Int): UInt64 {
     return (x << r) | (x >> (64 - r))
 }
 
 // 64 位最终混合函数（私有静态辅助函数）
+@Frozen
 @OverflowWrapping
 private func fmix64(k: UInt64): UInt64 {
     var k_var = k
