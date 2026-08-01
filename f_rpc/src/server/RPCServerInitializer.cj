@@ -36,7 +36,7 @@ public struct RPCServerInitializer <: Initializer {
         //todo
     }
     /**
-     * 返回阻塞启动函数，调用此函数将阻塞
+     * 阻塞启动函数，调用此函数将阻塞
      */
     public func start(): Unit {
         //todo
