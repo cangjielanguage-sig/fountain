@@ -118,7 +118,7 @@ abstract sealed class TicktockUnit <: Currently & ToString & Hashable & Equatabl
             return value_
         }
     }
-
+    @Frozen
     public open func convertRange(start: Int64, end: Int64): Array<Range<Int64>> {
         let begin = if (oneStart && start == 0) {
             1
@@ -145,6 +145,7 @@ abstract sealed class TicktockUnit <: Currently & ToString & Hashable & Equatabl
         }
         return [begin..=end]
     }
+    @Frozen
     public func convertRange(exprPart: ArrayList<Int64>): Array<Range<Int64>> {
         let size = exprPart.size
         if (size > 2 || size < 1) {
@@ -173,7 +174,7 @@ abstract sealed class TicktockUnit <: Currently & ToString & Hashable & Equatabl
         }
         result
     }
-
+    @Frozen
     public open func convertDuration(start: Int64, end: Int64, duration: Int64): Array<Range<Int64>> {
         let range = this.range
         if (end == 0) {
@@ -201,6 +202,7 @@ abstract sealed class TicktockUnit <: Currently & ToString & Hashable & Equatabl
         }
         return [start..=end : duration]
     }
+    @Frozen
     public open func convertSingle(value: Int64) {
         let range = this.range
         if (value >= range.start && value <= range.end) {
@@ -299,7 +301,7 @@ public class WeekDailyTicktockUnit <: TicktockUnit {
             case x => x
         }
     }
-
+    @Frozen
     public override func convertRange(start: Int64, end: Int64): Array<Range<Int64>> {
         if (start == 0) {
             if (end == 0) {
@@ -312,7 +314,7 @@ public class WeekDailyTicktockUnit <: TicktockUnit {
         }
         return super.convertRange(start, end)
     }
-
+    @Frozen
     public override func convertDuration(start: Int64, end: Int64, duration: Int64): Array<Range<Int64>> {
         if (start == 0) {
             return [super.convertDuration(duration, end, duration)[0], 7..=7]
@@ -320,7 +322,7 @@ public class WeekDailyTicktockUnit <: TicktockUnit {
             return super.convertDuration(start, end, duration)
         }
     }
-
+    @Frozen
     public override func convertSingle(value: Int64): Int64 {
         if (value == 0) {
             return 7
@@ -336,7 +338,7 @@ public class YearlyTicktockUnit <: TicktockUnit {
     init(value: Int64, oneStart: Bool, rangeBase: Int64, range: Range<Int64>, lastRange: Range<Int64>) {
         super(value, oneStart, rangeBase, range, lastRange)
     }
-
+    @Frozen
     public override func convert(task: TicktockTask, last: Bool): TicktockTask {
         if (last) {
             throw IllegalArgumentException(

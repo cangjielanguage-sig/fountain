@@ -24,13 +24,15 @@ public class CronData <: ToString & Hashable & Equatable<CronData> {
     private let last_: Bool
     private let hash: Int64
 
+    @Frozen
     public init(unit: TicktockUnit, value: Int64) {
         this(unit, value..=value)
     }
+    @Frozen
     public init(unit: TicktockUnit, range: Range<Int64>) {
         this(unit, range, false)
     }
-
+    @Frozen
     private init(unit: TicktockUnit, range: Range<Int64>, last: Bool) {
         if(unit == TicktockUnit.YEARLY && last){
             throw TicktockException('time unit of year must not be specified as last')
@@ -40,6 +42,7 @@ public class CronData <: ToString & Hashable & Equatable<CronData> {
         this.last_ = last
         hash = HashBuilder().append(unit_).append(range_).append(last_).build()
     }
+    @Frozen
     public static func createLast(unit: TicktockUnit) {
         if (unit == TicktockUnit.YEARLY) {
             throw IllegalArgumentException("L tag for YEARLY unit in cron expression is forbidden.")
@@ -49,12 +52,15 @@ public class CronData <: ToString & Hashable & Equatable<CronData> {
     public func hashCode() {
         hash
     }
+    @Frozen
     public operator func ==(other: CronData) {
         refEq(this, other) || (hash == other.hash && unit_ == other.unit_ && range_ == other.range_ && last_ == other.last_)
     }
+    @Frozen
     public func toString(): String {
         "unit: ${unit}, start: ${start}, end: ${end}, duration: ${duration}, last: ${last}"
     }
+    @Frozen
     public func convert(task: TicktockTask): TicktockTask {
         return unit.convert(task, last)
     }

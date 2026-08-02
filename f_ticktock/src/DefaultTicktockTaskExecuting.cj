@@ -20,11 +20,11 @@ import fountain::f_collection.*
 
 class DefaultTicktockTaskExecuting {
     private static var executingMap = ConcurrentHashMap<String, Int64>()
-
+    @Frozen
     static func executing(name: String, stamp: Int64): Bool {
         executingMap.addIfAbsent(name, stamp).isSome()
     }
-
+    @Frozen
     static func reset(name: String, stamp: Int64): Unit {
         executingMap.removeIf(name) {v => v == stamp}
     }

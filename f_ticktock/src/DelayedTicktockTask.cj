@@ -22,14 +22,14 @@ public abstract class DelayedTicktockTask <: CronTicktockTask {
     public prop delayedPeriodic: DelayedPeriodic 
     public prop immediate: Bool 
     public prop delay: Duration 
-    
+    @Frozen
     public prop cron: String {
         get() {
             let t = DateTime.now() + delay
             "${t.second} ${t.minute} ${t.hour} ${t.dayOfMonth} ${t.month.toInteger()} ${t.dayOfWeek.toInteger()} ${t.year}"
         }
     }
-    
+    @Frozen
     protected func run(): Unit {
         func nextCall(): Unit {
             if(!once){

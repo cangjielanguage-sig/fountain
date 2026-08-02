@@ -28,6 +28,7 @@ public class CronCompiler {
        但是每种表达式都单独处理是为了给这些表达式单独的异常信息，
        为了方便编写表达式的人
      */
+    @Frozen
     public static func compile(cronExpr: String): Collection<CronDataCollection> {
         if (cronExpr.isEmpty()) {
             throw IllegalArgumentException("arg cronExpr must not be null or empty string!!!")
@@ -107,7 +108,7 @@ public class CronCompiler {
         }
         return datas
     }
-
+    @Frozen
     private static func parsePart(value: String, first: Int64, last: Int64, defaultValue: Int64): Int64 {
         if (last == first) {
             return defaultValue
@@ -120,7 +121,7 @@ public class CronCompiler {
             }
         }
     }
-
+    @Frozen
     private static func putCronc(
         cronc: CronDataCollection,
         ticktockUnit: TicktockUnit,

@@ -24,6 +24,7 @@ public abstract class TicktockTask <: TicktockTaskDef & Hashable & Equatable<Tic
      * 不需要覆盖本方法，任务逻辑都在void execute()方法实现，
      * 控制逻辑都在concurrentable: Bool executing(boolean): Bool 和  once(): Bool
      */
+    @Frozen
     protected open func run(): Unit {
         let currentStamp = stamped.fetchAdd(1) + 1
         if (!executing(currentStamp) || (concurrentable && !this.once)) {

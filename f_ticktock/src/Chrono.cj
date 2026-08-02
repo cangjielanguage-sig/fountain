@@ -21,6 +21,7 @@ import fountain::f_base.ZERO_TIMER
 class Chrono {
     private var timer: Timer = ZERO_TIMER
     init() {}
+    @Frozen
     func start(emitter: Emitter) {
         func next(now: DateTime, n: Int64) {
             DateTime.of(
@@ -41,6 +42,7 @@ class Chrono {
             next(now, 1)
         }
     }
+    @Frozen
     func shutdown() {
         timer.cancel()
     }

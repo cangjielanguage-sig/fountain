@@ -73,6 +73,7 @@ public class Ticktock <: Emitter {
      * 如果只是想从IOC获得定时任务初始化，如果IOC内没有注册定时任务就不初始化，此时anyway应该是false，
      * anyway是false且IOC没有注册过定时任务将返回None<Ticktock>。
      */
+    @Frozen
     public static func getInstance(anyway!: Bool = true): ?Ticktock {
         if(let Some(x) <- instance_.load()){
             return x
@@ -185,7 +186,7 @@ public class Ticktock <: Emitter {
     public func addOrReplaceTask(task: TicktockTask, cronExpr: String) {
         tasks.add(task.name, (task, CronCompiler.compile(cronExpr)))
     }
-
+    @Frozen
     public func emit(now: DateTime): Unit {
         for ((name, (task, crons)) in tasks) {
             spawn {

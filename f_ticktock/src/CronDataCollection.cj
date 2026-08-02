@@ -32,7 +32,7 @@ public class CronDataCollection <: Hashable & Equatable<CronDataCollection> & To
     public operator func ==(other: CronDataCollection) {
         refEq(this, other) || this.cron == other.cron
     }
-
+    @Frozen
     public func put(unit: TicktockUnit, data: CronData): Unit {
         if (let Some(l) <- datas.get(unit)) {
             l
@@ -51,6 +51,7 @@ public class CronDataCollection <: Hashable & Equatable<CronDataCollection> & To
     public func putLast(unit: TicktockUnit) {
         put(unit, CronData.createLast(unit))
     }
+    @Frozen
     public func get(unit: TicktockUnit): Option<Collection<CronData>> {
         if (let Some(list) <- datas.get(unit)) {
             list as Collection<CronData>
@@ -58,6 +59,7 @@ public class CronDataCollection <: Hashable & Equatable<CronDataCollection> & To
             None<Collection<CronData>>
         }
     }
+    @Frozen
     public func matches(date: DateTime) {
         if(datas.isEmpty()){//如果datas是空的，表示cron表达式是* * * * * * *
             return true
