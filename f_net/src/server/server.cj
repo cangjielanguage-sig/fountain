@@ -24,7 +24,8 @@ import fountain::f_log.*
 import fountain::f_protocol.default.*
 import fountain::f_net.*
 
-public struct Server<T> <: Resource where T <: DataFields<T> {
+//struct不能在构造函数内使用 this.，为了使用atExit，只能改为class
+public class Server<T> <: Resource where T <: DataFields<T> {
     private static let log = LoggerFactory.getLogger('fountain::f_net.server.Server')
     private let buffers = LinkedBlockingQueue<SocketBuffer>()
     private let checkTimer: Timer
@@ -32,7 +33,7 @@ public struct Server<T> <: Resource where T <: DataFields<T> {
     internal Server(checkDuration!: Duration, checker!: () -> ?Message, private let queueSize!: Int64 = 1024,
         private let server!: TcpServerSocket, private let params!: SocketParams) {
         let buffers = this.buffers
-        let checkTimer = Timer.repeat(
+        this.checkTimer = Timer.repeat(
             checkDuration,
             checkDuration,
             {=>
@@ -68,11 +69,9 @@ public struct Server<T> <: Resource where T <: DataFields<T> {
             },
             style: Burst
         )
-        this.checkTimer = checkTimer
         env.atExit{
-            checkTimer.cancel()
-            if(!server.isClosed()){
-                server.close()
+            if(!isClosed()){
+                close()
             }
         }
     }

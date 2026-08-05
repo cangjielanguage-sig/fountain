@@ -110,16 +110,7 @@ public class Client<T> <: Resource where T <: DataFields<T> {
                 }
             }
         }, style: Burst)
-        env.atExit{
-            checkTimer.cancel()
-            for(s in sockets where !s.isClosed()){
-                try{
-                    s.close()
-                }catch(e: Exception){
-                    log.warn(e){'TcpSocket.close'}
-                }
-            }
-        }
+        env.atExit(close)
     }
 
     public func close(): Unit {
