@@ -42,7 +42,7 @@ internal let log = LoggerFactory.getLogger<App>()
 
 @When[os == "Linux"]
 private let _ = {=>
-    // 必须有这个才能响应kill -15，atExit函数调用才能生效
+    // 必须有这个才能响应kill -15和CTRL+C，atExit函数调用才能生效
     let f = {_: Int32 =>
         exit(0)
         false
