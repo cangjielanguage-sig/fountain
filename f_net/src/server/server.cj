@@ -16,13 +16,13 @@ limitations under the License.
 package fountain::f_net.server
 
 import std.collection.concurrent.LinkedBlockingQueue
+import std.env
 import std.net.TcpServerSocket
 import std.sync.{Timer, CatchupStyle}
 import fountain::f_data.*
 import fountain::f_log.*
 import fountain::f_protocol.default.*
 import fountain::f_net.*
-
 
 public struct Server<T> <: Resource where T <: DataFields<T> {
     private static let log = LoggerFactory.getLogger('fountain::f_net.server.Server')
@@ -32,7 +32,7 @@ public struct Server<T> <: Resource where T <: DataFields<T> {
     internal Server(checkDuration!: Duration, checker!: () -> ?Message, private let queueSize!: Int64 = 1024,
         private let server!: TcpServerSocket, private let params!: SocketParams) {
         let buffers = this.buffers
-        checkTimer = Timer.repeat(
+        let checkTimer = Timer.repeat(
             checkDuration,
             checkDuration,
             {=>
@@ -68,6 +68,13 @@ public struct Server<T> <: Resource where T <: DataFields<T> {
             },
             style: Burst
         )
+        this.checkTimer = checkTimer
+        env.atExit{
+            checkTimer.cancel()
+            if(!server.isClosed()){
+                server.close()
+            }
+        }
     }
     /**
      * @param queueSize 数据传输任务队列

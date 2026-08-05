@@ -124,7 +124,12 @@ protected class RotatableFile <: OutputStream & Resource {
             rotateFileIfNeed(0)
             this.timeunit.since(datetime: timeunit.trim(DateTime.now()))
         }
-        env.atExit {timer.cancel()}
+        env.atExit {
+            timer.cancel()
+            if(let Some(f) <- file.load() && !f.isClosed()){
+                f.close()
+            }
+        }
         timer
     }
     private static func createDirIfNeed(path: String) {

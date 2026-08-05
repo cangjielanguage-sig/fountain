@@ -16,6 +16,7 @@ limitations under the License.
 package fountain::f_net.client
 
 import std.collection.concurrent.ConcurrentHashMap
+import std.env
 internal import std.sync.{Timer, CatchupStyle, AtomicInt64, Mutex, AtomicReference}
 internal import fountain::f_data.*
 internal import fountain::f_log.*
@@ -109,6 +110,16 @@ public class Client<T> <: Resource where T <: DataFields<T> {
                 }
             }
         }, style: Burst)
+        env.atExit{
+            checkTimer.cancel()
+            for(s in sockets where !s.isClosed()){
+                try{
+                    s.close()
+                }catch(e: Exception){
+                    log.warn(e){'TcpSocket.close'}
+                }
+            }
+        }
     }
 
     public func close(): Unit {

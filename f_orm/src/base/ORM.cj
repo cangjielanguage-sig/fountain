@@ -16,6 +16,7 @@ limitations under the License.
 package fountain::f_orm.base
 
 import std.collection.concurrent.ConcurrentHashMap
+import std.env
 import fountain::f_collection.*
 import fountain::f_orm.exception.ORMException
 import fountain::f_log.*
@@ -37,8 +38,12 @@ public class ORM {
     private static let datasources = ConcurrentHashMap<String, NamedDatasource>()
     static let hooks = TransactionHooks()
 
+    static init(){
+        env.atExit(close)
+    }
+
     public static func close() {
-        for ((_, s) in datasources) {
+        for ((_, s) in datasources where !s.isClosed()) {
             s.close()
         }
     }
