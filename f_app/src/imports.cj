@@ -47,6 +47,6 @@ private let _ = {=>
         exit(0)
         false
     }
-    registerSignalHandler(Signal.SIGTERM, f)
-    registerSignalHandler(Signal.SIGINT, f)
+    registerSignalHandler(Signal.SIGTERM, f)// 响应kill -15
+    registerSignalHandler(Signal.SIGINT, f)// 响应CTRL+C
 }()
