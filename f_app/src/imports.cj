@@ -36,7 +36,7 @@ internal import fountain::f_data.*
 internal import fountain::f_log.impl.*
 
 import std.env.exit
-import std.runtime.registerSignalHandler
+public import std.runtime.registerSignalHandler
 public import std.runtime.Signal
 
 internal let log = LoggerFactory.getLogger<App>()
