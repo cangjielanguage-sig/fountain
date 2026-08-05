@@ -56,11 +56,9 @@ public class LoggerAppenderFacade <: AsyncLogger {
     public func close(): Unit {
         let appenders = loadAppenders()
         this.appenders.store(Box<Array<AbstractLogger>>([]))
-        for (appender in appenders) {
+        for (appender in appenders where !appender.isClosed()) {
             try {
-                if(!appender.isClosed()){
-                    appender.close()
-                }
+                appender.close()
             } catch (e: Exception) {
                 e.printStackTrace()
             }
