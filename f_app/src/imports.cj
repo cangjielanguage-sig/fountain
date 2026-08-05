@@ -36,17 +36,38 @@ internal import fountain::f_data.*
 internal import fountain::f_log.impl.*
 
 import std.env.exit
-import std.runtime.*
+import std.runtime.registerSignalHandler
+public import std.runtime.Signal
 
 internal let log = LoggerFactory.getLogger<App>()
 
 @When[os == "Linux"]
 private let _ = {=>
     // 必须有这个才能响应kill -15和CTRL+C，atExit函数调用才能生效
-    let f = {_: Int32 =>
+    registerSignalHandler([Signal.SIGTERM, Signal.SIGINT]){
         exit(0)
         false
     }
-    registerSignalHandler(Signal.SIGTERM, f)// 响应kill -15
-    registerSignalHandler(Signal.SIGINT, f)// 响应CTRL+C
 }()
+
+@When[os == "Linux"]
+public func registerSignalHandler(signals: Array<Signal>, handler: () -> Bool): Unit {
+    registerSignalHandler(signals){_ => handler()}
+}
+@When[os == "Linux"]
+public func registerSignalHandler(signals: Array<Signal>, handler: (Int32) -> Bool): Unit {
+    for(signal in signals){
+        registerSignalHandler(signal, handler)
+    }
+}
+@When[os == "Linux"]
+public func registerSignalHandler(signal: Signal, handler: () -> Bool): Unit {
+    registerSignalHandler(signal){_ => handler()}
+}
+
+@When[os != "Linux"]
+public func registerSignalHandler(signals: Array<Signal>, handler: () -> Bool): Unit{}
+@When[os != "Linux"]
+public func registerSignalHandler(signals: Array<Signal>, handler: (Int32) -> Bool): Unit {}
+@When[os != "Linux"]
+public func registerSignalHandler(signal: Signal, handler: () -> Bool): Unit {}

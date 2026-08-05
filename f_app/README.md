@@ -19,3 +19,11 @@
 
 - [应用初始化函数的集合](doc/应用初始化函数的集合.md)
 
+## 注册信号处理函数
+只有linux有效。
+与std.runtime.registerSignalHandler(signal: Signal, handler: (Int32) -> Bool)拥有相同的意义
+```cj
+public func registerSignalHandler(signals: Array<Signal>, handler: () -> Bool): Unit{}
+public func registerSignalHandler(signals: Array<Signal>, handler: (Int32) -> Bool): Unit {}
+public func registerSignalHandler(signal: Signal, handler: () -> Bool): Unit {}
+```
