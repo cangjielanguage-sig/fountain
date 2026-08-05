@@ -17,7 +17,6 @@ package fountain::f_log.output
 
 protected import std.io.OutputStream
 protected import std.net.{UnixDatagramSocket, SocketAddress}
-import std.env
 import std.sync.AtomicUInt64
 
 protected class UnixDatagramOutputStream <: OutputStream & Resource {
@@ -33,13 +32,7 @@ protected class UnixDatagramOutputStream <: OutputStream & Resource {
         }
         sock
     }
-    public UnixDatagramOutputStream(private let sock: UnixDatagramSocket, private let addr: UnixSocketAddress) {
-        env.atExit{
-            if(!sock.isClosed()){
-                sock.close()
-            }
-        }
-    }
+    public UnixDatagramOutputStream(private let sock: UnixDatagramSocket, private let addr: UnixSocketAddress) {}
 
     public init(path: String, sendTimeout!: ?Duration = None<Duration>, bufSize!: ?Int64 = None<Int64>) {
         this(newSocket(path: path, sendTimeout: sendTimeout, bufSize: bufSize), UnixSocketAddress(path))

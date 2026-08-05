@@ -17,7 +17,6 @@ package fountain::f_log.base
 
 import std.collection.ArrayDeque
 import std.collection.concurrent.{ArrayBlockingQueue, ConcurrentHashMap}
-import std.env
 import std.io.OutputStream
 import std.sync.AtomicInt64
 import std.time.DateTime
@@ -74,7 +73,6 @@ public abstract class AsyncLogger <: AbstractLogger {
         policy = LoggerConfig.getAsyncTimeoutPolicy()
         let qstream = queueStream(output, queueTag)
         this.queue = qstream.queue
-        env.atExit{doClose(output, true, queueTag)}
     }
     public open func isClosed(): Bool {
         if(let r: Resource <- actualOutput){

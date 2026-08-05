@@ -17,7 +17,6 @@ package fountain::f_log.output
 
 protected import std.io.OutputStream
 protected import std.net.{UnixSocket, SocketAddress, UnixSocketAddress}
-import std.env
 
 protected class UnixOutputStream <: OutputStream & Resource {
     private static func newSocket(addr: UnixSocketAddress, writeTimeout: ?Duration) {
@@ -26,13 +25,7 @@ protected class UnixOutputStream <: OutputStream & Resource {
         sock.writeTimeout = writeTimeout
         sock
     }
-    public UnixOutputStream(private let sock: UnixSocket, private let addr: UnixSocketAddress) {
-        env.atExit{
-            if(!sock.isClosed()){
-                sock.close()
-            }
-        }
-    }
+    public UnixOutputStream(private let sock: UnixSocket, private let addr: UnixSocketAddress) {}
     public init(addr: UnixSocketAddress, writeTimeout!: ?Duration = None<Duration>) {
         this(newSocket(addr, writeTimeout), addr)
     }

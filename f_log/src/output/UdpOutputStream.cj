@@ -15,7 +15,6 @@ limitations under the License.
  */
 package fountain::f_log.output
 
-import std.env
 protected import std.io.OutputStream
 protected import std.net.{UdpSocket, IPSocketAddress, SocketAddress}
 
@@ -28,7 +27,6 @@ protected class UdpOutputStream <: OutputStream & Resource {
         sock.bind()
         this.udp = sock
         this.addr = sockAddr
-        onExitProcess()
     }
     public init(addr: String, sendTimeout!: ?Duration = None<Duration>) {
         let sockAddr = IPSocketAddress.parse(addr)
@@ -37,14 +35,6 @@ protected class UdpOutputStream <: OutputStream & Resource {
         sock.bind()
         this.udp = sock
         this.addr = sockAddr
-        onExitProcess()
-    }
-    private func onExitProcess(){
-        env.atExit{
-            if(!isClosed()){
-                close()
-            }
-        }
     }
     public func write(buffer: Array<Byte>): Unit {
         udp.sendTo(addr, buffer)
