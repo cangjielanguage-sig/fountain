@@ -135,7 +135,7 @@ public struct Message <: Protocol<EncodedMessage, Message> {
         if(bool) { byte } else { 0u8 }
     }
     public func encode(): EncodedMessage {
-        let bytes = DefaultCodec().encode(id.pid).encode(id.tid).encode(id.time).encode(data).finish()
+        let bytes = DefaultCodec().encode(id.time).encode(id.pid).encode(id.tid).encode(id.hostId).encode(data).finish()
         EncodedMessage(command.value, bytes)
     }
     public static func decode<T>(input: InputStream): Message where T <: DataFields<T> {
@@ -146,11 +146,12 @@ public struct Message <: Protocol<EncodedMessage, Message> {
         }
         let command = Command.parse(b[0])
         let decoder = DefaultCodec()
+        let time = decoder.decode<DateTime>(input).getOrThrow {IllegalArgumentException()}
         let pid = decoder.decode<Int64>(input).getOrThrow {IllegalArgumentException()}
         let tid = decoder.decode<Int64>(input).getOrThrow {IllegalArgumentException()}
-        let time = decoder.decode<DateTime>(input).getOrThrow {IllegalArgumentException()}
+        let hostId = decoder.decode<Int64>(input).getOrThrow {IllegalArgumentException()}
         let data = decoder.decode<T>(input)
-        build(command, MessageID(pid: pid, tid: tid, time: time), data)
+        build(command, MessageID(time: time, pid: pid, tid: tid, hostId: hostId), data)
     }
 }
 

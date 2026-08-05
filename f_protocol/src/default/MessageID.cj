@@ -15,13 +15,14 @@ limitations under the License.
 */
 package fountain::f_protocol.default
 
-public struct MessageID <: Hashable & Equatable<MessageID> {
+public struct MessageID <: Hashable & Equatable<MessageID> & ToString {
     public static let pidgen: ProcessID = CurrentProcessID.instance
     private let hash: Int64
     public MessageID(
+        public let time!: DateTime = DateTime.now(),
         public let pid!: Int64 = pidgen.value,
         public let tid!: Int64 = Thread.currentThread.id,
-        public let time!: DateTime = DateTime.now()
+        public let hostId!: Int64 = ProtocolConfig.getProtocolHostId()
     ){
         hash = HashBuilder().append(pid).append(tid).append(time).build()
     }
@@ -33,5 +34,8 @@ public struct MessageID <: Hashable & Equatable<MessageID> {
         this.pid == other.pid && 
         this.tid == other.tid &&
         this.time == other.time
+    }
+    public func toString(): String {
+        '${pid}_${tid}_${time.format("yyyyMMddHHmmssSSS")}'
     }
 }
