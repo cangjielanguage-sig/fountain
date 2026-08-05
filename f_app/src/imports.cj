@@ -47,7 +47,6 @@ private let _ = {=>
         exit(0)
         false
     }
-    resetSignalHandler([Signal.SIGTERM, Signal.SIGINT])
     registerSignalHandler(Signal.SIGTERM, f)
     registerSignalHandler(Signal.SIGINT, f)
 }()
