@@ -25,6 +25,7 @@ exports(){
     export logger_appender_FDemoFile_pattern='[%level-%name]%d{yyyy/MM/dd,HH:mm:ss.SSS}|%tid;%m'
     export logger_appender_FDemoFile_path=./log/fdemo.log
     export logger_appender_FDemoFile_rotateDuration=DAY
+    export logger_asyncWaitTimeout=5ms # 异步日志缓冲区等待时间，默认是5毫秒，超过这个时间，本次日志被忽略
     export controllerPointcut='*::*..*Controller.*(**): *'
     export mvc_port=8080 # 这一行可以没有，默认就是8080
     export mvc_maxRequestBodySize=67108864

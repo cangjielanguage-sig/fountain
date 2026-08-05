@@ -30,6 +30,7 @@ public class LoggerConfig {
     //confItem 可以是level pattern 等，还可以有Appender特有配置项
     private static const confPrefix = "logger"
     public static const appender = "appender"
+    public static const asyncWaitTimeout = confPrefix + "_asyncWaitTimeout"
     private static let filter_ = AtomicReference<Box<LogFilter>>(Box(DummyLogFilter.instance))
 
     private init() {
@@ -169,5 +170,8 @@ public class LoggerConfig {
             case "ALL" => LogLevel.ALL
             case _ => LogLevel.INFO
         }
+    }
+    public static func getAsyncWaitTimeout(): Duration {
+        Config.getDuration(asyncWaitTimeout) ?? (Duration.millisecond * 5)
     }
 }

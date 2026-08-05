@@ -152,7 +152,7 @@ public struct SyncQueueOutputStream <: OutputStream {
     public func write(bytes: Array<Byte>): Unit {
         let buf = if(let Some(buf) <- buffer.get()){
             buf
-        }else if (let Some(buf) <- pool.remove(Duration.millisecond * 5)) {
+        }else if (let Some(buf) <- pool.remove(LoggerConfig.getAsyncWaitTimeout())) {
             buffer.set(buf)
             buf
         } else {
