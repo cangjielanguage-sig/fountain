@@ -44,7 +44,11 @@ public class ORM {
 
     public static func close() {
         for ((_, s) in datasources where !s.isClosed()) {
-            s.close()
+            try{
+                s.close()
+            }catch(e: Exception){
+                e.printStackTrace()
+            }
         }
     }
     protected static prop driverNames: Iterator<String> {
