@@ -24,8 +24,7 @@ import fountain::f_log.*
 import fountain::f_protocol.default.*
 import fountain::f_net.*
 
-//struct不能在构造函数内使用 this.，为了使用atExit，只能改为class
-public class Server<T> <: Resource where T <: DataFields<T> {
+public struct Server<T> <: Resource where T <: DataFields<T> {
     private static let log = LoggerFactory.getLogger('fountain::f_net.server.Server')
     private let buffers = LinkedBlockingQueue<SocketBuffer>()
     private let checkTimer: Timer
@@ -70,8 +69,8 @@ public class Server<T> <: Resource where T <: DataFields<T> {
             style: Burst
         )
         env.atExit{
-            if(!isClosed()){
-                close()
+            if(!hasClosed(server)){
+                doClose(server, checkTimer, buffers)
             }
         }
     }
@@ -118,10 +117,11 @@ public class Server<T> <: Resource where T <: DataFields<T> {
             }
         }
     }
-    public func isClosed(): Bool {
+    //hasClosed doClose是为了在struct构造函数使用atExit而声明，struct构造函数不能访问实例函数
+    private static func hasClosed(server: TcpServerSocket) {
         server.isClosed()
     }
-    public func close(): Unit {
+    private static func doClose(server: TcpServerSocket, checkTimer: Timer, buffers: LinkedBlockingQueue<SocketBuffer>){
         server.close()
         checkTimer.cancel()
         for (i in 0..3) {
@@ -135,6 +135,12 @@ public class Server<T> <: Resource where T <: DataFields<T> {
                 }
             }
         }
+    }
+    public func isClosed(): Bool {
+        hasClosed(server)
+    }
+    public func close(): Unit {
+        doClose(server, checkTimer, buffers)
     }
 }
 
