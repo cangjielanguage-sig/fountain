@@ -35,4 +35,16 @@ internal import fountain::f_base.*
 internal import fountain::f_data.*
 internal import fountain::f_log.impl.*
 
+import std.env.exit
+import std.runtime.*
+
 internal let log = LoggerFactory.getLogger<App>()
+
+@When[os == "Linux"]
+private let _ = {=>
+    // 必须有这个才能响应kill -15，atExit函数调用才能生效
+    registerSignalHandler(Signal.SIGTERM){_ =>
+        exit(0)
+        false
+    }
+}()
