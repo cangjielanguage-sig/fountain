@@ -43,8 +43,10 @@ internal let log = LoggerFactory.getLogger<App>()
 @When[os == "Linux"]
 private let _ = {=>
     // 必须有这个才能响应kill -15，atExit函数调用才能生效
-    registerSignalHandler(Signal.SIGTERM){_ =>
+    let f = {_: Int32 =>
         exit(0)
         false
     }
+    registerSignalHandler(Signal.SIGTERM, f)
+    registerSignalHandler(Signal.SIGINT, f)
 }()
