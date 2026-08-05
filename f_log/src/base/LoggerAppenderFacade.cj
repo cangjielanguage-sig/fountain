@@ -15,41 +15,47 @@ limitations under the License.
  */
 package fountain::f_log.base
 
+import std.sync.AtomicReference
 import std.time.DateTime
 import stdx.log.{LogLevel, LogRecord}
 import fountain::f_io.DummyOutputStream
 
 public class LoggerAppenderFacade <: AsyncLogger {
-    private let appenders: Array<AbstractLogger>
+    private let appenders: AtomicReference<Box<Array<AbstractLogger>>>
     public init(name: String, appenders: Array<AbstractLogger>) {
         super(name, LogLevel.ALL, LogPattern.default, DummyOutputStream.THROW_ON_ACCESSING,
             'f_log.LoggerAppenderFacade_${name}')
-        this.appenders = appenders
+        this.appenders = AtomicReference<Box<Array<AbstractLogger>>>(Box<Array<AbstractLogger>>(appenders))
+    }
+    private func loadAppenders(){
+        appenders.load().value
     }
     func isEmpty(){
-        appenders.isEmpty()
+        loadAppenders().isEmpty()
     }
     public func logLevelEnabled(level: LogLevel): Bool {
-        for (appender in appenders where appender.logLevelEnabled(level)) {
+        for (appender in loadAppenders() where appender.logLevelEnabled(level)) {
             return true
         }
         return false
     }
     public open func log(record: LogRecord): Unit {
         append {
-            for (appender in appenders) {
+            for (appender in loadAppenders()) {
                 appender.log(record)
             }
         }
     }
     protected func append(level: LogLevel, message: () -> String, now: DateTime, tid: Int64, ex: Option<Exception>): Unit {
         append {
-            for (appender in appenders) {
+            for (appender in loadAppenders()) {
                 appender.append(level, message, now, tid, ex)
             }
         }
     }
     public func close(): Unit {
+        let appenders = loadAppenders()
+        this.appenders.store(Box<Array<AbstractLogger>>([]))
         for (appender in appenders) {
             try {
                 if(!appender.isClosed()){
