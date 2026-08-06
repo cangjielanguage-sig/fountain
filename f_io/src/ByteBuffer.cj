@@ -58,9 +58,7 @@ public class ByteBuffer <: IOStream {
     }
     public func clear(): Unit {
         if (toOverwriteOnClearing){
-            for(i in 0 .. woffset){
-                buffer[i] = 0
-            }
+            buffer = Array<Byte>(buffer.size, repeat: 0)
         }
         woffset = 0
         roffset = 0
