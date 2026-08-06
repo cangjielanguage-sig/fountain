@@ -20,7 +20,7 @@ import std.sync.{Mutex, Condition, AtomicBool}
 import fountain::f_io.exception.SeekException
 
 public class ByteBuffer <: IOStream {
-    private var buffer: Array<Byte>
+    private let buffer: Array<Byte>
     private var woffset: Int64 = 0
     private var roffset: Int64 = 0
 
@@ -58,7 +58,7 @@ public class ByteBuffer <: IOStream {
     }
     public func clear(): Unit {
         if (toOverwriteOnClearing){
-            buffer = Array<Byte>(buffer.size, repeat: 0)
+            buffer[0..woffset].fill(0)
         }
         woffset = 0
         roffset = 0
