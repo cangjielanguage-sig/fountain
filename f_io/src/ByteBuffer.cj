@@ -58,7 +58,7 @@ public class ByteBuffer <: IOStream {
     }
     public func clear(): Unit {
         if (toOverwriteOnClearing){
-            buffer[0..woffset].fill(0)
+            buffer[0..woffset].fill(0)//经测试，fill比创建新数组性能更好
         }
         woffset = 0
         roffset = 0
