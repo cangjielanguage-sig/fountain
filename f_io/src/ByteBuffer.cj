@@ -94,17 +94,17 @@ public class ByteBuffer <: IOStream {
         }
     }
     public func seekReading(pos: SeekPosition): Unit {
-        match(pos) {
-            case Begin(offset) => roffset = seek(0, offset, 0, woffset)
-            case Current(offset) => roffset = seek(roffset, offset, 0, woffset)
-            case End(offset) => roffset = seek(buffer.size, offset, 0, woffset)
+        roffset = match(pos) {
+            case Begin(offset) => seek(0, offset, 0, woffset)
+            case Current(offset) => seek(roffset, offset, 0, woffset)
+            case End(offset) => seek(buffer.size, offset, 0, woffset)
         }
     }
     public func seekWriting(pos: SeekPosition): Unit {
-        match(pos) {
-            case Begin(offset) => woffset = seek(0, offset, roffset, buffer.size)
-            case Current(offset) => woffset = seek(woffset, offset, roffset, buffer.size)
-            case End(offset) => woffset = seek(buffer.size, offset, roffset, buffer.size)
+        woffset = match(pos) {
+            case Begin(offset) => seek(0, offset, roffset, buffer.size)
+            case Current(offset) => seek(woffset, offset, roffset, buffer.size)
+            case End(offset) => seek(buffer.size, offset, roffset, buffer.size)
         }
     }
     public func readByte(): ?Byte{
