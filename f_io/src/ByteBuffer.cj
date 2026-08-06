@@ -20,7 +20,7 @@ import std.sync.{Mutex, Condition, AtomicBool}
 import fountain::f_io.exception.SeekException
 
 public class ByteBuffer <: IOStream {
-    private let buffer: Array<Byte>
+    private var buffer: Array<Byte>
     private var woffset: Int64 = 0
     private var roffset: Int64 = 0
 
