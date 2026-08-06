@@ -24,9 +24,9 @@ public class ByteBuffer <: IOStream {
     public func clone(): ByteBuffer 
     // 扩容，如果capacity - writeOffset + readOffset >= addition，则只将未读数据移到缓冲区头部，而不扩容
     public func reserve(addition: Int64): Unit 
-    // 改变缓冲区的读取位置，读取范围从缓冲区头部到writeOffset
+    // 移动缓冲区的读取位置，移动范围从缓冲区头部到writeOffset
     public func seekReading(pos: SeekPosition): Unit 
-    // 改变缓冲区的写入位置，读取范围从readOffset到缓冲区尾
+    // 移动缓冲区的写入位置，移动范围从readOffset到缓冲区尾
     public func seekWriting(pos: SeekPosition): Unit 
     // 读取一字节，如果没有可读字节立即返回None
     public func readByte(): ?Byte
