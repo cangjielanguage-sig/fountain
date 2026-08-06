@@ -132,16 +132,19 @@ public class ByteBuffer <: IOStream {
         }
         bytes
     }
+    private func grow(){
+        reserve(buffer.size + buffer.size / 2)
+    }
     public func writeByte(b: Byte): Unit {
         if(woffset >= buffer.size){
-            reserve(buffer.size / 2)
+            grow()
         }
         buffer[woffset] = b
         woffset++
     }
     public func write(buf: Array<Byte>): Unit {
         if(woffset + buf.size >= buffer.size) {
-            reserve(buf.size + buffer.size / 2)
+            grow()
         }
         copy(buf, buffer, 0, woffset, buf.size)
         woffset += buf.size
