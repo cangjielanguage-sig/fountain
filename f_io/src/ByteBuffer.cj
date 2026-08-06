@@ -69,12 +69,12 @@ public class ByteBuffer <: IOStream {
         buffer.woffset = woffset
         buffer
     }
-    private func copy(src: Array<Byte>, dst: Array<Byte>, srcOffset: Int64, dstOffset: Int64, length: Int64){
-        src.copyTo(dst, srcOffset, dstOffset, length)
-        roffset = 0
-        woffset = length
-    }
     public func reserve(addition: Int64): Unit {
+        func copy(src: Array<Byte>, dst: Array<Byte>, srcOffset: Int64, dstOffset: Int64, length: Int64){
+            src.copyTo(dst, srcOffset, dstOffset, length)
+            roffset = 0
+            woffset = length
+        }
         if(addition <= 0){
             return
         }
@@ -126,7 +126,8 @@ public class ByteBuffer <: IOStream {
         }else{
             buf.size
         }
-        copy(buffer, buf, roffset, 0, bytes)
+        buffer.copyTo(buf, roffset, 0, bytes)
+        roffset += bytes
         if(bytes < buf.size){
             clear()
         }
@@ -146,7 +147,7 @@ public class ByteBuffer <: IOStream {
         if(woffset + buf.size >= buffer.size) {
             grow()
         }
-        copy(buf, buffer, 0, woffset, buf.size)
+        buf.copyTo(buffer, 0, woffset, buf.size)
         woffset += buf.size
     }
     public func flush(): Unit {}
