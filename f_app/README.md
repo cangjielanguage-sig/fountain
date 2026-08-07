@@ -23,7 +23,13 @@
 只有linux有效，其它操作系统是空函数体。
 与std.runtime.registerSignalHandler(signal: Signal, handler: (Int32) -> Bool)拥有相同的意义
 ```cj
+//注册新的信号处理函数，不清空相同信号的其它处理函数
 public func registerSignalHandler(signals: Array<Signal>, handler: () -> Bool): Unit{}
 public func registerSignalHandler(signals: Array<Signal>, handler: (Int32) -> Bool): Unit {}
 public func registerSignalHandler(signal: Signal, handler: () -> Bool): Unit {}
+
+// 注册前先清空相同信号的其它处理函数
+public func resetAndRegisterSignalHandler(signals: Array<Signal>, handler: () -> Bool): Unit{}
+public func resetAndRegisterSignalHandler(signals: Array<Signal>, handler: (Int32) -> Bool): Unit {}
+public func resetAndRegisterSignalHandler(signal: Signal, handler: () -> Bool): Unit {}
 ```
