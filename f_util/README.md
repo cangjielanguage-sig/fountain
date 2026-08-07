@@ -6,7 +6,7 @@
 - [STDX依赖](doc/STDX依赖.md)
 
 ## CaseFormat 转换
-
+PascalCase camelCase lower_case_with_underscores UPPER_CASE_WITH_UNDERSCORES lower-case-with-hyphens UPPER-CASE-WITH-HYPHENS 六种风格互相转换
 - [CaseFormat_转换](doc/CaseFormat_转换.md)
 
 ## crc16
