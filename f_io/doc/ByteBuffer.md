@@ -32,7 +32,7 @@ public class ByteBuffer <: IOStream {
     public func readByte(): ?Byte
     // 读取字节数组，返回实际读取的字节数，读取字节数小于等于writeOffset - readOffset
     public func read(buf: Array<Byte>): Int64 
-    // 写一字节，如果缓冲区已满将自动扩容capacity/2
+    // 写一字节，如果缓冲区已满将自动扩容capacity/2 + buf.size
     public func writeByte(b: Byte): Unit 
     // 写入缓冲区，如果可写空间不足，将自动扩容capacity/2 + buf.size
     public func write(buf: Array<Byte>): Unit 
