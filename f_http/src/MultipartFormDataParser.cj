@@ -15,7 +15,7 @@ limitations under the License.
  */
 package f_http
 
-import std.io.*
+import std.io.SeekPosition
 import f_collection.*
 import f_data.*
 import f_io.RotatableBuffer

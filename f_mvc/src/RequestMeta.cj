@@ -15,6 +15,8 @@ limitations under the License.
  */
 package f_mvc
 
+import f_data
+
 public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMeta> {
     private static let log = LoggerFactory.getLogger<RequestMeta>()
     private static let NOT_FOUND = NotFoundHandler()
@@ -48,22 +50,26 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
         private let headers!: RequestCondition = DummyRequestCondition.instance
     ) {
         this.handle_ = {ctx =>
-            if(let Some(dotIdx) <- path.lastIndexOf('.') && let Some(bytes) <- loadStaticResource(path)){
-                let ext = path[dotIdx + 1 ..]
-                ctx.responseBuilder.status(HttpStatus.OK.value).header('Content-Type', match(ext){
-                    case 'html' | 'css' | 'xml' | 'txt' => 'text/${ext}'
-                    case 'json' => 'application/json'
-                    case 'js' => 'application/javascript'
-                    case 'htm' => 'text/html'
-                    case 'jpg' | 'jpeg' | 'png' | 'gif' | 'bmp' | 'ico' | 'webp' | 'tif' | 'tiff' | 'avif' | 'ico' => 'image/${ext}'
-                    case 'svg' => 'image/svg+xml'
-                    case 'ttf' | 'otf' | 'woff' | 'woff2' => 'font/${ext}'
-                    case _ => 'application/${ext}'
-                }).body(bytes)
+            if(let Some(bytes) <- loadStaticResource(path)){
+                let builder = ctx.responseBuilder.status(HttpStatus.OK.value)
+                if(let Some(dotIdx) <- path.lastIndexOf('.')){
+                    let ext = path[dotIdx + 1 ..]
+                    builder.header('Content-Type', match(ext){
+                        case 'html' | 'css' | 'xml' | 'txt' => 'text/${ext}'
+                        case 'json' => 'application/json'
+                        case 'js' => 'application/javascript'
+                        case 'htm' => 'text/html'
+                        case 'jpg' | 'jpeg' | 'png' | 'gif' | 'bmp' | 'ico' | 'webp' | 'tif' | 'tiff' | 'avif' | 'ico' => 'image/${ext}'
+                        case 'svg' => 'image/svg+xml'
+                        case 'ttf' | 'otf' | 'woff' | 'woff2' => 'font/${ext}'
+                        case _ => 'application/${ext}'
+                    })
+                }
+                builder.body(bytes)
                 return
             }
             log.warn('RequestMeta.handle.Not Found:${path} ${ctx.request.headers.getFirst('Accept')}')
-            NOT_FOUND.`handle`(ctx)
+            NOT_FOUND.handle(ctx)
         }
     }
 
@@ -89,12 +95,19 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
     }
     private static func loadStaticResource(path: String): ?Array<Byte> {
         staticResourceBytes.entryView(path){view =>
-            let p = if(path.startsWith('/')){
+            var p = if(path.startsWith('/')){
                 path[1..]
             }else{
                 path
             } |> STATIC_RESOURCE_ROOT.join
-            if(exists(p)){
+            if(exists(p) && let fi <- FileInfo(p)){
+                if(fi.isSymbolicLink()){
+                    p = SymbolicLink.readFrom(p, recursive: true)
+                }
+                if(fi.isDirectory()){
+                    view.value = None
+                    return
+                }
                 try(file = File(p, Read)){
                     let lastModified = file.info.lastModificationTime
                     view.value = if(let Some((last, _)) <- view.value && last < lastModified){
@@ -173,23 +186,24 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
         let pattern = this.pattern.getOrThrow()
         this.handle_ = {
             ctx =>
-                let result = try {
+                try {
                     CurrentHttpContext.set(ctx)
-                    fn(BeanFactory.instance.getFirst<T>().getOrThrow(), ctx, pattern)
+                    let result = fn(BeanFactory.instance.getFirst<T>().getOrThrow(), ctx, pattern)
+                    match (result) {
+                        case x: JsonValue => respond(x, ctx)
+                        case x: InputStream => respond(x, ctx)
+                        case x: Array<Byte> => respond(x, ctx)
+                        case _: Unit => ()
+                        case x: ToData => respond(x, ctx)
+                        case x: Redirect => respond(x, ctx)
+                        case x: FileDownloadMeta => respond(x, ctx)
+                        case _ =>
+                            let request = ctx.request
+                            log.warn {'f_mvc.handle ${request.method}:${request.url};${TypeInfo.of(result)}'}
+                            MultiRequestMethodHandler.NOT_ACCEPTABLE.handle(ctx)
+                    }
                 } finally {
                     CurrentHttpContext.clear()
-                }
-                match (result) {
-                    case x: JsonValue => respond(x, ctx)
-                    case x: InputStream => respond(x, ctx)
-                    case x: Array<Byte> => respond(x, ctx)
-                    case _: Unit => ()
-                    case x: ToData => respond(x, ctx)
-                    case x: Redirect => respond(x, ctx)
-                    case _ =>
-                        let request = ctx.request
-                        log.warn {'fountain.mvc.handle ${request.method}:${request.url};${TypeInfo.of(result)}'}
-                        MultiRequestMethodHandler.NOT_ACCEPTABLE.handle(ctx)
                 }
         }
     }
@@ -214,7 +228,12 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
         }
         setResponseStatus(status)
         let accept = ctx.request.headers.getFirst('Accept') ?? '*/*'
-        let builder = ctx.responseBuilder.status(status.value).header('Content-Type', accept)
+        let firstAccept = if (accept.contains(',')){
+            AcceptQueue(accept).first() ?? 'application/json'
+        }else{
+            accept
+        }
+        let builder = ctx.responseBuilder.status(status.value).header('Content-Type', firstAccept)
         func respondStatusReasonPhrase() {
             builder.body(if (status == HttpStatus.OK) {
                 HttpStatus.UNAUTHORIZED.reasonPhrase
@@ -223,14 +242,14 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
             })
         }
         log.warn {
-            'fountain.mvc.check ${this}; accept: ${accept}; status: ${status.value}; CheckHandler returns ${TypeInfo.of(resp)}; checked: ${check}'
+            'f_mvc.check ${this}; accept: ${accept}; status: ${status.value}; CheckHandler returns ${TypeInfo.of(resp)}; checked: ${check}'
         }
         match (resp) {
             case x: String => builder.body(x)
             case x: Array<Byte> => builder.body(x)
             case x: InputStream => builder.body(x)
             case x: ToString => builder.body(x.toString())
-            case x: ToData where accept != '*/*' => match (MediaTypes.tryParse(accept)) {
+            case x: ToData where firstAccept != '*/*' => match (MediaTypes.tryParse(firstAccept)) {
                 case Some(mt) => builder.body(mt.fromData(x.toData()))
                 case _ => respondStatusReasonPhrase()
             }
@@ -252,44 +271,65 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
             OverallStopwatch.elapsed(method)
         }
     }
-    private func respond<R>(result: R, ctx: HttpContext): Unit where R <: ToData {
+
+    private func respond<R>(status: HttpStatus, result: R, ctx: HttpContext): Unit where R <: ToData {
         respond(ctx.request.method) {
+            let emptyResult = result is Unit || result is DataUnit || result is DataNone
             let accept = ctx.request.headers.getFirst('Accept')
-            if (!(result is Unit) && let Some(accept) <- accept) {
-                if (let Some(mediaType) <- MediaTypes.tryParse(accept)) {
-                    let bytes = mediaType.fromData(result.toData())
-                    ctx.responseBuilder.header('Content-Type', accept).body(bytes)
-                } else if (accept == '*/*') {
-                    let acc = this.produces.iterator().next() ?? 'application/json'
-                    let mt = MediaTypes.parse(acc)
-                    let bytes = mt.fromData(result.toData())
-                    ctx.responseBuilder.header('Content-Type', acc).body(bytes)
-                } else {
-                    if (let r: Resource <- result) {
-                        try {
-                            r.close()
-                        } catch (e: Exception) {
-                            log.warn(e){'Error occurred on closing ${TypeInfo.of(result)}; path: ${path}; accept: ${accept}'}
-                        }
+            if (!emptyResult && let Some(accept) <- accept) {
+                func genBody(accept: String): Bool {
+                    if (let Some(mediaType) <- MediaTypes.tryParse(accept)) {
+                        let bytes = mediaType.fromData(result.toData())
+                        ctx.responseBuilder.status(status.value).header('Content-Type', accept).body(bytes)
+                        return true
+                    } else if (accept == '*/*') {
+                        let acc = this.produces.iterator().next() ?? 'application/json'
+                        let mt = MediaTypes.parse(acc)
+                        let bytes = mt.fromData(result.toData())
+                        ctx.responseBuilder.status(status.value).header('Content-Type', acc).body(bytes)
+                        return true
                     }
+                    false
+                }
+                let accepted = if(accept.indexOf(',').isSome()){
+                    AcceptQueue(accept).first() ?? '*/*'
+                } else {
+                    accept
+                } |> genBody
+                if (let r: Resource <- result) {
+                    try {
+                        r.close()
+                    } catch (e: Exception) {
+                        log.warn(e){'Error occurred on closing ${TypeInfo.of(result)}; path: ${path}; accept: ${accept}'}
+                    }
+                }
+                if(!accepted){
                     MultiRequestMethodHandler.NOT_ACCEPTABLE.handle(ctx)
                 }
-            } else if ((result is Unit) && let Some(accept) <- accept && accept == '*/*') {
-                ctx.responseBuilder.header('Content-Type', accept).body('')
-            } else if ((result is Unit) && accept.isNone()) {
-                ctx.responseBuilder.body('')
+            } else if (emptyResult && let Some(accept) <- accept && accept.contains('*/*')) {
+                ctx.responseBuilder.status(status.value).header('Content-Type', accept).body('')
+            } else if (emptyResult && accept.isNone()) {
+                ctx.responseBuilder.status(status.value).body('')
             } else {
                 MultiRequestMethodHandler.NOT_ACCEPTABLE.handle(ctx)
             }
         }
     }
+    private func respond<R>(result: R, ctx: HttpContext): Unit where R <: ToData {
+        respond<R>(HttpStatus.OK, result, ctx)
+    }
     private func respond(response: JsonValue, ctx: HttpContext): Unit {
         respond(ctx.request.method) {
             if (let Some(accept) <- ctx.request.headers.getFirst('Accept')) {
-                if (let Some(mediaType) <- MediaTypes.tryParse(accept) && let jmt: JsonMediaType <- mediaType) {
+                let firstAccept = if(accept.contains(',')){
+                    AcceptQueue(accept).first() ?? 'application/json'
+                }else{
+                    accept
+                }
+                if (let Some(mediaType) <- MediaTypes.tryParse(firstAccept) && let jmt: JsonMediaType <- mediaType) {
                     let bytes = jmt.fromData(response)
-                    ctx.responseBuilder.header('Content-Type', accept).body(bytes)
-                } else if (accept == '*/*') {
+                    ctx.responseBuilder.header('Content-Type', firstAccept).body(bytes)
+                } else if (firstAccept == '*/*') {
                     ctx.responseBuilder.header('Content-Type', 'application/json').body(response.toString())
                 } else {
                     MultiRequestMethodHandler.NOT_ACCEPTABLE.handle(ctx)
@@ -322,7 +362,12 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
             ctx.responseBuilder.body(response.unsafeBytes())
         }
     }
-    
+    private func respond(meta: FileDownloadMeta, ctx: HttpContext): Unit {
+        respond(ctx.request.method) {
+            meta.execute()
+        }
+    }
+
     public func isMultipart(name: String) {
         args[name] is MultipartFormData
     }
@@ -405,38 +450,36 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
         for (param in function.parameters) {
             let pname = param.name
             var toThrow = true
+            log.debug{'controller function param ${pname} annotations: ${param.annotations.size}'}
             for (annotation in param.annotations) {
+                log.debug{'controller function param ${pname} annotation: ${TypeInfo.of(annotation)}'}
                 match (annotation) {
                     case x: ControllerFuncParam => match (args.get(pname)) {
                         case Some((p, v, c)) where refEq(p, zero) =>
                             args[pname] = (x, v, c)
                             toThrow = false
-                            break
                         case None =>
                             args[pname] = (x, DummyValidator.instance, None<AbstractDateTimeConverter>)
                             toThrow = false
-                        case _ => throw UnreachableException()
+                        case _ => throw MVCException('Mapping annotation for controller func param ${pname} is duplicated')
                     }
                     case x: Validator => match (args.get(pname)) {
                         case Some((p, v, c)) where v is DummyValidator =>
                             args[pname] = (p, x, c)
-                            toThrow = false
-                            break
                         case None => args[pname] = (zero, x, None<AbstractDateTimeConverter>)
-                        case _ => throw UnreachableException()
+                        case _ => throw MVCException('Validator annotaton for controller func param ${pname} is duplicated')
                     }
                     case x: AbstractDateTimeConverter => match (args.get(pname)) {
                         case Some((p, v, c)) where c.isNone() =>
                             args[pname] = (p, v, x)
-                            toThrow = false
-                            break
                         case None => args[pname] = (zero, DummyValidator.instance, x)
-                        case _ => throw UnreachableException()
+                        case _ => throw MVCException('DateTimeConverter annotaton for controller func param ${pname} is duplicated')
                     }
-                    case _ => continue
+                    case _ => continue // 可能存在与f_mvc 无关的注解，所以这里必须使用continue
                 }
             }
             if (toThrow) {
+                log.warn{'controller function param ${pname}'}
                 throw MVCException(
                     'parameter of controller function must be with one and only one Annotation as @RequestBody or @RequestParam or @RequestHeader or @PathVariable or @MultipartFormData')
             }
