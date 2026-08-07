@@ -15,16 +15,29 @@ limitations under the License.
  */
 package f_mvc
 
+import f_io.SyncByteBuffer
+
+public struct FileDownloadMeta {
+    public FileDownloadMeta(
+        let multi!: Bool = false,
+        let contentType!: String = "application/octet-stream",
+        let exec!: (FileDownload) -> Unit
+    ){}
+    func execute(): Unit {
+        FileDownload(multi: multi, contentType: contentType).exec(exec)
+    }
+}
+
 public class FileDownload {
     private static let random = RandomString()
     private let responseBuilder: HttpResponseBuilder
-    private let writer: HttpResponseWriter
     private let built = AtomicBool(false)
+    private let pipe = SyncByteBuffer()
     private let boundary = "----${random.randomLettersNumbers(32)}"
-    public FileDownload(private let ctx: HttpContext, private let multi!: Bool = false,
+    private let ctx = CurrentHttpContext.instance
+    public FileDownload(private let multi!: Bool = false,
         private let contentType!: String = "application/octet-stream") {
         responseBuilder = ctx.responseBuilder
-        writer = HttpResponseWriter(ctx)
     }
     public func noContent(): Unit {
         let status = HttpStatus.NO_CONTENT
@@ -39,6 +52,28 @@ public class FileDownload {
         }
     }
     public func write(filename: String, input: InputStream, length!: Int64 = -1) {
+        start(filename, length: length)
+        let buf = Array<Byte>(MVCConfig.downloadBufferSize, repeat: 0)
+        while (let len <- input.read(buf) && len > 0) {
+            write(buf[0..len])
+        }
+        end()
+    }
+    private func write(header: String) {
+        write(header.unsafeBytes())
+    }
+    public func write(bytes: Array<Byte>): Unit {
+        pipe.write(bytes)
+    }
+    /**
+     * 务必在本函数实参内部调用其它函数
+     */
+    public func exec(fn: (FileDownload) -> Unit): Unit {
+        spawn{
+            fn(this)
+        }
+    }
+    public func start(filename: String, length!: Int64 = -1): FileDownload {
         if (!built.load()) {
             if (multi) {
                 responseBuilder.header("Content-Type", "multipart/x-mixed-replace; boundary=${boundary}")
@@ -46,47 +81,43 @@ public class FileDownload {
                 write("--${boundary}\r\n")
             } else {
                 responseBuilder.header("Content-Disposition", attachment(filename))
-                responseBuilder.header("Content-Type", contentType)
+                if(contentType.size > 0){
+                    responseBuilder.header("Content-Type", contentType)
+                }
                 if (length >= 0) {
                     responseBuilder.header("Content-Length", length.toString())
                 }
                 responseBuilder.build()
             }
+            responseBuilder.body(pipe)
             built.store(true)
         }
-        func write() {
-            let buf = Array<Byte>(MVCConfig.downloadBufferSize, repeat: 0)
-            while (let len <- input.read(buf)) {
-                if (len > 0) {
-                    writer.write(buf[0..len])
-                } else {
-                    break
-                }
-            }
+        if(multi){
+            next(filename, contentType, length: length)
         }
-
-        if (multi) {
+        this
+    }
+    public func next(filename: String, contentType: String, length!: Int64 = -1): Unit {
+        if(multi){
             write("Content-Disposition: ${attachment(filename)}\r\n")
             if (length >= 0) {
                 write("Content-Length: ${length}\r\n")
             }
-            write("Content-Type: ${contentType}\r\n\r\n")
-            write()
-            write("\r\n--${boundary}\r\n")
-        } else {
-            write()
-            end()
+            if(contentType.size > 0) {
+                write("Content-Type: ${contentType}\r\n\r\n")
+            }
+        }else{
+            throw MVCException('current function only supports to download multi file, so param multi of FileDownload constructor must be true to invoke this function.')
         }
     }
+    
     public func end() {
         if (multi) {
-            write("--${boundary}--")
+            write("\r\n--${boundary}\r\n")
+            pipe.end()
         }
     }
     private func attachment(filename: String) {
         "attachment, filename=\"${filename}\""
-    }
-    private func write(header: String) {
-        writer.write(header.unsafeBytes())
     }
 }

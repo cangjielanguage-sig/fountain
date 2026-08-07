@@ -34,3 +34,6 @@ console.log
 .codeartsdoer/
 .codemate/
 CODEBUDDY.md
+.atomcode/
+*.cjo
+*.so
