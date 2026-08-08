@@ -63,15 +63,15 @@ public func resetAndRegisterSignalHandler(signal: Signal, handler: () -> Bool): 
 }
 
 @When[os == "Windows"]
-public func registerSignalHandler(signals: Array<Signal>, handler: () -> Bool): Unit{}
+public func registerSignalHandler(_: Array<Signal>, _: () -> Bool): Unit{}
 @When[os == "Windows"]
-public func registerSignalHandler(signals: Array<Signal>, handler: (Int32) -> Bool): Unit {}
+public func registerSignalHandler(_: Array<Signal>, _: (Int32) -> Bool): Unit {}
 @When[os == "Windows"]
-public func registerSignalHandler(signal: Signal, handler: () -> Bool): Unit {}
+public func registerSignalHandler(_: Signal, _: () -> Bool): Unit {}
 
 @When[os == "Windows"]
-public func resetAndRegisterSignalHandler(signals: Array<Signal>, handler: () -> Bool): Unit{}
+public func resetAndRegisterSignalHandler(_: Array<Signal>, _: () -> Bool): Unit{}
 @When[os == "Windows"]
-public func resetAndRegisterSignalHandler(signals: Array<Signal>, handler: (Int32) -> Bool): Unit {}
+public func resetAndRegisterSignalHandler(_: Array<Signal>, _: (Int32) -> Bool): Unit {}
 @When[os == "Windows"]
-public func resetAndRegisterSignalHandler(signal: Signal, handler: () -> Bool): Unit {}
+public func resetAndRegisterSignalHandler(_: Signal, _: () -> Bool): Unit {}
