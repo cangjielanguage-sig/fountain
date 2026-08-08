@@ -18,8 +18,6 @@ package fountain::f_app
 import std.env.exit
 public import std.runtime.{registerSignalHandler, resetSignalHandler, Signal}
 
-internal let log = LoggerFactory.getLogger<App>()
-
 @When[os != "Windows"]
 private let _ = {=>
     // 必须有这个才能响应kill -15和CTRL+C，atExit函数调用才能生效

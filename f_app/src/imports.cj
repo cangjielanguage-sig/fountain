@@ -34,3 +34,5 @@ internal import stdx.net.tls.common.*
 internal import fountain::f_base.*
 internal import fountain::f_data.*
 internal import fountain::f_log.impl.*
+
+internal let log = LoggerFactory.getLogger<App>()
