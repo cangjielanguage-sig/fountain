@@ -32,7 +32,7 @@ public struct Server<T> <: Resource where T <: DataFields<T> {
     internal Server(checkDuration!: Duration, checker!: () -> ?Message, private let queueSize!: Int64 = 1024,
         private let server!: TcpServerSocket, private let params!: SocketParams) {
         let buffers = this.buffers
-        this.checkTimer = Timer.repeat(
+        let checkTimer = Timer.repeat(
             checkDuration,
             checkDuration,
             {=>
@@ -68,6 +68,7 @@ public struct Server<T> <: Resource where T <: DataFields<T> {
             },
             style: Burst
         )
+        this.checkTimer = checkTimer
         env.atExit{
             if(!hasClosed(server)){
                 doClose(server, checkTimer, buffers)

@@ -13,15 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package fountain::f_protocol.default
+package fountain::f_rpc.server
 
-import fountain::f_config.*
-
-public class ProtocolConfig {
-    public static const protocol = "protocol"
-    public static const protocol_hostId = protocol + '_hostId'
-
-    public static func getProtocolHostId(): Int64 {
-        return Config.getValue<Int64>(protocol_hostId) ?? 0
-    }
-}
+internal import fountain::f_concurrent.ConcurrentHashSet
+internal import fountain::f_rpc.base.*

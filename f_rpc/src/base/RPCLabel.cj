@@ -21,16 +21,24 @@ package fountain::f_rpc.base
  * eg. a.b.c 与x.y.z，如果a == x && b == y，则认为两个版本兼容。
  * 没有参数的Stub跟任意Stub匹配，表示当前Stub可以使用任意版本的的服务。
  * Stub('*') Stub('') 意义与Stub相同
+ * 构造器第二个参数是服务实现的名称，也就是f_bean的bean名称。
  */
 public enum RPCLabel <: Equatable<RPCLabel> {
     | Stub
     | Stub(String)
+    | Stub(String, String)
     | Skeleton(String)
+    | Skeleton(String, String)
 
     public operator func ==(other: RPCLabel): Bool {
         match((this, other)){
-            case (Stub(x), Stub(y)) | (Skeleton(x), Skeleton(y)) => x == '' || y == '' || x == '*' || y == '*' || compareVersion(x, y)
+            case (Stub(x), Stub(y)) | (Skeleton(x), Skeleton(y)) => compareVersion(x, y)
+            case (Stub(v1, n1), Stub(v2, n2)) => v1 == v2 && n1 == n2
             case (Stub, Stub(_)) | (Stub(_), Stub) | (Stub, Stub) => true
+            case (Stub, Stub(_, _)) | (Stub(_, _), Stub) => true
+            case (Stub(v1), Stub(v2, _)) | (Stub(v1, _), Stub(v2)) => v1 == v2
+            case (Skeleton(v1, n1), Skeleton(v2, n2)) => v1 == v2 && n1 == n2
+            case (Skeleton(v1), Skeleton(v2, _)) | (Skeleton(v1, _), Skeleton(v2)) => v1 == v2
             case _ => false
         }
     }

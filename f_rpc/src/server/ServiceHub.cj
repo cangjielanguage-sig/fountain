@@ -15,30 +15,21 @@ limitations under the License.
 */
 package fountain::f_rpc.server
 
-import fountain::f_app.Initializer
+import std.collection.concurrent.ConcurrentHashMap
 
-public struct RPCServerInitializer <: Initializer {
-    static init(){
-        InitializerCollection.register(RPCServerInitializer())
+public struct ServiceHub {
+    private static let hub = ConcurrentHashMap<ServiceMeta, (Array<Data>) -> Data>()
+
+    public static func register(meta: ServiceMeta, fn: (Array<Data>) -> Data): Unit {
+        hub[meta] = fn
     }
-    private init(){}
-    public prop name: String {
+    internal static func call(message: RPCMessage): Data {
+        hub[message.meta](message.params)
+    }
+    internal static prop metas: Array<ServiceMeta> {
         get(){
-            'fountain::f_rpc.server'
+            let itr = hub.iterator().map{e => e[0]}
+            Array<ServiceMeta>(hub.size){_ => itr.next().getOrThrow()}
         }
-    }
-    public prop dependencies: Array<String> {
-        get(){
-            ['fountain::f_bean']
-        }
-    }
-    public func initialize(): Unit {
-        //todo
-    }
-    /**
-     * 阻塞启动函数，调用此函数将阻塞
-     */
-    public func start(): Unit {
-        Server.start()
     }
 }

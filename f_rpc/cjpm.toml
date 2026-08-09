@@ -18,8 +18,10 @@
   "fountain::f_base" = {path = "../f_base"}
   "fountain::f_codec" = {path = "../f_codec"}
   "fountain::f_collection" = {path = "../f_collection"}
+  "fountain::f_concurrent" = {path = "../f_concurrent"}
   "fountain::f_config" = {path = "../f_config"}
   "fountain::f_data" = {path = "../f_data"}
+  "fountain::f_io" = {path = "../f_io"}
   "fountain::f_log" = {path = "../f_log"}
   "fountain::f_macros" = {path = "../f_macros"}
   "fountain::f_net" = {path = "../f_net"}

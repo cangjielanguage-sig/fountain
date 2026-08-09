@@ -13,15 +13,12 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package fountain::f_protocol.default
+package fountain::f_rpc.base
 
-import fountain::f_config.*
+protected import fountain::f_base.*
+protected import fountain::f_config.*
+protected import fountain::f_data.*
 
-public class ProtocolConfig {
-    public static const protocol = "protocol"
-    public static const protocol_hostId = protocol + '_hostId'
+internal import fountain::f_io.ByteBuffer
 
-    public static func getProtocolHostId(): Int64 {
-        return Config.getValue<Int64>(protocol_hostId) ?? 0
-    }
-}
+public const UNSUPPORTED_COMMAND = 'UnsupportedCommand'
