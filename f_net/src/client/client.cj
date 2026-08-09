@@ -147,6 +147,16 @@ public class Client<T> <: Resource where T <: DataFields<T> {
         SocketBuilder<T>(queueSize: queueSize, socketCount: socketCount, host: host, port: port,
             checkDuration: checkDuration, checker: checker)
     }
+    public static func builder(queueSize!: Int64 = 1024, socketCount!: Int64 = 1, address!: String,
+        checkDuration!: Duration, checker!: () -> ?Message): SocketBuilder<T> {
+        SocketBuilder<T>(queueSize: queueSize, socketCount: socketCount, address: address,
+            checkDuration: checkDuration, checker: checker)
+    }
+    public static func builder(queueSize!: Int64 = 1024, socketCount!: Int64 = 1, address!: IPSocketAddress,
+        checkDuration!: Duration, checker!: () -> ?Message): SocketBuilder<T> {
+        SocketBuilder<T>(queueSize: queueSize, socketCount: socketCount, address: address,
+            checkDuration: checkDuration, checker: checker)
+    }
     private prop index: Int64 {
         get(){
             ThreadLocalRandom.current.nextInt64(0, sockets.size, closed: false)
@@ -201,7 +211,7 @@ public class Client<T> <: Resource where T <: DataFields<T> {
 }
 
 public class SocketBuilder<T> where T <: DataFields<T> {
-    SocketBuilder(let queueSize!: Int64 = 1024, private let socketCount!: Int64 = 1, private let address!: IPAddress, 
+    SocketBuilder(let queueSize!: Int64 = 1024, private let socketCount!: Int64 = 1, private let address!: IPSocketAddress, 
                   private let checkDuration!: Duration, private let checker!: () -> ?Message){}
     init(queueSize!: Int64 = 1024, socketCount!: Int64 = 1, 
         host!: String, port!: UInt16, 
@@ -215,7 +225,7 @@ public class SocketBuilder<T> where T <: DataFields<T> {
         checkDuration!: Duration, checker!: () -> ?Message){
         this(queueSize: queueSize, 
             socketCount: socketCount,
-            address: IPAddress.tryParse(address).getOrThrow(),
+            address: IPSocketAddress.tryParse(address).getOrThrow(),
             checkDuration: checkDuration, checker: checker)
     }
     private let params = SocketParams()
