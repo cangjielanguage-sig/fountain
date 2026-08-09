@@ -15,10 +15,10 @@ limitations under the License.
  */
 package fountain::f_net.server
 
-import std.collection.concurrent.LinkedBlockingQueue
+import std.collection.concurrent.{ConcurrentHashMap, LinkedBlockingQueue}
 import std.env
-import std.net.TcpServerSocket
-import std.sync.{Timer, CatchupStyle, AtomicOptionReference, AtomicInt64}
+import std.net.{TcpServerSocket, SocketAddress}
+import std.sync.{Timer, CatchupStyle}
 import fountain::f_base.ZERO_TIMER
 import fountain::f_concurrent.*
 import fountain::f_data.*
@@ -26,13 +26,15 @@ import fountain::f_log.*
 import fountain::f_protocol.default.*
 import fountain::f_net.*
 
+private class PingCounter{
+    PingCounter(var id: MessageID, var count: Int64){}
+}
 public class Server<T> <: Resource where T <: DataFields<T> {
     private static let log = LoggerFactory.getLogger('fountain::f_net.server.Server')
     private let buffers = LinkedBlockingQueue<SocketBuffer>()
     private var checkTimer: Timer = ZERO_TIMER
     private let executors: Executors<Message>
-    private let checkerId = AtomicOptionReference<MessageID>()
-    private let unavailableCheckedCount = AtomicInt64(0)
+    private let checkerId = ConcurrentHashMap<SocketAddress, PingCounter>()
     internal Server(checkDuration!: Duration, checker!: () -> ?Message, executors!: Int64 = 200,
         private let bufferQueueSize!: Int64 = 1024, private let unavailableChecked!: Int64 = 3,
         private let limiter!: RateLimiter<Unit> = UnlimitedRateLimiter<Unit>(),
@@ -50,11 +52,16 @@ public class Server<T> <: Resource where T <: DataFields<T> {
                     spawn {
                         let available = try {
                             if(let Some(m) <- checker()){
-                                if(!checkerId.compareAndSwap(None, m.id)){
-                                    unavailableCheckedCount.fetchAdd(1)
-                                    checkerId.store(m.id)
+                                let counter = checkerId.entryView(buffer.remoteAddress){view => 
+                                    if(let Some(c) <- view.value){
+                                        c.id = m.id
+                                        c.count++
+                                    }else{
+                                        let c = PingCounter(m.id, 1)
+                                        view.value = c
+                                    }
                                 }
-                                if(unavailableCheckedCount.load() > unavailableChecked){
+                                if(let Some(c) <- counter && c.count > unavailableChecked){
                                     false
                                 }else{
                                     buffer.transfer(m)
@@ -120,9 +127,8 @@ public class Server<T> <: Resource where T <: DataFields<T> {
                     try{
                         let m = try {
                             let req = Message.decode<T>(buffer)
-                            if(let Some(id) <- checkerId.load() && id == req.id && req.command == Command.ACK){
-                                checkerId.store(None)
-                                unavailableCheckedCount.store(0)
+                            let remoteAddress = socket.remoteAddress
+                            if(let Some(c) <- checkerId.remove(remoteAddress) && c.id == req.id && req.command == Command.ACK){
                                 continue
                             }else if (let Command.PING(_) <- req.command){
                                 buffer.transfer(Message.ack(req.id))

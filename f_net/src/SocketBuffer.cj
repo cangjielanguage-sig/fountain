@@ -92,7 +92,7 @@ public class SocketBuffer <: IOStream & Resource {
             isStopped() && socket.isClosed()
         }
     }
-    public prop removeAddress: SocketAddress {
+    public prop remoteAddress: SocketAddress {
         get(){
             socket.remoteAddress
         }
