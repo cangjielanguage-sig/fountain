@@ -17,8 +17,11 @@ package fountain::f_rpc.base
 
 protected import fountain::f_base.*
 protected import fountain::f_config.*
-protected import fountain::f_data.*
 
 internal import fountain::f_io.ByteBuffer
 
+public import std.reflect.*
+public import fountain::f_bean.*
+public import fountain::f_data.*
+public import fountain::f_data
 public const UNSUPPORTED_COMMAND = 'UnsupportedCommand'

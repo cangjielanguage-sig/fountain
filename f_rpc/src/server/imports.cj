@@ -16,4 +16,4 @@ limitations under the License.
 package fountain::f_rpc.server
 
 internal import fountain::f_concurrent.ConcurrentHashSet
-internal import fountain::f_rpc.base.*
+public import fountain::f_rpc.base.*

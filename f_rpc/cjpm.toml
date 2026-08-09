@@ -16,6 +16,7 @@
 [dependencies]
   "fountain::f_app" = {path = "../f_app"}
   "fountain::f_base" = {path = "../f_base"}
+  "fountain::f_bean" = {path = "../f_bean"}
   "fountain::f_codec" = {path = "../f_codec"}
   "fountain::f_collection" = {path = "../f_collection"}
   "fountain::f_concurrent" = {path = "../f_concurrent"}

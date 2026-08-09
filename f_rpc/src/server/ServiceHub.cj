@@ -16,12 +16,26 @@ limitations under the License.
 package fountain::f_rpc.server
 
 import std.collection.concurrent.ConcurrentHashMap
+import std.env
+import std.fs.File
+import std.reflect.*
 
 public struct ServiceHub {
     private static let hub = ConcurrentHashMap<ServiceMeta, (Array<Data>) -> Data>()
 
-    public static func register(meta: ServiceMeta, fn: (Array<Data>) -> Data): Unit {
-        hub[meta] = fn
+    public static func register<T>(funcName: String, argTypes: Array<TypeInfo>, fn: (String, Array<Data>) -> Data): Unit{
+        let classInfo = ClassTypeInfo.of<T>()
+        let typeInfo = classInfo.qualifiedName
+        let name = if(let Some(annotation) <- classInfo.findAnnotation<BeanMeta>()){
+            annotation.name
+        }else{
+            ''
+        }
+        let argTypeNames = Array<String>(argTypes.size){i => argTypes[i].qualifiedName}
+        let meta = ServiceMeta(extractVersion(), name, typeInfo, funcName, argTypeNames)
+        hub[meta] = {args => 
+            fn(name, args)
+        }
     }
     internal static func call(message: RPCMessage): Data {
         hub[message.meta](message.params)
@@ -31,5 +45,28 @@ public struct ServiceHub {
             let itr = hub.iterator().map{e => e[0]}
             Array<ServiceMeta>(hub.size){_ => itr.next().getOrThrow()}
         }
+    }
+    private static func extractVersion(): String {
+        let cjpm = 'cjpm.toml' |> env.getWorkingDirectory().join |> File.readFrom |> String.fromUtf8
+        for(line in cjpm.lines()){
+            let l = line.replace(' ', '').replace('\t', '')
+            if(l.startsWith('version=')){
+                return l['version='.size ..].trimAscii()
+            }
+        }
+        throw RPCVersionException('There is no version in cjpm.toml which is in ${env.getWorkingDirectory()}')
+    }
+}
+public class RPCVersionException <: BaseException {
+    public init() {}
+
+    public init(message: String) {
+        super(message)
+    }
+    public init(caused: Exception) {
+        super(caused)
+    }
+    public init(message: String, caused: Exception) {
+        super(message, caused)
     }
 }
