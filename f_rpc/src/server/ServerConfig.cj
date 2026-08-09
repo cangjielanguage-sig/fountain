@@ -22,6 +22,7 @@ internal class ServerConfig {
     public static const RPC_SERVER_BUFFER_QUEUE_SIZE = RPC_SERVER_PREFIX + '_bufferQueueSize'
     public static const RPC_SERVER_CONNECTION_CHECK_DURATION = RPC_SERVER_PREFIX + '_connectionCheckDuration'
     public static const RPC_SERVER_BASE_ADDRESSES = RPC_SERVER_PREFIX + '_baseAddresses'
+    public static const RPC_SERVER_UNAVAILABLE_CHECKED = RPC_SERVER_PREFIX + '_unavailableChecked'
 
     public static const RPC_SERVER_RATE_LIMITER_NAME = RPC_SERVER_PREFIX + '_rateLimiterName'
     public static const RPC_SERVER_RATE_LIMITER_MAX_TOKENS = RPC_SERVER_PREFIX + '_maxTokens'
@@ -59,6 +60,11 @@ internal class ServerConfig {
             Config.getStringArray(RPC_SERVER_BASE_ADDRESSES)
         }
     }
+    internal static prop unavailableChecked: Int64 {
+        get(){
+            Config.getValue<Int64>(RPC_SERVER_UNAVAILABLE_CHECKED) ?? 3
+        }
+    }
     internal static func rateLimiter(): RateLimiter<Unit> {
         if(let Some(l) <- Config.getString(RPC_SERVER_RATE_LIMITER_NAME)){
             match(l){
@@ -90,12 +96,3 @@ internal class ServerConfig {
         }
     }
 }
-/*
-    public func anyMomentRateLimiter(maxTokens!: Int64, timeout!: Duration): This 
-    public func leakingBucketRateLimiter(timeout!: Duration,
-        maxWaitings!: Int64,
-        leakingPerDuration!: Int64,
-        leakingDuration!: Duration): This 
-    public func slidingWindowRateLimiter(window!: Duration, timeout!: Duration, limit!: Int64): This 
-    public func tokenBucketRateLimiter(tokens!: Int64, timeout!: Duration, populationPeriod!: Duration): This 
-    public func defaultResponse(resp: (MessageID) -> ?Message): This 

@@ -24,7 +24,9 @@ class Server {
         let qsize = ServerConfig.bufferQueueSize
         let port = ServerConfig.port
         let checkDuration = ServerConfig.connectionCheckDuration
-        let server = Server<Array<Byte>>(queueSize: qsize, bindAt: port, checkDuration: checkDuration, checker: checker,
+        let unavailableChecked = ServerConfig.unavailableChecked
+        let server = Server<Array<Byte>>(queueSize: qsize, bindAt: port, checkDuration: checkDuration, 
+            checker: checker, unavailableChecked: unavailableChecked,
             defaultResp: {id => error(id, OVERFEEDING)}, limiter: rateLimiter()
         )
         for(address in ServerConfig.baseAddresses){
