@@ -30,4 +30,3 @@
   "fountain::f_protocol" = {path = "../f_protocol"}
   "fountain::f_store" = {path = "../f_store"}
   "fountain::f_util" = {path = "../f_util"}
-  "fountain::fleet" = {path = "../fleet"}

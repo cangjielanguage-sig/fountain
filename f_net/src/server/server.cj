@@ -19,6 +19,7 @@ import std.collection.concurrent.LinkedBlockingQueue
 import std.env
 import std.net.TcpServerSocket
 import std.sync.{Timer, CatchupStyle}
+import fountain::f_concurrent.*
 import fountain::f_data.*
 import fountain::f_log.*
 import fountain::f_protocol.default.*
@@ -28,10 +29,14 @@ public struct Server<T> <: Resource where T <: DataFields<T> {
     private static let log = LoggerFactory.getLogger('fountain::f_net.server.Server')
     private let buffers = LinkedBlockingQueue<SocketBuffer>()
     private let checkTimer: Timer
-
-    internal Server(checkDuration!: Duration, checker!: () -> ?Message, private let queueSize!: Int64 = 1024,
+    private let executors: Executors<Message>
+    internal Server(checkDuration!: Duration, checker!: () -> ?Message, executors!: Int64 = 200,
+        private let bufferQueueSize!: Int64 = 1024,
+        private let limiter!: RateLimiter<Unit> = UnlimitedRateLimiter<Unit>(),
+        private let defaultResp!: (MessageID) -> ?Message = {_ => None},
         private let server!: TcpServerSocket, private let params!: SocketParams) {
         let buffers = this.buffers
+        this.executors = Executors<Message>(executors: executors, maxQueueSize: 1)
         let checkTimer = Timer.repeat(
             checkDuration,
             checkDuration,
@@ -76,29 +81,32 @@ public struct Server<T> <: Resource where T <: DataFields<T> {
         }
     }
     /**
-     * @param queueSize 数据传输任务队列
+     * @param bufferQueueSize 数据传输任务队列
      * @param bindAt    绑定的端口号
      * @param checkDuration tcp连接有效性检查周期
      * @param checker   tcp连接有效性检查函数，务必使用server.transfer(socketBuffer, id, message, timeout)
      */
-    public init(queueSize!: Int64 = 1024, bindAt!: UInt16, checkDuration!: Duration, checker!: () -> ?Message) {
-        this(queueSize: queueSize, checkDuration: checkDuration, checker: checker,
+    public init(bufferQueueSize!: Int64 = 1024, bindAt!: UInt16, checkDuration!: Duration, executors!: Int64 = 200, 
+                defaultResp!: (MessageID) -> ?Message = {_=> None},
+                limiter!: RateLimiter<Unit> = UnlimitedRateLimiter<Unit>(),
+                checker!: () -> ?Message) {
+        this(bufferQueueSize: bufferQueueSize, checkDuration: checkDuration, checker: checker, executors: executors, 
             server: newServerSocket(bindAt), params: SocketParams())
     }
-    public static func build(queueSize!: Int64 = 1024, checkDuration!: Duration, checker!: () -> ?Message, bindAt!: UInt16): ServerBuilder<T> {
-        ServerBuilder<T>(queueSize, checkDuration, checker, bindAt)
+    public static func build(bufferQueueSize!: Int64 = 1024, checkDuration!: Duration, checker!: () -> ?Message, bindAt!: UInt16): ServerBuilder<T> {
+        ServerBuilder<T>(bufferQueueSize, checkDuration, checker, bindAt)
     }
     public func start(executor: (SocketBuffer, Message) -> ?Message): Unit {
         while (let socket <- server.accept()) {
             params.populate(socket)
-            let buffer = SocketBuffer(queueSize, socket)
+            let buffer = SocketBuffer(bufferQueueSize, socket)
             this.buffers.add(buffer)
-            spawn {
+            spawn{
                 while (!socket.isClosed()) {
                     try{
                         let m = try {
                             let req = Message.decode<T>(buffer)
-                            let msg = executor(buffer, req)
+                            let msg = executors.call(limiter){executor(buffer, req)}.get(defaultResp(req.id))
                             if(let Some(m) <- msg){
                                 m
                             }else{
@@ -148,12 +156,16 @@ public struct Server<T> <: Resource where T <: DataFields<T> {
 public class ServerBuilder<T> where T <: DataFields<T> {
     private let server: TcpServerSocket
     private let params = SocketParams()
-    ServerBuilder(private let queueSize: Int64, private let checkDuration: Duration,
+    private var executors_ = 200
+    private var rateLimiter: RateLimiter<Unit> = UnlimitedRateLimiter<Unit>()
+    private var defaultResp: (MessageID) -> ?Message = {_ => None}
+    ServerBuilder(private let bufferQueueSize: Int64, private let checkDuration: Duration,
         private let checker: () -> ?Message, private let bindAt: UInt16) {
         server = newServerSocket(bindAt)
     }
     public func build(): Server<T> {
-        Server<T>(queueSize: queueSize, checkDuration: checkDuration, checker: checker, server: server, params: params.copy())
+        Server<T>(bufferQueueSize: bufferQueueSize, checkDuration: checkDuration, checker: checker, 
+                  executors: executors_, defaultResp: defaultResp, limiter: rateLimiter, server: server, params: params.copy())
     }
     public func backlogSize(size: Int64): This {
         server.backlogSize = size
@@ -218,6 +230,33 @@ public class ServerBuilder<T> where T <: DataFields<T> {
     }
     public func socketWriteTimeout(writeTimeout: ?Duration): This {
         params.writeTimeout(writeTimeout)
+        this
+    }
+    public func executors(executors: Int64): This {
+        executors_ = executors
+        this
+    }
+    public func anyMomentRateLimiter(maxTokens!: Int64, timeout!: Duration): This {
+        this.rateLimiter = AnyMomentRateLimiter<Unit>(maxTokens: maxTokens, timeout: timeout)
+        this
+    }
+    public func leakingBucketRateLimiter(timeout!: Duration, maxWaitings!: Int64, leakingPerDuration!: Int64, leakingDuration!: Duration): This {
+            this.rateLimiter = LeakingBucketRateLimiter<Unit>(timeout: timeout,
+            maxWaitings: maxWaitings,
+            leakingPerDuration: leakingPerDuration,
+            leakingDuration: leakingDuration)
+        this
+    }
+    public func slidingWindowRateLimiter(window!: Duration, timeout!: Duration, limit!: Int64): This {
+        this.rateLimiter = SlidingWindowRateLimiter<Unit>(window: window, timeout: timeout, limit: limit)
+        this
+    }
+    public func tokenBucketRateLimiter(tokens!: Int64, timeout!: Duration, populationPeriod!: Duration): This {
+        this.rateLimiter = TokenBucketRateLimiter<Unit>(tokens: tokens, timeout: timeout, populationPeriod: populationPeriod)
+        this
+    }
+    public func defaultResponse(resp: (MessageID) -> ?Message): This {
+        defaultResp = resp
         this
     }
 }

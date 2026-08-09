@@ -24,9 +24,28 @@ class Server {
         let qsize = ServerConfig.bufferQueueSize
         let port = ServerConfig.port
         let checkDuration = ServerConfig.connectionCheckDuration
-        let server = Server<Array<Byte>>(queueSize: qsize, bindAt: port, checkDuration: checkDuration, checker: checker)
-        spawn{
-            //todo to register
+        let server = Server<Array<Byte>>(queueSize: qsize, bindAt: port, checkDuration: checkDuration, checker: checker,
+            defaultResp: {id => error(id, OVERFEEDING)}, limiter: rateLimiter()
+        )
+        for(address in ServerConfig.baseAddresses){
+            spawn{
+                let client: Client<UInt16>
+                while(true){
+                    try{
+                        client = Client<UInt16>.builder(address: address, checkDuration: Duration.second, checker: {=> Message.pint()}).build()
+                        break
+                    }catch(_){}
+                }
+                let message = Message.register(data: port)
+                try{
+                    while(true){
+                        client.transfer(message)
+                        return
+                    }
+                }catch(_){}finally{
+                    client.close()
+                }
+            }
         }
         server.start(executor)
     }

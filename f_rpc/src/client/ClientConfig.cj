@@ -15,10 +15,13 @@ limitations under the License.
 */
 package fountain::f_rpc.client
 
-import std.sync.AtomicReference
-import std.collection.ArrayList
+class ClientConfig {
+    static const RPC_CLIENT_PREFIX = 'rpcClient'
+    static const RPC_SERVER_ADDRESS = RPC_CLIENT_PREFIX + '_serverAddress'
 
-public abstract class AbstractRPCClient {
-    private static clients = AtomicReference<ArrayList<Client<RPCMessage>>>(ArrayList<Client<RPCMessage>>())
-    protected AbstractRPCClient(protected let serviceName: String) {}
+    internal static prop serverAddresses: Array<String> {
+        get(){
+            Config.getStringArray(RPC_SERVER_ADDRESS)
+        }
+    }
 }

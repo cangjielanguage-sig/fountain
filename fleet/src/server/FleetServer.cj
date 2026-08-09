@@ -20,7 +20,7 @@ internal struct FleetServer {
         let qsize = FleetServerConfig.bufferQueueSize
         let port = FleetServerConfig.port
         let checkDuration = FleetServerConfig.connectionCheckDuration
-        let server = Server<Array<Byte>>(queueSize: qsize, bindAt: port, checkDuration: checkDuration, checker: checker)
+        let server = Server<Array<Byte>>(bufferQueueSize: qsize, bindAt: port, checkDuration: checkDuration, checker: checker)
         server.start(executor)
     }
     private static func checker(): ?Message {

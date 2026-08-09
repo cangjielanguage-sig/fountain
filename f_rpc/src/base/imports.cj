@@ -25,3 +25,4 @@ public import fountain::f_bean.*
 public import fountain::f_data.*
 public import fountain::f_data
 public const UNSUPPORTED_COMMAND = 'UnsupportedCommand'
+public const OVERFEEDING = 'Client is overfeeding'
