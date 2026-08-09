@@ -17,7 +17,7 @@ package fountain::f_net.client
 
 import std.collection.concurrent.ConcurrentHashMap
 import std.env
-import std.net.IPAddress
+import std.net.IPSocketAddress
 internal import std.sync.{Timer, CatchupStyle, AtomicInt64, Mutex, AtomicReference}
 internal import fountain::f_data.*
 internal import fountain::f_log.*
