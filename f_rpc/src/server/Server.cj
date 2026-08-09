@@ -25,6 +25,9 @@ class Server {
         let port = ServerConfig.port
         let checkDuration = ServerConfig.connectionCheckDuration
         let server = Server<Array<Byte>>(queueSize: qsize, bindAt: port, checkDuration: checkDuration, checker: checker)
+        spawn{
+            //todo to register
+        }
         server.start(executor)
     }
     private static func checker(): ?Message {

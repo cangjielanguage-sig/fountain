@@ -17,6 +17,7 @@ package fountain::f_net.client
 
 import std.collection.concurrent.ConcurrentHashMap
 import std.env
+import std.net.IPAddress
 internal import std.sync.{Timer, CatchupStyle, AtomicInt64, Mutex, AtomicReference}
 internal import fountain::f_data.*
 internal import fountain::f_log.*
@@ -272,7 +273,7 @@ public class SocketBuilder<T> where T <: DataFields<T> {
             Array<TcpSocket>(socketCount) {_ => newSocket()})
     }
     func newSocket() {
-        let s = TcpSocket(host, port)
+        let s = TcpSocket(address)
         params.populate(s)
         s.connect()
         s

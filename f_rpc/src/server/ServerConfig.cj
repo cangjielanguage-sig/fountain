@@ -21,6 +21,7 @@ internal class ServerConfig {
     public static const RPC_SERVER_PORT = RPC_SERVER_PREFIX + '_port'
     public static const RPC_SERVER_BUFFER_QUEUE_SIZE = RPC_SERVER_PREFIX + '_bufferQueueSize'
     public static const RPC_SERVER_CONNECTION_CHECK_DURATION = RPC_SERVER_PREFIX + '_connectionCheckDuration'
+    public static const RPC_SERVER_BASE_HOSTS = RPC_SERVER_PREFIX + '_baseHosts'
 
     internal static prop port: Unit16 {
         get(){
@@ -35,6 +36,11 @@ internal class ServerConfig {
     internal static prop connectionCheckDuration: Int64 {
         get(){
             Config.getValue<Int64>(RPC_SERVER_CONNECTION_CHECK_DURATION) ?? 1000
+        }
+    }
+    internal static prop baseHosts: Array<String> {
+        get(){
+            Config.getStringArray(RPC_SERVER_BASE_HOSTS)
         }
     }
 }
