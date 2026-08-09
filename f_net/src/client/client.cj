@@ -147,6 +147,11 @@ public class Client<T> <: Resource where T <: DataFields<T> {
         SocketBuilder<T>(queueSize: queueSize, socketCount: socketCount, host: host, port: port,
             checkDuration: checkDuration, checker: checker)
     }
+    public static func builder(queueSize!: Int64 = 1024, socketCount!: Int64 = 1, address!: (String, UInt16),
+        checkDuration!: Duration, checker!: () -> ?Message): SocketBuilder<T> {
+        SocketBuilder<T>(queueSize: queueSize, socketCount: socketCount, address: '${address[0]}:${address[1]}',
+            checkDuration: checkDuration, checker: checker)
+    }
     public static func builder(queueSize!: Int64 = 1024, socketCount!: Int64 = 1, address!: String,
         checkDuration!: Duration, checker!: () -> ?Message): SocketBuilder<T> {
         SocketBuilder<T>(queueSize: queueSize, socketCount: socketCount, address: address,

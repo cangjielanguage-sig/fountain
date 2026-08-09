@@ -17,7 +17,6 @@ package fountain::f_concurrent
 
 import std.collection.TreeMap
 import std.math.Number as StdNumber
-import std.sync.*
 import stdx.crypto.crypto.SecureRandom
 import fountain::f_base.Addable
 import fountain::f_random.*
@@ -60,7 +59,6 @@ public class Float64Weight <: RandomWeight<Float64>{
     }
 }
 public class LoadBalance<W, D, R> where W <: Addable<W> & Comparable<W> {
-    private let mutex = Mutex()
     private let tree = TreeMap<W, (D) -> R>()
     public LoadBalance(private let min: W, private let algo: LoadBalanceAlgo<W>){}
     public func add(weight: W, fn: (D) -> R): Unit {
@@ -68,18 +66,12 @@ public class LoadBalance<W, D, R> where W <: Addable<W> & Comparable<W> {
         let new = max + weight
         tree[new] = fn
     }
-    public func add(all!: Collection<(W, (D) -> R)>): Unit {
+    public func add(all!: Iterable<(W, (D) -> R)>): Unit {
         for((w, fn) in all){
             add(w, fn)
         }
     }
-    public func add(all!: Array<(W, (D) -> R)>): Unit {
-        let c: Collection<(W, (D) -> R)> = all
-        add(all: c)
-    }
     public func call(data: D): R {
-        synchronized(mutex){
-            tree.forward(algo.next(), inclusive: true).next()
-        }.getOrThrow()[1](data)
+        tree.forward(algo.next(), inclusive: true).next().getOrThrow()[1](data)
     }
 }
