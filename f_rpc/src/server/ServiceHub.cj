@@ -23,7 +23,7 @@ import std.reflect.*
 public struct ServiceHub {
     private static let hub = ConcurrentHashMap<ServiceMeta, (Array<Data>) -> Data>()
 
-    public static func register<T>(funcName: String, argTypes: Array<TypeInfo>, fn: (String, Array<Data>) -> Data): Unit{
+    public static func register<T>(funcName: String, argTypes: Array<TypeInfo>, fn: (String, Array<Data>) -> Data): Unit where T <: Object {
         let classInfo = ClassTypeInfo.of<T>()
         let typeInfo = classInfo.qualifiedName
         let name = if(let Some(annotation) <- classInfo.findAnnotation<BeanMeta>()){

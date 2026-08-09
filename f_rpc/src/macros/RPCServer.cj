@@ -58,7 +58,7 @@ private func extractFuncs(decl: ClassDecl): Tokens {
                     }.$(fname)($argNames)
                 }
             )
-            funcs += quote(ServiceHub.register($fname, $argTypes, $closure))
+            funcs += quote(ServiceHub.register<$klass>($fname, $argTypes, $closure))
         }
     }
     funcs
