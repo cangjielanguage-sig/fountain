@@ -18,26 +18,29 @@ package fountain::f_net.server
 import std.collection.concurrent.LinkedBlockingQueue
 import std.env
 import std.net.TcpServerSocket
-import std.sync.{Timer, CatchupStyle}
+import std.sync.{Timer, CatchupStyle, AtomicOptionReference, AtomicInt64}
+import fountain::f_base.ZERO_TIMER
 import fountain::f_concurrent.*
 import fountain::f_data.*
 import fountain::f_log.*
 import fountain::f_protocol.default.*
 import fountain::f_net.*
 
-public struct Server<T> <: Resource where T <: DataFields<T> {
+public class Server<T> <: Resource where T <: DataFields<T> {
     private static let log = LoggerFactory.getLogger('fountain::f_net.server.Server')
     private let buffers = LinkedBlockingQueue<SocketBuffer>()
-    private let checkTimer: Timer
+    private var checkTimer: Timer = ZERO_TIMER
     private let executors: Executors<Message>
+    private let checkerId = AtomicOptionReference<MessageID>()
+    private let unavailableCheckedCount = AtomicInt64(0)
     internal Server(checkDuration!: Duration, checker!: () -> ?Message, executors!: Int64 = 200,
-        private let bufferQueueSize!: Int64 = 1024,
+        private let bufferQueueSize!: Int64 = 1024, private let unavailableChecked!: Int64 = 3,
         private let limiter!: RateLimiter<Unit> = UnlimitedRateLimiter<Unit>(),
         private let defaultResp!: (MessageID) -> ?Message = {_ => None},
         private let server!: TcpServerSocket, private let params!: SocketParams) {
         let buffers = this.buffers
         this.executors = Executors<Message>(executors: executors, maxQueueSize: 1)
-        let checkTimer = Timer.repeat(
+        this.checkTimer = Timer.repeat(
             checkDuration,
             checkDuration,
             {=>
@@ -47,8 +50,16 @@ public struct Server<T> <: Resource where T <: DataFields<T> {
                     spawn {
                         let available = try {
                             if(let Some(m) <- checker()){
-                                buffer.transfer(m)
-                                true
+                                if(!checkerId.compareAndSwap(None, m.id)){
+                                    unavailableCheckedCount.fetchAdd(1)
+                                    checkerId.store(m.id)
+                                }
+                                if(unavailableCheckedCount.load() > unavailableChecked){
+                                    false
+                                }else{
+                                    buffer.transfer(m)
+                                    true
+                                }
                             }else{
                                 false
                             }
@@ -73,7 +84,6 @@ public struct Server<T> <: Resource where T <: DataFields<T> {
             },
             style: Burst
         )
-        this.checkTimer = checkTimer
         env.atExit{
             if(!hasClosed(server)){
                 doClose(server, checkTimer, buffers)
@@ -89,10 +99,12 @@ public struct Server<T> <: Resource where T <: DataFields<T> {
      * @param checker   tcp连接有效性检查函数，务必使用server.transfer(socketBuffer, id, message, timeout)
      */
     public init(bufferQueueSize!: Int64 = 1024, bindAt!: UInt16, checkDuration!: Duration, executors!: Int64 = 200, 
+                unavailableChecked!: Int64 = 3,
                 defaultResp!: (MessageID) -> ?Message = {_=> None},
                 limiter!: RateLimiter<Unit> = UnlimitedRateLimiter<Unit>(),
                 checker!: () -> ?Message) {
         this(bufferQueueSize: bufferQueueSize, checkDuration: checkDuration, checker: checker, executors: executors, 
+             unavailableChecked: unavailableChecked,
             server: newServerSocket(bindAt), params: SocketParams())
     }
     public static func builder(bufferQueueSize!: Int64 = 1024, checkDuration!: Duration, checker!: () -> ?Message, bindAt!: UInt16): ServerBuilder<T> {
@@ -108,6 +120,14 @@ public struct Server<T> <: Resource where T <: DataFields<T> {
                     try{
                         let m = try {
                             let req = Message.decode<T>(buffer)
+                            if(let Some(id) <- checkerId.load() && id == req.id && req.command == Command.ACK){
+                                checkerId.store(None)
+                                unavailableCheckedCount.store(0)
+                                continue
+                            }else if (let Command.PING(_) <- req.command){
+                                buffer.transfer(Message.ack(req.id))
+                                continue
+                            }
                             let msg = executors.call(limiter){executor(buffer, req)}.get(defaultResp(req.id))
                             if(let Some(m) <- msg){
                                 m
@@ -161,12 +181,14 @@ public class ServerBuilder<T> where T <: DataFields<T> {
     private var executors_ = 200
     private var rateLimiter: RateLimiter<Unit> = UnlimitedRateLimiter<Unit>()
     private var defaultResp: (MessageID) -> ?Message = {_ => None}
+    private var unavailableChecked_ = 3
     ServerBuilder(private let bufferQueueSize: Int64, private let checkDuration: Duration,
         private let checker: () -> ?Message, private let bindAt: UInt16) {
         server = newServerSocket(bindAt)
     }
     public func build(): Server<T> {
         Server<T>(bufferQueueSize: bufferQueueSize, checkDuration: checkDuration, checker: checker, 
+                  unavailableChecked: unavailableChecked_,
                   executors: executors_, defaultResp: defaultResp, limiter: rateLimiter, server: server, params: params.copy())
     }
     public func backlogSize(size: Int64): This {
@@ -236,6 +258,10 @@ public class ServerBuilder<T> where T <: DataFields<T> {
     }
     public func executors(executors: Int64): This {
         executors_ = executors
+        this
+    }
+    public func unavailableChecked(unavailableChecked: Int64): This {
+        unavailableChecked_ = unavailableChecked
         this
     }
     public func anyMomentRateLimiter(maxTokens!: Int64, timeout!: Duration): This {

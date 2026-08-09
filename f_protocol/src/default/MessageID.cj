@@ -15,7 +15,7 @@ limitations under the License.
 */
 package fountain::f_protocol.default
 
-public struct MessageID <: Hashable & Equatable<MessageID> & ToString {
+public class MessageID <: Hashable & Equatable<MessageID> & ToString {
     public static let pidgen: ProcessID = CurrentProcessID.instance
     private let hash: Int64
     public MessageID(

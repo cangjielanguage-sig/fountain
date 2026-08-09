@@ -74,7 +74,9 @@ public class Client<T> <: Resource where T <: DataFields<T> {
                                     try {
                                         let message = Message.decode<T>(buffer)
                                         let id = message.id
-                                        if (let Some(fut) <- futures.remove(id)) {
+                                        if(let Command.PING(_) <- message.command){
+                                            transfer(Message.ack(id))
+                                        }else if (let Some(fut) <- futures.remove(id)) {
                                             var f = fut
                                             f.set(message)
                                         }
