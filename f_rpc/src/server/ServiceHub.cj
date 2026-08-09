@@ -37,10 +37,12 @@ public struct ServiceHub {
         q.add(classInfo)
         while(let Some(ti) <- q.remove()){
             let typeInfo = ti.qualifiedName
-            let meta = ServiceMeta(version, name, typeInfo, funcName, argTypeNames)
-            hub.addIfAbsent(meta, {args => 
-                fn(name, args)
-            })
+            if(ti is InterfaceTypeInfo){
+                let meta = ServiceMeta(version, name, typeInfo, funcName, argTypeNames)
+                hub.addIfAbsent(meta, {args => 
+                    fn(name, args)
+                })
+            }
             if(let cti: ClassTypeInfo <- ti && cti != ClassTypeInfo.of<Object>() && let sti <- cti.superClass && sti != ClassTypeInfo.of<Object>()){
                 q.add(sti)
             }
