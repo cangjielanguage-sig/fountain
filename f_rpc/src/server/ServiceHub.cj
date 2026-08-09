@@ -15,6 +15,7 @@ limitations under the License.
 */
 package fountain::f_rpc.server
 
+import std.collection.ArrayQueue
 import std.collection.concurrent.ConcurrentHashMap
 import std.env
 import std.fs.File
@@ -25,16 +26,27 @@ public struct ServiceHub {
 
     public static func register<T>(funcName: String, argTypes: Array<TypeInfo>, fn: (String, Array<Data>) -> Data): Unit where T <: Object {
         let classInfo = ClassTypeInfo.of<T>()
-        let typeInfo = classInfo.qualifiedName
+        let version = extractVersion()
         let name = if(let Some(annotation) <- classInfo.findAnnotation<BeanMeta>()){
             annotation.name
         }else{
             ''
         }
         let argTypeNames = Array<String>(argTypes.size){i => argTypes[i].qualifiedName}
-        let meta = ServiceMeta(extractVersion(), name, typeInfo, funcName, argTypeNames)
-        hub[meta] = {args => 
-            fn(name, args)
+        let q = ArrayQueue<TypeInfo>()
+        q.add(classInfo)
+        while(let Some(ti) <- q.remove()){
+            let typeInfo = ti.qualifiedName
+            let meta = ServiceMeta(version, name, typeInfo, funcName, argTypeNames)
+            hub.addIfAbsent(meta, {args => 
+                fn(name, args)
+            })
+            if(let cti: ClassTypeInfo <- ti && cti != ClassTypeInfo.of<Object>() && let sti <- cti.superClass && sti != ClassTypeInfo.of<Object>()){
+                q.add(sti)
+            }
+            for(sti in ti.superInterfaces where sti != TypeInfo.of<Any>() && sti != ti){
+                q.add(sti)
+            }
         }
     }
     internal static func call(message: RPCMessage): Data {
