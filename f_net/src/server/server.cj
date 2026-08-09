@@ -84,6 +84,8 @@ public struct Server<T> <: Resource where T <: DataFields<T> {
      * @param bufferQueueSize 数据传输任务队列
      * @param bindAt    绑定的端口号
      * @param checkDuration tcp连接有效性检查周期
+     * @param executors  线程池大小
+     * @param limiter   限流器
      * @param checker   tcp连接有效性检查函数，务必使用server.transfer(socketBuffer, id, message, timeout)
      */
     public init(bufferQueueSize!: Int64 = 1024, bindAt!: UInt16, checkDuration!: Duration, executors!: Int64 = 200, 
@@ -93,7 +95,7 @@ public struct Server<T> <: Resource where T <: DataFields<T> {
         this(bufferQueueSize: bufferQueueSize, checkDuration: checkDuration, checker: checker, executors: executors, 
             server: newServerSocket(bindAt), params: SocketParams())
     }
-    public static func build(bufferQueueSize!: Int64 = 1024, checkDuration!: Duration, checker!: () -> ?Message, bindAt!: UInt16): ServerBuilder<T> {
+    public static func builder(bufferQueueSize!: Int64 = 1024, checkDuration!: Duration, checker!: () -> ?Message, bindAt!: UInt16): ServerBuilder<T> {
         ServerBuilder<T>(bufferQueueSize, checkDuration, checker, bindAt)
     }
     public func start(executor: (SocketBuffer, Message) -> ?Message): Unit {
