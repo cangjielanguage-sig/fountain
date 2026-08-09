@@ -200,9 +200,23 @@ public class Client<T> <: Resource where T <: DataFields<T> {
 }
 
 public class SocketBuilder<T> where T <: DataFields<T> {
-    SocketBuilder(let queueSize!: Int64 = 1024, private let socketCount!: Int64 = 1, private let host!: String,
-        private let port!: UInt16, private let checkDuration!: Duration,
-        private let checker!: () -> ?Message) {}
+    SocketBuilder(let queueSize!: Int64 = 1024, private let socketCount!: Int64 = 1, private let address!: IPAddress, 
+                  private let checkDuration!: Duration, private let checker!: () -> ?Message){}
+    init(queueSize!: Int64 = 1024, socketCount!: Int64 = 1, 
+        host!: String, port!: UInt16, 
+        checkDuration!: Duration, checker!: () -> ?Message) {
+            this(queueSize: queueSize, 
+                 socketCount: socketCount,
+                 address: '${host}:${port}',
+                 checkDuration: checkDuration, checker: checker)
+    }
+    init(queueSize!: Int64 = 1024, socketCount!: Int64 = 1, address!: String, 
+        checkDuration!: Duration, checker!: () -> ?Message){
+        this(queueSize: queueSize, 
+            socketCount: socketCount,
+            address: IPAddress.tryParse(address).getOrThrow(),
+            checkDuration: checkDuration, checker: checker)
+    }
     private let params = SocketParams()
 
     public func bindToDevice(bindToDevice: ?String): This {

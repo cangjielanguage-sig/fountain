@@ -22,12 +22,8 @@ public struct Fleet {
             let hosts = FleetConfig.hosts
             Array<Client<FleetDataMessage>>(hosts.size) {
                 i =>
-                    let host = hosts[i]
-                    let colon = host.indexOf(':').getOrThrow {FleetClientException("illegal host: ${host}")}
-                    let ip = host[0..colon]
-                    let port = UInt16.parse(host[colon + 1..])
                     Client<FleetDataMessage>
-                        .builder(host: ip, port: port, checkDuration: Duration.second, checker: {=> Message.ping()})
+                        .builder(address: hosts[i], checkDuration: Duration.second, checker: {=> Message.ping()})
                         .build()
             }
     }()
