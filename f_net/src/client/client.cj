@@ -71,8 +71,8 @@ public class Client<T> <: Resource where T <: DataFields<T> {
                     func new() {
                         try {
                             sockets[i] = socketCreator()
-                            buffers[i] = SocketBuffer(queueSize, sockets[i])
-                            let buffer = buffers[i]
+                            let buffer = SocketBuffer(queueSize, sockets[i]) 
+                            buffers[i] = buffer
                             spawn {
                                 while (!buffer.isClosed()) {
                                     var mid = None<MessageID>
