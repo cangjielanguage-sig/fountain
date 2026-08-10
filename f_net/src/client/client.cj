@@ -33,10 +33,11 @@ public class Client<T> <: Resource where T <: DataFields<T> {
     private var checkTimer: Timer = unsafeZeroValue<Timer>()
     private let closed = AtomicInt64(0)
     private let closeLock = Mutex()
-
+    
     Client(queueSize: Int64, 
         let checkDuration: Duration, 
         let checker: () -> ?Message,
+        private let pingTimeout: Duration,
         private let socketCreator: () -> TcpSocket, 
         private let sockets: Array<TcpSocket>) {
         let futures = this.futures
@@ -45,15 +46,17 @@ public class Client<T> <: Resource where T <: DataFields<T> {
                 let buffer = SocketBuffer(queueSize, sockets[i])
                 spawn {
                     while (!buffer.isClosed()) {
+                        var id = None<MessageID>
                         try {
                             let message = Message.decode<T>(buffer)
-                            let id = message.id
-                            if (let Some(fut) <- futures.remove(id)) {
+                            let mid = message.id
+                            id = mid
+                            if (let Some(fut) <- futures.remove(mid)) {
                                 var f = fut
                                 f.set(message)
                             }
                         } catch (e: Exception) {
-                            log.error('Client reader error', e)
+                            log.error('Client reader error; {}', e, id)
                             break
                         }
                     }
@@ -93,7 +96,7 @@ public class Client<T> <: Resource where T <: DataFields<T> {
                     }
                     let buffer = buffers[i]
                     try {
-                        if (let Some(m) <- checker() && let Some(res) <- transfer(m, Duration.millisecond * 10)) {
+                        if (let Some(m) <- checker() && let Some(_) <- transfer(m, pingTimeout)) {
                             //do nothing
                         }else{
                             buffer.close()
@@ -218,6 +221,7 @@ public class Client<T> <: Resource where T <: DataFields<T> {
 }
 
 public class SocketBuilder<T> where T <: DataFields<T> {
+    private var pingTimeout_ = Duration.millisecond * 10
     SocketBuilder(let queueSize!: Int64 = 1024, private let socketCount!: Int64 = 1, private let address!: IPSocketAddress, 
                   private let checkDuration!: Duration, private let checker!: () -> ?Message){}
     init(queueSize!: Int64 = 1024, socketCount!: Int64 = 1, 
@@ -285,8 +289,12 @@ public class SocketBuilder<T> where T <: DataFields<T> {
         params.socketOptionIntNative(level, option, value)
         this
     }
+    public func pingTimeout(timeout: Duration): This {
+        pingTimeout_ = timeout
+        this
+    }
     public func build(): Client<T> {
-        Client<T>(queueSize, checkDuration, checker, this.newSocket,
+        Client<T>(queueSize, checkDuration, checker,  pingTimeout_, this.newSocket,
             Array<TcpSocket>(socketCount) {_ => newSocket()})
     }
     func newSocket() {
