@@ -67,60 +67,60 @@ public class Client<T> <: Resource where T <: DataFields<T> {
         this.buffers = buffers
         checkTimer = Timer.repeat(checkDuration, checkDuration, {
             => for (i in 0..sockets.size) {
-                spawn {
-                    func new() {
-                        try {
-                            sockets[i] = socketCreator()
-                            let buffer = SocketBuffer(queueSize, sockets[i]) 
-                            buffers[i] = buffer
-                            spawn {
-                                while (!buffer.isClosed()) {
-                                    var mid = None<MessageID>
-                                    var cmd = None<Command>
-                                    try {
-                                        let message: Message = Message.decode<T>(buffer)
-                                        let id = message.id
-                                        mid = id
-                                        cmd = message.command
-                                        if(let Command.PING(_) <- message.command){
-                                            transfer(buffer, Message.ack(id))
-                                        }else if (let Some(fut) <- futures.remove(id)) {
-                                            var f = fut
-                                            f.set(message)
-                                        }
-                                    } catch (e: Exception) {
-                                        log.error(e){'Client reader error ${cmd}:${mid}'}
-                                        break
+                func new() {
+                    try {
+                        sockets[i] = socketCreator()
+                        let buffer = SocketBuffer(queueSize, sockets[i]) 
+                        buffers[i] = buffer
+                        spawn {
+                            while (!buffer.isClosed()) {
+                                var mid = None<MessageID>
+                                var cmd = None<Command>
+                                try {
+                                    let message: Message = Message.decode<T>(buffer)
+                                    let id = message.id
+                                    mid = id
+                                    cmd = message.command
+                                    if(let Command.PING(_) <- message.command){
+                                        transfer(buffer, Message.ack(id))
+                                    }else if (let Some(fut) <- futures.remove(id)) {
+                                        var f = fut
+                                        f.set(message)
                                     }
+                                } catch (e: Exception) {
+                                    let mid = mid
+                                    let cmd = cmd
+                                    log.error(e){'Client reader error ${cmd}:${mid}'}
+                                    break
                                 }
                             }
-                        } catch (e: Exception) {
-                            log.error('SocketBuffer.new', e)
-                            throw e
-                        }
-                    }
-                    let buffer = buffers[i]
-                    try {
-                        if (let Some(m) <- checker() && let Some(res) <- transfer(buffer, m).tryGet(pingTimeout) && res.id == m.id && res.command == Command.ACK) {
-                            //do nothing
-                        }else{
-                            buffer.close()
-                            new()
                         }
                     } catch (e: Exception) {
-                        log.error('SocketBuffer.checker', e)
-                        try {
-                            if (!buffer.isClosed()) {
-                                buffer.close()
-                            }
-                        } catch (e: Exception) {
-                            log.error('SocketBuffer.close', e)
+                        log.error('SocketBuffer.new', e)
+                        throw e
+                    }
+                }
+                let buffer = buffers[i]
+                try {
+                    if (let Some(m) <- checker() && let Some(res) <- transfer(buffer, m).tryGet(pingTimeout) && res.id == m.id && res.command == Command.ACK) {
+                        //do nothing
+                    }else{
+                        buffer.close()
+                        new()
+                    }
+                } catch (e: Exception) {
+                    log.error('SocketBuffer.checker', e)
+                    try {
+                        if (!buffer.isClosed()) {
+                            buffer.close()
                         }
-                        try{
-                            new()
-                        }catch(e: Exception){
-                            log.error('SocketBuffer.new', e)
-                        }
+                    } catch (e: Exception) {
+                        log.error('SocketBuffer.close', e)
+                    }
+                    try{
+                        new()
+                    }catch(e: Exception){
+                        log.error('SocketBuffer.new', e)
                     }
                 }
             }
