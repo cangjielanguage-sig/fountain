@@ -56,7 +56,7 @@ public class Client<T> <: Resource where T <: DataFields<T> {
                                 f.set(message)
                             }
                         } catch (e: Exception) {
-                            log.error('Client reader error; {}', e, id)
+                            log.error(e){'Client reader error; ${id}'}
                             break
                         }
                     }
