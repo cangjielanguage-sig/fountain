@@ -56,7 +56,8 @@ public class Client<T> <: Resource where T <: DataFields<T> {
                                 f.set(message)
                             }
                         } catch (e: Exception) {
-                            log.error(e){'Client reader error; ${id}'}
+                            let eid = id
+                            log.error(e){'Client reader error; ${eid}'}
                             break
                         }
                     }
@@ -75,7 +76,7 @@ public class Client<T> <: Resource where T <: DataFields<T> {
                             spawn {
                                 while (!buffer.isClosed()) {
                                     try {
-                                        let message = Message.decode<T>(buffer)
+                                        let message: Message = Message.decode<T>(buffer)
                                         let id = message.id
                                         if(let Command.PING(_) <- message.command){
                                             transfer(Message.ack(id))
