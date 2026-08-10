@@ -96,7 +96,7 @@ public class Client<T> <: Resource where T <: DataFields<T> {
                     }
                     let buffer = buffers[i]
                     try {
-                        if (let Some(m) <- checker() && let Some(_) <- transfer(m, pingTimeout)) {
+                        if (let Some(m) <- checker() && let Some(res) <- transfer(m, pingTimeout) && res.id == m.id && res.command == Command.ACK) {
                             //do nothing
                         }else{
                             buffer.close()
