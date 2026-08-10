@@ -15,5 +15,8 @@ limitations under the License.
 */
 package fountain::f_rpc.server
 
+import fountain::f_rpc.server
 internal import fountain::f_concurrent.ConcurrentHashSet
 public import fountain::f_rpc.base.*
+
+internal let log = LoggerFactory.getLogger('fountain::f_rpc.server')

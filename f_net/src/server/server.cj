@@ -128,13 +128,14 @@ public class Server<T> <: Resource where T <: DataFields<T> {
                         let m = try {
                             let req = Message.decode<T>(buffer)
                             let remoteAddress = socket.remoteAddress
-                            if(let Some(c) <- checkerId.remove(remoteAddress) && c.id == req.id && req.command == Command.ACK){
+                            if(let Some(c) <- checkerId.get(remoteAddress) && c.id == req.id && req.command == Command.ACK){
+                                checkerId.remove(remoteAddress)
                                 continue
                             }else if (let Command.PING(_) <- req.command){
                                 buffer.transfer(Message.ack(req.id))
                                 continue
                             }
-                            let msg = executors.call(limiter){executor(buffer, req)}.get(defaultResp(req.id))
+                            let msg = executors.call(limiter){executor(buffer, req)}.get{defaultResp(req.id)}
                             if(let Some(m) <- msg){
                                 m
                             }else{

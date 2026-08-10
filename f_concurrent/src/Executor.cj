@@ -122,6 +122,9 @@ public class ExecutorFuture<T> {
         get(None<T>).getOrThrow()
     }
     public func get(default: ?T): ?T {
+        get{default}
+    }
+    public func get(default: () -> ?T): ?T {
         synchronized(mutex){
             while(!finished){
                 if(let Some(r) <- result){
@@ -130,7 +133,7 @@ public class ExecutorFuture<T> {
                 condition.wait()
             }
         }
-        default
+        default()
     }
     public func tryGet(): ?T {
         result

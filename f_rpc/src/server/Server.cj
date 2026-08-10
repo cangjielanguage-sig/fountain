@@ -17,6 +17,7 @@ package fountain::f_rpc.server
 
 private let serviceHosts = ConcurrentHashSet<String>()
 private func error(id: MessageID, message: String): Message {
+    log.warn('error: ${id}; ${message}')
     Message.error(id, data: message)
 }
 class Server {
@@ -57,7 +58,6 @@ class Server {
     /**
      * REGISTER 向其它服务节点注册自身
      * ACK
-     * PING 向其它服务节点发送心跳
      * SUBSCRIBE 获取服务节点能够提供的服务
      * CONSUME 向服务节点发起RPC调用
      * RESP 服务节点返回调用结果或当前服务节点能够提供的服务
@@ -68,15 +68,15 @@ class Server {
             case Command.REGISTER => RegisterExecutor(buffer, message.id, message.tryFromData<UInt16>() ?? 0).exec()
             case Command.SUBSCRIBE => SubscribeExecutor(message.id, message.tryFromData<Bool>() ?? false).exec()
             case Command.CONSUME => ConsumeExecutor(buffer, message.id, message.tryFromData<RPCMessage>().getOrThrow()).exec()
-            case Command.PING(_) => Message.ack(message.id)
             case Command.ACK => None<Message>
-            case _ => error(message.id, UNSUPPORTED_COMMAND)
+            case x => error(message.id, '${UNSUPPORTED_COMMAND}: ${x}')
         }
     }
 }
 private struct RegisterExecutor{
     RegisterExecutor(private let buffer: SocketBuffer, private let id: MessageID, private let port: UInt16){}
     func exec(): Message {
+        log.debug{'register: ${id}; ${port}'}
         let addr = buffer.remoteAddress.toString()
         serviceHosts.add('${addr[0 .. addr.indexOf(":").getOrThrow()]}:${port}')
         Message.ack(id, DataNone.INSTANCE)
@@ -85,17 +85,19 @@ private struct RegisterExecutor{
 private struct SubscribeExecutor{
     SubscribeExecutor(private let id: MessageID, private let hosts: Bool){}
     private exec(): Message {
+        log.debug{'subscribe: ${id}; ${hosts}'}
         Message.resp(id, if(hosts){
             let hosts = serviceHosts.iterator()
             Array<String>(serviceHosts.size){_ => hosts.next().getOrThrow()}.toData()
         }else{
-            ServiceHub.meats.toData()
+            ServiceHub.metas.toData()
         })
     }
 }
 private struct ConsumeExecutor{
     ConsumeExecutor(private let id: MessageID, private let message: RPCMessage){}
     func exec(): Message {
+        log.debug{'consume: ${id}'}
         try{
             Message.resp(id, ServiceHub.call(message))
         }catch(e: Exception){
