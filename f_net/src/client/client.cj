@@ -75,9 +75,13 @@ public class Client<T> <: Resource where T <: DataFields<T> {
                             let buffer = buffers[i]
                             spawn {
                                 while (!buffer.isClosed()) {
+                                    var mid = None<MessageID>
+                                    var cmd = None<Command>
                                     try {
                                         let message: Message = Message.decode<T>(buffer)
                                         let id = message.id
+                                        mid = id
+                                        cmd = message.command
                                         if(let Command.PING(_) <- message.command){
                                             transfer(buffer, Message.ack(id))
                                         }else if (let Some(fut) <- futures.remove(id)) {
@@ -85,13 +89,13 @@ public class Client<T> <: Resource where T <: DataFields<T> {
                                             f.set(message)
                                         }
                                     } catch (e: Exception) {
-                                        log.error('Client reader error', e)
+                                        log.error(e){'Client reader error ${cmd}:${mid}'}
                                         break
                                     }
                                 }
                             }
                         } catch (e: Exception) {
-                            log.error('TcpSocket.new', e)
+                            log.error('SocketBuffer.new', e)
                             throw e
                         }
                     }
@@ -104,15 +108,19 @@ public class Client<T> <: Resource where T <: DataFields<T> {
                             new()
                         }
                     } catch (e: Exception) {
-                        log.error('TcpSocket.checker', e)
+                        log.error('SocketBuffer.checker', e)
                         try {
                             if (!buffer.isClosed()) {
                                 buffer.close()
                             }
                         } catch (e: Exception) {
-                            log.error('TcpSocket.close', e)
+                            log.error('SocketBuffer.close', e)
                         }
-                        new()
+                        try{
+                            new()
+                        }catch(e: Exception){
+                            log.error('SocketBuffer.new', e)
+                        }
                     }
                 }
             }
