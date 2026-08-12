@@ -635,6 +635,12 @@ private let _ = AppVersion.set(#'${banner()}'#, '${name}', '${version}')
                 SubCommandMediator.exec(x, args[1..])
         }
     }
+    public static func start(args: Array<String>): Int64 {
+        let newargs = Array<String>(args.size + 1, repeat: '')
+        newargs[0] = 'run'
+        args.copyTo(newargs, 0, 1, args.size)
+        App(newargs).boot()
+    }
 }
 private class CodeCounter{
     var modules = 0

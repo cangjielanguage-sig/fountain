@@ -33,3 +33,11 @@ public func resetAndRegisterSignalHandler(signals: Array<Signal>, handler: () ->
 public func resetAndRegisterSignalHandler(signals: Array<Signal>, handler: (Int32) -> Bool): Unit {}
 public func resetAndRegisterSignalHandler(signal: Signal, handler: () -> Bool): Unit {}
 ```
+
+## 使用main函数启动应用的简便方法
+如果开发者想使用自己开发的main函数启动应用，可以调用本模块的以下API：
+```cj
+main(args: Array<String>): Int64 {
+    App.start(args)
+}
+```
