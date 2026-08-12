@@ -35,7 +35,9 @@ public func resetAndRegisterSignalHandler(signal: Signal, handler: () -> Bool): 
 ```
 
 ## 使用main函数启动应用的简便方法
-如果开发者想使用自己开发的main函数启动应用，可以调用本模块的以下API：
+如果开发者想使用自己开发的main函数启动应用，可以调用本模块的以下API。
+目前这个API只支持run子命令。
+如果使用fboot命令启动应用的参数是`fboot run --dylibPattern='<dylib_name_regex_to_load>'`，使用以下API传的main函数参数就是`--dylibPattern='<dylib_name_regex_to_load>'`，App.start函数会自动加上run子命令。
 ```cj
 main(args: Array<String>): Int64 {
     App.start(args)
