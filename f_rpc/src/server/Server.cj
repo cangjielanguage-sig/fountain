@@ -16,10 +16,12 @@ limitations under the License.
 package fountain::f_rpc.server
 
 private let serviceHosts = ConcurrentHashSet<String>()
-private func error(id: MessageID, message: String): Message {
-    log.warn('error: ${id}; ${message}')
-    Message.error(id, data: message)
+
+private func error(id: MessageID, cmd: Command, msg: String): Message {
+    errorLog(id, cmd, msg)
+    Message.error(id, data: msg)
 }
+
 class Server {
     internal static func start(): Unit {
         let qsize = ServerConfig.bufferQueueSize
@@ -69,14 +71,14 @@ class Server {
             case Command.SUBSCRIBE => SubscribeExecutor(message.id, message.tryFromData<Bool>() ?? false).exec()
             case Command.CONSUME => ConsumeExecutor(buffer, message.id, message.tryFromData<RPCMessage>().getOrThrow()).exec()
             case Command.ACK => None<Message>
-            case x => error(message.id, '${UNSUPPORTED_COMMAND}: ${x}')
+            case x => error(message.id, x, UNSUPPORTED_COMMAND)
         }
     }
 }
 private struct RegisterExecutor{
     RegisterExecutor(private let buffer: SocketBuffer, private let id: MessageID, private let port: UInt16){}
     func exec(): Message {
-        log.debug{'register: ${id}; ${port}'}
+        debugLog(id, Command.REGISTER){port}
         let addr = buffer.remoteAddress.toString()
         serviceHosts.add('${addr[0 .. addr.indexOf(":").getOrThrow()]}:${port}')
         Message.ack(id, DataNone.INSTANCE)
@@ -85,25 +87,40 @@ private struct RegisterExecutor{
 private struct SubscribeExecutor{
     SubscribeExecutor(private let id: MessageID, private let hosts: Bool){}
     private exec(): Message {
-        log.debug{'subscribe: ${id}; ${hosts}'}
-        Message.resp(id, if(hosts){
+        let start = MonoTime.now()
+        let data = if(hosts){
             let hosts = serviceHosts.iterator()
-            Array<String>(serviceHosts.size){_ => hosts.next().getOrThrow()}.toData()
+            Array<String>(serviceHosts.size){_ => hosts.next().getOrThrow()}
         }else{
-            ServiceHub.metas.toData()
-        })
+            ServiceHub.metas
+        }.toData()
+        debugLog(id, Command.REGISTER){DebugMessage(hosts, data, MonoTime.now() - start)}
+        Message.resp(id, data)
     }
 }
 private struct ConsumeExecutor{
     ConsumeExecutor(private let id: MessageID, private let message: RPCMessage){}
     func exec(): Message {
-        log.debug{'consume: ${id}'}
+        var result: ToData = ()
+        let start = MonoTime.now()
         try{
-            Message.resp(id, ServiceHub.call(message))
+            result = ServiceHub.call(message)
+            Message.resp(id, result)
         }catch(e: Exception){
             let buffer = ByteBuffer()
             printStackTrace(e, buffer)
-            error(id, String.fromUtf8(buffer.bytes()))
+            error(id, Command.CONSUME, buffer.bytes() |> String.fromUtf8)
+        }finally{
+            let consumed = MonoTime.now() - start
+            debugInfo(id, Command.REGISTER){DebugMessage(message, result, consumed)}
         }
     }
+}
+@DataAssist
+public class DebugMessage<A, R> where A <: ToData, R <: ToData {
+    public DebugMessage(
+        public let param: A,
+        public let result: R,
+        public let consumed: Duration
+    ){}
 }

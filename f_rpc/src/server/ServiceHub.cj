@@ -22,9 +22,10 @@ import std.fs.File
 import std.reflect.*
 
 public struct ServiceHub {
-    private static let hub = ConcurrentHashMap<ServiceMeta, (Array<Data>) -> Data>()
+    private static log = LoggerFactory.getLogger<ServiceHub>()
+    private static let hub = ConcurrentHashMap<ServiceMeta, (Array<Data>) -> ToData>()
     private static let version = extractVersion()
-    public static func register<T>(funcName: String, argTypes: Array<TypeInfo>, fn: (String, Array<Data>) -> Data): Unit where T <: Object {
+    public static func register<T>(funcName: String, argTypes: Array<TypeInfo>, fn: (String, Array<Data>) -> ToData): Unit where T <: Object {
         let classInfo = ClassTypeInfo.of<T>()
         let name = if(let Some(annotation) <- classInfo.findAnnotation<BeanMeta>()){
             annotation.name
@@ -34,13 +35,21 @@ public struct ServiceHub {
         let argTypeNames = Array<String>(argTypes.size){i => argTypes[i].qualifiedName}
         let q = ArrayQueue<TypeInfo>()
         q.add(classInfo)
-        while(let Some(ti) <- q.remove()){
-            if(ti is InterfaceTypeInfo){
-                let typeInfo = ti.qualifiedName
-                let meta = ServiceMeta(version, name, typeInfo, funcName, argTypeNames)
-                hub.addIfAbsent(meta, {args => 
-                    fn(name, args)
-                })
+        while(let Some(t) <- q.remove()){
+            if(let ti: InterfaceTypeInfo <- t){
+                let hasFunc = try{
+                    ti.findInstanceFunction(funcName, argTypes)
+                    true
+                }catch(_){
+                    false
+                }
+                if(hasFunc){
+                    let meta = ServiceMeta(version, name, ti.qualifiedName, funcName, argTypeNames)
+                    log.info{'register: [${name}(${version})]${ti}.${funcName}${argTypeNames}; ${hub.contains(meta)}'}
+                    hub.addIfAbsent(meta, {args => 
+                        fn(name, args)
+                    })
+                }
             }
             if(let cti: ClassTypeInfo <- ti && cti != ClassTypeInfo.of<Object>() && let sti <- cti.superClass && sti != ClassTypeInfo.of<Object>() && sti != ti){
                 q.add(sti)
@@ -67,7 +76,7 @@ public struct ServiceHub {
             }
         }
     }
-    internal static func call(message: RPCMessage): Data {
+    internal static func call(message: RPCMessage): ToData {
         hub[message.meta](message.params)
     }
     internal static prop metas: Array<ServiceMeta> {

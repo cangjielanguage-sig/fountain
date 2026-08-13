@@ -15,14 +15,31 @@ limitations under the License.
 */
 package fountain::f_rpc.base
 
+protected import std.reflect.*
+protected import std.time.MonoTime
+
 protected import fountain::f_base.*
 protected import fountain::f_config.*
+protected import fountain::f_io.ByteBuffer
+protected import fountain::f_bean.*
+protected import fountain::f_data.*
+protected import fountain::f_data
 
-internal import fountain::f_io.ByteBuffer
-
-public import std.reflect.*
-public import fountain::f_bean.*
-public import fountain::f_data.*
-public import fountain::f_data
 public const UNSUPPORTED_COMMAND = 'UnsupportedCommand'
 public const OVERFEEDING = 'Client is overfeeding'
+
+protected import fountain::f_log.*
+protected let rpclog = LoggerFactory.getLogger('rpc')
+
+private func logmsg(id: MessageID, command: Command, message: String){
+    '[FOUNTAIN_RPC.${command}] ${id}; ${message}'
+}
+protected func errorLog(id: MessageID, command: Command, message: String): Unit {
+    rpclog.error(logmsg(id, command, message))
+}
+protected func debugLog<T>(id: MessageID, command: Command, message: () -> T): Unit where T <: ToData {
+    rpclog.debug{logmsg(id, command, JsonValue.from(message().toData()))}
+}
+protected func infoLog<T>(id: MessageID, command: Command, message: () -> T): Unit where T <: ToData {
+    rpclog.info{logmsg(id, command, JsonValue.from(message().toData()))}
+}
