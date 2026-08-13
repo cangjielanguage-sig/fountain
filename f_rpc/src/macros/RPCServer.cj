@@ -34,7 +34,7 @@ private func expand(attr: Tokens, input: Decl): Tokens {
             quote(
                 @Bean[$attr]
                 $input
-                private _ = {=>
+                private let _ = {=>
                     $(extractFuncs(x))
                 }()
             )
@@ -46,7 +46,11 @@ private func expand(attr: Tokens, input: Decl): Tokens {
 }
 
 private func extractFuncs(decl: ClassDecl): Tokens {
-    let klass = decl.identifier
+    let klass = decl.identifier + if(decl.isGenericDecl){
+        decl.genericParam
+    }else{
+        `empty_tokens`
+    }
     var funcs = `empty_tokens`
     for(d in decl.body.decls){
         if(let f: FuncDecl <- d && isPublic(f) && !isStatic(f)){
