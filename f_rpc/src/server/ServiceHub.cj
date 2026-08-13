@@ -46,7 +46,7 @@ public struct ServiceHub {
                 }
                 if(hasFunc){
                     let meta = ServiceMeta(version, name, ti.qualifiedName, funcName, argTypeNames, exactlyVersion: exactlyVersion)
-                    rpclog.debug{'[FOUNTAIN_RPC.${SKELETON}] [${name}(${version})]interface-${ti}.${funcName}${argTypeNames}; ${hub.contains(meta)}'}
+                    rpclog.debug{'[FOUNTAIN_RPC.${SKELETON}] [${name}(${version})]interface-${ti}.${funcName}${argTypeNames};${hub.contains(meta)}'}
                     hub.addIfAbsent(meta, fn)
                 }
             }
