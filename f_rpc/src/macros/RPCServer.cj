@@ -41,7 +41,7 @@ private func expand(attr: Tokens, input: Decl): Tokens {
         case x: MacroExpandDecl => expand(attr, extract(x))
         case x => 
             diagReport(ERROR, input, '${x.identifier.value} must be a class decl', '')
-            return `empty_tokens`
+            return input.toTokens()
     }
 }
 
