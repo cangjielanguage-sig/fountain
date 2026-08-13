@@ -112,6 +112,7 @@ private struct ConsumeExecutor{
             error(id, Command.CONSUME, ErrorMessage(message, buffer.bytes() |> String.fromUtf8))
         }finally{
             let consumed = MonoTime.now() - start
+            infoLog(id, Command.CONSUME){LogMessage(message, result, consumed)}
             debugInfo(id, Command.CONSUME){LogMessage(message, result, consumed)}
         }
     }
