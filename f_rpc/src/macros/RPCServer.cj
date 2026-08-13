@@ -16,8 +16,6 @@ limitations under the License.
 macro package fountain::f_rpc.macros
 
 public import fountain::f_bean.macros.*
-import std.ast.*
-import fountain::f_macros.*
 
 public macro RPCServer(input: Tokens): Tokens {
     return RPCServer(empty_tokens, input)
@@ -41,7 +39,7 @@ private func expand(attr: Tokens, input: Decl): Tokens {
         case x: MacroExpandDecl => expand(attr, extract(x))
         case x => 
             diagReport(ERROR, input, '${x.identifier.value} must be a class decl', '')
-            return input.toTokens()
+            throw RPCException()
     }
 }
 
