@@ -50,11 +50,11 @@ public struct ServiceHub {
                     hub.addIfAbsent(meta, fn)
                 }
             }
-            if(let cti: ClassTypeInfo <- ti && cti != ClassTypeInfo.of<Object>() && let sti <- cti.superClass && sti != ClassTypeInfo.of<Object>() && sti != ti){
+            if(let cti: ClassTypeInfo <- t && cti != ClassTypeInfo.of<Object>() && let sti <- cti.superClass && sti != ClassTypeInfo.of<Object>() && sti != cti){
                 q.add(sti)
             }
             func isNotStdInterface(sti: InterfaceTypeInfo){
-                if(sti == TypeInfo.of<Any>() || sti == ti){
+                if(sti == TypeInfo.of<Any>() || sti == t){
                     return false
                 }
                 let qualifiedName = sti.qualifiedName
@@ -70,7 +70,7 @@ public struct ServiceHub {
                   qualifiedName.startsWith('std.Greater') || qualifiedName.startsWith('std.GreaterOrEqual') ||
                   qualifiedName.startsWith('std.Iterable') || qualifiedName.startsWith('std.Collection'))
             }
-            for(sti in ti.superInterfaces where isNotStdInterface(sti)){
+            for(sti in t.superInterfaces where isNotStdInterface(sti)){
                 q.add(sti)
             }
         }
