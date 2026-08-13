@@ -34,39 +34,22 @@ public macro RPCServer(attr: Tokens, input: Tokens): Tokens {
     }
     match(parseDecl(input)){
         case x: ClassDecl => 
-            if(attr.size > 1 && attr[0].kind == BOOL_LITERAL){
-                quote(
-                    @Bean[$(attr[1..])]
-                    $input
-                    private _ = {=>
-                        $(extractFuncs(attr[0], x))
-                    }()
-                )
+            let (beanAttrs, exactly)if(attr.size > 1 && attr[0].kind == BOOL_LITERAL){
+                (quote([$(attr[1..])]), quote($(attr[0])))
             }else if(attr.size == 1 && attr[0].kind == BOOL_LITERAL){
-                quote(
-                    @Bean
-                    $input
-                    private _ = {=>
-                        $(extractFuncs(attr[0], x))
-                    }()
-                )
+                (`empty_tokens`, quote($(attr[0])))
             }else if(attr.size > 0 && attr[0].kind != BOOL_LITERAL){
-                quote(
-                    @Bean[$attr]
-                    $input
-                    private _ = {=>
-                        $(extractFuncs(false, x))
-                    }()
-                )
+                (attr, `false`)
             }else{//attr.size == 0
-                quote(
-                    @Bean
-                    $input
-                    private _ = {=>
-                        $(extractFuncs(false, x))
-                    }()
-                )
+                (`empty_tokens`, `false`)
             }
+            quote(
+                @Bean$beanAttrs
+                $input
+                private _ = {=>
+                    $(extractFuncs($exactly, x))
+                }()
+            )
         case x => 
             diagReport(ERROR, input, '${x.identifier.value} must be a class decl', '')
             return `empty_tokens`
