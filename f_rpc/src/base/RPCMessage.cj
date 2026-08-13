@@ -31,20 +31,19 @@ public class ServiceMeta {
     private var argTypeNames: Array<String> = []
 
     public init(){}
-    public init(version: String, name: String, typeName: String, methodName: String, argTypeNames: Array<String>){
-        let v = version.split('.')
-        this.version = '${v[0].v[1]}'
+    public init(version: String, name: String, typeName: String, methodName: String, argTypeNames: Array<String>, exactlyVersion!: Bool = false){
+        this.version = if(exactlyVersion){
+            version
+        }else{
+            let v = version.split('.')
+            '${v[0].v[1]}'
+        }
         this.name = name
         this.typeName = typeName
         this.methodName = methodName
         this.argTypeNames = argTypeNames
     }
-    public init(version: String, name: String, typeName: TypeInfo, methodName: String, argTypeNames: Array<TypeInfo>){
-        let v = version.split('.')
-        this.version = '${v[0].v[1]}'
-        this.name = name
-        this.typeName = typeName.qualifiedName
-        this.methodName = methodName
-        this.argTypeNames = Array<String>(argTypeNames.size){i => argTypeNames[i].qualifiedName}
+    public init(version: String, name: String, typeName: TypeInfo, methodName: String, argTypeNames: Array<TypeInfo>, exactlyVersion!: Bool = false){
+        this(version, name, typeName, methodName, Array<String>(argTypeNames.size){i => argTypeNames[i].qualifiedName}, exactlyVersion: exactlyVersion)
     }
 }
