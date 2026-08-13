@@ -19,12 +19,12 @@ internal import fountain::f_concurrent.ConcurrentHashSet
 public import fountain::f_rpc.base.*
 
 internal const SKELETON = "Skeleton"
-private func errorLog(id: MessageID, command: Command, message: String): Unit {
-    rpclog.error(logmsg(id, SKELETON, command, message))
+private func errorLog(id: MessageID, command: Command, message: ErrorMessage): Unit {
+    errorLog(id, SKELETON, command, message)
 }
 private func debugLog<T>(id: MessageID, command: Command, message: () -> T): Unit where T <: ToData {
-    rpclog.debug{logmsg(id, SKELETON, command, JsonValue.from(message().toData()))}
+    debugLog(id, SKELETON, command, message)
 }
 private func infoLog<T>(id: MessageID, command: Command, message: () -> T): Unit where T <: ToData {
-    rpclog.info{logmsg(id, SKELETON, command, JsonValue.from(message().toData()))}
+    infoLog(id, SKELETON, command, message)
 }

@@ -34,12 +34,21 @@ protected let rpclog = LoggerFactory.getLogger('rpc')
 private func logmsg(id: MessageID, label: String, command: Command, message: String){
     '[FOUNTAIN_RPC.${label}.${command}] ${id}; ${message}'
 }
+private func logmsg<T>(id: MessageID, label: String, command: Command, message: T): String where T <: ToData {
+    logmsg(id, label, command, JsonValue.from(message.toData()).toString())
+}
+private func logmsg<T>(id: MessageID, label: String, command: Command, message: () -> T): String where T <: ToData {
+    logmsg(id, label, command, message())
+}
 protected func errorLog(id: MessageID, label: String, command: Command, message: String): Unit {
     rpclog.error(logmsg(id, label, command, message))
 }
+protected func errorLog<T>(id: MessageID, label: String, command: Command, message: T): Unit where T <: ToData {
+    rpclog.error(logmsg(id, label, command, message))
+}
 protected func debugLog<T>(id: MessageID, label: String, command: Command, message: () -> T): Unit where T <: ToData {
-    rpclog.debug{logmsg(id, label, command, JsonValue.from(message().toData()))}
+    rpclog.debug{logmsg(id, label, command, message)}
 }
 protected func infoLog<T>(id: MessageID, label: String, command: Command, message: () -> T): Unit where T <: ToData {
-    rpclog.info{logmsg(id, label, command, JsonValue.from(message().toData()))}
+    rpclog.info{logmsg(id, label, command, message)}
 }

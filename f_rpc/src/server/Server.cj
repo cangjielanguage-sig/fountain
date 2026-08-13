@@ -17,9 +17,9 @@ package fountain::f_rpc.server
 
 private let serviceHosts = ConcurrentHashSet<String>()
 
-private func error(id: MessageID, cmd: Command, msg: String): Message {
+private func error(id: MessageID, cmd: Command, msg: ErrorMessage): Message {
     errorLog(id, cmd, msg)
-    Message.error(id, data: msg)
+    Message.error(id, data: msg.error)
 }
 
 class Server {
@@ -109,18 +109,25 @@ private struct ConsumeExecutor{
         }catch(e: Exception){
             let buffer = ByteBuffer()
             printStackTrace(e, buffer)
-            error(id, Command.CONSUME, buffer.bytes() |> String.fromUtf8)
+            error(id, Command.CONSUME, ErrorMessage(message, buffer.bytes() |> String.fromUtf8))
         }finally{
             let consumed = MonoTime.now() - start
-            debugInfo(id, Command.CONSUME){DebugMessage(message, result, consumed)}
+            debugInfo(id, Command.CONSUME){LogMessage(message, result, consumed)}
         }
     }
 }
 @DataAssist
-public class DebugMessage<A, R> where A <: ToData, R <: ToData {
-    public DebugMessage(
+public class LogMessage<A, R> where A <: ToData, R <: ToData {
+    public LogMessage(
         public let param: A,
         public let result: R,
         public let consumed: Duration
+    ){}
+}
+@DataAssist
+public class ErrorMessage<A> where A <: ToData {
+    public ErrorMessage(
+        public let param: A,
+        public let error: String
     ){}
 }
