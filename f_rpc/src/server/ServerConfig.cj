@@ -35,10 +35,13 @@ internal class ServerConfig {
     public static const RPC_SERVER_RATE_LIMITER_TOKENS = RPC_SERVER_PREFIX + '_tokens'
     public static const RPC_SERVER_RATE_LIMITER_POPULATION_PERIOD = RPC_SERVER_PREFIX + '_populationPeriod'
 
+    public static const RPC_SERVER_EXACTLY_VERSION = RPC_SERVER_PREFIX + '_exactlyVersion'
+    
     public static const ANY_MOMENT_RATE_LIMITER = "anyMomentRateLimiter"
     public static const LEAKING_BUCKET_RATE_LIMITER = "leakingBucketRateLimiter"
     public static const SLIDING_WINDOW_RATE_LIMITER = "slidingWindowRateLimiter"
     public static const TOKEN_BUCKET_RATE_LIMITER = "tokenBucketRateLimiter"
+
 
     internal static prop port: Unit16 {
         get(){
@@ -63,6 +66,12 @@ internal class ServerConfig {
     internal static prop unavailableChecked: Int64 {
         get(){
             Config.getValue<Int64>(RPC_SERVER_UNAVAILABLE_CHECKED) ?? 3
+        }
+    }
+    internal static prop exactlyVersion: Bool {
+        get(){
+            Config.getValue<Bool>(RPC_SERVER_EXACTLY_VERSION) ?? false
+
         }
     }
     internal static func rateLimiter(): RateLimiter<Unit> {

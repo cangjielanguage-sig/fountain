@@ -23,8 +23,7 @@ public macro RPCServer(input: Tokens): Tokens {
     return RPCServer(empty_tokens, input)
 }
 /**
- * attr 可以没有，第一个元素如果是true或false，表示注册RPC服务的版本是否与项目cjpm.toml version一致；剩余属性都是fountain::f_bean.macrs.Bean宏的属性。
- * 如果第一个元素不是true或false，表示注册RPC服务的版本只采用项目cjpm.toml version的前两位；attr都是fountain::f_bean.macrs.Bean宏的属性
+ * attr 作为fountain::f_bean.macros.Bean宏的属性，可以没有
  */
 public macro RPCServer(attr: Tokens, input: Tokens): Tokens {
     let attrs = if(attr.size == 0){
@@ -34,20 +33,11 @@ public macro RPCServer(attr: Tokens, input: Tokens): Tokens {
     }
     match(parseDecl(input)){
         case x: ClassDecl => 
-            let (beanAttrs, exactly)if(attr.size > 1 && attr[0].kind == BOOL_LITERAL){
-                (quote([$(attr[1..])]), quote($(attr[0])))
-            }else if(attr.size == 1 && attr[0].kind == BOOL_LITERAL){
-                (`empty_tokens`, quote($(attr[0])))
-            }else if(attr.size > 0 && attr[0].kind != BOOL_LITERAL){
-                (attr, `false`)
-            }else{//attr.size == 0
-                (`empty_tokens`, `false`)
-            }
             quote(
-                @Bean$beanAttrs
+                @Bean[$attr]
                 $input
                 private _ = {=>
-                    $(extractFuncs($exactly, x))
+                    $(extractFuncs(x))
                 }()
             )
         case x => 
@@ -56,7 +46,7 @@ public macro RPCServer(attr: Tokens, input: Tokens): Tokens {
     }   
 }
 
-private func extractFuncs(exactlyVersion: Token, decl: ClassDecl): Tokens {
+private func extractFuncs(decl: ClassDecl): Tokens {
     let klass = decl.identifier
     var funcs = `empty_tokens`
     for(d in decl.body.decls){
@@ -76,7 +66,7 @@ private func extractFuncs(exactlyVersion: Token, decl: ClassDecl): Tokens {
                     }.$(fname)($argNames)
                 }
             )
-            funcs += quote(ServiceHub.register<$klass>($exactlyVersion, $fname, $argTypes, $closure))
+            funcs += quote(ServiceHub.register<$klass>($fname, $argTypes, $closure))
         }
     }
     funcs

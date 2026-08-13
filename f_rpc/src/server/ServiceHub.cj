@@ -23,12 +23,13 @@ import std.reflect.*
 
 public struct ServiceHub {
     private static log = LoggerFactory.getLogger<ServiceHub>()
-    private static let hub = ConcurrentHashMap<ServiceMeta, (Array<Data>) -> ToData>()
     private static let version = extractVersion()
-    public static func register<T>(exactlyVersion: Bool, funcName: String, argTypes: Array<TypeInfo>, fn: (String, Array<Data>) -> ToData): Unit where T <: Object {
+    private static let exactlyVersion = ServerConfig.exactlyVersion
+    private static let hub = ConcurrentHashMap<ServiceMeta, (Array<Data>) -> ToData>()
+    public static func register<T>(funcName: String, argTypes: Array<TypeInfo>, fn: (String, Array<Data>) -> ToData): Unit where T <: Object {
         let classInfo = ClassTypeInfo.of<T>()
-        let name = if(let Some(annotation) <- classInfo.findAnnotation<BeanMeta>()){
-            annotation.name
+        let name = if(let Some(beanMeta) <- classInfo.findAnnotation<BeanMeta>()){
+            beanMeta.name
         }else{
             ''
         }
