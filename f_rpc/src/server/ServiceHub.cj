@@ -45,7 +45,24 @@ public struct ServiceHub {
             if(let cti: ClassTypeInfo <- ti && cti != ClassTypeInfo.of<Object>() && let sti <- cti.superClass && sti != ClassTypeInfo.of<Object>() && sti != ti){
                 q.add(sti)
             }
-            for(sti in ti.superInterfaces where sti != TypeInfo.of<Any>() && sti != ti){
+            func isNotStdInterface(sti: InterfaceTypeInfo){
+                if(sti == TypeInfo.of<Any>() || sti == ti){
+                    return false
+                }
+                let qualifiedName = sti.qualifiedName
+                !(qualifiedName.startsWith('std.') || qualifiedName.startsWith('fountain::') || 
+                  qualifiedName.startsWith('Equatable') || qualifiedName.startsWith('Comparable') || 
+                  qualifiedName.startsWith('Iterable') || qualifiedName.startsWith('Collection') || 
+                  qualifiedName.startsWith('Equal') || qualifiedName.startsWith('NotEqual') ||
+                  qualifiedName.startsWith('Less') || qualifiedName.startsWith('LessOrEqual') ||
+                  qualifiedName.startsWith('Greater') || qualifiedName.startsWith('GreaterOrEqual') ||
+                  qualifiedName.startsWith('std.Equatable') || qualifiedName.startsWith('std.Comparable') || 
+                  qualifiedName.startsWith('std.Equal') || qualifiedName.startsWith('std.NotEqual') ||
+                  qualifiedName.startsWith('std.Less') || qualifiedName.startsWith('std.LessOrEqual') ||
+                  qualifiedName.startsWith('std.Greater') || qualifiedName.startsWith('std.GreaterOrEqual') ||
+                  qualifiedName.startsWith('std.Iterable') || qualifiedName.startsWith('std.Collection'))
+            }
+            for(sti in ti.superInterfaces where isNotStdInterface(sti)){
                 q.add(sti)
             }
         }
