@@ -32,14 +32,16 @@ public class ServiceMeta {
 
     public init(){}
     public init(version: String, name: String, typeName: String, methodName: String, argTypeNames: Array<String>){
-        this.version = version
+        let v = version.split('.')
+        this.version = '${v[0].v[1]}'
         this.name = name
         this.typeName = typeName
         this.methodName = methodName
         this.argTypeNames = argTypeNames
     }
     public init(version: String, name: String, typeName: TypeInfo, methodName: String, argTypeNames: Array<TypeInfo>){
-        this.version = version
+        let v = version.split('.')
+        this.version = '${v[0].v[1]}'
         this.name = name
         this.typeName = typeName.qualifiedName
         this.methodName = methodName
