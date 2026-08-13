@@ -31,15 +31,15 @@ public const OVERFEEDING = 'Client is overfeeding'
 protected import fountain::f_log.*
 protected let rpclog = LoggerFactory.getLogger('rpc')
 
-private func logmsg(id: MessageID, command: Command, message: String){
-    '[FOUNTAIN_RPC.${command}] ${id}; ${message}'
+private func logmsg(id: MessageID, label: String, command: Command, message: String){
+    '[FOUNTAIN_RPC.${label}.${command}] ${id}; ${message}'
 }
-protected func errorLog(id: MessageID, command: Command, message: String): Unit {
-    rpclog.error(logmsg(id, command, message))
+protected func errorLog(id: MessageID, label: String, command: Command, message: String): Unit {
+    rpclog.error(logmsg(id, label, command, message))
 }
-protected func debugLog<T>(id: MessageID, command: Command, message: () -> T): Unit where T <: ToData {
-    rpclog.debug{logmsg(id, command, JsonValue.from(message().toData()))}
+protected func debugLog<T>(id: MessageID, label: String, command: Command, message: () -> T): Unit where T <: ToData {
+    rpclog.debug{logmsg(id, label, command, JsonValue.from(message().toData()))}
 }
-protected func infoLog<T>(id: MessageID, command: Command, message: () -> T): Unit where T <: ToData {
-    rpclog.info{logmsg(id, command, JsonValue.from(message().toData()))}
+protected func infoLog<T>(id: MessageID, label: String, command: Command, message: () -> T): Unit where T <: ToData {
+    rpclog.info{logmsg(id, label, command, JsonValue.from(message().toData()))}
 }

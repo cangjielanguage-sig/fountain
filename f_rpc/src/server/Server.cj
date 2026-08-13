@@ -94,7 +94,7 @@ private struct SubscribeExecutor{
         }else{
             ServiceHub.metas
         }.toData()
-        debugLog(id, Command.REGISTER){DebugMessage(hosts, data, MonoTime.now() - start)}
+        debugLog(id, Command.SUBSCRIBE){DebugMessage(hosts, data, MonoTime.now() - start)}
         Message.resp(id, data)
     }
 }
@@ -112,7 +112,7 @@ private struct ConsumeExecutor{
             error(id, Command.CONSUME, buffer.bytes() |> String.fromUtf8)
         }finally{
             let consumed = MonoTime.now() - start
-            debugInfo(id, Command.REGISTER){DebugMessage(message, result, consumed)}
+            debugInfo(id, Command.CONSUME){DebugMessage(message, result, consumed)}
         }
     }
 }

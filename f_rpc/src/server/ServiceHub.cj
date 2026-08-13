@@ -22,10 +22,9 @@ import std.fs.File
 import std.reflect.*
 
 public struct ServiceHub {
-    private static log = LoggerFactory.getLogger<ServiceHub>()
     private static let version = extractVersion()
     private static let exactlyVersion = ServerConfig.exactlyVersion
-    private static let hub = ConcurrentHashMap<ServiceMeta, (Array<Data>) -> ToData>()
+    private static let hub = ConcurrentHashMap<ServiceMeta, (String, Array<Data>) -> ToData>()
     public static func register<T>(funcName: String, argTypes: Array<TypeInfo>, fn: (String, Array<Data>) -> ToData): Unit where T <: Object {
         let classInfo = ClassTypeInfo.of<T>()
         let name = if(let Some(beanMeta) <- classInfo.findAnnotation<BeanMeta>()){
@@ -34,6 +33,7 @@ public struct ServiceHub {
             ''
         }
         let argTypeNames = Array<String>(argTypes.size){i => argTypes[i].qualifiedName}
+        rpclog.debug{'[FOUNTAIN_RPC.${SKELETON}] [${name}(${version})]class(${classInfo}).${funcName}${argTypeNames};${exactlyVersion}'}
         let q = ArrayQueue<TypeInfo>()
         q.add(classInfo)
         while(let Some(t) <- q.remove()){
@@ -46,10 +46,8 @@ public struct ServiceHub {
                 }
                 if(hasFunc){
                     let meta = ServiceMeta(version, name, ti.qualifiedName, funcName, argTypeNames, exactlyVersion: exactlyVersion)
-                    log.info{'register: [${name}(${version})]${ti}.${funcName}${argTypeNames}; ${hub.contains(meta)}'}
-                    hub.addIfAbsent(meta, {args => 
-                        fn(name, args)
-                    })
+                    rpclog.debug{'[FOUNTAIN_RPC.skeleton] [${name}(${version})]interface(${ti}).${funcName}${argTypeNames}; ${hub.contains(meta)}'}
+                    hub.addIfAbsent(meta, fn)
                 }
             }
             if(let cti: ClassTypeInfo <- ti && cti != ClassTypeInfo.of<Object>() && let sti <- cti.superClass && sti != ClassTypeInfo.of<Object>() && sti != ti){
@@ -78,7 +76,8 @@ public struct ServiceHub {
         }
     }
     internal static func call(message: RPCMessage): ToData {
-        hub[message.meta](message.params)
+        let meta = message.meta
+        hub[meta](meta.name, message.params)
     }
     internal static prop metas: Array<ServiceMeta> {
         get(){

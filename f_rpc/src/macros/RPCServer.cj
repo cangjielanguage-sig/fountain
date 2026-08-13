@@ -26,12 +26,10 @@ public macro RPCServer(input: Tokens): Tokens {
  * attr 作为fountain::f_bean.macros.Bean宏的属性，可以没有
  */
 public macro RPCServer(attr: Tokens, input: Tokens): Tokens {
-    let attrs = if(attr.size == 0){
-        `false`
-    }else{
-        attr
-    }
-    match(parseDecl(input)){
+    expand(attr, parseDecl(input))
+}
+private func expand(attr: Tokens, input: Decl): Tokens {
+    match(input){
         case x: ClassDecl => 
             quote(
                 @Bean[$attr]
@@ -40,33 +38,31 @@ public macro RPCServer(attr: Tokens, input: Tokens): Tokens {
                     $(extractFuncs(x))
                 }()
             )
+        case x: MacroExpandDecl => expand(attr, extract(x))
         case x => 
             diagReport(ERROR, input, '${x.identifier.value} must be a class decl', '')
             return `empty_tokens`
-    }   
+    }
 }
 
 private func extractFuncs(decl: ClassDecl): Tokens {
     let klass = decl.identifier
     var funcs = `empty_tokens`
     for(d in decl.body.decls){
-        if(funcs.size > 0){
-            funcs += `nl`
-        }
-        if(let f: FuncDecl <: d && isPublic(f) && !isStatic(f)){
+        if(let f: FuncDecl <- d && isPublic(f) && !isStatic(f)){
+            if(funcs.size > 0){
+                funcs += `nl`
+            }
             let fname = f.identifier
             let (argTypes, argValues, argNames) = extractParams(f.funcParams)
-            let closure = quote(
-                {beanName: String, args: Array<Data> => 
-                    $argValues
-                    if(beanName.isEmpty()){
-                        lookup<$klass>()
-                    }else{
-                        lookup<$klass>(beanName)
-                    }.$(fname)($argNames)
-                }
-            )
-            funcs += quote(ServiceHub.register<$klass>($fname, $argTypes, $closure))
+            funcs += quote(ServiceHub.register<$klass>($(fname.value), $argTypes){beanName: String, args: Array<Data> => 
+                $argValues
+                if(beanName.isEmpty()){
+                    lookup<$klass>()
+                }else{
+                    lookup<$klass>(beanName)
+                }.$(fname)($argNames)
+            })
         }
     }
     funcs
