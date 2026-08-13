@@ -33,7 +33,7 @@ public struct ServiceHub {
             ''
         }
         let argTypeNames = Array<String>(argTypes.size){i => argTypes[i].qualifiedName}
-        rpclog.debug{'[FOUNTAIN_RPC.${SKELETON}] [${name}(${version})]class(${classInfo}).${funcName}${argTypeNames};${exactlyVersion}'}
+        rpclog.debug{'[FOUNTAIN_RPC.${SKELETON}] [${name}(${version})]class-${classInfo}.${funcName}${argTypeNames};${exactlyVersion}'}
         let q = ArrayQueue<TypeInfo>()
         q.add(classInfo)
         while(let Some(t) <- q.remove()){
@@ -46,7 +46,7 @@ public struct ServiceHub {
                 }
                 if(hasFunc){
                     let meta = ServiceMeta(version, name, ti.qualifiedName, funcName, argTypeNames, exactlyVersion: exactlyVersion)
-                    rpclog.debug{'[FOUNTAIN_RPC.${SKELETON}] [${name}(${version})]interface(${ti}).${funcName}${argTypeNames}; ${hub.contains(meta)}'}
+                    rpclog.debug{'[FOUNTAIN_RPC.${SKELETON}] [${name}(${version})]interface-${ti}.${funcName}${argTypeNames}; ${hub.contains(meta)}'}
                     hub.addIfAbsent(meta, fn)
                 }
             }
