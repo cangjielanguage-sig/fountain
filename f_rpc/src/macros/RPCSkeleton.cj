@@ -17,13 +17,13 @@ macro package fountain::f_rpc.macros
 
 public import fountain::f_bean.macros.*
 
-public macro RPCServer(input: Tokens): Tokens {
-    return RPCServer(empty_tokens, input)
+public macro RPCSkeleton(input: Tokens): Tokens {
+    return RPCSkeleton(empty_tokens, input)
 }
 /**
  * attr 作为fountain::f_bean.macros.Bean宏的属性，可以没有
  */
-public macro RPCServer(attr: Tokens, input: Tokens): Tokens {
+public macro RPCSkeleton(attr: Tokens, input: Tokens): Tokens {
     expand(attr, parseDecl(input))
 }
 private func expand(attr: Tokens, input: Decl): Tokens {
