@@ -22,23 +22,58 @@ import fountain::f_macros.*
 public macro RPCServer(input: Tokens): Tokens {
     return RPCServer(empty_tokens, input)
 }
+/**
+ * attr 可以没有，第一个元素如果是true或false，表示注册RPC服务的版本是否与项目cjpm.toml version一致；剩余属性都是fountain::f_bean.macrs.Bean宏的属性。
+ * 如果第一个元素不是true或false，表示注册RPC服务的版本只采用项目cjpm.toml version的前两位；attr都是fountain::f_bean.macrs.Bean宏的属性
+ */
 public macro RPCServer(attr: Tokens, input: Tokens): Tokens {
+    let attrs = if(attr.size == 0){
+        `false`
+    }else{
+        attr
+    }
     match(parseDecl(input)){
         case x: ClassDecl => 
-            quote(
-                @Bean[$attr]
-                $input
-                private _ = {=>
-                    $(extractFuncs(x))
-                }()
-            )
+            if(attr.size > 1 && attr[0].kind == BOOL_LITERAL){
+                quote(
+                    @Bean[$(attr[1..])]
+                    $input
+                    private _ = {=>
+                        $(extractFuncs(attr[0], x))
+                    }()
+                )
+            }else if(attr.size == 1 && attr[0].kind == BOOL_LITERAL){
+                quote(
+                    @Bean
+                    $input
+                    private _ = {=>
+                        $(extractFuncs(attr[0], x))
+                    }()
+                )
+            }else if(attr.size > 0 && attr[0].kind != BOOL_LITERAL){
+                quote(
+                    @Bean[$attr]
+                    $input
+                    private _ = {=>
+                        $(extractFuncs(false, x))
+                    }()
+                )
+            }else{//attr.size == 0
+                quote(
+                    @Bean
+                    $input
+                    private _ = {=>
+                        $(extractFuncs(false, x))
+                    }()
+                )
+            }
         case x => 
             diagReport(ERROR, input, '${x.identifier.value} must be a class decl', '')
             return `empty_tokens`
     }   
 }
 
-private func extractFuncs(decl: ClassDecl): Tokens {
+private func extractFuncs(exactlyVersion: Token, decl: ClassDecl): Tokens {
     let klass = decl.identifier
     var funcs = `empty_tokens`
     for(d in decl.body.decls){
@@ -58,7 +93,7 @@ private func extractFuncs(decl: ClassDecl): Tokens {
                     }.$(fname)($argNames)
                 }
             )
-            funcs += quote(ServiceHub.register<$klass>($fname, $argTypes, $closure))
+            funcs += quote(ServiceHub.register<$klass>($exactlyVersion, $fname, $argTypes, $closure))
         }
     }
     funcs

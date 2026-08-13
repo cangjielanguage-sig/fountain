@@ -25,7 +25,7 @@ public struct ServiceHub {
     private static log = LoggerFactory.getLogger<ServiceHub>()
     private static let hub = ConcurrentHashMap<ServiceMeta, (Array<Data>) -> ToData>()
     private static let version = extractVersion()
-    public static func register<T>(funcName: String, argTypes: Array<TypeInfo>, fn: (String, Array<Data>) -> ToData): Unit where T <: Object {
+    public static func register<T>(exactlyVersion: Bool, funcName: String, argTypes: Array<TypeInfo>, fn: (String, Array<Data>) -> ToData): Unit where T <: Object {
         let classInfo = ClassTypeInfo.of<T>()
         let name = if(let Some(annotation) <- classInfo.findAnnotation<BeanMeta>()){
             annotation.name
@@ -44,7 +44,7 @@ public struct ServiceHub {
                     false
                 }
                 if(hasFunc){
-                    let meta = ServiceMeta(version, name, ti.qualifiedName, funcName, argTypeNames)
+                    let meta = ServiceMeta(version, name, ti.qualifiedName, funcName, argTypeNames, exactlyVersion: exactlyVersion)
                     log.info{'register: [${name}(${version})]${ti}.${funcName}${argTypeNames}; ${hub.contains(meta)}'}
                     hub.addIfAbsent(meta, {args => 
                         fn(name, args)
