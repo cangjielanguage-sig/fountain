@@ -113,7 +113,6 @@ private struct ConsumeExecutor{
         }finally{
             let consumed = MonoTime.now() - start
             infoLog(id, Command.CONSUME){LogMessage(message, result, consumed)}
-            debugInfo(id, Command.CONSUME){LogMessage(message, result, consumed)}
         }
     }
 }
