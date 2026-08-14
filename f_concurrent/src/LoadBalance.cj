@@ -20,6 +20,7 @@ import std.math.Number as StdNumber
 import stdx.crypto.crypto.SecureRandom
 import fountain::f_base.Addable
 import fountain::f_random.*
+import fountain::f_concurrent.exception.LoadBalanceException
 
 public interface LoadBalanceAlgo<W> where W <: Addable<W> & Comparable<W> {
     mut func next(): W
@@ -73,5 +74,50 @@ public class LoadBalance<W, D, R> where W <: Addable<W> & Comparable<W> {
     }
     public func call(data: D): R {
         tree.forward(algo.next(), inclusive: true).next().getOrThrow()[1](data)
+    }
+    public func call(data: D, maxRetrying: Int64): (?R, ?LoadBalanceException) {
+        var tried = 0
+        var ex = None<LoadBalanceException>
+        for(f in iterator()){
+            try{
+                return (f(data), ex)
+            }catch(e: Exception){
+                if(let Some(e) <- ex){
+                    e
+                }else{
+                    let e = LoadBalanceException()
+                    ex = e
+                    e
+                }.addSuppressed(e)
+                if(tried < maxRetrying){
+                    tried++
+                    continue
+                }
+                throw ex.getOrThrow()
+            }
+        }
+        (None<R>, ex)
+    }
+    public func iterator(): Iterator<(D) -> R> {
+        func mapper(tpl: (W, (D) -> R)){
+            tpl[1]
+        }
+        LoadBalanceIterator<D, R>(tree.iterator().map(mapper), tree.forward(algo.next(), inclusive: true).map(mapper))
+    }
+}
+class LoadBalanceIterator<D, R> <: Iterator<(D) -> R> {
+    LoadBalanceIterator(
+        private let itr: Iterator<(D) -> R>,
+        private let sub: Iterator<(D) -> R>
+    ){}
+    private var endsub = false
+    public func next(): ?(D) -> R {
+        if(endsub){
+            return itr.next()
+        }else if(let Some(f) <- itr.next()){
+            return f
+        }
+        endsub = true
+        next()
     }
 }

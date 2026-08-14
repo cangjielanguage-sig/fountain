@@ -34,36 +34,6 @@ public class ListeningClient<T> <: Resource where T <: DataFields<T> {
                 spawn{executor(m)}
             }
         }
-        this.timer = Timer.repeat(client.checkDuration, client.checkDuration, {=>
-            func new() {
-                try {
-                    let buf = buffer.load().clone()
-                    client.transfer(buf, message, once: false)
-                    buffer.store(buf)
-                } catch (e: Exception) {
-                    log.error('TcpSocket.new', e)
-                    throw e
-                }
-            }
-            try {
-                if (let Some(m) <- client.checker() && let Some(res) <- client.transfer(m, Duration.millisecond * 10)) {
-                    //do nothing
-                }else{
-                    buffer.load().close()
-                    new()
-                }
-            } catch (e: Exception) {
-                log.error('TcpSocket.checker', e)
-                try {
-                    if (!buffer.load().isClosed()) {
-                        buffer.load().close()
-                    }
-                } catch (e: Exception) {
-                    log.error('TcpSocket.close', e)
-                }
-                new()
-            }
-        }, style: Burst)
     }
     init(buffer: SocketBuffer, client: Client<T>, message: Message, executor: (Message) -> Unit){
         this(AtomicReference(buffer), client, message, executor)

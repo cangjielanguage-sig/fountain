@@ -15,9 +15,9 @@ limitations under the License.
  */
 package fountain::f_net.client
 
-import std.collection.concurrent.ConcurrentHashMap
-import std.env
-import std.net.IPSocketAddress
+internal import std.collection.concurrent.ConcurrentHashMap
+internal import std.env
+internal import std.net.IPSocketAddress
 internal import std.sync.{Timer, CatchupStyle, AtomicInt64, Mutex, AtomicReference}
 internal import fountain::f_data.*
 internal import fountain::f_log.*
@@ -161,16 +161,40 @@ public class Client<T> <: Resource where T <: DataFields<T> {
         SocketBuilder<T>(queueSize: queueSize, socketCount: socketCount, host: host, port: port,
             checkDuration: checkDuration, checker: checker)
     }
+    /**
+     * @param queueSize 写数据任务队列大小
+     * @param socketCount 连接数
+     * @param address     String是待连接的主机名、域名、IP，UInt16是端口号
+     * @param idGetter  从DE获得消息ID的函数
+     * @param checkDuration 连接有效性的检查周期
+     * @param checker   连接有效性检查函数，务必使用client.transfer(socketBuffer, id, message, timeout)传检查包
+     */
     public static func builder(queueSize!: Int64 = 1024, socketCount!: Int64 = 1, address!: (String, UInt16),
         checkDuration!: Duration, checker!: () -> ?Message): SocketBuilder<T> {
         SocketBuilder<T>(queueSize: queueSize, socketCount: socketCount, address: '${address[0]}:${address[1]}',
             checkDuration: checkDuration, checker: checker)
     }
+    /**
+     * @param queueSize 写数据任务队列大小
+     * @param socketCount 连接数
+     * @param address     <host>:<port>，<host>是主机名、域名、IP
+     * @param idGetter  从DE获得消息ID的函数
+     * @param checkDuration 连接有效性的检查周期
+     * @param checker   连接有效性检查函数，务必使用client.transfer(socketBuffer, id, message, timeout)传检查包
+     */
     public static func builder(queueSize!: Int64 = 1024, socketCount!: Int64 = 1, address!: String,
         checkDuration!: Duration, checker!: () -> ?Message): SocketBuilder<T> {
         SocketBuilder<T>(queueSize: queueSize, socketCount: socketCount, address: address,
             checkDuration: checkDuration, checker: checker)
     }
+    /**
+     * @param queueSize 写数据任务队列大小
+     * @param socketCount 连接数
+     * @param address    IPSocketAddress
+     * @param idGetter  从DE获得消息ID的函数
+     * @param checkDuration 连接有效性的检查周期
+     * @param checker   连接有效性检查函数，务必使用client.transfer(socketBuffer, id, message, timeout)传检查包
+     */
     public static func builder(queueSize!: Int64 = 1024, socketCount!: Int64 = 1, address!: IPSocketAddress,
         checkDuration!: Duration, checker!: () -> ?Message): SocketBuilder<T> {
         SocketBuilder<T>(queueSize: queueSize, socketCount: socketCount, address: address,
@@ -206,9 +230,7 @@ public class Client<T> <: Resource where T <: DataFields<T> {
     private func transfer(index: Int64, message: Message): MessageFuture<Message> {
         transfer(buffers[index], message)
     }
-    private func transfer(index: Int64, message: Message, timeout: Duration): ?Message {
-        transfer(buffers[index], message, timeout)
-    }
+
     internal func transfer(buffer: SocketBuffer, message: Message, once!: Bool = true): MessageFuture<Message> {
         let future = MessageFuture<Message>()
         if(once){
@@ -217,13 +239,7 @@ public class Client<T> <: Resource where T <: DataFields<T> {
         buffer.transfer(message)
         future
     }
-    private func transfer(buffer: SocketBuffer, message: Message, timeout: Duration): ?Message {
-        let result = transfer(buffer, message).tryGet(timeout)
-        if (result.isNone()) {
-            futures.remove(message.id)
-        }
-        result
-    }
+
     public func transfer(message: Message, executor: (Message) -> Unit): ListeningClient<T> {
         ListeningClient<T>(buffers[0].clone(), this, message, executor)
     }
