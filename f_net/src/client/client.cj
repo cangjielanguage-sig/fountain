@@ -15,16 +15,16 @@ limitations under the License.
  */
 package fountain::f_net.client
 
-internal import std.collection.concurrent.ConcurrentHashMap
-internal import std.env
+import std.env
+import std.collection.concurrent.ConcurrentHashMap
+import fountain::f_protocol.*
+import fountain::f_random.*
 internal import std.net.IPSocketAddress
 internal import std.sync.{Timer, CatchupStyle, AtomicInt64, Mutex, AtomicReference}
 internal import fountain::f_data.*
 internal import fountain::f_log.*
-internal import fountain::f_protocol.*
-internal import fountain::f_protocol.default.*
-internal import fountain::f_random.*
 internal import fountain::f_net.*
+internal import fountain::f_protocol.default.*
 
 public class Client<T> <: Resource where T <: DataFields<T> {
     private static let log = LoggerFactory.getLogger('fountain::f_net.client.Client')
