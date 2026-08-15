@@ -78,7 +78,7 @@ private func genStub(exactlyVersion: Bool, version: String, name: String, decl: 
             diagReport(ERROR, decl.toTokens(), '${x.identifier.value} must be a interface decl', '')
             throw RPCException()
     }
-    let className = Token(IDENTIFIER, '${decl.identifier.value}_STUB__')
+    let className = Token(IDENTIFIER, '${decl.identifier.value}_Stub__')
     quote(
         $decl
         public class $(className) <: $(decl.identifier){
