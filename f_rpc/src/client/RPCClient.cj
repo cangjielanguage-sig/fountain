@@ -26,6 +26,37 @@ public class RPCClient {
     private static let services = ConcurrentHashMap<ServiceMeta, MultiClient<Float64, RPCMessage>>()
 
     static init(){
+        let metas = HashMap<ServiceMeta, ArrayList<String>>()
+        func subscribe(client: Client, closingOnEnd: Bool){
+            try{
+                let message = Message.subscribe(data: false)
+                let data = client.transfer(message).get().data
+                let any = Array<ServiceMeta>.tryFromData(data)
+                let array: Array<ServiceMeta> = match(any){
+                    case x: Array<ServiceMeta> => x
+                    case x: ?Array<ServiceMeta> => x ?? []
+                    case _ => []
+                }
+                if(array.isEmpty()){
+                    return true
+                }
+                for(meta in array){
+                    let view = metas.entryView(meta)
+                    if(view.value.isNone()){
+                        view.value = ArrayList<String>()
+                    }
+                    view.value?.add(all: array)
+                }
+                return true
+            }catch(e: Exception){
+                rpclog.error("[FOUNTAIN_RPC.subscribe.services] ${host}", e)
+                return false
+            }finally{
+                if(closingOnEnd){
+                    client.close()
+                }
+            }
+        }
         let hosts = HashSet<String>()
         let clients = ClientConfig.createClient()
         for(client in clients){
@@ -38,9 +69,9 @@ public class RPCClient {
                 case _ => []
             }
             hosts.add(all: array)
+            subscribe(client, false)
         }
         clients.close()
-        let metas = HashMap<ServiceMeta, ArrayList<String>>()
         for(host in hosts){
             while(true){
                 let client: Client
@@ -52,30 +83,8 @@ public class RPCClient {
                         rpclog.error("[FOUNTAIN_RPC.subscribe.hosts] ${host}", e)
                     }
                 }
-                try{
-                    let message = Message.subscribe(data: false)
-                    let data = client.transfer(message).get().data
-                    let any = Array<ServiceMeta>.tryFromData(data)
-                    let array: Array<ServiceMeta> = match(any){
-                        case x: Array<ServiceMeta> => x
-                        case x: ?Array<ServiceMeta> => x ?? []
-                        case _ => []
-                    }
-                    if(array.isEmpty()){
-                        break
-                    }
-                    for(meta in array){
-                        let view = metas.entryView(meta)
-                        if(view.value.isNone()){
-                            view.value = ArrayList<String>()
-                        }
-                        view.value?.add(all: array)
-                    }
+                if(subscribe(client, true)){
                     break
-                }catch(e: Exception){
-                    rpclog.error("[FOUNTAIN_RPC.subscribe.services] ${host}", e)
-                }finally{
-                    client.close()
                 }
             }
         }
