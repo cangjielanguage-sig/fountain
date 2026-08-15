@@ -38,24 +38,24 @@ class RPCServer {
         server.start(executor)
         for(address in ServerConfig.baseAddresses){
             spawn{
-                let client: Client
                 while(true){
-                    try{
-                        client = Client.builder(address: address, checkDuration: Duration.second, checker: {=> Message.ping()}).build()
-                        break
-                    }catch(e: Exception){
-                        rpclog.error('[FOUNTAIN_RPC.register.newClient] ${address}', e)
-                    }
-                }
-                try{
+                    let client: Client
                     while(true){
+                        try{
+                            client = Client.builder(address: address, checkDuration: Duration.second, checker: {=> Message.ping()}).build()
+                            break
+                        }catch(e: Exception){
+                            rpclog.error('[FOUNTAIN_RPC.register.newClient] ${address}', e)
+                        }
+                    }
+                    try{
                         Message.register(data: port.toData()) |> client.transfer
                         return
+                    }catch(e: Exception){
+                        rpclog.error('[FOUNTAIN_RPC.register] ${address}', e)
+                    }finally{
+                        client.close()
                     }
-                }catch(e: Exception){
-                    rpclog.error('[FOUNTAIN_RPC.register] ${address}', e)
-                }finally{
-                    client.close()
                 }
             }
         }

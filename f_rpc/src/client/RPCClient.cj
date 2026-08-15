@@ -42,17 +42,17 @@ public class RPCClient {
         clients.close()
         let metas = HashMap<ServiceMeta, ArrayList<String>>()
         for(host in hosts){
-            let client: Client
             while(true){
-                try{
-                    client = Client.builder(address: address, checkDuration: Duration.second, checker: {=> Message.ping()}).build()
-                    break
-                }catch(e: Exception){
-                    rpclog.error("[FOUNTAIN_RPC.subscribe.hosts] ${host}", e)
-                }
-            }
-            try{
+                let client: Client
                 while(true){
+                    try{
+                        client = Client.builder(address: address, checkDuration: Duration.second, checker: {=> Message.ping()}).build()
+                        break
+                    }catch(e: Exception){
+                        rpclog.error("[FOUNTAIN_RPC.subscribe.hosts] ${host}", e)
+                    }
+                }
+                try{
                     let message = Message.subscribe(data: false)
                     let data = client.transfer(message).get().data
                     let any = Array<ServiceMeta>.tryFromData(data)
@@ -72,11 +72,11 @@ public class RPCClient {
                         view.value?.add(all: array)
                     }
                     break
+                }catch(e: Exception){
+                    rpclog.error("[FOUNTAIN_RPC.subscribe.services] ${host}", e)
+                }finally{
+                    client.close()
                 }
-            }catch(e: Exception){
-                rpclog.error("[FOUNTAIN_RPC.subscribe.services] ${host}", e)
-            }finally{
-                client.close()
             }
         }
         for((meta, hosts) in metas){
