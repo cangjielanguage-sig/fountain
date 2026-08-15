@@ -240,8 +240,8 @@ public class Client <: Resource {
         future
     }
 
-    public func transfer(message: Message, executor: (Message) -> Unit): ListeningClient<Message> {
-        ListeningClient(buffers[0].clone(), this, message, executor)
+    public func transfer<T>(message: Message, executor: (Message) -> Unit): ListeningClient<T> where T <: DataFields<T> {
+        ListeningClient<T>(buffers[0].clone(), this, message, executor)
     }
 }
 
