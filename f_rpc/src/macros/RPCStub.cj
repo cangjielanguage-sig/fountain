@@ -19,9 +19,9 @@ import std.ast.*
 /**
  * attr 用于指定skeleton的版本号、fountain::f_bean名称、是否精确版本号，分别有以下属性：
  * 
- * version: 指定skeleton的版本号，没有默认值，不指定将报错
+ * version: 指定skeleton的版本号，没有默认值，不指定将报错。version 包含两位或三位版本数字。
  * name: 指定fountain::f_bean名称，默认为空
- * exactlyVersion: 是否精确版本号，默认为false
+ * exactlyVersion: 是否精确版本号，默认为false。false时只保留version的前两位版本数字，true时保留version的所有版本数字。
  * 
  */
 public macro RPCStub(attr: Tokens, input: Tokens): Tokens {
