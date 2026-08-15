@@ -35,6 +35,7 @@ class RPCServer {
             executors: executors, checker: checker, unavailableChecked: unavailableChecked,
             defaultResp: {id => error(id, OVERFEEDING)}, limiter: rateLimiter()
         )
+        server.start(executor)
         for(address in ServerConfig.baseAddresses){
             spawn{
                 let client: Client<UInt16>
@@ -59,7 +60,6 @@ class RPCServer {
                 }
             }
         }
-        server.start(executor)
     }
     private static func checker(): ?Message {
         Message.ping()
