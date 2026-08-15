@@ -16,11 +16,11 @@ limitations under the License.
 package fountain::f_protocol
 
 import std.io.{InputStream, OutputStream}
-import fountain::f_data.DataFields
+import fountain::f_data.FromToData
 
 public interface Protocol<EN, DE> where EN <: MessageCopier {
     func encode(): EN
-    static func decode<T>(input: InputStream): DE where T <: DataFields<T>
+    static func decode<T>(input: InputStream): DE where T <: FromToData
 }
 public interface MessageCopier {
     func copy(to!: OutputStream, closeToOnEnd!: Bool): Unit

@@ -54,7 +54,7 @@ public struct Message <: Protocol<EncodedMessage, Message> {
 | ERROR                   | 0         | 0         | 0         | 0         |
 | DEREGISTER              | 0         | 0         | 0         | ACK       |
 */
-    private static func build<T>(command: Command, data: T): Message where T <: ToData {
+    private static func build<T>(command: Command, data: ?T): Message where T <: ToData {
         Message(command, data.toData())
     }
     private static func build(command: Command): Message {
@@ -63,7 +63,7 @@ public struct Message <: Protocol<EncodedMessage, Message> {
     private static func build(command: Command, id: MessageID): Message {
         Message(command, id)
     }
-    public static func build<T>(command: Command, id: MessageID, data: T): Message where T <: ToData {
+    public static func build<T>(command: Command, id: MessageID, data: ?T): Message where T <: ToData {
         Message(command, id, data.toData())
     }
     public static func auth<T>(hasData!: Bool, ack!: Bool, authData!: T): Message  where T <: ToData {
@@ -138,7 +138,7 @@ public struct Message <: Protocol<EncodedMessage, Message> {
         let bytes = DefaultCodec().encode(id.time).encode(id.pid).encode(id.tid).encode(id.hostId).encode(data).finish()
         EncodedMessage(command.value, bytes)
     }
-    public static func decode<T>(input: InputStream): Message where T <: DataFields<T> {
+    public static func decode<T>(input: InputStream): Message where T <: FromToData {
         let b = [0u8]
         let l = input.read(b)
         if (l == 0) {
@@ -151,7 +151,7 @@ public struct Message <: Protocol<EncodedMessage, Message> {
         let tid = decoder.decode<Int64>(input).getOrThrow {IllegalArgumentException()}
         let hostId = decoder.decode<Int64>(input).getOrThrow {IllegalArgumentException()}
         let data = decoder.decode<T>(input)
-        build(command, MessageID(time: time, pid: pid, tid: tid, hostId: hostId), data)
+        build<T>(command, MessageID(time: time, pid: pid, tid: tid, hostId: hostId), data)
     }
 }
 

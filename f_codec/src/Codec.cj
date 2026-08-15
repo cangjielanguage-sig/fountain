@@ -68,7 +68,7 @@ public interface Encoder {
 }
 
 public interface Decoder {
-    func decode<T>(input: InputStream): ?T where T <: DataFields<T>
+    func decode<T>(input: InputStream): ?T where T <: FromToData
 }
 
 public interface Codec <: Encoder & Decoder {}

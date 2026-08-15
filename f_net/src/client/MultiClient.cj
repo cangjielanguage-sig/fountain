@@ -189,7 +189,7 @@ public class MultiClientBuilder<W> where W <: Addable<W> & Comparable<W>{
     }
 }
 public class MultiClient<W> <: Resource & Iterable<Client> where W <: Addable<W> & Comparable<W> {
-    MultiClient(private let clients: LoadBalance<W, Unit, Client>, private let clients: ArrayList<Client>){}
+    MultiClient(private let loadbalance: LoadBalance<W, Unit, Client>, private let clients: ArrayList<Client>){}
     /**
      * @param queueSize 写数据任务队列大小
      * @param socketCount 连接数
@@ -199,11 +199,11 @@ public class MultiClient<W> <: Resource & Iterable<Client> where W <: Addable<W>
      */
     public static func builder(queueSize!: Int64 = 1024, socketCount!: Int64 = 1, 
         checkDuration!: Duration, checker!: () -> ?Message): MultiClientBuilder<W> {
-        builder(queueSize: queueSize, socketCount: socketCount, 
+        MultiClientBuilder<W>(queueSize: queueSize, socketCount: socketCount, 
             checkDuration: checkDuration, checker: checker)
     }
     public func iterator(): Iterator<Client> {
-        clients.iterator().map{f => f(())}
+        loadbalance.iterator().map{f => f(())}
     }
     private var closed = false
     public func isClosed(): Bool {

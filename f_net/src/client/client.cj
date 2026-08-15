@@ -48,7 +48,7 @@ public class Client <: Resource {
                     while (!buffer.isClosed()) {
                         var id = None<MessageID>
                         try {
-                            let message = Message.decode<None<Bool>>(buffer)
+                            let message = Message.decode<DataNone>(buffer)
                             let mid = message.id
                             id = mid
                             if (let Some(fut) <- futures.remove(mid)) {
@@ -77,7 +77,7 @@ public class Client <: Resource {
                                 var mid = None<MessageID>
                                 var cmd = None<Command>
                                 try {
-                                    let message: Message = Message.decode<None<Bool>>(buffer)
+                                    let message: Message = Message.decode<DataNone>(buffer)
                                     let id = message.id
                                     mid = id
                                     cmd = message.command
@@ -240,7 +240,7 @@ public class Client <: Resource {
         future
     }
 
-    public func transfer(message: Message, executor: (Message) -> Unit): ListeningClient {
+    public func transfer(message: Message, executor: (Message) -> Unit): ListeningClient<Message> {
         ListeningClient(buffers[0].clone(), this, message, executor)
     }
 }
