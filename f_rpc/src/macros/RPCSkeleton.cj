@@ -15,8 +15,6 @@ limitations under the License.
 */
 macro package fountain::f_rpc.macros
 
-public import fountain::f_bean.macros.*
-
 public macro RPCSkeleton(input: Tokens): Tokens {
     return RPCSkeleton(empty_tokens, input)
 }

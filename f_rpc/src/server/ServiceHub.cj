@@ -48,6 +48,10 @@ public struct ServiceHub {
                     let meta = ServiceMeta(version, name, ti.qualifiedName, funcName, argTypeNames, exactlyVersion: exactlyVersion)
                     rpclog.debug{'[FOUNTAIN_RPC.${SKELETON}] [${name}(${version})]interface-${ti}.${funcName}${argTypeNames};${hub.contains(meta)}'}
                     hub.addIfAbsent(meta, fn)
+                    if(name.size != 0){
+                        let meta = ServiceMeta(version, '', ti.qualifiedName, funcName, argTypeNames, exactlyVersion: exactlyVersion)
+                        hub.addIfAbsent(meta, fn)
+                    }
                 }
             }
             if(let cti: ClassTypeInfo <- t && cti != ClassTypeInfo.of<Object>() && let sti <- cti.superClass && sti != ClassTypeInfo.of<Object>() && sti != cti){

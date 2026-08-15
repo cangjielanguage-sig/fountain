@@ -18,3 +18,5 @@ package fountain::f_rpc.macros
 internal import std.ast.*
 internal import fountain::f_macros.*
 internal import fountain::f_rpc.base.*
+
+public import fountain::f_bean.macros.*

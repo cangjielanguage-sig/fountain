@@ -15,7 +15,7 @@ limitations under the License.
 */
 package fountain::f_rpc.base
 
-protected import std.reflect.*
+public import std.reflect.*
 protected import std.time.MonoTime
 
 protected import fountain::f_base.*
