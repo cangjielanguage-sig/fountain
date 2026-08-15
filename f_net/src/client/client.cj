@@ -82,6 +82,7 @@ public class Client <: Resource {
                                     mid = id
                                     cmd = message.command
                                     if(let Command.PING(_) <- message.command){
+                                        futures.remove(id)
                                         transfer(buffer, Message.ack(id))
                                     }else if (let Some(fut) <- futures.remove(id)) {
                                         var f = fut
