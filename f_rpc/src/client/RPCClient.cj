@@ -51,9 +51,9 @@ public class RPCClient {
                     rpclog.error("[FOUNTAIN_RPC.subscribe.hosts] ${host}", e)
                 }
             }
-            let message = Message.subscribe(data: false)
             try{
                 while(true){
+                    let message = Message.subscribe(data: false)
                     let data = client.transfer(message).get().data
                     let any = Array<ServiceMeta>.tryFromData(data)
                     let array: Array<ServiceMeta> = match(any){
