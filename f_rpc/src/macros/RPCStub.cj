@@ -52,6 +52,11 @@ public macro RPCStub(attr: Tokens, input: Tokens): Tokens {
     genStub(exactlyVersion, version, name, parseDecl(input))
 }
 private func genStub(exactlyVersion: Bool, version: String, name: String, decl: Decl): Tokens {
+    try{
+        decl.genericParam
+        diagReport(ERROR, decl.toTokens(), 'decl ${d.identifier.value} must not be with generic param fountain::f_rpc stub', '')
+        throw RPCException()
+    }catch(_){}
     var tokens = `empty_tokens`
     match(decl){
         case x: InterfaceDecl => 
