@@ -20,14 +20,14 @@ public struct Fleet {
     private static let clients = {
         =>
             let hosts = FleetConfig.hosts
-            Array<Client<FleetDataMessage>>(hosts.size) {
+            Array<Client>(hosts.size) {
                 i =>
-                    Client<FleetDataMessage>
+                    Client
                         .builder(address: hosts[i], checkDuration: Duration.second, checker: {=> Message.ping()})
                         .build()
             }
     }()
-    private static func confirmClient(path: String): Client<FleetDataMessage> {
+    private static func confirmClient(path: String): Client {
         clients[path.hashCode() % clients.size]
     }
     public static func get<T>(path: String): ?T where T <: DataFields<T> {
@@ -65,7 +65,7 @@ public struct Fleet {
     }
     public static func listen(path: String, executor: (Message) -> Unit): ListeningFleet {
         let message = Message.subscribe(data: path)
-        let listening = confirmClient(path).transfer(message, executor)
+        let listening = confirmClient(path).transfer<FleetDataMessage>(message, executor)
         ListeningFleet(path, message.id, listening)
     }
     static func cancel(path: String, id: MessageID): Unit {
