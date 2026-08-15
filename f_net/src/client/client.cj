@@ -26,7 +26,7 @@ internal import fountain::f_log.*
 internal import fountain::f_net.*
 internal import fountain::f_protocol.default.*
 
-public class Client<T> <: Resource where T <: DataFields<T> {
+public class Client <: Resource {
     private static let log = LoggerFactory.getLogger('fountain::f_net.client.Client')
     private let futures = ConcurrentHashMap<MessageID, MessageFuture<Message>>()
     private let buffers: Array<SocketBuffer>
@@ -48,7 +48,7 @@ public class Client<T> <: Resource where T <: DataFields<T> {
                     while (!buffer.isClosed()) {
                         var id = None<MessageID>
                         try {
-                            let message = Message.decode<T>(buffer)
+                            let message = Message.decode<None<Bool>>(buffer)
                             let mid = message.id
                             id = mid
                             if (let Some(fut) <- futures.remove(mid)) {
@@ -77,7 +77,7 @@ public class Client<T> <: Resource where T <: DataFields<T> {
                                 var mid = None<MessageID>
                                 var cmd = None<Command>
                                 try {
-                                    let message: Message = Message.decode<T>(buffer)
+                                    let message: Message = Message.decode<None<Bool>>(buffer)
                                     let id = message.id
                                     mid = id
                                     cmd = message.command
@@ -157,8 +157,8 @@ public class Client<T> <: Resource where T <: DataFields<T> {
      * @param checker   连接有效性检查函数，务必使用client.transfer(socketBuffer, id, message, timeout)传检查包
      */
     public static func builder(queueSize!: Int64 = 1024, socketCount!: Int64 = 1, host!: String, port!: UInt16,
-        checkDuration!: Duration, checker!: () -> ?Message): SocketBuilder<T> {
-        SocketBuilder<T>(queueSize: queueSize, socketCount: socketCount, host: host, port: port,
+        checkDuration!: Duration, checker!: () -> ?Message): ClientBuilder {
+        ClientBuilder(queueSize: queueSize, socketCount: socketCount, host: host, port: port,
             checkDuration: checkDuration, checker: checker)
     }
     /**
@@ -170,8 +170,8 @@ public class Client<T> <: Resource where T <: DataFields<T> {
      * @param checker   连接有效性检查函数，务必使用client.transfer(socketBuffer, id, message, timeout)传检查包
      */
     public static func builder(queueSize!: Int64 = 1024, socketCount!: Int64 = 1, address!: (String, UInt16),
-        checkDuration!: Duration, checker!: () -> ?Message): SocketBuilder<T> {
-        SocketBuilder<T>(queueSize: queueSize, socketCount: socketCount, address: '${address[0]}:${address[1]}',
+        checkDuration!: Duration, checker!: () -> ?Message): ClientBuilder {
+        ClientBuilder(queueSize: queueSize, socketCount: socketCount, address: '${address[0]}:${address[1]}',
             checkDuration: checkDuration, checker: checker)
     }
     /**
@@ -183,8 +183,8 @@ public class Client<T> <: Resource where T <: DataFields<T> {
      * @param checker   连接有效性检查函数，务必使用client.transfer(socketBuffer, id, message, timeout)传检查包
      */
     public static func builder(queueSize!: Int64 = 1024, socketCount!: Int64 = 1, address!: String,
-        checkDuration!: Duration, checker!: () -> ?Message): SocketBuilder<T> {
-        SocketBuilder<T>(queueSize: queueSize, socketCount: socketCount, address: address,
+        checkDuration!: Duration, checker!: () -> ?Message): ClientBuilder {
+        ClientBuilder(queueSize: queueSize, socketCount: socketCount, address: address,
             checkDuration: checkDuration, checker: checker)
     }
     /**
@@ -196,8 +196,8 @@ public class Client<T> <: Resource where T <: DataFields<T> {
      * @param checker   连接有效性检查函数，务必使用client.transfer(socketBuffer, id, message, timeout)传检查包
      */
     public static func builder(queueSize!: Int64 = 1024, socketCount!: Int64 = 1, address!: IPSocketAddress,
-        checkDuration!: Duration, checker!: () -> ?Message): SocketBuilder<T> {
-        SocketBuilder<T>(queueSize: queueSize, socketCount: socketCount, address: address,
+        checkDuration!: Duration, checker!: () -> ?Message): ClientBuilder {
+        ClientBuilder(queueSize: queueSize, socketCount: socketCount, address: address,
             checkDuration: checkDuration, checker: checker)
     }
     private prop index: Int64 {
@@ -240,14 +240,14 @@ public class Client<T> <: Resource where T <: DataFields<T> {
         future
     }
 
-    public func transfer(message: Message, executor: (Message) -> Unit): ListeningClient<T> {
-        ListeningClient<T>(buffers[0].clone(), this, message, executor)
+    public func transfer(message: Message, executor: (Message) -> Unit): ListeningClient {
+        ListeningClient(buffers[0].clone(), this, message, executor)
     }
 }
 
-public class SocketBuilder<T> where T <: DataFields<T> {
+public class ClientBuilder {
     private var pingTimeout_ = Duration.millisecond * 10
-    SocketBuilder(let queueSize!: Int64 = 1024, private let socketCount!: Int64 = 1, private let address!: IPSocketAddress, 
+    ClientBuilder(let queueSize!: Int64 = 1024, private let socketCount!: Int64 = 1, private let address!: IPSocketAddress, 
                   private let checkDuration!: Duration, private let checker!: () -> ?Message){}
     init(queueSize!: Int64 = 1024, socketCount!: Int64 = 1, 
         host!: String, port!: UInt16, 
@@ -318,8 +318,8 @@ public class SocketBuilder<T> where T <: DataFields<T> {
         pingTimeout_ = timeout
         this
     }
-    public func build(): Client<T> {
-        Client<T>(queueSize, checkDuration, checker,  pingTimeout_, this.newSocket,
+    public func build(): Client {
+        Client(queueSize, checkDuration, checker,  pingTimeout_, this.newSocket,
             Array<TcpSocket>(socketCount) {_ => newSocket()})
     }
     func newSocket() {

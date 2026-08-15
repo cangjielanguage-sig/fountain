@@ -15,4 +15,5 @@ limitations under the License.
 */
 package fountain::f_rpc.client
 
+internal import fountain::f_base.*
 public import fountain::f_rpc.base.*

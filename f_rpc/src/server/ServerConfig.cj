@@ -36,12 +36,19 @@ internal class ServerConfig {
     public static const RPC_SERVER_RATE_LIMITER_POPULATION_PERIOD = RPC_SERVER_PREFIX + '_populationPeriod'
 
     public static const RPC_SERVER_EXACTLY_VERSION = RPC_SERVER_PREFIX + '_exactlyVersion'
+
+    public static const RPC_SERVER_EXECUTORS = RPC_SERVER_PREFIX + '_executors'
     
     public static const ANY_MOMENT_RATE_LIMITER = "anyMomentRateLimiter"
     public static const LEAKING_BUCKET_RATE_LIMITER = "leakingBucketRateLimiter"
     public static const SLIDING_WINDOW_RATE_LIMITER = "slidingWindowRateLimiter"
     public static const TOKEN_BUCKET_RATE_LIMITER = "tokenBucketRateLimiter"
 
+    internal static prop executors: Int64 {
+        get(){
+            Config.getValue<Int64>(RPC_SERVER_EXECUTORS) ?? 200
+        }
+    }
 
     internal static prop port: Unit16 {
         get(){

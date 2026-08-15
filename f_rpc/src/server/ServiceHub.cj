@@ -75,9 +75,9 @@ public struct ServiceHub {
             }
         }
     }
-    internal static func call(message: RPCMessage): ToData {
+    internal static func call(message: RPCMessage): Data {
         let meta = message.meta
-        hub[meta](meta.name, message.params)
+        hub[meta](meta.name, message.params).toData()
     }
     internal static prop metas: Array<ServiceMeta> {
         get(){

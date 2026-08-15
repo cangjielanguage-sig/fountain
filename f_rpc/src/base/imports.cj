@@ -24,6 +24,7 @@ protected import fountain::f_io.ByteBuffer
 protected import fountain::f_bean.*
 protected import fountain::f_data.*
 protected import fountain::f_data
+protected import fountain::f_protocol.default.*
 
 public const UNSUPPORTED_COMMAND = 'UnsupportedCommand'
 public const OVERFEEDING = 'Client is overfeeding'
@@ -42,6 +43,9 @@ private func logmsg<T>(id: MessageID, label: String, command: Command, message: 
 }
 protected func errorLog(id: MessageID, label: String, command: Command, message: String): Unit {
     rpclog.error(logmsg(id, label, command, message))
+}
+protected func errorLog(id: MessageID, label: String, command: Command, e: Exception): Unit {
+    rpclog.error('[FOUNTAIN_RPC.${label}.${command}] ${id}', e)
 }
 protected func errorLog<T>(id: MessageID, label: String, command: Command, message: T): Unit where T <: ToData {
     rpclog.error(logmsg(id, label, command, message))

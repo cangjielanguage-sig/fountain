@@ -15,6 +15,8 @@ limitations under the License.
 */
 package fountain::f_rpc.server
 
+import fountain::f_net.server.Server
+
 private let serviceHosts = ConcurrentHashSet<String>()
 
 private func error(id: MessageID, cmd: Command, msg: ErrorMessage): Message {
@@ -22,14 +24,15 @@ private func error(id: MessageID, cmd: Command, msg: ErrorMessage): Message {
     Message.error(id, data: msg.error)
 }
 
-class Server {
+class RPCServer {
     internal static func start(): Unit {
         let qsize = ServerConfig.bufferQueueSize
         let port = ServerConfig.port
         let checkDuration = ServerConfig.connectionCheckDuration
         let unavailableChecked = ServerConfig.unavailableChecked
-        let server = Server<Array<Byte>>(queueSize: qsize, bindAt: port, checkDuration: checkDuration, 
-            checker: checker, unavailableChecked: unavailableChecked,
+        let executors = ServerConfig.executors
+        let server = Server<Data>(bufferQueueSize: qsize, bindAt: port, checkDuration: checkDuration, 
+            executors: executors, checker: checker, unavailableChecked: unavailableChecked,
             defaultResp: {id => error(id, OVERFEEDING)}, limiter: rateLimiter()
         )
         for(address in ServerConfig.baseAddresses){
@@ -37,17 +40,21 @@ class Server {
                 let client: Client<UInt16>
                 while(true){
                     try{
-                        client = Client<UInt16>.builder(address: address, checkDuration: Duration.second, checker: {=> Message.pint()}).build()
+                        client = Client<UInt16>.builder(address: address, checkDuration: Duration.second, checker: {=> Message.ping()}).build()
                         break
-                    }catch(_){}
+                    }catch(e: Exception){
+                        rpclog.error('[FOUNTAIN_RPC.register.newClient] ${address}', e)
+                    }
                 }
-                let message = Message.register(data: port)
+                let message = Message.register(data: port.toData())
                 try{
                     while(true){
                         client.transfer(message)
                         return
                     }
-                }catch(_){}finally{
+                }catch(e: Exception){
+                    rpclog.error('[FOUNTAIN_RPC.register] ${address}', e)
+                }finally{
                     client.close()
                 }
             }

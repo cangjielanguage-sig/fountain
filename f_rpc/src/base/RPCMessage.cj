@@ -20,7 +20,12 @@ import fountain::f_data.macros.*
 @DataAssist[fields props]
 public class RPCMessage {
     private let meta: ServiceMeta = ServiceMeta()
-    private var params: Array<Data> = [] 
+    private var params: Array<Data> = []
+    public init(){}
+    public init(meta: ServiceMeta, params: Array<Data>){
+        this.meta = meta
+        this.params = params
+    }
 }
 @DataAssist[fields props hash equal]
 public class ServiceMeta {
