@@ -42,10 +42,10 @@ public class RPCClient {
         clients.close()
         let metas = HashMap<ServiceMeta, ArrayList<String>>()
         for(host in hosts){
-            let client: Client<Array<ServiceMeta>>
+            let client: Client
             while(true){
                 try{
-                    client = Client<Array<ServiceMeta>>.builder(address: address, checkDuration: Duration.second, checker: {=> Message.ping()}).build()
+                    client = Client.builder(address: address, checkDuration: Duration.second, checker: {=> Message.ping()}).build()
                     break
                 }catch(e: Exception){
                     rpclog.error("[FOUNTAIN_RPC.subscribe.hosts] ${host}", e)

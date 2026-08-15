@@ -38,10 +38,10 @@ class RPCServer {
         server.start(executor)
         for(address in ServerConfig.baseAddresses){
             spawn{
-                let client: Client<UInt16>
+                let client: Client
                 while(true){
                     try{
-                        client = Client<UInt16>.builder(address: address, checkDuration: Duration.second, checker: {=> Message.ping()}).build()
+                        client = Client.builder(address: address, checkDuration: Duration.second, checker: {=> Message.ping()}).build()
                         break
                     }catch(e: Exception){
                         rpclog.error('[FOUNTAIN_RPC.register.newClient] ${address}', e)
