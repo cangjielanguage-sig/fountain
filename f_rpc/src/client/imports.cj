@@ -16,4 +16,6 @@ limitations under the License.
 package fountain::f_rpc.client
 
 internal import fountain::f_base.*
+public import std.reflect.*
+public import fountain::f_bean.BeanFactory
 public import fountain::f_rpc.base.*

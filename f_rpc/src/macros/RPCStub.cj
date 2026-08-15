@@ -24,6 +24,7 @@ import std.ast.*
  * exactlyVersion: 是否精确版本号，默认为false。false时只保留version的前两位版本数字，true时保留version的所有版本数字。
  * 格式：version='1.0.0' name=beanName exactlyVersion=true
  * **注意**：目前只能实现被RPCStub修饰的接口直接声明的实例成员函数，不能实现属性，也不能实现父接口的函数
+ * 当存在环境变量rpc_currentSkeleton，且变量值与当前项目名称一致时或者与被@RPCStub修饰的接口有相同的包名，宏RPCStub展开的代码将不会注册到IOC
  */
 public macro RPCStub(attr: Tokens, input: Tokens): Tokens {
     var version = ''
@@ -80,10 +81,19 @@ private func genStub(exactlyVersion: Bool, version: String, name: String, decl: 
     let className = Token(IDENTIFIER, '${decl.identifier.value}_STUB__')
     quote(
         $decl
-        @Bean
         public class $(className) <: $(decl.identifier){
             $tokens
         }
+        private let _ = {=>
+            let skeleton = RPCClient.currentSkeleton
+            let klass = TypeInfo.of<$(className)>()
+            let qualified = klass.qualifiedName
+            let pkgStart = (qualified.indexOf('::') ?? -1) + 1
+            let pkgEnd = qualified.indexOf('.', pkgStart).getOrThrow()
+            if(skeleton == '' || !(skeleton == qualified[0 .. pkgEnd] || skeleton == qualified[pkgStart .. pkgEnd])) {
+                BeanFactory.instance.register<$(className)>{$(className)()}
+            }
+        }()
     )
 }
 private func genStub(exactlyVersion: Bool, version: String, name: String, typeName: String, decl: FuncDecl): Tokens {
@@ -113,10 +123,3 @@ private func genStub(exactlyVersion: Bool, version: String, name: String, typeNa
         }
     )
 }
-/*
-    private var version: String = ''
-    private var name: String = ''
-    private var typeName: String = ''
-    private var methodName: String = ''
-    private var argTypeNames: Array<String> = []
-*/
