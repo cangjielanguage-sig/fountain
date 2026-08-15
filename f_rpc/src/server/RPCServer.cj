@@ -47,10 +47,9 @@ class RPCServer {
                         rpclog.error('[FOUNTAIN_RPC.register.newClient] ${address}', e)
                     }
                 }
-                let message = Message.register(data: port.toData())
                 try{
                     while(true){
-                        client.transfer(message)
+                        Message.register(data: port.toData()) |> client.transfer
                         return
                     }
                 }catch(e: Exception){
