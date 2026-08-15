@@ -22,7 +22,7 @@ import std.ast.*
  * version: 指定skeleton的版本号，没有默认值，不指定将报错。version 包含两位或三位版本数字。
  * name: 指定fountain::f_bean名称，默认为空
  * exactlyVersion: 是否精确版本号，默认为false。false时只保留version的前两位版本数字，true时保留version的所有版本数字。
- * 
+ * **注意**：目前只能实现被RPCStub修饰的接口直接声明的实例成员函数，不能实现属性，也不能实现父接口的函数
  */
 public macro RPCStub(attr: Tokens, input: Tokens): Tokens {
     var version = ''
@@ -57,10 +57,13 @@ private func genStub(exactlyVersion: Bool, version: String, name: String, decl: 
         case x: InterfaceDecl => 
             let typeName = x.qualifiedName
             for(d in x.body.decls){
-                if(let f: FuncDecl <- d){
-                    tokens = genStub(exactlyVersion, version, name, typeName, f)
+                if(let f: FuncDecl <- d && !isStatic(f)){
+                    if(tokens.size > 0){
+                        tokens += `nl`
+                    }
+                    tokens += genStub(exactlyVersion, version, name, typeName, f)
                 }else{
-                    diagReport(ERROR, d.toTokens(), 'decl ${d.identifier.value} in ${x.identifier.value} must be a func decl for fountain::f_rpc stub', '')
+                    diagReport(ERROR, d.toTokens(), 'decl ${d.identifier.value} in ${x.identifier.value} must be a instance func decl for fountain::f_rpc stub', '')
                     throw RPCException()
                 }
             }
