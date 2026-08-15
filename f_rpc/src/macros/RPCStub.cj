@@ -22,6 +22,7 @@ import std.ast.*
  * version: 指定skeleton的版本号，没有默认值，不指定将报错。version 包含两位或三位版本数字。
  * name: 指定fountain::f_bean名称，默认为空
  * exactlyVersion: 是否精确版本号，默认为false。false时只保留version的前两位版本数字，true时保留version的所有版本数字。
+ * 格式：version='1.0.0' name=beanName exactlyVersion=true
  * **注意**：目前只能实现被RPCStub修饰的接口直接声明的实例成员函数，不能实现属性，也不能实现父接口的函数
  */
 public macro RPCStub(attr: Tokens, input: Tokens): Tokens {
