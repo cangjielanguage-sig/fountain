@@ -88,9 +88,9 @@ private func genStub(exactlyVersion: Bool, version: String, name: String, decl: 
             let skeleton = RPCClient.currentSkeleton
             let klass = TypeInfo.of<$(className)>()
             let qualified = klass.qualifiedName
-            let pkgStart = (qualified.indexOf('::') ?? -1) + 1
-            let pkgEnd = qualified.indexOf('.', pkgStart).getOrThrow()
-            if(skeleton == '' || !(skeleton == qualified[0 .. pkgEnd] || skeleton == qualified[pkgStart .. pkgEnd])) {
+            let modStart = (qualified.indexOf('::') ?? -1) + 1
+            let modEnd = qualified.indexOf('.', modStart).getOrThrow()
+            if(skeleton == '' || !(skeleton == qualified[0 .. modEnd] || skeleton == qualified[modStart .. modEnd])) {
                 BeanFactory.instance.register<$(className)>{$(className)()}
             }
         }()
