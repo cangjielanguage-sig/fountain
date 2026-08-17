@@ -10,8 +10,9 @@
   "fountain::f_crypto" = {path = "../f_crypto"}
   "fountain::f_data" = {path = "../f_data"}
   "fountain::f_exception" = {path = "../f_exception"}
-  "fountain::f_io" = {path = "../f_io"}
+  "fountain::f_health" = {path = "../f_health"}
   "fountain::f_http" = {path = "../f_http"}
+  "fountain::f_io" = {path = "../f_io"}
   "fountain::f_log" = {path = "../f_log"}
   "fountain::f_macros" = {path = "../f_macros"}
   "fountain::f_random" = {path = "../f_random"}
