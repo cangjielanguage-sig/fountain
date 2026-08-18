@@ -33,8 +33,9 @@ public struct RoundRobin<W> <: LoadBalanceAlgo<W> where W <: Addable<W> & Compar
         current = min
     }
     public mut func next(): W{
-        let v = current
+        let v: W
         synchronized(mutex){
+            v = current
             current += step
         }
         if(current > max){
