@@ -85,7 +85,7 @@ private func genStub(exactlyVersion: Bool, version: String, name: String, decl: 
             $tokens
         }
         private let _ = {=>
-            let skeleton = RPCClient.currentSkeleton
+            let skeleton = ClientConfig.currentSkeleton
             let klass = TypeInfo.of<$(className)>()
             let qualified = klass.qualifiedName
             let modStart = (qualified.indexOf('::') ?? -1) + 1
