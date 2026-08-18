@@ -17,6 +17,7 @@ package fountain::f_concurrent
 
 import std.collection.TreeMap
 import std.math.Number as StdNumber
+import std.sync.Mutex
 import stdx.crypto.crypto.SecureRandom
 import fountain::f_base.Addable
 import fountain::f_random.*
@@ -26,15 +27,22 @@ public interface LoadBalanceAlgo<W> where W <: Addable<W> & Comparable<W> {
     mut func next(): W
 }
 public struct RoundRobin<W> <: LoadBalanceAlgo<W> where W <: Addable<W> & Comparable<W> {
+    private let mutex = Mutex()
     private var current: W
     public RoundRobin(private let step: W, private let min: W, private let max: W){
         current = min
     }
     public mut func next(): W{
         let v = current
-        current += step
+        synchronized(mutex){
+            current += step
+        }
         if(current > max){
-            current = min
+            synchronized(mutex){
+                if(current > max){
+                    current = min
+                }
+            }
         }
         v
     }
