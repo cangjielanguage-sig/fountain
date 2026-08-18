@@ -54,8 +54,14 @@ public struct Message <: Protocol<EncodedMessage, Message> {
 | ERROR                   | 0         | 0         | 0         | 0         |
 | DEREGISTER              | 0         | 0         | 0         | ACK       |
 */
+    private static func toData<T>(data: ?T): Data where T <: ToData {
+        match(data){
+            case Some(x) => x.toData()
+            case _ => DataNone.INSTANCE
+        }
+    }
     private static func build<T>(command: Command, data: ?T): Message where T <: ToData {
-        Message(command, data.toData())
+        Message(command, toData<T>(data))
     }
     private static func build(command: Command): Message {
         Message(command)
@@ -64,7 +70,7 @@ public struct Message <: Protocol<EncodedMessage, Message> {
         Message(command, id)
     }
     public static func build<T>(command: Command, id: MessageID, data: ?T): Message where T <: ToData {
-        Message(command, id, data.toData())
+        Message(command, id, toData<T>(data))
     }
     public static func auth<T>(hasData!: Bool, ack!: Bool, authData!: T): Message  where T <: ToData {
         if (hasData) {

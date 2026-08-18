@@ -19,16 +19,12 @@ extend<T> Option<T> <: DataFields<Option<T>> where T <: DataFields<T> {
     public static func isSimple(): Bool {
         T.isSimple()
     }
-}
-extend<T> Option<T> <: ToData where T <: ToData {
     public func toData(): Data {
         match (this) {
             case Some(x) => x.toData()
             case _ => DataNone.INSTANCE
         }
     }
-}
-extend<T> Option<T>  FromData where T <: FromData {
     public static func tryFromData(data: Data, flag: DataConversionFlag): Any {
         match (data) {
             case x: DataNone => None<T>

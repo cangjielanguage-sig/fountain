@@ -17,7 +17,7 @@ package fountain::f_net.client
 
 import std.sync.AtomicBool
 
-public class ListeningClient<T> <: Resource {
+public class ListeningClient<T> <: Resource where T <: DataFields<T> {
     private static let log = LoggerFactory.getLogger('fountain::f_net.client.ListeningClient')
     private let closed = AtomicBool(false)
     private var timer: Timer = ZERO_TIMER
