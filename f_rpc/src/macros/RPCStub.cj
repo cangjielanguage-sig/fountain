@@ -117,7 +117,7 @@ private func genStub(exactlyVersion: Bool, version: String, name: String, typeNa
             let methodName = $(decl.identifier.value)
             let argTypeNames = $(argTypes)
             let meta = ServiceMeta(version, name, typeName, methodName, argTypeNames, exactlyVersion: $exactlyVersion)
-            let args = $(argValues)
+            let args: Array<Data> = $(argValues)
             let message = RPCMessage(meta, args)
             RPCClient.call<$(decl.declType)>(message)
         }
