@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package fountain::f_rpc
+package fountain::f_rpc.base
 
 import fountain::f_data.macros.*
 
@@ -23,7 +23,7 @@ public class RPCMessage {
     private var params: Array<Data> = []
     public init(){}
     public init(meta: ServiceMeta, params: Array<Data>){
-        this.meta = meta
+        DataObject.populate(meta, this.meta)
         this.params = params
     }
 }
@@ -41,7 +41,7 @@ public class ServiceMeta {
             version
         }else{
             let v = version.split('.')
-            '${v[0].v[1]}'
+            '${v[0]}.${v[1]}'
         }
         this.name = name
         this.typeName = typeName
@@ -49,6 +49,6 @@ public class ServiceMeta {
         this.argTypeNames = argTypeNames
     }
     public init(version: String, name: String, typeName: TypeInfo, methodName: String, argTypeNames: Array<TypeInfo>, exactlyVersion!: Bool = false){
-        this(version, name, typeName, methodName, Array<String>(argTypeNames.size){i => argTypeNames[i].qualifiedName}, exactlyVersion: exactlyVersion)
+        this(version, name, typeName.qualifiedName, methodName, Array<String>(argTypeNames.size){i => argTypeNames[i].qualifiedName}, exactlyVersion: exactlyVersion)
     }
 }

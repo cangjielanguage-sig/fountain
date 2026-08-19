@@ -7,8 +7,8 @@
   target-dir = ""
   script-dir = ""
   output-type = "dynamic"
-  compile-option = ""
-  override-compile-option = ""
+  compile-option = "--debug-macro"
+  override-compile-option = "--debug-macro"
   link-option = ""
   package-configuration = {}
   category = ["Utility", "Developer Tools", "Distributed", "Infrastructure", "Programming Framework", "RPC", "Middleware", "Network"]

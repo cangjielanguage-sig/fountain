@@ -21,16 +21,15 @@ protected import std.time.MonoTime
 protected import fountain::f_base.*
 protected import fountain::f_config.*
 protected import fountain::f_io.ByteBuffer
+protected import fountain::f_log.*
 protected import fountain::f_protocol.default.*
 
 public import fountain::f_bean.*
-public import fountain::f_data
 public import fountain::f_data.*
 
 public const UNSUPPORTED_COMMAND = 'UnsupportedCommand'
 public const OVERFEEDING = 'Client is overfeeding'
 
-protected import fountain::f_log.*
 protected let rpclog = LoggerFactory.getLogger('rpc')
 
 private func logmsg(id: MessageID, label: String, command: Command, message: String){
