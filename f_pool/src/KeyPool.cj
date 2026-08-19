@@ -272,7 +272,6 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
         }
     }
     private func startCreationSchedule() {
-        let start = MonoTime.now()
         spawn {
             while(running.load() && let task <- tasks.remove()){
                 while(running.load() && pool.size < totalSize && let k <- task.key && pool.keyedSize(k) < maxSize){

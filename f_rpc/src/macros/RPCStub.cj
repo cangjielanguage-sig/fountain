@@ -48,7 +48,7 @@ public macro RPCStub(attr: Tokens, input: Tokens): Tokens {
         i++
     }
     if(version == ''){
-        diagReport(ERROR, attr, 'version is required for attr of fountain::f_rpc.RPCStub', '')
+        diagReport(DiagReportLevel.ERROR, attr, 'version is required for attr of fountain::f_rpc.RPCStub', '')
         throw RPCException()
     }
     genStub(exactlyVersion, version, name, parseDecl(input))
@@ -56,13 +56,13 @@ public macro RPCStub(attr: Tokens, input: Tokens): Tokens {
 private func genStub(exactlyVersion: Bool, version: String, name: String, decl: Decl): Tokens {
     try{
         decl.genericParam
-        diagReport(ERROR, decl.toTokens(), 'decl ${d.identifier.value} must not be with generic param fountain::f_rpc stub', '')
+        diagReport(DiagReportLevel.ERROR, decl.toTokens(), 'decl ${decl.identifier.value} must not be with generic param fountain::f_rpc stub', '')
         throw RPCException()
     }catch(_){}
     var tokens = `empty_tokens`
     match(decl){
         case x: InterfaceDecl => 
-            let typeName = x.qualifiedName
+            let typeName = x.identifier
             for(d in x.body.decls){
                 if(let f: FuncDecl <- d && !isStatic(f)){
                     if(tokens.size > 0){
@@ -70,12 +70,12 @@ private func genStub(exactlyVersion: Bool, version: String, name: String, decl: 
                     }
                     tokens += genStub(exactlyVersion, version, name, typeName, f)
                 }else{
-                    diagReport(ERROR, d.toTokens(), 'decl ${d.identifier.value} in ${x.identifier.value} must be a instance func decl for fountain::f_rpc stub', '')
+                    diagReport(DiagReportLevel.ERROR, d.toTokens(), 'decl ${d.identifier.value} in ${x.identifier.value} must be a instance func decl for fountain::f_rpc stub', '')
                     throw RPCException()
                 }
             }
-        case _ => 
-            diagReport(ERROR, decl.toTokens(), '${x.identifier.value} must be a interface decl', '')
+        case x => 
+            diagReport(DiagReportLevel.ERROR, decl.toTokens(), '${x.identifier.value} must be a interface decl', '')
             throw RPCException()
     }
     let className = Token(IDENTIFIER, '${decl.identifier.value}_Stub__')
@@ -96,7 +96,7 @@ private func genStub(exactlyVersion: Bool, version: String, name: String, decl: 
         }()
     )
 }
-private func genStub(exactlyVersion: Bool, version: String, name: String, typeName: String, decl: FuncDecl): Tokens {
+private func genStub(exactlyVersion: Bool, version: String, name: String, typeName: Token, decl: FuncDecl): Tokens {
     var argTypes = `lsquare`
     var argValues = `lsquare`
     for(arg in decl.funcParams){
@@ -105,7 +105,7 @@ private func genStub(exactlyVersion: Bool, version: String, name: String, typeNa
             argValues += `comma`
         }
         argTypes += quote(TypeInfo.of<$(arg.paramType)>().qualifiedName)
-        argValues += quote($(arg.identifier).toData())
+        argValues += quote(DataAny($(arg.identifier).toData()))
     }
     argTypes = `rsquare`
     argValues = `rsquare`
@@ -113,7 +113,7 @@ private func genStub(exactlyVersion: Bool, version: String, name: String, typeNa
         public func $(decl.identifier)($(decl.funcParams)): $(decl.declType) {
             let version = $(version)
             let name = $(name)
-            let typeName = $(typeName)
+            let typeName = TypeInfo.of<$(typeName)>().qualifiedName
             let methodName = $(decl.identifier.value)
             let argTypeNames = $(argTypes)
             let meta = ServiceMeta(version, name, typeName, methodName, argTypeNames, exactlyVersion: $exactlyVersion)

@@ -91,6 +91,11 @@ public class RPCClient {
         for((meta, hosts) in metas){
             services[meta] = ClientConfig.createClient(hosts.toArray())
         }
+        atExit{
+            for((_, client) in services){
+                client.close()
+            }
+        }
     }
 
     public static func call<R>(message: RPCMessage): R where R <: DataFields<R> {
@@ -132,8 +137,8 @@ public class RPCClient {
 }
 @DataFields[fields]
 public class LogMessage {
-    public let params: Array<Data>,
-    public var result: ?Data,
+    public let params: Array<Data>
+    public var result: ?Data
     public var consumed: Duration = Duration.Zero
     public init(params: Array<Data>){
         this.params = params

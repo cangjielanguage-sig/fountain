@@ -24,7 +24,8 @@ import fountain::f_concurrent.*
 import fountain::f_data.*
 import fountain::f_log.*
 import fountain::f_protocol.default.*
-import fountain::f_net.*
+internal import fountain::f_net.*
+public import fountain::f_net.*
 
 private class PingCounter{
     PingCounter(var id: MessageID, var count: Int64){}

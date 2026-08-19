@@ -15,11 +15,14 @@ limitations under the License.
 */
 package fountain::f_rpc.server
 
+import std.env.atExit
+import fountain::f_net.SocketBuffer
+import fountain::f_net.client.Client
 import fountain::f_net.server.Server
 
 private let serviceHosts = ConcurrentHashSet<String>()
 
-private func error(id: MessageID, cmd: Command, msg: ErrorMessage): Message {
+private func error<T>(id: MessageID, cmd: Command, msg: ErrorMessage<T>): Message where T <: ToData {
     errorLog(id, cmd, msg)
     Message.error(id, data: msg.error)
 }
@@ -36,6 +39,7 @@ class RPCServer {
             defaultResp: {id => error(id, OVERFEEDING)}, limiter: rateLimiter()
         )
         server.start(executor)
+        atExit{server.close()}
         for(address in ServerConfig.baseAddresses){
             spawn{
                 while(true){
@@ -77,7 +81,7 @@ class RPCServer {
             case Command.SUBSCRIBE => SubscribeExecutor(message.id, message.tryFromData<Bool>() ?? false).exec()
             case Command.CONSUME => ConsumeExecutor(buffer, message.id, message.tryFromData<RPCMessage>().getOrThrow()).exec()
             case Command.ACK => None<Message>
-            case x => error(message.id, x, UNSUPPORTED_COMMAND)
+            case x => error(message.id, x, ErrorMessage(message.data, UNSUPPORTED_COMMAND))
         }
     }
 }
@@ -87,12 +91,12 @@ private struct RegisterExecutor{
         debugLog(id, Command.REGISTER){port}
         let addr = buffer.remoteAddress.toString()
         serviceHosts.add('${addr[0 .. addr.indexOf(":").getOrThrow()]}:${port}')
-        Message.ack(id, DataNone.INSTANCE)
+        Message.ack(id, data: DataNone.INSTANCE)
     }
 }
 private struct SubscribeExecutor{
     SubscribeExecutor(private let id: MessageID, private let hosts: Bool){}
-    private exec(): Message {
+    func exec(): Message {
         let start = MonoTime.now()
         let data = if(hosts){
             let hosts = serviceHosts.iterator()
@@ -100,18 +104,18 @@ private struct SubscribeExecutor{
         }else{
             ServiceHub.metas
         }.toData()
-        debugLog(id, Command.SUBSCRIBE){DebugMessage(hosts, data, MonoTime.now() - start)}
-        Message.resp(id, data)
+        debugLog(id, Command.SUBSCRIBE){LogMessage(hosts, data, MonoTime.now() - start)}
+        Message.resp(id, qos: QoS.AtMostOnce, ack: false, data: data)
     }
 }
 private struct ConsumeExecutor{
-    ConsumeExecutor(private let id: MessageID, private let message: RPCMessage){}
+    ConsumeExecutor(private let buffer: SocketBuffer, private let id: MessageID, private let message: RPCMessage){}
     func exec(): Message {
         var result: ToData = ()
         let start = MonoTime.now()
         try{
             result = ServiceHub.call(message)
-            Message.resp(id, result)
+            Message.resp(id, qos: QoS.AtMostOnce, ack: false, data: result)
         }catch(e: Exception){
             let buffer = ByteBuffer()
             printStackTrace(e, buffer)

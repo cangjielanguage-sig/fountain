@@ -16,12 +16,15 @@ limitations under the License.
 macro package fountain::f_rpc.macros
 
 public macro RPCSkeleton(input: Tokens): Tokens {
-    return RPCSkeleton(empty_tokens, input)
+    return expand(`empty_tokens`, input)
 }
 /**
  * attr 作为fountain::f_bean.macros.Bean宏的属性，可以没有
  */
 public macro RPCSkeleton(attr: Tokens, input: Tokens): Tokens {
+    expand(attr, input)
+}
+private func expand(attr: Tokens, input: Tokens): Tokens {
     expand(attr, parseDecl(input))
 }
 private func expand(attr: Tokens, input: Decl): Tokens {
@@ -36,14 +39,14 @@ private func expand(attr: Tokens, input: Decl): Tokens {
             )
         case x: MacroExpandDecl => expand(attr, extract(x))
         case x => 
-            diagReport(ERROR, input, '${x.identifier.value} must be a class decl', '')
+            diagReport(DiagReportLevel.ERROR, input.toTokens(), '${x.identifier.value} must be a class decl', '')
             throw RPCException()
     }
 }
 
 private func extractFuncs(decl: ClassDecl): Tokens {
     let klass = decl.identifier + if(decl.isGenericDecl){
-        decl.genericParam
+        decl.genericParam.toTokens()
     }else{
         `empty_tokens`
     }
@@ -68,15 +71,15 @@ private func extractFuncs(decl: ClassDecl): Tokens {
     funcs
 }
 private func extractParams(params: ArrayList<FuncParam>): (Tokens, Tokens, Tokens) {
-    var argTypes = `lspare`
+    var argTypes = `lsquare`
     var argValues = `empty_tokens`
     var argNames = `empty_tokens`
     for(i in 0 .. params.size){
         let p = params[i]
         if(argTypes.size > 1){
-            argTypes += `, `
+            argTypes += `comma`
             argValues += `nl`
-            argNames += `, `
+            argNames += `comma`
         }
         argTypes += quote(TypeInfo.of<$(p.paramType)>())
         argValues += quote(let $(p.identifier) = f_data.convert<$(p.paramType)>(args[$i]).getOrThrow())

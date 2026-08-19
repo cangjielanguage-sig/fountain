@@ -15,6 +15,8 @@ limitations under the License.
 */
 package fountain::f_rpc.server
 
+import fountain::f_concurrent.*
+
 internal class ServerConfig {
     public static const RPC_SERVER_PREFIX = "rpcServer"
     public static const RPC_SERVER_PREFIX_PORT = RPC_SERVER_PREFIX + "_port"
@@ -50,9 +52,9 @@ internal class ServerConfig {
         }
     }
 
-    internal static prop port: Unit16 {
+    internal static prop port: UInt16 {
         get(){
-            Config.getValue<Int16>(RPC_SERVER_PREFIX_PORT) ?? 1203u16
+            Config.getValue<UInt16>(RPC_SERVER_PREFIX_PORT) ?? 1203u16
         }
     }
     internal static prop bufferQueueSize: Int64 {
