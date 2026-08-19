@@ -13,10 +13,4 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-macro package fountain::f_rpc.macros
-
-internal import std.ast.*
-internal import fountain::f_macros.*
-internal import fountain::f_rpc.base.*
-
-public import fountain::f_bean.macros.*
+package fountain::f_rpc
