@@ -165,7 +165,7 @@ class ClientConfig {
         }
     }
     private  static func createClient(addresses: Array<(Float64, String)>): MultiClient<Float64>{
-        func checker(){
+        func checker(): ?Message {
             Message.ping()
         }
         let builder = if(let (Some(qs), Some(sc)) <- (queueSize, socketCount)){

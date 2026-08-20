@@ -46,6 +46,7 @@ extend String <: DataFields<String> {
     }
     public static func tryFromData(data: Data, flag: DataConversionFlag): Any {
         match (data) {
+            case x: DataAny => tryFromData(x.data, flag)
             case x: DataString => x.data
             case x: DataNone => None<String>
             case _ where (flag & IGNORE_FIELD_TYPE_NOT_MATCH) == 0 => throw DataException(

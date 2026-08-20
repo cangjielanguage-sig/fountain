@@ -35,7 +35,9 @@ extend File <: DataFields<File> {
         DataInputStream(this)
     }
     public static func tryFromData(data: Data, flag: DataConversionFlag): Any {
-        if (let d: DataInputStream <- data && let f: File <- d.data) {
+        if(let x: DataAny <- data) {
+            tryFromData(x.data, flag)
+        } else if (let d: DataInputStream <- data && let f: File <- d.data) {
             f
         } else if ((flag & IGNORE_FIELD_TYPE_NOT_MATCH) == 0){
             throw DataException('current data does not match to File')
@@ -49,7 +51,9 @@ extend TcpSocket <: DataFields<TcpSocket> {
         DataInputStream(this)
     }
     public static func tryFromData(data: Data, flag: DataConversionFlag): Any {
-        if (let d: DataInputStream <- data && let s: TcpSocket <- d.data) {
+        if(let x: DataAny <- data) {
+            tryFromData(x.data, flag)
+        } else if (let d: DataInputStream <- data && let s: TcpSocket <- d.data) {
             s
         } else if ((flag & IGNORE_FIELD_TYPE_NOT_MATCH) == 0){
             throw DataException('current data does not match to TcpSocket')
@@ -63,7 +67,9 @@ extend UnixSocket <: DataFields<UnixSocket>{
         DataInputStream(this)
     }
     public static func tryFromData(data: Data, flag: DataConversionFlag): Any {
-        if (let d: DataInputStream <- data && let f: UnixSocket <- d.data) {
+        if(let x: DataAny <- data) {
+            tryFromData(x.data, flag)
+        } else if (let d: DataInputStream <- data && let f: UnixSocket <- d.data) {
             f
         } else if ((flag & IGNORE_FIELD_TYPE_NOT_MATCH) == 0){
             throw DataException('current data does not match to UnixSocket')
@@ -77,7 +83,9 @@ extend ByteBuffer <: DataFields<ByteBuffer> {
         DataInputStream(this)
     }
     public static func tryFromData(data: Data, flag: DataConversionFlag): Any {
-        if (let d: DataInputStream <- data && let f: ByteBuffer <- d.data) {
+        if(let x: DataAny <- data) {
+            tryFromData(x.data, flag)
+        } else if (let d: DataInputStream <- data && let f: ByteBuffer <- d.data) {
             f
         } else if ((flag & IGNORE_FIELD_TYPE_NOT_MATCH) == 0){
             throw DataException('current data does not match to ByteBuffer')
@@ -91,7 +99,9 @@ extend f_io.ByteBuffer <: DataFields<f_io.ByteBuffer> {
         DataInputStream(this)
     }
     public static func tryFromData(data: Data, flag: DataConversionFlag): Any {
-        if (let d: DataInputStream <- data && let f: f_io.ByteBuffer <- d.data) {
+        if(let x: DataAny <- data) {
+            tryFromData(x.data, flag)
+        } else if (let d: DataInputStream <- data && let f: f_io.ByteBuffer <- d.data) {
             f
         } else if ((flag & IGNORE_FIELD_TYPE_NOT_MATCH) == 0){
             throw DataException('current data does not match to fountain::f_io.ByteBuffer')
@@ -105,7 +115,9 @@ extend f_io.SyncByteBuffer <: DataFields<f_io.SyncByteBuffer> {
         DataInputStream(this)
     }
     public static func tryFromData(data: Data, flag: DataConversionFlag): Any {
-        if (let d: DataInputStream <- data && let f: f_io.SyncByteBuffer <- d.data) {
+        if(let x: DataAny <- data) {
+            tryFromData(x.data, flag)
+        } else if (let d: DataInputStream <- data && let f: f_io.SyncByteBuffer <- d.data) {
             f
         } else if ((flag & IGNORE_FIELD_TYPE_NOT_MATCH) == 0){
             throw DataException('current data does not match to fountain::f_io.SyncByteBuffer')
@@ -119,7 +131,9 @@ extend<T> ChainedInputStream<T> <: DataFields<ChainedInputStream<T>> where T <: 
         DataInputStream(this)
     }
     public static func tryFromData(data: Data, flag: DataConversionFlag): Any {
-        if (let d: DataInputStream <- data && let ch: ChainedInputStream<T> <- d.data) {
+        if(let x: DataAny <- data) {
+            tryFromData(x.data, flag)
+        } else if (let d: DataInputStream <- data && let ch: ChainedInputStream<T> <- d.data) {
             ch
         } else if ((flag & IGNORE_FIELD_TYPE_NOT_MATCH) == 0){
             throw DataException('current data does not match to ChainedInputStream')
@@ -133,7 +147,9 @@ extend<T> BufferedInputStream<T> <: DataFields<BufferedInputStream<T>> where T <
         DataInputStream(this)
     }
     public static func tryFromData(data: Data, flag: DataConversionFlag): Any {
-        if (let d: DataInputStream <- data && let buf: BufferedInputStream<T> <- d.data) {
+        if(let x: DataAny <- data) {
+            tryFromData(x.data, flag)
+        } else if (let d: DataInputStream <- data && let buf: BufferedInputStream<T> <- d.data) {
             buf
         } else if ((flag & IGNORE_FIELD_TYPE_NOT_MATCH) == 0){
             throw DataException('current data does not match to BufferedInputStream')

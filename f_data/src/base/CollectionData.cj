@@ -78,6 +78,7 @@ extend<T> Array<T> <: CollectionData<Array<T>, T> where T <: DataFields<T> {
     }
     public static func tryFromData(data: Data, flag: DataConversionFlag): Any {
         match (data) {
+            case x: DataAny => tryFromData(x.data, flag)
             case d: DataCollection<Array<T>, T> where (flag & DEEP) == 0 => d.data
             case itr: Iterable<Data> =>
                 let list = ArrayList<T>()
@@ -103,6 +104,7 @@ extend<T> ArrayList<T> <: CollectionData<ArrayList<T>, T> where T <: DataFields<
     }
     public static func tryFromData(data: Data, flag: DataConversionFlag): Any {
         match (data) {
+            case x: DataAny => tryFromData(x.data, flag)
             case d: DataCollection<ArrayList<T>, T> where (flag & DEEP) == 0 => d.data
             case itr: Iterable<Data> =>
                 let list = ArrayList<T>()
@@ -130,6 +132,7 @@ extend<T> LinkedList<T> <: CollectionData<LinkedList<T>, T> where T <: DataField
     }
     public static func tryFromData(data: Data, flag: DataConversionFlag): Any {
         match (data) {
+            case x: DataAny => tryFromData(x.data, flag)
             case d: DataCollection<LinkedList<T>, T> where (flag & DEEP) == 0 => d.data
             case itr: Iterable<Data> =>
                 let list = LinkedList<T>()
@@ -157,6 +160,7 @@ extend<T> HashSet<T> <: CollectionData<HashSet<T>, T> where T <: Hashable & Equa
     }
     public static func tryFromData(data: Data, flag: DataConversionFlag): Any {
         match (data) {
+            case x: DataAny => tryFromData(x.data, flag)
             case d: DataCollection<HashSet<T>, T> where (flag & DEEP) == 0 => d.data
             case itr: Iterable<Data> =>
                 let set = HashSet<T>()
@@ -184,6 +188,7 @@ extend<T> TreeSet<T> <: CollectionData<TreeSet<T>, T> where T <: Comparable<T> &
     }
     public static func tryFromData(data: Data, flag: DataConversionFlag): Any {
         match (data) {
+            case x: DataAny => tryFromData(x.data, flag)
             case d: DataCollection<TreeSet<T>, T> where (flag & DEEP) == 0 => d.data
             case itr: Iterable<Data> =>
                 let set = TreeSet<T>()
@@ -211,6 +216,7 @@ extend<T> LinkedHashSet<T> <: CollectionData<LinkedHashSet<T>, T> where T <: Has
     }
     public static func tryFromData(data: Data, flag: DataConversionFlag): Any {
         match (data) {
+            case x: DataAny => tryFromData(x.data, flag)
             case d: DataCollection<LinkedHashSet<T>, T> where (flag & DEEP) == 0 => d.data
             case itr: Iterable<Data> =>
                 let set = LinkedHashSet<T>()

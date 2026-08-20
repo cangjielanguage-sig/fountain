@@ -79,6 +79,7 @@ extend<K, V> ConcurrentHashMap<K, V> <: ConcurrentMapData<ConcurrentHashMap<K, V
     }
     public static func tryFromData(data: Data, flag: DataConversionFlag): Any {
         match (data) {
+            case x: DataAny => tryFromData(x.data, flag)
             case x: DataConcurrentMap<ConcurrentHashMap<K, V>, K, V> where (flag & DEEP) == 0 => x.data
             case itr: Iterable<(Data, Data)> =>
                 let map = ConcurrentHashMap<K, V>()

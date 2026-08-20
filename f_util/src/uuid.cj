@@ -44,6 +44,7 @@ public struct UUID <: Hashable & Comparable<UUID> & ToString & Parsable<UUID> & 
     }
     public static func tryFromData(data: Data, flag: DataConversionFlag): Any {
         match(data){
+            case x: DataAny => tryFromData(x.data, flag)
             case x: DataString => 
                 match(UUID.tryParse(x.data)){
                     case Some(x) => x

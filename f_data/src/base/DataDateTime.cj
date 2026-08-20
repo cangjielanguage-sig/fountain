@@ -58,6 +58,7 @@ extend DateTime <: DataFields<DateTime> & ExtendDateTimeData {
     }
     public static func tryFromData(data: Data, flag: DataConversionFlag): Any {
         match (data) {
+            case x: DataAny => tryFromData(x.data, flag)
             case x: DataDateTime => x.tryToDateTime()
             case _: DataNone => None<DateTime>
             case _ where (flag & IGNORE_FIELD_TYPE_NOT_MATCH) == 0 => throw DataException(

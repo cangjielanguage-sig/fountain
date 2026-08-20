@@ -43,6 +43,7 @@ public class MultipartFile <: Multipart & InputStream & Resource & DataFields<Mu
     }
     public static func tryFromData(data: Data, flag: DataConversionFlag): Any {
         match(data){
+            case x: DataAny => tryFromData(x.data, flag)
             case x: MultipartFile => x
             case _ => throw MediaTypeException('Not Supported')
         }

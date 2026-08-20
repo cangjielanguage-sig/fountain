@@ -24,7 +24,8 @@ extend<T> Option<T> <: DataFields<Option<T>> where T <: DataFields<T> {
     }
     public static func tryFromData(data: Data, flag: DataConversionFlag): Any {
         match (data) {
-            case x: DataNone => None<T>
+            case x: DataAny => tryFromData(x.data, flag)
+            case _: DataNone => None<T>
             case x => T.tryFromData(x, flag)
         }
     }

@@ -52,6 +52,7 @@ extend Duration <: DataFields<Duration> {
     }
     public static func tryFromData(data: Data, flag: DataConversionFlag): Any {
         match (data) {
+            case x: DataAny => tryFromData(x.data, flag)
             case x: DataDuration => x.tryToDuration()
             case _: DataNone => None<Duration>
             case _ where (flag & IGNORE_FIELD_TYPE_NOT_MATCH) == 0 => throw DataException(

@@ -193,6 +193,7 @@ public class DataObject<T> <: SimpleDataObject & Collection<(String, Data)> & Na
     }
     public static func populate(src: Data, target: T, flag!: DataConversionFlag = DEFAULT_DATA_FLAG): ?T {
         match (src) {
+            case x: DataAny => populate(x.data, target, flag: flag)
             case x: Iterable<(String, Data)> =>
                 let targetData = DataObject<T>(target)
                 for ((n, d) in x) {

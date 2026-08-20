@@ -114,6 +114,7 @@ extend JsonValue <: ExtendJsonValue & DataFields<JsonValue> {
             }
         }
         match (data) {
+            case x: DataAny => tryFromData(x.data, flag)
             case x: DataJsonArray => x.json
             case x: DataJsonObject => x.json
             case x: DataNone => JsonNull.instance

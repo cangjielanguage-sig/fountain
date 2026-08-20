@@ -59,6 +59,7 @@ extend Bool <: DataFields<Bool> {
     }
     public static func tryFromData(data: Data, flag: DataConversionFlag): Any {
         match (data) {
+            case x: DataAny => tryFromData(x.data, flag)
             case x: DataBool => x.tryToBool()
             case _: DataNone => None<Bool>
             case _ where (flag & IGNORE_FIELD_TYPE_NOT_MATCH) == 0 => throw DataException(
