@@ -22,7 +22,7 @@ import fountain::f_net.server.Server
 
 private let serviceHosts = ConcurrentHashSet<String>()
 
-private func error<T>(id: MessageID, cmd: Command, msg: ErrorMessage<T>): Message where T <: ToData {
+private func error(id: MessageID, cmd: Command, msg: ErrorMessage): Message {
     errorLog(id, cmd, msg)
     Message.error(id, data: msg.error)
 }
@@ -79,9 +79,9 @@ class RPCServer {
         match(message.command){
             case Command.REGISTER => RegisterExecutor(buffer, message.id, message.tryFromData<UInt16>() ?? 0).exec()
             case Command.SUBSCRIBE => SubscribeExecutor(message.id, message.tryFromData<Bool>() ?? false).exec()
-            case Command.CONSUME => ConsumeExecutor(buffer, message.id, message.tryFromData<RPCMessage>().getOrThrow()).exec()
+            case Command.CONSUME(b) => ConsumeExecutor(buffer, message.id, b, message.tryFromData<RPCMessage>().getOrThrow()).exec()
             case Command.ACK => None<Message>
-            case x => error(message.id, x, ErrorMessage(message.data, UNSUPPORTED_COMMAND))
+            case x => error(message.id, x, ErrorMessage.new(message.data, UNSUPPORTED_COMMAND))
         }
     }
 }
@@ -104,12 +104,12 @@ private struct SubscribeExecutor{
         }else{
             ServiceHub.metas
         }.toData()
-        debugLog(id, Command.SUBSCRIBE){LogMessage(hosts, data, MonoTime.now() - start)}
+        debugLog(id, Command.SUBSCRIBE){LogMessage.new(hosts, data, MonoTime.now() - start)}
         Message.resp(id, qos: QoS.AtMostOnce, ack: false, data: data)
     }
 }
 private struct ConsumeExecutor{
-    ConsumeExecutor(private let buffer: SocketBuffer, private let id: MessageID, private let message: RPCMessage){}
+    ConsumeExecutor(private let buffer: SocketBuffer, private let b: Byte, private let id: MessageID, private let message: RPCMessage){}
     func exec(): Message {
         var result: ToData = ()
         let start = MonoTime.now()
@@ -119,25 +119,10 @@ private struct ConsumeExecutor{
         }catch(e: Exception){
             let buffer = ByteBuffer()
             printStackTrace(e, buffer)
-            error(id, Command.CONSUME, ErrorMessage(message, buffer.bytes() |> String.fromUtf8))
+            error(id, Command.CONSUME(b), ErrorMessage.new(message, buffer.bytes() |> String.fromUtf8))
         }finally{
             let consumed = MonoTime.now() - start
-            infoLog(id, Command.CONSUME){LogMessage(message, result, consumed)}
+            infoLog(id, Command.CONSUME(b)){LogMessage.new(message, result, consumed)}
         }
     }
-}
-@DataAssist
-public class LogMessage<A, R> where A <: ToData, R <: ToData {
-    public LogMessage(
-        public let param: A,
-        public let result: R,
-        public let consumed: Duration
-    ){}
-}
-@DataAssist
-public class ErrorMessage<A> where A <: ToData {
-    public ErrorMessage(
-        public let param: A,
-        public let error: String
-    ){}
 }

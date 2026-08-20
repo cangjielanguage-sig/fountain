@@ -88,26 +88,26 @@ internal class ServerConfig {
             match(l){
                 case 'anyMomentRateLimiter' => 
                     let maxTokens = Config.getValue<Int64>(RPC_SERVER_RATE_LIMITER_MAX_TOKENS) ?? 1024
-                    let timeout = Duration.milisecond * (Config.getValue<Int64>(RPC_SERVER_RATE_LIMITER_TIMEOUT) ?? 100)
+                    let timeout = Duration.millisecond * (Config.getValue<Int64>(RPC_SERVER_RATE_LIMITER_TIMEOUT) ?? 100)
                     AnyMomentRateLimiter<Unit>(maxTokens: maxTokens, timeout: timeout)
                 case 'leakingBucketRateLimiter' =>
-                    let timeout = Duration.milisecond * Config.getValue<Int64>(RPC_SERVER_RATE_LIMITER_TIMEOUT) ?? 1000
+                    let timeout = Duration.millisecond * Config.getValue<Int64>(RPC_SERVER_RATE_LIMITER_TIMEOUT) ?? 1000
                     let maxWaitings = Config.getValue<Int64>(RPC_SERVER_RATE_LIMITER_MAX_WAITINGS) ?? 1024
                     let leakingPerDuration = Config.getValue<Int64>(RPC_SERVER_RATE_LIMITER_LEAKING_PER_DURATION) ?? 1
-                    let leakingDuration = Duration.milisecond * (Config.getValue<Int64>(RPC_SERVER_RATE_LIMITER_LEAKING_DURATION) * 50)
+                    let leakingDuration = Duration.millisecond * (Config.getValue<Int64>(RPC_SERVER_RATE_LIMITER_LEAKING_DURATION) * 50)
                     LeakingBucketRateLimiter<Unit>(timeout: timeout,
                         maxWaitings: maxWaitings,
                         leakingPerDuration: leakingPerDuration,
                         leakingDuration: leakingDuration)
                 case 'slidingWindowRateLimiter' =>
-                    let window = Duration.milisecond * (Config.getValue<Int64>(RPC_SERVER_RATE_LIMITER_WINDOW) ?? 150)
+                    let window = Duration.millisecond * (Config.getValue<Int64>(RPC_SERVER_RATE_LIMITER_WINDOW) ?? 150)
                     let limit = Config.getValue<Int64>(RPC_SERVER_RATE_LIMITER_LIMIT) ?? 1024
-                    let timeout = Duration.milisecond * (Config.getValue<Int64>(RPC_SERVER_RATE_LIMITER_TIMEOUT) ?? 100)
+                    let timeout = Duration.millisecond * (Config.getValue<Int64>(RPC_SERVER_RATE_LIMITER_TIMEOUT) ?? 100)
                     SlidingWindowRateLimiter<Unit>(window: window, limit: limit, timeout: timeout)
                 case 'tokenBucketRateLimiter' =>
                     let tokens = Config.getValue<Int64>(RPC_SERVER_RATE_LIMITER_TOKENS) ?? 1024
-                    let timeout = Duration.milisecond * (Config.getValue<Int64>(RPC_SERVER_RATE_LIMITER_TIMEOUT) ?? 100)
-                    let populationPeriod = Duration.milisecond * (Config.getValue<Int64>(RPC_SERVER_RATE_LIMITER_POPULATION_PERIOD) ?? 150)
+                    let timeout = Duration.millisecond * (Config.getValue<Int64>(RPC_SERVER_RATE_LIMITER_TIMEOUT) ?? 100)
+                    let populationPeriod = Duration.millisecond * (Config.getValue<Int64>(RPC_SERVER_RATE_LIMITER_POPULATION_PERIOD) ?? 150)
                     TokenBucketRateLimiter<Unit>(tokens: tokens, timeout: timeout, populationPeriod: populationPeriod)
                 case _ => UnlimitedRateLimiter<Unit>()
             }

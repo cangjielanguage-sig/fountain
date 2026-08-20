@@ -19,4 +19,5 @@ internal import fountain::f_base.*
 internal import fountain::f_net.client.*
 public import std.reflect.*
 public import fountain::f_bean.BeanFactory
-public import fountain::f_rpc.base.*
+public import fountain::f_rpc.base.* //public import只能导入顶级公共声明，
+internal import fountain::f_rpc.base.* //所以还需要internal import 导入同包的顶级非公共声明

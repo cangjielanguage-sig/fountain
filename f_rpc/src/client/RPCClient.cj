@@ -23,7 +23,7 @@ import fountain::f_data.macros.*
 
 public class RPCClient {
     private static let retryCount = ClientConfig.retryCount
-    private static let services = ConcurrentHashMap<ServiceMeta, MultiClient<Float64, RPCMessage>>()
+    private static let services = ConcurrentHashMap<ServiceMeta, MultiClient<Float64>>()
 
     static init(){
         let metas = HashMap<ServiceMeta, ArrayList<String>>()

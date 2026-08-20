@@ -19,7 +19,8 @@ import fountain::f_data.macros.*
 
 @DataAssist[fields props]
 public class RPCMessage {
-    private var meta: ServiceMeta = ServiceMeta()
+    private static let EMPTY_META = unsafeZeroValue<ServiceMeta>()
+    private var meta: ServiceMeta = EMPTY_META
     private var params: Array<DataAny> = []
     public init(){}
     public init(meta: ServiceMeta, params: Array<DataAny>){

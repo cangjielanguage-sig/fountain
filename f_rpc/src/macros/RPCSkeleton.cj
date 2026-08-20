@@ -58,7 +58,7 @@ private func extractFuncs(decl: ClassDecl): Tokens {
             }
             let fname = f.identifier
             let (argTypes, argValues, argNames) = extractParams(f.funcParams)
-            funcs += quote(ServiceHub.register<$klass>($(fname.value), $argTypes){beanName: String, args: Array<Data> => 
+            funcs += quote(ServiceHub.register<$klass>($(fname.value), $argTypes){beanName: String, args: Array<DataAny> => 
                 $argValues
                 if(beanName.isEmpty()){
                     lookup<$klass>()
@@ -82,7 +82,7 @@ private func extractParams(params: ArrayList<FuncParam>): (Tokens, Tokens, Token
             argNames += `comma`
         }
         argTypes += quote(TypeInfo.of<$(p.paramType)>())
-        argValues += quote(let $(p.identifier) = f_data.convert<$(p.paramType)>(args[$i]).getOrThrow())
+        argValues += quote(let $(p.identifier) = f_data.convert<$(p.paramType)>(args[$i].data).getOrThrow())
         argNames += quote(p.identifier)
     }
     argTypes += `rsquare`

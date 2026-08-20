@@ -20,6 +20,12 @@ public struct DataAny <: DataFields<DataAny> & Data {
     public func toString(): String {
         this.data.toString()
     }
+    public static func new<T>(data: T): DataAny where T <: ToData {
+        match(data){
+            case x: DataAny => x
+            case x => DataAny(x.toData())
+        }
+    }
     public static func tryParse(data: String): ?Data {
         data.toData()
     }

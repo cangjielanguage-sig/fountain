@@ -24,8 +24,8 @@ import std.reflect.*
 public struct ServiceHub {
     private static let version = extractVersion()
     private static let exactlyVersion = ServerConfig.exactlyVersion
-    private static let hub = ConcurrentHashMap<ServiceMeta, (String, Array<Data>) -> ToData>()
-    public static func register<T>(funcName: String, argTypes: Array<TypeInfo>, fn: (String, Array<Data>) -> ToData): Unit where T <: Object {
+    private static let hub = ConcurrentHashMap<ServiceMeta, (String, Array<DataAny>) -> ToData>()
+    public static func register<T>(funcName: String, argTypes: Array<TypeInfo>, fn: (String, Array<DataAny>) -> ToData): Unit where T <: Object {
         let classInfo = ClassTypeInfo.of<T>()
         let name = if(let Some(beanMeta) <- classInfo.findAnnotation<BeanMeta>()){
             beanMeta.name
@@ -39,7 +39,7 @@ public struct ServiceHub {
         while(let Some(t) <- q.remove()){
             if(let ti: InterfaceTypeInfo <- t){
                 let hasFunc = try{
-                    ti.findInstanceFunction(funcName, argTypes)
+                    ti.getInstanceFunction(funcName, argTypes)
                     true
                 }catch(_){
                     false
@@ -54,7 +54,7 @@ public struct ServiceHub {
                     }
                 }
             }
-            if(let cti: ClassTypeInfo <- t && cti != ClassTypeInfo.of<Object>() && let sti <- cti.superClass && sti != ClassTypeInfo.of<Object>() && sti != cti){
+            if(let cti: ClassTypeInfo <- t && cti != ClassTypeInfo.of<Object>() && let Some(sti) <- cti.superClass && sti != ClassTypeInfo.of<Object>() && sti != cti){
                 q.add(sti)
             }
             func isNotStdInterface(sti: InterfaceTypeInfo){

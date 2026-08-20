@@ -39,7 +39,7 @@ class ClientConfig {
     private static const RPC_CLIENT_SOCKET_OPTION_BOOL = RPC_CLIENT_PREFIX + '_socketOptionBool'
     private static const RPC_CLIENT_SOCKET_OPTION_INT = RPC_CLIENT_PREFIX + '_socketOptionInt'
     private static const RPC_CLIENT_PING_TIMEOUT = RPC_CLIENT_PREFIX + '_pingTimeout'
-    private static const RPC_CLIENT_RETRY_COUNT = PRC_CLIENT_PREFIX + '_retryCount'
+    private static const RPC_CLIENT_RETRY_COUNT = RPC_CLIENT_PREFIX + '_retryCount'
     private static const RPC_CURRENT_SKELETON = 'rpc_currentSkeleton'
 
     public static prop currentSkeleton: String {
@@ -148,7 +148,7 @@ class ClientConfig {
         get(){
             let option = Config.getString(RPC_CLIENT_SOCKET_OPTION_INT)
             if(let Some(opt) <- option && let arr <- opt.split(',')){
-                (Int32.parse(arr[0]), Int32.parse(arr[1]), IntNative.parse(arr[2]))
+                (Int32.parse(arr[0]), Int32.parse(arr[1]), IntNative(Int64.parse(arr[2])))
             }else{
                 None
             }
@@ -164,18 +164,18 @@ class ClientConfig {
             Config.getValue<Int64>(RPC_CLIENT_RETRY_COUNT) ?? 0
         }
     }
-    private  static func createClient(addresses: Array<(Float64, String)>): MultiClient<Float64, RPCMessage>{
+    private  static func createClient(addresses: Array<(Float64, String)>): MultiClient<Float64>{
         func checker(){
             Message.ping()
         }
         let builder = if(let (Some(qs), Some(sc)) <- (queueSize, socketCount)){
-            MultiClient<Float64, RPCMessage>.builder(queueSize: qs, socketCount: sc, checkDuration: checkDuration, checker: checker)
+            MultiClient<Float64>.builder(queueSize: qs, socketCount: sc, checkDuration: checkDuration, checker: checker)
         }else if(let (Some(qs), _) <- (queueSize, socketCount)){
-            MultiClient<Float64, RPCMessage>.builder(queueSize: qs, checkDuration: checkDuration, checker: checker)
+            MultiClient<Float64>.builder(queueSize: qs, checkDuration: checkDuration, checker: checker)
         }else if(let (_, Some(sc)) <- (queueSize, socketCount)){
-            MultiClient<Float64, RPCMessage>.builder(socketCount: sc, checkDuration: checkDuration, checker: checker)
+            MultiClient<Float64>.builder(socketCount: sc, checkDuration: checkDuration, checker: checker)
         }else{
-            MultiClient<Float64, RPCMessage>.builder(checkDuration: checkDuration, checker: checker)
+            MultiClient<Float64>.builder(checkDuration: checkDuration, checker: checker)
         }
         builder.bindToDevice(bindToDevice)
         builder.socketKeepaliveConfig(socketKeepaliveConfig)
@@ -190,10 +190,10 @@ class ClientConfig {
         builder.receiveBufferSize(receiveBufferSize)
         builder.sendBufferSize(sendBufferSize)
         builder.writeTimeout(writeTimeout)
-        if(let Some(l, o, v) <- socketOptionBool){
+        if(let Some((l, o, v)) <- socketOptionBool){
             builder.socketOptionBool(l, o, v)
         }
-        if(let Some(l, o, v) <- socketOptionInt){
+        if(let Some((l, o, v)) <- socketOptionInt){
             builder.socketOptionInt(l, o, v)
         }
         if(let Some(pt) <- pingTimeout){
@@ -217,11 +217,11 @@ class ClientConfig {
         builder.add(addresses)
         builder.build()
     }
-    internal static func createClient(hosts: Array<String>): MultiClient<Float64, RPCMessage> {
+    internal static func createClient(hosts: Array<String>): MultiClient<Float64> {
         createClient(Array<(Float64, String)>(hosts.size){i => (1.0f64, hosts[i])})
     }
 
-    internal static func createClient(): MultiClient<Float64, RPCMessage> {
+    internal static func createClient(): MultiClient<Float64> {
         createClient(serverAddresses)
     }
 }
