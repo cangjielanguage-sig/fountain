@@ -78,7 +78,7 @@ public interface MapData<M, K, V> <: DataFields<M> & MapRawType where K <: Equat
 private func tryFromDataToMap<M, K, V>(data: Data, flag: DataConversionFlag, creator: () -> M): M where K <: Equatable<K> & DataFields<K>,
     V <: DataFields<V>, M <: DataFields<M> & Map<K, V> {
     match (data) {
-        case x: DataAny => tryFromData(x.data, flag)
+        case x: DataAny => tryFromDataToMap<M, K, V>(x.data, flag, creator)
         case x: DataMap<M, K, V> where (flag & DEEP) == 0 => x.data
         case itr: Iterable<(Data, Data)> =>
             let map = creator()

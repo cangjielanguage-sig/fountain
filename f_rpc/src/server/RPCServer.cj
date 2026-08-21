@@ -34,7 +34,7 @@ class RPCServer {
         let checkDuration = ServerConfig.connectionCheckDuration
         let unavailableChecked = ServerConfig.unavailableChecked
         let executors = ServerConfig.executors
-        let server = Server<Data>(bufferQueueSize: qsize, bindAt: port, checkDuration: checkDuration, 
+        let server = Server<RPCMessage>(bufferQueueSize: qsize, bindAt: port, checkDuration: checkDuration, 
             executors: executors, checker: checker, unavailableChecked: unavailableChecked,
             defaultResp: {id => error(id, OVERFEEDING)}, limiter: rateLimiter()
         )
