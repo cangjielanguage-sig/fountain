@@ -201,11 +201,14 @@ extend SqlExecutor <: SqlPartial {
     }
     private func selectPage<R>(partial: String, size: Int64, page: Int64, callee: (SqlExecutor) -> ArrayList<R>): Pagination<R> where R <: DataFields<R> {
         let partial_ = partial.trimAsciiStart()
-        if(partial_.size < 8 || partial_[0 .. 6].toAsciiLower() != 'select' || partial_[6] > b' '){
-            throw ORMException('${partial} is not a select.')
+        if(partial_.size < 8 || partial_[0 .. 6].toAsciiLower() != 'select'){
+            let b = partial_[6]
+            if(!(b == b' ' || b == b'\t' || b == b'\r' || b == b'\n')){
+                throw ORMException('${partial} is not a select.')
+            }
         }
-        let countSql = 'select count(*) from (${partial}) as __tmp___'//如果sql中包含order by 这样也可以执行
         try{
+            let countSql = 'select count(*) from (${partial}) as __tmp___'//如果sql中包含order by 这样也可以执行
             let count = executor.setSql(countSql, clearArgsAfterExec: false).first<Int64>() ?? 0
             Pagination<R>(page: page, rows: count, size: size){size: Int64, offset: Int64 =>
                 let (one, two, psql) = dialect.limit(size, offset)
