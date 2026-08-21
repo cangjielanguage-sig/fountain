@@ -41,3 +41,6 @@ console.log
 CODEBUDDY.md
 .atomcode
 datalog/
+
+.codegraph/
+common_virtual_env/
