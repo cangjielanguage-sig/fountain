@@ -37,3 +37,5 @@ CODEBUDDY.md
 .atomcode/
 *.cjo
 *.so
+.codegraph/
+common_virtual_env/
