@@ -200,12 +200,11 @@ extend SqlExecutor <: SqlPartial {
         FromClause<T>(this)
     }
     private func selectPage<R>(partial: String, size: Int64, page: Int64, callee: (SqlExecutor) -> ArrayList<R>): Pagination<R> where R <: DataFields<R> {
-        let partial_ = partial.trimAsciiStart()
-        if(partial_.size < 8 || partial_[0 .. 6].toAsciiLower() != 'select'){
-            let b = partial_[6]
-            if(!(b == b' ' || b == b'\t' || b == b'\r' || b == b'\n')){
-                throw ORMException('${partial} is not a select.')
-            }
+        if (let partial_ <- partial.trimAsciiStart() && 
+            partial_.size >= 8 && partial_[0 .. 6].equalsIgnoreAsciiCase('select') && 
+            let b <- partial_[6] && (b == b' ' || b == b'\t' || b == b'\r' || b == b'\n')){
+        }else{
+            throw ORMException('${partial} is not a select.')
         }
         try{
             let countSql = 'select count(*) from (${partial}) as __tmp___'//如果sql中包含order by 这样也可以执行
