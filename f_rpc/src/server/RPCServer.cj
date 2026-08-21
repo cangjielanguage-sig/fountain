@@ -15,7 +15,6 @@ limitations under the License.
 */
 package fountain::f_rpc.server
 
-import std.env.atExit
 import fountain::f_net.SocketBuffer
 import fountain::f_net.client.Client
 import fountain::f_net.server.Server
@@ -36,14 +35,14 @@ class RPCServer {
         let executors = ServerConfig.executors
         let server = Server<RPCMessage>(bufferQueueSize: qsize, bindAt: port, checkDuration: checkDuration, 
             executors: executors, checker: checker, unavailableChecked: unavailableChecked,
-            defaultResp: {id => error(id, OVERFEEDING)}, limiter: rateLimiter()
+            defaultResp: {id => error(id, Command.ERROR, ErrorMessage(EXCEEDING))}, limiter: ServerConfig.rateLimiter()
         )
         server.start(executor)
         atExit{server.close()}
         for(address in ServerConfig.baseAddresses){
             spawn{
                 while(true){
-                    let client: Client
+                    var client: Client = unsafeZeroValue<Client>()
                     while(true){
                         try{
                             client = Client.builder(address: address, checkDuration: Duration.second, checker: {=> Message.ping()}).build()
@@ -79,7 +78,7 @@ class RPCServer {
         match(message.command){
             case Command.REGISTER => RegisterExecutor(buffer, message.id, message.tryFromData<UInt16>() ?? 0).exec()
             case Command.SUBSCRIBE => SubscribeExecutor(message.id, message.tryFromData<Bool>() ?? false).exec()
-            case Command.CONSUME(b) => ConsumeExecutor(buffer, message.id, b, message.tryFromData<RPCMessage>().getOrThrow()).exec()
+            case Command.CONSUME(b) => ConsumeExecutor(buffer, b, message.id, message.tryFromData<RPCMessage>().getOrThrow()).exec()
             case Command.ACK => None<Message>
             case x => error(message.id, x, ErrorMessage.new(message.data, UNSUPPORTED_COMMAND))
         }
@@ -100,10 +99,10 @@ private struct SubscribeExecutor{
         let start = MonoTime.now()
         let data = if(hosts){
             let hosts = serviceHosts.iterator()
-            Array<String>(serviceHosts.size){_ => hosts.next().getOrThrow()}
+            Array<String>(serviceHosts.size){_ => hosts.next().getOrThrow()}.toData()
         }else{
-            ServiceHub.metas
-        }.toData()
+            ServiceHub.metas.toData()
+        }
         debugLog(id, Command.SUBSCRIBE){LogMessage.new(hosts, data, MonoTime.now() - start)}
         Message.resp(id, qos: QoS.AtMostOnce, ack: false, data: data)
     }
@@ -122,7 +121,8 @@ private struct ConsumeExecutor{
             error(id, Command.CONSUME(b), ErrorMessage.new(message, buffer.bytes() |> String.fromUtf8))
         }finally{
             let consumed = MonoTime.now() - start
-            infoLog(id, Command.CONSUME(b)){LogMessage.new(message, result, consumed)}
+            let r = result
+            infoLog(id, Command.CONSUME(b)){LogMessage.new(message, r, consumed)}
         }
     }
 }

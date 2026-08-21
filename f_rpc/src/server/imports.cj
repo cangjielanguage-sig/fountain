@@ -54,6 +54,9 @@ public class ErrorMessage {
     public init(){
         this(EMPTY_DATA_ANY, "")
     }
+    public init(error: String){
+        this(EMPTY_DATA_ANY, error)
+    }
     protected static func new<T>(param: T, error: String): ErrorMessage where T <: ToData {
         return ErrorMessage(DataAny.new(param), error)
     }

@@ -178,7 +178,7 @@ class ClientConfig {
             MultiClient<Float64>.builder(checkDuration: checkDuration, checker: checker)
         }
         builder.bindToDevice(bindToDevice)
-        builder.socketKeepaliveConfig(socketKeepaliveConfig)
+        builder.keepAlive(socketKeepaliveConfig)
         builder.linger(linger)
         if(let Some(nd) <- noDelay){
             builder.noDelay(nd)

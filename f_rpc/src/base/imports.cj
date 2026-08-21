@@ -16,6 +16,7 @@ limitations under the License.
 package fountain::f_rpc.base
 
 public import std.reflect.*
+protected import std.env.atExit
 protected import std.time.MonoTime
 
 protected import fountain::f_base.*
@@ -28,7 +29,7 @@ public import fountain::f_bean.*
 public import fountain::f_data.*
 
 public const UNSUPPORTED_COMMAND = 'UnsupportedCommand'
-public const OVERFEEDING = 'Client is overfeeding'
+public const EXCEEDING = 'ServerExceeding'
 
 protected let rpclog = LoggerFactory.getLogger('rpc')
 
@@ -46,6 +47,9 @@ protected func errorLog(id: MessageID, label: String, command: Command, message:
 }
 protected func errorLog(id: MessageID, label: String, command: Command, e: Exception): Unit {
     rpclog.error('[FOUNTAIN_RPC.${label}.${command}] ${id}', e)
+}
+protected func errorLog<T>(id: MessageID, label: String, command: Command, message: T, e: Exception): Unit where T <: ToData {
+    rpclog.error('[FOUNTAIN_RPC.${label}.${command}] ${id};${JsonValue.from(message.toData())}', e)
 }
 protected func errorLog<T>(id: MessageID, label: String, command: Command, message: T): Unit where T <: ToData {
     rpclog.error(logmsg(id, label, command, message))

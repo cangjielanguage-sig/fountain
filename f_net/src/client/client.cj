@@ -39,6 +39,7 @@ public class Client <: Resource {
         let checkDuration: Duration, 
         let checker: () -> ?Message,
         private let pingTimeout: Duration,
+        public let address: IPSocketAddress,
         private let socketCreator: () -> TcpSocket, 
         private let sockets: Array<TcpSocket>) {
         let futures = this.futures
@@ -321,7 +322,7 @@ public class ClientBuilder {
         this
     }
     public func build(): Client {
-        Client(queueSize, checkDuration, checker,  pingTimeout_, this.newSocket,
+        Client(queueSize, checkDuration, checker,  pingTimeout_, address, this.newSocket,
             Array<TcpSocket>(socketCount) {_ => newSocket()})
     }
     func newSocket() {

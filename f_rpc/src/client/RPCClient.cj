@@ -49,7 +49,7 @@ public class RPCClient {
                 }
                 return true
             }catch(e: Exception){
-                rpclog.error("[FOUNTAIN_RPC.subscribe.services] ${host}", e)
+                rpclog.error("[FOUNTAIN_RPC.subscribe.services] ${client.address}", e)
                 return false
             }finally{
                 if(closingOnEnd){
@@ -74,10 +74,10 @@ public class RPCClient {
         clients.close()
         for(host in hosts){
             while(true){
-                let client: Client
+                var client: Client = unsafeZeroValue<Client>()
                 while(true){
                     try{
-                        client = Client.builder(address: address, checkDuration: Duration.second, checker: {=> Message.ping()}).build()
+                        client = Client.builder(address: host, checkDuration: Duration.second, checker: {=> Message.ping()}).build()
                         break
                     }catch(e: Exception){
                         rpclog.error("[FOUNTAIN_RPC.subscribe.hosts] ${host}", e)
@@ -101,20 +101,32 @@ public class RPCClient {
     public static func call<R>(message: RPCMessage): R where R <: DataFields<R> {
         var tried = 0
         var ex = None<RPCException>
-        var result = LogMessage(message.params)
+        let result = LogMessage(message)
+        var consume = unsafeZeroValue<Message>()
         let start = MonoTime.now()
         try{
             for(client in services[message.meta]){
                 if(tried >= retryCount){
                     throw RPCException("retry count exceeded")
                 }
+                consume = Message.consume<Message>(once: true, qos: AtMostOnce, data: message)
                 try{
-                    let resp = client.transfer(Message.consume<Message>(once: true, qos: AtMostOnce, data: message)).get()
-                    result.result = resp.data
-                    return DataObject<R>.populate(resp.data)
+                    let resp = client.transfer(consume).get()
+                    let data = resp.data
+                    result.result = DataAny(data)
+                    match(R.fromData(data)){
+                        case x: R => x
+                        case x: ?R => match(x){
+                            case x: R => x
+                            case x: ToData => throw RPCException("response data ${JsonValue.from(x.toData())} is not a ${TypeInfo.of<R>()}")
+                            case _ => throw RPCException("response data is not a ${TypeInfo.of<R>()}")
+                        }
+                        case x: ToData => throw RPCException("response data ${JsonValue.from(x.toData())} is not a ${TypeInfo.of<R>()}")
+                        case _ => throw RPCException("response data is not a ${TypeInfo.of<R>()}")
+                    }
                 }catch(e: Exception){
                     tried++
-                    errorLog(message.id, 'Stub', message.command, e)
+                    errorLog(consume.id, 'Stub', consume.command, message, e)
                     if(let Some(ee) <- ex){
                         ee.addSuppressed(e)
                     }else{
@@ -127,21 +139,25 @@ public class RPCClient {
             if(let Some(e) <- ex){
                 throw e
             }
+            throw RPCException("no client is available")
         }finally{
-            infoLog<LogMessage>(message.id, message.label, message.command){
-                result.consumed = MonoTim.now() - start
+            infoLog<LogMessage>(consume.id, 'Stub', consume.command){
+                result.consumed = MonoTime.now() - start
                 result
             }
         }
     }
 }
-@DataFields[fields]
+@DataAssist[fields props]
 public class LogMessage {
-    public let params: Array<Data>
-    public var result: ?Data
+    public let message: RPCMessage
+    public var result: ?DataAny
     public var consumed: Duration = Duration.Zero
-    public init(params: Array<Data>){
-        this.params = params
-        this.result = None<Data>
+    public init(){
+        this(unsafeZeroValue<RPCMessage>())
+    }
+    public init(message: RPCMessage){
+        this.message = message
+        this.result = None<DataAny>
     }
 }

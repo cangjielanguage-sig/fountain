@@ -62,9 +62,9 @@ internal class ServerConfig {
             Config.getValue<Int64>(RPC_SERVER_BUFFER_QUEUE_SIZE) ?? 1000000
         }
     }
-    internal static prop connectionCheckDuration: Int64 {
+    internal static prop connectionCheckDuration: Duration {
         get(){
-            Config.getValue<Int64>(RPC_SERVER_CONNECTION_CHECK_DURATION) ?? 1000
+            Duration.millisecond * (Config.getValue<Int64>(RPC_SERVER_CONNECTION_CHECK_DURATION) ?? 1000)
         }
     }
     internal static prop baseAddresses: Array<String> {
@@ -91,10 +91,10 @@ internal class ServerConfig {
                     let timeout = Duration.millisecond * (Config.getValue<Int64>(RPC_SERVER_RATE_LIMITER_TIMEOUT) ?? 100)
                     AnyMomentRateLimiter<Unit>(maxTokens: maxTokens, timeout: timeout)
                 case 'leakingBucketRateLimiter' =>
-                    let timeout = Duration.millisecond * Config.getValue<Int64>(RPC_SERVER_RATE_LIMITER_TIMEOUT) ?? 1000
+                    let timeout = Duration.millisecond * (Config.getValue<Int64>(RPC_SERVER_RATE_LIMITER_TIMEOUT) ?? 1000)
                     let maxWaitings = Config.getValue<Int64>(RPC_SERVER_RATE_LIMITER_MAX_WAITINGS) ?? 1024
                     let leakingPerDuration = Config.getValue<Int64>(RPC_SERVER_RATE_LIMITER_LEAKING_PER_DURATION) ?? 1
-                    let leakingDuration = Duration.millisecond * (Config.getValue<Int64>(RPC_SERVER_RATE_LIMITER_LEAKING_DURATION) * 50)
+                    let leakingDuration = Duration.millisecond * (Config.getValue<Int64>(RPC_SERVER_RATE_LIMITER_LEAKING_DURATION) ?? 50)
                     LeakingBucketRateLimiter<Unit>(timeout: timeout,
                         maxWaitings: maxWaitings,
                         leakingPerDuration: leakingPerDuration,
@@ -111,6 +111,8 @@ internal class ServerConfig {
                     TokenBucketRateLimiter<Unit>(tokens: tokens, timeout: timeout, populationPeriod: populationPeriod)
                 case _ => UnlimitedRateLimiter<Unit>()
             }
+        }else{
+            UnlimitedRateLimiter<Unit>()
         }
     }
 }

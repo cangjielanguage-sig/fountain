@@ -15,7 +15,7 @@ limitations under the License.
 */
 package fountain::f_rpc.server
 
-import fountain::f_app.Initializer
+import fountain::f_app.{Initializer, InitializerCollection}
 
 public struct RPCServerInitializer <: Initializer {
     static init(){
@@ -39,6 +39,6 @@ public struct RPCServerInitializer <: Initializer {
      * 阻塞启动函数，调用此函数将阻塞
      */
     public func start(): Unit {
-        Server.start()
+        RPCServer.start()
     }
 }
