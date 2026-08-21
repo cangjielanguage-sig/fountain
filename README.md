@@ -44,6 +44,9 @@ Fountain 终于稳定运行在真实医疗环境中，成为仓颉语言应用�
 
 ---
 
+### 一些特别情况
+- 对于sdk lts/1.0.5 sts/1.1.x 有一个编译器BUG导致编译器会删除一部分mvc的代码，从而无法正确初始化。具体见：https://gitcode.com/Cangjie/UsersForum/issues/3372
+
 ### 项目概况
 一个用于服务器应用开发的原创综合工具库。
   1. `f_rx`功能参考了`RxJava`，API原创。
