@@ -114,7 +114,7 @@ public class RPCClient {
                     let resp = client.transfer(consume).get()
                     let data = resp.data
                     result.result = DataAny(data)
-                    return match(resp.command){
+                    return match(resp.command){//必须明确return，否则编译器推断最后的throw才是返回值
                         case Command.RESP(b) =>
                             match(R.fromData(data)){
                                 case x: R => x
