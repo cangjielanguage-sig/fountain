@@ -114,7 +114,7 @@ public class RPCClient {
                     let resp = client.transfer(consume).get()
                     let data = resp.data
                     result.result = DataAny(data)
-                    match(resp.command){
+                    return match(resp.command){
                         case Command.RESP(b) =>
                             match(R.fromData(data)){
                                 case x: R => x
