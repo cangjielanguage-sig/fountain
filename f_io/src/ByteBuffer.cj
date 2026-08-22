@@ -77,8 +77,7 @@ public class ByteBuffer <: IOStream {
         }
         if(addition <= 0){
             return
-        }
-        if(addition + woffset - roffset <= buffer.size){
+        }else if(addition + woffset - roffset <= buffer.size){
             copy(buffer, buffer, roffset, 0, woffset - roffset)
         }else{
             let tmp = Array<Byte>(buffer.size + addition, repeat: 0)
