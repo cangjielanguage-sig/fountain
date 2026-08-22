@@ -82,7 +82,7 @@ private func extractParams(params: ArrayList<FuncParam>): (Tokens, Tokens, Token
             argNames += `comma`
         }
         argTypes += quote(TypeInfo.of<$(p.paramType)>())
-        argValues += quote(let $(p.identifier) = f_data.convert<$(p.paramType)>(args[$i].data).getOrThrow())
+        argValues += quote(let $(p.identifier) = FountainDataConvert<$(p.paramType)>(args[$i].data).getOrThrow())
         argNames += try{
             p.not
             quote($(p.identifier): $(p.identifier))

@@ -27,6 +27,7 @@ protected import fountain::f_protocol.default.*
 public import fountain::f_bean.*
 public import fountain::f_config.*
 public import fountain::f_data.*
+public import fountain::f_data.convert as FountainDataConvert
 
 public const UNSUPPORTED_COMMAND = 'UnsupportedCommand'
 public const EXCEEDING = 'ServerExceeding'
