@@ -114,15 +114,20 @@ public class RPCClient {
                     let resp = client.transfer(consume).get()
                     let data = resp.data
                     result.result = DataAny(data)
-                    match(R.fromData(data)){
-                        case x: R => x
-                        case x: ?R => match(x){
-                            case x: R => x
-                            case x: ToData => throw RPCException("response data ${JsonValue.from(x.toData())} is not a ${TypeInfo.of<R>()}")
-                            case _ => throw RPCException("response data is not a ${TypeInfo.of<R>()}")
-                        }
-                        case x: ToData => throw RPCException("response data ${JsonValue.from(x.toData())} is not a ${TypeInfo.of<R>()}")
-                        case _ => throw RPCException("response data is not a ${TypeInfo.of<R>()}")
+                    match(resp.command){
+                        case Command.RESP(b) =>
+                            match(R.fromData(data)){
+                                case x: R => x
+                                case x: ?R => match(x){
+                                    case x: R => x
+                                    case x: ToData => throw RPCException("response data ${JsonValue.from(x.toData())} is not a ${TypeInfo.of<R>()}")
+                                    case _ => throw RPCException("response data is not a ${TypeInfo.of<R>()}")
+                                }
+                                case x: ToData => throw RPCException("response data ${JsonValue.from(x.toData())} is not a ${TypeInfo.of<R>()}")
+                                case _ => throw RPCException("response data is not a ${TypeInfo.of<R>()}")
+                            }
+                        case Command.ERROR => throw RPCException(data.toString())
+                        case x => throw RPCException("unexpected command ${x}")
                     }
                 }catch(e: Exception){
                     tried++
