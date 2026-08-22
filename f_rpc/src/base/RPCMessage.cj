@@ -38,7 +38,7 @@ public class ServiceMeta {
 
     public init(){}
     public init(version: String, name: String, typeName: String, methodName: String, argTypeNames: Array<String>, exactlyVersion!: Bool = false){
-        this.version = if(exactlyVersion){
+        this.version = if(exactlyVersion || version == '*'){
             version
         }else{
             let v = version.split('.')
