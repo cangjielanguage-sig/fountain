@@ -15,7 +15,6 @@ limitations under the License.
 */
 package fountain::f_rpc.client
 
-import std.sync.AtomicReference
 import std.collection.{ArrayList, HashSet, HashMap}
 import std.collection.concurrent.ConcurrentHashMap
 import std.time.MonoTime
