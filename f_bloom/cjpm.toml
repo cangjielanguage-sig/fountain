@@ -17,3 +17,6 @@
   "fountain::f_base" = {path = "../f_base"}
   "fountain::f_random" = {path = "../f_random"}
   "fountain::f_util" = {path = "../f_util"}
+
+[profile.build]
+  incremental = true

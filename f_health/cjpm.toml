@@ -18,3 +18,6 @@
   "fountain::f_config" = {path = "../f_config"}
   "fountain::f_data" = {path = "../f_data"}
   "fountain::f_log" = {path = "../f_log"}
+
+[profile.build]
+  incremental = true
