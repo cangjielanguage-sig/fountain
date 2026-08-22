@@ -45,7 +45,7 @@ public class RPCClient {
                     if(view.value.isNone()){
                         view.value = ArrayList<String>()
                     }
-                    view.value?.add(all: array)
+                    view.value?.add(client.address.toString())
                 }
                 return true
             }catch(e: Exception){
@@ -89,7 +89,7 @@ public class RPCClient {
             }
         }
         for((meta, hosts) in metas){
-            services[meta] = ClientConfig.createClient(hosts.toArray())
+            services[meta] = ClientConfig.createClient(hosts.unsafeData())
         }
         atExit{
             for((_, client) in services){
@@ -109,7 +109,7 @@ public class RPCClient {
                 if(tried >= retryCount){
                     throw RPCException("retry count exceeded")
                 }
-                consume = Message.consume<Message>(once: true, qos: AtMostOnce, data: message)
+                consume = Message.consume<RPCMessage>(once: true, qos: AtMostOnce, data: message)
                 try{
                     let resp = client.transfer(consume).get()
                     let data = resp.data

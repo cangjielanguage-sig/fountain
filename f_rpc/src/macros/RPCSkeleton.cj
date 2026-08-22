@@ -83,7 +83,12 @@ private func extractParams(params: ArrayList<FuncParam>): (Tokens, Tokens, Token
         }
         argTypes += quote(TypeInfo.of<$(p.paramType)>())
         argValues += quote(let $(p.identifier) = f_data.convert<$(p.paramType)>(args[$i].data).getOrThrow())
-        argNames += quote(p.identifier)
+        argNames += try{
+            p.not
+            quote($(p.identifier): $(p.identifier))
+        }catch(_){
+            quote($(p.identifier))
+        }
     }
     argTypes += `rsquare`
     (argTypes, argValues, argNames)

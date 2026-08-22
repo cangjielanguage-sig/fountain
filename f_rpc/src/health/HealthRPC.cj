@@ -15,6 +15,7 @@ limitations under the License.
 */
 package fountain::f_rpc.health
 
+import fountain::f_health.*
 import fountain::f_rpc.client.*
 import fountain::f_rpc.macros.*
 

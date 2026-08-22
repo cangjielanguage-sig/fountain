@@ -20,12 +20,12 @@ protected import std.env.atExit
 protected import std.time.MonoTime
 
 protected import fountain::f_base.*
-protected import fountain::f_config.*
 protected import fountain::f_io.ByteBuffer
 protected import fountain::f_log.*
 protected import fountain::f_protocol.default.*
 
 public import fountain::f_bean.*
+public import fountain::f_config.*
 public import fountain::f_data.*
 
 public const UNSUPPORTED_COMMAND = 'UnsupportedCommand'

@@ -16,6 +16,10 @@ limitations under the License.
 macro package fountain::f_rpc.macros
 
 import std.ast.*
+
+public macro RPCStub(input: Tokens): Tokens {
+    genStub(quote(), input)
+}
 /**
  * attr 用于指定skeleton的版本号、fountain::f_bean名称、是否精确版本号，分别有以下属性：
  * 
@@ -27,7 +31,10 @@ import std.ast.*
  * 当存在环境变量rpc_currentSkeleton，且变量值与当前项目名称一致时或者与被@RPCStub修饰的接口有相同的包名，宏RPCStub展开的代码将不会注册到IOC
  */
 public macro RPCStub(attr: Tokens, input: Tokens): Tokens {
-    var version = ''
+    genStub(attr, input)
+}
+private func genStub(attr: Tokens, input: Tokens): Tokens {
+    var version = '*'
     var name = ''
     var exactlyVersion = false
     var i = 0
@@ -48,8 +55,14 @@ public macro RPCStub(attr: Tokens, input: Tokens): Tokens {
         i++
     }
     if(version == ''){
-        diagReport(DiagReportLevel.ERROR, attr, 'version is required for attr of fountain::f_rpc.RPCStub', '')
+        diagReport(DiagReportLevel.ERROR, input, 'version is empty for @RPCStub attr', '')
         throw RPCException()
+    } else if (Regex(#'^[a-zA-Z]+\w*$'#).matches(version)){
+        let v = version
+        version = Config.getString(version).getOrThrow{
+            diagReport(DiagReportLevel.ERROR, input, 'version ${v} is not a valid version or a valid config item for @RPCStub attr', '')
+            RPCException()
+        }
     }
     genStub(exactlyVersion, version, name, parseDecl(input))
 }
@@ -59,16 +72,16 @@ private func genStub(exactlyVersion: Bool, version: String, name: String, decl: 
         diagReport(DiagReportLevel.ERROR, decl.toTokens(), 'decl ${decl.identifier.value} must not be with generic param fountain::f_rpc stub', '')
         throw RPCException()
     }catch(_){}
-    var tokens = `empty_tokens`
+    var funcs = `empty_tokens`
     match(decl){
         case x: InterfaceDecl => 
             let typeName = x.identifier
             for(d in x.body.decls){
                 if(let f: FuncDecl <- d && !isStatic(f)){
-                    if(tokens.size > 0){
-                        tokens += `nl`
+                    if(funcs.size > 0){
+                        funcs += `nl`
                     }
-                    tokens += genStub(exactlyVersion, version, name, typeName, f)
+                    funcs += genStub(exactlyVersion, version, name, typeName, f)
                 }else{
                     diagReport(DiagReportLevel.ERROR, d.toTokens(), 'decl ${d.identifier.value} in ${x.identifier.value} must be a instance func decl for fountain::f_rpc stub', '')
                     throw RPCException()
@@ -82,7 +95,7 @@ private func genStub(exactlyVersion: Bool, version: String, name: String, decl: 
     quote(
         $decl
         public class $(className) <: $(decl.identifier){
-            $tokens
+            $funcs
         }
         private let _ = {=>
             let skeleton = ClientConfig.currentSkeleton
@@ -107,17 +120,17 @@ private func genStub(exactlyVersion: Bool, version: String, name: String, typeNa
         argTypes += quote(TypeInfo.of<$(arg.paramType)>().qualifiedName)
         argValues += quote(DataAny($(arg.identifier).toData()))
     }
-    argTypes = `rsquare`
-    argValues = `rsquare`
+    argTypes += `rsquare`
+    argValues += `rsquare`
     quote(
         public func $(decl.identifier)($(decl.funcParams)): $(decl.declType) {
             let version = $(version)
             let name = $(name)
             let typeName = TypeInfo.of<$(typeName)>().qualifiedName
             let methodName = $(decl.identifier.value)
-            let argTypeNames = $(argTypes)
+            let argTypeNames: Array<String> = $(argTypes)
             let meta = ServiceMeta(version, name, typeName, methodName, argTypeNames, exactlyVersion: $exactlyVersion)
-            let args: Array<Data> = $(argValues)
+            let args: Array<DataAny> = $(argValues)
             let message = RPCMessage(meta, args)
             RPCClient.call<$(decl.declType)>(message)
         }

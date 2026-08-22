@@ -18,7 +18,7 @@ package fountain::f_rpc.client
 import std.convert.*
 import fountain::f_concurrent.exception.LoadBalanceException
 
-class ClientConfig {
+public class ClientConfig {
     private static const RPC_CLIENT_PREFIX = 'rpcClient'
     private static const RPC_SERVER_ADDRESS = RPC_CLIENT_PREFIX + '_serverAddress'
     private static const RPC_CLIENT_LOADBALANCE = RPC_CLIENT_PREFIX + '_loadbalance'
@@ -187,14 +187,18 @@ class ClientConfig {
             builder.quickAcknowledge(qack)
         }
         builder.readTimeout(readTimeout)
-        builder.receiveBufferSize(receiveBufferSize)
-        builder.sendBufferSize(sendBufferSize)
+        if(let Some(s) <- receiveBufferSize){
+            builder.receiveBufferSize(s)
+        }
+        if(let Some(s) <- sendBufferSize){
+            builder.sendBufferSize(s)
+        }
         builder.writeTimeout(writeTimeout)
         if(let Some((l, o, v)) <- socketOptionBool){
             builder.socketOptionBool(l, o, v)
         }
         if(let Some((l, o, v)) <- socketOptionInt){
-            builder.socketOptionInt(l, o, v)
+            builder.socketOptionIntNative(l, o, v)
         }
         if(let Some(pt) <- pingTimeout){
             builder.pingTimeout(pt)
@@ -211,7 +215,7 @@ class ClientConfig {
         }
         match(loadbalance){
             case 'random' => builder.random(min, max)
-            case 'roundrobin' => builder.roundRobin(1, min, max)
+            case 'roundrobin' => builder.roundRobin(1.0f64, min, max)
             case x => throw LoadBalanceException("unsupported loadbalance algorithm: ${x}")
         }
         builder.add(addresses)
