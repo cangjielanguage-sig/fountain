@@ -107,7 +107,13 @@ public class RPCClient {
         try{
             for(client in services[message.meta]){
                 if(tried >= retryCount){
-                    throw RPCException("retry count exceeded")
+                    let exceeded = RPCException("retry count exceeded")
+                    if(let Some(e) <- ex){
+                        e.addSuppressed(exceeded)
+                    }else{
+                        ex = exceeded
+                    }
+                    break
                 }
                 consume = Message.consume<RPCMessage>(once: true, qos: AtMostOnce, data: message)
                 try{
