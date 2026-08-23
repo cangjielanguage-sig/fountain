@@ -1,6 +1,7 @@
 ![LICENSE](https://img.shields.io/badge/License-ApacheV2.0-orange.svg?style=flat-square&logo=opensourceinitiative&logoSize=14)
 ![stars](https://gitcode.com/Cangjie-SIG/fountain/star/badge.svg?style=flat-square&logoSize=14)
 ![star](https://gitcode.com/Cangjie-SIG/fountain/star/2025top.svg)
+[![AtomGit Star](https://atomgit.com/Cangjie-SIG/fountain/star/badge.svg)](https://atomgit.com/Cangjie-SIG/fountain)
 ```
   _____                    __         .__
 _/ ____\____  __ __  _____/  |______  |__| ____
@@ -42,6 +43,11 @@ Fountain 终于稳定运行在真实医疗环境中，成为仓颉语言应用�
 欢迎加入我们，一起建设 Fountain，让更多领域的核心业务使用仓颉开发，让我们共同建设未来。
 
 ---
+
+### 一些特别情况
+- 对于sdk lts/1.0.5 sts/1.1.x 有一个编译器BUG导致编译器会删除一部分mvc的代码，从而无法正确初始化。具体见：https://gitcode.com/Cangjie/UsersForum/issues/3372
+- 这个问题在lts/1.0.4 不存在。
+- ng 1.2.x 比较早的版本也存在，1.2.x最后的少数几个版本得到了解决
 
 ### 项目概况
 一个用于服务器应用开发的原创综合工具库。
