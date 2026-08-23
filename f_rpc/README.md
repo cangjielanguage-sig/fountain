@@ -534,3 +534,5 @@ RPC 基于 `fountain::f_protocol` 的 `Command` 枚举：
    - 第三位版本号变化表示没有破坏性的不兼容的变更，但是实现有所变化。
      - 注册为`rpcServer_exactlyVersion=true`，可以用于灰度发布或金丝雀发布，确认没有问题以后如果不希望升级客户端版本，可以把`rpcServer_exactlyVersion`改为`false`，同时客户端版本改为`a.b`的形式。或者把`@RPCStub`的exactlyVersion指定为一个配置项，并把配置项的值改为`false`。
    - 前两位版本号变化表示发生了破坏性、不兼容变更。
+9. 客户端可能依赖不同业务不同版本的RPC服务端，所以`@RPCStub`的`exactlyVersion`和`version`的属性需要客户端开发者自己定义配置项。
+10. 客户端配置项`rpc_currentSkeleton`用于阻止同模块的Stub注册到IOC。
