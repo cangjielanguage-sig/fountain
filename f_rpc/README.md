@@ -502,7 +502,7 @@ RPC 基于 `fountain::f_protocol` 的 `Command` 枚举：
 
 ## 日志
 
-日志器名称为 `rpc`（`LoggerFactory.getLogger('rpc')`），可通过 `fountain::f_log` 的日志配置调整级别。日志格式：
+日志器名称为 `rpc`（`LoggerFactory.getLogger('rpc')`），可通过 `fountain::f_log` 的日志配置调整级别。日志内容：
 
 ```text
 [FOUNTAIN_RPC.{label}.{command}] {messageId}; {JSON}
