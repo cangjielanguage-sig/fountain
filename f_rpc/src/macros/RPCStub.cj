@@ -34,6 +34,7 @@ public macro RPCStub(attr: Tokens, input: Tokens): Tokens {
     genStub(attr, input)
 }
 private func genStub(attr: Tokens, input: Tokens): Tokens {
+    let identifierRegex = Regex(#'^[a-zA-Z]+\w*$'#)
     var version = '*'
     var name = ''
     var exactlyVersion = false
@@ -49,7 +50,15 @@ private func genStub(attr: Tokens, input: Tokens): Tokens {
                 version = attr[i].value
             case 'exactlyVersion' =>
                 i += 2
-                exactlyVersion = attr[i].value == 'true'
+                exactlyVersion = match(attr[i].value){
+                    case 'true' => true
+                    case 'false' => false
+                    case x where identifierRegex.matches(x) => 
+                        Config.getValue<Bool>(x) ?? false
+                    case _ => 
+                        diagReport(DiagReportLevel.ERROR, input, 'exactlyVersion must be true or false for @RPCStub attr, or it is a config item which matches identifier specification', '')
+                        throw RPCException()
+                }
             case _ => ()
         }
         i++
@@ -57,7 +66,7 @@ private func genStub(attr: Tokens, input: Tokens): Tokens {
     if(version == ''){
         diagReport(DiagReportLevel.ERROR, input, 'version is empty for @RPCStub attr', '')
         throw RPCException()
-    } else if (Regex(#'^[a-zA-Z]+\w*$'#).matches(version)){
+    } else if (identifierRegex.matches(version)){
         let v = version
         version = Config.getString(version).getOrThrow{
             diagReport(DiagReportLevel.ERROR, input, 'version ${v} is not a valid version or a valid config item for @RPCStub attr', '')

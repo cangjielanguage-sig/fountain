@@ -516,7 +516,7 @@ RPC 基于 `fountain::f_protocol` 的 `Command` 枚举：
 | 端 | 版本来源 | 截断规则 |
 | --- | --- | --- |
 | 服务端 | 工作目录 `cjpm.toml` 的 `version=` 字段 | `rpcServer_exactlyVersion=false`（默认）保留前两位；`true` 保留全部 |
-| 客户端（属性形式） | `@RPCStub` 的 `version` 属性（字面值或配置项） | `exactlyVersion=false`（默认）保留前两位；`true` 保留全部 |
+| 客户端（属性形式） | `@RPCStub` 的 `version` 属性（字面值或客户端开发者自定义配置项） | `exactlyVersion=false`（默认）保留前两位；`true` 保留全部，默认是`false`，也可以是客户端开发者自定义配置项|
 | 客户端（无属性形式） | 版本固定为 `*`（通配） | — |
 
 示例：客户端 `@RPCStub[version='1.0.0']` 实际查找版本 `1.0`，可命中版本为 `1.0.x`（且未开启精确版本）的服务端。
@@ -530,3 +530,7 @@ RPC 基于 `fountain::f_protocol` 的 `Command` 枚举：
 5. `rpcClient_retryCount` 默认为 `0`，且每次尝试前检查已达上限即抛出 `RPCException("retry count exceeded")`，使用时需配置为不小于 `1`
 6. 客户端与服务端的接口定义需保持一致（接口完全限定名、方法名、参数类型完全限定名均参与匹配），推荐共享 API 包
 7. 服务端调用异常不会抛给客户端，而是通过 `ERROR` 命令返回异常堆栈文本（客户端表现为 `RPCException`）
+8. skeleton `rpcServer_exactlyVersion=true`时，`a.b.c`版本不能服务指定版本是`a.b`的客户端访问。
+   - 第三位版本号变化表示没有破坏性的不兼容的变更，但是实现有所变化。
+     - 注册为`rpcServer_exactlyVersion=true`，可以用于灰度发布或金丝雀发布，确认没有问题以后如果不希望升级客户端版本，可以把`rpcServer_exactlyVersion`改为`false`，同时客户端版本改为`a.b`的形式。或者把`@RPCStub`的exactlyVersion指定为一个配置项，并把配置项的值改为`false`。
+   - 前两位版本号变化表示发生了破坏性、不兼容变更。
