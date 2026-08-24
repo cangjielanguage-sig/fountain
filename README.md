@@ -530,7 +530,7 @@ Observable.replaySize(capacity)
   - 生成文档的路径从环境变量获得
 
 ## 主要功能演示视频与主要功能介绍
-- 从50：55开始是具体的fountain使用介绍
+- 从50：55开始是具体的fountain使用介绍（基于SDK1.0.4）
 https://www.bilibili.com/video/BV1Vb1sBzEyD/?spm_id_from=333.1387.upload.video_card.click&vd_source=29618d9ddd46963c9eabd64d9e362fb4
 
 
