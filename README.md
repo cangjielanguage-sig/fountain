@@ -533,10 +533,12 @@ Observable.replaySize(capacity)
 - 从50：55开始是具体的fountain使用介绍（基于SDK1.0.4）
 https://www.bilibili.com/video/BV1Vb1sBzEyD/?spm_id_from=333.1387.upload.video_card.click&vd_source=29618d9ddd46963c9eabd64d9e362fb4
 
-
 - 这个是详细的功能介绍，你们先看看吧。有问题再找我。
 https://www.bilibili.com/video/BV1RaW3zYEYP/?spm_id_from=333.1387.upload.video_card.click&vd_source=29618d9ddd46963c9eabd64d9e362fb4
 
+- [fdemo](./fdemo)
+  演示了f_bean f_aspect f_mvc f_orm f_ticktock f_jwt 等模块的用法
+  
 ## Stargazers over time
 
 ![Stargazers over time](https://gitcode.com/Cangjie-SIG/fountain/starcharts.svg?variant=adaptive)
