@@ -38,7 +38,7 @@ public struct ServiceHub {
         }else{
             '<UnspecifiedName>'
         }
-        rpclog.debug{'[FOUNTAIN_RPC.${SKELETON}] [${beanName}(${version})]class-${classInfo}.${funcName}${argTypeNames};${exactlyVersion}'}
+        rpclog.debug{'[FOUNTAIN_RPC.${SKELETON}] [${beanName}(${version})]class-${classInfo.qualifiedName}.${funcName}${argTypeNames};${exactlyVersion}'}
         let q = ArrayQueue<TypeInfo>()
         q.add(classInfo)
         while(let Some(t) <- q.remove()){
