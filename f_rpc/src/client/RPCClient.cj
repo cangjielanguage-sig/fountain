@@ -15,7 +15,7 @@ limitations under the License.
 */
 package fountain::f_rpc.client
 
-import std.collection.{ArrayList, HashSet, HashMap}
+import std.collection.{TreeSet, HashSet, HashMap}
 import std.collection.concurrent.ConcurrentHashMap
 import std.time.MonoTime
 import fountain::f_data.macros.*
@@ -25,7 +25,7 @@ public class RPCClient {
     private static let services = ConcurrentHashMap<ServiceMeta, MultiClient<Float64>>()
 
     static init(){
-        let metas = HashMap<ServiceMeta, ArrayList<String>>()
+        let metas = HashMap<ServiceMeta, TreeSet<String>>()
         func subscribe(client: Client, closingOnEnd: Bool){
             try{
                 let message = Message.subscribe(data: false)
@@ -42,7 +42,7 @@ public class RPCClient {
                 for(meta in array){
                     let view = metas.entryView(meta)
                     if(view.value.isNone()){
-                        view.value = ArrayList<String>()
+                        view.value = TreeSet<String>()
                     }
                     view.value?.add(client.address.toString())
                 }
@@ -58,37 +58,58 @@ public class RPCClient {
         }
         let hosts = HashSet<String>()
         let clients = ClientConfig.createClient()
-        for(client in clients){
-            let msg = Message.subscribe(data: true)
-            let resp = client.transfer(msg).get().data
-            let any = Array<String>.tryFromData(resp)
-            let array: Array<String> = match(any){
-                case x: Array<String> => x
-                case x: ?Array<String> => x ?? []
-                case _ => []
-            }
-            hosts.add(all: array)
-            subscribe(client, false)
-        }
-        clients.close()
-        for(host in hosts){
-            while(true){
-                var client: Client = unsafeZeroValue<Client>()
-                while(true){
-                    try{
-                        client = Client.builder(address: host, checkDuration: Duration.second, checker: {=> Message.ping()}).build()
-                        break
-                    }catch(e: Exception){
-                        rpclog.error("[FOUNTAIN_RPC.subscribe.hosts] ${host}", e)
+        spawn{
+            try{
+                for(client in clients){
+                    let msg = Message.subscribe(data: true)
+                    let resp = client.transfer(msg).get().data
+                    let any = Array<String>.tryFromData(resp)
+                    let array: Array<String> = match(any){
+                        case x: Array<String> => x
+                        case x: ?Array<String> => x ?? []
+                        case _ => []
+                    }
+                    hosts.add(all: array)
+                    subscribe(client, false)
+                }
+                clients.close()
+                for(host in hosts){
+                    while(true){
+                        var client: Client = unsafeZeroValue<Client>()
+                        while(true){
+                            try{
+                                client = Client.builder(address: host, checkDuration: Duration.second, checker: {=> Message.ping()}).build()
+                                break
+                            }catch(e: Exception){
+                                rpclog.error("[FOUNTAIN_RPC.subscribe.hosts] ${host}", e)
+                            }
+                        }
+                        if(subscribe(client, true)){
+                            break
+                        }
                     }
                 }
-                if(subscribe(client, true)){
-                    break
+                for((meta, hosts) in metas){
+                    services.entryView(meta){view => 
+                        if(let Some(clients) <- view.value){
+                            let set = TreeSet<String>()
+                            for(c in clients){
+                                set.add(c.address.toString())
+                            }
+                            if(let hostArray <- hosts.toArray() && set.toArray() != hostArray){
+                                let newClients = ClientConfig.createClient(hosts.toArray())
+                                view.value = newClients
+                                clients.close()
+                            }
+                        }else{
+                            view.value = ClientConfig.createClient(hosts.toArray())
+                        }
+                    }
                 }
+            }finally{
+                metas.clear()
+                sleep(Duration.second)
             }
-        }
-        for((meta, hosts) in metas){
-            services[meta] = ClientConfig.createClient(hosts.unsafeData())
         }
         atExit{
             for((_, client) in services){

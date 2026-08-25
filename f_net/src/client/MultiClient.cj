@@ -150,7 +150,19 @@ public class MultiClientBuilder<W> where W <: Addable<W> & Comparable<W>{
         if(let Some(pingTimeout) <- pingTimeout_){
             builder.pingTimeout(pingTimeout)
         }
-        let client = builder.build()
+        let client = try{
+            builder.build()
+        }catch(e: Exception){
+            let ce = ClientException(e)
+            for(c in clients){
+                try{
+                    c.close()
+                }catch(ex: Exception){
+                    ce.addSuppressed(ex)
+                }
+            }
+            throw ce
+        }
         this.clients.add(client)
         balance?.add(weight){_ => client}
         this
