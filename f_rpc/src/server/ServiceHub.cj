@@ -50,11 +50,14 @@ public struct ServiceHub {
                     rpclog.debug{'[FOUNTAIN_RPC.${SKELETON}] [${name}(${version})]interface-${ti}.${funcName}${argTypeNames};${hub.contains(m)}'}
                     hub.addIfAbsent(meta, fn)
                     meta = ServiceMeta('*', name, ti.qualifiedName, funcName, argTypeNames, exactlyVersion: exactlyVersion)
+                    rpclog.debug{'[FOUNTAIN_RPC.${SKELETON}] [${name}(*)]interface-${ti}.${funcName}${argTypeNames};${hub.contains(m)}'}
                     hub.addIfAbsent(meta, fn)
                     if(name.size != 0){
                         meta = ServiceMeta(version, '', ti.qualifiedName, funcName, argTypeNames, exactlyVersion: exactlyVersion)
+                        rpclog.debug{'[FOUNTAIN_RPC.${SKELETON}] [<NoName>(${version})]interface-${ti}.${funcName}${argTypeNames};${hub.contains(m)}'}
                         hub.addIfAbsent(meta, fn)
                         meta = ServiceMeta('*', '', ti.qualifiedName, funcName, argTypeNames, exactlyVersion: exactlyVersion)
+                        rpclog.debug{'[FOUNTAIN_RPC.${SKELETON}] [<NoName>(*)]interface-${ti}.${funcName}${argTypeNames};${hub.contains(m)}'}
                         hub.addIfAbsent(meta, fn)
                         let meta = ServiceMeta(version, '', ti.qualifiedName, funcName, argTypeNames, exactlyVersion: exactlyVersion)
                         hub.addIfAbsent(meta, fn)
