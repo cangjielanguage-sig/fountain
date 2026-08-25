@@ -223,8 +223,20 @@ public class MultiClient<W> <: Resource & Iterable<Client> where W <: Addable<W>
     }
     public func close(): Unit {
         closed = true
+        var ex = None<ClientException>
         for(client in clients){
-            client.close()
+            try{
+                client.close()
+            }catch(e: Exception){
+                if(let Some(ee) <- ex){
+                    ee.addSuppressed(e)
+                }else{
+                    ex = ClientException(e)
+                }
+            }
+        }
+        if(let Some(ee) <- ex){
+            throw ee
         }
     }
 }

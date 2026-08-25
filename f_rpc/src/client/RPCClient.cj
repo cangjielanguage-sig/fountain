@@ -19,6 +19,7 @@ import std.collection.{TreeSet, HashSet, HashMap}
 import std.collection.concurrent.ConcurrentHashMap
 import std.time.MonoTime
 import fountain::f_data.macros.*
+import fountain::f_log.*
 
 public class RPCClient {
     private static let retryCount = ClientConfig.retryCount
@@ -106,9 +107,11 @@ public class RPCClient {
                         }
                     }
                 }
+            }catch(e: Exception){
+                rpclog.warn('error on RPCClient init', e)
             }finally{
                 metas.clear()
-                sleep(Duration.second)
+                sleep(ClientConfig.refreshIntervalSeconds)
             }
         }
         atExit{

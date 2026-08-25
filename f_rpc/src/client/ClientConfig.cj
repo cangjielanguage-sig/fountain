@@ -40,6 +40,7 @@ public class ClientConfig {
     private static const RPC_CLIENT_SOCKET_OPTION_INT = RPC_CLIENT_PREFIX + '_socketOptionInt'
     private static const RPC_CLIENT_PING_TIMEOUT = RPC_CLIENT_PREFIX + '_pingTimeout'
     private static const RPC_CLIENT_RETRY_COUNT = RPC_CLIENT_PREFIX + '_retryCount'
+    private static const RPC_CLIENT_REFRESH_INTERVAL_SECONDS = RPC_CLIENT_PREFIX + '_refreshIntervalSeconds'
     private static const RPC_CURRENT_SKELETON = 'rpc_currentSkeleton'
 
     public static prop currentSkeleton: String {
@@ -162,6 +163,11 @@ public class ClientConfig {
     internal static prop retryCount: Int64 {
         get(){
             Config.getValue<Int64>(RPC_CLIENT_RETRY_COUNT) ?? 0
+        }
+    }
+    internal static prop refreshIntervalSeconds: Duration {
+        get(){
+            Duration.second * (Config.getValue<Int64>(RPC_CLIENT_REFRESH_INTERVAL_SECONDS) ?? 1)
         }
     }
     private  static func createClient(addresses: Array<(Float64, String)>): MultiClient<Float64>{

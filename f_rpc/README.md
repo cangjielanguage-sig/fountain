@@ -466,6 +466,7 @@ public class HealthRPCImpl <: HealthRPC {
 | `rpcClient_socketOptionInt` | `level,option,value` | 无 | 整型套接字选项，如 `6,2,128` |
 | `rpcClient_pingTimeout` | `Duration` | 无 | ping 超时 |
 | `rpcClient_retryCount` | `Int64` | `0` | 单次调用最大尝试次数（每次尝试前检查已尝试次数是否达到上限，**需配置为不小于 1 才能发起调用**） |
+| `_refreshIntervalSeconds` | `Duration` | `1` | 刷新服务端连接的周期，单位是秒，定时从种子节点获取服务端节点，并获得每个节点提供的RPC服务元数据 |
 | `rpc_currentSkeleton` | `String` | 无 | 当前服务模块名，用于阻止存根在服务端模块注册到 IOC（见 `@RPCStub`） |
 
 ### 限流器配置
