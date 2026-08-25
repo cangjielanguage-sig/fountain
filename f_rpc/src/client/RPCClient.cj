@@ -57,7 +57,7 @@ public class RPCClient {
                 }
             }
         }
-        let hosts = HashSet<String>()
+        let hosts = TreeSet<String>()
         let clients = ClientConfig.createClient()
         spawn{
             try{
@@ -91,20 +91,17 @@ public class RPCClient {
                     }
                 }
                 for((meta, hosts) in metas){
-                    services.entryView(meta){view => 
-                        if(let Some(clients) <- view.value){
-                            let set = TreeSet<String>()
-                            for(c in clients){
-                                set.add(c.address.toString())
-                            }
-                            if(let hostArray <- hosts.toArray() && set.toArray() != hostArray){
-                                let newClients = ClientConfig.createClient(hosts.toArray())
-                                view.value = newClients
-                                clients.close()
-                            }
-                        }else{
-                            view.value = ClientConfig.createClient(hosts.toArray())
+                    if(let Some(clients) <- services.get(view)){
+                        let set = TreeSet<String>()
+                        for(c in clients){
+                            set.add(c.address.toString())
                         }
+                        if(let hostArray <- hosts.toArray() && set.toArray() != hostArray){
+                            services[meta] = ClientConfig.createClient(hostArray)
+                            clients.close()
+                        }
+                    }else{
+                        services[meta] = ClientConfig.createClient(hosts.toArray())
                     }
                 }
             }catch(e: Exception){
