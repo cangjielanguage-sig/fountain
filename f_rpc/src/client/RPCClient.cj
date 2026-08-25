@@ -91,14 +91,14 @@ public class RPCClient {
                     }
                 }
                 for((meta, hosts) in metas){
-                    if(let Some(clients) <- services.get(view)){
+                    if(let Some(clients) <- services.get(meta)){
                         let set = TreeSet<String>()
                         for(c in clients){
                             set.add(c.address.toString())
                         }
                         if(let hostArray <- hosts.toArray() && set.toArray() != hostArray){
                             services[meta] = ClientConfig.createClient(hostArray)
-                            clients.close()
+                            clients.close()//todo 此处应该先发送一个关闭通知，可以改造DEREGISTER命令，服务端等待所有任务都结束以后再返回，然后两边关闭。要为Client中的每个同服务节点的连接各发送一次
                         }
                     }else{
                         services[meta] = ClientConfig.createClient(hosts.toArray())

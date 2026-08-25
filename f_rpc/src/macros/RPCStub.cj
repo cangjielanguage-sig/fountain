@@ -87,10 +87,16 @@ private func genStub(exactlyVersion: Bool, version: String, name: String, decl: 
             let typeName = x.identifier
             for(d in x.body.decls){
                 if(let f: FuncDecl <- d && !isStatic(f)){
-                    if(funcs.size > 0){
+                    if(f.block.lBrace.kind == LCURL){
+                        continue
+                    } else if (funcs.size > 0){
                         funcs += `nl`
                     }
                     funcs += genStub(exactlyVersion, version, name, typeName, f)
+                }else if (let f: FuncDecl <- d && f.block.lBrace.kind == LCURL){
+                    continue
+                }else if (let p: PropDecl <- d && p.lBrace.kind == LCURL){
+                    continue
                 }else{
                     diagReport(DiagReportLevel.ERROR, d.toTokens(), 'decl ${d.identifier.value} in ${x.identifier.value} must be a instance func decl for fountain::f_rpc stub', '')
                     throw RPCException()
