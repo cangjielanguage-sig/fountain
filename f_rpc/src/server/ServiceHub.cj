@@ -33,7 +33,12 @@ public struct ServiceHub {
             ''
         }
         let argTypeNames = Array<String>(argTypes.size){i => argTypes[i].qualifiedName}
-        rpclog.debug{'[FOUNTAIN_RPC.${SKELETON}] [${name}(${version})]class-${classInfo}.${funcName}${argTypeNames};${exactlyVersion}'}
+        let beanName = if(name.size == 0){
+            name
+        }else{
+            'UnspecifiedName'
+        }
+        rpclog.debug{'[FOUNTAIN_RPC.${SKELETON}] [${beanName}(${version})]class-${classInfo}.${funcName}${argTypeNames};${exactlyVersion}'}
         let q = ArrayQueue<TypeInfo>()
         q.add(classInfo)
         while(let Some(t) <- q.remove()){
@@ -47,10 +52,10 @@ public struct ServiceHub {
                 if(hasFunc){
                     var meta = ServiceMeta(version, name, ti.qualifiedName, funcName, argTypeNames, exactlyVersion: exactlyVersion)
                     let m = meta
-                    rpclog.debug{'[FOUNTAIN_RPC.${SKELETON}] [${if(name.size > 0){name}else{'<UnspecifiedName>'}}(${version})]interface-${ti}.${funcName}${argTypeNames};${hub.contains(m)}'}
+                    rpclog.debug{'[FOUNTAIN_RPC.${SKELETON}] [${beanName}(${version})]interface-${ti}.${funcName}${argTypeNames};${hub.contains(m)}'}
                     hub.addIfAbsent(meta, fn)
                     meta = ServiceMeta('*', name, ti.qualifiedName, funcName, argTypeNames, exactlyVersion: exactlyVersion)
-                    rpclog.debug{'[FOUNTAIN_RPC.${SKELETON}] [${if(name.size > 0){name}else{'<UnspecifiedName>'}}(*)]interface-${ti}.${funcName}${argTypeNames};${hub.contains(m)}'}
+                    rpclog.debug{'[FOUNTAIN_RPC.${SKELETON}] [${beanName}(*)]interface-${ti}.${funcName}${argTypeNames};${hub.contains(m)}'}
                     hub.addIfAbsent(meta, fn)
                     if(name.size != 0){
                         meta = ServiceMeta(version, '', ti.qualifiedName, funcName, argTypeNames, exactlyVersion: exactlyVersion)
