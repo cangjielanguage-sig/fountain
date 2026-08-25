@@ -33,10 +33,10 @@ public struct ServiceHub {
             ''
         }
         let argTypeNames = Array<String>(argTypes.size){i => argTypes[i].qualifiedName}
-        let beanName = if(name.size == 0){
+        let beanName = if(name.size > 0){
             name
         }else{
-            'UnspecifiedName'
+            '<UnspecifiedName>'
         }
         rpclog.debug{'[FOUNTAIN_RPC.${SKELETON}] [${beanName}(${version})]class-${classInfo}.${funcName}${argTypeNames};${exactlyVersion}'}
         let q = ArrayQueue<TypeInfo>()
