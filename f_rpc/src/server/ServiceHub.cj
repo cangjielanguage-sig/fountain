@@ -52,20 +52,20 @@ public struct ServiceHub {
                 if(hasFunc){
                     var meta = ServiceMeta(version, name, ti.qualifiedName, funcName, argTypeNames, exactlyVersion: exactlyVersion)
                     let m1 = meta
-                    rpclog.debug{'[FOUNTAIN_RPC.${SKELETON}] [${beanName}(${version})]interface-${ti}.${funcName}${argTypeNames};${hub.contains(m1)}'}
+                    rpclog.debug{'[FOUNTAIN_RPC.${SKELETON}] [${beanName}(${version})]interface-${ti.qualifiedName}.${funcName}${argTypeNames};${hub.contains(m1)}'}
                     hub.addIfAbsent(meta, fn)
                     meta = ServiceMeta('*', name, ti.qualifiedName, funcName, argTypeNames, exactlyVersion: exactlyVersion)
                     let m2 = meta
-                    rpclog.debug{'[FOUNTAIN_RPC.${SKELETON}] [${beanName}(*)]interface-${ti}.${funcName}${argTypeNames};${hub.contains(m2)}'}
+                    rpclog.debug{'[FOUNTAIN_RPC.${SKELETON}] [${beanName}(*)]interface-${ti.qualifiedName}.${funcName}${argTypeNames};${hub.contains(m2)}'}
                     hub.addIfAbsent(meta, fn)
                     if(name.size != 0){
                         meta = ServiceMeta(version, '', ti.qualifiedName, funcName, argTypeNames, exactlyVersion: exactlyVersion)
                         let m3 = meta
-                        rpclog.debug{'[FOUNTAIN_RPC.${SKELETON}] [<NoName>(${version})]interface-${ti}.${funcName}${argTypeNames};${hub.contains(m3)}'}
+                        rpclog.debug{'[FOUNTAIN_RPC.${SKELETON}] [<NoName>(${version})]interface-${ti.qualifiedName}.${funcName}${argTypeNames};${hub.contains(m3)}'}
                         hub.addIfAbsent(meta, fn)
                         meta = ServiceMeta('*', '', ti.qualifiedName, funcName, argTypeNames, exactlyVersion: exactlyVersion)
                         let m4 = meta
-                        rpclog.debug{'[FOUNTAIN_RPC.${SKELETON}] [<NoName>(*)]interface-${ti}.${funcName}${argTypeNames};${hub.contains(m4)}'}
+                        rpclog.debug{'[FOUNTAIN_RPC.${SKELETON}] [<NoName>(*)]interface-${ti.qualifiedName}.${funcName}${argTypeNames};${hub.contains(m4)}'}
                         hub.addIfAbsent(meta, fn)
                     }
                 }
