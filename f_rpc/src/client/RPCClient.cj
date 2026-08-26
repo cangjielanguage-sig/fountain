@@ -117,7 +117,7 @@ public class RPCClient {
             }
         }
     }
-
+    private init(){}
     public static func call<R>(message: RPCMessage): R where R <: DataFields<R> {
         var tried = 0
         var ex = None<RPCException>
