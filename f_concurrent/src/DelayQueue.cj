@@ -45,13 +45,13 @@ public class DelayQueue<T> <: Queue<T> where T <: Delayed<T> {
     public func remove(): ?T {
         synchronized(mutex){
             while(true){
-                if(let Some(v) <- queue.peek()){
+                if(let Some(v) <- queue.remove()){
                     let now = DateTime.now()
                     if(v.delayedAt <= now){
-                        queue.remove()
                         return v
                     }
                     delayedCond.wait(timeout: v.delayedAt - now)
+                    return v
                 }else{
                     remCond.wait()
                 }
@@ -63,12 +63,12 @@ public class DelayQueue<T> <: Queue<T> where T <: Delayed<T> {
         let start = MonoTime.now()
         synchronized(mutex){
             while(true){
-                if(let Some(v) <- queue.peek()){
+                if(let Some(v) <- queue.remove()){
                     if(v.delayedAt <= DateTime.now()){
-                        queue.remove()
                         return v
                     }
                     delayedCond.wait(timeout: v.delayedAt - DateTime.now())
+                    return v
                 }else if(let consumed <- MonoTime.now() - start && (consumed >= timeout || !remCond.wait(timeout: timeout - consumed))){
                     return None<T>
                 }
