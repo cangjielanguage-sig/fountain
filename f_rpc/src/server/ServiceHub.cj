@@ -22,6 +22,7 @@ import std.fs.File
 import std.reflect.*
 
 public struct ServiceHub {
+    private init(){}
     private static let version = extractVersion()
     private static let exactlyVersion = ServerConfig.exactlyVersion
     private static let hub = ConcurrentHashMap<ServiceMeta, (String, Array<DataAny>) -> ToData>()
