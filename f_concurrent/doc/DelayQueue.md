@@ -4,6 +4,7 @@
 ### Delayed
 ```cj
 public interface Delayed<T> <: Comparable<T> where T <: Delayed<T> {
+    //只要Delayed实例确定了，delayedAt的值就必须是确定的，不能再改变
     prop delayedAt: DateTime
 
     func compare(other: T): Ordering {
