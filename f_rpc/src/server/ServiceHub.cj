@@ -89,12 +89,7 @@ public struct ServiceHub {
                   qualifiedName.startsWith('Iterable') || qualifiedName.startsWith('Collection') || 
                   qualifiedName.startsWith('Equal') || qualifiedName.startsWith('NotEqual') ||
                   qualifiedName.startsWith('Less') || qualifiedName.startsWith('LessOrEqual') ||
-                  qualifiedName.startsWith('Greater') || qualifiedName.startsWith('GreaterOrEqual') ||
-                  qualifiedName.startsWith('std.Equatable') || qualifiedName.startsWith('std.Comparable') || 
-                  qualifiedName.startsWith('std.Equal') || qualifiedName.startsWith('std.NotEqual') ||
-                  qualifiedName.startsWith('std.Less') || qualifiedName.startsWith('std.LessOrEqual') ||
-                  qualifiedName.startsWith('std.Greater') || qualifiedName.startsWith('std.GreaterOrEqual') ||
-                  qualifiedName.startsWith('std.Iterable') || qualifiedName.startsWith('std.Collection'))
+                  qualifiedName.startsWith('Greater') || qualifiedName.startsWith('GreaterOrEqual'))
             }
             for(sti in t.superInterfaces where isNotStdInterface(sti)){
                 q.add(sti)
