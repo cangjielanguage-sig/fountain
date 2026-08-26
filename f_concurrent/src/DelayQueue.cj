@@ -40,9 +40,7 @@ public class DelayQueue<T> <: Queue<T> where T <: Delayed<T> {
         }
     }
     public func peek(): ?T {
-        synchronized(mutex){
-            return queue.peek()
-        }
+        return queue.peek()
     }
     public func remove(): ?T {
         synchronized(mutex){
@@ -80,15 +78,11 @@ public class DelayQueue<T> <: Queue<T> where T <: Delayed<T> {
     }
     public prop size: Int64 {
         get(){
-            synchronized(mutex){
-                return queue.size
-            }
+            return queue.size
         }
     }
     public func isEmpty(): Bool {
-        synchronized(mutex){
-            return queue.isEmpty()
-        }
+        return queue.isEmpty()
     }
     public func iterator(): Iterator<T> {
         DelayQueueIterator<T>(mutex, queue.iterator())
