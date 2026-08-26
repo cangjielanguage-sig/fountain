@@ -39,7 +39,7 @@ public struct ServiceHub {
         }else{
             '<UnspecifiedName>'
         }
-        rpclog.debug{'[FOUNTAIN_RPC.${SKELETON}] [${beanName}(${version})]class-${classInfo.qualifiedName}.${funcName}${argTypeNames};${exactlyVersion}'}
+        rpclog.debug{'[FOUNTAIN_RPC.${SKELETON}] [${beanName}(${version})]class-${classInfo.qualifiedName}.${funcName}(${argTypeNames});${exactlyVersion}'}
         let types = HashSet<String>()
         let q = ArrayQueue<TypeInfo>()
         q.add(classInfo)
@@ -57,20 +57,20 @@ public struct ServiceHub {
                     for(tin in types){
                         var meta = ServiceMeta(version, name, tin, funcName, argTypeNames, exactlyVersion: exactlyVersion)
                         let m1 = meta
-                        rpclog.debug{'[FOUNTAIN_RPC.${SKELETON}] [${beanName}(${version})]interface-${tin}.${funcName}${argTypeNames};${hub.contains(m1)}'}
+                        rpclog.debug{'[FOUNTAIN_RPC.${SKELETON}] [${beanName}(${version})]interface-${tin}.${funcName}(${argTypeNames});${hub.contains(m1)}'}
                         hub.addIfAbsent(meta, fn)
                         meta = ServiceMeta('*', name, tin, funcName, argTypeNames, exactlyVersion: exactlyVersion)
                         let m2 = meta
-                        rpclog.debug{'[FOUNTAIN_RPC.${SKELETON}] [${beanName}(*)]interface-${tin}.${funcName}${argTypeNames};${hub.contains(m2)}'}
+                        rpclog.debug{'[FOUNTAIN_RPC.${SKELETON}] [${beanName}(*)]interface-${tin}.${funcName}(${argTypeNames});${hub.contains(m2)}'}
                         hub.addIfAbsent(meta, fn)
                         if(name.size != 0){
                             meta = ServiceMeta(version, '', tin, funcName, argTypeNames, exactlyVersion: exactlyVersion)
                             let m3 = meta
-                            rpclog.debug{'[FOUNTAIN_RPC.${SKELETON}] [<WithoutName>(${version})]interface-${tin}.${funcName}${argTypeNames};${hub.contains(m3)}'}
+                            rpclog.debug{'[FOUNTAIN_RPC.${SKELETON}] [<WithoutName>(${version})]interface-${tin}.${funcName}(${argTypeNames});${hub.contains(m3)}'}
                             hub.addIfAbsent(meta, fn)
                             meta = ServiceMeta('*', '', tin, funcName, argTypeNames, exactlyVersion: exactlyVersion)
                             let m4 = meta
-                            rpclog.debug{'[FOUNTAIN_RPC.${SKELETON}] [<WithoutName>(*)]interface-${tin}.${funcName}${argTypeNames};${hub.contains(m4)}'}
+                            rpclog.debug{'[FOUNTAIN_RPC.${SKELETON}] [<WithoutName>(*)]interface-${tin}.${funcName}(${argTypeNames});${hub.contains(m4)}'}
                             hub.addIfAbsent(meta, fn)
                         }
                     }
