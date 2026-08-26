@@ -45,10 +45,11 @@ public struct ServiceHub {
             if(let ti: InterfaceTypeInfo <- t){
                 let hasFunc = try{
                     ti.getInstanceFunction(funcName, argTypes)
-                    true
                 }catch(_){
-                    false
-                }
+                    None<InstanceFunctionInfo>
+                }.isSome()
+                //如果在try块返回true，在catch块返回false，可能会由于getInstanceFunction的结果没有实际应用而被编译器剪枝。
+                //并不确定是否发生这种情况，但是以防万一，而改为这种方式
                 if(hasFunc){
                     var meta = ServiceMeta(version, name, ti.qualifiedName, funcName, argTypeNames, exactlyVersion: exactlyVersion)
                     let m1 = meta
