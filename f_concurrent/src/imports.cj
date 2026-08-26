@@ -16,7 +16,7 @@ limitations under the License.
 package fountain::f_concurrent
 
 internal import std.sync.*
-internal import std.collection.{Set, ArrayList, ReadOnlySet, MapEntryView}
+internal import std.collection.{Set, ArrayList, ReadOnlySet, MapEntryView, Queue}
 internal import std.collection.concurrent.{ArrayBlockingQueue, LinkedBlockingQueue, ConcurrentHashMap}
 internal import std.env.*
 internal import std.process.Process
