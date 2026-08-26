@@ -15,7 +15,7 @@ limitations under the License.
 */
 package fountain::f_rpc.server
 
-import std.collection.{ArrayQueue, ArrayList}
+import std.collection.{ArrayQueue, HashSet}
 import std.collection.concurrent.ConcurrentHashMap
 import std.env
 import std.fs.File
@@ -40,7 +40,7 @@ public struct ServiceHub {
             '<UnspecifiedName>'
         }
         rpclog.debug{'[FOUNTAIN_RPC.${SKELETON}] [${beanName}(${version})]class-${classInfo.qualifiedName}.${funcName}${argTypeNames};${exactlyVersion}'}
-        let types = ArrayList<String>()
+        let types = HashSet<String>()
         let q = ArrayQueue<TypeInfo>()
         q.add(classInfo)
         while(let Some(t) <- q.remove()){
