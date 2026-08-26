@@ -47,7 +47,7 @@ public class DelayQueue<T> <: Queue<T> where T <: Delayed<T> {
             while(true){
                 if(let Some(v) <- queue.remove()){
                     let now = DateTime.now()
-                    if(v.delayedAt <= now){
+                    if(v.delayedAt <= now){//先使用peek取得值，再这个if内remove有可能导致活锁
                         return v
                     }
                     delayedCond.wait(timeout: v.delayedAt - now)
