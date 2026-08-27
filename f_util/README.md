@@ -53,9 +53,9 @@ PascalCase camelCase lower_case_with_underscores UPPER_CASE_WITH_UNDERSCORES low
 
 - [isPrime](doc/isPrime.md)
 
-## 文档模板
+## 文本模板
 
-- [文档模板](doc/文档模板.md)
+- [文本模板](doc/文本模板.md)
 
 ## UUID
 
