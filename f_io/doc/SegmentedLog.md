@@ -64,6 +64,16 @@ let oldFiles = log.takeOldFiles()
 
 外部负责对返回的旧文件执行删除或归档操作。
 
+### 顺序读取已写入的segment
+
+```cj
+/**
+ * 返回一个 InputStream，依次读取所有 segment 中已写入的数据。
+ * 读完后自动关闭。调用方可用 DefaultCodec 流式解码每条 entry。
+ */
+public func openEntryStream(): InputStream
+```
+
 ### 关闭日志
 
 ```cj
