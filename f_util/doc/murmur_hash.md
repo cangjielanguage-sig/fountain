@@ -1,21 +1,16 @@
 ## murmur hash
 ```cj
-public struct MurmurHash3X128 <: ToString & Hashable & Comparable<MurmurHash3X128> & DataParsable<MurmurHash3X128> & Parsable<MurmurHash3X128>{
-    private MurmurHash3X128(
-        public let left: UInt64,
-        public let right: UInt64
-    ){}
-    public func toString(): String 
-    public static func tryParse(s: String): ?MurmurHash3X128 
-    public static func parse(s: String): MurmurHash3X128 
-    public func hashCode(): Int64 
-    public func compare(other: MurmurHash3X128): Ordering 
-    public func toBytes(): Array<Byte> 
-    public static func fromBytes(bytes: Array<Byte>): MurmurHash3X128
-    // 核心哈希函数：对字节数组进行哈希（静态方法）
-    @OverflowWrapping
-    public static func hashBytes(data: Array<Byte>, seed!: UInt64 = 0): MurmurHash3X128 
-    // 便捷函数：直接对字符串进行哈希（静态方法）
-    public static func hashString(text: String, seed!: UInt64 = 0): MurmurHash3X128 
-}
+@Frozen
+@OverflowWrapping
+public func murmurHash(data: Array<Byte>, seed!: UInt64 = 0): UInt128 
+
+// 便捷函数：直接对字符串进行哈希（静态方法）
+@Frozen
+public func murmurHash(text: String, seed!: UInt64 = 0): UInt128 
+@Frozen
+public func murmurHash<T>(text: T, seed!: UInt64 = 0): UInt128 where T <: ToString 
+// 64 位循环左移（私有静态辅助函数）
+@Frozen
+@OverflowWrapping
+private func rotl64(x: UInt64, r: Int): UInt64 
 ```

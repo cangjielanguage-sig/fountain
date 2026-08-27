@@ -9,9 +9,21 @@
 PascalCase camelCase lower_case_with_underscores UPPER_CASE_WITH_UNDERSCORES lower-case-with-hyphens UPPER-CASE-WITH-HYPHENS 六种风格互相转换
 - [CaseFormat_转换](doc/CaseFormat_转换.md)
 
-## crc16
+## crc16/crc32/crc64
 
-- [crc16](doc/crc16.md)
+- [crc](doc/crc.md)
+
+## wyhash
+
+- [wyhash](doc/wyhash.md)
+
+## cityhash
+
+- [cityhash](doc/cityhash.md)
+
+## UInt128
+
+- [UInt128](doc/UInt128.md)
 
 ## 工厂模式
 
