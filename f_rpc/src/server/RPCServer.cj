@@ -111,7 +111,7 @@ private struct ConsumeExecutor{
     ConsumeExecutor(private let buffer: SocketBuffer, private let b: Byte, private let id: MessageID, private let message: RPCMessage){}
     func exec(): Message {
         let start = MonoTime.now()
-        let m: Message = try {
+        try {
             let result = ServiceHub.call(message)
             let msg = Message.resp(id, qos: QoS.AtMostOnce, ack: false, data: result)
             let consumed = MonoTime.now() - start
@@ -124,6 +124,5 @@ private struct ConsumeExecutor{
             printStackTrace(e, buffer)
             error(id, Command.CONSUME(b), ErrorMessage.new(message, buffer.bytes() |> String.fromUtf8))
         }
-        m
     }
 }
