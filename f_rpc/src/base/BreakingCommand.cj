@@ -17,6 +17,7 @@ package fountain::f_rpc.base
 
 import stdx.effect.*
 
+//业务执行过程中执行perform BreakingCommand(someValue)立即结束当前业务，快速失败
 public class BreakingCommand <: Command<Unit>{
     private BreakingCommand(public let data: Data){}
 
