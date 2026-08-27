@@ -110,20 +110,20 @@ private struct SubscribeExecutor{
 private struct ConsumeExecutor{
     ConsumeExecutor(private let buffer: SocketBuffer, private let b: Byte, private let id: MessageID, private let message: RPCMessage){}
     func exec(): Message {
-        let box = Box<Message>(unsafeZeroValue<Message>())
         let start = MonoTime.now()
-        try{
+        let m: Message = try{
             let result = ServiceHub.call(message)
-            box.value = Message.resp(id, qos: QoS.AtMostOnce, ack: false, data: result)
+            let msg = Message.resp(id, qos: QoS.AtMostOnce, ack: false, data: result)
             let consumed = MonoTime.now() - start
             infoLog(id, Command.CONSUME(b)){LogMessage.new(message, result, consumed)}
+            msg
         } handle (cmd: BreakingCommand) {
-            box.value = Message.resp(id, qos: QoS.AtMostOnce, ack: false, data: cmd.data)
+            Message.resp(id, qos: QoS.AtMostOnce, ack: false, data: cmd.data)
         }catch(e: Exception){
             let buffer = ByteBuffer()
             printStackTrace(e, buffer)
-            box.value = error(id, Command.CONSUME(b), ErrorMessage.new(message, buffer.bytes() |> String.fromUtf8))
+            error(id, Command.CONSUME(b), ErrorMessage.new(message, buffer.bytes() |> String.fromUtf8))
         }
-        box.value
+        m
     }
 }
