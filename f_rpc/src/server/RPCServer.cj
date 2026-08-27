@@ -127,6 +127,6 @@ private struct ConsumeExecutor{
             let r = result
             infoLog(id, Command.CONSUME(b)){LogMessage.new(message, r, consumed)}
         }
-        box.value.getOrThrow()
+        box.value
     }
 }
