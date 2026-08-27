@@ -1,5 +1,11 @@
 ## `FutureTask<T>`
 ```cj
+public sealed abstract class AbstractFutureTask <: Hashable & Equatable<AbstractFutureTask>{
+    public func hashCode(): Int64 
+    public operator func ==(other: AbstractFutureTask): Bool 
+    //创建新的InheritedTaskLocal
+    public func newLocal<T>(): InheritedTaskLocal<T> 
+}
 public class FutureTask<T> <: AbstractFutureTask {
     //创建新的FutureTask
     //shutdownSubOnFinish: 是否在当前FutureTask结束时结束子任务
@@ -19,5 +25,22 @@ public class FutureTask<T> <: AbstractFutureTask {
     public func shutdown(): Unit 
     //结束当前FutureTask的所有子任务。
     public static func shutdownCurrentSubThreads(): Unit 
+}
+public sealed abstract class AbstractInheritedTaskLocal <: Hashable & Equatable<AbstractInheritedTaskLocal> {
+    AbstractInheritedTaskLocal(let task: AbstractFutureTask)
+    public func hashCode(): Int64 
+    public operator func ==(other: AbstractInheritedTaskLocal): Bool 
+}
+//可从父线程继承的ThreadLocal，当前FutureTask的InheritedTaskLocal无值时，会从父FutureTask查询
+//FutureTask初始化时的任务结束时，相应的InheritedTaskLocal会被移除
+public class InheritedTaskLocal<T> <: AbstractInheritedTaskLocal {
+    init(task: AbstractFutureTask)
+    public func set(value: T): Unit 
+
+    public func get(): ?T 
+
+    public func remove(): Unit 
+    public func getOrSet(value: T): T 
+    public func getOrCompute(fn: () -> T): T 
 }
 ```
