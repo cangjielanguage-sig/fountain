@@ -25,9 +25,9 @@ PascalCase camelCase lower_case_with_underscores UPPER_CASE_WITH_UNDERSCORES low
 
 - [UInt128](doc/UInt128.md)
 
-## 工厂模式
+## 设计模式
 
-- [工厂模式](doc/工厂模式.md)
+- [设计模式](doc/设计模式.md)
 
 ## geohash
 
