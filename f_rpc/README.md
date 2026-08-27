@@ -524,7 +524,8 @@ RPC 基于 `fountain::f_protocol` 的 `Command` 枚举：
 
 ## 快速失败
 ```cj
-//业务执行过程中执行perform BreakingCommand(someValue.toData())立即结束当前业务，快速失败
+//服务端业执行过程中执行perform BreakingCommand(someValue.toData())立即结束当前业务，快速失败
+//data是返回给客户端的数据
 public class BreakingCommand <: Command<Unit>{
     private BreakingCommand(public let data: Data){}
 
