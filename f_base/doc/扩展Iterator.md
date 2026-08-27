@@ -23,3 +23,22 @@ public func groupBy<K>(key: (T) -> K): HashMap<K, ArrayList<T>> where K <: Hasha
 //返回的实例有一个函数peek，调用peek会返回当前未迭代的值，不消耗任何未迭代值，不影响next()的执行。
 public func peekable(): PeekableIterator<T>
 ```
+
+## PeekableIterator
+```cj
+public class PeekableIterator<T> <: Iterator<T> & Resource {
+    public PeekableIterator(private let itr: Iterator<T>){}
+
+    public func next(): Option<T> 
+    public func peek(): ?T 
+
+    /** 关闭底层迭代器（如果实现了 Resource 接口） */
+    public func close(): Unit 
+
+    public func isClosed(): Bool 
+}
+public interface Peekable<T>{
+    func peekable(): PeekableIterator<T>
+}
+extend<T> Iterator<T> <: Peekable<T> 
+```
