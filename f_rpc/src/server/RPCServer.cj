@@ -116,8 +116,7 @@ private struct ConsumeExecutor{
             Message.resp(id, qos: QoS.AtMostOnce, ack: false, data: result)
         }
         try {
-            let result = ServiceHub.call(message)
-            innerInfo(result, MonoTime.now())
+            innerInfo(ServiceHub.call(message), MonoTime.now())
         } handle (cmd: BreakingCommand) {
             innerInfo(cmd.data, MonoTime.now())
         } catch (e: Exception) {
