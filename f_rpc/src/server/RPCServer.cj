@@ -115,11 +115,7 @@ private struct ConsumeExecutor{
             let result = ServiceHub.call(message)
             let msg = Message.resp(id, qos: QoS.AtMostOnce, ack: false, data: result)
             let consumed = MonoTime.now() - start
-            try{
-                infoLog(id, Command.CONSUME(b)){LogMessage.new(message, result, consumed)}
-            }catch(e: Exception){
-                e.printStackTrace()
-            }
+            infoLog(id, Command.CONSUME(b)){LogMessage.new(message, result, consumed)}
             msg
         } handle (cmd: BreakingCommand) {
             Message.resp(id, qos: QoS.AtMostOnce, ack: false, data: cmd.data)
