@@ -74,13 +74,17 @@ class RPCServer {
      * RESP 服务节点返回调用结果或当前服务节点能够提供的服务
      */
     private static func executor(buffer: SocketBuffer, message: Message): ?Message {
-        let cmd = message.command
-        match(message.command){
-            case Command.REGISTER => RegisterExecutor(buffer, message.id, message.tryFromData<UInt16>() ?? 0).exec()
-            case Command.SUBSCRIBE => SubscribeExecutor(message.id, message.tryFromData<Bool>() ?? false).exec()
-            case Command.CONSUME(b) => ConsumeExecutor(buffer, b, message.id, message.tryFromData<RPCMessage>().getOrThrow()).exec()
-            case Command.ACK => None<Message>
-            case x => error(message.id, x, ErrorMessage.new(message.data, UNSUPPORTED_COMMAND))
+        try{
+            let cmd = message.command
+            match(message.command){
+                case Command.REGISTER => RegisterExecutor(buffer, message.id, message.tryFromData<UInt16>() ?? 0).exec()
+                case Command.SUBSCRIBE => SubscribeExecutor(message.id, message.tryFromData<Bool>() ?? false).exec()
+                case Command.CONSUME(b) => ConsumeExecutor(buffer, b, message.id, message.tryFromData<RPCMessage>().getOrThrow()).exec()
+                case Command.ACK => None<Message>
+                case x => error(message.id, x, ErrorMessage.new(message.data, UNSUPPORTED_COMMAND))
+            }
+        }finally{
+            ServiceMeta.clearCurrentTrace()
         }
     }
 }

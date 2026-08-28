@@ -36,6 +36,6 @@ public class MessageID <: Hashable & Equatable<MessageID> & ToString {
         this.time == other.time
     }
     public func toString(): String {
-        '${pid}_${tid}_${time.format("yyyyMMddHHmmssSSS")}'
+        '${pid}_${tid}_${hostId}_${time.format("yyyyMMddHHmmssSSS")}'
     }
 }

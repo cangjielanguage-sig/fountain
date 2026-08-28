@@ -15,6 +15,7 @@
 
 [dependencies]
   "fountain::f_app" = {path = "../f_app"}
+  "fountain::f_aspect" = {path = "../f_aspect"}
   "fountain::f_base" = {path = "../f_base"}
   "fountain::f_bean" = {path = "../f_bean"}
   "fountain::f_codec" = {path = "../f_codec"}

@@ -52,4 +52,31 @@ public class ServiceMeta {
     public init(version: String, name: String, typeName: TypeInfo, methodName: String, argTypeNames: Array<TypeInfo>, exactlyVersion!: Bool = false){
         this(version, name, typeName.qualifiedName, methodName, Array<String>(argTypeNames.size){i => argTypeNames[i].qualifiedName}, exactlyVersion: exactlyVersion)
     }
+    @DataExclude[prop]
+    private var trace_: String = ''
+    public mut prop trace: String {
+        get(){
+            if(trace_.isEmpty()){
+                trace_ = currentTrace()
+            }
+            trace_
+        }
+        set(value){
+            currentTrace_.set(value)
+            trace_ = value
+        }
+    }
+    private static var currentTrace_ = ThreadLocal<String>()
+    public static func currentTrace(): String {
+        if(let Some(x) <- currentTrace_.get()){
+            x
+        }else{
+            let id = MessageID().toString()
+            currentTrace_.set(id)
+            id
+        }
+    }
+    public static func clearCurrentTrace(): Unit {
+        currentTrace_.set(None)
+    }
 }
