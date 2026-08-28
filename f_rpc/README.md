@@ -540,6 +540,33 @@ data是返回给客户端的数据
 ## ControllerTraceAspect
 对于同时使用f_mvc和f_rpc的项目，一次http访问需要依赖f_rpc服务，为了及时清除trace，应当使用`fountain::f_mvc.macros.WeavedController`宏修饰Controller类。
 如此本模块的ControllerTraceAspect就会生效。Controller函数返回前会清除ServiceMeta的trace。
+其他客户端场景可参考此类
+```cj
+import fountain::f_aspect.*
+import fountain::f_bean.{BeanFactory, BeanMeta}
+import fountain::f_log.LoggerFactory
+
+@AspectRoute[FuncAnnotationRouteRule("fountain::f_mvc.PostMapping") | FuncAnnotationRouteRule("fountain::f_mvc.PutMapping") | FuncAnnotationRouteRule("fountain::f_mvc.GetMapping") | FuncAnnotationRouteRule("fountain::f_mvc.DeleteMapping") | FuncAnnotationRouteRule("fountain::f_mvc.PatchMapping")]
+@BeanMeta
+public class ControllerTraceAspect <: Aspect {
+    private static let log = LoggerFactory.getLogger<ControllerTraceAspect>()
+    static init(){
+        BeanFactory.instance.register<ControllerTraceAspect>({=> ControllerTraceAspect()})
+    }
+
+    private init(){}
+
+    public func proceed(funcInfo: InvocationFuncInfo, point: (Array<Any>) -> Any): Any {
+        log.debug('ControllerTraceAspect.proceed start')
+        try{
+            point(funcInfo.args)
+        }finally{
+            ServiceMeta.clearCurrentTrace()
+            log.debug('ControllerTraceAspect.proceed end')
+        }
+    }
+}
+```
 
 ## 注意事项与限制
 
