@@ -202,7 +202,7 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
                             log.warn {'fountain::f_mvc.`handle` ${request.method}:${request.url};${TypeInfo.of(result)}'}
                             MultiRequestMethodHandler.NOT_ACCEPTABLE.`handle`(ctx)
                     }
-                } handle (cmd: MVCBreakingCommand) {
+                } handle (cmd: BreakingCommand) {
                     respond(cmd, ctx)
                 } finally {
                     CurrentHttpContext.clear()
@@ -317,7 +317,7 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
             }
         }
     }
-    private func respond(cmd: MVCBreakingCommand, ctx: HttpContext): Unit {
+    private func respond(cmd: BreakingCommand, ctx: HttpContext): Unit {
         respond<Data>(cmd.status, cmd.data, ctx)
     }
     private func respond<R>(result: R, ctx: HttpContext): Unit where R <: ToData {

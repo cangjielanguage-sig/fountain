@@ -15,8 +15,10 @@ limitations under the License.
 */
 package fountain::f_mvc
 
-public class MVCBreakingCommand <: BreakingCommand {
-    public MVCBreakingCommand(data: Data, public let status: HttpStatus){
+import fountain::f_data
+
+public class BreakingCommand <: f_data.BreakingCommand {
+    public BreakingCommand(data: Data, public let status: HttpStatus){
         super(data)
     }
     public init(status: HttpStatus){
@@ -25,10 +27,10 @@ public class MVCBreakingCommand <: BreakingCommand {
     public init(){
         this(HttpStatus.OK)
     }
-    public static func new<T>(data: T): MVCBreakingCommand where T <: ToData {
-        MVCBreakingCommand(data.toData(), HttpStatus.OK)
+    public static func new<T>(data: T): BreakingCommand where T <: ToData {
+        BreakingCommand(data.toData(), HttpStatus.OK)
     }
-    public static func new<T>(data: T, status: HttpStatus): MVCBreakingCommand where T <: ToData {
-        MVCBreakingCommand(data.toData(), status)
+    public static func new<T>(data: T, status: HttpStatus): BreakingCommand where T <: ToData {
+        BreakingCommand(data.toData(), status)
     }
 }
