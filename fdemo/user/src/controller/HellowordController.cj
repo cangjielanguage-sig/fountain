@@ -38,18 +38,18 @@ public class HellowordController {
         Redirect.found('/helloworld')
     }
 
-    // @GetMapping[path:"/helloworld2", produces:'text/plain', consumes:'application/x-www-form-urlencoded']
-    // @IgnoreSecurity
-    // public func helloworld2(): String {
-    //     let username = "aaa"
-    //     var zero:Int64 = 1
-    //     var res :Int64 = 1
-    //     if(username.size> 0){
-    //         zero--
-    //         println("zero new value: ${zero}")//这里能够输出 zero new value: 0
-    //     }
-    //     res = 1/zero
-    //     println("res: ${res}")//这里也能输出，但是应该在上一行抛出异常
-    //     return "helloworld"
-    // }
+    @GetMapping[path:"/helloworld2", produces:'text/plain', consumes:'application/x-www-form-urlencoded']
+    @IgnoreSecurity
+    public func helloworld2(): String {
+        let username = "aaa"
+        var zero:Int64 = 1
+        var res :Int64 = 1
+        if(username.size> 0){
+            zero--
+            println("zero new value: ${zero}")//这里能够输出 zero new value: 0
+        }
+        res = 1/zero
+        println("res: ${res}")//这里也能输出，但是应该在上一行抛出异常
+        return "helloworld"
+    }
 }

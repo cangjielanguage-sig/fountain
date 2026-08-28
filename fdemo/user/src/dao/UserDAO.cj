@@ -83,12 +83,12 @@ public interface UserDAO <: RootDAO {
         //     select id, is_valid from rec_task_info limit 1 offset 0
         // ''').first<RecTaskInfo>()
         // println('TTTTTTTTTTTTTTT ${task?.isValid}')
-        // let med = executor.setSql('''
-        // select create_time, pre_amount
-        //   from med_allocation
-        //  limit 1 offset 0 
-        // ''').first<MedAllocationPO>()
-        // println('MMMMMMMMMMMMMMM ${med?.preAmount}')
+        let med = executor.setSql('''
+        select create_time, pre_amount
+          from med_allocation
+         limit 1 offset 0 
+        ''').first<MedAllocationPO>()
+        println('MMMMMMMMMMMMMMM ${med?.preAmount}')
         // let page = executor.FROM<UserPO>()
         //                 .WHERE{'''
         //                         ${meet(username.size > 0, ' username like '){

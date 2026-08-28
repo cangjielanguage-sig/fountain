@@ -32,5 +32,5 @@ public class MedAllocationPO {
     @ORMField['pre_amount']
     private var preAmount: Decimal = Decimal.zero
 
-    // public var amount: ?String = None<String>
+    public var amount: ?String = None<String>
 }
