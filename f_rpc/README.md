@@ -285,6 +285,16 @@ public class ServiceMeta {
         methodName: String, argTypeNames: Array<String>, exactlyVersion!: Bool = false)
     public init(version: String, name: String, typeName: TypeInfo,
         methodName: String, argTypeNames: Array<TypeInfo>, exactlyVersion!: Bool = false)
+    
+    //服务端再次调用其它服务时会自动继承当前服务从客户端接收到的trace
+    public mut prop trace: String
+    //属性trace如果没有trace值会调用currentTrace()获得一个
+    //本类维持一个静态ThreadLocal成员变量，currentTrace()会从这个静态变量获得追踪标志，如果静态变量无值会自动创建一个
+    public static func currentTrace(): String
+    //由开发者决定何时清除ThreadLocal，f_rpc提供了针对f_mvc的切面，
+    //只要使用fountain::f_mvc.macros.WeavedController修饰controller类这个切面即可生效
+    //f_rpc的服务端会在服务结束前自动调用clearCurrentTrace()
+    public static func clearCurrentTrace(): Unit
 }
 ```
 
@@ -526,6 +536,10 @@ RPC 基于 `fountain::f_protocol` 的 `Command` 枚举：
 `import fountain::f_data.BreakingCommand`
 服务端业执行过程中执行perform BreakingCommand(toDataValue)立即结束当前业务，快速失败
 data是返回给客户端的数据
+
+## ControllerTraceAspect
+对于同时使用f_mvc和f_rpc的项目，一次http访问需要依赖f_rpc服务，为了及时清除trace，应当使用`fountain::f_mvc.macros.WeavedController`宏修饰Controller类。
+如此本模块的ControllerTraceAspect就会生效。Controller函数返回前会清除ServiceMeta的trace。
 
 ## 注意事项与限制
 
