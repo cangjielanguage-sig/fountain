@@ -523,20 +523,9 @@ RPC 基于 `fountain::f_protocol` 的 `Command` 枚举：
 示例：客户端 `@RPCStub[version='1.0.0']` 实际查找版本 `1.0`，可命中版本为 `1.0.x`（且未开启精确版本）的服务端。
 
 ## 快速失败
-```cj
-//服务端业执行过程中执行perform BreakingCommand(someValue.toData())立即结束当前业务，快速失败
-//data是返回给客户端的数据
-public class BreakingCommand <: Command<Unit>{
-    private BreakingCommand(public let data: Data){}
-
-    public static func new<T>(data: T): BreakingCommand where T <: ToData {
-        BreakingCommand(data.toData())
-    }
-    public static func new(): BreakingCommand {
-        BreakingCommand(DataUnit.UNIT)
-    }
-}
-```
+`import fountain::f_data.BreakingCommand`
+服务端业执行过程中执行perform BreakingCommand(toDataValue)立即结束当前业务，快速失败
+data是返回给客户端的数据
 
 ## 注意事项与限制
 

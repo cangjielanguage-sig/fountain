@@ -15,19 +15,20 @@ limitations under the License.
 */
 package fountain::f_mvc
 
-public class BreakingCommand <: Command<Unit>{
-    private BreakingCommand(public let status: HttpStatus, public let data: Data){}
-
-    public static func new<T>(status: HttpStatus, data: T): BreakingCommand where T <: ToData {
-        BreakingCommand(status, data.toData())
+public class MVCBreakingCommand <: BreakingCommand {
+    public MVCBreakingCommand(data: Data, public let status: HttpStatus){
+        super(data)
     }
-    public static func new(status: HttpStatus): BreakingCommand {
-        BreakingCommand(status, DataUnit.UNIT)
+    public init(status: HttpStatus){
+        this(DataUnit.UNIT, status)
     }
-    public static func new(): BreakingCommand {
-        new(HttpStatus.OK)
+    public init(){
+        this(HttpStatus.OK)
     }
-    public static func new<T>(data: T): BreakingCommand where T <: ToData {
-        new<T>(HttpStatus.OK, data)
+    public static func new<T>(data: T): MVCBreakingCommand where T <: ToData {
+        MVCBreakingCommand(data.toData(), HttpStatus.OK)
+    }
+    public static func new<T>(data: T, status: HttpStatus): MVCBreakingCommand where T <: ToData {
+        MVCBreakingCommand(data.toData(), status)
     }
 }

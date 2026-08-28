@@ -13,18 +13,17 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package fountain::f_rpc.base
-
-import stdx.effect
+package fountain::f_data.base
 
 //业务执行过程中执行perform BreakingCommand(someValue)立即结束当前业务，快速失败
-public class BreakingCommand <: effect.Command<Unit>{
-    private BreakingCommand(public let data: Data){}
-
-    public static func new<T>(data: T): BreakingCommand where T <: ToData {
-        BreakingCommand(data.toData())
+public open class BreakingCommand <: BaseCommand<Data, Unit> {
+    public init(data: Data){
+        super(data)
     }
-    public static func new(): BreakingCommand {
-        BreakingCommand(DataUnit.UNIT)
+    public init(){
+        this(DataUnit.UNIT)
+    }
+    public static func new<T>(data: T): BreakingCommand where T <: ToData {
+        return BreakingCommand(data.toData())
     }
 }

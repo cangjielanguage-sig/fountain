@@ -29,3 +29,7 @@
 
 - [DataPath API 文档](doc/DataPath_API.md)
 
+## 快速失败
+`import fountain::f_data.BreakingCommand`
+服务端业执行过程中执行perform BreakingCommand(toDataValue)立即结束当前业务，快速失败
+data是返回给客户端的数据
