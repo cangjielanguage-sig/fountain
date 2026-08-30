@@ -42,6 +42,7 @@ class RPCServer {
         let zeroClients = unsafeZeroValue<Array<Client>>()
         let clients = Box<Array<Client>>(zeroClients)
         spawn{
+            let registerMessage = Message.register(data: port.toData())
             clients.value = Array<Client>(addresses.size){i =>
                 let address = addresses[i]
                 var client = unsafeZeroValue<Client>()
@@ -55,7 +56,7 @@ class RPCServer {
                 }
                 while(true){
                     try{
-                        Message.register(data: port.toData()) |> client.transfer
+                        client.transfer(registerMessage)
                         break
                     }catch(e: Exception){
                         rpclog.error('[FOUNTAIN_RPC.register] ${address}', e)
@@ -65,9 +66,10 @@ class RPCServer {
             }
         }
         atExit{
+            let deregisterMessage = Message.deregister(data: port.toData())
             for(client in clients.value){
                 try{
-                    Message.deregister(data: port.toData()) |> client.transfer
+                    client.transfer(deregisterMessage)
                 }catch(e: Exception){
                     rpclog.error('[FOUNTAIN_RPC.deregister] ${client.address}', e)
                 }finally{
