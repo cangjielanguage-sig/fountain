@@ -15,7 +15,7 @@ limitations under the License.
 */
 package fountain::f_rpc.client
 
-import std.collection.{TreeSet, HashSet, HashMap}
+import std.collection.{TreeSet, HashSet, HashMap, TreeMap}
 import std.collection.concurrent.ConcurrentHashMap
 import std.time.MonoTime
 import fountain::f_data.macros.*
@@ -60,7 +60,7 @@ public class RPCClient {
                         }
                     }
                 }
-                let hosts = TreeSet<String>()
+                let hosts = TreeMap<String, Float64>()
                 try{
                     for(client in clients){
                         let msg = Message.subscribe(data: true)
@@ -71,11 +71,16 @@ public class RPCClient {
                             case x: ?Array<String> => x ?? []
                             case _ => []
                         }
-                        hosts.add(all: array)
+                        for(h in array){
+                            let idx = h.indexOf(',').getOrThrow()
+                            let host = h[0 .. idx]
+                            let weight = Float64.parse(h[idx + 1 ..])
+                            hosts.add(host, weight)
+                        }
                         subscribe(client, false)
                     }
                     clients.close()
-                    for(host in hosts){
+                    for((host, weight) in hosts){
                         while(true){
                             var client: Client = unsafeZeroValue<Client>()
                             while(true){
@@ -91,18 +96,24 @@ public class RPCClient {
                             }
                         }
                     }
-                    for((meta, hosts) in metas){
+                    for((meta, hostSet) in metas){
+                        let hostIterator = hostSet.iterator()
+                        let hosts = Array<(Float64, String)>(hostSet.size){i => 
+                            let host = hostIterator.next().getOrThrow()
+                            let weight = hosts[host]
+                            (weight, host)
+                        }
                         if(let Some(clients) <- services.get(meta)){
                             let set = TreeSet<String>()
                             for(c in clients){
                                 set.add(c.address.toString())
                             }
-                            if(let hostArray <- hosts.toArray() && set.toArray() != hostArray){
-                                services[meta] = ClientConfig.createClient(hostArray)
-                                clients.close()//todo 此处应该先发送一个关闭通知，可以改造DEREGISTER命令，服务端等待所有任务都结束以后再返回，然后两边关闭。要为Client中的每个同服务节点的连接各发送一次
+                            if(let hostArray <- hostSet.toArray() && set.toArray() != hostArray){
+                                services[meta] = ClientConfig.createClient(hosts)
+                                clients.close()
                             }
                         }else{
-                            services[meta] = ClientConfig.createClient(hosts.toArray())
+                            services[meta] = ClientConfig.createClient(hosts)
                         }
                     }
                 }catch(e: Exception){

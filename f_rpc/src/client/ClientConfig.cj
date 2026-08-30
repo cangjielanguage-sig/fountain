@@ -170,7 +170,7 @@ public class ClientConfig {
             Duration.second * (Config.getValue<Int64>(RPC_CLIENT_REFRESH_INTERVAL_SECONDS) ?? 1)
         }
     }
-    private  static func createClient(addresses: Array<(Float64, String)>): MultiClient<Float64>{
+    internal static func createClient(addresses: Array<(Float64, String)>): MultiClient<Float64>{
         func checker(): ?Message {
             Message.ping()
         }
@@ -230,7 +230,6 @@ public class ClientConfig {
     internal static func createClient(hosts: Array<String>): MultiClient<Float64> {
         createClient(Array<(Float64, String)>(hosts.size){i => (1.0f64, hosts[i])})
     }
-
     internal static func createClient(): MultiClient<Float64> {
         createClient(serverAddresses)
     }

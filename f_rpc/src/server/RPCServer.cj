@@ -19,7 +19,7 @@ import fountain::f_net.SocketBuffer
 import fountain::f_net.client.Client
 import fountain::f_net.server.Server
 
-private let serviceHosts = ConcurrentHashSet<String>()
+private let serviceHosts = ConcurrentHashMap<String, Float64>()
 
 private func error(id: MessageID, cmd: Command, msg: ErrorMessage): Message {
     errorLog(id, cmd, msg)
@@ -42,7 +42,8 @@ class RPCServer {
         let zeroClients = unsafeZeroValue<Array<Client>>()
         let clients = Box<Array<Client>>(zeroClients)
         spawn{
-            let registerMessage = Message.register(data: port.toData())
+            let weight = ServerConfig.weight
+            let registerMessage = Message.register(data: '${port},${weight}'.toData())
             clients.value = Array<Client>(addresses.size){i =>
                 let address = addresses[i]
                 let clientBuilder = Client.builder(address: address, checkDuration: Duration.second, checker: checker)
@@ -92,7 +93,7 @@ class RPCServer {
         try{
             let cmd = message.command
             match(message.command){
-                case Command.REGISTER => RegisterExecutor(buffer, message.id, message.tryFromData<UInt16>() ?? 0).exec()
+                case Command.REGISTER => RegisterExecutor(buffer, message.id, message.tryFromData<String>() ?? '').exec()
                 case Command.DEREGISTER => DeregisterExecutor(buffer, message.id, message.tryFromData<UInt16>() ?? 0).exec()
                 case Command.SUBSCRIBE => SubscribeExecutor(message.id, message.tryFromData<Bool>() ?? false).exec()
                 case Command.CONSUME(b) => ConsumeExecutor(buffer, b, message.id, message.tryFromData<RPCMessage>().getOrThrow()).exec()
@@ -105,11 +106,15 @@ class RPCServer {
     }
 }
 private struct RegisterExecutor{
-    RegisterExecutor(private let buffer: SocketBuffer, private let id: MessageID, private let port: UInt16){}
+    RegisterExecutor(private let buffer: SocketBuffer, private let id: MessageID, private let server: String){}
     func exec(): Message {
-        debugLog(id, Command.REGISTER){port}
         let addr = buffer.remoteAddress.toString()
-        serviceHosts.add('${addr[0 .. addr.indexOf(":").getOrThrow()]}:${port}')
+        let address = addr[0 .. addr.indexOf(":").getOrThrow()]
+        debugLog(id, Command.REGISTER){'${address}:${server}'}
+        let idx = server.indexOf(',').getOrThrow()
+        let port = UInt16.parse(server[0 .. idx])
+        let weight = Float64.parse(server[idx + 1 ..])
+        serviceHosts.add('${address}:${port}', weight)
         Message.ack(id, data: DataNone.INSTANCE)
     }
 }
@@ -128,7 +133,10 @@ private struct SubscribeExecutor{
         let start = MonoTime.now()
         let data = if(hosts){
             let hosts = serviceHosts.iterator()
-            Array<String>(serviceHosts.size){_ => hosts.next().getOrThrow()}.toData()
+            Array<String>(serviceHosts.size){_ => 
+                let (host, weight) = hosts.next().getOrThrow()
+                '${host},${weight}'
+            }.toData()
         }else{
             ServiceHub.metas.toData()
         }

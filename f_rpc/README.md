@@ -141,6 +141,8 @@ export rpcServer_port=1203
 export rpcServer_executors=200
 # 向已有集群注册时，配置种子节点地址（逗号分隔）
 export rpcServer_baseAddresses=192.168.1.10:1203
+# 服务端权重，默认值是1.0
+export rpcServer_weight=1.0
 
 # 客户端：种子节点地址，格式 weight,address（weight 为权重，| 分隔多个）
 export rpcClient_serverAddress='1.0,192.168.1.10:1203|2.0,192.168.1.11:1203'
@@ -452,6 +454,7 @@ public class HealthRPCImpl <: HealthRPC {
 | `rpcServer_baseAddresses` | `Array<String>`（逗号分隔） | 空 | 种子节点地址列表（如 `192.168.1.10:1203,192.168.1.11:1203`），启动后向这些节点注册自身 |
 | `rpcServer_unavailableChecked` | `Int64` | `3` | 不可用检查次数 |
 | `rpcServer_executors` | `Int64` | `200` | 服务端线程池大小 |
+| `rpcServer_weight` | `Float64` | `1.0` | 服务权重 |
 | `rpcServer_exactlyVersion` | `Bool` | `false` | 是否以完整版本号注册服务（`false` 只保留前两位） |
 | `rpcServer_rateLimiterName` | `String` | 无（不限流） | 限流器名称，见下表 |
 

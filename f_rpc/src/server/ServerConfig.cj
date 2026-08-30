@@ -41,6 +41,7 @@ internal class ServerConfig {
 
     public static const RPC_SERVER_EXECUTORS = RPC_SERVER_PREFIX + '_executors'
 
+    public static const RPC_SERVER_WEIGHT = RPC_SERVER_PREFIX + '_weight'
 
     internal static prop executors: Int64 {
         get(){
@@ -109,6 +110,11 @@ internal class ServerConfig {
             }
         }else{
             UnlimitedRateLimiter<Unit>()
+        }
+    }
+    internal static prop weight: Float64 {
+        get(){
+            Config.getValue<Float64>(RPC_SERVER_WEIGHT) ?? 1.0
         }
     }
 }

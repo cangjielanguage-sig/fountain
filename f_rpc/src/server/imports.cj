@@ -15,9 +15,9 @@ limitations under the License.
 */
 package fountain::f_rpc.server
 
-internal import fountain::f_concurrent.ConcurrentHashSet
-public import fountain::f_rpc.base.* //public import只能导入顶级公共声明，
+internal import std.collection.concurrent.ConcurrentHashMap
 internal import fountain::f_rpc.base.* //所以还需要internal import 导入同包的顶级非公共声明
+public import fountain::f_rpc.base.* //public import只能导入顶级公共声明，
 
 internal const SKELETON = "Skeleton"
 func errorLog(id: MessageID, command: Command, message: ErrorMessage): Unit {
