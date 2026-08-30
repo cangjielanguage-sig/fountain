@@ -171,7 +171,7 @@ fboot --dylibPattern=<REGEX_FOR_LOADING_DYNAMIC_LIB_FILE> --rpcServer_port=1300 
 ```cj
 public macro RPCSkeleton(input: Tokens): Tokens
 // attr 可选，用于作为二次展开的宏 @Bean 的属性
-// attr 还支持权重属性weight，默认是1.0
+// attr 还支持权重属性weight，默认是1.0，weight支持标识符表示的配置项或者具体权重值
 // attr eg. @RPCSkeleton[weight = 1.0] //如果还有其他属性，一律作为@Bean[...]的属性
 // attr 的weight属性会覆盖rpcServer_weight的配置
 public macro RPCSkeleton(attr: Tokens, input: Tokens): Tokens
