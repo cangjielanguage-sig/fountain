@@ -34,7 +34,6 @@ public macro RPCStub(attr: Tokens, input: Tokens): Tokens {
     genStub(attr, input)
 }
 private func genStub(attr: Tokens, input: Tokens): Tokens {
-    let identifierRegex = Regex(#'^[a-zA-Z]+\w*$'#)
     var version = '*'
     var name = ''
     var exactlyVersion = false

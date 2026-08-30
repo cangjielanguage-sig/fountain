@@ -35,7 +35,12 @@ private func expand(attr: Tokens, input: Decl): Tokens {
         let a = attr[i]
         if(a.kind == TokenKind.IDENTIFIER && a.value == 'weight'){
             i += 2
-            weight = Float64.parse(attr[i].value)
+            let w = attr[i].value
+            weight = if(identifierRegex.matches(w)){
+                Config.getValue<Float64>(w) ?? 1.0
+            }else{
+                Float64.parse(w)
+            }
         }else{
             beanAttr += a
         }

@@ -20,3 +20,5 @@ internal import fountain::f_macros.*
 internal import fountain::f_rpc.base.*
 
 public import fountain::f_bean.macros.*
+
+internal let identifierRegex = Regex(#'^[a-zA-Z]+\w*$'#)
