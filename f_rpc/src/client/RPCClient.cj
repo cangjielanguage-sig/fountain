@@ -60,7 +60,7 @@ public class RPCClient {
                         }
                     }
                 }
-                let hosts = TreeMap<String, Float64>()
+                let hostMap = TreeMap<String, Float64>()
                 try{
                     for(client in clients){
                         let msg = Message.subscribe(data: true)
@@ -75,12 +75,12 @@ public class RPCClient {
                             let idx = h.indexOf(',').getOrThrow()
                             let host = h[0 .. idx]
                             let weight = Float64.parse(h[idx + 1 ..])
-                            hosts.add(host, weight)
+                            hostMap.add(host, weight)
                         }
                         subscribe(client, false)
                     }
                     clients.close()
-                    for((host, weight) in hosts){
+                    for((host, weight) in hostMap){
                         while(true){
                             var client: Client = unsafeZeroValue<Client>()
                             while(true){
@@ -100,7 +100,11 @@ public class RPCClient {
                         let hostIterator = hostSet.iterator()
                         let hosts = Array<(Float64, String)>(hostSet.size){i => 
                             let host = hostIterator.next().getOrThrow()
-                            let weight = hosts[host]
+                            let weight = if(meta.weight != 1.0){
+                                meta.weight
+                            }else{
+                                hostMap[host]
+                            }
                             (weight, host)
                         }
                         if(let Some(clients) <- services.get(meta)){

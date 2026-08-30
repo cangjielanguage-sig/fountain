@@ -28,13 +28,26 @@ private func expand(attr: Tokens, input: Tokens): Tokens {
     expand(attr, parseDecl(input))
 }
 private func expand(attr: Tokens, input: Decl): Tokens {
+    var beanAttr = `empty_tokens`
+    var weight = 1.0
+    var i = 0
+    while(i < attr.size){
+        let a = attr[i]
+        if(a.kind == TokenKind.IDENTIFIER && a.value == 'weight'){
+            i += 2
+            weight = Float64.parse(attr[i].value)
+        }else{
+            beanAttr += a
+        }
+        i++
+    }
     match(input){
         case x: ClassDecl => 
             quote(
-                @Bean[$attr]
+                @Bean[$beanAttr]
                 $input
                 private let _ = {=>
-                    $(extractFuncs(x))
+                    $(extractFuncs(weight, x))
                 }()
             )
         case x: MacroExpandDecl => expand(attr, extract(x))
@@ -44,7 +57,7 @@ private func expand(attr: Tokens, input: Decl): Tokens {
     }
 }
 
-private func extractFuncs(decl: ClassDecl): Tokens {
+private func extractFuncs(weight: Float64, decl: ClassDecl): Tokens {
     let klass = decl.identifier + if(decl.isGenericDecl){
         decl.genericParam.toTokens()
     }else{
@@ -58,7 +71,7 @@ private func extractFuncs(decl: ClassDecl): Tokens {
             }
             let fname = f.identifier
             let (argTypes, argValues, argNames) = extractParams(f.funcParams)
-            funcs += quote(ServiceHub.register<$klass>($(fname.value), $argTypes){beanName: String, args: Array<DataAny> => 
+            funcs += quote(ServiceHub.register<$klass>($(fname.value), $argTypes, $weight){beanName: String, args: Array<DataAny> => 
                 $argValues
                 if(beanName.isEmpty()){
                     lookup<$klass>()

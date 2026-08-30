@@ -26,7 +26,7 @@ public struct ServiceHub {
     private static let version = extractVersion()
     private static let exactlyVersion = ServerConfig.exactlyVersion
     private static let hub = ConcurrentHashMap<ServiceMeta, (String, Array<DataAny>) -> ToData>()
-    public static func register<T>(funcName: String, argTypes: Array<TypeInfo>, fn: (String, Array<DataAny>) -> ToData): Unit where T <: Object {
+    public static func register<T>(funcName: String, argTypes: Array<TypeInfo>, weight: Float64, fn: (String, Array<DataAny>) -> ToData): Unit where T <: Object {
         let classInfo = ClassTypeInfo.of<T>()
         let name = if(let Some(beanMeta) <- classInfo.findAnnotation<BeanMeta>()){
             beanMeta.name
@@ -55,20 +55,20 @@ public struct ServiceHub {
                 //并不确定是否发生这种情况，但是以防万一，而改为这种方式
                 types.add(ti.qualifiedName)//只要判定当前接口拥有这个函数声明，这个接口和之前遍历过的子接口都要注册这个函数
                 for(tin in types){
-                    var meta = ServiceMeta(version, name, tin, funcName, argTypeNames, exactlyVersion: exactlyVersion)
+                    var meta = ServiceMeta(version, name, tin, funcName, argTypeNames, weight, exactlyVersion: exactlyVersion)
                     let m1 = meta
                     rpclog.debug{'[FOUNTAIN_RPC.${SKELETON}] [${beanName}(${version})]interface-${tin}.${funcName}(${argTypeNameStr});${hub.contains(m1)}'}
                     hub.addIfAbsent(meta, fn)
-                    meta = ServiceMeta('*', name, tin, funcName, argTypeNames, exactlyVersion: exactlyVersion)
+                    meta = ServiceMeta('*', name, tin, funcName, argTypeNames, weight, exactlyVersion: exactlyVersion)
                     let m2 = meta
                     rpclog.debug{'[FOUNTAIN_RPC.${SKELETON}] [${beanName}(*)]interface-${tin}.${funcName}(${argTypeNameStr});${hub.contains(m2)}'}
                     hub.addIfAbsent(meta, fn)
                     if(name.size != 0){
-                        meta = ServiceMeta(version, '', tin, funcName, argTypeNames, exactlyVersion: exactlyVersion)
+                        meta = ServiceMeta(version, '', tin, funcName, argTypeNames, weight, exactlyVersion: exactlyVersion)
                         let m3 = meta
                         rpclog.debug{'[FOUNTAIN_RPC.${SKELETON}] [<WithoutName>(${version})]interface-${tin}.${funcName}(${argTypeNameStr});${hub.contains(m3)}'}
                         hub.addIfAbsent(meta, fn)
-                        meta = ServiceMeta('*', '', tin, funcName, argTypeNames, exactlyVersion: exactlyVersion)
+                        meta = ServiceMeta('*', '', tin, funcName, argTypeNames, weight, exactlyVersion: exactlyVersion)
                         let m4 = meta
                         rpclog.debug{'[FOUNTAIN_RPC.${SKELETON}] [<WithoutName>(*)]interface-${tin}.${funcName}(${argTypeNameStr});${hub.contains(m4)}'}
                         hub.addIfAbsent(meta, fn)

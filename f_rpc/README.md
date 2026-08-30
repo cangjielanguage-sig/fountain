@@ -170,6 +170,9 @@ fboot --dylibPattern=<REGEX_FOR_LOADING_DYNAMIC_LIB_FILE> --rpcServer_port=1300 
 
 ```cj
 public macro RPCSkeleton(input: Tokens): Tokens
+// attr 可选，用于作为二次展开的宏 @Bean 的属性
+// attr 还支持权重属性weight，默认是1.0
+// attr eg. @RPCSkeleton[weight = 1.0] //如果还有其他属性，一律作为@Bean[...]的属性
 public macro RPCSkeleton(attr: Tokens, input: Tokens): Tokens
 ```
 
@@ -367,9 +370,10 @@ public struct ServiceHub {
      * 注册服务方法（通常由 @RPCSkeleton 生成的代码调用）
      * @param funcName 方法名
      * @param argTypes 形参类型列表
+     * @param weight 权重，用于负载均衡
      * @param fn 执行函数：入参为 Bean 名与实参数组，从 IOC 容器取出服务实例后完成调用并返回结果
      */
-    public static func register<T>(funcName: String, argTypes: Array<TypeInfo>,
+    public static func register<T>(funcName: String, argTypes: Array<TypeInfo>, weight: Float64,
         fn: (String, Array<DataAny>) -> ToData): Unit where T <: Object
 }
 ```

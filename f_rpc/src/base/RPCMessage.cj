@@ -35,9 +35,10 @@ public class ServiceMeta {
     private var typeName: String = ''
     private var methodName: String = ''
     private var argTypeNames: Array<String> = []
+    private var weight: Float64 = 1.0
 
     public init(){}
-    public init(version: String, name: String, typeName: String, methodName: String, argTypeNames: Array<String>, exactlyVersion!: Bool = false){
+    public init(version: String, name: String, typeName: String, methodName: String, argTypeNames: Array<String>, weight: Float64, exactlyVersion!: Bool = false){
         this.version = if(exactlyVersion || version == '*'){
             version
         }else{
@@ -48,9 +49,10 @@ public class ServiceMeta {
         this.typeName = typeName
         this.methodName = methodName
         this.argTypeNames = argTypeNames
+        this.weight = weight
     }
-    public init(version: String, name: String, typeName: TypeInfo, methodName: String, argTypeNames: Array<TypeInfo>, exactlyVersion!: Bool = false){
-        this(version, name, typeName.qualifiedName, methodName, Array<String>(argTypeNames.size){i => argTypeNames[i].qualifiedName}, exactlyVersion: exactlyVersion)
+    public init(version: String, name: String, typeName: TypeInfo, methodName: String, argTypeNames: Array<TypeInfo>, weight: Float64, exactlyVersion!: Bool = false){
+        this(version, name, typeName.qualifiedName, methodName, Array<String>(argTypeNames.size){i => argTypeNames[i].qualifiedName}, weight, exactlyVersion: exactlyVersion)
     }
     @DataExclude[prop]
     private var trace_: String = ''
