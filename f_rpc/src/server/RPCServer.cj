@@ -82,6 +82,7 @@ class RPCServer {
     }
     /**
      * REGISTER 向其它服务节点注册自身
+     * DEREGISTER 向其它服务节点注销自身
      * ACK
      * SUBSCRIBE 获取服务节点能够提供的服务
      * CONSUME 向服务节点发起RPC调用
