@@ -54,6 +54,9 @@ public class ServiceMeta {
     public init(version: String, name: String, typeName: TypeInfo, methodName: String, argTypeNames: Array<TypeInfo>, weight: Float64, exactlyVersion!: Bool = false){
         this(version, name, typeName.qualifiedName, methodName, Array<String>(argTypeNames.size){i => argTypeNames[i].qualifiedName}, weight, exactlyVersion: exactlyVersion)
     }
+    public init(version: String, name: String, typeName: String, methodName: String, argTypeNames: Array<String>, exactlyVersion!: Bool = false){
+        this(version, name, typeName, methodName, argTypeNames, 0.0, exactlyVersion: exactlyVersion)
+    }
     @DataExclude[prop]
     private var trace_: String = ''
     public mut prop trace: String {
