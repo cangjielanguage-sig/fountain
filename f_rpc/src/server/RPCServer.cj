@@ -45,10 +45,11 @@ class RPCServer {
             let registerMessage = Message.register(data: port.toData())
             clients.value = Array<Client>(addresses.size){i =>
                 let address = addresses[i]
+                let clientBuilder = Client.builder(address: address, checkDuration: Duration.second, checker: {=> Message.ping()})
                 var client = unsafeZeroValue<Client>()
                 while(true){
                     try{
-                        client = Client.builder(address: address, checkDuration: Duration.second, checker: {=> Message.ping()}).build()
+                        client = clientBuilder.build()
                         break
                     }catch(e: Exception){
                         rpclog.error('[FOUNTAIN_RPC.register.newClient] ${address}', e)
