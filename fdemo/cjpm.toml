@@ -20,8 +20,8 @@
   organization = "fountain"
   description = "demo for how to develop by fountain "
   members=["./boot", "./user"]
-  compile-option = "-O2 --dy-std -Woff unused"
-  override-compile-option = "-O2 --dy-std -Woff unused"
+  compile-option = "-O2 --dy-std -Woff unused --debug-macro"
+  override-compile-option = "-O2 --dy-std -Woff unused --debug-macro"
 
 [profile.build]
   incremental = true
