@@ -493,10 +493,10 @@ export rpcServer_timeout=100
 ```
 | 限流器 | 配置项（均带 `rpcServer_` 前缀） | 默认值 |
 | --- | --- | --- |
-| `anyMomentRateLimiter` | `maxTokens`、`timeout` | `1024`、`100ms` |
-| `leakingBucketRateLimiter` | `timeout`、`maxWaitings`、`leakingPerDuration`、`leakingDuration` | `1000ms`、`1024`、`1`、`50ms` |
-| `slidingWindowRateLimiter` | `window`、`limit`、`timeout` | `150ms`、`1024`、`100ms` |
-| `tokenBucketRateLimiter` | `tokens`、`timeout`、`populationPeriod` | `1024`、`100ms`、`150ms` |
+| `anyMomentRateLimiter` | `maxTokens`、`timeout` | `1024`、`100`(单位毫秒) |
+| `leakingBucketRateLimiter` | `timeout`、`maxWaitings`、`leakingPerDuration`、`leakingDuration` | `1000ms`、`1024`、`1`、`50`（单位毫秒） |
+| `slidingWindowRateLimiter` | `window`、`limit`、`timeout` | `150ms`、`1024`、`100`（单位毫秒） |
+| `tokenBucketRateLimiter` | `tokens`、`timeout`、`populationPeriod` | `1024`、`100`（单位毫秒）、`150`（单位毫秒） |
 
 未配置 `rpcServer_rateLimiterName` 时使用 `UnlimitedRateLimiter`（不限流）。限流触发时服务端返回 `ERROR` 命令，data 为 `ServerExceeding`。
 
