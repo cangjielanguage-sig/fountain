@@ -38,29 +38,43 @@ class RPCServer {
             defaultResp: {id => error(id, Command.ERROR, ErrorMessage(EXCEEDING))}, limiter: ServerConfig.rateLimiter()
         )
         server.start(executor)
-        atExit{server.close()}
-        for(address in ServerConfig.baseAddresses){
-            spawn{
+        let addresses = ServerConfig.baseAddresses
+        let zeroClients = unsafeZeroValue<Array<Client>>()
+        let clients = Box<Array<Client>>(zeroClients)
+        spawn{
+            clients.value = Array<Client>(addresses.size){i =>
+                let address = addresses[i]
+                var client = unsafeZeroValue<Client>()
                 while(true){
-                    var client: Client = unsafeZeroValue<Client>()
-                    while(true){
-                        try{
-                            client = Client.builder(address: address, checkDuration: Duration.second, checker: {=> Message.ping()}).build()
-                            break
-                        }catch(e: Exception){
-                            rpclog.error('[FOUNTAIN_RPC.register.newClient] ${address}', e)
-                        }
-                    }
                     try{
-                        Message.register(data: port.toData()) |> client.transfer
-                        return
+                        client = Client.builder(address: address, checkDuration: Duration.second, checker: {=> Message.ping()}).build()
+                        break
                     }catch(e: Exception){
-                        rpclog.error('[FOUNTAIN_RPC.register] ${address}', e)
-                    }finally{
-                        client.close()
+                        rpclog.error('[FOUNTAIN_RPC.register.newClient] ${address}', e)
                     }
                 }
+                while(true){
+                    try{
+                        Message.register(data: port.toData()) |> client.transfer
+                        break
+                    }catch(e: Exception){
+                        rpclog.error('[FOUNTAIN_RPC.register] ${address}', e)
+                    }
+                }
+                client
             }
+        }
+        atExit{
+            for(client in clients.value){
+                try{
+                    Message.deregister(data: port.toData()) |> client.transfer
+                }catch(e: Exception){
+                    rpclog.error('[FOUNTAIN_RPC.deregister] ${client.address}', e)
+                }finally{
+                    client.close()
+                }
+            }
+            server.close()
         }
     }
     private static func checker(): ?Message {
@@ -78,6 +92,7 @@ class RPCServer {
             let cmd = message.command
             match(message.command){
                 case Command.REGISTER => RegisterExecutor(buffer, message.id, message.tryFromData<UInt16>() ?? 0).exec()
+                case Command.DEREGISTER => DeregisterExecutor(buffer, message.id, message.tryFromData<UInt16>() ?? 0).exec()
                 case Command.SUBSCRIBE => SubscribeExecutor(message.id, message.tryFromData<Bool>() ?? false).exec()
                 case Command.CONSUME(b) => ConsumeExecutor(buffer, b, message.id, message.tryFromData<RPCMessage>().getOrThrow()).exec()
                 case Command.ACK => None<Message>
@@ -94,6 +109,15 @@ private struct RegisterExecutor{
         debugLog(id, Command.REGISTER){port}
         let addr = buffer.remoteAddress.toString()
         serviceHosts.add('${addr[0 .. addr.indexOf(":").getOrThrow()]}:${port}')
+        Message.ack(id, data: DataNone.INSTANCE)
+    }
+}
+private struct DeregisterExecutor{
+    DeregisterExecutor(private let buffer: SocketBuffer, private let id: MessageID, private let port: UInt16){}
+    func exec(): Message {
+        debugLog(id, Command.DEREGISTER){port}
+        let addr = buffer.remoteAddress.toString()
+        serviceHosts.remove('${addr[0 .. addr.indexOf(":").getOrThrow()]}:${port}')
         Message.ack(id, data: DataNone.INSTANCE)
     }
 }

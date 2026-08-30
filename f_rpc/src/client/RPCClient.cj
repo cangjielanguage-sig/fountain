@@ -26,89 +26,90 @@ public class RPCClient {
     private static let services = ConcurrentHashMap<ServiceMeta, MultiClient<Float64>>()
 
     static init(){
-        let metas = HashMap<ServiceMeta, TreeSet<String>>()
-        func subscribe(client: Client, closingOnEnd: Bool){
-            try{
-                let message = Message.subscribe(data: false)
-                let data = client.transfer(message).get().data
-                let any = Array<ServiceMeta>.tryFromData(data)
-                let array: Array<ServiceMeta> = match(any){
-                    case x: Array<ServiceMeta> => x
-                    case x: ?Array<ServiceMeta> => x ?? []
-                    case _ => []
-                }
-                if(array.isEmpty()){
-                    return true
-                }
-                for(meta in array){
-                    let view = metas.entryView(meta)
-                    if(view.value.isNone()){
-                        view.value = TreeSet<String>()
-                    }
-                    view.value?.add(client.address.toString())
-                }
-                return true
-            }catch(e: Exception){
-                rpclog.error("[FOUNTAIN_RPC.subscribe.services] ${client.address}", e)
-                return false
-            }finally{
-                if(closingOnEnd){
-                    client.close()
-                }
-            }
-        }
-        let hosts = TreeSet<String>()
         let clients = ClientConfig.createClient()
         spawn{
-            try{
-                for(client in clients){
-                    let msg = Message.subscribe(data: true)
-                    let resp = client.transfer(msg).get().data
-                    let any = Array<String>.tryFromData(resp)
-                    let array: Array<String> = match(any){
-                        case x: Array<String> => x
-                        case x: ?Array<String> => x ?? []
-                        case _ => []
+            while(true){
+                let metas = HashMap<ServiceMeta, TreeSet<String>>()
+                func subscribe(client: Client, closingOnEnd: Bool){
+                    try{
+                        let message = Message.subscribe(data: false)
+                        let data = client.transfer(message).get().data
+                        let any = Array<ServiceMeta>.tryFromData(data)
+                        let array: Array<ServiceMeta> = match(any){
+                            case x: Array<ServiceMeta> => x
+                            case x: ?Array<ServiceMeta> => x ?? []
+                            case _ => []
+                        }
+                        if(array.isEmpty()){
+                            return true
+                        }
+                        for(meta in array){
+                            let view = metas.entryView(meta)
+                            if(view.value.isNone()){
+                                view.value = TreeSet<String>()
+                            }
+                            view.value?.add(client.address.toString())
+                        }
+                        return true
+                    }catch(e: Exception){
+                        rpclog.error("[FOUNTAIN_RPC.subscribe.services] ${client.address}", e)
+                        return false
+                    }finally{
+                        if(closingOnEnd){
+                            client.close()
+                        }
                     }
-                    hosts.add(all: array)
-                    subscribe(client, false)
                 }
-                clients.close()
-                for(host in hosts){
-                    while(true){
-                        var client: Client = unsafeZeroValue<Client>()
+                let hosts = TreeSet<String>()
+                try{
+                    for(client in clients){
+                        let msg = Message.subscribe(data: true)
+                        let resp = client.transfer(msg).get().data
+                        let any = Array<String>.tryFromData(resp)
+                        let array: Array<String> = match(any){
+                            case x: Array<String> => x
+                            case x: ?Array<String> => x ?? []
+                            case _ => []
+                        }
+                        hosts.add(all: array)
+                        subscribe(client, false)
+                    }
+                    clients.close()
+                    for(host in hosts){
                         while(true){
-                            try{
-                                client = Client.builder(address: host, checkDuration: Duration.second, checker: {=> Message.ping()}).build()
+                            var client: Client = unsafeZeroValue<Client>()
+                            while(true){
+                                try{
+                                    client = Client.builder(address: host, checkDuration: Duration.second, checker: {=> Message.ping()}).build()
+                                    break
+                                }catch(e: Exception){
+                                    rpclog.error("[FOUNTAIN_RPC.subscribe.hosts] ${host}", e)
+                                }
+                            }
+                            if(subscribe(client, true)){
                                 break
-                            }catch(e: Exception){
-                                rpclog.error("[FOUNTAIN_RPC.subscribe.hosts] ${host}", e)
                             }
                         }
-                        if(subscribe(client, true)){
-                            break
+                    }
+                    for((meta, hosts) in metas){
+                        if(let Some(clients) <- services.get(meta)){
+                            let set = TreeSet<String>()
+                            for(c in clients){
+                                set.add(c.address.toString())
+                            }
+                            if(let hostArray <- hosts.toArray() && set.toArray() != hostArray){
+                                services[meta] = ClientConfig.createClient(hostArray)
+                                clients.close()//todo 此处应该先发送一个关闭通知，可以改造DEREGISTER命令，服务端等待所有任务都结束以后再返回，然后两边关闭。要为Client中的每个同服务节点的连接各发送一次
+                            }
+                        }else{
+                            services[meta] = ClientConfig.createClient(hosts.toArray())
                         }
                     }
+                }catch(e: Exception){
+                    rpclog.warn('error on RPCClient init', e)
+                }finally{
+                    sleep(ClientConfig.refreshIntervalSeconds)
                 }
-                for((meta, hosts) in metas){
-                    if(let Some(clients) <- services.get(meta)){
-                        let set = TreeSet<String>()
-                        for(c in clients){
-                            set.add(c.address.toString())
-                        }
-                        if(let hostArray <- hosts.toArray() && set.toArray() != hostArray){
-                            services[meta] = ClientConfig.createClient(hostArray)
-                            clients.close()//todo 此处应该先发送一个关闭通知，可以改造DEREGISTER命令，服务端等待所有任务都结束以后再返回，然后两边关闭。要为Client中的每个同服务节点的连接各发送一次
-                        }
-                    }else{
-                        services[meta] = ClientConfig.createClient(hosts.toArray())
-                    }
-                }
-            }catch(e: Exception){
-                rpclog.warn('error on RPCClient init', e)
-            }finally{
-                metas.clear()
-                sleep(ClientConfig.refreshIntervalSeconds)
             }
         }
         atExit{
