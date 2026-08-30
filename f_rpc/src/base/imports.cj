@@ -34,10 +34,6 @@ public const EXCEEDING = 'ServerExceeding'
 
 protected let rpclog = LoggerFactory.getLogger('rpc')
 
-protected func checker(): ?Message{
-    Message.ping()
-}
-
 private func logmsg(id: MessageID, label: String, command: Command, message: String){
     '[FOUNTAIN_RPC.${label}.${command}] ${id}; ${message}'
 }
@@ -64,4 +60,8 @@ protected func debugLog<T>(id: MessageID, label: String, command: Command, messa
 }
 protected func infoLog<T>(id: MessageID, label: String, command: Command, message: () -> T): Unit where T <: ToData {
     rpclog.info{logmsg(id, label, command, message)}
+}
+
+protected func checker(): ?Message{
+    Message.ping()
 }
