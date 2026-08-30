@@ -45,7 +45,7 @@ class RPCServer {
             let registerMessage = Message.register(data: port.toData())
             clients.value = Array<Client>(addresses.size){i =>
                 let address = addresses[i]
-                let clientBuilder = Client.builder(address: address, checkDuration: Duration.second, checker: {=> Message.ping()})
+                let clientBuilder = Client.builder(address: address, checkDuration: Duration.second, checker: checker)
                 var client = unsafeZeroValue<Client>()
                 while(true){
                     try{
@@ -79,9 +79,6 @@ class RPCServer {
             }
             server.close()
         }
-    }
-    private static func checker(): ?Message {
-        Message.ping()
     }
     /**
      * REGISTER 向其它服务节点注册自身

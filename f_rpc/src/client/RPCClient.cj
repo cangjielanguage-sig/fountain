@@ -80,7 +80,7 @@ public class RPCClient {
                             var client: Client = unsafeZeroValue<Client>()
                             while(true){
                                 try{
-                                    client = Client.builder(address: host, checkDuration: Duration.second, checker: {=> Message.ping()}).build()
+                                    client = Client.builder(address: host, checkDuration: Duration.second, checker: checker).build()
                                     break
                                 }catch(e: Exception){
                                     rpclog.error("[FOUNTAIN_RPC.subscribe.hosts] ${host}", e)
