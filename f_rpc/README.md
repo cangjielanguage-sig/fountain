@@ -6,6 +6,8 @@
 
 - **声明式 RPC**：服务端用 `@RPCSkeleton` 宏一键发布服务，客户端用 `@RPCStub` 宏自动生成远程调用存根
 - **服务注册与发现**：节点间通过 `REGISTER` / `SUBSCRIBE` 命令自动完成服务注册与发现，无需独立注册中心
+- **DEREGISTER**: 节点退出时自动向种子节点发送 `DEREGISTER` 命令
+- **服务版本号**：支持服务版本号（主版本.次版本.修订版本），支持精确版本与通配版本
 - **版本路由**：按服务版本号（主版本.次版本）匹配调用目标，支持精确版本与通配版本
 - **负载均衡**：内置随机（random）与轮询（roundrobin）策略，按权重选择服务节点
 - **限流**：支持任意时刻、漏桶、滑动窗口、令牌桶四种限流算法
@@ -38,6 +40,7 @@
    - 逐个连接每个服务节点，发送 `SUBSCRIBE(data: false)` 获取该节点提供的**服务元数据列表**（`Array<ServiceMeta>`）
    - 为每个服务元数据建立一个带负载均衡的连接池（`MultiClient`）
    - 进程退出时自动关闭全部连接
+3. 服务节点退出时向种子节点发送 `DEREGISTER` 命令
 
 ### RPC 调用流程
 
@@ -504,6 +507,7 @@ RPC 基于 `fountain::f_protocol` 的 `Command` 枚举：
 | 命令 | 方向 | 说明 |
 | --- | --- | --- |
 | `REGISTER` | Client → Server | 服务节点向种子节点注册自身地址与端口，服务端回复 `ACK` |
+| `DEREGISTER` | Server → BaseServer | 服务节点向种子节点注销自身地址与端口，服务端回复 `ACK` |
 | `SUBSCRIBE` | Client → Server | `data=true` 返回全部服务节点地址列表（`Array<String>`）；`data=false` 返回本节点提供的服务元数据列表（`Array<ServiceMeta>`） |
 | `CONSUME` | Client → Server | 发起 RPC 调用，data 为 `RPCMessage`（`once: true`，QoS 为 `AtMostOnce`） |
 | `RESP` | Server → Client | 返回调用结果或订阅数据 |
