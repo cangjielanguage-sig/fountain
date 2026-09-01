@@ -1,13 +1,24 @@
 ## 安装
 ```bash
-cjpm install "fountain::fboot"="a.b.c" --root /path/to/install
+cjpm install "fountain::fboot"="a.b.c" --root /path/to/install # 把a.b.c换成具体的版本号
 export PATH=$PATH:/path/to/install/bin
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/path/to/install/libs/fboot
 ```
-### 启动
+
+## 启动
 ```bash
 fboot run --dylibPattern=<REGEX_OF_PROJECT_DYLIB_FILENAMES> # 具体查看项目的fdemo模块的boot.sh脚本
 ```
+
+## 创建项目与添加依赖
+安装`fboot`之后，可以执行`fboot workspace`将当前目录初始化为仓颉workspace项目，详细见`fboot`文档。
+项目需要的任何模块都在项目根目录的cjpm.toml添加。以`f_base`为例：
+```toml
+[dependencies]
+"fountain::f_base" = "a.b.c" # 把a.b.c换成具体的版本号
+```
+
+## fboot命令列表
 
 ```
 1.  应用项目只需要编译为动态链接库，把应用的动态链接库加入LD_LIBRARY_PATH
