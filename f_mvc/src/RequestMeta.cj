@@ -204,6 +204,8 @@ public class RequestMeta <: HttpRequestHandler & ToString & Comparable<RequestMe
                     }
                 } handle (cmd: MVCBreakingCommand) {
                     respond(cmd, ctx)
+                } handle (cmd: BreakingCommand) {
+                    respond(MVCBreakingCommand(cmd.data), ctx)
                 } finally {
                     CurrentHttpContext.clear()
                 }

@@ -22,6 +22,9 @@ public class MVCBreakingCommand <: BreakingCommand {
     public init(status: HttpStatus){
         this(DataUnit.UNIT, status)
     }
+    public init(data: Data){
+        this(data, HttpStatus.OK)
+    }
     public init(){
         this(HttpStatus.OK)
     }
