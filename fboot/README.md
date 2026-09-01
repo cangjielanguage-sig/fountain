@@ -29,8 +29,8 @@ workspace下的每个模块的编译目标务必是**动态链接库**。
 5.  fboot workspace <direct_path> 将绝对路径创建为仓颉workspace
 6.  fboot module 将当前目录初始化为仓颉dynamic项目
 7.  fboot module <module_name> 在当前目录创建名为<module_name>的子目录，并初始化为仓颉dynamic模块，并把模块加入当前目录的cjpm.toml
-8. fboot build 编译使用fountain开发的应用项目
-9. fboot count 数当前目录的仓颉代码模块数、包数、文件数、行数、计数耗时
+8.  fboot build 编译使用fountain开发的应用项目
+9.  fboot count 数当前目录的仓颉代码模块数、包数、文件数、行数、计数耗时
 10. fboot pub <version> 发布当前路径下的仓颉模块
 11. fboot <subcmd> --dylibPattern=<DYNAMIC_LIB_NAME_REGEX_WITHOUT_EXTNAME> 运行实现了`fountain::f_app.SubCommand`的子命令
 ==============下面的命令用来管理fountain本身===================
