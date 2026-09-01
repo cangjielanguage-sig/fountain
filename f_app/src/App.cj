@@ -30,43 +30,9 @@ public struct App {
                private let appHomeIsWorkingPath!: Bool = true,
                private let dynamic!: Bool = true,
                private let name!: String = '') {}
-    private func convertArgs(first: String){
-        match (this.args[0]) {
-            case x where x == first => Array<String>(args.size - 1) {
-                i => if (i == 0) {
-                    x.replace('re', '')
-                } else {
-                    args[i + 1]
-                }
-            }
-            case _ => args
-        }
-    }
 
     private func run(): Int64 {
         run(args)
-    }
-    private func confirmPath(args: Array<String>): (Int64, Path){
-        var idx = 1
-        var path = if (appHomeIsWorkingPath || args[0] == 'count' || idx >= args.size) {
-            getWorkingDirectory()
-        } else if (idx >= 1) {
-            Path(args[1])
-        } else if (idx >= 2) {
-            Path(args[2])
-        } else {
-            let p = canonicalize(Path(getCommand()))
-            if (p.parent.fileName == 'bin') {
-                p.parent.parent
-            } else {
-                p.parent
-            }
-        }
-        path = canonicalize(path)
-        if(!exists(path)){
-            Directory.create(path)
-        }
-        (idx, path)
     }
     
     private func load(): (Path, ArrayList<() -> Unit>) {
