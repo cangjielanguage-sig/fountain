@@ -26,6 +26,11 @@ public class HealthData {
             getAllocatedHeapSize()
         }
     }
+    public prop heapPhysicalMemory: Int64 {
+        get(){
+            MemoryInfo.heapPhysicalMemory
+        }
+    }
     public prop blockingThreadCount: Int64 {
         get(){
             getBlockingThreadCount()
