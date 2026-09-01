@@ -16,16 +16,44 @@ limitations under the License.
 package fountain::f_app
 
 import std.env.exit
+import fountain::f_concurrent.SyncPriorityQueue
+
 public import std.runtime.{registerSignalHandler, resetSignalHandler, Signal}
 
-@When[os != "Windows"]
-private let _ = {=>
-    // 必须有这个才能响应kill -15和CTRL+C，atExit函数调用才能生效
-    registerSignalHandler([Signal.SIGTERM, Signal.SIGINT]){
-        exit(0)
-        false
+public struct ExitCallback <: Comparable<ExitCallback> {
+    ExitCallback(private let priority: UInt16, let atexit: () -> Unit){}
+    public func compare(other: ExitCallback): Ordering {
+        return priority.compare(other.priority)
     }
-}()
+}
+
+@When[os != "Windows"]
+struct ExitCallbacks {
+    private static let callbacks = SyncPriorityQueue<ExitCallback>.create<ExitCallback>()
+    static func exitGracefully(): Unit {
+        let signals = [Signal.SIGTERM, Signal.SIGINT]
+        resetSignalHandler(signals)
+        registerSignalHandler(signals){
+            onExit()
+            exit(0)
+            false
+        }
+    }
+    static func atExit(priority: UInt16, atexit: () -> Unit): Unit {
+        callbacks.add(ExitCallback(priority, atexit))
+    }
+    private static func onExit(): Unit {
+        while(let Some(callback) <- callbacks.remove()){
+            callback.atexit()
+        }
+    }
+}
+@When[os == "Windows"]
+struct ExitCallbacks {
+    static func exitGracefully(): Unit {}
+    static func atExit(_: UInt16, _: () -> Unit): Unit {}
+    static func onExit(): Unit {}
+}
 
 @When[os != "Windows"]
 public func registerSignalHandler(signals: Array<Signal>, handler: () -> Bool): Unit {

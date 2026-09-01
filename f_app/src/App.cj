@@ -607,6 +607,9 @@ private let _ = AppVersion.set(#'${banner()}'#, '${name}', '${version}')
         args.copyTo(newargs, 0, 1, args.size)
         App(newargs).boot()
     }
+    public static func atExit(priority: UInt16, atexit: () -> Unit): Unit {
+        ExitCallbacks.atExit(priority, atexit)
+    }
 }
 private class CodeCounter{
     var modules = 0

@@ -19,6 +19,7 @@
 
 [dependencies]
   "fountain::f_base" = {path = "../f_base"}
+  "fountain::f_concurrent" = {path = "../f_concurrent"}
   "fountain::f_data" = {path = "../f_data"}
   "fountain::f_log" = {path = "../f_log"}
   "fountain::f_version" = {path = "../f_version"}
