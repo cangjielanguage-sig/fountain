@@ -1,6 +1,17 @@
+## 安装
+```bash
+cjpm install "fountain::fboot"="a.b.c" --root /path/to/install
+export PATH=$PATH:/path/to/install/bin
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/path/to/install/libs/fboot
+```
+### 启动
+```bash
+fboot run --dylibPattern=<REGEX_OF_PROJECT_DYLIB_FILENAMES> # 具体查看项目的fdemo模块的boot.sh脚本
+```
+
 ```
 1.  应用项目只需要编译为动态链接库，把应用的动态链接库加入LD_LIBRARY_PATH
-2.  fboot run [PATH] --dylibPattern=<DYNAMIC_LIB_NAME_REGEX_WITHOUT_EXTNAME>
+2.  fboot run [PATH] --dylibPattern=<DYNAMIC_LIB_NAME_REGEX_WITHOUT_EXTNAME> 可以用来启动应用项目
 3.  fboot workspace 将当前目录初始化为仓颉workspace
 4.  fboot workspace <spacename> 在当前目录创建名为<spacename>的子目录，并将它初始化为仓颉workspace
 5.  fboot workspace <direct_path> 将绝对路径创建为仓颉workspace

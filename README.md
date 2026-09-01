@@ -49,6 +49,17 @@ Fountain 终于稳定运行在真实医疗环境中，成为仓颉语言应用�
 ## STDX依赖
 配置环境变量：`export CANGJIE_STDX_DYNAMIC_PATH=/path/to/dynamic_stdx`
 
+## 安装
+```bash
+cjpm install "fountain::fboot"="a.b.c" --root /path/to/install
+export PATH=$PATH:/path/to/install/bin
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/path/to/install/libs/fboot
+```
+### 启动
+```bash
+fboot run --dylibPattern=<REGEX_OF_PROJECT_DYLIB_FILENAMES> # 具体查看项目的fdemo模块的boot.sh脚本
+```
+
 ## 各模块详细文档
 ### `fountain::f_app`
 应用进程管理模块，可以用本模块加载使用fountain开发的应用项目动态链接库。
