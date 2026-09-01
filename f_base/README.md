@@ -119,6 +119,10 @@ ExitCallbacks.atExit(priority){...}
 函数声明如下：
 ```cj
 public struct ExitCallbacks {
+    //注册信号处理函数，这个函数会重置之前注册过的SIGTERM、SIGINT信号，
+    //然后为这两个信号注册新的处理函数，处理函数内调用ExitCallbacks.atExit注册的函数，然后调用exit(0)退出进程，信号处理函数最后返回false
+    //需要在进程退出前做清理工作的模块务必调用ExitCallbacks.atExit或std.env.atExit
+    public static func toExitGracefully(): Unit
     //回调函数按照权重升序顺序执行，权重一样的按照注册顺序执行
     public static func atExit(priority: UInt16, atexit: () -> Unit): Unit
 }
