@@ -78,7 +78,9 @@ class RPCServer {
                     client.close()
                 }
             }
-            server.close()
+            if(!server.isClosed()){
+                server.close()
+            }
         }
     }
     /**
