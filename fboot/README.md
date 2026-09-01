@@ -11,7 +11,8 @@ fboot run --dylibPattern=<REGEX_OF_PROJECT_DYLIB_FILENAMES> # 具体查看项目
 ```
 
 ## 创建项目与添加依赖
-安装`fboot`之后，可以执行`fboot workspace`将当前目录初始化为仓颉workspace项目，详细见`fboot`文档。
+安装`fboot`之后，可以执行`fboot workspace`将当前目录初始化为仓颉workspace项目，详细见下面的子命令列表。
+workspace下的每个模块的编译目标务必是**动态链接库**。
 项目需要的任何模块都在项目根目录的cjpm.toml添加。以`f_base`为例：
 ```toml
 [dependencies]
