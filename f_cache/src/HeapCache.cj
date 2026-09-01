@@ -40,7 +40,7 @@ public class HeapCache<V> where V <: Object {
         }
         this.store = ConcHashMap<Priority<V>>.create(concurrencyLevel: concurrencyLevel)
         startTimer()
-        atExit(destroy)
+        ExitCallbacks.atExit(254, destroy)
     }
 
     public static func builder(): HeapCacheBuilder<V> {

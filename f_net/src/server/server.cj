@@ -92,11 +92,6 @@ public class Server<T> <: Resource where T <: DataFields<T> {
             },
             style: Burst
         )
-        env.atExit{
-            if(!hasClosed(server)){
-                doClose(server, checkTimer, buffers)
-            }
-        }
     }
     /**
      * @param bufferQueueSize 数据传输任务队列

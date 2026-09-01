@@ -13,24 +13,19 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package fountain::f_app
+package fountain::f_base
 
+import std.collection.{TreeMap, ArrayList}
 import std.env.exit
-import fountain::f_concurrent.SyncPriorityQueue
+import std.sync.Mutex
 
 public import std.runtime.{registerSignalHandler, resetSignalHandler, Signal}
 
-public struct ExitCallback <: Comparable<ExitCallback> {
-    ExitCallback(private let priority: UInt16, let atexit: () -> Unit){}
-    public func compare(other: ExitCallback): Ordering {
-        return priority.compare(other.priority)
-    }
-}
-
 @When[os != "Windows"]
-struct ExitCallbacks {
-    private static let callbacks = SyncPriorityQueue<ExitCallback>.create<ExitCallback>()
-    static func exitGracefully(): Unit {
+public struct ExitCallbacks {
+    private static let mutex = Mutex()
+    private static let callbacks = TreeMap<UInt16, ArrayList<() -> Unit>>()
+    public static func exitGracefully(): Unit {
         let signals = [Signal.SIGTERM, Signal.SIGINT]
         resetSignalHandler(signals)
         registerSignalHandler(signals){
@@ -39,20 +34,32 @@ struct ExitCallbacks {
             false
         }
     }
-    static func atExit(priority: UInt16, atexit: () -> Unit): Unit {
-        callbacks.add(ExitCallback(priority, atexit))
+    public static func atExit(priority: UInt16, atexit: () -> Unit): Unit {
+        synchronized(mutex){
+            let view = callbacks.entryView(priority)
+            if(let Some(list) <- view.value){
+                list
+            }else{
+                let list = ArrayList<() -> Unit>()
+                view.value = list
+                list
+            }.add(atexit)
+        }
     }
     private static func onExit(): Unit {
-        while(let Some(callback) <- callbacks.remove()){
-            callback.atexit()
+        synchronized(mutex){
+            for((_, atexits) in callbacks){
+                for(atexit in atexits){
+                    atexit()
+                }
+            }
         }
     }
 }
 @When[os == "Windows"]
-struct ExitCallbacks {
-    static func exitGracefully(): Unit {}
-    static func atExit(_: UInt16, _: () -> Unit): Unit {}
-    static func onExit(): Unit {}
+public struct ExitCallbacks {
+    public static func exitGracefully(): Unit {}
+    public static func atExit(_: UInt16, _: () -> Unit): Unit {}
 }
 
 @When[os != "Windows"]

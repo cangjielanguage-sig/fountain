@@ -16,8 +16,8 @@ limitations under the License.
 package fountain::f_pool
 
 import std.collection.concurrent.ArrayBlockingQueue
-import std.env
 import std.sync.{AtomicBool, Mutex, Condition}
+import fountain::f_base.ExitCallbacks
 import fountain::f_pool.exception.PoolException
 
 public interface KeyedObjectManager<K, V> {
@@ -187,7 +187,7 @@ public class KeyPool<K, V> <: Resource where K <: Hashable & Equatable<K> {
         while(let Some(k) <- initKeys()){
             tryAddTask(k)
         }
-        env.atExit(close)
+        ExitCallbacks.atExit(254, close)
     }
     public init(
         mode!: Mode = Mode.Fifo,

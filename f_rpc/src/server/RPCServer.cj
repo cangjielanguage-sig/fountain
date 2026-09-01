@@ -67,9 +67,9 @@ class RPCServer {
                 client
             }
         }
-        atExit{
+        ExitCallbacks.atExit(0){
             let deregisterMessage = Message.deregister(data: port.toData())
-            for(client in clients.value){
+            for(client in clients.value where !client.isClosed()){
                 try{
                     client.transfer(deregisterMessage)
                 }catch(e: Exception){

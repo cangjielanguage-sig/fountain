@@ -109,3 +109,17 @@
 1. 父任务结束时可以选择是否结束子任务
 2. 支持InheritedTaskLocal，类似ThreadLocal，不过有继承关系，如果当然FutureTask未找到值，则从父任务中获取
 - [FutureTask](doc/FutureTask.md)
+
+## 结束进程信号处理函数
+本模块确保在使用fountain的应用项目所有动态链接库完成加载后再注册SIGTERM、SIGINT两个信号处理函数，并清除之前注册的这两个信号的处理函数。
+应用项目模块如果需要在进程结束前做一些清除工作应当调用以下函数：
+```cj
+ExitCallbacks.atExit(priority){...}
+```
+函数声明如下：
+```cj
+public struct ExitCallbacks {
+    //回调函数按照权重升序顺序执行，权重一样的按照注册顺序执行
+    public static func atExit(priority: UInt16, atexit: () -> Unit): Unit
+}
+```

@@ -138,18 +138,6 @@ public func resetAndRegisterSignalHandler(signals: Array<Signal>, handler: (Int3
 public func resetAndRegisterSignalHandler(signal: Signal, handler: () -> Bool): Unit {}
 ```
 
-本模块确保在使用fountain的应用项目所有动态链接库完成加载后再注册SIGTERM、SIGINT两个信号处理函数，并清除之前注册的这两个信号的处理函数。
-应用项目模块如果需要在进程结束前做一些清除工作应当调用以下函数：
-```cj
-App.atExit(priority){...}
-```
-函数声明如下：
-```cj
-public struct App {
-    public static func atExit(priority: UInt16, atexit: () -> Unit): Unit
-}
-```
-
 ## 使用main函数启动应用的简便方法
 如果开发者想使用自己开发的main函数启动应用，可以调用本模块的以下API。
 目前这个API只支持run子命令。

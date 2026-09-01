@@ -128,7 +128,6 @@ public class Client <: Resource {
                 }
             }
         }, style: Burst)
-        env.atExit(close)
     }
 
     public func close(): Unit {

@@ -127,8 +127,8 @@ public class RPCClient {
                 }
             }
         }
-        atExit{
-            for((_, client) in services){
+        ExitCallbacks.atExit(252){
+            for((_, client) in services where !client.isClosed()){
                 client.close()
             }
         }

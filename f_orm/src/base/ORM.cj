@@ -23,6 +23,7 @@ import fountain::f_log.*
 public import std.convert.*
 public import std.database.sql.*
 public import std.reflect.*
+public import fountain::f_base.ExitCallbacks
 public import fountain::f_bean.*
 public import fountain::f_exception.{BaseException, UnreachableException}
 public import fountain::f_orm.wrap.*
@@ -39,7 +40,7 @@ public class ORM {
     static let hooks = TransactionHooks()
 
     static init(){
-        env.atExit(close)
+        ExitCallbacks.atExit(255u16, close)
     }
 
     public static func close() {
