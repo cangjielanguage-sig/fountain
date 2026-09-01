@@ -25,7 +25,7 @@ public import std.runtime.{registerSignalHandler, resetSignalHandler, Signal}
 public struct ExitCallbacks {
     private static let mutex = Mutex()
     private static let callbacks = TreeMap<UInt16, ArrayList<() -> Unit>>()
-    public static func exitGracefully(): Unit {
+    public static func toExitGracefully(): Unit {
         let signals = [Signal.SIGTERM, Signal.SIGINT]
         resetSignalHandler(signals)
         registerSignalHandler(signals){

@@ -67,6 +67,6 @@ internal func load(args: Array<String>, dynamic: Bool): (Path, ArrayList<() -> U
         load(path, Regex('^lib.*(${extractPattern()}|.+${APP_STATIC_RESOURCE_SUFFIX}).*$'))
     }
     let starters = InitializerCollection.initialize()
-    ExitCallbacks.exitGracefully()
+    ExitCallbacks.toExitGracefully()
     (path, starters)
 }
