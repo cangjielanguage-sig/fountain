@@ -1,6 +1,7 @@
 [dependencies]
   "fountain::f_base" = {path = "../f_base"}
   "fountain::f_exception" = {path = "../f_exception"}
+  "fountain::f_regex" = {path = "../f_regex"}
   
 [package]
   cjc-version = "1.2.0"

@@ -80,3 +80,21 @@ fountain::f_io.exception 包的异常类。
 ### ByteBuffer & SyncByteBuffer 
 
 [doc/ByteBuffer.md](doc/ByteBuffer.md)
+
+### 扩展Path
+```cj
+//to 是复制的目标路径，必须是Directory
+//如果当前路径是符号连接则递归读取连接的目标文件再复制
+//matched 是过滤函数，源路径满足matched的才会复制
+//srcPattern是源路径模式，文件路径满足这个模式的才会复制。**表示任意级别的路径，*表示任意零个或多个字符
+//对于matched和srcPattern，当前路径如果是Directory，则其下每个文件都会执行这个判断
+public interface ExtendPath{
+    func copy(to!: String): Unit 
+    func copy(to!: Path): Unit
+    func copy(srcPattern: String, to!: String): Unit 
+    func copy(srcPattern: String, to!: Path): Unit
+    func copy(to!: String, matched!: (Path) -> Bool): Unit 
+    func copy(to!: Path, matched!: (Path) -> Bool): Unit
+}
+extend Path <: ExtendPath
+```
