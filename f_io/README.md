@@ -83,6 +83,7 @@ fountain::f_io.exception 包的异常类。
 
 ### 扩展Path
 ```cj
+//复制时会忽略空文件夹
 //to 是复制的目标路径，必须是Directory
 //如果当前路径是符号连接则递归读取连接的目标文件再复制
 //matched 是过滤函数，源路径满足matched的才会复制
