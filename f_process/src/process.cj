@@ -19,9 +19,8 @@ import std.collection.{Map, HashMap}
 import std.env.*
 import std.fs.Path
 import std.io.{InputStream, OutputStream}
-import std.process.{Process, SubProcess, ProcessRedirect, launch}
+import std.process.{SubProcess, ProcessRedirect, launch}
 import fountain::f_io.{asyncPipe, pipe}
-import fountain::f_regex.*
 
 public interface ExtendProcess {
     func piped(workingDirectory!: ?Path, environment!: ?Map<String, String>, stdIn!: InputStream, stdOut!: OutputStream,

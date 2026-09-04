@@ -1,83 +1,82 @@
 # f_exception
 
 
-## DuplicationInstanceException
+## `DuplicationInstanceException <: BaseException`
 
-- [DuplicationInstanceException](doc/DuplicationInstanceException.md)
+实例冲突异常
 
-## IllegalAccessException
+## `IllegalAccessException <: BaseException`
 
-- [IllegalAccessException](doc/IllegalAccessException.md)
+非法访问异常
 
-## IllegalArgException
+## `IllegalArgException <: BaseException`
 
-- [IllegalArgException](doc/IllegalArgException.md)
+非法参数异常
 
-## IllegalSizeException
+## `IllegalSizeException <: BaseException`
 
-- [IllegalSizeException](doc/IllegalSizeException.md)
+非法大小异常
 
-## IllegalStateException
+## `IllegalStateException <: BaseException`
 
-- [IllegalStateException](doc/IllegalStateException.md)
+非法状态异常
 
-## NoSuchElementException
+## `NoSuchElementException <: BaseException`
 
-- [NoSuchElementException](doc/NoSuchElementException.md)
+没有元素异常
 
-## NotConsideredException
+## `NotConsideredException <: BaseException`
 
-- [NotConsideredException](doc/NotConsideredException.md)
+未考虑到的异常
 
-## NotInstantiatedException
+## `NotInstantiatedException <: BaseException`
 
-- [NotInstantiatedException](doc/NotInstantiatedException.md)
+未初始化异常
 
-## NotSupportedTypeException
+## `NotSupportedTypeException <: BaseException`
 
-- [NotSupportedTypeException](doc/NotSupportedTypeException.md)
+不支持的类型异常
 
-## NumberFormatException
+## `NumberFormatException <: BaseException`
 
-- [NumberFormatException](doc/NumberFormatException.md)
+数字格式异常
 
-## OutOfBoundsException
+## `OutOfBoundsException <: BaseException`
 
-- [OutOfBoundsException](doc/OutOfBoundsException.md)
+越界异常
 
-## StatusException
+## `StatusException <: BaseException`
 
-- [StatusException](doc/StatusException.md)
+状态异常
 
-## TypeCastException
+## `TypeCastException <: BaseException`
 
-- [TypeCastException](doc/TypeCastException.md)
+类型转换异常
 
-## TypeNotMatchException
+## `TypeNotMatchException <: BaseException`
 
-- [TypeNotMatchException](doc/TypeNotMatchException.md)
+类型不匹配异常
 
-## UnexpectedTokenException
+## `UnexpectedTokenException <: BaseException`
 
-- [UnexpectedTokenException](doc/UnexpectedTokenException.md)
+意外的标记异常
 
-## UnreachableException
+## `UnreachableException <: BaseException`
 
-- [UnreachableException](doc/UnreachableException.md)
+不可达异常
 
-## UnreadableException
+## `UnreadableException <: BaseException`
 
-- [UnreadableException](doc/UnreadableException.md)
+不可读异常
 
-## UnsupportedAccessException
+## `UnsupportedAccessException <: BaseException`
 
-- [UnsupportedAccessException](doc/UnsupportedAccessException.md)
+不支持的访问异常
 
-## UnsupportedOperatorException
+## `UnsupportedOperatorException <: BaseException`
 
-- [UnsupportedOperatorException](doc/UnsupportedOperatorException.md)
+不支持的运算符异常`
 
-## UnwritableException
+## `UnwritableException <: BaseException`
 
-- [UnwritableException](doc/UnwritableException.md)
-
+不可写异常

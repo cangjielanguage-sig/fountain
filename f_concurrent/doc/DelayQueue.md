@@ -1,6 +1,5 @@
 ## 延迟队列
 
-
 ### Delayed
 ```cj
 public interface Delayed<T> <: Comparable<T> where T <: Delayed<T> {

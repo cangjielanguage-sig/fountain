@@ -80,88 +80,564 @@ public func then<O>(mapper: (T) -> O, equal: Equaler<O>): Equaler<T>
 
 ## Console
 
-- [Console](doc/Console.md)
+```cj
+public struct Console {
+    //将参数写到标准输出流，不换行
+    public static func write<T>(v: T): Unit where T <: ToString
+    //将参数写到标准输出流后换行
+    public static func writeln<T>(v: T): Unit where T <: ToString
+    //将参数执行结果写到标准输出流，不换行
+    public static func write<T>(fn: () -> T): Unit where T <: ToString
+    //将参数执行结果写到标准输出流后换行
+    public static func writeln<T>(fn: () -> T): Unit where T <: ToString
+    //向标准输出流写一个空行
+    public static func writeln(): Unit
+    //从标准输入流读一个字符，不阻塞
+    public static func read(): ?Rune
+    //从标准输入流读一个字符串，直到遇到参数才返回，返回不包含参数
+    public static func readUntil(r: Rune): ?String
+    //从标准输入流读到的每个字符作为参数，调用参数，直到返回true时结束，返回读到的每个字符，不包含返回true的字符
+    public static func readUntil(predicate: (Rune) -> Bool): ?String
+    //从标准输入流读一个空行
+    public static func readln(): ?String
+}
+```
+
 
 ## 空集合
 
-- [空集合](doc/空集合.md)
+```cj
+//以下是各种空集合的实例化方式
+EmptyArray<T>.instance()
+EmptySet<T>.instance()//EmptySet<T> <: Set where T <: Equatable<T>
+EmptyIterator<T>.instance()//EmptyIterator<T> <: Iterator<T>
+EmptyIterable<T>.instance()//EmptyIterable<T> <:Iterable<T>
+EmptyMap<K, V>.instance()//EmptyMap<K, V> <: Map<K, V> where K <: Equatable<K>
+EmptyEquatableCollection<K>.instance()//EmptyEquatableCollection<K> <: EquatableCollection<K> where K <: Equatable<K>
+EmptyCollection<T>.instance()//EmptyCollection<T> <: Collection<T>
+EmptyList<T>.instance()//EmptyList<T> <: List<T>
+```
+
 
 ## 扩展Iterator
+```cj
+//返回的Iterator每次执行next()都创建一个新线程返回一个?Future<?T>，
+func async(): Iterator<Future<?T>>
+//使用参数比较迭代器的每个元素，返回迭代器中的最小值
+func min(cmp: (T, T) -> Ordering): ?T
+//使用参数比较迭代器的每个元素，返回迭代器中的最大值
+func max(cmp: (T, T) -> Ordering): ?T
+//exactly： true，则迭代器的每个元素类型必须是R类型才会返回；exactly: false，则迭代器的每个元素类型必须是R的子类型才会返回；忽略其它元素
+func filterType<R>(exactly!: Bool): Iterator<R>
+//如果迭代器的每个元素是Iterable<R>，则将当前元素转换为Iterator<R>；如果迭代器元素不是Iterable<R>类型，toThrow是true时会抛出异常，toThrow是false时返回EmptyIterator<T>
+func flatten<R>(toThrow!: Bool): Iterator<R>
+//用迭代器的每个元素调用collector，把迭代器元素填充到collection
+func collect<C>(collection: C, collector: (T, C) -> Unit): C where C <: Collection<T>
+//把迭代器转换为Array<T>
+func toArray(): Array<T>
+//把迭代器转换为ArrayList<T>
+func toArrayList(): ArrayList<T>
+//把迭代器元素作为key的参数用key返回的K作为HashMap的KEY，将迭代器元素填充到HashMap
+func collect<K>(key: (T) -> K): HashMap<K, T> where K <: Hashable & Equatable<K>
+//把迭代器元素作为key的参数用key返回的K作为HashMap的KEY，将迭代器元素填充的HashMap
+public func groupBy<K>(key: (T) -> K): HashMap<K, ArrayList<T>> where K <: Hashable & Equatable<K>
+//返回的实例有一个函数peek，调用peek会返回当前未迭代的值，不消耗任何未迭代值，不影响next()的执行。
+public func peekable(): PeekableIterator<T>
+```
 
-- [扩展Iterator](doc/扩展Iterator.md)
+## PeekableIterator
+```cj
+public class PeekableIterator<T> <: Iterator<T> & Resource {
+    public PeekableIterator(private let itr: Iterator<T>){}
+
+    public func next(): Option<T> 
+    public func peek(): ?T 
+
+    /** 关闭底层迭代器（如果实现了 Resource 接口） */
+    public func close(): Unit 
+
+    public func isClosed(): Bool 
+}
+public interface Peekable<T>{
+    func peekable(): PeekableIterator<T>
+}
+extend<T> Iterator<T> <: Peekable<T> 
+```
 
 ## 扩展Option
 
-- [扩展Option](doc/扩展Option.md)
+```cj
+//用当前Option实例化为只有一个元素的迭代器，这个迭代在首次调用next函数时函数返回值取决于Option是Some还是None
+func iterator(): Iterator<T>
+//如果Option是Some则用Some包含的值调用fn，则fn的返回值就是call的返回值，否则call返回None
+func call<R>(fn: (T) -> R): ?R
+//如果Option是Some则用Some包含的值和right作参数调用fn，则fn的返回值就是call的返回值，否则call返回None
+func call<A, R>(right: A, fn: (T, A) -> R): ?R
+
+//fn和当前Option作为参数初始化OptionCaller
+func caller<R>(fn: (T) -> R): OptionCaller<T, R>
+//fn、right和当前Option作为参数初始化OptionCaller
+func caller<A, R>(right: A, fn: (T, A) -> R): OptionCaller<T, R>
+//当前Option如果是Some(x: U)，则转换为Result.Ok(x)；如果是Some但是类型不是U，返回None；如果是None，返回NoResult
+func toResult<U, E>(): ?Result<U, E>
+//当前Option如果是Some，调用fn转换为U，并用返回值实例化为Result类型，否则返回None
+func toResult<U, E>(fn: (T) -> U): ?Result<U, E>
+//当前Option如果是Some，调用fn转换为?U，如果返回了Some(x)，则将Some的值实例化为Result<U, E>.Ok(x)， 否则返回None；如果是None，则返回NoResult
+func toResult<U, E>(fn: (T) -> ?U): ?Result<U, E>
+//当前Option如果是Some(x: U)，返回Result<U, E>.Ok(x)，如果是Some，但值不是类型U，会抛出异常；否则返回Result<U, E>.NoResult
+func toResult<U, E>(fn: () -> Exception): Result<U, E>
+//将当前Option包装为Result.Ok(this)
+func wrapResult<E>(): Result<?T, E>
+``
 
 ## OptionCaller
 
-- [OptionCaller](doc/OptionCaller.md)
+```cj
+public class OptionCaller<T, R> {
+    public OptionCaller(
+        private let option: ?T,
+        private let someCallee: (T) -> R,
+        private var noneCallee!: ?() -> R = None<() -> R>
+    ) {}
+    //修改noneCallee
+    public func none(callee: () -> R) 
+    //如果option是Some，执行someCallee，否则执行noneCallee，如果noneCallee是None，则返回None
+    public func call(): ?R 
+    //同call
+    public operator func ()(): ?R 
+}
+```
 
 ## Result<T, E>
 
-- [Result_T_E](doc/Result_T_E.md)
+```cj
+public enum Result<T, E> {
+    | Ok
+    | Ok(T)
+    | Err
+    | Err(E)
+    | NoResult
+    //当前Result是不是Ok
+    public prop isOk: Bool 
+    //当前Result是不是Err
+    public prop isErr: Bool 
+    //当前Result是不是NoResult
+    public prop isNoResult: Bool 
+    //当前Result是否包含错误值，只有是Err(E)时才返回true
+    public prop withE: Bool
+    //当前Result是否包含正确的值，只有是Ok(T)时才返回true
+    public prop withValue: Bool 
+    //是Ok(T)时返回Some(T)，其它情况返回None<T>
+    public func result(): ?T 
+    //是Err(E)时返回Some(E)，其它情况返回None<E>
+    public func err(): ?E 
+    //将当前Result转换为Result<U, E>，当前Result是Ok(T)时执行参数f，
+    public func mapValue<U>(f: (T) -> Result<U, E>): Result<U, E> 
+    /**
+     * 将当前Result转换为Result<U, E>，当前Result是Err(E)时执行参数f，
+     * 当前Result是Ok(x: U)时返回Ok(x)，其它Ok值返回Ok
+     * 其它情况返回同样的枚举值
+     */
+    public func mapError<U>(f: (E) -> Result<U, E>): Result<U, E> 
+    //忽略数据和错误信息，只返回Ok Err NoResult
+    public func ignore(): Result<T, E> 
+    //当前Result 是Ok(x)时执行predicate，且返回true时返回当前Result，其它情况返回NoResult
+    public func filterValue(predicate: (T) -> Bool): Result<T, E> 
+    //当前Result是Err(x)时执行predicate，且返回true时返回当前Result，其它情况返回NoResult
+    public func filterError(predicate: (E) -> Bool): Result<T, E> 
+    //当前Result的isOk返回true时返回当前Result，否则返回NoResult
+    public func filterOk(): Result<T, E> 
+    //当前Result的isErr返回true返回当前Result，否则返回NoResult
+    public func filterErr(): Result<T, E>
+    //当前Result是Err(E)时返回当前Result，否则返回NoResult
+    public func filterWithE(): Result<T, E>
+    //当前Result是Ok(T)时返回当前Result，否则返回NoResult
+    public func filterWithValue(): Result<T, E>
+    //如果当前Result是Ok(x: Result<U, E>)返回x，其它情况原样返回
+    public func flatten<U>(): Result<U, E> 
+    //如果当前Result是Ok(x: U)，返回Ok(x)，是Ok(x)，但是x不是类型U返回Ok，其它情况原样返回
+    public func transpose<U>(): ?Result<U, E> 
+    //如果当前Result是Ok(x)，返回x，其它情况返回default
+    public func orDefault(default: T): T 
+    //如果当前Result是Ok(x)，返回x，其它情况返回fn的返回值
+    public func orElse(fn: () -> T): T 
+    //如果当前Result是Ok(x)，返回x，其它情况返回fn的返回值
+    public func orElse(fn: () -> ?T): ?T 
+}
+```
 
 ## 扩展ThreadLocal
 
-- [扩展ThreadLocal](doc/扩展ThreadLocal.md)
+```cj
+//如果当前ThreadLocal有值就返回当前值，否则调用fn，将fn的返回值存入当前ThreadLocal，并返回刚存入的值
+func getOrCompute(fn: () -> T): T
+//清除当前ThreadLocal的值
+func remove(): Unit
+```
+
 
 ## HashBuilder
 
-- [HashBuilder](doc/HashBuilder.md)
+```cj
+/* 此类一般只作为局部变量使用，不会发生逃逸
+   仓颉已支持类实例的逃逸分析和栈上分配
+   按照HashBuilder_test的简单性能测试。
+   每个append函数参数会尽量参与哈希计算，参数实现了Hashable的会调用参数的hashCode()再用这个哈希值执行哈希公式
+ */
+public class HashBuilder
+
+/**
+ * 调用一次，本类的实例回到初始状态
+ */
+public func build(): Int64
+@OverflowWrapping
+public func append(arg: Int64): This
+public func append<T>(arg: T): This where T <: Hashable
+//遍历参数的每个元素，逐个元素调用append函数
+public func append<T, I>(args: I): This where T <: Hashable, I <: Iterable<T>
+//遍历区间，每个区间值调用append函数
+public func append<T>(args: Range<T>): This where T <: Hashable & Countable<T> & Comparable<T> & Equatable<T>
+//调用参数的toString()函数，用这个字符串调用append
+public func append(arg: StringGenerator): This
+/**
+ * 遍历参数，如果键和值实现了Hashable，则使用它们的哈希值分别调用append函数，
+ * 如果实现了ToString则先调用toString()再调用append，都没有实现的用'_'调用append函数。
+ */
+public func append<K, V>(value: ConcurrentHashMap<K, V>): This where K <: Hashable & Equatable<K>
+/**
+ * 如果value实现了Hashable，使用参数的哈希值调用append函数，
+ * 如果value实现了ToString，用参数的toString()结果调用append
+ */
+public func append(value: Any): This
+/**
+ * 如果参数扩展了Hashable，则用参数的哈希值调用append。
+ * 否则遍历参数，每个键和值如果实现了Hashable，则分别用哈希值调用append，
+ * 如果实现了ToString则用toString()的结果调用append
+ */
+private func append<K, V>(value: Map<K, V>): This where K <: Equatable<K>
+```
+
 
 ## Help
 
-- [Help](doc/Help.md)
+```cj
+//convert返回第一个非None且非空的值
+//Help.convert<T>(a, b, c)
+//Help.convert<T>(list)
+public static func convert<T>(options: Array<?T>): ?T
+public static func convert<T>(options: Array<?String>): String
+public static func convert<T, C>(collections: Array<C>): ?C where C <: Collection<T>
+public static func convert(strings: Array<String>): String
+```
+
 
 ## OS
 
-- [OS](doc/OS.md)
+```cj
+//操作系统
+public enum OS <: Equatable<OS> & ToString & Hashable {
+    | Linux
+    | Windows
+    | macOS
+    | HarmonyOS
+    public operator func ==(other: OS): Bool
+    public prop isWindows: Bool
+    public prop isLinux: Bool
+    public prop isMacOS: Bool
+    public prop isHarmonyOS: Bool
+    public func toString(): String
+    public static func valueOf(value: String): OS
+    public func hashCode(): Int64
+    //返回当前操作系统的实例
+    public static prop current: OS
+    //返回当前操作系统的换行符
+    public prop nextLine: String
+}
+```
+
 
 ## 顶级函数resource
 
-- [顶级函数resource](doc/顶级函数resource.md)
+```cj
+//代替try-with-resource，fn的参数是res，区别是本函数会返回fn的返回。
+public func resource<R, T>(res: R, fn: (R) -> T): T where R <: Resource
+```
+
 
 ## `ResourceManager<R> where R <: Resource`
 
-- [ResourceManager_R_where_R_Resource](doc/ResourceManager_R_where_R_Resource.md)
+```cj
+/**
+ * 构造函数接收一个返回Resource实现的闭包，call函数执行fn，fn结束时关闭new闭包返回的实例
+ */
+public struct ResourceManager<R> where R <: Resource {
+    public init(new: () -> R)
+    public func call<T>(fn: (R) -> T): T 
+}
+```
+
 
 ## 单值迭代
 
-- [单值迭代](doc/单值迭代.md)
+```cj
+//用一个值初始化的迭代对象
+public class SingleIterable<T> <: Iterable<T>
+public class SingleIterator<T> <: Iterator<T>
+```
+
 
 ## StringGenerator
 
-- [StringGenerator](doc/StringGenerator.md)
+```cj
+//功能比标准库的StringBuilder更丰富
+public class StringGenerator <: ToString
+
+public init() {}
+public init(s: String)
+//当前StringGenerator的大小
+public prop size: Int64
+//重置当前StringGenerator
+public func reset(): This
+public func clear(): This
+//把参数添加到StringGenerator
+public func append<T>(content: T): This where T <: ToString
+//把参数添加到StringGenerator，然后追加指定的换行符
+public func appendln<T>(content: T, nextLine!: String = OS.current.nextLine): This where T <: ToString
+//把参数添加到StringGenerator，并追加类UNIX系统的换行符
+public func appendUnixNewLine<T>(content: T): This where T <: ToString
+//把指定换行符添加到StringGenerator
+public func append(nextLine!: String = OS.current.nextLine): This
+//把类UNIX换行符添加到StringGenerator
+public func appendUnixNewLine(): This
+//把UTF8字节数组添加到StringGenerator
+public func appendFromUtf8(utf8: Array<Byte>): This
+//把字节数组用指定字符集转换为字符串并添加到StringGenerator
+public func appendFromBytes(bytes: Array<Byte>, charset!: Charset = Charsets.UTF8): This
+//将content转为字符串并从StringGenerator的fromIndex开始查找子串，返回找到的第一个子串的索引，找不到就返回None
+public func indexOf<T>(content: T, fromIndex!: Int64 = 0): ?Int64 where T <: ToString
+//将content转为字符串并从StringGenerator的fromIndex开始查找子串，返回找到的最后一个子串的索引，找不到就返回None
+public func lastIndexOf<T>(content: T, fromIndex!: Int64 = 0): ?Int64 where T <: ToString
+//将content转为字符串并判断当前StringGenerator是否包含这个字符串
+public func contains<T>(content: T): Bool where T <: ToString
+//判断当前StringGenerator是否以参数开头
+public func startsWith(content: String): Bool
+//判断当前StringGenerator是否以参数结尾
+public func endsWith(content: String): Bool
+//从StringGenerator截取从start到end的子串，包含start不包含end
+public func substring(start: Int64, end: Int64): String
+//把content转为字符串，删除从fromIndex开始找到的第一个子串
+public func removeFirst<T>(content: T, fromIndex!: Int64 = 0): This where T <: ToString
+//把content转为字符串，删除从fromIndex开始找到的最后一个子串
+public func removeLast<T>(content: T, fromIndex!: Int64 = 0): This where T <: ToString
+//把content转为字符串，删除从fromIndex到toIndex的所有子串
+public func remove<T>(content: T, fromIndex!: Int64 = 0, toIndex!: Int64 = size): This where T <: ToString
+//将sub转为字符串并插入到索引at处
+public func insert<T>(sub: T, at!: Int64): This where T <: ToString
+//将old和new转为字符串，将fromIndex到toIndex的所有old换为new
+public func replace<O, T>(old: O, new: T, fromIndex!: Int64 = 0, toIndex!: Int64 = size): This where O <: ToString, T <: ToString
+//将new转为字符串，从fromIndex到toIndex的内容替换为这个字符串
+public func replace<T>(new: T, fromIndex!: Int64 = 0, toIndex!: Int64 = size): This where T <: ToString
+//将old和new转为字符串，将fromIndex到toIndex找到的第一个old替换为new
+public func replaceFirst<O, T>(old: O, new: T, fromIndex!: Int64 = 0, toIndex!: Int64 = size): This where O <: ToString, T <: ToString
+//将old和new转为字符串，将fromIndex到toIndex找到的最后一个old替换为new
+public func replaceLast<O, T>(old: O, new: T, fromIndex!: Int64 = 0, toIndex!: Int64 = size): This where O <: ToString, T <: ToString
+//按字符反转StringGenerator
+public func reverse(): This
+//返回构造的字符串
+public func toString(): String
+//返回StringGenerator的原始字节数组
+public func unsafeBytes(): Array<Byte>
+```
 
 ## 得到字符串的原始字节数组
 
-- [得到字符串的原始字节数组](doc/得到字符串的原始字节数组.md)
+```cj
+public interface UnsafeBytes {
+    func unsafeBytes(): Array<Byte>
+}
+extend String <: UnsafeBytes{...}
+```
+
 
 ## 得到ArrayList的原始数组
 
-- [得到ArrayList的原始数组](doc/得到ArrayList的原始数组.md)
+```cj
+import std.collection.ArrayList
+
+public interface UnsafeData<T> {
+    func unsafeData(): Array<T>
+}
+
+extend<T> ArrayList<T> <: UnsafeData<T>{...}
+```
 
 ## 得到零值
 
-- [得到零值](doc/得到零值.md)
+```cj
+//不必使用unsafe关键词
+public func unsafeZeroValue<T>(): T
+```
+
 
 ## 零Timer
 
-- [零Timer](doc/零Timer.md)
+```cj
+public import std.sync.Timer
+
+public let ZERO_TIMER: Timer = unsafe { zeroValue<Timer>() }
+```
+
 
 ## 溢出拒绝策略
 
-- [溢出拒绝策略](doc/溢出拒绝策略.md)
+```cj
+public interface OverSizePolicy<T> {
+    /**
+       o 是待添加的新值，
+       fn是执行策略以后要执行的函数，比如执行策略以后又可以添加新值了就可以在fn内包含添加新值的逻辑
+     */
+    func reject(o: T, fn: () -> Unit): Unit
+}
+/**抛出异常*/
+public class AbortOverSizePolicy<T> <: OverSizePolicy<T>
+/**丢弃当前值*/
+public class DiscardOverSizePolicy<T> <: OverSizePolicy<T>
+/**丢弃某个值*/
+public class RemoveSomeOnePolicy<T> <: OverSizePolicy<T>
+/**调用线程执行*/
+public class CallerRunsOverSizePolicy<T> <: OverSizePolicy<T>
+/**阻塞直到超时，超时前唤醒且recovered返回true执行policy*/
+public class BlockingOverSizePolicy<T> <: OverSizePolicy<T> {
+    public BlockingOverSizePolicy(
+        private let recovered: (T) -> Bool,
+        private let timeout!: Duration = Duration.Max,
+        private let policy!: OverSizePolicy<T> = DiscardOverSizePolicy<T>()
+    ) {}
+    /**阻塞直到超时，超时前唤醒且recovered返回true执行policy*/
+    public func reject(o: T, fn: () -> Unit): Unit
+    public func notifyAll(): Unit
+    public func notify(): Unit
+}
+```
+
 
 ## 基础运算符接口
 
-- [基础运算符接口](doc/基础运算符接口.md)
+```cj
+public interface Negativable<T> where T <: Negativable<T> {
+    operator func -(): T
+}
+
+public interface Addable<T> where T <: Addable<T> {
+    operator func +(right: T): T
+}
+
+public interface Subable<T> where T <: Subable<T> {
+    operator func -(right: T): T
+}
+
+public interface Mulable<T> where T <: Mulable<T> {
+    operator func *(right: T): T
+}
+
+public interface Divable<T> where T <: Divable<T> {
+    operator func /(right: T): T
+}
+
+public interface Modable<T> where T <: Modable<T> {
+    operator func %(right: T): T
+}
+
+public interface Expable<T> where T <: Expable<T> {
+    operator func **(right: T): T
+}
+
+public interface Cmpable<T> where T <: Cmpable<T> {
+    operator func >(right: T): Bool
+    operator func <(right: T): Bool
+    operator func >=(right: T): Bool
+    operator func <=(right: T): Bool
+}
+
+public interface Eqable<T> where T <: Eqable<T> {
+    operator func ==(right: T): Bool
+    operator func !=(right: T): Bool
+}
+
+public interface BitAndable<T> where T <: BitAndable<T> {
+    operator func &(right: T): T
+}
+
+public interface BitOrable<T> where T <: BitOrable<T> {
+    operator func |(right: T): T
+}
+
+public interface BitXorable<T> where T <: BitXorable<T> {
+    operator func ^(right: T): T
+}
+
+public interface BitNotable<T> where T <: BitNotable<T> {
+    operator func !(): T
+}
+
+public interface LeftShiftable<T> where T <: LeftShiftable<T> {
+    operator func <<(right: T): T
+}
+
+public interface RightShiftable<T> where T <: RightShiftable<T> {
+    operator func >>(right: T): T
+}
+```
+
 
 ## `FutureTask<T>`
 1. 父任务结束时可以选择是否结束子任务
 2. 支持InheritedTaskLocal，类似ThreadLocal，不过有继承关系，如果当然FutureTask未找到值，则从父任务中获取
-- [FutureTask](doc/FutureTask.md)
+```cj
+public sealed abstract class AbstractFutureTask <: Hashable & Equatable<AbstractFutureTask>{
+    public func hashCode(): Int64 
+    public operator func ==(other: AbstractFutureTask): Bool 
+    //创建新的InheritedTaskLocal
+    public func newLocal<T>(): InheritedTaskLocal<T> 
+}
+public class FutureTask<T> <: AbstractFutureTask {
+    //创建新的FutureTask
+    //shutdownSubOnFinish: 是否在当前FutureTask结束时结束子任务
+    //fn: 任务函数
+    public init(shutdownSubOnFinish: Bool, fn: () -> T)
+    //创建新的FutureTask，此时shutdownSubOnFinish为true
+    public init(fn: () -> T)
+    //返回当前线程ID对应的FutureTask，只有在FutureTask内部调用此函数才有效，否则将抛出异常
+    public static func current(): FutureTask<T> 
+    //返回当前FutureTask执行结束后的结果，即构造函数参数fn的返回结果
+    public func get(): T 
+    //返回当前FutureTask执行结束后的结果，即构造函数参数fn的返回结果，如果调用此函数超过timeout的时间任务还没有结束，将抛出异常
+    public func get(timeout: Duration): T
+    //返回当前FutureTask执行结束后的结果，即构造函数参数fn的返回结果，如果调用此函数时任务还没有结束，将返回None
+    public func tryGet(): ?T 
+    //结束当前FutureTask，并按照shutdownSubOnFinish决定是否结束子任务
+    public func shutdown(): Unit 
+    //结束当前FutureTask的所有子任务。
+    public static func shutdownCurrentSubThreads(): Unit 
+}
+public sealed abstract class AbstractInheritedTaskLocal <: Hashable & Equatable<AbstractInheritedTaskLocal> {
+    AbstractInheritedTaskLocal(let task: AbstractFutureTask)
+    public func hashCode(): Int64 
+    public operator func ==(other: AbstractInheritedTaskLocal): Bool 
+}
+//可从父线程继承的ThreadLocal，当前FutureTask的InheritedTaskLocal无值时，会从父FutureTask查询
+//FutureTask初始化时的任务结束时，相应的InheritedTaskLocal会被移除
+public class InheritedTaskLocal<T> <: AbstractInheritedTaskLocal {
+    init(task: AbstractFutureTask)
+    public func set(value: T): Unit 
+
+    public func get(): ?T 
+
+    public func remove(): Unit 
+    public func getOrSet(value: T): T 
+    public func getOrCompute(fn: () -> T): T 
+}
+```
 
 ## 结束进程信号处理函数
 本模块确保在使用fountain的应用项目所有动态链接库完成加载后再注册SIGTERM、SIGINT两个信号处理函数，并清除之前注册的这两个信号的处理函数。

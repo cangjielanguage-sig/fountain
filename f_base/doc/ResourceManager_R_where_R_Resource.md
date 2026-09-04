@@ -7,5 +7,4 @@ public struct ResourceManager<R> where R <: Resource {
     public init(new: () -> R)
     public func call<T>(fn: (R) -> T): T 
 }
-
 ```

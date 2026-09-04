@@ -17,12 +17,9 @@ package fountain::f_cmd
 
 import std.collection.{HashMap, ArrayList}
 import std.convert.Parsable
-import std.fs.Path
+import std.fs.{Path, canonicalize}
 import std.env
-import std.process.Process
 import fountain::f_base.*
-import fountain::f_regex.*
-import fountain::f_cmd.exception.CmdException
 
 public class CmdArgs {
     private var args = HashMap<String, ArrayList<String>>()
@@ -83,15 +80,21 @@ public class CmdArgs {
     public func getAppName(): String {
         return appName
     }
+    public prop commandPath: Path {
+        get(){
+            canonicalize(env.getCommand()).parent
+        }
+    }
     public prop currentWorkingDirectory: Path {
         get() {
             _currentWorkingDir
         }
     }
-    public func getInt64Arg(name: String): Option<Int64> {
+    public func getArgValue<T>(name: String): Option<T> where T <: Parsable<T> {
         if (let Some(v) <- getArg(name)) {
-            Int64.parse(v)
+            T.tryParse(v)
+        }else{
+            None<T>
         }
-        None<Int64>
     }
 }

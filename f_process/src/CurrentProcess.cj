@@ -15,7 +15,6 @@ limitations under the License.
  */
 package fountain::f_process
 
-import std.io.{InputStream, OutputStream}
 import std.env.*
 public import std.fs.{Path, canonicalize}
 import cangjie_tpc::charset4cj.charset.encoding.Charset
