@@ -162,11 +162,7 @@ private func expandQueryMappers(attr: Tokens, declParam: Decl): Tokens {
     )))
     quote(
         $decl
-        private let _ = try {
-            TableMetas.register<$(decl.identifier)>()
-        }catch(e: Exception){
-            ORM.log.warn('An error occurred while registering TableMeta, possibly because the current class does not use the @DatabaseSchema annotation.', e)
-        }
+        private let _ = TableMetas.register<$(decl.identifier)>()
     )
 }
 
