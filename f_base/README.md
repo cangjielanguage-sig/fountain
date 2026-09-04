@@ -1,29 +1,82 @@
 # f_base
 
-
 ## STDX依赖
 
-- [STDX依赖](doc/STDX依赖.md)
+配置环境变量：`export CANGJIE_STDX_DYNAMIC_PATH=/path/to/dynamic_stdx`
 
 ## 基本特性
 
-- [基本特性](doc/基本特性.md)
+fountain项目的基本模块，建议开发时无脑导入本包。
 
 ## 导入
 
-- [导入](doc/导入.md)
+```cj
+import fountain::f_base.*
+```
 
 ## BaseException
 
-- [BaseException](doc/BaseException.md)
+BaseException是open类。增加了suppressed属性，可以向异常实例添加被遮盖的异常。
 
 ## `Comparator<T>`
 
-- [Comparator_T](doc/Comparator_T.md)
+```cj
+public class Comparator<T>
+//实例化比较器
+Comparator<T>(public let comparator: (T, T) -> Ordering)
+
+//对Comparable类型实例执行比较
+public static func compare<T>(left: T, right: T): Ordering where T <: Comparable<T>
+
+//把Comparable转换为Comparator实例
+public static func create<T>(): Comparator<T> where T <: Comparable<T>
+
+//比较两个实例
+public operator func ()(left: T, right: T): Ordering
+
+//反转比较器
+public func reverse(): Comparator<T>
+
+//使用参数创建新的Comparator，如果当前Comparator比较结果为EQ，执行本函数参数做下一步比较
+public func then(comparator: (T, T) -> Ordering): Comparator<T>
+public func then(comparator: Comparator<T>): Comparator<T>
+//使用参数创建新的Comparator，如果当前Comparator比较结果为EQ，调用mapper把类型T转换成O，并调用comparator做下一步比较
+public func then<O>(mapper: (T) -> O, comparator: (O, O) -> Ordering): Comparator<T>
+public func then<O>(mapper: (T) -> O, comparator: Comparator<O>): Comparator<T>
+
+//返回的Comparator调用本函数参数完成类型转换，并对转换结果做比较
+public static func comparing<O, T>(mapper: (O) -> T): Comparator<O> where T <: Comparator<T>
+//返回的Comparator调用mapper完成类型转换，并调用comparator完成比较
+public static func comparing<O, T>(mapper: (O) -> T, comparator: (T, T) -> Ordering): Comparator<O>
+public static func comparing<O>(mapper: (O) -> T, comparator: Comparator<T>): Comparator<O>
+```
+
 
 ## `Equaler<T>`
 
-- [Equaler_T](doc/Equaler_T.md)
+```cj
+public struct Equaler
+Equaler(private let eq: (T, T) -> Bool)
+
+//比较两个参数是否相等
+public static func equals<T>(left: T, right: T): Bool where T <: Equal<T>
+//为泛型参数创建Equaler实例
+public static func create<T>(): Equaler<T> where T <: Equal<T>
+//使用本类型实例比较两个参数是否相等
+public operator func ()(left: T, right: T): Bool
+//使用参数创建新的Euqaler，如果当前Euqaler比较结果为EQ，调用mapper把类型T转换成O，并调用equal做下一步比较
+public func then(equal: (T, T) -> Bool): Equaler<T>
+public func then(equal: Equaler<T>): Equaler<T>
+//返回的Equaler实例调用mapper完成类型转换，并用转换结果完成比较
+public static func equalling<O, T>(mapper: (O) -> T): Equaler<O> where T <: Equal<T>
+//返回的Equaler实例调用mapper完成类型转换，并用转换结果执行equal完成比较
+public static func equalling<O, T>(mapper: (O) -> T, equal: (T, T) -> Bool): Equaler<O>
+public static func equalling<O, T>(mapper: (O) -> T, equal: Equaler<T>): Equaler<O>
+
+//返回的Equaler实例先执行当前Equaler，如果返回true再调用mapper将当前Equaler泛型类型转换成新类型，并用新类型调用equal完成比较
+public func then<O>(mapper: (T) -> O, equal: (O, O) -> Bool): Equaler<T>
+public func then<O>(mapper: (T) -> O, equal: Equaler<O>): Equaler<T>
+```
 
 ## Console
 
