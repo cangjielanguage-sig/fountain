@@ -30,12 +30,22 @@ public class ControllerTraceAspect <: Aspect {
     private init(){}
 
     public func proceed(funcInfo: InvocationFuncInfo, point: (Array<Any>) -> Any): Any {
+        let trace = RPCMessage.currentTrace()
         log.debug('ControllerTraceAspect.proceed start')
+        let args = funcInfo.args
+        let argDatas = Array<JsonValue>(args.size){i => 
+            match(args[i]){
+                case x: ToData => x.toData()
+                case _ => '_'.toData()
+            } |> JsonValue.from
+        }.toString()
+        let invocation = '${trace} ${funcInfo.typeInfo.qualifiedName}.${funcInfo.funcInfo.name}(${argDatas})'
+        log.info('ControllerTrace.proceed start: ${invocation}')
         try{
             point(funcInfo.args)
         }finally{
-            ServiceMeta.clearCurrentTrace()
-            log.debug('ControllerTraceAspect.proceed end')
+            RPCMessage.clearCurrentTrace()
+            log.debug('ControllerTraceAspect.proceed end: ${invocation}')
         }
     }
 }

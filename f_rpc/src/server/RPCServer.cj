@@ -103,7 +103,7 @@ class RPCServer {
                 case x => error(message.id, x, ErrorMessage.new(message.data, UNSUPPORTED_COMMAND))
             }
         }finally{
-            ServiceMeta.clearCurrentTrace()
+            RPCMessage.clearCurrentTrace()
         }
     }
 }

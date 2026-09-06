@@ -27,6 +27,33 @@ public class RPCMessage {
         this.meta = meta
         this.params = params
     }
+    @DataExclude[prop]
+    private var trace_: String = ''
+    public mut prop trace: String {
+        get(){
+            if(trace_.isEmpty()){
+                trace_ = currentTrace()
+            }
+            trace_
+        }
+        set(value){
+            currentTrace_.set(value)
+            trace_ = value
+        }
+    }
+    private static var currentTrace_ = ThreadLocal<String>()
+    public static func currentTrace(): String {
+        if(let Some(x) <- currentTrace_.get()){
+            x
+        }else{
+            let id = MessageID().toString()
+            currentTrace_.set(id)
+            id
+        }
+    }
+    public static func clearCurrentTrace(): Unit {
+        currentTrace_.set(None)
+    }
 }
 @DataAssist[fields props hash equal]
 public class ServiceMeta {
@@ -56,32 +83,5 @@ public class ServiceMeta {
     }
     public init(version: String, name: String, typeName: String, methodName: String, argTypeNames: Array<String>, exactlyVersion!: Bool = false){
         this(version, name, typeName, methodName, argTypeNames, 0.0, exactlyVersion: exactlyVersion)
-    }
-    @DataExclude[prop]
-    private var trace_: String = ''
-    public mut prop trace: String {
-        get(){
-            if(trace_.isEmpty()){
-                trace_ = currentTrace()
-            }
-            trace_
-        }
-        set(value){
-            currentTrace_.set(value)
-            trace_ = value
-        }
-    }
-    private static var currentTrace_ = ThreadLocal<String>()
-    public static func currentTrace(): String {
-        if(let Some(x) <- currentTrace_.get()){
-            x
-        }else{
-            let id = MessageID().toString()
-            currentTrace_.set(id)
-            id
-        }
-    }
-    public static func clearCurrentTrace(): Unit {
-        currentTrace_.set(None)
     }
 }

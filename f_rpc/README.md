@@ -248,7 +248,7 @@ public interface HealthRPC {
 // }
 ```
 
-**`rpc_currentSkeleton` 防回环机制**：当存在配置项/环境变量 `rpc_currentSkeleton`，且其值与当前项目名称一致、或与被 `@RPCStub` 修饰的接口具有相同包名时，存根类**不会**注册到 IOC。用于服务端模块同时依赖接口定义时，避免本模块误用远程存根替代本地实现。可通过 `ClientConfig.currentSkeleton` 读取该值。
+**`rpc_currentSkeleton`防回环机制**：当存在配置项/环境变量`rpc_currentSkeleton`，且其值与当前项目拥有相同的组织名和顶级包名时，存根类**不会**注册到 IOC。用于服务端模块同时依赖接口定义时，避免本模块误用远程存根替代本地实现。可通过 `ClientConfig.currentSkeleton` 读取该值。
 
 ## 核心 API
 
@@ -552,7 +552,8 @@ data是返回给客户端的数据
 ## ControllerTraceAspect
 对于同时使用f_mvc和f_rpc的项目，一次http访问需要依赖f_rpc服务，为了及时清除trace，应当使用`fountain::f_mvc.macros.WeavedController`宏修饰Controller类。
 如此本模块的ControllerTraceAspect就会生效。Controller函数返回前会清除ServiceMeta的trace。
-其他客户端场景可参考此类
+另外此类还会记录当前Controller的trace到日志。
+其他客户端场景可参考此类。
 ```cj
 import fountain::f_aspect.*
 import fountain::f_bean.{BeanFactory, BeanMeta}
@@ -573,7 +574,7 @@ public class ControllerTraceAspect <: Aspect {
         try{
             point(funcInfo.args)
         }finally{
-            ServiceMeta.clearCurrentTrace()
+            RPCMessage.clearCurrentTrace()
             log.debug('ControllerTraceAspect.proceed end')
         }
     }

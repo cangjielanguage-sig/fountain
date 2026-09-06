@@ -115,9 +115,8 @@ private func genStub(exactlyVersion: Bool, version: String, name: String, decl: 
             let skeleton = ClientConfig.currentSkeleton
             let klass = TypeInfo.of<$(className)>()
             let qualified = klass.qualifiedName
-            let modStart = (qualified.indexOf('::') ?? -1) + 1
-            let modEnd = qualified.indexOf('.', modStart).getOrThrow()
-            if(skeleton == '' || !(skeleton == qualified[0 .. modEnd] || skeleton == qualified[modStart .. modEnd])) {
+            let modEnd = qualified.indexOf('.').getOrThrow()
+            if(skeleton == '' || skeleton != qualified[0 .. modEnd]) {
                 BeanFactory.instance.register<$(className)>{$(className)()}
             }
         }()

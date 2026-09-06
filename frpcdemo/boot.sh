@@ -31,6 +31,7 @@ exports(){
 }
 runServer(){
     exports rpcserver
+    export rpc_currentSkeleton='fountain::rpcserver'
     fboot run $path --dylibPattern='(rpcserver)'
 }
 runClient(){
