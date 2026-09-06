@@ -59,6 +59,7 @@ class RPCServer {
                 while(true){
                     try{
                         client.transfer(registerMessage)
+                        rpclog.info('[FOUNTAIN_RPC.register] server: ${address}:${port},${weight}')
                         break
                     }catch(e: Exception){
                         rpclog.error('[FOUNTAIN_RPC.register] ${address}', e)
