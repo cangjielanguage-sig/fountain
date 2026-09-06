@@ -37,8 +37,8 @@ class RPCServer {
             executors: executors, checker: checker, unavailableChecked: unavailableChecked,
             defaultResp: {id => error(id, Command.ERROR, ErrorMessage(EXCEEDING))}, limiter: ServerConfig.rateLimiter()
         )
-        server.start(executor)
         let addresses = ServerConfig.baseAddresses
+        rpclog.debug{'[FOUNTAIN_RPC.register] base addresses: ${addresses}'}
         let zeroClients = unsafeZeroValue<Array<Client>>()
         let clients = Box<Array<Client>>(zeroClients)
         spawn{
@@ -46,6 +46,7 @@ class RPCServer {
             let registerMessage = Message.register(data: '${port},${weight}'.toData())
             clients.value = Array<Client>(addresses.size){i =>
                 let address = addresses[i]
+                rpclog.debug{'[FOUNTAIN_RPC.register] host: ${address} - ${port},${weight}'}
                 let clientBuilder = Client.builder(address: address, checkDuration: Duration.second, checker: checker)
                 var client = unsafeZeroValue<Client>()
                 while(true){
@@ -58,8 +59,9 @@ class RPCServer {
                 }
                 while(true){
                     try{
+                        rpclog.debug{'[FOUNTAIN_RPC.register] host to register: ${address} - ${port},${weight}'}
                         client.transfer(registerMessage)
-                        rpclog.info('[FOUNTAIN_RPC.register] server: ${address}:${port},${weight}')
+                        rpclog.debug{'[FOUNTAIN_RPC.register] host registered: ${address} - ${port},${weight}'}
                         break
                     }catch(e: Exception){
                         rpclog.error('[FOUNTAIN_RPC.register] ${address}', e)
@@ -83,6 +85,7 @@ class RPCServer {
                 server.close()
             }
         }
+        server.start(executor)
     }
     /**
      * REGISTER 向其它服务节点注册自身

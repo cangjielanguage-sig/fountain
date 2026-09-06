@@ -1,0 +1,33 @@
+[ERROR-fountain::f_net.client.Client]2026/09/06,16:07:48.412098598|233;Client reader error; None
+An exception has occured:
+SocketException: Socket is already closed
+        at std.net.DopraTcpSocketImpl::read(std.core::Array<...>, std.core::Option<...>)(std/net/socket_ffi_cjnative_impl.cj: 435)
+        at std.net.TcpSocket::read(std.core::Array<...>)(std/net/tcp.cj: 302)
+        at fountain::f_net.SocketBuffer::read(std.core::Array<...>)(/mnt/d/docs/work/cangjie/projects/fountain/f_net/src/SocketBuffer.cj: 67)
+        at fountain::f_protocol.default.Message::decode<...>(std.io::InputStream)(/mnt/d/docs/work/cangjie/projects/fountain/f_protocol/src/default/Message.cj: 149)
+        at fountain::f_net.client.Client::init::lambda.0::lambda.0()(/mnt/d/docs/work/cangjie/projects/fountain/f_net/src/client/client.cj: 46)
+[ERROR-fountain::f_net.client.Client]2026/09/06,16:07:49.398229780|240;Client reader error None:None
+An exception has occured:
+SocketException: Socket is already closed
+        at std.net.DopraTcpSocketImpl::read(std.core::Array<...>, std.core::Option<...>)(std/net/socket_ffi_cjnative_impl.cj: 435)
+        at std.net.TcpSocket::read(std.core::Array<...>)(std/net/tcp.cj: 302)
+        at fountain::f_net.SocketBuffer::read(std.core::Array<...>)(/mnt/d/docs/work/cangjie/projects/fountain/f_net/src/SocketBuffer.cj: 67)
+        at fountain::f_protocol.default.Message::decode<...>(std.io::InputStream)(/mnt/d/docs/work/cangjie/projects/fountain/f_protocol/src/default/Message.cj: 149)
+        at fountain::f_net.client.Client::init::lambda.1::new::lambda.0()(/mnt/d/docs/work/cangjie/projects/fountain/f_net/src/client/client.cj: 82)
+[ERROR-fountain::f_net.client.Client]2026/09/06,16:07:50.396582298|246;Client reader error None:None
+An exception has occured:
+SocketException: Socket is already closed
+        at std.net.DopraTcpSocketImpl::read(std.core::Array<...>, std.core::Option<...>)(std/net/socket_ffi_cjnative_impl.cj: 435)
+        at std.net.TcpSocket::read(std.core::Array<...>)(std/net/tcp.cj: 302)
+        at fountain::f_net.SocketBuffer::read(std.core::Array<...>)(/mnt/d/docs/work/cangjie/projects/fountain/f_net/src/SocketBuffer.cj: 67)
+        at fountain::f_protocol.default.Message::decode<...>(std.io::InputStream)(/mnt/d/docs/work/cangjie/projects/fountain/f_protocol/src/default/Message.cj: 149)
+        at fountain::f_net.client.Client::init::lambda.1::new::lambda.0()(/mnt/d/docs/work/cangjie/projects/fountain/f_net/src/client/client.cj: 82)
+[ERROR-fountain::f_net.client.Client]2026/09/06,16:07:50.482661654|252;Client reader error None:None
+An exception has occured:
+SocketException: Failed to read data 104: Connection reset by peer.
+        at std.net.DopraTcpSocketImpl::readImpl(std.core::Array<...>)(std/net/socket_ffi_cjnative_impl.cj: 457)
+        at std.net.DopraTcpSocketImpl::read(std.core::Array<...>, std.core::Option<...>)(std/net/socket_ffi_cjnative_impl.cj: 435)
+        at std.net.TcpSocket::read(std.core::Array<...>)(std/net/tcp.cj: 302)
+        at fountain::f_net.SocketBuffer::read(std.core::Array<...>)(/mnt/d/docs/work/cangjie/projects/fountain/f_net/src/SocketBuffer.cj: 67)
+        at fountain::f_protocol.default.Message::decode<...>(std.io::InputStream)(/mnt/d/docs/work/cangjie/projects/fountain/f_protocol/src/default/Message.cj: 149)
+        at fountain::f_net.client.Client::init::lambda.1::new::lambda.0()(/mnt/d/docs/work/cangjie/projects/fountain/f_net/src/client/client.cj: 82)

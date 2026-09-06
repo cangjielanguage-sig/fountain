@@ -22,20 +22,22 @@ exports(){
     export logger_appender_file=FRPCDemoFile # 这是文件日志记录器的名称，可以任意起名
     export logger_appender_FRPCDemoFile_level=INFO
     export logger_appender_FRPCDemoFile_pattern='[%level-%name]%d{yyyy/MM/dd,HH:mm:ss.SSS}|%tid;%m'
-    export logger_appender_FRPCDemoFile_path=./log/fdemo.log
+    export logger_appender_FRPCDemoFile_path=./log/$2.log
     export logger_appender_FRPCDemoFile_rotateDuration=DAY
     export logger_asyncWaitTimeout=5ms # 异步日志缓冲区等待时间，默认是5毫秒，超过这个时间，本次日志被忽略
+    export rpcServer_baseAddresses=$3
     regexp="_stAtIc__|$1"
     export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:`find ./target/release/* -type d|grep -a -v -P $regexp|tr '\n' ':'`
     echo "LD_LIBRARY_PATH=$LD_LIBRARY_PATH"
 }
 runServer(){
-    exports rpcserver
+    exports rpcserver "frpcdemoserver-$1" $2 # rpcserver是包名
     export rpc_currentSkeleton='fountain::rpcserver'
+    export rpcServer_port=$1
     fboot run $path --dylibPattern='(rpcserver)'
 }
 runClient(){
-    exports rpcclient
+    exports rpcclient frpcdemoclient # rpcclient是包名
     fboot run $path --dylibPattern='(rpcclient)'
 }
 build(){
@@ -51,7 +53,7 @@ runClient)
     runClient
     ;;
 runServer)
-    runServer
+    runServer $2 $3
     ;;
 build)
     build 
