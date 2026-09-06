@@ -19,7 +19,7 @@ import std.collection.TreeMap
 import std.math.Number as StdNumber
 import std.sync.Mutex
 import stdx.crypto.crypto.SecureRandom
-import fountain::f_base.Addable
+import fountain::f_base.{Addable, EmptyIterator}
 import fountain::f_random.*
 import fountain::f_concurrent.exception.LoadBalanceException
 
@@ -111,7 +111,12 @@ public class LoadBalance<W, D, R> where W <: Addable<W> & Comparable<W> {
         func mapper(tpl: (W, (D) -> R)){
             tpl[1]
         }
-        LoadBalanceIterator<D, R>(tree.iterator().map(mapper), tree.forward(algo.next(), inclusive: true).map(mapper))
+        let forward = if(tree.isEmpty()){
+            EmptyIterator<(W, (D) -> R)>.instance()
+        }else{
+            tree.forward(algo.next(), inclusive: true)
+        }
+        LoadBalanceIterator<D, R>(tree.iterator().map(mapper), forward.map(mapper))
     }
 }
 class LoadBalanceIterator<D, R> <: Iterator<(D) -> R> {

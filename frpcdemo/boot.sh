@@ -25,8 +25,8 @@ exports(){
     export logger_appender_FRPCDemoFile_path=./log/fdemo.log
     export logger_appender_FRPCDemoFile_rotateDuration=DAY
     export logger_asyncWaitTimeout=5ms # 异步日志缓冲区等待时间，默认是5毫秒，超过这个时间，本次日志被忽略
-    arg=$1
-    export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:`find ./target/release/* -type d|grep -a -v -P "_stAtIc__|$(arg)"|tr '\n' ':'`
+    regexp="_stAtIc__|$1"
+    export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:`find ./target/release/* -type d|grep -a -v -P $regexp|tr '\n' ':'`
     echo "LD_LIBRARY_PATH=$LD_LIBRARY_PATH"
 }
 runServer(){
