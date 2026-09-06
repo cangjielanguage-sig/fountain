@@ -102,8 +102,11 @@ private func extractParams(params: ArrayList<FuncParam>): (Tokens, Tokens, Token
         argTypes += quote(TypeInfo.of<$(p.paramType)>())
         argValues += quote(let $(p.identifier) = FountainDataConvert<$(p.paramType)>(args[$i].data).getOrThrow())
         argNames += try{
-            p.not
-            quote($(p.identifier): $(p.identifier))
+            if(p.not.kind == TokenKind.ILLEGAL){
+                quote($(p.identifier))
+            }else{
+                quote($(p.identifier): $(p.identifier))
+            }
         }catch(_){
             quote($(p.identifier))
         }

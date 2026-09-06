@@ -82,7 +82,7 @@ private func genStub(exactlyVersion: Bool, version: String, name: String, decl: 
     }catch(_){}
     var funcs = `empty_tokens`
     match(decl){
-        case x: InterfaceDecl => 
+        case x: InterfaceDecl where isPublic(x) => 
             let typeName = x.identifier
             for(d in x.body.decls){
                 if(let f: FuncDecl <- d && !isStatic(f)){
@@ -102,7 +102,7 @@ private func genStub(exactlyVersion: Bool, version: String, name: String, decl: 
                 }
             }
         case x => 
-            diagReport(DiagReportLevel.ERROR, decl.toTokens(), '${x.identifier.value} must be a interface decl', '')
+            diagReport(DiagReportLevel.ERROR, decl.toTokens(), '${x.identifier.value} must be a public interface decl', '')
             throw RPCException()
     }
     let className = Token(IDENTIFIER, '${decl.identifier.value}_Stub__')
