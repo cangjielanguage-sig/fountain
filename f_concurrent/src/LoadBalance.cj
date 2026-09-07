@@ -112,11 +112,11 @@ public class LoadBalance<W, D, R> where W <: Addable<W> & Comparable<W> {
             tpl[1]
         }
         let forward = if(tree.isEmpty()){
-            EmptyIterator<(W, (D) -> R)>.instance()
+            EmptyIterator<(D) -> R>.instance()
         }else{
-            tree.forward(algo.next(), inclusive: true)
+            tree.forward(algo.next(), inclusive: true).map(mapper)
         }
-        LoadBalanceIterator<D, R>(tree.iterator().map(mapper), forward.map(mapper))
+        LoadBalanceIterator<D, R>(tree.iterator().map(mapper), forward)
     }
 }
 class LoadBalanceIterator<D, R> <: Iterator<(D) -> R> {
