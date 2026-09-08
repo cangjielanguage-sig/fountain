@@ -27,7 +27,9 @@ public class RPCClient {
     private static let services = ConcurrentHashMap<ServiceMeta, MultiClient<Float64>>()
     private static let started = AtomicInt8(0)
     static func start(): Unit {
-        if(started.compareAndSwap(0, 1)){
+        if (started.load() == 2) {
+            return
+        } else if (started.compareAndSwap(0, 1)) {
             let clients = ClientConfig.createClient()
             spawn{
                 while(true){
