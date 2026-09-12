@@ -27,8 +27,8 @@ public interface UserDAO <: RootDAO {
     func register(username: String, password: String): Int64 {
         executor.setSql('''
             insert into user_info(
-                        username,
-                        password)
+                        ${UserPO.tableColumns().username},
+                        ${UserPO.tableColumns().password})
                  values(${arg(username)}, 
                         ${arg(password)}) 
             returning id'''
@@ -37,8 +37,8 @@ public interface UserDAO <: RootDAO {
     func changePassword(username: String, password: String): Int64 {
         executor.setSql('''
             update user_info
-               set "password" = ${arg(password)}
-             where username = ${arg(username)}'''
+               set ${UserPO.tableColumns().password} = ${arg(password)}
+             where ${UserPO.tableColumns().username} = ${arg(username)}'''
         ).update
     }
     func findUser(id: Int64): UserPO {

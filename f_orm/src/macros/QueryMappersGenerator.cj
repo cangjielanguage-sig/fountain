@@ -450,7 +450,7 @@ private func generateColumns(name: Tokens, props: ArrayList<PropDecl>, vars: Arr
     func genTokens(identifier: Token){
         let columnName = Token(IDENTIFIER, mapperMetaFn(identifier.value)[1])
         columns += quote(
-            public static prop $columnName: Column {
+            public prop $columnName: Column {
                 get(){
                     Column($(columnName.value))
                 }
