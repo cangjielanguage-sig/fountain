@@ -133,7 +133,8 @@ private func expandQueryMappers(attr: Tokens, declParam: Decl): Tokens {
     if (superTypes.isEmpty()) {
         decl.upperBound = `upperbound`[0]
     }
-    decl.superTypes.add(RefType(quote(QueryMappersObject<$name>)))
+    let (tableColumns, tableColumnsClass) = generateColumns(name, extractMutProps(body), extractVars(body), mapperMetaFn)
+    decl.superTypes.add(RefType(quote(QueryMappersObject<$name, $tableColumns>)))
     let tableName = transformTableName(attr, decl)
     body.add(parseDecl(
             quote(
@@ -163,15 +164,11 @@ private func expandQueryMappers(attr: Tokens, declParam: Decl): Tokens {
             $queryMappersName
         }
     )))
-    let (tableColumns, tableColumnsClass) = generateColumns(name, extractMutProps(body), extractVars(body), mapperMetaFn)
+    
     body.add(parseDecl(
         quote(
-        private static let tAblEcOlUmns__ = $(tableColumns)()
-    )))
-    body.add(parseDecl(
-        quote(
-        public static func tableColumns(): Columns<$name> {
-            tAblEcOlUmns__
+        public static func tableColumns(): $tableColumns {
+            $(tableColumns).instance
         }
     )))
     let tokens = quote(
@@ -444,7 +441,7 @@ private func generateColumns(name: Tokens, props: ArrayList<PropDecl>, vars: Arr
     var columns = quote()
     var toString = quote(
         public func toString(): String {
-            let builder = StringGenerator()
+            let builder = StringGenerator()$(`nl`)
     )
     func genTokens(identifier: Token){
         let columnName = Token(IDENTIFIER, mapperMetaFn(identifier.value)[1])
@@ -455,9 +452,7 @@ private func generateColumns(name: Tokens, props: ArrayList<PropDecl>, vars: Arr
                 }
             }$(`nl`)
         )
-        toString += quote(
-            builder.append($(columnName).AS(super.tableAlias_)).append(',')$(`nl`)
-        )
+        toString += quote(builder.append($(columnName).AS(super.tableAlias_)).append(',')$(`nl`))
     }
     for(p in props){
         genTokens(p.identifier)
@@ -469,8 +464,9 @@ private func generateColumns(name: Tokens, props: ArrayList<PropDecl>, vars: Arr
         return builder.substring(0, builder.size - 1)
     })
     let klass = quote(
-        public class $columnsName <: Columns<$name> {
-            init(){}
+        public class $columnsName <: Columns {
+            static let instance = $columnsName()
+            private init(){}
             $toString
             $columns
         }

@@ -38,10 +38,20 @@ import fountain::f_macros.*
  * 现在的编译器不允许泛型形参出现在静态成员变量的声明当中，所以会编译错误。
  */
 public macro DataAssist(attr: Tokens, input: Tokens): Tokens {
-    assist(attr, input)
+    let (decl, index) = parseDeclFragment(input)
+    let remainder = if(index < input.size){
+        input[index..]
+    }else{
+        `empty_tokens`
+    }
+    let tokens = quote(
+        $(assist(attr, decl))
+        $(remainder)
+    )
+    tokens
 }
-private func assist(attr: Tokens, input: Tokens): Tokens {
-    match (parseDecl(input)) {
+private func assist(attr: Tokens, input: Decl): Tokens {
+    match (input) {
         case d: ClassDecl =>
             let set = HashSet<String>()
             for (t in attr) {
@@ -87,11 +97,11 @@ private func assist(attr: Tokens, input: Tokens): Tokens {
             while(let md: MacroExpandDecl <- ind.macroInputDecl) {
                 ind = md
             }
-            let tokens = assist(attr, ind.macroInputs)
+            let tokens = assist(attr, ind.macroInputDecl)
             ind.macroInputDecl = parseDecl(tokens)
             d.toTokens()
         case _ =>
-            diagReport(ERROR, input, 'input must be class decl', '')
+            diagReport(ERROR, input.toTokens(), 'input must be class decl', '')
             throw IllegalArgumentException("input must be a class decl")
     }
 }

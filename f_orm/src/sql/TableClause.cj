@@ -234,7 +234,7 @@ public class FromClause<T> <: ExceptInsertClause<T> where T <: QueryMappersInit<
     public func first<T>(columns: String): ?T where T <: QueryMappersInit<T> {
         executor.setSql('select ${columns} ${LIMIT(1)}').first<T>()
     }
-    public func first<T>(columns: Columns<T>): ?T where T <: QueryMappersInit<T> {
+    public func first<T>(columns: Columns): ?T where T <: QueryMappersInit<T> {
         first<T>(columns.toString())
     }
     private func columns2string(columns: Array<Column>): String {
@@ -262,7 +262,7 @@ public class FromClause<T> <: ExceptInsertClause<T> where T <: QueryMappersInit<
     public func list<T>(columns: String): ArrayList<T> where T <: QueryMappersInit<T> {
         executor.setSql('select ${columns} ${sqlgen}').list<T>()
     }
-    public func list<T>(columns: Columns<T>): ArrayList<T> where T <: QueryMappersInit<T> {
+    public func list<T>(columns: Columns): ArrayList<T> where T <: QueryMappersInit<T> {
         list<T>(columns.toString())
     }
     public func list<T>(columns: Array<Column>): ArrayList<T> where T <: QueryMappersInit<T> {

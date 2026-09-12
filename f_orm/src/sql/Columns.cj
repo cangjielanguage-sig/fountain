@@ -15,11 +15,11 @@ limitations under the License.
 */
 package fountain::f_orm.sql
 
-public interface QueryMappersObject<T> <: QueryMappersInit<T> where T <: QueryMappersObject<T> {
-    static func tableColumns(): Columns<T>
+public interface QueryMappersObject<T, C> <: QueryMappersInit<T> where C <: Columns, T <: QueryMappersObject<T, C> {
+    static func tableColumns(): C
 }
 
-public abstract class Columns<T> <: RootDAO & ToString {
+public abstract class Columns <: RootDAO & ToString {
     public prop executor: SqlExecutor {
         get(){
             SqlExecutor.getCurrent()
@@ -32,7 +32,7 @@ public abstract class Columns<T> <: RootDAO & ToString {
     }
 }
 
-public abstract class Column <: RootDAO & ToString {
+public class Column <: RootDAO & ToString {
     public Column(private let name: String){}
     public prop executor: SqlExecutor {
         get(){
