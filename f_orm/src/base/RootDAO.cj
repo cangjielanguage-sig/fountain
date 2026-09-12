@@ -401,11 +401,86 @@ public interface RootDAO {
         }
         ' not in ${args} '
     }
+    func LIKE(value: String): String {
+        ' like ${value} '
+    }
+    func LIKE(value: () -> String): String {
+        ' like ${value()} '
+    }
+    func NOT_LIKE(value: String): String {
+        ' not like ${value} '
+    }
+    func NOT_LIKE(value: () -> String): String {
+        ' not like ${value()} '
+    }
+    func BETWEEN(one: String, two: String): String {
+        ' between ${one} and ${two} '
+    }
+    func BETWEEN(one: () -> String, two: () -> String): String {
+        ' between ${one()} and ${two()} '
+    }
     func EXISTS(exists: () -> String): String {
-        ' exists (${exists()}) '
+        ' exists ${paren(exists)} '
     }
     func NOT_EXISTS(notExists: () -> String): String {
-        ' not exists (${notExists()}) '
+        ' not exists ${paren(notExists)} '
+    }
+    func lt(value: String): String {
+        ' < ${value} '
+    }
+    func lt(partial: () -> String): String {
+        ' < ${partial()} '
+    }
+    func gt(value: String): String {
+        ' > ${value} '
+    }
+    func gt(partial: () -> String): String {
+        ' > ${partial()} '
+    }
+    func lte(value: String): String {
+        ' <= ${value} '
+    }
+    func lte(partial: () -> String): String {
+        ' <= ${partial()} '
+    }
+    func gte(value: String): String {
+        ' >= ${value} '
+    }
+    func gte(partial: () -> String): String {
+        ' >= ${partial()} '
+    }
+    func eq(value: String): String {
+        ' = ${value} '
+    }
+    func eq(partial: () -> String): String {
+        ' = ${partial()} '
+    }
+    func neq(value: String): String {
+        ' <> ${value} '
+    }
+    func neq(partial: () -> String): String {
+        ' <> ${partial()} '
+    }
+    func AND(value: String): String {
+        ' and ${value} '
+    }
+    func AND(partial: () -> String): String {
+        ' and ${paren(partial)} '
+    }
+    func OR(value: String): String {
+        ' or ${value} '
+    }
+    func OR(partial: () -> String): String {
+        ' or ${paren(partial)} '
+    }
+    func NOT(value: String): String {
+        ' not ${value} '
+    }
+    func NOT(partial: () -> String): String {
+        ' not ${paren(partial)} '
+    }
+    func paren(partial: () -> String): String {
+        ' (${partial()}) '
     }
     func SET(partial: () -> String): String {
         Condition.SET(partial)

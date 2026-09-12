@@ -52,13 +52,16 @@ import fountain::f_util.CaseFormat
  * 3. 如果没有2. 这种需求，则二者顺序没有要求，但是1. 还需要满足。
  */
 public macro QueryMappersGenerator(input: Tokens): Tokens {
-    expandQueryMappers(quote(), input)
+    let tokens = expandQueryMappers(quote(), input)
+    tokens
 }
 public macro QueryMappersGenerator(attr: Tokens, input: Tokens): Tokens {
-    expandQueryMappers(attr, input)
+    let tokens = expandQueryMappers(attr, input)
+    tokens
 }
 private func expandQueryMappers(attr: Tokens, input: Tokens): Tokens {
-    expandQueryMappers(attr, parseDecl(input))
+    let tokens = expandQueryMappers(attr, parseDecl(input))
+    tokens
 }
 private func expandQueryMappers(attr: Tokens, declParam: Decl): Tokens {
     let decl = match(declParam){
@@ -130,7 +133,7 @@ private func expandQueryMappers(attr: Tokens, declParam: Decl): Tokens {
     if (superTypes.isEmpty()) {
         decl.upperBound = `upperbound`[0]
     }
-    decl.superTypes.add(RefType(quote(QueryMappersInit<$name>)))
+    decl.superTypes.add(RefType(quote(QueryMappersObject<$name>)))
     let tableName = transformTableName(attr, decl)
     body.add(parseDecl(
             quote(
@@ -143,27 +146,40 @@ private func expandQueryMappers(attr: Tokens, declParam: Decl): Tokens {
         }()
     )))
     body.add(parseDecl(
-            quote(
+        quote(
         public static func tableName(): String {
             $tableName
         }
     )))
     body.add(parseDecl(
-            quote(
+        quote(
         public static func isSimpleData(): Bool {
             false
         }
     )))
     body.add(parseDecl(
-            quote(
+        quote(
         public static func queryMappers(): QueryMappers<$name>{
             $queryMappersName
         }
     )))
-    quote(
+    let (tableColumns, tableColumnsClass) = generateColumns(name, extractMutProps(body), extractVars(body), mapperMetaFn)
+    body.add(parseDecl(
+        quote(
+        private static let tAblEcOlUmns__ = $(tableColumns)()
+    )))
+    body.add(parseDecl(
+        quote(
+        public static func tableColumns(): Columns<$name> {
+            tAblEcOlUmns__
+        }
+    )))
+    let tokens = quote(
         $decl
+        $tableColumnsClass
         private let _ = TableMetas.register<$(decl.identifier)>()
     )
+    tokens
 }
 
 func generateMappers(name: Tokens, props: ArrayList<PropDecl>, dirty: Bool, mapperMetaFn: (String) -> (Bool, String, String)): Tokens {
@@ -421,4 +437,43 @@ private func transformTableName(attrs: Tokens, decl: Decl): String {
         case (_, x) => x
     }
     '${tablePrefix}${tableName}${tableSuffix}'
+}
+
+private func generateColumns(name: Tokens, props: ArrayList<PropDecl>, vars: ArrayList<VarDecl>, mapperMetaFn: (String) -> (Bool, String, String)): (Token, Tokens) {
+    let columnsName = Token(IDENTIFIER, name[0].value + "Columns")
+    var columns = quote()
+    var toString = quote(
+        public func toString(): String {
+            let builder = StringGenerator()
+    )
+    func genTokens(identifier: Token){
+        let columnName = Token(IDENTIFIER, mapperMetaFn(identifier.value)[1])
+        columns += quote(
+            public static prop $columnName: Column {
+                get(){
+                    Column($(columnName.value))
+                }
+            }$(`nl`)
+        )
+        toString += quote(
+            builder.append($(columnName).AS(super.tableAlias_)).append(',')$(`nl`)
+        )
+    }
+    for(p in props){
+        genTokens(p.identifier)
+    }
+    for(v in vars){
+        genTokens(v.identifier)
+    }
+    toString += quote(
+        return builder.substring(0, builder.size - 1)
+    })
+    let klass = quote(
+        public class $columnsName <: Columns<$name> {
+            init(){}
+            $toString
+            $columns
+        }
+    )
+    (columnsName, klass)
 }

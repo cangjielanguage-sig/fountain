@@ -21,3 +21,4 @@ internal import fountain::f_base.*
 internal import fountain::f_bean.*
 internal import fountain::f_data.*
 internal import fountain::f_orm.base.*
+internal import fountain::f_orm.sql.*

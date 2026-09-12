@@ -234,8 +234,27 @@ public class FromClause<T> <: ExceptInsertClause<T> where T <: QueryMappersInit<
     public func first<T>(columns: String): ?T where T <: QueryMappersInit<T> {
         executor.setSql('select ${columns} ${LIMIT(1)}').first<T>()
     }
+    public func first<T>(columns: Columns<T>): ?T where T <: QueryMappersInit<T> {
+        first<T>(columns.toString())
+    }
+    private func columns2string(columns: Array<Column>): String {
+        let builder = StringGenerator()
+        for(c in columns){
+            if(builder.size > 0){
+                builder.append(', ')
+            }
+            builder.append(c)
+        }
+        return builder.toString()
+    }
+    public func first<T>(columns: Array<Column>): ?T where T <: QueryMappersInit<T> {
+        first<T>(columns2string(columns))
+    }
     public func singleFirst<T>(column: String): ?T {
         executor.setSql('select ${column} ${LIMIT(1)}').singleFirst<T>()
+    }
+    public func singleFirst<T>(column: Column): ?T {
+        singleFirst<T>(column.toString())
     }
     public func list<T>(): ArrayList<T> where T <: QueryMappersInit<T> {
         executor.setSql('select * ${sqlgen}').list<T>()
@@ -243,11 +262,20 @@ public class FromClause<T> <: ExceptInsertClause<T> where T <: QueryMappersInit<
     public func list<T>(columns: String): ArrayList<T> where T <: QueryMappersInit<T> {
         executor.setSql('select ${columns} ${sqlgen}').list<T>()
     }
+    public func list<T>(columns: Columns<T>): ArrayList<T> where T <: QueryMappersInit<T> {
+        list<T>(columns.toString())
+    }
+    public func list<T>(columns: Array<Column>): ArrayList<T> where T <: QueryMappersInit<T> {
+        list<T>(columns2string(columns))
+    }
     public func singleList<T>(): ArrayList<T> {
         singleList<T>('id')
     }
     public func singleList<T>(column: String): ArrayList<T> {
         executor.setSql('select ${column} ${sqlgen}').singleList<T>()
+    }
+    public func singleList<T>(column: Column): ArrayList<T> {
+        singleList<T>(column.toString())
     }
 
     public func count(): Int64 {

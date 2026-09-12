@@ -54,7 +54,7 @@ extend SqlExecutor <: SqlPartial {
             SqlDialectMediator.instance.getDialect(this.driverName)
         }
     }
-    private func involve(identifier: String){
+    func involve(identifier: String): String {
         dialect.involvedIdentifier(identifier)
     }
     private func involveTable<T>(): String where T <: QueryMappersInit<T> {
