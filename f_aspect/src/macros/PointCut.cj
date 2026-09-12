@@ -40,7 +40,11 @@ public macro Pointcut(input: Tokens): Tokens {
                 throw AspectException()
         }
     }
-    doPointcut(parseDecl(input))
+    let (decl, remainder) = extractFirstDecl(input)
+    quote(
+        $(doPointcut(decl))
+        $remainder
+    )
 }
 func pointcut(decl: FuncDecl): Tokens {
     var tokens = decl.toTokens()

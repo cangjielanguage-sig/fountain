@@ -20,28 +20,34 @@ macro package fountain::f_bean.macros
  * 本宏的属性仅仅用来指定泛型类型的泛型实参，可以使用|分隔指定多组泛型实参。
  */
 public macro Bean(attr: Tokens, input: Tokens): Tokens {
-    let klass = extractClassDecl(input)
-    expandBean(attr, input, klass)
+    expand(attr, input)
 }
 /**
  * 只能修饰类。将@Bean修饰的类注册到BeanFactory。如果不是泛型类型建议使用无属性的@Bean宏
  */
 public macro Bean(input: Tokens): Tokens {
-    let klass = extractClassDecl(input)
-    expandBean(quote(), input, klass)
+    expand(`empty_tokens`, input)
 }
-private func extractClassDecl(input: Tokens): ClassDecl {
-    match(parseDecl(input)){
+private func expand(attr: Tokens, input: Tokens): Tokens {
+    let (decl, remainder) = extractFirstDecl(input)
+    let klass = extractClassDecl(decl)
+    quote(
+        $(expandBean(attr, input, klass))
+        $remainder
+    )
+}
+private func extractClassDecl(input: Decl): ClassDecl {
+    match(input){
         case x: ClassDecl => x
         case x: MacroExpandDecl => 
             match(extract(x)){
                 case x: ClassDecl => x
                 case _ => 
-                    diagReport(ERROR, input, '@Bean modify class decl only', '')
+                    diagReport(ERROR, input.toTokens(), '@Bean modify class decl only', '')
                     throw BeanException()
             }
         case _ => 
-            diagReport(ERROR, input, '@Bean modify class decl only', '')
+            diagReport(ERROR, input.toTokens(), '@Bean modify class decl only', '')
             throw BeanException()
     }
 }

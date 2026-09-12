@@ -44,10 +44,19 @@ public class Column <: RootDAO & ToString {
         alias_ = alias
         return this
     }
+    private var tableAlias_: String = ''
+    public func tableAlias(alias: String): This {
+        tableAlias_ = alias
+        return this
+    }
     public func toString(): String {
         let exe = executor
-        if(alias_.size > 0){
-            return '${exe.involve(alias_)} AS ${exe.involve(name)}'
+        if(alias_.size > 0 && tableAlias_.size > 0){
+            return '${exe.involve(tableAlias_)}.${exe.involve(name)} AS ${exe.involve(alias_)}'
+        }else if(alias_.size > 0){
+            return '${exe.involve(name)} AS ${exe.involve(alias_)}'
+        }else if(tableAlias_.size > 0){
+            return '${exe.involve(tableAlias_)}.${exe.involve(name)}'
         }
         return exe.involve(name)
     }

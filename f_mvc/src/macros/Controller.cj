@@ -55,7 +55,11 @@ public macro WeavedController(attr: Tokens, input: Tokens): Tokens {
 }
 
 private func generate(input: Tokens): Tokens {
-    generate(parseDecl(input))
+    let (decl, remainder) = extractFirstDecl(input)
+    quote(
+        $(generate(decl))
+        $remainder
+    )
 }
 private func generate(input: Decl): Tokens {
     let decl = match(input){

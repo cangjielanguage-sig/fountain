@@ -60,8 +60,12 @@ public macro QueryMappersGenerator(attr: Tokens, input: Tokens): Tokens {
     tokens
 }
 private func expandQueryMappers(attr: Tokens, input: Tokens): Tokens {
-    let tokens = expandQueryMappers(attr, parseDecl(input))
-    tokens
+    let (decl, remainder) = extractFirstDecl(input)
+    let tokens = expandQueryMappers(attr, decl)
+    quote(
+        $tokens
+        $remainder
+    )
 }
 private func expandQueryMappers(attr: Tokens, declParam: Decl): Tokens {
     let decl = match(declParam){
@@ -452,7 +456,7 @@ private func generateColumns(name: Tokens, props: ArrayList<PropDecl>, vars: Arr
                 }
             }$(`nl`)
         )
-        toString += quote(builder.append($(columnName).AS(super.tableAlias_)).append(',')$(`nl`))
+        toString += quote(builder.append($(columnName).tableAlias(super.tableAlias_)).append(',')$(`nl`))
     }
     for(p in props){
         genTokens(p.identifier)
