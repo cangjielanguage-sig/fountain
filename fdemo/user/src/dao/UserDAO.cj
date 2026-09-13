@@ -42,11 +42,12 @@ public interface UserDAO <: RootDAO {
         ).update
     }
     func findUser(id: Int64): UserPO {
-        executor.setSql('''
-            select * 
-              from user_info
-             where id = ${arg(id)}'''
-        ).first<UserPO>().getOrThrow()
+        // executor.setSql('''
+        //     select * 
+        //       from user_info
+        //      where id = ${arg(id)}'''
+        // ).first<UserPO>().getOrThrow()
+        executor.FROM<UserPO>().WHERE{return UserPO.tableColumns().id.eq(id)}.first<UserPO>().getOrThrow()
     }
     
     func findUserToMap(id: Int64): Map<String, Any> {

@@ -97,4 +97,10 @@ public class Column <: ToString {
     public func NOT_BETWEEN(arg: Any): LogicalExpr {
         BetweenExpr(this, CmpOp.NOT_BETWEEN, arg)
     }
+    public func IS_NULL(): LogicalExpr {
+        NullExpr(this, CmpOp.IS_NULL)
+    }
+    public func IS_NOT_NULL(): LogicalExpr {
+        NullExpr(this, CmpOp.IS_NOT_NULL)
+    }
 }

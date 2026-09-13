@@ -994,6 +994,62 @@ public class SqlExecutor <: Resource & RootDAO {
 }
 ```
 
+## sql dsl
+
+```cj
+import fountain::f_data.*
+import fountain::f_data.macros.*
+import fountain::f_orm.*
+import fountain::f_orm.macros.*
+
+@DataAssist[fields tostring]
+@QueryMappersGenerator[table: user_info dirty]
+public class UserPO {
+    @ORMField[true 'id']
+    private var id: Int64 = 0
+    @ORMField['username']
+    private var username: String = ''
+    @ORMField['password']
+    private var password: String = ''
+    @ORMField['save_time']
+    private var saveTime: ?DateTime = None<DateTime>
+}
+```
+```cj
+// 以下代码假设是一个DAO接口函数
+// WHERE 接收一个对象实参的，生成的逻辑表达式不被括号包含
+let user: UserPO = executor.FROM<UserPO>().WHERE(UserPO.tableColumns().id.eq(100)).first<UserPO>().getOrThrow()
+return user
+```
+```cj
+// WHERE 接收一个lambda的，生成的逻辑表达式被括号包含
+// 编译器BUG，WHERE的闭包必须明确return，否则会被编译器判定为函数调用模糊
+// 除了FROM函数，还有相同泛型约束的UPDATE函数。
+let user: UserPO = executor.FROM<UserPO>().WHERE{return UserPO.tableColumns().id.eq(100)}.first<UserPO>().getOrThrow()
+return user
+```
+```cj
+// AND 是fountain::f_orm.sql.RootDAO的成员，同样还有OR NOT函数，
+// AND OR NOT 跟WHERE一样，接收对象实参参的，生成的逻辑表达式不被括号包含，接收lambda的，生成的逻辑表达式被括号包含
+// AND OR NOT 接收的参数可以嵌套其他AND OR NOT函数调用
+func findUser(username: String, password: String): UserPO {
+    let user: UserPO = executor.FROM<UserPO>().WHERE{return AND([UserPO.tableColumns().username.eq(username), UserPO.tableColumns().password.eq(password)])}.first<UserPO>().getOrThrow()
+    return user
+}
+// NOT 只接收一个逻辑表达式参数
+func findUser(username: String, password: String): ArrayList<UserPO> {
+    let list = executor.FROM<UserPO>().WHERE{NOT(UserPO.tableColumns().username.eq(username))}.list<UserPO>()
+    return list
+}
+func findOrders(username: String): ArrayList<OrderPO> {
+    let orders = executor.FROM<OrderPO>(AS: 'u').INNER_JOIN<UserPO>(AS: 'o', ON: {=> UserPO.tableColumns().id.eq(OrderPO.tableColumns().userId)})
+                 .WHERE(UserPO.tableColumns().username.eq(username)).list<OrderPO>()
+    orders
+}
+```
+### 支持的比较函数
+`UserPO.tableColumns()`返回的是`fountain::f_orm.sql.Columns`实例，`Columns`的成员包含映射类型用映射的表列名命名的实例属性，属性类型是`fountain::f_orm.sql.Column`。
+`Column`支持各种比较函数，`lt` `gt` `lte` `gte` `eq` `neq` `IN` `NOT_IN` `BETWEEN` `NOT_BETWEEN` `LIKE` `NOT_LIKE` `IS_NULL` `IS_NOT_NULL`。
 
 ## 数据库表变更
 

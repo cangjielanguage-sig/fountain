@@ -65,16 +65,22 @@ public open class CmpExpr <: RootDAO & LogicalExpr {
         match(op){
             case BETWEEN | NOT_BETWEEN => 
                 match(value){
-                    case x: Array<Any> => ' ${column} ${op} ${arg(x[0])} AND ${arg(x[1])} '
+                    case x: Array<Any> => 
+                        match((x[0], x[1])){
+                            case (x: Column, y: Column) => ' ${column} ${op} ${x} AND ${y} '
+                            case _ => ' ${column} ${op} ${arg(x[0])} AND ${arg(x[1])} '
+                        }
                     case _ => throw SqlArgException('value must be Array<Any> for BETWEEN or NOT_BETWEEN')
                 }
             case IN | NOT_IN =>
                 match(value){
                     case x: Collection<Any> => ' ${column} ${op} (${arg(x)}) '
+                    case x: Column => ' ${column} ${op} ${x} '
                     case _ => throw SqlArgException('value must be Collection<Any> for IN or NOT_IN')
                 }
-            case _ =>
-                '${column} ${op} ${arg(value)}'
+            case IS_NULL | IS_NOT_NULL => ' ${column} ${op} '
+            case x: Column => ' ${column} ${op} ${x} '
+            case _ => '${column} ${op} ${arg(value)}'
         }
     }
 }
@@ -96,6 +102,17 @@ public class InExpr <: CmpExpr {
             case IN | NOT_IN => ()
             case _ => throw SqlArgException('op must be IN or NOT_IN')
         }
+    }
+}
+
+public class NullExpr <: CmpExpr {
+    init(column: Column, op: CmpOp){
+        super(column, op, Option<Any>.None)
+        match(op){
+            case IS_NULL | IS_NOT_NULL => ()
+            case _ => throw SqlArgException('op must be IS_NULL or IS_NOT_NULL')
+        }
+
     }
 }
 

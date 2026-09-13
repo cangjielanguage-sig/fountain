@@ -18,7 +18,7 @@ package fountain::f_orm.sql
 public interface SqlPartial <: RootDAO {
     func INTO<T>(ignoreColumns!: Array<String>): IntoClause<T> where T <: QueryMappersInit<T>
     func INTO<T>(values: T, ignoreColumns!: Array<String>): Int64 where T <: QueryMappersInit<T> & ObjectData<T>
-    func UPDATE<T>(): UpdateClause<T> where T <: QueryMappersInit<T>
+    func UPDATE<T>(AS!: String): UpdateClause<T> where T <: QueryMappersInit<T>
     /**
      * map的key可以是列名或T的公共实例成员名，values必须包含主键键值对
      */
@@ -32,7 +32,7 @@ public interface SqlPartial <: RootDAO {
      * ignoredColumns/includingColumns可以指定values的公共成员或对应的列名，两个参数要么都不指定，要么只指定一个，都指定会抛异常
      */
     func UPDATE<T>(values: T, ignoredColumns!: Array<String>, includingColumns!: Array<String>): Int64 where T <: QueryMappersInit<T> & ObjectData<T>
-    func FROM<T>(): FromClause<T> where T <: QueryMappersInit<T>
+    func FROM<T>(AS!: String): FromClause<T> where T <: QueryMappersInit<T>
     func page<R>(sql: String, size: Int64, page!: Int64): Pagination<R> where R <: QueryMappersInit<R> & DataFields<R>
     func singlePage<R>(sql: String, size: Int64, page!: Int64): Pagination<R> where R <: DataFields<R> {
         singlePage<R>(sql, 0, size, page: page)
@@ -66,8 +66,8 @@ extend SqlExecutor <: SqlPartial {
     public func INTO<T>(values: T, ignoreColumns!: Array<String>): Int64 where T <: QueryMappersInit<T> & ObjectData<T> {
         INTO<T>(ignoreColumns: ignoreColumns).VALUES<T>(values).execute()
     }
-    public func UPDATE<T>(): UpdateClause<T> where T <: QueryMappersInit<T> {
-        UpdateClause<T>(this)
+    public func UPDATE<T>(AS!: String = ''): UpdateClause<T> where T <: QueryMappersInit<T> {
+        UpdateClause<T>(this, AS)
     }
     public func UPDATE<T>(values: Map<String, Any>): Int64 where T <: QueryMappersInit<T> {
         if(values.isEmpty()){
@@ -196,8 +196,8 @@ extend SqlExecutor <: SqlPartial {
             UPDATE<T>(values, ignoredColumns: HashSet<String>())
         }
     }
-    public func FROM<T>(): FromClause<T> where T <: QueryMappersInit<T> {
-        FromClause<T>(this)
+    public func FROM<T>(AS!: String = ''): FromClause<T> where T <: QueryMappersInit<T> {
+        FromClause<T>(this, AS)
     }
     private func selectPage<R>(partial: String, size: Int64, page: Int64, callee: (SqlExecutor) -> ArrayList<R>): Pagination<R> where R <: DataFields<R> {
         if (let partial_ <- partial.trimAsciiStart() && 

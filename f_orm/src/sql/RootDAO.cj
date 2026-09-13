@@ -35,3 +35,4 @@ public interface RootDAO <: BaseDAO {
         RelationExpr(RelationOp.NOT, [exprs()], true)
     }
 }
+extend SqlExecutor <: RootDAO {}

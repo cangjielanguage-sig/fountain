@@ -214,8 +214,8 @@ public abstract class ExceptInsertClause<T> <: TableClause<T> where T <: QueryMa
 }
 
 public class FromClause<T> <: ExceptInsertClause<T> where T <: QueryMappersInit<T> {
-    init(executor: SqlExecutor) {
-        super(' from ${T.tableName()} ', executor)
+    init(executor: SqlExecutor, AS: String) {
+        super(' from ${T.tableName()}${if(AS.size == 0){''}else{' AS ${AS} '}}', executor)
     }
     public func DELETE(): Int64 {
         DELETE('')
@@ -332,8 +332,8 @@ public class FromClause<T> <: ExceptInsertClause<T> where T <: QueryMappersInit<
 }
 
 public class UpdateClause<T> <: ExceptInsertClause<T> where T <: QueryMappersInit<T> {
-    init(executor: SqlExecutor) {
-        super('update ${T.tableName()} ', executor)
+    init(executor: SqlExecutor, AS: String) {
+        super('update ${T.tableName()}${if(AS.size == 0){''}else{' AS ${AS} '}} ', executor)
     }
     public func SET(set: () -> String): This {
         appendPartial('set', ',', set())
