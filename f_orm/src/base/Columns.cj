@@ -85,10 +85,10 @@ public class Column <: ToString & Hashable & Equatable<Column> {
     public func gte(arg: Any): LogicalExpr {
         CmpExpr(this, GTE, arg)
     }
-    public func IN(arg: Any): LogicalExpr {
+    public func IN(arg: Array<Any>): LogicalExpr {
         CmpExpr(this, CmpOp.IN, arg)
     }
-    public func NOT_INT(arg: Any): LogicalExpr {
+    public func NOT_IN(arg: Array<Any>): LogicalExpr {
         CmpExpr(this, NOT_IN, arg)
     }
     public func LIKE(arg: Any): LogicalExpr {
@@ -97,11 +97,11 @@ public class Column <: ToString & Hashable & Equatable<Column> {
     public func NOT_LIKE(arg: Any): LogicalExpr {
         CmpExpr(this, CmpOp.NOT_LIKE, arg)
     }
-    public func BETWEEN(arg: Array<Any>): LogicalExpr {
-        BetweenExpr(this, CmpOp.BETWEEN, arg)
+    public func BETWEEN(one: Any, two: Any): LogicalExpr {
+        BetweenExpr(this, CmpOp.BETWEEN, [one, two])
     }
-    public func NOT_BETWEEN(arg: Any): LogicalExpr {
-        BetweenExpr(this, CmpOp.NOT_BETWEEN, arg)
+    public func NOT_BETWEEN(one: Any, two: Any): LogicalExpr {
+        BetweenExpr(this, CmpOp.NOT_BETWEEN, [one, two])
     }
     public func IS_NULL(): LogicalExpr {
         NullExpr(this, CmpOp.IS_NULL)
