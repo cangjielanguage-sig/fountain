@@ -19,8 +19,8 @@ public interface QueryMappersObject<T, C> <: QueryMappersInit<T> where C <: Colu
     static func tableColumns(): C
 }
 
-public abstract class Columns <: RootDAO & ToString {
-    public prop executor: SqlExecutor {
+public abstract class Columns <: ToString {
+    private prop executor: SqlExecutor {
         get(){
             SqlExecutor.getCurrent()
         }
@@ -32,9 +32,9 @@ public abstract class Columns <: RootDAO & ToString {
     }
 }
 
-public class Column <: RootDAO & ToString {
+public class Column <: ToString {
     public Column(private let name: String){}
-    public prop executor: SqlExecutor {
+    private prop executor: SqlExecutor {
         get(){
             SqlExecutor.getCurrent()
         }
@@ -61,4 +61,40 @@ public class Column <: RootDAO & ToString {
         return exe.involve(name)
     }
 
+    public func eq(arg: Any): LogicalExpr {
+        CmpExpr(this, EQ, arg)
+    }
+    public func neq(arg: Any): LogicalExpr {
+        CmpExpr(this, NEQ, arg)
+    }
+    public func lt(arg: Any): LogicalExpr {
+        CmpExpr(this, LT, arg)
+    }
+    public func gt(arg: Any): LogicalExpr {
+        CmpExpr(this, GT, arg)
+    }
+    public func lte(arg: Any): LogicalExpr {
+        CmpExpr(this, LTE, arg)
+    }
+    public func gte(arg: Any): LogicalExpr {
+        CmpExpr(this, GTE, arg)
+    }
+    public func IN(arg: Any): LogicalExpr {
+        CmpExpr(this, CmpOp.IN, arg)
+    }
+    public func NOT_INT(arg: Any): LogicalExpr {
+        CmpExpr(this, NOT_IN, arg)
+    }
+    public func LIKE(arg: Any): LogicalExpr {
+        CmpExpr(this, CmpOp.LIKE, arg)
+    }
+    public func NOT_LIKE(arg: Any): LogicalExpr {
+        CmpExpr(this, CmpOp.NOT_LIKE, arg)
+    }
+    public func BETWEEN(arg: Array<Any>): LogicalExpr {
+        BetweenExpr(this, CmpOp.BETWEEN, arg)
+    }
+    public func NOT_BETWEEN(arg: Any): LogicalExpr {
+        BetweenExpr(this, CmpOp.NOT_BETWEEN, arg)
+    }
 }

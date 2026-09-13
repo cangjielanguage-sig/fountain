@@ -171,6 +171,7 @@ struct SqlDialectMediator {
     private init(){}
     public static let instance = SqlDialectMediator()
 
+
     func getDialect(dialect: String): SqlDialect {
         if(dialects.isEmpty()){
             for(dialect in lookupList<SqlDialect>()){

@@ -93,6 +93,31 @@ public abstract class ExceptInsertClause<T> <: TableClause<T> where T <: QueryMa
     public func FULL_JOIN<T>(AS!: String = '', ON!: String = ''): This where T <: QueryMappersInit<T> {
         join<T>('full outer', AS, ON)
     }
+    public func INNER_JOIN<T>(AS!: String = '', ON!: LogicalExpr): This where T <: QueryMappersInit<T> {
+        INNER_JOIN<T>(AS: AS, ON: ON.toString())
+    }
+    public func INNER_JOIN<T>(AS!: String = '', ON!: () -> LogicalExpr): This where T <: QueryMappersInit<T> {
+        INNER_JOIN<T>(AS: AS, ON: ParenExpr(ON()))
+    }
+    public func LEFT_JOIN<T>(AS!: String = '', ON!: LogicalExpr): This where T <: QueryMappersInit<T> {
+        LEFT_JOIN<T>(AS: AS, ON: ON.toString())
+    }
+    public func LEFT_JOIN<T>(AS!: String = '', ON!: () -> LogicalExpr): This where T <: QueryMappersInit<T> {
+        LEFT_JOIN<T>(AS: AS, ON: ParenExpr(ON()))
+    }
+    public func RIGHT_JOIN<T>(AS!: String = '', ON!: LogicalExpr): This where T <: QueryMappersInit<T> {
+        RIGHT_JOIN<T>(AS: AS, ON: ON.toString())
+    }
+    public func RIGHT_JOIN<T>(AS!: String = '', ON!: () -> LogicalExpr): This where T <: QueryMappersInit<T> {
+        RIGHT_JOIN<T>(AS: AS, ON: ParenExpr(ON()))
+    }
+    
+    public func FULL_JOIN<T>(AS!: String = '', ON!: LogicalExpr): This where T <: QueryMappersInit<T> {
+        FULL_JOIN<T>(AS: AS, ON: ON.toString())
+    }
+    public func FULL_JOIN<T>(AS!: String = '', ON!: () -> LogicalExpr): This where T <: QueryMappersInit<T> {
+        FULL_JOIN<T>(AS: AS, ON: ParenExpr(ON()))
+    }
     protected func condition(cond: () -> Unit, keyword: String, trim: String): This {
         try{
             executor.partials.clear()
@@ -111,6 +136,12 @@ public abstract class ExceptInsertClause<T> <: TableClause<T> where T <: QueryMa
     }
     public func WHERE(condition: String): This {
         appendPartial('where', 'and|or', condition)//这个不能用this.condition
+    }
+    public func WHERE(condition: LogicalExpr): This {
+        WHERE(condition.toString())
+    }
+    public func WHERE(condition: () -> LogicalExpr): This {
+        WHERE(ParenExpr(condition()))
     }
     public func AND(condition: () -> Unit): This {
         this.condition(condition, 'and', 'and|or')

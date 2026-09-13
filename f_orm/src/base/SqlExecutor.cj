@@ -38,7 +38,7 @@ public class SqlCacheKey <: Hashable & Equatable<SqlCacheKey> & ToString {
     }
 }
 
-public class SqlExecutor <: Resource & RootDAO {
+public class SqlExecutor <: Resource & BaseDAO {
     private static let logger = LoggerFactory.getLogger<SqlExecutor>()
     private static let blankRegex = Regex(#"\s{2,}"#)
     private static let currents = ThreadLocal<HashMap<String, SqlExecutor>>()
