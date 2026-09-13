@@ -27,14 +27,14 @@ public interface RootService {
     func executor(): SqlExecutor {
         ORM.executor()
     }
-    func dao<T>(driver: String): T where T <: BaseDAO {
+    func dao<T>(driver: String): T where T <: RootDAO {
         if(let x: T <- executor(driver)){
             x
         }else{
             throw ORMException('${TypeInfo.of<T>()} is not extended to SqlExecutor')
         }
     }
-    func dao<T>(): T where T <: BaseDAO {
+    func dao<T>(): T where T <: RootDAO {
         if(let x: T <- executor()) {
             x
         }else{

@@ -25,7 +25,7 @@ import fountain::f_data.*
 /**
  * 所有的DAO接口都要继承本接口
  */
-public interface BaseDAO {
+public interface RootDAO {
     /**
      * 本接口函数不必实现，所有DAO都是SqlExecutor的扩展，SqlExecutor已经提供了相同声明的属性，
      * 且SqlExecutor已经实现本接口，故任意DAO接口可以直接调用本属性
@@ -369,6 +369,32 @@ public interface BaseDAO {
         executor.partials.append(sql)
         sql
     }
+    func meet(condition: Bool, partial: () -> LogicalExpr): LogicalExpr {
+        if(condition){
+            partial()
+        }else{
+            EmptyExpr()
+        }
+    }
+    func meet(pairs: Array<(() -> Bool, () -> LogicalExpr)>): LogicalExpr {
+        for(pair in pairs where pair[0]()){
+            return pair[1]()
+        }
+        EmptyExpr()
+    }
+    func meet(condition: Bool, partial: () -> Array<LogicalExpr>): LogicalExpr {
+        if(condition){
+            CommaExpr(partial())
+        }else{
+            EmptyExpr()
+        }
+    }
+    func meet(pairs: Array<(() -> Bool, () -> Array<LogicalExpr>)>): LogicalExpr {
+        for(pair in pairs where pair[0]()){
+            return CommaExpr(pair[1]())
+        }
+        EmptyExpr()
+    }
     func meet(condition: Bool, partial: String): MeetCondition {
         MeetCondition(condition, partial, executor)
     }
@@ -445,6 +471,24 @@ public interface BaseDAO {
     }
     func paren(partial: () -> String): String {
         ' (${partial()}) '
+    }
+    func AND(exprs: Array<LogicalExpr>): LogicalExpr {
+        RelationExpr(RelationOp.AND, exprs)
+    }
+    func AND(exprs: () -> Array<LogicalExpr>): LogicalExpr {
+        ParenExpr(RelationExpr(RelationOp.AND, exprs()))
+    }
+    func OR(exprs: Array<LogicalExpr>): LogicalExpr {
+        RelationExpr(RelationOp.OR, exprs)
+    }
+    func OR(exprs: () -> Array<LogicalExpr>): LogicalExpr {
+        ParenExpr(RelationExpr(RelationOp.OR, exprs()))
+    }
+    func NOT(exprs: LogicalExpr): LogicalExpr {
+        RelationExpr(RelationOp.NOT, [exprs])
+    }
+    func NOT(exprs: () -> LogicalExpr): LogicalExpr {
+        ParenExpr(RelationExpr(RelationOp.NOT, [exprs()]))
     }
     func SET(partial: () -> String): String {
         Condition.SET(partial)

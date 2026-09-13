@@ -13,13 +13,13 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package fountain::f_orm.sql
+package fountain::f_orm.base
 
 public interface QueryMappersObject<T, C> <: QueryMappersInit<T> where C <: Columns, T <: QueryMappersObject<T, C> {
     static func tableColumns(): C
 }
 
-public abstract class Columns <: ToString {
+public abstract class Columns <: ToString & Iterable<Column> {
     private prop executor: SqlExecutor {
         get(){
             SqlExecutor.getCurrent()
@@ -32,12 +32,18 @@ public abstract class Columns <: ToString {
     }
 }
 
-public class Column <: ToString {
+public class Column <: ToString & Hashable & Equatable<Column> {
     public Column(private let name: String){}
     private prop executor: SqlExecutor {
         get(){
             SqlExecutor.getCurrent()
         }
+    }
+    public func hashCode(): Int64 {
+        name.hashCode()
+    }
+    public operator func ==(other: Column): Bool {
+        name == other.name
     }
     private var alias_: String = ''
     public func AS(alias: String): This {

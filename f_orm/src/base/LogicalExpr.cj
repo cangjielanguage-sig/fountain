@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package fountain::f_orm.sql
+package fountain::f_orm.base
 
 public enum CmpOp <: ToString{
     | EQ
@@ -50,6 +50,12 @@ public enum CmpOp <: ToString{
     }
 }
 public interface LogicalExpr <: ToString {}
+public struct EmptyExpr <: LogicalExpr {
+    init(){}
+    public func toString(): String {
+        ''
+    }
+}
 public open class CmpExpr <: RootDAO & LogicalExpr {
     CmpExpr(
         private let column: Column,
@@ -131,34 +137,24 @@ public enum RelationOp <: ToString {
 public class RelationExpr <: LogicalExpr & ToString {
     RelationExpr(
         private let op: RelationOp,
-        private let exprs: Array<LogicalExpr>,
-        private let paren: Bool
+        private let exprs: Array<LogicalExpr>
     ){}
     public func toString(): String {
-        let builder = StringBuilder()
-        let ss = if(paren){
-            builder.append('(')
-            1
-        }else{
-            0
-        }
+        let builder = StringGenerator()
         if(let NOT <- op){
             builder.append(op)
             if(exprs.size > 1){
                 throw SqlArgException('NOT only support one expr')
             }else{
-                builder.append(exprs[0])
+                builder.append('(').append(exprs[0]).append(')')
             }
         }else{
             for(expr in exprs){
-                if(builder.size > ss){
+                if(builder.size > 0){
                     builder.append(op)
                 }
                 builder.append(expr)
             }
-        }
-        if(paren){
-            builder.append(')')
         }
         return builder.toString()
     }
@@ -167,5 +163,18 @@ public class ParenExpr <: LogicalExpr & ToString {
     ParenExpr(private let expr: LogicalExpr){}
     public func toString(): String {
         return '(${expr})'
+    }
+}
+public class CommaExpr <: LogicalExpr & ToString {
+    CommaExpr(private let exprs: Array<LogicalExpr>){}
+    public func toString(): String {
+        let builder = StringBuilder()
+        for(expr in exprs){
+            if(builder.size > 0){
+                builder.append(',')
+            }
+            builder.append(expr)
+        }
+        return builder.toString()
     }
 }

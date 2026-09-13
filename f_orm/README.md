@@ -1046,10 +1046,43 @@ func findOrders(username: String): ArrayList<OrderPO> {
                  .WHERE(UserPO.tableColumns().username.eq(username)).list<OrderPO>()
     orders
 }
+func updatePassword(username: String, password: String): Int64 {
+    executor.UPDATE<UserPO>().SET([UserPO.tableColumns().password.eq(password)]).WHERE(UserPO.tableColumns().username.eq(username)).execute()
+    //executor.UPDATE<UserPO>().SET{[UserPO.tableColumns().password.eq(password)]}.WHERE(UserPO.tableColumns().username.eq(username)).execute()
+}
 ```
+
 ### 支持的比较函数
 `UserPO.tableColumns()`返回的是`fountain::f_orm.sql.Columns`实例，`Columns`的成员包含映射类型用映射的表列名命名的实例属性，属性类型是`fountain::f_orm.sql.Column`。
 `Column`支持各种比较函数，`lt` `gt` `lte` `gte` `eq` `neq` `IN` `NOT_IN` `BETWEEN` `NOT_BETWEEN` `LIKE` `NOT_LIKE` `IS_NULL` `IS_NOT_NULL`。
+
+### 条件函数
+逻辑表达式支持以下条件函数
+```cj
+// condition为true时返回partial的结果，可以用于WHERE和ON子句。
+// 如果condition为false则返回空的逻辑表达式EmptyExpr()，EmptyExpr的toString()返回空串
+func meet(condition: Bool, partial: () -> LogicalExpr): LogicalExpr
+// 任意一个元组的第一个元素返回true时，返回元组第二个元素的结果，如果没有任何()->Bool返回true则返回空的逻辑表达式EmptyExpr()。
+func meet(pairs: Array<(() -> Bool, () -> LogicalExpr)>): LogicalExpr
+
+// condition为true时将partial的结果包装为CommaExpr，否则返回空的逻辑表达式EmptyExpr()。
+// 可以用于SET子句
+func meet(condition: Bool, partial: () -> Array<LogicalExpr>): LogicalExpr
+// 任意一个元组的第一个元素返回true时，将元组第二个元素结果包装为CommaExpr，否则返回空的逻辑表达式EmptyExpr()。
+func meet(pairs: Array<(() -> Bool, () -> Array<LogicalExpr>)>): LogicalExpr
+```
+
+### 逻辑函数
+```cj
+//闭包参数的函数会用括号包含返回的逻辑表达式
+//AND OR 函数参数每个逻辑表达式都会用AND|OR分隔
+func AND(exprs: Array<LogicalExpr>): LogicalExpr
+func AND(exprs: () -> Array<LogicalExpr>): LogicalExpr
+func OR(exprs: Array<LogicalExpr>): LogicalExpr
+func OR(exprs: () -> Array<LogicalExpr>): LogicalExpr
+func NOT(exprs: LogicalExpr): LogicalExpr
+func NOT(exprs: () -> LogicalExpr): LogicalExpr
+```
 
 ## 数据库表变更
 

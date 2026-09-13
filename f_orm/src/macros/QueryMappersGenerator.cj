@@ -447,6 +447,10 @@ private func generateColumns(name: Tokens, props: ArrayList<PropDecl>, vars: Arr
         public func toString(): String {
             let builder = StringGenerator()$(`nl`)
     )
+    var iterator = quote(
+        public func iterator(): Iterator<Column> {
+            [
+    )
     func genTokens(identifier: Token){
         let columnName = Token(IDENTIFIER, mapperMetaFn(identifier.value)[1])
         columns += quote(
@@ -457,6 +461,7 @@ private func generateColumns(name: Tokens, props: ArrayList<PropDecl>, vars: Arr
             }$(`nl`)
         )
         toString += quote(builder.append($(columnName).tableAlias(super.tableAlias_)).append(',')$(`nl`))
+        iterator += quote($(columnName),)
     }
     for(p in props){
         genTokens(p.identifier)
@@ -467,11 +472,15 @@ private func generateColumns(name: Tokens, props: ArrayList<PropDecl>, vars: Arr
     toString += quote(
         return builder.substring(0, builder.size - 1)
     })
+    iterator = quote(
+        $(iterator[0..iterator.size - 1])].iterator()
+    })
     let klass = quote(
         public class $columnsName <: Columns {
             static let instance = $columnsName()
             private init(){}
             $toString
+            $iterator
             $columns
         }
     )
