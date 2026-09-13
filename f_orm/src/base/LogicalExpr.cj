@@ -73,20 +73,20 @@ public open class CmpExpr <: RootDAO & LogicalExpr {
                 match(value){
                     case x: Array<Any> => 
                         match((x[0], x[1])){
-                            case (x: Column, y: Column) => ' ${column} ${op} ${x} AND ${y} '
-                            case _ => ' ${column} ${op} ${arg(x[0])} AND ${arg(x[1])} '
+                            case (x: Column, y: Column) => ' ${column.name} ${op} ${x} AND ${y} '
+                            case _ => ' ${column.name} ${op} ${arg(x[0])} AND ${arg(x[1])} '
                         }
                     case _ => throw SqlArgException('value must be Array<Any> for BETWEEN or NOT_BETWEEN')
                 }
             case IN | NOT_IN =>
                 match(value){
-                    case x: Collection<Any> => ' ${column} ${op} (${arg<Collection<Any>, Any>(x)}) '
-                    case x: Column => ' ${column} ${op} (${x}) '
+                    case x: Collection<Any> => ' ${column.name} ${op} (${arg<Collection<Any>, Any>(x)}) '
+                    case x: Column => ' ${column.name} ${op} (${x}) '
                     case _ => throw SqlArgException('value must be Collection<Any> for IN or NOT_IN')
                 }
-            case IS_NULL | IS_NOT_NULL => ' ${column} ${op} '
-            case x: Column => ' ${column} ${op} ${x} '
-            case _ => '${column} ${op} ${arg(value)}'
+            case IS_NULL | IS_NOT_NULL => ' ${column.name} ${op} '
+            case x: Column => ' ${column.name} ${op} ${x} '
+            case _ => '${column.name} ${op} ${arg(value)}'
         }
     }
 }

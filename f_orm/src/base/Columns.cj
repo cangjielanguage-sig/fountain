@@ -33,7 +33,7 @@ public abstract class Columns <: ToString & Iterable<Column> {
 }
 
 public class Column <: ToString & Hashable & Equatable<Column> {
-    public Column(private let name: String){}
+    public Column(let name: String){}
     private prop executor: SqlExecutor {
         get(){
             SqlExecutor.getCurrent()
@@ -89,7 +89,7 @@ public class Column <: ToString & Hashable & Equatable<Column> {
         CmpExpr(this, CmpOp.IN, arg)
     }
     public func NOT_IN(arg: Array<Any>): LogicalExpr {
-        CmpExpr(this, NOT_IN, arg)
+        CmpExpr(this, CmpOp.NOT_IN, arg)
     }
     public func LIKE(arg: Any): LogicalExpr {
         CmpExpr(this, CmpOp.LIKE, arg)
