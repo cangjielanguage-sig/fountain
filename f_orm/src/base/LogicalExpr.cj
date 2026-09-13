@@ -80,7 +80,7 @@ public open class CmpExpr <: RootDAO & LogicalExpr {
                 }
             case IN | NOT_IN =>
                 match(value){
-                    case x: Collection<Any> => ' ${column} ${op} (${arg(x)}) '
+                    case x: Collection<Any> => ' ${column} ${op} (${arg<Collection<Any>, Any>(x)}) '
                     case x: Column => ' ${column} ${op} (${x}) '
                     case _ => throw SqlArgException('value must be Collection<Any> for IN or NOT_IN')
                 }
