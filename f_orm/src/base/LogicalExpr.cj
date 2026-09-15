@@ -146,14 +146,14 @@ public class RelationExpr <: LogicalExpr & ToString {
             if(exprs.size > 1){
                 throw SqlArgException('NOT only support one expr')
             }else{
-                builder.append('(').append(exprs[0]).append(')')
+                builder.append(' (').append(exprs[0]).append(') ')
             }
         }else{
             for(expr in exprs){
                 if(builder.size > 0){
                     builder.append(op)
                 }
-                builder.append(expr)
+                builder.append(' ').append(expr).append(' ')
             }
         }
         return builder.toString()
