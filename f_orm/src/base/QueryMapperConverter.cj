@@ -19,7 +19,6 @@ import std.collection.concurrent.ConcurrentHashMap
 import std.io.*
 import std.reflect.*
 import fountain::f_bean.*
-import fountain::f_bean.macros.*
 import fountain::f_collection.*
 import fountain::f_data.*
 
@@ -31,13 +30,15 @@ public abstract class QueryMapperConverter {
             if(let Some(c) <- lookupOption<QueryMapperConverter>(name)){
                 c
             }else{
+                for(bean in lookupList<QueryMapperConverter>() where TypeInfo.of(bean) == TypeInfo.get(name)){
+                    return bean
+                }
                 (ClassTypeInfo.get(name).construct([]) as QueryMapperConverter).getOrThrow{ORMException('QueryMapperJsonConverter: ${name} not found')}
             }
         }
     }
     public func convert<T>(data: Any): T where T <: DataFields<T>
 }
-@Bean
 public class QueryMapperJsonConverter <: QueryMapperConverter {
     public func convert<T>(data: Any): T where T <: DataFields<T> {
         let json = if(let x: String <- data){
@@ -52,7 +53,6 @@ public class QueryMapperJsonConverter <: QueryMapperConverter {
         ((JsonValue.fromStr(json).toData() |> T.fromData) as T).getOrThrow()
     }
 }
-@Bean
 public class QueryMapperWithTypeNameJsonConverter <: QueryMapperConverter { 
     public func convert<T>(data: Any): T where T <: DataFields<T> {
         let json = if(let x: String <- data){

@@ -401,10 +401,11 @@ column: 列名转换的格式，可以是LowerUnderScore、UpperUnderScore、Pas
         如果column对应的值是字符串，这个字符串就是映射的列名，
         如果没有指定column，会把ORMField修饰的成员名称转换成LowerUnderScore风格，并把转换结果作为列名
 converter: 对应的值是数据转换器的名称，可以是`fountain::f_bean`管理的bean名称，也可以是`fountain::f_orm.QueryMapperConverter`的子类全限定名。指定了converter的被映射成员类型必须是`fountain::f_data.DataFields<T>`的子类型。
-    - QueryMapperConverter目前已提供了`fountain::f_orm.QueryMapperJsonConverter`和`fountain::f_orm.QueryMapperWithTypeNameJsonConverter`两个实现，且已自动注册到IOC。
-每一部分都是可选的，且两种属性风格可以混用。
+    - QueryMapperConverter目前已提供了`fountain::f_orm.QueryMapperJsonConverter`和`fountain::f_orm.QueryMapperWithTypeNameJsonConverter`两个实现，可以使用它们的全限定名获取实例。
     - 如果要使用`QueryMapperWithTypeNameJsonConverter`，保存相应数据表列前务必调用`QueryMapperWithTypeNameJsonConverter.toJson(cjobj)`将类实例转换为JSON字符串。
 没有使用@ORMField注解的成员认为映射的不是主键，且按照列名是LowerUnderScore处理。
+
+- id/column/converter每一部分都是可选的，且两种属性风格可以混用。
 
 ### 例子
 ```cj
