@@ -33,6 +33,7 @@
     crc16 CaseFormat 密钥交换算法 常用设计模式 murmur-hash PathPattern uuid
 
 2026-09-15
+release-1.3.0.alpha
     feat(orm): 支持SQL拼装API化，可以使用各种函数和宏生成的类静态属性构造SQL
     feat(orm): 支持序列化JSON时添加类型名，反序列化时如果映射的成员属性是一个父类，可以从JSON获取子类型名完成反序列化
     fix(loadbalance): treemap是空时抛出NoneValueException，此时判断treemap是否为空，避免抛出异常
