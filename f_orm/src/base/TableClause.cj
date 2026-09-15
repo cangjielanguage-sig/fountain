@@ -138,6 +138,10 @@ public abstract class ExceptInsertClause<T> <: TableClause<T> where T <: QueryMa
         appendPartial('where', 'and|or', condition)//这个不能用this.condition
     }
     public func WHERE(condition: LogicalExpr): This {
+        let s = condition.toString().trimAscii()
+        if(s.isEmpty() || s == '()' || s == '( )'){
+            return this
+        }
         WHERE(condition.toString())
     }
     public func WHERE(condition: () -> LogicalExpr): This {
