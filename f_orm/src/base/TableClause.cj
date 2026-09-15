@@ -43,7 +43,7 @@ abstract sealed class TableClause<T> <: ToString where T <: QueryMappersInit<T> 
             '^(\\s*${trim}\\s*)|(\\s*${trim}\\s*)$'.regex(flags: [IgnoreCase], solid: true).replaceAll(partial, '')
         }
         if(sql.size > 0){
-            sqlgen.append(' ').append(keyword).append(' ').append(sql)
+            sqlgen.append(' ').append(keyword).append(' ').append(sql).append(' ')
         }
         this
     }
@@ -73,9 +73,11 @@ public abstract class ExceptInsertClause<T> <: TableClause<T> where T <: QueryMa
         if (AS.size > 0) {
             sqlgen.append(' AS ').append(AS)
         }
-        if (ON.size > 0) {
-            sqlgen.append(' ON ').append(ON)
+        let on = ON.trimAscii()
+        if(on.isEmpty() || on == '()' || on == '( )'){
+            return this
         }
+        sqlgen.append(' ON ').append(on).append(' ')
         this
     }
     init(sql: String, executor: SqlExecutor) {
@@ -138,11 +140,11 @@ public abstract class ExceptInsertClause<T> <: TableClause<T> where T <: QueryMa
         appendPartial('where', 'and|or', condition)//这个不能用this.condition
     }
     public func WHERE(condition: LogicalExpr): This {
-        let s = condition.toString().trimAscii()
-        if(s.isEmpty() || s == '()' || s == '( )'){
+        let cond = condition.toString().trimAscii()
+        if(cond.isEmpty() || cond == '()' || cond == '( )'){
             return this
         }
-        WHERE(condition.toString())
+        WHERE(cond)
     }
     public func WHERE(condition: () -> LogicalExpr): This {
         WHERE(ParenExpr(condition()))
