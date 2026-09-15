@@ -162,6 +162,10 @@ public class RelationExpr <: LogicalExpr & ToString {
 public class ParenExpr <: LogicalExpr & ToString {
     ParenExpr(private let expr: LogicalExpr){}
     public func toString(): String {
+        let s = expr.toString()
+        if(s.isEmpty()){
+            return ''
+        }
         return '(${expr})'
     }
 }
