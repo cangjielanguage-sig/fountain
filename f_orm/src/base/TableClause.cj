@@ -137,7 +137,7 @@ public abstract class ExceptInsertClause<T> <: TableClause<T> where T <: QueryMa
         this.condition(condition, 'where', 'and|or')
     }
     public func WHERE(condition: String): This {
-        appendPartial('where', 'and|or', condition)//这个不能用this.condition
+        appendPartial(' where ', 'and|or', condition)//这个不能用this.condition
     }
     public func WHERE(condition: LogicalExpr): This {
         let cond = condition.toString().trimAscii()
@@ -149,6 +149,17 @@ public abstract class ExceptInsertClause<T> <: TableClause<T> where T <: QueryMa
     public func WHERE(condition: () -> LogicalExpr): This {
         WHERE(ParenExpr(condition()))
     }
+    public func ORDER_BY(order: Array<Column>): This {
+        let columns = StringGenerator()
+        for (i in 0 .. order.size) {
+            if(columns.size > 0){
+                columns.append(' ')
+            }
+            columns.append(order[i].toString())
+        }
+        appendPartial(' order by ', ',', columns.toString())
+    }
+    
     public func AND(condition: () -> Unit): This {
         this.condition(condition, 'and', 'and|or')
     }
@@ -233,6 +244,16 @@ public class FromClause<T> <: ExceptInsertClause<T> where T <: QueryMappersInit<
     public func GROUP_BY(groupBy: () -> String): This {
         appendPartial('group by', ',', groupBy())
     }
+    public func GROUP_BY(group: Array<Column>): This {
+        let columns = StringGenerator()
+        for (i in 0 .. group.size) {
+            if(columns.size > 0){
+                columns.append(' ')
+            }
+            columns.append(group[i].toString())
+        }
+        appendPartial(' group by ', ',', columns.toString())
+    }
     public func HAVING(condition: () -> Unit): This {
         this.condition(condition, 'having', 'and|or')
     }
@@ -241,6 +262,9 @@ public class FromClause<T> <: ExceptInsertClause<T> where T <: QueryMappersInit<
     }
     public func HAVING(arg: Map<String, Any>, condition: () -> String): This {
         HAVING(parseSqlFromMap(executor, condition(), arg))
+    }
+    public func HAVING(logical: LogicalExpr): This {
+        HAVING(logical.toString())
     }
     public func HAVING<T>(arg: T, condition: () -> String): This where T <: ObjectData<T> {
         HAVING(parseSqlFromObject<T>(executor, condition(), arg))
@@ -313,6 +337,9 @@ public class FromClause<T> <: ExceptInsertClause<T> where T <: QueryMappersInit<
     }
     public func singleList<T>(column: Column): ArrayList<T> {
         singleList<T>(column.toString())
+    }
+    public func firstToMap(): Map<String, Any> {
+        executor.setSql('select * ${LIMIT(1)}').firstToMap()
     }
 
     public func count(): Int64 {
@@ -401,14 +428,21 @@ public class IntoClause<T> <: TableClause<T> where T <: QueryMappersInit<T> {
         }
         sqlgen.append(')')
     }
-    init(executor: SqlExecutor, ignores: Array<Column>) {
+    init(executor: SqlExecutor, ignores: Array<Column>, includes: Array<Column>) {
         super('insert into ${T.tableName()}(', executor)
-        let set = HashSet<String>()
+        if(ignores.size > 0 && includes.size > 0){
+            throw ORMException("ignores and includes can't be used together")
+        }
+        let ignoresSet = HashSet<String>()
         for(ignore in ignores){
-            set.add(ignore.toString())
+            ignoresSet.add(ignore.toString())
+        }
+        let includesSet = HashSet<String>()
+        for(include in includes){
+            includesSet.add(include.toString())
         }
         var i = 0
-        for (mapper in T.queryMappers().mappers where !set.contains(mapper.dataType.columnName)) {
+        for (mapper in T.queryMappers().mappers where !ignoresSet.contains(mapper.dataType.columnName) && (includesSet.isEmpty() || includesSet.contains(mapper.dataType.columnName))) {
             if (i > 0) {
                 sqlgen.append(',')
             }
@@ -417,6 +451,20 @@ public class IntoClause<T> <: TableClause<T> where T <: QueryMappersInit<T> {
             i++
         }
         sqlgen.append(')')
+    }
+    public func VALUES(values: Array<Any>): This {
+        sqlgen.append('values(')
+        for(i in 0 .. values.size){
+            if(i > 0){
+                sqlgen.append(',')
+            }
+            sqlgen.append(executor.arg(values[i]))
+        }
+        sqlgen.append(')')
+        if (let Some(idType) <- super.idType) {
+            sqlgen.append(dialect.lastInsertId(idType))
+        }
+        this
     }
     public func VALUES<D>(value: D): This where D <: ObjectData<D> {
         sqlgen.append('values(')

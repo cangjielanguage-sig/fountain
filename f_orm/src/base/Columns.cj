@@ -55,16 +55,32 @@ public class Column <: ToString & Hashable & Equatable<Column> {
         tableAlias_ = alias
         return this
     }
+    private var sort: String = ''
+    public func ASC(): This {
+        sort = ' ASC '
+        return this
+    }
+    public func DESC(): This {
+        sort = ' DESC '
+        return this
+    }
     public func toString(): String {
+        if(alias_.size > 0 && sort.size > 0){
+            throw ORMException('column alias and column alias cannot be set at the same time')
+        }
         let exe = executor
         if(alias_.size > 0 && tableAlias_.size > 0){
-            return '${exe.involve(tableAlias_)}.${exe.involve(name)} AS ${exe.involve(alias_)}'
+            return ' ${exe.involve(tableAlias_)}.${exe.involve(name)} AS ${exe.involve(alias_)} '
         }else if(alias_.size > 0){
-            return '${exe.involve(name)} AS ${exe.involve(alias_)}'
+            return ' ${exe.involve(name)} AS ${exe.involve(alias_)} '
+        }else if(tableAlias_.size > 0 && sort.size > 0){
+            return ' ${exe.involve(tableAlias_)}.${exe.involve(name)} ${sort} '
+        }else if(sort.size > 0){
+            return ' ${exe.involve(name)} ${sort} '
         }else if(tableAlias_.size > 0){
-            return '${exe.involve(tableAlias_)}.${exe.involve(name)}'
+            return ' ${exe.involve(tableAlias_)}.${exe.involve(name)} '
         }
-        return exe.involve(name)
+        return ' ${exe.involve(name)} '
     }
 
     public func eq(arg: Any): LogicalExpr {
