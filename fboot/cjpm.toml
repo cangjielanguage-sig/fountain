@@ -2,7 +2,7 @@
   "fountain::f_app" = {path = "../f_app"}
 
 [package]
-  cjc-version = "1.3.0"
+  cjc-version = "1.2.0"
   description = "依赖fountain的应用项目启动程序"
   link-option = ""
   name = "fboot"
