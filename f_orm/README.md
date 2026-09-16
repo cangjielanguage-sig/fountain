@@ -1065,12 +1065,15 @@ public class CommaExpr <: LogicalExpr & ToString            // 逗号分隔（�
 ### 10.4 `RootDAO` 的 `LogicalExpr` 版本逻辑运算
 
 ```cangjie
+//接收Array或LogicalExpr为参数的AND/OR/NOT返回的LogicalExpr不会被括号包含
 func AND(exprs: Array<LogicalExpr>): LogicalExpr
-func AND(exprs: () -> Array<LogicalExpr>): LogicalExpr
 func OR(exprs: Array<LogicalExpr>): LogicalExpr
-func OR(exprs: () -> Array<LogicalExpr>): LogicalExpr
 func NOT(exprs: LogicalExpr): LogicalExpr
+//接收闭包为参数的AND/OR/NOT返回的LogicalExpr会自动被括号包含
+func AND(exprs: () -> Array<LogicalExpr>): LogicalExpr
+func OR(exprs: () -> Array<LogicalExpr>): LogicalExpr
 func NOT(exprs: () -> LogicalExpr): LogicalExpr
+//数组只有一个元素时相当于不使用AND/OR/NOT
 ```
 
 示例（来自 `fdemo`）：
