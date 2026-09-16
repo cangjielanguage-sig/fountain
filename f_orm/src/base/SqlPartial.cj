@@ -26,6 +26,8 @@ public interface SqlPartial <: RootDAO {
     func INSERT_INTO<T>(values: T): Int64 where T <: QueryMappersInit<T> & ObjectData<T> {
         return INSERT_INTO<T>(values, ignoreColumns: Array<Column>())
     }
+    func UPDATE<T, ID>(values: Array<(Column, Any)>, id: ID): Int64 where T <: QueryMappersInit<T>
+    func UPDATE<T>(values: Array<(Column, Any)>): Int64 where T <: QueryMappersInit<T> 
     func UPDATE<T>(AS!: String): UpdateClause<T> where T <: QueryMappersInit<T>
     func UPDATE<T>(): UpdateClause<T> where T <: QueryMappersInit<T>
     /**
@@ -107,6 +109,21 @@ extend SqlExecutor <: SqlPartial {
     }
     public func UPDATE<T>(): UpdateClause<T> where T <: QueryMappersInit<T> {
         UPDATE<T>(AS: '')
+    }
+    
+    public func UPDATE<T>(values: Array<(Column, Any)>): Int64 where T <: QueryMappersInit<T> { 
+        let values2 = HashMap<String, Any>()
+        for((k, v) in values){
+            values2[k.name] = v
+        }
+        UPDATE<T>(values2)
+    }
+    public func UPDATE<T, ID>(values: Array<(Column, Any)>, id: ID): Int64 where T <: QueryMappersInit<T> {
+        let values2 = HashMap<String, Any>()
+        for((k, v) in values){
+            values2[k.name] = v
+        }
+        UPDATE<T, ID>(values2, id)
     }
     public func UPDATE<T>(values: Map<Column, Any>): Int64 where T <: QueryMappersInit<T> {
         let values2 = HashMap<String, Any>()
