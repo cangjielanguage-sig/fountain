@@ -101,11 +101,11 @@ public class Column <: ToString & Hashable & Equatable<Column> {
     public func gte(arg: Any): LogicalExpr {
         CmpExpr(this, GTE, arg)
     }
-    public func IN(arg: Array<Any>): LogicalExpr {
-        CmpExpr(this, CmpOp.IN, arg)
+    public func IN<T>(arg: Collection<T>): LogicalExpr {
+        InExpr<T>(this, CmpOp.IN, arg)
     }
-    public func NOT_IN(arg: Array<Any>): LogicalExpr {
-        CmpExpr(this, CmpOp.NOT_IN, arg)
+    public func NOT_IN<T>(arg: Collection<T>): LogicalExpr {
+        InExpr<T>(this, CmpOp.NOT_IN, arg)
     }
     public func LIKE(arg: Any): LogicalExpr {
         CmpExpr(this, CmpOp.LIKE, arg)

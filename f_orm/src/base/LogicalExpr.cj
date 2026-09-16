@@ -78,12 +78,6 @@ public open class CmpExpr <: RootDAO & LogicalExpr {
                         }
                     case _ => throw SqlArgException('value must be Array<Any> for BETWEEN or NOT_BETWEEN')
                 }
-            case IN | NOT_IN =>
-                match(value){
-                    case x: Collection<Any> => ' ${column.name} ${op} (${arg<Collection<Any>, Any>(x)}) '
-                    case x: Column => ' ${column.name} ${op} (${x}) '
-                    case _ => throw SqlArgException('value must be Collection<Any> for IN or NOT_IN')
-                }
             case IS_NULL | IS_NOT_NULL => ' ${column.name} ${op} '
             case x: Column => ' ${column.name} ${op} ${x} '
             case _ => '${column.name} ${op} ${arg(value)}'
@@ -101,13 +95,20 @@ public class BetweenExpr <: CmpExpr {
     }
 }
 
-public class InExpr <: CmpExpr {
-    init(column: Column, op: CmpOp, value: Collection<Any>){
-        super(column, op, value)
+public class InExpr<T> <: RootDAO & LogicalExpr {
+    InExpr(private let column: Column, private let op: CmpOp, private let value: Collection<T>){
         match(op){
             case IN | NOT_IN => ()
             case _ => throw SqlArgException('op must be IN or NOT_IN')
         }
+    }
+    public prop executor: SqlExecutor {
+        get(){
+            SqlExecutor.getCurrent()
+        }
+    }
+    public func toString(): String {
+        ' ${column.name} ${op} ${arg<Collection<T>, T>(value)} '
     }
 }
 
