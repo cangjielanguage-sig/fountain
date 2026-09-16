@@ -71,7 +71,7 @@ public class ORM {
         hooks.register<T>(hook)
     }
 
-    public static func register(datasource: NamedDatasource, default!: Bool = true): Unit {
+    public static func register(datasource: NamedDatasource, default!: Bool = ORMConfig.isDefaultDriver(datasource.driverName)): Unit {
         if (datasources.addIfAbsent(datasource.driverName, datasource).isNone()) {
             if (default) {
                 ORM.default = datasource.driverName
@@ -80,11 +80,12 @@ public class ORM {
             datasource.close()
         }
     }
-    public static func register(creator: DatasourceCreator, default!: Bool = true): Unit {
+    
+    public static func register(creator: DatasourceCreator, default!: Bool = ORMConfig.isDefaultDriver(creator.driverName)): Unit {
         let ds = creator.create()
         register(ds, default: default)
     }
-    public static func register(driver: Driver, default!: Bool = true): Unit {
+    public static func register(driver: Driver, default!: Bool = ORMConfig.isDefaultDriver(driver)): Unit {
         if (datasources.contains(driver.name)) {
             log.warn {'driver ${driver.name} has been registered'}
             return
@@ -92,14 +93,14 @@ public class ORM {
         log.debug {'driver ${driver.name} registering...'}
         register(NamedDatasource(driver), default: default)
     }
-    public static func register(driver: Driver, opts: Array<(String, String)>, default!: Bool = true): Unit {
+    public static func register(driver: Driver, opts: Array<(String, String)>, default!: Bool = ORMConfig.isDefaultDriver(driver)): Unit {
         if (datasources.contains(driver.name)) {
             return
         }
         log.debug {'driver ${driver.name} registering...'}
         register(NamedDatasource(driver, opts), default: default)
     }
-    public static func register(driver: Driver, url: String, default!: Bool = true): Unit {
+    public static func register(driver: Driver, url: String, default!: Bool = ORMConfig.isDefaultDriver(driver)): Unit {
         if (datasources.contains(driver.name)) {
             log.warn {'driver ${driver.name} has been registered'}
             return
@@ -107,7 +108,7 @@ public class ORM {
         log.debug('driver ${driver.name} registering...')
         register(NamedDatasource(driver, url), default: default)
     }
-    public static func register(driver: Driver, url: String, opts: Array<(String, String)>, default!: Bool = true): Unit {
+    public static func register(driver: Driver, url: String, opts: Array<(String, String)>, default!: Bool = ORMConfig.isDefaultDriver(driver)): Unit {
         if (datasources.contains(driver.name)) {
             log.warn {'driver ${driver.name} has been registered'}
             return
@@ -117,16 +118,16 @@ public class ORM {
     public static func getDriver(driver: String) {
         ORMConfig.getDriver(driver)
     }
-    public static func register(driver: String, default!: Bool = true): Unit {
+    public static func register(driver: String, default!: Bool = ORMConfig.isDefaultDriver(driver)): Unit {
         register(NamedDatasource(getDriver(driver)), default: default)
     }
-    public static func register(driver: String, opts: Array<(String, String)>, default!: Bool = true) {
+    public static func register(driver: String, opts: Array<(String, String)>, default!: Bool = ORMConfig.isDefaultDriver(driver)) {
         register(NamedDatasource(getDriver(driver), opts), default: default)
     }
-    public static func register(driver: String, url: String, default!: Bool = true) {
+    public static func register(driver: String, url: String, default!: Bool = ORMConfig.isDefaultDriver(driver)) {
         register(NamedDatasource(getDriver(driver), url), default: default)
     }
-    public static func register(driver: String, url: String, opts: Array<(String, String)>, default!: Bool = true) {
+    public static func register(driver: String, url: String, opts: Array<(String, String)>, default!: Bool = ORMConfig.isDefaultDriver(driver)) {
         register(NamedDatasource(getDriver(driver), url, opts), default: default)
     }
     public static func register() {

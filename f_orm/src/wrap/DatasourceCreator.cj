@@ -17,4 +17,5 @@ package fountain::f_orm.wrap
 
 public interface DatasourceCreator {
     func create(): NamedDatasource
+    prop driverName: String
 }

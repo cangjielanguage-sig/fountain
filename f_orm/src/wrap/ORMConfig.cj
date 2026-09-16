@@ -117,11 +117,24 @@ public class ORMConfig {
     public static func getUseThirdPartyPool(driverName: String){
         get<Bool>(driverName: driverName, key: useThirdPartyPool, default: false)
     }
+    private static func getDriverNameArray(): Array<String>{
+        Config.getString(drivers)?.split(',') ?? []
+    }
     public static func getDefaultDriver(): String {
-        Config.getString(defaultDriver) ?? ''
+        Config.getString(defaultDriver) ?? if(let drivers <- getDriverNameArray() && drivers.size > 0){
+            drivers[0]
+        }else{
+            ''
+        }
+    }
+    public static func isDefaultDriver(driver: String){
+        getDefaultDriver() == driver
+    }
+    public static func isDefaultDriver(driver: Driver){
+        isDefaultDriver(driver.name)
     }
     public static func getDriverNames(): Iterator<String>{
-        (Config.getString(drivers)?.split(',') ?? []).iterator()
+        getDriverNameArray().iterator()
     }
     protected static func getDriver(driverName: String){
         DriverManager.getDriver(driverName).getOrThrow{ORMException('database driver ${driverName} does not initialize')}
