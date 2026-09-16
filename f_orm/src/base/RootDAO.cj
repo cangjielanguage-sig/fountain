@@ -297,6 +297,21 @@ public interface RootDAO {
             case x => throw SqlArgException('${TypeInfo.of(x)} does not support for sql arg')
         }
     }
+    func arg<I1, I2, T>(value: I1): String where I1 <: Iterable<I2>, I2 <: Iterable<T> {
+        let frag = StringGenerator(' (')
+        let s = frag.size
+        for(v in value){
+            if(frag.size > s){
+                frag.append(',')
+            }
+            frag.append(arg<I2, T>(v))
+        }
+        if(frag.size == s){
+            return ''
+        }
+        frag.append(')')
+        frag.toString()
+    }
     func arg<I, T>(value: I): String where I <: Iterable<T> {
         let frag = StringGenerator(' (')
         let s = frag.size

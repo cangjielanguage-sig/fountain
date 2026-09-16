@@ -107,6 +107,12 @@ public class Column <: ToString & Hashable & Equatable<Column> {
     public func NOT_IN<T>(arg: Collection<T>): LogicalExpr {
         InExpr<T>(this, CmpOp.NOT_IN, arg)
     }
+    public func IN<T, I>(arg: Collection<I>): LogicalExpr where I <: Collection<T> {
+        In2Expr<I, T>(this, CmpOp.IN, arg)
+    }
+    public func NOT_IN<T, I>(arg: Collection<I>): LogicalExpr where I <: Collection<T> {
+        In2Expr<I, T>(this, CmpOp.NOT_IN, arg)
+    }
     public func LIKE(arg: Any): LogicalExpr {
         CmpExpr(this, CmpOp.LIKE, arg)
     }

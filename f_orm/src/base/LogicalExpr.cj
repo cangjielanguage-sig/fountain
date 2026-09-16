@@ -111,6 +111,22 @@ public class InExpr<T> <: RootDAO & LogicalExpr {
         ' ${column.name} ${op} ${arg<Collection<T>, T>(value)} '
     }
 }
+public class In2Expr<I, T> <: RootDAO & LogicalExpr where I <: Collection<T> {
+    In2Expr(private let column: Column, private let op: CmpOp, private let value: Collection<I>){
+        match(op){
+            case IN | NOT_IN => ()
+            case _ => throw SqlArgException('op must be IN or NOT_IN')
+        }
+    }
+    public prop executor: SqlExecutor {
+        get(){
+            SqlExecutor.getCurrent()
+        }
+    }
+    public func toString(): String {
+        ' ${column.name} ${op} ${arg<Collection<I>, I, T>(value)} '
+    }
+}
 
 public class NullExpr <: CmpExpr {
     init(column: Column, op: CmpOp){
