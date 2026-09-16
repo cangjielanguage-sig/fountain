@@ -1058,7 +1058,7 @@ func updatePassword(username: String, password: String): Int64 {
 ### 支持的比较函数
 `UserPO.tableColumns()`返回的是`fountain::f_orm.sql.Columns`实例，`Columns`的成员包含映射类型用映射的表列名命名的实例属性，属性类型是`fountain::f_orm.sql.Column`。
 `Column`支持各种比较函数，`lt` `gt` `lte` `gte` `eq` `neq` `IN` `NOT_IN` `BETWEEN` `NOT_BETWEEN` `LIKE` `NOT_LIKE` `IS_NULL` `IS_NOT_NULL`。
-`IN`和`NOT_IN`支持`(a,b) in ((?, ?), (?, ?))`这种形式。
+`IN`和`NOT_IN`支持`(a,b) in ((?, ?), (?, ?))`这种形式，调用方式是`column.IN<Any, Array<Any>>([[1,'a'], [2, 'b']])`。
 
 ### 条件函数
 逻辑表达式支持以下条件函数
