@@ -16,16 +16,16 @@ limitations under the License.
 package fountain::f_orm.base
 
 public interface SqlPartial <: RootDAO {
-    func INTO<T>(ignoreColumns!: Array<String>): IntoClause<T> where T <: QueryMappersInit<T>
+    func INTO<T>(ignoreColumns!: Array<String>, includingColumns!: Array<String>): IntoClause<T> where T <: QueryMappersInit<T>
     func INTO<T>(values: T, ignoreColumns!: Array<String>): Int64 where T <: QueryMappersInit<T> & ObjectData<T>
-    func INTO<T>(values: T): Int64 where T <: QueryMappersInit<T> & ObjectData<T> {
-        INTO<T>(values, ignoreColumns: [])
-    }
+    // func INTO<T>(values: T): Int64 where T <: QueryMappersInit<T> & ObjectData<T> {
+    //     INTO<T>(values, ignoreColumns: [])
+    // }
     func INSERT_INTO<T>(ignoreColumns!: Array<Column>, includingColumns!: Array<Column>): IntoClause<T> where T <: QueryMappersInit<T>
     func INSERT_INTO<T>(values: T, ignoreColumns!: Array<Column>): Int64 where T <: QueryMappersInit<T> & ObjectData<T>
-    func INSERT_INTO<T>(values: T): Int64 where T <: QueryMappersInit<T> & ObjectData<T> {
-        return INSERT_INTO<T>(values, ignoreColumns: Array<Column>())
-    }
+    // func INSERT_INTO<T>(values: T): Int64 where T <: QueryMappersInit<T> & ObjectData<T> {
+    //     return INSERT_INTO<T>(values, ignoreColumns: Array<Column>())
+    // }
     func UPDATE<T, ID>(values: Array<(Column, Any)>, id: ID): Int64 where T <: QueryMappersInit<T>
     func UPDATE<T>(values: Array<(Column, Any)>): Int64 where T <: QueryMappersInit<T> 
     func UPDATE<T>(AS!: String): UpdateClause<T> where T <: QueryMappersInit<T>
@@ -56,6 +56,15 @@ public interface SqlPartial <: RootDAO {
     func UPDATE<T>(values: T, dirty!: Bool): Int64 where T <: QueryMappersInit<T> & ObjectData<T> {
         let empty = Array<String>()
         UPDATE<T>(values, ignoredColumns: empty, includingColumns: empty, dirty: dirty)
+    }
+    func UPDATE<T>(values: T, ignoredColumns!: HashSet<Column>, includingColumns!: HashSet<Column>, dirty!: Bool): Int64 where T <: QueryMappersInit<T> & ObjectData<T> {
+        let ignoredItr = ignoredColumns.iterator()
+        let includingItr = includingColumns.iterator()
+        UPDATE<T>(values, ignoredColumns: Array<String>(ignoredColumns.size){_ => ignoredItr.next().getOrThrow().name}, 
+                          includingColumns: Array<String>(includingColumns.size){_ => includingItr.next().getOrThrow().name}, dirty: dirty)
+    }
+    func UPDATE<T>(values: T, ignoredColumns!: HashSet<Column>, includingColumns!: HashSet<Column>): Int64 where T <: QueryMappersInit<T> & ObjectData<T> {
+        UPDATE<T>(values, ignoredColumns: ignoredColumns, includingColumns: includingColumns, dirty: false)
     }
     func UPDATE<T>(values: T, ignoredColumns!: Array<Column>, includingColumns!: Array<Column>, dirty!: Bool): Int64 where T <: QueryMappersInit<T> & ObjectData<T> {
         UPDATE<T>(values, ignoredColumns: Array<String>(ignoredColumns.size){i => ignoredColumns[i].name}, includingColumns: Array<String>(includingColumns.size){i => includingColumns[i].name}, dirty: dirty)
@@ -92,16 +101,16 @@ extend SqlExecutor <: SqlPartial {
     private func involveTable<T>(): String where T <: QueryMappersInit<T> {
         involve(T.tableName())
     }
-    public func INTO<T>(ignoreColumns!: Array<String> = []): IntoClause<T> where T <: QueryMappersInit<T> {
-        IntoClause<T>(this, ignoreColumns)
-    }
-    public func INTO<T>(values: T, ignoreColumns!: Array<String> = []): Int64 where T <: QueryMappersInit<T> & ObjectData<T> {
-        INTO<T>(ignoreColumns: ignoreColumns).VALUES<T>(values).execute()
-    }
-    public func INSERT_INTO<T>(ignoreColumns!: Array<Column>, includingColumns!: Array<Column>): IntoClause<T> where T <: QueryMappersInit<T> {
+    public func INTO<T>(ignoreColumns!: Array<String> = [], includingColumns!: Array<String> = []): IntoClause<T> where T <: QueryMappersInit<T> {
         IntoClause<T>(this, ignoreColumns, includingColumns)
     }
-    public func INSERT_INTO<T>(values: T, ignoreColumns!: Array<Column>): Int64 where T <: QueryMappersInit<T> & ObjectData<T> {
+    public func INTO<T>(values: T, ignoreColumns!: Array<String> = []): Int64 where T <: QueryMappersInit<T> & ObjectData<T> {
+        INTO<T>(ignoreColumns: ignoreColumns, includingColumns: []).VALUES<T>(values).execute()
+    }
+    public func INSERT_INTO<T>(ignoreColumns!: Array<Column> = [], includingColumns!: Array<Column> = []): IntoClause<T> where T <: QueryMappersInit<T> {
+        IntoClause<T>(this, ignoreColumns, includingColumns)
+    }
+    public func INSERT_INTO<T>(values: T, ignoreColumns!: Array<Column> = []): Int64 where T <: QueryMappersInit<T> & ObjectData<T> {
         INSERT_INTO<T>(ignoreColumns: ignoreColumns, includingColumns: []).VALUES<T>(values).execute()
     }
     public func UPDATE<T>(AS!: String): UpdateClause<T> where T <: QueryMappersInit<T> {
@@ -267,6 +276,7 @@ extend SqlExecutor <: SqlPartial {
             UPDATE<T>(values, ignoredColumns: empty, includingColumns: empty, dirty: dirty)
         }
     }
+    
     public func FROM<T>(AS!: String): FromClause<T> where T <: QueryMappersInit<T> {
         FromClause<T>(this, AS)
     }

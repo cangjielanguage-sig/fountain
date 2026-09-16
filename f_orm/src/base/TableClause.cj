@@ -414,11 +414,21 @@ public class UpdateClause<T> <: ExceptInsertClause<T> where T <: QueryMappersIni
 public class IntoClause<T> <: TableClause<T> where T <: QueryMappersInit<T> {
     private let fields = ArrayList<DataType>()
 
-    init(executor: SqlExecutor, ignores: Array<String>) {
+    init(executor: SqlExecutor, ignores: Array<String>, includes: Array<String>) {
         super('insert into ${T.tableName()}(', executor)
-        let set = HashSet<String>(ignores)
+        if(ignores.size > 0 && includes.size > 0){
+            throw ORMException("ignores and includes can't be used together")
+        }
+        let ignoresSet = HashSet<String>()
+        for(ignore in ignores){
+            ignoresSet.add(ignore.toString())
+        }
+        let includesSet = HashSet<String>()
+        for(include in includes){
+            includesSet.add(include.toString())
+        }
         var i = 0
-        for (mapper in T.queryMappers().mappers where !set.contains(mapper.dataType.columnName)) {
+        for (mapper in T.queryMappers().mappers where !ignoresSet.contains(mapper.dataType.columnName) && (includesSet.isEmpty() || includesSet.contains(mapper.dataType.columnName))) {
             if (i > 0) {
                 sqlgen.append(',')
             }
