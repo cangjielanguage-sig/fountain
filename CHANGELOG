@@ -54,3 +54,4 @@ release-1.3.0.alpha
 2026-09-16
 release-1.3.1.alpha
     feat(f_orm): 更新判定默认驱动的逻辑
+    chaos(f_orm): 更新README
