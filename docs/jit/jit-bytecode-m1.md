@@ -1,7 +1,7 @@
 # Fountain JIT · M1 字节码规格
 
 > 版本 v0.4（评审稿） · 2026-09-16（v0.3：一致性修订 + 冻结决策 ③；v0.4：区间 / Decimal 算术 / 数值互转 / Duration·DateTime 算术 / 插值串 / 类型化局部变量（明确赋值 + 空安全）/ 句柄 Marshal 与逃逸（§8.1）/ 统一函数包装 call\<T\>（§8.2），激活窗口分配机制）
-> 适用范围：M1 —— 纯计算 + 白名单不可变值分配（§9.12–13）+ 类型化局部变量（§11.7）、不使用宏、无 JIT 级 try-catch
+> 适用范围：M1 —— 纯计算 + 白名单不可变值分配（§9.12–13）+ 类型化局部变量（§11.7）、不使用宏、无 JIT 级 try-catch（字节码无 handler 表、机器码不抛不展开；异常仅存在于宿主边界：helper 内转码 §6、桥的转换 §8）
 > 平台范围：**字节码跨平台**（Windows / Linux / HarmonyOS / macOS）；**JIT 仅 Linux**，后端 **x86_64** 与 **aarch64**
 > **冻结决策**：① 32 位宿主不支持（§9 附则 9） ② JIT 仅 Linux x86_64 / aarch64，字节码不得含"仅 JIT 可实现"指令（§9 附则 10） ③ 编译粒度为整单元（§9 附则 11）
 > 目录：§0 总览 · §1 ctx · §2 错误码 · §3 帧布局 · §4 入口 ABI · §5 ISA · §6 helper · §7 伪指令 · §8 桥入口 · §9 附则 · §10 opcode 常量表 · §11 跨平台字节码 · §12 JIT 后端（x86_64 / AArch64） · §13 平台矩阵与差分测试
@@ -13,6 +13,8 @@
 **执行模型**：栈式虚拟机字节码是**跨平台唯一产物**，由解释器在所有平台执行；在 Linux x86_64 / aarch64 上另有 JIT 后端把它展开为机器码。机器码**本身不分配**、**不抛异常**、**不做栈展开**，且**永不落盘、永不跨机共享**。
 
 **值分配（I8）**：白名单 helper 可在宿主侧分配**不可变值**（String/Decimal/DateTime/Duration/Range 的运算与转换结果、插值串）；机器码与解释器核心本身仍不分配。deopt 重放会重新分配**等值**对象——值不可变 ⇒ 可观察语义不变。
+
+**错误通道 vs 异常**：字节码与机器码**没有 try-catch**——错误经 ctx 错误槽单向传递（I3/I4：写槽 → CHECK_ERR → BAIL），由桥（宿主代码）在边界转换为仓颉异常抛给调用方（§8）。文档中出现的 try-catch 全部位于宿主侧：helper 内部的异常转码（§6/§9.5）与桥的 errCode→异常转换，均由宿主编译器处理，与字节码/JIT 无关。
 
 **八条硬不变式**（违反即编译期报错或加载期拒绝）：
 
@@ -31,7 +33,7 @@
 
 1. 分配仅产不可变值 ⇒ 已登记句柄槽**只读**，机器码永不持裸指针、无需写屏障。
 2. 计算无副作用、分配结果不可变 ⇒ 可**自由 deopt / 重放**：失败就退回解释器重跑（重复分配等值对象），语义安全。
-3. 无宏 ⇒ helper 分派用 `match`/token 表手写即可，类型集封闭（List/Map/String/Decimal/DateTime/Duration/Range）。
+3. 无宏 ⇒ helper 分派在解释器实现中用条件分支/token 表手写即可，类型集封闭（List/Map/String/Decimal/DateTime/Duration/Range）。
 
 ---
 
@@ -325,7 +327,7 @@ ret: rax = cell（返回值或句柄）；errCode != 0 时 rax 未定义
 | 70 | `JMP` | rel32 | 无条件跳 | — |
 | 71 | `JZ` | rel32 | `c==0` 跳（弹 c） | — |
 | 72 | `JNZ` | rel32 | `c!=0` 跳 | — |
-| 73 | `SWITCH` | u16 n, i32[n] T, i32 D | v=弹栈；0 ≤ v < n → 跳 T[v]，否则跳 D（case 值恒为紧凑的 0..n-1，编码中无值表；稀疏 switch 由前端降级为比较链） | — |
+| 73 | 保留 | | | |
 | 74 | `LOOP_BACK` | rel32 | 回边：`STACK_GUARD` + 安全点 → 跳 | DEOPT / -2 |
 | 75 | `CALL_HELPER` | u16 hid, u8 argc | 调 helper，压结果；**汇编器自动尾随 CHECK_ERR** | helper 码 |
 | 76 | `CALL_HELPER_NC` | u16 hid, u8 argc | 同上但不做错误检查（仅永不失败的纯函数允许） | — |
@@ -408,6 +410,76 @@ ret: rax = cell（返回值或句柄）；errCode != 0 时 rax 未定义
 | B8–BF | 保留（M1） | — | 禁用 | — |
 
 **0xC0–0xFF 预留 M2**，M1 发射即报错；预留给：`HW_OPEN` 区块内的批量分配、`CALL_HOST`、容器构造。
+
+### 前端控制流降低模式（if / while / for-in / break / continue）
+
+M1 的控制原语（`JMP/JZ/JNZ/LOOP_BACK`）足以表达全部结构化控制流——`if`、`while` 在字节码层完全可表达。本节固化其规范降低模式，前端必须按此生成，以保证安全点与明确赋值分析（§7 校验 10）的兼容性：
+
+**`if-else` 与 `if-else if-else`**：M1 支持这两种形式（无专用指令，经条件跳转降低）；**if 表达式靠栈顶留值汇合**。
+
+`if-else`：
+
+```
+<cond 求值 → 0/1>
+JZ   else                 ; 条件假 → 走 else
+<then 分支>               ; 表达式形式：结果恰留 1 个 cell 在栈顶
+JMP   end
+else:
+<else 分支>               ; 结果恰留 1 个 cell（类型与 then 一致，前端保证）
+end:                      ; 两分支栈深一致地汇合
+```
+
+`if-else if-else`：`else if` 就是 **else 分支内嵌套的 if**，逐级串联、每个分支各自 `JMP end` 汇合：
+
+```
+<c1>
+JZ   elif1
+<A 分支>
+JMP  end
+elif1:
+<c2>
+JZ   else2
+<B 分支>
+JMP  end
+else2:
+<C 分支>
+end:
+```
+
+- **语句形式**（无值）：各分支栈净深为 0；**裸 `if`**（无 else-if/else 收尾）允许，等价于末尾为空分支；
+- **表达式形式**：**必须有最终 else**（仓颉语义：无 else 的 if 不产生值），且**每个分支**（then、每个 else-if、else）都恰留 1 个 cell、类型一致——由前端保证（§7 校验 9 同口径）；
+- **明确赋值汇合规则**（§7 校验 10）：某局部必须在**全部分支**（then、每个 else-if、else）内都被赋值 → 出口视为已赋值；任一分支未赋值 → 出口未赋值，出口后读取 = 编译错误。
+
+**`while (cond) { body }`**（条件在头部，每轮重算）：
+
+**`while (cond) { body }`**（条件在头部，每轮重算）：
+
+```
+header:
+  <cond 求值 → 栈顶 0/1>
+  JZ   end                 ; 假 → 退出循环
+  <body>
+  LOOP_BACK header         ; 回边 = STACK_GUARD + interrupt_poll(H22) + jmp header
+end:
+```
+
+- **`for-in`**：经**隐藏计数局部**降低为上述 while 模式，不需要新指令、不需要迭代器协议：
+  - 区间：`for i in a..b(:s)` → 隐藏局部 `i` 初始化为 `a`（声明即首写，满足明确赋值），条件按 `s` 符号与 `b` 比较（`..=` 含端点，空区间规则见 §11.9），步进 `i = i + s`（`s<0` 用 `ISUB`）；空区间首轮条件即假，体不执行；
+  - 只读容器：`for x in list/map` → `j = 0; while j < LEN(h) { x = GET_IDX/GET_KEY(h, j); body; j = j + 1 }`；
+  - 隐藏计数局部计入 `nLocals` 与局部类型表（`Int64`），遵守明确赋值与空安全的全部规则。
+- **`while (true)`**：可省略头部的 `JZ`，但**回边安全点必须保留**——`deadline` 到期经 `interrupt_poll` 置 -2，保证无限循环可中断（§12.6）。
+- **`break` / `continue`**：无专用指令。`break` = `JMP end`；`continue` = `JMP` 至回边指令（`LOOP_BACK`）之前，保证每一轮回边都经过安全点。
+- **短路 `&&` / `||`**：前端用 `JZ/JNZ` 短路链降低；`AND_B/OR_B`（0x5F/0x60）仅用于两侧均已求值的场景。
+
+**明确赋值分析与回边（§7 校验 10 的循环规则）**：数据流按**不动点迭代**求解。`while` 不保证至少执行一轮，因此**仅**在循环体内 `STOREL` 的局部，在循环出口之后**不视为已赋值**——出口后读取 = 编译错误：
+
+```cangjie
+var x: Int64            // 声明（无默认值，§11.7）
+while (c) { x = f() }   // 仅循环内赋值
+return x                // 编译错误：出口路径 x 未必已赋值
+```
+
+M1 的循环（`while` 与经降低的 `for-in`）都**不保证至少执行一轮**，因此仅在循环体内 `STOREL` 的局部，在循环出口之后一律**不视为已赋值**——出口后读取 = 编译错误；前端必须在循环入口之前完成赋值。
 
 ---
 
@@ -603,7 +675,7 @@ public enum JitValue {
 ```
 1. ctx.errCode = 0; ctx.site = -1; ctx.hwTop = ctx.hwBase; ctx.fnId = f.id
 2. rax = rawEntry(ctx, &args[0], nargs)
-3. match ctx.errCode:
+3. 按 ctx.errCode 分派（伪码）：
      0   → unbox(rax)                     // 正常；返回句柄先按 §8.1 逃逸（迁出窗口）
     -1   → interp.run(f, ctx)              // 解释器重跑，其抛出的异常原样上抛
     -2   → throw InterruptedException
@@ -772,7 +844,6 @@ retUnboxer    : (Int64) -> Any          // 返回 cell → 具体仓颉值（句
 | `rel32` | 4 | 相对偏移（跳转目标） |
 | `i64` | 8 | 64 位立即数（整数值或 Float64 位模式） |
 | `u16 u8` | 3 | 双操作数（如 helper id + argc） |
-| `u16 i32* i32` | 6+4n | `SWITCH`：n 个 case 偏移 + 默认偏移（操作数字节 = 2 + 4n + 4） |
 
 ### §10.3 opcode 常量表（Cangjie 骨架，可直接作为实现起点）
 
@@ -795,7 +866,7 @@ public struct OpInfo {
     public let code: UInt8
     public let name: String
     public let fmt: String        // 操作数编码，见 §10.2
-    public let len: Int64         // 固定长度；可变长度记 0（SWITCH 指令总长 = 1+6+4n）
+    public let len: Int64         // 指令总长（1 + 操作数字节）；M1 全部指令定长
     public let cat: UInt8
     public const init(code: UInt8, name: String, fmt: String, len: Int64, cat: UInt8) { ... }
 }
@@ -895,7 +966,6 @@ public let OPCODE_TABLE: Array<OpInfo> = [
   OpInfo(0x70, "OP_JMP",           "rel32", 5,    CAT_CTRL),
   OpInfo(0x71, "OP_JZ",            "rel32", 5,    CAT_CTRL),
   OpInfo(0x72, "OP_JNZ",           "rel32", 5,    CAT_CTRL),
-  OpInfo(0x73, "OP_SWITCH",        "u16 i32* i32", 0, CAT_CTRL),
   OpInfo(0x74, "OP_LOOP_BACK",     "rel32", 5,    CAT_CTRL),
   OpInfo(0x75, "OP_CALL_HELPER",   "u16 u8", 4,   CAT_CALL),
   OpInfo(0x76, "OP_CALL_HELPER_NC","u16 u8", 4,   CAT_CALL),
@@ -985,7 +1055,7 @@ public let OPCODE_TABLE: Array<OpInfo> = [
 
 - 字节码是**字节串，固定小端（LE）**：多字节操作数按 LE 写出/读出，**必须显式解码**；禁止 `memcpy`、指针强转、`memcpy` 式的结构体覆盖来解读字节码。这样同一份字节码在 BE 主机上也能被解释器正确执行（JIT 仅面向 LE 目标）。
 - cell = 8 字节、8 字节对齐；`Float64` = IEEE754 binary64；`Int64` = 补码，溢出已检查，**不依赖机器 wrap 行为**。
-- 指令自身无对齐要求；`SWITCH` 的偏移数组按指令起点 4 字节相对编码，解码仍逐字节读取。
+- 指令自身无对齐要求，**全部指令定长**（v0.4 起无可变长指令）；解码逐字节读取。
 - §10.3 的 `len` 是**平台无关**的字节长度，任何平台都算得相同。
 
 ### §11.3 浮点：NaN 规范化（跨平台一致的关键）
@@ -1144,7 +1214,7 @@ LocalType (u8，每槽 1 字节):
 - step 可为负（`10..0 : -2` 遍历 10, 8, 6, 4, 2），方向由 step 符号决定。
 - `RANGE_CONTAINS(h, v)`：按上述语义判定（`..=` 含 end；空区间恒 false）。
 - 开端点区间（构造器 `hasStart/hasEnd=false` 形态）M1 不支持：字节码中的区间恒有双端点。
-- 迭代 / 切片 / 按区间索引属 M2。
+- `for-in` 循环经隐藏计数局部降低为 while 模式（§5 循环降低模式），支持 `Range` 与只读 `List/Map`；切片 / 按区间索引 / 自定义迭代器协议属 M2。
 
 ---
 
@@ -1165,15 +1235,15 @@ LocalType (u8，每槽 1 字节):
 - 引擎选择（三平台语义一致，只看能否拿到机器码）：
 
 ```cangjie
-let engine = match (opts.jit) {
-    case Off   => Engine.Interp
-    case Force | Auto =>
-        if (Platform.isLinux && (Platform.arch == X86_64 || Platform.arch == Aarch64)) {
-            Engine.Jit        // Auto 另以字节码指纹为缓存键
-        } else {
-            diag("jit unavailable on ${Platform.os}/${Platform.arch}; fallback to interp")
-            Engine.Interp
-        }
+let engine = if (opts.jit == JitMode.Off) {
+    Engine.Interp
+} else {                                   // Auto / Force
+    if (Platform.isLinux && (Platform.arch == X86_64 || Platform.arch == Aarch64)) {
+        Engine.Jit        // Auto 另以字节码指纹为缓存键
+    } else {
+        diag("jit unavailable on ${Platform.os}/${Platform.arch}; fallback to interp")
+        Engine.Interp
+    }
 }
 ```
 
@@ -1314,7 +1384,7 @@ interp(args)  ==  jit_x86_64(args)  ==  jit_aarch64(args)
 | T10 | **分配与重放**：含 `STR_CAT/DEC_*/DUR_*` 的函数触发 DEOPT 重放；循环内分配超过初始 `hwCap` | 重放结果值相等、`errCode/site` 一致；窗口扩容正确，16 仅在全局上限出现 |
 | T11 | **TO_STR 黄金值**：§11.9 全类型格式 ×（±0 / NaN / Inf / 极端 Decimal / 4 字节码点插值 / 负 Duration） | 三引擎输出逐字节一致，与黄金文件全等 |
 | T12 | **混合类型差分**：§11.9 提升矩阵全组合（3 类型对称对 × 四则与比较 × 提升方向，含 2^53 边界、`0.1` 类浮点、除零、空区间判定） | 三引擎结果与错误码逐位一致，与提升规则推导值全等 |
-| T13 | **类型化局部变量与明确赋值**：全部 9 种 LocalType 的显式赋值/读取；读未赋值局部 → **汇编期拒绝**（非运行期错误）；`PUSH_NULL` 直存句柄型局部 → 拒绝；句柄型局部在后续 helper 调用（可能触发 GC）后仍有效；类型表破坏性用例（长度错/非法值）被加载器拒绝 | 明确赋值/空安全在汇编期强制；零值填充**不可观察**（无任何用例可读到 0/null）；存活语义逐位一致；非法类型表拒绝且纳入 crc32 |
+| T13 | **类型化局部变量与明确赋值**：全部 9 种 LocalType 的显式赋值/读取；读未赋值局部 → **汇编期拒绝**（非运行期错误）；`PUSH_NULL` 直存句柄型局部 → 拒绝；句柄型局部在后续 helper 调用（可能触发 GC）后仍有效；类型表破坏性用例（长度错/非法值）被加载器拒绝 | 明确赋值/空安全在汇编期强制（数据流含回边不动点，见 §5 循环降低模式）；零值填充**不可观察**（无任何用例可读到 0/null）；存活语义逐位一致；非法类型表拒绝且纳入 crc32 |
 | T14 | **句柄 Marshal 与逃逸**：invoke 返回 `STR_CAT/DEC_ADD` 结果 → 窗口重置后 `get` 有效；`release` 后 `get` → None 且表项不重用（gen 校验）；DEOPT 重放产物值相等；逃逸区超配额 → 16；跨调用 ID 稳定性（常量稳定、分配型不保证） | 逃逸/释放/重放语义符合 §8.1 矩阵；pin/get/release 在并发下无竞态 |
 | T15 | **统一包装 call\<T\>**：§8.2.1/§8.2.2 全类型组合（含错误入参：长度不符、元素类型不符、T 与返回类型不符 → 19）；call 与 invoke 对同一执行错误的 `code/site` 一致；三引擎差异对 call 不可见；异常转换清单逐条验证 | 全部契约错误 → 19 且 `site=-1`；执行错误与 invoke 逐位一致；无非 JitException/非 InterruptedException 异常逃逸 |
 
