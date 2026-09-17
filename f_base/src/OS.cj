@@ -157,16 +157,4 @@ public enum OS <: Equatable<OS> & ToString & Hashable {
             '\r\n'
         }
     }
-    @When[arch == "aarch64"]
-    public prop arch: String {
-        get(){
-            "aarch64"
-        }
-    }
-    @When[arch == "x86_64"]
-    public prop arch: String {
-        get(){
-            "x86_64"
-        }
-    }
 }
