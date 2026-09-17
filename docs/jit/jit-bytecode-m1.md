@@ -1,6 +1,6 @@
 # Fountain JIT · M1 字节码规格
 
-> 版本 v0.12.1（评审稿） · 2026-09-16（v0.3：一致性修订 + 冻结决策 ③；v0.4：区间 / Decimal 算术 / 数值互转 / Duration·DateTime 算术 / 插值串 / 类型化局部变量（明确赋值 + 空安全）/ 句柄 Marshal 与逃逸（§8.1）/ 统一函数包装 call\<T\>（§8.2）/ 源码入口与只编译一次去重（§8）/ 调用契约与线程模型（§8.3）/ 小数字面值与超 Int64 整数字面值 → Decimal、显式数值转换（§11.9）/ 句柄类型映射标准库（§3.2，Decimal = std.math.numeric.Decimal §9.12），激活窗口分配机制；v0.4.1：宿主句柄槽实现冻结——ID 形态（决策 ④）；v0.4.2：`call<T>` 逃逸槽自动回收（§8.1 规则 6）；call 清理 try/finally 化、16 中途边界与三缓解手段 + capacityLimit、ctx 内存机制与 Marshal 自实现依据、helper 封闭白名单与准入准则（§4/§6/§8.1/§8.2/§9.6）；v0.5：容器变更（List add/insert/set/remove、Map put/remove，0xA1/A3 启用 + 0xAB–AF）、常量容器写保护（错误码 20）、变更型函数 deopt 禁令（§9.15）、for-in 全类型规范降低（含 Map 键快照 MAP_KEYS，§5/§11.9）；v0.6：字符串切片/替换（STR_SUB/STR_REPLACE，0xB8/B9）、正则字面量 `/…/flags`（新类型 Regex = token 8 / LocalType 9 / 常量 kind 10，加载期一次编译、跨调用复用，REGEX_IS_MATCH/FIND = 0xBA/BB）、for-in 源语言形式与仓颉对齐（含 where）、多重赋值/变量交换降低——同时赋值语义（§5）；v0.7：被编译代码格式声明（lambda 源入口，§8.0）、`recursive` 自递归关键字（降低为 CALL_FUNC）、LocalType 10/11（List/Map 仅参数槽）、FuncEntry.retType（签名入字节码，verMinor=4）；v0.8：编译器门面 Compiler 类与预定义函数注册（§8.4——user helper 通道 hid[0x0100,0xFFFF]、编译期名字解析与未注册错误 SourceCompileException、分发边界），verMinor=5；v0.9：嵌套闭包（词法绑定 + 按值捕获快照）、recursive 绑定最近层词法闭包、立即调用 IIFE、源码注释（§8.5；无 .fbc 格式变更）；v0.10：first-class 闭包值（闭包表达式求值/变量绑定与调用，§8.6——closure_new/CALL_CLOSURE/LOAD_CAP、token 9、LocalType 12、ctx.fnTable、词法绑定模型统一升级为闭包值模型，verMinor=6）；v0.11：正则操作符 `~` / `!~` / 全局与第 n 替换（§11.9，H58/H59，优先级高于加减左结合，verMinor=7；错误即终止（fail-fast）语义显式化（§0/§2/§5，CALL_HELPER_V 自动 CHECK_ERR 明确）；ctx 非托管内存配对释放 finally 义务（§8.2）+ M1 无单元卸载注记（§8.1）+ T27 内存安全）；v0.12：recursive 值化——`let x = recursive` 自引用闭包值（闭包层 = LOADL 0；顶层 = 隐藏适配器 FuncEntry + closure_new，§8.0/§8.6），嵌套闭包经变量捕获递归调用任意外层（§8.5）；无 opcode/helper/格式变更；v0.12.1：全文档审计修正——分配型清单补 H54 closure_new（§1/§6/§8.1）、§0 I8/简化 3/适用范围随 v0.10–v0.12 同步、§2 -1 行随 §9.15 扩展同步、§8.0 源入口参数禁用 Closure（Marshal 表无行，恒不可供给）、§8.3 取消及时性边界、T13 计数 13 种；M2 CALL_HOST 议题清单（八项困难 + 三档演进路径）备案于 §6）
+> 版本 v0.13（评审稿） · 2026-09-16（v0.3：一致性修订 + 冻结决策 ③；v0.4：区间 / Decimal 算术 / 数值互转 / Duration·DateTime 算术 / 插值串 / 类型化局部变量（明确赋值 + 空安全）/ 句柄 Marshal 与逃逸（§8.1）/ 统一函数包装 call\<T\>（§8.2）/ 源码入口与只编译一次去重（§8）/ 调用契约与线程模型（§8.3）/ 小数字面值与超 Int64 整数字面值 → Decimal、显式数值转换（§11.9）/ 句柄类型映射标准库（§3.2，Decimal = std.math.numeric.Decimal §9.12），激活窗口分配机制；v0.4.1：宿主句柄槽实现冻结——ID 形态（决策 ④）；v0.4.2：`call<T>` 逃逸槽自动回收（§8.1 规则 6）；call 清理 try/finally 化、16 中途边界与三缓解手段 + capacityLimit、ctx 内存机制与 Marshal 自实现依据、helper 封闭白名单与准入准则（§4/§6/§8.1/§8.2/§9.6）；v0.5：容器变更（List add/insert/set/remove、Map put/remove，0xA1/A3 启用 + 0xAB–AF）、常量容器写保护（错误码 20）、变更型函数 deopt 禁令（§9.15）、for-in 全类型规范降低（含 Map 键快照 MAP_KEYS，§5/§11.9）；v0.6：字符串切片/替换（STR_SUB/STR_REPLACE，0xB8/B9）、正则字面量 `/…/flags`（新类型 Regex = token 8 / LocalType 9 / 常量 kind 10，加载期一次编译、跨调用复用，REGEX_IS_MATCH/FIND = 0xBA/BB）、for-in 源语言形式与仓颉对齐（含 where）、多重赋值/变量交换降低——同时赋值语义（§5）；v0.7：被编译代码格式声明（lambda 源入口，§8.0）、`recursive` 自递归关键字（降低为 CALL_FUNC）、LocalType 10/11（List/Map 仅参数槽）、FuncEntry.retType（签名入字节码，verMinor=4）；v0.8：编译器门面 Compiler 类与预定义函数注册（§8.4——user helper 通道 hid[0x0100,0xFFFF]、编译期名字解析与未注册错误 SourceCompileException、分发边界），verMinor=5；v0.9：嵌套闭包（词法绑定 + 按值捕获快照）、recursive 绑定最近层词法闭包、立即调用 IIFE、源码注释（§8.5；无 .fbc 格式变更）；v0.10：first-class 闭包值（闭包表达式求值/变量绑定与调用，§8.6——closure_new/CALL_CLOSURE/LOAD_CAP、token 9、LocalType 12、ctx.fnTable、词法绑定模型统一升级为闭包值模型，verMinor=6）；v0.11：正则操作符 `~` / `!~` / 全局与第 n 替换（§11.9，H58/H59，优先级高于加减左结合，verMinor=7；错误即终止（fail-fast）语义显式化（§0/§2/§5，CALL_HELPER_V 自动 CHECK_ERR 明确）；ctx 非托管内存配对释放 finally 义务（§8.2）+ M1 无单元卸载注记（§8.1）+ T27 内存安全）；v0.12：recursive 值化——`let x = recursive` 自引用闭包值（闭包层 = LOADL 0；顶层 = 隐藏适配器 FuncEntry + closure_new，§8.0/§8.6），嵌套闭包经变量捕获递归调用任意外层（§8.5）；无 opcode/helper/格式变更；v0.12.1：全文档审计修正——分配型清单补 H54 closure_new（§1/§6/§8.1）、§0 I8/简化 3/适用范围随 v0.10–v0.12 同步、§2 -1 行随 §9.15 扩展同步、§8.0 源入口参数禁用 Closure（Marshal 表无行，恒不可供给）、§8.3 取消及时性边界、T13 计数 13 种；M2 CALL_HOST 议题清单（八项困难 + 三档演进路径）备案于 §6；v0.13：单元卸载——JitFunction.unload（状态机 Ready→Unloading→Unloaded、活跃调用排空、资产清点与释放顺序、常量同 ID 契约限定单元存活期，§8.7）、调用已卸载单元 → 19（§2/§8.2 入口断言）、T29；无 opcode/helper/格式变更）
 > 适用范围：M1 —— 纯计算 + 白名单不可变值分配 + 白名单容器变更（§9.15）+ 类型化局部变量（§11.7）+ first-class 闭包与自引用（§8.5–8.6）+ 正则字面量与操作符（§3.3/§11.9）+ 多重赋值（§5）+ 预定义函数（§8.4）、不使用宏、无 JIT 级 try-catch（字节码无 handler 表、机器码不抛不展开；异常仅存在于宿主边界：helper 内转码 §6、桥的转换 §8）
 > 平台范围：**字节码跨平台**（Windows / Linux / HarmonyOS / macOS）；**JIT 仅 Linux**，后端 **x86_64** 与 **aarch64**
 > **冻结决策**：① 32 位宿主不支持（§9 附则 9） ② JIT 仅 Linux x86_64 / aarch64，字节码不得含"仅 JIT 可实现"指令（§9 附则 10） ③ 编译粒度为整单元（§9 附则 11） ④ 宿主为仓颉运行时，句柄槽取 ID 形态（§9 附则 14）
@@ -86,7 +86,7 @@ off  size 字段      含义
 16   ERR_HANDLE_WINDOW_FULL  (宿主句柄表全局上限——资源耗尽)
 17   ERR_EXPLICIT            (源语言 throw；具体码放 site 附加表)
 18   ERR_NOT_IMPL            (汇编器遇到未实现特性时主动 bail)
-19   ERR_CALL_CONTRACT       (call 的调用契约错误：参数长度/元素类型/返回 T 不符；桥层产生，site=-1，不经字节码执行)
+19   ERR_CALL_CONTRACT       (call 的调用契约错误：参数长度/元素类型/返回 T 不符；调用已卸载单元（§8.7）；桥层产生，site=-1，不经字节码执行)
 20   ERR_READONLY            (对常量/冻结容器写入——变更型 helper 的目标槽属路径 A，§9.15①)
 99   ERR_HELPER_PANIC        (helper 内未识别异常兜底；任何内部异常最终都以此码浮现)
 ```
@@ -797,6 +797,7 @@ public enum JitValue {
 **桥的三态收尾（private `invoke` 内部固定流程）**：
 
 ```
+0. **入口断言**：`f` 未卸载（状态 Ready，§8.7）——否则抛 `JitException(19)`（site=-1），不进入后续步骤
 1. ctx.errCode = 0; ctx.site = -1; ctx.hwTop = ctx.hwBase; ctx.fnId = f.id
 2. rax = rawEntry(ctx, &args[0], nargs)
 3. 按 ctx.errCode 分派（伪码）：
@@ -851,7 +852,7 @@ public class HandleTable {
 1. 函数签名返回引用类型时，桥在 `unbox` 前把返回句柄对应槽**迁出窗口**：强引用登记入逃逸区，表项保留、ID 不变；随后窗口重置 `hwTop=hwBase` 不影响该槽（§9.6）。
 2. 逃逸句柄存活至 `release(id)` 或宿主侧逃逸区销毁；期间表项**不得重用**（`gen` 不变，保证宿主持有的 ID 稳定有效）。
 3. 逃逸区受句柄表同一全局上限约束（§9.6，默认 2^20 槽），超限 → `ERR_HANDLE_WINDOW_FULL(16)`。
-4. **跨调用 ID 稳定性（冻结语义）**：同一次调用内 ID 稳定（`EQ_H` 可靠）；**跨调用仅常量句柄（路径 A）保证同 ID**——路径 C/D 的结果因重放或重复分配**不保证同 ID**（值不可变 ⇒ 等值）。宿主不得缓存/比较跨调用句柄 ID，应以值比较（`get` 后比较或字节码内比较）为准。
+4. **跨调用 ID 稳定性（冻结语义）**：同一次调用内 ID 稳定（`EQ_H` 可靠）；**跨调用仅常量句柄（路径 A）保证同 ID**——路径 C/D 的结果因重放或重复分配**不保证同 ID**（值不可变 ⇒ 等值）。宿主不得缓存/比较跨调用句柄 ID，应以值比较（`get` 后比较或字节码内比较）为准。常量同 ID 保证的作用域 = **单元存活期**：单元卸载后旧常量 ID 一律作废，宿主不得跨卸载缓存/使用任何 ID（§8.7）。
 5. Marshal 与逃逸操作由宿主侧同步保护（§9.7）；对机器码与解释器核心完全不可见。
 6. **逃逸回收的自动化边界（冻结，v0.4.2）**：① `call<T>` 路径**自动回收**——解包（`get`）完成时宿主已持有对象引用，且按规则 4 宿主不得跨调用缓存句柄 ID，故桥随即释放本次调用的**窗口分配**逃逸槽（`hwBase ≤ id < hwTop`，`gen` +1 允许复用）；路径 A/B 的 ID 不在回收之列（不在窗口区间，且分配型 helper 产的都是新对象，不会与常量/参数 ID 撞号）。② `invoke` 路径（`JitValue.Handle`，桥内部）**只能显式 `release`**：宿主持有的是 ID 本身，桥无法感知其使用何时结束——ID 是可复制的普通整数值（无引用计数回调）、GC 不通知桥、依赖 GC finalizer 则时机不确定（`JitValue` 为值类型）。③ 错误 16 时**不做**批量自动清理：16 由历史逃逸累积造成，自动清理会把宿主仍在使用的 ID 作废（违反规则 2），把资源错误变成静默数据错配；正确处置是宿主先 `release` 再重试。
 
@@ -859,12 +860,12 @@ public class HandleTable {
 
 | 句柄来源 | 强引用根 | 存活期 | 失效方式 |
 |---|---|---|---|
-| A 常量（kind 3–10 实例化） | ConstTable | 整个单元生命周期 | 单元卸载 |
+| A 常量（kind 3–10 实例化） | ConstTable | 整个单元生命周期 | 单元卸载（§8.7，v0.13 起为真实能力；卸载后旧 ID 作废） |
 | B 参数（`pin`） | 宿主调用方 | `pin` 至调用结束 | 宿主释放对象 |
 | C 窗口分配（helper 结果） | `[hwBase, hwTop)` | 单次调用 | 返回/重放前重置 `hwTop` |
 | D 逃逸（返回值） | 逃逸区/宿主 | `unbox` → `release`；`call<T>` 至解包完成（自动回收，§8.1 规则 6） | `invoke`：显式 `release` 或逃逸区销毁；`call<T>`：桥自动回收 |
 
-> **M1 无单元卸载**：M1 不提供卸载 API——A 常量槽、code buffer、编译缓存条目随进程驻留（**有界**：≤ 编译过的单元数与各自大小；"只编译一次"去重保证不随调用增长）。矩阵中"单元卸载"是失效方式的**定义**而非 M1 能力；引入卸载属范围变更（须整体回收单元全部资产：ConstTable + code buffer + 适配器注册表 + 编译缓存条目，且常量同 ID 契约随之终止）。
+> **单元卸载（v0.13，§8.7）**：提供 `JitFunction.unload`——整体回收单元全部资产（ConstTable + A 常量槽 + code buffer + fnTable + 适配器注册表条目 + 编译缓存条目），状态机 `Ready → Unloading → Unloaded` 保证与活跃调用/并发编译的安全交互。常量同 ID 契约随卸载终止（§8.1 规则 4）；跨卸载缓存 ID 属禁止事项（§8.3）。
 
 ### §8.2 统一函数包装：`JitFunction.call<T>`（v0.4）
 
@@ -986,6 +987,7 @@ retUnboxer    : (Int64) -> Any          // 返回 cell → 具体仓颉值（句
 | 缓存非逃逸/非常量句柄 ID 跨调用使用 | §8.1 规则 4（重放/重分配不保证同 ID） |
 | helper 读写跨调用可见的可变态 | 破坏"可重复调用结果一致"（纯度约束：helper 除分配不可变值、窗口登记与**变更型 helper 的容器修改**（H43–H48，§9.15）外不得有副作用） |
 | 修改机器码页 / 字节码常量 | 违反 W^X 与只读契约 |
+| 跨卸载缓存/使用句柄 ID（含常量 ID） | 卸载后旧 ID 作废（§8.7/§8.1 规则 4）；表项复用 + 同 tag 重分配无法静态区分，违反即未定义 |
 
 **取消及时性边界（v0.12.1 审计补充）**：`-2` 仅在 `LOOP_BACK` 回边安全点产生（§5/§12.6）——**helper 执行期间不可中断**：正则匹配（含潜在灾难性回溯）、大串切片/替换、`user helper` 宿主代码等长操作会推迟取消的感知，延迟上界 = 该 helper 剩余执行时长。M1 不在 helper 内设安全点（M2 议题）；调用方对取消延迟的预期以此边界为准。
 
@@ -1154,6 +1156,59 @@ let g = c.compile("{ x: Int64 => unknown(x) }")
 - §9.15：**含 `CALL_CLOSURE` 的函数 → `flags.bit0`**（实际调用的闭包体静态不可知，黑盒）→ deopt 源禁令；`closure_new` 是分配型，不触发禁令；
 - §8.2：闭包值不跨桥——Marshal/解包表不含 Closure；
 - §6 白名单：+H54/H55/H56/H57、token 9=Closure；准入准则照旧（H54 分配型）。
+
+### §8.7 单元卸载（v0.13）
+
+**定位**：卸载已编译单元（源入口 `compile(source)` 或分发入口 `compile(unit)` 的产物），回收其全部资产。无新 opcode、无 `.fbc` 格式变更、不改变任何字节码语义（差分测试体系不变，§13.3）。
+
+**API**：
+
+```cangjie
+public class JitFunction {
+    // 既有唯一对外执行成员 call<T>（§8.2）与 private invoke/tryInvoke 不变
+    // v0.13：卸载
+    public func unload(timeout!: ?Duration = None): Bool
+    // true = 已卸载（含对已卸载单元的幂等重复调用）；false = 超时（单元恢复 Ready，可重试）
+    public prop isUnloaded: Bool
+}
+```
+
+**单元状态机**（独立于函数级 JIT 状态机与进程级编译缓存状态机，三层并存，§12.6）：
+
+```
+Ready ──unload() CAS──▶ Unloading ──activeCalls == 0──▶ Unloaded（终态，不可逆）
+  ▲                        │ timeout 到期
+  └────────────────────────┘（恢复 Ready，卸载未发生，可重试）
+```
+
+- **Ready**：可正常调用。
+- **Unloading**：拒绝新调用（入口断言 → 19，§8.2 三态收尾第 0 步）；**正在执行中的调用不受任何影响**——不注入 -2、不抢占、正常完成并返回正确结果（卸载不改变执行中调用的可观察语义）。`activeCalls` 为原子计数：桥 `invoke` 入口 +1、`finally` −1（与资源清理同一 finally，§8.2）。
+- **Unloaded**：资产已释放；再调用 → `JitException(19)`（site=-1）；重复 `unload` → true（幂等）。
+
+**资产清点**（Unloading 排空后按序释放）：
+
+| 资产 | 归属 | 处置 |
+|---|---|---|
+| code buffer + fnTable（仅 JIT 形态） | 非 GC 内存 | **最后释放**（活跃调用可能仍在执行机器码）；malloc/free 配对，T27 计数断言扩展 |
+| ConstTable + A 常量槽 | 托管 + 句柄表 | ConstTable 释放 → 常量对象由 GC 回收；A 槽 `gen` +1、标记可复用 |
+| 函数目录/字节码/局部类型表 | 托管 | 随 `JitFunction` 内部一并释放 |
+| 适配器注册表条目 | 进程级 | 按单元指纹维度移除（键 `(单元指纹, fnId, T)`，§8.2） |
+| 编译缓存条目 | 进程级 | 按指纹移除——同源码再次 `compile` 重新执行完整管线，产出**新** `JitFunction` |
+
+**并发语义**：
+
+- **unload vs 调用**：CAS 先行拒绝新调用，再排空活跃调用（`timeout = None` 无限等待；供给 timeout 则超时恢复 Ready）；
+- **unload vs compile（同指纹 Compiling 中）**：阻塞等待其完成——成功 → 继续卸载流程；失败 → 缓存条目移除，`unload` 返回 true（与既有"Compiling 阻塞等待"语义一致，§12.6）；
+- **unload vs unload**：CAS 幂等，后者直接返回 true；
+- **解释器形态**（Engine.Interp）：同样适用——无 code buffer/fnTable 资产，其余语义相同。
+
+**失效与契约修订**：
+
+- `JitFunction` 失效：Unloaded 后任何调用 → `JitException(19)`（§2）；
+- **常量同 ID 契约终止**（§8.1 规则 4）：常量 ID 的跨调用同 ID 保证作用域 = **单元存活期**；卸载后旧常量 ID 一律作废。A 槽 `gen`+1 + tag 校验提供尽力拦截（同 tag 重分配不可静态区分——跨卸载缓存/使用 ID 属禁止事项，§8.3）。实际暴露面小：常量 ID 主要在字节码内流转，`call<T>` 参数走 Marshal `pin`（§8.2.1）；
+- 逃逸槽（路径 D）独立于单元（per-call 逃逸区），不受卸载影响。
+
+**测试**：T29（§13.2）。
 
 ---
 
@@ -1755,7 +1810,7 @@ let engine = if (opts.jit == JitMode.Off) {
 ### §12.6 并发与去优化
 
 - `JitFunction` 编译完成即**不可变**，可跨线程共享；编译自身用每函数一次的状态机（`NotCompiled → Compiling → Ready`，CAS 或自旋锁），重复请求等待或直接解释执行。
-- **单元级"只编译一次"去重**：`compile` 以源码指纹（主入口）/字节码指纹（分发入口）为键查询进程级编译缓存（仅驻内存）：`Ready` → 复用同一 `JitFunction`；`Compiling` → 阻塞等待（成功共享结果、失败共享异常）；Miss → CAS 占位（`Idle → Compiling → Ready/Failed`）后执行管线（源码 → 字节码 → OS 检查 → JIT/解释器，§8）。与函数级 JIT 状态机（上条）两层并存，共同保证并发安全与**相同源码只编译一次**。
+- **单元级"只编译一次"去重**：`compile` 以源码指纹（主入口）/字节码指纹（分发入口）为键查询进程级编译缓存（仅驻内存）：`Ready` → 复用同一 `JitFunction`；`Compiling` → 阻塞等待（成功共享结果、失败共享异常）；Miss → CAS 占位（`Idle → Compiling → Ready/Failed`）后执行管线（源码 → 字节码 → OS 检查 → JIT/解释器，§8）；条目可经单元卸载（§8.7）移除——同指纹再 compile 重新执行管线。与函数级 JIT 状态机（上条）两层并存，共同保证并发安全与**相同源码只编译一次**。
 - DEOPT：`errCode = -1` → 桥回解释器重跑（§8 第 3 步）。因为机器码不分配（分配仅在宿主 helper 内，结果只是句柄 ID，I8），机器码**不需要栈映射（stack map）**，也就无需帧重建——这是最大的简化。重放会重新执行分配型 helper、产出等值的不可变新对象，语义不变（§9.13、T10）；**含变更型调用（变更型 helper/预定义 helper/`CALL_CLOSURE`）的函数不参与重放**——deopt 源已在汇编期禁用（§9.15②），防御性 -1 按 99 上报。
 - 安全点：仅 `LOOP_BACK` 回边（`interrupt_poll`），保证超时可中断；不做异步抢占。
 
@@ -1816,6 +1871,7 @@ interp(args)  ==  jit_x86_64(args)  ==  jit_aarch64(args)
 | T26 | **正则操作符（v0.11）**：`~` / `!~` ×（匹配/不匹配/无匹配/flags i-m-u 组合/空 replacement）；替换 ×（`g` 全局、省略修饰符 = 第 0 个、`/n` 各位次含越位 → 原串、多匹配连续扫描、replacement 含正则元字符与 `$` 字面保留、空 pattern 加载期拒绝）；词法（`!~` 单 token、替换段紧贴 `/` 优先于注释识别、`-` 修饰符 → 词法错误）；优先级/结合性（高于加减低于乘除、左结合 × 与算术混排） | 四形式语义与 §11.9 全等；三引擎结果/错误码/site 逐位一致；分配型语义（重放等值）；优先级与结合性按文法全等 |
 | T27 | **内存安全（v0.11）**：ctx 非托管内存配对释放 ×（正常返回 / 全部错误码路径含 1–20、-2 / 99 / DEOPT / 桥 Marshal 失败 / 宿主 GC 并发搬移期间调用）；句柄表四路径无泄漏断言（A 驻留有界、B/C/D 调用后归零）；`call<T>` 循环 10^6 次句柄表占用不增长；gen 递增与 tag 校验拦截 release 后旧 ID（invoke 路径） | 所有路径 ctx 配对释放（计数断言 malloc==free）；句柄表稳态零残留；无悬挂 ID 命中错配对象；三引擎行为一致 |
 | T28 | **recursive 值化与外层递归（v0.12）**：顶层 `let outer = recursive` + 嵌套闭包内 `outer()` 与 `recursive()` 并存（双递归收敛 × 带参/无参顶层 × 深度 ≥ 3）；闭包层值化（IIFE 外层经 `let self = recursive` 传自身给内层）；适配器转发（实参 argc 不符 → 14、`fnId` 归因 entryFn 而非适配器、适配器帧 `locals[0]` 句柄槽不参与参数传递）；顶层签名含 Closure 参数 → 值化编译错误；值化求值的分配行为（hwCap 估计含之、deopt 重放等值重建、窗口回收无泄漏（§8.1 规则 6①））；值化引用不可逃逸（存容器 → 前端拒绝/19、跨桥 → 19） | 经捕获的外层调用与直接 `CALL_FUNC` 语义逐位一致（结果/错误码/site/fnId）；适配器对可观察行为零影响（目录计数按"源函数 + 隐藏适配器"断言）；三引擎全等 |
+| T29 | **单元卸载（v0.13）**：卸载后调用 → 19（site=-1）× 三引擎；活跃调用排空（长调用 × `unload(timeout)` 超时恢复 Ready → 重试成功；`unload(None)` 阻塞至排空）；执行中调用不受卸载影响（结果逐位正确、不注入 -2）；并发双 unload 幂等且资产仅释放一次；卸载 → 同源码 re-compile → 新 `JitFunction` 结果与基准一致、旧引用调用 → 19；编译缓存条目移除断言（管线重执行计数）；ConstTable 释放后常量对象 GC 可回收（弱引用观察）；code buffer/fnTable malloc==free 配对（T27 扩展）；A 槽 `gen`+1 后旧 ID 尽力拦截（tag/世代校验行为）；`isUnloaded` 状态转换正确 | 全部断言成立；三引擎行为一致；无悬挂执行、无双重释放、无泄漏 |
 
 ### §13.3 版本演进约束
 
