@@ -1,6 +1,6 @@
 # Fountain JIT · M1 字节码规格
 
-> 版本 v0.12.1（评审稿） · 2026-09-16（v0.3：一致性修订 + 冻结决策 ③；v0.4：区间 / Decimal 算术 / 数值互转 / Duration·DateTime 算术 / 插值串 / 类型化局部变量（明确赋值 + 空安全）/ 句柄 Marshal 与逃逸（§8.1）/ 统一函数包装 call\<T\>（§8.2）/ 源码入口与只编译一次去重（§8）/ 调用契约与线程模型（§8.3）/ 小数字面值与超 Int64 整数字面值 → Decimal、显式数值转换（§11.9）/ 句柄类型映射标准库（§3.2，Decimal = std.math.numeric.Decimal §9.12），激活窗口分配机制；v0.4.1：宿主句柄槽实现冻结——ID 形态（决策 ④）；v0.4.2：`call<T>` 逃逸槽自动回收（§8.1 规则 6）；call 清理 try/finally 化、16 中途边界与三缓解手段 + capacityLimit、ctx 内存机制与 Marshal 自实现依据、helper 封闭白名单与准入准则（§4/§6/§8.1/§8.2/§9.6）；v0.5：容器变更（List add/insert/set/remove、Map put/remove，0xA1/A3 启用 + 0xAB–AF）、常量容器写保护（错误码 20）、变更型函数 deopt 禁令（§9.15）、for-in 全类型规范降低（含 Map 键快照 MAP_KEYS，§5/§11.9）；v0.6：字符串切片/替换（STR_SUB/STR_REPLACE，0xB8/B9）、正则字面量 `/…/flags`（新类型 Regex = token 8 / LocalType 9 / 常量 kind 10，加载期一次编译、跨调用复用，REGEX_IS_MATCH/FIND = 0xBA/BB）、for-in 源语言形式与仓颉对齐（含 where）、多重赋值/变量交换降低——同时赋值语义（§5）；v0.7：被编译代码格式声明（lambda 源入口，§8.0）、`recursive` 自递归关键字（降低为 CALL_FUNC）、LocalType 10/11（List/Map 仅参数槽）、FuncEntry.retType（签名入字节码，verMinor=4）；v0.8：编译器门面 Compiler 类与预定义函数注册（§8.4——user helper 通道 hid[0x0100,0xFFFF]、编译期名字解析与未注册错误 SourceCompileException、分发边界），verMinor=5；v0.9：嵌套闭包（词法绑定 + 按值捕获快照）、recursive 绑定最近层词法闭包、立即调用 IIFE、源码注释（§8.5；无 .fbc 格式变更）；v0.10：first-class 闭包值（闭包表达式求值/变量绑定与调用，§8.6——closure_new/CALL_CLOSURE/LOAD_CAP、token 9、LocalType 12、ctx.fnTable、词法绑定模型统一升级为闭包值模型，verMinor=6）；v0.11：正则操作符 `~` / `!~` / 全局与第 n 替换（§11.9，H58/H59，优先级高于加减左结合，verMinor=7；错误即终止（fail-fast）语义显式化（§0/§2/§5，CALL_HELPER_V 自动 CHECK_ERR 明确）；ctx 非托管内存配对释放 finally 义务（§8.2）+ M1 无单元卸载注记（§8.1）+ T27 内存安全）；v0.12：recursive 值化——`let x = recursive` 自引用闭包值（闭包层 = LOADL 0；顶层 = 隐藏适配器 FuncEntry + closure_new，§8.0/§8.6），嵌套闭包经变量捕获递归调用任意外层（§8.5）；无 opcode/helper/格式变更；v0.12.1：全文档审计修正——分配型清单补 H54 closure_new（§1/§6/§8.1）、§0 I8/简化 3/适用范围随 v0.10–v0.12 同步、§2 -1 行随 §9.15 扩展同步、§8.0 源入口参数禁用 Closure（Marshal 表无行，恒不可供给）、§8.3 取消及时性边界、T13 计数 13 种）
+> 版本 v0.12.1（评审稿） · 2026-09-16（v0.3：一致性修订 + 冻结决策 ③；v0.4：区间 / Decimal 算术 / 数值互转 / Duration·DateTime 算术 / 插值串 / 类型化局部变量（明确赋值 + 空安全）/ 句柄 Marshal 与逃逸（§8.1）/ 统一函数包装 call\<T\>（§8.2）/ 源码入口与只编译一次去重（§8）/ 调用契约与线程模型（§8.3）/ 小数字面值与超 Int64 整数字面值 → Decimal、显式数值转换（§11.9）/ 句柄类型映射标准库（§3.2，Decimal = std.math.numeric.Decimal §9.12），激活窗口分配机制；v0.4.1：宿主句柄槽实现冻结——ID 形态（决策 ④）；v0.4.2：`call<T>` 逃逸槽自动回收（§8.1 规则 6）；call 清理 try/finally 化、16 中途边界与三缓解手段 + capacityLimit、ctx 内存机制与 Marshal 自实现依据、helper 封闭白名单与准入准则（§4/§6/§8.1/§8.2/§9.6）；v0.5：容器变更（List add/insert/set/remove、Map put/remove，0xA1/A3 启用 + 0xAB–AF）、常量容器写保护（错误码 20）、变更型函数 deopt 禁令（§9.15）、for-in 全类型规范降低（含 Map 键快照 MAP_KEYS，§5/§11.9）；v0.6：字符串切片/替换（STR_SUB/STR_REPLACE，0xB8/B9）、正则字面量 `/…/flags`（新类型 Regex = token 8 / LocalType 9 / 常量 kind 10，加载期一次编译、跨调用复用，REGEX_IS_MATCH/FIND = 0xBA/BB）、for-in 源语言形式与仓颉对齐（含 where）、多重赋值/变量交换降低——同时赋值语义（§5）；v0.7：被编译代码格式声明（lambda 源入口，§8.0）、`recursive` 自递归关键字（降低为 CALL_FUNC）、LocalType 10/11（List/Map 仅参数槽）、FuncEntry.retType（签名入字节码，verMinor=4）；v0.8：编译器门面 Compiler 类与预定义函数注册（§8.4——user helper 通道 hid[0x0100,0xFFFF]、编译期名字解析与未注册错误 SourceCompileException、分发边界），verMinor=5；v0.9：嵌套闭包（词法绑定 + 按值捕获快照）、recursive 绑定最近层词法闭包、立即调用 IIFE、源码注释（§8.5；无 .fbc 格式变更）；v0.10：first-class 闭包值（闭包表达式求值/变量绑定与调用，§8.6——closure_new/CALL_CLOSURE/LOAD_CAP、token 9、LocalType 12、ctx.fnTable、词法绑定模型统一升级为闭包值模型，verMinor=6）；v0.11：正则操作符 `~` / `!~` / 全局与第 n 替换（§11.9，H58/H59，优先级高于加减左结合，verMinor=7；错误即终止（fail-fast）语义显式化（§0/§2/§5，CALL_HELPER_V 自动 CHECK_ERR 明确）；ctx 非托管内存配对释放 finally 义务（§8.2）+ M1 无单元卸载注记（§8.1）+ T27 内存安全）；v0.12：recursive 值化——`let x = recursive` 自引用闭包值（闭包层 = LOADL 0；顶层 = 隐藏适配器 FuncEntry + closure_new，§8.0/§8.6），嵌套闭包经变量捕获递归调用任意外层（§8.5）；无 opcode/helper/格式变更；v0.12.1：全文档审计修正——分配型清单补 H54 closure_new（§1/§6/§8.1）、§0 I8/简化 3/适用范围随 v0.10–v0.12 同步、§2 -1 行随 §9.15 扩展同步、§8.0 源入口参数禁用 Closure（Marshal 表无行，恒不可供给）、§8.3 取消及时性边界、T13 计数 13 种；M2 CALL_HOST 议题清单（八项困难 + 三档演进路径）备案于 §6）
 > 适用范围：M1 —— 纯计算 + 白名单不可变值分配 + 白名单容器变更（§9.15）+ 类型化局部变量（§11.7）+ first-class 闭包与自引用（§8.5–8.6）+ 正则字面量与操作符（§3.3/§11.9）+ 多重赋值（§5）+ 预定义函数（§8.4）、不使用宏、无 JIT 级 try-catch（字节码无 handler 表、机器码不抛不展开；异常仅存在于宿主边界：helper 内转码 §6、桥的转换 §8）
 > 平台范围：**字节码跨平台**（Windows / Linux / HarmonyOS / macOS）；**JIT 仅 Linux**，后端 **x86_64** 与 **aarch64**
 > **冻结决策**：① 32 位宿主不支持（§9 附则 9） ② JIT 仅 Linux x86_64 / aarch64，字节码不得含"仅 JIT 可实现"指令（§9 附则 10） ③ 编译粒度为整单元（§9 附则 11） ④ 宿主为仓颉运行时，句柄槽取 ID 形态（§9 附则 14）
@@ -345,7 +345,7 @@ ret: rax = cell（返回值或句柄）；errCode != 0 时 rax 未定义
 | 76 | `CALL_HELPER_NC` | u16 hid, u8 argc | 同上但不做错误检查（仅永不失败的纯函数允许） | — |
 | 77 | `CALL_HELPER_V` | u16 hid, u8 argc | 返回 Unit，不压栈；**自动尾随 CHECK_ERR**（与 CALL_HELPER 同） | helper 码 |
 | 78 | `CALL_FUNC` | u16 fid, u8 argc | 内部 JIT 函数调用（共窗口） | 传播 + 14 |
-| 79 | `CALL_HOST` | u16 fid, u8 argc | 经薄 @C 包装调宿主回调（**M1 汇编期报 `ERR_NOT_IMPL`**，M2 启用） | 传播 |
+| 79 | `CALL_HOST` | u16 fid, u8 argc | 经薄 @C 包装调宿主回调（**M1 汇编期报 `ERR_NOT_IMPL`**，M2 启用；八项困难与三档演进路径见 §6 议题清单） | 传播 |
 | 7A | `HW_OPEN` | u16 cap | 打开分配区块（M1 汇编期报 `ERR_NOT_IMPL`） | 16 |
 | 7B | `HW_CLOSE` | — | 关闭区块 | — |
 | 7C | `RET` | — | `t=[rsp]`；`rax=t`；跳 epilogue | — |
@@ -508,6 +508,25 @@ return x                // 编译错误：出口路径 x 未必已赋值
 **helper ABI**：`rdi=ctx`，`rsi=&args[0]`，`rdx=nargs`，`ret rax=cell`。args 从**操作数栈顶向下**排列（`args[0]` 是最深的那个）；nargs 由指令 `argc` 决定。**helper 内部必须把所有异常转成错误码，绝不抛出**。
 
 **封闭白名单**：本表 + §5 指令面 = JIT 产物对仓颉类型的**全部**可见能力。机器码没有任何直接调用仓颉 API 的通道（只见 Int64 ID 与固定 ABI）；不存在"调用任意 ArrayList/HashMap/String/… API"的路径。新增 helper 的准入准则（必须**全部**满足）：① 确定性——同输入同输出，禁止 now/随机/读全局态；② 无副作用——除登记不可变值与**变更型 helper 的容器修改**（H43–H48，§9.15）外；③ 结果不可变；④ 异常面可枚举并映射到 §2 错误码；⑤ 三引擎逐位一致（I7；涉及格式时按 §11.9 冻结）。扩展能力 = 新增指令 + helper + verMinor 升版（§13.3）+ 差分测试；"调用任意仓颉函数"的通用出口是 M2 `CALL_HOST`（用户经 Compiler 注册的预定义函数走 user helper 通道，§8.4，准入责任由注册者自担）。
+
+**M2 CALL_HOST 议题清单（v0.12.1 备案——不改变任何 M1 语义；M1 内 CALL_HOST 汇编期报 `ERR_NOT_IMPL`）**：以"运行期接收宿主仓颉闭包做实参"为标本，八项困难均**非理论障碍**、均有解法（括注），性质为工程代价与可证明正确性面的取舍：
+
+1. **调用通道缺位**——机器码只见固定 helper ABI（`rdi=ctx, rsi=&args, rdx=n, ret rax=cell`），无法调用仓颉 ABI（含隐藏捕获环境参数）（解法：`CALL_HOST` 薄 @C 转发器 = helper ABI 反向版，0x79 已预留）；
+2. **静态性丧失**——调用点目标运行期才知，§8.4 的"静态 hid 烘焙 + trampoline 编译期布局"不可复用（解法：运行期回调表——闭包 ID 入句柄表、条目持 `CFunc`，同步保护复用 §9.7）；
+3. **签名运行期校验 + 禁高阶失效**——§8.6 的"签名是前端/桥静态知识"前提崩塌，宿主闭包返回值可为闭包形成高阶链（解法：Marshal 时对仓颉函数类型验签；一/二档**保留禁高阶**，排除高阶链）；
+4. **输入等价性不可建立**——宿主闭包捕获状态跨调用可变，"同输入同输出"无法定义，差分测试与可重复调用（§8.3）失去黄金基准（解法：三引擎共用同一宿主闭包 ⇒ 行为天然一致，差分退化为"转发语义逐位一致"；含 CALL_HOST 的函数按 §9.15 既有模式保守按变更型处理）；
+5. **异常语义错位**——用户闭包的业务异常是正常程序流，映射为 99（实现缺陷信号）不合理（解法：新错误码 `21 ERR_HOST_CALLBACK` + 复用 cause 通道；异常对象回译属第三档）；
+6. **重入**——宿主闭包体内再调 JIT 产物（解法：ctx 每调用独立分配已是 §9.7 现状，重入 = 转发器内走正常 call 开新 ctx；需专项审计 fail-fast/三态收尾的嵌套组合语义）；
+7. **GC 栈扫描边界放大**——回调链穿过 JIT 帧更深（解法：先例已存在——helper 内分配即触发 GC 穿过 JIT 帧；需验证并文档化保守扫描假设）；
+8. **序列化封闭**——闭包不可序列化（§8.4），`.fbc` 分发世界无供给通道（解法：分发世界继续禁止，零成本）。
+
+**三档演进路径**（每档独立交付、独立测试）：
+
+- **第一档（最小可行）**：`CALL_HOST` 仅调**编译期注册**的回调——静态性保留，仅补运行期绑定；
+- **第二档**：宿主闭包做实参——运行期回调表 + 运行期验签 + 错误码 21，禁高阶保留；
+- **第三档**：高阶（闭包返回闭包）+ 异常对象回译——完整双向互操作。
+
+判定：M1 的形态上限是 §8.4（编译期注册、运行期只传数据）；运行期闭包实参 = M2 CALL_HOST 的核心议题，按档渐进开放。
 
 | hid | 名称 | 输入 | 输出 | 失败码 |
 |---|---|---|---|---|
