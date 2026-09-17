@@ -6,7 +6,7 @@
   "fountain::rpcdef" = {path = "./rpcdef"}
 
 [workspace]
-  version = "1.3.0"
+  version = "1.3.2"
   organization = "fountain"
   description = "demo for how to develop by fountain::f_rpc"
   members=["./rpcdef", "./rpcserver", "./rpcclient"]
