@@ -1,16 +1,16 @@
 # Fountain JIT · M1 字节码规格
 
-> 版本 v0.18.12（评审稿） · 2026-09-16（v0.3：一致性修订 + 冻结决策 ③；v0.4：区间 / Decimal 算术 / 数值互转 / Duration·DateTime 算术 / 插值串 / 类型化局部变量（明确赋值 + 空安全）/ 句柄 Marshal 与逃逸（§8.1）/ 统一函数包装 call\<T\>（§8.2）/ 源码入口与只编译一次去重（§8）/ 调用契约与线程模型（§8.3）/ 小数字面值与超 Int64 整数字面值 → Decimal、显式数值转换（§11.9）/ 句柄类型映射标准库（§3.2，Decimal = std.math.numeric.Decimal §9.12），激活窗口分配机制；v0.4.1：宿主句柄槽实现冻结——ID 形态（决策 ④）；v0.4.2：`call<T>` 逃逸槽自动回收（§8.1 规则 6）；call 清理 try/finally 化、16 中途边界与三缓解手段 + capacityLimit、ctx 内存机制与 Marshal 自实现依据、helper 封闭白名单与准入准则（§4/§6/§8.1/§8.2/§9.6）；v0.5：容器变更（List add/insert/set/remove、Map put/remove，0xA1/A3 启用 + 0xAB–AF）、常量容器写保护（错误码 20）、变更型函数 deopt 禁令（§9.15）、for-in 全类型规范降低（含 Map 键快照 MAP_KEYS，§5/§11.9）；v0.6：字符串切片/替换（STR_SUB/STR_REPLACE，0xB8/B9）、正则字面量 `/…/flags`（新类型 Regex = token 8 / LocalType 9 / 常量 kind 10，加载期一次编译、跨调用复用，REGEX_IS_MATCH/FIND = 0xBA/BB）、for-in 源语言形式与仓颉对齐（含 where）、多重赋值/变量交换降低——同时赋值语义（§5）；v0.7：被编译代码格式声明（lambda 源入口，§8.0）、`recursive` 自递归关键字（降低为 CALL_FUNC）、LocalType 10/11（List/Map 仅参数槽）、FuncEntry.retType（签名入字节码，verMinor=4）；v0.8：编译器门面 Compiler 类与预定义函数注册（§8.4——user helper 通道 hid[0x0100,0xFFFF]、编译期名字解析与未注册错误 SourceCompileException、分发边界），verMinor=5；v0.9：嵌套闭包（词法绑定 + 按值捕获快照）、recursive 绑定最近层词法闭包、立即调用 IIFE、源码注释（§8.5；无 .fbc 格式变更）；v0.10：first-class 闭包值（闭包表达式求值/变量绑定与调用，§8.6——closure_new/CALL_CLOSURE/LOAD_CAP、token 9、LocalType 12、ctx.fnTable、词法绑定模型统一升级为闭包值模型，verMinor=6）；v0.11：正则操作符 `~` / `!~` / 全局与第 n 替换（§11.9，H58/H59，优先级高于加减左结合，verMinor=7；错误即终止（fail-fast）语义显式化（§0/§2/§5，CALL_HELPER_V 自动 CHECK_ERR 明确）；ctx 非托管内存配对释放 finally 义务（§8.2）+ M1 无单元卸载注记（§8.1）+ T27 内存安全）；v0.12：recursive 值化——`let x = recursive` 自引用闭包值（闭包层 = LOADL 0；顶层 = 隐藏适配器 FuncEntry + closure_new，§8.0/§8.6），嵌套闭包经变量捕获递归调用任意外层（§8.5）；无 opcode/helper/格式变更；v0.12.1：全文档审计修正——分配型清单补 H54 closure_new（§1/§6/§8.1）、§0 I8/简化 3/适用范围随 v0.10–v0.12 同步、§2 -1 行随 §9.15 扩展同步、§8.0 源入口参数禁用 Closure（Marshal 表无行，恒不可供给）、§8.3 取消及时性边界、T13 计数 13 种；M2 CALL_HOST 议题清单（八项困难 + 三档演进路径）备案于 §6；v0.13：单元卸载——JitFunction.unload（状态机 Ready→Unloading→Unloaded、活跃调用排空、资产清点与释放顺序、常量同 ID 契约限定单元存活期，§8.7）、调用已卸载单元 → 19（§2/§8.2 入口断言）、T29；无 opcode/helper/格式变更；v0.13.1：目录审计修正——§8 JitFunction 骨架补生命周期成员 ⑤（unload/isUnloaded）、§8.2 调用六步补第 0 步入口断言、A 常量槽释放措辞精确化（唯一释放点 = 单元卸载，§8.7）；v0.14：字符串字面量形态（§8.8）——多行 `'''`/`"""`（仓颉基础规则）、原始串（`#`×n 定界，仓颉一致）、`>|` 每行锚定扩展（前缀一律忽略）、换行规范化（CRLF/CR→LF）、插值适用边界（原始串不适用）；无 opcode/helper/格式变更；T42；v0.14.1：`>|` 锚定放宽——无 `>|` 的行（含空白/非空白）**整行原样保留**（`MissingMarginMarker` 取消）；v0.14.2：`>|` 标记不进入字符串内容显式化——纯定位语法，切分时被消耗，产物不含该标记（单独 `>|` 行 → 空串）；v0.14.3：`>|` 有效标记收紧——仅行内**首个非空白位置**的 `>|` 才生效（前导仅缩进空白；非空白符之后的 `>|` 是字面内容、既不截断也不触发锚定模式）；v0.14.4：非标记情形固化显式示例——`>>|`/`a>|b`/`|>|` 中 `>|` 前有任意非空白字符即为字面内容（不消耗、不截断、不触发锚定模式，行为同 v0.14.3）；v0.14.5：并发安全补强——§8.3② 增适配器注册表同步行、§8.4 增 user helper impl 并发调用义务、§8.7 增 unload vs compile（Unloading 期间）阻塞重编语义（并发与序贯等价）；v0.14.6：cause 通道调用私有明确——§8.4（并发失败调用的 code/site/cause 互不串扰）；v0.15：String 重复 `s * n`（STR_REPEAT 0xBC/H60）、DateTime 差 `dt1 − dt2 → Duration`（DT_DIFF 0xBD/H61，自 M2 提前）、n 位置运行期自动窄化（F64/DEC → Int64，含 `d / n`；仅限 n 位置）；verMinor=8；T43；v0.15.1：if 值/语句双用法类型规则——形式按使用位置判定；值用法（典型 = 变量赋值）要求全分支类型逐位一致、语句用法不受限（前端语义，无字节码变更）；v0.16：Map for-in 双快照降低——`MAP_KEYS`（0xAF/H49）升级为单遍 `toArray()` 拆分（键列表 + 值列表挂起）、新 `MAP_VALUES`（0xBE/H62）登记值列表；迭代视图完全冻结（零逐键查找、无 5 场景）、每执行 2 槽；verMinor=9；T45；v0.16.1：Map for-in 改**惰性单遍迭代器**（取代同轮 v0.16 双快照）——0xAF `MAP_KEYS`→`MAP_ITER_BEGIN`（H49 重定义、移出分配型）、0xBE `MAP_VALUES`→`MAP_ITER_STEP`（`u8 mode`；H62 重定义）；新增错误码 **23**（迭代中修改同一 map，对齐 std CME）；**无新增 helper 槽位**（M2/M3 编号不变）；每执行 0 槽；v0.16.2：§8.5 逃逸括注精确化——「向上返回」移出禁止例（与 §8.6 对齐：禁止仅跨桥/存容器；链内返回为允许面；纯显式化、无行为变更）；v0.16.3：§11.9 替换段 `/` 个数澄清——`//` = 无 flags 字面量闭合符 + 开启符相邻（非独立符号）；带 flags 字面量（`/[a-z]/i/s/r/g`）与 Regex 变量（`let re = /\s/` → `re/s/r/g`）均为单 `/`；LHS 括注更新为「字面量常量或 Regex 局部变量」（§11.7）；v0.16.4：示意记法修正——表格与 §5 摘要的 `re//s/r/g` 改为 `re/s/r/g`（`re` = Regex 表达式占位符，分隔符恒单 `/`；无 flags 字面量代入后闭合符与分隔符相邻呈 `//`，如 `/\s//s/r/g`，非分隔符翻倍）；v0.16.5：std API 事实核对修正——`HashMap` 无 `put` 方法：写键 = `add(key, value): Option<V>`（覆盖并返回旧值；不存在 → None）、删键 = `remove(key): Option<V>`（返回被删值；不存在 → None）；§6 变更型 helper 映射句、§9 附则 15、§11.9 迭代段、T19/T45 相关表述同步；其余 std 引用（ArrayList 签名、`HashMap.iterator()`、CME 转码）核对无误；无格式/语义变更）；v0.17：① **Regex 互操作开放**——可作参数/返回（§8.0 参数面、§11.7 LocalType 9 与 retType、§8.2 Marshal/解包表 +Regex、§3.3/§11.9 同步）；新增 **`fountain::f_regex` 字符串扩展 `regexStr.regex()`** 运行期构造 Regex（新 opcode `STR_TO_REGEX`=0xBF、helper H69 `str_to_regex`；非法/空 pattern → 14；分配型）；**verMinor=10**（新增 opcode/helper）；② **`recursive` 自动尾递归优化**——尾位置自递归降为「实参逆序 `STOREL` + `LOOP_BACK <入口>`」帧复用回边（不增长栈、安全点照常；无新 opcode——纯前端降低）；T46/T47；v0.18：**容器自建开放**——空字面值 `[]`/`{}` = 运行时构造（既有 A0/A2 **原地启用** `MAKE_LIST`/`MAKE_MAP` + helper H70/H71；分配型、可变、不进常量表；非空字面值维持常量模型）+ **List/Map 可声明为局部**（LocalType 10/11 全槽位）；**verMinor=11**；T48；并修正 §3.2 类型表遗留表述（Regex 来源）；v0.18.1：**字面值变量返回明确化**——任意（M1）字面值类型声明的变量均可作返回值（含**非空容器字面值常量**：交付宿主 = 共享只读对象（零拷贝）、ID 跨调用稳定、D 路径对路径 A 为 no-op；闭包除外）；§3.3/§8.0/§8.1/T48 同步；无格式变更）；v0.18.2：capacityLimit 调整语义统一——§9.6 缓解手段 1 与 §8.1 API 注释对齐（运行中调大即时生效、调小不追溯已占用槽；删除旧「须在加载前调整」矛盾句）；无格式变更）；v0.18.3：措辞修正——§6/§9.6「表达全局上限」→「句柄表全局上限触顶」（原措辞「表·达」连写易误读为「表达」，§9.6 并缺主语「句柄」；纯措辞、无行为变更）；v0.18.4：hwCap 初值统一——**有分配单元恒 1024**（2^10；取代「无分配循环精确上界/含循环静态估计」双轨，编译器不再做槽需求分析）；无分配单元仍 0；上限 capacityLimit（2^20）不变；§1/§9.6/T28 同步；m2 v0.8.4 引用同步；无格式变更）；v0.18.5：`HandleTable.initialCapacity` 开放——窗口初始容量为宿主可配置（默认 1024；可在调用前调整、对之后开始的调用生效；无分配单元仍 0）；`capacityLimit` 语义不变；§1（ctx 表 + 句柄窗口语义）/§8.1/§8.2（桥义务：hwBase/hwCap 写入明文化）/§9.6/§12 同步；m2 v0.8.5 措辞同步）；v0.18.6：§8.6 逃逸禁令设计理由成文——四条硬约束（窗口生命周期 §8.1 / 桥封闭性 §8.2.1 / 单元存活耦合 §8.7 / 确定性与重放 I8）+ 配套与术语注（与 §8.1「逃逸（D 路径）」同名反义）；§8.5 交叉引用同步；纯增注、无行为变更）；v0.18.7：§8.6 补后档指针两处（逃逸禁令行 + 设计理由「配套」句 → `jit-bytecode-m2.md` §13 第 8 项：逃逸闭包回桥草案——仅跨桥返回方向、存容器维持禁止）；纯增注、无行为变更）；v0.18.8：§8.5「M2 边界」修订（闭包逃逸仅"跨桥返回"方向自 M2 开放）+ §8.6 两处指针改指 m2 §14——逃逸闭包回桥（返回嵌套闭包）转为 **M2 交付**（同批：m2 v0.8.8 §14 增篇）；纯表述与指针、无 M1 行为变更）；v0.18.9：§8.8 增「异种引号内容规则」——与定界引号不同种的引号（含任意连续串）为有效内容、不参与定界配对（`'"aa"'` 的 `"`、`"'aa'"` 的 `'`；单行与多行均适用；同种引号规则不变；原始串不受影响）；T42 补项；语义明确化、无格式变更）；v0.18.10：§9.6 条 6 补 `initialCapacity` 选值依据（调用级不预分配、仅是扩容触发点；1024 覆盖常见单调用峰值量级；与 2^20 相差 1024 倍；运行期可调）；纯依据注记、无行为变更）；v0.18.11：`initialCapacity` 默认值 1024 → **128**（2^7）——依据修订：常见单调用分配为个位到十位数、128 留 4–10 倍余量并覆盖小循环（≤128 次迭代）；§1/§8.1/§9.6/§12 同步；m2 v0.8.9 同步；无格式变更）；v0.18.12：§9.6 明确**扩容倍率 = 倍增（×2）**（以 `capacityLimit` 封顶；单调用扩容事件 ≤ log2 上取整——默认 128 → 2^20 为 ≤ 13 次；松弛有界 `hwCap ≤ 2 × hwTop`；表物理容量宿主自管）；语义明确化、无格式变更）
+> 版本 v0.18.14（评审稿） · 2026-09-16（v0.3：一致性修订 + 冻结决策 ③；v0.4：区间 / Decimal 算术 / 数值互转 / Duration·DateTime 算术 / 插值串 / 类型化局部变量（明确赋值 + 空安全）/ 句柄 Marshal 与逃逸（§8.1）/ 统一函数包装 call\<T\>（§8.2）/ 源码入口与只编译一次去重（§8）/ 调用契约与线程模型（§8.3）/ 小数字面值与超 Int64 整数字面值 → Decimal、显式数值转换（§11.9）/ 句柄类型映射标准库（§3.2，Decimal = std.math.numeric.Decimal §9.12），激活窗口分配机制；v0.4.1：宿主句柄槽实现冻结——ID 形态（决策 ④）；v0.4.2：`call<T>` 逃逸槽自动回收（§8.1 规则 6）；call 清理 try/finally 化、16 中途边界与三缓解手段 + capacityLimit、ctx 内存机制与 Marshal 自实现依据、helper 封闭白名单与准入准则（§4/§6/§8.1/§8.2/§9.6）；v0.5：容器变更（List add/insert/set/remove、Map put/remove，0xA1/A3 启用 + 0xAB–AF）、常量容器写保护（错误码 20）、变更型函数 deopt 禁令（§9.15）、for-in 全类型规范降低（含 Map 键快照 MAP_KEYS，§5/§11.9）；v0.6：字符串切片/替换（STR_SUB/STR_REPLACE，0xB8/B9）、正则字面量 `/…/flags`（新类型 Regex = token 8 / LocalType 9 / 常量 kind 10，加载期一次编译、跨调用复用，REGEX_IS_MATCH/FIND = 0xBA/BB）、for-in 源语言形式与仓颉对齐（含 where）、多重赋值/变量交换降低——同时赋值语义（§5）；v0.7：被编译代码格式声明（lambda 源入口，§8.0）、`recursive` 自递归关键字（降低为 CALL_FUNC）、LocalType 10/11（List/Map 仅参数槽）、FuncEntry.retType（签名入字节码，verMinor=4）；v0.8：编译器门面 Compiler 类与预定义函数注册（§8.4——user helper 通道 hid[0x0100,0xFFFF]、编译期名字解析与未注册错误 SourceCompileException、分发边界），verMinor=5；v0.9：嵌套闭包（词法绑定 + 按值捕获快照）、recursive 绑定最近层词法闭包、立即调用 IIFE、源码注释（§8.5；无 .fbc 格式变更）；v0.10：first-class 闭包值（闭包表达式求值/变量绑定与调用，§8.6——closure_new/CALL_CLOSURE/LOAD_CAP、token 9、LocalType 12、ctx.fnTable、词法绑定模型统一升级为闭包值模型，verMinor=6）；v0.11：正则操作符 `~` / `!~` / 全局与第 n 替换（§11.9，H58/H59，优先级高于加减左结合，verMinor=7；错误即终止（fail-fast）语义显式化（§0/§2/§5，CALL_HELPER_V 自动 CHECK_ERR 明确）；ctx 非托管内存配对释放 finally 义务（§8.2）+ M1 无单元卸载注记（§8.1）+ T27 内存安全）；v0.12：recursive 值化——`let x = recursive` 自引用闭包值（闭包层 = LOADL 0；顶层 = 隐藏适配器 FuncEntry + closure_new，§8.0/§8.6），嵌套闭包经变量捕获递归调用任意外层（§8.5）；无 opcode/helper/格式变更；v0.12.1：全文档审计修正——分配型清单补 H54 closure_new（§1/§6/§8.1）、§0 I8/简化 3/适用范围随 v0.10–v0.12 同步、§2 -1 行随 §9.15 扩展同步、§8.0 源入口参数禁用 Closure（Marshal 表无行，恒不可供给）、§8.3 取消及时性边界、T13 计数 13 种；M2 CALL_HOST 议题清单（八项困难 + 三档演进路径）备案于 §6；v0.13：单元卸载——JitFunction.unload（状态机 Ready→Unloading→Unloaded、活跃调用排空、资产清点与释放顺序、常量同 ID 契约限定单元存活期，§8.7）、调用已卸载单元 → 19（§2/§8.2 入口断言）、T29；无 opcode/helper/格式变更；v0.13.1：目录审计修正——§8 JitFunction 骨架补生命周期成员 ⑤（unload/isUnloaded）、§8.2 调用六步补第 0 步入口断言、A 常量槽释放措辞精确化（唯一释放点 = 单元卸载，§8.7）；v0.14：字符串字面量形态（§8.8）——多行 `'''`/`"""`（仓颉基础规则）、原始串（`#`×n 定界，仓颉一致）、`>|` 每行锚定扩展（前缀一律忽略）、换行规范化（CRLF/CR→LF）、插值适用边界（原始串不适用）；无 opcode/helper/格式变更；T42；v0.14.1：`>|` 锚定放宽——无 `>|` 的行（含空白/非空白）**整行原样保留**（`MissingMarginMarker` 取消）；v0.14.2：`>|` 标记不进入字符串内容显式化——纯定位语法，切分时被消耗，产物不含该标记（单独 `>|` 行 → 空串）；v0.14.3：`>|` 有效标记收紧——仅行内**首个非空白位置**的 `>|` 才生效（前导仅缩进空白；非空白符之后的 `>|` 是字面内容、既不截断也不触发锚定模式）；v0.14.4：非标记情形固化显式示例——`>>|`/`a>|b`/`|>|` 中 `>|` 前有任意非空白字符即为字面内容（不消耗、不截断、不触发锚定模式，行为同 v0.14.3）；v0.14.5：并发安全补强——§8.3② 增适配器注册表同步行、§8.4 增 user helper impl 并发调用义务、§8.7 增 unload vs compile（Unloading 期间）阻塞重编语义（并发与序贯等价）；v0.14.6：cause 通道调用私有明确——§8.4（并发失败调用的 code/site/cause 互不串扰）；v0.15：String 重复 `s * n`（STR_REPEAT 0xBC/H60）、DateTime 差 `dt1 − dt2 → Duration`（DT_DIFF 0xBD/H61，自 M2 提前）、n 位置运行期自动窄化（F64/DEC → Int64，含 `d / n`；仅限 n 位置）；verMinor=8；T43；v0.15.1：if 值/语句双用法类型规则——形式按使用位置判定；值用法（典型 = 变量赋值）要求全分支类型逐位一致、语句用法不受限（前端语义，无字节码变更）；v0.16：Map for-in 双快照降低——`MAP_KEYS`（0xAF/H49）升级为单遍 `toArray()` 拆分（键列表 + 值列表挂起）、新 `MAP_VALUES`（0xBE/H62）登记值列表；迭代视图完全冻结（零逐键查找、无 5 场景）、每执行 2 槽；verMinor=9；T45；v0.16.1：Map for-in 改**惰性单遍迭代器**（取代同轮 v0.16 双快照）——0xAF `MAP_KEYS`→`MAP_ITER_BEGIN`（H49 重定义、移出分配型）、0xBE `MAP_VALUES`→`MAP_ITER_STEP`（`u8 mode`；H62 重定义）；新增错误码 **23**（迭代中修改同一 map，对齐 std CME）；**无新增 helper 槽位**（M2/M3 编号不变）；每执行 0 槽；v0.16.2：§8.5 逃逸括注精确化——「向上返回」移出禁止例（与 §8.6 对齐：禁止仅跨桥/存容器；链内返回为允许面；纯显式化、无行为变更）；v0.16.3：§11.9 替换段 `/` 个数澄清——`//` = 无 flags 字面量闭合符 + 开启符相邻（非独立符号）；带 flags 字面量（`/[a-z]/i/s/r/g`）与 Regex 变量（`let re = /\s/` → `re/s/r/g`）均为单 `/`；LHS 括注更新为「字面量常量或 Regex 局部变量」（§11.7）；v0.16.4：示意记法修正——表格与 §5 摘要的 `re//s/r/g` 改为 `re/s/r/g`（`re` = Regex 表达式占位符，分隔符恒单 `/`；无 flags 字面量代入后闭合符与分隔符相邻呈 `//`，如 `/\s//s/r/g`，非分隔符翻倍）；v0.16.5：std API 事实核对修正——`HashMap` 无 `put` 方法：写键 = `add(key, value): Option<V>`（覆盖并返回旧值；不存在 → None）、删键 = `remove(key): Option<V>`（返回被删值；不存在 → None）；§6 变更型 helper 映射句、§9 附则 15、§11.9 迭代段、T19/T45 相关表述同步；其余 std 引用（ArrayList 签名、`HashMap.iterator()`、CME 转码）核对无误；无格式/语义变更）；v0.17：① **Regex 互操作开放**——可作参数/返回（§8.0 参数面、§11.7 LocalType 9 与 retType、§8.2 Marshal/解包表 +Regex、§3.3/§11.9 同步）；新增 **`fountain::f_regex` 字符串扩展 `regexStr.regex()`** 运行期构造 Regex（新 opcode `STR_TO_REGEX`=0xBF、helper H69 `str_to_regex`；非法/空 pattern → 14；分配型）；**verMinor=10**（新增 opcode/helper）；② **`recursive` 自动尾递归优化**——尾位置自递归降为「实参逆序 `STOREL` + `LOOP_BACK <入口>`」帧复用回边（不增长栈、安全点照常；无新 opcode——纯前端降低）；T46/T47；v0.18：**容器自建开放**——空字面值 `[]`/`{}` = 运行时构造（既有 A0/A2 **原地启用** `MAKE_LIST`/`MAKE_MAP` + helper H70/H71；分配型、可变、不进常量表；非空字面值维持常量模型）+ **List/Map 可声明为局部**（LocalType 10/11 全槽位）；**verMinor=11**；T48；并修正 §3.2 类型表遗留表述（Regex 来源）；v0.18.1：**字面值变量返回明确化**——任意（M1）字面值类型声明的变量均可作返回值（含**非空容器字面值常量**：交付宿主 = 共享只读对象（零拷贝）、ID 跨调用稳定、D 路径对路径 A 为 no-op；闭包除外）；§3.3/§8.0/§8.1/T48 同步；无格式变更）；v0.18.2：capacityLimit 调整语义统一——§9.6 缓解手段 1 与 §8.1 API 注释对齐（运行中调大即时生效、调小不追溯已占用槽；删除旧「须在加载前调整」矛盾句）；无格式变更）；v0.18.3：措辞修正——§6/§9.6「表达全局上限」→「句柄表全局上限触顶」（原措辞「表·达」连写易误读为「表达」，§9.6 并缺主语「句柄」；纯措辞、无行为变更）；v0.18.4：hwCap 初值统一——**有分配单元恒 1024**（2^10；取代「无分配循环精确上界/含循环静态估计」双轨，编译器不再做槽需求分析）；无分配单元仍 0；上限 capacityLimit（2^20）不变；§1/§9.6/T28 同步；m2 v0.8.4 引用同步；无格式变更）；v0.18.5：`HandleTable.initialCapacity` 开放——窗口初始容量为宿主可配置（默认 1024；可在调用前调整、对之后开始的调用生效；无分配单元仍 0）；`capacityLimit` 语义不变；§1（ctx 表 + 句柄窗口语义）/§8.1/§8.2（桥义务：hwBase/hwCap 写入明文化）/§9.6/§12 同步；m2 v0.8.5 措辞同步）；v0.18.6：§8.6 逃逸禁令设计理由成文——四条硬约束（窗口生命周期 §8.1 / 桥封闭性 §8.2.1 / 单元存活耦合 §8.7 / 确定性与重放 I8）+ 配套与术语注（与 §8.1「逃逸（D 路径）」同名反义）；§8.5 交叉引用同步；纯增注、无行为变更）；v0.18.7：§8.6 补后档指针两处（逃逸禁令行 + 设计理由「配套」句 → `jit-bytecode-m2.md` §13 第 8 项：逃逸闭包回桥草案——仅跨桥返回方向、存容器维持禁止）；纯增注、无行为变更）；v0.18.8：§8.5「M2 边界」修订（闭包逃逸仅"跨桥返回"方向自 M2 开放）+ §8.6 两处指针改指 m2 §14——逃逸闭包回桥（返回嵌套闭包）转为 **M2 交付**（同批：m2 v0.8.8 §14 增篇）；纯表述与指针、无 M1 行为变更）；v0.18.9：§8.8 增「异种引号内容规则」——与定界引号不同种的引号（含任意连续串）为有效内容、不参与定界配对（`'"aa"'` 的 `"`、`"'aa'"` 的 `'`；单行与多行均适用；同种引号规则不变；原始串不受影响）；T42 补项；语义明确化、无格式变更）；v0.18.10：§9.6 条 6 补 `initialCapacity` 选值依据（调用级不预分配、仅是扩容触发点；1024 覆盖常见单调用峰值量级；与 2^20 相差 1024 倍；运行期可调）；纯依据注记、无行为变更）；v0.18.11：`initialCapacity` 默认值 1024 → **128**（2^7）——依据修订：常见单调用分配为个位到十位数、128 留 4–10 倍余量并覆盖小循环（≤128 次迭代）；§1/§8.1/§9.6/§12 同步；m2 v0.8.9 同步；无格式变更）；v0.18.12：§9.6 明确**扩容倍率 = 倍增（×2）**（以 `capacityLimit` 封顶；单调用扩容事件 ≤ log2 上取整——默认 128 → 2^20 为 ≤ 13 次；松弛有界 `hwCap ≤ 2 × hwTop`；表物理容量宿主自管）；语义明确化、无格式变更）；v0.18.13：JIT 指令集支持表述修订——「JIT 仅 Linux x86_64 / aarch64」统一改为「**JIT 仅 Linux；指令集支持范围跟随仓颉 SDK for Linux**（当前 x86_64 / aarch64；SDK 扩大支持范围时本实现**随之扩大**）」——覆盖 §0 平台范围/冻结决策 ②/执行模型、§8 引擎选择（管线注释 + 段落）、§9 附则 10、§12 标题 + §12.1、§13.1 注 + §13 原则 4 + §4 原则表；当前支持集与行为不变）；v0.18.14：**OPCODE_TABLE 全量显式化**——0x00–0xFF 共 256 项不留空洞（98 个未分配槽补 `OP_RSVD`/CAT_RSVD；0xC0–FF 为 M2 规划预留区、归 RSVD）；顺带修正 0xBE `OP_MAP_ITER_STEP` len 1→2（`u8 mode`，违反校验 2 的笔误）；§10.1 RSVD/FORBID 归类、§10.3 导语与校验 1 措辞同步；行为不变（未分配槽发射仍 `ERR_NOT_IMPL`））
 > 适用范围：M1 —— 纯计算 + 白名单值分配与容器自建/变更（§9.15；空容器构造 v0.18）+ 类型化局部变量（§11.7）+ first-class 闭包与自引用（§8.5–8.6）+ 正则字面量与操作符（§3.3/§11.9）+ 多重赋值（§5）+ 预定义函数（§8.4）+ 字符串重复与日期差（§11.9，v0.15）、不使用宏、无 JIT 级 try-catch（字节码无 handler 表、机器码不抛不展开；异常仅存在于宿主边界：helper 内转码 §6、桥的转换 §8）
-> 平台范围：**字节码跨平台**（Windows / Linux / HarmonyOS / macOS）；**JIT 仅 Linux**，后端 **x86_64** 与 **aarch64**
-> **冻结决策**：① 32 位宿主不支持（§9 附则 9） ② JIT 仅 Linux x86_64 / aarch64，字节码不得含"仅 JIT 可实现"指令（§9 附则 10） ③ 编译粒度为整单元（§9 附则 11） ④ 宿主为仓颉运行时，句柄槽取 ID 形态（§9 附则 14）
-> 目录：§0 总览 · §1 ctx · §2 错误码 · §3 帧布局 · §4 入口 ABI · §5 ISA · §6 helper · §7 伪指令 · §8 桥入口 · §9 附则 · §10 opcode 常量表 · §11 跨平台字节码 · §12 JIT 后端（x86_64 / AArch64） · §13 平台矩阵与差分测试
+> 平台范围：**字节码跨平台**（Windows / Linux / HarmonyOS / macOS）；**JIT 仅 Linux**——指令集支持范围**跟随仓颉 SDK for Linux**（当前 SDK 仅 x86_64 与 aarch64，故当前后端为这两种；SDK 扩大指令集支持范围时，本实现**随之扩大**）
+> **冻结决策**：① 32 位宿主不支持（§9 附则 9） ② JIT 仅 Linux、指令集跟随仓颉 SDK for Linux（当前 x86_64 / aarch64），字节码不得含"仅 JIT 可实现"指令（§9 附则 10） ③ 编译粒度为整单元（§9 附则 11） ④ 宿主为仓颉运行时，句柄槽取 ID 形态（§9 附则 14）
+> 目录：§0 总览 · §1 ctx · §2 错误码 · §3 帧布局 · §4 入口 ABI · §5 ISA · §6 helper · §7 伪指令 · §8 桥入口 · §9 附则 · §10 opcode 常量表 · §11 跨平台字节码 · §12 JIT 后端（Linux；当前 x86_64 / AArch64） · §13 平台矩阵与差分测试
 
 ---
 
 ## §0 总览与不变式
 
-**执行模型**：栈式虚拟机字节码是**跨平台唯一产物**，由解释器在所有平台执行；在 Linux x86_64 / aarch64 上另有 JIT 后端把它展开为机器码。机器码**本身不分配**、**不抛异常**、**不做栈展开**，且**永不落盘、永不跨机共享**。
+**执行模型**：栈式虚拟机字节码是**跨平台唯一产物**，由解释器在所有平台执行；在 Linux 上另有 JIT 后端把它展开为机器码（**指令集支持范围跟随仓颉 SDK for Linux**——当前 x86_64 与 aarch64；SDK 扩大时随之扩大）。机器码**本身不分配**、**不抛异常**、**不做栈展开**，且**永不落盘、永不跨机共享**。
 
 **值分配（I8）与容器变更（v0.5）**：白名单**分配型** helper 可在宿主侧分配**值**（String/Decimal/DateTime/Duration/Range 的运算与转换结果、插值串、**闭包对象**（H54，fnId + 捕获快照，§8.6）、**新建空容器**（H70/H71，v0.18——可变，其变更仍经变更型 helper））；白名单**变更型** helper（H43–H48）是**唯一许可的容器副作用**——修改已存在的 List/Map（含自建容器），仅作用于非常量槽，且语义确定（§9.15）。机器码与解释器核心本身仍不分配、不直接变更。deopt 重放会重新分配**等值**对象——值不可变 ⇒ 可观察语义不变；**含变更型调用的函数禁止 deopt 重放**（§9.15②：H43–H48/预定义 helper/CALL_CLOSURE，汇编期保证重放不可达）。
 
@@ -741,7 +741,8 @@ func hl_get(ctx: CPointer<Unit>, args: CPointer<Int64>, n: Int64): Int64 {
 //    2. 并发去重：以 (源码指纹) 为键查询进程级编译缓存——命中 Ready 复用同一
 //       JitFunction；他人 Compiling 中则等待其完成（成功共享结果、失败共享异常），
 //       确保【相同源码只编译一次】；Miss → CAS 占位后执行后续步骤；
-//    3. 引擎选择：当前 OS 为 Linux x86_64 / aarch64 → 立即将字节码 JIT 为机器码；
+//    3. 引擎选择：OS 为 Linux 且指令集在仓颉 SDK for Linux 支持范围内
+//       （当前 = x86_64 / aarch64）→ 立即将字节码 JIT 为机器码；
 //       否则编译到此结束（仅解释器，diagnostics 记录，§12.1）；
 //    4. 返回入口函数对象（fnId == entryFn），单元内其余函数随之就绪。
 //    失败在此刻抛出，不涉及运行期错误槽；失败结果同样入缓存（同键复用同一异常）。
@@ -840,7 +841,7 @@ try {
 }
 ```
 
-**引擎选择（跨平台一致）**：`CompileOptions.jit` 取值 `Off / Auto / Force`。只有 Linux x86_64 / aarch64 上可能产生机器码；其他平台（Windows / macOS / HarmonyOS / 其他架构 Linux）一律**静默降级为解释器**，并在 `CompileOptions.diagnostics` 记一条说明——**绝不因此报错，也绝不改变语义**（见 §12.1、§13）。三个入口的签名与语义在任何平台完全相同。
+**引擎选择（跨平台一致）**：`CompileOptions.jit` 取值 `Off / Auto / Force`。只有 **Linux、且指令集在仓颉 SDK for Linux 支持范围内**（当前 x86_64 / aarch64）才可能产生机器码；其他平台（Windows / macOS / HarmonyOS / 当前 SDK 未支持的 Linux 架构）一律**静默降级为解释器**，并在 `CompileOptions.diagnostics` 记一条说明——**绝不因此报错，也绝不改变语义**（见 §12.1、§13）。三个入口的签名与语义在任何平台完全相同。
 
 ### §8.1 句柄生命周期与桥 Marshal（v0.4）
 
@@ -1311,7 +1312,7 @@ Ready ──unload() CAS──▶ Unloading ──activeCalls == 0──▶ Unlo
 7. **并发**：ctx 随调用栈分配，各调用的句柄窗口 `[hwBase, hwTop)` 互不重叠，句柄表的槽追加由宿主侧同步保护，故 `JitFunction` 可在多线程并发调用（前提：常量表 `freeze` 后不可变）。完整调用契约与线程模型见 §8.3。
 8. **不变量回归**：每个 M1 失败点（除零 / 越界 / 缺键 / 类型不符 / helper panic）都必须有对应测试用例，断言 `JitException.code` 与 `site` 两字段正确。
 9. **32 位宿主不支持（冻结决策）**：`cell` 恒 64 位、`ctx` 恒 64 字节是整套设计的硬前提，因此 M1 **不为任何 32 位宿主（Windows x86 / Linux i686 / armv7 / …）提供支持路径**——不构建 32 位产物、不做指针压缩、不做 32 位兼容层、不引入"宽 cell"分支。表现为**构建期/装载期失败**而非运行期降级：桥不产出 32 位库；宿主若手工加载，装载向导必须以明确错误拒绝，不得尝试解释执行。
-10. **JIT 仅 Linux（冻结决策）**：机器码只在 **Linux x86_64 / aarch64** 上产生；其余平台即使 `jit = Force` 也**静默降级为解释器**（只记 `diagnostics`，不报错、不改语义、不改返回类型）。由此推出硬约束：**字节码中不得出现任何"仅 JIT 可实现"的指令**（`.fbc` 的 `flags.bit1` 恒 0）。当某项优化只有 JIT 做得到时，唯一允许的表现是"解释器跑得慢一些"，绝不允许表现为"该函数只有 JIT 能跑"或"非 Linux 上语义不同"。
+10. **JIT 仅 Linux（冻结决策）**：机器码只在 **Linux** 上产生、且**指令集支持范围跟随仓颉 SDK for Linux**（当前 x86_64 / aarch64；SDK 扩大指令集支持范围时，本实现**随之扩大**——按既有范围变更流程执行〔§13 原则 4 + §13.2 重跑〕，属预期演进、不改变语义）；其余平台即使 `jit = Force` 也**静默降级为解释器**（只记 `diagnostics`，不报错、不改语义、不改返回类型）。由此推出硬约束：**字节码中不得出现任何"仅 JIT 可实现"的指令**（`.fbc` 的 `flags.bit1` 恒 0）。当某项优化只有 JIT 做得到时，唯一允许的表现是"解释器跑得慢一些"，绝不允许表现为"该函数只有 JIT 能跑"或"非 Linux 上语义不同"。
 
 11. **编译粒度为整单元（冻结决策）**：`compile()` 一次性处理 `SourceUnit` 内**全部函数**；不存在"单函数增量编译"。`CALL_FUNC` 只允许指向**同一 `.fbc` 单元内**的函数，目标经 §11.7 函数目录解析——相互递归因此天然支持，不依赖编译顺序。把粒度改为增量/跨单元编译属 M2 议题，且不得破坏本条与 §11.7 的一致性。
 12. **Decimal = 仓颉标准库 `std.math.numeric.Decimal`（不自定义类型，冻结）**：任意精度有符号十进制数，默认精度 0（无限精度）；**可能产生无限小数的运算（除法等）默认采用 std 的 IEEE 754-2019 decimal128 舍入（HalfEven）**。M1 固定使用 std 默认上下文，不自定义精度/舍入（不使用 `divWithPrecision` 等自定义精度 API）——确定性由 std 的实现保证。构造（含 `parse`）、四则、比较语义全部以 std 为准；÷0（含 0÷0）→ 10；`DEC_TO_I64` 经 `OverflowStrategy` 转换，越界 → 9；比较恒精确（`CMP_DEC` 不变）。
@@ -1329,7 +1330,7 @@ Ready ──unload() CAS──▶ Unloading ──activeCalls == 0──▶ Unlo
 
 - 常量名规则：`OP_<助记符>`（大写下划线），例如 `OP_PUSH_I8`、`OP_CALL_HELPER`。
 - 指令编码：`[op:u8][operands…]` 小端；`rel` 为相对**下一条指令**的有符号 32 位偏移。
-- 保留区（RSVD）在 M1 中发射即 `ERR_NOT_IMPL`；禁用区（FORBID：0xA9–AA——时间**构造**，M2 启用；0xC0–FF）同样发射即报错。v0.5 起 A1/A3/AB–AF（容器变更/快照）、v0.6 起 0xB8–BB（字符串切片替换/正则）、v0.15 起 0xBC–BD（字符串重复/日期差）、v0.16.1 起 0xBE（Map 迭代步进）、v0.17 起 0xBF（字符串建 Regex）、v0.18 起 A0/A2（空容器构造）已启用，归入 BOX。
+- 保留区（RSVD：表中未分配槽 + 0xC0–FF——后者为 M2 规划预留区〔HW_OPEN 区块内批量分配、CALL_HOST〕，见 §5）在 M1 中发射即 `ERR_NOT_IMPL`；禁用区（FORBID：0xA9–AA——时间**构造**，M2 启用）同样发射即报错。v0.5 起 A1/A3/AB–AF（容器变更/快照）、v0.6 起 0xB8–BB（字符串切片替换/正则）、v0.15 起 0xBC–BD（字符串重复/日期差）、v0.16.1 起 0xBE（Map 迭代步进）、v0.17 起 0xBF（字符串建 Regex）、v0.18 起 A0/A2（空容器构造）已启用，归入 BOX。
 - 实现侧应构建 `OPCODE_TABLE: Array<OpInfo>` 并以 opcode 为下标索引，供反汇编、汇编期校验、调试器共用。
 
 ### §10.2 操作数编码种类（OperandFormat）
@@ -1345,6 +1346,8 @@ Ready ──unload() CAS──▶ Unloading ──activeCalls == 0──▶ Unlo
 | `u16 u8` | 3 | 双操作数（如 helper id + argc） |
 
 ### §10.3 opcode 常量表（Cangjie 骨架，可直接作为实现起点）
+
+**全量 256 项显式列出**（`table[i].code == i`）；未分配槽统一 `OP_RSVD`（CAT_RSVD）——M1 发射即 `ERR_NOT_IMPL`。
 
 ```cangjie
 // 类别
@@ -1380,6 +1383,15 @@ public let OPCODE_TABLE: Array<OpInfo> = [
   OpInfo(0x05, "OP_BAIL",         "i8",  2, CAT_MISC),
   OpInfo(0x06, "OP_CHECK_ERR_NC", "-",   1, CAT_MISC),
   OpInfo(0x07, "OP_STACK_GUARD",  "u16", 3, CAT_MISC),
+  // ---- 0x08–0x0F 未分配（RSVD）----
+  OpInfo(0x08, "OP_RSVD", "-", 1, CAT_RSVD),
+  OpInfo(0x09, "OP_RSVD", "-", 1, CAT_RSVD),
+  OpInfo(0x0A, "OP_RSVD", "-", 1, CAT_RSVD),
+  OpInfo(0x0B, "OP_RSVD", "-", 1, CAT_RSVD),
+  OpInfo(0x0C, "OP_RSVD", "-", 1, CAT_RSVD),
+  OpInfo(0x0D, "OP_RSVD", "-", 1, CAT_RSVD),
+  OpInfo(0x0E, "OP_RSVD", "-", 1, CAT_RSVD),
+  OpInfo(0x0F, "OP_RSVD", "-", 1, CAT_RSVD),
   // ---- 0x10–0x1F 常量/栈 ----
   OpInfo(0x10, "OP_PUSH_I8",  "i8",  2, CAT_CONST),
   OpInfo(0x11, "OP_PUSH_I32", "i32", 5, CAT_CONST),
@@ -1394,6 +1406,10 @@ public let OPCODE_TABLE: Array<OpInfo> = [
   OpInfo(0x1A, "OP_POP2",     "-",   1, CAT_CONST),
   OpInfo(0x1B, "OP_SWAP",     "-",   1, CAT_CONST),
   OpInfo(0x1C, "OP_PICK",     "u8",  2, CAT_CONST),
+  // ---- 0x1D–0x1F 未分配（RSVD）----
+  OpInfo(0x1D, "OP_RSVD", "-", 1, CAT_RSVD),
+  OpInfo(0x1E, "OP_RSVD", "-", 1, CAT_RSVD),
+  OpInfo(0x1F, "OP_RSVD", "-", 1, CAT_RSVD),
   // ---- 0x20–0x2F 局部变量 ----
   OpInfo(0x20, "OP_LOADL",  "u16", 3, CAT_LOCAL),
   OpInfo(0x21, "OP_STOREL", "u16", 3, CAT_LOCAL),
@@ -1402,6 +1418,16 @@ public let OPCODE_TABLE: Array<OpInfo> = [
   OpInfo(0x24, "OP_LOADL2", "-",   1, CAT_LOCAL),
   OpInfo(0x25, "OP_LOADL3", "-",   1, CAT_LOCAL),
   OpInfo(0x26, "OP_LOAD_CAP", "u16", 3, CAT_LOCAL),
+  // ---- 0x27–0x2F 未分配（RSVD）----
+  OpInfo(0x27, "OP_RSVD", "-", 1, CAT_RSVD),
+  OpInfo(0x28, "OP_RSVD", "-", 1, CAT_RSVD),
+  OpInfo(0x29, "OP_RSVD", "-", 1, CAT_RSVD),
+  OpInfo(0x2A, "OP_RSVD", "-", 1, CAT_RSVD),
+  OpInfo(0x2B, "OP_RSVD", "-", 1, CAT_RSVD),
+  OpInfo(0x2C, "OP_RSVD", "-", 1, CAT_RSVD),
+  OpInfo(0x2D, "OP_RSVD", "-", 1, CAT_RSVD),
+  OpInfo(0x2E, "OP_RSVD", "-", 1, CAT_RSVD),
+  OpInfo(0x2F, "OP_RSVD", "-", 1, CAT_RSVD),
   // ---- 0x30–0x3F 整型算术 ----
   OpInfo(0x30, "OP_IADD",      "-", 1, CAT_I64),
   OpInfo(0x31, "OP_ISUB",      "-", 1, CAT_I64),
@@ -1415,6 +1441,11 @@ public let OPCODE_TABLE: Array<OpInfo> = [
   OpInfo(0x39, "OP_IADD_WRAP", "-", 1, CAT_I64),
   OpInfo(0x3A, "OP_ICLZ",      "-", 1, CAT_I64),
   OpInfo(0x3B, "OP_IPOPCNT",   "-", 1, CAT_I64),
+  // ---- 0x3C–0x3F 未分配（RSVD）----
+  OpInfo(0x3C, "OP_RSVD", "-", 1, CAT_RSVD),
+  OpInfo(0x3D, "OP_RSVD", "-", 1, CAT_RSVD),
+  OpInfo(0x3E, "OP_RSVD", "-", 1, CAT_RSVD),
+  OpInfo(0x3F, "OP_RSVD", "-", 1, CAT_RSVD),
   // ---- 0x40–0x4F 浮点运算 ----
   OpInfo(0x40, "OP_FADD",     "-", 1, CAT_F64),
   OpInfo(0x41, "OP_FSUB",     "-", 1, CAT_F64),
@@ -1430,6 +1461,9 @@ public let OPCODE_TABLE: Array<OpInfo> = [
   OpInfo(0x4B, "OP_FCEIL",    "-", 1, CAT_F64),
   OpInfo(0x4C, "OP_FTRUNC",   "-", 1, CAT_F64),
   OpInfo(0x4D, "OP_FROUND",   "-", 1, CAT_F64),
+  // ---- 0x4E–0x4F 未分配（RSVD）----
+  OpInfo(0x4E, "OP_RSVD", "-", 1, CAT_RSVD),
+  OpInfo(0x4F, "OP_RSVD", "-", 1, CAT_RSVD),
   // ---- 0x50–0x6F 比较/逻辑/位 ----
   OpInfo(0x50, "OP_CMP_I",  "-", 1, CAT_CMP),
   OpInfo(0x51, "OP_CMP_F",  "-", 1, CAT_CMP),
@@ -1462,10 +1496,14 @@ public let OPCODE_TABLE: Array<OpInfo> = [
   OpInfo(0x6C, "OP_CMP_DEC", "-", 1, CAT_CMP),
   OpInfo(0x6D, "OP_CMP_DT",  "-", 1, CAT_CMP),
   OpInfo(0x6E, "OP_CMP_DUR", "-", 1, CAT_CMP),
+  // 0x6F 未分配（RSVD）
+  OpInfo(0x6F, "OP_RSVD", "-", 1, CAT_RSVD),
   // ---- 0x70–0x7F 控制流与调用 ----
   OpInfo(0x70, "OP_JMP",           "rel32", 5,    CAT_CTRL),
   OpInfo(0x71, "OP_JZ",            "rel32", 5,    CAT_CTRL),
   OpInfo(0x72, "OP_JNZ",           "rel32", 5,    CAT_CTRL),
+  // 0x73 未分配（RSVD）
+  OpInfo(0x73, "OP_RSVD", "-", 1, CAT_RSVD),
   OpInfo(0x74, "OP_LOOP_BACK",     "rel32", 5,    CAT_CTRL),
   OpInfo(0x75, "OP_CALL_HELPER",   "u16 u8", 4,   CAT_CALL),
   OpInfo(0x76, "OP_CALL_HELPER_NC","u16 u8", 4,   CAT_CALL),
@@ -1489,6 +1527,13 @@ public let OPCODE_TABLE: Array<OpInfo> = [
   OpInfo(0x87, "OP_ABORT",      "u8", 2,     CAT_TYPE),
   OpInfo(0x88, "OP_GUARD_NNZ",  "u8", 2,     CAT_TYPE),
   OpInfo(0x89, "OP_TYPE_OF",    "-", 1,      CAT_TYPE),
+  // ---- 0x8A–0x8F 未分配（RSVD）----
+  OpInfo(0x8A, "OP_RSVD", "-", 1, CAT_RSVD),
+  OpInfo(0x8B, "OP_RSVD", "-", 1, CAT_RSVD),
+  OpInfo(0x8C, "OP_RSVD", "-", 1, CAT_RSVD),
+  OpInfo(0x8D, "OP_RSVD", "-", 1, CAT_RSVD),
+  OpInfo(0x8E, "OP_RSVD", "-", 1, CAT_RSVD),
+  OpInfo(0x8F, "OP_RSVD", "-", 1, CAT_RSVD),
   // ---- 0x90–0x9F 容器/值提取/数值转换 ----
   OpInfo(0x90, "OP_LEN",         "-", 1,    CAT_BOX),
   OpInfo(0x91, "OP_GET_IDX",     "-", 1,    CAT_BOX),
@@ -1505,6 +1550,8 @@ public let OPCODE_TABLE: Array<OpInfo> = [
   OpInfo(0x9C, "OP_TO_DEC",      "u8", 2,   CAT_BOX),
   OpInfo(0x9D, "OP_DEC_TO_I64",  "u8", 2,   CAT_BOX),
   OpInfo(0x9E, "OP_DEC_TO_F64",  "-", 1,    CAT_BOX),
+  // ---- 0x9F 未分配（RSVD）----
+  OpInfo(0x9F, "OP_RSVD", "-", 1, CAT_RSVD),
   // ---- 0xA0–0xAF 分配/变更区（A9/AA 禁用；A0–A3、AB–AF 自 v0.5/v0.18 起启用）----
   OpInfo(0xA0, "OP_MAKE_LIST",   "-", 1, CAT_BOX),
   OpInfo(0xA1, "OP_LIST_APPEND", "-", 1, CAT_BOX),
@@ -1538,16 +1585,79 @@ public let OPCODE_TABLE: Array<OpInfo> = [
   OpInfo(0xBB, "OP_REGEX_FIND",    "-", 1, CAT_BOX),
   OpInfo(0xBC, "OP_STR_REPEAT",  "-", 1, CAT_BOX),
   OpInfo(0xBD, "OP_DT_DIFF",     "-", 1, CAT_BOX),
-  OpInfo(0xBE, "OP_MAP_ITER_STEP",  "u8", 1, CAT_BOX),
+  OpInfo(0xBE, "OP_MAP_ITER_STEP",  "u8", 2, CAT_BOX),
   OpInfo(0xBF, "OP_STR_TO_REGEX", "-", 1, CAT_BOX),
-  // ---- 0xC0–0xFF 保留 ----
-  OpInfo(0xFF, "OP_RSVD",        "-", 1, CAT_RSVD),
+  // ---- 0xC0–0xFF 保留（预留 M2：HW_OPEN 区块内批量分配、CALL_HOST；M1 发射即 ERR_NOT_IMPL，§5）----
+  OpInfo(0xC0, "OP_RSVD", "-", 1, CAT_RSVD),
+  OpInfo(0xC1, "OP_RSVD", "-", 1, CAT_RSVD),
+  OpInfo(0xC2, "OP_RSVD", "-", 1, CAT_RSVD),
+  OpInfo(0xC3, "OP_RSVD", "-", 1, CAT_RSVD),
+  OpInfo(0xC4, "OP_RSVD", "-", 1, CAT_RSVD),
+  OpInfo(0xC5, "OP_RSVD", "-", 1, CAT_RSVD),
+  OpInfo(0xC6, "OP_RSVD", "-", 1, CAT_RSVD),
+  OpInfo(0xC7, "OP_RSVD", "-", 1, CAT_RSVD),
+  OpInfo(0xC8, "OP_RSVD", "-", 1, CAT_RSVD),
+  OpInfo(0xC9, "OP_RSVD", "-", 1, CAT_RSVD),
+  OpInfo(0xCA, "OP_RSVD", "-", 1, CAT_RSVD),
+  OpInfo(0xCB, "OP_RSVD", "-", 1, CAT_RSVD),
+  OpInfo(0xCC, "OP_RSVD", "-", 1, CAT_RSVD),
+  OpInfo(0xCD, "OP_RSVD", "-", 1, CAT_RSVD),
+  OpInfo(0xCE, "OP_RSVD", "-", 1, CAT_RSVD),
+  OpInfo(0xCF, "OP_RSVD", "-", 1, CAT_RSVD),
+  OpInfo(0xD0, "OP_RSVD", "-", 1, CAT_RSVD),
+  OpInfo(0xD1, "OP_RSVD", "-", 1, CAT_RSVD),
+  OpInfo(0xD2, "OP_RSVD", "-", 1, CAT_RSVD),
+  OpInfo(0xD3, "OP_RSVD", "-", 1, CAT_RSVD),
+  OpInfo(0xD4, "OP_RSVD", "-", 1, CAT_RSVD),
+  OpInfo(0xD5, "OP_RSVD", "-", 1, CAT_RSVD),
+  OpInfo(0xD6, "OP_RSVD", "-", 1, CAT_RSVD),
+  OpInfo(0xD7, "OP_RSVD", "-", 1, CAT_RSVD),
+  OpInfo(0xD8, "OP_RSVD", "-", 1, CAT_RSVD),
+  OpInfo(0xD9, "OP_RSVD", "-", 1, CAT_RSVD),
+  OpInfo(0xDA, "OP_RSVD", "-", 1, CAT_RSVD),
+  OpInfo(0xDB, "OP_RSVD", "-", 1, CAT_RSVD),
+  OpInfo(0xDC, "OP_RSVD", "-", 1, CAT_RSVD),
+  OpInfo(0xDD, "OP_RSVD", "-", 1, CAT_RSVD),
+  OpInfo(0xDE, "OP_RSVD", "-", 1, CAT_RSVD),
+  OpInfo(0xDF, "OP_RSVD", "-", 1, CAT_RSVD),
+  OpInfo(0xE0, "OP_RSVD", "-", 1, CAT_RSVD),
+  OpInfo(0xE1, "OP_RSVD", "-", 1, CAT_RSVD),
+  OpInfo(0xE2, "OP_RSVD", "-", 1, CAT_RSVD),
+  OpInfo(0xE3, "OP_RSVD", "-", 1, CAT_RSVD),
+  OpInfo(0xE4, "OP_RSVD", "-", 1, CAT_RSVD),
+  OpInfo(0xE5, "OP_RSVD", "-", 1, CAT_RSVD),
+  OpInfo(0xE6, "OP_RSVD", "-", 1, CAT_RSVD),
+  OpInfo(0xE7, "OP_RSVD", "-", 1, CAT_RSVD),
+  OpInfo(0xE8, "OP_RSVD", "-", 1, CAT_RSVD),
+  OpInfo(0xE9, "OP_RSVD", "-", 1, CAT_RSVD),
+  OpInfo(0xEA, "OP_RSVD", "-", 1, CAT_RSVD),
+  OpInfo(0xEB, "OP_RSVD", "-", 1, CAT_RSVD),
+  OpInfo(0xEC, "OP_RSVD", "-", 1, CAT_RSVD),
+  OpInfo(0xED, "OP_RSVD", "-", 1, CAT_RSVD),
+  OpInfo(0xEE, "OP_RSVD", "-", 1, CAT_RSVD),
+  OpInfo(0xEF, "OP_RSVD", "-", 1, CAT_RSVD),
+  OpInfo(0xF0, "OP_RSVD", "-", 1, CAT_RSVD),
+  OpInfo(0xF1, "OP_RSVD", "-", 1, CAT_RSVD),
+  OpInfo(0xF2, "OP_RSVD", "-", 1, CAT_RSVD),
+  OpInfo(0xF3, "OP_RSVD", "-", 1, CAT_RSVD),
+  OpInfo(0xF4, "OP_RSVD", "-", 1, CAT_RSVD),
+  OpInfo(0xF5, "OP_RSVD", "-", 1, CAT_RSVD),
+  OpInfo(0xF6, "OP_RSVD", "-", 1, CAT_RSVD),
+  OpInfo(0xF7, "OP_RSVD", "-", 1, CAT_RSVD),
+  OpInfo(0xF8, "OP_RSVD", "-", 1, CAT_RSVD),
+  OpInfo(0xF9, "OP_RSVD", "-", 1, CAT_RSVD),
+  OpInfo(0xFA, "OP_RSVD", "-", 1, CAT_RSVD),
+  OpInfo(0xFB, "OP_RSVD", "-", 1, CAT_RSVD),
+  OpInfo(0xFC, "OP_RSVD", "-", 1, CAT_RSVD),
+  OpInfo(0xFD, "OP_RSVD", "-", 1, CAT_RSVD),
+  OpInfo(0xFE, "OP_RSVD", "-", 1, CAT_RSVD),
+  OpInfo(0xFF, "OP_RSVD", "-", 1, CAT_RSVD),
 ]
 ```
 
 **表构建时的一致性校验（建议放在 `OpcodeTable.build()` 的调试断言里）**：
 
-1. 数组长度 == 256，且 `table[i].code == i`（未显式列出的槽以 `OP_RSVD` 填充）。
+1. 数组长度 == 256，且 `table[i].code == i`（0x00–0xFF **全量显式列出**；未分配槽统一为 `OP_RSVD`（CAT_RSVD））。
 2. `len != 0` 时，`len == 1 + Σ operandSize(fmt)`。
 3. `CAT_FORBID` 与 `CAT_RSVD` 类别的项，以及 M2 专属的 `OP_CALL_HOST/OP_HW_OPEN/OP_HW_CLOSE`，汇编器 `emit` 一律拒绝并报 `ERR_NOT_IMPL`。
 4. `CAT_CALL` 中 `OP_CALL_HELPER` 之后必须能查到 `OP_CHECK_ERR`（见 §7 校验 1）。
@@ -1680,7 +1790,7 @@ LocalType (u8，每槽 1 字节):
 | `CALL_HOST`（M2）引用未在各平台注册的回调 | 各平台注册集不同 → 加载期校验为 `ERR_NOT_IMPL` |
 | 机器码持久化 / 跨机共享 / 写入 `.fbc` | 后端与 ABI 相关 |
 | 字节码中出现"仅 JIT 可实现"的指令 | 违反 I6 / P1；`flags.bit1` 恒 0（冻结决策，§9 附则 10） |
-| 按平台分叉行为（错误码不同、某平台被拒） | 冻结决策：JIT 仅 Linux，其余平台解释执行且**语义、可用性完全相同**（§9 附则 10） |
+| 按平台分叉行为（错误码不同、某平台被拒） | 冻结决策：JIT 仅 Linux（指令集跟随仓颉 SDK for Linux、当前 x86_64 / aarch64），其余平台解释执行且**语义、可用性完全相同**（§9 附则 10） |
 | TO_STR / 插值 / 数值转换依赖平台 locale 或宿主格式化库 | 违反 P3；全部格式已由 §11.9 冻结，实现必须内嵌同一算法 |
 | 分发装载含 user helper hid（[0x0100,0xFFFF]）的 `.fbc` | 预定义函数是编译器实例的宿主侧资产，不进 `.fbc`（§8.4）；加载期拒绝（JitException(18) 语义） |
 
@@ -1783,19 +1893,21 @@ Closure 无文本形式：`TO_STR` 标签 t=9 非法（前端对闭包 TO_STR �
 
 ---
 
-## §12 JIT 后端规格（Linux · x86_64 / AArch64）
+## §12 JIT 后端规格（Linux · 指令集跟随仓颉 SDK for Linux；当前 x86_64 / AArch64）
 
 ### §12.1 适用范围与架构基线
 
+**指令集支持范围跟随仓颉 SDK for Linux**——下表为**当前**状态（SDK 扩大指令集支持范围时，本实现随之新增后端，详见下条）：
+
 | 平台 | 引擎 |
 |---|---|
-| Linux x86_64 | 解释器 + JIT（后端 **B1**） |
-| Linux aarch64 | 解释器 + JIT（后端 **B2**） |
-| Linux 其他架构（riscv64 / loongarch64 / …） | 仅解释器 |
+| Linux x86_64 | 解释器 + JIT（后端 **B1**；当前 SDK 支持） |
+| Linux aarch64 | 解释器 + JIT（后端 **B2**；当前 SDK 支持） |
+| Linux 其他架构（**当前 SDK 未支持**；如 riscv64 / loongarch64 / …） | 仅解释器 |
 | Windows / macOS / HarmonyOS（任意架构） | 仅解释器（接口与语义完全一致；`jit = Force` 亦静默降级） |
 | 任何 32 位宿主（Windows x86 / Linux i686 / armv7 / …） | **不支持**（**冻结决策**：cell 64 位、ctx 64 字节是硬前提；构建期/装载期明确拒绝，见 §9 附则 9） |
 
-- 平台范围是**冻结决策**：JIT 后端只随 Linux 构建产出；非 Linux 平台不编译机器码路径，也不得因缺少 JIT 而报错或降级语义（§9 附则 10）。
+- 平台范围是**冻结决策**：JIT 后端只随 Linux 构建产出，**指令集支持范围跟随仓颉 SDK for Linux**（当前 x86_64 / aarch64；SDK 扩大支持范围时本实现**随之扩大**，按范围变更流程执行——§13 原则 4 + §13.2 重跑）；非 Linux 平台不编译机器码路径，也不得因缺少 JIT 而报错或降级语义（§9 附则 10）。
 - 基线 ISA：x86_64 用 **SSE2**（x86-64 ABI 已保证存在）；aarch64 用 **NEON/ASIMD**（A64 基线）。JIT **不发射** AVX/AVX2/AVX512/SVE，不做运行时特性探测分支；需要时由 `CompileOptions.cpuFeatures` 显式开启（M2）。
 - 引擎选择（三平台语义一致，只看能否拿到机器码）：
 
@@ -1936,6 +2048,8 @@ interp(args)  ==  jit_x86_64(args)  ==  jit_aarch64(args)
 | `jit = Off/Auto/Force` | 三值均为解释器 | Auto/Force 生效 | Auto/Force 生效 | 三值均为解释器 | 三值均为解释器 | 三值均为解释器 |
 | 错误码 / site | 同一套 | 同一套 | 同一套 | 同一套 | 同一套 | 同一套 |
 
+> **指令集支持范围跟随仓颉 SDK for Linux**（当前 x86_64 / aarch64）——SDK 扩大支持范围时本矩阵随之扩展（新增后端列）；非 Linux 平台恒为解释器（§9 附则 10、§12.1）。
+
 ### §13.2 测试项
 
 | # | 测试项 | 判据 |
@@ -1982,4 +2096,4 @@ interp(args)  ==  jit_x86_64(args)  ==  jit_aarch64(args)
 1. 新增 opcode 只允许使用 §5 保留区段，并同步升 `verMinor`；语义变更升 `verMajor`。
 2. 新增 JIT 后端（如 riscv64）只能是"新增一个 lowering 表 + 一个 ABI 映射行"，不得修改 §11 字节码语义。
 3. 任何"解释器能跑、JIT 跑不了"的指令都不得进入字节码（`flags.bit1` 恒 0）。
-4. **冻结决策不得被平台适配绕过**：M1 只支持 64 位宿主，且 JIT 仅在 Linux x86_64 / aarch64 生效（§9 附则 9–10）。任何"给某平台开特例"的补丁，只要它改变语义、改变可用性（在非 Linux 上抛错而 Linux 不抛）或要求 JIT 必须存在，一律拒绝；确需变更时按 §9 附则的变更流程走**范围变更**并重跑 §13.2。
+4. **冻结决策不得被平台适配绕过**：M1 只支持 64 位宿主，且 JIT 仅在 Linux、且指令集在仓颉 SDK for Linux 支持范围内（当前 x86_64 / aarch64）生效（§9 附则 9–10）。任何"给某平台开特例"的补丁，只要它改变语义、改变可用性（在非 Linux 上抛错而 Linux 不抛）或要求 JIT 必须存在，一律拒绝；确需变更时按 §9 附则的变更流程走**范围变更**并重跑 §13.2。
