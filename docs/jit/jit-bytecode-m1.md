@@ -1,6 +1,6 @@
 # Fountain JIT · M1 字节码规格
 
-> 版本 v0.16.4（评审稿） · 2026-09-16（v0.3：一致性修订 + 冻结决策 ③；v0.4：区间 / Decimal 算术 / 数值互转 / Duration·DateTime 算术 / 插值串 / 类型化局部变量（明确赋值 + 空安全）/ 句柄 Marshal 与逃逸（§8.1）/ 统一函数包装 call\<T\>（§8.2）/ 源码入口与只编译一次去重（§8）/ 调用契约与线程模型（§8.3）/ 小数字面值与超 Int64 整数字面值 → Decimal、显式数值转换（§11.9）/ 句柄类型映射标准库（§3.2，Decimal = std.math.numeric.Decimal §9.12），激活窗口分配机制；v0.4.1：宿主句柄槽实现冻结——ID 形态（决策 ④）；v0.4.2：`call<T>` 逃逸槽自动回收（§8.1 规则 6）；call 清理 try/finally 化、16 中途边界与三缓解手段 + capacityLimit、ctx 内存机制与 Marshal 自实现依据、helper 封闭白名单与准入准则（§4/§6/§8.1/§8.2/§9.6）；v0.5：容器变更（List add/insert/set/remove、Map put/remove，0xA1/A3 启用 + 0xAB–AF）、常量容器写保护（错误码 20）、变更型函数 deopt 禁令（§9.15）、for-in 全类型规范降低（含 Map 键快照 MAP_KEYS，§5/§11.9）；v0.6：字符串切片/替换（STR_SUB/STR_REPLACE，0xB8/B9）、正则字面量 `/…/flags`（新类型 Regex = token 8 / LocalType 9 / 常量 kind 10，加载期一次编译、跨调用复用，REGEX_IS_MATCH/FIND = 0xBA/BB）、for-in 源语言形式与仓颉对齐（含 where）、多重赋值/变量交换降低——同时赋值语义（§5）；v0.7：被编译代码格式声明（lambda 源入口，§8.0）、`recursive` 自递归关键字（降低为 CALL_FUNC）、LocalType 10/11（List/Map 仅参数槽）、FuncEntry.retType（签名入字节码，verMinor=4）；v0.8：编译器门面 Compiler 类与预定义函数注册（§8.4——user helper 通道 hid[0x0100,0xFFFF]、编译期名字解析与未注册错误 SourceCompileException、分发边界），verMinor=5；v0.9：嵌套闭包（词法绑定 + 按值捕获快照）、recursive 绑定最近层词法闭包、立即调用 IIFE、源码注释（§8.5；无 .fbc 格式变更）；v0.10：first-class 闭包值（闭包表达式求值/变量绑定与调用，§8.6——closure_new/CALL_CLOSURE/LOAD_CAP、token 9、LocalType 12、ctx.fnTable、词法绑定模型统一升级为闭包值模型，verMinor=6）；v0.11：正则操作符 `~` / `!~` / 全局与第 n 替换（§11.9，H58/H59，优先级高于加减左结合，verMinor=7；错误即终止（fail-fast）语义显式化（§0/§2/§5，CALL_HELPER_V 自动 CHECK_ERR 明确）；ctx 非托管内存配对释放 finally 义务（§8.2）+ M1 无单元卸载注记（§8.1）+ T27 内存安全）；v0.12：recursive 值化——`let x = recursive` 自引用闭包值（闭包层 = LOADL 0；顶层 = 隐藏适配器 FuncEntry + closure_new，§8.0/§8.6），嵌套闭包经变量捕获递归调用任意外层（§8.5）；无 opcode/helper/格式变更；v0.12.1：全文档审计修正——分配型清单补 H54 closure_new（§1/§6/§8.1）、§0 I8/简化 3/适用范围随 v0.10–v0.12 同步、§2 -1 行随 §9.15 扩展同步、§8.0 源入口参数禁用 Closure（Marshal 表无行，恒不可供给）、§8.3 取消及时性边界、T13 计数 13 种；M2 CALL_HOST 议题清单（八项困难 + 三档演进路径）备案于 §6；v0.13：单元卸载——JitFunction.unload（状态机 Ready→Unloading→Unloaded、活跃调用排空、资产清点与释放顺序、常量同 ID 契约限定单元存活期，§8.7）、调用已卸载单元 → 19（§2/§8.2 入口断言）、T29；无 opcode/helper/格式变更；v0.13.1：目录审计修正——§8 JitFunction 骨架补生命周期成员 ⑤（unload/isUnloaded）、§8.2 调用六步补第 0 步入口断言、A 常量槽释放措辞精确化（唯一释放点 = 单元卸载，§8.7）；v0.14：字符串字面量形态（§8.8）——多行 `'''`/`"""`（仓颉基础规则）、原始串（`#`×n 定界，仓颉一致）、`>|` 每行锚定扩展（前缀一律忽略）、换行规范化（CRLF/CR→LF）、插值适用边界（原始串不适用）；无 opcode/helper/格式变更；T42；v0.14.1：`>|` 锚定放宽——无 `>|` 的行（含空白/非空白）**整行原样保留**（`MissingMarginMarker` 取消）；v0.14.2：`>|` 标记不进入字符串内容显式化——纯定位语法，切分时被消耗，产物不含该标记（单独 `>|` 行 → 空串）；v0.14.3：`>|` 有效标记收紧——仅行内**首个非空白位置**的 `>|` 才生效（前导仅缩进空白；非空白符之后的 `>|` 是字面内容、既不截断也不触发锚定模式）；v0.14.4：非标记情形固化显式示例——`>>|`/`a>|b`/`|>|` 中 `>|` 前有任意非空白字符即为字面内容（不消耗、不截断、不触发锚定模式，行为同 v0.14.3）；v0.14.5：并发安全补强——§8.3② 增适配器注册表同步行、§8.4 增 user helper impl 并发调用义务、§8.7 增 unload vs compile（Unloading 期间）阻塞重编语义（并发与序贯等价）；v0.14.6：cause 通道调用私有明确——§8.4（并发失败调用的 code/site/cause 互不串扰）；v0.15：String 重复 `s * n`（STR_REPEAT 0xBC/H60）、DateTime 差 `dt1 − dt2 → Duration`（DT_DIFF 0xBD/H61，自 M2 提前）、n 位置运行期自动窄化（F64/DEC → Int64，含 `d / n`；仅限 n 位置）；verMinor=8；T43；v0.15.1：if 值/语句双用法类型规则——形式按使用位置判定；值用法（典型 = 变量赋值）要求全分支类型逐位一致、语句用法不受限（前端语义，无字节码变更）；v0.16：Map for-in 双快照降低——`MAP_KEYS`（0xAF/H49）升级为单遍 `toArray()` 拆分（键列表 + 值列表挂起）、新 `MAP_VALUES`（0xBE/H62）登记值列表；迭代视图完全冻结（零逐键查找、无 5 场景）、每执行 2 槽；verMinor=9；T45；v0.16.1：Map for-in 改**惰性单遍迭代器**（取代同轮 v0.16 双快照）——0xAF `MAP_KEYS`→`MAP_ITER_BEGIN`（H49 重定义、移出分配型）、0xBE `MAP_VALUES`→`MAP_ITER_STEP`（`u8 mode`；H62 重定义）；新增错误码 **23**（迭代中修改同一 map，对齐 std CME）；**无新增 helper 槽位**（M2/M3 编号不变）；每执行 0 槽；v0.16.2：§8.5 逃逸括注精确化——「向上返回」移出禁止例（与 §8.6 对齐：禁止仅跨桥/存容器；链内返回为允许面；纯显式化、无行为变更）；v0.16.3：§11.9 替换段 `/` 个数澄清——`//` = 无 flags 字面量闭合符 + 开启符相邻（非独立符号）；带 flags 字面量（`/[a-z]/i/s/r/g`）与 Regex 变量（`let re = /\s/` → `re/s/r/g`）均为单 `/`；LHS 括注更新为「字面量常量或 Regex 局部变量」（§11.7）；v0.16.4：示意记法修正——表格与 §5 摘要的 `re//s/r/g` 改为 `re/s/r/g`（`re` = Regex 表达式占位符，分隔符恒单 `/`；无 flags 字面量代入后闭合符与分隔符相邻呈 `//`，如 `/\s//s/r/g`，非分隔符翻倍））
+> 版本 v0.17（评审稿） · 2026-09-16（v0.3：一致性修订 + 冻结决策 ③；v0.4：区间 / Decimal 算术 / 数值互转 / Duration·DateTime 算术 / 插值串 / 类型化局部变量（明确赋值 + 空安全）/ 句柄 Marshal 与逃逸（§8.1）/ 统一函数包装 call\<T\>（§8.2）/ 源码入口与只编译一次去重（§8）/ 调用契约与线程模型（§8.3）/ 小数字面值与超 Int64 整数字面值 → Decimal、显式数值转换（§11.9）/ 句柄类型映射标准库（§3.2，Decimal = std.math.numeric.Decimal §9.12），激活窗口分配机制；v0.4.1：宿主句柄槽实现冻结——ID 形态（决策 ④）；v0.4.2：`call<T>` 逃逸槽自动回收（§8.1 规则 6）；call 清理 try/finally 化、16 中途边界与三缓解手段 + capacityLimit、ctx 内存机制与 Marshal 自实现依据、helper 封闭白名单与准入准则（§4/§6/§8.1/§8.2/§9.6）；v0.5：容器变更（List add/insert/set/remove、Map put/remove，0xA1/A3 启用 + 0xAB–AF）、常量容器写保护（错误码 20）、变更型函数 deopt 禁令（§9.15）、for-in 全类型规范降低（含 Map 键快照 MAP_KEYS，§5/§11.9）；v0.6：字符串切片/替换（STR_SUB/STR_REPLACE，0xB8/B9）、正则字面量 `/…/flags`（新类型 Regex = token 8 / LocalType 9 / 常量 kind 10，加载期一次编译、跨调用复用，REGEX_IS_MATCH/FIND = 0xBA/BB）、for-in 源语言形式与仓颉对齐（含 where）、多重赋值/变量交换降低——同时赋值语义（§5）；v0.7：被编译代码格式声明（lambda 源入口，§8.0）、`recursive` 自递归关键字（降低为 CALL_FUNC）、LocalType 10/11（List/Map 仅参数槽）、FuncEntry.retType（签名入字节码，verMinor=4）；v0.8：编译器门面 Compiler 类与预定义函数注册（§8.4——user helper 通道 hid[0x0100,0xFFFF]、编译期名字解析与未注册错误 SourceCompileException、分发边界），verMinor=5；v0.9：嵌套闭包（词法绑定 + 按值捕获快照）、recursive 绑定最近层词法闭包、立即调用 IIFE、源码注释（§8.5；无 .fbc 格式变更）；v0.10：first-class 闭包值（闭包表达式求值/变量绑定与调用，§8.6——closure_new/CALL_CLOSURE/LOAD_CAP、token 9、LocalType 12、ctx.fnTable、词法绑定模型统一升级为闭包值模型，verMinor=6）；v0.11：正则操作符 `~` / `!~` / 全局与第 n 替换（§11.9，H58/H59，优先级高于加减左结合，verMinor=7；错误即终止（fail-fast）语义显式化（§0/§2/§5，CALL_HELPER_V 自动 CHECK_ERR 明确）；ctx 非托管内存配对释放 finally 义务（§8.2）+ M1 无单元卸载注记（§8.1）+ T27 内存安全）；v0.12：recursive 值化——`let x = recursive` 自引用闭包值（闭包层 = LOADL 0；顶层 = 隐藏适配器 FuncEntry + closure_new，§8.0/§8.6），嵌套闭包经变量捕获递归调用任意外层（§8.5）；无 opcode/helper/格式变更；v0.12.1：全文档审计修正——分配型清单补 H54 closure_new（§1/§6/§8.1）、§0 I8/简化 3/适用范围随 v0.10–v0.12 同步、§2 -1 行随 §9.15 扩展同步、§8.0 源入口参数禁用 Closure（Marshal 表无行，恒不可供给）、§8.3 取消及时性边界、T13 计数 13 种；M2 CALL_HOST 议题清单（八项困难 + 三档演进路径）备案于 §6；v0.13：单元卸载——JitFunction.unload（状态机 Ready→Unloading→Unloaded、活跃调用排空、资产清点与释放顺序、常量同 ID 契约限定单元存活期，§8.7）、调用已卸载单元 → 19（§2/§8.2 入口断言）、T29；无 opcode/helper/格式变更；v0.13.1：目录审计修正——§8 JitFunction 骨架补生命周期成员 ⑤（unload/isUnloaded）、§8.2 调用六步补第 0 步入口断言、A 常量槽释放措辞精确化（唯一释放点 = 单元卸载，§8.7）；v0.14：字符串字面量形态（§8.8）——多行 `'''`/`"""`（仓颉基础规则）、原始串（`#`×n 定界，仓颉一致）、`>|` 每行锚定扩展（前缀一律忽略）、换行规范化（CRLF/CR→LF）、插值适用边界（原始串不适用）；无 opcode/helper/格式变更；T42；v0.14.1：`>|` 锚定放宽——无 `>|` 的行（含空白/非空白）**整行原样保留**（`MissingMarginMarker` 取消）；v0.14.2：`>|` 标记不进入字符串内容显式化——纯定位语法，切分时被消耗，产物不含该标记（单独 `>|` 行 → 空串）；v0.14.3：`>|` 有效标记收紧——仅行内**首个非空白位置**的 `>|` 才生效（前导仅缩进空白；非空白符之后的 `>|` 是字面内容、既不截断也不触发锚定模式）；v0.14.4：非标记情形固化显式示例——`>>|`/`a>|b`/`|>|` 中 `>|` 前有任意非空白字符即为字面内容（不消耗、不截断、不触发锚定模式，行为同 v0.14.3）；v0.14.5：并发安全补强——§8.3② 增适配器注册表同步行、§8.4 增 user helper impl 并发调用义务、§8.7 增 unload vs compile（Unloading 期间）阻塞重编语义（并发与序贯等价）；v0.14.6：cause 通道调用私有明确——§8.4（并发失败调用的 code/site/cause 互不串扰）；v0.15：String 重复 `s * n`（STR_REPEAT 0xBC/H60）、DateTime 差 `dt1 − dt2 → Duration`（DT_DIFF 0xBD/H61，自 M2 提前）、n 位置运行期自动窄化（F64/DEC → Int64，含 `d / n`；仅限 n 位置）；verMinor=8；T43；v0.15.1：if 值/语句双用法类型规则——形式按使用位置判定；值用法（典型 = 变量赋值）要求全分支类型逐位一致、语句用法不受限（前端语义，无字节码变更）；v0.16：Map for-in 双快照降低——`MAP_KEYS`（0xAF/H49）升级为单遍 `toArray()` 拆分（键列表 + 值列表挂起）、新 `MAP_VALUES`（0xBE/H62）登记值列表；迭代视图完全冻结（零逐键查找、无 5 场景）、每执行 2 槽；verMinor=9；T45；v0.16.1：Map for-in 改**惰性单遍迭代器**（取代同轮 v0.16 双快照）——0xAF `MAP_KEYS`→`MAP_ITER_BEGIN`（H49 重定义、移出分配型）、0xBE `MAP_VALUES`→`MAP_ITER_STEP`（`u8 mode`；H62 重定义）；新增错误码 **23**（迭代中修改同一 map，对齐 std CME）；**无新增 helper 槽位**（M2/M3 编号不变）；每执行 0 槽；v0.16.2：§8.5 逃逸括注精确化——「向上返回」移出禁止例（与 §8.6 对齐：禁止仅跨桥/存容器；链内返回为允许面；纯显式化、无行为变更）；v0.16.3：§11.9 替换段 `/` 个数澄清——`//` = 无 flags 字面量闭合符 + 开启符相邻（非独立符号）；带 flags 字面量（`/[a-z]/i/s/r/g`）与 Regex 变量（`let re = /\s/` → `re/s/r/g`）均为单 `/`；LHS 括注更新为「字面量常量或 Regex 局部变量」（§11.7）；v0.16.4：示意记法修正——表格与 §5 摘要的 `re//s/r/g` 改为 `re/s/r/g`（`re` = Regex 表达式占位符，分隔符恒单 `/`；无 flags 字面量代入后闭合符与分隔符相邻呈 `//`，如 `/\s//s/r/g`，非分隔符翻倍）；v0.16.5：std API 事实核对修正——`HashMap` 无 `put` 方法：写键 = `add(key, value): Option<V>`（覆盖并返回旧值；不存在 → None）、删键 = `remove(key): Option<V>`（返回被删值；不存在 → None）；§6 变更型 helper 映射句、§9 附则 15、§11.9 迭代段、T19/T45 相关表述同步；其余 std 引用（ArrayList 签名、`HashMap.iterator()`、CME 转码）核对无误；无格式/语义变更）；v0.17：① **Regex 互操作开放**——可作参数/返回（§8.0 参数面、§11.7 LocalType 9 与 retType、§8.2 Marshal/解包表 +Regex、§3.3/§11.9 同步）；新增 **`fountain::f_regex` 字符串扩展 `regexStr.regex()`** 运行期构造 Regex（新 opcode `STR_TO_REGEX`=0xBF、helper H69 `str_to_regex`；非法/空 pattern → 14；分配型）；**verMinor=10**（新增 opcode/helper）；② **`recursive` 自动尾递归优化**——尾位置自递归降为「实参逆序 `STOREL` + `LOOP_BACK <入口>`」帧复用回边（不增长栈、安全点照常；无新 opcode——纯前端降低）；T46/T47）
 > 适用范围：M1 —— 纯计算 + 白名单不可变值分配 + 白名单容器变更（§9.15）+ 类型化局部变量（§11.7）+ first-class 闭包与自引用（§8.5–8.6）+ 正则字面量与操作符（§3.3/§11.9）+ 多重赋值（§5）+ 预定义函数（§8.4）+ 字符串重复与日期差（§11.9，v0.15）、不使用宏、无 JIT 级 try-catch（字节码无 handler 表、机器码不抛不展开；异常仅存在于宿主边界：helper 内转码 §6、桥的转换 §8）
 > 平台范围：**字节码跨平台**（Windows / Linux / HarmonyOS / macOS）；**JIT 仅 Linux**，后端 **x86_64** 与 **aarch64**
 > **冻结决策**：① 32 位宿主不支持（§9 附则 9） ② JIT 仅 Linux x86_64 / aarch64，字节码不得含"仅 JIT 可实现"指令（§9 附则 10） ③ 编译粒度为整单元（§9 附则 11） ④ 宿主为仓颉运行时，句柄槽取 ID 形态（§9 附则 14）
@@ -55,7 +55,7 @@ off  size 字段      含义
 
 **句柄槽（8 B，仅 helper 可解释）＝ ID 形态（冻结决策 ④，§9 附则 14）**：槽内为 `idx:u32 + tag:u16 + gen:u16`——`idx` 指向桥持有的**托管对象表**（Cangjie 托管容器，条目即 GC 强引用：对象存活与搬移由仓颉 GC 处理，机器码只见整数 ID、永不接触对象指针），`tag` 用 §6 类型 token 编码（fetch 类型校验依据），`gen` 为表项世代号：表项释放复用时 +1、逃逸期间保持不变（§8.1）——M1 常规路径（常量/参数/窗口）窗口只增不减，不依赖世代校验。`objref`（槽内存裸指针）形态**不采用**：仓颉 GC 为 region 式搬移收集（低占用 region 整体回收搬移），托管对象地址不稳定，裸指针槽在仓颉宿主上不可实现。
 
-**句柄窗口语义**：`[hwBase, hwTop)` 本次调用可见。M1 中窗口**只增不减**；仅白名单**分配型 helper**（§6：H24–H29、H32–H41、H50–H51、H53–H54、H58–H61）可登记新槽，且每次调用至多登记 1 个——其运算结果（不可变值 / 闭包句柄）。**变更型 helper（H43–H48）不登记新槽**——它们修改已存在的容器（非常量槽）。`hwTop == hwCap` 时宿主就地扩容句柄表（§9.6），不因容量失败；无分配单元 `hwCap=0`。
+**句柄窗口语义**：`[hwBase, hwTop)` 本次调用可见。M1 中窗口**只增不减**；仅白名单**分配型 helper**（§6：H24–H29、H32–H41、H50–H51、H53–H54、H58–H61、H69）可登记新槽，且每次调用至多登记 1 个——其运算结果（不可变值 / 闭包句柄）。**变更型 helper（H43–H48）不登记新槽**——它们修改已存在的容器（非常量槽）。`hwTop == hwCap` 时宿主就地扩容句柄表（§9.6），不因容量失败；无分配单元 `hwCap=0`。
 
 ---
 
@@ -81,7 +81,7 @@ off  size 字段      含义
 11   ERR_DT_RANGE            (DT±DUR 结果超出 DateTime 值域)
 12   ERR_DUR_OVERFLOW        (Duration 算术溢出)
 13   ERR_FP_INVALID          (NaN/Inf 转整型；F64→Decimal)
-14   ERR_ARG_MISMATCH        (CALL_FUNC argc 不符；RANGE_NEW step=0；STR_REPLACE 空模式；正则字面量非法 pattern/flags（加载期）；桥入口断言)
+14   ERR_ARG_MISMATCH        (CALL_FUNC argc 不符；RANGE_NEW step=0；STR_REPLACE 空模式；正则字面量非法 pattern/flags（加载期）；STR_TO_REGEX 非法/空 pattern（运行期，v0.17）；桥入口断言)
 15   ERR_STACK_GUARD         (DEOPT 后解释器余量亦不足、无法重跑时由桥写入)
 16   ERR_HANDLE_WINDOW_FULL  (宿主句柄表全局上限——资源耗尽)
 17   ERR_EXPLICIT            (源语言 throw；具体码放 site 附加表)
@@ -163,7 +163,7 @@ ConstTable
 
 字面量 `[1,2,3]` / `{k:v}` / `"abc"`（字符串三形态：单行 `'…'`/`"…"`、多行 `'''`/`"""`、原始 `#`×n 定界——§8.8，v0.14） / `Decimal(...)`（**无后缀小数字面值即 Decimal**，§11.9）/ 区间 `a..b` / `a..=b`（可带 `: step`，§11.9）/ **正则 `/pattern/flags`**（v0.6，flags ∈ `i m u` 任意组合，见下）**全部在拼装期由宿主构造一次**，登记入常量表并由 ctx 外部持有强引用。语义：**字面值共享只读**——常量容器被变更型 helper 写入 → `ERR_READONLY(20)`（§9.15①，跨调用共享 ⇒ 写入会破坏可重复调用）；如需"每次求值可变副本"，由桥在调用前显式深拷贝（`CallContext.literalCopy`，M2）。
 
-**正则字面量（v0.6）**：形式 `/pattern/flags`——两个 `/` 之间为 pattern（UTF-8），结尾标志字符：`i` 忽略大小写、`m` 多行模式、`u` Unicode 模式，分别对应 `std.regex.RegexFlag` 的相应项（以 std 为准），可组合（如 `/^[a-z]+$/im`）。**一次性编译、跨调用复用**：加载器在装载 `.fbc` 时对每个 kind 10 常量构造一次 `Regex` 实例（ConstTable 持有，路径 A——跨调用同 ID，永不在执行期重编译）；同单元内**同 (pattern, flags) 去重为同一常量**（跨单元不共享，编译粒度决策 ③）；非法 pattern 或 flags 组合 → **加载期拒绝**（`JitException(14)`，site=-1），不进入执行期；**pattern 为空 → 加载期拒绝**（v0.11——非空 pattern 保证每次匹配至少 1 字节，替换扫描无零宽死循环，§11.9）。M1 中 Regex **不可作函数参数或返回值**（仅经常量在单元内使用；互操作开放属 M2）。
+**正则字面量（v0.6）**：形式 `/pattern/flags`——两个 `/` 之间为 pattern（UTF-8），结尾标志字符：`i` 忽略大小写、`m` 多行模式、`u` Unicode 模式，分别对应 `std.regex.RegexFlag` 的相应项（以 std 为准），可组合（如 `/^[a-z]+$/im`）。**一次性编译、跨调用复用**：加载器在装载 `.fbc` 时对每个 kind 10 常量构造一次 `Regex` 实例（ConstTable 持有，路径 A——跨调用同 ID，永不在执行期重编译）；同单元内**同 (pattern, flags) 去重为同一常量**（跨单元不共享，编译粒度决策 ③）；非法 pattern 或 flags 组合 → **加载期拒绝**（`JitException(14)`，site=-1），不进入执行期；**pattern 为空 → 加载期拒绝**（v0.11——非空 pattern 保证每次匹配至少 1 字节，替换扫描无零宽死循环，§11.9）。**Regex 可作参数与返回值（v0.17 开放）**：与其它句柄类型同路由——参数经 Marshal 表 `pin`（§8.1 路径 B）、返回经逃逸（路径 D）交由 `call<T>` 解包（§8.2）；LocalType 9 全位置合法、`retType=9` 合法（§11.7）。**字符串扩展构造（v0.17，`fountain::f_regex`）**：`regexStr.regex(): Regex`——运行期由字符串构造（恒无 flags；flags 需求用字面量形态）。降低：字符串句柄 + `STR_TO_REGEX`（0xBF，H69，分配型，§5/§6）。失败：**非法或空 pattern → 14**（空 pattern 与字面量同因——防零宽匹配死循环，§11.9）；结果为不可变新对象——每次求值新分配、**不去重**（去重是 kind 10 字面量常量的性质）；重放等值重建（I8）。
 
 ---
 
@@ -204,7 +204,7 @@ ret: rax = cell（返回值或句柄）；errCode != 0 时 rax 未定义
 
 **桥的调用义务**：入口前 `errCode=0; site=-1; hwTop=hwBase`；返回后**先读 errCode**，非 0 时不得使用 rax。
 
-**内部调用 `CALL_FUNC`**：复用同一 ctx 与句柄窗口（不新开窗口），参数从操作数栈按顺序拷入新帧 locals，仍遵循本节帧约定，只是不经桥。汇编期校验 `fid` 存在且 `argc` 与被调函数一致（不符 → 编译错误 / 运行期 `ERR_ARG_MISMATCH`）。被调函数 prologue 把自己的 `fnId` 写入 ctx；**返回后调用方立即重写自身 `fnId`**（一条 mov），保证后续错误归因正确。**自递归**（源语言 `recursive(…)` 关键字，§8.0）就是 `fid = 自身 fnId` 的 CALL_FUNC——递归深度受宿主线程栈限制，M1 不做尾调用优化、不插深度检查（§8.0）。
+**内部调用 `CALL_FUNC`**：复用同一 ctx 与句柄窗口（不新开窗口），参数从操作数栈按顺序拷入新帧 locals，仍遵循本节帧约定，只是不经桥。汇编期校验 `fid` 存在且 `argc` 与被调函数一致（不符 → 编译错误 / 运行期 `ERR_ARG_MISMATCH`）。被调函数 prologue 把自己的 `fnId` 写入 ctx；**返回后调用方立即重写自身 `fnId`**（一条 mov），保证后续错误归因正确。**自递归**（源语言 `recursive(…)` 关键字，§8.0）就是 `fid = 自身 fnId` 的 CALL_FUNC——非尾位置递归深度受宿主线程栈限制；**尾位置自递归经 v0.17 自动尾递归优化**（帧复用回边，不增长栈，§8.0）。不插深度检查。
 
 ---
 
@@ -342,7 +342,7 @@ ret: rax = cell（返回值或句柄）；errCode != 0 时 rax 未定义
 | 72 | `JNZ` | rel32 | `c!=0` 跳 | — |
 | 73 | 保留 | | | |
 | 74 | `LOOP_BACK` | rel32 | 回边：`STACK_GUARD` + 安全点 → 跳 | DEOPT / -2 |
-| 75 | `CALL_HELPER` | u16 hid, u8 argc | 调 helper，压结果；**汇编器自动尾随 CHECK_ERR**（hid：1–59 = 固定 helper §6；[0x0100,0xFFFF] = 单元私有预定义 helper §8.4，仅源入口产物） | helper 码 |
+| 75 | `CALL_HELPER` | u16 hid, u8 argc | 调 helper，压结果；**汇编器自动尾随 CHECK_ERR**（hid：1–62、69 = 固定 helper §6；[0x0100,0xFFFF] = 单元私有预定义 helper §8.4，仅源入口产物） | helper 码 |
 | 76 | `CALL_HELPER_NC` | u16 hid, u8 argc | 同上但不做错误检查（仅永不失败的纯函数允许） | — |
 | 77 | `CALL_HELPER_V` | u16 hid, u8 argc | 返回 Unit，不压栈；**自动尾随 CHECK_ERR**（与 CALL_HELPER 同） | helper 码 |
 | 78 | `CALL_FUNC` | u16 fid, u8 argc | 内部 JIT 函数调用（共窗口） | 传播 + 14 |
@@ -413,7 +413,7 @@ ret: rax = cell（返回值或句柄）；errCode != 0 时 rax 未定义
 | AF | `MAP_ITER_BEGIN` | — | `h → i64` 建立宿主侧 Map 迭代器并返回**游标**（H49，v0.16.1 重定义；**不登记窗口槽**——状态在宿主侧调用级迭代器表，随调用销毁；for-in 降级专用，§11.9） | 6, 8 |
 | BE | `MAP_ITER_STEP` | u8 mode | `cur → cell` 迭代推进/取件/关闭（H62，v0.16.1 重定义；mode：**0=推进→0/1**、1=键、2=值、**3=close**（出口发射、幂等）；坏游标/未推进取件 → 99（防御）；**迭代中修改同一 map → 23**） | 23, 99 |
 
-### 0xB0–0xBF 时间运算 / 文本化 / 字符串切片替换 / 正则（v0.4–v0.6，走 helper）
+### 0xB0–0xBF 时间运算 / 文本化 / 字符串切片替换 / 正则 / 字符串建 Regex（v0.4–v0.17，走 helper）
 
 | Hex | 名称 | 操作数 | 语义 | 失败码 |
 |---|---|---|---|---|
@@ -427,11 +427,11 @@ ret: rax = cell（返回值或句柄）；errCode != 0 时 rax 未定义
 | B7 | `TO_STR` | u8 t | 值 → 字符串（H33；t=静态类型标签，格式冻结于 §11.9） | 6, 8, 16 |
 | B8 | `STR_SUB` | — | `h a b → h` 子串（H50；**码点索引**半开区间 `[a, b)`，与 `STR_AT` 同一索引域（§11.4）；`a<0 / b>码点数 / a>b` → 4，`a==b` → 空串；源语言 `s[a..=b]` 由前端折算为半开形式） | 4, 6, 8, 16 |
 | B9 | `STR_REPLACE` | — | `h old new → h` 全部子串替换（H51；old 为空串 → 14） | 6, 8, 14, 16 |
-| BA | `REGEX_IS_MATCH` | — | `h_re h_s → 0/1`（H52；h_re 为 kind 10 常量句柄） | 6, 8 |
+| BA | `REGEX_IS_MATCH` | — | `h_re h_s → 0/1`（H52；h_re 为任意 Regex 句柄——常量/局部/构造结果） | 6, 8 |
 | BB | `REGEX_FIND` | — | `h_re h_s → h` 首个匹配子串（H53；返回整个匹配 group-0 的新 String，无匹配 → 0；捕获组提取属 M2） | 6, 8, 16 |
 | BC | `STR_REPEAT` | — | `h i64 → h` 字符串重复（H60，v0.15；n ≤ 0 → 空串；`n × len_utf8` 溢出 → 3；见 §11.9） | 3, 6, 8, 16 |
 | BD | `DT_DIFF` | — | `dt1 dt2 → h` 日期差 `dt1 − dt2 → Duration`（H61，v0.15；可为负；差分溢出 Duration 值域 → 12；见 §11.9） | 6, 8, 12, 16 |
-| BF | 保留（M1） | — | 禁用 | — |
+| BF | `STR_TO_REGEX` | — | `h_s → h_re` 字符串构造 Regex（H69，v0.17；非法/空 pattern → 14；分配型；见 §3.3） | 6, 8, 14, 16 |
 
 **0xC0–0xFF 预留 M2**，M1 发射即报错；预留给：`HW_OPEN` 区块内的批量分配、`CALL_HOST`、容器构造。
 
@@ -493,7 +493,7 @@ end:
 - **`while (true)`**：可省略头部的 `JZ`，但**回边安全点必须保留**——`deadline` 到期经 `interrupt_poll` 置 -2，保证无限循环可中断（§12.6）。
 - **`break` / `continue`**：无专用指令。`break` = `JMP end`；`continue` = `JMP` 至回边指令（`LOOP_BACK`）之前，保证每一轮回边都经过安全点。
 - **多重赋值与变量交换（v0.6）**：`(a, b) = (b, a)` 是前端糖，语义冻结为**同时赋值**——全部 RHS 先求值、后统一写回（先读后写 ⇒ 交换天然正确，`a` 的写入不影响 `b` 的读取）。降低：为每个 RHS 结果引入**隐藏局部**（类型 = 各 RHS 静态类型，声明即首写，计入 `nLocals` 与局部类型表），再依序 `STOREL` 至 LHS。约束：LHS 只能是局部变量（M1 无属性赋值——`list[i] = v` 是指令不是赋值语句）；RHS 仅支持**一维元组字面量**（M1 函数单返回值，无元组类型，元组不可作为值传递）；LHS 槽可用 `_` 忽略——对应 RHS **仍求值**（副作用与错误不能省），结果经 `POP`（0x19）丢弃；RHS **从左到右求值**；含变更型调用的 RHS 照常受 §9.15 约束。明确赋值交互：LHS 全部视为出口已赋值（各 `STOREL` 均执行）；RHS 所读变量须此前已赋值（§7 校验 10 自然满足）。
-- **`recursive(args)` 自递归（v0.7，§8.0）**：顶层 lambda 内 = `CALL_FUNC <entryFn>`（`fid` = 自身，目录必含）；实参表达式从左到右求值入栈，argc 与自身 `nargs` 一致由前端静态校验 + §7 校验 7 把关；不做尾调用优化，深度受宿主线程栈限制。**v0.9/v0.10**：`recursive` 绑定**最近一层词法闭包**（嵌套闭包内 = `LOADL 0` + `CALL_CLOSURE`，捕获快照经闭包对象携带；顶层 = `CALL_FUNC`，§8.5/§8.6）。**v0.12 值位**：`recursive` 可作右值——求值结果 = 当前层的**自引用闭包值**（LocalType 12，类型 = 当前层签名 `(T1..Tn) -> R`）：闭包层 = `LOADL 0`（零成本）；顶层 = `closure_new <adapterFn>`（0 捕获；adapterFn 为前端按需生成的隐藏适配器 FuncEntry，闭包帧格式，体 = 转发 `CALL_FUNC <entryFn>`，§8.0/§8.6）——经变量赋值与嵌套捕获，内层闭包可递归调用任意外层（§8.5）。
+- **`recursive(args)` 自递归（v0.7，§8.0）**：顶层 lambda 内 = `CALL_FUNC <entryFn>`（`fid` = 自身，目录必含）；实参表达式从左到右求值入栈，argc 与自身 `nargs` 一致由前端静态校验 + §7 校验 7 把关；**v0.17 自动尾递归优化**：**尾位置**的 `recursive(...)` 降为「实参逆序 `STOREL`（闭包槽基址 1）→ `LOOP_BACK <函数入口>`」帧复用回边（不重入帧、不增长栈；不发射 `RET`——该路径以回边终结）；非尾位置深度受宿主线程栈限制。**v0.9/v0.10**：`recursive` 绑定**最近一层词法闭包**（嵌套闭包内 = `LOADL 0` + `CALL_CLOSURE`，捕获快照经闭包对象携带；顶层 = `CALL_FUNC`，§8.5/§8.6）。**v0.12 值位**：`recursive` 可作右值——求值结果 = 当前层的**自引用闭包值**（LocalType 12，类型 = 当前层签名 `(T1..Tn) -> R`）：闭包层 = `LOADL 0`（零成本）；顶层 = `closure_new <adapterFn>`（0 捕获；adapterFn 为前端按需生成的隐藏适配器 FuncEntry，闭包帧格式，体 = 转发 `CALL_FUNC <entryFn>`，§8.0/§8.6）——经变量赋值与嵌套捕获，内层闭包可递归调用任意外层（§8.5）。
 - **嵌套闭包与立即调用（v0.9，§8.5；v0.10 闭包值模型）**：闭包声明 → 独立 FuncEntry + `closure_new`（捕获快照打包）；`name(args)` / `{...}(args)` → `CALL_CLOSURE`（被调帧 locals[0]=句柄，捕获经 LOAD_CAP）；first-class 局部闭包值支持（§8.6），逃逸 → 编译错误。
 - **正则操作符（v0.11，§11.9）**：`re ~ s` / `re !~ s` → `REGEX_IS_MATCH`（`!~` 加 `NOT_B` 取反）；`re/s/r/g` → `REGEX_REPLACE_ALL`；`re/s/r/n` → `REGEX_REPLACE_NTH`（示意中 `re` 为 Regex 表达式**占位符**——变量/字面量皆可；分隔符恒为单 `/`：无 flags 字面量代入后其闭合 `/` 与分隔 `/` 相邻呈 `//`，带 flags 字面量与变量均为单 `/`）；优先级高于加减、低于乘除，左结合；字面量后的紧贴 `/` 优先于注释识别。
 - **短路 `&&` / `||`**：前端用 `JZ/JNZ` 短路链降低；`AND_B/OR_B`（0x5F/0x60）仅用于两侧均已求值的场景。
@@ -597,10 +597,11 @@ return x                // 编译错误：出口路径 x 未必已赋值
 | H60 | `str_repeat`（v0.15） | h, i64 | h | 3, 6, 8, 16 |
 | H61 | `dt_diff`（v0.15） | h, h | h | 6, 8, 12, 16 |
 | H62 | `map_iter_step`（v0.16.1 重定义） | i64, mode | cell | 23, 99 |
+| H69 | `str_to_regex`（v0.17；编号接 m2/m3 占用的 H63–H68 之后） | h | h | 6, 8, 14, 16 |
 
-**分配型 helper（H24–H29、H32–H41、H50–H51、H53–H54、H58–H61）**：每次调用在窗口登记**恰好 1 个新槽**（其结果，不可变值 / H54 的闭包对象——新对象，M1 内只读使用），窗口满则宿主扩容（§9.6）；句柄表达全局上限 → 16。**H30/H31 返回原始值、H42/H48/H52 返回 0/1，均不登记新槽**；H01–H23 与**变更型 helper（H43–H48）**同样不登记。`to_str` 的标签 `t`：`0=I64 1=F64 2=Bool 3=String 4=Decimal 5=DateTime 6=Duration 7=Range 8=Regex`。
+**分配型 helper（H24–H29、H32–H41、H50–H51、H53–H54、H58–H61、H69）**：每次调用在窗口登记**恰好 1 个新槽**（其结果，不可变值 / H54 的闭包对象——新对象，M1 内只读使用），窗口满则宿主扩容（§9.6）；句柄表达全局上限 → 16。**H30/H31 返回原始值、H42/H48/H52 返回 0/1，均不登记新槽**；H01–H23 与**变更型 helper（H43–H48）**同样不登记。`to_str` 的标签 `t`：`0=I64 1=F64 2=Bool 3=String 4=Decimal 5=DateTime 6=Duration 7=Range 8=Regex`。
 
-**变更型 helper（H43–H48，v0.5）**：修改**已存在**的 List/Map（目标槽经 fetch 取得，tag=1/2），是 M1 **唯一许可的容器副作用**。三条硬规则（§9.15）：① 目标槽属路径 A（常量）→ `ERR_READONLY(20)`；② 含其调用的函数**禁止 deopt 源**（汇编期校验，§7 校验 11）；③ 元素/键值 cell 按 §3.2 表示（Int64/Float64/Bool 原值，句柄型传 ID）。语义对应 std API：`ArrayList.add` / `add(at!)` / `remove(at!)` / 下标写、`HashMap.put` / `remove`。
+**变更型 helper（H43–H48，v0.5）**：修改**已存在**的 List/Map（目标槽经 fetch 取得，tag=1/2），是 M1 **唯一许可的容器副作用**。三条硬规则（§9.15）：① 目标槽属路径 A（常量）→ `ERR_READONLY(20)`；② 含其调用的函数**禁止 deopt 源**（汇编期校验，§7 校验 11）；③ 元素/键值 cell 按 §3.2 表示（Int64/Float64/Bool 原值，句柄型传 ID）。语义对应 std API（签名以 std 为准）：`ArrayList.add(element)` / `add(element, at!)` / `remove(at!)`（返回被删元素）/ 下标写（`operator [](index, value!)`）；`HashMap.add(key, value): Option<V>`（写键——std 无 `put` 方法；覆盖并返回旧值，键此前不存在 → None；M1 `map[k] = v` 忽略该返回值）/ `HashMap.remove(key): Option<V>`（删键——返回被删值，不存在 → None；H48 规范化为 1/0）。
 
 `ht_field` 的 f：`1=year 2=month 3=day 4=hour 5=minute 6=second 7=nanosecond 8=dayOfWeek 9=epochSec 10=epochMilli`
 
@@ -608,7 +609,7 @@ return x                // 编译错误：出口路径 x 未必已赋值
 
 **fetch 类失败码约定**：凡经 `HandleTable.fetch` 的 helper，句柄为 null → 6、类型不符 → 8；上表失败码列略写了这类公共项（`ERR_BAD_CAST`(7) 仅由 `CAST` 指令产生）。
 
-**std 类型实现（不自定义类型）**：全部句柄类型映射到标准库（§3.2 映射表），运算/构造/比较/文本化直接调用 std API，不自实现——H01–H08（List/Map/String 的 `LEN/GET_IDX/GET_KEY` 等）、H24–H27 与 H28–H31（`std.math.numeric.Decimal`，§9.12）、H32/H33（String 拼接与文本化）、H34–H40（`std.time.DateTime`/`std.core.Duration` 运算）、H41/H42（`std.core.Range`）、H43–H48（`std.collection` 容器变更）、H49/H62（v0.16.1：`HashMap.iterator()` 惰性游标封装——单遍无快照）、H50/H51（String 切片/替换）、H52/H53（`std.regex.Regex` 匹配/查找）、H58/H59（`std.regex` 全局/第 n 替换，§11.9）、H60/H61（v0.15：String 重复 / DateTime − DateTime 差；详见 §11.9）。helper 捕获 std 异常并按 §2 转码（除 0 → 10/1、越界 → 4/9、其余未知 → 99）。语义确定性由 std 的跨平台一致实现保证（T1/T11）。
+**std 类型实现（不自定义类型）**：全部句柄类型映射到标准库（§3.2 映射表），运算/构造/比较/文本化直接调用 std API，不自实现——H01–H08（List/Map/String 的 `LEN/GET_IDX/GET_KEY` 等）、H24–H27 与 H28–H31（`std.math.numeric.Decimal`，§9.12）、H32/H33（String 拼接与文本化）、H34–H40（`std.time.DateTime`/`std.core.Duration` 运算）、H41/H42（`std.core.Range`）、H43–H48（`std.collection` 容器变更）、H49/H62（v0.16.1：`HashMap.iterator()` 惰性游标封装——单遍无快照）、H50/H51（String 切片/替换）、H52/H53（`std.regex.Regex` 匹配/查找）、H58/H59（`std.regex` 全局/第 n 替换，§11.9）、H69（v0.17：`std.regex` 运行期构造——String 扩展，§3.3）、H60/H61（v0.15：String 重复 / DateTime − DateTime 差；详见 §11.9）。helper 捕获 std 异常并按 §2 转码（除 0 → 10/1、越界 → 4/9、其余未知 → 99）。语义确定性由 std 的跨平台一致实现保证（T1/T11）。
 
 **单元私有预定义 helper（user helpers，v0.8，§8.4）**：Compiler 实例注册的宿主函数（`PredefinedFunction`），编译期名字解析后以 hid [0x0100,0xFFFF] 进入 CALL_HELPER 通道；trampoline ABI 与本表一致（§6 ABI），实参/返回值按注册签名 marshal（§8.4），异常转码按 §9.5；一律按变更型处理（§9.15），返回句柄型时同时为分配型（登记 1 槽）。封闭白名单的责任模型：固定 helper 由本规范背书；user helper 的准入责任由**注册者**自担（运行期安全由 §9.15 保守规则兜底，不依赖注册者自觉）。
 
@@ -661,7 +662,7 @@ func hl_get(ctx: CPointer<Unit>, args: CPointer<Int64>, n: Int64): Int64 {
 **汇编期硬校验（报错即拒绝生成）**：
 
 1. 每条 `CALL_HELPER` 后必存在可达 `CHECK_ERR`（除显式 `_NC`）。
-2. `0xA0`、`0xA2`、`0xA9–AA`、`0xBC–BF` 与 `0xC0–0xFF` 出现即 `ERR_NOT_IMPL`（v0.5 起 A1/A3/AB–AF、v0.6 起 0xB8–BB 已启用）。
+2. `0xA0`、`0xA2`、`0xA9–AA` 与 `0xC0–0xFF` 出现即 `ERR_NOT_IMPL`（v0.5 起 A1/A3/AB–AF、v0.6 起 0xB8–BB、v0.15 起 0xBC–BD、v0.16.1 起 0xBE、v0.17 起 0xBF 已启用）。
 3. 每个 sink（`RET/RET_VOID/BAIL`）前 `rsp` 深度必须回到帧基线（栈平衡校验）。
 4. `PUSH_KH idx` 的 idx 必须 < 常量表长度且已 `freeze`。
 5. `LOADL/STOREL i`：`i < nLocals`。
@@ -686,11 +687,11 @@ func hl_get(ctx: CPointer<Unit>, args: CPointer<Int64>, n: Int64): Int64 {
 }
 ```
 
-- **`arg_list`（形参列表）**：严格按仓颉函数参数定义——`name: Type` 逗号分隔；**不支持具名参数与参数默认值**；可以为空（`{ => … }`）。`=>` **不可省略**。参数类型 ∈ §11.7 LocalType（0–8、10–11；**9=Regex 非法**，§3.3；**12=Closure 仅限非入口函数**——源入口（顶层 lambda）参数不得为 Closure：Marshal 表无此行（§8.2.1），经 `call<T>` 恒不可供给，前端拒绝（v0.12.1 收紧；CALL_FUNC 链内传闭包不受影响，§8.6）），容器参数记 `List<元素类型>` / `Map<K, V>`（元素类型为前端/桥的静态知识，类型表只记大类）。这些形参就是字节码/JIT 产物接收的参数（`locals[0..nargs-1]`，§3.1）。
+- **`arg_list`（形参列表）**：严格按仓颉函数参数定义——`name: Type` 逗号分隔；**不支持具名参数与参数默认值**；可以为空（`{ => … }`）。`=>` **不可省略**。参数类型 ∈ §11.7 LocalType（0–11；**9=Regex 自 v0.17 可作参数/返回**，Marshal 表含 token 8（§8.2.1）；**12=Closure 仅限非入口函数**——源入口（顶层 lambda）参数不得为 Closure：Marshal 表无此行（§8.2.1），经 `call<T>` 恒不可供给，前端拒绝（v0.12.1 收紧；CALL_FUNC 链内传闭包不受影响，§8.6）），容器参数记 `List<元素类型>` / `Map<K, V>`（元素类型为前端/桥的静态知识，类型表只记大类）。这些形参就是字节码/JIT 产物接收的参数（`locals[0..nargs-1]`，§3.1）。
 - **返回值 = 闭包体执行的最后一个表达式的值**（隐式返回，仓颉 lambda 语义），不限制返回类型（§11.7 类型集内即可；Unit 体最后为语句）。返回类型由前端对尾表达式做**静态推导**，写入 `FuncEntry.retType`（§11.7）——这就是 `JitFunction.call<T>` 识别结果具体类型的依据：`retUnboxer` 按 retType 解包（§8.2.2），`T` 与 retType 不符 → 19（§8.2 第 5 步）。实参按**顺序**转换成 arg_list 的参数类型（§8.2.1 Marshal 表）。
-- **body 能力面**（全部为白名单内能力）：类型化局部变量声明（§11.7 类型集，不含 List/Map 非参数局部）、`if` / `while` / `for-in`（§5 规范降低）、`recursive` 自递归（见下）、**嵌套闭包定义与立即调用（§8.5，v0.9）**、全部 §5 指令面/§6 helper 可达操作（数值与 Decimal 算术、混合提升、字符串切片/替换/插值/重复（v0.15）、多行/原始字符串字面量（§8.8，v0.14）、正则常量匹配与操作符（§11.9，v0.11）、容器遍历与变更、区间、Duration/DateTime 运算（含日期差 `dt1 − dt2`，v0.15）等）。
-- **body 禁用面**：宏（M1 总则）；try-catch（§0 错误通道）；**闭包逃逸**（闭包值不可跨桥/存容器——first-class 局部闭包值自 v0.10 支持，见 §8.6；词法绑定不可重赋值为异签名闭包）；具名/默认参数；Regex 作参数或返回（§3.3）。
-- **`recursive` 自递归调用（关键字）**：`recursive(<arg_list>)` 调用**当前最近一层词法闭包**自身（v0.9 细化：顶层 lambda 内 = 调用顶层；嵌套闭包内 = 调用该嵌套闭包，§8.5）——参数表须与所在闭包签名逐位一致（个数/类型，前端静态校验）。降低：**顶层 lambda 内** = `CALL_FUNC <entryFn>`；**嵌套闭包内** = `LOADL 0`（自身闭包句柄，§8.6 帧约定）+ `CALL_CLOSURE`（v0.10；argc 与签名一致由 §7 校验 7 把关）。**不做尾调用优化**；递归深度受宿主线程栈限制，溢出表现与仓颉原生递归一致（M1 不插深度检查）。含变更型调用的递归函数同样受 §9.15 全部规则约束。**值位（v0.12）**：`recursive` 亦可作右值——求值结果 = 当前层的**自引用闭包值**（LocalType 12，类型 = 当前层签名）：闭包层 = `LOADL 0`；顶层 = `closure_new <adapterFn>`（0 捕获）。**adapterFn** 为前端按需生成的隐藏 FuncEntry（不计入源函数数；闭包帧格式：`locals[0]`=句柄、`locals[1..n]`=实参；体 = 依次推入 `locals[1..n]` + `CALL_FUNC <entryFn>` + 尾直返；适配器内 `recursive` 绑定适配器自身，前端不生成对它的使用）。约束：**顶层签名含 Closure 参数（LocalType 12）→ 值化编译错误**（规避禁高阶边界，改用命名变量模式）；值化每次求值 = 新分配（分配型，重放等值，§8.6）；调用经值化引用的 argc/类型不符 → 运行期 14（§2）。
+- **body 能力面**（全部为白名单内能力）：类型化局部变量声明（§11.7 类型集，不含 List/Map 非参数局部）、`if` / `while` / `for-in`（§5 规范降低）、`recursive` 自递归（见下）、**嵌套闭包定义与立即调用（§8.5，v0.9）**、全部 §5 指令面/§6 helper 可达操作（数值与 Decimal 算术、混合提升、字符串切片/替换/插值/重复（v0.15）、多行/原始字符串字面量（§8.8，v0.14）、正则匹配/操作符（§11.9，v0.11）与 `s.regex()` 字符串构造（§3.3，v0.17）、容器遍历与变更、区间、Duration/DateTime 运算（含日期差 `dt1 − dt2`，v0.15）等）。
+- **body 禁用面**：宏（M1 总则）；try-catch（§0 错误通道）；**闭包逃逸**（闭包值不可跨桥/存容器——first-class 局部闭包值自 v0.10 支持，见 §8.6；词法绑定不可重赋值为异签名闭包）；具名/默认参数。
+- **`recursive` 自递归调用（关键字）**：`recursive(<arg_list>)` 调用**当前最近一层词法闭包**自身（v0.9 细化：顶层 lambda 内 = 调用顶层；嵌套闭包内 = 调用该嵌套闭包，§8.5）——参数表须与所在闭包签名逐位一致（个数/类型，前端静态校验）。降低：**顶层 lambda 内** = `CALL_FUNC <entryFn>`；**嵌套闭包内** = `LOADL 0`（自身闭包句柄，§8.6 帧约定）+ `CALL_CLOSURE`（v0.10；argc 与签名一致由 §7 校验 7 把关）。**自动尾递归优化（v0.17，冻结；无需关键字）**：处于**尾位置**的 `recursive(...)` 自动降低为**帧复用回边**——实参求值入栈 → 按**逆序** `STOREL` 写入本次参数槽（顶层 `locals[0..n-1]`；闭包 `locals[1..n]`，不重写 `locals[0]` 自身句柄）→ `LOOP_BACK <函数入口>`：**不增长调用栈**、操作数栈回基线后回跳；`STACK_GUARD`/安全点照常（深尾递归可被 `-2` 取消）。**尾位置定义（冻结）**：函数体末表达式；`if`/`else` 各分支（当该 `if` 位于尾位置）；块的最后表达式（当该块位于尾位置）。非尾位置的 `recursive(...)` 维持普通调用（`CALL_FUNC`/`CALL_CLOSURE`），深度受宿主线程栈限制——**尾递归路径不再增长栈（不溢出）**，非尾路径与仓颉原生递归表现一致；M1 不插深度检查。实参求值顺序、静态 argc/签名校验与错误路径全部不变（求值失败即 fail-fast 退出，不回跳）；含变更型调用的尾递归函数照常受 §9.15 全部规则约束（尾优化与 deopt 禁令正交）。含变更型调用的递归函数同样受 §9.15 全部规则约束。**值位（v0.12）**：`recursive` 亦可作右值——求值结果 = 当前层的**自引用闭包值**（LocalType 12，类型 = 当前层签名）：闭包层 = `LOADL 0`；顶层 = `closure_new <adapterFn>`（0 捕获）。**adapterFn** 为前端按需生成的隐藏 FuncEntry（不计入源函数数；闭包帧格式：`locals[0]`=句柄、`locals[1..n]`=实参；体 = 依次推入 `locals[1..n]` + `CALL_FUNC <entryFn>` + 尾直返；适配器内 `recursive` 绑定适配器自身，前端不生成对它的使用）。约束：**顶层签名含 Closure 参数（LocalType 12）→ 值化编译错误**（规避禁高阶边界，改用命名变量模式）；值化每次求值 = 新分配（分配型，重放等值，§8.6）；调用经值化引用的 argc/类型不符 → 运行期 14（§2）。
 - **单元形态**：源入口 = 单个 lambda ⇒ 前端为其与**每个嵌套闭包**各生成一个 FuncEntry（目录 ≥ 1 项，`entryFn` = 顶层 lambda；v0.9，§8.5）；**v0.12**：源码出现**顶层 `recursive` 值位**时另按需生成 1 个隐藏适配器 FuncEntry（见上文值位）——目录 = 顶层 + 嵌套闭包 + 适配器（按需）；多函数目录（含互递归）由**分发入口** `compile(unit)` 的 `.fbc` 提供的场景同样成立，`CALL_FUNC` 能力对两者一致可用。
 
 示例：
@@ -726,7 +727,7 @@ func hl_get(ctx: CPointer<Unit>, args: CPointer<Int64>, n: Int64): Int64 {
 //       完成加载校验（§11.6/§11.7）；
 //       源码中对预定义函数的调用编译为单元私有 user helper 调用（§8.4）；
 //       编译时自动导入：std.time（DateTime）、std.math.numeric（Decimal）、
-//       std.collection（ArrayList/HashMap）；std.core 按仓颉规则始终隐式可用；
+//       std.collection（ArrayList/HashMap）、fountain::f_regex（String.regex() 扩展，v0.17）；std.core 按仓颉规则始终隐式可用；
 //       编译粒度是整单元（§9 附则 11），CALL_FUNC 经 §11.7 目录自动互连（支持相互递归）；
 //    2. 并发去重：以 (源码指纹) 为键查询进程级编译缓存——命中 Ready 复用同一
 //       JitFunction；他人 Compiling 中则等待其完成（成功共享结果、失败共享异常），
@@ -840,7 +841,7 @@ try {
 |---|---|---|---|
 | A 常量 | 加载 `.fbc` 时 | 加载器实例化 const 段（kind 3–10）登记 ConstTable（§3.3） | ConstTable（freeze 只读） |
 | B 参数 | 执行前 | 桥 `pin` 宿主对象，ID 写入 `ctx.args[i]`（§8） | 宿主调用方 |
-| C 窗口分配 | 执行期 | 分配型 helper（§6：H24–H29、H32–H41、H50–H51、H53–H54、H58–H61）追加槽并推进 `hwTop`（§9.6） | 窗口 `[hwBase, hwTop)` |
+| C 窗口分配 | 执行期 | 分配型 helper（§6：H24–H29、H32–H41、H50–H51、H53–H54、H58–H61、H69）追加槽并推进 `hwTop`（§9.6） | 窗口 `[hwBase, hwTop)` |
 | D 逃逸 | unbox 时 | 桥把返回的句柄槽迁出窗口、提升为持久根 | HandleTable 逃逸区/宿主 |
 
 **Marshal API 签名草案**（与 §6 `HandleTable.fetch` 同族，示意；**纯 Cangjie 自实现**——句柄表即桥持有的托管容器：`pin` = 存入并返回下标、`get` = 按下标取出，仓颉 GC 天然把容器内的引用当根集合。仓颉不提供、本方案也**不需要**"对象→裸指针"API，此即冻结决策 ④ 的动因）：
@@ -911,7 +912,7 @@ retUnboxer    : (Int64) -> Any          // 返回 cell → 具体仓颉值（句
 | `Int64` | `Int64` | 原值 | 19 |
 | `Float64` | `Float64` | IEEE 位模式 | 19 |
 | `Bool` | `Bool` | 0/1 | 19 |
-| `String/Decimal/DateTime/Duration/Range/List/Map` | 对应引用类型 | `HandleTable.pin`（§8.1 路径 B） | 19 |
+| `String/Decimal/DateTime/Duration/Range/Regex/List/Map` | 对应引用类型 | `HandleTable.pin`（§8.1 路径 B） | 19 |
 
 - **不做数值宽化与混合提升**（§11.9 提升规则是前端编译期职责，`call` 不重做）；不接受 `Option`/null（句柄传 null → M1 不支持）。
 - `pin` 失败抛 `JitException`：句柄表全局上限 → 16；不接受的对象类型（无类型 token，如宿主自定义类）→ 19。
@@ -921,7 +922,7 @@ retUnboxer    : (Int64) -> Any          // 返回 cell → 具体仓颉值（句
 | 签名返回类型 | 解包 | `T` 校验 |
 |---|---|---|
 | `Int64` / `Float64` / `Bool` / `Unit` | 原值 / 位模式 / 0↔false / 忽略 | `T` == 该类型 |
-| `String/Decimal/DateTime/Duration/Range/List/Map` | 逃逸（§8.1 路径 D）→ `get` → 对象引用 | `T` == 该类型 |
+| `String/Decimal/DateTime/Duration/Range/Regex/List/Map` | 逃逸（§8.1 路径 D）→ `get` → 对象引用 | `T` == 该类型 |
 
 - 执行期已失败（`errCode > 0`）→ 不解包，直接按三态收尾抛出（rax 未定义，I5）。
 - 返回引用类型经逃逸 + `get` 交付后，本次调用的窗口分配逃逸槽由桥**自动回收**（§8.1 规则 6）——`call<T>` 不产生跨调用句柄泄漏；`release` 仅桥内部 `invoke` 路径需要。
@@ -987,7 +988,7 @@ retUnboxer    : (Int64) -> Any          // 返回 cell → 具体仓颉值（句
 | 传递物 | 为什么安全 |
 |---|---|
 | 值型 cell（Int64/Float64/Bool） | 按值拷贝，无共享 |
-| 不可变值对象（String/Decimal/DateTime/Duration/Range）经参数/逃逸返回 | **不可变 ⇒ 多线程同时读无竞态**（§3.2） |
+| 不可变值对象（String/Decimal/DateTime/Duration/Range/Regex）经参数/逃逸返回 | **不可变 ⇒ 多线程同时读无竞态**（§3.2） |
 | `JitFunction` 本身 | 编译产物不可变，任意线程并发调用（§12.6） |
 | 只读常量（含常量 List/Map） | 按**只读契约**使用 |
 
@@ -1056,7 +1057,7 @@ public class SourceCompileException <: Exception {
 
 **预定义函数 = 单元私有 user helper（CALL_HELPER 通道）**。选择 CALL_HELPER 而非提前启用 CALL_HOST（M2），理由：① 调用点编译期**静态解析**（注册表在编译期固定）→ 静态 hid + 自动 `CHECK_ERR`；② 复用 helper 全套机制（trampoline ABI、错误转码、窗口登记）；③ CALL_HOST 的运行期动态回调语义留给 M2。
 
-- **hid 编码（冻结）**：固定 helper H01–H62 ↔ hid 1–62（v0.15：+H60/H61；v0.16：+H62；v0.16.1：H49/H62 重定义为迭代器——`map_iter_begin`/`map_iter_step`）；**63–255 保留**（M2/M3 草案规划 H63–H68）；**user helpers ↔ hid [0x0100, 0xFFFF]**（slot = hid − 0x0100，上限 65280，受 `maxPredefined` 收紧）。hid 0 非法。
+- **hid 编码（冻结）**：固定 helper H01–H62、H69 ↔ hid 1–62、69（v0.15：+H60/H61；v0.16：+H62；v0.16.1：H49/H62 重定义为迭代器——`map_iter_begin`/`map_iter_step`；v0.17：+H69 `str_to_regex`）；**63–68、70–255 保留**（63–68 为 M2/M3 草案规划占用）；**user helpers ↔ hid [0x0100, 0xFFFF]**（slot = hid − 0x0100，上限 65280，受 `maxPredefined` 收紧）。hid 0 非法。
 - **编译期名字解析（需求 4）**：body 中 `name(` 调用点按顺序解析——`recursive` → 自递归（§8.0）；命中注册表 → user helper（实参表达式**从左到右**求值，逐参按签名静态校验）；未命中 → `SourceCompileException(kind=UnregisteredFunction)`，消息含**名字、字节位置、已注册清单与修复提示**。非调用的未定义标识符 → 同类异常（kind=UndefinedIdentifier）。**编译期错误不占用 §2 运行期错误码**。
 - **运行路径（需求 3）**：`CALL_HELPER userHid` 与固定 helper 完全同构——`call trampoline` + 自动 `CHECK_ERR`；trampoline 按 (单元, slot) 查注册表快照 → **按签名 marshal**（实参 cell → 仓颉值：句柄型经 `HandleTable.get` 取回对象引用，值型直取）→ `impl(values)` → 返回值按 retType 校验 → 值 → cell（**返回句柄型 = 分配型语义：结果登记 1 槽**，逃逸/自动回收照 §8.1）。
 - **异常转码（§9.5 user 版）**：impl 抛出的任何异常由 trampoline 兜底——已知语义（除零 → 1 等）→ 对应码；未知 → **99**（cause 附原始描述），绝不让宿主异常穿越机器码边界。**cause 通道为调用私有**：错误描述字符串由宿主侧按本次调用记录（随调用销毁，不跨调用/线程共享）——并发失败调用各自的 code/site/cause 互不串扰（§8.3）。
@@ -1119,7 +1120,7 @@ let g = c.compile("{ x: Int64 => unknown(x) }")
 - 内层闭包可捕获外层闭包的参数/局部，以及**外层的闭包变量**（闭包句柄按值快照捕获——内层调用它 = `CALL_CLOSURE`）；递归嵌套逐层可见；
 - 遮蔽：嵌套闭包的参数/局部可遮蔽外层名（内层引用遮蔽名 = 内层变量；未遮蔽名 = 捕获）；同一作用域重复定义同名闭包变量 → 编译错误。
 
-**`recursive`（对 §8.0 关键字的绑定细化）**：`recursive` 绑定**最近一层词法闭包**（含顶层 lambda）——嵌套闭包内即"调用该嵌套闭包自身"，实参 = 当前层的捕获快照 + recursive 实参。注意：内层闭包内裸 `recursive` 被内层绑定**遮蔽**，无法直达外层 lambda——需要调用外层时的两条路：① 词法闭包变量模式（外层 `let f = {...}` → 内层词法引用 `f`）；② **v0.12 值化捕获**：任意层 `let self = recursive` 把当前层自引用闭包值存入变量（§8.0 值位），嵌套闭包按值捕获后即可 `self()` 递归调用该外层——外层为闭包实例时其捕获快照随句柄携带，语义 = 完整重入该层；外层为顶层 lambda 时经隐藏适配器转发（§8.0）。裸 `recursive` 的绑定规则不变（仍遮蔽至最近层）。降低（v0.10）：闭包内 `recursive(args)` = `LOADL 0`（自身闭包句柄，闭包函数帧约定，§8.6）+ `CALL_CLOSURE`；**顶层 lambda 内**维持 `CALL_FUNC <entryFn>`（§8.0）。
+**`recursive`（对 §8.0 关键字的绑定细化）**：`recursive` 绑定**最近一层词法闭包**（含顶层 lambda）——嵌套闭包内即"调用该嵌套闭包自身"，实参 = 当前层的捕获快照 + recursive 实参。注意：内层闭包内裸 `recursive` 被内层绑定**遮蔽**，无法直达外层 lambda——需要调用外层时的两条路：① 词法闭包变量模式（外层 `let f = {...}` → 内层词法引用 `f`）；② **v0.12 值化捕获**：任意层 `let self = recursive` 把当前层自引用闭包值存入变量（§8.0 值位），嵌套闭包按值捕获后即可 `self()` 递归调用该外层——外层为闭包实例时其捕获快照随句柄携带，语义 = 完整重入该层；外层为顶层 lambda 时经隐藏适配器转发（§8.0）。裸 `recursive` 的绑定规则不变（仍遮蔽至最近层）。降低（v0.10）：闭包内 `recursive(args)` = `LOADL 0`（自身闭包句柄，闭包函数帧约定，§8.6）+ `CALL_CLOSURE`；**顶层 lambda 内**维持 `CALL_FUNC <entryFn>`（§8.0）。**v0.17 尾位置特例**：尾位置的 `recursive(args)` 自动降为帧复用回边（实参逆序 `STOREL` + `LOOP_BACK <入口>`，不重写 `locals[0]`、不发射上述调用；§8.0）。
 
 **立即调用（IIFE）**：`{ params => body }(args)` 在声明处直接调用，表达式的值 = 闭包返回值（`let c = {=> a + b}()` 中 `c` 即 `a + b` 的值）；实参表达式从左到右求值；降低（v0.10）：声明发射 `closure_new`、调用发射 `CALL_CLOSURE`，不经过任何绑定名。
 
@@ -1160,7 +1161,7 @@ let g = c.compile("{ x: Int64 => unknown(x) }")
 
 - 赋值/传参/返回的兼容 = 签名一致；调用实参个数/类型按静态签名编译期校验 + 运行期防御（19）；
 - **生命周期/逃逸边界**：闭包值**不可逃逸出创建它的最外层调用**——不可作 `call<T>` 实参/返回（跨桥；Marshal 表不含 Closure，retType=12 的函数经 call<T> → 19）、**不可存入容器**（窗口重置 → 宿主容器悬空 ID）；**可以**：向下传给 CALL_FUNC 被调函数（参数槽 LocalType 12，调用期间窗口存活）、被嵌套闭包按值捕获（同调用内句柄快照）、在 CALL_FUNC 链内返回（retType=12，窗口存活）；
-- 递归：闭包体内 `recursive` = 自身句柄（`locals[0]`）→ `CALL_CLOSURE`（§8.5）；**v0.12 值位**：`recursive` 作右值 = `LOADL 0`（闭包层）/ `closure_new <adapterFn>`（顶层；隐藏适配器为闭包帧格式 FuncEntry，体 = 转发 `CALL_FUNC <entryFn>`，§8.0）——自引用闭包值可赋值、被嵌套按值捕获、按本节全部规则传递（不可逃逸出最外层调用/不可存容器/不跨桥）；被捕获后调用 = 完整重入该外层实例；
+- 递归：闭包体内 `recursive` = 自身句柄（`locals[0]`）→ `CALL_CLOSURE`（§8.5；**尾位置**自 v0.17 自动改走帧复用回边，§8.0）；**v0.12 值位**：`recursive` 作右值 = `LOADL 0`（闭包层）/ `closure_new <adapterFn>`（顶层；隐藏适配器为闭包帧格式 FuncEntry，体 = 转发 `CALL_FUNC <entryFn>`，§8.0）——自引用闭包值可赋值、被嵌套按值捕获、按本节全部规则传递（不可逃逸出最外层调用/不可存容器/不跨桥）；被捕获后调用 = 完整重入该外层实例；
 - **禁高阶**：闭包签名的 T/R 不得为闭包类型（编译错误）。
 
 **对现有语义的影响**：
@@ -1293,7 +1294,7 @@ Ready ──unload() CAS──▶ Unloading ──activeCalls == 0──▶ Unlo
 12. **Decimal = 仓颉标准库 `std.math.numeric.Decimal`（不自定义类型，冻结）**：任意精度有符号十进制数，默认精度 0（无限精度）；**可能产生无限小数的运算（除法等）默认采用 std 的 IEEE 754-2019 decimal128 舍入（HalfEven）**。M1 固定使用 std 默认上下文，不自定义精度/舍入（不使用 `divWithPrecision` 等自定义精度 API）——确定性由 std 的实现保证。构造（含 `parse`）、四则、比较语义全部以 std 为准；÷0（含 0÷0）→ 10；`DEC_TO_I64` 经 `OverflowStrategy` 转换，越界 → 9；比较恒精确（`CMP_DEC` 不变）。
 13. **插值串是前端糖（冻结）**：`"a${x}b"` → 各片段 `TO_STR`（静态类型标签）+ `STR_CAT` 左结合链；片段类型不在 §6 标签集 → 编译错误。分配型指令在 deopt 重放时会**重新分配等值对象**（I8），允许；T10 覆盖。**适用形态（v0.14，对齐仓颉）**：单行与多行（非原始）字符串；**原始串中 `${` 为字面文本**；`>|` 标记与前导缩进同样不参与插值（§8.8）。
 14. **宿主为仓颉运行时，句柄槽取 ID 形态（冻结决策 ④）**：句柄槽实现为 `idx:u32 + tag:u16 + gen:u16`（§1）——对象表由桥以 Cangjie 托管容器持有（条目为 GC 强引用，对象存活与搬移由仓颉 GC 处理），机器码永不接触裸指针。依据：仓颉 GC 为 region 式搬移收集，对象地址不稳定，`objref`（裸指针槽）不可实现。`gen` 语义按 §8.1（逃逸期间表项不得重用、世代保持；复用时递增），M1 常规路径（窗口只增不减）不依赖世代校验。变更宿主或句柄槽形态属范围变更。
-15. **变更型 helper 与重放安全（冻结，v0.5；v0.8 纳入预定义 helper；v0.10 纳入 CALL_CLOSURE）**：H43–H48（List add/insert/set/remove、Map put/remove）、**预定义 helper（user helper，§8.4——宿主闭包，副作用黑盒）**及 **`CALL_CLOSURE` 闭包调用（§8.6——被调闭包体静态不可知，黑盒）**保守按变更型处理，是 M1 **唯一许可的容器副作用**来源，三条硬规则：① **常量禁写**——目标容器槽属路径 A（常量，跨调用共享）→ `ERR_READONLY(20)`；写入会造成跨调用可见的状态残留，破坏可重复调用；② **deopt 禁令**——含变更型 helper 的函数**禁止全部 deopt 源**（汇编期校验，§7 校验 11）：deopt 重放会重复执行变更（add 两遍、remove 两遍），因此此类函数必须保证重放不可达；前端改用报错模式语义等价；③ **防御兜底**——`FuncEntry.flags.bit0`（§11.7）标记"含变更型调用"，运行期若桥仍收到该类函数的 `errCode=-1`，**不重放**、按 99 上报（实现缺陷）。I7 不受影响：三引擎共用同一 helper 代码，对同一输入的变更序列逐位一致；可重复调用性以"输入对象状态相同"为前提（变更后即不同输入）。
+15. **变更型 helper 与重放安全（冻结，v0.5；v0.8 纳入预定义 helper；v0.10 纳入 CALL_CLOSURE）**：H43–H48（List add/insert/set/remove、Map 写键/删键）、**预定义 helper（user helper，§8.4——宿主闭包，副作用黑盒）**及 **`CALL_CLOSURE` 闭包调用（§8.6——被调闭包体静态不可知，黑盒）**保守按变更型处理，是 M1 **唯一许可的容器副作用**来源，三条硬规则：① **常量禁写**——目标容器槽属路径 A（常量，跨调用共享）→ `ERR_READONLY(20)`；写入会造成跨调用可见的状态残留，破坏可重复调用；② **deopt 禁令**——含变更型 helper 的函数**禁止全部 deopt 源**（汇编期校验，§7 校验 11）：deopt 重放会重复执行变更（add 两遍、remove 两遍），因此此类函数必须保证重放不可达；前端改用报错模式语义等价；③ **防御兜底**——`FuncEntry.flags.bit0`（§11.7）标记"含变更型调用"，运行期若桥仍收到该类函数的 `errCode=-1`，**不重放**、按 99 上报（实现缺陷）。I7 不受影响：三引擎共用同一 helper 代码，对同一输入的变更序列逐位一致；可重复调用性以"输入对象状态相同"为前提（变更后即不同输入）。
 
 > 变更上述冻结决策（例如新增 macOS JIT、支持 32 位宿主、或改为增量编译）属于**范围变更**：需同步更新受影响章节（§8 / §11 / §12 / §13.1）并重跑 §13.2 全量测试，且不得违反 I6 / I7。
 
@@ -1305,7 +1306,7 @@ Ready ──unload() CAS──▶ Unloading ──activeCalls == 0──▶ Unlo
 
 - 常量名规则：`OP_<助记符>`（大写下划线），例如 `OP_PUSH_I8`、`OP_CALL_HELPER`。
 - 指令编码：`[op:u8][operands…]` 小端；`rel` 为相对**下一条指令**的有符号 32 位偏移。
-- 保留区（RSVD）在 M1 中发射即 `ERR_NOT_IMPL`；禁用区（FORBID：0xA0/A2/A9–AA——容器与时间**构造**，M2 启用；0xBF、0xC0–FF）同样发射即报错。v0.5 起 A1/A3/AB–AF（容器变更/快照）、v0.6 起 0xB8–BB（字符串切片替换/正则）、v0.15 起 0xBC–BD（字符串重复/日期差）、v0.16.1 起 0xBE（Map 迭代步进）已启用，归入 BOX。
+- 保留区（RSVD）在 M1 中发射即 `ERR_NOT_IMPL`；禁用区（FORBID：0xA0/A2/A9–AA——容器与时间**构造**，M2 启用；0xC0–FF）同样发射即报错。v0.5 起 A1/A3/AB–AF（容器变更/快照）、v0.6 起 0xB8–BB（字符串切片替换/正则）、v0.15 起 0xBC–BD（字符串重复/日期差）、v0.16.1 起 0xBE（Map 迭代步进）、v0.17 起 0xBF（字符串建 Regex）已启用，归入 BOX。
 - 实现侧应构建 `OPCODE_TABLE: Array<OpInfo>` 并以 opcode 为下标索引，供反汇编、汇编期校验、调试器共用。
 
 ### §10.2 操作数编码种类（OperandFormat）
@@ -1515,7 +1516,8 @@ public let OPCODE_TABLE: Array<OpInfo> = [
   OpInfo(0xBC, "OP_STR_REPEAT",  "-", 1, CAT_BOX),
   OpInfo(0xBD, "OP_DT_DIFF",     "-", 1, CAT_BOX),
   OpInfo(0xBE, "OP_MAP_ITER_STEP",  "u8", 1, CAT_BOX),
-  // ---- 0xBC–0xBF / 0xC0–0xFF 保留 ----
+  OpInfo(0xBF, "OP_STR_TO_REGEX", "-", 1, CAT_BOX),
+  // ---- 0xC0–0xFF 保留 ----
   OpInfo(0xFF, "OP_RSVD",        "-", 1, CAT_RSVD),
 ]
 ```
@@ -1594,8 +1596,8 @@ Entry = (kind: u8, payload)
 off  size 字段        说明
 0    4    magic       "FBC1"
 4    2    verMajor    1
-6    2    verMinor    9（递增原因＝新增 opcode / 新增 helper / 类型表格式变更 / CALL_HELPER hid 值域扩展；历史：v0.4=1、v0.5=2、v0.6=3、v0.7=4、v0.8=5、v0.10=6、v0.11=7、v0.15=8、v0.16=9；加载器接受 ≤ 自身版本的 verMinor）
-8    4    flags       bit0=UTF-8 语义(恒 1)  bit1=需要 JIT(必须为 0)  bit2=使用值运算/分配/变更类指令（helper 路由：A1/A3–A8 / 0x9A–0x9E / 0xAB–AF / 0xB0–0xBE 时置 1）
+6    2    verMinor    10（递增原因＝新增 opcode / 新增 helper / 类型表格式变更 / CALL_HELPER hid 值域扩展；历史：v0.4=1、v0.5=2、v0.6=3、v0.7=4、v0.8=5、v0.10=6、v0.11=7、v0.15=8、v0.16=9、v0.17=10；加载器接受 ≤ 自身版本的 verMinor）
+8    4    flags       bit0=UTF-8 语义(恒 1)  bit1=需要 JIT(必须为 0)  bit2=使用值运算/分配/变更类指令（helper 路由：A1/A3–A8 / 0x9A–0x9E / 0xAB–AF / 0xB0–0xBF 时置 1）
 12   4    hdrSize     恒 32（v1；为向后兼容预留）
 16   4    codeLen
 20   4    constLen
@@ -1621,7 +1623,7 @@ FuncEntry = { fnId: u32, codeOff: u32, codeLen: u32, localTypesOff: u32,
 
 - `codeOff/codeLen/localTypesOff` 相对 code 段起点；`frameSize` 由 §3.1 公式在加载期算出（平台无关）。
 - `flags.bit0` = 函数含变更型 helper、预定义 helper（user helper，§8.4）或 CALL_CLOSURE（§8.6）调用（v0.5，汇编器设置；v0.8/v0.10 扩展）：桥的防御性 DEOPT 检查依据（§9.15③）。
-- `retType`（v0.7）：返回类型，LocalType 编码，合法值 0–8 与 10–12（**9=Regex 非法**，§3.3；12=闭包仅限 CALL_FUNC 链内返回，不可经 call<T> 逃逸，§8.6）。源入口 = lambda 尾表达式静态推导（§8.0）；分发入口场景 `call<T>` 的 `T` 校验依据（§8.2 第 5 步）。加载器校验其合法性。
+- `retType`（v0.7）：返回类型，LocalType 编码，合法值 0–12（**9=Regex 自 v0.17 合法**——可经 `call<T>` 双向，§3.3；12=闭包仅限 CALL_FUNC 链内返回，不可经 call<T> 逃逸，§8.6）。源入口 = lambda 尾表达式静态推导（§8.0）；分发入口场景 `call<T>` 的 `T` 校验依据（§8.2 第 5 步）。加载器校验其合法性。
 
 **局部类型表（v0.4 起，每个函数一份，`localTypesOff` 指向，共 `nLocals` 字节）**：
 
@@ -1629,7 +1631,7 @@ FuncEntry = { fnId: u32, codeOff: u32, codeLen: u32, localTypesOff: u32,
 LocalType (u8，每槽 1 字节):
   0=Int64   1=Float64  2=Bool     3=Unit
   4=String  5=Decimal  6=DateTime 7=Duration 8=Range
-  9=Regex（不可作参数/返回，§3.3）
+  9=Regex（v0.17 起可作参数/返回，§3.3）
   10=List  11=Map（**仅参数槽**合法，v0.7；元素类型为前端/桥的静态知识，类型表不编码泛型实参）
   12=Closure（v0.10，§8.6；闭包句柄，签名是前端/桥的静态知识）
   13–255 保留（加载器拒绝）
@@ -1733,9 +1735,9 @@ Closure 无文本形式：`TO_STR` 标签 t=9 非法（前端对闭包 TO_STR �
 - `RANGE_CONTAINS(h, v)`：按上述语义判定（`..=` 含 end；空区间恒 false）。
 - 开端点区间（构造器 `hasStart/hasEnd=false` 形态）M1 不支持：字节码中的区间恒有双端点。
 - `for-in` 循环经隐藏计数局部降低为 while 模式（§5 循环降低模式），支持 `Range` / `List` / `Map`（v0.5：Map 经 `MAP_KEYS`；**v0.16.1：`MAP_ITER_BEGIN`/`MAP_ITER_STEP` 惰性单遍迭代**）/ `String`（索引 + `STR_AT`）；切片 / 按区间索引 / 自定义迭代器协议属 M2。
-- **迭代语义（v0.5 冻结，`for-in` 的规范降低；v0.16.1 更新 Map）**：① List——迭代开始快照长度 `n = LEN(h)`，逐索引 `GET_IDX`（迭代中越界 → 4）；② Map——**惰性单遍迭代（v0.16.1）**：`MAP_ITER_BEGIN` 建立宿主迭代器、逐轮 `MAP_ITER_STEP`（advance/key/value），出口 `close`——**无快照、无预遍历**（唯一一遍 = 循环本身）；**迭代期间修改同一 map → 错误码 23**（转码自 std `ConcurrentModificationException`——对齐仓颉；失败点 = 触发检测的 STEP 调用）；顺序 = std 迭代顺序；③ Range——整数循环，`i += step` 溢出 → 3；④ String——索引 + `STR_AT`。迭代中修改容器**语义明确**（List 为“长度快照 + 活值”；Map 为 fail-fast → **23**），**修改非同一容器的其它容器不受影响**；迭代器状态在宿主侧调用级表（随调用销毁；deopt 重放不携带旧游标）。变更型调用（`add/remove/put/[]=`）在循环体内许可（**Map 循环中修改自身 → 23**），同样受 §9.15 全部规则约束。源语言形式冻结为仓颉同形（§5）：`for (i in iterable) { … }`，Map 为 `for ((k, v) in map)`，可选 `where` 谓词。
+- **迭代语义（v0.5 冻结，`for-in` 的规范降低；v0.16.1 更新 Map）**：① List——迭代开始快照长度 `n = LEN(h)`，逐索引 `GET_IDX`（迭代中越界 → 4）；② Map——**惰性单遍迭代（v0.16.1）**：`MAP_ITER_BEGIN` 建立宿主迭代器、逐轮 `MAP_ITER_STEP`（advance/key/value），出口 `close`——**无快照、无预遍历**（唯一一遍 = 循环本身）；**迭代期间修改同一 map → 错误码 23**（转码自 std `ConcurrentModificationException`——对齐仓颉；失败点 = 触发检测的 STEP 调用）；顺序 = std 迭代顺序；③ Range——整数循环，`i += step` 溢出 → 3；④ String——索引 + `STR_AT`。迭代中修改容器**语义明确**（List 为“长度快照 + 活值”；Map 为 fail-fast → **23**），**修改非同一容器的其它容器不受影响**；迭代器状态在宿主侧调用级表（随调用销毁；deopt 重放不携带旧游标）。变更型调用（`add` / `remove` / `[]=`——list 下标写与 map 写键）在循环体内许可（**Map 循环中修改自身 → 23**），同样受 §9.15 全部规则约束。源语言形式冻结为仓颉同形（§5）：`for (i in iterable) { … }`，Map 为 `for ((k, v) in map)`，可选 `where` 谓词。
 
-**正则操作符（v0.11，冻结；v0.16.3 澄清 LHS 形态）**：LHS 恒为 Regex 类型（正则字面量常量或 Regex 局部变量，§11.7 类型集含 Regex；Regex 不可作参数/返回，§3.3）；RHS 为 String 类型表达式；类型不符 → 编译错误。
+**正则操作符（v0.11，冻结；v0.16.3 澄清 LHS 形态；v0.17 LHS 面扩展）**：LHS 恒为 Regex 类型（**任意 Regex 类型表达式**——字面量常量、Regex 局部变量或 `s.regex()` 构造结果，§3.3/§11.7）；RHS 为 String 类型表达式；类型不符 → 编译错误。
 
 | 形式 | 语义 | 降低 |
 |---|---|---|
@@ -1933,7 +1935,7 @@ interp(args)  ==  jit_x86_64(args)  ==  jit_aarch64(args)
 | T16 | **只编译一次去重**：多线程并发 `compile` 相同源码/相同 `.fbc`（含一方 Compiling 中另一方加入）；编译失败后的同键重入；不同源码并行编译 | 成功路径恰好执行一次管线（计数断言）、全部线程收到同一 `JitFunction`；失败共享等价异常；不同键互不阻塞 |
 | T17 | **并发重复调用**：多线程并发调用同一 `JitFunction` 数百次（覆盖分配/循环/分支/DEOPT 触发/`call` 契约错误），期间宿主 GC 并发运行 | 每线程结果/错误码/site 与单线程基准**逐位一致**；线程间无状态串扰（局部隔离断言：线程写各自的句柄型局部互不可见）；无悬挂句柄 |
 | T18 | **容器变更差分**：`LIST_APPEND/INSERT/SET/REMOVE`、`MAP_PUT/REMOVE` 全组合 ×（越界、常量容器目标 → 20、null 目标 → 6、tag 不符 → 8）× 三引擎；变更函数与 `DEC_TO_I64` mode=1 同单元 → 汇编期拒绝（§7 校验 11）；`FuncEntry.flags.bit0` 标记正确 | 三引擎变更结果与错误码逐位一致；宿主侧可见的容器终态一致；20/4/6/8 全部按 §2 触发；禁令用例编译期拒绝 |
-| T19 | **迭代与快照语义**：§11.9 迭代规则全组合——List 迭代中 append/remove（快照长度）、Map 迭代中 put/remove（**fail-fast：修改同一 map → 23**；修改其它容器不受影响）、Range 步进溢出 → 3、String 逐码点；嵌套 for-in 的迭代器表行为（游标独立、出口 close、条目不随执行增长） | 三引擎迭代序列逐位一致；迭代语义与 §11.9 全等；无快照槽（0 槽/执行）；迭代器条目随调用回收、无泄漏 |
+| T19 | **迭代与快照语义**：§11.9 迭代规则全组合——List 迭代中 append/remove（快照长度）、Map 迭代中写键/删键（**fail-fast：修改同一 map → 23**；修改其它容器不受影响）、Range 步进溢出 → 3、String 逐码点；嵌套 for-in 的迭代器表行为（游标独立、出口 close、条目不随执行增长） | 三引擎迭代序列逐位一致；迭代语义与 §11.9 全等；无快照槽（0 槽/执行）；迭代器条目随调用回收、无泄漏 |
 | T20 | **字符串切片/替换与正则（v0.6）**：STR_SUB（越界 → 4、`a==b` → 空串、`s[a..=b]` 前端折算等价性）；STR_REPLACE（空模式 → 14、多匹配全替换、替换串含模式子串）；正则字面量 ×（i/m/u 全组合 × is_match/find/无匹配 → 0），同 (pattern, flags) 单元内同 ID、**编译次数 == 常量数**（一次编译断言）；非法 pattern → 加载期 `JitException(14)` | 三引擎结果/错误码/site 逐位一致；复用与去重断言成立；正则语义与 std.regex 一致（同版本 std 下跨平台确定） |
 | T21 | **多重赋值与交换（v0.6）**：`(a, b) = (b, a)` 及 n 元推广 ×（值型/句柄型局部、RHS 含变更型调用与错误路径、`_` 忽略位仍求值、同变量 RHS 别名 `(a, a) = (b, a)`、嵌套于循环与分支） | 同时赋值语义逐位一致（先读后写）；隐藏局部不影响可观察行为（零值填充不可观察，§3.1）；三引擎结果/错误码/site 全等 |
 | T22 | **源入口格式与自递归（v0.7）**：lambda 源入口全形态（无参/多参/容器参数 List/Map/`=>` 缺失 → 前端拒绝/具名与默认参数 → 拒绝/Regex 参数 → 拒绝）；返回类型推导 × `call<T>` 校验（T 与尾表达式不符 → 19；分发入口按 `FuncEntry.retType` 校验）；`recursive` 深度递归（参数逐位一致、`fnId` 归因随递归层修正、中等深度 × 三引擎、含变更型的递归函数受 §9.15 约束） | 非法源码前端拒绝；`call<T>` 结果类型识别全部正确；递归结果/错误码/site 三引擎逐位一致；retType 非法值被加载器拒绝 |
@@ -1947,7 +1949,9 @@ interp(args)  ==  jit_x86_64(args)  ==  jit_aarch64(args)
 | T42 | **字符串字面量形态（v0.14，编号接 m2/m3 序列）**：多行 ×（两式定界 `'''`/`"""`、首行换行后起始、转义三引号不终止、单独 `\` → 编译错误、跨行/缩进逐字节保留、未闭合 → 编译错误）；原始串 ×（`#`×n 与引号匹配计数、verbatim（`\n` 不转义）、无插值、单/双引号两种、可跨行、EOF 未闭合 → 编译错误）；`>|` 锚定 ×（进入判定——**仅有效标记触发**；有效标记识别（前导仅缩进空白 + 首两个非空白符 = `>|`）；**非空白符之后的 `>|` 为字面内容且不触发、不截取**（`x >| y`、`>>|`、`a>|b`、`|>|` 行均原样保留）；**无有效标记的行（含空白/非空白）整行原样保留**；标记行与保留行混排（首/中/末位置组合）；**标记符号不进入产物**（前导缩进+标记消耗、单独 `>|` 行 → 空串、标记后 `>|` 为字面文本）；`>|>|asdfaf>|` → `>|asdfaf>|`、`>|    >|` → `    >|`；截取后正常转义与插值）；换行规范化（CRLF/CR → `\n`）；词法消歧（起始三引号最长匹配）；常量化（kind 3——**无格式变更**） | 各形态产物逐字节与黄金值一致；**产物中不含被消耗的标记与前导缩进**；编译错误 kind 正确（`MultilineHeadContent`/`UnterminatedMultilineString`/`UnterminatedRawString`）；三引擎结果一致；跨平台编译产物一致（换行规范化） |
 | T43 | **字符串重复与日期差（v0.15）**：`s * n` ×（n ≤ 0 → 空串（含负值）；n=1；多字节 UTF-8 字符；`n * s` 换序；n 为 F64/DEC 的自动窄化（向零截断、NaN/越界 → 13、DEC 越界 → 9、负值 → 空串）；`n × len` 溢出 → 3；大 n 分配失败 → 99）；`dt1 − dt2` ×（正/负差、相等 → 零、跨年、Duration 值域边界 → 12）；两运算 × 分配路径（窗口登记 1 槽、逃逸、重放等值）；不含变更型 → deopt 无禁令对照 | 三引擎结果/错误码/site 逐位一致；窄化插入位置与报错码与 §11.9 全等；结果与 std 语义等价物逐位一致 |
 | T44 | **if 双用法与分支类型（v0.15.1）**：语句用法 ×（`if c { 1 } else { "s" }` 类型互异且合法、分支末值经 `POP` 丢弃且**栈平衡无残留**、裸 if、嵌套于循环/分支、句柄型分支值同样丢弃）；值用法 ×（`let x = if …` / `x = if …` 同型通过；混合 I64/F64/DEC → 编译错误（不做提升）；句柄型 vs 值型 → 错误；容器分支元素类型不同 → 错误；无最终 else → 错误；作为实参/运算数/尾返回时分支不一致 → 编译错误）；明确赋值汇合 ×（全部分支赋值才视为已赋值——两种形式同规则） | 语句用法不引入任何类型约束（产物栈平衡逐位一致）；值用法类型规则与 §5 全等；三引擎结果/错误码/site 全等 |
-| T45 | **Map 惰性迭代（v0.16.1）**：单遍断言（无预遍历——宿主侧 `iterator()` 调用计数 == 循环执行数、无 O(n) 预扫描）；模式序列（advance/key/value/close）与 close 幂等；嵌套循环（迭代器表独立游标）；`break`/`continue`（出口 close 汇聚、表条目不随执行增长）；**迭代中修改同一 map → 23**（put/remove/clear × advance 触发）+ 修改他容器不受影响；坏游标/未推进取件 → 99（防御）；deopt 重放（新游标、旧条目随调用回收）；窗口账目（**0 槽/执行**） | 三引擎迭代序列/结果/错误码/site 逐位一致；23 与 std CME 对齐；表条目 ≤ 嵌套深度 |
+| T45 | **Map 惰性迭代（v0.16.1）**：单遍断言（无预遍历——宿主侧 `iterator()` 调用计数 == 循环执行数、无 O(n) 预扫描）；模式序列（advance/key/value/close）与 close 幂等；嵌套循环（迭代器表独立游标）；`break`/`continue`（出口 close 汇聚、表条目不随执行增长）；**迭代中修改同一 map → 23**（写键/删键 × advance 触发）+ 修改他容器不受影响；坏游标/未推进取件 → 99（防御）；deopt 重放（新游标、旧条目随调用回收）；窗口账目（**0 槽/执行**） | 三引擎迭代序列/结果/错误码/site 逐位一致；23 与 std CME 对齐；表条目 ≤ 嵌套深度 |
+| T46 | **Regex 互操作与运行期构造（v0.17）**：Regex 作参数（桥 `pin` → helper 使用；null/类型不符 → 19）与作返回（retType=9 逃逸 → `get` → Regex 实例；`call<T>` T=Regex）；CALL_FUNC 链内 Regex 传参/返回；嵌套闭包签名含 Regex；`s.regex()` ×（合法构造与字面量同语义——is_match/find/replace 结果逐位一致；非法 pattern → **14**、空 pattern → **14**（site=调用点）；恒无 flags；每次求值新对象、**不去重**（同 pattern 两构造 → 行为等价、ID 不同）；分配型窗口登记 1 槽 / 重放等值重建）；加载期与运行期拒绝分列（字面量 kind 10 → 加载期 14；`regex()` → 执行期 14） | 三引擎结果/错误码/site 逐位一致；Marshal/解包与既有句柄类型同路由；无泄漏（T27 模式） |
+| T47 | **自动尾递归优化（v0.17）**：尾位置判定（体末表达式 / `if` 双分支 / 块末 / 嵌套组合 × 顶层与嵌套闭包；非尾位置——运算数、实参、`let` 右值——不优化）；深度 ≥ 10^6 尾递归**栈深恒定、不溢出**（宿主栈用量断言；对照组：非尾位置维持调用语义、栈深随深度增长）；优化与未优化**语义逐位一致**（结果/错误码/site；实参求值顺序与失败路径；变更型尾递归照受 §9.15 禁令）；回边产物（`STOREL` 逆序 + `LOOP_BACK <入口>`；操作数栈回基线；不发射 `RET`）；安全点（深尾递归中 `deadline` → `-2` 可取消）；`hasLoop`/§7 校验 6 由回边自然生效；T24/T28 非尾路径对拍 | 帧深恒定断言成立；三引擎结果/错误码/site 与回边模式逐位一致 |
 
 ### §13.3 版本演进约束
 
