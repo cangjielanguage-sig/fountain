@@ -441,7 +441,7 @@ private func transformTableName(attrs: Tokens, decl: Decl): String {
 }
 
 private func generateColumns(name: Tokens, props: ArrayList<PropDecl>, vars: ArrayList<VarDecl>, mapperMetaFn: (String) -> (Bool, String, String)): (Token, Tokens) {
-    let columnsName = Token(IDENTIFIER, name[0].value + "Columns")
+    let columnsName = Token(IDENTIFIER, name[0].value + "__cOlUmns___")
     var columns = quote()
     var toString = quote(
         public func toString(): String {
