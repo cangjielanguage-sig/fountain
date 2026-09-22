@@ -3,7 +3,7 @@
   name = "f_health"
   organization = "fountain"
   description = "收集进程运行数据作为健康检查信息、注册健康检查实现，按照配置向注册的实现发送健康检查数据"
-  version = "1.0.0"
+  version = "1.3.2"
   target-dir = ""
   script-dir = ""
   output-type = "dynamic"

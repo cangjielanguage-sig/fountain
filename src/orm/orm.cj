@@ -16,4 +16,3 @@ limitations under the License.
 package fountain::fountain.orm
 
 public import fountain::f_orm.*
-public import fountain::f_orm.sql.*
