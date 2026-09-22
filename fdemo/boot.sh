@@ -26,7 +26,7 @@ exports(){
     export logger_appender_FDemoFile_path=./log/fdemo.log
     export logger_appender_FDemoFile_rotateDuration=DAY
     export logger_asyncWaitTimeout=5ms # 异步日志缓冲区等待时间，默认是5毫秒，超过这个时间，本次日志被忽略
-    export controllerPointcut='*::*..*Controller.*(**): *'
+    export controllerPointcut='*::*..*Controller.*(**): *' # 这个不是mvc的配置，这是声明切面时指定的配置项，开发者可以任意起名
     export mvc_port=8080 # 这一行可以没有，默认就是8080
     export mvc_maxRequestBodySize=67108864
     export mvc_overallElapsedSwitch=true # 生产环境建议改为false，默认是false
