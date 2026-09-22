@@ -16,7 +16,6 @@ limitations under the License.
 package fountain::f_app
 
 internal import fountain::f_version.*
-internal import std.ast.*
 internal import std.collection.*
 internal import std.collection.concurrent.{ConcurrentHashMap, ConcurrentLinkedQueue}
 internal import std.convert.*
