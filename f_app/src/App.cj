@@ -504,20 +504,20 @@ private let _ = AppVersion.set(#'${banner()}'#, '${name}', '${version}')
                     for(line in r.lines()){
                         let l = line.trimAscii()
                         if(ignoreComments){
-                            if(inComment > 0 || l.startsWith('//') || (l.startsWith('/*') && l.endsWith('*/'))){
+                            if(l.endsWith('*/') && inComment > 0){
+                                inComment--
+                                continue
+                            }else if(l.contains('*/') && inComment > 0){
+                                inComment--
+                            }else if(inComment > 0 || l.startsWith('//') || (l.startsWith('/*') && l.endsWith('*/'))){
                                 continue
                             }else if(l.startsWith('/*')){
                                 inComment++
                                 continue
-                            }else if(l.endsWith('*/') && inComment > 0){
-                                inComment--
-                                continue
-                            }else if (let Some(s) <- l.lastIndexOf('/*') && let Some(e) <- l.indexOf('*/') && s > e && l[e + 2 .. s].trimAscii() == ''){
+                            }else if (let Some(s) <- l.lastIndexOf('/*') && let Some(e) <- l.indexOf('*/') && s > e + 1 && l[e + 2 .. s].trimAscii() == ''){
                                 continue
                             }else if (l.contains('/*') && !l.contains('*/')) {
                                 inComment++
-                            }else if(l.contains('*/') && inComment > 0){
-                                inComment--
                             }
                         }
                         if(l.size > 0 && !(ignoreBrackets && ')]}{[('.contains(l))){
