@@ -498,29 +498,31 @@ private let _ = AppVersion.set(#'${banner()}'#, '${name}', '${version}')
                 count(fi.path, counter, ext, ignoreBrackets, ignoreComments)
             } else if (fi.path.extensionName == ext){
                 counter.files++
-                func count(input: InputStream){
+                try(input = File(fi.path, Read)){
                     let r = StringReader(input)
+                    var inComment = 0
                     for(line in r.lines()){
                         let l = line.trimAscii()
+                        if(ignoreComments){
+                            if(inComment > 0 || l.startsWith('//') || (l.startsWith('/*') && l.endsWith('*/'))){
+                                continue
+                            }else if(l.startsWith('/*')){
+                                inComment++
+                                continue
+                            }else if(l.endsWith('*/') && inComment > 0){
+                                inComment--
+                                continue
+                            }else if (let Some(s) <- l.lastIndexOf('/*') && let Some(e) <- l.indexOf('*/') && s > e && l[e + 2 .. s].trimAscii() == ''){
+                                continue
+                            }else if (l.contains('/*') && !l.contains('*/')) {
+                                inComment++
+                            }else if(l.contains('*/') && inComment > 0){
+                                inComment--
+                            }
+                        }
                         if(l.size > 0 && !(ignoreBrackets && ')]}{[('.contains(l))){
                             counter.lines++
                         }
-                    }
-                }
-                if (ignoreComments && ext == 'cj') {
-                    let code = entireFileText(fi.path)
-                    let tokens = cangjieLex(code)
-                    try {
-                        let bytes = parseProgram(tokens).toTokens().toString().unsafeBytes()
-                        count(ByteBuffer(bytes))
-                    } catch (e: Exception) {
-                        stdOut.writeln(code)
-                        e.printStackTrace()
-                        count(ByteBuffer(code.unsafeBytes()))
-                    }
-                }else{
-                    try(f = File(fi.path, Read)){
-                        count(f)
                     }
                 }
             } else if (fi.path.extensionName == 'toml') {
