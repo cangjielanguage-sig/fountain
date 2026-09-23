@@ -85,7 +85,7 @@ class RPCServer {
                 server.close()
             }
         }
-        server.start(executor)
+        server.start(execute)
     }
     /**
      * REGISTER 向其它服务节点注册自身
@@ -95,7 +95,7 @@ class RPCServer {
      * CONSUME 向服务节点发起RPC调用
      * RESP 服务节点返回调用结果或当前服务节点能够提供的服务
      */
-    private static func executor(buffer: SocketBuffer, message: Message): ?Message {
+    private static func execute(buffer: SocketBuffer, message: Message): ?Message {
         try{
             let cmd = message.command
             match(message.command){
@@ -107,10 +107,7 @@ class RPCServer {
                 case x => error(message.id, x, ErrorMessage.new(message.data, UNSUPPORTED_COMMAND))
             }
         }catch(e: Exception){
-            let buffer = ByteBuffer()
-            printStackTrace(e, buffer)
-            let errmsg = buffer.bytes() |> String.fromUtf8Unchecked
-            error(message.id, message.command, ErrorMessage.new(message.data, errmsg))
+            error(message.id, message.command, ErrorMessage.new(message.data, e))
         }finally{
             RPCMessage.clearCurrentTrace()
         }
@@ -168,9 +165,7 @@ private struct ConsumeExecutor{
         } handle (cmd: BreakingCommand) {
             innerInfo(cmd.data, MonoTime.now())
         } catch (e: Exception) {
-            let buffer = ByteBuffer()
-            printStackTrace(e, buffer)
-            error(id, Command.CONSUME(b), ErrorMessage.new(message, buffer.bytes() |> String.fromUtf8))
+            error(id, Command.CONSUME(b), ErrorMessage.new(message, e))
         }
     }
 }
