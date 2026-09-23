@@ -95,7 +95,7 @@ public class ORMConfig {
     }
     public static func getAllConfigTuples(driverName!: String = String.empty): Array<(String, String)> {
         let map = getAllConfigs(driverName: driverName)
-        map.iterator().filter{tpl => tpl[0].contains('orm_options_')}.map{tpl => 
+        map.iterator().filter{tpl => tpl[0].contains('orm_option_')}.map{tpl =>
             let tp = tpl[1].split('=')
             (tp[0], tp[1])
         }.toArray()
