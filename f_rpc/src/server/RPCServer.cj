@@ -106,6 +106,11 @@ class RPCServer {
                 case Command.ACK => None<Message>
                 case x => error(message.id, x, ErrorMessage.new(message.data, UNSUPPORTED_COMMAND))
             }
+        }catch(e: Exception){
+            let buffer = ByteBuffer()
+            printStackTrace(e, buffer)
+            let errmsg = buffer.bytes() |> String.fromBytes
+            error(message.id, message.command, ErrorMessage.new(message.data, errmsg))
         }finally{
             RPCMessage.clearCurrentTrace()
         }
