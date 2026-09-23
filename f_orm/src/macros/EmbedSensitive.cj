@@ -21,7 +21,7 @@ import fountain::f_macros.*
 import fountain::f_orm.wrap.ORMConfig
 import fountain::f_base.UnsafeBytes
 
-public macro EmbedSensitive(_: Tokens): Tokens {
+protected macro EmbedSensitive(_: Tokens): Tokens {
     var tokens = quote(
         private let _ = {=>
     )
