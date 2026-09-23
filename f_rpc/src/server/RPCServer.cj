@@ -109,7 +109,7 @@ class RPCServer {
         }catch(e: Exception){
             let buffer = ByteBuffer()
             printStackTrace(e, buffer)
-            let errmsg = buffer.bytes() |> String.fromBytes
+            let errmsg = buffer.bytes() |> String.fromUtf8Unchecked
             error(message.id, message.command, ErrorMessage.new(message.data, errmsg))
         }finally{
             RPCMessage.clearCurrentTrace()
