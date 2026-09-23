@@ -22,8 +22,8 @@ public class NamedDatasource <: Datasource & Resource {
         private let datasource: Datasource
     ) {
         if (!optionSpecified) {
-            for ((k, v) in ORMConfig.getAllConfigs(driverName: driverName) where k.contains('orm_option_')) {
-                setOption(k[k.indexOf('orm_option_').getOrThrow() + 'orm_option_'.size .. ], v)
+            for ((k, v) in ORMConfig.getAllConfigTuples(driverName: driverName)) {
+                setOption(k, v)
             }
         }
     }

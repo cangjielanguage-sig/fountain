@@ -58,6 +58,8 @@ public class ORMConfig {
 
     public static const indexStartsWithZero = confPrefix + '_indexStartsWithZero'
 
+    public static const ormOption = 'orm_option_'
+
     private static let dot = Regex(#"\."#)
 
     private static let converterMap = ConcurrentHashMap<String, Any>()
@@ -95,9 +97,10 @@ public class ORMConfig {
     }
     public static func getAllConfigTuples(driverName!: String = String.empty): Array<(String, String)> {
         let map = getAllConfigs(driverName: driverName)
-        map.iterator().filter{tpl => tpl[0].contains('orm_option_')}.map{tpl =>
-            let tp = tpl[1].split('=')
-            (tp[0], tp[1])
+        map.iterator().filter{tpl => tpl[0].contains(ormOption)}.map{tpl =>
+            var key = tpl[0]
+            key = key[key.indexOf(ormOption).getOrThrow() + ormOption.size ..]
+            (key, tpl[1])
         }.toArray()
     }
     public static func getUseCache(driverName!: String = String.empty): ?Bool {
