@@ -15,6 +15,7 @@ limitations under the License.
  */
 package fountain::f_orm.wrap
 
+internal import std.ast.*
 internal import std.collection.{Map, HashMap, ArrayList}
 internal import std.collection.concurrent.ConcurrentHashMap
 internal import std.convert.Parsable
@@ -24,6 +25,8 @@ internal import std.math.numeric.{Decimal, BigInt}
 internal import std.reflect.TypeInfo
 internal import std.regex.Regex
 internal import std.time.DateTime
+internal import stdx.crypto.crypto.*
+internal import stdx.encoding.hex.*
 internal import fountain::f_config.*
 internal import fountain::f_data.*
 internal import fountain::f_regex.*

@@ -58,13 +58,21 @@ public class ORMConfig {
 
     public static const indexStartsWithZero = confPrefix + '_indexStartsWithZero'
 
-    public static const ormOption = 'orm_option_'
+    public static const sm4Operation = confPrefix + '_sm4Operation'
+    public static const sm4Padding = confPrefix + '_sm4Padding'
+    public static const sm4Key = confPrefix + '_sm4Key'
+    public static const sm4Iv = confPrefix + '_sm4Iv'
+    public static const sm4Aad = confPrefix + '_sm4Aad'
+    public static const sm4TagSize = confPrefix + '_sm4TagSize'
 
-    private static let dot = Regex(#"\."#)
+    public static const ormOption = confPrefix + '_option_'
 
     private static let converterMap = ConcurrentHashMap<String, Any>()
     private static var transactionIncludingRegex = None<Regex>
     private static var transactionExcludingRegex = None<Regex>
+
+    private static let sensitiveMap = ConcurrentHashMap<String, Array<Byte>>()
+
     static init() {
         refresh {
             if (let Some(reg) <- Config.getString(transactionIncluding)) {
@@ -85,23 +93,61 @@ public class ORMConfig {
     public static func getConverter<D, T>(name: String): (D) -> T {
         (converterMap[name] as (D) -> T).getOrThrow()
     }
+    private static func getSensitive(driverName: String, key: String): String {
+        let bytes = if(let Some(bytes) <- sensitiveMap.remove(key)){
+            bytes
+        }else if(let Some(bytes) <- sensitiveMap.remove(genKey(driverName, key))){
+            bytes
+        }else{
+            return ''
+        }
+        if(bytes.size == 0){
+            return ''
+        }else if(let Some(sm4) <- getSM4()){
+            bytes |> sm4.decrypt
+        }else{
+            bytes
+        } |> String.fromUtf8
+    }
+    public static func genKey(driverName: String, suffix: String): String {
+        '${driverName}_${suffix}'
+    }
     public static func getAllConfigs(driverName!: String = String.empty): Map<String, String> {
         let confMap = Config.getAll(confPrefix)
         if (!driverName.isEmpty()) {
-            let driverConfs = Config.getAll("${driverName}_${confPrefix}")
+            let driverConfs = Config.getAll(genKey(driverName, confPrefix))
             for ((k, v) in driverConfs) {
-                confMap[k.replace('${driverName}_', '')] = v
+                confMap[k.replace(genKey(driverName, ''), '')] = v
             }
         }
         confMap
     }
-    public static func getAllConfigTuples(driverName!: String = String.empty): Array<(String, String)> {
-        let map = getAllConfigs(driverName: driverName)
-        map.iterator().filter{tpl => tpl[0].contains(ormOption)}.map{tpl =>
+    private static func getAllConfigTupleIterator(driverName: String): Iterator<(String, String)>{
+        getAllConfigs(driverName: driverName).iterator().filter{tpl => tpl[0].contains(ormOption)}.map{tpl =>
             var key = tpl[0]
             key = key[key.indexOf(ormOption).getOrThrow() + ormOption.size ..]
             (key, tpl[1])
-        }.toArray()
+        }.concat(sensitiveMap.iterator().filter{tpl => tpl[0].endsWith(genKey(ormOption, SqlOption.Password).replace('__', '_')) || tpl[0].endsWith(genKey(ormOption, SqlOption.Username).replace('__', '_'))}.map{tpl => 
+            var key = tpl[0]
+            key = key[key.indexOf(ormOption).getOrThrow() + ormOption.size ..]
+            var value = tpl[1]
+            if(let Some(sm4) <- getSM4()){
+                value = sm4.decrypt(value)
+            }
+            (key, String.fromUtf8(value))
+        })
+    }
+    public static func getAllConfigTuples(driverName!: String = String.empty): Array<(String, String)> {
+        getAllConfigTupleIterator(driverName).toArray()
+    }
+    public static func getOption(option: String, driverName!: String = String.empty): ?String {
+        getAllConfigTupleIterator(driverName).filter{tpl => tpl[0] == option}.map{tpl => tpl[1]}.first()
+    }
+    public static func getUsername(driverName!: String = String.empty): ?String {
+        getOption(SqlOption.Username, driverName: driverName)
+    }
+    public static func getPassword(driverName!: String = String.empty): ?String {
+        getOption(SqlOption.Password, driverName: driverName)
     }
     public static func getUseCache(driverName!: String = String.empty): ?Bool {
         match (getConf(driverName: driverName, key: useCache)) {
@@ -111,7 +157,7 @@ public class ORMConfig {
         }
     }
     public static func getConf(driverName!: String = String.empty, key!: String): ?String {
-        if (!driverName.isEmpty() && let Some(x) <- Config.getString("${driverName}_${key}")) {
+        if (!driverName.isEmpty() && let Some(x) <- Config.getString(genKey(driverName, key))) {
             x
         } else {
             Config.getString(key)
@@ -146,11 +192,14 @@ public class ORMConfig {
         getDriverNames().map{d => getDriver(d)}
     }
     public static func getUrl(driverName!: String = String.empty): String {
+        if(let url <- getSensitive(driverName, connectionUrl) && url.size > 0){
+            return url
+        }
         match (getConf(driverName: driverName, key: connectionUrl)) {
             case Some(x) => x
             case _ where !driverName.isEmpty() => getUrl()
             case _ => throw ORMException(
-                "connection url for ${driverName} is not be configed, config which key is ${driverName}_${connectionUrl} or ${connectionUrl} must be specified")
+                "connection url for ${driverName} is not be configed, config which key is ${genKey(driverName, connectionUrl)} or ${connectionUrl} must be specified")
         }
     }
     private static func get<T>(driverName!: String = String.empty, key!: String, default!: T): T where T <: Parsable<T> {
@@ -332,4 +381,34 @@ public class ORMConfig {
         }
     }
 
+    public static func getSM4(): ?SM4 {
+        let operation = Config.getString(sm4Operation) ?? return None<SM4>
+        let padding = Config.getString(sm4Padding) ?? 'PKCS7Padding'
+        let key = if( let Some(k) <- ((Config.getString(sm4Key) ?? '') |> fromHexString)){
+            k
+        }else{
+            throw IllegalArgumentException("orm config item ${sm4Key} is not a legal hex string")
+        }
+        if(key.isEmpty()){
+            return None<SM4>
+        }
+        let iv = ((Config.getString(sm4Iv) ?? '') |> fromHexString).getOrThrow{IllegalArgumentException("orm config item ${sm4Iv} is not a legal hex string")}
+        let aad = ((Config.getString(sm4Aad) ?? '') |> fromHexString).getOrThrow{IllegalArgumentException("orm config item ${sm4Aad} is not a legal hex string")}
+        let tagSize = Config.getValue<Int64>(sm4TagSize) ?? 16
+        SM4(match(operation){
+            case 'CBC' => OperationMode.CBC
+            case 'CFB' => OperationMode.CFB
+            case 'CTR' => OperationMode.CTR
+            case 'GCM' => OperationMode.GCM
+            case 'OFB' => OperationMode.OFB
+            case _ => throw IllegalArgumentException("${operation} is not a legal sm4 OperationMode, and ECB is not safe to use, so it is not supported")
+        }, key, iv: iv, paddingMode: match(padding){
+            case 'NoPadding' => PaddingMode.NoPadding
+            case 'PKCS7Padding' => PaddingMode.PKCS7Padding
+            case _ => throw IllegalArgumentException("${padding} is not a legal sm4 PaddingMode, only NoPadding and PKCS7Padding are supported")
+        }, aad: aad, tagSize: tagSize)
+    }
+    public static func registerSensitive(key: String, value: Array<Byte>): Unit {
+        sensitiveMap[key] = value
+    }
 }

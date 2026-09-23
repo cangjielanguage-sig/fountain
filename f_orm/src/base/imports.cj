@@ -25,3 +25,7 @@ internal import fountain::f_orm.exception.*
 public import fountain::f_base.*
 public import fountain::f_bean.*
 public import fountain::f_data.*
+public import fountain::f_orm.wrap.ORMConfig
+
+import fountain::f_orm.macros.EmbedSensitive
+@EmbedSensitive(_)
