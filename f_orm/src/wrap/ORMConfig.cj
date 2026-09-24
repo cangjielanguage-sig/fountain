@@ -391,6 +391,7 @@ public class ORMConfig {
     }
 
     public static func getSM4(): ?SM4 {
+        let sm4conf = ORMConfig.sm4conf
         let key = sm4conf.key
         if(key.isEmpty()){
             return None<SM4>
@@ -422,7 +423,7 @@ public class ORMConfig {
         }
     }
 }
-protected class SM4Conf{
+protected struct SM4Conf{
     SM4Conf(
         private let sensitiveMap: ConcurrentHashMap<String, Array<Byte>>
     ){}
