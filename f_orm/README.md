@@ -1949,6 +1949,7 @@ export orm_sm4TagSize=16 # Int64，默认16
 
 ### 18.2 敏感信息配置项
 ```bash
+export orm_drivers='postgres,mysql' # 英文逗号分隔的数据库驱动名称，没有默认值
 export orm_connectionUrl='.....' # 数据库连接URL
 export <driverName>_orm_connectionUrl='....' # 如果有多个数据源，配置项可以驱动名称开头
 export orm_option_username='...' # 数据库用户名
