@@ -22,7 +22,8 @@
 15. [宏](#15-宏)
 16. [表结构元数据与 migro](#16-表结构元数据与-migro)
 17. [异常体系](#17-异常体系)
-18. [附录](#18-附录)
+18. [敏感信息](#18-敏感信息)
+19. [附录](#18-附录)
 
 ---
 
@@ -71,7 +72,7 @@ ORM.initialize()   // 等价于 register() + registerTransactionHooks<Transactio
 //最好有专门的初始化模块
 ```
 
-> 使用 `f_app` 应用框架时无需手工调用：`f_orm` 内置的 `ORMInitializer`（见 [18.4](#184-其他实用类型)）已注册到 `InitializerCollection`，应用启动时会自动执行 `ORM.initialize()`。
+> 使用 `f_app` 应用框架时无需手工调用：`f_orm` 内置的 `ORMInitializer`（见 [19.4](#184-其他实用类型)）已注册到 `InitializerCollection`，应用启动时会自动执行 `ORM.initialize()`。
 
 ### 2.3 定义 PO
 
@@ -346,7 +347,7 @@ public class ORM {
 * `default` 参数的默认值是一个**表达式** `ORMConfig.isDefaultDriver(<驱动名>)`，即只有所注册的驱动恰为默认驱动时，它才会成为默认数据源（`ORM.default`）；显式传 `default: true` / `default: false` 可覆盖此行为。默认数据源供 `ORM.connection()` / `ORM.executor()` 无参重载使用；未指定时抛 `ORMException("default datasource is not specified")`。
 * `deregister(name)` 会同时 `DriverManager.deregister(name)` 并关闭数据源；若注销的是默认数据源，默认值被清空。
 * `register(driver: String, ...)` 内部通过 `DriverManager.getDriver(driverName)` 取驱动，未注册时抛 `ORMException('database driver ${driverName} does not initialize')`。
-* `register(creator: DatasourceCreator, ...)` 先调用 `creator.create()` 得到 `NamedDatasource` 再注册；用于计算 `default` 默认值的 `creator.driverName` 由实现方提供（见 [18.2](#182-wrap-层进阶类型)）。
+* `register(creator: DatasourceCreator, ...)` 先调用 `creator.create()` 得到 `NamedDatasource` 再注册；用于计算 `default` 默认值的 `creator.driverName` 由实现方提供（见 [19.2](#182-wrap-层进阶类型)）。
 
 ---
 
@@ -1924,9 +1925,41 @@ init(message: String, caused: Exception)
 
 > `Mandatory` / `Never` / `StartFailure` 这三类异常由 `wrap/DummyTransaction.cj` 在「无真实事务」的占位事务对象上执行传播规则检查时抛出（见 [14. 事务](#14-事务)）。
 
-## 18. 附录
 
-### 18.1 SQL 方言 `SqlDialect`
+## 18. 敏感信息
+数据库连接URL、用户名、密码可以在编译期读取相关配置项，使用SM4加密并将加密后的字节数组内嵌到编译产物。
+编译期，按照以下配置即可将敏感信息嵌入到编译产物中。
+如果没有加密配置项，会将敏感信息的UTF8字节数组嵌入到编译产物。
+如果编译环境没有配置敏感信息，就必须在运行环境配置它们，否则访问数据库时将出错。
+进程启动时首先从加密配置集合获取敏感信息，如果获取不到，则从运行环境获取敏感信息配置项。
+
+编译环境和运行环境的敏感信息配置项完全一致。
+
+以下需要16进制串的情形可以使用命令：`fboot randhex 16`
+
+### 18.1 加密配置项
+```bash
+export orm_sm4Operation='CBC' # CBC CFB CTR GCM OFB，默认CBC。ECB被文档标记为不安全，没有给予支持
+export orm_sm4Padding='PKCS7Padding' # PKCS7Padding NoPadding，默认是PKCS7Padding
+export orm_sm4Key='1234567812345678' # 16字节，没有默认值，以长度为32的16进制字符串表示
+export orm_sm4Iv='1234567812345678' # 16字节，默认是空字节数组，以长度为32的16进制字符串表示
+export orm_sm4Aad='1234567812345678' # 附加认证数据，默认是空字节数组，以长度为32的16进制字符串表示
+export orm_sm4TagSize=16 # Int64，默认16
+```
+
+### 18.2 敏感信息配置项
+```bash
+export orm_connectionUrl='.....' # 数据库连接URL
+export <driverName>_orm_connectionUrl='....' # 如果有多个数据源，配置项可以驱动名称开头
+export orm_option_username='...' # 数据库用户名
+export <driverName>_orm_option_username='...' # 如果有多个数据源，配置项可以驱动名称开头
+export orm_option_password='...' # 密码
+export <driverName>_orm_option_password='...'
+```
+
+## 19. 附录
+
+### 19.1 SQL 方言 `SqlDialect`
 
 分页语法、标识符包裹、`lastInsertId` 等数据库差异集中在方言类中，`SqlExecutor` 按 `driverName` 自动选用。
 
@@ -1958,7 +1991,7 @@ public abstract class SqlDialect {
 | `DB2Dialect` | `db2` | `limit` → ` OFFSET ? ROWS FETCH FIRST ? ROWS ONLY` |
 | `MockdbDialect` | `mockdb` | 代理方言：`mock` 属性指定被代理的方言（默认 `opengauss`）；设置为自身时抛 `MockDBException` |
 
-### 18.2 `wrap` 层进阶类型
+### 19.2 `wrap` 层进阶类型
 
 | 类型 | 说明 | 关键成员 |
 | --- | --- | --- |
@@ -1974,13 +2007,13 @@ public abstract class SqlDialect {
 | `Propagation` | 事务传播级别枚举（`@Transactional` 传播参数）。 | `Required`、`Supports`、`Mandatory`、`RequiresNew`、`NotSupported`、`Never`、`Nested` |
 | `DataType`（抽象） | 列类型描述（`nullable` / `columnName` / `fieldName`），与 `QueryMapper` 一一对应：定类型读取结果列，也决定 insert/update 时的参数绑定重载。 | `get(result): Any`；子类：`BoolDataType`、`Int8DataType`、`UInt8DataType`、`Int16DataType`、`UInt16DataType`、`Int32DataType`、`UInt32DataType`、`Int64DataType`、`UInt64DataType`、`Float16DataType`、`Float32DataType`、`Float64DataType`、`DecimalDataType`、`BigIntDataType`、`RuneDataType`、`StringDataType`、`ByteArrayDataType`、`DateTimeDataType`、`DurationDataType`、`InputStreamDataType`、`UnknownDataType` |
 
-### 18.3 SQL 参数支持的类型
+### 19.3 SQL 参数支持的类型
 
 `arg(...)`（`SqlArg.new<T>`）与 `add(...)` 支持以下类型；其余类型抛 `SqlArgException`：
 
 `Bool`、`Int8`、`UInt8`、`Int16`、`UInt16`、`Int32`、`UInt32`、`Int64`、`UInt64`、`Float16`、`Float32`、`Float64`、`Decimal`、`BigInt`、`Rune`、`String`、`Duration`、`DateTime`、`Array<Byte>`、`InputStream`，以及 `None`（`addNull()`）。
 
-### 18.4 其他实用类型
+### 19.4 其他实用类型
 
 | 类型 | 说明 |
 | --- | --- |
@@ -1989,40 +2022,8 @@ public abstract class SqlDialect {
 | `ORMInitializer` | `f_app` 集成：注册 `initializer`（名称 `fountain::f_orm`，依赖 `fountain::f_bean`），应用启动时自动执行 `ORM.initialize()` |
 | `ORMColumn` | 成员上的列名/主键注解（`name!: String = ''`、`id!: Bool = false`），与 `@ORMField` 提供等价的声明能力（见 [15. 宏](#15-宏)） |
 
-### 18.5 相关文档
+### 19.5 相关文档
 
 * `f_orm/README.md`：模块历史介绍（部分内容已滞后于当前 API）。
 * `f_orm/src/**/*.cj`：源码即最权威的参考；本文档未覆盖的行为以源码为准。
 * 示例工程 `fdemo`：`fdemo/boot.sh`（配置）、`fdemo/user/src/dao/*DAO.cj`（DAO 定义）、`fdemo/user/src/service/impl/UserServiceImpl.cj`（事务服务）。
-
-
-## 敏感信息
-数据库连接URL、用户名、密码可以在编译期读取相关配置项，使用SM4加密并将加密后的字节数组内嵌到编译产物。
-编译期，按照以下配置即可将敏感信息嵌入到编译产物中。
-如果没有加密配置项，会将敏感信息的UTF8字节数组嵌入到编译产物。
-如果编译环境没有配置敏感信息，就必须在运行环境配置它们，否则访问数据库时将出错。
-进程启动时首先从加密配置集合获取敏感信息，如果获取不到，则从运行环境获取敏感信息配置项。
-
-编译环境和运行环境的敏感信息配置项完全一致。
-
-以下需要16进制串的情形可以使用命令：`fboot randhex 16`
-
-### 加密配置项
-```bash
-export orm_sm4Operation='CBC' # CBC CFB CTR GCM OFB，默认CBC。ECB被文档标记为不安全，没有给予支持
-export orm_sm4Padding='PKCS7Padding' # PKCS7Padding NoPadding，默认是PKCS7Padding
-export orm_sm4Key='1234567812345678' # 16字节，没有默认值，以长度为32的16进制字符串表示
-export orm_sm4Iv='1234567812345678' # 16字节，默认是空字节数组，以长度为32的16进制字符串表示
-export orm_sm4Aad='1234567812345678' # 附加认证数据，默认是空字节数组，以长度为32的16进制字符串表示
-export orm_sm4TagSize=16 # Int64，默认16
-```
-
-### 敏感信息配置项
-```bash
-export orm_connectionUrl='.....' # 数据库连接URL
-export <driverName>_orm_connectionUrl='....' # 如果有多个数据源，配置项可以驱动名称开头
-export orm_option_username='...' # 数据库用户名
-export <driverName>_orm_option_username='...' # 如果有多个数据源，配置项可以驱动名称开头
-export orm_option_password='...' # 密码
-export <driverName>_orm_option_password='...'
-```
