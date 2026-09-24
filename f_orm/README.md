@@ -1931,14 +1931,15 @@ init(message: String, caused: Exception)
 编译期，按照以下配置即可将敏感信息嵌入到编译产物中。
 如果没有加密配置项，会将敏感信息的UTF8字节数组嵌入到编译产物。
 如果编译环境没有配置敏感信息，就必须在运行环境配置它们，否则访问数据库时将出错。
-进程启动时首先从加密配置集合获取敏感信息，如果获取不到，则从运行环境获取敏感信息配置项。
+启动进程时首先从加密配置集合获取敏感信息，如果获取不到，则从运行环境获取敏感信息配置项。
 
 编译环境和运行环境的敏感信息配置项完全一致。
 
-以下需要16进制串的情形可以使用命令：`fboot randhex 16`
+以下需要16进制串的情形可以使用命令：`fboot randhex 32`
 
 ### 18.1 加密配置项
 ```bash
+# 这些加密配置项也会作为敏感信息嵌入编译产物
 export orm_sm4Operation='CBC' # CBC CFB CTR GCM OFB，默认CBC。ECB被文档标记为不安全，没有给予支持
 export orm_sm4Padding='PKCS7Padding' # PKCS7Padding NoPadding，默认是PKCS7Padding
 export orm_sm4Key='1234567812345678' # 16字节，没有默认值，以长度为32的16进制字符串表示
@@ -1949,7 +1950,8 @@ export orm_sm4TagSize=16 # Int64，默认16
 
 ### 18.2 敏感信息配置项
 ```bash
-export orm_drivers='postgres,mysql' # 英文逗号分隔的数据库驱动名称，没有默认值
+# orm_drivers这个配置项本身不是敏感信息，但是必须同时在编译环境和运行环境配置，且必须一致。
+export orm_drivers='postgres,mysql' # 英文逗号分隔的数据库驱动名称，没有默认值。
 export orm_connectionUrl='.....' # 数据库连接URL
 export <driverName>_orm_connectionUrl='....' # 如果有多个数据源，配置项可以驱动名称开头
 export orm_option_username='...' # 数据库用户名
