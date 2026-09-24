@@ -1955,7 +1955,7 @@ export <driverName>_orm_connectionUrl='....' # 如果有多个数据源，配置
 export orm_option_username='...' # 数据库用户名
 export <driverName>_orm_option_username='...' # 如果有多个数据源，配置项可以驱动名称开头
 export orm_option_password='...' # 密码
-export <driverName>_orm_option_password='...'
+export <driverName>_orm_option_password='...' # 如果有多个数据源，配置项可以驱动名称开头
 ```
 
 ## 19. 附录
