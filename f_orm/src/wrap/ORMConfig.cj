@@ -94,7 +94,9 @@ public class ORMConfig {
         (converterMap[name] as (D) -> T).getOrThrow()
     }
     private static func sensitive2Str(bytes: Array<Byte>){
-        if(let Some(sm4) <- getSM4()){
+        if(bytes.size == 0){
+            return ''
+        }else if(let Some(sm4) <- getSM4()){
             bytes |> sm4.decrypt
         }else{
             bytes
@@ -127,7 +129,7 @@ public class ORMConfig {
         for((k, v) in sensitiveMap){
             let kk = if(driverName.size > 0 && let p <- genKey(driverName, '') && k.startsWith(p)){
                  k.replace(p, '')
-            }else if(k.startsWith(genKey(confPrefix, ''))){
+            }else if(k.startsWith(genKey(confPrefix, '')) && !k.startsWith(genKey(confPrefix, 'sm4'))){
                 k
             }else{
                 continue
@@ -427,7 +429,7 @@ protected struct SM4Conf{
     SM4Conf(
         private let sensitiveMap: ConcurrentHashMap<String, Array<Byte>>
     ){}
-    private func get(key: String): ?String {
+    private func getString(key: String): ?String {
         if(let Some(bytes) <- sensitiveMap.get(key)){
             String.fromUtf8(bytes)
         }else if (let Some(v) <- Config.getString(key)){
@@ -436,38 +438,51 @@ protected struct SM4Conf{
             None<String>
         }
     }
+    private func getBytes(key: String): ?Array<Byte> {
+        if(let Some(bytes) <- sensitiveMap.get(key)){
+            bytes
+        }else if (let Some(v) <- Config.getString(key)){
+            fromHexString(v)
+        }else{
+            Array<Byte>()
+        }
+    }
     protected prop operation: String {
         get(){
-            return get(ORMConfig.sm4Operation) ?? 'CBC'
+            return getString(ORMConfig.sm4Operation) ?? 'CBC'
         }
     }
     protected prop padding: String {
         get(){
-            return get(ORMConfig.sm4Padding) ?? 'PKCS7Padding'
+            return getString(ORMConfig.sm4Padding) ?? 'PKCS7Padding'
         }
     }
     protected prop key: Array<Byte> {
         get(){
-            if(let Some(k) <- ((get(ORMConfig.sm4Key) ?? '') |> fromHexString)){
-                k
+            if(let Some(bytes) <- getBytes(ORMConfig.sm4Key) && bytes.size > 0){
+                bytes
             }else{
-                throw IllegalArgumentException("orm config item ${ORMConfig.sm4Key} is not a legal hex string")
+                throw IllegalArgumentException("orm config item ${ORMConfig.sm4Key} is not a legal hex string or is not be specified")
             }
         }
     }
     protected prop iv: Array<Byte> {
         get(){
-            ((get(ORMConfig.sm4Iv) ?? '') |> fromHexString).getOrThrow{IllegalArgumentException("orm config item ${ORMConfig.sm4Iv} is not a legal hex string")}
+            if(let Some(bytes) <- getBytes(ORMConfig.sm4Iv) && bytes.size > 0){
+                bytes
+            }else{
+                throw IllegalArgumentException("orm config item ${ORMConfig.sm4Iv} is not a legal hex string or is not be specified")
+            }
         }
     }
     protected prop aad: Array<Byte> {
         get(){
-            ((get(ORMConfig.sm4Aad) ?? '') |> fromHexString).getOrThrow{IllegalArgumentException("orm config item ${ORMConfig.sm4Aad} is not a legal hex string")}
+            getBytes(ORMConfig.sm4Aad) ?? []
         }
     }
     protected prop tagSize: Int64 {
         get(){
-            (get(ORMConfig.sm4TagSize) ?? '16') |> Int64.parse
+            (getString(ORMConfig.sm4TagSize) ?? '16') |> Int64.parse
         }
     }
 }
